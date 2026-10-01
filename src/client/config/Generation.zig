@@ -1934,7 +1934,8 @@ fn parseAction(self: *Generation, action_input: ActionInput, diagnostic: *data.D
             },
         };
         const reference = self.snapshot.command_tabs.add(self.number, &command) catch |err| {
-            const limit = if (self.snapshot.command_tabs.fixedRowsFull()) CommandTabs.rows_limit else CommandTabs.bytes_limit;
+            const tabs = &self.snapshot.command_tabs;
+            const limit = if (tabs.sealed) CommandTabs.recent_limit else if (tabs.fixedRowsFull()) CommandTabs.rows_limit else CommandTabs.bytes_limit;
             diagnostic.set("the configuration's command tabs pass their {d} {s}", .{ limit.value, limit.noun });
             self.unreported.add(.{
                 .limit = limit,

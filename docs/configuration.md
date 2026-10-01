@@ -1030,9 +1030,12 @@ takes an argv of up to 32 arguments and 4096 bytes, like a bar command, and a
 label of at most 32 bytes. The commands a configuration's bindings and
 static components open share 80 KiB (768 of them); a binding whose command
 passes one of these is left out and its limit reported, and a command is
-never cut. What renders and callbacks return shares 32 KiB of recent rows,
-cleared between renders when half is used; a button whose command was
-cleared says so and renders the bars again.
+never cut. What renders and callbacks return shares at least 64 KiB of
+recent rows, cleared only between renders: a render whose buttons do not
+fit keeps its first ones and leaves out the rest, reporting
+`config.recent_command_tab_bytes`, and the next render starts with all the
+room. A button whose command was cleared since says so and renders the
+bars again.
 `telar config check` compiles the merged keymap and reports conflicts between
 configured bindings. `client.input.sequence_timeout_ms` applies only to partial
 global sequences; prefixed sequences do not expire.

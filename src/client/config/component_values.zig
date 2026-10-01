@@ -2,7 +2,6 @@
 //! Every table is checked against the fields its component accepts, and
 //! every component against the place it appears in, before anything is kept.
 const ComponentSource = @import("ComponentSource.zig");
-const CommandTabs = @import("CommandTabs.zig");
 const core = @import("telar-core");
 const data = @import("model");
 const lua_api = @import("lua-api");
@@ -101,6 +100,13 @@ const Pass = struct {
         self.room.remove(above);
     }
 
+    /// Gives back the room `admits` took for a component left out.
+    fn release(self: *Pass, input: data.NodeInput) void {
+        var one: data.ContentDemand = .{};
+        one.add(input);
+        self.taken.remove(one);
+    }
+
     /// Whether a component of the cutoff's rank still has room.
     fn admits(self: *Pass, input: data.NodeInput) bool {
         var next = self.taken;
@@ -181,16 +187,10 @@ pub fn parse(generation: *Generation, content: anytype, request: ComponentSource
     try readList(reader, staged, root);
     pass.chooseCutoff(data.StagedContent.capacity);
     staged.clear();
-    generation.snapshot.command_tabs.makeRoom();
-    const epoch = generation.snapshot.command_tabs.epoch;
+    const tabs = &generation.snapshot.command_tabs;
+    tabs.beginRender();
+    defer tabs.endRender();
     try readList(reader, staged, root);
-    if (generation.snapshot.command_tabs.epoch != epoch) {
-        // The render's own command tabs outgrew the recent rows, so the
-        // first of its buttons name cleared rows.
-        generation.unreported.add(.{
-            .limit = CommandTabs.recent_limit,
-        });
-    }
 
     content.keepFitting(staged, &pass.had_children);
     reportDemand(generation, pass.demand, switch (request.surface) {
@@ -460,7 +460,12 @@ fn append(reader: Reader, content: anytype, input: data.NodeInput, target: Targe
         pass.had_children[target.parent] = true;
     }
 
-    if (rank < pass.cutoff or (rank == pass.cutoff and !pass.admits(counted))) {
+    if (rank < pass.cutoff) {
+        return null;
+    }
+
+    const admitted = rank == pass.cutoff;
+    if (admitted and !pass.admits(counted)) {
         return null;
     }
 
@@ -468,6 +473,12 @@ fn append(reader: Reader, content: anytype, input: data.NodeInput, target: Targe
     if (action_field) |name| {
         staged.action = actionField(reader, target.index, name) catch |err| {
             try leaveOut(err);
+            // A component left out gives back the room it was admitted to,
+            // for the other components of the cutoff's rank.
+            if (admitted) {
+                pass.release(counted);
+            }
+
             return null;
         };
     }
@@ -965,4 +976,35 @@ test "a render larger than the staged list still keeps its highest-priority comp
     // 300 labels, the group, its three children and three more labels.
     try std.testing.expectEqualStrings("bars.max_bar_nodes", generation.unreported.slice()[0].limit.name);
     try std.testing.expectEqual(@as(?u64, 307), generation.unreported.slice()[0].requested);
+}
+
+test "a group whose children all fall under the staging cutoff is not kept empty" {
+    const source =
+        \\local telar = require("telar")
+        \\local ui = telar.ui
+        \\return { api_version = 2, client = { bars = { bottom = {
+        \\  left = telar.bar.dynamic({ render = function()
+        \\    local items = {}
+        \\    for index = 1, 300 do items[#items + 1] = ui.label({ text = "row", priority = 50 }) end
+        \\    items[#items + 1] = ui.group({ priority = 60, mark = "claude",
+        \\      ui.label({ text = "a", priority = 10 }), ui.label({ text = "b", priority = 10 }) })
+        \\    return items
+        \\  end }),
+        \\  right = telar.bar.tabs(),
+        \\} } } }
+    ;
+    var diagnostic: data.Diagnostic = .{};
+    const generation = try testLoad(source, &diagnostic);
+    defer generation.deinit();
+
+    var content: data.Content = .{};
+    try generation.invokeBar(.{
+        .reference = generation.snapshot.bars.bottom[0].dynamic.callback,
+        .context = testContext(null),
+    }, &content, &diagnostic);
+
+    try std.testing.expectEqual(@as(u8, data.bar_values.max_bar_nodes), content.node_count);
+    for (content.slice()) |node| {
+        try std.testing.expect(node.kind != .group);
+    }
 }

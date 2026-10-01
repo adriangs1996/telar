@@ -189,11 +189,12 @@ pub fn Type(comptime bounds: ContentBounds) type {
             }
 
             std.sort.pdq(u8, order[0..count], &rank, outranks);
+            const empty = emptyContainers(source, had_children);
             var kept: [max_node_capacity]bool = @splat(false);
             var budget: ContentDemand = .{};
             for (order[0..count]) |index| {
                 const node = source.nodes[index];
-                if (!node.isRoot() and !kept[node.parent]) {
+                if (empty[index] or (!node.isRoot() and !kept[node.parent])) {
                     continue;
                 }
 
@@ -230,6 +231,19 @@ pub fn Type(comptime bounds: ContentBounds) type {
                     continue;
                 };
             }
+        }
+
+        /// The containers that had children before `source` was built but
+        /// hold none in it, which the selection skips so they take no room.
+        fn emptyContainers(source: anytype, had_children: ?*const [max_node_capacity]bool) [max_node_capacity]bool {
+            var empty: [max_node_capacity]bool = if (had_children) |value| value.* else @splat(false);
+            for (source.slice()) |node| {
+                if (!node.isRoot()) {
+                    empty[node.parent] = false;
+                }
+            }
+
+            return empty;
         }
 
         /// Leaves out a kept container none of whose children were kept,

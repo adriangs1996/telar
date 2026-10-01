@@ -1514,15 +1514,24 @@ test "a command tab button whose row was cleared says so and renders the bars ag
     const client = harness.client;
     _ = try fixtures.reloadConfiguration(&harness, try fixtures.testingConfigAdoptionSource(1,
         \\local telar = require("telar")
-        \\return { api_version = 2, client = { keybindings = {
-        \\  telar.bind({ "g" }, telar.action.command_tab({ command = { "lazygit" } })),
-        \\} } }
+        \\return { api_version = 2, client = {
+        \\  keybindings = { telar.bind({ "g" }, telar.action.command_tab({ command = { "lazygit" } })) },
+        \\  bars = { bottom = {
+        \\    left = telar.bar.dynamic({ every_ms = 60000, render = function() return "x" end }),
+        \\    right = telar.bar.tabs(),
+        \\  } },
+        \\} }
     ));
     var cleared = client.lua_generation.?.snapshot.bindings[0].action.command_tab;
     cleared.epoch +%= 1;
     const requests = client.model.to_runtime.len;
+    const slot = @intFromEnum(data.bar_values.Position.bottom_left);
+    const later = std.math.maxInt(u64) - 1;
+    client.model.bar_updates.deadlines[slot] = later;
 
     _ = try client_module.actions.executeAction(client, .{ .command_tab = cleared }, .effect);
     try std.testing.expect(std.mem.indexOf(u8, data.client_diagnostic.shown(&client.model).?, "expired") != null);
     try std.testing.expectEqual(requests, client.model.to_runtime.len);
+    // The bars render again now instead of at their next interval.
+    try std.testing.expect(client.model.bar_updates.deadlines[slot] < later);
 }

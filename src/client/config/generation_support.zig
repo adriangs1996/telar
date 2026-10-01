@@ -1977,3 +1977,73 @@ test "a selected profile whose panels fit makes a name only the base declared an
     }));
     try std.testing.expect(std.mem.indexOf(u8, diagnostic.message(), "p18") != null);
 }
+
+test "a render whose buttons outgrow the recent rows keeps its first buttons alive and reports the limit" {
+    const source =
+        \\local telar = require("telar")
+        \\local ui = telar.ui
+        \\return { api_version = 2, client = { panels = {
+        \\  scripts = telar.panel({ render = function()
+        \\    local buttons = {}
+        \\    for index = 1, 64 do
+        \\      local script = string.rep("x", 4000) .. index
+        \\      buttons[index] = ui.button({ text = tostring(index), action = telar.action.command_tab({ command = { "sh", "-c", script } }) })
+        \\    end
+        \\    return ui.actions(buttons)
+        \\  end }),
+        \\} } }
+    ;
+    var diagnostic: data.Diagnostic = .{};
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 });
+    defer generation.deinit();
+
+    const content = try std.testing.allocator.create(data.PanelContent);
+    defer std.testing.allocator.destroy(content);
+    const context: BarCallbackContext = .{
+        .client = .{
+            .sidebar_visible = true,
+            .tab_count = 1,
+            .active_tab_index = 0,
+            .pane_count = 1,
+            .focused_pane_id = 1,
+        },
+        .time = .{
+            .unix_seconds = 1,
+            .year = 2026,
+            .month = 10,
+            .day = 1,
+            .hour = 12,
+            .minute = 0,
+            .second = 0,
+            .weekday = 4,
+        },
+        .metrics = null,
+    };
+    // Every render, the second after a refused one too, keeps its first
+    // buttons alive and leaves out the tail that did not fit.
+    for (0..3) |_| {
+        content.* = .{};
+        generation.unreported.clear();
+        try generation.invokeBar(.{
+            .reference = generation.snapshot.bars.panels[0].source.dynamic.callback,
+            .context = context,
+            .surface = .panel,
+        }, content, &diagnostic);
+
+        // 64 buttons of 4 KiB pass the recent rows; the panel still keeps
+        // its 32 actions from the first ones.
+        try std.testing.expectEqual(@as(u8, data.bar_values.max_panel_actions), content.action_count);
+        for (content.actions[0..content.action_count]) |action| {
+            var command: data.CommandTab = undefined;
+            try std.testing.expect(generation.snapshot.command_tabs.find(generation.number, action.command_tab, &command));
+        }
+
+        try std.testing.expectEqualStrings("1", content.text(content.slice()[1].text));
+        var reported = false;
+        for (generation.unreported.slice()) |reach| {
+            reported = reported or std.mem.eql(u8, reach.limit.name, "config.recent_command_tab_bytes");
+        }
+
+        try std.testing.expect(reported);
+    }
+}

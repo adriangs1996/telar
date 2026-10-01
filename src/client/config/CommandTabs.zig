@@ -18,10 +18,10 @@ const CommandTabs = @This();
 /// Bytes the fixed and recent rows share; the fixed ones may take all but
 /// `recent_reserve`, room for a full keymap of 256 command tabs of 256
 /// bytes.
-pub const pool_bytes = 112 * 1024;
-/// Bytes always left to the recent rows: seven commands of the largest
-/// argv, or hundreds of the short ones a render's buttons run.
-const recent_reserve = 32 * 1024;
+pub const pool_bytes = 144 * 1024;
+/// Bytes always left to the recent rows: fifteen commands of the largest
+/// argv, or about 1 KiB for each of the 64 buttons a render may stage.
+const recent_reserve = 64 * 1024;
 /// Rows of both kinds: the bindings and static components of the base
 /// configuration and of the selected profile, and what renders keep.
 pub const max_rows = 1024;
@@ -30,9 +30,9 @@ pub const max_rows = 1024;
 const recent_rows = 256;
 pub const bytes_limit = core.Limit.declare("config.command_tab_bytes", "command tab bytes", pool_bytes - recent_reserve);
 pub const rows_limit = core.Limit.declare("config.command_tab_rows", "command tabs", max_rows - recent_rows);
-/// Reported when one render keeps more command tabs than half the recent
-/// rows hold, which clears its own earlier rows.
-pub const recent_limit = core.Limit.declare("config.recent_command_tab_bytes", "command tab bytes", recent_reserve / 2);
+/// Reported when one render keeps more command tabs than the recent rows
+/// hold; its last buttons are left out.
+pub const recent_limit = core.Limit.declare("config.recent_command_tab_bytes", "command tab bytes", recent_reserve);
 /// A row's header: its argument count and its label length.
 const header_bytes = 2;
 const length_bytes = @sizeOf(u16);
@@ -56,13 +56,19 @@ fixed_bytes: u32 = 0,
 sealed: bool = false,
 /// Advances each time the recent rows are cleared.
 epoch: u32 = 1,
+/// A render is staging its buttons: full recent rows refuse a new row
+/// instead of clearing the render's own earlier ones.
+rendering: bool = false,
+/// The last render was refused a row, so the next one starts with all the
+/// recent room.
+refused: bool = false,
 
 /// Keeps `command` and returns the reference that names it in the
 /// generation `number`, sharing an equal row. Before `seal` the row is
 /// fixed, and fixed rows past their share of rows or bytes fail with
 /// `TooManyCommandTabs` (`fixedRowsFull` tells which). After it the row is
-/// recent, and full recent rows are cleared to make room, so it never
-/// fails.
+/// recent, and full recent rows are cleared to make room, so it fails
+/// only while a render stages (`beginRender`).
 ///
 /// ```zig
 /// const reference = try generation.snapshot.command_tabs.add(generation.number, &command);
@@ -88,28 +94,42 @@ pub fn add(self: *CommandTabs, number: u64, command: *const data.CommandTab) !da
     // Fixed rows stop `recent_rows` and `recent_reserve` short of the end,
     // so a cleared recent region always has room for this row.
     if (self.used + row.len > pool_bytes or self.count == max_rows) {
+        if (self.rendering) {
+            self.refused = true;
+            return error.TooManyCommandTabs;
+        }
+
         self.clearRecent();
     }
 
     return self.reference(number, self.append(row));
 }
 
-/// Clears the recent rows before a render when less than half of their
-/// room is left, so a render's own rows are cleared only when it alone
-/// keeps more than half of them (`recent_limit`), never halfway through
-/// because earlier renders filled the room. Other surfaces' buttons that
-/// named cleared rows render them again when clicked.
-/// Example: `generation.snapshot.command_tabs.makeRoom();`
-pub fn makeRoom(self: *CommandTabs) void {
+/// Starts a render's staging. The recent rows are cleared first when the
+/// last render was refused a row or less than half their room is left, so
+/// earlier renders never crowd a render out; while it stages, full rows
+/// refuse its later buttons (`recent_limit`) instead of clearing its
+/// earlier ones. Other surfaces' buttons that named cleared rows render
+/// them again when clicked.
+/// Example: `tabs.beginRender(); defer tabs.endRender();`
+pub fn beginRender(self: *CommandTabs) void {
     if (!self.sealed) {
         return;
     }
 
-    if (pool_bytes - self.used >= recent_reserve / 2 and max_rows - self.count >= recent_rows / 2) {
-        return;
+    const crowded = pool_bytes - self.used < recent_reserve / 2 or max_rows - self.count < recent_rows / 2;
+    if (self.refused or crowded) {
+        self.clearRecent();
     }
 
-    self.clearRecent();
+    self.refused = false;
+    self.rendering = true;
+}
+
+/// Ends a render's staging: later rows may clear the recent ones again.
+/// Example: `tabs.endRender();`
+pub fn endRender(self: *CommandTabs) void {
+    self.rendering = false;
 }
 
 fn clearRecent(self: *CommandTabs) void {
