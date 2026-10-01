@@ -5,6 +5,9 @@
 //! capped backoff. The next session starts as a fresh client would.
 const data = @import("model");
 const pacing = @import("pacing");
+const pty = @import("pty");
+const core = @import("telar-core");
+const Discovery = @import("../machines/Discovery.zig");
 const std = @import("std");
 const Client = @import("../execution/Client.zig");
 const RuntimeConnectJob = @import("RuntimeConnectJob.zig");
@@ -419,8 +422,7 @@ fn adoptLaunchDefaults(client: *Client) void {
     if (named.len == 0) {
         const shell = defaults.shell[0..@min(defaults.shell.len, client.launch_shell.len)];
         @memcpy(client.launch_shell[0..shell.len], shell);
-        client.launch_arguments[0] = client.launch_shell[0..shell.len];
-        client.options.arguments = &client.launch_arguments;
+        client.options.arguments = pty.login_shell.interactive(client.launch_shell[0..shell.len], &client.launch_arguments);
     }
 }
 
@@ -429,6 +431,58 @@ fn targetName(target: MachineTarget) []const u8 {
         .local => "this machine",
         .remote => |machine| machine.destination,
     };
+}
+
+test "remote default shells use owned login arguments across discovery replacement" {
+    const client = try std.testing.allocator.create(Client);
+    defer std.testing.allocator.destroy(client);
+    client.options.machine = .{ .remote = .{ .destination = "dev@box" } };
+
+    for ([_][]const u8{ "/bin/bash", "/bin/zsh", "/bin/ksh", "/bin/sh", "/bin/dash", "/usr/bin/fish", "/bin/tcsh", "/bin/nu" }) |shell| {
+        var buffer: [Discovery.max_output_bytes]u8 = undefined;
+        client.forward = .{
+            .child = undefined,
+            .discovery = try Discovery.parse(try std.fmt.bufPrint(&buffer, "/home/remote user\n{s}\n/tmp/remote.sock\n{s}\n", .{ shell, &core.schema_id })),
+        };
+        adoptLaunchDefaults(client);
+        client.forward = null;
+
+        try std.testing.expectEqualStrings("/home/remote user", client.options.cwd);
+        try std.testing.expectEqualStrings(shell, client.options.arguments[0]);
+        try std.testing.expectEqual(@intFromPtr(&client.launch_shell), @intFromPtr(client.options.arguments[0].ptr));
+        try std.testing.expectEqual(@intFromPtr(&client.launch_arguments), @intFromPtr(client.options.arguments.ptr));
+        if (pty.login_shell.script(shell) != null) {
+            try std.testing.expectEqual(@as(usize, 1 + pty.login_shell.login_flags.len), client.options.arguments.len);
+            try std.testing.expectEqualStrings("-l", client.options.arguments[1]);
+            try std.testing.expectEqualStrings("-i", client.options.arguments[2]);
+        } else {
+            try std.testing.expectEqual(@as(usize, 1), client.options.arguments.len);
+        }
+    }
+}
+
+test "remote named commands and local launch defaults keep their arguments" {
+    const client = try std.testing.allocator.create(Client);
+    defer std.testing.allocator.destroy(client);
+    const named = &[_][]const u8{ "custom-command", "$HOME; literal argument", "" };
+    client.options.machine = .{ .remote = .{ .destination = "dev@box", .arguments = named } };
+    client.forward = .{
+        .child = undefined,
+        .discovery = try Discovery.parse("/home/remote\n/bin/zsh\n/tmp/remote.sock\n" ++ core.schema_id ++ "\n"),
+    };
+    adoptLaunchDefaults(client);
+    try std.testing.expectEqualStrings("/home/remote", client.options.cwd);
+    try std.testing.expectEqual(named.ptr, client.options.arguments.ptr);
+    try std.testing.expectEqualDeep(named.*, client.options.arguments[0..named.len].*);
+
+    client.forward = null;
+    client.options.machine = .{ .local = .{} };
+    client.options.cwd = "/local/work";
+    client.options.arguments = &.{"/local/shell"};
+    adoptLaunchDefaults(client);
+    try std.testing.expectEqualStrings("/local/work", client.options.cwd);
+    try std.testing.expectEqualStrings("/local/shell", client.options.arguments[0]);
+    try std.testing.expectEqual(@as(usize, 1), client.options.arguments.len);
 }
 
 test "a lost runtime is reached again and its session starts fresh" {

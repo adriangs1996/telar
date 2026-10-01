@@ -8,6 +8,7 @@ const pacing = @import("pacing");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
+const pty = @import("pty");
 const bar_updates = @import("../config/bar_updates.zig");
 const pick_list = @import("../bars/pick_list.zig");
 const client_tests = @import("client_tests.zig");
@@ -134,7 +135,7 @@ connected_at_ns: u64 = 0,
 /// from its discovery because the forward that holds them can stop.
 launch_cwd: [std.fs.max_path_bytes]u8 = undefined,
 launch_shell: [std.fs.max_path_bytes]u8 = undefined,
-launch_arguments: [1][]const u8 = undefined,
+launch_arguments: [1 + pty.login_shell.login_flags.len][]const u8 = undefined,
 /// Whether the window shows this client's machine. A hidden client keeps
 /// metadata only: it defers its first pane and leaves its workspace.
 presented: bool = true,

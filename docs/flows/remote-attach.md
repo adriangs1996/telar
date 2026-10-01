@@ -86,8 +86,11 @@ output and socket paths containing `:`. SSH destinations cannot start with
 an option or contain whitespace/control bytes.
 
 Initial launches use the remote home and login shell, not the client's current
-directory or `$SHELL`. An explicit command still selects the remote program to
-run. Reattaching to an existing pane preserves that pane's process and cwd.
+directory or `$SHELL`. Supported shells (bash, zsh, ksh, sh, dash and fish)
+start with `-l -i`, following the shell's login and interactive startup rules.
+Other shells start directly, without flags telar does not know. An explicit
+command keeps its arguments unchanged and selects the remote program to run.
+Reattaching to an existing pane preserves that pane's process and cwd.
 
 A remote machine's client never starts a runtime locally, and
 `--config`/`--profile` affect only the local client: the remote runtime reads
@@ -122,7 +125,15 @@ becomes the link's failure text.
   directory; closing the headless client left both windows attached, and
   closing the windows left no `telar server bridge` on the box.
 - `src/gui/run.zig` tests that one window slot gets a distinct identity on each machine.
-- `src/cli/client.zig` tests remote launch defaults and explicit commands.
+- `src/client/connection/runtime_link.zig` tests supported and unsupported
+  remote default shells, owned arguments across discovery replacement,
+  explicit commands and unchanged local defaults.
+- `python3 tools/remote_login_smoke.py` runs discovery and the bridge through
+  a local SSH stub against a disposable runtime, with synthetic `.zprofile`
+  and `.zshrc` files. It checks login environment before interactive startup,
+  remote home, retained shell PID/state after reconnect and literal arguments
+  of explicit commands. It requires zsh and built `telar`/`telar-headless`
+  binaries, and makes no network connection.
 - `telar server endpoint` is covered by the parser tests and prints through
   the same connector the client uses.
 - `python3 tools/remote_smoke.py --destination dev@box` drives

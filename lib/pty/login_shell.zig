@@ -7,7 +7,21 @@ const std = @import("std");
 /// Flags of a login shell that is also interactive, so it reads the rc
 /// files that only interactive shells read (`.zshrc`, `.bashrc`), where
 /// PATH additions often live.
-pub const interactive_flags = [_][]const u8{ "-l", "-i", "-c" };
+pub const login_flags = [_][]const u8{ "-l", "-i" };
+pub const interactive_flags = login_flags ++ [_][]const u8{"-c"};
+
+/// Starts a known shell as an interactive login shell. Unknown shells keep
+/// their direct launch because their login flags may differ.
+/// Example: `const argv = login_shell.interactive(shell, &storage);`
+pub fn interactive(shell: []const u8, storage: *[1 + login_flags.len][]const u8) []const []const u8 {
+    storage[0] = shell;
+    if (script(shell) == null) {
+        return storage[0..1];
+    }
+
+    @memcpy(storage[1..], &login_flags);
+    return storage;
+}
 
 /// Arguments `wrap` puts before the command.
 pub const wrapper_len = interactive_flags.len + 2;
