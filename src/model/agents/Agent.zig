@@ -33,8 +33,8 @@ last_event_len: u8 = 0,
 status_age_s: u32,
 /// The tracked worktree the agent works in; `invalid` when none.
 work_tree: core.WorktreeId = .invalid,
-/// The start of the agent's final answer, lines kept, cut on a UTF-8
-/// boundary; the peek shows it and a task card its first line.
+/// The agent's final answer as the runtime sent it, lines kept; a task
+/// card shows its first line.
 final_message: [max_final_message_bytes]u8 = undefined,
 final_message_len: u16 = 0,
 plan_done: u16 = 0,
@@ -42,8 +42,8 @@ plan_total: u16 = 0,
 plan_step: [core.max_agent_plan_step_bytes]u8 = undefined,
 plan_step_len: u8 = 0,
 
-/// Bytes of the final answer a client keeps.
-pub const max_final_message_bytes = 512;
+/// Bytes of the final answer a client keeps: all the wire carries.
+pub const max_final_message_bytes = core.max_agent_final_message_bytes;
 
 /// Manifest name of the provider ("claude"), or "agent" when the runtime
 /// sent none because the provider is unknown.

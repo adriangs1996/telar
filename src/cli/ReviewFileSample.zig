@@ -7,6 +7,8 @@ pub const capacity = core.change_review.max_sample_bytes;
 storage: [capacity + 1]u8 = undefined,
 len: usize = 0,
 exists: bool = false,
+/// Size of the last file skipped as `ReviewFileTooLarge`.
+size: u64 = 0,
 
 /// Samples one bounded regular text file; every path component rejects symlinks.
 /// Example: `try sample.read(io, "/workspace/src/main.zig");`
@@ -53,8 +55,13 @@ pub fn read(self: *ReviewFileSample, io: std.Io, path: []const u8) !void {
     const file: std.Io.File = .{ .handle = fd, .flags = .{ .nonblocking = true } };
     defer file.close(io);
     const before = try file.stat(io);
-    if (before.kind != .file or before.size > capacity) {
+    if (before.kind != .file) {
         return error.UnsafeReviewFile;
+    }
+
+    if (before.size > capacity) {
+        self.size = before.size;
+        return error.ReviewFileTooLarge;
     }
 
     var reader = file.readerStreaming(io, &.{});
@@ -100,7 +107,8 @@ test "review file samples distinguish absent empty and text and reject unsafe pa
     try sample.read(io, try std.fmt.bufPrint(&path_buffer, "{s}/empty", .{directory}));
     try std.testing.expect(sample.exists and sample.len == 0);
     try std.testing.expectError(error.BinaryReviewFile, sample.read(io, try std.fmt.bufPrint(&path_buffer, "{s}/binary", .{directory})));
-    try std.testing.expectError(error.UnsafeReviewFile, sample.read(io, try std.fmt.bufPrint(&path_buffer, "{s}/oversized", .{directory})));
+    try std.testing.expectError(error.ReviewFileTooLarge, sample.read(io, try std.fmt.bufPrint(&path_buffer, "{s}/oversized", .{directory})));
+    try std.testing.expectEqual(@as(u64, capacity + 1), sample.size);
     for ([_][]const u8{ "link", "linked-directory/source.zig" }) |leaf| {
         try std.testing.expectError(error.UnsafeReviewFile, sample.read(io, try std.fmt.bufPrint(&path_buffer, "{s}/{s}", .{ directory, leaf })));
     }

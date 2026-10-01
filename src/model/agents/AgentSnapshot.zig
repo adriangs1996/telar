@@ -23,10 +23,8 @@ pub fn replace(self: *Snapshot, input: SnapshotInput) !bool {
         return error.TooManyAgents;
     }
 
-    var replacement: Snapshot = .{
-        .revision = input.revision,
-        .count = @intCast(input.agents.len),
-    };
+    // Validate every entry before writing any, so a rejected replacement
+    // keeps the previous replica without a second snapshot on the stack.
     for (input.agents, 0..) |agent, index| {
         for (input.agents[0..index]) |previous| {
             if (std.meta.eql(previous.key, agent.key)) {
@@ -34,10 +32,15 @@ pub fn replace(self: *Snapshot, input: SnapshotInput) !bool {
             }
         }
 
-        replacement.items[index] = try .init(agent);
+        _ = try Agent.init(agent);
     }
 
-    self.* = replacement;
+    for (input.agents, 0..) |agent, index| {
+        self.items[index] = Agent.init(agent) catch unreachable;
+    }
+
+    self.revision = input.revision;
+    self.count = @intCast(input.agents.len);
     return true;
 }
 

@@ -4,6 +4,7 @@
 //! they are built from, so the codec layer can reference it without cycles.
 
 const id = @import("id.zig");
+const Limit = @import("../Limit.zig");
 const ClientLayoutSplit = @import("ClientLayoutSplit.zig");
 const ClientLayoutPane = @import("ClientLayoutPane.zig");
 
@@ -28,7 +29,7 @@ pub const max_panes_per_tab = 64;
 /// this also bounds the tabs alive at once.
 pub const max_panes = 256;
 pub const max_history_query_bytes = 1024;
-pub const max_history_results = 100;
+pub const max_history_results = 1000;
 pub const max_history_command_bytes = 64 * 1024;
 /// Agents the runtime tracks at once, one per agent pane generation.
 pub const max_agent_snapshot_entries = 64;
@@ -73,8 +74,13 @@ pub const max_pane_text_bytes = 256 * 1024;
 /// Text one `send_pane_text` carries: as much as one typed input, so a
 /// prompt with pasted context fits.
 pub const max_pane_text_input_bytes = max_input_bytes;
-pub const max_notification_title_bytes = 48;
-pub const max_notification_message_bytes = 192;
+/// A notification's title: a short sentence.
+pub const max_notification_title_bytes = 96;
+/// A notification's body: a few sentences, such as an agent's login
+/// instructions with their code.
+pub const max_notification_message_bytes = 512;
+pub const notification_title_limit = Limit.declare("notifications.max_title_bytes", "bytes", max_notification_title_bytes);
+pub const notification_message_limit = Limit.declare("notifications.max_message_bytes", "bytes", max_notification_message_bytes);
 /// A notification's link: an https URL, such as an agent's login page.
 /// OAuth authorization URLs measured for the agents telar sets up stay
 /// under 700 bytes.
@@ -348,7 +354,8 @@ pub const AgentProvider = enum(u8) {
     _,
 };
 
-pub const max_agent_manifests = 16;
+/// Agent manifests one configuration holds, the five built-in ones included.
+pub const max_agent_manifests = 32;
 pub const first_custom_agent_provider: u8 = 6;
 pub const max_agent_provider_index: u8 = first_custom_agent_provider + max_agent_manifests - 1;
 pub const max_agent_provider_name_bytes = 32;

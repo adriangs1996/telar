@@ -1,4 +1,5 @@
 const data = @import("model");
+const core = @import("telar-core");
 const lua_api = @import("lua-api");
 const RuntimeSnapshot = @import("RuntimeSnapshot.zig");
 const value = @import("lua_value.zig");
@@ -104,9 +105,44 @@ pub fn parsePatterns(self: *Parser, absolute: c_int, kind: history.PatternKind) 
             self.diagnostic.set("config.runtime.history.{s}[{d}] must be a string", .{ name, item });
             return error.InvalidConfig;
         };
-        list.add(pattern) catch {
-            self.diagnostic.set("config.runtime.history.{s}[{d}] is empty, too long or exceeds the pattern limit", .{ name, item });
+        list.add(pattern) catch |err| {
+            self.refusePattern(.{
+                .name = name,
+                .item = item,
+                .count = count,
+                .len = pattern.len,
+            }, err);
             return error.InvalidConfig;
         };
     }
+}
+
+/// Where a refused filter pattern sits and how large it and its list are.
+const RefusedPattern = struct {
+    name: []const u8,
+    item: usize,
+    count: usize,
+    len: usize,
+};
+
+/// Names what refused a pattern: an empty or NUL-carrying pattern, or the
+/// limit it or its list passed, in the limit notice's words.
+fn refusePattern(self: *Parser, refused: RefusedPattern, err: anyerror) void {
+    const reach: core.LimitReach = switch (err) {
+        error.FilterPatternTooLong => .{
+            .limit = core.history_filter_pattern_bytes_limit,
+            .requested = refused.len,
+        },
+        error.TooManyFilterPatterns => .{
+            .limit = core.history_filter_patterns_limit,
+            .requested = refused.count,
+        },
+        else => {
+            self.diagnostic.set("config.runtime.history.{s}[{d}] must not be empty or contain NUL", .{ refused.name, refused.item });
+            return;
+        },
+    };
+
+    var buffer: [core.LimitReach.max_description_bytes]u8 = undefined;
+    self.diagnostic.set("config.runtime.history.{s}[{d}]: {s}", .{ refused.name, refused.item, reach.describe(&buffer, 1) });
 }

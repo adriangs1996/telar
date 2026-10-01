@@ -23,6 +23,8 @@ const sound = @import("../agent/sound.zig");
 const providers = @import("../agent/providers/providers.zig");
 const hook_integration = @import("../agent/hook_integration.zig");
 const agent_hooks = @import("agent_hooks.zig");
+const limit_reached = @import("limit_reached.zig");
+const channel_support = @import("../history/channel_support.zig");
 
 /// Starts the pane's single observation actor when it may run.
 ///
@@ -77,6 +79,7 @@ pub fn finish(model: *RuntimeModel, completion: ObservationCompletion) !void {
     recordProcessMetrics(model, completion.process_probe);
     reconcileProcess(model, pane, completion.process_probe, transition);
     recordHistoryMetrics(model, completion.stats);
+    reportHistoryLimits(model, pane, completion.stats);
     // Before the screen can settle an interrupt: a composer that reads as
     // ready may still hold the prompt the agent put back.
     // Its error waits until the observation is re-armed, so a key that
@@ -179,6 +182,20 @@ fn reconcileProcess(model: *RuntimeModel, pane: *Pane, probe: Probe, transition:
 
     if (transition.previous_process.provider != .unknown) {
         _ = agent_status.clearProcess(model, pane.key());
+    }
+}
+
+/// Reports the history limits the observation stopped at: a batch dropped
+/// before it was observed, or commands the history queue refused.
+fn reportHistoryLimits(model: *RuntimeModel, pane: *Pane, stats: HistoryStats) void {
+    if (pane.history_observer.takeDrop()) |reach| {
+        limit_reached.report(model, reach);
+    }
+
+    if (stats.refused != 0) {
+        limit_reached.report(model, .{
+            .limit = channel_support.requests_limit,
+        });
     }
 }
 

@@ -4,8 +4,8 @@ const core = @import("telar-core");
 const data = @import("model");
 const std = @import("std");
 
-const notification_max_bytes = 1 + 1 + 4 + 1 + 8 + 1 +
-    core.max_notification_title_bytes + 1 + core.max_notification_message_bytes;
+const notification_max_bytes = 1 + 1 + 4 + 1 + 8 + 2 +
+    core.max_notification_title_bytes + 2 + core.max_notification_message_bytes;
 pub const max_bytes = 1 + data.effects.max_callback_effects * notification_max_bytes;
 
 pub fn encode(buffer: []u8, batch: *const data.EffectBatch) ![]const u8 {
@@ -76,8 +76,8 @@ pub fn encode(buffer: []u8, batch: *const data.EffectBatch) ![]const u8 {
                     try writeU64(&writer, core.raw(workspace_id));
                 },
             }
-            try writeSized8(&writer, value.title());
-            try writeSized8(&writer, value.message());
+            try writeSized16(&writer, value.title());
+            try writeSized16(&writer, value.message());
         },
         .lua_callback, .lua_expr, .plugin => return error.InvalidWorkerEffect,
     };
@@ -146,8 +146,8 @@ pub fn decode(bytes: []const u8) !data.EffectBatch {
                         return error.InvalidWorkerEffect },
                     else => return error.InvalidWorkerEffect,
                 };
-                const title = try sized8(bytes, &offset);
-                const message = try sized8(bytes, &offset);
+                const title = try sized16(bytes, &offset);
+                const message = try sized16(bytes, &offset);
                 break :notification .{ .notification = data.Notification.init(.{
                     .level = level,
                     .duration_ms = duration_ms,
@@ -183,11 +183,14 @@ fn writeU64(writer: *std.Io.Writer, value: u64) !void {
     try writer.writeAll(&bytes);
 }
 
-fn writeSized8(writer: *std.Io.Writer, bytes: []const u8) !void {
-    if (bytes.len > std.math.maxInt(u8)) {
+fn writeSized16(writer: *std.Io.Writer, bytes: []const u8) !void {
+    if (bytes.len > std.math.maxInt(u16)) {
         return error.InvalidWorkerEffect;
     }
-    try writer.writeByte(@intCast(bytes.len));
+
+    var length: [2]u8 = undefined;
+    std.mem.writeInt(u16, &length, @intCast(bytes.len), .little);
+    try writer.writeAll(&length);
     try writer.writeAll(bytes);
 }
 
@@ -207,8 +210,13 @@ fn readU64(bytes: []const u8, offset: *usize) !u64 {
     return std.mem.readInt(u64, bytes[offset.*..][0..8], .little);
 }
 
-fn sized8(bytes: []const u8, offset: *usize) ![]const u8 {
-    const len = try byte(bytes, offset);
+fn sized16(bytes: []const u8, offset: *usize) ![]const u8 {
+    if (bytes.len -| offset.* < 2) {
+        return error.TruncatedWorkerResult;
+    }
+
+    const len = std.mem.readInt(u16, bytes[offset.*..][0..2], .little);
+    offset.* += 2;
     if (bytes.len -| offset.* < len) {
         return error.TruncatedWorkerResult;
     }

@@ -449,13 +449,12 @@ const Probe = struct {
         const widget = try self.gpa.create(Widget);
         defer self.gpa.destroy(widget);
         widget.* = .{};
-        widget.model.revisions[0].load(source.written()) catch |err| {
-            if (lines != 10000 or err != error.ReviewLineLimit) {
-                return err;
-            }
-            try self.writer.writeAll("{\"type\":\"capacity\",\"name\":\"review/10000\",\"expected_error\":\"ReviewLineLimit\"}\n");
+        try widget.model.revisions[0].load(source.written());
+        if (widget.model.revisions[0].reach()) |reach| {
+            try self.writer.print("{{\"type\":\"capacity\",\"name\":\"review/{d}\",\"limit\":\"{s}\",\"kept_rows\":{d}}}\n", .{ lines, reach.limit.name, widget.model.revisions[0].row_count });
             return;
-        };
+        }
+
         if (widget.model.revisions[0].row_count != lines) {
             return error.InvalidReviewFixture;
         }

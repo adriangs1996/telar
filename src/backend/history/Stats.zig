@@ -4,6 +4,8 @@ const Stats = @This();
 input_bytes: u64 = 0,
 captured: u64 = 0,
 dropped: u64 = 0,
+/// Commands the full history queue refused.
+refused: u64 = 0,
 reset: bool = false,
 failed: bool = false,
 shell_markers: bool = false,

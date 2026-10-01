@@ -25,6 +25,9 @@ active: u1 = 0,
 worker: ?u1 = null,
 dropped_events: u64 = 0,
 dropped_bytes: u64 = 0,
+/// The batch limit the last drop stopped at, until the event loop reports
+/// it (`takeDrop`). Only the runtime thread, which queues events, touches it.
+drop: ?core.LimitReach = null,
 resets: u64 = 0,
 failures: u64 = 0,
 sample: Sample = .{},
@@ -65,6 +68,7 @@ pub fn init(self: *Observer, initialization: Initialization) !void {
     self.worker = null;
     self.dropped_events = 0;
     self.dropped_bytes = 0;
+    self.drop = null;
     self.resets = 0;
     self.failures = 0;
     self.sample = .{};
@@ -124,6 +128,18 @@ pub fn queueResize(self: *Observer, size: core.TerminalSize) void {
 
 pub fn queueShellExit(self: *Observer, clock: Clock, exit_code: i32) void {
     self.pushControl(.{ .shell_exit = .{ .clock = clock, .exit_code = exit_code } });
+}
+
+/// Takes the batch limit a drop stopped at since the last call, so the
+/// event loop reports it once.
+///
+/// ```zig
+/// if (observer.takeDrop()) |reach| limit_reached.report(model, reach);
+/// ```
+pub fn takeDrop(self: *Observer) ?core.LimitReach {
+    const reach = self.drop orelse return null;
+    self.drop = null;
+    return reach;
 }
 
 pub fn hasPending(self: *const Observer) bool {
@@ -319,30 +335,52 @@ fn observeOutput(self: *Observer, observation: ObserverOutputObservation, sink: 
 
 fn prepareBytes(self: *Observer, bytes: []const u8) ?*Batch {
     if (bytes.len > observer_support.batch_bytes) {
-        self.dropActive(bytes.len, 1);
+        self.dropActive(.bytes, bytes.len);
         return null;
     }
+
     var batch = &self.batches[self.active];
-    if (batch.event_count == batch.events.len or bytes.len > batch.bytes.len - batch.len) {
-        self.dropActive(bytes.len, 1);
+    if (batch.event_count == batch.events.len) {
+        self.dropActive(.events, bytes.len);
+        batch = &self.batches[self.active];
+    } else if (bytes.len > batch.bytes.len - batch.len) {
+        self.dropActive(.bytes, bytes.len);
         batch = &self.batches[self.active];
     }
+
     return batch;
 }
 
 fn pushControl(self: *Observer, event: observer_support.Event) void {
     var batch = &self.batches[self.active];
     if (!batch.pushEvent(event)) {
-        self.dropActive(0, 1);
+        self.dropActive(.events, 0);
         batch = &self.batches[self.active];
         _ = batch.pushEvent(event);
     }
 }
 
-fn dropActive(self: *Observer, incoming_bytes: usize, incoming_events: usize) void {
+/// Which bound of a batch an event did not fit.
+const BatchLimit = enum { bytes, events };
+
+/// Drops the active batch and the event that did not fit it, and keeps
+/// which limit stopped it with what the batch was asked to hold.
+fn dropActive(self: *Observer, limit: BatchLimit, incoming_bytes: usize) void {
     const batch = &self.batches[self.active];
-    self.dropped_events +|= batch.event_count + incoming_events;
-    self.dropped_bytes +|= batch.len + incoming_bytes;
+    const events = batch.event_count + 1;
+    const bytes = batch.len + incoming_bytes;
+    self.dropped_events +|= events;
+    self.dropped_bytes +|= bytes;
+    self.drop = switch (limit) {
+        .bytes => .{
+            .limit = observer_support.batch_bytes_limit,
+            .requested = bytes,
+        },
+        .events => .{
+            .limit = observer_support.batch_events_limit,
+            .requested = events,
+        },
+    };
     batch.reset();
     batch.reset_before = true;
 }

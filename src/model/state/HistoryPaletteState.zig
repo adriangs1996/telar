@@ -5,9 +5,19 @@ const std = @import("std");
 const history_palette = @import("history_palette.zig");
 const State = @This();
 
+/// Rows one palette page shows and asks the runtime for; older and newer
+/// pages page through the rest. Below `core.max_history_results`, which
+/// bounds any one reply.
+pub const page_entries = 100;
+
+comptime {
+    std.debug.assert(page_entries <= core.max_history_results);
+    std.debug.assert(page_entries <= std.math.maxInt(u8));
+}
+
 revision: u64 = 0,
 pending_request: u64 = 0,
-entries: [core.max_history_results]Entry = undefined,
+entries: [page_entries]Entry = undefined,
 len: u8 = 0,
 phase: enum { idle, loading, ready, failed } = .idle,
 has_page: bool = false,
@@ -150,7 +160,7 @@ pub fn page(self: *State, direction: enum { older, newer }) bool {
                 return false;
             }
 
-            self.pending_offset = self.page_offset -| core.max_history_results;
+            self.pending_offset = self.page_offset -| page_entries;
         },
     }
 
@@ -218,7 +228,7 @@ fn applyEntries(self: *State, request_id: u64, entries: []const core.HistoryEntr
     self.len = 0;
     self.commands_len = 0;
     for (entries) |*entry| {
-        if (self.len == core.max_history_results) {
+        if (self.len == page_entries) {
             break;
         }
 

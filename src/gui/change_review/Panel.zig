@@ -123,17 +123,20 @@ pub fn synchronize(self: *Self, app: *client.Client) !void {
     if (self.notified) {
         const prepared = &self.slots[self.job.?];
         if (state.loaded and prepared.generation == state.generation and prepared.edition == state.snapshot.edition_id) {
-            if (prepared.failure) |err| {
+            if (prepared.failure != null) {
                 self.widget.loading = false;
                 self.widget.read_only = true;
-                self.status(switch (err) {
-                    error.ReviewFileLimit, error.ReviewLineLimit => "This edition exceeds the file or line limit of the review view.",
-                    else => "This edition could not be prepared for review. Refresh to retry.",
-                });
+                self.status("This edition could not be prepared for review. Refresh to retry.");
             } else {
                 self.visible_slot = self.job.?;
                 self.adopt(&state.snapshot);
                 if (prepared.limit) |reach| {
+                    client.limit_reached.report(app, reach);
+                }
+
+                // An edition past the view's file or row limit shows its
+                // first files and rows.
+                if (prepared.revision.reach()) |reach| {
                     client.limit_reached.report(app, reach);
                 }
             }

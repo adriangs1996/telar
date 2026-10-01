@@ -248,18 +248,19 @@ fn requestHistoryPage(model: *data.ClientModel, text: []const u8) !void {
     const filters = historyFilters(model.name_prompt.currentConst(), text);
     const query = filters.query;
 
+    const kept = core.utf8Prefix(query, data.OwnedHistoryQuery.max_query_bytes);
     var owned: data.OwnedHistoryQuery = .{
         .request_id = request_id,
-        .query_len = @intCast(@min(query.len, data.OwnedHistoryQuery.max_query_bytes)),
+        .query_len = @intCast(kept.len),
         .failed_only = filters.failed_only,
         .author = filters.author,
         .match = if (model.config.history_match_fts) .fts else .fuzzy,
-        .limit = core.max_history_results,
+        .limit = data.HistoryPaletteState.page_entries,
         .offset = model.history_palette.pending_offset,
         .snapshot_id = model.history_palette.snapshot_id,
     };
-    @memcpy(owned.query[0..owned.query_len], query[0..owned.query_len]);
-    resolveHistoryScope(model, &owned);
+    @memcpy(owned.query[0..owned.query_len], kept);
+    try resolveHistoryScope(model, &owned);
     if (!model.history_palette.beginPageRequest(core.raw(request_id), owned.scope)) {
         return;
     }
@@ -282,7 +283,11 @@ fn requestHistoryPage(model: *data.ClientModel, text: []const u8) !void {
     };
 }
 
-fn resolveHistoryScope(model: *const data.ClientModel, owned: *data.OwnedHistoryQuery) void {
+/// Narrows the query to the prompt's scope. The workspace path and the
+/// working directory fit `OwnedHistoryQuery.max_scope_bytes`, their own
+/// capacity; one that did not would stop at `ScopeTooLong` rather than
+/// widen the search to every command without saying so.
+fn resolveHistoryScope(model: *const data.ClientModel, owned: *data.OwnedHistoryQuery) !void {
     const prompt = model.name_prompt.currentConst() orelse return;
     if (prompt.target() != .history) {
         return;
@@ -300,25 +305,31 @@ fn resolveHistoryScope(model: *const data.ClientModel, owned: *data.OwnedHistory
             const list = &model.workspace_list_snapshot;
             const index = list.indexOf(workspace) orelse return;
             const path = list.pathAt(index);
-            if (path.len == 0 or path.len > data.OwnedHistoryQuery.max_scope_bytes) {
+            if (path.len == 0) {
                 return;
             }
 
+            if (path.len > data.OwnedHistoryQuery.max_scope_bytes) {
+                return error.ScopeTooLong;
+            }
+
             owned.scope = .workspace;
-            @memcpy(owned.scope_value[0..path.len], path);
-            owned.scope_value_len = @intCast(path.len);
+            owned.scope_value = path;
         },
         .cwd => {
             const active = model.tabs.activeSlot() orelse return;
             const pane = data.tab_layout.focusedPaneConst(model, active) orelse return;
             const cwd = pane.cwdSlice();
-            if (cwd.len == 0 or cwd.len > data.OwnedHistoryQuery.max_scope_bytes) {
+            if (cwd.len == 0) {
                 return;
             }
 
+            if (cwd.len > data.OwnedHistoryQuery.max_scope_bytes) {
+                return error.ScopeTooLong;
+            }
+
             owned.scope = .cwd;
-            @memcpy(owned.scope_value[0..cwd.len], cwd);
-            owned.scope_value_len = @intCast(cwd.len);
+            owned.scope_value = cwd;
         },
         .pane => {
             const active = model.tabs.activeSlot() orelse return;
@@ -332,7 +343,7 @@ fn resolveHistoryScope(model: *const data.ClientModel, owned: *data.OwnedHistory
 /// Applies one runtime reply to the palette model. Stale replies and replies
 /// arriving after the palette closed change nothing visible.
 pub fn applyHistoryResults(client: *Client, view: core.HistoryResultsView) !bool {
-    var storage: [core.max_history_results]core.HistoryEntry = undefined;
+    var storage: [data.HistoryPaletteState.page_entries]core.HistoryEntry = undefined;
     var count: usize = 0;
     var iterator = view.entries();
     while (try iterator.next()) |entry| {

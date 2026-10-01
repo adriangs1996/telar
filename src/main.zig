@@ -343,6 +343,7 @@ test {
     _ = @import("cli/hook_event.zig");
     _ = @import("cli/hook_progress.zig");
     _ = @import("cli/hook_worktree.zig");
+    _ = @import("cli/HookStdin.zig");
     _ = @import("cli/WorktreeCatalog.zig");
     _ = @import("cli/integration_support.zig");
     _ = @import("cli/TempFile.zig");

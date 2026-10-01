@@ -1344,6 +1344,21 @@ test "runtime agents reject bad names and oversized phrases" {
     var long_phrase: data.Diagnostic = .{};
     try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &long_phrase }, .{ .source = "return { api_version = 2, runtime = { agents = { { name = \"x\", working = { string.rep(\"a\", 49) } } } } }", .source_name = "@config.lua", .number = 1 }));
     try std.testing.expectEqualStrings("config.runtime.agents[1].working[1] is too long", long_phrase.message());
+
+    var too_many: data.Diagnostic = .{};
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
+        .{
+            .gpa = std.testing.allocator,
+            .io = std.testing.io,
+            .diagnostic = &too_many,
+        },
+        .{
+            .source = "local agents = {} for i = 1, 28 do agents[i] = { name = \"agent-\" .. i } end return { api_version = 2, runtime = { agents = agents } }",
+            .source_name = "@config.lua",
+            .number = 1,
+        },
+    ));
+    try std.testing.expectEqualStrings("config.runtime.agents[28].name: config.max_agent_manifests: 33 agents; limit 32, the built-in ones included", too_many.message());
 }
 
 test "runtime agents carry presentation and the attachment scheme" {
@@ -1481,6 +1496,56 @@ test "runtime history filters parse and reject invalid patterns" {
 
     var bad_flag: data.Diagnostic = .{};
     try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &bad_flag }, .{ .source = "return { api_version = 2, runtime = { history = { secrets_filter = \"yes\" } } }", .source_name = "@config.lua", .number = 1 }));
+}
+
+test "a history filter past its limit names the limit it passed" {
+    const long = "return { api_version = 2, runtime = { history = { cwd_filters = { string.rep(\"p\", 257) } } } }";
+    var too_long: data.Diagnostic = .{};
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
+        .{
+            .gpa = std.testing.allocator,
+            .io = std.testing.io,
+            .diagnostic = &too_long,
+        },
+        .{
+            .source = long,
+            .source_name = "@config.lua",
+            .number = 1,
+        },
+    ));
+    try std.testing.expectEqualStrings("config.runtime.history.cwd_filters[1]: history_filter.max_pattern_bytes: 257 bytes; limit 256", too_long.message());
+
+    const many = "local p = {} for i = 1, 65 do p[i] = \"n\" .. i end return { api_version = 2, runtime = { history = { command_filters = p } } }";
+    var too_many: data.Diagnostic = .{};
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
+        .{
+            .gpa = std.testing.allocator,
+            .io = std.testing.io,
+            .diagnostic = &too_many,
+        },
+        .{
+            .source = many,
+            .source_name = "@config.lua",
+            .number = 1,
+        },
+    ));
+    try std.testing.expectEqualStrings("config.runtime.history.command_filters[65]: history_filter.max_patterns: 65 patterns; limit 64", too_many.message());
+
+    const empty = "return { api_version = 2, runtime = { history = { command_filters = { \"\" } } } }";
+    var invalid: data.Diagnostic = .{};
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
+        .{
+            .gpa = std.testing.allocator,
+            .io = std.testing.io,
+            .diagnostic = &invalid,
+        },
+        .{
+            .source = empty,
+            .source_name = "@config.lua",
+            .number = 1,
+        },
+    ));
+    try std.testing.expectEqualStrings("config.runtime.history.command_filters[1] must not be empty or contain NUL", invalid.message());
 }
 
 test "client history config toggles agent command visibility" {
