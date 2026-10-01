@@ -21,6 +21,7 @@ pub fn applyAgentSnapshot(client: *Client, snapshot: core.AgentSnapshotView) !?d
                 .pane_id = entry.pane_id,
                 .pane_generation = entry.pane_generation,
             },
+            .session_id = entry.session_id,
             .location = entry.location,
             .pane_index = entry.pane_index,
             .workspace_label = entry.workspace_label,
@@ -47,7 +48,8 @@ pub fn applyAgentSnapshot(client: *Client, snapshot: core.AgentSnapshotView) !?d
         count += 1;
     }
 
-    const commit = try data.agent_snapshot.reconcile(&client.model, 
+    const commit = try data.agent_snapshot.reconcile(
+        &client.model,
         .{
             .revision = snapshot.revision,
             .agents = entries[0..count],

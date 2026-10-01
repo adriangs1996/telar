@@ -5,6 +5,8 @@
 //! and the handshake fingerprint is derived from the same corpus, so a wire
 //! change cannot ship without a visible schema bump.
 
+const CoordinatorReference = @import("CoordinatorReference.zig");
+const corpus_coordinator: CoordinatorReference = .{ .session_id = .{1} ** 16, .pane_id = @enumFromInt(5), .pane_generation = 3 };
 const std = @import("std");
 const localsocket = @import("localsocket");
 const schema = @import("schema/schema.zig");
@@ -1317,6 +1319,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         .source = @enumFromInt(7),
         .workspace = @enumFromInt(9),
         .created_by = @enumFromInt(5),
+        .coordinator = corpus_coordinator,
         .path = "/work/telar-worktrees/fix",
         .branch = "fix",
         .base = "main",
@@ -1538,6 +1541,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .request_id = @enumFromInt(5),
             .source = @enumFromInt(7),
             .created_by = @enumFromInt(5),
+            .coordinator = corpus_coordinator,
             .path = "/work/telar-worktrees/fix",
             .branch = "fix",
             .base = "main",

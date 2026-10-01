@@ -365,6 +365,7 @@ fn restoreWorktree(model: *RuntimeModel, record: WorktreeRecord) !void {
         .title = record.title,
         .brief = record.brief,
         .dispatched_from = record.dispatched_from,
+        .coordinator = record.coordinator,
     });
     if (record.workspace_id != 0) {
         model.worktrees.workspace[registered.slot] = try core.workspace(record.workspace_id);
@@ -596,6 +597,7 @@ pub fn encode(model: *RuntimeModel, buffer: []u8) !EncodedCheckpoint {
             .title = worktrees.titleAt(slot),
             .brief = worktrees.briefAt(slot),
             .dispatched_from = worktrees.dispatchedFromAt(slot),
+            .coordinator = worktrees.coordinator[slot],
         });
     }
 

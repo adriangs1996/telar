@@ -127,6 +127,10 @@ fn writeWorktree(self: *Encoder, record: WorktreeRecord) !void {
     try self.inner.writeSized16(record.title);
     try self.inner.writeSized16(record.brief);
     try self.inner.writeSized16(record.dispatched_from);
+    try self.inner.writeByte(@intFromBool(record.coordinator != null));
+    if (record.coordinator) |coordinator| {
+        try coordinator.encode(&self.inner);
+    }
 }
 
 pub fn layout(self: *Encoder, record: LayoutRecord) !void {

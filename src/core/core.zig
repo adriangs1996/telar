@@ -124,6 +124,7 @@ pub const ImportHistoryView = @import("schema/messages/ImportHistoryView.zig");
 pub const Launch = @import("schema/Launch.zig");
 pub const LaunchView = @import("schema/messages/LaunchView.zig");
 pub const MachineId = @import("MachineId.zig").MachineId;
+pub const CoordinatorReference = @import("CoordinatorReference.zig");
 pub const MachineProfile = @import("MachineProfile.zig");
 pub const AgentLogin = @import("AgentLogin.zig").AgentLogin;
 pub const MachineProfileFields = @import("MachineProfileFields.zig");
@@ -494,6 +495,7 @@ test {
     _ = @import("graphics.zig");
     _ = @import("history_filter.zig");
     _ = @import("MachineId.zig");
+    _ = @import("CoordinatorReference.zig");
     _ = @import("MachineProfile.zig");
     _ = @import("AgentLogin.zig");
     _ = @import("MachineProfiles.zig");
@@ -576,7 +578,6 @@ pub const EditorOpened = @import("schema/messages/EditorOpened.zig");
 const editor_codec = @import("schema/messages/editor.zig");
 pub const encodeOpenEditor = editor_codec.encodeOpenEditor;
 pub const encodeEditorOpened = editor_codec.encodeEditorOpened;
-
 
 pub const OwnedEditorOpen = @import("schema/messages/OwnedEditorOpen.zig");
 

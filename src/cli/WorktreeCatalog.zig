@@ -48,6 +48,7 @@ pub fn copy(self: *WorktreeCatalog, list: core.WorkspaceListView) !void {
             .source = core.raw(entry.source),
             .workspace = if (entry.workspace) |id| core.raw(id) else null,
             .created_by = if (entry.created_by) |id| core.raw(id) else null,
+            .coordinator = entry.coordinator,
             .origin = entry.origin,
             .state = entry.state,
             .path = try arena.dupe(u8, entry.path),

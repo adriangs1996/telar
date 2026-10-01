@@ -3,6 +3,7 @@ const AgentKey = @import("AgentKey.zig");
 const AgentInput = @This();
 
 key: AgentKey,
+session_id: [16]u8 = @splat(0),
 location: core.TabLocation,
 pane_index: u16,
 workspace_label: []const u8 = "",

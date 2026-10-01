@@ -100,6 +100,17 @@ fn creatorOf(sources: FleetSources, entries: []const FleetEntry, entry: FleetEnt
 
     const agent = &sources.agents[entry.index];
     const row = taskRow(sources.workspaces, agent) orelse return null;
+    if (row.coordinator) |reference| {
+        for (entries) |candidate| {
+            const parent = &sources.agents[candidate.index];
+            if (candidate.index != entry.index and candidate.card == .agent and candidate.project == entry.project and parent.key.pane_id == reference.pane_id and parent.key.pane_generation == reference.pane_generation and std.mem.eql(u8, &parent.session_id, &reference.session_id)) {
+                return candidate.index;
+            }
+        }
+
+        return null;
+    }
+
     const pane = row.created_by orelse return null;
     if (pane == agent.key.pane_id) {
         return null;

@@ -555,6 +555,31 @@ pub fn interruptAgent(self: *Session, pane: PaneRef) !void {
     };
 }
 
+/// Captures attribution only after the runtime verifies this process's pane.
+/// An absent, stale or unverified pane carries no coordinator attribution.
+/// Example: `const reference = session.coordinator(init.minimal.environ);`
+pub fn coordinator(self: *Session, environ: std.process.Environ) ?core.CoordinatorReference {
+    const pane_id = control.currentPaneId(environ) catch return null;
+    const generation = control.currentPaneGeneration(environ) catch return null;
+    self.verifyDescent(.{ .pane_id = pane_id, .pane_generation = generation }) catch return null;
+
+    var snapshot: Snapshot = .{};
+    self.fetchAgents(&snapshot) catch return null;
+    for (snapshot.entries[0..snapshot.count]) |entry| {
+        if (entry.pane_id == pane_id and entry.pane_generation == generation) {
+            const reference: core.CoordinatorReference = .{
+                .session_id = entry.session_id,
+                .pane_id = @enumFromInt(pane_id),
+                .pane_generation = generation,
+            };
+            reference.validate() catch return null;
+            return reference;
+        }
+    }
+
+    return null;
+}
+
 /// Has the runtime confirm that this process runs inside `pane`: it reads
 /// the process from the socket and walks its parents. Once confirmed, this
 /// connection may report for the pane in the name of an agent.
@@ -604,7 +629,6 @@ pub fn reportLimit(self: *Session, reach: core.LimitReach) !void {
         .hits = 1,
     }));
 }
-
 
 pub fn nowMs(self: *const Session) i64 {
     return std.Io.Timestamp.now(self.io, .real).toMilliseconds();

@@ -21,6 +21,7 @@ source: [capacity]core.WorkspaceId = @splat(.invalid),
 /// and again after its last tab closes.
 workspace: [capacity]?core.WorkspaceId = @splat(null),
 created_by: [capacity]?core.PaneId = @splat(null),
+coordinator: [capacity]?core.CoordinatorReference = @splat(null),
 origin: [capacity]core.WorktreeOrigin = @splat(.telar),
 state: [capacity]core.WorktreeState = @splat(.active),
 branch: [capacity][core.max_git_branch_bytes]u8 = undefined,
@@ -60,6 +61,7 @@ next_id: u64 = 1,
 /// Tracks a worktree, or returns the row that already tracks `path`. An
 /// existing row keeps its identity; a non-empty title or brief replaces the
 /// stored one, so a coordinator can name a worktree an agent created.
+/// An explicit coordinator replaces its attribution; absence preserves it.
 ///
 /// ```zig
 /// const registered = try worktrees.register(gpa, .{ .source = workspace, .path = "/src/fix", .branch = "fix" });
@@ -68,6 +70,9 @@ pub fn register(self: *Worktrees, gpa: std.mem.Allocator, request: WorktreeRegis
     try validate(request);
     if (self.slotOfPath(request.path)) |slot| {
         self.rename(slot, request.title, request.brief);
+        if (request.coordinator) |coordinator| {
+            self.coordinator[slot] = coordinator;
+        }
         return .{ .id = self.id[slot], .slot = slot, .created = false };
     }
 
@@ -87,6 +92,7 @@ pub fn register(self: *Worktrees, gpa: std.mem.Allocator, request: WorktreeRegis
     self.source[slot] = request.source;
     self.workspace[slot] = null;
     self.created_by[slot] = request.created_by;
+    self.coordinator[slot] = request.coordinator;
     self.origin[slot] = request.origin;
     self.state[slot] = .active;
     self.branch_len[slot] = @intCast(copyText(&self.branch[slot], request.branch));
@@ -290,6 +296,7 @@ pub fn listEntries(self: *const Worktrees, output: *[capacity]core.WorktreeListE
             .source = self.source[slot],
             .workspace = self.workspace[slot],
             .created_by = self.created_by[slot],
+            .coordinator = self.coordinator[slot],
             .origin = self.origin[slot],
             .state = self.state[slot],
             .path = self.path[slot],
@@ -371,6 +378,10 @@ fn validate(request: WorktreeRegistration) !void {
 
     if (request.branch.len == 0) {
         return error.InvalidWorktreeText;
+    }
+
+    if (request.coordinator) |coordinator| {
+        try coordinator.validate();
     }
 
     // A row every client can decode: the workspace list carries all of them.
@@ -539,4 +550,19 @@ test "registration rejects relative paths, empty branches and exhausted capacity
     }
 
     try std.testing.expectError(error.WorktreeLimitReached, table.register(gpa, .{ .source = source, .path = "/w/over", .branch = "b" }));
+}
+
+test "a later registration can add coordinator attribution without replacing worktree identity" {
+    var table: Worktrees = .{};
+    defer table.deinit(std.testing.allocator);
+    const request: WorktreeRegistration = .{ .source = @enumFromInt(1), .path = "/work/fix", .branch = "fix" };
+    const first = try table.register(std.testing.allocator, request);
+    var attributed = request;
+    attributed.coordinator = .{ .session_id = .{1} ** 16, .pane_id = @enumFromInt(7), .pane_generation = 3 };
+    const second = try table.register(std.testing.allocator, attributed);
+    try std.testing.expectEqual(first.id, second.id);
+    try std.testing.expect(!second.created);
+    try std.testing.expectEqualDeep(attributed.coordinator, table.coordinator[first.slot]);
+    _ = try table.register(std.testing.allocator, request);
+    try std.testing.expectEqualDeep(attributed.coordinator, table.coordinator[first.slot]);
 }

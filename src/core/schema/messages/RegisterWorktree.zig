@@ -1,3 +1,4 @@
+const CoordinatorReference = @import("../../CoordinatorReference.zig");
 const id = @import("../id.zig");
 const types = @import("../types.zig");
 /// Asks the runtime to track one Git linked worktree. The CLI adds the
@@ -10,6 +11,7 @@ request_id: id.RequestId,
 source: id.WorkspaceId,
 /// The pane that asked for it, so a coordinator's delegations stay traceable.
 created_by: ?id.PaneId = null,
+coordinator: ?CoordinatorReference = null,
 origin: types.WorktreeOrigin = .telar,
 path: []const u8,
 branch: []const u8,

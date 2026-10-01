@@ -1,6 +1,7 @@
 //! Worktree tracking: registration, launches into a worktree's workspace,
 //! forgetting one, and the worktree section of the workspace list.
 
+const CoordinatorReference = @import("../../CoordinatorReference.zig");
 const bytecodec = @import("bytecodec");
 const std = @import("std");
 const types = @import("../types.zig");
@@ -39,6 +40,7 @@ pub fn encodeRegisterWorktree(buffer: []u8, message: RegisterWorktree) ![]const 
     try encoder.writeSized16(message.title);
     try encoder.writeSized16(message.brief);
     try encoder.writeSized16(message.dispatched_from);
+    try encodeCoordinator(&encoder, message.coordinator);
     return encoder.finish();
 }
 
@@ -55,6 +57,7 @@ pub fn decodeRegisterWorktree(decoder: *Decoder) !RegisterWorktree {
         .title = try decoder.readSized16(),
         .brief = try decoder.readSized16(),
         .dispatched_from = try decoder.readSized16(),
+        .coordinator = try decodeCoordinator(decoder),
     };
     try validateRegistration(message);
     return message;
@@ -122,6 +125,7 @@ pub fn encodeWorktreeListEntry(encoder: *Encoder, entry: WorktreeListEntry) !voi
     try encoder.writeSized16(entry.title);
     try encoder.writeSized16(entry.brief);
     try encoder.writeSized16(entry.dispatched_from);
+    try encodeCoordinator(encoder, entry.coordinator);
     try encoder.writeInt(u32, entry.diff_added);
     try encoder.writeInt(u32, entry.diff_removed);
     try encoder.writeInt(u32, entry.diff_files);
@@ -147,6 +151,7 @@ pub fn decodeWorktreeListEntry(decoder: *Decoder) !WorktreeListEntry {
         .title = try decoder.readSized16(),
         .brief = try decoder.readSized16(),
         .dispatched_from = try decoder.readSized16(),
+        .coordinator = try decodeCoordinator(decoder),
         .diff_added = try decoder.readInt(u32),
         .diff_removed = try decoder.readInt(u32),
         .diff_files = try decoder.readInt(u32),
@@ -161,6 +166,10 @@ pub fn decodeWorktreeListEntry(decoder: *Decoder) !WorktreeListEntry {
 }
 
 fn validateRegistration(message: RegisterWorktree) !void {
+    if (message.coordinator) |coordinator| {
+        try coordinator.validate();
+    }
+
     if (message.source == .invalid) {
         return error.InvalidWorkspaceId;
     }
@@ -176,6 +185,10 @@ fn validateRegistration(message: RegisterWorktree) !void {
 }
 
 fn validateListEntry(entry: WorktreeListEntry) !void {
+    if (entry.coordinator) |coordinator| {
+        try coordinator.validate();
+    }
+
     if (entry.source == .invalid) {
         return error.InvalidWorkspaceId;
     }
@@ -240,4 +253,15 @@ fn decodeOptionalWorkspace(decoder: *Decoder) !?id.WorkspaceId {
     }
 
     return try id.workspace(try decoder.readInt(u64));
+}
+
+fn encodeCoordinator(encoder: *Encoder, coordinator: ?CoordinatorReference) !void {
+    try encoder.writeByte(@intFromBool(coordinator != null));
+    if (coordinator) |reference| {
+        try reference.encode(encoder);
+    }
+}
+
+fn decodeCoordinator(decoder: *Decoder) !?CoordinatorReference {
+    return if (try decoder.readBool()) try CoordinatorReference.decode(decoder) else null;
 }

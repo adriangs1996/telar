@@ -43,6 +43,7 @@ pub fn register(model: *RuntimeModel, session: *Session, request: core.RegisterW
     const registered = model.worktrees.register(model.gpa, .{
         .source = request.source,
         .created_by = request.created_by,
+        .coordinator = request.coordinator,
         .origin = request.origin,
         .path = request.path,
         .branch = request.branch,

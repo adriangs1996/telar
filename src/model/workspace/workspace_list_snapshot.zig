@@ -57,6 +57,7 @@ pub fn apply(model: *ClientModel, list: core.WorkspaceListView) !workspace_list_
             .source = entry.source,
             .workspace = entry.workspace,
             .created_by = entry.created_by,
+            .coordinator = entry.coordinator,
             .state = entry.state,
             .path = entry.path,
             .branch = entry.branch,
@@ -73,7 +74,8 @@ pub fn apply(model: *ClientModel, list: core.WorkspaceListView) !workspace_list_
         worktree_count += 1;
     }
 
-    const commit = reconcile(model, 
+    const commit = reconcile(
+        model,
         .{
             .revision = list.revision,
             .entries = entries[0..count],

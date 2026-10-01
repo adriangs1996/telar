@@ -5,6 +5,7 @@ const snapshot_support = @import("snapshot_support.zig");
 const Agent = @This();
 
 key: data.AgentKey,
+session_id: [16]u8 = @splat(0),
 location: core.TabLocation,
 pane_index: u16,
 workspace_label: [core.max_agent_workspace_label_bytes]u8 = undefined,
@@ -86,6 +87,7 @@ pub fn iconGlyph(self: *const Agent) []const u8 {
 pub fn init(input: data.AgentInput) !Agent {
     var agent: Agent = .{
         .key = input.key,
+        .session_id = input.session_id,
         .location = input.location,
         .pane_index = input.pane_index,
         .title_source = input.title_source,

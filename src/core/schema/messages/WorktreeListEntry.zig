@@ -1,3 +1,4 @@
+const CoordinatorReference = @import("../../CoordinatorReference.zig");
 const id = @import("../id.zig");
 const types = @import("../types.zig");
 /// One tracked worktree in the workspace list.
@@ -8,6 +9,7 @@ source: id.WorkspaceId,
 /// The workspace holding the worktree's tabs, once something was launched.
 workspace: ?id.WorkspaceId = null,
 created_by: ?id.PaneId = null,
+coordinator: ?CoordinatorReference = null,
 origin: types.WorktreeOrigin = .telar,
 state: types.WorktreeState = .active,
 path: []const u8,

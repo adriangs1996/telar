@@ -186,6 +186,9 @@ pub fn writeAgentJson(writer: *std.Io.Writer, agent: *const ControlAgent) !void 
     try writeJsonString(writer, agent.planStep());
     try writer.writeAll("},\"final_message\":");
     try writeJsonString(writer, agent.finalMessage());
+    try writer.writeAll(",\"session_id\":");
+    const session = std.fmt.bytesToHex(agent.session_id, .lower);
+    try writeJsonString(writer, &session);
     try writer.writeByte('}');
 }
 
@@ -251,4 +254,24 @@ test "snapshot resolution prefers exact pane ids and rejects ambiguous titles" {
 
     snapshot.count = 1;
     try std.testing.expectEqual(@as(u64, 7), (try snapshot.resolve(.{ .name = "investigate PROXY" }, .empty)).?.pane_id);
+}
+
+test "agent JSON exposes the same pane session identity coordinator references use" {
+    const agent: ControlAgent = .{
+        .pane_id = 7,
+        .pane_generation = 3,
+        .session_id = .{1} ** 16,
+        .workspace_id = 1,
+        .tab_id = 1,
+        .pane_index = 1,
+        .provider = .codex,
+        .status = .working,
+    };
+    var buffer: [1024]u8 = undefined;
+    var writer: std.Io.Writer = .fixed(&buffer);
+    try writeAgentJson(&writer, &agent);
+    const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, writer.buffered(), .{});
+    defer parsed.deinit();
+    try std.testing.expectEqualStrings("01010101010101010101010101010101", parsed.value.object.get("session_id").?.string);
+    try std.testing.expectEqual(@as(i64, 7), parsed.value.object.get("pane_id").?.integer);
 }

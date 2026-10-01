@@ -26,7 +26,9 @@ pub const magic: *const [8]u8 = "TELARCKP";
 /// session in the pane; version 9 sizes a pane's launch arguments in 32 bits,
 /// so a launch of up to `max_launch_bytes` fits.
 /// Older labels remain explicit because their naming intent was not recorded.
-pub const version: u16 = 9;
+pub const version: u16 = 10;
+/// Version 10 adds the globally qualified coordinator attribution.
+pub const coordinator_version: u16 = 10;
 pub const oldest_readable_version: u16 = 1;
 /// The first version whose worktree records end with `dispatched_from`.
 pub const dispatched_from_version: u16 = 7;
@@ -87,6 +89,10 @@ pub fn validateTitle(title: []const u8, source: u8) !void {
 /// A worktree record carries an absolute path and text every client can
 /// decode, by the same rule the wire and the runtime's table apply.
 pub fn validateWorktree(record: WorktreeRecord) !void {
+    if (record.coordinator) |coordinator| {
+        try coordinator.validate();
+    }
+
     try validatePath(record.path);
     if (record.id == 0 or record.source_workspace_id == 0 or record.branch.len == 0) {
         return error.InvalidCheckpoint;
@@ -516,7 +522,7 @@ test "worktree records keep the dispatching machine from version 7 on" {
     try encoder.worktree(local);
     const bytes = try encoder.finish();
     var legacy: [512]u8 = undefined;
-    const trailing_empty_text = 2;
+    const trailing_empty_text = 2 + 1;
     const body = bytes.len - 1 - trailing_empty_text;
     @memcpy(legacy[0..body], bytes[0..body]);
     legacy[body] = bytes[bytes.len - 1];
@@ -568,4 +574,42 @@ test "a worktree record with text no client could decode is refused" {
     var escaped = valid;
     escaped.title = "Fix\x1b[2J";
     try std.testing.expectError(error.InvalidCheckpoint, validateWorktree(escaped));
+}
+
+test "coordinator attribution restores in version 10 and version 9 has no reference" {
+    var buffer: [512]u8 = undefined;
+    const counters: Counters = .{ .next_workspace_id = 2, .next_tab_id = 1, .next_pane_id = 1, .next_pane_generation = 1 };
+    const reference: core.CoordinatorReference = .{ .session_id = .{1} ** 16, .pane_id = @enumFromInt(7), .pane_generation = 3 };
+    var encoder = try Encoder.init(&buffer, counters);
+    try encoder.worktree(.{ .id = 4, .source_workspace_id = 1, .path = "/work/fix", .branch = "fix", .coordinator = reference });
+    var reader = try Reader.init(try encoder.finish());
+    try std.testing.expectEqualDeep(reference, (try reader.next()).?.worktree.coordinator.?);
+    try std.testing.expect(try reader.next() == null);
+
+    encoder = try Encoder.init(&buffer, counters);
+    try encoder.worktree(.{ .id = 4, .source_workspace_id = 1, .path = "/work/fix", .branch = "fix" });
+    const bytes = try encoder.finish();
+    // Strip the new optional-reference byte, retaining the end record.
+    var legacy: [512]u8 = undefined;
+    const body = bytes.len - 2;
+    @memcpy(legacy[0..body], bytes[0..body]);
+    legacy[body] = bytes[bytes.len - 1];
+    std.mem.writeInt(u16, legacy[magic.len..][0..2], coordinator_version - 1, .little);
+    reader = try Reader.init(legacy[0 .. body + 1]);
+    try std.testing.expect((try reader.next()).?.worktree.coordinator == null);
+    try std.testing.expect(try reader.next() == null);
+}
+
+test "invalid coordinator attribution skips its worktree and preserves the following records" {
+    var buffer: [512]u8 = undefined;
+    var encoder = try Encoder.init(&buffer, .{ .next_workspace_id = 2, .next_tab_id = 2, .next_pane_id = 1, .next_pane_generation = 1 });
+    const reference: core.CoordinatorReference = .{ .session_id = .{1} ** 16, .pane_id = @enumFromInt(7), .pane_generation = 3 };
+    try encoder.worktree(.{ .id = 4, .source_workspace_id = 1, .path = "/work/fix", .branch = "fix", .coordinator = reference });
+    // A torn reference must not quarantine unrelated session state.
+    @memset(buffer[encoder.inner.index - 32 ..][0..16], 0);
+    try encoder.workspace(.{ .id = 1, .path = "/work/repo", .name = "repo", .first_tab_id = 1, .first_tab_label = "main" });
+    var reader = try Reader.init(try encoder.finish());
+    try std.testing.expect((try reader.next()).? == .workspace);
+    try std.testing.expectEqual(@as(u16, 1), reader.skipped_worktrees);
+    try std.testing.expect(try reader.next() == null);
 }

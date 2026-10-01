@@ -10,6 +10,7 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const WorktreeOptions = @import("arguments/WorktreeOptions.zig");
 const GitTransfer = @import("GitTransfer.zig");
+const Session = @import("Session.zig");
 const agent = @import("agent.zig");
 const machine_dispatch = @import("machine_dispatch.zig");
 const worktree_git = @import("worktree_git.zig");
@@ -22,7 +23,7 @@ const max_url_bytes = url_scheme.len + core.ssh_destination.max_bytes + std.fs.m
 /// pushed commit is shorter than a branch.
 const max_refspec_bytes = "+refs/heads/:refs/remotes//".len + 2 * workspace_grammar.max_worktree_branch_bytes + core.MachineProfile.max_label_bytes;
 /// Most words a forwarded `worktree create` carries besides the command.
-const max_create_words = 16;
+const max_create_words = 18;
 /// `telar worktree resolve --repository ID --json [--workspace PATH]`.
 const max_resolve_words = 8;
 
@@ -74,12 +75,16 @@ pub fn create(init: std.process.Init, options: WorktreeOptions, profile: core.Ma
 
     var label_buffer: [std.posix.HOST_NAME_MAX]u8 = undefined;
     const local = try machine_dispatch.localLabel(init, &label_buffer);
+    const coordinator = if (options.coordinator) |reference| try core.CoordinatorReference.parse(std.mem.span(reference)) else sourceCoordinator(init);
+    var coordinator_buffer: [core.CoordinatorReference.max_text_bytes]u8 = undefined;
+    const coordinator_text = if (coordinator) |reference| try arena.dupeZ(u8, try reference.format(&coordinator_buffer)) else null;
     var words: [max_create_words + WorktreeOptions.max_command_arguments][*:0]const u8 = undefined;
     const argv = createArgv(.{
         .options = &options,
         .path = clone.path,
         .dispatched_from = try arena.dupeZ(u8, local),
         .base = if (continued) null else try arena.dupeZ(u8, commit),
+        .coordinator = coordinator_text,
     }, &words);
     return machine_dispatch.forward(init, &clone.profile, argv);
 }
@@ -234,6 +239,7 @@ const CreateWords = struct {
     /// The commit a new branch starts from, so its diff there shows only
     /// the task's work; null when an existing branch continues.
     base: ?[:0]const u8,
+    coordinator: ?[:0]const u8 = null,
 };
 
 /// `telar worktree create BRANCH --workspace PATH --dispatched-from LABEL`
@@ -250,6 +256,7 @@ fn createArgv(request: CreateWords, words: [][*:0]const u8) []const [*:0]const u
     const optional = [_]struct { flag: [*:0]const u8, value: ?[*:0]const u8 }{
         .{ .flag = "--title", .value = options.title },
         .{ .flag = "--label", .value = options.label },
+        .{ .flag = "--coordinator", .value = if (request.coordinator) |reference| reference.ptr else null },
         .{ .flag = "--from", .value = if (request.base) |base| base.ptr else null },
     };
     for (optional) |pair| {
@@ -292,4 +299,24 @@ test "a dispatched create names the clone and this machine and keeps the command
     for (expected, argv) |want, got| {
         try std.testing.expectEqualStrings(want, std.mem.span(got));
     }
+}
+
+fn sourceCoordinator(init: std.process.Init) ?core.CoordinatorReference {
+    if (init.minimal.environ.getPosix("TELAR_PANE_ID") == null) {
+        return null;
+    }
+
+    var session = Session.attach(init, null) catch return null;
+    defer session.close();
+    return session.coordinator(init.minimal.environ);
+}
+
+test "a forwarded dispatch carries the exact coordinator separately from the machine label" {
+    const reference = "01010101010101010101010101010101:7:9";
+    const options = try WorktreeOptions.parse(&.{ "create", "fix", "--machine", "box", "--coordinator", reference });
+    var words: [max_create_words + WorktreeOptions.max_command_arguments][*:0]const u8 = undefined;
+    const argv = createArgv(.{ .options = &options, .path = "/repo", .dispatched_from = "laptop", .base = null, .coordinator = reference }, &words);
+    try std.testing.expectEqualStrings("--coordinator", std.mem.span(argv[8]));
+    try std.testing.expectEqualStrings(reference, std.mem.span(argv[9]));
+    try std.testing.expectError(error.InvalidCoordinatorReference, WorktreeOptions.parse(&.{ "create", "fix", "--coordinator", "bad" }));
 }

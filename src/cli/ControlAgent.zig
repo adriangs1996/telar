@@ -6,6 +6,7 @@ const Agent = @This();
 
 pane_id: u64,
 pane_generation: u64,
+session_id: [16]u8 = @splat(0),
 workspace_id: u64,
 tab_id: u64,
 pane_index: u16,
@@ -75,6 +76,7 @@ pub fn fromEntry(entry: core.AgentSnapshotEntry) Agent {
     var agent: Agent = .{
         .pane_id = core.raw(entry.pane_id),
         .pane_generation = entry.pane_generation,
+        .session_id = entry.session_id,
         .workspace_id = core.raw(entry.location.workspace.workspace),
         .tab_id = core.raw(entry.location.tab_id),
         .pane_index = entry.pane_index,

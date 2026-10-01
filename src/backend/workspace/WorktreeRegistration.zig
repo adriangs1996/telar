@@ -6,6 +6,7 @@ const WorktreeRegistration = @This();
 id: ?core.WorktreeId = null,
 source: core.WorkspaceId,
 created_by: ?core.PaneId = null,
+coordinator: ?core.CoordinatorReference = null,
 origin: core.WorktreeOrigin = .telar,
 path: []const u8,
 branch: []const u8,

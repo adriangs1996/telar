@@ -159,6 +159,7 @@ fn create(init: std.process.Init, command: Command) !u8 {
         .request_id = .none,
         .source = try core.workspace(source),
         .created_by = attributedPane(command.session, init.minimal.environ),
+        .coordinator = if (options.coordinator) |reference| try core.CoordinatorReference.parse(std.mem.span(reference)) else command.session.coordinator(init.minimal.environ),
         .path = checkout,
         .branch = branch,
         .base = base,
@@ -398,6 +399,7 @@ fn findOrAdopt(init: std.process.Init, command: Command) !CatalogWorktree {
             .request_id = .none,
             .source = try core.workspace(source),
             .created_by = attributedPane(command.session, init.minimal.environ),
+            .coordinator = command.session.coordinator(init.minimal.environ),
             .path = listed.path,
             .branch = listed.branch,
             .base = base,
@@ -697,6 +699,14 @@ fn writeWorktreeJson(writer: *std.Io.Writer, worktree: *const CatalogWorktree, s
     try control.writeJsonString(writer, worktree.base);
     try writer.writeAll(",\"dispatched_from\":");
     try control.writeJsonString(writer, worktree.dispatched_from);
+    try writer.writeAll(",\"coordinator\":");
+    if (worktree.coordinator) |reference| {
+        const session = std.fmt.bytesToHex(reference.session_id, .lower);
+        try std.json.Stringify.value(.{ .session_id = @as([]const u8, &session), .pane_id = core.raw(reference.pane_id), .pane_generation = reference.pane_generation }, .{}, writer);
+    } else {
+        try writer.writeAll("null");
+    }
+
     try writer.writeAll(",\"path\":");
     try control.writeJsonString(writer, worktree.path);
     try writer.print(",\"origin\":\"{s}\",\"state\":\"{s}\",\"source_workspace_id\":{d},\"workspace_id\":", .{
@@ -927,4 +937,45 @@ test "the most recently used client wins unless one is named" {
     try std.testing.expectEqual(@as(u64, 2), (try chooseClient(&clients, 0)).id);
     try std.testing.expectEqual(@as(u64, 1), (try chooseClient(&clients, 1)).id);
     try std.testing.expectError(error.ClientNotFound, chooseClient(&clients, 7));
+}
+
+test "worktree JSON exposes coordinator identity as a nullable object with a hex session" {
+    var record: CatalogWorktree = .{
+        .id = @enumFromInt(1),
+        .source = 1,
+        .workspace = 2,
+        .created_by = null,
+        .coordinator = .{ .session_id = .{1} ** 16, .pane_id = @enumFromInt(7), .pane_generation = 3 },
+        .origin = .telar,
+        .state = .active,
+        .path = "/work/fix",
+        .branch = "fix",
+        .base = "main",
+        .title = "Fix",
+        .brief = "",
+        .diff_added = 0,
+        .diff_removed = 0,
+        .diff_files = 0,
+        .commits_ahead = 0,
+        .command_label = "codex",
+        .command_state = .running,
+        .command_exit = 0,
+    };
+    const snapshot: Snapshot = .{};
+    var buffer: [2048]u8 = undefined;
+    var writer: std.Io.Writer = .fixed(&buffer);
+    try writeWorktreeJson(&writer, &record, &snapshot);
+    const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, writer.buffered(), .{});
+    defer parsed.deinit();
+    const reference = parsed.value.object.get("coordinator").?.object;
+    try std.testing.expectEqualStrings("01010101010101010101010101010101", reference.get("session_id").?.string);
+    try std.testing.expectEqual(@as(i64, 7), reference.get("pane_id").?.integer);
+    try std.testing.expectEqual(@as(i64, 3), reference.get("pane_generation").?.integer);
+
+    record.coordinator = null;
+    writer = .fixed(&buffer);
+    try writeWorktreeJson(&writer, &record, &snapshot);
+    const unattributed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, writer.buffered(), .{});
+    defer unattributed.deinit();
+    try std.testing.expect(unattributed.value.object.get("coordinator").? == .null);
 }

@@ -1,3 +1,4 @@
+const core = @import("telar-core");
 /// One tracked worktree in a checkpoint. Git observations and the running
 /// command are not recorded; the next probe and launch rebuild them.
 const WorktreeRecord = @This();
@@ -8,6 +9,7 @@ source_workspace_id: u64,
 workspace_id: u64 = 0,
 /// The pane that asked for it; zero when unknown.
 created_by: u64 = 0,
+coordinator: ?core.CoordinatorReference = null,
 origin: u8 = 0,
 path: []const u8,
 branch: []const u8,

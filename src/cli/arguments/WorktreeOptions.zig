@@ -27,6 +27,8 @@ client: u64 = 0,
 machine: ?[*:0]const u8 = null,
 /// `create`: the label of the machine that dispatched it here.
 dispatched_from: ?[*:0]const u8 = null,
+/// Internal cross-machine attribution; never execution authority.
+coordinator: ?[*:0]const u8 = null,
 /// `resolve`: the repository identity to find among the workspaces.
 repository: ?[*:0]const u8 = null,
 socket: ?[*:0]const u8 = null,
@@ -90,6 +92,9 @@ pub fn parse(args: []const [*:0]const u8) !WorktreeOptions {
         } else if (std.mem.eql(u8, arg, "--dispatched-from") and action == .create) {
             options.dispatched_from = try single(options.dispatched_from, try cursor.require(error.MissingMachineLabel));
             try validateText(std.mem.span(options.dispatched_from.?), core.MachineProfile.max_label_bytes);
+        } else if (std.mem.eql(u8, arg, "--coordinator") and action == .create) {
+            options.coordinator = try single(options.coordinator, try cursor.require(error.MissingCoordinatorReference));
+            _ = try core.CoordinatorReference.parse(std.mem.span(options.coordinator.?));
         } else if (std.mem.eql(u8, arg, "--repository") and action == .resolve) {
             options.repository = try single(options.repository, try cursor.require(error.MissingRepository));
             try validateText(std.mem.span(options.repository.?), max_repository_bytes);

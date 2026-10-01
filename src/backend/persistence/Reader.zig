@@ -16,7 +16,7 @@ inner: bytecodec.Decoder,
 counters: Counters,
 version: u16,
 finished: bool = false,
-/// Worktree records dropped because their text no longer validates; the
+/// Worktree records dropped because their metadata no longer validates; the
 /// rest of the checkpoint still restores.
 skipped_worktrees: u16 = 0,
 
@@ -90,6 +90,7 @@ pub fn next(self: *Reader) !?checkpoint.Record {
                     .title = try self.inner.readSized16(),
                     .brief = try self.inner.readSized16(),
                     .dispatched_from = if (self.version >= checkpoint.dispatched_from_version) try self.inner.readSized16() else "",
+                    .coordinator = if (self.version >= checkpoint.coordinator_version and try self.inner.readBool()) try self.readCoordinator() else null,
                 } };
                 // A worktree is observation, not session state: losing one
                 // must not quarantine every workspace, tab and pane with it.
@@ -177,4 +178,12 @@ pub fn next(self: *Reader) !?checkpoint.Record {
             },
         }
     }
+}
+
+fn readCoordinator(self: *Reader) !core.CoordinatorReference {
+    return .{
+        .session_id = (try self.inner.readBytes(16))[0..16].*,
+        .pane_id = @enumFromInt(try self.inner.readInt(u64)),
+        .pane_generation = try self.inner.readInt(u64),
+    };
 }
