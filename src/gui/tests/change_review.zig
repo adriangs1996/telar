@@ -264,7 +264,7 @@ test "runtime review failed preparation keeps the old edition read only and retr
     const index = 1 - panel.visible_slot;
     panel.slots[index].generation = gui.app.model.change_review.generation;
     panel.slots[index].edition = 2;
-    panel.slots[index].failure = error.ReviewLineLimit;
+    panel.slots[index].failure = error.ReviewFileWithoutLines;
     panel.job = index;
     panel.notify();
     try panel.synchronize(gui.app);
@@ -272,7 +272,7 @@ test "runtime review failed preparation keeps the old edition read only and retr
     try std.testing.expectEqualStrings(patch, panel.widget.model.current().source);
     try std.testing.expect(panel.widget.read_only);
     try std.testing.expect(!panel.widget.loading);
-    try std.testing.expect(std.mem.indexOf(u8, panel.widget.model.status, "file or line limit") != null);
+    try std.testing.expect(std.mem.indexOf(u8, panel.widget.model.status, "could not be prepared") != null);
     panel.widget.command = .refresh;
     try panel.synchronize(gui.app);
     try std.testing.expectEqual(@as(u64, 2), (try core.decodeClient(try session.sent())).query_change_review.edition_id);
