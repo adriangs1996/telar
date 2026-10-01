@@ -54,7 +54,9 @@ A zero token defers submission while that completion still awaits dispatch.
    Changes arriving during GPU work coalesce into `dirty`; no frame replay is
    queued. A quiet view keeps its display link paused.
 
-The link requests 60 Hz. A frame budget carries the cadence forward across
+The link requests the refresh rate of the window's screen, or less under
+`gui.max_fps`, and follows the window to another screen
+([frame pacing](frame-pacing.md)). A frame budget carries the cadence forward across
 callback jitter and resets after idle; it never queues missed frames. The system
 chooses actual callback timing. `displaySyncEnabled` remains enabled.
 This controls scheduling and presentation, not a promise of lower input latency.

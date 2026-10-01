@@ -16,7 +16,7 @@ All paths below are relative to `src/gui/linux/`.
 | --- | --- |
 | [window.c](../../src/gui/linux/window.c) | Wayland toplevel, geometry, dirty state, Zig callbacks and teardown ordering |
 | [input.c](../../src/gui/linux/input.c) | Keyboard translation, repeat and nonblocking clipboard reads |
-| [frame_clock.c](../../src/gui/linux/frame_clock.c) | One pending Wayland frame callback and the 60 Hz submission budget |
+| [frame_clock.c](../../src/gui/linux/frame_clock.c) | One pending Wayland frame callback and the submission budget at the window's interval |
 | [frame_worker.c](../../src/gui/linux/frame_worker.c) | One borrowed sealed scene, worker thread and completion wakeup |
 | [renderer.c](../../src/gui/linux/renderer.c) | Assembly, reusable command buffer, render fence and submission flow |
 | [vulkan_device.c](../../src/gui/linux/vulkan_device.c) | Instance, surface, device, queue and memory capabilities |
@@ -100,8 +100,10 @@ space, preferring BGRA8 UNORM.
    A quiet window requests no further callbacks or draw-deadline wakeups.
 
 Wayland supplies the compositor's pacing hints and FIFO synchronizes
-presentation. A monotonic deadline also caps submission at 60 Hz, matching
-Metal's budget on faster displays. The existing native poll loop uses the
+presentation. A monotonic deadline also caps submission at the window's
+interval: the refresh of the fastest output the surface is on, read from
+`wl_output` by `display_rate.c`, or longer under `gui.max_fps`
+([frame pacing](frame-pacing.md)). The existing native poll loop uses the
 remaining deadline only when a dirty window has no callback or GPU work
 outstanding. There is no periodic timer. Cadence carries forward across small
 wake jitter and resets after idle; a dirty window can then submit immediately.

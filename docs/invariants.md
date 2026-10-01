@@ -83,6 +83,11 @@ detach, reconnect, destroy), its recovery and the test that proves it.
   (`string.rep`) in a release build, before it fails.
 - Steady state allocates nothing. Fixed buffers and bounded rings absorb
   bursts.
+- A window presents at most at the refresh rate of its display, or of
+  `gui.max_fps` below it; frames past the display's rate are never drawn.
+  The runtime paces each attachment's cell frames at its client's interval,
+  bounded on the wire to 30..240 Hz, so no client can ask for frames without
+  limit.
 - Obsolete frames are folded, never queued as a replay.
 
 **Media**: KGP payloads, decoded images, compression, image transfer.
