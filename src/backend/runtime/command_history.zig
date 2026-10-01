@@ -182,10 +182,6 @@ pub fn receive(model: *RuntimeModel, result: anyerror!history_model.Response) !v
 
     switch (response) {
         .query_result => |value| {
-            if (value.limit) |reach| {
-                limit_reached.report(model, reach);
-            }
-
             const session = model.clients.resolve(value.origin.client) orelse return;
             session.delivery.setCloseAfterReply(value.origin.close_after_reply);
             owned_query = null;

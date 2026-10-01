@@ -75,9 +75,11 @@ previous page. This bounded one-page implementation replaces the review's
 suggested two-page prefetch cache.
 
 The fuzzy matcher scores the newest 10,000 executions in the selected scope
-(`history.fuzzy_max_candidates`); older ones never match a fuzzy query. When
-a page runs out inside that window while older executions exist, the runtime
-reports the limit with the limit notice. Empty queries browse chronological
+(`FuzzyPage.max_candidates`); older ones never match a fuzzy query. The
+window bounds the work of one keystroke on the history worker; it is a
+property of fuzzy search, not a loss, so it raises no limit notice: a user
+with a long history would otherwise see one every minute while typing.
+Empty queries browse chronological
 history without that candidate cap.
 `client.history.match = "fts"` uses the existing indexed substring path instead.
 

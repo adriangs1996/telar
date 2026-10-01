@@ -84,7 +84,7 @@ sequentially splitting the same pane had exhausted its minimum width.
 | Native idle/scroll/full | One 30-second capture per case, 5-second workload warmup, about 21 seconds inside the steady window | Frame IDs and GPU/main completions; separate short captures recover loss-free core traces |
 | Workspace lookups | 1, 8 and 64 populated tabs; 1,000 batches per CPU run | Fixed hot lookup sequence, not random-access session latency |
 | Agent thread | 32 synthetic messages, 1,000 resolves/draws per CPU run | Real retained layout; no provider/network or end-to-end snapshot replay |
-| Review | 100 and 1,000 rows with search, 1,000 draws each | Plain syntax roles; excludes Tree-sitter. 10,000 rows explicitly rejected by the 1,024-row view limit |
+| Review | 100 and 1,000 rows with search, 1,000 draws each | Plain syntax roles; excludes Tree-sitter. 10,000 rows were rejected by the 1,024-row view limit of the time; the view now keeps the first 4,096 rows of a longer edition |
 | Runtime attached/detached | 8 MiB ASCII and ANSI per B0/B2 case | PTY write through DSR completion, not GPU presentation |
 | Media and load | Five paired 4K inline compressed-image transfers and five paired input-under-output runs | Existing headless TUI probes; pixel checksum and timeouts checked |
 | Slow host | Two corrected pairs, then one pair after atomic receipt publication | Foreground PTY child received all 32 input bytes while host reads were blocked |

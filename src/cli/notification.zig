@@ -92,7 +92,7 @@ pub fn send(init: std.process.Init, notification: core.Notification, socket: ?[*
         .notification_shown => |shown| {
             try validateAcknowledgement(shown);
             const reach = truncated orelse return;
-            var report_buffer: LimitReportBuffer = undefined;
+            var report_buffer: [core.max_report_limit_bytes]u8 = undefined;
             const report = core.encodeReportLimit(&report_buffer, .{
                 .reach = reach,
                 .hits = 1,
@@ -130,10 +130,6 @@ fn validateAcknowledgement(shown: core.NotificationShown) !void {
         return error.NoNotificationClients;
     }
 }
-
-/// Room for one `report_limit`: its strings plus the tag, their lengths
-/// and its four integers.
-const LimitReportBuffer = [core.Limit.max_name_bytes + core.Limit.max_noun_bytes + core.LimitReach.max_route_bytes + 64]u8;
 
 test "a title and body past their limits are cut on a UTF-8 boundary and reported" {
     const title = "t" ** (core.max_notification_title_bytes - 1) ++ "é";

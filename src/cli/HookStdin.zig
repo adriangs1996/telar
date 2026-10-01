@@ -57,7 +57,9 @@ fn readFrom(gpa: std.mem.Allocator, reader: *std.Io.Reader, limit: usize) !HookS
         else => |other| return other,
     };
 
-    return .{ .text = try input.toOwnedSlice(gpa) };
+    return .{
+        .text = try input.toOwnedSlice(gpa),
+    };
 }
 
 /// Copies the top-level members of an object cut short into a complete

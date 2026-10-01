@@ -146,11 +146,15 @@ a 256 MiB retained-storage quota. Saturation preserves existing editions and
 appears in review status; it does not silently delete older reviews. Each of
 these bounds is reported by name when the review job finishes:
 `review.group_capacity`, `review.editions_in_memory`, `review.archive_capacity`,
-`review.pending_samples`, `review.conversation_storage`, `review.global_storage`
-and `review.max_storage_files`.
+`review.pending_samples`, `review.pending_sample_bytes`,
+`review.conversation_storage`, `review.global_storage` and
+`review.max_storage_files`.
 
 Before/after capture holds at most 128 pending paths per conversation. A pending
-sample holds only its own bytes, not the largest a sample may be. Unmatched
+sample holds only its own bytes, not the largest a sample may be, and all
+conversations' pending samples share 64 MiB (`review.pending_sample_bytes`):
+without it, 32 conversations of 128 samples of 128 KiB could hold half a
+gigabyte for the ten minutes a sample waits. Unmatched
 samples expire after ten minutes and are discarded when the owning pane
 generation changes. Creation or deletion of an empty file currently has no
 supported text hunk and is rejected as an unsupported patch.

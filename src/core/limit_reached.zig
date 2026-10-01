@@ -124,6 +124,7 @@ pub const LimitError = error{
     ReviewGlobalStorageFull,
     ReviewGroupsFull,
     ReviewPatchTooLarge,
+    ReviewPendingSampleBytesFull,
     ReviewPendingSamplesFull,
     ReviewStorageFilesExceeded,
     RingFull,

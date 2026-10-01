@@ -539,6 +539,7 @@ pub const QueryLimits = @import("schema/messages/QueryLimits.zig");
 pub const LimitListEntry = @import("schema/messages/LimitListEntry.zig");
 pub const LimitListView = @import("schema/messages/LimitListView.zig");
 pub const encodeReportLimit = limits_module.encodeReportLimit;
+pub const max_report_limit_bytes = limits_module.max_report_limit_bytes;
 pub const encodeQueryLimits = limits_module.encodeQueryLimits;
 pub const encodeLimitList = limits_module.encodeLimitList;
 

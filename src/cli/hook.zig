@@ -536,6 +536,13 @@ pub fn run(init: std.process.Init, options: HookOptions) !void {
     const environ = init.minimal.environ;
     var stdin = HookStdin.read(init) catch return;
     defer stdin.deinit(init.gpa);
+    // Every way out says the input passed its limit, the early ones too;
+    // `sendReports` also reports it to the runtime.
+    defer {
+        if (stdin.limit) |reach| {
+            limit_reached.report(reach);
+        }
+    }
     const input = stdin.text;
 
     if (options.agent == .claude) {
@@ -544,6 +551,10 @@ pub fn run(init: std.process.Init, options: HookOptions) !void {
             defer parsed.deinit();
             if (hook_worktree.handles(parsed.value.hook_event_name)) {
                 hook_worktree.answer(init, parsed.value, options.socket) catch |err| {
+                    if (stdin.limit) |reach| {
+                        limit_reached.report(reach);
+                    }
+
                     std.debug.print("telar hook: {s} failed: {s}\n", .{ parsed.value.hook_event_name, control.describe(err) });
                     std.process.exit(1);
                 };
@@ -714,32 +725,22 @@ fn hookProvider(agent: HookOptions.Agent) core.AgentProvider {
 
 /// Sends every report the event produced. Each is independent of the ones
 /// before it, so one the runtime refuses never costs the others, and a
-/// limit the input reached is reported last.
+/// limit the input reached is sent last; `run` prints it.
 fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
     if (reports.lifecycle == null and reports.command == null and reports.title == null and reports.review == null and reports.progress == null) {
-        if (reports.limit) |reach| {
-            limit_reached.report(reach);
-        }
-
         return;
     }
 
     // Attach only. The pane environment survives a stopped runtime, and a
     // hook that started one would resurrect it from every orphaned agent.
-    var session = Session.attach(init, target.socket) catch {
-        if (reports.limit) |reach| {
-            limit_reached.report(reach);
-        }
-
-        return;
-    };
+    var session = Session.attach(init, target.socket) catch return;
     defer session.close();
 
     const pane = target.pane;
     session.verifyDescent(pane) catch return;
     sendVerified(&session, target, reports);
     if (reports.limit) |reach| {
-        limit_reached.reportThrough(&session, reach);
+        session.reportLimit(reach) catch {};
     }
 }
 

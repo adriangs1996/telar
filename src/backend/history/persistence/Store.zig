@@ -388,23 +388,14 @@ fn queryFuzzy(self: *Store, gpa: std.mem.Allocator, request: *const Query) !*Que
     _ = sqlite.c.sqlite3_bind_int64(stmt, parameter, @intCast(request.snapshot_id));
     parameter += 1;
     history_sql.bindQueryFilters(stmt, &parameter, request);
-    // One row past the window says whether older executions exist.
-    _ = sqlite.c.sqlite3_bind_int(stmt, parameter, max_candidates + 1);
+    _ = sqlite.c.sqlite3_bind_int(stmt, parameter, max_candidates);
 
     var ranking = FuzzyPage.init(request);
     var seen: std.AutoHashMapUnmanaged(u64, void) = .empty;
     defer seen.deinit(gpa);
 
-    var scanned: usize = 0;
-    var window_passed = false;
     while (true) switch (sqlite.c.sqlite3_step(stmt)) {
         sqlite.c.SQLITE_ROW => {
-            if (scanned == max_candidates) {
-                window_passed = true;
-                break;
-            }
-
-            scanned += 1;
             const hash = history_sql.commandHash(stmt);
             if (request.distinct and seen.contains(hash)) {
                 continue;
@@ -441,14 +432,7 @@ fn queryFuzzy(self: *Store, gpa: std.mem.Allocator, request: *const Query) !*Que
         }
     }
 
-    const result = try accumulator.finish(request, start + accumulator.entries.items.len < ranking.count);
-    if (window_passed and ranking.count < ranking.wanted) {
-        // The page ran out inside the window while older commands, which
-        // might match, were never scored.
-        result.limit = .{ .limit = FuzzyPage.candidates_limit };
-    }
-
-    return result;
+    return accumulator.finish(request, start + accumulator.entries.items.len < ranking.count);
 }
 
 /// Aggregates totals, distinct commands, and the top command groups in

@@ -936,11 +936,13 @@ test "fuzzy matching ranks subsequences and collapses duplicates" {
     try std.testing.expectEqual(second.entries[0].id, exact.entries[0].id);
 }
 
-test "a fuzzy page that ends inside the candidate window names the window" {
+test "a fuzzy query scores only the newest executions of its window" {
     var store = try Store.open(":memory:");
     defer store.close();
     const location: core.TabLocation = .{
-        .workspace = .{ .workspace = @enumFromInt(1) },
+        .workspace = .{
+            .workspace = @enumFromInt(1),
+        },
         .tab_id = @enumFromInt(1),
     };
     const session: SessionStarted = .{
@@ -982,7 +984,10 @@ test "a fuzzy page that ends inside the candidate window names the window" {
     }
 
     const origin: QueryOrigin = .{
-        .client = .{ .id = 1, .generation = 1 },
+        .client = .{
+            .id = 1,
+            .generation = 1,
+        },
         .close_after_reply = false,
     };
     const query_value = try Query.init(.{
@@ -994,7 +999,6 @@ test "a fuzzy page that ends inside the candidate window names the window" {
     const inside = try store.query(std.testing.allocator, &query_value);
     defer inside.deinit();
     try std.testing.expectEqual(@as(usize, 1), inside.entries.len);
-    try std.testing.expect(inside.limit == null);
 
     value.sequence = FuzzyPage.max_candidates + 1;
     value.started_at_ms = FuzzyPage.max_candidates + 1;
@@ -1002,7 +1006,6 @@ test "a fuzzy page that ends inside the candidate window names the window" {
     const past = try store.query(std.testing.allocator, &query_value);
     defer past.deinit();
     try std.testing.expectEqual(@as(usize, 0), past.entries.len);
-    try std.testing.expectEqualStrings("history.fuzzy_max_candidates", past.limit.?.limit.name);
 }
 
 pub fn appendQueryFilters(sql: *std.Io.Writer, request: *const Query) !void {

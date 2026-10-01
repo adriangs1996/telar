@@ -76,7 +76,9 @@ pub fn observeReport(model: *RuntimeModel, observation: ReportObservation) bool 
                 .path = observation.session_file.path,
             });
             if (!watched and model.agent_watches.full()) {
-                limit_reached.report(model, .{ .limit = Watches.capacity_limit });
+                limit_reached.report(model, .{
+                    .limit = Watches.capacity_limit,
+                });
             }
         }
     }
@@ -274,7 +276,9 @@ pub fn restoreTitle(model: *RuntimeModel, key: PaneKey, title: SessionTitle) boo
 /// found no slot; `stored` passes through.
 fn kept(model: *RuntimeModel, stored: bool) bool {
     if (!stored) {
-        limit_reached.report(model, .{ .limit = RestoredAgents.capacity_limit });
+        limit_reached.report(model, .{
+            .limit = RestoredAgents.capacity_limit,
+        });
     }
 
     return stored;
@@ -618,7 +622,9 @@ fn ensure(model: *RuntimeModel, identity: Identity) ?*Agent {
 
     const agent = model.agents.insert(Agent.init(identity)) orelse {
         if (model.agents.full()) {
-            limit_reached.report(model, .{ .limit = Agents.capacity_limit });
+            limit_reached.report(model, .{
+                .limit = Agents.capacity_limit,
+            });
         }
 
         return null;

@@ -598,16 +598,13 @@ pub fn reportProgress(self: *Session, report: core.ReportAgentProgress) !void {
 /// try session.reportLimit(.{ .limit = ReviewHookFiles.files_limit, .requested = 40 });
 /// ```
 pub fn reportLimit(self: *Session, reach: core.LimitReach) !void {
-    var buffer: [limit_report_bytes]u8 = undefined;
+    var buffer: [core.max_report_limit_bytes]u8 = undefined;
     try self.connection.send(self.io, try core.encodeReportLimit(&buffer, .{
         .reach = reach,
         .hits = 1,
     }));
 }
 
-/// Bytes of the largest `report_limit`: its strings plus the tag, their
-/// lengths and its four integers.
-const limit_report_bytes = core.Limit.max_name_bytes + core.Limit.max_noun_bytes + core.LimitReach.max_route_bytes + 64;
 
 pub fn nowMs(self: *const Session) i64 {
     return std.Io.Timestamp.now(self.io, .real).toMilliseconds();

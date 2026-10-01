@@ -75,12 +75,19 @@ pub fn reach(self: *const Self) ?core.LimitReach {
 }
 
 /// Ends the view at `start`, the line past a limit, and counts the files
-/// and numbered rows after it.
+/// and numbered rows after it. A last file the cut left without rows goes
+/// too, since a file the view shows needs a row to select.
 fn leaveOut(self: *Self, lines: *core.ChangeReviewDiffLines, start: usize, limit: core.Limit) void {
     self.cut = limit;
     self.source = self.source[0..start];
     if (self.file_count > 0) {
         self.files[self.file_count - 1].end = start;
+    }
+
+    if (self.file_count > 1 and self.files[self.file_count - 1].first == self.files[self.file_count - 1].last) {
+        self.file_count -= 1;
+        self.omitted_files += 1;
+        self.source = self.source[0..self.files[self.file_count].start];
     }
 
     while (lines.next()) |line| {
@@ -216,6 +223,23 @@ test "an edition past the view's row limit keeps its first rows and names the li
     const cut = revision.reach().?;
     try std.testing.expectEqualStrings("change_review.view_lines", cut.limit.name);
     try std.testing.expectEqual(@as(?u64, rows + 1), cut.requested);
+}
+
+test "a row limit at the first row of a file leaves that file out and keeps the files before it" {
+    const header = std.fmt.comptimePrint("Added full.zig\n@@ -0,0 +1,{d} @@\n", .{limits.lines});
+    const row = "+x\n";
+    const first = header ++ row ** limits.lines;
+    const source = first ++ "Added next.zig\n@@ -0,0 +1,2 @@\n+y\n+z\n";
+    var revision: Self = .{};
+    try revision.load(source);
+    try revision.ensureReviewable();
+    try std.testing.expectEqual(@as(usize, 1), revision.file_count);
+    try std.testing.expectEqual(@as(usize, limits.lines), revision.row_count);
+    try std.testing.expectEqual(@as(usize, 1), revision.omitted_files);
+    try std.testing.expectEqual(@as(usize, 2), revision.omitted_rows);
+    try std.testing.expectEqualStrings(first, revision.source);
+    try std.testing.expectEqual(first.len, revision.files[0].end);
+    try std.testing.expectEqualStrings("change_review.view_lines", revision.reach().?.limit.name);
 }
 
 test "review prototype live editions require a path and numbered rows in every file" {

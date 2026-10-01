@@ -148,7 +148,9 @@ pub fn push(self: *Outbox, message: outbox_support.Message) !void {
                             if (old.offset == 0 and old.snapshot_id == 0 and old.entry_id == 0) {
                                 var owned = query;
                                 try owned.ownScope(self.payloadAt(index));
-                                self.items[index] = .{ .query_history = owned };
+                                self.items[index] = .{
+                                    .query_history = owned,
+                                };
                                 return;
                             }
                         },
@@ -310,7 +312,9 @@ pub fn pushNotification(self: *Outbox, request: core.ShowNotification) !void {
     const encoded = try core.encodeShowNotification(&scratch, request);
     const index = try self.reserve();
     self.item_launch_cwd[index] = null;
-    self.items[index] = .{ .show_notification = @intCast(encoded.len) };
+    self.items[index] = .{
+        .show_notification = @intCast(encoded.len),
+    };
     @memcpy(self.payloadAt(index)[0..encoded.len], encoded);
 }
 

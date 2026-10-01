@@ -72,22 +72,34 @@ pub fn setFittingPatch(self: *Edition, patch: []const u8) !usize {
 }
 
 /// Writes into `buffer` the longest prefix of `patch` that ends before a
-/// hunk or file line, or up to the hunk crossing the end with only the
-/// lines of it that fit, and returns its length.
+/// file's header or before a hunk that is not its file's first, or up to
+/// the hunk crossing the end with only the lines of it that fit, and
+/// returns its length. A file is never kept without a hunk.
 fn fit(buffer: []u8, patch: []const u8) usize {
-    var lines: core.ChangeReviewDiffLines = .{ .text = patch };
+    var lines: core.ChangeReviewDiffLines = .{
+        .text = patch,
+    };
     var boundary: usize = 0;
     var hunk_start: ?usize = null;
+    var file_hunks: usize = 0;
     var previous: ?DiffLine.Kind = null;
     while (true) {
         const start = lines.index;
         const line = lines.next() orelse break;
-        if (line.kind == .file or line.kind == .hunk) {
+        if (line.kind == .file) {
             if (previous != null and previous.? != .file and start <= buffer.len) {
                 boundary = start;
             }
 
-            hunk_start = if (line.kind == .hunk) start else null;
+            hunk_start = null;
+            file_hunks = 0;
+        } else if (line.kind == .hunk) {
+            if (file_hunks != 0 and start <= buffer.len) {
+                boundary = start;
+            }
+
+            hunk_start = start;
+            file_hunks += 1;
         }
 
         if (lines.index > buffer.len) {
@@ -426,7 +438,9 @@ test "a diff at the patch limit is kept whole and one byte past it with a single
     const gpa = std.testing.allocator;
     const edition = try gpa.create(Edition);
     defer gpa.destroy(edition);
-    edition.* = .{ .id = 1 };
+    edition.* = .{
+        .id = 1,
+    };
 
     const prefix = "Added a.zig\n@@ -0,0 +1 @@\n+";
     const patch = try gpa.alloc(u8, core.change_review.max_patch_bytes + 1);
@@ -449,7 +463,9 @@ test "a diff past the patch limit keeps its whole hunks and recounts the hunk it
     const gpa = std.testing.allocator;
     const edition = try gpa.create(Edition);
     defer gpa.destroy(edition);
-    edition.* = .{ .id = 1 };
+    edition.* = .{
+        .id = 1,
+    };
 
     var hunks: std.Io.Writer.Allocating = .init(gpa);
     defer hunks.deinit();
@@ -483,11 +499,26 @@ test "a diff past the patch limit keeps its whole hunks and recounts the hunk it
     try std.testing.expect(std.mem.endsWith(u8, edition.text(), "+line\n"));
 }
 
+test "a cut past a file's git header keeps the files before it, never the header alone" {
+    const first = "diff --git a/one.zig b/one.zig\nindex 1111111..2222222 100644\n--- a/one.zig\n+++ b/one.zig\n@@ -1 +1 @@\n-a\n+b\n";
+    const second_header = "diff --git a/two.zig b/two.zig\nindex 3333333..4444444 100644\n--- a/two.zig\n+++ b/two.zig\n";
+    const second_hunk = "@@ -1,2 +1,2 @@\n-c\n+d\n";
+    const patch = first ++ second_header ++ second_hunk;
+
+    // Room for the second header and the start of its hunk header, but not
+    // for a recounted hunk with a change.
+    var buffer: [first.len + second_header.len + 4]u8 = undefined;
+    const kept = fit(&buffer, patch);
+    try std.testing.expectEqualStrings(first, buffer[0..kept]);
+}
+
 test "feedback keeps the comments that fit and counts the rest" {
     const gpa = std.testing.allocator;
     const edition = try gpa.create(Edition);
     defer gpa.destroy(edition);
-    edition.* = .{ .id = 1 };
+    edition.* = .{
+        .id = 1,
+    };
     try edition.setPatch("Updated file.zig\n@@ -1,2 +1,2 @@\n-old\n+new\n context\n");
 
     const body: [core.change_review.max_comment_bytes]u8 = @splat('c');

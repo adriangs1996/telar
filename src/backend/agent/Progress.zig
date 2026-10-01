@@ -205,15 +205,31 @@ test "the final message is bounded and unchanged values report no change" {
 test "the plan keeps its first max_tasks tasks and refuses the next" {
     var progress: Progress = .{};
     for (0..max_tasks) |_| {
-        try std.testing.expect(!progress.refusesTask(.{ .op = .add, .text = "task" }));
-        try std.testing.expect(progress.applyPlan(.{ .op = .add, .text = "task" }));
+        try std.testing.expect(!progress.refusesTask(.{
+            .op = .add,
+            .text = "task",
+        }));
+        try std.testing.expect(progress.applyPlan(.{
+            .op = .add,
+            .text = "task",
+        }));
     }
 
     try std.testing.expectEqual(@as(u16, max_tasks), progress.total());
-    try std.testing.expect(progress.refusesTask(.{ .op = .add, .text = "one more" }));
-    try std.testing.expect(!progress.applyPlan(.{ .op = .add, .text = "one more" }));
+    try std.testing.expect(progress.refusesTask(.{
+        .op = .add,
+        .text = "one more",
+    }));
+    try std.testing.expect(!progress.applyPlan(.{
+        .op = .add,
+        .text = "one more",
+    }));
     try std.testing.expectEqual(@as(u16, max_tasks), progress.total());
 
-    try std.testing.expect(progress.applyPlan(.{ .op = .mark, .index = max_tasks - 1, .status = .completed }));
+    try std.testing.expect(progress.applyPlan(.{
+        .op = .mark,
+        .index = max_tasks - 1,
+        .status = .completed,
+    }));
     try std.testing.expectEqual(@as(u16, 1), progress.done());
 }

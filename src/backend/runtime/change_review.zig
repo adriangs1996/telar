@@ -228,6 +228,7 @@ fn limitOf(err: anyerror) ?core.Limit {
     return switch (err) {
         error.ReviewGroupsFull => Service.groups_limit,
         error.ReviewPendingSamplesFull => Group.samples_limit,
+        error.ReviewPendingSampleBytesFull => Service.pending_sample_bytes_limit,
         error.ReviewArchiveFull => Group.archive_limit,
         error.ReviewEditionsFull => Group.editions_limit,
         error.ReviewConversationStorageFull => StorageInput.conversation_storage_limit,
@@ -262,6 +263,7 @@ fn failure(request_id: core.RequestId, err: anyerror) PendingFailure {
         error.MissingReviewBaseline => "no matching before snapshot; edit was not attributed",
         error.ReviewGroupsFull => "review holds too many conversations with unmatched edits; retry once their tools finish",
         error.ReviewPendingSamplesFull => "too many edits of this conversation await their after snapshot",
+        error.ReviewPendingSampleBytesFull => "edits awaiting their after snapshot hold too many bytes; retry once their tools finish",
         error.ReviewArchiveFull => "this conversation reached its review edition limit",
         error.ReviewEditionsFull => "too many recent editions hold unsent comments; send or delete some",
         error.ReviewConversationStorageFull, error.ReviewGlobalStorageFull, error.ReviewStorageFilesExceeded => "review storage is full; existing editions were preserved",
@@ -324,7 +326,14 @@ test "a review job that stops at a limit reports it by name and frees its slot" 
     defer fixture.deinit();
 
     const model = &fixture.runtime.model;
-    const context = try Context.init(.{ .id = @enumFromInt(9), .generation = 1 }, .claude, "thread");
+    const context = try Context.init(
+        .{
+            .id = @enumFromInt(9),
+            .generation = 1,
+        },
+        .claude,
+        "thread",
+    );
     const job = &model.review_jobs.storage[0];
     job.* = .{
         .service = model.review_service.?,
@@ -346,6 +355,7 @@ test "every review worker limit error names its limit and answers resource_limit
     const errors = [_]anyerror{
         error.ReviewGroupsFull,
         error.ReviewPendingSamplesFull,
+        error.ReviewPendingSampleBytesFull,
         error.ReviewArchiveFull,
         error.ReviewEditionsFull,
         error.ReviewConversationStorageFull,

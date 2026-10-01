@@ -22,6 +22,10 @@ const LimitListView = @import("LimitListView.zig");
 /// Rows one list carries: both of the runtime's tables.
 const max_list_entries = 2 * LimitReaches.capacity;
 
+/// Bytes of the largest `report_limit`: the tag, the name, noun and route
+/// with their 16-bit lengths, the value, the optional amount and the hits.
+pub const max_report_limit_bytes = 1 + 3 * 2 + Limit.max_name_bytes + Limit.max_noun_bytes + LimitReach.max_route_bytes + 8 + 1 + 8 + 4;
+
 /// Encodes one client report. Example: `const bytes = try limits.encodeReportLimit(buffer, report);`
 pub fn encodeReportLimit(buffer: []u8, report: ReportLimit) ![]const u8 {
     if (report.hits == 0) {
@@ -262,4 +266,24 @@ test "a report refuses empty hits, names that are not identifiers and odd routes
     const decoded = try decodeReportLimit(&decoder);
     try std.testing.expectEqualStrings("gui.widgets.registry_capacity", decoded.reach.limit.name);
     try std.testing.expectEqual(@as(u32, 2), decoded.hits);
+}
+
+test "the largest report fits max_report_limit_bytes exactly" {
+    const name = "n" ** Limit.max_name_bytes;
+    const noun = "u" ** Limit.max_noun_bytes;
+    const route = "r" ** LimitReach.max_route_bytes;
+    var buffer: [max_report_limit_bytes]u8 = undefined;
+    const bytes = try encodeReportLimit(&buffer, .{
+        .reach = .{
+            .limit = .{
+                .name = name,
+                .noun = noun,
+                .value = std.math.maxInt(u64),
+            },
+            .requested = std.math.maxInt(u64),
+            .route = route,
+        },
+        .hits = std.math.maxInt(u32),
+    });
+    try std.testing.expectEqual(@as(usize, max_report_limit_bytes), bytes.len);
 }

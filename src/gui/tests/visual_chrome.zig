@@ -320,11 +320,25 @@ test "a toast's accessible label keeps the start of a body longer than the label
 
     var overlays: Overlays = .{};
     const renderer = &fixture.session.gui.renderer;
-    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.app.model.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
+    var canvas: Canvas = .{
+        .atlas = &renderer.atlas.?,
+        .quads = &renderer.quads,
+        .metrics = renderer.metrics,
+        .origin = renderer.origin,
+        .theme = fixture.session.gui.app.model.theme,
+        .chrome = renderer.chrome,
+        .viewport = renderer.viewport,
+    };
     renderer.quads.clear();
     var projection = fixture.projection();
     var widgets: frame_widget.List = .{};
-    try overlays.compose(.{ .canvas = &canvas, .projection = &projection }, &widgets);
+    try overlays.compose(
+        .{
+            .canvas = &canvas,
+            .projection = &projection,
+        },
+        &widgets,
+    );
     try widgets.draw(&canvas);
     overlays.seal();
 

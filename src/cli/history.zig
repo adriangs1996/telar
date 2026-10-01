@@ -239,7 +239,6 @@ fn runImport(init: std.process.Init, options: HistoryOptions) !void {
     try output.interface.flush();
 
     if (parser_state.skipped != 0) {
-        std.debug.print("telar history import: skipped {d} commands longer than {d} bytes\n", .{ parser_state.skipped, core.max_import_command_bytes });
         limit_reached.reportThrough(&session, .{
             .limit = core.import_command_limit,
             .requested = parser_state.largest_skipped,
@@ -370,7 +369,9 @@ test "bash timestamp comments attach to the following command" {
 test "an imported command past the limit is skipped whole and the rest import" {
     const state = try std.testing.allocator.create(ImportParser);
     defer std.testing.allocator.destroy(state);
-    state.* = .{ .kind = .bash };
+    state.* = .{
+        .kind = .bash,
+    };
 
     const longest = try std.testing.allocator.alloc(u8, core.max_import_command_bytes + 1);
     defer std.testing.allocator.free(longest);
@@ -384,7 +385,9 @@ test "an imported command past the limit is skipped whole and the rest import" {
     try std.testing.expectEqual(@as(usize, 1), state.skipped);
     try std.testing.expectEqual(@as(usize, core.max_import_command_bytes + 1), state.largest_skipped);
 
-    state.* = .{ .kind = .zsh };
+    state.* = .{
+        .kind = .zsh,
+    };
     longest[longest.len - 1] = '\\';
     try std.testing.expect(state.feed(longest) == null);
     try std.testing.expect(state.feed("tail") == null);

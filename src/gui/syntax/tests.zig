@@ -98,7 +98,12 @@ test "a review edition past the fragment budget keeps its first colors and names
     const text = "Updated main.zig\n" ++ hunk ** hunks;
     var roles: [text.len]syntaxhl.Role = undefined;
 
-    var strict: DiffHighlighter = .{ .allocator = std.testing.allocator, .io = std.testing.io, .text = text, .roles = &roles };
+    var strict: DiffHighlighter = .{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .text = text,
+        .roles = &roles,
+    };
     try std.testing.expectError(error.SyntaxLimit, strict.run());
 
     var partial: DiffHighlighter = .{

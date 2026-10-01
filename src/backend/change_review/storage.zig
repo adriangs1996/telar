@@ -51,7 +51,16 @@ pub fn save(input: StorageInput, group: *const Group) !u32 {
     var values: [Group.capacity]StoredEdition = undefined;
     for (group.editions[0..group.count], 0..) |item, index| {
         const edition = item.?;
-        values[index] = .{ .identity = edition.identity, .next_comment = edition.next_comment, .omitted_patch_bytes = edition.omitted_patch_bytes, .snapshot = edition.view(.{ .request_id = @enumFromInt(1), .pane_id = group.context.pane.id, .pane_generation = group.context.pane.generation }) };
+        values[index] = .{
+            .identity = edition.identity,
+            .next_comment = edition.next_comment,
+            .omitted_patch_bytes = edition.omitted_patch_bytes,
+            .snapshot = edition.view(.{
+                .request_id = @enumFromInt(1),
+                .pane_id = group.context.pane.id,
+                .pane_generation = group.context.pane.generation,
+            }),
+        };
     }
     const records = if (input.archive_id == 0) group.records[0..group.total] else &.{};
     const bytes = try std.json.Stringify.valueAlloc(input.gpa, Persisted{ .version = 2, .records = records, .editions = values[0..group.count] }, .{});

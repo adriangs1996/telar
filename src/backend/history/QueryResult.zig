@@ -10,9 +10,6 @@ entries: []Entry,
 gpa: std.mem.Allocator,
 snapshot_id: u64 = 0,
 has_more: bool = false,
-/// A limit the worker stopped at while answering; the event loop reports
-/// it when the result arrives.
-limit: ?core.LimitReach = null,
 
 pub fn deinit(self: *QueryResult) void {
     for (self.entries) |*entry| entry.deinit(self.gpa);

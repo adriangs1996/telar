@@ -346,9 +346,13 @@ test "a history scope as long as a working directory travels in the payload slot
         .scope_value = path[0..data.OwnedHistoryQuery.max_scope_bytes],
         .limit = 20,
     };
-    try outbox.push(.{ .query_history = query });
+    try outbox.push(.{
+        .query_history = query,
+    });
     query.request_id = @enumFromInt(2);
-    try outbox.push(.{ .query_history = query });
+    try outbox.push(.{
+        .query_history = query,
+    });
     path[1] = 'x';
 
     var buffer: [2 * data.OwnedHistoryQuery.max_scope_bytes]u8 = undefined;
@@ -359,7 +363,9 @@ test "a history scope as long as a working directory travels in the payload slot
 
     query.scope_value = &path;
     query.offset = 20;
-    try std.testing.expectError(error.ScopeTooLong, outbox.push(.{ .query_history = query }));
+    try std.testing.expectError(error.ScopeTooLong, outbox.push(.{
+        .query_history = query,
+    }));
     try std.testing.expectEqual(@as(u8, 1), outbox.len);
     try std.testing.expect(@sizeOf(Message) <= max_message_bytes);
 }

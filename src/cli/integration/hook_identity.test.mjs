@@ -40,7 +40,7 @@ appendFileSync(${JSON.stringify(log)}, JSON.stringify({ thread, args, pane: proc
 // which runs the hooks elsewhere, unless it has no server: a version before
 // it, or one with the daemon turned off (FAKE_CODEX_NO_SERVER).
 if (args.includes("--no-daemon") || process.env.FAKE_CODEX_NO_SERVER) {
-  const hook = (payload) => spawnSync(${JSON.stringify(telar)}, ["hook", "codex"], { input: JSON.stringify({ session_id: thread, cwd: process.cwd(), ...payload })});
+  const hook = (payload) => spawnSync(${JSON.stringify(telar)}, ["hook", "codex"], { input: JSON.stringify({ session_id: thread, cwd: process.cwd(), ...payload }) });
   hook({ hook_event_name: "SessionStart", source: "startup" });
   hook({ hook_event_name: "UserPromptSubmit", prompt: "go" });
   hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_use_id: "call-" + thread, tool_input: { command: "echo own-" + thread } });

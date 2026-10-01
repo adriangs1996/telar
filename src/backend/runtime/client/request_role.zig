@@ -40,6 +40,9 @@ pub fn classify(tag: Tag) RequestClass {
         .report_agent_progress,
         .verify_pane_descent,
         .query_limits,
+        // A window reports only after it attached; a first report comes
+        // from a command, whose notice the runtime then shows.
+        .report_limit,
         => .control,
         else => .ui,
     };
@@ -61,7 +64,7 @@ test "runtime observers cannot be mistaken for interactive clients" {
 
 test "interactive mutations and control queries keep distinct admission roles" {
     const ui = [_]Tag{ .open_pane, .pane_input, .pane_resize, .frame_ack, .configure_graphics, .update_client_layout };
-    const control = [_]Tag{ .runtime_stop, .query_clients, .read_pane, .report_agent_session, .request_pane_focus, .query_change_review };
+    const control = [_]Tag{ .runtime_stop, .query_clients, .read_pane, .report_agent_session, .request_pane_focus, .query_change_review, .report_limit };
     for (ui) |tag| {
         try std.testing.expectEqual(RequestClass.ui, classify(tag));
     }

@@ -33,6 +33,15 @@ pub fn create(gpa: std.mem.Allocator, sample: core.ReportChangeReviewSample, ide
     return self;
 }
 
+/// Bytes a pending sample of `content_bytes` holds, its record included.
+///
+/// ```zig
+/// const held = Sample.heldBytes(reported.content.len);
+/// ```
+pub fn heldBytes(content_bytes: usize) usize {
+    return @sizeOf(Sample) + content_bytes;
+}
+
 pub fn destroy(self: *Sample, gpa: std.mem.Allocator) void {
     gpa.free(self.content);
     gpa.destroy(self);
