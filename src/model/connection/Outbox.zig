@@ -146,6 +146,7 @@ pub fn push(self: *Outbox, message: outbox_support.Message) !void {
     switch (message) {
         .pane_resize => |resize| return self.pushResize(resize),
         .frame_ack => |ack| return self.pushAck(ack),
+        .configure_frame_interval => |interval| return self.pushFrameInterval(interval),
         .query_history => |query| {
             if (query.offset == 0 and query.snapshot_id == 0 and query.entry_id == 0) {
                 if (self.mutableTailIndex()) |index| {
@@ -649,6 +650,26 @@ fn pushResize(self: *Outbox, resize: core.PaneResize) !void {
     try self.append(.{ .pane_resize = resize });
 }
 
+// Only the newest interval means anything to the runtime, and where it sits
+// among other messages does not, so it replaces any unsent one. A window
+// moved between displays with the outbox full then needs no new slot.
+fn pushFrameInterval(self: *Outbox, interval: core.ConfigureFrameInterval) !void {
+    var offset: usize = 0;
+    const mutable_len = self.len - @intFromBool(self.send_pending);
+    while (offset < mutable_len) : (offset += 1) {
+        const index = (@as(usize, self.head) + self.len - 1 - offset) % outbox_support.capacity;
+        switch (self.items[index]) {
+            .configure_frame_interval => |*pending| {
+                pending.* = interval;
+                return;
+            },
+            else => {},
+        }
+    }
+
+    try self.append(.{ .configure_frame_interval = interval });
+}
+
 fn pushAck(self: *Outbox, ack: core.FrameAck) !void {
     var offset: usize = 0;
     const mutable_len = self.len - @intFromBool(self.send_pending);
@@ -700,4 +721,32 @@ test "runtime bootstrap queues colors before subscribing to the initial layout" 
     const runtime_state = try core.decodeClient((try outbox.beginSend(&buffer)).?);
     try std.testing.expect(runtime_state == .request_runtime_state);
     try std.testing.expectEqual(@as(core.ClientIdentity, @enumFromInt(9)), runtime_state.request_runtime_state.client_identity);
+}
+
+test "a frame interval replaces an unsent one instead of taking a slot" {
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
+    var buffer: [bootstrap_send_bytes]u8 = undefined;
+
+    try outbox.push(.{ .configure_frame_interval = .{ .interval_ns = std.time.ns_per_s / 60 } });
+    try outbox.push(.{ .request_snapshot = .{ .pane_id = @enumFromInt(3), .known_frame_id = 0 } });
+    while (outbox.availableCapacity() != 0) {
+        try outbox.push(.{ .request_snapshot = .{ .pane_id = @enumFromInt(4), .known_frame_id = 0 } });
+    }
+
+    try outbox.push(.{ .configure_frame_interval = .{ .interval_ns = std.time.ns_per_s / 120 } });
+    const first = try core.decodeClient((try outbox.beginSend(&buffer)).?);
+    try std.testing.expectEqual(@as(u64, std.time.ns_per_s / 120), first.configure_frame_interval.interval_ns);
+
+    // One being sent is not replaced; the next one queues behind it.
+    while (outbox.len > 1) {
+        try outbox.finishSend({});
+        _ = try outbox.beginSend(&buffer);
+    }
+
+    try outbox.finishSend({});
+    try outbox.push(.{ .configure_frame_interval = .{ .interval_ns = std.time.ns_per_s / 100 } });
+    _ = try outbox.beginSend(&buffer);
+    try outbox.push(.{ .configure_frame_interval = .{ .interval_ns = std.time.ns_per_s / 144 } });
+    try std.testing.expectEqual(@as(usize, 2), outbox.len);
 }
