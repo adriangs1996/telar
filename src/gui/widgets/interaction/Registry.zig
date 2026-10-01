@@ -8,13 +8,15 @@ const Registry = @This();
 
 /// Room for every chrome band target (`BandHitMap.capacity`), the open
 /// overlay's rows and editors, and a change review's visible rows; it
-/// follows the band when the bar and panel limits grow it.
-pub const capacity = @max(1024, 2 * BandHitMap.capacity);
+/// follows the band when the bar and panel limits grow it, rounded to a
+/// power of two because `probe` wraps its index with a mask.
+pub const capacity = std.math.ceilPowerOfTwoAssert(usize, @max(1024, 2 * BandHitMap.capacity));
 pub const limit = core.Limit.declare("gui.widgets.registry_capacity", "widget targets", capacity);
 
 comptime {
     // Every chrome band target fits with room for an open overlay's rows.
     std.debug.assert(capacity >= 2 * BandHitMap.capacity);
+    std.debug.assert(std.math.isPowerOfTwo(index_len));
 }
 /// Open-addressed index from identity to row, twice the rows so probes
 /// stay short; a duplicate identity is found in one probe run.
