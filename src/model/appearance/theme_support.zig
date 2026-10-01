@@ -11,6 +11,8 @@ pub const Builtin = enum {
     tokyo_night,
     pierre_dark,
     pierre_dark_soft,
+    kanagawa,
+    kanagawa_dragon,
     terminal,
 
     pub fn canonicalName(self: Builtin) []const u8 {
@@ -21,6 +23,8 @@ pub const Builtin = enum {
             .tokyo_night => "tokyo-night",
             .pierre_dark => "pierre-dark",
             .pierre_dark_soft => "pierre-dark-soft",
+            .kanagawa => "kanagawa",
+            .kanagawa_dragon => "kanagawa-dragon",
             .terminal => "terminal",
         };
     }
@@ -53,6 +57,12 @@ pub fn fromName(name: []const u8) ?Theme {
     }
     if (eql(name, "pierre-dark-soft")) {
         return builtin(.pierre_dark_soft);
+    }
+    if (eql(name, "kanagawa") or eql(name, "kanagawa-wave") or eql(name, "kanagawa_wave")) {
+        return builtin(.kanagawa);
+    }
+    if (eql(name, "kanagawa-dragon") or eql(name, "kanagawa_dragon")) {
+        return builtin(.kanagawa_dragon);
     }
     if (eql(name, "terminal") or eql(name, "default")) {
         return builtin(.terminal);
@@ -170,6 +180,42 @@ pub fn builtin(name: Builtin) Theme {
                 .teal = rgb24c(0x68cdf2),
                 .peach = rgb24c(0xffba82),
             },
+            .kanagawa_dragon => .{
+                .accent = rgb24c(0x8ba4b0),
+                .panel_bg = rgb24c(0x181616),
+                .surface0 = rgb24c(0x282727),
+                .surface1 = rgb24c(0x393836),
+                .surface_dim = rgb24c(0x0d0c0c),
+                .overlay0 = rgb24c(0x625e5a),
+                .overlay1 = rgb24c(0x737c73),
+                .text = rgb24c(0xc5c9c5),
+                .subtext0 = rgb24c(0xc8c093),
+                .mauve = rgb24c(0x8a93b0),
+                .green = rgb24c(0x8a9a7b),
+                .yellow = rgb24c(0xff9e3b),
+                .red = rgb24c(0xe82424),
+                .blue = rgb24c(0x8ba4b0),
+                .teal = rgb24c(0x8fa49e),
+                .peach = rgb24c(0xb6927b),
+            },
+            .kanagawa => .{
+                .accent = rgb24c(0x7e9cd8),
+                .panel_bg = rgb24c(0x1f1f28),
+                .surface0 = rgb24c(0x2a2a37),
+                .surface1 = rgb24c(0x363646),
+                .surface_dim = rgb24c(0x16161d),
+                .overlay0 = rgb24c(0x54546d),
+                .overlay1 = rgb24c(0x727169),
+                .text = rgb24c(0xdcd7ba),
+                .subtext0 = rgb24c(0xc8c093),
+                .mauve = rgb24c(0x957fb8),
+                .green = rgb24c(0x98bb6c),
+                .yellow = rgb24c(0xff9e3b),
+                .red = rgb24c(0xe82424),
+                .blue = rgb24c(0x7e9cd8),
+                .teal = rgb24c(0x8fa49e),
+                .peach = rgb24c(0xb6927b),
+            },
             .terminal => .{
                 .accent = indexed(4),
                 .panel_bg = .default,
@@ -199,10 +245,19 @@ fn syntax(name: Builtin) Theme.SyntaxStyles {
         .shade => .{ 0xd1d1cf, 0xa0a0a0, 0x91b99a, 0xe6b99d, 0x304a39, 0xc3cea0, 0xe6b99d, 0xa8c98c, 0xa8c98c, 0xc3cea0, 0xadd0c5, 0xbbc8b5, 0xc4b3c5, 0xa0a0a0, 0xa0a0a0 },
         .pierre_dark => .{ 0xe5e5e5, 0xff678d, 0x5ecc71, 0x68cdf2, 0x737373, 0xffd452, 0x68cdf2, 0xffab16, 0x9d6afb, 0xd568ea, 0xffa359, 0xffd452, 0xffab16, 0x08c0ef, 0x636363 },
         .pierre_dark_soft => .{ 0xd4d4d4, 0xff91a8, 0x8cda94, 0x96d9f6, 0x636363, 0xffde80, 0x96d9f6, 0xffde80, 0xba8ffd, 0xe290f0, 0xffba82, 0xffde80, 0xffde80, 0x68cdf2, 0x737373 },
+        .kanagawa_dragon => .{ 0xc5c9c5, 0x8a93b0, 0x8a9a7b, 0xb6927b, 0x737c73, 0xb6927b, 0xb6927b, 0xb6927b, 0x8ba4b0, 0x8fa49e, 0xa6a69c, 0xc4b28a, 0xb6927b, 0xc4746e, 0x9e9b93 },
+        .kanagawa => .{ 0xdcd7ba, 0x957fb8, 0x98bb6c, 0xb6927b, 0x727169, 0xffa066, 0xb6927b, 0xb6927b, 0x7e9cd8, 0x8fa49e, 0xb8b4d0, 0xe6c384, 0xb6927b, 0xc0a36e, 0x9cabca },
         else => return result,
     };
     inline for (roles, colors) |role, color| {
-        result.set(role, .{ .color = rgb24c(color), .italic = name == .shade and role == .parameter });
+        result.set(role, .{
+            .color = rgb24c(color),
+            .italic = switch (name) {
+                .shade => role == .parameter,
+                .kanagawa, .kanagawa_dragon => role == .keyword or role == .comment,
+                else => false,
+            },
+        });
     }
 
     return result;
@@ -248,6 +303,26 @@ fn terminal(name: Builtin) TerminalTheme {
             .palette = ansi(.{
                 0x171717, 0xff2e3f, 0x0dbe4e, 0xffca00, 0x009fff, 0xe130ac, 0x08c0ef, 0xbcbcbc,
                 0x171717, 0xff2e3f, 0x86c427, 0xffca00, 0x009fff, 0xe130ac, 0x08c0ef, 0xbcbcbc,
+            }),
+        },
+        .kanagawa_dragon => .{
+            .foreground = rgb24(0xc5c9c5),
+            .background = rgb24(0x181616),
+            .cursor_color = rgb24(0xc5c9c5),
+            .cursor_text_color = rgb24(0x181616),
+            .palette = ansi(.{
+                0x0d0c0c, 0xc4746e, 0x8a9a7b, 0xc4b28a, 0x8ba4b0, 0xa292a3, 0x8fa49e, 0xc8c093,
+                0xa6a69c, 0xe46876, 0x87a987, 0xe6c384, 0x7fb4ca, 0x938aa9, 0x7aa89f, 0xc5c9c5,
+            }),
+        },
+        .kanagawa => .{
+            .foreground = rgb24(0xdcd7ba),
+            .background = rgb24(0x1f1f28),
+            .cursor_color = rgb24(0xdcd7ba),
+            .cursor_text_color = rgb24(0x1f1f28),
+            .palette = ansi(.{
+                0x16161d, 0xc34043, 0x76946a, 0xc0a36e, 0x7e9cd8, 0x957fb8, 0x6a9589, 0xc8c093,
+                0x727169, 0xe82424, 0x98bb6c, 0xe6c384, 0x7fb4ca, 0x938aa9, 0x7aa89f, 0xdcd7ba,
             }),
         },
         .terminal => .{},
@@ -380,4 +455,29 @@ test "overrides replace only the requested color roles" {
     try std.testing.expectEqualDeep(cellgrid.Color.default, custom.palette.panel_bg);
     try std.testing.expectEqualDeep(rgb(1, 2, 3), custom.palette.accent);
     try std.testing.expectEqualDeep(base.palette.text, custom.palette.text);
+}
+
+test "Kanagawa preserves Neovim custom syntax independently of its ANSI palette" {
+    const wave = fromName("kanagawa-wave").?;
+    const dragon = fromName("Kanagawa_Dragon").?;
+    try std.testing.expectEqualStrings("kanagawa", wave.base.canonicalName());
+    try std.testing.expectEqualStrings("kanagawa-dragon", dragon.base.canonicalName());
+    try std.testing.expectEqualDeep(rgb24c(0x957fb8), wave.syntax(.keyword));
+    try std.testing.expectEqualDeep(rgb24c(0x8a93b0), dragon.syntax(.keyword));
+    for ([_]Theme{ wave, dragon }) |theme| {
+        try std.testing.expectEqualDeep(rgb24c(0x8fa49e), theme.syntax(.type));
+        try std.testing.expectEqualDeep(rgb24c(0xb6927b), theme.syntax(.number));
+        try std.testing.expectEqualDeep(rgb24c(0xb6927b), theme.syntax(.namespace));
+        try std.testing.expect(theme.syntaxStyle(.keyword).italic);
+        try std.testing.expect(theme.syntaxStyle(.comment).italic);
+        try std.testing.expect(!theme.syntaxStyle(.func).italic);
+        try std.testing.expectEqualDeep(theme.palette.panel_bg.rgbChannels().?, theme.terminal.background);
+        try std.testing.expectEqualDeep(theme.terminal.foreground, theme.terminal.cursor_color.?);
+        try std.testing.expectEqualDeep(theme.terminal.background, theme.terminal.cursor_text_color.?);
+    }
+
+    try std.testing.expectEqualDeep(rgb24(0x957fb8), wave.terminal.palette[5]);
+    try std.testing.expectEqualDeep(rgb24(0xa292a3), dragon.terminal.palette[5]);
+    try std.testing.expectEqualDeep(rgb24(0x6a9589), wave.terminal.palette[6]);
+    try std.testing.expectEqualDeep(rgb24(0x8fa49e), dragon.terminal.palette[6]);
 }

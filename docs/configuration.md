@@ -186,7 +186,8 @@ theme = "shade"
 
 Each preset defines Telar's chrome roles and the native terminal's foreground,
 background, ANSI palette and cursor colors. Built-ins are `shade` (the default),
-`vesper`, `catppuccin` (Mocha), `tokyo-night`, `pierre-dark`,
+`vesper`, `catppuccin` (Mocha), `tokyo-night`, `kanagawa` (Wave),
+`kanagawa-dragon`, `pierre-dark`,
 `pierre-dark-soft`, and `terminal`. The Pierre presets use the dark and dark-soft
 palettes from Adrian's Neovim theme, including syntax and ANSI colors. Shade
 combines Vesper's neutral grays and terminal palette with green chrome accents.
@@ -256,6 +257,16 @@ Shade inherits Vesper's terminal colors unchanged. The ANSI data comes from the 
 [Catppuccin Mocha](https://github.com/catppuccin/ghostty/blob/main/themes/catppuccin-mocha.conf)
 and [Tokyo Night](https://github.com/folke/tokyonight.nvim/blob/main/extras/ghostty/tokyonight_night).
 Telar retains its orange Vesper cursor with background-colored text.
+
+Kanagawa and Kanagawa Dragon use the [Kanagawa Neovim palette](https://github.com/rebelot/kanagawa.nvim/tree/bb85e4bfc8d89b0e62c8fa53ccdd13d12e2f77b3),
+including its ANSI colors and cursor. They include these Neovim customizations:
+Dragon keywords use `#8a93b0`; both variants use `#8fa49e` for types and
+`#b6927b` for numbers, builtins and namespaces. Keywords and comments are italic.
+Panels use the normal floating-window background, surfaces use the popup menu
+and cursor-line backgrounds, and warning/error ink follows diagnostic colors.
+These colors are compiled into the presets; Neovim is not a runtime dependency.
+Select them with `theme = "kanagawa"` or `theme = "kanagawa-dragon"`, or the
+corresponding `--theme` argument.
 
 ## Graphical application
 

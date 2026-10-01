@@ -222,7 +222,9 @@ pub const text =
     \\  --fresh           Start a runtime that sets the previous session
     \\                    aside (session.ckpt.previous) instead of restoring
     \\                    it; refused while a runtime is already running
-    \\  --theme NAME      UI theme: shade, vesper, catppuccin, tokyo-night, terminal
+    \\  --theme NAME      UI theme: shade, vesper, catppuccin, tokyo-night,
+    \\                    kanagawa, kanagawa-dragon, pierre-dark,
+    \\                    pierre-dark-soft, terminal
     \\Server options:
     \\  --graphics-pane-mib N    Decoded KGP memory per pane (default 64)
     \\  --graphics-global-mib N  Decoded KGP memory for the runtime (default 256)
