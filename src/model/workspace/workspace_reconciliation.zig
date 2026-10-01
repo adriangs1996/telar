@@ -8,6 +8,7 @@ const model_namespace = @import("../state/model_namespace.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const ClientModel = @import("../state/ClientModel.zig");
+const limit_reached = @import("../connection/limit_reached.zig");
 const WorkspaceSnapshotInput = @import("WorkspaceSnapshotInput.zig");
 const label_validation = @import("label_validation.zig");
 
@@ -30,6 +31,7 @@ pub fn reconcileTabs(model: *ClientModel, snapshot: WorkspaceSnapshotInput) !voi
         const tab_id = model.tabs.location[current].tab_id;
         if (std.mem.findScalar(core.TabId, canonical, tab_id) == null) {
             model.panes.removeTab(tab_id);
+            limit_reached.forgetClosedPanes(model);
             model.tabs.remove(current);
         }
     }

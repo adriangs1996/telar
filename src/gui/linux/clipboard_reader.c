@@ -15,8 +15,16 @@ static void finish(telar_clipboard_reader *self, enum telar_clipboard_read_statu
     if (status != TELAR_CLIPBOARD_READ_OK) self->len = 0;
 }
 
+// Sets the header only: the byte buffer stays untouched, so a reader that
+// never reads a large selection keeps it out of resident memory.
 void telar_clipboard_reader_init(telar_clipboard_reader *self) {
-    *self = (telar_clipboard_reader){.fd = -1};
+    self->fd = -1;
+    self->pending = false;
+    self->ready = false;
+    self->request_id = 0;
+    self->deadline_ms = 0;
+    self->status = TELAR_CLIPBOARD_READ_OK;
+    self->len = 0;
 }
 
 bool telar_clipboard_reader_begin(telar_clipboard_reader *self, int fd, uint64_t request_id, int64_t now_ms) {

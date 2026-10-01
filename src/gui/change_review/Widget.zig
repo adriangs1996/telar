@@ -1,6 +1,5 @@
 //! Reusable native change-review surface. Runtime and experiments supply editions.
 const syntaxhl = @import("syntaxhl");
-const core = @import("telar-core");
 const data = @import("model");
 const event_module = @import("../input/event.zig");
 const std = @import("std");
@@ -36,7 +35,10 @@ read_only: bool = false,
 delivery: enum { idle, queued, pending, sending, sent, failed } = .idle,
 live_status: [320]u8 = undefined,
 model: client.ChangeReviewModel = .{},
-roles: [2][core.change_review.max_patch_bytes]syntaxhl.Role = undefined,
+/// Borrowed roles of each revision's source, one per byte, owned by whoever
+/// owns that source (the panel's visible edition slot). Shorter roles than
+/// the source paint it plain.
+roles: [2][]const syntaxhl.Role = @splat(&.{}),
 theme: data.theme_support.Builtin = .shade,
 widgets: ?*State = null,
 generation: u64 = 1,
@@ -232,15 +234,41 @@ pub fn accessibility(self: *Self, out: *native.AccessibilityTree) bool {
     const state = self.widgets orelse return false;
     const registry = state.dispatcher.maps.presented();
     var count: usize = 0;
+    state.accessibility_dropped = 0;
     for (registry.targets[0..registry.len]) |*target| {
         if (target.id.generation != self.generation or target.label_len == 0) {
             continue;
         }
 
-        state.native_nodes[count] = .{ .id = target.id.target_id, .generation = target.id.generation, .role = target.role, .flags = 1, .actions = 1 | 2, .x = target.bounds.x, .y = target.bounds.y, .width = target.bounds.width, .height = target.bounds.height, .label = &target.label, .label_len = target.label_len };
+        // A full tree still publishes the focused control, in place of the
+        // last node it holds.
+        const focused = if (state.dispatcher.focused) |id| id.eql(target.id) else false;
+        var slot = count;
+        if (count == state.native_nodes.len) {
+            state.accessibility_dropped += 1;
+            if (!focused) {
+                continue;
+            }
+
+            slot = count - 1;
+        }
+
+        state.native_nodes[slot] = .{
+            .id = target.id.target_id,
+            .generation = target.id.generation,
+            .role = target.role,
+            .flags = 1,
+            .actions = 1 | 2,
+            .x = target.bounds.x,
+            .y = target.bounds.y,
+            .width = target.bounds.width,
+            .height = target.bounds.height,
+            .label = &target.label,
+            .label_len = target.label_len,
+        };
         if (target.action == .custom and (actions.kind(target.action.custom) == .editor or actions.kind(target.action.custom) == .search) and self.activeField() != null) {
             const field = self.activeField().?;
-            const node = &state.native_nodes[count];
+            const node = &state.native_nodes[slot];
             node.flags |= 8;
             node.actions |= 4 | 8 | 64 | 128 | 256 | 512;
             node.value = field.text().ptr;
@@ -249,7 +277,7 @@ pub fn accessibility(self: *Self, out: *native.AccessibilityTree) bool {
             node.selection_end = @intCast(field.head);
             node.text_revision = self.text_revision;
         }
-        count += 1;
+        count = slot + 1;
     }
 
     out.* = .{ .revision = self.text_revision +% state.dispatcher.revision, .nodes = &state.native_nodes, .count = @intCast(count) };

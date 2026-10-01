@@ -12,14 +12,12 @@ const Target = @import("../interaction/Target.zig");
 const Hits = @import("NotificationHits.zig");
 const Text = @import("NotificationText.zig");
 
-/// Bytes of the accessible label a target holds.
-const accessible_label_bytes = @sizeOf(@FieldType(Target, "label"));
-/// Bytes of the longest UTF-8 sequence.
-const max_utf8_sequence_bytes = 4;
 const Card = @This();
 
 /// Room for "Open …HOST ↗"; a host is at most a link's length.
 const link_label_bytes = 16 + core.max_notification_link_bytes;
+/// The screen-reader label's words beside the title, link host and message.
+const accessible_label_bytes = core.max_notification_title_bytes + core.max_notification_link_bytes + core.max_notification_message_bytes + ", opens : ".len;
 
 item: *const shared_model.NotificationItem,
 bounds: Rect,
@@ -67,18 +65,14 @@ pub fn draw(self: *const Card, canvas: *Canvas) !void {
     }
     // Body and close can share a dismiss action, so use distinct namespaces.
     target.namespace = 2;
-    // The label keeps the start of the body when the whole text does not
-    // fit; one character more than the label holds lets `labelled` cut it
-    // on a UTF-8 boundary.
-    var accessible: [accessible_label_bytes + max_utf8_sequence_bytes]u8 = undefined;
-    var writer: std.Io.Writer = .fixed(&accessible);
-    if (self.item.link_len != 0) {
-        writer.print("{s}, opens {s}: {s}", .{ self.item.title(), self.item.linkHost(), self.item.message() }) catch {};
-    } else {
-        writer.print("{s}: {s}", .{ self.item.title(), self.item.message() }) catch {};
-    }
-
-    target = target.labelled(writer.buffered());
+    // Room for the longest title, link and message a notification holds, so
+    // the label always formats; `labelled` then keeps the prefix that fits.
+    var accessible: [accessible_label_bytes]u8 = undefined;
+    const label = if (self.item.link_len != 0)
+        std.fmt.bufPrint(&accessible, "{s}, opens {s}: {s}", .{ self.item.title(), self.item.linkHost(), self.item.message() }) catch self.item.title()
+    else
+        std.fmt.bufPrint(&accessible, "{s}: {s}", .{ self.item.title(), self.item.message() }) catch self.item.title();
+    target = target.labelled(label);
     if (self.focused(canvas, target)) {
         try canvas.ringAt(bounds, .{ .color = accent, .width = px.px(1.5), .radius = radius });
     }

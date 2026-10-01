@@ -31,13 +31,15 @@ fn from(context: ?*anyopaque) *GuiAdapter {
     return @ptrCast(@alignCast(context.?));
 }
 
-fn ready(context: ?*anyopaque, viewport: native.Viewport) callconv(.c) void {
+fn ready(context: ?*anyopaque, native_viewport: native.Viewport) callconv(.c) void {
     const gui = from(context);
+    const viewport = limit_reached.boundViewport(gui, native_viewport);
     gui.windowReady(viewport) catch |err| gui.fail(err);
 }
 
-fn render(context: ?*anyopaque, viewport: native.Viewport, out: *native.Frame) callconv(.c) void {
+fn render(context: ?*anyopaque, native_viewport: native.Viewport, out: *native.Frame) callconv(.c) void {
     const gui = from(context);
+    const viewport = limit_reached.boundViewport(gui, native_viewport);
     core.mark(gui.app.io, .compose_start);
     defer core.mark(gui.app.io, .host_flush_start);
     // Token 0 keeps the previous frame on screen.
@@ -62,6 +64,7 @@ fn pump(context: ?*anyopaque) callconv(.c) c_int {
         return -1;
     }
 
+    gui.postUnposted();
     const status = gui.update() catch |err| {
         if (limit_reached.absorb(gui, .window_update, err)) {
             // The rest of the batch stays queued. A draw shows the notice,
@@ -87,22 +90,31 @@ fn complete(context: ?*anyopaque, token: u64, delivered: c_int) callconv(.c) voi
     const gui = from(context);
     core.mark(gui.app.io, .host_flush_done);
     if (token != 0) {
-        gui.driver.inbox.post(
+        gui.completePresentation(
             .{
-                .presented = .{
-                    .token = token,
-                    .delivered = delivered != 0,
-                },
+                .token = token,
+                .delivered = delivered != 0,
             },
-        ) catch |err| gui.fail(err);
+        );
     }
 }
 
 fn input(context: ?*anyopaque, event: native.InputEvent) callconv(.c) c_int {
     const gui = from(context);
-    const decoded = decode_input.decode(event) catch return 0;
+    const decoded = decode_input.decode(event) catch |err| {
+        // A native paste past the clipboard capacity is refused whole.
+        if (err == error.InputTooLarge) {
+            _ = limit_reached.absorbInput(gui, null, err);
+        }
+
+        return 0;
+    };
+    // An event that reaches a limit is refused alone; the window goes on.
     const accepted = gui.input(decoded) catch |err| {
-        gui.fail(err);
+        if (!limit_reached.absorbInput(gui, decoded, err)) {
+            gui.fail(err);
+        }
+
         return 0;
     };
     return @intFromBool(accepted);

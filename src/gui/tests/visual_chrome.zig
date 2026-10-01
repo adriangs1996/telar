@@ -233,6 +233,65 @@ test "the attention ring surrounds an unfocused blocked pane only and the header
     try std.testing.expectEqual(@as(usize, 0), ringQuads(renderer.quads.items(), focused_outer));
 }
 
+test "a pane whose images a limit paused says so in its header, and only that pane" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    const model = &fixture.session.gui.app.model;
+    const tab = model.tabs.active;
+    const second: core.PaneId = @enumFromInt(20);
+    try data.pane_split.split(
+        model,
+        tab,
+        .{
+            .existing_pane = Session.pane_id,
+            .new_pane = second,
+            .location = Session.location,
+            .axis = .horizontal,
+            .area = fixture.projection().geometry.area,
+        },
+    );
+
+    var layout: data.LayoutSnapshot = .{};
+    model.tabs.layout[tab].snapshot(fixture.projection().geometry.area, &layout);
+    const renderer = &fixture.session.gui.renderer;
+    const paused_header = renderer.metrics.rect(renderer.origin, layout.find(second).?.outer.row(0));
+    const other_header = renderer.metrics.rect(renderer.origin, layout.find(Session.pane_id).?.outer.row(0));
+    const yellow = model.theme.palette.yellow;
+
+    try fixture.paint(fixture.projection());
+    try std.testing.expectEqual(@as(usize, 0), inkQuads(
+        renderer.quads.items(),
+        paused_header,
+        yellow,
+    ));
+
+    _ = model.graphics_pauses.add(second, 0);
+    try fixture.paint(fixture.projection());
+    try std.testing.expect(inkQuads(
+        renderer.quads.items(),
+        paused_header,
+        yellow,
+    ) > 0);
+    try std.testing.expectEqual(@as(usize, 0), inkQuads(
+        renderer.quads.items(),
+        other_header,
+        yellow,
+    ));
+}
+
+/// Glyph quads inked in `color` inside `area`.
+fn inkQuads(quads: []const Quad, area: Rect, color: cellgrid.Color) usize {
+    var count: usize = 0;
+    for (quads) |quad| {
+        const inside = quad.x >= area.x and quad.x + quad.width <= area.x + area.width and quad.y >= area.y and quad.y + quad.height <= area.y + area.height;
+        if (inside and quad.u0 != quad.u1 and quad.v0 != quad.v1 and matchesColor(quad, color)) {
+            count += 1;
+        }
+    }
+
+    return count;
+}
+
 test "toasts cap at two and skip a pane already on screen" {
     var fixture = try Fixture.init();
     defer fixture.deinit();

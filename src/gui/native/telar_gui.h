@@ -22,12 +22,15 @@
 // Uploads started per frame; the client keeps at most this many in flight.
 #define TELAR_GUI_IMAGE_UPLOADS 4
 // Image quads one frame may draw.
-#define TELAR_GUI_IMAGE_DRAWS 512
+#define TELAR_GUI_IMAGE_DRAWS 2048
 // The quad texture selector that samples the image named by an image draw.
 #define TELAR_GUI_IMAGE_TEXTURE 10
 
 #define TELAR_GUI_RANGE_NONE UINT32_MAX
 #define TELAR_GUI_TEXT_CAPACITY 4096
+// UTF-8 bytes one clipboard read, write or native paste event carries; the
+// only definition every backend and `input/event.zig` mirror.
+#define TELAR_GUI_CLIPBOARD_CAPACITY (1024 * 1024)
 #define TELAR_GUI_ACCESSIBILITY_CAPACITY 256
 #define TELAR_GUI_TITLE_CAPACITY 256
 
@@ -156,6 +159,12 @@ typedef struct {
   uint32_t image_release_count;
   const telar_gui_image_draw *image_draws;
   uint32_t image_draw_count;
+  // A host holding atlas version atlas_dirty_base uploads only rows
+  // atlas_dirty_top..atlas_dirty_bottom (half open) of atlas_version; any
+  // other host uploads the whole page.
+  uint32_t atlas_dirty_base;
+  uint32_t atlas_dirty_top;
+  uint32_t atlas_dirty_bottom;
 } telar_gui_frame;
 
 // Input kinds: 1 committed UTF-8 text, 2 clipboard paste, 3 semantic key,

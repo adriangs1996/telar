@@ -8,16 +8,36 @@ pub fn Type(comptime byte_capacity: usize, comptime slot_capacity: usize) type {
         const Pool = @This();
         const Slot = struct {
             event: event_module.Event = .{ .focus = false },
-            bytes: [byte_capacity]u8 = undefined,
             len: usize = 0,
             used: bool = false,
         };
 
+        /// Bytes the pool's storage needs: one payload per slot.
+        pub const storage_bytes = byte_capacity * slot_capacity;
+
         slots: [slot_capacity]Slot = @splat(.{}),
+        /// The payloads, borrowed from the owner; `storage_bytes` long. Only
+        /// the bytes an admitted event copies are ever written.
+        storage: []u8 = &.{},
+
+        /// Example: `var pool: Pool = .init(storage[0..Pool.storage_bytes]);`
+        pub fn init(storage: []u8) Pool {
+            std.debug.assert(storage.len == storage_bytes);
+            return .{
+                .storage = storage,
+            };
+        }
 
         /// Copies before admission completes, without retaining native pointers.
         /// Example: `const slot = try pool.admit(event);`
         pub fn admit(self: *Pool, event: event_module.Event) !u8 {
+            return self.admitLeaving(event, 0);
+        }
+
+        /// `admit` that leaves `spare` slots free for events only `admit`
+        /// takes, so one kind of event cannot take the room another needs.
+        /// Example: `const slot = try pool.admitLeaving(event, 1);`
+        pub fn admitLeaving(self: *Pool, event: event_module.Event, spare: usize) !u8 {
             const bytes = payload(event);
             if (bytes.len > byte_capacity) {
                 return error.InputTooLarge;
@@ -27,26 +47,39 @@ pub fn Type(comptime byte_capacity: usize, comptime slot_capacity: usize) type {
                 return error.InvalidUtf8;
             }
 
+            var free: usize = 0;
+            for (self.slots) |slot| {
+                free += @intFromBool(!slot.used);
+            }
+
+            if (free <= spare) {
+                return error.InputPoolFull;
+            }
+
             for (&self.slots, 0..) |*slot, index| {
                 if (slot.used) {
                     continue;
                 }
 
                 slot.event = withPayload(event, "");
-                @memcpy(slot.bytes[0..bytes.len], bytes);
+                @memcpy(self.bytesOf(index)[0..bytes.len], bytes);
                 slot.len = bytes.len;
                 slot.used = true;
                 return @intCast(index);
             }
 
-            return error.NativeInputFull;
+            unreachable;
         }
 
         /// Example: `try dispatch(pool.view(index));`
         pub fn view(self: *const Pool, index: u8) event_module.Event {
             const slot = &self.slots[index];
             std.debug.assert(slot.used);
-            return withPayload(slot.event, slot.bytes[0..slot.len]);
+            return withPayload(slot.event, self.bytesOf(index)[0..slot.len]);
+        }
+
+        fn bytesOf(self: *const Pool, index: usize) []u8 {
+            return self.storage[index * byte_capacity ..][0..byte_capacity];
         }
 
         /// Example: `pool.release(index);`
@@ -83,7 +116,9 @@ pub fn Type(comptime byte_capacity: usize, comptime slot_capacity: usize) type {
 }
 
 test "payload slots own UTF8 and reject oversized or exhausted admission atomically" {
-    var pool: Type(8, 2) = .{};
+    const Pool = Type(8, 2);
+    var storage: [Pool.storage_bytes]u8 = undefined;
+    var pool: Pool = .init(&storage);
     var bytes = [_]u8{ 'h', 'i' };
     const index = try pool.admit(.{ .text = .{ .bytes = &bytes, .target_id = 12, .generation = 4 } });
     @memset(&bytes, 'x');
@@ -92,8 +127,9 @@ test "payload slots own UTF8 and reject oversized or exhausted admission atomica
     try std.testing.expectError(error.InputTooLarge, pool.admit(.{ .paste = "123456789" }));
     try std.testing.expectError(error.InvalidUtf8, pool.admit(.{ .paste = "\xff" }));
     const other = try pool.admit(.{ .paste = "🌍" });
-    try std.testing.expectError(error.NativeInputFull, pool.admit(.{ .paste = "a" }));
+    try std.testing.expectError(error.InputPoolFull, pool.admit(.{ .paste = "a" }));
     pool.release(index);
+    try std.testing.expectError(error.InputPoolFull, pool.admitLeaving(.{ .paste = "b" }, 1));
     _ = try pool.admit(.{ .paste = "new" });
     try std.testing.expectEqualStrings("🌍", pool.view(other).paste);
 }

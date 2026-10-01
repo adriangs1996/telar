@@ -6,13 +6,33 @@ const markers_module = @import("markers.zig");
 const data = @import("model");
 const core = @import("telar-core");
 const pane_input = @import("../panes/pane_input.zig");
+const limit_reached = @import("../notifications/limit_reached.zig");
 const Client = @import("../execution/Client.zig");
+const MarkerRemovalPlan = @import("MarkerRemovalPlan.zig").MarkerRemovalPlan;
 
-/// Deletes the paired child marker and then retires one local preview.
+/// Deletes the paired child marker and then retires one local preview. A
+/// removal that stops at a limit (navigation steps, a path's cells, keys in
+/// one transaction) sends nothing, keeps the preview and reports the limit.
 /// Example: `_ = try agent_attachments.dismissAttachment(app, id);`
 pub fn dismissAttachment(client: *Client, id: data.AttachmentId) !bool {
     const command = planAttachmentRemoval(client, id) orelse return false;
-    try deliverAttachmentRemoval(client, command);
+    const marker = switch (command.plan) {
+        .planned => |removal| removal,
+        .unreachable_marker => return false,
+        .limited => |reach| {
+            limit_reached.report(client, reach);
+            return false;
+        },
+    };
+
+    try deliverAttachmentRemoval(
+        client,
+        .{
+            .pane_id = command.pane_id,
+            .marker = marker,
+        },
+    );
+
     const shelf = client.attachments orelse return false;
     return shelf.remove(id) orelse false;
 }
@@ -113,24 +133,30 @@ pub fn reconcileAttachmentFrame(client: *Client, pane_id: core.PaneId) bool {
     ) orelse false;
 }
 
-fn planAttachmentRemoval(client: *Client, id: data.AttachmentId) ?data.RemovalCommand {
+fn planAttachmentRemoval(client: *Client, id: data.AttachmentId) ?PlannedRemoval {
     const shelf = client.attachments orelse return null;
     const target = shelf.visibleTarget() orelse return null;
     const model = client.model.tabs.activeSlot() orelse return null;
     const pane = client.model.panes.findInConst(client.model.tabs.location[model].tab_id, target.pane_id) orelse return null;
-    const marker = shelf.planMarkerRemoval(
+    const plan = shelf.planMarkerRemoval(
         id,
         .{
             .buffer = &pane.buffer,
             .cursor = pane.cursor,
         },
-    ) orelse return null;
+    );
 
     return .{
         .pane_id = target.pane_id,
-        .marker = marker,
+        .plan = plan,
     };
 }
+
+/// The pane whose prompt holds the marker and the plan that removes it.
+const PlannedRemoval = struct {
+    pane_id: core.PaneId,
+    plan: MarkerRemovalPlan,
+};
 
 fn deliverAttachmentRemoval(client: *Client, command: data.RemovalCommand) !void {
     var keys: [data.attachment_types.max_removal_keys]keyinput.Key = undefined;

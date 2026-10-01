@@ -80,7 +80,7 @@ pub fn prepare(self: *Notifications, canvas: *Canvas, projection: client.Project
             continue;
         }
 
-        try result.append(card.*);
+        result.append(card.*);
     }
 
     for (&self.motions, used) |*motion_state, seen| {

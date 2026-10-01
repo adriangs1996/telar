@@ -6,6 +6,8 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Session = @import("Session.zig");
 const PointerEvent = @import("../input/PointerEvent.zig");
+const syntaxhl = @import("syntaxhl");
+const syntax_limits = @import("../syntax/limits.zig");
 
 const patch = "diff --git a/file.zig b/file.zig\n--- a/file.zig\n+++ b/file.zig\n@@ -1,3 +1,3 @@\n-old\n+new\n context\n tail\n";
 
@@ -51,6 +53,18 @@ pub fn reply(session: *Session, snapshot: core.ChangeReviewSnapshotView) !void {
 }
 
 pub fn adopt(session: *Session) !void {
+    try prepare(
+        session,
+        .{
+            .allocator = std.testing.allocator,
+            .job_ms = syntax_limits.job_ms,
+        },
+    );
+}
+
+// Prepares the loaded edition as the observation worker would, then lets the
+// adapter loop's synchronize finish it.
+fn prepare(session: *Session, context: struct { allocator: std.mem.Allocator, job_ms: i64 }) !void {
     const panel = session.gui.review;
     const state = &session.gui.app.model.change_review;
     const index = 1 - panel.visible_slot;
@@ -59,8 +73,13 @@ pub fn adopt(session: *Session) !void {
     slot.edition = state.snapshot.edition_id;
     slot.len = state.snapshot.patch.len;
     @memcpy(slot.source[0..slot.len], state.snapshot.patch);
-    slot.build(.{ .allocator = std.testing.allocator, .io = std.testing.io });
+    slot.build(.{
+        .allocator = context.allocator,
+        .io = std.testing.io,
+        .job_ms = context.job_ms,
+    });
     try std.testing.expect(slot.failure == null);
+
     panel.job = index;
     panel.notify();
     try panel.synchronize(session.gui.app);
@@ -99,7 +118,7 @@ pub fn send(session: *Session, event: event_module.Event) !void {
     try input_support.pump(session.gui);
 }
 
-test "an edition past the view's file limit shows its first files, says so and reports the limit" {
+test "an edition past the view's file limit shows its first files and reports the limit" {
     const view_files = @typeInfo(@FieldType(client.ChangeReviewRevision, "files")).array.len;
     const file = "Added overflow.zig\n@@ -0,0 +1 @@\n+new\n";
     const session = try base();
@@ -113,8 +132,6 @@ test "an edition past the view's file limit shows its first files, says so and r
 
     const panel = session.gui.review;
     try std.testing.expectEqual(@as(usize, view_files), panel.widget.model.current().file_count);
-    const expected = std.fmt.comptimePrint("Shows the first {d} of {d} files", .{ view_files, view_files + 2 });
-    try std.testing.expect(std.mem.startsWith(u8, panel.widget.model.status, expected));
     try std.testing.expect(!panel.widget.read_only);
     try std.testing.expect(session.gui.app.model.limit_reaches.find("change_review.view_files") != null);
 }
@@ -247,7 +264,7 @@ test "runtime review failed preparation keeps the old edition read only and retr
     const index = 1 - panel.visible_slot;
     panel.slots[index].generation = gui.app.model.change_review.generation;
     panel.slots[index].edition = 2;
-    panel.slots[index].failure = error.SyntaxUnavailable;
+    panel.slots[index].failure = error.ReviewLineLimit;
     panel.job = index;
     panel.notify();
     try panel.synchronize(gui.app);
@@ -255,7 +272,7 @@ test "runtime review failed preparation keeps the old edition read only and retr
     try std.testing.expectEqualStrings(patch, panel.widget.model.current().source);
     try std.testing.expect(panel.widget.read_only);
     try std.testing.expect(!panel.widget.loading);
-    try std.testing.expect(std.mem.indexOf(u8, panel.widget.model.status, "Syntax highlighting") != null);
+    try std.testing.expect(std.mem.indexOf(u8, panel.widget.model.status, "file or line limit") != null);
     panel.widget.command = .refresh;
     try panel.synchronize(gui.app);
     try std.testing.expectEqual(@as(u64, 2), (try core.decodeClient(try session.sent())).query_change_review.edition_id);
@@ -265,6 +282,100 @@ test "runtime review failed preparation keeps the old edition read only and retr
     try std.testing.expectEqual(@as(u64, 2), panel.edition);
     try std.testing.expectEqualStrings("Before/after snapshot", panel.widget.source_label);
     try std.testing.expect(!panel.widget.read_only);
+}
+
+test "runtime review adopts an edition highlighted up to its fragment limit and reports the limit" {
+    const session = try base();
+    defer session.deinit();
+
+    // A context line is a fragment on each side and an added line on one, so
+    // this edition asks for one fragment past the limit within the view's rows.
+    const header = "diff --git a/file.zig b/file.zig\n--- a/file.zig\n+++ b/file.zig\n";
+    const context = "@@ -1 +1 @@\n const value = 1;\n";
+    const added = "@@ -0,0 +1 @@\n+const last = 2;\n";
+    const pairs = syntax_limits.fragments / 2;
+    const text = try std.testing.allocator.alloc(u8, header.len + pairs * context.len + added.len);
+    defer std.testing.allocator.free(text);
+
+    @memcpy(text[0..header.len], header);
+    for (0..pairs) |index| {
+        @memcpy(text[header.len + index * context.len ..][0..context.len], context);
+    }
+
+    @memcpy(text[header.len + pairs * context.len ..], added);
+    try session.gui.openChangeReview(Session.pane_id);
+    var snapshot = response(session, 1);
+    snapshot.patch = text;
+    try reply(session, snapshot);
+    try prepare(
+        session,
+        .{
+            .allocator = std.testing.allocator,
+            .job_ms = std.math.maxInt(i64),
+        },
+    );
+
+    const panel = session.gui.review;
+    const roles = panel.widget.roles[0];
+    try std.testing.expectEqual(@as(u64, 1), panel.edition);
+    try std.testing.expect(!panel.widget.read_only);
+    try std.testing.expect(!panel.widget.loading);
+    try std.testing.expectEqual(text.len, roles.len);
+    try std.testing.expectEqual(syntaxhl.Role.keyword, roles[std.mem.lastIndexOf(u8, text, "const value").?]);
+    try std.testing.expectEqual(syntaxhl.Role.plain, roles[std.mem.lastIndexOf(u8, text, "const last").?]);
+
+    const reaches = &session.gui.app.model.limit_reaches;
+    const slot = reaches.find("syntax.job_fragments").?;
+    try std.testing.expectEqual(@as(u64, 1), reaches.hits[slot]);
+    try std.testing.expectEqual(@as(u64, syntax_limits.fragments), reaches.value[slot]);
+}
+
+test "runtime review adopts an edition past its time budget with the roles it highlighted" {
+    const session = try base();
+    defer session.deinit();
+
+    try session.gui.openChangeReview(Session.pane_id);
+    var snapshot = response(session, 1);
+    snapshot.patch = "diff --git a/file.zig b/file.zig\n--- a/file.zig\n+++ b/file.zig\n@@ -0,0 +1 @@\n+const first = 1;\n@@ -0,0 +9 @@\n+const second = 2;\n";
+    try reply(session, snapshot);
+    try prepare(
+        session,
+        .{
+            .allocator = std.testing.allocator,
+            .job_ms = 0,
+        },
+    );
+
+    const panel = session.gui.review;
+    const roles = panel.widget.roles[0];
+    try std.testing.expectEqual(@as(u64, 1), panel.edition);
+    try std.testing.expect(!panel.widget.read_only);
+    try std.testing.expectEqual(syntaxhl.Role.keyword, roles[std.mem.indexOf(u8, snapshot.patch, "const first").?]);
+    try std.testing.expectEqual(syntaxhl.Role.plain, roles[std.mem.indexOf(u8, snapshot.patch, "const second").?]);
+    try std.testing.expect(session.gui.app.model.limit_reaches.find("syntax.job_ms") != null);
+}
+
+test "runtime review adopts an edition whose highlighting failed as plain text" {
+    const session = try base();
+    defer session.deinit();
+
+    try session.gui.openChangeReview(Session.pane_id);
+    try reply(session, response(session, 1));
+    var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
+    try prepare(
+        session,
+        .{
+            .allocator = failing.allocator(),
+            .job_ms = syntax_limits.job_ms,
+        },
+    );
+
+    const panel = session.gui.review;
+    try std.testing.expectEqual(@as(u64, 1), panel.edition);
+    try std.testing.expect(!panel.widget.read_only);
+    try std.testing.expect(std.mem.allEqual(syntaxhl.Role, panel.widget.roles[0], .plain));
+    try std.testing.expect(session.gui.app.model.limit_reaches.find("syntax.job_fragments") == null);
+    try std.testing.expect(session.gui.app.model.limit_reaches.find("syntax.job_ms") == null);
 }
 
 test "runtime review modal consumes new terminal input" {

@@ -81,7 +81,15 @@ pub fn draw(self: TextField, canvas: *Canvas) !void {
     if (canvas.widgets) |state| {
         const target = (Target{ .id = .{ .generation = self.generation }, .bounds = self.bounds, .action = self.action, .layer = self.layer, .role = 3 }).labelled(self.label);
         const id = try state.dispatcher.add(target);
-        try state.editors.preparing().add(.{ .id = id, .bounds = content, .columns = columns, .cell_width = cell, .preferred = self.focused, .multiline = self.multiline, .line_height = @floatFromInt(painter.metrics.cell_height) });
+        state.editors.preparing().add(.{
+            .id = id,
+            .bounds = content,
+            .columns = columns,
+            .cell_width = cell,
+            .preferred = self.focused,
+            .multiline = self.multiline,
+            .line_height = @floatFromInt(painter.metrics.cell_height),
+        });
         if (state.preedit.owner) |owner| {
             if (owner.eql(id)) {
                 preedit = &state.preedit;

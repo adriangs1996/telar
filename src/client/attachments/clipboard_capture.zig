@@ -4,6 +4,7 @@ const attachment_prompt = @import("../input/attachment_prompt.zig");
 const data = @import("model");
 const std = @import("std");
 const clipboard_image = @import("../input/clipboard_image.zig");
+const limit_reached = @import("../notifications/limit_reached.zig");
 const notifications = @import("../notifications/notifications.zig");
 const pane_resize = @import("../panes/pane_resize.zig");
 const Client = @import("../execution/Client.zig");
@@ -30,6 +31,7 @@ pub fn completeClipboardCapture(client: *Client, completion: data.Completion) !v
         .failed = .{
             .execution_id = completion.execution_id,
             .reason = err,
+            .limit = completion.limit,
         },
     };
 
@@ -37,7 +39,7 @@ pub fn completeClipboardCapture(client: *Client, completion: data.Completion) !v
         return;
 
     const outcome: clipboard_image.CompletionOutcome = switch (command) {
-        .failed => |failure| clipboard_image.classifyFailure(failure.reason),
+        .failed => |failure| clipboard_image.classifyFailure(failure.reason, failure.limit),
         .succeeded => |result| result: {
             if (result.result_id != capture.id or !std.meta.eql(result.target, capture.target)) {
                 break :result .stale;
@@ -99,10 +101,17 @@ fn scheduleClipboardCapture(model: *data.ClientModel, capture: data.ClipboardCap
     try model.to_host.push(.{ .capture = request });
 }
 
+// Hands the capture to the shelf and reports the limit a preview it evicted
+// for room reached. Returns whether the pane layout changed.
 fn adoptClipboardCapture(client: *Client, capture: *data.Capture) !bool {
     const request = capture.request;
     const shelf = client.attachments orelse return error.AttachmentsUnsupported;
-    var layout_changed = try shelf.adopt(capture);
+    const adoption = try shelf.adopt(capture);
+    if (adoption.evicted) |reach| {
+        limit_reached.report(client, reach);
+    }
+
+    var layout_changed = adoption.layout_changed;
     if (request.marker_policy.learnsIdentity()) {
         if (client.model.panes.findConst(request.target.pane_id)) |value| {
             layout_changed = layout_changed or (shelf.reconcileMarkers(
@@ -121,10 +130,9 @@ fn adoptClipboardCapture(client: *Client, capture: *data.Capture) !bool {
 fn reportClipboardCapture(client: *Client, outcome: clipboard_image.CompletionOutcome) !void {
     const input: data.NotificationInput = switch (outcome) {
         .applied, .stale, .ignored, .no_image => return,
-        .too_large => .{
-            .level = .failure,
-            .title = "Image preview skipped",
-            .message = "The clipboard image exceeds Telar's local preview limit",
+        .too_large => |reach| {
+            limit_reached.report(client, reach);
+            return;
         },
         .worker_failed, .adoption_failed => |err| .{
             .level = .failure,

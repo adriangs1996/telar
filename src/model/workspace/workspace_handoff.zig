@@ -7,6 +7,7 @@ const model_namespace = @import("../state/model_namespace.zig");
 const model_data = @import("../model.zig");
 const std = @import("std");
 const ClientModel = @import("../state/ClientModel.zig");
+const limit_reached = @import("../connection/limit_reached.zig");
 const Panes = @import("../panes/Panes.zig");
 const WorkspaceLayout = @import("WorkspaceLayout.zig");
 const RootTab = @import("RootTab.zig");
@@ -15,6 +16,7 @@ const RootTab = @import("RootTab.zig");
 /// Example: `workspace_handoff.clear(model);`
 pub fn clear(model: *ClientModel) void {
     model.panes.deinit();
+    limit_reached.forgetClosedPanes(model);
     model.tabs.count = 0;
     model.tabs.active = 0;
     model.workspace = null;

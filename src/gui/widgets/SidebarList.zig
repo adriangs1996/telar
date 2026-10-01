@@ -7,7 +7,7 @@ bounds: Rect,
 
 /// The visible part of a card, as its pointer target: the list clips what
 /// it paints, so a card scrolled half out of view is hit only where it shows.
-/// Example: `try context.bands.add(.{ .area = list.hitArea(card), .action = action });`
+/// Example: `context.bands.add(.{ .area = list.hitArea(card), .action = action });`
 pub fn hitArea(self: SidebarList, card: Rect) Rect {
     const top = @max(card.y, self.bounds.y);
     const bottom = @min(card.y + card.height, self.bounds.y + self.bounds.height);

@@ -266,6 +266,58 @@ test "hidden panes resolve no placements" {
     try std.testing.expectEqual(@as(usize, 0), images.placement_count);
 }
 
+test "a full frame keeps the placements painted highest and counts the rest" {
+    var stores = [_]Store{.init(std.testing.allocator)};
+    defer stores[0].deinit();
+    const images = try std.testing.allocator.create(PaneImages);
+    defer std.testing.allocator.destroy(images);
+    images.* = .{};
+    const per_pane = core.max_placements_per_pane;
+    const panes = PaneImages.capacity / per_pane + 1;
+    const pixels = [_]u8{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
+    const key: core.ImageKey = .{
+        .image_id = 7,
+        .generation = 1,
+    };
+    for (1..panes + 1) |number| {
+        const pane: core.PaneId = @enumFromInt(number);
+        try stores[0].applyImage(.{
+            .pane_id = pane,
+            .revision = 1,
+            .image = .{
+                .key = key,
+                .format = .rgb,
+                .width = 2,
+                .height = 2,
+                .byte_len = pixels.len,
+            },
+        });
+        try stores[0].applyChunk(.{
+            .pane_id = pane,
+            .revision = 1,
+            .key = key,
+            .offset = 0,
+            .bytes = &pixels,
+        });
+        for (0..per_pane) |index| {
+            var value = placement(7, 1, index + 1, if (number == 1) -5 else @intCast(index));
+            value.placement_id = @intCast(index + 1);
+            try stores[0].applyPlacement(.{
+                .pane_id = pane,
+                .revision = 1,
+                .placement = value,
+            });
+        }
+    }
+
+    pane_images.place(images, &stores, view, 0);
+    try std.testing.expectEqual(@as(usize, PaneImages.capacity), images.placement_count);
+    try std.testing.expectEqual(@as(usize, panes * per_pane - PaneImages.capacity), images.dropped);
+    for (images.resolved()) |kept| {
+        try std.testing.expect(kept.z_index >= 0);
+    }
+}
+
 test "the three layers paint around cell backgrounds and text, clipped and scrolled with the pane" {
     var stores = [_]Store{.init(std.testing.allocator)};
     defer stores[0].deinit();

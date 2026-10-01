@@ -4,8 +4,9 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <wayland-client.h>
+#include "../native/telar_gui.h"
 
-#define TELAR_CLIPBOARD_LIMIT (64 * 1024)
+#define TELAR_CLIPBOARD_LIMIT TELAR_GUI_CLIPBOARD_CAPACITY
 #define TELAR_CLIPBOARD_TRANSFERS 4
 
 typedef struct telar_clipboard telar_clipboard;

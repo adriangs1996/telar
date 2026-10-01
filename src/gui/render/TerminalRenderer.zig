@@ -58,6 +58,9 @@ chrome: ChromeMetrics = .{},
 /// What the next measurement asks of the sidebar band; the host sets it
 /// from the shared visibility and its width preference before measuring.
 sidebar_request: SidebarRequest = .{},
+/// Cells the last measured viewport held when its grid was cut to
+/// `core.max_cell_count`; null when the whole viewport fit.
+cut_from: ?u64 = null,
 /// The band the last measurement took off the left of the grid.
 sidebar: SidebarBand = .{},
 /// Device pixels the window controls cover at the left of navigation.
@@ -67,6 +70,13 @@ origin: [2]u32 = .{ 0, 0 },
 viewport: [2]u32 = .{ 0, 0 },
 atlas_version: u32 = 0,
 last_page_version: u32 = 0,
+/// The frame version the backend must hold to upload only `atlas_dirty`,
+/// the rows written since; any other version uploads the whole page.
+atlas_dirty_base: u32 = 0,
+atlas_dirty: [2]u32 = .{ 0, 0 },
+/// The side glyph pages open at: `GlyphAtlas.min_side` until one frame
+/// outgrew it.
+atlas_side: u32 = GlyphAtlas.min_side,
 sprites_version: u32 = 0,
 last_sprites_version: u32 = 0,
 background: Color = .black,
@@ -74,6 +84,11 @@ foreground: Color = .white,
 last_theme: ?data.TerminalTheme = null,
 cursor_on: bool = true,
 focused: bool = true,
+
+/// The largest display scale the renderer draws at; a larger one draws at
+/// this scale, with smaller glyphs, rather than losing the window.
+pub const max_display_scale: f32 = 8;
+pub const display_scale_limit = core.Limit.declare("render.display_scale_max", "times the logical size", @as(u64, @intFromFloat(max_display_scale)));
 
 pub fn init(allocator: std.mem.Allocator) Renderer {
     return .{
@@ -116,26 +131,14 @@ pub fn deinit(self: *Renderer) void {
 /// Resolves physical font metrics before the shared client is constructed.
 /// Example: `const size = try renderer.measure(viewport);`
 pub fn measure(self: *Renderer, viewport: native.Viewport) !core.TerminalSize {
-    if (!std.math.isFinite(viewport.scale) or viewport.scale <= 0 or viewport.scale > 8) {
+    if (!std.math.isFinite(viewport.scale) or viewport.scale <= 0 or viewport.scale > max_display_scale) {
         return error.InvalidDisplayScale;
     }
 
     if (self.atlas == null or self.scale != viewport.scale) {
         const pixel_height: u16 = @intFromFloat(@round(self.config.font.scaledSize(viewport.scale)));
-        var replacement = try GlyphAtlas.init(
-            self.allocator,
-            .{
-                .font = self.font.bytes,
-                .pixel_height = pixel_height,
-                .face_index = self.font.match.face_index,
-                .postscript = std.mem.sliceTo(&self.font.match.postscript, 0),
-                .thicken = self.config.font.thicken,
-                .thicken_strength = self.config.font.thicken_strength,
-                .io = self.io,
-            },
-        );
+        var replacement = try self.openAtlas(pixel_height, self.atlas_side);
         errdefer replacement.deinit();
-        try replacement.prepareFallbacks();
         // The chrome ratio follows the scale and the font size; either one
         // changing builds a new renderer or reaches here, so the page and
         // its favicons are rebuilt at the size they are drawn.
@@ -182,11 +185,13 @@ pub fn measure(self: *Renderer, viewport: native.Viewport) !core.TerminalSize {
     const sidebar = SidebarBand.resolve(self.sidebar_request, .{ .width = viewport.width, .cell_width = self.metrics.cell_width, .padding_x = x, .scale = viewport.scale });
     const left = if (sidebar.visible()) sidebar.reserved() else x;
 
-    const size = try self.metrics.measure(.{
+    const measured = try self.metrics.measure(.{
         .width = viewport.width -| left -| x,
         .height = body_height -| (2 * y),
         .scale = viewport.scale,
     });
+    const size = measured.size;
+    self.cut_from = measured.cut_from;
 
     self.chrome = chrome;
     self.sidebar = sidebar;
@@ -208,11 +213,81 @@ pub fn measure(self: *Renderer, viewport: native.Viewport) !core.TerminalSize {
     return size;
 }
 
+/// Settles the glyph page between two frames: a page that filled is
+/// emptied, and one a single frame outgrew reopens at
+/// `GlyphAtlas.max_side`; either drops the retained cells that sampled it.
+/// Returns what happened so the adapter reports an exhausted page.
+/// Example: `if (try renderer.settleAtlas(now_ns) == .exhausted) report();`
+pub fn settleAtlas(self: *Renderer, now_ns: u64) !GlyphAtlas.Settled {
+    const atlas = if (self.atlas) |*value| value else return .kept;
+    const settled = try atlas.settle(now_ns);
+    switch (settled) {
+        .kept, .exhausted => {},
+        .emptied => self.retained.invalidate(),
+        .outgrown => try self.reopenAtlas(GlyphAtlas.max_side),
+        .shrunk => try self.reopenAtlas(GlyphAtlas.min_side),
+    }
+
+    return settled;
+}
+
+/// Replaces the glyph page with an empty one of `side` at the same height.
+fn reopenAtlas(self: *Renderer, side: u32) !void {
+    const atlas = &self.atlas.?;
+    var replacement = try self.openAtlas(atlas.pixel_height, side);
+    errdefer replacement.deinit();
+    atlas.deinit();
+    self.atlas = replacement;
+    self.atlas_side = side;
+    self.last_page_version = 0;
+    self.retained.invalidate();
+}
+
+/// Whether the glyph page filled and the next frame settles it into room
+/// for what the last frame drew as the replacement glyph.
+/// Example: `const due = renderer.atlasSettleDue(now_ns);`
+pub fn atlasSettleDue(self: *const Renderer, now_ns: u64) bool {
+    const atlas = if (self.atlas) |*value| value else return false;
+    return atlas.settleDue(now_ns);
+}
+
+/// Milliseconds until a held glyph page may be emptied, zero when none is
+/// held, so a still window wakes to draw what the hold kept out.
+/// Example: `const delay = renderer.atlasWakeupAfter(now_ns);`
+pub fn atlasWakeupAfter(self: *const Renderer, now_ns: u64) u32 {
+    const atlas = if (self.atlas) |*value| value else return 0;
+    const deadline = atlas.heldUntil() orelse return 0;
+    return @intCast(@max(1, std.math.divCeil(u64, deadline -| now_ns, std.time.ns_per_ms) catch unreachable));
+}
+
+/// Opens a glyph page for the configured font at one height and side, with
+/// its replacement glyphs prepared.
+fn openAtlas(self: *const Renderer, pixel_height: u16, side: u32) !GlyphAtlas {
+    var atlas = try GlyphAtlas.init(
+        self.allocator,
+        .{
+            .font = self.font.bytes,
+            .pixel_height = pixel_height,
+            .side = side,
+            .face_index = self.font.match.face_index,
+            .postscript = std.mem.sliceTo(&self.font.match.postscript, 0),
+            .thicken = self.config.font.thicken,
+            .thicken_strength = self.config.font.thicken_strength,
+            .io = self.io,
+        },
+    );
+    errdefer atlas.deinit();
+    try atlas.prepareFallbacks();
+    return atlas;
+}
+
 /// Starts a frame without traversing the model or emitting any quads. The
 /// widget composition decides which terminal leaves to draw afterwards.
 /// Example: `renderer.begin();`
 pub fn begin(self: *Renderer) void {
     self.quads.clear();
+    self.quads.dropped = 0;
+    self.cell_quads.dropped = 0;
     self.image_draw_count = 0;
     self.repainted_cells = 0;
     const background = rgb(self.theme.background);
@@ -257,10 +332,14 @@ pub fn prepare(self: *Renderer, projection: client.Projection) !data.Presentatio
 /// changed, so the backend uploads once per change and never on a warm frame.
 /// Example: `renderer.seal();`
 pub fn seal(self: *Renderer) void {
-    const page_version = self.atlas.?.version;
+    const atlas = &self.atlas.?;
+    atlas.frameDrawn();
+    const page_version = atlas.version;
     if (self.last_page_version != page_version) {
         self.last_page_version = page_version;
+        self.atlas_dirty_base = self.atlas_version;
         self.atlas_version +%= 1;
+        self.atlas_dirty = atlas.takeDirty();
     }
 
     const sprites_version = if (self.sprites) |page| page.version else 0;
@@ -550,8 +629,11 @@ pub fn frame(self: *const Renderer, token: u64) native.Frame {
         .quads = quads.ptr,
         .quad_count = @intCast(quads.len),
         .atlas = if (self.atlas) |atlas| atlas.pixels.ptr else null,
-        .atlas_side = GlyphAtlas.side,
+        .atlas_side = if (self.atlas) |atlas| atlas.side else 0,
         .atlas_version = self.atlas_version,
+        .atlas_dirty_base = self.atlas_dirty_base,
+        .atlas_dirty_top = self.atlas_dirty[0],
+        .atlas_dirty_bottom = self.atlas_dirty[1],
         .sprites = if (self.sprites) |page| page.pixels.ptr else null,
         .sprites_side = if (self.sprites) |page| page.side else 0,
         .sprites_version = self.sprites_version,

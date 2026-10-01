@@ -10,4 +10,4 @@ start: Position,
 end: Position,
 /// Editor steps from `start` to `end`, or null when the path exceeds
 /// `max_cells`. A marker is still recognisable without its extent.
-cells: ?u8,
+cells: ?u16,

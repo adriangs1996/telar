@@ -11,7 +11,8 @@ use std::{
 };
 use tree_sitter_highlight::{HighlightConfiguration, HighlightEvent, Highlighter};
 
-const MAX_SOURCE: usize = 48 * 1024;
+// Matches `syntaxhl.limits.source_bytes`, which holds telar's largest review patch.
+const MAX_SOURCE: usize = 256 * 1024;
 const DEADLINE: Duration = Duration::from_millis(100);
 const CAPTURES: &[&CStr] = &[
     c"variable",

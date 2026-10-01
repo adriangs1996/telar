@@ -38,7 +38,7 @@
   busy = YES;
   const uint64_t request_id = request.request_id, target_id = request.target_id, generation = request.generation;
   const uint32_t kind = request.kind;
-  const BOOL invalid = request.len > 64 * 1024 || (request.len && request.text == NULL);
+  const BOOL invalid = request.len > TELAR_GUI_CLIPBOARD_CAPACITY || (request.len && request.text == NULL);
   NSData *owned = !invalid && kind == 2 ? [NSData dataWithBytes:request.text length:request.len] : nil;
   __weak TelarHostServices *weak = self;
   // AppKit pasteboard access stays on the main thread, outside input dispatch.
@@ -51,7 +51,7 @@
     if (!invalid && kind == 1) {
       NSString *text = [service->pasteboard stringForType:NSPasteboardTypeString];
       if (text == nil) status = 1;
-      else if ([text lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > 64 * 1024) status = 2;
+      else if ([text lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > TELAR_GUI_CLIPBOARD_CAPACITY) status = 2;
       else {
         result = [text dataUsingEncoding:NSUTF8StringEncoding];
         if (result == nil) status = 1;

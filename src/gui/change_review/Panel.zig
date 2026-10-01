@@ -9,9 +9,6 @@ const dispatch = @import("dispatch.zig");
 const Self = @This();
 const Pending = @import("Pending.zig");
 
-/// Bytes of the status line the panel shows.
-const status_capacity = 1024;
-
 allocator: std.mem.Allocator,
 widget: Widget = .{ .mode = .runtime, .layer = 1 },
 active: bool = false,
@@ -20,18 +17,45 @@ revision: u64 = 0,
 edition: u64 = 0,
 previous: u64 = 0,
 next: u64 = 0,
-slots: [2]PreparedEdition = @splat(.{}),
+slots: [2]PreparedEdition,
 visible_slot: usize = 0,
 job: ?usize = null,
 notified: bool = false,
 pending: ?Pending = null,
 blocked: bool = false,
 refreshing: bool = false,
-status_bytes: [status_capacity]u8 = undefined,
+status_bytes: [1024]u8 = undefined,
 paste: client.ChangeReviewComment = .{},
 paste_generation: ?u64 = null,
 paste_revision: u64 = 0,
 paste_failed: bool = false,
+
+/// Reserves both edition slots once, when the window starts, so opening,
+/// preparing and painting a review never allocate on the adapter loop. The
+/// panel is large, so it is built where it lives rather than returned.
+///
+/// ```zig
+/// try panel.init(allocator);
+/// defer panel.deinit();
+/// ```
+pub fn init(self: *Self, allocator: std.mem.Allocator) !void {
+    self.* = .{
+        .allocator = allocator,
+        .slots = undefined,
+    };
+    self.slots[0] = try PreparedEdition.init(allocator);
+    errdefer self.slots[0].deinit(allocator);
+
+    self.slots[1] = try PreparedEdition.init(allocator);
+}
+
+/// Call after the inbox joined its workers; a running job writes a slot.
+/// Example: `panel.deinit();`
+pub fn deinit(self: *Self) void {
+    for (&self.slots) |*slot| {
+        slot.deinit(self.allocator);
+    }
+}
 
 /// Keeps one pane's unacknowledged edits alive until its runtime reply arrives.
 /// Example: `try panel.open(app, pane_id);`
@@ -99,17 +123,22 @@ pub fn synchronize(self: *Self, app: *client.Client) !void {
     if (self.notified) {
         const prepared = &self.slots[self.job.?];
         if (state.loaded and prepared.generation == state.generation and prepared.edition == state.snapshot.edition_id) {
-            if (prepared.failure) |err| {
+            if (prepared.failure != null) {
                 self.widget.loading = false;
                 self.widget.read_only = true;
-                self.status(switch (err) {
-                    error.SyntaxLimit, error.SyntaxUnavailable => "Syntax highlighting could not finish. Refresh to retry this edition.",
-                    else => "This edition could not be prepared for review. Refresh to retry.",
-                });
+                self.status("This edition could not be prepared for review. Refresh to retry.");
             } else {
                 self.visible_slot = self.job.?;
                 self.adopt(&state.snapshot);
-                self.noteLimits(app, prepared);
+                if (prepared.limit) |reach| {
+                    client.limit_reached.report(app, reach);
+                }
+
+                // An edition past the view's file or row limit shows its
+                // first files and rows.
+                if (prepared.revision.reach()) |reach| {
+                    client.limit_reached.report(app, reach);
+                }
             }
         }
         self.job = null;
@@ -258,7 +287,7 @@ fn adopt(self: *Self, snapshot: *const core.ChangeReviewSnapshotView) void {
     self.widget.resetNavigation();
     self.widget.model = .{};
     self.widget.model.revisions[0] = self.slots[self.visible_slot].revision;
-    @memcpy(self.widget.roles[0][0..snapshot.patch.len], self.slots[self.visible_slot].roles[0..snapshot.patch.len]);
+    self.widget.roles[0] = self.slots[self.visible_slot].roles[0..snapshot.patch.len];
     self.widget.model.selectFile(0);
     self.widget.scroll = 0;
     self.widget.sidebar_start = 0;
@@ -489,31 +518,6 @@ fn localChange(self: *const Self, index: usize) bool {
 
 fn dirty(self: *const Self) bool {
     return self.widget.changed_comments != 0 or self.widget.deleted_comments != 0 or self.widget.reviewed_changed or self.pending != null;
-}
-
-/// Reports the view limits a prepared edition reached and says ahead of the
-/// status what the view left out.
-fn noteLimits(self: *Self, app: *client.Client, prepared: *const PreparedEdition) void {
-    const cut = prepared.revision.reach();
-    if (cut) |reach| {
-        client.limit_reached.report(app, reach);
-    }
-
-    if (prepared.syntax_limit) |limit| {
-        client.limit_reached.report(app, .{
-            .limit = limit,
-        });
-    }
-
-    var buffer: [status_capacity]u8 = undefined;
-    const current = self.widget.model.status;
-    const note = if (cut) |reach|
-        std.fmt.bufPrint(&buffer, "Shows the first {d} of {d} {s}; the rest passed the review view's limit. {s}", .{ reach.limit.value, reach.requested.?, reach.limit.noun, current }) catch return
-    else if (prepared.syntax_limit != null)
-        std.fmt.bufPrint(&buffer, "Syntax colors stop partway through this edition. {s}", .{current}) catch return
-    else
-        return;
-    self.status(note);
 }
 
 fn status(self: *Self, message: []const u8) void {

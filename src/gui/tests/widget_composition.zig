@@ -131,8 +131,9 @@ test "complete widget list fits the maximum pane count with every optional layer
         try std.testing.expectEqual(commit.pane_id, widget.terminal_pane.paint.pane.id);
     }
 
-    try std.testing.expectError(error.WidgetCapacityExceeded, widgets.append(widgets.storage[0]));
+    widgets.append(widgets.storage[0]);
     try std.testing.expectEqual(FrameWidget.capacity, widgets.len);
+    try std.testing.expectEqual(@as(usize, 1), widgets.dropped);
     try widgets.draw(&canvas);
     try std.testing.expect(fixture.session.gui.renderer.quads.items().len > 0);
 }

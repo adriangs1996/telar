@@ -10,11 +10,17 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+/* Each quota has its own status so the caller names the limit it reached:
+ * TOO_LARGE is the source bytes, TOO_MANY_PIXELS the image's pixels (width
+ * and height are written when they fit) and PNG_TOO_LARGE the encoded PNG
+ * (its length is written, its bytes are not returned). */
 enum {
     TELAR_CLIPBOARD_OK = 0,
     TELAR_CLIPBOARD_NO_IMAGE = 1,
     TELAR_CLIPBOARD_TOO_LARGE = 2,
     TELAR_CLIPBOARD_FAILED = 3,
+    TELAR_CLIPBOARD_TOO_MANY_PIXELS = 4,
+    TELAR_CLIPBOARD_PNG_TOO_LARGE = 5,
 };
 
 static int source_dimensions(
@@ -30,14 +36,21 @@ static int source_dimensions(
     CFNumberRef height_value = CFDictionaryGetValue(properties, kCGImagePropertyPixelHeight);
     int64_t parsed_width = 0;
     int64_t parsed_height = 0;
-    const bool valid = width_value != NULL && height_value != NULL &&
+    const bool parsed = width_value != NULL && height_value != NULL &&
         CFNumberGetValue(width_value, kCFNumberSInt64Type, &parsed_width) &&
         CFNumberGetValue(height_value, kCFNumberSInt64Type, &parsed_height) &&
-        parsed_width > 0 && parsed_height > 0 &&
-        parsed_width <= UINT32_MAX && parsed_height <= UINT32_MAX &&
-        (uint64_t)parsed_width <= max_pixels / (uint64_t)parsed_height;
+        parsed_width > 0 && parsed_height > 0;
     CFRelease(properties);
-    if (!valid) return TELAR_CLIPBOARD_TOO_LARGE;
+    if (!parsed) return TELAR_CLIPBOARD_FAILED;
+
+    const bool sides_fit = parsed_width <= UINT32_MAX && parsed_height <= UINT32_MAX;
+    if (!sides_fit || (uint64_t)parsed_width > max_pixels / (uint64_t)parsed_height) {
+        if (sides_fit) {
+            *width = (uint32_t)parsed_width;
+            *height = (uint32_t)parsed_height;
+        }
+        return TELAR_CLIPBOARD_TOO_MANY_PIXELS;
+    }
 
     *width = (uint32_t)parsed_width;
     *height = (uint32_t)parsed_height;
@@ -147,7 +160,11 @@ static int telar_clipboard_copy_png(
         CFRelease(destination);
         CFRelease(source);
         if (!encoded_ok || encoded.length == 0) return TELAR_CLIPBOARD_FAILED;
-        if (encoded.length > max_png_bytes) return TELAR_CLIPBOARD_TOO_LARGE;
+        if (encoded.length > max_png_bytes) {
+            [encoded resetBytesInRange:NSMakeRange(0, encoded.length)];
+            *len = encoded.length;
+            return TELAR_CLIPBOARD_PNG_TOO_LARGE;
+        }
 
         unsigned char *copy = malloc(encoded.length);
         if (copy == NULL) {

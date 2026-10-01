@@ -115,24 +115,35 @@ Every one of these limits keeps what fits and reports the rest by name with the
 [limit notice](limit-reached.md); none drops a whole edit:
 
 - A diff past `review.max_patch_bytes` keeps its whole files and hunks, then
-  the first lines of the hunk that crosses the bound under a recounted header.
-  The edition's status says how many bytes it left out, and the runtime reports
-  the limit with the diff's full size. Only a diff whose first hunk has no
-  change that fits is refused, and reported.
+  the first lines of the hunk that crosses the bound under a recounted header;
+  a cut never keeps a file's header without a hunk. The edition's status says
+  how many bytes it left out, and the runtime reports the limit with the
+  diff's full size. Only a diff whose first hunk has no change that fits is
+  refused, and reported.
 - Feedback past `review.max_feedback_bytes` keeps the comments that fit. A
   comment whose excerpt does not fit is sent without it; one that does not fit
   at all is counted in the feedback's last line.
 - An edition past `change_review.view_files` or `change_review.view_lines`
-  shows its first files and rows; the status names what the view left out and
-  the window reports the limit.
-- A diff with more hunks than the highlighter's fragment or time budget keeps
-  the colors of its first hunks and shows the rest plain (`syntax.fragments`,
-  `syntax.job_ms`).
+  shows its first files and rows, and the window reports the limit. A last
+  file the row limit leaves without rows is left out with the rest.
 
 Other unsupported content, such as binary or non-UTF-8 text, fails explicitly;
 it is not silently turned into a different review. One syntax job uses an
 inactive source slot; its completion is adopted only after the preceding
-presentation releases its resources.
+presentation releases its resources. The two slots, each a source and one role
+per byte, are reserved when the window starts and sized by the patch limit;
+the view borrows the visible slot's roles.
+
+Syntax highlighting never refuses an edition. A job highlights at most 1,024
+fragments (one side of one hunk; `syntax.job_fragments`) and starts no fragment
+after one second (`syntax.job_ms`); a source larger than 256 KiB
+(`syntax.source_bytes`, which the build asserts holds the patch limit) is not
+highlighted. A job that reaches one of these keeps the roles it wrote, leaves
+the rest in the plain syntax color and returns the limit with its edition; the
+window's loop adopts the edition as usual and reports the limit. A job that
+fails (a grammar, a malformed native result, memory) shows the whole edition
+plain and logs why. Copying review code takes at most one patch and the clipboard's 1 MiB; a
+longer selection copies the lines that fit and reports `ClipboardTooLarge`.
 
 The service admits four observation jobs, at most one per client connection.
 Availability discovery uses at most three slots, leaving one for review requests.

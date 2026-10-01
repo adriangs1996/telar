@@ -15,8 +15,15 @@ pub fn Type(comptime Value: type) type {
         /// Example: `const pending = state.begin();`.
         pub fn begin(self: *State) *Value {
             self.sealed = false;
-            self.slots[self.current ^ 1] = .{};
-            return &self.slots[self.current ^ 1];
+            const pending = &self.slots[self.current ^ 1];
+            // A large table resets its counts rather than every row.
+            if (@hasDecl(Value, "reset")) {
+                pending.reset();
+            } else {
+                pending.* = .{};
+            }
+
+            return pending;
         }
 
         pub fn seal(self: *State) void {

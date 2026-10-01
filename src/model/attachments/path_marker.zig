@@ -8,6 +8,7 @@
 //! This module reads those conventions back from a committed pane frame.
 
 const cellgrid = @import("cellgrid");
+const core = @import("telar-core");
 const Marker = @import("Marker.zig");
 const Scan = @import("Scan.zig");
 const std = @import("std");
@@ -18,8 +19,11 @@ const Head = @import("Head.zig");
 
 pub const prefix = "pi-clipboard-";
 pub const uuid_len: usize = 36;
-/// Bound for the whole path in editor steps. A macOS `$TMPDIR` path is 102.
-pub const max_cells: u8 = 128;
+/// Bound for the whole path in editor steps. A macOS `$TMPDIR` path is 102;
+/// a custom `TMPDIR` can be several times longer. The bound only stops the
+/// count of one marker's cells, so raising it costs scan steps, never memory.
+pub const max_cells: u16 = 512;
+pub const cells_limit = core.Limit.declare("attachments.path_marker.max_cells", "editor steps", max_cells);
 const extensions = [_][]const u8{
     "png",
     "jpg",
@@ -138,7 +142,7 @@ pub fn cursorOnRow(screen: Screen, y: u16) ?u16 {
 /// ```zig
 /// const steps = path_marker.stepsOnRow(buffer, marker.end.y, .{ .from = marker.end.x, .to = cursor_x }) orelse return;
 /// ```
-pub fn stepsOnRow(buffer: *const cellgrid.Buffer, y: u16, span: Span) ?u8 {
+pub fn stepsOnRow(buffer: *const cellgrid.Buffer, y: u16, span: Span) ?u16 {
     if (span.from > span.to or span.to > buffer.w or y >= buffer.h) {
         return null;
     }
@@ -152,11 +156,8 @@ pub fn stepsOnRow(buffer: *const cellgrid.Buffer, y: u16, span: Span) ?u8 {
             y,
         ).width != 0);
     }
-    if (steps > std.math.maxInt(u8)) {
-        return null;
-    }
 
-    return @intCast(steps);
+    return steps;
 }
 
 fn parseHead(buffer: *const cellgrid.Buffer, start: Position) ?Head {
@@ -301,12 +302,12 @@ fn rowForceWrapped(buffer: *const cellgrid.Buffer, y: u16) bool {
     return !isBlank(last_content) and isBlank(reserved);
 }
 
-fn countCells(buffer: *const cellgrid.Buffer, start: Position, end: Position) ?u8 {
+fn countCells(buffer: *const cellgrid.Buffer, start: Position, end: Position) ?u16 {
     var scan = Scan.at(buffer, start) orelse return null;
     var cells: u16 = 0;
     while (true) {
         if (scan.x == end.x and scan.y == end.y) {
-            return @intCast(cells);
+            return cells;
         }
 
         const here = scan.position() orelse return null;
@@ -434,7 +435,7 @@ test "a pasted path on one row is one marker with its full extent" {
         },
         marker.end,
     );
-    try std.testing.expectEqual(@as(?u8, test_path.len), marker.cells);
+    try std.testing.expectEqual(@as(?u16, test_path.len), marker.cells);
 }
 
 test "a path broken over force-wrapped rows keeps one identity and extent" {
@@ -463,7 +464,52 @@ test "a path broken over force-wrapped rows keeps one identity and extent" {
         marker.start,
     );
     try std.testing.expectEqual(end, marker.end);
-    try std.testing.expectEqual(@as(?u8, test_path.len), marker.cells);
+    try std.testing.expectEqual(@as(?u16, test_path.len), marker.cells);
+}
+
+/// A path of exactly `cells` cells ending in the test marker's file name.
+fn pathOfCells(comptime cells: usize) *const [cells]u8 {
+    const file = "/pi-clipboard-" ++ test_uuid ++ ".png";
+    return comptime "/" ++ ("d" ** (cells - file.len - 1)) ++ file;
+}
+
+test "a path counts its cells up to max_cells and stays recognisable past them" {
+    var buffer = try cellgrid.Buffer.init(
+        std.testing.allocator,
+        120,
+        6,
+    );
+    defer buffer.deinit();
+
+    // A custom TMPDIR four times as long as macOS's keeps its extent.
+    _ = writeWrapped(
+        &buffer,
+        .{
+            .x = 0,
+            .y = 0,
+        },
+        pathOfCells(max_cells),
+    );
+    try std.testing.expectEqual(@as(?u16, max_cells), find(&buffer, test_uuid.*).?.cells);
+
+    buffer.clear(.{});
+    _ = writeWrapped(
+        &buffer,
+        .{
+            .x = 0,
+            .y = 0,
+        },
+        pathOfCells(max_cells + 1),
+    );
+    const past = find(&buffer, test_uuid.*).?;
+    try std.testing.expect(past.cells == null);
+    try std.testing.expectEqual(
+        Position{
+            .x = 0,
+            .y = 0,
+        },
+        past.start,
+    );
 }
 
 test "a word soft-wrapped before the path is not part of its extent" {
@@ -506,7 +552,7 @@ test "a word soft-wrapped before the path is not part of its extent" {
         marker.start,
     );
     try std.testing.expectEqual(end, marker.end);
-    try std.testing.expectEqual(@as(?u8, test_path.len), marker.cells);
+    try std.testing.expectEqual(@as(?u16, test_path.len), marker.cells);
 }
 
 test "a file name glued to following text is no longer a marker" {
@@ -699,7 +745,7 @@ test "row steps count graphemes rather than cells" {
         },
     );
 
-    try std.testing.expectEqual(@as(?u8, 3), stepsOnRow(
+    try std.testing.expectEqual(@as(?u16, 3), stepsOnRow(
         &buffer,
         0,
         .{

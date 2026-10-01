@@ -198,10 +198,13 @@ back to straight alpha for the blend state and multiply the quad's tint. The
 page holds equal square cells of `SpritePage.cellFor(scale)` texels, 16
 logical pixels at the display scale, clamped to 8..48: the three provider
 marks box-filtered from the embedded sheet at construction, then at most 64
-workspace favicons. `TerminalRenderer.measure` builds it with the atlas for
-the same scale; `seal` advances `sprites_version` only when a cell was
-written, so the backend uploads the page once per landed favicon and never on
-a warm frame. `native.Frame` carries the page pointer, side and version
+workspace favicons at once (`gui.favicons.max_favicons`, as many as the
+workspace list shows). A favicon's slot is released, cleared to transparent
+texels, when its workspace's entry leaves the registry, and the next favicon
+reuses it before the page grows. `TerminalRenderer.measure` builds it with
+the atlas for the same scale; `seal` advances `sprites_version` only when a
+cell was written or cleared, so the backend uploads the page once per change
+and never on a warm frame. `native.Frame` carries the page pointer, side and version
 beside the atlas; a frame without a page leaves the atlas bound in the sprite
 slot and no quad selects it. `Canvas.spriteAt` draws one cell into a
 device-pixel rectangle, snapped to whole pixels, as one quad with zero shape.
@@ -209,7 +212,12 @@ device-pixel rectangle, snapped to whole pixels, as one quad with zero shape.
 Workspace favicons never cross the wire. `widgets/Favicons` keeps one entry per
 workspace of the list; each preparation places the one landed image into the
 page and asks `client/workspace/favicons.request` for a lookup job for the next
-wanted workspace. The GUI runs that job as
+wanted workspace. An entry outlives its workspace, so one that comes back
+keeps its slot without a second lookup, until the table or the page needs
+room for a listed workspace: then the entries of workspaces no longer listed
+leave and release their slots. The page is full only when every slot belongs
+to a listed workspace; that favicon keeps the glyph, the window reports
+`gui.favicons.max_favicons`, and it looks up again once the list changes. The GUI runs that job as
 `image/favicon_worker.execute` on an inbox task: the shared `favicon_lookup` reads
 `favicon.png`, `favicon.ico`, then `.telar/icon.png` under the workspace root (regular files,
 1 MiB at most). `imaging.ico` inspects at most 64 directory entries without
@@ -221,16 +229,23 @@ the padded AND mask when every alpha byte is zero, following the
 [ICO alpha convention](https://devblogs.microsoft.com/oldnewthing/20101021-00/?p=12483).
 SVG and other ICO bitmap encodings are unsupported.
 `imaging.png` reads the IHDR, which must be the first chunk, checks its CRC
-and rejects dimensions beyond `PngLimits` (4096 px a side, 1 Mi pixels)
-before Wuffs allocates anything. Wuffs then decodes every standard PNG
-(interlaced, grayscale, palette, 1 to 16 bits) into straight RGBA8 of
-exactly the checked size, at most 4 MiB, and rejects a zlib stream that
-ends short or carries more data than the image needs.
+and rejects dimensions beyond the caller's limits before Wuffs allocates
+anything. The favicon worker passes 2048 px a side and 4 Mi pixels
+(`favicon_worker.max_png_side`), so a logo up to 2048 px lands. Wuffs then
+decodes every standard PNG (interlaced, grayscale, palette, 1 to 16 bits)
+into straight RGBA8 of exactly the checked size, at most 16 MiB, beside a
+work buffer of one filter byte a row and one to eight bytes a pixel: one
+decode holds 32 MiB for 8-bit RGBA and 48 MiB at worst on the worker,
+since a flat 1 MiB file from any repository can declare the whole square. It rejects a zlib
+stream that ends short or carries more data than the image needs. A larger
+PNG returns `gui.favicons.max_png_side` with its longer side in the
+completion, and `favicons.complete` reports it when the lookup lands on the
+window's loop.
 `imaging.box_filter` area-averages the result into one
 cell. One lookup is in flight at a time; a completion for another execution
 is released unread, a missing file is silent and an unusable one logs once
-under the `favicons` scope. A full sheet or a failed lookup keeps the generic
-glyph. A page rebuilt for another scale forgets its placements, so the
+under the `favicons` scope. A full sheet, a PNG past its limit or a failed
+lookup keeps the generic glyph. A page rebuilt for another scale forgets its placements, so the
 lookups run again at the new cell size.
 
 `zig build test-gui` covers the reported multi-resolution ICO fixture through
@@ -432,6 +447,9 @@ config, font resources, cursor clock and rendering contracts.
   that shape, rasterize and allocate nothing, the PNG decoder on synthetic
   files with every filter type and its rejections, the favicon registry,
   worker and one favicon reaching the card a frame after its completion;
+  slots released and reused as three pages' worth of workspaces pass
+  through a list of 64, the full page that reports `gui.favicons.max_favicons`,
+  and PNGs at and one past 2048 px a side, the latter reported on the loop;
   installed font resolution, missing family failure,
   scaled metrics, all cursor shapes, wide-cell ink, palette rendering and
   allocation failure after warmup. Twenty cursor phases reuse the atlas and

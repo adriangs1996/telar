@@ -275,30 +275,114 @@ fn resolve(images: *PaneImages, store: *Store, view: ImageView) void {
             continue;
         }
 
-        if (images.placement_count == images.placements.len) {
-            images.dropped += 1;
-            continue;
-        }
+        keep(
+            images,
+            .{
+                .pane_id = pane_id,
+                .layer = kitty_protocol.displayLayer(placement.z_index),
+                .z_index = placement.z_index,
+                .image_id = identity.image_id,
+                .generation = identity.generation,
+                .virtual_id = placement.virtual_id,
+                .handle = 0,
+                .column = placement.x,
+                .row = placement.y,
+                .box = box,
+                .uv = @splat(0),
+            },
+            source,
+        );
+    }
 
-        const texture = images.shown[shownOf(images, view.machine, identity)].texture;
-        images.placements[images.placement_count] = .{
-            .pane_id = pane_id,
-            .layer = kitty_protocol.displayLayer(placement.z_index),
-            .z_index = placement.z_index,
-            .image_id = identity.image_id,
-            .generation = identity.generation,
-            .virtual_id = placement.virtual_id,
-            .handle = if (texture) |row| GpuImages.handleOf(row) else 0,
-            .column = placement.x,
-            .row = placement.y,
-            .box = box,
-            .uv = if (texture) |row| uvOf(&images.gpu, row, source) else @splat(0),
+    // Textures are looked for only for the placements kept, so `shown`
+    // never holds an image no placement draws.
+    for (images.placements[0..images.placement_count], images.sources[0..images.placement_count]) |*kept, source| {
+        const identity: client.ImageIdentity = .{
+            .pane_id = kept.pane_id,
+            .image_id = kept.image_id,
+            .generation = kept.generation,
         };
-        images.placement_count += 1;
+        const texture = images.shown[shownOf(images, view.machine, identity)].texture;
+        kept.handle = if (texture) |row| GpuImages.handleOf(row) else 0;
+        kept.uv = if (texture) |row| uvOf(&images.gpu, row, source) else @splat(0);
     }
 
     std.mem.sort(ImagePlacement, images.placements[0..images.placement_count], {}, ImagePlacement.lessThan);
     markStandIns(images);
+}
+
+// Keeps a visible placement. A full list keeps the placements painted
+// highest, by layer then z-index: the new one replaces the lowest kept when
+// it paints above it, and either way one counts in `dropped`. The list is a
+// min-heap by that order until `resolve` sorts it for painting.
+fn keep(images: *PaneImages, placement: ImagePlacement, source: core.RectRect) void {
+    if (images.placement_count < images.placements.len) {
+        const index = images.placement_count;
+        images.placements[index] = placement;
+        images.sources[index] = source;
+        images.placement_count += 1;
+        siftUp(images, index);
+        return;
+    }
+
+    images.dropped += 1;
+    if (!paintsBelow(images.placements[0], placement)) {
+        return;
+    }
+
+    images.placements[0] = placement;
+    images.sources[0] = source;
+    siftDown(images, 0);
+}
+
+fn paintsBelow(left: ImagePlacement, right: ImagePlacement) bool {
+    if (left.layer != right.layer) {
+        return @intFromEnum(left.layer) < @intFromEnum(right.layer);
+    }
+
+    return left.z_index < right.z_index;
+}
+
+fn siftUp(images: *PaneImages, from: usize) void {
+    var index = from;
+    while (index > 0) {
+        const parent = (index - 1) / 2;
+        if (!paintsBelow(images.placements[index], images.placements[parent])) {
+            return;
+        }
+
+        swapKept(images, index, parent);
+        index = parent;
+    }
+}
+
+fn siftDown(images: *PaneImages, from: usize) void {
+    var index = from;
+    const count = images.placement_count;
+    while (true) {
+        var lowest = index;
+        const left = 2 * index + 1;
+        const right = left + 1;
+        if (left < count and paintsBelow(images.placements[left], images.placements[lowest])) {
+            lowest = left;
+        }
+
+        if (right < count and paintsBelow(images.placements[right], images.placements[lowest])) {
+            lowest = right;
+        }
+
+        if (lowest == index) {
+            return;
+        }
+
+        swapKept(images, index, lowest);
+        index = lowest;
+    }
+}
+
+fn swapKept(images: *PaneImages, a: usize, b: usize) void {
+    std.mem.swap(ImagePlacement, &images.placements[a], &images.placements[b]);
+    std.mem.swap(core.RectRect, &images.sources[a], &images.sources[b]);
 }
 
 const empty_shown = std.math.maxInt(u16);
