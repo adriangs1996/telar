@@ -17,11 +17,11 @@ The helper is a function over the model. Producers clear successful prior
 failures with `model.clearDiagnostic`. There is no diagnostic object to assemble
 or erased callback to invoke.
 
-`Diagnostic` retains at most 512 bytes and validates length and UTF-8 before
+`Diagnostic` retains at most 1024 bytes and validates length and UTF-8 before
 mutation. If both the primary value and explicit fallback are invalid, the old
 banner survives. Equal text is a no-op. A real replacement or removal advances
-the diagnostic revision once. `formatted` uses a bounded buffer and a static
-fallback when formatting does not fit.
+the diagnostic revision once. A message that does not fit keeps its start, cut
+at a character, and ends with `…`, so a long Lua error keeps its detail.
 
 Configuration and plugin operations commit the banner before publishing a
 notification. Notification failure preserves it. Lua failures publish the banner

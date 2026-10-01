@@ -51,7 +51,8 @@ pub fn chosen(items: *const PickItems, query: []const u8, selection: u16) ?u16 {
 /// Replaces `items` with one option per nonempty line of a list command's
 /// output, trimmed of surrounding blanks. The line is the value as printed,
 /// tabs included; its label shows tabs as spaces and is cut at a character
-/// when it is longer than a label may be.
+/// when it is longer than a label may be. Options past the list's limits
+/// are left out and `items.reaches` names the limits passed.
 ///
 /// ```zig
 /// try pick_list.readLines(&model.pick_list.items, output);
@@ -71,7 +72,7 @@ pub fn readLines(items: *PickItems, text: []const u8) !void {
             label[index] = if (byte == '\t') ' ' else byte;
         }
 
-        try items.append(.{
+        try items.keep(.{
             .label = label[0..shown.len],
             .value = option,
         });
@@ -111,7 +112,7 @@ test "options match by label or detail, best first and list order on ties" {
     try std.testing.expectEqual(@as(?u16, null), chosen(&items, "zzz", 0));
 }
 
-test "each nonempty trimmed line becomes an option and a surplus fails" {
+test "each nonempty trimmed line becomes an option and a surplus is left out" {
     var items: PickItems = .{};
     try readLines(&items, "  low\r\n\nmedium\t\nhigh\tfast");
     try std.testing.expectEqual(@as(u16, 3), items.count);
@@ -124,7 +125,9 @@ test "each nonempty trimmed line becomes an option and a surplus fails" {
     try readLines(&items, long);
     try std.testing.expectEqualStrings(long, items.value(0));
     try std.testing.expectEqualStrings("é" ** (PickItems.max_label_bytes / 2), items.label(0));
-    try std.testing.expectError(error.PickItemTooLong, readLines(&items, "x" ** (PickItems.max_value_bytes + 1)));
+    try readLines(&items, "x" ** (PickItems.max_value_bytes + 1) ++ "\nshort");
+    try std.testing.expectEqual(@as(u16, 1), items.count);
+    try std.testing.expectEqualStrings("short", items.value(0));
 
     var text: [2 * (PickItems.max_items + 1)]u8 = undefined;
     for (0..PickItems.max_items + 1) |line| {
@@ -132,5 +135,8 @@ test "each nonempty trimmed line becomes an option and a surplus fails" {
         text[2 * line + 1] = '\n';
     }
 
-    try std.testing.expectError(error.TooManyPickItems, readLines(&items, &text));
+    try readLines(&items, &text);
+    try std.testing.expectEqual(@as(u16, PickItems.max_items), items.count);
+    var buffer: [PickItems.max_reaches]core.LimitReach = undefined;
+    try std.testing.expectEqualStrings("picks.max_items", items.reaches(&buffer)[0].limit.name);
 }

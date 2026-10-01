@@ -7,15 +7,29 @@ const GenericBoundedList = @import("GenericBoundedList.zig").Type;
 const keyinput = @import("keyinput");
 const types = @import("schema/types.zig");
 const std = @import("std");
+const Limit = @import("Limit.zig");
 const Table = @import("Table.zig");
 
-pub const max_phrase_bytes = 48;
-pub const max_phrases = 8;
-pub const max_path_bytes = 64;
-pub const max_paths = 4;
+/// Room for a whole screen line such as "do you trust the contents of this
+/// directory?".
+pub const max_phrase_bytes = 64;
+pub const phrase_bytes_limit = Limit.declare("agent_manifest.max_phrase_bytes", "bytes", max_phrase_bytes);
+/// Entries of one phrase list; built-in lists fill at most half, so
+/// configuration can always extend them.
+pub const max_phrases = 16;
+pub const phrases_limit = Limit.declare("agent_manifest.max_phrases", "phrases", max_phrases);
+/// Room for an entry point under a versioned `node_modules` path.
+pub const max_path_bytes = 128;
+pub const path_bytes_limit = Limit.declare("agent_manifest.max_path_bytes", "bytes", max_path_bytes);
+/// Entries of `process_names` or `process_paths`.
+pub const max_paths = 8;
+pub const paths_limit = Limit.declare("agent_manifest.max_paths", "entries", max_paths);
 pub const max_command_tools = 8;
+pub const command_tools_limit = Limit.declare("agent_manifest.max_command_tools", "command tools", max_command_tools);
 pub const max_tool_name_bytes = 64;
 pub const max_command_field_bytes = 32;
+/// Agents configuration may declare besides the built-in ones.
+pub const custom_manifests_limit = Limit.declare("agent_manifest.max_custom_agents", "agents", types.max_agent_manifests);
 
 /// Labels for an agent the table does not know. Clients and the runtime use
 /// the same words so an unknown agent reads identically everywhere.
@@ -372,21 +386,6 @@ test "custom agents receive stable provider indexes and extend built-ins by name
     try std.testing.expectEqual(gemini.provider, table.providerFromExecutable("gemini").?);
 }
 
-test "the table fills with custom agents up to its limit and refuses the next" {
-    var table = builtin_table;
-    var name_buffer: [16]u8 = undefined;
-    const custom = types.max_agent_manifests - builtin_table.count;
-    for (0..custom) |index| {
-        const name = try std.fmt.bufPrint(&name_buffer, "agent-{d}", .{index});
-        const manifest = try table.add(name);
-        try std.testing.expect(@intFromEnum(manifest.provider) <= types.max_agent_provider_index);
-    }
-
-    try std.testing.expectEqual(@as(u8, types.max_agent_manifests), table.count);
-    try std.testing.expectError(error.TooManyAgents, table.add("one-more"));
-    _ = try table.add("claude");
-}
-
 test "phrase lists reject empty, oversized and excess entries" {
     var list: PhraseList = .{};
     try std.testing.expectError(error.EmptyEntry, list.append(""));
@@ -432,4 +431,32 @@ test "presentation defaults derive from the manifest and configuration overrides
     try std.testing.expectError(error.EmptyText, gemini.setIcon(""));
     try std.testing.expectError(error.TextTooLong, gemini.setIcon("x" ** (types.max_agent_icon_bytes + 1)));
     try std.testing.expectError(error.TextTooLong, gemini.setDisplayName("x" ** (types.max_agent_display_name_bytes + 1)));
+}
+
+test "every built-in list leaves at least half its room to configuration" {
+    for (builtin_table.slice()) |*manifest| {
+        for ([_]u8{ manifest.brand.count, manifest.identity.count, manifest.working.count, manifest.blocked.count, manifest.ready_prompt.count }) |count| {
+            try std.testing.expect(count <= max_phrases / 2);
+        }
+
+        for ([_]u8{ manifest.process_names.count, manifest.process_paths.count }) |count| {
+            try std.testing.expect(count <= max_paths / 2);
+        }
+
+        try std.testing.expect(manifest.command_tools.count <= max_command_tools / 2);
+    }
+}
+
+test "a table holds every built-in agent and twenty-seven custom ones within the wire's provider range" {
+    var table = builtin_table;
+    var name_buffer: [types.max_agent_provider_name_bytes]u8 = undefined;
+    for (0..types.max_agent_manifests) |index| {
+        const name = try std.fmt.bufPrint(&name_buffer, "agent-{d}", .{index});
+        const manifest = try table.add(name);
+        try std.testing.expect(@intFromEnum(manifest.provider) <= types.max_agent_provider_index);
+    }
+
+    try std.testing.expectError(error.TooManyAgents, table.add("one-more"));
+    // A built-in name still extends its manifest in a full table.
+    try std.testing.expectEqual(types.AgentProvider.claude, (try table.add("claude")).provider);
 }

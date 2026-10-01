@@ -6,6 +6,7 @@ const Entry = @import("PathCompletionEntry.zig");
 const Result = @This();
 
 pub const max_entries = 64;
+pub const entries_limit = core.Limit.declare("workspace_form.completion_entries", "directories", max_entries);
 pub const max_name_bytes = 255;
 pub const max_path_bytes = core.max_cwd_bytes;
 
@@ -15,6 +16,8 @@ entries: [max_entries]Entry = undefined,
 len: u8 = 0,
 /// The expanded query names an existing directory.
 exact_exists: bool = false,
+/// Matching directories the listing found, kept or not.
+matched: u32 = 0,
 
 pub fn baseSlice(self: *const Result) []const u8 {
     return self.base[0..self.base_len];
@@ -48,6 +51,42 @@ pub fn append(self: *Result, name: []const u8) !void {
     @memcpy(entry.name[0..name.len], name);
     self.entries[self.len] = entry;
     self.len += 1;
+}
+
+/// Keeps one matching directory among the first `max_entries` by name,
+/// whatever order the listing finds them in: a full result replaces its
+/// last name when this one sorts before it. Counts every match.
+/// Example: `try result.keep(entry.name);`
+pub fn keep(self: *Result, name: []const u8) !void {
+    if (name.len == 0 or name.len > max_name_bytes or self.base_len + 1 + name.len > max_path_bytes) {
+        return error.PathEntryTooLong;
+    }
+
+    self.matched +|= 1;
+    if (self.len < max_entries) {
+        return self.append(name);
+    }
+
+    var last: usize = 0;
+    for (self.entries[1..self.len], 1..) |entry, index| {
+        if (lessThan({}, self.entries[last], entry)) {
+            last = index;
+        }
+    }
+
+    if (!std.mem.lessThan(u8, name, self.entries[last].slice())) {
+        return;
+    }
+
+    var entry: Entry = .{ .len = @intCast(name.len) };
+    @memcpy(entry.name[0..name.len], name);
+    self.entries[last] = entry;
+}
+
+/// Whether the listing found more matches than the result keeps.
+/// Example: `if (result.cut()) report(PathCompletionResult.entries_limit);`
+pub fn cut(self: *const Result) bool {
+    return self.matched > max_entries;
 }
 
 /// Joins the base and one entry into `buffer`; a base of "/" yields "/name".

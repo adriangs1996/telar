@@ -10,6 +10,7 @@ const LocalTime = @import("../state/LocalTime.zig");
 const BarComponent = @import("BarComponent.zig");
 const PanelRun = @import("../operations/configuration/PanelRun.zig");
 const PanelTarget = @import("PanelTarget.zig").PanelTarget;
+const PanelSource = @import("PanelSource.zig").PanelSource;
 const bar_values = @import("model.zig");
 const std = @import("std");
 
@@ -134,7 +135,7 @@ test "a panel opens, ignores renders for an earlier opening and closes on a seco
     model.bar_updates = .{};
     model.bars_revision = 0;
     model.configuration_generation = 2;
-    const source: bar_values.Source = .{ .dynamic = .{ .callback = .{ .generation = 2, .id = 0 }, .interval_ns = 0 } };
+    const source: PanelSource = .{ .dynamic = .{ .callback = .{ .generation = 2, .id = 0 }, .interval_ns = 0 } };
 
     toggle(&model, .{
         .target = .{ .configured = 0 },

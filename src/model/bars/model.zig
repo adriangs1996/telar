@@ -1,7 +1,10 @@
 //! Bounded configuration and presentation state for client-owned bars.
 
 const cellgrid = @import("cellgrid");
+const core = @import("telar-core");
 const GenericContent = @import("GenericContent.zig").Type;
+const Node = @import("Node.zig");
+const ContentLimits = @import("ContentLimits.zig");
 const Dynamic = @import("Dynamic.zig");
 const Command = @import("BarCommand.zig");
 const std = @import("std");
@@ -15,24 +18,61 @@ pub const max_segments = 16;
 /// Legacy plain command output without a render callback stays one line of
 /// at most this many bytes.
 pub const max_text_bytes = 512;
-pub const max_bar_nodes = 32;
-pub const max_bar_text_bytes = 1024;
-pub const max_bar_actions = 4;
-pub const max_panel_nodes = 64;
-pub const max_panel_text_bytes = 4096;
-pub const max_panel_actions = 8;
+pub const text_limit = core.Limit.declare("bars.max_text_bytes", "output bytes", max_text_bytes);
+pub const max_panels = 16;
+pub const panels_limit = core.Limit.declare("panels.max_panels", "panels", max_panels);
+pub const max_picks = 16;
+pub const picks_limit = core.Limit.declare("picks.max_picks", "picks", max_picks);
+/// Enough click actions for one slot or panel to open every configured
+/// panel and pick.
+pub const max_content_actions = max_panels + max_picks;
+
+pub const max_bar_nodes = 64;
+pub const max_bar_text_bytes = 4096;
+pub const max_bar_actions = max_content_actions;
+/// Sparkline samples of one bar slot: two full sparklines and change.
+pub const max_bar_samples = 256;
+pub const max_panel_nodes = 128;
+pub const max_panel_text_bytes = 16 * 1024;
+pub const max_panel_actions = max_content_actions;
+pub const max_panel_samples = 1024;
+
+/// What a bar slot reports when a render returns more than it holds.
+pub const bar_limits: ContentLimits = .{
+    .nodes = core.Limit.declare("bars.max_bar_nodes", "components", max_bar_nodes),
+    .text = core.Limit.declare("bars.max_bar_text_bytes", "text bytes", max_bar_text_bytes),
+    .actions = core.Limit.declare("bars.max_bar_actions", "click actions", max_bar_actions),
+    .samples = core.Limit.declare("bars.max_samples", "sparkline samples", max_bar_samples),
+};
+/// What a panel reports when a render returns more than it holds.
+pub const panel_limits: ContentLimits = .{
+    .nodes = core.Limit.declare("panels.max_panel_nodes", "components", max_panel_nodes),
+    .text = core.Limit.declare("panels.max_panel_text_bytes", "text bytes", max_panel_text_bytes),
+    .actions = core.Limit.declare("panels.max_panel_actions", "click actions", max_panel_actions),
+    .samples = core.Limit.declare("panels.max_samples", "sparkline samples", max_panel_samples),
+};
+/// Values one `telar.ui.sparkline` keeps; the most recent ones stay.
+pub const node_samples_limit = core.Limit.declare("bars.max_node_samples", "sparkline values", Node.max_samples);
 /// Command output handed to a render callback, such as a JSON document.
 pub const max_command_output_bytes = 64 * 1024;
+pub const command_output_limit = core.Limit.declare("bars.max_command_output_bytes", "output bytes", max_command_output_bytes);
 /// Output a pick's list command may print; `pi --list-models` prints
 /// about 43 KiB.
 pub const max_pick_output_bytes = 256 * 1024;
+pub const pick_output_limit = core.Limit.declare("picks.max_pick_output_bytes", "output bytes", max_pick_output_bytes);
 
 /// The components of one bar slot.
-pub const Content = GenericContent(max_bar_nodes, max_bar_text_bytes, max_bar_actions);
+pub const Content = GenericContent(bar_limits.bounds());
 /// The components of one open panel.
-pub const PanelContent = GenericContent(max_panel_nodes, max_panel_text_bytes, max_panel_actions);
-pub const max_panels = 8;
-pub const max_picks = 8;
+pub const PanelContent = GenericContent(panel_limits.bounds());
+/// Everything one render returns before it is fitted into a slot or a
+/// panel; the configuration generation keeps one on the heap.
+pub const StagedContent = GenericContent(.{
+    .nodes = Node.max_list_nodes,
+    .text = 2 * max_panel_text_bytes,
+    .actions = 2 * max_content_actions,
+    .samples = 2 * max_panel_samples,
+});
 
 /// What `telar.bar.metrics()` shows: one group of CPU, memory and battery,
 /// each formatted by the adapter from the runtime's latest sample.
@@ -76,7 +116,12 @@ pub const max_command_bytes = 4096;
 pub const min_interval_ms: u32 = 100;
 pub const max_interval_ms: u32 = 60 * 60 * 1000;
 pub const min_command_timeout_ms: u32 = 100;
+/// Bar and panel commands share one worker, so a slow one delays every
+/// other source; they stop within this.
 pub const max_command_timeout_ms: u32 = 10_000;
+/// A pick's list and `on_select` commands run in jobs of their own, when a
+/// person opens or chooses, and may reach the network or install something.
+pub const max_pick_timeout_ms: u32 = 60_000;
 
 pub const Position = enum(u3) {
     bottom_left,

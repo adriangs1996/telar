@@ -11,7 +11,8 @@ const PickOpening = @import("PickOpening.zig");
 const Prompt = @import("Prompt.zig");
 const PickListState = @This();
 
-pub const max_error_bytes = 128;
+/// Room for why a list command failed, its own words included.
+pub const max_error_bytes = 512;
 
 pub const Phase = enum {
     closed,
@@ -33,7 +34,7 @@ title_bytes: [PanelHeading.max_title_bytes]u8 = undefined,
 title_len: u8 = 0,
 items: PickItems = .{},
 error_text: [max_error_bytes]u8 = undefined,
-error_len: u8 = 0,
+error_len: u16 = 0,
 /// The list command whose options this list waits for.
 listing: command_execution.Id = .none,
 /// The `on_select` command running after a choice; it outlives the list,

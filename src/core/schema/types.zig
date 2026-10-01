@@ -360,9 +360,10 @@ pub const AgentProvider = enum(u8) {
     _,
 };
 
-/// Agent manifests one configuration holds, the five built-in ones included.
-pub const max_agent_manifests = 32;
 pub const first_custom_agent_provider: u8 = 6;
+/// Agents a configuration may declare beyond the built-in ones, 32 agents
+/// in all; the custom provider indices the wire accepts cover exactly these.
+pub const max_agent_manifests = 27;
 pub const max_agent_provider_index: u8 = first_custom_agent_provider + max_agent_manifests - 1;
 pub const max_agent_provider_name_bytes = 32;
 /// Bound for a manifest display name such as "Claude Code".

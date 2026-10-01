@@ -494,7 +494,6 @@ fn encodeNext(self: *const Outbox, buffer: []u8) ![]const u8 {
         .query_history => |*value| core.encodeQueryHistory(buffer, value.view()),
         .delete_history => |value| core.encodeDeleteHistory(buffer, value),
         .read_history_output => |value| core.encodeReadHistoryOutput(buffer, value),
-        .suggest_command => |*value| core.encodeSuggestCommand(buffer, value.view()),
         .complete_client_command, .find_paths, .show_notification => |length| self.payloadAt(self.head)[0..length],
         .open_editor => |value| encode: {
             var request = value;

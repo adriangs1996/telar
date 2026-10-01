@@ -12,6 +12,7 @@ const agent_navigation = @import("agent_navigation.zig");
 const workspace_handoff = @import("../workspace/workspace_handoff.zig");
 const name_prompt = @import("../input/name_prompt.zig");
 const fleet_order = @import("fleet_order.zig");
+const limit_reached = @import("../notifications/limit_reached.zig");
 
 /// What the field's text does when submitted.
 pub const Command = enum {
@@ -80,18 +81,26 @@ pub fn requestScreen(model: *data.ClientModel) !void {
     model.peek_screen.reading = true;
 }
 
-/// Stores a read the peek asked for.
+/// Stores a read the peek asked for; a read longer than the peek keeps its
+/// last bytes and reports the limit.
 ///
 /// ```zig
-/// try agent_peek.receiveScreen(&client.model, text);
+/// try agent_peek.receiveScreen(client, text);
 /// ```
-pub fn receiveScreen(model: *data.ClientModel, text: core.PaneText) !void {
+pub fn receiveScreen(client: *Client, text: core.PaneText) !void {
+    const model = &client.model;
     const continuation = model.request_lifecycle.tracker.take(text.request_id) orelse return error.UnexpectedControlReply;
     if (continuation != .peek_screen) {
         return error.UnexpectedControlReply;
     }
 
-    _ = model.peek_screen.store(text.pane_id, text.text);
+    const dropped = model.peek_screen.store(text.pane_id, text.text) orelse return;
+    if (dropped != 0) {
+        limit_reached.report(client, .{
+            .limit = data.PeekScreen.text_limit,
+            .requested = text.text.len,
+        });
+    }
 }
 
 /// Drops the peek's pane text once its prompt is gone.

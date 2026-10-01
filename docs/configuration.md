@@ -397,8 +397,17 @@ show it, and which client capability it supports. Telar ships manifests for
 `claude`, `codex`, `pi`, `cursor` and `opencode`. Naming one of them extends or overrides the
 shipped manifest; any other name creates a new agent that the sidebar, the
 `telar agent` command, notifications and the image shelf treat exactly like a
-built-in one. The table holds 32 agents, the five shipped ones included, so
-a configuration can add 27 new agents.
+built-in one. Up to 27 agents can be configured besides the built-in ones,
+32 in all.
+
+A manifest past a limit keeps what fits and the rest of the configuration
+loads: a 28th new agent, list entries past a list's room and entries longer
+than their bound are left out, and each limit reached is reported with the
+limit notice (`agent_manifest.max_custom_agents`, `agent_manifest.max_phrases`,
+`agent_manifest.max_phrase_bytes`, `agent_manifest.max_paths`,
+`agent_manifest.max_path_bytes`, `agent_manifest.max_command_tools`) and
+listed by `telar diagnostics limits`. Configured entries extend a built-in
+list, and every built-in list leaves at least half its room free.
 
 ```lua
 runtime = {
@@ -416,14 +425,15 @@ runtime = {
       icon = "G",                         -- one glyph, exactly one cell wide;
                                           -- built-ins use Telar's artwork when unset
 
-      -- Identity: how the foreground process is recognized (optional, max 4 each).
+      -- Identity: how the foreground process is recognized (optional, max 8 each,
+      -- max 128 bytes each).
       process_names = { "gemini" },                 -- executable basenames, launcher
                                                     -- suffixes (.exe/.cmd/.bat/.js) ignored
       process_paths = { "/@google/gemini-cli/" },   -- entry-point path fragments for
                                                     -- interpreter launches (node, python)
 
       -- Screen phrases: case-insensitive substrings of the pane's visible
-      -- screen, not of its byte stream (optional, max 8 each, max 48 bytes each).
+      -- screen, not of its byte stream (optional, max 16 each, max 64 bytes each).
       brand = { "gemini" },          -- attributes a generic working/blocked phrase to this agent
       identity = { "gemini cli" },   -- confirms identity on screen without proving readiness
       working = { "esc to cancel" },
@@ -573,7 +583,7 @@ alone, as in `ui.clock("%H:%M")`.
 | `ui.icon` | `name` (shorthand), a built-in icon, or `glyph`, one grapheme of at most 16 bytes; `tone` |
 | `ui.mark` | `name` (shorthand): `claude`, `codex`, `pi` or `telar`, drawn from Telar's own artwork |
 | `ui.meter` | `value` 0..1, `label`, `text` (shown instead of the percentage), `marker` 0..1, `tone` |
-| `ui.sparkline` | `values`, at most 32 non-negative numbers; `max` (their largest by default); `tone` |
+| `ui.sparkline` | `values`, non-negative numbers, of which the last 120 are kept; `max` (their largest by default); `tone` |
 | `ui.badge` | `text` (shorthand), `tone` |
 | `ui.clock` | `format` (shorthand, default `%H:%M`), `tone` |
 | `ui.metric` | `name` (shorthand): `cpu`, `memory` or `battery` |
@@ -644,8 +654,13 @@ The icon names are `sidebar-collapse`, `sidebar-expand`, `workspace-menu`,
 `agent-failed`, `close`, `pane-fullscreen` and `telar-mark`. They follow the
 configured Unicode or graphical icon theme.
 
-A slot holds at most 32 components, 1024 bytes of text, 64 sparkline samples
-and 4 actions. Text is UTF-8 without control characters.
+A slot holds at most 64 components, 4096 bytes of text, 256 sparkline samples
+and 32 actions, enough to open every panel and pick a configuration holds.
+Text is UTF-8 without control characters. A render that returns more keeps
+its highest-priority components that fit, each with its group, in their
+order; the rest are left out and the limit notice names each bound passed
+(`bars.max_bar_nodes`, `bars.max_bar_text_bytes`, `bars.max_bar_actions`,
+`bars.max_samples`).
 
 ### Panels
 
@@ -681,7 +696,10 @@ panels = {
 like `telar.bar.command`, or `render` alone, like `telar.bar.dynamic`. Without
 `every_ms` a panel renders once each time it opens and on
 `telar.action.refresh_panel()`. Panel names are 1 to 32 letters, digits, `-`
-or `_`; a configuration holds at most 8 panels.
+or `_`, and titles at most 128 bytes (a longer title is cut at a character).
+A configuration holds at most 16 panels: past that it keeps the first 16 by
+name, reports `panels.max_panels`, and an action naming one left out does
+nothing.
 
 A panel's content is any list of components plus these blocks:
 
@@ -696,9 +714,11 @@ A panel's content is any list of components plus these blocks:
 | `ui.button` | `text`, `action` or `url`, `primary` |
 | `ui.divider` | none |
 
-A panel holds at most 64 components, 4096 bytes of text and 8 actions. Its
-header shows the title, the time of the last successful render and a close
-control. A failed render keeps the last content and says so.
+A panel holds at most 128 components, 16 KiB of text, 1024 sparkline samples
+and 32 actions; a render that returns more keeps what fits by priority, like
+a bar slot, and reports the `panels.*` limits. Its header shows the title,
+the time of the last successful render and a close control. A failed render
+keeps the last content and says so.
 
 `telar.action.open_panel("name")` opens or closes a panel from a key binding
 too; it appears above the bar component that opens the same panel.
@@ -734,14 +754,18 @@ bars = { bottom = {
 | `items` | a list of options, or with `command` a function from the render context to that list |
 | `command` | an argv that prints the options, one per nonempty line unless `items` parses its output |
 | `on_select` | the argv to run with the choice; each argument that is exactly `"{}"` becomes the chosen value |
-| `timeout_ms` | 100 to 10000, default 2000: how long `command` and `on_select` may each run, start to exit |
+| `timeout_ms` | 100 to 60000, default 2000: how long `command` and `on_select` may each run, start to exit; picks run apart from the bar worker, so a slow one delays no bar |
 | `refresh` | rerun the bar sources after `on_select` succeeds; `true` by default |
 
 An option is a string, or a table with a `label` to show and search, a
 `value` for `on_select` (the label by default) and a `detail` shown muted
-beside the label and searched too. A list holds at most 1024 options and
-128 KiB of text; labels and details are at most 128 bytes and values 512, all
-printable UTF-8 on one line, and a value may also hold tabs. An `items`
+beside the label and searched too. A list holds at most 4096 options and
+256 KiB of text; labels and details are at most 128 bytes and values 512, all
+printable UTF-8 on one line, and a value may also hold tabs. A list past
+these keeps what fits: a longer label or detail is cut at a character, an
+option whose value is longer is left out (a value is one argument, never
+cut), options past the count or the text are left out, and the limit notice
+names each `picks.*` limit passed. An `items`
 function needs a `command`: it receives the context of
 [a render callback](#dynamic-context), with the command's output in
 `ctx.output`, and returns the list. A written `items` list is checked when
@@ -750,10 +774,11 @@ trimmed, is an option whose value is the line as printed; its label shows
 tabs as spaces and is cut at a character past 128 bytes.
 
 The list command runs when the pick opens, outside the client loop; the palette
-shows "Loading…" until its options arrive. A command that fails, runs past
-its timeout, prints more than 256 KiB of output or 4 KiB of errors, or lists
-options that break the bounds leaves the palette open with the reason instead
-of a partial list. Opening another prompt closes the list, and options that
+shows "Loading…" until its options arrive. A command that fails, runs past its
+timeout or prints control characters leaves the palette open with the reason.
+A command that prints more than 256 KiB keeps its first whole lines and
+reports `picks.max_pick_output_bytes`; what it prints on stderr past 4 KiB is
+dropped. Opening another prompt closes the list, and options that
 arrive after that are dropped.
 
 `on_select` runs as an argv without a shell. Telar replaces only whole
@@ -767,7 +792,7 @@ value may start with `-`, so helpers that take options should end them with
 prints, a zero exit status is a success; a nonzero status, a signal or a
 timeout shows a client diagnostic. A second choice while one still runs is
 refused. Pick names follow the panel rules, and a configuration holds at most
-8 picks. `telar.action.pick("name")` opens a pick from a binding as well;
+16 picks, keeping the first 16 by name like panels. `telar.action.pick("name")` opens a pick from a binding as well;
 plugin effects cannot return it. See [Pick list](flows/pick-list.md).
 
 #### Example: Pi's default provider, model and thinking level
@@ -964,13 +989,18 @@ bounded client diagnostic.
 Commands contain 1 to 32 arguments and at most 4096 argument bytes. Telar
 executes the argv directly, without a shell, and inherits the client's process
 environment and working directory. `timeout_ms` defaults to 2000 and must be
-between 100 and 10000; it bounds the whole run, from start to exit, however
-the command prints. A command runs in its own process group: one that exits
+between 100 and 10000, since bar and panel commands share one worker and a
+slow one delays the others; it bounds the whole run, from start to exit,
+however the command prints. A command runs in its own process group: one that exits
 in time may leave background work running, while one that passes its
 timeout is stopped with its group, TERM first and KILL 200 ms later. Output passed to a `render` callback may hold several
 lines, up to 64 KiB of UTF-8 without control characters other than tab and
 newline, so a helper can print JSON. Without `render`, stdout must be one
-display line of at most 512 bytes. Stderr is bounded to 4096 bytes. Bar and
+display line of at most 512 bytes. Output past its bound keeps its first
+whole lines (its first 512 bytes, cut at a character, for one line), is
+stopped there rather than left printing until its timeout, and reports
+`bars.max_command_output_bytes` or `bars.max_text_bytes`. Stderr
+past 4096 bytes is dropped and never fails the command. Bar and
 panel commands share one worker, and another elapsed tick records only one
 pending rerun. Reloading the configuration discards a completion from the
 previous generation.
@@ -996,6 +1026,20 @@ binding accepts one to five keys. `client.keybindings` extends the default
 keymap. A configured binding replaces every conflicting default. A conflict is
 the same key sequence, or a sequence that is a prefix of the other, since the
 keymap refuses ambiguous prefixes. Defaults free of conflicts remain active.
+The keymap holds 256 bindings: past that it keeps the first configured ones,
+then the defaults that fit, and reports `config.max_bindings`; the window
+always starts. `telar.action.command_tab({ command = argv, label = text })`
+takes an argv of up to 32 arguments and 4096 bytes, like a bar command, and a
+label of at most 32 bytes. The commands a configuration's bindings and
+static components open share 80 KiB (768 of them); a binding whose command
+passes one of these is left out and its limit reported, and a command is
+never cut. What renders and callbacks return shares at least 64 KiB of
+recent rows, cleared only between renders: a render whose buttons do not
+fit keeps its first ones and leaves out the rest, reporting
+`config.recent_command_tab_bytes`. The next render, of whichever bar or
+panel comes next, starts with the recent rows cleared, so buttons other
+surfaces showed may name cleared rows: such a button says so when clicked
+and renders the bars again.
 `telar config check` compiles the merged keymap and reports conflicts between
 configured bindings. `client.input.sequence_timeout_ms` applies only to partial
 global sequences; prefixed sequences do not expire.
@@ -1196,12 +1240,15 @@ loading, or mutable metatables. `require("telar")` returns the API and local
 module names resolve only beneath the directory containing `config.lua`.
 
 Evaluating the configuration may use 16 MiB of Lua memory and one million Lua
-instructions; a callback may use 100,000 instructions. Pattern matching,
+instructions; a key callback and a bar or panel render may use 100,000
+instructions, and a pick's `items` function, which runs once when the pick
+opens, one million. Pattern matching,
 `string.find` and `table.sort` count their steps as instructions, so one
 backtracking search or large sort spends the same budget. The instruction
 count is the budget, so whether a file loads does not depend on how busy the
 machine is. A wall-clock deadline of 2 s for the file and 100 ms for a
-callback is checked between instructions and those steps; it stops a run of
+callback or render (1 s for a render in a debug build) is checked between
+instructions and those steps; it stops a run of
 costly instructions, such as repeated `string.rep` over megabytes, but not a
 single other call, which the memory limit bounds to about 25 ms.
 

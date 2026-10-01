@@ -1,13 +1,17 @@
 //! What an adapter draws around a configured panel's components: its name,
 //! title, mark and width. Copied from configuration into the presentation.
 const bar_text = @import("bar_text.zig");
+const core = @import("telar-core");
 const Mark = @import("Mark.zig").Mark;
 const std = @import("std");
 const ui_icons = @import("../layout/icons.zig");
 const PanelHeading = @This();
 
 pub const max_name_bytes = 32;
-pub const max_title_bytes = 64;
+/// About 40 characters of non-Latin text; a configured title longer than
+/// this is cut at a character.
+pub const max_title_bytes = 128;
+pub const title_limit = core.Limit.declare("panels.title_bytes", "title bytes", max_title_bytes);
 pub const default_width: u16 = 420;
 pub const min_width: u16 = 240;
 pub const max_width: u16 = 720;

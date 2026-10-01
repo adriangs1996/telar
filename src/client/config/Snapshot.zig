@@ -3,6 +3,7 @@ const data = @import("model");
 const RuntimeSnapshot = @import("RuntimeSnapshot.zig");
 const GuiConfig = @import("GuiConfig.zig");
 const retired_config = @import("retired_config.zig");
+const CommandTabs = @import("CommandTabs.zig");
 const Snapshot = @This();
 
 /// Keys only the retired terminal client used that this file still sets;
@@ -33,6 +34,8 @@ binding_count: u16 = 0,
 runtime: RuntimeSnapshot = .{},
 plugins: [data.config_values.max_plugins]data.PluginSpec = undefined,
 plugin_count: u8 = 0,
+/// The command tabs the actions of this configuration open.
+command_tabs: CommandTabs = .{},
 
 /// Resolves a complete theme with identical CLI/appearance precedence for both hosts.
 /// Example: `const theme = snapshot.resolveTheme(.dark, null);`

@@ -2,6 +2,7 @@
 //! Every table is checked against the fields its component accepts, and
 //! every component against the place it appears in, before anything is kept.
 const ComponentSource = @import("ComponentSource.zig");
+const core = @import("telar-core");
 const data = @import("model");
 const lua_api = @import("lua-api");
 const lua_value = @import("lua_value.zig");
@@ -47,6 +48,83 @@ const Reader = struct {
     state: *lua_api.c.lua_State,
     diagnostic: *data.Diagnostic,
     generation: *Generation,
+    pass: *Pass,
+};
+
+/// Ranks a component can take: its priority plus its tone's bonus, at
+/// most its container's.
+const rank_count = std.math.maxInt(u8) + 1;
+
+/// One walk over a render's result. The first only counts what every
+/// component asks, by rank; the second stages the components whose rank
+/// reaches `cutoff`, so priority decides what is staged even when the
+/// render is larger than the staged list: every rank above the cutoff is
+/// staged whole, and the cutoff's own components take the room left, in
+/// document order.
+const Pass = struct {
+    counting: bool = true,
+    cutoff: u8 = 0,
+    /// What the cutoff's components may take, and what they took.
+    room: data.ContentDemand = .{},
+    taken: data.ContentDemand = .{},
+    /// Everything the render returned, children of any container included.
+    demand: data.ContentDemand = .{},
+    ranked: [rank_count]data.ContentDemand = @splat(.{}),
+    /// Staged containers the render gave children, staged or not, so one
+    /// whose children all fell under the cutoff is not kept empty.
+    had_children: [data.Node.max_list_nodes]bool = @splat(false),
+
+    /// Picks the lowest rank to stage and the room its components share:
+    /// rank 0 and all of `bounds` when the whole render fits.
+    fn chooseCutoff(self: *Pass, bounds: data.ContentBounds) void {
+        self.counting = false;
+        var above: data.ContentDemand = .{};
+        var rank: usize = rank_count;
+        while (rank > 0) {
+            rank -= 1;
+            var next = above;
+            next.merge(self.ranked[rank]);
+            if (!next.fits(bounds)) {
+                break;
+            }
+
+            above = next;
+        } else {
+            self.cutoff = 0;
+            self.room = data.ContentDemand.of(bounds);
+            return;
+        }
+
+        self.cutoff = @intCast(rank);
+        self.room = data.ContentDemand.of(bounds);
+        self.room.remove(above);
+    }
+
+    /// Gives back the room `admits` took for a component left out.
+    fn release(self: *Pass, input: data.NodeInput) void {
+        var one: data.ContentDemand = .{};
+        one.add(input);
+        self.taken.remove(one);
+    }
+
+    /// Whether a component of the cutoff's rank still has room.
+    fn admits(self: *Pass, input: data.NodeInput) bool {
+        var next = self.taken;
+        next.add(input);
+        if (!next.within(self.room)) {
+            return false;
+        }
+
+        self.taken = next;
+        return true;
+    }
+};
+
+/// Where a staged component went: its index, which its children name as
+/// their parent, and its rank, which bounds theirs.
+const Staged = struct {
+    index: u8,
+    rank: u8,
 };
 
 const Target = struct {
@@ -54,6 +132,8 @@ const Target = struct {
     place: Place,
     parent: u8 = data.Node.no_parent,
     priority: u8 = data.Node.default_priority,
+    /// The rank of the container, which no child outranks.
+    rank: u8 = std.math.maxInt(u8),
     depth: u8 = 0,
 };
 
@@ -80,25 +160,61 @@ const kind_names = [_]struct { []const u8, data.NodeKind }{
 
 /// Parses `nil`, a string, one component, a legacy segment or a list of any
 /// of them into `content`, which is a `data.Content` or `data.PanelContent`.
+/// A list larger than `content` keeps its highest-priority components that
+/// fit and leaves each bound it passed for the client to report.
 ///
 /// ```zig
 /// var content: data.Content = .{};
 /// try component_values.parse(generation, &content, .{ .index = -1, .surface = .bar }, diagnostic);
 /// ```
 pub fn parse(generation: *Generation, content: anytype, request: ComponentSource, diagnostic: *data.Diagnostic) !void {
+    var pass: Pass = .{};
     const reader: Reader = .{
         .state = generation.vm.state,
         .diagnostic = diagnostic,
         .generation = generation,
+        .pass = &pass,
     };
-
-    try readList(reader, content, .{
+    const root: Target = .{
         .index = lua_api.c.lua_absindex(reader.state, request.index),
         .place = switch (request.surface) {
             .bar => .bar,
             .panel => .panel,
         },
+    };
+
+    const staged = generation.staged_content;
+    try readList(reader, staged, root);
+    pass.chooseCutoff(data.StagedContent.capacity);
+    staged.clear();
+    const tabs = &generation.snapshot.command_tabs;
+    tabs.beginRender();
+    defer tabs.endRender();
+    try readList(reader, staged, root);
+
+    content.keepFitting(staged, &pass.had_children);
+    reportDemand(generation, pass.demand, switch (request.surface) {
+        .bar => data.bar_values.bar_limits,
+        .panel => data.bar_values.panel_limits,
     });
+}
+
+/// Leaves every bound the render passed for the client to report.
+fn reportDemand(generation: *Generation, demand: data.ContentDemand, limits: data.ContentLimits) void {
+    const bounds = [_]struct { u32, core.Limit }{
+        .{ demand.nodes, limits.nodes },
+        .{ demand.text, limits.text },
+        .{ demand.actions, limits.actions },
+        .{ demand.samples, limits.samples },
+    };
+    for (bounds) |bound| {
+        if (bound[0] > bound[1].value) {
+            generation.unreported.add(.{
+                .limit = bound[1],
+                .requested = bound[0],
+            });
+        }
+    }
 }
 
 fn readList(reader: Reader, content: anytype, target: Target) anyerror!void {
@@ -113,7 +229,7 @@ fn readList(reader: Reader, content: anytype, target: Target) anyerror!void {
                 .in_tooltip = target.place == .tooltip,
                 .text = lua_value.string(state, index).?,
                 .priority = target.priority,
-            }, target.place);
+            }, target, null);
             return;
         },
         lua_api.c.LUA_TTABLE => {},
@@ -152,7 +268,7 @@ fn readSegment(reader: Reader, content: anytype, target: Target) !void {
         .icon = segment.icon,
         .style = segment.style,
         .priority = target.priority,
-    }, target.place);
+    }, target, null);
 }
 
 fn readComponent(reader: Reader, content: anytype, target: Target) !void {
@@ -178,7 +294,10 @@ fn readComponent(reader: Reader, content: anytype, target: Target) !void {
         .priority = try priorityField(reader, index, target.priority),
         .tone = try toneField(reader, index),
     };
-    var samples: [data.CpuHistory.capacity]u8 = undefined;
+    var samples: [data.Node.max_samples]u8 = undefined;
+    // The action is parsed only once the component is staged, so a
+    // component left out never keeps a command tab.
+    var action_field: ?[*:0]const u8 = null;
     switch (kind) {
         .label => {
             input.text = try stringField(reader, index, "text") orelse "";
@@ -222,7 +341,7 @@ fn readComponent(reader: Reader, content: anytype, target: Target) !void {
         .group => {
             input.mark = try markField(reader, index);
             input.icon = try iconField(reader, index, "icon");
-            input.action = try actionField(reader, index, "on_click");
+            action_field = if (hasField(state, index, "on_click")) "on_click" else null;
             input.url = try stringField(reader, index, "url") orelse "";
         },
         .kv => {
@@ -236,35 +355,38 @@ fn readComponent(reader: Reader, content: anytype, target: Target) !void {
         },
         .button => {
             input.text = try stringField(reader, index, "text") orelse "";
-            input.action = try actionField(reader, index, "action");
+            action_field = if (hasField(state, index, "action")) "action" else null;
             input.url = try stringField(reader, index, "url") orelse "";
             input.primary = try boolField(reader, index, "primary");
-            if (input.action == null and input.url.len == 0) {
+            if (action_field == null and input.url.len == 0) {
                 return fail(reader, "telar.ui.button needs an action or a url", .{});
             }
         },
         .actions, .divider => {},
     }
 
-    const node = try append(reader, content, input, target.place);
+    const node = try append(reader, content, input, target, action_field) orelse return;
     switch (kind) {
         .group => {
             try readChildren(reader, content, .{
                 .index = index,
                 .place = .group,
-                .parent = node,
+                .parent = node.index,
                 .priority = input.priority,
+                .rank = node.rank,
             });
             try readTooltip(reader, content, .{
                 .index = index,
                 .place = .tooltip,
-                .parent = node,
+                .parent = node.index,
+                .rank = node.rank,
             });
         },
         .actions => try readChildren(reader, content, .{
             .index = index,
             .place = .buttons,
-            .parent = node,
+            .parent = node.index,
+            .rank = node.rank,
         }),
         .callout => {
             _ = lua_api.c.lua_getfield(state, index, "button");
@@ -272,7 +394,8 @@ fn readComponent(reader: Reader, content: anytype, target: Target) !void {
             try readList(reader, content, .{
                 .index = lua_api.c.lua_absindex(state, -1),
                 .place = .buttons,
-                .parent = node,
+                .parent = node.index,
+                .rank = node.rank,
             });
         },
         else => {},
@@ -302,14 +425,74 @@ fn readTooltip(reader: Reader, content: anytype, target: Target) !void {
     try readList(reader, content, tooltip);
 }
 
-fn append(reader: Reader, content: anytype, input: data.NodeInput, place: Place) !u8 {
-    if (!place.accepts(input.kind)) {
-        return fail(reader, "telar.ui.{s} is not allowed in a {s}", .{ @tagName(input.kind), @tagName(place) });
+/// Counts one component on the first pass; stages it on the second when
+/// its rank reaches the cutoff and the staged list has room, parsing its
+/// `action_field` of the component table only then. Null leaves it out,
+/// and a container left out takes its children with it.
+fn append(reader: Reader, content: anytype, input: data.NodeInput, target: Target, action_field: ?[*:0]const u8) !?Staged {
+    if (!target.place.accepts(input.kind)) {
+        return fail(reader, "telar.ui.{s} is not allowed in a {s}", .{ @tagName(input.kind), @tagName(target.place) });
     }
 
-    return content.append(input) catch |err| {
-        reader.diagnostic.set("invalid telar.ui.{s}: {s}", .{ @tagName(input.kind), @errorName(err) });
-        return error.InvalidBarContent;
+    const ranked: data.Node = .{
+        .priority = @min(input.priority, data.Node.max_priority),
+        .tone = input.tone,
+    };
+    const rank = @min(ranked.effectivePriority(), target.rank);
+    // Counts as the component will: the placeholder stands for its action,
+    // which is not parsed yet.
+    var counted = input;
+    if (action_field != null) {
+        counted.action = .close_panel;
+    }
+
+    const pass = reader.pass;
+    if (pass.counting) {
+        pass.demand.add(counted);
+        pass.ranked[rank].add(counted);
+        return .{
+            .index = 0,
+            .rank = rank,
+        };
+    }
+
+    if (target.parent != data.Node.no_parent) {
+        pass.had_children[target.parent] = true;
+    }
+
+    if (rank < pass.cutoff) {
+        return null;
+    }
+
+    const admitted = rank == pass.cutoff;
+    if (admitted and !pass.admits(counted)) {
+        return null;
+    }
+
+    var staged = input;
+    if (action_field) |name| {
+        staged.action = actionField(reader, target.index, name) catch |err| {
+            try leaveOut(err);
+            // A component left out gives back the room it was admitted to,
+            // for the other components of the cutoff's rank.
+            if (admitted) {
+                pass.release(counted);
+            }
+
+            return null;
+        };
+    }
+
+    const index = content.append(staged) catch |err| switch (err) {
+        error.TooManyBarComponents, error.BarTextTooLong, error.TooManyBarActions, error.TooManyBarSamples => return null,
+        else => {
+            reader.diagnostic.set("invalid telar.ui.{s}: {s}", .{ @tagName(input.kind), @errorName(err) });
+            return error.InvalidBarContent;
+        },
+    };
+    return .{
+        .index = index,
+        .rank = rank,
     };
 }
 
@@ -452,12 +635,16 @@ fn actionField(reader: Reader, index: c_int, name: [*:0]const u8) !?data.Action 
         return null;
     }
 
-    return reader.generation.parseComponentAction(-1, reader.diagnostic) catch
-        return fail(reader, "component field '{s}' must be a telar.action value", .{name});
+    return reader.generation.parseComponentAction(-1, reader.diagnostic) catch |err| switch (err) {
+        error.TooManyArguments, error.ArgumentsTooLarge, error.TooManyCommandTabs => return err,
+        else => return fail(reader, "component field '{s}' must be a telar.action value", .{name}),
+    };
 }
 
-/// Scales `values` to percentages of `max`, or of their largest value.
-fn samplesField(reader: Reader, index: c_int, buffer: *[data.CpuHistory.capacity]u8) ![]const u8 {
+/// Scales `values` to percentages of `max`, or of their largest value. A
+/// longer list keeps its last `data.Node.max_samples` values, the most
+/// recent in a history.
+fn samplesField(reader: Reader, index: c_int, buffer: *[data.Node.max_samples]u8) ![]const u8 {
     const state = reader.state;
     const maximum = try numberField(reader, index, "max");
     _ = lua_api.c.lua_getfield(state, index, "values");
@@ -467,15 +654,20 @@ fn samplesField(reader: Reader, index: c_int, buffer: *[data.CpuHistory.capacity
     }
 
     const table = lua_api.c.lua_absindex(state, -1);
-    const count = lua_api.c.lua_rawlen(state, table);
-    if (count > buffer.len) {
-        return fail(reader, "telar.ui.sparkline accepts at most {d} values", .{buffer.len});
+    const length = lua_api.c.lua_rawlen(state, table);
+    const count = @min(length, buffer.len);
+    const first = length - count;
+    if (length > buffer.len) {
+        reader.generation.unreported.add(.{
+            .limit = data.bar_values.node_samples_limit,
+            .requested = length,
+        });
     }
 
-    var values: [data.CpuHistory.capacity]f64 = undefined;
+    var values: [data.Node.max_samples]f64 = undefined;
     var largest: f64 = 0;
     for (0..count) |item| {
-        _ = lua_api.c.lua_geti(state, table, @intCast(item + 1));
+        _ = lua_api.c.lua_geti(state, table, @intCast(first + item + 1));
         defer lua_value.pop(state, 1);
         if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNUMBER) {
             return fail(reader, "telar.ui.sparkline values must be numbers", .{});
@@ -497,6 +689,16 @@ fn samplesField(reader: Reader, index: c_int, buffer: *[data.CpuHistory.capacity
     }
 
     return buffer[0..count];
+}
+
+/// A component whose action stopped at a limit is left out with its
+/// children and the rest of the list stays; the limit is already kept for
+/// the client to report. Any other error fails the render.
+fn leaveOut(err: anyerror) anyerror!void {
+    return switch (err) {
+        error.TooManyArguments, error.ArgumentsTooLarge, error.TooManyCommandTabs => {},
+        else => err,
+    };
 }
 
 fn fail(reader: Reader, comptime message: []const u8, arguments: anytype) error{InvalidBarContent} {
@@ -682,4 +884,127 @@ test "an action names only a configured panel" {
         \\return { api_version = 2, client = { keybindings = { telar.bind({ "u" }, telar.action.open_panel("missing")) } } }
     , &diagnostic));
     try std.testing.expect(std.mem.indexOf(u8, diagnostic.message(), "missing") != null);
+}
+
+test "a panel render past its components keeps what fits and a long sparkline keeps its last values" {
+    const source =
+        \\local telar = require("telar")
+        \\local ui = telar.ui
+        \\return { api_version = 2, client = { panels = {
+        \\  usage = telar.panel({ render = function(ctx)
+        \\    local count = tonumber(ctx.pane_title)
+        \\    local blocks = {}
+        \\    local values = {}
+        \\    for index = 1, 150 do values[index] = index end
+        \\    blocks[1] = ui.sparkline({ values = values, max = 150 })
+        \\    for index = 2, count do blocks[index] = ui.text("row " .. index) end
+        \\    return blocks
+        \\  end }),
+        \\} } }
+    ;
+    var diagnostic: data.Diagnostic = .{};
+    const generation = try testLoad(source, &diagnostic);
+    defer generation.deinit();
+
+    const reference = generation.snapshot.bars.panels[0].source.dynamic.callback;
+    var content: data.PanelContent = .{};
+    var context = testContext(null);
+    context.pane_title = "128";
+    try generation.invokeBar(.{
+        .reference = reference,
+        .context = context,
+        .surface = .panel,
+    }, &content, &diagnostic);
+
+    try std.testing.expectEqual(@as(u8, data.bar_values.max_panel_nodes), content.node_count);
+    const samples = content.samples(content.slice()[0]);
+    try std.testing.expectEqual(@as(usize, data.Node.max_samples), samples.len);
+    try std.testing.expectEqual(@as(u8, 100), samples[samples.len - 1]);
+    try std.testing.expectEqual(@as(u8, 1), generation.unreported.count);
+    try std.testing.expectEqualStrings("bars.max_node_samples", generation.unreported.slice()[0].limit.name);
+    try std.testing.expectEqual(@as(?u64, 150), generation.unreported.slice()[0].requested);
+
+    generation.unreported.clear();
+    context.pane_title = "129";
+    try generation.invokeBar(.{
+        .reference = reference,
+        .context = context,
+        .surface = .panel,
+    }, &content, &diagnostic);
+
+    try std.testing.expectEqual(@as(u8, data.bar_values.max_panel_nodes), content.node_count);
+    // Equal priorities keep document order, so the last row is left out.
+    try std.testing.expectEqualStrings("row 128", content.text(content.slice()[127].text));
+    try std.testing.expectEqualStrings("panels.max_panel_nodes", generation.unreported.slice()[1].limit.name);
+    try std.testing.expectEqual(@as(?u64, 129), generation.unreported.slice()[1].requested);
+}
+
+test "a render larger than the staged list still keeps its highest-priority components and counts every child" {
+    const source =
+        \\local telar = require("telar")
+        \\local ui = telar.ui
+        \\return { api_version = 2, client = { bars = { bottom = {
+        \\  left = telar.bar.dynamic({ render = function()
+        \\    local items = {}
+        \\    for index = 1, 300 do items[#items + 1] = ui.label({ text = "low", priority = 10 }) end
+        \\    items[#items + 1] = ui.group({ priority = 5, ui.label("a"), ui.label("b"), ui.label("c") })
+        \\    for index = 1, 3 do items[#items + 1] = ui.label({ text = "high", priority = 90 }) end
+        \\    return items
+        \\  end }),
+        \\  right = telar.bar.tabs(),
+        \\} } } }
+    ;
+    var diagnostic: data.Diagnostic = .{};
+    const generation = try testLoad(source, &diagnostic);
+    defer generation.deinit();
+
+    var content: data.Content = .{};
+    try generation.invokeBar(.{
+        .reference = generation.snapshot.bars.bottom[0].dynamic.callback,
+        .context = testContext(null),
+    }, &content, &diagnostic);
+
+    var high: usize = 0;
+    for (content.slice()) |node| {
+        if (std.mem.eql(u8, content.text(node.text), "high")) {
+            high += 1;
+        }
+    }
+
+    try std.testing.expectEqual(@as(usize, 3), high);
+    try std.testing.expectEqual(@as(u8, data.bar_values.max_bar_nodes), content.node_count);
+    // 300 labels, the group, its three children and three more labels.
+    try std.testing.expectEqualStrings("bars.max_bar_nodes", generation.unreported.slice()[0].limit.name);
+    try std.testing.expectEqual(@as(?u64, 307), generation.unreported.slice()[0].requested);
+}
+
+test "a group whose children all fall under the staging cutoff is not kept empty" {
+    const source =
+        \\local telar = require("telar")
+        \\local ui = telar.ui
+        \\return { api_version = 2, client = { bars = { bottom = {
+        \\  left = telar.bar.dynamic({ render = function()
+        \\    local items = {}
+        \\    for index = 1, 300 do items[#items + 1] = ui.label({ text = "row", priority = 50 }) end
+        \\    items[#items + 1] = ui.group({ priority = 60, mark = "claude",
+        \\      ui.label({ text = "a", priority = 10 }), ui.label({ text = "b", priority = 10 }) })
+        \\    return items
+        \\  end }),
+        \\  right = telar.bar.tabs(),
+        \\} } } }
+    ;
+    var diagnostic: data.Diagnostic = .{};
+    const generation = try testLoad(source, &diagnostic);
+    defer generation.deinit();
+
+    var content: data.Content = .{};
+    try generation.invokeBar(.{
+        .reference = generation.snapshot.bars.bottom[0].dynamic.callback,
+        .context = testContext(null),
+    }, &content, &diagnostic);
+
+    try std.testing.expectEqual(@as(u8, data.bar_values.max_bar_nodes), content.node_count);
+    for (content.slice()) |node| {
+        try std.testing.expect(node.kind != .group);
+    }
 }

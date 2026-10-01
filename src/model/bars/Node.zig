@@ -12,6 +12,11 @@ const Node = @This();
 
 pub const no_parent: u8 = 0xff;
 pub const no_action: u8 = 0xff;
+/// The most components one list can index: `no_parent` and `no_action`
+/// take the last byte value.
+pub const max_list_nodes = no_parent - 1;
+/// Values one sparkline keeps: two minutes of one-second samples.
+pub const max_samples = 120;
 pub const default_priority: u8 = 50;
 pub const max_priority: u8 = 100;
 /// Meter values and markers are stored in thousandths of the full scale.

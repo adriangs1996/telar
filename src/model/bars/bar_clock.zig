@@ -8,8 +8,12 @@ const std = @import("std");
 const seconds_per_minute: u64 = 60;
 
 pub const max_format_bytes = 32;
-/// Room for the longest expansion of `max_format_bytes` of directives.
-pub const max_output_bytes = 128;
+/// A directive is `%` and one letter.
+const directive_bytes = 2;
+/// Room for the longest expansion of `max_format_bytes` of directives:
+/// each writes at most the longest month or weekday name, so no clock is
+/// ever cut.
+pub const max_output_bytes = max_format_bytes / directive_bytes * longestName();
 
 const noon: u8 = 12;
 const century: u16 = 100;
@@ -135,4 +139,29 @@ test "clock formats the strftime subset from local time" {
     try std.testing.expectEqualStrings("100% %q", format(&buffer, "100%% %q", time));
     try std.testing.expect(showsSeconds("%H:%M:%S"));
     try std.testing.expect(!showsSeconds("%H:%M"));
+}
+
+fn longestName() usize {
+    var longest: usize = 0;
+    for (weekday_names ++ month_names) |name| {
+        longest = @max(longest, name.len);
+    }
+
+    return longest;
+}
+
+test "a format of the longest directives fits the output whole" {
+    var buffer: [max_output_bytes]u8 = undefined;
+    const time: LocalTime = .{
+        .year = 2026,
+        .month = 9,
+        .day = 30,
+        .hour = 11,
+        .minute = 52,
+        .second = 0,
+        .weekday = 3,
+    };
+
+    const text = format(&buffer, "%B" ** (max_format_bytes / directive_bytes), time);
+    try std.testing.expectEqualStrings("September" ** (max_format_bytes / directive_bytes), text);
 }

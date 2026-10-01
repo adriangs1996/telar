@@ -135,7 +135,10 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
         .refresh_panel => try bar_updates.refreshPanel(client),
         .pick => |index| try pick_list.open(client, index),
         .new_workspace => _ = workspace_creation.beginWorkspacePrompt(client),
-        .rename_workspace => _ = name_prompt.openNamePrompt(&client.model, .rename_workspace),
+        .rename_workspace => {
+            _ = name_prompt.openNamePrompt(&client.model, .rename_workspace);
+            name_prompt.reportClipped(client);
+        },
         .select_workspace => |position| _ = try workspace_handoff.selectWorkspace(
             client,
             .{
@@ -183,7 +186,19 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
             return .stop;
         },
         .enter_copy_mode => _ = copy_mode.enterCopyMode(client),
-        .command_tab => |*command| try cli_control.createCommandTab(client, command),
+        .command_tab => |reference| {
+            const generation = client.lua_generation orelse return .continue_routing;
+            var command: data.CommandTab = undefined;
+            if (!generation.snapshot.command_tabs.find(generation.number, reference, &command)) {
+                // Its recent row was cleared for newer ones: say so and
+                // render the bars and panel again, which keep it anew.
+                _ = try data.client_diagnostic.set(&client.model, "that button's command tab expired; the bars are rendering it again", .{});
+                try bar_updates.refreshSources(client);
+                return .continue_routing;
+            }
+
+            try cli_control.createCommandTab(client, &command);
+        },
         .goto_picker => _ = name_prompt.openNamePrompt(&client.model, .goto_picker),
         .history_palette => _ = try history_palette.beginHistoryPalette(&client.model),
         .path_picker => _ = try path_picker.enter(&client.model),

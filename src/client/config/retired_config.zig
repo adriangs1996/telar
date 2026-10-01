@@ -9,8 +9,13 @@ const notifications = @import("../notifications/notifications.zig");
 
 pub const Set = std.EnumSet(RetiredConfigKey);
 
-/// Room for every retired key and the sentence around them.
-pub const max_description_bytes = 256;
+const lead = "Ignored ";
+const separator = ", ";
+const tail = ": only the retired terminal client used them; remove them";
+
+/// Room for every retired key and the sentence around them, counted from
+/// the keys, so a new key never outgrows it.
+pub const max_description_bytes = describedBytes();
 
 /// One sentence naming the ignored keys, or an empty slice when none is set.
 /// Example: `const text = retired_config.describe(snapshot.retired, &buffer);`
@@ -19,21 +24,31 @@ pub fn describe(retired: Set, buffer: *[max_description_bytes]u8) []const u8 {
         return "";
     }
 
+    // The buffer holds every key (`describedBytes`), so no write fails.
     var writer = std.Io.Writer.fixed(buffer);
-    writer.writeAll("Ignored ") catch unreachable;
+    writer.writeAll(lead) catch unreachable;
     var keys = retired.iterator();
     var first = true;
     while (keys.next()) |key| {
         if (!first) {
-            writer.writeAll(", ") catch unreachable;
+            writer.writeAll(separator) catch unreachable;
         }
 
         writer.writeAll(key.path()) catch unreachable;
         first = false;
     }
 
-    writer.writeAll(": only the retired terminal client used them; remove them") catch unreachable;
+    writer.writeAll(tail) catch unreachable;
     return writer.buffered();
+}
+
+fn describedBytes() usize {
+    var bytes: usize = lead.len + tail.len;
+    for (std.enums.values(RetiredConfigKey)) |key| {
+        bytes += key.path().len + separator.len;
+    }
+
+    return bytes;
 }
 
 /// Tells the person which keys the active configuration ignored.

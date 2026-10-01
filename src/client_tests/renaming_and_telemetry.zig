@@ -326,6 +326,40 @@ test "tab rename separates prompt submission canonical commit and presentation" 
     try std.testing.expectEqualDeep(observed_before_noop, client.presentation.observed);
 }
 
+test "a tab label typed past its bound keeps what fits, reports the limit and still renames" {
+    var harness: ClientHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.model.request_lifecycle.tracker = .{};
+
+    try std.testing.expect(client_module.name_prompt.openNamePrompt(
+        &client.model,
+        .{
+            .rename_tab = ClientHarness.bootstrap_location.tab_id,
+        },
+    ));
+    try keys.routeText(client, "y" ** core.max_tab_label_bytes);
+
+    const reaches = &client.model.limit_reaches;
+    const slot = reaches.find("prompt.tab_label_bytes").?;
+    try std.testing.expectEqual(@as(u64, core.max_tab_label_bytes), reaches.value[slot]);
+    try std.testing.expectEqual(@as(usize, core.max_tab_label_bytes), client.model.name_prompt.currentConst().?.field.len);
+
+    try keys.routeKey(client, .plain(.enter));
+    try harness.settle();
+    var buffer: [512]u8 = undefined;
+    // The limit reaches the runtime first, then the rename.
+    const reported = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(reported == .report_limit);
+    try std.testing.expectEqualStrings("prompt.tab_label_bytes", reported.report_limit.reach.limit.name);
+    const message = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(message == .rename_tab);
+    try std.testing.expectEqual(@as(usize, core.max_tab_label_bytes), message.rename_tab.label.len);
+    try std.testing.expect(std.mem.startsWith(u8, message.rename_tab.label, "shell"));
+}
+
 test "tab rename response must match the requested identity" {
     var harness: ClientHarness = undefined;
     try harness.init();
