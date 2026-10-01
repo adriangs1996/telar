@@ -12,6 +12,7 @@
 #include "accessibility.h"
 #include "background_effect.h"
 #include "decoration.h"
+#include "display_rate.h"
 #include "frame_clock.h"
 #include "frame_worker.h"
 #include "input.h"
@@ -34,6 +35,7 @@ typedef struct {
   telar_frame_worker *worker;
   bool dirty, in_flight;
   telar_frame_clock clock;
+  telar_display_rate rate;
   telar_background_effect background;
   telar_decoration decoration;
   uint32_t width;
@@ -83,6 +85,7 @@ static void registry_global(void *data, struct wl_registry *registry,
   telar_input_global(self->input, &global);
   telar_background_effect_global(&self->background, name, interface);
   telar_decoration_global(&self->decoration, &global);
+  telar_display_rate_global(&self->rate, &global);
   if (strcmp(interface, wl_compositor_interface.name) == 0) {
     self->compositor = wl_registry_bind(
         registry, name, &wl_compositor_interface, version < 4 ? version : 4);
@@ -99,6 +102,7 @@ static void registry_global_remove(void *data, struct wl_registry *registry,
   telar_input_remove(self->input, name);
   telar_background_effect_remove(&self->background, name);
   telar_decoration_remove(&self->decoration, name);
+  telar_display_rate_remove(&self->rate, name);
 }
 
 static const struct wl_registry_listener registry_listener = {
@@ -126,8 +130,11 @@ static void draw(window *self) {
     return;
   }
   telar_decoration_apply(&self->decoration, frame.titlebar);
+  uint64_t interval = self->callbacks.frame_interval_ns != NULL
+                          ? self->callbacks.frame_interval_ns(self->context)
+                          : 0;
   if (!telar_background_effect_apply(&self->background, viewport, &frame) ||
-      !telar_frame_clock_request(&self->clock, self->surface)) {
+      !telar_frame_clock_request(&self->clock, self->surface, interval)) {
     self->callbacks.complete(self->context, frame.token, 0);
     self->failed = self->closing = true;
     return;
@@ -232,6 +239,7 @@ static void destroy(window *self) {
   }
   telar_background_effect_deinit(&self->background);
   telar_decoration_deinit(&self->decoration);
+  telar_display_rate_deinit(&self->rate);
   if (self->toplevel != NULL) {
     xdg_toplevel_destroy(self->toplevel);
   }
@@ -305,6 +313,7 @@ int telar_gui_run(const char *title, void *context,
   }
 
   self.surface = wl_compositor_create_surface(self.compositor);
+  telar_display_rate_attach(&self.rate, self.surface);
   self.background.compositor = self.compositor;
   self.background.surface = self.surface;
   self.xdg_surface = xdg_wm_base_get_xdg_surface(self.shell, self.surface);
@@ -338,6 +347,12 @@ int telar_gui_run(const char *title, void *context,
     }
 
     telar_input_dispatch(self.input);
+
+    uint64_t display_interval;
+    if (callbacks->display_interval != NULL &&
+        telar_display_rate_take(&self.rate, &display_interval)) {
+      callbacks->display_interval(context, display_interval);
+    }
 
     int result = callbacks->pump(context);
     if (result < 0) {

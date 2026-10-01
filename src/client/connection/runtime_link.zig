@@ -387,7 +387,7 @@ fn adopt(client: *Client) !void {
     client.model.startup.phase = .opening;
 
     const bootstrap = client.bootstrap orelse return error.MissingRuntimeBootstrap;
-    try client.model.to_runtime.pushBootstrap(bootstrap);
+    try client.model.to_runtime.pushBootstrap(bootstrap, client.model.host.host_capabilities.frame_interval_ns);
     try runtime_io.startRuntimeIo(client);
 }
 

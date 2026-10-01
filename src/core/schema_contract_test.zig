@@ -65,7 +65,7 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 127;
+const corpus_len = 128;
 
 const failure_codes = std.enums.values(types.FailureCode);
 const failure_code_listing = listing: {
@@ -347,6 +347,14 @@ const wire_bounds = [_]WireBound{
     .{
         .name = "max_agent_session_reference_bytes",
         .value = types.max_agent_session_reference_bytes,
+    },
+    .{
+        .name = "min_frame_interval_ns",
+        .value = types.min_frame_interval_ns,
+    },
+    .{
+        .name = "max_frame_interval_ns",
+        .value = types.max_frame_interval_ns,
     },
 };
 const corpus_storage_size = 12 * 1024;
@@ -648,6 +656,11 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .foreground = .{ 255, 255, 255 },
             .background = .{ 16, 16, 16 },
             .palette = .{.{ 1, 2, 3 }} ** 16,
+        }),
+    ));
+    helper.add(.{ .name = "configure_frame_interval", .direction = .client, .golden_hex = golden.configure_frame_interval }, helper.commit(
+        try runtime.encodeConfigureFrameInterval(helper.space(), .{
+            .interval_ns = std.time.ns_per_s / 120,
         }),
     ));
     helper.add(.{ .name = "request_runtime_state", .direction = .client, .golden_hex = golden.request_runtime_state }, helper.commit(
@@ -2045,6 +2058,30 @@ test "notifications enforce text and duration bounds before crossing IPC" {
             .title = "line one\nline two",
         }),
     );
+}
+
+test "a frame interval outside the wire bounds is refused in both directions" {
+    var buffer: [16]u8 = undefined;
+    for ([_]u64{ types.min_frame_interval_ns, types.max_frame_interval_ns }) |interval| {
+        const decoded = (try root.decodeClient(try runtime.encodeConfigureFrameInterval(&buffer, .{
+            .interval_ns = interval,
+        }))).configure_frame_interval;
+        try std.testing.expectEqual(interval, decoded.interval_ns);
+    }
+
+    for ([_]u64{ 0, types.min_frame_interval_ns - 1, types.max_frame_interval_ns + 1 }) |interval| {
+        try std.testing.expectError(
+            error.InvalidFrameInterval,
+            runtime.encodeConfigureFrameInterval(&buffer, .{
+                .interval_ns = interval,
+            }),
+        );
+
+        var payload: [9]u8 = undefined;
+        payload[0] = @intFromEnum(tags.ClientTag.configure_frame_interval);
+        std.mem.writeInt(u64, payload[1..9], interval, .little);
+        try std.testing.expectError(error.InvalidFrameInterval, root.decodeClient(&payload));
+    }
 }
 
 test "explicit pane attachment has no launch payload" {

@@ -1,8 +1,9 @@
 #define _POSIX_C_SOURCE 200809L
 #include "frame_clock.h"
+#include <stdint.h>
 #include <time.h>
 
-static const int64_t frame_ns = 16666667;
+static const int64_t fallback_frame_ns = 16666667;
 
 static int64_t now_ns(void) {
     struct timespec now;
@@ -29,10 +30,11 @@ int telar_frame_clock_timeout(const telar_frame_clock *self) {
 
 bool telar_frame_clock_ready(const telar_frame_clock *self) { return telar_frame_clock_timeout(self) == 0; }
 
-bool telar_frame_clock_request(telar_frame_clock *self, struct wl_surface *surface) {
+bool telar_frame_clock_request(telar_frame_clock *self, struct wl_surface *surface, uint64_t interval_ns) {
     if (!telar_frame_clock_ready(self)) {
         return false;
     }
+    int64_t frame_ns = interval_ns > 0 && interval_ns <= INT64_MAX ? (int64_t)interval_ns : fallback_frame_ns;
     self->callback = wl_surface_frame(surface);
     if (self->callback == NULL) {
         return false;

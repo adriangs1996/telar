@@ -1,5 +1,7 @@
 //! Native drawing cadence and input grace, independent of GPU ownership.
 //! Callers supply visible pane identities and only record sealed preparations.
+//! The cadence follows the display the window is on.
+const std = @import("std");
 const pacing = @import("pacing");
 const data = @import("model");
 const core = @import("telar-core");
@@ -15,6 +17,21 @@ cadence: pacing.Pacer = .{
     .credits = @intFromEnum(OrdinaryBudget.frame),
 },
 inputs: [core.max_panes_per_tab]?PaneInputGrace = @splat(null),
+/// The refresh interval of the display the window is on, as the native
+/// window last reported it.
+display_interval_ns: u64 = pacing.pace.default_interval,
+
+/// Paces frames at the display's rate, or slower when `max_fps` caps it,
+/// within the cadences the runtime accepts, and returns the interval.
+/// Credit, grace and the cadence anchor carry over, so a window moved to
+/// another display keeps its burst and its next deadline stays monotonic.
+/// Example: `const interval_ns = pacer.pace(config.max_fps);`
+pub fn pace(self: *FramePacer, max_fps: ?u16) u64 {
+    const cap: u64 = if (max_fps) |fps| std.time.ns_per_s / @as(u64, @max(fps, 1)) else 0;
+    const interval = std.math.clamp(@max(self.display_interval_ns, cap), core.min_frame_interval_ns, core.max_frame_interval_ns);
+    self.cadence.interval = interval;
+    return interval;
+}
 
 /// Records admitted input against the pane's current applied frame. Replacing
 /// the oldest entry when full drops only grace, never input or pending damage.

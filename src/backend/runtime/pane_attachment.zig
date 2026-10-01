@@ -107,6 +107,7 @@ pub fn attach(model: *RuntimeModel, session: *Session, pane: *Pane) !*Attachment
 
     const attachment = try model.attachments.add(model.gpa, session.slot, pane);
     attachment.configureGraphics(session.shared_graphics);
+    attachment.cell_pacer.interval = session.frame_interval_ns;
     if (session.workspace == null) {
         session.workspace = pane.location.workspace;
     }

@@ -1,4 +1,5 @@
 const localsocket = @import("localsocket");
+const pacing = @import("pacing");
 const core = @import("telar-core");
 const ClientKey = @import("../../history/ClientKey.zig");
 const Delivery = @import("../delivery/Delivery.zig");
@@ -26,6 +27,9 @@ slot: usize = 0,
 workspace: ?core.WorkspaceLocation = null,
 /// Graphics transport for existing and future attachments.
 shared_graphics: bool = false,
+/// The cadence the client presents at, which paces the cell frames of its
+/// existing and future attachments.
+frame_interval_ns: u64 = pacing.pace.default_interval,
 delivery: Delivery,
 role: session_support.Role = .undecided,
 read_pending: bool = false,

@@ -18,6 +18,7 @@ test "GUI configuration owns font names and overlays profiles independently of c
         \\    window = { background_opacity = 0.75, background_blur = true, titlebar = false, padding = { x = 8.5, y = 4 } },
         \\    chrome = { scale = 1.25 },
         \\    sidebar = { width = 300 },
+        \\    max_fps = 120,
         \\  },
         \\  profiles = { large = { gui = { font = { size = 24, thicken_strength = 0 }, window = { padding = { y = 12 } }, chrome = { scale = 1.5 }, sidebar = { width = 320 } }, theme = { terminal = { background = "#ffffff" } } } },
         \\}
@@ -43,6 +44,7 @@ test "GUI configuration owns font names and overlays profiles independently of c
     try std.testing.expectEqual(@as(f32, 0.75), config.window.background_opacity);
     try std.testing.expectEqual(@as(f32, 1.5), config.chrome.scale);
     try std.testing.expectEqual(@as(f32, 320), config.sidebar.width);
+    try std.testing.expectEqual(@as(?u16, 120), config.max_fps);
     try std.testing.expectEqual(@as(u8, 20), config.window.background_blur);
     try std.testing.expect(!config.window.titlebar);
     try std.testing.expectEqual(@as(f32, 8.5), config.window.padding.x);
@@ -81,6 +83,11 @@ test "GUI validation rejects malformed values including profiles that are not se
         "gui = { window = { padding = { x = 0/0 } } }",
         "gui = { window = { padding = { z = 1 } } }",
         "gui = { sidebar = 284 }",
+        "gui = { max_fps = 29 }",
+        "gui = { max_fps = 241 }",
+        "gui = { max_fps = 59.5 }",
+        "gui = { max_fps = '60' }",
+        "profiles = { unused = { gui = { max_fps = 0 } } }",
         "gui = { sidebar = { width = 219 } }",
         "gui = { sidebar = { width = 481 } }",
         "gui = { sidebar = { width = '284' } }",

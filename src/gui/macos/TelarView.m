@@ -7,6 +7,10 @@
 #import <QuartzCore/CADisplayLink.h>
 #include <string.h>
 
+// The cadence of a host that answers no frame interval, and the lowest rate
+// the display link is asked to hold.
+static const NSInteger fallback_frames_per_second = 60;
+
 @implementation TelarView {
   TelarMetalRenderer *renderer;
   TelarHostServices *host_services;
@@ -18,6 +22,8 @@
   BOOL dirty, closed, preparing;
   CADisplayLink *display_link;
   CFTimeInterval next_draw;
+  // The interval the display link was last matched to; zero before then.
+  uint64_t frame_interval;
 }
 
 - (instancetype)initWithFrame:(NSRect)frame
@@ -81,12 +87,64 @@
   display_link = [self displayLinkWithTarget:self
                                     selector:@selector(displayDidRefresh:)];
   display_link.paused = YES;
-  display_link.preferredFrameRateRange = CAFrameRateRangeMake(60, 60, 60);
 
   [display_link addToRunLoop:[NSRunLoop mainRunLoop]
                      forMode:NSRunLoopCommonModes];
 
+  // A display changing its rate, or one plugged in or removed, keeps the
+  // window on its screen and sends no screen change.
+  [NSNotificationCenter.defaultCenter
+      addObserver:self
+         selector:@selector(screenParametersDidChange:)
+             name:NSApplicationDidChangeScreenParametersNotification
+           object:nil];
+
   return self;
+}
+
+// Reports the refresh interval of the window's display to Zig, then asks the
+// display link for the rate Zig paces at.
+// Example: [self reportDisplay] after the window moves to another screen.
+- (void)reportDisplay {
+  NSScreen *screen = self.window.screen;
+  if (closed || screen == nil) {
+    return;
+  }
+
+  NSInteger rate = screen.maximumFramesPerSecond;
+  if (rate > 0 && callbacks.display_interval != NULL) {
+    callbacks.display_interval(context, NSEC_PER_SEC / (uint64_t)rate);
+  }
+
+  [self followFrameInterval];
+}
+
+// Matches the display link to the interval Zig paces at: the display's rate,
+// or lower under a configured cap. The link never ticks faster than frames
+// can be presented, so a capped window also wakes less.
+// Example: [self followFrameInterval] after a pump adopts a configuration.
+- (void)followFrameInterval {
+  if (display_link == nil || callbacks.frame_interval_ns == NULL) {
+    return;
+  }
+
+  uint64_t interval = callbacks.frame_interval_ns(context);
+  if (interval == 0 || interval == frame_interval) {
+    return;
+  }
+
+  frame_interval = interval;
+  float rate = (float)NSEC_PER_SEC / (float)interval;
+  display_link.preferredFrameRateRange = CAFrameRateRangeMake(
+      MIN((float)fallback_frames_per_second, rate), rate, rate);
+}
+
+- (void)screenParametersDidChange:(NSNotification *)notification {
+  [self reportDisplay];
+}
+
+- (void)windowDidChangeScreen:(NSNotification *)notification {
+  [self reportDisplay];
 }
 
 - (CALayer *)makeBackingLayer {
@@ -120,6 +178,7 @@
 
 - (void)viewDidMoveToWindow {
   [super viewDidMoveToWindow];
+  [self reportDisplay];
   [self resizeDrawable];
   [self requestDraw];
 }
@@ -226,8 +285,10 @@
   }
 
   if (callbacks.frame_delay_ns == NULL) {
-    // Standalone native hosts retain their local cadence fallback.
-    const CFTimeInterval interval = 1.0 / 60.0;
+    // Standalone native hosts keep a local cadence at the display's rate.
+    NSInteger rate = self.window.screen.maximumFramesPerSecond;
+    const CFTimeInterval interval =
+        1.0 / (CFTimeInterval)(rate > 0 ? rate : fallback_frames_per_second);
     const CFTimeInterval now = CACurrentMediaTime();
     next_draw =
         now - next_draw >= interval ? now + interval : next_draw + interval;
@@ -258,6 +319,8 @@
   dirty = NO;
   preparing = YES;
   callbacks.render(context, viewport, &frame);
+  // Preparation adopts configuration, which may cap the frame rate.
+  [self followFrameInterval];
   [renderer acceptImages:&frame];
   [self refreshPointerCursor];
   if (frame.token == 0) {
@@ -298,6 +361,7 @@
   }
   [self stopInput];
 
+  [NSNotificationCenter.defaultCenter removeObserver:self];
   [display_link invalidate];
   display_link = nil;
 

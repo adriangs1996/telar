@@ -79,6 +79,13 @@ test "native startup sends the ordered bootstrap without graphics credits or a s
     session.pending = null;
     try client.runtime_io.completeRuntimeSend(app, {});
     try session.startJobs();
+    const interval = try core.decodeClient(session.pending.?);
+    try std.testing.expectEqual(session.gui.driver.frame_pacer.cadence.interval, interval.configure_frame_interval.interval_ns);
+    try std.testing.expectEqual(app.model.host.host_capabilities.frame_interval_ns, interval.configure_frame_interval.interval_ns);
+
+    session.pending = null;
+    try client.runtime_io.completeRuntimeSend(app, {});
+    try session.startJobs();
     const request = try core.decodeClient(session.pending.?);
     try std.testing.expect(request == .request_runtime_state);
     try std.testing.expectEqual(app.client_identity, request.request_runtime_state.client_identity);
@@ -89,6 +96,56 @@ test "native startup sends the ordered bootstrap without graphics credits or a s
     try std.testing.expect(session.pending == null);
     try std.testing.expectEqual(@as(usize, 0), app.model.to_runtime.len);
     try std.testing.expect(app.model.startup.phase == .opening);
+}
+
+// Sends every queued runtime message and returns the last frame interval
+// among them.
+fn sentFrameInterval(session: *Session) !?u64 {
+    var interval: ?u64 = null;
+    while (session.pending) |bytes| {
+        const message = try core.decodeClient(bytes);
+        if (message == .configure_frame_interval) {
+            interval = message.configure_frame_interval.interval_ns;
+        }
+
+        session.pending = null;
+        try client.runtime_io.completeRuntimeSend(session.gui.app, {});
+        try session.startJobs();
+    }
+
+    return interval;
+}
+
+test "the window paces itself and its runtime cell frames to the display it is on" {
+    const session = try Session.init();
+    defer session.deinit();
+    const promotion: u64 = std.time.ns_per_s / 120;
+    const standard: u64 = std.time.ns_per_s / 60;
+
+    // Before the runtime link opens, a display report only paces the window.
+    try session.gui.observeDisplay(promotion);
+    try std.testing.expectEqual(promotion, session.gui.driver.frame_pacer.cadence.interval);
+    try std.testing.expect(session.pending == null);
+
+    try session.gui.windowReady(
+        .{
+            .width = 180,
+            .height = 240,
+            .scale = 1,
+        },
+    );
+    try std.testing.expectEqual(promotion, session.gui.app.model.host.host_capabilities.frame_interval_ns);
+    try std.testing.expectEqual(@as(?u64, promotion), try sentFrameInterval(session));
+
+    try session.gui.observeDisplay(standard);
+    try std.testing.expectEqual(standard, session.gui.driver.frame_pacer.cadence.interval);
+    try std.testing.expectEqual(@as(?u64, standard), try sentFrameInterval(session));
+
+    // The same display again, or one reporting no rate, sends nothing.
+    try session.gui.observeDisplay(standard);
+    try session.gui.observeDisplay(0);
+    try std.testing.expectEqual(@as(?u64, null), try sentFrameInterval(session));
+    try std.testing.expectEqual(standard, session.gui.driver.frame_pacer.cadence.interval);
 }
 
 test "drawing does not activate the runtime before native readiness" {

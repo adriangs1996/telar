@@ -103,6 +103,12 @@ pub const max_client_layout_ratio: u16 = client_layout_ratio_scale - min_client_
 pub const min_notification_duration_ms: u32 = 500;
 pub const max_notification_duration_ms: u32 = 60_000;
 pub const default_notification_duration_ms: u32 = 4_000;
+/// The fastest cadence a client may ask the runtime to send cell frames at,
+/// 240 Hz: past the fastest common display nothing more is seen.
+pub const min_frame_interval_ns: u64 = 1_000_000_000 / 240;
+/// The slowest cadence a client may ask for, 30 Hz, so a client cannot hold
+/// pane output back past what still reads as live.
+pub const max_frame_interval_ns: u64 = 1_000_000_000 / 30;
 
 pub const PaneTarget = union(enum) {
     default,

@@ -19,6 +19,7 @@ pub fn add(b: *std.Build, gui: *std.Build.Module, disable_coverage: bool) void {
             "src/gui/linux/accessible.c",
             "src/gui/linux/background_effect.c",
             "src/gui/linux/decoration.c",
+            "src/gui/linux/display_rate.c",
             "src/gui/linux/input.c",
             "src/gui/linux/pointer.c",
             "src/gui/linux/clipboard.c",

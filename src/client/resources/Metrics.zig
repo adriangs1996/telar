@@ -29,5 +29,8 @@ graphics_upload: core.Timing = .{},
 /// textures hold.
 graphics_presented: u64 = 0,
 graphics_gpu_bytes: usize = 0,
+/// Frames a window delivered to its display, so a flood shows how close the
+/// window came to its display's rate.
+presentations: u64 = 0,
 /// Graphics snapshots requested to recover a broken revision.
 graphics_resyncs: u64 = 0,

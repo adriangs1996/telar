@@ -34,6 +34,18 @@ pub fn deliverHostCommit(client: *Client, commit: data.HostCommit) !void {
             );
         }
 
+        if (change.previous.frame_interval_ns != change.current.frame_interval_ns and
+            (client.model.startup.phase == .opening or client.model.startup.phase == .active))
+        {
+            try client.model.to_runtime.push(
+                .{
+                    .configure_frame_interval = .{
+                        .interval_ns = change.current.frame_interval_ns,
+                    },
+                },
+            );
+        }
+
         if (change.previous.appearance != change.current.appearance and !client.options.theme_locked) {
             const theme = switch (change.current.appearance) {
                 .unknown => null,

@@ -24,7 +24,17 @@ const Pacer = @import("Pacer.zig");
 
 pub const ns_per_ms: u64 = 1_000_000;
 
-/// The sustained frame budget. Idle and input bursts may present earlier.
+/// The sustained frame budget of a host that reports no display rate.
+/// Idle and input bursts may present earlier.
+///
+/// The budget is the display's own refresh interval wherever the host knows
+/// it: 120 Hz on ProMotion, 144 or 165 on an external monitor. Presenting
+/// faster than the display buys nothing, since vsync discards the extra
+/// frames, so the display is the ceiling; a user may cap below it to save
+/// power. A pacer takes the interval as a field, and the window and the
+/// runtime set it from the display, so this value only covers hosts that
+/// cannot tell, such as a terminal client, and the moment before a window
+/// learns which display it is on.
 pub const default_interval: u64 = std.time.ns_per_s / 60;
 
 /// Frames an idle UI may present back to back before the interval applies.
@@ -298,6 +308,68 @@ test "a burst is bounded and the frames it skips are counted" {
     try std.testing.expect(frames <= 300 / 16 + 1 + default_burst);
     // Every event that did not earn a frame rode along on one.
     try std.testing.expect(p.stats.absorbed >= 250);
+}
+
+/// Refresh rates of 60 Hz, ProMotion and a common external monitor.
+const DisplayRate = enum(u64) { standard = 60, promotion = 120, external = 144 };
+/// A build log's pace: a screen change every quarter millisecond.
+const FloodEvent = enum(u64) { spacing = ns_per_ms / 4 };
+
+/// Frames a pacer presents over one second of a flood that changes the
+/// screen every `event_ns`: immediate frames while credit lasts, then one
+/// per cadence slot, the way a loop waking at each deadline draws them.
+fn floodFrames(interval: u64, event_ns: u64) u64 {
+    var p: Pacer = .{ .interval = interval };
+    var now: u64 = 0;
+    while (now < std.time.ns_per_s) : (now += event_ns) {
+        const deadline = p.waitUntil(now) orelse {
+            p.record(.{ .now = now, .scheduled_deadline = null, .absorbed = 1 });
+            continue;
+        };
+
+        if (deadline <= now) {
+            p.record(.{ .now = now, .scheduled_deadline = deadline, .absorbed = 1 });
+        } else {
+            p.noteThrottled();
+        }
+    }
+
+    return p.stats.drawn;
+}
+
+test "a flood presents at the display's rate, never faster" {
+    // The burst is the only excess over the rate, and it is spent once at
+    // the start of the flood.
+    for (std.enums.values(DisplayRate)) |rate| {
+        const hz = @intFromEnum(rate);
+        const frames = floodFrames(std.time.ns_per_s / hz, @intFromEnum(FloodEvent.spacing));
+        try std.testing.expect(frames >= hz - 1);
+        try std.testing.expect(frames <= hz + default_burst);
+    }
+}
+
+test "input grace and burst keep their size at any display rate" {
+    // The grace window is time, not frames: 30 ms whether a frame is 16 ms
+    // or 7 ms, so a faster display only lets the echo out sooner.
+    for (std.enums.values(DisplayRate)) |rate| {
+        const interval = std.time.ns_per_s / @intFromEnum(rate);
+        var p: Pacer = .{ .interval = interval, .burst = 0, .credits = 0 };
+        p.record(.{ .now = 0, .scheduled_deadline = null, .absorbed = 1 });
+        try std.testing.expectEqual(@as(?u64, interval), p.waitUntil(1));
+
+        p.noteInput(1);
+        try std.testing.expectEqual(@as(?u64, null), p.waitUntil(default_input_grace));
+        try std.testing.expect(p.waitUntil(1 + default_input_grace) != null);
+
+        var fresh: Pacer = .{ .interval = interval };
+        var frame: u32 = 0;
+        while (frame < default_burst) : (frame += 1) {
+            try std.testing.expectEqual(@as(?u64, null), fresh.waitUntil(0));
+            fresh.record(.{ .now = 0, .scheduled_deadline = null, .absorbed = 1 });
+        }
+
+        try std.testing.expectEqual(@as(?u64, interval), fresh.waitUntil(0));
+    }
 }
 
 // A message shaped like the ones a real loop carries.

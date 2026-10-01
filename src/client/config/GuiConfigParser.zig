@@ -9,6 +9,9 @@ const GuiChrome = @import("GuiChrome.zig");
 const GuiWindow = @import("GuiWindow.zig");
 const Parser = @This();
 
+/// Below every accepted cap, so it marks a cap nobody set.
+const FpsCap = enum(u16) { unset = 0 };
+
 state: *lua_api.c.lua_State,
 diagnostic: *data.Diagnostic,
 
@@ -26,7 +29,7 @@ pub fn parse(self: Parser, initial: Config) !Config {
         return self.invalid("gui.theme moved to theme.terminal; select a preset once with theme = 'vesper'");
     }
 
-    try self.table("config.gui", &.{ "font", "cursor", "window", "chrome", "sidebar" });
+    try self.table("config.gui", &.{ "font", "cursor", "window", "chrome", "sidebar", "max_fps" });
     var result = initial;
     _ = lua_api.c.lua_getfield(self.state, -1, "font");
     if (lua_api.c.lua_type(self.state, -1) != lua_api.c.LUA_TNIL) {
@@ -102,7 +105,24 @@ pub fn parse(self: Parser, initial: Config) !Config {
         result.sidebar = try self.sidebar(result.sidebar);
     }
     value.pop(self.state, 1);
+
+    result.max_fps = try self.maxFps(result.max_fps);
     return result;
+}
+
+// Absent keeps the inherited cap; the display's rate when nothing set one.
+fn maxFps(self: Parser, initial: ?u16) !?u16 {
+    const unset: f64 = @floatFromInt(@intFromEnum(FpsCap.unset));
+    const fps = try self.number(.{ "max_fps", Config.min_fps_cap, Config.max_fps_cap }, if (initial) |cap| @floatFromInt(cap) else unset);
+    if (fps == unset) {
+        return null;
+    }
+
+    if (@trunc(fps) != fps) {
+        return self.invalid("gui.max_fps must be an integer");
+    }
+
+    return @intFromFloat(fps);
 }
 
 fn sidebar(self: Parser, initial: Sidebar) !Sidebar {

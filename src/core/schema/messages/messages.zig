@@ -31,6 +31,7 @@ const MoveTab = @import("MoveTab.zig");
 const RequestGraphicsSnapshot = @import("RequestGraphicsSnapshot.zig");
 const GraphicsCredit = @import("GraphicsCredit.zig");
 const ConfigureGraphics = @import("ConfigureGraphics.zig");
+const ConfigureFrameInterval = @import("ConfigureFrameInterval.zig");
 const TerminalColors = @import("../TerminalColors.zig");
 const RequestRuntimeState = @import("RequestRuntimeState.zig");
 const CreateWorkspaceView = @import("CreateWorkspaceView.zig");
@@ -162,6 +163,7 @@ pub const ClientMessage = union(enum) {
     graphics_credit: GraphicsCredit,
     configure_graphics: ConfigureGraphics,
     configure_terminal_colors: TerminalColors,
+    configure_frame_interval: ConfigureFrameInterval,
     request_runtime_state: RequestRuntimeState,
     create_workspace: CreateWorkspaceView,
     rename_workspace: RenameWorkspace,
@@ -298,6 +300,9 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
             .configure_graphics = try GenericDerived(ConfigureGraphics).decode(&decoder),
         },
         .configure_terminal_colors => .{ .configure_terminal_colors = try runtime.decodeConfigureTerminalColors(&decoder) },
+        .configure_frame_interval => .{
+            .configure_frame_interval = try GenericDerived(ConfigureFrameInterval).decode(&decoder),
+        },
         .request_runtime_state => .{ .request_runtime_state = try runtime.decodeRequestRuntimeState(&decoder) },
         .create_workspace => .{ .create_workspace = try workspace.decodeCreateWorkspace(&decoder) },
         .rename_workspace => .{ .rename_workspace = try workspace.decodeRenameWorkspace(&decoder) },
