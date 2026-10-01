@@ -16,6 +16,7 @@ const Session = @import("client/Session.zig");
 /// ```
 pub fn configure(model: *RuntimeModel, session: *Session, request: core.ConfigureFrameInterval) void {
     const interval = std.math.clamp(request.interval_ns, core.min_frame_interval_ns, core.max_frame_interval_ns);
+
     if (session.frame_interval_ns == interval) {
         return;
     }
