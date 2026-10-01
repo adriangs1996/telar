@@ -7,6 +7,8 @@ line numbers are intentionally omitted because symbols survive refactors.
 
 | Flow | Trigger | Visible result | Proof |
 | --- | --- | --- | --- |
+| [Execution](execution.md) | `telar exec` starts a literal command without a terminal | Runtime-owned stdin/stdout/stderr, stable results, list/status/output/cancel and bounded retention | Exact-schema corpus, IPC fuzz seeds and isolated fleet acceptance |
+| [Repository preparation](repository-preparation.md) | Explicit prepare or remote worktree creation needs a clone | Source-mediated history, safe clone reuse/publication, declared setup and artifact transfer before agent launch | Isolated fake-SSH preparation/setup/brief/agent/commit/fetch/cleanup acceptance |
 | [Native terminal](native-terminal.md) | `telar` or `telar gui` opens a native window | Runtime cells, keyboard, paste and resize work through shared operations; closing the window preserves the shell | GUI contract tests, macOS window test and isolated Wayland integration |
 | [Native appearance](native-appearance.md) | GUI config loads, the child changes its cursor, or a cursor deadline fires | Native fonts, terminal colors and cursor styles render through shared retained geometry | Config, protocol, VT, font, retained rendering and native deadline tests |
 | [Agent snapshot](agent-snapshot.md) | Runtime agent evidence changes | The client commits one bounded replica, emits actionable transitions and the window draws the latest revision | Storage, model, effect-order, protocol and presentation tests |

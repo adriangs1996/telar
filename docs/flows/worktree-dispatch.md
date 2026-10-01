@@ -22,17 +22,12 @@ worktree_dispatch.create              no local runtime is contacted
         |  worktree_git.originIdentity git config remote.origin.url
         |                              -> repository_identity.normalize
         |
-        |  machine_dispatch.capture    ssh box telar dispatch-argv …
-        v
-telar worktree resolve --repository github.com/o/telar --json   (on box)
-        |  each workspace of box's runtime -> mainRoot -> originIdentity
-        |  one clone -> {"repository", "path"}; none or several -> error
-        |  (--workspace PATH checks that one instead)
-        v
-worktree_dispatch.create
+        |  repository_prepare.prepare  source-mediated Git bundle, runtime-owned receiver
+        |                              open/catalog/history discovery, existing clone reuse
+        |                              missing clone staged, verified and published atomically
+        |                              multiple clones require --workspace PATH|ID
+        |                              see repository-preparation.md
         |  source: the local branch BRANCH if it exists, else --from, else HEAD
-        |  worktree_git.commitOf       the commit to send
-        |  worktree_git.changedFiles   "N uncommitted files stay on this machine"
         |  worktree_git.push           git push -- ssh://box/<path> <commit>:refs/heads/fix-tabs
         |                              GIT_SSH_COMMAND = SshOptions.gitCommand
         |
@@ -50,7 +45,7 @@ box's Worktrees row: dispatched_from = "laptop"; stdout and exit status return
 telar worktree fetch fix-tabs --machine box
         |
 worktree_dispatch.fetch
-        |  resolve on box, as above
+        |  resolve on box using catalog, history and managed path
         |  worktree_git.fetch   git fetch --no-tags -- ssh://box/<path>
         |                         +refs/heads/fix-tabs:refs/remotes/box/fix-tabs
         v
@@ -64,7 +59,7 @@ fix-tabs`, `telar --machine box worktree remove fix-tabs`.
 ## Repository identity
 
 `src/cli/repository_identity.zig` reduces an `origin` URL to `host/path`:
-the user, the port, `.git` and slashes go, the host is lowercased. The SSH,
+the user, scheme-default ports, `.git` and slashes go; nondefault ports remain, the host is lowercased. The SSH,
 HTTPS and scp-like forms of one project agree. A local path or `file://`
 origin names nothing another machine has and is refused. The identity finds
 a clone; it never decides where work runs.
@@ -75,9 +70,11 @@ a clone; it never decides where work runs.
   history rejects the push and nothing is created there.
 - Only commits travel. Uncommitted files are counted, reported on stderr, and
   stay.
-- Telar does not clone on demand: the other machine must have the project
-  open in a workspace of its runtime, or `--workspace PATH` must name its
-  clone.
+- Telar prepares a missing clone through committed-history transfer; existing
+  catalog and history paths find closed clones. Explicit `--workspace PATH|ID`
+  selects an existing matching clone. See [repository preparation](repository-preparation.md).
+- Declared `.telar/setup.json` requires `--setup`. Setup runs as an observable
+  execution before agent launch; failure retains the worktree and refuses launch.
 - `git` runs with `GIT_SSH_COMMAND` set to the managed SSH options (batch
   mode, keepalives, no agent forwarding, the control master in telar's
   owner-only runtime directory), every word single-quoted for `sh`, and
@@ -107,3 +104,6 @@ a clone; it never decides where work runs.
   ambiguous identity settled by `--workspace`, a missing clone, a local
   origin, unknown and local labels for fetch, the local label creating
   here, and `dispatched_from` surviving a runtime restart.
+
+The isolated acceptance test is `python3 tools/test_fleet_operations.py`; it uses
+fake SSH and disposable local runtimes, without accessing the real fleet.

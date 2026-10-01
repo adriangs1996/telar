@@ -74,3 +74,16 @@ master stays ten minutes after its last session
 - Against the Linux SSH box (`tools/local-docker`): `--machine` with
   `machine list`, `pane list --json`, a quoted argument, a failing remote
   command's exit status, and an unreachable machine.
+
+## General commands and artifacts
+
+`telar --machine box exec -- PROGRAM ARGUMENTS...` starts a destination-runtime
+execution with separate raw streams, stable status/output/cancel operations and
+no Git requirement. Its default cwd is destination HOME, in an explicitly owned
+administration workspace. See [execution](execution.md).
+
+`repository prepare --machine box` and remote `worktree create` prepare a missing
+clone using source-side committed history. `file put/get` transport explicit
+artifacts through raw streams; declared project setup gates task launch. See
+[repository preparation](repository-preparation.md). These use the same managed
+SSH and encoded argv contract, with no ad hoc SSH fallback or provider login.
