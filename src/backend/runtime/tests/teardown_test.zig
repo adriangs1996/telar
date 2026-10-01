@@ -80,6 +80,7 @@ test "loop cancellation releases every transferred result already queued by comp
     capture.* = .{
         .gpa = gpa,
         .reservation = quota.reserve(16).?,
+        .max_bytes = 16,
         .meta = .{ .protocol = .http11 },
         .key = .{ .connection_id = 1, .stream_id = 0 },
         .side = .request,

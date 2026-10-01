@@ -1,5 +1,6 @@
 //! Bounded pointer-transfer queue for captured exchange halves.
 
+const core = @import("telar-core");
 const exchangecapture = @import("exchangecapture");
 const owned = @import("owned.zig");
 const Quota = exchangecapture.Quota;
@@ -8,9 +9,11 @@ const std = @import("std");
 const Channel = @import("Channel.zig");
 
 pub const capacity = 256;
+pub const capacity_limit = core.Limit.declare("proxy.capture.queue_capacity", "halves", capacity);
 
+/// A half holding one captured byte of the quota.
 fn testHalf(quota: *Quota, stream_id: u32) *Half {
-    return Half.create(.{
+    const half = Half.create(.{
         .gpa = std.testing.allocator,
         .quota = quota,
         .config = .{
@@ -25,6 +28,8 @@ fn testHalf(quota: *Quota, stream_id: u32) *Half {
         .host = "example.test",
         .started_at_ms = 1,
     }).?;
+    std.debug.assert(half.append(.request_body, "x"));
+    return half;
 }
 
 test "queue saturation drops and frees the rejected half" {

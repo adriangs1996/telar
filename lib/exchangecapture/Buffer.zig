@@ -53,19 +53,31 @@ pub fn deinit(self: *Buffer) void {
     self.truncated = false;
 }
 
-fn ensureCapacity(self: *Buffer, needed: usize) bool {
-    if (needed <= self.storage.len) {
-        return true;
-    }
-
+/// The capacity growing to hold `needed` bytes would allocate: doubling
+/// from 256 bytes, never past `max_bytes`. Doubling keeps the copies of a
+/// growing buffer linear in its size.
+///
+/// ```zig
+/// const capacity = buffer.grownCapacity(buffer.len + fragment.len);
+/// ```
+pub fn grownCapacity(self: *const Buffer, needed: usize) usize {
     var capacity = @min(self.max_bytes, @max(@as(usize, 256), self.storage.len));
-    while (capacity < needed) {
+    while (capacity < needed and capacity < self.max_bytes) {
         capacity = @min(self.max_bytes, capacity *| 2);
-        if (capacity < needed and capacity == self.max_bytes) {
-            return false;
-        }
     }
 
+    return capacity;
+}
+
+/// Moves the bytes into storage of exactly `capacity` bytes. While it
+/// copies, the old and the new storage are both allocated. Returns false,
+/// keeping the old storage, when the allocation fails.
+///
+/// ```zig
+/// if (!buffer.growTo(capacity)) return false;
+/// ```
+pub fn growTo(self: *Buffer, capacity: usize) bool {
+    std.debug.assert(capacity >= self.len);
     const replacement = self.gpa.alloc(u8, capacity) catch return false;
     @memcpy(replacement[0..self.len], self.storage[0..self.len]);
     if (self.storage.len != 0) {
@@ -75,4 +87,17 @@ fn ensureCapacity(self: *Buffer, needed: usize) bool {
 
     self.storage = replacement;
     return true;
+}
+
+fn ensureCapacity(self: *Buffer, needed: usize) bool {
+    if (needed <= self.storage.len) {
+        return true;
+    }
+
+    const capacity = self.grownCapacity(needed);
+    if (capacity < needed) {
+        return false;
+    }
+
+    return self.growTo(capacity);
 }

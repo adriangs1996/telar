@@ -179,7 +179,7 @@ from it only when `model.host.grid_chrome` is set, and no adapter sets it.
 The window's sidebar is a band of device pixels (`widgets/SidebarBand.zig`)
 that the renderer takes off the window width before it counts columns, the
 way the top bar, tab strip and status bar come off the height. Its width is
-`gui.sidebar.width` logical pixels (default 284, bounds 220..480) scaled by
+`gui.sidebar.width` logical pixels (default 284, bounds 220..800) scaled by
 the display and rounded, and an 8 logical px gap separates the edge line
 from the first cell column. The band is clamped so the workbench keeps at
 least 20 columns after the gap and the right window padding; a window that

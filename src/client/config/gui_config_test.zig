@@ -89,7 +89,7 @@ test "GUI validation rejects malformed values including profiles that are not se
         "gui = { max_fps = '60' }",
         "profiles = { unused = { gui = { max_fps = 0 } } }",
         "gui = { sidebar = { width = 219 } }",
-        "gui = { sidebar = { width = 481 } }",
+        "gui = { sidebar = { width = 801 } }",
         "gui = { sidebar = { width = '284' } }",
         "gui = { sidebar = { height = 10 } }",
         "profiles = { unused = { gui = { window = { background_blur = 'yes' } } } }",

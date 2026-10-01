@@ -8,8 +8,8 @@ recent keyboard focus/input serial. Incoming paste continues through the same
 native input queue and shared paste owner.
 
 `src/gui/linux/clipboard.c` owns the outgoing selection and transfer lifecycle.
-The clipboard and each of four transfer slots hold at most 64 KiB, matching the
-wire clipboard limit. A compositor send callback copies one immutable snapshot
+The clipboard and each of four transfer slots hold at most
+`TELAR_GUI_CLIPBOARD_CAPACITY` (1 MiB), at least the wire clipboard limit. A compositor send callback copies one immutable snapshot
 into a free slot and wakes one worker. Replacing the selection cannot overwrite
 bytes already being pasted into another application.
 

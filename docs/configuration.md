@@ -47,10 +47,10 @@ return telar.config({
       ca_dir = "state/proxy",
       capture = {
         enabled = false,
-        max_part_bytes = 4 * 1024 * 1024,
-        max_exchange_bytes = 8 * 1024 * 1024,
-        max_total_bytes = 64 * 1024 * 1024,
-        join_timeout_ms = 30000,
+        max_part_bytes = 16 * 1024 * 1024,
+        max_exchange_bytes = 32 * 1024 * 1024,
+        max_total_bytes = 128 * 1024 * 1024,
+        join_timeout_ms = 15 * 60 * 1000,
       },
       intercept_hosts = { "api.example.com" },
     },
@@ -309,7 +309,7 @@ gui = {
 | `cursor.style` | `block` | `block`, `bar`, `underline`, or `hollow`. |
 | `cursor.blink` | `true` | Whether the default cursor blinks. An explicit application DECSCUSR style overrides this default; DEC mode 12 can suppress blinking. |
 | `cursor.blink_interval_ms` | `600` | Duration of each visible or hidden phase; integer `100..5000`. |
-| `sidebar.width` | `284` | Width of the native sidebar band in logical pixels; `220..480`, decimals allowed. Scaled by the display and rounded to device pixels, then clamped so the workbench keeps at least 20 columns after the band and its 8 px gap; a window too narrow for the narrowest band hides it. Keyboard `resize_sidebar` moves the width by 16 logical pixels and dragging the edge sets it exactly; both change only this window and are not written back to the file, so the value here is what a new window starts from. A reload that changes the value replaces the window's width; one that leaves it unchanged keeps an interactive choice. |
+| `sidebar.width` | `284` | Width of the native sidebar band in logical pixels; `220..800`, decimals allowed. Scaled by the display and rounded to device pixels, then clamped so the workbench keeps at least 20 columns after the band and its 8 px gap; a window too narrow for the narrowest band hides it. Keyboard `resize_sidebar` moves the width by 16 logical pixels and dragging the edge sets it exactly; both change only this window and are not written back to the file, so the value here is what a new window starts from. A reload that changes the value replaces the window's width; one that leaves it unchanged keeps an interactive choice. |
 | `max_fps` | the display's rate | Caps how many frames a second the window presents; an integer `30..240`. By default the window presents at the refresh rate of the display it is on (120 on ProMotion, 144 or 165 on many external monitors, 60 elsewhere) and follows it to another display; past that rate vsync would discard the frames. A lower cap saves power during floods and animations. The runtime sends pane output to this window at the same interval. A reload applies it at once. See [frame pacing](flows/frame-pacing.md). |
 | `chrome.scale` | `1` | Multiplies the native chrome text sizes; `0.5..2`, decimals allowed. The chrome derives three sizes from `font.size` times the display scale: title and body ×0.87, small ×0.73, rounded to device pixels and never below 6. The bands (top navigation 42, status bar 26, pane header 22 logical pixels) do not scale with it, so the body size is capped at the largest whose line box fits the pane header: at `font.size = 15` the body stops growing at 16 px (scale ≈ 1.3) while title and small keep growing, reaching 26 and 22 px at scale 2. The terminal grid and the PTY size never change with it; a reload applies it without rebuilding the atlas. |
 
@@ -1248,10 +1248,14 @@ server starts with less than one day remaining.
 `runtime.proxy.capture` accepts `enabled`, `max_part_bytes`,
 `max_exchange_bytes`, `max_total_bytes`, and `join_timeout_ms`. The byte limits
 must satisfy `max_part_bytes <= max_exchange_bytes <= max_total_bytes`; all
-limits and the timeout must be positive. Captured heads and de-framed bodies
-are bounded independently, and a full queue or exhausted quota drops capture
-data without delaying or changing proxied traffic. Response decompression is
-performed on the runtime observation path and is capped by `max_part_bytes`.
+limits and the timeout must be positive. `max_part_bytes` and
+`max_exchange_bytes` may be at most 64 MiB, `max_total_bytes` at most 1 GiB
+and `join_timeout_ms` at most one hour. Captured heads and de-framed bodies
+are bounded independently; request and response each get half of
+`max_exchange_bytes`. A full queue or exhausted quota drops capture data
+without delaying or changing proxied traffic, and the limit notice names the
+bound that cut it. Response decompression runs off the runtime's event loop,
+only while a tap plugin listens, and is capped by `max_part_bytes`.
 Until a trusted tap plugin is configured, completed captures are consumed only
 for metrics and are not persisted. Runtime tap workers are created only at
 server startup, so restart the runtime after changing a tap package or its

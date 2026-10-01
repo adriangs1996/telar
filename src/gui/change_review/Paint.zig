@@ -69,7 +69,21 @@ pub fn draw(self: *Self) !void {
     try self.drawSidebar(.{ .x = 0, .y = top, .width = sidebar, .height = self.viewport.height });
     const revision = w.model.current();
     const file = revision.files[w.model.file];
-    var diff: DiffPaint = .{ .canvas = canvas, .bounds = self.viewport, .viewport = self.viewport, .text = revision.text(w.model.file), .roles = w.roles[w.model.revision][file.start..file.end], .paint = false, .annotations = .{ .context = self, .row = row, .after = after } };
+    const roles = w.roles[w.model.revision];
+    const file_roles = if (file.end <= roles.len) roles[file.start..file.end] else null;
+    var diff: DiffPaint = .{
+        .canvas = canvas,
+        .bounds = self.viewport,
+        .viewport = self.viewport,
+        .text = revision.text(w.model.file),
+        .roles = file_roles,
+        .paint = false,
+        .annotations = .{
+            .context = self,
+            .row = row,
+            .after = after,
+        },
+    };
     w.maximum_scroll = @max(0, try diff.layout() - self.viewport.height);
     w.prepared_viewport.maximum_scroll = w.maximum_scroll;
     if (w.reveal) {
@@ -379,9 +393,13 @@ fn addTarget(self: *Self, original: Target, label_text: []const u8) !void {
     var target_value = original.labelled(label_text);
     target_value.id.generation = self.widget.generation;
     target_value.layer = self.widget.layer;
-    if (self.widget.widgets.?.dispatcher.maps.preparing().len >= Registry.capacity - reserved_controls) {
+    const registry = self.widget.widgets.?.dispatcher.maps.preparing();
+    if (registry.len >= Registry.capacity - reserved_controls) {
+        // The row still draws; the window reports the registry's limit.
+        registry.dropped += 1;
         return;
     }
+
     _ = try self.widget.widgets.?.dispatcher.add(target_value);
 }
 

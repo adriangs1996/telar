@@ -222,7 +222,7 @@ int telar_test_host_input(NSView *host) {
   if (!wait_for(capture, before + 1) || fixture.last.request_id != 102 || fixture.last.target_id != 41 || fixture.last.generation != 7 ||
       fixture.last.len != 15 || memcmp(fixture.last.text, "owned clipboard", 15)) { fprintf(stderr, "native host input assertion failed at line %d\n", __LINE__); failures++; }
   [pasteboard clearContents];
-  [pasteboard setString:[@"" stringByPaddingToLength:64 * 1024 + 1 withString:@"x" startingAtIndex:0] forType:NSPasteboardTypeString];
+  [pasteboard setString:[@"" stringByPaddingToLength:TELAR_GUI_CLIPBOARD_CAPACITY + 1 withString:@"x" startingAtIndex:0] forType:NSPasteboardTypeString];
   fixture.requests[2] = (telar_gui_host_request){.kind = 1, .request_id = 103, .target_id = 41, .generation = 7};
   fixture.request_count = 3;
   before = fixture.received;
@@ -238,8 +238,9 @@ int telar_test_host_input(NSView *host) {
   size_t limited_length = 0;
   uint32_t limited_width = 0, limited_height = 0;
   if (telar_clipboard_copy_png(pasteboard, &limited_bytes, &limited_length, &limited_width, &limited_height, png.length - 1, 1024 * 1024, 64) != TELAR_CLIPBOARD_TOO_LARGE || limited_bytes != NULL) { fprintf(stderr, "image source quota failed\n"); failures++; }
-  if (telar_clipboard_copy_png(pasteboard, &limited_bytes, &limited_length, &limited_width, &limited_height, 1024 * 1024, 1024 * 1024, 63) != TELAR_CLIPBOARD_TOO_LARGE || limited_bytes != NULL) { fprintf(stderr, "image pixel quota failed\n"); failures++; }
-  if (telar_clipboard_copy_png(pasteboard, &limited_bytes, &limited_length, &limited_width, &limited_height, 1024 * 1024, 1, 64) != TELAR_CLIPBOARD_TOO_LARGE || limited_bytes != NULL) { fprintf(stderr, "image PNG quota failed\n"); failures++; }
+  if (telar_clipboard_copy_png(pasteboard, &limited_bytes, &limited_length, &limited_width, &limited_height, 1024 * 1024, 1024 * 1024, 63) != TELAR_CLIPBOARD_TOO_MANY_PIXELS || limited_bytes != NULL || limited_width != 8 || limited_height != 8) { fprintf(stderr, "image pixel quota failed\n"); failures++; }
+  limited_length = 0;
+  if (telar_clipboard_copy_png(pasteboard, &limited_bytes, &limited_length, &limited_width, &limited_height, 1024 * 1024, 1, 64) != TELAR_CLIPBOARD_PNG_TOO_LARGE || limited_bytes != NULL || limited_length <= 1) { fprintf(stderr, "image PNG quota failed\n"); failures++; }
   fixture.requests[3] = (telar_gui_host_request){.kind = 3, .request_id = 105, .target_id = 41, .generation = 7};
   fixture.request_count = 4;
   before = fixture.received;

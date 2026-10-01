@@ -100,7 +100,7 @@ fn format(model: *RuntimeModel, buffer: []u8) ![]const u8 {
             .tls_mint_failures = proxy_metrics.tls_mint_failures,
             .capture_started = proxy_metrics.capture_started,
             .capture_truncated = proxy_metrics.capture_truncated,
-            .capture_skipped_quota = proxy_metrics.capture_skipped_quota,
+            .capture_skipped = proxy_metrics.capture_skipped,
             .capture_dropped_queue = proxy_metrics.capture_dropped_queue,
             .capture_decode_failed = proxy_metrics.capture_decode_failed,
             .capture_queue_depth = proxy_metrics.queued_captures,

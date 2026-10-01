@@ -1,3 +1,4 @@
+const exchangecapture = @import("exchangecapture");
 const owned = @import("capture/owned.zig");
 const std = @import("std");
 const proxy_namespace = @import("proxy_namespace.zig");
@@ -62,22 +63,14 @@ pub fn destroy(self: *Proxy) void {
     gpa.destroy(self);
 }
 
-/// Waits for one heap-owned captured exchange half.
+/// Waits for one heap-owned captured exchange half, its body decoded when
+/// `decode` asks, off the event loop.
 ///
 /// ```zig
-/// const half = try proxy.receiveCapture(io);
+/// const half = try proxy.receiveCapture(io, tap_listens);
 /// ```
-pub fn receiveCapture(self: *Proxy, io: std.Io) anyerror!*Half {
-    return self.service.receiveCapture(io);
-}
-
-/// Decodes one captured body on the runtime observation path.
-///
-/// ```zig
-/// proxy.decodeCapture(half);
-/// ```
-pub fn decodeCapture(self: *Proxy, half: *Half) void {
-    self.service.decodeCapture(half);
+pub fn receiveCapture(self: *Proxy, io: std.Io, decode: bool) anyerror!*Half {
+    return self.service.receiveCapture(io, decode);
 }
 
 /// Returns the owned child environment of a new pane. `pane_overrides`
@@ -116,6 +109,15 @@ pub fn environment(self: *Proxy, options: PaneEnvironmentOptions) !PaneEnvironme
 /// ```
 pub fn metrics(self: *const Proxy) Snapshot {
     return self.service.metrics();
+}
+
+/// Returns the capture bounds the proxy was started with.
+///
+/// ```zig
+/// const bounds = proxy.captureConfig();
+/// ```
+pub fn captureConfig(self: *const Proxy) exchangecapture.Config {
+    return self.service.captures.config;
 }
 
 pub fn address(self: *const Proxy) std.Io.net.IpAddress {

@@ -5,6 +5,7 @@
 
 const favicon_outcome = @import("favicon_outcome.zig");
 const std = @import("std");
+const limit_reached = @import("../notifications/limit_reached.zig");
 const Client = @import("../execution/Client.zig");
 const FaviconCompletion = @import("../completion/FaviconCompletion.zig");
 const FaviconImage = @import("../completion/FaviconImage.zig");
@@ -42,16 +43,22 @@ pub fn request(model: *data.ClientModel, wanted: FaviconRequest) ?FaviconJob {
 
 /// Lands one worker result: the owned image when it answers the in-flight
 /// lookup, `missing` when that lookup found nothing usable, `stale` when
-/// it answered no lookup at all. A failed decode logs once; a missing file
-/// is silent. The caller owns a returned image.
+/// it answered no lookup at all. A limit the worker stopped at is reported
+/// here, on the loop, even for a stale lookup, since the file reached it
+/// all the same; any other failed decode logs once and a missing file is
+/// silent. The caller owns a returned image.
 ///
 /// ```zig
 /// switch (complete(client, completion)) { .image => |image| place(image), else => {} }
 /// ```
 pub fn complete(client: *Client, completion: FaviconCompletion) favicon_outcome.FaviconOutcome {
     const answered = client.model.favicons.finish(completion.execution_id);
+    if (completion.limit) |reach| {
+        limit_reached.report(client, reach);
+    }
+
     const result = completion.result catch |err| {
-        if (answered and err != error.FaviconNotFound) {
+        if (answered and err != error.FaviconNotFound and completion.limit == null) {
             std.log.scoped(.favicons).warn("favicon of workspace {d} unusable: {s}", .{ @intFromEnum(completion.workspace), @errorName(err) });
         }
 

@@ -18,7 +18,6 @@ pub const Message = union(enum) {
     binding_timeout: anyerror!void,
     favicon: client.FaviconCompletion,
     diagram_ready,
-    syntax_ready,
     change_review_ready,
     /// A clipboard image capture finished reading and decoding the pasteboard.
     clipboard_image: data.Completion,

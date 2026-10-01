@@ -92,7 +92,7 @@ alias are one word.
 | `exchangecapture` (done) | `proxy/capture` | `Half` embedded a telar pane and credential; it now carries the caller's comptime `Meta`, and the credential gate stays in telar's `Channel` |
 | `bytecodec` (done) | `schema/{Encoder,Decoder,wire}.zig` | none |
 | `cellcodec` (done) | the cell run half of `schema/frame_support.zig` and `FrameView`'s cell iterator | the frame's size budget becomes a limit the caller passes |
-| `syntaxhl` (done) | `model/syntax/role.zig`, `client/syntax/language.zig`, `gui/syntax/{captures,Store,Entry,Job,Result}.zig` | none; the diff highlighter over change review lines, the Rust highlighter behind `telar_syntax_*` and the GUI service stay |
+| `syntaxhl` (done) | `model/syntax/role.zig`, `client/syntax/language.zig`, `gui/syntax/{captures,Store,Entry,Job,Result}.zig` | none; the diff highlighter over change review lines and the Rust highlighter behind `telar_syntax_*` stay. The content cache (`Store` and its jobs) and the GUI service that drove it had no caller and were removed later |
 | `mermaid` (done) | `gui/diagrams/{protocol,Image,worker,ProcessTask}.zig` | the library runs a caller-named helper with a deadline and validates its pixels; the texture store, service, helper path and theme mapping stay in the GUI, and the store now takes an opaque owner key instead of an agent message identity |
 
 What stays in `telar-core` after the cuts: agent manifests and providers,

@@ -68,21 +68,43 @@ pub fn begin(self: *Chrome, canvas: *Canvas, projection: *const client.Projectio
 /// The caller owns the context through draw. Example: `try chrome.compose(&context, &widgets);`
 pub fn compose(self: *Chrome, context: *Context, widgets: anytype) !void {
     const bands = self.maps.preparing().bands;
-    try widgets.append(.{ .top_bar = .{ .context = context, .area = bands.top_bar } });
-    try widgets.append(.{ .status = .{ .context = context, .area = bands.status_bar } });
+    widgets.append(.{ .top_bar = .{
+        .context = context,
+        .area = bands.top_bar,
+    } });
+    widgets.append(.{ .status = .{
+        .context = context,
+        .area = bands.status_bar,
+    } });
     if (bands.rail) {
         self.sidebar.hide();
-        try widgets.append(.{ .rail = .{ .context = context, .area = bands.sidebar } });
+        widgets.append(.{ .rail = .{
+            .context = context,
+            .area = bands.sidebar,
+        } });
     } else {
-        try widgets.append(.{ .sidebar = .{ .state = &self.sidebar, .context = context, .area = bands.sidebar } });
+        widgets.append(.{ .sidebar = .{
+            .state = &self.sidebar,
+            .context = context,
+            .area = bands.sidebar,
+        } });
     }
 
-    try widgets.append(.{ .panes = .{ .context = context, .rings = &self.rings } });
+    widgets.append(.{ .panes = .{
+        .context = context,
+        .rings = &self.rings,
+    } });
     if (context.projection.model.runtime_link.phase != .connected) {
-        try widgets.append(.{ .link_status = .{ .context = context } });
+        widgets.append(.{ .link_status = .{ .context = context } });
     }
-    try widgets.append(.{ .rail_tooltip = .{ .context = context, .area = bands.sidebar } });
-    try widgets.append(.{ .bar_overlay = .{ .context = context, .area = bands.status_bar } });
+    widgets.append(.{ .rail_tooltip = .{
+        .context = context,
+        .area = bands.sidebar,
+    } });
+    widgets.append(.{ .bar_overlay = .{
+        .context = context,
+        .area = bands.status_bar,
+    } });
 }
 
 /// Seals hit records only after every composed widget has drawn successfully.
@@ -290,7 +312,10 @@ fn hoverBand(self: *Chrome, hit: ?BandHit) void {
 fn registerPanes(hits: *HitMap, projection: client.Projection) !void {
     const layout = projection.layout orelse return;
     for (layout.views()) |view| {
-        try hits.add(.{ .area = view.content, .action = .{ .pane_content = view.pane_id } });
+        hits.add(.{
+            .area = view.content,
+            .action = .{ .pane_content = view.pane_id },
+        });
     }
 }
 

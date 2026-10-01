@@ -58,7 +58,7 @@ pub fn draw(self: TaskCard, canvas: *Canvas) !void {
 }
 
 /// A click focuses the agent's pane, which opens the worktree's tab.
-/// Example: `try hits.add(.{ .area = cells, .action = card.action() });`
+/// Example: `hits.add(.{ .area = cells, .action = card.action() });`
 pub fn action(self: TaskCard) action_module.Action {
     return .{ .intent = .{ .focus_agent = self.agent.key } };
 }

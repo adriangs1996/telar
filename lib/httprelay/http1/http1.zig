@@ -5,6 +5,7 @@
 //! their wire representation.
 
 const head = @import("head_support.zig");
+const observer_hooks = @import("../observer_hooks.zig");
 pub const body = @import("body.zig");
 const types = @import("types.zig");
 const connection = @import("connection.zig");
@@ -17,6 +18,8 @@ const IgnoreTestObserver = @import("IgnoreTestObserver.zig");
 const ConnectionIntegration = @import("ConnectionIntegration.zig");
 
 pub const max_chunk_line_bytes = body.max_chunk_line_bytes;
+pub const max_trailer_line_bytes = body.max_trailer_line_bytes;
+pub const FramingLine = @import("FramingLine.zig").FramingLine;
 /// The longest head the relay reads.
 pub const max_head_bytes = head.max_bytes;
 pub const Fragment = @import("Fragment.zig");
@@ -58,14 +61,27 @@ pub fn relay(session: anytype, route: MessageRoute, observer: anytype) ?Message 
 ///
 /// The connection owner can therefore run the request body and response
 /// concurrently for `Expect: 100-continue` and early final responses. The
-/// observer's `head` receives the head bytes as read.
+/// observer's `head` receives the head bytes as read. An observer that
+/// declares `headStarted()` hears the head's first byte arrive, and one that
+/// declares `headTooLarge()` hears when a head passes `max_head_bytes`;
+/// nothing of it was forwarded.
 ///
 /// ```zig
 /// const head = relayHead(session, route, &observer);
 /// ```
 pub fn relayHead(session: anytype, route: MessageRoute, observer: anytype) ?Head {
     var buffer: [head.max_bytes]u8 = undefined;
-    const len = head.read(session, route.from, &buffer) orelse return null;
+    const len = switch (head.read(session, route.from, &buffer, observer)) {
+        .complete => |len| len,
+        .ended => return null,
+        .too_large => {
+            if (comptime observer_hooks.declares(@TypeOf(observer), "headTooLarge")) {
+                observer.headTooLarge();
+            }
+
+            return null;
+        },
+    };
     observer.head(buffer[0..len]);
 
     if (!session.writeAll(route.to, buffer[0..len])) {

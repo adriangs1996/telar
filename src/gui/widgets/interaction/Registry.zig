@@ -1,16 +1,36 @@
 //! One bounded presentation's owned hit and focus targets.
 const std = @import("std");
+const core = @import("telar-core");
 const Target = @import("Target.zig");
 const Id = @import("Id.zig");
+const BandHitMap = @import("../BandHitMap.zig");
 const Registry = @This();
 
-pub const capacity = 256;
+/// Room for every chrome band target (`BandHitMap.capacity`), the open
+/// overlay's rows and editors, and a change review's visible rows.
+pub const capacity = 1024;
+pub const limit = core.Limit.declare("gui.widgets.registry_capacity", "widget targets", capacity);
+
+comptime {
+    // Every chrome band target fits with room for an open overlay's rows.
+    std.debug.assert(capacity >= 2 * BandHitMap.capacity);
+}
+/// Open-addressed index from identity to row, twice the rows so probes
+/// stay short; a duplicate identity is found in one probe run.
+const index_len = 2 * capacity;
+const empty_row = std.math.maxInt(u16);
+
 targets: [capacity]Target = undefined,
 len: usize = 0,
 modal_layer: u8 = 0,
+index: [index_len]u16 = @splat(empty_row),
+/// Targets left out because the registry was full; their controls still
+/// draw and the window reports `gui.widgets.registry_capacity`.
+dropped: usize = 0,
 
-/// Rejects invalid geometry, duplicate identities and capacity failure before
-/// publishing an unreachable control. Empty clipped targets are omitted.
+/// Rejects invalid geometry and duplicate identities. A full registry keeps
+/// the targets it holds and counts the rest as dropped, so the frame still
+/// draws. Empty clipped targets are omitted.
 /// Example: `try registry.add(.{ .id = id, .bounds = bounds, .action = .{ .custom = 1 } });`
 pub fn add(self: *Registry, target: Target) !void {
     const bounds = target.bounds;
@@ -23,26 +43,43 @@ pub fn add(self: *Registry, target: Target) !void {
     }
 
     if (self.len == capacity) {
-        return error.WidgetTargetCapacityExceeded;
+        self.dropped += 1;
+        return;
     }
 
-    if (self.find(target.id) != null) {
+    const position = self.probe(target.id);
+    if (self.index[position] != empty_row) {
         return error.DuplicateWidgetIdentity;
     }
 
+    self.index[position] = @intCast(self.len);
     self.targets[self.len] = target;
     self.len += 1;
 }
 
+/// Empties the registry for the next frame without touching its rows.
+/// Example: `registry.reset();`
+pub fn reset(self: *Registry) void {
+    self.len = 0;
+    self.dropped = 0;
+    self.modal_layer = 0;
+    @memset(&self.index, empty_row);
+}
+
 /// Example: `const target = registry.find(id) orelse return;`
 pub fn find(self: *const Registry, id: Id) ?Target {
-    for (self.targets[0..self.len]) |target| {
-        if (target.id.eql(id)) {
-            return target;
-        }
+    const row = self.index[self.probe(id)];
+    return if (row == empty_row) null else self.targets[row];
+}
+
+/// The index position holding `id`, or the empty one where it would go.
+fn probe(self: *const Registry, id: Id) usize {
+    var position: usize = @intCast((std.hash.int(id.target_id) ^ std.hash.int(id.generation)) & (index_len - 1));
+    while (self.index[position] != empty_row and !self.targets[self.index[position]].id.eql(id)) {
+        position = (position + 1) & (index_len - 1);
     }
 
-    return null;
+    return position;
 }
 
 /// Later declarations take precedence within the active modal scope.
@@ -74,4 +111,108 @@ pub fn equivalent(self: *const Registry, right: *const Registry) bool {
     }
 
     return true;
+}
+
+test "a full registry keeps its targets and counts the dropped one" {
+    const registry = try std.testing.allocator.create(Registry);
+    defer std.testing.allocator.destroy(registry);
+    registry.* = .{};
+    for (0..capacity) |index| {
+        try registry.add(.{
+            .id = .{ .target_id = index + 1 },
+            .bounds = .{
+                .x = @floatFromInt(index),
+                .y = 0,
+                .width = 1,
+                .height = 1,
+            },
+            .action = .{ .custom = index },
+        });
+    }
+
+    try registry.add(.{
+        .id = .{ .target_id = capacity + 1 },
+        .bounds = .{
+            .x = 0,
+            .y = 0,
+            .width = 1,
+            .height = 1,
+        },
+        .action = .{ .custom = 0 },
+    });
+    try std.testing.expectEqual(@as(usize, capacity), registry.len);
+    try std.testing.expectEqual(@as(usize, 1), registry.dropped);
+    try std.testing.expect(registry.find(.{ .target_id = capacity + 1 }) == null);
+    try std.testing.expect(registry.at(.{ 0.5, 0.5 }) != null);
+}
+
+test "a duplicate identity is refused and a reset registry takes it again" {
+    var registry: Registry = .{};
+    try registry.add(.{
+        .id = .{
+            .target_id = 7,
+            .generation = 2,
+        },
+        .bounds = .{
+            .x = 0,
+            .y = 0,
+            .width = 1,
+            .height = 1,
+        },
+        .action = .{ .custom = 1 },
+    });
+    try std.testing.expectError(error.DuplicateWidgetIdentity, registry.add(.{
+        .id = .{
+            .target_id = 7,
+            .generation = 2,
+        },
+        .bounds = .{
+            .x = 1,
+            .y = 0,
+            .width = 1,
+            .height = 1,
+        },
+        .action = .{ .custom = 2 },
+    }));
+    try registry.add(.{
+        .id = .{
+            .target_id = 7,
+            .generation = 3,
+        },
+        .bounds = .{
+            .x = 1,
+            .y = 0,
+            .width = 1,
+            .height = 1,
+        },
+        .action = .{ .custom = 2 },
+    });
+    try std.testing.expectEqual(@as(u64, 2), registry.find(.{
+        .target_id = 7,
+        .generation = 3,
+    }).?.action.custom);
+
+    registry.reset();
+    try std.testing.expectEqual(@as(usize, 0), registry.len);
+    try std.testing.expect(registry.find(.{
+        .target_id = 7,
+        .generation = 2,
+    }) == null);
+    try registry.add(.{
+        .id = .{
+            .target_id = 7,
+            .generation = 2,
+        },
+        .bounds = .{
+            .x = 0,
+            .y = 0,
+            .width = 1,
+            .height = 1,
+        },
+        .action = .{ .custom = 3 },
+    });
+    try std.testing.expectEqual(@as(u64, 3), registry.find(.{
+        .target_id = 7,
+        .generation = 2,
+    }).?.action.custom);
 }

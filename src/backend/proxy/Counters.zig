@@ -5,16 +5,8 @@ const CaptureMetrics = @import("capture/CaptureMetrics.zig");
 const Snapshot = @import("Snapshot.zig");
 const Counters = @This();
 
-rejected_connections: std.atomic.Value(u64) = .init(0),
-invalid_authorization_rejections: std.atomic.Value(u64) = .init(0),
-unknown_credential_rejections: std.atomic.Value(u64) = .init(0),
-h2_decode_failures: std.atomic.Value(u64) = .init(0),
-passthrough_connections: std.atomic.Value(u64) = .init(0),
-upstream_connect_failures: std.atomic.Value(u64) = .init(0),
-tls_context_failures: std.atomic.Value(u64) = .init(0),
-tls_upstream_handshake_failures: std.atomic.Value(u64) = .init(0),
-tls_downstream_handshake_failures: std.atomic.Value(u64) = .init(0),
-tls_mint_failures: std.atomic.Value(u64) = .init(0),
+/// One lock-free count per named proxy outcome.
+values: std.EnumArray(metrics.Counter, std.atomic.Value(u64)) = .initFill(.init(0)),
 
 /// Records one named proxy outcome without exposing the underlying
 /// atomics to protocol adapters.
@@ -23,20 +15,7 @@ tls_mint_failures: std.atomic.Value(u64) = .init(0),
 /// counters.record(.upstream_connect_failure);
 /// ```
 pub fn record(self: *Counters, counter: metrics.Counter) void {
-    const selected = switch (counter) {
-        .rejected_connection => &self.rejected_connections,
-        .invalid_authorization_rejection => &self.invalid_authorization_rejections,
-        .unknown_credential_rejection => &self.unknown_credential_rejections,
-        .h2_decode_failure => &self.h2_decode_failures,
-        .passthrough_connection => &self.passthrough_connections,
-        .upstream_connect_failure => &self.upstream_connect_failures,
-        .tls_context_failure => &self.tls_context_failures,
-        .tls_upstream_handshake_failure => &self.tls_upstream_handshake_failures,
-        .tls_downstream_handshake_failure => &self.tls_downstream_handshake_failures,
-        .tls_mint_failure => &self.tls_mint_failures,
-    };
-
-    _ = selected.fetchAdd(1, .monotonic);
+    _ = self.values.getPtr(counter).fetchAdd(1, .monotonic);
 }
 
 /// Combines owned counters with current admission and capture state.
@@ -47,25 +26,44 @@ pub fn record(self: *Counters, counter: metrics.Counter) void {
 pub fn snapshot(self: *const Counters, live: LiveState) Snapshot {
     return .{
         .active_connections = live.connections.active,
-        .rejected_connections = self.rejected_connections.load(.monotonic),
-        .invalid_authorization_rejections = self.invalid_authorization_rejections.load(.monotonic),
-        .unknown_credential_rejections = self.unknown_credential_rejections.load(.monotonic),
+        .rejected_connections = self.load(.rejected_connection),
+        .invalid_authorization_rejections = self.load(.invalid_authorization_rejection),
+        .unknown_credential_rejections = self.load(.unknown_credential_rejection),
         .connection_limit_drops = live.connections.limit_drops,
-        .h2_decode_failures = self.h2_decode_failures.load(.monotonic),
-        .passthrough_connections = self.passthrough_connections.load(.monotonic),
-        .upstream_connect_failures = self.upstream_connect_failures.load(.monotonic),
-        .tls_context_failures = self.tls_context_failures.load(.monotonic),
-        .tls_upstream_handshake_failures = self.tls_upstream_handshake_failures.load(.monotonic),
-        .tls_downstream_handshake_failures = self.tls_downstream_handshake_failures.load(.monotonic),
-        .tls_mint_failures = self.tls_mint_failures.load(.monotonic),
+        .h2_decode_failures = self.load(.h2_decode_failure),
+        .passthrough_connections = self.load(.passthrough_connection),
+        .upstream_connect_failures = self.load(.upstream_connect_failure),
+        .tls_context_failures = self.load(.tls_context_failure),
+        .tls_upstream_handshake_failures = self.load(.tls_upstream_handshake_failure),
+        .tls_downstream_handshake_failures = self.load(.tls_downstream_handshake_failure),
+        .tls_mint_failures = self.load(.tls_mint_failure),
+        .h2_capture_streams_skipped = self.load(.h2_capture_stream_skipped),
+        .http1_heads_too_large = self.load(.http1_head_too_large),
+        .http1_chunk_lines_too_long = self.load(.http1_chunk_line_too_long),
+        .http1_trailer_lines_too_long = self.load(.http1_trailer_line_too_long),
+        .connect_heads_too_large = self.load(.connect_head_too_large),
+        .connect_head_timeouts = self.load(.connect_head_timeout),
+        .establish_timeouts = self.load(.establish_timeout),
+        .evictions = self.load(.eviction),
+        .unauthenticated_refusals = self.load(.unauthenticated_refusal),
+        .unauthenticated_evictions = self.load(.unauthenticated_eviction),
+        .h2_header_blocks_too_large = self.load(.h2_header_block_too_large),
+        .h2_streams_untracked = self.load(.h2_stream_untracked),
         .capture_started = live.captures.started,
         .capture_truncated = live.captures.truncated,
-        .capture_skipped_quota = live.captures.skipped_quota,
+        .capture_truncated_part = live.captures.truncated_part,
+        .capture_truncated_exchange = live.captures.truncated_exchange,
+        .capture_truncated_total = live.captures.truncated_total,
+        .capture_skipped = live.captures.skipped,
         .capture_dropped_queue = live.captures.dropped_queue,
         .capture_decode_failed = live.captures.decode_failed,
         .queued_captures = live.captures.queued,
         .capture_queue_high_water = live.captures.queue_high_water,
     };
+}
+
+fn load(self: *const Counters, counter: metrics.Counter) u64 {
+    return self.values.getPtrConst(counter).load(.monotonic);
 }
 
 const LiveState = struct {

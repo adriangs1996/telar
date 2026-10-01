@@ -5,6 +5,17 @@ const EditorDisplay = @import("EditorDisplay.zig");
 const GuiAdapter = @import("../../GuiAdapter.zig");
 const native = @import("../../native/native.zig");
 const FieldView = @import("FieldView.zig");
+const std = @import("std");
+const core = @import("telar-core");
+const event = @import("../../input/event.zig");
+
+comptime {
+    // The native IME and accessibility values take a whole field, up to
+    // `TELAR_GUI_TEXT_CAPACITY` (mirrored by `max_composition_bytes`); a
+    // longer field would turn input methods off for it.
+    std.debug.assert(core.max_cwd_bytes <= event.max_composition_bytes);
+    std.debug.assert(core.max_tab_label_bytes <= event.max_composition_bytes);
+}
 
 /// Uses current committed text and the delivered editor's geometry. Preedit
 /// is intentionally excluded from surrounding text sent to the native IME.
@@ -47,12 +58,25 @@ pub fn accessibility(gui: *GuiAdapter, output: *native.AccessibilityTree) bool {
     const registry = state.dispatcher.maps.presented();
     const modal = gui.app.model.name_prompt.active();
     var count: usize = 0;
+    state.accessibility_dropped = 0;
     for (registry.targets[0..registry.len]) |*target| {
         if (target.layer < registry.modal_layer or (target.layer != 0) != modal) {
             continue;
         }
 
         const focused = if (state.dispatcher.focused) |id| id.eql(target.id) else false;
+        // A full tree still publishes the focused control, in place of the
+        // last node it holds.
+        var slot = count;
+        if (count == state.native_nodes.len) {
+            if (!focused) {
+                state.accessibility_dropped += 1;
+                continue;
+            }
+
+            slot = count - 1;
+            state.accessibility_dropped += 1;
+        }
         var node: native.AccessibilityNode = .{
             .id = target.id.target_id,
             .generation = target.id.generation,
@@ -77,8 +101,8 @@ pub fn accessibility(gui: *GuiAdapter, output: *native.AccessibilityTree) bool {
             node.selection_end = current.head;
         }
 
-        state.native_nodes[count] = node;
-        count += 1;
+        state.native_nodes[slot] = node;
+        count = slot + 1;
     }
 
     output.* = .{ .revision = gui.chrome.revision +% gui.app.model.name_prompt.version() +% gui.app.model.version().panes +% state.dispatcher.revision, .nodes = &state.native_nodes, .count = @intCast(count) };

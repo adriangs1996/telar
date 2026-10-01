@@ -205,7 +205,10 @@ fn paintEntry(self: FullscreenStrip, canvas: *Canvas, item: *const Entry, bounds
     }
 
     if (!item.focused) {
-        try self.context.bands.add(.{ .area = bounds, .action = action });
+        self.context.bands.add(.{
+            .area = bounds,
+            .action = action,
+        });
     }
 
     return @min(x, end) - bounds.x;

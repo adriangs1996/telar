@@ -300,6 +300,9 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: TelemetrySample) ![]const u8
             "\"proxy_tls_mint_failures\":{d}," ++
             "\"proxy_capture_started\":{d}," ++
             "\"proxy_capture_truncated\":{d}," ++
+            // The key keeps its old name for the readers of telemetry logs; it
+            // counts directions whose half could not start, since capture no
+            // longer reserves quota up front.
             "\"proxy_capture_skipped_quota\":{d}," ++
             "\"proxy_capture_dropped_queue\":{d}," ++
             "\"proxy_capture_decode_failed\":{d}," ++
@@ -325,7 +328,7 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: TelemetrySample) ![]const u8
             proxy.tls_mint_failures,
             proxy.capture_started,
             proxy.capture_truncated,
-            proxy.capture_skipped_quota,
+            proxy.capture_skipped,
             proxy.capture_dropped_queue,
             proxy.capture_decode_failed,
             proxy.capture_queue_depth,
@@ -495,7 +498,7 @@ test "runtime telemetry reports retained memory domains" {
                 .tls_mint_failures = 73,
                 .capture_started = 103,
                 .capture_truncated = 107,
-                .capture_skipped_quota = 109,
+                .capture_skipped = 109,
                 .capture_dropped_queue = 113,
                 .capture_decode_failed = 127,
                 .capture_queue_depth = 131,
@@ -593,7 +596,7 @@ const TelemetrySample = struct {
         tls_mint_failures: u64 = 0,
         capture_started: u64 = 0,
         capture_truncated: u64 = 0,
-        capture_skipped_quota: u64 = 0,
+        capture_skipped: u64 = 0,
         capture_dropped_queue: u64 = 0,
         capture_decode_failed: u64 = 0,
         capture_queue_depth: u64 = 0,

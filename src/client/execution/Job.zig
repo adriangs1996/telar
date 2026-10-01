@@ -35,5 +35,8 @@ pub const Job = union(enum) {
         sidebar_animation,
         /// The wait before connecting again to a lost runtime.
         runtime_retry,
+        /// The wait until the earliest paused pane asks for its graphics
+        /// again (`limit_reached.resumeGraphics`).
+        graphics_resume,
     };
 };

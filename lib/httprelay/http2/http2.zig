@@ -13,6 +13,7 @@ const streams = h2frames.streams;
 
 pub const Direction = relay_mod.Direction;
 pub const client_preface = relay_mod.client_preface;
+pub const max_header_block_bytes = relay_mod.max_header_block_bytes;
 pub const Stats = @import("Stats.zig");
 pub const Lifecycle = @import("Lifecycle.zig");
 pub const RequestBody = @import("RequestBody.zig");

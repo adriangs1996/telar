@@ -3,6 +3,7 @@
 //! and releases the next frame hands to the backend. Procedures live in
 //! `pane_images.zig`.
 const std = @import("std");
+const core = @import("telar-core");
 const GpuImages = @import("GpuImages.zig");
 const ImagePlacement = @import("ImagePlacement.zig");
 const ResolvedFrom = @import("ResolvedFrom.zig");
@@ -13,12 +14,16 @@ const PaneImages = @This();
 
 /// Placements resolved at once; the frame cannot draw more image quads.
 pub const capacity = ImageDraw.capacity;
+pub const limit = core.Limit.declare("gui.images.placements_per_frame", "image placements", capacity);
 /// Twice `capacity`, a power of two, so probes stay short.
 pub const shown_index_len = 2 * capacity;
 pub const ShownImage = @import("ShownImage.zig");
 
 gpu: GpuImages = .{},
 placements: [capacity]ImagePlacement = undefined,
+/// Each kept placement's source rectangle in its image, until its texture
+/// coordinates are resolved.
+sources: [capacity]core.RectRect = undefined,
 placement_count: usize = 0,
 /// The distinct images the resolved placements show, each with the texture
 /// it draws; uploads are looked for once per image, not per placement.

@@ -1,9 +1,11 @@
 const std = @import("std");
 const Stats = @import("Stats.zig");
+const observer_hooks = @import("../observer_hooks.zig");
 
 /// Creates the lifecycle owner for one intercepted HTTP/2 connection.
 /// `Context` provides `relayRequest() Stats`, `relayResponse() Stats`,
-/// `recordDecodeFailure(Direction)` and `settle()`.
+/// `recordDecodeFailure(Direction)` and `settle()`, and may declare
+/// `recordLimits(Direction, Stats)` to hear the bounds that cut observation.
 ///
 /// ```zig
 /// const RelayConnection = GenericConnection(Context);
@@ -32,6 +34,11 @@ pub fn Type(comptime Context: type) type {
 
             if (request_stats.decode_failed) {
                 context.recordDecodeFailure(.request);
+            }
+
+            if (comptime observer_hooks.declares(*Context, "recordLimits")) {
+                context.recordLimits(.response, response_stats);
+                context.recordLimits(.request, request_stats);
             }
 
             context.settle();

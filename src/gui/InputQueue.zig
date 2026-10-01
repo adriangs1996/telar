@@ -3,6 +3,7 @@ const keyinput = @import("keyinput");
 const native = @import("native/native.zig");
 const input_item = @import("input_item.zig");
 const std = @import("std");
+const core = @import("telar-core");
 const event_types = @import("input/event.zig");
 const decode_input = @import("native/decode_input.zig");
 const ReleaseRecovery = @import("input/ReleaseRecovery.zig");
@@ -14,12 +15,54 @@ const PointerStamp = @import("input/PointerStamp.zig");
 
 pub const max_paste_bytes = event_types.max_text_bytes;
 const capacity = 1024;
+/// Scalars a committed text takes one ring entry each; a longer text is
+/// held whole in the large pool.
+const inline_text_scalars = 64;
+/// Ring entries a native paste takes as chunks; a longer paste is held
+/// whole in the large pool.
+const inline_paste_items = 64;
+/// Bytes and slots of the pool holding widget text, compositions and
+/// accessibility edits.
+const small_event_bytes = 4096;
+const small_event_slots = 8;
+/// Slots of the pool holding clipboard results and held texts and pastes;
+/// held ones leave `clipboard_spare` for a clipboard result.
+const large_event_slots = 3;
+const clipboard_spare = 1;
+const SmallEvents = GenericEventPool(small_event_bytes, small_event_slots);
+const LargeEvents = GenericEventPool(max_paste_bytes, large_event_slots);
+pub const queue_limit = core.Limit.declare("gui.input.queue_capacity", "input events", capacity);
+pub const small_limit = core.Limit.declare("gui.input.event_pool_bytes", "text bytes", small_event_bytes);
+pub const small_slots_limit = core.Limit.declare("gui.input.small_events", "held events", small_event_slots);
+pub const large_slots_limit = core.Limit.declare("gui.input.large_events", "held payloads", large_event_slots);
+
 items: [capacity]input_item.Item = undefined,
 head: usize = 0,
 len: usize = 0,
 recovery: ReleaseRecovery = .{},
-small_events: GenericEventPool(4096, 8) = .{},
-large_events: GenericEventPool(max_paste_bytes, 2) = .{},
+small_events: SmallEvents = .{},
+large_events: LargeEvents = .{},
+/// Both pools' payloads, reserved once by `init` and written only by the
+/// bytes an event copies, so an unused pool costs no resident memory.
+storage: []u8 = &.{},
+
+/// Builds the queue where it lives: its ring stays unwritten until events
+/// arrive. Example: `try gui.input_queue.init(gpa);`
+pub fn init(self: *InputQueue, gpa: std.mem.Allocator) !void {
+    const storage = try gpa.alloc(u8, SmallEvents.storage_bytes + LargeEvents.storage_bytes);
+    self.head = 0;
+    self.len = 0;
+    self.recovery = .{};
+    self.small_events = .init(storage[0..SmallEvents.storage_bytes]);
+    self.large_events = .init(storage[SmallEvents.storage_bytes..]);
+    self.storage = storage;
+}
+
+/// Example: `gui.input_queue.deinit(gpa);`
+pub fn deinit(self: *InputQueue, gpa: std.mem.Allocator) void {
+    gpa.free(self.storage);
+    self.storage = &.{};
+}
 
 /// Copies borrowed payloads atomically into bounded storage. Recovery admission
 /// requires the owner to invalidate gestures before accepting another event.
@@ -63,6 +106,12 @@ pub fn accept(self: *InputQueue, event: event_types.Event, stamp: PointerStamp) 
                 count += 1;
             }
 
+            if (count > inline_text_scalars) {
+                try self.reserve(1);
+                self.push(.{ .text_block = .{ .slot = try self.large_events.admitLeaving(event, clipboard_spare) } });
+                return .accepted;
+            }
+
             self.reserve(count) catch |err| {
                 if (count != 1 or text.phase != .release or text.physical == null) {
                     return err;
@@ -100,6 +149,12 @@ pub fn accept(self: *InputQueue, event: event_types.Event, stamp: PointerStamp) 
             while (offset < text.len) {
                 offset += PasteChunk.nextSize(text[offset..]);
                 chunks += 1;
+            }
+
+            if (chunks + 2 > inline_paste_items) {
+                try self.reserve(1);
+                self.push(.{ .paste_block = .{ .slot = try self.large_events.admitLeaving(event, clipboard_spare) } });
+                return .accepted;
             }
 
             try self.reserve(chunks + 2);
@@ -165,6 +220,7 @@ pub fn consume(self: *InputQueue) void {
     switch (self.items[self.head]) {
         .owned_small => |index| self.small_events.release(index),
         .owned_large => |index| self.large_events.release(index),
+        .text_block, .paste_block => |held| self.large_events.release(held.slot),
         .release_recovery => {
             std.debug.assert(self.recovery.len == 0);
             self.recovery.queued = false;
@@ -219,7 +275,9 @@ fn push(self: *InputQueue, item: input_item.Item) void {
 }
 
 test "native paste admission is atomic and owns the borrowed bytes" {
-    var input: InputQueue = .{};
+    var input: InputQueue = undefined;
+    try input.init(std.testing.allocator);
+    defer input.deinit(std.testing.allocator);
     var bytes = [_]u8{'x'} ** 257;
     try acceptNative(&input, .{ .kind = 2, .text = &bytes, .len = bytes.len });
     @memset(&bytes, 'y');
@@ -231,7 +289,9 @@ test "native paste admission is atomic and owns the borrowed bytes" {
 }
 
 test "native key normalization preserves configured Ctrl-Space Alt uppercase and back-tab" {
-    var input: InputQueue = .{};
+    var input: InputQueue = undefined;
+    try input.init(std.testing.allocator);
+    defer input.deinit(std.testing.allocator);
     try acceptNative(&input, .{ .kind = 4, .code = ' ', .mods = 4, .physical = 50 });
     try acceptNative(&input, .{ .kind = 4, .code = 'B', .mods = 4 });
     try acceptNative(&input, .{ .kind = 4, .code = 'N', .mods = 3 });
@@ -247,7 +307,9 @@ test "native key normalization preserves configured Ctrl-Space Alt uppercase and
 }
 
 test "native input rejects invalid pointer and key payloads atomically" {
-    var input: InputQueue = .{};
+    var input: InputQueue = undefined;
+    try input.init(std.testing.allocator);
+    defer input.deinit(std.testing.allocator);
     try std.testing.expectError(error.InvalidNativePointer, acceptNative(&input, .{ .kind = 6, .code = 1, .x = std.math.nan(f64) }));
     try std.testing.expectError(error.InvalidNativePointer, acceptNative(&input, .{ .kind = 6, .code = 8 }));
     try std.testing.expectError(error.InvalidNativePointer, acceptNative(&input, .{ .kind = 6, .code = 1, .button = 3 }));
@@ -258,7 +320,9 @@ test "native input rejects invalid pointer and key payloads atomically" {
 }
 
 test "native paste chunks preserve UTF-8 scalar boundaries for prompt editing" {
-    var input: InputQueue = .{};
+    var input: InputQueue = undefined;
+    try input.init(std.testing.allocator);
+    defer input.deinit(std.testing.allocator);
     const bytes = "a" ** 255 ++ "🌍" ++ "b" ** 255;
     try acceptNative(&input, .{ .kind = 2, .text = bytes.ptr, .len = bytes.len });
     var total: usize = 0;
@@ -276,7 +340,9 @@ test "native paste chunks preserve UTF-8 scalar boundaries for prompt editing" {
 }
 
 test "native committed text stays owned and distinct from keys until dispatch" {
-    var input: InputQueue = .{};
+    var input: InputQueue = undefined;
+    try input.init(std.testing.allocator);
+    defer input.deinit(std.testing.allocator);
     var bytes = [_]u8{ 'a', 'b' };
     try acceptNative(&input, .{ .kind = 1, .text = &bytes, .len = bytes.len });
     @memset(&bytes, 'x');
@@ -289,7 +355,9 @@ test "native committed text stays owned and distinct from keys until dispatch" {
 }
 
 test "targeted commits enter atomically with replacement metadata and owned UTF8" {
-    var input: InputQueue = .{};
+    var input: InputQueue = undefined;
+    try input.init(std.testing.allocator);
+    defer input.deinit(std.testing.allocator);
     var bytes = [_]u8{ 'a', 'b' };
     try acceptNative(&input, .{ .kind = 1, .target_id = 3, .generation = 9, .text = &bytes, .len = bytes.len, .replacement_start = 1, .replacement_end = 5 });
     @memset(&bytes, 'x');
@@ -308,7 +376,9 @@ test "targeted commits enter atomically with replacement metadata and owned UTF8
 }
 
 test "composition cancellation remains admissible with exhausted payload slots or input ring" {
-    var input: InputQueue = .{};
+    var input: InputQueue = undefined;
+    try input.init(std.testing.allocator);
+    defer input.deinit(std.testing.allocator);
     for (0..8) |_| {
         try acceptNative(&input, .{ .kind = 7, .code = 1, .target_id = 12, .generation = 3, .text = "a", .len = 1 });
     }
@@ -324,7 +394,9 @@ test "composition cancellation remains admissible with exhausted payload slots o
 }
 
 test "queued payloads survive borrowing and their slots can be reused across ring wrap" {
-    var input: InputQueue = .{};
+    var input: InputQueue = undefined;
+    try input.init(std.testing.allocator);
+    defer input.deinit(std.testing.allocator);
     for (0..capacity + 1) |_| {
         var bytes = [_]u8{ 'a', 'b' };
         _ = try input.accept(.{ .text = .{ .bytes = &bytes, .target_id = 1 } }, .{});
@@ -346,7 +418,9 @@ fn acceptNative(self: *InputQueue, event: native.InputEvent) !void {
 }
 
 test "recovery keeps admission closed until retained releases and the marker are consumed" {
-    var queue: InputQueue = .{};
+    var queue: InputQueue = undefined;
+    try queue.init(std.testing.allocator);
+    defer queue.deinit(std.testing.allocator);
     _ = try queue.accept(.{ .text = .{ .bytes = "a" } }, .{});
     queue.requestRecovery();
     const release: KeyInput = .{ .code = .{ .char = .init("a") }, .phase = .release, .physical = .{ .value = 1 } };
@@ -362,4 +436,24 @@ test "recovery keeps admission closed until retained releases and the marker are
     try std.testing.expect(!queue.recovery.queued);
     try std.testing.expectEqual(input_item.Admission.accepted, try queue.accept(.{ .text = .{ .bytes = "b" } }, .{}));
     try std.testing.expectEqualStrings("b", queue.front().?.text.text().bytes);
+}
+
+test "a long committed text and a long native paste each take one ring entry" {
+    var input: InputQueue = undefined;
+    try input.init(std.testing.allocator);
+    defer input.deinit(std.testing.allocator);
+    const text = "\u{3042}" ** (capacity + 8);
+    _ = try input.accept(.{ .text = .{ .bytes = text } }, .{});
+    try std.testing.expectEqual(@as(usize, 1), input.len);
+    const held = input.front().?.text_block;
+    try std.testing.expectEqualStrings(text, input.large_events.view(held.slot).text.bytes);
+
+    const paste = "p" ** (inline_paste_items * PasteChunk.capacity);
+    _ = try input.accept(.{ .paste = paste }, .{});
+    try std.testing.expectEqual(@as(usize, 2), input.len);
+    input.consume();
+    try std.testing.expect(input.front().?.* == .paste_block);
+    input.consume();
+    _ = try input.accept(.{ .text = .{ .bytes = "short" } }, .{});
+    try std.testing.expectEqual(@as(usize, 5), input.len);
 }

@@ -53,9 +53,9 @@ const line_end = "\r\n";
 /// it unread.
 const next_bytes = "NEXT-BYTES";
 
-/// The chunk-size lines of every chunk, the last chunk, the trailers and the
-/// blank line, each at the bound.
-const framing_bytes = (max_chunks + max_trailers + 3) * http1.max_chunk_line_bytes;
+/// The chunk-size lines of every chunk, the last chunk and the blank line,
+/// and the trailers, each at its bound.
+const framing_bytes = (max_chunks + 3) * http1.max_chunk_line_bytes + max_trailers * http1.max_trailer_line_bytes;
 
 const wire_capacity = max_body_bytes + framing_bytes + (max_chunks + 1) * line_end.len + next_bytes.len;
 
@@ -87,7 +87,7 @@ const SizeLine = enum {
 const Trailer = enum {
     trace,
     checksum,
-    /// A field exactly `max_chunk_line_bytes` long.
+    /// A field exactly `max_trailer_line_bytes` long.
     long,
 };
 
@@ -393,7 +393,7 @@ fn writeTrailer(writer: *std.Io.Writer, trailer: Trailer) std.Io.Writer.Error!vo
         .long => {
             const name = "X-Long: ";
             try writer.writeAll(name);
-            try writer.splatByteAll('l', http1.max_chunk_line_bytes - name.len - line_end.len);
+            try writer.splatByteAll('l', http1.max_trailer_line_bytes - name.len - line_end.len);
         },
     }
 
@@ -770,7 +770,7 @@ const mutated_seeds = [_]MutatedSeed{
     },
     .{
         .mutated = rawBody(.chunked),
-        .bytes = "0\r\n" ++ "t" ** (http1.max_chunk_line_bytes + 2),
+        .bytes = "0\r\n" ++ "t" ** (http1.max_trailer_line_bytes + 2),
     },
     .{
         .mutated = rawBody(.chunked),
@@ -809,20 +809,27 @@ test "every generated body seed reaches its outcome and corpus encoding" {
     }
 }
 
-test "long size lines and trailers fill the chunk line bound exactly" {
+test "long size lines and trailers fill their line bounds exactly" {
     var wire: BodyWire = .{};
     wire.build(body_seeds[5].shape, body_seeds[5].payload);
 
     var lines = std.mem.splitSequence(u8, wire.message(), line_end);
-    var bound_lines: usize = 0;
+    var size_lines: usize = 0;
+    var trailer_lines: usize = 0;
     while (lines.next()) |line| {
-        try std.testing.expect(line.len + line_end.len <= http1.max_chunk_line_bytes or line[0] == 'x');
-        if (line.len + line_end.len == http1.max_chunk_line_bytes) {
-            bound_lines += 1;
+        const len = line.len + line_end.len;
+        try std.testing.expect(len <= http1.max_trailer_line_bytes or line[0] == 'x');
+        if (len == http1.max_chunk_line_bytes) {
+            size_lines += 1;
+        }
+
+        if (len == http1.max_trailer_line_bytes) {
+            trailer_lines += 1;
         }
     }
 
-    try std.testing.expectEqual(3, bound_lines);
+    try std.testing.expectEqual(2, size_lines);
+    try std.testing.expectEqual(1, trailer_lines);
 }
 
 test "every mutated body seed keeps the body contract and its corpus encoding" {

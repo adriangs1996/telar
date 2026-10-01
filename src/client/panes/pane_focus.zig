@@ -10,13 +10,23 @@ const pane_attachment = @import("pane_attachment.zig");
 const pane_input = @import("pane_input.zig");
 const pane_resize = @import("pane_resize.zig");
 const Client = @import("../execution/Client.zig");
+const limit_reached = @import("../notifications/limit_reached.zig");
 
 const FocusReportOutcome = enum { applied, unchanged };
 
-/// Synchronizes the focused attachment before reporting child focus. Example: `try pane_focus.synchronizeActivePane(client);`
+/// Synchronizes the focused attachment before reporting child focus. A
+/// pane that gains focus resumes its paused graphics when it may
+/// (`limit_reached.resumeFocused`).
+/// Example: `try pane_focus.synchronizeActivePane(client);`
 pub fn synchronizeActivePane(client: *Client) !void {
     _ = try pane_attachment.synchronizePaneAttachments(client);
+    const previous = client.model.reported_pane_focus;
     _ = try synchronizeReportedFocus(&client.model);
+
+    const current = client.model.reported_pane_focus orelse return;
+    if (previous == null or previous.?.pane_id != current.pane_id) {
+        try limit_reached.resumeFocused(client, current.pane_id);
+    }
 }
 
 /// Commits focus before synchronizing attachments and child focus.

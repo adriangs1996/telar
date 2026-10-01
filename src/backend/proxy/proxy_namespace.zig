@@ -5,13 +5,14 @@
 
 const core = @import("telar-core");
 const Service = @import("service/Service.zig");
-const service_support = @import("service/service_support.zig");
 const pty = @import("pty");
 const Override = pty.Override;
 const std = @import("std");
 const connect_authentication = @import("connect_authentication.zig");
 const identity = @import("identity.zig");
 const service_mod = @import("service/service_namespace.zig");
+const Tunnel = @import("tunnel/Tunnel.zig");
+const Connections = @import("Connections.zig");
 const localca = @import("localca");
 const tls = localca.tls;
 
@@ -151,7 +152,7 @@ test "proxy lifecycle accepts traffic and cancels an active tunnel during destru
     proxy = null;
 }
 
-test "proxy connection admission enforces the real worker limit" {
+test "silent connections fill only the unauthenticated rows, and the oldest past a second makes room" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     var files = try ProxyTestFiles.init(io);
@@ -160,9 +161,8 @@ test "proxy connection admission enforces the real worker limit" {
     defer proxy.destroy();
 
     const address = proxy.address();
-    const connection_limit: usize = service_support.max_connections;
-    const client_count = connection_limit + 1;
-    var clients: [client_count]?std.Io.net.Stream = @splat(null);
+    const silent_count = Connections.max_unauthenticated;
+    var clients: [silent_count + 2]?std.Io.net.Stream = @splat(null);
     defer {
         for (clients) |client| {
             if (client) |stream| {
@@ -171,27 +171,170 @@ test "proxy connection admission enforces the real worker limit" {
         }
     }
 
-    for (clients[0..connection_limit]) |*client| {
-        const stream = try address.connect(io, .{ .mode = .stream });
-        client.* = stream;
-        var write_buffer: [32]u8 = undefined;
-        var writer = stream.writer(io, &write_buffer);
-        try writer.interface.writeAll("CONNECT unfinished");
-        try writer.interface.flush();
+    for (clients[0..silent_count]) |*client| {
+        client.* = try address.connect(io, .{
+            .mode = .stream,
+        });
     }
 
-    try waitForConnectionMetrics(proxy, service_support.max_connections, 0);
+    try waitForConnectionMetrics(proxy, silent_count, 0);
 
-    clients[connection_limit] = try address.connect(io, .{ .mode = .stream });
-    try waitForConnectionMetrics(proxy, service_support.max_connections, 1);
+    clients[silent_count] = try address.connect(io, .{
+        .mode = .stream,
+    });
+    try expectAnswer(io, clients[silent_count].?, "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+    try std.testing.expectEqual(@as(u64, 1), proxy.metrics().unauthenticated_refusals);
+
+    try io.sleep(.fromMilliseconds(Connections.min_evictable_connect_head_ms + 100), .awake);
+    clients[silent_count + 1] = try address.connect(io, .{
+        .mode = .stream,
+    });
+    try waitForMetric(proxy, "unauthenticated_evictions", 1);
+
+    var evicted: usize = 0;
+    for (clients[0..silent_count]) |client| {
+        var byte: [1]u8 = undefined;
+        evicted += @intFromBool(std.c.recv(client.?.socket.handle, &byte, byte.len, std.c.MSG.DONTWAIT) == 0);
+    }
+
+    try std.testing.expectEqual(@as(usize, 1), evicted);
+    try waitForConnectionMetrics(proxy, silent_count, 0);
+}
+
+test "a full table closes a waiting connection to admit a new one, and never one in flight" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var files = try ProxyTestFiles.init(io);
+    defer files.deinit();
+    const proxy = try Proxy.create(io, gpa, files.config());
+    defer proxy.destroy();
+
+    const address = proxy.address();
+    const connections = &proxy.service.connections;
+    var clients: [Connections.capacity + 2]?std.Io.net.Stream = @splat(null);
+    defer {
+        for (clients) |client| {
+            if (client) |stream| {
+                stream.close(io);
+            }
+        }
+    }
+
+    // Admit every row in batches the unauthenticated bound allows, then
+    // pretend each batch authenticated and has an exchange in flight.
+    var admitted: u32 = 0;
+    while (admitted < Connections.capacity) {
+        const batch = @min(Connections.max_unauthenticated, Connections.capacity - admitted);
+        for (clients[admitted..][0..batch]) |*client| {
+            client.* = try address.connect(io, .{
+                .mode = .stream,
+            });
+        }
+
+        admitted += batch;
+        try waitForConnectionMetrics(proxy, admitted, 0);
+        markInFlight(connections, now(io));
+    }
+
+    // One row waits for its next request, long past the idle bound.
+    const waiting: Connections.Slot = @enumFromInt(17);
+    connections.endExchange(waiting);
+    connections.enter(waiting, .idle, now(io) - Connections.min_evictable_idle_ms - 1);
+
+    clients[Connections.capacity] = try address.connect(io, .{
+        .mode = .stream,
+    });
+    try waitForMetric(proxy, "evictions", 1);
+    try waitForConnectionMetrics(proxy, Connections.capacity, 0);
+
+    var closed: usize = 0;
+    for (clients[0..Connections.capacity]) |client| {
+        var byte: [1]u8 = undefined;
+        closed += @intFromBool(std.c.recv(client.?.socket.handle, &byte, byte.len, std.c.MSG.DONTWAIT) == 0);
+    }
+
+    try std.testing.expectEqual(@as(usize, 1), closed);
+
+    // Every other row has an exchange in flight: the next one is refused.
+    markInFlight(connections, now(io));
+    clients[Connections.capacity + 1] = try address.connect(io, .{
+        .mode = .stream,
+    });
+    try expectAnswer(io, clients[Connections.capacity + 1].?, "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+    try waitForConnectionMetrics(proxy, Connections.capacity, 1);
+    try std.testing.expectEqual(@as(u64, 1), proxy.metrics().evictions);
+}
+
+/// Moves every row still reading its CONNECT head to relaying with one
+/// exchange in flight, as if it had authenticated.
+fn markInFlight(connections: *Connections, now_ms: i64) void {
+    for (0..Connections.capacity) |index| {
+        if (connections.phase[index].load(.acquire) != .connect_head) {
+            continue;
+        }
+
+        const slot: Connections.Slot = @enumFromInt(index);
+        connections.enter(slot, .open, now_ms);
+        connections.beginExchange(slot);
+    }
+}
+
+fn now(io: std.Io) i64 {
+    return std.Io.Timestamp.now(io, .awake).toMilliseconds();
+}
+
+fn waitForMetric(proxy: *const Proxy, comptime field: []const u8, expected: u64) !void {
+    for (0..1000) |_| {
+        if (@field(proxy.metrics(), field) == expected) {
+            return;
+        }
+
+        try std.testing.io.sleep(.fromMilliseconds(1), .awake);
+    }
+
+    return error.ProxyMetricNotObserved;
+}
+
+test "a CONNECT head past its bound is answered 431 and counted" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var files = try ProxyTestFiles.init(io);
+    defer files.deinit();
+    const proxy = try Proxy.create(io, gpa, files.config());
+    defer proxy.destroy();
+
+    const client = try proxy.address().connect(io, .{
+        .mode = .stream,
+    });
+    defer client.close(io);
+    var write_buffer: [1024]u8 = undefined;
+    var writer = client.writer(io, &write_buffer);
+    // Exactly the bound and nothing past it, so no unread byte turns the
+    // proxy's close into a reset before the answer is read.
+    const start = "CONNECT example.test:443 HTTP/1.1\r\nX-Pad: ";
+    try writer.interface.writeAll(start);
+    try writer.interface.splatByteAll('p', Tunnel.max_connect_head_bytes - start.len);
+    try writer.interface.flush();
+
+    try expectAnswer(io, client, "HTTP/1.1 431 Request Header Fields Too Large\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+    try std.testing.expectEqual(@as(u64, 1), proxy.metrics().connect_heads_too_large);
+}
+
+fn expectAnswer(io: std.Io, stream: std.Io.net.Stream, comptime expected: []const u8) !void {
+    var read_buffer: [256]u8 = undefined;
+    var reader = stream.reader(io, &read_buffer);
+    var answer: [expected.len]u8 = undefined;
+    try reader.interface.readSliceAll(&answer);
+    try std.testing.expectEqualStrings(expected, &answer);
 }
 
 test {
     std.testing.refAllDecls(ca);
-    _ = @import("Slots.zig");
+    _ = @import("Connections.zig");
     _ = @import("capture/capture_tests.zig");
     _ = @import("tunnel/tunnel_namespace.zig");
     _ = @import("tunnel/EventObserver.zig");
+    _ = @import("tunnel/StreamsInFlight.zig");
     _ = @import("tunnel/RelayContext.zig");
     _ = @import("tunnel/Http1Connection.zig");
     _ = @import("tunnel/Establisher.zig");

@@ -15,6 +15,7 @@ const runtime_io = @import("../connection/runtime_io.zig");
 const runtime_link = @import("../connection/runtime_link.zig");
 const RuntimeResync = @import("../connection/RuntimeResync.zig").RuntimeResync;
 const runtime_messages = @import("../connection/runtime_messages.zig");
+const pane_focus = @import("../panes/pane_focus.zig");
 const workspace_rename = @import("../workspace/workspace_rename.zig");
 
 /// Layout export decodes to the same active pane and split tree.
@@ -597,7 +598,23 @@ const no_graphics: GraphicsRetention = .{
     .consume_credit_fn = NoGraphics.consumeCredit,
 };
 
+/// A retained-graphics store that takes every message, for tests that
+/// deliver graphics without keeping them.
+const accepting_graphics: GraphicsRetention = .{
+    .context = undefined,
+    .apply_fn = NoGraphics.accept,
+    .clear_pane_fn = NoGraphics.clearPane,
+    .set_pane_visible_fn = NoGraphics.setPaneVisible,
+    .pane_visible_fn = NoGraphics.paneVisible,
+    .has_pane_graphics_fn = NoGraphics.paneVisible,
+    .ingress_version_fn = NoGraphics.ingressVersion,
+    .peek_credit_fn = NoGraphics.peekCredit,
+    .consume_credit_fn = NoGraphics.consumeCredit,
+};
+
 const NoGraphics = struct {
+    fn accept(_: *anyopaque, _: data.PaneGraphicsCommand) !void {}
+
     fn apply(_: *anyopaque, _: data.PaneGraphicsCommand) !void {
         return error.UnexpectedGraphics;
     }
@@ -727,7 +744,7 @@ pub fn reconnectAfterLoss(comptime start: fn (*Client) anyerror!void) !void {
 /// stay paused and anything else gives the link up naming the limit, until
 /// the person retries.
 /// Example: `try client_tests.recoverLimitedMessages(limit_reached.recover, limit_reached.resumeGraphics);`
-pub fn recoverLimitedMessages(comptime recover: fn (*Client, RuntimeResync, anyerror) anyerror!void, comptime limit_reached_resume: fn (*Client) void) !void {
+pub fn recoverLimitedMessages(comptime recover: fn (*Client, RuntimeResync, anyerror) anyerror!void, comptime limit_reached_resume: fn (*Client) anyerror!void) !void {
     const gpa = std.testing.allocator;
     const app = try gpa.create(Client);
     defer gpa.destroy(app);
@@ -765,7 +782,7 @@ pub fn recoverLimitedMessages(comptime recover: fn (*Client, RuntimeResync, anye
     try recover(app, .{ .graphics = pane_id }, error.GraphicsQuotaExceeded);
     try std.testing.expect(app.model.runtime_link.phase == .connected);
     try std.testing.expectEqual(@as(usize, 1), queuedCount(app, .request_graphics_snapshot));
-    try std.testing.expectEqualStrings("Limit reached: images paused", app.model.notification_center.itemAt(0).?.title());
+    try std.testing.expectEqualStrings("Images paused in pane 1: shell", app.model.notification_center.itemAt(0).?.title());
     try recover(app, .{ .graphics = pane_id }, error.GraphicsQuotaExceeded);
     try recover(app, .{ .graphics = pane_id }, error.GraphicsQuotaExceeded);
     try recover(app, .{ .graphics = pane_id }, error.GraphicsQuotaExceeded);
@@ -775,8 +792,8 @@ pub fn recoverLimitedMessages(comptime recover: fn (*Client, RuntimeResync, anye
 
     // Once its window passes, the paused pane asks again by itself.
     const slot = app.model.graphics_pauses.find(pane_id).?;
-    app.model.graphics_pauses.since_ns[slot] -|= runtime_link.healthy_after_ns;
-    limit_reached_resume(app);
+    app.model.graphics_pauses.due_ns[slot] -|= runtime_link.healthy_after_ns;
+    try limit_reached_resume(app);
     try std.testing.expectEqual(@as(usize, 4), queuedCount(app, .request_graphics_snapshot));
     try std.testing.expectEqual(@as(usize, 0), app.model.graphics_pauses.waiting_count);
 
@@ -861,6 +878,379 @@ fn closeForLimits(app: *Client) !void {
     _ = try app.update(.{ .server = error.EndOfStream });
     _ = try app.update(.{ .sent = error.BrokenPipe });
     while (app.to_workers.pop()) |_| {}
+}
+
+/// Each pane whose images pause gets one notice naming it by its number
+/// and program, which focuses it when clicked; further reaches of a paused
+/// pane only count, so `telar diagnostics limits` still sees every one.
+/// Example: `try client_tests.noticePausedPanes(limit_reached.recover);`
+pub fn noticePausedPanes(comptime recover: fn (*Client, RuntimeResync, anyerror) anyerror!void) !void {
+    const gpa = std.testing.allocator;
+    const app = try gpa.create(Client);
+    defer gpa.destroy(app);
+
+    try initForLimits(app);
+    defer app.deinit();
+    var runtime = try connectForLimits(app);
+    defer runtime.deinit(std.testing.io);
+    const second = try splitForLimits(app);
+    _ = app.model.panes.find(second).?.setForegroundName("vim");
+
+    try reachImageLimit(recover, app);
+    try reachImageLimit(recover, app);
+    try std.testing.expectEqual(@as(usize, 1), noticeCount(app));
+    try recover(
+        app,
+        .{
+            .graphics = second,
+        },
+        error.GraphicsQuotaExceeded,
+    );
+    try std.testing.expectEqual(@as(usize, 2), noticeCount(app));
+    try expectNotice(
+        app,
+        "Images paused in pane 1: shell",
+        limits_pane,
+    );
+    try expectNotice(
+        app,
+        "Images paused in pane 2: vim",
+        second,
+    );
+
+    const reached = app.model.limit_reaches.find("GraphicsQuotaExceeded").?;
+    try std.testing.expectEqual(@as(u64, 3), app.model.limit_reaches.hits[reached]);
+    try std.testing.expect(app.model.graphics_pauses.contains(limits_pane));
+    try std.testing.expect(app.model.graphics_pauses.contains(second));
+    try data.model_invariants.check(&app.model);
+    try closeForLimits(app);
+}
+
+/// A waiting pane resumes without runtime traffic: its timer is armed for
+/// its due time and asks when it fires, then idles while nothing waits;
+/// focusing the pane asks once its base window passed, before its doubled
+/// wait ends.
+/// Example: `try client_tests.resumeWithoutTraffic(limit_reached.recover, limit_reached.finishResumeTick);`
+pub fn resumeWithoutTraffic(comptime recover: fn (*Client, RuntimeResync, anyerror) anyerror!void, comptime finish_tick: fn (*Client, anyerror!void) anyerror!void) !void {
+    const gpa = std.testing.allocator;
+    const app = try gpa.create(Client);
+    defer gpa.destroy(app);
+
+    try initForLimits(app);
+    defer app.deinit();
+    var runtime = try connectForLimits(app);
+    defer runtime.deinit(std.testing.io);
+    const second = try splitForLimits(app);
+    _ = try pane_focus.applyPaneFocus(
+        app,
+        .{
+            .target = .{
+                .pane_id = second,
+            },
+            .area = app.geometry().area,
+        },
+    );
+
+    for (0..4) |_| {
+        try reachImageLimit(recover, app);
+    }
+
+    const pauses = &app.model.graphics_pauses;
+    var slot = pauses.find(limits_pane).?;
+    try std.testing.expectEqual(@as(usize, 1), pauses.waiting_count);
+    try std.testing.expect(armedTimer(app, .graphics_resume));
+    try std.testing.expectEqual(pauses.due_ns[slot], app.graphics_resume.deadline_ns.load(.acquire));
+
+    // The timer fires once the wait passed and asks; nothing else waits,
+    // so no timer follows.
+    pauses.due_ns[slot] = 0;
+    try finish_tick(app, {});
+    try std.testing.expectEqual(@as(usize, 4), queuedCount(app, .request_graphics_snapshot));
+    try std.testing.expectEqual(@as(usize, 0), pauses.waiting_count);
+    try std.testing.expect(!app.graphics_resume.pending);
+    try std.testing.expect(!armedTimer(app, .graphics_resume));
+
+    // Waiting again, the pane is focused once its base window passed.
+    for (0..3) |_| {
+        try reachImageLimit(recover, app);
+    }
+
+    slot = pauses.find(limits_pane).?;
+    try std.testing.expectEqual(@as(usize, 1), pauses.waiting_count);
+    pauses.since_ns[slot] -|= runtime_link.healthy_after_ns;
+    try std.testing.expect(pauses.due_ns[slot] > pacing.clock.monotonic(app.io));
+    _ = try pane_focus.applyPaneFocus(
+        app,
+        .{
+            .target = .{
+                .pane_id = limits_pane,
+            },
+            .area = app.geometry().area,
+        },
+    );
+    try std.testing.expectEqual(@as(usize, 7), queuedCount(app, .request_graphics_snapshot));
+    try std.testing.expectEqual(@as(usize, 0), pauses.waiting_count);
+    try data.model_invariants.check(&app.model);
+    try closeForLimits(app);
+}
+
+/// A pause ends when a graphics snapshot of the pane applies without the
+/// pane reaching its limit again, and a new session drops every pause. A
+/// table that is somehow full gives up its oldest row and asks that
+/// pane's snapshot, so no pane stays paused without a resume on the way.
+/// Example: `try client_tests.endGraphicsPauses(limit_reached.recover);`
+pub fn endGraphicsPauses(comptime recover: fn (*Client, RuntimeResync, anyerror) anyerror!void) !void {
+    const gpa = std.testing.allocator;
+    const app = try gpa.create(Client);
+    defer gpa.destroy(app);
+
+    try initForLimits(app);
+    defer app.deinit();
+    app.graphics = accepting_graphics;
+    var first = try connectForLimits(app);
+    defer first.deinit(std.testing.io);
+    const pauses = &app.model.graphics_pauses;
+
+    // A snapshot that applies whole ends the pause, and the window stops
+    // marking the pane.
+    try reachImageLimit(recover, app);
+    const marked = app.model.pane_graphics_revision;
+    try receiveSnapshot(app, .begin);
+    try std.testing.expect(pauses.contains(limits_pane));
+    try receiveSnapshot(app, .end);
+    try std.testing.expect(!pauses.contains(limits_pane));
+    try std.testing.expect(app.model.pane_graphics_revision != marked);
+
+    // A snapshot the pane's limit stops again keeps the pause.
+    try reachImageLimit(recover, app);
+    try receiveSnapshot(app, .begin);
+    try reachImageLimit(recover, app);
+    try receiveSnapshot(app, .end);
+    try std.testing.expect(pauses.contains(limits_pane));
+    try data.model_invariants.check(&app.model);
+
+    // A full table gives up its oldest row, a waiting one, and asks that
+    // pane's snapshot at once.
+    pauses.* = .{};
+    for (0..data.GraphicsPauses.capacity) |number| {
+        const row = pauses.add(@enumFromInt(1000 + number), number);
+        pauses.setWaiting(row, true);
+    }
+
+    const asked = queuedCount(app, .request_graphics_snapshot);
+    try reachImageLimit(recover, app);
+    try std.testing.expectEqual(data.GraphicsPauses.capacity, pauses.count);
+    try std.testing.expect(!pauses.contains(@enumFromInt(1000)));
+    try std.testing.expect(pauses.contains(limits_pane));
+    try std.testing.expectEqual(data.GraphicsPauses.capacity - 1, pauses.waiting_count);
+    try std.testing.expectEqual(asked + 2, queuedCount(app, .request_graphics_snapshot));
+    try std.testing.expect(queuedSnapshotFor(app, @enumFromInt(1000)));
+
+    // A new session starts with no pause.
+    try closeForLimits(app);
+    try runtime_link.retryNow(app);
+    var second = try connectForLimits(app);
+    defer second.deinit(std.testing.io);
+    try std.testing.expectEqual(@as(usize, 0), pauses.count);
+    try std.testing.expectEqual(@as(usize, 0), pauses.waiting_count);
+    try data.model_invariants.check(&app.model);
+    try closeForLimits(app);
+}
+
+/// Each window a pause ends waiting doubles the next wait, up to its cap.
+/// A pane that pauses again soon after a snapshot ended its pause goes on
+/// with that backoff and no second notice; one that pauses after a healthy
+/// window starts a new pause that waits one window again.
+/// Example: `try client_tests.backOffPausedPanes(limit_reached.recover, limit_reached.resumeGraphics, limit_reached.receiveGraphicsSnapshot);`
+pub fn backOffPausedPanes(comptime recover: fn (*Client, RuntimeResync, anyerror) anyerror!void, comptime limit_reached_resume: fn (*Client) anyerror!void, comptime receive_snapshot: fn (*Client, core.Snapshot) anyerror!void) !void {
+    const gpa = std.testing.allocator;
+    const app = try gpa.create(Client);
+    defer gpa.destroy(app);
+
+    try initForLimits(app);
+    defer app.deinit();
+    var runtime = try connectForLimits(app);
+    defer runtime.deinit(std.testing.io);
+    const pauses = &app.model.graphics_pauses;
+    const longest_wait_ns = 16 * std.time.ns_per_min;
+
+    var window_ns: u64 = runtime_link.healthy_after_ns;
+    for (0..6) |round| {
+        const reaches: usize = if (round == 0) 4 else 3;
+        for (0..reaches) |_| {
+            try reachImageLimit(recover, app);
+        }
+
+        const slot = pauses.find(limits_pane).?;
+        try std.testing.expect(pauses.waiting[slot]);
+        try std.testing.expectEqual(pauses.since_ns[slot] + window_ns, pauses.due_ns[slot]);
+        pauses.due_ns[slot] = 0;
+        try limit_reached_resume(app);
+        try std.testing.expect(!pauses.waiting[slot]);
+        window_ns = @min(2 * window_ns, longest_wait_ns);
+    }
+
+    try std.testing.expectEqual(longest_wait_ns, window_ns);
+
+    // The pause ends; the next one waits one window again.
+    const snapshot: core.Snapshot = .{
+        .pane_id = limits_pane,
+        .revision = 1,
+        .phase = .begin,
+    };
+    try receive_snapshot(app, snapshot);
+    var ended = snapshot;
+    ended.phase = .end;
+    try receive_snapshot(app, ended);
+    try std.testing.expect(!pauses.contains(limits_pane));
+    const notices = app.model.notification_center.count;
+    try reachImageLimit(recover, app);
+    try std.testing.expect(pauses.contains(limits_pane));
+    try std.testing.expectEqual(notices, app.model.notification_center.count);
+    const kept = pauses.find(limits_pane).?;
+    try std.testing.expect(pauses.backoff[kept] > 1);
+
+    try receive_snapshot(app, snapshot);
+    try receive_snapshot(app, ended);
+    pauses.resumed_ns[kept] = 0;
+    for (0..4) |_| {
+        try reachImageLimit(recover, app);
+    }
+
+    const slot = pauses.find(limits_pane).?;
+    try std.testing.expectEqual(@as(u8, 1), pauses.backoff[slot]);
+    try std.testing.expectEqual(pauses.since_ns[slot] + runtime_link.healthy_after_ns, pauses.due_ns[slot]);
+    try closeForLimits(app);
+}
+
+/// The pane `connectForLimits` gives the client.
+const limits_pane: core.PaneId = @enumFromInt(3);
+
+/// Delivers one graphics message of `limits_pane` that stopped at its
+/// limit.
+fn reachImageLimit(comptime recover: fn (*Client, RuntimeResync, anyerror) anyerror!void, app: *Client) !void {
+    try recover(
+        app,
+        .{
+            .graphics = limits_pane,
+        },
+        error.GraphicsQuotaExceeded,
+    );
+}
+
+/// Initializes `app` for a local machine and starts its link; the caller
+/// completes the connection with `connectForLimits`.
+fn initForLimits(app: *Client) !void {
+    try app.init(.{
+        .gpa = std.testing.allocator,
+        .io = std.testing.io,
+        .host_size = .{
+            .cols = 40,
+            .rows = 10,
+            .cell_width_px = 0,
+            .cell_height_px = 0,
+        },
+        .options = .{
+            .arguments = &.{"/bin/sh"},
+            .cwd = "/",
+            .endpoint = "",
+            .machine = .{ .local = .{} },
+        },
+    });
+    errdefer app.deinit();
+    app.graphics = no_graphics;
+    app.bootstrap = .{
+        .graphics_shared = false,
+        .client_identity = @enumFromInt(7),
+    };
+
+    try runtime_link.start(app);
+}
+
+/// Splits `limits_pane` and returns the new pane, the tab's second.
+fn splitForLimits(app: *Client) !core.PaneId {
+    const second: core.PaneId = @enumFromInt(4);
+    const tab = app.model.tabs.active;
+    try data.pane_split.split(
+        &app.model,
+        tab,
+        .{
+            .existing_pane = limits_pane,
+            .new_pane = second,
+            .location = app.model.tabs.location[tab],
+            .axis = .horizontal,
+            .area = app.geometry().area,
+        },
+    );
+
+    return second;
+}
+
+/// Delivers one phase of a graphics snapshot of `limits_pane` as the
+/// runtime sends it.
+fn receiveSnapshot(app: *Client, phase: @FieldType(core.Snapshot, "phase")) !void {
+    const message: core.ServerMessage = .{
+        .graphics_snapshot = .{
+            .pane_id = limits_pane,
+            .revision = 1,
+            .phase = phase,
+        },
+    };
+    _ = try runtime_messages.receiveServerMessage(app, &message);
+}
+
+fn noticeCount(app: *const Client) usize {
+    var count: usize = 0;
+    while (app.model.notification_center.itemAt(count)) |_| {
+        count += 1;
+    }
+
+    return count;
+}
+
+/// Fails unless a notice titled `title` focuses `pane_id` when clicked.
+fn expectNotice(app: *const Client, title: []const u8, pane_id: core.PaneId) !void {
+    var index: usize = 0;
+    while (app.model.notification_center.itemAt(index)) |item| : (index += 1) {
+        if (std.mem.eql(u8, item.title(), title)) {
+            try std.testing.expect(item.level == .warning);
+            try std.testing.expect(item.target == .focus_pane and item.target.focus_pane == pane_id);
+            return;
+        }
+    }
+
+    return error.TestExpectedNotice;
+}
+
+/// Pops every queued job and returns whether a timer of `kind` was among
+/// them.
+fn armedTimer(app: *Client, kind: Job.Kind) bool {
+    var armed = false;
+    while (app.to_workers.pop()) |job| {
+        if (job == .timer and job.timer.kind == kind) {
+            armed = true;
+        }
+    }
+
+    return armed;
+}
+
+/// Whether the outbox holds a graphics snapshot request for `pane_id`.
+fn queuedSnapshotFor(app: *const Client, pane_id: core.PaneId) bool {
+    const outbox = &app.model.to_runtime;
+    for (0..outbox.len) |offset| {
+        const index = (@as(usize, outbox.head) + offset) % outbox.items.len;
+        switch (outbox.items[index]) {
+            .request_graphics_snapshot => |request| {
+                if (request.pane_id == pane_id) {
+                    return true;
+                }
+            },
+            else => {},
+        }
+    }
+
+    return false;
 }
 
 /// A failed attempt keeps the client, shows the report and waits to retry;

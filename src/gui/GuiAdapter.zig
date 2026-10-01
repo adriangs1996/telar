@@ -30,7 +30,6 @@ const native = @import("native/native.zig");
 const selection = @import("render/copy_selection.zig");
 const State = @import("widgets/interaction/State.zig");
 const Chrome = @import("widgets/Chrome.zig");
-const SyntaxService = @import("syntax/Service.zig");
 const ReviewPanel = @import("change_review/Panel.zig");
 const review_dispatch = @import("change_review/dispatch.zig");
 
@@ -40,6 +39,7 @@ const ClipboardResult = @import("input/ClipboardResult.zig");
 const ScrollSample = @import("input/ScrollSample.zig");
 const PointerEvent = @import("input/PointerEvent.zig");
 const PasteChunk = @import("PasteChunk.zig");
+const TextCommit = @import("input/TextCommit.zig");
 
 const HostServices = @import("host/Services.zig");
 const SidebarPreference = @import("SidebarPreference.zig");
@@ -58,6 +58,9 @@ const animate = @import("animate");
 const FrameClock = animate.FrameClock;
 const native_callbacks = @import("native/window_callbacks.zig");
 const limit_reached = @import("limit_reached.zig");
+const PresentationResult = @import("PresentationResult.zig");
+const GlyphAtlas = @import("text/GlyphAtlas.zig");
+const WindowLimit = @import("WindowLimit.zig").WindowLimit;
 const LimitedFrame = @import("LimitedFrame.zig");
 const window_machines = @import("window_machines.zig");
 const clipboard_image = @import("clipboard_image.zig");
@@ -118,6 +121,12 @@ limited: ?LimitedFrame = null,
 /// The limit error the last update stopped at, so the same one again does
 /// not ask for another draw.
 update_limited: ?anyerror = null,
+/// A presentation's completion or a focus change a full inbox refused; the
+/// next pump posts it before anything else, so the frame in flight always
+/// completes and focus stays ordered.
+unposted: Unposted = .{},
+/// The window's own limits it is at now; each reports when entered.
+reached: std.EnumSet(WindowLimit) = .{},
 exit_status: ?u8 = null,
 started: bool = false,
 needs_draw: bool = false,
@@ -160,7 +169,6 @@ diagrams: DiagramService,
 previews: ImagePreviews,
 /// The preview revision the chrome was last prepared at.
 previews_prepared: u64 = 0,
-syntax: SyntaxService,
 review: *ReviewPanel,
 
 /// Adopts options on success and binds all ports before receiving messages.
@@ -187,6 +195,8 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
 
     const review = try params.gpa.create(ReviewPanel);
     errdefer params.gpa.destroy(review);
+    try review.init(params.gpa);
+    errdefer review.deinit();
 
     gui.driver = try NativeLoop.init(params.io);
     errdefer gui.driver.deinit();
@@ -209,7 +219,8 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
     gui.app.model.host.clipboard_capture = clipboard_image.supported();
 
     gui.driver.configuration.inbox = &gui.driver.inbox;
-    gui.input_queue = .{};
+    try gui.input_queue.init(params.gpa);
+    errdefer gui.input_queue.deinit(params.gpa);
     gui.router = router;
     gui.binding_timeout = .{};
     gui.binding_revision = 0;
@@ -220,7 +231,12 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
     gui.paste_route = .shared;
     gui.recovery_interactions_finished = false;
     gui.stopped = false;
-    gui.host = .{};
+    try gui.host.init(params.gpa);
+    errdefer gui.host.deinit(params.gpa);
+    gui.limited = null;
+    gui.update_limited = null;
+    gui.unposted = .{};
+    gui.reached = .{};
     gui.input_revision = 0;
     gui.focused = true;
     gui.widgets = .{};
@@ -239,14 +255,7 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
 
     gui.diagrams = .init(params.gpa);
 
-    gui.syntax = .{
-        .allocator = params.gpa,
-    };
-
     gui.review = review;
-    gui.review.* = .{
-        .allocator = params.gpa,
-    };
 
     gui.review.widget.host_port = &gui.host;
     gui.review.widget.widgets = &gui.widgets;
@@ -263,6 +272,8 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
 /// Call after native GPU consumers stop; joins workers before releasing resources. Example: `gui.deinit();`
 pub fn deinit(self: *GuiAdapter) void {
     const gpa = self.app.gpa;
+    self.input_queue.deinit(gpa);
+    self.host.deinit(gpa);
     self.driver.deinit();
     self.renderer.deinit();
 
@@ -280,6 +291,7 @@ pub fn deinit(self: *GuiAdapter) void {
     self.diagrams.deinit();
     self.previews.deinit();
     self.chrome.favicons.deinit(gpa);
+    self.review.deinit();
     gpa.destroy(self.review);
     // Other machines share the window client's configuration, so they go
     // first.
@@ -471,7 +483,8 @@ pub fn wakeupAfter(self: *const GuiAdapter) u32 {
     const now_ns = self.now();
     const widgets = if (self.app.presentation.active == null) self.chrome.animation.wakeupAfter(now_ns) else 0;
     const images = pane_images.wakeupAfter(&self.images, now_ns);
-    return FrameClock.earliest(FrameClock.earliest(self.cursor_clock.wakeupAfter(now_ns), widgets), images);
+    const glyphs = self.renderer.atlasWakeupAfter(now_ns);
+    return FrameClock.earliest(FrameClock.earliest(FrameClock.earliest(self.cursor_clock.wakeupAfter(now_ns), widgets), images), glyphs);
 }
 
 /// Reports native frame admission delay from visible terminal frame identities.
@@ -620,12 +633,25 @@ fn start(self: *GuiAdapter, colors: core.TerminalColors) !void {
 /// rejects admission; inbox failures propagate to the host. Example: `_ = try gui.acceptInput(event);`
 pub fn acceptInput(self: *GuiAdapter, event: event_module.Event) !bool {
     if (event == .focus) {
-        // Focus transitions must remain ordered even when native input coalesces.
-        try self.driver.inbox.post(
+        // Focus transitions must remain ordered even when native input
+        // coalesces; a full inbox keeps the latest for the next pump.
+        if (self.unposted.focus != null) {
+            self.unposted.focus = event.focus;
+            return true;
+        }
+
+        self.driver.inbox.post(
             .{
                 .focus = event.focus,
             },
-        );
+        ) catch |err| {
+            if (err != error.InboxFull) {
+                return err;
+            }
+
+            self.unposted.focus = event.focus;
+            self.wake();
+        };
 
         return true;
     }
@@ -645,6 +671,49 @@ pub fn acceptInput(self: *GuiAdapter, event: event_module.Event) !bool {
     try self.driver.inbox.notify(.input_ready);
 
     return true;
+}
+
+/// Completes a delivered or dropped presentation through the inbox. A full
+/// inbox keeps the completion for the next pump, so the frame in flight
+/// always completes and the window never waits on it forever.
+/// Example: `gui.completePresentation(.{ .token = token, .delivered = true });`
+pub fn completePresentation(self: *GuiAdapter, result: PresentationResult) void {
+    self.driver.inbox.post(
+        .{
+            .presented = result,
+        },
+    ) catch |err| {
+        if (err != error.InboxFull) {
+            self.fail(err);
+            return;
+        }
+
+        self.unposted.presented = result;
+        self.wake();
+    };
+}
+
+/// Posts what the native callbacks kept while the inbox was full, oldest
+/// kind first; what still does not fit waits for the next pump.
+/// Example: `gui.postUnposted();`
+pub fn postUnposted(self: *GuiAdapter) void {
+    if (self.unposted.presented) |result| {
+        self.driver.inbox.post(
+            .{
+                .presented = result,
+            },
+        ) catch return;
+        self.unposted.presented = null;
+    }
+
+    if (self.unposted.focus) |focused| {
+        self.driver.inbox.post(
+            .{
+                .focus = focused,
+            },
+        ) catch return;
+        self.unposted.focus = null;
+    }
 }
 
 /// Drains one bounded turn, then folds reconnectable layout state once.
@@ -705,6 +774,7 @@ pub fn update(self: *GuiAdapter) !?u8 {
             self.driver.configuration.pending or
             self.renderer.cursor_on != self.cursor_clock.shown(now_ns) or
             self.renderer.focused != self.cursor_clock.focused or
+            self.renderer.atlasSettleDue(now_ns) or
             pane_images.trimDue(&self.images, now_ns);
     }
 
@@ -739,7 +809,6 @@ fn dispatch(self: *GuiAdapter, event: gui_event.Message) !?u8 {
         .binding_timeout => |result| try self.expireBinding(result),
         .favicon => |result| self.landFavicon(result),
         .diagram_ready => self.landDiagram(),
-        .syntax_ready => self.landSyntax(),
         .change_review_ready => self.landChangeReview(),
         .clipboard_image => |completion| try clipboard_image.finish(self, completion),
     }
@@ -767,7 +836,6 @@ fn pathFor(event: gui_event.Message) core.Path {
         .profiles_changed,
         .favicon,
         .diagram_ready,
-        .syntax_ready,
         .change_review_ready,
         => .observation,
         else => .interactive,
@@ -873,43 +941,45 @@ fn drainInput(self: *GuiAdapter) !void {
 
         switch (pending_input.front().?.*) {
             .key => |key| try self.dispatchKey(key),
-            .text => |*text| {
-                if (!try self.widgetInput(
-                    .{
-                        .text = text.text(),
-                    },
-                )) {
-                    _ = try self.routeKey(
-                        .{
-                            .key = text.key(),
-                            .now_ns = pacing.clock.monotonic(app.io),
-                        },
-                    );
+            .text => |*text| try self.dispatchText(text),
+            .text_block => |*held| {
+                const text = pending_input.large_events.view(held.slot).text;
+                const bytes = text.bytes;
+                const len = std.unicode.utf8ByteSequenceLength(bytes[held.offset]) catch 1;
+                // A held text has many scalars, so no physical key: each
+                // keeps the text's phase.
+                var scalar: TextCommit = .{
+                    .bytes = @splat(0),
+                    .len = len,
+                    .phase = text.phase,
+                };
+                @memcpy(scalar.bytes[0..len], bytes[held.offset..][0..len]);
+                held.offset += len;
+                try self.dispatchText(&scalar);
+                if (held.offset < bytes.len) {
+                    continue;
                 }
             },
-            .paste_start => {
-                _ = try self.applyInputDecision(self.router.interrupt());
-                self.paste_route = if (try self.beginWidgetPaste()) .widget else .shared;
-
-                if (self.paste_route == .shared) {
-                    _ = try client.paste_routing.start(app);
-                }
-            },
-            .paste_text => |*chunk| {
-                if (self.paste_route == .widget) {
-                    try self.widgetPaste(chunk.bytes[0..chunk.len]);
-                } else {
-                    _ = try client.paste_routing.content(app, chunk.bytes[0..chunk.len]);
-                }
-            },
-            .paste_finish => {
-                if (self.paste_route == .widget) {
-                    try self.endWidgetPaste();
-                } else {
-                    _ = try client.paste_routing.finish(app);
+            .paste_start => try self.startPaste(),
+            .paste_text => |*chunk| try self.pasteContent(chunk.bytes[0..chunk.len]),
+            .paste_finish => try self.finishPaste(),
+            .paste_block => |*held| {
+                const bytes = pending_input.large_events.view(held.slot).paste;
+                if (!held.started) {
+                    held.started = true;
+                    try self.startPaste();
+                    continue;
                 }
 
-                self.paste_route = .shared;
+                if (held.offset < bytes.len) {
+                    const count = PasteChunk.nextSize(bytes[held.offset..]);
+                    const chunk = bytes[held.offset..][0..count];
+                    held.offset += @intCast(count);
+                    try self.pasteContent(chunk);
+                    continue;
+                }
+
+                try self.finishPaste();
             },
             .release_recovery => {
                 if (!self.recovery_interactions_finished) {
@@ -988,6 +1058,51 @@ fn drainInput(self: *GuiAdapter) !void {
     }
 
     try self.finishInput(pending);
+}
+
+/// Delivers one committed scalar to the focused widget or, failing that, to
+/// the shared key router.
+fn dispatchText(self: *GuiAdapter, text: *const TextCommit) !void {
+    if (!try self.widgetInput(
+        .{
+            .text = text.text(),
+        },
+    )) {
+        _ = try self.routeKey(
+            .{
+                .key = text.key(),
+                .now_ns = pacing.clock.monotonic(self.app.io),
+            },
+        );
+    }
+}
+
+/// Opens a native paste on the widget that takes it or the shared route.
+fn startPaste(self: *GuiAdapter) !void {
+    _ = try self.applyInputDecision(self.router.interrupt());
+    self.paste_route = if (try self.beginWidgetPaste()) .widget else .shared;
+
+    if (self.paste_route == .shared) {
+        _ = try client.paste_routing.start(self.app);
+    }
+}
+
+fn pasteContent(self: *GuiAdapter, bytes: []const u8) !void {
+    if (self.paste_route == .widget) {
+        try self.widgetPaste(bytes);
+    } else {
+        _ = try client.paste_routing.content(self.app, bytes);
+    }
+}
+
+fn finishPaste(self: *GuiAdapter) !void {
+    if (self.paste_route == .widget) {
+        try self.endWidgetPaste();
+    } else {
+        _ = try client.paste_routing.finish(self.app);
+    }
+
+    self.paste_route = .shared;
 }
 
 /// Resolve and execute one semantic key before accepting the next event.
@@ -1132,11 +1247,11 @@ fn readTerminalClipboard(self: *GuiAdapter) !void {
 
     const tab = self.app.model.tabs.activeSlot() orelse return;
     const pane = shared_model.tab_layout.focusedPaneConst(&self.app.model, tab) orelse return;
-    clipboard.request_id = try self.host.read(
+    clipboard.request_id = self.host.read(
         .{
             .generation = pane.attachment_generation,
         },
-    );
+    ) catch |err| return self.refuseHostRequest(err, 0);
     clipboard.pane_id = pane.id;
     clipboard.generation = pane.attachment_generation;
     native.telar_gui_wake(self.driver.fds[@intFromEnum(PipeEnd.write)]);
@@ -1164,6 +1279,17 @@ fn takeTerminalClipboard(self: *GuiAdapter, result: ClipboardResult) bool {
 }
 
 fn dispatchClipboard(self: *GuiAdapter, result: ClipboardResult) !bool {
+    if (result.status == .too_large) {
+        // The host refused a paste larger than the window carries; it is
+        // dropped whole, never cut, and the notice names the limit.
+        client.limit_reached.report(
+            self.app,
+            .{
+                .limit = event_module.clipboard_limit,
+            },
+        );
+    }
+
     if (self.terminal_clipboard.offset == null) {
         const kind = self.host.complete(result) orelse return true;
 
@@ -1621,6 +1747,7 @@ fn deliverRequests(self: *GuiAdapter) !void {
     while (effects.pop()) |effect| {
         switch (effect) {
             .clipboard => self.requestClipboardWrite(effects.clipboard.items) catch |err| switch (err) {
+                // A refused size or queue is reported where it was refused.
                 error.HostRequestsFull, error.ClipboardTooLarge, error.InvalidUtf8 => std.log.warn("native clipboard update was not admitted: {s}", .{@errorName(err)}),
                 else => return err,
             },
@@ -1666,8 +1793,45 @@ fn startJobs(self: *GuiAdapter) !void {
 }
 
 pub fn requestClipboardWrite(self: *GuiAdapter, bytes: []const u8) !void {
-    _ = try self.host.write(bytes);
+    const superseded = self.host.superseded;
+    _ = self.host.write(bytes) catch |err| return self.refuseHostRequest(err, bytes.len);
+    self.reportSuperseded(superseded);
     native.telar_gui_wake(self.driver.fds[@intFromEnum(PipeEnd.write)]);
+}
+
+/// Reports a copy that replaced an older one waiting in a full queue; the
+/// clipboard keeps the newest.
+fn reportSuperseded(self: *GuiAdapter, before: u64) void {
+    if (self.host.superseded == before) {
+        return;
+    }
+
+    client.limit_reached.report(
+        self.app,
+        .{
+            .limit = HostServices.limit,
+            .requested = HostServices.capacity + 1,
+        },
+    );
+}
+
+/// Reports a clipboard request refused at a limit, then returns its error
+/// so the caller keeps its own path: the old clipboard stays, nothing is cut.
+fn refuseHostRequest(self: *GuiAdapter, err: anyerror, bytes: usize) anyerror {
+    const limit = switch (err) {
+        error.ClipboardTooLarge => event_module.clipboard_limit,
+        error.HostRequestsFull => HostServices.limit,
+        else => return err,
+    };
+    client.limit_reached.report(
+        self.app,
+        .{
+            .limit = limit,
+            .requested = if (err == error.ClipboardTooLarge) bytes else HostServices.capacity + 1,
+        },
+    );
+
+    return err;
 }
 
 /// Requests a link copy with a bottom confirmation after host success.
@@ -1682,7 +1846,9 @@ pub fn copyLink(self: *GuiAdapter, bytes: []const u8) !void {
 /// The editor can commit a cut only after the matching native write succeeds.
 /// Example: `const request = try gui.requestClipboardWriteOwned(owner, bytes);`
 pub fn requestClipboardWriteOwned(self: *GuiAdapter, owner: ClipboardOwner, bytes: []const u8) !u64 {
-    const request = try self.host.writeOwned(owner, bytes);
+    const superseded = self.host.superseded;
+    const request = self.host.writeOwned(owner, bytes) catch |err| return self.refuseHostRequest(err, bytes.len);
+    self.reportSuperseded(superseded);
     native.telar_gui_wake(self.driver.fds[@intFromEnum(PipeEnd.write)]);
 
     return request;
@@ -1777,6 +1943,14 @@ fn measure(self: *GuiAdapter, renderer: *Renderer, viewport: native.Viewport) !c
     ) or renderer.scale != viewport.scale;
     renderer.sidebar_request = self.sidebar.request(self.app.model.sidebar_visible);
     const size = try renderer.measure(viewport);
+    limit_reached.reportEntering(
+        self,
+        .grid_cells,
+        if (renderer.cut_from) |wanted| .{
+            .limit = limit_reached.cell_count_limit,
+            .requested = wanted,
+        } else null,
+    );
 
     if (viewport_changed or !std.meta.eql(size, self.app.model.host.host_size) or self.widgets.tab_drag_step != renderer.chrome.px(@intFromEnum(TabDragStep.logical_pixels))) {
         self.widgets.tab_drag.cancel();
@@ -1881,7 +2055,6 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
     self.chrome.now_ns = pacing.clock.monotonic(self.app.io);
     self.diagrams.beginFrame();
     self.previews.beginFrame();
-    self.syntax.beginFrame();
     try self.review.synchronize(self.app);
     self.review.widget.theme_override = self.app.model.theme;
 
@@ -1910,7 +2083,6 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
         .link = if (self.pointer.hover.link) |*hit| hit else null,
         .widgets = &self.widgets,
         .diagrams = &self.diagrams.store,
-        .syntax = &self.syntax.store,
         .review = if (self.review.active) &self.review.widget else null,
         .previews = if (self.showsPreviews()) &self.previews else null,
     };
@@ -1920,7 +2092,22 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
         self.chrome.invalidate();
     }
 
+    // A page held full reports once; one that changes size may reach the
+    // limit anew.
+    switch (try renderer.settleAtlas(self.now())) {
+        .exhausted => limit_reached.reportEntering(
+            self,
+            .glyph_page,
+            .{
+                .limit = GlyphAtlas.side_limit,
+            },
+        ),
+        .outgrown, .shrunk => limit_reached.reportEntering(self, .glyph_page, null),
+        .kept, .emptied => {},
+    }
+
     const commit = try scene.prepare(projected);
+    limit_reached.reportFrame(self, &scene);
     pane_images.noteDrawn(&self.images, renderer.imageDraws());
     if (comptime core.enabled) {
         self.app.telemetry.metrics.graphics_presented = self.images.presented;
@@ -1929,7 +2116,6 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
 
     const diagram_revision = self.diagrams.store.revision;
     self.diagrams.start(&self.driver.inbox);
-    self.syntax.start(&self.driver.inbox);
     self.review.start(
         .{
             .app = self.app,
@@ -1973,12 +2159,6 @@ fn landDiagram(self: *GuiAdapter) void {
     self.chrome.invalidate();
 }
 
-/// The inbox synchronizes completed tokens; adoption waits for frame preparation.
-fn landSyntax(self: *GuiAdapter) void {
-    self.syntax.notify();
-    self.chrome.invalidate();
-}
-
 /// Opens a runtime review for either a terminal pane or a managed agent.
 /// Example: `try gui.openChangeReview(pane_id);`
 pub fn openChangeReview(self: *GuiAdapter, pane_id: core.PaneId) !void {
@@ -2018,12 +2198,17 @@ fn landFavicon(self: *GuiAdapter, completion: client.FaviconCompletion) void {
 }
 
 // Places a landed favicon into the page and starts the next lookup the
-// list needs. Warm frames find nothing landed and nothing wanted.
+// list needs. Warm frames find nothing landed and nothing wanted. A favicon
+// the full page cannot place reports `gui.favicons.max_favicons`.
 fn resolveFavicons(self: *GuiAdapter, renderer: *Renderer) !void {
     const page = if (renderer.sprites) |*sprites| sprites else return;
     const favicons = &self.chrome.favicons;
-    favicons.refresh(self.app.gpa, page);
-    const want = favicons.next(&self.app.model.workspace_list_snapshot) orelse return;
+    const workspaces = &self.app.model.workspace_list_snapshot;
+    if (favicons.refresh(self.app.gpa, page, workspaces)) |reach| {
+        client.limit_reached.report(self.app, reach);
+    }
+
+    const want = favicons.next(page, workspaces) orelse return;
 
     const job = client.favicons.request(
         &self.app.model,
@@ -2149,11 +2334,9 @@ pub fn widgetTextContext(self: *GuiAdapter, output: *native.TextContext) bool {
 /// Publishes owned widget semantics using delivered geometry.
 /// Example: `const available = gui.widgetAccessibility(&tree);`
 pub fn widgetAccessibility(self: *GuiAdapter, output: *native.AccessibilityTree) bool {
-    if (self.review.active) {
-        return self.review.widget.accessibility(output);
-    }
-
-    return host_context.accessibility(self, output);
+    const published = if (self.review.active) self.review.widget.accessibility(output) else host_context.accessibility(self, output);
+    limit_reached.reportAccessibility(self);
+    return published;
 }
 
 test "widget draw failure preserves delivered targets and pending pane damage before retry" {
@@ -2192,12 +2375,11 @@ test "widget draw failure preserves delivered targets and pending pane damage be
         },
     );
     const pane = gui.app.model.panes.find(TestSession.pane_id).?;
-    const limit = session.gui.renderer.quads.limit;
-    session.gui.renderer.quads.limit = 1;
-    defer session.gui.renderer.quads.limit = limit;
-    // Inject failure after measurement reserves the production frame budget.
-    try std.testing.expectError(error.NativeQuadBudgetExceeded, gui.prepare(&gui.renderer));
-    try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.quads.items().len);
+    const next_token = gui.app.presentation.next_token;
+    gui.app.presentation.next_token = std.math.maxInt(u64);
+    defer gui.app.presentation.next_token = next_token;
+    // Inject failure after every widget drew and registered its targets.
+    try std.testing.expectError(error.PresentationIdExhausted, gui.prepare(&gui.renderer));
     try std.testing.expect(gui.app.presentation.active == null);
     try std.testing.expectEqual(@as(u64, 2), pane.pending_frame_id);
     try std.testing.expectEqual(chrome, gui.chrome.presented());
@@ -2212,7 +2394,7 @@ test "widget draw failure preserves delivered targets and pending pane damage be
     try std.testing.expectEqual(targets, gui.widgets.dispatcher.maps.presented());
     try std.testing.expectEqual(@as(u64, 2), pane.pending_frame_id);
 
-    session.gui.renderer.quads.limit = limit;
+    gui.app.presentation.next_token = next_token;
     const retry = try session.draw();
     try std.testing.expect(retry != delivered);
     try std.testing.expectEqual(targets, gui.widgets.dispatcher.maps.presented());
@@ -2304,4 +2486,10 @@ const LinkGesture = struct {
     pub fn cancel(self: *LinkGesture) void {
         self.pressed = null;
     }
+};
+
+/// Messages the native callbacks could not post because the inbox was full.
+const Unposted = struct {
+    presented: ?PresentationResult = null,
+    focus: ?bool = null,
 };

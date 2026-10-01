@@ -3,10 +3,13 @@
 //! side, each that size's logical side at the chrome ratio, so a favicon is
 //! drawn one texel per pixel in every view. The provider marks from the
 //! embedded sheet fill the first slots at construction, at `large` only;
-//! favicons take the rest as they land, at most `max_favicons`. Texels are
-//! premultiplied so linear sampling never fringes. `version` advances with
-//! every slot written, so the backend re-uploads the page once per landed
-//! favicon and never on a warm frame. The page is square and its bytes
+//! favicons take the rest as they land, at most `max_favicons` at once. A
+//! favicon's slot is released when its workspace leaves the registry and the
+//! next favicon reuses it, so a long-lived page never runs out of slots for
+//! workspaces that come and go. Texels are premultiplied so linear sampling
+//! never fringes. `version` advances with every slot written or cleared, so
+//! the backend re-uploads the page once per change and never on a warm
+//! frame. The page is square and its bytes
 //! follow the cells: 306 KiB at a ratio of 1, 736 KiB at 1.53 (a 23 pt
 //! font), 2.8 MiB at 3.07 (the same on a 2x display) and 6.9 MiB at the
 //! `max_cell` bound.
@@ -29,7 +32,11 @@ pub const Images = [SpriteSize.count]?ImageView;
 pub const min_cell: u16 = 8;
 /// The rail at a chrome ratio of 4.8: a 36 pt font on a 2x display.
 pub const max_cell: u16 = 96;
+/// Favicons the page holds at once: the workspace list never shows more
+/// (`core.max_workspace_list_entries`), so a listed workspace always finds a
+/// slot once the slots of departed ones are released.
 pub const max_favicons: u16 = 64;
+pub const favicons_limit = core.Limit.declare("gui.favicons.max_favicons", "favicons", max_favicons);
 /// Slots on each row of the page and rows of slots: a slot is about 2.6
 /// times as wide as it is tall, so this grid keeps the page nearly square.
 pub const slot_columns: u32 = 5;
@@ -42,14 +49,22 @@ pub const provider_mark_count: u16 = providers.len;
 comptime {
     std.debug.assert(assets.provider_symbols_rgba.len == providers.len * provider_slot * provider_slot * 4);
     std.debug.assert(slot_columns * slot_rows >= providers.len + max_favicons);
+    std.debug.assert(max_favicons >= core.max_workspace_list_entries);
 }
+
+/// Favicon slots, counted from the first slot after the provider marks.
+const FaviconSlots = std.StaticBitSet(max_favicons);
 
 allocator: std.mem.Allocator,
 pixels: []u8,
 cells: Cells,
 /// Texels on each side of the page.
 side: u32,
+/// Slots written since the page was built, provider marks included; a
+/// released slot below it is reused before the page grows.
 count: u16 = 0,
+/// Favicon slots below `count` that hold no favicon and wait for reuse.
+released: FaviconSlots = .initEmpty(),
 version: u32 = 1,
 provider_marks: [providers.len]Sprite = undefined,
 
@@ -118,11 +133,13 @@ pub fn capacity(_: *const SpritePage) u16 {
     return slot_columns * slot_rows;
 }
 
-/// Favicon slots still free: the sheet keeps `max_favicons` at most.
+/// Favicon slots still free, released ones included: the sheet keeps
+/// `max_favicons` at most.
 /// Example: `if (page.faviconRoom() == 0) keepGlyph();`
 pub fn faviconRoom(self: *const SpritePage) u16 {
-    const used = self.count -| @as(u16, providers.len);
-    return @min(max_favicons - @min(max_favicons, used), self.capacity() - self.count);
+    const released: u16 = @intCast(self.released.count());
+    const placed = (self.count -| provider_mark_count) - released;
+    return @min(max_favicons - @min(max_favicons, placed), self.capacity() - self.count + released);
 }
 
 /// The embedded mark of a built-in provider; custom providers have none.
@@ -138,7 +155,8 @@ pub fn providerMark(self: *const SpritePage, provider: core.AgentProvider) ?Spri
 }
 
 /// Copies one straight-alpha favicon per sprite size, each `cell(size)`
-/// a side, into the next free slot and returns the slot.
+/// a side, into a released slot or the next unwritten one and returns the
+/// slot. `error.SheetFull` means `max_favicons` favicons are placed.
 /// Example: `const slot = try page.addFavicon(images);`
 pub fn addFavicon(self: *SpritePage, images: Images) !u16 {
     if (self.faviconRoom() == 0) {
@@ -151,7 +169,37 @@ pub fn addFavicon(self: *SpritePage, images: Images) !u16 {
         }
     }
 
-    return self.add(images);
+    const released = self.released.findFirstSet() orelse return self.add(images);
+    try self.checkSizes(images);
+    const slot = provider_mark_count + @as(u16, @intCast(released));
+    self.write(slot, images);
+    self.released.unset(released);
+    self.version +%= 1;
+    return slot;
+}
+
+/// Clears the favicon in `slot` to transparent texels and keeps the slot
+/// for the next favicon. A provider mark, an unwritten slot or one already
+/// released is left alone.
+/// Example: `page.removeFavicon(entry.slot);`
+pub fn removeFavicon(self: *SpritePage, slot: u16) void {
+    if (slot < provider_mark_count or slot >= self.count) {
+        return;
+    }
+
+    const index = slot - provider_mark_count;
+    if (index >= max_favicons or self.released.isSet(index)) {
+        return;
+    }
+
+    const corner = self.origin(slot, .small);
+    const width = slotWidth(self.cells);
+    for (0..self.cell(.large)) |row| {
+        @memset(self.pixels[((corner[1] + row) * self.side + corner[0]) * 4 ..][0 .. width * 4], 0);
+    }
+
+    self.released.set(index);
+    self.version +%= 1;
 }
 
 /// Texture coordinates of a sprite's cell: u0, v0, u1, v1 in the page.
@@ -186,18 +234,30 @@ fn slotWidth(cells: Cells) u32 {
 }
 
 fn add(self: *SpritePage, images: Images) !u16 {
+    try self.checkSizes(images);
+    if (self.count >= self.capacity()) {
+        return error.SheetFull;
+    }
+
+    const slot = self.count;
+    self.write(slot, images);
+    self.count += 1;
+    self.version +%= 1;
+    return slot;
+}
+
+fn checkSizes(self: *const SpritePage, images: Images) !void {
     for (SpriteSize.all, images) |size, entry| {
         const image = entry orelse continue;
         if (image.width != self.cell(size) or image.height != self.cell(size)) {
             return error.SpriteSizeMismatch;
         }
     }
+}
 
-    if (self.count >= self.capacity()) {
-        return error.SheetFull;
-    }
-
-    const slot = self.count;
+// Premultiplies each size's image into its cell of `slot`; a null size
+// leaves its cell as it is.
+fn write(self: *SpritePage, slot: u16, images: Images) void {
     for (SpriteSize.all, images) |size, entry| {
         const image = entry orelse continue;
         const corner = self.origin(slot, size);
@@ -209,10 +269,6 @@ fn add(self: *SpritePage, images: Images) !u16 {
             }
         }
     }
-
-    self.count += 1;
-    self.version +%= 1;
-    return slot;
 }
 
 test "the page holds the provider marks then at most 64 favicons and premultiplies" {
@@ -263,6 +319,63 @@ test "the page holds the provider marks then at most 64 favicons and premultipli
     }
 
     try std.testing.expectEqual(@as(u16, 0), page.faviconRoom());
+    try std.testing.expectError(error.SheetFull, page.addFavicon(images));
+}
+
+test "a released favicon slot is cleared, re-uploaded and reused before the page grows" {
+    var page = try SpritePage.init(std.testing.allocator, 1);
+    defer page.deinit();
+    const opaque_texels = [_]u8{ 255, 255, 255, 255 } ** (20 * 20);
+    var images: Images = undefined;
+    for (SpriteSize.all, &images) |size, *image| {
+        image.* = .{
+            .pixels = &opaque_texels,
+            .stride = page.cell(size) * 4,
+            .width = page.cell(size),
+            .height = page.cell(size),
+        };
+    }
+
+    var slots: [max_favicons]u16 = undefined;
+    for (&slots) |*slot| {
+        slot.* = try page.addFavicon(images);
+    }
+
+    try std.testing.expectEqual(@as(u16, 0), page.faviconRoom());
+    try std.testing.expectError(error.SheetFull, page.addFavicon(images));
+
+    // A provider mark and an unwritten slot are never released.
+    const version = page.version;
+    page.removeFavicon(page.providerMark(.claude).?.index);
+    page.removeFavicon(page.count);
+    try std.testing.expectEqual(version, page.version);
+    try std.testing.expectEqual(@as(u16, 0), page.faviconRoom());
+
+    const freed = slots[7];
+    page.removeFavicon(freed);
+    try std.testing.expectEqual(version + 1, page.version);
+    try std.testing.expectEqual(@as(u16, 1), page.faviconRoom());
+    const extent: f32 = @floatFromInt(page.side);
+    for (SpriteSize.all) |size| {
+        const cell_uv = page.uv(.{
+            .index = freed,
+            .size = size,
+        });
+        const left: usize = @intFromFloat(cell_uv[0] * extent);
+        const top: usize = @intFromFloat(cell_uv[1] * extent);
+        for (0..page.cell(size)) |row| {
+            const texels = page.pixels[((top + row) * page.side + left) * 4 ..][0 .. page.cell(size) * 4];
+            try std.testing.expect(std.mem.allEqual(u8, texels, 0));
+        }
+    }
+
+    // Releasing twice changes nothing; the next favicon takes the slot.
+    page.removeFavicon(freed);
+    try std.testing.expectEqual(version + 1, page.version);
+    const count = page.count;
+    try std.testing.expectEqual(freed, try page.addFavicon(images));
+    try std.testing.expectEqual(count, page.count);
+    try std.testing.expectEqual(version + 2, page.version);
     try std.testing.expectError(error.SheetFull, page.addFavicon(images));
 }
 

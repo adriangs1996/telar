@@ -9,6 +9,8 @@ const ScrollEvent = @import("ScrollEvent.zig");
 const ClipboardResult = @import("ClipboardResult.zig");
 const AccessibilityAction = @import("AccessibilityAction.zig");
 const DeleteSurrounding = @import("DeleteSurrounding.zig");
+const core = @import("telar-core");
+const std = @import("std");
 
 pub const Event = union(enum) {
     text: TextInput,
@@ -55,5 +57,15 @@ pub const Event = union(enum) {
     }
 };
 
-pub const max_text_bytes = 64 * 1024;
+/// Mirrors `TELAR_GUI_CLIPBOARD_CAPACITY`: the UTF-8 bytes one clipboard
+/// read, write or native paste carries. Pasting a long log or a file into an
+/// agent's prompt fits; a larger paste is refused whole, never cut, since
+/// half a pasted command may run.
+pub const max_text_bytes = 1024 * 1024;
+pub const clipboard_limit = core.Limit.declare("gui.clipboard.max_text_bytes", "clipboard bytes", max_text_bytes);
 pub const max_composition_bytes = 4096;
+
+comptime {
+    // A selection the runtime copies always fits the host clipboard.
+    std.debug.assert(max_text_bytes >= core.max_clipboard_bytes);
+}

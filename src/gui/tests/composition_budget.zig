@@ -89,7 +89,7 @@ test "native decorated combining clusters remain bounded and atlas exhaustion re
     try std.testing.expectEqual(calls, atlas.shape_calls);
     try std.testing.expectEqual(version, atlas.version);
     try std.testing.expectEqual(count, renderer.quads.items().len);
-    atlas.shelf_y = GlyphAtlas.side;
+    atlas.shelf_y = atlas.side;
     renderer.quads.clear();
     try canvas.text(area, .{ .text = "Ω", .color = .default, .bold = true, .italic = true });
     try std.testing.expectEqual(version, atlas.version);

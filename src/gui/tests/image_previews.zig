@@ -56,7 +56,7 @@ test "retired pixels outlive the key press that retired them until the next fram
     _ = shelf.syncTarget(target);
 
     previews.landing = try preview(gpa, 1, 0x40);
-    try std.testing.expect(try shelf.adopt(try capture(gpa, 1, target)));
+    try std.testing.expect((try shelf.adopt(try capture(gpa, 1, target))).layout_changed);
     try std.testing.expect(previews.landing == null);
 
     previews.beginFrame();

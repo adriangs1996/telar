@@ -126,10 +126,21 @@ fn brotliFree(allocator: ?*anyopaque, pointer: ?*anyopaque) callconv(.c) void {
     cblocks.free(gpa.*, pointer);
 }
 
+/// The decoder keeps its own history window, so output can stop at any
+/// byte of the cap: without one, a back-reference past a small remaining
+/// cap fails the whole decode instead of truncating it.
 fn decodeFlate(gpa: std.mem.Allocator, input: DecodeInput, container: std.compress.flate.Container) !Result {
+    const window = try gpa.alloc(u8, std.compress.flate.max_window_len);
+    defer {
+        std.crypto.secureZero(u8, window);
+        gpa.free(window);
+    }
+
     var source: std.Io.Reader = .fixed(input.input);
-    var decoder: std.compress.flate.Decompress = .init(&source, container, &.{});
-    return collect(gpa, &decoder.reader, .{ .max_bytes = input.max_bytes });
+    var decoder: std.compress.flate.Decompress = .init(&source, container, window);
+    return collect(gpa, &decoder.reader, .{
+        .max_bytes = input.max_bytes,
+    });
 }
 
 fn decodeBrotli(gpa: std.mem.Allocator, input: DecodeInput) !Result {
@@ -176,21 +187,8 @@ fn collect(gpa: std.mem.Allocator, reader: *std.Io.Reader, options: CollectOptio
         std.crypto.secureZero(u8, temporary);
         gpa.free(temporary);
     }
-    var writer: std.Io.Writer = .fixed(temporary);
-    var total: usize = 0;
 
-    while (total < logical_capacity) {
-        const written = reader.stream(&writer, .limited(logical_capacity - total)) catch |err| switch (err) {
-            error.EndOfStream => break,
-            else => return err,
-        };
-        if (written == 0) {
-            return error.InvalidCompressedStream;
-        }
-
-        total = writer.end;
-    }
-
+    const total = reader.readSliceShort(temporary) catch return error.InvalidCompressedStream;
     const result_len = @min(total, options.max_bytes);
     return .{
         .bytes = try gpa.dupe(u8, temporary[0..result_len]),
@@ -278,6 +276,27 @@ test "gzip brotli and zstd decode within a shared output cap" {
         try std.testing.expectEqualStrings("capt", capped.bytes);
         try std.testing.expect(capped.decoded);
         try std.testing.expect(capped.truncated);
+    }
+}
+
+test "a repetitive gzip body truncates at any cap instead of failing" {
+    const repeated = [_]u8{
+        0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x13, 0x4b, 0x4c,
+        0x1c, 0x1e, 0x00, 0x00, 0x58, 0xf0, 0x9a, 0x59, 0xc8, 0x00, 0x00, 0x00,
+    };
+
+    for ([_]usize{ 1, 28, 199, 200 }) |max_bytes| {
+        var result = try decode(std.testing.allocator, .{
+            .input = &repeated,
+            .encoding = "gzip",
+            .max_bytes = max_bytes,
+        });
+        defer result.deinit(std.testing.allocator);
+
+        try std.testing.expect(result.decoded);
+        try std.testing.expect(!result.failed);
+        try std.testing.expectEqual(max_bytes, result.bytes.len);
+        try std.testing.expectEqual(max_bytes < 200, result.truncated);
     }
 }
 
