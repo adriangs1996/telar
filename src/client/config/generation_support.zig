@@ -1386,10 +1386,10 @@ test "runtime agent lists keep the entries that fit, extend full built-ins and r
     try std.testing.expectEqual(@as(?u64, 9), unreportedRequest(generation, "agent_manifest.max_command_tools"));
 }
 
-test "sixteen custom agents fit and the next one is left out and reported" {
+test "twenty-seven custom agents fit and the next one is left out and reported" {
     const source =
         \\local agents = {}
-        \\for index = 1, 17 do agents[index] = { name = "agent-" .. index, process_names = { "agent-" .. index } } end
+        \\for index = 1, 28 do agents[index] = { name = "agent-" .. index, process_names = { "agent-" .. index } } end
         \\return { api_version = 2, runtime = { agents = agents } }
     ;
     var diagnostic: data.Diagnostic = .{};
@@ -1398,9 +1398,10 @@ test "sixteen custom agents fit and the next one is left out and reported" {
     const table = &generation.snapshot.runtime.agent_manifests;
 
     try std.testing.expectEqual(core.builtin_table.count + core.max_custom_agent_manifests, table.count);
-    try std.testing.expect(table.providerFromExecutable("agent-16") != null);
-    try std.testing.expect(table.providerFromExecutable("agent-17") == null);
-    try std.testing.expectEqual(@as(?u64, 17), unreportedRequest(generation, "agent_manifest.max_custom_agents"));
+    try std.testing.expectEqual(@as(usize, 32), table.count);
+    try std.testing.expect(table.providerFromExecutable("agent-27") != null);
+    try std.testing.expect(table.providerFromExecutable("agent-28") == null);
+    try std.testing.expectEqual(@as(?u64, 28), unreportedRequest(generation, "agent_manifest.max_custom_agents"));
 }
 
 fn unreportedRequest(generation: *const Generation, name: []const u8) ?u64 {
@@ -1872,7 +1873,7 @@ test "renders that return new command tabs on every tick never run out of rows" 
 test "a notification action with a long title and body keeps their start and reports both limits" {
     var diagnostic: data.Diagnostic = .{};
     const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{
-        .source = "local telar = require('telar') return { api_version = 2, client = { keybindings = { telar.bind({ 'n' }, telar.action.notification({ title = string.rep('é', 40), body = string.rep('b', 300) })) } } }",
+        .source = "local telar = require('telar') return { api_version = 2, client = { keybindings = { telar.bind({ 'n' }, telar.action.notification({ title = string.rep('é', 60), body = string.rep('b', 600) })) } } }",
         .source_name = "@config.lua",
         .number = 1,
     });
@@ -1882,7 +1883,8 @@ test "a notification action with a long title and body keeps their start and rep
     try std.testing.expectEqualStrings("é" ** (core.max_notification_title_bytes / 2), notification.title());
     try std.testing.expectEqual(@as(usize, core.max_notification_message_bytes), notification.message().len);
     try std.testing.expectEqual(@as(u8, 2), generation.unreported.count);
-    try std.testing.expectEqual(@as(?u64, 80), generation.unreported.slice()[0].requested);
+    try std.testing.expectEqual(@as(?u64, 120), generation.unreported.slice()[0].requested);
+    try std.testing.expectEqualStrings("notifications.max_title_bytes", generation.unreported.slice()[0].limit.name);
 }
 
 test "a pick's items function lists a full command output within the render budget" {

@@ -395,10 +395,11 @@ show it, and which client capability it supports. Telar ships manifests for
 `claude`, `codex`, `pi`, `cursor` and `opencode`. Naming one of them extends or overrides the
 shipped manifest; any other name creates a new agent that the sidebar, the
 `telar agent` command, notifications and the image shelf treat exactly like a
-built-in one. Up to 16 agents can be configured besides the built-in ones.
+built-in one. Up to 27 agents can be configured besides the built-in ones,
+32 in all.
 
 A manifest past a limit keeps what fits and the rest of the configuration
-loads: a 17th new agent, list entries past a list's room and entries longer
+loads: a 28th new agent, list entries past a list's room and entries longer
 than their bound are left out, and each limit reached is reported with the
 limit notice (`agent_manifest.max_custom_agents`, `agent_manifest.max_phrases`,
 `agent_manifest.max_phrase_bytes`, `agent_manifest.max_paths`,
@@ -1033,9 +1034,10 @@ passes one of these is left out and its limit reported, and a command is
 never cut. What renders and callbacks return shares at least 64 KiB of
 recent rows, cleared only between renders: a render whose buttons do not
 fit keeps its first ones and leaves out the rest, reporting
-`config.recent_command_tab_bytes`, and the next render starts with all the
-room. A button whose command was cleared since says so and renders the
-bars again.
+`config.recent_command_tab_bytes`. The next render, of whichever bar or
+panel comes next, starts with the recent rows cleared, so buttons other
+surfaces showed may name cleared rows: such a button says so when clicked
+and renders the bars again.
 `telar config check` compiles the merged keymap and reports conflicts between
 configured bindings. `client.input.sequence_timeout_ms` applies only to partial
 global sequences; prefixed sequences do not expire.

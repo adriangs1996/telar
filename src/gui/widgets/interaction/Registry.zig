@@ -17,6 +17,8 @@ comptime {
     // Every chrome band target fits with room for an open overlay's rows.
     std.debug.assert(capacity >= 2 * BandHitMap.capacity);
     std.debug.assert(std.math.isPowerOfTwo(index_len));
+    // A row index never reaches the empty marker.
+    std.debug.assert(capacity < empty_row);
 }
 /// Open-addressed index from identity to row, twice the rows so probes
 /// stay short; a duplicate identity is found in one probe run.

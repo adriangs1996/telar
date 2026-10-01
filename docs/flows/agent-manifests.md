@@ -71,10 +71,9 @@ evidence retains its typed resume session and allows screen status updates.
 
 ## Table
 
-`core.agent_manifest.Table` holds at most `schema.max_agent_manifests`
-manifests: the five built-in ones and `schema.max_custom_agent_manifests`
-(16) configured ones, whose provider indexes end at
-`schema.max_agent_provider_index`. A phrase list holds 16 entries of up to
+`core.Table` holds `Table.capacity` manifests, 32: the five built-in ones
+and `schema.max_agent_manifests` (27) configured ones, whose provider
+indexes end at `schema.max_agent_provider_index`. A phrase list holds 16 entries of up to
 64 bytes, `process_names` and `process_paths` 8 of up to 128 bytes; built-in
 lists fill at most half of theirs. Configuration past any of these keeps
 what fits and reports the limit (`config.agents.parse`, through the

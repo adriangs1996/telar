@@ -17,6 +17,12 @@ pub const capacity = ImageDraw.capacity;
 pub const limit = core.Limit.declare("gui.images.placements_per_frame", "image placements", capacity);
 /// Twice `capacity`, a power of two, so probes stay short.
 pub const shown_index_len = 2 * capacity;
+
+comptime {
+    // `pane_images` wraps its probes with a mask.
+    std.debug.assert(std.math.isPowerOfTwo(shown_index_len));
+}
+
 pub const ShownImage = @import("ShownImage.zig");
 
 gpu: GpuImages = .{},

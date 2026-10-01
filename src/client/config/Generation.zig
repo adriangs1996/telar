@@ -2023,8 +2023,8 @@ fn parseAction(self: *Generation, action_input: ActionInput, diagnostic: *data.D
             .level = level,
             .duration_ms = @intCast(duration),
             .target = target,
-            .title = self.fitted(title, data.Notification.title_limit),
-            .message = self.fitted(body, data.Notification.message_limit),
+            .title = self.fitted(title, core.notification_title_limit),
+            .message = self.fitted(body, core.notification_message_limit),
         }) catch {
             diagnostic.set("notification title or body is invalid or too long", .{});
             return error.InvalidConfig;

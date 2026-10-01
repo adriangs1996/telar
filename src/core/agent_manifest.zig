@@ -447,7 +447,7 @@ test "every built-in list leaves at least half its room to configuration" {
     }
 }
 
-test "a table holds every built-in agent and sixteen custom ones within the wire's provider range" {
+test "a table holds every built-in agent and twenty-seven custom ones within the wire's provider range" {
     var table = builtin_table;
     var name_buffer: [types.max_agent_provider_name_bytes]u8 = undefined;
     for (0..types.max_agent_manifests) |index| {
