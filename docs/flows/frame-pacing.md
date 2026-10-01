@@ -90,3 +90,31 @@ interval never changes another's cell pacing.
   directions; the golden corpus pins the encoding.
 - `src/client/config/gui_config_test.zig`: `gui.max_fps` accepts integers in
   30..240 and inherits through profiles.
+- `tools/gui_frame_rate.py` (macOS, ReleaseFast with diagnostics) floods one
+  pane in an isolated runtime and counts delivered presentations, the
+  interval the window reported and the runtime's cell frames a second.
+
+## Measured
+
+On an M3 MacBook Pro (2026-10-01), one pane running `yes`, six seconds per
+run, three runs each:
+
+| Display | `main` before | This flow |
+| --- | --- | --- |
+| Dell P3225QE, 100 Hz | 59.5-59.9 presented/s, 60 cell frames/s | 99.1-99.4 presented/s, 99.4-99.9 cell frames/s |
+| Built-in ProMotion, 120 Hz | 60.0-60.1 presented/s, 60 cell frames/s | 102-115 presented/s, 119.4-119.9 cell frames/s |
+| Built-in, `gui.max_fps = 60` | | 59.8-60.0 presented/s, 60 cell frames/s |
+
+At 120 Hz the runtime fills every slot and the window misses some: a frame
+takes 2.4-3.1 ms from preparation to GPU completion at the median but
+9.4-9.8 ms at p95, past one 8.3 ms vsync, and one presentation is in flight
+at a time. Pacing the window at 7/8 of the interval presented the same
+110-111 a second, so the cadence is not what drops them. Key echo latency
+(`tools/gui_latency.py`, 100 samples, 100 Hz display) did not change: idle
+p50 1.25 ms before and after, and under a pane redrawing text at 120 Hz p50
+9.2-9.8 ms before and 9.2-9.6 ms after, p95 about 20 ms on both, since input
+grace already let the echo skip the cadence.
+
+In the Fedora test machine (sway on a 75 Hz virtual output, llvmpipe), the
+window committed 74 frames a second during the same flood, against 58 with
+the fixed 60 Hz budget.
