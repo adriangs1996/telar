@@ -119,7 +119,8 @@ pub fn inputPrompt(client: *Client, input: name_prompts.Input) !PromptOutcome {
     const before = promptListSnapshot(&client.model.name_prompt);
     const directory_before = promptDirectoryVersion(&client.model.name_prompt);
     const paths_request = client.model.path_picker.pending_request;
-    const command = path_picker.orient(&client.model, name_prompts.commandFor(&input));
+    const target = if (client.model.name_prompt.currentConst()) |prompt| prompt.target() else null;
+    const command = path_picker.orient(&client.model, name_prompts.commandFor(&input, target));
     const parent = if (before.kind == .actions and command != null and command.? == .submit) client.model.name_prompt.value else null;
     const cancelled_child = if (client.model.name_prompt.currentConst()) |prompt| prompt.generation == client.model.palette_child_generation else false;
     const outcome = if (command) |value| try applyPromptCommand(client, value) else .unchanged;

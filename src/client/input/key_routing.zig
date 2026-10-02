@@ -26,6 +26,10 @@ pub fn keyRoutingAuthority(client: *const Client) data.KeyRoutingAuthority {
 /// Routes one semantic key or borrowed byte slice to a single current owner.
 /// Example: `_ = try key_routing.routeKeyInput(app, command);`
 pub fn routeKeyInput(client: *Client, command: data.KeyRoutingCommand) !data.KeyRoutingOutcome {
+    if (command == .key and command.key.mods.super and command.key.phase != .release) {
+        return .{ .owner = .ignored };
+    }
+
     const current = keyRoutingAuthority(client);
     const outcome = switch (command) {
         .bytes => |bytes| if (bytes.len == 0) data.KeyRoutingOutcome{
@@ -199,7 +203,7 @@ fn routeCurrentKey(client: *Client, command: data.KeyRoutingCommand, authority: 
             }
 
             // Escape dismisses the bar panel before a prompt or pane sees it.
-            if (!authority.prompt_active and key.code == .escape and @as(u3, @bitCast(key.mods)) == 0 and client.model.bars.panel.isOpen()) {
+            if (!authority.prompt_active and keyinput.keybind.isPlainEscape(key) and client.model.bars.panel.isOpen()) {
                 try bar_updates.closePanel(client);
                 return .{
                     .outcome = .{

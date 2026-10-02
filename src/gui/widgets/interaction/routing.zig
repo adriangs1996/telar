@@ -319,6 +319,10 @@ fn editor(gui: *GuiAdapter, target: Target, event: event_module.Event) !void {
                 return;
             }
 
+            if (key.mods.super) {
+                return;
+            }
+
             if (key.code == .escape and state.preedit.owner != null) {
                 state.cancelComposition();
                 state.dispatcher.revision +%= 1;
@@ -411,11 +415,16 @@ fn shortcut(gui: *GuiAdapter, target: Target, key: Key) !bool {
 
     const current = field(gui, target) orelse return true;
     const selected = current.selection();
+    const letter = std.ascii.toLower(key.code.char.bytes[0]);
+    if (letter != 'a' and letter != 'c' and letter != 'x' and letter != 'v') {
+        return false;
+    }
+
     if (key.phase != .press) {
         return true;
     }
 
-    switch (std.ascii.toLower(key.code.char.bytes[0])) {
+    switch (letter) {
         'a' => try command(gui, .select_all),
         // With nothing selected in the search field, copy takes the
         // selected command instead of an empty string.
@@ -424,7 +433,7 @@ fn shortcut(gui: *GuiAdapter, target: Target, key: Key) !bool {
             try beginCut(gui, target, selected);
         },
         'v' => gui.requestClipboardRead(target.id.target_id, target.id.generation) catch return true,
-        else => return false,
+        else => unreachable,
     }
 
     return true;

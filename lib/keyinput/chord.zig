@@ -36,6 +36,12 @@ pub fn parseKey(text: []const u8) !Key {
                 return error.DuplicateModifier;
             }
             mods.shift = true;
+        } else if (eqlAscii(part, "super") or eqlAscii(part, "cmd") or eqlAscii(part, "command")) {
+            if (mods.super) {
+                return error.DuplicateModifier;
+            }
+
+            mods.super = true;
         } else {
             code_text = part;
         }
@@ -46,14 +52,14 @@ pub fn parseKey(text: []const u8) !Key {
 
     // Legacy terminals report Shift+Tab as its own CSI sequence and do not set
     // a modifier bit. Store the form the input parser emits.
-    if (code == .tab and mods.shift and !mods.ctrl and !mods.alt) {
+    if (code == .tab and mods.shift and !mods.ctrl and !mods.alt and !mods.super) {
         code = .back_tab;
         mods.shift = false;
     }
 
-    // Ctrl letters arrive as C0 bytes and therefore lose their case. Treat
-    // `ctrl+B` and `ctrl+b` as the same configuration value.
-    if (mods.ctrl) {
+    // Ctrl and native Super letters use lowercase identities. Treat
+    // `cmd+P` and `cmd+p` as the same binding, retaining explicit Shift.
+    if (mods.ctrl or mods.super) {
         switch (code) {
             .char => |*char| {
                 if (char.len == 1 and std.ascii.isUpper(char.bytes[0])) {
@@ -67,7 +73,7 @@ pub fn parseKey(text: []const u8) !Key {
     // Legacy terminal input carries the resulting printable character, not a
     // Shift bit. Canonicalize the combinations whose result is independent of
     // keyboard layout and reject the rest instead of accepting a dead binding.
-    if (mods.shift) {
+    if (mods.shift and !mods.super) {
         switch (code) {
             .char => |*char| {
                 if (mods.ctrl) {

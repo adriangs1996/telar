@@ -51,8 +51,8 @@ pub fn format(buffer: []u8, key: keyinput.Key, style: Style) []const u8 {
     };
 
     return switch (style) {
-        .pc => std.fmt.bufPrint(buffer, "{s}{s}{s}{s}", .{ if (key.mods.ctrl) "Ctrl+" else "", if (key.mods.alt) "Alt+" else "", if (key.mods.shift) "Shift+" else "", code }) catch "?",
-        .mac => std.fmt.bufPrint(buffer, "{s}{s}{s}{s}", .{ if (key.mods.ctrl) "⌃" else "", if (key.mods.alt) "⌥" else "", if (key.mods.shift) "⇧" else "", code }) catch "?",
+        .pc => std.fmt.bufPrint(buffer, "{s}{s}{s}{s}{s}", .{ if (key.mods.ctrl) "Ctrl+" else "", if (key.mods.alt) "Alt+" else "", if (key.mods.shift) "Shift+" else "", if (key.mods.super) "Super+" else "", code }) catch "?",
+        .mac => std.fmt.bufPrint(buffer, "{s}{s}{s}{s}{s}", .{ if (key.mods.ctrl) "⌃" else "", if (key.mods.alt) "⌥" else "", if (key.mods.shift) "⇧" else "", if (key.mods.super) "⌘" else "", code }) catch "?",
     };
 }
 
@@ -64,6 +64,13 @@ fn upper(text: []const u8, storage: *[8]u8) []const u8 {
 
     storage[0] = std.ascii.toUpper(text[0]);
     return storage[0..1];
+}
+
+test "Command shortcuts show the platform modifier" {
+    var storage: [max_bytes]u8 = undefined;
+    const key = try keyinput.chord.parseKey("cmd+shift+p");
+    try std.testing.expectEqualStrings("⇧⌘P", format(&storage, key, .mac));
+    try std.testing.expectEqualStrings("Shift+Super+p", format(&storage, key, .pc));
 }
 
 test "chords print the prefix before the bound suffix in both styles" {

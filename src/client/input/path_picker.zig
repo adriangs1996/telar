@@ -147,7 +147,7 @@ pub fn canInsert(model: *data.ClientModel, selection: u16) bool {
 /// selection moves to worse matches going up.
 ///
 /// ```zig
-/// const command = path_picker.orient(&client.model, name_prompts.commandFor(&input));
+/// const command = path_picker.orient(&client.model, name_prompts.commandFor(&input, .paths));
 /// ```
 pub fn orient(model: *const data.ClientModel, command: ?data.PromptCommand) ?data.PromptCommand {
     const value = command orelse return null;

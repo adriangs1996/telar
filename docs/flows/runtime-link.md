@@ -53,7 +53,13 @@ machine disabled or moved (machine-presentation.md)
   from the first frame. `LinkStatus` dims the workbench and says
   `Connecting to …`, `Reconnecting to … (attempt n)`, `… is unreachable` or
   `Cannot connect to …`, with SSH's error output or the runtime's refusal
-  underneath.
+  underneath. The GUI holds startup input only while connected and waiting
+  for the first pane. A connecting, lost, failed or stopped link keeps
+  keyboard and pointer navigation usable, so the person can open the machine
+  picker or return to another machine. Window controls do not require an
+  active tab; only resizing attached panes does. Disconnected pane input is
+  discarded through the existing input routing; it is not retained for a
+  later session.
 - **Some failures wait for the person.** A host key or login SSH refuses,
   a `telar` the remote shell cannot find or run, discovery output this
   telar cannot read, another wire schema, a remote runtime of another
@@ -110,7 +116,10 @@ machine disabled or moved (machine-presentation.md)
   retry timer, a second session that forgets the first, and a failed attempt
   that shows its report and waits.
 - `src/gui/tests/machines.zig` tests that a moved machine drops the result
-  of the attempt that was running and reaches the new destination next.
+  of the attempt that was running and reaches the new destination next. It
+  also tests keyboard and pointer navigation before a machine's first pane,
+  including a rejected wire schema, and that disconnected input is drained
+  without reaching either runtime.
 - `src/model/connection/runtime_session.zig` tests what a forgotten session
   drops and keeps, and that revisions advance.
 - `src/model/connection/RuntimeLink.zig` tests bounded, one-line failures.

@@ -3,6 +3,14 @@ const InputModes = @import("InputModes.zig");
 const std = @import("std");
 const encoding = @import("encoding.zig");
 
+test "unbound Super shortcuts never encode terminal text" {
+    var buffer: [encoding.max_key_bytes]u8 = undefined;
+    for ([_]InputModes{ .{}, .{ .kitty_keyboard_flags = 31 } }) |modes| {
+        const key: Key = .{ .code = .{ .char = .init("p") }, .mods = .{ .super = true } };
+        try std.testing.expectEqualStrings("", try encoding.encodeKey(&buffer, key, modes));
+    }
+}
+
 test "cursor keys follow the focused child's mode" {
     var buffer: [32]u8 = undefined;
     try std.testing.expectEqualStrings(
@@ -44,7 +52,7 @@ test "Enter modifiers follow the child's keyboard protocol" {
     var buffer: [32]u8 = undefined;
     var expected_buffer: [32]u8 = undefined;
     for (0..8) |bits| {
-        const mods: Key.Mods = @bitCast(@as(u3, @intCast(bits)));
+        const mods: Key.Mods = @bitCast(@as(u4, @intCast(bits)));
         const pressed: Key = .{ .code = .enter, .mods = mods };
         const legacy = if (mods.alt) "\x1b\r" else "\r";
         try std.testing.expectEqualStrings(legacy, try encoding.encodeKey(&buffer, pressed, .{}));

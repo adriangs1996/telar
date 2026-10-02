@@ -16,6 +16,11 @@ pub const max_key_bytes = "\x1b[".len + 3 * decimalDigits(u32) + ":".len * 2 +
 
 /// Example: `var encoded: [max_key_bytes]u8 = undefined; const bytes = try encodeKey(&encoded, key, modes);`
 pub fn encodeKey(buffer: []u8, key: Key, modes: InputModes) ![]const u8 {
+    // Super belongs to GUI shortcuts; never turn an unbound chord into text.
+    if (key.mods.super) {
+        return buffer[0..0];
+    }
+
     var writer: std.Io.Writer = .fixed(buffer);
     const encoding: Encoding = .init(key, modes);
 

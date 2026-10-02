@@ -1029,6 +1029,21 @@ for ownership, scheduling and stale-result behavior.
 
 ## Bindings
 
+In GUI pickers and the command palette, `Ctrl+J` and `Ctrl+K` move down and up
+through results. `Ctrl+H` goes back or closes the picker, like Escape;
+`Ctrl+L` chooses the current result, like Enter. Holding J or K repeats
+navigation; H and L act once per press. Arrow keys and text editing remain
+available, and these shortcuts do not change ordinary name forms.
+
+Key chords accept `ctrl`, `alt`, `shift` and `super`. `cmd` and `command`
+are aliases for `super`, the Command key on macOS. Super bindings are GUI
+shortcuts; unbound Super chords are not sent to the shell. Native text-editing
+and clipboard shortcuts retain priority. For example, open the palette with ⌘P:
+
+```lua
+telar.bind_global({ "cmd+p" }, "goto-picker"),
+```
+
 `client.prefix` is one key chord and defaults to `"ctrl+b"`. `telar.bind` and
 `telar.bind_expr` prepend it to their `keys`, so `{ "s" }` matches
 `prefix`, then `s`. Changing the prefix also changes the compiled default

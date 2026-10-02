@@ -914,7 +914,7 @@ fn drainInput(self: *GuiAdapter) !void {
     const app = self.app;
     const pending_input = &self.input_queue;
 
-    if (app.model.startup.holdsInput()) {
+    if (self.holdsStartupInput()) {
         return;
     }
 
@@ -1211,7 +1211,7 @@ fn dispatchKey(self: *GuiAdapter, key: KeyInput) !void {
         return;
     }
 
-    if (key.mods.super or key.target_id != 0) {
+    if (key.target_id != 0) {
         return;
     }
 
@@ -1521,10 +1521,9 @@ pub fn applyViewInteraction(self: *GuiAdapter, interaction: client.ViewInteracti
         else => {},
     }
 
-    const tab = self.app.model.tabs.activeSlot() orelse return;
     _ = try client.view_interactions.apply(
         self.app,
-        tab,
+        self.app.model.tabs.activeSlot(),
         interaction,
     );
 }
@@ -1897,9 +1896,15 @@ pub fn forgetMachineView(self: *GuiAdapter) void {
 /// Queue one readiness notification only when input can make progress.
 /// Example: `try gui.resumeInput();`
 pub fn resumeInput(self: *GuiAdapter) !void {
-    if (self.input_queue.len != 0 and !self.app.model.startup.holdsInput() and self.app.model.to_runtime.availableCapacity() >= @intFromEnum(InputLimit.minimum_outbox_slots)) {
+    if (self.input_queue.len != 0 and !self.holdsStartupInput() and self.app.model.to_runtime.availableCapacity() >= @intFromEnum(InputLimit.minimum_outbox_slots)) {
         try self.driver.inbox.notify(.input_ready);
     }
+}
+
+// A connected runtime can finish opening its first pane. Without a connection,
+// input must still reach the machine picker and the window's other controls.
+fn holdsStartupInput(self: *const GuiAdapter) bool {
+    return self.app.model.runtime_link.phase == .connected and self.app.model.startup.holdsInput();
 }
 
 /// Copies the visible cursor identity for the native blink clock.

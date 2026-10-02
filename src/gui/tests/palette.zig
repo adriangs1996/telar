@@ -339,6 +339,56 @@ fn special(session: *Session, code: u32) !void {
     try session.settle();
 }
 
+fn controlKey(session: *Session, code: u32, phase: u32) !void {
+    try input_support.acceptNative(session.gui, .{ .kind = 4, .code = code, .mods = 4, .phase = phase });
+    try input_support.pump(session.gui);
+    try session.settle();
+}
+
+test "native control hjkl navigates focused pickers and returns from nested palettes" {
+    const session = try input_support.createSession();
+    defer session.deinit();
+    const app = session.gui.app;
+    const picks = &app.model.pick_list;
+    app.model.name_prompt.begin(.pick);
+    picks.begin(.{ .index = 0, .generation = 1, .prompt_generation = app.model.name_prompt.currentConst().?.generation, .title = "Theme" });
+    for ([_][]const u8{ "Dragon", "Wave", "Lotus" }) |label| {
+        try picks.items.append(.{ .label = label });
+    }
+
+    picks.show();
+    try input_support.presented(session.gui, try session.draw(), true);
+    try controlKey(session, 'j', 1);
+    try std.testing.expectEqual(@as(u16, 1), app.model.name_prompt.currentConst().?.selection());
+    try controlKey(session, 'j', 2);
+    try controlKey(session, 'j', 2);
+    try std.testing.expectEqual(@as(u16, 2), app.model.name_prompt.currentConst().?.selection());
+    try controlKey(session, 'k', 1);
+    try controlKey(session, 'k', 2);
+    try controlKey(session, 'k', 2);
+    try std.testing.expectEqual(@as(u16, 0), app.model.name_prompt.currentConst().?.selection());
+    try std.testing.expectEqualStrings("", app.model.name_prompt.currentConst().?.field.text());
+    try controlKey(session, 'h', 1);
+    try std.testing.expect(!app.model.name_prompt.active());
+
+    _ = client.name_prompt.beginCommandPalette(&app.model, .actions);
+    _ = try client.name_prompt.inputPrompt(app, .{ .command = .{ .insert = "Suggest a command" } });
+    try input_support.presented(session.gui, try session.draw(), true);
+    try controlKey(session, 'l', 1);
+    try std.testing.expectEqual(data.CommandPalettePrefix.suggest, app.model.name_prompt.currentConst().?.paletteMode());
+    try input_support.presented(session.gui, try session.draw(), true);
+    try controlKey(session, 'l', 2);
+    try std.testing.expectEqual(data.CommandPalettePrefix.suggest, app.model.name_prompt.currentConst().?.paletteMode());
+    try controlKey(session, 'h', 1);
+    try std.testing.expectEqualStrings(">Suggest a command", app.model.name_prompt.currentConst().?.field.text());
+    try input_support.presented(session.gui, try session.draw(), true);
+    try controlKey(session, 'h', 2);
+    try std.testing.expect(app.model.name_prompt.active());
+    try controlKey(session, 'h', 1);
+    try std.testing.expect(!app.model.name_prompt.active());
+    try std.testing.expectEqual(@as(usize, 0), session.input_len);
+}
+
 test "native prefix keys open the palette prefixed and enter runs the chosen action" {
     const session = try Session.init();
     defer session.deinit();

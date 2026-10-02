@@ -30,6 +30,26 @@ test "malformed chords are rejected" {
     try std.testing.expectError(error.MissingKey, chord.parseKey("ctrl"));
 }
 
+test "Command aliases preserve native modifiers and stay distinct from plain keys" {
+    const command = try chord.parseKey("cmd+P");
+    for ([_][]const u8{ "super+p", "COMMAND+p", "Cmd+p" }) |name| {
+        try std.testing.expectEqualDeep(command, try chord.parseKey(name));
+    }
+
+    try std.testing.expect(command.mods.super);
+    try std.testing.expect(keybind.keyOrder(command, try chord.parseKey("p")) != .eq);
+    try std.testing.expect(keybind.keyOrder(command, try chord.parseKey("ctrl+p")) != .eq);
+    try std.testing.expect(!keybind.isPlainEscape(try chord.parseKey("cmd+escape")));
+    try std.testing.expectError(error.DuplicateModifier, chord.parseKey("cmd+super+p"));
+    try std.testing.expectError(error.MissingKey, chord.parseKey("command"));
+
+    const shifted = try chord.parseKey("cmd+shift+P");
+    try std.testing.expect(shifted.mods.super and shifted.mods.shift);
+    try std.testing.expectEqualStrings("p", shifted.code.char.slice());
+    const tab = try chord.parseKey("super+shift+tab");
+    try std.testing.expect(tab.code == .tab and tab.mods.shift and tab.mods.super);
+}
+
 test "keys order by modifiers before codes and by text within characters" {
     const a = Key.plain(.{ .char = Char.init("a") });
     const b = Key.plain(.{ .char = Char.init("b") });

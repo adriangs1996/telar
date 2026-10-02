@@ -123,6 +123,55 @@ test "a machine chosen while a frame is in flight is shown after it" {
     try std.testing.expectEqual(@as(?u8, slot), gui.pending_machine);
 }
 
+test "an unopened machine keeps keyboard and pointer navigation usable without a runtime" {
+    const phases = [_]data.RuntimeLink.Phase{ .failed, .connecting, .lost, .stopped };
+    for (phases) |phase| {
+        var box = try socketPair();
+        defer box.channel.deinit(std.testing.io);
+        defer box.peer.deinit(std.testing.io);
+        var fixture = try Fixture.init();
+        defer fixture.deinit();
+        try fixture.showSidebar(true);
+        const gui = fixture.session.gui;
+        const slot = try openMachine(fixture.session, &box.channel);
+        const remote = &gui.clients[slot];
+        const own = gui.app;
+        remote.runtime_transport.unbind();
+        remote.model.startup.phase = .opening;
+        remote.model.runtime_link.phase = .connecting;
+        if (phase == .failed) {
+            try runtime_link.finishConnect(remote, error.RemoteTelarIncompatible);
+            try std.testing.expect(remote.model.runtime_link.setup_repairs);
+        } else {
+            remote.model.runtime_link.phase = phase;
+        }
+
+        _ = try input_support.action(gui, .{ .select_machine_offset = 1 });
+        try std.testing.expect(gui.app == remote);
+        try input_support.presented(gui, try fixture.session.draw(), true);
+
+        _ = try input_support.action(gui, .machine_picker);
+        try std.testing.expect(remote.model.name_prompt.active());
+        try std.testing.expectEqual(data.command_palette.Prefix.machines, remote.model.name_prompt.currentConst().?.paletteMode());
+        try input_support.accept(gui, .{ .key = .{ .code = .escape } });
+        try input_support.pump(gui);
+        try std.testing.expect(!remote.model.name_prompt.active());
+
+        try input_support.accept(gui, .{ .text = .{ .bytes = "discarded while disconnected" } });
+        try input_support.pump(gui);
+        try std.testing.expectEqual(@as(usize, 0), gui.input_queue.len);
+        try std.testing.expectEqual(@as(usize, 0), remote.model.to_runtime.len);
+        try input_support.presented(gui, try fixture.session.draw(), true);
+
+        const target = try activityTarget(gui, .{ .select_machine = Machines.local_slot });
+        try pointAt(gui, .press, target);
+        try pointAt(gui, .release, target);
+        try std.testing.expect(gui.app == own);
+        try std.testing.expectEqual(@as(usize, 0), gui.input_queue.len);
+        try std.testing.expectEqual(@as(usize, 0), fixture.session.input_len);
+    }
+}
+
 test "a machine hidden in a worktree reopens that worktree when shown again" {
     const session = try Session.init();
     defer session.deinit();

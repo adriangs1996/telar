@@ -38,6 +38,10 @@ pub fn sequenceOrder(a: []const Key, b: []const Key) std.math.Order {
 /// if (keybind.keyOrder(pressed, bound) == .eq) fire();
 /// ```
 pub fn keyOrder(a: Key, b: Key) std.math.Order {
+    if (a.mods.super != b.mods.super) {
+        return std.math.order(@intFromBool(a.mods.super), @intFromBool(b.mods.super));
+    }
+
     if (a.mods.ctrl != b.mods.ctrl) {
         return std.math.order(@intFromBool(a.mods.ctrl), @intFromBool(b.mods.ctrl));
     }
@@ -68,7 +72,7 @@ pub fn keyOrder(a: Key, b: Key) std.math.Order {
 /// if (keybind.isPlainEscape(key)) cancel();
 /// ```
 pub fn isPlainEscape(key: Key) bool {
-    if (key.mods.ctrl or key.mods.alt or key.mods.shift) {
+    if (key.mods.ctrl or key.mods.alt or key.mods.shift or key.mods.super) {
         return false;
     }
 

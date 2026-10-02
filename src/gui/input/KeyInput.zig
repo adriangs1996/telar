@@ -10,8 +10,8 @@ kitty: ?keyinput.Key.KittyCodepoints = null,
 target_id: u64 = 0,
 generation: u64 = 0,
 
-/// Converts only after GUI shortcuts have been handled. Super has no terminal
-/// encoding in the shared key protocol. Example: `router.route(key.terminalKey());`
+/// Preserves every modifier for the shared binding router. Unbound Super keys
+/// stay client-owned. Example: `router.route(key.terminalKey());`
 pub fn terminalKey(self: Input) keyinput.Key {
-    return .{ .code = self.code, .mods = .{ .shift = self.mods.shift, .alt = self.mods.alt, .ctrl = self.mods.ctrl }, .phase = self.phase, .physical = self.physical, .kitty = self.kitty };
+    return .{ .code = self.code, .mods = .{ .shift = self.mods.shift, .alt = self.mods.alt, .ctrl = self.mods.ctrl, .super = self.mods.super }, .phase = self.phase, .physical = self.physical, .kitty = self.kitty };
 }

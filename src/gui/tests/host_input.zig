@@ -6,6 +6,37 @@ const client = @import("telar-client");
 const Session = @import("Session.zig");
 const native = @import("../native/native.zig");
 
+test "configured Command P opens the palette without capturing plain P or leaking unbound shortcuts" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    try session.receiveFrame(1);
+    const binding = try data.config_values.ConfiguredBinding.parse(&.{"cmd+p"}, .goto_picker);
+    session.gui.adoptBindings(.{
+        .prefix = data.keybind.default_prefix,
+        .bindings = &.{binding},
+        .sequence_timeout_ns = std.time.ns_per_s,
+    });
+    try input_support.acceptNative(session.gui, .{ .kind = 4, .code = 'p', .physical = 35 });
+    try input_support.acceptNative(session.gui, .{ .kind = 4, .code = 'p', .physical = 35, .phase = 3 });
+    try input_support.acceptNative(session.gui, .{ .kind = 4, .code = 'p', .mods = 9, .physical = 35 });
+    try input_support.acceptNative(session.gui, .{ .kind = 4, .code = 'p', .mods = 9, .physical = 35, .phase = 3 });
+    try input_support.pump(session.gui);
+    try session.settle();
+    try std.testing.expectEqualStrings("p", session.input[0..session.input_len]);
+    try std.testing.expect(!session.gui.app.model.name_prompt.active());
+
+    try input_support.acceptNative(session.gui, .{ .kind = 4, .code = 'P', .mods = 8, .physical = 35 });
+    try input_support.acceptNative(session.gui, .{ .kind = 4, .code = 'P', .mods = 8, .physical = 35, .phase = 2 });
+    try input_support.acceptNative(session.gui, .{ .kind = 4, .code = 'p', .physical = 35, .phase = 3 });
+    try input_support.pump(session.gui);
+    try session.settle();
+    const prompt = session.gui.app.model.name_prompt.currentConst().?;
+    try std.testing.expect(prompt.target() == .palette);
+    try std.testing.expectEqualStrings("@", prompt.field.text());
+    try std.testing.expectEqualStrings("p", session.input[0..session.input_len]);
+}
+
 test "GUI clipboard shortcut requests owned async text and streams a bracketed terminal paste" {
     const session = try Session.init();
     defer session.deinit();

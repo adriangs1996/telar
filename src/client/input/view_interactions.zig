@@ -22,12 +22,12 @@ const tab_selection = @import("../workspace/tab_selection.zig");
 const workspace_handoff = @import("../workspace/workspace_handoff.zig");
 
 /// Applies one interaction emitted by the view and returns its pane-input
-/// routing decision.
+/// routing decision. Window controls remain usable before any tab opens.
 ///
 /// ```zig
 /// const outcome = try apply(client, tab, interaction);
 /// ```
-pub fn apply(client: *Client, tab: usize, interaction: ViewInteractionCommand) !ViewInteractionOutcome {
+pub fn apply(client: *Client, tab: ?usize, interaction: ViewInteractionCommand) !ViewInteractionOutcome {
     var layout_changed = interaction.layout_changed;
     switch (interaction.intent) {
         .none, .focus_machine_agent, .peek_machine_agent, .open_machine_worktree => {},
@@ -39,7 +39,9 @@ pub fn apply(client: *Client, tab: usize, interaction: ViewInteractionCommand) !
 
     if (layout_changed) {
         client.model.to_host.invalidate_placements = true;
-        try pane_resize.resizeAttachedPanes(client, tab, client.geometry().area);
+        if (tab) |slot| {
+            try pane_resize.resizeAttachedPanes(client, slot, client.geometry().area);
+        }
     }
 
     return .{
