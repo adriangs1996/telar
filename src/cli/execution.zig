@@ -3,8 +3,11 @@ const core = @import("telar-core");
 const Session = @import("Session.zig");
 const ExecOptions = @import("arguments/ExecOptions.zig");
 const poll_ms = 10;
-const failure_status = 125;
-const timeout_status = 124;
+/// Exit status of a transport, observation or refusal failure; a child may
+/// exit with it too, so `exec status` tells them apart.
+pub const failure_status = 125;
+/// Exit status when `--timeout` passes; the execution keeps running.
+pub const timeout_status = 124;
 
 /// Runs an execution command over the ordinary control connection. Example: `return execution.run(init, options);`.
 pub fn run(init: std.process.Init, options: ExecOptions) u8 {

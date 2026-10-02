@@ -413,3 +413,26 @@ verified local clone, independently of project setup.
 **Project setup**:
 An explicitly authorized command that prepares a worktree environment before
 its task starts. Its execution outcome is distinct from Git readiness.
+
+## Command line
+
+**Command family**:
+The first word of a `telar` command line that names a group of commands
+(`worktree` in `telar worktree create`). The parser dispatches on it and
+`telar FAMILY --help` lists what it offers; a word that is no family is a
+program to run in a pane.
+_Avoid_: Subcommand group, Namespace, Verb
+
+**Command help**:
+What `telar FAMILY COMMAND --help` prints for one command: its usage line,
+its effects and its results, from the binary alone, without a runtime. The
+command's examples are command lines the parser accepts, so help and grammar
+cannot drift apart.
+_Avoid_: Man page, Docs, Usage text
+
+**Skill**:
+A short guide a coding agent loads on its own, installed by `telar integration
+install` in the agent's skills directory: `telar`, how to discover and drive
+the installed telar from its help, and `telar-coordinator`, how to delegate
+tasks to worktree agents. Neither repeats the command help.
+_Avoid_: Manual, Cheat sheet

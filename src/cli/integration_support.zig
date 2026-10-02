@@ -33,8 +33,18 @@ const worktree_hook_margin_seconds = 60;
 /// Worktree hooks run `git worktree add`, which may take minutes in a large
 /// monorepo; Claude Code must not stop the hook before Git's own deadline.
 pub const worktree_timeout_seconds = worktree_git.git_timeout_seconds + worktree_hook_margin_seconds;
-/// The coordinator skill, installed next to an agent's settings so the agent
-/// finds it among its own skills.
+/// The skills telar installs in an agent's own skills directory, beside its
+/// hooks or extension, so the agent finds them among its skills. Each starts
+/// with its header, which marks it as telar's: only such a file is ever
+/// replaced or removed.
+pub const skill_directory = "skills/telar";
+pub const skill_header =
+    \\---
+    \\name: telar
+    \\description: Drive telar, the terminal multiplexer and agent runtime this pane runs in. Use when the user asks about telar, about other panes, agents, workspaces or worktrees, about running or watching commands in terminals or on other machines, or when a command's output mentions telar. Teaches how to discover the installed telar's commands from its own help.
+    \\---
+    \\
+;
 pub const coordinator_skill_directory = "skills/telar-coordinator";
 pub const coordinator_skill_header =
     \\---
@@ -42,8 +52,32 @@ pub const coordinator_skill_header =
     \\description: Delegate tasks to agents in their own Git worktrees and steer them through telar. Use when the user asks to implement, fix or build something in a separate worktree, or asks about, stops, redirects or reviews agents working in worktrees.
     \\---
     \\
-    \\
 ;
+
+/// What the coordinator skill started with before the marker line existed:
+/// the front matter and a blank line. A file that starts with it is telar's
+/// too, so an upgrade replaces it.
+const legacy_coordinator_header = coordinator_skill_header ++ "\n";
+
+/// One skill file telar owns: where it goes under the agent's directory,
+/// its front matter, the marker line that says telar wrote it and the
+/// bundled text that follows.
+const InstalledSkill = struct {
+    directory: []const u8,
+    header: []const u8,
+    /// A Markdown comment after the front matter; a file that carries it in
+    /// its first kilobyte is telar's to replace or remove.
+    marker: []const u8,
+    text: []const u8,
+    /// The skill's name, for the lines `install` and `status` print.
+    name: []const u8,
+    legacy_header: ?[]const u8 = null,
+};
+
+const installed_skills = [_]InstalledSkill{
+    .{ .directory = skill_directory, .header = skill_header, .marker = "<!-- telar-integration: skill telar -->\n", .text = skill.text, .name = "telar" },
+    .{ .directory = coordinator_skill_directory, .header = coordinator_skill_header, .marker = "<!-- telar-integration: skill telar-coordinator -->\n", .text = skill.coordinator_text, .name = "telar-coordinator", .legacy_header = legacy_coordinator_header },
+};
 const claude_marker = core.HookSettings.claude.marker;
 const codex_marker = core.HookSettings.codex.marker;
 const cursor_marker = core.HookSettings.cursor.marker;
@@ -131,6 +165,7 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
                 try writer.print("{s}: {s}\n", .{ event, if (hasHook(parsed.value, event, worktree_hooks)) "installed" else "absent" });
             }
 
+            try reportSkills(init.io, std.fs.path.dirname(path) orelse return error.InvalidSettingsPath, writer);
             if (options.settings == null) {
                 var legacy_buffer: [std.fs.max_path_bytes]u8 = undefined;
                 if (legacySettingsPath(init, integration, &legacy_buffer)) |legacy| {
@@ -148,9 +183,7 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
                 try writeSettings(init.io, path, parsed.value);
             }
             try writer.print("telar integration: {s} hooks {s} in {s}\n", .{ integration.name, if (changed) "installed" else "already present", path });
-            var skill_buffer: [std.fs.max_path_bytes]u8 = undefined;
-            const skill_path = try installSkill(init.io, path, &skill_buffer);
-            try writer.print("telar integration: coordinator skill written to {s}\n", .{skill_path});
+            try installSkills(init.io, std.fs.path.dirname(path) orelse return error.InvalidSettingsPath, writer);
             if (integration.launch_note.len != 0) {
                 try writer.print("telar integration: {s}\n", .{integration.launch_note});
             }
@@ -166,10 +199,10 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
             }
             try writer.print("telar integration: {s} hooks {s} in {s}\n", .{ integration.name, if (changed) "removed" else "not present", path });
 
-            // Another file the agent does not read keeps a skill that came
+            // Another file the agent does not read keeps the skills that came
             // with hooks no one removed.
             if (changed or !options.legacy) {
-                removeSkill(init.io, path);
+                removeSkills(init.io, std.fs.path.dirname(path) orelse return error.InvalidSettingsPath);
             }
 
             return 0;
@@ -279,11 +312,13 @@ fn integrationFor(agent: values.HookAgent) Integration {
 /// OpenCode. `--settings` overrides the file path.
 fn runExtension(init: std.process.Init, options: IntegrationOptions) !u8 {
     const extension = extensionFor(options.agent);
+    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const root = try extensionRoot(init.minimal.environ, options.agent, &root_buffer);
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = if (options.settings) |value|
         std.mem.span(value)
     else
-        try extensionPath(init.minimal.environ, options.agent, &path_buffer);
+        try std.fmt.bufPrint(&path_buffer, "{s}/{s}/telar.ts", .{ root, extension.directory });
     var executable_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const executable = executable_buffer[0..try std.process.executablePath(init.io, &executable_buffer)];
     var rendered_buffer: [max_extension_bytes]u8 = undefined;
@@ -311,6 +346,7 @@ fn runExtension(init: std.process.Init, options: IntegrationOptions) !u8 {
                     path,
                 },
             );
+            try reportSkills(init.io, root, writer);
             return 0;
         },
         .install => {
@@ -324,6 +360,7 @@ fn runExtension(init: std.process.Init, options: IntegrationOptions) !u8 {
                             path,
                         },
                     );
+                    try installSkills(init.io, root, writer);
                     return 0;
                 }
 
@@ -349,6 +386,7 @@ fn runExtension(init: std.process.Init, options: IntegrationOptions) !u8 {
                     path,
                 },
             );
+            try installSkills(init.io, root, writer);
             return 0;
         },
         .uninstall => {
@@ -361,6 +399,7 @@ fn runExtension(init: std.process.Init, options: IntegrationOptions) !u8 {
                         path,
                     },
                 );
+                removeSkills(init.io, root);
                 return 0;
             }
 
@@ -384,6 +423,7 @@ fn runExtension(init: std.process.Init, options: IntegrationOptions) !u8 {
                     path,
                 },
             );
+            removeSkills(init.io, root);
             return 0;
         },
     }
@@ -412,16 +452,20 @@ fn extensionFor(agent: values.HookAgent) Extension {
     };
 }
 
-// Pi reads `extensions/` in its agent directory, `$PI_CODING_AGENT_DIR` or
-// `~/.pi/agent`. OpenCode scans `plugins/` in its global configuration
-// directory, `$XDG_CONFIG_HOME/opencode` or `~/.config/opencode`.
-fn extensionPath(environ: std.process.Environ, agent: values.HookAgent, buffer: *[std.fs.max_path_bytes]u8) ![]const u8 {
-    const extension = extensionFor(agent);
-    const root = extension.root;
+// Pi reads `extensions/` and `skills/` in its agent directory,
+// `$PI_CODING_AGENT_DIR` or `~/.pi/agent`. OpenCode scans `plugins/` and
+// `skills/` in its global configuration directory, `$XDG_CONFIG_HOME/opencode`
+// or `~/.config/opencode`.
+fn extensionRoot(environ: std.process.Environ, agent: values.HookAgent, buffer: *[std.fs.max_path_bytes]u8) ![]const u8 {
+    const root = extensionFor(agent).root;
     const override = if (root.environment) |name| std.process.Environ.getPosix(environ, name) else null;
+    return root.resolve(override, std.process.Environ.getPosix(environ, "HOME"), buffer) orelse error.HomeUnavailable;
+}
+
+fn extensionPath(environ: std.process.Environ, agent: values.HookAgent, buffer: *[std.fs.max_path_bytes]u8) ![]const u8 {
     var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory = root.resolve(override, std.process.Environ.getPosix(environ, "HOME"), &root_buffer) orelse return error.HomeUnavailable;
-    return std.fmt.bufPrint(buffer, "{s}/{s}/telar.ts", .{ directory, extension.directory });
+    const directory = try extensionRoot(environ, agent, &root_buffer);
+    return std.fmt.bufPrint(buffer, "{s}/{s}/telar.ts", .{ directory, extensionFor(agent).directory });
 }
 
 /// Fills the Telar executable path into a bundled extension template. The
@@ -808,18 +852,32 @@ fn ensureArray(arena: std.mem.Allocator, object: *std.json.ObjectMap, name: []co
     return object.getPtr(name).?;
 }
 
-/// Writes the coordinator skill into `skills/telar-coordinator/SKILL.md`
-/// beside the agent's settings file and returns its path.
-fn installSkill(io: std.Io, settings_path: []const u8, buffer: *[std.fs.max_path_bytes]u8) ![]const u8 {
-    const directory = std.fs.path.dirname(settings_path) orelse return error.InvalidSettingsPath;
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const skill_directory = try std.fmt.bufPrint(&directory_buffer, "{s}/{s}", .{ directory, coordinator_skill_directory });
-    try std.Io.Dir.cwd().createDirPath(io, skill_directory);
-    const path = try std.fmt.bufPrint(buffer, "{s}/SKILL.md", .{skill_directory});
+/// Writes every skill telar owns under `root/skills/NAME/SKILL.md`, the
+/// agent's own skills directory, and prints one line per skill.
+///
+/// ```zig
+/// try installSkills(io, "/home/me/.claude", writer);
+/// ```
+fn installSkills(io: std.Io, root: []const u8, writer: *std.Io.Writer) !void {
+    for (installed_skills) |installed| {
+        var buffer: [std.fs.max_path_bytes]u8 = undefined;
+        const path = try std.fmt.bufPrint(&buffer, "{s}/{s}/SKILL.md", .{ root, installed.directory });
+        if (skillOwner(io, path, installed) == .foreign) {
+            try writer.print("telar integration: skill {s} at {s} is not telar's; left untouched\n", .{ installed.name, path });
+            continue;
+        }
+
+        try installSkill(io, path, installed);
+        try writer.print("telar integration: skill {s} written to {s}\n", .{ installed.name, path });
+    }
+}
+
+fn installSkill(io: std.Io, path: []const u8, installed: InstalledSkill) !void {
+    try std.Io.Dir.cwd().createDirPath(io, std.fs.path.dirname(path) orelse return error.InvalidSettingsPath);
     var temp = try TempFile.begin(io, path);
     var file_buffer: [4096]u8 = undefined;
     var file_writer = temp.file.writerStreaming(io, &file_buffer);
-    file_writer.interface.writeAll(coordinator_skill_header ++ skill.coordinator_text) catch |err| {
+    file_writer.interface.print("{s}{s}\n{s}", .{ installed.header, installed.marker, installed.text }) catch |err| {
         temp.discard();
         return err;
     };
@@ -828,22 +886,63 @@ fn installSkill(io: std.Io, settings_path: []const u8, buffer: *[std.fs.max_path
         return err;
     };
     try temp.commit();
-    return path;
 }
 
-// Removes the coordinator skill beside the settings, only when telar wrote
-// it: a file of the user's at that path is left alone.
-fn removeSkill(io: std.Io, settings_path: []const u8) void {
-    const directory = std.fs.path.dirname(settings_path) orelse return;
-    var buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = std.fmt.bufPrint(&buffer, "{s}/{s}/SKILL.md", .{ directory, coordinator_skill_directory }) catch return;
-    var header: [coordinator_skill_header.len]u8 = undefined;
-    const read = std.Io.Dir.cwd().readFile(io, path, &header) catch return;
-    if (!std.mem.eql(u8, read, coordinator_skill_header)) {
-        return;
+/// Prints whether each skill under `root` is telar's, someone else's or
+/// absent.
+///
+/// ```zig
+/// try reportSkills(io, "/home/me/.claude", writer);
+/// ```
+fn reportSkills(io: std.Io, root: []const u8, writer: *std.Io.Writer) !void {
+    for (installed_skills) |installed| {
+        var buffer: [std.fs.max_path_bytes]u8 = undefined;
+        const path = try std.fmt.bufPrint(&buffer, "{s}/{s}/SKILL.md", .{ root, installed.directory });
+        const state = switch (skillOwner(io, path, installed)) {
+            .absent => "absent",
+            .telar => "installed",
+            .foreign => "foreign",
+        };
+        try writer.print("skill {s}: {s} at {s}\n", .{ installed.name, state, path });
+    }
+}
+
+const SkillOwner = enum { absent, telar, foreign };
+
+// Whether the file at `path` carries telar's marker in its first kilobyte,
+// or the header an older telar wrote: only then it is telar's to replace or
+// remove.
+fn skillOwner(io: std.Io, path: []const u8, installed: InstalledSkill) SkillOwner {
+    var head: [1024]u8 = undefined;
+    const read = std.Io.Dir.cwd().readFile(io, path, &head) catch |err| switch (err) {
+        error.FileNotFound => return .absent,
+        else => return .foreign,
+    };
+    if (std.mem.indexOf(u8, read, installed.marker) != null) {
+        return .telar;
     }
 
-    std.Io.Dir.cwd().deleteFile(io, path) catch {};
+    if (installed.legacy_header) |legacy| {
+        if (std.mem.startsWith(u8, read, legacy)) {
+            return .telar;
+        }
+    }
+
+    return .foreign;
+}
+
+// Removes the skills under `root` that telar wrote; a file of the user's at
+// that path is left alone.
+fn removeSkills(io: std.Io, root: []const u8) void {
+    for (installed_skills) |installed| {
+        var buffer: [std.fs.max_path_bytes]u8 = undefined;
+        const path = std.fmt.bufPrint(&buffer, "{s}/{s}/SKILL.md", .{ root, installed.directory }) catch continue;
+        if (skillOwner(io, path, installed) != .telar) {
+            continue;
+        }
+
+        std.Io.Dir.cwd().deleteFile(io, path) catch {};
+    }
 }
 
 // An agent that never ran has no settings directory yet. A settings file

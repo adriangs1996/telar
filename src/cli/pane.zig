@@ -16,7 +16,7 @@ const Snapshot = @import("Snapshot.zig");
 
 /// How long `send-keys --enter` waits between the text and Enter. Codex's
 /// `PASTE_ENTER_SUPPRESS_WINDOW` is 120 ms.
-const submit_delay_ms = 150;
+pub const submit_delay_ms = 150;
 
 /// Runs one pane command and returns the process exit code.
 ///

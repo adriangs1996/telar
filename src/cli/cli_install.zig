@@ -5,7 +5,7 @@
 const std = @import("std");
 const CliOptions = @import("arguments/CliOptions.zig");
 
-const default_dir = "/usr/local/bin";
+pub const default_dir = "/usr/local/bin";
 
 /// ```zig
 /// try cli_install.run(process_init, options);

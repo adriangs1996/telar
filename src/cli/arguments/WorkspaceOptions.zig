@@ -5,9 +5,10 @@ const entity_target = @import("entity_target.zig");
 const core = @import("telar-core");
 const WorkspaceOptions = @This();
 
-/// The widths `--columns` accepts.
-const min_columns = 20;
-const max_columns = 1024;
+/// The widths `--columns` accepts, and the width without it.
+pub const min_columns = 20;
+pub const max_columns = 1024;
+pub const default_columns = 80;
 
 action: workspace.WorkspaceAction,
 branch: ?[*:0]const u8 = null,

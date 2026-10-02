@@ -12,7 +12,7 @@ const repository_git = @import("repository_git.zig");
 const repository_identity = @import("repository_identity.zig");
 const repository_discovery = @import("repository_discovery.zig");
 const machine_dispatch = @import("machine_dispatch.zig");
-const max_bundle_bytes = 256 * 1024 * 1024;
+pub const max_bundle_bytes = 256 * 1024 * 1024;
 const bundle_limit = core.Limit.declare("repository.max_bundle_bytes", "bytes", max_bundle_bytes);
 
 /// Prepares a repository using source-side committed history only. Example: `return repository_prepare.run(init, options);`.

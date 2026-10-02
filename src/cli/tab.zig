@@ -8,7 +8,7 @@ const login_shell = @import("login_shell.zig");
 const WorktreeCatalog = @import("WorktreeCatalog.zig");
 
 /// Size of a tab opened before any UI shows it; a UI resizes it on view.
-const background_size: core.TerminalSize = .{ .cols = 160, .rows = 48 };
+pub const background_size: core.TerminalSize = .{ .cols = 160, .rows = 48 };
 
 /// Queries the tabs of an explicit or inherited workspace. Example: `const status = tab.run(init, options);`
 pub fn run(init: std.process.Init, options: TabOptions) u8 {

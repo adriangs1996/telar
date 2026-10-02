@@ -81,7 +81,7 @@ fn execute(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Wr
         .name = name,
         .cwd = directory,
         .arguments = if (options.command.len != 0) command_buffer[0..options.command.len] else &shell,
-        .columns = options.columns orelse 80,
+        .columns = options.columns orelse WorkspaceOptions.default_columns,
     });
     const workspace_id = core.raw(opened.location.workspace.workspace);
 

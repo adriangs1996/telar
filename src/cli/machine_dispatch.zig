@@ -17,7 +17,7 @@ pub const Target = union(enum) {
 /// Exit status `ssh` reports for its own failures.
 const ssh_failure: u8 = 255;
 /// The longest remote command line, in bytes.
-const max_command_bytes = 64 * 1024;
+pub const max_command_bytes = 64 * 1024;
 /// The most output `capture` reads, in bytes: the JSON of `pane list` or
 /// `workspace list` on a busy runtime runs to hundreds of kilobytes.
 const max_captured_bytes = 4 * 1024 * 1024;

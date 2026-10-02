@@ -6,6 +6,11 @@ const std = @import("std");
 const Cursor = @import("Cursor.zig");
 const PaneOptions = @This();
 
+/// `watch`: how often the pane is read, in milliseconds.
+pub const default_interval_ms = 250;
+pub const min_interval_ms = 10;
+pub const max_interval_ms = 60_000;
+
 action: pane.PaneAction,
 target: values.Target = .current,
 workspace: ?entity_target.Target = null,
@@ -15,13 +20,13 @@ text: ?[*:0]const u8 = null,
 /// shows in a process list.
 stdin: bool = false,
 enter: bool = false,
-lines: u16 = 40,
+lines: u16 = values.default_read_rows,
 source: core.PaneTextSource = .recent,
 json: bool = false,
 socket: ?[*:0]const u8 = null,
 direction: ?core.PaneDirection = null,
 count: ?u32 = null,
-interval_ms: u32 = 250,
+interval_ms: u32 = default_interval_ms,
 
 pub fn parse(args: []const [*:0]const u8) !PaneOptions {
     if (args.len == 0) {
@@ -136,7 +141,7 @@ pub fn parse(args: []const [*:0]const u8) !PaneOptions {
             }
         } else if (std.mem.eql(u8, arg, "--interval-ms") and action == .watch) {
             options.interval_ms = std.fmt.parseUnsigned(u32, std.mem.span(try cursor.require(error.MissingInterval)), 10) catch return error.InvalidInterval;
-            if (options.interval_ms < 10 or options.interval_ms > 60000) {
+            if (options.interval_ms < min_interval_ms or options.interval_ms > max_interval_ms) {
                 return error.InvalidInterval;
             }
         } else if (std.mem.eql(u8, arg, "--socket")) {

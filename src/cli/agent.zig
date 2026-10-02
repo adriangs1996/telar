@@ -14,10 +14,10 @@ const AgentReports = @import("AgentReports.zig");
 const WorktreeCatalog = @import("WorktreeCatalog.zig");
 const core = @import("telar-core");
 
-const poll_interval_ms = 250;
-const prompt_start_grace_ms = 5_000;
+pub const poll_interval_ms = 250;
+pub const prompt_start_grace_ms = 5_000;
 /// How long `prompt --interrupt` waits for the interrupted turn to stop.
-const interrupt_settle_ms = 15_000;
+pub const interrupt_settle_ms = 15_000;
 
 pub const exit_ok: u8 = 0;
 pub const exit_failure: u8 = 1;

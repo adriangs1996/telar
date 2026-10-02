@@ -3,7 +3,7 @@ const core = @import("telar-core");
 const limit_reached = @import("limit_reached.zig");
 const privatefile = @import("privatefile");
 const FileOptions = @import("arguments/FileOptions.zig");
-const max_bytes = 128 * 1024 * 1024;
+pub const max_bytes = 128 * 1024 * 1024;
 const bytes_limit = core.Limit.declare("file_transfer.max_bytes", "bytes", max_bytes);
 
 /// Transfers a single bounded file through raw stdin/stdout. Example: `return file_transfer.run(init, options);`.

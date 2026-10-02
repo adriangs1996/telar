@@ -25,7 +25,7 @@ const workspace_grammar = @import("arguments/workspace.zig");
 const login_shell = @import("login_shell.zig");
 
 /// Size of a pane launched before any UI sized it; a UI resizes it on view.
-const launch_size: core.TerminalSize = .{ .cols = 160, .rows = 48 };
+pub const launch_size: core.TerminalSize = .{ .cols = 160, .rows = 48 };
 const wait_poll_ms = 250;
 /// Most arguments a launch carries: the command and the login shell around it.
 const max_launch_arguments = WorktreeOptions.max_command_arguments + pty.login_shell.wrapper_len;

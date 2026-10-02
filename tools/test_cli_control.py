@@ -412,8 +412,8 @@ class ControlTests(unittest.TestCase):
 
     def test_unreadable_arguments_print_one_line_without_a_trace(self):
         for arguments, message in (
-            (["pane", "send-keys", "5", ""], "telar: send-keys needs text of 1 to 16384 bytes, or --stdin; see `telar --help`"),
-            (["pane", "read"], "telar: MissingPaneTarget; see `telar --help`"),
+            (["pane", "send-keys", "5", ""], "telar: send-keys needs text of 1 to 65536 bytes, or --stdin; see `telar pane send-keys --help`"),
+            (["pane", "read"], "telar: MissingPaneTarget; see `telar pane read --help`"),
         ):
             result = subprocess.run([str(BINARY), *arguments], capture_output=True, text=True, timeout=5)
             self.assertEqual(result.returncode, 1, result.stderr)

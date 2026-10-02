@@ -5,8 +5,8 @@ const Session = @import("Session.zig");
 const execution = @import("execution.zig");
 const file_transfer = @import("file_transfer.zig");
 const ProjectOptions = @import("arguments/ProjectOptions.zig");
-const max_recipe_bytes = 32 * 1024;
-const wait_seconds = 600;
+pub const max_recipe_bytes = 32 * 1024;
+pub const wait_seconds = 600;
 const Recipe = struct { version: u8, argv: []const []const u8 };
 
 /// Executes the explicitly requested declared recipe. Example: `return project_setup.run(init, options);`.

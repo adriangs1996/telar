@@ -38,6 +38,9 @@ pub const max_wait_timeout_seconds = 24 * 60 * 60;
 
 pub const default_wait_timeout_seconds = 30;
 
+/// Rows `agent read` and `pane read` return unless `--lines` says otherwise.
+pub const default_read_rows = 40;
+
 pub const HookAgent = enum { claude, codex, pi, cursor, opencode };
 
 pub fn parseHookAgent(text: []const u8) !HookAgent {

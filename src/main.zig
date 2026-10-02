@@ -12,7 +12,7 @@ const sqlite = @import("sqlite");
 const parser = @import("cli/parser.zig");
 const control = @import("cli/control.zig");
 const cli_limit_reached = @import("cli/limit_reached.zig");
-const usage_module = @import("cli/usage.zig");
+const help_module = @import("cli/help.zig");
 const server_module = @import("cli/server.zig");
 const diagnostics_module = @import("cli/diagnostics.zig");
 const runtime_module = @import("cli/runtime.zig");
@@ -174,7 +174,7 @@ fn dispatch(init: std.process.Init, args: []const [*:0]const u8) anyerror!void {
         .file => |options| std.process.exit(file_transfer.run(init, options)),
         .project => |options| std.process.exit(project_setup.run(init, options)),
         .exec => |options| std.process.exit(execution.run(init, options)),
-        .help => try std.Io.File.stdout().writeStreamingAll(init.io, usage_module.text),
+        .help => |topic| try help_module.run(init, topic),
         .version => try std.Io.File.stdout().writeStreamingAll(init.io, "telar " ++ version ++ "\n"),
         .server => |options| try server_module.run(init, options),
         .diagnostics => |options| std.process.exit(diagnostics_module.run(init, options)),
@@ -248,7 +248,8 @@ fn parseCommand(init: std.process.Init, args: []const [*:0]const u8) parser.Cli 
             });
         }
 
-        std.debug.print("telar: {s}; see `telar --help`\n", .{control.describe(err)});
+        var topic_buffer: [64]u8 = undefined;
+        std.debug.print("telar: {s}; see `telar {s}--help`\n", .{ control.describe(err), help_module.topic(args, &topic_buffer) });
         std.process.exit(agent_module.exit_failure);
     };
 }
@@ -361,6 +362,7 @@ test {
     _ = @import("cli/proxy.zig");
     _ = @import("cli/server.zig");
     _ = @import("cli/skill.zig");
-    _ = @import("cli/usage.zig");
+    _ = @import("cli/help.zig");
+    _ = @import("cli/arguments/CommandFamily.zig");
     _ = @import("cli/workspace.zig");
 }

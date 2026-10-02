@@ -192,7 +192,7 @@ test "history fields preserve printable UTF-8" {
 
 /// The newest bytes of a histfile imported; older commands are left out
 /// and the limit is named.
-const max_histfile_bytes = 32 * 1024 * 1024;
+pub const max_histfile_bytes = 32 * 1024 * 1024;
 const histfile_limit = core.Limit.declare("history.max_histfile_bytes", "bytes", max_histfile_bytes);
 
 /// Command bytes one import batch carries: room for the longest command

@@ -179,15 +179,18 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     // Pi and OpenCode load their Telar integration as TypeScript source, so
     // Node runs its tests and drives the built executable's install flows
     // in a throwaway home.
-    const integrations_step = b.step("test-integrations", "Run the Pi extension and OpenCode plugin tests, their installation, hook pane identity and the limit registry with Node");
+    const integrations_step = b.step("test-integrations", "Run the Pi extension and OpenCode plugin tests, their installation, hook pane identity, CLI help discovery and the limit registry with Node");
     const integration_tests = b.addSystemCommand(&.{ "node", "--test", b.pathFromRoot("src/cli/integration/opencode.test.mjs"), b.pathFromRoot("src/cli/integration/pi.test.mjs") });
     const install_tests = b.addSystemCommand(&.{ "node", b.pathFromRoot("src/cli/integration/install.test.mjs") });
     install_tests.addArtifactArg(app.exe);
     const hook_identity_tests = b.addSystemCommand(&.{ "node", b.pathFromRoot("src/cli/integration/hook_identity.test.mjs") });
     hook_identity_tests.addArtifactArg(app.exe);
+    const help_tests = b.addSystemCommand(&.{ "node", b.pathFromRoot("src/cli/integration/help.test.mjs") });
+    help_tests.addArtifactArg(app.exe);
     integrations_step.dependOn(&integration_tests.step);
     integrations_step.dependOn(&install_tests.step);
     integrations_step.dependOn(&hook_identity_tests.step);
+    integrations_step.dependOn(&help_tests.step);
     const limits_tests = b.addSystemCommand(&.{ "node", b.pathFromRoot("src/cli/integration/limits.test.mjs") });
     limits_tests.addArtifactArg(app.exe);
     integrations_step.dependOn(&limits_tests.step);

@@ -32,8 +32,8 @@ const failure: u8 = 1;
 /// Hex digits of the binary's hash in a development build's directory.
 const build_hash_digits = 12;
 /// Seconds a quick script and an install may take.
-const probe_timeout_s = 60;
-const install_timeout_s = 900;
+pub const probe_timeout_s = 60;
+pub const install_timeout_s = 900;
 /// How long a restarted runtime may take to accept the new telar.
 const restart_attempts = 20;
 const restart_wait_ms = 250;

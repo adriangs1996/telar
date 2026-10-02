@@ -5,10 +5,13 @@ pub const Component = enum { all, runtime, client };
 /// `logs` reads the log files beside the socket; `limits` asks the runtime
 /// for the limits it and its windows reached.
 pub const Action = enum { logs, limits };
+/// `logs`: lines printed per file, and the most `--lines` accepts.
+pub const default_lines = 100;
+pub const max_lines = 10_000;
 action: Action = .logs,
 component: Component = .all,
 pid: ?u32 = null,
-lines: u16 = 100,
+lines: u16 = default_lines,
 json: bool = false,
 socket: ?[*:0]const u8 = null,
 
@@ -34,7 +37,7 @@ pub fn parse(args: []const [*:0]const u8) !Options {
             }
         } else if (std.mem.eql(u8, arg, "--lines") and reads_logs) {
             self.lines = std.fmt.parseUnsigned(u16, std.mem.span(try cursor.require(error.MissingLineCount)), 10) catch return error.InvalidLineCount;
-            if (self.lines == 0 or self.lines > 10000) {
+            if (self.lines == 0 or self.lines > max_lines) {
                 return error.InvalidLineCount;
             }
         } else if (std.mem.eql(u8, arg, "--json") and !self.json) {

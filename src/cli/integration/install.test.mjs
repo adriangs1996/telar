@@ -14,9 +14,32 @@ assert.ok(process.argv[2], "usage: node install.test.mjs /path/to/telar");
 const telar = resolve(process.argv[2]);
 
 const agents = [
-  { agent: "pi", noun: "extension", marker: "// telar-integration: pi\n", path: (home) => join(home, ".pi/agent/extensions/telar.ts") },
-  { agent: "opencode", noun: "plugin", marker: "// telar-integration: opencode\n", path: (home, config) => join(config, "opencode/plugins/telar.ts") },
+  { agent: "pi", noun: "extension", marker: "// telar-integration: pi\n", path: (home) => join(home, ".pi/agent/extensions/telar.ts"), root: (home) => join(home, ".pi/agent") },
+  { agent: "opencode", noun: "plugin", marker: "// telar-integration: opencode\n", path: (home, config) => join(config, "opencode/plugins/telar.ts"), root: (home, config) => join(config, "opencode") },
 ];
+
+// The skills telar writes beside an integration, each marked by its front matter.
+const skills = [
+  { name: "telar", needle: "telar FAMILY COMMAND --help" },
+  { name: "telar-coordinator", needle: "worktree create" },
+];
+
+function skillPath(root, name) {
+  return join(root, "skills", name, "SKILL.md");
+}
+
+function expectSkills(root) {
+  for (const { name, needle } of skills) {
+    const source = readFileSync(skillPath(root, name), "utf8");
+    assert.ok(source.startsWith(`---\nname: ${name}\n`), `${name}: front matter`);
+    assert.ok(source.includes(`\n---\n<!-- telar-integration: skill ${name} -->\n`), `${name}: marker`);
+    assert.ok(source.includes(needle), `${name}: body`);
+  }
+}
+
+function expectNoSkills(root) {
+  for (const { name } of skills) assert.ok(!existsSync(skillPath(root, name)), `${name} remains`);
+}
 
 // A home and configuration directory of its own for each test, removed after it.
 function sandbox(t) {
@@ -37,16 +60,20 @@ function sandbox(t) {
   return { root, home, config, run };
 }
 
-for (const { agent, noun, marker, path } of agents) {
+for (const { agent, noun, marker, path, root } of agents) {
   test(`${agent}: install writes the ${noun} owner-only once, status follows it and uninstall removes it`, (t) => {
     const s = sandbox(t);
     const file = path(s.home, s.config);
+    const skillsRoot = root(s.home, s.config);
+    const skillLines = (state) => skills.map(({ name }) => `skill ${name}: ${state} at ${skillPath(skillsRoot, name)}\n`).join("");
+    const written = skills.map(({ name }) => `telar integration: skill ${name} written to ${skillPath(skillsRoot, name)}\n`).join("");
 
-    assert.deepEqual(s.run("status", agent), { code: 0, signal: null, stdout: `telar ${noun}: absent at ${file}\n`, stderr: "" });
+    assert.deepEqual(s.run("status", agent), { code: 0, signal: null, stdout: `telar ${noun}: absent at ${file}\n` + skillLines("absent"), stderr: "" });
 
     const installed = s.run("install", agent);
     assert.equal(installed.code, 0, installed.stderr);
-    assert.equal(installed.stdout, `telar integration: ${agent} ${noun} installed at ${file}\n`);
+    assert.equal(installed.stdout, `telar integration: ${agent} ${noun} installed at ${file}\n` + written);
+    expectSkills(skillsRoot);
     const source = readFileSync(file, "utf8");
     assert.ok(source.startsWith(marker));
     const executable = /^const TELAR = (".*");$/m.exec(source);
@@ -55,17 +82,38 @@ for (const { agent, noun, marker, path } of agents) {
     assert.equal(statSync(file).mode & 0o777, 0o600);
     assert.deepEqual(readdirSync(dirname(file)), ["telar.ts"]);
 
-    assert.equal(s.run("status", agent).stdout, `telar ${noun}: installed at ${file}\n`);
-    assert.equal(s.run("install", agent).stdout, `telar integration: ${agent} ${noun} already present at ${file}\n`);
+    assert.equal(s.run("status", agent).stdout, `telar ${noun}: installed at ${file}\n` + skillLines("installed"));
+    assert.equal(s.run("install", agent).stdout, `telar integration: ${agent} ${noun} already present at ${file}\n` + written);
 
-    // A file an older telar wrote is replaced.
+    // A file an older telar wrote is replaced, and so is an older skill.
     writeFileSync(file, marker + "// older\n");
-    assert.equal(s.run("install", agent).stdout, `telar integration: ${agent} ${noun} updated at ${file}\n`);
+    writeFileSync(skillPath(skillsRoot, "telar"), "---\nname: telar\ndescription: older\n---\n<!-- telar-integration: skill telar -->\n# older\n");
+    assert.equal(s.run("install", agent).stdout, `telar integration: ${agent} ${noun} updated at ${file}\n` + written);
     assert.equal(readFileSync(file, "utf8"), source);
+    expectSkills(skillsRoot);
 
     assert.equal(s.run("uninstall", agent).stdout, `telar integration: ${agent} ${noun} removed from ${file}\n`);
     assert.ok(!existsSync(file));
+    expectNoSkills(skillsRoot);
     assert.equal(s.run("uninstall", agent).stdout, `telar integration: ${agent} ${noun} not present at ${file}\n`);
+  });
+
+  test(`${agent}: a skill telar did not write is reported as foreign and never replaced or removed`, (t) => {
+    const s = sandbox(t);
+    const skillsRoot = root(s.home, s.config);
+    const mine = skillPath(skillsRoot, "telar");
+    mkdirSync(dirname(mine), { recursive: true });
+    writeFileSync(mine, "---\nname: mine\n---\n");
+
+    assert.ok(s.run("status", agent).stdout.includes(`skill telar: foreign at ${mine}\n`));
+    const installed = s.run("install", agent);
+    assert.equal(installed.code, 0, installed.stderr);
+    assert.ok(readFileSync(skillPath(skillsRoot, "telar-coordinator"), "utf8").startsWith("---\nname: telar-coordinator\n"));
+    // Install never replaces a file that is not telar's.
+    assert.equal(readFileSync(mine, "utf8"), "---\nname: mine\n---\n");
+    assert.equal(s.run("uninstall", agent).code, 0);
+    assert.equal(readFileSync(mine, "utf8"), "---\nname: mine\n---\n");
+    assert.ok(!existsSync(skillPath(skillsRoot, "telar-coordinator")));
   });
 
   test(`${agent}: a file telar did not write is reported and never replaced or removed`, (t) => {
@@ -75,7 +123,7 @@ for (const { agent, noun, marker, path } of agents) {
     const foreign = "export default function () {}\n";
     writeFileSync(file, foreign);
 
-    assert.equal(s.run("status", agent).stdout, `telar ${noun}: foreign at ${file}\n`);
+    assert.ok(s.run("status", agent).stdout.startsWith(`telar ${noun}: foreign at ${file}\n`));
 
     const install = s.run("install", agent);
     assert.equal(install.code, 1);
@@ -142,10 +190,14 @@ test("claude: CLAUDE_CONFIG_DIR holds the hooks; hooks left in ~/.claude are rep
   const installed = withDirectory("install", "claude");
   assert.equal(installed.status, 0, installed.stderr);
   assert.ok(readFileSync(join(directory, "settings.json"), "utf8").includes(" hook claude"));
+  expectSkills(directory);
+  assert.ok(installed.stdout.includes(`telar integration: skill telar written to ${skillPath(directory, "telar")}\n`));
 
   const status = withDirectory("status", "claude");
   assert.equal(status.status, 0, status.stderr);
   assert.match(status.stdout, /SessionStart: installed/);
+  assert.ok(status.stdout.includes(`skill telar: installed at ${skillPath(directory, "telar")}\n`));
+  assert.ok(status.stdout.includes(`skill telar-coordinator: installed at ${skillPath(directory, "telar-coordinator")}\n`));
   assert.ok(status.stdout.includes(`hooks remain in ${legacy}`));
   assert.ok(status.stdout.includes("`telar integration uninstall claude --legacy`"));
 
@@ -158,7 +210,8 @@ test("claude: CLAUDE_CONFIG_DIR holds the hooks; hooks left in ~/.claude are rep
   const legacyRemoved = withDirectory("uninstall", "claude", "--legacy");
   assert.equal(legacyRemoved.status, 0, legacyRemoved.stderr);
   assert.ok(!readFileSync(legacy, "utf8").includes(" hook claude"));
-  assert.ok(!existsSync(join(s.home, ".claude/skills/telar-coordinator/SKILL.md")));
+  expectNoSkills(join(s.home, ".claude"));
+  expectNoSkills(directory);
   assert.ok(!withDirectory("status", "claude").stdout.includes("hooks remain"));
 });
 

@@ -93,6 +93,7 @@ pub const accepted_roots = [_][]const u8{
 /// What telar itself writes there through `integration install`; syncing
 /// this machine's copy would undo the machine's.
 const telar_owned = [_][]const u8{
+    "skills/telar",
     "skills/telar-coordinator",
     "extensions/telar.ts",
     "plugins/telar.ts",

@@ -12,7 +12,7 @@ const native = @cImport({
     @cInclude("fcntl.h");
     @cInclude("unistd.h");
 });
-const max_files = 64;
+pub const max_files = 64;
 const files_limit = core.Limit.declare("cli.diagnostic_logs", "logs", max_files);
 /// Entries of the runtime directory looked at; the rest are not read.
 const max_directory_entries = 64 * 1024;

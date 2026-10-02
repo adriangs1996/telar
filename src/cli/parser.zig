@@ -24,6 +24,9 @@ const PaneOptions = @import("arguments/PaneOptions.zig");
 const WorkspaceOptions = @import("arguments/WorkspaceOptions.zig");
 const WorktreeOptions = @import("arguments/WorktreeOptions.zig");
 const skill_module = @import("skill.zig");
+const help = @import("help.zig");
+const HelpTopic = @import("HelpTopic.zig").HelpTopic;
+const CommandFamily = @import("arguments/CommandFamily.zig").CommandFamily;
 const ApiOptions = @import("arguments/ApiOptions.zig");
 const HookOptions = @import("arguments/HookOptions.zig");
 const IntegrationOptions = @import("arguments/IntegrationOptions.zig");
@@ -39,6 +42,9 @@ const plugin_module = @import("arguments/plugin.zig");
 const history_module = @import("arguments/history.zig");
 const agent_module = @import("arguments/agent.zig");
 const pane_module = @import("arguments/pane.zig");
+const tab_grammar = @import("arguments/tab.zig");
+const workspace_grammar = @import("arguments/workspace.zig");
+const runtime_grammar = @import("arguments/runtime.zig");
 const values_module = @import("arguments/values.zig");
 const integration_module = @import("arguments/integration.zig");
 const proxy_module = @import("arguments/proxy.zig");
@@ -48,7 +54,7 @@ pub const Cli = union(enum) {
     project: ProjectOptions,
     file: FileOptions,
     repository: RepositoryOptions,
-    help,
+    help: HelpTopic,
     version,
     server: ServerOptions,
     runtime: RuntimeOptions,
@@ -96,6 +102,10 @@ pub const Cli = union(enum) {
             return .{ .run = try RunOptions.parse(&.{}, environ) };
         }
 
+        if (help.find(args[1..])) |topic| {
+            return .{ .help = topic };
+        }
+
         if (try MachineDispatchOptions.parse(args)) |options| {
             return .{ .machine_dispatch = options };
         }
@@ -105,44 +115,6 @@ pub const Cli = union(enum) {
         }
 
         const first = std.mem.span(args[1]);
-        if (std.mem.eql(u8, first, "repository")) {
-            return .{ .repository = try RepositoryOptions.parse(args[2..]) };
-        }
-
-        if (std.mem.eql(u8, first, "file")) {
-            return .{ .file = try FileOptions.parse(args[2..]) };
-        }
-
-        if (std.mem.eql(u8, first, "project")) {
-            return .{ .project = try ProjectOptions.parse(args[2..]) };
-        }
-
-        if (std.mem.eql(u8, first, "exec")) {
-            return .{ .exec = try ExecOptions.parse(args[2..]) };
-        }
-
-        if (std.mem.eql(u8, first, "client")) {
-            return .{ .client_control = try ClientOptions.parse(args[2..]) };
-        }
-
-        if (std.mem.eql(u8, first, "command")) {
-            return .{ .command = try SuggestionOptions.parse(args[2..]) };
-        }
-
-        if (std.mem.eql(u8, first, "tab")) {
-            return .{ .tab = try TabOptions.parse(args[2..]) };
-        }
-
-        if (std.mem.eql(u8, first, "diagnostics")) {
-            return .{ .diagnostics = try DiagnosticsOptions.parse(args[2..]) };
-        }
-        if (std.mem.eql(u8, first, "runtime")) {
-            return .{ .runtime = try RuntimeOptions.parse(args[2..]) };
-        }
-
-        if (std.mem.eql(u8, first, "--help") or std.mem.eql(u8, first, "-h")) {
-            return .help;
-        }
         if (std.mem.eql(u8, first, "--version") or std.mem.eql(u8, first, "-V")) {
             return .version;
         }
@@ -154,70 +126,61 @@ pub const Cli = union(enum) {
 
             return .{ .skill = .telar };
         }
-        if (std.mem.eql(u8, first, "agent")) {
-            return .{ .agent = try AgentOptions.parse(args[2..]) };
-        }
-        if (std.mem.eql(u8, first, "pane")) {
-            return .{ .pane = try PaneOptions.parse(args[2..]) };
-        }
-        if (std.mem.eql(u8, first, "workspace")) {
-            return .{ .workspace = try WorkspaceOptions.parse(args[2..]) };
-        }
-        if (std.mem.eql(u8, first, "worktree")) {
-            return .{ .worktree = try WorktreeOptions.parse(args[2..]) };
-        }
-        if (std.mem.eql(u8, first, "api")) {
-            return .{ .api = try ApiOptions.parse(args[2..]) };
-        }
-        if (std.mem.eql(u8, first, "hook")) {
-            return .{ .hook = try HookOptions.parse(args[2..]) };
-        }
-        if (std.mem.eql(u8, first, "integration")) {
-            return .{ .integration = try IntegrationOptions.parse(args[2..]) };
-        }
-        if (std.mem.eql(u8, first, "proxy")) {
-            if (args.len > 2 and std.mem.eql(u8, std.mem.span(args[2]), "watch")) {
-                var options = try RuntimeOptions.parse(args[2..]);
-                options.proxy_only = true;
-                return .{ .runtime = options };
-            }
 
-            return .{ .proxy = try ProxyOptions.parse(args[2..]) };
-        }
-        if (std.mem.eql(u8, first, "server")) {
-            return .{ .server = try ServerOptions.parse(args[2..]) };
-        }
-        if (std.mem.eql(u8, first, "history")) {
-            return .{ .history = try HistoryOptions.parse(args[2..]) };
-        }
-        if (std.mem.eql(u8, first, "notification")) {
-            return .{ .notification = try NotificationOptions.parse(args[2..]) };
-        }
-        if (std.mem.eql(u8, first, "config")) {
-            return .{ .config_check = try ConfigCheckOptions.parse(args[2..]) };
-        }
+        // Entry points telar runs for itself; no family lists them.
         if (std.mem.eql(u8, first, "plugin-worker")) {
             return .{ .plugin_worker = try PluginWorkerOptions.parse(args[2..]) };
         }
         if (std.mem.eql(u8, first, "tap-worker")) {
             return .{ .tap_worker = try TapWorkerOptions.parse(args[2..]) };
         }
-        if (std.mem.eql(u8, first, "plugin")) {
-            return .{ .plugin = try PluginOptions.parse(args[2..]) };
-        }
-        if (std.mem.eql(u8, first, "gui")) {
-            return .{ .gui = try GuiOptions.parse(args[2..], environ) };
-        }
-        if (std.mem.eql(u8, first, "cli")) {
-            return .{ .cli = try CliOptions.parse(args[2..]) };
-        }
-        if (std.mem.eql(u8, first, "machine")) {
-            return .{ .machine = try MachineOptions.parse(args[2..]) };
-        }
         if (std.mem.eql(u8, first, "dispatch-argv")) {
             return .{ .dispatch_argv = args[2..] };
         }
-        return .{ .run = try RunOptions.parse(args[1..], environ) };
+
+        const family = CommandFamily.parse(first) orelse return .{ .run = try RunOptions.parse(args[1..], environ) };
+        const rest = args[2..];
+        return switch (family) {
+            .repository => .{ .repository = try RepositoryOptions.parse(rest) },
+            .file => .{ .file = try FileOptions.parse(rest) },
+            .project => .{ .project = try ProjectOptions.parse(rest) },
+            .exec => .{ .exec = try ExecOptions.parse(rest) },
+            .client => .{ .client_control = try ClientOptions.parse(rest) },
+            .command => .{ .command = try SuggestionOptions.parse(rest) },
+            .tab => .{ .tab = try TabOptions.parse(rest) },
+            .diagnostics => .{ .diagnostics = try DiagnosticsOptions.parse(rest) },
+            .runtime => .{ .runtime = try RuntimeOptions.parse(rest) },
+            .agent => .{ .agent = try AgentOptions.parse(rest) },
+            .pane => .{ .pane = try PaneOptions.parse(rest) },
+            .workspace => .{ .workspace = try WorkspaceOptions.parse(rest) },
+            .worktree => .{ .worktree = try WorktreeOptions.parse(rest) },
+            .api => .{ .api = try ApiOptions.parse(rest) },
+            .hook => .{ .hook = try HookOptions.parse(rest) },
+            .integration => .{ .integration = try IntegrationOptions.parse(rest) },
+            .proxy => try parseProxy(rest),
+            .server => .{ .server = try ServerOptions.parse(rest) },
+            .history => .{ .history = try HistoryOptions.parse(rest) },
+            .notification => .{ .notification = try NotificationOptions.parse(rest) },
+            .config => .{ .config_check = try ConfigCheckOptions.parse(rest) },
+            .plugin => .{ .plugin = try PluginOptions.parse(rest) },
+            .gui => .{ .gui = try GuiOptions.parse(rest, environ) },
+            .cli => .{ .cli = try CliOptions.parse(rest) },
+            .machine => .{ .machine = try MachineOptions.parse(rest) },
+            // Every command of these families goes through a window, and the
+            // routed grammar above took the ones it knows.
+            .sidebar, .workspace_list, .layout => if (rest.len == 0) error.MissingClientAction else error.UnknownClientAction,
+        };
+    }
+
+    // `proxy watch` is a runtime subscription; the rest of the family is trust.
+    fn parseProxy(rest: []const [*:0]const u8) !Cli {
+        if (rest.len > 0 and std.mem.eql(u8, std.mem.span(rest[0]), "watch")) {
+            var options = try RuntimeOptions.parse(rest);
+            options.proxy_only = true;
+            return .{ .runtime = options };
+        }
+
+        return .{ .proxy = try ProxyOptions.parse(rest) };
     }
 };
 
@@ -732,4 +695,113 @@ test "CLI parses the internal tap worker and rejects extra arguments" {
 
     const extra = [_][*:0]const u8{ "telar", "tap-worker", "/tmp/main.lua", "extra" };
     try std.testing.expectError(error.InvalidTapWorkerArguments, Cli.parse(&extra, .empty));
+}
+
+// The command help a grammar's action is spelled under: `send_keys` is typed
+// `send-keys`.
+fn spelledAction(comptime name: []const u8) []const u8 {
+    comptime {
+        var word: [name.len]u8 = undefined;
+        for (name, 0..) |byte, index| {
+            word[index] = if (byte == '_') '-' else byte;
+        }
+
+        const copy = word;
+        return &copy;
+    }
+}
+
+fn expectActionsHaveHelp(comptime which: CommandFamily, comptime Action: type, comptime implicit: []const []const u8) !void {
+    inline for (@typeInfo(Action).@"enum".fields) |field| {
+        const spelled = comptime spelledAction(field.name);
+        const covered = for (implicit) |word| {
+            if (std.mem.eql(u8, word, field.name)) {
+                break true;
+            }
+        } else false;
+        if (!covered and help.family(which).find(spelled) == null) {
+            std.debug.print("{s} {s} has no help\n", .{ which.name(), spelled });
+            return error.ActionWithoutHelp;
+        }
+    }
+}
+
+test "every grammar action has a command help" {
+    try expectActionsHaveHelp(.agent, agent_module.AgentAction, &.{});
+    try expectActionsHaveHelp(.pane, pane_module.PaneAction, &.{});
+    try expectActionsHaveHelp(.tab, tab_grammar.Action, &.{});
+    try expectActionsHaveHelp(.workspace, workspace_grammar.WorkspaceAction, &.{});
+    try expectActionsHaveHelp(.worktree, WorktreeOptions.Action, &.{});
+    try expectActionsHaveHelp(.exec, ExecOptions.Action, &.{});
+    try expectActionsHaveHelp(.repository, RepositoryOptions.Action, &.{});
+    try expectActionsHaveHelp(.file, FileOptions.Action, &.{});
+    try expectActionsHaveHelp(.client, ClientOptions.Action, &.{});
+    try expectActionsHaveHelp(.diagnostics, DiagnosticsOptions.Action, &.{});
+    try expectActionsHaveHelp(.runtime, runtime_grammar.Action, &.{});
+    // `telar server` without a word runs the runtime; the family usage says so.
+    try expectActionsHaveHelp(.server, server_module.ServerAction, &.{"run"});
+    try expectActionsHaveHelp(.history, history_module.HistoryAction, &.{});
+    try expectActionsHaveHelp(.plugin, plugin_module.PluginCommand, &.{});
+    try expectActionsHaveHelp(.integration, integration_module.IntegrationAction, &.{});
+    try expectActionsHaveHelp(.cli, CliOptions.Action, &.{});
+    try expectActionsHaveHelp(.machine, MachineOptions.Action, &.{});
+}
+
+test "every routed client action is claimed by exactly one command help" {
+    inline for (@typeInfo(core.ClientAction).@"enum".fields) |field| {
+        const action: core.ClientAction = @enumFromInt(field.value);
+        var claims: usize = 0;
+        inline for (@typeInfo(CommandFamily).@"enum".fields) |family_field| {
+            const which: CommandFamily = @enumFromInt(family_field.value);
+            for (help.family(which).commands) |command| {
+                for (command.routed) |routed| {
+                    if (routed == action) {
+                        claims += 1;
+                    }
+                }
+            }
+        }
+
+        if (claims != 1) {
+            std.debug.print("{s} is claimed by {d} command helps\n", .{ field.name, claims });
+            return error.RoutedActionWithoutHelp;
+        }
+    }
+}
+
+test "every example in the help parses, and a help flag parses as help" {
+    inline for (@typeInfo(CommandFamily).@"enum".fields) |family_field| {
+        const which: CommandFamily = @enumFromInt(family_field.value);
+        for (help.family(which).commands) |command| {
+            for (command.examples) |example| {
+                var argv: [48][*:0]const u8 = undefined;
+                argv[0] = "telar";
+                for (example, 1..) |word, index| {
+                    argv[index] = word;
+                }
+
+                const parsed = Cli.parse(argv[0 .. example.len + 1], .empty) catch |err| {
+                    std.debug.print("example of {s} {s} does not parse: {s}\n", .{ which.name(), command.name, @errorName(err) });
+                    return err;
+                };
+                try std.testing.expect(parsed != .run and parsed != .help);
+
+                // `--help` right after the family word, before any `--`, which
+                // would hand it to the child command instead.
+                var asking: [48][*:0]const u8 = undefined;
+                asking[0] = "telar";
+                asking[1] = argv[1];
+                asking[2] = "--help";
+                for (example[1..], 3..) |word, index| {
+                    asking[index] = word;
+                }
+
+                const asked = try Cli.parse(asking[0 .. example.len + 2], .empty);
+                try std.testing.expect(asked == .help);
+            }
+        }
+
+        var family_argv = [_][*:0]const u8{ "telar", comptime which.name(), "--help" };
+        try std.testing.expectEqual(which, (try Cli.parse(&family_argv, .empty)).help.family);
+    }
 }
