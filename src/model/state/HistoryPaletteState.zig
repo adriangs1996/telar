@@ -270,15 +270,23 @@ fn applyEntries(self: *State, request_id: u64, entries: []const core.HistoryEntr
 /// Returns the full command only when the current reply owns every byte.
 /// Example: `const command = state.commandAt(selection) orelse return;`.
 pub fn commandAt(self: *const State, index: u16) ?[]const u8 {
-    if (self.phase != .ready or index >= self.len) {
+    if (self.phase != .ready or index >= self.len or self.entries[index].captured_truncated) {
+        return null;
+    }
+
+    return self.ownedCommand(index);
+}
+
+/// The complete command the page holds for a loaded row, whatever the phase
+/// of the query replacing it, so a pending search does not change what the
+/// rows show. Pasting and copying still go through `commandAt`.
+/// Example: `const text = state.ownedCommand(index) orelse entry.commandSlice();`.
+pub fn ownedCommand(self: *const State, index: u16) ?[]const u8 {
+    if (index >= self.len) {
         return null;
     }
 
     const entry = &self.entries[index];
-    if (entry.captured_truncated) {
-        return null;
-    }
-
     if (self.full_id == entry.id and self.full_len != 0) {
         return self.storage.?.selected_command[0..self.full_len];
     }

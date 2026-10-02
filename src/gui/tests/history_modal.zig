@@ -1,5 +1,8 @@
 const data = @import("model");
 const ModalMotion = @import("../widgets/overlays/ModalMotion.zig");
+const SelectionMotion = @import("../widgets/overlays/SelectionMotion.zig");
+const HistoryModalLayout = @import("../widgets/overlays/HistoryModalLayout.zig");
+const HistoryModalMetrics = @import("../widgets/overlays/HistoryModalMetrics.zig");
 const event_module = @import("../input/event.zig");
 const input_support = @import("input_support.zig");
 const std = @import("std");
@@ -214,7 +217,9 @@ test "native history wheel accumulates precise movement and bounds inspector scr
     defer session.deinit();
     const gui = session.gui;
     const editor = try targetFor(session, .{ .text_field = .name });
-    const row = try rowTarget(session, 0);
+    // One wheel step is a closed row, not the taller selected card.
+    const row = try rowTarget(session, 1);
+    try std.testing.expect(row.bounds.height < (try rowTarget(session, 0)).bounds.height);
     const x = row.bounds.x + row.bounds.width / 2;
     const y = row.bounds.y + row.bounds.height / 2;
     try send(session, .{ .scroll = .{ .x = x, .y = y, .delta_y = -row.bounds.height / 2, .precise = true, .phase = .begin } });
@@ -454,4 +459,155 @@ test "native history warm frames reuse shaping for long paths and every result s
         try std.testing.expectEqual(version, fixture.renderer.atlas.?.version);
         try std.testing.expectEqual(@as(usize, 0), failing.allocated_bytes);
     }
+}
+
+fn rowBounds(fixture: *Fixture, index: u16) !Rect {
+    const registry = fixture.widgets.dispatcher.maps.presented();
+    const action: Target.Action = .{ .history = .{ .select = .{ .index = index, .revision = fixture.model.history_palette.version() } } };
+    for (registry.targets[0..registry.len]) |target| {
+        if (std.meta.eql(target.action, action)) {
+            return target.bounds;
+        }
+    }
+
+    return error.MissingHistoryControl;
+}
+
+test "native history panel follows the window and keeps the field where it was" {
+    const fixture = try Fixture.init();
+    defer fixture.deinit();
+    try populateFixture(fixture);
+    var previous: ?Rect = null;
+    for ([_][2]u32{ .{ 1000, 600 }, .{ 1280, 800 }, .{ 2560, 1440 } }) |size| {
+        fixture.size = try fixture.renderer.measure(.{ .width = size[0], .height = size[1], .scale = 1 });
+        const canvas = fixture.canvas();
+        const metrics = HistoryModalMetrics.fromCanvas(&canvas);
+        const browsing = HistoryModalLayout.measure(metrics, false);
+        const inspecting = HistoryModalLayout.measure(metrics, true);
+        const px = metrics.chrome;
+
+        // The panel uses the window: most of its height, and its width up
+        // to the measure a command stays readable at.
+        try std.testing.expect(browsing.bounds.width >= @min(px.px(HistoryModalLayout.max_width), metrics.viewport.width * 0.9));
+        try std.testing.expect(browsing.bounds.width <= px.px(HistoryModalLayout.max_width));
+        try std.testing.expect(browsing.bounds.height >= metrics.viewport.height * 0.75);
+        if (previous) |smaller| {
+            try std.testing.expect(browsing.results.height > smaller.height);
+        }
+
+        previous = browsing.results;
+
+        // Opening the inspector splits the list; nothing else moves.
+        try std.testing.expectEqual(browsing.bounds, inspecting.bounds);
+        try std.testing.expectEqual(browsing.search, inspecting.search);
+        try std.testing.expectEqual(browsing.header, inspecting.header);
+        try std.testing.expectEqual(browsing.footer, inspecting.footer);
+        try std.testing.expect(inspecting.results.width > 0 and inspecting.inspection.width > inspecting.results.width);
+        try std.testing.expectEqual(browsing.results.width, inspecting.results.width + inspecting.inspection.width);
+    }
+
+    // A window too narrow to split lets the inspector replace the list.
+    fixture.size = try fixture.renderer.measure(.{ .width = 700, .height = 600, .scale = 1 });
+    const canvas = fixture.canvas();
+    const narrow = HistoryModalLayout.measure(HistoryModalMetrics.fromCanvas(&canvas), true);
+    try std.testing.expectEqual(@as(f32, 0), narrow.results.width);
+    try std.testing.expectEqual(narrow.bounds.width, narrow.inspection.width);
+}
+
+test "native history selection moves at once while its card opens over a few frames" {
+    const fixture = try Fixture.init();
+    defer fixture.deinit();
+    try populateFixture(fixture);
+    fixture.animation = .{};
+    fixture.animation.?.begin(0);
+    try fixture.paint();
+    fixture.animation.?.begin(std.time.ns_per_s);
+    try fixture.paint();
+    try std.testing.expectEqual(@as(?u64, null), fixture.animation.?.deadline_ns);
+    const card = (try rowBounds(fixture, 0)).height;
+    const closed = (try rowBounds(fixture, 1)).height;
+    try std.testing.expect(card > closed);
+
+    // The key lands in the model before any frame; only the geometry follows.
+    _ = fixture.model.name_prompt.apply(.move_up);
+    try std.testing.expectEqual(@as(u16, 1), fixture.model.name_prompt.currentConst().?.selection());
+    fixture.animation.?.begin(std.time.ns_per_s + 1);
+    try fixture.paint();
+    try std.testing.expect(fixture.animation.?.deadline_ns != null);
+    try std.testing.expectEqual(card, (try rowBounds(fixture, 0)).height);
+    try std.testing.expectEqual(closed, (try rowBounds(fixture, 1)).height);
+
+    fixture.animation.?.begin(std.time.ns_per_s + 1 + SelectionMotion.duration_ns / 2);
+    try fixture.paint();
+    const leaving = (try rowBounds(fixture, 0)).height;
+    const opening = (try rowBounds(fixture, 1)).height;
+    try std.testing.expect(leaving < card and leaving > closed);
+    try std.testing.expect(opening < card and opening > closed);
+
+    fixture.animation.?.begin(std.time.ns_per_s + 1 + SelectionMotion.duration_ns);
+    try fixture.paint();
+    try std.testing.expectEqual(@as(?u64, null), fixture.animation.?.deadline_ns);
+    try std.testing.expectEqual(closed, (try rowBounds(fixture, 0)).height);
+    try std.testing.expectEqual(card, (try rowBounds(fixture, 1)).height);
+
+    // A page replaced under the same position does not replay the motion.
+    const history = &fixture.model.history_palette;
+    var replaced = entries;
+    replaced[0].id = 40;
+    replaced[1].id = 39;
+    try std.testing.expect(history.beginPageRequest(2, .global));
+    try std.testing.expect(history.acceptPageResult(.{ .request_id = 2, .entries = &replaced, .snapshot_id = 40, .has_more = false, .now_ms = 2000 }));
+    fixture.animation.?.begin(2 * std.time.ns_per_s);
+    try fixture.paint();
+    try std.testing.expectEqual(@as(?u64, null), fixture.animation.?.deadline_ns);
+    try std.testing.expectEqual(card, (try rowBounds(fixture, 1)).height);
+}
+
+test "native history shows a long selected command complete and marks the rows it cuts" {
+    const fixture = try Fixture.init();
+    defer fixture.deinit();
+    try populateFixture(fixture);
+    const history = &fixture.model.history_palette;
+    var long_entries = entries;
+    long_entries[0].command = "printf '%s ' " ++ "alpha-beta-gamma-delta " ** 20 ++ "| wc -c";
+    long_entries[1].command = "for word in uno dos tres; do\n  echo \"$word añadir café 日本語\"\ndone";
+    try std.testing.expect(history.beginPageRequest(2, .global));
+    try std.testing.expect(history.acceptPageResult(.{ .request_id = 2, .entries = &long_entries, .snapshot_id = 9, .has_more = false, .now_ms = 2000 }));
+    try fixture.paint();
+    const cell: f32 = @floatFromInt(fixture.renderer.metrics.cell_height);
+    const closed = (try rowBounds(fixture, 1)).height;
+    const card = try rowBounds(fixture, 0);
+    const columns = @floor(card.width / @as(f32, @floatFromInt(fixture.renderer.metrics.cell_width)));
+    const lines = @ceil(@as(f32, @floatFromInt(long_entries[0].command.len)) / columns);
+    try std.testing.expect(lines > 1);
+    try std.testing.expect(card.height >= closed + lines * cell);
+
+    // The multi-line command opens to its three lines when selected.
+    _ = fixture.model.name_prompt.apply(.move_up);
+    try fixture.paint();
+    try std.testing.expectEqual(closed, (try rowBounds(fixture, 0)).height);
+    try std.testing.expect((try rowBounds(fixture, 1)).height >= closed + 3 * cell);
+}
+
+test "native history card reaches copy and delete with the pointer and keeps the browser open" {
+    const session = try initSession();
+    defer session.deinit();
+    const gui = session.gui;
+    const card = try rowTarget(session, 0);
+    const copy = try targetFor(session, .{ .history = .copy });
+    const remove = try targetFor(session, .{ .history = .remove });
+    try expectInside(copy.bounds, card.bounds);
+    try expectInside(remove.bounds, card.bounds);
+    try std.testing.expect(copy.bounds.x + copy.bounds.width <= remove.bounds.x);
+
+    try click(session, copy);
+    try std.testing.expectEqualStrings("zig build", gui.app.model.to_host.clipboard.items);
+    try std.testing.expectEqual(@as(u16, 0), gui.app.model.name_prompt.currentConst().?.selection());
+    try std.testing.expectEqual(@as(u64, 0), gui.app.model.history_palette.delete_request);
+
+    try click(session, remove);
+    try std.testing.expect(gui.app.model.history_palette.delete_request != 0);
+    try std.testing.expect(gui.app.model.name_prompt.active());
+    try session.settle();
+    try std.testing.expectEqual(@as(usize, 0), session.input_len);
 }

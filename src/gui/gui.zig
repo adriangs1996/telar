@@ -73,6 +73,7 @@ test {
     _ = @import("tests/path_picker.zig");
     _ = @import("tests/history_rendering.zig");
     _ = @import("widgets/overlays/LoadingCue.zig");
+    _ = @import("widgets/overlays/SelectionMotion.zig");
     _ = @import("tests/notifications.zig");
     _ = @import("tests/scene.zig");
     _ = @import("tests/visual_language.zig");

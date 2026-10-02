@@ -1,11 +1,14 @@
 # History browser
 
-The approved compact design opens with `prefix+/`. Search stays below the
-results, with the best/newest result nearest the prompt. Rows show duration,
-relative time and exit status when the terminal has enough columns. The selected
-row's cwd, author and pane appear above the search field. The native GUI keeps
-the same order in its own panel above the status bar, with day headings, filter
-chips and an inspector (see `src/gui/widgets/README.md`, "Command history").
+The browser opens with `prefix+/`. Search stays below the results, with the
+best/newest result nearest the prompt. In the terminal UI the design is
+compact: rows show duration, relative time and exit status when the terminal
+has enough columns, and the selected row's cwd, author and pane appear above
+the search field. The native GUI keeps the same order in a large panel that
+follows the window: filter chips in its header, one-line rows that give the
+command the width, and the selected row open as a card with the complete
+command wrapped, its facts and its secondary actions (see
+`src/gui/widgets/README.md`, "Command history").
 
 ## Ownership and delivery
 
@@ -85,8 +88,9 @@ history without that candidate cap.
 
 ## Inspection and bounds
 
-Ctrl+O opens the inspector beside the list when at least 100 inner columns fit;
-otherwise the inspector replaces the list. Ctrl+O or Escape returns to the list,
+Ctrl+O opens the inspector beside the list when at least 100 inner columns fit
+(900 logical pixels of panel in the GUI); otherwise the inspector replaces the
+list. Ctrl+O or Escape returns to the list,
 preserving query, scope and selection. A second Escape closes the browser.
 PgUp and PgDn scroll wrapped detail while inspecting, bounded by its content.
 
@@ -100,7 +104,10 @@ The client allocates one storage block at startup: 768 KiB for long commands,
 64 KiB for output and 64 KiB for the selected command fallback. It also keeps
 100 fixed summaries with 512-byte command previews and 256-byte cwd previews.
 Input, navigation and rendering allocate nothing. Preview truncation respects
-UTF-8 codepoint boundaries. These previews never authorize an incomplete paste.
+UTF-8 codepoint boundaries. These previews never authorize an incomplete paste. What a
+row displays comes from `ownedCommand`, the complete command the page holds
+whatever the phase of the query replacing it; `commandAt` alone decides what
+may be pasted or copied.
 
 When page storage cannot retain a command, a bounded `query_history` with
 `entry_id` retrieves that command, up to 64 KiB. A capture marked

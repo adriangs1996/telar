@@ -39,7 +39,7 @@ test "native history keeps the visible page while a replacement query is pending
     try fixture.paint();
     const empty = try historyRows(fixture);
     defer std.testing.allocator.free(empty);
-    try std.testing.expect(visible.len != empty.len);
+    try std.testing.expect(!sameQuads(visible, empty));
     try std.testing.expect(history.beginPageRequest(3, .global));
     try fixture.paint();
     try expectHistoryRows(fixture, empty);
@@ -154,7 +154,8 @@ test "native notification replacement retains the delivered card identity" {
     const close = fixture.overlays.presented().notifications.hits[1].bounds;
     _ = data.notifications.dismiss(&fixture.model, first, data.notifications.transition_duration_ns);
     _ = data.notifications.advance(&fixture.model, data.notifications.transition_duration_ns * 2);
-    const second = data.notifications.publish(&fixture.model, 
+    const second = data.notifications.publish(
+        &fixture.model,
         data.notifications.transition_duration_ns * 2,
         .{
             .title = "Next",
@@ -442,11 +443,27 @@ fn historyRows(fixture: *Fixture) ![]Quad.Quad {
         if (quad.y >= layout.results.y and quad.y + quad.height <= layout.results.y + layout.results.height) {
             var row = quad;
             row.a = 1;
+            row.border_a = 1;
             try result.append(std.testing.allocator, row);
         }
     }
 
     return result.toOwnedSlice(std.testing.allocator);
+}
+
+// Two pages can paint the same number of quads; what they paint differs.
+fn sameQuads(left: []const Quad.Quad, right: []const Quad.Quad) bool {
+    if (left.len != right.len) {
+        return false;
+    }
+
+    for (left, right) |a, b| {
+        if (!std.meta.eql(a, b)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 fn expectHistoryRows(fixture: *Fixture, expected: []const Quad.Quad) !void {

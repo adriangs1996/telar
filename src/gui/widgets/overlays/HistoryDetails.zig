@@ -124,7 +124,7 @@ pub fn lines(self: *const HistoryDetails, columns: u16) LineIterator {
     return .{
         .details = self,
         .columns = columns,
-        .wrapped = .{ .text = self.command, .width = columns },
+        .wrapped = .{ .text = self.command, .width = columns, .words = true },
     };
 }
 

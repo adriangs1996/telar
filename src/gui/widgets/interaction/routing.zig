@@ -634,6 +634,7 @@ fn scrollHistory(gui: *GuiAdapter, event: event_module.Event) !bool {
 
     var delivered = false;
     var line_height: f64 = @floatFromInt(@max(1, gui.pointer.geometry.size.cell_height_px));
+    var row_height: ?f64 = null;
     const registry = state.dispatcher.maps.presented();
     for (registry.targets[0..registry.len]) |target| {
         if (target.id.generation != prompt.generation) {
@@ -649,10 +650,15 @@ fn scrollHistory(gui: *GuiAdapter, event: event_module.Event) !bool {
                 return true;
             }
 
+            // The selected row is a taller card; one step is a closed row.
             if (!prompt.inspecting()) {
-                line_height = @max(1, target.bounds.height);
+                row_height = @min(row_height orelse target.bounds.height, target.bounds.height);
             }
         }
+    }
+
+    if (row_height) |height| {
+        line_height = @max(1, height);
     }
 
     if (!delivered) {

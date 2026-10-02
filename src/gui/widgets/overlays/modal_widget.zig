@@ -86,6 +86,8 @@ pub fn compose(input: OverlayComposition, pending: *HitState, widgets: anytype) 
                     .projection = input.projection,
                     .reveal = input.history_reveal,
                     .loading = input.history_loading,
+                    .expansion = input.history_expansion,
+                    .inspector_reveal = input.history_inspector_reveal,
                 },
             },
         });

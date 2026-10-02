@@ -7,6 +7,8 @@ const HistoryModal = @import("HistoryModal.zig");
 const Notifications = @import("Notifications.zig");
 const ModalMotion = @import("ModalMotion.zig");
 const LoadingCue = @import("LoadingCue.zig");
+const SelectionMotion = @import("SelectionMotion.zig");
+const HistoryPosition = @import("HistoryPosition.zig");
 const OverlayComposition = @import("OverlayComposition.zig");
 const Overlays = @This();
 
@@ -14,6 +16,8 @@ maps: GenericPresentedState(HitState) = .{},
 notifications: Notifications = .{},
 history_motion: ModalMotion = .{},
 history_loading: LoadingCue = .{},
+history_selection: SelectionMotion = .{},
+history_inspector: ModalMotion = .{},
 gesture: ?u8 = null,
 /// The native keymap, for the palette's bound-key column.
 router: ?*const client.key_router.Type = null,
@@ -42,7 +46,23 @@ pub fn compose(self: *Overlays, input: OverlayComposition, widgets: anytype) !vo
     const history = input.projection.history;
     const replacing = history_generation != null and history.phase == .loading and history.has_page;
     modal_input.history_loading = self.history_loading.sample(replacing, input.canvas.animation);
+    modal_input.history_expansion = self.history_selection.sample(history_generation, selectedCommand(input.projection), input.canvas.animation);
+    const inspecting = if (input.projection.prompt) |prompt| prompt.inspecting() else false;
+    modal_input.history_inspector_reveal = self.history_inspector.sample(if (inspecting) history_generation else null, input.canvas.animation);
     try modal_widget.compose(modal_input, pending, widgets);
+}
+
+// The command whose card is open: none while the page is empty or the
+// inspector shows the selection instead.
+fn selectedCommand(projection: *const client.Projection) ?HistoryPosition {
+    const prompt = projection.prompt orelse return null;
+    const history = projection.history;
+    if (prompt.target() != .history or prompt.inspecting() or history.len == 0) {
+        return null;
+    }
+
+    const index: u16 = @min(prompt.selection(), history.len - 1);
+    return .{ .index = index, .id = history.slice()[index].id };
 }
 
 /// Seal after all widgets have drawn and registered their controls.

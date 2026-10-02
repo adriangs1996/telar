@@ -1,7 +1,8 @@
-//! Native command history: a panel above the status bar with the search
-//! field at its foot, the newest command right above the filter chips, day
-//! headings over the list, an inspector beside it and the host's key hints
-//! in the footer. It shares query and selection semantics with the TUI.
+//! Native command history: a large panel above the status bar. The filter
+//! chips sit in its header, the commands grow upward from the search field
+//! at its foot, the selected one opens into a card with the complete
+//! command, and an inspector shares the panel with the list. It shares
+//! query and selection semantics with the TUI.
 const std = @import("std");
 const cellgrid = @import("cellgrid");
 const client = @import("telar-client");
@@ -13,6 +14,8 @@ const Rect = gfx.Rect;
 const TextField = @import("../TextField.zig");
 const FormButton = @import("../FormButton.zig");
 const HistoryDetails = @import("HistoryDetails.zig");
+const HistoryExpansion = @import("HistoryExpansion.zig");
+const HistoryHint = @import("HistoryHint.zig");
 const HistoryLine = @import("HistoryLine.zig");
 const Metrics = @import("HistoryModalMetrics.zig");
 const Layout = @import("HistoryModalLayout.zig");
@@ -27,18 +30,27 @@ const labels = @import("history_labels.zig");
 const HistoryModal = @This();
 
 /// Rows plus headings the list can place at its smallest row height.
-const max_placements = 96;
+const max_placements = 160;
 /// The search glyph of the embedded symbols face.
 const search_glyph = "\u{f002}";
-/// Steps of the indeterminate loading line under the chips.
+/// Steps of the indeterminate loading line over the field.
 const loading_steps: u64 = 40;
 const loading_step_ns: u64 = 24 * std.time.ns_per_ms;
+/// Older rows kept in view above the selection while the list scrolls.
+const context_rows: u16 = 2;
+/// The share of the list an open card may take before it points at the
+/// inspector for the rest of a long command.
+const card_share: f32 = 0.45;
 
 layout: Layout,
 projection: *const client.Projection,
 reveal: f32 = 1,
 /// A replacement page is late: rows dim and the loading line runs.
 loading: bool = false,
+/// How open the selected row's card is, and the one the selection left.
+expansion: HistoryExpansion = .{},
+/// Opacity of the inspector while it appears.
+inspector_reveal: f32 = 1,
 
 /// All controls use the same animated pixel layout as the painted surface.
 /// Example: `try widget.draw(canvas);`
@@ -47,6 +59,7 @@ pub fn draw(self: HistoryModal, canvas: *Canvas) !void {
     try (DialogSurface{ .bounds = self.layout.bounds, .viewport = self.layout.viewport }).draw(canvas);
     const content = canvas.quads.items().len;
     const prompt = self.projection.prompt.?;
+    try self.chips(canvas);
     if (self.projection.history.len == 0) {
         try self.empty(canvas);
     } else {
@@ -56,7 +69,6 @@ pub fn draw(self: HistoryModal, canvas: *Canvas) !void {
         }
     }
 
-    try self.chips(canvas);
     try self.search(canvas);
     try self.footer(canvas);
     canvas.quads.clipFrom(content, self.layout.bounds);
@@ -90,6 +102,7 @@ const Placement = struct {
     kind: PlacementKind,
     index: u16 = 0,
     y: f32,
+    height: f32,
 };
 
 const Plan = struct {
@@ -109,10 +122,29 @@ const Plan = struct {
     }
 };
 
-const PlaceInput = struct {
-    list: Rect,
-    bottom: u16,
+/// The rows that are not one line tall this frame: the selected card and
+/// the one the selection left while it closes.
+const Cards = struct {
+    selected: u16,
+    selected_height: f32,
+    selected_open: f32,
+    leaving: ?u16 = null,
+    leaving_height: f32 = 0,
+    leaving_open: f32 = 0,
+    line_limit: u16,
+
+    fn heightOf(self: *const Cards, index: u16, row_height: f32) f32 {
+        if (index == self.selected) {
+            return self.selected_height;
+        }
+
+        return if (self.leaving == index) self.leaving_height else row_height;
+    }
+};
+
+const RowStyle = struct {
     grouped: bool,
+    show_cwd: bool,
 };
 
 fn rows(self: HistoryModal, canvas: *Canvas) !void {
@@ -125,27 +157,39 @@ fn rows(self: HistoryModal, canvas: *Canvas) !void {
     const history = self.projection.history;
     const prompt = self.projection.prompt.?;
     const selected: u16 = @min(prompt.selection(), history.len - 1);
-    const grouped = self.queryFilters().query.len == 0;
+    const style: RowStyle = .{
+        .grouped = self.queryFilters().query.len == 0,
+        .show_cwd = history.effective_scope == .global or history.effective_scope == .workspace,
+    };
+    const cards = try self.measureCards(canvas, selected, style);
     var plan: Plan = .{};
     var bottom: u16 = 0;
-    self.place(canvas, .{ .list = list, .bottom = bottom, .grouped = grouped }, &plan);
-    while (!plan.contains(selected) and bottom < selected) {
+    const kept = @min(selected +| context_rows, history.len - 1);
+    self.place(canvas, .{ .bottom = bottom, .grouped = style.grouped, .cards = &cards }, &plan);
+    while ((!plan.contains(selected) or !(plan.complete or plan.contains(kept))) and bottom < selected) {
         bottom += 1;
-        self.place(canvas, .{ .list = list, .bottom = bottom, .grouped = grouped }, &plan);
+        self.place(canvas, .{ .bottom = bottom, .grouped = style.grouped, .cards = &cards }, &plan);
     }
 
     const first = canvas.quads.items().len;
-    const show_cwd = history.effective_scope == .global or history.effective_scope == .workspace;
     for (plan.placements[0..plan.count]) |placement| {
         switch (placement.kind) {
-            .row => try (HistoryRow{
-                .bounds = .{ .x = list.x, .y = placement.y, .width = list.width, .height = layout.row_height },
-                .projection = self.projection,
-                .index = placement.index,
-                .selected = placement.index == selected,
-                .time = if (grouped) .clock else .date,
-                .show_cwd = show_cwd,
-            }).draw(canvas),
+            .row => {
+                var row = self.rowAt(placement.index, style);
+                row.bounds.y = placement.y;
+                row.bounds.height = placement.height;
+                row.line_limit = cards.line_limit;
+                if (placement.index == cards.selected) {
+                    row.selected = true;
+                    row.open = cards.selected_open;
+                    row.highlight = 1;
+                } else if (cards.leaving == placement.index) {
+                    row.open = cards.leaving_open;
+                    row.highlight = cards.leaving_open;
+                }
+
+                try row.draw(canvas);
+            },
             .heading => try self.heading(canvas, placement),
             .older => try self.olderRow(canvas, placement.y),
         }
@@ -158,22 +202,82 @@ fn rows(self: HistoryModal, canvas: *Canvas) !void {
     canvas.quads.clipFrom(first, list);
 }
 
+// One row of the list at its closed height; the caller places and opens it.
+fn rowAt(self: HistoryModal, index: u16, style: RowStyle) HistoryRow {
+    const list = self.layout.results;
+    return .{
+        .bounds = .{ .x = list.x, .y = list.y, .width = list.width, .height = self.layout.row_height },
+        .projection = self.projection,
+        .index = index,
+        .row_height = self.layout.row_height,
+        .time = if (style.grouped) .clock else .date,
+        .show_cwd = style.show_cwd,
+    };
+}
+
+// The selected row opens into a card unless the inspector beside the list
+// already shows the command. A card never takes more than `card_share` of
+// the list, so the rows around the selection stay in view.
+fn measureCards(self: HistoryModal, canvas: *Canvas, selected: u16, style: RowStyle) !Cards {
+    const layout = self.layout;
+    const history = self.projection.history;
+    const cell: f32 = @floatFromInt(@max(1, canvas.metrics.cell_height));
+    const budget = layout.results.height * card_share - layout.row_height - canvas.chrome.px(32);
+    var cards: Cards = .{
+        .selected = selected,
+        .selected_height = layout.row_height,
+        .selected_open = 0,
+        .line_limit = @intFromFloat(std.math.clamp(@floor(budget / cell) + 1, 1, @as(f32, @floatFromInt(HistoryRow.max_lines)))),
+    };
+    if (self.projection.prompt.?.inspecting()) {
+        return cards;
+    }
+
+    const tallest = @max(layout.row_height, layout.results.height - canvas.chrome.px(4));
+    var card = self.rowAt(selected, style);
+    card.line_limit = cards.line_limit;
+    cards.selected_open = self.expansion.open;
+    cards.selected_height = @min(tallest, opened(layout.row_height, try card.cardHeight(canvas), self.expansion.open));
+    const leaving = self.expansion.leaving orelse return cards;
+    if (leaving.index == selected or leaving.index >= history.len or history.slice()[leaving.index].id != leaving.id) {
+        return cards;
+    }
+
+    card.index = leaving.index;
+    cards.leaving = leaving.index;
+    cards.leaving_open = self.expansion.leaving_open;
+    cards.leaving_height = @min(tallest, opened(layout.row_height, try card.cardHeight(canvas), self.expansion.leaving_open));
+    return cards;
+}
+
+fn opened(closed: f32, open: f32, amount: f32) f32 {
+    return @round(closed + @max(0, open - closed) * amount);
+}
+
+const PlaceInput = struct {
+    bottom: u16,
+    grouped: bool,
+    cards: *const Cards,
+};
+
 // Places rows from the bottom up: the newest of the window sits on the
-// chips, each day's heading goes above its oldest row, and the "older"
-// row appears only when the whole page fits.
+// search field, each day's heading goes above its oldest row, and the
+// "older" row appears only when the whole page fits.
 fn place(self: HistoryModal, canvas: *const Canvas, input: PlaceInput, plan: *Plan) void {
     const history = self.projection.history;
     const layout = self.layout;
+    const list = layout.results;
     plan.* = .{};
-    var y = input.list.y + input.list.height - canvas.chrome.px(4);
+    var y = list.y + list.height - canvas.chrome.px(6);
     var index = input.bottom;
     while (index < history.len and plan.count < max_placements) : (index += 1) {
-        if (y - layout.row_height < input.list.y) {
+        const height = input.cards.heightOf(index, layout.row_height);
+        if (y - height < list.y) {
             break;
         }
 
-        y -= layout.row_height;
-        plan.placements[plan.count] = .{ .kind = .row, .index = index, .y = y };
+        y -= height;
+        plan.placements[plan.count] = .{ .kind = .row, .index = index, .y = y, .height = height };
         plan.count += 1;
         if (!input.grouped) {
             continue;
@@ -184,19 +288,19 @@ fn place(self: HistoryModal, canvas: *const Canvas, input: PlaceInput, plan: *Pl
         if (!closes_group) {
             continue;
         }
-        if (y - layout.group_height < input.list.y or plan.count == max_placements) {
+        if (y - layout.group_height < list.y or plan.count == max_placements) {
             break;
         }
 
         y -= layout.group_height;
-        plan.placements[plan.count] = .{ .kind = .heading, .index = index, .y = y };
+        plan.placements[plan.count] = .{ .kind = .heading, .index = index, .y = y, .height = layout.group_height };
         plan.count += 1;
     }
 
     plan.complete = index == history.len;
-    if (plan.complete and history.has_more and plan.count < max_placements and y - layout.row_height >= input.list.y) {
+    if (plan.complete and history.has_more and plan.count < max_placements and y - layout.row_height >= list.y) {
         y -= layout.row_height;
-        plan.placements[plan.count] = .{ .kind = .older, .y = y };
+        plan.placements[plan.count] = .{ .kind = .older, .y = y, .height = layout.row_height };
         plan.count += 1;
     }
 }
@@ -465,7 +569,7 @@ const author_chips = [_]struct { author: core.HistoryAuthorFilter, text: []const
 };
 
 fn chips(self: HistoryModal, canvas: *Canvas) !void {
-    const area = self.layout.chips;
+    const area = self.layout.header;
     if (area.height <= 0 or area.width <= 0) {
         return;
     }
@@ -475,8 +579,8 @@ fn chips(self: HistoryModal, canvas: *Canvas) !void {
     const prompt = self.projection.prompt.?;
     const history = self.projection.history;
     const filters = self.queryFilters();
-    try canvas.fillAt(.{ .x = area.x, .y = area.y, .width = area.width, .height = 1 }, palette.surface1);
-    const chip_height = @min(px.px(26), @max(0, area.height - px.px(8)));
+    try canvas.fillAt(.{ .x = area.x, .y = area.y + area.height - 1, .width = area.width, .height = 1 }, palette.surface1);
+    const chip_height = @min(px.px(28), @max(0, area.height - px.px(12)));
     const y = area.y + @floor((area.height - chip_height) / 2);
     const gap = px.px(8);
     var value_storage: [labels.path_bytes]u8 = undefined;
@@ -502,12 +606,12 @@ fn chips(self: HistoryModal, canvas: *Canvas) !void {
     const scope_key_width = try canvas.measure(.{ .text = scope_key }) + key_gap;
     const author_key_width = try canvas.measure(.{ .text = author_key }) + key_gap;
     const failed_key_width = try canvas.measure(.{ .text = "!" }) + key_gap;
-    const available = area.width - px.px(24);
+    const available = area.width - px.px(32);
     const with_keys = scope_total + scope_key_width + gap + author_total + author_key_width + gap + failed_width + failed_key_width;
     const show_keys = with_keys <= available;
     const show_right = show_keys or scope_total + gap + author_total + gap + failed_width <= available;
 
-    var x = area.x + px.px(12);
+    var x = area.x + px.px(16);
     try canvas.fillRoundedAt(.{ .x = x, .y = y, .width = scope_total, .height = chip_height }, .{ .color = palette.surface0, .radius = px.px(6) });
     x += px.px(2);
     for (scope_chips, 0..) |chip, index| {
@@ -531,7 +635,7 @@ fn chips(self: HistoryModal, canvas: *Canvas) !void {
         return;
     }
 
-    var right = area.x + area.width - px.px(12);
+    var right = area.x + area.width - px.px(16);
     if (show_keys) {
         right -= failed_key_width;
         _ = try canvas.textAt(.{ .x = right + key_gap, .y = y, .width = failed_key_width, .height = chip_height }, .{ .text = "!", .color = palette.overlay1 });
@@ -657,79 +761,61 @@ fn loadingLine(self: HistoryModal, canvas: *Canvas, area: Rect) !void {
 // The footer
 // ---------------------------------------------------------------------------
 
-const HintAction = enum { none, submit, submit_alternate, toggle_inspection, copy, remove, cancel, visit_pane };
+const HintAction = enum { none, submit, submit_alternate, toggle_inspection, visit_pane };
 
-/// One footer hint; a hint with an action is also a clickable control, so
-/// the pointer reaches everything the keys do without extra buttons.
+/// One footer hint: the key, the word for what it does and the action a
+/// press of the hint triggers.
 const Hint = struct {
     key: []const u8,
     word: []const u8,
     action: HintAction = .none,
 };
 
+// The footer keeps what every selection can do. Copy, delete and go to
+// pane sit on the selected card; closing is the field's `esc`.
 const mac_browse_paste = [_]Hint{
-    .{ .key = "↑↓", .word = "select" },
     .{ .key = "↩", .word = "paste", .action = .submit },
     .{ .key = "⇧↩", .word = "run", .action = .submit_alternate },
     .{ .key = "⌃O", .word = "details", .action = .toggle_inspection },
-    .{ .key = "⌘C", .word = "copy", .action = .copy },
-    .{ .key = "⌘⌫", .word = "delete", .action = .remove },
-    .{ .key = "esc", .word = "close", .action = .cancel },
 };
 const mac_browse_run = [_]Hint{
-    .{ .key = "↑↓", .word = "select" },
     .{ .key = "↩", .word = "run", .action = .submit },
     .{ .key = "⇧↩", .word = "paste", .action = .submit_alternate },
     .{ .key = "⌃O", .word = "details", .action = .toggle_inspection },
-    .{ .key = "⌘C", .word = "copy", .action = .copy },
-    .{ .key = "⌘⌫", .word = "delete", .action = .remove },
-    .{ .key = "esc", .word = "close", .action = .cancel },
 };
 const pc_browse_paste = [_]Hint{
-    .{ .key = "↑↓", .word = "select" },
     .{ .key = "Enter", .word = "paste", .action = .submit },
     .{ .key = "Shift+Enter", .word = "run", .action = .submit_alternate },
     .{ .key = "Ctrl+O", .word = "details", .action = .toggle_inspection },
-    .{ .key = "Ctrl+C", .word = "copy", .action = .copy },
-    .{ .key = "Ctrl+D", .word = "delete", .action = .remove },
-    .{ .key = "Esc", .word = "close", .action = .cancel },
 };
 const pc_browse_run = [_]Hint{
-    .{ .key = "↑↓", .word = "select" },
     .{ .key = "Enter", .word = "run", .action = .submit },
     .{ .key = "Shift+Enter", .word = "paste", .action = .submit_alternate },
     .{ .key = "Ctrl+O", .word = "details", .action = .toggle_inspection },
-    .{ .key = "Ctrl+C", .word = "copy", .action = .copy },
-    .{ .key = "Ctrl+D", .word = "delete", .action = .remove },
-    .{ .key = "Esc", .word = "close", .action = .cancel },
 };
 const mac_inspect_paste = [_]Hint{
+    .{ .key = "↩", .word = "paste", .action = .submit },
     .{ .key = "⌃O", .word = "back", .action = .toggle_inspection },
     .{ .key = "⇞⇟", .word = "scroll" },
     .{ .key = "⌥↩", .word = "go to pane", .action = .visit_pane },
-    .{ .key = "↩", .word = "paste", .action = .submit },
-    .{ .key = "esc", .word = "back", .action = .cancel },
 };
 const mac_inspect_run = [_]Hint{
+    .{ .key = "↩", .word = "run", .action = .submit },
     .{ .key = "⌃O", .word = "back", .action = .toggle_inspection },
     .{ .key = "⇞⇟", .word = "scroll" },
     .{ .key = "⌥↩", .word = "go to pane", .action = .visit_pane },
-    .{ .key = "↩", .word = "run", .action = .submit },
-    .{ .key = "esc", .word = "back", .action = .cancel },
 };
 const pc_inspect_paste = [_]Hint{
+    .{ .key = "Enter", .word = "paste", .action = .submit },
     .{ .key = "Ctrl+O", .word = "back", .action = .toggle_inspection },
     .{ .key = "PgUp PgDn", .word = "scroll" },
     .{ .key = "Alt+Enter", .word = "go to pane", .action = .visit_pane },
-    .{ .key = "Enter", .word = "paste", .action = .submit },
-    .{ .key = "Esc", .word = "back", .action = .cancel },
 };
 const pc_inspect_run = [_]Hint{
+    .{ .key = "Enter", .word = "run", .action = .submit },
     .{ .key = "Ctrl+O", .word = "back", .action = .toggle_inspection },
     .{ .key = "PgUp PgDn", .word = "scroll" },
     .{ .key = "Alt+Enter", .word = "go to pane", .action = .visit_pane },
-    .{ .key = "Enter", .word = "run", .action = .submit },
-    .{ .key = "Esc", .word = "back", .action = .cancel },
 };
 
 // Every table is a constant, so the footer borrows static memory.
@@ -770,26 +856,25 @@ fn footer(self: HistoryModal, canvas: *Canvas) !void {
         return;
     }
 
-    var x = left;
+    const ready = history.phase == .ready and history.len != 0;
+    var x = left - px.px(6);
     for (hints(prompt.inspecting(), history.enter_runs)) |hint| {
-        const key: Label = .{ .text = hint.key, .color = palette.text, .alpha = 0.85 };
-        const word: Label = .{ .text = hint.word, .face = .sans, .size = .small, .color = palette.subtext0 };
-        const key_width = try canvas.measure(key);
-        const word_width = try canvas.measure(word);
-        if (x + key_width + px.px(6) + word_width > limit) {
+        var control: HistoryHint = .{
+            .bounds = .{ .x = x, .y = area.y + px.px(5), .width = 0, .height = @max(0, area.height - px.px(10)) },
+            .key = hint.key,
+            .word = hint.word,
+            .action = self.hintAction(hint.action),
+            .enabled = ready,
+            .generation = prompt.generation,
+            .namespace = .footer,
+        };
+        control.bounds.width = try control.width(canvas);
+        if (x + control.bounds.width > limit) {
             break;
         }
 
-        try self.hintControl(canvas, hint, .{
-            .x = x - px.px(6),
-            .y = area.y + px.px(5),
-            .width = key_width + px.px(6) + word_width + px.px(12),
-            .height = @max(0, area.height - px.px(10)),
-        });
-        _ = try canvas.textAt(.{ .x = x, .y = area.y, .width = key_width, .height = area.height }, key);
-        x += key_width + px.px(6);
-        _ = try canvas.textAt(.{ .x = x, .y = area.y, .width = word_width, .height = area.height }, word);
-        x += word_width + px.px(16);
+        try control.draw(canvas);
+        x += control.bounds.width + px.px(4);
     }
 
     if (history.len == 0) {
@@ -805,52 +890,25 @@ fn footer(self: HistoryModal, canvas: *Canvas) !void {
     }) catch "";
     const label: Label = .{ .text = range, .face = .sans, .size = .small, .color = palette.subtext0 };
     const width = try canvas.measure(label);
-    if (x + width <= limit) {
+    if (x + px.px(12) + width <= limit) {
         _ = try canvas.textAt(.{ .x = limit - width, .y = area.y, .width = width, .height = area.height }, label);
     }
 }
 
-// A hint with an action registers the same control its key triggers and
-// lights up under the pointer; the delivered page revision guards submits.
-fn hintControl(self: HistoryModal, canvas: *Canvas, hint: Hint, bounds: Rect) !void {
+// The control a hint's key triggers; the delivered page revision guards
+// submits, so a replaced page cannot run an unseen command.
+fn hintAction(self: HistoryModal, action: HintAction) ?Target.Action {
     const prompt = self.projection.prompt.?;
     const history = self.projection.history;
-    const ready = history.phase == .ready and history.len != 0;
     const selected: u16 = if (history.len == 0) 0 else @min(prompt.selection(), history.len - 1);
     const choice: HistoryChoice = .{ .index = selected, .revision = history.version() };
-    const action: Target.Action = switch (hint.action) {
-        .none => return,
+    return switch (action) {
+        .none => null,
         .submit => .{ .history = .{ .submit = choice } },
         .submit_alternate => .{ .history = .{ .submit_alternate = choice } },
         .toggle_inspection => .{ .history = .toggle_inspection },
-        .copy => .{ .history = .copy },
-        .remove => .{ .history = .remove },
-        .cancel => .{ .prompt = .cancel },
         .visit_pane => .{ .history = .visit_pane },
     };
-    const enabled = switch (hint.action) {
-        .cancel => true,
-        .toggle_inspection => ready,
-        else => ready,
-    };
-    var hovered = false;
-    if (canvas.widgets) |state| {
-        const target = (Target{
-            .id = .{ .generation = prompt.generation },
-            .namespace = 5,
-            .bounds = bounds,
-            .action = action,
-            .layer = 1,
-            .focusable = false,
-            .enabled = enabled,
-        }).labelled(hint.word);
-        const id = try state.dispatcher.add(target);
-        hovered = if (state.dispatcher.hovered) |hover| hover.eql(id) else false;
-    }
-
-    if (hovered and enabled) {
-        try canvas.fillRoundedAt(bounds, .{ .color = canvas.theme.palette.surface0, .radius = canvas.chrome.px(4) });
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -881,6 +939,7 @@ fn inspect(self: HistoryModal, canvas: *Canvas) !void {
     const selection = @min(prompt.selection(), history.len - 1);
     const details = HistoryDetails.init(self.projection, selection);
     const first = canvas.quads.items().len;
+    defer canvas.quads.fadeFrom(first, self.inspector_reveal);
     var lines = details.lines(columns);
     var skip = prompt.detailScroll();
     var row: u16 = 0;

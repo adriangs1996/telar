@@ -204,35 +204,57 @@ host validation commands.
 
 ## Command history
 
-`HistoryModal` is a panel above the status bar: the search field at its foot
-where the shell prompt was, the filter chips above the field, the newest
-command right above the chips and older ones growing upward under day
-headings (`history_labels.dayLabel`), an inspector beside the list and the
-host's key hints in the footer (`key_label.host_style` prints `⌃O` on macOS
-and `Ctrl+O` elsewhere). Commands and captured output keep the terminal face;
-headings, chips and facts use the chrome face. The layout is fixed for
-fourteen rows so replacing a page never moves the field; a viewport under
-1000 logical pixels lets the inspector replace the list. `DialogSurface`
-dims the window at 0.25 and draws a 12 px radius with a hairline edge.
+`HistoryModal` is a large panel above the status bar. `HistoryModalLayout`
+sizes it from the window alone: up to 1360 logical pixels wide and 80% of the
+window's height, never under 640 while the window allows it, so a larger
+window shows more commands. The filter chips sit in its header, the commands
+grow upward from the search field at its foot, where the shell prompt was,
+with the newest right above the field under day headings
+(`history_labels.dayLabel`), and the key hints close the panel. Commands and
+captured output keep the terminal face; headings, chips and facts use the
+chrome face. Replacing a page, moving the selection and opening the inspector
+never move the field. From 900 logical pixels of panel the inspector takes
+56% of the list's area beside it; a narrower panel lets it replace the list,
+and one under 420 by 260 drops the header. `DialogSurface` dims the window at
+0.25 and draws a 12 px radius with a hairline edge.
 
-Rows are one line: a status glyph in the meaning's color (failure red,
-running teal, interrupted yellow, success quiet), the command with the match
-highlighted, and facts right-aligned that drop from the right when the row is
-narrow: time, then duration, then directory; an agent's provider mark
-survives last. Directory and pane scopes hide the directory column. Under a
-day heading the time column is the local clock; while searching it is the
-date. The page's `utc_offset_min`, read by the client when the reply lands,
-turns timestamps into local days.
+The command comes first. A `HistoryRow` is one line: a status glyph in the
+meaning's color (failure red, running teal, interrupted yellow, success
+quiet), the command with the match highlighted, and its facts only in the
+space the command leaves: the directory goes first, then the time, and an
+agent's provider mark survives last. Directory and pane scopes hide the
+directory. Under a day heading the time is the local clock; while searching
+it is the date. The page's `utc_offset_min`, read by the client when the
+reply lands, turns timestamps into local days. Nothing is cut without a
+mark: a line that does not fit ends in `…`, and a command that continues on
+further lines in `↵`.
+
+The selected row opens into a card with the complete command wrapped at
+spaces (`WrappedLines.words`; a multi-line command keeps its lines), a facts
+line (directory, outcome, duration, age, author) and the actions that only
+make sense for a selection: copy, delete and go to pane. A card takes at
+most ten lines and 45% of the list, so its neighbours stay in view; past
+that it says how many lines remain and names the inspector's key. A capture
+cut short, or a complete command still on its way, is said in the same
+place. Rows paint `HistoryPaletteState.ownedCommand`, which a pending query
+does not change, while pasting still goes through `commandAt`. The list
+keeps two older rows in view above the selection while it scrolls. With the
+inspector beside the list the selected row stays one line, since the
+inspector shows the command.
 
 The chips are the scope segmented control (`select_scope`), the author
 control (`select_author`) and the failed toggle (`toggle_failed`); a leading
-`!` in the field is the failed filter too. Footer hints with an action are
-clickable controls, so the pointer reaches paste, run, details, copy, delete
-and close without buttons; the inspector adds a button row (paste, run, copy,
-delete, go to pane). The row above the oldest command asks for the previous
-page. A row click selects without submitting. Rows and every submit control
-carry the delivered history revision, so a replaced or pending page cannot
-run an unseen command. The search field retains keyboard and IME focus.
+`!` in the field is the failed filter too. The footer keeps what every
+selection can do (paste, run, details); `key_label.host_style` spells the
+keys `⌃O` on macOS and `Ctrl+O` elsewhere. Footer and card hints are
+`HistoryHint`s: a keycap as the command palette draws it, the word, and the
+control its key triggers, so the pointer reaches everything the keys do. The
+field's `esc` closes the panel, and the inspector adds a button row (paste,
+run, copy, delete, go to pane). The row above the oldest command asks for
+the previous page. A row click selects without submitting, and one wheel
+step is a closed row. Rows and every submit control carry the delivered
+history revision, so a replaced or pending page cannot run an unseen
+command. The search field retains keyboard and IME focus.
 
 The inspector walks `HistoryDetails.lines`: the wrapped command, its facts
 (local time and age, duration, exit, directory, pane with its tab or
@@ -277,6 +299,15 @@ logical pixels. `Overlays` retains one `ModalMotion` keyed by prompt generation;
 edits, query results and toggling details do not restart it. Painting and input
 registration use the same shifted rectangles. Closing or finishing the entrance
 leaves no animation deadline.
+
+Moving the selection changes the model at once; `Overlays` retains one
+`SelectionMotion` that opens the card of the row the selection reached over
+140 ms while the one it left closes, so their neighbours barely move. The
+highlight of the selected row is never delayed, and no glyph fades. A page
+replaced under the same position does not replay the motion, so typing
+never animates. The inspector fades in over the entrance's duration through
+a second `ModalMotion`; its geometry does not move, so painting and input
+agree on every frame.
 
 While a replacement page is pending, the previous rows stay as they were.
 `Overlays` retains one `LoadingCue`: only a wait longer than 150 ms dims the
