@@ -30,7 +30,6 @@ const workspace_module = @import("cli/workspace.zig");
 const worktree_module = @import("cli/worktree.zig");
 const api_module = @import("cli/api.zig");
 const hook_module = @import("cli/hook.zig");
-const review_module = @import("cli/review.zig");
 const integration_support = @import("cli/integration_support.zig");
 const proxy_module = @import("cli/proxy.zig");
 const skill_module = @import("cli/skill.zig");
@@ -196,7 +195,6 @@ fn dispatch(init: std.process.Init, args: []const [*:0]const u8) anyerror!void {
         .worktree => |options| std.process.exit(try worktree_module.run(init, options)),
         .api => |options| try api_module.run(init, options),
         .hook => |options| try hook_module.run(init, options),
-        .review => |options| std.process.exit(try review_module.run(init, options)),
         .integration => |options| std.process.exit(try integration_support.run(init, options)),
         .proxy => |options| std.process.exit(try proxy_module.run(init, options)),
         .skill => |which| try skill_module.run(init, which),

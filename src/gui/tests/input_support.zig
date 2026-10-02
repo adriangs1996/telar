@@ -1,4 +1,5 @@
 //! Test native admission through the same owner and notification path as the host.
+const Session = @import("Session.zig");
 const keyinput = @import("keyinput");
 const native = @import("../native/native.zig");
 const event_module = @import("../input/event.zig");
@@ -69,4 +70,24 @@ pub fn action(gui: *GuiAdapter, value: data.actions.Action) !keyinput.Control {
         },
     });
     return if (try gui.update() != null) .stop else .continue_routing;
+}
+
+/// Creates a sized terminal fixture for native widget interactions.
+/// Example: `const fixture = try input_support.createSession();`
+pub fn createSession() !*Session {
+    const session = try Session.init();
+    errdefer session.deinit();
+    try session.bootstrap();
+    const size = try session.gui.resizeViewport(
+        .{
+            .width = 1100,
+            .height = 750,
+            .scale = 1,
+        },
+    );
+    try session.gui.resize(size, session.gui.renderer.theme);
+    session.gui.pointer.configure(session.gui.renderer.origin, size);
+    _ = session.gui.app.model.panes.find(Session.pane_id).?.identify(77);
+    try session.settle();
+    return session;
 }

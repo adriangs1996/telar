@@ -46,7 +46,7 @@ The hidden panes follow in display order with the tab strip's label
 composition (mark, index, name) and no tab surface, in `overlay1` with the
 mark at 0.6 alpha, the way an unfocused pane is dimmed; hovering one lifts it
 to `text`. A hidden agent that is blocked or failed keeps its `AttentionDot`.
-The right end holds the progress capsule, the change-review button and a
+The right end holds the progress capsule and a
 `pane_fullscreen` control that sends the `toggle_pane_fullscreen` intent,
 the same toggle as `prefix z`. Nothing in the band uses `accent`; the frame
 ring alone marks focus. When the entries do not fit, hidden names give way to

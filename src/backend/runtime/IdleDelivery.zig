@@ -249,7 +249,7 @@ fn sleepLaunch(buffer: []u8) !core.LaunchView {
 const Shape = struct {
     clients: usize,
     panes: usize,
-    /// An existing directory the runtime's socket and review store live in.
+    /// An existing directory the runtime's socket lives in.
     directory: []const u8,
     environment: std.process.Environ,
     size: core.TerminalSize,

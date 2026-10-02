@@ -22,21 +22,6 @@ const tab_removal = @import("tab_removal.zig");
 const worktree_lifecycle = @import("worktree_lifecycle.zig");
 const PaneFixture = @import("tests/PaneFixture.zig");
 
-/// Requests PTY shutdown exactly once and marks review owners for
-/// rediscovery. Pane retirement stays with the later exit event.
-///
-/// ```zig
-/// const started = pane_closure.requestClose(model, pane);
-/// ```
-pub fn requestClose(model: *RuntimeModel, pane: *Pane) bool {
-    if (!pane.requestClose()) {
-        return false;
-    }
-
-    model.review_owner_revision +%= 1;
-    return true;
-}
-
 /// Requests closure of an attached pane. The pane stays until its exit.
 ///
 /// ```zig
@@ -47,7 +32,7 @@ pub fn close(model: *RuntimeModel, session: *Session, request: core.ClosePane) !
         return client_request.fail(session, request.request_id, .pane_not_found, "pane not attached");
     };
 
-    _ = requestClose(model, attachment.pane);
+    _ = attachment.pane.requestClose();
 }
 
 /// Commits the child's exit, retires its agent and credential, and

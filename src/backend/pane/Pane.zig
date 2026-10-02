@@ -44,7 +44,6 @@ const HistoryObservationCompletion = @import("HistoryObservationCompletion.zig")
 const agent_process = @import("../process/process.zig");
 const HistoryStats = @import("../history/Stats.zig");
 const cwd_module = @import("../process/cwd.zig");
-const ReviewAvailability = @import("../change_review/Availability.zig");
 pub const Pane = @This();
 
 /// A set of client slots, one bit each.
@@ -59,7 +58,6 @@ generation: u64,
 location: core.TabLocation,
 launch_state: pane_namespace.LaunchState = .starting,
 session: Session,
-review_availability: ReviewAvailability = .{},
 /// One bit per client slot that holds an attachment to this pane. Delivery,
 /// damage settling and collection visit only these clients.
 observers: Observers = 0,

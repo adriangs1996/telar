@@ -2,7 +2,6 @@ const localsocket = @import("localsocket");
 const Workspaces = @import("../../workspace/Workspaces.zig");
 const Worktrees = @import("../../workspace/Worktrees.zig");
 const core = @import("telar-core");
-const ReviewResult = @import("../../change_review/Result.zig");
 const ResponseQueue = @import("ResponseQueue.zig");
 const delivery_namespace = @import("delivery_namespace.zig");
 const std = @import("std");
@@ -162,7 +161,6 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
         var history_result: ?*QueryResult = null;
         var history_output: ?*OutputResult = null;
         var history_stats: ?*StatsResult = null;
-        var change_review: ?*ReviewResult = null;
         var path_results: ?*PathQuery = null;
         const payload = try runtime_encoder.encodeResponse(.{
             .buffer = buffer,
@@ -171,7 +169,6 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
             .history_result = &history_result,
             .history_output = &history_output,
             .history_stats = &history_stats,
-            .change_review = &change_review,
             .path_results = &path_results,
             .runtime_limits = sources.runtime_limits,
             .client_limits = sources.client_limits,
@@ -183,7 +180,6 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
             .history_result = history_result,
             .history_output = history_output,
             .history_stats = history_stats,
-            .change_review = change_review,
             .path_results = path_results,
         } });
     }
@@ -253,12 +249,6 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
             }),
             .{ .agent_revision = revision },
         );
-    }
-
-    if (self.runtime_state_requested) {
-        if (try self.prepareAttachment(preparation, .review, pending)) |prepared| {
-            return prepared;
-        }
     }
 
     if (self.runtime_state_requested and
@@ -332,7 +322,6 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
         var history_result: ?*QueryResult = null;
         var history_output: ?*OutputResult = null;
         var history_stats: ?*StatsResult = null;
-        var change_review: ?*ReviewResult = null;
         var path_results: ?*PathQuery = null;
         const payload = try runtime_encoder.encodeResponse(.{
             .buffer = buffer,
@@ -341,7 +330,6 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
             .history_result = &history_result,
             .history_output = &history_output,
             .history_stats = &history_stats,
-            .change_review = &change_review,
             .path_results = &path_results,
             .runtime_limits = sources.runtime_limits,
             .client_limits = sources.client_limits,
@@ -353,7 +341,6 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
             .history_result = history_result,
             .history_output = history_output,
             .history_stats = history_stats,
-            .change_review = change_review,
             .path_results = path_results,
         } });
     }
@@ -389,9 +376,6 @@ pub fn commit(self: *Delivery, operation: Commit) void {
                 result.deinit();
             }
             if (response.history_stats) |result| {
-                result.deinit();
-            }
-            if (response.change_review) |result| {
                 result.deinit();
             }
             if (response.path_results) |query| {
@@ -462,7 +446,7 @@ pub fn complete(self: *Delivery, result: anyerror!void) Completion {
     }
 }
 
-const Lane = enum { cwd, foreground, title, progress, review, cells, exit, graphics };
+const Lane = enum { cwd, foreground, title, progress, cells, exit, graphics };
 
 fn prepareForeground(self: *Delivery, preparation: Preparation) !?Prepared {
     for (preparation.sources.panes.items, 0..) |slot, index| {
@@ -557,7 +541,6 @@ fn candidate(self: *Delivery, preparation: Preparation, attachment: *Attachment,
         .foreground => try attachment.prepareForeground(buffer),
         .title => try attachment.prepareTitle(buffer),
         .progress => try attachment.prepareProgress(buffer),
-        .review => try attachment.prepareReview(buffer),
         .cells => try attachment.prepareNextCells(.{ .io = preparation.io, .buffer = buffer, .metrics = preparation.metrics }),
         .exit => try attachment.prepareExit(buffer),
         .graphics => graphics: {

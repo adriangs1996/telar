@@ -32,7 +32,6 @@ pub const run = host_support.run;
 pub const serve = instance.serve;
 
 test {
-    _ = @import("change_review/Service.zig");
     _ = @import("agent/Agent.zig");
     _ = @import("agent/description.zig");
     _ = @import("agent/EventLine.zig");
@@ -118,7 +117,6 @@ test {
     _ = @import("runtime/suggestion.zig");
     _ = @import("runtime/attachment/attachment_namespace.zig");
     _ = @import("runtime/attachment/Attachments.zig");
-    _ = @import("runtime/change_review.zig");
     _ = @import("revisions.zig");
     _ = @import("runtime/agent_snapshot.zig");
     _ = @import("workspace/Workspaces.zig");

@@ -61,9 +61,7 @@ The notice reads `<name>: <requested> <noun>; limit <value>`, or
 model may touch: the runtime's event loop, or the client adapter's loop. No
 lock guards the table. A worker never reports. It returns the reach in its
 completion, and the `finish` that runs on the loop reports it. The window's
-workers do so: change-review highlighting records the reach in
-`PreparedEdition.limit` and `Panel.synchronize` reports it when it adopts
-the edition, the favicon worker returns `FaviconCompletion.limit`, reported
+workers do so: the favicon worker returns `FaviconCompletion.limit`, reported
 by `favicons.complete`, and the clipboard capture worker returns
 `Completion.limit`, reported by `clipboard_capture.completeClipboardCapture`.
 Workers that live as long as the runtime and have no completion per piece

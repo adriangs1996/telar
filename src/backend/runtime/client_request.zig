@@ -7,7 +7,6 @@ const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
 const agent_done = @import("agent_done.zig");
 const agent_hooks = @import("agent_hooks.zig");
-const change_review = @import("change_review.zig");
 const client_control = @import("client_control.zig");
 const client_delivery = @import("client_delivery.zig");
 const client_layout_persistence = @import("client_layout_persistence.zig");
@@ -91,9 +90,7 @@ pub fn receive(model: *RuntimeModel, session: *Session, message: core.ClientMess
         .read_history_output => |request| command_history.readOutput(model, session, request),
         .history_stats => |request| command_history.stats(model, session, request),
         .suggest_command => |request| suggest_command.start(model, session, request),
-        .query_change_review => |request| change_review.start(model, session, request),
-        .change_review_command => |request| change_review.start(model, session, request),
-        .report_change_review_sample => |request| change_review.start(model, session, request),
+
         .query_agents => session.delivery.requestAgentSnapshot(),
         .acknowledge_agent => |request| agent_done.acknowledge(model, request),
         .report_agent_session => |request| agent_hooks.receiveSession(model, session, request),

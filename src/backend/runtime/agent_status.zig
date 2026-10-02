@@ -64,7 +64,6 @@ pub fn observeReport(model: *RuntimeModel, observation: ReportObservation) bool 
     var changed = false;
     if (observation.session) |session| {
         changed = agent.applySessionReference(session, observation.provider);
-        model.agent_session_revision +%= @intFromBool(changed);
     }
 
     if (observation.session_file.path.len != 0) {
@@ -135,7 +134,6 @@ pub fn observeSessionReference(model: *RuntimeModel, identity: Identity, referen
     supersedeRestoredSession(model, identity.key, reference);
     const agent = ensure(model, identity) orelse return false;
     const changed = agent.applySessionReference(reference, .unknown);
-    model.agent_session_revision +%= @intFromBool(changed);
     return changed;
 }
 
@@ -342,13 +340,12 @@ pub fn observeProcess(model: *RuntimeModel, observation: ProcessObservation) boo
     // their session is not this agent's, nor is the file they named.
     if (had_session and agent.session_reference == null) {
         _ = model.agent_watches.remove(observation.identity.key);
-        model.agent_session_revision +%= 1;
     }
 
     if (model.restored_agents.take(observation.identity.key)) |pending| {
         if (pending.session) |session| {
             if (agent.session_reference == null) {
-                model.agent_session_revision +%= @intFromBool(agent.applySessionReference(session.reference, session.provider));
+                _ = agent.applySessionReference(session.reference, session.provider);
             }
         }
 

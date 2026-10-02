@@ -7,7 +7,6 @@ const control = @import("control.zig");
 const ControlAgent = @import("ControlAgent.zig");
 const AgentCommandReport = @import("AgentCommandReport.zig");
 const core = @import("telar-core");
-const ReviewSelection = @import("ReviewSelection.zig");
 const WorktreeCatalog = @import("WorktreeCatalog.zig");
 /// One connected control session with its owned receive buffer.
 const Session = @This();
@@ -159,63 +158,6 @@ fn decodeNext(self: *Session) !core.ServerMessage {
 fn refuse(self: *Session, failure: core.RequestFailed) control.ControlError {
     self.failure_reason = failure.message;
     return control.failureError(failure);
-}
-
-/// Reads one immutable edition; returned strings borrow the next receive buffer.
-/// Example: `const review = try session.fetchReview(pane, .{});`
-pub fn fetchReview(self: *Session, pane: PaneRef, selection: ReviewSelection) !core.ChangeReviewSnapshotView {
-    const id = self.requestId();
-    var buffer: [256]u8 = undefined;
-    try self.connection.send(self.io, try core.encodeQueryChangeReview(&buffer, .{
-        .request_id = id,
-        .pane_id = try core.pane(pane.pane_id),
-        .pane_generation = pane.pane_generation,
-        .edition_id = selection.edition,
-        .session = selection.session,
-    }));
-    return self.receiveReview(id);
-}
-
-/// Issues an explicit review action, replacing only its transport request ID.
-/// Example: `const review = try session.commandReview(command);`
-pub fn commandReview(self: *Session, command: core.ChangeReviewCommand) !core.ChangeReviewSnapshotView {
-    var request = command;
-    request.request_id = self.requestId();
-    var buffer: [16 * 1024]u8 = undefined;
-    try self.connection.send(self.io, try core.encodeChangeReviewCommand(&buffer, request));
-    return self.receiveReview(request.request_id);
-}
-
-/// Records evidence already read by the hook process, without runtime file I/O.
-/// Example: `try session.reportReviewSample(sample);`
-pub fn reportReviewSample(self: *Session, sample: core.ReportChangeReviewSample) !void {
-    var request = sample;
-    request.request_id = self.requestId();
-    const buffer = try self.gpa.alloc(u8, core.change_review.max_sample_message_bytes);
-    defer self.gpa.free(buffer);
-    try self.connection.send(self.io, try core.encodeReportChangeReviewSample(buffer, request));
-    const response = try self.decodeNext();
-    switch (response) {
-        .request_completed => |completed| if (completed.request_id != request.request_id) {
-            return error.UnexpectedRuntimeResponse;
-        },
-        .request_failed => |failure| return self.refuse(failure),
-        else => return error.UnexpectedRuntimeResponse,
-    }
-}
-
-fn receiveReview(self: *Session, id: core.RequestId) !core.ChangeReviewSnapshotView {
-    const response = try self.decodeNext();
-    const review = switch (response) {
-        .change_review_snapshot => |view| view,
-        .request_failed => |failure| return self.refuse(failure),
-        else => return error.UnexpectedRuntimeResponse,
-    };
-    if (review.request_id != id) {
-        return error.UnexpectedRuntimeResponse;
-    }
-
-    return review;
 }
 
 /// Fetches the current agent snapshot into owned storage.
@@ -620,7 +562,7 @@ pub fn reportProgress(self: *Session, report: core.ReportAgentProgress) !void {
 /// command has none. Nothing answers it.
 ///
 /// ```zig
-/// try session.reportLimit(.{ .limit = ReviewHookFiles.files_limit, .requested = 40 });
+/// try session.reportLimit(.{ .limit = core.agent_manifest.phrase_bytes_limit, .requested = 40 });
 /// ```
 pub fn reportLimit(self: *Session, reach: core.LimitReach) !void {
     var buffer: [core.max_report_limit_bytes]u8 = undefined;

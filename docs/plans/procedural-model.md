@@ -69,7 +69,7 @@ that touches it.
    outbox into the model.
 3. **The rest of the client model.** Done. The sixteen `data.*` fields beside
    `AttachedClient.model`, the configuration mirrors (bugs 1 and 2), path
-   completion, clipboard capture, change review and startup become fields and
+   completion, clipboard capture and startup become fields and
    tables of `ClientModel`. One copy of configuration. `application/` and
    `operations/` merge into flow files; the three pointer-routing contexts go.
 4. **One client dispatch and the host boundary as data.** `update` handles the
@@ -101,9 +101,7 @@ that touches it.
    Done: `Projection.layout` carries the model's cached snapshot to every GUI
    renderer; the TUI compositor rebuilds only when invalidated; GUI focus is
    reconciled once per `update`, so native text and accessibility queries no
-   longer mutate state; change review keeps its own session revision instead
-   of bumping `chrome` (which also resent the client layout on every review
-   event); `captureVersion` reads the chrome counter directly. Frontend
+   longer mutate state; `captureVersion` reads the chrome counter directly. Frontend
    benchmark medians match or beat the branch base. Kept on purpose: the
    `Version` fields, because 124 test assertions and the commit validations
    (sidebar, host, activation) depend on the individual counters and merging
@@ -112,8 +110,8 @@ that touches it.
    frame anyway; and the TUI chrome repaint while toasts show, which must
    redraw the overlay over freshly composed pane cells.
 6. **The runtime.** `RuntimeModel` tables for clients, workspaces, panes,
-   attachments and agents. One flush after `update` (bug 3). Change-review
-   discovery keyed by revision, `HOME` read once, an observer mask per pane
+   attachments and agents. One flush after `update` (bug 3),
+   `HOME` read once, an observer mask per pane
    instead of client scans. `application/commands`, the identical `*Failure`
    types, the proxy scheduling contexts and the empty event-dispatcher stubs
    go. Done: `Application` merged into `RuntimeModel`; `Runtime.update`
@@ -124,7 +122,7 @@ that touches it.
    geometry lease as a column; the agent repository is indexed by pane id and
    the agent snapshot is projected once per flush from table revisions;
    `HOME` is read once; `Pane.observers` masks which clients a pane visits;
-   change-review discovery is keyed by an owner stamp; attachments are
+   attachments are
    `RuntimeModel.attachments`, one row per client slot of heap records
    instead of a 2.7 MB store inside every session, with the client's
    workspace view and graphics transport on `Session`. Pending: the

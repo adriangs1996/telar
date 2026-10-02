@@ -15,67 +15,6 @@ const initial: Initial = .{
     .attached = true,
 };
 
-test "change review availability owns session identity and survives the initial attachment frame" {
-    var pane = try Pane.init(std.testing.allocator, initial);
-    defer pane.deinit();
-    _ = pane.identify(7);
-    try std.testing.expect(!pane.hasChangeReview());
-    var session = "session-A".*;
-    var notification: core.ChangeReviewChanged = .{ .pane_id = pane.id, .pane_generation = 7, .session = &session, .latest_edition_id = 1 };
-    try std.testing.expect(pane.applyChangeReview(notification));
-    @memset(&session, 'x');
-    notification.session = "session-A";
-    try std.testing.expect(!pane.applyChangeReview(notification));
-    try std.testing.expect(pane.hasChangeReview());
-    pane.attach(11);
-    try std.testing.expect(pane.hasChangeReview());
-    try std.testing.expect(!pane.applyChangeReview(notification));
-
-    notification.latest_edition_id = 0;
-    try std.testing.expect(pane.applyChangeReview(notification));
-    try std.testing.expect(!pane.hasChangeReview());
-    try std.testing.expect(!pane.applyChangeReview(notification));
-    notification.latest_edition_id = 1;
-    try std.testing.expect(pane.applyChangeReview(notification));
-    try std.testing.expect(pane.hasChangeReview());
-
-    notification.session = "session-B";
-    notification.latest_edition_id = 0;
-    try std.testing.expect(pane.applyChangeReview(notification));
-    try std.testing.expect(!pane.hasChangeReview());
-    notification.latest_edition_id = 1;
-    try std.testing.expect(pane.applyChangeReview(notification));
-    try std.testing.expect(pane.hasChangeReview());
-}
-
-test "change review availability rejects foreign panes and retires generations and attachments" {
-    var pane = try Pane.init(std.testing.allocator, initial);
-    defer pane.deinit();
-    var notification: core.ChangeReviewChanged = .{ .pane_id = pane.id, .pane_generation = 7, .session = "session-A", .latest_edition_id = 1 };
-    try std.testing.expect(!pane.applyChangeReview(notification));
-    _ = pane.identify(7);
-    pane.attach(11);
-    notification.pane_id = @enumFromInt(2);
-    try std.testing.expect(!pane.applyChangeReview(notification));
-    notification.pane_id = pane.id;
-    try std.testing.expect(pane.applyChangeReview(notification));
-    pane.attached = false;
-    try std.testing.expect(!pane.hasChangeReview());
-    try std.testing.expect(!pane.applyChangeReview(notification));
-    pane.attach(12);
-    try std.testing.expect(!pane.hasChangeReview());
-    try std.testing.expect(pane.applyChangeReview(notification));
-    pane.attachment_generation += 1;
-    try std.testing.expect(!pane.hasChangeReview());
-    try std.testing.expect(pane.applyChangeReview(notification));
-    _ = pane.identify(8);
-    try std.testing.expect(!pane.hasChangeReview());
-    try std.testing.expect(!pane.applyChangeReview(notification));
-    notification.pane_generation = 8;
-    try std.testing.expect(pane.applyChangeReview(notification));
-    try std.testing.expect(pane.hasChangeReview());
-}
-
 fn frame(storage: []u8, input: FrameInput) !core.FrameView {
     var cells = [_]cellgrid.Cell{.{}} ** 9;
     cells[0].bytes[0] = input.character;

@@ -4,7 +4,6 @@
 //! with the sidebar expanded the tabs start where the workbench starts. When
 //! the window cannot hold even the rail, compact workspace indicators follow
 //! the toggle as the last fallback.
-const data = @import("model");
 const SidebarRegions = @import("SidebarRegions.zig");
 const Bands = @import("Bands.zig");
 const Context = @import("Context.zig");
@@ -16,7 +15,6 @@ const TabStrip = @import("TabStrip.zig");
 const Canvas = @import("Canvas.zig");
 const Label = @import("Label.zig");
 const PixelButton = @import("PixelButton.zig");
-const ChangeReviewButton = @import("ChangeReviewButton.zig");
 const workspace_identity = @import("workspace_identity.zig");
 const MachineSegment = @import("MachineSegment.zig");
 const TopBar = @This();
@@ -25,7 +23,6 @@ const padding: f32 = 8;
 const toggle_side: f32 = 28;
 const control_height: f32 = 26;
 const control_gap: f32 = 8;
-const change_review_width: f32 = 36;
 const context_inset: f32 = 4;
 const context_max_width: f32 = 160;
 const separator_gap: f32 = 10;
@@ -43,27 +40,13 @@ pub fn draw(self: TopBar, canvas: *Canvas) !void {
     const chrome = canvas.chrome;
     try canvas.panelAt(self.area);
 
-    var content = (Layout{
+    const content = (Layout{
         .area = self.area,
         .padding = .{
             .left = chrome.px(padding),
             .right = chrome.px(padding),
         },
     }).content();
-
-    // The slot depends only on window geometry, so detach, split and focus do
-    // not animate the tabs or move delivered workspace targets underneath input.
-    if (content.width >= chrome.px(160)) {
-        const projection = self.context.projection;
-        if (projection.tab) |tab| {
-            if (data.tab_layout.focusedPaneConst(projection.model, tab)) |pane| {
-                if (!projection.model.tabs.layout[tab].hasBorders()) {
-                    _ = try (ChangeReviewButton{ .area = content, .pane = pane, .placement = .top_bar }).draw(canvas);
-                }
-            }
-        }
-        content.width -= chrome.px(change_review_width);
-    }
 
     const band = canvas.sidebar;
     const right = content.x + content.width;

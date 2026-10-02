@@ -16,8 +16,6 @@ const StatsTop = @import("../../history/StatsTop.zig");
 const PluginResult = @import("../../plugins/Result.zig");
 const Half = capture_owned.Half;
 const Quota = exchangecapture.Quota;
-const ReviewJob = @import("../../change_review/Job.zig");
-const ReviewResult = @import("../../change_review/Result.zig");
 const RequestFixture = @import("RequestFixture.zig");
 const EventFixture = @import("EventFixture.zig");
 const pane_search = @import("../pane_search.zig");
@@ -124,32 +122,6 @@ test "loop cancellation joins the last producer when every event slot is occupie
     loop.cancel();
     try std.testing.expectEqual(@as(u64, 0), heap.snapshot().live_allocs);
     try std.testing.expectError(error.Closed, loop.select.queue.getOneUncancelable(std.testing.io));
-}
-
-test "loop cancellation leaves model-retained job results for their owner" {
-    const loop = try std.testing.allocator.create(Loop);
-    defer std.testing.allocator.destroy(loop);
-    loop.init(std.testing.io, null);
-    defer loop.cancel();
-    var heap: core.Heap = .init(std.testing.allocator);
-    var job: ReviewJob = .{
-        .service = undefined,
-        .context = undefined,
-        .client = null,
-        .request_id = .none,
-        .wire_len = 0,
-        .result = try ReviewResult.init(heap.allocator()),
-    };
-    defer job.deinit();
-    const owned = job.result.?;
-    const before = heap.snapshot().live_allocs;
-    try loop.select.queue.putOne(std.testing.io, .{ .change_review_completed = &job });
-
-    loop.cancel();
-    try std.testing.expect(job.result == owned);
-    try std.testing.expectEqual(before, heap.snapshot().live_allocs);
-    job.deinit();
-    try std.testing.expectEqual(@as(u64, 0), heap.snapshot().live_allocs);
 }
 
 test "closing clients retain their search slot until the matching wake retires it" {

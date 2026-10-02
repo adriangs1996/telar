@@ -27,8 +27,8 @@ agent_snapshot.project -> agent_status.snapshot(&model.agents, ...)
   their agent is observed.
 - `model.agent_watches`: session files probed for names an agent gives its
   session.
-- `model.agent_revision`, `model.agent_session_revision`,
-  `model.agent_sequence`: what the snapshot and change review compare.
+- `model.agent_revision` and `model.agent_sequence`: revisions and ordering
+  of agent projections.
 
 ## Rules
 

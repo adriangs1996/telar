@@ -23,29 +23,10 @@ const Owner = @import("../../host/Owner.zig");
 const ClipboardResult = @import("../../input/ClipboardResult.zig");
 const GenericField = textfield.GenericField;
 
-/// Delivered controls may outlive their pane's keyboard focus between frames.
-/// Example: `routing.reconcileFocus(gui);`
-pub fn reconcileFocus(gui: *GuiAdapter) void {
-    const state = &gui.widgets;
-    const focused_pane: ?core.PaneId = if (gui.app.model.tabs.activeSlot()) |tab| gui.app.model.tabs.layout[tab].focused() else null;
-    const target = state.dispatcher.focusedTarget() orelse return;
-    const pane_id = target.paneId() orelse return;
-
-    if (focused_pane == pane_id and eligible(gui, target)) {
-        return;
-    }
-
-    state.cancelComposition();
-    state.paste_owner = null;
-    _ = state.dispatcher.focus(null);
-    state.dispatcher.cancel();
-}
-
 /// Runs after queue admission, before the existing terminal fallback.
 /// Targeted stale events are consumed, never retargeted to another editor.
 /// Example: `if (try routing.apply(gui, event)) return;`
 pub fn apply(gui: *GuiAdapter, event: event_module.Event) !bool {
-    reconcileFocus(gui);
     const state = &gui.widgets;
 
     if (try continueFallback(gui, event)) {
@@ -135,11 +116,6 @@ pub fn apply(gui: *GuiAdapter, event: event_module.Event) !bool {
 
     switch (target.action) {
         .text_field => try editor(gui, target, event),
-        .change_review => {
-            if (target.enabled and buttonActivated(event, target)) {
-                try activateControl(gui, target);
-            }
-        },
         .intent => |intent| {
             if (activated(event)) {
                 var value = intent;
@@ -182,7 +158,6 @@ pub fn apply(gui: *GuiAdapter, event: event_module.Event) !bool {
 /// Latches paste ownership once, including when a control merely consumes it.
 /// Example: `const owned = try routing.beginPaste(gui);`
 pub fn beginPaste(gui: *GuiAdapter) !bool {
-    reconcileFocus(gui);
     const state = &gui.widgets;
     const routed = state.dispatcher.route(.{ .paste = "" });
     state.paste_consumed = routed.consumed;
@@ -211,7 +186,6 @@ pub fn paste(gui: *GuiAdapter, bytes: []const u8) !void {
 
 /// Example: `try routing.endPaste(gui);`
 pub fn endPaste(gui: *GuiAdapter) !void {
-    reconcileFocus(gui);
     defer gui.widgets.paste_owner = null;
     defer gui.widgets.paste_consumed = false;
     const owner = gui.widgets.paste_owner orelse return;
@@ -290,27 +264,11 @@ pub fn eligible(gui: *const GuiAdapter, target: Target) bool {
         return target.layer != 0 and target.id.generation == prompt.generation;
     }
 
-    const pane_id = switch (target.action) {
-        .change_review => |id| id,
-        else => return target.layer == 0,
-    };
-    const tab = gui.app.model.tabs.activeSlot() orelse return false;
-    const pane = gui.app.model.panes.findInConst(gui.app.model.tabs.location[tab].tab_id, pane_id) orelse return false;
-    return target.layer == 0 and pane.attached and pane.hasChangeReview() and pane.attachment_generation == target.id.generation;
+    return target.layer == 0;
 }
 
 fn focus(gui: *GuiAdapter, target: Target) !void {
     gui.cancelBinding();
-    if (target.paneId()) |pane_id| {
-        if (!eligible(gui, target)) {
-            return;
-        }
-
-        _ = gui.widgets.dispatcher.focus(target.id);
-        const tab = gui.app.model.tabs.activeSlot() orelse return;
-        _ = try client.view_interactions.apply(gui.app, tab, .{ .intent = .{ .focus_pane = pane_id }, .consumed = true });
-        return;
-    }
 
     if (target.action == .text_field and field(gui, target) != null) {
         try command(gui, .{ .focus_field = if (target.action.text_field == .directory) .directory else .name });
@@ -529,7 +487,6 @@ fn scrollDirectory(gui: *GuiAdapter, target: Target, event: event_module.Event) 
 fn activateControl(gui: *GuiAdapter, target: Target) !void {
     gui.widgets.cancelComposition();
     switch (target.action) {
-        .change_review => |pane_id| try gui.openChangeReview(pane_id),
         .prompt => |action| try command(gui, if (action == .submit) .submit else .cancel),
         .complete_path => |choice| try client.name_prompt.chooseDirectory(gui.app, choice.index, choice.revision),
         .history => |action| {

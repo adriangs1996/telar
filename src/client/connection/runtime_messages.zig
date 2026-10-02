@@ -7,7 +7,6 @@ const agent_peek = @import("../agents/agent_peek.zig");
 const agent_snapshot = @import("../agents/agent_snapshot.zig");
 const agent_sound = @import("../agents/agent_sound.zig");
 const proxy_status = @import("../agents/proxy_status.zig");
-const change_review = @import("../change_review/change_review.zig");
 const cli_control = @import("cli_control.zig");
 const request_failure = @import("request_failure.zig");
 const resync_required = @import("resync_required.zig");
@@ -42,12 +41,6 @@ pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
 /// Example: `_ = try runtime_messages.receiveServerMessage(client, &received.message);`
 pub fn receiveServerMessage(client: *Client, message: *const core.ServerMessage) !?u8 {
     switch (message.*) {
-        .change_review_changed => |notification| {
-            _ = change_review.changeReviewChanged(&client.model, notification);
-        },
-        .change_review_snapshot => |snapshot| {
-            _ = try change_review.applyChangeReview(&client.model, snapshot);
-        },
         .editor_opened => |reply| {
             try editor_file_links.completeEditorOpen(client, reply);
         },

@@ -21,7 +21,6 @@ pub fn forget(model: *ClientModel) void {
     model.request_lifecycle = .{};
     model.client_layouts = .{};
     model.navigation_history = .{};
-    model.change_review = .{};
     model.editor_open = .{};
     model.layout_snapshot = .{};
     model.layout_snapshot_tab = .invalid;

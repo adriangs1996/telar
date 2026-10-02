@@ -9,7 +9,6 @@
 
 const core = @import("telar-core");
 const ToolHookInput = @import("ToolHookInput.zig");
-const hook_review = @import("hook_review.zig");
 const CommandReport = @import("CommandReport.zig");
 const AgentCommandReport = @import("AgentCommandReport.zig");
 const std = @import("std");
@@ -594,7 +593,6 @@ pub fn run(init: std.process.Init, options: HookOptions) !void {
                 .lifecycle = mapClaudeHook(parsed.value, &event_buffer),
                 .command = command,
                 .title = mapClaudeTitle(&title_buffer, parsed.value),
-                .review = .{ .provider = .claude, .input = tool },
                 .progress = hook_progress.map(init.io, .{
                     .event = parsed.value.hook_event_name,
                     .agent_id = parsed.value.agent_id,
@@ -633,7 +631,6 @@ pub fn run(init: std.process.Init, options: HookOptions) !void {
                 .limit = stdin.limit,
                 .lifecycle = mapCodexHook(parsed.value, &event_buffer),
                 .command = command,
-                .review = .{ .provider = .codex, .input = tool },
                 .progress = hook_progress.map(init.io, .{
                     .event = parsed.value.hook_event_name,
                     .agent_id = parsed.value.agent_id,
@@ -704,10 +701,6 @@ pub fn run(init: std.process.Init, options: HookOptions) !void {
                 .limit = stdin.limit,
                 .lifecycle = mapCursorHook(parsed.value, &event_buffer),
                 .command = mapToolCommand(.cursor, tool),
-                .review = .{
-                    .provider = .cursor,
-                    .input = tool,
-                },
             });
         },
     }
@@ -727,7 +720,7 @@ fn hookProvider(agent: HookOptions.Agent) core.AgentProvider {
 /// before it, so one the runtime refuses never costs the others, and a
 /// limit the input reached is sent last; `run` prints it.
 fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
-    if (reports.lifecycle == null and reports.command == null and reports.title == null and reports.review == null and reports.progress == null) {
+    if (reports.lifecycle == null and reports.command == null and reports.title == null and reports.progress == null) {
         return;
     }
 
@@ -770,10 +763,6 @@ fn sendVerified(session: *Session, target: Target, reports: Reports) void {
         session.reportAgent(pane, report) catch {};
     }
 
-    if (reports.review) |review| {
-        hook_review.capture(session, pane, review);
-    }
-
     if (reports.title) |title| {
         session.reportAgentTitle(pane, target.provider, title) catch {};
     }
@@ -789,10 +778,6 @@ fn sendVerified(session: *Session, target: Target, reports: Reports) void {
             .exit_code = tool.exit_code,
         };
         session.reportAgentCommand(pane, command) catch {};
-    }
-
-    if (reports.review) |review| {
-        hook_review.feedback(session, pane, review) catch {};
     }
 }
 

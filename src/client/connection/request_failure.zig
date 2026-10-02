@@ -4,7 +4,6 @@ const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
 const builtin = @import("builtin");
-const change_review = @import("../change_review/change_review.zig");
 const notifications = @import("../notifications/notifications.zig");
 const pane_attachment = @import("../panes/pane_attachment.zig");
 const pane_split = @import("../panes/pane_split.zig");
@@ -19,19 +18,6 @@ pub fn failRuntimeRequest(client: *Client, failure: core.RequestFailed) !Request
 
         return error.UnexpectedRequestFailure;
     };
-
-    if (continuation == .ignored) {
-        change_review.retireChangeReview(&client.model, failure.request_id);
-    }
-
-    switch (continuation) {
-        .change_review_query, .change_review_command => |operation| {
-            if (!change_review.failChangeReview(&client.model, operation, failure.message)) {
-                return .ignored;
-            }
-        },
-        else => {},
-    }
 
     _ = client.model.editor_open.complete(failure.request_id);
 
@@ -85,8 +71,7 @@ pub fn failRuntimeRequest(client: *Client, failure: core.RequestFailed) !Request
         .rename_tab,
         .move_tab,
         .notification,
-        .change_review_query,
-        .change_review_command,
+
         .editor_open,
         .peek_action,
         => {},

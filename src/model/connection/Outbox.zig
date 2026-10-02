@@ -166,7 +166,7 @@ pub fn push(self: *Outbox, message: outbox_support.Message) !void {
                 }
             }
         },
-        .pane_input, .create_tab, .create_workspace, .rename_tab, .rename_workspace, .show_notification, .client_layout, .query_change_review, .change_review_command, .complete_client_command, .encoded, .find_paths => unreachable,
+        .pane_input, .create_tab, .create_workspace, .rename_tab, .rename_workspace, .show_notification, .client_layout, .complete_client_command, .encoded, .find_paths => unreachable,
         else => {},
     }
     try self.append(message);
@@ -198,28 +198,6 @@ pub fn pushInput(self: *Outbox, pane_id: core.PaneId, bytes: []const u8) !void {
         .len = @intCast(bytes.len),
     } };
     @memcpy(self.payloadAt(index)[0..bytes.len], bytes);
-}
-
-/// Owns the complete encoded command in an existing byte slot before input returns.
-/// Example: `try outbox.pushChangeReviewCommand(command);`
-pub fn pushChangeReviewCommand(self: *Outbox, command: core.ChangeReviewCommand) !void {
-    try self.pushReview(command);
-}
-
-/// Owns the provider conversation identity before a review changes or closes.
-/// Example: `try outbox.pushChangeReviewQuery(query);`
-pub fn pushChangeReviewQuery(self: *Outbox, query: core.QueryChangeReview) !void {
-    try self.pushReview(query);
-}
-
-fn pushReview(self: *Outbox, value: anytype) !void {
-    const query = @TypeOf(value) == core.QueryChangeReview;
-    var scratch: [data.input_limits.max_encoded_bytes]u8 = undefined;
-    const encoded = if (query) try core.encodeQueryChangeReview(&scratch, value) else try core.encodeChangeReviewCommand(&scratch, value);
-    const index = try self.reserve();
-    self.item_launch_cwd[index] = null;
-    self.items[index] = if (query) .{ .query_change_review = @intCast(encoded.len) } else .{ .change_review_command = @intCast(encoded.len) };
-    @memcpy(self.payloadAt(index)[0..encoded.len], encoded);
 }
 
 /// Reserves a whole bounded paste before copying any chunk into the queue.
@@ -503,7 +481,7 @@ fn encodeNext(self: *const Outbox, buffer: []u8) ![]const u8 {
             break :encode core.encodeOpenEditor(buffer, request);
         },
         .complete_pane_focus => |value| core.encodeCompletePaneFocus(buffer, value),
-        .query_change_review, .change_review_command, .encoded => |len| self.payloadAt(self.head)[0..len],
+        .encoded => |len| self.payloadAt(self.head)[0..len],
     };
 }
 

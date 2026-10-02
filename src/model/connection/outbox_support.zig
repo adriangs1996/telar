@@ -23,8 +23,6 @@ pub const capacity = core.max_panes_per_tab + 16;
 pub const max_pending_launches = 4;
 
 pub const Message = union(enum) {
-    query_change_review: u16,
-    change_review_command: u16,
     open_editor: core.OpenEditor,
     open_pane: core.OpenPane,
     pane_input: OwnedInput,
@@ -630,44 +628,6 @@ test "queued editor tabs retain long arguments after configuration source storag
     try std.testing.expectEqualStrings("/opt/" ++ "editor" ** 50, (try argv.next()).?);
     try std.testing.expectEqualStrings("/tmp/design.md", (try argv.next()).?);
     try outbox.finishSend({});
-}
-
-test "change review outbox owns range comment bytes and rejects overflow atomically" {
-    var outbox: Outbox = try .init(std.testing.allocator);
-    defer outbox.deinit(std.testing.allocator);
-    var path = "src/main.zig".*;
-    var body = "Preserve café on these lines".*;
-    const request: core.ChangeReviewCommand = .{ .request_id = @enumFromInt(21), .pane_id = @enumFromInt(2), .pane_generation = 3, .edition_id = 7, .expected_revision = 4, .action = .save_comment, .path = &path, .first_line = 3, .last_line = 6, .body = &body, .draft = true };
-    try outbox.pushChangeReviewCommand(request);
-    @memset(&path, 'x');
-    @memset(&body, 'x');
-    var encoded: [data.input_limits.max_encoded_bytes]u8 = undefined;
-    const sent = (try outbox.beginSend(&encoded)).?;
-    const decoded = try core.decodeClient(sent);
-    try std.testing.expectEqualStrings("src/main.zig", decoded.change_review_command.path);
-    try std.testing.expectEqualStrings("Preserve café on these lines", decoded.change_review_command.body);
-    try std.testing.expectEqual(@as(u32, 6), decoded.change_review_command.last_line);
-    try std.testing.expectEqual(@as(u64, 4), decoded.change_review_command.expected_revision);
-    outbox.sendFailed();
-    const before = outbox.len;
-    var invalid = request;
-    var huge: [core.change_review.max_comment_bytes + 1]u8 = @splat('a');
-    invalid.body = &huge;
-    try std.testing.expectError(error.InvalidChangeReview, outbox.pushChangeReviewCommand(invalid));
-    try std.testing.expectEqual(before, outbox.len);
-    const retry = (try outbox.beginSend(&encoded)).?;
-    try std.testing.expectEqualStrings("Preserve café on these lines", (try core.decodeClient(retry)).change_review_command.body);
-}
-
-test "change review query owns its provider conversation identity" {
-    var outbox: Outbox = try .init(std.testing.allocator);
-    defer outbox.deinit(std.testing.allocator);
-    var conversation = "thread-A".*;
-    try outbox.pushChangeReviewQuery(.{ .request_id = @enumFromInt(21), .pane_id = @enumFromInt(2), .pane_generation = 3, .edition_id = 7, .session = &conversation });
-    @memset(&conversation, 'x');
-    var bytes: [data.input_limits.max_encoded_bytes]u8 = undefined;
-    const sent = (try outbox.beginSend(&bytes)).?;
-    try std.testing.expectEqualStrings("thread-A", (try core.decodeClient(sent)).query_change_review.session);
 }
 
 test "queued editor requests own paths without enlarging queue metadata" {

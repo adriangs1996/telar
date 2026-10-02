@@ -115,8 +115,6 @@ pub const text =
     \\       telar integration install|uninstall|status claude|codex|pi|cursor|opencode [--settings PATH]
     \\       telar proxy trust install|uninstall|status [--ca-dir PATH] [--linux BACKEND]
     \\       telar hook claude|codex|pi|cursor|opencode
-    \\       telar review list|show|comment|delete|submit|reviewed [pane|--current] [options]
-    \\       telar review feedback|ack --provider claude|codex|pi|cursor|opencode --session ID [options]
     \\       telar --skill
     \\
     \\Run an interactive shell inside telar's multiplexer UI.
@@ -160,26 +158,12 @@ pub const text =
     \\  api schema       Print the wire contract of this binary
     \\  integration      Register telar's lifecycle reports with an agent (claude, codex and cursor hooks, pi extension, opencode plugin)
     \\  hook             Entry point that agent hooks run (reads JSON on stdin)
-    \\  review           Inspect captured editions and submit line-range feedback
     \\  proxy trust      Install, remove, or inspect Telar's short-lived system CA
     \\  --skill          Print the bundled agent skill
     \\  config check     Compile and validate config.lua, then exit
     \\  plugin inspect   Validate a package and print its immutable identity
     \\  plugin install   Copy a package into the content-addressed local store
     \\  plugin trust     Grant declared capabilities to one exact package digest
-    \\
-    \\Review options:
-    \\  --edition ID     Select an immutable captured edition (default latest)
-    \\  --revision ID    Require this review revision before changing it
-    \\  --session ID     Require the same provider session while reading or editing
-    \\  --file PATH --first N [--last N] --body TEXT  Add a line-range comment
-    \\  --comment-id ID  Update or delete an existing comment
-    \\  --before         Anchor a comment to removed lines (default after)
-    \\  --draft          Save the comment without including it in submitted feedback
-    \\  --unreviewed     Clear the reviewed marker
-    \\  --feedback-id ID Acknowledge feedback after the agent has received it
-    \\  --json           Print structured review or feedback data
-    \\  --socket PATH    Attach to an existing local runtime
     \\
     \\History options:
     \\  --cwd            Restrict results to the current directory

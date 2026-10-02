@@ -95,7 +95,6 @@ navigation_history: model_data.NavigationHistory = .{},
 sound_playback: model_data.SoundPlayback = .{ .configuration = .{} },
 link_opening: model_data.Opening = .{},
 link_pointer: model_data.Pointer = .{},
-change_review: model_data.ChangeReviewSession = .{},
 sidebar_animation_scheduler: pacing.DeadlineScheduler = .{},
 notification_scheduler: pacing.DeadlineScheduler = .{},
 bar_updates: model_data.BarUpdatesState = .{},
@@ -373,4 +372,3 @@ pub fn tabLocation(model: *const ClientModel, tab_id: core.TabId) ?core.TabLocat
     const slot = model.tabs.find(tab_id) orelse return null;
     return model.tabs.location[slot];
 }
-

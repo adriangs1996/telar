@@ -110,8 +110,6 @@ pub const Capture = @import("attachments/Capture.zig");
 pub const CaptureRequest = @import("attachments/CaptureRequest.zig");
 pub const Center = @import("notifications/Center.zig");
 pub const Change = @import("state/Change.zig").Change;
-pub const ChangeReviewOperation = @import("connection/ChangeReviewOperation.zig");
-pub const ChangeReviewSession = @import("change_review/Session.zig");
 pub const ClientLayoutsState = @import("resources/ClientLayoutsState.zig");
 pub const ClipboardCapture = @import("state/ClipboardCapture.zig");
 pub const ClipboardCaptureId = @import("state/ClipboardCaptureId.zig").ClipboardCaptureId;
@@ -426,7 +424,6 @@ test {
     _ = @import("operations/configuration/Due.zig");
     _ = @import("operations/configuration/DueInput.zig");
     _ = @import("operations/configuration/Synchronization.zig");
-    _ = @import("panes/ChangeReviewAvailability.zig");
     _ = @import("panes/FrameInput.zig");
     _ = @import("panes/Initial.zig");
     _ = @import("panes/PaneCommit.zig");

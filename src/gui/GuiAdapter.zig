@@ -30,8 +30,6 @@ const native = @import("native/native.zig");
 const selection = @import("render/copy_selection.zig");
 const State = @import("widgets/interaction/State.zig");
 const Chrome = @import("widgets/Chrome.zig");
-const ReviewPanel = @import("change_review/Panel.zig");
-const review_dispatch = @import("change_review/dispatch.zig");
 
 const widget_routing = @import("widgets/interaction/routing.zig");
 const KeyInput = @import("input/KeyInput.zig");
@@ -171,7 +169,6 @@ diagrams: DiagramService,
 previews: ImagePreviews,
 /// The preview revision the chrome was last prepared at.
 previews_prepared: u64 = 0,
-review: *ReviewPanel,
 
 /// Adopts options on success and binds all ports before receiving messages.
 /// Example: `const gui = try GuiAdapter.init(params);`
@@ -195,11 +192,6 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
     gui.pending_activity = null;
     gui.profiles_path_len = 0;
     gui.profiles_seen = 0;
-
-    const review = try params.gpa.create(ReviewPanel);
-    errdefer params.gpa.destroy(review);
-    try review.init(params.gpa);
-    errdefer review.deinit();
 
     gui.driver = try NativeLoop.init(params.io);
     errdefer gui.driver.deinit();
@@ -258,11 +250,6 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
 
     gui.diagrams = .init(params.gpa);
 
-    gui.review = review;
-
-    gui.review.widget.host_port = &gui.host;
-    gui.review.widget.widgets = &gui.widgets;
-
     gui.app.machines = &gui.machines;
     gui.app.graphics = host_ports.graphicsRetention(gui, client.Machines.local_slot);
     gui.app.chrome = host_ports.chrome(gui);
@@ -294,8 +281,6 @@ pub fn deinit(self: *GuiAdapter) void {
     self.diagrams.deinit();
     self.previews.deinit();
     self.chrome.favicons.deinit(gpa);
-    self.review.deinit();
-    gpa.destroy(self.review);
     // Other machines share the window client's configuration, so they go
     // first.
     for (self.machines.live, 0..) |live, slot| {
@@ -755,8 +740,6 @@ pub fn update(self: *GuiAdapter) !?u8 {
         break :turn null;
     };
 
-    widget_routing.reconcileFocus(self);
-
     self.refreshPointer();
     self.exit_status = status;
     const now_ns = self.now();
@@ -812,7 +795,7 @@ fn dispatch(self: *GuiAdapter, event: gui_event.Message) !?u8 {
         .binding_timeout => |result| try self.expireBinding(result),
         .favicon => |result| self.landFavicon(result),
         .diagram_ready => self.landDiagram(),
-        .change_review_ready => self.landChangeReview(),
+
         .clipboard_image => |completion| try clipboard_image.finish(self, completion),
     }
 
@@ -839,7 +822,6 @@ fn pathFor(event: gui_event.Message) core.Path {
         .profiles_changed,
         .favicon,
         .diagram_ready,
-        .change_review_ready,
         => .observation,
         else => .interactive,
     };
@@ -2037,14 +2019,8 @@ fn complete(self: *GuiAdapter, token: u64, delivered: bool) !void {
 
     self.chrome.present(delivered);
     self.overlays.present(delivered);
-    widget_routing.reconcileFocus(self);
     self.widgets.present(delivered);
 
-    if (self.review.active) {
-        self.review.widget.present(delivered);
-    }
-
-    widget_routing.reconcileFocus(self);
     self.pointer.hover.present(delivered);
     const delivery = self.app.presentation.complete(@enumFromInt(token), if (delivered) .delivered else .failed) orelse return;
     if (delivered) {
@@ -2075,8 +2051,6 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
     self.chrome.now_ns = pacing.clock.monotonic(self.app.io);
     self.diagrams.beginFrame();
     self.previews.beginFrame();
-    try self.review.synchronize(self.app);
-    self.review.widget.theme_override = self.app.model.theme;
 
     self.refreshPointer();
     try self.resolveFavicons(renderer);
@@ -2103,7 +2077,6 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
         .link = if (self.pointer.hover.link) |*hit| hit else null,
         .widgets = &self.widgets,
         .diagrams = &self.diagrams.store,
-        .review = if (self.review.active) &self.review.widget else null,
         .previews = if (self.showsPreviews()) &self.previews else null,
     };
 
@@ -2136,12 +2109,6 @@ fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
 
     const diagram_revision = self.diagrams.store.revision;
     self.diagrams.start(&self.driver.inbox);
-    self.review.start(
-        .{
-            .app = self.app,
-            .inbox = &self.driver.inbox,
-        },
-    );
     renderer.diagrams[0..DiagramStore.capacity].* = self.diagrams.store.textures();
     renderer.diagrams[ImagePreviews.sheet_slot..][0..2].* = self.previews.textures(self.showsPreviews());
 
@@ -2176,26 +2143,6 @@ fn showsPreviews(self: *const GuiAdapter) bool {
 /// Defers image adoption until the current GPU consumer releases its frame.
 fn landDiagram(self: *GuiAdapter) void {
     self.diagrams.notify();
-    self.chrome.invalidate();
-}
-
-/// Opens a runtime review for either a terminal pane or a managed agent.
-/// Example: `try gui.openChangeReview(pane_id);`
-pub fn openChangeReview(self: *GuiAdapter, pane_id: core.PaneId) !void {
-    try self.review.open(self.app, pane_id);
-    try self.releasePointer();
-    self.pointer.invalidateGestures();
-    self.widgets.dispatcher.cancel();
-    self.widgets.cancelComposition();
-    self.widgets.tab_drag.cancel();
-    self.chrome.cancelPointer();
-    self.overlays.cancelPointer();
-    self.chrome.invalidate();
-}
-
-/// Inbox completion releases the worker's immutable patch for the next frame.
-fn landChangeReview(self: *GuiAdapter) void {
-    self.review.notify();
     self.chrome.invalidate();
 }
 
@@ -2308,70 +2255,37 @@ pub fn observation(self: *const GuiAdapter) client.Observation {
 fn ingress(self: *const GuiAdapter) client.PresentationIngress {
     return .{
         .input_routing = self.binding_revision,
-        .view_interaction = self.chrome.revision +% self.pointer.hover.revision +% self.widgets.dispatcher.revision +% self.app.model.change_review.version,
+        .view_interaction = self.chrome.revision +% self.pointer.hover.revision +% self.widgets.dispatcher.revision,
     };
 }
 
 /// Routes delivered widget targets before falling back to terminal input.
 fn widgetInput(self: *GuiAdapter, event: event_module.Event) !bool {
-    if (self.review.active) {
-        if (try widget_routing.continueFallback(self, event)) {
-            return true;
-        }
-
-        defer self.chrome.invalidate();
-
-        return review_dispatch.apply(&self.review.widget, event);
-    }
-
     return widget_routing.apply(self, event);
 }
 
 fn beginWidgetPaste(self: *GuiAdapter) !bool {
-    if (self.review.active) {
-        self.review.beginPaste();
-
-        return true;
-    }
-
     return widget_routing.beginPaste(self);
 }
 
 fn widgetPaste(self: *GuiAdapter, bytes: []const u8) !void {
-    if (self.review.paste_generation != null) {
-        self.review.appendPaste(bytes);
-
-        return;
-    }
-
     try widget_routing.paste(self, bytes);
 }
 
 fn endWidgetPaste(self: *GuiAdapter) !void {
-    if (self.review.paste_generation != null) {
-        try self.review.endPaste();
-        self.chrome.invalidate();
-
-        return;
-    }
-
     try widget_routing.endPaste(self);
 }
 
 /// Publishes current editing state with the delivered caret geometry.
 /// Example: `const available = gui.widgetTextContext(&context);`
 pub fn widgetTextContext(self: *GuiAdapter, output: *native.TextContext) bool {
-    if (self.review.active) {
-        return self.review.widget.textContext(output);
-    }
-
     return host_context.text(self, output);
 }
 
 /// Publishes owned widget semantics using delivered geometry.
 /// Example: `const available = gui.widgetAccessibility(&tree);`
 pub fn widgetAccessibility(self: *GuiAdapter, output: *native.AccessibilityTree) bool {
-    const published = if (self.review.active) self.review.widget.accessibility(output) else host_context.accessibility(self, output);
+    const published = host_context.accessibility(self, output);
     limit_reached.reportAccessibility(self);
     return published;
 }

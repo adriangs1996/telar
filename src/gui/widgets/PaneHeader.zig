@@ -12,7 +12,6 @@ const Rect = gfx.Rect;
 const attention = @import("attention.zig");
 const Canvas = @import("Canvas.zig");
 const PaneProgress = @import("PaneProgress.zig");
-const ChangeReviewButton = @import("ChangeReviewButton.zig");
 const StatusChip = @import("StatusChip.zig");
 const Label = @import("Label.zig");
 const PaneHeader = @This();
@@ -39,7 +38,6 @@ pub fn draw(self: PaneHeader, canvas: *Canvas) !void {
     }
 
     var band: Rect = .{ .x = row.x + chrome.px(8), .y = row.y, .width = @max(0, row.width - 2 * chrome.px(8)), .height = band_height };
-    band.width -= try (ChangeReviewButton{ .area = band, .pane = self.pane }).draw(canvas);
     var index_storage: [8]u8 = undefined;
     const index_text = std.fmt.bufPrint(&index_storage, "{d}", .{self.index}) catch unreachable;
     const index_width = try canvas.measure(.{ .text = index_text, .bold = true, .face = .sans, .size = .body });

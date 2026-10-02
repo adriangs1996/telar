@@ -18,9 +18,7 @@ pub fn classify(tag: Tag) RequestClass {
         .read_history_output,
         .history_stats,
         .show_notification,
-        .query_change_review,
-        .change_review_command,
-        .report_change_review_sample,
+
         .request_client_command,
         .detach_client,
         .query_clients,
@@ -65,7 +63,7 @@ test "runtime observers cannot be mistaken for interactive clients" {
 
 test "interactive mutations and control queries keep distinct admission roles" {
     const ui = [_]Tag{ .open_pane, .pane_input, .pane_resize, .frame_ack, .configure_graphics, .update_client_layout };
-    const control = [_]Tag{ .runtime_stop, .query_clients, .read_pane, .report_agent_session, .request_pane_focus, .query_change_review, .report_limit };
+    const control = [_]Tag{ .runtime_stop, .query_clients, .read_pane, .report_agent_session, .request_pane_focus, .report_limit };
     for (ui) |tag| {
         try std.testing.expectEqual(RequestClass.ui, classify(tag));
     }

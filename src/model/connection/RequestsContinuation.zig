@@ -4,7 +4,6 @@ const InitialOpen = @import("InitialOpen.zig");
 const Split = @import("Split.zig");
 const PaneOperation = @import("PaneOperation.zig");
 const CreateTab = @import("CreateTab.zig");
-const ChangeReviewOperation = @import("ChangeReviewOperation.zig");
 const Group = @import("RequestsGroup.zig").RequestsGroup;
 
 pub const RequestsContinuation = union(enum) {
@@ -21,8 +20,6 @@ pub const RequestsContinuation = union(enum) {
     close_tab: core.TabLocation,
     move_tab: core.TabLocation,
     notification,
-    change_review_query: ChangeReviewOperation,
-    change_review_command: ChangeReviewOperation,
     editor_open: EditorOpenOperation,
     /// A peek's read of its agent's pane.
     peek_screen: core.PaneId,
@@ -40,8 +37,7 @@ pub const RequestsContinuation = union(enum) {
             .attach_pane => .attachment,
             .create_tab, .rename_tab, .close_tab, .move_tab => .tab_operation,
             .notification => .notification,
-            .change_review_query => .change_review_query,
-            .change_review_command => .change_review_command,
+
             .editor_open => .editor_open,
             .peek_screen, .peek_action => .peek,
             .ignored => .ignored,
@@ -50,7 +46,6 @@ pub const RequestsContinuation = union(enum) {
 
     pub fn tabId(self: RequestsContinuation) ?core.TabId {
         return switch (self) {
-            .change_review_query, .change_review_command => |operation| operation.location.tab_id,
             .editor_open => |operation| operation.location.tab_id,
             .tab_snapshot => |location| location.tab_id,
             .split => |split| split.location.tab_id,
@@ -62,7 +57,6 @@ pub const RequestsContinuation = union(enum) {
 
     pub fn paneId(self: RequestsContinuation) ?core.PaneId {
         return switch (self) {
-            .change_review_query, .change_review_command => |operation| operation.pane_id,
             .editor_open => |operation| operation.pane_id,
             .split => |split| split.target_pane,
             .close_pane, .attach_pane => |operation| operation.pane_id,

@@ -35,7 +35,7 @@ pub fn resize(model: *RuntimeModel, session: *Session, request: core.PaneResize)
     }
 
     pane.applyPendingResize() catch {
-        _ = pane_closure.requestClose(model, pane);
+        _ = pane.requestClose();
         return;
     };
     try pane_observation.start(model, pane);

@@ -74,7 +74,7 @@ _Avoid_: Dropdown, selector, menu
 
 **Telar view**:
 Content Telar composes from client and runtime projections instead of from a
-PTY, such as a history browser or a change review. The layout may
+PTY, such as a history browser. The layout may
 place it beside terminal panes; its state never lives in the adapter.
 _Avoid_: GUI pane, virtual pane, widget pane
 
@@ -394,67 +394,6 @@ and default ports removed, nondefault ports retained. It finds the clone of
 one project on another machine; it never decides where work runs. A separately
 sanitized transport URL preserves non-secret origin details.
 _Avoid_: Repo id, project key
-
-## Change review
-
-**Directed session**:
-A synchronous collaboration in a pane where the user directs project changes
-through natural language, contextual code review and optional direct editing,
-taking exclusive collaboration turns with one agent. The
-agent works without subagents in a working tree that other agents do not share.
-_Avoid_: Permission mode
-
-**Collaboration turn**:
-An exclusive period of a directed session assigned to the user or the agent;
-the other participant must wait for its owner to hand control back before
-advancing the shared work. It is independent of the provider's model exchanges.
-_Avoid_: Model exchange, Provider turn completion
-
-**Explanation turn**:
-An agent collaboration turn whose scope is answering the user's contextual
-question without implementing further changes. Earlier implementation
-instructions do not authorize additional implementation during this turn.
-_Avoid_: Continue implementation
-
-**Implementation turn**:
-An agent collaboration turn authorized to work on one agreed change objective
-and then return control to the user. The objective can involve multiple files.
-_Avoid_: Complete the whole task
-
-**Review step**:
-A project change with an agreed objective, developed and reviewed across one
-or more collaboration turns. It becomes accepted only through an explicit
-user decision.
-_Avoid_: Tool call, Commit, Collaboration turn
-
-**Step draft**:
-The current project code being developed and reviewed for a step, already
-present in the directed session's private working tree before acceptance.
-_Avoid_: Accepted version
-
-**Review revision**:
-A retained code version delivered for review within a step, linked to the
-conversation about that version. Internal edits made before that delivery do
-not become separate review revisions.
-_Avoid_: Tool call, Final task result
-
-**Step acceptance**:
-The user's explicit decision that a review step is suitable to advance from,
-independently of whether it passes validation. Asking a question, editing code,
-or handing control back does not itself accept the step.
-_Avoid_: Turn handoff
-
-**Step discard**:
-The rejection of a step draft, restoring the state preceding that step,
-including reversal of both human and agent contributions to it. The rejection
-retains the user's feedback on how the work should proceed.
-_Avoid_: Request revision
-
-**Experiment area**:
-A designated space for a directed session's disposable utilities and
-experiments outside the project changes under review. Incorporating its
-contents into the project requires a change proposal.
-_Avoid_: Untracked files
 
 ## Fleet operations
 

@@ -453,28 +453,6 @@ fn expectSameValue(comptime T: type, expected: T, actual: T) !void {
         );
     }
 
-    if (T == core.ChangeReviewSnapshotView) {
-        inline for (@typeInfo(T).@"struct".fields) |field| {
-            if (comptime !std.mem.eql(
-                u8,
-                field.name,
-                "comment_storage",
-            )) {
-                try expectSameValue(
-                    field.type,
-                    @field(expected, field.name),
-                    @field(actual, field.name),
-                );
-            }
-        }
-
-        return expectSameValue(
-            []const core.ChangeReviewComment,
-            expected.comments(),
-            actual.comments(),
-        );
-    }
-
     if (T == core.ShmName) {
         return expectSameValue(
             []const u8,
@@ -570,34 +548,6 @@ fn expectSameValue(comptime T: type, expected: T, actual: T) !void {
 /// names) and path positions, which land in caller storage, hold none.
 fn expectBorrowed(comptime T: type, value: T, payload: []const u8) !void {
     if (T == core.ClientList or T == core.ClientCommand or T == core.ShmName or T == Cell) {
-        return;
-    }
-
-    if (T == core.ChangeReviewSnapshotView) {
-        inline for (@typeInfo(T).@"struct".fields) |field| {
-            if (comptime !std.mem.eql(
-                u8,
-                field.name,
-                "comment_storage",
-            )) {
-                try expectBorrowed(
-                    field.type,
-                    @field(value, field.name),
-                    payload,
-                );
-            }
-        }
-
-        // The comments live in the message's own storage; their texts
-        // borrow the payload.
-        for (value.comments()) |comment| {
-            try expectBorrowed(
-                core.ChangeReviewComment,
-                comment,
-                payload,
-            );
-        }
-
         return;
     }
 
@@ -974,8 +924,7 @@ fn reencode(message: *const ServerMessage, buffer: []u8) anyerror![]const u8 {
         .client_list => |value| core.encodeClientList(buffer, value),
         .client_command => |value| core.encodeClientCommand(buffer, value),
         .client_command_result => |value| core.encodeClientCommandResult(buffer, value),
-        .change_review_changed => |value| core.encodeChangeReviewChanged(buffer, value),
-        .change_review_snapshot => |value| core.encodeChangeReviewSnapshot(buffer, value),
+
         .pane_opened => |value| core.encodePaneOpened(buffer, value),
         .pane_frame => unreachable,
         .pane_exited => |value| core.encodePaneExited(buffer, value),
@@ -1323,59 +1272,6 @@ fn addClientSeeds(corpus: *SeedCorpus) !void {
         "client_command_result",
         try core.encodeClientCommandResult(corpus.space(), command),
         accepted(.client_command_result),
-    );
-
-    const changed: core.ChangeReviewChanged = .{
-        .pane_id = @enumFromInt(5),
-        .pane_generation = 2,
-        .session = "s-1",
-        .latest_edition_id = 9,
-    };
-    corpus.add(
-        "change_review_changed",
-        try core.encodeChangeReviewChanged(corpus.space(), changed),
-        accepted(.change_review_changed),
-    );
-
-    var snapshot: core.ChangeReviewSnapshotView = .{
-        .request_id = @enumFromInt(1),
-        .pane_id = @enumFromInt(5),
-        .pane_generation = 2,
-    };
-    corpus.add(
-        "change_review_snapshot_empty",
-        try core.encodeChangeReviewSnapshot(corpus.space(), snapshot),
-        accepted(.change_review_snapshot),
-    );
-
-    snapshot.session = "s-1";
-    snapshot.revision = 3;
-    snapshot.patch = "--- a\n+++ b\n";
-    snapshot.reviewed = true;
-    snapshot.delivery = .pending;
-    snapshot.status = "ready";
-    for (&snapshot.comment_storage, 1..) |*comment, index| {
-        comment.* = .{
-            .id = index,
-            .path = "a.zig",
-            .first_line = 1,
-            .last_line = 2,
-            .body = "fix",
-        };
-    }
-
-    snapshot.comment_count = 1;
-    corpus.add(
-        "change_review_snapshot_comment",
-        try core.encodeChangeReviewSnapshot(corpus.space(), snapshot),
-        accepted(.change_review_snapshot),
-    );
-
-    snapshot.comment_count = core.change_review.max_comments;
-    corpus.add(
-        "change_review_snapshot_full",
-        try core.encodeChangeReviewSnapshot(corpus.space(), snapshot),
-        accepted(.change_review_snapshot),
     );
 }
 
@@ -2311,7 +2207,7 @@ fn addMutatedSeeds(corpus: *SeedCorpus) !void {
         rejected(error.Truncated),
     );
 
-    const unknown_tags = [_]u8{ 0x00, 0x01, 0x42, 0x80, 0xb7, 0xff };
+    const unknown_tags = [_]u8{ 0x00, 0x01, 0x42, 0x80, 0xb0, 0xb1, 0xb7, 0xff };
     for (unknown_tags) |tag| {
         const bytes = corpus.space()[0..1];
         bytes[0] = tag;
@@ -2493,19 +2389,6 @@ fn addMutatedSeeds(corpus: *SeedCorpus) !void {
             core.ClientList.capacity + 1,
         ),
         rejected(error.InvalidClientList),
-    );
-
-    // change_review_snapshot with empty texts: tag, three ids, empty session,
-    // five edition ids, source, empty patch, then the comment count.
-    const comment_count_offset = 1 + 24 + 4 + 40 + 1 + 4;
-    corpus.add(
-        "change_review_comments_over_bound",
-        withByte(
-            corpus.copy(seedNamed(corpus, "change_review_snapshot_empty")),
-            comment_count_offset,
-            core.change_review.max_comments + 1,
-        ),
-        rejected(error.InvalidChangeReview),
     );
 
     // client_layout_snapshot: tag, restored, sidebar visible, then the width

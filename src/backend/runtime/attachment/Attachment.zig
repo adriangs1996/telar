@@ -7,7 +7,6 @@ const std = @import("std");
 const Range = @import("Range.zig");
 const selection = @import("selection.zig");
 const attachment_namespace = @import("attachment_namespace.zig");
-const ReviewContext = @import("../../change_review/Context.zig");
 /// Per-client rendering state. It is disposable: reconnecting creates a fresh
 /// baseline while the pane and its PTY continue to exist.
 const Attachment = @This();
@@ -29,7 +28,6 @@ observed_foreground_revision: u64 = 0,
 /// titles a child actually set.
 observed_title_revision: u64 = 1,
 observed_progress_revision: u64 = 1,
-observed_review_revision: u64 = 0,
 exit_sent: bool = false,
 
 pub fn init(gpa: std.mem.Allocator, pane: *Pane) !Attachment {
@@ -97,7 +95,6 @@ pub fn hasDelivery(self: *const Attachment) bool {
         self.observed_title_revision != pane.title.revision or
         self.observed_foreground_revision != pane.foreground_revision or
         self.observed_progress_revision != pane.progress_revision or
-        self.observed_review_revision != pane.review_availability.revision or
         (!self.exit_sent and pane.exit != null) or
         self.hasGraphicsWork();
 }
@@ -114,50 +111,6 @@ pub fn prepareCwd(self: *Attachment, buffer: []u8) !?Prepared {
         }),
         .effect = .{ .cwd = pane.cwd.revision },
     };
-}
-
-/// Replays retained review availability for each fresh attachment and coalesces live changes.
-/// Example: `const prepared = try attachment.prepareReview(buffer);`.
-pub fn prepareReview(self: *Attachment, buffer: []u8) !?Prepared {
-    const availability = &self.pane.review_availability;
-    if (self.observed_review_revision == availability.revision) {
-        return null;
-    }
-
-    const change = availability.view() orelse return null;
-    return .{ .bytes = try core.encodeChangeReviewChanged(buffer, change), .effect = .{ .review = availability.revision } };
-}
-
-test "review discovery replays on attach and reconnect without losing changes during send" {
-    var pane: Pane = undefined;
-    pane.review_availability = .{};
-    const context = try ReviewContext.init(.{ .id = @enumFromInt(1), .generation = 4 }, .claude, "hook-session");
-    var first: Attachment = undefined;
-    first.pane = &pane;
-    first.observed_review_revision = 0;
-    var buffer: [1024]u8 = undefined;
-    try std.testing.expect(try first.prepareReview(&buffer) == null);
-    pane.review_availability.record(context, 2);
-    const pending = (try first.prepareReview(&buffer)).?;
-    const initial = (try core.decodeServer(pending.bytes)).change_review_changed;
-    try std.testing.expectEqualStrings("hook-session", initial.session);
-    try std.testing.expectEqual(@as(u64, 2), initial.latest_edition_id);
-    pane.review_availability.record(context, 5);
-    _ = first.commitPrepared(pending);
-    const newer = (try first.prepareReview(&buffer)).?;
-    try std.testing.expectEqual(@as(u64, 5), (try core.decodeServer(newer.bytes)).change_review_changed.latest_edition_id);
-    _ = first.commitPrepared(newer);
-    try std.testing.expect(try first.prepareReview(&buffer) == null);
-    var reconnect: Attachment = undefined;
-    reconnect.pane = &pane;
-    reconnect.observed_review_revision = 0;
-    const replayed = (try reconnect.prepareReview(&buffer)).?;
-    try std.testing.expectEqual(@as(u64, 5), (try core.decodeServer(replayed.bytes)).change_review_changed.latest_edition_id);
-    _ = reconnect.commitPrepared(replayed);
-    pane.review_availability.invalidate();
-    const cleared = (try first.prepareReview(&buffer)).?;
-    try std.testing.expectEqual(@as(u64, 0), (try core.decodeServer(cleared.bytes)).change_review_changed.latest_edition_id);
-    try std.testing.expect(try reconnect.prepareReview(&buffer) != null);
 }
 
 /// Prepares the pane's newest title. The VT actor writes the title while
@@ -414,10 +367,6 @@ pub fn commitPrepared(self: *Attachment, prepared: Prepared) CommitEffect {
         },
         .progress => |revision| effect: {
             self.observed_progress_revision = revision;
-            break :effect .{};
-        },
-        .review => |revision| effect: {
-            self.observed_review_revision = revision;
             break :effect .{};
         },
         .cells => .{},

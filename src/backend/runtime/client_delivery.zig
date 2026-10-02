@@ -9,7 +9,6 @@ const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
 const Pane = @import("../pane/Pane.zig");
-const change_review = @import("change_review.zig");
 const agent_snapshot = @import("agent_snapshot.zig");
 const Sources = @import("delivery/Sources.zig");
 const store_support = @import("client/store_support.zig");
@@ -28,7 +27,6 @@ pub fn flush(model: *RuntimeModel) !void {
     var passes: usize = 0;
     while (passes <= store_support.max_clients) : (passes += 1) {
         pane_closure.collect(model);
-        change_review.discover(model);
         agent_snapshot.refresh(model);
 
         var sources = deliverySources(model);

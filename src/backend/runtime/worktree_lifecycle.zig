@@ -250,7 +250,6 @@ fn closeWorkspace(model: *RuntimeModel, workspace_id: core.WorkspaceId) void {
         tab_removal.announce(model, removed);
     }
 
-    model.review_owner_revision +%= 1;
     session_checkpoint.noteChange(model);
 }
 

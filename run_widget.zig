@@ -202,7 +202,7 @@ pub fn addBuild(b: *std.Build, app: BuildApplication) void {
     module.addImport("model", app.modules.data);
     module.addImport("assets", app.modules.assets);
     module.addImport("freetype", app.modules.freetype);
-    module.addObjectFile(app.modules.syntax_library.?);
+    app.modules.libraries.addImports(module);
     module.addCSourceFile(.{ .file = b.path("src/gui/native/wake.c"), .flags = &.{} });
     if (os == .macos) {
         macos_gui.add(b, module, app.coverage.enabled);

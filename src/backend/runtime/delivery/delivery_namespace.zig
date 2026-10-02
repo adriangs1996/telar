@@ -1,7 +1,6 @@
 //! Bounded runtime-to-client delivery policy and logical send transaction.
 
 const core_module = @import("telar-core");
-const ReviewResult = @import("../../change_review/Result.zig");
 const QueryResult = @import("../../history/QueryResult.zig");
 const PathQuery = @import("../../paths/PathQuery.zig");
 const OutputResult = @import("../../history/OutputResult.zig");
@@ -29,7 +28,6 @@ pub const Effect = union(enum) {
         history_result: ?*QueryResult,
         history_output: ?*OutputResult,
         history_stats: ?*StatsResult,
-        change_review: ?*ReviewResult = null,
         path_results: ?*PathQuery = null,
     },
     resync,
@@ -52,38 +50,6 @@ pub const Phase = union(enum) {
 
 /// The one client every delivery test prepares for.
 const test_client = 0;
-
-test "review response remains reserved across a prepared send until commit or client cleanup" {
-    for ([_]bool{ false, true }) |abort| {
-        var delivery = try Delivery.init(std.testing.allocator);
-        defer delivery.deinit(std.testing.allocator);
-        var attachments: Attachments = .{};
-        defer attachments.deinit(std.testing.allocator);
-        var metrics: RuntimeMetrics = .{ .started_ns = 0 };
-        const result = try ReviewResult.init(std.testing.allocator);
-        try delivery.enqueue(.{ .change_review = result });
-        try std.testing.expect(delivery.responses.hasChangeReview());
-
-        const prepared = delivery.stage("review", .{ .response = .{
-            .offset = 0,
-            .history_result = null,
-            .history_output = null,
-            .history_stats = null,
-            .change_review = result,
-        } });
-        try std.testing.expect(delivery.responses.hasChangeReview());
-        if (abort) {
-            delivery.abort(prepared);
-            try std.testing.expect(delivery.responses.hasChangeReview());
-            delivery.close();
-        } else {
-            delivery.commit(.{ .prepared = prepared, .attachments = &attachments, .client = test_client, .metrics = &metrics });
-            _ = delivery.complete({});
-        }
-
-        try std.testing.expect(!delivery.responses.hasChangeReview());
-    }
-}
 
 /// Cuts `text` to at most `limit` bytes on a UTF-8 boundary.
 pub fn truncateUtf8(text: []const u8, limit: usize) []const u8 {

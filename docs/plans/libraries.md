@@ -6,7 +6,7 @@ Target: every piece of code is one of three things.
   tables and records.
 - **Business rules** are flow procedures over that model, reached from
   `update`. A rule stays here even when it is pure: what an agent status
-  means, which host is Claude, when a review edition may be commented.
+  means, which host is Claude, which client may focus a pane.
 - **Everything else is a library**: a module under `lib/<name>/` with its own
   root, its own tests and its own build step, that imports only `std`,
   external dependencies and other libraries. It never imports `telar-core`,
@@ -92,14 +92,14 @@ alias are one word.
 | `exchangecapture` (done) | `proxy/capture` | `Half` embedded a telar pane and credential; it now carries the caller's comptime `Meta`, and the credential gate stays in telar's `Channel` |
 | `bytecodec` (done) | `schema/{Encoder,Decoder,wire}.zig` | none |
 | `cellcodec` (done) | the cell run half of `schema/frame_support.zig` and `FrameView`'s cell iterator | the frame's size budget becomes a limit the caller passes |
-| `syntaxhl` (done) | `model/syntax/role.zig`, `client/syntax/language.zig`, `gui/syntax/{captures,Store,Entry,Job,Result}.zig` | none; the diff highlighter over change review lines and the Rust highlighter behind `telar_syntax_*` stay. The content cache (`Store` and its jobs) and the GUI service that drove it had no caller and were removed later |
+| `syntaxhl` (done) | Syntax roles, language lookup and capture values | The native diff highlighter and its Rust dependency were removed with Reviews; theme syntax roles remain. |
 | `mermaid` (done) | `gui/diagrams/{protocol,Image,worker,ProcessTask}.zig` | the library runs a caller-named helper with a deadline and validates its pixels; the texture store, service, helper path and theme mapping stay in the GUI, and the store now takes an opaque owner key instead of an agent message identity |
 
 What stays in `telar-core` after the cuts: agent manifests and providers,
 plugin manifests and capabilities, proxy and editor protocol values, history
 filters and fuzzy matching, and the protocol in `src/core/schema`. The
 schema was listed as a `wire` library, but 145 of its 192 files are telar's
-messages (workspaces, tabs, agents, approvals, change review) and it imports
+messages (workspaces, tabs, agents, approvals) and it imports
 some twenty of core's domain values; its field codec (`GenericDerived`)
 switches on telar's ids and enums. Only its byte codec and cell encoding are
 mechanism, and those are `bytecodec` and `cellcodec`. Core imports them,

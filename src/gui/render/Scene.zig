@@ -4,7 +4,6 @@ const data = @import("model");
 const client = @import("telar-client");
 const Canvas = @import("../widgets/Canvas.zig");
 const Composition = @import("../widgets/Composition.zig");
-const ReviewWidget = @import("../change_review/Widget.zig");
 const TerminalRenderer = @import("TerminalRenderer.zig");
 const Chrome = @import("../widgets/Chrome.zig");
 const Overlays = @import("../widgets/overlays/Overlays.zig");
@@ -21,7 +20,6 @@ theme: data.ColorTheme,
 link: ?*const LinkHit = null,
 widgets: ?*State = null,
 diagrams: ?*Store = null,
-review: ?*ReviewWidget = null,
 previews: ?*const ImagePreviews = null,
 /// Frame widgets the last `prepare` left out because the list was full.
 dropped_widgets: usize = 0,
@@ -53,12 +51,7 @@ pub fn prepare(self: *Scene, projection: client.Projection) !data.PresentationCo
     self.dropped_widgets = widgets.dropped;
     try widgets.draw(&canvas);
 
-    if (self.review) |review| {
-        if (self.widgets) |state| {
-            state.begin(true);
-        }
-        try review.draw(&canvas);
-    } else if (self.widgets) |state| {
+    if (self.widgets) |state| {
         try state.overlays(&canvas, self.overlays);
     }
 

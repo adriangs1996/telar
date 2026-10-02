@@ -2,11 +2,10 @@ const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const input_support = @import("input_support.zig");
-const review = @import("change_review.zig");
 const Session = @import("Session.zig");
 
 test "a secondary press on an agent card opens a drawable peek that reads its pane" {
-    const session = try review.base();
+    const session = try input_support.createSession();
     defer session.deinit();
     const gui = session.gui;
     const app = gui.app;

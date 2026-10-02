@@ -9,7 +9,6 @@ const damage = cellgrid.damage;
 const pane_support = @import("pane_support.zig");
 const Pane = @This();
 const core = @import("telar-core");
-const ChangeReviewAvailability = @import("ChangeReviewAvailability.zig");
 
 gpa: std.mem.Allocator,
 id: core.PaneId,
@@ -34,7 +33,6 @@ progress_state: core.PaneProgressState = .remove,
 progress_percent: ?u8 = null,
 title: []u8 = &.{},
 pane_generation: u64 = 0,
-change_review: ChangeReviewAvailability = .{},
 
 pub const Initial = @import("Initial.zig");
 
@@ -230,36 +228,14 @@ pub fn titleSlice(self: *const Pane) []const u8 {
     return self.title;
 }
 
-/// Installs a client attachment, preserving notices received before its first frame.
+/// Installs the current client attachment generation.
 /// Example: `pane.attach(generation);`
 pub fn attach(self: *Pane, generation: u64) void {
-    if (self.attached and self.attachment_generation == 0) {
-        self.change_review.attachment_generation = generation;
-    } else if (!self.attached or self.attachment_generation != generation) {
-        self.change_review = .{};
-    }
-
     self.attached = true;
     self.attachment_generation = generation;
 }
 
-/// Retains availability for the exact attached pane lifetime.
-/// Example: `_ = pane.applyChangeReview(notification);`
-pub fn applyChangeReview(self: *Pane, notification: core.ChangeReviewChanged) bool {
-    if (!self.attached or self.pane_generation == 0 or self.id != notification.pane_id or self.pane_generation != notification.pane_generation) {
-        return false;
-    }
-
-    return self.change_review.apply(notification, self.attachment_generation);
-}
-
-/// Reports recorded editions belonging to this exact attached pane lifetime.
-/// Example: `if (pane.hasChangeReview()) drawReviewAction();`
-pub fn hasChangeReview(self: *const Pane) bool {
-    return self.attached and self.change_review.pane_generation == self.pane_generation and self.change_review.attachment_generation == self.attachment_generation and self.change_review.latest_edition_id != 0;
-}
-
-/// Installs the runtime identity and retires cached state for another lifetime.
+/// Updates the runtime identity when the pane generation changes.
 /// Example: `_ = pane.identify(generation);`
 pub fn identify(self: *Pane, generation: u64) bool {
     if (self.pane_generation == generation) {
@@ -267,6 +243,5 @@ pub fn identify(self: *Pane, generation: u64) bool {
     }
 
     self.pane_generation = generation;
-    self.change_review = .{};
     return true;
 }

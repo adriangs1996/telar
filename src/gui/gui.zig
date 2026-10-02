@@ -23,12 +23,10 @@ test {
     _ = @import("tests/limit_reached.zig");
     _ = @import("widgets/LinkStatus.zig");
     _ = @import("tests/cache_trace.zig");
-    _ = @import("tests/change_review.zig");
     _ = @import("tests/agent_peek.zig");
     _ = @import("tests/image_previews.zig");
     _ = @import("tests/pane_images.zig");
     _ = @import("image/preview_decode.zig");
-    _ = @import("tests/change_review_navigation.zig");
     _ = @import("tests/frame_pacer.zig");
     _ = @import("tests/input_pacing.zig");
     _ = @import("tests/top_navigation.zig");
@@ -38,7 +36,6 @@ test {
     _ = @import("tests/widget_interaction.zig");
     _ = @import("diagrams/tests.zig");
     _ = @import("diagrams/theme.zig");
-    _ = @import("syntax/tests.zig");
     _ = Layout;
     _ = @import("input/GenericEventPool.zig");
     _ = @import("host/Services.zig");

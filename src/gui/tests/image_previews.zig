@@ -1,10 +1,10 @@
+const event_module = @import("../input/event.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const data = @import("model");
 const client = @import("telar-client");
 const gfx = @import("gfx");
 const input_support = @import("input_support.zig");
-const review = @import("change_review.zig");
 const Session = @import("Session.zig");
 const ImagePreviews = @import("../ImagePreviews.zig");
 const PreviewImage = @import("../image/PreviewImage.zig");
@@ -126,7 +126,7 @@ test "a decoded preview of another capture is not adopted" {
 }
 
 test "a capture waiting behind one whose completion fails still starts" {
-    const session = try review.base();
+    const session = try input_support.createSession();
     defer session.deinit();
     const gui = session.gui;
     const app = gui.app;
@@ -198,12 +198,12 @@ fn findTarget(session: *Session, action: Target.Action) ?Target {
 fn click(session: *Session, bounds: gfx.Rect) !void {
     const x = bounds.x + bounds.width / 2;
     const y = bounds.y + bounds.height / 2;
-    try review.send(session, .{ .pointer = .{ .kind = .press, .x = x, .y = y } });
-    try review.send(session, .{ .pointer = .{ .kind = .release, .x = x, .y = y } });
+    try send(session, .{ .pointer = .{ .kind = .press, .x = x, .y = y } });
+    try send(session, .{ .pointer = .{ .kind = .release, .x = x, .y = y } });
 }
 
 test "a pasted clipboard image shows below the agent's pane and opens in a modal Esc closes" {
-    const session = try review.base();
+    const session = try input_support.createSession();
     defer session.deinit();
     const gui = session.gui;
     const app = gui.app;
@@ -245,8 +245,13 @@ test "a pasted clipboard image shows below the agent's pane and opens in a modal
     try input_support.presented(gui, try session.draw(), true);
     try std.testing.expectEqual(@as(u32, 32), gui.renderer.diagrams[ImagePreviews.modal_slot].width);
 
-    try review.send(session, .{ .key = .{ .code = .escape } });
-    try review.send(session, .{ .key = .{ .code = .escape, .phase = .release } });
+    try send(session, .{ .key = .{ .code = .escape } });
+    try send(session, .{ .key = .{ .code = .escape, .phase = .release } });
     try std.testing.expect(!gui.previews.catalog.hasModal());
     try std.testing.expect(gui.previews.catalog.hasVisibleItems());
+}
+
+fn send(session: *Session, event: event_module.Event) !void {
+    try input_support.accept(session.gui, event);
+    try input_support.pump(session.gui);
 }

@@ -709,7 +709,7 @@ test "a descent check reads the peer from the socket, walks it in a worker and r
     try expectFailure(&fixture, .foreign_process);
 }
 
-test "attributing a worktree or sending review evidence for a pane takes a connection confirmed inside it" {
+test "attributing a worktree for a pane takes a connection confirmed inside it" {
     var fixture: RequestFixture = undefined;
     try fixture.init();
     defer fixture.deinit();
@@ -726,31 +726,6 @@ test "attributing a worktree or sending review evidence for a pane takes a conne
     };
 
     try fixture.send(registration);
-    try expectFailure(&fixture, .foreign_process);
-
-    const root = agent_identity.fromPane(pane).process_id;
-    try std.testing.expect(agent_status.observeProcess(model, .{
-        .identity = agent_identity.fromPane(pane),
-        .provider = .codex,
-        .process_id = root,
-        .observed_at_ms = 1,
-    }));
-    const reference = try SessionReference.init("019a0000-0000-7000-8000-00000000000a", 1);
-    try std.testing.expect(agent_status.observeSessionReference(model, agent_identity.fromPane(pane), reference));
-    try fixture.send(.{
-        .report_change_review_sample = .{
-            .request_id = @enumFromInt(41),
-            .pane_id = pane.id,
-            .pane_generation = pane.generation,
-            .provider = .codex,
-            .session = reference.slice(),
-            .tool_call_id = "call-1",
-            .phase = .before,
-            .path = "/tmp/telar-worktrees/fix/a.txt",
-            .exists = true,
-            .content = "a",
-        },
-    });
     try expectFailure(&fixture, .foreign_process);
 
     try agent_hooks.finishDescent(model, .{

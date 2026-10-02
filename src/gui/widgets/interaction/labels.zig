@@ -9,7 +9,6 @@ pub fn forAction(projection: *const client.Projection, action: Target.Action) []
         .resize_sidebar => "Resize sidebar",
         .custom => "Agents",
         .text_field => |field| if (field == .name) "Name or query" else "Working directory",
-        .change_review => "Review changes",
         .preview => |preview| switch (preview) {
             .open => "Open image preview",
             .close => "Close image preview",

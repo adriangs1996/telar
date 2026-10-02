@@ -19,8 +19,6 @@ pub fn notification(command: Command) NotificationInput {
 
 fn failureTitle(continuation: client_requests.Continuation) []const u8 {
     return switch (continuation) {
-        .change_review_query => "Could not load change review",
-        .change_review_command => "Could not update change review",
         .editor_open => "Could not open file",
         .split => "Could not split pane",
         .close_pane => "Could not close pane",
@@ -41,9 +39,6 @@ fn failureTitle(continuation: client_requests.Continuation) []const u8 {
 
 fn notificationTarget(continuation: client_requests.Continuation) notifications.Target {
     return switch (continuation) {
-        .change_review_query, .change_review_command => |operation| .{
-            .focus_pane = operation.pane_id,
-        },
         .editor_open => |operation| .{
             .focus_pane = operation.pane_id,
         },

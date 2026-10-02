@@ -9,7 +9,6 @@ const runtime_event = @import("event.zig");
 const agent_description = @import("agent_description.zig");
 const agent_maintenance = @import("agent_maintenance.zig");
 const agent_rename = @import("agent_rename.zig");
-const change_review = @import("change_review.zig");
 const client_connection = @import("client_connection.zig");
 const client_delivery = @import("client_delivery.zig");
 const command_history = @import("command_history.zig");
@@ -197,7 +196,7 @@ fn dispatch(self: *Runtime, event: runtime_event.Event) !void {
         .proxy_capture => |result| try proxy_capture.receive(model, result),
         .plugin_effects => |result| try proxy_tap.receive(model, result),
         .engine_response => |result| try suggest_command.finish(model, result),
-        .change_review_completed => |job| change_review.finish(model, job),
+
         .editor_opened => |job| link_opening.finish(model, job),
         .path_index_built => |index| path_picker.finishBuild(model, index),
         .paths_found => |query| path_picker.finishQuery(model, query),

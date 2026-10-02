@@ -11,7 +11,6 @@ pub fn add(b: *std.Build, app: Application, diagram_helper: ?std.Build.LazyPath)
     var gui_module: ?*std.Build.Module = null;
     if (app.modules.native_client) {
         const gui = zigModule(b, app.modules, diagram_helper.?);
-        gui.addObjectFile(app.modules.syntax_library.?);
         if (app.modules.target.result.os.tag == .macos) {
             macos_gui.add(b, gui, app.coverage.enabled);
         } else {
@@ -28,7 +27,6 @@ pub fn add(b: *std.Build, app: Application, diagram_helper: ?std.Build.LazyPath)
             probe.addImport(entry.key_ptr.*, entry.value_ptr.*);
         }
         probe.addOptions("profile_options", app.modules.build_options);
-        probe.addObjectFile(app.modules.syntax_library.?);
         probe.addCSourceFile(.{ .file = b.path("src/gui/native/wake.c"), .flags = &.{} });
         if (app.modules.target.result.os.tag == .macos) {
             macos_gui.add(b, probe, false);
@@ -105,7 +103,7 @@ pub fn add(b: *std.Build, app: Application, diagram_helper: ?std.Build.LazyPath)
 }
 
 /// The native adapter's Zig code with its imports and the portable wake pipe,
-/// before the platform's window sources or the syntax highlighter link in.
+/// before the platform's window sources link in.
 /// The cross check type-checks it for targets whose window headers this
 /// machine lacks.
 ///

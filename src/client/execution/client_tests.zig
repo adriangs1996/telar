@@ -10,7 +10,6 @@ const Job = @import("Job.zig").Job;
 const GraphicsRetention = @import("../graphics/GraphicsRetention.zig");
 const Credit = @import("../graphics/Credit.zig");
 const actions = @import("../input/actions.zig");
-const change_review = @import("../change_review/change_review.zig");
 const runtime_io = @import("../connection/runtime_io.zig");
 const runtime_link = @import("../connection/runtime_link.zig");
 const RuntimeResync = @import("../connection/RuntimeResync.zig").RuntimeResync;
@@ -96,7 +95,8 @@ pub fn rejectStaleHostCommits(comptime deliver: fn (*Client, data.HostCommit) an
             .size = app.model.host.host_size,
         },
     );
-    const stale_size = (try data.host_capabilities.reconcile(&app.model, 
+    const stale_size = (try data.host_capabilities.reconcile(
+        &app.model,
         .{
             .capabilities = app.model.host.host_capabilities,
             .size = .{
@@ -105,7 +105,8 @@ pub fn rejectStaleHostCommits(comptime deliver: fn (*Client, data.HostCommit) an
             },
         },
     )).?;
-    _ = try data.host_capabilities.reconcile(&app.model, 
+    _ = try data.host_capabilities.reconcile(
+        &app.model,
         .{
             .capabilities = app.model.host.host_capabilities,
             .size = .{
@@ -343,124 +344,6 @@ pub fn retainQueuedInput(comptime flush: fn (*Client) anyerror!void) !void {
     ));
     try std.testing.expectEqual(sends, capture.sends);
     try std.testing.expect(!app.model.to_runtime.inFlight());
-}
-
-/// Change review operation accepts terminal panes and rejects replaced attachments.
-/// Example: `try client_tests.rejectReplacedReviewAttachment(openChangeReviewSession, changeReviewOperation, applyChangeReviewResponse);`
-pub fn rejectReplacedReviewAttachment(comptime open_session: fn (*data.ClientModel, core.PaneId) anyerror!void, comptime operation: fn (*data.ClientModel, u64) anyerror!data.ChangeReviewOperation, comptime apply_response: fn (*data.ClientModel, data.ChangeReviewOperation, core.ChangeReviewSnapshotView) anyerror!bool) !void {
-    const app = try std.testing.allocator.create(Client);
-    const model = &app.model;
-    defer std.testing.allocator.destroy(app);
-    model.* = data.ClientModel.init(std.testing.allocator, true);
-    defer model.deinit();
-    app.model.change_review = .{};
-    const session = &app.model.change_review;
-    const pane_id: core.PaneId = @enumFromInt(1);
-    const location: core.TabLocation = .{
-        .workspace = .{
-            .workspace = @enumFromInt(1),
-        },
-        .tab_id = @enumFromInt(1),
-    };
-
-    try data.workspace_handoff.bootstrap(
-        model,
-        .{
-            .pane_id = pane_id,
-            .location = location,
-            .size = .{
-                .cols = 20,
-                .rows = 5,
-            },
-        },
-    );
-    const pane = model.panes.find(pane_id).?;
-    _ = pane.identify(3);
-    try open_session(&app.model, pane_id);
-    try std.testing.expect(change_review.isChangeReviewAttached(&app.model));
-    const pending_owner = try operation(&app.model, 0);
-    session.begin(@enumFromInt(21));
-    try std.testing.expectError(error.ChangeReviewRequestPending, operation(&app.model, 0));
-    const response: core.ChangeReviewSnapshotView = .{
-        .request_id = @enumFromInt(21),
-        .pane_id = pane_id,
-        .pane_generation = 3,
-        .edition_id = 1,
-        .patch = "immutable",
-    };
-
-    pane.attachment_generation += 1;
-    try std.testing.expect(!change_review.isChangeReviewAttached(&app.model));
-    try std.testing.expect(!try apply_response(
-        &app.model,
-        pending_owner,
-        response,
-    ));
-    try std.testing.expect(!session.loaded);
-    try std.testing.expect(session.errorSlice().len > 0);
-}
-
-/// Change review operation updates closed review availability without opening or querying a view.
-/// Example: `try client_tests.retainReviewAvailability(openChangeReviewSession, changeReviewChanged);`
-pub fn retainReviewAvailability(comptime open_session: fn (*data.ClientModel, core.PaneId) anyerror!void, comptime changed: fn (*data.ClientModel, core.ChangeReviewChanged) bool) !void {
-    const app = try std.testing.allocator.create(Client);
-    const model = &app.model;
-    defer std.testing.allocator.destroy(app);
-    model.* = data.ClientModel.init(std.testing.allocator, true);
-    defer model.deinit();
-    app.model.change_review = .{};
-    const session = &app.model.change_review;
-    const pane_id: core.PaneId = @enumFromInt(1);
-    const location: core.TabLocation = .{
-        .workspace = .{
-            .workspace = @enumFromInt(1),
-        },
-        .tab_id = @enumFromInt(1),
-    };
-
-    try data.workspace_handoff.bootstrap(
-        model,
-        .{
-            .pane_id = pane_id,
-            .location = location,
-            .size = .{
-                .cols = 20,
-                .rows = 5,
-            },
-        },
-    );
-    const pane = model.panes.find(pane_id).?;
-    _ = pane.identify(3);
-    var notification: core.ChangeReviewChanged = .{
-        .pane_id = pane_id,
-        .pane_generation = 3,
-        .session = "hook-session",
-        .latest_edition_id = 1,
-    };
-
-    const revision = model.pane_metadata_revision;
-    try std.testing.expect(changed(&app.model, notification));
-    try std.testing.expect(model.pane_metadata_revision != revision);
-    try std.testing.expect(pane.hasChangeReview());
-    try std.testing.expect(session.owner == null);
-    try std.testing.expect(!session.needsRefresh());
-    try std.testing.expect(!changed(&app.model, notification));
-
-    try open_session(&app.model, pane_id);
-    notification.latest_edition_id = 2;
-    try std.testing.expect(changed(&app.model, notification));
-    try std.testing.expect(session.needsRefresh());
-    change_review.closeChangeReview(&app.model);
-    try std.testing.expect(pane.hasChangeReview());
-    notification.session = "next-hook-session";
-    notification.latest_edition_id = 0;
-    try std.testing.expect(changed(&app.model, notification));
-    try std.testing.expect(!pane.hasChangeReview());
-    try std.testing.expect(!session.needsRefresh());
-    notification.pane_generation += 1;
-    notification.latest_edition_id = 1;
-    try std.testing.expect(!changed(&app.model, notification));
-    try std.testing.expect(!pane.hasChangeReview());
 }
 
 /// Owned request deliveries roll back only their own correlation when the outbox is full.

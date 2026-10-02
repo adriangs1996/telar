@@ -55,7 +55,7 @@ carries only `pane_id` and a slice borrowed for the synchronous call.
 
 The window delivers a paste as start, chunk and finish events.
 `GuiAdapter.drainInput` interrupts a pending chord at the start, hands the
-paste to an open change review or a widget that takes it, and otherwise calls `paste_routing.start`,
+paste to a widget that takes it, and otherwise calls `paste_routing.start`,
 `content` and `finish`. For every phase, the `paste_routing` adapter snapshots attachment-modal,
 prompt, copy-mode and pane-session authority. `paste_routing` assigns the
 phase to at most one owner. An attachment modal blocks start. An active prompt

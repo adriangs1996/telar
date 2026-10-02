@@ -51,11 +51,6 @@ pub const Registry = @import("plugins/Registry.zig");
 pub const RouterConfig = @import("input/RouterConfig.zig");
 pub const TelemetryMetrics = @import("resources/Metrics.zig");
 pub const TelemetryState = @import("resources/TelemetryState.zig");
-pub const ChangeReviewModel = @import("change_review/view/Model.zig");
-pub const ChangeReviewRevision = @import("change_review/view/Revision.zig");
-pub const ChangeReviewAnchor = @import("change_review/view/Anchor.zig");
-pub const ChangeReviewComment = @import("change_review/view/Comment.zig");
-pub const change_review_limits = @import("change_review/view/limits.zig");
 pub const WorkerRequest = @import("plugins/WorkerRequest.zig");
 pub const client_layouts = @import("resources/client_layouts.zig");
 pub const config_reload = @import("resources/config_reload.zig");
@@ -143,8 +138,6 @@ pub const supportsSharedMemory = store.supportsSharedMemory;
 pub const validateDefaultBindings = default_bindings.validate;
 
 test {
-    _ = @import("change_review/view/Model.zig");
-    _ = @import("change_review/view/Revision.zig");
     _ = @import("agents/attention.zig");
     _ = @import("agents/fleet_order.zig");
     _ = @import("agents/agent_peek.zig");
@@ -203,7 +196,6 @@ test {
     _ = @import("agents/proxy_status.zig");
     _ = @import("attachments/agent_attachments.zig");
     _ = @import("attachments/clipboard_capture.zig");
-    _ = @import("change_review/change_review.zig");
     _ = @import("completion/prompt_paths.zig");
     _ = @import("config/config_adoption.zig");
     _ = @import("connection/cli_control.zig");
@@ -275,7 +267,6 @@ pub const TabDrag = @import("workspace/TabDrag.zig");
 pub const agent_navigation = @import("agents/agent_navigation.zig");
 pub const agent_sound = @import("agents/agent_sound.zig");
 pub const clipboard_capture = @import("attachments/clipboard_capture.zig");
-pub const change_review = @import("change_review/change_review.zig");
 pub const config_adoption = @import("config/config_adoption.zig");
 pub const runtime_io = @import("connection/runtime_io.zig");
 pub const runtime_link = @import("connection/runtime_link.zig");

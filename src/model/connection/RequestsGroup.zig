@@ -1,6 +1,4 @@
 pub const RequestsGroup = enum {
-    change_review_query,
-    change_review_command,
     initial_open,
     workspace_operation,
     workspace_snapshot,

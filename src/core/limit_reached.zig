@@ -42,8 +42,6 @@ pub const LimitError = error{
     BarTextTooLong,
     BoxQuadBudgetExceeded,
     BufferTooSmall,
-    ChangeReviewSessionTooLarge,
-    ChangeReviewSnapshotTooLarge,
     ClientIdentityExhausted,
     ClientLimitReached,
     ClientOutboxFull,
@@ -121,17 +119,6 @@ pub const LimitError = error{
     RemoteTelarPathTooLong,
     RequestIdExhausted,
     ResponseQueueFull,
-    ReviewArchiveFull,
-    ReviewCommentCapacity,
-    ReviewConversationStorageFull,
-    ReviewEditionsFull,
-    ReviewFileTooLarge,
-    ReviewGlobalStorageFull,
-    ReviewGroupsFull,
-    ReviewPatchTooLarge,
-    ReviewPendingSampleBytesFull,
-    ReviewPendingSamplesFull,
-    ReviewStorageFilesExceeded,
     RingFull,
     ScopeTooLong,
     ScreenTooLarge,
@@ -288,8 +275,6 @@ pub const NotLimitError = error{
     PtyInputForwardingDeadlineExceeded,
     /// A test fixture with one receive in flight.
     ReceiveBusy,
-    /// One review job per pane in flight by design; the caller answers busy.
-    ReviewBusy,
     /// A window too small to lay out: a geometry answer, not a capacity.
     TerminalTooSmall,
     /// A deadline a test measures, not a bound telar enforces.
@@ -434,7 +419,6 @@ test "limit errors are told apart from host errors and bugs" {
     try std.testing.expect(isLimitError(error.AtlasFull));
     try std.testing.expect(isLimitError(error.PaneLimitReached));
     try std.testing.expect(isLimitError(error.WidgetIdentityExhausted));
-    try std.testing.expect(isLimitError(error.ReviewPatchTooLarge));
     try std.testing.expect(!isLimitError(error.NoSpaceLeft));
     try std.testing.expect(!isLimitError(error.WriteFailed));
     try std.testing.expect(!isLimitError(error.OutOfMemory));

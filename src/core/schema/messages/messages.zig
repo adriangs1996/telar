@@ -144,9 +144,6 @@ pub const ClientMessage = union(enum) {
     request_client_command: ClientCommand,
     complete_client_command: ClientCommand,
 
-    query_change_review: QueryChangeReview,
-    change_review_command: ChangeReviewCommand,
-    report_change_review_sample: ReportChangeReviewSample,
     open_pane: OpenPaneView,
     pane_input: PaneInput,
     pane_resize: PaneResize,
@@ -205,21 +202,12 @@ pub const ClientMessage = union(enum) {
     query_limits: QueryLimits,
 };
 
-const ChangeReviewChanged = @import("ChangeReviewChanged.zig");
-const change_review = @import("change_review.zig");
-const QueryChangeReview = @import("QueryChangeReview.zig");
-const ChangeReviewCommand = @import("ChangeReviewCommand.zig");
-const ReportChangeReviewSample = @import("ReportChangeReviewSample.zig");
-const ChangeReviewSnapshotView = @import("ChangeReviewSnapshotView.zig");
-
 pub const ServerMessage = union(enum) {
     execution_reply: ExecutionReply,
     client_list: ClientList,
     client_command: ClientCommand,
     client_command_result: ClientCommand,
 
-    change_review_changed: ChangeReviewChanged,
-    change_review_snapshot: ChangeReviewSnapshotView,
     pane_opened: PaneOpened,
     pane_frame: FrameView,
     pane_exited: PaneExited,
@@ -289,9 +277,7 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
             .request_workspace_snapshot = try GenericDerived(RequestWorkspaceSnapshot).decode(&decoder),
         },
         .create_tab => .{ .create_tab = try tab.decodeCreateTab(&decoder) },
-        .query_change_review => .{ .query_change_review = try change_review.decode(QueryChangeReview, &decoder) },
-        .change_review_command => .{ .change_review_command = try change_review.decode(ChangeReviewCommand, &decoder) },
-        .report_change_review_sample => .{ .report_change_review_sample = try change_review.decode(ReportChangeReviewSample, &decoder) },
+
         .rename_tab => .{ .rename_tab = try tab.decodeRenameTab(&decoder) },
         .close_tab => .{ .close_tab = try GenericDerived(CloseTab).decode(&decoder) },
         .move_tab => .{ .move_tab = try GenericDerived(MoveTab).decode(&decoder) },
@@ -374,8 +360,6 @@ pub fn decodeServerInto(message: *ServerMessage, payload: []const u8) !void {
     var decoder = Decoder.init(payload);
     const tag = try decodeTag(tags.ServerTag, try decoder.readByte());
     message.* = switch (tag) {
-        .change_review_changed => .{ .change_review_changed = try change_review.decode(ChangeReviewChanged, &decoder) },
-        .change_review_snapshot => .{ .change_review_snapshot = try change_review.decode(ChangeReviewSnapshotView, &decoder) },
         .pane_opened => .{ .pane_opened = try GenericDerived(PaneOpened).decode(&decoder) },
         .pane_frame => .{ .pane_frame = try frame.decodeBody(&decoder) },
         .pane_exited => .{ .pane_exited = try GenericDerived(PaneExited).decode(&decoder) },

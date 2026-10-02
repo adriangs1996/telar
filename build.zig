@@ -7,12 +7,10 @@ const gui = @import("build/gui.zig");
 const tests = @import("build/tests.zig");
 const cross = @import("build/cross.zig");
 const diagram_renderer = @import("build/diagram_renderer.zig");
-const syntax_highlighter = @import("build/syntax_highlighter.zig");
 const headless = @import("build/headless.zig");
 
 pub fn build(b: *std.Build) void {
     var app = Application.init(b) orelse return;
-    app.modules.syntax_library = syntax_highlighter.add(b, app.modules);
     const bench = Benchmarks.init(b, app);
     const diagram_helper = diagram_renderer.add(b, app);
     packaging.add(b, app, diagram_helper);

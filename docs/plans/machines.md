@@ -631,7 +631,7 @@ workspace, in the machine's color, followed by the worktree when there is
 one:
 
 ```
-[● ● ●][≡]  box ▾ › telar › ⎇ fix-tabs │ tab1  tab2  tab3        [review]
+[● ● ●][≡]  box ▾ › telar › ⎇ fix-tabs │ tab1  tab2  tab3
 ```
 
 With only the local machine, the segment is not drawn. A dot on it marks
@@ -729,7 +729,6 @@ before `src/frontend` is deleted.
 | `tools/perf_e2e.py` | paired echo, load, slow-host and graphics cases; `tools/perf_suite.py` runs it, so it feeds the perf gate | headless client for echo and load. `slow-host` is a host terminal that reads slowly and `graphics` is Kitty output to a host terminal; both exist only for the TUI and need GUI-side replacements, not ports |
 | `tools/graphics_roundtrip.py` | a synthetic Kitty host verifies a 4K image roundtrip through the TUI | retire; the GUI's own image coverage must be confirmed first (not checked) |
 | `tools/terminal_runtime_bench.py` | DSR workload "inside an isolated, headless Telar TUI"; `tools/dod_measure.py` runs it | headless client |
-| `tools/test_review_runtime.py` | review CLI and pane hooks on an isolated runtime with a TUI attached | headless client |
 | `tools/test_cli_live.py` | CLI against a real runtime and a PTY client | headless client |
 | `tools/tui_smoke.py` | plugin and CLI smoke with a TUI attached | headless client |
 | `tools/remote_smoke.py` | remote home, shell PID and environment across detach and reconnect | `telar gui --remote` on macOS, headless client with `--remote` elsewhere |

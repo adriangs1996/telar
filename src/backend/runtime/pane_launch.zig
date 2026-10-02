@@ -270,7 +270,6 @@ fn recordFailure(model: *RuntimeModel, pane: *const Pane, failure: Failure) void
 fn abort(model: *RuntimeModel, pane: *Pane, failure: Failure) void {
     recordFailure(model, pane, failure);
     pane.abortLaunch();
-    model.review_owner_revision +%= 1;
 }
 
 test "pane overrides name the runtime socket and the pane's own identity" {

@@ -106,7 +106,7 @@ pub fn finishIngest(model: *RuntimeModel, completion: IngestCompletion) !void {
 
     pane.completeOutputIngest();
     const stats = completion.result catch {
-        _ = pane_closure.requestClose(model, pane);
+        _ = pane.requestClose();
         pane.finishPtyOutput();
         return;
     };
@@ -116,7 +116,7 @@ pub fn finishIngest(model: *RuntimeModel, completion: IngestCompletion) !void {
     }
 
     pane.applyPendingResize() catch {
-        _ = pane_closure.requestClose(model, pane);
+        _ = pane.requestClose();
     };
 
     // The next read is armed, or held for the media actor, before anything

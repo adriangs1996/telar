@@ -10,7 +10,6 @@ const CellMesh = @import("render/CellMesh.zig");
 const gfx = @import("gfx");
 const Quad = gfx.Quad;
 const Canvas = @import("widgets/Canvas.zig");
-const Widget = @import("change_review/Widget.zig");
 const State = @import("widgets/interaction/State.zig");
 const AgentCard = @import("widgets/AgentCard.zig");
 const CardGeometry = @import("widgets/CardGeometry.zig");
@@ -78,7 +77,7 @@ const Probe = struct {
 
     /// Reports sizes and runs validated fixed workloads. Example: `try probe.run();`
     pub fn run(self: *Probe) !void {
-        inline for (.{ cellgrid.Cell, data.Pane, data.Tabs, data.Panes, client.Client, Renderer, CellMesh, Quad.Quad, Widget, core.ProfileStore }) |T| {
+        inline for (.{ cellgrid.Cell, data.Pane, data.Tabs, data.Panes, client.Client, Renderer, CellMesh, Quad.Quad, core.ProfileStore }) |T| {
             try self.writer.print("{{\"type\":\"layout\",\"name\":\"{s}\",\"size\":{d},\"alignment\":{d},\"fields\":[", .{ @typeName(T), @sizeOf(T), @alignOf(T) });
             inline for (std.meta.fields(T), 0..) |field, index| {
                 try self.writer.print("{s}{{\"name\":\"{s}\",\"offset\":{d},\"size\":{d}}}", .{ if (index == 0) "" else ",", field.name, @offsetOf(T, field.name), @sizeOf(field.type) });
@@ -115,9 +114,6 @@ const Probe = struct {
 
         for ([_]usize{ 1, 8, 64 }) |count| {
             try self.workspace(count);
-        }
-        for ([_]usize{ 100, 1000, 10000 }) |lines| {
-            try self.review(lines);
         }
     }
 
@@ -437,56 +433,6 @@ const Probe = struct {
 
         std.mem.sort(u64, timings, {}, std.sort.asc(u64));
         try self.writer.print("{{\"type\":\"workload\",\"name\":\"chrome/{d}/{d}/{d}\",\"iterations\":{d},\"elapsed_ns\":{d},\"p50_ns\":{d},\"p95_ns\":{d},\"p99_ns\":{d},\"shape_calls\":{d},\"raster_attempts\":{d},\"measured_allocations\":{d},\"shaping_cache_bytes\":{d},\"checksum\":{d}}}\n", .{ count, title_bytes, width, samples, elapsed, timings[samples / 2], timings[samples * 95 / 100], timings[samples * 99 / 100], renderer.atlas.?.shape_calls - shapes, renderer.atlas.?.raster_attempts - rasters, accounting.allocations - allocations, @sizeOf(ShapingEntry) * ShapingCache.capacity, checksum });
-    }
-
-    fn review(self: *Probe, lines: usize) !void {
-        var source: std.Io.Writer.Allocating = .init(self.gpa);
-        defer source.deinit();
-        try source.writer.print("diff --git a/example.zig b/example.zig\n--- a/example.zig\n+++ b/example.zig\n@@ -0,0 +1,{d} @@\n", .{lines});
-        for (0..lines) |_| {
-            try source.writer.writeAll("+const value = 42;\n");
-        }
-        const widget = try self.gpa.create(Widget);
-        defer self.gpa.destroy(widget);
-        widget.* = .{};
-        try widget.model.revisions[0].load(source.written());
-        if (widget.model.revisions[0].reach()) |reach| {
-            try self.writer.print("{{\"type\":\"capacity\",\"name\":\"review/{d}\",\"limit\":\"{s}\",\"kept_rows\":{d}}}\n", .{ lines, reach.limit.name, widget.model.revisions[0].row_count });
-            return;
-        }
-
-        if (widget.model.revisions[0].row_count != lines) {
-            return error.InvalidReviewFixture;
-        }
-        _ = widget.model.search.setQuery("value");
-        var renderer = Renderer.init(self.gpa);
-        defer renderer.deinit();
-        _ = try renderer.measure(.{ .width = 1200, .height = 900, .scale = 1 });
-        var canvas = makeCanvas(&renderer);
-        const state = try self.gpa.create(State);
-        defer self.gpa.destroy(state);
-        state.* = .{};
-        canvas.widgets = state;
-        var before: core.ProfileCounters = .{};
-        var started: i96 = 0;
-        var checksum: usize = 0;
-        for (0..warmup + iterations) |index| {
-            if (index == warmup) {
-                before = core.profiling.snapshot();
-                started = std.Io.Clock.awake.now(self.io).nanoseconds;
-            }
-            renderer.begin();
-            state.begin(true);
-            try widget.draw(&canvas);
-            state.seal();
-            state.present(true);
-            checksum +%= renderer.quads.items().len;
-        }
-        if (checksum == 0) {
-            return error.EmptyReviewWorkload;
-        }
-        try self.writer.print("{{\"type\":\"workload\",\"name\":\"review/search/{d}\",\"iterations\":{d},\"warmup\":{d},\"elapsed_ns\":{d},\"checksum\":{d},", .{ lines, iterations, warmup, std.Io.Clock.awake.now(self.io).nanoseconds - started, checksum });
-        try self.counts(before);
     }
 
     fn workspace(self: *Probe, count: usize) !void {

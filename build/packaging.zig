@@ -37,11 +37,6 @@ pub fn add(b: *std.Build, app: Application, diagram_helper: ?std.Build.LazyPath)
         bundle_step.dependOn(&b.addInstallArtifact(launcher, .{ .dest_dir = .{ .override = .{ .custom = contents ++ "/MacOS" } } }).step);
         bundle_step.dependOn(&b.addInstallFile(infoPlist(b), contents ++ "/Info.plist").step);
         bundle_step.dependOn(&b.addInstallFile(b.path("packaging/macos/telar.icns"), contents ++ "/Resources/telar.icns").step);
-        bundle_step.dependOn(&b.addInstallDirectory(.{
-            .source_dir = b.path("tools/syntax-highlighter/licenses"),
-            .install_dir = .prefix,
-            .install_subdir = contents ++ "/Resources/licenses/syntax-highlighter",
-        }).step);
         installNativeLicenses(b, bundle_step, contents ++ "/Resources/licenses");
 
         const dmg = b.addSystemCommand(&.{

@@ -141,9 +141,7 @@ fn claimedCoverage(tag: ClientTag) SeedCoverage {
         .configure_frame_interval,
         .open_editor,
         .find_paths,
-        .query_change_review,
-        .change_review_command,
-        .report_change_review_sample,
+
         .register_worktree,
         .launch_worktree,
         .forget_worktree,
@@ -1873,55 +1871,6 @@ fn addAgentSeeds(seeds: *ClientSeeds) !void {
             },
         ),
     );
-    seeds.accept(
-        "query_change_review",
-        try schema.encodeQueryChangeReview(
-            seeds.space(),
-            .{
-                .request_id = @enumFromInt(5),
-                .pane_id = @enumFromInt(5),
-                .pane_generation = 3,
-                .edition_id = 2,
-            },
-        ),
-    );
-    seeds.accept(
-        "change_review_command",
-        try schema.encodeChangeReviewCommand(
-            seeds.space(),
-            .{
-                .request_id = @enumFromInt(5),
-                .pane_id = @enumFromInt(5),
-                .pane_generation = 3,
-                .edition_id = 2,
-                .expected_revision = 4,
-                .action = .save_comment,
-                .path = "file.zig",
-                .first_line = 1,
-                .last_line = 1,
-                .body = "review",
-            },
-        ),
-    );
-    seeds.accept(
-        "report_change_review_sample",
-        try schema.encodeReportChangeReviewSample(
-            seeds.space(),
-            .{
-                .request_id = @enumFromInt(5),
-                .pane_id = @enumFromInt(5),
-                .pane_generation = 3,
-                .provider = .codex,
-                .session = "thread",
-                .tool_call_id = "edit",
-                .phase = .before,
-                .path = "file.zig",
-                .exists = true,
-                .content = "before\n",
-            },
-        ),
-    );
-
     var encoder = seeds.begin(.report_agent);
     try encoder.writeInt(u64, 5);
     try encoder.writeInt(u64, 5);
@@ -2572,9 +2521,7 @@ fn encodeAccepted(message: ClientMessage, reencoding: *Reencoding) !?[]const u8 
         .detach_client => |value| try schema.encodeDetachClient(buffer, value),
         .request_client_command => |value| try schema.encodeRequestClientCommand(buffer, value),
         .complete_client_command => |value| try schema.encodeCompleteClientCommand(buffer, value),
-        .query_change_review => |value| try schema.encodeQueryChangeReview(buffer, value),
-        .change_review_command => |value| try schema.encodeChangeReviewCommand(buffer, value),
-        .report_change_review_sample => |value| try schema.encodeReportChangeReviewSample(buffer, value),
+
         .pane_input => |value| try schema.encodePaneInput(buffer, value),
         .pane_resize => |value| try schema.encodePaneResize(buffer, value),
         .frame_ack => |value| try schema.encodeFrameAck(buffer, value),

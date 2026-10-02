@@ -391,13 +391,12 @@ opening and real host clipboard delivery were not exercised by the live suite.
 
 ## Integration with main
 
-The CLI API and the existing change-review API coexist in protocol generation
-63. CLI control retains request tags `0x33..0x36` and response tags
-`0xad..0xaf`; change review uses `0x37..0x39`, `0xb0`, and `0xb1`. Golden
-fixtures and the negotiated fingerprint cover both message families.
+CLI control retains request tags `0x33..0x36` and response tags
+`0xad..0xaf`. Golden fixtures and the negotiated fingerprint cover these
+messages. Removed feature tags are not reused.
 
 Application startup initializes its final runtime-owned storage directly.
-This avoids large return-value temporaries when CLI message buffers and review
-state coexist, and preserves the checkpoint restart/shutdown regressions.
+This avoids large return-value temporaries and preserves checkpoint
+restart/shutdown behavior.
 The merge is checked with runtime, wire, CLI, client and GUI tests, the CLI
 socket contracts, and isolated live runtime/client integration.

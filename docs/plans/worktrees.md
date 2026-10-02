@@ -379,7 +379,7 @@ summaries, not screen dumps.
 
 - `telar worktree diff` shows `merge-base...HEAD`; `--uncommitted` shows the
   working tree against `HEAD`. The client opens it through the existing
-  editor opening path or `change_review`, whichever fits after P3.
+  editor opening path.
 - `integrated`: the branch adds no changes to its base. The row dims.
 - `gone`: the checkout no longer exists. The row offers to forget it.
 - `remove` runs `git worktree remove` without `--force`. `--force` asks for

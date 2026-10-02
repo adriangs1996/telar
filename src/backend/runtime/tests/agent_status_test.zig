@@ -73,7 +73,6 @@ fn testModel() !*RuntimeModel {
     model.restored_agents = .{};
     model.agent_watches = .{};
     model.agent_revision = 1;
-    model.agent_session_revision = 0;
     model.agent_sequence = 0;
     return model;
 }

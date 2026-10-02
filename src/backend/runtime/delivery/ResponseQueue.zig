@@ -35,7 +35,6 @@ pub fn pushOrDrop(self: *ResponseQueue, response: response_queue.PendingResponse
     self.push(response) catch {
         switch (response) {
             .history_result => |result| result.deinit(),
-            .change_review => |result| result.deinit(),
             .history_output => |result| result.deinit(),
             .history_stats => |result| result.deinit(),
             .path_results => |query| query.destroy(),
@@ -85,12 +84,6 @@ pub fn reserveNotificationShown(self: *ResponseQueue, request_id: core.RequestId
 
     const index = (@as(usize, self.head) + self.len - 1) % self.items.len;
     return &self.items[index].notification_shown;
-}
-
-/// Keeps one owned review result reserved through socket send admission.
-/// Example: `if (queue.hasChangeReview()) return error.ReviewBusy;`.
-pub fn hasChangeReview(self: *const ResponseQueue) bool {
-    return self.contains(.change_review);
 }
 
 fn contains(self: *const ResponseQueue, tag: std.meta.Tag(response_queue.PendingResponse)) bool {
@@ -159,7 +152,6 @@ pub fn clear(self: *ResponseQueue) void {
     while (self.peek()) |response| {
         switch (response.*) {
             .history_result => |result| result.deinit(),
-            .change_review => |result| result.deinit(),
             .history_output => |result| result.deinit(),
             .history_stats => |result| result.deinit(),
             .path_results => |query| query.destroy(),

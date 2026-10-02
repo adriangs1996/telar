@@ -86,7 +86,6 @@ window dimensions. Keep total viewport area fixed when varying visible panes.
 | Multiple panes | 1, 4 and 8 visible panes; separately 8 and 64 live panes with most hidden | Work per visible cell; hidden-pane parsing and publication; memory by pane kind |
 | Tabs/workspaces | 1, 8 and 64 populated tabs; fixed switch and focus sequence | Metadata scans, lookups, allocations and latency per completed switch |
 | Agent conversation | Deterministic replay of synthetic thread snapshots, growing text and tool output | Snapshot bytes, items visited, layout work and completion latency; no model/network randomness |
-| Change review | Fixed diff with 100, 1000 and 10000 lines; scroll, search and range selection | Visible versus total lines processed, highlighting/layout reuse and interaction latency |
 | Resize/invalidation | Alternate two fixed geometries; change theme, font and selection | Full invalidation cost and correct final image/state; separate from steady state |
 | Media contention | Text input plus bounded image updates | Input tail latency, media queues, drops and retained resources |
 | Runtime detached | Same PTY workload with client detached | Runtime-only parsing cost and absence of client rendering work |
@@ -127,7 +126,7 @@ All exports name this catalog revision. No unlabeled generic "hits" field.
 | `MultiplexerModel.find/findConst`, `GenericPaneIterator.next`, layout snapshots | Lookup calls, successful lookups, slots inspected, live panes and snapshot rebuilds | Does pointer traversal matter under realistic pane counts? |
 | TUI `Compositor` and `Screen` | Compositions, visited/changed cells, encoded bytes and partial delivery | Separate shared model costs from host-specific presentation costs |
 | Runtime `pane_pipeline.ingestPane`, `blit.blit`, `damage.collectSpans` | PTY batches/bytes, projected cells, dirty rows, equality calls, comparisons, spans and wire bytes | Is the expensive traversal parsing, projection, comparison or encoding? |
-| Agent and review drawing after CPU discovery | Items/lines received, visited, visible and laid out; cache rebuilds | Does a small visible update rescan retained history or the whole diff? |
+| Agent drawing after CPU discovery | Items/lines received, visited, visible and laid out; cache rebuilds | Does a small visible update rescan retained history? |
 | Allocation and teardown boundaries | Requested, live and peak bytes, allocation/reallocation counts and retained capacity by owner | Which memory is fixed, pane-specific, temporary or retained after use? |
 
 Inventory every update site of existing metrics before adding a counter.
@@ -282,7 +281,7 @@ needed; do not subtract a guessed constant overhead from candidate timings.
 Tests for the instrumentation must cover counter ownership and merging,
 overflow, bounded histograms, dropped traces, dump failure, disabled builds and
 failure/cancellation paths. Differential fixtures must produce the same final
-cells, focus, generations and review state in B0 and B2. Validate existing
+cells, focus and generations in B0 and B2. Validate existing
 presentation retry and resource-retirement behavior.
 
 Keep the [invariants](../invariants.md), including
@@ -341,7 +340,7 @@ measured user impact and data-access evidence, not by a preselected SoA design.
 1. Inventory current metrics and benchmark coverage, save B0 artifacts and verify
    CPU-profile symbolization. Complete when every planned measurement has a
    source or an explicit gap and process endpoints are reproducible.
-2. Extend isolated fixtures for missing native, agent and review cases. Complete
+2. Extend isolated fixtures for missing native and agent cases. Complete
    when readiness, final-state checks, cleanup and repeated workloads agree.
 3. Add opt-in counts and selected phase distributions with bounded storage.
    Complete when instrumentation tests and the B0/B2 equivalence and overhead

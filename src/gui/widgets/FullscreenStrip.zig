@@ -3,9 +3,8 @@
 //! hidden panes follow in display order with the tab strip's label
 //! composition (mark, index, name) but no tab surface, dimmed the way an
 //! unfocused pane is. A hidden agent that needs the person keeps its
-//! attention dot. The right end holds the progress capsule, the change-review
-//! button and the control that leaves fullscreen. Hidden names give way to
-//! marks before the row scrolls around the focused pane, so the focused entry
+//! attention dot. The right end holds the progress capsule and the control
+//! that leaves fullscreen. Hidden names give way to marks before the row scrolls around the focused pane, so the focused entry
 //! stays visible at any width.
 const cellgrid = @import("cellgrid");
 const data = @import("model");
@@ -20,7 +19,6 @@ const application_mark = @import("application_mark.zig");
 const Canvas = @import("Canvas.zig");
 const Label = @import("Label.zig");
 const PaneProgress = @import("PaneProgress.zig");
-const ChangeReviewButton = @import("ChangeReviewButton.zig");
 const StatusChip = @import("StatusChip.zig");
 const AttentionDot = @import("AttentionDot.zig");
 const PixelButton = @import("PixelButton.zig");
@@ -72,7 +70,6 @@ pub fn draw(self: FullscreenStrip, canvas: *Canvas) !void {
     var band: Rect = .{ .x = row.x + chrome.px(margin), .y = row.y + @floor((row.height - band_height) / 2), .width = @max(0, row.width - 2 * chrome.px(margin)), .height = band_height };
     band.width = @max(0, band.width - try self.leaveControl(canvas, band));
     if (model.panes.findInConst(location.tab_id, focused_id)) |pane| {
-        band.width = @max(0, band.width - try (ChangeReviewButton{ .area = band, .pane = pane, .placement = .fullscreen }).draw(canvas));
         band.width = @max(0, band.width - try self.progress(canvas, band, pane));
     }
 

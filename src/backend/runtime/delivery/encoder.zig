@@ -1,7 +1,6 @@
 //! Runtime protocol projection from authoritative state.
 const core = @import("telar-core");
 
-const ReviewResult = @import("../../change_review/Result.zig");
 const response_queue = @import("response_queue.zig");
 const QueryResult = @import("../../history/QueryResult.zig");
 const PathQuery = @import("../../paths/PathQuery.zig");
@@ -103,16 +102,6 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
         ),
         .notification_shown => |shown| try core.encodeNotificationShown(buffer, shown),
         .agent_sound => |sound| try core.encodeAgentSound(buffer, sound),
-        .change_review => |result| payload: {
-            if (context.change_review) |owned| {
-                owned.* = result;
-            }
-            if (result.len > buffer.len) {
-                return error.NoSpaceLeft;
-            }
-            @memcpy(buffer[0..result.len], result.bytes[0..result.len]);
-            break :payload buffer[0..result.len];
-        },
         .path_results => |query| payload: {
             if (context.path_results) |owned| {
                 owned.* = query;
@@ -297,7 +286,6 @@ const EncodeContext = struct {
     history_result: *?*QueryResult,
     history_output: *?*OutputResult,
     history_stats: *?*StatsResult,
-    change_review: ?*?*ReviewResult = null,
     path_results: ?*?*PathQuery = null,
     runtime_limits: *const core.LimitReaches = &core.LimitReaches.none,
     client_limits: *const core.LimitReaches = &core.LimitReaches.none,

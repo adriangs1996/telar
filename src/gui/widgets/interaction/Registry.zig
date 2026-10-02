@@ -7,7 +7,7 @@ const BandHitMap = @import("../BandHitMap.zig");
 const Registry = @This();
 
 /// Room for every chrome band target (`BandHitMap.capacity`), the open
-/// overlay's rows and editors, and a change review's visible rows; it
+/// overlay's rows and editors; it
 /// follows the band when the bar and panel limits grow it, rounded to a
 /// power of two because `probe` wraps its index with a mask.
 pub const capacity = std.math.ceilPowerOfTwoAssert(usize, @max(1024, 2 * BandHitMap.capacity));

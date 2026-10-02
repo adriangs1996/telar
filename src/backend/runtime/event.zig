@@ -28,7 +28,6 @@ const WorktreeProbeCompletion = @import("resources/WorktreeProbeCompletion.zig")
 const WorktreeDetectionCompletion = @import("resources/WorktreeDetectionCompletion.zig");
 const AgentCompletion = @import("../agent/Completion.zig");
 const std = @import("std");
-const Job = @import("../change_review/Job.zig");
 const PathIndex = @import("../paths/PathIndex.zig");
 const PathQuery = @import("../paths/PathQuery.zig");
 
@@ -57,7 +56,6 @@ pub const Event = union(enum) {
     agent_description: AgentResult,
     /// The reply is in `RuntimeModel.engine_reply`.
     engine_response: anyerror!void,
-    change_review_completed: *Job,
     metrics_tick: anyerror!void,
     metrics_sampled: SystemMetricsSample,
     checkpoint_written: anyerror!void,
@@ -96,7 +94,7 @@ pub fn discard(completed: Event, io: std.Io) void {
         },
         .paths_found => |query| query.destroy(),
         // These pointers name slots still retained by RuntimeModel.
-        .change_review_completed, .editor_opened, .path_index_built => {},
+        .editor_opened, .path_index_built => {},
         // Other events contain values or borrows whose owners outlive the join.
         .handshaken,
         .client_message,
@@ -159,7 +157,7 @@ fn diagnosticsPathForTag(tag: std.meta.Tag(Event)) core.Path {
         .agent_tick,
         .agent_description,
         .engine_response,
-        .change_review_completed,
+
         .metrics_tick,
         .metrics_sampled,
         .telemetry_tick,
@@ -210,7 +208,7 @@ test "observation events use the observation budget" {
         .agent_tick,
         .agent_description,
         .engine_response,
-        .change_review_completed,
+
         .metrics_tick,
         .metrics_sampled,
         .telemetry_tick,

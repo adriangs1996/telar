@@ -5,9 +5,7 @@ const EngineRuntime = @import("resources/EngineRuntime.zig");
 const EngineReply = EngineRuntime.Service.Response;
 const core = @import("telar-core");
 const std = @import("std");
-const ReviewJobs = @import("../change_review/Jobs.zig");
 const PathIndexes = @import("../paths/PathIndexes.zig");
-const ReviewService = @import("../change_review/Service.zig");
 const EditorOpenState = @import("../editors/State.zig");
 const event = @import("event.zig");
 const Resources = @import("resources/Resources.zig");
@@ -77,9 +75,6 @@ restored_agents: RestoredAgents = .{},
 agent_watches: Watches = .{},
 /// Advances when an agent appears, leaves, or changes status or title.
 agent_revision: u64 = 1,
-/// Advances when an agent's session reference changes; the reference names
-/// the change-review owner, which `agent_revision` does not cover.
-agent_session_revision: u64 = 0,
 /// Orders agent projections; zero is never handed out.
 agent_sequence: u64 = 0,
 client_layouts: ClientLayouts = .{},
@@ -97,24 +92,12 @@ checkpoint: CheckpointWriter = .{},
 session_name_probe_in_flight: bool = false,
 /// Whether a worker is looking for the linked worktree of a pane's directory.
 worktree_detection_in_flight: bool = false,
-review_jobs: ReviewJobs = .{},
-review_service: ?*ReviewService = null,
 /// The agent snapshot's revision and the input revisions it last covered.
 agent_snapshot_revision: u64 = 1,
 agent_snapshot_inputs: [4]u64 = @splat(0),
 /// Storage the snapshot is built into, once per flush that sends it.
 agent_entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined,
 agent_display: [core.max_agent_snapshot_entries]AgentDisplayStorage = undefined,
-/// The owner hash discovery last ran against; only safe builds keep it, to
-/// check that `review_owner_inputs` covers every owner input.
-review_owner_stamp: u64 = 0,
-/// Advances when a pane's review owner may change without a table
-/// revision: a close request, a review binding or an agent session id.
-review_owner_revision: u64 = 0,
-/// The pane, agent and review-owner revisions discovery last ran against.
-review_owner_inputs: [4]u64 = @splat(0),
-/// Discovery skipped a pane because every job slot was busy; retry it.
-review_discovery_blocked: bool = false,
 editor_open: EditorOpenState = .{},
 /// The path picker index of each client that opened one.
 path_indexes: PathIndexes = .{},
@@ -138,12 +121,7 @@ pub fn init(model: *RuntimeModel, resources: *Resources, select: *std.Io.Select(
     var executable_path: [std.fs.max_path_bytes]u8 = undefined;
     const executable_path_len = try std.process.executablePath(io, &executable_path);
 
-    var review_directory: [std.fs.max_path_bytes]u8 = undefined;
-    const review_path = try std.fmt.bufPrint(&review_directory, "{s}/change-reviews", .{std.fs.path.dirname(options.session_path orelse options.endpoint) orelse return error.InvalidReviewStorage});
-    const review_service = try ReviewService.init(resources.gpa, review_path);
-    errdefer review_service.deinit();
     model.* = .{
-        .review_service = review_service,
         .io = io,
         .gpa = resources.gpa,
         .select = select,
@@ -178,12 +156,7 @@ pub fn deinit(model: *RuntimeModel) void {
 
     model.attachments.deinit(model.gpa);
     model.panes.deinit();
-    model.review_jobs.deinitJoined();
     model.path_indexes.deinitJoined();
-    if (model.review_service) |service| {
-        service.deinit();
-        model.review_service = null;
-    }
 
     model.client_layouts.deinit();
     model.workspaces.deinit(model.gpa);

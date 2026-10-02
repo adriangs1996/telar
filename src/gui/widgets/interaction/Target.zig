@@ -1,6 +1,5 @@
 //! Owned input semantics for one delivered widget. No projection, text slice,
 //! Canvas or widget pointer crosses the presentation boundary.
-const core = @import("telar-core");
 const data = @import("model");
 const client = @import("telar-client");
 const history_action = @import("history_action.zig");
@@ -36,7 +35,6 @@ pub const PreviewAction = union(enum) {
 pub const Action = union(enum) {
     intent: client.Intent,
     text_field: Field,
-    change_review: core.PaneId,
     prompt: PromptAction,
     complete_path: PathCompletionChoice,
     history: history_action.Action,
@@ -45,18 +43,10 @@ pub const Action = union(enum) {
     custom: u64,
 };
 
-/// Example: `const pane_id = target.paneId() orelse return;`
-pub fn paneId(self: Target) ?core.PaneId {
-    return switch (self.action) {
-        .change_review => |id| id,
-        else => null,
-    };
-}
-
 /// Example: `if (target.activatable()) exposePressAction();`
 pub fn activatable(self: Target) bool {
     return switch (self.action) {
-        .change_review, .intent, .prompt, .complete_path, .history, .preview => true,
+        .intent, .prompt, .complete_path, .history, .preview => true,
         else => false,
     };
 }

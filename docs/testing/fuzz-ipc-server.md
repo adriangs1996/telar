@@ -110,10 +110,9 @@ Seeds are built at test time by telar's own encoders, so they follow the
 encodings as they change. `every server tag has an accepted seed` fails when a
 tag gains no accepted seed.
 
-- **Accepted, one or more per tag, all 50.** Variants with their own seed:
+- **Accepted, one or more per tag.** Variants with their own seed:
   empty and one-entry client lists and a full one (8); requested and applied
-  client commands; change review snapshots empty, with one comment and with
-  the 32 allowed; snapshot and patch frames (the patch has no metadata);
+  client commands; snapshot and patch frames (the patch has no metadata);
   exited and running pane text; set and cleared titles; search matches at 0,
   2 and 64; progress in set, indeterminate and error states; tab snapshots at
   0, 2 and 64 panes; automatic and labelled tabs in a workspace and a
@@ -127,11 +126,11 @@ tag gains no accepted seed.
   agent snapshots at 0, 1 and 64 entries; unrestored, split and 64-tab
   layouts; focused and unfocused focus results.
 - **Rejected:** the empty payload; unknown tags `0x00`, `0x01` (a client
-  tag), `0x42`, `0x80`, `0xb5`, `0xff`; a pane count over its bound, past the
+  tag), `0x42`, `0x80`, `0xb0`, `0xb1`, `0xb7`, `0xff`; a pane count over its bound, past the
   end of the payload and short of it (`TrailingBytes`); an unknown lifecycle;
   a duplicate pane; a zero request id; a boolean flag of 2; a length past the
   end; a tab out of position; too many history results and client list
-  entries; too many review comments; an unrestored layout with a width; a set
+  entries; an unrestored layout with a width; a set
   progress without percent; an image whose length does not match its size;
   a trailing byte.
 - **Accepted, then refused by a late consumer, with the exact error:** a

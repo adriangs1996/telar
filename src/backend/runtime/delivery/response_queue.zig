@@ -1,7 +1,6 @@
 //! Bounded, priority-aware responses awaiting one client session's writer.
 const core = @import("telar-core");
 
-const ReviewResult = @import("../../change_review/Result.zig");
 const PendingFailure = @import("PendingFailure.zig");
 const PendingTabCreated = @import("PendingTabCreated.zig");
 const PendingTabRenamed = @import("PendingTabRenamed.zig");
@@ -44,7 +43,6 @@ pub const PendingResponse = union(enum) {
     notification_shown: core.NotificationShown,
     agent_sound: core.AgentSoundNotification,
     history_result: *QueryResult,
-    change_review: *ReviewResult,
     request_completed: core.RequestCompleted,
     pane_text: PendingPaneText,
     pane_matches: PendingPaneMatches,

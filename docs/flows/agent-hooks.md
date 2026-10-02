@@ -152,9 +152,7 @@ reports and Claude Code's `WorktreeCreate` hook ask for descent too; outside
 the pane, a report that names an agent (`report-command`) is refused. The
 runtime also requires a connection confirmed inside the pane to attribute a
 worktree to it (`register_worktree` with `created_by`; `telar worktree
-create` registers without attribution when it cannot confirm), and to take
-the pane's file evidence (`report_change_review_sample`) or hand its agent
-review feedback (`feedback`, `ack_feedback`). These
+create` registers without attribution when it cannot confirm). These
 checks separate agents, not users: same-user processes are not isolated from
 each other (see [invariants](../invariants.md#local-authority)), and any of
 them can start a process inside a pane.
@@ -442,82 +440,12 @@ that command when it exits. Uninstall deletes the file only when it starts
 with `// telar-integration: opencode`. Reinstall after updating Telar and
 restart OpenCode to load the new plugin.
 
-## File change review
-
-Claude Code `Write` and `Edit`, Codex `apply_patch`, and Cursor Agent `Write`
-and `Delete` also record before/after file evidence through
-`report_change_review_sample`. Cursor reports every edit, a search-and-replace
-included, as a `Write` of the whole file. This works in ordinary
-terminal panes using their inherited pane ID, generation and provider session.
-It does not require launching the agent in Telar's agent mode.
-
-Review reads expose the canonical provider session. Mutations carry that same
-session as well as the pane generation and expected revision, so resuming a
-different thread in the same pane cannot redirect a pending comment. CLI
-callers can also pin reads and edits with `--session SESSION`.
-
-The hook subprocess reads files before returning from `PreToolUse` and after
-`PostToolUse`; the runtime receives bounded bytes rather than doing filesystem
-work while handling input. Claude declares its path in `tool_input.file_path`.
-Codex declares paths in the Add/Update/Delete/Move headers of
-`tool_input.command`. Telar reads those headers to identify files; it does not
-apply the patch or parse source languages. These shapes follow the
-[Claude hook reference](https://code.claude.com/docs/en/hooks) and
-[Codex hook reference](https://developers.openai.com/es-419/docs/hooks).
-
-Each tool call samples at most 128 distinct paths, and each file sample is
-capped at 128 KiB. A tool call that declares more paths samples the first 128,
-and a file larger than the cap is skipped; either way `telar hook` prints the
-limit notice on standard error and reports `review.hook_files` or
-`review.max_sample_bytes` to the runtime, which shows it, and the hook still
-exits 0. A file the runtime refuses leaves the other files' samples in place.
-Every path component rejects symlinks. Files must be regular UTF-8 text, with
-stable size and modification metadata during the read. Empty files and absent
-files are distinct. Binary, oversized, inaccessible and unstable files are
-omitted rather than truncated. Traversal components and malformed path lists
-are rejected. An unmatched after sample supplies no base from which Telar can
-claim a diff.
-
-These editions are labeled `observed_snapshot`: they capture the transition
-around the named tool, but another process might write the same file between
-the snapshots. Telar does not use the working tree's Git diff to attribute
-unrelated changes. Shell commands and unrecognized tools are not automatically
-captured. Pi's current asynchronous extension delivery cannot guarantee a
-before snapshot, so it does not advertise this capture capability, and the
-OpenCode plugin does not capture file changes yet.
-
-Only explicitly submitted review feedback is sent to the agent, and only to
-Claude Code and Codex: Cursor's tool hooks document no context field for it. On the next
-`PreToolUse`, `PostToolUse` or `UserPromptSubmit`, the hook fetches feedback for
-its exact provider/session and emits official
-`hookSpecificOutput.additionalContext` JSON. It acknowledges the feedback ID
-after flushing stdout. This hands feedback to the provider; it is not evidence
-that the model has acted on it. A lost acknowledgement or concurrent hooks can
-repeat the same ID, so delivery has at-least-once semantics. Telar never types
-review text into an ordinary pane's PTY and does not wake an idle agent with
-an unsolicited turn.
-
-Other cooperative integrations can use the same runtime API explicitly:
-
-```sh
-telar review feedback --current --provider codex --session SESSION --json
-telar review ack --current --provider codex --session SESSION --feedback-id ID
-```
-
-The feedback read does not consume it; the adapter acknowledges only after
-accepting it. `telar review list/show/comment/delete/submit/reviewed` provides
-the inspection and review actions from the terminal. `comment` accepts
-`--edition`, `--file`, `--first`, `--last`, `--body` and optional `--before`;
-`--revision` makes the optimistic revision check explicit. Both the CLI and
-hooks attach to an existing runtime and never start an orphaned one.
-
 ## Ownership
 
 `telar hook` never fails loudly: outside a pane, from a process that left it,
 for a pane that runs another agent, with a malformed payload or an
 unreachable runtime it exits 0, so the agent is unaffected. Lifecycle,
-command and title reports remain bounded; supported file tools add at most
-128 file samples, and cooperative feedback adds one read and acknowledgement.
+command, title and progress reports remain bounded.
 Each report is sent on its own, so one the runtime refuses never costs the
 others.
 
@@ -706,7 +634,7 @@ for `SessionEnd` and `Interrupt`.
   an agent needs a connection bound to its pane and generation, that a
   connection confirmed in one pane cannot report for another, that another
   agent's report is refused with a recheck and accepted once the probe names
-  that agent, that worktree attribution and review evidence need the
+  that agent, that worktree attribution needs the
   confirmation too, one descent check per connection, and a descent check
   through the real peer lookup and worker; that a parked report pauses its
   connection's reads until answered, waits for a recheck that starts after

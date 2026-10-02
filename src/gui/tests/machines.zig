@@ -898,14 +898,14 @@ test "delivered local activity cards focus their pane through pointer keyboard a
 }
 
 test "a delivered remote activity card switches machines and attaches its agent on pointer input" {
+    var box = try socketPair();
+    defer box.channel.deinit(std.testing.io);
+    defer box.peer.deinit(std.testing.io);
     var fixture = try Fixture.init();
     defer fixture.deinit();
     try fixture.showSidebar(true);
     try settleActivitySnapshots(fixture.session);
     const gui = fixture.session.gui;
-    var box = try socketPair();
-    defer box.channel.deinit(std.testing.io);
-    defer box.peer.deinit(std.testing.io);
     const slot = try openMachine(fixture.session, &box.channel);
     const remote = &gui.clients[slot];
     const own = gui.app;

@@ -27,7 +27,7 @@ const ShellOutput = struct {
 const max_output_parse_bytes = 256;
 
 /// The Claude Code event name of a tool event, so the shared command and
-/// review mappings read Cursor's tool calls too. A failed tool still ends
+/// command mappings read Cursor's tool calls too. A failed tool still ends
 /// its call. Other events have none.
 ///
 /// ```zig

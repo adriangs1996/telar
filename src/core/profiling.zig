@@ -9,9 +9,6 @@ pub const catalog_version = 1;
 pub const max_threads = 64;
 pub const max_metrics = 128;
 pub const Metric = enum {
-    review_draw,
-    review_search_rows,
-    review_search_bytes,
     tui_compose,
     tui_flush,
 
@@ -95,9 +92,6 @@ pub fn snapshot() ProfileCounters {
 /// Describes the exact catalog coverage. Example: `const unit = profiling.unit(.gui_draw);`
 pub fn unit(metric: Metric) []const u8 {
     return switch (metric) {
-        .review_draw => "calls",
-        .review_search_rows => "rows",
-        .review_search_bytes => "logical_bytes",
         .tui_compose => "calls",
         .tui_flush => "calls",
 
@@ -139,9 +133,6 @@ pub fn unit(metric: Metric) []const u8 {
 /// Names the measured code boundary. Example: `const source = profiling.source(.gui_draw);`
 pub fn source(metric: Metric) []const u8 {
     return switch (metric) {
-        .review_draw => "Paint.draw",
-        .review_search_rows => "Paint.searchStatus",
-        .review_search_bytes => "Paint.searchStatus",
         .tui_compose => "Compositor.render",
         .tui_flush => "Screen.flush",
 
@@ -183,9 +174,6 @@ pub fn source(metric: Metric) []const u8 {
 /// Explains inclusion limits. Example: `const coverage = profiling.coverage(.gui_draw);`
 pub fn coverage(metric: Metric) []const u8 {
     return switch (metric) {
-        .review_draw => "review draw entry",
-        .review_search_rows => "file rows traversed to compute match count",
-        .review_search_bytes => "sum of searched line lengths, not repeated substring probes",
         .tui_compose => "entry",
         .tui_flush => "entry",
 

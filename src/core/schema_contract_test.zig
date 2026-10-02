@@ -24,7 +24,6 @@ const WorktreeListEntry = @import("schema/messages/WorktreeListEntry.zig");
 const runtime = @import("schema/messages/runtime.zig");
 const tab_module = @import("schema/messages/tab.zig");
 const history = @import("schema/messages/history.zig");
-const change_review = @import("change_review.zig");
 const ImportEntry = @import("schema/messages/ImportEntry.zig");
 const graphics = @import("schema/messages/graphics.zig");
 const notification_support = @import("schema/messages/notification_support.zig");
@@ -58,7 +57,6 @@ const TextMetadataBuilder = @import("text_metadata/Builder.zig");
 const text_metadata_limits = @import("text_metadata/limits.zig");
 const ClientList = @import("ClientList.zig");
 const core_graphics = @import("graphics.zig");
-const ChangeReviewSnapshotView = @import("schema/messages/ChangeReviewSnapshotView.zig");
 const MoveTab = @import("schema/messages/MoveTab.zig");
 
 test {
@@ -68,7 +66,7 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 130;
+const corpus_len = std.meta.declarations(golden).len;
 
 const failure_codes = std.enums.values(types.FailureCode);
 const failure_code_listing = listing: {
@@ -118,38 +116,6 @@ const wire_bounds = [_]WireBound{
     .{
         .name = "max_history_stats_top",
         .value = history.max_history_stats_top,
-    },
-    .{
-        .name = "change_review.max_patch_bytes",
-        .value = change_review.max_patch_bytes,
-    },
-    .{
-        .name = "change_review.max_sample_bytes",
-        .value = change_review.max_sample_bytes,
-    },
-    .{
-        .name = "change_review.max_comments",
-        .value = change_review.max_comments,
-    },
-    .{
-        .name = "change_review.max_comment_bytes",
-        .value = change_review.max_comment_bytes,
-    },
-    .{
-        .name = "change_review.max_path_bytes",
-        .value = change_review.max_path_bytes,
-    },
-    .{
-        .name = "change_review.max_identity_bytes",
-        .value = change_review.max_identity_bytes,
-    },
-    .{
-        .name = "change_review.max_feedback_bytes",
-        .value = change_review.max_feedback_bytes,
-    },
-    .{
-        .name = "change_review.max_status_bytes",
-        .value = change_review.max_status_bytes,
     },
     .{
         .name = "client_list_capacity",
@@ -1505,26 +1471,6 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     ));
     helper.add(.{ .name = "client_command_result", .direction = .server, .golden_hex = golden.client_command_result }, helper.commit(
         try schema.encodeClientCommandResult(helper.space(), .{ .request_id = @enumFromInt(5), .route = .{ .id = 7, .generation = 9 }, .action = .workspace_select, .status = .admitted, .target_id = 42 }),
-    ));
-
-    const review = @import("schema/messages/change_review.zig");
-    helper.add(.{ .name = "query_change_review", .direction = .client, .golden_hex = golden.query_change_review }, helper.commit(
-        try review.encodeQueryChangeReview(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .edition_id = 2 }),
-    ));
-    helper.add(.{ .name = "change_review_command", .direction = .client, .golden_hex = golden.change_review_command }, helper.commit(
-        try review.encodeChangeReviewCommand(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .edition_id = 2, .expected_revision = 4, .action = .save_comment, .path = "file.zig", .first_line = 1, .last_line = 1, .body = "review" }),
-    ));
-    helper.add(.{ .name = "report_change_review_sample", .direction = .client, .golden_hex = golden.report_change_review_sample }, helper.commit(
-        try review.encodeReportChangeReviewSample(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .provider = .codex, .session = "thread", .tool_call_id = "edit", .phase = .before, .path = "file.zig", .exists = true, .content = "before\n" }),
-    ));
-    var review_snapshot: ChangeReviewSnapshotView = .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .revision = 4, .edition_id = 2, .latest_edition_id = 3, .previous_edition_id = 1, .next_edition_id = 3, .patch = "Updated file.zig\n@@ -1 +1 @@\n-a\n+b\n", .comment_count = 1 };
-    review_snapshot.comment_storage[0] = .{ .id = 7, .path = "file.zig", .first_line = 1, .last_line = 1, .body = "review" };
-    helper.add(.{ .name = "change_review_snapshot", .direction = .server, .golden_hex = golden.change_review_snapshot }, helper.commit(
-        try review.encodeChangeReviewSnapshot(helper.space(), review_snapshot),
-    ));
-
-    helper.add(.{ .name = "change_review_changed", .direction = .server, .golden_hex = golden.change_review_changed }, helper.commit(
-        try review.encodeChangeReviewChanged(helper.space(), .{ .pane_id = @enumFromInt(5), .pane_generation = 3, .session = "thread", .latest_edition_id = 2 }),
     ));
 
     var editor_request: schema.OwnedEditorOpen = .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(6), .pane_generation = 7, .line = 12, .column = 3 };

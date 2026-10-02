@@ -51,7 +51,7 @@ resolves it against the delivered chrome hit map and the current pane layout
 pointer shape.
 
 - An unfocused window selects the default pointer.
-- An open change review selects the default; a tab drag selects `grabbing`.
+- A tab drag selects `grabbing`.
 - A native modal and the notification stack give their controls `pointer`
   (text fields `text`) and everything else the default.
 - An active name prompt or modal gives palette rows `pointer`, the modal's

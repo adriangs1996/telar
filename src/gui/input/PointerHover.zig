@@ -41,11 +41,6 @@ pub fn refresh(self: *Hover, gui: *GuiAdapter) void {
     }
 
     const event = self.event orelse return;
-    if (gui.review.active) {
-        self.assign(null, .default);
-        self.cached = null;
-        return;
-    }
 
     if (gui.widgets.tab_drag.dragging and gui.widgets.tab_drag.source != null) {
         self.assign(null, .grabbing);
