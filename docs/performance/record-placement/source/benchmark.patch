@@ -1,0 +1,145 @@
+--- a/benchmarks/main.zig
++++ b/benchmarks/main.zig
+@@ -25,6 +25,7 @@
+ const ClientEventContext = @import("ClientEventContext.zig");
+ const InboxContext = @import("InboxContext.zig");
+ const IdleDeliveryShape = @import("IdleDeliveryShape.zig");
++const PlacementAllocator = @import("PlacementAllocator.zig");
+ const Fixture = @import("Fixture.zig");
+ const Config = @import("Config.zig");
+ const client_storage = @import("client_storage.zig");
+@@ -241,7 +242,50 @@
+     return checksum;
+ }
+ 
++var evict_scratch: ?[]u8 = null;
++var cold_spent_ns: u64 = 0;
++var cold_clock_ns: u64 = 0;
++var cold_flushes: u64 = 0;
++
++fn launder(pointer: anytype) @TypeOf(pointer) {
++    var value = pointer;
++    std.mem.doNotOptimizeAway(&value);
++    return value;
++}
++
++noinline fn evictCache(scratch: []u8) u64 {
++    var sum: u64 = 0;
++    var index: usize = 0;
++    while (index < scratch.len) : (index += 64) {
++        sum +%= scratch[index];
++    }
++
++    return sum;
++}
++
+ fn runIdleDelivery(context: *IdleDeliveryContext, iterations: usize) !u64 {
++    if (evict_scratch) |scratch| {
++        var checksum: u64 = 0;
++        for (0..iterations) |_| {
++            checksum +%= evictCache(launder(scratch));
++            const start = timestamp(context.io);
++            try context.idle.flush();
++            cold_spent_ns += timestamp(context.io) - start;
++
++            checksum +%= evictCache(launder(scratch));
++            const empty = timestamp(context.io);
++            cold_clock_ns += timestamp(context.io) - empty;
++        }
++
++        cold_flushes += iterations;
++        std.mem.doNotOptimizeAway(checksum);
++        if (!context.idle.quiet()) {
++            return error.IdleDeliveryStartedWrite;
++        }
++
++        return iterations;
++    }
++
+     for (0..iterations) |_| {
+         try context.idle.flush();
+     }
+@@ -635,10 +679,34 @@
+         const case = cases[case_index];
+         case_index += 1;
+         if (config.includes(case.name)) {
++            const mode_name = resources.environ.getPosix("TELAR_BENCH_PLACEMENT") orelse "none";
++            const mode = std.meta.stringToEnum(PlacementAllocator.Mode, mode_name) orelse return error.UnknownPlacement;
++            const child_name = resources.environ.getPosix("TELAR_BENCH_CHILD") orelse "debug";
++            const child = if (std.mem.eql(u8, child_name, "libc")) std.heap.c_allocator else if (std.mem.eql(u8, child_name, "smp")) std.heap.smp_allocator else gpa;
++            var placement = try PlacementAllocator.init(child, mode);
++            if (resources.environ.getPosix("TELAR_BENCH_THRESHOLD")) |text| {
++                placement.threshold = try std.fmt.parseInt(usize, text, 10);
++            }
+             var context: IdleDeliveryContext = undefined;
+-            try context.init(io, gpa, resources.environ, shape);
++            try context.init(io, placement.allocator(), resources.environ, shape);
+             defer context.deinit();
++            if (resources.environ.getPosix("TELAR_BENCH_REPORT") != null) {
++                std.debug.print("placement={s} child={s} placed={d}\n", .{ mode_name, child_name, placement.placed });
++                context.idle.reportPlacement();
++            }
++            if (resources.environ.getPosix("TELAR_BENCH_EVICT")) |text| {
++                const bytes = try std.fmt.parseInt(usize, text, 10);
++                const scratch = try std.heap.page_allocator.alloc(u8, bytes);
++                @memset(scratch, 1);
++                evict_scratch = scratch;
++                cold_spent_ns = 0;
++                cold_clock_ns = 0;
++                cold_flushes = 0;
++            }
+             try result_writer.write(case, try measure(.{ .io = io, .config = config, .context = &context }, runIdleDelivery));
++            if (evict_scratch != null) {
++                std.debug.print("cold {s} flushes={d} ns_per_flush={d} clock_ns={d}\n", .{ case.name, cold_flushes, cold_spent_ns / cold_flushes, cold_clock_ns / cold_flushes });
++            }
+         }
+     }
+     const client_frame_case = cases[case_index];
+--- a/src/backend/runtime/IdleDelivery.zig
++++ b/src/backend/runtime/IdleDelivery.zig
+@@ -13,6 +13,9 @@
+ const client_delivery = @import("client_delivery.zig");
+ const client_request = @import("client_request.zig");
+ const agent_snapshot = @import("agent_snapshot.zig");
++const Pane = @import("../pane/Pane.zig");
++const Attachment = @import("attachment/Attachment.zig");
++const CellSync = @import("attachment/CellSync.zig");
+ const IdleDelivery = @This();
+ 
+ /// Deliveries a fixture drains before it is idle; more means a pane keeps
+@@ -92,6 +95,35 @@
+     try client_delivery.flush(&self.runtime.model);
+ }
+ 
++/// Experiment only: prints the layout and placement the idle flush reads.
++pub fn reportPlacement(self: *const IdleDelivery) void {
++    const page = 16 * 1024;
++    std.debug.print("sizeof Pane={d} align={d} Attachment={d} align={d} Session={d} Runtime={d}\n", .{ @sizeOf(Pane), @alignOf(Pane), @sizeOf(Attachment), @alignOf(Attachment), @sizeOf(Session), @sizeOf(Runtime) });
++    inline for (.{ "id", "launch_state", "observers", "review_availability", "text_metadata", "graphics_revision", "dirty", "render_pending", "cell_revision", "ingest_pending", "close_requested", "exit", "foreground_revision", "progress_revision", "cwd", "title", "damaged_rows", "media", "media_ingestion", "graphics_present" }) |name| {
++        std.debug.print("  Pane.{s} offset={d} size={d}\n", .{ name, @offsetOf(Pane, name), @sizeOf(@FieldType(Pane, name)) });
++    }
++
++    inline for (.{ "pane", "cells", "graphics", "cell_pacer", "cell_deadline_ns", "observed_cwd_revision", "observed_review_revision", "exit_sent" }) |name| {
++        std.debug.print("  Attachment.{s} offset={d} size={d}\n", .{ name, @offsetOf(Attachment, name), @sizeOf(@FieldType(Attachment, name)) });
++    }
++
++    inline for (.{ "snapshot_pending", "observed_revision", "projected_text_metadata" }) |name| {
++        std.debug.print("  CellSync.{s} offset={d}\n", .{ name, @offsetOf(CellSync, name) });
++    }
++
++    for (self.runtime.model.panes.items) |slot| {
++        const pane = slot orelse continue;
++        std.debug.print("  pane {x} page_offset={d}\n", .{ @intFromPtr(pane), @intFromPtr(pane) % page });
++    }
++
++    for (&self.runtime.model.attachments.record, 0..) |*row, client| {
++        for (row) |slot| {
++            const attachment = slot orelse continue;
++            std.debug.print("  attachment c{d} {x} page_offset={d}\n", .{ client, @intFromPtr(attachment), @intFromPtr(attachment) % page });
++        }
++    }
++}
++
+ /// Reports whether every client is still idle: no flush started a write.
+ ///
+ /// ```zig

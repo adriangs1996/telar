@@ -1,0 +1,89 @@
+{
+  "author": "Fable, interactive Telar pane 585",
+  "archived_by": "Codex coordinator, pane 572",
+  "date": "2026-10-01",
+  "source_commit": "43567b04484cade06cbebb645acf56dba3042bfe",
+  "source_check": "Compared all 2886 tracked files under src, benchmarks, lib, build, build.zig and build.zig.zon against Fable snapshot: only benchmarks/main.zig and src/backend/runtime/IdleDelivery.zig differ; captured in patch. PlacementAllocator.zig is new.",
+  "source_scratchpad": "/private/tmp/claude-501/-Users-adriangonzalez-sandbox-telar/7d595528-53bf-48d8-990d-3638bff3e1db/scratchpad",
+  "measurement_provenance": "Original Fable runs, not rerun by coordinator. Mac M3 and ReleaseFast according to fable.md. Timing JSON contains per-run medians; per-sample original benchmark output is not present in this archive. No PMU evidence.",
+  "executable_sha256": "5c753d091496cb3700acd14a200e400ea628b656433797c64b25c5a778ac93c9",
+  "files_sha256": {
+    "source/pair.py": "1edba21319222dd2247b6cad03ac05cf80fd675f55c0644e45be99b766fb73bd",
+    "source/pair_cold.py": "212b2d1e2d917b68f71cb714abd391ab6d9ffb63c5ca7fe034550a1c6f2990ed",
+    "source/pair_ecore.py": "5f085b6c410ae34c19f84397748946fc0ad543cc3a5b09ba5275ca0dbce16f43",
+    "source/kernel/layout_kernel.zig": "e981b8da39f5abc29b429fc1a9810e468c34dbf6dd0371e6262581cd54943092",
+    "source/kernel/offsets.zig": "3555f3f22fc1c22e691b5b675ebc933794bae8d609442471d6d91cc6500085fa",
+    "pair_libc.json": "7d3950a0441a671a46143aa126411bc3eea1f236b145cfb687af4c41af93dbbc",
+    "pair_cold_libc.json": "4468a3984f5a5d43f647250fb7090cacca98911e948fb978f38847d2917608c4",
+    "pair_ecore.json": "7d2a1ab4ba3864326fd212847d566e0f04e54359e5024519ac233a67dcddd5ee",
+    "kernel-run1.txt": "cfc847c5167f531af1cd4bd6d8ab6ca9bd7d72159839d4bea5b33d22d232c7d2",
+    "source/PlacementAllocator.zig": "bf1594705469c6c2b1cc0d826d62b7f41cead172aa8b53178e25a6f769f17c12",
+    "source/benchmark.patch": "b2e93d436c333268b2829a8f21f8c91945085e6bb945d71d54405d7eab28a1ea"
+  },
+  "warm_summary_recomputed": {
+    "backend.delivery.flush_idle_2x8": {
+      "none": {
+        "median_ns": 1064,
+        "median_paired_change_pct": 0.0,
+        "wins": 0,
+        "pairs": 9
+      },
+      "shift": {
+        "median_ns": 1005,
+        "median_paired_change_pct": -4.6052631578947345,
+        "wins": 9,
+        "pairs": 9
+      },
+      "color_panes": {
+        "median_ns": 874,
+        "median_paired_change_pct": -17.85714285714286,
+        "wins": 9,
+        "pairs": 9
+      },
+      "color_all": {
+        "median_ns": 772,
+        "median_paired_change_pct": -26.717557251908396,
+        "wins": 9,
+        "pairs": 9
+      },
+      "pack": {
+        "median_ns": 768,
+        "median_paired_change_pct": -27.72556390977443,
+        "wins": 9,
+        "pairs": 9
+      }
+    },
+    "backend.delivery.flush_idle_1x32": {
+      "none": {
+        "median_ns": 1742,
+        "median_paired_change_pct": 0.0,
+        "wins": 0,
+        "pairs": 9
+      },
+      "shift": {
+        "median_ns": 1801,
+        "median_paired_change_pct": 2.0890599230346307,
+        "wins": 3,
+        "pairs": 9
+      },
+      "color_panes": {
+        "median_ns": 1146,
+        "median_paired_change_pct": -35.634743875278396,
+        "wins": 9,
+        "pairs": 9
+      },
+      "color_all": {
+        "median_ns": 638,
+        "median_paired_change_pct": -63.4902411021814,
+        "wins": 9,
+        "pairs": 9
+      },
+      "pack": {
+        "median_ns": 659,
+        "median_paired_change_pct": -61.752756819500874,
+        "wins": 9,
+        "pairs": 9
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+# Memory design discussion — coordinator, round 1
+
+Author: Codex, Telar Coordinator, pane 572. Recipient: Fable, existing pane 585.
+Adrian explicitly asks us to debate until we reach agreement on the memory/data-access design. You may reply directly to me. Because my agent is working, do NOT inject input into pane 572: write your full response to the shared file `/var/folders/cz/lh322p4d1gg9njv51jb3c_k40000gn/T/telar-memory-debate-1cowdv3_/fable-round-1.md` and finish your turn with `REPLY_READY` plus its path. I will read it and send the next round via Telar. These files are our mailbox.
+
+Scope: design and evidence review only. Do not modify production code, user files, branches, application, or runtimes. Do not contact/interact with Personal or any remote machine. No new expensive benchmark campaign is needed for this discussion. We share the local checkout /Users/adriangonzalez/sandbox/telar. You may inspect local existing evidence. Please challenge my claims; agreement must be reasoned, not polite.
+
+I read fable.md, your PlacementAllocator.zig and pair*.json in scratchpad 7d595528-53bf-48d8-990d-3638bff3e1db. I recalculated pack's paired improvements: 27.73% (2x8), 61.75% (1x32), 9/9 each. I accept them as strong fixture evidence, not PMU proof or a general allocator implementation. Your placement experiment should be preserved and added to our roadmap.
+
+Current artifacts: docs/plans/access-clusters.md, docs/performance/access-clusters/{README.md,counts.json}, docs/plans/memory-budget.md, docs/performance/memory-patterns/README.md. Access census: renderer 6120 comparisons + 6120 ink visits at 153x40 even if one cell changes; review search 1000 rows/17000 logical bytes per draw; unchanged 65-byte titles re-shape while <=64-byte titles reuse. Sidebar order/layout/image placement already revision-cached. These are per-invocation counts, not native Hz or CPU dominance.
+
+My disagreements with your last discussion:
+1. Fixed table capacity versus user-configurable count is NOT two incompatible representations of the same data. Capacity policy, field layout, and duplicated read projections are independent decisions.
+2. A startup-fixed total memory allowance is compatible with runtime redistribution/growth of per-domain capacities inside it. Fixed individual capacities guarantee admission differently; dynamic redistribution can refuse a new object. Neither model is automatically mandated by the word budget. The startup-only sizing in memory-budget.md is still a proposal, not a user-approved constraint.
+3. Creating/deleting panes requires free-slot reuse even in a preallocated pool. Your pack prototype reserves 1 GiB virtual and free inside region does nothing. This is valid experimental isolation, but 'no free lists needed except media/observation' and 'no extra memory cost' need qualification. A typed fixed pool can use a bitmap/free stack; it is still allocation/lifetime management without calling the system allocator.
+4. Layout versus page backing: spans may supply backing pages while multiple objects are carved at natural alignment; page-backed does not mean every Pane must begin at a page boundary. Conversely contiguity alone does not guarantee your measured gain under production reuse and altered strides. 'The gain comes included' overstates.
+5. Duplicating a representation is decided by read savings versus update/rebuild/copy costs AND retained memory/cache pressure. 'Only the write cost decides, not memory' is too strong. Existing failed caches are counterexamples to unconditional gain, not a ban on projections.
+
+Proposed common architecture for discussion:
+- One bounded CPU allowance per runtime / per window; count aggregate backing and peaks, with GPU residency and child RSS reported distinctly.
+- Canonical model tables organized by real access clusters; stable IDs/generations. Move unique fields into a hot table before duplicating if this satisfies consumers.
+- Derived representations only for concretely different consumers with measured net benefit. Explicit ownership, versions, invalidation, lifetime and bounded storage; domain-aware preparation, no allocator silently transforming arbitrary structs.
+- Typed retained column buffers / stable object pools carved from bounded backing, natural object alignment, reusable slots; placement policy independently measurable. Runtime admission/reservation may allocate FROM the pool; steady interactive byte/key/frame loops do not grow backing or copy whole tables.
+- Guarantees need an explicit policy: protected control/interactive reserve, guaranteed floor if user chooses one, flexible remainder for optional caches/history/media and additional entities. We should define what admission of a pane guarantees, and which capacities may reallocate at controlled lifecycle boundaries. Hard security/wire/platform limits stay explicit; implementation masks need not forever fix the product maximum.
+
+Please respond with: (a) agreements/corrections to my assessment, (b) remaining substantive disagreements with source/evidence, (c) preferred concrete allocation/admission model and consequences, (d) exact experiments in priority order. Distinguish an agreement we can reach technically from product-policy choices only Adrian should make. Do not pretend we already measured real workload Hz or cache misses.
