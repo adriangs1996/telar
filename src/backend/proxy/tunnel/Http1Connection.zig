@@ -306,6 +306,7 @@ fn pumpUpgrade(self: *Connection, route: UpgradeRoute) void {
         self.exchange.touch();
     }
 
+    self.exchange.enter(.half_closed);
     self.session.halfClose(route.to);
 }
 

@@ -2,8 +2,9 @@
 //! holds the phase its tunnel is in, when that phase began, when bytes last
 //! moved, how many exchanges are in flight and the sockets the tunnel owns,
 //! so the service can close a connection that never authenticates, one that
-//! never reaches its origin, and, when it must make room, the connection
-//! that costs the least to lose.
+//! never reaches its origin, one that a side left and that went silent,
+//! and, when it must make room, the connection that costs the least to
+//! lose.
 //!
 //! Tunnels write their own row with atomics. The service only shuts a
 //! socket down, which wakes the tunnel's blocked read; the tunnel still
@@ -28,6 +29,10 @@ pub const connect_head_timeout_ms: i64 = 10 * std.time.ms_per_s;
 pub const establish_timeout_ms: i64 = 30 * std.time.ms_per_s;
 pub const connect_head_timeout_limit = core.Limit.declare("proxy.connect_head_timeout_ms", "ms", connect_head_timeout_ms);
 pub const establish_timeout_limit = core.Limit.declare("proxy.establish_timeout_ms", "ms", establish_timeout_ms);
+/// A connection one side has left is closed once no byte moved for this
+/// long: the other side has had time to send what it had left, and a peer
+/// that never closes would otherwise keep the row.
+pub const half_closed_timeout_ms: i64 = 60 * std.time.ms_per_s;
 /// Connections still sending their CONNECT head at once. A local process
 /// that opens silent connections fills at most these rows, so it can never
 /// lock authenticated clients out of the rest.
@@ -55,6 +60,8 @@ pub const Phase = enum(u8) {
     open,
     /// Between HTTP/1.1 exchanges, waiting for the next request.
     idle,
+    /// One side ended its stream; relaying what the other still sends.
+    half_closed,
     /// Giving its sockets up; never shut down again.
     closing,
 };
@@ -63,6 +70,7 @@ pub const Phase = enum(u8) {
 const Closure = enum {
     connect_head_timeout,
     establish_timeout,
+    half_closed_timeout,
     /// Making room: a connection still sending its CONNECT head.
     evict_unauthenticated,
     /// Making room: an HTTP/1.1 connection between exchanges.
@@ -263,6 +271,9 @@ pub fn expire(self: *Connections, now_ms: i64) Expired {
             .establishing => if (self.shutDown(index, .establish_timeout, now_ms)) {
                 expired.establishing += 1;
             },
+            .half_closed => if (self.shutDown(index, .half_closed_timeout, now_ms)) {
+                expired.half_closed += 1;
+            },
             .free, .open, .idle, .closing => {},
         }
     }
@@ -393,6 +404,7 @@ fn due(self: *const Connections, index: usize, closure: Closure, now_ms: i64) bo
     return switch (closure) {
         .connect_head_timeout => phase == .connect_head and now_ms - since_ms >= connect_head_timeout_ms,
         .establish_timeout => phase == .establishing and now_ms - since_ms >= establish_timeout_ms,
+        .half_closed_timeout => phase == .half_closed and now_ms - active_ms >= half_closed_timeout_ms,
         .evict_unauthenticated => phase == .connect_head and now_ms - since_ms >= min_evictable_connect_head_ms,
         .evict_idle => phase == .idle and quiet and now_ms - active_ms >= min_evictable_idle_ms,
         .evict_silent => phase == .open and quiet and now_ms - active_ms >= min_evictable_silence_ms,
@@ -409,6 +421,7 @@ fn lock(self: *Connections, index: usize) void {
 const Expired = struct {
     connect_head: u32 = 0,
     establishing: u32 = 0,
+    half_closed: u32 = 0,
 };
 
 fn testSockets() [2]Handle {
@@ -478,6 +491,33 @@ test "a connection past its CONNECT head or establishment deadline is shut down"
     try std.testing.expect(readsEndOfStream(hung[0]));
     try std.testing.expect(readsEndOfStream(origin[0]));
     try std.testing.expectEqual(Expired{}, connections.expire(establish_timeout_ms * 2));
+}
+
+test "a connection one side left is shut down after its silence, in flight or not, and never while bytes move" {
+    var connections: Connections = .{};
+    const child = testSockets();
+    defer closeSockets(child);
+    const origin = testSockets();
+    defer closeSockets(origin);
+
+    const slot = connections.acquire(child[0], 0).?;
+    connections.enter(slot, .open, 0);
+    connections.attachOrigin(slot, origin[0]);
+    connections.beginExchange(slot);
+    connections.enter(slot, .half_closed, 0);
+
+    try std.testing.expectEqual(Expired{}, connections.expire(half_closed_timeout_ms - 1));
+    connections.touch(slot, half_closed_timeout_ms - 1);
+    try std.testing.expectEqual(Expired{}, connections.expire(half_closed_timeout_ms));
+    try std.testing.expect(!readsEndOfStream(child[0]));
+
+    const closed_half_closed: Expired = .{
+        .half_closed = 1,
+    };
+    try std.testing.expectEqual(closed_half_closed, connections.expire(2 * half_closed_timeout_ms - 1));
+    try std.testing.expect(readsEndOfStream(child[0]));
+    try std.testing.expect(readsEndOfStream(origin[0]));
+    try std.testing.expectEqual(Phase.closing, connections.phase[@intFromEnum(slot)].load(.acquire));
 }
 
 test "making room closes a waiting HTTP/1.1 connection before a silent one, and never one in flight" {

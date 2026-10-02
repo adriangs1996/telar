@@ -129,7 +129,9 @@ pub fn raiseDescriptorLimit() void {
 }
 
 /// Closes every connection past its CONNECT head or establishment deadline,
-/// once a second, until the service stops. Then it cancels every tunnel and
+/// and every one a side left that went silent, once a second, until the
+/// service stops. Only the two deadlines count as limits reached; closing a
+/// half-closed connection is routine. Then it cancels every tunnel and
 /// waits for them, however long they take, and sets
 /// `service.tunnels_joined`. That wait lives on this task so `Service.stop`
 /// can bound its own with `awaitTunnels` and leave.

@@ -79,7 +79,10 @@ fn relayDirection(self: *RelayContext, direction: relay_module.Direction) Stats 
         .streams = &self.streams,
     };
 
-    return h2.relay(self.session, h2.relayOptions(direction, .{ .gpa = self.gpa }), &observer);
+    const stats = h2.relay(self.session, h2.relayOptions(direction, .{ .gpa = self.gpa }), &observer);
+    self.exchange.enter(.half_closed);
+
+    return stats;
 }
 
 /// Counts a direction whose header decoding failed.

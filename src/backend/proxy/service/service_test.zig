@@ -289,6 +289,84 @@ fn awakeMs(io: std.Io) i64 {
     return std.Io.Timestamp.now(io, .awake).toMilliseconds();
 }
 
+test "a passthrough tunnel one side left is closed once it goes silent" {
+    const io = std.testing.io;
+    var origin = try listenTestOrigin(io);
+    defer origin.listener.deinit(io);
+
+    var fixture: TestServiceFixture = .{};
+    try fixture.init(io, std.testing.allocator, &.{});
+    defer fixture.deinit();
+    const service = fixture.service.?;
+    try service.start();
+    defer _ = service.stop();
+
+    // The child leaves and the origin never closes its side.
+    const gone = try openTunnel(io, service, origin.port);
+    const holding = try origin.listener.accept(io);
+    defer holding.close(io);
+    gone.close(io);
+    try silenceHalfClosed(io, service);
+    try waitForEmptyTable(service);
+
+    // The origin leaves and the child never closes its side.
+    const lingering = try openTunnel(io, service, origin.port);
+    defer lingering.close(io);
+    const leaving = try origin.listener.accept(io);
+    leaving.close(io);
+    try silenceHalfClosed(io, service);
+    try waitForEmptyTable(service);
+}
+
+/// Opens one authenticated CONNECT tunnel to a local origin and returns the
+/// child's stream once the proxy answered 200.
+fn openTunnel(io: std.Io, service: *const Service, origin_port: u16) !std.Io.net.Stream {
+    const proxy_address = try std.Io.net.IpAddress.parse("127.0.0.1", service.clientConfiguration().port);
+    const client = try proxy_address.connect(io, .{ .mode = .stream });
+    errdefer client.close(io);
+
+    var authority_buffer: [32]u8 = undefined;
+    const authority = try std.fmt.bufPrint(&authority_buffer, "127.0.0.1:{d}", .{origin_port});
+    try writeConnect(io, client, &service.secret, authority);
+    try expectAnswer(io, client, "HTTP/1.1 200 Connection Established\r\n\r\n");
+
+    return client;
+}
+
+/// Waits for the table's one connection to be half closed, then dates its
+/// last byte past the silence the service allows.
+fn silenceHalfClosed(io: std.Io, service: *Service) !void {
+    const connections = &service.connections;
+
+    for (0..1000) |_| {
+        for (&connections.phase, 0..) |*phase, index| {
+            if (phase.load(.acquire) != .half_closed) {
+                continue;
+            }
+
+            connections.touch(@enumFromInt(index), now(io) - Connections.half_closed_timeout_ms);
+            return;
+        }
+
+        try io.sleep(.fromMilliseconds(1), .awake);
+    }
+
+    return error.ProxyConnectionNotHalfClosed;
+}
+
+/// The service closes expired connections once a second; wait a few rounds.
+fn waitForEmptyTable(service: *const Service) !void {
+    for (0..5000) |_| {
+        if (service.metrics().active_connections == 0) {
+            return;
+        }
+
+        try std.testing.io.sleep(.fromMilliseconds(1), .awake);
+    }
+
+    return error.ProxyConnectionNotClosed;
+}
+
 /// The tunnel records its TLS outcome after the origin closed; poll briefly.
 fn waitForCounter(service: *const Service, comptime field: []const u8, expected: u64) !void {
     for (0..1000) |_| {

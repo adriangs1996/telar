@@ -163,6 +163,17 @@ Resolutions live in a table that belongs to the process, not to the proxy,
 and is never freed. A worker left behind touches only its row, and frees it
 when the resolver returns.
 
+A row is held only while both sides of its connection are there. Origin
+sockets carry TCP keepalive: a connection silent for a minute is probed every
+10 seconds, and six unanswered probes end it, so an origin that vanished
+without closing, after a sleep or a network change, is noticed two minutes
+after its last byte. An origin that answers its probes is never closed. Once
+one side ends its stream, the child or the origin, the connection is half
+closed: the proxy keeps relaying what the other side still sends and closes
+the connection after a minute without a byte, in flight or not. Without that
+bound a peer that never closes its side would keep the row until the table
+filled.
+
 At most 64 connections may still be sending their CONNECT head at once
 (`proxy.max_unauthenticated`), so a local process that opens silent
 connections can fill those rows and no others. Making room closes, in this

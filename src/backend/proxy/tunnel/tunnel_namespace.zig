@@ -1,5 +1,6 @@
 //! One authenticated CONNECT tunnel from request head through protocol relay.
 
+const builtin = @import("builtin");
 const Counters = @import("../Counters.zig");
 const Exchange = @import("Exchange.zig");
 const connect_authentication = @import("../connect_authentication.zig");
@@ -17,8 +18,9 @@ pub fn recordAuthenticationRejection(telemetry: *Counters, rejection: connect_au
     }
 }
 
-/// Relays opaque bytes both ways until either side closes; every copy
-/// marks the connection active.
+/// Relays opaque bytes both ways until both sides close; every copy marks
+/// the connection active. Once one side ends, the connection is half
+/// closed, and the service closes it when the other goes silent.
 ///
 /// ```zig
 /// tunnel_namespace.relayPassthrough(child, origin, &exchange);
@@ -48,6 +50,7 @@ fn pumpPassthrough(source: std.Io.net.Stream, destination: std.Io.net.Stream, ex
         exchange.touch();
     }
 
+    exchange.enter(.half_closed);
     destination.shutdown(io, .send) catch {};
 }
 
@@ -171,6 +174,7 @@ fn connectBefore(io: std.Io, address: std.Io.net.IpAddress, deadline_ms: i64) !s
     errdefer _ = std.c.close(handle);
 
     try setCloseOnExec(handle);
+    try setKeepalive(handle);
     try setNonblocking(handle, true);
 
     var storage: std.c.sockaddr.storage = undefined;
@@ -250,6 +254,61 @@ fn setCloseOnExec(handle: std.c.fd_t) !void {
         return error.SystemResources;
     }
 }
+
+/// Turns TCP keepalive on for an origin socket. A relay that only reads
+/// never learns that its origin vanished without closing, after a sleep or
+/// a network change, and would hold its row for as long as the child waits.
+/// With keepalive the kernel probes a connection silent for
+/// `keepalive_idle_s` and ends it after `keepalive_probes` unanswered
+/// probes, which fails the blocked read. An origin that answers its probes
+/// is never closed, however long a model takes to answer.
+fn setKeepalive(handle: std.c.fd_t) !void {
+    const options = [_]SocketOption{
+        .{
+            .level = std.c.SOL.SOCKET,
+            .name = std.c.SO.KEEPALIVE,
+            .value = keepalive_enabled,
+        },
+        .{
+            .level = std.c.IPPROTO.TCP,
+            .name = keepalive_idle_option,
+            .value = keepalive_idle_s,
+        },
+        .{
+            .level = std.c.IPPROTO.TCP,
+            .name = std.c.TCP.KEEPINTVL,
+            .value = keepalive_interval_s,
+        },
+        .{
+            .level = std.c.IPPROTO.TCP,
+            .name = std.c.TCP.KEEPCNT,
+            .value = keepalive_probes,
+        },
+    };
+
+    for (options) |option| {
+        if (std.c.setsockopt(handle, option.level, option.name, &option.value, @sizeOf(c_int)) != 0) {
+            return error.SystemResources;
+        }
+    }
+}
+
+const SocketOption = struct {
+    level: i32,
+    name: u32,
+    value: c_int,
+};
+
+const keepalive_enabled = 1;
+/// Seconds an origin connection stays silent before its first probe.
+const keepalive_idle_s = 60;
+/// Seconds between probes.
+const keepalive_interval_s = 10;
+/// Unanswered probes that end the connection: a vanished origin is noticed
+/// two minutes after its last byte.
+const keepalive_probes = 6;
+/// The idle time option, which Darwin names after the feature.
+const keepalive_idle_option = if (builtin.os.tag.isDarwin()) std.c.TCP.KEEPALIVE else std.c.TCP.KEEPIDLE;
 
 fn socketAddress(address: std.Io.net.IpAddress, storage: *std.c.sockaddr.storage) std.c.socklen_t {
     switch (address) {
@@ -379,6 +438,33 @@ test "a pending connect gives up as soon as its task is canceled" {
     }
 
     try std.testing.expect(now(io) - started < std.time.ms_per_s);
+}
+
+test "an origin socket probes a silent origin and gives it up after its unanswered probes" {
+    const io = std.testing.io;
+    const loopback: std.Io.net.IpAddress = .{
+        .ip4 = .loopback(0),
+    };
+    var origin = try loopback.listen(io, .{});
+    defer origin.deinit(io);
+
+    const stream = try connectBefore(io, origin.socket.address, now(io) + std.time.ms_per_s);
+    defer stream.close(io);
+
+    try std.testing.expect(try socketOption(stream.socket.handle, std.c.SOL.SOCKET, std.c.SO.KEEPALIVE) != 0);
+    try std.testing.expectEqual(@as(c_int, keepalive_idle_s), try socketOption(stream.socket.handle, std.c.IPPROTO.TCP, keepalive_idle_option));
+    try std.testing.expectEqual(@as(c_int, keepalive_interval_s), try socketOption(stream.socket.handle, std.c.IPPROTO.TCP, std.c.TCP.KEEPINTVL));
+    try std.testing.expectEqual(@as(c_int, keepalive_probes), try socketOption(stream.socket.handle, std.c.IPPROTO.TCP, std.c.TCP.KEEPCNT));
+}
+
+fn socketOption(handle: std.c.fd_t, level: i32, name: u32) !c_int {
+    var value: c_int = 0;
+    var value_len: std.c.socklen_t = @sizeOf(c_int);
+    if (std.c.getsockopt(handle, level, name, &value, &value_len) != 0) {
+        return error.SocketOptionUnreadable;
+    }
+
+    return value;
 }
 
 /// 192.0.2.0/24 is reserved for documentation and never answers.
