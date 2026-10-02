@@ -37,6 +37,21 @@ pub fn report(model: *RuntimeModel) void {
     proxy.tap_reported = tap_counts;
 }
 
+/// Reports the stop deadline when the proxy's teardown left tunnels
+/// running. Call it on the event loop's thread, right after that teardown.
+///
+/// ```zig
+/// resources.proxy.deinit();
+/// proxy_limits.reportStop(model);
+/// ```
+pub fn reportStop(model: *RuntimeModel) void {
+    if (model.resources.proxy.active()) {
+        limit_reached.report(model, .{
+            .limit = proxy_service.stop_timeout_limit,
+        });
+    }
+}
+
 fn reportProxy(model: *RuntimeModel, now: Snapshot, last: Snapshot, capture: CaptureConfig) void {
     reportGrowth(model, now.connection_limit_drops, last.connection_limit_drops, proxy_service.connections_limit);
     reportGrowth(model, now.evictions, last.evictions, proxy_service.connections_limit);

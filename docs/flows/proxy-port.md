@@ -71,6 +71,16 @@ Proxy.port / Proxy.preferredPort -> ProxyRuntime.port / preferredPort
   connect waiting for about eight seconds on macOS. Only the preferred port is
   probed, so a start waits at most one probe. `SO_REUSEPORT` is never set.
   Windows keeps the plain bind.
+- A stopping runtime frees the port before it waits for anything. `Service.stop`
+  joins the accept loop and closes the listening socket, then shuts every
+  connection down, cancels the tunnels and waits for them at most
+  `proxy.stop_timeout_ms` (2 seconds). A tunnel inside a call nothing
+  interrupts, such as the system resolver, still holds its accepted socket,
+  open or in TIME_WAIT once the process exits; neither listens, so the next
+  runtime binds the port by the rule above. A runtime that stopped without a
+  tunnel exits its process after the rest of its teardown
+  (`Runtime.leftProxyTunnels`, `src/cli/server.zig`), because returning from
+  `main` would wait for that tunnel's thread.
 - Binding a port another runtime remembers deletes that runtime's file, so the
   directory holds at most one file per port, 128 in all.
 - The shared `proxy-port` of earlier versions is a preference only for the
@@ -102,6 +112,15 @@ earlier may still point at. Exhausting the range fails the start with
   closed connections are in TIME_WAIT, never shadows a wildcard listener, and
   gives up on a silent preferred port within the probe's limit. The suite runs
   on macOS and on Linux (`zig build test-backend-proxy -Dgui=false`).
+- `src/backend/proxy/service/service_test.zig` proves a stop ends a
+  passthrough tunnel whose client and origin keep their connections open,
+  and that a stop gives up on a tunnel nothing interrupts at its deadline
+  with the port already free: the next service binds the remembered port
+  while that tunnel still holds its socket. `src/backend/proxy/Connections.zig`
+  proves the shutdown reaches every admitted connection and no retired one.
+  `src/backend/runtime/instance.zig` proves the same for a whole runtime:
+  its teardown returns at the deadline, the checkpoint is written and
+  restores, and the next runtime binds the same proxy port.
 - `src/client/machines/runtime_connection.zig` proves the default endpoint
   ignores the sockets a pane or a user names; `src/cli/server.zig` proves a
   relative `XDG_DATA_HOME` is ignored.

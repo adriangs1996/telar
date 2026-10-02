@@ -6,6 +6,8 @@ const gated_resolver = @import("../gated_resolver.zig");
 const service_support = @import("service_support.zig");
 const Service = @import("Service.zig");
 const Paths = @import("Paths.zig");
+const TunnelJoin = @import("TunnelJoin.zig").TunnelJoin;
+const TunnelTestGate = @import("TunnelTestGate.zig");
 const identity = @import("../identity.zig");
 const Connections = @import("../Connections.zig");
 
@@ -26,7 +28,7 @@ test "running service leaves exchange capture inert when disabled" {
     const service = fixture.service.?;
     try service.start();
 
-    service.stop();
+    try std.testing.expectEqual(TunnelJoin.joined, service.stop());
 
     const snapshot = service.metrics();
     try std.testing.expectEqual(@as(u64, 0), snapshot.capture_started);
@@ -108,7 +110,7 @@ test "non-whitelisted CONNECT relays bytes untouched" {
     defer fixture.deinit();
     const service = fixture.service.?;
     try service.start();
-    defer service.stop();
+    defer _ = service.stop();
 
     const proxy_address = try std.Io.net.IpAddress.parse("127.0.0.1", service.clientConfiguration().port);
     const client = try proxy_address.connect(io, .{ .mode = .stream });
@@ -162,7 +164,7 @@ test "intercepted CONNECT counts an upstream TLS failure" {
     defer fixture.deinit();
     const service = fixture.service.?;
     try service.start();
-    defer service.stop();
+    defer _ = service.stop();
 
     const proxy_address = try std.Io.net.IpAddress.parse("127.0.0.1", service.clientConfiguration().port);
     const client = try proxy_address.connect(io, .{ .mode = .stream });
@@ -205,6 +207,88 @@ test "intercepted CONNECT counts an upstream TLS failure" {
     try std.testing.expectEqual(@as(u64, 0), service.metrics().tls_mint_failures);
 }
 
+test "a stop wakes a passthrough tunnel whose client and origin keep their connections open" {
+    const io = std.testing.io;
+    var origin = try listenTestOrigin(io);
+    defer origin.listener.deinit(io);
+
+    var fixture: TestServiceFixture = .{};
+    try fixture.init(io, std.testing.allocator, &.{});
+    defer fixture.deinit();
+    const service = fixture.service.?;
+    try service.start();
+
+    const proxy_address = try std.Io.net.IpAddress.parse("127.0.0.1", service.clientConfiguration().port);
+    const client = try proxy_address.connect(io, .{ .mode = .stream });
+    defer client.close(io);
+    var write_buffer: [512]u8 = undefined;
+    var writer = client.writer(io, &write_buffer);
+    var raw_buffer: [basic_raw_capacity]u8 = undefined;
+    defer std.crypto.secureZero(u8, &raw_buffer);
+    var encoded_buffer: [basic_encoded_capacity]u8 = undefined;
+    defer std.crypto.secureZero(u8, &encoded_buffer);
+    const basic = try encodeBasic(&service.secret, &raw_buffer, &encoded_buffer);
+    var request_buffer: [512]u8 = undefined;
+    const request = try std.fmt.bufPrint(
+        &request_buffer,
+        "CONNECT localhost:{d} HTTP/1.1\r\nProxy-Authorization: Basic {s}\r\n\r\n",
+        .{ origin.port, basic },
+    );
+    try writer.interface.writeAll(request);
+    try writer.interface.flush();
+    var read_buffer: [512]u8 = undefined;
+    var reader = client.reader(io, &read_buffer);
+    var response: ["HTTP/1.1 200 Connection Established\r\n\r\n".len]u8 = undefined;
+    try reader.interface.readSliceAll(&response);
+    const upstream = try origin.listener.accept(io);
+    defer upstream.close(io);
+
+    // Neither side closes: only the stop ends both relay directions.
+    const started = awakeMs(io);
+    try std.testing.expectEqual(TunnelJoin.joined, service.stop());
+    try std.testing.expect(awakeMs(io) - started < service_support.stop_timeout_ms);
+}
+
+test "a stop leaves a tunnel nothing interrupts behind at its deadline, with the port free for the next service" {
+    const io = std.testing.io;
+    var gate: TunnelTestGate = .{};
+    var fixture: TestServiceFixture = .{
+        .tunnel_gate = &gate,
+    };
+    try fixture.init(io, std.testing.allocator, &.{});
+    defer fixture.deinit();
+    const service = fixture.service.?;
+    try service.start();
+
+    const port = service.clientConfiguration().port;
+    const proxy_address = try std.Io.net.IpAddress.parse("127.0.0.1", port);
+    const client = try proxy_address.connect(io, .{ .mode = .stream });
+    defer client.close(io);
+    try gate.held.wait(io);
+
+    const started = awakeMs(io);
+    try std.testing.expectEqual(TunnelJoin.abandoned, service.stop());
+    const waited_ms = awakeMs(io) - started;
+    try std.testing.expect(waited_ms >= service_support.stop_timeout_ms);
+    try std.testing.expect(waited_ms < service_support.stop_timeout_ms + stop_slack_ms);
+
+    // The held tunnel still owns its accepted socket on the port.
+    const next = try Service.create(io, std.testing.allocator, fixture.paths(&.{}));
+    defer next.destroy();
+    try std.testing.expectEqual(port, next.clientConfiguration().port);
+    try std.testing.expectEqual(port, next.preferred_port.?);
+
+    gate.released.set(io);
+    try std.testing.expectEqual(TunnelJoin.joined, service.stop());
+}
+
+/// How far past its deadline a stop may return on a loaded machine.
+const stop_slack_ms = 2 * std.time.ms_per_s;
+
+fn awakeMs(io: std.Io) i64 {
+    return std.Io.Timestamp.now(io, .awake).toMilliseconds();
+}
+
 /// The tunnel records its TLS outcome after the origin closed; poll briefly.
 fn waitForCounter(service: *const Service, comptime field: []const u8, expected: u64) !void {
     for (0..1000) |_| {
@@ -225,7 +309,7 @@ test "loopback service maps CONNECT authentication and target rejections" {
     defer fixture.deinit();
     const service = fixture.service.?;
     try service.start();
-    defer service.stop();
+    defer _ = service.stop();
 
     const address = try std.Io.net.IpAddress.parse("127.0.0.1", service.clientConfiguration().port);
     const client = try address.connect(io, .{ .mode = .stream });
@@ -450,7 +534,7 @@ test "stopping the service does not wait for a blocked resolution" {
     try std.testing.expectEqual(@as(u32, 1), service.metrics().active_connections);
 
     const started = now(io);
-    service.stop();
+    try std.testing.expectEqual(TunnelJoin.joined, service.stop());
     try std.testing.expect(now(io) - started < std.time.ms_per_s);
     try std.testing.expectEqual(@as(u32, 0), service.metrics().active_connections);
 
@@ -535,6 +619,7 @@ const TestServiceFixture = struct {
     legacy_port: [std.fs.max_path_bytes]u8 = undefined,
     directory_len: usize = 0,
     service: ?*Service = null,
+    tunnel_gate: ?*TunnelTestGate = null,
 
     pub fn init(self: *TestServiceFixture, io: std.Io, gpa: std.mem.Allocator, intercept_hosts: []const []const u8) !void {
         self.temp = std.testing.tmpDir(.{});
@@ -564,6 +649,7 @@ const TestServiceFixture = struct {
             .legacy_port = self.legacy_port[0 .. directory_len + "/proxy-port".len],
             .endpoint = "/test/runtime.sock",
             .intercept_hosts = intercept_hosts,
+            .tunnel_gate = self.tunnel_gate,
         };
     }
 

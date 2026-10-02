@@ -67,7 +67,10 @@ by `favicons.complete`, and the clipboard capture worker returns
 Workers that live as long as the runtime and have no completion per piece
 of work, the proxy's tunnels and the tap workers, count each limit in an
 atomic instead; `proxy_limits.report`, on the maintenance tick, reports
-every limit whose count grew since the last tick. This is the shape a worker
+every limit whose count grew since the last tick. The proxy's stop deadline,
+`proxy.stop_timeout_ms`, is reached once, on the thread that tears the
+runtime down, so `proxy_limits.reportStop` reports it there; no window is
+left to show it, and the notice goes to the runtime's log. This is the shape a worker
 with a completion takes, on worktree detection, whose completion gains a
 `limit: ?core.LimitReach = null` field:
 

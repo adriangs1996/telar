@@ -246,6 +246,11 @@ analytics.
   secret. The runtime only asks the proxy for a child environment.
 - The proxy observes traffic, never agents: it keeps no provider dialect, no
   lifecycle observation and no agent evidence.
+- Stopping the runtime never depends on a proxy tunnel returning. The
+  proxy's listening socket closes before the tunnels are waited for, the wait
+  ends at `proxy.stop_timeout_ms`, and a runtime that leaves a tunnel behind
+  finishes its teardown and exits its process. The session checkpoint is
+  written before the proxy stops.
 
 ## Lua and plugins
 

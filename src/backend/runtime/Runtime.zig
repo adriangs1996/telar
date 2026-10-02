@@ -23,6 +23,7 @@ const pane_output = @import("pane_output.zig");
 const agent_hooks = @import("agent_hooks.zig");
 const pane_search = @import("pane_search.zig");
 const proxy_capture = @import("proxy_capture.zig");
+const proxy_limits = @import("proxy_limits.zig");
 const proxy_tap = @import("proxy_tap.zig");
 const runtime_telemetry = @import("runtime_telemetry.zig");
 const session_checkpoint = @import("session_checkpoint.zig");
@@ -120,6 +121,12 @@ pub fn run(self: *Runtime) !void {
 /// Stops actors and releases acquired resources in dependency order. It is
 /// safe to call again after teardown has completed.
 ///
+/// The session checkpoint is written before the proxy stops, and the proxy
+/// waits for its tunnels only `proxy.stop_timeout_ms`: one that is still
+/// inside a call nothing interrupts is left running, its proxy alive, and
+/// the rest of the teardown goes on. `leftProxyTunnels` then tells the
+/// process to exit instead of returning from `main`.
+///
 /// ```zig
 /// runtime.deinit();
 /// ```
@@ -138,6 +145,7 @@ pub fn deinit(self: *Runtime) void {
     session_checkpoint.writeNow(&self.model);
 
     self.resources.proxy.deinit();
+    proxy_limits.reportStop(&self.model);
     self.resources.plugins.deinit();
     self.resources.listener.deinit(self.resources.io());
     client_connection.releaseAll(&self.model);
@@ -151,6 +159,21 @@ pub fn deinit(self: *Runtime) void {
     self.resources.telemetry.deinit(self.resources.io());
     self.resources.child_environment.deinit();
     self.teardown_state = .stopped;
+}
+
+/// Whether teardown left proxy tunnels running past their stop deadline.
+/// Their threads still use the proxy and this runtime's allocator, and the
+/// process's `Io` waits for every thread when `main` returns, so the process
+/// must exit while this runtime is still in place.
+///
+/// ```zig
+/// runtime.deinit();
+/// if (runtime.leftProxyTunnels()) {
+///     std.process.exit(0);
+/// }
+/// ```
+pub fn leftProxyTunnels(self: *const Runtime) bool {
+    return self.teardown_state == .stopped and self.resources.proxy.active();
 }
 
 /// Calls the procedure that owns one runtime event, then flushes client

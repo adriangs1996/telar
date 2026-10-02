@@ -322,6 +322,28 @@ fn oldest(self: *const Connections, closure: Closure, now_ms: i64) ?usize {
     return found;
 }
 
+/// Shuts down both sockets of every admitted connection, so a tunnel
+/// blocked reading or writing either one returns and its child reads the
+/// end of the stream. The service calls it when it stops; each tunnel still
+/// closes its own sockets.
+///
+/// ```zig
+/// connections.shutDownAll();
+/// ```
+pub fn shutDownAll(self: *Connections) void {
+    for (0..capacity) |index| {
+        self.lock(index);
+        defer self.guard[index].unlock();
+
+        const phase = self.phase[index].load(.acquire);
+        if (phase == .free or phase == .closing) {
+            continue;
+        }
+
+        self.shutDownSockets(index);
+    }
+}
+
 /// Returns a lock-free metrics snapshot.
 ///
 /// ```zig
@@ -345,13 +367,19 @@ fn shutDown(self: *Connections, index: usize, closure: Closure, now_ms: i64) boo
         return false;
     }
 
+    self.shutDownSockets(index);
+    return true;
+}
+
+/// Shuts a locked row's sockets down and marks it closing, so no later
+/// shutdown reaches them.
+fn shutDownSockets(self: *Connections, index: usize) void {
     _ = std.c.shutdown(self.child[index], std.c.SHUT.RDWR);
     if (self.origin[index]) |origin| {
         _ = std.c.shutdown(origin, std.c.SHUT.RDWR);
     }
 
     self.phase[index].store(.closing, .release);
-    return true;
 }
 
 /// Whether a row's phase and clocks call for `closure` at `now_ms`.
@@ -519,6 +547,36 @@ test "a relaying connection is evicted only after its longer silence" {
     try std.testing.expect(!connections.evict(min_evictable_silence_ms, .any));
     try std.testing.expect(connections.evict(2 * min_evictable_silence_ms - 1, .any));
     try std.testing.expect(readsEndOfStream(sockets[0]));
+}
+
+test "stopping shuts every admitted connection down, whatever its phase, and no retired one" {
+    var connections: Connections = .{};
+    const head = testSockets();
+    defer closeSockets(head);
+    const thinking = testSockets();
+    defer closeSockets(thinking);
+    const origin = testSockets();
+    defer closeSockets(origin);
+    const retired = testSockets();
+    defer closeSockets(retired);
+
+    const head_slot = connections.acquire(head[0], 0).?;
+    const thinking_slot = connections.acquire(thinking[0], 0).?;
+    connections.enter(thinking_slot, .open, 0);
+    connections.attachOrigin(thinking_slot, origin[0]);
+    connections.beginExchange(thinking_slot);
+    const retired_slot = connections.acquire(retired[0], 0).?;
+    connections.retire(retired_slot);
+
+    connections.shutDownAll();
+
+    try std.testing.expect(readsEndOfStream(head[0]));
+    try std.testing.expect(readsEndOfStream(thinking[0]));
+    try std.testing.expect(readsEndOfStream(origin[0]));
+    try std.testing.expect(!readsEndOfStream(retired[0]));
+    try std.testing.expectEqual(Phase.closing, connections.phase[@intFromEnum(head_slot)].load(.acquire));
+    try std.testing.expectEqual(Phase.closing, connections.phase[@intFromEnum(thinking_slot)].load(.acquire));
+    connections.release(retired_slot);
 }
 
 test "a retired row is never shut down" {

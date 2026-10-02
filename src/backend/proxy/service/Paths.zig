@@ -1,5 +1,6 @@
 const exchangecapture = @import("exchangecapture");
 const Config = exchangecapture.Config;
+const TunnelTestGate = @import("TunnelTestGate.zig");
 const Paths = @This();
 
 key: []const u8,
@@ -18,3 +19,5 @@ endpoint: []const u8,
 system_authority: bool = false,
 intercept_hosts: []const []const u8 = &.{},
 capture: Config = .{},
+/// Test seam: holds a tunnel in a wait no cancellation interrupts.
+tunnel_gate: ?*TunnelTestGate = null,

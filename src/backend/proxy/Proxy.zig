@@ -11,6 +11,7 @@ const pty = @import("pty");
 const Override = pty.Override;
 const ChildEnvironment = pty.ChildEnvironment;
 const Snapshot = @import("Snapshot.zig");
+const TunnelJoin = @import("service/TunnelJoin.zig").TunnelJoin;
 const Proxy = @This();
 
 gpa: std.mem.Allocator,
@@ -37,6 +38,7 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, config: Config) !*Proxy {
         .system_authority = config.system_authority,
         .intercept_hosts = config.intercept_hosts,
         .capture = config.capture,
+        .tunnel_gate = config.tunnel_gate,
     });
 
     errdefer service.destroy();
@@ -49,16 +51,33 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, config: Config) !*Proxy {
     return proxy;
 }
 
-/// Cancels proxy traffic, closes capture delivery, and releases the
-/// capability. The caller must first cancel its outstanding `receiveCapture`
-/// operations.
+/// Stops proxy traffic within the service's stop deadline and says whether
+/// every tunnel returned. The listening port is free once it returns,
+/// either way. The caller must first cancel its outstanding
+/// `receiveCapture` operations. After `.abandoned` a tunnel still uses the
+/// proxy, which must not be destroyed; stopping again waits again.
+///
+/// ```zig
+/// if (proxy.stop() == .joined) {
+///     proxy.destroy();
+/// }
+/// ```
+pub fn stop(self: *Proxy) TunnelJoin {
+    return self.service.stop();
+}
+
+/// Stops proxy traffic, closes capture delivery, and releases the
+/// capability. Every tunnel must return within the stop deadline; a caller
+/// that cannot promise it calls `stop` first and destroys only a joined
+/// proxy.
 ///
 /// ```zig
 /// proxy.destroy();
 /// ```
 pub fn destroy(self: *Proxy) void {
     const gpa = self.gpa;
-    self.service.stop();
+    const tunnels = self.service.stop();
+    std.debug.assert(tunnels == .joined);
     self.service.destroy();
     gpa.destroy(self);
 }

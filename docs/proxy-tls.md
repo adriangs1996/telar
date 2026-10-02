@@ -48,6 +48,19 @@ records its own. A runtime that finds the port taken, or cannot write its own
 file, leaves the shared file for its next start. Development runtimes ignore
 it, so they neither take its port nor warn about it.
 
+A stopping runtime closes its listening socket first, so nothing of it
+listens on the port from then on. It then shuts down both sockets of every
+connection, cancels each tunnel and waits for the tunnels to return, at most
+2 seconds (`proxy.stop_timeout_ms`). A tunnel returns well before that
+unless it is inside a call that neither a shutdown nor a cancellation
+interrupts: name resolution on macOS is one. The runtime does not wait for
+such a tunnel. It reports the limit in its log, finishes the rest of its
+teardown and exits the process, where returning normally would wait for the
+tunnel's thread. Nothing durable is pending by then: the session checkpoint
+is written before the proxy stops, history is closed after it, and a tunnel
+writes no file. The port file, the secret and the authority are written only
+when the proxy starts.
+
 Stopping the runtime closes the connections its children held open, and
 those leave the port in TIME_WAIT for up to a minute. A plain bind refuses the
 port meanwhile, which used to move a quickly restarted runtime to another
@@ -296,7 +309,9 @@ runtime's maintenance tick reports every limit whose count grew with the
 `proxy.capture.max_total_bytes`, and for the taps
 `plugins.tap.queue_depth`, `plugins.tap.max_held_bytes`,
 `plugins.tap.reply_timeout_ms` and `plugins.tap.restart_limit`. The event
-loop reports `proxy.capture.joiner_capacity` where it joins halves.
+loop reports `proxy.capture.joiner_capacity` where it joins halves, and the
+runtime's teardown reports `proxy.stop_timeout_ms` when it stops without a
+tunnel.
 
 ## System trust
 

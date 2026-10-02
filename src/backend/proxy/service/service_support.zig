@@ -22,6 +22,12 @@ pub const Service = @import("Service.zig");
 
 /// How often the service closes connections past their deadlines.
 const reap_interval_ms = std.time.ms_per_s;
+/// How long a stopping service waits for its tunnels once their sockets are
+/// shut down and their tasks canceled. A tunnel returns well before that
+/// unless it is inside a call neither interrupts, such as the system
+/// resolver; the service then stops without it.
+pub const stop_timeout_ms: i64 = 2 * std.time.ms_per_s;
+pub const stop_timeout_limit = core.Limit.declare("proxy.stop_timeout_ms", "ms", stop_timeout_ms);
 /// How long a full table waits for an evicted connection to free its row.
 const eviction_wait_ms = 100;
 /// How often that wait looks for the free row.
@@ -60,17 +66,16 @@ pub var resolutions: Resolutions = .{
 const refusal = "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
 
 /// Accepts until cancellation or listener closure. A started connection owns
-/// its stream and its row; a connection over the bound is answered 503 and
-/// closed here, after the idle connection that was idle the longest, if any,
-/// was closed to make room for it. Transient accept failures are retried.
+/// its stream and its row, and its tunnel joins `service.tunnels`, which
+/// outlives this loop: the reaper cancels them when the service stops. A
+/// connection over the bound is answered 503 and closed here, after the idle
+/// connection that was idle the longest, if any, was closed to make room for
+/// it. Transient accept failures are retried.
 ///
 /// ```zig
 /// try service_support.acceptConnections(service);
 /// ```
 pub fn acceptConnections(service: *Service) anyerror!void {
-    var connections: std.Io.Group = .init;
-    defer connections.cancel(service.io);
-
     while (true) {
         const stream = service.listener.accept(service.io) catch |err| switch (err) {
             error.Canceled => |canceled| return canceled,
@@ -101,7 +106,7 @@ pub fn acceptConnections(service: *Service) anyerror!void {
             },
         };
 
-        connections.concurrent(service.io, serveConnection, .{ service, stream, slot }) catch {
+        service.tunnels.concurrent(service.io, serveConnection, .{ service, stream, slot }) catch {
             close(service, stream, slot);
         };
     }
@@ -124,15 +129,16 @@ pub fn raiseDescriptorLimit() void {
 }
 
 /// Closes every connection past its CONNECT head or establishment deadline,
-/// once a second, until the service stops.
+/// once a second, until the service stops. Then it cancels every tunnel and
+/// waits for them, however long they take, and sets
+/// `service.tunnels_joined`. That wait lives on this task so `Service.stop`
+/// can bound its own with `awaitTunnels` and leave.
 ///
 /// ```zig
-/// try service_support.expireConnections(service);
+/// service_support.reapConnections(service);
 /// ```
-pub fn expireConnections(service: *Service) anyerror!void {
-    while (true) {
-        try pause(service.io, reap_interval_ms);
-
+pub fn reapConnections(service: *Service) void {
+    while (!stopRequested(service)) {
         const expired = service.connections.expire(now(service.io));
         for (0..expired.connect_head) |_| {
             service.telemetry.record(.connect_head_timeout);
@@ -142,6 +148,52 @@ pub fn expireConnections(service: *Service) anyerror!void {
             service.telemetry.record(.establish_timeout);
         }
     }
+
+    service.tunnels.cancel(service.io);
+    service.tunnels_joined.set(service.io);
+}
+
+/// Waits one reap interval and returns whether the service stops. A
+/// spurious wake only makes one round early.
+fn stopRequested(service: *Service) bool {
+    const interval: std.Io.Timeout = .{
+        .duration = .{
+            .raw = .fromMilliseconds(reap_interval_ms),
+            .clock = .awake,
+        },
+    };
+    service.stopping.waitTimeout(service.io, interval) catch |err| switch (err) {
+        error.Timeout => return service.stopping.isSet(),
+        error.Canceled => return true,
+    };
+
+    return true;
+}
+
+/// Waits until every tunnel returned, at most `stop_timeout_ms`, and
+/// returns whether they did.
+///
+/// ```zig
+/// if (!service_support.awaitTunnels(service)) return .abandoned;
+/// ```
+pub fn awaitTunnels(service: *Service) bool {
+    const deadline_ms = now(service.io) + stop_timeout_ms;
+    while (!service.tunnels_joined.isSet()) {
+        const left_ms = deadline_ms - now(service.io);
+        if (left_ms <= 0) {
+            return false;
+        }
+
+        const left: std.Io.Timeout = .{
+            .duration = .{
+                .raw = .fromMilliseconds(left_ms),
+                .clock = .awake,
+            },
+        };
+        service.tunnels_joined.waitTimeout(service.io, left) catch {};
+    }
+
+    return true;
 }
 
 /// A row for a new connection. At `max_unauthenticated` connections still
@@ -210,6 +262,10 @@ fn serveConnection(service: *Service, stream: std.Io.net.Stream, slot: Connectio
 /// ```
 pub fn serve(service: *Service, stream: std.Io.net.Stream, slot: Connections.Slot, establishment: Establishment) std.Io.Cancelable!void {
     defer close(service, stream, slot);
+
+    if (service.tunnel_gate) |gate| {
+        gate.hold(service.io);
+    }
 
     var tunnel = Tunnel.init(.{
         .dependencies = .{

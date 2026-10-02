@@ -17,7 +17,8 @@ const Inode = privatefile.Inode;
 
 /// Executes the selected server action. A running action prepares persistent
 /// paths, initializes one public Runtime with production dependencies and owns
-/// its complete `init`, `run`, `deinit` lifecycle.
+/// its complete `init`, `run`, `deinit` lifecycle. A runtime whose teardown
+/// left proxy tunnels running exits here instead of returning.
 ///
 /// ```zig
 /// try server.run(process_init, options);
@@ -48,10 +49,39 @@ pub fn run(init: std.process.Init, options: ServerOptions) !void {
 
     var runtime: backend.Runtime = undefined;
     try runtime.init(launch.runtimeInitialization());
-    defer runtime.deinit();
+    const ended = runtime.run();
+    runtime.deinit();
+    if (runtime.leftProxyTunnels()) {
+        launch.removeTapSnapshot();
+        exitPastProxyTunnels(ended);
+    }
 
-    try runtime.run();
+    return ended;
 }
+
+/// Ends the process of a runtime whose teardown left proxy tunnels inside
+/// calls nothing interrupts, such as the system resolver. Returning from
+/// `main` would wait for their threads, since the process's `Io` joins every
+/// thread it started. The teardown that ran is complete: the session
+/// checkpoint was written before the proxy stopped, history, plugins and
+/// the socket were released after it, and a tunnel writes no file. The
+/// runtime, its allocator and the configuration the tunnels borrow host
+/// names from stay in place until the process is gone.
+fn exitPastProxyTunnels(ended: anyerror!void) noreturn {
+    ended catch |err| {
+        std.debug.print("telar runtime: {s}\n", .{@errorName(err)});
+        std.process.exit(@intFromEnum(RuntimeExit.failed));
+    };
+
+    std.process.exit(@intFromEnum(RuntimeExit.stopped));
+}
+
+/// The exit status of a runtime that exits past its proxy tunnels: the one
+/// returning from `main` would have given.
+const RuntimeExit = enum(u8) {
+    stopped = 0,
+    failed = 1,
+};
 
 /// Ensures the runtime is running and prints its socket path, then the wire
 /// schema this `telar` speaks, one per line. A client runs this over SSH to

@@ -35,6 +35,8 @@ const Closed = enum {
 
 server: std.Io.net.Server,
 bound_port: u16,
+/// Whether the listening socket is still open and holds its port.
+listening: bool = true,
 
 /// Binds the preferred loopback port when one is given and free, else the
 /// first available port in Telar's bounded proxy range that no other runtime
@@ -223,13 +225,19 @@ fn closedSocket(handle: std.c.fd_t) ?std.c.fd_t {
     return null;
 }
 
-/// Closes the owned listening socket.
+/// Closes the owned listening socket, which frees its port for the next
+/// listener. Closing again does nothing; `port` keeps answering.
 ///
 /// ```zig
 /// listener.deinit(io);
 /// ```
 pub fn deinit(self: *Listener, io: std.Io) void {
+    if (!self.listening) {
+        return;
+    }
+
     self.server.deinit(io);
+    self.listening = false;
 }
 
 /// Waits for one incoming loopback connection.

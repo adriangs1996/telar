@@ -72,7 +72,9 @@ Shutdown stops connections and children, then cancels and joins the actors.
 Only after that join does it release any pending checkpoint buffer and write
 the current canonical model synchronously. The model is destroyed afterward,
 so the last shape survives `telar server stop` even when an older write or
-its completion was still pending. Stopping a child's PTY does not remove its
+its completion was still pending. The proxy stops after that write, so a
+proxy tunnel that does not return, which the runtime leaves behind after
+`proxy.stop_timeout_ms`, can neither delay the checkpoint nor lose it. Stopping a child's PTY does not remove its
 pane from the model; discarded exit events cannot erase the final snapshot.
 
 A session larger than `snapshot_bytes` (4 MiB, the largest file restore reads,

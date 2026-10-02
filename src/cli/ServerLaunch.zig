@@ -259,6 +259,19 @@ fn ensureTapSnapshot(self: *Launch) ![]const u8 {
     return path;
 }
 
+/// Deletes the tap workers' package snapshot, the one thing a launch
+/// leaves on disk. A process that exits without `deinit` calls it alone.
+///
+/// ```zig
+/// launch.removeTapSnapshot();
+/// ```
+pub fn removeTapSnapshot(self: *Launch) void {
+    if (self.tap_snapshot_directory) |directory| {
+        std.Io.Dir.cwd().deleteTree(self.process.io, directory) catch {};
+        self.tap_snapshot_directory = null;
+    }
+}
+
 pub fn runtimeInitialization(self: *const Launch) backend.Initialization {
     return .{
         .dependencies = .{
@@ -390,10 +403,7 @@ fn openStartLog(io: std.Io, endpoint: []const u8) !std.Io.File {
 }
 
 pub fn deinit(self: *Launch) void {
-    if (self.tap_snapshot_directory) |directory| {
-        std.Io.Dir.cwd().deleteTree(self.process.io, directory) catch {};
-        self.tap_snapshot_directory = null;
-    }
+    self.removeTapSnapshot();
     if (self.default_proxy_directory) |directory| {
         self.process.gpa.free(directory);
         self.default_proxy_directory = null;

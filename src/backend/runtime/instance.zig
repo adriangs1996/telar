@@ -15,6 +15,9 @@ const Initialization = @import("Initialization.zig");
 const agent_identity = @import("agent_identity.zig");
 const SessionReference = @import("../agent/SessionReference.zig");
 const PersistenceEncoder = @import("../persistence/Encoder.zig");
+const ProxyTestFiles = @import("resources/ProxyTestFiles.zig");
+const TunnelTestGate = @import("../proxy/service/TunnelTestGate.zig");
+const proxy_service = @import("../proxy/service/service_support.zig");
 
 /// Runs one runtime instance until a stop event or fatal runtime error.
 /// `options` is borrowed for the duration of the call.
@@ -98,6 +101,75 @@ test "runtime composition keeps every borrowed capability at a stable address" {
     try std.testing.expectEqual(.stopped, runtime.teardown_state);
     try expectRuntimeEndpointRemoved(io, endpoint);
 }
+
+test "a stopped runtime leaves a proxy tunnel nothing interrupts behind at the stop deadline, and the next runtime binds its proxy port" {
+    const io = std.testing.io;
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
+    var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/stuck-tunnel.sock", .{temp.path()});
+    var session_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const session_path = try std.fmt.bufPrint(&session_buffer, "{s}/session.ckpt", .{temp.path()});
+    var files = try ProxyTestFiles.init(io);
+    defer files.deinit();
+    var gate: TunnelTestGate = .{};
+    var proxy_config = files.config();
+    proxy_config.tunnel_gate = &gate;
+    const initialization: Initialization = .{
+        .dependencies = .{ .io = io, .allocator = std.testing.allocator },
+        .options = .{ .endpoint = endpoint, .environment = std.testing.environ, .proxy = proxy_config, .session_path = session_path },
+    };
+
+    var first: Runtime = undefined;
+    try first.init(initialization);
+    const workspace = try first.model.workspaces.insert(first.model.gpa, temp.path(), null);
+    var launch_buffer: [64]u8 = undefined;
+    _ = try pane_launch.launch(&first.model, .{
+        .location = workspace,
+        .size = .{ .cols = 20, .rows = 5 },
+        .launch = try sleepLaunch(&launch_buffer),
+        .launch_cwd = temp.path(),
+        .workspace_path = temp.path(),
+    });
+    const port = first.resources.proxy.port().?;
+    const proxy_address = try std.Io.net.IpAddress.parse("127.0.0.1", port);
+    const child = try proxy_address.connect(io, .{ .mode = .stream });
+    defer child.close(io);
+    try gate.held.wait(io);
+
+    // The stop deadline is reported as a limit, which logs a warning.
+    const previous_log_level = std.testing.log_level;
+    std.testing.log_level = .err;
+    defer std.testing.log_level = previous_log_level;
+
+    const started = std.Io.Timestamp.now(io, .awake).toMilliseconds();
+    first.deinit();
+    const waited_ms = std.Io.Timestamp.now(io, .awake).toMilliseconds() - started;
+
+    try std.testing.expect(first.leftProxyTunnels());
+    try std.testing.expect(waited_ms < proxy_service.stop_timeout_ms + stop_slack_ms);
+    try std.testing.expectEqual(@as(u64, 1), first.model.checkpoint.writes);
+    _ = try std.Io.Dir.cwd().statFile(io, session_path, .{ .follow_symlinks = false });
+    try expectRuntimeEndpointRemoved(io, endpoint);
+
+    var second: Runtime = undefined;
+    try second.init(initialization);
+    try std.testing.expectEqual(port, second.resources.proxy.port().?);
+    try std.testing.expectEqual(port, second.resources.proxy.preferredPort().?);
+    try std.testing.expect(!second.model.checkpoint.restore_failed);
+    try std.testing.expectEqual(@as(u16, 1), second.model.checkpoint.restored_panes);
+    second.deinit();
+    try std.testing.expect(!second.leftProxyTunnels());
+
+    // The held tunnel returns and its proxy can be released at last.
+    gate.released.set(io);
+    first.resources.proxy.deinit();
+    try std.testing.expect(!first.resources.proxy.active());
+}
+
+/// How far past the proxy's stop deadline a teardown may return on a loaded
+/// machine.
+const stop_slack_ms = 3 * std.time.ms_per_s;
 
 fn sleepLaunch(buffer: []u8) !core.LaunchView {
     return sleepLaunchIn(buffer, "/");

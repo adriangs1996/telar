@@ -14,6 +14,8 @@ const Snapshot = @import("../Snapshot.zig");
 const identity = @import("../identity.zig");
 const secret_store = @import("secret.zig");
 const PortMemory = @import("PortMemory.zig");
+const TunnelJoin = @import("TunnelJoin.zig").TunnelJoin;
+const TunnelTestGate = @import("TunnelTestGate.zig");
 const Service = @This();
 
 io: std.Io,
@@ -29,9 +31,20 @@ captures: Producer = undefined,
 connections: Connections = .{},
 telemetry: Counters = .{},
 next_connection_id: std.atomic.Value(u64) = .init(1),
+/// Every admitted connection's tunnel. The accept loop adds them; the
+/// reaper cancels them when the service stops.
+tunnels: std.Io.Group = .init,
+/// Set by `stop` to end the reaper's rounds.
+stopping: std.Io.Event = .unset,
+/// Set by the reaper once every tunnel returned.
+tunnels_joined: std.Io.Event = .unset,
+/// Test seam: holds a tunnel in a wait no cancellation interrupts.
+tunnel_gate: ?*TunnelTestGate,
 /// The accept loop while the service runs; `stop` joins it.
 worker: ?service_support.Worker = null,
-/// The loop that closes connections past their deadlines; `stop` joins it.
+/// The loop that closes connections past their deadlines and, when the
+/// service stops, cancels every tunnel and waits for them. `stop` joins it
+/// once they returned.
 reaper: ?service_support.Worker = null,
 
 /// Builds the loopback listener and every bounded dependency without
@@ -67,6 +80,7 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, paths: Paths) !*Service {
         .interception = interception,
         .secret = secret,
         .preferred_port = memory.preferred(),
+        .tunnel_gate = paths.tunnel_gate,
     };
     try service.captures.init(gpa, paths.capture);
 
@@ -74,13 +88,14 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, paths: Paths) !*Service {
 }
 
 /// Releases the stopped service and scrubs its in-memory authority and
-/// secret. A started service must be stopped first.
+/// secret. A started service must be stopped first, and `stop` must have
+/// joined every tunnel: one still running uses this memory.
 ///
 /// ```zig
 /// service.destroy();
 /// ```
 pub fn destroy(self: *Service) void {
-    std.debug.assert(self.worker == null);
+    std.debug.assert(self.worker == null and self.reaper == null);
     const gpa = self.gpa;
     self.listener.deinit(self.io);
     self.interception.deinit();
@@ -88,39 +103,58 @@ pub fn destroy(self: *Service) void {
     gpa.destroy(self);
 }
 
-/// Starts the accept loop.
+/// Starts the reaper, then the accept loop.
 ///
 /// ```zig
 /// try service.start();
-/// defer service.stop();
+/// defer _ = service.stop();
 /// ```
 pub fn start(self: *Service) !void {
-    std.debug.assert(self.worker == null);
-    self.worker = try self.io.concurrent(run, .{self});
-    errdefer self.stop();
-
+    std.debug.assert(self.worker == null and self.reaper == null);
     self.reaper = try self.io.concurrent(reap, .{self});
+    errdefer _ = self.stop();
+
+    self.worker = try self.io.concurrent(run, .{self});
 }
 
-/// Stops traffic, then delivery: joins the accept loop, which cancels every
-/// tunnel, and only then closes the capture queue, so no producer outlives
-/// it.
+/// Stops traffic and says whether every tunnel returned. It joins the
+/// accept loop and closes the listening socket, so the port is free from
+/// here on whatever the tunnels do; shuts every connection's sockets down
+/// and cancels its tunnel; then waits for the tunnels at most
+/// `service_support.stop_timeout_ms`.
+///
+/// `.joined`: no tunnel is left, the capture queue is closed so no producer
+/// outlives it, and `destroy` may follow. `.abandoned`: a tunnel is still
+/// inside a call that neither a shutdown nor a cancellation interrupts,
+/// such as the system resolver. Its thread still uses the service, so the
+/// service must not be destroyed; calling `stop` again waits again.
 ///
 /// ```zig
-/// service.stop();
+/// if (service.stop() == .joined) {
+///     service.destroy();
+/// }
 /// ```
-pub fn stop(self: *Service) void {
-    if (self.reaper) |*reaper| {
-        _ = reaper.cancel(self.io) catch {};
-        self.reaper = null;
-    }
-
+pub fn stop(self: *Service) TunnelJoin {
     if (self.worker) |*worker| {
         _ = worker.cancel(self.io) catch {};
         self.worker = null;
     }
 
+    self.listener.deinit(self.io);
+
+    if (self.reaper) |*reaper| {
+        self.connections.shutDownAll();
+        self.stopping.set(self.io);
+        if (!service_support.awaitTunnels(self)) {
+            return .abandoned;
+        }
+
+        _ = reaper.await(self.io) catch {};
+        self.reaper = null;
+    }
+
     self.captures.close(self.io);
+    return .joined;
 }
 
 /// Returns the stable connection and trust configuration inherited by
@@ -150,7 +184,7 @@ fn reap(self: *Service) anyerror!void {
     const path = core.enter(.observation);
     defer path.restore();
 
-    return service_support.expireConnections(self);
+    return service_support.reapConnections(self);
 }
 
 /// Waits for one captured half and, when `decode` asks, decodes its body.

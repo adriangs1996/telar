@@ -15,7 +15,8 @@ const TapLimitCounts = @import("../../plugins/TapLimitCounts.zig");
 /// the captured halves of each exchange.
 const ProxyRuntime = @This();
 
-/// Null while the proxy is disabled, and again after `deinit`.
+/// Null while the proxy is disabled, and again after `deinit` unless it left
+/// tunnels running, which still use the proxy.
 proxy: ?*Proxy,
 scope: core.ProxyScope,
 system_trusted: bool,
@@ -171,8 +172,11 @@ pub fn metrics(self: *const ProxyRuntime) Snapshot {
     return proxy.metrics();
 }
 
-/// Destroys the proxy at most once. Outstanding receives must already be
-/// canceled by the runtime's event loop.
+/// Stops the proxy within its stop deadline, which frees its port, and
+/// destroys it at most once. Outstanding receives must already be canceled
+/// by the runtime's event loop. A proxy whose tunnels did not all return is
+/// kept, since their threads still use it: `active` stays true, and calling
+/// `deinit` again waits for them again.
 ///
 /// ```zig
 /// loop.cancel();
@@ -181,6 +185,10 @@ pub fn metrics(self: *const ProxyRuntime) Snapshot {
 pub fn deinit(self: *ProxyRuntime) void {
     self.captures.deinit();
     const proxy = self.proxy orelse return;
+    if (proxy.stop() == .abandoned) {
+        return;
+    }
+
     self.proxy = null;
     proxy.destroy();
 }
