@@ -1,6 +1,7 @@
 //! A running runtime whose clients have caught up with every pane they
-//! attach, for timing the delivery flush that ends each runtime update.
-//! Benchmarks drive it; the runtime itself never does.
+//! attach, for timing and counting the delivery flush that ends each
+//! runtime update. Benchmarks and the work-counter fixture drive it; the
+//! runtime itself never does.
 
 const bytecodec = @import("bytecodec");
 const localsocket = @import("localsocket");

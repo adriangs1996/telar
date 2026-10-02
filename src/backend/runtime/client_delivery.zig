@@ -1,6 +1,7 @@
 //! The one flush that follows every runtime update: reaps finished panes,
 //! delivers at most one message per client and settles observed damage.
 
+const core = @import("telar-core");
 const pacing = @import("pacing");
 const pane_closure = @import("pane_closure.zig");
 const pane_graphics = @import("pane_graphics.zig");
@@ -24,6 +25,8 @@ const TextMetadataCapture = @import("../pane/TextMetadataCapture.zig");
 /// try client_delivery.flush(model);
 /// ```
 pub fn flush(model: *RuntimeModel) !void {
+    core.profiling.add(.runtime_flush, 1);
+
     var passes: usize = 0;
     while (passes <= store_support.max_clients) : (passes += 1) {
         pane_closure.collect(model);
@@ -39,12 +42,25 @@ pub fn flush(model: *RuntimeModel) !void {
         }
     }
 
+    if (comptime core.profiling.enabled) {
+        // A break leaves `passes` at the index of the last pass; reaching
+        // the bound leaves it one past that index.
+        core.profiling.add(.runtime_flush_passes, @min(passes + 1, store_support.max_clients + 1));
+    }
+
     scheduleCellPublication(model) catch {
         // The timer reset itself; the next flush retries it.
     };
 
     // One pane whose media cannot start does not keep the others' damage.
     var failure: ?anyerror = null;
+    if (comptime core.profiling.enabled) {
+        // The pass below adds and removes no pane, so the table's count is
+        // the panes it reaches.
+        core.profiling.add(.runtime_pane_slots, model.panes.items.len);
+        core.profiling.add(.runtime_live_panes, model.panes.count);
+    }
+
     for (model.panes.items) |slot| {
         const pane = slot orelse continue;
         pane_graphics.startMedia(model, pane) catch |err| {

@@ -1,0 +1,1151 @@
+{
+  "schema": 1,
+  "date": "2026-10-02",
+  "scope": "Integration after retiring Reviews; measured inline and allocator-requested bytes only, not backing, mappings or RSS.",
+  "source": {
+    "base_commit": "a680e32d521941d4522a5e6513be457e1217094d",
+    "merged_tips": [
+      "4154465b846cb73aaaba33aca371a6c9b57c629d",
+      "2644b5829e8144f75ac61a34f192d54afac91f8a",
+      "7b3efdedeb86be5265f044d0d36318b7333a34bf",
+      "20f331d36f1ee7b43b5a779897a5aca388b3be46"
+    ],
+    "integration_changes": [
+      "remove retired Review event counter and title lane; no data-layout changes after this measurement"
+    ],
+    "wire_schema": "866b480d"
+  },
+  "binary_sha256": "94e9781abe533a6b7a2aaca4b355d1e1e8399ce4fbaf83d01cdb92917f66226c",
+  "metadata": {
+    "type": "metadata",
+    "zig": "0.16.0",
+    "mode": "ReleaseFast",
+    "arch": "aarch64",
+    "cpu": "apple_m3",
+    "os": "macos",
+    "cols": 154,
+    "rows": 37,
+    "samples": 4,
+    "sample_target_ns": 20000000
+  },
+  "commands": [
+    "zig build build-bench -j2",
+    "zig-out/bin/telar-benchmarks --storage",
+    "python3 tools/placement_bench.py run --output /tmp/telar-integrated-placement-smoke --binary zig-out/bin/telar-benchmarks --rounds 2 --samples 4 --sample-ms 20"
+  ],
+  "runtime_layouts": [
+    {
+      "type": "placement_layout",
+      "record": "pane",
+      "type_name": "pane.Pane",
+      "size_bytes": 836512,
+      "alignment_bytes": 8,
+      "shape_selected": false,
+      "fields": [
+        {
+          "name": "id",
+          "offset_bytes": 819840,
+          "size_bytes": 8
+        },
+        {
+          "name": "generation",
+          "offset_bytes": 819848,
+          "size_bytes": 8
+        },
+        {
+          "name": "location",
+          "offset_bytes": 1096,
+          "size_bytes": 24
+        },
+        {
+          "name": "launch_state",
+          "offset_bytes": 836511,
+          "size_bytes": 1
+        },
+        {
+          "name": "session",
+          "offset_bytes": 1136,
+          "size_bytes": 80
+        },
+        {
+          "name": "observers",
+          "offset_bytes": 819872,
+          "size_bytes": 4
+        },
+        {
+          "name": "terminal",
+          "offset_bytes": 1232,
+          "size_bytes": 2432
+        },
+        {
+          "name": "stream",
+          "offset_bytes": 3664,
+          "size_bytes": 2912
+        },
+        {
+          "name": "media",
+          "offset_bytes": 6576,
+          "size_bytes": 203640
+        },
+        {
+          "name": "pty_responses",
+          "offset_bytes": 210216,
+          "size_bytes": 65744
+        },
+        {
+          "name": "graphics_limits",
+          "offset_bytes": 275960,
+          "size_bytes": 48
+        },
+        {
+          "name": "graphics_storage_limit",
+          "offset_bytes": 276008,
+          "size_bytes": 8
+        },
+        {
+          "name": "media_allocator",
+          "offset_bytes": 276016,
+          "size_bytes": 2088
+        },
+        {
+          "name": "pty_write_mutex",
+          "offset_bytes": 819876,
+          "size_bytes": 4
+        },
+        {
+          "name": "response_pending",
+          "offset_bytes": 836449,
+          "size_bytes": 1
+        },
+        {
+          "name": "input_queue",
+          "offset_bytes": 278128,
+          "size_bytes": 131096
+        },
+        {
+          "name": "cell_input_ns",
+          "offset_bytes": 409224,
+          "size_bytes": 16
+        },
+        {
+          "name": "input_write_pending",
+          "offset_bytes": 836448,
+          "size_bytes": 1
+        },
+        {
+          "name": "input_write_len",
+          "offset_bytes": 409264,
+          "size_bytes": 8
+        },
+        {
+          "name": "size",
+          "offset_bytes": 820006,
+          "size_bytes": 8
+        },
+        {
+          "name": "render_state",
+          "offset_bytes": 409272,
+          "size_bytes": 1264
+        },
+        {
+          "name": "text_metadata",
+          "offset_bytes": 410536,
+          "size_bytes": 64
+        },
+        {
+          "name": "screen",
+          "offset_bytes": 410872,
+          "size_bytes": 112
+        },
+        {
+          "name": "damaged_rows",
+          "offset_bytes": 410984,
+          "size_bytes": 16
+        },
+        {
+          "name": "output_buffer",
+          "offset_bytes": 820063,
+          "size_bytes": 16384
+        },
+        {
+          "name": "cursor",
+          "offset_bytes": 820014,
+          "size_bytes": 6
+        },
+        {
+          "name": "mouse",
+          "offset_bytes": 820027,
+          "size_bytes": 3
+        },
+        {
+          "name": "input_modes",
+          "offset_bytes": 820049,
+          "size_bytes": 8
+        },
+        {
+          "name": "pointer_shape",
+          "offset_bytes": 820057,
+          "size_bytes": 1
+        },
+        {
+          "name": "foreground_override",
+          "offset_bytes": 819988,
+          "size_bytes": 8
+        },
+        {
+          "name": "background_override",
+          "offset_bytes": 819864,
+          "size_bytes": 8
+        },
+        {
+          "name": "semantic_colors_dirty",
+          "offset_bytes": 836509,
+          "size_bytes": 1
+        },
+        {
+          "name": "graphics_revision",
+          "offset_bytes": 816528,
+          "size_bytes": 8
+        },
+        {
+          "name": "graphics_present",
+          "offset_bytes": 820021,
+          "size_bytes": 1
+        },
+        {
+          "name": "media_ingestion",
+          "offset_bytes": 816880,
+          "size_bytes": 2960
+        },
+        {
+          "name": "dirty",
+          "offset_bytes": 836510,
+          "size_bytes": 1
+        },
+        {
+          "name": "render_pending",
+          "offset_bytes": 820025,
+          "size_bytes": 1
+        },
+        {
+          "name": "cell_revision",
+          "offset_bytes": 819856,
+          "size_bytes": 8
+        },
+        {
+          "name": "search_revision",
+          "offset_bytes": 0,
+          "size_bytes": 8
+        },
+        {
+          "name": "output_pending",
+          "offset_bytes": 820058,
+          "size_bytes": 1
+        },
+        {
+          "name": "ingest_pending",
+          "offset_bytes": 820026,
+          "size_bytes": 1
+        },
+        {
+          "name": "actor_count",
+          "offset_bytes": 836450,
+          "size_bytes": 1
+        },
+        {
+          "name": "output_done",
+          "offset_bytes": 836447,
+          "size_bytes": 1
+        },
+        {
+          "name": "output_held",
+          "offset_bytes": 820062,
+          "size_bytes": 1
+        },
+        {
+          "name": "kitty_commands",
+          "offset_bytes": 816536,
+          "size_bytes": 344
+        },
+        {
+          "name": "kitty_cursor",
+          "offset_bytes": 8,
+          "size_bytes": 1088
+        },
+        {
+          "name": "wait_pending",
+          "offset_bytes": 820024,
+          "size_bytes": 1
+        },
+        {
+          "name": "close_requested",
+          "offset_bytes": 820020,
+          "size_bytes": 1
+        },
+        {
+          "name": "exit",
+          "offset_bytes": 819976,
+          "size_bytes": 12
+        },
+        {
+          "name": "history_service",
+          "offset_bytes": 816520,
+          "size_bytes": 8
+        },
+        {
+          "name": "history_observer",
+          "offset_bytes": 415160,
+          "size_bytes": 401360
+        },
+        {
+          "name": "agent_process_cache",
+          "offset_bytes": 819904,
+          "size_bytes": 72
+        },
+        {
+          "name": "agent_recheck_requested",
+          "offset_bytes": 820022,
+          "size_bytes": 1
+        },
+        {
+          "name": "agent_recheck_running",
+          "offset_bytes": 820023,
+          "size_bytes": 1
+        },
+        {
+          "name": "agent_rechecks",
+          "offset_bytes": 819900,
+          "size_bytes": 4
+        },
+        {
+          "name": "rejected_reporter",
+          "offset_bytes": 819884,
+          "size_bytes": 16
+        },
+        {
+          "name": "foreground_revision",
+          "offset_bytes": 415152,
+          "size_bytes": 8
+        },
+        {
+          "name": "progress_state",
+          "offset_bytes": 820030,
+          "size_bytes": 1
+        },
+        {
+          "name": "progress_percent",
+          "offset_bytes": 820031,
+          "size_bytes": 2
+        },
+        {
+          "name": "progress_revision",
+          "offset_bytes": 415144,
+          "size_bytes": 8
+        },
+        {
+          "name": "history_session_id",
+          "offset_bytes": 820033,
+          "size_bytes": 16
+        },
+        {
+          "name": "started_at_ms",
+          "offset_bytes": 415136,
+          "size_bytes": 8
+        },
+        {
+          "name": "history_sequence",
+          "offset_bytes": 415128,
+          "size_bytes": 8
+        },
+        {
+          "name": "injected_submissions",
+          "offset_bytes": 819880,
+          "size_bytes": 4
+        },
+        {
+          "name": "history_session_started",
+          "offset_bytes": 820059,
+          "size_bytes": 1
+        },
+        {
+          "name": "history_session_finished",
+          "offset_bytes": 820060,
+          "size_bytes": 1
+        },
+        {
+          "name": "history_exit_queued",
+          "offset_bytes": 820061,
+          "size_bytes": 1
+        },
+        {
+          "name": "workspace_path",
+          "offset_bytes": 415112,
+          "size_bytes": 16
+        },
+        {
+          "name": "cwd",
+          "offset_bytes": 411000,
+          "size_bytes": 4112
+        },
+        {
+          "name": "title",
+          "offset_bytes": 410600,
+          "size_bytes": 272
+        },
+        {
+          "name": "launch_record",
+          "offset_bytes": 409240,
+          "size_bytes": 24
+        },
+        {
+          "name": "manifests",
+          "offset_bytes": 278120,
+          "size_bytes": 8
+        },
+        {
+          "name": "pending_size",
+          "offset_bytes": 819996,
+          "size_bytes": 10
+        },
+        {
+          "name": "pending_terminal_colors",
+          "offset_bytes": 836451,
+          "size_bytes": 58
+        },
+        {
+          "name": "sync_hold_started_ns",
+          "offset_bytes": 278104,
+          "size_bytes": 16
+        },
+        {
+          "name": "io",
+          "offset_bytes": 1216,
+          "size_bytes": 16
+        },
+        {
+          "name": "gpa",
+          "offset_bytes": 1120,
+          "size_bytes": 16
+        }
+      ]
+    },
+    {
+      "type": "placement_layout",
+      "record": "attachment",
+      "type_name": "runtime.attachment.Attachment",
+      "size_bytes": 42528,
+      "alignment_bytes": 8,
+      "shape_selected": false,
+      "fields": [
+        {
+          "name": "pane",
+          "offset_bytes": 0,
+          "size_bytes": 8
+        },
+        {
+          "name": "cells",
+          "offset_bytes": 8,
+          "size_bytes": 1688
+        },
+        {
+          "name": "graphics",
+          "offset_bytes": 1696,
+          "size_bytes": 40688
+        },
+        {
+          "name": "cell_pacer",
+          "offset_bytes": 42384,
+          "size_bytes": 88
+        },
+        {
+          "name": "cell_deadline_ns",
+          "offset_bytes": 42472,
+          "size_bytes": 16
+        },
+        {
+          "name": "observed_cwd_revision",
+          "offset_bytes": 42488,
+          "size_bytes": 8
+        },
+        {
+          "name": "observed_foreground_revision",
+          "offset_bytes": 42496,
+          "size_bytes": 8
+        },
+        {
+          "name": "observed_title_revision",
+          "offset_bytes": 42504,
+          "size_bytes": 8
+        },
+        {
+          "name": "observed_progress_revision",
+          "offset_bytes": 42512,
+          "size_bytes": 8
+        },
+        {
+          "name": "exit_sent",
+          "offset_bytes": 42520,
+          "size_bytes": 1
+        }
+      ]
+    },
+    {
+      "type": "placement_layout",
+      "record": "cell_sync",
+      "type_name": "runtime.attachment.CellSync",
+      "size_bytes": 1688,
+      "alignment_bytes": 8,
+      "shape_selected": false,
+      "fields": [
+        {
+          "name": "acknowledged",
+          "offset_bytes": 0,
+          "size_bytes": 112
+        },
+        {
+          "name": "acknowledged_text_revision",
+          "offset_bytes": 112,
+          "size_bytes": 8
+        },
+        {
+          "name": "acknowledged_text_projected",
+          "offset_bytes": 1670,
+          "size_bytes": 1
+        },
+        {
+          "name": "acknowledged_cursor",
+          "offset_bytes": 1664,
+          "size_bytes": 6
+        },
+        {
+          "name": "acknowledged_mouse",
+          "offset_bytes": 1671,
+          "size_bytes": 3
+        },
+        {
+          "name": "acknowledged_input_modes",
+          "offset_bytes": 1674,
+          "size_bytes": 8
+        },
+        {
+          "name": "acknowledged_pointer_shape",
+          "offset_bytes": 1682,
+          "size_bytes": 1
+        },
+        {
+          "name": "acknowledged_scroll",
+          "offset_bytes": 1656,
+          "size_bytes": 8
+        },
+        {
+          "name": "projected",
+          "offset_bytes": 120,
+          "size_bytes": 112
+        },
+        {
+          "name": "projected_damage",
+          "offset_bytes": 232,
+          "size_bytes": 16
+        },
+        {
+          "name": "projected_state",
+          "offset_bytes": 248,
+          "size_bytes": 1264
+        },
+        {
+          "name": "projected_text_metadata",
+          "offset_bytes": 1512,
+          "size_bytes": 64
+        },
+        {
+          "name": "viewport_pin",
+          "offset_bytes": 1576,
+          "size_bytes": 8
+        },
+        {
+          "name": "projected_revision",
+          "offset_bytes": 1584,
+          "size_bytes": 8
+        },
+        {
+          "name": "viewport_screen",
+          "offset_bytes": 1683,
+          "size_bytes": 1
+        },
+        {
+          "name": "observed_revision",
+          "offset_bytes": 1592,
+          "size_bytes": 8
+        },
+        {
+          "name": "next_frame_id",
+          "offset_bytes": 1600,
+          "size_bytes": 8
+        },
+        {
+          "name": "acknowledged_frame_id",
+          "offset_bytes": 1608,
+          "size_bytes": 8
+        },
+        {
+          "name": "outstanding",
+          "offset_bytes": 1616,
+          "size_bytes": 24
+        },
+        {
+          "name": "snapshot_pending",
+          "offset_bytes": 1684,
+          "size_bytes": 1
+        },
+        {
+          "name": "gpa",
+          "offset_bytes": 1640,
+          "size_bytes": 16
+        }
+      ]
+    },
+    {
+      "type": "placement_layout",
+      "record": "session",
+      "type_name": "runtime.client.Session",
+      "size_bytes": 1096256,
+      "alignment_bytes": 16,
+      "shape_selected": false,
+      "fields": [
+        {
+          "name": "key",
+          "offset_bytes": 1095824,
+          "size_bytes": 16
+        },
+        {
+          "name": "connection",
+          "offset_bytes": 1095664,
+          "size_bytes": 160
+        },
+        {
+          "name": "receive_buffer",
+          "offset_bytes": 1095976,
+          "size_bytes": 16
+        },
+        {
+          "name": "read_buffer",
+          "offset_bytes": 7864,
+          "size_bytes": 16
+        },
+        {
+          "name": "slot",
+          "offset_bytes": 7880,
+          "size_bytes": 8
+        },
+        {
+          "name": "workspace",
+          "offset_bytes": 7888,
+          "size_bytes": 24
+        },
+        {
+          "name": "shared_graphics",
+          "offset_bytes": 1096246,
+          "size_bytes": 1
+        },
+        {
+          "name": "frame_interval_ns",
+          "offset_bytes": 7920,
+          "size_bytes": 8
+        },
+        {
+          "name": "delivery",
+          "offset_bytes": 7928,
+          "size_bytes": 1087736
+        },
+        {
+          "name": "role",
+          "offset_bytes": 1096183,
+          "size_bytes": 1
+        },
+        {
+          "name": "read_pending",
+          "offset_bytes": 1096182,
+          "size_bytes": 1
+        },
+        {
+          "name": "send_pending",
+          "offset_bytes": 1096245,
+          "size_bytes": 1
+        },
+        {
+          "name": "closing",
+          "offset_bytes": 1096242,
+          "size_bytes": 1
+        },
+        {
+          "name": "last_input_pane",
+          "offset_bytes": 1095864,
+          "size_bytes": 8
+        },
+        {
+          "name": "last_input_sequence",
+          "offset_bytes": 1095872,
+          "size_bytes": 8
+        },
+        {
+          "name": "pending_client_command",
+          "offset_bytes": 1095880,
+          "size_bytes": 48
+        },
+        {
+          "name": "pending_pane_focus",
+          "offset_bytes": 1095928,
+          "size_bytes": 48
+        },
+        {
+          "name": "terminal_colors",
+          "offset_bytes": 1096185,
+          "size_bytes": 57
+        },
+        {
+          "name": "pending_search",
+          "offset_bytes": 0,
+          "size_bytes": 3696
+        },
+        {
+          "name": "search_scheduled",
+          "offset_bytes": 1096184,
+          "size_bytes": 1
+        },
+        {
+          "name": "hook_pane",
+          "offset_bytes": 1096008,
+          "size_bytes": 24
+        },
+        {
+          "name": "descent_pending",
+          "offset_bytes": 1096181,
+          "size_bytes": 1
+        },
+        {
+          "name": "hook_lineage",
+          "offset_bytes": 1096052,
+          "size_bytes": 128
+        },
+        {
+          "name": "hook_lineage_len",
+          "offset_bytes": 1096180,
+          "size_bytes": 1
+        },
+        {
+          "name": "parked",
+          "offset_bytes": 3704,
+          "size_bytes": 4160
+        },
+        {
+          "name": "parked_pane",
+          "offset_bytes": 1096032,
+          "size_bytes": 16
+        },
+        {
+          "name": "parked_recheck",
+          "offset_bytes": 1096048,
+          "size_bytes": 4
+        },
+        {
+          "name": "parked_at_ms",
+          "offset_bytes": 3696,
+          "size_bytes": 8
+        },
+        {
+          "name": "parked_real_ms",
+          "offset_bytes": 1096000,
+          "size_bytes": 8
+        },
+        {
+          "name": "parked_awake_ns",
+          "offset_bytes": 1095992,
+          "size_bytes": 8
+        },
+        {
+          "name": "parked_sequence",
+          "offset_bytes": 1095856,
+          "size_bytes": 8
+        },
+        {
+          "name": "answering_parked",
+          "offset_bytes": 1096243,
+          "size_bytes": 1
+        },
+        {
+          "name": "parked_rechecked",
+          "offset_bytes": 1096244,
+          "size_bytes": 1
+        },
+        {
+          "name": "cell_deadline_ns",
+          "offset_bytes": 1095840,
+          "size_bytes": 16
+        },
+        {
+          "name": "limit_report_window_ms",
+          "offset_bytes": 7912,
+          "size_bytes": 8
+        },
+        {
+          "name": "limit_reports",
+          "offset_bytes": 1096247,
+          "size_bytes": 1
+        }
+      ]
+    },
+    {
+      "type": "placement_layout",
+      "record": "runtime",
+      "type_name": "runtime.Runtime",
+      "size_bytes": 4173512,
+      "alignment_bytes": 8,
+      "shape_selected": false,
+      "fields": [
+        {
+          "name": "resources",
+          "offset_bytes": 0,
+          "size_bytes": 318960
+        },
+        {
+          "name": "loop",
+          "offset_bytes": 318960,
+          "size_bytes": 1037512
+        },
+        {
+          "name": "model",
+          "offset_bytes": 1356472,
+          "size_bytes": 2817032
+        },
+        {
+          "name": "teardown_state",
+          "offset_bytes": 4173504,
+          "size_bytes": 1
+        }
+      ]
+    },
+    {
+      "type": "placement_layout",
+      "record": "runtime_model",
+      "type_name": "runtime.RuntimeModel",
+      "size_bytes": 2817032,
+      "alignment_bytes": 8,
+      "shape_selected": false,
+      "fields": [
+        {
+          "name": "io",
+          "offset_bytes": 2448552,
+          "size_bytes": 16
+        },
+        {
+          "name": "gpa",
+          "offset_bytes": 2368152,
+          "size_bytes": 16
+        },
+        {
+          "name": "select",
+          "offset_bytes": 18208,
+          "size_bytes": 8
+        },
+        {
+          "name": "resources",
+          "offset_bytes": 18216,
+          "size_bytes": 8
+        },
+        {
+          "name": "inherited_environment",
+          "offset_bytes": 18224,
+          "size_bytes": 16
+        },
+        {
+          "name": "socket_path",
+          "offset_bytes": 18240,
+          "size_bytes": 16
+        },
+        {
+          "name": "executable_path",
+          "offset_bytes": 2816004,
+          "size_bytes": 1024
+        },
+        {
+          "name": "executable_path_len",
+          "offset_bytes": 22384,
+          "size_bytes": 8
+        },
+        {
+          "name": "home",
+          "offset_bytes": 22392,
+          "size_bytes": 16
+        },
+        {
+          "name": "agent_description_options",
+          "offset_bytes": 22408,
+          "size_bytes": 32
+        },
+        {
+          "name": "agent_description_pending",
+          "offset_bytes": 2816003,
+          "size_bytes": 1
+        },
+        {
+          "name": "launch_fault",
+          "offset_bytes": 22456,
+          "size_bytes": 8
+        },
+        {
+          "name": "ingest_gate",
+          "offset_bytes": 22464,
+          "size_bytes": 8
+        },
+        {
+          "name": "clients",
+          "offset_bytes": 22472,
+          "size_bytes": 280
+        },
+        {
+          "name": "parked_reports",
+          "offset_bytes": 22752,
+          "size_bytes": 8
+        },
+        {
+          "name": "client_admission",
+          "offset_bytes": 22760,
+          "size_bytes": 2696
+        },
+        {
+          "name": "shutdown",
+          "offset_bytes": 25456,
+          "size_bytes": 32
+        },
+        {
+          "name": "workspaces",
+          "offset_bytes": 25488,
+          "size_bytes": 595528
+        },
+        {
+          "name": "executions",
+          "offset_bytes": 621016,
+          "size_bytes": 3368
+        },
+        {
+          "name": "administration_workspace",
+          "offset_bytes": 624384,
+          "size_bytes": 8
+        },
+        {
+          "name": "worktrees",
+          "offset_bytes": 624392,
+          "size_bytes": 81128
+        },
+        {
+          "name": "panes",
+          "offset_bytes": 705520,
+          "size_bytes": 271648
+        },
+        {
+          "name": "attachments",
+          "offset_bytes": 977168,
+          "size_bytes": 106752
+        },
+        {
+          "name": "agents",
+          "offset_bytes": 1083920,
+          "size_bytes": 1284232
+        },
+        {
+          "name": "prompt_budget",
+          "offset_bytes": 0,
+          "size_bytes": 800
+        },
+        {
+          "name": "restored_agents",
+          "offset_bytes": 2527232,
+          "size_bytes": 14336
+        },
+        {
+          "name": "agent_watches",
+          "offset_bytes": 2368168,
+          "size_bytes": 80384
+        },
+        {
+          "name": "agent_revision",
+          "offset_bytes": 2448568,
+          "size_bytes": 8
+        },
+        {
+          "name": "agent_sequence",
+          "offset_bytes": 2448576,
+          "size_bytes": 8
+        },
+        {
+          "name": "client_layouts",
+          "offset_bytes": 2448584,
+          "size_bytes": 56
+        },
+        {
+          "name": "system_metrics",
+          "offset_bytes": 2448640,
+          "size_bytes": 40
+        },
+        {
+          "name": "system_metrics_pending",
+          "offset_bytes": 2816002,
+          "size_bytes": 1
+        },
+        {
+          "name": "metrics",
+          "offset_bytes": 2448688,
+          "size_bytes": 592
+        },
+        {
+          "name": "limit_reaches",
+          "offset_bytes": 2449280,
+          "size_bytes": 29840
+        },
+        {
+          "name": "client_limit_reaches",
+          "offset_bytes": 2479120,
+          "size_bytes": 29840
+        },
+        {
+          "name": "refused_limit_reports",
+          "offset_bytes": 2508960,
+          "size_bytes": 8
+        },
+        {
+          "name": "checkpoint",
+          "offset_bytes": 2508968,
+          "size_bytes": 144
+        },
+        {
+          "name": "session_name_probe_in_flight",
+          "offset_bytes": 2553857,
+          "size_bytes": 1
+        },
+        {
+          "name": "worktree_detection_in_flight",
+          "offset_bytes": 2553856,
+          "size_bytes": 1
+        },
+        {
+          "name": "agent_snapshot_revision",
+          "offset_bytes": 2527192,
+          "size_bytes": 8
+        },
+        {
+          "name": "agent_snapshot_inputs",
+          "offset_bytes": 2527200,
+          "size_bytes": 32
+        },
+        {
+          "name": "agent_entries",
+          "offset_bytes": 800,
+          "size_bytes": 17408
+        },
+        {
+          "name": "agent_display",
+          "offset_bytes": 2541568,
+          "size_bytes": 12288
+        },
+        {
+          "name": "editor_open",
+          "offset_bytes": 2509152,
+          "size_bytes": 18040
+        },
+        {
+          "name": "path_indexes",
+          "offset_bytes": 2509112,
+          "size_bytes": 40
+        },
+        {
+          "name": "pane_text",
+          "offset_bytes": 2553858,
+          "size_bytes": 262144
+        },
+        {
+          "name": "input_sequence",
+          "offset_bytes": 2448680,
+          "size_bytes": 8
+        },
+        {
+          "name": "cell_timer",
+          "offset_bytes": 22440,
+          "size_bytes": 16
+        },
+        {
+          "name": "engine_reply",
+          "offset_bytes": 18256,
+          "size_bytes": 4128
+        }
+      ]
+    }
+  ],
+  "client_storage": [
+    {
+      "type": "size",
+      "name": "execution.Client",
+      "bytes": 2533760
+    },
+    {
+      "type": "size",
+      "name": "state.ClientModel",
+      "bytes": 1711320
+    },
+    {
+      "type": "size",
+      "name": "workspace.Tabs",
+      "bytes": 210192
+    },
+    {
+      "type": "size",
+      "name": "panes.Panes",
+      "bytes": 6664
+    },
+    {
+      "type": "size",
+      "name": "panes.Pane",
+      "bytes": 328
+    },
+    {
+      "type": "live_storage",
+      "panes": 0,
+      "cell_size": "1x1",
+      "bytes": 1711320,
+      "allocations": 1
+    },
+    {
+      "type": "live_storage",
+      "panes": 1,
+      "cell_size": "1x1",
+      "bytes": 1799272,
+      "allocations": 6
+    },
+    {
+      "type": "live_storage",
+      "panes": 8,
+      "cell_size": "1x1",
+      "bytes": 2414936,
+      "allocations": 41
+    },
+    {
+      "type": "live_storage",
+      "panes": 64,
+      "cell_size": "1x1",
+      "bytes": 7340248,
+      "allocations": 321
+    }
+  ],
+  "derived": {
+    "gui_client_slots": 17,
+    "gui_clients_inline_bytes": 43073920,
+    "runtime_pane_fixed_requested": 1011638,
+    "runtime_attachment_fixed_requested": 217654,
+    "runtime_session_requested": 9550400,
+    "client_pane_fixed_requested": 87915
+  },
+  "limits": [
+    "Native aarch64 macOS only; other targets still need measurement.",
+    "The smoke checks execution and invariants; two rounds are not a performance acceptance campaign.",
+    "The original ledger and P1-P3 measurements remain historical; renderer, VT and thread-stack measurements have not been refreshed."
+  ]
+}

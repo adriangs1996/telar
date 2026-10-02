@@ -1,0 +1,162 @@
+{
+  "schema": 1,
+  "historical": true,
+  "current_measurements": "current.json",
+  "title": "Telar CPU memory resource ledger: Pane, Attachment, Session, Client, ClientModel",
+  "base_commit": "23e9afc6117d7a561b96849f180061e37024144d",
+  "production_commit": "43567b04484cade06cbebb645acf56dba3042bfe",
+  "dependencies": {
+    "zig_std": "0.16.0 (/opt/homebrew/Cellar/zig/0.16.0_1/lib/zig/std, read only)",
+    "ghostty_vt": "ghostty-1.3.2-dev-5UdBC84MRwUm4UZ8gcDZ-4vBiye_KqGyGJpht6KayFbZ (build.zig.zon:20-22); tarball sha256 4161bf5d3fc498d6fac774a0f32bd402a95c8633e8ae4fdf5037f20704bf227a, extracted read only to task scratch"
+  },
+  "method": "Source reading and arithmetic only. No compiler, test binary, size probe, runtime probe or benchmark was run for this ledger.",
+  "quantities": {
+    "inline": "@sizeOf of a record: bytes inside the record's single allocation",
+    "requested": "bytes passed to an allocator (what core.Heap counts; Heap.zig:60-91)",
+    "mapped": "writable anonymous mapping obtained from the OS (page allocator, pthread stacks, GPU shared buffers); not RSS",
+    "rss": "resident pages; never derived in this ledger"
+  },
+  "status": {
+    "archived": "printed by an earlier build; see provenance",
+    "exact": "follows from constants and types whose size is fixed by source (asserted or byte arrays)",
+    "derived": "computed from source rules (allocator growth, layout) without compiler confirmation",
+    "estimate": "Zig auto-layout or union size assumed; needs @sizeOf",
+    "unknown": "not resolvable from source reading; needs the listed measurement"
+  },
+  "provenance": {
+    "P1": "Fable, pane 585, 2026-10-01: reportPlacement() printout from docs/performance/record-placement/source/benchmark.patch:117-127; values quoted in docs/performance/record-placement/discussion/fable-round-1.md:43,100-102. Apple M3, macOS, ReleaseFast, commit 43567b04. Raw printout not archived.",
+    "P2": "Codex memory-pattern audit: docs/performance/memory-patterns/measurements.json storage[] (benchmarks/client_storage.zig, FailingAllocator requested bytes). Commit 43567b04, Zig 0.16.0, ReleaseFast, macOS 26.6.2 AArch64, telar-benchmarks sha256 6165a25a...",
+    "P3": "Codex memory-pattern audit: docs/performance/memory-patterns/measurements.json workloads[] (src/gui/profiling_main.zig:124-259, live requested bytes). Same build as P2, telar-dod-probe sha256 a587fc8e..."
+  },
+  "variables": {
+    "C": "pane columns",
+    "R": "pane rows",
+    "N": "window workbench cells (RetainedCells grid)",
+    "W": "workspace path bytes",
+    "L": "launch record bytes, sum(argument_len + 1), only for environment_mode inherit_runtime",
+    "S": "ghostty standard page bytes, Page.layout(std_capacity).total_size; upstream comment says 524288, unverified here"
+  },
+  "constants": {
+    "cell_bytes": {"value": 32, "status": "exact", "source": "lib/cellgrid/Cell.zig:61"},
+    "text_metadata_capacity_fixed": {"value": 87563, "status": "exact", "formula": "11 + 256*6 + 2048*10 + 65536", "source": "src/core/text_metadata/limits.zig:2-17"},
+    "output_chunk_size": {"value": 16384, "status": "exact", "source": "src/backend/pane/pane_namespace.zig:23"},
+    "max_pty_responses_x_bytes": {"value": 65536, "status": "exact", "source": "src/backend/pane/pane_namespace.zig:25-27"},
+    "pane_input_queue_capacity": {"value": 131072, "status": "exact", "source": "src/backend/pane/PaneInputQueue.zig:13; src/core/schema/types.zig:11"},
+    "media_batch_bytes": {"value": 65536, "status": "exact", "source": "src/backend/media/media.zig:34"},
+    "history_batch_bytes": {"value": 131072, "status": "exact", "source": "src/backend/history/observer_support.zig:27"},
+    "max_frame_size": {"value": 4194304, "status": "exact", "source": "lib/localsocket/transport.zig:13"},
+    "read_buffer_size": {"value": 65536, "status": "exact", "source": "lib/localsocket/transport.zig:71"},
+    "machine_slots": {"value": 17, "status": "exact", "source": "src/gui/GuiAdapter.zig:74"},
+    "quad_bytes": {"value": 80, "status": "exact", "source": "lib/gfx/Quad.zig:19-43"},
+    "cell_mesh_capacity": {"value": 24, "status": "exact", "source": "src/gui/render/CellMesh.zig:19-22"},
+    "pthread_stack_bytes": {"value": 16777216, "status": "exact", "source": "zig std Thread.zig:307,766; no telar override (grep stack_size in src, lib: none)"},
+    "vt_page_preheat": {"value": 4, "status": "exact", "source": "ghostty src/terminal/PageList.zig:39,344-361"},
+    "vt_scrollback_bytes_main": {"value": 10000000, "status": "exact", "source": "src/backend/pane/pane_namespace.zig:31; Pane.zig:214"},
+    "vt_scrollback_bytes_media_history": {"value": 10000, "status": "exact", "source": "ghostty src/terminal/Terminal.zig:266 default; Pipeline.zig:55-60 and Observer.zig:52 pass no override"}
+  },
+  "records": [
+    {"id": "runtime.Pane", "inline": 836696, "status": "archived", "provenance": "P1", "alloc": "src/backend/pane/Pane.zig:173", "free": "src/backend/pane/Pane.zig:660", "owner": "runtime", "lifetime": "pane launch to readyToDestroy (Pane.zig:1311) after exit and actor drain", "contains": ["runtime.Pane.media 203640 (P1)"], "contained_in": "none; PaneStore.items holds a pointer (PaneStore.zig:21)"},
+    {"id": "runtime.Attachment", "inline": 42536, "status": "archived", "provenance": "P1", "alloc": "src/backend/runtime/attachment/Attachments.zig:57", "free": "Attachments.release via remove/clear (Attachments.zig:73-92)", "owner": "runtime", "lifetime": "attach (pane_attachment.zig:108) to detach (:133) or client clear (:166)", "contained_in": "none; Attachments.record holds pointers (Attachments.zig:18)"},
+    {"id": "runtime.Session", "inline": 1096256, "status": "archived", "provenance": "P1", "alloc": "src/backend/runtime/client/Session.zig:138", "free": "src/backend/runtime/client/Store.zig:117-118,137-138", "owner": "runtime", "lifetime": "accepted connection to close", "contained_in": "none; Store.items holds pointers (Store.zig:9)"},
+    {"id": "client.Client", "inline": 2909536, "status": "archived", "provenance": "P2", "alloc": "GUI: one array of 17, src/gui/GuiAdapter.zig:190; headless: embedded by its adapter", "free": "src/gui/GuiAdapter.zig:308", "owner": "window", "lifetime": "window lifetime; slot initialized at local start (GuiAdapter.zig:219) or machine connect (window_machines.zig:418)", "contains": ["model.ClientModel 2087088 (P2)"]},
+    {"id": "model.ClientModel", "inline": 2087088, "status": "archived", "provenance": "P2", "contained_in": "client.Client.model (Client.zig:67)", "contains": ["model.Tabs 210192 (P2)", "model.Panes 6664 (P2)"]},
+    {"id": "model.Pane", "inline": 488, "status": "archived", "provenance": "P2", "alloc": "src/model/panes/Panes.zig:58", "free": "src/model/panes/Panes.zig:81-84", "owner": "client connection"},
+    {"id": "gui.clients_array", "inline": 49462112, "status": "exact", "formula": "17 * 2909536", "alloc": "src/gui/GuiAdapter.zig:190", "free": "src/gui/GuiAdapter.zig:308", "note": "requested bytes of all 17 inline Client slots, initialized or not; not RSS"}
+  ],
+  "inline_breakdown": {
+    "runtime.Pane": [
+      {"field": "output_buffer", "bytes": 16384, "status": "exact", "source": "Pane.zig:85"},
+      {"field": "pty_responses.bytes+lengths", "bytes": 65664, "status": "exact", "source": "PtyResponseQueue.zig:7-8"},
+      {"field": "input_queue.bytes", "bytes": 131072, "status": "exact", "source": "PaneInputQueue.zig:16"},
+      {"field": "media batches bytes x2 + scratch", "bytes": 196608, "status": "exact", "source": "Pipeline.zig:19-21; Batch.zig:6"},
+      {"field": "media batch events 2x64", "bytes": 1536, "status": "estimate", "assumes": "media.Event = 12 B (media.zig:59-62)"},
+      {"field": "history batches bytes x2", "bytes": 262144, "status": "exact", "source": "Observer.zig:23,406-407"},
+      {"field": "history batch events 2x512", "bytes": 40960, "status": "estimate", "assumes": "observer Event = 40 B (observer_support.zig:52-60,416-428; Clock 16 B)"},
+      {"field": "history tracker osc+command buffers", "bytes": 73728, "status": "exact", "source": "lib/cmdcapture/OscTracker.zig:12,15; lib/cmdcapture/osc.zig:7-8"},
+      {"field": "history tracker cwd paths x2", "bytes": 2048, "status": "exact", "target": "aarch64-macos (std.fs.max_path_bytes 1024; 4096 on Linux)", "source": "OscTracker.zig:18; TerminalTracker.zig:32"},
+      {"field": "history sample", "bytes": 16384, "status": "exact", "source": "src/backend/history/Sample.zig:8-10"},
+      {"field": "cwd.bytes", "bytes": 4096, "status": "exact", "source": "CwdState.zig:6"},
+      {"field": "title.bytes", "bytes": 256, "status": "exact", "source": "TitleState.zig:10"},
+      {"field": "kitty_cursor.sizes", "bytes": 1024, "status": "exact", "source": "KittyCursor.zig:25,35,46-51"},
+      {"field": "media_allocator.mappings", "bytes": 2048, "status": "estimate", "assumes": "?Mapping = 32 B (PaneMediaAllocator.zig:21; Mapping.zig)"},
+      {"field": "agent_process_cache.foreground_name", "bytes": 48, "status": "exact", "source": "process/Cache.zig:9"}
+    ],
+    "runtime.Attachment": [
+      {"field": "graphics.known_placements", "bytes": 20480, "status": "estimate", "assumes": "?core.Placement = 80 B (Placement.zig:9-24 is 72 B + tag)"},
+      {"field": "graphics.transfer.placements", "bytes": 18432, "status": "estimate", "assumes": "core.Placement = 72 B x 256 (Transfer.zig:8)"},
+      {"field": "graphics.known_images", "bytes": 1536, "status": "estimate", "assumes": "?core.ImageKey = 24 B (ImageKey.zig:3-4)"}
+    ],
+    "runtime.Session": [
+      {"field": "delivery.responses.items 128 x PendingResponse", "bytes": 1077248, "status": "estimate", "assumes": "largest member core.ExecutionReply ~8408 B (two 4096 B chunks + 128 B failure, ExecutionReply.zig:6-23) + tag = 8416 B; capacity 128 (response_queue.zig:26)"},
+      {"field": "delivery.foregrounds_sent 256 x ?ForegroundProjection", "bytes": 10240, "status": "estimate", "assumes": "40 B per optional (ForegroundProjection.zig:3-5)"}
+    ],
+    "client.Client": [
+      {"field": "model (ClientModel)", "bytes": 2087088, "status": "archived", "provenance": "P2"}
+    ]
+  },
+  "external": [
+    {"id": "pane.workspace_path", "owner": "runtime.Pane", "quantity": "requested", "formula": "W", "status": "exact", "alloc": "Pane.zig:176", "free": "Pane.zig:646", "heap_visible": true},
+    {"id": "pane.screen.cells", "owner": "runtime.Pane", "quantity": "requested", "formula": "32*C*R", "status": "exact", "alloc": "Pane.zig:259; lib/cellgrid/Buffer.zig:36-37", "free": "Pane.zig:650", "resize": "pane_namespace.zig:140-155 then Buffer.zig:79-83: new allocated before old freed", "heap_visible": true},
+    {"id": "pane.damaged_rows", "owner": "runtime.Pane", "quantity": "requested", "formula": "R", "status": "exact", "alloc": "Pane.zig:261", "free": "Pane.zig:648", "heap_visible": true},
+    {"id": "pane.text_metadata", "owner": "runtime.Pane", "quantity": "requested", "formula": "2*(87563+R)", "status": "exact", "alloc": "TextMetadataCapture.zig:23-27; Storage.zig:12-17", "free": "Pane.zig:649", "resize": "Storage.zig:26-35 grows only; old freed after new allocated", "heap_visible": true},
+    {"id": "pane.render_state", "owner": "runtime.Pane", "quantity": "requested", "formula": "R*(C*c_rs + row_overhead)", "status": "unknown", "note": "ghostty RenderState: per-row MultiArrayList(Cell{raw 8 B, grapheme slice 16 B, Style ~14-16 B}) plus per-row arenas for graphemes (render.zig:204-280)", "alloc": "Pane.zig:1444", "free": "Pane.zig:651", "heap_visible": true},
+    {"id": "pane.launch_record", "owner": "runtime.Pane", "quantity": "requested", "formula": "L", "status": "exact", "bound": "max_argument_bytes 131072 plus terminators (types.zig:18)", "alloc": "pane_launch.zig:190; LaunchRecord.zig:38", "free": "Pane.zig:647", "heap_visible": true},
+    {"id": "pane.history_output_tail", "owner": "runtime.Pane", "quantity": "requested", "formula": "65536 if history output capture else 0", "status": "exact", "alloc": "lib/cmdcapture/TerminalTracker.zig:59-62", "free": "Observer.deinit", "heap_visible": true},
+    {"id": "pane.vt_gpa_small", "owner": "runtime.Pane", "quantity": "requested", "formula": "3 terminals x (Screen struct, node pool 4 items, pin pool 8 items, tracked pin set, tabstops past prealloc)", "status": "unknown", "alloc": "ghostty ScreenSet.zig:44; PageList.zig:349-353", "heap_visible": "main and history terminals: yes (gpa); media terminal: through PaneMediaAllocator and graphics budget (Pane.zig:241)"},
+    {"id": "pane.vt_page_pool", "owner": "runtime.Pane", "quantity": "mapped", "formula": "3 primary screens x [4*S, ~5.5*S] at admission; +3 pools when the alternate screen is first used", "status": "derived", "derivation": "PagePool.initCapacity(4) through std.heap.ArenaAllocator over pageAllocator(): memory_pool.zig:73-102,149-152; ArenaAllocator.zig:513-518 (node = 1.5*(prev+item+align+header)); PageList.zig:543-555,603-618", "alloc": "Terminal.init in Pane.zig:210, Pipeline.zig:55, Observer.zig:52", "free": "terminal deinit only; pool items recycle, arena never returns single items", "heap_visible": false, "budget_visible": false},
+    {"id": "pane.vt_scrollback_pages", "owner": "runtime.Pane", "quantity": "mapped", "formula": "main terminal up to 10000000 B of page_size (logical) plus pool and arena slack; retained at high water until pane destroy", "status": "derived", "source": "Pane.zig:214; PageList.zig:400-410,3614-3640", "heap_visible": false},
+    {"id": "pane.worker_threads", "owner": "runtime.Pane", "quantity": "mapped", "formula": "up to 2 blocked std.Io.Threaded workers (readPane, waitPane) x 16777216 B stack", "status": "derived", "source": "pane_launch.zig:117-128,216-230; zig std Io/Threaded.zig:2130-2170; Thread.zig:307,766", "heap_visible": false, "note": "pool threads persist; retention after pane close unknown"},
+    {"id": "pane.io_futures", "owner": "runtime.Pane", "quantity": "requested", "formula": "per concurrent task Future record via the process gpa", "status": "unknown", "source": "zig std Io/Threaded.zig:2143", "heap_visible": false},
+    {"id": "pane.parser_transients", "owner": "runtime.Pane", "quantity": "requested", "formula": "per stream: OSC up to 8388608 B, DCS up to 1048576 B while a long sequence is open", "status": "derived", "source": "ghostty osc.zig:301-321,385-388; dcs.zig:19; stream.zig:515-519; telar passes an allocator at Pane.zig:226-229, Pipeline.zig:246, Observer.zig:57", "heap_visible": "main/history yes; media via PaneMediaAllocator"},
+    {"id": "pane.media_images", "owner": "runtime.Pane", "quantity": "requested+mapped", "formula": "per pane <= 268435456 B logical; global <= 536870912 B; shm mappings adopted (PaneMediaAllocator.zig:31-43)", "status": "exact", "source": "src/core/graphics.zig:19-21; PaneStore.zig:38-39", "heap_visible": "charged by GraphicsBudget, not by Heap categories alone"},
+    {"id": "attachment.acknowledged", "owner": "runtime.Attachment", "quantity": "requested", "formula": "32*C*R", "status": "exact", "alloc": "CellSync.zig:38", "free": "CellSync.zig:62", "heap_visible": true},
+    {"id": "attachment.projected", "owner": "runtime.Attachment", "quantity": "requested", "formula": "32*C*R", "status": "exact", "alloc": "CellSync.zig:40", "free": "CellSync.zig:61", "note": "read only while the client's viewport is scrolled (CellSync.zig:170-215)", "heap_visible": true},
+    {"id": "attachment.projected_damage", "owner": "runtime.Attachment", "quantity": "requested", "formula": "R", "status": "exact", "alloc": "CellSync.zig:42", "free": "CellSync.zig:60", "heap_visible": true},
+    {"id": "attachment.projected_text_metadata", "owner": "runtime.Attachment", "quantity": "requested", "formula": "2*(87563+R)", "status": "exact", "alloc": "CellSync.zig:45", "free": "CellSync.zig:58", "note": "scrolled viewport only", "heap_visible": true},
+    {"id": "attachment.projected_state", "owner": "runtime.Attachment", "quantity": "requested", "formula": "R*(C*c_rs + row_overhead), allocated on first scrolled projection, kept until attachment destroy", "status": "unknown", "alloc": "CellSync.zig:188", "free": "CellSync.zig:59", "heap_visible": true},
+    {"id": "attachment.transfer_pixels", "owner": "runtime.Attachment", "quantity": "requested", "formula": "transient image copy, reserved against the pane media allocator", "status": "exact", "source": "GraphicsSync.zig:49-62", "heap_visible": true},
+    {"id": "session.receive_buffer", "owner": "runtime.Session", "quantity": "requested", "formula": "4194304", "status": "exact", "alloc": "Session.zig:130", "free": "Session.zig:170", "heap_visible": true},
+    {"id": "session.read_buffer", "owner": "runtime.Session", "quantity": "requested", "formula": "65536", "status": "exact", "alloc": "Session.zig:132", "free": "Session.zig:171", "heap_visible": true},
+    {"id": "session.send_buffer", "owner": "runtime.Session", "quantity": "requested", "formula": "4194304", "status": "exact", "alloc": "Delivery.zig:49-51", "free": "Delivery.zig:56", "heap_visible": true},
+    {"id": "session.clipboard_storage", "owner": "runtime.Session", "quantity": "requested", "formula": "selection bytes", "status": "exact", "source": "Delivery.zig:45,55", "heap_visible": true},
+    {"id": "session.queued_results", "owner": "runtime.Session", "quantity": "requested", "formula": "QueryResult/ReviewResult/OutputResult/StatsResult/PathQuery objects owned by queued responses", "status": "unknown", "source": "response_queue.zig:46-57", "heap_visible": true},
+    {"id": "client.transport", "owner": "client.Client", "quantity": "requested", "formula": "4194304 + 4194304 + 65536", "status": "exact", "alloc": "RuntimeTransportState.zig:89-103", "free": "Client.zig:279", "heap_visible": false},
+    {"id": "client.outbox_payloads", "owner": "client.Client", "quantity": "requested", "formula": "80 * 8192", "status": "exact", "alloc": "Client.zig:220; Outbox.zig:20,38-42; outbox_support.zig:19; input/limits.zig:3", "free": "Outbox.zig:44-50", "heap_visible": false},
+    {"id": "client.history_palette_storage", "owner": "client.Client", "quantity": "requested", "formula": "786432 + 65536 + 65536", "status": "exact", "alloc": "Client.zig:219; HistoryPaletteState.zig:52-59; state/Storage.zig:5-7", "heap_visible": false},
+    {"id": "client.pane_replica", "owner": "model.Pane", "quantity": "requested", "formula": "488 + 32*C*R + 4*R + 24 + (87563+R)", "status": "exact", "reconciled_with": "P2 one 1x1 pane = 88112 B in 5 allocations", "alloc": "Panes.zig:58; Pane.zig:48-56", "free": "Panes.zig:81-84", "heap_visible": false},
+    {"id": "gui.retained_cells", "owner": "window", "quantity": "requested", "formula": "1972*N", "status": "derived", "derivation": "metadata 52 + primary 2*80 + overflow 22*80 (RetainedCells.zig:20-22,38-53; CellMesh.zig:19-22; CellMetadata.zig:4-9); 52 B confirmed by the P3 reconciliation", "heap_visible": false},
+    {"id": "gui.scene_quads", "owner": "window", "quantity": "requested", "formula": "80 * Q(N), Q(N) = 24*(N + min(N,4200) + min(N,384) + min(N,1544)) + N + 17664 + ImageDraw.capacity", "status": "derived", "source": "frame_budget.zig:9-19; TerminalRenderer.zig:207-208", "heap_visible": false},
+    {"id": "gui.metal_quads", "owner": "window", "quantity": "mapped (GPU shared)", "formula": "high-water emitted quads x 80, a second copy of the CPU list", "status": "exact", "source": "src/gui/macos/TelarMetalRenderer.m:519-532", "heap_visible": false},
+    {"id": "gui.textures", "owner": "window", "quantity": "GPU", "formula": "atlas side^2 (R8), sprites RGBA, diagrams, Kitty textures with eviction", "status": "unknown", "source": "TelarMetalRenderer.m:210-221,269,314,335-343; linux/vulkan_resources.c:79-82,150-162", "heap_visible": false}
+  ],
+  "admission": {
+    "runtime_pane_requested": {"formula": "1011822 + 32*C*R + 3*R + W + L + O + RS + VTgpa", "known_part": "836696 + 32*C*R + R + 2*(87563+R)", "open_terms": ["O output tail 0 or 65536", "RS RenderState", "VTgpa"], "outside_heap": ["3 page pools >= 12*S mapped", "2 thread stacks 2*16 MiB mapped", "Future records"]},
+    "runtime_attachment_requested": {"formula": "217662 + 64*C*R + 3*R", "known_part": "42536 + 64*C*R + R + 2*(87563+R)", "later": "projected RenderState on first scroll"},
+    "runtime_session_requested": {"formula": "9550400", "known_part": "1096256 + 4194304 + 65536 + 4194304", "later": "clipboard and queued result objects"},
+    "client_pane_replica_requested": {"formula": "88075 + 32*C*R + 5*R"},
+    "machine_client_external_requested": {"formula": "10027008", "known_part": "8454144 + 655360 + 917504", "note": "the GUI already holds its 2909536 B inline slot in the 17-slot array"},
+    "window_geometry_requested": {"formula": "1972*N + 80*Q(N) + 1920"}
+  },
+  "reconciliations": [
+    {"id": "client_model_live_storage", "claim": "P2 live storage = 2087088 + 88112*n bytes and 1 + 5*n allocations for n in 0,1,8,64", "status": "checked by verify.py"},
+    {"id": "gui_geometry_delta", "claim": "P3 40595286 - 25222486 = 15372800 = 80*dQ + 1972*dN + 2*32*dN for N 2920 -> 6120", "status": "checked by verify.py"},
+    {"id": "gui_clients_array", "claim": "17 * 2909536 = 49462112 (memory-patterns README)", "status": "checked by verify.py"},
+    {"id": "pane_inline_residual", "claim": "836696 - itemized fields = residual for 3 vt.Terminal, 3 vt.TerminalStream, RenderState, Buffer, scalars and padding", "status": "checked by verify.py (non-negative)"},
+    {"id": "attachment_session_residual", "claim": "itemized estimates stay below archived totals", "status": "checked by verify.py"}
+  ],
+  "classification": {
+    "stable_segments": ["runtime.Pane record", "runtime.Attachment record", "runtime.Session record", "client.Client slot", "model.Pane record (small; slab class rather than page segment)"],
+    "reusable_scratch": ["Pipeline.scratch (worker-only)", "inactive history/media batch while no actor runs", "admission transients ChildEnvironment and OwnedCommand (pane_launch.zig:150-171)", "OSC/DCS parser growth", "resize replacement overlap"],
+    "dynamic_payload_pools": ["TextMetadata storage (5 copies per pane view)", "geometry cells and damage (pane, attachment x2, client replica)", "attachment projected set (scrolled viewports only)", "Session ResponseQueue payloads", "attachment graphics placements and transfer", "Pane media pipeline for panes without graphics", "per-connection 4 MiB frame buffers", "client outbox and palette storage"],
+    "existing_shared_backing": ["ghostty PageList page/node/pin pools", "GraphicsBudget and PaneMediaAllocator", "POSIX shm image mappings (runtime charge, client view reported separately)", "GPU shared buffers and textures (own domain)"]
+  },
+  "unknowns": [
+    {"id": "U1", "what": "@sizeOf/@offsetOf for every field of Pane, Attachment, Session, Client, ClientModel, vt.Terminal, vt.TerminalStream, vt.RenderState, Pipeline, Observer, PendingResponse, Transfer", "targets": ["aarch64-macos", "x86_64-linux"], "resolves": ["inline residuals", "estimates", "ClientModel 1870232 B unattributed", "Client 822448 B exclusive unattributed"]},
+    {"id": "U2", "what": "ghostty S and mapped bytes of each PageList pool after Terminal.init, mapped vs resident, alternate screen delta, 10 MB scrollback high water and retention", "resolves": ["pane.vt_page_pool", "pane.vt_scrollback_pages"]},
+    {"id": "U3", "what": "RenderState bytes per cell and per row; projected RenderState after first scroll", "resolves": ["pane.render_state", "attachment.projected_state"]},
+    {"id": "U4", "what": "allocator backing for 836696, 1096256, 4194304 and 49462112 B requests on macOS libc malloc and musl slabheap; first-touch faults", "resolves": ["backing vs requested"]},
+    {"id": "U5", "what": "std.Io.Threaded worker threads per live pane in steady state and after closure", "resolves": ["pane.worker_threads"]},
+    {"id": "U6", "what": "GPU residency per window", "resolves": ["gui.textures", "gui.metal_quads"]},
+    {"id": "U7", "what": "replacement peaks at large geometry (pane, attachment, client replica, RetainedCells, QuadList)", "resolves": ["peak overlap"]}
+  ]
+}

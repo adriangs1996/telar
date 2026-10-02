@@ -1,4 +1,5 @@
 const execution = @import("execution.zig");
+const std = @import("std");
 const core = @import("telar-core");
 const Resources = @import("resources/Resources.zig");
 const Loop = @import("Loop.zig");
@@ -157,6 +158,10 @@ pub fn deinit(self: *Runtime) void {
 /// Example: `const stopped = try runtime.update(event);`.
 pub fn update(self: *Runtime, event: runtime_event.Event) !bool {
     const model = &self.model;
+    if (comptime core.profiling.enabled) {
+        core.profiling.add(eventMetric(event), 1);
+    }
+
     if (event == .stopped) {
         return self.loop.completeStop(event.stopped);
     }
@@ -168,6 +173,23 @@ pub fn update(self: *Runtime, event: runtime_event.Event) !bool {
     return switch (event) {
         .client_message, .client_sent => client_delivery.shutdownDelivered(model),
         else => false,
+    };
+}
+
+// Every event tag has its work counter, in every build, so a new event
+// cannot go uncounted when profiling is enabled.
+comptime {
+    for (std.meta.tags(std.meta.Tag(runtime_event.Event))) |tag| {
+        _ = @field(core.profiling.Metric, event_metric_prefix ++ @tagName(tag));
+    }
+}
+
+const event_metric_prefix = "runtime_event_";
+
+/// The profile metric that counts one runtime event by its tag.
+fn eventMetric(event: runtime_event.Event) core.profiling.Metric {
+    return switch (std.meta.activeTag(event)) {
+        inline else => |tag| @field(core.profiling.Metric, event_metric_prefix ++ @tagName(tag)),
     };
 }
 

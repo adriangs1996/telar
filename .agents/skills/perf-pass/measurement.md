@@ -44,6 +44,10 @@ python3 .agents/skills/perf-pass/scripts/probe_pair.py $SCRATCH/A $SCRATCH/B 7 r
 python3 .agents/skills/perf-pass/scripts/bench_pair.py $SCRATCH/A $SCRATCH/B 6 backend.damage
 ```
 
+Both scripts compare two builds. Where a fixture's large records land is
+compared inside one build, by arguments, with `tools/placement_bench.py`:
+[record placement benchmark](../../../docs/performance/record-placement/benchmark.md).
+
 Check `uptime` first; do not measure while builds or test suites run.
 Compare against the previous accepted build, then re-measure the final build
 against `A`.

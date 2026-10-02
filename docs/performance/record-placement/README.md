@@ -12,6 +12,11 @@ files with the scratch copy found exactly two modified files, both represented
 in the patch, plus the new allocator source. No production source was changed
 when archiving this experiment.
 
+The experiment is now maintained in the tree as benchmark tooling:
+[benchmark.md](benchmark.md) has its options, runner, commands and a fresh
+validation on another machine. Everything below is the original archive and
+stays as it was recorded.
+
 ## Warm idle delivery
 
 Original report: Apple M3, macOS, ReleaseFast, libc child allocator; same

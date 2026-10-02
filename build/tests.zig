@@ -79,6 +79,21 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     inventory_tests.setEnvironmentVariable("PYTHONDONTWRITEBYTECODE", "1");
     test_step.dependOn(&inventory_tests.step);
     check_step.dependOn(&inventory_tests.step);
+    // The placement experiment's allocator needs only `std` and the value
+    // files beside it, so it tests without the benchmark's module graph; its
+    // runner tests against a stand-in executable and measures nothing.
+    const placement_module = b.createModule(.{
+        .root_source_file = b.path("benchmarks/PlacementAllocator.zig"),
+        .target = app.modules.target,
+        .optimize = app.modules.optimize,
+    });
+    const placement_runner_tests = b.addSystemCommand(&.{ "python3", b.pathFromRoot("tools/test_placement_bench.py") });
+    placement_runner_tests.setEnvironmentVariable("PYTHONDONTWRITEBYTECODE", "1");
+    const placement_step = b.step("test-bench-placement", "Run the placement benchmark's allocator and runner tests");
+    placement_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = placement_module })).step);
+    placement_step.dependOn(&placement_runner_tests.step);
+    test_step.dependOn(placement_step);
+    check_step.dependOn(&b.addTest(.{ .root_module = placement_module }).step);
     const model_check = b.addTest(
         .{
             .root_module = app.modules.data,
@@ -357,8 +372,28 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     app.coverage.instrumentTest(substitution);
     parallel_test_prerequisites.dependOn(&b.addRunArtifact(substitution).step);
 
+    // Runtime work counters compile only into a root that opts into profile
+    // counts, which a test runner never is, so their fixture is a program.
+    // It spawns PTY children, so it runs after the parallel suites.
+    const work_counters = b.addExecutable(.{
+        .name = "runtime-work-counters",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/runtime_work_counters_main.zig"),
+            .target = app.modules.target,
+            .optimize = app.modules.optimize,
+            .link_libc = true,
+        }),
+    });
+    work_counters.root_module.addImport("telar-backend", app.modules.backend);
+    work_counters.root_module.addImport("telar-core", app.modules.core);
+    work_counters.root_module.addImport("ghostty-vt", app.modules.ghostty_vt);
+    app.modules.libraries.addImports(work_counters.root_module);
+    const work_counters_run = isolatedTestRun(b, work_counters, parallel_test_prerequisites);
+    b.step("test-runtime-work-counters", "Check exact runtime work counts in a profile-counts build").dependOn(&b.addRunArtifact(work_counters).step);
+    test_step.dependOn(&work_counters_run.step);
+
     const check_programs = b.step("check-programs", "Analyze every first-party executable entrypoint");
-    for ([_]*std.Build.Step.Compile{ app.exe, bench.benchmarks, bench.echo_probe }) |program| {
+    for ([_]*std.Build.Step.Compile{ app.exe, bench.benchmarks, bench.echo_probe, work_counters }) |program| {
         const analyzed = b.addExecutable(.{ .name = program.name, .root_module = program.root_module });
         check_programs.dependOn(&analyzed.step);
     }

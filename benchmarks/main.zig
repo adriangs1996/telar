@@ -25,6 +25,10 @@ const IdleDeliveryContext = @import("IdleDeliveryContext.zig");
 const ClientEventContext = @import("ClientEventContext.zig");
 const InboxContext = @import("InboxContext.zig");
 const IdleDeliveryShape = @import("IdleDeliveryShape.zig");
+const InterveningWalk = @import("InterveningWalk.zig");
+const PlacementAllocator = @import("PlacementAllocator.zig");
+const PlacementBacking = @import("PlacementBacking.zig").PlacementBacking;
+const placement_report = @import("placement_report.zig");
 const Fixture = @import("Fixture.zig");
 const Config = @import("Config.zig");
 const client_storage = @import("client_storage.zig");
@@ -61,6 +65,24 @@ const usage =
     \\  --list                Print benchmark names without running them
     \\  --storage             Report client sizes and live pane allocations as JSON Lines
     \\  --help                Print this help
+    \\
+    \\Placement experiment, idle-delivery cases only (docs/performance/record-placement):
+    \\  --placement <mode>    Where large fixture allocations land: baseline (default),
+    \\                        shift, stagger or pack
+    \\  --placement-backing <name>
+    \\                        Allocator under the placement: debug (default) or libc
+    \\  --placement-threshold <bytes>
+    \\                        Smallest allocation placed, default 32768
+    \\  --placement-stride <bytes>
+    \\                        Step between staggered offsets and largest alignment
+    \\                        placed; a power of two, default 512
+    \\  --placement-window <bytes>
+    \\                        Span the offsets spread over; a power of two of at
+    \\                        least four strides, default the host page size
+    \\  --placement-report    With --json, emit record layout and placement lines
+    \\  --intervening-walk <bytes>
+    \\                        With --json, read this much unrelated memory before
+    \\                        each idle flush and time every flush on its own
 ;
 
 const cases = [_]Case{
@@ -241,16 +263,108 @@ fn runDamage(context: *DamageContext, iterations: usize) !u64 {
     return checksum;
 }
 
-fn runIdleDelivery(context: *IdleDeliveryContext, iterations: usize) !u64 {
+/// The timed work of both idle-delivery measurements. Nothing else in this
+/// program calls the flush, so it is compiled once, into this loop, and a
+/// flush timed back to back and one timed after a walk run the same code.
+noinline fn flushIdle(context: *IdleDeliveryContext, iterations: usize) !void {
     for (0..iterations) |_| {
         try context.idle.flush();
     }
+}
+
+fn runIdleDelivery(context: *IdleDeliveryContext, iterations: usize) !u64 {
+    try flushIdle(context, iterations);
 
     if (!context.idle.quiet()) {
         return error.IdleDeliveryStartedWrite;
     }
 
     return iterations;
+}
+
+/// Reads unrelated memory before each flush and times that flush alone, then
+/// times an empty clock interval after an equal read. Both sums stay in the
+/// walk; the sample this returns to `measure` still includes the reads.
+fn runIdleDeliveryAfterWalk(walked: *WalkedIdleDelivery, iterations: usize) !u64 {
+    const io = walked.context.io;
+    const walk = walked.walk;
+    var checksum: u64 = 0;
+    for (0..iterations) |_| {
+        checksum +%= walk.read();
+        const started = timestamp(io);
+        try flushIdle(walked.context, 1);
+        walk.flush_ns += timestamp(io) - started;
+
+        checksum +%= walk.read();
+        const empty = timestamp(io);
+        walk.empty_clock_ns += timestamp(io) - empty;
+    }
+
+    walk.flushes += iterations;
+    if (!walked.context.idle.quiet()) {
+        return error.IdleDeliveryStartedWrite;
+    }
+
+    return checksum;
+}
+
+fn backingAllocator(backing: PlacementBacking, gpa: std.mem.Allocator) std.mem.Allocator {
+    return switch (backing) {
+        .debug => gpa,
+        .libc => std.heap.c_allocator,
+    };
+}
+
+/// Builds one idle-delivery fixture under the configured placement, reports
+/// it outside the timed samples and measures its flush. With no placement
+/// option the fixture allocates from `resources.gpa`, as it always did.
+fn executeIdleDelivery(result_writer: ResultWriter, resources: ExecutionResources, case: Case, shape: IdleDeliveryShape) !void {
+    const config = result_writer.config;
+    const io = resources.io;
+    var placement = try PlacementAllocator.init(backingAllocator(config.placement_backing, resources.gpa), config.placementPolicy());
+    defer placement.deinit();
+
+    {
+        var context: IdleDeliveryContext = undefined;
+        context.init(io, placement.allocator(), resources.environ, shape) catch |err| {
+            if (placement.refused != 0) {
+                return error.PlacementRefusedAllocation;
+            }
+
+            return err;
+        };
+        defer context.deinit();
+
+        if (config.placement_report) {
+            try placement_report.writeFixture(result_writer.writer, case.name, shape, &context.idle, &placement);
+        }
+
+        if (config.intervening_walk) |bytes| {
+            var walk = try InterveningWalk.init(bytes);
+            defer walk.deinit();
+
+            var walked: WalkedIdleDelivery = .{
+                .context = &context,
+                .walk = &walk,
+            };
+            try result_writer.write(case, try measure(.{ .io = io, .config = config, .context = &walked }, runIdleDeliveryAfterWalk));
+            try walk.write(result_writer.writer, case.name);
+        } else {
+            try result_writer.write(case, try measure(.{ .io = io, .config = config, .context = &context }, runIdleDelivery));
+        }
+
+        if (config.placement_report) {
+            try placement_report.writeIdle(result_writer.writer, case.name, &context.idle);
+        }
+    }
+
+    if (config.placement_report) {
+        try placement_report.writeTeardown(result_writer.writer, case.name, &placement);
+    }
+
+    if (placement.live != 0) {
+        return error.PlacementLeaked;
+    }
 }
 
 fn runFrame(context: *FrameContext, iterations: usize) !u64 {
@@ -635,10 +749,7 @@ fn execute(result_writer: ResultWriter, resources: ExecutionResources, fixture: 
         const case = cases[case_index];
         case_index += 1;
         if (config.includes(case.name)) {
-            var context: IdleDeliveryContext = undefined;
-            try context.init(io, gpa, resources.environ, shape);
-            defer context.deinit();
-            try result_writer.write(case, try measure(.{ .io = io, .config = config, .context = &context }, runIdleDelivery));
+            try executeIdleDelivery(result_writer, resources, case, shape);
         }
     }
     const client_frame_case = cases[case_index];
@@ -819,6 +930,10 @@ pub fn main(init: std.process.Init) !void {
             },
         );
     }
+    if (config.placement_report) {
+        try placement_report.writePolicy(writer, config.placementPolicy(), config.placement_backing);
+    }
+
     try writer.flush();
 
     var gpa: std.heap.DebugAllocator(.{}) = .init;
@@ -956,6 +1071,12 @@ const ExecutionResources = struct {
     io: std.Io,
     gpa: std.mem.Allocator,
     environ: std.process.Environ,
+};
+
+/// An idle fixture measured with an unrelated memory walk before each flush.
+const WalkedIdleDelivery = struct {
+    context: *IdleDeliveryContext,
+    walk: *InterveningWalk,
 };
 
 const OutboxContext = struct {
