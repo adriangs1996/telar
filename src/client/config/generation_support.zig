@@ -2099,3 +2099,30 @@ test "a render whose buttons outgrow the recent rows keeps its first buttons ali
         try std.testing.expect(reported);
     }
 }
+
+test "pick presentation metadata validates colors and preserves ordinary values" {
+    var vm = try lua.Vm.init(std.testing.io, std.testing.allocator, .{});
+    defer vm.deinit();
+    try lua.open(vm.state);
+    try vm.evaluate("return { { label = 'Dragon', value = 'dragon', selected = true, swatch = { '#181616', '#8ba4b0', '#8a9a7b' } }, 'plain' }", "@items.lua");
+    const items = try std.testing.allocator.create(data.PickItems);
+    defer std.testing.allocator.destroy(items);
+    items.clear();
+    var diagnostic: data.Diagnostic = .{};
+    try pick_values.parse(vm.state, -1, items, &diagnostic);
+    try std.testing.expectEqualStrings("dragon", items.value(0));
+    try std.testing.expect(items.selected[0]);
+    try std.testing.expectEqual([3]u8{ 0x18, 0x16, 0x16 }, items.swatches[0].?[0].value);
+    try std.testing.expect(!items.selected[1] and items.swatches[1] == null);
+
+    for ([_][]const u8{
+        "return { { label = 'bad', selected = 'yes' } }",
+        "return { { label = 'bad', swatch = { '#000000' } } }",
+        "return { { label = 'bad', swatch = { '#gggggg', '#000000', '#ffffff' } } }",
+        "return { { label = 'bad', swatch = { '#ff_fff', '#000000', '#ffffff' } } }",
+        "return { { label = 'bad', swatch = { '#000000', '#000000', '#ffffff', extra = 'bad' } } }",
+    }) |source| {
+        try vm.evaluate(source, "@items.lua");
+        try std.testing.expectError(error.InvalidPickItems, pick_values.parse(vm.state, -1, items, &diagnostic));
+    }
+}

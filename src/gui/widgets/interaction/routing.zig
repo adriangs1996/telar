@@ -544,7 +544,14 @@ fn scroll(gui: *GuiAdapter, event: event_module.Event) !bool {
     }
 
     if (gui.app.model.name_prompt.currentConst()) |prompt| {
-        return if (prompt.target() == .history) try scrollHistory(gui, event) else false;
+        if (prompt.target() == .history) {
+            return try scrollHistory(gui, event);
+        }
+        if (prompt.target() == .palette or prompt.target() == .pick) {
+            return try scrollPalette(gui, event);
+        }
+
+        return false;
     }
 
     const pointer = if (event == .scroll) [2]f64{ event.scroll.x, event.scroll.y } else [2]f64{ event.pointer.x, event.pointer.y };
@@ -563,6 +570,39 @@ fn scroll(gui: *GuiAdapter, event: event_module.Event) !bool {
     const delta = if (event == .scroll) std.math.clamp(event.scroll.delta_y, -65535, 65535) * (if (event.scroll.precise) @as(f64, 1) else @as(f64, @floatFromInt(sidebar.step))) else if (event.pointer.kind == .scroll_up) -@as(f64, @floatFromInt(sidebar.step)) else @as(f64, @floatFromInt(sidebar.step));
     if (sidebar.scrollBy(delta)) {
         gui.chrome.invalidate();
+    }
+
+    return true;
+}
+
+fn scrollPalette(gui: *GuiAdapter, event: event_module.Event) !bool {
+    const prompt = gui.app.model.name_prompt.currentConst() orelse return true;
+    const bounds = gui.overlays.presented().native_modal orelse return true;
+    const pointer = if (event == .scroll) [2]f64{ event.scroll.x, event.scroll.y } else [2]f64{ event.pointer.x, event.pointer.y };
+    const hits = &gui.overlays.presented().palette;
+    if (!Bands.within(bounds, pointer[0], pointer[1]) or !hits.native or hits.count == 0) {
+        return true;
+    }
+
+    const state = &gui.widgets;
+    if (state.palette_scroll_generation != prompt.generation or (event == .scroll and (event.scroll.phase == .begin or event.scroll.phase == .cancel))) {
+        state.palette_scroll_remainder = 0;
+        state.palette_scroll_generation = prompt.generation;
+    }
+    if (event == .scroll and event.scroll.phase == .cancel) {
+        return true;
+    }
+
+    const delta = if (event == .scroll) event.scroll.delta_y / (if (event.scroll.precise) @max(1, @as(f64, hits.pixel_rows[0].height)) else 1) else if (event.pointer.kind == .scroll_up) @as(f64, -1) else @as(f64, 1);
+    if (!std.math.isFinite(delta)) {
+        return true;
+    }
+
+    state.palette_scroll_remainder += std.math.clamp(delta, -32, 32);
+    const lines: i16 = @intFromFloat(std.math.clamp(@trunc(state.palette_scroll_remainder), -32, 32));
+    state.palette_scroll_remainder -= @floatFromInt(lines);
+    for (0..@abs(lines)) |_| {
+        try command(gui, if (lines < 0) .move_up else .move_down);
     }
 
     return true;

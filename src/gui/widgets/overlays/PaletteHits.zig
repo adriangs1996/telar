@@ -4,10 +4,14 @@
 const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
 const PaletteHits = @This();
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 
 pub const capacity = 16;
 
 rows: [capacity]cellgrid.Rect = undefined,
+pixel_rows: [capacity]Rect = undefined,
+native: bool = false,
 /// Result index of `rows[0]`; rows are consecutive after it.
 first: u16 = 0,
 count: u8 = 0,
@@ -23,9 +27,25 @@ pub fn add(self: *PaletteHits, area: cellgrid.Rect) void {
     self.count += 1;
 }
 
+/// Records native rows without quantizing their hit bounds to terminal cells.
+/// Example: `hits.addAt(row);`.
+pub fn addAt(self: *PaletteHits, bounds: Rect) void {
+    self.native = true;
+    if (self.count == capacity or bounds.width <= 0 or bounds.height <= 0) {
+        return;
+    }
+
+    self.pixel_rows[self.count] = bounds;
+    self.count += 1;
+}
+
 /// The result index under the pointer, if a row is there.
 /// Example: `if (hits.at(mouse)) |index| choose(index);`.
 pub fn at(self: *const PaletteHits, mouse: keyinput.Mouse) ?u16 {
+    if (self.native) {
+        return null;
+    }
+
     for (self.rows[0..self.count], 0..) |row, offset| {
         if (row.contains(mouse.x, mouse.y)) {
             return self.first + @as(u16, @intCast(offset));

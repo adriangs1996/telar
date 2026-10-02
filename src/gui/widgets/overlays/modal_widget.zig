@@ -43,6 +43,7 @@ pub fn compose(input: OverlayComposition, pending: *HitState, widgets: anytype) 
             .projection = input.projection,
             .hits = &pending.palette,
             .modal = &pending.modal,
+            .native_modal = &pending.native_modal,
             .router = input.router,
             .scale = input.scale,
         } } });

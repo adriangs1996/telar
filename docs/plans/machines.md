@@ -7,6 +7,11 @@ merged into `main` (`7950e160`); see
 [worktrees and agent coordination plan](worktrees.md) and the agent control
 commands in [agent control](../flows/agent-control.md).
 
+[Fleet operations](fleet-operations.md) is the follow-up draft for preparing
+missing destination repositories, project setup and general command execution.
+Its decided defaults are coordinator-mediated Git transfer, an administration
+workspace and separate command streams with optional terminal execution.
+
 This plan assumes the native GUI is the only client. Retiring the TUI is
 being evaluated: telar targets graphical environments, and servers run only
 the runtime and the CLI. The section [Retiring the TUI](#retiring-the-tui)

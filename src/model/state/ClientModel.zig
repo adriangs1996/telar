@@ -126,6 +126,9 @@ host: HostState,
 to_host: model_data.HostEffects = .{},
 to_runtime: model_data.Outbox = .{},
 name_prompt: model_data.NamePromptState = .{},
+/// One nested palette level; only the matching child can restore it.
+palette_parent: ?model_data.Prompt = null,
+palette_child_generation: u64 = 0,
 /// The pane text an open peek shows.
 peek_screen: PeekScreen = .{},
 history_palette: HistoryPaletteState = .{},

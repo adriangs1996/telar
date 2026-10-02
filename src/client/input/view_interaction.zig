@@ -30,6 +30,7 @@ pub const Intent = union(enum) {
     diagnostic_dismiss,
     /// A pointer press on one visible row of the active list prompt.
     prompt_row: u16,
+    palette_mode: model_data.CommandPalettePrefix,
     /// A click on a configured bar component with an action or a url.
     bar_component: model_data.BarComponent,
     /// A click on a button of the open panel, by its index in the panel.

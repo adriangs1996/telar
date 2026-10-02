@@ -130,6 +130,7 @@ fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcome 
         .attachment_dismiss => |id| outcome.layout_changed = try agent_attachments.dismissAttachment(client, id),
         .diagnostic_dismiss => _ = data.client_diagnostic.clear(&client.model),
         .prompt_row => |index| try name_prompt.choosePromptRow(client, index),
+        .palette_mode => |mode| try name_prompt.selectPaletteMode(client, mode),
         .bar_component => |component| try bar_components.activate(client, component),
         .panel_component => |index| try bar_components.activatePanel(client, index),
         .toggle_bar_overflow => try bar_updates.toggleOverflow(client),

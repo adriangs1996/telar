@@ -53,6 +53,20 @@ pub fn beginCommandPalette(model: *data.ClientModel, prefix: data.CommandPalette
     return true;
 }
 
+/// Switches modes through the same edit path as a typed prefix.
+/// Example: `try name_prompt.selectPaletteMode(client, .actions);`
+pub fn selectPaletteMode(client: *Client, mode: data.CommandPalettePrefix) !void {
+    const prompt = client.model.name_prompt.currentConst() orelse return;
+    if (prompt.target() != .palette or prompt.paletteMode() == mode) {
+        return;
+    }
+
+    const text = prompt.field.text();
+    const prefix_len: u32 = if (text.len > 0 and data.CommandPalettePrefix.parse(text[0]) != null) 1 else 0;
+    _ = try inputPrompt(client, .{ .command = .{ .replace_range = .{ .range = .{ 0, prefix_len }, .text = &.{mode.byte()} } } });
+    _ = try inputPrompt(client, .{ .command = .{ .end = false } });
+}
+
 /// Chooses one visible list row with the pointer and submits it, exactly as
 /// moving the selection there and pressing Enter would.
 /// Example: `try name_prompt.choosePromptRow(app, index);`
@@ -106,6 +120,8 @@ pub fn inputPrompt(client: *Client, input: name_prompts.Input) !PromptOutcome {
     const directory_before = promptDirectoryVersion(&client.model.name_prompt);
     const paths_request = client.model.path_picker.pending_request;
     const command = path_picker.orient(&client.model, name_prompts.commandFor(&input));
+    const parent = if (before.kind == .actions and command != null and command.? == .submit) client.model.name_prompt.value else null;
+    const cancelled_child = if (client.model.name_prompt.currentConst()) |prompt| prompt.generation == client.model.palette_child_generation else false;
     const outcome = if (command) |value| try applyPromptCommand(client, value) else .unchanged;
     reportClipped(client);
     try refreshPromptHistory(&client.model, before);
@@ -139,6 +155,14 @@ pub fn inputPrompt(client: *Client, input: name_prompts.Input) !PromptOutcome {
         submission.alternate = client.list_submission_alternate;
         client.list_submission_alternate = false;
         try finishPromptList(client, submission);
+        if (parent) |saved| {
+            if (client.model.name_prompt.currentConst()) |child| {
+                if (child.target() == .pick or (child.target() == .palette and child.paletteMode() == .suggest)) {
+                    client.model.palette_parent = saved;
+                    client.model.palette_child_generation = child.generation;
+                }
+            }
+        }
     }
     if (outcome == .removed and before.kind == .history) {
         try history_palette.deleteHistorySelection(&client.model, before.selection);
@@ -155,6 +179,21 @@ pub fn inputPrompt(client: *Client, input: name_prompts.Input) !PromptOutcome {
     if (outcome == .pane_requested and before.kind == .history) {
         try history_palette.visitHistoryPane(client, before.selection);
     }
+    if (outcome == .cancelled) {
+        client.model.suggestion.invalidate();
+        if (cancelled_child) {
+            if (client.model.palette_parent) |saved| {
+                client.model.name_prompt.begin(.{ .palette = .actions });
+                const generation = client.model.name_prompt.generation;
+                client.model.name_prompt.value = saved;
+                client.model.name_prompt.value.?.generation = generation;
+            }
+        }
+
+        client.model.palette_parent = null;
+        client.model.palette_child_generation = 0;
+    }
+
     return outcome;
 }
 
@@ -210,7 +249,7 @@ pub fn openNamePrompt(model: *data.ClientModel, intent: name_prompt_opening.Inte
         },
         .goto_picker => .goto_picker,
         .history_palette => .history_palette,
-        .suggest_palette => .suggest_palette,
+        .suggest_palette => .{ .palette = .suggest },
         .path_picker => .path_picker,
         .palette => |prefix| .{
             .palette = prefix,
@@ -233,6 +272,8 @@ pub fn openNamePrompt(model: *data.ClientModel, intent: name_prompt_opening.Inte
         .copy_search => unreachable,
     };
 
+    model.palette_parent = null;
+    model.palette_child_generation = 0;
     model.name_prompt.begin(command);
     if (intent != .pick) {
         pick_list.close(model);

@@ -44,6 +44,8 @@ paste_buffer: PasteBuffer = .{},
 paste_selection: [2]u32 = .{ 0, 0 },
 paste_revision: u64 = 0,
 directory_scroll_remainder: f64 = 0,
+palette_scroll_remainder: f64 = 0,
+palette_scroll_generation: u64 = 0,
 history_scroll_remainder: f64 = 0,
 history_scroll_generation: u64 = 0,
 history_scroll_inspecting: bool = false,
@@ -110,8 +112,8 @@ pub fn overlays(self: *State, canvas: *Canvas, value: *Overlays) !void {
     }
 
     const palette = &value.prepared().palette;
-    for (palette.rows[0..palette.count], 0..) |row, index| {
-        _ = try self.dispatcher.add(.{ .id = .{ .generation = self.prompt_generation }, .bounds = canvas.rect(row), .action = .{ .intent = .{ .prompt_row = palette.first + @as(u16, @intCast(index)) } }, .layer = 1, .focusable = false });
+    for (0..palette.count) |index| {
+        _ = try self.dispatcher.add(.{ .id = .{ .generation = self.prompt_generation }, .bounds = if (palette.native) palette.pixel_rows[index] else canvas.rect(palette.rows[index]), .action = .{ .intent = .{ .prompt_row = palette.first + @as(u16, @intCast(index)) } }, .layer = 1, .focusable = false });
     }
 }
 

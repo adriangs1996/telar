@@ -101,6 +101,7 @@ pub fn forAction(projection: *const client.Projection, action: Target.Action) []
             // The chip reads as the reason it shows; a press dismisses it.
             .diagnostic_dismiss => projection.diagnostic orelse "Dismiss diagnostic",
             .prompt_row => "Choose result",
+            .palette_mode => "Choose palette mode",
             .bar_component => |component| blk: {
                 const content = projection.bar_state.layout.content(component.position) orelse break :blk "Bar item";
                 break :blk componentName(content, component.node) orelse "Bar item";

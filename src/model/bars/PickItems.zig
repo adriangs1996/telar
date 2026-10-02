@@ -3,6 +3,7 @@
 //! label. Every string lives in one fixed byte buffer, so a list costs the
 //! same whatever its items and never allocates.
 const core = @import("telar-core");
+const cellgrid = @import("cellgrid");
 const std = @import("std");
 const PickItem = @import("PickItem.zig");
 const bar_text = @import("bar_text.zig");
@@ -30,6 +31,8 @@ used: u32 = 0,
 labels: [max_items]Range = undefined,
 values: [max_items]Range = undefined,
 details: [max_items]Range = undefined,
+selected: [max_items]bool = undefined,
+swatches: [max_items]?[3]cellgrid.Color = undefined,
 count: u16 = 0,
 /// What `keep` was offered beyond the limits since the last `clear`.
 offered: Offered = .{},
@@ -83,6 +86,8 @@ pub fn append(self: *PickItems, item: PickItem) !void {
     self.labels[index] = self.store(item.label);
     self.values[index] = if (shared) self.labels[index] else self.store(chosen);
     self.details[index] = self.store(item.detail);
+    self.selected[index] = item.selected;
+    self.swatches[index] = item.swatch;
     self.count += 1;
 }
 
@@ -104,6 +109,8 @@ pub fn keep(self: *PickItems, item: PickItem) !void {
         .label = bar_text.prefix(item.label, max_label_bytes),
         .value = chosen,
         .detail = bar_text.prefix(item.detail, max_detail_bytes),
+        .selected = item.selected,
+        .swatch = item.swatch,
     };
     if (item.label.len > max_label_bytes) {
         self.offered.label = @max(self.offered.label, saturated(item.label.len));

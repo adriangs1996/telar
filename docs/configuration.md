@@ -784,6 +784,13 @@ the configuration loads. Without `items`, each nonempty line of the output,
 trimmed, is an option whose value is the line as printed; its label shows
 tabs as spaces and is cut at a character past 128 bytes.
 
+Pick item tables may also set `selected = true` to mark the current value,
+and `swatch = { "#181616", "#8ba4b0", "#8a9a7b" }` to show a background
+and two sample colors in native pickers. The three colors must be `#RRGGBB`.
+These optional fields only affect presentation; selection still passes
+`value` to `on_select`. Existing string and label/value/detail options keep
+their behavior. Lists without this metadata use a plain text row.
+
 The list command runs when the pick opens, outside the client loop; the palette
 shows "Loading…" until its options arrive. A command that fails, runs past its
 timeout or prints control characters leaves the palette open with the reason.

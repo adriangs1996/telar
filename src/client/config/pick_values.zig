@@ -2,6 +2,8 @@
 //! returns into bounded `PickItems`. An option is a string, or a table with
 //! `label` and optional `value` and `detail`.
 const data = @import("model");
+const cellgrid = @import("cellgrid");
+const std = @import("std");
 const lua_api = @import("lua-api");
 const lua_value = @import("lua_value.zig");
 
@@ -57,7 +59,7 @@ fn read(state: *lua_api.c.lua_State, position: usize, diagnostic: *data.Diagnost
         state,
         .{
             .index = -1,
-            .allowed = &.{ "label", "value", "detail" },
+            .allowed = &.{ "label", "value", "detail", "selected", "swatch" },
             .path = "pick item",
         },
         diagnostic,
@@ -77,6 +79,8 @@ fn read(state: *lua_api.c.lua_State, position: usize, diagnostic: *data.Diagnost
         .label = label,
         .value = value,
         .detail = detail orelse "",
+        .selected = try selected(state, diagnostic),
+        .swatch = try swatch(state, diagnostic),
     };
 }
 
@@ -93,4 +97,56 @@ fn absentOrString(state: *lua_api.c.lua_State, name: [*:0]const u8) bool {
     defer lua_value.pop(state, 1);
     const kind = lua_api.c.lua_type(state, -1);
     return kind == lua_api.c.LUA_TNIL or kind == lua_api.c.LUA_TSTRING;
+}
+
+fn selected(state: *lua_api.c.lua_State, diagnostic: *data.Diagnostic) !bool {
+    _ = lua_api.c.lua_getfield(state, -1, "selected");
+    defer lua_value.pop(state, 1);
+    const kind = lua_api.c.lua_type(state, -1);
+    if (kind != lua_api.c.LUA_TNIL and kind != lua_api.c.LUA_TBOOLEAN) {
+        diagnostic.set("pick item selected must be a boolean", .{});
+        return error.InvalidPickItems;
+    }
+
+    return lua_api.c.lua_toboolean(state, -1) != 0;
+}
+
+fn swatch(state: *lua_api.c.lua_State, diagnostic: *data.Diagnostic) !?[3]cellgrid.Color {
+    _ = lua_api.c.lua_getfield(state, -1, "swatch");
+    defer lua_value.pop(state, 1);
+    if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TNIL) {
+        return null;
+    }
+
+    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TTABLE or lua_api.c.lua_rawlen(state, -1) != 3) {
+        diagnostic.set("pick item swatch must contain three #RRGGBB colors", .{});
+        return error.InvalidPickItems;
+    }
+
+    lua_value.ensureArrayOnly(state, .{ .index = -1, .count = 3, .path = "pick item swatch" }, diagnostic) catch return error.InvalidPickItems;
+    var result: [3]cellgrid.Color = undefined;
+    for (&result, 1..) |*color, index| {
+        _ = lua_api.c.lua_rawgeti(state, -1, @intCast(index));
+        defer lua_value.pop(state, 1);
+        const text = lua_value.string(state, -1) orelse "";
+        if (text.len != 7 or text[0] != '#') {
+            diagnostic.set("pick item swatch colors must be #RRGGBB", .{});
+            return error.InvalidPickItems;
+        }
+
+        for (text[1..]) |byte| {
+            if (!std.ascii.isHex(byte)) {
+                diagnostic.set("pick item swatch colors must be #RRGGBB", .{});
+                return error.InvalidPickItems;
+            }
+        }
+
+        const rgb = std.fmt.parseInt(u24, text[1..], 16) catch {
+            diagnostic.set("pick item swatch colors must be #RRGGBB", .{});
+            return error.InvalidPickItems;
+        };
+        color.* = .rgb(.{ @intCast(rgb >> 16), @truncate(rgb >> 8), @truncate(rgb) });
+    }
+
+    return result;
 }

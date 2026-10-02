@@ -1,265 +1,310 @@
-//! The native command palette: one rounded surface with the prefixed field,
-//! up to sixteen result rows and the prefix legend. It reads the client's
-//! canonical results for every mode and never scores anything itself. A
-//! pick list uses the same surface with a plain field and its title in the
-//! legend.
+//! Native palette and pick lists share one pixel-based surface.
 const cellgrid = @import("cellgrid");
 const TextField = @import("../TextField.zig");
 const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const Canvas = @import("../Canvas.zig");
-const Modal = @import("Modal.zig");
 const PaletteHits = @import("PaletteHits.zig");
 const PaletteRow = @import("PaletteRow.zig");
+const PaletteLayout = @import("PaletteLayout.zig");
+const DialogSurface = @import("DialogSurface.zig");
 const SuggestionPanel = @import("SuggestionPanel.zig");
+const FormButton = @import("../FormButton.zig");
 const Label = @import("../Label.zig");
 const key_label = @import("key_label.zig");
+const gfx = @import("gfx");
+const Rect = gfx.Rect;
 const CommandPalette = @This();
 
 pub const max_rows = PaletteHits.capacity;
-/// Logical width; converted to cells through the host scale.
-pub const width_px = 900;
-/// The top edge sits at this share of the host height.
+pub const width_px = PaletteLayout.width_px;
 pub const top_percent = 11;
-pub const radius_px = 10;
-/// Footer tokens; each stays under the shaping cache's entry size so a warm
-/// frame shapes nothing. The active prefix token is painted in the accent.
-/// Icons and key words use glyphs the embedded faces cover.
-pub const legend = [_][]const u8{ ">", "actions", "@", "agents & panes", "?", "suggest", ":", "machines", "↑↓", "select", "enter", "run", "esc", "close" };
-/// The machine list's keys instead of the prefixes.
-pub const machine_legend = [_][]const u8{ "enter", "show", "⇧enter", "enable/disable", "^R", "rename", "^D", "remove", "esc", "close" };
-/// Cells between a pick's title and its keys, as between legend words.
-const title_gap_cells = 3;
-/// A pick list's keys, after its title.
-pub const pick_legend = [_][]const u8{ "↑↓", "select", "enter", "choose", "esc", "close" };
-
-/// The list the palette shows: the mode its prefix selects, or a pick.
-const List = enum {
-    goto,
-    actions,
-    suggest,
-    machines,
-    pick,
-
-    fn of(prompt: *const data.Prompt) List {
-        if (prompt.target() == .pick) {
-            return .pick;
-        }
-
-        return switch (prompt.paletteMode()) {
-            .goto => .goto,
-            .actions => .actions,
-            .suggest => .suggest,
-            .machines => .machines,
-        };
-    }
-};
-
+pub const radius_px = 12;
 projection: *const client.Projection,
 hits: *PaletteHits,
 modal: *?cellgrid.Rect,
-/// The native keymap that prints bound chords next to actions; absent in
-/// fixtures without a window.
+native_modal: *?Rect,
 router: ?*const client.key_router.Type,
 scale: f32,
 
-/// Cells the palette occupies for `rows` visible results, centered
-/// horizontally and anchored at eleven percent of the host height. Tiny
-/// hosts fall back to the shared modal bounds.
-/// Example: `const bounds = palette.area(canvas, rows);`
-pub fn area(self: CommandPalette, canvas: *Canvas, rows: u16) cellgrid.Rect {
-    const host: cellgrid.Rect = .{ .w = self.projection.host_size.cols, .h = self.projection.host_size.rows };
-    const scale = if (self.scale > 0) self.scale else 1;
-    const cell: f32 = @floatFromInt(@max(canvas.metrics.cell_width, 1));
-    const wanted: u16 = @intFromFloat(@ceil(@as(f32, width_px) * scale / cell));
-    const width = @min(@max(wanted, 24), @min(host.w -| 4, 140));
-    const height: u16 = if (self.projection.prompt.?.paletteMode() == .suggest)
-        SuggestionPanel.height(self.projection.suggestion, width)
-    else
-        rows + 4;
-    const top = @as(u16, @intCast(@as(u32, host.h) * top_percent / 100));
-    if (host.w < 12 or top + height > host.h) {
-        return Modal.bounds(host, .{ .w = width, .h = height });
+const Matches = union(enum) {
+    goto: data.Results,
+    actions: data.CommandResults,
+    machines: client.MachineResults,
+    pick: data.PickResults,
+    suggest,
+
+    fn count(self: *const Matches) u16 {
+        return switch (self.*) {
+            .goto => |*rows| rows.len,
+            .actions => |*rows| rows.len,
+            .machines => |*rows| rows.rows(),
+            .pick => |*rows| rows.len,
+            .suggest => 0,
+        };
     }
 
-    return .{ .x = (host.w - width) / 2, .y = top, .w = width, .h = height };
-}
+    fn group(self: *const Matches, index: u16) []const u8 {
+        return switch (self.*) {
+            .goto => |*rows| switch (rows.slice()[index].item) {
+                .workspace => "Contexts",
+                .tab => "Tabs",
+                .agent => "Agents",
+            },
+            .actions => "Actions",
+            .machines => "Machines",
+            else => "",
+        };
+    }
 
-/// Paints the palette and records one hit per visible row.
+    fn tall(self: *const Matches, index: u16) bool {
+        return self.* == .goto and self.goto.slice()[index].item == .agent;
+    }
+};
+
+/// Paints all modes with the same native field, list and action footer.
 /// Example: `try palette.draw(canvas);`
 pub fn draw(self: CommandPalette, canvas: *Canvas) !void {
-    const hits = self.hits;
-    hits.* = .{};
+    self.hits.* = .{};
     const prompt = self.projection.prompt.?;
-    const colors = canvas.theme.palette;
-    const scale = if (self.scale > 0) self.scale else 1;
-    const list = List.of(&prompt);
-    const picks = &self.projection.model.pick_list;
-    var goto_results: data.Results = .{};
-    var action_results: data.CommandResults = .{};
-    var machine_results: client.MachineResults = .{};
-    var pick_results: data.PickResults = .{};
-    const total: u16 = switch (list) {
-        .goto => blk: {
-            data.goto_picker.collect(self.sources(), prompt.paletteQuery(), &goto_results);
-            break :blk goto_results.len;
-        },
-        .actions => blk: {
-            data.command_palette.collect(prompt.paletteQuery(), &action_results);
-            break :blk action_results.len;
-        },
-        .suggest => 1,
-        .machines => blk: {
-            const machines = self.projection.machines orelse break :blk 0;
-            client.machine_picker.collect(machines, prompt.paletteQuery(), &machine_results);
-            break :blk machine_results.rows();
-        },
-        .pick => blk: {
-            data.pick_list.collect(&picks.items, prompt.field.text(), &pick_results);
-            break :blk pick_results.len;
-        },
+    const pick = prompt.target() == .pick;
+    const suggest = !pick and prompt.paletteMode() == .suggest;
+    const layout = PaletteLayout.measure(canvas, .{ .pick_rows = if (pick) self.projection.model.pick_list.items.count else null, .suggest = suggest });
+    self.modal.* = .{ .w = self.projection.host_size.cols, .h = self.projection.host_size.rows };
+    self.native_modal.* = layout.bounds;
+    try (DialogSurface{ .bounds = layout.bounds, .viewport = layout.viewport }).draw(canvas);
+    const first = canvas.quads.items().len;
+    defer canvas.quads.clipFrom(first, layout.bounds);
+    try self.heading(canvas, layout.heading);
+    try self.search(canvas, layout.search);
+    try self.tabs(canvas, layout.tabs);
+    if (suggest) {
+        try (SuggestionPanel{ .bounds = layout.results, .footer_bounds = layout.footer, .projection = self.projection }).draw(canvas);
+        return;
+    }
+
+    var matches: Matches = undefined;
+    if (pick) {
+        matches = .{ .pick = .{} };
+        data.pick_list.collect(&self.projection.model.pick_list.items, prompt.field.text(), &matches.pick);
+    } else {
+        switch (prompt.paletteMode()) {
+            .goto => {
+                matches = .{ .goto = .{} };
+                data.goto_picker.collect(self.sources(), prompt.paletteQuery(), &matches.goto);
+            },
+            .actions => {
+                matches = .{ .actions = .{} };
+                data.command_palette.collect(prompt.paletteQuery(), &matches.actions);
+            },
+            .machines => {
+                matches = .{ .machines = .{} };
+                if (self.projection.machines) |machines| {
+                    client.machine_picker.collect(machines, prompt.paletteQuery(), &matches.machines);
+                }
+            },
+            .suggest => unreachable,
+        }
+    }
+    try self.results(canvas, layout, &matches);
+    try self.footer(canvas, layout.footer, matches.count() != 0);
+}
+
+fn heading(self: CommandPalette, canvas: *Canvas, bounds: Rect) !void {
+    const prompt = self.projection.prompt.?;
+    const title = if (prompt.target() == .pick) self.projection.model.pick_list.title() else "Suggest a command";
+    var content = PaletteLayout.inset(bounds, canvas.chrome.px(8));
+    const model = self.projection.model;
+    if (model.palette_parent != null and model.palette_child_generation == prompt.generation) {
+        const width = @min(content.width, canvas.chrome.px(26));
+        try (FormButton{ .bounds = .{ .x = content.x, .y = bounds.y, .width = width, .height = bounds.height }, .text = "‹", .label = "Back to actions", .action = .{ .prompt = .cancel }, .generation = prompt.generation, .namespace = 3, .quiet = true }).draw(canvas);
+        content.x += width;
+        content.width -= width;
+    }
+
+    _ = try canvas.textAt(content, .{ .text = title, .face = .sans, .size = .small, .color = canvas.theme.palette.text, .alpha = 0.75 });
+}
+
+fn search(self: CommandPalette, canvas: *Canvas, bounds: Rect) !void {
+    const prompt = self.projection.prompt.?;
+    const px = canvas.chrome;
+    const inset = @min(px.px(16), bounds.width / 8);
+    const icon_width = @min(px.px(18), bounds.width / 8);
+    const close_width = @min(px.px(30), bounds.width / 6);
+    const close: Rect = .{ .x = bounds.x + bounds.width - inset - close_width, .y = bounds.y, .width = close_width, .height = bounds.height };
+    try canvas.iconAt(.{ .x = bounds.x + inset, .y = bounds.y, .width = icon_width, .height = bounds.height }, .{ .text = "\u{f002}", .size = .body, .color = canvas.theme.palette.text, .alpha = 0.65 });
+    try (FormButton{ .bounds = close, .text = "", .label = "Close palette", .action = .{ .prompt = .cancel }, .generation = prompt.generation, .namespace = 1, .quiet = true }).draw(canvas);
+    try PaletteRow.keycap(canvas, close, "esc");
+    const x = bounds.x + inset + icon_width;
+    var field = TextField.fromPrompt(&prompt, .{ .x = x, .y = bounds.y, .width = @max(0, close.x - px.px(8) - x), .height = bounds.height }, .name);
+    field.form_control = true;
+    field.bare = true;
+    field.label = "Search palette";
+    field.placeholder = if (prompt.target() == .pick) "Search options…" else switch (prompt.paletteMode()) {
+        .goto => "Search contexts, tabs and agents…",
+        .actions => "Search actions…",
+        .machines => "Search machines…",
+        .suggest => "What would you like to do?",
     };
-    const visible: u16 = @max(@min(total, max_rows), 1);
-    const frame = self.area(canvas, visible);
-    self.modal.* = frame;
-    try canvas.fillRounded(frame, .{ .radius = radius_px * scale, .color = canvas.covering(colors.panel_bg) });
-    try canvas.ring(frame, .{ .width = scale, .radius = radius_px * scale, .color = colors.surface1 });
+    field.placeholder_prefix = if (prompt.target() == .palette and prompt.field.len > 0 and data.CommandPalettePrefix.parse(prompt.field.text()[0]) != null) prompt.field.text()[0] else null;
+    try field.draw(canvas);
+    try separator(canvas, .{ .x = bounds.x, .y = bounds.y + bounds.height - @min(px.px(1), bounds.height), .width = bounds.width, .height = @min(px.px(1), bounds.height) });
+}
 
-    const content = frame.inner(1);
-    if (content.h < 3) {
+fn tabs(self: CommandPalette, canvas: *Canvas, bounds: Rect) !void {
+    if (bounds.height <= 0) {
         return;
     }
 
-    if (list == .suggest) {
-        const inset: u16 = @min(2, content.w / 8);
-        const suggestion_area: cellgrid.Rect = .{ .x = content.x + inset, .y = content.y, .w = content.w - inset * 2, .h = content.h };
-        try (SuggestionPanel{ .area = suggestion_area, .projection = self.projection, .hits = hits }).draw(canvas);
-        return;
-    }
-
-    try drawField(canvas, content.row(0), prompt, list);
-    const rows = content.splitTop(1)[1].splitBottom(1)[0];
-    const selected: u16 = if (total == 0) 0 else @min(prompt.selection(), total - 1);
-    const count = @min(rows.h, visible);
-    const start = (selected + 1) -| count;
-    hits.first = start;
-    if (total == 0) {
-        const failed = list == .pick and picks.phase == .failed;
-        const empty: []const u8 = if (list != .pick) "No matches" else switch (picks.phase) {
-            .loading => "Loading…",
-            .failed => picks.errorSlice(),
-            .ready, .closed => "No matches",
-        };
-        try canvas.text(rows.row(0).splitLeft(2)[1], .{
-            .text = empty,
-            .color = if (failed) colors.red else colors.subtext0,
-            .face = .sans,
-            .size = .body,
-        });
-    }
-
-    for (0..@min(count, total)) |offset| {
-        const index = start + @as(u16, @intCast(offset));
-        const row = rows.row(@intCast(offset));
-        hits.add(row);
-        if (index == selected) {
-            try canvas.fill(row, colors.surface0);
+    const prompt = self.projection.prompt.?;
+    const px = canvas.chrome;
+    var x = bounds.x + px.px(12);
+    for ([_]data.CommandPalettePrefix{ .goto, .actions, .machines }) |mode| {
+        const label: Label = .{ .text = switch (mode) {
+            .goto => "Navigate  @",
+            .actions => "Actions  >",
+            .machines => "Machines  :",
+            .suggest => unreachable,
+        }, .face = .sans, .size = .small, .color = canvas.theme.palette.text };
+        const width = @min(try canvas.measure(label) + px.px(20), @max(0, bounds.x + bounds.width - px.px(8) - x));
+        const tab: Rect = .{ .x = x, .y = bounds.y + px.px(5), .width = width, .height = @max(0, bounds.height - px.px(10)) };
+        if (mode == prompt.paletteMode()) {
+            try canvas.fillRoundedAt(tab, .{ .color = canvas.theme.palette.surface0, .radius = px.px(5) });
         }
 
+        try (FormButton{ .bounds = tab, .text = "", .label = label.text, .action = .{ .intent = .{ .palette_mode = mode } }, .generation = prompt.generation, .namespace = mode.byte(), .quiet = true }).draw(canvas);
+        _ = try canvas.textAt(PaletteLayout.inset(tab, px.px(4)), label);
+        x += width + px.px(4);
+    }
+}
+
+fn rowHeight(matches: *const Matches, index: u16, layout: PaletteLayout) f32 {
+    return if (matches.tall(index)) layout.agent_height else layout.row_height;
+}
+
+fn results(self: CommandPalette, canvas: *Canvas, layout: PaletteLayout, matches: *const Matches) !void {
+    const bounds = PaletteLayout.inset(layout.results, canvas.chrome.px(8));
+    const total = matches.count();
+    const prompt = self.projection.prompt.?;
+    const first_quad = canvas.quads.items().len;
+    defer canvas.quads.clipFrom(first_quad, bounds);
+    if (total == 0) {
+        const picks = &self.projection.model.pick_list;
+        const text = if (matches.* != .pick) "No results. Try another search." else switch (picks.phase) {
+            .loading => "Loading options…",
+            .failed => picks.errorSlice(),
+            .ready, .closed => "No results. Try another search.",
+        };
+        _ = try canvas.textAt(PaletteLayout.inset(bounds, canvas.chrome.px(12)), .{ .text = text, .face = .sans, .size = .body, .color = if (matches.* == .pick and picks.phase == .failed) canvas.theme.palette.red else canvas.theme.palette.text, .alpha = 0.75 });
+        return;
+    }
+
+    const grouped = prompt.paletteQuery().len == 0 and matches.* != .pick;
+    const selected = @min(prompt.selection(), total - 1);
+    var start = selected;
+    var used = rowHeight(matches, selected, layout) + if (grouped) layout.group_height else @as(f32, 0);
+    while (start > 0 and selected - start + 1 < max_rows) {
+        const preceding = start - 1;
+        const extra = rowHeight(matches, preceding, layout) + if (grouped and !std.mem.eql(u8, matches.group(preceding), matches.group(start))) layout.group_height else @as(f32, 0);
+        if (used + extra > bounds.height) {
+            break;
+        }
+
+        start = preceding;
+        used += extra;
+    }
+
+    self.hits.first = start;
+    var y = bounds.y;
+    var last_group: []const u8 = "";
+    var index = start;
+    while (index < total and self.hits.count < max_rows) : (index += 1) {
+        const group = matches.group(index);
+        if (grouped and !std.mem.eql(u8, group, last_group)) {
+            if (y + layout.group_height + rowHeight(matches, index, layout) > bounds.y + bounds.height) {
+                break;
+            }
+
+            _ = try canvas.textAt(.{ .x = bounds.x + canvas.chrome.px(10), .y = y, .width = @max(0, bounds.width - canvas.chrome.px(20)), .height = layout.group_height }, .{ .text = group, .face = .sans, .size = .small, .bold = true, .color = canvas.theme.palette.text, .alpha = 0.65 });
+            y += layout.group_height;
+            last_group = group;
+        }
+
+        const height = rowHeight(matches, index, layout);
+        if (y + height > bounds.y + bounds.height) {
+            break;
+        }
+
+        const row_bounds: Rect = .{ .x = bounds.x, .y = y, .width = bounds.width, .height = height };
         var label_storage: [data.goto_picker.max_label_bytes]u8 = undefined;
         var key_storage: [key_label.max_bytes]u8 = undefined;
-        var child = switch (list) {
-            .goto => self.pickerRow(goto_results.slice()[index].item, &label_storage),
-            .actions => self.actionRow(action_results.slice()[index].index, &key_storage),
-            .machines => if (machine_results.slotAt(index)) |slot| self.machineRow(slot, &label_storage) else addMachineRow(),
-            .pick => pickRow(&picks.items, pick_results.slice()[index].index),
+        var row = switch (matches.*) {
+            .goto => |*rows| self.pickerRow(rows.slice()[index].item, &label_storage),
+            .actions => |*rows| self.actionRow(rows.slice()[index].index, &key_storage),
+            .machines => |*rows| if (rows.slotAt(index)) |slot| self.machineRow(slot, &label_storage) else addMachineRow(),
+            .pick => |*rows| pickRow(&self.projection.model.pick_list.items, rows.slice()[index].index),
             .suggest => unreachable,
         };
-        child.area = row;
-        try child.draw(canvas);
+        row.selected = index == selected;
+        try row.drawAt(canvas, row_bounds);
+        self.hits.addAt(row_bounds);
+        y += height;
     }
-
-    var legend_row = content.row(content.h - 1);
-    if (list == .pick) {
-        legend_row = try drawTitle(canvas, legend_row, picks.title());
-    }
-
-    try drawLegend(canvas, legend_row, list, prompt.paletteMode());
 }
 
-// The pick's title in the accent, before its keys; returns what is left.
-fn drawTitle(canvas: *Canvas, row: cellgrid.Rect, title: []const u8) !cellgrid.Rect {
-    const cell: f32 = @floatFromInt(@max(canvas.metrics.cell_width, 1));
-    const label: Label = .{
-        .text = title,
-        .color = canvas.theme.palette.accent,
-        .bold = true,
-        .face = .sans,
-        .size = .body,
+fn footer(self: CommandPalette, canvas: *Canvas, bounds: Rect, enabled: bool) !void {
+    const px = canvas.chrome;
+    const prompt = self.projection.prompt.?;
+    try separator(canvas, .{ .x = bounds.x, .y = bounds.y, .width = bounds.width, .height = @min(bounds.height, px.px(1)) });
+    const inset = @min(px.px(14), bounds.width / 8);
+    const key_width = @min(px.px(22), bounds.width / 10);
+    try PaletteRow.keycap(canvas, .{ .x = bounds.x + inset, .y = bounds.y, .width = key_width, .height = bounds.height }, "↑");
+    try PaletteRow.keycap(canvas, .{ .x = bounds.x + inset + key_width + px.px(4), .y = bounds.y, .width = key_width, .height = bounds.height }, "↓");
+    const action = if (prompt.target() == .pick) "Choose  ↵" else switch (prompt.paletteMode()) {
+        .goto => "Open  ↵",
+        .actions => "Run  ↵",
+        .machines => "Show  ↵",
+        .suggest => unreachable,
     };
-    const used: u16 = @intFromFloat(@ceil(try canvas.measure(label) / cell));
-    try canvas.text(row, label);
-    return row.splitLeft(@min(used + title_gap_cells, row.w))[1];
+    const action_width = @min(px.px(112), bounds.width / 2);
+    if (bounds.width > px.px(320)) {
+        const x = bounds.x + inset + key_width * 2 + px.px(14);
+        _ = try canvas.textAt(.{ .x = x, .y = bounds.y, .width = @max(0, bounds.width - (x - bounds.x) - action_width - inset), .height = bounds.height }, .{ .text = if (prompt.paletteMode() == .machines) "⇧↵ enable/disable · ^R rename · ^D remove" else "Navigate", .face = .sans, .size = .small, .color = canvas.theme.palette.text, .alpha = 0.65 });
+    }
+
+    try (FormButton{ .bounds = .{ .x = bounds.x + bounds.width - action_width - inset, .y = bounds.y + px.px(4), .width = action_width, .height = @max(0, bounds.height - px.px(8)) }, .text = action, .action = .{ .prompt = .submit }, .generation = prompt.generation, .namespace = 2, .quiet = true, .enabled = enabled }).draw(canvas);
 }
 
-// Keys in the monospace face, words in sans; the active prefix in accent.
-fn drawLegend(canvas: *Canvas, row: cellgrid.Rect, list: List, mode: data.command_palette.Prefix) !void {
-    const colors = canvas.theme.palette;
-    const cell: f32 = @floatFromInt(@max(canvas.metrics.cell_width, 1));
-    var remaining = row;
-    const tokens: []const []const u8 = switch (list) {
-        .machines => &machine_legend,
-        .pick => &pick_legend,
-        .goto, .actions, .suggest => &legend,
-    };
-    for (tokens, 0..) |token, index| {
-        const is_key = index % 2 == 0;
-        const active = list != .pick and token.len == 1 and data.command_palette.Prefix.parse(token[0]) == mode;
-        const label: Label = .{ .text = token, .color = if (active) colors.accent else colors.subtext0, .bold = active, .face = if (is_key) .mono else .sans, .size = .body };
-        const used: u16 = @intFromFloat(@ceil(try canvas.measure(label) / cell));
-        if (used + 1 > remaining.w) {
-            return;
-        }
-
-        try canvas.text(remaining, label);
-        remaining = remaining.splitLeft(used + @as(u16, if (is_key) 1 else 3))[1];
-    }
+fn separator(canvas: *Canvas, bounds: Rect) !void {
+    try canvas.fillAt(bounds, canvas.theme.palette.surface1);
 }
 
 fn sources(self: CommandPalette) data.Sources {
     return .{ .agents = self.projection.agents, .workspaces = self.projection.workspaces, .model = self.projection.model };
 }
 
-// The prefix byte is painted over the field text in the accent color; the
-// field keeps it as ordinary text so editing never needs a second cursor.
-// A pick's field has no prefix.
-fn drawField(canvas: *Canvas, row: cellgrid.Rect, prompt: data.Prompt, list: List) !void {
-    const colors = canvas.theme.palette;
-    var field = prompt.field;
-    const view = field.view(row.w);
-    try TextField.fromPrompt(&prompt, canvas.rect(row), .name).draw(canvas);
-    if (list != .pick and !view.clipped_left and view.text.len != 0 and data.command_palette.Prefix.parse(view.text[0]) != null) {
-        const cell = row.splitLeft(1)[0];
-        try canvas.fill(cell, colors.surface0);
-        try canvas.text(cell, .{ .text = view.text[0..1], .color = colors.accent, .bold = true });
-    }
-}
-
 fn pickerRow(self: CommandPalette, item: data.goto_picker.Item, storage: *[data.goto_picker.max_label_bytes]u8) PaletteRow {
     const label = data.goto_picker.describe(self.sources(), item, storage);
     const split = std.mem.indexOf(u8, label, "  ") orelse label.len;
     const icon: []const u8 = switch (item) {
-        .workspace => "■",
-        .tab => "□",
-        .agent => "●",
+        .workspace => "\u{f07b}",
+        .tab => "\u{f2d0}",
+        .agent => "\u{f121}",
     };
     const kind: []const u8 = switch (item) {
         .workspace => "context",
         .tab => "tab",
         .agent => "agent",
     };
-    return .{ .icon = icon, .primary = label[0..split], .secondary = std.mem.trimStart(u8, label[split..], " "), .hint = kind };
+    if (item == .agent) {
+        const agent = self.projection.agents.find(item.agent) orelse return .{ .icon = icon, .primary = label };
+        const detail = std.fmt.bufPrint(storage, "{s} · {s}", .{ agent.providerName(), agent.workspaceLabel() }) catch agent.providerName();
+        return .{ .icon = icon, .primary = if (agent.sessionTitle().len != 0) agent.sessionTitle() else agent.providerName(), .secondary = detail, .detail_below = true };
+    }
+
+    const primary = if (item == .tab and std.mem.startsWith(u8, label, "tab ")) label[4..split] else label[0..split];
+    return .{ .icon = icon, .primary = primary, .secondary = std.mem.trimStart(u8, label[split..], " "), .hint = if (self.projection.prompt.?.paletteQuery().len > 0) kind else "" };
 }
 
 fn actionRow(self: CommandPalette, index: u8, storage: *[key_label.max_bytes]u8) PaletteRow {
@@ -268,14 +313,16 @@ fn actionRow(self: CommandPalette, index: u8, storage: *[key_label.max_bytes]u8)
         const key = router.prefixedKeyForAction(entry.action) orelse break :blk "";
         break :blk key_label.chord(storage, router.prefix, key, key_label.host_style);
     } else "";
-    return .{ .icon = "»", .primary = entry.label, .hint = hint };
+    return .{ .icon = "\u{f105}", .primary = entry.label, .hint = hint, .shortcut = hint.len != 0 };
 }
 
 fn pickRow(items: *const data.PickItems, index: u16) PaletteRow {
     return .{
-        .icon = "›",
+        .icon = "",
         .primary = items.label(index),
         .secondary = items.detail(index),
+        .checked = items.selected[index],
+        .swatch = items.swatches[index],
     };
 }
 

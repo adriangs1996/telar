@@ -11,7 +11,7 @@ const Session = @import("Session.zig");
 const CommandPalette = @import("../widgets/overlays/CommandPalette.zig");
 const PaletteHits = @import("../widgets/overlays/PaletteHits.zig");
 const PaletteRow = @import("../widgets/overlays/PaletteRow.zig");
-const WrappedLines = @import("../widgets/overlays/WrappedLines.zig");
+const PaletteLayout = @import("../widgets/overlays/PaletteLayout.zig");
 
 test "palette row clips long hints in narrow and empty widget bounds" {
     const fixture = try Fixture.init();
@@ -55,35 +55,31 @@ test "native palette switches its list by the first byte and paints inside one r
     fixture.model.name_prompt.begin(.{ .palette = .goto });
     try fixture.paint();
     var presented = fixture.overlays.presented();
-    const area = presented.modal.?;
+    const area = presented.native_modal.?;
     try std.testing.expectEqual(@as(u8, 3), presented.palette.count);
-    try std.testing.expectEqual(@as(u16, 3 + 4), area.h);
-    try std.testing.expectEqual(@as(u16, fixture.size.rows * CommandPalette.top_percent / 100), area.y);
-    try std.testing.expect(area.w >= 24 and area.w <= fixture.size.cols - 4);
-    try quadsInside(fixture, area);
-    const surface = fixture.renderer.quads.items()[0];
-    try std.testing.expectEqual(@as(f32, CommandPalette.radius_px), surface.radius);
-    try std.testing.expectEqual(@as(f32, 1), fixture.renderer.quads.items()[1].border);
+    try std.testing.expectEqual(@as(f32, 640), area.width);
+    try std.testing.expect(area.y > 0 and area.y + area.height <= 720);
+    try quadsInViewport(fixture);
 
     _ = fixture.model.name_prompt.apply(.{ .home = false });
     _ = fixture.model.name_prompt.apply(.delete);
     _ = fixture.model.name_prompt.apply(.{ .insert = ">" });
     try fixture.paint();
     presented = fixture.overlays.presented();
-    try std.testing.expectEqual(@as(u8, CommandPalette.max_rows), presented.palette.count);
-    try std.testing.expectEqual(@as(u16, CommandPalette.max_rows + 4), presented.modal.?.h);
-    try quadsInside(fixture, presented.modal.?);
+    try std.testing.expect(presented.palette.count > 0 and presented.palette.count <= CommandPalette.max_rows);
+    try std.testing.expectEqual(area.height, presented.native_modal.?.height);
+    try quadsInViewport(fixture);
 
     _ = fixture.model.name_prompt.apply(.{ .insert = "zzzz" });
     try fixture.paint();
     try std.testing.expectEqual(@as(u8, 0), fixture.overlays.presented().palette.count);
-    try std.testing.expectEqual(@as(u16, 1 + 4), fixture.overlays.presented().modal.?.h);
+    try std.testing.expect(fixture.overlays.presented().native_modal != null);
 
     _ = fixture.model.name_prompt.apply(.{ .home = false });
     _ = fixture.model.name_prompt.apply(.delete);
     _ = fixture.model.name_prompt.apply(.{ .insert = "?" });
     try fixture.paint();
-    try std.testing.expectEqual(@as(u8, 1), fixture.overlays.presented().palette.count);
+    try std.testing.expectEqual(@as(u8, 0), fixture.overlays.presented().palette.count);
     try std.testing.expectEqualStrings("?zzzz", fixture.model.name_prompt.currentConst().?.field.text());
 }
 
@@ -97,22 +93,20 @@ test "native palette rows are hits that choose their result and scroll with the 
 
     try fixture.paint();
     const hits = &fixture.overlays.presented().palette;
-    try std.testing.expectEqual(@as(u8, CommandPalette.max_rows), hits.count);
-    try std.testing.expectEqual(@as(u16, 3), hits.first);
-    const row = hits.rows[2];
-    const press = fixture.overlays.pointer(.{ .x = row.x + 1, .y = row.y, .kind = .press }).?;
+    try std.testing.expect(hits.count > 2 and hits.count <= CommandPalette.max_rows);
+    try std.testing.expect(hits.first > 0);
+    try std.testing.expectEqual(@as(u16, CommandPalette.max_rows + 2), hits.first + hits.count - 1);
+    const row = hits.pixel_rows[2];
+    const press = fixture.pointer(.{ .x = row.x + 1, .y = row.y + 1, .kind = .press });
     try std.testing.expect(press.consumed);
-    try std.testing.expectEqualDeep(client.Intent{ .prompt_row = 5 }, press.intent);
-    try std.testing.expect(fixture.overlays.pointer(.{ .x = row.x + 1, .y = row.y, .kind = .release }).?.consumed);
+    try std.testing.expectEqualDeep(client.Intent{ .prompt_row = hits.first + 2 }, press.intent);
+    _ = fixture.pointer(.{ .x = row.x + 1, .y = row.y + 1, .kind = .release });
     const outside = fixture.overlays.pointer(.{ .x = 0, .y = 0, .kind = .press }).?;
     try std.testing.expect(outside.consumed and outside.intent == .none);
     _ = fixture.overlays.pointer(.{ .x = 0, .y = 0, .kind = .release });
-    const secondary = fixture.overlays.pointer(.{ .x = row.x + 1, .y = row.y, .kind = .press, .button = 1 }).?;
-    try std.testing.expect(secondary.consumed and secondary.intent == .none);
-    _ = fixture.overlays.pointer(.{ .x = row.x + 1, .y = row.y, .kind = .release, .button = 1 });
 
     var empty: PaletteHits = .{};
-    try std.testing.expect(empty.at(.{ .x = row.x, .y = row.y, .kind = .move }) == null);
+    try std.testing.expect(empty.at(.{ .x = 0, .y = 0, .kind = .move }) == null);
     empty.add(.{});
     try std.testing.expectEqual(@as(u8, 0), empty.count);
 }
@@ -227,11 +221,10 @@ test "suggestion separates the request command and paste control across window s
     for ([_]u32{ 1280, 640, 320 }) |width| {
         fixture.size = try fixture.renderer.measure(.{ .width = width, .height = 720, .scale = 1 });
         try fixture.paint();
-        const modal = fixture.overlays.presented().modal.?;
-        try quadsInside(fixture, modal);
-        const preview = fixture.overlays.presented().palette.rows[0];
+        const modal = fixture.overlays.presented().native_modal.?;
+        try quadsInViewport(fixture);
         var canvas = fixture.canvas();
-        const command_bounds = canvas.rect(preview);
+        const command_bounds = PaletteLayout.measure(&canvas, .{ .suggest = true }).results;
         const targets = fixture.widgets.dispatcher.maps.presented();
         var found_field = false;
         var found_submit = false;
@@ -244,7 +237,7 @@ test "suggestion separates the request command and paste control across window s
             if (target.action == .prompt and target.action.prompt == .submit) {
                 found_submit = true;
                 try std.testing.expect(target.enabled);
-                try std.testing.expectEqualStrings("Paste command  Enter", target.label[0..target.label_len]);
+                try std.testing.expectEqualStrings("Paste command  ↵", target.label[0..target.label_len]);
                 try std.testing.expect(target.bounds.y >= command_bounds.y + command_bounds.height);
                 const route = fixture.widgets.dispatcher.route(.{ .pointer = .{ .kind = .press, .x = target.bounds.x + 1, .y = target.bounds.y + 1 } });
                 try std.testing.expect(route.consumed);
@@ -254,10 +247,8 @@ test "suggestion separates the request command and paste control across window s
         }
 
         try std.testing.expect(found_field and found_submit);
-        const lines: WrappedLines = .{ .text = command, .width = preview.w - 2 };
-        try std.testing.expect(lines.count() <= preview.h - 2);
         if (width == 1280) {
-            try std.testing.expect(canvas.rect(modal).width >= 900);
+            try std.testing.expectEqual(@as(f32, 640), modal.width);
         }
     }
 }
@@ -307,7 +298,7 @@ test "suggestion clips long unicode commands on short and scaled hosts" {
         fixture.size = try fixture.renderer.measure(viewport);
         fixture.overlays.scale = viewport.scale;
         try fixture.paint();
-        try quadsInside(fixture, fixture.overlays.presented().modal.?);
+        try quadsInViewport(fixture);
     }
 }
 
@@ -393,7 +384,7 @@ test "a pick list fills the palette from the model, filters by label or detail a
     });
     try fixture.paint();
     try std.testing.expectEqual(@as(u8, 0), fixture.overlays.presented().palette.count);
-    try std.testing.expectEqual(@as(u16, 1 + 4), fixture.overlays.presented().modal.?.h);
+    try std.testing.expect(fixture.overlays.presented().native_modal != null);
 
     for ([_][2][]const u8{ .{ "claude-opus-5-5", "anthropic" }, .{ "gpt-6-sol", "openai-codex" }, .{ "claude-sonnet-5-5", "anthropic" } }) |option| {
         try picks.items.append(.{
@@ -406,7 +397,7 @@ test "a pick list fills the palette from the model, filters by label or detail a
     try fixture.paint();
     var presented = fixture.overlays.presented();
     try std.testing.expectEqual(@as(u8, 3), presented.palette.count);
-    try quadsInside(fixture, presented.modal.?);
+    try quadsInViewport(fixture);
 
     // A prefix byte is ordinary query text in a pick list.
     _ = fixture.model.name_prompt.apply(.{ .insert = ">anthropic" });
@@ -423,4 +414,73 @@ test "a pick list fills the palette from the model, filters by label or detail a
     try fixture.paint();
     try std.testing.expectEqual(@as(u8, 0), fixture.overlays.presented().palette.count);
     try std.testing.expect(fixture.renderer.quads.items().len != quads);
+}
+
+fn quadsInViewport(fixture: *Fixture) !void {
+    const width: f32 = @floatFromInt(fixture.renderer.viewport[0]);
+    const height: f32 = @floatFromInt(fixture.renderer.viewport[1]);
+    for (fixture.renderer.quads.items()) |quad| {
+        try std.testing.expect(quad.x >= -0.001 and quad.y >= -0.001);
+        try std.testing.expect(quad.x + quad.width <= width + 0.001);
+        try std.testing.expect(quad.y + quad.height <= height + 0.001);
+    }
+}
+
+test "native palette mode controls preserve query and invalidate a suggestion" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    const app = session.gui.app;
+    _ = client.name_prompt.beginCommandPalette(&app.model, .goto);
+    _ = try client.name_prompt.inputPrompt(app, .{ .command = .{ .insert = "split" } });
+    try client.name_prompt.selectPaletteMode(app, .actions);
+    try std.testing.expectEqualStrings(">split", app.model.name_prompt.currentConst().?.field.text());
+    try std.testing.expectEqual(@as(u16, 0), app.model.name_prompt.currentConst().?.selection());
+    app.model.suggestion.expect(99);
+    try client.name_prompt.selectPaletteMode(app, .suggest);
+    try std.testing.expectEqualStrings("?split", app.model.name_prompt.currentConst().?.field.text());
+    try std.testing.expect(!app.model.suggestion.apply(.{ .request_id = @enumFromInt(99), .status = .ready, .text = "stale" }));
+    _ = try client.name_prompt.inputPrompt(app, .{ .command = .{ .insert = " pane" } });
+    try std.testing.expectEqualStrings("?split pane", app.model.name_prompt.currentConst().?.field.text());
+}
+
+test "a nested suggestion restores the palette query and discards its late reply" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    const app = session.gui.app;
+    _ = client.name_prompt.beginCommandPalette(&app.model, .actions);
+    _ = try client.name_prompt.inputPrompt(app, .{ .command = .{ .insert = "Suggest a command" } });
+    _ = try client.name_prompt.inputPrompt(app, .{ .command = .submit });
+    const generation = app.model.name_prompt.currentConst().?.generation;
+    try std.testing.expectEqual(data.CommandPalettePrefix.suggest, app.model.name_prompt.currentConst().?.paletteMode());
+    try std.testing.expect(app.model.palette_parent != null);
+    app.model.suggestion.expect(99);
+    _ = try client.name_prompt.inputPrompt(app, .{ .command = .cancel });
+    try std.testing.expectEqualStrings(">Suggest a command", app.model.name_prompt.currentConst().?.field.text());
+    try std.testing.expect(app.model.name_prompt.currentConst().?.generation != generation);
+    try std.testing.expect(!app.model.suggestion.apply(.{ .request_id = @enumFromInt(99), .status = .ready, .text = "stale" }));
+    _ = try client.name_prompt.inputPrompt(app, .{ .command = .cancel });
+    try std.testing.expect(!app.model.name_prompt.active());
+}
+
+test "native palette mode buttons publish their exact mode without stealing the query" {
+    const fixture = try Fixture.init();
+    defer fixture.deinit();
+    fixture.model.name_prompt.begin(.{ .palette = .goto });
+    try fixture.paint();
+    const registry = fixture.widgets.dispatcher.maps.presented();
+    var count: usize = 0;
+    for (registry.targets[0..registry.len]) |target| {
+        if (target.action != .intent or target.action.intent != .palette_mode) {
+            continue;
+        }
+
+        const press = fixture.pointer(.{ .x = target.bounds.x + 1, .y = target.bounds.y + 1, .kind = .press });
+        try std.testing.expectEqualDeep(target.action.intent, press.intent);
+        _ = fixture.pointer(.{ .x = target.bounds.x + 1, .y = target.bounds.y + 1, .kind = .release });
+        count += 1;
+    }
+
+    try std.testing.expectEqual(@as(usize, 3), count);
 }

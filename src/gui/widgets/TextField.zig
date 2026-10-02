@@ -24,6 +24,8 @@ form_control: bool = false,
 /// A bare form control paints no box of its own; its owner draws the band.
 bare: bool = false,
 placeholder: []const u8 = "",
+/// A palette prefix remains editable while the empty query shows its hint.
+placeholder_prefix: ?u8 = null,
 layer: u8 = 1,
 multiline: bool = false,
 
@@ -115,6 +117,13 @@ pub fn draw(self: TextField, canvas: *Canvas) !void {
         _ = try canvas.textAt(content, .{ .text = self.placeholder, .color = palette.subtext0, .alpha = 0.7, .face = .sans, .size = .body });
     } else {
         _ = try painter.textAt(content, .{ .text = view.text, .color = palette.text, .underline = display.provisional });
+    }
+
+    if (self.placeholder_prefix) |prefix| {
+        if (view.text.len == 1 and view.text[0] == prefix and !display.provisional) {
+            const gap = cell * 2;
+            _ = try canvas.textAt(.{ .x = content.x + gap, .y = content.y, .width = @max(0, content.width - gap), .height = content.height }, .{ .text = self.placeholder, .color = palette.text, .alpha = 0.55, .face = .sans, .size = .body });
+        }
     }
 
     if (self.focused) {

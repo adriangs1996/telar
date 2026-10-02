@@ -39,6 +39,7 @@ pub const entries = [_]CommandEntry{
     .{ .action = .forget_gone_worktrees, .label = "Forget gone worktrees" },
     .{ .action = .enter_copy_mode, .label = "Enter copy mode" },
     .{ .action = .history_palette, .label = "Search command history" },
+    .{ .action = .suggest_command, .label = "Suggest a command…" },
     .{
         .action = .path_picker,
         .label = "Insert a path",
