@@ -41,11 +41,11 @@ class Actions:
         self.items.append(dict(capture=str(self.directory / f'{name}.png')))
 
 
-def exercise(binary, directory, env, library, actions, name):
+def exercise(binary, directory, env, library, actions, name, gui_args=('--no-config',)):
     script = directory / f'{name}.json'
     script.write_text(json.dumps(actions.items))
     with (directory / f'{name}.log').open('w') as log:
-        subprocess.run([str(binary), 'gui', '--no-config', '/bin/sh'], cwd=directory,
+        subprocess.run([str(binary), 'gui', *gui_args, '/bin/sh'], cwd=directory,
                        env=dict(env, DYLD_INSERT_LIBRARIES=str(library), TELAR_GUI_ACTIONS=str(script)),
                        stdout=log, stderr=log, timeout=100, check=True)
 
