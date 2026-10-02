@@ -33,11 +33,10 @@ execution frequency. Historical trace rates must not fill that gap.
 
 | Cluster and trigger | Current accesses together | Frequency / work established | Representation to evaluate |
 | --- | --- | --- | --- |
-| Runtime delivery eligibility after an event | Pane cell/cwd/title/foreground/progress/review revisions, render/exit/media flags; attachment observed revisions, outstanding frame, deadline and graphics status | One flush per non-stop runtime event; pending mask scans attachments, final pass scans pane slots. Hz unmeasured | Dense delivery columns indexed by stable internal slots; compare against a pending set maintained by transitions |
+| Runtime delivery eligibility after an event | Pane cell/cwd/title/foreground/progress revisions, render/exit/media flags; attachment observed revisions, outstanding frame, deadline and graphics status | One flush per non-stop runtime event; pending mask scans attachments, final pass scans pane slots. Hz unmeasured | Dense delivery columns indexed by stable internal slots; compare against a pending set maintained by transitions |
 | PTY ingest, screen projection and per-client damage | PTY bytes + VT state; then row damage + current/acknowledged cells + text metadata; then wire spans | Ingest follows PTY batches; damage scans dirty rows × width per eligible attachment. Frames are paced/coalesced | Keep sequential row buffers; evaluate row summaries/ranges only where producer information is available |
 | GUI cell validation | Source cell bytes/style/width + retained visual key/validity + physical rect + selection | 6,120 comparisons per draw at 153×40, even for one changed cell | Retain visual preparation by pane/row generations; visit changed rows/ranges for comparison, preserve fallback |
 | GUI quad emission | Background-present flag; ink length; primary/overflow quads; clipping/cursor/layer | Another 6,120 metadata visits per same draw; quads still emitted for the scene | Separate small emission descriptors from comparison keys if measurement supports it; contiguous runs without rebuilding/copying a second complete scene |
-| Review search status/navigation | Edition/file, query, row text/hunk/side, match offset, current selection | 1,000 row / 17,000 logical-byte reads per draw in the unchanged 1,000-line fixture | Per-row match counts/prefix counts, optionally bounded match positions; derive status without rescanning text |
 | Sidebar/card text and fleet navigation | Machine/session/pane identities, parent/project/order/card shape; title, status, elapsed time, bounds and shaped glyphs | Order is already revision-cached. Drawing still visits list entries; 65-byte unchanged titles cause 1–2 shaping calls per card/draw in the fixture | Cached row heights/offsets and bounded prepared label runs, with stable text separated from animated status |
 | Image placement and residency | Machine/image generation, placement, geometry/layer; texture residency/lease/last use/bytes | Resolution is revision-guarded; maintenance runs at preparation. Renderer checks three image layers | Existing SoA/dense occupancy first; layer spans or maintenance indexes only if measured scans justify them |
 | Focus/input/layout | Active tab + layout snapshot + focused pane modes and bounds | Per semantic input/capture; pane lookup already indexed, layout already revision-cached | Keep existing layout projection; avoid a second model-wide copy without a measured lookup cost |
@@ -115,7 +114,7 @@ latency runner and telemetry. Do not introduce a second metrics framework.
 - Run isolated local scenarios: idle; typing; sparse output; continuous full
   output; 1/4/8 visible panes at constant total area; 8/64 live panes mostly
   hidden; one/two clients with different viewports and one slow client; synthetic
-  fleet metadata; review search; images plus typing; reconnect/font/resize.
+  fleet metadata; images plus typing; reconnect/font/resize.
   Replay fleet data locally; this task requires no access to Personal.
 - Collect a fixed work count and wall-clock interval per scenario. Use separate
   uninstrumented ReleaseFast CPU/latency runs, count builds and timing builds.
@@ -128,19 +127,8 @@ order between runtime and rendering. Counts alone cannot decide the winner.
 
 ### 1. Remove repeated semantic computation
 
-The strongest verified repeated computations are diff search status and long
-unchanged card labels. Run them as separate experiments.
-
-**Review.** Retain per-row match counts with prefix totals, keyed by edition,
-file and query. Recompute only on those changes. Visual hunk/side restriction
-selects the corresponding totals; selection movement updates the selected match
-ordinal without scanning the whole file. If navigation also benefits, compare
-bounded match-position storage with counts plus local-row search; do not store
-unbounded matches. Preserve overlapping matches (`offset = at + 1`) and current
-visual-search semantics. Additional capacity is proportional to rows and, only
-if admitted, match positions. Read cost becomes constant or local-row/index
-work, while building the index still pays the full search cost. Rapid query
-editing must be measured as well as repeated drawing.
+Long unchanged card labels remain a candidate for reducing repeated work.
+The review-search experiment is retired with the Reviews feature.
 
 **Labels.** Keep the existing shaping cache. Compare bounded prepared runs for
 visible labels longer than its 64-byte limit against a bounded long-run cache.
@@ -149,9 +137,9 @@ Separate title preparation from age/spinner/status drawing. Preserve full
 Unicode shaping: arbitrary text chunking is not an equivalence-preserving
 substitute. Do not enlarge every short-run slot merely to admit rare long text.
 
-Exit: unchanged draws perform no repeated text search/shaping for the admitted
-case; output and navigation match the reference; alternating-query/title-churn
-cases include preparation cost and remain acceptable in paired measurements.
+Exit: unchanged draws perform no repeated shaping for the admitted case;
+output matches the reference; title churn includes preparation cost and remains
+acceptable in paired measurements.
 
 ### 2. Runtime delivery working data
 

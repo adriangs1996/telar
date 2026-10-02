@@ -147,7 +147,7 @@ bounds are separate changes.
    timing gains. Validate target-specific policies on native Linux and x86-64
    before platform-wide claims.
 
-Repeated review-search work, label shaping and renderer row/emission clusters
+Label shaping and renderer row/emission clusters
 remain in the [access roadmap](access-clusters.md). Live CPU contribution and
 reuse determine their priority relative to runtime placement. Idle-flush gains
 are not a prediction of interactive FPS or perceptible keystroke latency.
