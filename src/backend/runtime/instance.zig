@@ -167,6 +167,34 @@ test "a stopped runtime leaves a proxy tunnel nothing interrupts behind at the s
     try std.testing.expect(!first.resources.proxy.active());
 }
 
+test "a launch that finds its endpoint taken leaves the proxy port and its memory alone" {
+    const io = std.testing.io;
+    var temp = try SocketDirectory.create(io);
+    defer temp.cleanup(io);
+    var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/taken.sock", .{temp.path()});
+    var files = try ProxyTestFiles.init(io);
+    defer files.deinit();
+    const proxy_config = files.config();
+    const initialization: Initialization = .{
+        .dependencies = .{ .io = io, .allocator = std.testing.allocator },
+        .options = .{ .endpoint = endpoint, .environment = std.testing.environ, .proxy = proxy_config },
+    };
+
+    var running: Runtime = undefined;
+    try running.init(initialization);
+    defer running.deinit();
+    const port = running.resources.proxy.port().?;
+
+    var late: Runtime = undefined;
+    try std.testing.expectError(error.AddressInUse, late.init(initialization));
+
+    var record_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const record = try std.Io.Dir.cwd().readFile(io, proxy_config.port_path, &record_buffer);
+    const remembered = try std.fmt.parseInt(u16, std.mem.sliceTo(record, '\n'), 10);
+    try std.testing.expectEqual(port, remembered);
+}
+
 /// How far past the proxy's stop deadline a teardown may return on a loaded
 /// machine.
 const stop_slack_ms = 3 * std.time.ms_per_s;

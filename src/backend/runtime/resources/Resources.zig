@@ -59,6 +59,13 @@ pub fn acquire(self: *Resources, initialization: Initialization, comptime fail_a
     errdefer self.child_environment.deinit();
     try resources_namespace.checkpoint(fail_after, .child_environment);
 
+    // The socket comes first: a launch that finds another runtime on it
+    // stops here, before it binds a proxy port or rewrites the port that
+    // runtime remembers.
+    self.listener = try LocalListener.listen(self.io(), initialization.options.endpoint);
+    errdefer self.listener.deinit(self.io());
+    try resources_namespace.checkpoint(fail_after, .listener);
+
     self.proxy = try ProxyRuntime.init(
         self.io(),
         self.gpa,
@@ -68,14 +75,12 @@ pub fn acquire(self: *Resources, initialization: Initialization, comptime fail_a
         },
     );
     errdefer self.proxy.deinit();
-    try resources_namespace.checkpoint(fail_after, .proxy);
-
-    self.listener = try LocalListener.listen(self.io(), initialization.options.endpoint);
-    errdefer self.listener.deinit(self.io());
     // Only the runtime holding the socket rotates its log, so a second
-    // launch racing this one never moves a live runtime's log aside.
+    // launch racing this one never moves a live runtime's log aside. The
+    // proxy starts before that, so a proxy that cannot start still leaves
+    // its reason in the launch's start log.
     self.log = if (initialization.options.own_log) RuntimeLog.open(self.io(), initialization.options.endpoint) else .{};
-    try resources_namespace.checkpoint(fail_after, .listener);
+    try resources_namespace.checkpoint(fail_after, .proxy);
 
     self.telemetry = resources_namespace.initTelemetry(self.io(), initialization.options.endpoint);
     errdefer self.telemetry.deinit(self.io());

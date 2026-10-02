@@ -81,6 +81,11 @@ Proxy.port / Proxy.preferredPort -> ProxyRuntime.port / preferredPort
   tunnel exits its process after the rest of its teardown
   (`Runtime.leftProxyTunnels`, `src/cli/server.zig`), because returning from
   `main` would wait for that tunnel's thread.
+- A runtime takes its socket before it creates its proxy
+  (`Resources.acquire`). A launch that finds another runtime on the socket
+  fails there, so it binds no proxy port and leaves the port file alone. It
+  used to bind a second port and record it, and the next restart of the
+  runtime that was running moved to that port.
 - Binding a port another runtime remembers deletes that runtime's file, so the
   directory holds at most one file per port, 128 in all.
 - The shared `proxy-port` of earlier versions is a preference only for the
@@ -120,7 +125,8 @@ earlier may still point at. Exhausting the range fails the start with
   proves the shutdown reaches every admitted connection and no retired one.
   `src/backend/runtime/instance.zig` proves the same for a whole runtime:
   its teardown returns at the deadline, the checkpoint is written and
-  restores, and the next runtime binds the same proxy port.
+  restores, and the next runtime binds the same proxy port. It also proves
+  a launch on a taken socket leaves the port file as it was.
 - `src/client/machines/runtime_connection.zig` proves the default endpoint
   ignores the sockets a pane or a user names; `src/cli/server.zig` proves a
   relative `XDG_DATA_HOME` is ignored.

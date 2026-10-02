@@ -9,8 +9,8 @@ const Resources = @import("Resources.zig");
 
 pub const AcquisitionPhase = enum {
     child_environment,
-    proxy,
     listener,
+    proxy,
     telemetry,
     history,
     plugins,
