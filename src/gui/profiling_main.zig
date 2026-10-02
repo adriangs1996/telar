@@ -59,7 +59,10 @@ pub fn main(init: std.process.Init) !void {
 const Probe = struct {
     const iterations = 1000;
     const warmup = 200;
-    const Mode = enum { retained, sparse, full, theme, resize, selection, font, two_one_active, two_all_active, cursor, focus, reattach, images };
+    const Mode = enum { retained, sparse, full, theme, resize, selection, font, two_one_active, two_all_active, cursor, focus, reattach, images, ligatures };
+    /// The row the `ligatures` workload repeats: operators the embedded face
+    /// joins between words it never joins.
+    const ligature_row = "a -> b != c ";
     /// Kitty graphics placements the `images` workloads draw and resolve.
     const image_placements = 256;
     const image_count = 64;
@@ -127,9 +130,9 @@ const Probe = struct {
         const size = try renderer.measure(.{ .width = @as(u32, cols) * renderer.metrics.cell_width + renderer.origin[0] * 2, .height = 40 * @as(u32, renderer.metrics.cell_height) + renderer.chrome.vertical() + 16, .scale = 1 });
         var pane = try data.Pane.init(accounting.allocator(), .{ .spec = .{ .pane_id = @enumFromInt(1), .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) }, .size = size }, .attached = true });
         defer pane.deinit();
-        for (pane.buffer.cells) |*cell| {
+        for (pane.buffer.cells, 0..) |*cell, index| {
             cell.* = .{};
-            cell.bytes[0] = 'a';
+            cell.bytes[0] = if (mode == .ligatures) ligature_row[index % size.cols % ligature_row.len] else 'a';
         }
         pane.attachment_generation = 1;
         pane.applied_frame_id = 1;
@@ -208,6 +211,13 @@ const Probe = struct {
                     renderer.scale = 0;
                     _ = try renderer.measure(.{ .width = renderer.viewport[0], .height = renderer.viewport[1], .scale = 1 });
                 },
+                .ligatures => {
+                    // `->` and `=>` share the spacer cell, so each edit
+                    // repaints the edited cell and the ligature beside it.
+                    pane.applied_frame_id += 1;
+                    const cell = &pane.buffer.cells[(stimulus % size.rows) * size.cols + 2];
+                    cell.bytes[0] = if (cell.bytes[0] == '-') '=' else '-';
+                },
                 .sparse => {
                     pane.applied_frame_id += 1;
                     const cell = &pane.buffer.cells[stimulus % pane.buffer.cells.len];
@@ -232,6 +242,9 @@ const Probe = struct {
             renderer.seal();
             if (mode == .sparse and index > 0 and renderer.repainted_cells != 1) {
                 return error.InvalidSparseWorkload;
+            }
+            if (mode == .ligatures and index > 0 and renderer.repainted_cells != 2) {
+                return error.InvalidLigatureWorkload;
             }
             if (multiple and index > 0 and renderer.repainted_cells != @as(usize, if (mode == .two_all_active) 2 else 1)) {
                 return error.InvalidSplitWorkload;
