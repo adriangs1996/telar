@@ -9,6 +9,44 @@ find `telar` afterwards. `telar` typed in a terminal opens the same window as
 the launchers; without a display (an SSH login, or Linux without
 `WAYLAND_DISPLAY`) it says so and names the CLI commands to use instead.
 
+## Install a local build
+
+No releases are published yet. The release, installer and Homebrew sections
+below describe packaging infrastructure; use a local build today.
+Start with the [build dependencies](development.md#build-requirements).
+
+On macOS, build the app, copy it to a location you will keep, and open it:
+
+```sh
+zig build bundle -Doptimize=ReleaseFast
+mkdir -p "$HOME/Applications"
+```
+
+Use Finder to copy `zig-out/Telar.app` to `~/Applications`. If another copy
+already exists there, quit its window and decide whether to replace it. This
+does not itself stop its runtime. Then launch and link the installed executable:
+
+```sh
+open "$HOME/Applications/Telar.app"
+"$HOME/Applications/Telar.app/Contents/Resources/bin/telar" cli install --dir "$HOME/.local/bin"
+```
+
+On Linux, install into a user-owned prefix:
+
+```sh
+zig build -Doptimize=ReleaseFast --prefix "$HOME/.local"
+"$HOME/.local/bin/telar" --version
+```
+
+This installs the binary, diagram helper, desktop entry and icon. It can
+replace a previous build at that prefix. Ensure `~/.local/bin` is on PATH.
+The app menu entry opens the GUI through the login shell.
+
+A running runtime keeps its existing build. After updating, save/finish the
+work in its panes before stopping that runtime and starting the new build.
+Reinstall agent integrations if their executable path changed; see
+[agents](agents.md#install-an-integration).
+
 ## macOS
 
 ```sh

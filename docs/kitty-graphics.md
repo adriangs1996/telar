@@ -8,6 +8,46 @@ messages. The window keeps a bounded replica of them
 ([pane images](flows/pane-images.md)). The terminal client re-emitted them as
 KGP to its host terminal; that path left with it.
 
+## Display an image
+
+Use a program that emits the Kitty Graphics Protocol inside a Telar pane. For
+example, if you have the standalone `kitten` tool installed and a local PNG:
+
+```sh
+kitten icat --transfer-mode=stream ./image.png
+```
+
+Run it on the machine that owns the pane, with an image that exists there.
+Streaming sends the image bytes through the terminal instead of relying on
+shared files between machines. `kitten` is an external tool, not bundled with
+Telar; its [icat documentation](https://sw.kovidgoyal.net/kitty/kittens/icat/)
+describes installation and options. The image should appear in that pane.
+
+![A Telar pane displaying the project's icon below a chafa command using Kitty graphics](images/telar-kitty-graphics.png)
+
+This example uses `chafa -f kitty` to display Telar's icon directly in a pane.
+Both Chafa and kitten are external programs that can emit Kitty graphics.
+
+If no image appears, check the program's stderr, the file path and the protocol
+it emits. Telar supports a subset of Kitty graphics, not every terminal image
+protocol or Kitty feature. See [supported operations](#implemented-child-subset)
+and [limitations](#remaining-limitations). Unicode placeholder placements and
+animation are not a general compatibility promise.
+
+Image memory is bounded. To choose smaller runtime quotas, merge this field
+into your [config's root table](configuration.md#check-and-reload):
+
+```lua
+runtime = {
+  graphics = { pane_mib = 32, global_mib = 128 },
+}
+```
+
+Runtime settings apply at startup; changing the file alone does not change a
+running runtime's quota. Oversized images can be rejected or evicted. Inspect
+`telar diagnostics limits --json` for limits the runtime reports reaching.
+The remaining sections document the protocol and implementation.
+
 ## Ownership
 
 The runtime owns decoded child images, child image and placement IDs,

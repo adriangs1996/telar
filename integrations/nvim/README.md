@@ -5,6 +5,11 @@ through the nearest Telar pane at an editor edge.
 
 ## Install with lazy.nvim
 
+Keep a Telar source checkout available and replace `/path/to/telar` below with
+its absolute path. Save this plugin spec in your Neovim configuration's
+lazy.nvim specs directory (for example, `lua/plugins/telar.lua` in LazyVim),
+then install the dependency with `:Lazy sync` and restart Neovim inside Telar.
+
 Frameworks such as LazyVim define their own `ctrl+h/j/k/l` mappings. Declare
 the mappings in the plugin spec so lazy.nvim owns their final registration,
 and disable the adapter's duplicate mappings:
@@ -63,15 +68,26 @@ plugin spec or another config file registers them.
 
 ## Configure Telar
 
-Telar must own the same global keys with its navigation-aware action:
+Telar must own the same global keys with its navigation-aware action. This is
+a complete Telar `config.lua`; if you already have one, merge the bindings into
+`client.keybindings` and keep a single return statement. See the
+[configuration guide](../../docs/configuration.md#start-with-a-small-config)
+for the file location and validation:
 
 ```lua
-config.client.keybindings = {
-  telar.bind_global({ "ctrl+h" }, telar.action.navigate_pane({ direction = "left" })),
-  telar.bind_global({ "ctrl+j" }, telar.action.navigate_pane({ direction = "down" })),
-  telar.bind_global({ "ctrl+k" }, telar.action.navigate_pane({ direction = "up" })),
-  telar.bind_global({ "ctrl+l" }, telar.action.navigate_pane({ direction = "right" })),
-}
+local telar = require("telar")
+
+return telar.config({
+  api_version = 2,
+  client = {
+    keybindings = {
+      telar.bind_global({ "ctrl+h" }, telar.action.navigate_pane({ direction = "left" })),
+      telar.bind_global({ "ctrl+j" }, telar.action.navigate_pane({ direction = "down" })),
+      telar.bind_global({ "ctrl+k" }, telar.action.navigate_pane({ direction = "up" })),
+      telar.bind_global({ "ctrl+l" }, telar.action.navigate_pane({ direction = "right" })),
+    },
+  },
+})
 ```
 
 Do not use `focus_pane` for these keys. That action moves Telar focus before
@@ -81,6 +97,11 @@ Outside Neovim, Telar moves to a neighboring pane. At an outer edge it sends
 the original control key to the focused process. Inside Neovim, Telar sends the
 key to the editor. `smart-splits.nvim` moves within Neovim first and invokes
 `telar pane focus --current` only at the editor boundary.
+
+To check it, split a Telar tab left/right (`Ctrl+b`, then `%`) and run Neovim
+in one pane. Create an editor split with `:vsplit`. `Ctrl+h` and `Ctrl+l`
+should first move between editor windows, then cross into the adjacent Telar
+pane when you reach the editor's edge.
 
 ## Coexist with Herdr and tmux
 

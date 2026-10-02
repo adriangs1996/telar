@@ -1,92 +1,165 @@
-# Lua configuration
+# Configuring Telar
 
-Telar loads `$XDG_CONFIG_HOME/telar/config.lua`, or
-`$HOME/.config/telar/config.lua` when `XDG_CONFIG_HOME` is unset. Use
-`--config PATH` to select another file, `--no-config` to disable it, and
-`telar config check [PATH] [--profile NAME]` to validate a generation without
-starting a client or runtime. The check also parses enabled plugin packages and
-resolves every static plugin action referenced by the keymap.
+Start with the complete examples below. The [reference sections](#reference)
+cover individual settings once you need them. Commands assume `telar` is
+[on your PATH](usage.md#put-telar-on-your-path).
 
-Configuration precedence is:
+## Start with a small config
 
-1. compiled defaults;
-2. the base Lua table;
-3. the selected `--profile` overlay;
-4. explicit CLI options.
+Telar works without a config file. To customize it, create
+`$XDG_CONFIG_HOME/telar/config.lua`, or `~/.config/telar/config.lua` if that
+variable is unset. Create the directory first:
 
-The file must return a table with `api_version = 2`. Unknown fields are errors.
-The complete schema is demonstrated by [`examples/config.lua`](../examples/config.lua).
+```sh
+mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/telar"
+```
+
+Open `config.lua` in your editor and save this complete configuration. If you
+already have a config, edit the corresponding fields instead of replacing it:
+
+```lua
+return {
+  api_version = 2,
+  theme = "vesper",
+  gui = {
+    font = { size = 16 },
+  },
+  client = {
+    sidebar = { visible = true },
+  },
+}
+```
+
+The window will use Vesper colors and a larger font. The default bundled font
+needs no installation. Omitted fields keep their defaults. Every config must
+return one table with `api_version = 2`; unknown fields are errors.
+
+Validate the file and open Telar:
+
+```sh
+telar config check
+telar
+```
+
+A successful check prints `telar config: OK`. It does not start a runtime or
+window, and it cannot prove that an explicitly named font exists on the machine.
+
+## Change shortcuts
+
+This complete example changes the prefix to `Ctrl+s`, keeps default shortcuts
+under that new prefix and adds a global sidebar toggle:
 
 ```lua
 local telar = require("telar")
 
 return telar.config({
   api_version = 2,
-  theme = telar.theme({
-    base = "vesper",
-    colors = { accent = "#ffc799" },
-  }),
   client = {
     prefix = "ctrl+s",
-    sidebar = { visible = true },
-    sound = { enabled = true, ready = true, needs_input = true },
-    input = { sequence_timeout_ms = 1000 },
     keybindings = {
       telar.bind({ "s" }, telar.action.toggle_sidebar()),
-      telar.bind({ "alt+left" }, telar.action.resize_sidebar({ direction = "left" })),
-      telar.bind({ "shift+left" }, telar.action.resize_pane({ direction = "left" })),
-      telar.bind({ "z" }, telar.action.toggle_pane_fullscreen()),
-      telar.bind_global({ "ctrl+shift+s" }, telar.action.detach()),
-    },
-  },
-  runtime = {
-    history = { path = "state/history.db" },
-    graphics = { pane_mib = 64, global_mib = 256 },
-    proxy = {
-      enabled = false,
-      ca_dir = "state/proxy",
-      capture = {
-        enabled = false,
-        max_part_bytes = 16 * 1024 * 1024,
-        max_exchange_bytes = 32 * 1024 * 1024,
-        max_total_bytes = 128 * 1024 * 1024,
-        join_timeout_ms = 15 * 60 * 1000,
-      },
-      intercept_hosts = { "api.example.com" },
-    },
-    agent_descriptions = {
-      command = {
-        "codex", "exec", "--ephemeral", "--ignore-rules",
-        "--skip-git-repo-check", "--model", "gpt-5.6-luna",
-        "-c", 'model_reasoning_effort="low"', "-",
-      },
-      timeout_ms = 15000,
-    },
-    agents = {
-      {
-        name = "gemini",
-        display_name = "Gemini CLI",
-        icon = "G",
-        process_names = { "gemini" },
-        process_paths = { "/@google/gemini-cli/" },
-        identity = { "gemini cli" },
-        working = { "esc to cancel" },
-        attachments = "ordered",
-      },
-      { name = "claude", working = { "brewing" } },
-    },
-  },
-  plugins = {
-    telar.plugin({ path = "plugins/sample", enabled = true }),
-  },
-  profiles = {
-    remote = {
-      client = { sidebar = { visible = false } },
-      runtime = { graphics = { pane_mib = 16, global_mib = 64 } },
+      telar.bind_global({ "ctrl+alt+b" }, telar.action.toggle_sidebar()),
     },
   },
 })
 ```
+
+`telar.bind` requires the prefix first; `telar.bind_global` does not. Here,
+`Ctrl+s`, then `s` and `Ctrl+Alt+b` both toggle the sidebar. To combine this
+with your existing file, add the `require` line at the top and merge `prefix`
+and `keybindings` into its `client` table. Keep a single `return` statement.
+
+Custom bindings replace conflicting defaults and leave other defaults active.
+Changing the prefix also changes how you invoke the defaults. `cmd` means
+`super`, the Command key on macOS. Native text-editing shortcuts take priority.
+See [bindings](#bindings) for action names, chords and sequences.
+
+## Use a profile
+
+Profiles let the same file describe more than one setup. This complete example
+uses a larger font and hides the sidebar for presentations:
+
+```lua
+return {
+  api_version = 2,
+  theme = "shade",
+  gui = { font = { size = 15 } },
+  profiles = {
+    presentation = {
+      gui = { font = { size = 22 } },
+      client = { sidebar = { visible = false } },
+    },
+  },
+}
+```
+
+```sh
+telar config check --profile presentation
+telar gui --profile presentation
+```
+
+The profile overlays only its supplied fields. The order is compiled defaults,
+base config, selected profile, then explicit CLI options. For example,
+`telar gui --profile presentation --theme vesper` keeps the profile's font size
+but chooses Vesper. A CLI theme remains selected across config reloads.
+
+## Check and reload
+
+For a separate trial file, validate and launch it explicitly:
+
+```sh
+telar config check /absolute/path/to/trial.lua
+telar gui --config /absolute/path/to/trial.lua
+```
+
+A window watches the config it loaded and its imported modules. Save the file;
+client and GUI settings reload automatically after validation. If the file did
+not exist when the window started, reopen the window with the new file. An
+invalid reload keeps the previous working settings and reports the error.
+
+| Change | When it takes effect |
+| --- | --- |
+| Theme, font, sidebar or keybindings | On a successful window config reload. |
+| Selected profile or `--config` file | Choose it when opening a window. |
+| `runtime.*` settings | When the runtime starts with those settings. |
+| Runtime proxy tap plugins | When the runtime starts; client reload does not replace them. |
+
+A window restart does not restart the runtime. To change runtime settings,
+finish/save work in all its panes, run `telar server stop` from an external
+terminal, and reopen Telar with the desired config/profile. Stopping the
+runtime terminates its running children. For a remote runtime, apply its
+settings on that machine; see [remote configuration](remote.md#open-and-reconnect).
+
+| Problem | What to do |
+| --- | --- |
+| Syntax error or unknown field | Run `telar config check` against the same file and profile as the window; fix the reported setting. |
+| Check says OK but the font fails to load | Use an installed family name or remove `family` to use the bundled font. |
+| Saving has no effect | Check `--config`, `--profile`, `--no-config` and CLI overrides; a failed reload preserves the old config. |
+| A binding disappeared | Check for conflicts with custom bindings and native text-editing shortcuts. |
+| History database cannot open | If you set `runtime.history.path`, create its parent directory. Relative paths are resolved beside `config.lua`. |
+| Plugin not found | Check the package path relative to the config directory and follow [plugin setup](plugins.md#try-the-example-plugin). |
+
+To recover from a broken window configuration, launch `telar gui --no-config`.
+This uses window defaults; it does not reset an already running runtime or
+delete your configuration.
+
+## Reference
+
+| Customize | Section |
+| --- | --- |
+| Colors and presets | [Theme](#theme) |
+| Fonts, cursor, padding, transparency and frame rate | [Graphical application](#graphical-application) |
+| Agent recognition | [Agents](#agents) |
+| Optional model-generated titles and command suggestions | [Runtime model commands](#runtime-model-commands) |
+| Custom bars, menus and panels | [Bars](#bars) |
+| Actions and shortcuts | [Bindings](#bindings) |
+| Runtime settings and Lua restrictions | [Environment and reload](#environment-and-reload) |
+
+The remaining Lua snippets are **fields or expressions to merge into your
+config**, unless they include their own `return` table. Do not paste a second
+root table into the same file. The annotated [advanced example](../examples/config.lua)
+also includes optional model commands and a sample plugin; read those sections
+before enabling them. It is not a minimal starter configuration.
 
 ### Retired keys
 
@@ -107,6 +180,8 @@ the window or the runtime from starting. Remove them from older files:
   icon sets; the window always draws the Nerd Font subset embedded in Telar,
   so no Nerd Font needs to be installed.
 
+### Runtime model commands
+
 `runtime.agent_descriptions` is an explicit privacy opt-in. When the first user
 request starts model work, Telar sends that request through standard input to
 the configured command and accepts one short line as the session title. The
@@ -116,9 +191,9 @@ arguments and 4096 bytes in total; `timeout_ms` must be between 1000 and 60000.
 Telar retains its local placeholder if the command is missing, busy, times out,
 or returns invalid output.
 
-The example above uses the installed Codex subscription with Luna at low
-reasoning effort. A Claude Code subscription can be selected without changing
-Telar:
+The [advanced example](../examples/config.lua) configures a Codex command for
+these titles. To use an installed and authenticated Claude Code CLI instead,
+add the following inside your `runtime` table:
 
 ```lua
 agent_descriptions = {
@@ -157,6 +232,8 @@ configured, `prefix+?` (`telar.action.suggest_command()`) opens the
 [command suggestion](flows/suggest-command.md) palette: it sends the focused
 pane's working directory, its last visible rows and your request to the
 engine, and Enter pastes the answer without running it.
+
+### Editor and sounds
 
 `client.editor` selects the executable used to open local file links. For example,
 `client = { editor = "/opt/homebrew/bin/nvim" }` works without `$EDITOR` in the
@@ -320,7 +397,7 @@ gui = {
 | `cursor.style` | `block` | `block`, `bar`, `underline`, or `hollow`. |
 | `cursor.blink` | `true` | Whether the default cursor blinks. An explicit application DECSCUSR style overrides this default; DEC mode 12 can suppress blinking. |
 | `cursor.blink_interval_ms` | `600` | Duration of each visible or hidden phase; integer `100..5000`. |
-| `sidebar.width` | `284` | Width of the native sidebar band in logical pixels; `220..800`, decimals allowed. Scaled by the display and rounded to device pixels, then clamped so the workbench keeps at least 20 columns after the band and its 8 px gap; a window too narrow for the narrowest band hides it. Keyboard `resize_sidebar` moves the width by 16 logical pixels and dragging the edge sets it exactly; both change only this window and are not written back to the file, so the value here is what a new window starts from. A reload that changes the value replaces the window's width; one that leaves it unchanged keeps an interactive choice. |
+| `sidebar.width` | `284` | Width of the native sidebar band in logical pixels; `220..800`, decimals allowed. Scaled by the display and rounded to device pixels, then clamped so the workbench keeps at least 20 columns after the band and its 8 px gap; a window too narrow for the full sidebar shows a workspace rail if space permits. Keyboard `resize_sidebar` moves the width by 16 logical pixels and dragging the edge sets it exactly; both change only this window and are not written back to the file, so the value here is what a new window starts from. A reload that changes the value replaces the window's width; one that leaves it unchanged keeps an interactive choice. |
 | `max_fps` | the display's rate | Caps how many frames a second the window presents; an integer `30..240`. By default the window presents at the refresh rate of the display it is on (120 on ProMotion, 144 or 165 on many external monitors, 60 elsewhere) and follows it to another display; past that rate vsync would discard the frames. A lower cap saves power during floods and animations. The runtime sends pane output to this window at the same interval. A reload applies it at once. See [frame pacing](flows/frame-pacing.md). |
 | `chrome.scale` | `1` | Multiplies the native chrome text sizes; `0.5..2`, decimals allowed. The chrome derives three sizes from `font.size` times the display scale: title and body ×0.87, small ×0.73, rounded to device pixels and never below 6. The bands (top navigation 42, status bar 26, pane header 22 logical pixels) do not scale with it, so the body size is capped at the largest whose line box fits the pane header: at `font.size = 15` the body stops growing at 16 px (scale ≈ 1.3) while title and small keep growing, reaching 26 and 22 px at scale 2. The terminal grid and the PTY size never change with it; a reload applies it without rebuilding the atlas. |
 
@@ -1044,6 +1121,11 @@ and clipboard shortcuts retain priority. For example, open the palette with ⌘P
 telar.bind_global({ "cmd+p" }, "goto-picker"),
 ```
 
+Some combinations are rejected by the key parser. In particular,
+`ctrl+shift+b` produces `UnrepresentableKey`; use a supported alternative such
+as `ctrl+alt+b`. Shift with arrow keys is supported. Validate a new chord with
+`telar config check` before relying on it.
+
 `client.prefix` is one key chord and defaults to `"ctrl+b"`. `telar.bind` and
 `telar.bind_expr` prepend it to their `keys`, so `{ "s" }` matches
 `prefix`, then `s`. Changing the prefix also changes the compiled default
@@ -1091,11 +1173,12 @@ The default bindings are `prefix`, then `shift+left`, `shift+right`, `shift+up`,
 or `shift+down`.
 
 `telar.action.resize_sidebar({ direction = ... })` accepts `"left"` to narrow
-the sidebar and `"right"` to widen it, two columns per invocation. The default
-bindings are `prefix`, then `alt+left` or `alt+right`. Dragging the sidebar's
-rightmost column selects an exact width. Telar always reserves at least 42
-columns for the sidebar and 20 for the workbench; a narrower host temporarily
-hides or clamps the sidebar without discarding its preferred width.
+the sidebar and `"right"` to widen it, 16 logical pixels per invocation. The
+default bindings are `prefix`, then `alt+left` or `alt+right`. Drag the sidebar's
+right edge to resize it. The native window preserves at least 20 terminal
+columns beside the sidebar; when there is not enough room for the full sidebar,
+it shows a narrow workspace rail if space permits. `gui.sidebar.width` sets
+the preferred width in logical pixels.
 
 `telar.action.leave_worktree()` returns from a worktree's tab to the project
 workspace the worktree hangs from; outside a worktree it does nothing. The
@@ -1105,11 +1188,11 @@ default binding is `prefix`, then `u`.
 applies one wheel step to the focused pane without entering copy mode. The
 default bindings are `prefix`, then `-` to scroll up, and `prefix`, then `=`
 to scroll down. For holding a key, use a modified chord that the host reports
-with physical repeat events, such as these global bindings:
+with physical repeat events. Add these entries to `client.keybindings`:
 
 ```lua
-telar.bind_global({ "alt+up" }, telar.action.scroll_pane({ direction = "up" }))
-telar.bind_global({ "alt+down" }, telar.action.scroll_pane({ direction = "down" }))
+telar.bind_global({ "alt+up" }, telar.action.scroll_pane({ direction = "up" })),
+telar.bind_global({ "alt+down" }, telar.action.scroll_pane({ direction = "down" })),
 ```
 
 The first step is immediate; host auto-repeat then drives at most one step
@@ -1118,12 +1201,10 @@ another key press, pointer input, paste, configuration reload or a changed
 target cancels the hold. Lua callbacks and other actions do not gain
 physical-repeat execution.
 
-A prefixed binding can also repeat its final chord when the host reports its
-physical lifecycle, without re-entering the prefix. Telar requests Kitty
-keyboard flags 7, which leave plain text keys such as the default `-` and `=`
-suffixes as text. Those defaults still require the prefix for each step.
-Legacy hosts that report only presses keep ordinary binding behavior;
-Telar does not infer a held key or start a synthetic repeat timer.
+A prefixed scroll binding can also repeat its final chord without re-entering
+the prefix. The native window receives key press, repeat and release events
+from the operating system; it does not require an outer terminal's keyboard
+protocol. Telar does not start a synthetic repeat timer.
 
 The action follows the same policy as the wheel: send an SGR wheel report when
 the application tracks it, send three cursor keys at the live bottom when
@@ -1173,7 +1254,7 @@ every list prompt. Its default binding is `prefix`, then `f`.
 Copy mode accepts `h`, `j`, `k`, `l` and the arrow keys, `w`, `b`, `e`, `{`,
 `}`, `0`, `^`, `$`, `g`, `G`, Page Up, Page Down, Ctrl-B, Ctrl-F, Ctrl-U, and Ctrl-D.
 Press `v` or Space for a character selection, `V` for a line selection, then
-`y` or Enter to copy through OSC 52. Escape first clears an active selection;
+`y` or Enter to copy to the clipboard. Escape first clears an active selection;
 a second Escape, or `q`, leaves copy mode and restores the entry viewport.
 Press `o` over a textual `http://`, `https://`, or `file://` URI to open it
 without leaving copy mode. A left click opens the same URI outside copy mode.
@@ -1186,16 +1267,10 @@ replaces them with the prefix-mode hints.
 
 `telar.action.toggle_pane_fullscreen()` makes the focused pane occupy the whole
 tab inside its own border, and the tab bar marks the tab with a fullscreen
-icon. The top border lists the tab's panes in display order and highlights the
-focused pane. Long labels are truncated; when the strip overflows, the focused
-pane stays visible. In fullscreen, left/right focus selects the previous/next
+icon. The native window puts pane selectors and a leave-fullscreen control
+below the content. In fullscreen, left/right focus selects the previous/next
 pane without wrapping, and up/down focus does nothing. These rules apply to
-pane-focus actions, not arrow keys forwarded to the child. With Kitty graphics
-support and RGB label colors, pane labels use smaller embedded JetBrains Mono
-Regular text. The selected pill is 75 percent of the cell height and centered
-on the border; workspace labels and pane contents keep their usual size.
-While graphics are pending, unavailable or cannot display a glyph, the labels
-use normal terminal text without bold and selection stays rectangular.
+pane-focus actions, not arrow keys forwarded to the child.
 
 The client retains the tiled layout and its split ratios. Invoking the action
 again restores that geometry and spatial navigation, keeping the last selected

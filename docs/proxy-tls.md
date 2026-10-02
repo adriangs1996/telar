@@ -6,7 +6,12 @@ name and bounded capture of the exchanges it relays. It knows nothing about
 agents. Agent state comes from hooks, the foreground process and the screen;
 the proxy is a tool for looking at traffic.
 
-Enable it in `config.lua` and restart the long-lived runtime:
+## Try the proxy
+
+This feature is optional and is not required for agent detection. Start with
+[configuration basics](configuration.md); commands assume `telar` is on PATH.
+Replace `api.example.com` below with a host whose traffic you intend to inspect.
+Merge the `runtime.proxy` table into your config, or use this complete file:
 
 ```lua
 return {
@@ -24,6 +29,41 @@ return {
 
 The top workspace bar displays an interception badge for the entire time the
 proxy is active, including while a pane is fullscreen.
+
+Save/finish work in existing panes before restarting the runtime: stopping it
+terminates its children. From an external terminal, run `telar server stop`,
+then reopen Telar using the updated config. If you use `--config`, pass that
+same path when reopening. New pane processes inherit the proxy and CA settings.
+Check the running service with:
+
+```sh
+telar runtime status --json
+```
+
+Its proxy status should show that the service is active. Make a request using
+the application you want to inspect from a new Telar pane. Hosts outside
+`intercept_hosts` pass through as opaque tunnels; an empty list intercepts
+nothing. Enabling the proxy alone does not create a browsable request archive.
+
+The example leaves capture disabled. To process captured exchanges, enable
+`runtime.proxy.capture.enabled` and configure a trusted
+[exchange-listener plugin](plugins.md#exchange-listeners). Without one, completed
+captures are consumed for metrics and are not persisted. Such a plugin can see
+unredacted headers and bodies, including credentials.
+
+For certificate errors, first check whether the application honors the CA
+variables described below. Use [system trust](#system-trust) only for applications
+that need it. The example's `ca_dir` is relative to `config.lua`; pass its resolved
+absolute path with `--ca-dir` to every trust command so you do not configure a
+different CA directory by mistake.
+
+To disable interception, set `runtime.proxy.enabled = false`, then save work
+and restart the runtime with that config. If you installed system trust,
+uninstall that same authority with `telar proxy trust uninstall --ca-dir
+/absolute/path/to/ca-dir`. Existing processes retain their inherited environment;
+start new panes after changing the service.
+
+The rest of this document explains trust, capture limits and connection behavior.
 
 ## Traffic path and trust
 

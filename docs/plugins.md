@@ -10,6 +10,55 @@ Plugins may also register a runtime-side exchange listener. Unlike action
 workers, each listener remains alive for the runtime lifetime so it can inspect
 completed ProxyTLS exchanges while every client is disconnected.
 
+## Try the example plugin
+
+Start from a source checkout with `telar` [on your PATH](usage.md#put-telar-on-your-path).
+The included sample toggles the sidebar and requests no capabilities:
+
+```sh
+telar plugin inspect ./examples/plugins/sample
+telar plugin install ./examples/plugins/sample
+```
+
+Inspection lists the package ID, version, actions and requested capabilities.
+Installation prints an installed path under your data directory. Copy that
+exact absolute path into the configuration below in place of
+`/absolute/installed/plugin/path`. This is a complete trial config; when using
+an existing file, merge the `plugins` and `client.keybindings` entries:
+
+```lua
+local telar = require("telar")
+
+return telar.config({
+  api_version = 2,
+  plugins = {
+    telar.plugin({ path = "/absolute/installed/plugin/path" }),
+  },
+  client = {
+    keybindings = {
+      telar.bind({ "o" }, telar.action.plugin({
+        plugin = "dev.telar.sample",
+        action = "toggle",
+      })),
+    },
+  },
+})
+```
+
+Run `telar config check` and save/reload the config. With the default prefix,
+`Ctrl+b`, then `o` should toggle the sidebar. Installation alone does not enable
+a plugin. The sample needs no trust grant; another plugin may need one of the
+capabilities described below. Inspect what it requests before granting it.
+
+To disable the sample, remove both its `plugins` entry and its binding, then
+validate and reload. Leaving a binding that names an absent plugin fails
+validation. Updating a package installs a new digest/path; update the config
+and review any new capability grants rather than assuming trust transfers.
+
+If it does not run, check the installed path, matching plugin/action IDs and
+config validation output. Keep the previous config until the new one passes.
+The rest of this page is the reference for package authors and capability grants.
+
 ## Package identity
 
 `plugin.json` is declarative and is parsed before Lua executes:

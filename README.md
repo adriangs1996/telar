@@ -1,407 +1,190 @@
-# telar
+<p align="center">
+  <img src="src/assets/telar-mark.svg" alt="Telar" width="96" height="96">
+</p>
 
-A terminal runtime for coding agents, with the UI and UX that match GUIs.
+<h1 align="center">Telar</h1>
 
-_Telar_ is Spanish for loom, the machine that holds many threads under tension
-and weaves them into one surface. A **hilo** is one agent session, which is a
-thread of execution and a thread of conversation at the same time. The **trama**
-is how they are laid out on screen.
+<p align="center">
+  A terminal for working with coding agents.<br>
+  Persistent sessions, agent status and remote machines in one native window.
+</p>
 
-Written in Zig 0.16. Very early.
+<p align="center">
+  <a href="#about">About</a> ·
+  <a href="#getting-started">Getting started</a> ·
+  <a href="#documentation">Documentation</a> ·
+  <a href="#contributing">Contributing</a>
+</p>
 
-## Architecture
+## About
 
-Telar is split into a long-lived runtime and a disposable client. Each process
-keeps its state in one flat model and dispatches every message through one
-`update`. See the [architecture](docs/architecture.md), the
-[flow index](docs/flows/README.md), and the
-[invariants](docs/invariants.md).
+Telar is a terminal emulator and multiplexer for macOS and Linux. It brings
+shells, editors and coding agents into workspaces, tabs and split panes, with
+a sidebar that shows which agents are working, waiting for input or finished.
 
-The runtime links system SQLite, libnghttp2 and Brotli. On macOS with Homebrew:
+![Telar with agent activity in the sidebar, a coding agent on the left, and Neovim and a shell on the right](docs/images/telar-workspace.png)
 
-```sh
-brew install sqlite libnghttp2 brotli
-```
+A workspace with a coding agent, Neovim and a shell. The sidebar keeps agent
+activity visible across tasks. [Explore workspaces and panes](docs/usage.md#workspaces-tabs-and-panes).
 
-Building the native GUI also requires Rust/Cargo 1.93.1 or newer for its
-[Mermaid renderer](tools/diagram-renderer/README.md). `zig build` installs the
-compiled helper beside Telar; running an installed build does not require Cargo.
+When several agents are running, finding the one that needs you becomes part
+of the work. Telar keeps their status beside your terminals and lets you
+organize tasks in Git worktrees, follow their progress and return to their
+results. Your agents keep their own interfaces; Telar runs their existing CLIs.
 
-On Arch Linux or Arch Linux ARM, install the libraries and libc development
-headers before building with Zig 0.16.0:
+The window connects to a separate runtime that owns the processes and their
+terminals. Close the window and the work keeps running. Reopen it to reconnect,
+or connect over SSH to a runtime on another machine.
 
-```sh
-sudo pacman -Syu --needed base-devel sqlite libnghttp2 brotli \
-  wayland wayland-protocols libxkbcommon vulkan-headers vulkan-icd-loader shaderc \
-  fontconfig ttf-dejavu at-spi2-core glib2
-zig build
-zig build test
-```
+Telar is written in Zig and uses Ghostty's terminal emulation library,
+`libghostty-vt`, with its own window and multiplexer. The name is Spanish for
+*loom*.
 
-Filesystem metadata calls import the target's `sys/stat.h` declarations so
-Linux and macOS use their own libc ABI. No Linux-specific source patch is
-needed. `zig build cross` also compiles the local transport tests for Linux
-x86_64 and aarch64, without running those foreign binaries.
+## What you can do
 
-Use `zig build -Dnghttp2=/path/to/prefix` when libnghttp2 is installed under a
-different prefix.
+- **Keep track of agents.** Integrations for Claude Code, Codex, Pi, Cursor
+  Agent and OpenCode report lifecycle events. Without an integration, Telar
+  uses process and terminal observations to estimate status.
+- **Give tasks their own workspaces.** Create a Git worktree, launch an agent
+  there and inspect its status and diff through the CLI. Keep your shell,
+  editor and tests alongside it.
+- **Work across machines.** Save SSH hosts and switch between their workspaces
+  in the same window. Processes stay on the machine running their runtime
+  when the client disconnects.
+- **Find previous commands.** Search shell and agent command history by
+  workspace, directory, pane or exit status, with captured output where
+  available.
+- **Make the terminal yours.** Configure themes, fonts, keybindings and the
+  sidebar in Lua. Add behavior through plugins and display terminal images
+  with Kitty graphics support.
 
-## Remote runtime
+## Getting started
 
-Run the client on your machine and keep the runtime and child processes on an
-SSH host. Install matching Telar builds on both machines, then verify that SSH
-can find the remote binary without an interactive shell:
+Telar is in early development. There are no published releases yet; build
+from source to try it. Configuration and CLI interfaces are still evolving.
 
-```sh
-ssh dev@box 'command -v telar; telar --version'
-./zig-out/bin/telar --no-config --remote dev@box
-```
+| Platform | Desktop requirements |
+| --- | --- |
+| macOS | macOS 26 or later and a [Metal 4 GPU](docs/flows/metal4-renderer.md) |
+| Linux | Wayland and Vulkan 1.3 with the [required extensions](docs/flows/vulkan-renderer.md) |
 
-The window discovers the remote home and shell and forwards the runtime's Unix
-socket over SSH, and reconnects by itself when the link drops. Closing the
-window leaves the remote processes running; the same command reattaches. No
-Telar TCP listener is exposed. See [remote attach](docs/flows/remote-attach.md)
-for requirements and ownership.
-
-Machines you use often can be saved and kept in every window:
-
-```sh
-telar machine add box dev@box --check
-telar --machine box pane list          # run a telar command on box
-telar gui --machine box                # a window that shows box first
-```
-
-See [machine profiles](docs/flows/machine-profiles.md),
-[machine dispatch](docs/flows/machine-dispatch.md) and
-[machine presentation](docs/flows/machine-presentation.md).
-
-## Configuration and plugins
-
-Telar uses a versioned Lua configuration with semantic keybindings, bounded
-inline callbacks, expression bindings, profiles, atomic reload, and typed
-runtime settings. Plugins are content-addressed packages executed in isolated
-workers with digest-bound capability grants.
-
-See [docs/configuration.md](docs/configuration.md) and
-[docs/plugins.md](docs/plugins.md). Application bundles, the Linux desktop
-entry and the `telar cli` PATH link are described in
-[docs/packaging.md](docs/packaging.md). The opt-in TLS interception proxy, its
-shared secret and its exchange capture are documented in
-[docs/proxy-tls.md](docs/proxy-tls.md). A complete configuration
-and plugin package live under [`examples/`](examples/): `config.lua` and
-`plugins/`.
-
-The [Neovim adapter](integrations/nvim/README.md) integrates Telar's
-navigation-aware `ctrl+h/j/k/l` action with `smart-splits.nvim`.
-
-The [Pi integration](integrations/pi/README.md) reports Pi's own lifecycle
-to the runtime through `telar integration install pi`, and `runtime.engine`
-keeps a headless Pi alive as Telar's model engine.
-
-## Themes
-
-Set `theme = "shade"` once in Lua for Telar's interface and native
-terminal. Shade is the default. Vesper, Catppuccin Mocha, Tokyo Night, and
-a terminal-palette theme are also built in:
+Install **Zig 0.16.0**, **Rust/Cargo 1.93.1 or newer**, and the
+[platform build dependencies](docs/development.md#build-requirements), then:
 
 ```sh
-zig build run -- --theme vesper
-zig build run -- --theme catppuccin
-zig build run -- --theme tokyo-night
-zig build run -- --theme terminal
+git clone https://github.com/adriangs1996/telar.git
+cd telar
+zig build -Doptimize=ReleaseFast
+./zig-out/bin/telar
 ```
 
-Themes color Telar's bars, sidebar, selections, and pane borders. The GUI also
-uses the preset's terminal foreground, background, ANSI palette and cursor
-colors. Customize either part with
-`theme.colors` and `theme.terminal`; [Lua configuration](docs/configuration.md#theme)
-documents overrides, profiles and hot reload.
+Telar opens a window with your shell and starts its local runtime when needed.
+Run your editor or agent as you would in another terminal.
 
-## Kitty graphics
+The default keybinding prefix is `Ctrl+b`: press it, release it, then press
+the next key.
 
-The runtime terminates Kitty graphics commands at each pane and sends the
-images to the window, which keeps a bounded replica but does not draw them yet.
-Run a graphical child like any other command:
+| Keys after `Ctrl+b` | Action |
+| --- | --- |
+| `%` / `"` | Split left/right or top/bottom |
+| `c` | Create a tab |
+| `n` / `p` | Select the next or previous tab |
+| `s` | Toggle the sidebar |
+| `/` | Search command history |
+
+For a macOS application bundle, a Linux desktop installation or a server build
+without a GUI, see [local installation](docs/packaging.md#install-a-local-build).
+
+### Connect your agents
+
+Install the integration for the agent you use, then start a new agent session
+inside Telar. For Claude Code, from the checkout:
 
 ```sh
-zig build run -- terminal-browser open https://example.com
+./zig-out/bin/telar integration install claude
 ```
 
-Runtime decoded-image quotas default to 256 MiB per pane and 512 MiB globally
-and can be lowered on an explicit server:
+The other integration names are `codex`, `pi`, `cursor` and `opencode`.
+Integrations install hooks or extensions in the agent's configuration and
+report its activity to Telar. Run Codex with `codex --no-daemon` so its session
+and hooks belong to its pane. See [working with agents](docs/agents.md)
+for details.
+
+The binary includes guidance for agents using Telar:
 
 ```sh
-zig build run -- server --graphics-pane-mib 32 --graphics-global-mib 128
+./zig-out/bin/telar --skill
 ```
 
-See [docs/kitty-graphics.md](docs/kitty-graphics.md) for the supported protocol
-subset, ownership boundaries, limits, and verification.
+### Connect to another machine
 
-## Development diagnostics
-
-Debug builds emit one JSON Lines sample per second without writing terminal or
-PTY contents. Logs live beside the local runtime socket:
-
-```text
-<socket>.runtime-<pid>.log
-<socket>.client-<pid>.log
-```
-
-Runtime samples cover PTY throughput, folded updates, frame size, damaged rows,
-diff scans, no-op frames, VT ingestion, frame encoding, and acknowledgement
-latency. Client samples separate cell `flush_*` from `media_flush_*`, attribute
-KGP wire bytes to panes, toasts, and the sidebar, and report retained bytes for
-the Kitty store, toast textures, sidebar atlas, screen buffers, Lua VM, and
-instrumented heap. File writes run outside the interactive loop. Release builds
-neither create these files nor schedule the telemetry actors.
-
-Runtime heap samples keep the aggregate `interactive_alloc*` counters and split
-them into `interactive_vt_alloc*` for terminal-emulator state growth and
-`interactive_telar_alloc*` for allocations owned by Telar's event path. Proxy
-rejections likewise distinguish missing or malformed authorization from an
-otherwise valid credential that is no longer registered, without logging
-either value.
-
-## Test coverage
-
-Telar uses [zcov](https://github.com/ericsssan/zcov) to run the native test
-suites with SanitizerCoverage and write an LCOV tracefile:
+Install matching Telar builds on both machines, with `telar` available to the
+remote SSH command, then open a window connected to that host:
 
 ```sh
-just coverage
+./zig-out/bin/telar gui --remote dev@box
 ```
 
-`zig-cov` and its adjacent `zig-cov-rt.o` must be installed together. Set
-`ZIG_COV_BIN` when the executable is not on `PATH`, or
-`TELAR_COVERAGE_FILE` to change the default `coverage.lcov` destination:
+You can also [save machines](docs/remote.md#save-a-machine) for repeated use.
+See [remote connections](docs/remote.md) for setup and reconnection
+behavior.
 
-```sh
-ZIG_COV_BIN=/path/to/zig-cov just coverage
-```
+## Find actions and previous commands
 
-The coverage build forces LLVM and libc only for native test executables. It
-instruments Telar's Zig-only shared modules and suite roots, while leaving
-C-family dependencies and cross-target compile checks alone. Generated
-packages, caches, and vendored sources are excluded from the report.
+### Command palette
 
-Feed the result into `zig-crap` to join line coverage with per-function
-complexity:
+Find an action by name, navigate to a workspace or switch machines from the
+command palette. Open it with `Ctrl+b`, then `g`; select **Actions** to search
+for commands such as splitting or focusing a pane.
+[Learn the palette controls](docs/usage.md#find-an-action).
 
-```sh
-zig-crap src --lcov coverage.lcov --lcov-base .
-```
+<img src="docs/images/telar-command-palette.png" alt="Command palette showing split and pane-focus actions with their configured shortcuts" width="760">
 
-## Fuzzing
+The screenshots use a [custom configuration](docs/configuration.md); the
+instructions here use the default shortcuts.
 
-Telar uses Zig's built-in fuzzer (`std.testing.fuzz`) with 12 target steps:
-handshake, client and server IPC, frame bodies, cell runs, text metadata,
-PNG, ICO, HTTP/1 heads and bodies, and HTTP/2 frame reading and observation.
-The targets use synthetic inputs and do not start a runtime or contact real
-services. Their contracts and limits are described in
-[`docs/testing/`](docs/testing/).
+### Searchable history
 
-Run every fuzz root's deterministic tests and replay its seed corpus:
+Find commands from your shells and agents, filter by where they ran, and inspect
+their recorded details. Paste a command to edit it or run it again.
+[Search and reuse commands](docs/usage.md#find-previous-commands) with `Ctrl+b`,
+then `/`.
 
-```sh
-just fuzz-check
-```
+<img src="docs/images/telar-command-history.png" alt="History search with workspace and author filters, matching commands, and details of the selected command" width="760">
 
-Fuzz every target in sequence, with GUI disabled and one build job. The
-argument takes Zig's `K`, `M` and `G` suffixes and is passed to each target,
-not shared across the whole campaign:
+## Documentation
 
-```sh
-just fuzz         # --fuzz=10K for each target
-just fuzz 1M      # --fuzz=1M for each target
-```
+Start with the [user guide](docs/README.md) or choose a task below.
 
-Each target prints its report before the next starts. Coverage counts the
-whole executable, including the runner and oracles, not only production
-code. Wuffs C and nghttp2 provide no fuzz coverage feedback. Run these
-commands without `-Dcoverage`.
+| Topic | Guide |
+| --- | --- |
+| Themes, fonts, keybindings and profiles | [Configuration](docs/configuration.md#start-with-a-small-config) |
+| Agent control and worktrees | [Working with agents](docs/agents.md) |
+| Command history | [Search and reuse commands](docs/usage.md#find-previous-commands) |
+| Extensions and editor navigation | [Plugins](docs/plugins.md#try-the-example-plugin) · [Neovim integration](integrations/nvim/README.md) |
+| Terminal images | [Kitty graphics](docs/kitty-graphics.md#display-an-image) |
+| Optional network inspection | [TLS proxy and capture](docs/proxy-tls.md#try-the-proxy) |
 
-With Zig 0.16.0, `zig build --fuzz` can exit 0 after a failure. `just fuzz`
-checks each target's output for saved inputs, panics and termination signals
-and stops with a nonzero status if it finds one or the build fails.
+Run `telar --help` for the CLI command overview.
+[Using Telar](docs/usage.md) covers navigation, session lifetime and troubleshooting.
 
-A failing input is reported as `input saved to '.zig-cache/f/crash'`. It is
-in Smith input form, not necessarily raw protocol bytes. Zig has sometimes
-written an empty or truncated crash file; the target documents explain how
-to recover the complete input from `.zig-cache/f/in<N>` and replay it.
+## Contributing
 
-The fuzz roots stay out of ordinary suites and coverage discovery. Their
-executables use LLVM and disable error return traces only on the root;
-Debug runtime safety stays enabled.
+Bug reports and contributions are welcome. For a bug, include your OS, Telar
+version or commit, reproduction steps and whether the runtime is local or
+remote. File reports in [GitHub Issues](https://github.com/adriangs1996/telar/issues).
 
-## Performance benchmarks
+Start with the [development guide](docs/development.md) for dependencies,
+tests, diagnostics and benchmarks. Read the [architecture](docs/architecture.md)
+and relevant [invariants](docs/invariants.md) before changing runtime or client
+behavior.
 
-Run the controlled interactive-path workloads with:
+## Acknowledgements
 
-```sh
-zig build bench
-```
+[Ghostty](https://github.com/ghostty-org/ghostty) provides the terminal emulation
+library at Telar's core. [herdr](https://github.com/herdrdev/herdr) inspired the
+project, and [T3 Code](https://github.com/pingdotgg/t3code) informed its sidebar.
 
-The benchmark target uses `ReleaseFast` when the main build mode is `Debug`.
-It measures damage collection, frame encoding and decoding, keybinding routing,
-bounded Lua callbacks, client events, KGP ingest and shared frames, text
-rasterization and blitting. Cell workloads use a fixed 154×37 screen: a one-cell
-patch, a representative fragmented patch with 56 spans of 24 cells, and a full
-screen. Fixture construction is outside the timed section. Use `--filter`,
-`--samples`, or `--sample-ms` after `--` to narrow or lengthen a run:
+## License
 
-```sh
-zig build bench -- --filter frontend.client --samples 20 --sample-ms 100
-zig build bench -- --filter client.keybind --samples 20 --sample-ms 100
-zig build bench -- --list
-```
-
-Save JSON Lines before and after a change, then compare median time and payload
-bytes per operation. The comparison rejects runs built with different Zig
-versions, optimization modes, CPUs, targets, screen sizes, sample counts or
-sample durations.
-
-```sh
-zig build bench -- --json > /tmp/telar-before.jsonl
-# Make the optimization.
-zig build bench -- --json > /tmp/telar-after.jsonl
-python3 tools/bench_compare.py /tmp/telar-before.jsonl /tmp/telar-after.jsonl
-```
-
-`--fail-above 5` gives the comparison command a nonzero exit status when any
-median regresses by more than five percent. `--fail-payload-above 0` also
-rejects any wire payload growth. Keep benchmark result files outside the
-repository because absolute timings belong to the machine that produced them.
-
-Architecture changes use five repeated runs of 200 samples. `perf_gate.py`
-compares the median p50, p95 and p99 across those runs, rejects regressions over
-5%, 8% and 10% respectively, rejects wire-payload changes, and emits no verdict
-when either group is noisier than those bounds:
-
-```sh
-python3 tools/perf_gate.py \
-  --baseline '/tmp/telar-before-*.jsonl' \
-  --candidate '/tmp/telar-after-*.jsonl'
-```
-
-CI cadence and release-candidate requirements are recorded in
-[`docs/performance-gates.md`](docs/performance-gates.md).
-
-### End-to-end latency against tmux and herdr
-
-The microbenchmarks above time telar's own code. The numbers a user feels are
-end to end, through both processes. `tools/latency_bench.sh` measures them for
-one telar binary against an isolated runtime, through its headless client
-(`zig build headless`):
-
-```sh
-zig build -Doptimize=ReleaseFast --prefix /tmp/telar-candidate
-tools/latency_bench.sh /tmp/telar-candidate/bin/telar candidate
-```
-
-How the measurement works:
-
-- `tools/echo_latency.py` gives the multiplexer `SHELL` pointing at a script
-  that execs `/bin/cat`. The kernel line discipline of the pane's pty echoes
-  every byte immediately, so what is timed is only the multiplexer.
-- telar runs as `telar-headless`. Each sample sends one token as an input
-  line, and the latency runs from the client taking the line to the first
-  frame of that pane the client presents, read from its exit trace
-  ([headless client](docs/flows/headless-client.md#reports)). It ends where
-  the client has the frame, not where a window or host terminal shows it.
-- Comparators run in a pty of 160x40 columns as its session leader. Each
-  sample writes one token to the pty master and waits until that token
-  is visible in the multiplexer's output. Escape sequences (CSI, OSC, DCS) are
-  stripped before matching, so a cursor move between two painted frames does
-  not hide the token. Tokens are letters that never appear as final bytes of a
-  control sequence.
-- Two token sizes matter. One byte measures the single-frame path. Two bytes
-  usually reach the child as two writes, which the runtime turns into two
-  frames: the second frame waits for the first frame's acknowledgement, which
-  the client only sends after painting. Any real keystroke in a shell that
-  redraws its prompt behaves like the two-byte case.
-- Samples: 200 per case, 50 ms apart, after a warm-up. The script reports
-  p50, p95, p99, min, max and mean in microseconds.
-- `tools/flood.py` runs `/bin/sh`, types `seq 1 300000; echo <marker>` and
-  times until the marker is visible. The marker is unique per repetition
-  because the previous one is still on screen and the diff repaints it when
-  rows scroll. For telar the time runs from the client taking Enter to the
-  last frame it presented for that pane. For comparators, `host_bytes` is what
-  reached the host terminal: a multiplexer that folds intermediate frames
-  writes far less.
-- Isolation is mandatory. A telar runtime reads and writes the session
-  checkpoint and `history.db` under `XDG_DATA_HOME`, and connects to the
-  socket under `TELAR_SOCKET_PATH`. The script sets all three to fresh
-  directories per pass, and unsets every inherited `TELAR_*` variable, so a
-  shell running inside telar can measure without touching the live runtime,
-  and a restored session cannot steal focus from the launched pane. The unix
-  socket path must stay under 104 bytes.
-- Comparators run through the same two scripts. tmux:
-  `tmux -L bench -f /dev/null new-session`, herdr: `herdr --session bench`
-  with `HOME` and `XDG_CONFIG_HOME` pointing at a short empty directory.
-
-Results on 2026-09-03, Apple Silicon macOS 26.6, Zig 0.16.0, ReleaseFast,
-one client, no config, everything else idle. Latencies are p50 / p99. They
-predate the headless client: telar was measured the way the comparators are,
-through its retired terminal client in a pty, up to the host write.
-
-| Multiplexer | 1 byte | 2 bytes | Flood, 300k lines |
-| --- | --- | --- | --- |
-| telar, before the pacer change | 0.49 ms / 1.01 ms | 22.3 ms / 26.0 ms | 233 ms |
-| telar, after (pacer burst credit, inline draw, socket read-ahead) | 0.51 ms / 0.91 ms | 0.64 ms / 1.38 ms | 242 - 261 ms |
-| tmux 3.7c | 0.24 ms / 0.48 ms | 0.25 ms / 0.38 ms | 220 - 226 ms |
-| herdr 0.8.2, default config | 2.91 ms / 5.29 ms | 2.91 ms / 5.41 ms | 234 - 252 ms |
-| herdr 0.7.5, a real user config | 3.11 ms / 10.9 ms | 3.16 ms / 15.9 ms | marker not shown within 60 s |
-
-Reading the table: the two-byte column is where telar used to lose two orders
-of magnitude, because the second frame of an interaction waited a whole 60 Hz
-pacer interval plus a late timer wakeup. With burst credit and inline
-presentation it sits within the run-to-run noise of the one-byte case. The
-remaining gap to tmux is structural: `std.Io.Threaded` pays one thread
-handoff per read, ingest and send, across two processes, where tmux runs one
-kqueue loop. Bare pty echo without any multiplexer measures about 15 us on the
-same machine, which is the floor for every row.
-
-#### Echo latency under load
-
-`tools/load_bench.sh <binary> <label>` runs `tools/load_latency.py`: it opens
-`FLOODS` extra panes (default `0 1 2 4 8`), each running `while :; do seq 1
-100000; done`, then measures single-byte echo latency in one idle pane. telar
-panes are opened by sending the default `ctrl+b %` and `ctrl+b "` bindings to
-its headless client; tmux panes with `split-window -d` plus `select-layout tiled`. Each token is
-erased with backspace after it is seen, because a later repaint of the input
-line would otherwise match the next token early. A runtime whose panes are
-still flooding does not finish `telar server stop`; the script kills it by
-socket after five seconds.
-
-Results on 2026-09-03, same machine as above but with a browser and a
-build-on-save watcher active (load average 4-6), p50 / p99, also through the
-retired terminal client:
-
-| Flooding panes | telar before input grace | telar with input grace | tmux 3.7c |
-| --- | --- | --- | --- |
-| 0 | 0.41 ms / 27.9 ms | 0.87 ms / 1.62 ms | 0.49 ms / 1.07 ms |
-| 2 | 15.1 ms / 20.6 ms | 0.56 ms / 1.21 ms | 0.64 ms / 0.87 ms |
-| 4 | 14.6 ms / 21.1 ms | 1.02 ms / 2.36 ms | 1.11 ms / 1.45 ms |
-| 8 | 15.7 ms / 21.2 ms | 1.69 ms / 5.48 ms | 2.36 ms / 7.25 ms |
-
-Before the change telar sat on the 60 Hz pacer interval whatever the load:
-the flood spent the burst credit and the keystroke's echo waited for the next
-cadence slot. A control build with the interval forced to 1 ms measured
-2.1 ms / 9.7 ms at four panes, which bounded what any scheduling change could
-buy and ruled out a kqueue-based event loop as the next step. The input
-grace window recovers most of that bound: after every host read, up to
-`pace.default_input_frames` frames present immediately even while a paced
-draw task is armed. tmux's own behaviour under flood is bimodal; the same
-harness measured 48-50 ms medians at two and four panes in an earlier
-session. The 0-pane rows and every p99 in this table carry the noise of the
-busy host; idle rows measured 0.36-0.70 ms for both builds when alternated.
-
-Run-to-run noise on a quiet laptop is about 0.1 ms at p50 and 0.3 ms at p99;
-treat smaller differences as no verdict, as `docs/performance-gates.md`
-already requires for the microbenchmarks.
-
-The runtime proxy has its own gate:
-
-```sh
-zig build test-backend-proxy
-```
+Telar is available under the [MIT license](LICENSE).
