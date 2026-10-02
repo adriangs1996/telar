@@ -1,9 +1,13 @@
 //! Contract and integration tests for the proxy service.
 
 const std = @import("std");
+const Resolutions = @import("../Resolutions.zig");
+const gated_resolver = @import("../gated_resolver.zig");
+const service_support = @import("service_support.zig");
 const Service = @import("Service.zig");
 const Paths = @import("Paths.zig");
 const identity = @import("../identity.zig");
+const Connections = @import("../Connections.zig");
 
 const basic_raw_capacity = 128;
 const basic_encoded_capacity = std.base64.standard.Encoder.calcSize(basic_raw_capacity);
@@ -71,6 +75,11 @@ fn rejectTlsHandshake(io: std.Io, listener: *std.Io.net.Server) !void {
     var writer = stream.writer(io, &write_buffer);
     try writer.interface.writeAll(&.{ 0x16, 0x03, 0x03, 0xff, 0xff });
     try writer.interface.flush();
+}
+
+fn acceptAndClose(io: std.Io, listener: *std.Io.net.Server) !void {
+    const stream = try listener.accept(io);
+    stream.close(io);
 }
 
 fn listenTestOrigin(io: std.Io) !TestOrigin {
@@ -312,6 +321,206 @@ test "loopback service maps CONNECT authentication and target rejections" {
         @as(u64, 2),
         service.metrics().rejected_connections,
     );
+}
+
+test "a tunnel whose host never resolves answers 504 at its deadline and frees its row" {
+    const io = std.testing.io;
+    var fixture: TestServiceFixture = .{};
+    try fixture.init(io, std.testing.allocator, &.{});
+    defer fixture.deinit();
+    const service = fixture.service.?;
+    const establish_timeout_ms = 200;
+
+    const started = now(io);
+    const client = try sendConnect(service, "silent.test:443");
+    defer client.close(io);
+    var tunnel = try io.concurrent(service_support.serve, .{
+        service,
+        client.proxy_side,
+        client.slot,
+        .{
+            .resolutions = &gated_resolver.table,
+            .timeout_ms = establish_timeout_ms,
+        },
+    });
+
+    try expectAnswer(io, client.stream, "HTTP/1.1 504 Gateway Timeout\r\nContent-Length: 0\r\n\r\n");
+    try tunnel.await(io);
+    const waited_ms = now(io) - started;
+    try std.testing.expect(waited_ms >= establish_timeout_ms and waited_ms < 10 * establish_timeout_ms);
+
+    // The row is free while the resolver still holds its worker.
+    const metrics = service.metrics();
+    try std.testing.expectEqual(@as(u32, 0), metrics.active_connections);
+    try std.testing.expectEqual(@as(u64, 1), metrics.establish_timeouts);
+    try std.testing.expectEqual(@as(u64, 0), metrics.upstream_connect_failures);
+    try std.testing.expectEqual(@as(u32, 1), gated_resolver.table.count(.resolving));
+
+    try gated_resolver.open(&gated_resolver.table);
+}
+
+test "a CONNECT that finds every resolution taken is answered 503 at once and frees its row" {
+    const io = std.testing.io;
+    var fixture: TestServiceFixture = .{};
+    try fixture.init(io, std.testing.allocator, &.{});
+    defer fixture.deinit();
+    const service = fixture.service.?;
+    try gated_resolver.fill();
+
+    const started = now(io);
+    const client = try sendConnect(service, "one-more.test:443");
+    defer client.close(io);
+    var tunnel = try io.concurrent(service_support.serve, .{
+        service,
+        client.proxy_side,
+        client.slot,
+        .{
+            .resolutions = &gated_resolver.table,
+            .timeout_ms = Connections.establish_timeout_ms,
+        },
+    });
+
+    try expectAnswer(io, client.stream, "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\n\r\n");
+    try tunnel.await(io);
+    try std.testing.expect(now(io) - started < std.time.ms_per_s);
+
+    const metrics = service.metrics();
+    try std.testing.expectEqual(@as(u32, 0), metrics.active_connections);
+    try std.testing.expectEqual(@as(u64, 1), metrics.resolution_refusals);
+    try std.testing.expectEqual(@as(u64, 0), metrics.establish_timeouts);
+    try std.testing.expectEqual(Resolutions.capacity, gated_resolver.table.count(.resolving));
+
+    try gated_resolver.open(&gated_resolver.table);
+}
+
+test "a CONNECT to an IPv4 address reaches its origin while no name can resolve" {
+    const io = std.testing.io;
+    var origin = try listenTestOrigin(io);
+    defer origin.listener.deinit(io);
+    var origin_worker = try io.concurrent(acceptAndClose, .{ io, &origin.listener });
+    defer origin_worker.cancel(io) catch {};
+    var fixture: TestServiceFixture = .{};
+    try fixture.init(io, std.testing.allocator, &.{});
+    defer fixture.deinit();
+    const service = fixture.service.?;
+    try gated_resolver.fill();
+
+    var authority_buffer: [32]u8 = undefined;
+    const authority = try std.fmt.bufPrint(&authority_buffer, "127.0.0.1:{d}", .{origin.port});
+    const client = try sendConnect(service, authority);
+    defer client.close(io);
+    var tunnel = try io.concurrent(service_support.serve, .{
+        service,
+        client.proxy_side,
+        client.slot,
+        .{
+            .resolutions = &gated_resolver.table,
+            .timeout_ms = Connections.establish_timeout_ms,
+        },
+    });
+
+    try expectAnswer(io, client.stream, "HTTP/1.1 200 Connection Established\r\n\r\n");
+    // Both ends close, so the relay ends on its own.
+    try client.stream.shutdown(io, .both);
+    try origin_worker.await(io);
+    try tunnel.await(io);
+    try std.testing.expectEqual(@as(u32, 0), service.metrics().active_connections);
+    try std.testing.expectEqual(@as(u64, 0), service.metrics().resolution_refusals);
+
+    try gated_resolver.open(&gated_resolver.table);
+}
+
+test "stopping the service does not wait for a blocked resolution" {
+    const io = std.testing.io;
+    var fixture: TestServiceFixture = .{};
+    try fixture.init(io, std.testing.allocator, &.{});
+    defer fixture.deinit();
+    const service = fixture.service.?;
+    const resolutions = &service_support.resolutions;
+    const system_resolver = resolutions.resolver;
+    resolutions.resolver = gated_resolver.answerOnceOpen;
+    defer resolutions.resolver = system_resolver;
+    try service.start();
+
+    const proxy_address = try std.Io.net.IpAddress.parse("127.0.0.1", service.clientConfiguration().port);
+    const client = try proxy_address.connect(io, .{ .mode = .stream });
+    defer client.close(io);
+    try writeConnect(io, client, &service.secret, "silent.test:443");
+    try gated_resolver.expectCalls(1);
+    try std.testing.expectEqual(@as(u32, 1), service.metrics().active_connections);
+
+    const started = now(io);
+    service.stop();
+    try std.testing.expect(now(io) - started < std.time.ms_per_s);
+    try std.testing.expectEqual(@as(u32, 0), service.metrics().active_connections);
+
+    // The worker is still inside the resolver, in a row the service never
+    // owned; it frees the row when the resolver returns.
+    try std.testing.expectEqual(@as(u32, 1), resolutions.count(.resolving));
+    try gated_resolver.open(resolutions);
+}
+
+/// One admitted connection over a socket pair, its CONNECT head already
+/// sent: the proxy's end with its row, and the client's end.
+const ConnectedClient = struct {
+    proxy_side: std.Io.net.Stream,
+    slot: Connections.Slot,
+    stream: std.Io.net.Stream,
+
+    /// Closes the client's end; the tunnel closes the proxy's.
+    fn close(self: ConnectedClient, io: std.Io) void {
+        self.stream.close(io);
+    }
+};
+
+fn sendConnect(service: *Service, authority: []const u8) !ConnectedClient {
+    const io = std.testing.io;
+    var sockets: [2]std.c.fd_t = undefined;
+    try std.testing.expectEqual(@as(c_int, 0), std.c.socketpair(std.c.AF.UNIX, std.c.SOCK.STREAM, 0, &sockets));
+    const client: ConnectedClient = .{
+        .proxy_side = localStream(sockets[0]),
+        .slot = service.connections.acquire(sockets[0], now(io)).?,
+        .stream = localStream(sockets[1]),
+    };
+    try writeConnect(io, client.stream, &service.secret, authority);
+
+    return client;
+}
+
+fn localStream(handle: std.c.fd_t) std.Io.net.Stream {
+    return .{
+        .socket = .{
+            .handle = handle,
+            .address = .{
+                .ip4 = .loopback(0),
+            },
+        },
+    };
+}
+
+fn writeConnect(io: std.Io, stream: std.Io.net.Stream, secret: *const identity.Secret, authority: []const u8) !void {
+    var raw_buffer: [basic_raw_capacity]u8 = undefined;
+    defer std.crypto.secureZero(u8, &raw_buffer);
+    var encoded_buffer: [basic_encoded_capacity]u8 = undefined;
+    defer std.crypto.secureZero(u8, &encoded_buffer);
+    const basic = try encodeBasic(secret, &raw_buffer, &encoded_buffer);
+
+    var write_buffer: [512]u8 = undefined;
+    var writer = stream.writer(io, &write_buffer);
+    try writer.interface.print("CONNECT {s} HTTP/1.1\r\nProxy-Authorization: Basic {s}\r\n\r\n", .{ authority, basic });
+    try writer.interface.flush();
+}
+
+fn expectAnswer(io: std.Io, stream: std.Io.net.Stream, comptime expected: []const u8) !void {
+    var read_buffer: [256]u8 = undefined;
+    var reader = stream.reader(io, &read_buffer);
+    var answer: [expected.len]u8 = undefined;
+    try reader.interface.readSliceAll(&answer);
+    try std.testing.expectEqualStrings(expected, &answer);
+}
+
+fn now(io: std.Io) i64 {
+    return std.Io.Timestamp.now(io, .awake).toMilliseconds();
 }
 
 const TestOrigin = struct { listener: std.Io.net.Server, port: u16 };

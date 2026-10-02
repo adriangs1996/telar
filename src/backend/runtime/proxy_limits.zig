@@ -6,6 +6,7 @@ const core = @import("telar-core");
 const RuntimeModel = @import("RuntimeModel.zig");
 const limit_reached = @import("limit_reached.zig");
 const Connections = @import("../proxy/Connections.zig");
+const Resolutions = @import("../proxy/Resolutions.zig");
 const Http1Connection = @import("../proxy/tunnel/Http1Connection.zig");
 const CaptureStreams = @import("../proxy/tunnel/CaptureStreams.zig");
 const RelayContext = @import("../proxy/tunnel/RelayContext.zig");
@@ -44,6 +45,8 @@ fn reportProxy(model: *RuntimeModel, now: Snapshot, last: Snapshot, capture: Cap
     reportGrowth(model, now.connect_heads_too_large, last.connect_heads_too_large, Tunnel.connect_head_limit);
     reportGrowth(model, now.connect_head_timeouts, last.connect_head_timeouts, Connections.connect_head_timeout_limit);
     reportGrowth(model, now.establish_timeouts, last.establish_timeouts, Connections.establish_timeout_limit);
+    reportGrowth(model, now.resolution_refusals, last.resolution_refusals, Resolutions.capacity_limit);
+    reportGrowth(model, now.resolutions_truncated, last.resolutions_truncated, Resolutions.addresses_limit);
     reportGrowth(model, now.http1_heads_too_large, last.http1_heads_too_large, Http1Connection.head_limit);
     reportGrowth(model, now.http1_chunk_lines_too_long, last.http1_chunk_lines_too_long, Http1Connection.chunk_line_limit);
     reportGrowth(model, now.http1_trailer_lines_too_long, last.http1_trailer_lines_too_long, Http1Connection.trailer_line_limit);
@@ -106,6 +109,38 @@ test "a proxy counter that grew reports its limit by name, and an unchanged one 
         .{},
     );
     try std.testing.expectEqual(@as(u64, 1), model.limit_reaches.hits[slot]);
+}
+
+test "a refused name resolution and a host with too many addresses report their limits" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const model = &fixture.runtime.model;
+
+    reportProxy(
+        model,
+        .{
+            .resolution_refusals = 1,
+        },
+        .{},
+        .{},
+    );
+    const notice = fixture.response().?.notification.view();
+    try std.testing.expectEqualStrings("proxy.max_resolutions: limit 64 host names reached", notice.message);
+
+    reportProxy(
+        model,
+        .{
+            .resolution_refusals = 1,
+            .resolutions_truncated = 1,
+        },
+        .{
+            .resolution_refusals = 1,
+        },
+        .{},
+    );
+    try std.testing.expectEqual(@as(u64, 1), model.limit_reaches.hits[model.limit_reaches.find("proxy.max_resolutions").?]);
+    try std.testing.expect(model.limit_reaches.find("proxy.max_resolved_addresses") != null);
 }
 
 test "capture truncation names the configured bound that cut it" {

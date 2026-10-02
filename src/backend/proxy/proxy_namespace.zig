@@ -331,6 +331,8 @@ fn expectAnswer(io: std.Io, stream: std.Io.net.Stream, comptime expected: []cons
 test {
     std.testing.refAllDecls(ca);
     _ = @import("Connections.zig");
+    _ = @import("Resolutions.zig");
+    _ = @import("name_resolution.zig");
     _ = @import("capture/capture_tests.zig");
     _ = @import("tunnel/tunnel_namespace.zig");
     _ = @import("tunnel/EventObserver.zig");

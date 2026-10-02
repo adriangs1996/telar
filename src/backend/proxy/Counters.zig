@@ -49,6 +49,8 @@ pub fn snapshot(self: *const Counters, live: LiveState) Snapshot {
         .unauthenticated_evictions = self.load(.unauthenticated_eviction),
         .h2_header_blocks_too_large = self.load(.h2_header_block_too_large),
         .h2_streams_untracked = self.load(.h2_stream_untracked),
+        .resolution_refusals = self.load(.resolution_refusal),
+        .resolutions_truncated = self.load(.resolution_truncated),
         .capture_started = live.captures.started,
         .capture_truncated = live.captures.truncated,
         .capture_truncated_part = live.captures.truncated_part,

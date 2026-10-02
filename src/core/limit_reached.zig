@@ -118,6 +118,7 @@ pub const LimitError = error{
     RemoteOutputTooLong,
     RemoteTelarPathTooLong,
     RequestIdExhausted,
+    ResolutionLimitReached,
     ResponseQueueFull,
     RingFull,
     ScopeTooLong,

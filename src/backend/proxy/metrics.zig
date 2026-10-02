@@ -41,6 +41,12 @@ pub const Counter = enum {
     h2_header_block_too_large,
     /// An HTTP/2 stream the relay could not follow past its tracked streams.
     h2_stream_untracked,
+    /// A CONNECT refused because `max_resolutions` other host names were
+    /// resolving.
+    resolution_refusal,
+    /// A connection whose host has more addresses than
+    /// `max_resolved_addresses`; the rest are not tried.
+    resolution_truncated,
 };
 
 test "each proxy counter has one independent snapshot field" {
@@ -92,6 +98,8 @@ test "each proxy counter has one independent snapshot field" {
     try std.testing.expectEqual(@as(u64, 20), snapshot.unauthenticated_evictions);
     try std.testing.expectEqual(@as(u64, 21), snapshot.h2_header_blocks_too_large);
     try std.testing.expectEqual(@as(u64, 22), snapshot.h2_streams_untracked);
+    try std.testing.expectEqual(@as(u64, 23), snapshot.resolution_refusals);
+    try std.testing.expectEqual(@as(u64, 24), snapshot.resolutions_truncated);
     try std.testing.expectEqual(@as(u64, 43), snapshot.capture_started);
     try std.testing.expectEqual(@as(u64, 47), snapshot.capture_truncated);
     try std.testing.expectEqual(@as(u64, 31), snapshot.capture_truncated_part);

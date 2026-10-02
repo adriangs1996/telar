@@ -4,6 +4,7 @@ const identity = @import("../identity.zig");
 const Producer = @import("../capture/Producer.zig");
 const std = @import("std");
 const Connections = @import("../Connections.zig");
+const Resolutions = @import("../Resolutions.zig");
 const tunnel_namespace = @import("tunnel_namespace.zig");
 const connect_authentication = @import("../connect_authentication.zig");
 const Exchange = @import("Exchange.zig");
@@ -96,11 +97,19 @@ pub fn run(self: *Tunnel) std.Io.Cancelable!void {
         .host = target.host,
         .io = io,
         .port = target.port,
-        .deadline_ms = exchange.deadline(Connections.establish_timeout_ms),
+        .deadline_ms = exchange.deadline(dependencies.establish_timeout_ms),
+        .resolutions = dependencies.resolutions,
+        .telemetry = dependencies.tls.telemetry,
     }) catch |err| {
         if (err == error.Timeout) {
             dependencies.tls.telemetry.record(.establish_timeout);
             tunnel_namespace.reply(io, self.child, "HTTP/1.1 504 Gateway Timeout\r\nContent-Length: 0\r\n\r\n");
+            return;
+        }
+
+        if (err == error.ResolutionLimitReached) {
+            dependencies.tls.telemetry.record(.resolution_refusal);
+            tunnel_namespace.reply(io, self.child, "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\n\r\n");
             return;
         }
 
@@ -175,4 +184,8 @@ const Dependencies = struct {
     connection_ids: *std.atomic.Value(u64),
     captures: *Producer,
     connections: *Connections,
+    /// Where the tunnel's host name resolves.
+    resolutions: *Resolutions,
+    /// How long the tunnel may take to reach its origin.
+    establish_timeout_ms: i64,
 };

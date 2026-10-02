@@ -4,6 +4,8 @@ const core = @import("telar-core");
 const pty = @import("pty");
 const std = @import("std");
 const Connections = @import("../Connections.zig");
+const name_resolution = @import("../name_resolution.zig");
+const Resolutions = @import("../Resolutions.zig");
 const Tunnel = @import("../tunnel/Tunnel.zig");
 const tunnel_namespace = @import("../tunnel/tunnel_namespace.zig");
 
@@ -27,17 +29,32 @@ const eviction_poll_ms = 5;
 /// How long accepting pauses after the process ran out of descriptors, so
 /// the loop waits for a tunnel to close one instead of spinning.
 const descriptor_backoff_ms = 100;
-/// Descriptors the runtime keeps for everything but proxy connections:
-/// panes, clients, history and logs.
-const reserved_descriptors = 512;
+/// Descriptors the runtime keeps for everything but the proxy: panes,
+/// clients, history and logs.
+const reserved_descriptors = 448;
 /// Descriptors a proxy connection holds: its child and its origin.
 const descriptors_per_connection = 2;
+/// Descriptors a name resolution holds once every tunnel gave up on it:
+/// measured on macOS 26, `getaddrinfo` keeps one open per call in flight.
+/// While a tunnel still waits, the resolution takes the place of the origin
+/// socket that tunnel has yet to open.
+const descriptors_per_resolution = 1;
+/// What the proxy at its bounds and the rest of the runtime may hold.
+const wanted_descriptors = max_connections * descriptors_per_connection + Resolutions.capacity * descriptors_per_resolution + reserved_descriptors;
 /// How long the accept loop drains a refused connection so its 503 is not
 /// lost to a reset; short, since accepting waits for it.
 const refusal_drain_ms = 20;
 comptime {
-    std.debug.assert(max_connections * descriptors_per_connection + reserved_descriptors <= pty.descriptor_limit.select_descriptor_ceiling);
+    std.debug.assert(wanted_descriptors <= pty.descriptor_limit.select_descriptor_ceiling);
 }
+
+/// The name resolutions of every proxy this process starts. It is static
+/// because a resolution outlives its proxy: a worker blocked in the system
+/// resolver returns whenever the resolver lets it, to a row that must still
+/// be there. Stopping a proxy leaves such rows to their workers.
+pub var resolutions: Resolutions = .{
+    .resolver = name_resolution.askSystem,
+};
 
 /// The answer to a connection that finds every slot taken.
 const refusal = "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
@@ -91,9 +108,10 @@ pub fn acceptConnections(service: *Service) anyerror!void {
 }
 
 /// Raises the process's soft descriptor limit so every proxy connection
-/// fits beside the rest of the runtime: 256 connections of two sockets and
-/// 512 more make 1024, which is also the most a raise gives, so no child
-/// ever inherits a limit past what select() holds (`pty.descriptor_limit`).
+/// fits beside the rest of the runtime: 256 connections of two sockets, 64
+/// blocked name resolutions of one descriptor and 448 more make 1024, which
+/// is also the most a raise gives, so no child ever inherits a limit past
+/// what select() holds (`pty.descriptor_limit`).
 /// A launcher such as launchd starts processes with 256. A limit that
 /// cannot be raised is kept; accepting then backs off when descriptors run
 /// out.
@@ -102,7 +120,7 @@ pub fn acceptConnections(service: *Service) anyerror!void {
 /// service_support.raiseDescriptorLimit();
 /// ```
 pub fn raiseDescriptorLimit() void {
-    pty.descriptor_limit.raise(max_connections * descriptors_per_connection + reserved_descriptors);
+    pty.descriptor_limit.raise(wanted_descriptors);
 }
 
 /// Closes every connection past its CONNECT head or establishment deadline,
@@ -175,6 +193,22 @@ const Admission = union(enum) {
 };
 
 fn serveConnection(service: *Service, stream: std.Io.net.Stream, slot: Connections.Slot) std.Io.Cancelable!void {
+    const establishment: Establishment = .{
+        .resolutions = &resolutions,
+        .timeout_ms = Connections.establish_timeout_ms,
+    };
+
+    return serve(service, stream, slot, establishment);
+}
+
+/// Runs one admitted connection's tunnel until it ends, then closes its
+/// socket and frees its row. `establishment` says where its host name
+/// resolves and how long it may take to reach its origin.
+///
+/// ```zig
+/// try service_support.serve(service, stream, slot, .{ .resolutions = &service_support.resolutions, .timeout_ms = Connections.establish_timeout_ms });
+/// ```
+pub fn serve(service: *Service, stream: std.Io.net.Stream, slot: Connections.Slot, establishment: Establishment) std.Io.Cancelable!void {
     defer close(service, stream, slot);
 
     var tunnel = Tunnel.init(.{
@@ -184,6 +218,8 @@ fn serveConnection(service: *Service, stream: std.Io.net.Stream, slot: Connectio
             .connection_ids = &service.next_connection_id,
             .captures = &service.captures,
             .connections = &service.connections,
+            .resolutions = establishment.resolutions,
+            .establish_timeout_ms = establishment.timeout_ms,
         },
         .child = stream,
         .slot = slot,
@@ -191,6 +227,13 @@ fn serveConnection(service: *Service, stream: std.Io.net.Stream, slot: Connectio
 
     return tunnel.run();
 }
+
+/// Where a tunnel's host name resolves and how long it may take to reach
+/// its origin.
+const Establishment = struct {
+    resolutions: *Resolutions,
+    timeout_ms: i64,
+};
 
 /// Closes a connection's child socket only after its row stops every
 /// shutdown, so none reaches a descriptor reused by the next accept.
@@ -218,7 +261,7 @@ test "the descriptor limit rises to fit every connection within its hard limit" 
     const original = try std.posix.getrlimit(.NOFILE);
     defer std.posix.setrlimit(.NOFILE, original) catch {};
 
-    const wanted: std.posix.rlim_t = max_connections * descriptors_per_connection + reserved_descriptors;
+    const wanted: std.posix.rlim_t = wanted_descriptors;
     var lowered = original;
     lowered.cur = @min(original.cur, 256);
     try std.posix.setrlimit(.NOFILE, lowered);

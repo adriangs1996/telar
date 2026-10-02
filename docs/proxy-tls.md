@@ -120,12 +120,35 @@ The proxy admits 256 connections at once across every pane of the runtime
 (`proxy.max_connections`), passthrough and intercepted alike. A connection
 must send its whole CONNECT head, at most 16 KiB (`proxy.max_connect_head_bytes`,
 a longer one is answered `431`), within 10 seconds. It must then reach its
-origin and finish TLS within 30 seconds: the TCP connect to each resolved
-address waits only for what is left of that budget, and stops at once when
-the proxy stops; a timeout is answered `504`, and a TLS handshake still
-running at the deadline is shut down. Name
-resolution keeps the system resolver's own timeouts, which on macOS the proxy
-cannot interrupt.
+origin and finish TLS within 30 seconds: resolving the host name and the TCP
+connect to each resolved address wait only for what is left of that budget,
+and stop at once when the proxy stops; a timeout is answered `504`, and a TLS
+handshake still running at the deadline is shut down.
+
+The system resolver cannot be interrupted. On macOS `getaddrinfo` returns
+only when the resolver gives up, so no connection calls it on its own thread.
+Each host name resolves on a worker thread of its own, and connections that
+ask for the same name share that worker and its answer. A connection whose
+name has not resolved at its deadline is answered `504` and frees its row at
+that moment. The worker stays inside the resolver until it returns, and the
+next connection to that name joins it instead of starting another, so a host
+that does not resolve costs one thread however often its clients retry.
+
+At most 64 host names resolve at once (`proxy.max_resolutions`). That bounds
+what the resolver can hold while it does not answer: 64 threads with 512 KiB
+of reserved stack each, and on macOS one descriptor per name. A connection
+whose name finds all 64 taken by other names is answered
+`503 Service Unavailable` without waiting and frees its row. It is `503` and
+not `504` because the proxy is what ran out, and the origin was never tried.
+A name keeps its first 32 addresses
+(`proxy.max_resolved_addresses`), tried in the resolver's order. A host given
+as a dotted IPv4 address needs no resolution and takes no worker, so it still
+connects while every name is stuck.
+
+Stopping the proxy does not wait for a worker still inside the resolver.
+Resolutions live in a table that belongs to the process, not to the proxy,
+and is never freed. A worker left behind touches only its row, and frees it
+when the resolver returns.
 
 At most 64 connections may still be sending their CONNECT head at once
 (`proxy.max_unauthenticated`), so a local process that opens silent
@@ -142,7 +165,8 @@ answered `503 Service Unavailable`; the proxy drains what the client already
 sent, for at most 20 ms, before closing, so the answer is not lost to a
 reset. The accept loop waits for that drain, so a burst of refused
 connections is answered at about 50 a second. At start the proxy raises the
-process's soft descriptor limit to fit every slot's two sockets, but never
+process's soft descriptor limit to fit every slot's two sockets and one
+descriptor per resolving name, but never
 past 1024, the `FD_SETSIZE` of Linux and macOS, so no child the runtime
 starts, however it starts it, can open a descriptor `select()` cannot hold;
 children started on a pty also get back the exact limit the runtime
@@ -262,7 +286,8 @@ The proxy's threads only count the limits they reach. Once a second the
 runtime's maintenance tick reports every limit whose count grew with the
 [limit notice](flows/limit-reached.md): `proxy.max_connections`,
 `proxy.max_connect_head_bytes`, `proxy.connect_head_timeout_ms`,
-`proxy.establish_timeout_ms`, `proxy.http1.max_head_bytes`,
+`proxy.establish_timeout_ms`, `proxy.max_resolutions`,
+`proxy.max_resolved_addresses`, `proxy.http1.max_head_bytes`,
 `proxy.http1.max_chunk_line_bytes`, `proxy.http1.max_trailer_line_bytes`,
 `proxy.max_unauthenticated`, `proxy.h2.max_header_block_bytes`,
 `proxy.h2.max_tracked_streams`,

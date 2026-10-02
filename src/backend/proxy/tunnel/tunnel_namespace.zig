@@ -3,6 +3,8 @@
 const Counters = @import("../Counters.zig");
 const Exchange = @import("Exchange.zig");
 const connect_authentication = @import("../connect_authentication.zig");
+const name_resolution = @import("../name_resolution.zig");
+const Resolutions = @import("../Resolutions.zig");
 const std = @import("std");
 const Snapshot = @import("../Snapshot.zig");
 
@@ -93,54 +95,58 @@ pub fn reply(io: std.Io, stream: std.Io.net.Stream, bytes: []const u8) void {
     writer.interface.flush() catch {};
 }
 
-/// Resolves the origin and connects to its addresses one at a time, each
-/// connect waiting at most until `deadline_ms` on the awake clock. Resolution
-/// runs asynchronously but connects run sequentially, which avoids a Zig
-/// 0.16 Darwin race where concurrent connect attempts can report EISCONN.
-/// The resolver keeps its own timeouts; on Darwin it cannot be interrupted.
+/// Resolves the origin and connects to its addresses one at a time, the
+/// resolution and each connect waiting at most until `deadline_ms` on the
+/// awake clock and ending when the task is canceled. The name resolves on a
+/// worker of `resolutions`, since the system resolver cannot be interrupted;
+/// a dotted IPv4 address needs none. Connects run sequentially, which
+/// avoids a Zig 0.16 Darwin race where concurrent connect attempts can
+/// report EISCONN.
 ///
 /// ```zig
-/// const origin = try tunnel_namespace.connectUpstream(.{ .host = host, .io = io, .port = 443, .deadline_ms = deadline });
+/// const origin = try tunnel_namespace.connectUpstream(.{ .host = host, .io = io, .port = 443, .deadline_ms = deadline, .resolutions = resolutions, .telemetry = telemetry });
 /// ```
 pub fn connectUpstream(target: Upstream) !std.Io.net.Stream {
     const io = target.io;
-    var lookup_storage: [32]std.Io.net.HostName.LookupResult = undefined;
-    var resolved: std.Io.Queue(std.Io.net.HostName.LookupResult) = .init(&lookup_storage);
-    var lookup = io.async(std.Io.net.HostName.lookup, .{
-        target.host,
-        io,
-        &resolved,
-        .{
-            .port = target.port,
-        },
-    });
-    defer lookup.cancel(io) catch {};
-    var last_error: ?anyerror = null;
+    if (std.Io.net.IpAddress.parseIp4(target.host.bytes, target.port)) |address| {
+        return connectBefore(io, address, target.deadline_ms);
+    } else |_| {}
 
-    while (resolved.getOne(io)) |result| switch (result) {
-        .canonical_name => continue,
-        .address => |address| {
-            if (connectBefore(io, address, target.deadline_ms)) |stream| {
-                return stream;
-            } else |err| {
-                last_error = err;
-                if (err == error.Timeout or err == error.Canceled) {
-                    return err;
-                }
-            }
+    var addresses: [Resolutions.max_addresses]std.Io.net.IpAddress = undefined;
+    const found = try name_resolution.resolve(
+        target.resolutions,
+        .{
+            .host = target.host,
+            .io = io,
+            .deadline_ms = target.deadline_ms,
         },
-    } else |err| switch (err) {
-        error.Canceled => return error.Canceled,
-        error.Closed => {
-            try lookup.await(io);
-            return last_error orelse error.UnknownHostName;
-        },
+        &addresses,
+    );
+    if (found > addresses.len) {
+        target.telemetry.record(.resolution_truncated);
     }
+
+    var last_error: ?anyerror = null;
+    for (addresses[0..@min(found, addresses.len)]) |*address| {
+        address.setPort(target.port);
+        if (connectBefore(io, address.*, target.deadline_ms)) |stream| {
+            return stream;
+        } else |err| {
+            last_error = err;
+            if (err == error.Timeout or err == error.Canceled) {
+                return err;
+            }
+        }
+    }
+
+    return last_error orelse error.UnknownHostName;
 }
 
 /// Where a tunnel connects and by when.
 const Upstream = struct {
     host: std.Io.net.HostName,
+    resolutions: *Resolutions,
+    telemetry: *Counters,
     io: std.Io,
     port: u16,
     /// On the awake clock.
