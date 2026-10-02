@@ -29,6 +29,7 @@ pub const family: FamilyHelp = .{
         \\or with window options, opens a window showing that machine. The command line sent
         \\is at most {d} KiB. `worktree create --machine` and `worktree fetch --machine` are
         \\not forwarded whole: their Git transfer starts here.
+        \\With --help, this binary prints its help locally before resolving the machine.
         \\
     , .{ core.MachineProfiles.capacity, core.MachineProfile.max_label_bytes, machine_dispatch.max_command_bytes / 1024 }),
     .commands = &.{

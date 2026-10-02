@@ -60,6 +60,35 @@ function sandbox(t) {
   return { root, home, config, run };
 }
 
+for (const agent of ["claude", "codex", "cursor"]) {
+  test(`${agent}: skills upgrade from the legacy coordinator and preserve a foreign general skill`, (t) => {
+    const s = sandbox(t);
+    const root = join(s.home, `.${agent}`);
+    assert.equal(s.run("install", agent).code, 0);
+    expectSkills(root);
+
+    const coordinator = skillPath(root, "telar-coordinator");
+    const current = readFileSync(coordinator, "utf8");
+    const header = current.slice(0, current.indexOf("\n---\n") + "\n---\n".length);
+    writeFileSync(coordinator, header + "\n# Legacy coordinator\n");
+    const general = skillPath(root, "telar");
+    const foreign = "---\nname: telar\ndescription: My own skill\n---\n# Keep this\n";
+    writeFileSync(general, foreign);
+
+    const installed = s.run("install", agent);
+    assert.equal(installed.code, 0, installed.stderr);
+    assert.equal(readFileSync(coordinator, "utf8"), current);
+    assert.equal(readFileSync(general, "utf8"), foreign);
+    const status = s.run("status", agent);
+    assert.equal(status.code, 0, status.stderr);
+    assert.ok(status.stdout.includes("skill telar: foreign"));
+    assert.ok(status.stdout.includes("skill telar-coordinator: installed"));
+    assert.equal(s.run("uninstall", agent).code, 0);
+    assert.ok(!existsSync(coordinator));
+    assert.equal(readFileSync(general, "utf8"), foreign);
+  });
+}
+
 for (const { agent, noun, marker, path, root } of agents) {
   test(`${agent}: install writes the ${noun} owner-only once, status follows it and uninstall removes it`, (t) => {
     const s = sandbox(t);

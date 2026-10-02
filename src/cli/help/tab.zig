@@ -21,8 +21,8 @@ pub const family: FamilyHelp = .{
     \\A tab belongs to one workspace and holds one or more panes. Ids are stable; a tab's
     \\position is zero-based and changes when tabs move. `--workspace` defaults to
     \\`--current` (TELAR_WORKSPACE_ID); a tab `--current` is TELAR_TAB_ID. `list`, `get`,
-    \\`rename`, `close`, `move` and `create --background` act on the runtime and change no
-    \\window; `create --client`, `select`, `next` and `previous` act on one window's
+    \\`rename`, `close`, `move` and `create --background` act on the runtime; attached
+    \\windows reflect those changes. `create --client`, `select`, `next` and `previous` act on one window's
     \\selection. Exit codes: 0; 1 when refused (the runtime's reason on stderr, such as
     \\`tab not found`); 3 when the runtime did not answer in time.
     \\

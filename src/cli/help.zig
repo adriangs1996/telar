@@ -258,7 +258,6 @@ pub const root_text = "telar " ++ build_options.version ++ ": a terminal multipl
     \\  Shift+arrows     Resize the focused pane
     \\  z                Toggle pane fullscreen
     \\  s                Toggle the sidebar
-    \\  w                Toggle the workspace list
     \\  N                Create and select a workspace
     \\  W                Rename the active workspace
     \\  x                Close the focused pane

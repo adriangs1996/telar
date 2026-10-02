@@ -15,7 +15,11 @@ pub const family: FamilyHelp = .{
     .summary = "Show, hide, resize and read a window's sidebar",
     .usage = "telar sidebar get|show|hide|resize [COLUMNS] --client ID [--json] [--socket PATH]",
     .text =
-    \\The sidebar belongs to one window; nothing here touches the runtime's state.
+    \\Visibility and the column width below belong to the shared client model. The native
+    \\window uses a separate pixel width from `gui.sidebar.width`, its resize keys and
+    \\edge dragging. `resize` changes the shared column preference, not that native
+    \\width; `get` reports the column preference. Hiding the native sidebar leaves a
+    \\narrow workspace rail when space permits.
     \\
     ,
     .commands = &.{
@@ -49,13 +53,14 @@ pub const family: FamilyHelp = .{
         },
         .{
             .name = "resize",
-            .summary = "Set the sidebar's width in columns, within the window's bounds",
+            .summary = "Set the shared client's sidebar column preference; native pixel width is separate",
             .usage = "telar sidebar resize COLUMNS --client ID [--json] [--socket PATH]",
             .routed = &.{.sidebar_resize},
             .text = std.fmt.comptimePrint(
                 \\Arguments:
                 \\  COLUMNS          A positive width; the window clamps it to its minimum and its
                 \\                   own width, and `value` reports what it committed.
+                \\                   The native window uses gui.sidebar.width instead of this value.
                 \\
                 \\{s}
                 \\

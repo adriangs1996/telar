@@ -8,10 +8,11 @@ pub const family: FamilyHelp = .{
     .summary = "Install or remove the proxy's short-lived system CA, and watch the proxy's status",
     .usage = "telar proxy trust install|uninstall|status [--ca-dir PATH] [--linux BACKEND]\n       telar proxy watch [--count N] [--jsonl] [--socket PATH]",
     .text =
-    \\The proxy sits between the agents in panes and the network to record what they asked
-    \\a model and what came back; it observes traffic, never agents, and changes nothing it
-    \\forwards. TLS interception is opt-in and visible while active; trusting its CA on the
-    \\system is a separate, explicit, reversible step.
+    \\The optional CONNECT proxy relays pane applications' traffic and can intercept TLS
+    \\for configured hosts. Capture is separately enabled; exchange-listener plugins can
+    \\process captured requests and responses. It does not determine agent status or
+    \\create a persistent request archive by itself. Interception is visible while active;
+    \\trusting its CA on the system is a separate, explicit, reversible step.
     \\
     ,
     .commands = &.{

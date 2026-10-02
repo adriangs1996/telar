@@ -256,6 +256,7 @@ fn parseCommand(init: std.process.Init, args: []const [*:0]const u8) parser.Cli 
 
 fn dispatchToMachine(init: std.process.Init, options: MachineDispatchOptions) anyerror!void {
     switch (parseCommand(init, options.argv)) {
+        .help => |topic| return help_module.run(init, topic),
         // Window options, or none: a window that shows the machine first.
         .run => |run| return openWindowOn(init, options.label, run),
         .gui => |gui| return openWindowOn(init, options.label, gui.run),

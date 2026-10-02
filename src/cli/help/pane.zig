@@ -28,7 +28,8 @@ pub const family: FamilyHelp = .{
         \\from TELAR_PANE_ID. Titles are not accepted here: use `telar agent` for agents.
         \\
         \\`read`, `send-keys`, `search`, `watch`, `list` and `get` work on the runtime alone
-        \\and change nothing a person sees. `create`, `split`, `close`, `focus ID`, `resize`,
+        \\without selecting a window; input can change the pane's visible output.
+        \\`create`, `split`, `close`, `focus ID`, `resize`,
         \\`fullscreen`, `scroll` and `copy` act through one attached window (`--client ID`),
         \\whose layout and focus belong to that window. Exit codes: 0; 2 the pane is gone;
         \\1 anything else, with the reason on stderr. A pane a person has focused in an
@@ -83,7 +84,7 @@ pub const family: FamilyHelp = .{
                 \\Results: nothing; exit 0, 1 when refused, 2 when the pane is gone.
                 \\
             , .{ core.max_pane_text_input_bytes, pane.submit_delay_ms }),
-            .examples = &.{ &.{ "pane", "send-keys", "4", "y", "--enter" }, &.{ "pane", "send-keys", "--current", "--stdin" } },
+            .examples = &.{ &.{ "pane", "send-keys", "4", "pwd", "--enter" }, &.{ "pane", "send-keys", "--current", "--stdin" } },
         },
         .{
             .name = "search",

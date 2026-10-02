@@ -76,7 +76,7 @@ pub const family: FamilyHelp = .{
         },
         .{
             .name = "exec",
-            .summary = "Run a command in a new tab of a worktree; --wait prints its output and exit code",
+            .summary = "Run a command in a new tab of a worktree; --wait prints output and returns its exit status",
             .usage = "telar worktree exec BRANCH|TITLE [--label TEXT] [--wait [--timeout SECONDS]] [--json] [--socket PATH] -- COMMAND...",
             .text = std.fmt.comptimePrint(
                 \\Arguments:
@@ -143,8 +143,7 @@ pub const family: FamilyHelp = .{
             \\Arguments:
             \\  --client ID      The window to switch (default: the one a person typed in last).
             \\
-            \\Effects: changes which workspace that window shows. This is the one worktree command
-            \\that changes what a person sees; it sends `workspace select` to the window. The
+            \\Effects: changes which workspace that window shows by sending `workspace select`. The
             \\worktree must be tracked and have a workspace. Starts the local runtime when none runs.
             \\
             \\Results: `opened BRANCH in client N`; JSON `worktree_id`, `workspace_id`, `client_id`.

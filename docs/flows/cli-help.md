@@ -18,6 +18,8 @@ help carries every syntax, default and limit.
 - `telar FAMILY COMMAND --help` prints one command's usage, arguments,
   effects and results. Nested words (`proxy trust install`, `client open goto`)
   belong to the command named by the second word.
+- `telar --machine LABEL FAMILY COMMAND --help` prints this binary's help
+  before looking up the machine or starting SSH. The label need not exist.
 - A `--help` after `--` is the child command's: `telar worktree exec fix --
   claude --help` runs Claude with `--help`. A first word that is no family is a
   program for a pane, whose `--help` is its own.

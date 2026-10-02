@@ -123,6 +123,20 @@ test("an unknown or incomplete command line answers with the help to read", (t) 
   untouched();
 });
 
+test("machine-prefixed help is local even when the machine is unknown", (t) => {
+  const { cli, untouched } = sandbox(t);
+  for (const prefix of [["--machine", "unknown-help-host"], ["--machine=unknown-help-host"]]) {
+    for (const args of [["--help"], ["pane", "--help"], ["pane", "read", "--help"], ["proxy", "trust", "install", "-h"]]) {
+      const local = cli(args);
+      const remote = cli([...prefix, ...args]);
+      assert.equal(remote.status, 0, remote.stderr);
+      assert.equal(remote.stdout, local.stdout);
+      assert.equal(remote.stderr, "");
+    }
+  }
+  untouched();
+});
+
 test("a --help after -- belongs to the child and is never telar's help", (t) => {
   const { cli, untouched } = sandbox(t);
   // The directory is checked before anything connects, so the command fails

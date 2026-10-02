@@ -10,8 +10,9 @@ pub const family: FamilyHelp = .{
     .usage = "telar workspace COMMAND [ID|--current] [options]",
     .text = std.fmt.comptimePrint(
         \\A workspace is a directory the runtime holds tabs for. Its id is stable; `--current`
-        \\is TELAR_WORKSPACE_ID. `create`, `list`, `get` and `rename` act on the runtime and
-        \\change no window; `select` changes what one window shows. At most {d} workspaces.
+        \\is TELAR_WORKSPACE_ID. `create`, `list`, `get` and `rename` act on the runtime;
+        \\windows reflect workspace additions and renames. `select` switches one window's
+        \\active workspace. At most {d} workspaces.
         \\Exit codes: 0, or 1 with the reason on stderr.
         \\
     , .{core.max_workspace_list_entries}),

@@ -19,10 +19,11 @@ pub const family: FamilyHelp = .{
     .summary = "Search, show, import, prune and summarize the command history the runtime records",
     .usage = "telar history COMMAND [ARG] [filters] [--socket PATH]",
     .text = std.fmt.comptimePrint(
-        \\The runtime records every command run in a pane, by people and by agents, with its
-        \\directory, exit status, duration and, when `runtime.history.output` is enabled, its
+        \\The runtime records commands detected through shell integration and agent hooks, with their
+        \\directory, exit status, duration and, when `runtime.history.output` is enabled, their
         \\output; the database lives under $XDG_DATA_HOME/telar. These commands query the
-        \\runtime and start it when none runs. Text output only. One scope filter at a time.
+        \\runtime and start it when none runs. This is not a complete audit log.
+        \\Text output only. One scope filter at a time.
         \\
         \\{s}
         \\

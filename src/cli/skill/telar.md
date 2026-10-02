@@ -3,8 +3,8 @@
 telar is the runtime your pane lives on: one long-lived process per account
 that owns the terminals, the agents in them, the history and the commands it
 runs for you, so a window can come and go. Windows own only what makes sense
-while someone looks: layout, focus, selection, scroll. Everything below works
-from the command line, with no window.
+while someone looks: layout, focus, selection, scroll. Runtime operations work
+without a window; window operations require an attached client.
 
 ## The binary
 
@@ -46,8 +46,9 @@ telar machine list --json         # saved machines, for --machine LABEL
 telar exec list                   # runtime-owned commands still retained
 ```
 
-Every `list` has a `get` for one entity. Ids belong to the runtime that
-answered them: with `telar --machine LABEL ...` they are that machine's, and
+Use the family's help to find its detail command (`get`, `status` or another
+operation). Ids belong to the runtime that answered them: with
+`telar --machine LABEL ...` they are that machine's, and
 `--machine` is never inherited, so pass it on every command meant for it.
 
 ## Verify outcomes
@@ -78,12 +79,12 @@ answered them: with `telar --machine LABEL ...` they are that machine's, and
 
 ## Rules that decide things
 
-- Pane, tab and workspace commands act on the runtime and change nothing a
-  person sees. Commands with `--client ID` act on one window, and
-  `worktree open` switches a window; that is the whole list.
-- A pane a person has focused in a window refuses text and interrupts. Do not
-  wait for them to move: open a tab of your own with `telar tab create
-  --background` and work there.
+- Check the command's effects: runtime mutations such as renaming or closing
+  tabs are visible in attached windows too. Layout and navigation commands
+  act through a window; their help explains client selection.
+- A pane a person has focused in a window refuses text and interrupts. Report
+  the refusal and retry when it is unfocused. For independent work, open a tab
+  of your own with `telar tab create --background`.
 - A `blocked` agent is asking something. Read the question with `pane read`,
   answer only what the user already authorized, with `pane send-keys`, and
   otherwise tell the user. Never approve on their behalf by default, never

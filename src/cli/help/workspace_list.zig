@@ -3,15 +3,17 @@
 const FamilyHelp = @import("../FamilyHelp.zig");
 
 const routed_text =
-    \\Effects: forwarded to the window `--client ID` names, which commits the state in its
-    \\model and chrome. Idempotent. Needs a running runtime; never starts one. Results:
+    \\Effects: forwarded to the client `--client ID` names, which commits the collapsed
+    \\preference in its model. The native window does not use that preference: its
+    \\workspace navigation adapts to available space. Idempotent; no visible change in
+    \\the native window. Needs a running runtime; never starts one. Results:
     \\text `ACTION: applied` or JSON `client_id`, `client_generation`, `action`, `status`,
     \\`target_id`, `value`, `text`. Exit 0; 2 unknown client; 3 no answer in time.
     \\
 ;
 
 pub const family: FamilyHelp = .{
-    .summary = "Expand or collapse the workspace list of a window",
+    .summary = "Set a client's legacy workspace-list preference; native windows ignore it",
     .usage = "telar workspace-list expand|collapse --client ID [--json] [--socket PATH]",
     .text =
     \\The workspace list is part of one window's chrome; the runtime keeps no such state.
