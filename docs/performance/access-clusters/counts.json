@@ -1,0 +1,3167 @@
+{
+  "source_commit": "43567b04484cade06cbebb645acf56dba3042bfe",
+  "collected_at": "2026-10-01T17:38:15.891135+00:00",
+  "zig": "0.16.0",
+  "os": "26.6.2",
+  "architecture": "arm64",
+  "build": "zig build build-dod-probe -Doptimize=ReleaseFast -Dprofile-counts=true --prefix /tmp/telar-memory-patterns.fnZXsC/counts -j2",
+  "executable_sha256": "17acf0aa080860066395c3577dc62cc72e8a3bdcf71b842c04e0186b456947e2",
+  "environment": {
+    "DOD_SAMPLES": "128",
+    "DOD_WARMUP": "64"
+  },
+  "invocations": [
+    {
+      "file": "access.jsonl",
+      "extra_environment": {}
+    },
+    {
+      "file": "access-chrome.jsonl",
+      "extra_environment": {
+        "DOD_CHROME_ONLY": "1"
+      }
+    }
+  ],
+  "scope": "Offline CPU fixtures only. No live application, runtime, GPU submission or remote connection. Counter-build timings intentionally removed. Terminal and chrome iterations are overridden; workspace/review use 1000 fixed iterations, review warms 200. Image resolution and chrome do not export ProfileCounters deltas.",
+  "layouts": [
+    {
+      "type": "layout",
+      "name": "Cell",
+      "size": 32,
+      "alignment": 2,
+      "fields": [
+        {
+          "name": "bytes",
+          "offset": 14,
+          "size": 16
+        },
+        {
+          "name": "len",
+          "offset": 30,
+          "size": 1
+        },
+        {
+          "name": "width",
+          "offset": 31,
+          "size": 1
+        },
+        {
+          "name": "style",
+          "offset": 0,
+          "size": 14
+        }
+      ]
+    },
+    {
+      "type": "layout",
+      "name": "panes.Pane",
+      "size": 488,
+      "alignment": 8,
+      "fields": [
+        {
+          "name": "gpa",
+          "offset": 0,
+          "size": 16
+        },
+        {
+          "name": "id",
+          "offset": 16,
+          "size": 8
+        },
+        {
+          "name": "location",
+          "offset": 24,
+          "size": 24
+        },
+        {
+          "name": "buffer",
+          "offset": 48,
+          "size": 112
+        },
+        {
+          "name": "text_metadata",
+          "offset": 160,
+          "size": 8
+        },
+        {
+          "name": "damage_rows",
+          "offset": 168,
+          "size": 16
+        },
+        {
+          "name": "attached",
+          "offset": 422,
+          "size": 1
+        },
+        {
+          "name": "attachment_generation",
+          "offset": 184,
+          "size": 8
+        },
+        {
+          "name": "cursor",
+          "offset": 416,
+          "size": 6
+        },
+        {
+          "name": "mouse",
+          "offset": 423,
+          "size": 3
+        },
+        {
+          "name": "input_modes",
+          "offset": 426,
+          "size": 8
+        },
+        {
+          "name": "pointer_shape",
+          "offset": 434,
+          "size": 1
+        },
+        {
+          "name": "scroll",
+          "offset": 408,
+          "size": 8
+        },
+        {
+          "name": "applied_frame_id",
+          "offset": 192,
+          "size": 8
+        },
+        {
+          "name": "pending_frame_id",
+          "offset": 200,
+          "size": 8
+        },
+        {
+          "name": "graphics_placeholder",
+          "offset": 435,
+          "size": 1
+        },
+        {
+          "name": "cwd",
+          "offset": 208,
+          "size": 16
+        },
+        {
+          "name": "foreground_name",
+          "offset": 436,
+          "size": 48
+        },
+        {
+          "name": "foreground_name_len",
+          "offset": 484,
+          "size": 1
+        },
+        {
+          "name": "progress_state",
+          "offset": 485,
+          "size": 1
+        },
+        {
+          "name": "progress_percent",
+          "offset": 486,
+          "size": 2
+        },
+        {
+          "name": "title",
+          "offset": 224,
+          "size": 16
+        },
+        {
+          "name": "pane_generation",
+          "offset": 240,
+          "size": 8
+        },
+        {
+          "name": "change_review",
+          "offset": 248,
+          "size": 160
+        }
+      ]
+    },
+    {
+      "type": "layout",
+      "name": "workspace.Tabs",
+      "size": 210192,
+      "alignment": 8,
+      "fields": [
+        {
+          "name": "location",
+          "offset": 0,
+          "size": 1536
+        },
+        {
+          "name": "label",
+          "offset": 198672,
+          "size": 8192
+        },
+        {
+          "name": "label_len",
+          "offset": 206864,
+          "size": 64
+        },
+        {
+          "name": "layout",
+          "offset": 1536,
+          "size": 196608
+        },
+        {
+          "name": "snapshot_loaded",
+          "offset": 206928,
+          "size": 64
+        },
+        {
+          "name": "restore_display_order",
+          "offset": 206992,
+          "size": 64
+        },
+        {
+          "name": "foreground_pane",
+          "offset": 198144,
+          "size": 512
+        },
+        {
+          "name": "foreground_name",
+          "offset": 207056,
+          "size": 3072
+        },
+        {
+          "name": "foreground_name_len",
+          "offset": 210128,
+          "size": 64
+        },
+        {
+          "name": "count",
+          "offset": 198656,
+          "size": 8
+        },
+        {
+          "name": "active",
+          "offset": 198664,
+          "size": 8
+        }
+      ]
+    },
+    {
+      "type": "layout",
+      "name": "panes.Panes",
+      "size": 6664,
+      "alignment": 8,
+      "fields": [
+        {
+          "name": "record",
+          "offset": 0,
+          "size": 2048
+        },
+        {
+          "name": "index",
+          "offset": 2048,
+          "size": 4608
+        },
+        {
+          "name": "count",
+          "offset": 6656,
+          "size": 8
+        }
+      ]
+    },
+    {
+      "type": "layout",
+      "name": "execution.Client",
+      "size": 2909536,
+      "alignment": 16,
+      "fields": [
+        {
+          "name": "io",
+          "offset": 2896400,
+          "size": 16
+        },
+        {
+          "name": "gpa",
+          "offset": 2879200,
+          "size": 16
+        },
+        {
+          "name": "runtime_transport",
+          "offset": 2869640,
+          "size": 8496
+        },
+        {
+          "name": "options",
+          "offset": 0,
+          "size": 202656
+        },
+        {
+          "name": "client_identity",
+          "offset": 774032,
+          "size": 8
+        },
+        {
+          "name": "telemetry",
+          "offset": 774040,
+          "size": 8480
+        },
+        {
+          "name": "model",
+          "offset": 782520,
+          "size": 2087088
+        },
+        {
+          "name": "lua_generation",
+          "offset": 2869608,
+          "size": 8
+        },
+        {
+          "name": "plugin_registry",
+          "offset": 2869616,
+          "size": 8
+        },
+        {
+          "name": "trust_store",
+          "offset": 2869624,
+          "size": 8
+        },
+        {
+          "name": "owns_configuration",
+          "offset": 2909526,
+          "size": 1
+        },
+        {
+          "name": "reload",
+          "offset": 756656,
+          "size": 17216
+        },
+        {
+          "name": "list_submission_alternate",
+          "offset": 2909524,
+          "size": 1
+        },
+        {
+          "name": "to_workers",
+          "offset": 2878160,
+          "size": 1040
+        },
+        {
+          "name": "to_background",
+          "offset": 202656,
+          "size": 554000
+        },
+        {
+          "name": "plugin_result",
+          "offset": 2879216,
+          "size": 10424
+        },
+        {
+          "name": "graphics",
+          "offset": 2889640,
+          "size": 72
+        },
+        {
+          "name": "chrome",
+          "offset": 2889712,
+          "size": 32
+        },
+        {
+          "name": "attachments",
+          "offset": 2889744,
+          "size": 120
+        },
+        {
+          "name": "presentation",
+          "offset": 2889864,
+          "size": 6440
+        },
+        {
+          "name": "host_input_source",
+          "offset": 2896304,
+          "size": 16
+        },
+        {
+          "name": "bootstrap",
+          "offset": 2896320,
+          "size": 80
+        },
+        {
+          "name": "channel",
+          "offset": 773872,
+          "size": 160
+        },
+        {
+          "name": "channel_owned",
+          "offset": 2909523,
+          "size": 1
+        },
+        {
+          "name": "forward",
+          "offset": 2903008,
+          "size": 3312
+        },
+        {
+          "name": "connect_result",
+          "offset": 2896416,
+          "size": 3472
+        },
+        {
+          "name": "connect_report",
+          "offset": 2906320,
+          "size": 264
+        },
+        {
+          "name": "connect_pending",
+          "offset": 2909520,
+          "size": 1
+        },
+        {
+          "name": "connect_outdated",
+          "offset": 2907471,
+          "size": 1
+        },
+        {
+          "name": "connect_parked",
+          "offset": 2907470,
+          "size": 1
+        },
+        {
+          "name": "machine_edit_label",
+          "offset": 2907438,
+          "size": 32
+        },
+        {
+          "name": "machine_edit_value",
+          "offset": 2906672,
+          "size": 255
+        },
+        {
+          "name": "machine_edit_pending",
+          "offset": 2906927,
+          "size": 1
+        },
+        {
+          "name": "connect_destination",
+          "offset": 2906928,
+          "size": 255
+        },
+        {
+          "name": "connect_telar_path",
+          "offset": 2907183,
+          "size": 255
+        },
+        {
+          "name": "runtime_retry",
+          "offset": 2906656,
+          "size": 16
+        },
+        {
+          "name": "graphics_resume",
+          "offset": 2906640,
+          "size": 16
+        },
+        {
+          "name": "connected_at_ns",
+          "offset": 2906632,
+          "size": 8
+        },
+        {
+          "name": "launch_cwd",
+          "offset": 2907472,
+          "size": 1024
+        },
+        {
+          "name": "launch_shell",
+          "offset": 2908496,
+          "size": 1024
+        },
+        {
+          "name": "launch_arguments",
+          "offset": 2906584,
+          "size": 48
+        },
+        {
+          "name": "presented",
+          "offset": 2909521,
+          "size": 1
+        },
+        {
+          "name": "open_deferred",
+          "offset": 2909522,
+          "size": 1
+        },
+        {
+          "name": "deferred_layout",
+          "offset": 2899888,
+          "size": 3120
+        },
+        {
+          "name": "left_workspace",
+          "offset": 2878136,
+          "size": 24
+        },
+        {
+          "name": "leave_pending",
+          "offset": 2909525,
+          "size": 1
+        },
+        {
+          "name": "machines",
+          "offset": 2869632,
+          "size": 8
+        }
+      ]
+    },
+    {
+      "type": "layout",
+      "name": "render.TerminalRenderer",
+      "size": 92992,
+      "alignment": 16,
+      "fields": [
+        {
+          "name": "allocator",
+          "offset": 71128,
+          "size": 16
+        },
+        {
+          "name": "io",
+          "offset": 71104,
+          "size": 24
+        },
+        {
+          "name": "config",
+          "offset": 92432,
+          "size": 312
+        },
+        {
+          "name": "theme",
+          "offset": 92856,
+          "size": 62
+        },
+        {
+          "name": "font",
+          "offset": 71152,
+          "size": 4376
+        },
+        {
+          "name": "atlas",
+          "offset": 0,
+          "size": 71040
+        },
+        {
+          "name": "sprites",
+          "offset": 75528,
+          "size": 88
+        },
+        {
+          "name": "diagrams",
+          "offset": 75616,
+          "size": 192
+        },
+        {
+          "name": "images",
+          "offset": 75808,
+          "size": 16
+        },
+        {
+          "name": "image_draws",
+          "offset": 76000,
+          "size": 16384
+        },
+        {
+          "name": "image_draw_count",
+          "offset": 92384,
+          "size": 4
+        },
+        {
+          "name": "quads",
+          "offset": 75936,
+          "size": 64
+        },
+        {
+          "name": "cell_quads",
+          "offset": 71040,
+          "size": 64
+        },
+        {
+          "name": "retained",
+          "offset": 75840,
+          "size": 96
+        },
+        {
+          "name": "repainted_cells",
+          "offset": 71144,
+          "size": 8
+        },
+        {
+          "name": "metrics",
+          "offset": 92388,
+          "size": 12
+        },
+        {
+          "name": "chrome",
+          "offset": 92400,
+          "size": 24
+        },
+        {
+          "name": "sidebar_request",
+          "offset": 92424,
+          "size": 8
+        },
+        {
+          "name": "cut_from",
+          "offset": 75824,
+          "size": 16
+        },
+        {
+          "name": "sidebar",
+          "offset": 92744,
+          "size": 24
+        },
+        {
+          "name": "controls",
+          "offset": 92768,
+          "size": 4
+        },
+        {
+          "name": "scale",
+          "offset": 92772,
+          "size": 4
+        },
+        {
+          "name": "origin",
+          "offset": 92776,
+          "size": 8
+        },
+        {
+          "name": "viewport",
+          "offset": 92784,
+          "size": 8
+        },
+        {
+          "name": "atlas_version",
+          "offset": 92792,
+          "size": 4
+        },
+        {
+          "name": "last_page_version",
+          "offset": 92796,
+          "size": 4
+        },
+        {
+          "name": "atlas_dirty_base",
+          "offset": 92800,
+          "size": 4
+        },
+        {
+          "name": "atlas_dirty",
+          "offset": 92804,
+          "size": 8
+        },
+        {
+          "name": "atlas_side",
+          "offset": 92812,
+          "size": 4
+        },
+        {
+          "name": "sprites_version",
+          "offset": 92816,
+          "size": 4
+        },
+        {
+          "name": "last_sprites_version",
+          "offset": 92820,
+          "size": 4
+        },
+        {
+          "name": "background",
+          "offset": 92824,
+          "size": 16
+        },
+        {
+          "name": "foreground",
+          "offset": 92840,
+          "size": 16
+        },
+        {
+          "name": "last_theme",
+          "offset": 92918,
+          "size": 63
+        },
+        {
+          "name": "cursor_on",
+          "offset": 92981,
+          "size": 1
+        },
+        {
+          "name": "focused",
+          "offset": 92982,
+          "size": 1
+        }
+      ]
+    },
+    {
+      "type": "layout",
+      "name": "render.CellMesh",
+      "size": 24,
+      "alignment": 8,
+      "fields": [
+        {
+          "name": "metadata",
+          "offset": 0,
+          "size": 8
+        },
+        {
+          "name": "primary",
+          "offset": 8,
+          "size": 8
+        },
+        {
+          "name": "overflow",
+          "offset": 16,
+          "size": 8
+        }
+      ]
+    },
+    {
+      "type": "layout",
+      "name": "Quad.Quad",
+      "size": 80,
+      "alignment": 4,
+      "fields": [
+        {
+          "name": "x",
+          "offset": 0,
+          "size": 4
+        },
+        {
+          "name": "y",
+          "offset": 4,
+          "size": 4
+        },
+        {
+          "name": "width",
+          "offset": 8,
+          "size": 4
+        },
+        {
+          "name": "height",
+          "offset": 12,
+          "size": 4
+        },
+        {
+          "name": "u0",
+          "offset": 16,
+          "size": 4
+        },
+        {
+          "name": "v0",
+          "offset": 20,
+          "size": 4
+        },
+        {
+          "name": "u1",
+          "offset": 24,
+          "size": 4
+        },
+        {
+          "name": "v1",
+          "offset": 28,
+          "size": 4
+        },
+        {
+          "name": "r",
+          "offset": 32,
+          "size": 4
+        },
+        {
+          "name": "g",
+          "offset": 36,
+          "size": 4
+        },
+        {
+          "name": "b",
+          "offset": 40,
+          "size": 4
+        },
+        {
+          "name": "a",
+          "offset": 44,
+          "size": 4
+        },
+        {
+          "name": "radius",
+          "offset": 48,
+          "size": 4
+        },
+        {
+          "name": "border",
+          "offset": 52,
+          "size": 4
+        },
+        {
+          "name": "texture",
+          "offset": 56,
+          "size": 4
+        },
+        {
+          "name": "reserved",
+          "offset": 60,
+          "size": 4
+        },
+        {
+          "name": "border_r",
+          "offset": 64,
+          "size": 4
+        },
+        {
+          "name": "border_g",
+          "offset": 68,
+          "size": 4
+        },
+        {
+          "name": "border_b",
+          "offset": 72,
+          "size": 4
+        },
+        {
+          "name": "border_a",
+          "offset": 76,
+          "size": 4
+        }
+      ]
+    },
+    {
+      "type": "layout",
+      "name": "change_review.Widget",
+      "size": 809680,
+      "alignment": 8,
+      "fields": [
+        {
+          "name": "host",
+          "offset": 808792,
+          "size": 192
+        },
+        {
+          "name": "host_port",
+          "offset": 809064,
+          "size": 8
+        },
+        {
+          "name": "layer",
+          "offset": 809672,
+          "size": 1
+        },
+        {
+          "name": "mode",
+          "offset": 809671,
+          "size": 1
+        },
+        {
+          "name": "command",
+          "offset": 809668,
+          "size": 2
+        },
+        {
+          "name": "changed_comments",
+          "offset": 809092,
+          "size": 4
+        },
+        {
+          "name": "deleted_comments",
+          "offset": 809088,
+          "size": 4
+        },
+        {
+          "name": "reviewed_changed",
+          "offset": 809665,
+          "size": 1
+        },
+        {
+          "name": "theme_override",
+          "offset": 809429,
+          "size": 233
+        },
+        {
+          "name": "edition_id",
+          "offset": 808984,
+          "size": 8
+        },
+        {
+          "name": "source_label",
+          "offset": 808992,
+          "size": 16
+        },
+        {
+          "name": "previous_edition",
+          "offset": 809428,
+          "size": 1
+        },
+        {
+          "name": "next_edition",
+          "offset": 809427,
+          "size": 1
+        },
+        {
+          "name": "loading",
+          "offset": 809426,
+          "size": 1
+        },
+        {
+          "name": "read_only",
+          "offset": 809664,
+          "size": 1
+        },
+        {
+          "name": "delivery",
+          "offset": 809424,
+          "size": 1
+        },
+        {
+          "name": "live_status",
+          "offset": 809104,
+          "size": 320
+        },
+        {
+          "name": "model",
+          "offset": 8,
+          "size": 740696
+        },
+        {
+          "name": "roles",
+          "offset": 809032,
+          "size": 32
+        },
+        {
+          "name": "theme",
+          "offset": 809425,
+          "size": 1
+        },
+        {
+          "name": "widgets",
+          "offset": 0,
+          "size": 8
+        },
+        {
+          "name": "generation",
+          "offset": 809016,
+          "size": 8
+        },
+        {
+          "name": "text_revision",
+          "offset": 809008,
+          "size": 8
+        },
+        {
+          "name": "scroll",
+          "offset": 809076,
+          "size": 4
+        },
+        {
+          "name": "maximum_scroll",
+          "offset": 809080,
+          "size": 4
+        },
+        {
+          "name": "sidebar_start",
+          "offset": 809024,
+          "size": 8
+        },
+        {
+          "name": "reveal",
+          "offset": 809662,
+          "size": 1
+        },
+        {
+          "name": "needs_focus",
+          "offset": 809663,
+          "size": 1
+        },
+        {
+          "name": "prepared_cell",
+          "offset": 809072,
+          "size": 4
+        },
+        {
+          "name": "cell",
+          "offset": 809084,
+          "size": 4
+        },
+        {
+          "name": "copy_range",
+          "offset": 808768,
+          "size": 24
+        },
+        {
+          "name": "dragging",
+          "offset": 809666,
+          "size": 1
+        },
+        {
+          "name": "clipboard_id",
+          "offset": 808752,
+          "size": 16
+        },
+        {
+          "name": "clipboard_revision",
+          "offset": 808744,
+          "size": 8
+        },
+        {
+          "name": "clipboard_selection",
+          "offset": 809096,
+          "size": 8
+        },
+        {
+          "name": "clipboard_cut",
+          "offset": 809667,
+          "size": 1
+        },
+        {
+          "name": "search_prompt",
+          "offset": 806304,
+          "size": 2440
+        },
+        {
+          "name": "pending_g",
+          "offset": 809670,
+          "size": 1
+        },
+        {
+          "name": "prepared_viewport",
+          "offset": 773504,
+          "size": 32800
+        },
+        {
+          "name": "viewport",
+          "offset": 740704,
+          "size": 32800
+        }
+      ]
+    },
+    {
+      "type": "layout",
+      "name": "ProfileStore",
+      "size": 163968,
+      "alignment": 128,
+      "fields": [
+        {
+          "name": "claimed",
+          "offset": 163840,
+          "size": 8
+        },
+        {
+          "name": "banks",
+          "offset": 0,
+          "size": 163840
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "type": "workload",
+      "name": "terminal/retained/73x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 560640,
+      "live_requested_bytes": 25222486,
+      "retained_length": 2920,
+      "retained_capacity": 2920,
+      "last_frame_quads": 2920,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 128,
+        "gui_cell_visit": 373760,
+        "gui_ink_visit": 373760,
+        "mesh_compare": 373760,
+        "mesh_hit": 373760,
+        "mesh_rebuild": 0,
+        "mesh_items": 373760,
+        "gui_quads": 373760,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 1.0,
+        "gui_cell_visit": 2920.0,
+        "gui_ink_visit": 2920.0,
+        "mesh_compare": 2920.0,
+        "mesh_hit": 2920.0,
+        "mesh_items": 2920.0,
+        "gui_quads": 2920.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/sparse/73x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 560640,
+      "live_requested_bytes": 25222486,
+      "retained_length": 2920,
+      "retained_capacity": 2920,
+      "last_frame_quads": 2920,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 128,
+        "gui_cell_visit": 373760,
+        "gui_ink_visit": 373760,
+        "mesh_compare": 373760,
+        "mesh_hit": 373632,
+        "mesh_rebuild": 128,
+        "mesh_items": 373760,
+        "gui_quads": 373760,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 1.0,
+        "gui_cell_visit": 2920.0,
+        "gui_ink_visit": 2920.0,
+        "mesh_compare": 2920.0,
+        "mesh_hit": 2919.0,
+        "mesh_rebuild": 1.0,
+        "mesh_items": 2920.0,
+        "gui_quads": 2920.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/full/73x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 560640,
+      "live_requested_bytes": 25223470,
+      "retained_length": 2920,
+      "retained_capacity": 2920,
+      "last_frame_quads": 2920,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 128,
+        "gui_cell_visit": 373760,
+        "gui_ink_visit": 373760,
+        "mesh_compare": 373760,
+        "mesh_hit": 0,
+        "mesh_rebuild": 373760,
+        "mesh_items": 373760,
+        "gui_quads": 373760,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 1.0,
+        "gui_cell_visit": 2920.0,
+        "gui_ink_visit": 2920.0,
+        "mesh_compare": 2920.0,
+        "mesh_rebuild": 2920.0,
+        "mesh_items": 2920.0,
+        "gui_quads": 2920.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/theme/73x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 560640,
+      "live_requested_bytes": 25222486,
+      "retained_length": 2920,
+      "retained_capacity": 2920,
+      "last_frame_quads": 2920,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 128,
+        "gui_cell_visit": 373760,
+        "gui_ink_visit": 373760,
+        "mesh_compare": 373760,
+        "mesh_hit": 0,
+        "mesh_rebuild": 373760,
+        "mesh_items": 373760,
+        "gui_quads": 373760,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 1.0,
+        "gui_cell_visit": 2920.0,
+        "gui_ink_visit": 2920.0,
+        "mesh_compare": 2920.0,
+        "mesh_rebuild": 2920.0,
+        "mesh_items": 2920.0,
+        "gui_quads": 2920.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/resize/73x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 560640,
+      "live_requested_bytes": 25222486,
+      "retained_length": 2920,
+      "retained_capacity": 2920,
+      "last_frame_quads": 2920,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 128,
+        "gui_cell_visit": 373760,
+        "gui_ink_visit": 373760,
+        "mesh_compare": 373760,
+        "mesh_hit": 373760,
+        "mesh_rebuild": 0,
+        "mesh_items": 373760,
+        "gui_quads": 373760,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 1.0,
+        "gui_cell_visit": 2920.0,
+        "gui_ink_visit": 2920.0,
+        "mesh_compare": 2920.0,
+        "mesh_hit": 2920.0,
+        "mesh_items": 2920.0,
+        "gui_quads": 2920.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/selection/73x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 816913,
+      "live_requested_bytes": 25222486,
+      "retained_length": 2920,
+      "retained_capacity": 2920,
+      "last_frame_quads": 3486,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 128,
+        "gui_cell_visit": 373760,
+        "gui_ink_visit": 373760,
+        "mesh_compare": 373760,
+        "mesh_hit": 354377,
+        "mesh_rebuild": 19383,
+        "mesh_items": 550865,
+        "gui_quads": 550865,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 1.0,
+        "gui_cell_visit": 2920.0,
+        "gui_ink_visit": 2920.0,
+        "mesh_compare": 2920.0,
+        "mesh_hit": 2768.5703125,
+        "mesh_rebuild": 151.4296875,
+        "mesh_items": 4303.6328125,
+        "gui_quads": 4303.6328125
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/font/73x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 560640,
+      "live_requested_bytes": 29759326,
+      "retained_length": 2920,
+      "retained_capacity": 3690,
+      "last_frame_quads": 2920,
+      "measured_allocations": 640,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 128,
+        "gui_cell_visit": 373760,
+        "gui_ink_visit": 373760,
+        "mesh_compare": 373760,
+        "mesh_hit": 0,
+        "mesh_rebuild": 373760,
+        "mesh_items": 373760,
+        "gui_quads": 373760,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 1.0,
+        "gui_cell_visit": 2920.0,
+        "gui_ink_visit": 2920.0,
+        "mesh_compare": 2920.0,
+        "mesh_rebuild": 2920.0,
+        "mesh_items": 2920.0,
+        "gui_quads": 2920.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/two_one_active/73x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 560640,
+      "live_requested_bytes": 25222486,
+      "retained_length": 2920,
+      "retained_capacity": 2920,
+      "last_frame_quads": 2920,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 256,
+        "gui_cell_visit": 373760,
+        "gui_ink_visit": 373760,
+        "mesh_compare": 373760,
+        "mesh_hit": 373632,
+        "mesh_rebuild": 128,
+        "mesh_items": 373760,
+        "gui_quads": 373760,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 2.0,
+        "gui_cell_visit": 2920.0,
+        "gui_ink_visit": 2920.0,
+        "mesh_compare": 2920.0,
+        "mesh_hit": 2919.0,
+        "mesh_rebuild": 1.0,
+        "mesh_items": 2920.0,
+        "gui_quads": 2920.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/two_all_active/73x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 560640,
+      "live_requested_bytes": 25222486,
+      "retained_length": 2920,
+      "retained_capacity": 2920,
+      "last_frame_quads": 2920,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 256,
+        "gui_cell_visit": 373760,
+        "gui_ink_visit": 373760,
+        "mesh_compare": 373760,
+        "mesh_hit": 373504,
+        "mesh_rebuild": 256,
+        "mesh_items": 373760,
+        "gui_quads": 373760,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 2.0,
+        "gui_cell_visit": 2920.0,
+        "gui_ink_visit": 2920.0,
+        "mesh_compare": 2920.0,
+        "mesh_hit": 2918.0,
+        "mesh_rebuild": 2.0,
+        "mesh_items": 2920.0,
+        "gui_quads": 2920.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/cursor/73x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 560832,
+      "live_requested_bytes": 25222486,
+      "retained_length": 2920,
+      "retained_capacity": 2920,
+      "last_frame_quads": 2921,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 128,
+        "gui_cell_visit": 373760,
+        "gui_ink_visit": 373760,
+        "mesh_compare": 373760,
+        "mesh_hit": 373760,
+        "mesh_rebuild": 0,
+        "mesh_items": 373760,
+        "gui_quads": 373888,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 1.0,
+        "gui_cell_visit": 2920.0,
+        "gui_ink_visit": 2920.0,
+        "mesh_compare": 2920.0,
+        "mesh_hit": 2920.0,
+        "mesh_items": 2920.0,
+        "gui_quads": 2921.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/focus/73x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 561120,
+      "live_requested_bytes": 25222486,
+      "retained_length": 2920,
+      "retained_capacity": 2920,
+      "last_frame_quads": 2924,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 128,
+        "gui_cell_visit": 373760,
+        "gui_ink_visit": 373760,
+        "mesh_compare": 373760,
+        "mesh_hit": 373760,
+        "mesh_rebuild": 0,
+        "mesh_items": 373760,
+        "gui_quads": 374080,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 1.0,
+        "gui_cell_visit": 2920.0,
+        "gui_ink_visit": 2920.0,
+        "mesh_compare": 2920.0,
+        "mesh_hit": 2920.0,
+        "mesh_items": 2920.0,
+        "gui_quads": 2922.5
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/reattach/73x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 560640,
+      "live_requested_bytes": 25222486,
+      "retained_length": 2920,
+      "retained_capacity": 2920,
+      "last_frame_quads": 2920,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 128,
+        "gui_cell_visit": 373760,
+        "gui_ink_visit": 373760,
+        "mesh_compare": 373760,
+        "mesh_hit": 373760,
+        "mesh_rebuild": 0,
+        "mesh_items": 373760,
+        "gui_quads": 373760,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 1.0,
+        "gui_cell_visit": 2920.0,
+        "gui_ink_visit": 2920.0,
+        "mesh_compare": 2920.0,
+        "mesh_hit": 2920.0,
+        "mesh_items": 2920.0,
+        "gui_quads": 2920.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/images/73x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 609792,
+      "live_requested_bytes": 25222486,
+      "retained_length": 2920,
+      "retained_capacity": 2920,
+      "last_frame_quads": 3176,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 128,
+        "gui_cell_visit": 373760,
+        "gui_ink_visit": 373760,
+        "mesh_compare": 373760,
+        "mesh_hit": 373760,
+        "mesh_rebuild": 0,
+        "mesh_items": 373760,
+        "gui_quads": 406528,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 1.0,
+        "gui_cell_visit": 2920.0,
+        "gui_ink_visit": 2920.0,
+        "mesh_compare": 2920.0,
+        "mesh_hit": 2920.0,
+        "mesh_items": 2920.0,
+        "gui_quads": 3176.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/retained/153x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 1175040,
+      "live_requested_bytes": 40595286,
+      "retained_length": 6120,
+      "retained_capacity": 6120,
+      "last_frame_quads": 6120,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 128,
+        "gui_cell_visit": 783360,
+        "gui_ink_visit": 783360,
+        "mesh_compare": 783360,
+        "mesh_hit": 783360,
+        "mesh_rebuild": 0,
+        "mesh_items": 783360,
+        "gui_quads": 783360,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 1.0,
+        "gui_cell_visit": 6120.0,
+        "gui_ink_visit": 6120.0,
+        "mesh_compare": 6120.0,
+        "mesh_hit": 6120.0,
+        "mesh_items": 6120.0,
+        "gui_quads": 6120.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/sparse/153x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 1175040,
+      "live_requested_bytes": 40595286,
+      "retained_length": 6120,
+      "retained_capacity": 6120,
+      "last_frame_quads": 6120,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 128,
+        "gui_cell_visit": 783360,
+        "gui_ink_visit": 783360,
+        "mesh_compare": 783360,
+        "mesh_hit": 783232,
+        "mesh_rebuild": 128,
+        "mesh_items": 783360,
+        "gui_quads": 783360,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 1.0,
+        "gui_cell_visit": 6120.0,
+        "gui_ink_visit": 6120.0,
+        "mesh_compare": 6120.0,
+        "mesh_hit": 6119.0,
+        "mesh_rebuild": 1.0,
+        "mesh_items": 6120.0,
+        "gui_quads": 6120.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/full/153x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 1175040,
+      "live_requested_bytes": 40596270,
+      "retained_length": 6120,
+      "retained_capacity": 6120,
+      "last_frame_quads": 6120,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 128,
+        "gui_cell_visit": 783360,
+        "gui_ink_visit": 783360,
+        "mesh_compare": 783360,
+        "mesh_hit": 0,
+        "mesh_rebuild": 783360,
+        "mesh_items": 783360,
+        "gui_quads": 783360,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 1.0,
+        "gui_cell_visit": 6120.0,
+        "gui_ink_visit": 6120.0,
+        "mesh_compare": 6120.0,
+        "mesh_rebuild": 6120.0,
+        "mesh_items": 6120.0,
+        "gui_quads": 6120.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/theme/153x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 1175040,
+      "live_requested_bytes": 40595286,
+      "retained_length": 6120,
+      "retained_capacity": 6120,
+      "last_frame_quads": 6120,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 128,
+        "gui_cell_visit": 783360,
+        "gui_ink_visit": 783360,
+        "mesh_compare": 783360,
+        "mesh_hit": 0,
+        "mesh_rebuild": 783360,
+        "mesh_items": 783360,
+        "gui_quads": 783360,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 1.0,
+        "gui_cell_visit": 6120.0,
+        "gui_ink_visit": 6120.0,
+        "mesh_compare": 6120.0,
+        "mesh_rebuild": 6120.0,
+        "mesh_items": 6120.0,
+        "gui_quads": 6120.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/resize/153x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 1175040,
+      "live_requested_bytes": 40595286,
+      "retained_length": 6120,
+      "retained_capacity": 6120,
+      "last_frame_quads": 6120,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 128,
+        "gui_cell_visit": 783360,
+        "gui_ink_visit": 783360,
+        "mesh_compare": 783360,
+        "mesh_hit": 783360,
+        "mesh_rebuild": 0,
+        "mesh_items": 783360,
+        "gui_quads": 783360,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 1.0,
+        "gui_cell_visit": 6120.0,
+        "gui_ink_visit": 6120.0,
+        "mesh_compare": 6120.0,
+        "mesh_hit": 6120.0,
+        "mesh_items": 6120.0,
+        "gui_quads": 6120.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/selection/153x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 1709248,
+      "live_requested_bytes": 40595286,
+      "retained_length": 6120,
+      "retained_capacity": 6120,
+      "last_frame_quads": 7319,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 128,
+        "gui_cell_visit": 783360,
+        "gui_ink_visit": 783360,
+        "mesh_compare": 783360,
+        "mesh_hit": 742784,
+        "mesh_rebuild": 40576,
+        "mesh_items": 1153920,
+        "gui_quads": 1153920,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 1.0,
+        "gui_cell_visit": 6120.0,
+        "gui_ink_visit": 6120.0,
+        "mesh_compare": 6120.0,
+        "mesh_hit": 5803.0,
+        "mesh_rebuild": 317.0,
+        "mesh_items": 9015.0,
+        "gui_quads": 9015.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/font/153x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 1175040,
+      "live_requested_bytes": 47029926,
+      "retained_length": 6120,
+      "retained_capacity": 7740,
+      "last_frame_quads": 6120,
+      "measured_allocations": 640,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 128,
+        "gui_cell_visit": 783360,
+        "gui_ink_visit": 783360,
+        "mesh_compare": 783360,
+        "mesh_hit": 0,
+        "mesh_rebuild": 783360,
+        "mesh_items": 783360,
+        "gui_quads": 783360,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 1.0,
+        "gui_cell_visit": 6120.0,
+        "gui_ink_visit": 6120.0,
+        "mesh_compare": 6120.0,
+        "mesh_rebuild": 6120.0,
+        "mesh_items": 6120.0,
+        "gui_quads": 6120.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/two_one_active/153x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 1175040,
+      "live_requested_bytes": 40595286,
+      "retained_length": 6120,
+      "retained_capacity": 6120,
+      "last_frame_quads": 6120,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 256,
+        "gui_cell_visit": 783360,
+        "gui_ink_visit": 783360,
+        "mesh_compare": 783360,
+        "mesh_hit": 783232,
+        "mesh_rebuild": 128,
+        "mesh_items": 783360,
+        "gui_quads": 783360,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 2.0,
+        "gui_cell_visit": 6120.0,
+        "gui_ink_visit": 6120.0,
+        "mesh_compare": 6120.0,
+        "mesh_hit": 6119.0,
+        "mesh_rebuild": 1.0,
+        "mesh_items": 6120.0,
+        "gui_quads": 6120.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/two_all_active/153x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 1175040,
+      "live_requested_bytes": 40595286,
+      "retained_length": 6120,
+      "retained_capacity": 6120,
+      "last_frame_quads": 6120,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 256,
+        "gui_cell_visit": 783360,
+        "gui_ink_visit": 783360,
+        "mesh_compare": 783360,
+        "mesh_hit": 783104,
+        "mesh_rebuild": 256,
+        "mesh_items": 783360,
+        "gui_quads": 783360,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 2.0,
+        "gui_cell_visit": 6120.0,
+        "gui_ink_visit": 6120.0,
+        "mesh_compare": 6120.0,
+        "mesh_hit": 6118.0,
+        "mesh_rebuild": 2.0,
+        "mesh_items": 6120.0,
+        "gui_quads": 6120.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/cursor/153x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 1175232,
+      "live_requested_bytes": 40595286,
+      "retained_length": 6120,
+      "retained_capacity": 6120,
+      "last_frame_quads": 6121,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 128,
+        "gui_cell_visit": 783360,
+        "gui_ink_visit": 783360,
+        "mesh_compare": 783360,
+        "mesh_hit": 783360,
+        "mesh_rebuild": 0,
+        "mesh_items": 783360,
+        "gui_quads": 783488,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 1.0,
+        "gui_cell_visit": 6120.0,
+        "gui_ink_visit": 6120.0,
+        "mesh_compare": 6120.0,
+        "mesh_hit": 6120.0,
+        "mesh_items": 6120.0,
+        "gui_quads": 6121.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/focus/153x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 1175520,
+      "live_requested_bytes": 40595286,
+      "retained_length": 6120,
+      "retained_capacity": 6120,
+      "last_frame_quads": 6124,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 128,
+        "gui_cell_visit": 783360,
+        "gui_ink_visit": 783360,
+        "mesh_compare": 783360,
+        "mesh_hit": 783360,
+        "mesh_rebuild": 0,
+        "mesh_items": 783360,
+        "gui_quads": 783680,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 1.0,
+        "gui_cell_visit": 6120.0,
+        "gui_ink_visit": 6120.0,
+        "mesh_compare": 6120.0,
+        "mesh_hit": 6120.0,
+        "mesh_items": 6120.0,
+        "gui_quads": 6122.5
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/reattach/153x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 1175040,
+      "live_requested_bytes": 40595286,
+      "retained_length": 6120,
+      "retained_capacity": 6120,
+      "last_frame_quads": 6120,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 128,
+        "gui_cell_visit": 783360,
+        "gui_ink_visit": 783360,
+        "mesh_compare": 783360,
+        "mesh_hit": 783360,
+        "mesh_rebuild": 0,
+        "mesh_items": 783360,
+        "gui_quads": 783360,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 1.0,
+        "gui_cell_visit": 6120.0,
+        "gui_ink_visit": 6120.0,
+        "mesh_compare": 6120.0,
+        "mesh_hit": 6120.0,
+        "mesh_items": 6120.0,
+        "gui_quads": 6120.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "terminal/images/153x40",
+      "iterations": 128,
+      "warmup": 64,
+      "checksum": 1224192,
+      "live_requested_bytes": 40595286,
+      "retained_length": 6120,
+      "retained_capacity": 6120,
+      "last_frame_quads": 6376,
+      "measured_allocations": 0,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 128,
+        "gui_cell_visit": 783360,
+        "gui_ink_visit": 783360,
+        "mesh_compare": 783360,
+        "mesh_hit": 783360,
+        "mesh_rebuild": 0,
+        "mesh_items": 783360,
+        "gui_quads": 816128,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "gui_pane_draw": 1.0,
+        "gui_cell_visit": 6120.0,
+        "gui_ink_visit": 6120.0,
+        "mesh_compare": 6120.0,
+        "mesh_hit": 6120.0,
+        "mesh_items": 6120.0,
+        "gui_quads": 6376.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "images/stream_frame/256",
+      "iterations": 128,
+      "warmup": 64,
+      "measured_allocations": 0
+    },
+    {
+      "type": "workload",
+      "name": "images/echo_frame/256",
+      "iterations": 128,
+      "warmup": 64,
+      "measured_allocations": 0
+    },
+    {
+      "type": "workload",
+      "name": "workspace/1-tabs",
+      "iterations": 1000,
+      "lookup_requests": 1000,
+      "checksum": 1000,
+      "live_requested_bytes": 2277763,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 1000,
+        "pane_find_found": 1000,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 0,
+        "gui_cell_visit": 0,
+        "gui_ink_visit": 0,
+        "mesh_compare": 0,
+        "mesh_hit": 0,
+        "mesh_rebuild": 0,
+        "mesh_items": 0,
+        "gui_quads": 0,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "pane_find": 1.0,
+        "pane_find_found": 1.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "workspace/8-tabs",
+      "iterations": 1000,
+      "lookup_requests": 8000,
+      "checksum": 36000,
+      "live_requested_bytes": 3612488,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 8000,
+        "pane_find_found": 8000,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 0,
+        "gui_cell_visit": 0,
+        "gui_ink_visit": 0,
+        "mesh_compare": 0,
+        "mesh_hit": 0,
+        "mesh_rebuild": 0,
+        "mesh_items": 0,
+        "gui_quads": 0,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "pane_find": 8.0,
+        "pane_find_found": 8.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "workspace/64-tabs",
+      "iterations": 1000,
+      "lookup_requests": 64000,
+      "checksum": 2080000,
+      "live_requested_bytes": 14290288,
+      "counts": {
+        "review_draw": 0,
+        "review_search_rows": 0,
+        "review_search_bytes": 0,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 64000,
+        "pane_find_found": 64000,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 0,
+        "gui_cell_visit": 0,
+        "gui_ink_visit": 0,
+        "mesh_compare": 0,
+        "mesh_hit": 0,
+        "mesh_rebuild": 0,
+        "mesh_items": 0,
+        "gui_quads": 0,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "pane_find": 64.0,
+        "pane_find_found": 64.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "review/search/100",
+      "iterations": 1000,
+      "warmup": 200,
+      "checksum": 1321200,
+      "counts": {
+        "review_draw": 1000,
+        "review_search_rows": 100000,
+        "review_search_bytes": 1700000,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 0,
+        "gui_cell_visit": 0,
+        "gui_ink_visit": 0,
+        "mesh_compare": 0,
+        "mesh_hit": 0,
+        "mesh_rebuild": 0,
+        "mesh_items": 0,
+        "gui_quads": 0,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "review_draw": 1.0,
+        "review_search_rows": 100.0,
+        "review_search_bytes": 1700.0
+      }
+    },
+    {
+      "type": "workload",
+      "name": "review/search/1000",
+      "iterations": 1000,
+      "warmup": 200,
+      "checksum": 1326000,
+      "counts": {
+        "review_draw": 1000,
+        "review_search_rows": 1000000,
+        "review_search_bytes": 17000000,
+        "tui_compose": 0,
+        "tui_flush": 0,
+        "gui_update": 0,
+        "gui_dispatch": 0,
+        "gui_input_drain": 0,
+        "gui_draw": 0,
+        "gui_complete": 0,
+        "client_receive": 0,
+        "client_apply_frame": 0,
+        "pane_apply_frame": 0,
+        "pane_find": 0,
+        "pane_find_found": 0,
+        "pane_iterator": 0,
+        "pane_slots": 0,
+        "layout_query": 0,
+        "layout_rebuild": 0,
+        "gui_scene": 0,
+        "gui_pane_draw": 0,
+        "gui_cell_visit": 0,
+        "gui_ink_visit": 0,
+        "mesh_compare": 0,
+        "mesh_hit": 0,
+        "mesh_rebuild": 0,
+        "mesh_items": 0,
+        "gui_quads": 0,
+        "runtime_ingest": 0,
+        "runtime_ingest_bytes": 0,
+        "runtime_blit": 0,
+        "runtime_damage": 0,
+        "runtime_rows": 0,
+        "runtime_scanned_cells": 0,
+        "runtime_equal": 0,
+        "pane_copy_cells": 0,
+        "pane_copy_bytes": 0
+      },
+      "per_iteration": {
+        "review_draw": 1.0,
+        "review_search_rows": 1000.0,
+        "review_search_bytes": 17000.0
+      }
+    },
+    {
+      "type": "capacity",
+      "name": "review/10000",
+      "limit": "change_review.view_lines",
+      "kept_rows": 4096
+    },
+    {
+      "type": "workload",
+      "name": "chrome/1/32/280",
+      "iterations": 128,
+      "shape_calls": 0,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 11328,
+      "shape_calls_per_iteration": 0.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/1/32/480",
+      "iterations": 128,
+      "shape_calls": 0,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 11328,
+      "shape_calls_per_iteration": 0.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/1/40/280",
+      "iterations": 128,
+      "shape_calls": 0,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 12672,
+      "shape_calls_per_iteration": 0.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/1/40/480",
+      "iterations": 128,
+      "shape_calls": 0,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 12672,
+      "shape_calls_per_iteration": 0.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/1/64/280",
+      "iterations": 128,
+      "shape_calls": 0,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 12864,
+      "shape_calls_per_iteration": 0.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/1/64/480",
+      "iterations": 128,
+      "shape_calls": 0,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 16704,
+      "shape_calls_per_iteration": 0.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/1/65/280",
+      "iterations": 128,
+      "shape_calls": 128,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 12864,
+      "shape_calls_per_iteration": 1.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/1/65/480",
+      "iterations": 128,
+      "shape_calls": 256,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 16896,
+      "shape_calls_per_iteration": 2.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/8/32/280",
+      "iterations": 128,
+      "shape_calls": 0,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 90624,
+      "shape_calls_per_iteration": 0.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/8/32/480",
+      "iterations": 128,
+      "shape_calls": 0,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 90624,
+      "shape_calls_per_iteration": 0.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/8/40/280",
+      "iterations": 128,
+      "shape_calls": 0,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 101376,
+      "shape_calls_per_iteration": 0.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/8/40/480",
+      "iterations": 128,
+      "shape_calls": 0,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 101376,
+      "shape_calls_per_iteration": 0.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/8/64/280",
+      "iterations": 128,
+      "shape_calls": 0,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 102912,
+      "shape_calls_per_iteration": 0.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/8/64/480",
+      "iterations": 128,
+      "shape_calls": 0,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 133632,
+      "shape_calls_per_iteration": 0.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/8/65/280",
+      "iterations": 128,
+      "shape_calls": 1024,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 102912,
+      "shape_calls_per_iteration": 8.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/8/65/480",
+      "iterations": 128,
+      "shape_calls": 2048,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 135168,
+      "shape_calls_per_iteration": 16.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/16/32/280",
+      "iterations": 128,
+      "shape_calls": 0,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 181248,
+      "shape_calls_per_iteration": 0.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/16/32/480",
+      "iterations": 128,
+      "shape_calls": 0,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 181248,
+      "shape_calls_per_iteration": 0.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/16/40/280",
+      "iterations": 128,
+      "shape_calls": 0,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 202752,
+      "shape_calls_per_iteration": 0.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/16/40/480",
+      "iterations": 128,
+      "shape_calls": 0,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 202752,
+      "shape_calls_per_iteration": 0.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/16/64/280",
+      "iterations": 128,
+      "shape_calls": 0,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 205824,
+      "shape_calls_per_iteration": 0.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/16/64/480",
+      "iterations": 128,
+      "shape_calls": 0,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 267264,
+      "shape_calls_per_iteration": 0.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/16/65/280",
+      "iterations": 128,
+      "shape_calls": 2048,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 205824,
+      "shape_calls_per_iteration": 16.0
+    },
+    {
+      "type": "workload",
+      "name": "chrome/16/65/480",
+      "iterations": 128,
+      "shape_calls": 4096,
+      "raster_attempts": 0,
+      "measured_allocations": 0,
+      "shaping_cache_bytes": 1012224,
+      "checksum": 270336,
+      "shape_calls_per_iteration": 32.0
+    }
+  ]
+}
