@@ -148,6 +148,8 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
     const sources = preparation.sources;
 
     std.debug.assert(self.phase == .ready);
+    core.profiling.add(.runtime_prepare, 1);
+
     const buffer = self.send_buffer;
     const workspaces = sources.workspaces;
 
@@ -375,6 +377,8 @@ pub fn commit(self: *Delivery, operation: Commit) void {
         else => unreachable,
     };
     std.debug.assert(transaction.ticket == prepared.ticket);
+    core.profiling.add(.runtime_commits, 1);
+
     var completion: Completion = .{};
     switch (transaction.effect) {
         .stopping => {
@@ -417,6 +421,13 @@ pub fn commit(self: *Delivery, operation: Commit) void {
         .workspace_list_revision => |revision| self.workspace_list_revision_sent = revision,
         .foreground => |projection| self.foregrounds_sent[projection.slot] = projection,
         .attachment => |work| {
+            if (comptime core.profiling.enabled) {
+                core.profiling.add(.runtime_attachment_commits, 1);
+                if (work.prepared.effect == .cells) {
+                    core.profiling.add(.runtime_cell_commits, 1);
+                }
+            }
+
             const attachment = attachments.at(operation.client, work.index) orelse unreachable;
             const effect = attachment.commitPrepared(work.prepared);
             completion.detach_pane = effect.detach_after_send;
@@ -487,10 +498,18 @@ fn prepareForeground(self: *Delivery, preparation: Preparation) !?Prepared {
             }
         }
 
+        if (comptime core.profiling.enabled) {
+            core.profiling.add(.runtime_foreground_slots, index + 1);
+        }
+
         return self.stage(try core.encodePaneForeground(self.send_buffer, .{
             .pane_id = pane.id,
             .name = pane.agent_process_cache.name(),
         }), .{ .foreground = projection });
+    }
+
+    if (comptime core.profiling.enabled) {
+        core.profiling.add(.runtime_foreground_slots, preparation.sources.panes.items.len);
     }
 
     return null;
@@ -510,6 +529,14 @@ fn pendingAttachments(preparation: Preparation) PendingAttachments {
         }
     }
 
+    if (comptime core.profiling.enabled) {
+        // The loop asks every live attachment once and each yes sets one bit.
+        core.profiling.add(.runtime_pending_scans, 1);
+        core.profiling.add(.runtime_attachment_slots, Attachments.capacity);
+        core.profiling.add(.runtime_eligibility_checks, preparation.attachments.len(preparation.client));
+        core.profiling.add(.runtime_eligible_attachments, @popCount(pending));
+    }
+
     return pending;
 }
 
@@ -522,6 +549,12 @@ fn prepareAttachment(self: *Delivery, preparation: Preparation, lane: Lane, pend
 
     const start: std.math.Log2Int(PendingAttachments) = @intCast(self.next_attachment);
     var remaining = std.math.rotr(PendingAttachments, pending, start);
+    // Each offer clears its bit first, so the cleared bits are the offers
+    // however the lane ends.
+    defer if (comptime core.profiling.enabled) {
+        core.profiling.add(.runtime_lane_offers, @popCount(pending) - @popCount(remaining));
+    };
+
     while (remaining != 0) {
         const offset = @ctz(remaining);
         remaining &= remaining - 1;
