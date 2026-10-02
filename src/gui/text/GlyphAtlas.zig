@@ -43,6 +43,7 @@ const Rect = gfx.Rect;
 const FontSize = @import("FontSize.zig");
 const LineBox = @import("LineBox.zig");
 const GlyphId = @import("GlyphId.zig");
+const LigatureCoverage = @import("LigatureCoverage.zig");
 
 extern fn FT_GlyphSlot_Embolden(freetype.c.FT_GlyphSlot) void;
 extern fn FT_GlyphSlot_Oblique(freetype.c.FT_GlyphSlot) void;
@@ -271,6 +272,30 @@ fn placeShaped(self: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
     }
 
     return advance;
+}
+
+/// What the primary face's ligature lookups join across terminal cells.
+/// Example: `if (atlas.ligatures().joins()) { ... }`
+pub fn ligatures(self: *const GlyphAtlas) *const LigatureCoverage {
+    return &self.fonts.ligatures;
+}
+
+/// Shapes the text of consecutive terminal cells together in the primary
+/// face, so ligatures and contextual alternates see their neighbours. The
+/// result is borrowed until the next shaping or cache clear, so callers
+/// place every cell before shaping again; null when HarfBuzz ordered the
+/// glyphs right to left, which a cell grid keeps shaping cell by cell.
+/// Example: `const shaped = try atlas.shapeCells(text, cells, metrics.pixel_height) orelse return paintAlone();`
+pub fn shapeCells(self: *GlyphAtlas, text: []const u8, columns: u32, pixel_height: u16) !?ShapedRun {
+    const shaped = try self.shape(.{ .text = text, .source = .{ .font = .primary }, .columns = columns }, pixel_height);
+    return if (shaped.ordered()) shaped else null;
+}
+
+/// Appends one cell's share of a run `shapeCells` shaped, placed from the
+/// cell's pen origin exactly as `place` places text that starts there.
+/// Example: `try atlas.placeGlyphs(cell_run, parts[0], &list);`
+pub fn placeGlyphs(self: *GlyphAtlas, run: TextRun, glyphs: ShapedRun, list: *QuadList) !void {
+    _ = try self.paint(.{ .run = run, .shaped = glyphs }, list);
 }
 
 /// Measures the pen advance `place` would return without appending quads or
@@ -1651,6 +1676,30 @@ test "cached ASCII glyphs place exactly what the shaping path places" {
             }
         }
     }
+}
+
+test "cells shaped together place each share from its own pen origin and reuse the shaping cache" {
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 32 });
+    defer atlas.deinit();
+    try std.testing.expect(atlas.ligatures().joins());
+    var line = QuadList.init(std.testing.allocator);
+    defer line.deinit();
+    var cells = QuadList.init(std.testing.allocator);
+    defer cells.deinit();
+    _ = try atlas.place(.{ .text = "->", .x = 0, .y = 40, .color = .white, .pixel_height = 32 }, &line);
+    try std.testing.expectEqual(@as(usize, 1), line.items().len);
+    const calls = atlas.shape_calls;
+    const shaped = (try atlas.shapeCells("->", 2, 32)).?;
+    try std.testing.expectEqual(calls, atlas.shape_calls);
+    const parts = shaped.split(1);
+    const advance: f32 = @as(f32, @floatFromInt(parts[0].positions[0].x_advance)) / 64;
+    try atlas.placeGlyphs(.{ .text = "-", .x = 0, .y = 40, .color = .white, .pixel_height = 32 }, parts[0], &cells);
+    try std.testing.expectEqual(@as(usize, 0), cells.items().len);
+    try atlas.placeGlyphs(.{ .text = ">", .x = advance, .y = 40, .color = .white, .pixel_height = 32 }, parts[1], &cells);
+    try std.testing.expectEqualSlices(quad.Quad, line.items(), cells.items());
+
+    // The ligature reaches back over the spacer's cell.
+    try std.testing.expect(cells.items()[0].x < advance);
 }
 
 /// Fits fallback ink to the configured grid while preserving its aspect ratio.

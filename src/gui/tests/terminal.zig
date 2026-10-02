@@ -588,13 +588,32 @@ test "retained cell damage rebuilds only changed cells and a cursor move reuses 
     try present(session);
     try std.testing.expectEqual(@as(usize, 0), session.gui.renderer.repainted_cells);
     try std.testing.expectEqual(shape_calls, session.gui.renderer.atlas.?.shape_calls);
+    // The embedded face can join `$` with its neighbours, so the first
+    // cursor move and edit shape their new runs once; repeating them only
+    // reads the shaping cache. Neither repaints a cell whose glyphs stay.
+    var warm_calls = shape_calls;
+    for (0..3) |round| {
+        pane.cursor.x = 2;
+        try present(session);
+        try std.testing.expectEqual(@as(usize, 0), session.gui.renderer.repainted_cells);
+        pane.buffer.cells[1].bytes[0] = '$';
+        try present(session);
+        try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.repainted_cells);
+        try expectFullRedraw(session);
+        pane.buffer.cells[1].bytes[0] = ' ';
+        pane.cursor.x = 1;
+        try present(session);
+        try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.repainted_cells);
+        if (round > 0) {
+            try std.testing.expectEqual(warm_calls, session.gui.renderer.atlas.?.shape_calls);
+        }
+
+        warm_calls = session.gui.renderer.atlas.?.shape_calls;
+    }
+
     pane.cursor.x = 2;
-    try present(session);
-    try std.testing.expectEqual(@as(usize, 0), session.gui.renderer.repainted_cells);
     pane.buffer.cells[1].bytes[0] = '$';
     try present(session);
-    try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.repainted_cells);
-    try std.testing.expectEqual(shape_calls, session.gui.renderer.atlas.?.shape_calls);
     try expectFullRedraw(session);
 
     // Damage in several unpresented updates must survive coalescing.

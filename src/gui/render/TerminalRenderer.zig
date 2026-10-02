@@ -20,6 +20,11 @@ const SidebarRequest = @import("../widgets/SidebarRequest.zig");
 const native = @import("../native/native.zig");
 const Renderer = @This();
 const RetainedCells = @import("RetainedCells.zig");
+const RowRuns = @import("RowRuns.zig");
+const CellRun = @import("CellRun.zig");
+const ShapedRun = @import("../text/ShapedRun.zig");
+const TextRun = @import("../text/TextRun.zig");
+const freetype = @import("freetype");
 const CellPaint = @import("CellPaint.zig");
 const CellMesh = @import("CellMesh.zig");
 const CursorPaint = @import("CursorPaint.zig");
@@ -52,6 +57,8 @@ image_draw_count: u32 = 0,
 quads: QuadList,
 cell_quads: QuadList,
 retained: RetainedCells,
+/// Splits rows into the runs the primary face shapes together.
+runs: RowRuns,
 repainted_cells: usize = 0,
 metrics: Metrics = .{ .cell_width = 1, .cell_height = 1, .baseline = 0, .pixel_height = 15 },
 chrome: ChromeMetrics = .{},
@@ -96,6 +103,7 @@ pub fn init(allocator: std.mem.Allocator) Renderer {
         .quads = .init(allocator),
         .cell_quads = .init(allocator),
         .retained = .init(allocator),
+        .runs = .init(allocator),
     };
 }
 
@@ -126,6 +134,7 @@ pub fn deinit(self: *Renderer) void {
     self.quads.deinit();
     self.cell_quads.deinit();
     self.retained.deinit();
+    self.runs.deinit();
 }
 
 /// Resolves physical font metrics before the shared client is constructed.
@@ -210,6 +219,7 @@ pub fn measure(self: *Renderer, viewport: native.Viewport) !core.TerminalSize {
         size.cols,
         size.rows,
     });
+    try self.runs.reserve(size.cols);
     return size;
 }
 
@@ -378,52 +388,22 @@ pub fn drawPane(self: *Renderer, paint: PanePaint) !void {
     const rows: u16 = @min(area.h, pane.buffer.h);
     const cols: u16 = @min(area.w, pane.buffer.w);
     const images = self.paneImages(pane.id);
+    const shaping = self.atlas.?.ligatures().joins();
+    const cursor_cell = cursorCell(paint);
     try self.pushImages(paint, images, .below_background);
-    for (0..rows) |row| {
-        const y = area.y + @as(u16, @intCast(row));
-        const source = pane.buffer.cells[row * pane.buffer.w ..][0..cols];
-        const retained = self.retained.row(.{ area.x, y }, cols);
-        for (source, retained.metadata, 0..) |*original, *metadata, col| {
-            // Only a selected cell needs a projected copy; every other cell
-            // is compared in place in the pane buffer.
-            var selected: cellgrid.Cell = undefined;
-            const cell: *const cellgrid.Cell = if (paint.copy) |copy| projected: {
-                if (!copy.selected(@intCast(col), pane.scroll.offset + @as(u32, @intCast(row)))) {
-                    break :projected original;
-                }
-
-                selected = original.*;
-                selected.style.flags.inverse = !selected.style.flags.inverse;
-                break :projected &selected;
-            } else original;
-
-            const rect = self.cellRect(.{
-                .x = area.x + @as(u16, @intCast(col)),
-                .y = y,
-                .w = @intCast(@min(@max(1, cell.width), cols - col)),
-                .h = 1,
-            });
-            const mesh = retained.at(col);
-            visited += 1;
-            if (!mesh.matchesCell(cell, rect)) {
-                const key: CellPaint = .{
-                    .cell = cell.*,
-                    .rect = rect,
-                };
-                try self.paintCell(key);
-                mesh.replace(key, self.cell_quads.items());
-                mesh.classifyBackground(self.background);
-                self.repainted_cells += 1;
-                rebuilt += 1;
-            } else {
-                hits += 1;
-            }
-
-            if (metadata.background) {
-                item_calls += 1;
-                try self.quads.push(mesh.background());
-            }
+    for (0..rows) |index| {
+        const row: u16 = @intCast(index);
+        const repainted = self.repainted_cells;
+        if (shaping) {
+            const split = splitAt(cursor_cell, row);
+            item_calls += if (self.rowCurrent(paint, row, split)) try self.pushBackgrounds(paint, row) else try self.paintRow(paint, row, split);
+        } else {
+            item_calls += try self.paintCells(paint, row);
         }
+
+        visited += cols;
+        rebuilt += self.repainted_cells - repainted;
+        hits += cols - (self.repainted_cells - repainted);
     }
 
     try self.pushImages(paint, images, .below_text);
@@ -547,39 +527,300 @@ fn pushInk(self: *Renderer, ink: []const Quad, target: InkTarget) !void {
     }
 }
 
-fn paneCursor(self: *const Renderer, paint: PanePaint) ?CursorPaint {
+/// Compares, repaints and draws the backgrounds of one row segment cell by
+/// cell, for a face whose ligature lookups join nothing. Returns the
+/// backgrounds drawn.
+fn paintCells(self: *Renderer, paint: PanePaint, row: u16) !u64 {
     const pane = paint.pane;
     const area = paint.view.content;
-    const rows = @min(area.h, pane.buffer.h);
-    const cols = @min(area.w, pane.buffer.w);
-    const visible_cursor = copy_selection.cursor(pane, paint.copy);
-    if (!paint.hide_cursor and paint.view.focused and visible_cursor.visible and self.cursor_on and visible_cursor.x < cols and visible_cursor.y < rows) {
-        var col = visible_cursor.x;
-        const row = visible_cursor.y;
-        if (col > 0 and pane.buffer.cells[@as(usize, row) * pane.buffer.w + col].width == 0) {
-            col -= 1;
+    const cols = segmentWidth(paint);
+    const source = pane.buffer.cells[@as(usize, row) * pane.buffer.w ..][0..cols];
+    const retained = self.retained.row(.{ area.x, area.y + row }, cols);
+    var drawn: u64 = 0;
+    for (source, retained.metadata, 0..) |*original, *metadata, col| {
+        var selected: cellgrid.Cell = undefined;
+        const cell = projected(paint, original, .{ @intCast(col), row }, &selected);
+        const rect = self.paneCellRect(paint, .{ @intCast(col), row }, cell.width);
+        const mesh = retained.at(col);
+        if (!mesh.matchesCell(cell, rect)) {
+            try self.repaint(mesh, .{ .cell = cell.*, .rect = rect }, null);
         }
 
-        const cell = pane.buffer.cells[@as(usize, row) * pane.buffer.w + col];
-        return .{
-            .rect = self.cellRect(.{ .x = area.x + col, .y = area.y + row, .w = @min(@max(1, cell.width), cols - col), .h = 1 }),
-            .style = if (!self.focused) .hollow else switch (visible_cursor.appearance.shape) {
-                .default => self.config.cursor.style,
-                .block => .block,
-                .bar => .bar,
-                .underline => .underline,
-                .hollow => .hollow,
-            },
-            .color = if (self.theme.cursor_color) |c| rgb(c) else self.foreground,
-            .text_color = if (self.theme.cursor_text_color) |c| rgb(c) else self.background,
-            .thickness = @max(1, @round(self.scale * 2)),
-        };
+        if (metadata.background) {
+            drawn += 1;
+            try self.quads.push(mesh.background());
+        }
     }
 
-    return null;
+    return drawn;
 }
 
-fn paintCell(self: *Renderer, paint: CellPaint) !void {
+/// Draws the retained backgrounds of one row segment. Returns how many.
+fn pushBackgrounds(self: *Renderer, paint: PanePaint, row: u16) !u64 {
+    const area = paint.view.content;
+    const retained = self.retained.row(.{ area.x, area.y + row }, segmentWidth(paint));
+    var drawn: u64 = 0;
+    for (retained.metadata, 0..) |*metadata, col| {
+        if (metadata.background) {
+            drawn += 1;
+            try self.quads.push(retained.at(col).background());
+        }
+    }
+
+    return drawn;
+}
+
+/// Whether a row segment's cells, its cursor split and its end are what its
+/// meshes were painted from; only then do their shaping contexts still
+/// hold, so a warm row compares cells exactly as the unshaped path does.
+fn rowCurrent(self: *Renderer, paint: PanePaint, row: u16, cursor: ?u16) bool {
+    const pane = paint.pane;
+    const area = paint.view.content;
+    const cols = segmentWidth(paint);
+    const source = pane.buffer.cells[@as(usize, row) * pane.buffer.w ..][0..cols];
+    const retained = self.retained.row(.{ area.x, area.y + row }, cols);
+    for (source, retained.metadata, 0..) |*original, *metadata, col| {
+        var selected: cellgrid.Cell = undefined;
+        const cell = projected(paint, original, .{ @intCast(col), row }, &selected);
+        if (metadata.cursor != atColumn(cursor, col) or metadata.edge != (col + 1 == cols)) {
+            return false;
+        }
+
+        if (!retained.at(col).matchesCell(cell, self.paneCellRect(paint, .{ @intCast(col), row }, cell.width))) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/// Splits a changed row segment into shaping runs, repaints every cell
+/// whose own key or run changed and draws the row's backgrounds in the same
+/// pass: a ligature edited anywhere repaints whole, and cells the edit
+/// cannot reach keep their meshes. Returns the backgrounds drawn.
+fn paintRow(self: *Renderer, paint: PanePaint, row: u16, cursor: ?u16) !u64 {
+    const pane = paint.pane;
+    const area = paint.view.content;
+    const cols = segmentWidth(paint);
+    const source = pane.buffer.cells[@as(usize, row) * pane.buffer.w ..][0..cols];
+    const coverage = self.atlas.?.ligatures();
+    const joining = coverage.substitutes(source);
+    self.runs.clear();
+    if (joining) {
+        for (source, 0..) |*original, col| {
+            var selected: cellgrid.Cell = undefined;
+            self.runs.append(coverage, projected(paint, original, .{ @intCast(col), row }, &selected), atColumn(cursor, col));
+        }
+
+        self.runs.close(coverage.reach);
+    }
+
+    const retained = self.retained.row(.{ area.x, area.y + row }, cols);
+    var drawn: u64 = 0;
+    var col: u16 = 0;
+    while (col < cols) {
+        const run: CellRun = if (joining) self.runs.at(col) else .{
+            .len = cols,
+            .together = false,
+        };
+        if (run.together) {
+            try self.paintRun(paint, .{ col, row }, run.len);
+        }
+
+        for (source[col..][0..run.len], retained.metadata[col..][0..run.len], col..) |*original, *metadata, index| {
+            const mesh = retained.at(index);
+            if (!run.together) {
+                var selected: cellgrid.Cell = undefined;
+                const cell = projected(paint, original, .{ @intCast(index), row }, &selected);
+                const key: CellPaint = .{
+                    .cell = cell.*,
+                    .rect = self.paneCellRect(paint, .{ @intCast(index), row }, cell.width),
+                };
+                if (!mesh.matches(key)) {
+                    try self.repaint(mesh, key, null);
+                }
+            }
+
+            metadata.cursor = atColumn(cursor, index);
+            metadata.edge = index + 1 == cols;
+            if (metadata.background) {
+                drawn += 1;
+                try self.quads.push(mesh.background());
+            }
+        }
+
+        col += run.len;
+    }
+
+    return drawn;
+}
+
+fn paintAlone(self: *Renderer, paint: PanePaint, point: [2]u16) !void {
+    const pane = paint.pane;
+    const area = paint.view.content;
+    var selected: cellgrid.Cell = undefined;
+    const cell = projected(paint, &pane.buffer.cells[@as(usize, point[1]) * pane.buffer.w + point[0]], point, &selected);
+    const key: CellPaint = .{
+        .cell = cell.*,
+        .rect = self.paneCellRect(paint, point, cell.width),
+    };
+    const mesh = self.retained.at(.{ area.x + point[0], area.y + point[1] });
+    if (!mesh.matches(key)) {
+        try self.repaint(mesh, key, null);
+    }
+}
+
+/// Shapes `len` cells from `start` together and gives each cell its share
+/// of the glyphs. A cell whose share is what it shapes into alone keeps a
+/// zero context and paints alone; any other cell is keyed by its glyphs, so
+/// an edit repaints exactly the cells whose ink changed. Warm runs read the
+/// shaping cache.
+fn paintRun(self: *Renderer, paint: PanePaint, start: [2]u16, len: u16) !void {
+    const pane = paint.pane;
+    const area = paint.view.content;
+    var text: [RowRuns.max_bytes]u8 = undefined;
+    var ends: [RowRuns.max_cells]u32 = undefined;
+    var size: usize = 0;
+    for (ends[0..len], 0..) |*end, offset| {
+        const point: [2]u16 = .{ start[0] + @as(u16, @intCast(offset)), start[1] };
+        const bytes = pane.buffer.cells[@as(usize, point[1]) * pane.buffer.w + point[0]].text();
+        @memcpy(text[size..][0..bytes.len], bytes);
+        size += bytes.len;
+        end.* = @intCast(size);
+    }
+
+    const atlas = &self.atlas.?;
+    const borrowed = try atlas.shapeCells(text[0..size], len, self.metrics.pixel_height) orelse ShapedRun.empty;
+    if (borrowed.glyphs.len == 0 or borrowed.glyphs.len > RowRuns.max_glyphs) {
+        for (0..len) |offset| {
+            try self.paintAlone(paint, .{ start[0] + @as(u16, @intCast(offset)), start[1] });
+        }
+
+        return;
+    }
+
+    // Shaping a cell alone below reuses HarfBuzz's buffer and may evict the
+    // run from the cache, so the run keeps its own copy.
+    var infos: [RowRuns.max_glyphs]freetype.c.hb_glyph_info_t = undefined;
+    var positions: [RowRuns.max_glyphs]freetype.c.hb_glyph_position_t = undefined;
+    @memcpy(infos[0..borrowed.glyphs.len], borrowed.glyphs);
+    @memcpy(positions[0..borrowed.positions.len], borrowed.positions);
+    var rest = borrowed;
+    rest.glyphs = infos[0..borrowed.glyphs.len];
+    rest.positions = positions[0..borrowed.positions.len];
+    for (ends[0..len], 0..) |end, offset| {
+        const parts = rest.split(end);
+        rest = parts[1];
+        const point: [2]u16 = .{ start[0] + @as(u16, @intCast(offset)), start[1] };
+        var selected: cellgrid.Cell = undefined;
+        const cell = projected(paint, &pane.buffer.cells[@as(usize, point[1]) * pane.buffer.w + point[0]], point, &selected);
+        const alone = try atlas.shapeCells(cell.text(), 1, self.metrics.pixel_height);
+        const shared = alone == null or !parts[0].sameGlyphs(alone.?);
+        const key: CellPaint = .{
+            .cell = cell.*,
+            .rect = self.paneCellRect(paint, point, cell.width),
+            .context = if (shared) parts[0].glyphHash() else 0,
+        };
+        const mesh = self.retained.at(.{ area.x + point[0], area.y + point[1] });
+        if (!mesh.matches(key)) {
+            try self.repaint(mesh, key, if (shared) parts[0] else null);
+        }
+    }
+}
+
+// Inlined into each row loop, with `paintCell`: a full-screen repaint runs
+// it once per cell, and a call there costs about a third of the frame.
+inline fn repaint(self: *Renderer, mesh: CellMesh, key: CellPaint, glyphs: ?ShapedRun) !void {
+    try self.paintCell(key, glyphs);
+    mesh.replace(key, self.cell_quads.items());
+    mesh.classifyBackground(self.background);
+    self.repainted_cells += 1;
+}
+
+// Only a selected cell needs a projected copy; every other cell is
+// compared in place in the pane buffer.
+fn projected(paint: PanePaint, original: *const cellgrid.Cell, point: [2]u16, storage: *cellgrid.Cell) *const cellgrid.Cell {
+    const copy = paint.copy orelse return original;
+    if (!copy.selected(point[0], paint.pane.scroll.offset + point[1])) {
+        return original;
+    }
+
+    storage.* = original.*;
+    storage.style.flags.inverse = !storage.style.flags.inverse;
+    return storage;
+}
+
+fn segmentWidth(paint: PanePaint) u16 {
+    return @min(paint.view.content.w, paint.pane.buffer.w);
+}
+
+// A wide cell's rectangle covers its spacer, cut at the segment's end.
+fn paneCellRect(self: *const Renderer, paint: PanePaint, point: [2]u16, width: u8) Rect {
+    const area = paint.view.content;
+    return self.cellRect(.{
+        .x = area.x + point[0],
+        .y = area.y + point[1],
+        .w = @intCast(@min(@max(1, width), segmentWidth(paint) - point[0])),
+        .h = 1,
+    });
+}
+
+fn atColumn(cursor: ?u16, col: usize) bool {
+    const split = cursor orelse return false;
+    return split == col;
+}
+
+// The column the cursor splits shaping runs at on `row`.
+fn splitAt(cursor: ?[2]u16, row: u16) ?u16 {
+    const point = cursor orelse return null;
+    return if (point[1] == row) point[0] else null;
+}
+
+/// Where the pane draws its cursor, blinking or not, so a blink never
+/// reshapes a row: the anchor of a wide character, inside the segment.
+fn cursorCell(paint: PanePaint) ?[2]u16 {
+    const pane = paint.pane;
+    const visible = copy_selection.cursor(pane, paint.copy);
+    if (paint.hide_cursor or !paint.view.focused or !visible.visible or visible.x >= segmentWidth(paint) or visible.y >= @min(paint.view.content.h, pane.buffer.h)) {
+        return null;
+    }
+
+    var col = visible.x;
+    if (col > 0 and pane.buffer.cells[@as(usize, visible.y) * pane.buffer.w + col].width == 0) {
+        col -= 1;
+    }
+
+    return .{ col, visible.y };
+}
+
+fn paneCursor(self: *const Renderer, paint: PanePaint) ?CursorPaint {
+    if (!self.cursor_on) {
+        return null;
+    }
+
+    const point = cursorCell(paint) orelse return null;
+    const pane = paint.pane;
+    const visible_cursor = copy_selection.cursor(pane, paint.copy);
+    const cell = pane.buffer.cells[@as(usize, point[1]) * pane.buffer.w + point[0]];
+    return .{
+        .rect = self.paneCellRect(paint, point, cell.width),
+        .style = if (!self.focused) .hollow else switch (visible_cursor.appearance.shape) {
+            .default => self.config.cursor.style,
+            .block => .block,
+            .bar => .bar,
+            .underline => .underline,
+            .hollow => .hollow,
+        },
+        .color = if (self.theme.cursor_color) |c| rgb(c) else self.foreground,
+        .text_color = if (self.theme.cursor_text_color) |c| rgb(c) else self.background,
+        .thickness = @max(1, @round(self.scale * 2)),
+    };
+}
+
+/// Builds one cell's quads: its background, its ink (the cell's share of a
+/// run shaped together when `glyphs` holds it, its own text otherwise) and
+/// its decorations.
+inline fn paintCell(self: *Renderer, paint: CellPaint, glyphs: ?ShapedRun) !void {
     const cell = paint.cell;
     const rect = paint.rect;
     const list = &self.cell_quads;
@@ -597,8 +838,11 @@ fn paintCell(self: *Renderer, paint: CellPaint) !void {
         ink.a *= 0.5;
     }
 
-    if (!std.mem.eql(u8, cell.text(), " ")) {
-        _ = try self.atlas.?.place(.{ .text = cell.text(), .x = rect.x, .y = rect.y + self.metrics.baseline, .color = ink, .pixel_height = self.metrics.pixel_height, .cell_bounds = self.metrics.glyphCell(), .bold = cell.style.flags.bold, .italic = cell.style.flags.italic }, list);
+    const run: TextRun = .{ .text = cell.text(), .x = rect.x, .y = rect.y + self.metrics.baseline, .color = ink, .pixel_height = self.metrics.pixel_height, .cell_bounds = self.metrics.glyphCell(), .bold = cell.style.flags.bold, .italic = cell.style.flags.italic };
+    if (glyphs) |shaped| {
+        try self.atlas.?.placeGlyphs(run, shaped, list);
+    } else if (!std.mem.eql(u8, cell.text(), " ")) {
+        _ = try self.atlas.?.place(run, list);
     }
 
     if (cell.style.flags.underline != .none) {
@@ -664,7 +908,7 @@ test "fallback icons retain their full texture in tightened terminal cells" {
                 cell.style.flags.italic = style & 2 != 0;
                 natural.clear();
                 _ = try renderer.atlas.?.place(.{ .text = icon, .x = rect.x, .y = rect.y + renderer.metrics.baseline, .color = .white, .pixel_height = renderer.metrics.pixel_height, .bold = cell.style.flags.bold, .italic = cell.style.flags.italic }, &natural);
-                try renderer.paintCell(.{ .cell = cell, .rect = rect });
+                try renderer.paintCell(.{ .cell = cell, .rect = rect }, null);
                 const ink = renderer.cell_quads.items()[1..];
                 try std.testing.expectEqual(natural.items().len, ink.len);
                 for (natural.items(), ink) |source, actual| {

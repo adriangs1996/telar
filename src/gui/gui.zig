@@ -61,6 +61,10 @@ test {
     _ = @import("tests/braille.zig");
     _ = @import("tests/box_drawing.zig");
     _ = @import("tests/italic.zig");
+    _ = @import("tests/ligatures.zig");
+    _ = @import("render/RowRuns.zig");
+    _ = @import("text/ShapedRun.zig");
+    _ = @import("text/LigatureCoverage.zig");
     _ = @import("tests/navigation.zig");
     _ = @import("tests/chrome.zig");
     _ = @import("tests/composition_budget.zig");

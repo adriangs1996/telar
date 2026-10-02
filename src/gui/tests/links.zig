@@ -134,6 +134,12 @@ test "native link highlight reuses retained cells and disappears without changin
     const fixture = try Fixture.init();
     defer fixture.deinit();
     const renderer = &fixture.session.gui.renderer;
+    // The tooltip names the destination glyph by glyph, while the cells
+    // draw `//` as one ligature: its first hover rasterizes the lone `/`.
+    try fixture.send(fixture.event(6));
+    try fixture.present();
+    try fixture.send(fixture.event(7));
+    try fixture.present();
     const atlas = renderer.atlas.?.version;
     try fixture.send(fixture.event(6));
     try fixture.present();

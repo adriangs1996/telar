@@ -101,6 +101,7 @@ line numbers are intentionally omitted because symbols survive refactors.
 | [Client detach](client-detach.md) | The user detaches a client | The client saves its layout and exits; panes and PTYs keep running | Model detachment and client lifecycle tests |
 | [Editor file links](editor-file-links.md) | A caller opens a local file linked from a pane | The file opens in an editor already running in that tab, or in a new pane | Link, runtime editor-discovery and GUI tests |
 | [GUI font fallback](gui-font-fallback.md) | A cell or label needs a glyph the configured font lacks | The first covering face renders it, keeping graphemes together | Font run and atlas tests |
+| [GUI ligatures](gui-ligatures.md) | A pane row holds characters the primary face joins, such as `->` or `!=` | The window draws the face's ligatures on the cell grid; cells, copy and search keep the text | Coverage, run, atlas and retained rendering tests |
 | [GUI multiplexer on Linux](gui-multiplexer-linux.md) | The Wayland validation script drives the native client | Keyboard input reaches the intended panes, checked by shell markers | VM-driven integration script |
 | [GUI multiplexer](gui-multiplexer.md) | Native input requests a workspace, tab or pane operation | The GUI renders the shared model after the shared client's operations | GUI composition and navigation tests |
 | [GUI procedural glyphs](gui-procedural-glyphs.md) | A cell holds Braille, box-drawing or block characters | The atlas draws them procedurally to the cell grid | Procedural glyph and atlas tests |

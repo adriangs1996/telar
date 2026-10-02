@@ -24,13 +24,17 @@ metadata: *Metadata,
 primary: *[primary_capacity]Quad,
 overflow: *[overflow_capacity]Quad,
 
-/// Compares the complete visual key. Example: `if (mesh.matches(paint)) reuse();`
+/// Compares the complete visual key, shaping context included.
+/// Example: `if (mesh.matches(paint)) reuse();`
 pub fn matches(self: Mesh, paint: Paint) bool {
-    return self.matchesCell(&paint.cell, paint.rect);
+    return self.matchesCell(&paint.cell, paint.rect) and self.metadata.paint.context == paint.context;
 }
 
 /// Compares against a cell still in its source buffer, so the warm draw
 /// loads it straight from memory instead of copying it into a key first.
+/// The shaping context is left out: it changes only with the cells of its
+/// row, which the warm draw compares, or with the cursor and segment bounds
+/// the metadata records.
 /// Example: `if (mesh.matchesCell(&row[x], rect)) reuse();`
 pub fn matchesCell(self: Mesh, cell: *const cellgrid.Cell, rect: Rect) bool {
     const cached = self.metadata;

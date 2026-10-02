@@ -10,6 +10,7 @@ const FallbackFace = @import("FallbackFace.zig");
 const FallbackPool = @import("FallbackPool.zig");
 const GraphemeMisses = @import("GraphemeMisses.zig");
 const AtlasOptions = @import("AtlasOptions.zig");
+const LigatureCoverage = @import("LigatureCoverage.zig");
 const FontMatch = @import("../native/FontMatch.zig").FontMatch;
 const FontSet = @This();
 
@@ -32,6 +33,8 @@ identity: u64,
 /// Changes only when the resident fallback order changes, not on rasterization.
 revision: u64 = 0,
 primary: FontFace,
+/// What the primary face's ligature lookups join across terminal cells.
+ligatures: LigatureCoverage,
 text: ?FontFace,
 symbols: FontFace,
 sans: FontFace,
@@ -50,6 +53,8 @@ pub fn init(library: freetype.c.FT_Library, options: AtlasOptions, pixels: []u8)
     const identity = try allocateIdentity(&next_identity);
     var primary = try FontFace.init(library, options, pixels);
     errdefer primary.deinit();
+    var ligatures = try LigatureCoverage.init(primary.face, primary.shaping_font);
+    errdefer ligatures.deinit();
     var fallback = options;
     fallback.face_index = 0;
     fallback.postscript = "";
@@ -69,6 +74,7 @@ pub fn init(library: freetype.c.FT_Library, options: AtlasOptions, pixels: []u8)
     return .{
         .identity = identity,
         .primary = primary,
+        .ligatures = ligatures,
         .text = text,
         .symbols = symbols,
         .sans = sans,
@@ -88,6 +94,7 @@ pub fn deinit(self: *FontSet, allocator: std.mem.Allocator) void {
         face.deinit();
     }
 
+    self.ligatures.deinit();
     self.primary.deinit();
 }
 

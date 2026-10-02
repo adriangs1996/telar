@@ -41,6 +41,10 @@ bounds, colliding glyph indices, mixed runs and 120 warm repaints. The full
 symbols font's source, version, SHA-256 and license are recorded in
 [`src/assets/README.md`](../../src/assets/README.md).
 
+Terminal rows shape runs of primary-face cells together so the face's
+ligatures see their neighbours; fallback graphemes split those runs and keep
+their own fitted cells (see [GUI ligatures](gui-ligatures.md)).
+
 This is a GUI presentation change. It does not change the runtime's cells or
 PTY behavior.
 
