@@ -17,6 +17,8 @@ int telar_test_diagrams(void);
 int telar_test_images(void);
 
 static int paints, delivered, discarded, inputs, failed;
+// Counts one failed check and names its line, so a run says which one.
+#define FAIL() (failed++, fprintf(stderr, "native macOS check failed at line %d\n", __LINE__))
 static BOOL injecting, close_in_flight, closed_in_flight;
 static IMP original_draw;
 static CFTimeInterval deadline;
@@ -63,12 +65,12 @@ static void verify_repeat(TelarTextInputView *view, unsigned short key, NSString
             if (phase == 2) [view keyDown:key_event(view, key, text, mods, phase)];
         }
     }
-    if (repeat_inputs != start + 4) failed++;
+    if (repeat_inputs != start + 4) FAIL();
     checking_repeat = false;
 }
 
 static void verify_keyboard(TelarTextInputView *view) {
-    if ([NSUserDefaults.standardUserDefaults boolForKey:@"ApplePressAndHoldEnabled"]) failed++;
+    if ([NSUserDefaults.standardUserDefaults boolForKey:@"ApplePressAndHoldEnabled"]) FAIL();
     verify_repeat(view, 38, @"j", 0, (telar_gui_input){.kind = 1, .text = (const uint8_t *)"j", .len = 1});
     verify_repeat(view, 38, @"J", NSEventModifierFlagShift, (telar_gui_input){.kind = 1, .text = (const uint8_t *)"J", .len = 1});
     verify_repeat(view, 125, @"\uf701", 0, (telar_gui_input){.kind = 3, .code = 6});
@@ -83,14 +85,14 @@ static void verify_keyboard(TelarTextInputView *view) {
     checking_repeat = true;
     const int before_commit = repeat_inputs;
     [view insertText:@"café" replacementRange:NSMakeRange(NSNotFound, 0)];
-    if (repeat_inputs != before_commit + 1) failed++;
+    if (repeat_inputs != before_commit + 1) FAIL();
 
     expected_repeat = (telar_gui_input){.kind = 4, .phase = 3, .physical = 39, .code = 'j'};
     const int before_release = repeat_inputs;
     [view releasePressedKeys];
     [view releasePressedKeys];
     [view keyUp:key_event(view, 38, @"j", 0, 3)];
-    if (repeat_inputs != before_release + 1) failed++;
+    if (repeat_inputs != before_release + 1) FAIL();
     checking_repeat = false;
 }
 
@@ -120,7 +122,7 @@ static NSEvent *pointer_event(NSView *view, NSEventType type, NSEventModifierFla
 static void verify_pointer(TelarView *view) {
     for (uint32_t shape = 0; shape < 34; shape++) {
         NSCursor *cursor = telar_pointer_cursor(shape);
-        if (cursor == nil || cursor != telar_pointer_cursor(shape)) failed++;
+        if (cursor == nil || cursor != telar_pointer_cursor(shape)) FAIL();
     }
     if (telar_pointer_cursor(2) != NSCursor.arrowCursor ||
         telar_pointer_cursor(4) != NSCursor.arrowCursor ||
@@ -129,12 +131,12 @@ static void verify_pointer(TelarView *view) {
         telar_pointer_cursor(3) != NSCursor.pointingHandCursor ||
         telar_pointer_cursor(8) != NSCursor.IBeamCursor ||
         telar_pointer_cursor(14) != NSCursor.operationNotAllowedCursor ||
-        telar_pointer_cursor(32) != NSCursor.zoomInCursor) failed++;
+        telar_pointer_cursor(32) != NSCursor.zoomInCursor) FAIL();
 
     checking_pointer = YES;
     expected_pointer = (telar_gui_input){.kind = 6, .code = 6, .phase = 1, .x = pointer_x, .y = pointer_y};
     [view mouseEntered:pointer_event(view, NSEventTypeMouseEntered, 0)];
-    if (NSCursor.currentCursor != NSCursor.arrowCursor) failed++;
+    if (NSCursor.currentCursor != NSCursor.arrowCursor) FAIL();
 
     // State changes refresh the native pointer before another GPU frame exists.
     const int before_pump = paints;
@@ -142,7 +144,7 @@ static void verify_pointer(TelarView *view) {
     pointer_shape = 3;
     [view pumpEvents];
     if (paints != before_pump || pointer_queries <= before_queries ||
-        NSCursor.currentCursor != NSCursor.pointingHandCursor) failed++;
+        NSCursor.currentCursor != NSCursor.pointingHandCursor) FAIL();
 
     expected_pointer.mods = 15;
     [view mouseMoved:pointer_event(view, NSEventTypeMouseMoved,
@@ -154,27 +156,27 @@ static void verify_pointer(TelarView *view) {
 
     pointer_shape = 8;
     [view mouseMoved:pointer_event(view, NSEventTypeMouseMoved, 0)];
-    if (NSCursor.currentCursor != NSCursor.IBeamCursor) failed++;
+    if (NSCursor.currentCursor != NSCursor.IBeamCursor) FAIL();
     [NSCursor.arrowCursor set];
     [view cursorUpdate:pointer_event(view, NSEventTypeCursorUpdate, 0)];
-    if (NSCursor.currentCursor != NSCursor.IBeamCursor) failed++;
+    if (NSCursor.currentCursor != NSCursor.IBeamCursor) FAIL();
 
     expected_pointer.code = 7;
     [view mouseExited:pointer_event(view, NSEventTypeMouseExited, 0)];
-    if (NSCursor.currentCursor != NSCursor.arrowCursor) failed++;
+    if (NSCursor.currentCursor != NSCursor.arrowCursor) FAIL();
     const unsigned after_exit = pointer_inputs;
     [view flagsChanged:pointer_event(view, NSEventTypeFlagsChanged, NSEventModifierFlagCommand)];
     [view pumpEvents];
-    if (pointer_inputs != after_exit || NSCursor.currentCursor != NSCursor.arrowCursor) failed++;
+    if (pointer_inputs != after_exit || NSCursor.currentCursor != NSCursor.arrowCursor) FAIL();
 
     expected_pointer.code = 6;
     [view mouseEntered:pointer_event(view, NSEventTypeMouseEntered, 0)];
     expected_pointer.code = 7;
     [view windowDidResignKey:[NSNotification notificationWithName:NSWindowDidResignKeyNotification object:view.window]];
-    if (NSCursor.currentCursor != NSCursor.arrowCursor) failed++;
+    if (NSCursor.currentCursor != NSCursor.arrowCursor) FAIL();
     const unsigned after_focus = pointer_inputs;
     [view flagsChanged:pointer_event(view, NSEventTypeFlagsChanged, 0)];
-    if (pointer_inputs != after_focus || pointer_inputs != 8) failed++;
+    if (pointer_inputs != after_focus || pointer_inputs != 8) FAIL();
     checking_pointer = NO;
     pointer_shape = 0;
 }
@@ -199,7 +201,7 @@ static void draw(id view, SEL selector, id drawable) {
             [window standardWindowButton:NSWindowCloseButton].isHidden)) ||
             !NSEqualRects(outer_frame, window.frame) ||
             (was_key && (!window.isKeyWindow || window.firstResponder != responder)) ||
-            window.alphaValue != 1.0) failed++;
+            window.alphaValue != 1.0) FAIL();
         if (!titlebar && !fullscreen_in_progress) {
             // The traffic lights stay visible over the transparent titlebar,
             // centered on Telar's navigation row and reported as its inset.
@@ -207,18 +209,18 @@ static void draw(id view, SEL selector, id drawable) {
             NSRect light = [close convertRect:close.bounds toView:nil];
             CGFloat row = 84 / window.backingScaleFactor;
             CGFloat center = window.frame.size.height - NSMidY(light);
-            if (fabs(center - row / 2) > 1 || fabs(light.origin.x - 14) > 1 || ((TelarWindow *)window).controlsInset < 60) failed++;
+            if (fabs(center - row / 2) > 1 || fabs(light.origin.x - 14) > 1 || ((TelarWindow *)window).controlsInset < 60) FAIL();
             // A new title makes AppKit lay the titlebar out again; the lights
             // must still be in place when that layout ends, before any paint.
             window.title = [NSString stringWithFormat:@"title %d", paints];
             [window.contentView.superview layoutSubtreeIfNeeded];
             NSRect moved = [close convertRect:close.bounds toView:nil];
-            if (fabs((window.frame.size.height - NSMidY(moved)) - row / 2) > 1 || fabs(moved.origin.x - 14) > 1) failed++;
+            if (fabs((window.frame.size.height - NSMidY(moved)) - row / 2) > 1 || fabs(moved.origin.x - 14) > 1) FAIL();
             NSView *terminal = view;
             NSPoint top = NSMakePoint(NSMidX(terminal.bounds), terminal.bounds.size.height - 8);
             NSView *frame_view = window.contentView.superview;
             NSView *hit = [frame_view hitTest:[terminal convertPoint:top toView:frame_view]];
-            if (hit != terminal && ![hit isDescendantOf:terminal]) failed++;
+            if (hit != terminal && ![hit isDescendantOf:terminal]) FAIL();
         }
         appearance_checked |= 1u << appearance_phase;
     }
@@ -247,7 +249,7 @@ static void ready(void *context, telar_gui_viewport viewport) {
     }
 }
 static void render(void *context, telar_gui_viewport viewport, telar_gui_frame *frame) {
-    if (ready_count == 0) failed++;
+    if (ready_count == 0) FAIL();
     (void)context;
     if (!deferred) {
         deferred++;
@@ -257,10 +259,10 @@ static void render(void *context, telar_gui_viewport viewport, telar_gui_frame *
         });
         return;
     }
-    if (!viewport.width || !viewport.height) failed++;
+    if (!viewport.width || !viewport.height) FAIL();
     CAMetalLayer *layer = (CAMetalLayer *)terminal_view(NSApp.windows.firstObject.contentView).layer;
     if (layer && (viewport.width != (uint32_t)layer.drawableSize.width ||
-                  viewport.height != (uint32_t)layer.drawableSize.height)) failed++;
+                  viewport.height != (uint32_t)layer.drawableSize.height)) FAIL();
     *frame = (telar_gui_frame){.token = ++paints, .quads = quads, .quad_count = appearance_phase == 2 ? 4 : 6, .atlas = pixels, .atlas_side = 2, .atlas_version = 1, .sprites = sprite_pixels, .sprites_side = 2, .sprites_version = 1, .background = {.2f,.3f,.4f,appearance_phase == 2 ? 1 : .5f}, .background_blur = appearance_phase == 0 ? 40 : appearance_phase == 1 || appearance_phase == 4 ? 80 : 0, .titlebar = appearance_phase != 1 && appearance_phase != 4, .navigation = 84};
     if (appearance_phase != 2) {
         frame->diagrams[0] = (telar_gui_diagram_texture){sprite_pixels, 4, 1, 1};
@@ -287,14 +289,14 @@ static uint32_t desired_pointer(void *context) {
 }
 static void complete(void *context, uint64_t token, int success) {
     (void)context;
-    if (token != (uint64_t)delivered + discarded + 1) failed++;
+    if (token != (uint64_t)delivered + discarded + 1) FAIL();
     if (success) delivered++; else discarded++;
     if (delivered == 1 && success) deadline = CACurrentMediaTime() + 0.15;
     if (success && appearance_phase == 4 && !fullscreen_exit_scheduled) {
         fullscreen_exit_scheduled = YES;
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC / 5), dispatch_get_main_queue(), ^{
             TelarWindow *window = (TelarWindow *)NSApp.windows.firstObject;
-            if (!(window.styleMask & NSWindowStyleMaskFullScreen) || window.titlebarVisible) failed++;
+            if (!(window.styleMask & NSWindowStyleMaskFullScreen) || window.titlebarVisible) FAIL();
             [window toggleFullScreen:nil];
         });
     }
@@ -306,7 +308,7 @@ static int input(void *context, telar_gui_input event) {
         if (event.kind != expected_pointer.kind || event.code != expected_pointer.code ||
             event.mods != expected_pointer.mods || event.phase != expected_pointer.phase ||
             event.button != expected_pointer.button || event.x != expected_pointer.x ||
-            event.y != expected_pointer.y || event.physical != 0) failed++;
+            event.y != expected_pointer.y || event.physical != 0) FAIL();
         pointer_inputs++;
         return 1;
     }
@@ -314,22 +316,22 @@ static int input(void *context, telar_gui_input event) {
         if (event.kind != expected_repeat.kind || event.phase != expected_repeat.phase ||
             event.physical != expected_repeat.physical || event.mods != expected_repeat.mods ||
             event.code != expected_repeat.code || event.len != expected_repeat.len ||
-            (event.len && memcmp(event.text, expected_repeat.text, event.len))) failed++;
+            (event.len && memcmp(event.text, expected_repeat.text, event.len))) FAIL();
         repeat_inputs++;
         return 1;
     }
     if (!injecting) return 1;
-    if (inputs == 0 && !(event.kind == 1 && event.len == 1 && event.text[0] == 'a' && event.physical == 1)) failed++;
-    if (inputs == 1 && !(event.kind == 4 && event.code == 'c' && (event.mods & 4))) failed++;
-    if (inputs == 2 && !(event.kind == 3 && event.code == 1)) failed++;
-    if (inputs == 3 && !(event.kind == 1 && event.len == 5 && !memcmp(event.text,"caf\xc3\xa9",5))) failed++;
-    if (inputs == 4 && !(event.kind == 4 && event.code == 'a' && event.phase == 3 && event.physical == 1)) failed++;
-    if (inputs == 5 && !(event.kind == 4 && event.code == ' ' && event.mods == 4 && event.physical == 50 && event.phase == 1)) failed++;
-    if (inputs == 6 && !(event.kind == 4 && event.code == ' ' && event.mods == 4 && event.physical == 50 && event.phase == 3)) failed++;
+    if (inputs == 0 && !(event.kind == 1 && event.len == 1 && event.text[0] == 'a' && event.physical == 1)) FAIL();
+    if (inputs == 1 && !(event.kind == 4 && event.code == 'c' && (event.mods & 4))) FAIL();
+    if (inputs == 2 && !(event.kind == 3 && event.code == 1)) FAIL();
+    if (inputs == 3 && !(event.kind == 1 && event.len == 5 && !memcmp(event.text,"caf\xc3\xa9",5))) FAIL();
+    if (inputs == 4 && !(event.kind == 4 && event.code == 'a' && event.phase == 3 && event.physical == 1)) FAIL();
+    if (inputs == 5 && !(event.kind == 4 && event.code == ' ' && event.mods == 4 && event.physical == 50 && event.phase == 1)) FAIL();
+    if (inputs == 6 && !(event.kind == 4 && event.code == ' ' && event.mods == 4 && event.physical == 50 && event.phase == 3)) FAIL();
     if (inputs >= 7 && inputs <= 9) {
         uint32_t code = inputs == 7 ? 1 : inputs == 8 ? 3 : 2;
         if (event.kind != 6 || event.code != code || event.button != 0 ||
-            event.x != pointer_x || event.y != pointer_y) failed++;
+            event.x != pointer_x || event.y != pointer_y) FAIL();
     }
     inputs++;
     return 1;
@@ -349,7 +351,7 @@ int main(void) {
         NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
         id entered = [center addObserverForName:NSWindowDidEnterFullScreenNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note) {
             NSWindow *window = note.object;
-            if (!(window.styleMask & NSWindowStyleMaskFullScreen) || !window.isKeyWindow || window.firstResponder != terminal_view(window.contentView)) failed++;
+            if (!(window.styleMask & NSWindowStyleMaskFullScreen) || !window.isKeyWindow || window.firstResponder != terminal_view(window.contentView)) FAIL();
             fullscreen_checked |= 1;
             appearance_phase = 4;
             [(id)terminal_view(window.contentView) requestDraw];
@@ -360,7 +362,7 @@ int main(void) {
                 fullscreen_in_progress = NO;
                 if ((window.styleMask & NSWindowStyleMaskFullScreen) || window.titlebarVisible ||
                     !(window.styleMask & NSWindowStyleMaskFullSizeContentView) ||
-                    !window.isKeyWindow || window.firstResponder != terminal_view(window.contentView)) failed++;
+                    !window.isKeyWindow || window.firstResponder != terminal_view(window.contentView)) FAIL();
                 fullscreen_checked |= 2;
                 appearance_phase = 3;
                 close_in_flight = YES;
@@ -370,7 +372,7 @@ int main(void) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1000000000), dispatch_get_main_queue(), ^{
             NSWindow *window = NSApp.windows.firstObject;
             NSView *view = terminal_view(window.contentView);
-            if (timer_wakes != 1 || delivered < 2 || !focus_events) failed++;
+            if (timer_wakes != 1 || delivered < 2 || !focus_events) FAIL();
             injecting = YES;
             [view keyDown:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0 timestamp:0 windowNumber:window.windowNumber context:nil characters:@"a" charactersIgnoringModifiers:@"a" isARepeat:NO keyCode:0]];
             [view keyDown:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:NSEventModifierFlagControl timestamp:0 windowNumber:window.windowNumber context:nil characters:@"\003" charactersIgnoringModifiers:@"c" isARepeat:NO keyCode:8]];
@@ -396,11 +398,11 @@ int main(void) {
             int burst_start = paints;
             for (int i = 0; i < 100; i++) [view requestDraw];
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                if (paints - burst_start > 3) failed++;
+                if (paints - burst_start > 3) FAIL();
                 int idle_paints = paints;
-                if (paints != delivered + discarded) failed++;
+                if (paints != delivered + discarded) FAIL();
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC / 3), dispatch_get_main_queue(), ^{
-                    if (paints != idle_paints) failed++;
+                    if (paints != idle_paints) FAIL();
                     appearance_phase = 2;
                     [view requestDraw];
                     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC / 3), dispatch_get_main_queue(), ^{
@@ -413,7 +415,7 @@ int main(void) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 15 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
             if (!closed_in_flight) {
                 fprintf(stderr, "Native fullscreen lifecycle timed out\n");
-                failed++;
+                FAIL();
                 [NSApp.windows.firstObject close];
             }
         });
