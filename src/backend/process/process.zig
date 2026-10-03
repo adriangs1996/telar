@@ -11,6 +11,7 @@ const Identification = @import("Identification.zig");
 const std = @import("std");
 const Cache = @import("Cache.zig");
 const darwin = @import("darwin.zig");
+const ProcBsdInfo = @import("ProcBsdInfo.zig").ProcBsdInfo;
 const providers = @import("../agent/providers/providers.zig");
 const SessionHost = @import("../agent/SessionHost.zig").SessionHost;
 
@@ -137,8 +138,8 @@ fn identifyMacosProcessGroup(table: *const core.Table, process_group_id: u32, pr
     }
 
     var pids: [max_group_processes]std.c.pid_t = @splat(0);
-    const byte_count = Native.c.proc_listpids(
-        Native.c.PROC_PGRP_ONLY,
+    const byte_count = Native.proc_listpids(
+        Native.PROC_PGRP_ONLY,
         process_group_id,
         &pids,
         @intCast(@sizeOf(@TypeOf(pids))),
@@ -183,11 +184,11 @@ fn identifyMacosProcess(table: *const core.Table, pid: u32) Identification {
         return .{};
     }
 
-    var info: Native.c.proc_bsdinfo = std.mem.zeroes(Native.c.proc_bsdinfo);
-    const expected: c_int = @intCast(@sizeOf(Native.c.proc_bsdinfo));
-    if (Native.c.proc_pidinfo(
+    var info: ProcBsdInfo = std.mem.zeroes(ProcBsdInfo);
+    const expected: c_int = @intCast(@sizeOf(ProcBsdInfo));
+    if (Native.proc_pidinfo(
         @intCast(pid),
-        Native.c.PROC_PIDTBSDINFO,
+        Native.PROC_PIDTBSDINFO,
         0,
         &info,
         expected,
@@ -212,9 +213,9 @@ fn readMacosArgv(pid: u32, buffer: []u8) ?[]const u8 {
     if (pid > std.math.maxInt(c_int)) {
         return null;
     }
-    var mib = [_]c_int{ Native.c.CTL_KERN, Native.c.KERN_PROCARGS2, @intCast(pid) };
+    var mib = [_]c_int{ Native.CTL_KERN, Native.KERN_PROCARGS2, @intCast(pid) };
     var size = buffer.len;
-    if (Native.c.sysctl(&mib, mib.len, buffer.ptr, &size, null, 0) != 0 or
+    if (Native.sysctl(&mib, mib.len, buffer.ptr, &size, null, 0) != 0 or
         size < @sizeOf(c_int) or size > buffer.len)
     {
         return null;
