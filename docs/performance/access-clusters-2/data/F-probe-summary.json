@@ -1,0 +1,754 @@
+[
+  {
+    "name": "images/echo_frame/256",
+    "baseline_ns": 146.484375,
+    "candidate_ns": 145.1875,
+    "paired_percent": -0.885333333333338,
+    "wins": 4,
+    "losses": 1,
+    "ties": 2,
+    "pairs": 7,
+    "paired_percent_min": -3.4849749582637757,
+    "paired_percent_max": 16.972034715525552,
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "images/stream_frame/256",
+    "baseline_ns": 20347.65625,
+    "candidate_ns": 20442.0625,
+    "paired_percent": -0.43622979577465637,
+    "wins": 4,
+    "losses": 3,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -5.633802816901412,
+    "paired_percent_max": 10.164034207717055,
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "terminal/cursor/153x40",
+    "baseline_ns": 35017.578125,
+    "candidate_ns": 35392.578125,
+    "paired_percent": -0.14054153238391986,
+    "wins": 4,
+    "losses": 3,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -3.520241757055742,
+    "paired_percent_max": 5.359219798184789,
+    "live_requested_bytes": {
+      "A": 40669644,
+      "B": 40669644
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 6121,
+      "B": 6121
+    }
+  },
+  {
+    "name": "terminal/cursor/73x40",
+    "baseline_ns": 17049.46875,
+    "candidate_ns": 17128.25,
+    "paired_percent": 0.35515641965604416,
+    "wins": 2,
+    "losses": 5,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -7.279692829986262,
+    "paired_percent_max": 2.337041293442055,
+    "live_requested_bytes": {
+      "A": 25257964,
+      "B": 25257964
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 2921,
+      "B": 2921
+    }
+  },
+  {
+    "name": "terminal/focus/153x40",
+    "baseline_ns": 34178.390625,
+    "candidate_ns": 35361.328125,
+    "paired_percent": 0.24000921635389805,
+    "wins": 3,
+    "losses": 4,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -2.9869963307987746,
+    "paired_percent_max": 4.324509356458228,
+    "live_requested_bytes": {
+      "A": 40669644,
+      "B": 40669644
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 6124,
+      "B": 6124
+    }
+  },
+  {
+    "name": "terminal/focus/73x40",
+    "baseline_ns": 16603.515625,
+    "candidate_ns": 17139.96875,
+    "paired_percent": 2.3019667270751665,
+    "wins": 1,
+    "losses": 6,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -1.689852808149761,
+    "paired_percent_max": 4.885731090459955,
+    "live_requested_bytes": {
+      "A": 25257964,
+      "B": 25257964
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 2924,
+      "B": 2924
+    }
+  },
+  {
+    "name": "terminal/font/153x40",
+    "baseline_ns": 430281.25,
+    "candidate_ns": 428345.703125,
+    "paired_percent": -0.5408768094047667,
+    "wins": 4,
+    "losses": 3,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -6.9393137086973145,
+    "paired_percent_max": 15.168561235472854,
+    "live_requested_bytes": {
+      "A": 47123838,
+      "B": 47123838
+    },
+    "measured_allocations": {
+      "A": 320,
+      "B": 320
+    },
+    "last_frame_quads": {
+      "A": 6120,
+      "B": 6120
+    }
+  },
+  {
+    "name": "terminal/font/73x40",
+    "baseline_ns": 358251.953125,
+    "candidate_ns": 359201.171875,
+    "paired_percent": -0.9624293307891496,
+    "wins": 5,
+    "losses": 2,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -13.029071110036893,
+    "paired_percent_max": 8.37972703517842,
+    "live_requested_bytes": {
+      "A": 29804098,
+      "B": 29804098
+    },
+    "measured_allocations": {
+      "A": 320,
+      "B": 320
+    },
+    "last_frame_quads": {
+      "A": 2920,
+      "B": 2920
+    }
+  },
+  {
+    "name": "terminal/full/153x40",
+    "baseline_ns": 139580.734375,
+    "candidate_ns": 140452.46875,
+    "paired_percent": 0.6060510106602246,
+    "wins": 2,
+    "losses": 5,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -2.925601322371796,
+    "paired_percent_max": 7.931977150511749,
+    "live_requested_bytes": {
+      "A": 40670628,
+      "B": 40670628
+    },
+    "measured_allocations": {
+      "A": 1,
+      "B": 1
+    },
+    "last_frame_quads": {
+      "A": 6120,
+      "B": 6120
+    }
+  },
+  {
+    "name": "terminal/full/73x40",
+    "baseline_ns": 66931.640625,
+    "candidate_ns": 68022.78125,
+    "paired_percent": 0.5087623142603137,
+    "wins": 2,
+    "losses": 5,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -4.484803041503859,
+    "paired_percent_max": 6.897405818669933,
+    "live_requested_bytes": {
+      "A": 25258948,
+      "B": 25258948
+    },
+    "measured_allocations": {
+      "A": 1,
+      "B": 1
+    },
+    "last_frame_quads": {
+      "A": 2920,
+      "B": 2920
+    }
+  },
+  {
+    "name": "terminal/images/153x40",
+    "baseline_ns": 36483.078125,
+    "candidate_ns": 35774.734375,
+    "paired_percent": -0.8341692624465491,
+    "wins": 5,
+    "losses": 2,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -6.164846020994874,
+    "paired_percent_max": 2.0123711413698953,
+    "live_requested_bytes": {
+      "A": 40669644,
+      "B": 40669644
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 6376,
+      "B": 6376
+    }
+  },
+  {
+    "name": "terminal/images/73x40",
+    "baseline_ns": 18404.953125,
+    "candidate_ns": 18110.03125,
+    "paired_percent": 0.7905000118024308,
+    "wins": 3,
+    "losses": 4,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -4.3925060958910915,
+    "paired_percent_max": 8.475384937987984,
+    "live_requested_bytes": {
+      "A": 25257964,
+      "B": 25257964
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 3176,
+      "B": 3176
+    }
+  },
+  {
+    "name": "terminal/ligatures/153x40",
+    "baseline_ns": 31576.171875,
+    "candidate_ns": 30617.1875,
+    "paired_percent": -0.5866972769593803,
+    "wins": 4,
+    "losses": 3,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -7.458936305364672,
+    "paired_percent_max": 0.5731675635553879,
+    "live_requested_bytes": {
+      "A": 40669972,
+      "B": 40669972
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 2560,
+      "B": 2560
+    }
+  },
+  {
+    "name": "terminal/ligatures/73x40",
+    "baseline_ns": 14964.84375,
+    "candidate_ns": 14959.625,
+    "paired_percent": -0.3748751863900224,
+    "wins": 5,
+    "losses": 2,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -9.598409356725146,
+    "paired_percent_max": 0.7613219068540955,
+    "live_requested_bytes": {
+      "A": 25258292,
+      "B": 25258292
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 1240,
+      "B": 1240
+    }
+  },
+  {
+    "name": "terminal/reattach/153x40",
+    "baseline_ns": 33644.53125,
+    "candidate_ns": 35494.140625,
+    "paired_percent": 3.1550681957637217,
+    "wins": 1,
+    "losses": 6,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -0.20888975369327545,
+    "paired_percent_max": 6.819031775357942,
+    "live_requested_bytes": {
+      "A": 40669644,
+      "B": 40669644
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 6120,
+      "B": 6120
+    }
+  },
+  {
+    "name": "terminal/reattach/73x40",
+    "baseline_ns": 16447.265625,
+    "candidate_ns": 16361.984375,
+    "paired_percent": -0.8243792884412127,
+    "wins": 4,
+    "losses": 3,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -3.493946675821036,
+    "paired_percent_max": 2.256388294075662,
+    "live_requested_bytes": {
+      "A": 25257964,
+      "B": 25257964
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 2920,
+      "B": 2920
+    }
+  },
+  {
+    "name": "terminal/resize/153x40",
+    "baseline_ns": 35162.109375,
+    "candidate_ns": 33713.53125,
+    "paired_percent": -4.628828528578566,
+    "wins": 6,
+    "losses": 1,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -7.584265425028514,
+    "paired_percent_max": 43.32539082931366,
+    "live_requested_bytes": {
+      "A": 40669644,
+      "B": 40669644
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 6120,
+      "B": 6120
+    }
+  },
+  {
+    "name": "terminal/resize/73x40",
+    "baseline_ns": 16524.09375,
+    "candidate_ns": 16386.71875,
+    "paired_percent": -0.7961845195697537,
+    "wins": 4,
+    "losses": 3,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -7.172874531141648,
+    "paired_percent_max": 6.508701340188927,
+    "live_requested_bytes": {
+      "A": 25257964,
+      "B": 25257964
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 2920,
+      "B": 2920
+    }
+  },
+  {
+    "name": "terminal/retained/153x40",
+    "baseline_ns": 34206.375,
+    "candidate_ns": 34422.53125,
+    "paired_percent": -0.2697600509089404,
+    "wins": 4,
+    "losses": 3,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -6.385457316821186,
+    "paired_percent_max": 6.132354714581711,
+    "live_requested_bytes": {
+      "A": 40669644,
+      "B": 40669644
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 6120,
+      "B": 6120
+    }
+  },
+  {
+    "name": "terminal/retained/73x40",
+    "baseline_ns": 16689.453125,
+    "candidate_ns": 16512.375,
+    "paired_percent": -3.3782562902281987,
+    "wins": 4,
+    "losses": 3,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -9.457049478785839,
+    "paired_percent_max": 14.314802768678248,
+    "live_requested_bytes": {
+      "A": 25257964,
+      "B": 25257964
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 2920,
+      "B": 2920
+    }
+  },
+  {
+    "name": "terminal/selection/153x40",
+    "baseline_ns": 51507.8125,
+    "candidate_ns": 50773.4375,
+    "paired_percent": 0.06284913835710171,
+    "wins": 3,
+    "losses": 4,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -4.51816797295791,
+    "paired_percent_max": 7.7443354751437266,
+    "live_requested_bytes": {
+      "A": 40669644,
+      "B": 40669644
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 9703,
+      "B": 9703
+    }
+  },
+  {
+    "name": "terminal/selection/73x40",
+    "baseline_ns": 24636.71875,
+    "candidate_ns": 25223.953125,
+    "paired_percent": 1.6002581894465129,
+    "wins": 2,
+    "losses": 5,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -4.400319297545396,
+    "paired_percent_max": 6.365808149270391,
+    "live_requested_bytes": {
+      "A": 25257964,
+      "B": 25257964
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 4663,
+      "B": 4663
+    }
+  },
+  {
+    "name": "terminal/sparse/153x40",
+    "baseline_ns": 34220.046875,
+    "candidate_ns": 35354.8125,
+    "paired_percent": 3.489653573982743,
+    "wins": 2,
+    "losses": 5,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -4.6260039166130635,
+    "paired_percent_max": 9.631990727325412,
+    "live_requested_bytes": {
+      "A": 40669644,
+      "B": 40669644
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 6120,
+      "B": 6120
+    }
+  },
+  {
+    "name": "terminal/sparse/73x40",
+    "baseline_ns": 16543.625,
+    "candidate_ns": 16600.921875,
+    "paired_percent": -0.8737315733401863,
+    "wins": 4,
+    "losses": 3,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -6.788761799000554,
+    "paired_percent_max": 4.211223585734514,
+    "live_requested_bytes": {
+      "A": 25257964,
+      "B": 25257964
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 2920,
+      "B": 2920
+    }
+  },
+  {
+    "name": "terminal/theme/153x40",
+    "baseline_ns": 135531.90625,
+    "candidate_ns": 136442.71875,
+    "paired_percent": 0.09132252930179607,
+    "wins": 3,
+    "losses": 4,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -1.6540429887410446,
+    "paired_percent_max": 4.50336763414334,
+    "live_requested_bytes": {
+      "A": 40669644,
+      "B": 40669644
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 6120,
+      "B": 6120
+    }
+  },
+  {
+    "name": "terminal/theme/73x40",
+    "baseline_ns": 65973.296875,
+    "candidate_ns": 65504.546875,
+    "paired_percent": -0.6822058661969166,
+    "wins": 4,
+    "losses": 3,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -4.848009084357486,
+    "paired_percent_max": 7.852182618393666,
+    "live_requested_bytes": {
+      "A": 25257964,
+      "B": 25257964
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 2920,
+      "B": 2920
+    }
+  },
+  {
+    "name": "terminal/two_all_active/153x40",
+    "baseline_ns": 35187.5,
+    "candidate_ns": 35307.296875,
+    "paired_percent": 0.6914834612478105,
+    "wins": 3,
+    "losses": 4,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -64.82108566702797,
+    "paired_percent_max": 8.135346358792184,
+    "live_requested_bytes": {
+      "A": 40669644,
+      "B": 40669644
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 6120,
+      "B": 6120
+    }
+  },
+  {
+    "name": "terminal/two_all_active/73x40",
+    "baseline_ns": 16812.5,
+    "candidate_ns": 16847.65625,
+    "paired_percent": 0.23728259600794832,
+    "wins": 3,
+    "losses": 4,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -3.3255736614566045,
+    "paired_percent_max": 4.08161579068167,
+    "live_requested_bytes": {
+      "A": 25257964,
+      "B": 25257964
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 2920,
+      "B": 2920
+    }
+  },
+  {
+    "name": "terminal/two_one_active/153x40",
+    "baseline_ns": 34263.03125,
+    "candidate_ns": 34853.515625,
+    "paired_percent": 2.943972634728831,
+    "wins": 0,
+    "losses": 7,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": 0.2963744633656784,
+    "paired_percent_max": 7.876985527852365,
+    "live_requested_bytes": {
+      "A": 40669644,
+      "B": 40669644
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 6120,
+      "B": 6120
+    }
+  },
+  {
+    "name": "terminal/two_one_active/73x40",
+    "baseline_ns": 16962.890625,
+    "candidate_ns": 16852.859375,
+    "paired_percent": -0.9642001275950163,
+    "wins": 4,
+    "losses": 3,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -6.025692857613551,
+    "paired_percent_max": 2.3175601341259844,
+    "live_requested_bytes": {
+      "A": 25257964,
+      "B": 25257964
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 2920,
+      "B": 2920
+    }
+  },
+  {
+    "name": "workspace/1-tabs",
+    "baseline_ns": 1.167,
+    "candidate_ns": 1.167,
+    "paired_percent": -3.39403973509933,
+    "wins": 4,
+    "losses": 3,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -12.453113278319572,
+    "paired_percent_max": 7.112253641816624,
+    "live_requested_bytes": {
+      "A": 1963923,
+      "B": 1963923
+    }
+  },
+  {
+    "name": "workspace/64-tabs",
+    "baseline_ns": 65.959,
+    "candidate_ns": 67.0,
+    "paired_percent": 1.4934512164160196,
+    "wins": 1,
+    "losses": 6,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -1.9283582089552276,
+    "paired_percent_max": 36.26082497721057,
+    "live_requested_bytes": {
+      "A": 13966368,
+      "B": 13966368
+    }
+  },
+  {
+    "name": "workspace/8-tabs",
+    "baseline_ns": 8.083,
+    "candidate_ns": 8.042,
+    "paired_percent": 1.0268464678955924,
+    "wins": 1,
+    "losses": 4,
+    "ties": 2,
+    "pairs": 7,
+    "paired_percent_min": -2.066064579982674,
+    "paired_percent_max": 7.225040207843625,
+    "live_requested_bytes": {
+      "A": 3297528,
+      "B": 3297528
+    }
+  }
+]

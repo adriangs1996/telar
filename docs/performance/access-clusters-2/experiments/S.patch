@@ -1,0 +1,172 @@
+diff --git a/src/gui/text/ShapingCache.zig b/src/gui/text/ShapingCache.zig
+index 75e2dcbf..d7ea4539 100644
+--- a/src/gui/text/ShapingCache.zig
++++ b/src/gui/text/ShapingCache.zig
+@@ -9,6 +9,7 @@ const std = @import("std");
+ const Entry = @import("ShapingEntry.zig");
+ const ShapedRun = @import("ShapedRun.zig");
+ const Key = @import("ShapingKey.zig");
++const font_id = @import("font_id.zig");
+ const Cache = @This();
+ 
+ const ascii_capacity = 128;
+@@ -16,14 +17,19 @@ const ways = 4;
+ const sets = 64;
+ pub const capacity = ascii_capacity + ways * sets;
+ 
++const Filter = packed struct(u32) {
++    pixel_height: u16 = 0,
++    len: u8 = 0,
++    preferred: font_id.Id = .primary,
++    reserved: u4 = 0,
++};
++
+ entries: []Entry,
++filters: [capacity]Filter = @splat(.{}),
+ victims: [sets]u8 = @splat(0),
+ 
+ pub fn init(allocator: std.mem.Allocator) !Cache {
+     const entries = try allocator.alloc(Entry, capacity);
+-    for (entries) |*entry| {
+-        entry.len = 0;
+-    }
+ 
+     return .{ .entries = entries };
+ }
+@@ -34,9 +40,7 @@ pub fn deinit(self: *Cache, allocator: std.mem.Allocator) void {
+ 
+ /// Invalidates font-dependent results. Example: `cache.clear();`
+ pub fn clear(self: *Cache) void {
+-    for (self.entries) |*entry| {
+-        entry.len = 0;
+-    }
++    self.filters = @splat(.{});
+ 
+     self.victims = @splat(0);
+ }
+@@ -53,8 +57,8 @@ fn slotFor(self: *const Cache, key: Key) ?Slot {
+     }
+ 
+     if (text.len == 1 and text[0] < ascii_capacity and key.face == .primary) {
+-        const entry = &self.entries[text[0]];
+-        if (entry.len == 0 or entry.pixel_height == key.pixel_height) {
++        const filter = self.filters[text[0]];
++        if (filter.len == 0 or filter.pixel_height == key.pixel_height) {
+             return .{ .dedicated = text[0] };
+         }
+     }
+@@ -68,13 +72,13 @@ fn seed(key: Key) u64 {
+     return @as(u64, @intFromEnum(key.face)) | (@as(u64, key.pixel_height) << 8);
+ }
+ 
+-fn matches(entry: *const Entry, key: Key) bool {
+-    return entry.len == key.text.len and entry.preferred == key.face and entry.pixel_height == key.pixel_height and std.mem.eql(u8, entry.text[0..entry.len], key.text);
+-}
+-
+-fn setEntries(self: *Cache, set: usize) []Entry {
+-    const start = ascii_capacity + set * ways;
+-    return self.entries[start .. start + ways];
++fn matches(self: *const Cache, index: usize, key: Key) bool {
++    const filter: Filter = .{
++        .pixel_height = key.pixel_height,
++        .len = @intCast(key.text.len),
++        .preferred = key.face,
++    };
++    return @as(u32, @bitCast(self.filters[index])) == @as(u32, @bitCast(filter)) and std.mem.eql(u8, self.entries[index].text[0..key.text.len], key.text);
+ }
+ 
+ /// Borrows until the next insertion or clear.
+@@ -83,12 +87,13 @@ pub fn find(self: *Cache, key: Key) ?ShapedRun {
+     switch (self.slotFor(key) orelse return null) {
+         .dedicated => |index| {
+             const entry = &self.entries[index];
+-            return if (matches(entry, key)) entry.view() else null;
++            return if (self.matches(index, key)) entry.view() else null;
+         },
+         .set => |set| {
+-            for (self.setEntries(set)) |*entry| {
+-                if (matches(entry, key)) {
+-                    return entry.view();
++            const start = ascii_capacity + set * ways;
++            for (start..start + ways) |index| {
++                if (self.matches(index, key)) {
++                    return self.entries[index].view();
+                 }
+             }
+ 
+@@ -103,42 +108,45 @@ pub fn remember(self: *Cache, key: Key, shaped: ShapedRun) void {
+         return;
+     }
+ 
+-    const entry = switch (self.slotFor(key) orelse return) {
+-        .dedicated => |index| &self.entries[index],
++    const index = switch (self.slotFor(key) orelse return) {
++        .dedicated => |index| index,
+         .set => |set| self.victim(set, key),
+     };
+ 
++    const entry = &self.entries[index];
+     @memcpy(entry.text[0..key.text.len], key.text);
+     @memcpy(entry.glyphs[0..shaped.glyphs.len], shaped.glyphs);
+     @memcpy(entry.positions[0..shaped.positions.len], shaped.positions);
+     entry.font = shaped.font;
+-    entry.preferred = key.face;
+-    entry.pixel_height = key.pixel_height;
+     entry.columns = shaped.columns;
+     entry.rtl = shaped.rtl;
+-    entry.len = @intCast(key.text.len);
+     entry.count = @intCast(shaped.glyphs.len);
++    self.filters[index] = .{
++        .pixel_height = key.pixel_height,
++        .len = @intCast(key.text.len),
++        .preferred = key.face,
++    };
+ }
+ 
+ // Reuses the way already holding `key`, then an empty way, then the set's
+ // round-robin victim so four colliding labels share the set stably.
+-fn victim(self: *Cache, set: usize, key: Key) *Entry {
+-    const candidates = self.setEntries(set);
+-    for (candidates) |*entry| {
+-        if (matches(entry, key)) {
+-            return entry;
++fn victim(self: *Cache, set: usize, key: Key) usize {
++    const start = ascii_capacity + set * ways;
++    for (start..start + ways) |index| {
++        if (self.matches(index, key)) {
++            return index;
+         }
+     }
+ 
+-    for (candidates) |*entry| {
+-        if (entry.len == 0) {
+-            return entry;
++    for (start..start + ways) |index| {
++        if (self.filters[index].len == 0) {
++            return index;
+         }
+     }
+ 
+     const way = self.victims[set] % ways;
+     self.victims[set] = (self.victims[set] + 1) % ways;
+-    return &candidates[way];
++    return start + way;
+ }
+ 
+ test "colliding labels share a set instead of evicting one another" {
+diff --git a/src/gui/text/ShapingEntry.zig b/src/gui/text/ShapingEntry.zig
+index 0a6d9110..6b7ba44c 100644
+--- a/src/gui/text/ShapingEntry.zig
++++ b/src/gui/text/ShapingEntry.zig
+@@ -7,11 +7,8 @@ pub const max_bytes = 64;
+ pub const max_glyphs = max_bytes;
+ 
+ text: [max_bytes]u8 = undefined,
+-len: u8 = 0,
+ count: u8 = 0,
+ font: font_id.Id = .primary,
+-preferred: font_id.Id = .primary,
+-pixel_height: u16 = 0,
+ columns: u32 = 0,
+ rtl: bool = false,
+ glyphs: [max_glyphs]freetype.c.hb_glyph_info_t = undefined,

@@ -1,0 +1,129 @@
+{
+  "A": {
+    "__text": {
+      "address": "0x100000fd8",
+      "size": 1879624,
+      "sha256": "4082b01a1acafc3b15e20ed25e4cd9fc2de752d058631547b430ff3657ca2e07"
+    },
+    "__stubs": {
+      "address": "0x1001cbe20",
+      "size": 2928,
+      "sha256": "acebaa776b62be1bc50b3b45d407a9038e1fcb9b337af11cdc582f7b26b704b0"
+    },
+    "__stub_helper": {
+      "address": "0x1001cc990",
+      "size": 2928,
+      "sha256": "971773df791fc19eca9f1433735593c5a9a86acb49d8e40757c6548422f5b5aa"
+    },
+    "__const": {
+      "address": "0x1001cd500",
+      "size": 4948096,
+      "sha256": "5555e056aa9685a45180705ce33c89406cc6077bd2fd2f8c6cc81323edafb51a"
+    },
+    "__cstring": {
+      "address": "0x100685580",
+      "size": 22761,
+      "sha256": "7c82cdcce0603a9b21b2b07e02a5a9e244381528cb226236160d252826c19a98"
+    },
+    "__gcc_except_tab": {
+      "address": "0x10068ae6c",
+      "size": 5840,
+      "sha256": "7dc2880df2084b81d055a6cb888cc792160ff8b9c6176b48af3c9738372d0589"
+    },
+    "__objc_classname": {
+      "address": "0x10068c53c",
+      "size": 304,
+      "sha256": "da9932d9c5b469b2536c79e0f1077d05ee9b281f8aeef752ebe6d8bb86996375"
+    },
+    "__objc_methname": {
+      "address": "0x10068c66c",
+      "size": 11396,
+      "sha256": "e91439ac093385e9cf36ac4832c7b9c23237fe0bce4c7396bc55ee298d39d085"
+    },
+    "__objc_methtype": {
+      "address": "0x10068f2f0",
+      "size": 4683,
+      "sha256": "116942bf3dfaff30a994e966fa838ff44ad50de744e2d08d4b47d7d152101cf2"
+    },
+    "__unwind_info": {
+      "address": "0x10069053c",
+      "size": 24272,
+      "sha256": "97173bd954e5182254a0690384c808c9b6b53f861480262aa5c945808785a45c"
+    },
+    "__eh_frame": {
+      "address": "0x100696410",
+      "size": 173736,
+      "sha256": "6505a2d4dcdca6f3314732e16c3528b4c86dac70231263020c9408df2d8b9b17"
+    }
+  },
+  "F": {
+    "__text": {
+      "address": "0x100000fd8",
+      "size": 1879624,
+      "sha256": "4082b01a1acafc3b15e20ed25e4cd9fc2de752d058631547b430ff3657ca2e07"
+    },
+    "__stubs": {
+      "address": "0x1001cbe20",
+      "size": 2928,
+      "sha256": "acebaa776b62be1bc50b3b45d407a9038e1fcb9b337af11cdc582f7b26b704b0"
+    },
+    "__stub_helper": {
+      "address": "0x1001cc990",
+      "size": 2928,
+      "sha256": "971773df791fc19eca9f1433735593c5a9a86acb49d8e40757c6548422f5b5aa"
+    },
+    "__const": {
+      "address": "0x1001cd500",
+      "size": 4948096,
+      "sha256": "5555e056aa9685a45180705ce33c89406cc6077bd2fd2f8c6cc81323edafb51a"
+    },
+    "__cstring": {
+      "address": "0x100685580",
+      "size": 22761,
+      "sha256": "7c82cdcce0603a9b21b2b07e02a5a9e244381528cb226236160d252826c19a98"
+    },
+    "__gcc_except_tab": {
+      "address": "0x10068ae6c",
+      "size": 5840,
+      "sha256": "7dc2880df2084b81d055a6cb888cc792160ff8b9c6176b48af3c9738372d0589"
+    },
+    "__objc_classname": {
+      "address": "0x10068c53c",
+      "size": 304,
+      "sha256": "da9932d9c5b469b2536c79e0f1077d05ee9b281f8aeef752ebe6d8bb86996375"
+    },
+    "__objc_methname": {
+      "address": "0x10068c66c",
+      "size": 11396,
+      "sha256": "e91439ac093385e9cf36ac4832c7b9c23237fe0bce4c7396bc55ee298d39d085"
+    },
+    "__objc_methtype": {
+      "address": "0x10068f2f0",
+      "size": 4683,
+      "sha256": "116942bf3dfaff30a994e966fa838ff44ad50de744e2d08d4b47d7d152101cf2"
+    },
+    "__unwind_info": {
+      "address": "0x10069053c",
+      "size": 24272,
+      "sha256": "97173bd954e5182254a0690384c808c9b6b53f861480262aa5c945808785a45c"
+    },
+    "__eh_frame": {
+      "address": "0x100696410",
+      "size": 173736,
+      "sha256": "6505a2d4dcdca6f3314732e16c3528b4c86dac70231263020c9408df2d8b9b17"
+    }
+  },
+  "identical_sections": {
+    "__text": true,
+    "__stubs": true,
+    "__stub_helper": true,
+    "__const": true,
+    "__cstring": true,
+    "__gcc_except_tab": true,
+    "__objc_classname": true,
+    "__objc_methname": true,
+    "__objc_methtype": true,
+    "__unwind_info": true,
+    "__eh_frame": true
+  }
+}

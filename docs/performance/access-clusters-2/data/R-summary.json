@@ -1,0 +1,50 @@
+[
+  {
+    "name": "backend.delivery.flush_idle_1x32",
+    "baseline_ns": 1801.0,
+    "candidate_ns": 1722.5,
+    "paired_percent": -4.803890543786643,
+    "wins": 5,
+    "losses": 1,
+    "ties": 0,
+    "pairs": 6,
+    "paired_percent_min": -5.393258426966296,
+    "paired_percent_max": 7.548209366391179,
+    "p95_ns_per_op": {
+      "A": 1861.5,
+      "B": 1782.0
+    },
+    "p99_ns_per_op": {
+      "A": 1861.5,
+      "B": 1782.0
+    },
+    "payload_bytes_per_op": {
+      "A": 0.0,
+      "B": 0.0
+    }
+  },
+  {
+    "name": "backend.delivery.flush_idle_2x8",
+    "baseline_ns": 860.5,
+    "candidate_ns": 855.0,
+    "paired_percent": 0.12646800593394958,
+    "wins": 3,
+    "losses": 3,
+    "ties": 0,
+    "pairs": 6,
+    "paired_percent_min": -3.28425821064553,
+    "paired_percent_max": 1.5258215962441257,
+    "p95_ns_per_op": {
+      "A": 889.0,
+      "B": 875.0
+    },
+    "p99_ns_per_op": {
+      "A": 889.0,
+      "B": 875.0
+    },
+    "payload_bytes_per_op": {
+      "A": 0.0,
+      "B": 0.0
+    }
+  }
+]

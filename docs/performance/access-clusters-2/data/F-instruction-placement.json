@@ -1,0 +1,50 @@
+{
+  "main.execute": {
+    "identical": true,
+    "diff_lines": 0
+  },
+  "damage.collectSpans__anon_20706": {
+    "identical": true,
+    "diff_lines": 0
+  },
+  "SharedFrameContext.publish": {
+    "identical": true,
+    "diff_lines": 0
+  },
+  "InboxContext.handle": {
+    "identical": true,
+    "diff_lines": 0
+  },
+  "config.Generation.invokeCallback": {
+    "identical": true,
+    "diff_lines": 0
+  },
+  "lua_pcallk": {
+    "identical": true,
+    "diff_lines": 0
+  },
+  "luaV_execute": {
+    "identical": true,
+    "diff_lines": 0
+  },
+  "ClientEventContext.finishEvent": {
+    "identical": true,
+    "diff_lines": 0
+  },
+  "workspace.WorkspaceLayout.focusDirection": {
+    "identical": true,
+    "diff_lines": 0
+  },
+  "main.timed__anon_62714": {
+    "identical": true,
+    "diff_lines": 0
+  },
+  "main.timed__anon_62765": {
+    "identical": false,
+    "diff_lines": 898
+  },
+  "main.timed__anon_62828": {
+    "identical": true,
+    "diff_lines": 0
+  }
+}

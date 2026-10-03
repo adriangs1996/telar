@@ -1,0 +1,13 @@
+diff --git a/src/backend/runtime/client_delivery.zig b/src/backend/runtime/client_delivery.zig
+index 87e3c42f..26b6107d 100644
+--- a/src/backend/runtime/client_delivery.zig
++++ b/src/backend/runtime/client_delivery.zig
+@@ -186,7 +186,7 @@ fn pump(model: *RuntimeModel, session: *Session, sources: Sources) !void {
+ /// Reports the link tables that rendering this client's panes cut to
+ /// `text_metadata.max_links`; the links that fit were kept.
+ fn reportDroppedLinks(model: *RuntimeModel, client: usize) void {
+-    for (model.attachments.record[client]) |slot| {
++    for (&model.attachments.record[client]) |slot| {
+         const attachment = slot orelse continue;
+         const pane_dropped = attachment.pane.text_metadata.takeDropped();
+         const projection_dropped = attachment.cells.projected_text_metadata.takeDropped();

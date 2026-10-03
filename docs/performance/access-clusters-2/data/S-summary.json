@@ -1,0 +1,962 @@
+[
+  {
+    "name": "chrome/1/32/280",
+    "baseline_ns": 1183.79,
+    "candidate_ns": 1196.777,
+    "paired_percent": 0.7444399000539503,
+    "wins": 3,
+    "losses": 4,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -5.755619863857497,
+    "paired_percent_max": 7.986213771023576,
+    "p50_ns": {
+      "A": 1167,
+      "B": 1167
+    },
+    "p95_ns": {
+      "A": 1292,
+      "B": 1292
+    },
+    "p99_ns": {
+      "A": 1417,
+      "B": 1375
+    },
+    "shape_calls": {
+      "A": 0,
+      "B": 0
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/1/32/480",
+    "baseline_ns": 1180.954,
+    "candidate_ns": 1178.197,
+    "paired_percent": -0.07118904438074836,
+    "wins": 4,
+    "losses": 3,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -2.486267181024926,
+    "paired_percent_max": 4.660780541902265,
+    "p50_ns": {
+      "A": 1167,
+      "B": 1167
+    },
+    "p95_ns": {
+      "A": 1250,
+      "B": 1209
+    },
+    "p99_ns": {
+      "A": 1416,
+      "B": 1375
+    },
+    "shape_calls": {
+      "A": 0,
+      "B": 0
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/1/40/280",
+    "baseline_ns": 1231.712,
+    "candidate_ns": 1250.711,
+    "paired_percent": 1.4198749950159018,
+    "wins": 2,
+    "losses": 5,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -5.15379495473316,
+    "paired_percent_max": 4.01651328803645,
+    "p50_ns": {
+      "A": 1209,
+      "B": 1250
+    },
+    "p95_ns": {
+      "A": 1250,
+      "B": 1333
+    },
+    "p99_ns": {
+      "A": 1333,
+      "B": 1459
+    },
+    "shape_calls": {
+      "A": 0,
+      "B": 0
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/1/40/480",
+    "baseline_ns": 1241.546,
+    "candidate_ns": 1252.65,
+    "paired_percent": 0.6080738651925044,
+    "wins": 1,
+    "losses": 6,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -0.943950190374554,
+    "paired_percent_max": 3.336412008467704,
+    "p50_ns": {
+      "A": 1209,
+      "B": 1250
+    },
+    "p95_ns": {
+      "A": 1375,
+      "B": 1334
+    },
+    "p99_ns": {
+      "A": 1459,
+      "B": 1459
+    },
+    "shape_calls": {
+      "A": 0,
+      "B": 0
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/1/64/280",
+    "baseline_ns": 2056.212,
+    "candidate_ns": 2031.049,
+    "paired_percent": -1.2465640702417846,
+    "wins": 4,
+    "losses": 3,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -3.087737455023809,
+    "paired_percent_max": 5.51920234861798,
+    "p50_ns": {
+      "A": 2041,
+      "B": 2042
+    },
+    "p95_ns": {
+      "A": 2333,
+      "B": 2292
+    },
+    "p99_ns": {
+      "A": 2500,
+      "B": 2500
+    },
+    "shape_calls": {
+      "A": 0,
+      "B": 0
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/1/64/480",
+    "baseline_ns": 1431.378,
+    "candidate_ns": 1466.541,
+    "paired_percent": 1.8642643130245329,
+    "wins": 1,
+    "losses": 6,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -3.283135775862067,
+    "paired_percent_max": 4.069894271972085,
+    "p50_ns": {
+      "A": 1417,
+      "B": 1458
+    },
+    "p95_ns": {
+      "A": 1459,
+      "B": 1625
+    },
+    "p99_ns": {
+      "A": 1667,
+      "B": 1792
+    },
+    "shape_calls": {
+      "A": 0,
+      "B": 0
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/1/65/280",
+    "baseline_ns": 9138.211,
+    "candidate_ns": 9111.716,
+    "paired_percent": 0.005394929051205644,
+    "wins": 3,
+    "losses": 4,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -1.176185653217099,
+    "paired_percent_max": 16.012524360298674,
+    "p50_ns": {
+      "A": 9083,
+      "B": 9042
+    },
+    "p95_ns": {
+      "A": 10042,
+      "B": 10083
+    },
+    "p99_ns": {
+      "A": 11583,
+      "B": 12292
+    },
+    "shape_calls": {
+      "A": 1000,
+      "B": 1000
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/1/65/480",
+    "baseline_ns": 15256.418,
+    "candidate_ns": 15421.297,
+    "paired_percent": 1.0807189472653356,
+    "wins": 1,
+    "losses": 6,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -0.8242743668966046,
+    "paired_percent_max": 2.5399833706610364,
+    "p50_ns": {
+      "A": 15083,
+      "B": 15291
+    },
+    "p95_ns": {
+      "A": 16500,
+      "B": 16958
+    },
+    "p99_ns": {
+      "A": 18583,
+      "B": 18833
+    },
+    "shape_calls": {
+      "A": 2000,
+      "B": 2000
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/16/32/280",
+    "baseline_ns": 19149.992,
+    "candidate_ns": 19245.203,
+    "paired_percent": 0.10194415748294716,
+    "wins": 3,
+    "losses": 4,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -13.490910820296198,
+    "paired_percent_max": 1.1879464217425362,
+    "p50_ns": {
+      "A": 18875,
+      "B": 18958
+    },
+    "p95_ns": {
+      "A": 21375,
+      "B": 21334
+    },
+    "p99_ns": {
+      "A": 22875,
+      "B": 22959
+    },
+    "shape_calls": {
+      "A": 0,
+      "B": 0
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/16/32/480",
+    "baseline_ns": 19127.999,
+    "candidate_ns": 19181.16,
+    "paired_percent": -0.21301539040508022,
+    "wins": 4,
+    "losses": 3,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -0.6207576703397555,
+    "paired_percent_max": 0.7038373433624789,
+    "p50_ns": {
+      "A": 18875,
+      "B": 18958
+    },
+    "p95_ns": {
+      "A": 21209,
+      "B": 21333
+    },
+    "p99_ns": {
+      "A": 23083,
+      "B": 22875
+    },
+    "shape_calls": {
+      "A": 0,
+      "B": 0
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/16/40/280",
+    "baseline_ns": 20152.619,
+    "candidate_ns": 20311.777,
+    "paired_percent": 0.677486344500422,
+    "wins": 1,
+    "losses": 6,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -0.24664656629979076,
+    "paired_percent_max": 1.7231407987220004,
+    "p50_ns": {
+      "A": 19917,
+      "B": 20042
+    },
+    "p95_ns": {
+      "A": 22000,
+      "B": 22333
+    },
+    "p99_ns": {
+      "A": 24042,
+      "B": 24209
+    },
+    "shape_calls": {
+      "A": 0,
+      "B": 0
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/16/40/480",
+    "baseline_ns": 20207.249,
+    "candidate_ns": 20349.352,
+    "paired_percent": 0.7793101435424221,
+    "wins": 1,
+    "losses": 6,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -0.15103842107377918,
+    "paired_percent_max": 1.4623564048723336,
+    "p50_ns": {
+      "A": 19958,
+      "B": 20125
+    },
+    "p95_ns": {
+      "A": 22459,
+      "B": 22375
+    },
+    "p99_ns": {
+      "A": 24000,
+      "B": 24208
+    },
+    "shape_calls": {
+      "A": 0,
+      "B": 0
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/16/64/280",
+    "baseline_ns": 33058.958,
+    "candidate_ns": 33095.992,
+    "paired_percent": 0.10169407033335798,
+    "wins": 3,
+    "losses": 4,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -0.46310392499704367,
+    "paired_percent_max": 0.9107391762662953,
+    "p50_ns": {
+      "A": 32792,
+      "B": 32875
+    },
+    "p95_ns": {
+      "A": 36292,
+      "B": 36209
+    },
+    "p99_ns": {
+      "A": 38958,
+      "B": 39083
+    },
+    "shape_calls": {
+      "A": 0,
+      "B": 0
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/16/64/480",
+    "baseline_ns": 23620.883,
+    "candidate_ns": 23671.789,
+    "paired_percent": 0.46787668892751544,
+    "wins": 3,
+    "losses": 4,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -0.6789134351239956,
+    "paired_percent_max": 1.0274800316729893,
+    "p50_ns": {
+      "A": 23333,
+      "B": 23375
+    },
+    "p95_ns": {
+      "A": 25916,
+      "B": 26208
+    },
+    "p99_ns": {
+      "A": 27834,
+      "B": 28000
+    },
+    "shape_calls": {
+      "A": 0,
+      "B": 0
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/16/65/280",
+    "baseline_ns": 146943.558,
+    "candidate_ns": 146650.102,
+    "paired_percent": -0.291033765306592,
+    "wins": 5,
+    "losses": 2,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -1.8056525166868842,
+    "paired_percent_max": 12.842930050371049,
+    "p50_ns": {
+      "A": 145417,
+      "B": 145416
+    },
+    "p95_ns": {
+      "A": 155041,
+      "B": 155250
+    },
+    "p99_ns": {
+      "A": 162791,
+      "B": 161459
+    },
+    "shape_calls": {
+      "A": 16000,
+      "B": 16000
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/16/65/480",
+    "baseline_ns": 246301.046,
+    "candidate_ns": 246022.218,
+    "paired_percent": 0.07153827301060733,
+    "wins": 3,
+    "losses": 4,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -9.481040692014309,
+    "paired_percent_max": 1.5550394581340221,
+    "p50_ns": {
+      "A": 244416,
+      "B": 244333
+    },
+    "p95_ns": {
+      "A": 257959,
+      "B": 257959
+    },
+    "p99_ns": {
+      "A": 270375,
+      "B": 267166
+    },
+    "shape_calls": {
+      "A": 32000,
+      "B": 32000
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/8/32/280",
+    "baseline_ns": 9401.506,
+    "candidate_ns": 9451.046,
+    "paired_percent": 0.7002652486012506,
+    "wins": 2,
+    "losses": 5,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -0.3249076234732584,
+    "paired_percent_max": 1.7932120858540346,
+    "p50_ns": {
+      "A": 9292,
+      "B": 9334
+    },
+    "p95_ns": {
+      "A": 10167,
+      "B": 10334
+    },
+    "p99_ns": {
+      "A": 11250,
+      "B": 11333
+    },
+    "shape_calls": {
+      "A": 0,
+      "B": 0
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/8/32/480",
+    "baseline_ns": 9415.881,
+    "candidate_ns": 9461.455,
+    "paired_percent": 0.6248416013990843,
+    "wins": 2,
+    "losses": 5,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -0.13056913790023827,
+    "paired_percent_max": 2.392527733670513,
+    "p50_ns": {
+      "A": 9291,
+      "B": 9375
+    },
+    "p95_ns": {
+      "A": 10500,
+      "B": 10500
+    },
+    "p99_ns": {
+      "A": 11541,
+      "B": 11250
+    },
+    "shape_calls": {
+      "A": 0,
+      "B": 0
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/8/40/280",
+    "baseline_ns": 9966.17,
+    "candidate_ns": 10023.458,
+    "paired_percent": 0.5748246317291539,
+    "wins": 1,
+    "losses": 6,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -0.7306696936522861,
+    "paired_percent_max": 3.8635665168260447,
+    "p50_ns": {
+      "A": 9833,
+      "B": 9875
+    },
+    "p95_ns": {
+      "A": 10917,
+      "B": 10917
+    },
+    "p99_ns": {
+      "A": 12000,
+      "B": 12000
+    },
+    "shape_calls": {
+      "A": 0,
+      "B": 0
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/8/40/480",
+    "baseline_ns": 9930.221,
+    "candidate_ns": 10021.359,
+    "paired_percent": 1.12188929247925,
+    "wins": 3,
+    "losses": 4,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -1.9227395611732256,
+    "paired_percent_max": 2.2318536515954834,
+    "p50_ns": {
+      "A": 9833,
+      "B": 9875
+    },
+    "p95_ns": {
+      "A": 10625,
+      "B": 10667
+    },
+    "p99_ns": {
+      "A": 11917,
+      "B": 11958
+    },
+    "shape_calls": {
+      "A": 0,
+      "B": 0
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/8/64/280",
+    "baseline_ns": 16372.074,
+    "candidate_ns": 16427.635,
+    "paired_percent": -0.17096995046567143,
+    "wins": 4,
+    "losses": 3,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -0.5394490643030436,
+    "paired_percent_max": 1.0427901825946995,
+    "p50_ns": {
+      "A": 16292,
+      "B": 16292
+    },
+    "p95_ns": {
+      "A": 17916,
+      "B": 17917
+    },
+    "p99_ns": {
+      "A": 19750,
+      "B": 19625
+    },
+    "shape_calls": {
+      "A": 0,
+      "B": 0
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/8/64/480",
+    "baseline_ns": 11691.654,
+    "candidate_ns": 11684.866,
+    "paired_percent": -0.25272482231211146,
+    "wins": 4,
+    "losses": 3,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -2.02928255987177,
+    "paired_percent_max": 1.5895122514789861,
+    "p50_ns": {
+      "A": 11542,
+      "B": 11541
+    },
+    "p95_ns": {
+      "A": 12625,
+      "B": 13209
+    },
+    "p99_ns": {
+      "A": 15042,
+      "B": 14000
+    },
+    "shape_calls": {
+      "A": 0,
+      "B": 0
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/8/65/280",
+    "baseline_ns": 72882.748,
+    "candidate_ns": 73190.01,
+    "paired_percent": 0.19096232063984253,
+    "wins": 1,
+    "losses": 6,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -0.27082403643726716,
+    "paired_percent_max": 3.2617983547489127,
+    "p50_ns": {
+      "A": 72167,
+      "B": 72334
+    },
+    "p95_ns": {
+      "A": 78209,
+      "B": 78875
+    },
+    "p99_ns": {
+      "A": 82417,
+      "B": 82667
+    },
+    "shape_calls": {
+      "A": 8000,
+      "B": 8000
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  },
+  {
+    "name": "chrome/8/65/480",
+    "baseline_ns": 122502.588,
+    "candidate_ns": 122939.576,
+    "paired_percent": 0.5931308597347584,
+    "wins": 3,
+    "losses": 4,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -0.9218659690564013,
+    "paired_percent_max": 3.6924527435472365,
+    "p50_ns": {
+      "A": 121458,
+      "B": 121834
+    },
+    "p95_ns": {
+      "A": 130583,
+      "B": 130250
+    },
+    "p99_ns": {
+      "A": 138000,
+      "B": 141041
+    },
+    "shape_calls": {
+      "A": 16000,
+      "B": 16000
+    },
+    "raster_attempts": {
+      "A": 0,
+      "B": 0
+    },
+    "shaping_cache_bytes": {
+      "A": 1012224,
+      "B": 1010688
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    }
+  }
+]

@@ -18,7 +18,6 @@ pub fn capture(projection: Projection) Geometry {
     const slot = projection.tab orelse return geometry;
     const model = projection.model;
     const tab_id = model.tabs.location[slot].tab_id;
-    geometry.location = if (model.panes.countIn(tab_id) == 0) null else model.tabs.location[slot];
     geometry.layout_revision = model.tabs.layout[slot].currentRevision();
     var panes = model.panes.iterateConst(tab_id);
     while (panes.next()) |pane| {
@@ -29,6 +28,10 @@ pub fn capture(projection: Projection) Geometry {
             .rows = pane.buffer.h,
         };
         geometry.len += 1;
+    }
+
+    if (geometry.len != 0) {
+        geometry.location = model.tabs.location[slot];
     }
 
     return geometry;

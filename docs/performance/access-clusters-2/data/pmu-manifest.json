@@ -1,0 +1,16 @@
+{
+  "mode": "l1d_miss_sampling",
+  "binary": "/private/tmp/telar-access-clusters-2.QhXJGE/A/bin/telar-dod-probe",
+  "binary_sha256": "ca844dd7bbb9d4110881475277c78c720927e6f75a3b07c290f37fbfe41807cf",
+  "original_template": "/Applications/Xcode.app/Contents/Applications/Instruments.app/Contents/Resources/templates/CPU Counters.tracetemplate",
+  "original_template_sha256": "e05c9cebabea6e4afcc9b0ede2dcf9afe75517ae794d1a0bf5b38bd897174740",
+  "template_sha256": "ef555259b318c9ca8e4dd22c976c32a80e9a80dcbe782e5f2ba6a68275035d8a",
+  "registry": "/Applications/Xcode.app/Contents/SharedFrameworks/RecountDT.framework/Versions/A/Resources/Analysis/bottleneck.json",
+  "registry_sha256": "bbe95a2c77e6f8af05ed8625d0cfb04eb8535099799118a2d61870aa755bc053",
+  "expected_metrics": [
+    "L1D TLB Misses",
+    "L1D Cache Load Misses",
+    "L1D Cache Store Misses",
+    "Cycles"
+  ]
+}

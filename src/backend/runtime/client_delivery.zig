@@ -186,7 +186,7 @@ fn pump(model: *RuntimeModel, session: *Session, sources: Sources) !void {
 /// Reports the link tables that rendering this client's panes cut to
 /// `text_metadata.max_links`; the links that fit were kept.
 fn reportDroppedLinks(model: *RuntimeModel, client: usize) void {
-    for (model.attachments.record[client]) |slot| {
+    for (&model.attachments.record[client]) |slot| {
         const attachment = slot orelse continue;
         const pane_dropped = attachment.pane.text_metadata.takeDropped();
         const projection_dropped = attachment.cells.projected_text_metadata.takeDropped();

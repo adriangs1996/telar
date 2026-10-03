@@ -1,0 +1,1732 @@
+test
++- test-libraries
+   +- run test lib-imaging w
+[wuffs_png] (warn): decode err=base: not enough data
+[wuffs_png] (warn): decode err=png: bad header
+[wuffs_png] (warn): decode err=base: not enough data
+[wuffs_png] (warn): decode err=base: not enough data
+[wuffs_png] (warn): decode err=png: bad header
+[wuffs_png] (warn): decode err=zlib: truncated input
+[wuffs_png] (warn): decode err=base: too much data
+failed command: ./.zig-cache/o/54ad7510086d3139c4147aec458240ed/lib-imaging --cache-dir=./.zig-cache --seed=0xcd6ac0c5 --listen=-
+
+✔ each Codex session reports to its own pane and a shared server reaches none (3679.660125ms)
+✔ a Codex started without --no-daemon that works without hooks says so on its card (6077.84075ms)
+✔ a Codex whose hooks reach its pane without --no-daemon shows no note and resumes without the flag (2185.288958ms)
+✔ a hook payload past the input limit still reports its event and names the limit (773.482833ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 12722.395542
+✔ an agent walks from the root help to every command's help without knowing any name (2380.423834ms)
+✔ help reads the same wherever the flag sits, including nested words and a window's --client (81.981167ms)
+✔ an unknown or incomplete command line answers with the help to read (28.360792ms)
+✔ machine-prefixed help is local even when the machine is unknown (151.220708ms)
+✔ a --help after -- belongs to the child and is never telar's help (10.61825ms)
+✔ the bundled skills print offline and point at the help (19.688083ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2675.355834
+✔ claude: skills upgrade from the legacy coordinator and preserve a foreign general skill (39.307208ms)
+✔ codex: skills upgrade from the legacy coordinator and preserve a foreign general skill (37.896667ms)
+✔ cursor: skills upgrade from the legacy coordinator and preserve a foreign general skill (37.031458ms)
+✔ pi: install writes the extension owner-only once, status follows it and uninstall removes it (70.167625ms)
+✔ pi: a skill telar did not write is reported as foreign and never replaced or removed (31.812167ms)
+✔ pi: a file telar did not write is reported and never replaced or removed (28.162125ms)
+✔ pi: --settings takes an absolute path and refuses a relative one (45.898333ms)
+✔ opencode: install writes the plugin owner-only once, status follows it and uninstall removes it (67.156542ms)
+✔ opencode: a skill telar did not write is reported as foreign and never replaced or removed (29.518083ms)
+✔ opencode: a file telar did not write is reported and never replaced or removed (27.313292ms)
+✔ opencode: --settings takes an absolute path and refuses a relative one (46.029ms)
+✔ opencode: without XDG_CONFIG_HOME the plugin goes to ~/.config/opencode/plugins (11.071958ms)
+✔ pi: PI_CODING_AGENT_DIR moves the extension (10.617375ms)
+✔ claude: CLAUDE_CONFIG_DIR holds the hooks; hooks left in ~/.claude are reported and removed only on request (59.346708ms)
+✔ claude: a trailing slash or a symlink to ~/.claude names the same settings (29.370083ms)
+✔ claude: uninstall never removes a skill telar did not write, nor hooks the user keeps in telar's groups (19.152083ms)
+✔ claude: a settings file that is a symlink is written through and keeps its mode (11.3865ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 605.159916
+✔ a limit a client reports is listed by telar diagnostics limits, and the runtime logs to its own file (282.496542ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 284.518375
+✔ a command line longer than 64 words is read whole and named by its own bound (20.899958ms)
+✔ a launch past the old 8 KiB request buffer creates its workspace (48.513583ms)
+✔ 64 KiB reaches a pane and one byte more is refused by name (63.123125ms)
+✔ a read asks for 2000 rows and no more (67.619542ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 203.859416
+test
++- run test
+   +- run parallel test prerequisites
+      +- run test w
+[limits] (warn): Limit reached: prompt.tab_label_bytes: 129 bytes; limit 128
+[limits] (warn): Limit reached: bars.max_bar_actions: 17 click actions; limit 4
+[limits] (warn): Limit reached: render.frame_quad_budget: limit 256 quads reached
+[limits] (warn): window_draw stopped at a limit: PresentationIdExhausted
+[limits] (warn): Limit reached: InboxFull: limit reached
+[limits] (warn): window_draw stopped at a limit: InboxFull
+[limits] (warn): Limit reached: picks.max_items: 5000 options; limit 4096
+[limits] (warn): Limit reached: picks.max_pick_output_bytes: 262150 output bytes; limit 262144
+[limits] (warn): Limit reached: picks.max_value_bytes: 600 value bytes; limit 512
+[limits] (warn): Limit reached: attachments.max_marker_navigation_steps: 121 editor steps; limit 120
+[limits] (warn): Limit reached: attachments.max_removal_keys: 257 keys; limit 256
+[limits] (warn): Limit reached: attachments.path_marker.max_cells: limit 512 editor steps reached
+[limits] (warn): Limit reached: bars.max_bar_actions: 33 click actions; limit 32
+[limits] (warn): Limit reached: attachments.max_items: 5 previews; limit 4
+[limits] (warn): Limit reached: attachments.max_pixels: 84934656 pixels; limit 37748736
+[limits] (warn): Limit reached: ClipboardImageTooLarge: limit reached
+[limits] (warn): Limit reached: tabs.one_operation_in_flight: limit 1 tab operations reached
+failed command: ./.zig-cache/o/50a315199e0d2948ab4d590101b1471d/test --cache-dir=./.zig-cache --seed=0xcd6ac0c5 --listen=-
+
+test
++- run test
+   +- run parallel test prerequisites
+      +- run test w
+[limits] (warn): agents.capacity: limit 64 agents reached
+[limits] (warn): agents.max_tasks: 129 tasks; limit 128
+[limits] (warn): agents.capacity: limit 64 agents reached
+[limits] (warn): agents.restored_agents: limit 64 restored agents reached
+[stream] (warn): unknown cursor shape: not-a-cursor
+[limits] (warn): clients.max_pending_handshakes: limit 16 handshakes reached
+[limits] (warn): clients.max_clients: 33 clients; limit 32
+[limits] (warn): session_checkpoint.snapshot_bytes: limit 43 bytes reached
+[limits] (warn): session_checkpoint.snapshot_bytes: 4096 bytes; limit 1024
+[limits] (warn): session_checkpoint.snapshot_bytes: 4096 bytes; limit 1024 (3 times)
+[limits] (warn): session_checkpoint.snapshot_bytes: 4096 bytes; limit 1024
+[limits] (warn): session_checkpoint.snapshot_bytes: 4096 bytes; limit 1024
+[limits] (warn): history.observer_batch_bytes: 131073 bytes; limit 131072
+[limits] (warn): history.request_queue: limit 64 requests reached
+[limits] (warn): TooManyTabs: limit reached
+[limits] (warn): request query_limits stopped at a limit: TooManyTabs
+[limits] (warn): BufferTooSmall: limit reached
+[limits] (warn): agent_tick stopped at a limit: BufferTooSmall
+[limits] (warn): QueueFull: limit reached
+[limits] (warn): pane_search stopped at a limit: QueueFull
+[limits] (warn): proxy.max_connections: limit 256 connections reached
+[limits] (warn): proxy.max_resolutions: limit 64 host names reached
+[limits] (warn): proxy.max_resolved_addresses: limit 32 addresses reached
+[limits] (warn): proxy.capture.max_total_bytes: limit 1024 bytes reached
+[limits] (warn): plugins.tap.reply_timeout_ms: limit 3000 ms reached
+[limits] (warn): plugins.tap.restart_limit: limit 5 restarts in 10 min reached
+PERF search_complete n=20 p50_ns=430666 p95_ns=792583 p99_ns=932167
+PERF search_incremental_total n=20 p50_ns=638334 p95_ns=966875 p99_ns=1006959
+PERF search_max_turn n=20 p50_ns=26250 p95_ns=137500 p99_ns=140750
+PERF pane_read_2000_rows n=20 p50_ns=624792 p95_ns=1787833 p99_ns=5149541
+PERF path_query_512ki_entries n=5 p50_ns=19826042 p95_ns=27881042 p99_ns=27881042
+PERF graphics_runtime_stage_4k n=20 p50_ns=2750 p95_ns=4333 p99_ns=5959
+PERF graphics_total_prepare_4k n=20 p50_ns=2764208 p95_ns=4247791 p99_ns=4344375
+PERF metrics_pending_ticks ticks=100 elapsed_ns=1480291
+PERF chunk_framing wire_bytes=279 tls_facing_writes=6
+PERF history_burst queued=32 sqlite_queries=1 elapsed_ns=197584
+[limits] (warn): panes.input_queue_capacity: 196608 queued input bytes; limit 131072
+[limits] (warn): pane_search.deadline_ms: limit 1563 ms reached
+[limits] (warn): client_layouts.max_client_layout_clients: 17 client layouts; limit 16
+failed command: ./.zig-cache/o/ad913e1eecdc8aa260637157864f990d/test --cache-dir=./.zig-cache --seed=0xcd6ac0c5 --listen=-
+
+test-gui
++- run test w
+[limits] (warn): Limit reached: PresentationIdExhausted: limit reached
+[limits] (warn): window_draw stopped at a limit: PresentationIdExhausted
+[limits] (warn): Limit reached: protocol.max_cell_count: 175686 cells; limit 130359
+[limits] (warn): Limit reached: QueueFull: limit reached
+[limits] (warn): window_update stopped at a limit: QueueFull
+[limits] (warn): Limit reached: gui.clipboard.max_text_bytes: 1048577 clipboard bytes; limit 1048576
+[limits] (warn): Limit reached: render.display_scale_max: 12 times the logical size; limit 8
+[limits] (warn): Limit reached: chrome.frame_widget_capacity: 79 frame widgets; limit 78
+[limits] (warn): Limit reached: chrome.band_hit_map_capacity: 4 chrome targets; limit 670
+[limits] (warn): Limit reached: gui.widgets.registry_capacity: 5 widget targets; limit 2048
+[limits] (warn): Limit reached: render.frame_quad_budget: 20 quads; limit 35232
+[limits] (warn): Limit reached: protocol.max_cell_count: 130360 cells; limit 130359
+[limits] (warn): Limit reached: gui.native.accessibility_capacity: 296 accessible nodes; limit 256
+[limits] (warn): Limit reached: gui.input.large_events: limit 3 held payloads reached
+[limits] (warn): window_input stopped at a limit: InputPoolFull
+[limits] (warn): Limit reached: gui.input.small_events: limit 8 held events reached
+[limits] (warn): window_input stopped at a limit: InputPoolFull
+[limits] (warn): Limit reached: gui.input.event_pool_bytes: limit 4096 text bytes reached
+[limits] (warn): window_input stopped at a limit: InputTooLarge
+[limits] (warn): Limit reached: gui.input.queue_capacity: limit 1024 input events reached
+[limits] (warn): window_input stopped at a limit: NativeInputFull
+[limits] (warn): Limit reached: gui.host.requests: 5 host requests; limit 4
+[gui_config] (warn): GUI configuration unchanged: config.lua:1: unexpected symbol near <eof>
+[gui_config] (warn): GUI configuration unchanged: cannot prepare GUI font 'Telar-Test-Missing-Family-98a34b1': FontFamilyNotFound
+[gui_config] (warn): GUI configuration unchanged: gui.background_blur must be a number in 0..255
+[gui_config] (warn): GUI configuration unchanged: config.client.editor must be a string
+[wuffs_png] (warn): decode err=base: not enough data
+[limits] (warn): Limit reached: gui.favicons.max_png_side: 4096 pixels per side; limit 2048
+failed command: ./.zig-cache/o/30c4656ff77ae3415f168ba1dc948cd0/test --cache-dir=./.zig-cache --seed=0xcd6ac0c5 --listen=-
+
+.......
+----------------------------------------------------------------------
+Ran 7 tests in 0.010s
+
+OK
+.........
+----------------------------------------------------------------------
+Ran 9 tests in 0.014s
+
+OK
+Shared model boundaries passed
+telar-client module boundaries passed
+....
+----------------------------------------------------------------------
+Ran 4 tests in 0.004s
+
+OK
+Library re-exports passed
+.......
+----------------------------------------------------------------------
+Ran 7 tests in 0.002s
+
+OK
+(node:84558) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ OpenCode does nothing outside a Telar pane (4.711875ms)
+✔ OpenCode reports the idle TUI it loads into (1.528625ms)
+✔ OpenCode reports a turn once per state change, not per repeated status (2.256541ms)
+✔ OpenCode blocks on a permission until it is answered or the turn is interrupted (0.632166ms)
+✔ OpenCode questions block with their questions and a rejection releases them (0.393167ms)
+✔ OpenCode subagent sessions never replace the root, but their prompts block it (1.661084ms)
+✔ OpenCode reports the root session's title once per change (0.4775ms)
+✔ OpenCode titles a resumed session renamed before its first prompt (1.039208ms)
+✔ OpenCode tool calls carry their arguments, directory and exit status (1.070042ms)
+✔ OpenCode renews a running turn and an open prompt, then stops (0.959583ms)
+✔ OpenCode bounds overload, kills hung hooks and keeps the latest state (0.948209ms)
+✔ OpenCode reports the exit from the last disposed instance and waits for delivery (0.377125ms)
+✔ OpenCode keeps an open permission while another tool call of the turn starts (0.335875ms)
+✔ OpenCode reports the idle TUI again when it recreates its instances (0.312667ms)
+✔ OpenCode trims a prompt too large to deliver instead of dropping it (3.171166ms)
+✔ OpenCode trims every question but the first from an oversized prompt (0.920541ms)
+✔ OpenCode renews an open prompt with its request and a reply names the prompt still open (0.4345ms)
+(node:84559) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ Pi delivers lifecycle reports in order with only one child in flight (2.034375ms)
+✔ Pi renews long runs, preserves nested dialogs and stops polling after settlement (0.549791ms)
+✔ Pi bounds overload, kills hung hooks and retains the latest state (3.666583ms)
+✔ Pi repairs a missing settled callback and cancels renewal on shutdown (2.756083ms)
+✔ Pi keeps a tool event past the payload bound with only the short tool input strings (1.574792ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 132.479708
+..............
+----------------------------------------------------------------------
+Ran 14 tests in 8.174s
+
+OK
+test
++- run test w
+[limits] (warn): Images paused in pane 1: shell: GraphicsQuotaExceeded: limit reached
+[limits] (warn): Limit reached: ClientOutboxFull: limit reached
+[limits] (warn): Limit reached: TooManyTabs: limit reached
+[limits] (warn): Images paused in pane 1: shell: GraphicsQuotaExceeded: limit reached
+[limits] (warn): Images paused in pane 2: vim: GraphicsQuotaExceeded: limit reached (3 times)
+[limits] (warn): Images paused in pane 1: shell: GraphicsQuotaExceeded: limit reached
+[limits] (warn): Images paused in pane 1: shell: GraphicsQuotaExceeded: limit reached
+[limits] (warn): Images paused in pane 1: shell: GraphicsQuotaExceeded: limit reached (4 times)
+[limits] (warn): Images paused in pane 1: shell: GraphicsQuotaExceeded: limit reached
+[limits] (warn): Images paused in pane 1: shell: GraphicsQuotaExceeded: limit reached (21 times)
+failed command: ./.zig-cache/o/0fa6aa7da6fe5d650a3ab1e24f0c9cad/test --cache-dir=./.zig-cache --seed=0xcd6ac0c5 --listen=-
+
+runtime work counters: 4 fixtures matched
+Build Summary: 399/399 steps succeeded; 3583/3585 tests passed (2 skipped)
+test success
++- run test 373 pass (373 total) 524ms MaxRSS:26M
+|  +- compile test ReleaseFast native success 24s MaxRSS:1G
+|  |  +- WriteFile brotli cached
+|  |  +- compile lib brotlidec ReleaseFast native cached 43ms MaxRSS:34M
+|  |  +- compile lib brotlidec ReleaseFast native (reused)
+|  |  +- WriteFile nghttp2/nghttp2.h cached
+|  |  +- compile lib nghttp2 ReleaseFast native cached 46ms MaxRSS:34M
+|  |  +- compile lib nghttp2 ReleaseFast native (reused)
+|  |  +- WriteFile  cached
+|  |  +- compile lib simdutf ReleaseFast aarch64-macos.13.0 cached 45ms MaxRSS:34M
+|  |  |  +- WriteFile libc.txt cached
+|  |  +- WriteFile hwy cached
+|  |  +- compile lib highway ReleaseFast aarch64-macos.13.0 cached 53ms MaxRSS:35M
+|  |  |  +- WriteFile libc.txt (reused)
+|  |  +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |  +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |  +- options cached
+|  |  +- options cached
+|  |  +- WriteFile props.zig cached
+|  |  |  +- run exe props-unigen cached
+|  |  |  |  +- compile exe props-unigen Debug native cached 49ms MaxRSS:35M
+|  |  |  |     +- run exe uucode_generate (tables.zig) cached
+|  |  |  |        +- compile exe uucode_generate Debug native cached 55ms MaxRSS:35M
+|  |  |  +- run exe symbols-unigen cached
+|  |  |     +- compile exe symbols-unigen Debug native cached 50ms MaxRSS:35M
+|  |  |        +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|  |  +- WriteFile props.zig (+2 more reused dependencies)
+|  |  +- translate-c wuffs_c.h cached
+|  |  |  +- compile exe translate-c Debug native cached 50ms MaxRSS:35M
+|  |  |  |  +- options cached
+|  |  |  |  +- options cached
+|  |  |  |  +- options cached
+|  |  |  |  +- run exe generate-def (aarch64.zig) cached
+|  |  |  |  |  +- compile exe generate-def Debug native cached 49ms MaxRSS:35M
+|  |  |  |  +- run exe generate-def (amdgcn.zig) cached
+|  |  |  |  |  +- compile exe generate-def Debug native (reused)
+|  |  |  |  +- run exe generate-def (arm.zig) cached
+|  |  |  |  |  +- compile exe generate-def Debug native (reused)
+|  |  |  |  +- run exe generate-def (bpf.zig) cached
+|  |  |  |  |  +- compile exe generate-def Debug native (reused)
+|  |  |  |  +- run exe generate-def (common.zig) cached
+|  |  |  |  |  +- compile exe generate-def Debug native (reused)
+|  |  |  |  +- run exe generate-def (hexagon.zig) cached
+|  |  |  |  |  +- compile exe generate-def Debug native (reused)
+|  |  |  |  +- run exe generate-def (loongarch.zig) cached
+|  |  |  |  |  +- compile exe generate-def Debug native (reused)
+|  |  |  |  +- run exe generate-def (mips.zig) cached
+|  |  |  |  |  +- compile exe generate-def Debug native (reused)
+|  |  |  |  +- run exe generate-def (neon.zig) cached
+|  |  |  |  |  +- compile exe generate-def Debug native (reused)
+|  |  |  |  +- run exe generate-def (nvptx.zig) cached
+|  |  |  |  |  +- compile exe generate-def Debug native (reused)
+|  |  |  |  +- run exe generate-def (powerpc.zig) cached
+|  |  |  |  |  +- compile exe generate-def Debug native (reused)
+|  |  |  |  +- run exe generate-def (riscv.zig) cached
+|  |  |  |  |  +- compile exe generate-def Debug native (reused)
+|  |  |  |  +- run exe generate-def (s390x.zig) cached
+|  |  |  |  |  +- compile exe generate-def Debug native (reused)
+|  |  |  |  +- run exe generate-def (ve.zig) cached
+|  |  |  |  |  +- compile exe generate-def Debug native (reused)
+|  |  |  |  +- run exe generate-def (wasm.zig) cached
+|  |  |  |  |  +- compile exe generate-def Debug native (reused)
+|  |  |  |  +- run exe generate-def (x86_64.zig) cached
+|  |  |  |  |  +- compile exe generate-def Debug native (reused)
+|  |  |  |  +- run exe generate-def (x86.zig) cached
+|  |  |  |  |  +- compile exe generate-def Debug native (reused)
+|  |  |  |  +- run exe generate-def (xcore.zig) cached
+|  |  |  |     +- compile exe generate-def Debug native (reused)
+|  |  |  +- WriteFile libc.txt (reused)
+|  |  |  +- WriteFile wuffs_c.h cached
+|  |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|  +- run python3 success 473ms
+|     +- run python3 success 63ms
++- run test 259 pass (259 total) 4s MaxRSS:704M
+|  +- compile test ReleaseFast native success 32s MaxRSS:1G
+|  |  +- WriteFile cached
+|  |  +- compile lib lua ReleaseFast native cached 53ms MaxRSS:34M
+|  |  +- compile lib lua ReleaseFast native (reused)
+|  |  +- WriteFile brotli (reused)
+|  |  +- compile lib brotlidec ReleaseFast native (reused)
+|  |  +- compile lib brotlidec ReleaseFast native (reused)
+|  |  +- WriteFile nghttp2/nghttp2.h (reused)
+|  |  +- compile lib nghttp2 ReleaseFast native (reused)
+|  |  +- compile lib nghttp2 ReleaseFast native (reused)
+|  |  +- WriteFile  (reused)
+|  |  +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |  +- WriteFile hwy (reused)
+|  |  +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |  +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |  +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |  +- options (reused)
+|  |  +- options (reused)
+|  |  +- WriteFile props.zig (+2 more reused dependencies)
+|  |  +- WriteFile props.zig (+2 more reused dependencies)
+|  |  +- translate-c wuffs_c.h (+3 more reused dependencies)
+|  |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|  +- run python3 success 255ms
+|     +- run python3 success 65ms
+|     +- run python3 (+1 more reused dependencies)
++- run test 8 pass (8 total) 387ms MaxRSS:10M
+|  +- compile test ReleaseFast native success 6s MaxRSS:444M
+|     +- WriteFile brotli (reused)
+|     +- compile lib brotlidec ReleaseFast native (reused)
+|     +- compile lib brotlidec ReleaseFast native (reused)
+|     +- WriteFile nghttp2/nghttp2.h (reused)
+|     +- compile lib nghttp2 ReleaseFast native (reused)
+|     +- compile lib nghttp2 ReleaseFast native (reused)
+|     +- WriteFile (reused)
+|     +- compile lib lua ReleaseFast native (reused)
+|     +- compile lib lua ReleaseFast native (reused)
+|     +- WriteFile  (reused)
+|     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- WriteFile hwy (reused)
+|     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- options (reused)
+|     +- options (reused)
+|     +- WriteFile props.zig (+2 more reused dependencies)
+|     +- WriteFile props.zig (+2 more reused dependencies)
+|     +- translate-c wuffs_c.h (+3 more reused dependencies)
+|     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
++- run test 12 pass (12 total) 684ms MaxRSS:29M
+|  +- compile test ReleaseFast native success 5s MaxRSS:397M
+|     +- WriteFile (reused)
+|     +- compile lib lua ReleaseFast native (reused)
+|     +- compile lib lua ReleaseFast native (reused)
+|     +- WriteFile brotli (reused)
+|     +- compile lib brotlidec ReleaseFast native (reused)
+|     +- compile lib brotlidec ReleaseFast native (reused)
+|     +- WriteFile nghttp2/nghttp2.h (reused)
+|     +- compile lib nghttp2 ReleaseFast native (reused)
+|     +- compile lib nghttp2 ReleaseFast native (reused)
+|     +- WriteFile  (reused)
+|     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- WriteFile hwy (reused)
+|     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- options (reused)
+|     +- options (reused)
+|     +- WriteFile props.zig (+2 more reused dependencies)
+|     +- WriteFile props.zig (+2 more reused dependencies)
+|     +- translate-c wuffs_c.h (+3 more reused dependencies)
+|     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
++- test-libraries success
+|  +- run test lib-vtscan 18 pass (18 total) 353ms MaxRSS:1M
+|  |  +- compile test lib-vtscan ReleaseFast native success 4s MaxRSS:329M
+|  +- run test lib-animate 15 pass (15 total) 309ms MaxRSS:1M
+|  |  +- compile test lib-animate ReleaseFast native success 4s MaxRSS:331M
+|  +- run test lib-gfx 14 pass (14 total) 374ms MaxRSS:1M
+|  |  +- compile test lib-gfx ReleaseFast native success 5s MaxRSS:340M
+|  +- run test lib-jsonl 10 pass (10 total) 582ms MaxRSS:5M
+|  |  +- compile test lib-jsonl ReleaseFast native success 6s MaxRSS:375M
+|  +- run test lib-privatefile 11 pass (11 total) 379ms MaxRSS:1M
+|  |  +- compile test lib-privatefile ReleaseFast native success 5s MaxRSS:335M
+|  +- run test lib-localsocket 23 pass (23 total) 379ms MaxRSS:1M
+|  |  +- compile test lib-localsocket ReleaseFast native success 5s MaxRSS:366M
+|  +- run test lib-mailbox 9 pass (9 total) 672ms MaxRSS:2M
+|  |  +- compile test lib-mailbox ReleaseFast native success 5s MaxRSS:338M
+|  +- run test lib-slabheap 4 pass (4 total) 494ms MaxRSS:2M
+|  |  +- compile test lib-slabheap ReleaseFast native success 4s MaxRSS:331M
+|  +- run test lib-pacing 32 pass (32 total) 309ms MaxRSS:1M
+|  |  +- compile test lib-pacing ReleaseFast native success 5s MaxRSS:336M
+|  +- run test lib-pi_rpc 12 pass (12 total) 562ms MaxRSS:3M
+|  |  +- compile test lib-pi_rpc ReleaseFast native success 5s MaxRSS:366M
+|  +- run test lib-pty 39 pass (39 total) 730ms MaxRSS:2M
+|  |  +- compile test lib-pty ReleaseFast native success 5s MaxRSS:360M
+|  +- run test lib-cblocks 4 pass (4 total) 394ms MaxRSS:1M
+|  |  +- compile test lib-cblocks ReleaseFast native success 4s MaxRSS:325M
+|  +- run test lib-sqlite 6 pass (6 total) 506ms MaxRSS:4M
+|  |  +- compile test lib-sqlite ReleaseFast native success 4s MaxRSS:330M
+|  +- run test lib-unicode success 519ms MaxRSS:1M
+|  |  +- compile test lib-unicode ReleaseFast native success 7s MaxRSS:364M
+|  |     +- WriteFile  (reused)
+|  |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- WriteFile hwy (reused)
+|  |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- options (reused)
+|  |     +- options (reused)
+|  |     +- WriteFile props.zig (+2 more reused dependencies)
+|  |     +- WriteFile props.zig (+2 more reused dependencies)
+|  |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|  +- run test lib-cellgrid 49 pass (49 total) 382ms MaxRSS:1M
+|  |  +- compile test lib-cellgrid ReleaseFast native success 6s MaxRSS:388M
+|  |     +- WriteFile  (reused)
+|  |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- WriteFile hwy (reused)
+|  |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- options (reused)
+|  |     +- options (reused)
+|  |     +- WriteFile props.zig (+2 more reused dependencies)
+|  |     +- WriteFile props.zig (+2 more reused dependencies)
+|  |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|  +- run test lib-editorremote 9 pass (9 total) 460ms MaxRSS:11M
+|  |  +- compile test lib-editorremote ReleaseFast native success 5s MaxRSS:352M
+|  +- run test lib-h2frames 5 pass (5 total) 309ms MaxRSS:1M
+|  |  +- compile test lib-h2frames ReleaseFast native success 4s MaxRSS:325M
+|  +- run test lib-localca 8 pass (8 total) 326ms MaxRSS:2M
+|  |  +- compile test lib-localca ReleaseFast native success 11s MaxRSS:538M
+|  +- run test lib-kitty_protocol 16 pass (16 total) 318ms MaxRSS:1M
+|  |  +- compile test lib-kitty_protocol ReleaseFast native success 5s MaxRSS:337M
+|  +- run test lib-keyinput 31 pass (31 total) 314ms MaxRSS:1M
+|  |  +- compile test lib-keyinput ReleaseFast native success 8s MaxRSS:416M
+|  |     +- WriteFile  (reused)
+|  |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- WriteFile hwy (reused)
+|  |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- options (reused)
+|  |     +- options (reused)
+|  |     +- WriteFile props.zig (+2 more reused dependencies)
+|  |     +- WriteFile props.zig (+2 more reused dependencies)
+|  |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|  +- run test lib-textfield 20 pass (20 total) 322ms MaxRSS:1M
+|  |  +- compile test lib-textfield ReleaseFast native success 7s MaxRSS:310M
+|  |     +- WriteFile  (reused)
+|  |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- WriteFile hwy (reused)
+|  |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- options (reused)
+|  |     +- options (reused)
+|  |     +- WriteFile props.zig (+2 more reused dependencies)
+|  |     +- WriteFile props.zig (+2 more reused dependencies)
+|  |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|  +- run test lib-console 55 pass (55 total) 317ms MaxRSS:2M
+|  |  +- compile test lib-console ReleaseFast native success 8s MaxRSS:450M
+|  |     +- WriteFile  (reused)
+|  |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- WriteFile hwy (reused)
+|  |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- options (reused)
+|  |     +- options (reused)
+|  |     +- WriteFile props.zig (+2 more reused dependencies)
+|  |     +- WriteFile props.zig (+2 more reused dependencies)
+|  |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|  +- run test lib-textraster 4 pass (4 total) 392ms MaxRSS:8M
+|  |  +- compile test lib-textraster ReleaseFast native success 21s MaxRSS:1G
+|  +- run test lib-cellglyphs 22 pass (22 total) 441ms MaxRSS:1M
+|  |  +- compile test lib-cellglyphs ReleaseFast native success 6s MaxRSS:371M
+|  +- run test lib-urlscan 19 pass (19 total) 308ms MaxRSS:1M
+|  |  +- compile test lib-urlscan ReleaseFast native success 4s MaxRSS:332M
+|  +- run test lib-fuzzymatch 6 pass (6 total) 561ms MaxRSS:1M
+|  |  +- compile test lib-fuzzymatch ReleaseFast native success 4s MaxRSS:326M
+|  +- run test lib-syntaxhl 3 pass (3 total) 303ms MaxRSS:1M
+|  |  +- compile test lib-syntaxhl ReleaseFast native success 4s MaxRSS:324M
+|  +- run test lib-mdinline 15 pass (15 total) 341ms MaxRSS:1M
+|  |  +- compile test lib-mdinline ReleaseFast native success 4s MaxRSS:335M
+|  +- run test lib-bytecodec 3 pass (3 total) 306ms MaxRSS:1M
+|  |  +- compile test lib-bytecodec ReleaseFast native success 4s MaxRSS:324M
+|  +- run test lib-cellcodec 7 pass (7 total) 304ms MaxRSS:1M
+|  |  +- compile test lib-cellcodec ReleaseFast native success 7s MaxRSS:392M
+|  |     +- WriteFile  (reused)
+|  |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- WriteFile hwy (reused)
+|  |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- options (reused)
+|  |     +- options (reused)
+|  |     +- WriteFile props.zig (+2 more reused dependencies)
+|  |     +- WriteFile props.zig (+2 more reused dependencies)
+|  |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|  +- run test lib-dropqueue 7 pass (7 total) 348ms MaxRSS:2M
+|  |  +- compile test lib-dropqueue ReleaseFast native success 4s MaxRSS:329M
+|  +- run test lib-exchangecapture 17 pass (17 total) 310ms MaxRSS:7M
+|  |  +- compile test lib-exchangecapture ReleaseFast native success 6s MaxRSS:385M
+|  |     +- WriteFile brotli (reused)
+|  |     +- compile lib brotlidec ReleaseFast native (reused)
+|  |     +- compile lib brotlidec ReleaseFast native (reused)
+|  +- run test lib-httprelay 69 pass (69 total) 363ms MaxRSS:3M
+|  |  +- compile test lib-httprelay ReleaseFast native success 7s MaxRSS:394M
+|  |     +- WriteFile nghttp2/nghttp2.h (reused)
+|  |     +- compile lib nghttp2 ReleaseFast native (reused)
+|  |     +- compile lib nghttp2 ReleaseFast native (reused)
+|  +- run test lib-childoutput 6 pass (6 total) 850ms MaxRSS:2M
+|  |  +- compile test lib-childoutput ReleaseFast native success 4s MaxRSS:331M
+|  +- run test lib-gitstatus 18 pass (18 total) 1s MaxRSS:10M
+|  |  +- compile test lib-gitstatus ReleaseFast native success 5s MaxRSS:361M
+|  +- run test lib-proclineage 3 pass (3 total) 302ms MaxRSS:1M
+|  |  +- compile test lib-proclineage ReleaseFast native success 4s MaxRSS:332M
+|  +- run test lib-hostmetrics 5 pass, 1 skip (6 total) 569ms MaxRSS:6M
+|  |  +- compile test lib-hostmetrics ReleaseFast native success 4s MaxRSS:324M
+|  +- run test lib-vtgrid 31 pass (31 total) 367ms MaxRSS:3M
+|  |  +- compile test lib-vtgrid ReleaseFast native success 20s MaxRSS:710M
+|  |     +- WriteFile  (reused)
+|  |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- WriteFile hwy (reused)
+|  |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- options (reused)
+|  |     +- options (reused)
+|  |     +- WriteFile props.zig (+2 more reused dependencies)
+|  |     +- WriteFile props.zig (+2 more reused dependencies)
+|  |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|  +- run test lib-cmdcapture 27 pass (27 total) 341ms MaxRSS:6M
+|  |  +- compile test lib-cmdcapture ReleaseFast native success 19s MaxRSS:781M
+|  |     +- WriteFile  (reused)
+|  |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- WriteFile hwy (reused)
+|  |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- options (reused)
+|  |     +- options (reused)
+|  |     +- WriteFile props.zig (+2 more reused dependencies)
+|  |     +- WriteFile props.zig (+2 more reused dependencies)
+|  |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|  +- run test lib-agentfiles 9 pass (9 total) 305ms MaxRSS:1M
+|  |  +- compile test lib-agentfiles ReleaseFast native success 5s MaxRSS:345M
+|  +- run test lib-imaging 21 pass (21 total) 329ms MaxRSS:3M
+|  |  +- compile test lib-imaging ReleaseFast native success 9s MaxRSS:359M
+|  |     +- translate-c wuffs_c.h (+3 more reused dependencies)
+|  +- run test lib-mermaid 11 pass (11 total) 7s MaxRSS:2M
+|  |  +- compile test lib-mermaid ReleaseFast native success 5s MaxRSS:352M
+|  +- run test lib-touchtrace 1 pass (1 total) 367ms MaxRSS:1M
+|     +- compile test lib-touchtrace ReleaseFast native success 4s MaxRSS:321M
++- run python3 success 245ms
+|  +- run python3 success 49ms
++- run python3 success 51ms
++- test-bench-placement success
+|  +- run test 9 pass (9 total) 333ms MaxRSS:9M
+|  |  +- compile test ReleaseFast native success 5s MaxRSS:341M
+|  +- run python3 success 8s
++- run exe codestyle success 158ms
+|  +- compile exe codestyle ReleaseFast native success 8s MaxRSS:435M
++- run test 63 pass (63 total) 397ms MaxRSS:4M
+|  +- compile test ReleaseFast native success 7s MaxRSS:459M
++- test-integrations success
+|  +- run node success 182ms
+|  +- run node success 652ms
+|  |  +- compile exe telar ReleaseFast native success 1m MaxRSS:1G
+|  |     +- WriteFile  (reused)
+|  |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- WriteFile hwy (reused)
+|  |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |     +- WriteFile brotli (reused)
+|  |     +- compile lib brotlidec ReleaseFast native (reused)
+|  |     +- compile lib brotlidec ReleaseFast native (reused)
+|  |     +- WriteFile nghttp2/nghttp2.h (reused)
+|  |     +- compile lib nghttp2 ReleaseFast native (reused)
+|  |     +- compile lib nghttp2 ReleaseFast native (reused)
+|  |     +- options cached
+|  |     +- WriteFile (reused)
+|  |     +- compile lib lua ReleaseFast native (reused)
+|  |     +- compile lib lua ReleaseFast native (reused)
+|  |     +- options (reused)
+|  |     +- options (reused)
+|  |     +- WriteFile props.zig (+2 more reused dependencies)
+|  |     +- WriteFile props.zig (+2 more reused dependencies)
+|  |     +- options cached
+|  |     |  +- run cargo (diagram-renderer) cached
+|  |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|  |     +- translate-c wuffs_c.h (+3 more reused dependencies)
+|  +- run node success 12s
+|  |  +- compile exe telar ReleaseFast native (+23 more reused dependencies)
+|  +- run node success 2s
+|  |  +- compile exe telar ReleaseFast native (+23 more reused dependencies)
+|  +- run node success 335ms
+|  |  +- compile exe telar ReleaseFast native (+23 more reused dependencies)
+|  +- run node success 253ms
+|     +- compile exe telar ReleaseFast native (+23 more reused dependencies)
++- run test 31 pass (31 total) 4s MaxRSS:106M
+|  +- compile test ReleaseFast native success 50s MaxRSS:1G
+|  |  +- WriteFile (reused)
+|  |  +- compile lib lua ReleaseFast native (reused)
+|  |  +- compile lib lua ReleaseFast native (reused)
+|  |  +- WriteFile brotli (reused)
+|  |  +- compile lib brotlidec ReleaseFast native (reused)
+|  |  +- compile lib brotlidec ReleaseFast native (reused)
+|  |  +- WriteFile nghttp2/nghttp2.h (reused)
+|  |  +- compile lib nghttp2 ReleaseFast native (reused)
+|  |  +- compile lib nghttp2 ReleaseFast native (reused)
+|  |  +- WriteFile  (reused)
+|  |  +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |  +- WriteFile hwy (reused)
+|  |  +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |  +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |  +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  |  +- options (+1 more reused dependencies)
+|  |  +- options (reused)
+|  |  +- options (reused)
+|  |  +- WriteFile props.zig (+2 more reused dependencies)
+|  |  +- WriteFile props.zig (+2 more reused dependencies)
+|  |  +- translate-c wuffs_c.h (+3 more reused dependencies)
+|  |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|  +- run parallel test prerequisites success
+|     +- run test 6 pass (6 total) 339ms MaxRSS:9M
+|     |  +- compile test ReleaseFast native success 5s MaxRSS:477M
+|     |     +- WriteFile (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- WriteFile brotli (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- WriteFile nghttp2/nghttp2.h (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- WriteFile  (reused)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- WriteFile hwy (reused)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- options (+1 more reused dependencies)
+|     |     +- options (reused)
+|     |     +- options (reused)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- translate-c wuffs_c.h (+3 more reused dependencies)
+|     |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|     +- run test 5 pass (5 total) 319ms MaxRSS:8M
+|     |  +- compile test ReleaseFast native success 5s MaxRSS:475M
+|     |     +- WriteFile (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- WriteFile brotli (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- WriteFile nghttp2/nghttp2.h (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- WriteFile  (reused)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- WriteFile hwy (reused)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- options (+1 more reused dependencies)
+|     |     +- options (reused)
+|     |     +- options (reused)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- translate-c wuffs_c.h (+3 more reused dependencies)
+|     |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|     +- run test 7 pass, 1 skip (8 total) 363ms MaxRSS:9M
+|     |  +- compile test ReleaseFast native success 5s MaxRSS:484M
+|     |     +- WriteFile (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- WriteFile brotli (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- WriteFile nghttp2/nghttp2.h (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- WriteFile  (reused)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- WriteFile hwy (reused)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- options (+1 more reused dependencies)
+|     |     +- options (reused)
+|     |     +- options (reused)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- translate-c wuffs_c.h (+3 more reused dependencies)
+|     |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|     +- run test 1 pass (1 total) 318ms MaxRSS:8M
+|     |  +- compile test ReleaseFast native success 5s MaxRSS:476M
+|     |     +- WriteFile (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- WriteFile brotli (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- WriteFile nghttp2/nghttp2.h (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- WriteFile  (reused)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- WriteFile hwy (reused)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- options (+1 more reused dependencies)
+|     |     +- options (reused)
+|     |     +- options (reused)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- translate-c wuffs_c.h (+3 more reused dependencies)
+|     |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|     +- run test 4 pass (4 total) 357ms MaxRSS:22M
+|     |  +- compile test ReleaseFast native success 7s MaxRSS:341M
+|     |     +- WriteFile (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- WriteFile brotli (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- WriteFile nghttp2/nghttp2.h (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- WriteFile  (reused)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- WriteFile hwy (reused)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- options (+1 more reused dependencies)
+|     |     +- options (reused)
+|     |     +- options (reused)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- translate-c wuffs_c.h (+3 more reused dependencies)
+|     |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|     +- run test 18 pass (18 total) 346ms MaxRSS:9M
+|     |  +- compile test ReleaseFast native success 7s MaxRSS:340M
+|     |     +- WriteFile (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- WriteFile brotli (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- WriteFile nghttp2/nghttp2.h (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- WriteFile  (reused)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- WriteFile hwy (reused)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- options (+1 more reused dependencies)
+|     |     +- options (reused)
+|     |     +- options (reused)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- translate-c wuffs_c.h (+3 more reused dependencies)
+|     |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|     +- run test 5 pass (5 total) 424ms MaxRSS:9M
+|     |  +- compile test ReleaseFast native success 6s MaxRSS:478M
+|     |     +- WriteFile (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- WriteFile brotli (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- WriteFile nghttp2/nghttp2.h (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- WriteFile  (reused)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- WriteFile hwy (reused)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- options (+1 more reused dependencies)
+|     |     +- options (reused)
+|     |     +- options (reused)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- translate-c wuffs_c.h (+3 more reused dependencies)
+|     |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|     +- run test 113 pass (113 total) 350ms MaxRSS:18M
+|     |  +- compile test ReleaseFast native success 18s MaxRSS:934M
+|     |     +- WriteFile (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- WriteFile brotli (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- WriteFile nghttp2/nghttp2.h (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- WriteFile  (reused)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- WriteFile hwy (reused)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- options (+1 more reused dependencies)
+|     |     +- options (reused)
+|     |     +- options (reused)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- translate-c wuffs_c.h (+3 more reused dependencies)
+|     |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|     +- run test 3 pass (3 total) 327ms MaxRSS:9M
+|     |  +- compile test ReleaseFast native success 6s MaxRSS:507M
+|     |     +- WriteFile (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- WriteFile brotli (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- WriteFile nghttp2/nghttp2.h (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- WriteFile  (reused)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- WriteFile hwy (reused)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- options (+1 more reused dependencies)
+|     |     +- options (reused)
+|     |     +- options (reused)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- translate-c wuffs_c.h (+3 more reused dependencies)
+|     |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|     +- run test 300 pass (300 total) 2s MaxRSS:128M
+|     |  +- compile test ReleaseFast native success 48s MaxRSS:1G
+|     |     +- WriteFile (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- WriteFile brotli (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- WriteFile nghttp2/nghttp2.h (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- WriteFile  (reused)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- WriteFile hwy (reused)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- options (+1 more reused dependencies)
+|     |     +- options (reused)
+|     |     +- options (reused)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- translate-c wuffs_c.h (+3 more reused dependencies)
+|     |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|     +- run test 87 pass (87 total) 6s MaxRSS:37M
+|     |  +- compile test ReleaseFast native success 24s MaxRSS:813M
+|     |     +- WriteFile (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- WriteFile brotli (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- WriteFile nghttp2/nghttp2.h (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- WriteFile  (reused)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- WriteFile hwy (reused)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- options (+1 more reused dependencies)
+|     |     +- options (reused)
+|     |     +- options (reused)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- translate-c wuffs_c.h (+3 more reused dependencies)
+|     |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|     +- run test 53 pass (53 total) 671ms MaxRSS:22M
+|     |  +- compile test ReleaseFast native success 19s MaxRSS:936M
+|     |     +- WriteFile (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- WriteFile brotli (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- WriteFile nghttp2/nghttp2.h (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- WriteFile  (reused)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- WriteFile hwy (reused)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- options (+1 more reused dependencies)
+|     |     +- options (reused)
+|     |     +- options (reused)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- translate-c wuffs_c.h (+3 more reused dependencies)
+|     |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|     +- run test 690 pass (690 total) 12s MaxRSS:464M
+|     |  +- compile test ReleaseFast native success 1m MaxRSS:2G
+|     |     +- WriteFile (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- WriteFile brotli (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- WriteFile nghttp2/nghttp2.h (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- WriteFile  (reused)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- WriteFile hwy (reused)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- options (+1 more reused dependencies)
+|     |     +- options (reused)
+|     |     +- options (reused)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- translate-c wuffs_c.h (+3 more reused dependencies)
+|     |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|     +- run test 258 pass (258 total) 1s MaxRSS:14M
+|     |  +- compile test ReleaseFast native success 31s MaxRSS:1G
+|     |     +- options (reused)
+|     |     +- WriteFile (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- compile lib lua ReleaseFast native (reused)
+|     |     +- WriteFile brotli (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- compile lib brotlidec ReleaseFast native (reused)
+|     |     +- WriteFile nghttp2/nghttp2.h (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- compile lib nghttp2 ReleaseFast native (reused)
+|     |     +- WriteFile  (reused)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- WriteFile hwy (reused)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|     |     +- options (+1 more reused dependencies)
+|     |     +- options (reused)
+|     |     +- options (reused)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- WriteFile props.zig (+2 more reused dependencies)
+|     |     +- translate-c wuffs_c.h (+3 more reused dependencies)
+|     |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|     +- run test 2 pass (2 total) 343ms MaxRSS:1M
+|     |  +- compile test ReleaseFast native success 4s MaxRSS:326M
+|     +- cross success
+|        +- compile test lib-vtscan-windows-x86_64 Debug x86_64-windows success 799ms MaxRSS:131M
+|        +- compile test lib-animate-windows-x86_64 Debug x86_64-windows success 802ms MaxRSS:131M
+|        +- compile test lib-gfx-windows-x86_64 Debug x86_64-windows success 502ms MaxRSS:130M
+|        +- compile test lib-jsonl-windows-x86_64 Debug x86_64-windows success 715ms MaxRSS:142M
+|        +- compile test lib-mailbox-windows-x86_64 Debug x86_64-windows success 413ms MaxRSS:128M
+|        +- compile test lib-slabheap-windows-x86_64 Debug x86_64-windows success 457ms MaxRSS:129M
+|        +- compile test lib-pacing-windows-x86_64 Debug x86_64-windows success 474ms MaxRSS:130M
+|        +- compile test lib-pi_rpc-windows-x86_64 Debug x86_64-windows success 441ms MaxRSS:132M
+|        +- compile test lib-cblocks-windows-x86_64 Debug x86_64-windows success 416ms MaxRSS:130M
+|        +- compile test lib-cellgrid-windows-x86_64 Debug x86_64-windows success 942ms MaxRSS:130M
+|        +- compile test lib-h2frames-windows-x86_64 Debug x86_64-windows success 454ms MaxRSS:128M
+|        +- compile test lib-kitty_protocol-windows-x86_64 Debug x86_64-windows success 860ms MaxRSS:132M
+|        +- compile test lib-keyinput-windows-x86_64 Debug x86_64-windows success 489ms MaxRSS:132M
+|        +- compile test lib-textfield-windows-x86_64 Debug x86_64-windows success 401ms MaxRSS:129M
+|        +- compile test lib-console-windows-x86_64 Debug x86_64-windows success 543ms MaxRSS:135M
+|        +- compile test lib-textraster-windows-x86_64 Debug x86_64-windows success 7s MaxRSS:732M
+|        +- compile test lib-cellglyphs-windows-x86_64 Debug x86_64-windows success 427ms MaxRSS:132M
+|        +- compile test lib-urlscan-windows-x86_64 Debug x86_64-windows success 663ms MaxRSS:130M
+|        +- compile test lib-fuzzymatch-windows-x86_64 Debug x86_64-windows success 438ms MaxRSS:128M
+|        +- compile test lib-syntaxhl-windows-x86_64 Debug x86_64-windows success 559ms MaxRSS:130M
+|        +- compile test lib-mdinline-windows-x86_64 Debug x86_64-windows success 449ms MaxRSS:130M
+|        +- compile test lib-bytecodec-windows-x86_64 Debug x86_64-windows success 1s MaxRSS:107M
+|        +- compile test lib-cellcodec-windows-x86_64 Debug x86_64-windows success 804ms MaxRSS:131M
+|        +- compile test lib-dropqueue-windows-x86_64 Debug x86_64-windows success 919ms MaxRSS:132M
+|        +- compile test lib-exchangecapture-windows-x86_64 Debug x86_64-windows success 568ms MaxRSS:135M
+|        |  +- WriteFile brotli cached
+|        |  +- compile lib brotlidec Debug x86_64-windows success 278ms MaxRSS:86M
+|        |  +- compile lib brotlidec Debug x86_64-windows (reused)
+|        +- compile test lib-childoutput-windows-x86_64 Debug x86_64-windows success 458ms MaxRSS:128M
+|        +- compile test lib-gitstatus-windows-x86_64 Debug x86_64-windows success 514ms MaxRSS:132M
+|        +- compile test lib-hostmetrics-windows-x86_64 Debug x86_64-windows success 485ms MaxRSS:129M
+|        +- compile test lib-touchtrace-windows-x86_64 Debug x86_64-windows success 419ms MaxRSS:127M
+|        +- compile test Debug x86_64-windows success 480ms MaxRSS:142M
+|        |  +- WriteFile sqlite3.h cached
+|        |  +- compile lib sqlite3 Debug x86_64-windows success 1s MaxRSS:284M
+|        |  +- compile lib sqlite3 Debug x86_64-windows (reused)
+|        |  +- WriteFile brotli (reused)
+|        |  +- compile lib brotlidec Debug x86_64-windows (reused)
+|        |  +- compile lib brotlidec Debug x86_64-windows (reused)
+|        +- compile test Debug x86_64-windows success 9s MaxRSS:833M
+|        |  +- WriteFile sqlite3.h (reused)
+|        |  +- compile lib sqlite3 Debug x86_64-windows (reused)
+|        |  +- compile lib sqlite3 Debug x86_64-windows (reused)
+|        |  +- WriteFile brotli (reused)
+|        |  +- compile lib brotlidec Debug x86_64-windows (reused)
+|        |  +- compile lib brotlidec Debug x86_64-windows (reused)
+|        +- compile test Debug x86_64-windows success 525ms MaxRSS:143M
+|        |  +- WriteFile sqlite3.h (reused)
+|        |  +- compile lib sqlite3 Debug x86_64-windows (reused)
+|        |  +- compile lib sqlite3 Debug x86_64-windows (reused)
+|        |  +- WriteFile brotli (reused)
+|        |  +- compile lib brotlidec Debug x86_64-windows (reused)
+|        |  +- compile lib brotlidec Debug x86_64-windows (reused)
+|        +- compile exe telar-x86_64 Debug x86_64-linux-gnu success 22s MaxRSS:938M
+|        |  +- WriteFile  cached
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu success 3s MaxRSS:234M
+|        |  +- WriteFile hwy cached
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu success 2s MaxRSS:361M
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- WriteFile sqlite3.h success
+|        |  +- compile lib sqlite3 Debug x86_64-linux-gnu success 1s MaxRSS:259M
+|        |  +- compile lib sqlite3 Debug x86_64-linux-gnu (reused)
+|        |  +- WriteFile brotli cached
+|        |  +- compile lib brotlidec Debug x86_64-linux-gnu success 326ms MaxRSS:83M
+|        |  +- compile lib brotlidec Debug x86_64-linux-gnu (reused)
+|        |  +- WriteFile nghttp2/nghttp2.h cached
+|        |  +- compile lib nghttp2 Debug x86_64-linux-gnu success 572ms MaxRSS:74M
+|        |  +- compile lib nghttp2 Debug x86_64-linux-gnu (reused)
+|        |  +- options cached
+|        |  +- WriteFile cached
+|        |  +- compile lib lua Debug x86_64-linux-gnu success 867ms MaxRSS:130M
+|        |  +- compile lib lua Debug x86_64-linux-gnu (reused)
+|        |  +- options success
+|        |  +- options cached
+|        |  +- WriteFile props.zig cached
+|        |  |  +- run exe props-unigen cached
+|        |  |  |  +- compile exe props-unigen Debug native cached 84ms MaxRSS:35M
+|        |  |  |     +- run exe uucode_generate (tables.zig) cached
+|        |  |  |        +- compile exe uucode_generate Debug native cached 66ms MaxRSS:35M
+|        |  |  +- run exe symbols-unigen cached
+|        |  |     +- compile exe symbols-unigen Debug native cached 66ms MaxRSS:35M
+|        |  |        +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- options cached
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        |  +- translate-c wuffs_c.h success 1s
+|        |     +- compile exe translate-c Debug native (+21 more reused dependencies)
+|        |     +- WriteFile wuffs_c.h cached
+|        +- compile test lib-vtscan-linux-x86_64 Debug x86_64-linux-gnu success 334ms MaxRSS:101M
+|        +- compile test lib-animate-linux-x86_64 Debug x86_64-linux-gnu success 231ms MaxRSS:99M
+|        +- compile test lib-gfx-linux-x86_64 Debug x86_64-linux-gnu success 376ms MaxRSS:101M
+|        +- compile test lib-jsonl-linux-x86_64 Debug x86_64-linux-gnu success 339ms MaxRSS:106M
+|        +- compile test lib-privatefile-linux-x86_64 Debug x86_64-linux-gnu success 280ms MaxRSS:101M
+|        +- compile test lib-localsocket-linux-x86_64 Debug x86_64-linux-gnu success 377ms MaxRSS:103M
+|        +- compile test lib-mailbox-linux-x86_64 Debug x86_64-linux-gnu success 256ms MaxRSS:100M
+|        +- compile test lib-slabheap-linux-x86_64 Debug x86_64-linux-gnu success 255ms MaxRSS:100M
+|        +- compile test lib-pacing-linux-x86_64 Debug x86_64-linux-gnu success 276ms MaxRSS:101M
+|        +- compile test lib-pi_rpc-linux-x86_64 Debug x86_64-linux-gnu success 358ms MaxRSS:103M
+|        +- compile test lib-pty-linux-x86_64 Debug x86_64-linux-gnu success 428ms MaxRSS:100M
+|        +- compile test lib-cblocks-linux-x86_64 Debug x86_64-linux-gnu success 327ms MaxRSS:101M
+|        +- compile test lib-unicode-linux-x86_64 Debug x86_64-linux-gnu success 2s MaxRSS:251M
+|        |  +- WriteFile  (reused)
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- WriteFile hwy (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- options (reused)
+|        |  +- options (reused)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        +- compile test lib-cellgrid-linux-x86_64 Debug x86_64-linux-gnu success 2s MaxRSS:253M
+|        |  +- WriteFile  (reused)
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- WriteFile hwy (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- options (reused)
+|        |  +- options (reused)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        +- compile test lib-editorremote-linux-x86_64 Debug x86_64-linux-gnu success 290ms MaxRSS:102M
+|        +- compile test lib-h2frames-linux-x86_64 Debug x86_64-linux-gnu success 353ms MaxRSS:101M
+|        +- compile test lib-localca-linux-x86_64 Debug x86_64-linux-gnu success 1s MaxRSS:151M
+|        +- compile test lib-kitty_protocol-linux-x86_64 Debug x86_64-linux-gnu success 234ms MaxRSS:100M
+|        +- compile test lib-keyinput-linux-x86_64 Debug x86_64-linux-gnu success 2s MaxRSS:251M
+|        |  +- WriteFile  (reused)
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- WriteFile hwy (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- options (reused)
+|        |  +- options (reused)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        +- compile test lib-textfield-linux-x86_64 Debug x86_64-linux-gnu success 2s MaxRSS:251M
+|        |  +- WriteFile  (reused)
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- WriteFile hwy (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- options (reused)
+|        |  +- options (reused)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        +- compile test lib-console-linux-x86_64 Debug x86_64-linux-gnu success 2s MaxRSS:251M
+|        |  +- WriteFile  (reused)
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- WriteFile hwy (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- options (reused)
+|        |  +- options (reused)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        +- compile test lib-textraster-linux-x86_64 Debug x86_64-linux-gnu success 10s MaxRSS:822M
+|        +- compile test lib-cellglyphs-linux-x86_64 Debug x86_64-linux-gnu success 240ms MaxRSS:101M
+|        +- compile test lib-urlscan-linux-x86_64 Debug x86_64-linux-gnu success 228ms MaxRSS:100M
+|        +- compile test lib-fuzzymatch-linux-x86_64 Debug x86_64-linux-gnu success 234ms MaxRSS:100M
+|        +- compile test lib-syntaxhl-linux-x86_64 Debug x86_64-linux-gnu success 269ms MaxRSS:100M
+|        +- compile test lib-mdinline-linux-x86_64 Debug x86_64-linux-gnu success 229ms MaxRSS:100M
+|        +- compile test lib-bytecodec-linux-x86_64 Debug x86_64-linux-gnu success 235ms MaxRSS:100M
+|        +- compile test lib-cellcodec-linux-x86_64 Debug x86_64-linux-gnu success 2s MaxRSS:252M
+|        |  +- WriteFile  (reused)
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- WriteFile hwy (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- options (reused)
+|        |  +- options (reused)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        +- compile test lib-dropqueue-linux-x86_64 Debug x86_64-linux-gnu success 257ms MaxRSS:100M
+|        +- compile test lib-exchangecapture-linux-x86_64 Debug x86_64-linux-gnu success 756ms MaxRSS:102M
+|        |  +- WriteFile brotli (reused)
+|        |  +- compile lib brotlidec Debug x86_64-linux-gnu (reused)
+|        |  +- compile lib brotlidec Debug x86_64-linux-gnu (reused)
+|        +- compile test lib-httprelay-linux-x86_64 Debug x86_64-linux-gnu success 309ms MaxRSS:104M
+|        |  +- WriteFile nghttp2/nghttp2.h (reused)
+|        |  +- compile lib nghttp2 Debug x86_64-linux-gnu (reused)
+|        |  +- compile lib nghttp2 Debug x86_64-linux-gnu (reused)
+|        +- compile test lib-childoutput-linux-x86_64 Debug x86_64-linux-gnu success 253ms MaxRSS:101M
+|        +- compile test lib-gitstatus-linux-x86_64 Debug x86_64-linux-gnu success 236ms MaxRSS:101M
+|        +- compile test lib-proclineage-linux-x86_64 Debug x86_64-linux-gnu success 226ms MaxRSS:100M
+|        +- compile test lib-hostmetrics-linux-x86_64 Debug x86_64-linux-gnu success 220ms MaxRSS:101M
+|        +- compile test lib-vtgrid-linux-x86_64 Debug x86_64-linux-gnu success 3s MaxRSS:252M
+|        |  +- WriteFile  (reused)
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- WriteFile hwy (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- options (reused)
+|        |  +- options (reused)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        +- compile test lib-cmdcapture-linux-x86_64 Debug x86_64-linux-gnu success 3s MaxRSS:252M
+|        |  +- WriteFile  (reused)
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- WriteFile hwy (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- options (reused)
+|        |  +- options (reused)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        +- compile test lib-imaging-linux-x86_64 Debug x86_64-linux-gnu success 7s MaxRSS:616M
+|        |  +- translate-c wuffs_c.h (+2 more reused dependencies)
+|        +- compile test lib-mermaid-linux-x86_64 Debug x86_64-linux-gnu success 231ms MaxRSS:100M
+|        +- compile test lib-touchtrace-linux-x86_64 Debug x86_64-linux-gnu success 212ms MaxRSS:99M
+|        +- compile test Debug x86_64-linux-gnu success 593ms MaxRSS:165M
+|        |  +- WriteFile sqlite3.h (reused)
+|        |  +- compile lib sqlite3 Debug x86_64-linux-gnu (reused)
+|        |  +- compile lib sqlite3 Debug x86_64-linux-gnu (reused)
+|        |  +- WriteFile brotli (reused)
+|        |  +- compile lib brotlidec Debug x86_64-linux-gnu (reused)
+|        |  +- compile lib brotlidec Debug x86_64-linux-gnu (reused)
+|        |  +- WriteFile nghttp2/nghttp2.h (reused)
+|        |  +- compile lib nghttp2 Debug x86_64-linux-gnu (reused)
+|        |  +- compile lib nghttp2 Debug x86_64-linux-gnu (reused)
+|        |  +- WriteFile  (reused)
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- WriteFile hwy (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- options (reused)
+|        |  +- options (reused)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- translate-c wuffs_c.h (+2 more reused dependencies)
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        +- compile test Debug x86_64-linux-gnu success 11s MaxRSS:853M
+|        |  +- WriteFile sqlite3.h (reused)
+|        |  +- compile lib sqlite3 Debug x86_64-linux-gnu (reused)
+|        |  +- compile lib sqlite3 Debug x86_64-linux-gnu (reused)
+|        |  +- WriteFile brotli (reused)
+|        |  +- compile lib brotlidec Debug x86_64-linux-gnu (reused)
+|        |  +- compile lib brotlidec Debug x86_64-linux-gnu (reused)
+|        |  +- WriteFile nghttp2/nghttp2.h (reused)
+|        |  +- compile lib nghttp2 Debug x86_64-linux-gnu (reused)
+|        |  +- compile lib nghttp2 Debug x86_64-linux-gnu (reused)
+|        |  +- WriteFile  (reused)
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- WriteFile hwy (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- options (reused)
+|        |  +- options (reused)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- translate-c wuffs_c.h (+2 more reused dependencies)
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        +- compile test Debug x86_64-linux-gnu success 655ms MaxRSS:165M
+|        |  +- WriteFile sqlite3.h (reused)
+|        |  +- compile lib sqlite3 Debug x86_64-linux-gnu (reused)
+|        |  +- compile lib sqlite3 Debug x86_64-linux-gnu (reused)
+|        |  +- WriteFile brotli (reused)
+|        |  +- compile lib brotlidec Debug x86_64-linux-gnu (reused)
+|        |  +- compile lib brotlidec Debug x86_64-linux-gnu (reused)
+|        |  +- WriteFile nghttp2/nghttp2.h (reused)
+|        |  +- compile lib nghttp2 Debug x86_64-linux-gnu (reused)
+|        |  +- compile lib nghttp2 Debug x86_64-linux-gnu (reused)
+|        |  +- WriteFile  (reused)
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- WriteFile hwy (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib simdutf ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast x86_64-linux-gnu (reused)
+|        |  +- options (reused)
+|        |  +- options (reused)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- translate-c wuffs_c.h (+2 more reused dependencies)
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        +- compile exe telar-aarch64 Debug aarch64-linux-gnu success 24s MaxRSS:914M
+|        |  +- WriteFile  cached
+|        |  +- compile lib simdutf ReleaseFast aarch64-linux-gnu success 2s MaxRSS:193M
+|        |  +- WriteFile hwy cached
+|        |  +- compile lib highway ReleaseFast aarch64-linux-gnu success 5s MaxRSS:299M
+|        |  +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- WriteFile sqlite3.h cached
+|        |  +- compile lib sqlite3 Debug aarch64-linux-gnu success 2s MaxRSS:280M
+|        |  +- compile lib sqlite3 Debug aarch64-linux-gnu (reused)
+|        |  +- WriteFile brotli cached
+|        |  +- compile lib brotlidec Debug aarch64-linux-gnu success 521ms MaxRSS:95M
+|        |  +- compile lib brotlidec Debug aarch64-linux-gnu (reused)
+|        |  +- WriteFile nghttp2/nghttp2.h cached
+|        |  +- compile lib nghttp2 Debug aarch64-linux-gnu success 552ms MaxRSS:75M
+|        |  +- compile lib nghttp2 Debug aarch64-linux-gnu (reused)
+|        |  +- options cached
+|        |  +- WriteFile cached
+|        |  +- compile lib lua Debug aarch64-linux-gnu success 1s MaxRSS:150M
+|        |  +- compile lib lua Debug aarch64-linux-gnu (reused)
+|        |  +- options cached
+|        |  +- options cached
+|        |  +- WriteFile props.zig cached
+|        |  |  +- run exe props-unigen cached
+|        |  |  |  +- compile exe props-unigen Debug native cached 51ms MaxRSS:35M
+|        |  |  |     +- run exe uucode_generate (tables.zig) cached
+|        |  |  |        +- compile exe uucode_generate Debug native cached 61ms MaxRSS:35M
+|        |  |  +- run exe symbols-unigen cached
+|        |  |     +- compile exe symbols-unigen Debug native cached 53ms MaxRSS:35M
+|        |  |        +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- options success
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        |  +- translate-c wuffs_c.h success 1s
+|        |     +- compile exe translate-c Debug native (+21 more reused dependencies)
+|        |     +- WriteFile wuffs_c.h cached
+|        +- compile test lib-vtscan-linux-aarch64 Debug aarch64-linux-gnu success 409ms MaxRSS:126M
+|        +- compile test lib-animate-linux-aarch64 Debug aarch64-linux-gnu success 536ms MaxRSS:126M
+|        +- compile test lib-gfx-linux-aarch64 Debug aarch64-linux-gnu success 432ms MaxRSS:128M
+|        +- compile test lib-jsonl-linux-aarch64 Debug aarch64-linux-gnu success 751ms MaxRSS:138M
+|        +- compile test lib-privatefile-linux-aarch64 Debug aarch64-linux-gnu success 695ms MaxRSS:128M
+|        +- compile test lib-localsocket-linux-aarch64 Debug aarch64-linux-gnu success 498ms MaxRSS:131M
+|        +- compile test lib-mailbox-linux-aarch64 Debug aarch64-linux-gnu success 467ms MaxRSS:127M
+|        +- compile test lib-slabheap-linux-aarch64 Debug aarch64-linux-gnu success 388ms MaxRSS:126M
+|        +- compile test lib-pacing-linux-aarch64 Debug aarch64-linux-gnu success 457ms MaxRSS:127M
+|        +- compile test lib-pi_rpc-linux-aarch64 Debug aarch64-linux-gnu success 860ms MaxRSS:130M
+|        +- compile test lib-pty-linux-aarch64 Debug aarch64-linux-gnu success 517ms MaxRSS:130M
+|        +- compile test lib-cblocks-linux-aarch64 Debug aarch64-linux-gnu success 398ms MaxRSS:126M
+|        +- compile test lib-unicode-linux-aarch64 Debug aarch64-linux-gnu success 11s MaxRSS:359M
+|        |  +- WriteFile  (reused)
+|        |  +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- WriteFile hwy (reused)
+|        |  +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- options (reused)
+|        |  +- options (reused)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        +- compile test lib-cellgrid-linux-aarch64 Debug aarch64-linux-gnu success 13s MaxRSS:358M
+|        |  +- WriteFile  (reused)
+|        |  +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- WriteFile hwy (reused)
+|        |  +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- options (reused)
+|        |  +- options (reused)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        +- compile test lib-editorremote-linux-aarch64 Debug aarch64-linux-gnu success 467ms MaxRSS:129M
+|        +- compile test lib-h2frames-linux-aarch64 Debug aarch64-linux-gnu success 547ms MaxRSS:126M
+|        +- compile test lib-localca-linux-aarch64 Debug aarch64-linux-gnu success 1s MaxRSS:181M
+|        +- compile test lib-kitty_protocol-linux-aarch64 Debug aarch64-linux-gnu success 885ms MaxRSS:128M
+|        +- compile test lib-keyinput-linux-aarch64 Debug aarch64-linux-gnu success 13s MaxRSS:361M
+|        |  +- WriteFile  (reused)
+|        |  +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- WriteFile hwy (reused)
+|        |  +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- options (reused)
+|        |  +- options (reused)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        +- compile test lib-textfield-linux-aarch64 Debug aarch64-linux-gnu success 13s MaxRSS:358M
+|        |  +- WriteFile  (reused)
+|        |  +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- WriteFile hwy (reused)
+|        |  +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- options (reused)
+|        |  +- options (reused)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        +- compile test lib-console-linux-aarch64 Debug aarch64-linux-gnu success 11s MaxRSS:359M
+|        |  +- WriteFile  (reused)
+|        |  +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- WriteFile hwy (reused)
+|        |  +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- options (reused)
+|        |  +- options (reused)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        +- compile test lib-textraster-linux-aarch64 Debug aarch64-linux-gnu success 9s MaxRSS:999M
+|        +- compile test lib-cellglyphs-linux-aarch64 Debug aarch64-linux-gnu success 458ms MaxRSS:130M
+|        +- compile test lib-urlscan-linux-aarch64 Debug aarch64-linux-gnu success 396ms MaxRSS:126M
+|        +- compile test lib-fuzzymatch-linux-aarch64 Debug aarch64-linux-gnu success 446ms MaxRSS:126M
+|        +- compile test lib-syntaxhl-linux-aarch64 Debug aarch64-linux-gnu success 798ms MaxRSS:127M
+|        +- compile test lib-mdinline-linux-aarch64 Debug aarch64-linux-gnu success 524ms MaxRSS:128M
+|        +- compile test lib-bytecodec-linux-aarch64 Debug aarch64-linux-gnu success 813ms MaxRSS:126M
+|        +- compile test lib-cellcodec-linux-aarch64 Debug aarch64-linux-gnu success 12s MaxRSS:359M
+|        |  +- WriteFile  (reused)
+|        |  +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- WriteFile hwy (reused)
+|        |  +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- options (reused)
+|        |  +- options (reused)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        +- compile test lib-dropqueue-linux-aarch64 Debug aarch64-linux-gnu success 778ms MaxRSS:130M
+|        +- compile test lib-exchangecapture-linux-aarch64 Debug aarch64-linux-gnu success 826ms MaxRSS:131M
+|        |  +- WriteFile brotli (reused)
+|        |  +- compile lib brotlidec Debug aarch64-linux-gnu (reused)
+|        |  +- compile lib brotlidec Debug aarch64-linux-gnu (reused)
+|        +- compile test lib-httprelay-linux-aarch64 Debug aarch64-linux-gnu success 527ms MaxRSS:135M
+|        |  +- WriteFile nghttp2/nghttp2.h (reused)
+|        |  +- compile lib nghttp2 Debug aarch64-linux-gnu (reused)
+|        |  +- compile lib nghttp2 Debug aarch64-linux-gnu (reused)
+|        +- compile test lib-childoutput-linux-aarch64 Debug aarch64-linux-gnu success 823ms MaxRSS:127M
+|        +- compile test lib-gitstatus-linux-aarch64 Debug aarch64-linux-gnu success 1s MaxRSS:131M
+|        +- compile test lib-proclineage-linux-aarch64 Debug aarch64-linux-gnu success 754ms MaxRSS:125M
+|        +- compile test lib-hostmetrics-linux-aarch64 Debug aarch64-linux-gnu success 480ms MaxRSS:125M
+|        +- compile test lib-vtgrid-linux-aarch64 Debug aarch64-linux-gnu success 10s MaxRSS:359M
+|        |  +- WriteFile  (reused)
+|        |  +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- WriteFile hwy (reused)
+|        |  +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- options (reused)
+|        |  +- options (reused)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        +- compile test lib-cmdcapture-linux-aarch64 Debug aarch64-linux-gnu success 14s MaxRSS:359M
+|        |  +- WriteFile  (reused)
+|        |  +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- WriteFile hwy (reused)
+|        |  +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- options (reused)
+|        |  +- options (reused)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        +- compile test lib-imaging-linux-aarch64 Debug aarch64-linux-gnu success 8s MaxRSS:600M
+|        |  +- translate-c wuffs_c.h (+2 more reused dependencies)
+|        +- compile test lib-mermaid-linux-aarch64 Debug aarch64-linux-gnu success 1s MaxRSS:129M
+|        +- compile test lib-touchtrace-linux-aarch64 Debug aarch64-linux-gnu success 631ms MaxRSS:128M
+|        +- compile test Debug aarch64-linux-gnu success 600ms MaxRSS:189M
+|        |  +- WriteFile sqlite3.h (reused)
+|        |  +- compile lib sqlite3 Debug aarch64-linux-gnu (reused)
+|        |  +- compile lib sqlite3 Debug aarch64-linux-gnu (reused)
+|        |  +- WriteFile brotli (reused)
+|        |  +- compile lib brotlidec Debug aarch64-linux-gnu (reused)
+|        |  +- compile lib brotlidec Debug aarch64-linux-gnu (reused)
+|        |  +- WriteFile nghttp2/nghttp2.h (reused)
+|        |  +- compile lib nghttp2 Debug aarch64-linux-gnu (reused)
+|        |  +- compile lib nghttp2 Debug aarch64-linux-gnu (reused)
+|        |  +- WriteFile  (reused)
+|        |  +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- WriteFile hwy (reused)
+|        |  +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- options (reused)
+|        |  +- options (reused)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- translate-c wuffs_c.h (+2 more reused dependencies)
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        +- compile test Debug aarch64-linux-gnu success 15s MaxRSS:982M
+|        |  +- WriteFile sqlite3.h (reused)
+|        |  +- compile lib sqlite3 Debug aarch64-linux-gnu (reused)
+|        |  +- compile lib sqlite3 Debug aarch64-linux-gnu (reused)
+|        |  +- WriteFile brotli (reused)
+|        |  +- compile lib brotlidec Debug aarch64-linux-gnu (reused)
+|        |  +- compile lib brotlidec Debug aarch64-linux-gnu (reused)
+|        |  +- WriteFile nghttp2/nghttp2.h (reused)
+|        |  +- compile lib nghttp2 Debug aarch64-linux-gnu (reused)
+|        |  +- compile lib nghttp2 Debug aarch64-linux-gnu (reused)
+|        |  +- WriteFile  (reused)
+|        |  +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- WriteFile hwy (reused)
+|        |  +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|        |  +- options (reused)
+|        |  +- options (reused)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- WriteFile props.zig (+2 more reused dependencies)
+|        |  +- translate-c wuffs_c.h (+2 more reused dependencies)
+|        |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|        +- compile test Debug aarch64-linux-gnu success 935ms MaxRSS:191M
+|           +- WriteFile sqlite3.h (reused)
+|           +- compile lib sqlite3 Debug aarch64-linux-gnu (reused)
+|           +- compile lib sqlite3 Debug aarch64-linux-gnu (reused)
+|           +- WriteFile brotli (reused)
+|           +- compile lib brotlidec Debug aarch64-linux-gnu (reused)
+|           +- compile lib brotlidec Debug aarch64-linux-gnu (reused)
+|           +- WriteFile nghttp2/nghttp2.h (reused)
+|           +- compile lib nghttp2 Debug aarch64-linux-gnu (reused)
+|           +- compile lib nghttp2 Debug aarch64-linux-gnu (reused)
+|           +- WriteFile  (reused)
+|           +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|           +- WriteFile hwy (reused)
+|           +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|           +- compile lib simdutf ReleaseFast aarch64-linux-gnu (reused)
+|           +- compile lib highway ReleaseFast aarch64-linux-gnu (reused)
+|           +- options (reused)
+|           +- options (reused)
+|           +- WriteFile props.zig (+2 more reused dependencies)
+|           +- WriteFile props.zig (+2 more reused dependencies)
+|           +- translate-c wuffs_c.h (+2 more reused dependencies)
+|           +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
++- run exe runtime-work-counters success 393ms
+   +- compile exe runtime-work-counters ReleaseFast native success 1m MaxRSS:1G
+   |  +- WriteFile  (reused)
+   |  +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+   |  +- WriteFile hwy (reused)
+   |  +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+   |  +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+   |  +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+   |  +- WriteFile brotli (reused)
+   |  +- compile lib brotlidec ReleaseFast native (reused)
+   |  +- compile lib brotlidec ReleaseFast native (reused)
+   |  +- WriteFile nghttp2/nghttp2.h (reused)
+   |  +- compile lib nghttp2 ReleaseFast native (reused)
+   |  +- compile lib nghttp2 ReleaseFast native (reused)
+   |  +- WriteFile (reused)
+   |  +- compile lib lua ReleaseFast native (reused)
+   |  +- compile lib lua ReleaseFast native (reused)
+   |  +- options (reused)
+   |  +- options (reused)
+   |  +- WriteFile props.zig (+2 more reused dependencies)
+   |  +- WriteFile props.zig (+2 more reused dependencies)
+   |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+   |  +- translate-c wuffs_c.h (+3 more reused dependencies)
+   +- run parallel test prerequisites (+16 more reused dependencies)
+test-gui success
++- run test 582 pass (582 total) 33s MaxRSS:176M
+   +- compile test ReleaseFast native success 1m MaxRSS:2G
+      +- WriteFile brotli (reused)
+      +- compile lib brotlidec ReleaseFast native (reused)
+      +- compile lib brotlidec ReleaseFast native (reused)
+      +- WriteFile nghttp2/nghttp2.h (reused)
+      +- compile lib nghttp2 ReleaseFast native (reused)
+      +- compile lib nghttp2 ReleaseFast native (reused)
+      +- options (+1 more reused dependencies)
+      +- WriteFile (reused)
+      +- compile lib lua ReleaseFast native (reused)
+      +- compile lib lua ReleaseFast native (reused)
+      +- WriteFile  (reused)
+      +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      +- WriteFile hwy (reused)
+      +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      +- options (reused)
+      +- options (reused)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- translate-c wuffs_c.h (+3 more reused dependencies)
+      +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+cross (+122 more reused dependencies)
+codestyle success
++- run exe codestyle success 651ms
+   +- compile exe codestyle ReleaseFast native (reused)
+check-client-boundaries success
++- run python3 (+2 more reused dependencies)
+check-model-boundaries success
++- run python3 (+1 more reused dependencies)
+check-programs success
++- compile exe telar ReleaseFast native success 35s MaxRSS:1G
+|  +- WriteFile  (reused)
+|  +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  +- WriteFile hwy (reused)
+|  +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  +- WriteFile brotli (reused)
+|  +- compile lib brotlidec ReleaseFast native (reused)
+|  +- compile lib brotlidec ReleaseFast native (reused)
+|  +- WriteFile nghttp2/nghttp2.h (reused)
+|  +- compile lib nghttp2 ReleaseFast native (reused)
+|  +- compile lib nghttp2 ReleaseFast native (reused)
+|  +- options (reused)
+|  +- WriteFile (reused)
+|  +- compile lib lua ReleaseFast native (reused)
+|  +- compile lib lua ReleaseFast native (reused)
+|  +- options (reused)
+|  +- options (reused)
+|  +- WriteFile props.zig (+2 more reused dependencies)
+|  +- WriteFile props.zig (+2 more reused dependencies)
+|  +- options (+1 more reused dependencies)
+|  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|  +- translate-c wuffs_c.h (+3 more reused dependencies)
++- compile exe telar-benchmarks ReleaseFast native success 28s MaxRSS:932M
+|  +- WriteFile brotli (reused)
+|  +- compile lib brotlidec ReleaseFast native (reused)
+|  +- compile lib brotlidec ReleaseFast native (reused)
+|  +- WriteFile nghttp2/nghttp2.h (reused)
+|  +- compile lib nghttp2 ReleaseFast native (reused)
+|  +- compile lib nghttp2 ReleaseFast native (reused)
+|  +- WriteFile  (reused)
+|  +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  +- WriteFile hwy (reused)
+|  +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  +- options (reused)
+|  +- WriteFile cached
+|  +- compile lib lua-bench ReleaseFast native cached 51ms MaxRSS:34M
+|  +- compile lib lua-bench ReleaseFast native (reused)
+|  +- options (reused)
+|  +- options (reused)
+|  +- WriteFile props.zig (+2 more reused dependencies)
+|  +- WriteFile props.zig (+2 more reused dependencies)
+|  +- translate-c wuffs_c.h (+3 more reused dependencies)
+|  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
++- compile exe echo-probe ReleaseFast native success 22s MaxRSS:1G
+|  +- WriteFile  (reused)
+|  +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  +- WriteFile hwy (reused)
+|  +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+|  +- WriteFile brotli (reused)
+|  +- compile lib brotlidec ReleaseFast native (reused)
+|  +- compile lib brotlidec ReleaseFast native (reused)
+|  +- WriteFile nghttp2/nghttp2.h (reused)
+|  +- compile lib nghttp2 ReleaseFast native (reused)
+|  +- compile lib nghttp2 ReleaseFast native (reused)
+|  +- options (reused)
+|  +- options (reused)
+|  +- WriteFile props.zig (+2 more reused dependencies)
+|  +- WriteFile props.zig (+2 more reused dependencies)
+|  +- WriteFile (reused)
+|  +- compile lib lua-bench ReleaseFast native (reused)
+|  +- compile lib lua-bench ReleaseFast native (reused)
+|  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|  +- translate-c wuffs_c.h (+3 more reused dependencies)
++- compile exe runtime-work-counters ReleaseFast native success 31s MaxRSS:927M
+   +- WriteFile  (reused)
+   +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+   +- WriteFile hwy (reused)
+   +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+   +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+   +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+   +- WriteFile brotli (reused)
+   +- compile lib brotlidec ReleaseFast native (reused)
+   +- compile lib brotlidec ReleaseFast native (reused)
+   +- WriteFile nghttp2/nghttp2.h (reused)
+   +- compile lib nghttp2 ReleaseFast native (reused)
+   +- compile lib nghttp2 ReleaseFast native (reused)
+   +- WriteFile (reused)
+   +- compile lib lua ReleaseFast native (reused)
+   +- compile lib lua ReleaseFast native (reused)
+   +- options (reused)
+   +- options (reused)
+   +- WriteFile props.zig (+2 more reused dependencies)
+   +- WriteFile props.zig (+2 more reused dependencies)
+   +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+   +- translate-c wuffs_c.h (+3 more reused dependencies)
+build-bench success
++- install telar-benchmarks success
+   +- compile exe telar-benchmarks ReleaseFast native success 1m MaxRSS:1G
+      +- WriteFile brotli (reused)
+      +- compile lib brotlidec ReleaseFast native (reused)
+      +- compile lib brotlidec ReleaseFast native (reused)
+      +- WriteFile nghttp2/nghttp2.h (reused)
+      +- compile lib nghttp2 ReleaseFast native (reused)
+      +- compile lib nghttp2 ReleaseFast native (reused)
+      +- WriteFile  (reused)
+      +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      +- WriteFile hwy (reused)
+      +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      +- options (reused)
+      +- WriteFile (reused)
+      +- compile lib lua-bench ReleaseFast native (reused)
+      +- compile lib lua-bench ReleaseFast native (reused)
+      +- options (reused)
+      +- options (reused)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- translate-c wuffs_c.h (+3 more reused dependencies)
+      +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+build-dod-probe success
++- install telar-dod-probe success
+   +- compile exe telar-dod-probe ReleaseFast native success 11s MaxRSS:713M
+      +- WriteFile brotli (reused)
+      +- compile lib brotlidec ReleaseFast native (reused)
+      +- compile lib brotlidec ReleaseFast native (reused)
+      +- WriteFile nghttp2/nghttp2.h (reused)
+      +- compile lib nghttp2 ReleaseFast native (reused)
+      +- compile lib nghttp2 ReleaseFast native (reused)
+      +- options (+1 more reused dependencies)
+      +- options (reused)
+      +- WriteFile (reused)
+      +- compile lib lua ReleaseFast native (reused)
+      +- compile lib lua ReleaseFast native (reused)
+      +- WriteFile  (reused)
+      +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      +- WriteFile hwy (reused)
+      +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      +- options (reused)
+      +- options (reused)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- translate-c wuffs_c.h (+3 more reused dependencies)
+      +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+

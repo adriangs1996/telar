@@ -1,0 +1,290 @@
+[
+  {
+    "name": "terminal/cursor/153x40",
+    "baseline_ns": 35480.47233333333,
+    "candidate_ns": 33249.083333333336,
+    "paired_percent": -6.417928464819289,
+    "wins": 7,
+    "losses": 0,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -18.475080818689747,
+    "paired_percent_max": -4.126213055844374,
+    "live_requested_bytes": {
+      "A": 40669644,
+      "B": 40669644
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 6121,
+      "B": 6121
+    }
+  },
+  {
+    "name": "terminal/cursor/73x40",
+    "baseline_ns": 16913.291666666668,
+    "candidate_ns": 16140.680333333334,
+    "paired_percent": -4.448993433850157,
+    "wins": 7,
+    "losses": 0,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -5.368979136953788,
+    "paired_percent_max": -3.2554679853706303,
+    "live_requested_bytes": {
+      "A": 25257964,
+      "B": 25257964
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 2921,
+      "B": 2921
+    }
+  },
+  {
+    "name": "terminal/full/153x40",
+    "baseline_ns": 136485.542,
+    "candidate_ns": 138753.417,
+    "paired_percent": 2.4348331161996972,
+    "wins": 0,
+    "losses": 7,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": 0.6114743867253969,
+    "paired_percent_max": 10.697164539230108,
+    "live_requested_bytes": {
+      "A": 40670628,
+      "B": 40670628
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 6120,
+      "B": 6120
+    }
+  },
+  {
+    "name": "terminal/full/73x40",
+    "baseline_ns": 63811.958,
+    "candidate_ns": 65247.792,
+    "paired_percent": 2.252541250830631,
+    "wins": 0,
+    "losses": 7,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": 0.9288949494354437,
+    "paired_percent_max": 3.1677661792119505,
+    "live_requested_bytes": {
+      "A": 25258948,
+      "B": 25258948
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 2920,
+      "B": 2920
+    }
+  },
+  {
+    "name": "terminal/retained/153x40",
+    "baseline_ns": 33811.55566666667,
+    "candidate_ns": 32352.916666666668,
+    "paired_percent": -4.392413490388158,
+    "wins": 6,
+    "losses": 1,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -6.334445506911202,
+    "paired_percent_max": 0.613482876069571,
+    "live_requested_bytes": {
+      "A": 40669644,
+      "B": 40669644
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 6120,
+      "B": 6120
+    }
+  },
+  {
+    "name": "terminal/retained/73x40",
+    "baseline_ns": 16250.833333333334,
+    "candidate_ns": 15791.222333333333,
+    "paired_percent": -3.450079483103441,
+    "wins": 7,
+    "losses": 0,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -6.159303052234044,
+    "paired_percent_max": -0.9300309724740496,
+    "live_requested_bytes": {
+      "A": 25257964,
+      "B": 25257964
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 2920,
+      "B": 2920
+    }
+  },
+  {
+    "name": "terminal/selection/153x40",
+    "baseline_ns": 53147.403,
+    "candidate_ns": 51210.736333333334,
+    "paired_percent": -3.828140555646564,
+    "wins": 6,
+    "losses": 1,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -6.405226749833448,
+    "paired_percent_max": 0.4029778053621813,
+    "live_requested_bytes": {
+      "A": 40669644,
+      "B": 40669644
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 12180,
+      "B": 12180
+    }
+  },
+  {
+    "name": "terminal/selection/73x40",
+    "baseline_ns": 25427.25,
+    "candidate_ns": 24529.527666666665,
+    "paired_percent": -3.594216720679544,
+    "wins": 6,
+    "losses": 1,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -4.115909087213987,
+    "paired_percent_max": 2.605661316267205,
+    "live_requested_bytes": {
+      "A": 25257964,
+      "B": 25257964
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 5774,
+      "B": 5774
+    }
+  },
+  {
+    "name": "terminal/sparse/153x40",
+    "baseline_ns": 34591.40266666667,
+    "candidate_ns": 32528.264,
+    "paired_percent": -5.532951162827993,
+    "wins": 7,
+    "losses": 0,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -7.899360902019737,
+    "paired_percent_max": -2.711855467314317,
+    "live_requested_bytes": {
+      "A": 40669644,
+      "B": 40669644
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 6120,
+      "B": 6120
+    }
+  },
+  {
+    "name": "terminal/sparse/73x40",
+    "baseline_ns": 16431.764,
+    "candidate_ns": 15754.472333333333,
+    "paired_percent": -4.405507933698816,
+    "wins": 7,
+    "losses": 0,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -6.45693727885509,
+    "paired_percent_max": -4.064726498186289,
+    "live_requested_bytes": {
+      "A": 25257964,
+      "B": 25257964
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 2920,
+      "B": 2920
+    }
+  },
+  {
+    "name": "terminal/two_all_active/153x40",
+    "baseline_ns": 34967.09733333333,
+    "candidate_ns": 33278.65266666667,
+    "paired_percent": -4.402909546624068,
+    "wins": 7,
+    "losses": 0,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -12.180075992819406,
+    "paired_percent_max": -3.365898520740418,
+    "live_requested_bytes": {
+      "A": 40669644,
+      "B": 40669644
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 6120,
+      "B": 6120
+    }
+  },
+  {
+    "name": "terminal/two_all_active/73x40",
+    "baseline_ns": 16924.055666666667,
+    "candidate_ns": 16244.708333333334,
+    "paired_percent": -4.460617837510805,
+    "wins": 7,
+    "losses": 0,
+    "ties": 0,
+    "pairs": 7,
+    "paired_percent_min": -9.841208764674814,
+    "paired_percent_max": -2.7744890441829373,
+    "live_requested_bytes": {
+      "A": 25257964,
+      "B": 25257964
+    },
+    "measured_allocations": {
+      "A": 0,
+      "B": 0
+    },
+    "last_frame_quads": {
+      "A": 2920,
+      "B": 2920
+    }
+  }
+]

@@ -1,0 +1,22 @@
+{
+  "A": {
+    "telar-dod-probe": "ca844dd7bbb9d4110881475277c78c720927e6f75a3b07c290f37fbfe41807cf",
+    "telar-benchmarks": "08be392ea64d9b2fb059a7a1c4db1a35b6940c6f541ee6a2781fb1718ef6d3ae"
+  },
+  "R": {
+    "telar-benchmarks": "97deb41301b6d2ae3779aa010d0ee3dbb31acf516a9cc17faed4185f7a7479f7"
+  },
+  "C": {
+    "telar-benchmarks": "85f9cb942d14d7aed7d0784a6bd0b5e90d3cb2ca2f4267c2d40c078a7455e761"
+  },
+  "G": {
+    "telar-dod-probe": "49e0210e449a3fe6db29572cb12c448fdb8768b3f1f9099e94a8aef92e647e43"
+  },
+  "S": {
+    "telar-dod-probe": "99ad841503fc420f1510749569fa3095b8be55d09bf98c17001264345264f88d"
+  },
+  "F": {
+    "telar-dod-probe": "8b2b06777e9887ecaf1f87562a0d4e93b954e9455810343fed27c2bb98b7aae7",
+    "telar-benchmarks": "686b9b0939a0d39f08f588a43fe8dc5f82cc6f85ce1327bdd07914fe1f1fe3a5"
+  }
+}

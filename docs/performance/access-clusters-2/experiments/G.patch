@@ -1,0 +1,186 @@
+diff --git a/src/gui/render/CellMesh.zig b/src/gui/render/CellMesh.zig
+index 0baf620e..443bbeca 100644
+--- a/src/gui/render/CellMesh.zig
++++ b/src/gui/render/CellMesh.zig
+@@ -1,10 +1,9 @@
+ //! Synchronous view into adapter-owned metadata and geometry. A grid resize
+ //! invalidates the view; no model or atlas storage is borrowed.
+ //!
+-//! Geometry is split by access frequency. Every warm draw reads the
+-//! background and the first ink quad, so they live in a dense `primary`
+-//! array. Underlines, strikethroughs and multi-glyph clusters spill into a
+-//! cold `overflow` array that warm draws touch only for the cells using it.
++//! Backgrounds and first ink quads live in separate columns: the ink pass
++//! reads consecutive glyphs without fetching unused default backgrounds.
++//! Underlines, strikethroughs and multi-glyph clusters use cold overflow.
+ const cellgrid = @import("cellgrid");
+ const std = @import("std");
+ const core = @import("telar-core");
+@@ -21,7 +20,8 @@ pub const limit = core.Limit.declare("render.cell_mesh_capacity", "quads per cel
+ pub const primary_capacity = 2;
+ pub const overflow_capacity = capacity - primary_capacity;
+ metadata: *Metadata,
+-primary: *[primary_capacity]Quad,
++fill: *Quad,
++ink: *[1]Quad,
+ overflow: *[overflow_capacity]Quad,
+ 
+ /// Compares the complete visual key, shaping context included.
+@@ -47,7 +47,8 @@ pub fn matchesCell(self: Mesh, cell: *const cellgrid.Cell, rect: Rect) bool {
+ pub fn replace(self: Mesh, paint: Paint, quads: []const Quad) void {
+     std.debug.assert(quads.len >= 1 and quads.len <= capacity);
+     const split = @min(quads.len, primary_capacity);
+-    @memcpy(self.primary[0..split], quads[0..split]);
++    self.fill.* = quads[0];
++    @memcpy(self.ink[0 .. split - 1], quads[1..split]);
+     @memcpy(self.overflow[0 .. quads.len - split], quads[split..]);
+     self.metadata.len = @intCast(quads.len);
+     self.metadata.paint = paint;
+@@ -58,19 +59,19 @@ pub fn replace(self: Mesh, paint: Paint, quads: []const Quad) void {
+ /// background, so warm draws never read geometry for default cells.
+ /// Example: `mesh.classifyBackground(renderer.background);`
+ pub fn classifyBackground(self: Mesh, theme: Color) void {
+-    const fill = self.primary[0];
++    const fill = self.fill.*;
+     self.metadata.background = fill.r != theme.r or fill.g != theme.g or fill.b != theme.b;
+ }
+ 
+ /// The retained background quad. Example: `try quads.push(mesh.background());`
+ pub fn background(self: Mesh) Quad {
+-    return self.primary[0];
++    return self.fill.*;
+ }
+ 
+-/// Borrows the ink stored densely beside the background.
++/// Borrows the cell's first ink quad from its dense column.
+ /// Example: `for (mesh.primaryInk()) |quad| draw(quad);`
+ pub fn primaryInk(self: Mesh) []const Quad {
+-    return self.primary[1..@min(self.metadata.len, primary_capacity)];
++    return self.ink[0 .. @min(self.metadata.len, primary_capacity) - 1];
+ }
+ 
+ /// Borrows the ink that did not fit in primary storage.
+@@ -84,7 +85,8 @@ pub fn overflowInk(self: Mesh) []const Quad {
+ pub fn collect(self: Mesh, storage: *[capacity]Quad) []const Quad {
+     const len = self.metadata.len;
+     const split = @min(len, primary_capacity);
+-    @memcpy(storage[0..split], self.primary[0..split]);
++    storage[0] = self.fill.*;
++    @memcpy(storage[1..split], self.ink[0 .. split - 1]);
+     @memcpy(storage[split..len], self.overflow[0 .. len - split]);
+     return storage[0..len];
+ }
+diff --git a/src/gui/render/CellRow.zig b/src/gui/render/CellRow.zig
+index 94a4d537..bfa7e5e4 100644
+--- a/src/gui/render/CellRow.zig
++++ b/src/gui/render/CellRow.zig
+@@ -7,14 +7,16 @@ const Quad = gfx.Quad.Quad;
+ const Row = @This();
+ 
+ metadata: []Metadata,
+-primary: [][Mesh.primary_capacity]Quad,
++fills: []Quad,
++ink: [][1]Quad,
+ overflow: [][Mesh.overflow_capacity]Quad,
+ 
+ /// Borrows one cell of the row. Example: `const mesh = row.at(col);`
+ pub fn at(self: Row, index: usize) Mesh {
+     return .{
+         .metadata = &self.metadata[index],
+-        .primary = &self.primary[index],
++        .fill = &self.fills[index],
++        .ink = &self.ink[index],
+         .overflow = &self.overflow[index],
+     };
+ }
+diff --git a/src/gui/render/RetainedCells.zig b/src/gui/render/RetainedCells.zig
+index 2ba1d503..02f0d06a 100644
+--- a/src/gui/render/RetainedCells.zig
++++ b/src/gui/render/RetainedCells.zig
+@@ -18,7 +18,8 @@ pub const max_cells = core.max_cell_count;
+ 
+ allocator: std.mem.Allocator,
+ entries: std.ArrayList(Metadata) = .empty,
+-primary: std.ArrayList([Mesh.primary_capacity]Quad) = .empty,
++fills: std.ArrayList(Quad) = .empty,
++ink: std.ArrayList([1]Quad) = .empty,
+ overflow: std.ArrayList([Mesh.overflow_capacity]Quad) = .empty,
+ cols: u16 = 0,
+ rows: u16 = 0,
+@@ -29,7 +30,8 @@ pub fn init(allocator: std.mem.Allocator) Grid {
+ 
+ pub fn deinit(self: *Grid) void {
+     self.entries.deinit(self.allocator);
+-    self.primary.deinit(self.allocator);
++    self.fills.deinit(self.allocator);
++    self.ink.deinit(self.allocator);
+     self.overflow.deinit(self.allocator);
+ }
+ 
+@@ -46,10 +48,12 @@ pub fn resize(self: *Grid, size: [2]u16) !void {
+     }
+ 
+     try self.entries.ensureTotalCapacityPrecise(self.allocator, count);
+-    try self.primary.ensureTotalCapacityPrecise(self.allocator, count);
++    try self.fills.ensureTotalCapacityPrecise(self.allocator, count);
++    try self.ink.ensureTotalCapacityPrecise(self.allocator, count);
+     try self.overflow.ensureTotalCapacityPrecise(self.allocator, count);
+     self.entries.items.len = count;
+-    self.primary.items.len = count;
++    self.fills.items.len = count;
++    self.ink.items.len = count;
+     self.overflow.items.len = count;
+     self.cols = size[0];
+     self.rows = size[1];
+@@ -69,7 +73,8 @@ pub fn at(self: *Grid, position: [2]u16) Mesh {
+     const index = @as(usize, position[1]) * self.cols + position[0];
+     return .{
+         .metadata = &self.entries.items[index],
+-        .primary = &self.primary.items[index],
++        .fill = &self.fills.items[index],
++        .ink = &self.ink.items[index],
+         .overflow = &self.overflow.items[index],
+     };
+ }
+@@ -81,7 +86,8 @@ pub fn row(self: *Grid, position: [2]u16, len: u16) Row {
+     const start = @as(usize, position[1]) * self.cols + position[0];
+     return .{
+         .metadata = self.entries.items[start..][0..len],
+-        .primary = self.primary.items[start..][0..len],
++        .fills = self.fills.items[start..][0..len],
++        .ink = self.ink.items[start..][0..len],
+         .overflow = self.overflow.items[start..][0..len],
+     };
+ }
+@@ -112,14 +118,19 @@ fn resizeWithFailures(allocator: std.mem.Allocator) !void {
+             .height = 20,
+         },
+     };
+-    const quads = [_]Quad{std.mem.zeroes(Quad)};
++    var quads = [_]Quad{std.mem.zeroes(Quad)} ** 3;
++    for (&quads, 0..) |*quad, index| {
++        quad.x = @floatFromInt(index);
++    }
++
+     grid.at(.{ 1, 1 }).replace(paint, &quads);
+ 
+     grid.resize(.{ 16, 16 }) catch |err| {
+         try std.testing.expectEqual(@as(u16, 2), grid.cols);
+         try std.testing.expectEqual(@as(u16, 2), grid.rows);
+         try std.testing.expectEqual(@as(usize, 4), grid.entries.items.len);
+-        try std.testing.expectEqual(@as(usize, 4), grid.primary.items.len);
++        try std.testing.expectEqual(@as(usize, 4), grid.fills.items.len);
++        try std.testing.expectEqual(@as(usize, 4), grid.ink.items.len);
+         try std.testing.expectEqual(@as(usize, 4), grid.overflow.items.len);
+         try std.testing.expect(grid.at(.{ 1, 1 }).matches(paint));
+         var storage: [Mesh.capacity]Quad = undefined;
+@@ -128,7 +139,8 @@ fn resizeWithFailures(allocator: std.mem.Allocator) !void {
+     };
+ 
+     try std.testing.expectEqual(@as(usize, 256), grid.entries.items.len);
+-    try std.testing.expectEqual(grid.entries.items.len, grid.primary.items.len);
++    try std.testing.expectEqual(grid.entries.items.len, grid.fills.items.len);
++    try std.testing.expectEqual(grid.entries.items.len, grid.ink.items.len);
+     try std.testing.expectEqual(grid.entries.items.len, grid.overflow.items.len);
+     try std.testing.expect(!grid.at(.{ 1, 1 }).matches(paint));
+     for (grid.entries.items) |entry| {

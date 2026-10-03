@@ -348,3 +348,56 @@ const FrameInput = struct {
     text: u8 = 'A',
     cursor_keys: bool = true,
 };
+
+test "geometry capture matches a direct table reference across empty and mixed tabs" {
+    const fixture = try Fixture.init();
+    defer fixture.deinit();
+    const model = fixture.model;
+    for (2..65) |id| {
+        _ = try model.panes.add(std.testing.allocator, .{
+            .pane_id = @enumFromInt(id),
+            .location = location,
+            .size = .{ .cols = @intCast(id), .rows = 1 },
+        }, true);
+    }
+
+    var random = std.Random.DefaultPrng.init(0x67656f6d65747279);
+    for (0..100) |iteration| {
+        for (&model.panes.record) |slot| {
+            const pane = slot orelse continue;
+            const active = iteration != 0 and (iteration == 1 or random.random().boolean());
+            pane.location.tab_id = if (active) location.tab_id else @enumFromInt(2);
+        }
+
+        const projection = fixture.projection();
+        const tab = projection.tab.?;
+        var expected: Geometry = .{
+            .region = projection.geometry,
+            .host_size = projection.host_size,
+            .layout_revision = model.tabs.layout[tab].currentRevision(),
+        };
+        for (&model.panes.record) |slot| {
+            const pane = slot orelse continue;
+            if (pane.location.tab_id != model.tabs.location[tab].tab_id) {
+                continue;
+            }
+
+            expected.location = model.tabs.location[tab];
+            expected.panes[expected.len] = .{
+                .id = pane.id,
+                .attachment_generation = pane.attachment_generation,
+                .cols = pane.buffer.w,
+                .rows = pane.buffer.h,
+            };
+            expected.len += 1;
+        }
+
+        const actual = Geometry.capture(projection);
+        try std.testing.expect(expected.matches(&actual));
+        var no_tab = projection;
+        no_tab.tab = null;
+        const empty = Geometry.capture(no_tab);
+        try std.testing.expectEqual(@as(u8, 0), empty.len);
+        try std.testing.expect(empty.location == null);
+    }
+}

@@ -1,0 +1,23 @@
+diff --git a/src/client/presentation/Geometry.zig b/src/client/presentation/Geometry.zig
+index 76eebb65..f35b449a 100644
+--- a/src/client/presentation/Geometry.zig
++++ b/src/client/presentation/Geometry.zig
+@@ -18,7 +18,6 @@ pub fn capture(projection: Projection) Geometry {
+     const slot = projection.tab orelse return geometry;
+     const model = projection.model;
+     const tab_id = model.tabs.location[slot].tab_id;
+-    geometry.location = if (model.panes.countIn(tab_id) == 0) null else model.tabs.location[slot];
+     geometry.layout_revision = model.tabs.layout[slot].currentRevision();
+     var panes = model.panes.iterateConst(tab_id);
+     while (panes.next()) |pane| {
+@@ -31,6 +30,10 @@ pub fn capture(projection: Projection) Geometry {
+         geometry.len += 1;
+     }
+ 
++    if (geometry.len != 0) {
++        geometry.location = model.tabs.location[slot];
++    }
++
+     return geometry;
+ }
+ 

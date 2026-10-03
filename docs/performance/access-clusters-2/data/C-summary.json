@@ -1,0 +1,122 @@
+[
+  {
+    "name": "frontend.client.frame_event",
+    "baseline_ns": 120.5,
+    "candidate_ns": 121.5,
+    "paired_percent": 1.243112947658398,
+    "wins": 2,
+    "losses": 4,
+    "ties": 0,
+    "pairs": 6,
+    "paired_percent_min": -0.8264462809917328,
+    "paired_percent_max": 1.6666666666666607,
+    "p95_ns_per_op": {
+      "A": 122.0,
+      "B": 125.5
+    },
+    "p99_ns_per_op": {
+      "A": 122.0,
+      "B": 125.5
+    },
+    "payload_bytes_per_op": {
+      "A": 0.0,
+      "B": 0.0
+    }
+  },
+  {
+    "name": "frontend.client.inbox_event",
+    "baseline_ns": 71.0,
+    "candidate_ns": 71.0,
+    "paired_percent": 0.0,
+    "wins": 0,
+    "losses": 1,
+    "ties": 5,
+    "pairs": 6,
+    "paired_percent_min": 0.0,
+    "paired_percent_max": 2.8169014084507005,
+    "p95_ns_per_op": {
+      "A": 72.5,
+      "B": 73.5
+    },
+    "p99_ns_per_op": {
+      "A": 72.5,
+      "B": 73.5
+    },
+    "payload_bytes_per_op": {
+      "A": 0.0,
+      "B": 0.0
+    }
+  },
+  {
+    "name": "frontend.client.key_event",
+    "baseline_ns": 46.0,
+    "candidate_ns": 45.5,
+    "paired_percent": -2.1286231884057982,
+    "wins": 4,
+    "losses": 1,
+    "ties": 1,
+    "pairs": 6,
+    "paired_percent_min": -10.204081632653061,
+    "paired_percent_max": 6.666666666666665,
+    "p95_ns_per_op": {
+      "A": 47.0,
+      "B": 48.0
+    },
+    "p99_ns_per_op": {
+      "A": 47.0,
+      "B": 48.0
+    },
+    "payload_bytes_per_op": {
+      "A": 0.0,
+      "B": 0.0
+    }
+  },
+  {
+    "name": "frontend.client.machine_frame_event",
+    "baseline_ns": 123.0,
+    "candidate_ns": 123.5,
+    "paired_percent": 0.40650406504064707,
+    "wins": 1,
+    "losses": 3,
+    "ties": 2,
+    "pairs": 6,
+    "paired_percent_min": -0.8130081300813052,
+    "paired_percent_max": 1.6393442622950838,
+    "p95_ns_per_op": {
+      "A": 127.0,
+      "B": 128.0
+    },
+    "p99_ns_per_op": {
+      "A": 127.0,
+      "B": 128.0
+    },
+    "payload_bytes_per_op": {
+      "A": 0.0,
+      "B": 0.0
+    }
+  },
+  {
+    "name": "frontend.client.present_frame",
+    "baseline_ns": 700.0,
+    "candidate_ns": 594.5,
+    "paired_percent": -14.81688720547002,
+    "wins": 6,
+    "losses": 0,
+    "ties": 0,
+    "pairs": 6,
+    "paired_percent_min": -16.643159379407614,
+    "paired_percent_max": -12.53561253561254,
+    "p95_ns_per_op": {
+      "A": 714.0,
+      "B": 606.0
+    },
+    "p99_ns_per_op": {
+      "A": 714.0,
+      "B": 606.0
+    },
+    "payload_bytes_per_op": {
+      "A": 0.0,
+      "B": 0.0
+    }
+  }
+]
