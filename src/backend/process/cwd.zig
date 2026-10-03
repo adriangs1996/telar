@@ -1,10 +1,11 @@
 //! Native working-directory lookup for an observed process.
 
 const darwin = @import("darwin.zig");
+const ProcVnodePathInfo = @import("ProcVnodePathInfo.zig").ProcVnodePathInfo;
 const builtin = @import("builtin");
 const std = @import("std");
 
-const mac = if (builtin.os.tag == .macos) darwin.c else void;
+const mac = if (builtin.os.tag == .macos) darwin else void;
 
 /// Reads the current working directory reported by the operating system.
 /// The returned slice borrows `buffer`; failure or insufficient space returns
@@ -26,7 +27,7 @@ fn readMacos(pid: std.c.pid_t, buffer: []u8) ?[]const u8 {
         return null;
     }
 
-    var info: mac.struct_proc_vnodepathinfo = undefined;
+    var info: ProcVnodePathInfo = undefined;
     const size: c_int = @intCast(@sizeOf(@TypeOf(info)));
     if (mac.proc_pidinfo(pid, mac.PROC_PIDVNODEPATHINFO, 0, &info, size) != size) {
         return null;

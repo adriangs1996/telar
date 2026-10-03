@@ -5,6 +5,7 @@
 const builtin = @import("builtin");
 const std = @import("std");
 const darwin = @import("darwin.zig");
+const ProcBsdShortInfo = @import("ProcBsdShortInfo.zig").ProcBsdShortInfo;
 
 /// The first process, which every chain ends at.
 pub const init_process: u32 = 1;
@@ -65,11 +66,11 @@ fn macosParent(pid: u32) ?u32 {
         return null;
     }
 
-    var info: darwin.c.proc_bsdshortinfo = std.mem.zeroes(darwin.c.proc_bsdshortinfo);
-    const expected: c_int = @intCast(@sizeOf(darwin.c.proc_bsdshortinfo));
-    const written = darwin.c.proc_pidinfo(
+    var info: ProcBsdShortInfo = std.mem.zeroes(ProcBsdShortInfo);
+    const expected: c_int = @intCast(@sizeOf(ProcBsdShortInfo));
+    const written = darwin.proc_pidinfo(
         @intCast(pid),
-        darwin.c.PROC_PIDT_SHORTBSDINFO,
+        darwin.PROC_PIDT_SHORTBSDINFO,
         0,
         &info,
         expected,
