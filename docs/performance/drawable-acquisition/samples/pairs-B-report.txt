@@ -1,0 +1,7 @@
+case        metric       A ms     B ms    paired  B wins
+single      p50_ms      4.707    9.611   +113.6%  0/7
+single      p95_ms      9.872   17.945    +81.8%  0/7
+single      p99_ms     12.557   19.245    +72.6%  0/7
+splits-load p50_ms      8.809    9.108     +2.5%  2/7
+splits-load p95_ms     17.121   17.019    -21.9%  5/7
+splits-load p99_ms     21.257   19.298    -30.3%  6/7

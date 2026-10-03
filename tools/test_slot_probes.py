@@ -105,6 +105,22 @@ class StateFreshnessTests(unittest.TestCase):
 
 
 class MetalSlotTimingTests(unittest.TestCase):
+    def test_drawable_cpu_excludes_sleep_and_requires_contained_wall_interval(self):
+        events = [
+            metal_event("measure_start", 0),
+            metal_event("drawable_begin", 1),
+            metal_event("drawable_cpu", 8.9, (0, .125, 0)),
+            metal_event("drawable_end", 9),
+            metal_event("close_end", 10),
+        ]
+        result = analyze_metal(events)["samples"]
+        self.assertEqual(result["drawable_ms"], [8])
+        self.assertEqual(result["drawable_cpu_ms"], [.125])
+        for window in ((2 / 1000, 10 / 1000), (0, 8.95 / 1000)):
+            self.assertEqual(analyze_metal(events, window)["samples"]["drawable_cpu_ms"], [])
+        legacy = [event for event in events if event[0] != "drawable_cpu"]
+        self.assertEqual(analyze_metal(legacy)["samples"]["drawable_cpu_ms"], [])
+
     def test_deadline_partitions_known_wait_even_without_an_event_at_deadline(self):
         # Each row declares the occupied interval and its exact intersection
         # with [deadline, infinity), rather than deriving an expected percentile.

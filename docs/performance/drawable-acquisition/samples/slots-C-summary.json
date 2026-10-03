@@ -1,0 +1,56 @@
+[
+  {
+    "metric": "drawable_ms",
+    "percentile": "p50_ms",
+    "A": 0.0578339968342334,
+    "B": 0.05754200537921861,
+    "paired_percent": 4.530561768432384,
+    "wins": 2,
+    "pairs": 7
+  },
+  {
+    "metric": "drawable_ms",
+    "percentile": "p95_ms",
+    "A": 14.719562503159977,
+    "B": 15.781416004756466,
+    "paired_percent": 18.221418056124428,
+    "wins": 1,
+    "pairs": 7
+  },
+  {
+    "metric": "drawable_ms",
+    "percentile": "p99_ms",
+    "A": 19.866707498804317,
+    "B": 19.879392965740408,
+    "paired_percent": 0.008147704809657874,
+    "wins": 3,
+    "pairs": 7
+  },
+  {
+    "metric": "drawable_cpu_ms",
+    "percentile": "p50_ms",
+    "A": 0.047917,
+    "B": 0.048521,
+    "paired_percent": 2.0310810524307277,
+    "wins": 2,
+    "pairs": 7
+  },
+  {
+    "metric": "drawable_cpu_ms",
+    "percentile": "p95_ms",
+    "A": 0.08074585,
+    "B": 0.08135429999999999,
+    "paired_percent": -1.8476491361475555,
+    "wins": 4,
+    "pairs": 7
+  },
+  {
+    "metric": "drawable_cpu_ms",
+    "percentile": "p99_ms",
+    "A": 0.10455699999999998,
+    "B": 0.10507125000000002,
+    "paired_percent": 1.1380842552412673,
+    "wins": 3,
+    "pairs": 7
+  }
+]

@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "../src/gui/native/telar_gui.h"
 
 enum EventKind {
@@ -17,7 +18,7 @@ enum EventKind {
     DrawableBegin, DrawableEnd, DrawBegin, DrawEnd, PrepareBegin, PrepareEnd,
     EncodeBegin, EncodeEnd, WaitBegin, WaitEnd, CommitBegin, CommitEnd,
     GPUComplete, GPUStart, GPUEnd, CompleteBegin, CompleteEnd,
-    PumpBegin, PumpEnd, InputBegin, InputEnd, CloseBegin, CloseEnd, FrameMarker,
+    PumpBegin, PumpEnd, InputBegin, InputEnd, CloseBegin, CloseEnd, FrameMarker, DrawableCpu,
 };
 
 static const char *event_names[] = {
@@ -25,7 +26,7 @@ static const char *event_names[] = {
     "drawable_begin", "drawable_end", "draw_begin", "draw_end", "prepare_begin", "prepare_end",
     "encode_begin", "encode_end", "wait_begin", "wait_end", "commit_begin", "commit_end",
     "gpu_complete", "gpu_start", "gpu_end", "complete_begin", "complete_end",
-    "pump_begin", "pump_end", "input_begin", "input_end", "close_begin", "close_end", "frame_marker",
+    "pump_begin", "pump_end", "input_begin", "input_end", "close_begin", "close_end", "frame_marker", "drawable_cpu",
 };
 
 enum { HasState = 1, Dirty = 2, Busy = 4, Visible = 8, Closed = 16 };
@@ -44,6 +45,8 @@ static BOOL dumped;
 static BOOL trace_marker;
 static const char *trace_path;
 static uint32_t viewport_width, viewport_height;
+static NSUInteger drawable_pool_capacity;
+static NSInteger display_max_fps;
 static telar_gui_callbacks original_callbacks;
 static IMP original_init, original_request, original_ready, original_draw;
 static IMP original_next, original_encode, original_submission, original_wait;
@@ -96,9 +99,9 @@ static void dump_trace(void) {
     if (file == NULL) {
         return;
     }
-    fprintf(file, "{\"version\":1,\"capacity\":%u,\"dropped\":%u,\"viewport\":[%u,%u],\"events\":[\n",
+    fprintf(file, "{\"version\":1,\"capacity\":%u,\"dropped\":%u,\"viewport\":[%u,%u],\"drawable_pool_capacity\":%lu,\"display_max_fps\":%ld,\"events\":[\n",
             EventCapacity, count > EventCapacity ? count - EventCapacity : 0,
-            viewport_width, viewport_height);
+            viewport_width, viewport_height, (unsigned long)drawable_pool_capacity, (long)display_max_fps);
     count = MIN(count, EventCapacity);
     for (unsigned i = 0; i < count; i++) {
         TraceEvent *event = &events[i];
@@ -123,14 +126,34 @@ static void draw_if_ready(id self, SEL selector) {
 }
 
 static void draw(id self, SEL selector, id drawable) {
+    if (display_max_fps == 0) {
+        display_max_fps = ((NSView *)self).window.screen.maximumFramesPerSecond;
+    }
     record_state(DrawBegin, self);
     ((void (*)(id, SEL, id))original_draw)(self, selector, drawable);
     record_state(DrawEnd, self);
 }
 
+// Wall time includes drawable availability waits; thread CPU time excludes them.
+// Example: compare drawable_ms with drawable_cpu_ms in the bounded trace.
 static id next_drawable(id self, SEL selector) {
+    if (!NSThread.isMainThread) {
+        return ((id (*)(id, SEL))original_next)(self, selector);
+    }
+
     record(DrawableBegin, 0, 0);
+    struct timespec before, after;
+    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &before) != 0) {
+        abort();
+    }
+
     id drawable = ((id (*)(id, SEL))original_next)(self, selector);
+    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &after) != 0) {
+        abort();
+    }
+
+    record(DrawableCpu, 0, (after.tv_sec - before.tv_sec) * 1000.0 +
+           (after.tv_nsec - before.tv_nsec) / 1000000.0);
     record(DrawableEnd, 0, drawable != nil);
     return drawable;
 }
@@ -181,8 +204,10 @@ static id initialize(id self, SEL selector, NSRect frame, void *context,
     wrapped.pump = pump;
     wrapped.complete = complete;
     wrapped.input = input;
-    return ((id (*)(id, SEL, NSRect, void *, const telar_gui_callbacks *))original_init)
+    NSView *view = ((id (*)(id, SEL, NSRect, void *, const telar_gui_callbacks *))original_init)
         (self, selector, frame, context, &wrapped);
+    drawable_pool_capacity = ((CAMetalLayer *)view.layer).maximumDrawableCount;
+    return view;
 }
 
 static BOOL encode(id self, SEL selector, const telar_gui_frame *frame, id drawable) {

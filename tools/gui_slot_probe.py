@@ -51,6 +51,8 @@ def analyze(path, window=None):
     dirty_busy = eligible_busy = 0.0
     starts = {}
     durations = {name: [] for name in ("drawable", "prepare", "encode", "wait", "commit", "pump", "input")}
+    drawable_cpu = []
+    pending_drawable_cpu = None
     failed_gpu = failed_complete = 0
     requests = eligible_busy_requests = busy_requests = 0
 
@@ -115,6 +117,11 @@ def analyze(path, window=None):
             elif kind == "frame_marker":
                 frame["marker_sequence"] = int(value)
 
+        if kind == "drawable_begin":
+            pending_drawable_cpu = None
+        elif kind == "drawable_cpu":
+            pending_drawable_cpu = value
+
         phase, _, edge = kind.rpartition("_")
         if phase in durations:
             if edge == "begin":
@@ -123,6 +130,8 @@ def analyze(path, window=None):
                 began = starts.pop(phase)
                 if window_start <= began and at <= window_end:
                     durations[phase].append((at - began) * 1000)
+                    if phase == "drawable" and pending_drawable_cpu is not None:
+                        drawable_cpu.append(pending_drawable_cpu)
 
     all_prepared = [frame for frame in frames.values() if "prepare_at" in frame]
     prepared = [frame for frame in all_prepared if window_start <= frame["prepare_at"] < window_end]
@@ -136,6 +145,7 @@ def analyze(path, window=None):
     frame_samples = contained if window is not None else prepared
     completed_samples = contained if window is not None else completed
     samples = {name + "_ms": values for name, values in durations.items()}
+    samples["drawable_cpu_ms"] = drawable_cpu
     for name in ("dirty_busy_ms", "eligible_busy_ms", "request_to_prepare_ms", "cadence_bound_ms"):
         samples[name] = [frame[name] for frame in frame_samples]
     for name, start, end in (
@@ -154,6 +164,8 @@ def analyze(path, window=None):
     span = window_end - window_start
     active_span = max(prepare_times) - min(prepare_times) if len(prepare_times) > 1 else 0
     summary = dict(
+        drawable_pool_capacity=trace.get("drawable_pool_capacity"),
+        display_max_fps=trace.get("display_max_fps"),
         viewport=trace["viewport"], events=sum(window_start <= event[1] <= window_end for event in events),
         elapsed_seconds=span, observation_start_s=window_start, observation_end_s=window_end,
         frames_prepared=len(prepared), frames_gpu_completed=len(completed),
