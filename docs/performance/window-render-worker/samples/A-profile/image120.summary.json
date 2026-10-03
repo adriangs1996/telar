@@ -1,0 +1,29 @@
+{
+  "binary": "/private/tmp/claude-501/-Users-adriangonzalez-sandbox-telar-worktrees-perf-window-render-worker/8a92c15e-f88e-40d0-a17b-fd49a1a98bad/scratchpad/perf/A/bin/telar",
+  "samples": 100,
+  "dense": false,
+  "viewport": [
+    1770,
+    2100,
+    2.0
+  ],
+  "baseline_glyphs": 64,
+  "p50_ms": 6.9859585,
+  "p95_ms": 18.13095,
+  "p99_ms": 25.51984866,
+  "max_ms": 25.723458,
+  "prepare_ms": {
+    "n": 723,
+    "p50": 0.070167,
+    "p95": 0.0817795,
+    "p99": 0.126945,
+    "max": 0.945458
+  },
+  "upload_ms": {
+    "n": 580,
+    "p50": 4.8324585,
+    "p95": 9.620545849999974,
+    "p99": 17.861319390000016,
+    "max": 25.527667
+  }
+}
