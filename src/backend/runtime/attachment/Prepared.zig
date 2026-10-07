@@ -1,5 +1,4 @@
 const GraphicsCounts = @import("GraphicsCounts.zig");
-const Prepared = @This();
 
 bytes: []const u8,
 effect: Effect,

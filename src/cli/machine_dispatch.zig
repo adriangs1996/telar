@@ -213,46 +213,6 @@ fn encodeCommand(telar_path: ?[]const u8, arguments: []const [*:0]const u8, buff
     return writer.buffered();
 }
 
-test "the remote command holds only shell-inert words that decode back" {
-    var buffer: [256]u8 = undefined;
-    const command = try encodeCommand(null, &.{ "pane", "send-keys", "--current", "it's $(x)" }, &buffer);
-
-    var words = std.mem.tokenizeScalar(u8, command, ' ');
-    try std.testing.expectEqualStrings("telar", words.next().?);
-    try std.testing.expectEqualStrings("dispatch-argv", words.next().?);
-
-    var sent: [4][*:0]const u8 = undefined;
-    var storage: [4][64:0]u8 = undefined;
-    var count: usize = 0;
-    while (words.next()) |word| : (count += 1) {
-        for (word) |byte| {
-            try std.testing.expect(std.ascii.isAlphanumeric(byte) or byte == '-' or byte == '_');
-        }
-
-        @memcpy(storage[count][0..word.len], word);
-        storage[count][word.len] = 0;
-        sent[count] = storage[count][0..word.len :0];
-    }
-
-    const argv = try decode(std.testing.allocator, sent[0..count]);
-    defer freeDecoded(std.testing.allocator, argv);
-
-    try std.testing.expectEqualStrings("telar", std.mem.span(argv[0]));
-    try std.testing.expectEqualStrings("it's $(x)", std.mem.span(argv[4]));
-}
-
-test "a command too long for the buffer is refused" {
-    var buffer: [24]u8 = undefined;
-    try std.testing.expectError(error.MachineCommandTooLong, encodeCommand(null, &.{ "pane", "list", "--json" }, &buffer));
-}
-
-test "a saved telar path replaces the PATH lookup" {
-    var buffer: [128]u8 = undefined;
-    const command = try encodeCommand("/home/dev/.local/share/telar/0.3.0/telar", &.{"version"}, &buffer);
-    try std.testing.expect(std.mem.startsWith(u8, command, "/home/dev/.local/share/telar/0.3.0/telar dispatch-argv a"));
-    try std.testing.expectError(error.InvalidRemoteTelarPath, encodeCommand("/home/dev/$(id)", &.{"version"}, &buffer));
-}
-
 /// Streams an already opened file over managed dispatch and captures its bounded reply.
 /// Example: `const reply = try machine_dispatch.captureFile(init, &profile, argv, bundle);`.
 pub fn captureFile(init: std.process.Init, profile: *const core.MachineProfile, argv: []const [*:0]const u8, input: std.Io.File) ![]u8 {

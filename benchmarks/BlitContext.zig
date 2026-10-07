@@ -2,7 +2,6 @@
 //! the runtime's cell buffer: the per-cell cost of `vt.RenderState` to `Cell`.
 const vtgrid = @import("vtgrid");
 const cellgrid = @import("cellgrid");
-const backend = @import("telar-backend");
 const std = @import("std");
 const vt = @import("ghostty-vt");
 const main = @import("main.zig");

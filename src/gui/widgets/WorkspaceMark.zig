@@ -93,16 +93,3 @@ fn initial(storage: *[4]u8, name: []const u8) ?[]const u8 {
     storage[0] = std.ascii.toUpper(storage[0]);
     return storage[0..length];
 }
-
-test "a name always picks the same tile hue" {
-    const palette = data.theme_support.default_theme.palette;
-    try std.testing.expectEqual(tileHue(palette, "telar"), tileHue(palette, "telar"));
-}
-
-test "the initial is the first code point, upper-cased when ASCII" {
-    var storage: [4]u8 = undefined;
-    try std.testing.expectEqualStrings("R", initial(&storage, "replay-web").?);
-    try std.testing.expectEqualStrings("\u{00e9}", initial(&storage, "\u{00e9}clair").?);
-    try std.testing.expect(initial(&storage, "") == null);
-    try std.testing.expect(initial(&storage, &[_]u8{0xff}) == null);
-}

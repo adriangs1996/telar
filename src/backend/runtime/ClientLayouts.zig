@@ -28,9 +28,12 @@ const Record = struct {
     sidebar_visible: bool = true,
     sidebar_width: u16 = 0,
     workspace_list_collapsed: bool = false,
+    // SAFETY: replace assigns active_tab before returning an acquired record; empty records have invalid identity and are not exported.
     active_tab: core.TabLocation = undefined,
+    // SAFETY: append fills each StoredTab before increasing tab_count; layout readers use only that prefix.
     tabs: [core.max_client_layout_tabs]StoredTab = undefined,
     tab_count: u16 = 0,
+    // SAFETY: append decodes the nodes before publishing their range in a StoredTab; readers use only stored node ranges.
     nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined,
     node_count: u16 = 0,
 

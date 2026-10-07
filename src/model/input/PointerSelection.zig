@@ -1,7 +1,5 @@
 const cellgrid = @import("cellgrid");
-const core = @import("telar-core");
 const Point = @import("Point.zig");
-const PointerSelection = @This();
 
 start: Point,
 end: Point,

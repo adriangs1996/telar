@@ -49,7 +49,12 @@ fn routePromptInput(client: *Client, command: data.KeyRoutingCommand) !void {
                 .key = value,
             },
         ),
-        .bytes => |bytes| try client.host_input_source.routePromptBytes(bytes),
+        .bytes => |bytes| _ = try name_prompt.inputPrompt(
+            client,
+            .{
+                .paste_text = bytes,
+            },
+        ),
     }
 }
 
@@ -253,6 +258,7 @@ fn routeCurrentKey(client: *Client, command: data.KeyRoutingCommand, authority: 
         },
     );
     if (pane_id != null and data.key_routing.requestsClipboardPreview(command)) {
+        // Preview capture is optional; startClipboardCapture rolls back its reservation on failure so key forwarding can continue.
         _ = clipboard_capture.startClipboardCapture(&client.model) catch {};
     }
 

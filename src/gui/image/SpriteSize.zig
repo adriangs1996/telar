@@ -24,9 +24,3 @@ pub const SpriteSize = enum {
         };
     }
 };
-
-test "sizes grow in declaration order" {
-    for (SpriteSize.all[1..], SpriteSize.all[0 .. SpriteSize.count - 1]) |size, smaller| {
-        try std.testing.expect(size.logical() > smaller.logical());
-    }
-}

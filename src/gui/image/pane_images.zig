@@ -1,10 +1,11 @@
 //! Pane images: turns the presented machine's retained Kitty graphics into
-//! textures and resolved placements (`docs/flows/pane-images.md`).
+//! textures and resolved placements.
 //!
 //! Everything here runs on the window thread and stays off the media path's
 //! bulk work: it reads metadata, borrows pixels through leases and hands at
 //! most `ImageUpload.uploads_in_flight` uploads to the backend, whose own
 //! thread copies them. Nothing allocates.
+const gfx = @import("gfx");
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
@@ -14,8 +15,7 @@ const ImagePlacement = @import("ImagePlacement.zig");
 const PaneImages = @import("PaneImages.zig");
 const ImageView = @import("ImageView.zig");
 const ResolvedFrom = @import("ResolvedFrom.zig");
-const native = @import("../native/native.zig");
-const ImageUpload = @import("../native/ImageUpload.zig");
+const ImageUpload = gfx.ImageUpload;
 
 const retained = client.retained_graphics;
 const Store = retained.Store;
@@ -142,39 +142,10 @@ pub fn start(images: *PaneImages, stores: []Store, machine: u8, now_ns: u64) voi
     }
 }
 
-/// Takes the backend's report for one upload: the pixels go back to their
-/// store, which may now free them and return the runtime's credit. Returns
-/// how long a successful upload took since `start` requested it.
-///
-/// ```zig
-/// const elapsed = pane_images.finish(&gui.images, &gui.graphics_stores, handle, true, now_ns);
-/// ```
-pub fn finish(images: *PaneImages, stores: []Store, handle: u32, success: bool, now_ns: u64) ?u64 {
-    const row = GpuImages.rowOf(handle) orelse return null;
-    if (images.gpu.residency[row] != .uploading) {
-        return null;
-    }
-
-    retained.release(&stores[images.gpu.machine[row]], images.gpu.lease[row]);
-    images.gpu.uploading -= 1;
-    images.revision +%= 1;
-    if (success) {
-        // Idle time counts from here, not from before the upload.
-        images.gpu.residency[row] = .ready;
-        images.gpu.used_ns[row] = now_ns;
-        return now_ns -| images.gpu.started_ns[row];
-    }
-
-    images.gpu.residency[row] = .failed;
-    images.gpu.resident_bytes -= images.gpu.bytes[row];
-    images.gpu.bytes[row] = 0;
-    return null;
-}
-
 /// Records which textures the prepared frame draws, so eviction spares them,
 /// and counts each generation the first time a frame draws it.
 /// Example: `pane_images.noteDrawn(&gui.images, renderer.imageDraws());`.
-pub fn noteDrawn(images: *PaneImages, draws: []const native.ImageDraw) void {
+pub fn noteDrawn(images: *PaneImages, draws: []const gfx.ImageDraw.ImageDraw) void {
     for (draws) |draw| {
         const row = GpuImages.rowOf(draw.handle) orelse continue;
         images.gpu.used_frame[row] = images.frame;
@@ -198,6 +169,7 @@ pub fn wakeupAfter(images: *const PaneImages, now_ns: u64) u32 {
 
     const deadline = earliest orelse return 0;
     const remaining = deadline -| now_ns;
+    // SAFETY: unsigned divCeil has a fixed nonzero divisor, ns_per_ms.
     return @intCast(@max(1, std.math.divCeil(u64, remaining, std.time.ns_per_ms) catch unreachable));
 }
 
@@ -214,18 +186,6 @@ pub fn trimDue(images: *const PaneImages, now_ns: u64) bool {
     return false;
 }
 
-/// Moves pending uploads and releases into the frame the backend takes when
-/// render returns, then forgets them; the arrays stay valid until the next
-/// prepare. Example: `pane_images.handOff(&gui.images, out);`.
-pub fn handOff(images: *PaneImages, frame: *native.Frame) void {
-    frame.image_uploads = &images.uploads;
-    frame.image_upload_count = images.upload_count;
-    frame.image_releases = &images.releases;
-    frame.image_release_count = images.release_count;
-    images.upload_count = 0;
-    images.release_count = 0;
-}
-
 /// Returns every lease after the backend stopped reading, before the stores
 /// go away. Example: `pane_images.abandon(&gui.images, &gui.graphics_stores);`.
 pub fn abandon(images: *PaneImages, stores: []Store) void {
@@ -234,7 +194,13 @@ pub fn abandon(images: *PaneImages, stores: []Store) void {
             continue;
         }
 
-        retained.release(&stores[images.gpu.machine[row]], images.gpu.lease[row]);
+        const store = &stores[images.gpu.machine[row]];
+        const lease = images.gpu.lease[row];
+        const image = store.images.getPtr(lease.identity) orelse unreachable;
+        std.debug.assert(image.delivery.leases != 0);
+        image.delivery.leases -= 1;
+        store.collectRetired(lease.identity.pane_id, lease.identity.image_id);
+
         images.gpu.residency[row] = .failed;
         images.gpu.uploading -= 1;
     }

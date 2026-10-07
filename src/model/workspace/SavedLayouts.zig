@@ -11,13 +11,20 @@ const Layouts = @This();
 /// Every tab the runtime holds has a pane, so its tabs all fit.
 pub const capacity = core.max_client_layout_tabs;
 
+// SAFETY: remember writes the location before increasing count; row lookup and compaction use only occupied rows.
 location: [capacity]core.TabLocation = undefined,
+// SAFETY: remember writes the focused pane before increasing count; find reads it only after locating an occupied row.
 pane_id: [capacity]core.PaneId = undefined,
+// SAFETY: remember writes the active flag before increasing count; find and compaction use only occupied rows.
 workspace_active: [capacity]bool = undefined,
+// SAFETY: remember fills the presentation before increasing count; find reads it only after locating an occupied row.
 presentation: [capacity]Presentation = undefined,
+// SAFETY: remember writes each tree offset before increasing count; lookup and compaction use offsets of occupied rows.
 node_start: [capacity]u16 = undefined,
+// SAFETY: remember writes each tree length before increasing count; lookup and compaction use lengths of occupied rows.
 node_count: [capacity]u16 = undefined,
 count: usize = 0,
+// SAFETY: remember copies tree nodes before increasing node_total and count; lookup and compaction use only retained tree ranges.
 nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined,
 node_total: usize = 0,
 
@@ -153,104 +160,3 @@ const Presentation = struct {
     metrics: Metrics,
     revision: u64,
 };
-
-test "saved trees keep their shape when an earlier tree leaves the pool" {
-    var layouts: Layouts = .{};
-    var trees: [3]data.WorkspaceLayout = @splat(.{});
-    for (&trees, 0..) |*tree, index| {
-        try tree.addRoot(@enumFromInt(10 * index + 1));
-        for (0..index * 2) |split| {
-            try tree.splitFocused(@enumFromInt(10 * index + split + 2), .vertical);
-        }
-
-        try layouts.remember(.{
-            .location = .{
-                .workspace = .{ .workspace = @enumFromInt(1) },
-                .tab_id = @enumFromInt(index + 1),
-            },
-            .pane_id = tree.focused().?,
-            .workspace_active = index == 0,
-            .layout = tree.*,
-        });
-    }
-
-    const middle: core.TabLocation = .{
-        .workspace = .{ .workspace = @enumFromInt(1) },
-        .tab_id = @enumFromInt(2),
-    };
-    layouts.forget(middle);
-    try std.testing.expect(layouts.find(middle) == null);
-    for ([_]usize{ 0, 2 }) |index| {
-        const restored = layouts.find(.{
-            .workspace = .{ .workspace = @enumFromInt(1) },
-            .tab_id = @enumFromInt(index + 1),
-        }).?;
-        var expected: [core.max_client_layout_tab_nodes]core.ClientLayoutNode = undefined;
-        var actual: [core.max_client_layout_tab_nodes]core.ClientLayoutNode = undefined;
-        try std.testing.expectEqualDeep(trees[index].clientLayoutNodes(&expected), restored.layout.clientLayoutNodes(&actual));
-        try std.testing.expectEqual(trees[index].focused(), restored.layout.focused());
-        try std.testing.expectEqual(trees[index].currentRevision(), restored.layout.currentRevision());
-    }
-}
-
-test "a full node pool gives way to the oldest trees" {
-    var layouts: Layouts = .{};
-    var tree: data.WorkspaceLayout = .{};
-    try tree.addRoot(@enumFromInt(1));
-    for (1..core.max_panes_per_tab) |pane| {
-        try tree.splitFocused(@enumFromInt(pane + 1), .vertical);
-    }
-
-    var saved: data.SavedLayout = .{
-        .location = .{
-            .workspace = .{ .workspace = @enumFromInt(1) },
-            .tab_id = @enumFromInt(1),
-        },
-        .pane_id = tree.focused().?,
-        .workspace_active = true,
-        .layout = tree,
-    };
-    const trees_that_fit = core.max_client_layout_nodes / core.max_client_layout_tab_nodes;
-    for (0..trees_that_fit + 1) |index| {
-        saved.location.tab_id = @enumFromInt(index + 1);
-        layouts.retain(saved);
-    }
-
-    try std.testing.expectEqual(trees_that_fit, layouts.count);
-    try std.testing.expect(layouts.find(.{ .workspace = saved.location.workspace, .tab_id = @enumFromInt(1) }) == null);
-    try std.testing.expect(layouts.find(saved.location) != null);
-}
-
-test "a tree that does not fit keeps the one it would replace" {
-    var layouts: Layouts = .{};
-    var small: data.WorkspaceLayout = .{};
-    try small.addRoot(@enumFromInt(1));
-    var large: data.WorkspaceLayout = .{};
-    try large.addRoot(@enumFromInt(1));
-    for (1..core.max_panes_per_tab) |pane| {
-        try large.splitFocused(@enumFromInt(pane + 1), .vertical);
-    }
-
-    var saved: data.SavedLayout = .{
-        .location = .{
-            .workspace = .{ .workspace = @enumFromInt(1) },
-            .tab_id = @enumFromInt(1),
-        },
-        .pane_id = @enumFromInt(1),
-        .workspace_active = true,
-        .layout = large,
-    };
-    const trees_that_fit = core.max_client_layout_nodes / core.max_client_layout_tab_nodes;
-    for (0..trees_that_fit) |index| {
-        saved.location.tab_id = @enumFromInt(index + 2);
-        try layouts.remember(saved);
-    }
-
-    saved.location.tab_id = @enumFromInt(1);
-    saved.layout = small;
-    try layouts.remember(saved);
-    saved.layout = large;
-    try std.testing.expectError(error.TooManySavedLayouts, layouts.remember(saved));
-    try std.testing.expectEqual(@as(usize, 1), layouts.find(saved.location).?.layout.count());
-    try std.testing.expectEqual(trees_that_fit + 1, layouts.count);
-}

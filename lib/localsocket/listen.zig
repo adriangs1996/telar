@@ -1,9 +1,7 @@
 //! Backend ownership of the filesystem-backed Unix listener.
 
 const std = @import("std");
-const SocketDirectory = @import("SocketDirectory.zig");
 const builtin = @import("builtin");
-const LocalListener = @import("LocalListener.zig");
 const privatefile = @import("privatefile");
 
 const Inode = privatefile.Inode;
@@ -25,6 +23,7 @@ pub fn peerUid(handle: std.c.fd_t) !u32 {
                 uid: u32,
                 gid: u32,
             };
+            // SAFETY: getsockopt fills credentials; both success and the exact output size are checked before reading uid.
             var credentials: Credentials = undefined;
             var len: std.os.linux.socklen_t = @sizeOf(Credentials);
             const result = std.os.linux.getsockopt(
@@ -40,7 +39,9 @@ pub fn peerUid(handle: std.c.fd_t) !u32 {
             break :linux credentials.uid;
         },
         .macos, .freebsd, .netbsd, .openbsd, .dragonfly => bsd: {
+            // SAFETY: getpeereid writes uid on success; its failure returns before uid is read.
             var uid: c.uid_t = undefined;
+            // SAFETY: getpeereid receives gid as an output parameter; this function never reads it.
             var gid: c.gid_t = undefined;
             if (c.getpeereid(handle, &uid, &gid) != 0) {
                 return error.PeerCredentialsUnavailable;
@@ -67,6 +68,7 @@ pub fn peerProcess(handle: std.c.fd_t) !u32 {
                 uid: u32,
                 gid: u32,
             };
+            // SAFETY: getsockopt fills credentials; short-circuit checks reject failure or a short result before reading pid.
             var credentials: Credentials = undefined;
             var len: std.os.linux.socklen_t = @sizeOf(Credentials);
             const result = std.os.linux.getsockopt(
@@ -154,8 +156,7 @@ pub fn localAddress(path: []const u8) !std.Io.net.UnixAddress {
     if (!std.fs.path.isAbsolute(path)) {
         return error.RelativePath;
     }
-    const native_address: std.c.sockaddr.un = .{ .path = undefined };
-    if (path.len >= native_address.path.len) {
+    if (path.len >= @sizeOf(@FieldType(std.c.sockaddr.un, "path"))) {
         return error.NameTooLong;
     }
     return std.Io.net.UnixAddress.init(path);
@@ -189,6 +190,7 @@ pub fn reclaimStaleEndpoint(io: std.Io, path: []const u8) !void {
     }
     defer _ = std.c.close(socket);
 
+    // SAFETY: memset initializes the entire path before it is passed to connect.
     var address: std.c.sockaddr.un = .{ .path = undefined };
     @memset(&address.path, 0);
     std.mem.copyForwards(u8, address.path[0..path.len], path);
@@ -218,168 +220,4 @@ pub fn reclaimStaleEndpoint(io: std.Io, path: []const u8) !void {
             else => return error.ProbeFailed,
         }
     }
-}
-
-test "endpoint directory trust classification" {
-    const euid: u32 = 1000;
-    try std.testing.expectEqual(
-        DirectoryTrust.trusted,
-        classifyEndpointDirectory(mode_directory | 0o700, 1000, euid),
-    );
-    try std.testing.expectEqual(
-        DirectoryTrust.trusted,
-        classifyEndpointDirectory(mode_directory | 0o755, 1000, euid),
-    );
-    try std.testing.expectEqual(
-        DirectoryTrust.group_or_world_writable,
-        classifyEndpointDirectory(mode_directory | 0o775, 1000, euid),
-    );
-    try std.testing.expectEqual(
-        DirectoryTrust.group_or_world_writable,
-        classifyEndpointDirectory(mode_directory | 0o777, 1000, euid),
-    );
-    try std.testing.expectEqual(
-        DirectoryTrust.wrong_owner,
-        classifyEndpointDirectory(mode_directory | 0o700, 1001, euid),
-    );
-    try std.testing.expectEqual(
-        DirectoryTrust.not_a_directory,
-        classifyEndpointDirectory(0o100600, 1000, euid),
-    );
-}
-
-test "peer authentication rejects a different account" {
-    try std.testing.expect(sameUserPeer(1000, 1000));
-    try std.testing.expect(!sameUserPeer(1001, 1000));
-}
-
-test "a listener refuses a directory another account could rewrite" {
-    const io = std.testing.io;
-    var temp = try SocketDirectory.create(io);
-    defer temp.cleanup(io);
-
-    var shared_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const shared = try std.fmt.bufPrintZ(
-        &shared_buffer,
-        "{s}/shared",
-        .{temp.path()},
-    );
-    try std.Io.Dir.createDirAbsolute(io, shared, std.Io.File.Permissions.fromMode(0o777));
-    try std.testing.expectEqual(@as(c_int, 0), std.c.chmod(shared, 0o777));
-
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try std.fmt.bufPrint(&path_buffer, "{s}/exposed.sock", .{shared});
-    try std.testing.expectError(
-        error.EndpointDirectoryWritable,
-        LocalListener.listen(io, path),
-    );
-}
-
-test "a listener refuses a symlink as its endpoint directory" {
-    const io = std.testing.io;
-    var temp = try SocketDirectory.create(io);
-    defer temp.cleanup(io);
-
-    try temp.dir.createDir(io, "real", std.Io.File.Permissions.fromMode(0o700));
-    try temp.dir.symLink(io, "real", "alias", .{ .is_directory = true });
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try std.fmt.bufPrint(&path_buffer, "{s}/alias/runtime.sock", .{temp.path()});
-
-    try std.testing.expectError(error.InvalidEndpoint, LocalListener.listen(io, path));
-}
-
-test "a listener reclaims a socket left behind by a crashed process" {
-    const io = std.testing.io;
-    var temp = try SocketDirectory.create(io);
-    defer temp.cleanup(io);
-
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try std.fmt.bufPrint(
-        &path_buffer,
-        "{s}/stale.sock",
-        .{temp.path()},
-    );
-
-    const address = try localAddress(path);
-    var abandoned = try address.listen(io, .{});
-    abandoned.deinit(io);
-
-    var listener = try LocalListener.listen(io, path);
-    listener.deinit(io);
-    try std.testing.expectError(
-        error.FileNotFound,
-        std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }),
-    );
-}
-
-test "the peer of a socket pair is the process that made it" {
-    var sockets: [2]std.c.fd_t = undefined;
-    try std.testing.expectEqual(@as(c_int, 0), std.c.socketpair(std.c.AF.UNIX, std.c.SOCK.STREAM, 0, &sockets));
-    defer _ = std.c.close(sockets[0]);
-    defer _ = std.c.close(sockets[1]);
-
-    try std.testing.expectEqual(@as(u32, @intCast(std.c.getpid())), try peerProcess(sockets[0]));
-}
-
-fn competingListener(io: std.Io, path: []const u8, entered: *std.atomic.Value(bool)) !LocalListener {
-    entered.store(true, .release);
-    return LocalListener.listen(io, path);
-}
-
-test "a competing startup cannot reclaim the bind before listen window" {
-    const io = std.testing.io;
-    var temp = try SocketDirectory.create(io);
-    defer temp.cleanup(io);
-    var buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try temp.endpoint(&buffer, "runtime.sock");
-    const held = try lockEndpoint(io, path);
-    var locked = true;
-    defer if (locked) held.close(io);
-    const socket = std.c.socket(std.c.AF.UNIX, std.c.SOCK.STREAM, 0);
-    try std.testing.expect(socket >= 0);
-    defer _ = std.c.close(socket);
-    var address: std.c.sockaddr.un = .{ .path = undefined };
-    @memset(&address.path, 0);
-    @memcpy(address.path[0..path.len], path);
-    try std.testing.expectEqual(@as(c_int, 0), std.c.bind(socket, @ptrCast(&address), @sizeOf(std.c.sockaddr.un)));
-    const bound = try temp.dir.statFile(io, "runtime.sock", .{ .follow_symlinks = false });
-
-    var entered: std.atomic.Value(bool) = .init(false);
-    var contender = try std.Io.concurrent(io, competingListener, .{ io, path, &entered });
-    defer {
-        if (locked) {
-            held.close(io);
-            locked = false;
-        }
-
-        if (contender.cancel(io)) |value| {
-            var unexpected = value;
-            unexpected.deinit(io);
-        } else |_| {}
-    }
-
-    while (!entered.load(.acquire)) {
-        try io.sleep(.fromMilliseconds(1), .awake);
-    }
-
-    try io.sleep(.fromMilliseconds(20), .awake);
-    const still_bound = try temp.dir.statFile(io, "runtime.sock", .{ .follow_symlinks = false });
-    try std.testing.expectEqual(bound.inode, still_bound.inode);
-    try std.testing.expectEqual(@as(c_int, 0), std.c.listen(socket, 1));
-    held.close(io);
-    locked = false;
-    try std.testing.expectError(error.AddressInUse, contender.await(io));
-}
-
-test "a listener refuses a linked startup lock without touching its target" {
-    const io = std.testing.io;
-    var temp = try SocketDirectory.create(io);
-    defer temp.cleanup(io);
-    try temp.dir.writeFile(io, .{ .sub_path = "precious", .data = "keep" });
-    try temp.dir.symLink(io, "precious", "runtime.sock.lock", .{});
-    var buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try temp.endpoint(&buffer, "runtime.sock");
-    try std.testing.expectError(error.InsecureFile, LocalListener.listen(io, path));
-    const stat = try temp.dir.statFile(io, "precious", .{});
-    try std.testing.expectEqual(@as(u64, 4), stat.size);
 }

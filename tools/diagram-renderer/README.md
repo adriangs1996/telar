@@ -14,10 +14,6 @@ builds the locked release helper and installs `bin/telar-diagram-renderer` besid
 Cross compilation requires the corresponding Rust target and linker, as well
 as the Zig target. Supported GUI targets are aarch64 and x86_64 macOS/Linux.
 
-Run `zig build test-diagram-renderer` for protocol, capture flowchart, sequence,
-resource rejection, pixel bounds and allocation quota checks. The direct Cargo
-equivalent is `cargo test --locked --release --manifest-path tools/diagram-renderer/Cargo.toml`.
-
 The GUI looks beside its executable for the helper. Development executables
 under Zig's build cache can use the generated `diagram_renderer_options.helper_path`.
 Installed applications do not need Cargo or access to the build directory.

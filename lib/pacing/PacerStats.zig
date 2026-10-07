@@ -1,5 +1,3 @@
-const Stats = @This();
-
 /// Frames actually drawn.
 drawn: u64 = 0,
 /// Frames that had to wait for the budget. The ratio against `drawn`

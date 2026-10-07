@@ -49,20 +49,3 @@ pub fn parse(args: []const [*:0]const u8) !RuntimeOptions {
 
     return self;
 }
-
-test "runtime watch bounds finite streams and rejects watch-only flags on status" {
-    const options = try RuntimeOptions.parse(&.{ "watch", "--jsonl", "--count", "2" });
-    try std.testing.expectEqual(runtime.Action.watch, options.action);
-    try std.testing.expectEqual(@as(?u32, 2), options.count);
-    try std.testing.expectError(error.InvalidCount, RuntimeOptions.parse(&.{ "watch", "--count", "0" }));
-    try std.testing.expectError(error.UnknownRuntimeOption, RuntimeOptions.parse(&.{ "status", "--count", "1" }));
-}
-
-test "runtime status rejects ambiguous and incomplete options" {
-    const options = try RuntimeOptions.parse(&.{ "status", "--socket", "/tmp/runtime.sock", "--json" });
-    try std.testing.expect(options.json);
-    try std.testing.expectEqualStrings("/tmp/runtime.sock", std.mem.span(options.socket.?));
-    try std.testing.expectError(error.MissingSocketPath, RuntimeOptions.parse(&.{ "status", "--socket" }));
-    try std.testing.expectError(error.DuplicateSocketOption, RuntimeOptions.parse(&.{ "status", "--socket", "a", "--socket", "b" }));
-    try std.testing.expectError(error.UnknownRuntimeOption, RuntimeOptions.parse(&.{ "status", "--wat" }));
-}

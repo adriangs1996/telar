@@ -1,5 +1,4 @@
 const notifications = @import("notifications.zig");
-const Input = @This();
 
 level: notifications.Level = .info,
 title: []const u8,

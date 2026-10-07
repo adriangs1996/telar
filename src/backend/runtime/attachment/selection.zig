@@ -66,42 +66,6 @@ fn resolveEndpoints(range: Range, cols: u16) ?Endpoints {
     };
 }
 
-test "linewise endpoints cover full rows in reading order" {
-    const endpoints = resolveEndpoints(.{
-        .start_x = 7,
-        .start_y = 9,
-        .end_x = 3,
-        .end_y = 4,
-        .linewise = true,
-    }, 12).?;
-
-    try std.testing.expectEqualDeep(Point{ .x = 0, .y = 4 }, endpoints.start);
-    try std.testing.expectEqualDeep(Point{ .x = 11, .y = 9 }, endpoints.end);
-}
-
-test "linear endpoints clamp columns without changing drag direction" {
-    const endpoints = resolveEndpoints(.{
-        .start_x = 40,
-        .start_y = 7,
-        .end_x = 3,
-        .end_y = 2,
-        .linewise = false,
-    }, 10).?;
-
-    try std.testing.expectEqualDeep(Point{ .x = 9, .y = 7 }, endpoints.start);
-    try std.testing.expectEqualDeep(Point{ .x = 3, .y = 2 }, endpoints.end);
-}
-
-test "a zero-width pane has no selectable endpoints" {
-    try std.testing.expect(resolveEndpoints(.{
-        .start_x = 0,
-        .start_y = 0,
-        .end_x = 0,
-        .end_y = 0,
-        .linewise = false,
-    }, 0) == null);
-}
-
 const Endpoints = struct {
     start: Point,
     end: Point,

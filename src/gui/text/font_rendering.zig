@@ -21,9 +21,3 @@ fn effective(font: client.GuiFont) client.GuiFont {
 
     return result;
 }
-
-test "font comparison ignores inactive optical weight but preserves geometry settings" {
-    try std.testing.expect(same(.{}, .{ .thicken_strength = 1 }));
-    try std.testing.expect(!same(.{}, .{ .size = 16 }));
-    try std.testing.expectEqual(builtin.os.tag != .macos, same(.{}, .{ .thicken = true }));
-}

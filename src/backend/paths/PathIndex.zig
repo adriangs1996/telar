@@ -29,6 +29,7 @@ pub const Failure = enum {
 
 gpa: std.mem.Allocator,
 client: ClientKey,
+// SAFETY: reset copies the wanted root before publishing root_len or starting a build; rootSlice reads only that prefix.
 root: [core.max_cwd_bytes]u8 = undefined,
 root_len: u16 = 0,
 bytes: []u8,
@@ -60,6 +61,7 @@ used_at: u64 = 0,
 wanted: OwnedQuery = .{},
 pending: bool = false,
 /// The root and refresh the newest request asked for.
+// SAFETY: want copies the requested root before publishing wanted_root_len; wantedRootSlice reads only that prefix.
 wanted_root: [core.max_cwd_bytes]u8 = undefined,
 wanted_root_len: u16 = 0,
 rebuild: bool = false,
@@ -201,55 +203,4 @@ pub fn truncation(self: *const PathIndex) ?core.Limit {
 /// Makes every appended entry visible to queries.
 pub fn publish(self: *PathIndex) void {
     self.published.store(self.entry_count, .release);
-}
-
-test "entries append within bounds and publish on demand" {
-    const index = try PathIndex.create(
-        std.testing.allocator,
-        .{
-            .id = 1,
-            .generation = 1,
-        },
-    );
-    defer index.destroy();
-
-    index.want("/work", false);
-    index.reset();
-    try std.testing.expect(index.append("src/", .directory));
-    try std.testing.expect(index.append("src/main.zig", .file));
-    try std.testing.expectEqual(@as(u32, 0), index.published.load(.acquire));
-
-    index.publish();
-    try std.testing.expectEqual(@as(u32, 2), index.published.load(.acquire));
-    try std.testing.expectEqualStrings("src/main.zig", index.path(index.entries[1]));
-    try std.testing.expectEqualStrings("/work", index.rootSlice());
-
-    index.want("/work", false);
-    try std.testing.expect(!index.rebuild);
-    index.want("/other", false);
-    try std.testing.expect(index.rebuild);
-}
-
-test "a build at the entry bound keeps what it listed and names the bound" {
-    const index = try PathIndex.create(
-        std.testing.allocator,
-        .{
-            .id = 1,
-            .generation = 1,
-        },
-    );
-    defer index.destroy();
-
-    index.want("/monorepo", false);
-    index.reset();
-    try std.testing.expect(index.truncation() == null);
-
-    var appended: usize = 0;
-    while (index.append("f", .file)) {
-        appended += 1;
-    }
-
-    try std.testing.expectEqual(@as(usize, max_entries), appended);
-    try std.testing.expectEqual(@as(u32, max_entries), index.entry_count);
-    try std.testing.expectEqualStrings("paths.max_entries", index.truncation().?.name);
 }

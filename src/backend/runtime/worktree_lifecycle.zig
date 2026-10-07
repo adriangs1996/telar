@@ -1,7 +1,6 @@
 //! A worktree is registered by the CLI after it added the checkout, receives
 //! launches that create its workspace and then add tabs to it, records the
-//! commands it runs, and is forgotten with every tab it holds. See
-//! `docs/flows/worktree-lifecycle.md`.
+//! commands it runs, and is forgotten with every tab it holds.
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -251,30 +250,4 @@ fn closeWorkspace(model: *RuntimeModel, workspace_id: core.WorkspaceId) void {
     }
 
     session_checkpoint.noteChange(model);
-}
-
-test "a long branch names its workspace on a character boundary" {
-    const gpa = std.testing.allocator;
-    const table = try gpa.create(Worktrees);
-    defer gpa.destroy(table);
-    table.* = .{};
-    defer table.deinit(gpa);
-
-    // 127 ASCII bytes, then a two-byte character straddling the tab bound.
-    const branch = "a" ** (core.max_tab_label_bytes - 1) ++ "é" ++ "b" ** 8;
-    const registered = try table.register(gpa, .{
-        .source = @enumFromInt(1),
-        .path = "/w/long",
-        .branch = branch,
-    });
-
-    const name = workspaceName(table, registered.slot);
-    try std.testing.expect(std.unicode.utf8ValidateSlice(name));
-    try std.testing.expectEqual(@as(usize, core.max_tab_label_bytes - 1), name.len);
-}
-
-test "command labels keep the program name within the wire bound" {
-    try std.testing.expectEqualStrings("claude", commandLabel("/usr/local/bin/claude"));
-    try std.testing.expectEqualStrings("zig", commandLabel("zig"));
-    try std.testing.expectEqual(@as(usize, core.max_worktree_command_label_bytes), commandLabel("/x/" ++ "a" ** 80).len);
 }

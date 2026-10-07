@@ -6,7 +6,6 @@ const Agents = @import("../../agent/Agents.zig");
 const hostmetrics = @import("hostmetrics");
 const Sampler = hostmetrics.Sampler;
 const ClientLayouts = @import("../ClientLayouts.zig");
-const Sources = @This();
 
 const no_worktrees: Worktrees = .{};
 

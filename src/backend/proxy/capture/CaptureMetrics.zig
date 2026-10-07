@@ -1,5 +1,3 @@
-const Metrics = @This();
-
 started: u64 = 0,
 truncated: u64 = 0,
 truncated_part: u64 = 0,

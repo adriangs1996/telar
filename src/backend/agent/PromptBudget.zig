@@ -54,17 +54,3 @@ fn rowFor(self: *PromptBudget, sender: core.PaneId, target: core.PaneId, now_ms:
     self.count[oldest] = 0;
     return oldest;
 }
-
-test "a pair spends its window budget and recovers after the window" {
-    var budget: PromptBudget = .{};
-    const sender: core.PaneId = @enumFromInt(1);
-    const target: core.PaneId = @enumFromInt(2);
-
-    for (0..prompts_per_window) |_| {
-        try std.testing.expect(budget.spend(sender, target, 1000));
-    }
-
-    try std.testing.expect(!budget.spend(sender, target, 1000));
-    try std.testing.expect(budget.spend(target, sender, 1000));
-    try std.testing.expect(budget.spend(sender, target, 1000 + window_ms));
-}

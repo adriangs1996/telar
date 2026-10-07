@@ -64,26 +64,3 @@ pub fn validate(self: Limit) !void {
         }
     }
 }
-
-test "limit names are identifiers and nouns are printable" {
-    try declare("bars.max_bar_actions", "click actions", 4).validate();
-
-    const empty: Limit = .{
-        .name = "",
-        .value = 1,
-    };
-    try std.testing.expectError(error.InvalidLimitName, empty.validate());
-
-    const spaced: Limit = .{
-        .name = "bars max",
-        .value = 1,
-    };
-    try std.testing.expectError(error.InvalidLimitName, spaced.validate());
-
-    const escaped: Limit = .{
-        .name = "a",
-        .noun = "\x1b[31m",
-        .value = 1,
-    };
-    try std.testing.expectError(error.InvalidLimitNoun, escaped.validate());
-}

@@ -4,6 +4,7 @@ const std = @import("std");
 const PtyResponseQueue = @This();
 
 mutex: ParkingMutex = .{},
+// SAFETY: push copies each response and its length under mutex before increasing len; peek reads only the head response.
 bytes: [pane_namespace.max_pty_responses][pane_namespace.max_pty_response_bytes]u8 = undefined,
 lengths: [pane_namespace.max_pty_responses]u16 = @splat(0),
 head: u8 = 0,

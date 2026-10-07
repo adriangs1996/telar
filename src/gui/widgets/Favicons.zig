@@ -20,6 +20,7 @@ const Favicons = @This();
 
 pub const capacity = core.max_workspace_list_entries;
 
+// SAFETY: register initializes each entry before increasing count; lookup and reclamation inspect only entries below count.
 entries: [capacity]Entry = undefined,
 count: u8 = 0,
 /// The page the placements belong to, by its pixel storage.
@@ -32,13 +33,13 @@ landed: ?Landing = null,
 reclaimed_revision: u64 = 0,
 
 /// Releases the landed image, if any, at client teardown.
-/// Example: `gui.chrome.favicons.deinit(gpa);`
+/// Example: `gui.model.chrome.favicons.deinit(gpa);`
 pub fn deinit(self: *Favicons, gpa: std.mem.Allocator) void {
     self.dropLanding(gpa);
 }
 
 /// Keeps one completed lookup until the next preparation places it.
-/// Example: `gui.chrome.favicons.land(gpa, .{ .workspace = id, .image = image });`
+/// Example: `gui.model.chrome.favicons.land(gpa, .{ .workspace = id, .image = image });`
 pub fn land(self: *Favicons, gpa: std.mem.Allocator, landing: Landing) void {
     self.dropLanding(gpa);
     self.landed = landing;
@@ -63,6 +64,7 @@ pub fn refresh(self: *Favicons, gpa: std.mem.Allocator, page: *SpritePage, works
         entry.state = .missing;
         return null;
     };
+    // SAFETY: The loop fills every image view before upload; an incompatible size returns before the array is read.
     var images: SpritePage.Images = undefined;
     for (SpriteSize.all, &images, 0..) |size, *view, index| {
         const side: u32 = image.sides[index];
@@ -146,16 +148,6 @@ pub fn sprite(self: *const Favicons, location: core.WorkspaceLocation, size: Spr
                 .index = entry.slot,
                 .size = size,
             };
-        }
-    }
-
-    return null;
-}
-
-pub fn stateOf(self: *const Favicons, workspace: core.WorkspaceId) ?Entry.State {
-    for (self.entries[0..self.count]) |entry| {
-        if (entry.workspace == workspace) {
-            return entry.state;
         }
     }
 

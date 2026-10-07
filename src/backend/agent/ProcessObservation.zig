@@ -1,7 +1,6 @@
 const core = @import("telar-core");
 const Identity = @import("Identity.zig");
 const SessionHost = @import("SessionHost.zig").SessionHost;
-const ProcessObservation = @This();
 
 identity: Identity,
 provider: core.AgentProvider,

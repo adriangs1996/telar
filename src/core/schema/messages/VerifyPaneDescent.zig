@@ -4,8 +4,6 @@ const id = @import("../id.zig");
 /// parent processes reaches the pane's root process. The runtime reads the
 /// sender's process from the socket and walks the chain itself; a confirmed
 /// connection may then report for that pane in the name of its agent.
-const VerifyPaneDescent = @This();
-
 request_id: id.RequestId,
 pane_id: id.PaneId,
 pane_generation: u64,

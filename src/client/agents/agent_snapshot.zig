@@ -89,6 +89,7 @@ fn publishAlerts(client: *Client, changes: []const data.AgentStatusChange) !void
             continue;
         }
 
+        // SAFETY: alertInput returns a successfully formatted prefix, a constant fallback or null; it never exposes unwritten bytes.
         var message_buffer: agent_snapshot_delivery.MessageBuffer = undefined;
         const label = if (current.find(change.key)) |agent| agent.displayName() else core.generic_display_name;
         const alert = agent_snapshot_delivery.alertInput(change, label, &message_buffer) orelse continue;
@@ -96,6 +97,7 @@ fn publishAlerts(client: *Client, changes: []const data.AgentStatusChange) !void
         published += 1;
     }
 
+    // SAFETY: summaryInput writes through a fixed writer and returns only writer.buffered(), or null without reading storage.
     var summary_buffer: agent_snapshot_delivery.MessageBuffer = undefined;
     const summary = folded.summaryInput(&summary_buffer) orelse return;
     try notifications.publishNotificationNow(client, summary);

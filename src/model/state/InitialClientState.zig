@@ -2,7 +2,6 @@ const data = @import("../model.zig");
 const core = @import("telar-core");
 const BarLayout = @import("../bars/BarLayout.zig");
 const Config = @import("Config.zig");
-const InitialClientState = @This();
 
 pane_gaps: bool,
 sidebar_width: u16 = data.sidebar.default_width,

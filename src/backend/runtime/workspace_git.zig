@@ -113,33 +113,3 @@ fn commit(workspaces: *Workspaces, workspace: core.WorkspaceId, branch: []const 
 
     return changed;
 }
-
-test "Git probes reserve one workspace, reject stale results and recover after removal" {
-    const gpa = std.testing.allocator;
-    const workspaces = try gpa.create(Workspaces);
-    defer gpa.destroy(workspaces);
-    workspaces.* = .{};
-    defer workspaces.deinit(gpa);
-    const first = try workspaces.insert(gpa, "/first", null);
-    _ = try workspaces.insert(gpa, "/second", null);
-
-    const probe = reserve(workspaces, 5000, 5000).?;
-    try std.testing.expectEqualStrings("/first", probe.pathSlice());
-    try std.testing.expect(reserve(workspaces, 5000, 5000) == null);
-    cancel(workspaces, @enumFromInt(999));
-    try std.testing.expect(reserve(workspaces, 5000, 5000) == null);
-    cancel(workspaces, probe.workspace);
-    _ = reserve(workspaces, 5000, 5000).?;
-
-    try std.testing.expect(commit(workspaces, probe.workspace, "main", true, 5000));
-    const revision = workspaces.revision;
-    try std.testing.expect(!commit(workspaces, probe.workspace, "main", true, 5000));
-    try std.testing.expectEqual(revision, workspaces.revision);
-
-    const second = reserve(workspaces, 5000, 5000).?;
-    try std.testing.expectEqualStrings("/second", second.pathSlice());
-    try std.testing.expect(workspaces.remove(gpa, second.workspace));
-    try std.testing.expect(!commit(workspaces, second.workspace, "main", false, 5000));
-    try std.testing.expect(reserve(workspaces, 5000, 5000) == null);
-    try std.testing.expectEqual(first.workspace.workspace, reserve(workspaces, 10000, 5000).?.workspace);
-}

@@ -43,11 +43,3 @@ pub fn tail(bytes: []const u8, lines: u16) []const u8 {
 
     return bytes;
 }
-
-test "log names are scoped to an exact endpoint and tail preserves final newlines" {
-    try std.testing.expect(parse("x.sock-other.runtime-7.log", "x.sock") == null);
-    try std.testing.expect(parse("x.sock.runtime-0.log", "x.sock") == null);
-    try std.testing.expectEqual(@as(u32, 7), parse("x.sock.runtime-7.log", "x.sock").?.pid);
-    try std.testing.expectEqualStrings("b\nc\n", tail("a\nb\nc\n", 2));
-    try std.testing.expectEqualStrings("c", tail("a\nb\nc", 1));
-}

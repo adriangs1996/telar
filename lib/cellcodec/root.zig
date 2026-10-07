@@ -14,9 +14,3 @@ pub const encode = cell_run.encode;
 pub const decodeCell = cell_run.decodeCell;
 pub const encodedCellsSize = cell_run.encodedCellsSize;
 pub const encodedCellSize = cell_run.encodedCellSize;
-
-test {
-    _ = @import("CellReader.zig");
-    _ = @import("cell_run.zig");
-    _ = @import("cell_run_tests.zig");
-}

@@ -9,12 +9,15 @@ const Tracker = @This();
 
 scanner: OscScanner = .{},
 zone: Zone = .unknown,
+// SAFETY: appendOsc writes each byte before increasing osc_len; finishOsc parses only the accumulated prefix.
 osc: [osc_ops.max_osc_bytes]u8 = undefined,
 osc_len: usize = 0,
 osc_overflow: bool = false,
+// SAFETY: captureByte writes each byte before increasing command_len; emitted commands borrow only that prefix.
 command: [osc_ops.max_command_bytes]u8 = undefined,
 command_len: usize = 0,
 command_truncated: bool = false,
+// SAFETY: init and cwdReport fill the current directory prefix; currentCwd exposes only cwd_len bytes.
 cwd: [std.fs.max_path_bytes]u8 = undefined,
 cwd_len: usize = 0,
 running: bool = false,

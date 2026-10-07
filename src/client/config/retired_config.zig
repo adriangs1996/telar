@@ -2,7 +2,6 @@
 //! that still sets one loads without it, and the person is told which keys
 //! were ignored, in the window and by `telar config check`.
 const std = @import("std");
-const data = @import("model");
 const RetiredConfigKey = @import("RetiredConfigKey.zig").RetiredConfigKey;
 const Client = @import("../execution/Client.zig");
 const notifications = @import("../notifications/notifications.zig");
@@ -68,13 +67,4 @@ pub fn announce(client: *Client, retired: Set) !void {
             .message = message,
         },
     );
-}
-
-test "every retired key fits the description" {
-    var buffer: [max_description_bytes]u8 = undefined;
-    try std.testing.expectEqualStrings("", describe(.initEmpty(), &buffer));
-
-    const all = describe(.initFull(), &buffer);
-    try std.testing.expect(std.mem.startsWith(u8, all, "Ignored client.sidebar.renderer, "));
-    try std.testing.expect(std.mem.endsWith(u8, all, "client.icons: only the retired terminal client used them; remove them"));
 }

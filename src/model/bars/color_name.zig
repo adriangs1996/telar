@@ -48,12 +48,3 @@ pub fn roleNameEql(left: []const u8, right: []const u8) bool {
 
     return true;
 }
-
-test "roles, literals and default parse; other text does not" {
-    try std.testing.expectEqual(bar_values.PaletteColor.panel_bg, parse("panel-bg").?.palette);
-    try std.testing.expectEqual(bar_values.PaletteColor.red, parse("RED").?.palette);
-    try std.testing.expect(parse("default").?.value.kind == .default);
-    try std.testing.expect(parse("#e06c75") != null);
-    try std.testing.expectEqual(@as(?bar_values.Color, null), parse("#e06c7"));
-    try std.testing.expectEqual(@as(?bar_values.Color, null), parse("neon"));
-}

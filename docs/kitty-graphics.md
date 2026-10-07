@@ -4,8 +4,7 @@ Telar terminates Kitty Graphics Protocol commands at each pane PTY. Child APCs
 never pass through to the host. The runtime interprets them into virtual
 images and placements and sends them to each client as separate graphics
 messages. The window keeps a bounded replica of them
-([pane graphics](flows/pane-graphics.md)) and draws them with Metal or Vulkan
-([pane images](flows/pane-images.md)). The terminal client re-emitted them as
+and draws them with Metal or Vulkan. The terminal client re-emitted them as
 KGP to its host terminal; that path left with it.
 
 ## Display an image
@@ -240,29 +239,6 @@ The terminal client's Kitty sidebar renderers, its provider-mark and Nerd Font
 icon atlases and its top-bar mark raster left with it. The window draws the
 sidebar, icons and marks itself; see [`sidebar.md`](sidebar.md).
 
-## Verification
-
-`zig build test-png` exercises PNG decoding, allocation-failure cleanup,
-malformed input, oversized dimensions, screen quotas, RGB/grayscale conversion,
-alpha preservation, every PTY split, Pi-style 4096-character chunks, quiet
-errors, replacement and deletion. `zig build test-transport` also sends PNG
-through a real child PTY and checks the decoded pixels before and after a
-runtime graphics snapshot.
-
-The runtime suite covers exact query encoding, APC parsing at every input
-split, RGB/RGBA chunking, zlib success and invalid sizes, unsupported media
-replies, overflow and quota checks, image and placement deletes, resize
-reconstruction, generation replacement, history isolation and runtime
-reconnect snapshots. Runtime integration tests use real PTYs in raw mode,
-verify that the child receives `Gi=31;OK`, exercise KGP and history in the
-same pane, and prove input remains live while the ingest actor is occupied.
-Client resource-store tests cover quotas, stale revisions and credits.
-
-The terminal-browser verifier (`zig build verify-terminal-browser`) and the
-graphics throughput gate measured the terminal client inside Ghostty and were
-retired with it; [`performance-gates.md`](performance-gates.md) records what
-replaces them.
-
 ## Remaining limitations
 
 - No temporary-file or Unicode-placeholder transport. File transport
@@ -277,7 +253,7 @@ replaces them.
   and the headless client receive decoded pixels in 1 MiB chunks, copied on
   the thread that routes keys.
 - A 4K stream is presented at about 57 generations a second on an M3, over
-  the gate's floor of 50 ([performance gates](performance-gates.md)).
+  the gate's floor of 50.
 - Only synchronized `a=T,t=s,C=1,q=2` envelopes, bare or wrapped in
   DECSC/DECRC, fold. A shared-memory producer with another framing has each
   queued frame copied; the 64 KiB batch bounds a turn to a few hundred

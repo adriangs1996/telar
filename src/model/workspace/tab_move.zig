@@ -1,4 +1,4 @@
-//! A tab takes a new position in its workspace (docs/flows/tab-move.md).
+//! A tab takes a new position in its workspace.
 const std = @import("std");
 const tab_move = @import("tab_move.zig");
 const model_data = @import("../model.zig");

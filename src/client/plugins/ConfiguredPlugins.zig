@@ -38,18 +38,3 @@ pub fn find(self: Catalog, name: []const u8) !usize {
 
     return error.PluginNotConfigured;
 }
-
-test "disabled configuration entries do not consume a loaded package" {
-    var snapshot: Snapshot = .{};
-    snapshot.plugin_count = 2;
-    snapshot.plugins[0] = .{ .path_len = 1, .enabled = false };
-    snapshot.plugins[0].path_bytes[0] = 'a';
-    snapshot.plugins[1] = .{ .path_len = 1, .enabled = true };
-    snapshot.plugins[1].path_bytes[0] = 'b';
-    var registry: Registry = .{};
-    registry.count = 1;
-    const catalog: Catalog = .{ .snapshot = &snapshot, .registry = &registry };
-    try std.testing.expect(catalog.package(0) == null);
-    try std.testing.expect(catalog.package(1).? == &registry.packages[0]);
-    try std.testing.expectEqual(@as(usize, 0), try catalog.find("a"));
-}

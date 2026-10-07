@@ -1,5 +1,4 @@
 //! Disposable scroll bounds and attention order, independent of frame widgets.
-const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -20,14 +19,18 @@ active_workspace: ?core.WorkspaceLocation = null,
 active_position: ?usize = null,
 project_height: f32 = 0,
 project_pitch: f32 = 0,
+// SAFETY: observe fills order from the returned fleet before returning; ordering exposes only order_len entries.
 order: [core.max_agent_snapshot_entries]u8 = undefined,
 order_len: u8 = 0,
+// SAFETY: fleet_order.order initializes its returned prefix; order_len and entries expose only that prefix.
 fleet: [core.max_agent_snapshot_entries]client.FleetEntry = undefined,
 ordered: SnapshotMark = .{},
 ordered_workspaces: u64 = 0,
 ordered_focus: ?core.PaneId = null,
+// SAFETY: machine_activity.order initializes its returned prefix before activity_len is assigned; Sidebar draws only that prefix.
 activity: [client.machine_activity.max_entries]client.MachineActivityEntry = undefined,
 activity_len: usize = 0,
+// SAFETY: observe checks the previous source count before comparing a mark and writes every current mark before publishing the new count.
 activity_marks: [client.Machines.capacity]ActivityMark = undefined,
 activity_source_count: usize = 0,
 activity_active: ?u8 = null,
@@ -125,10 +128,4 @@ pub fn revealWorkspace(self: *SidebarState, projection: *const client.Projection
         const top = @as(f32, @floatFromInt(index)) * pitch;
         self.projects.reveal(.{ top, top + pitch }, height);
     }
-}
-
-/// The attention order of the last observed snapshot, as replica indices.
-/// Example: `for (state.ordering()) |index| { ... }`
-pub fn ordering(self: *const SidebarState) []const u8 {
-    return self.order[0..self.order_len];
 }

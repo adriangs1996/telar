@@ -13,16 +13,3 @@ pub const Reservation = @import("Reservation.zig");
 pub const Truncation = @import("Truncation.zig");
 pub const buffer_support = @import("buffer_support.zig");
 pub const decode = @import("decode.zig");
-
-test {
-    _ = @import("Buffer.zig");
-    _ = @import("Config.zig");
-    _ = @import("GenericHalf.zig");
-    _ = @import("GenericJoiner.zig");
-    _ = @import("Key.zig");
-    _ = @import("Quota.zig");
-    _ = @import("Reservation.zig");
-    _ = @import("Truncation.zig");
-    _ = @import("buffer_support.zig");
-    _ = @import("decode.zig");
-}

@@ -29,8 +29,7 @@ work census, never for timing.
 ## Oracles
 
 - Renderer: `.agents/skills/perf-pass/scripts/probe_verify.sh A B` compares frame digests for all
-  twelve modes. Fixtures only use the default background; changes touching
-  colored backgrounds also need `zig build test-gui`.
+  twelve modes. Fixtures only use the default background.
 - Everything else: a test that runs the old and the new path on the same
   inputs (exhaustive where the domain is small, seeded random otherwise).
 
@@ -45,8 +44,7 @@ python3 .agents/skills/perf-pass/scripts/bench_pair.py $SCRATCH/A $SCRATCH/B 6 b
 ```
 
 Both scripts compare two builds. Where a fixture's large records land is
-compared inside one build, by arguments, with `tools/placement_bench.py`:
-[record placement benchmark](../../../docs/performance/record-placement/benchmark.md).
+compared inside one build, by arguments, with `tools/placement_bench.py`.
 
 Check `uptime` first; do not measure while builds or test suites run.
 Compare against the previous accepted build, then re-measure the final build

@@ -1,5 +1,5 @@
 //! GUI-owned diagram requests and images, mutated only between native flights.
-const native = @import("../native/native.zig");
+const gfx = @import("gfx");
 const view_module = @import("view.zig");
 const std = @import("std");
 const Request = @import("Request.zig");
@@ -135,8 +135,8 @@ pub fn nextJob(self: *Store) ?Job {
 
 /// Exposes borrowed pixels only after preparation has finished replacing slots.
 /// Example: `renderer.diagrams = store.textures();`
-pub fn textures(self: *const Store) [capacity]native.DiagramTexture {
-    var result: [capacity]native.DiagramTexture = @splat(.{});
+pub fn textures(self: *const Store) [capacity]gfx.DiagramTexture.DiagramTexture {
+    var result: [capacity]gfx.DiagramTexture.DiagramTexture = @splat(.{});
     for (&self.entries, 0..) |*entry, slot| {
         if (entry.image) |image| {
             if (entry.frame != self.frame) {

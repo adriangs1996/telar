@@ -5,7 +5,6 @@ const std = @import("std");
 const MachineTarget = @import("../machines/MachineTarget.zig").MachineTarget;
 const RuntimeConnection = @import("../machines/RuntimeConnection.zig");
 const ConnectReport = @import("ConnectReport.zig");
-const RuntimeConnectJob = @This();
 
 target: MachineTarget,
 environ: std.process.Environ,

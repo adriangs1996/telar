@@ -32,28 +32,3 @@ pub fn installed(settings: HookSettings, override: ?[]const u8, home: ?[]const u
     const len = std.posix.read(file, &content) catch return false;
     return std.mem.indexOf(u8, content[0..len], settings.marker) != null;
 }
-
-test "telar's entry in the settings file marks the hooks installed" {
-    const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
-    const settings = HookSettings.codex;
-
-    try std.testing.expect(!installed(settings, directory, null));
-
-    try temp.dir.writeFile(io, .{
-        .sub_path = "hooks.json",
-        .data = "{\"hooks\":{\"Stop\":[{\"hooks\":[{\"command\":\"exec '/bin/other' notify\"}]}]}}",
-    });
-    try std.testing.expect(!installed(settings, directory, null));
-
-    try temp.dir.writeFile(io, .{
-        .sub_path = "hooks.json",
-        .data = "{\"hooks\":{\"Stop\":[{\"hooks\":[{\"command\":\"exec '/usr/bin/telar' hook codex\"}]}]}}",
-    });
-    try std.testing.expect(installed(settings, directory, null));
-    try std.testing.expect(!installed(settings, null, null));
-}

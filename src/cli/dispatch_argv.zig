@@ -54,31 +54,3 @@ pub fn decode(gpa: std.mem.Allocator, word: []const u8) ![:0]u8 {
 
     return argument;
 }
-
-test "arguments survive the trip whatever they contain" {
-    const cases = [_][]const u8{ "", "pane", "it's a \"quote\"", "$(rm -rf ~)", "ünïcode", "a b\tc" };
-    for (cases) |argument| {
-        var buffer: [128]u8 = undefined;
-        const word = try encode(argument, &buffer);
-
-        for (word) |byte| {
-            try std.testing.expect(std.ascii.isAlphanumeric(byte) or byte == '-' or byte == '_');
-        }
-
-        const decoded = try decode(std.testing.allocator, word);
-        defer std.testing.allocator.free(decoded);
-        try std.testing.expectEqualStrings(argument, decoded);
-    }
-}
-
-test "words not written by encode are refused" {
-    for ([_][]const u8{ "", "b", "a!", "a" ++ "AA" }) |word| {
-        const result = decode(std.testing.allocator, word);
-        if (result) |argument| {
-            std.testing.allocator.free(argument);
-            return error.TestUnexpectedResult;
-        } else |err| {
-            try std.testing.expectEqual(error.InvalidDispatchArgument, err);
-        }
-    }
-}

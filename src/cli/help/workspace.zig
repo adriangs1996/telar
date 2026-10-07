@@ -43,7 +43,6 @@ pub const family: FamilyHelp = .{
                 \\refused (missing directory, full runtime).
                 \\
             , .{ core.max_workspace_name_bytes, WorkspaceOptions.min_columns, WorkspaceOptions.max_columns, WorkspaceOptions.default_columns, core.max_argument_count }),
-            .examples = &.{ &.{ "workspace", "create", "--directory", "/home/dev/project", "--json" }, &.{ "workspace", "create", "--directory", "/home/dev", "--columns", "200", "--", "codex", "login", "--device-auth" }, &.{ "workspace", "create", "--worktree", "fix-tab-order", "--name", "Fix tab order" } },
         },
         .{
             .name = "list",
@@ -59,7 +58,6 @@ pub const family: FamilyHelp = .{
             \\`dirty`. Exit 0.
             \\
             ,
-            .examples = &.{&.{ "workspace", "list", "--json" }},
         },
         .{
             .name = "get",
@@ -72,7 +70,6 @@ pub const family: FamilyHelp = .{
             \\output when the workspace does not exist.
             \\
             ,
-            .examples = &.{ &.{ "workspace", "get", "4", "--json" }, &.{ "workspace", "get", "--current" } },
         },
         .{
             .name = "rename",
@@ -89,13 +86,11 @@ pub const family: FamilyHelp = .{
                 \\`workspace_id`, `name`. Exit 0; 1 when refused.
                 \\
             , .{core.max_workspace_name_bytes}),
-            .examples = &.{&.{ "workspace", "rename", "4", "telar", "--json" }},
         },
         .{
             .name = "select",
             .summary = "Show a workspace in a window",
             .usage = "telar workspace select ID --client ID [--json] [--socket PATH]",
-            .routed = &.{.workspace_select},
             .text =
             \\Effects: forwarded to the window `--client ID` names (see `telar client list`),
             \\which switches to that workspace. The runtime keeps no window state. Needs a running
@@ -107,7 +102,6 @@ pub const family: FamilyHelp = .{
             \\(unknown workspace, busy); 2 unknown client; 3 no answer in time.
             \\
             ,
-            .examples = &.{&.{ "workspace", "select", "4", "--client", "1", "--json" }},
         },
     },
 };

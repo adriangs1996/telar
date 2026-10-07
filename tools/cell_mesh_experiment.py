@@ -94,7 +94,7 @@ def native(options, output):
                 for name in (('baseline','candidate') if repetition % 2 == 0 else ('candidate','baseline')):
                     row = gui_tui_latency.measure('gui',output/f'{name}-{repetition}-attempt-{attempt}',
                             (getattr(options,name)/'telar',None,library,
-                             ROOT/'docs/performance/ghostty-comparison/config.lua',settings))
+                             ROOT/'tools/ghostty-comparison.lua',settings))
                     row.update(build=name,repetition=repetition,attempt=attempt)
                     pair.append(row)
             except gui_tui_latency.ProbeFailure as error:

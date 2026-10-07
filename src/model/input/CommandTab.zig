@@ -15,9 +15,12 @@ pub const max_label_bytes = 32;
 pub const arguments_limit = core.Limit.declare("command_tab.max_arguments", "arguments", max_arguments);
 pub const command_bytes_limit = core.Limit.declare("command_tab.max_command_bytes", "argv bytes", max_command_bytes);
 
+// SAFETY: init copies every argument before returning success; argument and eql use lengths belonging to the initialized argv.
 argument_storage: [max_command_bytes]u8 = undefined,
+// SAFETY: init fills every length below argument_count before returning success; argv readers use only those entries.
 argument_lens: [max_arguments]u16 = undefined,
 argument_count: u8 = 0,
+// SAFETY: init copies the label before setting label_len; label and eql inspect only that initialized prefix.
 label_storage: [max_label_bytes]u8 = undefined,
 label_len: u8 = 0,
 

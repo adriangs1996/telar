@@ -1,5 +1,4 @@
 const core = @import("telar-core");
-const PaneSnapshot = @This();
 
 location: core.TabLocation,
 /// Borrowed only for synchronous reconciliation. Order is the canonical

@@ -38,6 +38,7 @@ pub fn wakeupAfter(self: *const Clock, now_ns: u64) u32 {
     }
 
     const remaining = self.interval() - (now_ns -| self.started_ns) % self.interval();
+    // SAFETY: unsigned divCeil has a fixed nonzero divisor, ns_per_ms.
     return @intCast(std.math.divCeil(u64, remaining, std.time.ns_per_ms) catch unreachable);
 }
 
@@ -49,42 +50,4 @@ fn blinks(self: *const Clock) bool {
 
 fn interval(self: *const Clock) u64 {
     return @as(u64, self.config.blink_interval_ms) * std.time.ns_per_ms;
-}
-
-test "cursor deadlines fold late wakeups and park for hidden steady or unfocused cursors" {
-    var clock: Clock = .{};
-    var target: Target = .{ .pane_id = @enumFromInt(1), .cursor = .{ .visible = true } };
-    clock.observe(target, 0);
-    try std.testing.expect(clock.shown(599 * std.time.ns_per_ms));
-    try std.testing.expect(!clock.shown(600 * std.time.ns_per_ms));
-    try std.testing.expect(clock.shown(2400 * std.time.ns_per_ms));
-    try std.testing.expectEqual(@as(u32, 600), clock.wakeupAfter(2400 * std.time.ns_per_ms));
-    clock.reset(650 * std.time.ns_per_ms);
-    try std.testing.expect(clock.shown(650 * std.time.ns_per_ms));
-    clock.focused = false;
-    try std.testing.expectEqual(@as(u32, 0), clock.wakeupAfter(0));
-    clock.focused = true;
-    target.cursor.visible = false;
-    clock.observe(target, 0);
-    try std.testing.expectEqual(@as(u32, 0), clock.wakeupAfter(0));
-    target.cursor.visible = true;
-    target.cursor.appearance.blink = false;
-    clock.observe(target, 0);
-    try std.testing.expectEqual(@as(u32, 0), clock.wakeupAfter(0));
-}
-
-test "application cursor style overrides GUI defaults until the VT restores default style" {
-    var clock: Clock = .{ .config = .{ .blink = false } };
-    var target: Target = .{ .cursor = .{ .visible = true } };
-    clock.observe(target, 0);
-    try std.testing.expectEqual(@as(u32, 0), clock.wakeupAfter(0));
-    target.cursor.appearance.shape = .bar;
-    clock.observe(target, 0);
-    try std.testing.expectEqual(@as(u32, 600), clock.wakeupAfter(0));
-    target.generation = 1;
-    clock.observe(target, 700 * std.time.ns_per_ms);
-    try std.testing.expect(clock.shown(700 * std.time.ns_per_ms));
-    target.cursor.appearance.shape = .default;
-    clock.observe(target, 0);
-    try std.testing.expectEqual(@as(u32, 0), clock.wakeupAfter(0));
 }

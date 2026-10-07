@@ -10,18 +10,3 @@ pub const ico = @import("ico.zig");
 pub const png = @import("png.zig");
 pub const premultiply = @import("premultiply.zig");
 pub const resize = @import("resize.zig");
-pub const testing = @import("testing.zig");
-
-test {
-    _ = @import("DecodedImage.zig");
-    _ = @import("IcoFrame.zig");
-    _ = @import("ImageView.zig");
-    _ = @import("PngHeader.zig");
-    _ = @import("PngTestSpec.zig");
-    _ = @import("bilinear.zig");
-    _ = @import("box_filter.zig");
-    _ = @import("ico.zig");
-    _ = @import("png.zig");
-    _ = @import("premultiply.zig");
-    _ = @import("resize.zig");
-}

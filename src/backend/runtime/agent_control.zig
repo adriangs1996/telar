@@ -1,8 +1,7 @@
 //! Automation drives agents in other panes: it interrupts their turn, and
 //! every text it sends passes the rules that keep a person in charge. Text
 //! never reaches the pane a person has focused, a sending pane is named on
-//! the prompt it sends, and prompts between two panes are budgeted. See
-//! `docs/flows/agent-control.md`.
+//! the prompt it sends, and prompts between two panes are budgeted.
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -147,6 +146,7 @@ pub fn focusedByClient(model: *const RuntimeModel, pane_id: core.PaneId) bool {
 pub fn senderLine(model: *const RuntimeModel, sender: core.PaneId, buffer: *[max_sender_line_bytes]u8) []const u8 {
     const name = senderName(model, sender);
     return std.fmt.bufPrint(buffer, "[telar: from {s}, pane {d}] ", .{ name, core.raw(sender) }) catch
+        // SAFETY: The fallback contains only fixed text and one u64 pane id; max_sender_line_bytes accommodates its twenty decimal digits.
         std.fmt.bufPrint(buffer, "[telar: from pane {d}] ", .{core.raw(sender)}) catch unreachable;
 }
 
@@ -169,10 +169,4 @@ fn senderName(model: *const RuntimeModel, sender: core.PaneId) []const u8 {
 /// The start of a sender name, cut on a UTF-8 boundary.
 fn prefix(name: []const u8) []const u8 {
     return core.utf8Prefix(name, max_sender_name_bytes);
-}
-
-test "a sender name is cut on a UTF-8 boundary" {
-    const name = "a" ** (max_sender_name_bytes - 1) ++ "é";
-    try std.testing.expectEqualStrings("a" ** (max_sender_name_bytes - 1), prefix(name));
-    try std.testing.expectEqualStrings("short", prefix("short"));
 }

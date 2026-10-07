@@ -1,15 +1,8 @@
-//! The client makes one tab active (docs/flows/tab-selection.md).
+//! The client makes one tab active.
 const tab_selection = @import("tab_selection.zig");
 const model_namespace = @import("../state/model_namespace.zig");
 const model_data = @import("../model.zig");
-const core = @import("telar-core");
 const ClientModel = @import("../state/ClientModel.zig");
-
-/// Example: `if (tab_selection.select(model, tab_id)) redraw();`
-pub fn select(model: *ClientModel, tab_id: core.TabId) bool {
-    const slot = model.tabs.find(tab_id) orelse return false;
-    return selectPosition(model, slot);
-}
 
 /// Moves the active tab by `offset`, wrapping around.
 /// Example: `_ = tab_selection.selectOffset(model, -1);`
@@ -41,7 +34,6 @@ pub fn selectPosition(model: *ClientModel, position: usize) bool {
 pub fn commitSelection(model: *ClientModel, target: model_data.TabSelectionTarget) !?model_data.TabSelection {
     const previous = model.tabs.activeSlot() orelse return error.NoActiveTab;
     const previous_location = model.tabs.location[previous];
-    const previous_layout_revision = model.tabs.layout[previous].currentRevision();
 
     const changed = switch (target) {
         .tab_id => |tab_id| changed: {
@@ -63,8 +55,6 @@ pub fn commitSelection(model: *ClientModel, target: model_data.TabSelectionTarge
     return .{
         .previous = previous_location,
         .selected = model.tabs.location[selected],
-        .previous_layout_revision = previous_layout_revision,
-        .selected_layout_revision = model.tabs.layout[selected].currentRevision(),
         .workspace_revision = model.workspace_revision,
         .tabs_revision = model.tabs_revision,
         .active_tab_revision = model.active_tab_revision,

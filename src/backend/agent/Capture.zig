@@ -5,6 +5,7 @@ const std = @import("std");
 const Capture = @This();
 
 scanner: InputScanner = .{},
+// SAFETY: feed writes retained bytes before increasing len; raw and clear use only that prefix.
 bytes: [description.max_query_bytes]u8 = undefined,
 len: u16 = 0,
 truncated: bool = false,

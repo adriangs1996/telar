@@ -60,7 +60,6 @@ pub const family: FamilyHelp = .{
                 \\exited; then exit 2.
                 \\
             , .{ values.default_read_rows, core.max_pane_text_rows, core.max_pane_text_bytes / 1024, backend.ExitedPanes.kept_rows, backend.ExitedPanes.max_text_bytes / 1024, backend.ExitedPanes.capacity }),
-            .examples = &.{ &.{ "pane", "read", "4", "--lines", "100" }, &.{ "pane", "read", "--current", "--source", "screen", "--json" } },
         },
         .{
             .name = "send-keys",
@@ -84,7 +83,6 @@ pub const family: FamilyHelp = .{
                 \\Results: nothing; exit 0, 1 when refused, 2 when the pane is gone.
                 \\
             , .{ core.max_pane_text_input_bytes, pane.submit_delay_ms }),
-            .examples = &.{ &.{ "pane", "send-keys", "4", "pwd", "--enter" }, &.{ "pane", "send-keys", "--current", "--stdin" } },
         },
         .{
             .name = "search",
@@ -103,7 +101,6 @@ pub const family: FamilyHelp = .{
                 \\is gone; 1 when it changed during the search (retry).
                 \\
             , .{ core.max_search_needle_bytes, core.max_search_matches }),
-            .examples = &.{&.{ "pane", "search", "4", "error:", "--json" }},
         },
         .{
             .name = "watch",
@@ -124,7 +121,6 @@ pub const family: FamilyHelp = .{
                 \\Exit 0 after --count changes; 2 when the pane is gone.
                 \\
             , .{ PaneOptions.default_interval_ms, PaneOptions.min_interval_ms, PaneOptions.max_interval_ms }),
-            .examples = &.{&.{ "pane", "watch", "4", "--count", "3", "--interval-ms", "500", "--lines", "20" }},
         },
         .{
             .name = "list",
@@ -144,7 +140,6 @@ pub const family: FamilyHelp = .{
                 \\`pane_generation`, `lifecycle` (running|exited). Exit 0.
                 \\
             , .{core.max_panes}),
-            .examples = &.{ &.{ "pane", "list", "--json" }, &.{ "pane", "list", "--workspace", "4", "--tab", "9" } },
         },
         .{
             .name = "get",
@@ -160,13 +155,11 @@ pub const family: FamilyHelp = .{
             \\2 with empty output when the pane does not exist.
             \\
             ,
-            .examples = &.{ &.{ "pane", "get", "4", "--json" }, &.{ "pane", "get", "--current", "--workspace", "--current" } },
         },
         .{
             .name = "focus",
             .summary = "Focus a pane in a window; or, from Neovim, move focus out of this pane by direction",
             .usage = "telar pane focus ID --client ID [--json] [--socket PATH]\n       telar pane focus --current --direction left|right|up|down [--json] [--socket PATH]",
-            .routed = &.{.pane_focus},
             .text = std.fmt.comptimePrint(
                 \\Two forms. `pane focus ID --client ID` focuses that pane in the window's active tab;
                 \\an already focused pane is a no-op. {s}
@@ -178,13 +171,11 @@ pub const family: FamilyHelp = .{
                 \\every outcome, 1 when no window typed here, 2 when the pane is gone.
                 \\
             , .{routed_text}),
-            .examples = &.{ &.{ "pane", "focus", "4", "--client", "1" }, &.{ "pane", "focus", "--current", "--direction", "left", "--json" } },
         },
         .{
             .name = "create",
             .summary = "Create a terminal pane in a window by splitting its focused pane",
             .usage = "telar pane create --client ID [--json] [--socket PATH]",
-            .routed = &.{.pane_create},
             .text = std.fmt.comptimePrint(
                 \\{s}
                 \\
@@ -194,13 +185,11 @@ pub const family: FamilyHelp = .{
                 \\--background`.
                 \\
             , .{routed_text}),
-            .examples = &.{&.{ "pane", "create", "--client", "1", "--json" }},
         },
         .{
             .name = "split",
             .summary = "Focus a pane in a window and split it horizontally (left/right) or vertically (top/bottom)",
             .usage = "telar pane split ID horizontal|vertical --client ID [--json] [--socket PATH]",
-            .routed = &.{.pane_split},
             .text = std.fmt.comptimePrint(
                 \\{s}
                 \\
@@ -208,13 +197,11 @@ pub const family: FamilyHelp = .{
                 \\for lack of room. The new pane is confirmed asynchronously (`admitted`).
                 \\
             , .{routed_text}),
-            .examples = &.{&.{ "pane", "split", "4", "horizontal", "--client", "1" }},
         },
         .{
             .name = "close",
             .summary = "Focus a pane in a window and request its closure",
             .usage = "telar pane close ID --client ID [--json] [--socket PATH]",
-            .routed = &.{.pane_close},
             .text = std.fmt.comptimePrint(
                 \\{s}
                 \\
@@ -223,39 +210,33 @@ pub const family: FamilyHelp = .{
                 \\window shows, close its tab with `telar tab close`.
                 \\
             , .{routed_text}),
-            .examples = &.{&.{ "pane", "close", "4", "--client", "1" }},
         },
         .{
             .name = "resize",
             .summary = "Focus a pane and move its nearest split edge one step in a direction",
             .usage = "telar pane resize ID left|right|up|down --client ID [--json] [--socket PATH]",
-            .routed = &.{.pane_resize},
             .text = std.fmt.comptimePrint(
                 \\{s}
                 \\
                 \\Uses the window's resize step. A pane with no split edge that way is refused.
                 \\
             , .{routed_text}),
-            .examples = &.{&.{ "pane", "resize", "4", "left", "--client", "1" }},
         },
         .{
             .name = "fullscreen",
             .summary = "Focus a pane and toggle it fullscreen in its window",
             .usage = "telar pane fullscreen ID --client ID [--json] [--socket PATH]",
-            .routed = &.{.pane_fullscreen},
             .text = std.fmt.comptimePrint(
                 \\{s}
                 \\
                 \\`value` is 1 when the pane is now fullscreen and 0 when it is tiled again.
                 \\
             , .{routed_text}),
-            .examples = &.{&.{ "pane", "fullscreen", "4", "--client", "1", "--json" }},
         },
         .{
             .name = "scroll",
             .summary = "Scroll a pane's viewport in a window by a signed number of rows",
             .usage = "telar pane scroll ID DELTA --client ID [--json] [--socket PATH]",
-            .routed = &.{.pane_scroll},
             .text = std.fmt.comptimePrint(
                 \\{s}
                 \\
@@ -264,13 +245,11 @@ pub const family: FamilyHelp = .{
                 \\mode or not attached is refused.
                 \\
             , .{routed_text}),
-            .examples = &.{&.{ "pane", "scroll", "4", "-20", "--client", "1" }},
         },
         .{
             .name = "copy",
             .summary = "Copy a range of a pane's text to a window's clipboard",
             .usage = "telar pane copy ID X1,Y1:X2,Y2 --client ID [--json] [--socket PATH]",
-            .routed = &.{.pane_copy},
             .text = std.fmt.comptimePrint(
                 \\{s}
                 \\
@@ -279,7 +258,6 @@ pub const family: FamilyHelp = .{
                 \\receives it asynchronously. For your own text use `client clipboard copy`.
                 \\
             , .{routed_text}),
-            .examples = &.{&.{ "pane", "copy", "4", "0,10:79,12", "--client", "1" }},
         },
     },
 };

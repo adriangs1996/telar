@@ -4,8 +4,6 @@ const std = @import("std");
 /// files: the plugin installed by `telar integration install opencode` runs
 /// `telar hook opencode` on OpenCode's own plugin events and hooks, and keeps
 /// the pane state they imply.
-const OpenCodeHookInput = @This();
-
 /// OpenCode's event or hook name, or `load`, `state_snapshot` and `dispose`
 /// from the plugin itself.
 event: []const u8 = "",

@@ -1,7 +1,5 @@
 const std = @import("std");
 /// The subset of Codex hook input telar reads.
-const CodexHookInput = @This();
-
 hook_event_name: []const u8 = "",
 session_id: []const u8 = "",
 agent_id: ?[]const u8 = null,

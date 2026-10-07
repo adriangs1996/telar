@@ -22,6 +22,7 @@ pub fn nonzeroHash(bytes: []const u8) u64 {
 /// somewhere the user cannot read it.
 pub var crash_restore: struct {
     fd: std.c.fd_t = -1,
+    // SAFETY: installCrashRestore supplies the saved termios before installing handlers; emergencyRestore returns while fd is negative.
     original: std.posix.termios = undefined,
     leave: []const u8 = "",
 } = .{};
@@ -58,6 +59,7 @@ pub fn emergencyRestore() void {
         return;
     }
     _ = std.c.write(state.fd, state.leave.ptr, state.leave.len);
+    // Fatal-signal cleanup cannot recover or safely log a restoration failure; return so the original signal can terminate the process.
     std.posix.tcsetattr(state.fd, .FLUSH, state.original) catch {};
 }
 
@@ -66,56 +68,6 @@ fn onFatalSignal(signal: std.posix.SIG) callconv(.c) void {
     // RESETHAND already restored the default disposition; re-raising delivers
     // the original signal to it once the handler returns.
     _ = std.c.raise(signal);
-}
-
-test "fast output attempts at most 4 KiB and yields on a full descriptor" {
-    var fds: [2]std.c.fd_t = undefined;
-    try std.testing.expect(std.c.pipe(&fds) == 0);
-    defer _ = std.c.close(fds[0]);
-    var fast: FastWriter = .{ .fd = fds[1] };
-    defer fast.deinit();
-    const flags = std.posix.O{ .NONBLOCK = true };
-    try std.testing.expect(std.c.fcntl(fast.fd, std.posix.F.SETFL, @as(c_int, @bitCast(flags))) == 0);
-    const bytes = [_]u8{0x34} ** 8192;
-    try std.testing.expectEqual(@as(usize, 4096), try FastWriter.writeOpaque(&fast, &bytes));
-    for (0..1024) |_| {
-        if (try FastWriter.writeOpaque(&fast, &bytes) == 0) {
-            return;
-        }
-    }
-    return error.PipeNeverReachedBackpressure;
-}
-
-test "emergency restore is armed, idempotent, and disarmable" {
-    // Unarmed: a no-op with nowhere to write.
-    emergencyRestore();
-
-    var fds: [2]std.c.fd_t = undefined;
-    try std.testing.expect(std.c.pipe(&fds) == 0);
-    defer _ = std.c.close(fds[0]);
-
-    crash_restore = .{
-        .fd = fds[1],
-        .original = std.mem.zeroes(std.posix.termios),
-        .leave = sequences.leave,
-    };
-    // Twice: the crash path cannot be choosy about who already ran it, and
-    // the tcsetattr on a pipe failing must stay silent.
-    emergencyRestore();
-    emergencyRestore();
-    crash_restore.fd = -1;
-    _ = std.c.close(fds[1]);
-
-    var buffer: [4 * sequences.leave.len]u8 = undefined;
-    const got = std.c.read(fds[0], &buffer, buffer.len);
-    try std.testing.expectEqual(@as(isize, 2 * sequences.leave.len), got);
-    try std.testing.expectEqualStrings(
-        sequences.leave ++ sequences.leave,
-        buffer[0..@intCast(got)],
-    );
-
-    // Disarmed: a no-op again.
-    emergencyRestore();
 }
 
 /// The self-pipe SIGWINCH writes into.

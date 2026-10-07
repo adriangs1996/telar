@@ -52,19 +52,3 @@ pub fn parse(args: []const [*:0]const u8) !IntegrationOptions {
 
     return options;
 }
-
-test "integration settings paths must be absolute" {
-    const options = try IntegrationOptions.parse(&.{ "install", "opencode", "--settings", "/home/me/.config/opencode/plugins/telar.ts" });
-    try std.testing.expectEqualStrings("/home/me/.config/opencode/plugins/telar.ts", std.mem.span(options.settings.?));
-    try std.testing.expectError(error.RelativeSettingsPath, IntegrationOptions.parse(&.{ "install", "opencode", "--settings", "plugins/telar.ts" }));
-    try std.testing.expectError(error.RelativeSettingsPath, IntegrationOptions.parse(&.{ "uninstall", "pi", "--settings", "./telar.ts" }));
-    try std.testing.expectError(error.RelativeSettingsPath, IntegrationOptions.parse(&.{ "install", "claude", "--settings", "" }));
-    try std.testing.expectError(error.UnknownIntegrationOption, IntegrationOptions.parse(&.{ "install", "pi", "--settings" }));
-}
-
-test "--legacy only names the uninstall of the file a directory variable hides" {
-    try std.testing.expect((try IntegrationOptions.parse(&.{ "uninstall", "claude", "--legacy" })).legacy);
-    try std.testing.expectError(error.UnknownIntegrationOption, IntegrationOptions.parse(&.{ "install", "claude", "--legacy" }));
-    try std.testing.expectError(error.UnknownIntegrationOption, IntegrationOptions.parse(&.{ "status", "claude", "--legacy" }));
-    try std.testing.expectError(error.UnknownIntegrationOption, IntegrationOptions.parse(&.{ "uninstall", "claude", "--legacy", "--settings", "/tmp/settings.json" }));
-}

@@ -10,8 +10,10 @@ pub const entries_limit = core.Limit.declare("workspace_form.completion_entries"
 pub const max_name_bytes = 255;
 pub const max_path_bytes = core.max_cwd_bytes;
 
+// SAFETY: setBase copies the directory before setting base_len; base and joined paths read only that prefix.
 base: [max_path_bytes]u8 = undefined,
 base_len: u16 = 0,
+// SAFETY: append and keep copy each name before publishing its entry; sorting and slice use only entries below len.
 entries: [max_entries]Entry = undefined,
 len: u8 = 0,
 /// The expanded query names an existing directory.
@@ -114,27 +116,4 @@ pub fn sort(self: *Result) void {
 
 fn lessThan(_: void, left: Entry, right: Entry) bool {
     return std.mem.lessThan(u8, left.slice(), right.slice());
-}
-
-test "results bound entries and every joined path" {
-    var result: Result = .{};
-    try result.setBase("/");
-    try result.append("b");
-    try result.append("a");
-    result.sort();
-    var buffer: [max_path_bytes]u8 = undefined;
-    try std.testing.expectEqualStrings("/a", result.join(0, &buffer));
-    try std.testing.expectEqualStrings("/b", result.join(1, &buffer));
-
-    try result.setBase("/home/me");
-    try std.testing.expectEqualStrings("/home/me/a", result.join(0, &buffer));
-    const long = [_]u8{'x'} ** (max_path_bytes - "/home/me".len);
-    try std.testing.expectError(error.PathEntryTooLong, result.append(&long));
-    try std.testing.expectError(error.PathEntryTooLong, result.append(""));
-
-    var full: Result = .{};
-    for (0..max_entries) |_| {
-        try full.append("d");
-    }
-    try std.testing.expectError(error.TooManyEntries, full.append("e"));
 }

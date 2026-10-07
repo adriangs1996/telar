@@ -1,21 +1,22 @@
 //! Resolves native affordances through the delivered controls before pane text.
 const keyinput = @import("keyinput");
 const data = @import("model");
+const client = @import("telar-client");
 const builtin = @import("builtin");
-const GuiAdapter = @import("../GuiAdapter.zig");
+const WindowModel = @import("../WindowModel.zig");
 const Target = @import("HoverTarget.zig");
 
 pub const link_modifier: u32 = if (builtin.os.tag == .macos) 8 else 4;
 
 /// Native link modifiers are never encoded into child mouse coordinates.
-/// Example: `const target = resolve(gui, mouse, event.mods);`
-pub fn resolve(gui: *GuiAdapter, mouse: keyinput.Mouse, mods: u32) Target {
-    if (!gui.focused) {
+/// Example: `const target = resolve(&gui.model, gui.app, mouse, event.mods);`
+pub fn resolve(model: *WindowModel, app: *client.Client, mouse: keyinput.Mouse, mods: u32) Target {
+    if (!model.focused) {
         return .{};
     }
 
-    const overlays = gui.overlays.presented();
-    if (gui.app.model.name_prompt.active() or overlays.modal != null) {
+    const overlays = model.overlays.presented();
+    if (app.model.name_prompt.active() or overlays.modal != null) {
         if (overlays.palette.at(mouse) != null) {
             return .{ .shape = .pointer };
         }
@@ -23,32 +24,32 @@ pub fn resolve(gui: *GuiAdapter, mouse: keyinput.Mouse, mods: u32) Target {
         return .{ .shape = if (overlays.modal) |area| if (area.inner(1).contains(mouse.x, mouse.y)) .text else .default else .default };
     }
 
-    if (gui.overlays.gesture != null) {
+    if (model.overlays.gesture != null) {
         return .{};
     }
 
-    if (gui.pointer.hover.covers(mouse)) {
+    if (model.pointer.hover.covers(mouse)) {
         return .{};
     }
 
-    if (gui.chrome.sidebar_resize_active) {
+    if (model.chrome.sidebar_resize_active) {
         return .{ .shape = .col_resize };
     }
 
-    const action = gui.chrome.presented().hits.at(.{ mouse.x, mouse.y }) orelse return .{};
+    const action = model.chrome.presented().hits.at(.{ mouse.x, mouse.y }) orelse return .{};
     switch (action) {
         .resize_sidebar => return .{ .shape = .col_resize },
         .intent => |intent| return .{ .shape = if (intent == .none) .default else .pointer },
         .pane_content => |id| {
-            const tab = gui.app.model.tabs.activeSlot() orelse return .{};
-            const pane = gui.app.model.panes.findInConst(gui.app.model.tabs.location[tab].tab_id, id) orelse return .{};
-            const view = data.tab_layout.view(&gui.app.model, tab, id, data.workbench.region(&gui.app.model).area) orelse return .{};
+            const tab = app.model.tabs.activeSlot() orelse return .{};
+            const pane = app.model.panes.findInConst(app.model.tabs.location[tab].tab_id, id) orelse return .{};
+            const view = data.tab_layout.view(&app.model, tab, id, data.workbench.region(&app.model).area) orelse return .{};
             if (!view.content.contains(mouse.x, mouse.y)) {
                 return .{};
             }
 
             const base: Target = .{ .shape = if (pane.pointer_shape == .default) .text else pane.pointer_shape };
-            if (data.copy_mode.isActive(&gui.app.model) or gui.chrome.gesture_button != null or !pane.attached) {
+            if (data.copy_mode.isActive(&app.model) or model.chrome.gesture_button != null or !pane.attached) {
                 return base;
             }
 
@@ -75,7 +76,7 @@ pub fn resolve(gui: *GuiAdapter, mouse: keyinput.Mouse, mods: u32) Target {
             return .{ .shape = .pointer, .link = .{
                 .pane_id = pane.id,
                 .generation = pane.attachment_generation,
-                .location = gui.app.model.tabs.location[tab],
+                .location = app.model.tabs.location[tab],
                 .content = view.content,
                 .scroll_offset = pane.scroll.offset,
                 .area = .{ .x = view.content.x + start_x, .y = mouse.y, .w = end_x - start_x, .h = 1 },

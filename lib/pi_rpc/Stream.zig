@@ -7,7 +7,9 @@ const rpc = @import("rpc.zig");
 /// must live at a stable address from `init` to `deinit`.
 const Stream = @This();
 
+// SAFETY: Stream.init calls toStreams to set the count and MultiReader.init to fill the contexts before any read or deinit.
 streams: std.Io.File.MultiReader.Buffer(1) = undefined,
+// SAFETY: Stream.init constructs reader at its final address before next or deinit is called.
 reader: std.Io.File.MultiReader = undefined,
 discarding: bool = false,
 

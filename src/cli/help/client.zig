@@ -38,7 +38,6 @@ pub const family: FamilyHelp = .{
             \\used last. Exit 0.
             \\
             ,
-            .examples = &.{&.{ "client", "list", "--json" }},
         },
         .{
             .name = "get",
@@ -51,7 +50,6 @@ pub const family: FamilyHelp = .{
             \\output when the client is not attached.
             \\
             ,
-            .examples = &.{&.{ "client", "get", "1", "--json" }},
         },
         .{
             .name = "detach",
@@ -66,13 +64,11 @@ pub const family: FamilyHelp = .{
             \\unknown; 1 when refused (a stale generation, a non-window client).
             \\
             ,
-            .examples = &.{&.{ "client", "detach", "1" }},
         },
         .{
             .name = "open",
             .summary = "Open the goto picker or the history palette in a window",
             .usage = "telar client open goto|history --client ID [--json] [--socket PATH]",
-            .routed = &.{ .client_open_goto, .client_open_history },
             .text = std.fmt.comptimePrint(
                 \\Arguments:
                 \\  goto             The pane/tab/workspace picker (`applied`).
@@ -82,26 +78,22 @@ pub const family: FamilyHelp = .{
                 \\{s}
                 \\
             , .{routed_text}),
-            .examples = &.{ &.{ "client", "open", "goto", "--client", "1" }, &.{ "client", "open", "history", "--client", "1", "--json" } },
         },
         .{
             .name = "copy-mode",
             .summary = "Enter copy mode in a window's focused terminal pane",
             .usage = "telar client copy-mode --client ID [--json] [--socket PATH]",
-            .routed = &.{.client_copy_mode},
             .text = std.fmt.comptimePrint(
                 \\{s}
                 \\
                 \\Already in copy mode is a successful no-op; a pane that cannot enter it refuses.
                 \\
             , .{routed_text}),
-            .examples = &.{&.{ "client", "copy-mode", "--client", "1" }},
         },
         .{
             .name = "open-link",
             .summary = "Open a URI through a window: files in an editor tab, web links in the host's browser",
             .usage = "telar client open-link URI --client ID [--json] [--socket PATH]",
-            .routed = &.{.client_open_link},
             .text = std.fmt.comptimePrint(
                 \\{s}
                 \\
@@ -109,13 +101,11 @@ pub const family: FamilyHelp = .{
                 \\focused pane; `admitted` means the opening job was queued.
                 \\
             , .{routed_text}),
-            .examples = &.{&.{ "client", "open-link", "https://example.com", "--client", "1" }},
         },
         .{
             .name = "clipboard",
             .summary = "Put text on the clipboard of a window's host",
             .usage = "telar client clipboard copy TEXT --client ID [--json] [--socket PATH]",
-            .routed = &.{.client_clipboard_copy},
             .text = std.fmt.comptimePrint(
                 \\Arguments:
                 \\  TEXT             UTF-8, at most {d} bytes.
@@ -125,7 +115,6 @@ pub const family: FamilyHelp = .{
                 \\The host writes its clipboard asynchronously, so the answer is `admitted`.
                 \\
             , .{ core.ClientCommand.capacity, routed_text }),
-            .examples = &.{&.{ "client", "clipboard", "copy", "copied text", "--client", "1" }},
         },
     },
 };

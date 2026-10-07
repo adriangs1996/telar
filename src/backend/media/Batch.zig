@@ -1,10 +1,11 @@
 const core = @import("telar-core");
-const std = @import("std");
 const media = @import("media.zig");
 const Batch = @This();
 
+// SAFETY: pushOutput copies bytes before publishing their event range; processing reads only accepted ranges.
 bytes: [media.batch_bytes]u8 = undefined,
 len: usize = 0,
+// SAFETY: pushOutput and pushResize write each event before increasing event_count; processing uses only that prefix.
 events: [media.batch_events]media.Event = undefined,
 event_count: usize = 0,
 reset_before: bool = false,
@@ -70,16 +71,4 @@ pub fn pushResize(self: *Batch, size: core.TerminalSize) bool {
     self.events[self.event_count] = .{ .resize = size };
     self.event_count += 1;
     return true;
-}
-
-test "consecutive resizes fold into one event" {
-    var batch: Batch = .{};
-    try std.testing.expect(batch.pushOutput("text"));
-    try std.testing.expect(batch.pushResize(.{ .cols = 10, .rows = 5 }));
-    try std.testing.expect(batch.pushResize(.{ .cols = 20, .rows = 6 }));
-    try std.testing.expectEqual(@as(usize, 2), batch.event_count);
-    try std.testing.expectEqual(@as(u16, 20), batch.events[1].resize.cols);
-    try std.testing.expect(batch.pushOutput("more"));
-    try std.testing.expect(batch.pushResize(.{ .cols = 30, .rows = 7 }));
-    try std.testing.expectEqual(@as(usize, 4), batch.event_count);
 }

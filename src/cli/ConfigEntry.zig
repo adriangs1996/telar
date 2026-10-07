@@ -1,6 +1,5 @@
 //! One allowlisted path under an agent's configuration directory, and how
 //! `telar machine setup` transforms it before it leaves.
-const ConfigEntry = @This();
 
 /// How a synced file is transformed before it leaves.
 pub const Format = enum {

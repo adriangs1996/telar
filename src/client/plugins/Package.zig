@@ -4,6 +4,7 @@ const Package = @This();
 
 manifest: core.PluginManifest,
 digest: core.Digest,
+// SAFETY: Plugin loading copies the resolved root before returning the package; root exposes only root_len bytes.
 root_bytes: [std.fs.max_path_bytes]u8 = undefined,
 root_len: u16,
 

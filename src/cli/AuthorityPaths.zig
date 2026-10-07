@@ -4,10 +4,13 @@ const std = @import("std");
 const proxy = @import("proxy.zig");
 const AuthorityPaths = @This();
 
+// SAFETY: init formats the key path before recording key_len; files reads only that prefix.
 key: [std.fs.max_path_bytes]u8 = undefined,
 key_len: usize,
+// SAFETY: init formats the certificate path before recording certificate_len; files reads only that prefix.
 certificate: [std.fs.max_path_bytes]u8 = undefined,
 certificate_len: usize,
+// SAFETY: init formats the record path before recording record_len; recordPath reads only that prefix.
 record: [std.fs.max_path_bytes]u8 = undefined,
 record_len: usize,
 

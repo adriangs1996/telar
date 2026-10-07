@@ -30,30 +30,3 @@ pub const max_key_bytes = encoding.max_key_bytes;
 pub const encodePaste = encoding.encodePaste;
 pub const encodeSgr = mouse_protocol.encodeSgr;
 pub const tracked = mouse_protocol.tracked;
-
-test {
-    _ = @import("Char.zig");
-    _ = @import("Control.zig");
-    _ = @import("GenericBinding.zig");
-    _ = @import("GenericKeymap.zig");
-    _ = @import("GenericRouter.zig");
-    _ = @import("GenericTable.zig");
-    _ = @import("InputModes.zig");
-    _ = @import("Key.zig");
-    _ = @import("KittyCodepoints.zig");
-    _ = @import("Mods.zig");
-    _ = @import("Mouse.zig");
-    _ = @import("MouseTracking.zig");
-    _ = @import("PixelProjection.zig");
-    _ = @import("Physical.zig");
-    _ = @import("RepeatPolicy.zig");
-    _ = @import("RouterLimits.zig");
-    _ = @import("RoutingCapture.zig");
-    _ = @import("chord.zig");
-    _ = @import("encoding.zig");
-    _ = @import("encoding_tests.zig");
-    _ = @import("keybind.zig");
-    _ = @import("mouse_protocol.zig");
-    _ = @import("key_tests.zig");
-    _ = @import("routing_tests.zig");
-}

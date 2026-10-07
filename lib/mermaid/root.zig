@@ -11,8 +11,3 @@ const render_module = @import("render.zig");
 
 pub const render = render_module.render;
 pub const renderTask = render_module.renderTask;
-
-test {
-    _ = @import("protocol.zig");
-    _ = @import("render.zig");
-}

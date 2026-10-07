@@ -10,7 +10,6 @@ const ServerLaunch = @import("ServerLaunch.zig");
 const runtime_bridge = @import("runtime_bridge.zig");
 const ProxyAuthorityNames = @import("ProxyAuthorityNames.zig");
 const HistoryPath = @import("HistoryPath.zig");
-const TestEnvironment = @import("TestEnvironment.zig");
 
 const privatefile = @import("privatefile");
 const Inode = privatefile.Inode;
@@ -35,6 +34,7 @@ pub fn run(init: std.process.Init, options: ServerOptions) !void {
         return runtime_bridge.relay(init.io, &connector);
     }
 
+    // SAFETY: prepare constructs launch in place and cleans up its own failures; only success reaches launch methods or deinit.
     var launch: ServerLaunch = undefined;
     try launch.prepare(.{
         .process = init,
@@ -47,6 +47,7 @@ pub fn run(init: std.process.Init, options: ServerOptions) !void {
         return launch.launchDaemon();
     }
 
+    // SAFETY: Runtime.init constructs all runtime resources before run or deinit; errors return before either call.
     var runtime: backend.Runtime = undefined;
     try runtime.init(launch.runtimeInitialization());
     const ended = runtime.run();
@@ -69,6 +70,7 @@ pub fn run(init: std.process.Init, options: ServerOptions) !void {
 /// names from stay in place until the process is gone.
 fn exitPastProxyTunnels(ended: anyerror!void) noreturn {
     ended catch |err| {
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar runtime: {s}\n", .{@errorName(err)});
         std.process.exit(@intFromEnum(RuntimeExit.failed));
     };
@@ -126,6 +128,7 @@ fn stop(init: std.process.Init, connector: *const RuntimeConnector) !void {
     switch (try core.decodeServer(try connection.receive(init.io, &receive_buffer))) {
         .runtime_stopping => try std.Io.File.stdout().writeStreamingAll(init.io, "telar runtime is stopping\n"),
         .request_failed => |failure| {
+            // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
             std.debug.print("telar runtime: {s}\n", .{failure.message});
             return error.RuntimeRequestFailed;
         },
@@ -259,123 +262,4 @@ fn checkDirectoryOwner(owner: std.c.uid_t, current_user: std.c.uid_t) error{Wron
     if (owner != current_user) {
         return error.WrongOwner;
     }
-}
-
-fn temporaryDirectory(temp: *std.testing.TmpDir, buffer: []u8) ![]const u8 {
-    const len = try temp.dir.realPath(std.testing.io, buffer);
-    return buffer[0..len];
-}
-
-test "explicit history storage overrides XDG data storage" {
-    var environment = try TestEnvironment.init(&.{
-        .{ .name = "TELAR_HISTORY", .value = "/var/lib/telar/history.db" },
-        .{ .name = "XDG_DATA_HOME", .value = "/data" },
-    });
-    defer environment.deinit();
-    var buffer: [std.fs.max_path_bytes]u8 = undefined;
-
-    const history = try resolveHistoryPath(.{ .block = environment.block }, &buffer);
-
-    try std.testing.expectEqualStrings("/var/lib/telar/history.db", history.path);
-    try std.testing.expect(history.managed_directory == null);
-}
-
-test "history and proxy storage prefer XDG data home" {
-    var environment = try TestEnvironment.init(&.{
-        .{ .name = "XDG_DATA_HOME", .value = "/data" },
-        .{ .name = "HOME", .value = "/home/adrian" },
-    });
-    defer environment.deinit();
-    const environ: std.process.Environ = .{ .block = environment.block };
-    var history_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    var proxy_buffer: [std.fs.max_path_bytes]u8 = undefined;
-
-    const history = try resolveHistoryPath(environ, &history_buffer);
-
-    try std.testing.expectEqualStrings("/data/telar", history.managed_directory.?);
-    try std.testing.expectEqualStrings("/data/telar/history.db", history.path);
-    try std.testing.expectEqualStrings("/data/telar/proxy", try resolveProxyDirectory(environ, &proxy_buffer));
-}
-
-test "a relative XDG data home is ignored for the proxy directory" {
-    var environment = try TestEnvironment.init(&.{
-        .{ .name = "XDG_DATA_HOME", .value = "data" },
-        .{ .name = "HOME", .value = "/home/adrian" },
-    });
-    defer environment.deinit();
-    const environ: std.process.Environ = .{ .block = environment.block };
-    var buffer: [std.fs.max_path_bytes]u8 = undefined;
-
-    try std.testing.expectEqualStrings("/home/adrian/.local/share/telar/proxy", try resolveProxyDirectory(environ, &buffer));
-}
-
-test "runtime selects the installed system authority without reusing the private CA" {
-    const private = proxyAuthorityNames(false);
-    const system = proxyAuthorityNames(true);
-
-    try std.testing.expectEqualStrings("ca-key.pem", private.key);
-    try std.testing.expectEqualStrings("ca-cert.pem", private.certificate);
-    try std.testing.expectEqualStrings("ca-system-key.pem", system.key);
-    try std.testing.expectEqualStrings("ca-system-cert.pem", system.certificate);
-}
-
-test "relative configured paths resolve from the config directory" {
-    const relative = try resolveConfigPath(std.testing.allocator, "/config/telar", "state/history.db");
-    defer std.testing.allocator.free(relative);
-    const absolute = try resolveConfigPath(std.testing.allocator, "/ignored", "/state/proxy");
-    defer std.testing.allocator.free(absolute);
-
-    try std.testing.expectEqualStrings("/config/telar/state/history.db", relative);
-    try std.testing.expectEqualStrings("/state/proxy", absolute);
-}
-
-test "runtime storage creates private history and proxy paths" {
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const root = try temporaryDirectory(&temp, &root_buffer);
-    var history_directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const history_directory = try std.fmt.bufPrint(&history_directory_buffer, "{s}/state", .{root});
-    var history_path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const history_path = try std.fmt.bufPrintZ(&history_path_buffer, "{s}/history.db", .{history_directory});
-    var proxy_directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const proxy_directory = try std.fmt.bufPrint(&proxy_directory_buffer, "{s}/proxy", .{root});
-
-    try prepareHistoryDatabase(std.testing.io, .{
-        .path = history_path,
-        .managed_directory = history_directory,
-    });
-    try prepareProxyDirectory(std.testing.io, proxy_directory);
-
-    const history_directory_stat = try std.Io.Dir.cwd().statFile(std.testing.io, history_directory, .{ .follow_symlinks = false });
-    const history_stat = try std.Io.Dir.cwd().statFile(std.testing.io, history_path, .{ .follow_symlinks = false });
-    const proxy_stat = try std.Io.Dir.cwd().statFile(std.testing.io, proxy_directory, .{ .follow_symlinks = false });
-    try std.testing.expectEqual(@as(u32, 0o700), history_directory_stat.permissions.toMode() & 0o777);
-    try std.testing.expectEqual(@as(u32, 0o600), history_stat.permissions.toMode() & 0o777);
-    try std.testing.expectEqual(@as(u32, 0o700), proxy_stat.permissions.toMode() & 0o777);
-}
-
-test "a fresh start sets the previous session aside once" {
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const root = try temporaryDirectory(&temp, &root_buffer);
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try std.fmt.bufPrint(&path_buffer, "{s}/session.ckpt", .{root});
-    var previous_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const previous = try std.fmt.bufPrint(&previous_buffer, "{s}/session.ckpt.previous", .{root});
-    try temp.dir.writeFile(std.testing.io, .{ .sub_path = "session.ckpt", .data = "session" });
-
-    try std.testing.expect(try setSessionAside(std.testing.io, path));
-
-    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(std.testing.io, path, .{ .follow_symlinks = false }));
-    const moved = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, previous, std.testing.allocator, .limited(64));
-    defer std.testing.allocator.free(moved);
-    try std.testing.expectEqualStrings("session", moved);
-    try std.testing.expect(!try setSessionAside(std.testing.io, path));
-}
-
-test "runtime storage rejects directories owned by another user" {
-    try checkDirectoryOwner(1000, 1000);
-    try std.testing.expectError(error.WrongOwner, checkDirectoryOwner(0, 1000));
 }

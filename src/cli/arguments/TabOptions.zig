@@ -123,27 +123,3 @@ pub fn parse(args: []const [*:0]const u8) !TabOptions {
 
     return self;
 }
-
-test "a background tab takes a workspace and a label but no target" {
-    const options = try TabOptions.parse(&.{ "create", "--background", "--label", "tests", "--workspace", "4", "--json" });
-    try std.testing.expect(options.background);
-    try std.testing.expectEqualStrings("tests", std.mem.span(options.label.?));
-    try std.testing.expectEqual(@as(u64, 4), options.workspace.id);
-    try std.testing.expectError(error.MissingClientId, TabOptions.parse(&.{"create"}));
-    try std.testing.expectError(error.UnknownTabOption, TabOptions.parse(&.{ "get", "8", "--background" }));
-}
-
-test "tab move validates direction and its optional anchor" {
-    const options = try TabOptions.parse(&.{ "move", "8", "previous", "--relative-to", "3" });
-    try std.testing.expectEqual(core.TabMoveDirection.previous, options.direction.?);
-    try std.testing.expectEqual(@as(u64, 3), core.raw(options.relative_to.?));
-    try std.testing.expectError(error.InvalidMoveDirection, TabOptions.parse(&.{ "move", "8", "sideways" }));
-    try std.testing.expectError(error.UnknownTabOption, TabOptions.parse(&.{ "get", "8", "--relative-to", "3" }));
-}
-
-test "tab list requires an unambiguous valid workspace option" {
-    const options = try TabOptions.parse(&.{ "list", "--workspace", "42", "--json" });
-    try std.testing.expectEqual(@as(u64, 42), options.workspace.id);
-    try std.testing.expectError(error.InvalidIdentity, TabOptions.parse(&.{ "list", "--workspace", "0" }));
-    try std.testing.expectError(error.DuplicateWorkspaceOption, TabOptions.parse(&.{ "list", "--workspace", "1", "--workspace", "2" }));
-}

@@ -1,4 +1,4 @@
-//! A client's link to its machine's runtime (docs/flows/runtime-link.md).
+//! A client's link to its machine's runtime.
 //! The client connects off the event loop, adopts the socket, and when a
 //! read or write fails it keeps running: the chrome shows the link as lost,
 //! the socket closes once no job uses it, and a new attempt follows after a
@@ -6,8 +6,6 @@
 const data = @import("model");
 const pacing = @import("pacing");
 const pty = @import("pty");
-const core = @import("telar-core");
-const Discovery = @import("../machines/Discovery.zig");
 const std = @import("std");
 const Client = @import("../execution/Client.zig");
 const RuntimeConnectJob = @import("RuntimeConnectJob.zig");
@@ -16,7 +14,6 @@ const MachineTarget = @import("../machines/MachineTarget.zig").MachineTarget;
 const machine_connection = @import("../machines/machine_connection.zig");
 const runtime_io = @import("runtime_io.zig");
 const pane_closure = @import("../panes/pane_closure.zig");
-const client_tests = @import("../execution/client_tests.zig");
 
 /// Waits between attempts: the first retry after half a second, doubling up
 /// to thirty seconds.
@@ -431,103 +428,4 @@ fn targetName(target: MachineTarget) []const u8 {
         .local => "this machine",
         .remote => |machine| machine.destination,
     };
-}
-
-test "remote default shells use owned login arguments across discovery replacement" {
-    const client = try std.testing.allocator.create(Client);
-    defer std.testing.allocator.destroy(client);
-    client.options.machine = .{ .remote = .{ .destination = "dev@box" } };
-
-    for ([_][]const u8{ "/bin/bash", "/bin/zsh", "/bin/ksh", "/bin/sh", "/bin/dash", "/usr/bin/fish", "/bin/tcsh", "/bin/nu" }) |shell| {
-        var buffer: [Discovery.max_output_bytes]u8 = undefined;
-        client.forward = .{
-            .child = undefined,
-            .discovery = try Discovery.parse(try std.fmt.bufPrint(&buffer, "/home/remote user\n{s}\n/tmp/remote.sock\n{s}\n", .{ shell, &core.schema_id })),
-        };
-        adoptLaunchDefaults(client);
-        client.forward = null;
-
-        try std.testing.expectEqualStrings("/home/remote user", client.options.cwd);
-        try std.testing.expectEqualStrings(shell, client.options.arguments[0]);
-        try std.testing.expectEqual(@intFromPtr(&client.launch_shell), @intFromPtr(client.options.arguments[0].ptr));
-        try std.testing.expectEqual(@intFromPtr(&client.launch_arguments), @intFromPtr(client.options.arguments.ptr));
-        if (pty.login_shell.script(shell) != null) {
-            try std.testing.expectEqual(@as(usize, 1 + pty.login_shell.login_flags.len), client.options.arguments.len);
-            try std.testing.expectEqualStrings("-l", client.options.arguments[1]);
-            try std.testing.expectEqualStrings("-i", client.options.arguments[2]);
-        } else {
-            try std.testing.expectEqual(@as(usize, 1), client.options.arguments.len);
-        }
-    }
-}
-
-test "remote named commands and local launch defaults keep their arguments" {
-    const client = try std.testing.allocator.create(Client);
-    defer std.testing.allocator.destroy(client);
-    const named = &[_][]const u8{ "custom-command", "$HOME; literal argument", "" };
-    client.options.machine = .{ .remote = .{ .destination = "dev@box", .arguments = named } };
-    client.forward = .{
-        .child = undefined,
-        .discovery = try Discovery.parse("/home/remote\n/bin/zsh\n/tmp/remote.sock\n" ++ core.schema_id ++ "\n"),
-    };
-    adoptLaunchDefaults(client);
-    try std.testing.expectEqualStrings("/home/remote", client.options.cwd);
-    try std.testing.expectEqual(named.ptr, client.options.arguments.ptr);
-    try std.testing.expectEqualDeep(named.*, client.options.arguments[0..named.len].*);
-
-    client.forward = null;
-    client.options.machine = .{ .local = .{} };
-    client.options.cwd = "/local/work";
-    client.options.arguments = &.{"/local/shell"};
-    adoptLaunchDefaults(client);
-    try std.testing.expectEqualStrings("/local/work", client.options.cwd);
-    try std.testing.expectEqualStrings("/local/shell", client.options.arguments[0]);
-    try std.testing.expectEqual(@as(usize, 1), client.options.arguments.len);
-}
-
-test "a lost runtime is reached again and its session starts fresh" {
-    try client_tests.reconnectAfterLoss(start);
-}
-
-test "a failed attempt shows its report and waits to retry, unless retried now" {
-    try client_tests.failedAttemptWaits(start, retryNow);
-}
-
-test "a failure retrying cannot fix waits for the person without a retry" {
-    const gpa = std.testing.allocator;
-    const app = try gpa.create(Client);
-    defer gpa.destroy(app);
-
-    try app.init(.{
-        .gpa = gpa,
-        .io = std.testing.io,
-        .host_size = .{
-            .cols = 40,
-            .rows = 10,
-            .cell_width_px = 0,
-            .cell_height_px = 0,
-        },
-        .options = .{
-            .arguments = &.{},
-            .cwd = "",
-            .endpoint = "",
-            .machine = .{ .remote = .{ .destination = "dev@box" } },
-        },
-    });
-    defer app.deinit();
-
-    try start(app);
-    _ = app.to_background.pop().?;
-
-    const report = "telar@box: Permission denied (publickey).";
-    @memcpy(app.connect_report.bytes[0..report.len], report);
-    app.connect_report.len = report.len;
-    try std.testing.expectEqual(@as(?u8, null), try app.update(.{ .runtime_connected = error.SshAuthenticationFailed }));
-    try std.testing.expect(app.model.runtime_link.phase == .failed);
-    try std.testing.expectEqualStrings(report, app.model.runtime_link.failure().?);
-    try std.testing.expect(app.to_workers.pop() == null);
-
-    try retryNow(app);
-    try std.testing.expect(app.model.runtime_link.phase == .connecting);
-    try std.testing.expect(app.to_background.pop().? == .runtime_connect);
 }

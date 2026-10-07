@@ -7,6 +7,7 @@ const Sample = @This();
 
 pub const capacity = 16 * 1024;
 
+// SAFETY: capture and prepend fill bytes[start..] before returning; text exposes only that initialized suffix.
 bytes: [capacity]u8 = undefined,
 start: usize = capacity,
 

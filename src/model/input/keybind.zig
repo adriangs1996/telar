@@ -5,6 +5,6 @@ const std = @import("std");
 
 pub const default_sequence_timeout_ns: u64 = 1000 * std.time.ns_per_ms;
 
-pub const default_prefix = keyinput.chord.parseKey("ctrl+b") catch unreachable;
+pub const default_prefix = keyinput.chord.parseKey("ctrl+b") catch @compileError("Invalid built-in key chord");
 
 pub const max_physical_leases = 64;

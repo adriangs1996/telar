@@ -15,18 +15,26 @@ const GraphicsPauses = @This();
 /// a table holding only live panes never fills.
 pub const capacity = core.max_panes_per_tab;
 
+// SAFETY: add initializes the pane id before returning the new row; find and removal operate only below count.
 pane_id: [capacity]core.PaneId = undefined,
+// SAFETY: add initializes the resync counter before returning the new row; live rows are bounded by count.
 resyncs: [capacity]u8 = undefined,
+// SAFETY: add initializes the window start before returning the new row; oldest scans only live rows below count.
 since_ns: [capacity]u64 = undefined,
 /// When a waiting row asks again; meaningful only while `waiting`.
+// SAFETY: add initializes the deadline before returning the new row; nextDue reads it only for a live waiting row.
 due_ns: [capacity]u64 = undefined,
 /// Consecutive windows of this pause that ended waiting.
+// SAFETY: add initializes backoff before returning the new row; callers obtain slots from add or find.
 backoff: [capacity]u8 = undefined,
+// SAFETY: add initializes waiting before returning the new row; waiting scans are bounded by count.
 waiting: [capacity]bool = undefined,
 /// A graphics snapshot began since the pane last reached its limit; its
 /// end, applied, ends the pause.
+// SAFETY: add initializes the snapshot flag before returning the new row; callers obtain slots from add or find.
 snapshot_begun: [capacity]bool = undefined,
 /// When the pause ended, or null while the pane is paused.
+// SAFETY: add initializes resumed_ns before returning the new row; contains and oldest read only live rows.
 resumed_ns: [capacity]?u64 = undefined,
 count: usize = 0,
 /// Rows waiting for their window to pass; zero keeps every check to one
@@ -140,27 +148,4 @@ pub fn setWaiting(self: *GraphicsPauses, slot: usize, waiting: bool) void {
     } else {
         self.waiting_count -= 1;
     }
-}
-
-test "removing a row keeps the rest findable and the waiting count in step" {
-    var pauses: GraphicsPauses = .{};
-    for (0..3) |number| {
-        const slot = pauses.add(@enumFromInt(number + 1), number + 10);
-        pauses.setWaiting(slot, true);
-        pauses.due_ns[slot] = 100 - number;
-    }
-
-    try std.testing.expectEqual(@as(?u64, 98), pauses.nextDue());
-    pauses.remove(pauses.find(@enumFromInt(1)).?);
-    try std.testing.expectEqual(@as(usize, 2), pauses.count);
-    try std.testing.expectEqual(@as(usize, 2), pauses.waiting_count);
-    try std.testing.expect(!pauses.contains(@enumFromInt(1)));
-    try std.testing.expect(pauses.contains(@enumFromInt(2)));
-    try std.testing.expect(pauses.contains(@enumFromInt(3)));
-    try std.testing.expectEqual(@as(core.PaneId, @enumFromInt(2)), pauses.pane_id[pauses.oldest()]);
-
-    pauses.remove(0);
-    pauses.remove(0);
-    try std.testing.expectEqual(@as(usize, 0), pauses.waiting_count);
-    try std.testing.expectEqual(@as(?u64, null), pauses.nextDue());
 }

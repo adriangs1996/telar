@@ -6,6 +6,7 @@ const Result = @This();
 pane: PaneKey,
 session_id: [16]u8,
 status: description.ResultStatus,
+// SAFETY: Description generation fills the normalized title before setting title_len; titleSlice reads only that prefix.
 title: [core.max_agent_session_title_bytes]u8 = undefined,
 title_len: u8 = 0,
 

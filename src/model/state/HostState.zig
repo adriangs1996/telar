@@ -61,9 +61,6 @@ fn commitHostResize(self: *State, size: core.TerminalSize) model_data.HostResize
     return .{
         .previous = previous,
         .current = size,
-        .grid_changed = previous.cols != size.cols or previous.rows != size.rows,
-        .cell_size_changed = previous.cell_width_px != size.cell_width_px or
-            previous.cell_height_px != size.cell_height_px,
         .host_revision = self.host_revision,
     };
 }

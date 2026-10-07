@@ -3,6 +3,7 @@
 const Candidate = @This();
 
 process_group: u32,
+// SAFETY: Discovery formats the terminal path before publishing tty_len; tty is empty until then.
 tty_bytes: [128]u8 = undefined,
 tty_len: u8 = 0,
 

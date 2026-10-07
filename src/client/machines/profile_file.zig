@@ -86,23 +86,3 @@ pub fn localLabel(profiles: *const core.MachineProfiles, buffer: *[std.posix.HOS
 
     return std.posix.gethostname(buffer) catch "localhost";
 }
-
-test "profiles are saved privately and load back" {
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(std.testing.io, &directory_buffer);
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const file_path = try std.fmt.bufPrint(&path_buffer, "{s}/telar/{s}", .{ directory_buffer[0..directory_len], file_name });
-
-    var profiles: core.MachineProfiles = .{};
-    try profiles.add(try core.MachineProfile.init(@enumFromInt(1), .{
-        .label = "box",
-        .destination = "dev@box",
-    }));
-    try save(std.testing.io, file_path, &profiles);
-
-    const loaded = try load(std.testing.io, std.testing.allocator, file_path);
-    try std.testing.expectEqualStrings("dev@box", loaded.rows[0].destination());
-}

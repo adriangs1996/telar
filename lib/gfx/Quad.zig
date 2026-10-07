@@ -42,8 +42,6 @@ pub const Quad = extern struct {
 /// The std430 stride both shaders index the quad buffer with.
 pub const stride: usize = 80;
 
-/// `texture` values both shaders branch on.
-pub const atlas_texture: f32 = 0;
 pub const sprite_texture: f32 = 1;
 pub const diagram_texture: f32 = 2;
 pub const image_texture: f32 = 10;

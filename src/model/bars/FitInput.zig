@@ -2,7 +2,6 @@
 //! order and the width of every component at each level, in the adapter's
 //! own unit (pixels in the GUI, cells in the TUI).
 const model = @import("model.zig");
-const FitInput = @This();
 
 pub const max_slots = 4;
 

@@ -5,12 +5,11 @@ const core = @import("telar-core");
 const options = @import("profile_options");
 const data = @import("model");
 const client = @import("telar-client");
-const Renderer = @import("render/TerminalRenderer.zig");
+const Renderer = @import("render/Renderer.zig");
 const CellMesh = @import("render/CellMesh.zig");
 const gfx = @import("gfx");
 const Quad = gfx.Quad;
 const Canvas = @import("widgets/Canvas.zig");
-const State = @import("widgets/interaction/State.zig");
 const AgentCard = @import("widgets/AgentCard.zig");
 const CardGeometry = @import("widgets/CardGeometry.zig");
 const Context = @import("widgets/Context.zig");
@@ -18,7 +17,6 @@ const HitMap = @import("widgets/HitMap.zig");
 const BandHitMap = @import("widgets/BandHitMap.zig");
 const ShapingEntry = @import("text/ShapingEntry.zig");
 const ShapingCache = @import("text/ShapingCache.zig");
-const kitty_protocol = @import("kitty_protocol");
 const ImagePlacement = @import("image/ImagePlacement.zig");
 const PaneImages = @import("image/PaneImages.zig");
 const ImageView = @import("image/ImageView.zig");
@@ -32,7 +30,7 @@ pub var profile_store: if (core.profiling.active) core.ProfileStore else void = 
 pub fn main(init: std.process.Init) !void {
     defer if (comptime core.profiling.active) {
         if (init.environ_map.get("TELAR_PROFILE_DIR")) |directory| {
-            profile_store.dump(init.io, directory) catch {};
+            profile_store.dump(init.io, directory) catch |err| std.log.warn("Could not write profiling data: {s}", .{@errorName(err)});
         }
     };
     var buffer: [16384]u8 = undefined;

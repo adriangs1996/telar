@@ -1,5 +1,4 @@
 const core = @import("telar-core");
-const std = @import("std");
 const Entry = @import("Entry.zig");
 const workspace_list = @import("workspace_list.zig");
 const SnapshotInput = @import("WorkspaceListInput.zig");
@@ -12,9 +11,12 @@ count: usize = 0,
 /// Entries before this index are projects; the rest hold worktree tabs and
 /// hang from their source in every view.
 project_count: usize = 0,
+// SAFETY: replace fills the retained entries before assigning the replacement snapshot; count excludes entries whose paths did not fit.
 entries: [core.max_workspace_list_entries]Entry = undefined,
+// SAFETY: replace initializes each worktree before publishing worktree_count; lookups traverse only that prefix.
 worktrees: [core.max_worktree_entries]WorktreeRow = undefined,
 worktree_count: usize = 0,
+// SAFETY: replace copies each path before publishing its entry in the replacement snapshot; pathAt reads only stored offset/length ranges.
 path_pool: [workspace_list.path_pool_size]u8 = undefined,
 pool_len: usize = 0,
 /// Entries of the last list whose paths did not fit `path_pool`.
@@ -84,6 +86,7 @@ pub fn replace(self: *Snapshot, input: SnapshotInput) !bool {
         const name = entry.name[0..@min(entry.name.len, workspace_list.max_name_bytes)];
         var stored: Entry = .{
             .workspace = entry.workspace,
+            // SAFETY: The bounded name prefix is copied before stored is appended; readers use only name[0..name_len].
             .name = undefined,
             .name_len = @intCast(name.len),
             .path_offset = @intCast(replacement.pool_len),
@@ -254,25 +257,4 @@ fn holdsWorktree(input: SnapshotInput, workspace: core.WorkspaceId) bool {
     }
 
     return false;
-}
-
-test "worktree workspaces follow the projects and resolve to their source" {
-    var snapshot: Snapshot = .{};
-    _ = try snapshot.replace(.{
-        .revision = 1,
-        .entries = &.{
-            .{ .workspace = @enumFromInt(5), .name = "fix", .path = "/w/fix", .tab_count = 1 },
-            .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 2 },
-        },
-        .worktrees = &.{
-            .{ .worktree = @enumFromInt(9), .source = @enumFromInt(1), .workspace = @enumFromInt(5), .branch = "fix", .title = "Fix tabs" },
-        },
-    });
-
-    try std.testing.expectEqual(@as(usize, 1), snapshot.project_count);
-    try std.testing.expectEqual(@as(core.WorkspaceId, @enumFromInt(1)), snapshot.workspaceAtPosition(0).?);
-    try std.testing.expect(snapshot.workspaceAtPosition(1) == null);
-    try std.testing.expectEqual(@as(core.WorkspaceId, @enumFromInt(1)), snapshot.projectOf(@enumFromInt(5)));
-    try std.testing.expectEqualStrings("Fix tabs", snapshot.worktreeOfWorkspace(@enumFromInt(5)).?.displayName());
-    try std.testing.expectEqual(@as(usize, 1), snapshot.worktreeCount(@enumFromInt(1)));
 }

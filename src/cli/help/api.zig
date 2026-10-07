@@ -21,7 +21,6 @@ pub const family: FamilyHelp = .{
             \\`server_messages`, `agent_statuses`, `bounds`. Exit 0.
             \\
             ,
-            .examples = &.{&.{ "api", "schema", "--json" }},
         },
     },
 };

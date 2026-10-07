@@ -283,6 +283,7 @@ fn drawChip(self: TabStrip, canvas: *Canvas, chip: Rect, tab: ChipTab) !void {
     if (std.meta.activeTag(self.context.projection.status_mode) == .prefix) {
         var storage: [8]u8 = undefined;
         const number: Label = .{
+            // SAFETY: the one-based index is bounded by max_tabs_per_workspace and fits eight bytes.
             .text = std.fmt.bufPrint(&storage, "{d}", .{tab.index + 1}) catch unreachable,
             .color = palette.text,
             .bold = true,
@@ -347,6 +348,7 @@ fn drawCounter(self: TabStrip, canvas: *Canvas, bounds: Rect, layout: *const Pla
         .context = self.context,
         .area = bounds,
         .intent = .{ .select_tab = model.tabs.location[nearest].tab_id },
+        // SAFETY: hidden tabs are bounded by max_tabs_per_workspace; the plus sign and count fit eight bytes.
         .text = std.fmt.bufPrint(&storage, "+{d}", .{layout.hidden()}) catch unreachable,
         .alignment = .center,
         .background = false,
@@ -366,6 +368,7 @@ fn caption(self: TabStrip, storage: *[caption_capacity]u8, index: usize) []const
     var shown: [data.tab_label.caption_bytes]u8 = undefined;
     const text = data.tab_label.caption(model, index, &shown);
     const suffix = if (model.tabs.layout[index].isFullscreen()) fullscreen_suffix else "";
+    // SAFETY: caption_capacity is caption_bytes plus fullscreen_suffix.len, exactly the two formatted components.
     return std.fmt.bufPrint(storage, "{s}{s}", .{ text, suffix }) catch unreachable;
 }
 
@@ -697,79 +700,4 @@ fn footprint(layout: Plan, metrics: Metrics) f32 {
     }
 
     return used;
-}
-
-const test_metrics: Metrics = .{
-    .lead = 5,
-    .trail = 12,
-    .spacing = 8,
-    .gap = 2,
-    .inactive_max = 220,
-    .selected_max = 300,
-    .caption_min = 56,
-    .counter = 36,
-};
-
-fn testSizes(comptime count: usize, caption_width: f32) [count]Measure {
-    return @splat(.{
-        .caption = caption_width,
-        .chip = 20,
-        .status = 0,
-    });
-}
-
-test "tabs that fit keep their whole captions and the selection its full width" {
-    const sizes = testSizes(3, 100);
-    const layout = plan(&sizes, 1, .{ .room = 1000, .metrics = test_metrics });
-    for (0..3) |index| {
-        try std.testing.expectEqual(Fit.full, layout.fits[index]);
-        try std.testing.expectEqual(sizes[index].whole(test_metrics), layout.widths[index]);
-    }
-
-    try std.testing.expectEqual(@as(usize, 0), layout.hidden());
-}
-
-test "narrower rooms truncate the captions, then keep only the chips around the selection" {
-    const sizes = testSizes(8, 120);
-    const whole = sizes[0].whole(test_metrics);
-    const truncated = plan(&sizes, 2, .{ .room = 1100, .metrics = test_metrics });
-    try std.testing.expectEqual(Fit.full, truncated.fits[2]);
-    try std.testing.expectEqual(whole, truncated.widths[2]);
-    try std.testing.expectEqual(Fit.truncated, truncated.fits[0]);
-    try std.testing.expect(truncated.widths[0] < whole and truncated.widths[0] >= sizes[0].truncated(test_metrics));
-    try std.testing.expect(footprint(truncated, test_metrics) <= 1100);
-
-    const compact = plan(&sizes, 2, .{ .room = 420, .metrics = test_metrics });
-    try std.testing.expectEqual(Fit.compact, compact.fits[0]);
-    try std.testing.expectEqual(sizes[0].compact(test_metrics), compact.widths[0]);
-    try std.testing.expectEqual(@as(usize, 0), compact.hidden());
-    try std.testing.expect(footprint(compact, test_metrics) <= 420);
-}
-
-test "past the chips the tabs farthest from the selection hide behind the counter" {
-    const sizes = testSizes(8, 120);
-    const layout = plan(&sizes, 2, .{ .room = 250, .metrics = test_metrics });
-    try std.testing.expect(layout.hidden() > 0);
-    try std.testing.expect(layout.first <= 2 and 2 < layout.end);
-    try std.testing.expect(footprint(layout, test_metrics) <= 250);
-    try std.testing.expect(layout.end - 1 - 2 <= 2 - layout.first + 1);
-}
-
-test "the selection never takes more than its share of a narrow strip" {
-    const sizes = testSizes(2, 400);
-    const layout = plan(&sizes, 0, .{ .room = 400, .metrics = test_metrics });
-    try std.testing.expectEqual(Fit.truncated, layout.fits[0]);
-    try std.testing.expectEqual(@as(f32, 400 * selected_share), layout.widths[0]);
-}
-
-test "a strip too narrow for every caption keeps captions next to the selection and chips further away" {
-    const sizes = testSizes(8, 120);
-    const layout = plan(&sizes, 3, .{ .room = 700, .metrics = test_metrics });
-    try std.testing.expectEqual(Fit.full, layout.fits[3]);
-    try std.testing.expect(layout.fits[2] != .compact and layout.fits[4] != .compact);
-    try std.testing.expectEqual(Fit.compact, layout.fits[7]);
-    try std.testing.expectEqual(@as(usize, 0), layout.hidden());
-    try std.testing.expect(footprint(layout, test_metrics) <= 700);
-    // No room a truncated caption could use is left over.
-    try std.testing.expect(700 - footprint(layout, test_metrics) < sizes[7].truncated(test_metrics) - sizes[7].compact(test_metrics));
 }

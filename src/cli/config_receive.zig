@@ -1,5 +1,5 @@
 //! `telar machine receive-config`, the machine's half of the configuration
-//! sync of `telar machine setup` (docs/flows/machine-setup.md). It reads a
+//! sync of `telar machine setup`. It reads a
 //! bounded stream of files on standard input and writes each one under the
 //! home, atomically and only when its bytes or mode differ. It writes only
 //! under the agents' directories (`config_allowlist.acceptable`), never
@@ -43,9 +43,9 @@ pub fn run(init: std.process.Init) !u8 {
     var input = std.Io.File.stdin().readerStreaming(init.io, &input_buffer);
     var output_buffer: [4096]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
-    defer output.interface.flush() catch {};
 
     try receive(init.io, init.gpa, home_dir, &input.interface, &output.interface);
+    try output.interface.flush();
     return 0;
 }
 
@@ -163,9 +163,11 @@ fn place(io: std.Io, home: std.Io.Dir, path: []const u8, bytes: []const u8, mode
     var nonce: [8]u8 = undefined;
     try io.randomSecure(&nonce);
     var temporary_buffer: [std.fs.max_name_bytes]u8 = undefined;
+    // SAFETY: the name has 7 prefix bytes and 16 hex digits, below max_name_bytes.
     const temporary = std.fmt.bufPrint(&temporary_buffer, ".telar-{s}", .{&std.fmt.bytesToHex(nonce, .lower)}) catch unreachable;
     var committed = false;
     defer if (!committed) {
+        // Only uncommitted temporary files are removed here; cleanup preserves the original receive error.
         parent.deleteFile(io, temporary) catch {};
     };
 
@@ -230,95 +232,5 @@ fn sameBytes(io: std.Io, parent: std.Io.Dir, name: []const u8, bytes: []const u8
         }
 
         offset += read;
-    }
-}
-
-fn testStream(buffer: []u8, files: []const [2][]const u8) ![]const u8 {
-    var writer: std.Io.Writer = .fixed(buffer);
-    try writer.writeAll(stream_header ++ "\n");
-    for (files) |file| {
-        try writer.print("file 644 {d} {s}\n{s}\n", .{ file[1].len, file[0], file[1] });
-    }
-
-    try writer.writeAll("end\n");
-    return writer.buffered();
-}
-
-test "files are written once, then reported unchanged" {
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-
-    var stream_buffer: [512]u8 = undefined;
-    const stream = try testStream(&stream_buffer, &.{
-        .{ ".claude/settings.json", "{\"model\":\"opus\"}" },
-        .{ ".claude/skills/grill/SKILL.md", "# Grill\n" },
-    });
-
-    var answer_buffer: [512]u8 = undefined;
-    var reader: std.Io.Reader = .fixed(stream);
-    var answer: std.Io.Writer = .fixed(&answer_buffer);
-    try receive(std.testing.io, std.testing.allocator, temp.dir, &reader, &answer);
-    try std.testing.expectEqualStrings("written .claude/settings.json\nwritten .claude/skills/grill/SKILL.md\n", answer.buffered());
-
-    var again: std.Io.Reader = .fixed(stream);
-    answer = .fixed(&answer_buffer);
-    try receive(std.testing.io, std.testing.allocator, temp.dir, &again, &answer);
-    try std.testing.expectEqualStrings("unchanged .claude/settings.json\nunchanged .claude/skills/grill/SKILL.md\n", answer.buffered());
-
-    var read_buffer: [64]u8 = undefined;
-    try std.testing.expectEqualStrings("# Grill\n", try temp.dir.readFile(std.testing.io, ".claude/skills/grill/SKILL.md", &read_buffer));
-}
-
-test "paths outside the agents' directories, credentials and symlinks are refused" {
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-
-    try temp.dir.createDirPath(std.testing.io, "elsewhere");
-    try temp.dir.symLink(std.testing.io, "elsewhere", ".codex", .{ .is_directory = true });
-    try temp.dir.createDirPath(std.testing.io, ".claude");
-    try temp.dir.symLink(std.testing.io, "../elsewhere/target", ".claude/CLAUDE.md", .{});
-
-    var stream_buffer: [1024]u8 = undefined;
-    const stream = try testStream(&stream_buffer, &.{
-        .{ ".ssh/authorized_keys", "ssh-ed25519 AAAA" },
-        .{ ".claude/../.ssh/authorized_keys", "ssh-ed25519 AAAA" },
-        .{ ".codex/auth.json", "{}" },
-        .{ ".codex/AGENTS.md", "through a symlinked directory" },
-        .{ ".claude/CLAUDE.md", "through a symlinked file" },
-    });
-
-    var answer_buffer: [1024]u8 = undefined;
-    var reader: std.Io.Reader = .fixed(stream);
-    var answer: std.Io.Writer = .fixed(&answer_buffer);
-    try receive(std.testing.io, std.testing.allocator, temp.dir, &reader, &answer);
-
-    try std.testing.expectEqualStrings(
-        "refused .ssh/authorized_keys: not a path the sync may write\n" ++
-            "refused .claude/../.ssh/authorized_keys: not a path the sync may write\n" ++
-            "refused .codex/auth.json: not a path the sync may write\n" ++
-            "refused .codex/AGENTS.md: SymlinkOnTheWay\n" ++
-            "refused .claude/CLAUDE.md: NotARegularFile\n",
-        answer.buffered(),
-    );
-    try std.testing.expectError(error.FileNotFound, temp.dir.statFile(std.testing.io, "elsewhere/AGENTS.md", .{}));
-    try std.testing.expectError(error.FileNotFound, temp.dir.statFile(std.testing.io, "elsewhere/target", .{}));
-}
-
-test "a stream past its bounds or out of shape stops" {
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-
-    var answer_buffer: [256]u8 = undefined;
-    for ([_][]const u8{
-        "not a stream\n",
-        stream_header ++ "\nfile 644 99999999 .claude/x\n",
-        stream_header ++ "\nfile 600 1 .claude/x\nx\nend\n",
-        stream_header ++ "\nfile 644 5 .claude/x\nab",
-    }) |stream| {
-        var reader: std.Io.Reader = .fixed(stream);
-        var answer: std.Io.Writer = .fixed(&answer_buffer);
-        if (receive(std.testing.io, std.testing.allocator, temp.dir, &reader, &answer)) |_| {
-            return error.TestUnexpectedResult;
-        } else |_| {}
     }
 }

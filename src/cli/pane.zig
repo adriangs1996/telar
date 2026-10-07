@@ -29,24 +29,28 @@ pub fn run(init: std.process.Init, options: PaneOptions) !u8 {
     var output_buffer: [16 * 1024]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
     const writer = &output.interface;
-    defer writer.flush() catch {};
 
     var text_buffer: [core.max_pane_text_input_bytes + 1:0]u8 = undefined;
     var effective = options;
     if (options.stdin) {
         effective.text = readText(init, &text_buffer) catch |err| {
+            // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
             std.debug.print("telar pane: {s}\n", .{control.describe(err)});
             return agent.exit_failure;
         };
     }
 
-    return execute(&session, effective, .{ .writer = writer, .environ = init.minimal.environ }) catch |err| {
+    const result = execute(&session, effective, .{ .writer = writer, .environ = init.minimal.environ }) catch |err| failure: {
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar pane: {s}\n", .{control.describe(err)});
-        return switch (err) {
+        break :failure switch (err) {
             error.PaneNotFound, error.PaneExited => agent.exit_not_found,
             else => agent.exit_failure,
         };
     };
+
+    try writer.flush();
+    return result;
 }
 
 // The text `send-keys --stdin` sends: standard input without its final
@@ -134,10 +138,12 @@ fn execute(session: *Session, options: PaneOptions, context: ExecutionContext) !
                     try context.writer.writeByte('\n');
                 }
                 if (text.truncated) {
+                    // Truncation is command feedback on stderr so the pane text on stdout stays unchanged.
                     std.debug.print("telar pane: older rows were omitted\n", .{});
                 }
 
                 if (text.exit_code) |code| {
+                    // The child exit code is command feedback on stderr, separate from captured pane text.
                     std.debug.print("telar pane: the command exited with {d}\n", .{code});
                 }
             }
@@ -152,7 +158,7 @@ fn execute(session: *Session, options: PaneOptions, context: ExecutionContext) !
                 // Enter pressed as a person would, after the text: Codex
                 // takes an Enter within 120 ms of a fast burst of typed
                 // characters for a newline inside a paste.
-                session.sleepMs(submit_delay_ms);
+                try session.sleepMs(submit_delay_ms);
                 try session.sendText(pane, .{
                     .mode = .raw_enter,
                     .text = "",

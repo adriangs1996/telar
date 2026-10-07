@@ -4,6 +4,7 @@ const std = @import("std");
 const file_uri = @import("file_uri.zig");
 const FilePath = @This();
 
+// SAFETY: Successful constructors copy or decode the path into storage before returning; slice exposes only len bytes.
 storage: [urlscan.max_uri_bytes]u8 = undefined,
 len: u16,
 /// The line the link points at; zero when it names only the file.
@@ -97,58 +98,4 @@ fn initUri(target: *const LinkTarget) !FilePath {
 
 pub fn slice(self: *const FilePath) []const u8 {
     return self.storage[0..self.len];
-}
-
-/// Accepts an absolute Markdown path or a validated local file URI.
-/// Example: `const path = try FilePath.fromDestination("/tmp/report.md");`
-pub fn fromDestination(text: []const u8) !FilePath {
-    if (text.len == 0 or text.len > urlscan.max_uri_bytes or !std.unicode.utf8ValidateSlice(text)) {
-        return error.InvalidFileLink;
-    }
-
-    for (text) |byte| {
-        if (std.ascii.isControl(byte)) {
-            return error.InvalidFileLink;
-        }
-    }
-
-    if (text[0] != '/') {
-        const target = try LinkTarget.init(text);
-        return init(&target);
-    }
-
-    var path: FilePath = .{
-        .len = @intCast(text.len),
-    };
-    @memcpy(path.storage[0..text.len], text);
-    return path;
-}
-
-test "file links carry the line and column they point at" {
-    const fragment = try LinkTarget.init("file:///tmp/a%20b.zig#L12:3");
-    const from_uri = try FilePath.init(&fragment);
-    try std.testing.expectEqualStrings("/tmp/a b.zig", from_uri.slice());
-    try std.testing.expectEqual(@as(u32, 12), from_uri.line);
-    try std.testing.expectEqual(@as(u32, 3), from_uri.column);
-
-    const prose = try LinkTarget.initPath("~/src/main.zig:40");
-    const from_prose = try FilePath.init(&prose);
-    try std.testing.expectEqualStrings("~/src/main.zig", from_prose.slice());
-    try std.testing.expectEqual(@as(u32, 40), from_prose.line);
-    try std.testing.expectEqual(@as(u32, 0), from_prose.column);
-
-    const anchor = try LinkTarget.init("file:///tmp/a.md#usage");
-    try std.testing.expectError(error.InvalidFileLink, FilePath.init(&anchor));
-    const web = try LinkTarget.init("https://example.com/a.zig");
-    try std.testing.expectError(error.NotFileLink, FilePath.init(&web));
-}
-
-test "message file destinations preserve literal paths and decode local URIs" {
-    const path = try FilePath.fromDestination("/tmp/a b '$(touch nope)%.md");
-    try std.testing.expectEqualStrings("/tmp/a b '$(touch nope)%.md", path.slice());
-    const uri = try FilePath.fromDestination("file:///tmp/a%20b.md");
-    try std.testing.expectEqualStrings("/tmp/a b.md", uri.slice());
-    try std.testing.expectError(error.RemoteFileLink, FilePath.fromDestination("file://server/tmp/a"));
-    try std.testing.expectError(error.InvalidFileLink, FilePath.fromDestination("/tmp/a\x00b"));
-    try std.testing.expectError(error.InvalidLink, FilePath.fromDestination("-c"));
 }

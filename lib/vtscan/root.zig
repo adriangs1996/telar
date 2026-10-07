@@ -9,13 +9,3 @@ pub const KittyCommand = @import("KittyCommand.zig");
 pub const KittyCommandScanner = @import("KittyCommandScanner.zig");
 pub const KittyFramingCounter = @import("KittyFramingCounter.zig");
 pub const OscScanner = @import("OscScanner.zig");
-
-test {
-    _ = @import("ApcFraming.zig");
-    _ = @import("Event.zig");
-    _ = @import("InputScanner.zig");
-    _ = @import("KittyCommandScanner.zig");
-    _ = @import("KittyFramingCounter.zig");
-    _ = @import("OscScanner.zig");
-    _ = @import("escape.zig");
-}

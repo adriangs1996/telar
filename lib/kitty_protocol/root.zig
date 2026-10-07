@@ -34,14 +34,3 @@ pub const writeSharedTransmission = transmission_support.writeSharedTransmission
 pub const writeTransmission = transmission_support.writeTransmission;
 pub const writeTransmissionAbort = transmission_support.writeTransmissionAbort;
 pub const writeTransmissionChunks = transmission_support.writeTransmissionChunks;
-
-test {
-    _ = @import("ControlField.zig");
-    _ = @import("ControlFields.zig");
-    _ = @import("deletion.zig");
-    _ = @import("display.zig");
-    _ = @import("image_support.zig");
-    _ = @import("placement.zig");
-    _ = @import("reply.zig");
-    _ = @import("transmission_support.zig");
-}

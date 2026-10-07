@@ -9,7 +9,6 @@ const std = @import("std");
 const ClientModel = @import("../state/ClientModel.zig");
 const limit_reached = @import("../connection/limit_reached.zig");
 const Pane = @import("../panes/Pane.zig");
-const Spec = @import("../panes/Spec.zig");
 const LayoutSnapshot = @import("LayoutSnapshot.zig");
 const LayoutView = @import("LayoutView.zig");
 const WorkspaceLayout = @import("WorkspaceLayout.zig");
@@ -160,18 +159,6 @@ pub fn restoreSaved(model: *ClientModel, slot: usize, saved: WorkspaceLayout, pa
     }
 
     return model.tabs.layout[slot].restoreSaved(saved, panes);
-}
-
-/// Adds the first pane of an empty tab.
-/// Example: `try tab_layout.addRoot(model, slot, .{ .pane_id = id, .location = location, .size = size });`
-pub fn addRoot(model: *ClientModel, slot: usize, spec: Spec) !void {
-    if (model.panes.countIn(model.tabs.location[slot].tab_id) != 0) {
-        return error.ModelNotEmpty;
-    }
-
-    _ = try model.panes.add(model.gpa, spec, true);
-    errdefer _ = model.panes.remove(spec.pane_id);
-    try model.tabs.layout[slot].addRoot(spec.pane_id);
 }
 
 /// Removes one pane from its tab and its layout.

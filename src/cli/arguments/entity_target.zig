@@ -30,12 +30,3 @@ fn parseId(text: []const u8) !u64 {
 
     return id;
 }
-
-test "entity targets never treat malformed identities as names" {
-    try std.testing.expectError(error.InvalidIdentity, Target.parse("0"));
-    try std.testing.expectError(error.InvalidIdentity, Target.parse("-1"));
-    try std.testing.expectError(error.InvalidIdentity, Target.parse("18446744073709551616"));
-    const current: Target = .current;
-    try std.testing.expectError(error.MissingCurrentIdentity, current.resolve(.empty, "TELAR_WORKSPACE_ID"));
-    try std.testing.expectEqual(@as(u64, 7), try (try Target.parse("7")).resolve(.empty, "TELAR_WORKSPACE_ID"));
-}

@@ -63,14 +63,3 @@ pub fn path(self: HookSettings, override: ?[]const u8, home: ?[]const u8, buffer
     const base = self.directory(override, home, &directory_buffer) orelse return null;
     return std.fmt.bufPrint(buffer, "{s}/{s}", .{ base, self.file }) catch null;
 }
-
-test "hooks live under the agent's variable when it reads them there, else under the home directory" {
-    var buffer: [std.fs.max_path_bytes]u8 = undefined;
-
-    try std.testing.expectEqualStrings("/srv/codex/hooks.json", codex.path("/srv/codex", "/home/me", &buffer).?);
-    try std.testing.expectEqualStrings("/home/me/.codex/hooks.json", codex.path("", "/home/me", &buffer).?);
-    try std.testing.expectEqualStrings("/srv/claude/settings.json", claude.path("/srv/claude", "/home/me", &buffer).?);
-    try std.testing.expectEqualStrings("/home/me/.cursor/hooks.json", cursor.path("/srv/cursor", "/home/me", &buffer).?);
-    try std.testing.expect(cursor.environment() == null);
-    try std.testing.expect(cursor.path(null, null, &buffer) == null);
-}

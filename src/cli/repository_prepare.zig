@@ -18,6 +18,7 @@ const bundle_limit = core.Limit.declare("repository.max_bundle_bytes", "bytes", 
 /// Prepares a repository using source-side committed history only. Example: `return repository_prepare.run(init, options);`.
 pub fn run(init: std.process.Init, options: RepositoryOptions) u8 {
     execute(init, options) catch |err| {
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar repository: {s}\n", .{@errorName(err)});
         return 1;
     };
@@ -55,10 +56,12 @@ pub fn prepare(init: std.process.Init, options: RepositoryOptions, profile: core
     const transport = try sanitized(arena, origin);
     const dirty = try worktree_git.changedFiles(init, root);
     if (dirty != 0) {
+        // Warn on stderr that dirty files were omitted while keeping transfer output unchanged.
         std.debug.print("telar repository: {d} uncommitted files stay on this machine\n", .{dirty});
     }
 
     const temporary = try temporaryDirectory(init);
+    // Remove the private transfer directory on either result without replacing the transfer error.
     defer std.Io.Dir.cwd().deleteTree(init.io, temporary) catch {};
     const bundle = try std.fmt.allocPrint(arena, "{s}/history.bundle", .{temporary});
     const ref = try std.fmt.allocPrint(arena, "refs/telar/transfer/{s}", .{std.fs.path.basename(temporary)});
@@ -149,6 +152,7 @@ fn receive(init: std.process.Init, options: RepositoryOptions) !void {
     }
 
     try std.Io.Dir.cwd().createDir(init.io, stage, .fromMode(0o700));
+    // Remove the private receive staging directory without replacing the receive result.
     defer std.Io.Dir.cwd().deleteTree(init.io, stage) catch {};
     try privatefile.replace(init.io, marker, options.identity);
     const temporary = stage;

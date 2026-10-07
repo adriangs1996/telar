@@ -8,6 +8,7 @@ const FuzzyPage = @This();
 /// candidate.
 pub const max_candidates = 10_000;
 
+// SAFETY: consider completes insertion before returning; comparisons and results use only the initialized best[0..count].
 best: [max_candidates]Scored = undefined,
 count: usize = 0,
 wanted: usize,

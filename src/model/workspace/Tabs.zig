@@ -9,10 +9,13 @@ pub const capacity = core.max_tabs_per_workspace;
 const Label = [core.max_tab_label_bytes]u8;
 const ForegroundName = [core.max_foreground_name_bytes]u8;
 
+// SAFETY: insert initializes the new location before increasing count; lookup and row movement use only occupied slots.
 location: [capacity]core.TabLocation = undefined,
 /// An empty canonical label follows the focused foreground application.
+// SAFETY: insert starts labels with zero length; setLabel copies text before publishing its length and canonicalLabel exposes only that prefix.
 label: [capacity]Label = undefined,
 label_len: [capacity]u8 = @splat(0),
+// SAFETY: insert initializes the layout before increasing count; layout consumers operate on occupied tab slots.
 layout: [capacity]WorkspaceLayout = undefined,
 /// Whether the runtime's pane snapshot for this tab has been reconciled.
 snapshot_loaded: [capacity]bool = @splat(false),
@@ -20,6 +23,7 @@ snapshot_loaded: [capacity]bool = @splat(false),
 restore_display_order: [capacity]bool = @splat(false),
 /// The pane whose foreground names the tab before its panes attach.
 foreground_pane: [capacity]core.PaneId = @splat(.invalid),
+// SAFETY: insert starts foreground names with zero length; setForegroundName copies text before publishing its length.
 foreground_name: [capacity]ForegroundName = undefined,
 foreground_name_len: [capacity]u8 = @splat(0),
 count: usize = 0,

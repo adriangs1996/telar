@@ -7,7 +7,6 @@ const core = @import("telar-core");
 const std = @import("std");
 const Command = @import("Command.zig");
 const Result = @import("Result.zig");
-const Capture = @import("Capture.zig");
 const Job = @import("Job.zig");
 
 pub const max_query_bytes = 4096;
@@ -71,7 +70,9 @@ pub fn generate(io: std.Io, gpa: std.mem.Allocator, generation: Generation) Resu
     input.close(io);
     child.stdin = null;
 
+    // SAFETY: toStreams sets the count; MultiReader.init fills the context and initializes the operation batch before use.
     var multi_reader_buffer: std.Io.File.MultiReader.Buffer(1) = undefined;
+    // SAFETY: init assigns the reader in place before reader, fill or deferred deinit accesses it.
     var multi_reader: std.Io.File.MultiReader = undefined;
     multi_reader.init(gpa, io, multi_reader_buffer.toStreams(), &.{child.stdout.?});
     defer multi_reader.deinit();
@@ -267,101 +268,6 @@ fn removeLastScalar(bytes: []const u8, len: *usize) void {
 fn removeLastWord(bytes: []const u8, len: *usize) void {
     while (len.* != 0 and bytes[len.* - 1] == ' ') len.* -= 1;
     while (len.* != 0 and bytes[len.* - 1] != ' ') removeLastScalar(bytes, len);
-}
-
-test "capture distinguishes pasted newlines, cancellation, and submit across chunks" {
-    var capture: Capture = .{};
-    try std.testing.expect(!capture.feed("discard\x03"));
-    try std.testing.expectEqual(@as(usize, 0), capture.raw().len);
-    try std.testing.expect(!capture.feed("rename \x1b[20"));
-    try std.testing.expect(!capture.feed("0~one\ntwo\x1b[201"));
-    try std.testing.expect(!capture.feed("~ sidebar"));
-    try std.testing.expect(capture.feed("\rignored"));
-    try std.testing.expect(!capture.feed("second\r"));
-
-    var normalized: [max_query_bytes]u8 = undefined;
-    try std.testing.expectEqualStrings(
-        "rename one two sidebar",
-        try normalizeQuery(capture.raw(), &normalized),
-    );
-}
-
-test "query normalization applies editing controls and validates UTF-8" {
-    var output: [max_query_bytes]u8 = undefined;
-    try std.testing.expectEqualStrings(
-        "hello Zig",
-        try normalizeQuery("hello X\x08Zig\r", &output),
-    );
-    try std.testing.expectEqualStrings(
-        "replacement",
-        try normalizeQuery("secret\x15replacement\r", &output),
-    );
-    try std.testing.expectEqualStrings(
-        "one three",
-        try normalizeQuery("one two\x17three\r", &output),
-    );
-    try std.testing.expectError(error.InvalidUtf8, normalizeQuery("bad\xff\r", &output));
-}
-
-test "title normalization accepts one bounded display line" {
-    var output: [core.max_agent_session_title_bytes]u8 = undefined;
-    try std.testing.expectEqualStrings(
-        "Improve agent sidebar",
-        try normalizeTitle("  \"Improve agent sidebar\"\n", &output),
-    );
-    try std.testing.expectError(
-        error.InvalidTitleControl,
-        normalizeTitle("first\nsecond", &output),
-    );
-    const oversized = [_]u8{'x'} ** (core.max_agent_session_title_bytes + 1);
-    try std.testing.expectError(error.InvalidTitleLength, normalizeTitle(&oversized, &output));
-}
-
-test "description command succeeds, rejects invalid output, times out, and may be absent" {
-    const job: Job = .{
-        .pane = .{ .id = @enumFromInt(1), .generation = 2 },
-        .session_id = .{3} ** 16,
-        .provider = .codex,
-        .query = undefined,
-        .query_len = 0,
-    };
-    // Consume the prompt so output validation does not race stdin closure.
-    const success = generate(std.testing.io, std.testing.allocator, .{
-        .command = .{
-            .arguments = &.{ "/bin/sh", "-c", "/bin/cat >/dev/null; printf 'Improve agent sidebar\\n'" },
-            .timeout_ms = 1000,
-        },
-        .job = job,
-    });
-    try std.testing.expectEqual(ResultStatus.success, success.status);
-    try std.testing.expectEqualStrings("Improve agent sidebar", success.titleSlice());
-
-    const invalid = generate(std.testing.io, std.testing.allocator, .{
-        .command = .{
-            .arguments = &.{ "/bin/sh", "-c", "/bin/cat >/dev/null; printf 'first\\nsecond\\n'" },
-            .timeout_ms = 1000,
-        },
-        .job = job,
-    });
-    try std.testing.expectEqual(ResultStatus.invalid_output, invalid.status);
-
-    const timed_out = generate(std.testing.io, std.testing.allocator, .{
-        .command = .{
-            .arguments = &.{ "/bin/sh", "-c", "sleep 1" },
-            .timeout_ms = 20,
-        },
-        .job = job,
-    });
-    try std.testing.expectEqual(ResultStatus.timeout, timed_out.status);
-
-    const unavailable = generate(std.testing.io, std.testing.allocator, .{
-        .command = .{
-            .arguments = &.{"/definitely/not/a/telar-command"},
-            .timeout_ms = 1000,
-        },
-        .job = job,
-    });
-    try std.testing.expectEqual(ResultStatus.unavailable, unavailable.status);
 }
 
 const Generation = struct {

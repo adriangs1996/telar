@@ -2,7 +2,6 @@
 //! last event or answer and the last rows of its pane, read from the runtime
 //! when it opens and again with every agent snapshot while it stays open.
 //! Its field sends a message to the agent; a few slash words act instead.
-//! See `docs/flows/agent-peek.md`.
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -206,19 +205,4 @@ fn sendEncoded(model: *data.ClientModel, continuation: data.RequestsContinuation
     var request = value;
     request.request_id = request_id;
     try model.to_runtime.pushEncoded(encode, request);
-}
-
-test "the peek's diff runs the coordinator's command with the branch as an argument" {
-    const arguments = diffArguments("fix-tabs; rm -rf ~");
-    try std.testing.expect(std.mem.indexOf(u8, arguments[2], "\"$TELAR_BIN_PATH\" worktree diff \"$1\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, arguments[2], "git ") == null);
-    try std.testing.expectEqualStrings("fix-tabs; rm -rf ~", arguments[4]);
-}
-
-test "the field's text selects what the peek does" {
-    try std.testing.expectEqual(Command.open, Command.of(""));
-    try std.testing.expectEqual(Command.open, Command.of("  /open "));
-    try std.testing.expectEqual(Command.stop, Command.of("/stop"));
-    try std.testing.expectEqual(Command.diff, Command.of("/diff"));
-    try std.testing.expectEqual(Command.message, Command.of("please add tests"));
 }

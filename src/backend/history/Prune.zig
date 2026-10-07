@@ -8,11 +8,13 @@ pub const Input = @import("PruneInput.zig");
 request_id: core.RequestId,
 origin: QueryOrigin,
 scope: core.HistoryScope = .global,
+// SAFETY: init copies the validated scope before setting scope_text_len; scopeSlice reads only that prefix.
 scope_text: [core.max_cwd_bytes]u8 = undefined,
 scope_text_len: u16 = 0,
 pane_id: core.PaneId = .invalid,
 before_ms: i64 = 0,
 failed_only: bool = false,
+// SAFETY: init copies the validated match text before setting match_len; matchSlice reads only that prefix.
 match: [core.max_history_query_bytes]u8 = undefined,
 match_len: u16 = 0,
 

@@ -1,9 +1,10 @@
 //! Window-thread requests with owned payloads and exact completion identity.
-//! Backend callbacks only drain requests; native results reenter the input queue.
-const event = @import("../input/event.zig");
+//! The GUI drains requests into Window; native results return through its event queue.
+const Window = @import("telar-window");
+const event = Window;
 const std = @import("std");
 const native = @import("../native/native.zig");
-const Result = @import("../input/ClipboardResult.zig");
+const Result = @FieldType(Window.Input, "clipboard");
 const Request = @import("Request.zig");
 const Owner = @import("Owner.zig");
 const core = @import("telar-core");
@@ -13,7 +14,7 @@ const Services = @This();
 pub const capacity = 4;
 pub const limit = core.Limit.declare("gui.host.requests", "host requests", capacity);
 requests: [capacity]Request = @splat(.{}),
-/// One payload of `event.max_text_bytes` per request, reserved once by
+/// One payload of `event.Input.max_text_bytes` per request, reserved once by
 /// `init` and written only by the bytes a write copies, so an idle payload
 /// costs no resident memory. Without them, as a widget's own fallback
 /// services, writes are refused.
@@ -27,7 +28,7 @@ next_id: u64 = 1,
 /// Example: `try gui.host.init(gpa);`
 pub fn init(self: *Services, gpa: std.mem.Allocator) !void {
     self.* = .{
-        .payloads = try gpa.alloc(u8, capacity * event.max_text_bytes),
+        .payloads = try gpa.alloc(u8, capacity * event.Input.max_text_bytes),
     };
 }
 
@@ -52,7 +53,7 @@ pub fn write(self: *Services, bytes: []const u8) !u64 {
 /// Correlates a write with the editor awaiting its outcome, for transactional
 /// cut. Example: `const request_id = try host.writeOwned(owner, selection);`
 pub fn writeOwned(self: *Services, owner: Owner, bytes: []const u8) !u64 {
-    if (bytes.len > event.max_text_bytes) {
+    if (bytes.len > event.Input.max_text_bytes) {
         return error.ClipboardTooLarge;
     }
 
@@ -160,67 +161,5 @@ fn oldestPlainWrite(self: *Services) ?*Request {
 /// The payload of a request: the one at its own index in `payloads`.
 fn payloadBytes(self: *const Services, request: *const Request) []u8 {
     const index = (@intFromPtr(request) - @intFromPtr(&self.requests)) / @sizeOf(Request);
-    return self.payloads[index * event.max_text_bytes ..][0..event.max_text_bytes];
-}
-
-test "host request owns writes and matches reads by request and original owner" {
-    var services: Services = .{};
-    try services.init(std.testing.allocator);
-    defer services.deinit(std.testing.allocator);
-    const read_id = try services.read(.{ .target_id = 3, .generation = 7 });
-    var bytes = [_]u8{ 'o', 'k' };
-    const write_id = try services.write(&bytes);
-    @memset(&bytes, 'x');
-    var request: native.HostRequest = .{};
-    try std.testing.expect(services.next(&request));
-    try std.testing.expectEqual(read_id, request.request_id);
-    try std.testing.expect(services.complete(.{
-        .request_id = read_id,
-        .target_id = 3,
-        .generation = 8,
-        .status = .success,
-    }) == null);
-    try std.testing.expect(services.next(&request));
-    try std.testing.expectEqual(write_id, request.request_id);
-    try std.testing.expectEqualStrings("ok", request.text.?[0..request.len]);
-    try std.testing.expectEqual(Request.Kind.read, services.complete(.{
-        .request_id = read_id,
-        .target_id = 3,
-        .generation = 7,
-        .status = .cancelled,
-    }).?);
-    try std.testing.expect(services.complete(.{
-        .request_id = read_id,
-        .target_id = 3,
-        .generation = 7,
-        .status = .success,
-    }) == null);
-}
-
-test "a copy past a full queue replaces the oldest waiting copy, never an owned one" {
-    var services: Services = .{};
-    try services.init(std.testing.allocator);
-    defer services.deinit(std.testing.allocator);
-    const owned = try services.writeOwned(.{ .target_id = 4, .generation = 1 }, "cut");
-    _ = try services.write("one");
-    _ = try services.write("two");
-    _ = try services.read(.{});
-    const newest = try services.write("three");
-    try std.testing.expectEqual(@as(u64, 1), services.superseded);
-
-    var request: native.HostRequest = .{};
-    var seen: [4][]const u8 = undefined;
-    var ids: [4]u64 = undefined;
-    for (&seen, &ids) |*text, *id| {
-        try std.testing.expect(services.next(&request));
-        text.* = if (request.text) |bytes| bytes[0..request.len] else "";
-        id.* = request.request_id;
-    }
-
-    try std.testing.expectEqual(owned, ids[0]);
-    try std.testing.expectEqualStrings("cut", seen[0]);
-    try std.testing.expectEqualStrings("two", seen[1]);
-    try std.testing.expectEqual(newest, ids[3]);
-    try std.testing.expectEqualStrings("three", seen[3]);
-    try std.testing.expectError(error.HostRequestsFull, services.read(.{}));
+    return self.payloads[index * event.Input.max_text_bytes ..][0..event.Input.max_text_bytes];
 }

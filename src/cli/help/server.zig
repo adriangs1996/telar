@@ -41,7 +41,6 @@ pub const family: FamilyHelp = .{
             \\both cases, 1 when the runtime refused.
             \\
             ,
-            .examples = &.{&.{ "server", "stop" }},
         },
         .{
             .name = "endpoint",
@@ -54,7 +53,6 @@ pub const family: FamilyHelp = .{
             \\Results: two lines, the socket path and the schema id. Exit 0.
             \\
             ,
-            .examples = &.{&.{ "server", "endpoint" }},
         },
         .{
             .name = "bridge",
@@ -65,7 +63,6 @@ pub const family: FamilyHelp = .{
             \\Run over SSH by a window attaching with `--remote`; not meant to be typed.
             \\
             ,
-            .examples = &.{&.{ "server", "bridge" }},
         },
     },
 };

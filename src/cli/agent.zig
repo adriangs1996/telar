@@ -12,7 +12,6 @@ const ControlAgent = @import("ControlAgent.zig");
 const Text = @import("Text.zig");
 const AgentReports = @import("AgentReports.zig");
 const WorktreeCatalog = @import("WorktreeCatalog.zig");
-const core = @import("telar-core");
 
 pub const poll_interval_ms = 250;
 pub const prompt_start_grace_ms = 5_000;
@@ -49,15 +48,18 @@ pub fn run(init: std.process.Init, options: AgentOptions) !u8 {
     var output_buffer: [16 * 1024]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
     const writer = &output.interface;
-    defer writer.flush() catch {};
 
-    return execute(&session, options, .{ .writer = writer, .environ = init.minimal.environ, .catalog = &catalog }) catch |err| {
+    const result = execute(&session, options, .{ .writer = writer, .environ = init.minimal.environ, .catalog = &catalog }) catch |err| failure: {
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar agent: {s}\n", .{control.describe(err)});
-        return switch (err) {
+        break :failure switch (err) {
             error.AgentNotFound, error.PaneNotFound, error.PaneExited, error.WorktreeNotFound, error.WorktreeHasNoAgent => exit_not_found,
             else => exit_failure,
         };
     };
+
+    try writer.flush();
+    return result;
 }
 
 fn execute(session: *Session, options: AgentOptions, output: ExecutionContext) !u8 {
@@ -139,6 +141,7 @@ fn waitFor(session: *Session, options: AgentOptions, output: ExecutionContext) !
         }
 
         if (session.nowMs() >= deadline) {
+            // This timeout diagnostic is part of the CLI response; agent rows or JSON remain on stdout.
             std.debug.print("telar agent: timed out after {d}s; agent is {s}\n", .{
                 options.timeout_seconds,
                 control.statusName(agent.status),
@@ -146,7 +149,7 @@ fn waitFor(session: *Session, options: AgentOptions, output: ExecutionContext) !
             return exit_timeout;
         }
 
-        session.sleepMs(poll_interval_ms);
+        try session.sleepMs(poll_interval_ms);
     }
 }
 
@@ -191,16 +194,18 @@ fn prompt(session: *Session, options: AgentOptions, output: ExecutionContext) !u
             try writeOne(output.writer, agent, options.json);
             return if (agent.status == .failed) exit_failure else exit_ok;
         } else if (session.nowMs() >= start_deadline) {
+            // Explain the prompt timeout on stderr while preserving the command exit status.
             std.debug.print("telar agent: the agent did not start working within {d}s\n", .{prompt_start_grace_ms / std.time.ms_per_s});
             return exit_timeout;
         }
 
         if (session.nowMs() >= deadline) {
+            // Report the still-running agent on stderr independently of structured stdout.
             std.debug.print("telar agent: timed out after {d}s; agent is still working\n", .{options.timeout_seconds});
             return exit_timeout;
         }
 
-        session.sleepMs(poll_interval_ms);
+        try session.sleepMs(poll_interval_ms);
     }
 }
 
@@ -210,7 +215,7 @@ fn interruptAndSettle(session: *Session, pane: PaneRef, snapshot: *Snapshot) !vo
     try session.interruptAgent(pane);
     const deadline = session.nowMs() + interrupt_settle_ms;
     while (session.nowMs() < deadline) {
-        session.sleepMs(poll_interval_ms);
+        try session.sleepMs(poll_interval_ms);
         try session.fetchAgents(snapshot);
         const agent = try snapshot.resolve(.{ .pane = pane.pane_id }, .empty) orelse return error.AgentNotFound;
         if (agent.status != .working) {
@@ -272,6 +277,7 @@ fn writeText(writer: *std.Io.Writer, text: Text, json: bool) !void {
         try writer.writeByte('\n');
     }
     if (text.truncated) {
+        // The truncation notice must not become part of the agent text returned on stdout.
         std.debug.print("telar agent: older rows were omitted\n", .{});
     }
 }

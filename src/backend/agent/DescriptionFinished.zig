@@ -6,6 +6,7 @@ const DescriptionFinished = @This();
 
 pane: PaneKey,
 session_id: [16]u8,
+// SAFETY: Agent description completion copies the accepted title before returning the event; titleSlice reads only title_len bytes.
 title: [core.max_agent_session_title_bytes]u8 = undefined,
 title_len: u8 = 0,
 source: core.AgentTitleSource,

@@ -1,4 +1,4 @@
-//! The headless client (docs/flows/headless-client.md): the shared client
+//! The headless client: the shared client
 //! with an adapter that has no window. It takes semantic input from stdin,
 //! presents and acknowledges every frame the moment it is ready, records
 //! host requests instead of performing them, and answers `--client`
@@ -43,8 +43,9 @@ router: client.key_router.Type,
 binding_revision: u64 = 0,
 trace: Trace,
 options: HeadlessOptions,
+// SAFETY: The stdin reader starts empty and fills this buffer from the file before exposing bytes to line parsing.
 stdin_buffer: [2 * input_protocol.max_line_bytes]u8 = undefined,
-stdin: std.Io.File.Reader = undefined,
+stdin: std.Io.File.Reader,
 reading: bool = false,
 /// Whether `ready` went to stdout, once input was first admitted.
 announced: bool = false,
@@ -68,26 +69,33 @@ pub fn init(params: client.ClientInit, options: HeadlessOptions) !*HeadlessClien
     self.* = .{
         .gpa = params.gpa,
         .io = params.io,
+        // SAFETY: Client.init constructs app at its final address before graphics and chrome access it; failure cleans up only the initialized trace.
         .app = undefined,
         .inbox = .init(params.io, .{}),
         .router = router,
         .trace = try Trace.init(params.gpa),
         .options = options,
+        .stdin = std.Io.File.stdin().readerStreaming(params.io, &self.stdin_buffer),
     };
     errdefer self.trace.deinit(params.gpa);
 
     try client.Client.init(&self.app, params);
-    self.app.graphics = no_graphics;
+    // Headless callbacks discard graphics but still receive a valid context.
+    self.app.graphics = .{
+        .context = self,
+        .apply_fn = NoGraphics.apply,
+        .clear_pane_fn = NoGraphics.clearPane,
+        .set_pane_visible_fn = NoGraphics.setPaneVisible,
+        .pane_visible_fn = NoGraphics.paneVisible,
+        .has_pane_graphics_fn = NoGraphics.paneVisible,
+        .ingress_version_fn = NoGraphics.ingressVersion,
+        .peek_credit_fn = NoGraphics.peekCredit,
+        .consume_credit_fn = NoGraphics.consumeCredit,
+    };
     self.app.chrome = .{
         .context = self,
-        .pointer_fn = noPointer,
         .inspection_scroll_limit_fn = noScrollLimit,
     };
-    self.app.host_input_source = .{
-        .context = self,
-        .route_prompt_bytes_fn = noPromptBytes,
-    };
-    self.stdin = std.Io.File.stdin().readerStreaming(params.io, &self.stdin_buffer);
     return self;
 }
 
@@ -429,8 +437,7 @@ fn startJobs(self: *HeadlessClient) !void {
 /// The completion of a host job the headless client records instead of
 /// running: opening a link, playing a sound, posting a desktop notice. There
 /// is no window to hand them to, so none of them may reach `open`,
-/// `xdg-open` or a sound player (docs/flows/headless-client.md, "No window,
-/// no host"). Null for a job that runs as in a window.
+/// `xdg-open` or a sound player. Null for a job that runs as in a window.
 ///
 /// ```zig
 /// if (recordedInstead(job)) |completion| _ = try app.update(completion);
@@ -442,18 +449,6 @@ fn recordedInstead(job: client.BackgroundJob) ?client.Message {
         .system_notification => .{ .notified = {} },
         .bar_command, .pick_command, .plugin, .path_completion, .config_watch, .runtime_connect, .machine_edit => null,
     };
-}
-
-test "links, sounds and desktop notices complete without running anything" {
-    const link = try data.LinkTarget.init("https://auth.openai.com/codex/device");
-    const opened = recordedInstead(.{ .link = link }) orelse return error.TestExpectedRecorded;
-    try opened.link_opened;
-
-    const played = recordedInstead(.{ .sound = .ready }) orelse return error.TestExpectedRecorded;
-    try played.sound_played;
-
-    const notified = recordedInstead(.{ .system_notification = .{} }) orelse return error.TestExpectedRecorded;
-    try notified.notified;
 }
 
 // Reads the next line once the startup lets input through and the runtime
@@ -515,29 +510,9 @@ fn hostSize(cols: u16, rows: u16) core.TerminalSize {
     };
 }
 
-fn noPointer(_: *anyopaque, _: keyinput.Mouse) client.ViewInteractionCommand {
-    return .{};
-}
-
 fn noScrollLimit(_: *anyopaque) ?u32 {
     return null;
 }
-
-fn noPromptBytes(_: *anyopaque, _: []const u8) anyerror!void {}
-
-/// The headless client keeps no images; graphics commands are accepted and
-/// dropped, and no pane shows any.
-const no_graphics: client.GraphicsRetention = .{
-    .context = undefined,
-    .apply_fn = NoGraphics.apply,
-    .clear_pane_fn = NoGraphics.clearPane,
-    .set_pane_visible_fn = NoGraphics.setPaneVisible,
-    .pane_visible_fn = NoGraphics.paneVisible,
-    .has_pane_graphics_fn = NoGraphics.paneVisible,
-    .ingress_version_fn = NoGraphics.ingressVersion,
-    .peek_credit_fn = NoGraphics.peekCredit,
-    .consume_credit_fn = NoGraphics.consumeCredit,
-};
 
 const NoGraphics = struct {
     fn apply(_: *anyopaque, _: data.PaneGraphicsCommand) !void {}

@@ -2,7 +2,6 @@ const core = @import("telar-core");
 const Identity = @import("Identity.zig");
 const SessionReference = @import("SessionReference.zig");
 const SessionFile = @import("SessionFile.zig");
-const ReportObservation = @This();
 
 identity: Identity,
 /// The agent whose hook reported; `unknown` for a report the user sent.

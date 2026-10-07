@@ -99,35 +99,3 @@ fn hostOf(authority: []const u8, scheme: []const u8) []const u8 {
 
     return if (host[0] == '[') host[1 .. colon - 1] else host[0..colon];
 }
-
-test "the clones of one project agree on their identity whatever the transport" {
-    var buffer: [256]u8 = undefined;
-    for ([_][]const u8{
-        "git@github.com:adriangs1996/telar.git",
-        "https://github.com/adriangs1996/telar",
-        "https://token@GitHub.com/adriangs1996/telar.git/",
-        "ssh://git@github.com:22/adriangs1996/telar.git",
-        " git@github.com:/adriangs1996/telar\n",
-    }) |url| {
-        try std.testing.expectEqualStrings("github.com/adriangs1996/telar", try normalize(url, &buffer));
-    }
-
-    try std.testing.expectEqualStrings("fe80::1/r", try normalize("ssh://git@[fe80::1]:22/r.git", &buffer));
-}
-
-test "local origins name no project another machine can have" {
-    var buffer: [256]u8 = undefined;
-    for ([_][]const u8{ "/srv/git/telar.git", "./telar", "file:///srv/git/telar.git", "", "github.com", "https://github.com/" }) |url| {
-        try std.testing.expectError(error.UnsupportedOrigin, normalize(url, &buffer));
-    }
-
-    var small: [8]u8 = undefined;
-    try std.testing.expectError(error.OriginTooLong, normalize("git@github.com:o/telar.git", &small));
-}
-
-test "nondefault ports are distinct while scheme defaults match" {
-    var buffer: [256]u8 = undefined;
-    try std.testing.expectEqualStrings("host:2222/team/repo", try normalize("ssh://git@Host:2222/team/repo.git", &buffer));
-    try std.testing.expectEqualStrings("host/team/repo", try normalize("https://token@Host:443/team/repo.git", &buffer));
-    try std.testing.expectEqualStrings("host:8443/team/repo", try normalize("https://Host:8443/team/repo.git", &buffer));
-}

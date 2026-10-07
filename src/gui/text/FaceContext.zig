@@ -3,7 +3,6 @@
 //! faces are opened with these after startup, so the set keeps one copy.
 const freetype = @import("freetype");
 const AtlasOptions = @import("AtlasOptions.zig");
-const FaceContext = @This();
 
 library: freetype.c.FT_Library,
 options: AtlasOptions,

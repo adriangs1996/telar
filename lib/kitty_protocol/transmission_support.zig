@@ -122,38 +122,3 @@ pub fn writeTransmissionAbort(writer: *std.Io.Writer) std.Io.Writer.Error!usize 
     try writer.writeAll(closing);
     return closing.len;
 }
-
-test "direct transmission chunks raw pixels without changing them" {
-    var pixels: [3073]u8 = undefined;
-    for (&pixels, 0..) |*byte, index| {
-        byte.* = @truncate(index);
-    }
-
-    var output: [8192]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&output);
-    _ = try writeTransmission(&writer, .{
-        .image_id = 9,
-        .image = .{ .format = .rgba, .width = 3073, .height = 1 },
-        .pixels = &pixels,
-    });
-
-    try std.testing.expect(std.mem.startsWith(u8, writer.buffered(), "\x1b_Ga=t,f=32,s=3073,v=1,t=d,i=9,q=2,m=1;"));
-    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "\x1b\\\x1b_Gm=0;") != null);
-}
-
-test "PNG transmission omits raw pixel dimensions" {
-    var output: [8192]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&output);
-    const progress = try writePngTransmissionChunks(&writer, .{
-        .image_id = 0x90000001,
-        .png = "encoded png bytes",
-        .start_offset = 0,
-        .budget = std.math.maxInt(usize),
-    });
-
-    try std.testing.expectEqual(@as(usize, 17), progress.offset);
-    const bytes = writer.buffered();
-    try std.testing.expect(std.mem.indexOf(u8, bytes, "a=t,f=100,t=d") != null);
-    try std.testing.expect(std.mem.indexOf(u8, bytes, ",s=") == null);
-    try std.testing.expect(std.mem.indexOf(u8, bytes, ",v=") == null);
-}

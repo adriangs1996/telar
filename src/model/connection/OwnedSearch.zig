@@ -3,6 +3,7 @@ const OwnedSearch = @This();
 
 request_id: core.RequestId,
 pane_id: core.PaneId,
+// SAFETY: name_prompt copies the search text before queueing this value; view exposes only needle_len bytes.
 needle: [core.max_search_needle_bytes]u8 = undefined,
 needle_len: u8 = 0,
 

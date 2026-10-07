@@ -3,7 +3,6 @@ const PaneKey = @import("PaneKey.zig");
 const pty = @import("pty");
 const Command = pty.Command;
 const GraphicsLimits = @import("../media/GraphicsLimits.zig");
-const CreationRequest = @This();
 
 identity: PaneKey,
 location: core.TabLocation,

@@ -2,7 +2,6 @@
 //! machine picker both make it. The slices are borrowed until the change is
 //! applied.
 const core = @import("telar-core");
-const MachineEdit = @This();
 
 pub const Kind = enum {
     add,

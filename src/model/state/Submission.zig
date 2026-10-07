@@ -1,5 +1,4 @@
 const name_prompt = @import("name_prompt.zig");
-const Submission = @This();
 
 target: name_prompt.Target,
 /// Borrowed from the active prompt until the synchronous submit effect

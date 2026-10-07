@@ -3,7 +3,6 @@
 //! where each login's outcome is kept.
 const std = @import("std");
 const values = @import("arguments/values.zig");
-const LoginRequest = @This();
 
 wanted: std.EnumSet(values.HookAgent),
 /// Whether setup can ask for a pasted code and wait for the person.

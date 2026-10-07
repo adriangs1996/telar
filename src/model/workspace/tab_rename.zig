@@ -1,4 +1,4 @@
-//! A tab takes a canonical label (docs/flows/tab-rename.md).
+//! A tab takes a canonical label.
 const RenameTab = @import("../state/RenameTab.zig");
 const tab_rename = @import("tab_rename.zig");
 const model_data = @import("../model.zig");

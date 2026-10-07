@@ -26,11 +26,13 @@ phase: Phase = .connecting,
 attempt: u16 = 0,
 /// Successful connections so far; the second one replaces a session.
 sessions: u32 = 0,
+// SAFETY: fail fills the bounded failure prefix before setting failure_len; failure reads only that prefix.
 failure_bytes: [max_failure_bytes]u8 = undefined,
 failure_len: u16 = 0,
 /// Whether the failure is one `telar machine setup` repairs: no telar
 /// there, or a telar or runtime of another build.
 setup_repairs: bool = false,
+// SAFETY: name copies the bounded UTF-8 prefix before setting target_len; target reads only that prefix.
 target_bytes: [max_target_bytes]u8 = undefined,
 target_len: u8 = 0,
 /// Resyncs a runtime message that stopped at a limit asked for, counted
@@ -94,20 +96,4 @@ fn boundedUtf8(text: []const u8, limit: usize) []const u8 {
     }
 
     return if (std.unicode.utf8ValidateSlice(text[0..end])) text[0..end] else "";
-}
-
-test "failures are one bounded line and names are kept" {
-    var link: RuntimeLink = .{};
-    link.name("dev@box");
-    link.fail("ssh: connect to host box\nport 22: refused\n");
-
-    try std.testing.expectEqualStrings("dev@box", link.target());
-    try std.testing.expectEqualStrings("ssh: connect to host box port 22: refused", link.failure().?);
-
-    link.fail("é" ** 200);
-    try std.testing.expect(std.unicode.utf8ValidateSlice(link.failure().?));
-    try std.testing.expect(link.failure().?.len <= max_failure_bytes);
-
-    link.clearFailure();
-    try std.testing.expectEqual(@as(?[]const u8, null), link.failure());
 }

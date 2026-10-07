@@ -36,7 +36,6 @@ pub fn reconcile(model: *ClientModel, input: AgentsSnapshotInput) !?model_data.A
         });
     }
 
-    const agent_revision_before = model.agent_revision;
     const replaced = try model.agent_snapshot.replace(input);
     std.debug.assert(replaced);
     model.agent_revision +%= 1;
@@ -45,7 +44,6 @@ pub fn reconcile(model: *ClientModel, input: AgentsSnapshotInput) !?model_data.A
         .runtime_revision = model.agent_snapshot.revision,
         .count = model.agent_snapshot.count,
         .status_changes = status_changes,
-        .agent_revision_before = agent_revision_before,
         .agent_revision = model.agent_revision,
     };
 }

@@ -1,5 +1,4 @@
 const core = @import("telar-core");
-const EntryInput = @This();
 
 workspace: core.WorkspaceId,
 name: []const u8,

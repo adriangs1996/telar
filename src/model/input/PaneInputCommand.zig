@@ -1,7 +1,6 @@
 const PaneInputTarget = @import("PaneInputTarget.zig").PaneInputTarget;
 const PaneInputSource = @import("PaneInputSource.zig").PaneInputSource;
 const keyinput = @import("keyinput");
-const PaneInputCommand = @This();
 
 target: PaneInputTarget,
 source: PaneInputSource,

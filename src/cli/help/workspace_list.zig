@@ -24,17 +24,13 @@ pub const family: FamilyHelp = .{
             .name = "expand",
             .summary = "Expand the workspace list",
             .usage = "telar workspace-list expand --client ID [--json] [--socket PATH]",
-            .routed = &.{.workspace_list_expand},
             .text = routed_text,
-            .examples = &.{&.{ "workspace-list", "expand", "--client", "1" }},
         },
         .{
             .name = "collapse",
             .summary = "Collapse the workspace list",
             .usage = "telar workspace-list collapse --client ID [--json] [--socket PATH]",
-            .routed = &.{.workspace_list_collapse},
             .text = routed_text,
-            .examples = &.{&.{ "workspace-list", "collapse", "--client", "1", "--json" }},
         },
     },
 };

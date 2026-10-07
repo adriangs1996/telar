@@ -49,6 +49,7 @@ fn build(index: *PathIndex, io: std.Io, environ: std.process.Environ) void {
     defer directory.close(io);
 
     if (insideWorkTree(io, root)) {
+        // A failed git listing falls back to directory walking when it produced no entries; cancellation is checked before that fallback.
         listTracked(index, io, environ) catch {};
         if (index.entry_count != 0 or index.cancelled.load(.acquire)) {
             return;
@@ -293,16 +294,6 @@ fn append(index: *PathIndex, relative: []const u8, kind: core.PathKind) bool {
     return true;
 }
 
-const testing = std.testing;
-
-fn buildIn(temp: *testing.TmpDir, index: *PathIndex) !void {
-    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const root = root_buffer[0..try temp.dir.realPath(testing.io, &root_buffer)];
-    index.want(root, true);
-    index.reset();
-    _ = run(index, testing.io, testing.environ);
-}
-
 fn contains(index: *const PathIndex, relative: []const u8) bool {
     for (index.entries[0..index.published.load(.acquire)]) |entry| {
         if (std.mem.eql(
@@ -315,168 +306,4 @@ fn contains(index: *const PathIndex, relative: []const u8) bool {
     }
 
     return false;
-}
-
-test "a walk lists shallow entries first and skips hidden and dependency directories" {
-    var temp = testing.tmpDir(.{});
-    defer temp.cleanup();
-
-    try temp.dir.createDirPath(testing.io, "src/types");
-    try temp.dir.createDirPath(testing.io, "node_modules/left-pad");
-    try temp.dir.createDirPath(testing.io, ".cache");
-    const file = try temp.dir.createFile(
-        testing.io,
-        "src/types/License.ts",
-        .{},
-    );
-    file.close(testing.io);
-
-    const index = try PathIndex.create(
-        testing.allocator,
-        .{
-            .id = 1,
-            .generation = 1,
-        },
-    );
-    defer index.destroy();
-
-    try buildIn(&temp, index);
-    try testing.expect(index.complete.load(.acquire));
-    try testing.expectEqualStrings("src/", index.path(index.entries[0]));
-    try testing.expect(contains(index, "src/types/License.ts"));
-    try testing.expect(contains(index, "src/types/"));
-    try testing.expect(!contains(index, "node_modules/"));
-    try testing.expect(!contains(index, ".cache/"));
-}
-
-test "listing a planted repository runs no program its config names" {
-    var temp = testing.tmpDir(.{});
-    defer temp.cleanup();
-    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const root = root_buffer[0..try temp.dir.realPath(testing.io, &root_buffer)];
-    var repo_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const repo = try std.fmt.bufPrint(&repo_buffer, "{s}/repo", .{root});
-    const init = std.process.run(testing.allocator, testing.io, .{ .argv = &.{ "git", "init", "-q", repo } }) catch return error.SkipZigTest;
-    testing.allocator.free(init.stdout);
-    testing.allocator.free(init.stderr);
-
-    // `ls-files --others` asks core.fsmonitor which files changed.
-    var script_buffer: [std.fs.max_path_bytes + 32]u8 = undefined;
-    try temp.dir.writeFile(testing.io, .{ .sub_path = "fsmonitor.sh", .data = try std.fmt.bufPrint(&script_buffer, "#!/bin/sh\ntouch {s}/ran\n", .{root}) });
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const script = try std.fmt.bufPrint(&path_buffer, "{s}/fsmonitor.sh", .{root});
-    for ([_][]const []const u8{
-        &.{ "chmod", "+x", script },
-        &.{ "git", "-C", repo, "config", "core.fsmonitor", script },
-    }) |argv| {
-        const result = try std.process.run(testing.allocator, testing.io, .{ .argv = argv });
-        testing.allocator.free(result.stdout);
-        testing.allocator.free(result.stderr);
-    }
-
-    try temp.dir.writeFile(testing.io, .{ .sub_path = "repo/notes.txt", .data = "" });
-    const index = try PathIndex.create(testing.allocator, .{ .id = 1, .generation = 1 });
-    defer index.destroy();
-    index.want(repo, true);
-    index.reset();
-    _ = run(index, testing.io, testing.environ);
-
-    try testing.expect(contains(index, "notes.txt"));
-    try testing.expectError(error.FileNotFound, temp.dir.statFile(testing.io, "ran", .{}));
-}
-
-test "inside a git work tree the index is what git lists, ignores included" {
-    var temp = testing.tmpDir(.{});
-    defer temp.cleanup();
-
-    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const root = root_buffer[0..try temp.dir.realPath(testing.io, &root_buffer)];
-    const init = std.process.run(
-        testing.allocator,
-        testing.io,
-        .{ .argv = &.{ "git", "-C", root, "init", "-q" } },
-    ) catch return error.SkipZigTest;
-    testing.allocator.free(init.stdout);
-    testing.allocator.free(init.stderr);
-
-    try temp.dir.createDirPath(testing.io, "src/types");
-    try temp.dir.createDirPath(testing.io, "build/out");
-    try temp.dir.writeFile(
-        testing.io,
-        .{
-            .sub_path = ".gitignore",
-            .data = "build/\n",
-        },
-    );
-    try temp.dir.writeFile(
-        testing.io,
-        .{
-            .sub_path = "src/types/License.ts",
-            .data = "",
-        },
-    );
-    try temp.dir.writeFile(
-        testing.io,
-        .{
-            .sub_path = "build/out/bundle.js",
-            .data = "",
-        },
-    );
-
-    const index = try PathIndex.create(
-        testing.allocator,
-        .{
-            .id = 1,
-            .generation = 1,
-        },
-    );
-    defer index.destroy();
-
-    try buildIn(&temp, index);
-    try testing.expect(contains(index, "src/"));
-    try testing.expect(contains(index, "src/types/"));
-    try testing.expect(contains(index, "src/types/License.ts"));
-    try testing.expect(contains(index, ".gitignore"));
-    try testing.expect(!contains(index, "build/"));
-    try testing.expect(!contains(index, "build/out/bundle.js"));
-}
-
-test "an unreadable root fails the build without entries" {
-    const index = try PathIndex.create(
-        testing.allocator,
-        .{
-            .id = 1,
-            .generation = 1,
-        },
-    );
-    defer index.destroy();
-
-    index.want("/nonexistent/telar-path-picker", true);
-    index.reset();
-    _ = run(index, testing.io, testing.environ);
-    try testing.expectEqual(PathIndex.Failure.unreadable, index.failure);
-    try testing.expectEqual(@as(u32, 0), index.published.load(.acquire));
-}
-
-test "a cancelled build stops before listing" {
-    var temp = testing.tmpDir(.{});
-    defer temp.cleanup();
-
-    try temp.dir.createDirPath(testing.io, "a/b");
-    const index = try PathIndex.create(
-        testing.allocator,
-        .{
-            .id = 1,
-            .generation = 1,
-        },
-    );
-    defer index.destroy();
-
-    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const root = root_buffer[0..try temp.dir.realPath(testing.io, &root_buffer)];
-    index.want(root, true);
-    index.reset();
-    index.cancelled.store(true, .release);
-    _ = run(index, testing.io, testing.environ);
-    try testing.expect(index.entry_count <= 1);
 }

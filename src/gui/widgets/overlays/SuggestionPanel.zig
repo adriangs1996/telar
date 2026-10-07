@@ -1,5 +1,4 @@
 //! Suggestion states inside the palette's shared search and action frame.
-const data = @import("model");
 const client = @import("telar-client");
 const Canvas = @import("../Canvas.zig");
 const FormButton = @import("../FormButton.zig");

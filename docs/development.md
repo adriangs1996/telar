@@ -13,8 +13,7 @@ requirement; the installed application does not need it.
 ### macOS
 
 The GUI requires macOS 26 and a Metal 4 GPU. Install Xcode or the Command
-Line Tools with a macOS 26 SDK, along with Zig and Rust. See the
-[renderer requirements](flows/metal4-renderer.md).
+Line Tools with a macOS 26 SDK, along with Zig and Rust.
 
 Brotli and nghttp2 are built from pinned sources. Telar uses macOS's SQLite;
 there is no separate Homebrew library installation required by the default
@@ -25,7 +24,7 @@ choose system libraries with `-Dbrotli=PREFIX`, `-Dnghttp2=PREFIX` and
 ### Linux
 
 The GUI needs a Wayland session and a Vulkan 1.3 device with the
-[required extensions](flows/vulkan-renderer.md). Building it also requires
+required extensions. Building it also requires
 Wayland protocol definitions and `wayland-scanner`, `glslc`, and development
 headers for xkbcommon, Fontconfig, Vulkan, ATK and GLib.
 
@@ -65,29 +64,26 @@ zig build -Dgui=false -Doptimize=ReleaseFast
 ```
 
 This build runs `telar server` and CLI commands; it cannot open a window.
-It is different from the [headless test client](flows/headless-client.md).
+It is different from the headless client (`zig build headless`).
 
 ## Making changes
 
-Read the [architecture](architecture.md), [naming conventions](naming.md),
-[Zig source layout](zig-source-layout.md) and relevant [invariants](invariants.md).
-The [flow index](flows/README.md) maps behavior to its implementation and tests;
-[build navigation](../build/README.md) maps build targets to their definitions.
+Read the [Zig source layout](zig-source-layout.md).
+[Build navigation](../build/README.md) maps build targets to their definitions.
 
-Run the tests for the area you change, for example:
+Check the tree before you commit:
 
 ```sh
-zig build test-cli
+zig build check
 zig build codestyle
 ```
 
-CI runs `zig build`, `zig build check` and `zig build test` on macOS and Linux.
-Some integration tests require Node.js 22.13 or newer and Python 3. Optional
-`just` recipes wrap build, test, coverage, fuzzing and benchmark commands; see
-[justfile](../justfile) and the [CI workflow](../.github/workflows/ci.yml).
+CI runs `zig build` and `zig build check` on macOS and Linux. Optional `just`
+recipes wrap build, check and benchmark commands; see [justfile](../justfile)
+and the [CI workflow](../.github/workflows/ci.yml).
 
 [Benchmarks](benchmarks.md) documents measurement commands and historical
-results. [Performance gates](performance-gates.md) defines how to compare runs.
+results.
 
 ## Development diagnostics
 
@@ -113,74 +109,3 @@ them into `interactive_vt_alloc*` for terminal-emulator state growth and
 rejections likewise distinguish missing or malformed authorization from an
 otherwise valid credential that is no longer registered, without logging
 either value.
-
-## Test coverage
-
-Telar uses [zcov](https://github.com/ericsssan/zcov) to run the native test
-suites with SanitizerCoverage and write an LCOV tracefile:
-
-```sh
-just coverage
-```
-
-`zig-cov` and its adjacent `zig-cov-rt.o` must be installed together. Set
-`ZIG_COV_BIN` when the executable is not on `PATH`, or
-`TELAR_COVERAGE_FILE` to change the default `coverage.lcov` destination:
-
-```sh
-ZIG_COV_BIN=/path/to/zig-cov just coverage
-```
-
-The coverage build forces LLVM and libc only for native test executables. It
-instruments Telar's Zig-only shared modules and suite roots, while leaving
-C-family dependencies and cross-target compile checks alone. Generated
-packages, caches, and vendored sources are excluded from the report.
-
-Feed the result into `zig-crap` to join line coverage with per-function
-complexity:
-
-```sh
-zig-crap src --lcov coverage.lcov --lcov-base .
-```
-
-## Fuzzing
-
-Telar uses Zig's built-in fuzzer (`std.testing.fuzz`) with 12 target steps:
-handshake, client and server IPC, frame bodies, cell runs, text metadata,
-PNG, ICO, HTTP/1 heads and bodies, and HTTP/2 frame reading and observation.
-The targets use synthetic inputs and do not start a runtime or contact real
-services. Their contracts and limits are described in
-[`docs/testing/`](testing/).
-
-Run every fuzz root's deterministic tests and replay its seed corpus:
-
-```sh
-just fuzz-check
-```
-
-Fuzz every target in sequence, with GUI disabled and one build job. The
-argument takes Zig's `K`, `M` and `G` suffixes and is passed to each target,
-not shared across the whole campaign:
-
-```sh
-just fuzz         # --fuzz=10K for each target
-just fuzz 1M      # --fuzz=1M for each target
-```
-
-Each target prints its report before the next starts. Coverage counts the
-whole executable, including the runner and oracles, not only production
-code. Wuffs C and nghttp2 provide no fuzz coverage feedback. Run these
-commands without `-Dcoverage`.
-
-With Zig 0.16.0, `zig build --fuzz` can exit 0 after a failure. `just fuzz`
-checks each target's output for saved inputs, panics and termination signals
-and stops with a nonzero status if it finds one or the build fails.
-
-A failing input is reported as `input saved to '.zig-cache/f/crash'`. It is
-in Smith input form, not necessarily raw protocol bytes. Zig has sometimes
-written an empty or truncated crash file; the target documents explain how
-to recover the complete input from `.zig-cache/f/in<N>` and replay it.
-
-The fuzz roots stay out of ordinary suites and coverage discovery. Their
-executables use LLVM and disable error return traces only on the root;
-Debug runtime safety stays enabled.

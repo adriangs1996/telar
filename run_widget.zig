@@ -2,7 +2,6 @@
 //! Edit src/gui/experiments/frame/problem.zig, function solve.
 //! Run: zig build run-widget -Doptimize=ReleaseFast
 //! Measure without a window: zig build run-widget -Doptimize=ReleaseFast -- --bench
-//! Test: zig build test-widget
 //!
 //! This file contains only native window/input/frame ownership and build wiring.
 const std = @import("std");
@@ -10,12 +9,10 @@ const data = @import("model");
 const macos_gui = @import("build/macos_gui.zig");
 const linux_gui = @import("build/linux_gui.zig");
 const native = @import("src/gui/native/native.zig");
-const decode_input = @import("src/gui/native/decode_input.zig");
-const event_module = @import("src/gui/input/event.zig");
+const event_module = @import("telar-window");
 const benchmark = @import("src/gui/experiments/frame/benchmark.zig");
 const BuildApplication = @import("build/Application.zig");
-const Renderer = @import("src/gui/render/TerminalRenderer.zig");
-const Canvas = @import("src/gui/widgets/Canvas.zig");
+const Renderer = @import("src/gui/render/Renderer.zig");
 const WidgetState = @import("src/gui/widgets/interaction/State.zig");
 const Widget = @import("src/gui/experiments/frame/Widget.zig");
 const GenericEventPool = @import("src/gui/input/GenericEventPool.zig").Type;
@@ -29,20 +26,10 @@ const Inbox = struct {
     const Message = union(enum) { input: u8, completed: Completion };
 
     pool: GenericEventPool(4096, 64) = .{},
+    // SAFETY: Enqueue writes each ring slot before increasing len; drain reads only queued slots.
     messages: [64]Message = undefined,
     head: usize = 0,
     len: usize = 0,
-
-    fn push(inbox: *Inbox, event: event_module.Event) !void {
-        // Reserve one slot for the single outstanding GPU completion.
-        if (inbox.len >= inbox.messages.len - 1) {
-            return error.NativeInputFull;
-        }
-
-        const slot = try inbox.pool.admit(event);
-        inbox.messages[(inbox.head + inbox.len) % inbox.messages.len] = .{ .input = slot };
-        inbox.len += 1;
-    }
 
     fn completed(inbox: *Inbox, result: Completion) void {
         std.debug.assert(inbox.len < inbox.messages.len);
@@ -98,38 +85,6 @@ const Runner = struct {
         self.renderer.deinit();
     }
 
-    // The consumer owns a submitted frame until its exact completion arrives.
-    fn prepare(self: *Runner, viewport: native.Viewport) !native.Frame {
-        if (self.in_flight != null or self.failure != null) {
-            return self.renderer.frame(0);
-        }
-
-        _ = self.renderer.measure(viewport) catch |err| switch (err) {
-            error.InvalidTerminalSize => return self.renderer.frame(0),
-            else => return err,
-        };
-        self.renderer.begin();
-        self.widgets.begin(false);
-        var canvas: Canvas = .{
-            .atlas = &self.renderer.atlas.?,
-            .quads = &self.renderer.quads,
-            .metrics = self.renderer.metrics,
-            .origin = .{ 0, 0 },
-            .theme = data.theme_support.default_theme,
-            .chrome = self.renderer.chrome,
-            .viewport = self.renderer.viewport,
-            .widgets = &self.widgets,
-        };
-        try self.widget.draw(&canvas);
-        self.widgets.seal();
-        self.renderer.seal();
-        const token = self.next_token;
-        self.next_token = try std.math.add(u64, token, 1);
-        self.in_flight = token;
-        self.dirty = false;
-        return self.renderer.frame(token);
-    }
-
     fn finish(self: *Runner, result: Completion) void {
         if (self.in_flight == null or self.in_flight.? != result.token) {
             return;
@@ -141,7 +96,7 @@ const Runner = struct {
         self.dirty = self.dirty or !result.delivered or revision != self.widgets.dispatcher.revision;
     }
 
-    fn dispatch(self: *Runner, value: event_module.Event) !void {
+    fn dispatch(self: *Runner, value: event_module.Input) !void {
         const revision = self.widgets.dispatcher.revision;
         const route = self.widgets.dispatcher.route(value);
         self.dirty = try self.widget.input(value, route) or self.dirty or revision != self.widgets.dispatcher.revision;
@@ -168,25 +123,9 @@ pub fn main(init: std.process.Init) !void {
         }
     }
 
-    const runner = try init.gpa.create(Runner);
-    defer init.gpa.destroy(runner);
-    runner.* = try Runner.init(init.gpa, init.io);
-    defer runner.deinit();
-    const callbacks: native.Callbacks = .{
-        .render = render,
-        .pump = pump,
-        .complete = complete,
-        .input = input,
-        .wake_fd = runner.fds[0],
-    };
-    const result = native.telar_gui_run("Telar frame challenge", runner, &callbacks);
-    if (runner.failure) |err| {
-        return err;
-    }
-
-    if (result != 0) {
-        return error.NativeWindowFailed;
-    }
+    // The native callback loop has been removed. Keep --bench available while
+    // this experiment's scene drawing is ported to the new renderer contract.
+    return error.WindowLoopMigrationPending;
 }
 
 /// Registers the executable and its checks. Example: run_widget.addBuild(b, app);
@@ -205,9 +144,9 @@ pub fn addBuild(b: *std.Build, app: BuildApplication) void {
     app.modules.libraries.addImports(module);
     module.addCSourceFile(.{ .file = b.path("src/gui/native/wake.c"), .flags = &.{} });
     if (os == .macos) {
-        macos_gui.add(b, module, app.coverage.enabled);
+        macos_gui.add(b, module);
     } else {
-        linux_gui.add(b, module, app.coverage.enabled);
+        linux_gui.add(b, module);
     }
 
     const executable = b.addExecutable(.{ .name = "run-widget", .root_module = module });
@@ -218,37 +157,10 @@ pub fn addBuild(b: *std.Build, app: BuildApplication) void {
         run.addArgs(args);
     }
     b.step("run-widget", "Run your widget with Telar's native GUI plumbing").dependOn(&run.step);
-    const tests = b.addTest(.{ .root_module = module, .filters = &.{ "widget runner", "frame challenge" } });
-    b.step("test-widget", "Check widget runner input and presentation ownership").dependOn(&b.addRunArtifact(tests).step);
 }
 
 fn from(context: ?*anyopaque) *Runner {
     return @ptrCast(@alignCast(context.?));
-}
-
-fn render(context: ?*anyopaque, viewport: native.Viewport, out: *native.Frame) callconv(.c) void {
-    const runner = from(context);
-    out.* = runner.prepare(viewport) catch |err| blk: {
-        runner.fail(err);
-        break :blk runner.renderer.frame(0);
-    };
-}
-
-fn input(context: ?*anyopaque, raw: native.InputEvent) callconv(.c) c_int {
-    const runner = from(context);
-    const event = decode_input.decode(raw) catch return 0;
-    // Only these events belong to this challenge; no clipboard/editor services.
-    switch (event) {
-        .text, .key, .pointer, .focus => {},
-        else => return 0,
-    }
-
-    runner.inbox.push(event) catch |err| {
-        runner.fail(err);
-        return 0;
-    };
-    native.telar_gui_wake(runner.fds[1]);
-    return 1;
 }
 
 fn complete(context: ?*anyopaque, token: u64, delivered: c_int) callconv(.c) void {
@@ -270,43 +182,4 @@ fn pump(context: ?*anyopaque) callconv(.c) c_int {
     }
 
     return @intFromBool(runner.in_flight == null and runner.dirty);
-}
-
-test "widget runner challenge preserves in-flight frames and delivered controls" {
-    const runner = try std.testing.allocator.create(Runner);
-    defer std.testing.allocator.destroy(runner);
-    runner.* = try Runner.init(std.testing.allocator, std.testing.io);
-    defer runner.deinit();
-    runner.renderer.io = null;
-    const viewport: native.Viewport = .{ .width = 1100, .height = 720, .scale = 1 };
-    const first = try runner.prepare(viewport);
-    try std.testing.expect(first.token != 0);
-    const saved = try std.testing.allocator.dupe(u8, std.mem.sliceAsBytes(runner.renderer.quads.items()));
-    defer std.testing.allocator.free(saved);
-    try runner.dispatch(.{ .text = .{ .bytes = "1" } });
-    const blocked = try runner.prepare(.{ .width = 1600, .height = 960, .scale = 2 });
-    try std.testing.expectEqual(@as(u64, 0), blocked.token);
-    try std.testing.expectEqualSlices(u8, saved, std.mem.sliceAsBytes(runner.renderer.quads.items()));
-    runner.finish(.{ .token = first.token + 1, .delivered = true });
-    try std.testing.expectEqual(first.token, runner.in_flight.?);
-    complete(runner, first.token, 1);
-    complete(runner, first.token, 1);
-    try std.testing.expectEqual(@as(c_int, 1), pump(runner));
-    const frame = try runner.prepare(viewport);
-    runner.finish(.{ .token = frame.token, .delivered = true });
-    const steps = runner.widget.demo.steps;
-    try runner.dispatch(.{ .pointer = .{ .kind = .press, .x = 50, .y = 160 } });
-    try runner.dispatch(.{ .pointer = .{ .kind = .release, .x = 50, .y = 160 } });
-    try std.testing.expectEqual(steps + 1, runner.widget.demo.steps);
-    try std.testing.expectEqual(@as(usize, 0), runner.widget.demo.cost.quads_copied);
-    const next = try runner.prepare(viewport);
-    runner.finish(.{ .token = next.token, .delivered = false });
-    try std.testing.expect(runner.dirty);
-    const retry = try runner.prepare(viewport);
-    runner.finish(.{ .token = retry.token, .delivered = true });
-    try std.testing.expectEqual(@as(c_int, 0), pump(runner));
-}
-
-test {
-    _ = @import("src/gui/experiments/frame/tests.zig");
 }

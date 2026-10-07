@@ -3,6 +3,7 @@ const core = @import("telar-core");
 const std = @import("std");
 const CwdState = @This();
 
+// SAFETY: set and update copy the validated path before setting len; slice reads only that prefix.
 bytes: [core.max_cwd_bytes]u8 = undefined,
 len: u16 = 0,
 revision: u64 = 1,

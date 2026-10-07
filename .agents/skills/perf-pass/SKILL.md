@@ -11,8 +11,7 @@ an oracle proves the output did not change.
 ## Steps
 
 1. **Freeze a baseline.** Before editing anything, build the baseline binaries
-   into a scratch prefix (`A`) with ReleaseFast, and read `docs/performance/`
-   for earlier experiments and rejected ideas. Done when `A/bin` holds the
+   into a scratch prefix (`A`) with ReleaseFast. Done when `A/bin` holds the
    probe and benchmark binaries and you can name what earlier passes already
    tried. Commands: [measurement.md](measurement.md).
 
@@ -46,13 +45,13 @@ an oracle proves the output did not change.
    tests as x86-64 under Rosetta. Done when each such construct has a
    verified lowering on all three targets.
 
-5. **Validate the tree.** `zig build test`, `test-gui`, `cross`, `codestyle`,
+5. **Validate the tree.** `zig build check`, `cross`, `codestyle`,
    `check-client-boundaries`, `check-model-boundaries`, `check-programs`, and
    every new oracle test. Done when all are green and the final build is
    re-measured against `A` across every mode and benchmark, including those
    you did not target.
 
-6. **Write the report** in `docs/performance/<pass-name>/README.md`: changes,
+6. **Write the report**: changes,
    paired tables with win counts, disassembly findings, rejected variants,
    regressions with their cause or "cause not established", and measured
    findings left for a user decision. Done when every number in it comes from

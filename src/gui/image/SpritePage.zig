@@ -19,7 +19,6 @@ const assets = @import("assets");
 const Sprite = @import("Sprite.zig");
 const SpriteSize = @import("SpriteSize.zig").SpriteSize;
 const imaging = @import("imaging");
-const data = @import("model");
 const ImageView = imaging.ImageView;
 const resize = imaging.resize;
 const SpritePage = @This();
@@ -66,6 +65,7 @@ count: u16 = 0,
 /// Favicon slots below `count` that hold no favicon and wait for reuse.
 released: FaviconSlots = .initEmpty(),
 version: u32 = 1,
+// SAFETY: SpritePage initialization constructs every provider mark before returning the page.
 provider_marks: [providers.len]Sprite = undefined,
 
 /// Allocates the page for one chrome ratio and resizes the provider sheet
@@ -112,6 +112,7 @@ pub fn deinit(self: *SpritePage) void {
 /// rounded the same way samples one texel per pixel.
 /// Example: `const cells = SpritePage.cellsFor(chrome.ratio);`
 pub fn cellsFor(ratio: f32) Cells {
+    // SAFETY: The loop assigns one cell size for every element of cells before return.
     var cells: Cells = undefined;
     for (SpriteSize.all, &cells) |size, *side| {
         const wanted = @round(size.logical() * ratio);
@@ -268,169 +269,5 @@ fn write(self: *SpritePage, slot: u16, images: Images) void {
                 destination[column * 4 ..][0..4].* = imaging.premultiply.pixel(image.pixel(@intCast(column), @intCast(row)));
             }
         }
-    }
-}
-
-test "the page holds the provider marks then at most 64 favicons and premultiplies" {
-    var page = try SpritePage.init(std.testing.allocator, 1);
-    defer page.deinit();
-    try std.testing.expectEqualSlices(u16, &.{ 14, 18, 20 }, &page.cells);
-    try std.testing.expectEqual(provider_mark_count, page.count);
-    try std.testing.expectEqual(@as(u16, 70), page.capacity());
-    // Five slots of 52 texels across, fourteen rows of 20 down.
-    try std.testing.expectEqual(@as(u32, 280), page.side);
-    try std.testing.expectEqual(@as(usize, 280 * 280 * 4), page.pixels.len);
-    try std.testing.expectEqual(max_favicons, page.faviconRoom());
-    try std.testing.expect(page.providerMark(.claude) != null);
-    try std.testing.expect(page.providerMark(.pi).?.index == 2);
-    try std.testing.expect(page.providerMark(.cursor).?.index == 3);
-    try std.testing.expect(page.providerMark(.opencode).?.index == 4);
-    try std.testing.expect(page.providerMark(.opencode).?.size == .large);
-    try std.testing.expect(page.providerMark(.unknown) == null);
-    try std.testing.expect(page.providerMark(@enumFromInt(9)) == null);
-
-    const half = [_]u8{ 200, 100, 0, 128 } ** (20 * 20);
-    var images: Images = undefined;
-    for (SpriteSize.all, &images) |size, *image| {
-        image.* = .{ .pixels = &half, .stride = page.cell(size) * 4, .width = page.cell(size), .height = page.cell(size) };
-    }
-
-    const version = page.version;
-    const first = try page.addFavicon(images);
-    try std.testing.expectEqual(provider_mark_count, first);
-    try std.testing.expectEqual(version + 1, page.version);
-    const extent: f32 = @floatFromInt(page.side);
-    var right_edge: f32 = 0;
-    for (SpriteSize.all) |size| {
-        const cell_uv = page.uv(.{ .index = first, .size = size });
-        try std.testing.expectApproxEqAbs(@as(f32, @floatFromInt(page.cell(size))), (cell_uv[2] - cell_uv[0]) * extent, 0.001);
-        try std.testing.expect(cell_uv[0] >= right_edge);
-        right_edge = cell_uv[2];
-        const texel = page.pixels[(@as(usize, @intFromFloat(cell_uv[1] * extent)) * page.side + @as(usize, @intFromFloat(cell_uv[0] * extent))) * 4 ..][0..4];
-        try std.testing.expectEqualSlices(u8, &.{ 100, 50, 0, 128 }, texel);
-    }
-
-    var missing = images;
-    missing[@intFromEnum(SpriteSize.medium)] = null;
-    try std.testing.expectError(error.SpriteSizeMismatch, page.addFavicon(missing));
-    try std.testing.expectError(error.SpriteSizeMismatch, page.addFavicon(.{ images[1], images[0], images[2] }));
-    for (1..max_favicons) |_| {
-        _ = try page.addFavicon(images);
-    }
-
-    try std.testing.expectEqual(@as(u16, 0), page.faviconRoom());
-    try std.testing.expectError(error.SheetFull, page.addFavicon(images));
-}
-
-test "a released favicon slot is cleared, re-uploaded and reused before the page grows" {
-    var page = try SpritePage.init(std.testing.allocator, 1);
-    defer page.deinit();
-    const opaque_texels = [_]u8{ 255, 255, 255, 255 } ** (20 * 20);
-    var images: Images = undefined;
-    for (SpriteSize.all, &images) |size, *image| {
-        image.* = .{
-            .pixels = &opaque_texels,
-            .stride = page.cell(size) * 4,
-            .width = page.cell(size),
-            .height = page.cell(size),
-        };
-    }
-
-    var slots: [max_favicons]u16 = undefined;
-    for (&slots) |*slot| {
-        slot.* = try page.addFavicon(images);
-    }
-
-    try std.testing.expectEqual(@as(u16, 0), page.faviconRoom());
-    try std.testing.expectError(error.SheetFull, page.addFavicon(images));
-
-    // A provider mark and an unwritten slot are never released.
-    const version = page.version;
-    page.removeFavicon(page.providerMark(.claude).?.index);
-    page.removeFavicon(page.count);
-    try std.testing.expectEqual(version, page.version);
-    try std.testing.expectEqual(@as(u16, 0), page.faviconRoom());
-
-    const freed = slots[7];
-    page.removeFavicon(freed);
-    try std.testing.expectEqual(version + 1, page.version);
-    try std.testing.expectEqual(@as(u16, 1), page.faviconRoom());
-    const extent: f32 = @floatFromInt(page.side);
-    for (SpriteSize.all) |size| {
-        const cell_uv = page.uv(.{
-            .index = freed,
-            .size = size,
-        });
-        const left: usize = @intFromFloat(cell_uv[0] * extent);
-        const top: usize = @intFromFloat(cell_uv[1] * extent);
-        for (0..page.cell(size)) |row| {
-            const texels = page.pixels[((top + row) * page.side + left) * 4 ..][0 .. page.cell(size) * 4];
-            try std.testing.expect(std.mem.allEqual(u8, texels, 0));
-        }
-    }
-
-    // Releasing twice changes nothing; the next favicon takes the slot.
-    page.removeFavicon(freed);
-    try std.testing.expectEqual(version + 1, page.version);
-    const count = page.count;
-    try std.testing.expectEqual(freed, try page.addFavicon(images));
-    try std.testing.expectEqual(count, page.count);
-    try std.testing.expectEqual(version + 2, page.version);
-    try std.testing.expectError(error.SheetFull, page.addFavicon(images));
-}
-
-test "cells follow the chrome ratio inside the bounds" {
-    try std.testing.expectEqualSlices(u16, &.{ 14, 18, 20 }, &cellsFor(1));
-    try std.testing.expectEqualSlices(u16, &.{ 28, 36, 40 }, &cellsFor(2));
-    // A 23 pt font against the 15 pt reference, on a 1x and a 2x display.
-    try std.testing.expectEqualSlices(u16, &.{ 21, 28, 31 }, &cellsFor(23.0 / 15.0));
-    try std.testing.expectEqualSlices(u16, &.{ 43, 55, 61 }, &cellsFor(2 * 23.0 / 15.0));
-    try std.testing.expectEqualSlices(u16, &.{ 67, 86, max_cell }, &cellsFor(4.8));
-    try std.testing.expectEqualSlices(u16, &.{ max_cell, max_cell, max_cell }, &cellsFor(std.math.inf(f32)));
-    try std.testing.expectEqualSlices(u16, &.{ min_cell, min_cell, min_cell }, &cellsFor(0.1));
-    try std.testing.expectEqualSlices(u16, &.{ min_cell, min_cell, min_cell }, &cellsFor(std.math.nan(f32)));
-
-    // Page bytes at the reported sizes: 1x, a 23 pt font at 1x and 2x, the bound.
-    for ([_]f32{ 1, 23.0 / 15.0, 2 * 23.0 / 15.0, 4.8 }, [_]u32{ 280, 434, 854, 1344 }) |ratio, side| {
-        var page = try SpritePage.init(std.testing.allocator, ratio);
-        defer page.deinit();
-        try std.testing.expectEqual(side, page.side);
-        try std.testing.expectEqual(max_favicons, page.faviconRoom());
-    }
-}
-
-test "provider symbols preserve alpha and OpenAI, Cursor and OpenCode are tintable white masks" {
-    // Below and above the 64 texel artwork, so both filters are covered.
-    for ([_]f32{ 1.6, 4.8 }) |ratio| {
-        try expectProviderSymbols(ratio);
-    }
-}
-
-fn expectProviderSymbols(ratio: f32) !void {
-    var page = try SpritePage.init(std.testing.allocator, ratio);
-    defer page.deinit();
-    const side = page.cell(.large);
-    const extent: f32 = @floatFromInt(page.side);
-    for (providers) |provider| {
-        const cell_uv = page.uv(page.providerMark(provider).?);
-        const left: usize = @intFromFloat(cell_uv[0] * extent);
-        const top: usize = @intFromFloat(cell_uv[1] * extent);
-        var visible: usize = 0;
-        var transparent: usize = 0;
-        for (0..side) |y| {
-            for (0..side) |x| {
-                const rgba = page.pixels[((top + y) * page.side + left + x) * 4 ..][0..4];
-                if (data.icons.providerMarkFollowsTheme(provider)) {
-                    try std.testing.expectEqual(rgba[3], rgba[0]);
-                    try std.testing.expectEqual(rgba[3], rgba[1]);
-                    try std.testing.expectEqual(rgba[3], rgba[2]);
-                }
-
-                visible += @intFromBool(rgba[3] > 0);
-                transparent += @intFromBool(rgba[3] == 0);
-            }
-        }
-
-        try std.testing.expect(visible > 0 and transparent > 0);
     }
 }

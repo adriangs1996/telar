@@ -1,7 +1,6 @@
 const localca = @import("localca");
 const Session = localca.Session;
 const RouteMatch = @import("../RouteMatch.zig");
-const MessageRoute = @This();
 
 from: Session.Side,
 to: Session.Side,

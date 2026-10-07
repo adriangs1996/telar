@@ -18,6 +18,7 @@ payload_limit: usize,
 storage_limit: usize,
 batches: [2]Batch = .{ .{}, .{} },
 /// Batch bytes with answered file queries removed, when any were.
+// SAFETY: stripFileQueries fills scratch before returning a slice into it; unchanged output may instead borrow the input.
 scratch: [media.batch_bytes]u8 = undefined,
 active: u1 = 0,
 worker: ?u1 = null,

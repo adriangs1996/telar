@@ -5,6 +5,7 @@ const Scorer = @This();
 
 sources: Sources,
 query: []const u8,
+// SAFETY: scoreItem passes this as describe's output buffer and scores only the returned initialized label slice.
 label: [goto_picker.max_label_bytes]u8 = undefined,
 
 pub fn scoreItem(self: *Scorer, item: goto_picker.Item) ?u32 {

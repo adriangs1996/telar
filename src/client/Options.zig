@@ -7,7 +7,6 @@ const std = @import("std");
 const GuiConfig = @import("config/GuiConfig.zig");
 const MachineTarget = @import("machines/MachineTarget.zig").MachineTarget;
 const RemoteMachine = @import("machines/RemoteMachine.zig");
-const Options = @This();
 
 arguments: []const []const u8,
 cwd: []const u8,

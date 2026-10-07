@@ -7,7 +7,6 @@ const NodeKind = @import("NodeKind.zig").NodeKind;
 const Style = @import("Style.zig");
 const Tone = @import("Tone.zig").Tone;
 const ui_icons = @import("../layout/icons.zig");
-const NodeInput = @This();
 
 kind: NodeKind,
 parent: u8 = Node.no_parent,

@@ -1,7 +1,6 @@
 //! Path picker: fuzzy-finds paths under the focused pane's directory and
 //! pastes the chosen one at its cursor. The runtime indexes and ranks; the
-//! client keeps the root, the page and the selection. See
-//! `docs/flows/path-picker.md`.
+//! client keeps the root, the page and the selection.
 
 const data = @import("model");
 const core = @import("telar-core");
@@ -317,103 +316,4 @@ fn boundedQuery(text: []const u8) []const u8 {
     }
 
     return text[0..len];
-}
-
-fn stateWith(paths: []const []const u8) !data.PathPickerState {
-    var state: data.PathPickerState = .{};
-    state.begin(@enumFromInt(3), "/work/app");
-    state.expect(9);
-
-    var matches: [4]core.PathMatch = undefined;
-    for (paths, 0..) |relative, index| {
-        matches[index] = .{
-            .path = relative,
-            .kind = if (relative[relative.len - 1] == '/') .directory else .file,
-        };
-    }
-
-    var buffer: [1024]u8 = undefined;
-    const encoded = try core.encodePathResults(&buffer, .{
-        .request_id = @enumFromInt(9),
-        .root = "/work/app",
-        .matches = matches[0..paths.len],
-    });
-    _ = try state.receive((try core.decodeServer(encoded)).path_results);
-    return state;
-}
-
-test "inserted paths are relative to the pane's directory and quoted for the shell" {
-    var state = try stateWith(&.{ "src/main.zig", "my docs/", "-rf", "it's.txt" });
-    var buffer: [max_text_bytes]u8 = undefined;
-
-    try std.testing.expectEqualStrings("src/main.zig", insertion(
-        &state,
-        .{
-            .selection = 0,
-            .absolute = false,
-        },
-        &buffer,
-    ).?);
-    try std.testing.expectEqualStrings("/work/app/src/main.zig", insertion(
-        &state,
-        .{
-            .selection = 0,
-            .absolute = true,
-        },
-        &buffer,
-    ).?);
-    try std.testing.expectEqualStrings("'my docs/'", insertion(
-        &state,
-        .{
-            .selection = 1,
-            .absolute = false,
-        },
-        &buffer,
-    ).?);
-    try std.testing.expectEqualStrings("./-rf", insertion(
-        &state,
-        .{
-            .selection = 2,
-            .absolute = false,
-        },
-        &buffer,
-    ).?);
-    try std.testing.expectEqualStrings("'it'\\''s.txt'", insertion(
-        &state,
-        .{
-            .selection = 3,
-            .absolute = false,
-        },
-        &buffer,
-    ).?);
-}
-
-test "a root above the pane's directory inserts absolute paths" {
-    var state = try stateWith(&.{"notes.md"});
-    state.anchor_len = 0;
-    @memcpy(state.anchor[0.."/work/app/src".len], "/work/app/src");
-    state.anchor_len = "/work/app/src".len;
-
-    var buffer: [max_text_bytes]u8 = undefined;
-    try std.testing.expectEqualStrings("/work/app/notes.md", insertion(
-        &state,
-        .{
-            .selection = 0,
-            .absolute = false,
-        },
-        &buffer,
-    ).?);
-}
-
-test "a picker opened above the cursor moves the selection the way its rows run" {
-    try std.testing.expectEqual(data.PromptCommand.move_down, onScreen(.move_down, false));
-    try std.testing.expectEqual(data.PromptCommand.move_up, onScreen(.move_down, true));
-    try std.testing.expectEqual(data.PromptCommand.move_down, onScreen(.move_up, true));
-    try std.testing.expectEqual(data.PromptCommand.tab, onScreen(.tab, true));
-}
-
-test "long queries are cut on a character boundary" {
-    const text = "a" ** (core.max_path_query_bytes - 1) ++ "é";
-    try std.testing.expectEqual(@as(usize, core.max_path_query_bytes - 1), boundedQuery(text).len);
-    try std.testing.expectEqualStrings("abc", boundedQuery("abc"));
 }

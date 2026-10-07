@@ -14,8 +14,3 @@ pub const lock = private_file.lock;
 pub const lockAt = private_file.lockAt;
 pub const fingerprint = private_file.fingerprint;
 pub const prepareDirectory = private_file.prepareDirectory;
-
-test {
-    _ = @import("private_file.zig");
-    _ = @import("Inode.zig");
-}

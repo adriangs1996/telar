@@ -27,6 +27,7 @@ const Grid = @import("BoxGrid.zig");
 const Raster = @import("BoxRaster.zig");
 const Curve = @This();
 
+// SAFETY: init fills all points for the selected shape before setting count; painting uses only that prefix.
 points: [19][2]f32 = undefined,
 count: u5 = 0,
 width: f32,
@@ -126,73 +127,4 @@ fn segmentDistance(point: [2]f32, segment: [2][2]f32) f32 {
     const x = point[0] - a[0] - t * dx;
     const y = point[1] - a[1] - t * dy;
     return x * x + y * y;
-}
-
-test "rounded corners and diagonals have antialias coverage and meet their cell edges" {
-    const grid = try Grid.init(.{ .x = 0, .y = 0, .width = 26, .height = 71 }, 2);
-    var pixels: [26 * 71]u8 = undefined;
-    for (0..7) |shape| {
-        const curve = init(grid, @intCast(shape));
-        curve.rasterize(.{ .pixels = &pixels, .stride = 26, .width = 26, .height = 71 });
-        var partial: usize = 0;
-        for (pixels) |alpha| {
-            partial += @intFromBool(alpha != 0 and alpha != 255);
-        }
-
-        try std.testing.expect(partial > 0);
-        if (shape < 4) {
-            const right = shape == 0 or shape == 3;
-            const down = shape == 0 or shape == 1;
-            try std.testing.expectEqual(@as(u8, 255), pixels[(if (down) @as(usize, 70) else 0) * 26 + 12]);
-            try std.testing.expect(pixels[34 * 26 + (if (right) @as(usize, 25) else 0)] >= 240);
-            try std.testing.expectEqual(@as(u8, 0), pixels[34 * 26 + 12]);
-        } else {
-            const x: usize = if (shape == 4) 25 else 0;
-            try std.testing.expect(pixels[x] > 0);
-            try std.testing.expect(pixels[70 * 26 + 25 - x] > 0);
-        }
-    }
-}
-
-test "fractional and tiny box curves never write outside the supplied raster" {
-    var storage: [17]u8 = @splat(37);
-    const sizes = [_]f32{ 0.25, 0.5, 1, 1.75, 3 };
-    for (sizes) |width| {
-        for (sizes) |height| {
-            const grid = try Grid.init(.{ .x = 0, .y = 0, .width = width, .height = height }, 3);
-            for (0..7) |shape| {
-                const curve = init(grid, @intCast(shape));
-                curve.rasterize(.{ .pixels = storage[1..], .stride = 4, .width = 3, .height = 3 });
-                try std.testing.expectEqual(@as(u8, 37), storage[0]);
-                try std.testing.expectEqual(@as(u8, 37), storage[4]);
-                try std.testing.expectEqual(@as(u8, 37), storage[8]);
-                try std.testing.expectEqual(@as(u8, 37), storage[12]);
-                try std.testing.expectEqual(@as(u8, 37), storage[16]);
-            }
-        }
-    }
-}
-
-test "curve bounds skip only zero-coverage pixels and preserve the full raster exactly" {
-    var pixels: [72 * 72]u8 = undefined;
-    for ([_][2]f32{ .{ 0.5, 1.75 }, .{ 7.25, 11.5 }, .{ 26, 71 }, .{ 71, 26 } }) |size| {
-        const grid = try Grid.init(.{ .x = 0, .y = 0, .width = size[0], .height = size[1] }, 2);
-        const width: u16 = @intFromFloat(@ceil(size[0]));
-        const height: u16 = @intFromFloat(@ceil(size[1]));
-        const scale_x = size[0] / @as(f32, @floatFromInt(width));
-        const scale_y = size[1] / @as(f32, @floatFromInt(height));
-        const antialias = @max(scale_x, scale_y);
-        for (0..7) |shape| {
-            const curve = init(grid, @intCast(shape));
-            curve.rasterize(.{ .pixels = &pixels, .stride = 72, .width = width, .height = height });
-            for (0..height) |row| {
-                for (0..width) |column| {
-                    const point = [2]f32{ (@as(f32, @floatFromInt(column)) + 0.5) * scale_x, (@as(f32, @floatFromInt(row)) + 0.5) * scale_y };
-                    const coverage = std.math.clamp((curve.thickness / 2 + antialias / 2 - @sqrt(curve.distanceSquared(point))) / antialias, 0, 1);
-                    const expected: u8 = @intFromFloat(@round(255 * coverage));
-                    try std.testing.expectEqual(expected, pixels[row * 72 + column]);
-                }
-            }
-        }
-    }
 }

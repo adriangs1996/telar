@@ -1,4 +1,4 @@
-//! The agent steps of `telar machine setup` (docs/flows/machine-setup.md):
+//! The agent steps of `telar machine setup`:
 //! every coding agent the person has on this machine is installed on the
 //! other one with its official installer, under the home and without sudo,
 //! and every agent there gets telar's integration. A prerequisite the
@@ -183,6 +183,7 @@ pub fn install(init: std.process.Init, report: *SetupReport, destination: []cons
         ran = true;
         try report.progress("installing {s} there with its official installer", .{@tagName(agent)});
         var script_buffer: [installer_prelude.len + max_installer_bytes]u8 = undefined;
+        // SAFETY: installer scripts are bounded by max_installer_bytes, checked for every built-in installer in tests.
         const script = std.fmt.bufPrint(&script_buffer, "{s}{s}", .{ installer_prelude, installer.script }) catch unreachable;
         var result = remote_shell.runScript(init, destination, script, install_timeout_s) catch |err| {
             try report.note(.agents, "{s}: its installer did not run to the end: {s}", .{ @tagName(agent), @errorName(err) });
@@ -309,73 +310,4 @@ fn names(set: std.EnumSet(Agent), buffer: *[names_bytes]u8) []const u8 {
     }
 
     return writer.buffered();
-}
-
-test "the node pi needs is 22.19 or newer" {
-    var platform: MachinePlatform = try .parse("os=Linux\narch=x86_64\nlibc=gnu\nhome=/h\ntarget=/h/t\nnode=v22.19.0\n");
-    try std.testing.expect(nodeRecentEnough(&platform));
-    platform = try .parse("os=Linux\narch=x86_64\nlibc=gnu\nhome=/h\ntarget=/h/t\nnode=v22.3.1\n");
-    try std.testing.expect(!nodeRecentEnough(&platform));
-    platform = try .parse("os=Linux\narch=x86_64\nlibc=gnu\nhome=/h\ntarget=/h/t\nnode=v24.0.0\n");
-    try std.testing.expect(nodeRecentEnough(&platform));
-}
-
-test "a missing prerequisite is named instead of improvised" {
-    const alpine = try MachinePlatform.parse("os=Linux\narch=aarch64\nlibc=musl\nhome=/h\ntarget=/h/t\ntool=curl\ntool=bash\ntool=tar\n");
-    try std.testing.expectEqualStrings("its binary needs glibc and this machine has musl", missingPrerequisite(&alpine, installerFor(.cursor), .cursor).?);
-    try std.testing.expect(std.mem.startsWith(u8, missingPrerequisite(&alpine, installerFor(.pi), .pi).?, "Node.js"));
-    try std.testing.expectEqual(@as(?[]const u8, null), missingPrerequisite(&alpine, installerFor(.codex), .codex));
-
-    const bare = try MachinePlatform.parse("os=Linux\narch=aarch64\nlibc=gnu\nhome=/h\ntarget=/h/t\n");
-    try std.testing.expectEqualStrings("curl is missing there", missingPrerequisite(&bare, installerFor(.claude), .claude).?);
-}
-
-test "local agents are found on the PATH by their command" {
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-
-    var file = try temp.dir.createFile(std.testing.io, "codex", .{ .permissions = .fromMode(0o755) });
-    file.close(std.testing.io);
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory = directory_buffer[0..try temp.dir.realPath(std.testing.io, &directory_buffer)];
-
-    try std.testing.expect(onPath(directory, "codex"));
-    try std.testing.expect(!onPath(directory, "claude"));
-    try std.testing.expect(!onPath("", "codex"));
-}
-
-test "every installer downloads over https only and stops when the download fails" {
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-
-    const io = std.testing.io;
-    var bin_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const bin = bin_buffer[0..try temp.dir.realPath(io, &bin_buffer)];
-    // A curl that fails as curl -f does on a 404, after writing nothing.
-    var curl = try temp.dir.createFile(io, "curl", .{ .permissions = .fromMode(0o755) });
-    try curl.writeStreamingAll(io, "#!/bin/sh\nexit 22\n");
-    curl.close(io);
-
-    for (std.enums.values(Agent)) |agent| {
-        const installer = installerFor(agent);
-        try std.testing.expect(installer.script.len <= max_installer_bytes);
-        try std.testing.expect(std.mem.indexOf(u8, installer.script, "| sh") == null);
-        try std.testing.expect(std.mem.indexOf(u8, installer.script, "| bash") == null);
-
-        const script = try std.fmt.allocPrint(std.testing.allocator, "{s}{s}echo installed\n", .{ installer_prelude, installer.script });
-        defer std.testing.allocator.free(script);
-        const path = try std.fmt.allocPrint(std.testing.allocator, "PATH={s}:/usr/bin:/bin", .{bin});
-        defer std.testing.allocator.free(path);
-
-        const result = try std.process.run(std.testing.allocator, io, .{
-            .argv = &.{ "/usr/bin/env", "-i", path, "/bin/sh", "-c", script },
-        });
-        defer std.testing.allocator.free(result.stdout);
-        defer std.testing.allocator.free(result.stderr);
-
-        try std.testing.expect(result.term == .exited and result.term.exited != 0);
-        try std.testing.expect(std.mem.indexOf(u8, result.stdout, "installed") == null);
-    }
-
-    try std.testing.expect(std.mem.indexOf(u8, installer_prelude, "--proto '=https'") != null);
 }

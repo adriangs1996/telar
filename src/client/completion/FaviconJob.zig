@@ -9,6 +9,7 @@ execution_id: data.FaviconsState.ExecutionId,
 workspace: core.WorkspaceId,
 /// Sides of the sprite cells the image is resized to, one per size.
 cells: FaviconImage.Sides,
+// SAFETY: init copies the bounded directory before setting cwd_len; cwdSlice exposes only that prefix.
 cwd: [core.max_cwd_bytes]u8 = undefined,
 cwd_len: u16 = 0,
 

@@ -48,22 +48,3 @@ fn finish(label: [:0]const u8, argv: []const [*:0]const u8) !MachineDispatchOpti
         .argv = argv,
     };
 }
-
-test "the machine flag splits the label from the command" {
-    const spaced = (try MachineDispatchOptions.parse(&.{ "telar", "--machine", "box", "pane", "list" })).?;
-    try std.testing.expectEqualStrings("box", spaced.label);
-    try std.testing.expectEqual(@as(usize, 3), spaced.argv.len);
-    try std.testing.expectEqualStrings("pane", std.mem.span(spaced.argv[1]));
-
-    const joined = (try MachineDispatchOptions.parse(&.{ "telar", "--machine=box", "pane", "list" })).?;
-    try std.testing.expectEqualStrings("box", joined.label);
-    try std.testing.expectEqualStrings("list", std.mem.span(joined.argv[2]));
-}
-
-test "the machine flag needs a label and a command" {
-    try std.testing.expectEqual(@as(?MachineDispatchOptions, null), try MachineDispatchOptions.parse(&.{ "telar", "pane", "list" }));
-    try std.testing.expectError(error.MissingMachineLabel, MachineDispatchOptions.parse(&.{ "telar", "--machine" }));
-    try std.testing.expectError(error.MissingMachineLabel, MachineDispatchOptions.parse(&.{ "telar", "--machine=", "pane" }));
-    const window = (try MachineDispatchOptions.parse(&.{ "telar", "--machine", "box" })).?;
-    try std.testing.expectEqual(@as(usize, 1), window.argv.len);
-}

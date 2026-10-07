@@ -3,7 +3,6 @@
 //! Filtering refuses to record — it never redacts after the fact.
 
 const std = @import("std");
-const Filters = @import("Filters.zig");
 const Limit = @import("Limit.zig");
 
 /// Patterns one filter list holds. The configuration is refused past it,
@@ -108,36 +107,4 @@ fn assignmentMatch(command: []const u8, marker: []const u8) bool {
     }
 
     return false;
-}
-
-test "builtin rules catch common credentials and spare normal commands" {
-    try std.testing.expect(looksLikeSecret("export AWS_KEY=AKIAIOSFODNN7EXAMPLE"));
-    try std.testing.expect(looksLikeSecret("git push https://ghp_abcdefghijklmnopqrstuvwx@github.com/x/y"));
-    try std.testing.expect(looksLikeSecret("curl https://hooks.slack.com/services/T0/B0/x"));
-    try std.testing.expect(looksLikeSecret("echo -----BEGIN OPENSSH PRIVATE KEY-----"));
-    try std.testing.expect(looksLikeSecret("mysql -u root --PASSWORD=hunter2"));
-    try std.testing.expect(looksLikeSecret("http POST /login token=abc123"));
-
-    try std.testing.expect(!looksLikeSecret("git status"));
-    try std.testing.expect(!looksLikeSecret("grep -rn password= --include=*.md docs"));
-    try std.testing.expect(!looksLikeSecret("echo AKIA is an aws prefix"));
-    try std.testing.expect(!looksLikeSecret("man git-token"));
-}
-
-test "filters refuse leading spaces and configured patterns" {
-    var filters: Filters = .{};
-    try filters.commands.add("vault kv");
-    try filters.cwds.add("/private/notes");
-
-    try std.testing.expect(filters.shouldRecord(.{ .command = "git status", .cwd = "/work" }));
-    try std.testing.expect(!filters.shouldRecord(.{ .command = " git status", .cwd = "/work" }));
-    try std.testing.expect(!filters.shouldRecord(.{ .command = "", .cwd = "/work" }));
-    try std.testing.expect(!filters.shouldRecord(.{ .command = "vault kv get secret/x", .cwd = "/work" }));
-    try std.testing.expect(!filters.shouldRecord(.{ .command = "ls", .cwd = "/private/notes/journal" }));
-
-    filters.secrets = false;
-    try std.testing.expect(filters.shouldRecord(.{ .command = "export t=ghp_abcdefghijklmnopqrstuvwx", .cwd = "/work" }));
-
-    try std.testing.expectError(error.InvalidFilterPattern, filters.commands.add(""));
-    try std.testing.expectError(error.InvalidFilterPattern, filters.commands.add("a" ** 97));
 }

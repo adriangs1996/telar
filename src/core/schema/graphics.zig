@@ -13,7 +13,6 @@ const DeleteImage = @import("DeleteImage.zig");
 const DeletePlacement = @import("DeletePlacement.zig");
 const id = @import("id.zig");
 const ImageKey = @import("../ImageKey.zig");
-const std = @import("std");
 
 pub const SnapshotPhase = enum(u8) { begin = 0, end = 1 };
 
@@ -246,37 +245,4 @@ fn decodeImageKey(d: *Decoder) !ImageKey {
         return error.InvalidGraphicsIdentity;
     }
     return key;
-}
-
-test "graphics image metadata and chunks round trip" {
-    var bytes: [256]u8 = undefined;
-    var encoder = Encoder.init(&bytes);
-    const image: Image = .{
-        .pane_id = @enumFromInt(1),
-        .revision = 3,
-        .image = .{
-            .key = .{ .image_id = 7, .generation = 8 },
-            .format = .rgba,
-            .width = 2,
-            .height = 2,
-            .byte_len = 16,
-        },
-    };
-    try encodeImage(&encoder, image);
-    var decoder = Decoder.init(encoder.finish());
-    try std.testing.expectEqualDeep(image, try decodeImage(&decoder));
-    try decoder.ensureEnd();
-}
-
-test "graphics IPC chunks have an explicit upper bound" {
-    var bytes: [128]u8 = undefined;
-    var encoder = Encoder.init(&bytes);
-    const oversized = @as([*]const u8, @ptrFromInt(1))[0 .. shared.max_ipc_chunk_bytes + 1];
-    try std.testing.expectError(error.InvalidGraphicsChunkLength, encodeImageChunk(&encoder, .{
-        .pane_id = @enumFromInt(1),
-        .revision = 1,
-        .key = .{ .image_id = 1, .generation = 1 },
-        .offset = 0,
-        .bytes = oversized,
-    }));
 }

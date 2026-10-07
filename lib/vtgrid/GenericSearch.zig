@@ -15,7 +15,9 @@ pub fn Type(comptime Match: type, comptime limits: SearchLimits) type {
 
         pub const rows_per_turn = limits.rows_per_turn;
 
+        // SAFETY: init writes decoded codepoints before increasing needle_len; matching examines only that compiled prefix.
         needle: [limits.needle_codepoints]u21 = undefined,
+        // SAFETY: init computes prefix entries in order up to needle_len; advance skips matching when needle_len is zero.
         prefix: [limits.needle_codepoints]usize = undefined,
         needle_len: usize = 0,
         fold: bool = true,
@@ -26,6 +28,7 @@ pub fn Type(comptime Match: type, comptime limits: SearchLimits) type {
         next_row: usize = 0,
         /// Matches found so far, newest first; `ordered` copies them out in
         /// document order.
+        // SAFETY: Search records a match before increasing count; ordered exposes only the recorded matches.
         matches: [limits.matches]Match = undefined,
         count: u16 = 0,
         /// Some match or row was left out; the flags below say which bound.

@@ -109,16 +109,6 @@ pub fn find(self: *const WorktreeCatalog, reference: []const u8) !?*const Catalo
     return found;
 }
 
-pub fn findId(self: *const WorktreeCatalog, id: core.WorktreeId) ?*const CatalogWorktree {
-    for (self.worktrees.items) |*worktree| {
-        if (worktree.id == id) {
-            return worktree;
-        }
-    }
-
-    return null;
-}
-
 pub fn findWorkspace(self: *const WorktreeCatalog, id: u64) ?*const CatalogWorkspace {
     for (self.workspaces.items) |*workspace| {
         if (workspace.id == id) {
@@ -154,53 +144,4 @@ pub fn holdsWorktree(self: *const WorktreeCatalog, id: u64) bool {
     }
 
     return false;
-}
-
-test "references resolve by branch first and by unique title" {
-    var catalog: WorktreeCatalog = .init(std.testing.allocator);
-    defer catalog.deinit();
-    const arena = catalog.arena.allocator();
-    try catalog.worktrees.append(arena, sample(1, "fix", "Fix tabs"));
-    try catalog.worktrees.append(arena, sample(2, "links", "Path links"));
-
-    try std.testing.expectEqual(@as(core.WorktreeId, @enumFromInt(1)), (try catalog.find("fix")).?.id);
-    try std.testing.expectEqual(@as(core.WorktreeId, @enumFromInt(2)), (try catalog.find("path LINKS")).?.id);
-    try std.testing.expect((try catalog.find("missing")) == null);
-
-    try catalog.worktrees.append(arena, sample(3, "other", "Path links"));
-    try std.testing.expectError(error.AmbiguousWorktree, catalog.find("path links"));
-}
-
-test "a branch two projects share names neither of their worktrees" {
-    var catalog: WorktreeCatalog = .init(std.testing.allocator);
-    defer catalog.deinit();
-    const arena = catalog.arena.allocator();
-    try catalog.worktrees.append(arena, sample(1, "fix", "Fix tabs"));
-    try catalog.worktrees.append(arena, sample(2, "fix", "Fix links"));
-
-    try std.testing.expectError(error.AmbiguousWorktree, catalog.find("fix"));
-    try std.testing.expectEqual(@as(core.WorktreeId, @enumFromInt(2)), (try catalog.find("Fix links")).?.id);
-}
-
-fn sample(id: u64, branch: []const u8, title: []const u8) CatalogWorktree {
-    return .{
-        .id = @enumFromInt(id),
-        .source = 1,
-        .workspace = null,
-        .created_by = null,
-        .origin = .telar,
-        .state = .active,
-        .path = "/w",
-        .branch = branch,
-        .base = "main",
-        .title = title,
-        .brief = "",
-        .diff_added = 0,
-        .diff_removed = 0,
-        .diff_files = 0,
-        .commits_ahead = 0,
-        .command_label = "",
-        .command_state = .none,
-        .command_exit = 0,
-    };
 }

@@ -32,7 +32,6 @@ pub const family: FamilyHelp = .{
                 \\stderr. Never fall back to cloning through a provider yourself.
                 \\
             , .{repository_prepare.max_bundle_bytes / (1024 * 1024)}),
-            .examples = &.{&.{ "repository", "prepare", "--machine", "box", "--from", "HEAD", "--json" }},
         },
         .{
             .name = "receive",
@@ -44,7 +43,6 @@ pub const family: FamilyHelp = .{
             \\`telar repository prepare` on the other machine; not meant to be typed.
             \\
             ,
-            .examples = &.{&.{ "repository", "receive", "--identity", "github.com/o/r", "--transport", "ssh://git@github.com/o/r.git", "--commit", "0000000000000000000000000000000000000000", "--ref", "refs/heads/main", "--bytes", "0" }},
         },
     },
 };

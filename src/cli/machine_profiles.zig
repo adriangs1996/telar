@@ -151,6 +151,7 @@ fn check(init: std.process.Init, profile: *const core.MachineProfile, json: bool
             try writer.writeAll("}\n");
             try writer.flush();
         } else {
+            // Show the failed machine probe and its remote diagnostic on stderr, separate from command results.
             std.debug.print("telar machine: {s} ({s}) is not reachable: {s}\n{s}\n", .{
                 profile.label(),
                 profile.destination(),
@@ -201,6 +202,7 @@ fn report(init: std.process.Init, err: anyerror) u8 {
 
     var buffer: [512]u8 = undefined;
     const message = std.fmt.bufPrint(&buffer, "telar machine: {s}\n", .{detail}) catch return failure;
+    // The command still returns failure if stderr itself cannot accept its diagnostic.
     std.Io.File.stderr().writeStreamingAll(init.io, message) catch {};
     return failure;
 }

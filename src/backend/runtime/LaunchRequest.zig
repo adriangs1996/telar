@@ -1,5 +1,4 @@
 const core = @import("telar-core");
-const LaunchRequest = @This();
 
 location: core.TabLocation,
 size: core.TerminalSize,

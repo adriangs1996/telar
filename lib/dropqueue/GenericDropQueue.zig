@@ -11,7 +11,9 @@ pub fn Type(comptime Item: type, comptime capacity: usize) type {
     return struct {
         const Queue = @This();
 
+        // SAFETY: init binds an empty Io.Queue to storage; the queue writes slots before making them available to receivers.
         storage: [capacity]Item = undefined,
+        // SAFETY: init constructs items with this object's final storage address before publish, receive or close is called.
         items: std.Io.Queue(Item) = undefined,
         queued: std.atomic.Value(u64) = .init(0),
         high_water: std.atomic.Value(u64) = .init(0),

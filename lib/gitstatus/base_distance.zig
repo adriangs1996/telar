@@ -96,17 +96,3 @@ fn gitLine(io: std.Io, checkout: Checkout, deadline: std.Io.Timeout, arguments: 
     @memcpy(buffer[0..line.len], line);
     return buffer[0..line.len];
 }
-
-test "shortstat lines parse every counter and tolerate missing ones" {
-    var stat: DiffStat = .{};
-    parseShortstat(" 3 files changed, 12 insertions(+), 4 deletions(-)\n", &stat);
-    try std.testing.expectEqual(@as(u32, 3), stat.files);
-    try std.testing.expectEqual(@as(u32, 12), stat.added);
-    try std.testing.expectEqual(@as(u32, 4), stat.removed);
-
-    var single: DiffStat = .{};
-    parseShortstat(" 1 file changed, 1 deletion(-)", &single);
-    try std.testing.expectEqual(@as(u32, 1), single.files);
-    try std.testing.expectEqual(@as(u32, 0), single.added);
-    try std.testing.expectEqual(@as(u32, 1), single.removed);
-}

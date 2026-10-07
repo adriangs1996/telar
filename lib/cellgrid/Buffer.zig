@@ -4,7 +4,6 @@ const Rect = @import("Rect.zig");
 const Style = @import("Style.zig");
 const Point = @import("Point.zig");
 const GraphemeIterator = @import("GraphemeIterator.zig");
-const text_module = @import("text.zig");
 const Buffer = @This();
 
 pub const Fill = @import("Fill.zig");
@@ -12,10 +11,6 @@ pub const Fill = @import("Fill.zig");
 pub const CellWrite = @import("CellWrite.zig");
 
 pub const TextWrite = @import("TextWrite.zig");
-
-pub const TruncatedText = @import("TruncatedText.zig");
-
-pub const RightAlignedText = @import("RightAlignedText.zig");
 
 pub const Box = @import("Box.zig");
 
@@ -26,6 +21,7 @@ gpa: std.mem.Allocator,
 
 /// Nothing is written outside this. Starts as the whole buffer.
 clip: Rect,
+// SAFETY: pushClip writes each saved rectangle before increasing depth; popClip refuses an empty stack.
 stack: [max_clip_depth]Rect = undefined,
 depth: u8 = 0,
 
@@ -43,33 +39,6 @@ pub fn init(gpa: std.mem.Allocator, w: u16, h: u16) !Buffer {
         .gpa = gpa,
         .clip = .{ .w = w, .h = h },
     };
-}
-
-/// Restricts drawing to the overlap of `r` and the current clip.
-///
-/// This is what makes a widget unable to damage its neighbours. Passing a
-/// rectangle to a draw function is a *request*; the clip is the part the
-/// widget cannot argue with, which matters most for the things that do not
-/// take a rectangle at all - a pane blit, a long label, a box border.
-///
-/// Silently ignored past `max_clip_depth`, because the alternative is a
-/// draw path that can fail, and a frame that draws one widget unclipped is
-/// a cosmetic bug where a frame that returns an error is a blank screen.
-pub fn pushClip(self: *Buffer, r: Rect) void {
-    if (self.depth == max_clip_depth) {
-        return;
-    }
-    self.stack[self.depth] = self.clip;
-    self.depth += 1;
-    self.clip = self.clip.intersect(r);
-}
-
-pub fn popClip(self: *Buffer) void {
-    if (self.depth == 0) {
-        return;
-    }
-    self.depth -= 1;
-    self.clip = self.stack[self.depth];
 }
 
 pub fn deinit(self: *Buffer) void {
@@ -201,116 +170,6 @@ pub fn writeText(self: *Buffer, r: Rect, write: TextWrite) u16 {
     return @intCast(@min(column - write.point.x, std.math.maxInt(u16)));
 }
 
-/// Draws `text`, appending an ellipsis if it does not fit in `max_width`.
-///
-/// The ellipsis has to be measured too, and the cut has to land on a
-/// grapheme boundary: truncating by bytes is how a name ending in an accent
-/// turns into a replacement character.
-///
-/// ```zig
-/// buffer.writeTruncated(area, .{ .point = .{ .x = 0, .y = 0 }, .text = name, .max_width = 12 });
-/// ```
-pub fn writeTruncated(self: *Buffer, r: Rect, truncated: TruncatedText) u16 {
-    const write: TextWrite = .{ .point = truncated.point, .text = truncated.text, .style = truncated.style };
-
-    if (truncated.max_width == 0) {
-        return 0;
-    }
-    if (text_module.measure(write.text) <= truncated.max_width) {
-        return self.writeText(r, write);
-    }
-
-    // Measured, not assumed to be one column. It is one in every real
-    // table, but reserving a column and then drawing something wider is
-    // how a truncation overruns the box it was supposed to fit inside.
-    const ellipsis = "\u{2026}";
-    const marker = text_module.measure(ellipsis);
-    // Not even room for the marker. Drawing it alone would say a value was
-    // cut without saying anything about the value.
-    if (marker >= truncated.max_width) {
-        return 0;
-    }
-    const budget = truncated.max_width - marker;
-
-    var it: GraphemeIterator = .{ .bytes = write.text };
-    var used: u32 = 0;
-    var cut: usize = 0;
-    while (it.next()) |cluster| {
-        if (used + cluster.width > budget) {
-            break;
-        }
-        used += cluster.width;
-        cut = it.index;
-    }
-    const written = self.writeText(r, .{ .point = write.point, .text = write.text[0..cut], .style = write.style });
-    const ellipsis_x = @as(u32, write.point.x) + written;
-    if (ellipsis_x > std.math.maxInt(u16)) {
-        return written;
-    }
-    return written + self.writeText(r, .{ .point = .{ .x = @intCast(ellipsis_x), .y = write.point.y }, .text = ellipsis, .style = write.style });
-}
-
-/// Draws the end of `text`, prepending an ellipsis when it does not fit.
-/// Paths use this form because their basename carries more information
-/// than a repeated home-directory prefix.
-///
-/// ```zig
-/// buffer.writeLeftTruncated(area, .{ .point = .{ .x = 0, .y = 0 }, .text = path, .max_width = 20 });
-/// ```
-pub fn writeLeftTruncated(self: *Buffer, r: Rect, truncated: TruncatedText) u16 {
-    const write: TextWrite = .{ .point = truncated.point, .text = truncated.text, .style = truncated.style };
-
-    if (truncated.max_width == 0) {
-        return 0;
-    }
-    const total = text_module.measure(write.text);
-    if (total <= truncated.max_width) {
-        return self.writeText(r, write);
-    }
-
-    const ellipsis = "\u{2026}";
-    const marker = text_module.measure(ellipsis);
-    if (marker >= truncated.max_width) {
-        return 0;
-    }
-    const budget = truncated.max_width - marker;
-    var it: GraphemeIterator = .{ .bytes = write.text };
-    var prefix_width: u32 = 0;
-    var cut: usize = write.text.len;
-    while (true) {
-        const cluster_start = it.index;
-        const cluster = it.next() orelse break;
-        if (total - prefix_width <= budget) {
-            cut = cluster_start;
-            break;
-        }
-        prefix_width += cluster.width;
-    }
-    const written = self.writeText(r, .{ .point = write.point, .text = ellipsis, .style = write.style });
-    const text_x = @as(u32, write.point.x) + written;
-    if (text_x > std.math.maxInt(u16)) {
-        return written;
-    }
-    return written + self.writeText(r, .{ .point = .{ .x = @intCast(text_x), .y = write.point.y }, .text = write.text[cut..], .style = write.style });
-}
-
-/// Draws `text` so that it ends at the right edge of `r`.
-///
-/// ```zig
-/// buffer.writeRight(area, .{ .y = area.y, .text = "100%" });
-/// ```
-pub fn writeRight(self: *Buffer, r: Rect, write: RightAlignedText) u16 {
-    const width = text_module.measure(write.text);
-    if (width > r.w) {
-        return self.writeTruncated(r, .{ .point = .{ .x = r.x, .y = write.y }, .text = write.text, .max_width = r.w, .style = write.style });
-    }
-    const start = @as(u32, r.x) + (r.w - width);
-    if (start > std.math.maxInt(u16)) {
-        return 0;
-    }
-    return self.writeText(r, .{ .point = .{ .x = @intCast(start), .y = write.y }, .text = write.text, .style = write.style });
-}
-
 /// Draws a box, with an optional title in the top edge.
 ///
 /// ```zig
@@ -349,23 +208,4 @@ pub fn box(self: *Buffer, r: Rect, box_value: Box) void {
         const inside: Rect = .{ .x = r.x + 2, .y = r.y, .w = r.w -| 4, .h = 1 };
         _ = self.writeText(inside, .{ .point = .{ .x = r.x + 2, .y = r.y }, .text = title, .style = box_value.style });
     }
-}
-
-/// Fills a rectangle except its four corner cells.
-///
-/// A pixel-aligned frame with rounded corners leaves the outside of each
-/// corner cell transparent, so those cells keep whatever sits beneath the
-/// modal instead of a square of modal background poking out of the curve.
-///
-/// ```zig
-/// buffer.fillWithoutCorners(area, .{ .bg = palette.panel_bg });
-/// ```
-pub fn fillWithoutCorners(self: *Buffer, r: Rect, style: Style) void {
-    if (r.w < 2 or r.h < 2) {
-        return;
-    }
-
-    self.fill(.{ .x = r.x + 1, .y = r.y, .w = r.w - 2, .h = 1 }, .{ .glyph = " ", .style = style });
-    self.fill(.{ .x = r.x, .y = r.y + 1, .w = r.w, .h = r.h - 2 }, .{ .glyph = " ", .style = style });
-    self.fill(.{ .x = r.x + 1, .y = r.y + r.h - 1, .w = r.w - 2, .h = 1 }, .{ .glyph = " ", .style = style });
 }

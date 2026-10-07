@@ -7,6 +7,7 @@ const std = @import("std");
 /// value is safe to place in a frame or a host title sequence.
 const TitleState = @This();
 
+// SAFETY: observe copies the sanitized title before setting len; slice reads only that prefix.
 bytes: [core.max_pane_title_bytes]u8 = undefined,
 len: u16 = 0,
 revision: u64 = 1,

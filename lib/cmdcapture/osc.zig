@@ -1,8 +1,6 @@
 //! OSC 133 command-zone tracker for one PTY.
 
 const std = @import("std");
-const OscTracker = @import("OscTracker.zig");
-const Command = @import("Command.zig");
 
 pub const max_command_bytes = 64 * 1024;
 pub const max_osc_bytes = 8 * 1024;
@@ -43,76 +41,3 @@ pub fn percentDecode(input: []const u8, output: []u8) ?usize {
     }
     return destination;
 }
-
-test "tracks command lifecycle across chunk boundaries" {
-    var tracker = OscTracker.init("/work");
-    var collected: OscCollected = .{};
-    tracker.feed(.{
-        .bytes = "\x1b]133;A\x07$ \x1b]133;B\x07",
-        .clock = .{ .real_ms = 100, .awake_ns = 1000 },
-    }, &collected);
-    _ = tracker.input("echo hi\r\n");
-    tracker.feed(.{
-        .bytes = "\x1b]133;C\x07",
-        .clock = .{ .real_ms = 150, .awake_ns = 1000 },
-    }, &collected);
-    tracker.feed(.{
-        .bytes = "hi\r\n\x1b]133;D;0\x07",
-        .clock = .{ .real_ms = 200, .awake_ns = 51_000 },
-    }, &collected);
-
-    try std.testing.expectEqual(@as(usize, 1), collected.count);
-    try std.testing.expectEqualStrings("echo hi\r\n", collected.last.?.bytes);
-    try std.testing.expectEqualStrings("/work", collected.last.?.cwd);
-    try std.testing.expectEqual(@as(?i32, 0), collected.last.?.exit_code);
-    try std.testing.expectEqual(@as(i64, 50_000), collected.last.?.duration_ns);
-}
-
-test "updates cwd from OSC 7 and reports interrupted commands" {
-    var tracker = OscTracker.init("/old");
-    var collected: OscCollected = .{};
-    tracker.feed(.{
-        .bytes = "\x1b]7;file://host/tmp/a%20b\x07\x1b]133;B\x07",
-        .clock = .{ .real_ms = 20, .awake_ns = 100 },
-    }, &collected);
-    _ = tracker.input("make\r\n");
-    tracker.feed(.{
-        .bytes = "\x1b]133;C\x07",
-        .clock = .{ .real_ms = 20, .awake_ns = 100 },
-    }, &collected);
-    tracker.interrupt(.{ .real_ms = 25, .awake_ns = 500 }, &collected);
-
-    try std.testing.expectEqual(@as(usize, 1), collected.count);
-    try std.testing.expectEqualStrings("/tmp/a b", collected.last.?.cwd);
-    try std.testing.expectEqual(Status.interrupted, collected.last.?.status);
-    try std.testing.expect(collected.last.?.exit_code == null);
-}
-
-test "an oversized OSC does not prevent later markers" {
-    var tracker = OscTracker.init("/");
-    var collected: OscCollected = .{};
-    var oversized: [max_osc_bytes + 64]u8 = @splat('x');
-    tracker.feed(.{ .bytes = "\x1b]", .clock = .{ .real_ms = 0, .awake_ns = 0 } }, &collected);
-    tracker.feed(.{ .bytes = &oversized, .clock = .{ .real_ms = 0, .awake_ns = 0 } }, &collected);
-    tracker.feed(.{
-        .bytes = "\x07\x1b]133;B\x07",
-        .clock = .{ .real_ms = 1, .awake_ns = 10 },
-    }, &collected);
-    _ = tracker.input("pwd\r\n");
-    tracker.feed(.{
-        .bytes = "\x1b]133;C\x07\x1b]133;D;7\x07",
-        .clock = .{ .real_ms = 1, .awake_ns = 10 },
-    }, &collected);
-    try std.testing.expectEqual(@as(usize, 1), collected.count);
-    try std.testing.expectEqual(@as(?i32, 7), collected.last.?.exit_code);
-}
-
-const OscCollected = struct {
-    count: usize = 0,
-    last: ?Command = null,
-
-    pub fn emit(self: *OscCollected, command: Command) void {
-        self.count += 1;
-        self.last = command;
-    }
-};

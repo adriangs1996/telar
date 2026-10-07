@@ -3,6 +3,7 @@ const command_palette = @import("command_palette.zig");
 const CommandMatch = @import("CommandMatch.zig");
 const CommandResults = @This();
 
+// SAFETY: command_palette writes or shifts initialized matches before increasing len; readers and ranking inspect only that prefix.
 matches: [command_palette.entries.len]CommandMatch = undefined,
 len: u8 = 0,
 

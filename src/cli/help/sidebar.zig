@@ -27,35 +27,28 @@ pub const family: FamilyHelp = .{
             .name = "get",
             .summary = "Report whether the sidebar is visible and its width",
             .usage = "telar sidebar get --client ID [--json] [--socket PATH]",
-            .routed = &.{.sidebar_get},
             .text =
             \\Effects: read-only on the window. Results: `visible|hidden N columns`; JSON
             \\`visible`, `width`. Exit 0; 2 unknown client; 3 no answer in time.
             \\
             ,
-            .examples = &.{&.{ "sidebar", "get", "--client", "1", "--json" }},
         },
         .{
             .name = "show",
             .summary = "Show the sidebar (idempotent)",
             .usage = "telar sidebar show --client ID [--json] [--socket PATH]",
-            .routed = &.{.sidebar_show},
             .text = routed_text ++ "\n",
-            .examples = &.{&.{ "sidebar", "show", "--client", "1" }},
         },
         .{
             .name = "hide",
             .summary = "Hide the sidebar (idempotent)",
             .usage = "telar sidebar hide --client ID [--json] [--socket PATH]",
-            .routed = &.{.sidebar_hide},
             .text = routed_text ++ "\n",
-            .examples = &.{&.{ "sidebar", "hide", "--client", "1" }},
         },
         .{
             .name = "resize",
             .summary = "Set the shared client's sidebar column preference; native pixel width is separate",
             .usage = "telar sidebar resize COLUMNS --client ID [--json] [--socket PATH]",
-            .routed = &.{.sidebar_resize},
             .text = std.fmt.comptimePrint(
                 \\Arguments:
                 \\  COLUMNS          A positive width; the window clamps it to its minimum and its
@@ -65,7 +58,6 @@ pub const family: FamilyHelp = .{
                 \\{s}
                 \\
             , .{routed_text}),
-            .examples = &.{&.{ "sidebar", "resize", "40", "--client", "1", "--json" }},
         },
     },
 };

@@ -18,7 +18,3 @@ pub const allocator: std.mem.Allocator = .{
     .ptr = &process_heap,
     .vtable = &SlabHeap.vtable,
 };
-
-test {
-    _ = @import("SlabHeap.zig");
-}

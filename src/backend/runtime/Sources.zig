@@ -10,7 +10,6 @@ const EngineService = EngineRuntime.Service;
 const Proxy = @import("../proxy/Proxy.zig");
 const ProxyRuntime = @import("resources/ProxyRuntime.zig");
 const PluginsService = @import("../plugins/Service.zig");
-const stop_signal = @import("lifecycle/stop_signal.zig");
 /// Arms asynchronous infrastructure work and maps each completion to its
 /// corresponding runtime event.
 ///
@@ -39,17 +38,6 @@ pub fn init(io: std.Io, select: *std.Io.Select(event.Event)) Sources {
 /// ```
 pub fn acceptClient(self: *Sources, listener: *LocalListener) !void {
     try self.select.concurrent(.accepted, event_sources.awaitClient, .{ self.io, listener });
-}
-
-/// Arms the optional external stop signal. Without a queue this arms
-/// nothing and the runtime stops only through its clients.
-///
-/// ```zig
-/// try sources.waitForStop(options.stop);
-/// ```
-pub fn waitForStop(self: *Sources, queue: ?*std.Io.Queue(u8)) !void {
-    const stop = queue orelse return;
-    try self.select.concurrent(.stopped, stop_signal.wait, .{ self.io, stop });
 }
 
 /// Arms the next history response receive.
@@ -120,57 +108,4 @@ pub fn waitForSystemMetrics(self: *Sources) !void {
 /// ```
 pub fn waitForTelemetry(self: *Sources) !void {
     try self.select.concurrent(.telemetry_tick, core.waitForTick, .{self.io});
-}
-
-const ProxyTestFiles = @import("resources/ProxyTestFiles.zig");
-
-fn unavailableSources(storage: *[1]event.Event, select: *std.Io.Select(event.Event)) Sources {
-    select.* = .init(std.Io.failing, storage);
-    return .{ .io = std.testing.io, .select = select };
-}
-
-test "a disabled stop signal and a disabled proxy arm nothing" {
-    var storage: [1]event.Event = undefined;
-    var select: std.Io.Select(event.Event) = undefined;
-    var sources = unavailableSources(&storage, &select);
-    var proxy = try ProxyRuntime.init(std.testing.io, std.testing.allocator, .{ .config = null, .system_trusted = true });
-    defer proxy.deinit();
-
-    try sources.waitForStop(null);
-    var tap: PluginsService = undefined;
-    tap.worker_count = 0;
-    try sources.receiveProxyCapture(&proxy, &tap);
-}
-
-test "an armed stop signal and an active proxy propagate scheduling failures" {
-    var storage: [1]event.Event = undefined;
-    var select: std.Io.Select(event.Event) = undefined;
-    var sources = unavailableSources(&storage, &select);
-    var queue_storage: [1]u8 = undefined;
-    var queue: std.Io.Queue(u8) = .init(&queue_storage);
-    var files = try ProxyTestFiles.init(std.testing.io);
-    defer files.deinit();
-    var proxy = try ProxyRuntime.init(std.testing.io, std.testing.allocator, .{ .config = files.config(), .system_trusted = false });
-    defer proxy.deinit();
-
-    try std.testing.expectError(error.ConcurrencyUnavailable, sources.waitForStop(&queue));
-    var tap: PluginsService = undefined;
-    tap.worker_count = 0;
-    try std.testing.expectError(error.ConcurrencyUnavailable, sources.receiveProxyCapture(&proxy, &tap));
-    try std.testing.expect(proxy.active());
-}
-
-test "an armed stop signal completes with its queue token" {
-    const io = std.testing.io;
-    var storage: [1]event.Event = undefined;
-    var select: std.Io.Select(event.Event) = .init(io, &storage);
-    var sources = Sources.init(io, &select);
-    var queue_storage: [1]u8 = undefined;
-    var queue: std.Io.Queue(u8) = .init(&queue_storage);
-
-    try sources.waitForStop(&queue);
-    try queue.putOne(io, 7);
-    const completed = try select.await();
-    try std.testing.expect(completed == .stopped);
-    try completed.stopped;
 }

@@ -7,7 +7,6 @@ const frame_support = @import("frame_support.zig");
 const Scroll = @import("Scroll.zig");
 const Span = @import("Span.zig");
 const View = @import("../text_metadata/View.zig");
-const Frame = @This();
 
 pane_id: id.PaneId,
 frame_id: u64,

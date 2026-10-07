@@ -3,7 +3,6 @@
 //! so those reach the runtime only as blocked screens.
 
 const Capabilities = @import("Capabilities.zig");
-const std = @import("std");
 
 pub const capabilities: Capabilities = .{
     .completion_requires_agent_signal = true,
@@ -11,7 +10,3 @@ pub const capabilities: Capabilities = .{
     .screen_reports_blocked = true,
     .screen_shows_idle = true,
 };
-
-test {
-    std.testing.refAllDecls(@This());
-}

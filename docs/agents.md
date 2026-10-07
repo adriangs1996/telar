@@ -156,6 +156,4 @@ also want the branch deleted. Unmerged branch deletion requires confirmation;
 | Wait times out | Read the agent's output; timeout does not mean cancellation or permission to launch a duplicate. |
 
 For remote tasks, continue with [remote machines](remote.md). For automated
-delegation, ask your agent to read `telar --skill coordinator`. Implementation
-details live in [agent hooks](flows/agent-hooks.md) and
-[agent control](flows/agent-control.md).
+delegation, ask your agent to read `telar --skill coordinator`.

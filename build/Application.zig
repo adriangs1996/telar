@@ -1,5 +1,4 @@
 const std = @import("std");
-const Coverage = @import("Coverage.zig");
 const Modules = @import("Modules.zig");
 const ModuleGraph = @import("ModuleGraph.zig");
 const BinaryFlags = @import("BinaryFlags.zig");
@@ -9,7 +8,6 @@ const manifest = @import("../build.zig.zon");
 const assets_build = @import("assets.zig");
 
 modules: Modules,
-coverage: Coverage,
 exe: *std.Build.Step.Compile,
 install: *std.Build.Step.InstallArtifact,
 
@@ -17,10 +15,9 @@ install: *std.Build.Step.InstallArtifact,
 pub fn init(b: *std.Build) ?@This() {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const coverage = Coverage.init(b);
     // Third-party C, like the emulator, stays optimized in Debug builds.
     const natives = native_libraries.create(b, target, if (optimize == .Debug) .ReleaseFast else optimize);
-    const graph = ModuleGraph.create(b, target, optimize, natives, coverage) orelse return null;
+    const graph = ModuleGraph.create(b, target, optimize, natives) orelse return null;
     // Dependents of this package import the shipped graph by name.
     for ([_]struct { []const u8, *std.Build.Module }{
         .{ "telar-core", graph.core },
@@ -73,7 +70,7 @@ pub fn init(b: *std.Build) ?@This() {
     }
     b.step("run", "Run telar").dependOn(&run_exe.step);
 
-    return .{ .modules = modules, .coverage = coverage, .exe = exe, .install = install_exe };
+    return .{ .modules = modules, .exe = exe, .install = install_exe };
 }
 
 /// The `build_options` of one telar executable, with the published version.

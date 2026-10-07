@@ -4,14 +4,9 @@
 //! process presence decides its state.
 
 const Capabilities = @import("Capabilities.zig");
-const std = @import("std");
 
 pub const capabilities: Capabilities = .{
     .completion_requires_agent_signal = true,
     .resume_prefix = "opencode --session ",
     .session_format = .opencode,
 };
-
-test {
-    std.testing.refAllDecls(@This());
-}

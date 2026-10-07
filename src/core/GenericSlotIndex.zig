@@ -11,6 +11,7 @@ pub fn Type(comptime capacity: usize) type {
         pub const empty_key: u64 = 0;
 
         keys: [capacity]u64 = @splat(empty_key),
+        // SAFETY: put initializes occupied slots; get and find reject empty keys before reading a slot.
         slots: [capacity]u8 = undefined,
 
         /// Inserts an absent key; the owning store bounds occupancy below
@@ -38,12 +39,12 @@ pub fn Type(comptime capacity: usize) type {
             var probe = home(key);
             for (0..capacity) |_| {
                 const found = self.keys[probe];
-                if (found == key) {
-                    return self.slots[probe];
-                }
-
                 if (found == empty_key) {
                     return null;
+                }
+
+                if (found == key) {
+                    return self.slots[probe];
                 }
 
                 probe = next(probe);
@@ -84,12 +85,12 @@ pub fn Type(comptime capacity: usize) type {
             var probe = home(key);
             for (0..capacity) |_| {
                 const found = self.keys[probe];
-                if (found == key) {
-                    return probe;
-                }
-
                 if (found == empty_key) {
                     return null;
+                }
+
+                if (found == key) {
+                    return probe;
                 }
 
                 probe = next(probe);

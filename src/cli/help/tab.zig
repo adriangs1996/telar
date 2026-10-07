@@ -39,7 +39,6 @@ pub const family: FamilyHelp = .{
             \\`workspace_id`, `tab_id`, `position`, `pane_count`, `label`. Exit 0.
             \\
             ,
-            .examples = &.{ &.{ "tab", "list", "--workspace", "4", "--json" }, &.{ "tab", "list" } },
         },
         .{
             .name = "get",
@@ -54,13 +53,11 @@ pub const family: FamilyHelp = .{
             \\or workspace is unknown.
             \\
             ,
-            .examples = &.{&.{ "tab", "get", "9", "--workspace", "4", "--json" }},
         },
         .{
             .name = "create",
             .summary = "Open a tab: --background runs a shell no window shows; --client adds one to a window",
             .usage = "telar tab create --background [--workspace ID|--current] [--label TEXT] [--json] [--socket PATH]\n       telar tab create --client ID [--label TEXT] [--json] [--socket PATH]",
-            .routed = &.{.tab_create},
             .text = std.fmt.comptimePrint(
                 \\Arguments:
                 \\  --background     Ask the runtime, not a window: the tab opens in the workspace's
@@ -77,7 +74,6 @@ pub const family: FamilyHelp = .{
                 \\workspace. Exit 0; 1 when the workspace is unknown or full. With --client: {s}
                 \\
             , .{ tab.background_size.cols, tab.background_size.rows, core.max_tab_label_bytes, core.max_tabs_per_workspace, routed_text }),
-            .examples = &.{ &.{ "tab", "create", "--background", "--workspace", "4", "--label", "tests", "--json" }, &.{ "tab", "create", "--client", "1", "--label", "scratch" } },
         },
         .{
             .name = "rename",
@@ -93,7 +89,6 @@ pub const family: FamilyHelp = .{
                 \\`workspace_id`, `tab_id`, `label`. Exit 0; 1 when refused.
                 \\
             , .{core.max_tab_label_bytes}),
-            .examples = &.{&.{ "tab", "rename", "9", "tests", "--workspace", "4" }},
         },
         .{
             .name = "close",
@@ -107,7 +102,6 @@ pub const family: FamilyHelp = .{
             \\Exit 0; 1 when the tab is unknown.
             \\
             ,
-            .examples = &.{&.{ "tab", "close", "9", "--workspace", "4", "--json" }},
         },
         .{
             .name = "move",
@@ -125,13 +119,11 @@ pub const family: FamilyHelp = .{
             \\`position`. Exit 0; 1 when refused.
             \\
             ,
-            .examples = &.{&.{ "tab", "move", "9", "next", "--relative-to", "3", "--workspace", "4" }},
         },
         .{
             .name = "select",
             .summary = "Select a tab in a window's current workspace",
             .usage = "telar tab select ID --client ID [--json] [--socket PATH]",
-            .routed = &.{.tab_select},
             .text = std.fmt.comptimePrint(
                 \\{s}
                 \\
@@ -139,33 +131,28 @@ pub const family: FamilyHelp = .{
                 \\window attaches the tab's panes.
                 \\
             , .{routed_text}),
-            .examples = &.{&.{ "tab", "select", "9", "--client", "1" }},
         },
         .{
             .name = "next",
             .summary = "Select the next tab in a window, cyclically",
             .usage = "telar tab next --client ID [--json] [--socket PATH]",
-            .routed = &.{.tab_next},
             .text = std.fmt.comptimePrint(
                 \\{s}
                 \\
                 \\A single tab is a successful no-op (`applied`).
                 \\
             , .{routed_text}),
-            .examples = &.{&.{ "tab", "next", "--client", "1" }},
         },
         .{
             .name = "previous",
             .summary = "Select the previous tab in a window, cyclically",
             .usage = "telar tab previous --client ID [--json] [--socket PATH]",
-            .routed = &.{.tab_previous},
             .text = std.fmt.comptimePrint(
                 \\{s}
                 \\
                 \\A single tab is a successful no-op (`applied`).
                 \\
             , .{routed_text}),
-            .examples = &.{&.{ "tab", "previous", "--client", "1", "--json" }},
         },
     },
 };

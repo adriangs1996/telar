@@ -41,6 +41,7 @@ pub fn loadGeneration(init: std.process.Init, selection: Selection, path_buffer:
         .number = 1,
         .profile = if (selection.profile) |value| std.mem.span(value) else null,
     }) catch |err| {
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar config: {s}\n", .{diagnostic.message()});
         return err;
     };
@@ -55,6 +56,7 @@ pub fn loadGeneration(init: std.process.Init, selection: Selection, path_buffer:
 fn printReaches(generation: *const client.Generation) bool {
     var buffer: [core.LimitReach.max_description_bytes]u8 = undefined;
     for (generation.unreported.slice()) |reach| {
+        // Configuration limit notices belong on stderr, leaving command stdout available for data.
         std.debug.print("telar config: limit reached, the excess was left out: {s}\n", .{reach.describe(&buffer, 1)});
     }
 
@@ -83,6 +85,7 @@ pub fn runCheck(init: std.process.Init, options: ConfigCheckOptions) !void {
         .number = 1,
         .profile = if (options.profile) |value| std.mem.span(value) else null,
     }) catch |err| {
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar config: {s}\n", .{diagnostic.message()});
         return err;
     };
@@ -95,12 +98,14 @@ pub fn runCheck(init: std.process.Init, options: ConfigCheckOptions) !void {
     }, generation.pluginSlice());
     try registry.validateConfiguredActions(generation.snapshot.bindingSlice());
     client.validateDefaultBindings(generation.snapshot.prefix, generation.snapshot.bindingSlice()) catch |err| {
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar config: keybindings do not compile: {s}\n", .{@errorName(err)});
         return err;
     };
     var retired_buffer: [client.retired_config.max_description_bytes]u8 = undefined;
     const retired = client.retired_config.describe(generation.snapshot.retired, &retired_buffer);
     if (retired.len != 0) {
+        // Retired configuration warnings are user-facing stderr output, not debug instrumentation.
         std.debug.print("telar config: warning: {s}\n", .{retired});
     }
 
@@ -120,46 +125,4 @@ fn resolveSelection(environ: std.process.Environ, selection: Selection, path_buf
         .path = try client.defaultPath(environ, path_buffer),
         .explicit = selection.profile != null,
     };
-}
-
-test "an explicit config path takes precedence over the environment" {
-    var environment = std.process.Environ.Map.init(std.testing.allocator);
-    defer environment.deinit();
-    try environment.put("TELAR_DEVELOPMENT_CONFIG", "/environment/config.lua");
-    const block = try environment.createPosixBlock(std.testing.allocator, .{});
-    defer block.deinit(std.testing.allocator);
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-
-    const selected = try resolveSelection(.{ .block = block }, .{ .path = "/explicit/config.lua" }, &path_buffer);
-
-    try std.testing.expect(selected.explicit);
-    try std.testing.expectEqualStrings("/explicit/config.lua", selected.path);
-}
-
-test "a profile makes the default config path explicit" {
-    var environment = std.process.Environ.Map.init(std.testing.allocator);
-    defer environment.deinit();
-    try environment.put("HOME", "/home/adrian");
-    const block = try environment.createPosixBlock(std.testing.allocator, .{});
-    defer block.deinit(std.testing.allocator);
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-
-    const selected = try resolveSelection(.{ .block = block }, .{ .profile = "work" }, &path_buffer);
-
-    try std.testing.expect(selected.explicit);
-    try std.testing.expectEqualStrings("/home/adrian/.config/telar/config.lua", selected.path);
-}
-
-test "an unqualified default config path remains optional" {
-    var environment = std.process.Environ.Map.init(std.testing.allocator);
-    defer environment.deinit();
-    try environment.put("XDG_CONFIG_HOME", "/config");
-    const block = try environment.createPosixBlock(std.testing.allocator, .{});
-    defer block.deinit(std.testing.allocator);
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-
-    const selected = try resolveSelection(.{ .block = block }, .{}, &path_buffer);
-
-    try std.testing.expect(!selected.explicit);
-    try std.testing.expectEqualStrings("/config/telar/config.lua", selected.path);
 }

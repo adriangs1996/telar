@@ -4,6 +4,7 @@ const local = @import("listen.zig");
 const LocalListener = @This();
 
 listener: std.Io.net.Server,
+// SAFETY: listen copies the validated path prefix before return; deinit reads only path[0..path_len].
 path: [std.Io.net.UnixAddress.max_len]u8 = undefined,
 path_len: usize,
 inode: std.Io.File.INode,
@@ -81,5 +82,6 @@ fn removeIfOwned(io: std.Io, path: []const u8, inode: std.Io.File.INode) void {
     if (stat.kind != .unix_domain_socket or stat.inode != inode) {
         return;
     }
+    // The inode check prevents deleting a replacement socket; unlink failure leaves a stale endpoint for startup reclamation.
     std.Io.Dir.deleteFileAbsolute(io, path) catch {};
 }

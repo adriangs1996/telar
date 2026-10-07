@@ -77,6 +77,7 @@ pub fn shutdown(self: *SocketChannel, io: std.Io) void {
     if (!self.isActive()) {
         return;
     }
+    // Shutdown can race peer disconnection; the owner still joins its I/O actors and closes the descriptor during teardown.
     self.stream.shutdown(io, .both) catch {};
 }
 
@@ -87,6 +88,7 @@ pub fn deinit(self: *SocketChannel, io: std.Io) void {
     // Closing a descriptor from another thread does not reliably wake a
     // blocking read on POSIX. Shutdown does, which lets a dead frontend
     // release its runtime connection while the reader actor is pending.
+    // A disconnected socket may reject shutdown; close must still release the descriptor regardless of that result.
     self.stream.shutdown(io, .both) catch {};
     self.stream.close(io);
 }

@@ -39,7 +39,6 @@ pub const family: FamilyHelp = .{
             \\marks an agent's command. Exit 0.
             \\
             ,
-            .examples = &.{ &.{ "history", "list", "--cwd", "--limit", "50" }, &.{ "history", "list", "--author", "agent", "--failed" } },
         },
         .{
             .name = "search",
@@ -52,7 +51,6 @@ pub const family: FamilyHelp = .{
                 \\Results: as `history list`. Exit 0.
                 \\
             , .{core.max_history_query_bytes}),
-            .examples = &.{&.{ "history", "search", "git commit", "--workspace", "/home/dev/telar", "--limit", "40" }},
         },
         .{
             .name = "show",
@@ -63,7 +61,6 @@ pub const family: FamilyHelp = .{
             \\(`runtime.history.output = "bounded"` enables capture) or it was cut. Exit 0.
             \\
             ,
-            .examples = &.{&.{ "history", "show", "42" }},
         },
         .{
             .name = "import",
@@ -82,7 +79,6 @@ pub const family: FamilyHelp = .{
                 \\Results: `imported N commands from PATH`. Exit 0; 1 when no histfile was found.
                 \\
             , .{ history.max_histfile_bytes / (1024 * 1024), core.max_import_command_bytes / 1024 }),
-            .examples = &.{ &.{ "history", "import" }, &.{ "history", "import", "fish", "--file", "/home/dev/.local/share/fish/fish_history" } },
         },
         .{
             .name = "delete",
@@ -92,7 +88,6 @@ pub const family: FamilyHelp = .{
             \\Results: `removed N entries`. Exit 0.
             \\
             ,
-            .examples = &.{&.{ "history", "delete", "42" }},
         },
         .{
             .name = "prune",
@@ -112,7 +107,6 @@ pub const family: FamilyHelp = .{
                 \\Results: `removed N entries`, or `aborted`. Exit 0.
                 \\
             , .{core.max_history_results}),
-            .examples = &.{ &.{ "history", "prune", "--before", "2025-01-01", "--dry-run" }, &.{ "history", "prune", "--match", "rm -rf", "--yes" } },
         },
         .{
             .name = "stats",
@@ -127,7 +121,6 @@ pub const family: FamilyHelp = .{
                 \\ignored here. Exit 0.
                 \\
             , .{core.max_history_stats_top}),
-            .examples = &.{&.{ "history", "stats", "--period", "week" }},
         },
     },
 };

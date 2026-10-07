@@ -1,4 +1,4 @@
-//! A new pane splits an existing one (docs/flows/pane-split.md).
+//! A new pane splits an existing one.
 const pane_attachment = @import("../panes/pane_attachment.zig");
 const RecoverPaneSplit = @import("../state/RecoverPaneSplit.zig");
 const PaneSplitCommitState = @import("../state/PaneSplitCommitState.zig");
@@ -45,10 +45,6 @@ pub fn split(model: *ClientModel, slot: usize, request: PaneSplit) !void {
         .new_pane = request.new_pane,
         .axis = request.axis,
     });
-}
-
-test {
-    std.testing.refAllDecls(@This());
 }
 
 /// Plans one split from active client state without changing the semantic

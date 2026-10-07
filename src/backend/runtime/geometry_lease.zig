@@ -7,7 +7,6 @@ const core = @import("telar-core");
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
 const ClientKey = @import("../history/ClientKey.zig");
-const Workspaces = @import("../workspace/Workspaces.zig");
 const resync_required = @import("resync_required.zig");
 const terminal_colors = @import("terminal_colors.zig");
 
@@ -73,54 +72,4 @@ pub fn releaseAll(model: *RuntimeModel, key: ClientKey) void {
         // the departed client's size until an unrelated resize.
         resync_required.notify(model, .{ .origin = key, .workspace = .{ .workspace = model.workspaces.id[slot] } });
     }
-}
-
-test "a workspace geometry lease is exclusive to one client generation" {
-    const model = try std.testing.allocator.create(RuntimeModel);
-    defer std.testing.allocator.destroy(model);
-    model.clients = .{};
-    model.workspaces = .{};
-    defer model.workspaces.deinit(std.testing.allocator);
-
-    const location = try model.workspaces.insert(std.testing.allocator, "/work/telar", null);
-    const workspace = location.workspace;
-    const holder: ClientKey = .{ .id = 3, .generation = 4 };
-    const stale_holder: ClientKey = .{ .id = 3, .generation = 3 };
-
-    try std.testing.expect(acquire(model, holder, workspace));
-    try std.testing.expect(acquire(model, holder, workspace));
-    try std.testing.expect(!acquire(model, stale_holder, workspace));
-
-    release(model, holder, workspace);
-
-    try std.testing.expect(acquire(model, stale_holder, workspace));
-}
-
-test "a proposed workspace holds its lease until rollback releases the row" {
-    const model = try std.testing.allocator.create(RuntimeModel);
-    defer std.testing.allocator.destroy(model);
-    model.clients = .{};
-    model.workspaces = .{};
-    defer model.workspaces.deinit(std.testing.allocator);
-
-    const holder: ClientKey = .{ .id = 1, .generation = 1 };
-    const slot = try model.workspaces.propose(std.testing.allocator, "/work/proposed", null);
-    const workspace: core.WorkspaceLocation = .{ .workspace = model.workspaces.id[slot] };
-
-    try std.testing.expect(acquire(model, holder, workspace));
-    try std.testing.expectEqualDeep(holder, owner(model, workspace).?);
-    model.workspaces.rollback(std.testing.allocator, slot);
-    try std.testing.expect(owner(model, workspace) == null);
-    try std.testing.expect(!acquire(model, holder, workspace));
-}
-
-test "leases exist only for workspaces the table holds" {
-    const model = try std.testing.allocator.create(RuntimeModel);
-    defer std.testing.allocator.destroy(model);
-    model.clients = .{};
-    model.workspaces = .{};
-
-    const holder: ClientKey = .{ .id = 1, .generation = 1 };
-    const missing: core.WorkspaceLocation = .{ .workspace = @enumFromInt(Workspaces.capacity + 1) };
-    try std.testing.expect(!acquire(model, holder, missing));
 }

@@ -44,9 +44,11 @@ comptime {
     std.debug.assert(recent_rows > 0 and recent_rows < max_rows);
 }
 
+// SAFETY: append copies an encoded command row before increasing used and count; rowBytes exposes only stored row ranges.
 bytes: [pool_bytes]u8 = undefined,
 used: u32 = 0,
 /// Where each row starts in `bytes`.
+// SAFETY: append writes the row offset before increasing count; lookup checks the row id against count.
 offsets: [max_rows]u32 = undefined,
 count: u16 = 0,
 /// Rows and bytes the configuration fixed while it loaded; the recent rows
@@ -222,6 +224,7 @@ fn encode(command: *const data.CommandTab, buffer: *[max_row_bytes]u8) []const u
     writer.writeByte(command.argument_count) catch unreachable;
     writer.writeByte(command.label_len) catch unreachable;
     for (command.argument_lens[0..command.argument_count]) |len| {
+        // SAFETY: max_row_bytes reserves the header, all argument lengths, command bytes and label bytes.
         writer.writeInt(u16, len, .little) catch unreachable;
     }
 
@@ -247,91 +250,4 @@ fn decode(row: []const u8, command: *data.CommandTab) void {
     @memcpy(command.argument_storage[0..argv_bytes], row[offset..][0..argv_bytes]);
     offset += argv_bytes;
     @memcpy(command.label_storage[0..command.label_len], row[offset..][0..command.label_len]);
-}
-
-test "fixed rows stay, equal commands share a row and recent rows clear whole when full" {
-    const tabs = try std.testing.allocator.create(CommandTabs);
-    defer std.testing.allocator.destroy(tabs);
-    tabs.* = .{};
-
-    const bound = try data.CommandTab.init(&.{ "lazygit", "-p" }, "git");
-    const fixed = try tabs.add(1, &bound);
-    try std.testing.expectEqual(@as(u32, 0), fixed.epoch);
-    try std.testing.expectEqual(fixed.id, (try tabs.add(1, &bound)).id);
-    tabs.seal();
-
-    var number: [8]u8 = undefined;
-    var first: ?data.CommandTabRef = null;
-    var cleared = false;
-    for (0..4 * max_rows) |index| {
-        const text = std.fmt.bufPrint(&number, "{d}", .{index}) catch unreachable;
-        const pr = try data.CommandTab.init(&.{ "gh", "pr", "checkout", text }, "");
-        const recent = try tabs.add(1, &pr);
-        first = first orelse recent;
-        cleared = cleared or recent.epoch != first.?.epoch;
-
-        var command: data.CommandTab = undefined;
-        try std.testing.expect(tabs.find(1, recent, &command));
-        try std.testing.expectEqualStrings(text, command.argument(3));
-    }
-
-    try std.testing.expect(cleared);
-    var command: data.CommandTab = undefined;
-    try std.testing.expect(!tabs.find(1, first.?, &command));
-    try std.testing.expect(!tabs.find(2, .{ .generation = 1, .id = fixed.id }, &command));
-    try std.testing.expect(tabs.find(1, .{ .generation = 1, .id = fixed.id }, &command));
-    try std.testing.expectEqualStrings("git", command.label());
-    try std.testing.expectEqualStrings("-p", command.argument(1));
-}
-
-test "the fixed rows stop at their share of the pool and leave the recent reserve" {
-    const tabs = try std.testing.allocator.create(CommandTabs);
-    defer std.testing.allocator.destroy(tabs);
-    tabs.* = .{};
-
-    var script: [data.CommandTab.max_command_bytes - 16]u8 = undefined;
-    @memset(&script, 'a');
-    var kept_rows: usize = 0;
-    var full = false;
-    while (!full) {
-        _ = std.fmt.bufPrint(script[0..8], "{d:0>8}", .{kept_rows}) catch unreachable;
-        const command = try data.CommandTab.init(&.{ "sh", "-c", &script }, "");
-        if (tabs.add(1, &command)) |_| {
-            kept_rows += 1;
-        } else |err| {
-            try std.testing.expectEqual(error.TooManyCommandTabs, err);
-            full = true;
-        }
-    }
-
-    try std.testing.expect(kept_rows >= (pool_bytes - recent_reserve) / max_row_bytes);
-    try std.testing.expect(tabs.used <= pool_bytes - recent_reserve);
-}
-
-test "fixed rows stop short of the table, so clearing the recent ones never writes past it" {
-    const tabs = try std.testing.allocator.create(CommandTabs);
-    defer std.testing.allocator.destroy(tabs);
-    tabs.* = .{};
-
-    var number: [8]u8 = undefined;
-    var index: usize = 0;
-    while (true) : (index += 1) {
-        const text = std.fmt.bufPrint(&number, "{d}", .{index}) catch unreachable;
-        const command = try data.CommandTab.init(&.{text}, "");
-        _ = tabs.add(1, &command) catch |err| {
-            try std.testing.expectEqual(error.TooManyCommandTabs, err);
-            break;
-        };
-    }
-
-    try std.testing.expect(tabs.fixedRowsFull());
-    tabs.seal();
-    for (0..3 * max_rows) |recent| {
-        const text = std.fmt.bufPrint(&number, "r{d}", .{recent}) catch unreachable;
-        const command = try data.CommandTab.init(&.{text}, "");
-        const kept = try tabs.add(1, &command);
-        var loaded: data.CommandTab = undefined;
-        try std.testing.expect(tabs.find(1, kept, &loaded));
-        try std.testing.expect(tabs.count <= max_rows);
-    }
 }

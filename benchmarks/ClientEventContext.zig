@@ -33,6 +33,7 @@ app: *client.Client,
 connection: localsocket.SocketChannel,
 peer: localsocket.SocketChannel,
 payload: []u8,
+// SAFETY: The receive path calls decodeInto before passing message to Client.update; a decoding error returns first.
 message: data.RuntimeMessage = undefined,
 frame_id: u64 = 0,
 started_jobs: u64 = 0,
@@ -48,18 +49,19 @@ pub fn init(self: *ClientEventContext, io: std.Io, gpa: std.mem.Allocator) !void
         return error.SocketPairFailed;
     }
 
+    const app = try gpa.create(client.Client);
+    errdefer gpa.destroy(app);
+
     self.* = .{
         .gpa = gpa,
         .io = io,
-        .app = undefined,
+        .app = app,
         .connection = channel(sockets[0]),
         .peer = channel(sockets[1]),
         .payload = try gpa.alloc(u8, @intFromEnum(Capacity.frame_payload)),
     };
     errdefer gpa.free(self.payload);
 
-    self.app = try gpa.create(client.Client);
-    errdefer gpa.destroy(self.app);
     try self.app.init(.{
         .gpa = gpa,
         .io = io,

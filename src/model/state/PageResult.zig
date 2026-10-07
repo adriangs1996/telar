@@ -1,5 +1,4 @@
 const core = @import("telar-core");
-const PageResult = @This();
 
 request_id: u64,
 entries: []const core.HistoryEntry,

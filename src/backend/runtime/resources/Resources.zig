@@ -43,10 +43,6 @@ log: RuntimeLog,
 /// try resources.init(initialization);
 /// ```
 pub fn init(self: *Resources, initialization: Initialization) !void {
-    return self.acquire(initialization, null);
-}
-
-pub fn acquire(self: *Resources, initialization: Initialization, comptime fail_after: ?resources_namespace.AcquisitionPhase) !void {
     self.dependencies = initialization.dependencies;
     self.heap = core.Heap.init(initialization.dependencies.allocator);
     self.gpa = self.heap.allocator();
@@ -57,14 +53,12 @@ pub fn acquire(self: *Resources, initialization: Initialization, comptime fail_a
     self.agent_manifests = initialization.options.agent_manifests;
     self.child_environment = try ChildEnvironment.init(self.gpa, initialization.options.environment, "telar");
     errdefer self.child_environment.deinit();
-    try resources_namespace.checkpoint(fail_after, .child_environment);
 
     // The socket comes first: a launch that finds another runtime on it
     // stops here, before it binds a proxy port or rewrites the port that
     // runtime remembers.
     self.listener = try LocalListener.listen(self.io(), initialization.options.endpoint);
     errdefer self.listener.deinit(self.io());
-    try resources_namespace.checkpoint(fail_after, .listener);
 
     self.proxy = try ProxyRuntime.init(
         self.io(),
@@ -80,11 +74,9 @@ pub fn acquire(self: *Resources, initialization: Initialization, comptime fail_a
     // proxy starts before that, so a proxy that cannot start still leaves
     // its reason in the launch's start log.
     self.log = if (initialization.options.own_log) RuntimeLog.open(self.io(), initialization.options.endpoint) else .{};
-    try resources_namespace.checkpoint(fail_after, .proxy);
 
     self.telemetry = resources_namespace.initTelemetry(self.io(), initialization.options.endpoint);
     errdefer self.telemetry.deinit(self.io());
-    try resources_namespace.checkpoint(fail_after, .telemetry);
 
     self.history = try HistoryRuntime.init(self.io(), self.gpa, .{
         .database_path = initialization.options.history_path,
@@ -92,7 +84,6 @@ pub fn acquire(self: *Resources, initialization: Initialization, comptime fail_a
         .capture_output = initialization.options.history_output_capture,
     });
     errdefer self.history.deinit();
-    try resources_namespace.checkpoint(fail_after, .history);
 
     try self.plugins.init(.{
         .io = self.io(),
@@ -100,14 +91,12 @@ pub fn acquire(self: *Resources, initialization: Initialization, comptime fail_a
         .specs = initialization.options.plugins,
     });
     errdefer self.plugins.deinit();
-    try resources_namespace.checkpoint(fail_after, .plugins);
 
     self.engine = if (initialization.options.engine) |options|
         try EngineRuntime.init(self.io(), self.gpa, options)
     else
         null;
     errdefer if (self.engine) |*engine| engine.deinit();
-    try resources_namespace.checkpoint(fail_after, .engine);
 }
 
 /// Borrows the engine service, or null when no engine is configured.

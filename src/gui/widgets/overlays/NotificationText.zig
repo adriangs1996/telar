@@ -9,6 +9,7 @@ const Text = @This();
 
 lines: [3][]const u8 = @splat(""),
 count: usize = 0,
+// SAFETY: Wrapping fills the tail before setting tail_len; line reads it only when that optional length is present.
 tail: [TextFit.max_bytes]u8 = undefined,
 tail_len: ?usize = null,
 

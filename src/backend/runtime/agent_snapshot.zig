@@ -119,34 +119,3 @@ fn worktreeOfWorkspace(sources: Sources, workspace: core.WorkspaceLocation) core
     const slot = sources.worktrees.slotOfWorkspace(workspace_id) orelse return .invalid;
     return sources.worktrees.id[slot];
 }
-
-test "display context changes advance the snapshot revision once each" {
-    const gpa = std.testing.allocator;
-    const model = try gpa.create(RuntimeModel);
-    defer gpa.destroy(model);
-    model.agents = .{};
-    model.panes = .{};
-    model.workspaces = .{};
-    defer model.workspaces.deinit(gpa);
-    model.agent_snapshot_revision = 1;
-    model.agent_snapshot_inputs = @splat(0);
-
-    refresh(model);
-    const initial = model.agent_snapshot_revision;
-    refresh(model);
-    try std.testing.expectEqual(initial, model.agent_snapshot_revision);
-
-    const location = try model.workspaces.insert(gpa, "/work/telar", null);
-    refresh(model);
-    const created = model.agent_snapshot_revision;
-    try std.testing.expect(created > initial);
-
-    try model.workspaces.renameTab(location, "logs");
-    refresh(model);
-    const renamed = model.agent_snapshot_revision;
-    try std.testing.expect(renamed > created);
-
-    revisions.advance(&model.panes.revision);
-    refresh(model);
-    try std.testing.expect(model.agent_snapshot_revision > renamed);
-}

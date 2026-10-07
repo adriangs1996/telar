@@ -1,5 +1,3 @@
-const Authority = @This();
-
 attachment_modal_active: bool = false,
 prompt_active: bool = false,
 prompt_pasting: bool = false,

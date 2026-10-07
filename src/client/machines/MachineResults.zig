@@ -3,7 +3,9 @@
 const Machines = @import("Machines.zig");
 const MachineResults = @This();
 
+// SAFETY: machine_picker writes and shifts initialized slots before increasing len; slice and slotAt expose only that prefix.
 slots: [Machines.capacity]u8 = undefined,
+// SAFETY: machine_picker writes each score alongside its slot before increasing len; ranking reads only scores below len.
 scores: [Machines.capacity]u32 = undefined,
 len: u8 = 0,
 

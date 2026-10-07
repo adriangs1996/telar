@@ -1,17 +1,22 @@
 const plugin = @import("plugin.zig");
-const std = @import("std");
 const Manifest = @This();
 
+// SAFETY: Manifest parsing copies the validated identifier before returning; id reads only id_len bytes.
 id_bytes: [plugin.max_id_bytes]u8 = undefined,
 id_len: u8,
+// SAFETY: Manifest parsing copies the validated version before returning; version reads only version_len bytes.
 version_bytes: [plugin.max_version_bytes]u8 = undefined,
 version_len: u8,
+// SAFETY: Manifest parsing copies the validated entry path before returning; entry reads only entry_len bytes.
 entry_bytes: [plugin.max_entry_bytes]u8 = undefined,
 entry_len: u16,
+// SAFETY: Manifest parsing copies the validated source before returning; source reads only source_len bytes.
 source_bytes: [plugin.max_source_bytes]u8 = undefined,
 source_len: u16,
+// SAFETY: Manifest parsing copies the validated revision before returning; revision reads only revision_len bytes.
 revision_bytes: [plugin.max_revision_bytes]u8 = undefined,
 revision_len: u8,
+// SAFETY: Manifest parsing fills the actions counted by action_count before returning; hasAction visits only those entries.
 actions: [plugin.max_actions]ActionName = undefined,
 action_count: u8,
 capabilities: plugin.CapabilitySet,
@@ -36,13 +41,8 @@ pub fn revision(self: *const Manifest) []const u8 {
     return self.revision_bytes[0..self.revision_len];
 }
 
-pub fn hasAction(self: *const Manifest, name: []const u8) bool {
-    for (self.actions[0..self.action_count]) |*candidate|
-        if (std.mem.eql(u8, candidate.slice(), name)) return true;
-    return false;
-}
-
 const ActionName = struct {
+    // SAFETY: Manifest parsing copies each action name before publishing the manifest; slice reads only len bytes.
     bytes: [plugin.max_action_bytes]u8 = undefined,
     len: u8,
 

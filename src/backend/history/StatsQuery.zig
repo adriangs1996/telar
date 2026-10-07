@@ -8,6 +8,7 @@ pub const Input = @import("StatsQueryInput.zig");
 request_id: core.RequestId,
 origin: QueryOrigin,
 scope: core.HistoryScope = .global,
+// SAFETY: init copies scope_value before setting scope_text_len; scopeSlice reads only that prefix.
 scope_text: [core.max_cwd_bytes]u8 = undefined,
 scope_text_len: u16 = 0,
 pane_id: core.PaneId = .invalid,

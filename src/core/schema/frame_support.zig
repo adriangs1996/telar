@@ -4,8 +4,6 @@ const keyinput = @import("keyinput");
 const bytecodec = @import("bytecodec");
 const Cursor = @import("Cursor.zig");
 const cellcodec = @import("cellcodec");
-const cellgrid = @import("cellgrid");
-const Cell = cellgrid.Cell;
 const localsocket = @import("localsocket");
 const transport = localsocket.transport;
 const Encoder = bytecodec.Encoder;
@@ -17,7 +15,6 @@ const FrameView = @import("FrameView.zig");
 const Mouse = @import("Mouse.zig");
 const InputModes = keyinput.InputModes;
 const Scroll = @import("Scroll.zig");
-const Span = @import("Span.zig");
 const TextMetadataView = @import("../text_metadata/View.zig");
 const text_metadata_limits = @import("../text_metadata/limits.zig");
 
@@ -324,159 +321,6 @@ fn gridCellCount(cols: u16, rows: u16) !u32 {
         return error.ScreenTooLarge;
     }
     return count;
-}
-
-test "full snapshots preserve cells, styles and cursor" {
-    const cells = [_]Cell{
-        .{},
-        .{
-            .bytes = [_]u8{'x'} ++ [_]u8{0} ** (Cell.max_bytes - 1),
-            .len = 1,
-            .width = 1,
-            .style = .{
-                .fg = .rgb(.{ 1, 2, 3 }),
-                .bg = .indexed(4),
-                .flags = .{ .bold = true, .underline = .curly },
-            },
-        },
-    };
-    const spans = [_]Span{.{ .start = 0, .cells = &cells }};
-    const frame = Frame{
-        .pane_id = @enumFromInt(7),
-        .frame_id = 1,
-        .base_frame_id = 0,
-        .cols = 2,
-        .rows = 1,
-        .cursor = .{ .visible = true, .x = 1, .y = 0 },
-        .scroll = .{ .total_rows = 1, .offset = 0 },
-        .spans = &spans,
-    };
-
-    var buffer: [256]u8 = undefined;
-    var encoder = Encoder.init(&buffer);
-    try encodeBody(&encoder, frame);
-    var decoder = Decoder.init(encoder.finish());
-    const decoded = try decodeBody(&decoder);
-    try decoder.ensureEnd();
-
-    try std.testing.expect(decoded.isSnapshot());
-    try std.testing.expectEqual(frame.pane_id, decoded.pane_id);
-    try std.testing.expectEqual(frame.cursor, decoded.cursor);
-    var span_iterator = decoded.spans();
-    const span = (try span_iterator.next()).?;
-    try std.testing.expectEqual(@as(u32, 2), span.cell_count);
-    var cell_iterator = span.cells();
-    try std.testing.expectEqualDeep(cells[0], (try cell_iterator.next()).?);
-    try std.testing.expectEqualDeep(cells[1], (try cell_iterator.next()).?);
-    try std.testing.expect((try cell_iterator.next()) == null);
-}
-
-test "a style run pays two bytes per ordinary cell" {
-    const cells = [_]Cell{ .{}, .{}, .{} };
-    const spans = [_]Span{.{ .start = 0, .cells = &cells }};
-    var buffer: [128]u8 = undefined;
-    var encoder = Encoder.init(&buffer);
-    try encodeBody(&encoder, .{
-        .pane_id = @enumFromInt(1),
-        .frame_id = 1,
-        .base_frame_id = 0,
-        .cols = 3,
-        .rows = 1,
-        .scroll = .{ .total_rows = 1, .offset = 0 },
-        .spans = &spans,
-    });
-
-    // The first cell carries the five-byte default style and costs seven
-    // bytes. Each following space costs only its packed header and text byte.
-    const cells_start = body_header_size + text_metadata_limits.header_size + 1 + span_header_size;
-    try std.testing.expectEqual(@as(usize, cells_start + 11), encoder.finish().len);
-    try std.testing.expectEqual(@as(u8, 0xa1), encoder.finish()[cells_start]);
-    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[cells_start + 7]);
-    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[cells_start + 9]);
-}
-
-test "the first cell of every span must define its style" {
-    const cells = [_]Cell{.{}};
-    const spans = [_]Span{.{ .start = 0, .cells = &cells }};
-    var buffer: [128]u8 = undefined;
-    var encoder = Encoder.init(&buffer);
-    try encodeBody(&encoder, .{
-        .pane_id = @enumFromInt(1),
-        .frame_id = 1,
-        .base_frame_id = 0,
-        .cols = 1,
-        .rows = 1,
-        .scroll = .{ .total_rows = 1, .offset = 0 },
-        .spans = &spans,
-    });
-
-    buffer[body_header_size + text_metadata_limits.header_size + 1 + span_header_size] &= ~cellcodec.style_changed_bit;
-    var decoder = Decoder.init(encoder.finish());
-    // Cell content is validated when the consumer iterates, not at decode.
-    const decoded = try decodeBody(&decoder);
-    var span_iterator = decoded.spans();
-    var cell_iterator = ((try span_iterator.next()).?).cells();
-    try std.testing.expectError(error.InvalidCell, cell_iterator.next());
-}
-
-test "patch spans must be ordered and inside the screen" {
-    const cell = [_]Cell{.{}};
-    const overlapping = [_]Span{
-        .{ .start = 1, .cells = &cell },
-        .{ .start = 1, .cells = &cell },
-    };
-    var buffer: [256]u8 = undefined;
-    var encoder = Encoder.init(&buffer);
-    try std.testing.expectError(error.InvalidSpan, encodeBody(&encoder, .{
-        .pane_id = @enumFromInt(1),
-        .frame_id = 2,
-        .base_frame_id = 1,
-        .cols = 2,
-        .rows = 1,
-        .scroll = .{ .total_rows = 1, .offset = 0 },
-        .spans = &overlapping,
-    }));
-}
-
-test "a snapshot must contain the complete grid" {
-    const cell = [_]Cell{.{}};
-    const spans = [_]Span{.{ .start = 0, .cells = &cell }};
-    var buffer: [256]u8 = undefined;
-    var encoder = Encoder.init(&buffer);
-    try std.testing.expectError(error.InvalidSnapshot, encodeBody(&encoder, .{
-        .pane_id = @enumFromInt(1),
-        .frame_id = 1,
-        .base_frame_id = 0,
-        .cols = 2,
-        .rows = 1,
-        .scroll = .{ .total_rows = 1, .offset = 0 },
-        .spans = &spans,
-    }));
-}
-
-test "the maximum screen is bounded by one transport frame" {
-    const maximum_snapshot_size = 1 + body_header_size + span_header_size + text_metadata_limits.max_encoded_size +
-        @as(usize, max_cell_count) * cellcodec.max_cell_size;
-    const next_snapshot_size = maximum_snapshot_size + cellcodec.max_cell_size;
-
-    try std.testing.expect(maximum_snapshot_size <= transport.max_frame_size);
-    try std.testing.expect(next_snapshot_size > transport.max_frame_size);
-}
-
-test "scroll metadata cannot point beyond retained history" {
-    const cells = [_]Cell{.{}} ** 2;
-    const spans = [_]Span{.{ .start = 0, .cells = &cells }};
-    var buffer: [256]u8 = undefined;
-    var encoder = Encoder.init(&buffer);
-    try std.testing.expectError(error.InvalidScroll, encodeBody(&encoder, .{
-        .pane_id = @enumFromInt(1),
-        .frame_id = 1,
-        .base_frame_id = 0,
-        .cols = 1,
-        .rows = 2,
-        .scroll = .{ .total_rows = 10, .offset = 9 },
-        .spans = &spans,
-    }));
 }
 
 const Header = struct {

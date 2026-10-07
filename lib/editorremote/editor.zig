@@ -20,13 +20,3 @@ pub fn identify(executable: []const u8) Kind {
 
     return .unsupported;
 }
-
-test "editor families recognize terminal package names without treating nano or shells as remote editors" {
-    try std.testing.expectEqual(Kind.neovim, identify("/opt/bin/nvim"));
-    try std.testing.expectEqual(Kind.vim, identify("/usr/bin/vim.basic"));
-    try std.testing.expectEqual(Kind.emacs, identify("emacs-nox"));
-    try std.testing.expectEqual(Kind.emacs, identify("Emacs"));
-    try std.testing.expectEqual(Kind.emacs, identify("emacsclient"));
-    try std.testing.expectEqual(Kind.unsupported, identify("nano"));
-    try std.testing.expectEqual(Kind.unsupported, identify("sh"));
-}

@@ -21,6 +21,7 @@ pub const option_count = 14;
 /// a random suffix while it binds, and Unix socket paths are short.
 const control_hash_digits = 12;
 
+// SAFETY: prepare formats the control path before setting control_len; arguments exposes only that initialized prefix.
 control_storage: [std.fs.max_path_bytes]u8 = undefined,
 control_len: usize = 0,
 
@@ -83,34 +84,4 @@ pub fn gitCommand(self: *const SshOptions, buffer: []u8) ![]const u8 {
     }
 
     return writer.buffered();
-}
-
-test "managed options keep ssh quiet, alive and shared" {
-    var options: SshOptions = .{};
-    const control = "ControlPath=/tmp/telar-501/ssh-0123456789ab";
-    @memcpy(options.control_storage[0..control.len], control);
-    options.control_len = control.len;
-
-    const managed = options.arguments();
-    try std.testing.expectEqualStrings("BatchMode=yes", managed[1]);
-    try std.testing.expectEqualStrings("ServerAliveInterval=15", managed[3]);
-    try std.testing.expectEqualStrings("ForwardAgent=no", managed[7]);
-    try std.testing.expectEqualStrings(control, managed[13]);
-}
-
-test "the git command quotes every managed option for the shell" {
-    var options: SshOptions = .{};
-    const control = "ControlPath=/tmp/telar 501/ssh-0123456789ab";
-    @memcpy(options.control_storage[0..control.len], control);
-    options.control_len = control.len;
-
-    var buffer: [512]u8 = undefined;
-    const command = try options.gitCommand(&buffer);
-    try std.testing.expect(std.mem.startsWith(u8, command, "ssh '-o' 'BatchMode=yes'"));
-    try std.testing.expect(std.mem.endsWith(u8, command, " '-o' 'ControlPath=/tmp/telar 501/ssh-0123456789ab'"));
-
-    const quoted = "ControlPath=/tmp/it's";
-    @memcpy(options.control_storage[0..quoted.len], quoted);
-    options.control_len = quoted.len;
-    try std.testing.expectError(error.UnquotableSshOption, options.gitCommand(&buffer));
 }

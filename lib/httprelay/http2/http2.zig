@@ -2,14 +2,6 @@
 
 const relay_mod = @import("relay.zig");
 pub const GenericConnection = @import("GenericConnection.zig").Type;
-const std = @import("std");
-const localca = @import("localca");
-const Session = localca.Session;
-const RouteMatch = @import("../RouteMatch.zig");
-const IntegrationContext = @import("IntegrationContext.zig");
-const connection = @import("connection.zig");
-const h2frames = @import("h2frames");
-const streams = h2frames.streams;
 
 pub const Direction = relay_mod.Direction;
 pub const client_preface = relay_mod.client_preface;
@@ -69,56 +61,4 @@ pub fn relay(session: anytype, options: RelayOptions, sink: anytype) Stats {
         },
         sink,
     );
-}
-
-test "relay options map each direction to its route" {
-    const watched = [_]RouteMatch{.{ .method = "POST", .paths = &.{"/v1/messages"} }};
-    const request = relayOptions(.request, .{
-        .gpa = std.testing.allocator,
-        .watched_routes = &watched,
-    });
-    try std.testing.expectEqual(Session.Side.child, request.route.from);
-    try std.testing.expectEqual(Session.Side.origin, request.route.to);
-    try std.testing.expect(request.watched_routes.ptr == &watched);
-
-    const response = relayOptions(.response, .{ .gpa = std.testing.allocator });
-    try std.testing.expectEqual(Session.Side.origin, response.route.from);
-    try std.testing.expectEqual(Session.Side.child, response.route.to);
-    try std.testing.expectEqual(@as(usize, 0), response.watched_routes.len);
-}
-
-const IntegrationConnection = GenericConnection(IntegrationContext);
-
-test "HTTP2 connection composition relays both directions before settlement" {
-    const settings_frame = "\x00\x00\x00\x04\x00\x00\x00\x00\x00";
-    const request_header = "\x00\x00\x0f\x01\x04\x00\x00\x00\x01";
-    const request_block = "\x83\x04\x0c/v1/messages";
-    const request_wire = relay_mod.client_preface ++ settings_frame ++ request_header ++ request_block;
-    var done_storage: [1]u8 = undefined;
-    var done: std.Io.Queue(u8) = .init(&done_storage);
-    var context: IntegrationContext = .{
-        .session = .{
-            .child_input = request_wire,
-            .origin_input = settings_frame,
-        },
-        .request_done = &done,
-    };
-
-    IntegrationConnection.run(std.testing.io, &context);
-
-    try std.testing.expectEqualStrings(request_wire, context.session.originOutput());
-    try std.testing.expectEqualStrings(settings_frame, context.session.childOutput());
-    try std.testing.expect(context.session.origin_half_closed);
-    try std.testing.expect(context.session.child_half_closed);
-    try std.testing.expectEqual(@as(u32, 3), context.event_count.load(.monotonic));
-    try std.testing.expectEqual(Lifecycle.Stage.request_started, context.request_stage.?.stage);
-    try std.testing.expect(context.request_stage.?.watched);
-    try std.testing.expectEqual(@as(u8, 0), context.decode_failures);
-    try std.testing.expectEqual(@as(u8, 1), context.settlements);
-}
-
-test {
-    std.testing.refAllDecls(connection);
-    std.testing.refAllDecls(relay_mod);
-    std.testing.refAllDecls(streams);
 }

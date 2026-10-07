@@ -69,6 +69,7 @@ pub fn deinit(self: *Tty) void {
 }
 
 pub fn size(self: *const Tty) Size {
+    // SAFETY: GetConsoleScreenBufferInfo fills info on success; its failure returns the fallback size before reading info.
     var info: windows_ops.CONSOLE_SCREEN_BUFFER_INFO = undefined;
     if (windows_ops.GetConsoleScreenBufferInfo(self.output, &info) == 0) {
         return .{ .cols = 80, .rows = 24 };

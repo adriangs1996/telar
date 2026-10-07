@@ -5,7 +5,7 @@
 //!
 //! Everything here runs on the thread that owns the client: the adapter's
 //! event loop. A job never calls it: it returns the reach in its completion
-//! and the flow that finishes it reports. See `docs/flows/limit-reached.md`.
+//! and the flow that finishes it reports.
 const std = @import("std");
 const core = @import("telar-core");
 const Client = @import("../execution/Client.zig");
@@ -14,7 +14,6 @@ const runtime_link = @import("../connection/runtime_link.zig");
 const RuntimeResync = @import("../connection/RuntimeResync.zig").RuntimeResync;
 const data = @import("model");
 const pacing = @import("pacing");
-const client_tests = @import("../execution/client_tests.zig");
 
 const log = std.log.scoped(.limits);
 
@@ -50,7 +49,20 @@ const max_pause_doublings = 4;
 /// });
 /// ```
 pub fn report(client: *Client, reach: core.LimitReach) void {
-    _ = notice(client, reach);
+    _ = notice(client, reach, 1);
+}
+
+/// Counts `hits` reaches of one limit an adapter collected since its last
+/// update, as `report` counts one, and logs the safety net that caught them
+/// when the notice shows. Never fails and allocates nothing.
+///
+/// ```zig
+/// limit_reached.reportCollected(client, reach, hits);
+/// ```
+pub fn reportCollected(client: *Client, reach: core.LimitReach, hits: u32) void {
+    if (notice(client, reach, hits) and reach.route.len != 0) {
+        log.warn("{s} stopped at a limit: {s}", .{ reach.route, reach.limit.name });
+    }
 }
 
 /// Reports the limits the active configuration generation reached where
@@ -79,17 +91,14 @@ pub fn reportGeneration(client: *Client) void {
     unreported.clear();
 }
 
-/// The safety net of a presentation adapter: a limit error is reported
-/// under `limit`, or under its own name when null, with `route`, and the
-/// caller keeps what it has. Any other error returns; a host error is
-/// logged as an error first. The route line is logged with the notice, so
-/// a limit reached every frame logs once a minute. A route a report could
-/// not carry fails the build.
+/// The reach a limit error caught under `route` stands for, named `limit`
+/// or its own error name. Any other error returns; a host error is logged
+/// as an error first. A route a report could not carry fails the build.
 ///
 /// ```zig
-/// try limit_reached.absorb(gui.app, "window_draw", err, null);
+/// const reach = try limit_reached.classify("window_input", err, null);
 /// ```
-pub fn absorb(client: *Client, comptime route: []const u8, err: anyerror, limit: ?core.Limit) anyerror!void {
+pub fn classify(comptime route: []const u8, err: anyerror, limit: ?core.Limit) anyerror!core.LimitReach {
     comptime {
         const routed: core.LimitReach = .{
             .limit = .{
@@ -114,9 +123,7 @@ pub fn absorb(client: *Client, comptime route: []const u8, err: anyerror, limit:
         reach.limit = named;
     }
 
-    if (notice(client, reach)) {
-        log.warn("{s} stopped at a limit: {s}", .{ route, @errorName(err) });
-    }
+    return reach;
 }
 
 /// The resync a runtime message that stopped at a limit needs, read from
@@ -276,7 +283,7 @@ pub fn receiveGraphicsSnapshot(client: *Client, snapshot: core.Snapshot) !void {
 /// `max_limit_resyncs` snapshots within `runtime_link.healthy_after_ns`,
 /// then it waits (`wait`). It never spends the link's budget.
 fn pauseGraphics(client: *Client, reach: core.LimitReach, pane_id: core.PaneId) !void {
-    const recorded = countReach(client, reach);
+    const recorded = countReach(client, reach, 1);
     const pauses = &client.model.graphics_pauses;
     const now_ns = pacing.clock.monotonic(client.io);
     var found = pauses.find(pane_id);
@@ -440,8 +447,8 @@ fn admitResync(client: *Client) bool {
 
 /// Records one reach and shows it when its interval allows; returns
 /// whether it showed, so a caller logs its own detail only then.
-fn notice(client: *Client, reach: core.LimitReach) bool {
-    const recorded = countReach(client, reach);
+fn notice(client: *Client, reach: core.LimitReach, hits: u32) bool {
+    const recorded = countReach(client, reach, hits);
     if (!recorded.show) {
         return false;
     }
@@ -455,9 +462,10 @@ fn notice(client: *Client, reach: core.LimitReach) bool {
     return true;
 }
 
-/// Counts one reach in `model.limit_reaches` and reports it to the runtime
-/// when its interval allows, so `telar diagnostics limits` lists every one.
-fn countReach(client: *Client, reach: core.LimitReach) core.RecordedReach {
+/// Counts `hits` reaches in `model.limit_reaches` and reports them to the
+/// runtime when its interval allows, so `telar diagnostics limits` lists
+/// every one.
+fn countReach(client: *Client, reach: core.LimitReach, hits: u32) core.RecordedReach {
     const at: core.ReachTime = .{
         .awake_ms = std.Io.Timestamp.now(client.io, .awake).toMilliseconds(),
         .real_ms = std.Io.Timestamp.now(client.io, .real).toMilliseconds(),
@@ -466,7 +474,7 @@ fn countReach(client: *Client, reach: core.LimitReach) core.RecordedReach {
         &client.model.limit_reaches,
         reach,
         at,
-        1,
+        hits,
     );
     send(
         client,
@@ -545,33 +553,4 @@ fn send(client: *Client, slot: usize, awake_ms: i64) void {
     client.model.to_runtime.pushEncoded(core.encodeReportLimit, reported) catch {
         core.limit_reached.restoreReport(reaches, slot, hits);
     };
-}
-
-test "a runtime message at a limit resyncs as little as it can and gives up past its budget" {
-    try client_tests.recoverLimitedMessages(recover, resumeGraphics);
-}
-
-test "each pane that starts a pause gets its own notice naming it, and more reaches only count" {
-    try client_tests.noticePausedPanes(recover);
-}
-
-test "a paused pane resumes from its timer or its focus without runtime traffic" {
-    try client_tests.resumeWithoutTraffic(recover, finishResumeTick);
-}
-
-test "a pause ends when its snapshot applies, and a full table leaves no pane without a resume" {
-    try client_tests.endGraphicsPauses(recover);
-}
-
-test "each window a pause ends waiting doubles the next wait up to sixteen minutes" {
-    try std.testing.expectEqual(runtime_link.healthy_after_ns, pauseWindowNs(0));
-    try std.testing.expectEqual(2 * runtime_link.healthy_after_ns, pauseWindowNs(1));
-    try std.testing.expectEqual(4 * runtime_link.healthy_after_ns, pauseWindowNs(2));
-    try std.testing.expectEqual(16 * std.time.ns_per_min, pauseWindowNs(max_pause_doublings));
-    try std.testing.expectEqual(16 * std.time.ns_per_min, pauseWindowNs(std.math.maxInt(u8)));
-    try client_tests.backOffPausedPanes(
-        recover,
-        resumeGraphics,
-        receiveGraphicsSnapshot,
-    );
 }

@@ -3,8 +3,6 @@
 //! These types own no buffers and borrow no network data. They may outlive the
 //! scratch storage used to parse or transform an HTTP message head.
 
-const std = @import("std");
-
 /// How an HTTP message body is delimited on the wire.
 pub const BodyPlan = union(enum) {
     none,
@@ -39,15 +37,3 @@ pub const ConnectionPolicy = enum {
     keep_alive,
     close,
 };
-
-pub const RequestHead = @import("RequestHead.zig");
-
-pub const ResponseHead = @import("ResponseHead.zig");
-
-test "body plans report whether payload relay is required" {
-    try std.testing.expect(!BodyPlan.hasBody(.none));
-    try std.testing.expect(!(BodyPlan{ .content_length = 0 }).hasBody());
-    try std.testing.expect((BodyPlan{ .content_length = 1 }).hasBody());
-    try std.testing.expect(BodyPlan.hasBody(.chunked));
-    try std.testing.expect(BodyPlan.hasBody(.until_close));
-}

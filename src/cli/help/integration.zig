@@ -48,7 +48,6 @@ pub const family: FamilyHelp = .{
             \\the settings are not a JSON object or a file at the path is not telar's.
             \\
             ,
-            .examples = &.{ &.{ "integration", "install", "claude" }, &.{ "integration", "install", "opencode", "--settings", "/home/dev/.config/opencode/plugins/telar.ts" } },
         },
         .{
             .name = "uninstall",
@@ -67,7 +66,6 @@ pub const family: FamilyHelp = .{
             \\Results: one line per thing removed or not present. Exit 0 or 1.
             \\
             ,
-            .examples = &.{ &.{ "integration", "uninstall", "codex" }, &.{ "integration", "uninstall", "claude", "--legacy" } },
         },
         .{
             .name = "status",
@@ -81,7 +79,6 @@ pub const family: FamilyHelp = .{
             \\PATH` and the skills. A note names hooks left in a legacy file. Exit 0.
             \\
             ,
-            .examples = &.{&.{ "integration", "status", "pi" }},
         },
     },
 };

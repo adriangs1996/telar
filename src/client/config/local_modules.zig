@@ -89,9 +89,6 @@ pub fn requireLocal(state: ?*lua_api.c.lua_State) callconv(.c) c_int {
     const dependency_index = modules.dependency_count;
     @memcpy(modules.dependencies[dependency_index][0..resolved_len], resolved);
     modules.dependency_lens[dependency_index] = @intCast(resolved_len);
-    const stat = std.Io.Dir.cwd().statFile(modules.vm.io, resolved, .{}) catch
-        return values.raise(lua_state, "cannot stat loaded configuration module");
-    modules.dependency_mtimes[dependency_index] = stat.mtime.nanoseconds;
     modules.dependency_count += 1;
 
     _ = lua_api.c.lua_pushlstring(lua_state, name.ptr, name.len);

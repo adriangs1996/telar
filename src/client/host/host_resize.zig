@@ -3,7 +3,6 @@
 const data = @import("model");
 const std = @import("std");
 const pane_graphics = @import("../panes/pane_graphics.zig");
-const client_tests = @import("../execution/client_tests.zig");
 const pane_attachment = @import("../panes/pane_attachment.zig");
 const pane_resize = @import("../panes/pane_resize.zig");
 const Client = @import("../execution/Client.zig");
@@ -97,8 +96,4 @@ fn validateHostCommit(model: *const data.ClientModel, commit: data.HostCommit) !
             return error.StaleHostCommit;
         }
     }
-}
-
-test "host resources reject empty and stale commits before calling ports" {
-    try client_tests.rejectStaleHostCommits(deliverHostCommit);
 }

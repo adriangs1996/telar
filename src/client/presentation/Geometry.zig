@@ -8,6 +8,7 @@ region: data.Region = .{ .area = .{}, .revision = 0 },
 location: ?core.TabLocation = null,
 layout_revision: u64 = 0,
 host_size: core.TerminalSize = .{ .cols = 0, .rows = 0 },
+// SAFETY: capture initializes each pane before increasing len; copyFrom copies only the source prefix and matches compares that prefix.
 panes: [core.max_panes_per_tab]GeometryPane = undefined,
 len: u8 = 0,
 

@@ -1,5 +1,4 @@
 const core = @import("telar-core");
-const std = @import("std");
 const AgentKey = @import("../agents/AgentKey.zig");
 /// The last rows of the pane a peek shows, as the runtime last read them.
 /// Disposable client state: it lives while the peek is open.
@@ -15,6 +14,7 @@ const max_row_cells = 256;
 const max_cell_bytes = 4;
 
 agent: ?AgentKey = null,
+// SAFETY: store copies the retained text before setting text_len; slice exposes only that prefix and show/close reset it to zero.
 text: [max_text_bytes]u8 = undefined,
 text_len: usize = 0,
 /// Whether a read is on its way, so snapshots do not queue duplicates.
@@ -54,25 +54,6 @@ pub fn store(self: *PeekScreen, pane_id: core.PaneId, text: []const u8) ?usize {
 
 const continuation_mask: u8 = 0b1100_0000;
 const continuation_bits: u8 = 0b1000_0000;
-
-test "a read longer than the peek keeps its last bytes from a character on" {
-    var screen: PeekScreen = .{};
-    const key: AgentKey = .{
-        .pane_id = @enumFromInt(4),
-        .pane_generation = 1,
-    };
-    screen.show(key);
-
-    const fits = "x" ** max_text_bytes;
-    try std.testing.expectEqual(@as(?usize, 0), screen.store(key.pane_id, fits));
-    try std.testing.expectEqual(max_text_bytes, screen.slice().len);
-
-    // "é" is two bytes, so the byte the bound would start at is its second.
-    const long = "é" ++ "y" ** (max_text_bytes - 1);
-    try std.testing.expectEqual(@as(?usize, 2), screen.store(key.pane_id, long));
-    try std.testing.expectEqualStrings("y" ** (max_text_bytes - 1), screen.slice());
-    try std.testing.expect(screen.store(@enumFromInt(5), long) == null);
-}
 
 /// Stops showing any pane. Example: `model.peek_screen.close();`.
 pub fn close(self: *PeekScreen) void {

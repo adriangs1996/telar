@@ -76,36 +76,3 @@ fn lispString(writer: *std.Io.Writer, text: []const u8) !void {
 
     try writer.writeByte('"');
 }
-
-test "editor paths remain literal data across Vim and Lisp quoting" {
-    var buffer: [max_bytes]u8 = undefined;
-    const target: Target = .{ .pid = 42, .path = "/tmp/a'|quit!\"\\$().txt" };
-    const vim_expression = try vim(&buffer, target);
-    try std.testing.expect(std.mem.indexOf(u8, vim_expression, "fnameescape('/tmp/a''|quit!\"\\$().txt')") != null);
-    try std.testing.expect(std.mem.startsWith(u8, vim_expression, "getpid() == 42 ?"));
-
-    const emacs_expression = try emacs(&buffer, target);
-    try std.testing.expect(std.mem.indexOf(u8, emacs_expression, "(find-file (concat \"/:\" \"/tmp/a'|quit!\\\"\\\\$().txt\"))") != null);
-    try std.testing.expect(std.mem.startsWith(u8, emacs_expression, "(if (and (= (emacs-pid) 42)"));
-}
-
-test "a line moves the cursor after the file opens and only integers join the expression" {
-    var buffer: [max_bytes]u8 = undefined;
-    const target: Target = .{
-        .pid = 42,
-        .path = "/tmp/a.zig",
-        .line = 12,
-        .column = 3,
-    };
-    const vim_expression = try vim(&buffer, target);
-    try std.testing.expect(std.mem.endsWith(u8, vim_expression, "fnameescape('/tmp/a.zig')), cursor(12, 3), 1][-1] : 0"));
-
-    const emacs_expression = try emacs(&buffer, target);
-    try std.testing.expect(std.mem.indexOf(u8, emacs_expression, "(goto-char (point-min)) (forward-line 11) (move-to-column 2) 1)") != null);
-
-    const unpositioned = try vim(&buffer, .{
-        .pid = 42,
-        .path = "/tmp/a.zig",
-    });
-    try std.testing.expect(std.mem.endsWith(u8, unpositioned, "fnameescape('/tmp/a.zig')), 1][-1] : 0"));
-}

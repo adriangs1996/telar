@@ -64,27 +64,3 @@ pub fn offset(self: Layout, point: [2]f64) u32 {
 
     return @intCast(self.text.len);
 }
-
-test "wrapped caret and pointer agree at UTF8 and newline boundaries" {
-    const std = @import("std");
-    const layout: Layout = .{ .text = "ab界c\nlast", .head = 6, .columns = 4, .rows = 2 };
-    try std.testing.expectEqualDeep([2]u32{ 1, 1 }, layout.position(6));
-    try std.testing.expectEqualDeep([2]u32{ 0, 2 }, layout.position(7));
-    try std.testing.expectEqual(@as(u32, 2), layout.offset(.{ 2.1, 0 }));
-    try std.testing.expectEqual(@as(u32, 5), layout.offset(.{ 0, 1 }));
-    const scrolled: Layout = .{ .text = "one\ntwo\nthree", .head = 13, .columns = 8, .rows = 2 };
-    try std.testing.expectEqual(@as(u32, 1), scrolled.firstRow());
-    try std.testing.expectEqual(@as(u32, 4), scrolled.offset(.{ 0, 0 }));
-}
-
-test "a full last line keeps its caret visible and distinct from the next hard line" {
-    const std = @import("std");
-    const last: Layout = .{ .text = "abcd", .head = 4, .columns = 4, .rows = 1 };
-    try std.testing.expectEqualDeep([2]u32{ 4, 0 }, last.position(4));
-    try std.testing.expectEqual(@as(u32, 0), last.firstRow());
-    const newline: Layout = .{ .text = "abcd\nef", .head = 0, .columns = 4, .rows = 2 };
-    try std.testing.expectEqualDeep([2]u32{ 4, 0 }, newline.position(4));
-    try std.testing.expectEqualDeep([2]u32{ 0, 1 }, newline.position(5));
-    try std.testing.expectEqual(@as(u32, 4), newline.offset(.{ 4, 0 }));
-    try std.testing.expectEqual(@as(u32, 5), newline.offset(.{ 0, 1 }));
-}

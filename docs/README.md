@@ -27,5 +27,4 @@ checkout; when reporting a problem, include its Git commit as well as the
 output of `telar --version`.
 
 For contributors, [development](development.md) covers build dependencies and
-tests. [Architecture](architecture.md), [invariants](invariants.md) and the
-[flow index](flows/README.md) explain how Telar is implemented.
+tests.

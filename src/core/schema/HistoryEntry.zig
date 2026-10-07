@@ -1,6 +1,5 @@
 const id_module = @import("id.zig");
 const types = @import("types.zig");
-const HistoryEntry = @This();
 
 id: u64,
 pane_id: id_module.PaneId,

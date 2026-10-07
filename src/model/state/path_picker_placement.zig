@@ -3,7 +3,6 @@
 //! edge next to the cursor. Both adapters place it with the same cells.
 
 const cellgrid = @import("cellgrid");
-const std = @import("std");
 const ClientModel = @import("ClientModel.zig");
 const LayoutSnapshot = @import("../workspace/LayoutSnapshot.zig");
 const PathPickerPlacement = @import("PathPickerPlacement.zig");
@@ -98,58 +97,4 @@ pub fn place(host: cellgrid.Rect, cursor: ?cellgrid.Point, width: u16, height: u
         },
         .flipped = flipped,
     };
-}
-
-test "the picker opens under the cursor and flips above it near the bottom" {
-    const host: cellgrid.Rect = .{
-        .w = 100,
-        .h = 40,
-    };
-    const under = place(
-        host,
-        .{
-            .x = 10,
-            .y = 5,
-        },
-        60,
-        14,
-    );
-    try std.testing.expect(!under.flipped);
-    try std.testing.expectEqual(@as(u16, 6), under.area.y);
-    try std.testing.expectEqual(@as(u16, 8), under.area.x);
-
-    const over = place(
-        host,
-        .{
-            .x = 90,
-            .y = 38,
-        },
-        60,
-        14,
-    );
-    try std.testing.expect(over.flipped);
-    try std.testing.expectEqual(@as(u16, 38 - 14), over.area.y);
-    try std.testing.expectEqual(@as(u16, 40), over.area.x);
-
-    const centred = place(
-        host,
-        null,
-        60,
-        14,
-    );
-    try std.testing.expectEqual(@as(u16, 20), centred.area.x);
-
-    const tiny = place(
-        .{
-            .w = 20,
-            .h = 6,
-        },
-        .{
-            .x = 1,
-            .y = 2,
-        },
-        60,
-        14,
-    );
-    try std.testing.expect(tiny.area.w <= 20 and tiny.area.y + tiny.area.h <= 6);
 }

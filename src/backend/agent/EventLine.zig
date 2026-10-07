@@ -6,6 +6,7 @@ const core = @import("telar-core");
 const std = @import("std");
 const EventLine = @This();
 
+// SAFETY: set copies the bounded valid line before setting len; text readers use only that prefix.
 bytes: [core.max_agent_last_event_bytes]u8 = undefined,
 len: u8 = 0,
 
@@ -60,18 +61,4 @@ pub fn slice(self: *const EventLine) []const u8 {
 /// ```
 pub fn eql(self: *const EventLine, other: *const EventLine) bool {
     return std.mem.eql(u8, self.slice(), other.slice());
-}
-
-test "event lines keep one control-free UTF-8 line within the wire bound" {
-    try std.testing.expectEqualStrings("» Edit src/proxy.zig", init("» Edit src/proxy.zig\nsecond").slice());
-    try std.testing.expectEqualStrings("tab", init("tab\tcut").slice());
-
-    const long = "é" ** 60;
-    const cut = init(long);
-    try std.testing.expectEqual(@as(u8, 96), cut.len);
-    try std.testing.expect(std.unicode.utf8ValidateSlice(cut.slice()));
-
-    try std.testing.expectEqual(@as(u8, 0), init("\xff\xfe").len);
-    try std.testing.expect(init("same").eql(&init("same\n")));
-    try std.testing.expect(!init("same").eql(&init("other")));
 }

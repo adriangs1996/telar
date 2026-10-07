@@ -30,7 +30,6 @@ pub const family: FamilyHelp = .{
                 \\setup goes on: inspect it with `exec status` and `exec output`).
                 \\
             , .{ project_setup.max_recipe_bytes / 1024, project_setup.wait_seconds }),
-            .examples = &.{ &.{ "project", "setup", "--cwd", "/home/dev/telar-worktrees/fix", "--json" }, &.{ "project", "setup", "--cwd", "/home/dev/project", "--detach" } },
         },
     },
 };

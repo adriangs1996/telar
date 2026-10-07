@@ -1,2 +1,0 @@
-1/1 ink_layout.test.role columns preserve every quad byte...OK
-All 1 tests passed.

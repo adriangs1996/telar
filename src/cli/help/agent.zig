@@ -50,7 +50,6 @@ pub const family: FamilyHelp = .{
                 \\`revision` and `agents` (an array of agent objects). At most {d} agents. Exit 0.
                 \\
             , .{core.max_agent_snapshot_entries}),
-            .examples = &.{&.{ "agent", "list", "--json" }},
         },
         .{
             .name = "get",
@@ -65,7 +64,6 @@ pub const family: FamilyHelp = .{
                 \\agent matches.
                 \\
             , .{target_text}),
-            .examples = &.{ &.{ "agent", "get", "7", "--json" }, &.{ "agent", "get", "worktree:fix-tab-order" }, &.{ "agent", "get", "--current" } },
         },
         .{
             .name = "wait",
@@ -87,7 +85,6 @@ pub const family: FamilyHelp = .{
                 \\(stderr names the current status), 2 when the agent disappears meanwhile.
                 \\
             , .{ target_text, values.default_wait_timeout_seconds, values.max_wait_timeout_seconds, agent.poll_interval_ms }),
-            .examples = &.{ &.{ "agent", "wait", "7", "--until", "finished", "--timeout", "3600s", "--json" }, &.{ "agent", "wait", "worktree:fix-tab-order", "--until", "blocked", "--timeout", "120" } },
         },
         .{
             .name = "prompt",
@@ -118,7 +115,6 @@ pub const family: FamilyHelp = .{
                 \\(the turn goes on), 2 when its pane generation changed.
                 \\
             , .{ target_text, core.max_pane_text_input_bytes, agent.interrupt_settle_ms / std.time.ms_per_s, values.default_wait_timeout_seconds, values.max_wait_timeout_seconds, backend.PromptBudget.prompts_per_window, @divExact(backend.PromptBudget.window_ms, std.time.ms_per_s), agent.prompt_start_grace_ms / std.time.ms_per_s }),
-            .examples = &.{ &.{ "agent", "prompt", "7", "Run the test suite and summarize failures", "--wait", "--timeout", "600s", "--json" }, &.{ "agent", "prompt", "worktree:fix-tab-order", "Stop and write a summary", "--interrupt" } },
         },
         .{
             .name = "read",
@@ -141,7 +137,6 @@ pub const family: FamilyHelp = .{
                 \\within {d} KiB while it is among the last {d} exited panes; then exit 2.
                 \\
             , .{ target_text, values.default_read_rows, core.max_pane_text_rows, core.max_pane_text_bytes / 1024, backend.ExitedPanes.kept_rows, backend.ExitedPanes.max_text_bytes / 1024, backend.ExitedPanes.capacity }),
-            .examples = &.{ &.{ "agent", "read", "7", "--lines", "60" }, &.{ "agent", "read", "Investigate proxy", "--source", "screen", "--json" } },
         },
         .{
             .name = "interrupt",
@@ -162,7 +157,6 @@ pub const family: FamilyHelp = .{
                 \\2 when unknown. Follow with `agent wait --until ready` or `agent prompt --interrupt`.
                 \\
             , .{ target_text, backend.agent_types.interrupt_repress_ms / std.time.ms_per_s }),
-            .examples = &.{&.{ "agent", "interrupt", "worktree:fix-tab-order", "--json" }},
         },
         .{
             .name = "acknowledge",
@@ -179,7 +173,6 @@ pub const family: FamilyHelp = .{
                 \\2 when the generation changed.
                 \\
             , .{target_text}),
-            .examples = &.{&.{ "agent", "acknowledge", "7", "--json" }},
         },
         .{
             .name = "report-session",
@@ -202,7 +195,6 @@ pub const family: FamilyHelp = .{
                 \\Results: nothing; exit 0, 2 when the agent is unknown.
                 \\
             , .{ target_text, core.max_agent_session_reference_bytes }),
-            .examples = &.{&.{ "agent", "report-session", "--current", "0192aaaa-bbbb-cccc-dddd-eeeeffff0000" }},
         },
         .{
             .name = "report-title",
@@ -220,7 +212,6 @@ pub const family: FamilyHelp = .{
                 \\Results: nothing; with --json `pane_id`, `pane_generation`, `accepted`. Exit 0.
                 \\
             , .{core.max_agent_session_title_bytes}),
-            .examples = &.{&.{ "agent", "report-title", "--current", "Investigate proxy", "--json" }},
         },
         .{
             .name = "report-state",
@@ -242,7 +233,6 @@ pub const family: FamilyHelp = .{
             \\Results: nothing; with --json `pane_id`, `pane_generation`, `accepted`. Exit 0.
             \\
             ,
-            .examples = &.{ &.{ "agent", "report-state", "--current", "blocked", "--blocked-reason", "permission", "--event", "Bash" }, &.{ "agent", "report-state", "7", "ready", "--json" } },
         },
         .{
             .name = "report-command",
@@ -263,7 +253,6 @@ pub const family: FamilyHelp = .{
             \\Results: nothing; with --json `pane_id`, `pane_generation`, `accepted`. Exit 0.
             \\
             ,
-            .examples = &.{&.{ "agent", "report-command", "--current", "finished", "zig build test", "--provider", "claude", "--exit-code", "0" }},
         },
     },
 };

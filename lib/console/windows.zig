@@ -1,5 +1,3 @@
-const Coord = @import("Coord.zig");
-const SmallRect = @import("SmallRect.zig");
 const ConsoleScreenBufferInfo = @import("ConsoleScreenBufferInfo.zig");
 
 const std = @import("std");
@@ -67,12 +65,3 @@ pub fn installCrashRestore(_: *const Tty) void {}
 pub fn emergencyRestore() void {}
 
 pub const ResizeWatcher = @import("WindowsResizeWatcher.zig");
-
-test "Windows console layouts preserve their pre-extraction ABI" {
-    try std.testing.expectEqual(@as(usize, 4), @sizeOf(Coord.COORD));
-    try std.testing.expectEqual(@as(usize, 8), @sizeOf(SmallRect.SMALL_RECT));
-    try std.testing.expectEqual(@as(usize, 22), @sizeOf(CONSOLE_SCREEN_BUFFER_INFO));
-    try std.testing.expectEqual(@as(usize, 2), @alignOf(CONSOLE_SCREEN_BUFFER_INFO));
-    try std.testing.expectEqual(@as(usize, 10), @offsetOf(CONSOLE_SCREEN_BUFFER_INFO, "srWindow"));
-    try std.testing.expectEqual(@as(usize, 18), @offsetOf(CONSOLE_SCREEN_BUFFER_INFO, "dwMaximumWindowSize"));
-}

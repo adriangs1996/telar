@@ -10,7 +10,6 @@ const cellgrid = @import("cellgrid");
 const profile_options = @import("profile_options");
 const data = @import("model");
 const core = @import("telar-core");
-const backend = @import("telar-backend");
 const client = @import("telar-client");
 const std = @import("std");
 const DamageContext = @import("DamageContext.zig");
@@ -66,7 +65,7 @@ const usage =
     \\  --storage             Report client sizes and live pane allocations as JSON Lines
     \\  --help                Print this help
     \\
-    \\Placement experiment, idle-delivery cases only (docs/performance/record-placement):
+    \\Placement experiment, idle-delivery cases only:
     \\  --placement <mode>    Where large fixture allocations land: baseline (default),
     \\                        shift, stagger or pack
     \\  --placement-backing <name>
@@ -325,6 +324,7 @@ fn executeIdleDelivery(result_writer: ResultWriter, resources: ExecutionResource
     defer placement.deinit();
 
     {
+        // SAFETY: init writes the context in place; failure returns before any benchmark or deinit reads it.
         var context: IdleDeliveryContext = undefined;
         context.init(io, placement.allocator(), resources.environ, shape) catch |err| {
             if (placement.refused != 0) {
@@ -758,6 +758,7 @@ fn execute(result_writer: ResultWriter, resources: ExecutionResources, fixture: 
     const client_present_case = cases[case_index + 3];
     case_index += 4;
     if (config.includes(client_frame_case.name) or config.includes(client_key_case.name) or config.includes(client_request_case.name) or config.includes(client_present_case.name)) {
+        // SAFETY: init constructs the client and channels in place before either benchmarking or deinit.
         var context: ClientEventContext = undefined;
         try context.init(io, gpa);
         defer context.deinit();
@@ -792,6 +793,7 @@ fn execute(result_writer: ResultWriter, resources: ExecutionResources, fixture: 
     const machine_frame_case = cases[case_index];
     case_index += 1;
     if (config.includes(machine_frame_case.name)) {
+        // SAFETY: init constructs the client and channels in place before loadMachine or deinit.
         var context: ClientEventContext = undefined;
         try context.init(io, gpa);
         defer context.deinit();
@@ -861,7 +863,7 @@ pub fn main(init: std.process.Init) !void {
     defer {
         if (comptime core.profiling.active) {
             if (init.minimal.environ.getPosix("TELAR_PROFILE_DIR")) |directory| {
-                profile_store.dump(init.io, directory) catch {};
+                profile_store.dump(init.io, directory) catch |err| std.log.warn("Could not write profiling data: {s}", .{@errorName(err)});
             }
         }
     }
@@ -1032,6 +1034,7 @@ const DecodeContext = struct {
 const KittyScanContext = struct {
     framing: vtscan.KittyFramingCounter = .{},
     scanner: vtscan.KittyCommandScanner = .{},
+    // SAFETY: The benchmark calls fill before scanning; fill assigns every byte in this fixed workload.
     bytes: [kitty_scan_bytes]u8 = undefined,
 
     fn fill(self: *KittyScanContext) void {
@@ -1081,6 +1084,7 @@ const WalkedIdleDelivery = struct {
 
 const OutboxContext = struct {
     outbox: *data.Outbox,
+    // SAFETY: beginSend encodes into this scratch buffer and returns only the written slice; the benchmark reads that result.
     buffer: [4096]u8 = undefined,
 
     pub fn init(gpa: std.mem.Allocator) !OutboxContext {

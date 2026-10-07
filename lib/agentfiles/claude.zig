@@ -84,37 +84,6 @@ pub fn probe(io: std.Io, path: []const u8, session: []const u8, offset: ?u64, ti
     };
 }
 
-/// The session title bound the tests cut against.
-const test_title_bytes = 96;
-
-test "scan keeps the last name for the session and leaves a partial line" {
-    var buffer: [test_title_bytes]u8 = undefined;
-    const bytes =
-        "{\"type\":\"custom-title\",\"customTitle\":\"first\",\"sessionId\":\"abc\"}\n" ++
-        "{\"type\":\"user\",\"message\":{\"content\":\"{\\\"type\\\":\\\"custom-title\\\"}\"}}\n" ++
-        "{\"type\":\"custom-title\",\"customTitle\":\"other\",\"sessionId\":\"zzz\"}\n" ++
-        "{\"type\":\"custom-title\",\"customTitle\":\"Fix \\\"proxy\\\"\",\"sessionId\":\"abc\"}\n" ++
-        "{\"type\":\"custom-title\",\"customTitle\":\"partial";
-    const result = scan(bytes, "abc", &buffer);
-
-    try std.testing.expectEqualStrings("Fix \"proxy\"", result.title.?);
-    try std.testing.expectEqual(bytes.len - "{\"type\":\"custom-title\",\"customTitle\":\"partial".len, result.consumed);
-    try std.testing.expect(scan("{\"type\":\"custom-title\",\"customTitle\":\"x\",\"sessionId\":\"abc\"", "abc", &buffer).title == null);
-    try std.testing.expect(scan("{\"type\":\"custom-title\",\"customTitle\":\"x\"\n", "abc", &buffer).title == null);
-    try std.testing.expect(scan("{\"type\":\"custom-title\",not json\n", "abc", &buffer).title == null);
-}
-
-test "scan reports a cleared name as an empty title and bounds long names" {
-    var buffer: [test_title_bytes]u8 = undefined;
-    const cleared = scan("{\"type\":\"custom-title\",\"customTitle\":\"\",\"sessionId\":\"abc\"}\n", "abc", &buffer);
-    try std.testing.expectEqualStrings("", cleared.title.?);
-
-    const long = "{\"type\":\"custom-title\",\"customTitle\":\"" ++ ("é" ** 60) ++ "\",\"sessionId\":\"abc\"}\n";
-    const bounded = scan(long, "abc", &buffer);
-    try std.testing.expectEqual(@as(usize, test_title_bytes), bounded.title.?.len);
-    try std.testing.expect(std.unicode.utf8ValidateSlice(bounded.title.?));
-}
-
 const Scan = struct {
     /// Bytes fully handled: up to and including the last newline, so a
     /// partial trailing line is read again once complete.

@@ -140,8 +140,7 @@ snapshot, closing the inspection-to-execution mutation window.
 Each invocation also carries a client-owned execution identity and the active
 configuration generation. Only its exact completion can clear the run. A
 completion from a replaced configuration is consumed without authorizing or
-applying its effects. See [Plugin action](flows/plugin-action.md) for the full
-client lifecycle.
+applying its effects.
 
 `runtime.control` is currently required for effects that create, rename, move,
 or close runtime-owned panes or tabs, or detach the client. Other declared
@@ -197,5 +196,3 @@ waits for a listener.
 Tap packages are loaded when the runtime starts. Client configuration reload
 does not replace runtime tap workers because runtime reload does not yet exist.
 Restart the runtime after changing the enabled package set or trust grants.
-
-See [Proxy tap](flows/proxy-tap.md) for ownership and scheduling details.

@@ -2,8 +2,7 @@
 //! never created. When a pane's directory changes, a worker reads the `.git`
 //! files above it (no Git process) and a linked worktree it finds is tracked
 //! as `external`, under the pane's project. One detection is in flight; the
-//! next pane waits for it or for the maintenance tick. See
-//! `docs/flows/worktree-detection.md`.
+//! next pane waits for it or for the maintenance tick.
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -138,96 +137,4 @@ fn detect(job: WorktreeDetectionJob) WorktreeDetectionCompletion {
     completion.branch_len = @intCast(linked.branch.len);
     @memcpy(completion.branch[0..linked.branch.len], linked.branch);
     return completion;
-}
-
-const RequestFixture = @import("tests/RequestFixture.zig");
-
-/// A linked worktree `fix` of a main checkout `main`, laid out in files the
-/// way Git writes them.
-fn writeLinkedWorktree(dir: std.Io.Dir, base: []const u8) !void {
-    const io = std.testing.io;
-    try dir.createDirPath(io, "main/.git/worktrees/fix");
-    try dir.createDirPath(io, "fix/src");
-    try dir.writeFile(io, .{ .sub_path = "main/.git/HEAD", .data = "ref: refs/heads/trunk\n" });
-    try dir.writeFile(io, .{ .sub_path = "main/.git/worktrees/fix/HEAD", .data = "ref: refs/heads/by-hand\n" });
-    try dir.writeFile(io, .{ .sub_path = "main/.git/worktrees/fix/commondir", .data = "../..\n" });
-    var gitfile_buffer: [std.fs.max_path_bytes + 32]u8 = undefined;
-    const gitfile = try std.fmt.bufPrint(&gitfile_buffer, "gitdir: {s}/main/.git/worktrees/fix\n", .{base});
-    try dir.writeFile(io, .{ .sub_path = "fix/.git", .data = gitfile });
-}
-
-test "a shell that moves into a linked worktree gets it tracked as external" {
-    var fixture: RequestFixture = undefined;
-    try fixture.init();
-    defer fixture.deinit();
-    const model = &fixture.runtime.model;
-    var base_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const base = base_buffer[0..try fixture.temporary.dir.realPath(std.testing.io, &base_buffer)];
-    try writeLinkedWorktree(fixture.temporary.dir, base);
-    var nested_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const nested = try std.fmt.bufPrint(&nested_buffer, "{s}/fix/src", .{base});
-    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const root = try std.fmt.bufPrint(&root_buffer, "{s}/fix", .{base});
-
-    const pane = try fixture.openPane();
-    const workspace = pane.location.workspace.workspace;
-    _ = reserve(model);
-    try std.testing.expect(reserve(model) == null);
-
-    try std.testing.expect(pane.cwd.update(nested));
-    const job = reserve(model).?;
-    try std.testing.expectEqual(pane.key(), job.pane);
-    try std.testing.expect(reserve(model) == null);
-
-    try finish(model, detect(job));
-    try std.testing.expectEqual(@as(usize, 1), model.worktrees.count);
-    const slot = model.worktrees.slotOfPath(root).?;
-    try std.testing.expectEqual(core.WorktreeOrigin.external, model.worktrees.origin[slot]);
-    try std.testing.expectEqual(workspace, model.worktrees.source[slot]);
-    try std.testing.expectEqualStrings("by-hand", model.worktrees.branchAt(slot));
-    try std.testing.expect(model.worktrees.created_by[slot] == null);
-
-    // Moving within a tracked worktree starts no detection.
-    try std.testing.expect(pane.cwd.update(root));
-    try std.testing.expect(reserve(model) == null);
-}
-
-test "a pane that moved while its directory was read is not tracked from the old one" {
-    var fixture: RequestFixture = undefined;
-    try fixture.init();
-    defer fixture.deinit();
-    const model = &fixture.runtime.model;
-    var base_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const base = base_buffer[0..try fixture.temporary.dir.realPath(std.testing.io, &base_buffer)];
-    try writeLinkedWorktree(fixture.temporary.dir, base);
-    var nested_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const nested = try std.fmt.bufPrint(&nested_buffer, "{s}/fix/src", .{base});
-
-    const pane = try fixture.openPane();
-    try std.testing.expect(pane.cwd.update(nested));
-    const job = reserve(model).?;
-    const completion = detect(job);
-    try std.testing.expect(completion.root_len != 0);
-
-    try std.testing.expect(pane.cwd.update(base));
-    try finish(model, completion);
-    try std.testing.expectEqual(@as(usize, 0), model.worktrees.count);
-}
-
-test "a main checkout is no worktree" {
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var base_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const base = base_buffer[0..try temp.dir.realPath(std.testing.io, &base_buffer)];
-    try writeLinkedWorktree(temp.dir, base);
-
-    var job: WorktreeDetectionJob = .{
-        .io = std.testing.io,
-        .pane = .{ .id = @enumFromInt(1), .generation = 1 },
-        .cwd_revision = 2,
-        .cwd_len = 0,
-    };
-    const main = try std.fmt.bufPrint(&job.cwd, "{s}/main", .{base});
-    job.cwd_len = @intCast(main.len);
-    try std.testing.expectEqual(@as(u16, 0), detect(job).root_len);
 }

@@ -5,6 +5,7 @@ const PendingSuggestion = @This();
 
 request_id: core.RequestId,
 status: core.SuggestionStatus,
+// SAFETY: suggest_command copies a successful reply before enqueueing it; textSlice uses only text_len bytes.
 text: [core.max_suggestion_bytes]u8 = undefined,
 text_len: u16 = 0,
 

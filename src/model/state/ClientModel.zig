@@ -1,29 +1,15 @@
-const sidebar = @import("../layout/sidebar.zig");
-const copy_mode = @import("../input/copy_mode.zig");
 const pacing = @import("pacing");
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const model_data = @import("../model.zig");
-const EntryInput = @import("../workspace/EntryInput.zig");
 const Pane = @import("../panes/Pane.zig");
-const model_namespace = @import("model_namespace.zig");
 const Tabs = @import("../workspace/Tabs.zig");
 const Config = @import("Config.zig");
 const Panes = @import("../panes/Panes.zig");
 const LayoutSnapshot = @import("../workspace/LayoutSnapshot.zig");
 const PaneBottomReservation = @import("../workspace/PaneBottomReservation.zig");
 const PendingLayoutRestore = @import("../workspace/PendingLayoutRestore.zig");
-const tab_layout = @import("../workspace/tab_layout.zig");
-const tab_label = @import("../workspace/tab_label.zig");
-const tab_creation = @import("../workspace/tab_creation.zig");
-const tab_removal = @import("../workspace/tab_removal.zig");
-const tab_move = @import("../workspace/tab_move.zig");
-const tab_rename = @import("../workspace/tab_rename.zig");
-const tab_selection = @import("../workspace/tab_selection.zig");
-const tab_snapshot_reconciliation = @import("../workspace/tab_snapshot_reconciliation.zig");
-const workspace_reconciliation = @import("../workspace/workspace_reconciliation.zig");
 const workspace_handoff = @import("../workspace/workspace_handoff.zig");
-const pane_split = @import("../workspace/pane_split.zig");
 const presentation_delivery = @import("../panes/presentation_delivery.zig");
 const SavedLayouts = @import("../workspace/SavedLayouts.zig");
 const ClipboardCaptureState = @import("ClipboardCaptureState.zig");
@@ -43,35 +29,6 @@ const std = @import("std");
 const InitialClientState = @import("InitialClientState.zig");
 const Version = @import("Version.zig");
 const PresentationCommit = @import("../panes/PresentationCommit.zig");
-const PluginExecution = @import("PluginExecution.zig");
-const ConfigurationInput = @import("ConfigurationInput.zig");
-const BarUpdateInput = @import("BarUpdateInput.zig");
-const BarUpdateCommit = @import("BarUpdateCommit.zig");
-const WorkspaceListCollapse = @import("WorkspaceListCollapse.zig");
-const WorkspaceListInput = @import("../workspace/WorkspaceListInput.zig");
-const WorkspaceListCommit = @import("WorkspaceListCommit.zig");
-const SystemMetricsCommit = @import("SystemMetricsCommit.zig");
-const PaneFocusReportTransition = @import("PaneFocusReportTransition.zig");
-const PaneMetadataCommit = @import("PaneMetadataCommit.zig");
-const PointerPress = @import("../input/PointerPress.zig");
-const CopyModeProjection = @import("CopyModeProjection.zig");
-const CopyModePlan = @import("CopyModePlan.zig");
-const CopyModeCommit = @import("CopyModeCommit.zig");
-const CopyModeFrame = @import("CopyModeFrame.zig");
-const TabCreationPlan = @import("TabCreationPlan.zig");
-const WorkspaceReplacement = @import("WorkspaceReplacement.zig");
-const WorkspaceActivationSeed = @import("WorkspaceActivationSeed.zig");
-const WorkspaceSnapshotInput = @import("../workspace/WorkspaceSnapshotInput.zig");
-const WorkspaceReconciliation = @import("WorkspaceReconciliation.zig");
-const PaneSnapshot = @import("../workspace/PaneSnapshot.zig");
-const TabReconciliation = @import("TabReconciliation.zig");
-const TabDetachmentPlan = @import("TabDetachmentPlan.zig");
-const CommitPaneSplit = @import("CommitPaneSplit.zig");
-const PaneSplitCommitState = @import("PaneSplitCommitState.zig");
-const RecoverPaneSplit = @import("RecoverPaneSplit.zig");
-const RenameTab = @import("RenameTab.zig");
-const NewTab = @import("NewTab.zig");
-const RemoveTab = @import("RemoveTab.zig");
 const PeekScreen = @import("PeekScreen.zig");
 const ClientModel = @This();
 
@@ -107,6 +64,7 @@ panes: Panes = .{},
 /// The runtime workspace this client shows; null before arrival and after
 /// departure.
 workspace: ?core.WorkspaceLocation = null,
+// SAFETY: Workspace reconciliation copies the name before publishing workspace_name_len; workspaceName reads only that prefix.
 workspace_name: [core.max_workspace_name_bytes]u8 = undefined,
 workspace_name_len: u16 = 0,
 pane_gaps: bool = true,
@@ -139,6 +97,7 @@ path_picker: PathPickerState = .{},
 pick_list: PickListState = .{},
 workspace_revision: u64 = 0,
 configuration_generation: u64 = 0,
+// SAFETY: Initialization and configuration reload copy the template before publishing its length; title generation uses only that prefix.
 window_title_template: [max_window_title_template_bytes]u8 = undefined,
 window_title_template_len: u8 = 0,
 configuration_revision: u64 = 0,
@@ -200,24 +159,13 @@ pub fn init(gpa: std.mem.Allocator, pane_gaps: bool) ClientModel {
     return initWithState(gpa, .{ .pane_gaps = pane_gaps });
 }
 
-/// Creates the client model at one already active configuration generation.
-///
-/// ```zig
-/// var model = ClientModel.initWithConfiguration(gpa, true, 1);
-/// ```
-pub fn initWithConfiguration(gpa: std.mem.Allocator, pane_gaps: bool, generation: u64) ClientModel {
-    return initWithState(gpa, .{
-        .pane_gaps = pane_gaps,
-        .configuration_generation = generation,
-    });
-}
-
 /// Creates the client model from its complete initial semantic state.
 ///
 /// ```zig
 /// var model = ClientModel.initWithState(gpa, initial);
 /// ```
 pub fn initWithState(gpa: std.mem.Allocator, initial: InitialClientState) ClientModel {
+    // SAFETY: initInto constructs the model in place before return, including the counters that bound reserved storage.
     var self: ClientModel = undefined;
     self.initInto(gpa, initial);
     return self;
@@ -226,6 +174,7 @@ pub fn initWithState(gpa: std.mem.Allocator, initial: InitialClientState) Client
 /// Initializes the final destination without copying the reserved workspace slots.
 /// Example: `model.initInto(gpa, initial);`
 pub fn initInto(model: *ClientModel, gpa: std.mem.Allocator, initial: InitialClientState) void {
+    // SAFETY: Client initialization validates host_size before initializing the model at its final address.
     initial.host_size.validate() catch unreachable;
     const cell_size = initial.host_capabilities.cellSize(
         initial.host_size.cols,

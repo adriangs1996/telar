@@ -15,7 +15,6 @@ const identity = @import("../identity.zig");
 const secret_store = @import("secret.zig");
 const PortMemory = @import("PortMemory.zig");
 const TunnelJoin = @import("TunnelJoin.zig").TunnelJoin;
-const TunnelTestGate = @import("TunnelTestGate.zig");
 const Service = @This();
 
 io: std.Io,
@@ -24,9 +23,13 @@ listener: Listener,
 interception: Interception,
 /// The one secret every child of this runtime authenticates with.
 secret: identity.Secret,
+/// Admits a CONNECT without credentials when the proxy does not intercept
+/// its host: the tunnel stays opaque, so nothing anonymous reaches capture.
+anonymous_tunnels: bool,
 /// The port this runtime tried first; null when it remembered none. A
 /// bound port that differs means another process held this one.
 preferred_port: ?u16,
+// SAFETY: create initializes captures at the final address before returning or starting worker threads.
 captures: Producer = undefined,
 connections: Connections = .{},
 telemetry: Counters = .{},
@@ -38,8 +41,6 @@ tunnels: std.Io.Group = .init,
 stopping: std.Io.Event = .unset,
 /// Set by the reaper once every tunnel returned.
 tunnels_joined: std.Io.Event = .unset,
-/// Test seam: holds a tunnel in a wait no cancellation interrupts.
-tunnel_gate: ?*TunnelTestGate,
 /// The accept loop while the service runs; `stop` joins it.
 worker: ?service_support.Worker = null,
 /// The loop that closes connections past their deadlines and, when the
@@ -79,8 +80,8 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, paths: Paths) !*Service {
         .listener = listener,
         .interception = interception,
         .secret = secret,
+        .anonymous_tunnels = paths.anonymous_tunnels,
         .preferred_port = memory.preferred(),
-        .tunnel_gate = paths.tunnel_gate,
     };
     try service.captures.init(gpa, paths.capture);
 
@@ -136,6 +137,7 @@ pub fn start(self: *Service) !void {
 /// ```
 pub fn stop(self: *Service) TunnelJoin {
     if (self.worker) |*worker| {
+        // Cancellation joins the admission worker; its cancellation or prior accept error must not skip listener and tunnel teardown.
         _ = worker.cancel(self.io) catch {};
         self.worker = null;
     }
@@ -149,6 +151,7 @@ pub fn stop(self: *Service) TunnelJoin {
             return .abandoned;
         }
 
+        // Tunnels have joined before this await; the reaper's result must not prevent closing the capture queue.
         _ = reaper.await(self.io) catch {};
         self.reaper = null;
     }

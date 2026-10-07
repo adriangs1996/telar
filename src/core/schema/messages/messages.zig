@@ -346,6 +346,7 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
 }
 
 pub fn decodeServer(payload: []const u8) !ServerMessage {
+    // SAFETY: decodeServerInto writes the selected union variant; failure returns before message is read.
     var message: ServerMessage = undefined;
     try decodeServerInto(&message, payload);
     return message;

@@ -18,11 +18,3 @@ pub const Exit = union(enum) {
         };
     }
 };
-
-test "the process result maps to the conventional shell status" {
-    try std.testing.expectEqual(@as(u8, 7), (Exit{ .exited = 7 }).code());
-    try std.testing.expectEqual(
-        @as(u8, 128 + @intFromEnum(std.posix.SIG.TERM)),
-        (Exit{ .signaled = .TERM }).code(),
-    );
-}

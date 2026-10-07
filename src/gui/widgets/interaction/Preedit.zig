@@ -8,6 +8,7 @@ const Preedit = @This();
 
 pub const capacity = 4096;
 owner: ?Id = null,
+// SAFETY: update copies validated text before publishing len; text reads that prefix and clear resets it to zero.
 bytes: [capacity]u8 = undefined,
 len: u16 = 0,
 selection: [2]u32 = .{ 0, 0 },

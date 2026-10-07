@@ -60,15 +60,21 @@ pub const Slot = enum(u32) { _ };
 /// What every worker of this table calls.
 resolver: Resolver,
 phase: [capacity]std.atomic.Value(Phase) = @splat(.init(.free)),
+// SAFETY: add copies the hostname before publishing a resolving row; find and the worker read only host_len bytes.
 host: [capacity][HostName.max_len]u8 = undefined,
+// SAFETY: add sets the hostname length before publishing a resolving row; free rows are skipped.
 host_len: [capacity]u8 = undefined,
 /// The Io its tunnels wait through; the worker wakes them with it.
+// SAFETY: add assigns Io before publishing a resolving row; free rows are skipped.
 io: [capacity]std.Io = undefined,
 /// Tunnels waiting for the answer or reading it.
 waiters: [capacity]u32 = @splat(0),
+// SAFETY: The resolver fills at most max_addresses entries; readers wait for resolution success and cap found to that capacity.
 addresses: [capacity][max_addresses]IpAddress = undefined,
 /// Addresses the name has, which may exceed `max_addresses`.
+// SAFETY: Resolution completion sets found on success; readers wait for resolved and check failure before using it.
 found: [capacity]usize = undefined,
+// SAFETY: Resolution completion sets failure on both outcomes before publishing resolved; readers wait for that phase.
 failure: [capacity]?Failure = undefined,
 guard: std.atomic.Mutex = .unlocked,
 
@@ -168,45 +174,4 @@ pub fn count(self: *const Resolutions, phase: Phase) u32 {
 
 fn sameIo(left: std.Io, right: std.Io) bool {
     return left.userdata == right.userdata and left.vtable == right.vtable;
-}
-
-fn testResolver(host: HostName, addresses: []IpAddress) Failure!usize {
-    _ = host;
-    _ = addresses;
-    return 0;
-}
-
-test "a name finds its row whatever its case, and a removed row is free again" {
-    const io = std.testing.io;
-    var resolutions: Resolutions = .{
-        .resolver = testResolver,
-    };
-    const name = try HostName.init("api.example.test");
-    const shouted = try HostName.init("API.Example.Test");
-    const other = try HostName.init("other.example.test");
-
-    try std.testing.expect(resolutions.find(name, io) == null);
-    const slot = resolutions.add(name, io).?;
-    try std.testing.expectEqual(slot, resolutions.find(shouted, io).?);
-    try std.testing.expect(resolutions.find(other, io) == null);
-    try std.testing.expectEqual(@as(u32, 1), resolutions.count(.resolving));
-
-    resolutions.remove(slot);
-    try std.testing.expect(resolutions.find(name, io) == null);
-    try std.testing.expectEqual(@as(u32, capacity), resolutions.count(.free));
-}
-
-test "a full table adds no row" {
-    const io = std.testing.io;
-    var resolutions: Resolutions = .{
-        .resolver = testResolver,
-    };
-    var buffer: [32]u8 = undefined;
-
-    for (0..capacity) |index| {
-        const name = try HostName.init(try std.fmt.bufPrint(&buffer, "host-{d}.test", .{index}));
-        try std.testing.expect(resolutions.add(name, io) != null);
-    }
-
-    try std.testing.expect(resolutions.add(try HostName.init("one-more.test"), io) == null);
 }

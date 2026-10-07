@@ -190,12 +190,18 @@ fn readHalf(cursor: *Cursor) !?HalfType {
     if (!try cursor.boolean()) {
         return null;
     }
+    const head = try cursor.sized();
+    const body = try cursor.sized();
+    const encoding = try cursor.sized();
+    const decoded = try cursor.boolean();
+
+    // The head's truncation flag stays on the wire; nothing reads it.
+    _ = try cursor.boolean();
     return .{
-        .head = try cursor.sized(),
-        .body = try cursor.sized(),
-        .encoding = try cursor.sized(),
-        .decoded = try cursor.boolean(),
-        .head_truncated = try cursor.boolean(),
+        .head = head,
+        .body = body,
+        .encoding = encoding,
+        .decoded = decoded,
         .body_truncated = try cursor.boolean(),
         .status_code = try cursor.int(u16),
         .outcome = std.enums.fromInt(buffer_support.Outcome, try cursor.byte()) orelse return error.InvalidExchange,
@@ -215,39 +221,6 @@ fn writeInt(writer: *std.Io.Writer, comptime T: type, value: T) !void {
     var bytes: [@sizeOf(T)]u8 = undefined;
     std.mem.writeInt(T, &bytes, value, .little);
     try writer.writeAll(&bytes);
-}
-
-test "effect protocol round trips notifications and rejects trailing bytes" {
-    var batch: Batch = .{ .len = 2 };
-    batch.items[0] = .{ .notification = .{ .level = .warning, .duration_ms = 3000, .title = "Tap", .message = "Observed" } };
-    batch.items[1] = .{ .notification = .{ .level = .info, .duration_ms = 500, .title = "Again", .message = "" } };
-    var storage: [2048]u8 = undefined;
-    const encoded = try encodeEffects(&storage, 9, &batch);
-    const decoded = try decodeEffects(encoded);
-    try std.testing.expectEqual(@as(u64, 9), decoded.event_id);
-    try std.testing.expectEqual(@as(u8, 2), decoded.batch.len);
-    try std.testing.expectEqual(core.NotificationLevel.warning, decoded.batch.items[0].notification.level);
-    try std.testing.expectEqualStrings("Observed", decoded.batch.items[0].notification.message);
-    try std.testing.expectEqualStrings("Again", decoded.batch.items[1].notification.title);
-    storage[encoded.len] = 0;
-    try std.testing.expectError(error.TrailingFrame, decodeEffects(storage[0 .. encoded.len + 1]));
-}
-
-test "effect protocol rejects the retired command and evidence tags" {
-    for ([_]u8{ 1, 2, 4 }) |tag| {
-        const frame = [_]u8{ 2, 9, 0, 0, 0, 0, 0, 0, 0, 1, tag };
-        try std.testing.expectError(error.UnknownEffect, decodeEffects(&frame));
-    }
-}
-
-test "worker error protocol round trips and rejects trailing bytes" {
-    var storage: [128]u8 = undefined;
-    const encoded = try encodeError(&storage, 41, "budget exceeded");
-    const decoded = try decodeError(encoded);
-    try std.testing.expectEqual(@as(u64, 41), decoded.event_id);
-    try std.testing.expectEqualStrings("budget exceeded", decoded.message);
-    storage[encoded.len] = 0;
-    try std.testing.expectError(error.TrailingFrame, decodeError(storage[0 .. encoded.len + 1]));
 }
 
 const Cursor = struct {

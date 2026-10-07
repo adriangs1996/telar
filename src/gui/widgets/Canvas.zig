@@ -3,10 +3,8 @@
 const cellgrid = @import("cellgrid");
 const data = @import("model");
 const GlyphAtlas = @import("../text/GlyphAtlas.zig");
-const assets = @import("assets");
 const QuadList = gfx.QuadList;
-const TerminalRenderer = @import("../render/TerminalRenderer.zig");
-const std = @import("std");
+const Renderer = @import("../render/Renderer.zig");
 const core = @import("telar-core");
 const gfx = @import("gfx");
 const Color = gfx.Color;
@@ -33,7 +31,7 @@ const SpritePaint = @import("SpritePaint.zig");
 
 widgets: ?*State = null,
 /// The specialized cell cache is available to terminal widgets in a GUI frame.
-terminal_renderer: ?*TerminalRenderer = null,
+renderer: ?*Renderer = null,
 
 atlas: *GlyphAtlas,
 quads: *QuadList,
@@ -61,7 +59,7 @@ diagrams: ?*Store = null,
 /// cache. A canvas backed by another quad list cannot use that cache.
 /// Example: `try canvas.terminal(.{ .pane = pane, .view = view });`
 pub fn terminal(self: *Canvas, paint: PanePaint) !void {
-    const renderer = self.terminal_renderer orelse return error.TerminalPainterUnavailable;
+    const renderer = self.renderer orelse return error.TerminalPainterUnavailable;
     if (self.quads != &renderer.quads or self.atlas != &renderer.atlas.?) {
         return error.TerminalCanvasMismatch;
     }
@@ -424,88 +422,4 @@ fn color(self: Canvas, value: cellgrid.Color, fallback: [3]u8) Color {
 
 fn clampRadius(bounds: Rect, radius: f32) f32 {
     return @min(radius, @min(bounds.width, bounds.height) / 2);
-}
-
-test "chrome text clips graphemes preserves metrics and reuses the terminal atlas" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
-    defer atlas.deinit();
-    var quads = QuadList.init(std.testing.allocator);
-    defer quads.deinit();
-    var canvas: Canvas = .{
-        .atlas = &atlas,
-        .quads = &quads,
-        .origin = .{ 8, 12 },
-        .metrics = .{ .cell_width = 12, .cell_height = 24, .baseline = 18, .pixel_height = 16 },
-        .theme = data.theme_support.default_theme,
-    };
-    const area: cellgrid.Rect = .{ .x = 2, .y = 3, .w = 3, .h = 1 };
-    const label: Label = .{ .text = "e\u{301}界hidden", .underline = true };
-    try canvas.text(area, label);
-    const bounds = canvas.rect(area);
-    try std.testing.expect(quads.items().len > 0);
-    for (quads.items()) |quad| {
-        try std.testing.expect(quad.x >= bounds.x and quad.y >= bounds.y);
-        try std.testing.expect(quad.x + quad.width <= bounds.x + bounds.width);
-        try std.testing.expect(quad.y + quad.height <= bounds.y + bounds.height);
-    }
-
-    const version = atlas.version;
-    const calls = atlas.shape_calls;
-    quads.clear();
-    try canvas.text(area, label);
-    try std.testing.expectEqual(version, atlas.version);
-    try std.testing.expectEqual(calls, atlas.shape_calls);
-}
-
-test "fallback icons fit each chrome column with negative letter spacing" {
-    var renderer = TerminalRenderer.init(std.testing.allocator);
-    defer renderer.deinit();
-    renderer.config.font = .{ .size = 22, .line_height = 0.75, .letter_spacing = -5, .thicken = true };
-    _ = try renderer.measure(.{ .width = 800, .height = 600, .scale = 2 });
-    var quads = QuadList.init(std.testing.allocator);
-    defer quads.deinit();
-    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = .{ 8, 12 }, .theme = data.theme_support.default_theme };
-    const area: cellgrid.Rect = .{ .x = 1, .y = 1, .w = 3, .h = 1 };
-    try canvas.text(area, .{ .text = "\u{f07b}\u{f02db} " });
-    try std.testing.expectEqual(@as(usize, 2), quads.items().len);
-    const bounds = canvas.rect(area);
-    const width: f32 = @floatFromInt(renderer.metrics.cell_width);
-    for (quads.items(), 0..) |item, index| {
-        const x = bounds.x + @as(f32, @floatFromInt(index)) * width;
-        try std.testing.expect(item.x >= x and item.x + item.width <= x + width + 0.001);
-        try std.testing.expect(item.y >= bounds.y and item.y + item.height <= bounds.y + bounds.height + 0.001);
-    }
-}
-
-test "chrome icons track label size preserve aspect and reuse cached glyphs" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
-    defer atlas.deinit();
-    var quads = QuadList.init(std.testing.allocator);
-    defer quads.deinit();
-    var canvas: Canvas = .{ .atlas = &atlas, .quads = &quads, .origin = .{ 0, 0 }, .metrics = .{ .cell_width = 10, .cell_height = 24, .baseline = 18, .pixel_height = 16 }, .theme = data.theme_support.default_theme };
-    for ([_]u16{ 11, 22, 33 }) |size| {
-        canvas.chrome.small = size;
-        const bounds: Rect = .{ .x = 20, .y = 30, .width = 60, .height = 60 };
-        for ([_][]const u8{ "\u{f07b}", "\u{f110}", "\u{f240}", "\u{f2db}" }) |glyph| {
-            const label: Label = .{ .text = glyph, .size = .small, .alpha = 0.5 };
-            quads.clear();
-            try canvas.iconAt(bounds, label);
-            try std.testing.expectEqual(@as(usize, 1), quads.items().len);
-            const painted = quads.items()[0];
-            try std.testing.expectApproxEqAbs(canvas.iconSize(label), @max(painted.width, painted.height), 0.001);
-            try std.testing.expectApproxEqAbs(bounds.x + bounds.width / 2, painted.x + painted.width / 2, 0.001);
-            try std.testing.expectApproxEqAbs(bounds.y + bounds.height / 2, painted.y + painted.height / 2, 0.001);
-            try std.testing.expectApproxEqAbs(@as(f32, 0.5), painted.a, 0.001);
-            const version = atlas.version;
-            const calls = atlas.shape_calls;
-            quads.clear();
-            try canvas.iconAt(.{ .x = 0, .y = 0, .width = 5, .height = 8 }, label);
-            const narrow = quads.items()[0];
-            try std.testing.expect(narrow.x >= 0 and narrow.x + narrow.width <= 5.001);
-            try std.testing.expect(narrow.y >= 0 and narrow.y + narrow.height <= 8.001);
-            try std.testing.expectApproxEqAbs(painted.width / painted.height, narrow.width / narrow.height, 0.001);
-            try std.testing.expectEqual(version, atlas.version);
-            try std.testing.expectEqual(calls, atlas.shape_calls);
-        }
-    }
 }

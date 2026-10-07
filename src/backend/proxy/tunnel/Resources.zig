@@ -4,7 +4,6 @@ const Authority = localca.Authority;
 const Roots = localca.Roots;
 const Policy = @import("../Policy.zig");
 const Counters = @import("../Counters.zig");
-const Resources = @This();
 
 io: std.Io,
 gpa: std.mem.Allocator,

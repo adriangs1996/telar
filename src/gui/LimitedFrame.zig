@@ -4,16 +4,20 @@
 //! names the limit meanwhile, since the frame cannot show the notice.
 const core = @import("telar-core");
 const client = @import("telar-client");
-const native = @import("native/native.zig");
+const Window = @import("telar-window");
 const LimitedFrame = @This();
 
 observation: client.Observation,
-viewport: native.Viewport,
+viewport: Window.Viewport,
+/// Whether `observation` includes the frame's own notice. Update reports
+/// the limit after the frame stopped, then observes again.
+noticed: bool = false,
+// SAFETY: init copies the bounded limit name before setting name_len; limitName reads only that prefix.
 name: [core.Limit.max_name_bytes]u8 = undefined,
 name_len: u8 = 0,
 
 /// Example: `const frame = LimitedFrame.init(observation, viewport, "render.retained_max_cells");`
-pub fn init(observation: client.Observation, viewport: native.Viewport, limit_name: []const u8) LimitedFrame {
+pub fn init(observation: client.Observation, viewport: Window.Viewport, limit_name: []const u8) LimitedFrame {
     var frame: LimitedFrame = .{
         .observation = observation,
         .viewport = viewport,

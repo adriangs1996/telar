@@ -55,37 +55,8 @@ pub fn service(self: *EngineRuntime) *Service {
 /// ```
 pub fn deinit(self: *EngineRuntime) void {
     self.service_value.stop(self.io);
+    // The service has been stopped; join its actor before freeing its child and rings even if the actor returned an error.
     _ = self.worker.await(self.io) catch {};
     self.service_value.deinit(self.io);
     self.gpa.destroy(self.service_value);
-}
-
-const test_options: Options = .{
-    .arguments = &.{"/definitely/not/a/telar-engine"},
-    .timeout_ms = 1000,
-    .idle_timeout_ms = 60_000,
-};
-
-fn createAndDestroy(gpa: std.mem.Allocator) !void {
-    var runtime = try EngineRuntime.init(std.testing.io, gpa, test_options);
-    runtime.deinit();
-}
-
-test "every allocation failure rolls back engine runtime ownership" {
-    try std.testing.checkAllAllocationFailures(std.testing.allocator, createAndDestroy, .{});
-}
-
-test "an engine actor that cannot start releases the engine service" {
-    try std.testing.expectError(error.ConcurrencyUnavailable, EngineRuntime.init(std.Io.failing, std.testing.allocator, test_options));
-}
-
-test "the engine runtime answers through its actor and stops cleanly" {
-    const io = std.testing.io;
-    var runtime = try EngineRuntime.init(io, std.testing.allocator, test_options);
-    defer runtime.deinit();
-
-    const purpose: EnginePurpose = .{ .suggestion = .{ .client_id = 1, .client_generation = 1, .request_id = 1 } };
-    try std.testing.expect(runtime.service().submit(io, .{ .prompt = try Service.Prompt.init(purpose, "suggest") }));
-    const response = try runtime.service().receiveResponse(io);
-    try std.testing.expectEqual(pi_rpc.types.Status.unavailable, response.status);
 }

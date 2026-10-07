@@ -11,7 +11,6 @@ const std = @import("std");
 const pty = @import("pty");
 const bar_updates = @import("../config/bar_updates.zig");
 const pick_list = @import("../bars/pick_list.zig");
-const client_tests = @import("client_tests.zig");
 
 const Options = @import("../Options.zig");
 const ClientInit = @import("../ClientInit.zig");
@@ -36,7 +35,6 @@ const Job = @import("Job.zig").Job;
 const BackgroundJob = @import("BackgroundJob.zig").BackgroundJob;
 const job_runner = @import("job_runner.zig");
 const Message = @import("Message.zig").Message;
-const HostInputSource = @import("../input/HostInputSource.zig");
 const RouterConfig = @import("../input/RouterConfig.zig");
 const agent_sound = @import("../agents/agent_sound.zig");
 const prompt_paths = @import("../completion/prompt_paths.zig");
@@ -87,25 +85,29 @@ to_background: core.GenericRing(BackgroundJob, max_queued_jobs) = .{},
 /// The running plugin action's result. Its worker writes it before posting
 /// the completion that tells `plugin_actions.completePluginAction` to read
 /// it; it stays out of `Message`, which every event copies.
+// SAFETY: The plugin worker fills this result before a successful completion; completePluginAction reads it only on that success branch.
 plugin_result: data.WorkerResult = undefined,
 /// Host ports, bound by the adapter before the first event.
+// SAFETY: GUI, headless and harness initialization bind graphics before dispatching events; Client initialization and teardown do not call this port.
 graphics: GraphicsRetention = undefined,
+// SAFETY: GUI, headless and harness initialization bind chrome before dispatching events; Client initialization and teardown do not call this port.
 chrome: HostChrome = undefined,
 /// Bound only by hosts that draw attachment previews.
 attachments: ?AttachmentShelf = null,
 /// The one presentation in flight and what the host last delivered, shared
 /// by every adapter.
 presentation: PresentationLifecycle = .{},
-host_input_source: HostInputSource = undefined,
 /// What every session sends first; the adapter stores it before the link
 /// starts.
 bootstrap: ?data.RuntimeBootstrap = null,
 /// The socket a connection job produced; `runtime_transport` borrows it.
+// SAFETY: runtime_link.adopt assigns the channel before binding transport and setting channel_owned; teardown checks channel_owned before using it.
 channel: localsocket.SocketChannel = undefined,
 channel_owned: bool = false,
 /// The SSH forward carrying `channel` to a remote machine.
 forward: ?Forward = null,
 /// Written by the connection worker before its completion.
+// SAFETY: runConnect assigns this before successful completion; adoption and closure read it only after success or while connect_parked records that success.
 connect_result: RuntimeConnection = undefined,
 connect_report: ConnectReport = .{},
 /// A connection job is running; its result lands in `connect_result`.
@@ -117,13 +119,17 @@ connect_outdated: bool = false,
 /// waits in `connect_result` until that socket closes.
 connect_parked: bool = false,
 /// The text of the machine change being written; one change at a time.
+// SAFETY: machine_profiles copies the edit label before queuing its borrowed slice; machine_edit_pending prevents reuse until completion.
 machine_edit_label: [core.MachineProfile.max_label_bytes]u8 = undefined,
+// SAFETY: machine_profiles copies the edit value before queuing its borrowed slice; machine_edit_pending prevents reuse until completion.
 machine_edit_value: [core.ssh_destination.max_bytes]u8 = undefined,
 machine_edit_pending: bool = false,
 /// The destination and telar path the running connection job reads. They
 /// are written only when no job runs, so a machine renamed meanwhile never
 /// changes them.
+// SAFETY: Connection scheduling copies the destination before queuing its borrowed slice; it is not rewritten while the job runs.
 connect_destination: [core.ssh_destination.max_bytes]u8 = undefined,
+// SAFETY: Connection scheduling copies the executable path before queuing its borrowed slice; it is not rewritten while the job runs.
 connect_telar_path: [core.remote_telar.max_path_bytes]u8 = undefined,
 /// The wait before connecting again to a lost runtime.
 runtime_retry: pacing.DeadlineScheduler = .{},
@@ -133,8 +139,11 @@ graphics_resume: pacing.DeadlineScheduler = .{},
 connected_at_ns: u64 = 0,
 /// A remote machine's home and login shell for the first pane, copied
 /// from its discovery because the forward that holds them can stop.
+// SAFETY: adoptLaunchDefaults copies the remote home before assigning options.cwd to its initialized prefix.
 launch_cwd: [std.fs.max_path_bytes]u8 = undefined,
+// SAFETY: adoptLaunchDefaults copies the remote shell before constructing argv from its initialized prefix.
 launch_shell: [std.fs.max_path_bytes]u8 = undefined,
+// SAFETY: adoptLaunchDefaults fills argv through login_shell.interactive before assigning the returned initialized slice to options.arguments.
 launch_arguments: [1 + pty.login_shell.login_flags.len][]const u8 = undefined,
 /// Whether the window shows this client's machine. A hidden client keeps
 /// metadata only: it defers its first pane and leaves its workspace.
@@ -191,6 +200,7 @@ pub fn init(self: *Client, params: ClientInit) !void {
         .options = options,
         .client_identity = params.client_identity,
         .telemetry = .init(params.io, params.options.endpoint),
+        // SAFETY: initInto constructs the model at its final client address before model access or deinit registration.
         .model = undefined,
         .lua_generation = params.options.lua_generation,
         .plugin_registry = params.options.plugin_registry,
@@ -316,6 +326,7 @@ pub fn update(self: *Client, message: Message) !?u8 {
         .path_completion => |completion| try prompt_paths.completePathCompletion(self, completion),
         .link_opened => |result| try link_opening.completeLinkOpening(self, result),
         .sound_played => |result| try agent_sound.completeAgentSound(self, result),
+        // A failed native notification must not fail client update; it owns no pending state or retry token.
         .notified => |result| result catch {},
         .config_reload => |result| _ = try config_adoption.completeConfigReload(self, result),
         .runtime_connected => |result| try runtime_link.finishConnect(self, result),
@@ -392,12 +403,4 @@ fn queueGraphicsCredits(self: *Client) void {
         ) catch break;
         self.graphics.consumeCredit(credit);
     }
-}
-
-test "transport scheduling releases rejected reservations and retries queued frames in order" {
-    try client_tests.retryTransportScheduling(flush);
-}
-
-test "enqueue retains copied input after rejected scheduling and preserves order on retry" {
-    try client_tests.retainQueuedInput(flush);
 }

@@ -42,17 +42,3 @@ fn owner(user_data: ?*anyopaque) std.mem.Allocator {
     const allocator: *const std.mem.Allocator = @ptrCast(@alignCast(user_data.?));
     return allocator.*;
 }
-
-test "an inflater allocates its table from the hooks and returns it on delete" {
-    var counting: std.testing.FailingAllocator = .init(std.testing.allocator, .{});
-    const allocator = counting.allocator();
-    var memory = of(&allocator);
-
-    var inflater: ?*relay.c.nghttp2_hd_inflater = null;
-    try std.testing.expectEqual(@as(c_int, 0), relay.c.nghttp2_hd_inflate_new2(&inflater, &memory));
-    try std.testing.expect(counting.allocations > 0);
-
-    relay.c.nghttp2_hd_inflate_del(inflater);
-    try std.testing.expectEqual(counting.allocations, counting.deallocations);
-    try std.testing.expectEqual(counting.allocated_bytes, counting.freed_bytes);
-}

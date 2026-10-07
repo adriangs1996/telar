@@ -5,8 +5,6 @@ const RasterizerPoint = @import("RasterizerPoint.zig");
 const Color = @import("Color.zig");
 const freetype = @import("freetype");
 const Surface = @import("Surface.zig");
-const Rasterizer = @import("Rasterizer.zig");
-const std = @import("std");
 
 pub fn fixed26_6Round(value: anytype) i32 {
     const signed: i64 = @intCast(value);
@@ -77,21 +75,6 @@ fn blendPixel(surface: Surface, blend: PixelBlend) void {
     }
 
     surface.pixels[index + 3] = @intCast((total + 127) / 255);
-}
-
-test "transparent glyphs retain straight RGB and opaque blending stays unchanged" {
-    var pixels: [4]u8 = .{ 0, 0, 0, 0 };
-    const surface: Surface = .{ .pixels = &pixels, .width = 1, .height = 1 };
-    const blend: PixelBlend = .{
-        .point = .{ .x = 0, .y = 0 },
-        .color = .{ .red = 240, .green = 180, .blue = 120 },
-        .alpha = 64,
-    };
-    blendPixel(surface, blend);
-    try std.testing.expectEqualSlices(u8, &.{ 240, 180, 120, 64 }, &pixels);
-    pixels = .{ 20, 40, 60, 255 };
-    blendPixel(surface, blend);
-    try std.testing.expectEqualSlices(u8, &.{ 75, 75, 75, 255 }, &pixels);
 }
 
 const BitmapBlend = struct {

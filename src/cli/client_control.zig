@@ -7,6 +7,7 @@ const control = @import("control.zig");
 /// Discovers generation-scoped interactive clients. Example: `std.process.exit(client_control.run(init, options));`
 pub fn run(init: std.process.Init, options: ClientOptions) u8 {
     execute(init, options) catch |err| {
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar client: {s}\n", .{control.describe(err)});
         return switch (err) {
             error.RuntimeTimeout => 3,

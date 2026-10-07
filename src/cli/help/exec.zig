@@ -62,7 +62,6 @@ pub const family: FamilyHelp = .{
                 \\names the id to query before retrying. Detached: {s}
                 \\
             , .{ core.ExecutionRequest.max_arguments, execution.timeout_status, execution.failure_status, reply_text }),
-            .examples = &.{ &.{ "exec", "--no-stdin", "--", "/usr/bin/uname", "-a" }, &.{ "exec", "--id", "829341", "--detach", "--json", "--", "/bin/sh", "-c", "sleep 30; echo done" }, &.{ "exec", "start", "--cwd", "/tmp", "--timeout", "60", "--", "ls" } },
         },
         .{
             .name = "list",
@@ -76,7 +75,6 @@ pub const family: FamilyHelp = .{
             \\Exit 0.
             \\
             ,
-            .examples = &.{&.{ "exec", "list", "--json" }},
         },
         .{
             .name = "status",
@@ -88,7 +86,6 @@ pub const family: FamilyHelp = .{
                 \\{s} Exit 0; {d} when the id is unknown.
                 \\
             , .{ reply_text, execution.failure_status }),
-            .examples = &.{&.{ "exec", "status", "829341" }},
         },
         .{
             .name = "output",
@@ -107,7 +104,6 @@ pub const family: FamilyHelp = .{
                 \\silently incomplete artifact. For a file, use `telar file get` through exec.
                 \\
             , .{ backend.ExecutionPipes.retained_bytes / (1024 * 1024), execution.failure_status }),
-            .examples = &.{&.{ "exec", "output", "829341", "--stdout-offset", "4096" }},
         },
         .{
             .name = "cancel",
@@ -120,7 +116,6 @@ pub const family: FamilyHelp = .{
                 \\{s} Query `status` for the final state. Exit 0; {d} when unknown.
                 \\
             , .{ reply_text, execution.failure_status }),
-            .examples = &.{&.{ "exec", "cancel", "829341" }},
         },
         .{
             .name = "forget",
@@ -134,7 +129,6 @@ pub const family: FamilyHelp = .{
                 \\{s} Exit 0; {d} when unknown or still running.
                 \\
             , .{ reply_text, execution.failure_status }),
-            .examples = &.{&.{ "exec", "forget", "829341" }},
         },
     },
 };

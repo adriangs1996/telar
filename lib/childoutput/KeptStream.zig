@@ -1,6 +1,4 @@
 /// One stream of a child as it was kept.
-const KeptStream = @This();
-
 bytes: []u8 = &.{},
 /// Bytes read before `bytes` that its tail no longer holds.
 dropped: u64 = 0,

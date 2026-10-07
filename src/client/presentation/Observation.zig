@@ -1,6 +1,5 @@
 const data = @import("model");
 const PresentationIngress = @import("PresentationIngress.zig");
-const Observation = @This();
 
 model: data.Version = .{},
 graphics_ingress: u64 = 0,

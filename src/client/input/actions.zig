@@ -31,13 +31,13 @@ const Client = @import("../execution/Client.zig");
 const bar_updates = @import("../config/bar_updates.zig");
 const pick_list = @import("../bars/pick_list.zig");
 
-const ctrl_h = keyinput.chord.parseKey("ctrl+h") catch unreachable;
+const ctrl_h = keyinput.chord.parseKey("ctrl+h") catch @compileError("Invalid built-in key chord");
 
-const ctrl_j = keyinput.chord.parseKey("ctrl+j") catch unreachable;
+const ctrl_j = keyinput.chord.parseKey("ctrl+j") catch @compileError("Invalid built-in key chord");
 
-const ctrl_k = keyinput.chord.parseKey("ctrl+k") catch unreachable;
+const ctrl_k = keyinput.chord.parseKey("ctrl+k") catch @compileError("Invalid built-in key chord");
 
-const ctrl_l = keyinput.chord.parseKey("ctrl+l") catch unreachable;
+const ctrl_l = keyinput.chord.parseKey("ctrl+l") catch @compileError("Invalid built-in key chord");
 
 /// Bindings obey prompt authority; validated native effects retain their caller's authority.
 const ActionOrigin = enum { binding, effect };
@@ -188,6 +188,7 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
         .enter_copy_mode => _ = copy_mode.enterCopyMode(client),
         .command_tab => |reference| {
             const generation = client.lua_generation orelse return .continue_routing;
+            // SAFETY: command_tabs.find fills command on success; the failure branch returns before createCommandTab can read it.
             var command: data.CommandTab = undefined;
             if (!generation.snapshot.command_tabs.find(generation.number, reference, &command)) {
                 // Its recent row was cleared for newer ones: say so and

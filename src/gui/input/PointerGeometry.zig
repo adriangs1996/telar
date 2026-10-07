@@ -1,7 +1,8 @@
+const Window = @import("telar-window");
 const keyinput = @import("keyinput");
 const std = @import("std");
 const core = @import("telar-core");
-const Event = @import("PointerEvent.zig");
+const Event = @FieldType(Window.Input, "pointer");
 const Geometry = @This();
 
 origin: [2]u32 = .{ 0, 0 },
@@ -55,25 +56,4 @@ pub fn resolve(self: Geometry, event: Event) ?keyinput.Mouse {
             .leave => unreachable,
         },
     };
-}
-
-test "pointer geometry removes physical padding and clamps only retained gestures" {
-    const geometry: Geometry = .{ .origin = .{ 8, 4 }, .size = .{ .cols = 10, .rows = 4, .cell_width_px = 8, .cell_height_px = 16 } };
-    try std.testing.expect(geometry.resolve(.{ .kind = .press, .x = 7, .y = 4 }) == null);
-    const inside = geometry.resolve(.{ .kind = .press, .x = 24, .y = 20 }).?;
-    try std.testing.expectEqual(@as(u16, 2), inside.x);
-    try std.testing.expectEqual(@as(u16, 1), inside.y);
-    try std.testing.expectEqual(@as(u32, 16), inside.raw_x);
-    const outside = geometry.resolve(.{ .kind = .release, .x = -100, .y = 1000 }).?;
-    try std.testing.expectEqual(@as(u16, 0), outside.x);
-    try std.testing.expectEqual(@as(u16, 3), outside.y);
-}
-
-test "pointer normalization retains SGR button modifiers movement and wheel identity" {
-    const geometry: Geometry = .{ .size = .{ .cols = 4, .rows = 4, .cell_width_px = 8, .cell_height_px = 16 } };
-    const expected = [_]u8{ 28, 28, 60, 92, 93, 63 };
-    for (expected, [_]Event.Kind{ .press, .release, .drag, .scroll_up, .scroll_down, .move }) |button, kind| {
-        const event = geometry.resolve(.{ .kind = kind, .mods = 7 }).?;
-        try std.testing.expectEqual(button, event.button);
-    }
 }

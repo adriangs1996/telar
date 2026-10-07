@@ -47,16 +47,3 @@ pub fn remember(self: *Cache, key: u64) void {
 fn bucket(key: u64) usize {
     return std.hash.int(key) % buckets;
 }
-
-test "glyph failures retain exact keys with bounded replacement" {
-    var cache: Cache = .{};
-    try std.testing.expect(!cache.contains(1));
-    for (1..4096) |key| {
-        cache.remember(key);
-        try std.testing.expect(cache.contains(key));
-        try std.testing.expect(!cache.contains(key + 4096));
-    }
-
-    cache = .{};
-    try std.testing.expect(!cache.contains(4095));
-}

@@ -53,7 +53,6 @@ pub const family: FamilyHelp = .{
             \\reason on stderr (taken label or destination, invalid label, unreachable).
             \\
             ,
-            .examples = &.{ &.{ "machine", "add", "box", "dev@box.example.com", "--color", "#3366ff" }, &.{ "machine", "add", "box", "dev@box", "--setup", "--skip", "login", "--json" } },
         },
         .{
             .name = "setup",
@@ -82,7 +81,6 @@ pub const family: FamilyHelp = .{
                 \\detail, notes). Exit 0, also with a login still pending; 1 when a step failed.
                 \\
             , .{ machine_setup.probe_timeout_s, machine_setup.install_timeout_s }),
-            .examples = &.{ &.{ "machine", "setup", "box", "--json" }, &.{ "machine", "setup", "dev@box", "--label", "box", "--binary", "/tmp/telar", "--skip", "login,config" } },
         },
         .{
             .name = "list",
@@ -96,7 +94,6 @@ pub const family: FamilyHelp = .{
             \\color, enabled, telar_path, logins). Exit 0.
             \\
             ,
-            .examples = &.{&.{ "machine", "list", "--json" }},
         },
         .{
             .name = "check",
@@ -111,7 +108,6 @@ pub const family: FamilyHelp = .{
             \\unreachable or the schemas differ (run `machine setup` to install this build there).
             \\
             ,
-            .examples = &.{&.{ "machine", "check", "box", "--json" }},
         },
         .{
             .name = "remove",
@@ -122,7 +118,6 @@ pub const family: FamilyHelp = .{
             \\Results: nothing; exit 0, 1 when the label is unknown or local.
             \\
             ,
-            .examples = &.{&.{ "machine", "remove", "box" }},
         },
         .{
             .name = "rename",
@@ -133,7 +128,6 @@ pub const family: FamilyHelp = .{
             \\Results: nothing; exit 0, 1 when refused (unknown, taken or local label).
             \\
             ,
-            .examples = &.{&.{ "machine", "rename", "box", "gpu" }},
         },
         .{
             .name = "enable",
@@ -144,7 +138,6 @@ pub const family: FamilyHelp = .{
             \\`--machine LABEL` dispatch works either way. Results: nothing; exit 0 or 1.
             \\
             ,
-            .examples = &.{&.{ "machine", "enable", "box" }},
         },
         .{
             .name = "disable",
@@ -155,7 +148,6 @@ pub const family: FamilyHelp = .{
             \\Results: nothing; exit 0 or 1.
             \\
             ,
-            .examples = &.{&.{ "machine", "disable", "box" }},
         },
         .{
             .name = "receive-config",
@@ -166,7 +158,6 @@ pub const family: FamilyHelp = .{
             \\Run by `telar machine setup` on the machine being set up; not meant to be typed.
             \\
             ,
-            .examples = &.{&.{ "machine", "receive-config" }},
         },
     },
 };

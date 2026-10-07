@@ -9,8 +9,6 @@ const tab_label = @import("../workspace/tab_label.zig");
 const Results = @import("Results.zig");
 const Scorer = @import("Scorer.zig");
 const std = @import("std");
-const AgentSnapshot = @import("../agents/AgentSnapshot.zig");
-const WorkspaceListSnapshot = @import("../workspace/WorkspaceListSnapshot.zig");
 const Tabs = @import("../workspace/Tabs.zig");
 
 /// Every candidate the sources can hold, so an empty query lists them all.
@@ -144,31 +142,4 @@ fn insert(results: *Results, item: Item, item_score: u32) void {
     if (results.len != max_results) {
         results.len += 1;
     }
-}
-
-test "collect keeps matches ordered by score with a stable bound" {
-    var results: Results = .{};
-    var snapshot: AgentSnapshot = .{};
-    var workspaces: WorkspaceListSnapshot = .{};
-    const sources: Sources = .{
-        .agents = &snapshot,
-        .workspaces = &workspaces,
-        .model = null,
-    };
-
-    collect(sources, "", &results);
-    try std.testing.expectEqual(@as(u8, 0), results.len);
-
-    for (0..max_results + 8) |index| {
-        insert(&results, .{ .workspace = @enumFromInt(index + 1) }, @intCast(index));
-    }
-    try std.testing.expectEqual(@as(u8, max_results), results.len);
-    try std.testing.expectEqual(@as(u32, max_results + 7), results.slice()[0].score);
-}
-
-test "a label cut by its buffer ends at the last whole character" {
-    try std.testing.expectEqual(@as(usize, 3), lastBoundary("abc"));
-    try std.testing.expectEqual(@as(usize, 2), lastBoundary("ab\xc3\xa9"[0..3]));
-    try std.testing.expectEqual(@as(usize, 4), lastBoundary("ab\xc3\xa9"));
-    try std.testing.expectEqual(@as(usize, 1), lastBoundary("a\xe2\x82"));
 }

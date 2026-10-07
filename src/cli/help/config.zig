@@ -30,13 +30,11 @@ pub const family: FamilyHelp = .{
             \\only warn.
             \\
             ,
-            .examples = &.{ &.{ "config", "check" }, &.{ "config", "check", "/home/dev/.config/telar/config.lua", "--profile", "remote" } },
         },
         .{
             .name = "reload",
             .summary = "Make a window reload its configuration now",
             .usage = "telar config reload --client ID [--json] [--socket PATH]",
-            .routed = &.{.config_reload},
             .text =
             \\Effects: forwarded to the window `--client ID` names, which schedules a reload even
             \\when no watched file changed. Validation, atomic adoption and trust checks are the
@@ -48,13 +46,11 @@ pub const family: FamilyHelp = .{
             \\`config show`.
             \\
             ,
-            .examples = &.{&.{ "config", "reload", "--client", "1" }},
         },
         .{
             .name = "show",
             .summary = "Print a section of the configuration a window adopted",
             .usage = "telar config show --client ID [--section client|theme|gui|input|runtime|binding] [--index N] [--json] [--socket PATH]",
-            .routed = &.{.config_show},
             .text =
             \\Arguments:
             \\  --section NAME   `client` (default), `theme`, `gui`, `input`, `runtime` or
@@ -69,7 +65,6 @@ pub const family: FamilyHelp = .{
             \\section does not fit the reply; 2 unknown client; 3 no answer in time.
             \\
             ,
-            .examples = &.{ &.{ "config", "show", "--client", "1", "--section", "theme" }, &.{ "config", "show", "--client", "1", "--section", "binding", "--index", "0", "--json" } },
         },
     },
 };

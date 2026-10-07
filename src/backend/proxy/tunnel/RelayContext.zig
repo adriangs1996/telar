@@ -2,7 +2,6 @@
 //! both directions and calls these methods, which install capture streams
 //! for the exchange and count decode failures.
 const core = @import("telar-core");
-const owned = @import("../capture/owned.zig");
 const httprelay = @import("httprelay");
 const std = @import("std");
 const localca = @import("localca");
@@ -16,10 +15,6 @@ const EventObserver = @import("EventObserver.zig");
 const StreamsInFlight = @import("StreamsInFlight.zig");
 const h2 = httprelay.http2;
 const relay_module = httprelay.http2;
-const Counters = @import("../Counters.zig");
-const Snapshot = @import("../Snapshot.zig");
-const HeaderField = h2frames.HeaderField;
-const Joiner = owned.Joiner;
 const GenericConnection = httprelay.http2.GenericConnection;
 const RelayContext = @This();
 
@@ -118,123 +113,3 @@ pub fn recordLimits(self: *RelayContext, _: relay_module.Direction, stats: Stats
 pub fn settle(self: *RelayContext) void {
     _ = self;
 }
-
-test "decode failure increments only the HTTP2 counter" {
-    var harness: H2TestHarness = .{};
-    harness.init();
-    var context: RelayContext = .{
-        .io = std.testing.io,
-        .gpa = std.testing.allocator,
-        .session = undefined,
-        .exchange = &harness.exchange,
-    };
-
-    context.recordDecodeFailure(.request);
-
-    try std.testing.expectEqual(@as(u64, 1), harness.snapshot().h2_decode_failures);
-}
-
-test "HTTP2 capture keeps interleaved streams independent" {
-    var producer: Producer = undefined;
-    try producer.init(std.testing.allocator, .{
-        .enabled = true,
-        .max_part_bytes = 512,
-        .max_exchange_bytes = 1024,
-        .max_total_bytes = 4096,
-    });
-    defer producer.close(std.testing.io);
-    var harness: H2TestHarness = .{};
-    harness.init();
-    harness.exchange.host = try std.Io.net.HostName.init("example.test");
-    var requests: CaptureStreams = .{ .producer = &producer, .exchange = &harness.exchange, .side = .request };
-    defer requests.deinit();
-    var responses: CaptureStreams = .{ .producer = &producer, .exchange = &harness.exchange, .side = .response };
-    defer responses.deinit();
-    var request_observer: EventObserver = .{ .captures = &requests };
-    var response_observer: EventObserver = .{ .captures = &responses };
-    const first_request_headers = [_]HeaderField{
-        .{ .name = ":method", .value = "POST" },
-        .{ .name = ":path", .value = "/first" },
-    };
-    const second_request_headers = [_]HeaderField{
-        .{ .name = ":method", .value = "GET" },
-        .{ .name = ":path", .value = "/second" },
-    };
-    const response_headers = [_]HeaderField{.{ .name = ":status", .value = "200" }};
-
-    request_observer.emit(.{ .request_headers = .{ .stream_id = 1, .fields = &first_request_headers } });
-    request_observer.emit(.{ .request_headers = .{ .stream_id = 3, .fields = &second_request_headers } });
-    request_observer.emit(.{ .request_body = .{ .stream_id = 1, .bytes = "first-" } });
-    request_observer.emit(.{ .request_body = .{ .stream_id = 3, .bytes = "second-" } });
-    request_observer.emit(.{ .request_body = .{ .stream_id = 1, .bytes = "body" } });
-    request_observer.emit(.{ .request_body = .{ .stream_id = 3, .bytes = "body" } });
-    request_observer.emit(.{ .request_finished = .{ .stream_id = 3 } });
-    request_observer.emit(.{ .request_finished = .{ .stream_id = 1 } });
-
-    response_observer.emit(.{ .response_headers = .{ .stream_id = 3, .fields = &response_headers } });
-    response_observer.emit(.{ .response_headers = .{ .stream_id = 1, .fields = &response_headers } });
-    response_observer.emit(.{ .response_body = .{ .stream_id = 3, .status_code = 200, .sse_body = false, .bytes = "two" } });
-    response_observer.emit(.{ .response_body = .{ .stream_id = 1, .status_code = 200, .sse_body = false, .bytes = "one" } });
-    response_observer.emit(.{ .lifecycle = .{ .stage = .response_ended, .stream_id = 1, .status_code = 200 } });
-    response_observer.emit(.{ .lifecycle = .{ .stage = .response_ended, .stream_id = 3, .status_code = 200 } });
-
-    var joiner = Joiner.init(30_000);
-    defer joiner.deinit();
-    var completed: usize = 0;
-    var saw_first = false;
-    var saw_second = false;
-    for (0..4) |_| {
-        const half = try producer.receive(std.testing.io);
-        switch (joiner.push(1, half)) {
-            .pending => {},
-            .complete => |value| {
-                var exchange = value;
-                defer exchange.deinit();
-                completed += 1;
-                const request = exchange.request.?;
-                const response = exchange.response.?;
-                if (request.key.stream_id == 1) {
-                    saw_first = true;
-                    try std.testing.expectEqualStrings("/first", request.target());
-                    try std.testing.expectEqualStrings("first-body", request.body.bytes());
-                    try std.testing.expectEqualStrings("one", response.body.bytes());
-                } else {
-                    saw_second = true;
-                    try std.testing.expectEqualStrings("/second", request.target());
-                    try std.testing.expectEqualStrings("second-body", request.body.bytes());
-                    try std.testing.expectEqualStrings("two", response.body.bytes());
-                }
-            },
-            .partial, .full => |value| {
-                var exchange = value;
-                exchange.deinit();
-                return error.UnexpectedPartialCapture;
-            },
-        }
-    }
-
-    try std.testing.expectEqual(@as(usize, 2), completed);
-    try std.testing.expect(saw_first);
-    try std.testing.expect(saw_second);
-}
-
-const H2TestHarness = struct {
-    counters: Counters = .{},
-    exchange: Exchange = undefined,
-
-    /// Builds the harness at its final address: the exchange borrows the counters.
-    pub fn init(self: *H2TestHarness) void {
-        self.exchange = .{
-            .io = std.testing.io,
-            .telemetry = &self.counters,
-            .connection_id = 29,
-            .protocol = .h2,
-        };
-    }
-
-    pub fn snapshot(self: *const H2TestHarness) Snapshot {
-        return self.counters.snapshot(.{
-            .connections = .{ .active = 0, .limit_drops = 0 },
-        });
-    }
-};

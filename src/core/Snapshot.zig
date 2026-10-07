@@ -1,5 +1,3 @@
-const Snapshot = @This();
-
 live_bytes: u64 = 0,
 live_allocs: u64 = 0,
 allocs: u64 = 0,

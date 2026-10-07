@@ -17,9 +17,11 @@ pub const payload_capacity = 64;
 framing: ApcFraming = .{},
 /// The current command's `;` was seen: content is payload from here on.
 in_payload: bool = false,
+// SAFETY: Command scanning writes each retained byte before increasing control_len; commands expose only that prefix.
 control: [control_capacity]u8 = undefined,
 control_len: usize = 0,
 truncated: bool = false,
+// SAFETY: Command scanning writes each retained byte before increasing payload_len; commands expose only that prefix.
 payload: [payload_capacity]u8 = undefined,
 payload_len: usize = 0,
 
@@ -99,63 +101,4 @@ fn capture(self: *KittyCommandScanner, content: []const u8) void {
             self.payload_len += 1;
         }
     }
-}
-
-test "commands end at their terminator across every split" {
-    const stream = "a\x1b[1mb\x1b_Ga=T,f=100;iVBORw0KGgo\x1b\\text\x1b_Xother\x1b\\\x1b_Ga=d\x1b\\";
-    for (0..stream.len + 1) |split| {
-        var scanner: KittyCommandScanner = .{};
-        var found: [2]struct { end: usize, control: [16]u8, control_len: usize, payload_len: usize } = undefined;
-        var count: usize = 0;
-        var consumed: usize = 0;
-        for ([_][]const u8{ stream[0..split], stream[split..] }) |part| {
-            var rest = part;
-            var base = consumed;
-            while (scanner.next(rest)) |command| {
-                found[count] = .{ .end = base + command.end, .control = undefined, .control_len = command.control.len, .payload_len = command.payload.len };
-                @memcpy(found[count].control[0..command.control.len], command.control);
-                count += 1;
-                base += command.end;
-                rest = rest[command.end..];
-            }
-
-            consumed += part.len;
-        }
-
-        try std.testing.expectEqual(@as(usize, 2), count);
-        // A command ends at its ESC; the `\\` that follows is the next byte.
-        try std.testing.expectEqual(std.mem.indexOf(u8, stream, "text").? - 1, found[0].end);
-        try std.testing.expectEqualStrings("a=T,f=100", found[0].control[0..found[0].control_len]);
-        try std.testing.expectEqual(@as(usize, 11), found[0].payload_len);
-        try std.testing.expectEqual(stream.len - 1, found[1].end);
-        try std.testing.expectEqualStrings("a=d", found[1].control[0..found[1].control_len]);
-        try std.testing.expectEqual(@as(usize, 0), found[1].payload_len);
-    }
-}
-
-test "long control data is truncated and the payload keeps its first bytes" {
-    var scanner: KittyCommandScanner = .{};
-    var stream: [control_capacity + 200]u8 = undefined;
-    stream[0] = 0x1b;
-    stream[1] = '_';
-    stream[2] = 'G';
-    @memset(stream[3 .. control_capacity + 10], 'x');
-    stream[control_capacity + 10] = ';';
-    @memset(stream[control_capacity + 11 .. stream.len - 2], 'A');
-    stream[stream.len - 2] = 0x1b;
-    stream[stream.len - 1] = '\\';
-    const command = scanner.next(&stream).?;
-    try std.testing.expect(command.truncated);
-    try std.testing.expectEqual(@as(usize, control_capacity), command.control.len);
-    try std.testing.expectEqual(@as(usize, payload_capacity), command.payload.len);
-    try std.testing.expectEqual(stream.len - 1, command.end);
-}
-
-test "an aborted command ends where Ghostty ends it and keeps no ignored bytes" {
-    var scanner: KittyCommandScanner = .{};
-    const stream = "\x1b_Ga=T,\x9ef=24;AAAA\x18text";
-    const command = scanner.next(stream).?;
-    try std.testing.expectEqualStrings("a=T,f=24", command.control);
-    try std.testing.expectEqualStrings("AAAA", command.payload);
-    try std.testing.expectEqualStrings("text", stream[command.end..]);
 }

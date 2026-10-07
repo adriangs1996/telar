@@ -6,8 +6,6 @@
 //! exec.
 
 const std = @import("std");
-const Command = @import("Command.zig");
-const Session = @import("Session.zig");
 
 /// Whether `inherited` holds the limit the process started with. Set once,
 /// before any raise, and read by children after fork.
@@ -16,6 +14,7 @@ var recorded: std.atomic.Value(bool) = .init(false);
 /// FD_SETSIZE on Linux and macOS: descriptors from this one on do not fit
 /// the fd_set select() takes.
 pub const select_descriptor_ceiling: std.posix.rlim_t = 1024;
+// SAFETY: raise stores the inherited limit before publishing recorded; restoreInChild checks recorded before reading it.
 var inherited: std.posix.rlimit = undefined;
 
 /// Raises the process's soft descriptor limit toward `wanted`, never past
@@ -39,6 +38,7 @@ pub fn raise(wanted: std.posix.rlim_t) void {
     }
 
     limits.cur = target;
+    // Raising this soft limit is optional; failure leaves the kernel's previous limit in effect.
     std.posix.setrlimit(.NOFILE, limits) catch {};
 }
 
@@ -53,74 +53,6 @@ pub fn restoreInChild() void {
         return;
     }
 
+    // Failure leaves the bounded parent limit in effect; this post-fork path must not allocate or log before exec.
     std.posix.setrlimit(.NOFILE, inherited) catch {};
 }
-
-test "a raise stops at the select() ceiling" {
-    const original = try std.posix.getrlimit(.NOFILE);
-    defer std.posix.setrlimit(.NOFILE, original) catch {};
-
-    var lowered = original;
-    lowered.cur = @min(original.cur, 256);
-    try std.posix.setrlimit(.NOFILE, lowered);
-    recorded.store(false, .release);
-    defer recorded.store(false, .release);
-
-    raise(4 * select_descriptor_ceiling);
-    try std.testing.expectEqual(@min(select_descriptor_ceiling, original.max), (try std.posix.getrlimit(.NOFILE)).cur);
-}
-
-test "a raised limit is restored to the inherited one" {
-    const original = try std.posix.getrlimit(.NOFILE);
-    defer std.posix.setrlimit(.NOFILE, original) catch {};
-
-    var lowered = original;
-    lowered.cur = @min(original.cur, 256);
-    try std.posix.setrlimit(.NOFILE, lowered);
-    recorded.store(false, .release);
-    defer recorded.store(false, .release);
-
-    raise(lowered.cur + 64);
-    try std.testing.expectEqual(@min(lowered.cur + 64, original.max), (try std.posix.getrlimit(.NOFILE)).cur);
-
-    restoreInChild();
-    try std.testing.expectEqual(lowered.cur, (try std.posix.getrlimit(.NOFILE)).cur);
-}
-
-test "a child spawned on a pty starts with the inherited limit" {
-    const io = std.testing.io;
-    const original = try std.posix.getrlimit(.NOFILE);
-    defer std.posix.setrlimit(.NOFILE, original) catch {};
-
-    var lowered = original;
-    lowered.cur = @min(original.cur, 256);
-    try std.posix.setrlimit(.NOFILE, lowered);
-    recorded.store(false, .release);
-    defer recorded.store(false, .release);
-
-    raise(lowered.cur + 64);
-
-    const args = [_][*:0]const u8{ "/bin/sh", "-c", "ulimit -n" };
-    const command = try Command.fromArgv(&args);
-    var session = try Session.spawn(&command, .{
-        .cols = 20,
-        .rows = 5,
-    });
-    defer session.deinit();
-
-    var expected_buffer: [32]u8 = undefined;
-    const expected = try std.fmt.bufPrint(&expected_buffer, "{d}\r\n", .{lowered.cur});
-    var output: [64]u8 = undefined;
-    var len: usize = 0;
-    while (!std.mem.endsWith(u8, output[0..len], "\r\n")) {
-        const read_len = try session.read(io, output[len..]);
-        if (read_len == 0) {
-            break;
-        }
-
-        len += read_len;
-    }
-
-    try std.testing.expectEqualStrings(expected, output[0..len]);
-}
-

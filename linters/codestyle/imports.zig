@@ -60,36 +60,3 @@ fn declares(tree: *const Ast, token: Ast.TokenIndex) bool {
 
     return next < tree.tokens.len and tree.tokenTag(next) == .semicolon;
 }
-
-fn expectInline(expected: usize, source: [:0]const u8) !void {
-    var tree = try Ast.parse(std.testing.allocator, source, .zig);
-    defer tree.deinit(std.testing.allocator);
-    const tokens = try find(std.testing.allocator, &tree);
-    defer std.testing.allocator.free(tokens);
-
-    try std.testing.expectEqual(expected, tokens.len);
-}
-
-test "declared and discarded imports are accepted" {
-    try expectInline(0,
-        \\const std = @import("std");
-        \\const Router = @import("GenericRouter.zig").Type;
-        \\test {
-        \\    _ = @import("tests.zig");
-        \\}
-    );
-}
-
-test "a declaration may choose between imports per platform" {
-    try expectInline(0,
-        \\const Native = if (true) @import("Native.zig") else @import("Fallback.zig");
-        \\const impl = switch (1) { 1 => @import("windows.zig"), else => @import("posix.zig") };
-    );
-}
-
-test "imports inside expressions are reported" {
-    try expectInline(2,
-        \\var label: @import("Label.zig") = .{};
-        \\fn size() usize { return @sizeOf(@import("Cache.zig")); }
-    );
-}

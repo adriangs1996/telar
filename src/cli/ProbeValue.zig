@@ -1,10 +1,10 @@
 //! One bounded value a machine probe reported: a path, a version line.
-const std = @import("std");
 const ProbeValue = @This();
 
 /// The longest value a probe line carries, in bytes.
 pub const max_bytes = 255;
 
+// SAFETY: init copies the bounded probe value before setting len; slice reads only that prefix.
 bytes: [max_bytes]u8 = undefined,
 len: u8 = 0,
 

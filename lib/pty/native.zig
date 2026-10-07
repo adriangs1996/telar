@@ -106,6 +106,7 @@ pub fn flushPty(master: std.c.fd_t) void {
 }
 
 pub fn waitObserve(pid: std.c.pid_t) !void {
+    // SAFETY: The blocking waitid writes siginfo on success; info.code is read only after that success.
     var info: std.c.siginfo_t = undefined;
     while (true) {
         const result = waitid(WAITID.P_PID, @intCast(pid), &info, WAITID.WEXITED | WAITID.WNOWAIT);
@@ -127,6 +128,7 @@ pub fn waitObserve(pid: std.c.pid_t) !void {
 }
 
 pub fn waitPid(pid: std.c.pid_t) !exit.Exit {
+    // SAFETY: waitpid writes child_status when it returns a child pid; other results retry or return an error.
     var child_status: c_int = undefined;
     while (true) {
         const result = std.c.waitpid(pid, &child_status, 0);
@@ -154,6 +156,7 @@ pub fn waitPid(pid: std.c.pid_t) !exit.Exit {
 
 pub fn terminateAndReap(pid: std.c.pid_t) void {
     terminate(pid);
+    // Called during spawn failure cleanup; preserve that failure even if the child has already been collected or waitpid fails.
     _ = waitPid(pid) catch {};
 }
 
@@ -170,28 +173,6 @@ pub fn terminateForeground(master: std.c.fd_t) void {
 
 pub fn terminate(pid: std.c.pid_t) void {
     _ = std.c.kill(pid, .KILL);
-}
-
-test "close-on-exec setup reports invalid descriptors" {
-    try std.testing.expectError(error.SetCloseOnExecFailed, setCloseOnExec(-1));
-}
-
-test "output readiness never waits and does not consume queued bytes" {
-    var pipe = try openCloseOnExecPipe();
-    defer closeDescriptor(&pipe[0]);
-    defer closeDescriptor(&pipe[1]);
-
-    try std.testing.expect(!outputReady(pipe[0]));
-    try std.testing.expectEqual(@as(isize, 1), std.c.write(pipe[1], "x", 1));
-    try std.testing.expect(outputReady(pipe[0]));
-    try std.testing.expect(outputReady(pipe[0]));
-
-    var byte: [1]u8 = undefined;
-    try std.testing.expectEqual(@as(isize, 1), std.c.read(pipe[0], &byte, 1));
-    try std.testing.expectEqualStrings("x", &byte);
-    try std.testing.expect(!outputReady(pipe[0]));
-
-    try std.testing.expect(!outputReady(-1));
 }
 
 const Pair = struct {

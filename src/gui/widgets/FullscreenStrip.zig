@@ -246,6 +246,7 @@ fn progress(self: FullscreenStrip, canvas: *Canvas, band: Rect, pane: *const dat
 
 fn indexLabel(item: *const Entry, storage: *[8]u8, color: cellgrid.Color) Label {
     return .{
+        // SAFETY: Entry.index is u16 and needs at most five of the eight buffer bytes.
         .text = std.fmt.bufPrint(storage, "{d}", .{item.index}) catch unreachable,
         .color = color,
         .bold = item.focused,

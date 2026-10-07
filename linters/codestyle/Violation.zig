@@ -1,5 +1,4 @@
 const diagnostic = @import("diagnostic.zig");
-const Violation = @This();
 
 rule: diagnostic.Rule,
 line: usize,

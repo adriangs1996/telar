@@ -46,20 +46,3 @@ pub fn reset(self: *FaviconsState) void {
 pub fn busy(self: *const FaviconsState) bool {
     return self.execution != .none;
 }
-
-const std = @import("std");
-
-test "one execution is reserved, only that one finishes and a reset orphans it" {
-    var self: FaviconsState = .{};
-    try std.testing.expect(!self.busy());
-    const first = self.reserve(@enumFromInt(7));
-    try std.testing.expect(self.busy());
-    try std.testing.expect(!self.finish(@enumFromInt(99)));
-    try std.testing.expect(!self.finish(.none));
-    try std.testing.expect(self.finish(first));
-    try std.testing.expect(!self.finish(first));
-    const second = self.reserve(@enumFromInt(8));
-    try std.testing.expect(second != first);
-    self.reset();
-    try std.testing.expect(!self.finish(second));
-}

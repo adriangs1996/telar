@@ -1,5 +1,5 @@
 const client = @import("telar-client");
-const native = @import("native/native.zig");
+const Window = @import("telar-window");
 wait: client.ConfigWaitArgs,
 current: client.GuiConfig,
-viewport: native.Viewport,
+viewport: Window.Viewport,

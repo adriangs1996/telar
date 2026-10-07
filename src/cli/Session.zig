@@ -576,8 +576,8 @@ pub fn nowMs(self: *const Session) i64 {
     return std.Io.Timestamp.now(self.io, .real).toMilliseconds();
 }
 
-pub fn sleepMs(self: *const Session, milliseconds: u32) void {
-    self.io.sleep(.fromMilliseconds(milliseconds), .awake) catch {};
+pub fn sleepMs(self: *const Session, milliseconds: u32) std.Io.Cancelable!void {
+    try self.io.sleep(.fromMilliseconds(milliseconds), .awake);
 }
 
 /// Sends a seen marker; a following query acts as an ordering barrier. Example: `try session.acknowledge(pane);`

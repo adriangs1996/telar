@@ -7,8 +7,10 @@ const std = @import("std");
 const WorkerRequest = @import("WorkerRequest.zig");
 const Registry = @This();
 
+// SAFETY: Registry loading writes each package before increasing count; lookup and invocation use occupied package slots.
 packages: [data.config_values.max_plugins]Package = undefined,
 count: u8 = 0,
+// SAFETY: Registry loading copies every trust entry before returning; authorization scans only the copied grant_count entries.
 grants: [core.max_grants]core.Grant = undefined,
 grant_count: u8 = 0,
 

@@ -2,6 +2,7 @@
 const data = @import("model");
 const CommandSpec = @This();
 
+// SAFETY: Command parsing copies argv bytes before returning the configured command; argument uses offsets and lengths below argument_count.
 bytes: [data.config_values.max_agent_description_command_bytes]u8 = undefined,
 byte_len: u16 = 0,
 offsets: [data.config_values.max_agent_description_command_args]u16 = @splat(0),

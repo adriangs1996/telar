@@ -4,8 +4,6 @@ const Launch = @import("../Launch.zig");
 /// Forces a named workspace identity at `launch.cwd`. Unlike `open_pane`, this
 /// never attaches to an existing workspace with the same path. The name is
 /// explicit and remains independent from pane cwd changes.
-const CreateWorkspace = @This();
-
 request_id: id.RequestId,
 size: TerminalSize,
 name: []const u8,

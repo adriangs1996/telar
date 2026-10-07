@@ -3,6 +3,7 @@ const core = @import("telar-core");
 const std = @import("std");
 const Self = @This();
 
+// SAFETY: copy fills every argument length before returning success; view reads only lengths below count.
 lengths: [core.max_argument_count]u16 = undefined,
 count: u16 = 0,
 

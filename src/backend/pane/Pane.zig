@@ -30,9 +30,6 @@ const TitleState = @import("TitleState.zig");
 const LaunchRecord = @import("LaunchRecord.zig");
 const TextRequest = @import("TextRequest.zig");
 const TextDump = @import("TextDump.zig");
-const SearchResult = @import("SearchResult.zig");
-const text_search = @import("text_search.zig");
-const PaneCursor = text_search.Search;
 const PaneKey = @import("PaneKey.zig");
 const MediaProcessingBorrow = @import("MediaProcessingBorrow.zig");
 const Stats = @import("../media/Stats.zig");
@@ -80,6 +77,7 @@ render_state: vt.RenderState = .empty,
 text_metadata: TextMetadataCapture,
 screen: cellgrid.Buffer,
 damaged_rows: []bool,
+// SAFETY: The PTY reader fills this buffer before publishing output_len; output processing reads only that prefix.
 output_buffer: [pane_namespace.output_chunk_size]u8 = undefined,
 cursor: core.Cursor = .{},
 mouse: core.Mouse = .{},
@@ -194,15 +192,23 @@ pub fn create(resources: CreationResources, request: CreationRequest) !*Pane {
         .workspace_path = workspace_copy,
         .cwd = try .init(launch_cwd),
         .manifests = resources.manifests,
+        // SAFETY: The PTY is spawned last, before returning pane; setup callbacks enqueue responses or read size without accessing session.
         .session = undefined,
         .size = size,
+        // SAFETY: terminal is initialized at the final pane address before handler construction; cleanup is registered only after success.
         .terminal = undefined,
+        // SAFETY: TerminalStream.init constructs stream after the terminal has its final address, before resize or stream cleanup.
         .stream = undefined,
+        // SAFETY: media.init constructs the pipeline before use; its errdefer is registered only after initialization succeeds.
         .media = undefined,
+        // SAFETY: history_observer.init constructs the observer before render or use; cleanup is registered only after success.
         .history_observer = undefined,
         .agent_process_cache = .init(std.mem.span(command.file)),
+        // SAFETY: screen.init allocates the grid before render; cleanup is registered only after success.
         .screen = undefined,
+        // SAFETY: text_metadata.init constructs the row storage before render; cleanup is registered only after success.
         .text_metadata = undefined,
+        // SAFETY: The slice is allocated and every flag cleared before render; only that allocation is registered for cleanup.
         .damaged_rows = undefined,
     };
     pane.terminal = try .init(io, gpa, .{
@@ -526,27 +532,6 @@ const TailWriter = struct {
     const continuation_mask = 0b1100_0000;
     const continuation_bits = 0b1000_0000;
 };
-
-/// Finds `needle` in the most recent rows of scrollback and screen, in
-/// document order and absolute coordinates. ASCII case folds unless the
-/// needle contains an uppercase letter. Bounded by `max_search_rows`
-/// rows, `max_search_cols` cells per row and `storage.len` matches;
-/// exceeding any bound sets `truncated`.
-///
-/// ```zig
-/// var matches: [schema.max_search_matches]schema.SearchMatch = undefined;
-/// const result = pane.searchText("error", &matches);
-/// ```
-pub fn searchText(self: *const Pane, needle: []const u8, storage: []core.SearchMatch) SearchResult {
-    std.debug.assert(!self.ingest_pending);
-    var cursor = PaneCursor.init(needle);
-    while (!(cursor.advance(self) catch unreachable)) {}
-    const found = cursor.ordered(storage);
-    return .{
-        .count = @intCast(found.len),
-        .truncated = cursor.truncated or cursor.count > found.len,
-    };
-}
 
 pub fn key(self: *const Pane) PaneKey {
     return .{ .id = self.id, .generation = self.generation };

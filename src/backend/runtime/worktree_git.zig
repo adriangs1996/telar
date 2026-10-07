@@ -2,7 +2,6 @@
 //! diff against its base, commits ahead and local changes. A worktree running
 //! a command is measured more often than a quiet one, one probe is in flight
 //! at a time, and a changed result reaches every client's workspace list.
-//! See `docs/flows/worktree-git.md`.
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -183,103 +182,4 @@ fn observed(worktrees: *const Worktrees, slot: usize) Observed {
     };
     @memcpy(value.branch[0..value.branch_len], worktrees.branchAt(slot));
     return value;
-}
-
-test "a clean worktree turns integrated only after it held work, and a missing checkout is gone" {
-    const gpa = std.testing.allocator;
-    const table = try gpa.create(Worktrees);
-    defer gpa.destroy(table);
-    table.* = .{};
-    defer table.deinit(gpa);
-    const registered = try table.register(gpa, .{
-        .source = @enumFromInt(1),
-        .path = "/w/fix",
-        .branch = "fix",
-        .base = "main",
-    });
-
-    table.git_probe = registered.id;
-    try std.testing.expect(!commit(table, .{ .worktree = registered.id, .present = true, .measured = true }, 10));
-    try std.testing.expectEqual(core.WorktreeState.active, table.state[registered.slot]);
-
-    table.git_probe = registered.id;
-    try std.testing.expect(commit(table, .{ .worktree = registered.id, .present = true, .measured = true, .stat = .{ .added = 3, .files = 1, .commits_ahead = 1 } }, 20));
-    try std.testing.expectEqual(@as(u32, 3), table.diff_added[registered.slot]);
-
-    table.git_probe = registered.id;
-    try std.testing.expect(commit(table, .{ .worktree = registered.id, .present = true, .measured = true }, 30));
-    try std.testing.expectEqual(core.WorktreeState.integrated, table.state[registered.slot]);
-
-    table.git_probe = registered.id;
-    try std.testing.expect(commit(table, .{ .worktree = registered.id }, 40));
-    try std.testing.expectEqual(core.WorktreeState.gone, table.state[registered.slot]);
-    try std.testing.expect(reserve(table, 100_000) == null);
-}
-
-test "a probe that measured nothing leaves the state as it was" {
-    const gpa = std.testing.allocator;
-    const table = try gpa.create(Worktrees);
-    defer gpa.destroy(table);
-    table.* = .{};
-    defer table.deinit(gpa);
-    const registered = try table.register(gpa, .{
-        .source = @enumFromInt(1),
-        .path = "/w/fix",
-        .branch = "fix",
-        .base = "main",
-    });
-
-    // Uncommitted work only: no commits, no diff yet.
-    table.git_probe = registered.id;
-    _ = commit(table, .{ .worktree = registered.id, .present = true, .measured = true, .dirty = true }, 10);
-    try std.testing.expectEqual(core.WorktreeState.active, table.state[registered.slot]);
-
-    // Git failed: nothing says the work went away.
-    table.git_probe = registered.id;
-    _ = commit(table, .{ .worktree = registered.id, .present = true }, 20);
-    try std.testing.expectEqual(core.WorktreeState.active, table.state[registered.slot]);
-    try std.testing.expect(table.git_dirty[registered.slot]);
-    try std.testing.expectEqual(@as(u8, 1), table.probe_failures[registered.slot]);
-}
-
-test "a base the probe found is kept once and a recorded base is never replaced" {
-    const gpa = std.testing.allocator;
-    const table = try gpa.create(Worktrees);
-    defer gpa.destroy(table);
-    table.* = .{};
-    defer table.deinit(gpa);
-    const external = try table.register(gpa, .{
-        .source = @enumFromInt(1),
-        .origin = .external,
-        .path = "/w/by-hand",
-        .branch = "by-hand",
-    });
-
-    var found: WorktreeProbeCompletion = .{ .worktree = external.id, .present = true, .measured = true };
-    found.found_base_len = 4;
-    @memcpy(found.found_base[0..4], "main");
-    table.git_probe = external.id;
-    try std.testing.expect(commit(table, found, 10));
-    try std.testing.expectEqualStrings("main", table.baseAt(external.slot));
-
-    @memcpy(found.found_base[0..4], "next");
-    table.git_probe = external.id;
-    _ = commit(table, found, 20);
-    try std.testing.expectEqualStrings("main", table.baseAt(external.slot));
-}
-
-test "a stale completion leaves the table untouched" {
-    const gpa = std.testing.allocator;
-    const table = try gpa.create(Worktrees);
-    defer gpa.destroy(table);
-    table.* = .{};
-    defer table.deinit(gpa);
-    const registered = try table.register(gpa, .{
-        .source = @enumFromInt(1),
-        .path = "/w/fix",
-        .branch = "fix",
-    });
-
-    try std.testing.expect(!commit(table, .{ .worktree = registered.id, .present = false }, 10));
-    try std.testing.expectEqual(core.WorktreeState.active, table.state[registered.slot]);
 }

@@ -1,5 +1,5 @@
-//! Owns the frame-local context borrowed by its widget list. Keep this value
-//! and its projection at stable addresses until the list finishes drawing.
+//! Selects widgets into a caller-owned frame. Context and projection stay
+//! at stable addresses until the renderer finishes drawing the list.
 const data = @import("model");
 const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
@@ -18,7 +18,7 @@ canvas: *Canvas,
 link: ?*const LinkHit = null,
 /// The window client's image previews; null while another machine shows.
 previews: ?*const ImagePreviews = null,
-context: Context = undefined,
+context: *Context,
 commit: data.PresentationCommit = .{},
 
 /// Selects the frame's widgets in painter order without emitting quads. The
@@ -64,8 +64,8 @@ pub fn render(self: *Composition, projection: *const client.Projection) !frame_w
         }
     }
 
-    self.context = try self.chrome.begin(self.canvas, projection);
-    try self.chrome.compose(&self.context, &widgets);
+    self.context.* = try self.chrome.begin(self.canvas, projection);
+    try self.chrome.compose(self.context, &widgets);
     widgets.append(.{ .chrome_focus = .{
         .chrome = self.chrome,
         .projection = projection,
@@ -83,5 +83,6 @@ pub fn render(self: *Composition, projection: *const client.Projection) !frame_w
         }
     }
 
+    widgets.append(.{ .interaction_targets = .{ .overlays = self.overlays } });
     return widgets;
 }

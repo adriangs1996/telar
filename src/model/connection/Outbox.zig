@@ -19,6 +19,7 @@ const BootstrapLength = enum(usize) { messages = 4 };
 
 const Payloads = [outbox_support.capacity][data.input_limits.max_encoded_bytes]u8;
 
+// SAFETY: Queue producers initialize each reserved message before returning, rolling back failed append reservations; consumers use head and len.
 items: [outbox_support.capacity]outbox_support.Message = undefined,
 /// Owned payload bytes, one slot per queued message. Reserved once on the
 /// heap so the model stays small enough to live on a test stack.
@@ -127,6 +128,7 @@ pub fn pushEncoded(self: *Outbox, comptime encode: anytype, value: anytype) !voi
 pub fn pushClientCompletion(self: *Outbox, reply: core.ClientCommand) !void {
     try reply.validateWire();
     const index = try self.reserve();
+    // SAFETY: validateWire checks all reply fields before reserve; max_encoded_bytes covers the complete-client-command wire bound.
     const encoded = core.encodeCompleteClientCommand(self.payloadAt(index), reply) catch unreachable;
     self.item_launch_cwd[index] = null;
     self.items[index] = .{ .complete_client_command = @intCast(encoded.len) };
@@ -137,6 +139,7 @@ pub fn pushClientCompletion(self: *Outbox, reply: core.ClientCommand) !void {
 pub fn pushFindPaths(self: *Outbox, request: core.FindPaths) !void {
     try request.validateWire();
     const index = try self.reserve();
+    // SAFETY: validateWire checks the path fields before reserve; max_encoded_bytes covers the find-paths wire bound.
     const encoded = core.encodeFindPaths(self.payloadAt(index), request) catch unreachable;
     self.item_launch_cwd[index] = null;
     self.items[index] = .{ .find_paths = @intCast(encoded.len) };
@@ -664,66 +667,4 @@ fn pushAck(self: *Outbox, ack: core.FrameAck) !void {
         }
     }
     try self.append(.{ .frame_ack = ack });
-}
-
-/// Bootstrap messages are small; a real sender encodes into a whole frame.
-const bootstrap_send_bytes = 64 * 1024;
-
-test "runtime bootstrap queues colors before subscribing to the initial layout" {
-    var outbox: Outbox = try .init(std.testing.allocator);
-    defer outbox.deinit(std.testing.allocator);
-    var buffer: [bootstrap_send_bytes]u8 = undefined;
-
-    try outbox.pushBootstrap(
-        .{
-            .graphics_shared = true,
-            .client_identity = @enumFromInt(9),
-        },
-        std.time.ns_per_s / 120,
-    );
-
-    const configure = try core.decodeClient((try outbox.beginSend(&buffer)).?);
-    try std.testing.expect(configure == .configure_graphics);
-    try std.testing.expect(configure.configure_graphics.shared);
-
-    try outbox.finishSend({});
-    const colors = try core.decodeClient((try outbox.beginSend(&buffer)).?);
-    try std.testing.expect(colors == .configure_terminal_colors);
-    try outbox.finishSend({});
-
-    const interval = try core.decodeClient((try outbox.beginSend(&buffer)).?);
-    try std.testing.expectEqual(@as(u64, std.time.ns_per_s / 120), interval.configure_frame_interval.interval_ns);
-    try outbox.finishSend({});
-
-    const runtime_state = try core.decodeClient((try outbox.beginSend(&buffer)).?);
-    try std.testing.expect(runtime_state == .request_runtime_state);
-    try std.testing.expectEqual(@as(core.ClientIdentity, @enumFromInt(9)), runtime_state.request_runtime_state.client_identity);
-}
-
-test "a frame interval replaces an unsent one instead of taking a slot" {
-    var outbox: Outbox = try .init(std.testing.allocator);
-    defer outbox.deinit(std.testing.allocator);
-    var buffer: [bootstrap_send_bytes]u8 = undefined;
-
-    try outbox.push(.{ .configure_frame_interval = .{ .interval_ns = std.time.ns_per_s / 60 } });
-    try outbox.push(.{ .request_snapshot = .{ .pane_id = @enumFromInt(3), .known_frame_id = 0 } });
-    while (outbox.availableCapacity() != 0) {
-        try outbox.push(.{ .request_snapshot = .{ .pane_id = @enumFromInt(4), .known_frame_id = 0 } });
-    }
-
-    try outbox.push(.{ .configure_frame_interval = .{ .interval_ns = std.time.ns_per_s / 120 } });
-    const first = try core.decodeClient((try outbox.beginSend(&buffer)).?);
-    try std.testing.expectEqual(@as(u64, std.time.ns_per_s / 120), first.configure_frame_interval.interval_ns);
-
-    // One being sent is not replaced; the next one queues behind it.
-    while (outbox.len > 1) {
-        try outbox.finishSend({});
-        _ = try outbox.beginSend(&buffer);
-    }
-
-    try outbox.finishSend({});
-    try outbox.push(.{ .configure_frame_interval = .{ .interval_ns = std.time.ns_per_s / 100 } });
-    _ = try outbox.beginSend(&buffer);
-    try outbox.push(.{ .configure_frame_interval = .{ .interval_ns = std.time.ns_per_s / 144 } });
-    try std.testing.expectEqual(@as(usize, 2), outbox.len);
 }

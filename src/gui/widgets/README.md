@@ -5,29 +5,26 @@ The GUI builds concrete Zig widgets during synchronous preparation of a client
 the sealed quad frame, glyph atlas and sprite page; adding a widget does not add
 a native drawing callback or a GPU command type.
 
-`Scene.prepare` starts the frame resources, then calls `Composition.render` with
-the borrowed projection. That method returns the complete `frame_widget.List`:
-terminal leaves, a hovered link, top bar, status bar, sidebar,
-pane decorations, chrome focus, notifications and the selected modal. It emits
-no quads. `Scene` draws the list once through `draw(canvas)` and seals the frame
-and its control registries only after drawing and registration succeed.
+`Scene.compose` calls `Composition.render` and writes the selected widgets into
+`Frame.widgets`. The frame owns stable storage for the projection and context
+those widgets borrow. It emits no quads. `Renderer.draw(surface, frame)` runs
+that list through `Canvas`, generates glyphs and retained cell meshes, and
+submits the resulting batch. GUI calls `Scene.seal` after an accepted draw;
+GPU delivery later decides whether the prepared control registries become visible.
 
 ```zig
-var composition: Composition = .{
-    .chrome = chrome,
-    .overlays = overlays,
-    .canvas = &canvas,
-};
-const widgets = try composition.render(&projection);
-try widgets.draw(&canvas);
+var frame: Frame = .{};
+const commit = try scene.compose(&frame, projection);
+if (try renderer.draw(surface, &frame)) {
+    scene.seal();
+}
 ```
 
-`Composition` owns the context borrowed by chrome widgets. Keep it and the
-projection at stable addresses until drawing returns; returning the list does
-not extend either lifetime. The list holds at most 78 widgets, derived from the
-64-pane limit, one link, seven chrome sections, one focus indicator, two
-notices, one modal and the image preview shelf and modal. Its commit captures the generations and damage of the panes
-actually composed.
+Keep the frame and its borrowed model at stable addresses until drawing returns.
+The asynchronous surface borrows generated quads and texture pixels, never the
+widget list or its projection. The fixed widget capacity is declared in
+`frame_widget.zig`; composition captures the generations and damage of the panes
+it selects.
 
 `frame_widget.zig` declares the frame's tagged union. Add a variant and select it
 in `Composition.render` to introduce a new frame section. Containers may build
@@ -66,10 +63,12 @@ flowchart LR
     Projection --> Composition[Composition.render]
     Clock[Animation deadlines] --> Composition
     Composition --> List[Frame widget list]
-    List --> Draw[Each widget.draw]
+    List --> Renderer[Renderer.draw]
+    Renderer --> Draw[Each widget.draw]
     Draw --> Canvas
-    Canvas --> Frame[Quads and resource references]
-    Frame --> GPU[Metal or Vulkan]
+    Canvas --> Batch[Quads and resource references]
+    Batch --> Surface
+    Surface --> GPU[Metal or Vulkan]
     GPU --> Completion[Presentation completion]
     Completion --> Registry[Delivered widget targets]
     Registry --> Dispatch
@@ -100,8 +99,8 @@ Chrome logical dimensions are converted through `ChromeMetrics.px` first.
 `TerminalPane.draw` uses `Canvas.terminal` to paint canonical cells and the cursor
 through the existing retained cell cache. Terminal shaping, selection colors and
 cursor ordering stay in that specialized painter. Selecting terminal leaves is
-the composition's job; the GUI no longer calls `TerminalRenderer.prepare` to
-paint them before its widget list.
+the composition's job. The renderer paints these leaves in the same ordered
+list as chrome and overlays.
 
 ```zig
 var rows = [_]LayoutItem{
@@ -135,11 +134,12 @@ remaining excess space participates in alignment.
 
 ## Input and host services
 
-`input/event.zig` defines committed text, paste, key phases, pointer gestures,
+`Window.Input` defines committed text, paste, key phases, pointer gestures,
 precise two-axis scroll, focus, IME composition, clipboard completions and
-accessibility actions. Only `native/decode_input.zig` interprets numeric C ABI
-tags. `InputQueue` copies borrowed payloads into bounded storage before native
-callbacks return. The window thread drains them through `GuiAdapter.widgetInput`
+accessibility actions. Only `lib/window/input/decode_input.zig` interprets numeric
+C ABI tags. `GuiAdapter.process` copies borrowed payloads into `InputQueue` before
+the next `Window.getNextEvent`. The window thread drains them through
+`widgets/interaction/routing.zig`
 before the terminal router. Terminal input keeps its physical-key and pane
 ownership rules.
 
@@ -198,9 +198,6 @@ actions return to the same Zig event queue. Partial text replacements include an
 expected text revision, so delayed accessibility operations cannot overwrite
 intervening edits. New widget semantics require no
 Metal, Vulkan or platform-specific control implementation.
-
-See [native input](../../../docs/flows/native-input.md) for limits, ownership and
-host validation commands.
 
 ## Command history
 
@@ -359,16 +356,7 @@ layers or partial GPU damage.
 - There is one presentation in flight. Its token publishes matching hit maps
   and retires only captured model damage on successful completion. Failed
   delivery preserves previously delivered controls; newer changes remain
-  pending. See [presentation delivery](../../../docs/invariants.md#presentation-delivery).
-
-`zig build test-gui` covers actual chrome composition, borrowed input ownership,
-layout bounds, widget-list capacity/order, warm allocation-free drawing, delayed
-presentation, gesture routing and animation deadlines. `zig build test-client
-check-client-boundaries codestyle` checks shared client behavior and boundaries.
-Run native window checks on each host when changing its bridge. On Linux also
-run `test-gui-ime`, `test-gui-clipboard-reader`, `test-gui-keyboard` and
-`test-gui-pointer`. These check protocol batching, UTF-8 ranges, backpressure,
-physical ownership and fractional scroll independently of a running compositor.
+  pending.
 
 ## Diagrams
 
@@ -376,4 +364,4 @@ A widget that shows a Mermaid diagram asks `diagrams.Store` for it while
 measuring, with an owner key it chooses, and draws the ready image through
 `Canvas.diagramAt`. Rendering runs in `lib/mermaid` on an inbox worker; the
 store keeps eight texture slots and pins visible ones until delivery. No widget
-does this yet. See [Mermaid diagrams](../../../docs/flows/mermaid-diagrams.md).
+does this yet.

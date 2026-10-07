@@ -5,7 +5,6 @@
 const data = @import("model");
 const core = @import("telar-core");
 const FaviconImage = @import("FaviconImage.zig");
-const Completion = @This();
 
 execution_id: data.FaviconsState.ExecutionId,
 workspace: core.WorkspaceId,

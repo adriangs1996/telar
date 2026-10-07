@@ -11,6 +11,7 @@ const UnreportedReaches = @This();
 /// past this the extra reaches are counted in `dropped`.
 pub const capacity = 16;
 
+// SAFETY: add writes each reach before increasing count; lookup and slice read only that initialized prefix.
 reach: [capacity]core.LimitReach = undefined,
 count: u8 = 0,
 dropped: u32 = 0,
@@ -53,32 +54,4 @@ pub fn slice(self: *const UnreportedReaches) []const core.LimitReach {
 pub fn clear(self: *UnreportedReaches) void {
     self.count = 0;
     self.dropped = 0;
-}
-
-test "a reach per limit keeps the largest amount and a full list counts the rest" {
-    var reaches: UnreportedReaches = .{};
-    const limit = core.Limit.declare("picks.max_picks", "picks", 16);
-    reaches.add(.{
-        .limit = limit,
-        .requested = 20,
-    });
-    reaches.add(.{
-        .limit = limit,
-        .requested = 18,
-    });
-    try std.testing.expectEqual(@as(u8, 1), reaches.count);
-    try std.testing.expectEqual(@as(?u64, 20), reaches.slice()[0].requested);
-
-    for (0..capacity) |_| {
-        reaches.add(.{
-            .limit = core.Limit.declare("panels.max_panels", "panels", 16),
-        });
-    }
-
-    try std.testing.expectEqual(@as(u8, 2), reaches.count);
-    reaches.count = capacity;
-    reaches.add(.{
-        .limit = core.Limit.declare("bars.max_bar_nodes", "components", 64),
-    });
-    try std.testing.expectEqual(@as(u32, 1), reaches.dropped);
 }

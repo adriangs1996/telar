@@ -1,5 +1,3 @@
-const RequestWorkspaceCreation = @This();
-
 /// Borrowed only for the synchronous request.
 name: []const u8,
 /// Expanded absolute directory typed in the new-context form; empty

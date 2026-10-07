@@ -4,6 +4,7 @@ const std = @import("std");
 const State = @This();
 
 sink: core.Sink = .{},
+// SAFETY: Telemetry formatting writes into buffer before scheduling the returned slice; write_pending protects its lifetime.
 line: [telemetry.max_line_bytes]u8 = undefined,
 write_pending: bool = false,
 

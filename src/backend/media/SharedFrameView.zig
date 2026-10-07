@@ -1,5 +1,4 @@
 const kitty_protocol = @import("kitty_protocol");
-const core = @import("telar-core");
 const media = @import("media.zig");
 /// One complete shared-memory frame the filter selected, handed to a sink
 /// that can load it without the emulator's parser. `bytes` spans the whole
@@ -8,8 +7,6 @@ const media = @import("media.zig");
 /// ```zig
 /// pub fn observeSharedFrame(sink: *Sink, frame: SharedFrameView) bool
 /// ```
-const SharedFrameView = @This();
-
 bytes: []const u8,
 apc_start: usize,
 apc_end: usize,

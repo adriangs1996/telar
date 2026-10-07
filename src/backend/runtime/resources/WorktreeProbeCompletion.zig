@@ -7,11 +7,13 @@ const WorktreeProbeCompletion = @This();
 
 worktree: core.WorktreeId,
 present: bool = false,
+// SAFETY: worktree_probe copies the observed branch before returning the completion; branchSlice reads only branch_len bytes.
 branch: [core.max_git_branch_bytes]u8 = undefined,
 branch_len: u8 = 0,
 dirty: bool = false,
 /// The base the worker measured against when the row had none: the branch
 /// its repository's main checkout stands on. Empty when the row had one.
+// SAFETY: worktree_probe copies the discovered base before returning the completion; foundBaseSlice reads only found_base_len bytes.
 found_base: [core.max_git_branch_bytes]u8 = undefined,
 found_base_len: u8 = 0,
 measured: bool = false,

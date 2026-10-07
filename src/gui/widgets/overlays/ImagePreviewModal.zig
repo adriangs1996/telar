@@ -2,10 +2,7 @@
 //! allows. A press outside the modal, its `×` or Esc closes it; the client
 //! routes Esc through the shelf's modal ownership.
 const cellgrid = @import("cellgrid");
-const gfx = @import("gfx");
-const Rect = gfx.Rect;
 const Canvas = @import("../Canvas.zig");
-const Label = @import("../Label.zig");
 const Target = @import("../interaction/Target.zig");
 const Modal = @import("Modal.zig");
 const ImagePreviewShelf = @import("../ImagePreviewShelf.zig");

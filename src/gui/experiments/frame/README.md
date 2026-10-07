@@ -116,12 +116,11 @@ prometer `O(P)` en ese peor caso. Para eliminar esa materialización tendríamos
 que cambiar el contrato: generar directamente en la salida o aceptar varios
 bloques en el consumidor. Eso afectaría a la integración y requiere otro reto.
 
-## Probar y medir
+## Medir
 
 Solo el algoritmo, sin compilar Telar ni cargar bibliotecas gráficas:
 
 ```sh
-zig test frame_challenge.zig
 zig run -O ReleaseFast frame_challenge.zig
 ```
 
@@ -140,7 +139,6 @@ El modo sin ventana del mismo runner también está disponible:
 
 ```sh
 zig build run-widget -Doptimize=ReleaseFast -- --bench
-zig build test-widget
 ```
 
 Cada caso del microbenchmark tiene 64 llamadas de calentamiento y 2.048 muestras.
@@ -155,6 +153,4 @@ iteración. No son latencias de Telar ni una prueba de mejora global. Los conteo
 permiten razonar antes de interpretar diferencias pequeñas de nanosegundos.
 
 El runner conserva únicamente la ventana, el input y la propiedad del frame.
-Los laboratorios anteriores y su runner quedaron archivados como texto en
-`docs/performance/persistent-pane-quads-experiment/source/`; sus informes y datos
-siguen disponibles. Ya no forman parte del runner activo.
+Los laboratorios anteriores ya no forman parte del runner activo.

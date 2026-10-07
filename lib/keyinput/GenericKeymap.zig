@@ -10,7 +10,9 @@ pub fn Type(comptime Action: type, comptime max_bindings: usize, comptime max_ke
 
     const BindingType = GenericBinding(Action, max_keys);
     return struct {
+        // SAFETY: init copies configured bindings before sorting or returning the map; lookup is bounded by len.
         bindings: [max_bindings]BindingType = undefined,
+        // SAFETY: init writes every live index before sorting it; bindingAt is used only for sorted indices below len.
         order: [max_bindings]u16 = undefined,
         len: u16 = 0,
 

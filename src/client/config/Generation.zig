@@ -8,10 +8,6 @@ const Callback = @import("Callback.zig");
 const State = @import("State.zig");
 const generation_support = @import("generation_support.zig");
 
-test {
-    _ = @import("gui_config_test.zig");
-    _ = @import("theme_test.zig");
-}
 const lua_api = @import("lua-api");
 const BarCallbackContext = @import("BarCallbackContext.zig");
 const bar_values = @import("bar_values.zig");
@@ -37,11 +33,14 @@ gpa: std.mem.Allocator,
 number: u64,
 vm: *lua.Vm,
 snapshot: Snapshot = .{},
+// SAFETY: Callback registration initializes each record before increasing callback_count; invocation and rollback use validated ids or count ranges.
 callbacks: [data.config_values.max_key_callbacks]Callback = undefined,
 callback_count: u16 = 0,
+// SAFETY: Bar callback registration initializes each record before increasing bar_callback_count; invocation and rollback use validated ids or count ranges.
 bar_callbacks: [data.config_values.max_bar_callbacks]BarCallback = undefined,
 bar_callback_count: u8 = 0,
 modules: State,
+// SAFETY: Generation initialization copies the selected profile before setting profile_len; diagnostics and selection read only that prefix.
 profile_bytes: [generation_support.max_profile_name_bytes]u8 = undefined,
 profile_len: u8 = 0,
 /// Everything one render returns before it is fitted into its slot or
@@ -72,6 +71,7 @@ pub fn loadSource(context: LoadContext, spec: SourceInput) !*Generation {
         .gpa = context.gpa,
         .number = spec.number,
         .vm = try lua.Vm.init(context.io, context.gpa, .{}),
+        // SAFETY: modules.init assigns the module loader before openEnvironment or cleanup uses it; only vm cleanup is registered beforehand.
         .modules = undefined,
         .staged_content = staged_content,
     };
@@ -97,7 +97,7 @@ pub fn loadSource(context: LoadContext, spec: SourceInput) !*Generation {
         context.diagnostic.set("{s}", .{generation.vm.errorMessage()});
         return err;
     };
-    generation.parseSnapshot(context.diagnostic) catch |err| return err;
+    try generation.parseSnapshot(context.diagnostic);
     generation.snapshot.command_tabs.seal();
     generation.checkKeymapRoom();
     generation.syncCallbackTriggers();

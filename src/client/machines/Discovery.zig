@@ -10,6 +10,7 @@ pub const max_output_bytes = 3 * (std.fs.max_path_bytes + 1) + schema_line_bytes
 
 const schema_line_bytes = @sizeOf(core.SchemaId) + 1;
 
+// SAFETY: parse copies all three validated paths before returning; launchDefaults and endpoint use only their initialized length ranges.
 storage: [3 * std.fs.max_path_bytes]u8 = undefined,
 lengths: [3]usize,
 schema: core.SchemaId,
@@ -25,7 +26,12 @@ pub fn parse(output: []const u8) !Discovery {
     }
 
     var lines = std.mem.splitScalar(u8, std.mem.trimEnd(u8, output, "\n"), '\n');
-    var result: Discovery = .{ .lengths = undefined, .schema = undefined };
+    var result: Discovery = .{
+        // SAFETY: The path loop assigns every length before result is returned or sliced.
+        .lengths = undefined,
+        // SAFETY: The validated schema has exactly schema.len bytes; memcpy fills it before compatible or return can read it.
+        .schema = undefined,
+    };
     var offset: usize = 0;
     for (&result.lengths, 0..) |*length, index| {
         const path = lines.next() orelse return error.RemoteDiscoveryUnreadable;

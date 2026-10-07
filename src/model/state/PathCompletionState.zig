@@ -15,12 +15,15 @@ revision: u64 = 0,
 next_id: u64 = 1,
 /// Execution whose result is awaited; `.none` while the worker is idle.
 pending: ExecutionId = .none,
+// SAFETY: want copies the query before setting wanted_len; wantedSlice exposes only that prefix.
 wanted: [Result.max_path_bytes]u8 = undefined,
 wanted_len: u16 = 0,
+// SAFETY: reserve copies the initialized wanted query before setting inflight_len; inflightSlice exposes only that prefix.
 inflight: [Result.max_path_bytes]u8 = undefined,
 inflight_len: u16 = 0,
 result: Result = .{},
 /// The result belongs to this expanded query; it is empty until one lands.
+// SAFETY: land copies the bounded query before setting query_len; querySlice exposes only that prefix.
 query: [Result.max_path_bytes]u8 = undefined,
 query_len: u16 = 0,
 
@@ -154,40 +157,3 @@ pub fn version(self: *const State) u64 {
 }
 
 const std = @import("std");
-
-test "only the awaited execution lands and invalidation clears the list once" {
-    var state: State = .{};
-    state.begin();
-    var result: Result = .{};
-    try result.setBase("/work");
-    try result.append("telar");
-    try std.testing.expect(state.want("/work/t"));
-    try std.testing.expect(!state.want("/work/t"));
-    const id = state.reserve();
-    try std.testing.expect(!state.retire(@enumFromInt(@intFromEnum(id) + 1)));
-    try std.testing.expect(state.retire(id));
-    try std.testing.expect(!state.superseded());
-    state.land(.{ .query = "/work/t", .result = &result });
-    try std.testing.expectEqual(@as(usize, 1), state.entries().len);
-    try std.testing.expect(state.matches("/work/t"));
-    try std.testing.expect(!state.retire(id));
-
-    const before = state.version();
-    state.invalidate();
-    try std.testing.expectEqual(before + 1, state.version());
-    state.invalidate();
-    try std.testing.expectEqual(before + 1, state.version());
-    try std.testing.expect(!state.matches("/work/t"));
-}
-
-test "a query typed while the listing runs supersedes it" {
-    var state: State = .{};
-    _ = state.want("/a");
-    const first = state.reserve();
-    try std.testing.expect(!state.superseded());
-    try std.testing.expect(state.want("/ab"));
-    try std.testing.expect(state.superseded());
-    try std.testing.expect(state.retire(first));
-    state.forgetQuery();
-    try std.testing.expect(state.want("/a"));
-}

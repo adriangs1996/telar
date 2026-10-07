@@ -10,25 +10,3 @@ pub const command_support = @import("command_support.zig");
 pub const descriptor_limit = @import("descriptor_limit.zig");
 pub const exit = @import("exit.zig");
 pub const login_shell = @import("login_shell.zig");
-
-test {
-    _ = @import("ChildDescriptor.zig");
-    _ = @import("ChildEnvironment.zig");
-    _ = @import("ChildFailure.zig");
-    _ = @import("Command.zig");
-    _ = @import("Configuration.zig");
-    _ = @import("Override.zig");
-    _ = @import("Session.zig");
-    _ = @import("Size.zig");
-    _ = @import("command_support.zig");
-    _ = @import("descriptor_limit.zig");
-    _ = @import("environment.zig");
-    _ = @import("exit.zig");
-    _ = @import("login_shell.zig");
-    _ = @import("native.zig");
-    _ = @import("native_darwin.zig");
-    _ = @import("native_linux.zig");
-    _ = @import("pty_tests.zig");
-    _ = @import("session_support.zig");
-    _ = @import("spawn.zig");
-}

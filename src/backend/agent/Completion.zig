@@ -6,6 +6,7 @@ const Completion = @This();
 
 key: PaneKey,
 offset: ?u64,
+// SAFETY: setTitle copies the title before setting title_len and has_title; titleSlice reads only that prefix.
 title: [core.max_agent_session_title_bytes]u8 = undefined,
 title_len: u8 = 0,
 has_title: bool = false,

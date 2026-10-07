@@ -5,16 +5,15 @@ const mailbox = @import("mailbox");
 const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
-const native = @import("native/native.zig");
-const Renderer = @import("render/TerminalRenderer.zig");
+const Window = @import("telar-window");
+const Renderer = @import("render/Renderer.zig");
 const GuiAdapter = @import("GuiAdapter.zig");
-const window_machines = @import("window_machines.zig");
 const Request = @import("ConfigurationRequest.zig");
 const font_rendering = @import("text/font_rendering.zig");
 const Reload = @This();
 
 io: std.Io,
-inbox: *gui_event.Inbox = undefined,
+inbox: *gui_event.Inbox,
 ticket: ?mailbox.ProducerTicket = null,
 worker: ?std.Io.Future(void) = null,
 ready: std.atomic.Value(bool) = .init(false),
@@ -26,11 +25,11 @@ failure: ?data.Diagnostic = null,
 prepared: ?Renderer = null,
 retired: ?Renderer = null,
 current: client.GuiConfig = .{},
-viewport: native.Viewport = .{ .width = 800, .height = 600, .scale = 1 },
+viewport: Window.Viewport = .{ .width = 800, .height = 600, .scale = 1 },
 
 /// Captures values, never renderer pointers, for the next preparation.
 /// Example: `reload.observe(renderer.config, viewport);`
-pub fn observe(self: *Reload, config: client.GuiConfig, viewport: native.Viewport) void {
+pub fn observe(self: *Reload, config: client.GuiConfig, viewport: Window.Viewport) void {
     self.current = config;
     self.viewport = viewport;
 }
@@ -75,12 +74,12 @@ pub fn poll(self: *Reload, _: *client.Client) !void {
 /// Applies one complete generation at the native consumer boundary.
 /// Example: `const changed = try reload.apply(gui, &renderer);`
 pub fn apply(self: *Reload, gui: *GuiAdapter, renderer: *Renderer) !bool {
-    if (!self.pending or gui.app.presentation.active != null) {
+    if (!self.pending or gui.app.presentation.active != null or renderer.active != null) {
         return false;
     }
 
     // The window's own client owns the configuration; the others follow it.
-    const own = window_machines.window(gui);
+    const own = gui.localClient();
 
     var result = try self.result;
     if (result == .loaded and !font_rendering.same(result.loaded.generation.snapshot.gui.font, self.request.?.current.font) and
@@ -120,7 +119,7 @@ pub fn apply(self: *Reload, gui: *GuiAdapter, renderer: *Renderer) !bool {
     const adopted = generation != null and own.lua_generation != null and
         own.lua_generation.?.number == generation.?;
     if (adopted) {
-        try window_machines.shareConfiguration(gui);
+        try gui.shareConfiguration();
         if (self.prepared) |replacement| {
             std.debug.assert(self.retired == null);
             self.retired = renderer.*;
@@ -133,8 +132,8 @@ pub fn apply(self: *Reload, gui: *GuiAdapter, renderer: *Renderer) !bool {
         renderer.config = config.?;
         renderer.theme = theme.?;
         self.current = config.?;
-        if (gui.sidebar.reload(config.?.sidebar.width)) {
-            gui.chrome.invalidate();
+        if (gui.model.sidebar.reload(config.?.sidebar.width)) {
+            gui.model.chrome.invalidate();
         }
     } else if (self.prepared) |replacement| {
         std.debug.assert(self.retired == null);

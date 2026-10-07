@@ -7,6 +7,7 @@ const HitMap = @This();
 // finite table also bounds every pointer lookup independently of text size.
 pub const capacity = core.max_panes_per_tab * 6 + core.max_agent_snapshot_entries * 3 + core.max_workspace_list_entries + core.max_tabs_per_workspace + 4;
 pub const limit = core.Limit.declare("chrome.hit_map_capacity", "cell targets", capacity);
+// SAFETY: add writes each hit before increasing len; at scans only that initialized prefix.
 items: [capacity]Hit = undefined,
 len: usize = 0,
 /// Targets left out because the table was full; the window reports

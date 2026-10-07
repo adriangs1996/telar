@@ -81,12 +81,3 @@ pub const CommandFamily = enum {
         }
     }
 };
-
-test "a family is spelled with dashes and parsed back" {
-    try std.testing.expectEqual(CommandFamily.workspace_list, CommandFamily.parse("workspace-list").?);
-    try std.testing.expectEqualStrings("workspace-list", CommandFamily.workspace_list.name());
-    try std.testing.expectEqual(CommandFamily.worktree, CommandFamily.parse("worktree").?);
-    try std.testing.expect(CommandFamily.parse("workspace_list") == null);
-    try std.testing.expect(CommandFamily.parse("/bin/sh") == null);
-    try std.testing.expect(CommandFamily.parse("") == null);
-}

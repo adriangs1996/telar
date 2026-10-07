@@ -14,8 +14,10 @@ theme: data.ColorTheme = data.theme_support.default_theme,
 gui: GuiConfig = .{},
 sidebar_visible: bool = true,
 pane_gaps: bool = true,
+// SAFETY: Generation copies the configured editor before setting editor_len; resolveEditor reads only that prefix or returns the fallback.
 editor_bytes: [data.config_values.max_editor_bytes]u8 = undefined,
 editor_len: u16 = 0,
+// SAFETY: Generation copies the title template before setting window_title_len; windowTitle exposes only that prefix.
 window_title_bytes: [data.config_values.max_window_title_bytes]u8 = undefined,
 window_title_len: u8 = 0,
 sound: data.SoundPolicy = .{},
@@ -28,10 +30,13 @@ theme_dark: ?data.ColorTheme = null,
 bars: data.BarConfiguration = .{},
 prefix: keyinput.Key = data.keybind.default_prefix,
 input_sequence_timeout_ns: u64 = data.keybind.default_sequence_timeout_ns,
+// SAFETY: Binding parsing fills the retained rows before publishing binding_count; bindingSlice and rebinding inspect only those rows.
 bindings: [data.config_values.max_bindings]data.config_values.ConfiguredBinding = undefined,
+// SAFETY: Binding parsing writes each prefixed flag alongside its retained binding before publishing binding_count.
 bindings_prefixed: [data.config_values.max_bindings]bool = undefined,
 binding_count: u16 = 0,
 runtime: RuntimeSnapshot = .{},
+// SAFETY: The plugin parser initializes every retained spec before publishing plugin_count; plugin iteration uses only that prefix.
 plugins: [data.config_values.max_plugins]data.PluginSpec = undefined,
 plugin_count: u8 = 0,
 /// The command tabs the actions of this configuration open.

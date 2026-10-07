@@ -1,6 +1,5 @@
 const core = @import("telar-core");
 const model_data = @import("../model.zig");
-const CopyModePlan = @This();
 
 expected_revision: u64,
 previous: model_data.State,

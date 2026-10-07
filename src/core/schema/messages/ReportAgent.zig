@@ -3,8 +3,6 @@ const types = @import("../types.zig");
 /// An official lifecycle report from an agent's hooks: its state and,
 /// optionally, its own session reference and the file it records the session
 /// in. Only the exact pane generation that hosts the agent accepts it.
-const ReportAgent = @This();
-
 request_id: id.RequestId,
 pane_id: id.PaneId,
 pane_generation: u64,

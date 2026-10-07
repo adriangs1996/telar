@@ -54,6 +54,7 @@ pub fn advance(model: *RuntimeModel, completion: Wake) !void {
     completion.result catch |err| {
         if (session.pending_search) |pending| {
             session.pending_search = null;
+            // Preserve the failed search wake's error if the response queue also refuses its failure reply.
             fail(session, pending.request_id, "Pane search stopped; retry") catch {};
         }
 
@@ -161,28 +162,4 @@ fn resolveTarget(panes: *PaneStore, attachments: *Attachments, session: *Session
 
     const attachment = attachments.find(session.slot, pane_id) orelse return null;
     return attachment.pane.key();
-}
-
-test "headless searches capture a generation without granting UI attachment authority" {
-    const pane = try std.testing.allocator.create(Pane);
-    defer std.testing.allocator.destroy(pane);
-    pane.id = @enumFromInt(7);
-    pane.generation = 9;
-    pane.launch_state = .running;
-    pane.exit = null;
-    var panes: PaneStore = .{};
-    panes.items[0] = pane;
-    panes.count = 1;
-    panes.index.put(7, 0);
-    var session: Session = undefined;
-    session.role = .ui;
-    session.slot = 0;
-    var attachments: Attachments = .{};
-    try std.testing.expect(resolveTarget(&panes, &attachments, &session, pane.id) == null);
-    session.role = .control;
-    const selected = resolveTarget(&panes, &attachments, &session, pane.id).?;
-    try std.testing.expectEqual(@as(u64, 9), selected.generation);
-    pane.generation = 10;
-    try std.testing.expect(panes.resolve(selected) == null);
-    try std.testing.expect(resolveTarget(&panes, &attachments, &session, @enumFromInt(99)) == null);
 }

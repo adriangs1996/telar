@@ -1,5 +1,3 @@
-const CallbackContext = @This();
-
 sidebar_visible: bool,
 tab_count: u16,
 active_tab_index: u16,

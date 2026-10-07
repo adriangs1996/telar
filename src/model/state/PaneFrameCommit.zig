@@ -1,5 +1,4 @@
 const core = @import("telar-core");
-const PaneFrameCommit = @This();
 
 pane_id: core.PaneId,
 location: core.TabLocation,

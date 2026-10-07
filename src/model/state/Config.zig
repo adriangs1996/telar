@@ -2,7 +2,6 @@
 //! and every reload write it the same way, so no setting waits for a reload.
 const NotificationDelivery = @import("../notifications/NotificationDelivery.zig").NotificationDelivery;
 const AppearanceThemes = @import("../appearance/AppearanceThemes.zig");
-const Config = @This();
 
 notification_delivery: NotificationDelivery = .telar,
 /// Whether the history palette lists automation-submitted commands too.

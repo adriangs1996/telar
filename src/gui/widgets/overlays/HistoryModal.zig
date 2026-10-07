@@ -106,6 +106,7 @@ const Placement = struct {
 };
 
 const Plan = struct {
+    // SAFETY: Planning writes each placement before increasing count; painting and hit testing visit only that prefix.
     placements: [max_placements]Placement = undefined,
     count: usize = 0,
     /// Every entry from the bottom index to the oldest was placed.

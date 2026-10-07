@@ -2,7 +2,6 @@
 const data = @import("model");
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
-const InlineRow = @This();
 
 index: usize,
 bounds: Rect,

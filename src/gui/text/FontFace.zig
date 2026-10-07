@@ -30,6 +30,7 @@ active: u16 = 0,
 /// Borrows font bytes and the shared alpha page until deinit.
 /// Example: `var face = try FontFace.init(library, options, pixels);`
 pub fn init(library: freetype.c.FT_Library, options: AtlasOptions, pixels: []u8) !FontFace {
+    // SAFETY: FT_New_Memory_Face writes face on success; failure returns before reading the face or registering cleanup.
     var face: freetype.c.FT_Face = undefined;
     if (freetype.c.FT_New_Memory_Face(library, @ptrCast(options.font.ptr), @intCast(options.font.len), @max(0, options.face_index), &face) != 0) {
         return error.FontInitFailed;
@@ -52,6 +53,7 @@ pub fn init(library: freetype.c.FT_Library, options: AtlasOptions, pixels: []u8)
                 return error.FontFaceNotFound;
             }
 
+            // SAFETY: FT_New_Memory_Face writes candidate on success; failure returns before replacing face.
             var candidate: freetype.c.FT_Face = undefined;
             if (freetype.c.FT_New_Memory_Face(library, @ptrCast(options.font.ptr), @intCast(options.font.len), index, &candidate) != 0) {
                 return error.FontInitFailed;
@@ -125,6 +127,7 @@ pub fn sized(self: *FontFace, pixel_height: u16) !FontSize {
     }
 
     const slot = self.emptySlot() orelse return error.TooManyFontSizes;
+    // SAFETY: FT_New_Size writes handle on success; failure returns before activation or cleanup registration.
     var handle: freetype.c.FT_Size = undefined;
     if (FT_New_Size(self.face, &handle) != 0) {
         return error.FontSizeFailed;

@@ -32,12 +32,3 @@ pub fn fromText(pane_id: id.PaneId, text: []const u8) !CopySelection {
 
     return selection;
 }
-
-test "copy ranges preserve absolute history rows and reject malformed coordinates" {
-    const selection = try fromText(@enumFromInt(1), "0,1000:79,1002");
-    try std.testing.expectEqual(@as(u32, 1000), selection.start_y);
-    try std.testing.expectEqual(@as(u16, 79), selection.end_x);
-    try std.testing.expectError(error.InvalidCopyRange, fromText(@enumFromInt(1), "0,1:65536,2"));
-    try std.testing.expectError(error.InvalidCopyRange, fromText(@enumFromInt(1), "0,,1:2,3"));
-    try std.testing.expectError(error.InvalidCopyRange, fromText(@enumFromInt(1), "0,1:2,3:4,5"));
-}

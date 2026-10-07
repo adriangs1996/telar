@@ -62,6 +62,7 @@ pub fn run(self: *Query, first: core.ClientCommand, writer: *std.Io.Writer) !voi
         }
 
         if (reply.status == .failed) {
+            // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
             std.debug.print("telar: {s}\n", .{reply.text()});
             return error.PluginQueryFailed;
         }

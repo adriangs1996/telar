@@ -1,5 +1,4 @@
 const core = @import("telar-core");
-const StalePaneExit = @This();
 
 pane_id: core.PaneId,
 workspace_revision: u64,

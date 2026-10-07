@@ -760,19 +760,6 @@ pub fn finishDescription(self: *Agent, result: *const Result) ?DescriptionFinish
     return finished;
 }
 
-/// Replaces any generated or pending title with a validated manual title.
-///
-/// ```zig
-/// _ = try agent.setManualTitle("Investigate proxy lifecycle");
-/// ```
-pub fn setManualTitle(self: *Agent, value: []const u8) !void {
-    if (!validTitle(value)) {
-        return error.InvalidAgentTitle;
-    }
-
-    self.applyReadyTitle(value, .manual);
-}
-
 /// Applies the name the agent's own session carries, as reported by its
 /// hooks. An empty value clears an earlier agent title back to the
 /// placeholder; the agent never clears a manual or generated title. Returns

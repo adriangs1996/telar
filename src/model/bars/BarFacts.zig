@@ -4,7 +4,6 @@
 const LocalTime = @import("../state/LocalTime.zig");
 const SystemMetrics = @import("../state/SystemMetrics.zig");
 const MachineFact = @import("MachineFact.zig");
-const BarFacts = @This();
 
 metrics: ?SystemMetrics = null,
 /// CPU percentages, oldest first.

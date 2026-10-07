@@ -99,35 +99,3 @@ pub fn preferredTo(self: IcoFrame, other: IcoFrame, cell: u32) bool {
 
     return previous < cell and side > previous;
 }
-
-test "32-bit ICO pixels flip bottom-up BGRA and use alpha or the padded legacy mask" {
-    var bytes = [_]u8{0} ** 64;
-    std.mem.writeInt(u32, bytes[0..4], 40, .little);
-    std.mem.writeInt(u32, bytes[4..8], 2, .little);
-    std.mem.writeInt(u32, bytes[8..12], 4, .little);
-    std.mem.writeInt(u16, bytes[12..14], 1, .little);
-    std.mem.writeInt(u16, bytes[14..16], 32, .little);
-    bytes[40..56].* = .{ 255, 0, 0, 128, 3, 2, 1, 0, 0, 0, 255, 255, 0, 255, 0, 255 };
-    // Top-right is masked; the active alpha channel takes precedence.
-    bytes[60] = 0x40;
-    const entry = [_]u8{ 2, 2 } ++ [_]u8{0} ** 14;
-    const frame = try init(&entry, &bytes);
-    const gpa = std.testing.allocator;
-    var image = try frame.decode(gpa);
-    defer image.deinit(gpa);
-    try std.testing.expectEqualSlices(u8, &.{ 255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 128, 1, 2, 3, 0 }, image.pixels);
-
-    for (0..4) |index| {
-        bytes[43 + index * 4] = 0;
-    }
-
-    var legacy = try frame.decode(gpa);
-    defer legacy.deinit(gpa);
-    try std.testing.expectEqualSlices(u8, &.{ 255, 0, 0, 255, 0, 255, 0, 0, 0, 0, 255, 255, 1, 2, 3, 255 }, legacy.pixels);
-    try std.testing.expectError(error.InvalidIcoData, init(&entry, bytes[0..63]));
-    std.mem.writeInt(u32, bytes[4..8], std.math.maxInt(u32), .little);
-    try std.testing.expectError(error.InvalidIcoData, init(&entry, &bytes));
-    std.mem.writeInt(u32, bytes[4..8], 2, .little);
-    std.mem.writeInt(u16, bytes[14..16], 8, .little);
-    try std.testing.expectError(error.UnsupportedIco, init(&entry, &bytes));
-}

@@ -8,6 +8,7 @@ const control = @import("control.zig");
 /// Inspects an existing runtime without starting or attaching a pane. Example: `const status = runtime.run(init, options);`
 pub fn run(init: std.process.Init, options: RuntimeOptions) u8 {
     execute(init, options) catch |err| {
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar runtime: {s}\n", .{control.describe(err)});
         return if (err == error.RuntimeTimeout) 3 else 1;
     };
@@ -114,60 +115,4 @@ fn writeProxyPort(writer: *std.Io.Writer, status: core.ProxyStatus) !void {
         "Proxy port: {d} (warning: remembered port {d} was held by another process; processes that inherited it do not reach this runtime)\n",
         .{ port, preferred },
     );
-}
-
-test "runtime status names the proxy port and warns when the remembered one was taken" {
-    var buffer: [1024]u8 = undefined;
-    var kept = std.Io.Writer.fixed(&buffer);
-    try writeStatus(
-        &kept,
-        .{
-            .active = true,
-            .scope = .exact,
-            .system_trusted = false,
-            .port = 45104,
-            .preferred_port = 45104,
-        },
-        false,
-    );
-    try std.testing.expect(std.mem.indexOf(u8, kept.buffered(), "Proxy port: 45104\n") != null);
-
-    var displaced_buffer: [1024]u8 = undefined;
-    var displaced = std.Io.Writer.fixed(&displaced_buffer);
-    try writeStatus(
-        &displaced,
-        .{
-            .active = true,
-            .scope = .exact,
-            .system_trusted = false,
-            .port = 45105,
-            .preferred_port = 45104,
-        },
-        false,
-    );
-    try std.testing.expect(std.mem.indexOf(u8, displaced.buffered(), "Proxy port: 45105 (warning: remembered port 45104 was held by another process") != null);
-
-    var disabled_buffer: [1024]u8 = undefined;
-    var disabled = std.Io.Writer.fixed(&disabled_buffer);
-    try writeStatus(
-        &disabled,
-        .{
-            .active = false,
-            .scope = .exact,
-            .system_trusted = false,
-        },
-        false,
-    );
-    try std.testing.expect(std.mem.indexOf(u8, disabled.buffered(), "Proxy port") == null);
-}
-
-test "runtime status JSON reports disabled proxy without claiming installed trust" {
-    var buffer: [1024]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&buffer);
-    try writeStatus(&writer, .{ .active = false, .scope = .exact, .system_trusted = false }, true);
-    const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, writer.buffered(), .{});
-    defer parsed.deinit();
-    try std.testing.expect(parsed.value.object.get("running").?.bool);
-    try std.testing.expect(!parsed.value.object.get("proxy").?.object.get("active").?.bool);
-    try std.testing.expect(!parsed.value.object.get("proxy").?.object.get("system_trusted").?.bool);
 }

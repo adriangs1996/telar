@@ -1,6 +1,4 @@
 /// What the relay saw happen to one stream.
-const Lifecycle = @This();
-
 stage: Stage,
 stream_id: u32,
 status_code: u16,

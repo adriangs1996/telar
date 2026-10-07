@@ -3,8 +3,10 @@ const core = @import("telar-core");
 const WorktreeProbe = @This();
 
 worktree: core.WorktreeId,
+// SAFETY: worktree_git copies the checkout path before dispatching the probe; pathSlice reads only path_len bytes.
 path: [core.max_cwd_bytes]u8 = undefined,
 path_len: u16,
+// SAFETY: worktree_git copies the base before dispatching the probe; baseSlice reads only base_len bytes.
 base: [core.max_git_branch_bytes]u8 = undefined,
 base_len: u8,
 

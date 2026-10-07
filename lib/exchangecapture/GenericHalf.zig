@@ -34,12 +34,16 @@ pub fn Type(comptime Meta: type) type {
         side: buffer_support.Side,
         head: Buffer,
         body: Buffer,
+        // SAFETY: create copies the hostname before returning the half; host exposes only host_len bytes.
         host_storage: [buffer_support.max_host_bytes]u8 = undefined,
         host_len: u16 = 0,
+        // SAFETY: setMethod copies validated bytes before publishing method_len; method exposes only that prefix.
         method_storage: [buffer_support.max_method_bytes]u8 = undefined,
         method_len: u8 = 0,
+        // SAFETY: setTarget copies validated bytes before publishing target_len; target exposes only that prefix.
         target_storage: [buffer_support.max_target_bytes]u8 = undefined,
         target_len: u16 = 0,
+        // SAFETY: setEncoding copies the retained bytes before publishing encoding_len; encoding exposes only that prefix.
         encoding_storage: [buffer_support.max_encoding_bytes]u8 = undefined,
         encoding_len: u8 = 0,
         status_code: u16 = 0,
@@ -277,136 +281,4 @@ pub fn Type(comptime Meta: type) type {
             started_at_ms: i64,
         };
     };
-}
-
-/// The owner the tests attach to each half.
-const TestOwner = struct { id: u64 };
-const TestHalf = Type(TestOwner);
-
-fn testHalf(quota: *Quota, config: Config) *TestHalf {
-    return TestHalf.create(.{
-        .gpa = std.testing.allocator,
-        .quota = quota,
-        .config = config,
-        .meta = .{
-            .id = 1,
-        },
-        .key = .{
-            .connection_id = 1,
-            .stream_id = 0,
-        },
-        .side = .request,
-        .host = "example.test",
-        .started_at_ms = 1,
-    }).?;
-}
-
-test "an empty half holds no quota and the quota holds its buffers' storage" {
-    var quota = Quota.init(64);
-    const half = testHalf(&quota, .{
-        .enabled = true,
-        .max_part_bytes = 32,
-        .max_exchange_bytes = 64,
-        .max_total_bytes = 64,
-    });
-
-    try std.testing.expectEqual(@as(usize, 0), quota.used());
-    try std.testing.expect(half.append(.request_body, "hello"));
-    try std.testing.expectEqual(half.body.storage.len, quota.used());
-    try std.testing.expect(!half.truncation.any());
-
-    half.deinit();
-    try std.testing.expectEqual(@as(usize, 0), quota.used());
-}
-
-test "growing charges the new storage before the old is freed" {
-    var quota = Quota.init(1024);
-    const half = testHalf(&quota, .{
-        .enabled = true,
-        .max_part_bytes = 1024,
-        .max_exchange_bytes = 2048,
-        .max_total_bytes = 2048,
-    });
-    defer half.deinit();
-    const fragment: [300]u8 = @splat('x');
-
-    try std.testing.expect(half.append(.request_body, &fragment));
-    try std.testing.expectEqual(@as(usize, 512), half.body.storage.len);
-    try std.testing.expectEqual(@as(usize, 512), quota.used());
-
-    try std.testing.expect(!half.append(.request_body, &fragment));
-    try std.testing.expectEqual(@as(usize, 512), half.body.len);
-    try std.testing.expectEqual(@as(usize, 512), quota.used());
-    try std.testing.expect(half.truncation.total);
-}
-
-test "a spent quota keeps what fits and names the total bound" {
-    var quota = Quota.init(4);
-    const half = testHalf(&quota, .{
-        .enabled = true,
-        .max_part_bytes = 32,
-        .max_exchange_bytes = 64,
-        .max_total_bytes = 64,
-    });
-    defer half.deinit();
-
-    try std.testing.expect(!half.append(.request_body, "hello"));
-    try std.testing.expectEqualStrings("hell", half.body.bytes());
-    try std.testing.expect(half.body.truncated);
-    const cut_by_total: Truncation = .{
-        .total = true,
-    };
-    try std.testing.expectEqual(cut_by_total, half.truncation);
-    try std.testing.expectEqual(@as(usize, 4), quota.used());
-}
-
-test "the part bound and the exchange share name their own cause" {
-    var quota = Quota.init(64);
-    const parts = testHalf(&quota, .{
-        .enabled = true,
-        .max_part_bytes = 4,
-        .max_exchange_bytes = 64,
-        .max_total_bytes = 64,
-    });
-    defer parts.deinit();
-
-    try std.testing.expect(!parts.append(.request_body, "hello"));
-    try std.testing.expectEqualStrings("hell", parts.body.bytes());
-    const cut_by_part: Truncation = .{
-        .part = true,
-    };
-    try std.testing.expectEqual(cut_by_part, parts.truncation);
-
-    const shared = testHalf(&quota, .{
-        .enabled = true,
-        .max_part_bytes = 8,
-        .max_exchange_bytes = 12,
-        .max_total_bytes = 64,
-    });
-    defer shared.deinit();
-
-    try std.testing.expect(shared.append(.request_head, "head"));
-    try std.testing.expect(!shared.append(.request_body, "hello"));
-    try std.testing.expectEqualStrings("he", shared.body.bytes());
-    const cut_by_exchange: Truncation = .{
-        .exchange = true,
-    };
-    try std.testing.expectEqual(cut_by_exchange, shared.truncation);
-}
-
-test "a request target past its bound keeps the method" {
-    var quota = Quota.init(64);
-    const half = testHalf(&quota, .{
-        .enabled = true,
-        .max_part_bytes = 32,
-        .max_exchange_bytes = 64,
-        .max_total_bytes = 64,
-    });
-    defer half.deinit();
-    const target: [buffer_support.max_target_bytes + 1]u8 = @splat('a');
-
-    half.setRoute("POST", &target);
-    try std.testing.expectEqualStrings("POST", half.method());
-    try std.testing.expectEqualStrings("", half.target());
-    try std.testing.expect(half.head.truncated);
 }

@@ -4,6 +4,7 @@ const RemovedWorkspacePanes = @This();
 
 pub const capacity = core.max_tabs_per_workspace * core.max_panes_per_tab;
 
+// SAFETY: append writes a pane id before increasing count; slice exposes only that initialized prefix.
 items: [capacity]core.PaneId = undefined,
 count: u16 = 0,
 

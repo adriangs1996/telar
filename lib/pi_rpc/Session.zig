@@ -11,6 +11,7 @@ gpa: std.mem.Allocator,
 timeout_ms: u32,
 child: std.process.Child,
 stream: Stream = .{},
+// SAFETY: encodePrompt and encodeCommand write into this scratch buffer; exchange sends only the returned encoded slice.
 line_buffer: [rpc.max_line_bytes]u8 = undefined,
 last_used_ms: i64,
 
@@ -31,18 +32,17 @@ pub fn open(io: std.Io, gpa: std.mem.Allocator, options: Options) !*Session {
     session.* = .{
         .gpa = gpa,
         .timeout_ms = options.timeout_ms,
-        .child = undefined,
+        .child = try std.process.spawn(io, .{
+            .argv = options.arguments,
+            // Keep the engine away from any repository: context files and
+            // trust decisions are explicit argv from Lua, never the cwd.
+            .cwd = .{ .path = "/" },
+            .stdin = .pipe,
+            .stdout = .pipe,
+            .stderr = .ignore,
+        }),
         .last_used_ms = session_support.nowMs(io),
     };
-    session.child = try std.process.spawn(io, .{
-        .argv = options.arguments,
-        // Keep the engine away from any repository: context files and
-        // trust decisions are explicit argv from Lua, never the cwd.
-        .cwd = .{ .path = "/" },
-        .stdin = .pipe,
-        .stdout = .pipe,
-        .stderr = .ignore,
-    });
     session.stream.init(.{ .allocator = gpa, .io = io, .stdout = session.child.stdout.? });
     return session;
 }

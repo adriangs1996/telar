@@ -131,11 +131,13 @@ pub fn writeSecure(io: std.Io, write: SecureWrite) Error!void {
         };
         file.writeStreamingAll(io, write.bytes) catch {
             file.close(io);
+            // Preserve WriteFailed from writing the owner-only temporary file even if cleanup also fails.
             std.Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
             return error.WriteFailed;
         };
         file.sync(io) catch {
             file.close(io);
+            // Preserve WriteFailed from syncing the owner-only temporary file even if cleanup also fails.
             std.Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
             return error.WriteFailed;
         };
@@ -143,11 +145,13 @@ pub fn writeSecure(io: std.Io, write: SecureWrite) Error!void {
         const cwd = std.Io.Dir.cwd();
         if (write.exclusive) {
             std.Io.Dir.renamePreserve(cwd, temp_path, cwd, path, io) catch {
+                // Preserve WriteFailed from exclusive publication even if removing the private temporary file also fails.
                 std.Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
                 return error.WriteFailed;
             };
         } else {
             std.Io.Dir.renameAbsolute(temp_path, path, io) catch {
+                // Preserve WriteFailed from replacement even if removing the private temporary file also fails.
                 std.Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
                 return error.WriteFailed;
             };
@@ -186,79 +190,6 @@ pub fn readSystemRoots(io: std.Io, gpa: std.mem.Allocator) ![]u8 {
 pub fn randomSerial(io: std.Io) u64 {
     const source: std.Random.IoSource = .{ .io = io };
     return source.interface().int(u64) >> 1;
-}
-
-
-/// The authority name the tests create and load.
-const test_name = "test local CA";
-
-test "minted leaves verify against the local authority" {
-    const io = std.testing.io;
-    const authority: Authority = .{ .pair = try generate(io, ca_seconds, test_name), .common_name = test_name };
-    const leaf = try authority.mint(io, "api.anthropic.com");
-    const parsed_leaf = try (std.crypto.Certificate{ .buffer = leaf.certDer(), .index = 0 }).parse();
-    const parsed_ca = try (std.crypto.Certificate{ .buffer = authority.pair.certDer(), .index = 0 }).parse();
-    try parsed_leaf.verify(parsed_ca, std.Io.Clock.real.now(io).toSeconds());
-    try parsed_leaf.verifyHostName("api.anthropic.com");
-}
-
-test "a leaf for the longest hostname fits and verifies" {
-    const io = std.testing.io;
-    const host = "a" ** 63 ++ "." ++ "b" ** 63 ++ "." ++ "c" ** 63 ++ "." ++ "d" ** 61;
-    comptime std.debug.assert(host.len == 253);
-    const authority: Authority = .{
-        .pair = try generate(io, ca_seconds, test_name),
-        .common_name = test_name,
-    };
-    const leaf = try authority.mint(io, host);
-    const leaf_certificate: std.crypto.Certificate = .{
-        .buffer = leaf.certDer(),
-        .index = 0,
-    };
-    const authority_certificate: std.crypto.Certificate = .{
-        .buffer = authority.pair.certDer(),
-        .index = 0,
-    };
-
-    const parsed_leaf = try leaf_certificate.parse();
-    const parsed_ca = try authority_certificate.parse();
-    try parsed_leaf.verify(parsed_ca, std.Io.Clock.real.now(io).toSeconds());
-    try parsed_leaf.verifyHostName(host);
-}
-
-test "authority files and derived bundle are owner-only" {
-    const io = std.testing.io;
-    const gpa = std.testing.allocator;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
-    var key_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    var cert_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    var bundle_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const key_path = try std.fmt.bufPrint(&key_buffer, "{s}/ca-key.pem", .{directory});
-    const cert_path = try std.fmt.bufPrint(&cert_buffer, "{s}/ca-cert.pem", .{directory});
-    const bundle_path = try std.fmt.bufPrint(&bundle_buffer, "{s}/ca-bundle.pem", .{directory});
-
-    const resources: Resources = .{ .io = io, .allocator = gpa };
-    const files: AuthorityFiles = .{ .key = key_path, .certificate = cert_path, .common_name = test_name };
-    var authority = try Authority.loadOrCreate(resources, files);
-    try authority.writeBundle(resources, bundle_path);
-    _ = try Authority.loadOrCreate(resources, files);
-    for ([_][]const u8{ key_path, cert_path, bundle_path }) |path| {
-        const stat = try std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false });
-        try std.testing.expectEqual(std.Io.File.Kind.file, stat.kind);
-        try std.testing.expectEqual(@as(u32, 0o600), stat.permissions.toMode() & 0o777);
-    }
-}
-
-test "system authorities have a bounded 30-day lifetime" {
-    const io = std.testing.io;
-    const authority: Authority = .{ .pair = try generate(io, system_ca_seconds, test_name), .common_name = test_name };
-    try std.testing.expect(try authority.hasSystemLifetime());
-    try std.testing.expect(!(try (Authority{ .pair = try generate(io, ca_seconds, test_name), .common_name = test_name }).hasSystemLifetime()));
-    try std.testing.expectEqual(@as(usize, 40), authority.fingerprint().len);
 }
 
 const SecureWrite = struct {

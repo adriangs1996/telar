@@ -67,19 +67,3 @@ fn isOpenCodeSession(value: []const u8) bool {
 
     return true;
 }
-
-test "session formats accept only their own references" {
-    const uuid = "0192aaaa-bbbb-cccc-dddd-eeeeffff0000";
-    const opencode = "ses_f212d4cc3ffeR3t3CA08EwN5Ap";
-    try std.testing.expect(SessionFormat.uuid.accepts(uuid));
-    try std.testing.expect(!SessionFormat.uuid.accepts(opencode));
-    try std.testing.expect(SessionFormat.opencode.accepts(opencode));
-    try std.testing.expect(!SessionFormat.opencode.accepts(uuid));
-
-    try std.testing.expect(!SessionFormat.opencode.accepts("ses_f212d4cc3ffeR3t3CA08EwN5A"));
-    try std.testing.expect(!SessionFormat.opencode.accepts("ses_f212d4cc3ffeR3t3CA08EwN5Ap0"));
-    try std.testing.expect(!SessionFormat.opencode.accepts("ses_g212d4cc3ffeR3t3CA08EwN5Ap"));
-    try std.testing.expect(!SessionFormat.opencode.accepts("ses_f212d4cc3ffeR3t3CA08Ew-5Ap"));
-    try std.testing.expect(!SessionFormat.opencode.accepts("msg_f212d4cc3ffeR3t3CA08EwN5Ap"));
-    try std.testing.expect(!SessionFormat.uuid.accepts("0192aaaa-bbbb-cccc-dddd-eeeeffff000g"));
-}

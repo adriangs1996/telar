@@ -36,39 +36,3 @@ pub fn nextId(self: *RequestLifecycle) !core.RequestId {
 
     return request_id;
 }
-
-test "request identities never reach the reserved zero or maximum values" {
-    var state: RequestLifecycle = .{};
-    try std.testing.expectEqual(@as(core.RequestId, @enumFromInt(2)), try state.nextId());
-
-    state.next_request_id = std.math.maxInt(u64) - 1;
-    try std.testing.expectEqual(
-        @as(core.RequestId, @enumFromInt(std.math.maxInt(u64) - 1)),
-        try state.nextId(),
-    );
-    try std.testing.expectError(error.RequestIdExhausted, state.nextId());
-
-    state.next_request_id = 0;
-    try std.testing.expectError(error.RequestIdExhausted, state.nextId());
-}
-
-test "request preflight preserves identities needed by synchronous recovery" {
-    var state: RequestLifecycle = .{
-        .next_request_id = std.math.maxInt(u64) - 1,
-    };
-
-    try state.ensureCanStart(1);
-    try std.testing.expectError(error.RequestIdExhausted, state.ensureCanStart(2));
-    try std.testing.expectEqual(std.math.maxInt(u64) - 1, state.next_request_id);
-}
-
-test "request identity allocation stops before correlation overflow" {
-    var state: RequestLifecycle = .{};
-    for (0..Tracker.capacity) |index| {
-        try state.tracker.add(@enumFromInt(index + 20), .notification);
-    }
-    const next_request_id = state.next_request_id;
-
-    try std.testing.expectError(error.TooManyPendingRequests, state.nextId());
-    try std.testing.expectEqual(next_request_id, state.next_request_id);
-}

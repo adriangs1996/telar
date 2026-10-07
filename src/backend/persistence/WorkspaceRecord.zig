@@ -1,5 +1,3 @@
-const WorkspaceRecord = @This();
-
 id: u64,
 path: []const u8,
 /// Explicit user name, empty when the workspace derives its name.

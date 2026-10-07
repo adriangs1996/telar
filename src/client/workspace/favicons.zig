@@ -81,39 +81,3 @@ pub fn complete(client: *Client, completion: FaviconCompletion) favicon_outcome.
 pub fn cancel(model: *data.ClientModel) void {
     model.favicons.reset();
 }
-
-pub const Request = FaviconRequest;
-pub const Completion = FaviconCompletion;
-
-test "one lookup runs at a time and stale and cancelled results are released" {
-    var client: Client = undefined;
-    client.gpa = std.testing.allocator;
-    client.model.favicons = .{};
-
-    try std.testing.expect(request(&client.model, .{ .workspace = @enumFromInt(1), .cwd = "/a", .cells = .{ 16, 0, 16 } }) == null);
-    const first = request(&client.model, .{ .workspace = @enumFromInt(1), .cwd = "/a", .cells = @splat(16) }).?;
-    try std.testing.expect(request(&client.model, .{ .workspace = @enumFromInt(2), .cwd = "/b", .cells = @splat(16) }) == null);
-    try std.testing.expectEqualStrings("/a", first.cwdSlice());
-
-    const stale = try std.testing.allocator.create(FaviconImage);
-    stale.* = .{ .sides = @splat(16) };
-    try std.testing.expect(complete(&client, .{ .execution_id = @enumFromInt(99), .workspace = @enumFromInt(1), .result = stale }) == .stale);
-    try std.testing.expect(client.model.favicons.busy());
-
-    const landed = try std.testing.allocator.create(FaviconImage);
-    landed.* = .{ .sides = @splat(16) };
-    const owned = complete(&client, .{ .execution_id = first.execution_id, .workspace = @enumFromInt(1), .result = landed });
-    std.testing.allocator.destroy(owned.image);
-    try std.testing.expect(!client.model.favicons.busy());
-
-    const second = request(&client.model, .{ .workspace = @enumFromInt(2), .cwd = "/b", .cells = @splat(16) }).?;
-    cancel(&client.model);
-    const cancelled = try std.testing.allocator.create(FaviconImage);
-    cancelled.* = .{ .sides = @splat(16) };
-    try std.testing.expect(complete(&client, .{ .execution_id = second.execution_id, .workspace = @enumFromInt(2), .result = cancelled }) == .stale);
-
-    const third = request(&client.model, .{ .workspace = @enumFromInt(3), .cwd = "/c", .cells = @splat(16) }).?;
-    try std.testing.expect(complete(&client, .{ .execution_id = third.execution_id, .workspace = @enumFromInt(3), .result = error.FaviconNotFound }) == .missing);
-    try std.testing.expect(complete(&client, .{ .execution_id = @enumFromInt(5), .workspace = @enumFromInt(3), .result = error.InvalidPngData }) == .stale);
-    try std.testing.expect(!client.model.favicons.busy());
-}

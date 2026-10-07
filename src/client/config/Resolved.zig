@@ -2,6 +2,7 @@ const data = @import("model");
 const default_bindings = @import("default_bindings.zig");
 const Resolved = @This();
 
+// SAFETY: Binding resolution copies configured bindings and appends defaults before publishing their lengths; slice exposes only len entries.
 bindings: [data.config_values.max_bindings]default_bindings.Binding = undefined,
 len: u16 = 0,
 /// Bindings, configured or default, the keymap had no room for.

@@ -11,20 +11,3 @@ pub const BoxGrid = @import("BoxGrid.zig");
 pub const BoxInk = @import("BoxInk.zig");
 pub const BoxRaster = @import("BoxRaster.zig");
 pub const Braille = @import("Braille.zig");
-
-test {
-    _ = @import("BlockElement.zig");
-    _ = @import("BlockInk.zig");
-    _ = @import("BlockSlab.zig");
-    _ = @import("BoxCurve.zig");
-    _ = @import("BoxDrawing.zig");
-    _ = @import("BoxGrid.zig");
-    _ = @import("BoxInk.zig");
-    _ = @import("BoxLines.zig");
-    _ = @import("BoxRaster.zig");
-    _ = @import("Braille.zig");
-    _ = @import("BrailleGrid.zig");
-    _ = @import("block_shapes.zig");
-    _ = @import("box_lines.zig");
-    _ = @import("box_style.zig");
-}

@@ -227,9 +227,9 @@ engine = {
 }
 ```
 
-See [Agent engine](flows/engine.md) for the runtime path. With an engine
+With an engine
 configured, `prefix+?` (`telar.action.suggest_command()`) opens the
-[command suggestion](flows/suggest-command.md) palette: it sends the focused
+command suggestion palette: it sends the focused
 pane's working directory, its last visible rows and your request to the
 engine, and Enter pastes the answer without running it.
 
@@ -398,7 +398,7 @@ gui = {
 | `cursor.blink` | `true` | Whether the default cursor blinks. An explicit application DECSCUSR style overrides this default; DEC mode 12 can suppress blinking. |
 | `cursor.blink_interval_ms` | `600` | Duration of each visible or hidden phase; integer `100..5000`. |
 | `sidebar.width` | `284` | Width of the native sidebar band in logical pixels; `220..800`, decimals allowed. Scaled by the display and rounded to device pixels, then clamped so the workbench keeps at least 20 columns after the band and its 8 px gap; a window too narrow for the full sidebar shows a workspace rail if space permits. Keyboard `resize_sidebar` moves the width by 16 logical pixels and dragging the edge sets it exactly; both change only this window and are not written back to the file, so the value here is what a new window starts from. A reload that changes the value replaces the window's width; one that leaves it unchanged keeps an interactive choice. |
-| `max_fps` | the display's rate | Caps how many frames a second the window presents; an integer `30..240`. By default the window presents at the refresh rate of the display it is on (120 on ProMotion, 144 or 165 on many external monitors, 60 elsewhere) and follows it to another display; past that rate vsync would discard the frames. A lower cap saves power during floods and animations. The runtime sends pane output to this window at the same interval. A reload applies it at once. See [frame pacing](flows/frame-pacing.md). |
+| `max_fps` | the display's rate | Caps how many frames a second the window presents; an integer `30..240`. By default the window presents at the refresh rate of the display it is on (120 on ProMotion, 144 or 165 on many external monitors, 60 elsewhere) and follows it to another display; past that rate vsync would discard the frames. A lower cap saves power during floods and animations. The runtime sends pane output to this window at the same interval. A reload applies it at once. |
 | `chrome.scale` | `1` | Multiplies the native chrome text sizes; `0.5..2`, decimals allowed. The chrome derives three sizes from `font.size` times the display scale: title and body ×0.87, small ×0.73, rounded to device pixels and never below 6. The bands (top navigation 42, status bar 26, pane header 22 logical pixels) do not scale with it, so the body size is capped at the largest whose line box fits the pane header: at `font.size = 15` the body stops growing at 16 px (scale ≈ 1.3) while title and small keep growing, reaching 26 and 22 px at scale 2. The terminal grid and the PTY size never change with it; a reload applies it without rebuilding the atlas. |
 
 Padding is applied once at the display scale, then rounded to physical pixels.
@@ -474,8 +474,7 @@ must be reopened with one before automatic reload is available.
 
 The selected options were informed by [Ghostty's configuration
 reference](https://ghostty.org/docs/config/reference); Telar does not load
-Ghostty configuration files. See [native appearance](flows/native-appearance.md)
-for the code path, resource lifetime and verification.
+Ghostty configuration files.
 
 ## Agents
 
@@ -544,8 +543,7 @@ runtime = {
 }
 ```
 
-`attachments` selects the marker scheme documented in
-[clipboard images](flows/clipboard-image.md): `ordered` renumbers `[Image #N]`
+`attachments` selects the marker scheme: `ordered` renumbers `[Image #N]`
 markers after a deletion (Codex), `stable_number` keeps numbers stable (Claude
 Code) and `pasted_path` inserts a temporary file path (Pi). The shipped
 defaults are `stable_number` for `claude`, `ordered` for `codex` and
@@ -888,7 +886,7 @@ prints, a zero exit status is a success; a nonzero status, a signal or a
 timeout shows a client diagnostic. A second choice while one still runs is
 refused. Pick names follow the panel rules, and a configuration holds at most
 16 picks, keeping the first 16 by name like panels. `telar.action.pick("name")` opens a pick from a binding as well;
-plugin effects cannot return it. See [Pick list](flows/pick-list.md).
+plugin effects cannot return it.
 
 #### Example: Pi's default provider, model and thinking level
 
@@ -1101,8 +1099,7 @@ pending rerun. Reloading the configuration discards a completion from the
 previous generation.
 
 The helper owns any credentials and network access it needs. Telar receives
-only its bounded stdout. See [Configurable bars](flows/configurable-bars.md)
-for ownership, scheduling and stale-result behavior.
+only its bounded stdout.
 
 ## Bindings
 
@@ -1241,8 +1238,7 @@ machines, which typing `:` in the palette also does; there Enter shows a
 machine, Shift+Enter enables or disables it, Ctrl+R renames it and Ctrl+D
 removes it. `telar.action.add_machine()` asks for a new machine's label and
 SSH destination. Each change is written to `machines.json`. They have no
-default binding, and plugins cannot run them. See
-[Machine presentation](flows/machine-presentation.md).
+default binding, and plugins cannot run them.
 
 `telar.action.path_picker()` opens a fuzzy finder over the files and
 directories under the focused pane's directory, anchored at its cursor. Enter
@@ -1337,9 +1333,6 @@ The client encodes the result for the focused pane's current cursor, keypad,
 and bracketed-paste modes. Raw terminal escape sequences are not part of the
 Lua API.
 
-See [Lua action](flows/lua-action.md) for VM ownership, validate-before-apply
-ordering, model-owned diagnostics and the semantic input path.
-
 ## Environment and reload
 
 The configuration VM exposes base, coroutine, math, string, table, and UTF-8
@@ -1368,8 +1361,7 @@ shows the error as a notice in the window and on stderr. Closure
 state is intentionally lost on reload.
 The client model records the accepted generation, sidebar and pane-gap state;
 the presenter observes that version and paints the new appearance on its paced
-frame. The ownership and failure order is mapped in
-[`flows/config-reload.md`](flows/config-reload.md).
+frame.
 
 The runtime evaluates the same file in a disposable VM and retains only typed,
 validated values. No Lua state or closure enters the runtime process.
@@ -1379,7 +1371,7 @@ validated values. No Lua state or closure enters the runtime process.
 substring patterns of up to 256 bytes; a list or pattern past that refuses
 the configuration and names the limit, because dropping a filter would record
 what it hides. `runtime.proxy` accepts
-`enabled`, `ca_dir`, `capture`, and `intercept_hosts`. ProxyTLS and exchange
+`enabled`, `anonymous_tunnels`, `ca_dir`, `capture`, and `intercept_hosts`. ProxyTLS and exchange
 capture are disabled by default. A
 relative `ca_dir` is also resolved beside `config.lua`; Telar creates it
 owner-only and stores its private CA and derived trust bundle there with
@@ -1397,6 +1389,10 @@ listener port there, in its own `proxy-port-<key>` file, so runtimes that
 share `ca_dir` keep separate ports. A connection outside the
 configured scope passes through the authenticated CONNECT listener, but its
 TCP payload is forwarded opaquely and is not captured.
+`anonymous_tunnels`, `false` by default, also admits a CONNECT without any
+`Proxy-Authorization` field to a host outside `intercept_hosts`, for clients
+that do not send the proxy URL's credential; see
+[ProxyTLS](proxy-tls.md#traffic-path-and-trust) for what it exposes.
 
 System trust is not a configuration side effect. Run `telar proxy trust
 install|uninstall|status` explicitly. If `ca_dir` is custom, pass the same

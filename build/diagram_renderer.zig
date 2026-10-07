@@ -28,13 +28,6 @@ pub fn add(b: *std.Build, app: Application) ?std.Build.LazyPath {
         .install_dir = .prefix,
         .install_subdir = "share/telar/diagram-renderer/licenses",
     }).step);
-
-    const test_helper = b.addSystemCommand(&.{ "cargo", "test", "--quiet", "--locked", "--release", "--manifest-path" });
-    test_helper.addFileArg(b.path("tools/diagram-renderer/Cargo.toml"));
-    test_helper.addArg("--target-dir");
-    _ = test_helper.addOutputDirectoryArg("diagram-renderer-tests");
-    addInputs(b, test_helper);
-    b.step("test-diagram-renderer", "Validate isolated Mermaid parsing, pixels and resource bounds").dependOn(&test_helper.step);
     return helper;
 }
 

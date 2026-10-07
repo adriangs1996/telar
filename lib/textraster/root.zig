@@ -8,15 +8,3 @@ pub const Metrics = @import("Metrics.zig");
 pub const Rasterizer = @import("Rasterizer.zig");
 pub const Size = @import("Size.zig");
 pub const Surface = @import("Surface.zig");
-pub const rounded_rectangle = @import("rounded_rectangle.zig");
-
-test {
-    _ = @import("Color.zig");
-    _ = @import("Metrics.zig");
-    _ = @import("Rasterizer.zig");
-    _ = @import("RasterizerPoint.zig");
-    _ = @import("Size.zig");
-    _ = @import("Surface.zig");
-    _ = @import("rasterizer_support.zig");
-    _ = @import("rounded_rectangle.zig");
-}

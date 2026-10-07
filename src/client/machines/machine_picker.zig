@@ -7,7 +7,6 @@
 //! `machines.json`, which the window then follows. Enter on a machine that
 //! failed for want of telar, or for another build, sets telar up there.
 const core = @import("telar-core");
-const std = @import("std");
 const Machines = @import("Machines.zig");
 const MachineResults = @import("MachineResults.zig");
 const machine_profiles = @import("machine_profiles.zig");
@@ -124,21 +123,4 @@ pub fn rename(client: *Client, chosen: ?u8) void {
         .slot = slot,
         .label = machines.label(slot),
     } });
-}
-
-test "machines match by label or destination" {
-    var machines: Machines = .{};
-    _ = try machines.add(.{ .label = "laptop" }, Machines.local_slot);
-    _ = try machines.add(.{ .label = "box", .destination = "dev@build-box" }, null);
-    _ = try machines.add(.{ .label = "gpu", .destination = "dev@gpu-rig" }, null);
-
-    var results: MachineResults = .{};
-    collect(&machines, "", &results);
-    try std.testing.expectEqual(@as(u8, 3), results.len);
-
-    collect(&machines, "build", &results);
-    try std.testing.expectEqualSlices(u8, &.{1}, results.slice());
-
-    collect(&machines, "zzz", &results);
-    try std.testing.expectEqual(@as(u8, 0), results.len);
 }

@@ -1,5 +1,4 @@
 //! Presentation-owned targets plus client-owned transient editor state.
-const Registry = @import("Registry.zig");
 const native = @import("../../native/native.zig");
 const labels = @import("labels.zig");
 const client = @import("telar-client");
@@ -49,6 +48,7 @@ palette_scroll_generation: u64 = 0,
 history_scroll_remainder: f64 = 0,
 history_scroll_generation: u64 = 0,
 history_scroll_inspecting: bool = false,
+// SAFETY: host_context fills each exported node before publishing the tree and its count; native consumers read only those nodes.
 native_nodes: [AccessibilityTree.capacity]native.AccessibilityNode = undefined,
 /// Targets the last published accessibility tree left out because it was full.
 accessibility_dropped: usize = 0,
@@ -147,6 +147,7 @@ pub fn present(self: *State, delivered: bool) void {
 
 const Editors = struct {
     pub const capacity = 16;
+    // SAFETY: add writes each geometry before increasing len; find and focus traversal read only that initialized prefix.
     items: [capacity]Geometry = undefined,
     len: usize = 0,
     /// Editors left out because the table was full; they draw but take no

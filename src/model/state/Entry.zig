@@ -14,11 +14,14 @@ full_offset: u32 = 0,
 full_len: u32 = 0,
 command_complete: bool = false,
 captured_truncated: bool = false,
+// SAFETY: HistoryPaletteState copies the bounded command before publishing command_len; commandSlice exposes only that prefix.
 command: [history_palette.max_command_bytes]u8 = undefined,
 command_len: u16 = 0,
+// SAFETY: HistoryPaletteState copies the bounded directory before publishing cwd_len; cwdSlice exposes only that prefix.
 cwd: [history_palette.max_entry_cwd_bytes]u8 = undefined,
 cwd_len: u16 = 0,
 /// Manifest name of the agent that submitted the command; empty for people.
+// SAFETY: HistoryPaletteState copies the bounded provider before publishing provider_len; providerSlice exposes only that prefix.
 provider: [core.max_history_provider_bytes]u8 = undefined,
 provider_len: u8 = 0,
 

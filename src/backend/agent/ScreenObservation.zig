@@ -1,6 +1,5 @@
 const core = @import("telar-core");
 const Identity = @import("Identity.zig");
-const ScreenObservation = @This();
 
 identity: Identity,
 signal: core.Signal,

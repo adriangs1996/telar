@@ -5,13 +5,11 @@
 const core = @import("telar-core");
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
-const pane_closure = @import("pane_closure.zig");
 const Pane = @import("../pane/Pane.zig");
 const PaneIngestStats = @import("../pane/PaneIngestStats.zig");
 const pane_namespace = @import("../pane/pane_namespace.zig");
 const OutputCompletion = @import("events/OutputCompletion.zig");
 const IngestCompletion = @import("events/IngestCompletion.zig");
-const IngestTestGate = @import("IngestTestGate.zig");
 const pane_attachment = @import("pane_attachment.zig");
 const pane_graphics = @import("pane_graphics.zig");
 const pane_input = @import("pane_input.zig");
@@ -76,14 +74,14 @@ pub fn receive(model: *RuntimeModel, completion: OutputCompletion) !void {
     };
     core.mark(ingest.io, .vt_queued);
 
-    if (model.ingest_gate == null and pane.canInlineOutput(ingest.bytes)) {
-        const ingested = finishIngest(model, ingestPane(ingest, null));
+    if (pane.canInlineOutput(ingest.bytes)) {
+        const ingested = finishIngest(model, ingestPane(ingest));
         try observation;
         try media;
         return ingested;
     }
 
-    model.select.concurrent(.pane_ingested, ingestPane, .{ ingest, model.ingest_gate }) catch |err| {
+    model.select.concurrent(.pane_ingested, ingestPane, .{ingest}) catch |err| {
         pane.cancelOutputIngest();
         return err;
     };
@@ -184,7 +182,7 @@ fn refreshAttachments(model: *RuntimeModel, pane: *Pane) void {
     }
 }
 
-fn ingestPane(ingest: OutputIngest, gate: ?*IngestTestGate) IngestCompletion {
+fn ingestPane(ingest: OutputIngest) IngestCompletion {
     core.profiling.add(.runtime_ingest, 1);
     core.profiling.add(.runtime_ingest_bytes, ingest.bytes.len);
     const profile_started = core.profiling.start(ingest.io);
@@ -194,12 +192,6 @@ fn ingestPane(ingest: OutputIngest, gate: ?*IngestTestGate) IngestCompletion {
 
     const path = core.enter(.interactive);
     defer path.restore();
-
-    if (gate) |held| {
-        held.wait(ingest.io) catch |err| {
-            return .{ .pane = ingest.pane.key(), .result = err };
-        };
-    }
 
     var stats: PaneIngestStats = .{};
     stats.elapsed_ns = ingest.pane.ingest(ingest.io, ingest.bytes) catch |err| {

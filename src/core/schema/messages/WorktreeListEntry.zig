@@ -2,8 +2,6 @@ const CoordinatorReference = @import("../../CoordinatorReference.zig");
 const id = @import("../id.zig");
 const types = @import("../types.zig");
 /// One tracked worktree in the workspace list.
-const WorktreeListEntry = @This();
-
 worktree: id.WorktreeId,
 source: id.WorkspaceId,
 /// The workspace holding the worktree's tabs, once something was launched.

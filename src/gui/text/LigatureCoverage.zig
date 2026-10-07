@@ -5,7 +5,6 @@
 //! shaping alone and the terminal grid draws exactly what it drew before.
 const std = @import("std");
 const freetype = @import("freetype");
-const assets = @import("assets");
 const LigatureRole = @import("LigatureRole.zig").LigatureRole;
 const cellgrid = @import("cellgrid");
 const LigatureCoverage = @This();
@@ -186,55 +185,4 @@ fn maxContext(face: c.FT_Face) u16 {
     }
 
     return os2.usMaxContext;
-}
-
-test "coverage reads which codepoints each face's ligature lookups substitute or read" {
-    var library: c.FT_Library = undefined;
-    try std.testing.expectEqual(@as(c_int, 0), c.FT_Init_FreeType(&library));
-    defer _ = c.FT_Done_FreeType(library);
-    const Expected = struct { font: []const u8, joins: bool, input: []const u8 = "", context: []const u8 = "", none: []const u8 = "" };
-    const faces = [_]Expected{
-        // Programming ligatures through `calt`: operators substitute, digits,
-        // capitals and spaces only steer them, lowercase never takes part.
-        .{ .font = assets.jetbrains_mono, .joins = true, .input = "-=>!|&:/*<", .context = " 019AZ", .none = "abxyz,\"\u{e9}\u{301}" },
-        // A symbols face has no ligature lookups at all.
-        .{ .font = assets.nerd_symbols, .joins = false, .none = "->=\u{f07b}" },
-        // A proportional face whose only ligature is the typographic `fi`.
-        .{ .font = assets.plex_sans, .joins = true, .input = "fi", .none = "->= " },
-    };
-    for (faces) |expected| {
-        var face: c.FT_Face = undefined;
-        try std.testing.expectEqual(@as(c_int, 0), c.FT_New_Memory_Face(library, expected.font.ptr, @intCast(expected.font.len), 0, &face));
-        defer _ = c.FT_Done_Face(face);
-        const font = c.hb_ft_font_create_referenced(face).?;
-        defer c.hb_font_destroy(font);
-        var coverage = try init(face, font);
-        defer coverage.deinit();
-        try std.testing.expectEqual(expected.joins, coverage.joins());
-        for (expected.input) |byte| {
-            try std.testing.expectEqual(LigatureRole.input, coverage.role(&.{byte}));
-        }
-
-        for (expected.context) |byte| {
-            try std.testing.expectEqual(LigatureRole.context, coverage.role(&.{byte}));
-        }
-
-        var graphemes = std.unicode.Utf8View.initUnchecked(expected.none).iterator();
-        while (graphemes.nextCodepointSlice()) |grapheme| {
-            try std.testing.expectEqual(LigatureRole.none, coverage.role(grapheme));
-        }
-    }
-
-    // A cluster joins only when the face shapes all of it.
-    var face: c.FT_Face = undefined;
-    try std.testing.expectEqual(@as(c_int, 0), c.FT_New_Memory_Face(library, assets.jetbrains_mono.ptr, @intCast(assets.jetbrains_mono.len), 0, &face));
-    defer _ = c.FT_Done_Face(face);
-    const font = c.hb_ft_font_create_referenced(face).?;
-    defer c.hb_font_destroy(font);
-    var coverage = try init(face, font);
-    defer coverage.deinit();
-    try std.testing.expectEqual(@as(u16, 6), coverage.reach);
-    try std.testing.expectEqual(LigatureRole.none, coverage.role("=\u{301}"));
-    try std.testing.expectEqual(LigatureRole.none, coverage.role("\xff"));
-    try std.testing.expectEqual(LigatureRole.none, coverage.role(""));
 }

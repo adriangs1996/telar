@@ -8,6 +8,7 @@ const Watch = @This();
 key: PaneKey,
 session: SessionReference,
 kind: core.AgentSessionFileKind,
+// SAFETY: session_file copies the registered path before setting path_len; pathSlice reads only that prefix.
 path: [core.max_agent_session_file_bytes]u8 = undefined,
 path_len: u16 = 0,
 /// Transcript scan position. Null until the first probe seeds it at the
@@ -15,6 +16,7 @@ path_len: u16 = 0,
 offset: ?u64 = null,
 /// The last name handed to the agent, so a state database read every
 /// second reports only changes.
+// SAFETY: remember copies the name before setting name_len; nameSlice reads only that prefix.
 name: [core.max_agent_session_title_bytes]u8 = undefined,
 name_len: u8 = 0,
 name_known: bool = false,

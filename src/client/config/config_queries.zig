@@ -32,7 +32,7 @@ pub fn writeSection(snapshot: *const Snapshot, query: Query, writer: *std.Io.Wri
         .runtime => {
             const value = &snapshot.runtime;
             var hosts: [core.max_intercept_hosts][]const u8 = undefined;
-            try std.json.Stringify.value(.{ .graphics_pane_bytes = value.graphics_pane_bytes, .graphics_global_bytes = value.graphics_global_bytes, .history_path = value.historyPath(), .history_output_capture = value.history_output_capture, .session_path = value.sessionPath(), .session_persist = value.session_persist, .session_resume_agents = value.session_resume_agents, .proxy_enabled = value.proxy_enabled, .proxy_ca_dir = value.proxyCaDir(), .proxy_intercept_hosts = value.proxyInterceptHosts(&hosts), .proxy_capture_enabled = value.proxy_capture_enabled, .proxy_capture_max_part_bytes = value.proxy_capture_max_part_bytes, .proxy_capture_max_exchange_bytes = value.proxy_capture_max_exchange_bytes, .proxy_capture_max_total_bytes = value.proxy_capture_max_total_bytes, .proxy_capture_join_timeout_ms = value.proxy_capture_join_timeout_ms, .engine_idle_timeout_ms = value.engine_idle_timeout_ms, .agent_manifest_count = value.agent_manifests.count }, .{}, writer);
+            try std.json.Stringify.value(.{ .graphics_pane_bytes = value.graphics_pane_bytes, .graphics_global_bytes = value.graphics_global_bytes, .history_path = value.historyPath(), .history_output_capture = value.history_output_capture, .session_path = value.sessionPath(), .session_persist = value.session_persist, .session_resume_agents = value.session_resume_agents, .proxy_enabled = value.proxy_enabled, .proxy_anonymous_tunnels = value.proxy_anonymous_tunnels, .proxy_ca_dir = value.proxyCaDir(), .proxy_intercept_hosts = value.proxyInterceptHosts(&hosts), .proxy_capture_enabled = value.proxy_capture_enabled, .proxy_capture_max_part_bytes = value.proxy_capture_max_part_bytes, .proxy_capture_max_exchange_bytes = value.proxy_capture_max_exchange_bytes, .proxy_capture_max_total_bytes = value.proxy_capture_max_total_bytes, .proxy_capture_join_timeout_ms = value.proxy_capture_join_timeout_ms, .engine_idle_timeout_ms = value.engine_idle_timeout_ms, .agent_manifest_count = value.agent_manifests.count }, .{}, writer);
         },
     }
 }
@@ -43,6 +43,7 @@ fn writeAction(snapshot: *const Snapshot, action: data.Action, writer: *std.Io.W
     try writer.writeAll(",\"value\":");
     switch (action) {
         .command_tab => |reference| {
+            // SAFETY: command_tabs.load writes loaded on success; the failure branch returns before inspecting it.
             var loaded: data.CommandTab = undefined;
             if (!snapshot.command_tabs.load(reference, &loaded)) {
                 return error.BindingNotFound;
@@ -67,20 +68,4 @@ fn writeAction(snapshot: *const Snapshot, action: data.Action, writer: *std.Io.W
     }
 
     try writer.writeByte('}');
-}
-
-test "configuration queries serialize occupied bindings and reject missing indices" {
-    var snapshot: Snapshot = .{};
-    snapshot.binding_count = 1;
-    const command = try data.CommandTab.init(&.{ "echo", "ready" }, "test");
-    const reference = try snapshot.command_tabs.add(0, &command);
-    snapshot.bindings[0] = try data.config_values.ConfiguredBinding.init(&.{snapshot.prefix}, .{ .command_tab = reference });
-    snapshot.bindings_prefixed[0] = true;
-    var buffer: [4096]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&buffer);
-    try writeSection(&snapshot, .{ .section = .binding, .index = 0 }, &writer);
-    const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, writer.buffered(), .{});
-    defer parsed.deinit();
-    try std.testing.expectEqualStrings("ready", parsed.value.object.get("action").?.object.get("value").?.object.get("argv").?.array.items[1].string);
-    try std.testing.expectError(error.BindingNotFound, writeSection(&snapshot, .{ .section = .binding, .index = 1 }, &writer));
 }

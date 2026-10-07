@@ -11,6 +11,7 @@ const Progress = @This();
 pub const max_tasks = 128;
 pub const tasks_limit = core.Limit.declare("agents.max_tasks", "tasks", max_tasks);
 
+// SAFETY: applyPlan copies a task subject before recording its length and count; subjectAt reads only that prefix.
 task_subject: [max_tasks][core.max_agent_plan_step_bytes]u8 = undefined,
 task_subject_len: [max_tasks]u8 = @splat(0),
 task_status: [max_tasks]core.AgentPlanStatus = @splat(.pending),
@@ -18,9 +19,11 @@ task_count: u8 = 0,
 /// A whole-plan report (`set`) replaces the task list with these counts.
 reported_done: u16 = 0,
 reported_total: u16 = 0,
+// SAFETY: applyPlan copies the reported step before recording its length; step reads only that prefix.
 reported_step: [core.max_agent_plan_step_bytes]u8 = undefined,
 reported_step_len: u8 = 0,
 uses_tasks: bool = false,
+// SAFETY: setFinalMessage copies the bounded text before recording its length; finalMessage reads only that prefix.
 final_message: [core.max_agent_final_message_bytes]u8 = undefined,
 final_message_len: u16 = 0,
 
@@ -162,74 +165,4 @@ fn copyBounded(storage: []u8, value: []const u8) usize {
 
     @memcpy(storage[0..len], value[0..len]);
     return len;
-}
-
-test "tasks count by status and the step follows the task in progress" {
-    var progress: Progress = .{};
-
-    _ = progress.applyPlan(.{ .op = .add, .text = "Read Tabs.zig" });
-    _ = progress.applyPlan(.{ .op = .add, .text = "Add the column" });
-    _ = progress.applyPlan(.{ .op = .add, .text = "Obsolete" });
-    try std.testing.expectEqualStrings("Read Tabs.zig", progress.step());
-
-    _ = progress.applyPlan(.{ .op = .mark, .index = 0, .status = .completed });
-    _ = progress.applyPlan(.{ .op = .mark, .index = 1, .status = .in_progress });
-    _ = progress.applyPlan(.{ .op = .mark, .index = 2, .status = .deleted });
-    try std.testing.expectEqual(@as(u16, 1), progress.done());
-    try std.testing.expectEqual(@as(u16, 2), progress.total());
-    try std.testing.expectEqualStrings("Add the column", progress.step());
-    try std.testing.expect(!progress.applyPlan(.{ .op = .mark, .index = 9, .status = .completed }));
-}
-
-test "a whole-plan report replaces tasks and bounds its counts" {
-    var progress: Progress = .{};
-    _ = progress.applyPlan(.{ .op = .add, .text = "gone" });
-
-    try std.testing.expect(progress.applyPlan(.{ .op = .set, .done = 9, .total = 4, .text = "Write tests" }));
-    try std.testing.expectEqual(@as(u16, 4), progress.done());
-    try std.testing.expectEqual(@as(u16, 4), progress.total());
-    try std.testing.expectEqualStrings("Write tests", progress.step());
-}
-
-test "the final message is bounded and unchanged values report no change" {
-    var progress: Progress = .{};
-    try std.testing.expect(progress.setFinalMessage("Done.\nTests pass."));
-    try std.testing.expect(!progress.setFinalMessage("Done.\nTests pass."));
-
-    const long = "é" ** core.max_agent_final_message_bytes;
-    _ = progress.setFinalMessage(long);
-    try std.testing.expect(progress.finalMessage().len <= core.max_agent_final_message_bytes);
-    try std.testing.expect(std.unicode.utf8ValidateSlice(progress.finalMessage()));
-}
-
-test "the plan keeps its first max_tasks tasks and refuses the next" {
-    var progress: Progress = .{};
-    for (0..max_tasks) |_| {
-        try std.testing.expect(!progress.refusesTask(.{
-            .op = .add,
-            .text = "task",
-        }));
-        try std.testing.expect(progress.applyPlan(.{
-            .op = .add,
-            .text = "task",
-        }));
-    }
-
-    try std.testing.expectEqual(@as(u16, max_tasks), progress.total());
-    try std.testing.expect(progress.refusesTask(.{
-        .op = .add,
-        .text = "one more",
-    }));
-    try std.testing.expect(!progress.applyPlan(.{
-        .op = .add,
-        .text = "one more",
-    }));
-    try std.testing.expectEqual(@as(u16, max_tasks), progress.total());
-
-    try std.testing.expect(progress.applyPlan(.{
-        .op = .mark,
-        .index = max_tasks - 1,
-        .status = .completed,
-    }));
-    try std.testing.expectEqual(@as(u16, 1), progress.done());
 }

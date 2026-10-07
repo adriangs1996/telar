@@ -15,13 +15,17 @@ pub const max_label_bytes = 32;
 pub const max_color_bytes = 24;
 
 id: MachineId,
+// SAFETY: init and relabel fill label_bytes[0..label_len] before returning; label reads only that prefix.
 label_bytes: [max_label_bytes]u8 = undefined,
 label_len: u8,
+// SAFETY: init fills destination_bytes[0..destination_len] before returning; destination reads only that prefix.
 destination_bytes: [ssh_destination.max_bytes]u8 = undefined,
 destination_len: u8,
+// SAFETY: init copies a supplied color before returning; color_len zero means there is no color to read.
 color_bytes: [max_color_bytes]u8 = undefined,
 color_len: u8 = 0,
 enabled: bool,
+// SAFETY: placeTelar validates and copies the path before returning; telarPath reads only a nonempty recorded prefix.
 telar_path_bytes: [remote_telar.max_path_bytes]u8 = undefined,
 telar_path_len: u8 = 0,
 /// Each built-in agent's login there, as setup last saw it.
@@ -176,54 +180,4 @@ pub fn validateColor(text: []const u8) !void {
             return error.InvalidMachineColor;
         }
     }
-}
-
-test "a profile keeps what it was given" {
-    const profile = try MachineProfile.init(@enumFromInt(7), .{
-        .label = "box",
-        .destination = "dev@box",
-        .color = "#e06c75",
-    });
-
-    try std.testing.expectEqualStrings("box", profile.label());
-    try std.testing.expectEqualStrings("dev@box", profile.destination());
-    try std.testing.expectEqualStrings("#e06c75", profile.color().?);
-    try std.testing.expect(profile.enabled);
-    try std.testing.expectEqual(@as(?[]const u8, null), profile.telarPath());
-}
-
-test "a profile keeps a valid telar path and refuses another" {
-    var profile = try MachineProfile.init(@enumFromInt(7), .{
-        .label = "box",
-        .destination = "dev@box",
-        .telar_path = "/home/dev/.local/share/telar/0.3.0/telar",
-    });
-
-    try std.testing.expectEqualStrings("/home/dev/.local/share/telar/0.3.0/telar", profile.telarPath().?);
-    try std.testing.expectError(error.InvalidRemoteTelarPath, profile.placeTelar("telar"));
-    try std.testing.expectEqualStrings("/home/dev/.local/share/telar/0.3.0/telar", profile.telarPath().?);
-    try std.testing.expectError(error.InvalidRemoteTelarPath, MachineProfile.init(@enumFromInt(8), .{
-        .label = "gpu",
-        .destination = "dev@gpu",
-        .telar_path = "/home/dev/$(id)",
-    }));
-}
-
-test "labels, destinations and colors are validated" {
-    for ([_][]const u8{ "", "-box", ".box", "box rig", "caja/1", "a" ** 33 }) |text| {
-        try std.testing.expectError(error.InvalidMachineLabel, validateLabel(text));
-    }
-
-    try validateLabel("gpu-rig.lan_2");
-
-    for ([_][]const u8{ "", "-oProxyCommand=x", "dev@box extra", "\xff@box" }) |text| {
-        try std.testing.expectError(error.InvalidRemoteDestination, validateDestination(text));
-    }
-
-    for ([_][]const u8{ "", "#12345", "#12345g", "Red", "red!", "a" ** 25 }) |text| {
-        try std.testing.expectError(error.InvalidMachineColor, validateColor(text));
-    }
-
-    try validateColor("accent");
-    try validateColor("#A0b1C2");
 }

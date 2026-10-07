@@ -159,11 +159,12 @@ return telar.config({
 	api_version = 2,
 
 	-- theme = require("osaka-jade"),
-	theme = "pierre-dark-soft",
+	-- theme = "pierre-dark-soft",
+	theme = "kanagawa-wave",
 
 	gui = {
 		window = {
-			background_opacity = 0.95,
+			background_opacity = 0.90,
 			background_blur = 20,
 			titlebar = false,
 			padding = { x = 2, y = 0 },

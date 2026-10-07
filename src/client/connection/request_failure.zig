@@ -3,7 +3,6 @@
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
-const builtin = @import("builtin");
 const notifications = @import("../notifications/notifications.zig");
 const pane_attachment = @import("../panes/pane_attachment.zig");
 const pane_split = @import("../panes/pane_split.zig");
@@ -88,12 +87,8 @@ pub fn failRuntimeRequest(client: *Client, failure: core.RequestFailed) !Request
 }
 
 fn reportRuntimeFailure(message: []const u8) void {
-    if (builtin.is_test) {
-        return;
-    }
-
-    std.debug.print(
-        "telar runtime: {s}\n",
+    std.log.warn(
+        "telar runtime: {s}",
         .{
             message,
         },

@@ -1,12 +1,7 @@
 const core = @import("telar-core");
-const TabCreation = @This();
 
 previous: core.TabLocation,
 created: core.TabLocation,
-created_root_pane_id: core.PaneId,
-created_position: u16,
-previous_layout_revision: u64,
-created_layout_revision: u64,
 tabs_revision_before: u64,
 active_tab_revision_before: u64,
 copy_revision_before: u64,

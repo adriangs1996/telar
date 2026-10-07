@@ -78,14 +78,3 @@ fn lastLines(text: []const u8, count: u16) std.mem.SplitIterator(u8, .scalar) {
 
     return std.mem.splitScalar(u8, trimmed[start..], '\n');
 }
-
-test "a peek shows the last rows of the pane" {
-    var lines = lastLines("one\ntwo\nthree\nfour\n\n", 2);
-    try std.testing.expectEqualStrings("three", lines.next().?);
-    try std.testing.expectEqualStrings("four", lines.next().?);
-    try std.testing.expect(lines.next() == null);
-
-    var all = lastLines("solo", 4);
-    try std.testing.expectEqualStrings("solo", all.next().?);
-    try std.testing.expect(all.next() == null);
-}

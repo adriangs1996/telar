@@ -7,6 +7,7 @@ const WorktreeCatalog = @import("WorktreeCatalog.zig");
 const Snapshot = @This();
 
 revision: u64 = 0,
+// SAFETY: Session fills each ControlAgent before increasing count; slice exposes only that prefix.
 entries: [core.max_agent_snapshot_entries]ControlAgent = undefined,
 count: usize = 0,
 /// Worktrees a `worktree:` target resolves against; set by the caller.

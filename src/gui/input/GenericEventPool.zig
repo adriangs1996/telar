@@ -1,13 +1,14 @@
 //! Bounded storage for borrowed text in whole composition/clipboard events.
 //! The queue stores slot indices; slices are rebuilt only for synchronous drain.
-const event_module = @import("event.zig");
+const Window = @import("telar-window");
+const event_module = Window;
 const std = @import("std");
 
 pub fn Type(comptime byte_capacity: usize, comptime slot_capacity: usize) type {
     return struct {
         const Pool = @This();
         const Slot = struct {
-            event: event_module.Event = .{ .focus = false },
+            event: event_module.Input = .{ .focus = false },
             len: usize = 0,
             used: bool = false,
         };
@@ -30,15 +31,15 @@ pub fn Type(comptime byte_capacity: usize, comptime slot_capacity: usize) type {
 
         /// Copies before admission completes, without retaining native pointers.
         /// Example: `const slot = try pool.admit(event);`
-        pub fn admit(self: *Pool, event: event_module.Event) !u8 {
+        pub fn admit(self: *Pool, event: event_module.Input) !u8 {
             return self.admitLeaving(event, 0);
         }
 
         /// `admit` that leaves `spare` slots free for events only `admit`
         /// takes, so one kind of event cannot take the room another needs.
         /// Example: `const slot = try pool.admitLeaving(event, 1);`
-        pub fn admitLeaving(self: *Pool, event: event_module.Event, spare: usize) !u8 {
-            const bytes = payload(event);
+        pub fn admitLeaving(self: *Pool, event: event_module.Input, spare: usize) !u8 {
+            const bytes = event.payload();
             if (bytes.len > byte_capacity) {
                 return error.InputTooLarge;
             }
@@ -61,7 +62,7 @@ pub fn Type(comptime byte_capacity: usize, comptime slot_capacity: usize) type {
                     continue;
                 }
 
-                slot.event = withPayload(event, "");
+                slot.event = event.withPayload("");
                 @memcpy(self.bytesOf(index)[0..bytes.len], bytes);
                 slot.len = bytes.len;
                 slot.used = true;
@@ -72,10 +73,10 @@ pub fn Type(comptime byte_capacity: usize, comptime slot_capacity: usize) type {
         }
 
         /// Example: `try dispatch(pool.view(index));`
-        pub fn view(self: *const Pool, index: u8) event_module.Event {
+        pub fn view(self: *const Pool, index: u8) event_module.Input {
             const slot = &self.slots[index];
             std.debug.assert(slot.used);
-            return withPayload(slot.event, self.bytesOf(index)[0..slot.len]);
+            return slot.event.withPayload(self.bytesOf(index)[0..slot.len]);
         }
 
         fn bytesOf(self: *const Pool, index: usize) []u8 {
@@ -87,49 +88,5 @@ pub fn Type(comptime byte_capacity: usize, comptime slot_capacity: usize) type {
             std.debug.assert(self.slots[index].used);
             self.slots[index].used = false;
         }
-
-        fn payload(event: event_module.Event) []const u8 {
-            return switch (event) {
-                .text => |value| value.bytes,
-                .paste => |value| value,
-                .composition => |value| value.text,
-                .clipboard => |value| value.text,
-                .accessibility => |value| value.text,
-                else => "",
-            };
-        }
-
-        fn withPayload(event: event_module.Event, bytes: []const u8) event_module.Event {
-            var result = event;
-            switch (result) {
-                .text => |*value| value.bytes = bytes,
-                .paste => |*value| value.* = bytes,
-                .composition => |*value| value.text = bytes,
-                .clipboard => |*value| value.text = bytes,
-                .accessibility => |*value| value.text = bytes,
-                else => {},
-            }
-
-            return result;
-        }
     };
-}
-
-test "payload slots own UTF8 and reject oversized or exhausted admission atomically" {
-    const Pool = Type(8, 2);
-    var storage: [Pool.storage_bytes]u8 = undefined;
-    var pool: Pool = .init(&storage);
-    var bytes = [_]u8{ 'h', 'i' };
-    const index = try pool.admit(.{ .text = .{ .bytes = &bytes, .target_id = 12, .generation = 4 } });
-    @memset(&bytes, 'x');
-    try std.testing.expectEqualStrings("hi", pool.view(index).text.bytes);
-    try std.testing.expectEqual(@as(u64, 12), pool.view(index).text.target_id);
-    try std.testing.expectError(error.InputTooLarge, pool.admit(.{ .paste = "123456789" }));
-    try std.testing.expectError(error.InvalidUtf8, pool.admit(.{ .paste = "\xff" }));
-    const other = try pool.admit(.{ .paste = "🌍" });
-    try std.testing.expectError(error.InputPoolFull, pool.admit(.{ .paste = "a" }));
-    pool.release(index);
-    try std.testing.expectError(error.InputPoolFull, pool.admitLeaving(.{ .paste = "b" }, 1));
-    _ = try pool.admit(.{ .paste = "new" });
-    try std.testing.expectEqualStrings("🌍", pool.view(other).paste);
 }

@@ -1,10 +1,9 @@
-//! Composes and draws one widget list during a synchronous semantic-model borrow.
-const core = @import("telar-core");
+//! Composes widgets and seals interaction results; Renderer executes the list.
 const data = @import("model");
 const client = @import("telar-client");
-const Canvas = @import("../widgets/Canvas.zig");
+const Frame = @import("Frame.zig");
 const Composition = @import("../widgets/Composition.zig");
-const TerminalRenderer = @import("TerminalRenderer.zig");
+const Renderer = @import("Renderer.zig");
 const Chrome = @import("../widgets/Chrome.zig");
 const Overlays = @import("../widgets/overlays/Overlays.zig");
 const LinkHit = @import("../input/LinkHit.zig");
@@ -13,7 +12,7 @@ const Store = @import("../diagrams/Store.zig");
 const ImagePreviews = @import("../ImagePreviews.zig");
 const Scene = @This();
 
-terminal: *TerminalRenderer,
+renderer: *Renderer,
 chrome: *Chrome,
 overlays: *Overlays,
 theme: data.ColorTheme,
@@ -21,49 +20,46 @@ link: ?*const LinkHit = null,
 widgets: ?*State = null,
 diagrams: ?*Store = null,
 previews: ?*const ImagePreviews = null,
-/// Frame widgets the last `prepare` left out because the list was full.
+/// Frame widgets the last `compose` left out because the list was full.
 dropped_widgets: usize = 0,
 
-/// Nothing retained by a layer may borrow the projection after this returns.
-/// Example: `const commit = try scene.prepare(projection);`
-pub fn prepare(self: *Scene, projection: client.Projection) !data.PresentationCommit {
-    core.profiling.add(.gui_scene, 1);
-    const profile_started = if (self.terminal.io) |io| core.profiling.start(io) else 0;
-    defer {
-        if (self.terminal.io) |io| {
-            core.profiling.finish(io, .gui_scene, profile_started);
-        }
-    }
-    const renderer = self.terminal;
-    renderer.begin();
+/// Selects widgets and prepares their interaction storage without drawing.
+/// The caller keeps frame at this address until rasterization has finished.
+pub fn compose(self: *Scene, frame: *Frame, projection: client.Projection) !data.PresentationCommit {
+    frame.* = .{
+        .projection = projection,
+        .theme = self.theme,
+        .animation = &self.chrome.animation,
+        .interaction = self.widgets,
+        .diagram_store = self.diagrams,
+    };
     self.chrome.animation.begin(self.chrome.now_ns);
-    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = self.theme, .background_opacity = renderer.config.window.background_opacity, .chrome = renderer.chrome, .viewport = renderer.viewport, .sidebar = renderer.sidebar, .controls = renderer.controls, .sprites = if (renderer.sprites) |*page| page else null, .terminal_renderer = renderer };
-    canvas.animation = &self.chrome.animation;
-    canvas.widgets = self.widgets;
-    canvas.diagrams = self.diagrams;
+    var canvas = self.renderer.canvas(frame);
     if (self.widgets) |widgets| {
         widgets.begin(projection.prompt != null);
         widgets.prompt_generation = if (projection.prompt) |prompt| prompt.generation else 0;
     }
-    self.overlays.scale = renderer.scale;
-    var composition: Composition = .{ .chrome = self.chrome, .overlays = self.overlays, .canvas = &canvas, .link = self.link, .previews = self.previews };
-    const widgets = try composition.render(&projection);
-    self.dropped_widgets = widgets.dropped;
-    try widgets.draw(&canvas);
 
-    if (self.widgets) |state| {
-        try state.overlays(&canvas, self.overlays);
-    }
+    self.overlays.scale = self.renderer.scale;
+    var composition: Composition = .{
+        .chrome = self.chrome,
+        .overlays = self.overlays,
+        .canvas = &canvas,
+        .context = &frame.context,
+        .link = self.link,
+        .previews = self.previews,
+    };
+    frame.widgets = try composition.render(&frame.projection);
+    self.dropped_widgets = frame.widgets.dropped;
+    return composition.commit;
+}
 
-    if (self.widgets) |state| {
-        try state.copy_feedback.draw(&canvas);
-    }
-
+/// Publishes pending hit records only after the complete widget list drew.
+/// Delivery still decides whether these records replace the visible targets.
+pub fn seal(self: *Scene) void {
     self.chrome.seal();
     self.overlays.seal();
     if (self.widgets) |state| {
         state.seal();
     }
-    renderer.seal();
-    return composition.commit;
 }

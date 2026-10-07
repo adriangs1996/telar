@@ -29,13 +29,11 @@ pub const family: FamilyHelp = .{
                 \\attached, or the text is too long or invalid.
                 \\
             , .{ core.max_notification_title_bytes, core.max_notification_message_bytes, core.min_notification_duration_ms, core.max_notification_duration_ms, core.default_notification_duration_ms, core.max_notification_link_bytes }),
-            .examples = &.{ &.{ "notification", "show", "Build complete", "--body", "Open the pane", "--level", "success", "--duration", "2500", "--pane", "42" }, &.{ "notification", "show", "Review ready", "--link", "https://example.com/pr/1" } },
         },
         .{
             .name = "dismiss",
             .summary = "Dismiss one notification shown in a window",
             .usage = "telar notification dismiss ID --client ID [--json] [--socket PATH]",
-            .routed = &.{.notification_dismiss},
             .text =
             \\Effects: forwarded to the window `--client ID` names, which dismisses the
             \\notification with that id and rearms its timer. Needs a running runtime; never
@@ -44,7 +42,6 @@ pub const family: FamilyHelp = .{
             \\answer in time.
             \\
             ,
-            .examples = &.{&.{ "notification", "dismiss", "5", "--client", "1" }},
         },
     },
 };

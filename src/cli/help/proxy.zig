@@ -40,7 +40,6 @@ pub const family: FamilyHelp = .{
                 \\command failed.
                 \\
             , .{@divExact(localca.ca.system_ca_seconds, 24 * 60 * 60)}),
-            .examples = &.{ &.{ "proxy", "trust", "status" }, &.{ "proxy", "trust", "install", "--ca-dir", "/home/dev/.local/share/telar/proxy", "--linux", "trust" } },
         },
         .{
             .name = "watch",
@@ -56,7 +55,6 @@ pub const family: FamilyHelp = .{
             \\stops; 1 after a resync notice.
             \\
             ,
-            .examples = &.{&.{ "proxy", "watch", "--count", "1", "--jsonl" }},
         },
     },
 };

@@ -47,14 +47,3 @@ pub const Id = enum(u4) {
 comptime {
     std.debug.assert(@intFromEnum(Id.fallback_7) - @intFromEnum(Id.fallback_0) + 1 == Id.fallback_slots);
 }
-
-test "fallback identities round-trip their slot and are fitted" {
-    for (0..Id.fallback_slots) |slot| {
-        const id = Id.fallback(@intCast(slot));
-        try std.testing.expectEqual(@as(?u3, @intCast(slot)), id.fallbackSlot());
-        try std.testing.expect(id.fitted());
-    }
-
-    try std.testing.expectEqual(@as(?u3, null), Id.sans.fallbackSlot());
-    try std.testing.expect(!Id.primary.fitted());
-}

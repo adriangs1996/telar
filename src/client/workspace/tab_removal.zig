@@ -51,7 +51,7 @@ pub fn detachTab(client: *Client, location: core.TabLocation) !void {
 /// Example: `const required = try tab_removal.tabDetachmentCapacity(app, location);`
 pub fn tabDetachmentCapacity(model: *const data.ClientModel, location: core.TabLocation) !usize {
     const plan = try data.client_detach.planTabDetachment(model, location);
-    var required = @as(usize, @intFromBool(plan.paste_marker_required));
+    var required: usize = @intFromBool(plan.paste_marker_required);
     required += @intFromBool(plan.focus_out_required);
     for (plan.slice()) |pane| {
         required += @intFromBool(pane.attached or model.request_lifecycle.tracker.hasPane(.attachment, pane.pane_id));
@@ -127,7 +127,8 @@ pub fn completeTabClose(client: *Client, closed: core.TabClosed) !TabCloseOutcom
     };
 
     try data.tab_close.validateWorkspaceTransition(command);
-    const commit = try data.tab_removal.commitRemoval(&client.model, 
+    const commit = try data.tab_removal.commitRemoval(
+        &client.model,
         .{
             .location = command.location,
             .workspace_removed = command.workspace_removed,

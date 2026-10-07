@@ -1,6 +1,5 @@
 const core = @import("telar-core");
 const FleetCard = @import("FleetCard.zig").FleetCard;
-const MachineActivityEntry = @This();
 
 source: u8,
 agent: ?u8 = null,

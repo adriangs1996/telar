@@ -234,6 +234,7 @@ pub fn deinit(self: *Session) void {
     self.lockLifecycle();
     if (!self.reaped.load(.acquire)) {
         native.terminate(self.pid);
+        // Teardown has terminated the child; a failed reap must not skip releasing the lifecycle mutex and session resources.
         _ = native.waitPid(self.pid) catch {};
         self.reaped.store(true, .release);
     }

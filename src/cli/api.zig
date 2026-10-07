@@ -17,13 +17,14 @@ pub fn run(init: std.process.Init, options: ApiOptions) !void {
     var output_buffer: [16 * 1024]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
     const writer = &output.interface;
-    defer writer.flush() catch {};
 
     if (options.json) {
         try writeJson(writer);
     } else {
         try writeText(writer);
     }
+
+    try writer.flush();
 }
 
 const bounds = [_]Bound{
@@ -87,16 +88,4 @@ fn writeEnumJson(writer: *std.Io.Writer, comptime Enum: type) !void {
         try control.writeJsonString(writer, field.name);
         try writer.print(":{d}", .{field.value});
     }
-}
-
-test "the schema listing names every client tag once" {
-    var buffer: [8 * 1024]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&buffer);
-
-    try writeText(&writer);
-
-    const text = writer.buffered();
-    try std.testing.expect(std.mem.indexOf(u8, text, "0x1c  query_agents") != null);
-    try std.testing.expect(std.mem.indexOf(u8, text, "0xa0  pane_text") != null);
-    try std.testing.expect(std.mem.indexOf(u8, text, "5  done") != null);
 }

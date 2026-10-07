@@ -9,7 +9,6 @@ const build_options = @import("build_options");
 const RunOptions = @import("arguments/RunOptions.zig");
 const RuntimeConnector = client.RuntimeConnector;
 const ClientLaunch = @import("ClientLaunch.zig");
-const TestEnvironment = @import("TestEnvironment.zig");
 
 /// Opens the native window, which `telar` and `telar gui` both do. The
 /// window opens first and connects to its machine by itself, so nothing
@@ -20,11 +19,13 @@ const TestEnvironment = @import("TestEnvironment.zig");
 /// ```
 pub fn runNative(init: std.process.Init, options: RunOptions) !u8 {
     if (comptime !build_options.native_client) {
+        // This is the CLI explanation for a build without window support and must be visible independently of log levels.
         std.debug.print("{s}", .{no_window_build_message});
         return no_window_status;
     }
 
     if (!displayAvailable(init.minimal.environ)) {
+        // This is the CLI explanation for a missing display and must be visible independently of log levels.
         std.debug.print("{s}", .{no_display_message});
         return no_window_status;
     }
@@ -34,6 +35,7 @@ pub fn runNative(init: std.process.Init, options: RunOptions) !u8 {
     const connector = try RuntimeConnector.init(init.io, init.minimal.environ, null);
     try connector.prepareServerDirectory();
 
+    // SAFETY: prepare assigns the launch in place before frontendOptions or deinit; failure returns after prepare's own cleanup.
     var prepared: ClientLaunch = undefined;
     try prepared.prepare(.{
         .process = init,
@@ -54,6 +56,7 @@ pub fn runNative(init: std.process.Init, options: RunOptions) !u8 {
     var profiles: core.MachineProfiles = .{};
     const opened = if (options.machine) |label|
         savedDestination(init, std.mem.span(label), &profiles) catch |err| {
+            // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
             std.debug.print("telar gui: {s}\n", .{switch (err) {
                 error.UnknownMachine => "no saved machine or local label has that name; see telar machine list",
                 else => @errorName(err),
@@ -133,15 +136,4 @@ fn displayAvailable(environ: std.process.Environ) bool {
 
 pub fn configuredEditor(environ: std.process.Environ) []const u8 {
     return environ.getPosix("EDITOR") orelse "";
-}
-
-test "the client snapshots EDITOR without inventing a fallback" {
-    var environment = try TestEnvironment.init(&.{.{ .name = "EDITOR", .value = "/usr/bin/nvim" }});
-    defer environment.deinit();
-
-    try std.testing.expectEqualStrings(
-        "/usr/bin/nvim",
-        configuredEditor(.{ .block = environment.block }),
-    );
-    try std.testing.expectEqualStrings("", configuredEditor(.empty));
 }

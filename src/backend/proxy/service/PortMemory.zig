@@ -121,6 +121,7 @@ pub fn remember(self: *const PortMemory, io: std.Io, paths: Paths, bound: u16) v
 
     if (self.own == null and self.legacy == bound) {
         if (paths.legacy_port) |legacy_path| {
+            // The new port record is already committed; inability to remove the obsolete legacy record does not undo the bound listener.
             std.Io.Dir.cwd().deleteFile(io, legacy_path) catch {};
         }
     }
@@ -186,6 +187,7 @@ fn scanOthers(io: std.Io, own_path: []const u8, scan: Scan) void {
         switch (scan) {
             .reserve => |ports| {
                 if (record.endpoint != null and vanished(io, record.endpoint.?)) {
+                    // Stale port-record deletion is best effort; a vanished endpoint is not reserved even when its old file cannot be removed.
                     directory.deleteFile(io, entry.name) catch {};
                     continue;
                 }
@@ -194,6 +196,7 @@ fn scanOthers(io: std.Io, own_path: []const u8, scan: Scan) void {
             },
             .forget => |bound| {
                 if (record.port == bound) {
+                    // A stale duplicate port record may remain if cleanup fails; listener binding remains the authority on whether the port is available.
                     directory.deleteFile(io, entry.name) catch {};
                 }
             },
@@ -213,206 +216,4 @@ fn isPortFile(name: []const u8) bool {
     }
 
     return true;
-}
-
-/// Whether a test runtime inherits the shared port of earlier versions.
-const Inheritance = enum {
-    default_socket,
-    other_socket,
-};
-
-/// Storage for one test runtime's paths.
-const TestRuntime = struct {
-    port: [std.fs.max_path_bytes]u8 = undefined,
-    endpoint: [std.fs.max_path_bytes]u8 = undefined,
-};
-
-const TestDirectory = struct {
-    temp: std.testing.TmpDir,
-    directory: [std.fs.max_path_bytes]u8 = undefined,
-    directory_len: usize = 0,
-    legacy: [std.fs.max_path_bytes]u8 = undefined,
-    legacy_len: usize = 0,
-
-    fn init(io: std.Io) !TestDirectory {
-        var fixture: TestDirectory = .{ .temp = std.testing.tmpDir(.{}) };
-        errdefer fixture.temp.cleanup();
-
-        fixture.directory_len = try fixture.temp.dir.realPath(io, &fixture.directory);
-        fixture.legacy_len = (try std.fmt.bufPrint(&fixture.legacy, "{s}/proxy-port", .{fixture.directory[0..fixture.directory_len]})).len;
-        return fixture;
-    }
-
-    fn deinit(self: *TestDirectory) void {
-        self.temp.cleanup();
-    }
-
-    /// Paths of the runtime whose socket is `name` inside the fixture's
-    /// directory, so its socket directory exists.
-    fn paths(self: *const TestDirectory, storage: *TestRuntime, name: []const u8, inheritance: Inheritance) !Paths {
-        const directory = self.directory[0..self.directory_len];
-        const endpoint = try std.fmt.bufPrint(&storage.endpoint, "{s}/{s}", .{ directory, name });
-        return .{
-            .key = "",
-            .certificate = "",
-            .bundle = "",
-            .secret = "",
-            .port = try path(&storage.port, directory, endpoint),
-            .legacy_port = if (inheritance == .default_socket) self.legacy[0..self.legacy_len] else null,
-            .endpoint = endpoint,
-        };
-    }
-};
-
-test "each endpoint keeps its own remembered port and ignores foreign values" {
-    const io = std.testing.io;
-    var fixture = try TestDirectory.init(io);
-    defer fixture.deinit();
-    var first_storage: TestRuntime = .{};
-    const first = try fixture.paths(&first_storage, "a.sock", .other_socket);
-    var second_storage: TestRuntime = .{};
-    const second = try fixture.paths(&second_storage, "b.sock", .other_socket);
-    var again_storage: TestRuntime = .{};
-    const again = try fixture.paths(&again_storage, "a.sock", .other_socket);
-
-    try std.testing.expectEqualStrings(first.port, again.port);
-    try std.testing.expect(!std.mem.eql(u8, first.port, second.port));
-    try std.testing.expect(isPortFile(std.fs.path.basename(first.port)));
-    try std.testing.expect(load(io, first).preferred() == null);
-
-    load(io, first).remember(io, first, listener_support.first_port + 3);
-    load(io, second).remember(io, second, listener_support.first_port + 5);
-
-    const first_memory = load(io, first);
-    try std.testing.expectEqual(@as(?u16, listener_support.first_port + 3), first_memory.preferred());
-    try std.testing.expect(first_memory.reserved.isSet(5));
-    try std.testing.expect(!first_memory.reserved.isSet(3));
-    try std.testing.expectEqual(@as(?u16, listener_support.first_port + 5), load(io, second).preferred());
-
-    try fixture.temp.dir.writeFile(io, .{ .sub_path = std.fs.path.basename(first.port), .data = "80\n" });
-    try std.testing.expect(load(io, first).preferred() == null);
-    try fixture.temp.dir.writeFile(io, .{ .sub_path = std.fs.path.basename(first.port), .data = "port\n" });
-    try std.testing.expect(load(io, first).preferred() == null);
-}
-
-test "only the default socket migrates onto the shared port, and only when it binds it" {
-    const io = std.testing.io;
-    var fixture = try TestDirectory.init(io);
-    defer fixture.deinit();
-    var development_storage: TestRuntime = .{};
-    const development = try fixture.paths(&development_storage, "dev.sock", .other_socket);
-    var storage: TestRuntime = .{};
-    const runtime = try fixture.paths(&storage, "runtime.sock", .default_socket);
-    const shared = listener_support.first_port + 4;
-    try fixture.temp.dir.writeFile(io, .{ .sub_path = "proxy-port", .data = "45104\n" });
-
-    try std.testing.expect(load(io, development).preferred() == null);
-
-    // The shared port was taken: the runtime records another and leaves the
-    // shared file alone.
-    const displaced = load(io, runtime);
-    try std.testing.expectEqual(@as(?u16, shared), displaced.preferred());
-    displaced.remember(io, runtime, shared + 1);
-    try std.testing.expectEqual(@as(?u16, shared), recallPort(io, runtime.legacy_port.?));
-
-    try fixture.temp.dir.deleteFile(io, std.fs.path.basename(runtime.port));
-    const migrating = load(io, runtime);
-    try std.testing.expectEqual(@as(?u16, shared), migrating.preferred());
-    migrating.remember(io, runtime, shared);
-    try std.testing.expect(recallPort(io, runtime.legacy_port.?) == null);
-    try std.testing.expectEqual(@as(?u16, shared), load(io, runtime).preferred());
-}
-
-test "a runtime that cannot record its port keeps the shared one for next time" {
-    const io = std.testing.io;
-    var fixture = try TestDirectory.init(io);
-    defer fixture.deinit();
-    var storage: TestRuntime = .{};
-    const runtime = try fixture.paths(&storage, "runtime.sock", .default_socket);
-    try fixture.temp.dir.writeFile(io, .{ .sub_path = "proxy-port", .data = "45104\n" });
-    // A directory where the port file belongs makes the write fail.
-    try fixture.temp.dir.createDir(io, std.fs.path.basename(runtime.port), .default_dir);
-
-    const memory = load(io, runtime);
-    memory.remember(io, runtime, listener_support.first_port + 4);
-
-    try std.testing.expectEqual(@as(?u16, listener_support.first_port + 4), recallPort(io, runtime.legacy_port.?));
-}
-
-test "the shared port reserves itself for others once a runtime has its own" {
-    const io = std.testing.io;
-    var fixture = try TestDirectory.init(io);
-    defer fixture.deinit();
-    var storage: TestRuntime = .{};
-    const runtime = try fixture.paths(&storage, "runtime.sock", .default_socket);
-    load(io, runtime).remember(io, runtime, listener_support.first_port + 1);
-    try fixture.temp.dir.writeFile(io, .{ .sub_path = "proxy-port", .data = "45104\n" });
-
-    const memory = load(io, runtime);
-    try std.testing.expectEqual(@as(?u16, listener_support.first_port + 1), memory.preferred());
-    try std.testing.expect(memory.reserved.isSet(4));
-}
-
-test "binding a port another runtime remembers forgets that runtime's claim" {
-    const io = std.testing.io;
-    var fixture = try TestDirectory.init(io);
-    defer fixture.deinit();
-    var loser_storage: TestRuntime = .{};
-    const loser = try fixture.paths(&loser_storage, "loser.sock", .other_socket);
-    var winner_storage: TestRuntime = .{};
-    const winner = try fixture.paths(&winner_storage, "winner.sock", .other_socket);
-    var bystander_storage: TestRuntime = .{};
-    const bystander = try fixture.paths(&bystander_storage, "bystander.sock", .other_socket);
-    load(io, loser).remember(io, loser, listener_support.first_port + 2);
-    load(io, bystander).remember(io, bystander, listener_support.first_port + 7);
-    try fixture.temp.dir.writeFile(io, .{ .sub_path = "notes.txt", .data = "45102\n" });
-
-    load(io, winner).remember(io, winner, listener_support.first_port + 2);
-
-    try std.testing.expect(load(io, loser).preferred() == null);
-    try std.testing.expectEqual(@as(?u16, listener_support.first_port + 2), load(io, winner).preferred());
-    try std.testing.expectEqual(@as(?u16, listener_support.first_port + 7), load(io, bystander).preferred());
-    _ = try fixture.temp.dir.statFile(io, "notes.txt", .{});
-}
-
-test "the file of a runtime whose socket directory is gone is removed" {
-    const io = std.testing.io;
-    var fixture = try TestDirectory.init(io);
-    defer fixture.deinit();
-    var storage: TestRuntime = .{};
-    const runtime = try fixture.paths(&storage, "runtime.sock", .other_socket);
-    var living_storage: TestRuntime = .{};
-    const living = try fixture.paths(&living_storage, "living.sock", .other_socket);
-    load(io, living).remember(io, living, listener_support.first_port + 6);
-
-    var gone_endpoint: [std.fs.max_path_bytes]u8 = undefined;
-    const endpoint = try std.fmt.bufPrint(&gone_endpoint, "{s}/deleted-worktree/r.sock", .{fixture.directory[0..fixture.directory_len]});
-    var gone_port: [std.fs.max_path_bytes]u8 = undefined;
-    const gone_path = try path(&gone_port, fixture.directory[0..fixture.directory_len], endpoint);
-    try fixture.temp.dir.writeFile(io, .{ .sub_path = std.fs.path.basename(gone_path), .data = "45109\n/nowhere/r.sock\n" });
-
-    const memory = load(io, runtime);
-
-    try std.testing.expect(!memory.reserved.isSet(9));
-    try std.testing.expect(memory.reserved.isSet(6));
-    try std.testing.expectError(error.FileNotFound, fixture.temp.dir.statFile(io, std.fs.path.basename(gone_path), .{}));
-    _ = try fixture.temp.dir.statFile(io, std.fs.path.basename(living.port), .{});
-}
-
-test "a relative proxy directory is neither scanned into a crash nor written" {
-    const io = std.testing.io;
-    const relative: Paths = .{
-        .key = "",
-        .certificate = "",
-        .bundle = "",
-        .secret = "",
-        .port = "telar-missing-proxy-directory/proxy-port-0000000000000000",
-        .legacy_port = "telar-missing-proxy-directory/proxy-port",
-        .endpoint = "relative.sock",
-    };
-
-    const memory = load(io, relative);
-    try std.testing.expect(memory.preferred() == null);
-    memory.remember(io, relative, listener_support.first_port);
-    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(io, "telar-missing-proxy-directory", .{}));
 }

@@ -1,5 +1,4 @@
 const core = @import("telar-core");
-const Package = @This();
 
 id: []const u8,
 entry: []const u8,

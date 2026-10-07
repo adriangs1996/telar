@@ -142,6 +142,7 @@ pub fn drawStatus(self: AgentCard, canvas: *Canvas, row: Rect) !f32 {
     var age_buffer: [age_label.max_bytes]u8 = undefined;
     var text_buffer: [32]u8 = undefined;
     const text = switch (state) {
+        // SAFETY: Working, one space and at most age_label.max_bytes bytes fit the 32-byte buffer.
         .working => std.fmt.bufPrint(&text_buffer, "{s} {s}", .{ word, age_label.duration(self.age_s, &age_buffer) }) catch unreachable,
         .ready => age_label.format(self.age_s, &age_buffer),
         else => word,

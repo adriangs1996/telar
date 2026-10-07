@@ -1,5 +1,4 @@
 const std = @import("std");
-const core = @import("telar-core");
 const Result = @import("Result.zig");
 const protocol = @import("protocol.zig");
 const effects = @import("effects.zig");
@@ -10,9 +9,12 @@ pub const OpenOptions = @import("OpenOptions.zig");
 io: std.Io,
 gpa: std.mem.Allocator,
 child: std.process.Child,
+// SAFETY: toStreams initializes the length; MultiReader.init initializes contexts and batch storage before starting reads.
 reader_storage: std.Io.File.MultiReader.Buffer(1) = undefined,
+// SAFETY: open initializes reader at the final address before returning or installing reader cleanup.
 reader: std.Io.File.MultiReader = undefined,
 stderr_future: ?std.Io.Future(anyerror!void) = null,
+// SAFETY: drainStderr copies retained bytes before increasing stderr_len; close awaits the worker before logging that prefix.
 stderr_bytes: [4096]u8 = undefined,
 stderr_len: usize = 0,
 timeout_ms: u32,
@@ -58,6 +60,7 @@ pub fn open(io: std.Io, gpa: std.mem.Allocator, options: OpenOptions) !*Session 
 pub fn close(self: *Session) void {
     self.child.kill(self.io);
     if (self.stderr_future) |*future| {
+        // The child has been killed; joining stderr drainage must complete before releasing its buffers even if the read failed.
         _ = future.await(self.io) catch {};
     }
     if (self.stderr_len != 0) {

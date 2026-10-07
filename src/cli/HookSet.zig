@@ -1,5 +1,4 @@
 const HookLayout = @import("HookLayout.zig").HookLayout;
-const HookSet = @This();
 
 events: []const []const u8,
 marker: []const u8,

@@ -1,6 +1,7 @@
 //! The challenge statement, one small input/output example, and optional timings.
+const Window = @import("telar-window");
 const std = @import("std");
-const event = @import("../../input/event.zig");
+const event = Window;
 const problem = @import("problem.zig");
 const benchmark = @import("benchmark.zig");
 const Canvas = @import("../../widgets/Canvas.zig");
@@ -87,7 +88,7 @@ pub fn draw(self: *Self, canvas: *Canvas) !void {
 }
 
 /// Example: `const changed = try widget.input(event, route);`
-pub fn input(self: *Self, value: event.Event, route: Route) !bool {
+pub fn input(self: *Self, value: event.Input, route: Route) !bool {
     const action: usize = switch (value) {
         .text => |text| if (text.bytes.len == 1 and text.target_id == 0) switch (text.bytes[0]) {
             'n', 'N', ' ' => 1,

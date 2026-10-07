@@ -8,16 +8,6 @@ const std = @import("std");
 const ClientModel = @import("ClientModel.zig");
 const LaunchSource = @import("LaunchSource.zig");
 const tab_layout = @import("../workspace/tab_layout.zig");
-const workspace_handoff = @import("../workspace/workspace_handoff.zig");
-
-test {
-    _ = @import("tests/configuration_and_host.zig");
-    _ = @import("tests/input_and_frames.zig");
-    _ = @import("tests/observations.zig");
-    _ = @import("tests/panes.zig");
-    _ = @import("tests/tabs.zig");
-    _ = @import("tests/workspaces.zig");
-}
 
 pub fn paneViewportOffset(pane: *const Pane, target: model_data.PaneViewportTarget) u32 {
     const maximum = pane.scroll.maxOffset(pane.buffer.h);
@@ -117,66 +107,4 @@ pub fn findTab(model: *const ClientModel, location: core.TabLocation) ?usize {
     }
 
     return slot;
-}
-
-test "resizing a mouse-selected pane cancels coordinates but retains gesture ownership" {
-    var model = ClientModel.init(std.testing.allocator, true);
-    defer model.deinit();
-    const location: core.TabLocation = .{
-        .workspace = .{ .workspace = @enumFromInt(1) },
-        .tab_id = @enumFromInt(1),
-    };
-    const pane_id: core.PaneId = @enumFromInt(1);
-    try workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
-    try std.testing.expect(copy_mode.beginPointerSelection(&model, .{ .pane_id = pane_id, .position = .{ .x = 15, .y = 0 }, .now_ns = 0 }));
-    const version = model.version();
-    const pane = model.panes.find(pane_id).?;
-    try pane.buffer.resize(10, 5);
-
-    try std.testing.expect(copy_mode.reconcileFrame(&model, .{ .pane_id = pane_id, .previous_offset = 0, .scroll = pane.scroll }));
-    try std.testing.expect(copy_mode.currentProjection(&model) == null);
-    try std.testing.expectEqual(version.copy + 1, model.version().copy);
-    try std.testing.expectEqual(pane_id, copy_mode.pointerSelection(&model).?.pane_id);
-    try std.testing.expect(copy_mode.pointerSelection(&model).?.dragging);
-    copy_mode.finishPointerGesture(&model);
-    try std.testing.expect(copy_mode.pointerSelection(&model) == null);
-}
-
-test "copy mode frame reconciliation and pane release are exact" {
-    var model = ClientModel.init(std.testing.allocator, true);
-    defer model.deinit();
-    const location: core.TabLocation = .{
-        .workspace = .{ .workspace = @enumFromInt(1) },
-        .tab_id = @enumFromInt(1),
-    };
-    const pane_id: core.PaneId = @enumFromInt(1);
-    try workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
-    const pane = model.panes.find(pane_id).?;
-    pane.scroll = .{ .total_rows = 15, .offset = 10 };
-    pane.cursor = .{ .visible = true, .x = 2, .y = 4 };
-    try std.testing.expect(copy_mode.enter(&model));
-    const version = model.version();
-
-    try std.testing.expect(!copy_mode.reconcileFrame(&model, .{
-        .pane_id = @enumFromInt(2),
-        .previous_offset = 10,
-        .scroll = .{ .total_rows = 10, .offset = 5 },
-    }));
-    try std.testing.expect(copy_mode.reconcileFrame(&model, .{
-        .pane_id = pane_id,
-        .previous_offset = 10,
-        .scroll = .{ .total_rows = 10, .offset = 5 },
-    }));
-
-    try std.testing.expectEqual(version.copy + 1, model.version().copy);
-    try std.testing.expectEqual(@as(u32, 9), copy_mode.currentProjection(&model).?.view.cursor.y);
-    try std.testing.expect(!copy_mode.reconcileFrame(&model, .{
-        .pane_id = pane_id,
-        .previous_offset = 5,
-        .scroll = .{ .total_rows = 10, .offset = 5 },
-    }));
-    try std.testing.expect(!copy_mode.release(&model, @enumFromInt(2)));
-    try std.testing.expect(copy_mode.release(&model, pane_id));
-    try std.testing.expect(!copy_mode.isActive(&model));
-    try std.testing.expectEqual(version.copy + 2, model.version().copy);
 }

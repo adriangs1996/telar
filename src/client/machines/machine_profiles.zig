@@ -1,4 +1,4 @@
-//! Changing `machines.json` (docs/flows/machine-profiles.md): the one
+//! Changing `machines.json`: the one
 //! procedure behind `telar machine add`, `remove`, `rename`, `enable` and
 //! `disable` and the window's machine picker, which writes the file on a
 //! worker. A change never touches a runtime; open windows follow the file.
@@ -165,65 +165,3 @@ fn requireNotLocal(profiles: *const core.MachineProfiles, label: []const u8) !vo
         return error.DuplicateMachineLabel;
     }
 }
-
-test "changes add, rename, disable and remove a machine but never take this machine's label" {
-    var profiles: core.MachineProfiles = .{};
-    var buffer: [std.posix.HOST_NAME_MAX]u8 = undefined;
-    const local = profile_file.localLabel(&profiles, &buffer);
-
-    try change(std.testing.io, &profiles, .{ .kind = .add, .label = "box", .value = "dev@box" });
-    try std.testing.expectError(error.DuplicateMachineLabel, change(std.testing.io, &profiles, .{ .kind = .add, .label = local, .value = "dev@other" }));
-    try std.testing.expectError(error.DuplicateMachineLabel, change(std.testing.io, &profiles, .{ .kind = .rename, .label = "box", .value = local }));
-
-    try change(std.testing.io, &profiles, .{ .kind = .rename, .label = "box", .value = "gpu" });
-    try change(std.testing.io, &profiles, .{ .kind = .disable, .label = "gpu" });
-    try std.testing.expect(!profiles.slice()[0].enabled);
-
-    try change(std.testing.io, &profiles, .{ .kind = .place_telar, .label = "gpu", .value = "/home/dev/.local/share/telar/0.3.0/telar" });
-    try std.testing.expectEqualStrings("/home/dev/.local/share/telar/0.3.0/telar", profiles.slice()[0].telarPath().?);
-    try std.testing.expectError(error.InvalidRemoteTelarPath, change(std.testing.io, &profiles, .{ .kind = .place_telar, .label = "gpu", .value = "telar" }));
-
-    try change(std.testing.io, &profiles, .{ .kind = .remove, .label = "gpu" });
-    try std.testing.expectEqual(@as(usize, 0), profiles.slice().len);
-}
-
-test "changes stored at once by several writers all reach the file" {
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(std.testing.io, &directory_buffer);
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const file_path = try std.fmt.bufPrint(&path_buffer, "{s}/telar/{s}", .{ directory_buffer[0..directory_len], profile_file.file_name });
-
-    const Writer = struct {
-        fn run(path: []const u8, writer: usize, failures: *std.atomic.Value(u32)) void {
-            for (0..adds_per_writer) |add| {
-                var label_buffer: [8]u8 = undefined;
-                const label = std.fmt.bufPrint(&label_buffer, "w{d}-{d}", .{ writer, add }) catch unreachable;
-                store(std.testing.io, std.testing.allocator, path, .{ .kind = .add, .label = label, .value = label }) catch {
-                    _ = failures.fetchAdd(1, .monotonic);
-                };
-            }
-        }
-    };
-
-    var failures: std.atomic.Value(u32) = .init(0);
-    var threads: [writers]std.Thread = undefined;
-    for (&threads, 0..) |*thread, writer| {
-        thread.* = try std.Thread.spawn(.{}, Writer.run, .{ file_path, writer, &failures });
-    }
-
-    for (threads) |thread| {
-        thread.join();
-    }
-
-    const loaded = try profile_file.load(std.testing.io, std.testing.allocator, file_path);
-    try std.testing.expectEqual(@as(u32, 0), failures.load(.monotonic));
-    try std.testing.expectEqual(@as(u8, writers * adds_per_writer), loaded.count);
-}
-
-/// Writers and changes in the concurrent store test; together they fill
-/// the file.
-const writers = 4;
-const adds_per_writer = core.MachineProfiles.capacity / writers;

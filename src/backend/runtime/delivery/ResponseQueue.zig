@@ -4,6 +4,7 @@ const PendingNotification = @import("PendingNotification.zig");
 const std = @import("std");
 const ResponseQueue = @This();
 
+// SAFETY: push assigns the response before increasing len; inspection and cleanup visit only queued slots.
 items: [response_queue.capacity]response_queue.PendingResponse = undefined,
 head: u8 = 0,
 len: u8 = 0,
@@ -84,17 +85,6 @@ pub fn reserveNotificationShown(self: *ResponseQueue, request_id: core.RequestId
 
     const index = (@as(usize, self.head) + self.len - 1) % self.items.len;
     return &self.items[index].notification_shown;
-}
-
-fn contains(self: *const ResponseQueue, tag: std.meta.Tag(response_queue.PendingResponse)) bool {
-    for (0..self.len) |offset| {
-        const index = (@as(usize, self.head) + offset) % self.items.len;
-        if (std.meta.activeTag(self.items[index]) == tag) {
-            return true;
-        }
-    }
-
-    return false;
 }
 
 pub fn peek(self: *ResponseQueue) ?*response_queue.PendingResponse {

@@ -534,18 +534,6 @@ pub fn finishDescription(model: *RuntimeModel, result: *const Result) ?Descripti
     return finished;
 }
 
-/// Replaces generated or pending title state for one existing agent.
-///
-/// ```zig
-/// _ = try agent_status.setManualTitle(model, pane_key, "Review proxy lifecycle");
-/// ```
-pub fn setManualTitle(model: *RuntimeModel, key: PaneKey, value: []const u8) !bool {
-    const agent = model.agents.find(key) orelse return false;
-    try agent.setManualTitle(value);
-    bumpRevision(model);
-    return true;
-}
-
 /// Applies the title an agent's hooks reported for one exact pane
 /// generation. Like a session reference, the report may precede every
 /// other evidence, so the aggregate is created when missing.

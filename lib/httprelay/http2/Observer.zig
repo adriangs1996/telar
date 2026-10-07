@@ -26,6 +26,7 @@ continuation_stream: u32 = 0,
 block_stream: u32 = 0,
 block_kind: relay.HeaderKind = .none,
 block_end_stream: bool = false,
+// SAFETY: Header fragments are copied before block_len advances; HPACK receives only block[0..block_len].
 block: [relay.max_header_block_bytes]u8 = undefined,
 block_len: usize = 0,
 streams: Tracker = .{},
@@ -335,6 +336,7 @@ fn decodeBlock(self: *Observer, sink: anytype) Decoded {
     var decoded: Decoded = .{};
     var input = self.block[0..self.block_len];
     while (true) {
+        // SAFETY: The inflater writes field when it sets NGHTTP2_HD_INFLATE_EMIT; field is read only under that flag after a successful result.
         var field: relay.c.nghttp2_nv = undefined;
         var flags: c_int = 0;
         const consumed = relay.c.nghttp2_hd_inflate_hd2(

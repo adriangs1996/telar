@@ -26,7 +26,9 @@ const kind_key = "\"kind\":\"";
 const thread_key = "\"agent_thread_id\":\"";
 
 /// Thread ids of started children without a completion.
+// SAFETY: start copies the id before increasing count; find compares only lens bytes of occupied rows.
 ids: [max_tracked][max_id_bytes]u8 = undefined,
+// SAFETY: start sets each length before increasing count; find and complete use occupied rows only.
 lens: [max_tracked]u8 = undefined,
 count: usize = 0,
 
@@ -169,61 +171,4 @@ fn value(item: []const u8, key: []const u8) ?[]const u8 {
     const from = (std.mem.indexOf(u8, item, key) orelse return null) + key.len;
     const end = std.mem.indexOfScalarPos(u8, item, from, '"') orelse return null;
     return item[from..end];
-}
-
-const started_a = "{\"type\":\"event_msg\",\"payload\":{\"type\":\"item_completed\",\"item\":{\"type\":\"SubAgentActivity\",\"id\":\"call_a\",\"kind\":\"started\",\"agent_thread_id\":\"thread-a\",\"agent_path\":\"/root/a\"}}}\n";
-const started_b = "{\"type\":\"event_msg\",\"payload\":{\"type\":\"item_completed\",\"item\":{\"type\":\"SubAgentActivity\",\"id\":\"call_b\",\"kind\":\"started\",\"agent_thread_id\":\"thread-b\",\"agent_path\":\"/root/b\"}}}\n";
-const completed_a = "{\"type\":\"event_msg\",\"payload\":{\"type\":\"item_completed\",\"item\":{\"type\":\"SubAgentActivity\",\"id\":\"subagent-completed-x\",\"kind\":\"completed\",\"agent_thread_id\":\"thread-a\",\"agent_path\":\"/root/a\"}}}\n";
-
-test "started children without a completion are running" {
-    var running: CodexSubagents = .{};
-    const bytes = started_a ++ started_b ++ completed_a ++ started_b;
-    try std.testing.expectEqual(bytes.len, running.scan(bytes, true));
-    try std.testing.expectEqual(@as(usize, 1), running.count);
-    try std.testing.expectEqual(@as(usize, 1), running.countExcept("thread-a"));
-    try std.testing.expectEqual(@as(usize, 0), running.countExcept("thread-b"));
-}
-
-test "a quoted marker inside message text is not an activity" {
-    var running: CodexSubagents = .{};
-    const quoted = "{\"text\":\"\\\"item\\\":{\\\"type\\\":\\\"SubAgentActivity\\\",\\\"kind\\\":\\\"started\\\",\\\"agent_thread_id\\\":\\\"fake\\\"}\"}\n";
-    _ = running.scan(quoted, true);
-    try std.testing.expectEqual(@as(usize, 0), running.count);
-}
-
-test "an item cut by the chunk end is scanned again with the rest" {
-    var running: CodexSubagents = .{};
-    const bytes = started_a ++ started_b;
-    const cut = started_a.len + 70;
-    const consumed = running.scan(bytes[0..cut], false);
-    try std.testing.expectEqual(@as(usize, 1), running.count);
-    try std.testing.expect(consumed <= cut);
-    _ = running.scan(bytes[consumed..], true);
-    try std.testing.expectEqual(@as(usize, 2), running.count);
-}
-
-test "a rollout file is read across chunks and unsafe paths yield nothing" {
-    const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-
-    // Pad the rollout past one window so the second start straddles chunks.
-    var content: [chunk_bytes + 4096]u8 = undefined;
-    const padding = chunk_bytes - started_a.len - 60;
-    @memcpy(content[0..started_a.len], started_a);
-    @memset(content[started_a.len .. started_a.len + padding], ' ');
-    content[started_a.len + padding - 1] = '\n';
-    const tail_start = started_a.len + padding;
-    @memcpy(content[tail_start .. tail_start + started_b.len], started_b);
-    const len = tail_start + started_b.len;
-    try temp.dir.writeFile(io, .{ .sub_path = "rollout.jsonl", .data = content[0..len] });
-
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try std.fmt.bufPrint(&path_buffer, "{s}/rollout.jsonl", .{directory_buffer[0..directory_len]});
-    try std.testing.expectEqual(@as(usize, 2), read(io, path).count);
-
-    try std.testing.expectEqual(@as(usize, 0), read(io, "rollout.jsonl").count);
-    try std.testing.expectEqual(@as(usize, 0), read(io, "/nonexistent/telar/rollout.jsonl").count);
 }

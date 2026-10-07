@@ -9,7 +9,9 @@ const Rect = gfx.Rect;
 
 pub const capacity = 16;
 
+// SAFETY: add writes rows before increasing count; cell hit testing reads that prefix only when native is false.
 rows: [capacity]cellgrid.Rect = undefined,
+// SAFETY: CommandPalette.draw resets the map and populates it through addAt; native consumers check count before reading pixel rows.
 pixel_rows: [capacity]Rect = undefined,
 native: bool = false,
 /// Result index of `rows[0]`; rows are consecutive after it.

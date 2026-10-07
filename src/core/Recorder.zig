@@ -5,6 +5,7 @@ const Recorder = @This();
 const capacity = 16384;
 
 claimed: std.atomic.Value(usize) = .init(0),
+// SAFETY: append fills each claimed slot; dump requires every producer to have joined and caps the count at capacity.
 records: [capacity]Record = undefined,
 
 /// Claims a unique slot. No allocation, lock or I/O; full traces drop work.

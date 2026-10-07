@@ -10,6 +10,9 @@ return telar.config({
     },
     proxy = {
       enabled = false,
+      -- Admit a CONNECT without the proxy secret to a host outside
+      -- intercept_hosts. Off by default; any local account can then tunnel.
+      anonymous_tunnels = false,
       ca_dir = "state/proxy",
       -- Hosts whose TLS the proxy terminates and captures; everything else
       -- passes through as an opaque tunnel. Empty intercepts nothing.

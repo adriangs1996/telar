@@ -1,5 +1,4 @@
-//! The runtime's canonical tab list for the client's workspace arrives
-//! (docs/flows/workspace-reconciliation.md).
+//! The runtime's canonical tab list for the client's workspace arrives.
 const pane_metadata = @import("../panes/pane_metadata.zig");
 const WorkspaceReconciliation = @import("../state/WorkspaceReconciliation.zig");
 const workspace_reconciliation = @import("workspace_reconciliation.zig");
@@ -152,7 +151,6 @@ pub fn reconcile(model: *ClientModel, snapshot: WorkspaceSnapshotInput) !Workspa
 
     const previous_active = model.activeTabLocation() orelse return error.NoActiveTab;
     var reconciliation: WorkspaceReconciliation = .{
-        .previous_active = previous_active,
         .active = previous_active,
         .workspace_changed = !std.mem.eql(u8, model.workspaceName(), snapshot.name),
         .tabs_changed = snapshot.tabs.len != model.tabs.count,

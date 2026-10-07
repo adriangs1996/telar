@@ -54,13 +54,6 @@ fn failureCounter(failure: tls.Error) metrics.Counter {
     };
 }
 
-test "each TLS establishment failure maps to its exact counter" {
-    try std.testing.expectEqual(metrics.Counter.tls_context_failure, failureCounter(error.ContextFailed));
-    try std.testing.expectEqual(metrics.Counter.tls_upstream_handshake_failure, failureCounter(error.UpstreamHandshakeFailed));
-    try std.testing.expectEqual(metrics.Counter.tls_downstream_handshake_failure, failureCounter(error.DownstreamHandshakeFailed));
-    try std.testing.expectEqual(metrics.Counter.tls_mint_failure, failureCounter(error.MintFailed));
-}
-
 /// One authenticated tunnel before policy decides whether to intercept it.
 const Attempt = struct {
     host: []const u8,

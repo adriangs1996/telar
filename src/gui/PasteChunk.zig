@@ -1,5 +1,6 @@
 pub const capacity = 256;
 
+// SAFETY: InputQueue copies each UTF-8 chunk before enqueueing it; delivery reads only bytes[0..len].
 bytes: [capacity]u8 = undefined,
 len: u16 = 0,
 

@@ -287,23 +287,6 @@ fn createArgv(request: CreateWords, words: [][*:0]const u8) []const [*:0]const u
     return words[0..len];
 }
 
-test "a dispatched create names the clone and this machine and keeps the command" {
-    const options = try WorktreeOptions.parse(&.{ "create", "fix", "--machine", "box", "--from", "main", "--title", "Fix tabs", "--json", "--", "claude", "go" });
-    var words: [max_create_words + WorktreeOptions.max_command_arguments][*:0]const u8 = undefined;
-    const argv = createArgv(.{
-        .options = &options,
-        .path = "/home/dev/telar",
-        .dispatched_from = "laptop",
-        .base = "0123abc",
-    }, &words);
-
-    const expected = [_][]const u8{ "telar", "worktree", "create", "fix", "--workspace", "/home/dev/telar", "--dispatched-from", "laptop", "--title", "Fix tabs", "--from", "0123abc", "--json", "--", "claude", "go" };
-    try std.testing.expectEqual(expected.len, argv.len);
-    for (expected, argv) |want, got| {
-        try std.testing.expectEqualStrings(want, std.mem.span(got));
-    }
-}
-
 fn sourceCoordinator(init: std.process.Init) ?core.CoordinatorReference {
     if (init.minimal.environ.getPosix("TELAR_PANE_ID") == null) {
         return null;
@@ -312,32 +295,4 @@ fn sourceCoordinator(init: std.process.Init) ?core.CoordinatorReference {
     var session = Session.attach(init, null) catch return null;
     defer session.close();
     return session.coordinator(init.minimal.environ);
-}
-
-test "a forwarded dispatch carries the exact coordinator separately from the machine label" {
-    const reference = "01010101010101010101010101010101:7:9";
-    const options = try WorktreeOptions.parse(&.{ "create", "fix", "--machine", "box", "--coordinator", reference });
-    var words: [max_create_words + WorktreeOptions.max_command_arguments][*:0]const u8 = undefined;
-    const argv = createArgv(.{ .options = &options, .path = "/repo", .dispatched_from = "laptop", .base = null, .coordinator = reference }, &words);
-    try std.testing.expectEqualStrings("--coordinator", std.mem.span(argv[8]));
-    try std.testing.expectEqualStrings(reference, std.mem.span(argv[9]));
-    try std.testing.expectError(error.InvalidCoordinatorReference, WorktreeOptions.parse(&.{ "create", "fix", "--coordinator", "bad" }));
-}
-
-test "a forwarded dispatch fits setup and coordinator with the maximum command" {
-    var options = try WorktreeOptions.parse(&.{ "create", "fix", "--title", "Fix tabs", "--label", "Agent", "--setup", "--json" });
-    options.command = @splat("argument");
-    options.command_len = WorktreeOptions.max_command_arguments;
-    var words: [max_create_words + WorktreeOptions.max_command_arguments][*:0]const u8 = undefined;
-    const argv = createArgv(.{
-        .options = &options,
-        .path = "/repo",
-        .dispatched_from = "laptop",
-        .base = "0123abc",
-        .coordinator = "01010101010101010101010101010101:7:9",
-    }, &words);
-    try std.testing.expectEqual(words.len, argv.len);
-    try std.testing.expectEqualStrings("--setup", std.mem.span(argv[max_create_words - 3]));
-    try std.testing.expectEqualStrings("--json", std.mem.span(argv[max_create_words - 2]));
-    try std.testing.expectEqualStrings("--", std.mem.span(argv[max_create_words - 1]));
 }

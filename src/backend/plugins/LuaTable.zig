@@ -19,16 +19,6 @@ pub fn string(self: LuaTable, name: [*:0]const u8, required: bool) ![]const u8 {
     return host_support.luaString(self.state, -1) orelse error.InvalidEffect;
 }
 
-pub fn optionalString(self: LuaTable, name: [*:0]const u8) !?[]const u8 {
-    _ = lua_api.c.lua_getfield(self.state, self.index, name);
-    defer host_support.pop(self.state, 1);
-    if (lua_api.c.lua_type(self.state, -1) == lua_api.c.LUA_TNIL) {
-        return null;
-    }
-
-    return host_support.luaString(self.state, -1) orelse error.InvalidEffect;
-}
-
 pub fn integer(self: LuaTable, name: [*:0]const u8, default: i64) !i64 {
     _ = lua_api.c.lua_getfield(self.state, self.index, name);
     defer host_support.pop(self.state, 1);

@@ -20,9 +20,6 @@ const BarMetrics = @import("BarMetrics.zig");
 const limit_reached = @import("../notifications/limit_reached.zig");
 
 pub const no_deadline = data.bar_timing.no_deadline;
-pub const position_count = data.bar_timing.position_count;
-
-pub const CommandExecutionId = data.command_execution.Id;
 
 /// Completes one replaceable timer and folds all expired source ticks.
 ///
@@ -567,37 +564,6 @@ fn timerJob(io: std.Io, state: *data.BarUpdatesState) ?Job {
         .idle, .retained => null,
         .schedule => .{ .timer = .{ .kind = .bar, .scheduler = &state.scheduler } },
     };
-}
-
-test "bar timers reuse one pending worker and follow the earliest deadline" {
-    var state: data.BarUpdatesState = .{};
-    const io = std.testing.io;
-    try std.testing.expect(timerJob(io, &state) == null);
-
-    state.pending_callbacks = data.bar_values.Position.bottom_left.bit();
-    const first = timerJob(io, &state).?;
-    try std.testing.expectEqual(Job.Kind.bar, first.timer.kind);
-    try std.testing.expect(state.scheduler.pending);
-    const immediate = state.scheduler.deadline_ns.load(.acquire);
-    try std.testing.expect(immediate <= pacing.clock.monotonic(io));
-    try std.testing.expect(timerJob(io, &state) == null);
-
-    state.pending_callbacks = 0;
-    state.deadlines[@intFromEnum(data.bar_values.Position.bottom_left)] = immediate + std.time.ns_per_s;
-    try std.testing.expect(timerJob(io, &state) == null);
-    try std.testing.expectEqual(immediate + std.time.ns_per_s, state.scheduler.deadline_ns.load(.acquire));
-    state.synchronize(
-        .{
-            .generation = 2,
-            .configuration = null,
-            .now_ns = pacing.clock.monotonic(io),
-        },
-    );
-    try std.testing.expect(timerJob(io, &state) == null);
-    try std.testing.expectEqual(data.bar_timing.no_deadline, state.scheduler.deadline_ns.load(.acquire));
-    try state.scheduler.complete({});
-    try std.testing.expect(timerJob(io, &state) == null);
-    try std.testing.expect(!state.scheduler.pending);
 }
 
 const BarCommandFailure = struct {

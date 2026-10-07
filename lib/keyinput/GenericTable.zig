@@ -10,6 +10,7 @@ pub fn Type(comptime Owner: type, comptime capacity: usize) type {
     }
 
     return struct {
+        // SAFETY: acquire writes a complete lease before increasing len; lookup and release inspect only live entries.
         entries: [capacity]Entry = undefined,
         len: usize = 0,
         overflows: u64 = 0,

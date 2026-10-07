@@ -51,17 +51,3 @@ pub fn parse(args: []const [*:0]const u8) !Options {
 
     return self;
 }
-
-test "diagnostic reads reject unbounded line counts and invalid process IDs" {
-    try std.testing.expectError(error.InvalidLineCount, parse(&.{ "logs", "--lines", "0" }));
-    try std.testing.expectError(error.InvalidPid, parse(&.{ "logs", "--pid", "0" }));
-    try std.testing.expectError(error.InvalidComponent, parse(&.{ "logs", "--component", "worker" }));
-}
-
-test "limits takes only the socket and json options" {
-    const options = try parse(&.{ "limits", "--json" });
-    try std.testing.expectEqual(Action.limits, options.action);
-    try std.testing.expect(options.json);
-    try std.testing.expectError(error.UnknownDiagnosticsOption, parse(&.{ "limits", "--lines", "5" }));
-    try std.testing.expectError(error.UnknownDiagnosticsAction, parse(&.{"counters"}));
-}

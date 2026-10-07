@@ -1,4 +1,5 @@
 //! One owned hover target. Pointer movement within a cell does no text scanning.
+const Window = @import("telar-window");
 const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
 const hover_target = @import("hover_target.zig");
@@ -6,7 +7,7 @@ const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const GuiAdapter = @import("../GuiAdapter.zig");
-const Event = @import("PointerEvent.zig");
+const Event = @FieldType(Window.Input, "pointer");
 const Hit = @import("LinkHit.zig");
 const Hover = @This();
 
@@ -35,29 +36,29 @@ pub fn observe(self: *Hover, event: Event) void {
 /// Reuses the cached cell until model state or delivered controls change.
 /// Example: `hover.refresh(gui);`
 pub fn refresh(self: *Hover, gui: *GuiAdapter) void {
-    if (!gui.focused) {
+    if (!gui.model.focused) {
         self.clear();
         return;
     }
 
     const event = self.event orelse return;
 
-    if (gui.widgets.tab_drag.dragging and gui.widgets.tab_drag.source != null) {
+    if (gui.model.widgets.tab_drag.dragging and gui.model.widgets.tab_drag.source != null) {
         self.assign(null, .grabbing);
         self.cached = null;
         return;
     }
 
-    if (gui.overlays.presented().native_modal != null) {
-        const target = gui.widgets.dispatcher.maps.presented().at(.{ event.x, event.y });
+    if (gui.model.overlays.presented().native_modal != null) {
+        const target = gui.model.widgets.dispatcher.maps.presented().at(.{ event.x, event.y });
         const shape: core.PointerShape = if (target) |control| if (control.action == .text_field) .text else if (control.enabled and control.activatable()) .pointer else .default else .default;
         self.assign(null, shape);
         self.cached = null;
         return;
     }
 
-    if (!gui.app.model.name_prompt.active() and gui.overlays.presented().modal == null) {
-        if (gui.overlays.presented().notifications.at(.{ event.x, event.y })) |target| {
+    if (!gui.app.model.name_prompt.active() and gui.model.overlays.presented().modal == null) {
+        if (gui.model.overlays.presented().notifications.at(.{ event.x, event.y })) |target| {
             self.assign(null, if (target.enabled) .pointer else .default);
             self.cached = null;
             return;
@@ -66,8 +67,8 @@ pub fn refresh(self: *Hover, gui: *GuiAdapter) void {
 
     var moved = event;
     moved.kind = .move;
-    const mouse = gui.pointer.geometry.resolve(moved) orelse {
-        self.assign(null, gui.chrome.bandShape(moved));
+    const mouse = gui.model.pointer.geometry.resolve(moved) orelse {
+        self.assign(null, gui.model.chrome.bandShape(moved));
         self.cached = null;
         return;
     };
@@ -79,7 +80,7 @@ pub fn refresh(self: *Hover, gui: *GuiAdapter) void {
 
     self.cached = stamp;
     self.dirty = false;
-    const target = hover_target.resolve(gui, mouse, event.mods);
+    const target = hover_target.resolve(&gui.model, gui.app, mouse, event.mods);
     self.assign(target.link, target.shape);
     if (target.link) |hit| {
         const pane = gui.app.model.panes.findInConst(gui.app.model.tabs.location[gui.app.model.tabs.active].tab_id, hit.pane_id).?;
@@ -159,6 +160,6 @@ const Stamp = struct {
     /// Captures only values; no model or hit-map pointer escapes.
     /// Example: `const stamp = HoverStamp.capture(gui, cell, mods);`
     pub fn capture(gui: *const GuiAdapter, cell: [2]u16, mods: u32) Stamp {
-        return .{ .cell = cell, .mods = mods, .model = gui.app.model.version(), .geometry = gui.pointer.revision, .chrome = gui.chrome.revision, .chrome_gesture = gui.chrome.gesture_button, .sidebar_resize = gui.chrome.sidebar_resize_active, .overlay_gesture = gui.overlays.gesture };
+        return .{ .cell = cell, .mods = mods, .model = gui.app.model.version(), .geometry = gui.model.pointer.revision, .chrome = gui.model.chrome.revision, .chrome_gesture = gui.model.chrome.gesture_button, .sidebar_resize = gui.model.chrome.sidebar_resize_active, .overlay_gesture = gui.model.overlays.gesture };
     }
 };

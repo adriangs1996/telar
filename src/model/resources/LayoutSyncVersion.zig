@@ -6,6 +6,7 @@ const LayoutSyncVersion = @This();
 
 chrome: u64,
 active_tab: core.TabLocation,
+// SAFETY: client_layouts writes each tab version before increasing tab_count; eql compares only that prefix.
 tabs: [Tabs.capacity]TabVersion = undefined,
 tab_count: u8 = 0,
 

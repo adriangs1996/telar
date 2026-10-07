@@ -20,13 +20,3 @@ pub const markdownLinkAt = markdown.linkAt;
 pub const pathAt = path.pathAt;
 pub const locatePath = path.locatePath;
 pub const locateFragment = path.locateFragment;
-
-test {
-    _ = @import("Match.zig");
-    _ = @import("Location.zig");
-    _ = @import("MarkdownLink.zig");
-    _ = @import("Prefix.zig");
-    _ = @import("markdown.zig");
-    _ = @import("path.zig");
-    _ = @import("uri.zig");
-}

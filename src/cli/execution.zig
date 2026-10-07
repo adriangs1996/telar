@@ -12,11 +12,13 @@ pub const timeout_status = 124;
 /// Runs an execution command over the ordinary control connection. Example: `return execution.run(init, options);`.
 pub fn run(init: std.process.Init, options: ExecOptions) u8 {
     var session = Session.open(init, options.socket) catch |err| {
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar exec: {s}\n", .{@errorName(err)});
         return failure_status;
     };
     defer session.close();
     return start(init, &session, options) catch |err| {
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar exec: {s}\n", .{session.failure_reason orelse @errorName(err)});
         return failure_status;
     };
@@ -55,6 +57,7 @@ fn start(init: std.process.Init, session: *Session, options: ExecOptions) !u8 {
     }
 
     errdefer if (options.action == .start) {
+        // Print the execution ID immediately on stderr so an uncertain launch can be queried safely.
         std.debug.print("telar exec: query execution {d} before retrying an uncertain launch\n", .{operation.execution_id});
     };
 
@@ -77,6 +80,7 @@ fn start(init: std.process.Init, session: *Session, options: ExecOptions) !u8 {
         try writeStreams(init, &operation, reply);
         if ((reply.state == .exited or reply.state == .failed) and operation.stdout_offset == reply.stdout_total and operation.stderr_offset == reply.stderr_total) {
             if (reply.state == .failed) {
+                // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
                 std.debug.print("telar exec: {s}\n", .{reply.failure[0..reply.failure_len]});
             }
 
@@ -84,6 +88,7 @@ fn start(init: std.process.Init, session: *Session, options: ExecOptions) !u8 {
         }
 
         if (options.timeout_seconds != 0 and session.nowMs() - started >= @as(i64, options.timeout_seconds) * std.time.ms_per_s) {
+            // Timeout leaves the execution running; stderr tells the caller which ID to inspect.
             std.debug.print("telar exec: wait timed out; execution {d} continues\n", .{operation.execution_id});
             return timeout_status;
         }
@@ -121,7 +126,7 @@ pub fn exchange(session: *Session, operation: core.ExecutionRequest) !core.Execu
         const response = session.exchange(core.encodeExecutionRequest, operation) catch |err| {
             if (session.failure_reason) |reason| {
                 if (std.mem.eql(u8, reason, "ExecutionBusy")) {
-                    session.sleepMs(poll_ms);
+                    try session.sleepMs(poll_ms);
                     continue;
                 }
             }
@@ -132,7 +137,7 @@ pub fn exchange(session: *Session, operation: core.ExecutionRequest) !core.Execu
             .execution_reply => |reply| return reply,
             .request_failed => |failure| {
                 if (std.mem.eql(u8, failure.message, "ExecutionBusy")) {
-                    session.sleepMs(poll_ms);
+                    try session.sleepMs(poll_ms);
                     continue;
                 }
 
@@ -146,6 +151,7 @@ pub fn exchange(session: *Session, operation: core.ExecutionRequest) !core.Execu
 
 fn writeStreams(init: std.process.Init, operation: *core.ExecutionRequest, reply: core.ExecutionReply) !void {
     if (reply.stdout_offset != operation.stdout_offset or reply.stderr_offset != operation.stderr_offset) {
+        // Recovery offsets are user-facing stderr diagnostics, separate from execution output.
         std.debug.print("telar exec: retained output lost; resume with --stdout-offset {d} --stderr-offset {d}\n", .{ reply.stdout_offset, reply.stderr_offset });
         return error.ExecutionOutputLost;
     }

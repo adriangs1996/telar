@@ -1,5 +1,4 @@
 //! A search's compile-time bounds.
-const SearchLimits = @This();
 
 /// Codepoints of the needle kept; the rest is ignored.
 needle_codepoints: usize,

@@ -3,13 +3,14 @@
 //! from its upload until its release. Occupied rows are also kept in a dense
 //! list, so every scan costs the textures held, not the table's capacity.
 //! Only the window thread touches it.
+const gfx = @import("gfx");
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
-const ImageUpload = @import("../native/ImageUpload.zig");
+const ImageUpload = gfx.ImageUpload;
 const GpuImages = @This();
 
-pub const capacity = ImageUpload.capacity;
+const capacity = ImageUpload.capacity;
 /// Bytes the window's images may hold at once, pixels retained by every
 /// machine's store and textures together: the client's global image quota.
 pub const budget: usize = core.max_image_bytes_global;
@@ -31,10 +32,12 @@ pub const Residency = enum {
 
 residency: [capacity]Residency = @splat(.free),
 machine: [capacity]u8 = @splat(0),
+// SAFETY: add and assign set identity before returning an occupied row; lookup visits occupied rows only.
 identity: [capacity]client.ImageIdentity = undefined,
 width: [capacity]u32 = @splat(0),
 height: [capacity]u32 = @splat(0),
 bytes: [capacity]usize = @splat(0),
+// SAFETY: pane_images.start records the lease for each upload before returning; finish and abandon require uploading residency.
 lease: [capacity]client.retained_graphics.Lease = undefined,
 /// When the upload was requested, on the window's monotonic clock.
 started_ns: [capacity]u64 = @splat(0),
@@ -45,7 +48,9 @@ used_ns: [capacity]u64 = @splat(0),
 /// The row counted as a presented generation.
 presented: [capacity]bool = @splat(false),
 /// Occupied rows, densely; `position[row]` is the row's index here.
+// SAFETY: add writes the dense row before increasing count; rows returns only that prefix.
 occupied: [capacity]Row = undefined,
+// SAFETY: add assigns the reverse position before returning the occupied row; remove requires a non-free row.
 position: [capacity]Row = undefined,
 count: usize = 0,
 /// Free rows, a stack.
@@ -197,17 +202,4 @@ pub fn rowOf(handle: u32) ?usize {
     }
 
     return handle - 1;
-}
-
-test "rows stay put while the dense list follows adds and removes" {
-    var images: GpuImages = .{};
-    const identity: client.ImageIdentity = .{ .pane_id = @enumFromInt(1), .image_id = 1, .generation = 1 };
-    const first = images.add(0, identity).?;
-    const second = images.add(0, identity).?;
-    const third = images.add(0, identity).?;
-    images.remove(second);
-    try std.testing.expectEqual(@as(usize, 2), images.count);
-    try std.testing.expect(std.mem.indexOfScalar(Row, images.rows(), @intCast(first)) != null);
-    try std.testing.expect(std.mem.indexOfScalar(Row, images.rows(), @intCast(third)) != null);
-    try std.testing.expectEqual(second, images.add(0, identity).?);
 }

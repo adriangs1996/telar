@@ -4,17 +4,21 @@ const std = @import("std");
 const Manifest = @This();
 
 provider: types.AgentProvider,
+// SAFETY: Table.add copies the name before publishing the manifest; nameSlice reads only name_len bytes.
 name: [types.max_agent_provider_name_bytes]u8 = undefined,
 name_len: u8 = 0,
 /// Human label shown wherever the agent is named; defaults to `name`.
+// SAFETY: setDisplayName copies text before recording its length; displayName falls back to name while that length is zero.
 display_name: [types.max_agent_display_name_bytes]u8 = undefined,
 display_name_len: u8 = 0,
 /// Session title shown until the agent has a real one; defaults to
 /// "New <display name> session".
+// SAFETY: setPlaceholder copies text before recording its length; placeholderTitle uses the generated title while that length is zero.
 placeholder: [types.max_agent_session_title_bytes]u8 = undefined,
 placeholder_len: u8 = 0,
 /// One sidebar glyph. Empty leaves the choice to the client, which has
 /// artwork for the built-in agents and a generic mark for the rest.
+// SAFETY: setIcon copies text before recording its length; iconSlice reads only that prefix.
 icon: [types.max_agent_icon_bytes]u8 = undefined,
 icon_len: u8 = 0,
 /// How the agent's prompt identifies pasted images; `none` disables the
@@ -71,6 +75,7 @@ pub fn placeholderTitle(self: *const Manifest, buffer: *[types.max_agent_session
         return self.placeholder[0..self.placeholder_len];
     }
 
+    // SAFETY: The comptime assertion below proves that the largest display name plus both literal fragments fits this buffer.
     return std.fmt.bufPrint(buffer, "New {s} session", .{self.displayName()}) catch unreachable;
 }
 
@@ -92,6 +97,7 @@ comptime {
 }
 
 const CommandTools = struct {
+    // SAFETY: append initializes both strings and lengths before increasing count; lookup visits only those entries.
     items: [agent_manifest.max_command_tools]CommandTool = undefined,
     count: u8 = 0,
 
@@ -125,8 +131,10 @@ const CommandTools = struct {
     }
 
     const CommandTool = struct {
+        // SAFETY: CommandTools.append copies tool[0..tool_len] before publishing the mapping; toolSlice reads only that prefix.
         tool: [agent_manifest.max_tool_name_bytes]u8 = undefined,
         tool_len: u8,
+        // SAFETY: CommandTools.append copies field[0..field_len] before publishing the mapping; fieldSlice reads only that prefix.
         field: [agent_manifest.max_command_field_bytes]u8 = undefined,
         field_len: u8,
 

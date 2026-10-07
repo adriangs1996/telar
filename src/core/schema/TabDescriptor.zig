@@ -1,6 +1,5 @@
 const id = @import("id.zig");
 const PaneForeground = @import("messages/PaneForeground.zig");
-const TabDescriptor = @This();
 
 tab_id: id.TabId,
 position: u16,

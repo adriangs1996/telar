@@ -12,10 +12,13 @@ guard: std.atomic.Mutex = .unlocked,
 cancel: std.atomic.Value(bool) = .init(false),
 eof: std.atomic.Value(bool) = .init(false),
 started: std.atomic.Value(bool) = .init(false),
+// SAFETY: The execution worker writes retained output under guard before advancing stdout_total; replies read only retained bytes.
 stdout: [retained_bytes]u8 = undefined,
+// SAFETY: The execution worker writes retained output under guard before advancing stderr_total; replies read only retained bytes.
 stderr: [retained_bytes]u8 = undefined,
 stdout_total: u64 = 0,
 stderr_total: u64 = 0,
+// SAFETY: Runtime input writes each ring byte under guard before advancing input_written; the worker reads only pending bytes.
 input: [input_bytes]u8 = undefined,
 input_read: u64 = 0,
 input_written: u64 = 0,

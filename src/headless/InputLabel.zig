@@ -4,6 +4,7 @@ const InputLabel = @This();
 /// The longest label, in bytes.
 pub const max_bytes = 32;
 
+// SAFETY: input_protocol copies the mark label before returning the parsed input; slice reads only len bytes.
 bytes: [max_bytes]u8 = undefined,
 len: u8 = 0,
 

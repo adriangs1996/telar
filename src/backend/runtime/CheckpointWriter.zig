@@ -18,7 +18,6 @@ restored_panes: u16 = 0,
 resumed_agents: u16 = 0,
 /// Restored tabs dropped because none of their panes came back.
 dropped_tabs: u16 = 0,
-restore_failed: bool = false,
 /// Bytes one checkpoint may take; what does not fit is left out.
 snapshot_bytes: usize = session_checkpoint.snapshot_bytes,
 

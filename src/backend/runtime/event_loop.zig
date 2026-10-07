@@ -55,7 +55,6 @@ fn producerSlots(tag: Tag) usize {
         .worktree_detected,
         .editor_opened,
         .session_name,
-        .stopped,
         => 1,
     };
 }

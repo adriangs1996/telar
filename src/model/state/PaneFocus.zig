@@ -1,5 +1,4 @@
 const core = @import("telar-core");
-const PaneFocus = @This();
 
 location: core.TabLocation,
 previous: core.PaneId,

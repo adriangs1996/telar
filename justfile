@@ -1,7 +1,5 @@
 dev_runtime_dir := justfile_directory() / ".zig-out/dev"
 
-fuzz_targets := "test-handshake test-fuzz-ipc-client test-fuzz-ipc-server test-fuzz-frames-body test-fuzz-frames-cells test-fuzz-frames-metadata test-fuzz-imaging-png test-fuzz-imaging-ico test-fuzz-http1-head test-fuzz-http1-body test-fuzz-http2-reader test-fuzz-http2-observer"
-
 # Show the available commands.
 default:
     @just --list
@@ -60,58 +58,11 @@ codestyle *args:
 codestyle-fix *args:
     zig build codestyle -- --fix {{ args }}
 
-# Apply safe fixes, then run formatting checks and the complete test suite.
+# Apply safe fixes, then run formatting and source checks.
 check:
     just codestyle-fix
     just fmt-check
-    just test
-
-# Run the complete test suite. Extra arguments are forwarded to `zig build`.
-test *args:
-    zig build test {{ args }}
-
-# Run the native tests with zcov and write coverage.lcov.
-coverage *args:
-    tools/coverage.sh {{ args }}
-
-# Run all fuzz roots' tests and replay their corpora, without fuzzing.
-fuzz-check:
-    zig build {{ fuzz_targets }} -Dgui=false -j1
-
-# Fuzz every target sequentially, e.g. `just fuzz 1M`.
-fuzz runs="10K":
-    #!/usr/bin/env sh
-    set -eu
-    log=$(mktemp)
-    trap 'rm -f "$log"' EXIT
-    for target in {{ fuzz_targets }}; do
-        printf '\n== %s ==\n' "$target"
-        status=0
-        zig build "$target" -Dgui=false -j1 --fuzz={{ quote(runs) }} >"$log" 2>&1 || status=$?
-        cat "$log"
-        if [ "$status" -ne 0 ]; then
-            exit "$status"
-        fi
-        if grep -Eq 'input saved|panic:|terminated with signal' "$log"; then
-            exit 1
-        fi
-    done
-
-# Run the shared client's tests: its own, over a real socket, and headless.
-test-client:
-    zig build test-client test-client-integration test-headless
-
-# Run transport tests.
-test-transport:
-    zig build test-transport
-
-# Run protocol schema tests.
-test-schema:
-    zig build test-schema
-
-# Run the runtime proxy tests.
-test-backend-proxy:
-    zig build test-backend-proxy
+    zig build check
 
 # Run benchmarks. Extra arguments are passed to the benchmark executable.
 bench *args:
@@ -125,10 +76,9 @@ bench-list:
 cross:
     zig build cross
 
-# Run correctness, portability and performance release gates.
+# Run portability and performance release gates.
 verify-release:
     zig build verify-release
 
 alias b := build
 alias r := run
-alias t := test

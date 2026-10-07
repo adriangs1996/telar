@@ -7,6 +7,7 @@ const QueueMetrics = dropqueue.QueueMetrics;
 const Halves = dropqueue.GenericDropQueue(*Half, queue.capacity);
 const Channel = @This();
 
+// SAFETY: Channel.init initializes halves at the final address before any queue operation.
 halves: Halves = undefined,
 
 /// Initializes fixed queue storage.

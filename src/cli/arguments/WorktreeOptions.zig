@@ -41,6 +41,7 @@ delete_branch: bool = false,
 /// `exec --wait`: block until the command exits and print its final output.
 wait: bool = false,
 timeout_seconds: u32 = default_wait_seconds,
+// SAFETY: Argument parsing fills the command entries before recording command_len; conversion uses only that prefix.
 command: [max_command_arguments][*:0]const u8 = undefined,
 command_len: usize = 0,
 
@@ -212,74 +213,4 @@ fn validateText(text: []const u8, maximum: usize) !void {
             return error.InvalidWorktreeText;
         }
     }
-}
-
-test "create takes a title and a command after the separator" {
-    const options = try WorktreeOptions.parse(&.{ "create", "fix/tabs", "--title", "Fix tabs", "--from", "main", "--", "claude", "--flag-for-claude", "fix it" });
-    try std.testing.expectEqual(Action.create, options.action);
-    try std.testing.expectEqualStrings("fix/tabs", std.mem.span(options.branch.?));
-    try std.testing.expectEqualStrings("Fix tabs", std.mem.span(options.title.?));
-
-    var storage: [max_command_arguments][]const u8 = undefined;
-    const command = options.argv(&storage);
-    try std.testing.expectEqual(@as(usize, 3), command.len);
-    try std.testing.expectEqualStrings("--flag-for-claude", command[1]);
-}
-
-test "a command needs a title on create and is required by exec" {
-    try std.testing.expectError(error.MissingWorktreeTitle, WorktreeOptions.parse(&.{ "create", "fix", "--", "claude" }));
-    try std.testing.expectError(error.MissingWorktreeCommand, WorktreeOptions.parse(&.{ "exec", "fix" }));
-    try std.testing.expectError(error.UnexpectedWorktreeCommand, WorktreeOptions.parse(&.{ "list", "--", "ls" }));
-    _ = try WorktreeOptions.parse(&.{ "create", "fix" });
-}
-
-test "branches that look like options or escape a ref are refused" {
-    try std.testing.expectError(error.MissingWorktreeBranch, WorktreeOptions.parse(&.{ "exec", "--title" }));
-    try std.testing.expectError(error.InvalidWorktreeBranch, WorktreeOptions.parse(&.{ "create", "a..b" }));
-    try std.testing.expectError(error.UnknownWorktreeOption, WorktreeOptions.parse(&.{ "diff", "fix", "--force" }));
-    try std.testing.expectError(error.RelativeWorktreeDirectory, WorktreeOptions.parse(&.{ "create", "fix", "--directory", "rel" }));
-    const removal = try WorktreeOptions.parse(&.{ "remove", "fix", "--force", "--delete-branch" });
-    try std.testing.expect(removal.force and removal.delete_branch);
-}
-
-test "commands on an existing worktree take its title as well as its branch" {
-    for ([_][*:0]const u8{ "open", "diff", "remove" }) |action| {
-        const options = try WorktreeOptions.parse(&.{ action, "Fix tabs" });
-        try std.testing.expectEqualStrings("Fix tabs", std.mem.span(options.branch.?));
-    }
-
-    _ = try WorktreeOptions.parse(&.{ "exec", "Ordenar pestañas", "--", "ls" });
-    try std.testing.expectError(error.InvalidWorktreeText, WorktreeOptions.parse(&.{ "open", "Fix\x1b[2J" }));
-    try std.testing.expectError(error.InvalidWorktreeBranch, WorktreeOptions.parse(&.{ "create", "Fix tabs" }));
-}
-
-test "every branch create accepts fits the protocol, so the runtime stores it whole" {
-    const longest = "b" ** workspace_grammar.max_worktree_branch_bytes;
-    const options = try WorktreeOptions.parse(&.{ "create", longest });
-    try core.validateWorktreeText(.{
-        .path = "/src/telar-worktrees/b",
-        .branch = std.mem.span(options.branch.?),
-        .base = std.mem.span(options.branch.?),
-    });
-
-    try std.testing.expectError(error.InvalidWorktreeBranch, WorktreeOptions.parse(&.{ "create", longest ++ "b" }));
-}
-
-test "a worktree on another machine names it; fetch needs one and resolve a repository" {
-    const remote = try WorktreeOptions.parse(&.{ "create", "fix", "--machine", "box", "--from", "HEAD", "--title", "Fix", "--", "claude", "go" });
-    try std.testing.expectEqualStrings("box", std.mem.span(remote.machine.?));
-
-    const fetched = try WorktreeOptions.parse(&.{ "fetch", "fix", "--machine", "box", "--json" });
-    try std.testing.expectEqual(Action.fetch, fetched.action);
-    try std.testing.expectError(error.MissingMachineLabel, WorktreeOptions.parse(&.{ "fetch", "fix" }));
-    try std.testing.expectError(error.InvalidMachineLabel, WorktreeOptions.parse(&.{ "create", "fix", "--machine", "-box" }));
-    try std.testing.expectError(error.DirectoryOnAnotherMachine, WorktreeOptions.parse(&.{ "create", "fix", "--machine", "box", "--directory", "/src/fix" }));
-    try std.testing.expectError(error.UnknownWorktreeOption, WorktreeOptions.parse(&.{ "exec", "fix", "--machine", "box", "--", "ls" }));
-
-    const resolved = try WorktreeOptions.parse(&.{ "resolve", "--repository", "github.com/o/r", "--json" });
-    try std.testing.expectEqualStrings("github.com/o/r", std.mem.span(resolved.repository.?));
-    try std.testing.expectError(error.MissingRepository, WorktreeOptions.parse(&.{"resolve"}));
-
-    const dispatched = try WorktreeOptions.parse(&.{ "create", "fix", "--dispatched-from", "laptop" });
-    try std.testing.expectEqualStrings("laptop", std.mem.span(dispatched.dispatched_from.?));
 }

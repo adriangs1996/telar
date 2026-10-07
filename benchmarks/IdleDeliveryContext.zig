@@ -14,6 +14,7 @@ pub fn init(self: *IdleDeliveryContext, io: std.Io, gpa: std.mem.Allocator, envi
     self.io = io;
     self.directory = try std.fmt.bufPrint(&self.directory_buffer, "/tmp/telar-bench-idle-{d}-{d}x{d}", .{ std.c.getpid(), shape.clients, shape.panes });
     try std.Io.Dir.cwd().createDirPath(io, self.directory);
+    // Cleanup must preserve the initialization error; failing to remove this benchmark directory leaves only temporary benchmark data.
     errdefer std.Io.Dir.cwd().deleteTree(io, self.directory) catch {};
 
     try self.idle.init(.{ .io = io, .allocator = gpa }, .{
@@ -28,5 +29,6 @@ pub fn init(self: *IdleDeliveryContext, io: std.Io, gpa: std.mem.Allocator, envi
 /// Example: `context.deinit();`.
 pub fn deinit(self: *IdleDeliveryContext) void {
     self.idle.deinit();
+    // The runtime is already deinitialized; a failed temporary-directory removal cannot affect its delivery measurements.
     std.Io.Dir.cwd().deleteTree(self.io, self.directory) catch {};
 }

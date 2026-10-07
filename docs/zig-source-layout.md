@@ -2,7 +2,7 @@
 
 These rules apply to first-party Zig sources, including tests, benchmarks,
 build support and linters. Dependency sources and generated files keep their
-upstream layout. Names follow [naming](naming.md).
+upstream layout.
 
 - A public struct owns a PascalCase file, and the file is the struct: fields
   and methods live at file scope and the self type is `@This()`. Tables
@@ -31,8 +31,7 @@ upstream layout. Names follow [naming](naming.md).
 `zig build codestyle` checks these rules with `std.zig.Ast`, together with
 receiver names (a method's receiver is `self`, a `ClientModel` or
 `RuntimeModel` parameter is `model`) and inline imports, and fixes what it
-can with `-- --fix`; `zig build test` and `zig build check` run it without
-fixing. A file's category comes from its declarations, not from comments or
+can with `-- --fix`; `zig build check` runs it without fixing. A file's category comes from its declarations, not from comments or
 strings. `zig build check-client-boundaries` and
 `zig build check-model-boundaries` keep module dependencies pointing the right
 way.

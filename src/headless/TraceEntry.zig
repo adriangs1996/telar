@@ -1,5 +1,4 @@
 //! One moment the headless client's trace keeps.
-const TraceEntry = @This();
 
 /// Bytes of an entry's label.
 pub const label_bytes = 32;
@@ -19,5 +18,6 @@ kind: Kind,
 t_ns: u64,
 pane: u64 = 0,
 frame: u64 = 0,
+// SAFETY: Trace copies the bounded label before retaining the entry; serialization reads only label_len bytes.
 label: [label_bytes]u8 = undefined,
 label_len: u8 = 0,

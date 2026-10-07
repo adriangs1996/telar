@@ -7,9 +7,9 @@ const std = @import("std");
 const PlacementIdentity = @import("PlacementIdentity.zig");
 
 pub const Store = GenericResourceStore(@This());
-pub const State = @import("State.zig");
+pub const State = @import("state.zig");
 pub const ImageState = @import("ImageState.zig");
-pub const PlacementState = @import("PlacementState.zig");
+pub const PlacementState = @import("placement_state.zig");
 pub const Lease = @import("Lease.zig");
 
 /// Borrows completed pixels until the matching release, without retaining map pointers.
@@ -22,15 +22,6 @@ pub fn retain(store: *Store, identity: ImageIdentity) !Lease {
 
     image.delivery.leases = std.math.add(u32, image.delivery.leases, 1) catch return error.GraphicsLeaseLimit;
     return .{ .identity = identity, .pixels = image.pixels };
-}
-
-/// Returns one acquired lease exactly once, then collects obsolete allocations.
-/// Example: `release(&store, lease);`.
-pub fn release(store: *Store, lease: Lease) void {
-    const image = store.images.getPtr(lease.identity) orelse unreachable;
-    std.debug.assert(image.delivery.leases != 0);
-    image.delivery.leases -= 1;
-    store.collectRetired(lease.identity.pane_id, lease.identity.image_id);
 }
 
 pub fn imageCreated(_: *Store) !ImageState {

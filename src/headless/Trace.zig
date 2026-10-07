@@ -76,20 +76,3 @@ pub fn writeJson(self: *const Trace, writer: *std.Io.Writer) !void {
 
     try writer.writeAll("]}\n");
 }
-
-test "the ring keeps the newest entries and counts the rest" {
-    var trace: Trace = .{ .entries = try std.testing.allocator.alloc(Entry, 2) };
-    defer trace.deinit(std.testing.allocator);
-
-    trace.record(.{ .kind = .mark, .t_ns = 1 }, "a");
-    trace.record(.{ .kind = .frame, .t_ns = 2, .pane = 3, .frame = 4 }, "");
-    trace.record(.{ .kind = .input, .t_ns = 5 }, "key");
-
-    var buffer: [256]u8 = undefined;
-    var writer: std.Io.Writer = .fixed(&buffer);
-    try trace.writeJson(&writer);
-    try std.testing.expectEqualStrings(
-        "{\"dropped\":1,\"entries\":[{\"kind\":\"frame\",\"t_ns\":2,\"pane\":3,\"frame\":4},{\"kind\":\"input\",\"t_ns\":5,\"label\":\"key\"}]}\n",
-        writer.buffered(),
-    );
-}

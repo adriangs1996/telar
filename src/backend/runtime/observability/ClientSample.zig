@@ -1,5 +1,4 @@
 const Attachments = @import("../attachment/Attachments.zig");
-const ClientSample = @This();
 
 attachments: ?*const Attachments = null,
 count: usize = 0,

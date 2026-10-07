@@ -9,9 +9,12 @@ const default_capture: exchangecapture.Config = .{};
 
 graphics_pane_bytes: usize = core.max_image_bytes_per_pane,
 graphics_global_bytes: usize = core.max_image_bytes_global,
+// SAFETY: HistoryParser copies the configured path before setting history_path_len; historyPath reads only that prefix or returns null.
 history_path_bytes: [data.config_values.max_history_path_bytes]u8 = undefined,
 history_path_len: u16 = 0,
 proxy_enabled: bool = false,
+proxy_anonymous_tunnels: bool = false,
+// SAFETY: Proxy configuration copies the directory before setting proxy_ca_dir_len; proxyCaDir reads only that prefix or returns null.
 proxy_ca_dir_bytes: [data.config_values.max_proxy_path_bytes]u8 = undefined,
 proxy_ca_dir_len: u16 = 0,
 proxy_intercept_hosts: data.ProxyInterceptHosts = data.config_values.defaultProxyInterceptHosts(),
@@ -28,6 +31,7 @@ history_filters: core.Filters = .{},
 history_output_capture: bool = false,
 session_persist: bool = true,
 session_resume_agents: bool = true,
+// SAFETY: Session configuration copies the path before setting session_path_len; sessionPath reads only that prefix or returns null.
 session_path_bytes: [data.config_values.max_history_path_bytes]u8 = undefined,
 session_path_len: u16 = 0,
 

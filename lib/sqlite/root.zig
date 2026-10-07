@@ -18,10 +18,3 @@ pub const tableExists = schema.tableExists;
 pub const ensureColumn = schema.ensureColumn;
 pub const ftsQuote = fts.quote;
 pub const routeMemory = memory.routeMemory;
-
-test {
-    _ = @import("fts.zig");
-    _ = @import("memory.zig");
-    _ = @import("schema.zig");
-    _ = @import("statement.zig");
-}

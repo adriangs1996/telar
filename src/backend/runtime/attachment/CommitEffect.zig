@@ -1,6 +1,5 @@
 const core = @import("telar-core");
 const GraphicsCounts = @import("GraphicsCounts.zig");
-const CommitEffect = @This();
 
 detach_after_send: ?core.PaneId = null,
 graphics_message: bool = false,

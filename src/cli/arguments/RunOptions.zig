@@ -20,6 +20,7 @@ machine: ?[*:0]const u8 = null,
 fresh: bool = false,
 /// Example: `const options = try RunOptions.parse(args, environ);`.
 pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !RunOptions {
+    // SAFETY: The final argument branch assigns command from defaultShell or fromArgv before return; option parsing never reads it.
     var options: RunOptions = .{ .command = undefined };
     var theme_set = false;
     var delimiter_seen = false;

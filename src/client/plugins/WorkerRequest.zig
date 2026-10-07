@@ -7,6 +7,7 @@ package_index: u8,
 plugin_id: u64,
 digest: core.Digest,
 package: Package,
+// SAFETY: Registry copies the action name before returning the worker request; action exposes only action_len bytes.
 action_bytes: [core.max_action_bytes]u8 = undefined,
 action_len: u8,
 context: data.CallbackContext,

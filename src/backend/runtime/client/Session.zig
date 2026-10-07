@@ -50,6 +50,7 @@ hook_pane: ?PaneKey = null,
 descent_pending: bool = false,
 /// The confirmed peer's parent processes, nearest first, as the descent
 /// check walked them.
+// SAFETY: agent_hooks copies the verified lineage before returning to the loop; readers use only hook_lineage_len entries.
 hook_lineage: [max_hook_lineage]u32 = undefined,
 hook_lineage_len: u8 = 0,
 /// A hook report held while the pane's process is identified again. The
@@ -58,6 +59,7 @@ hook_lineage_len: u8 = 0,
 parked: ?core.ClientMessage = null,
 /// The pane the parked report names and the count of its completed
 /// rechecks that answers it: one started after the report arrived.
+// SAFETY: agent_hooks assigns the pane before parking a report; readers check parked before using its identity.
 parked_pane: PaneKey = undefined,
 parked_recheck: u32 = 0,
 /// Monotonic arrival, for the deadline.

@@ -24,8 +24,10 @@ size: core.TerminalSize,
 /// so the pipeline must never move after `init`.
 pipeline: *backend.Pipeline,
 sequence: u64 = 0,
+// SAFETY: init formats the shared-memory name and its sentinel before publishing name_len; teardown uses only that name.
 name: [64]u8 = undefined,
 name_len: usize = 0,
+// SAFETY: init formats the complete envelope before publishing envelope_len; queueOutput borrows only that prefix.
 envelope: [256]u8 = undefined,
 envelope_len: usize = 0,
 

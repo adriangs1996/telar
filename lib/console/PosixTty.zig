@@ -45,11 +45,13 @@ pub fn deinit(self: *Tty) void {
     // Disarmed before the descriptor closes, so a crash after shutdown
     // cannot write escape sequences into a recycled file descriptor.
     posix_ops.crash_restore.fd = -1;
+    // Terminal restoration is best effort if the terminal disappeared; the descriptor must still be closed.
     std.posix.tcsetattr(self.fd, .FLUSH, self.original) catch {};
     _ = std.c.close(self.fd);
 }
 
 pub fn size(self: *const Tty) Size {
+    // SAFETY: TIOCGWINSZ writes ws on success; ioctl failure returns the fallback before reading ws.
     var ws: std.posix.winsize = undefined;
     const TIOCGWINSZ: c_int = switch (builtin.os.tag) {
         .macos, .ios, .tvos, .watchos => 0x40087468,
@@ -67,7 +69,6 @@ pub fn size(self: *const Tty) Size {
         .cols = ws.col,
         .rows = ws.row,
         .width_px = ws.xpixel,
-        .height_px = ws.ypixel,
     };
 }
 

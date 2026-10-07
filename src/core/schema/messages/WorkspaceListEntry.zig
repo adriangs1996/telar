@@ -1,5 +1,4 @@
 const id = @import("../id.zig");
-const WorkspaceListEntry = @This();
 
 workspace: id.WorkspaceId,
 name: []const u8,

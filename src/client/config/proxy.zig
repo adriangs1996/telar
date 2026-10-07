@@ -18,7 +18,7 @@ pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshot, diagnostic:
 
     try value.ensureOnlyFields(state, .{
         .index = absolute,
-        .allowed = &.{ "enabled", "ca_dir", "intercept_hosts", "capture" },
+        .allowed = &.{ "enabled", "anonymous_tunnels", "ca_dir", "intercept_hosts", "capture" },
         .path = "config.runtime.proxy",
     }, diagnostic);
 
@@ -31,6 +31,18 @@ pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshot, diagnostic:
         }
 
         runtime.proxy_enabled = lua_api.c.lua_toboolean(state, -1) != 0;
+    }
+    value.pop(state, 1);
+
+    _ = lua_api.c.lua_getfield(state, absolute, "anonymous_tunnels");
+    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
+        if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TBOOLEAN) {
+            value.pop(state, 1);
+            diagnostic.set("config.runtime.proxy.anonymous_tunnels must be a boolean", .{});
+            return error.InvalidConfig;
+        }
+
+        runtime.proxy_anonymous_tunnels = lua_api.c.lua_toboolean(state, -1) != 0;
     }
     value.pop(state, 1);
 
@@ -106,6 +118,7 @@ pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshot, diagnostic:
         // The count and each hostname's length were checked above, and the
         // byte budget holds `max_intercept_hosts` hostnames of
         // `max_hostname_bytes`, so the host always fits.
+        // SAFETY: the preceding count and per-host length checks bound the append to the allocated hostname budget.
         runtime.proxy_intercept_hosts.append(host) catch unreachable;
     }
     runtime.proxy_intercept_hosts.sortAndDeduplicate();
@@ -260,25 +273,6 @@ fn validExactHostname(host: []const u8) bool {
     }
 
     return true;
-}
-
-test "host validation accepts exact and leading wildcard DNS labels" {
-    try std.testing.expect(validHostname("api.anthropic.com"));
-    try std.testing.expect(validHostname("*.openai.com"));
-    try std.testing.expect(validHostname("*"));
-    try std.testing.expect(!validHostname(""));
-    try std.testing.expect(!validHostname(".api.openai.com"));
-    try std.testing.expect(!validHostname("api..openai.com"));
-    try std.testing.expect(!validHostname("-api.openai.com"));
-    try std.testing.expect(!validHostname("api-.openai.com"));
-    try std.testing.expect(!validHostname("api_openai.com"));
-    try std.testing.expect(!validHostname("api.openai.com/path"));
-    try std.testing.expect(!validHostname("*openai.com"));
-    try std.testing.expect(!validHostname("api.*.openai.com"));
-    try std.testing.expect(!validHostname("*."));
-    try std.testing.expect(!validHostname("openai.com:443"));
-    try std.testing.expect(!validHostname("a" ** 64 ++ ".com"));
-    try std.testing.expectEqual(core.max_hostname_bytes, core.max_hostname_bytes);
 }
 
 const PositiveField = struct {

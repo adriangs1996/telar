@@ -2,6 +2,7 @@ const core = @import("telar-core");
 const std = @import("std");
 const RemovedWorkspaceTabs = @This();
 
+// SAFETY: append writes a tab location before increasing count; slice exposes only that initialized prefix.
 items: [core.max_tabs_per_workspace]core.TabLocation = undefined,
 count: u8 = 0,
 

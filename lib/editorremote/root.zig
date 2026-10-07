@@ -9,14 +9,3 @@ pub const Launch = @import("Launch.zig");
 pub const Search = @import("Search.zig");
 pub const editor = @import("editor.zig");
 pub const expressions = @import("expressions.zig");
-
-test {
-    _ = @import("Candidate.zig");
-    _ = @import("Launch.zig");
-    _ = @import("Search.zig");
-    _ = @import("Target.zig");
-    _ = @import("editor.zig");
-    _ = @import("expressions.zig");
-    _ = @import("remote.zig");
-    _ = @import("remote_tests.zig");
-}

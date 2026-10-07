@@ -4,6 +4,7 @@ const data = @import("model");
 const Job = @This();
 
 execution_id: data.PathCompletionState.ExecutionId,
+// SAFETY: Job construction copies the query before setting query_len; query readers use only that prefix.
 query: [data.PathCompletionResult.max_path_bytes]u8 = undefined,
 query_len: u16 = 0,
 

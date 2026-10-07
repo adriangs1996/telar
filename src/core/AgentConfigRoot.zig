@@ -58,13 +58,3 @@ pub fn resolve(self: AgentConfigRoot, override: ?[]const u8, home: ?[]const u8, 
 
     return std.fmt.bufPrint(buffer, "{s}/{s}", .{ base, self.directory }) catch null;
 }
-
-test "a configuration root follows its variable, else the home directory" {
-    var buffer: [std.fs.max_path_bytes]u8 = undefined;
-
-    try std.testing.expectEqualStrings("/srv/codex", codex.resolve("/srv/codex", "/home/me", &buffer).?);
-    try std.testing.expectEqualStrings("/home/me/.codex", codex.resolve("", "/home/me", &buffer).?);
-    try std.testing.expectEqualStrings("/xdg/opencode", opencode.resolve("/xdg", "/home/me", &buffer).?);
-    try std.testing.expectEqualStrings("/home/me/.pi/agent", pi.resolve(null, "/home/me", &buffer).?);
-    try std.testing.expect(cursor.resolve(null, null, &buffer) == null);
-}

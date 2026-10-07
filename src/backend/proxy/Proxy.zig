@@ -37,8 +37,8 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, config: Config) !*Proxy {
         .endpoint = config.endpoint,
         .system_authority = config.system_authority,
         .intercept_hosts = config.intercept_hosts,
+        .anonymous_tunnels = config.anonymous_tunnels,
         .capture = config.capture,
-        .tunnel_gate = config.tunnel_gate,
     });
 
     errdefer service.destroy();
@@ -142,7 +142,7 @@ pub fn captureConfig(self: *const Proxy) exchangecapture.Config {
 pub fn address(self: *const Proxy) std.Io.net.IpAddress {
     const client = self.service.clientConfiguration();
 
-    return std.Io.net.IpAddress.parse("127.0.0.1", client.port) catch unreachable;
+    return .{ .ip4 = .loopback(client.port) };
 }
 
 /// Returns the loopback port children of this runtime reach the proxy on.

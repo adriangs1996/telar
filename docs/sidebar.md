@@ -83,7 +83,7 @@ retries. A manual title has higher authority than a generated completion.
 
 A name the user gives the session inside the agent (`/name` in Pi, `/rename`
 in Claude Code and Codex) reaches the runtime through the agent's hooks or the
-file it records its session in ([agent rename](flows/agent-rename.md)) as a
+file it records its session in as a
 title with source `agent`. It
 replaces a generated or manual title, is checkpointed like a manual one, and
 clearing the name inside the agent returns the row to its placeholder unless a
@@ -157,7 +157,7 @@ symbol disappears only when its own box cannot fit.
 
 Only the working glyph pulses through six alpha steps between 1.0 and 0.65
 across 17 animation frames, one frame every 120 ms of the window's frame
-clock ([sidebar animation](flows/sidebar-animation.md)). The state word and duration remain steady.
+clock. The state word and duration remain steady.
 The focused pane's card has `surface0` fill and an inner 1px `surface1` ring.
 Built-in providers use the embedded symbol atlas at 60% opacity.
 OpenAI, Cursor Agent and OpenCode are white masks tinted with `text`; Claude and Pi retain their source colors. Custom providers keep an unboxed glyph.
@@ -280,16 +280,6 @@ the last delivered project identity while it remains in the workspace list.
 Indicators, selection and the overflow window remain in place until arrival.
 The identity is stored with the delivered hit map; failed frames cannot replace
 it. This retains no pane data and does not change navigation authority.
-
-`src/gui/tests/sidebar_workspaces.zig` covers row navigation, clipping,
-independent scrolling, selected-row visibility, deferred delivery and display
-scaling. The existing sidebar warm-repaint test includes project names and
-paths, and the favicon tests verify that rows and cards reuse the same sprite.
-`src/gui/tests/top_navigation.zig` covers the rail's marks, numbers,
-favicons at both display scales, stable positions, overflow counters and tab
-placement in both sidebar states. `src/gui/tests/tab_strip.zig` covers the
-selected tab's lift, compression and the hidden-tab counter, frozen widths,
-faded captions, the rail tooltip and session-title captions.
 
 ## Detector wiring
 

@@ -11,7 +11,9 @@ io: std.Io,
 gpa: std.mem.Allocator,
 connection: *localsocket.SocketChannel,
 source: []const u8,
+// SAFETY: push assigns each ImportEntry before increasing count; finish encodes only that prefix.
 entries: [core.max_import_entries]core.ImportEntry = undefined,
+// SAFETY: push copies command bytes before retaining their slice in an entry; finish reads only published entries.
 storage: [history.max_batch_payload]u8 = undefined,
 used: usize = 0,
 count: usize = 0,
@@ -54,6 +56,7 @@ pub fn finish(self: *BatchSender) !void {
     switch (response) {
         .request_completed => {},
         .request_failed => |failure| {
+            // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
             std.debug.print("telar history import: {s}\n", .{failure.message});
             return error.HistoryImportFailed;
         },

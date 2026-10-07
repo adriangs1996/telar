@@ -6,6 +6,7 @@ const Job = @This();
 pane: PaneKey,
 session_id: [16]u8,
 provider: core.AgentProvider,
+// SAFETY: Agent copies the captured query before returning the description job; querySlice reads only query_len bytes.
 query: [description.max_query_bytes]u8 = undefined,
 query_len: u16,
 

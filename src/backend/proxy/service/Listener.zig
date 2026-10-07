@@ -91,7 +91,7 @@ fn bindFirst(io: std.Io, candidates: *const PortSet) !?Listener {
 /// connections there. `SO_REUSEPORT` is never set. Windows keeps the plain
 /// bind: its `SO_REUSEADDR` takes ports in use.
 fn bindPort(io: std.Io, port_value: u16, closed: Closed) !?Listener {
-    const address = std.Io.net.IpAddress.parse("127.0.0.1", port_value) catch unreachable;
+    const address: std.Io.net.IpAddress = .{ .ip4 = .loopback(port_value) };
     if (builtin.os.tag == .windows) {
         const server = address.listen(io, .{}) catch |err| switch (err) {
             error.AddressInUse => return null,

@@ -18,6 +18,7 @@ pub fn next(self: *TabDescriptorIterator) !?TabDescriptorView {
         .pane_count = try self.decoder.readInt(u16),
         .label = try self.decoder.readSized16(),
         .foreground_count = try self.decoder.readInt(u16),
+        // SAFETY: The decoder validates the foreground records and assigns their consumed slice before returning descriptor.
         .encoded_foregrounds = undefined,
     };
     const start = self.decoder.index;

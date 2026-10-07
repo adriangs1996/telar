@@ -15,6 +15,7 @@ pub const rows_per_turn = 32;
 /// waits for included.
 const turn_budget_ns = std.time.ns_per_ms;
 /// Turns a search of every row takes.
+// SAFETY: rows_per_turn is the nonzero constant 32; unsigned divCeil cannot fail for this divisor.
 const turns = std.math.divCeil(u64, max_rows, rows_per_turn) catch unreachable;
 /// A search that has not finished by then answers with what it found.
 pub const deadline_ns: u64 = turns * turn_budget_ns;

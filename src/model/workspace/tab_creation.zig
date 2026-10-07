@@ -1,5 +1,4 @@
-//! A runtime-confirmed tab joins the client's workspace
-//! (docs/flows/tab-creation.md).
+//! A runtime-confirmed tab joins the client's workspace.
 const TabCreationPlan = @import("../state/TabCreationPlan.zig");
 const NewTab = @import("../state/NewTab.zig");
 const tab_creation = @import("tab_creation.zig");
@@ -68,12 +67,11 @@ pub fn add(model: *ClientModel, created: CreatedTab, size: core.TerminalSize) !u
 pub fn create(model: *ClientModel, command: NewTab) !model_data.TabCreation {
     const previous = model.tabs.activeSlot() orelse return error.NoActiveTab;
     const previous_location = model.tabs.location[previous];
-    const previous_layout_revision = model.tabs.layout[previous].currentRevision();
     const tabs_revision_before = model.tabs_revision;
     const active_tab_revision_before = model.active_tab_revision;
     const copy_revision_before = model.copy_revision;
 
-    const created = try tab_creation.add(model, command.created, command.size);
+    _ = try tab_creation.add(model, command.created, command.size);
     model.tabs_revision +%= 1;
     model.active_tab_revision +%= 1;
     model_namespace.releaseInvalidCopyMode(model);
@@ -81,10 +79,6 @@ pub fn create(model: *ClientModel, command: NewTab) !model_data.TabCreation {
     return .{
         .previous = previous_location,
         .created = command.created.location,
-        .created_root_pane_id = command.created.root_pane_id,
-        .created_position = command.created.position,
-        .previous_layout_revision = previous_layout_revision,
-        .created_layout_revision = model.tabs.layout[created].currentRevision(),
         .tabs_revision_before = tabs_revision_before,
         .active_tab_revision_before = active_tab_revision_before,
         .copy_revision_before = copy_revision_before,

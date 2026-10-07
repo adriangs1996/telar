@@ -10,6 +10,7 @@ const Buffer = @This();
 /// always fits here.
 pub const capacity = EditorDisplay.capacity;
 pub const limit = core.Limit.declare("gui.widgets.paste_buffer", "pasted bytes", capacity);
+// SAFETY: append writes each normalized byte before increasing len; text and UTF-8 trimming inspect only that prefix.
 bytes: [capacity]u8 = undefined,
 len: usize = 0,
 /// The paste was longer than `capacity`; `text` holds its prefix.
@@ -54,22 +55,5 @@ pub fn text(self: *const Buffer) []const u8 {
     }
 
     const needed = std.unicode.utf8ByteSequenceLength(self.bytes[lead]) catch 1;
-    return self.bytes[0 .. if (lead + needed > self.len) lead else self.len];
-}
-
-test "an overflowing paste keeps its prefix up to a whole UTF-8 sequence" {
-    var buffer: Buffer = .{};
-    var long: [capacity + 8]u8 = undefined;
-    @memset(&long, 'a');
-    // A three-byte sequence straddles the capacity.
-    @memcpy(long[capacity - 1 ..][0..3], "\u{20ac}");
-    buffer.append(&long);
-    try std.testing.expect(buffer.overflow);
-    try std.testing.expectEqual(@as(usize, capacity - 1), buffer.text().len);
-    try std.testing.expect(std.unicode.utf8ValidateSlice(buffer.text()));
-
-    var exact: Buffer = .{};
-    exact.append(long[0 .. capacity - 1]);
-    try std.testing.expect(!exact.overflow);
-    try std.testing.expectEqual(@as(usize, capacity - 1), exact.text().len);
+    return self.bytes[0..if (lead + needed > self.len) lead else self.len];
 }

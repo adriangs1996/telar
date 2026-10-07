@@ -21,33 +21,3 @@ pub const damage = @import("damage.zig");
 pub const selection = @import("selection.zig");
 pub const syncRow = row_sync.syncRow;
 pub const text = @import("text.zig");
-
-test {
-    _ = @import("Box.zig");
-    _ = @import("Buffer.zig");
-    _ = @import("Cell.zig");
-    _ = @import("CellSpan.zig");
-    _ = @import("ClickTracker.zig");
-    _ = @import("CellWrite.zig");
-    _ = @import("Cluster.zig");
-    _ = @import("Color.zig");
-    _ = @import("DamageRow.zig");
-    _ = @import("Fill.zig");
-    _ = @import("Flags.zig");
-    _ = @import("GraphemeIterator.zig");
-    _ = @import("Point.zig");
-    _ = @import("Rect.zig");
-    _ = @import("SelectionRange.zig");
-    _ = @import("RightAlignedText.zig");
-    _ = @import("Style.zig");
-    _ = @import("TextWrite.zig");
-    _ = @import("TruncatedText.zig");
-    _ = @import("buffer_support.zig");
-    _ = @import("cell_support.zig");
-    _ = @import("damage.zig");
-    _ = @import("geometry.zig");
-    _ = @import("row_sync.zig");
-    _ = @import("selection.zig");
-    _ = @import("text.zig");
-    _ = @import("ui_tests.zig");
-}

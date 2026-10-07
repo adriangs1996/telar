@@ -1,5 +1,3 @@
-const Version = @This();
-
 workspace: u64 = 0,
 configuration: u64 = 0,
 diagnostic: u64 = 0,

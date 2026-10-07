@@ -4,7 +4,7 @@
 //! the tasks nobody alive created come last, under no one. Each part keeps
 //! the shared attention order. A task that needs the person (blocked,
 //! failed, finished unseen) or is selected is drawn in full; the rest take
-//! one line. See `docs/flows/task-cards.md`.
+//! one line.
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -175,101 +175,4 @@ fn lessThan(sources: FleetSources, left: FleetEntry, right: FleetEntry) bool {
     }
 
     return attention.compare(&sources.agents[left.index], &sources.agents[right.index]) == .lt;
-}
-
-fn testingAgent(pane: u64, workspace: u64, status: core.AgentStatus) !data.Agent {
-    return try data.Agent.init(.{
-        .key = .{ .pane_id = @enumFromInt(pane), .pane_generation = 1 },
-        .location = .{
-            .workspace = .{ .workspace = @enumFromInt(workspace) },
-            .tab_id = @enumFromInt(1),
-        },
-        .pane_index = 1,
-        .provider = .claude,
-        .status = status,
-    });
-}
-
-test "tasks without a creator close their project group, needing ones first" {
-    var snapshot: data.WorkspaceListSnapshot = .{};
-    _ = try snapshot.replace(.{
-        .revision = 1,
-        .entries = &.{
-            .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1 },
-            .{ .workspace = @enumFromInt(2), .name = "api", .path = "/w/api", .tab_count = 1 },
-            .{ .workspace = @enumFromInt(5), .name = "fix", .path = "/w/fix", .tab_count = 1 },
-            .{ .workspace = @enumFromInt(6), .name = "links", .path = "/w/links", .tab_count = 1 },
-        },
-        .worktrees = &.{
-            .{ .worktree = @enumFromInt(1), .source = @enumFromInt(1), .workspace = @enumFromInt(5), .branch = "fix" },
-            .{ .worktree = @enumFromInt(2), .source = @enumFromInt(1), .workspace = @enumFromInt(6), .branch = "links" },
-        },
-    });
-    const agents = [_]data.Agent{
-        try testingAgent(10, 2, .working),
-        try testingAgent(11, 5, .working),
-        try testingAgent(12, 1, .ready),
-        try testingAgent(13, 6, .blocked),
-    };
-
-    var storage: [max_entries]FleetEntry = undefined;
-    const fleet = order(.{ .agents = &agents, .workspaces = &snapshot }, &storage);
-    try std.testing.expectEqual(@as(u8, 2), fleet[0].index);
-    try std.testing.expectEqual(FleetCard.agent, fleet[0].card);
-    try std.testing.expect(fleet[0].first_in_project);
-    try std.testing.expectEqual(@as(u8, 3), fleet[1].index);
-    try std.testing.expectEqual(FleetCard.task_full, fleet[1].card);
-    try std.testing.expectEqual(@as(u8, 1), fleet[2].index);
-    try std.testing.expectEqual(FleetCard.task_compact, fleet[2].card);
-    try std.testing.expectEqual(@as(u8, 0), fleet[3].index);
-    try std.testing.expect(fleet[3].first_in_project);
-
-    const focused = order(.{ .agents = &agents, .workspaces = &snapshot, .focused = @enumFromInt(11) }, &storage);
-    for (focused) |entry| {
-        if (entry.index == 1) {
-            try std.testing.expectEqual(FleetCard.task_full, entry.card);
-        }
-    }
-}
-
-test "a task hangs under the agent whose pane created it, and one without a live creator under no one" {
-    var snapshot: data.WorkspaceListSnapshot = .{};
-    _ = try snapshot.replace(.{
-        .revision = 1,
-        .entries = &.{
-            .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 2 },
-            .{ .workspace = @enumFromInt(5), .name = "qa", .path = "/w/qa", .tab_count = 1 },
-            .{ .workspace = @enumFromInt(6), .name = "setup", .path = "/w/setup", .tab_count = 1 },
-            .{ .workspace = @enumFromInt(7), .name = "hook", .path = "/w/hook", .tab_count = 1 },
-        },
-        .worktrees = &.{
-            .{ .worktree = @enumFromInt(1), .source = @enumFromInt(1), .workspace = @enumFromInt(5), .created_by = @enumFromInt(20), .branch = "qa" },
-            // Its creator's pane closed.
-            .{ .worktree = @enumFromInt(2), .source = @enumFromInt(1), .workspace = @enumFromInt(6), .created_by = @enumFromInt(99), .branch = "setup" },
-            // Claude Code's WorktreeCreate hook names the pane that then works there.
-            .{ .worktree = @enumFromInt(3), .source = @enumFromInt(1), .workspace = @enumFromInt(7), .created_by = @enumFromInt(23), .branch = "hook" },
-        },
-    });
-    const agents = [_]data.Agent{
-        // The coordinator works and comes first; another session of the
-        // project waits. Grouping every task after the project's agents put
-        // the coordinator's task under that other session.
-        try testingAgent(20, 1, .working),
-        try testingAgent(21, 1, .ready),
-        try testingAgent(22, 5, .working),
-        try testingAgent(24, 6, .working),
-        try testingAgent(23, 7, .working),
-    };
-
-    var storage: [max_entries]FleetEntry = undefined;
-    const fleet = order(.{ .agents = &agents, .workspaces = &snapshot }, &storage);
-    const expected = [_]u8{ 0, 2, 1, 4, 3 };
-    for (expected, fleet) |index, entry| {
-        try std.testing.expectEqual(index, entry.index);
-    }
-
-    try std.testing.expectEqual(@as(?u8, 0), fleet[1].creator);
-    for ([_]usize{ 0, 2, 3, 4 }) |position| {
-        try std.testing.expectEqual(@as(?u8, null), fleet[position].creator);
-    }
 }

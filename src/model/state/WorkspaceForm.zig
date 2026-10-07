@@ -1,6 +1,5 @@
 //! Disposable state of the new-context form: which field owns input, the
 //! selected path completion and a pending directory confirmation.
-const WorkspaceForm = @This();
 
 pub const Focus = enum { name, directory };
 

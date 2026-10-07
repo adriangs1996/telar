@@ -1,5 +1,4 @@
-//! `telar-headless`: the shared client with no window, for tests and tools
-//! (docs/flows/headless-client.md). It launches like `telar gui`, with the
+//! `telar-headless`: the shared client with no window. It launches like `telar gui`, with the
 //! headless flags first:
 //!
 //! ```sh
@@ -29,6 +28,7 @@ const failure: u8 = 2;
 pub fn main(init: std.process.Init) !void {
     const args = try collectArgs(init);
     const status = launch(init, args) catch |err| {
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar-headless: {s}\n", .{@errorName(err)});
         std.process.exit(failure);
     };
@@ -47,6 +47,7 @@ fn launch(init: std.process.Init, args: []const [*:0]const u8) !u8 {
     const connector = try client.RuntimeConnector.init(init.io, init.minimal.environ, null);
     try connector.prepareServerDirectory();
 
+    // SAFETY: prepare assigns the launch in place before use; failure cleans up inside prepare and returns before this deinit.
     var prepared: ClientLaunch = undefined;
     try prepared.prepare(.{
         .process = init,
@@ -132,6 +133,6 @@ fn collectArgs(init: std.process.Init) ![]const [*:0]const u8 {
 fn dumpEchoTrace(init: std.process.Init) void {
     if (comptime build_options.echo_trace) {
         const directory = init.minimal.environ.getPosix("TELAR_ECHO_TRACE_DIR") orelse return;
-        echo_recorder.dump(init.io, directory) catch {};
+        echo_recorder.dump(init.io, directory) catch |err| std.log.warn("Could not write echo trace: {s}", .{@errorName(err)});
     }
 }

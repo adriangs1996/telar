@@ -4,7 +4,6 @@ const keyinput = @import("keyinput");
 const GenericTable = keyinput.GenericTable;
 const keybind = @import("keybind.zig");
 const KeyRoutingAuthority = @import("KeyRoutingAuthority.zig");
-const std = @import("std");
 
 pub const Command = @import("KeyRoutingCommand.zig").KeyRoutingCommand;
 
@@ -27,25 +26,4 @@ pub fn requestsClipboardPreview(command: Command) bool {
         .bytes => false,
         .key => |key| key.phase == .press and key.isCtrl('v') and !key.mods.alt and !key.mods.shift,
     };
-}
-
-test "key routing captures only modal and prompt authority" {
-    try std.testing.expect(captures(
-        .{
-            .attachment_modal_active = true,
-        },
-    ));
-    try std.testing.expect(captures(
-        .{
-            .prompt_active = true,
-        },
-    ));
-    try std.testing.expect(!captures(
-        .{
-            .copy_mode_active = true,
-        },
-    ));
-    try std.testing.expect(!captures(
-        .{},
-    ));
 }

@@ -3,6 +3,7 @@
 const types = @import("types.zig");
 const Reply = @This();
 
+// SAFETY: Session writes the reply prefix before publishing len; slice is empty until bytes have been recorded.
 bytes: [types.max_reply_bytes]u8 = undefined,
 len: u16 = 0,
 

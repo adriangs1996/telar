@@ -44,17 +44,3 @@ pub fn parse(args: []const [*:0]const u8) !CliOptions {
 
     return options;
 }
-
-test "cli install accepts a directory" {
-    const args = [_][*:0]const u8{ "install", "--dir", "/tmp/bin" };
-    const options = try CliOptions.parse(&args);
-
-    try std.testing.expectEqual(Action.install, options.action);
-    try std.testing.expectEqualStrings("/tmp/bin", std.mem.span(options.dir.?));
-}
-
-test "cli refuses unknown actions and options" {
-    try std.testing.expectError(error.UnknownCliAction, CliOptions.parse(&.{"link"}));
-    try std.testing.expectError(error.UnknownCliOption, CliOptions.parse(&.{ "status", "--path", "x" }));
-    try std.testing.expectError(error.MissingDirPath, CliOptions.parse(&.{ "install", "--dir" }));
-}

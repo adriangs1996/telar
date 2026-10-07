@@ -1,5 +1,3 @@
-const Snapshot = @This();
-
 queued: u64,
 queue_high_water: u64,
 dropped: u64,

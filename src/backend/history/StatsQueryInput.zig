@@ -1,6 +1,5 @@
 const core = @import("telar-core");
 const QueryOrigin = @import("QueryOrigin.zig");
-const Input = @This();
 
 request_id: core.RequestId,
 origin: QueryOrigin,

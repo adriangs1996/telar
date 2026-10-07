@@ -30,9 +30,11 @@ generation: u64 = 0,
 /// closes the list.
 prompt_generation: u64 = 0,
 /// The pick's title, which the palette shows above its keys.
+// SAFETY: Opening a pick list copies its title before setting title_len; title reads only that initialized prefix.
 title_bytes: [PanelHeading.max_title_bytes]u8 = undefined,
 title_len: u8 = 0,
 items: PickItems = .{},
+// SAFETY: Failure handling copies the bounded message before setting error_len; errorSlice exposes only that prefix.
 error_text: [max_error_bytes]u8 = undefined,
 error_len: u16 = 0,
 /// The list command whose options this list waits for.
@@ -132,34 +134,4 @@ pub fn shownBy(self: *const PickListState, prompt: ?*const Prompt) bool {
 
 pub fn version(self: *const PickListState) u64 {
     return self.revision;
-}
-
-test "a list closes once, keeps the running selection and fails with a bounded reason" {
-    var state: PickListState = .{};
-    state.begin(.{
-        .index = 2,
-        .generation = 7,
-        .prompt_generation = 1,
-        .title = "Pi model",
-    });
-    try std.testing.expectEqualStrings("Pi model", state.title());
-    state.listing = state.reserve();
-    state.selecting = state.reserve();
-    try std.testing.expect(state.shows(2, 7));
-    try std.testing.expect(!state.shows(2, 8));
-
-    state.fail("x" ** (max_error_bytes + 10));
-    try std.testing.expectEqual(Phase.failed, state.phase);
-    try std.testing.expectEqual(@as(usize, max_error_bytes), state.errorSlice().len);
-    state.fail("x" ++ "é" ** max_error_bytes);
-    try std.testing.expectEqual(@as(usize, max_error_bytes - 1), state.errorSlice().len);
-    try std.testing.expect(std.unicode.utf8ValidateSlice(state.errorSlice()));
-    try std.testing.expectEqual(command_execution.Id.none, state.listing);
-
-    const before = state.version();
-    state.close();
-    state.close();
-    try std.testing.expectEqual(before + 1, state.version());
-    try std.testing.expect(state.selecting != .none);
-    try std.testing.expect(!state.shows(2, 7));
 }

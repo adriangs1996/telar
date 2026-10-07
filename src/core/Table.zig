@@ -10,6 +10,7 @@ const Table = @This();
 /// agent's room.
 pub const capacity = types.first_custom_agent_provider - 1 + types.max_agent_manifests;
 
+// SAFETY: add initializes the manifest before increasing count; slice and lookup visit only that prefix.
 items: [capacity]AgentManifest = undefined,
 count: u8 = 0,
 

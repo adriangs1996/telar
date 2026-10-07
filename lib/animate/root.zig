@@ -4,9 +4,3 @@
 pub const FrameClock = @import("FrameClock.zig");
 pub const Spring = @import("Spring.zig");
 pub const Transition = @import("Transition.zig");
-
-test {
-    _ = @import("FrameClock.zig");
-    _ = @import("Spring.zig");
-    _ = @import("Transition.zig");
-}

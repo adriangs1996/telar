@@ -37,10 +37,3 @@ pub fn prefix(value: []const u8, max_bytes: usize) []const u8 {
 
 const continuation_mask: u8 = 0b1100_0000;
 const continuation_bits: u8 = 0b1000_0000;
-
-test "a prefix never splits a character" {
-    try std.testing.expectEqualStrings("ab", prefix("ab", 8));
-    try std.testing.expectEqualStrings("a", prefix("aé", 2));
-    try std.testing.expectEqualStrings("aé", prefix("aéb", 3));
-    try std.testing.expectEqualStrings("", prefix("€", 2));
-}

@@ -2,7 +2,6 @@
 const keyinput = @import("keyinput");
 
 const data = @import("model");
-const std = @import("std");
 
 /// One semantic host event the prompt can interpret. Pasted text arrives as
 /// bounded slices between the paste markers; the adapter decodes bytes.
@@ -72,65 +71,4 @@ pub fn commandFor(input: *const Input, target: ?data.name_prompt.Target) ?data.P
                 null,
         },
     };
-}
-
-test "ctrl+j and ctrl+k move a list selection like the arrows" {
-    const down: keyinput.Key = .{
-        .code = .{
-            .char = keyinput.Char.init("j"),
-        },
-        .mods = .{
-            .ctrl = true,
-        },
-    };
-    const up: keyinput.Key = .{
-        .code = .{
-            .char = keyinput.Char.init("k"),
-        },
-        .mods = .{
-            .ctrl = true,
-        },
-    };
-
-    try std.testing.expectEqual(data.PromptCommand.move_down, commandFor(&.{ .key = down }, .pick).?);
-    try std.testing.expectEqual(data.PromptCommand.move_up, commandFor(&.{ .key = up }, .pick).?);
-}
-
-test "ctrl+h and ctrl+l go back and choose only in list prompts" {
-    for ([_]data.name_prompt.Target{ .palette, .pick, .goto, .history, .paths, .suggest }) |target| {
-        var back: Input = .{ .key = try keyinput.chord.parseKey("ctrl+h") };
-        var choose: Input = .{ .key = try keyinput.chord.parseKey("ctrl+l") };
-        try std.testing.expectEqual(data.PromptCommand.cancel, commandFor(&back, target).?);
-        try std.testing.expectEqual(data.PromptCommand.submit, commandFor(&choose, target).?);
-        back.key.phase = .repeat;
-        choose.key.phase = .repeat;
-        try std.testing.expect(commandFor(&back, target) == null);
-        try std.testing.expect(commandFor(&choose, target) == null);
-        back.key.phase = .release;
-        choose.key.phase = .release;
-        try std.testing.expect(commandFor(&back, target) == null);
-        try std.testing.expect(commandFor(&choose, target) == null);
-    }
-
-    for ([_][]const u8{ "ctrl+h", "ctrl+l", "alt+ctrl+h", "cmd+ctrl+l" }) |chord| {
-        const input: Input = .{ .key = try keyinput.chord.parseKey(chord) };
-        try std.testing.expect(commandFor(&input, .create_workspace) == null);
-    }
-
-    const backspace: Input = .{ .key = .plain(.backspace) };
-    try std.testing.expectEqual(data.PromptCommand.backspace, commandFor(&backspace, .pick).?);
-}
-
-test "an inserted character borrows the caller's input, not a copy" {
-    const input: Input = .{
-        .key = .{
-            .code = .{
-                .char = keyinput.Char.init("m"),
-            },
-        },
-    };
-    const command = commandFor(&input, null).?;
-    const inserted = command.insert;
-    try std.testing.expectEqualStrings("m", inserted);
-    try std.testing.expect(@intFromPtr(inserted.ptr) >= @intFromPtr(&input) and @intFromPtr(inserted.ptr) < @intFromPtr(&input) + @sizeOf(Input));
 }

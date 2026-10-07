@@ -264,8 +264,11 @@ const RecordSites = struct {
     label: []const u8,
     /// Attachments belong to a client slot; the other kinds have none.
     by_client: bool = false,
+    // SAFETY: RecordSites.add writes the client slot before increasing count; report writers iterate only count entries.
     client: [max_sites]usize = undefined,
+    // SAFETY: RecordSites.add writes the record index before increasing count; report writers iterate only count entries.
     index: [max_sites]usize = undefined,
+    // SAFETY: RecordSites.add writes the address before increasing count; report writers iterate only count entries.
     address: [max_sites]usize = undefined,
     count: usize = 0,
 

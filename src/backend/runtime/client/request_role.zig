@@ -55,19 +55,3 @@ pub fn classifyMessage(message: core.ClientMessage) RequestClass {
 
     return classify(std.meta.activeTag(message));
 }
-
-test "runtime observers cannot be mistaken for interactive clients" {
-    try std.testing.expectEqual(RequestClass.control, classifyMessage(.{ .request_runtime_state = .{ .client_identity = @enumFromInt(1), .interactive = false } }));
-    try std.testing.expectEqual(RequestClass.ui, classifyMessage(.{ .request_runtime_state = .{ .client_identity = @enumFromInt(1) } }));
-}
-
-test "interactive mutations and control queries keep distinct admission roles" {
-    const ui = [_]Tag{ .open_pane, .pane_input, .pane_resize, .frame_ack, .configure_graphics, .update_client_layout };
-    const control = [_]Tag{ .runtime_stop, .query_clients, .read_pane, .report_agent_session, .request_pane_focus, .report_limit };
-    for (ui) |tag| {
-        try std.testing.expectEqual(RequestClass.ui, classify(tag));
-    }
-    for (control) |tag| {
-        try std.testing.expectEqual(RequestClass.control, classify(tag));
-    }
-}

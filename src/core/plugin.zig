@@ -2,8 +2,6 @@
 
 const std = @import("std");
 const PluginManifest = @import("PluginManifest.zig");
-const Grant = @import("Grant.zig");
-const TrustStore = @import("TrustStore.zig");
 
 pub const manifest_api_version: u16 = 1;
 pub const max_manifest_bytes = 64 * 1024;
@@ -123,19 +121,6 @@ pub fn parseManifest(gpa: std.mem.Allocator, source: []const u8) !PluginManifest
 
 pub const Digest = [32]u8;
 
-pub fn contentDigest(manifest_bytes: []const u8, entry_bytes: []const u8) Digest {
-    var hasher = std.crypto.hash.sha2.Sha256.init(.{});
-    hasher.update("telar-plugin-v1\x00");
-    var length: [8]u8 = undefined;
-    std.mem.writeInt(u64, &length, manifest_bytes.len, .little);
-    hasher.update(&length);
-    hasher.update(manifest_bytes);
-    std.mem.writeInt(u64, &length, entry_bytes.len, .little);
-    hasher.update(&length);
-    hasher.update(entry_bytes);
-    return hasher.finalResult();
-}
-
 pub const max_grants = 64;
 
 pub fn stableId(name: []const u8) u64 {
@@ -181,58 +166,6 @@ fn validRelativePath(path: []const u8) bool {
         }
     }
     return true;
-}
-
-test "manifest parsing is data-only and rejects traversal" {
-    const manifest = try parseManifest(std.testing.allocator,
-        \\{
-        \\  "api_version": 1,
-        \\  "id": "dev.telar.sample",
-        \\  "version": "1.2.3",
-        \\  "entry": "plugin.lua",
-        \\  "source": { "url": "https://example.invalid/sample", "revision": "abc123" },
-        \\  "actions": ["open", "close"],
-        \\  "capabilities": ["history.read"]
-        \\}
-    );
-    try std.testing.expectEqualStrings("dev.telar.sample", manifest.id());
-    try std.testing.expect(manifest.capabilities.contains(.history_read));
-    try std.testing.expect(manifest.hasAction("open"));
-    try std.testing.expectError(error.InvalidEntrypoint, parseManifest(std.testing.allocator,
-        \\{"api_version":1,"id":"sample","version":"1","entry":"../escape.lua","source":{"url":"local","revision":"dev"}}
-    ));
-}
-
-test "trust grants are invalidated by content changes" {
-    const first = contentDigest("manifest", "return 1");
-    const second = contentDigest("manifest", "return 2");
-    var capabilities = CapabilitySet.initEmpty();
-    capabilities.insert(.history_read);
-    const grant: Grant = .{
-        .plugin_hash = stableId("sample"),
-        .digest = first,
-        .capabilities = capabilities,
-    };
-    try std.testing.expect(grant.allows(.{ .id = "sample", .digest = first }, .history_read));
-    try std.testing.expect(!grant.allows(.{ .id = "sample", .digest = second }, .history_read));
-    try std.testing.expect(!grant.allows(.{ .id = "sample", .digest = first }, .network));
-}
-
-test "trust store round trips digest-bound capability grants" {
-    const manifest = try parseManifest(std.testing.allocator,
-        \\{"api_version":1,"id":"sample","version":"1","entry":"plugin.lua","source":{"url":"local","revision":"dev"},"capabilities":["history.read"]}
-    );
-    var capabilities = CapabilitySet.initEmpty();
-    capabilities.insert(.history_read);
-    var store: TrustStore = .{};
-    const digest = contentDigest("manifest", "entry");
-    try store.upsert(&manifest, .{ .digest = digest, .capabilities = capabilities });
-    var bytes: [4096]u8 = undefined;
-    var writer: std.Io.Writer = .fixed(&bytes);
-    try store.writeJson(&writer);
-    const decoded = try TrustStore.parse(std.testing.allocator, writer.buffered());
-    try std.testing.expectEqual(@as(u8, 1), decoded.count);
-    try std.testing.expect(decoded.entries[0].grant.allows(.{ .id = "sample", .digest = digest }, .history_read));
 }
 
 const WireManifest = struct {

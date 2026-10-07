@@ -7,9 +7,11 @@ pub const Input = @import("QueryInput.zig");
 
 request_id: core.RequestId,
 origin: QueryOrigin,
+// SAFETY: init copies the validated query text before setting text_len; textSlice reads only that prefix.
 text: [core.max_history_query_bytes]u8 = undefined,
 text_len: u16 = 0,
 scope: core.HistoryScope = .global,
+// SAFETY: init copies the validated scope before setting scope_text_len; scopeSlice reads only that prefix.
 scope_text: [core.max_cwd_bytes]u8 = undefined,
 scope_text_len: u16 = 0,
 pane_id: core.PaneId = .invalid,

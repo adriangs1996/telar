@@ -36,7 +36,7 @@ def main():
                      f'fixture.PAYLOAD_BYTES = {args.mib} * 1024 * 1024\n'
                      'fixture.LIFETIME_SECONDS = 180\n'
                      f'fixture.Fixture(Path({str(fixture)!r})).run()\n')
-    config = TOOLS.parent / 'docs/performance/ghostty-comparison/config.lua'
+    config = TOOLS / 'ghostty-comparison.lua'
     client = headless_client.HeadlessClient(
         ['--config', config, '--', sys.executable, child], env=env, cwd=directory,
         size=(111, 35), log=directory / 'client.log',

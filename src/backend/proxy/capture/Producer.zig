@@ -15,6 +15,7 @@ const Producer = @This();
 gpa: std.mem.Allocator,
 config: Config,
 quota: Quota,
+// SAFETY: init initializes channel at the final address before any queue operation or successful return.
 channel: Channel = undefined,
 started: std.atomic.Value(u64) = .init(0),
 truncated: std.atomic.Value(u64) = .init(0),

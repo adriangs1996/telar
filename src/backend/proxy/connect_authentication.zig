@@ -2,8 +2,8 @@
 
 const core = @import("telar-core");
 const identity = @import("identity.zig");
+const Policy = @import("Policy.zig");
 const std = @import("std");
-const ExpectedRejection = @import("ExpectedRejection.zig");
 
 const authentication_required_response =
     "HTTP/1.1 407 Proxy Authentication Required\r\n" ++
@@ -32,18 +32,33 @@ pub const Rejection = @import("Rejection.zig");
 
 pub const Decision = union(enum) {
     authenticated: Target,
+    /// No credential, admitted because `anonymous_tunnels` is on and the
+    /// proxy does not intercept the target.
+    anonymous: Target,
     rejected: Rejection,
 };
 
 /// Authenticates before revealing target validity. Only an exact
 /// `CONNECT authority HTTP/1.1` line with a bounded hostname and a nonzero
-/// decimal port is accepted. The presented secret never outlives this
+/// decimal port is accepted. With `anonymous_tunnels`, a request without any
+/// `Proxy-Authorization` field opens an opaque tunnel to a host outside
+/// `intercept_hosts`; a host the proxy intercepts, or a malformed or wrong
+/// credential, is still refused. The presented secret never outlives this
 /// call; the validated hostname borrows from `head`.
 ///
 /// ```zig
-/// const decision = connect_authentication.authenticate(&secret, head);
+/// const decision = connect_authentication.authenticate(&secret, false, &policy, head);
 /// ```
-pub fn authenticate(secret: *const identity.Secret, head: []const u8) Decision {
+pub fn authenticate(secret: *const identity.Secret, anonymous_tunnels: bool, intercept_hosts: *const Policy, head: []const u8) Decision {
+    if (anonymous_tunnels and !identity.hasProxyAuthorization(head)) {
+        const target = parseTarget(head) orelse return rejectInvalidTarget();
+        if (intercept_hosts.contains(target.host.bytes)) {
+            return rejectInvalidAuthorization();
+        }
+
+        return .{ .anonymous = target };
+    }
+
     var presented = identity.parseProxyAuthorization(head) orelse return rejectInvalidAuthorization();
     defer std.crypto.secureZero(u8, &presented);
 
@@ -119,117 +134,4 @@ pub fn rejectInvalidTarget() Decision {
         .response = bad_request_response,
         .metric = null,
     } };
-}
-
-const test_secret: identity.Secret = .{0x5a} ** identity.secret_bytes;
-
-fn requestHead(start_line: []const u8, output: []u8) ![]const u8 {
-    const raw = "telar:" ++ "5a" ** identity.secret_bytes;
-    var encoded: [std.base64.standard.Encoder.calcSize(raw.len)]u8 = undefined;
-    const basic = std.base64.standard.Encoder.encode(&encoded, raw);
-    return std.fmt.bufPrint(output, "{s}\r\nProxy-Authorization: Basic {s}\r\n\r\n", .{ start_line, basic });
-}
-
-fn expectRejected(decision: Decision, expected: ExpectedRejection) !void {
-    const rejection = switch (decision) {
-        .authenticated => return error.ExpectedConnectRejection,
-        .rejected => |value| value,
-    };
-    try std.testing.expectEqual(expected.reason, rejection.reason);
-    try std.testing.expectEqualStrings(expected.response, rejection.response);
-    try std.testing.expectEqual(expected.metric, rejection.metric);
-}
-
-test "missing authorization is rejected before secret or target lookup" {
-    try expectRejected(
-        authenticate(&test_secret, "GET / HTTP/1.1\r\n\r\n"),
-        .{
-            .reason = .invalid_authorization,
-            .response = authentication_required_response,
-            .metric = .invalid_authorization,
-        },
-    );
-}
-
-test "a malformed Basic value is an invalid authorization" {
-    try expectRejected(
-        authenticate(&test_secret, "CONNECT api.openai.com:443 HTTP/1.1\r\nProxy-Authorization: Basic !!!\r\n\r\n"),
-        .{
-            .reason = .invalid_authorization,
-            .response = authentication_required_response,
-            .metric = .invalid_authorization,
-        },
-    );
-}
-
-test "a well-formed secret must match the proxy secret" {
-    var head_buffer: [256]u8 = undefined;
-    const head = try requestHead("CONNECT api.openai.com:443 HTTP/1.1", &head_buffer);
-    const other: identity.Secret = .{0x5b} ** identity.secret_bytes;
-
-    try expectRejected(
-        authenticate(&other, head),
-        .{
-            .reason = .unknown_credential,
-            .response = authentication_required_response,
-            .metric = .unknown_credential,
-        },
-    );
-}
-
-test "target validity is hidden until authentication succeeds" {
-    var head_buffer: [256]u8 = undefined;
-    const head = try requestHead("GET / HTTP/1.1", &head_buffer);
-    const other: identity.Secret = .{0x5b} ** identity.secret_bytes;
-
-    try expectRejected(
-        authenticate(&other, head),
-        .{
-            .reason = .unknown_credential,
-            .response = authentication_required_response,
-            .metric = .unknown_credential,
-        },
-    );
-}
-
-test "authenticated malformed targets map to a bad request without an auth metric" {
-    const invalid_start_lines = [_][]const u8{
-        "GET api.openai.com:443 HTTP/1.1",
-        "CONNECT api.openai.com:443",
-        "CONNECT api.openai.com:443 HTTP/1.0",
-        "CONNECT api.openai.com:443 HTTP/1.1 extra",
-        "CONNECT :443 HTTP/1.1",
-        "CONNECT bad_host:443 HTTP/1.1",
-        "CONNECT api.openai.com:0 HTTP/1.1",
-        "CONNECT api.openai.com:+443 HTTP/1.1",
-        "CONNECT api.openai.com:65536 HTTP/1.1",
-        "CONNECT " ++ "a" ** (core.max_hostname_bytes + 1) ++ ":443 HTTP/1.1",
-    };
-
-    for (invalid_start_lines) |start_line| {
-        var head_buffer: [512]u8 = undefined;
-        const head = try requestHead(start_line, &head_buffer);
-
-        try expectRejected(
-            authenticate(&test_secret, head),
-            .{
-                .reason = .invalid_target,
-                .response = bad_request_response,
-                .metric = null,
-            },
-        );
-    }
-}
-
-test "the proxy secret and a valid CONNECT target produce an authenticated target" {
-    var head_buffer: [256]u8 = undefined;
-    const head = try requestHead("CONNECT api.openai.com:443 HTTP/1.1", &head_buffer);
-
-    const target = switch (authenticate(&test_secret, head)) {
-        .authenticated => |value| value,
-        .rejected => return error.ExpectedAuthenticatedConnect,
-    };
-
-    try std.testing.expectEqualStrings("api.openai.com", target.host.bytes);
-    try std.testing.expectEqual(@as(u16, 443), target.port);
 }

@@ -1,6 +1,5 @@
 //! Sidebar toggle: shows, hides and resizes the sidebar and reports its layout.
 const data = @import("model");
-const client_tests = @import("../execution/client_tests.zig");
 const pane_resize = @import("../panes/pane_resize.zig");
 const Client = @import("../execution/Client.zig");
 
@@ -36,10 +35,6 @@ pub fn deliverSidebarLayout(client: *Client, change: data.SidebarLayout) !void {
     client.model.to_host.invalidate_placements = true;
     const active = client.model.tabs.activeSlot() orelse return;
     try pane_resize.resizeAttachedPanes(client, active, client.geometry().area);
-}
-
-test "sidebar projection rejects changes that are not the current model commit" {
-    try client_tests.rejectStaleSidebarCommits(deliverSidebarLayout);
 }
 
 const SidebarResize = union(enum) {

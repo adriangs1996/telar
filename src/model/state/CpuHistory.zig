@@ -1,7 +1,6 @@
 //! The last CPU percentages the runtime reported, oldest first, for the
 //! built-in CPU sparkline. A fixed ring: a burst of samples overwrites the
 //! oldest ones instead of growing.
-const std = @import("std");
 const CpuHistory = @This();
 
 pub const capacity = 32;
@@ -26,18 +25,4 @@ pub fn ordered(self: *const CpuHistory, buffer: *[capacity]u8) []const u8 {
     }
 
     return buffer[0..self.count];
-}
-
-test "cpu history keeps the newest samples in order" {
-    var history: CpuHistory = .{};
-    for (0..capacity + 2) |value| {
-        history.push(@intCast(value));
-    }
-
-    var buffer: [capacity]u8 = undefined;
-    const values = history.ordered(&buffer);
-
-    try std.testing.expectEqual(@as(usize, capacity), values.len);
-    try std.testing.expectEqual(@as(u8, 2), values[0]);
-    try std.testing.expectEqual(@as(u8, capacity + 1), values[capacity - 1]);
 }

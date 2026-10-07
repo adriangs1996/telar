@@ -1,5 +1,4 @@
 const core = @import("telar-core");
-const Report = @This();
 
 state: core.AgentReportState,
 /// Why the agent is blocked, when the event names it.

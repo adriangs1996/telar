@@ -40,81 +40,6 @@ It owns what only makes sense while somebody is looking: layout, which pane is
 focused, hover, scroll position, selection, what a modal is covering. All of it
 is disposable, because the runtime can rebuild everything that matters.
 
-### State and behavior
-
-Each process keeps its state in one flat model, `RuntimeModel` or
-`ClientModel`: singletons as fields, repeating entities as tables of columns,
-relations as ids. Behavior is procedures over the model, one file per flow,
-reached from the process's single `update` dispatch. Read
-[`docs/architecture.md`](docs/architecture.md) before adding state or a flow,
-and name everything by [`docs/naming.md`](docs/naming.md).
-
-Code with another shape is migration debt, not a template: controllers,
-handlers, context structs that hold their owner, ports for services that behave
-the same on every host, models nested inside models.
-[`docs/plans/procedural-model.md`](docs/plans/procedural-model.md) tracks it.
-
-Before changing lifecycle, IPC, PTY/VT/input, graphics, agents, persistence,
-history/proxy, Lua/plugins, or performance, read
-[`docs/invariants.md`](docs/invariants.md) and apply every rule relevant to the
-change.
-
-### Code packages
-
-Both processes import `telar-core`. Backend and client packages never import
-each other, the window (`telar-gui`) and the headless client (`telar-headless`)
-never import each other, and what adapters embed lives in the `assets`
-module. The package table is in
-[`docs/architecture.md`](docs/architecture.md#packages). Each client connection
-owns its own model; sharing code never shares another connection's focus or
-navigation.
-
-### One pane, end to end
-
-The path a byte takes, because most decisions are really about where on it a
-piece of code sits:
-
-```
-child ──pty──> vt.Terminal ──> vt.RenderState ──> CellSync ──> pane_frame
-                                                                    │
-                                                         client model (frame ack)
-                                                                    │
-                                                        window renderer (Metal/Vulkan)
-                                                                    │
-keystroke <── key_routing <── keymap router <── native window (AppKit/Wayland)
-```
-
-Two things fall out of that picture. The emulator decides what a screen _is_, so
-telar never parses escape sequences from a child. And the client model is the
-last shared step before pixels, so anything that wants to change what the user
-sees changes the model or the frame, never the renderer's output.
-
-### Three paths, three budgets
-
-telar sits between the terminal emulator and the pty, and between the agent and
-the network. Graphics add bulk media between applications and the host terminal.
-These paths have different budgets and never wait on one another.
-
-**The interactive path** carries a keystroke to the child and a byte of output
-to a glyph. It is measured in microseconds and it allocates nothing. A frame is
-capped by `pace` at the refresh rate of the display the window is on, at most
-240 Hz (or lower under `gui.max_fps`), and what does not fit gets folded rather
-than queued.
-
-**The media path** carries KGP payloads, decoded images, compression and image
-transfer. It is measured in frame deadlines. It may allocate within strict
-quotas, runs behind its own bounded queues, and never delays input or cell
-output. Repeated frames replace obsolete work rather than building a replay.
-
-**The observation path** carries what an agent did into history: which tool it
-called, what it asked the model, what came back. It is measured in "before the
-user searches for it". It may allocate, it may block, it may be slow. What it
-may never do is sit in the interactive path's way.
-
-The test is easy to apply. Parsing JSON or decompressing a large image while
-forwarding a keystroke crosses a budget. Move the work to its queue and let the
-keystroke go.
-
 ## Performance, no matter what
 
 Doing so much work and placing between the terminal emulator and the actual pty,
@@ -180,8 +105,7 @@ pub fn observeProxy(
 pub fn observeProxy(store: *Store, observation: ProxyObservation) bool {}
 ```
 
-- Add comments only on non-trivial and behavior rich methods. Always include
-  example of usage in comments for public methods.
+- Add comments only on non-trivial and behavior rich methods.
 - Always leave a blank line between blocks of code inside a method.
   Example:
 
@@ -235,11 +159,6 @@ pub fn observeProxy(store: *Store, observation: ProxyObservation) bool {}
   parameters into a context struct that holds a pointer to its owner to stay under the
   limit. A sixth parameter means the function does too much.
 
-- Every change should preserve or improve the architecture in `docs/architecture.md`:
-  state lives in the model's fields and tables, behavior in procedures named after their
-  flow. Do not wrap data in a struct only to hide it; a table owns only its structural
-  changes (adding and removing rows, keeping its index).
-
 - DO NOT INLINE IMPORT calls:
 
 ```zig
@@ -267,8 +186,7 @@ const step: Step = Step.start;
 
 ```
 
-- Methods of a type (tables and other structs) name their receiver "self". Procedures
-  over a process model take `model`:
+- Methods of a type (tables and other structs) name their receiver "self":
 
 ```zig
 const Spring = @This()
@@ -278,9 +196,6 @@ pub fn speed(spring: *const Spring) ...
 
 // Good
 pub fn speed(self: *const Spring) ...
-
-// Good: a procedure in pane_focus.zig
-pub fn move(model: *ClientModel, direction: Direction) !void ...
 ```
 
 - OBJECTS AND FUNCTIONS USING OBJECTS SHOULD HAVE THEIR LAST FIELD ENDING IN COLON

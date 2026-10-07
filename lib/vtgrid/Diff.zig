@@ -1,5 +1,4 @@
 //! What one damage scan found and what coalescing saved.
-const Diff = @This();
 
 span_count: usize = 0,
 damaged_rows: usize = 0,

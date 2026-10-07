@@ -9,7 +9,6 @@
 
 const Capabilities = @import("Capabilities.zig");
 const core = @import("telar-core");
-const std = @import("std");
 
 pub const capabilities: Capabilities = .{
     .completion_requires_agent_signal = true,
@@ -53,7 +52,3 @@ pub const capabilities: Capabilities = .{
     .ready_prompt_settles_report = true,
     .screen_shows_idle = true,
 };
-
-test {
-    std.testing.refAllDecls(@This());
-}

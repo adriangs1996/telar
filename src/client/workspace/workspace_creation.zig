@@ -84,6 +84,7 @@ pub fn beginWorkspacePrompt(client: *Client) bool {
         return false;
     }
 
+    // Path completion is optional when opening the prompt; the user can still enter a path manually.
     prompt_paths.openPathCompletion(client) catch {};
     return true;
 }

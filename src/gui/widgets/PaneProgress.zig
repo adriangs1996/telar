@@ -103,6 +103,7 @@ fn label(self: Progress, canvas: *Canvas, storage: []u8) Label {
         .indeterminate => "Working",
         .pause => "Paused",
         .@"error" => "Error",
+        // SAFETY: a u8 percentage plus the percent sign uses at most four of the 24 storage bytes.
         .set => std.fmt.bufPrint(storage, "{d}%", .{self.pane.progress_percent orelse 0}) catch unreachable,
         .remove => "",
     };

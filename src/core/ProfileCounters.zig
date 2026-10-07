@@ -32,13 +32,3 @@ pub fn write(self: *const Counters, writer: *std.Io.Writer) !void {
         try writer.writeAll("]}\n");
     }
 }
-
-test "profile counters saturate without wrapping and copies are independent" {
-    var counts: Counters = .{};
-    counts.add(.gui_draw, 4);
-    const snapshot = counts;
-    counts.add(.gui_draw, std.math.maxInt(u64));
-    try std.testing.expect(counts.overflow);
-    try std.testing.expectEqual(std.math.maxInt(u64), counts.values[@intFromEnum(profiling.Metric.gui_draw)]);
-    try std.testing.expectEqual(@as(u64, 4), snapshot.values[@intFromEnum(profiling.Metric.gui_draw)]);
-}

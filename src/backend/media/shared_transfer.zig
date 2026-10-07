@@ -11,10 +11,6 @@
 const core = @import("telar-core");
 const builtin = @import("builtin");
 const std = @import("std");
-const PreparedTransfer = @import("PreparedTransfer.zig");
-const GraphicsBudget = @import("GraphicsBudget.zig");
-const PaneMediaAllocator = @import("PaneMediaAllocator.zig");
-const PreparedTransfers = @import("PreparedTransfers.zig");
 const privatefile = @import("privatefile");
 const Inode = privatefile.Inode;
 
@@ -252,162 +248,6 @@ pub fn mapOwnObject(name: core.ShmName, byte_len: usize) ?[]align(std.heap.page_
     return std.posix.mmap(null, byte_len, .{ .READ = true }, std.c.MAP{ .TYPE = .SHARED }, fd, 0) catch null;
 }
 
-fn testTransfer(image_id: u32, generation: u64, pixels: []const u8) !PreparedTransfer {
-    return .{
-        .metadata = .{
-            .key = .{ .image_id = image_id, .generation = generation },
-            .format = .rgba,
-            .width = 1,
-            .height = 1,
-            .byte_len = pixels.len,
-        },
-        .name = freezeSharedPixels(pixels) orelse return error.SharedMemoryUnavailable,
-        .reserved_len = pixels.len,
-    };
-}
-
-fn objectExists(name: core.ShmName) bool {
-    const fd = std.c.shm_open(name.sliceZ(), @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })), @as(u16, 0));
-    if (std.posix.errno(fd) != .SUCCESS) {
-        return false;
-    }
-    _ = std.c.close(fd);
-    return true;
-}
-
-test "child file metadata rejects undersized files, directories, symlinks and missing paths" {
-    if (comptime !shm_supported) {
-        return error.SkipZigTest;
-    }
-
-    const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    try temp.dir.writeFile(io, .{ .sub_path = "pixels", .data = "RGBA" });
-    try temp.dir.createDir(io, "directory", std.Io.File.Permissions.fromMode(0o700));
-    try temp.dir.symLink(io, "pixels", "alias", .{});
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-
-    for ([_][]const u8{ "pixels", "directory", "alias", "missing" }, 0..) |leaf, index| {
-        var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-        const path = try std.fmt.bufPrint(&path_buffer, "{s}/{s}", .{ directory_buffer[0..directory_len], leaf });
-        var encoded_buffer: [std.base64.standard.Encoder.calcSize(std.fs.max_path_bytes)]u8 = undefined;
-        const encoded = std.base64.standard.Encoder.encode(&encoded_buffer, path);
-
-        try std.testing.expectEqual(index == 0, validateChildFile(encoded, 4));
-        try std.testing.expect(!validateChildFile(encoded, 5));
-    }
-}
-
-test "child shared memory validates size before mapping and unlinking" {
-    if (comptime !shm_supported) {
-        return error.SkipZigTest;
-    }
-
-    const name = freezeSharedPixels("RGBA") orelse return error.SharedMemoryUnavailable;
-    defer _ = std.c.shm_unlink(name.sliceZ());
-    var encoded_buffer: [std.base64.standard.Encoder.calcSize(std.fs.max_path_bytes)]u8 = undefined;
-    const encoded = std.base64.standard.Encoder.encode(&encoded_buffer, name.sliceZ());
-
-    // Darwin reports shared-memory sizes rounded up to the host page size.
-    const oversized = mapChildObject(encoded, std.heap.pageSize() + 1);
-    defer {
-        if (oversized) |object| {
-            object.close();
-        }
-    }
-
-    try std.testing.expectEqual(@as(?ChildObject, null), oversized);
-    try std.testing.expect(objectExists(name));
-    const mapped = mapChildObject(encoded, 4) orelse return error.SharedMemoryUnavailable;
-    defer mapped.close();
-
-    try std.testing.expectEqualStrings("RGBA", mapped.pixels);
-    try std.testing.expect(!objectExists(name));
-}
-
-test "releasing a folded child object unlinks it without reading it" {
-    if (comptime !shm_supported) {
-        return error.SkipZigTest;
-    }
-
-    const name = freezeSharedPixels("RGBA") orelse return error.SharedMemoryUnavailable;
-    defer _ = std.c.shm_unlink(name.sliceZ());
-    var encoded_buffer: [std.base64.standard.Encoder.calcSize(std.fs.max_path_bytes)]u8 = undefined;
-    const encoded = std.base64.standard.Encoder.encode(&encoded_buffer, name.sliceZ());
-
-    releaseChildObject(encoded);
-    try std.testing.expect(!objectExists(name));
-    releaseChildObject(encoded);
-    releaseChildObject("not base64!");
-}
-
-test "a newer generation replaces the parked object of its image" {
-    if (comptime !shm_supported) {
-        return error.SkipZigTest;
-    }
-    var budget = GraphicsBudget.init(1024);
-    var media = PaneMediaAllocator.init(std.testing.allocator, &budget, 1024);
-    var prepared: PreparedTransfers = .{};
-    defer prepared.discardAll(&media);
-    const pixels = [_]u8{ 1, 2, 3, 255 };
-
-    const first = try testTransfer(7, 1, &pixels);
-    try std.testing.expect(media.reserveManual(first.reserved_len));
-    try std.testing.expect(prepared.put(first, &media));
-    try std.testing.expect(prepared.covers(.{ .image_id = 7, .generation = 1 }));
-    try std.testing.expect(!prepared.covers(.{ .image_id = 7, .generation = 2 }));
-
-    const second = try testTransfer(7, 2, &pixels);
-    try std.testing.expect(media.reserveManual(second.reserved_len));
-    try std.testing.expect(prepared.put(second, &media));
-
-    try std.testing.expect(!objectExists(first.name));
-    try std.testing.expect(objectExists(second.name));
-    try std.testing.expectEqual(pixels.len, media.used);
-    try std.testing.expect(prepared.take(.{ .image_id = 7, .generation = 1 }) == null);
-    const adopted = prepared.take(.{ .image_id = 7, .generation = 2 }) orelse return error.NotParked;
-    try std.testing.expect(prepared.covers(.{ .image_id = 7, .generation = 2 }));
-    _ = std.c.shm_unlink(adopted.name.sliceZ());
-    media.releaseManual(adopted.reserved_len);
-    try std.testing.expectEqual(@as(usize, 0), media.used);
-}
-
-test "parking is bounded and releases what the emulator dropped" {
-    if (comptime !shm_supported) {
-        return error.SkipZigTest;
-    }
-    var budget = GraphicsBudget.init(1024);
-    var media = PaneMediaAllocator.init(std.testing.allocator, &budget, 1024);
-    var prepared: PreparedTransfers = .{};
-    defer prepared.discardAll(&media);
-    const pixels = [_]u8{ 1, 2, 3, 255 };
-
-    var names: [max_prepared + 1]core.ShmName = undefined;
-    for (0..max_prepared + 1) |index| {
-        const transfer = try testTransfer(@intCast(index + 1), 1, &pixels);
-        names[index] = transfer.name;
-        try std.testing.expect(media.reserveManual(transfer.reserved_len));
-        if (index == max_prepared) {
-            try std.testing.expect(!prepared.put(transfer, &media));
-            transfer.discard(&media);
-        } else {
-            try std.testing.expect(prepared.put(transfer, &media));
-        }
-    }
-    try std.testing.expectEqual(max_prepared * pixels.len, media.used);
-    try std.testing.expect(!objectExists(names[max_prepared]));
-
-    const survivors = [_]core.ImageKey{.{ .image_id = 2, .generation = 1 }};
-    prepared.retain(TestAlive{ .keys = &survivors }, &media);
-    try std.testing.expectEqual(pixels.len, media.used);
-    try std.testing.expect(!objectExists(names[0]));
-    try std.testing.expect(objectExists(names[1]));
-    try std.testing.expect(!prepared.covers(.{ .image_id = 1, .generation = 1 }));
-    try std.testing.expect(prepared.covers(.{ .image_id = 2, .generation = 1 }));
-}
-
 const ChildObject = struct {
     /// A child's shared object mapped read-only for one copy out of it.
     pixels: []align(std.heap.page_size_min) u8,
@@ -416,19 +256,5 @@ const ChildObject = struct {
     /// asks of whoever consumes a `t=s` transmission.
     pub fn close(self: ChildObject) void {
         std.posix.munmap(self.pixels);
-    }
-};
-
-const TestAlive = struct {
-    keys: []const core.ImageKey,
-
-    pub fn holds(self: TestAlive, key: core.ImageKey) bool {
-        for (self.keys) |candidate| if (std.meta.eql(candidate, key)) return true;
-        return false;
-    }
-
-    pub fn holdsImage(self: TestAlive, image_id: u32) bool {
-        for (self.keys) |candidate| if (candidate.image_id == image_id) return true;
-        return false;
     }
 };

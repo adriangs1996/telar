@@ -50,6 +50,7 @@ const notes_limit = core.Limit.declare("cli.setup_report_notes", "notes", max_no
 
 const Note = struct {
     step: Step,
+    // SAFETY: note formats the text before publishing len and incrementing note_count; printing reads only that prefix.
     bytes: [max_text_bytes]u8 = undefined,
     len: u16 = 0,
 };
@@ -57,8 +58,10 @@ const Note = struct {
 json: bool,
 writer: *std.Io.Writer,
 status: [step_count]?Status = @splat(null),
+// SAFETY: end formats each detail before setting its length; JSON output reads only the counted prefix.
 detail_bytes: [step_count][max_text_bytes]u8 = undefined,
 detail_len: [step_count]u16 = @splat(0),
+// SAFETY: note initializes the Note and its text before increasing note_count; output visits only that prefix.
 notes: [max_notes]Note = undefined,
 note_count: u8 = 0,
 /// Notes past `max_notes`, counted so `finish` names the limit.
@@ -281,95 +284,4 @@ fn bounded(buffer: []u8, comptime format: []const u8, arguments: anytype) []cons
     }
 
     return std.mem.trim(u8, text, " ");
-}
-
-test "text mode prints numbered steps and a verdict" {
-    var buffer: [1024]u8 = undefined;
-    var writer: std.Io.Writer = .fixed(&buffer);
-    var report: SetupReport = .{ .json = false, .writer = &writer };
-    try report.end(.ssh, .ok, "batch mode works", .{});
-    try report.note(.telar, "linked ~/.local/bin/telar", .{});
-    try report.end(.telar, .changed, "installed telar {s}", .{"0.3.0"});
-    try report.finish("box", "dev@box");
-
-    try std.testing.expectEqualStrings(
-        " 1. SSH access     ok         batch mode works\n" ++
-            " 3. telar          changed    installed telar 0.3.0\n" ++
-            "      linked ~/.local/bin/telar\n" ++
-            "box is ready.\n",
-        writer.buffered(),
-    );
-}
-
-test "json mode writes one object with every step and its notes" {
-    var buffer: [1024]u8 = undefined;
-    var writer: std.Io.Writer = .fixed(&buffer);
-    var report: SetupReport = .{ .json = true, .writer = &writer };
-    try report.end(.ssh, .ok, "batch mode works", .{});
-    try report.end(.check, .failed, "schema\n{s}", .{"differs"});
-    try report.note(.check, "run \"setup\" again", .{});
-    try report.finish("box", "dev@box");
-
-    try std.testing.expectEqualStrings(
-        "{\"label\":\"box\",\"destination\":\"dev@box\",\"ready\":false,\"pending\":false,\"changed\":false,\"steps\":[" ++
-            "{\"step\":\"ssh\",\"status\":\"ok\",\"detail\":\"batch mode works\",\"notes\":[]}," ++
-            "{\"step\":\"check\",\"status\":\"failed\",\"detail\":\"schema differs\",\"notes\":[\"run \\\"setup\\\" again\"]}]}\n",
-        writer.buffered(),
-    );
-}
-
-test "a login still waiting is neither ready nor nothing changed" {
-    var buffer: [1024]u8 = undefined;
-    var writer: std.Io.Writer = .fixed(&buffer);
-    var report: SetupReport = .{ .json = false, .writer = &writer };
-    try report.end(.ssh, .ok, "batch mode works", .{});
-    try report.end(.logins, .pending, "a login waits for you", .{});
-    try report.finish("box", "dev@box");
-    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "nothing changed") == null);
-    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "box takes windows, but a login waits for you") != null);
-
-    var json_buffer: [1024]u8 = undefined;
-    var json_writer: std.Io.Writer = .fixed(&json_buffer);
-    var json: SetupReport = .{ .json = true, .writer = &json_writer };
-    try json.end(.logins, .pending, "a login waits for you", .{});
-    try json.finish("box", "dev@box");
-    try std.testing.expect(std.mem.indexOf(u8, json_writer.buffered(), "\"ready\":false,\"pending\":true") != null);
-}
-
-test "progress keeps what a machine printed to one line without control bytes" {
-    var buffer: [256]u8 = undefined;
-    var writer: std.Io.Writer = .fixed(&buffer);
-    var report: SetupReport = .{ .json = false, .writer = &writer };
-    try report.progress("link: {s}", .{"https://x\x1b]52;c;AAAA\x07\nnext\x7f"});
-    try std.testing.expectEqualStrings("    ... link: https://x ]52;c;AAAA  next\n", writer.buffered());
-}
-
-test "a setup refused before it starts says why in one object" {
-    var buffer: [512]u8 = undefined;
-    var writer: std.Io.Writer = .fixed(&buffer);
-    var report: SetupReport = .{ .json = true, .writer = &writer };
-    try report.refuse("box", "dev@box", "--confirm needs a terminal");
-    try std.testing.expectEqualStrings(
-        "{\"label\":\"box\",\"destination\":\"dev@box\",\"ready\":false,\"pending\":false,\"changed\":false,\"refused\":\"--confirm needs a terminal\",\"steps\":[]}\n",
-        writer.buffered(),
-    );
-}
-
-test "notes past the bound are counted and named in the JSON" {
-    var buffer: [4096]u8 = undefined;
-    var writer: std.Io.Writer = .fixed(&buffer);
-    var report: SetupReport = .{
-        .json = true,
-        .writer = &writer,
-    };
-
-    for (0..max_notes + 3) |index| {
-        try report.note(.configuration, "skipped file {d}", .{index});
-    }
-
-    try std.testing.expectEqual(@as(u8, max_notes), report.note_count);
-    try std.testing.expectEqual(@as(u32, 3), report.omitted_notes);
-
-    try report.finish("box", "dev@box");
-    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "\"omitted_notes\":3,") != null);
 }

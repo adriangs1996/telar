@@ -11,6 +11,7 @@ const nonce_bytes = 8;
 io: std.Io,
 file: std.Io.File,
 path: []const u8,
+// SAFETY: begin formats the temporary path before recording temp_len; commit and discard use only that prefix.
 temp_buffer: [std.fs.max_path_bytes]u8 = undefined,
 temp_len: usize = 0,
 
@@ -28,6 +29,7 @@ temp_len: usize = 0,
 pub fn begin(io: std.Io, path: []const u8) !TempFile {
     var temp: TempFile = .{
         .io = io,
+        // SAFETY: createFile assigns file before returning temp; formatting or open failure returns without using the handle.
         .file = undefined,
         .path = path,
     };
@@ -57,6 +59,7 @@ pub fn commit(self: *TempFile) !void {
     self.file.close(self.io);
     const cwd = std.Io.Dir.cwd();
     cwd.rename(self.tempPath(), cwd, self.path, self.io) catch |err| {
+        // Cleanup must preserve the rename failure that prevented the commit.
         cwd.deleteFile(self.io, self.tempPath()) catch {};
         return err;
     };
@@ -64,66 +67,6 @@ pub fn commit(self: *TempFile) !void {
 
 pub fn discard(self: *TempFile) void {
     self.file.close(self.io);
+    // Discard closes the file first; inability to remove its private temporary path cannot be returned from cleanup.
     std.Io.Dir.cwd().deleteFile(self.io, self.tempPath()) catch {};
-}
-
-fn entryCount(dir: std.Io.Dir) !usize {
-    var count: usize = 0;
-    var entries = dir.iterate();
-    while (try entries.next(std.testing.io)) |_| {
-        count += 1;
-    }
-
-    return count;
-}
-
-test "a committed file replaces the old one whole, owner-only, with no temporary left" {
-    var temp_dir = std.testing.tmpDir(.{ .iterate = true });
-    defer temp_dir.cleanup();
-
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory = directory_buffer[0..try temp_dir.dir.realPath(std.testing.io, &directory_buffer)];
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try std.fmt.bufPrint(&path_buffer, "{s}/settings.json", .{directory});
-    try temp_dir.dir.writeFile(std.testing.io, .{
-        .sub_path = "settings.json",
-        .data = "old",
-    });
-
-    var temp = try TempFile.begin(std.testing.io, path);
-    try temp.file.writeStreamingAll(std.testing.io, "new");
-    try temp.commit();
-
-    var bytes_buffer: [16]u8 = undefined;
-    try std.testing.expectEqualStrings("new", try temp_dir.dir.readFile(std.testing.io, "settings.json", &bytes_buffer));
-    const stat = try temp_dir.dir.statFile(std.testing.io, "settings.json", .{});
-    try std.testing.expectEqual(@intFromEnum(privatefile.Mode.file), stat.permissions.toMode() & 0o777);
-    try std.testing.expectEqual(@as(usize, 1), try entryCount(temp_dir.dir));
-
-    var discarded = try TempFile.begin(std.testing.io, path);
-    discarded.discard();
-    try std.testing.expectEqual(@as(usize, 1), try entryCount(temp_dir.dir));
-}
-
-test "a symlink planted at the old temporary name is never written through" {
-    var temp_dir = std.testing.tmpDir(.{ .iterate = true });
-    defer temp_dir.cleanup();
-
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory = directory_buffer[0..try temp_dir.dir.realPath(std.testing.io, &directory_buffer)];
-    try temp_dir.dir.writeFile(std.testing.io, .{
-        .sub_path = "victim",
-        .data = "keep",
-    });
-    try temp_dir.dir.symLink(std.testing.io, "victim", "settings.json.telar-tmp", .{});
-
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try std.fmt.bufPrint(&path_buffer, "{s}/settings.json", .{directory});
-    var temp = try TempFile.begin(std.testing.io, path);
-    try temp.file.writeStreamingAll(std.testing.io, "new");
-    try temp.commit();
-
-    var bytes_buffer: [16]u8 = undefined;
-    try std.testing.expectEqualStrings("keep", try temp_dir.dir.readFile(std.testing.io, "victim", &bytes_buffer));
-    try std.testing.expectEqualStrings("new", try temp_dir.dir.readFile(std.testing.io, "settings.json", &bytes_buffer));
 }

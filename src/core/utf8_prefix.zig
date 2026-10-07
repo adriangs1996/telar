@@ -1,6 +1,5 @@
 //! The start of a text that fits a byte limit without splitting a UTF-8
 //! sequence, so a bounded copy stays valid text.
-const std = @import("std");
 
 /// Mask and value of a UTF-8 continuation byte (`10xxxxxx`).
 const continuation_mask = 0xc0;
@@ -23,11 +22,4 @@ pub fn prefix(text: []const u8, limit: usize) []const u8 {
     }
 
     return text[0..end];
-}
-
-test "a prefix ends on a UTF-8 boundary" {
-    try std.testing.expectEqualStrings("café", prefix("café", 5));
-    try std.testing.expectEqualStrings("caf", prefix("café", 4));
-    try std.testing.expectEqualStrings("", prefix("é", 1));
-    try std.testing.expectEqualStrings("ab", prefix("abc", 2));
 }

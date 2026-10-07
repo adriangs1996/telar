@@ -1,7 +1,6 @@
 const keyinput = @import("keyinput");
 const cellgrid = @import("cellgrid");
 const std = @import("std");
-const builtin = @import("builtin");
 const DamageRow = cellgrid.DamageRow;
 const Applied = @import("Applied.zig");
 const frames = @import("frame.zig");
@@ -93,21 +92,19 @@ pub fn applyFrame(self: *Pane, frame: core.FrameView) !Applied {
         null;
     const resized = self.buffer.w != frame.cols or self.buffer.h != frame.rows;
     if (resized and frame.base_frame_id != 0) {
-        if (!builtin.is_test) {
-            std.log.err(
-                "pane {any}: patch frame={d} base={d}, applied={d}, incoming={d}x{d}, buffer={d}x{d}",
-                .{
-                    self.id,
-                    frame.frame_id,
-                    frame.base_frame_id,
-                    self.applied_frame_id,
-                    frame.cols,
-                    frame.rows,
-                    self.buffer.w,
-                    self.buffer.h,
-                },
-            );
-        }
+        std.log.err(
+            "pane {any}: patch frame={d} base={d}, applied={d}, incoming={d}x{d}, buffer={d}x{d}",
+            .{
+                self.id,
+                frame.frame_id,
+                frame.base_frame_id,
+                self.applied_frame_id,
+                frame.cols,
+                frame.rows,
+                self.buffer.w,
+                self.buffer.h,
+            },
+        );
 
         return error.PatchSizeMismatch;
     }

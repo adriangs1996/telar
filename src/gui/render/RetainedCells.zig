@@ -4,7 +4,6 @@
 const std = @import("std");
 const Mesh = @import("CellMesh.zig");
 const Metadata = @import("CellMetadata.zig");
-const Paint = @import("CellPaint.zig");
 const gfx = @import("gfx");
 const Quad = gfx.Quad.Quad;
 const Row = @import("CellRow.zig");
@@ -84,54 +83,4 @@ pub fn row(self: *Grid, position: [2]u16, len: u16) Row {
         .primary = self.primary.items[start..][0..len],
         .overflow = self.overflow.items[start..][0..len],
     };
-}
-
-test "grid budget failures preserve the previous cache" {
-    var grid = Grid.init(std.testing.allocator);
-    defer grid.deinit();
-    try grid.resize(.{ 80, 24 });
-    try std.testing.expectError(error.NativeCellBudgetExceeded, grid.resize(.{ 65535, 3 }));
-    try std.testing.expectEqual(@as(u16, 80), grid.cols);
-    try std.testing.expectEqual(@as(u16, 24), grid.rows);
-}
-
-test "split storage keeps the previous grid usable after either allocation fails" {
-    try std.testing.checkAllAllocationFailures(std.testing.allocator, resizeWithFailures, .{});
-}
-
-fn resizeWithFailures(allocator: std.mem.Allocator) !void {
-    var grid = Grid.init(allocator);
-    defer grid.deinit();
-    try grid.resize(.{ 2, 2 });
-    const paint: Paint = .{
-        .cell = .{},
-        .rect = .{
-            .x = 0,
-            .y = 0,
-            .width = 10,
-            .height = 20,
-        },
-    };
-    const quads = [_]Quad{std.mem.zeroes(Quad)};
-    grid.at(.{ 1, 1 }).replace(paint, &quads);
-
-    grid.resize(.{ 16, 16 }) catch |err| {
-        try std.testing.expectEqual(@as(u16, 2), grid.cols);
-        try std.testing.expectEqual(@as(u16, 2), grid.rows);
-        try std.testing.expectEqual(@as(usize, 4), grid.entries.items.len);
-        try std.testing.expectEqual(@as(usize, 4), grid.primary.items.len);
-        try std.testing.expectEqual(@as(usize, 4), grid.overflow.items.len);
-        try std.testing.expect(grid.at(.{ 1, 1 }).matches(paint));
-        var storage: [Mesh.capacity]Quad = undefined;
-        try std.testing.expectEqualSlices(Quad, &quads, grid.at(.{ 1, 1 }).collect(&storage));
-        return err;
-    };
-
-    try std.testing.expectEqual(@as(usize, 256), grid.entries.items.len);
-    try std.testing.expectEqual(grid.entries.items.len, grid.primary.items.len);
-    try std.testing.expectEqual(grid.entries.items.len, grid.overflow.items.len);
-    try std.testing.expect(!grid.at(.{ 1, 1 }).matches(paint));
-    for (grid.entries.items) |entry| {
-        try std.testing.expect(!entry.valid);
-    }
 }

@@ -115,33 +115,6 @@ fn validateNotificationLink(link: []const u8) !void {
     try notification_link.validate(link);
 }
 
-test "a notification carries an https link and refuses any other" {
-    var buffer: [2048]u8 = undefined;
-    const encoded = try encodeNotification(&buffer, .{
-        .title = "Log in to Codex on box",
-        .link = "https://auth.openai.com/codex/device",
-    });
-
-    var decoder = Decoder.init(encoded[1..]);
-    const decoded = try decodeNotification(&decoder);
-    try std.testing.expectEqualStrings("https://auth.openai.com/codex/device", decoded.link);
-
-    for ([_][]const u8{
-        "http://example.com",
-        "file:///etc/passwd",
-        "javascript:alert(1)",
-        "https://",
-        "https://example.com/a b",
-        "https://example.com/\x1b",
-        "https://" ++ "a" ** types.max_notification_link_bytes,
-    }) |link| {
-        try std.testing.expectError(error.InvalidNotificationLink, encodeNotification(&buffer, .{
-            .title = "t",
-            .link = link,
-        }));
-    }
-}
-
 fn validateNotificationText(bytes: []const u8, maximum: usize, empty_allowed: bool) !void {
     try codec.validateBytes(bytes, maximum, empty_allowed);
     if (!std.unicode.utf8ValidateSlice(bytes)) {

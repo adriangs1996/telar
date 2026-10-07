@@ -125,27 +125,3 @@ pub fn parse(args: []const [*:0]const u8) !WorkspaceOptions {
 
     return options;
 }
-
-test "workspace list rejects creation options" {
-    const options = try WorkspaceOptions.parse(&.{ "list", "--json" });
-    try std.testing.expectEqual(workspace.WorkspaceAction.list, options.action);
-    try std.testing.expectError(error.UnknownWorkspaceOption, WorkspaceOptions.parse(&.{ "list", "--worktree", "branch" }));
-}
-
-test "workspace creation takes a command and a width for its first pane" {
-    const options = try WorkspaceOptions.parse(&.{ "create", "--directory", "/home/dev", "--columns", "1024", "--", "codex", "login", "--device-auth" });
-    try std.testing.expectEqual(@as(?u16, 1024), options.columns);
-    try std.testing.expectEqual(@as(usize, 3), options.command.len);
-    try std.testing.expectEqualStrings("--device-auth", std.mem.span(options.command[2]));
-
-    try std.testing.expectError(error.MissingWorkspaceCommand, WorkspaceOptions.parse(&.{ "create", "--directory", "/home/dev", "--" }));
-    try std.testing.expectError(error.InvalidWorkspaceColumns, WorkspaceOptions.parse(&.{ "create", "--directory", "/home/dev", "--columns", "5000" }));
-    try std.testing.expectError(error.UnknownWorkspaceOption, WorkspaceOptions.parse(&.{ "create", "--worktree", "fix", "--", "claude" }));
-}
-
-test "workspace creation supports an existing directory without a worktree" {
-    const options = try WorkspaceOptions.parse(&.{ "create", "--directory", "/tmp/project", "--name", "project" });
-    try std.testing.expect(options.branch == null);
-    try std.testing.expectEqualStrings("/tmp/project", std.mem.span(options.directory.?));
-    try std.testing.expectError(error.EmptyWorkspaceDirectory, WorkspaceOptions.parse(&.{ "create", "--directory", "" }));
-}

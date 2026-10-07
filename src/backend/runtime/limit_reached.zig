@@ -6,8 +6,7 @@
 //!
 //! Everything here runs on the runtime's event loop, the thread that owns
 //! the model. A worker never calls it: it returns the reach in its
-//! completion and the flow's `finish` reports it. See
-//! `docs/flows/limit-reached.md`.
+//! completion and the flow's `finish` reports it.
 const std = @import("std");
 const core = @import("telar-core");
 const RuntimeModel = @import("RuntimeModel.zig");

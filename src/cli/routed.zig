@@ -8,6 +8,7 @@ const control = @import("control.zig");
 /// Discovers and targets one exact UI generation. Example: `std.process.exit(routed.run(init, options));`
 pub fn run(init: std.process.Init, options: Options) u8 {
     return execute(init, options) catch |err| {
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar: {s}\n", .{control.describe(err)});
         return switch (err) {
             error.ClientNotFound => 2,
@@ -49,6 +50,7 @@ fn execute(init: std.process.Init, options: Options) !u8 {
     }
 
     if (reply.status == .failed) {
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar: {s}\n", .{reply.text()});
         return 1;
     }

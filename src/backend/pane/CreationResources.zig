@@ -2,7 +2,6 @@ const core = @import("telar-core");
 const std = @import("std");
 const Service = @import("../history/Service.zig");
 const GraphicsBudget = @import("../media/GraphicsBudget.zig");
-const CreationResources = @This();
 
 io: std.Io,
 gpa: std.mem.Allocator,

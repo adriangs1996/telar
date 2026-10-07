@@ -9,6 +9,7 @@ const Query = @import("../history/Query.zig");
 const Prune = @import("../history/Prune.zig");
 const StatsQuery = @import("../history/StatsQuery.zig");
 const client_request = @import("client_request.zig");
+const client_connection = @import("client_connection.zig");
 const limit_reached = @import("limit_reached.zig");
 const channel_support = @import("../history/channel_support.zig");
 const Sources = @import("Sources.zig");
@@ -190,15 +191,15 @@ pub fn receive(model: *RuntimeModel, result: anyerror!history_model.Response) !v
         .failed => |failure| {
             const session = model.clients.resolve(failure.origin.client) orelse return;
             session.delivery.setCloseAfterReply(failure.origin.close_after_reply);
-            client_request.fail(session, failure.request_id, .internal, failure.message) catch {};
+            try client_connection.dropUnanswered(model, failure.origin.client, client_request.fail(session, failure.request_id, .internal, failure.message));
         },
         .pruned => |pruned| {
             const session = model.clients.resolve(pruned.origin.client) orelse return;
             session.delivery.setCloseAfterReply(pruned.origin.close_after_reply);
-            session.delivery.responses.push(.{ .history_pruned = .{
+            try client_connection.dropUnanswered(model, pruned.origin.client, session.delivery.responses.push(.{ .history_pruned = .{
                 .request_id = pruned.request_id,
                 .removed = pruned.removed,
-            } }) catch {};
+            } }));
         },
         .output_result => |value| {
             const session = model.clients.resolve(value.origin.client) orelse return;

@@ -1,5 +1,4 @@
 const core = @import("telar-core");
-const AgentCommandReport = @This();
 
 phase: core.AgentCommandPhase,
 provider: []const u8,

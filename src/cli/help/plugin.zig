@@ -45,7 +45,6 @@ pub const family: FamilyHelp = .{
             \\`capabilities` lines. Exit 0; 1 with the diagnostic on stderr.
             \\
             ,
-            .examples = &.{&.{ "plugin", "inspect", "./plugin" }},
         },
         .{
             .name = "install",
@@ -59,7 +58,6 @@ pub const family: FamilyHelp = .{
             \\Results: `telar plugin installed: DIR`. Exit 0 or 1.
             \\
             ,
-            .examples = &.{&.{ "plugin", "install", "./plugin" }},
         },
         .{
             .name = "trust",
@@ -78,13 +76,11 @@ pub const family: FamilyHelp = .{
             \\capability or an insecure store.
             \\
             ,
-            .examples = &.{&.{ "plugin", "trust", "./plugin", "--capability", "history.read" }},
         },
         .{
             .name = "list",
             .summary = "List a window's configured plugins, loaded or disabled",
             .usage = "telar plugin list --client ID [--json] [--socket PATH]",
-            .routed = &.{.plugin_list},
             .text = std.fmt.comptimePrint(
                 \\{s}
                 \\
@@ -93,13 +89,11 @@ pub const family: FamilyHelp = .{
                 \\(a concurrent reload fails the listing instead of mixing generations).
                 \\
             , .{routed_text}),
-            .examples = &.{&.{ "plugin", "list", "--client", "1" }},
         },
         .{
             .name = "get",
             .summary = "Show one plugin's configuration, identity, capabilities and actions",
             .usage = "telar plugin get ID|PATH --client ID [--json] [--socket PATH]",
-            .routed = &.{.plugin_get},
             .text = std.fmt.comptimePrint(
                 \\Arguments:
                 \\  ID|PATH          A loaded manifest id, or the configured path of a disabled one.
@@ -111,13 +105,11 @@ pub const family: FamilyHelp = .{
                 \\package reports configuration only; inspecting it loads no code.
                 \\
             , .{routed_text}),
-            .examples = &.{&.{ "plugin", "get", "telar-history", "--client", "1" }},
         },
         .{
             .name = "enable",
             .summary = "Enable a configured plugin for this window's lifetime and reload",
             .usage = "telar plugin enable ID|PATH --client ID [--json] [--socket PATH]",
-            .routed = &.{.plugin_enable},
             .text = std.fmt.comptimePrint(
                 \\{s}
                 \\
@@ -126,13 +118,11 @@ pub const family: FamilyHelp = .{
                 \\requested from adopted enablement.
                 \\
             , .{routed_text}),
-            .examples = &.{&.{ "plugin", "enable", "./plugin", "--client", "1" }},
         },
         .{
             .name = "disable",
             .summary = "Disable a configured plugin for this window's lifetime and reload",
             .usage = "telar plugin disable ID|PATH --client ID [--json] [--socket PATH]",
-            .routed = &.{.plugin_disable},
             .text = std.fmt.comptimePrint(
                 \\{s}
                 \\
@@ -140,13 +130,11 @@ pub const family: FamilyHelp = .{
                 \\them from the unchanged source. `admitted`.
                 \\
             , .{routed_text}),
-            .examples = &.{&.{ "plugin", "disable", "telar-history", "--client", "1", "--json" }},
         },
         .{
             .name = "run",
             .summary = "Run one action of a loaded plugin in its isolated worker",
             .usage = "telar plugin run ID|PATH ACTION --client ID [--json] [--socket PATH]",
-            .routed = &.{.plugin_run},
             .text = std.fmt.comptimePrint(
                 \\{s}
                 \\
@@ -155,7 +143,6 @@ pub const family: FamilyHelp = .{
                 \\worker refuses.
                 \\
             , .{routed_text}),
-            .examples = &.{&.{ "plugin", "run", "telar-history", "refresh", "--client", "1" }},
         },
     },
 };

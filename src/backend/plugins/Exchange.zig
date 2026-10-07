@@ -1,6 +1,5 @@
 const Protocol = @import("../proxy/Protocol.zig").Protocol;
 const Half = @import("Half.zig");
-const Exchange = @This();
 
 id: u64,
 generation: u64,

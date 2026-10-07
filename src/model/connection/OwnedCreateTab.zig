@@ -4,6 +4,7 @@ const OwnedCreateTab = @This();
 
 request_id: core.RequestId,
 workspace: core.WorkspaceLocation,
+// SAFETY: Outbox.pushCreateTab copies the validated label before queueing this value; view uses only label_len bytes.
 label: [core.max_tab_label_bytes]u8 = undefined,
 label_len: u8,
 size: core.TerminalSize,

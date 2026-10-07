@@ -1,7 +1,9 @@
 //! One owned committed scalar in the bounded input ring. It remains text until
 //! the terminal/prompt fallback needs the shared key router.
+
+const Window = @import("telar-window");
 const keyinput = @import("keyinput");
-const TextInput = @import("TextInput.zig");
+const TextInput = @FieldType(Window.Input, "text");
 const TextCommit = @This();
 
 bytes: [4]u8,
@@ -16,7 +18,7 @@ pub fn text(self: *const TextCommit) TextInput {
 }
 
 /// Preserves physical ownership and repeats when the shared router is the target.
-/// Example: `_ = try gui.routeKey(.{ .key = commit.key(), .now_ns = now });`
+/// Example: `_ = try window_input.routeKey(gui, .{ .key = commit.key(), .now_ns = now });`
 pub fn key(self: TextCommit) keyinput.Key {
     return .{ .code = .{ .char = .{ .bytes = self.bytes, .len = self.len } }, .phase = self.phase, .physical = self.physical };
 }

@@ -39,6 +39,7 @@ pub fn draw(self: PaneHeader, canvas: *Canvas) !void {
 
     var band: Rect = .{ .x = row.x + chrome.px(8), .y = row.y, .width = @max(0, row.width - 2 * chrome.px(8)), .height = band_height };
     var index_storage: [8]u8 = undefined;
+    // SAFETY: a u16 index needs at most five of the eight buffer bytes.
     const index_text = std.fmt.bufPrint(&index_storage, "{d}", .{self.index}) catch unreachable;
     const index_width = try canvas.measure(.{ .text = index_text, .bold = true, .face = .sans, .size = .body });
     var chip: StatusChip = .{ .context = self.context, .agent = self.agent, .area = band };

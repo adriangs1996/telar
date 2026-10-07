@@ -1,6 +1,5 @@
 const core = @import("telar-core");
 const name_prompt = @import("name_prompt.zig");
-const History = @This();
 
 selection: u16 = 0,
 scope: name_prompt.HistoryScope = .global,

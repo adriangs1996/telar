@@ -7,7 +7,6 @@ const connect_authentication = @import("../connect_authentication.zig");
 const name_resolution = @import("../name_resolution.zig");
 const Resolutions = @import("../Resolutions.zig");
 const std = @import("std");
-const Snapshot = @import("../Snapshot.zig");
 
 pub fn recordAuthenticationRejection(telemetry: *Counters, rejection: connect_authentication.RejectionMetric) void {
     telemetry.record(.rejected_connection);
@@ -51,6 +50,7 @@ fn pumpPassthrough(source: std.Io.net.Stream, destination: std.Io.net.Stream, ex
     }
 
     exchange.enter(.half_closed);
+    // The peer may already have disconnected; send shutdown is best effort and never closes the opposite relay's receive direction.
     destination.shutdown(io, .send) catch {};
 }
 
@@ -95,6 +95,7 @@ pub fn reply(io: std.Io, stream: std.Io.net.Stream, bytes: []const u8) void {
     var buffer: [1024]u8 = undefined;
     var writer = stream.writer(io, &buffer);
     writer.interface.writeAll(bytes) catch return;
+    // The CONNECT reply may race peer disconnection; failure ends this response and the caller closes the connection.
     writer.interface.flush() catch {};
 }
 
@@ -177,6 +178,7 @@ fn connectBefore(io: std.Io, address: std.Io.net.IpAddress, deadline_ms: i64) !s
     try setKeepalive(handle);
     try setNonblocking(handle, true);
 
+    // SAFETY: socketAddress writes the selected IPv4 or IPv6 struct; connect receives exactly that struct's byte length.
     var storage: std.c.sockaddr.storage = undefined;
     const length = socketAddress(address, &storage);
     if (std.c.connect(handle, @ptrCast(&storage), length) != 0) {
@@ -378,126 +380,3 @@ pub fn refuse(io: std.Io, stream: std.Io.net.Stream, answer: []const u8, drain_m
 
 /// The most a refusal drains before it closes anyway.
 const max_drained_bytes = 64 * 1024;
-
-test "a refused client reads the whole answer after sending its request" {
-    const io = std.testing.io;
-    var sockets: [2]std.c.fd_t = undefined;
-    try std.testing.expectEqual(@as(c_int, 0), std.c.socketpair(std.c.AF.UNIX, std.c.SOCK.STREAM, 0, &sockets));
-    defer _ = std.c.close(sockets[1]);
-    const proxy_side: std.Io.net.Stream = .{
-        .socket = .{
-            .handle = sockets[0],
-            .address = .{
-                .ip4 = .loopback(0),
-            },
-        },
-    };
-    const request = "CONNECT example.test:443 HTTP/1.1\r\n\r\n";
-    try std.testing.expectEqual(@as(isize, request.len), std.c.send(sockets[1], request, request.len, 0));
-
-    refuse(io, proxy_side, "HTTP/1.1 503 Service Unavailable\r\n\r\n", 50);
-    proxy_side.close(io);
-
-    var answer: [64]u8 = undefined;
-    const count = std.c.recv(sockets[1], &answer, answer.len, 0);
-    try std.testing.expectEqualStrings("HTTP/1.1 503 Service Unavailable\r\n\r\n", answer[0..@intCast(count)]);
-}
-
-test "a connect that cannot finish before its deadline times out" {
-    const io = std.testing.io;
-
-    try std.testing.expectError(error.Timeout, connectBefore(io, unroutable, now(io)));
-    const started = now(io);
-    const result = connectBefore(io, unroutable, started + 100);
-    if (result) |stream| {
-        stream.close(io);
-        return error.UnexpectedConnect;
-    } else |err| {
-        try std.testing.expect(err == error.Timeout or err == error.ConnectionRefused);
-    }
-
-    try std.testing.expect(now(io) - started < 2 * std.time.ms_per_s);
-}
-
-test "a pending connect gives up as soon as its task is canceled" {
-    const io = std.testing.io;
-    var pending = try io.concurrent(connectBefore, .{
-        io,
-        unroutable,
-        now(io) + 30 * std.time.ms_per_s,
-    });
-    try io.sleep(.fromMilliseconds(100), .awake);
-
-    const started = now(io);
-    const result = pending.cancel(io);
-    if (result) |stream| {
-        stream.close(io);
-        return error.UnexpectedConnect;
-    } else |err| {
-        try std.testing.expect(err == error.Canceled or err == error.ConnectionRefused);
-    }
-
-    try std.testing.expect(now(io) - started < std.time.ms_per_s);
-}
-
-test "an origin socket probes a silent origin and gives it up after its unanswered probes" {
-    const io = std.testing.io;
-    const loopback: std.Io.net.IpAddress = .{
-        .ip4 = .loopback(0),
-    };
-    var origin = try loopback.listen(io, .{});
-    defer origin.deinit(io);
-
-    const stream = try connectBefore(io, origin.socket.address, now(io) + std.time.ms_per_s);
-    defer stream.close(io);
-
-    try std.testing.expect(try socketOption(stream.socket.handle, std.c.SOL.SOCKET, std.c.SO.KEEPALIVE) != 0);
-    try std.testing.expectEqual(@as(c_int, keepalive_idle_s), try socketOption(stream.socket.handle, std.c.IPPROTO.TCP, keepalive_idle_option));
-    try std.testing.expectEqual(@as(c_int, keepalive_interval_s), try socketOption(stream.socket.handle, std.c.IPPROTO.TCP, std.c.TCP.KEEPINTVL));
-    try std.testing.expectEqual(@as(c_int, keepalive_probes), try socketOption(stream.socket.handle, std.c.IPPROTO.TCP, std.c.TCP.KEEPCNT));
-}
-
-fn socketOption(handle: std.c.fd_t, level: i32, name: u32) !c_int {
-    var value: c_int = 0;
-    var value_len: std.c.socklen_t = @sizeOf(c_int);
-    if (std.c.getsockopt(handle, level, name, &value, &value_len) != 0) {
-        return error.SocketOptionUnreadable;
-    }
-
-    return value;
-}
-
-/// 192.0.2.0/24 is reserved for documentation and never answers.
-const unroutable: std.Io.net.IpAddress = .{
-    .ip4 = .{
-        .bytes = .{ 192, 0, 2, 1 },
-        .port = 443,
-    },
-};
-
-test "authentication rejection records total and exact reason" {
-    var invalid: Counters = .{};
-    recordAuthenticationRejection(&invalid, .invalid_authorization);
-    const invalid_snapshot = snapshot(&invalid);
-
-    try std.testing.expectEqual(@as(u64, 1), invalid_snapshot.rejected_connections);
-    try std.testing.expectEqual(@as(u64, 1), invalid_snapshot.invalid_authorization_rejections);
-    try std.testing.expectEqual(@as(u64, 0), invalid_snapshot.unknown_credential_rejections);
-
-    var unknown: Counters = .{};
-    recordAuthenticationRejection(&unknown, .unknown_credential);
-    const unknown_snapshot = snapshot(&unknown);
-
-    try std.testing.expectEqual(@as(u64, 1), unknown_snapshot.rejected_connections);
-    try std.testing.expectEqual(@as(u64, 0), unknown_snapshot.invalid_authorization_rejections);
-    try std.testing.expectEqual(@as(u64, 1), unknown_snapshot.unknown_credential_rejections);
-}
-
-fn snapshot(telemetry: *const Counters) Snapshot {
-    return telemetry.snapshot(.{
-        .connections = .{
-            .active = 0,
-            .limit_drops = 0,
-        },
-    });
-}

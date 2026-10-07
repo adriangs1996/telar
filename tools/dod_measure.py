@@ -47,7 +47,7 @@ def native(options, output):
     subprocess.run(['clang', '-dynamiclib', '-O2', '-fobjc-arc', '-framework', 'AppKit',
                     '-framework', 'QuartzCore', '-framework', 'Metal',
                     str(TOOLS / 'gui_tui_latency.m'), '-o', str(library)], check=True)
-    config = SOURCE / 'docs/performance/ghostty-comparison/config.lua'
+    config = SOURCE / 'tools/ghostty-comparison.lua'
     runs = []
     settings = SimpleNamespace(samples=options.samples, input_method='text', viewport=[1600, 1000],
                                panes=4, vsync='true', case='single', throughput=False,

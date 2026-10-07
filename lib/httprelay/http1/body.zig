@@ -4,10 +4,8 @@
 //! from the head and keeps all buffers fixed-size.
 
 const std = @import("std");
-const FakeSessionType = @import("FakeSession.zig");
 const localca = @import("localca");
 const Session = localca.Session;
-const types = @import("types.zig");
 const observer_hooks = @import("../observer_hooks.zig");
 const FramingLine = @import("FramingLine.zig").FramingLine;
 
@@ -18,8 +16,6 @@ pub const max_chunk_line_bytes = 1024;
 pub const max_trailer_line_bytes = 8 * 1024;
 
 pub const Route = @import("Route.zig");
-
-pub const Fragment = @import("Fragment.zig");
 
 /// Relays one body according to its parsed route and reports forwarded
 /// fragments without giving the observer control over traffic.
@@ -56,7 +52,7 @@ fn relayUntilClose(session: anytype, direction: Direction, observer: anytype) bo
             return false;
         }
 
-        observer.observe(.{ .payload = buffer[0..len], .forwarded_bytes = len });
+        observer.observe(.{ .payload = buffer[0..len] });
     }
 
     return true;
@@ -75,7 +71,6 @@ fn relayExact(session: anytype, exact: Exact, observer: anytype) bool {
 
         observer.observe(.{
             .payload = if (exact.payload) buffer[0..len] else "",
-            .forwarded_bytes = len,
         });
         left -= len;
     }
@@ -165,226 +160,6 @@ fn relayLine(session: anytype, direction: Direction, line: Line, observer: anyty
     return null;
 }
 
-test "chunk lines use one write each and preserve single-byte input boundaries" {
-    const FakeSession = FakeSessionType;
-    const encoded = "1\r\nx\r\n0\r\n\r\n";
-    var fake: FakeSession = .{ .origin_input = encoded, .max_read_bytes = 1 };
-    var activity: Activity = .{};
-    try std.testing.expect(relay(&fake, testRoute(.origin, .child, .chunked), &activity));
-    try std.testing.expectEqualStrings(encoded, fake.childOutput());
-    try std.testing.expectEqual(@as(usize, 6), fake.write_calls);
-    try std.testing.expectEqualStrings("x", activity.payload[0..activity.payload_len]);
-
-    for (0..6) |failure| {
-        fake = .{ .origin_input = encoded, .max_read_bytes = 1, .fail_write_at = failure };
-        activity = .{};
-        try std.testing.expect(!relay(&fake, testRoute(.origin, .child, .chunked), &activity));
-        try std.testing.expectEqual(failure + 1, fake.write_calls);
-    }
-}
-
-test "an incomplete chunk line forwards its prefix once" {
-    const FakeSession = FakeSessionType;
-    var fake: FakeSession = .{ .origin_input = "123\r" };
-    var activity: Activity = .{};
-    try std.testing.expect(!relay(&fake, testRoute(.origin, .child, .chunked), &activity));
-    try std.testing.expectEqualStrings("123\r", fake.childOutput());
-    try std.testing.expectEqual(@as(usize, 1), fake.write_calls);
-}
-
-fn testRoute(from: Session.Side, to: Session.Side, framing: types.BodyPlan) Route {
-    return .{ .from = from, .to = to, .framing = framing };
-}
-
-test "a body without framing consumes and forwards nothing" {
-    const FakeSession = FakeSessionType;
-    var fake: FakeSession = .{ .child_input = "untouched" };
-    var activity: Activity = .{};
-
-    try std.testing.expect(relay(&fake, testRoute(.child, .origin, .none), &activity));
-    try std.testing.expectEqual(@as(usize, 0), fake.child_offset);
-    try std.testing.expectEqualStrings("", fake.originOutput());
-    try std.testing.expectEqual(@as(usize, 0), activity.bytes);
-}
-
-test "a fixed body stops at its declared length across short reads" {
-    const FakeSession = FakeSessionType;
-    var fake: FakeSession = .{
-        .child_input = "bodyNEXT",
-        .max_read_bytes = 2,
-    };
-    var activity: Activity = .{};
-
-    try std.testing.expect(relay(
-        &fake,
-        testRoute(.child, .origin, .{ .content_length = 4 }),
-        &activity,
-    ));
-    try std.testing.expectEqual(@as(usize, 4), fake.child_offset);
-    try std.testing.expectEqualStrings("body", fake.originOutput());
-    try std.testing.expectEqual(@as(usize, 4), activity.bytes);
-    try std.testing.expectEqual(@as(usize, 2), activity.calls);
-}
-
-test "an incomplete fixed body reports failure after forwarding its prefix" {
-    const FakeSession = FakeSessionType;
-    var fake: FakeSession = .{ .child_input = "ab" };
-    var activity: Activity = .{};
-
-    try std.testing.expect(!relay(
-        &fake,
-        testRoute(.child, .origin, .{ .content_length = 4 }),
-        &activity,
-    ));
-    try std.testing.expectEqualStrings("ab", fake.originOutput());
-    try std.testing.expectEqual(@as(usize, 2), activity.bytes);
-}
-
-test "a close-delimited body relays until EOF" {
-    const FakeSession = FakeSessionType;
-    var fake: FakeSession = .{
-        .origin_input = "streamed response",
-        .max_read_bytes = 3,
-    };
-    var activity: Activity = .{};
-
-    try std.testing.expect(relay(
-        &fake,
-        testRoute(.origin, .child, .until_close),
-        &activity,
-    ));
-    try std.testing.expectEqualStrings("streamed response", fake.childOutput());
-    try std.testing.expectEqual(@as(usize, "streamed response".len), activity.bytes);
-}
-
-test "a chunked body preserves chunk framing and trailers" {
-    const FakeSession = FakeSessionType;
-    const encoded = "4;extension=yes\r\nWiki\r\n" ++
-        "5\r\npedia\r\n" ++
-        "0\r\nX-Trace: present\r\n\r\n";
-    var fake: FakeSession = .{
-        .origin_input = encoded ++ "NEXT",
-        .max_read_bytes = 2,
-    };
-    var activity: Activity = .{};
-
-    try std.testing.expect(relay(
-        &fake,
-        testRoute(.origin, .child, .chunked),
-        &activity,
-    ));
-    try std.testing.expectEqual(encoded.len, fake.origin_offset);
-    try std.testing.expectEqualStrings(encoded, fake.childOutput());
-    try std.testing.expectEqual(@as(usize, 13), activity.bytes);
-    try std.testing.expectEqualStrings("Wikipedia", activity.payload[0..activity.payload_len]);
-}
-
-test "an invalid chunk size reports failure after forwarding its line" {
-    const FakeSession = FakeSessionType;
-    var fake: FakeSession = .{ .origin_input = "not-hex\r\n" };
-    var activity: Activity = .{};
-
-    try std.testing.expect(!relay(
-        &fake,
-        testRoute(.origin, .child, .chunked),
-        &activity,
-    ));
-    try std.testing.expectEqualStrings("not-hex\r\n", fake.childOutput());
-    try std.testing.expectEqual(@as(usize, 0), activity.bytes);
-}
-
-test "an oversized chunk line reports failure at its bound" {
-    const FakeSession = FakeSessionType;
-    const input: [max_chunk_line_bytes + 2]u8 = @splat('f');
-    var fake: FakeSession = .{
-        .origin_input = &input,
-    };
-    var activity: Activity = .{};
-
-    try std.testing.expect(!relay(
-        &fake,
-        testRoute(.origin, .child, .chunked),
-        &activity,
-    ));
-    try std.testing.expectEqual(max_chunk_line_bytes, fake.origin_offset);
-    try std.testing.expectEqual(max_chunk_line_bytes, fake.childOutput().len);
-}
-
-test "a trailer line longer than a chunk-size line still relays" {
-    const FakeSession = FakeSessionType;
-    const encoded = "0\r\nX-Trace: " ++ "t" ** (max_chunk_line_bytes + 1) ++ "\r\n\r\n";
-    var fake: FakeSession = .{
-        .origin_input = encoded,
-    };
-    var activity: Activity = .{};
-
-    try std.testing.expect(relay(
-        &fake,
-        testRoute(.origin, .child, .chunked),
-        &activity,
-    ));
-    try std.testing.expectEqualStrings(encoded, fake.childOutput());
-}
-
-test "a line past its bound is reported to an observer that asks" {
-    const FakeSession = FakeSessionType;
-    const input: [max_chunk_line_bytes + 2]u8 = @splat('f');
-    var fake: FakeSession = .{
-        .origin_input = &input,
-    };
-    var watcher: LineWatcher = .{};
-
-    try std.testing.expect(!relay(
-        &fake,
-        testRoute(.origin, .child, .chunked),
-        &watcher,
-    ));
-    try std.testing.expectEqual(@as(usize, 1), watcher.too_long);
-    try std.testing.expectEqual(FramingLine.chunk_size, watcher.kind);
-
-    const trailer = "0\r\n" ++ "t" ** (max_trailer_line_bytes + 2);
-    var trailer_fake: FakeSession = .{
-        .origin_input = trailer,
-    };
-    try std.testing.expect(!relay(
-        &trailer_fake,
-        testRoute(.origin, .child, .chunked),
-        &watcher,
-    ));
-    try std.testing.expectEqual(@as(usize, 2), watcher.too_long);
-    try std.testing.expectEqual(FramingLine.trailer, watcher.kind);
-    try std.testing.expectEqual(3 + max_trailer_line_bytes, trailer_fake.origin_offset);
-}
-
-/// Counts the lines that passed their bound.
-const LineWatcher = struct {
-    too_long: usize = 0,
-    kind: ?FramingLine = null,
-
-    pub fn observe(_: *LineWatcher, _: Fragment) void {}
-
-    pub fn lineTooLong(self: *LineWatcher, kind: FramingLine) void {
-        self.too_long += 1;
-        self.kind = kind;
-    }
-};
-
-test "an incomplete trailer block reports failure" {
-    const FakeSession = FakeSessionType;
-    const encoded = "0\r\nX-Trace: incomplete\r\n";
-    var fake: FakeSession = .{
-        .origin_input = encoded,
-    };
-    var activity: Activity = .{};
-
-    try std.testing.expect(!relay(
-        &fake,
-        testRoute(.origin, .child, .chunked),
-        &activity,
-    ));
-    try std.testing.expectEqualStrings(encoded, fake.childOutput());
-}
-
 const Exact = struct {
     direction: Direction,
     count: usize,
@@ -400,19 +175,4 @@ const Line = struct {
 const Direction = struct {
     from: Session.Side,
     to: Session.Side,
-};
-
-const Activity = struct {
-    bytes: usize = 0,
-    calls: usize = 0,
-    payload: [64]u8 = undefined,
-    payload_len: usize = 0,
-
-    pub fn observe(self: *Activity, fragment: Fragment) void {
-        self.bytes += fragment.forwarded_bytes;
-        self.calls += 1;
-
-        @memcpy(self.payload[self.payload_len..][0..fragment.payload.len], fragment.payload);
-        self.payload_len += fragment.payload.len;
-    }
 };

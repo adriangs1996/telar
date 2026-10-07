@@ -1,5 +1,3 @@
-const Mouse = @This();
-
 x: u16,
 y: u16,
 raw_x: u32 = 0,

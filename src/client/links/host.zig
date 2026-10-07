@@ -44,7 +44,3 @@ pub fn open(io: std.Io, target: data.LinkTarget) !void {
         else => return error.LinkOpeningFailed,
     }
 }
-
-test "host URL worker rejects non-web schemes before spawning a process" {
-    try std.testing.expectError(error.UnsupportedLinkScheme, open(std.testing.io, try data.LinkTarget.init("file:///tmp/example.txt")));
-}

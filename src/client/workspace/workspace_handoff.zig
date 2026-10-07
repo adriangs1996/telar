@@ -127,7 +127,9 @@ pub fn requestWorkspaceSwitch(client: *Client, target: WorkspaceSwitchTarget, au
     try client.model.request_lifecycle.ensureCanStart(2);
     try detachWorkspace(client, 1);
     sendWorkspaceOpen(&client.model, command) catch |err| {
-        restoreDepartingWorkspace(client) catch {};
+        restoreDepartingWorkspace(client) catch |recovery_error| {
+            std.log.err("Could not restore departing workspace: {s}", .{@errorName(recovery_error)});
+        };
         return err;
     };
 
@@ -169,7 +171,9 @@ fn detachWorkspace(client: *Client, extra: usize) !void {
 
     for (client.model.tabs.location[0..client.model.tabs.count]) |location| {
         tab_removal.detachTab(client, location) catch |err| {
-            restoreDepartingWorkspace(client) catch {};
+            restoreDepartingWorkspace(client) catch |recovery_error| {
+                std.log.err("Could not restore departing workspace: {s}", .{@errorName(recovery_error)});
+            };
             return err;
         };
     }

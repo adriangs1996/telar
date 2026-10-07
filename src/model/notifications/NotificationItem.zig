@@ -6,10 +6,13 @@ const Item = @This();
 id: notifications.Id,
 level: notifications.Level,
 target: notifications.Target,
+// SAFETY: Center.push copies valid UTF-8 into the title before publishing the item; title reads only title_len bytes.
 title_buffer: [core.max_notification_title_bytes]u8 = undefined,
 title_len: u16,
+// SAFETY: Center.push copies valid UTF-8 into the message before publishing the item; message reads only message_len bytes.
 message_buffer: [core.max_notification_message_bytes]u8 = undefined,
 message_len: u16,
+// SAFETY: Center.push copies a fitting link before setting link_len; an oversized link retains length zero.
 link_buffer: [core.max_notification_link_bytes]u8 = undefined,
 link_len: u16 = 0,
 phase: NotificationPhase = .entering,
@@ -35,33 +38,6 @@ pub fn link(self: *const Item) []const u8 {
 /// without a link.
 pub fn linkHost(self: *const Item) []const u8 {
     return core.notification_link.host(self.link());
-}
-
-/// Applies f(t) = 3t² - 2t³ and rounds to the nearest terminal cell.
-/// u128 intermediates keep the integer-only render path exact and bounded.
-pub fn animatedWidth(self: *const Item, full_width: u16) u16 {
-    return @intCast(self.animatedPixels(full_width));
-}
-
-/// Evaluates the same continuous curve at pixel precision for graphical
-/// placements. FPS only controls how often this value is sampled.
-pub fn animatedPixels(self: *const Item, full_width: u32) u32 {
-    if (full_width == 0 or self.transition_position_ns == 0) {
-        return 0;
-    }
-    if (self.transition_position_ns >= notifications.transition_duration_ns) {
-        return full_width;
-    }
-
-    const position: u128 = self.transition_position_ns;
-    const duration: u128 = notifications.transition_duration_ns;
-    const numerator = position * position * (3 * duration - 2 * position);
-    const denominator = duration * duration * duration;
-    const scaled = @as(u128, full_width) * numerator;
-    return @intCast(@min(
-        @as(u128, full_width),
-        (scaled + denominator / 2) / denominator,
-    ));
 }
 
 pub fn clickable(self: *const Item) bool {

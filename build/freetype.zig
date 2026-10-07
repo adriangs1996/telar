@@ -1,6 +1,5 @@
 const std = @import("std");
 const FreeTypeConfig = @import("FreeTypeConfig.zig");
-const c_flags = @import("c_flags.zig");
 
 /// Builds the same static FreeType and HarfBuzz sources Ghostty uses for font
 /// faces and shaping. Telar leaves system zlib disabled, so FreeType's bundled
@@ -8,7 +7,6 @@ const c_flags = @import("c_flags.zig");
 /// library dependency.
 pub fn add(b: *std.Build, config: FreeTypeConfig) *std.Build.Module {
     const target = config.target;
-    const disable_coverage = config.disable_coverage;
     const upstream = b.dependency("freetype", .{});
     const harfbuzz = b.dependency("harfbuzz", .{});
     const module = b.createModule(.{
@@ -32,11 +30,10 @@ pub fn add(b: *std.Build, config: FreeTypeConfig) *std.Build.Module {
             "-DHAVE_FCNTL_H",
             "-fno-sanitize=undefined",
         };
-    const flags = c_flags.forCoverage(b, base_flags, disable_coverage);
     module.addCSourceFiles(.{
         .root = upstream.path(""),
         .files = freetype_sources,
-        .flags = flags,
+        .flags = base_flags,
     });
     module.addCSourceFile(.{
         .file = if (target.result.os.tag == .linux)
@@ -45,14 +42,14 @@ pub fn add(b: *std.Build, config: FreeTypeConfig) *std.Build.Module {
             upstream.path("builds/windows/ftsystem.c")
         else
             upstream.path("src/base/ftsystem.c"),
-        .flags = flags,
+        .flags = base_flags,
     });
     module.addCSourceFile(.{
         .file = if (target.result.os.tag == .windows)
             upstream.path("builds/windows/ftdebug.c")
         else
             upstream.path("src/base/ftdebug.c"),
-        .flags = flags,
+        .flags = base_flags,
     });
     const harfbuzz_base_flags: []const []const u8 = if (target.result.os.tag == .windows)
         &.{
@@ -76,10 +73,9 @@ pub fn add(b: *std.Build, config: FreeTypeConfig) *std.Build.Module {
             "-DHAVE_FT_DONE_MM_VAR=1",
             "-DHAVE_FT_GET_TRANSFORM=1",
         };
-    const harfbuzz_flags = c_flags.forCoverage(b, harfbuzz_base_flags, disable_coverage);
     module.addCSourceFile(.{
         .file = harfbuzz.path("src/harfbuzz.cc"),
-        .flags = harfbuzz_flags,
+        .flags = harfbuzz_base_flags,
     });
     return module;
 }

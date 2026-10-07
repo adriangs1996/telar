@@ -13,6 +13,7 @@ has_parameter: bool = false,
 /// This is what a line editor re-echoes when it takes over input that
 /// arrived before it started. It is exact only while `typed_exact` holds:
 /// multi-byte text, pastes and kill keys are not modeled.
+// SAFETY: Input capture writes each byte before increasing typed_len; typedText exposes only that prefix.
 typed: [max_typed_bytes]u8 = undefined,
 typed_len: u8 = 0,
 typed_exact: bool = true,

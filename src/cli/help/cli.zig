@@ -26,7 +26,6 @@ pub const family: FamilyHelp = .{
             \\`--dir ~/.local/bin`. Exit 0 or 1.
             \\
             ,
-            .examples = &.{ &.{ "cli", "install" }, &.{ "cli", "install", "--dir", "/home/dev/.local/bin" } },
         },
         .{
             .name = "uninstall",
@@ -36,7 +35,6 @@ pub const family: FamilyHelp = .{
             \\Effects: removes the link when present. Results: `telar cli: removed LINK`. Exit 0.
             \\
             ,
-            .examples = &.{&.{ "cli", "uninstall", "--dir", "/home/dev/.local/bin" }},
         },
         .{
             .name = "status",
@@ -46,7 +44,6 @@ pub const family: FamilyHelp = .{
             \\Results: `telar cli: LINK -> TARGET` or `telar cli: LINK is not installed`. Exit 0.
             \\
             ,
-            .examples = &.{&.{ "cli", "status" }},
         },
     },
 };

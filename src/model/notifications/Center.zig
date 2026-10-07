@@ -57,10 +57,6 @@ pub fn push(self: *Center, now_ns: u64, input: Input) notifications.Id {
     return id;
 }
 
-pub fn hasItems(self: *const Center) bool {
-    return self.count != 0;
-}
-
 pub fn itemAt(self: *const Center, index: usize) ?*const Item {
     if (index >= self.count) {
         return null;

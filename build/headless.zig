@@ -1,10 +1,9 @@
 const std = @import("std");
 const Application = @import("Application.zig");
 
-/// The headless client for tests and tools: `zig build headless` installs
-/// `telar-headless`. It is not part of `zig build`, the bundle or the
-/// packages. Returns its module so the test suite can run its tests.
-pub fn add(b: *std.Build, app: Application) *std.Build.Module {
+/// The headless client: `zig build headless` installs `telar-headless`. It
+/// is not part of `zig build`, the bundle or the packages.
+pub fn add(b: *std.Build, app: Application) void {
     const modules = app.modules;
     const headless = b.createModule(.{
         .root_source_file = b.path("src/headless/headless.zig"),
@@ -34,6 +33,5 @@ pub fn add(b: *std.Build, app: Application) *std.Build.Module {
         .name = "telar-headless",
         .root_module = root,
     });
-    b.step("headless", "Build the headless client for tests and tools").dependOn(&b.addInstallArtifact(exe, .{}).step);
-    return headless;
+    b.step("headless", "Build the headless client").dependOn(&b.addInstallArtifact(exe, .{}).step);
 }

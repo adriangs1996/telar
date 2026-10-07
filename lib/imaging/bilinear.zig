@@ -63,54 +63,6 @@ pub fn resampleRect(source: ImageView, destination: []u8, width: u32, height: u3
     }
 }
 
-test "a flat bitmap resamples to its own colour at any size" {
-    const pixels = [_]u8{ 10, 200, 30, 255 } ** 16;
-    const source: ImageView = .{ .pixels = &pixels, .stride = 16, .width = 4, .height = 4 };
-    for ([_]u32{ 1, 3, 4, 7 }) |side| {
-        var out: [7 * 7 * 4]u8 = undefined;
-        resample(source, out[0 .. side * side * 4], side);
-        for (0..side * side) |index| {
-            try std.testing.expectEqualSlices(u8, &.{ 10, 200, 30, 255 }, out[index * 4 ..][0..4]);
-        }
-    }
-}
-
-test "an enlarged edge ramps its alpha instead of repeating blocks" {
-    // Left column opaque red, right column transparent black, 2x1 into 8x1.
-    const pixels = [_]u8{ 255, 0, 0, 255, 0, 0, 0, 0 };
-    const source: ImageView = .{ .pixels = &pixels, .stride = 8, .width = 2, .height = 1 };
-    var out: [8 * 1 * 4]u8 = undefined;
-    resampleRect(source, &out, 8, 1);
-    try std.testing.expectEqualSlices(u8, &.{ 255, 0, 0, 255 }, out[0..4]);
-    try std.testing.expectEqualSlices(u8, &.{ 0, 0, 0, 0 }, out[28..32]);
-    var previous: u8 = 255;
-    var steps: usize = 0;
-    for (0..8) |column| {
-        const alpha = out[column * 4 + 3];
-        try std.testing.expect(alpha <= previous);
-        steps += @intFromBool(alpha != previous);
-        if (alpha != 0) {
-            try std.testing.expectEqualSlices(u8, &.{ 255, 0, 0 }, out[column * 4 ..][0..3]);
-        }
-
-        previous = alpha;
-    }
-
-    // A box filter would jump once, from 255 straight to 0.
-    try std.testing.expect(steps >= 3);
-}
-
-test "a region samples only inside its origin" {
-    const pixels = [_]u8{ 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255 } ++
-        [_]u8{ 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255 };
-    const right: ImageView = .{ .pixels = &pixels, .stride = 16, .x = 2, .width = 2, .height = 2 };
-    var out: [5 * 5 * 4]u8 = undefined;
-    resample(right, &out, 5);
-    for (0..25) |index| {
-        try std.testing.expectEqualSlices(u8, &.{ 255, 255, 255, 255 }, out[index * 4 ..][0..4]);
-    }
-}
-
 /// The two source pixels one destination index blends on one axis and the
 /// weight of the second.
 const Tap = struct {

@@ -3,6 +3,7 @@ const std = @import("std");
 const Target = @This();
 
 scheme: urlscan.Scheme,
+// SAFETY: init and initPath copy the validated target before returning; uri and eql read only len bytes.
 storage: [urlscan.max_uri_bytes]u8 = undefined,
 len: u16,
 

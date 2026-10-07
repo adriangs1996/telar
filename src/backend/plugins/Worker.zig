@@ -11,7 +11,9 @@ const Worker = @This();
 gpa: std.mem.Allocator,
 spec: ServiceSpec,
 results: *std.Io.Queue(*Result),
+// SAFETY: init constructs the queue with request_storage at the final address before start or submit.
 requests: std.Io.Queue(*SharedExchange) = undefined,
+// SAFETY: The queue starts empty; submit writes pointer slots before the worker can retrieve them.
 request_storage: [service_support.queue_depth]*SharedExchange = undefined,
 session: ?*Session = null,
 future: ?std.Io.Future(anyerror!void) = null,
@@ -37,6 +39,7 @@ pub fn start(self: *Worker, io: std.Io) !void {
 pub fn stop(self: *Worker, io: std.Io) void {
     self.requests.close(io);
     if (self.future) |*future| {
+        // The request queue is closed; join the worker before releasing its session and pending requests regardless of the worker's result.
         _ = future.await(io) catch {};
         self.future = null;
     }

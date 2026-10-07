@@ -147,6 +147,7 @@ fn deliverHostNotification(client: *Client, input: data.NotificationInput) !void
     switch (client.model.config.notification_delivery) {
         .telar => unreachable,
         // A system notice is best effort; a saturated inbox drops it.
+        // Notifications are optional observation work; saturation drops this notice without blocking input.
         .system => client.to_background.push(.{ .system_notification = payload }) catch {},
     }
 }

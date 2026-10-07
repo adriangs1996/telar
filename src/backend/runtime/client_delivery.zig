@@ -48,6 +48,7 @@ pub fn flush(model: *RuntimeModel) !void {
         core.profiling.add(.runtime_flush_passes, @min(passes + 1, store_support.max_clients + 1));
     }
 
+    // A failed timer admission resets its scheduled state; a subsequent delivery flush retries publication.
     scheduleCellPublication(model) catch {
         // The timer reset itself; the next flush retries it.
     };

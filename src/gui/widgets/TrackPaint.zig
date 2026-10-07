@@ -2,7 +2,6 @@
 const data = @import("model");
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
-const TrackPaint = @This();
 
 bounds: Rect,
 value: u16,

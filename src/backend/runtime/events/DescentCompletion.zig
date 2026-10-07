@@ -12,6 +12,7 @@ request_id: core.RequestId,
 pane: PaneKey,
 descends: bool,
 /// The peer's parent processes, nearest first.
+// SAFETY: The descent walk fills ancestor storage before returning its counted lineage; lineage reads only ancestor_count entries.
 ancestors: [Session.max_hook_lineage]u32 = undefined,
 ancestor_count: u8 = 0,
 

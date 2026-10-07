@@ -7,6 +7,7 @@ package_index: u8,
 plugin_id: u64,
 digest: core.Digest,
 generation: u64,
+// SAFETY: init copies the validated entry path before returning; entry reads only entry_len bytes.
 entry_storage: [std.fs.max_path_bytes]u8 = undefined,
 entry_len: u16,
 declared: core.CapabilitySet,

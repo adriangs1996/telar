@@ -6,6 +6,7 @@ revision: u64 = 0,
 pending_request: u64 = 0,
 phase: suggestion_ops.Phase = .idle,
 status: core.SuggestionStatus = .ready,
+// SAFETY: apply copies suggestion bytes before setting text_len; textSlice exposes only that prefix.
 text: [core.max_suggestion_bytes]u8 = undefined,
 text_len: u16 = 0,
 

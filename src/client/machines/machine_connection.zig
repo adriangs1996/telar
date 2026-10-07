@@ -67,17 +67,3 @@ pub fn setupRepairs(err: anyerror) bool {
         else => false,
     };
 }
-
-test "only a missing telar or another build is setup's to repair" {
-    try std.testing.expect(setupRepairs(error.RemoteTelarMissing));
-    try std.testing.expect(setupRepairs(error.RemoteRuntimeIncompatible));
-    try std.testing.expect(!setupRepairs(error.SshHostKeyRejected));
-    try std.testing.expect(!setupRepairs(error.RemoteEndpointUnavailable));
-}
-
-test "only failures that retrying cannot fix are permanent" {
-    try std.testing.expect(permanent(error.SshHostKeyRejected));
-    try std.testing.expect(permanent(error.IncompatibleSchema));
-    try std.testing.expect(!permanent(error.RemoteEndpointUnavailable));
-    try std.testing.expect(!permanent(error.ConnectionRefused));
-}

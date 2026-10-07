@@ -118,6 +118,7 @@ fn drawAttention(self: WorkspaceRow, canvas: *Canvas, area: Rect) !f32 {
     const agent = urgent orelse return 0;
     var buffer: [8]u8 = undefined;
     const selected = if (workspace_identity.activeId(self.context.projection)) |active| self.context.projection.workspaces.projectOf(active) == workspace else false;
+    // SAFETY: the u8 count plus the two-byte prefix needs at most five of the eight buffer bytes.
     const label: Label = .{ .text = std.fmt.bufPrint(&buffer, "! {d}", .{count}) catch unreachable, .color = if (selected) attention.statusColor(canvas.theme.palette, agent.status) else inactive_ink, .face = .sans, .size = .small };
     const width = @min(area.width, try canvas.measure(label));
     _ = try canvas.textAt(.{ .x = area.x + area.width - width, .y = area.y, .width = width, .height = area.height }, label);

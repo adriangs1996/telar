@@ -1,6 +1,0 @@
-{
-  "ClientEventContext.receiveFrame": true,
-  "ClientEventContext.finishEvent": true,
-  "ClientEventContext.summarizeMachine": true,
-  "machine-loop": true
-}

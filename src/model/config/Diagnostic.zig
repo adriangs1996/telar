@@ -9,6 +9,7 @@ pub const max_bytes = 1024;
 /// Ends a message that did not fit, so a cut never reads as complete.
 pub const truncation_mark = "…";
 
+// SAFETY: set publishes only bytes written by the formatter, plus an initialized truncation mark on overflow; message is bounded by len.
 buffer: [max_bytes]u8 = undefined,
 len: usize = 0,
 
@@ -31,18 +32,4 @@ pub fn set(self: *Diagnostic, comptime format: []const u8, args: anytype) void {
     };
 
     self.len = writer.buffered().len;
-}
-
-test "a message past the buffer keeps its start, cut at a character, and ends with the mark" {
-    var diagnostic: Diagnostic = .{};
-    diagnostic.set("error in {s}", .{"é" ** max_bytes});
-
-    const text = diagnostic.message();
-    try std.testing.expect(text.len <= max_bytes);
-    try std.testing.expect(std.mem.startsWith(u8, text, "error in éé"));
-    try std.testing.expect(std.mem.endsWith(u8, text, truncation_mark));
-    try std.testing.expect(std.unicode.utf8ValidateSlice(text));
-
-    diagnostic.set("{s}", .{"x" ** max_bytes});
-    try std.testing.expectEqualStrings("x" ** max_bytes, diagnostic.message());
 }

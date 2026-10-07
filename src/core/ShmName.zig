@@ -5,6 +5,7 @@ const graphics = @import("graphics.zig");
 /// process calls `shm_open` with it.
 const ShmName = @This();
 
+// SAFETY: init copies the validated name and its NUL terminator before returning; sliceZ requires a successfully initialized name.
 bytes: [graphics.max_shm_name_bytes + 1]u8 = undefined,
 len: u8 = 0,
 

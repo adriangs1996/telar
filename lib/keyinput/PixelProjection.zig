@@ -1,5 +1,3 @@
-const PixelProjection = @This();
-
 cell: CellSize,
 exact: ?PixelPoint = null,
 

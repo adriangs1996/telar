@@ -3,8 +3,6 @@ const types = @import("../types.zig");
 /// What an agent works on and how far it got, as its hooks report it: the
 /// working directory, the linked worktree it resolves to, one plan change and
 /// its final answer. Empty strings leave the previous value in place.
-const ReportAgentProgress = @This();
-
 request_id: id.RequestId,
 pane_id: id.PaneId,
 pane_generation: u64,

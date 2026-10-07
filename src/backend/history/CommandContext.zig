@@ -1,6 +1,5 @@
 const core = @import("telar-core");
 const model = @import("model.zig");
-const CommandContext = @This();
 
 author: core.HistoryAuthor = .human,
 origin: core.HistoryOrigin = .pane,

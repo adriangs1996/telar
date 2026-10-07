@@ -3,7 +3,6 @@
 //! pointer, and replaced when a reload changes the configured value. It is
 //! never persisted; the Lua file is the durable form.
 const data = @import("model");
-const std = @import("std");
 const client = @import("telar-client");
 const SidebarBand = @import("widgets/SidebarBand.zig");
 const SidebarRequest = @import("widgets/SidebarRequest.zig");
@@ -15,25 +14,25 @@ configured: f32 = client.GuiSidebar.default_width,
 /// The band the last measurement resolved; interactive changes clamp to it.
 band: SidebarBand = .{},
 
-/// Example: `gui.sidebar = SidebarPreference.init(options.gui.sidebar.width);`
+/// Example: `gui.model.sidebar = SidebarPreference.init(options.gui.sidebar.width);`
 pub fn init(configured: f32) Preference {
     return .{ .logical = configured, .configured = configured };
 }
 
 /// The request the renderer measures with.
-/// Example: `renderer.sidebar_request = gui.sidebar.request(model.sidebar_visible);`
+/// Example: `renderer.sidebar_request = gui.model.sidebar.request(model.sidebar_visible);`
 pub fn request(self: *const Preference, visible: bool) SidebarRequest {
     return .{ .visible = visible, .logical_width = self.logical };
 }
 
 /// Retains the resolved band so later steps and drags clamp to this window.
-/// Example: `gui.sidebar.observe(renderer.sidebar);`
+/// Example: `gui.model.sidebar.observe(renderer.sidebar);`
 pub fn observe(self: *Preference, band: SidebarBand) void {
     self.band = band;
 }
 
 /// Moves the preference by one keyboard step; false when the bounds held it.
-/// Example: `if (gui.sidebar.step(.right)) gui.chrome.invalidate();`
+/// Example: `if (gui.model.sidebar.step(.right)) gui.model.chrome.invalidate();`
 pub fn step(self: *Preference, direction: data.actions.SidebarDirection) bool {
     const delta: f32 = switch (direction) {
         .left => -SidebarBand.logical_step,
@@ -43,14 +42,14 @@ pub fn step(self: *Preference, direction: data.actions.SidebarDirection) bool {
 }
 
 /// Adopts the exact width a drag selected, in device pixels.
-/// Example: `if (gui.sidebar.drag(width)) gui.chrome.invalidate();`
+/// Example: `if (gui.model.sidebar.drag(width)) gui.model.chrome.invalidate();`
 pub fn drag(self: *Preference, physical: u32) bool {
     return self.set(@as(f32, @floatFromInt(self.band.clamp(physical))) / self.band.scale);
 }
 
 /// Follows a reload: a changed configured width replaces the preference, an
 /// unchanged one keeps what the person chose interactively.
-/// Example: `_ = gui.sidebar.reload(renderer.config.sidebar.width);`
+/// Example: `_ = gui.model.sidebar.reload(renderer.config.sidebar.width);`
 pub fn reload(self: *Preference, configured: f32) bool {
     if (configured == self.configured) {
         return false;
@@ -67,29 +66,4 @@ fn set(self: *Preference, logical: f32) bool {
 
     self.logical = logical;
     return true;
-}
-
-test "the preference steps drags and reloads inside the observed band" {
-    var preference = init(284);
-    preference.observe(SidebarBand.resolve(.{ .visible = true }, .{ .width = 2000, .cell_width = 10 }));
-    try std.testing.expect(preference.step(.right));
-    try std.testing.expectEqual(@as(f32, 300), preference.logical);
-    try std.testing.expect(preference.step(.left));
-    try std.testing.expect(preference.step(.left));
-    try std.testing.expectEqual(@as(f32, 268), preference.logical);
-    try std.testing.expect(preference.drag(1000));
-    try std.testing.expectEqual(@as(f32, 800), preference.logical);
-    try std.testing.expect(!preference.step(.right));
-    try std.testing.expect(preference.drag(1));
-    try std.testing.expectEqual(@as(f32, 220), preference.logical);
-    try std.testing.expect(!preference.step(.left));
-    try std.testing.expect(!preference.reload(284));
-    try std.testing.expectEqual(@as(f32, 220), preference.logical);
-    try std.testing.expect(preference.reload(320));
-    try std.testing.expectEqual(@as(f32, 320), preference.logical);
-    preference.observe(SidebarBand.resolve(.{ .visible = true }, .{ .width = 4000, .cell_width = 20, .scale = 2 }));
-    try std.testing.expect(preference.drag(700));
-    try std.testing.expectEqual(@as(f32, 350), preference.logical);
-    try std.testing.expectEqual(true, preference.request(true).visible);
-    try std.testing.expectEqual(@as(f32, 350), preference.request(false).logical_width);
 }

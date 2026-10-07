@@ -1,7 +1,6 @@
 //! Planning a move to another agent's pane from the sidebar or a binding.
 
 const model_data = @import("../model.zig");
-const sidebar = @import("../layout/sidebar.zig");
 const ClientModel = @import("../state/ClientModel.zig");
 const LocalAgentNavigation = @import("../state/LocalAgentNavigation.zig");
 const AgentHandoff = @import("../state/AgentHandoff.zig");

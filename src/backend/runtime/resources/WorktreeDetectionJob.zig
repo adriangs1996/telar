@@ -9,6 +9,7 @@ io: std.Io,
 pane: PaneKey,
 /// The pane's cwd revision when copied; a later one makes the answer stale.
 cwd_revision: u64,
+// SAFETY: worktree_detection copies the current directory before dispatching the job; cwdSlice reads only cwd_len bytes.
 cwd: [core.max_cwd_bytes]u8 = undefined,
 cwd_len: u16,
 

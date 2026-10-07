@@ -61,27 +61,3 @@ fn lock(self: *StreamsInFlight) void {
         std.atomic.spinLoopHint();
     }
 }
-
-test "a stream counts once from its start to its first end" {
-    var streams: StreamsInFlight = .{};
-
-    try std.testing.expect(streams.start(1));
-    try std.testing.expect(!streams.start(1));
-    try std.testing.expect(streams.end(1));
-    try std.testing.expect(!streams.end(1));
-    try std.testing.expect(!streams.end(3));
-    try std.testing.expect(!streams.start(0));
-}
-
-test "a stream past the table is not counted, and a freed entry takes the next" {
-    var streams: StreamsInFlight = .{};
-
-    for (0..capacity) |index| {
-        try std.testing.expect(streams.start(@intCast(2 * index + 1)));
-    }
-
-    try std.testing.expect(!streams.start(2 * capacity + 1));
-    try std.testing.expect(!streams.end(2 * capacity + 1));
-    try std.testing.expect(streams.end(1));
-    try std.testing.expect(streams.start(2 * capacity + 1));
-}

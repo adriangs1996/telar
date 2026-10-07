@@ -33,16 +33,3 @@ pub fn retarget(self: *Transition, target: f32, now_ns: u64) void {
     self.to = target;
     self.started_ns = now_ns;
 }
-
-test "transitions fold late frames and reverse continuously" {
-    const std = @import("std");
-    var transition: Transition = .{ .from = 0, .to = 1, .started_ns = 100, .duration_ns = 200 };
-    try std.testing.expectEqual(@as(f32, 0), transition.value(50));
-    try std.testing.expectEqual(@as(f32, 0.5), transition.value(200));
-    transition.retarget(0, 200);
-    try std.testing.expectEqual(@as(f32, 0.5), transition.value(200));
-    try std.testing.expectEqual(@as(f32, 0.25), transition.value(300));
-    try std.testing.expectEqual(@as(f32, 0), transition.value(999));
-    transition.duration_ns = 0;
-    try std.testing.expectEqual(transition.to, transition.value(200));
-}

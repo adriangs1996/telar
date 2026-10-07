@@ -1,5 +1,4 @@
 const cellgrid = @import("cellgrid");
-const Palette = @This();
 
 accent: cellgrid.Color,
 panel_bg: cellgrid.Color,

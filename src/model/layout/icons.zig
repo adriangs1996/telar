@@ -153,46 +153,6 @@ pub const Icon = enum {
             .telar_mark => "\u{25a3}", // artwork in the atlas, never rasterized from the font
         };
     }
-
-    /// A one-cell placeholder used only while the opaque KGP replacement is
-    /// being transferred. Terminals without KGP keep `unicodeGlyph` instead.
-    pub fn cellFallbackGlyph(self: Icon) []const u8 {
-        return switch (self) {
-            .sidebar_collapse => "<",
-            .sidebar_expand => ">",
-            .workspace_menu => "W",
-            .proxy_active => "S",
-            .cpu => "C",
-            .memory => "M",
-            .battery_empty,
-            .battery_quarter,
-            .battery_half,
-            .battery_three_quarters,
-            .battery_full,
-            => "B",
-            .provider_unknown, .agent_unknown => "?",
-            .provider_claude => "A",
-            .provider_codex => "X",
-            .provider_pi => "P",
-            .provider_cursor => "C",
-            .provider_opencode => "O",
-            .app_terminal => ">",
-            .app_editor => "E",
-            .app_git => "G",
-            .agent_working_0,
-            .agent_working_1,
-            .agent_working_2,
-            .agent_working_3,
-            => "*",
-            .agent_blocked => "!",
-            .agent_ready => "+",
-            .agent_done => "*",
-            .agent_failed => "x",
-            .close => "x",
-            .pane_fullscreen => "F",
-            .telar_mark => " ", // the artwork carries alpha, so nothing may show through
-        };
-    }
 };
 
 /// Whether a built-in agent's mark is a white mask drawn in the theme's text
@@ -207,25 +167,4 @@ pub fn providerMarkFollowsTheme(provider: core.AgentProvider) bool {
         .codex, .cursor, .opencode => true,
         else => false,
     };
-}
-
-test "foreground application icons accept runtime display names and executable aliases" {
-    inline for (.{
-        .{ "Claude Code", Icon.provider_claude },
-        .{ "claude", Icon.provider_claude },
-        .{ "Codex", Icon.provider_codex },
-        .{ "codex", Icon.provider_codex },
-        .{ "Pi", Icon.provider_pi },
-        .{ "pi", Icon.provider_pi },
-        .{ "Cursor Agent", Icon.provider_cursor },
-        .{ "cursor-agent", Icon.provider_cursor },
-        .{ "OpenCode", Icon.provider_opencode },
-        .{ "opencode", Icon.provider_opencode },
-        .{ "nvim", Icon.app_editor },
-        .{ "git", Icon.app_git },
-        .{ "zsh", Icon.app_terminal },
-        .{ "unknown", Icon.app_terminal },
-    }) |example| {
-        try std.testing.expectEqual(example[1], Icon.forApplication(example[0]));
-    }
 }

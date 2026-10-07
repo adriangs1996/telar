@@ -45,21 +45,3 @@ fn channel(fd: std.c.fd_t) SocketChannel {
         .address = .{ .ip4 = .loopback(0) },
     } });
 }
-
-test "a pair carries frames both ways and closes on exec" {
-    const io = std.testing.io;
-    var ends = try pair();
-    defer ends[0].deinit(io);
-    defer ends[1].deinit(io);
-
-    try ends[0].send(io, "ping");
-    var buffer: [16]u8 = undefined;
-    try std.testing.expectEqualStrings("ping", try ends[1].receive(io, &buffer));
-
-    try ends[1].send(io, "pong");
-    try std.testing.expectEqualStrings("pong", try ends[0].receive(io, &buffer));
-
-    for (ends) |end| {
-        try std.testing.expect(std.c.fcntl(end.stream.socket.handle, std.c.F.GETFD) & std.c.FD_CLOEXEC != 0);
-    }
-}

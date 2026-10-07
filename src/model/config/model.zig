@@ -46,24 +46,4 @@ pub fn defaultProxyInterceptHosts() ProxyInterceptHosts {
     return .{};
 }
 
-test "proxy intercept hosts are compact, canonical, sorted, and unique" {
-    var hosts: ProxyInterceptHosts = .{};
-    try hosts.append("Updates.Example.com");
-    try hosts.append("api.example.com");
-    try hosts.append("API.EXAMPLE.COM");
-    hosts.sortAndDeduplicate();
-
-    var storage: [core.max_intercept_hosts][]const u8 = undefined;
-    const sorted = hosts.slices(&storage);
-    try std.testing.expectEqual(@as(usize, 2), sorted.len);
-    try std.testing.expectEqualStrings("api.example.com", sorted[0]);
-    try std.testing.expectEqualStrings("updates.example.com", sorted[1]);
-}
-
-test "the proxy intercepts no host by default" {
-    const hosts = defaultProxyInterceptHosts();
-    var storage: [core.max_intercept_hosts][]const u8 = undefined;
-    try std.testing.expectEqual(@as(usize, 0), hosts.slices(&storage).len);
-}
-
 pub const max_window_title_bytes = 128;

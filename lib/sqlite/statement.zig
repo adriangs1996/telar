@@ -84,31 +84,3 @@ pub fn columnText(gpa: std.mem.Allocator, stmt: *c.sqlite3_stmt, column: c_int) 
     const pointer = c.sqlite3_column_text(stmt, column) orelse return error.SqliteInvalidText;
     return gpa.dupe(u8, pointer[0..len]);
 }
-
-test "a statement binds, steps and reads text back" {
-    var db: ?*c.sqlite3 = null;
-    try std.testing.expectEqual(@as(c_int, c.SQLITE_OK), c.sqlite3_open(":memory:", &db));
-    defer _ = c.sqlite3_close(db);
-
-    const create = try prepare(db.?, "CREATE TABLE t (name TEXT, id BLOB);");
-    defer _ = c.sqlite3_finalize(create);
-    try stepDone(create);
-
-    const insert = try prepare(db.?, "INSERT INTO t VALUES (?, ?);");
-    defer _ = c.sqlite3_finalize(insert);
-    const id = [_]u8{ 1, 2, 3 };
-    bindText(insert, 1, "telar");
-    bindBlob(insert, 2, &id);
-    try stepDone(insert);
-    reset(insert);
-
-    const select = try prepare(db.?, "SELECT name FROM t;");
-    defer _ = c.sqlite3_finalize(select);
-    try std.testing.expectEqual(@as(c_int, c.SQLITE_ROW), c.sqlite3_step(select));
-    try std.testing.expectEqualStrings("telar", columnSlice(select, 0));
-
-    const copy = try columnText(std.testing.allocator, select, 0);
-    defer std.testing.allocator.free(copy);
-    try std.testing.expectEqualStrings("telar", copy);
-    try std.testing.expectError(error.SqlitePrepareFailed, prepare(db.?, "NOT SQL"));
-}

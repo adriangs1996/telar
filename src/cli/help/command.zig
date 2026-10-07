@@ -25,7 +25,6 @@ pub const family: FamilyHelp = .{
                 \\and `command`. Exit 0 when ready, 3 on timeout, 1 when unavailable or failed.
                 \\
             , .{core.max_suggestion_request_bytes}),
-            .examples = &.{&.{ "command", "suggest", "--current", "list the largest files here", "--json" }},
         },
     },
 };

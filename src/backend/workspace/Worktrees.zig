@@ -15,6 +15,7 @@ pub const reserved_for_telar = 16;
 const Rows = std.bit_set.IntegerBitSet(capacity);
 
 id: [capacity]core.WorktreeId = @splat(.invalid),
+// SAFETY: register assigns the owned path before marking a row occupied; readers and deinit visit occupied rows.
 path: [capacity][]u8 = undefined,
 source: [capacity]core.WorkspaceId = @splat(.invalid),
 /// The workspace holding the worktree's tabs; null until the first launch
@@ -24,15 +25,20 @@ created_by: [capacity]?core.PaneId = @splat(null),
 coordinator: [capacity]?core.CoordinatorReference = @splat(null),
 origin: [capacity]core.WorktreeOrigin = @splat(.telar),
 state: [capacity]core.WorktreeState = @splat(.active),
+// SAFETY: register and updates copy the branch before publishing branch_len; readers use only that prefix.
 branch: [capacity][core.max_git_branch_bytes]u8 = undefined,
 branch_len: [capacity]u8 = @splat(0),
+// SAFETY: register copies the base before publishing base_len; readers use only that prefix.
 base: [capacity][core.max_git_branch_bytes]u8 = undefined,
 base_len: [capacity]u8 = @splat(0),
+// SAFETY: register and rename copy the title before publishing title_len; readers use only that prefix.
 title: [capacity][core.max_worktree_title_bytes]u8 = undefined,
 title_len: [capacity]u8 = @splat(0),
+// SAFETY: register and rename copy the brief before publishing brief_len; readers use only that prefix.
 brief: [capacity][core.max_worktree_brief_bytes]u8 = undefined,
 brief_len: [capacity]u16 = @splat(0),
 /// The machine that dispatched the worktree here; empty when none did.
+// SAFETY: register copies the machine label before publishing dispatched_from_len; readers use only that prefix.
 dispatched_from: [capacity][core.MachineProfile.max_label_bytes]u8 = undefined,
 dispatched_from_len: [capacity]u8 = @splat(0),
 diff_added: [capacity]u32 = @splat(0),
@@ -47,6 +53,7 @@ had_changes: [capacity]bool = @splat(false),
 probe_failures: [capacity]u8 = @splat(0),
 /// The pane running the last launched command, while it runs.
 command_pane: [capacity]?core.PaneId = @splat(null),
+// SAFETY: A new row has command_label_len zero; command updates copy the label before publishing its length.
 command_label: [capacity][core.max_worktree_command_label_bytes]u8 = undefined,
 command_label_len: [capacity]u8 = @splat(0),
 command_state: [capacity]core.CommandState = @splat(.none),
@@ -196,26 +203,6 @@ pub fn slotOfWorkspace(self: *const Worktrees, workspace_id: core.WorkspaceId) ?
     }
 
     return null;
-}
-
-/// The row whose branch is `branch`, when exactly one row has it.
-/// Example: `const slot = worktrees.slotOfBranch("fix") orelse return;`.
-pub fn slotOfBranch(self: *const Worktrees, branch: []const u8) ?usize {
-    var found: ?usize = null;
-    var rows = self.rows.iterator(.{});
-    while (rows.next()) |slot| {
-        if (!std.mem.eql(u8, self.branchAt(slot), branch)) {
-            continue;
-        }
-
-        if (found != null) {
-            return null;
-        }
-
-        found = slot;
-    }
-
-    return found;
 }
 
 /// The workspace a new worktree found from `workspace_id` hangs from: the
@@ -408,161 +395,4 @@ fn contains(root: []const u8, path: []const u8) bool {
     }
 
     return path.len == root.len or path[root.len] == '/' or std.mem.endsWith(u8, root, "/");
-}
-
-fn testingTable() !*Worktrees {
-    const table = try std.testing.allocator.create(Worktrees);
-    table.* = .{};
-    return table;
-}
-
-fn destroyTestingTable(self: *Worktrees) void {
-    self.deinit(std.testing.allocator);
-    std.testing.allocator.destroy(self);
-}
-
-test "a path registers once and a later registration renames it" {
-    const gpa = std.testing.allocator;
-    const table = try testingTable();
-    defer destroyTestingTable(table);
-    const source: core.WorkspaceId = @enumFromInt(3);
-
-    const first = try table.register(gpa, .{
-        .source = source,
-        .path = "/src/telar-worktrees/fix",
-        .branch = "fix",
-        .base = "main",
-    });
-    const again = try table.register(gpa, .{
-        .source = source,
-        .path = "/src/telar-worktrees/fix",
-        .branch = "fix",
-        .title = "Fix tabs",
-    });
-
-    try std.testing.expect(first.created);
-    try std.testing.expect(!again.created);
-    try std.testing.expectEqual(first.id, again.id);
-    try std.testing.expectEqualStrings("Fix tabs", table.displayName(first.slot));
-    try std.testing.expectEqualStrings("main", table.baseAt(first.slot));
-    try std.testing.expectEqual(@as(usize, 1), table.count);
-}
-
-test "containment prefers the deepest checkout and never matches a sibling prefix" {
-    const gpa = std.testing.allocator;
-    const table = try testingTable();
-    defer destroyTestingTable(table);
-    const source: core.WorkspaceId = @enumFromInt(1);
-
-    const outer = try table.register(gpa, .{
-        .source = source,
-        .path = "/w/fix",
-        .branch = "fix",
-    });
-    const inner = try table.register(gpa, .{
-        .source = source,
-        .path = "/w/fix/nested",
-        .branch = "nested",
-    });
-
-    try std.testing.expectEqual(outer.slot, table.slotContaining("/w/fix/src").?);
-    try std.testing.expectEqual(inner.slot, table.slotContaining("/w/fix/nested/a").?);
-    try std.testing.expect(table.slotContaining("/w/fixed") == null);
-    try std.testing.expectEqual(outer.slot, table.slotOfBranch("fix").?);
-}
-
-test "commands and workspace links follow their panes" {
-    const gpa = std.testing.allocator;
-    const table = try testingTable();
-    defer destroyTestingTable(table);
-    const source: core.WorkspaceId = @enumFromInt(1);
-    const child: core.WorkspaceId = @enumFromInt(2);
-    const registered = try table.register(gpa, .{
-        .source = source,
-        .path = "/w/fix",
-        .branch = "fix",
-    });
-
-    table.workspace[registered.slot] = child;
-    table.startCommand(registered.slot, @enumFromInt(9), "zig");
-    try std.testing.expectEqual(registered.slot, table.slotOfWorkspace(child).?);
-    try std.testing.expect(!table.finishCommand(@enumFromInt(8), 0));
-    try std.testing.expect(table.finishCommand(@enumFromInt(9), 1));
-    try std.testing.expectEqual(core.CommandState.exited, table.command_state[registered.slot]);
-    try std.testing.expectEqual(@as(i32, 1), table.command_exit[registered.slot]);
-
-    try std.testing.expect(table.releaseWorkspace(child));
-    try std.testing.expect(table.workspace[registered.slot] == null);
-
-    var entries: [capacity]core.WorktreeListEntry = undefined;
-    try std.testing.expectEqual(@as(usize, 1), table.listEntries(&entries).len);
-    try std.testing.expect(table.remove(gpa, registered.id));
-    try std.testing.expectEqual(@as(usize, 0), table.listEntries(&entries).len);
-}
-
-test "found worktrees leave room for the ones telar creates" {
-    const gpa = std.testing.allocator;
-    const table = try testingTable();
-    defer destroyTestingTable(table);
-    const source: core.WorkspaceId = @enumFromInt(1);
-
-    var buffer: [32]u8 = undefined;
-    for (0..capacity - reserved_for_telar) |index| {
-        const path = try std.fmt.bufPrint(&buffer, "/w/found-{d}", .{index});
-        _ = try table.register(gpa, .{ .source = source, .origin = .external, .path = path, .branch = "b" });
-    }
-
-    try std.testing.expectError(error.WorktreeLimitReached, table.register(gpa, .{ .source = source, .origin = .external, .path = "/w/one-more", .branch = "b" }));
-    for (0..reserved_for_telar) |index| {
-        const path = try std.fmt.bufPrint(&buffer, "/w/made-{d}", .{index});
-        _ = try table.register(gpa, .{ .source = source, .path = path, .branch = "b" });
-    }
-
-    try std.testing.expectEqual(@as(usize, capacity), table.count);
-}
-
-test "registration refuses text no client could decode" {
-    const gpa = std.testing.allocator;
-    const table = try testingTable();
-    defer destroyTestingTable(table);
-    const source: core.WorkspaceId = @enumFromInt(1);
-
-    // A branch cut inside a character, as a truncated checkpoint or report
-    // would carry it, would make every workspace list fail to encode.
-    try std.testing.expectError(error.InvalidUtf8, table.register(gpa, .{ .source = source, .path = "/w/fix", .branch = "fix-\xc3" }));
-    try std.testing.expectError(error.InvalidAgentDisplayText, table.register(gpa, .{ .source = source, .path = "/w/fix", .branch = "fix", .title = "a\x1b[2J" }));
-    try std.testing.expectEqual(@as(usize, 0), table.count);
-}
-
-test "registration rejects relative paths, empty branches and exhausted capacity" {
-    const gpa = std.testing.allocator;
-    const table = try testingTable();
-    defer destroyTestingTable(table);
-    const source: core.WorkspaceId = @enumFromInt(1);
-
-    try std.testing.expectError(error.InvalidWorktreePath, table.register(gpa, .{ .source = source, .path = "fix", .branch = "fix" }));
-    try std.testing.expectError(error.InvalidWorktreeText, table.register(gpa, .{ .source = source, .path = "/w/fix", .branch = "" }));
-
-    var buffer: [32]u8 = undefined;
-    for (0..capacity) |index| {
-        const path = try std.fmt.bufPrint(&buffer, "/w/{d}", .{index});
-        _ = try table.register(gpa, .{ .source = source, .path = path, .branch = "b" });
-    }
-
-    try std.testing.expectError(error.WorktreeLimitReached, table.register(gpa, .{ .source = source, .path = "/w/over", .branch = "b" }));
-}
-
-test "a later registration can add coordinator attribution without replacing worktree identity" {
-    var table: Worktrees = .{};
-    defer table.deinit(std.testing.allocator);
-    const request: WorktreeRegistration = .{ .source = @enumFromInt(1), .path = "/work/fix", .branch = "fix" };
-    const first = try table.register(std.testing.allocator, request);
-    var attributed = request;
-    attributed.coordinator = .{ .session_id = .{1} ** 16, .pane_id = @enumFromInt(7), .pane_generation = 3 };
-    const second = try table.register(std.testing.allocator, attributed);
-    try std.testing.expectEqual(first.id, second.id);
-    try std.testing.expect(!second.created);
-    try std.testing.expectEqualDeep(attributed.coordinator, table.coordinator[first.slot]);
-    _ = try table.register(std.testing.allocator, request);
-    try std.testing.expectEqualDeep(attributed.coordinator, table.coordinator[first.slot]);
 }

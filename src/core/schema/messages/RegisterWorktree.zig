@@ -4,8 +4,6 @@ const types = @import("../types.zig");
 /// Asks the runtime to track one Git linked worktree. The CLI adds the
 /// checkout first; the runtime never runs Git on a client's behalf. A path
 /// the runtime already tracks returns the existing worktree.
-const RegisterWorktree = @This();
-
 request_id: id.RequestId,
 /// The workspace the worktree hangs from in every client.
 source: id.WorkspaceId,

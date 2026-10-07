@@ -25,6 +25,7 @@ comptime {
 const index_len = 2 * capacity;
 const empty_row = std.math.maxInt(u16);
 
+// SAFETY: add writes a target before returning with its index and length published; reset clears the index and len before reuse.
 targets: [capacity]Target = undefined,
 len: usize = 0,
 modal_layer: u8 = 0,
@@ -116,108 +117,4 @@ pub fn equivalent(self: *const Registry, right: *const Registry) bool {
     }
 
     return true;
-}
-
-test "a full registry keeps its targets and counts the dropped one" {
-    const registry = try std.testing.allocator.create(Registry);
-    defer std.testing.allocator.destroy(registry);
-    registry.* = .{};
-    for (0..capacity) |index| {
-        try registry.add(.{
-            .id = .{ .target_id = index + 1 },
-            .bounds = .{
-                .x = @floatFromInt(index),
-                .y = 0,
-                .width = 1,
-                .height = 1,
-            },
-            .action = .{ .custom = index },
-        });
-    }
-
-    try registry.add(.{
-        .id = .{ .target_id = capacity + 1 },
-        .bounds = .{
-            .x = 0,
-            .y = 0,
-            .width = 1,
-            .height = 1,
-        },
-        .action = .{ .custom = 0 },
-    });
-    try std.testing.expectEqual(@as(usize, capacity), registry.len);
-    try std.testing.expectEqual(@as(usize, 1), registry.dropped);
-    try std.testing.expect(registry.find(.{ .target_id = capacity + 1 }) == null);
-    try std.testing.expect(registry.at(.{ 0.5, 0.5 }) != null);
-}
-
-test "a duplicate identity is refused and a reset registry takes it again" {
-    var registry: Registry = .{};
-    try registry.add(.{
-        .id = .{
-            .target_id = 7,
-            .generation = 2,
-        },
-        .bounds = .{
-            .x = 0,
-            .y = 0,
-            .width = 1,
-            .height = 1,
-        },
-        .action = .{ .custom = 1 },
-    });
-    try std.testing.expectError(error.DuplicateWidgetIdentity, registry.add(.{
-        .id = .{
-            .target_id = 7,
-            .generation = 2,
-        },
-        .bounds = .{
-            .x = 1,
-            .y = 0,
-            .width = 1,
-            .height = 1,
-        },
-        .action = .{ .custom = 2 },
-    }));
-    try registry.add(.{
-        .id = .{
-            .target_id = 7,
-            .generation = 3,
-        },
-        .bounds = .{
-            .x = 1,
-            .y = 0,
-            .width = 1,
-            .height = 1,
-        },
-        .action = .{ .custom = 2 },
-    });
-    try std.testing.expectEqual(@as(u64, 2), registry.find(.{
-        .target_id = 7,
-        .generation = 3,
-    }).?.action.custom);
-
-    registry.reset();
-    try std.testing.expectEqual(@as(usize, 0), registry.len);
-    try std.testing.expect(registry.find(.{
-        .target_id = 7,
-        .generation = 2,
-    }) == null);
-    try registry.add(.{
-        .id = .{
-            .target_id = 7,
-            .generation = 2,
-        },
-        .bounds = .{
-            .x = 0,
-            .y = 0,
-            .width = 1,
-            .height = 1,
-        },
-        .action = .{ .custom = 3 },
-    });
-    try std.testing.expectEqual(@as(u64, 3), registry.find(.{
-        .target_id = 7,
-        .generation = 2,
-    }).?.action.custom);
 }

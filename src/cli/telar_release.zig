@@ -123,19 +123,3 @@ pub fn fileDigest(io: std.Io, path: []const u8) ![digest_hex_bytes]u8 {
 
     return std.fmt.bytesToHex(hasher.finalResult(), .lower);
 }
-
-test "the digest of an asset comes from its own line" {
-    const a = "a" ** digest_hex_bytes;
-    const b = "B" ** digest_hex_bytes;
-    const sums = a ++ "  telar-linux-aarch64.tar.gz\n" ++ b ++ " *telar-linux-aarch64-headless.tar.gz\n";
-
-    try std.testing.expectEqualStrings("b" ** digest_hex_bytes, &try digestFor(sums, "telar-linux-aarch64-headless.tar.gz"));
-    try std.testing.expectEqualStrings(a, &try digestFor(sums, "telar-linux-aarch64.tar.gz"));
-    try std.testing.expectError(error.ReleaseAssetMissing, digestFor(sums, "telar-macos-aarch64.tar.gz"));
-    try std.testing.expectError(error.ReleaseDigestUnreadable, digestFor("xyz  telar-macos-aarch64.tar.gz\n", "telar-macos-aarch64.tar.gz"));
-}
-
-test "a development build has no release" {
-    try std.testing.expect(!released("0.0.0"));
-    try std.testing.expect(released("0.3.0"));
-}

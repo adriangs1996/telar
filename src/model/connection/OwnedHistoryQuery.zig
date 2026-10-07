@@ -9,6 +9,7 @@ pub const max_query_bytes = core.max_tab_label_bytes;
 pub const max_scope_bytes = core.max_cwd_bytes;
 
 request_id: core.RequestId,
+// SAFETY: history_palette copies the query before queueing it; view exposes only query_len bytes, initially zero.
 query: [max_query_bytes]u8 = undefined,
 query_len: u8 = 0,
 scope: core.HistoryScope = .global,

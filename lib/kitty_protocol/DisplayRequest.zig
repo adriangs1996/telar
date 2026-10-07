@@ -2,7 +2,6 @@
 //! source rectangle's size in image pixels, the requested cells (zero means
 //! not given), the pixel offset inside the first cell, and the cell size in
 //! device pixels.
-const DisplayRequest = @This();
 
 source_width: u32,
 source_height: u32,

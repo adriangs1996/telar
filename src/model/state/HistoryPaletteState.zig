@@ -17,6 +17,7 @@ comptime {
 
 revision: u64 = 0,
 pending_request: u64 = 0,
+// SAFETY: Applying a page initializes each history entry before increasing len; slice and selected-entry access use that prefix.
 entries: [page_entries]Entry = undefined,
 len: u8 = 0,
 phase: enum { idle, loading, ready, failed } = .idle,
@@ -35,6 +36,7 @@ output_request: u64 = 0,
 output_id: u64 = 0,
 output_phase: enum { idle, loading, ready, failed } = .idle,
 output_truncated: bool = false,
+// SAFETY: Failure handling copies the bounded message before setting error_len; errorSlice exposes only that prefix.
 error_text: [128]u8 = undefined,
 error_len: u8 = 0,
 requests: [128]u64 = @splat(0),

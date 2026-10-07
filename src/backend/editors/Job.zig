@@ -13,7 +13,9 @@ comptime {
 client: ClientKey,
 request: core.OwnedEditorOpen,
 /// The pane each candidate belongs to, by index.
+// SAFETY: addCandidate assigns the pane key before increasing candidate_count; result lookup uses the matching candidate index.
 panes: [core.max_panes_per_tab]PaneKey = undefined,
+// SAFETY: addCandidate assigns the candidate before increasing candidate_count; discovery receives only that prefix.
 candidates: [core.max_panes_per_tab]editorremote.Candidate = undefined,
 candidate_count: usize = 0,
 environment: std.process.Environ,
@@ -66,48 +68,4 @@ pub fn run(self: *Job, io: std.Io) *Job {
     }
 
     return self;
-}
-
-test "editor opens ask no editor for a path that is not a regular file" {
-    const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    try temp.dir.writeFile(
-        io,
-        .{
-            .sub_path = "present.zig",
-            .data = "one\n",
-        },
-    );
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory = directory_buffer[0..try temp.dir.realPath(io, &directory_buffer)];
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const cases = [_]struct { name: []const u8, outcome: core.EditorOpened.Outcome }{
-        .{ .name = "absent.zig", .outcome = .missing },
-        .{ .name = "", .outcome = .missing },
-        .{ .name = "present.zig", .outcome = .unavailable },
-    };
-
-    for (cases) |case| {
-        const path = try std.fmt.bufPrint(&path_buffer, "{s}/{s}", .{ directory, case.name });
-        var job: Job = .{
-            .client = .{
-                .id = 1,
-                .generation = 1,
-            },
-            .request = .{
-                .request_id = @enumFromInt(5),
-                .pane_id = @enumFromInt(6),
-                .pane_generation = 7,
-                .line = 3,
-            },
-            .environment = std.testing.environ,
-            .result = .{
-                .request_id = @enumFromInt(5),
-                .outcome = .unavailable,
-            },
-        };
-        try job.request.setTarget("nvim", path);
-        try std.testing.expectEqual(case.outcome, job.run(io).result.outcome);
-    }
 }

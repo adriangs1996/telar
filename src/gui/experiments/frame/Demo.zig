@@ -9,9 +9,13 @@ const Self = @This();
 
 pub const Action = enum { repeat, edit, grow, shrink, swap, reset };
 
+// SAFETY: The first step and reset initialize every quad before constructing block slices.
 a: [4]quad.Quad = undefined,
+// SAFETY: The first step and reset initialize every quad before constructing block slices.
 b: [2]quad.Quad = undefined,
+// SAFETY: The frame algorithm fills the retained output before setting its valid length; comparison reads only that prefix.
 output: [6]quad.Quad = undefined,
+// SAFETY: problem.rebuild fills expected before returning the reference length; comparison reads only that prefix.
 expected: [6]quad.Quad = undefined,
 frame: Frame = .{ .output = &.{} },
 a_len: usize = 3,

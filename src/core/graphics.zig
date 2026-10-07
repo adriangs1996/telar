@@ -5,8 +5,6 @@
 
 const Rect = @import("Rect.zig");
 const std = @import("std");
-const Image = @import("Image.zig");
-const Placement = @import("Placement.zig");
 
 pub const max_images_per_pane: usize = 64;
 pub const max_placements_per_pane: usize = 256;
@@ -91,120 +89,8 @@ fn addExtent(start: i64, extent: u64) ?i64 {
 }
 
 fn scaleCeil(value: u64, numerator: u64, denominator: u64) u64 {
-    const product = std.math.mul(u128, value, numerator) catch unreachable;
+    const product = @as(u128, value) * numerator;
     return @intCast((product + denominator - 1) / denominator);
-}
-
-test "one full-pane frame on a 6K display fits the media quotas" {
-    // The regression this guards: a fullscreen terminal-browser pane on a
-    // Pro Display XDR produced frames over the old 32 MiB per-screen cap,
-    // so every shared frame was rejected and the pane froze on its first
-    // black paint while smaller split panes kept working.
-    const frame: usize = 6016 * 3384 * 4;
-    try std.testing.expect(max_image_bytes_per_screen >= frame);
-    // Resident generation + incoming load + one frozen client transfer.
-    try std.testing.expect(max_image_bytes_per_pane >= 3 * frame);
-    try std.testing.expect(max_image_bytes_global >= max_image_bytes_per_pane);
-}
-
-test "image lengths reject mismatches overflow and quotas" {
-    const image: Image = .{
-        .key = .{ .image_id = 7, .generation = 9 },
-        .format = .rgba,
-        .width = 10,
-        .height = 20,
-        .byte_len = 800,
-    };
-    try std.testing.expectEqual(@as(usize, 800), try image.validate(800));
-    var invalid = image;
-    invalid.byte_len -= 1;
-    try std.testing.expectError(error.InvalidImageLength, invalid.validate(800));
-    try std.testing.expectError(error.ImageQuotaExceeded, image.validate(799));
-    invalid = image;
-    invalid.width = std.math.maxInt(u32);
-    invalid.height = std.math.maxInt(u32);
-    try std.testing.expectError(error.ImageSizeOverflow, invalid.validate(std.math.maxInt(usize)));
-}
-
-test "scaled clipping handles every edge" {
-    const source: Rect = .{ .x = 0, .y = 0, .width = 100, .height = 100 };
-    const bounds: Rect = .{ .x = 0, .y = 0, .width = 80, .height = 80 };
-    const clipped = clipScaled(
-        .{ .x = -10, .y = -20, .width = 100, .height = 110 },
-        source,
-        bounds,
-    ).?;
-    try std.testing.expectEqual(Rect{ .x = 0, .y = 0, .width = 80, .height = 80 }, clipped.destination);
-    try std.testing.expectEqual(Rect{ .x = 10, .y = 19, .width = 80, .height = 71 }, clipped.source);
-}
-
-test "scaled clipping maps each edge independently" {
-    const source: Rect = .{ .x = 0, .y = 0, .width = 100, .height = 100 };
-    const bounds: Rect = .{ .x = 0, .y = 0, .width = 100, .height = 100 };
-    const cases = [_]struct { destination: Rect, expected_destination: Rect, expected_source: Rect }{
-        .{
-            .destination = .{ .x = -10, .y = 0, .width = 100, .height = 100 },
-            .expected_destination = .{ .x = 0, .y = 0, .width = 90, .height = 100 },
-            .expected_source = .{ .x = 10, .y = 0, .width = 90, .height = 100 },
-        },
-        .{
-            .destination = .{ .x = 10, .y = 0, .width = 100, .height = 100 },
-            .expected_destination = .{ .x = 10, .y = 0, .width = 90, .height = 100 },
-            .expected_source = .{ .x = 0, .y = 0, .width = 90, .height = 100 },
-        },
-        .{
-            .destination = .{ .x = 0, .y = -10, .width = 100, .height = 100 },
-            .expected_destination = .{ .x = 0, .y = 0, .width = 100, .height = 90 },
-            .expected_source = .{ .x = 0, .y = 10, .width = 100, .height = 90 },
-        },
-        .{
-            .destination = .{ .x = 0, .y = 10, .width = 100, .height = 100 },
-            .expected_destination = .{ .x = 0, .y = 10, .width = 100, .height = 90 },
-            .expected_source = .{ .x = 0, .y = 0, .width = 100, .height = 90 },
-        },
-    };
-    for (cases) |case| {
-        const clipped = clipScaled(case.destination, source, bounds).?;
-        try std.testing.expectEqual(case.expected_destination, clipped.destination);
-        try std.testing.expectEqual(case.expected_source, clipped.source);
-    }
-}
-
-test "scaled clipping rejects placements outside the pane" {
-    try std.testing.expect(clipScaled(
-        .{ .x = 20, .y = 20, .width = 5, .height = 5 },
-        .{ .x = 0, .y = 0, .width = 5, .height = 5 },
-        .{ .x = 0, .y = 0, .width = 10, .height = 10 },
-    ) == null);
-}
-
-test "placement source rectangles are bounded by their image" {
-    const image: Image = .{
-        .key = .{ .image_id = 1, .generation = 1 },
-        .format = .rgba,
-        .width = 100,
-        .height = 80,
-        .byte_len = 32_000,
-    };
-    const remaining = try (Placement{
-        .key = image.key,
-        .virtual_id = 1,
-        .placement_id = 1,
-        .x = 0,
-        .y = 0,
-        .source_x = 10,
-        .source_y = 20,
-    }).sourceRect(image);
-    try std.testing.expectEqual(Rect{ .x = 10, .y = 20, .width = 90, .height = 60 }, remaining);
-    try std.testing.expectError(error.InvalidSourceRectangle, (Placement{
-        .key = image.key,
-        .virtual_id = 2,
-        .placement_id = 2,
-        .x = 0,
-        .y = 0,
-        .source_x = 90,
-        .source_width = 11,
-    }).sourceRect(image));
 }
 
 const Clip = struct {

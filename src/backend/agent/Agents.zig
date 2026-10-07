@@ -18,6 +18,7 @@ const Occupancy = std.bit_set.IntegerBitSet(capacity);
 /// aggregate's key never changes after insertion, and every insertion and
 /// removal updates all four fields together.
 slots: [capacity]?Agent = @splat(null),
+// SAFETY: insert assigns the pane key before publishing occupancy and index; lookup and release use occupied slots.
 keys: [capacity]PaneKey = undefined,
 occupied: Occupancy = .initEmpty(),
 index: core.GenericSlotIndex(2 * capacity) = .{},

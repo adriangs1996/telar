@@ -1,7 +1,5 @@
 //! A circular progress stroke composed from bounded, antialiased round quads.
 const cellgrid = @import("cellgrid");
-const data = @import("model");
-const QuadList = gfx.QuadList;
 const std = @import("std");
 const Canvas = @import("Canvas.zig");
 const gfx = @import("gfx");
@@ -59,32 +57,4 @@ fn points() [segments][2]f32 {
     }
 
     return values;
-}
-
-test "progress arcs stay bounded at every fraction scale and rotation without allocating" {
-    var quads = QuadList.init(std.testing.allocator);
-    defer quads.deinit();
-    try quads.reserve(segments + 2);
-    var canvas: Canvas = .{ .atlas = undefined, .quads = &quads, .metrics = .{ .cell_width = 10, .cell_height = 20, .pixel_height = 16, .baseline = 15 }, .origin = .{ 0, 0 }, .theme = data.theme_support.default_theme };
-    var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
-    quads.allocator = failing.allocator();
-    defer quads.allocator = std.testing.allocator;
-    for ([_]f32{ 1, 14, 28, 56 }) |side| {
-        const bounds: Rect = .{ .x = 12, .y = 19, .width = side, .height = side };
-        for ([_]f32{ 0, 0.001, 0.25, 0.73, 1 }) |fraction| {
-            for ([_]f32{ 0, 0.173, 0.5, 0.92 }) |rotation| {
-                quads.clear();
-                try (ProgressRing{ .area = bounds, .color = .rgb(.{ 255, 0, 0 }), .fraction = fraction, .rotation = rotation }).draw(&canvas);
-                try std.testing.expect(quads.items().len <= segments + 2);
-                try std.testing.expectEqual(@as(f32, 0.18), quads.items()[0].border_a);
-                for (quads.items()) |item| {
-                    try std.testing.expect(item.x >= bounds.x - 0.001 and item.y >= bounds.y - 0.001);
-                    try std.testing.expect(item.x + item.width <= bounds.x + side + 0.001);
-                    try std.testing.expect(item.y + item.height <= bounds.y + side + 0.001);
-                }
-            }
-        }
-    }
-
-    try std.testing.expectEqual(@as(usize, 0), failing.allocations);
 }

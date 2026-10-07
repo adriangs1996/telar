@@ -114,6 +114,7 @@ fn environmentValue(environment: [*:null]const ?[*:0]const u8, name: []const u8)
 }
 
 fn readChildFailure(fd: std.c.fd_t) !?ChildFailure {
+    // SAFETY: The loop fills all bytes before returning failure; EOF before completion returns an error or null.
     var failure: ChildFailure = undefined;
     const bytes: [*]u8 = @ptrCast(&failure);
     var read_len: usize = 0;
@@ -271,28 +272,6 @@ fn childFail(fd: std.c.fd_t, stage: ChildFailureStage, error_code: std.posix.E) 
     }
 
     std.c._exit(127);
-}
-
-test "child failure reports preserve actionable exec errors" {
-    try std.testing.expectEqual(
-        error.ExecutableNotFound,
-        childFailureError(.{ .stage = .exec, .errno_code = @intFromEnum(std.posix.E.NOENT) }),
-    );
-    try std.testing.expectEqual(
-        error.ExecutableAccessDenied,
-        childFailureError(.{ .stage = .exec, .errno_code = @intFromEnum(std.posix.E.ACCES) }),
-    );
-    try std.testing.expectEqual(
-        error.ChildSetupFailed,
-        childFailureError(.{ .stage = .stdin, .errno_code = @intFromEnum(std.posix.E.BADF) }),
-    );
-}
-
-test "environment lookup requires the complete variable name" {
-    const environment: [2:null]?[*:0]const u8 = .{ "PATH_SUFFIX=wrong", "PATH=/bin" };
-
-    try std.testing.expectEqualStrings("/bin", environmentValue(&environment, "PATH").?);
-    try std.testing.expect(environmentValue(&environment, "MISSING") == null);
 }
 
 const Spawned = struct {

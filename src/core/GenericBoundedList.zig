@@ -7,7 +7,9 @@ pub fn Type(comptime capacity: usize, comptime entry_bytes: usize) type {
 
         pub const max_entries = capacity;
 
+        // SAFETY: append copies the string before publishing its length and increasing count; get requires an index below count.
         items: [capacity][entry_bytes]u8 = undefined,
+        // SAFETY: append sets each length before increasing count; get requires an index below count.
         lens: [capacity]u8 = undefined,
         count: u8 = 0,
 

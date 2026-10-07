@@ -1,5 +1,4 @@
-//! The runtime's canonical pane list for one tab reaches the client
-//! (docs/flows/tab-snapshot-reconciliation.md).
+//! The runtime's canonical pane list for one tab reaches the client.
 const TabReconciliation = @import("../state/TabReconciliation.zig");
 const tab_snapshot_reconciliation = @import("tab_snapshot_reconciliation.zig");
 const cellgrid = @import("cellgrid");

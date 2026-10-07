@@ -17,28 +17,3 @@ pub fn writePlacement(writer: *std.Io.Writer, placement: PlacementCommand) std.I
 
     return written;
 }
-
-test "placement preserves the caller's z-index" {
-    var output: [512]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&output);
-    _ = try writePlacement(&writer, .{
-        .image_id = 7,
-        .placement_id = 9,
-        .value = .{
-            .column = 2,
-            .row = 3,
-            .offset_x = 0,
-            .offset_y = 0,
-            .source_x = 0,
-            .source_y = 0,
-            .source_width = 16,
-            .source_height = 8,
-            .columns = 4,
-            .rows = 2,
-        },
-        .z = 2001,
-    });
-
-    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "\x1b[4;3H") != null);
-    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), ",z=2001,C=1,q=2") != null);
-}

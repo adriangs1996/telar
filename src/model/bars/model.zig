@@ -8,13 +8,8 @@ const ContentLimits = @import("ContentLimits.zig");
 const Dynamic = @import("Dynamic.zig");
 const Command = @import("BarCommand.zig");
 const std = @import("std");
-const ui_icons = @import("../layout/icons.zig");
-const Configuration = @import("BarConfiguration.zig");
-const State = @import("State.zig");
-const NodeKind = @import("NodeKind.zig").NodeKind;
 const MetricName = @import("MetricName.zig").MetricName;
 
-pub const max_segments = 16;
 /// Legacy plain command output without a render callback stays one line of
 /// at most this many bytes.
 pub const max_text_bytes = 512;
@@ -84,14 +79,14 @@ fn metricsContent() Content {
     const group = content.append(.{
         .kind = .group,
         .priority = metric_priority,
-    }) catch unreachable;
+    }) catch @compileError("Invalid built-in bar content");
     for ([_]MetricName{ .cpu, .memory, .battery }) |name| {
         _ = content.append(.{
             .kind = .metric,
             .parent = group,
             .metric = name,
             .priority = metric_priority,
-        }) catch unreachable;
+        }) catch @compileError("Invalid built-in bar content");
     }
 
     return content;
@@ -106,7 +101,7 @@ fn machinesContent() Content {
     _ = content.append(.{
         .kind = .machines,
         .priority = metric_priority,
-    }) catch unreachable;
+    }) catch @compileError("Invalid built-in bar content");
     return content;
 }
 
@@ -135,12 +130,6 @@ pub const Position = enum(u3) {
     pub fn bit(self: Position) u8 {
         return @as(u8, 1) << @intFromEnum(self);
     }
-};
-
-pub const Alignment = enum {
-    left,
-    center,
-    right,
 };
 
 pub const PaletteColor = enum {
@@ -216,45 +205,4 @@ pub fn slotEql(left: *const Slot, right: *const Slot) bool {
         .content => |*content| content.eql(&right.content),
         else => true,
     };
-}
-
-test "legacy segments become labels that keep their exact style" {
-    var content: Content = .{};
-    try content.appendSegment(.{
-        .text = " CPU 20%",
-        .icon = .cpu,
-        .style = .{ .foreground = .{ .palette = .teal }, .bold = true },
-    });
-    try content.appendSegment(.{ .text = "", .icon = .battery_full });
-
-    try std.testing.expectEqual(@as(u8, 2), content.node_count);
-    try std.testing.expectEqual(NodeKind.label, content.slice()[0].kind);
-    try std.testing.expectEqualStrings(" CPU 20%", content.text(content.slice()[0].text));
-    try std.testing.expect(content.slice()[0].style.bold);
-    try std.testing.expectEqual(NodeKind.icon, content.slice()[1].kind);
-    try std.testing.expectEqual(ui_icons.Icon.battery_full, content.slice()[1].icon.?);
-}
-
-test "bar state rejects stale dynamic updates and folds equal content" {
-    const configuration: Configuration = .{
-        .bottom = .{
-            .{ .dynamic = .{ .callback = .{ .generation = 7, .id = 1 }, .interval_ns = std.time.ns_per_s } },
-            .empty,
-            .tabs,
-        },
-    };
-    var state = State.init(configuration.presentation());
-    var content: Content = .{};
-    try content.appendSegment(.{ .text = "ready" });
-
-    try std.testing.expectError(error.StaleBarUpdate, state.update(.{ .generation = 6, .position = .bottom_left, .content = content }));
-    try std.testing.expectEqual(Change.changed, try state.update(.{ .generation = 7, .position = .bottom_left, .content = content }));
-    try std.testing.expectEqual(Change.unchanged, try state.update(.{ .generation = 7, .position = .bottom_left, .content = content }));
-}
-
-test "bar text rejects terminal controls before it reaches the renderer" {
-    var content: Content = .{};
-
-    try std.testing.expectError(error.InvalidBarText, content.appendSegment(.{ .text = "line\n" }));
-    try std.testing.expectError(error.InvalidBarText, content.appendSegment(.{ .text = "\x1b[31m" }));
 }

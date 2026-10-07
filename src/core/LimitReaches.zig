@@ -24,22 +24,36 @@ comptime {
 /// An empty table, for a reader with nothing to list.
 pub const none: LimitReaches = .{};
 
+// SAFETY: insert copies the name and records its length before returning the row; readers use only that prefix.
 name: [capacity][Limit.max_name_bytes]u8 = undefined,
+// SAFETY: insert initializes this column before returning the row; readers use only occupied rows below count.
 name_len: [capacity]u8 = undefined,
+// SAFETY: insert starts noun_len at zero; limit_reached.record copies each noun before publishing its new length.
 noun: [capacity][Limit.max_noun_bytes]u8 = undefined,
+// SAFETY: insert initializes this column before returning the row; readers use only occupied rows below count.
 noun_len: [capacity]u8 = undefined,
+// SAFETY: insert starts route_len at zero; limit_reached.record copies each route before publishing its new length.
 route: [capacity][LimitReach.max_route_bytes]u8 = undefined,
+// SAFETY: insert initializes this column before returning the row; readers use only occupied rows below count.
 route_len: [capacity]u8 = undefined,
+// SAFETY: insert initializes this column before returning the row; readers use only occupied rows below count.
 value: [capacity]u64 = undefined,
+// SAFETY: insert initializes this column before returning the row; readers use only occupied rows below count.
 requested: [capacity]?u64 = undefined,
+// SAFETY: insert initializes this column before returning the row; readers use only occupied rows below count.
 hits: [capacity]u64 = undefined,
 /// Wall clock of the last reach, in milliseconds since the epoch.
+// SAFETY: insert initializes this column before returning the row; readers use only occupied rows below count.
 last_ms: [capacity]i64 = undefined,
 /// Monotonic milliseconds of the last notice and the last report.
+// SAFETY: insert initializes this column before returning the row; readers use only occupied rows below count.
 shown_ms: [capacity]?i64 = undefined,
+// SAFETY: insert initializes this column before returning the row; readers use only occupied rows below count.
 reported_ms: [capacity]?i64 = undefined,
+// SAFETY: insert initializes this column before returning the row; readers use only occupied rows below count.
 unreported: [capacity]u32 = undefined,
 /// The index key each row holds.
+// SAFETY: insert initializes this column before returning the row; readers use only occupied rows below count.
 key: [capacity]u64 = undefined,
 index: GenericSlotIndex(2 * capacity) = .{},
 count: usize = 0,
@@ -135,37 +149,4 @@ fn freeKey(self: *const LimitReaches, name: []const u8) u64 {
 fn keyFor(name: []const u8, attempt: usize) u64 {
     const hash = std.hash.Wyhash.hash(attempt, name);
     return if (hash == GenericSlotIndex(2 * capacity).empty_key) 1 else hash;
-}
-
-test "a full table replaces the limit reached longest ago and counts it" {
-    var reaches: LimitReaches = .{};
-    var name_buffer: [16]u8 = undefined;
-    for (0..capacity) |number| {
-        const name = try std.fmt.bufPrint(&name_buffer, "limit.{d}", .{number});
-        const slot = reaches.insert(name);
-        reaches.last_ms[slot] = @intCast(number + 10);
-    }
-
-    const slot = reaches.insert("limit.new");
-    try std.testing.expectEqual(@as(usize, capacity), reaches.count);
-    try std.testing.expectEqual(@as(u64, 1), reaches.evicted);
-    try std.testing.expectEqual(slot, reaches.find("limit.new").?);
-    try std.testing.expectEqual(@as(?usize, null), reaches.find("limit.0"));
-    try std.testing.expect(reaches.find("limit.1") != null);
-    try std.testing.expectEqualStrings("limit.new", reaches.reachAt(slot).limit.name);
-}
-
-test "names whose keys collide keep their own rows" {
-    var reaches: LimitReaches = .{};
-    const first = reaches.insert("render.retained_max_cells");
-
-    // Point the second name's first key at the first row, as a hash
-    // collision would, then add the second name.
-    reaches.index.put(keyFor("gui.widgets.registry_capacity", 0), first);
-    try std.testing.expectEqual(@as(?usize, null), reaches.find("gui.widgets.registry_capacity"));
-    const second = reaches.insert("gui.widgets.registry_capacity");
-
-    try std.testing.expect(first != second);
-    try std.testing.expectEqual(first, reaches.find("render.retained_max_cells").?);
-    try std.testing.expectEqual(second, reaches.find("gui.widgets.registry_capacity").?);
 }

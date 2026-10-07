@@ -9,6 +9,7 @@ pub fn Type(comptime Widget: type, comptime capacity: usize) type {
     return struct {
         const List = @This();
 
+        // SAFETY: append writes a widget before increasing len; draw visits only that initialized prefix.
         storage: [capacity]Widget = undefined,
         len: usize = 0,
         /// Widgets left out because the list was full; the frame draws the

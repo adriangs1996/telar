@@ -1,6 +1,5 @@
 const SessionFormat = @import("SessionFormat.zig").SessionFormat;
 const core = @import("telar-core");
-const Capabilities = @This();
 
 /// Shell words that resume a session by its reference, ending in the space
 /// that separates them from the reference. `null` means the agent cannot

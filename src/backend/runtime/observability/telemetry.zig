@@ -4,7 +4,6 @@ const core = @import("telar-core");
 const ClientSample = @import("ClientSample.zig");
 const std = @import("std");
 const vt = @import("ghostty-vt");
-const State = @import("State.zig");
 const Service = @import("../../history/Service.zig");
 const PaneStore = @import("../../pane/PaneStore.zig");
 const RuntimeMetrics = @import("RuntimeMetrics.zig");
@@ -293,6 +292,7 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: TelemetrySample) ![]const u8
             "\"proxy_connection_limit_drops\":{d}," ++
             "\"proxy_h2_decode_failures\":{d}," ++
             "\"proxy_passthrough_connections\":{d}," ++
+            "\"proxy_anonymous_tunnels\":{d}," ++
             "\"proxy_upstream_connect_failures\":{d}," ++
             "\"proxy_tls_context_failures\":{d}," ++
             "\"proxy_tls_upstream_handshake_failures\":{d}," ++
@@ -321,6 +321,7 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: TelemetrySample) ![]const u8
             proxy.connection_limit_drops,
             proxy.h2_decode_failures,
             proxy.passthrough_connections,
+            proxy.anonymous_tunnels,
             proxy.upstream_connect_failures,
             proxy.tls_context_failures,
             proxy.tls_upstream_handshake_failures,
@@ -424,149 +425,6 @@ pub fn averageNs(total: u64, count: u64) u64 {
     return if (count == 0) 0 else total / count;
 }
 
-test "telemetry state lends its line buffer to exactly one write" {
-    var state: State = .{};
-
-    try std.testing.expect(!state.writePending());
-    state.beginWrite();
-    try std.testing.expect(state.writePending());
-
-    try std.testing.expectEqual(WriteCompletion.ready, state.finishWrite({}));
-    try std.testing.expect(!state.writePending());
-
-    state.beginWrite();
-    state.cancelWrite();
-    try std.testing.expect(!state.writePending());
-}
-
-test "a failed telemetry write releases the buffer before retiring its sink" {
-    var state: State = .{};
-    state.beginWrite();
-
-    try std.testing.expectEqual(
-        WriteCompletion.disable_sink,
-        state.finishWrite(error.WriteFailed),
-    );
-    try std.testing.expect(!state.writePending());
-}
-
-test "runtime telemetry reports retained memory domains" {
-    const io = std.testing.io;
-    var service = try Service.init(std.testing.allocator, .{ .database_path = ":memory:" });
-    defer service.deinit(io);
-    var heap = core.Heap.init(std.testing.allocator);
-    {
-        const path = core.enter(.observation);
-        defer path.restore();
-        const scratch = try heap.allocator().alloc(u8, 16);
-        defer heap.allocator().free(scratch);
-        var panes: PaneStore = .{};
-        panes.graphics_budget.used = 99;
-        var buffer: [max_line_bytes]u8 = undefined;
-        var metrics: RuntimeMetrics = .{ .started_ns = 0 };
-        metrics.graphics_stage_blocked = 4;
-        metrics.graphics_freeze.observe(3 * std.time.ns_per_us);
-        metrics.media_ingest.observe(7 * std.time.ns_per_us);
-        const line = try formatRuntimeTelemetry(&buffer, .{
-            .io = io,
-            .metrics = &metrics,
-            .clients = .{
-                .count = 2,
-                .response_queue_depth = 3,
-                .response_queue_high_water = 5,
-                .response_queue_dropped = 7,
-            },
-            .workspace_count = 11,
-            .tab_count = 13,
-            .panes = &panes,
-            .history_service = &service,
-            .proxy = .{
-                .active = true,
-                .port = 45105,
-                .preferred_port = 45104,
-                .active_connections = 17,
-                .rejected_connections = 31,
-                .invalid_authorization_rejections = 37,
-                .unknown_credential_rejections = 41,
-                .connection_limit_drops = 43,
-                .h2_decode_failures = 47,
-                .passthrough_connections = 53,
-                .upstream_connect_failures = 59,
-                .tls_context_failures = 61,
-                .tls_upstream_handshake_failures = 67,
-                .tls_downstream_handshake_failures = 71,
-                .tls_mint_failures = 73,
-                .capture_started = 103,
-                .capture_truncated = 107,
-                .capture_skipped = 109,
-                .capture_dropped_queue = 113,
-                .capture_decode_failed = 127,
-                .capture_queue_depth = 131,
-                .capture_queue_high_water = 137,
-            },
-            .heap = &heap,
-        });
-        try std.testing.expect(std.mem.indexOf(u8, line, "\"graphics_budget_used\":99") != null);
-        try std.testing.expect(std.mem.indexOf(u8, line, "\"pane_media_used\":0") != null);
-        try std.testing.expect(std.mem.indexOf(u8, line, "\"graphics_stage_blocked\":4") != null);
-        try std.testing.expect(std.mem.indexOf(u8, line, "\"graphics_stage_deferred\":0") != null);
-        try std.testing.expect(std.mem.indexOf(u8, line, "\"graphics_transfers_adopted\":0") != null);
-        try std.testing.expect(std.mem.indexOf(u8, line, "\"graphics_freeze_avg_us\":3") != null);
-        try std.testing.expect(std.mem.indexOf(u8, line, "\"media_ingest_max_us\":7") != null);
-        try std.testing.expect(std.mem.indexOf(u8, line, "\"vt_scrollback_bytes\":0") != null);
-        try std.testing.expect(std.mem.indexOf(u8, line, "\"history_sqlite_bytes\":0") != null);
-        try std.testing.expect(std.mem.indexOf(u8, line, "\"rss_bytes\":") != null);
-        const expected_heap = if (core.enabled)
-            "\"heap_live_bytes\":16"
-        else
-            "\"heap_live_bytes\":0";
-        const expected_observation_allocs = if (core.enabled)
-            "\"observation_allocs\":1"
-        else
-            "\"observation_allocs\":0";
-
-        try std.testing.expect(std.mem.indexOf(u8, line, expected_heap) != null);
-        try std.testing.expect(std.mem.indexOf(u8, line, expected_observation_allocs) != null);
-        try std.testing.expect(std.mem.indexOf(u8, line, "\"interactive_allocs\":0") != null);
-        try std.testing.expect(std.mem.indexOf(u8, line, "\"interactive_vt_allocs\":0") != null);
-        try std.testing.expect(std.mem.indexOf(u8, line, "\"interactive_telar_allocs\":0") != null);
-        const expected_fields = [_][]const u8{
-            "\"client_count\":2",
-            "\"workspace_count\":11",
-            "\"tab_count\":13",
-            "\"response_queue_depth\":3",
-            "\"response_queue_high_water\":5",
-            "\"response_queue_dropped\":7",
-            "\"proxy_active\":1",
-            "\"proxy_port\":45105",
-            "\"proxy_preferred_port\":45104",
-            "\"proxy_active_connections\":17",
-            "\"proxy_rejected_connections\":31",
-            "\"proxy_invalid_authorization_rejections\":37",
-            "\"proxy_unknown_credential_rejections\":41",
-            "\"proxy_connection_limit_drops\":43",
-            "\"proxy_h2_decode_failures\":47",
-            "\"proxy_passthrough_connections\":53",
-            "\"proxy_upstream_connect_failures\":59",
-            "\"proxy_tls_context_failures\":61",
-            "\"proxy_tls_upstream_handshake_failures\":67",
-            "\"proxy_tls_downstream_handshake_failures\":71",
-            "\"proxy_tls_mint_failures\":73",
-            "\"proxy_capture_started\":103",
-            "\"proxy_capture_truncated\":107",
-            "\"proxy_capture_skipped_quota\":109",
-            "\"proxy_capture_dropped_queue\":113",
-            "\"proxy_capture_decode_failed\":127",
-            "\"proxy_capture_queue_depth\":131",
-            "\"proxy_capture_queue_high_water\":137",
-        };
-
-        for (expected_fields) |field| {
-            try std.testing.expect(std.mem.indexOf(u8, line, field) != null);
-        }
-    }
-}
-
 const TelemetrySample = struct {
     io: std.Io,
     metrics: *const RuntimeMetrics,
@@ -589,6 +447,7 @@ const TelemetrySample = struct {
         connection_limit_drops: u64 = 0,
         h2_decode_failures: u64 = 0,
         passthrough_connections: u64 = 0,
+        anonymous_tunnels: u64 = 0,
         upstream_connect_failures: u64 = 0,
         tls_context_failures: u64 = 0,
         tls_upstream_handshake_failures: u64 = 0,

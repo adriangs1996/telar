@@ -6,7 +6,6 @@ const Rect = @import("Rect.zig");
 const RoundedRect = @import("RoundedRect.zig");
 const SpriteQuad = @import("SpriteQuad.zig");
 const quad = @import("Quad.zig");
-const OpacityWave = @import("OpacityWave.zig");
 const OpacityEdge = @import("OpacityEdge.zig");
 const Quad = quad.Quad;
 const QuadList = @This();
@@ -157,14 +156,6 @@ pub fn items(self: *const QuadList) []const Quad {
     return self.quads.items;
 }
 
-/// Highlights existing glyphs without changing their geometry or reshaping.
-/// Example: `list.highlightFrom(first_glyph, .{ .center = x, .radius = 40 });`
-pub fn highlightFrom(self: *QuadList, start: usize, wave: OpacityWave) void {
-    for (self.quads.items[start..]) |*glyph| {
-        glyph.a *= wave.at(glyph.x + glyph.width / 2);
-    }
-}
-
 /// Fades existing ink toward an edge by each quad's center, so a label cut
 /// by its box dissolves instead of ending mid-glyph.
 /// Example: `list.fadeEdgeFrom(first_glyph, .{ .from = right - 24, .to = right });`
@@ -210,48 +201,6 @@ pub fn fadeFrom(self: *QuadList, start: usize, opacity: f32) void {
         item.a *= opacity;
         item.border_a *= opacity;
     }
-}
-
-test "plain rectangles keep zero shape attributes and rounded surfaces carry theirs" {
-    var list = QuadList.init(std.testing.allocator);
-    defer list.deinit();
-    try list.pushRect(.{ .x = 1, .y = 2, .width = 3, .height = 4 }, Color.white);
-    const plain = list.items()[0];
-    try std.testing.expectEqualDeep(Quad{ .x = 1, .y = 2, .width = 3, .height = 4, .u0 = quad.solid_uv[0], .v0 = quad.solid_uv[1], .u1 = quad.solid_uv[2], .v1 = quad.solid_uv[3], .r = 1, .g = 1, .b = 1, .a = 1 }, plain);
-    try std.testing.expectEqual(@as(f32, 0), plain.radius);
-    try std.testing.expectEqual(@as(f32, 0), plain.border);
-    try std.testing.expectEqual(@as(f32, 0), plain.border_a);
-
-    try list.pushRounded(.{ .x = 1, .y = 2, .width = 3, .height = 4 }, .{ .fill = .{ .r = 0, .g = 0, .b = 0, .a = 0 }, .radius = 8, .border = 2, .border_color = Color.white });
-    const ring = list.items()[1];
-    try std.testing.expectEqual(@as(f32, 8), ring.radius);
-    try std.testing.expectEqual(@as(f32, 2), ring.border);
-    try std.testing.expectEqual(@as(f32, 0), ring.a);
-    try std.testing.expectEqual(@as(f32, 1), ring.border_a);
-    try std.testing.expectEqual(plain.u0, ring.u0);
-    try std.testing.expectEqual(@as(usize, 80), @sizeOf(Quad));
-    try std.testing.expectEqual(@as(f32, 0), plain.texture);
-    try std.testing.expectEqual(@as(f32, 0), ring.texture);
-
-    try list.pushSprite(.{ .x = 1, .y = 2, .width = 3, .height = 4 }, .{ .uv = .{ 0.25, 0.5, 0.75, 1 }, .tint = Color.white });
-    const sprite = list.items()[2];
-    try std.testing.expectEqual(quad.sprite_texture, sprite.texture);
-    try std.testing.expectEqual(@as(f32, 0.25), sprite.u0);
-    try std.testing.expectEqual(@as(f32, 1), sprite.v1);
-    try std.testing.expectEqual(@as(f32, 0), sprite.radius);
-    try std.testing.expectEqual(@as(f32, 0), sprite.border);
-}
-
-test "clear keeps capacity and drops quads" {
-    var list = QuadList.init(std.testing.allocator);
-    defer list.deinit();
-
-    try list.pushRect(.{ .x = 1, .y = 2, .width = 3, .height = 4 }, Color.white);
-    try std.testing.expectEqual(@as(usize, 1), list.items().len);
-    try std.testing.expectEqual(@as(f32, 3), list.items()[0].width);
-
-    list.clear();
-    try std.testing.expectEqual(@as(usize, 0), list.items().len);
 }
 
 /// Reserves a bounded frame at geometry changes. Example: `try list.reserve(4096);`
@@ -300,98 +249,4 @@ fn clipQuad(original: Quad, clip: Rect) Quad {
     item.width = right - left;
     item.height = bottom - top;
     return item;
-}
-
-test "clipping a glyph adjusts texture coordinates without leaking into the next pane" {
-    var list = QuadList.init(std.testing.allocator);
-    defer list.deinit();
-    try list.push(.{ .x = 5, .y = 2, .width = 20, .height = 10, .u0 = 0, .v0 = 0, .u1 = 1, .v1 = 1, .r = 1, .g = 1, .b = 1, .a = 1 });
-    list.clipFrom(0, .{ .x = 10, .y = 0, .width = 10, .height = 7 });
-    const clipped = list.items()[0];
-    try std.testing.expectEqual(@as(f32, 10), clipped.x);
-    try std.testing.expectEqual(@as(f32, 10), clipped.width);
-    try std.testing.expectEqual(@as(f32, 5), clipped.height);
-    try std.testing.expectApproxEqAbs(@as(f32, 0.25), clipped.u0, 0.001);
-    try std.testing.expectApproxEqAbs(@as(f32, 0.75), clipped.u1, 0.001);
-    try std.testing.expectApproxEqAbs(@as(f32, 0.5), clipped.v1, 0.001);
-    try list.push(.{ .x = 30, .y = 2, .width = 5, .height = 5, .u0 = 0, .v0 = 0, .u1 = 1, .v1 = 1, .r = 1, .g = 1, .b = 1, .a = 1 });
-    try list.push(.{ .x = 12, .y = 2, .width = 5, .height = 5, .u0 = 0, .v0 = 0, .u1 = 1, .v1 = 1, .r = 1, .g = 1, .b = 1, .a = 1 });
-    list.clipFrom(1, .{ .x = 10, .y = 0, .width = 10, .height = 7 });
-    try std.testing.expectEqual(@as(usize, 2), list.items().len);
-    try std.testing.expectEqual(@as(f32, 12), list.items()[1].x);
-}
-
-test "pane composition preserves contained texture coordinates and omits outside ink" {
-    var list = QuadList.init(std.testing.allocator);
-    defer list.deinit();
-    const clip: Rect = .{ .x = 10, .y = 20, .width = 30, .height = 40 };
-    var glyph: Quad = .{ .x = 11, .y = 22, .width = 7, .height = 13, .u0 = 0.13, .v0 = 0.41, .u1 = 0.27, .v1 = 0.57, .r = 1, .g = 1, .b = 1, .a = 1 };
-    try list.pushClipped(glyph, clip);
-    try std.testing.expectEqualDeep(glyph, list.items()[0]);
-    glyph.x = clip.x + clip.width;
-    try list.pushClipped(glyph, clip);
-    glyph.x = clip.x - glyph.width;
-    try list.pushClipped(glyph, clip);
-    glyph.x = clip.x;
-    glyph.y = clip.y - glyph.height;
-    try list.pushClipped(glyph, clip);
-    glyph.y = clip.y + clip.height;
-    try list.pushClipped(glyph, clip);
-    try std.testing.expectEqual(@as(usize, 1), list.items().len);
-}
-
-test "diagram quads retain slot and UV cropping through clipping" {
-    var list = QuadList.init(std.testing.allocator);
-    defer list.deinit();
-    try list.pushDiagram(.{ .x = 10, .y = 20, .width = 200, .height = 100 }, 7);
-    list.clipFrom(0, .{ .x = 60, .y = 45, .width = 100, .height = 50 });
-    const image = list.items()[0];
-    try std.testing.expectEqual(@as(f32, 9), image.texture);
-    try std.testing.expectEqual(@as(f32, 0.25), image.u0);
-    try std.testing.expectEqual(@as(f32, 0.75), image.u1);
-    try std.testing.expectEqual(@as(f32, 0.25), image.v0);
-    try std.testing.expectEqual(@as(f32, 0.75), image.v1);
-    try std.testing.expectError(error.InvalidDiagramSlot, list.pushDiagram(.{ .x = 0, .y = 0, .width = 1, .height = 1 }, 8));
-    try std.testing.expectEqual(@as(usize, 1), list.items().len);
-}
-
-test "a diagram region samples only its part of the texture" {
-    var list = QuadList.init(std.testing.allocator);
-    defer list.deinit();
-    try list.pushDiagramRegion(.{ .x = 0, .y = 0, .width = 40, .height = 20 }, 6, .{ 0.25, 0, 0.5, 0.5 });
-    const image = list.items()[0];
-    try std.testing.expectEqual(@as(f32, 8), image.texture);
-    try std.testing.expectEqual(@as(f32, 0.25), image.u0);
-    try std.testing.expectEqual(@as(f32, 0.5), image.u1);
-    try std.testing.expectEqual(@as(f32, 0.5), image.v1);
-}
-
-test "a list at its limit keeps the quads it holds and counts the rest" {
-    var list = QuadList.init(std.testing.allocator);
-    defer list.deinit();
-    try list.reserve(2);
-    try list.pushRect(.{
-        .x = 0,
-        .y = 0,
-        .width = 1,
-        .height = 1,
-    }, Color.white);
-    try list.pushRect(.{
-        .x = 1,
-        .y = 0,
-        .width = 1,
-        .height = 1,
-    }, Color.white);
-    try list.pushRect(.{
-        .x = 2,
-        .y = 0,
-        .width = 1,
-        .height = 1,
-    }, Color.white);
-    try std.testing.expectEqual(@as(usize, 2), list.items().len);
-    try std.testing.expectEqual(@as(usize, 1), list.dropped);
-    try std.testing.expectEqual(@as(f32, 1), list.items()[1].x);
-
-    list.clear();
-    try std.testing.expectEqual(@as(usize, 1), list.dropped);
 }

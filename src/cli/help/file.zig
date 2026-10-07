@@ -30,7 +30,6 @@ pub const family: FamilyHelp = .{
             \\Results: `{"bytes":N,"published":true}`; exit 1 and no file otherwise.
             \\
             ,
-            .examples = &.{&.{ "file", "put", "/home/dev/brief.md", "--bytes", "1532" }},
         },
         .{
             .name = "get",
@@ -43,7 +42,6 @@ pub const family: FamilyHelp = .{
             \\retained output is an explicit failure, not a short artifact: check the exit status.
             \\
             ,
-            .examples = &.{&.{ "file", "get", "/home/dev/report.tar" }},
         },
     },
 };

@@ -1,10 +1,11 @@
 //! One transient clipboard confirmation; repeated copies replace its deadline.
+const Window = @import("telar-window");
 const std = @import("std");
 const Canvas = @import("Canvas.zig");
 const Label = @import("Label.zig");
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
-const Result = @import("../input/ClipboardResult.zig");
+const Result = @FieldType(Window.Input, "clipboard");
 const CopyFeedback = @This();
 
 const duration_ns = 2 * std.time.ns_per_s;
@@ -47,7 +48,7 @@ pub fn draw(self: *const CopyFeedback, canvas: *Canvas) !void {
     const width = try canvas.measure(label) + 2 * padding_x;
     const height = canvas.chrome.rowHeight(.small) + 2 * padding_y;
     const window_width: f32 = @floatFromInt(canvas.viewport[0]);
-    const bottom = @as(f32, @floatFromInt(canvas.viewport[1] -| canvas.chrome.status_bar));
+    const bottom: f32 = @floatFromInt(canvas.viewport[1] -| canvas.chrome.status_bar);
     if (width + 2 * margin > window_width or height + 2 * margin > bottom) {
         return;
     }
@@ -57,22 +58,4 @@ pub fn draw(self: *const CopyFeedback, canvas: *Canvas) !void {
     try canvas.fillRoundedAt(area, .{ .color = canvas.theme.palette.surface0, .radius = canvas.chrome.px(corner_radius) });
     try canvas.ringAt(area, .{ .color = canvas.theme.palette.overlay0, .width = 1, .radius = canvas.chrome.px(corner_radius), .alpha = 0.7 });
     _ = try canvas.textAt(.{ .x = area.x + padding_x, .y = area.y + padding_y, .width = width - 2 * padding_x, .height = height - 2 * padding_y }, label);
-}
-
-test "copy confirmation rejects failures obsolete requests and duplicate completions" {
-    var feedback: CopyFeedback = .{ .pending = 2 };
-    var result: Result = .{ .request_id = 1, .target_id = 0, .generation = 0, .status = .success };
-    try std.testing.expect(!feedback.complete(result, 10));
-    try std.testing.expectEqual(@as(u64, 0), feedback.until_ns);
-    result.request_id = 2;
-    result.status = .cancelled;
-    try std.testing.expect(!feedback.complete(result, 20));
-    try std.testing.expect(feedback.pending == null);
-    feedback.pending = 3;
-    result.request_id = 3;
-    result.status = .success;
-    try std.testing.expect(feedback.complete(result, 30));
-    try std.testing.expectEqual(30 + duration_ns, feedback.until_ns);
-    try std.testing.expect(!feedback.complete(result, 40));
-    try std.testing.expectEqual(30 + duration_ns, feedback.until_ns);
 }

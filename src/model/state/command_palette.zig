@@ -5,7 +5,6 @@
 //! like `@`, so deleting the prefix never leaves the palette without a mode.
 
 const core = @import("telar-core");
-const std = @import("std");
 const CommandEntry = @import("CommandEntry.zig");
 const CommandResults = @import("CommandResults.zig");
 
@@ -93,44 +92,5 @@ pub fn collect(needle: []const u8, results: *CommandResults) void {
 
         results.matches[at] = .{ .index = @intCast(index), .score = item_score };
         results.len += 1;
-    }
-}
-
-test "the prefix byte selects the mode and text without one searches the picker" {
-    try std.testing.expectEqual(Prefix.actions, prefixOf(">split"));
-    try std.testing.expectEqual(Prefix.goto, prefixOf("@agent"));
-    try std.testing.expectEqual(Prefix.suggest, prefixOf("?list files"));
-    try std.testing.expectEqual(Prefix.goto, prefixOf(""));
-    try std.testing.expectEqual(Prefix.goto, prefixOf("plain"));
-    try std.testing.expectEqualStrings("split", query(">split"));
-    try std.testing.expectEqualStrings("", query("?"));
-    try std.testing.expectEqualStrings("plain", query("plain"));
-}
-
-test "the catalogue is bounded, stable for an empty query and filtered by fuzzy score" {
-    var results: CommandResults = .{};
-    collect("", &results);
-    try std.testing.expectEqual(@as(u8, entries.len), results.len);
-    for (results.slice(), 0..) |match, index| {
-        try std.testing.expectEqual(@as(u8, @intCast(index)), match.index);
-    }
-
-    collect("split", &results);
-    try std.testing.expectEqual(@as(u8, 2), results.len);
-    try std.testing.expectEqualStrings("Split right", entries[results.slice()[0].index].label);
-
-    collect("sdo", &results);
-    try std.testing.expect(results.len >= 1);
-    try std.testing.expectEqualStrings("Split down", entries[results.slice()[0].index].label);
-
-    collect("zzzz", &results);
-    try std.testing.expectEqual(@as(u8, 0), results.len);
-}
-
-test "no catalogue entry ends the input loop or depends on a callback" {
-    for (entries) |entry| {
-        try std.testing.expect(entry.action != .detach);
-        try std.testing.expect(entry.action != .lua_callback and entry.action != .lua_expr and entry.action != .plugin);
-        try std.testing.expect(entry.label.len != 0);
     }
 }

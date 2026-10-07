@@ -10,6 +10,7 @@ decode_ns: u64,
 
 /// Decode on the receiving producer. Example: `return RuntimeMessage.decode(io, bytes);`
 pub fn decode(io: std.Io, payload: []const u8) !RuntimeMessage {
+    // SAFETY: decodeInto writes the active message and metadata before return; decode errors return before received is read.
     var received: RuntimeMessage = undefined;
     try received.decodeInto(io, payload);
     return received;

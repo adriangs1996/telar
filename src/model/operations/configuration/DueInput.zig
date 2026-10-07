@@ -1,6 +1,5 @@
 const BarConfiguration = @import("../../bars/BarConfiguration.zig");
 const PanelSource = @import("../../bars/PanelSource.zig").PanelSource;
-const DueInput = @This();
 
 generation: u64,
 configuration: *const BarConfiguration,

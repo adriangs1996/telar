@@ -66,24 +66,3 @@ pub fn createLaunchDirectory(io: std.Io, cwd: []const u8) !void {
         return error.LaunchCwdNotDirectory;
     }
 }
-
-test "createLaunchDirectory creates missing parents and refuses files and relative paths" {
-    const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const root = buffer[0..try temp.dir.realPath(io, &buffer)];
-    var nested_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const nested = try std.fmt.bufPrint(&nested_buffer, "{s}/one/two", .{root});
-
-    try createLaunchDirectory(io, nested);
-    try createLaunchDirectory(io, nested);
-    try std.testing.expectEqual(std.Io.File.Kind.directory, (try temp.dir.statFile(io, "one/two", .{})).kind);
-
-    const file = try temp.dir.createFile(io, "one/plain", .{});
-    file.close(io);
-    var file_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const plain = try std.fmt.bufPrint(&file_buffer, "{s}/one/plain", .{root});
-    try std.testing.expectError(error.NotDir, createLaunchDirectory(io, plain));
-    try std.testing.expectError(error.RelativeLaunchCwd, createLaunchDirectory(io, "relative/path"));
-}

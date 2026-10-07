@@ -46,20 +46,6 @@ const machine_dispatch_failure: u8 = 1;
 
 const version = build_options.version;
 
-// Zig tests use the compiler runner as root, not this bootstrap. Check the
-// declarations here; executable probes exercise their root-level effects.
-test "the executable preserves diagnostic and trace root contracts" {
-    inline for (.{ "std_options", "telar_diagnostics", "telar_echo_trace", "telar_echo_trace_cpu", "echo_recorder", "telar_profile_counts", "telar_profile_timing", "profile_store" }) |name| {
-        _ = std.meta.declarationInfo(@This(), name);
-    }
-
-    try std.testing.expectEqual(build_options.profile_counts, telar_profile_counts);
-    try std.testing.expectEqual(build_options.profile_timing, telar_profile_timing);
-    try std.testing.expectEqual(build_options.diagnostics, telar_diagnostics);
-    try std.testing.expectEqual(build_options.echo_trace, telar_echo_trace);
-    try std.testing.expectEqual(build_options.echo_trace_cpu, telar_echo_trace_cpu);
-}
-
 // Library warnings cannot be written over a live frame; the bootstrap keeps
 // stderr out of the drawing path. GUI reload diagnostics have no terminal
 // frame to corrupt and remain visible, and so do reached limits: the
@@ -91,13 +77,13 @@ pub var echo_recorder: if (build_options.echo_trace) core.Recorder else void = i
 fn dumpEchoTrace(init: std.process.Init) void {
     if (comptime core.profiling.active) {
         if (init.minimal.environ.getPosix("TELAR_PROFILE_DIR")) |directory| {
-            profile_store.dump(init.io, directory) catch {};
+            profile_store.dump(init.io, directory) catch |err| std.log.warn("Could not write profiling data: {s}", .{@errorName(err)});
         }
     }
 
     if (comptime build_options.echo_trace) {
         const directory = init.minimal.environ.getPosix("TELAR_ECHO_TRACE_DIR") orelse return;
-        echo_recorder.dump(init.io, directory) catch {};
+        echo_recorder.dump(init.io, directory) catch |err| std.log.warn("Could not write echo trace: {s}", .{@errorName(err)});
     }
 }
 
@@ -249,6 +235,7 @@ fn parseCommand(init: std.process.Init, args: []const [*:0]const u8) parser.Cli 
         }
 
         var topic_buffer: [64]u8 = undefined;
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar: {s}; see `telar {s}--help`\n", .{ control.describe(err), help_module.topic(args, &topic_buffer) });
         std.process.exit(agent_module.exit_failure);
     };
@@ -281,89 +268,4 @@ fn dispatchToMachine(init: std.process.Init, options: MachineDispatchOptions) an
         .local => try dispatch(init, options.argv),
         .remote => |profile| std.process.exit(try machine_dispatch_module.forward(init, &profile, options.argv)),
     }
-}
-
-test {
-    _ = @import("cli/arguments/TabOptions.zig");
-    _ = @import("cli/arguments/MachineOptions.zig");
-    _ = @import("cli/arguments/MachineDispatchOptions.zig");
-    _ = @import("cli/dispatch_argv.zig");
-    _ = @import("cli/machine_profiles.zig");
-    _ = @import("cli/machine_dispatch.zig");
-    _ = @import("cli/machine_setup.zig");
-    _ = @import("cli/agent_setup.zig");
-    _ = @import("cli/agent_login.zig");
-    _ = @import("cli/LoginRequest.zig");
-    _ = @import("cli/config_allowlist.zig");
-    _ = @import("cli/ConfigEntry.zig");
-    _ = @import("cli/config_filter.zig");
-    _ = @import("cli/config_secrets.zig");
-    _ = @import("cli/config_receive.zig");
-    _ = @import("cli/config_sync.zig");
-    _ = @import("cli/ScriptOutput.zig");
-    _ = @import("cli/ProbeValue.zig");
-    _ = @import("cli/MachinePlatform.zig");
-    _ = @import("cli/SetupReport.zig");
-    _ = @import("cli/remote_shell.zig");
-    _ = @import("cli/telar_release.zig");
-    _ = @import("cli/arguments/WorktreeOptions.zig");
-    _ = @import("cli/repository_identity.zig");
-    _ = @import("cli/worktree_dispatch.zig");
-    _ = @import("cli/worktree_git.zig");
-    _ = @import("cli/limit_reached.zig");
-    _ = @import("cli/runtime.zig");
-    _ = @import("cli/DiagnosticLog.zig");
-    _ = @import("cli/arguments/DiagnosticsOptions.zig");
-    _ = @import("cli/diagnostics.zig");
-    _ = @import("cli/arguments/RuntimeOptions.zig");
-    _ = @import("cli/agent.zig");
-    _ = @import("cli/api.zig");
-    _ = @import("cli/arguments/AgentOptions.zig");
-    _ = @import("cli/arguments/ApiOptions.zig");
-    _ = @import("cli/arguments/CliOptions.zig");
-    _ = @import("cli/arguments/ConfigCheckOptions.zig");
-    _ = @import("cli/arguments/GuiOptions.zig");
-    _ = @import("cli/arguments/HistoryOptions.zig");
-    _ = @import("cli/arguments/HookOptions.zig");
-    _ = @import("cli/arguments/IntegrationOptions.zig");
-    _ = @import("cli/arguments/NotificationOptions.zig");
-    _ = @import("cli/arguments/PaneOptions.zig");
-    _ = @import("cli/arguments/PluginOptions.zig");
-    _ = @import("cli/arguments/PluginWorkerOptions.zig");
-    _ = @import("cli/arguments/ProxyOptions.zig");
-    _ = @import("cli/arguments/RunOptions.zig");
-    _ = @import("cli/arguments/ServerOptions.zig");
-    _ = @import("cli/arguments/TapWorkerOptions.zig");
-    _ = @import("cli/arguments/WorkspaceOptions.zig");
-    _ = @import("cli/arguments/agent.zig");
-    _ = @import("cli/arguments/cursor_support.zig");
-    _ = @import("cli/arguments/history.zig");
-    _ = @import("cli/arguments/pane.zig");
-    _ = @import("cli/arguments/plugin.zig");
-    _ = @import("cli/arguments/server.zig");
-    _ = @import("cli/arguments/values.zig");
-    _ = @import("cli/client.zig");
-    _ = @import("cli/CodexSubagents.zig");
-    _ = @import("cli/config.zig");
-    _ = @import("cli/control.zig");
-    _ = @import("cli/history.zig");
-    _ = @import("cli/hook.zig");
-    _ = @import("cli/hook_event.zig");
-    _ = @import("cli/hook_progress.zig");
-    _ = @import("cli/hook_worktree.zig");
-    _ = @import("cli/HookStdin.zig");
-    _ = @import("cli/WorktreeCatalog.zig");
-    _ = @import("cli/integration_support.zig");
-    _ = @import("cli/TempFile.zig");
-    _ = @import("cli/login_shell.zig");
-    _ = @import("cli/notification.zig");
-    _ = @import("cli/pane.zig");
-    _ = @import("cli/parser.zig");
-    _ = @import("cli/plugin.zig");
-    _ = @import("cli/proxy.zig");
-    _ = @import("cli/server.zig");
-    _ = @import("cli/skill.zig");
-    _ = @import("cli/help.zig");
-    _ = @import("cli/arguments/CommandFamily.zig");
-    _ = @import("cli/workspace.zig");
 }

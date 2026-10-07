@@ -17,7 +17,9 @@ pub fn contextLabel(model: *const data.ClientModel, storage: *[label_bytes]u8) [
 
     const location = model.workspace orelse return "workspace";
     return switch (location) {
+        // SAFETY: a workspace identifier and the fixed prefix fit the 64-byte label buffer.
         .workspace => |id| std.fmt.bufPrint(storage, "workspace {d}", .{@intFromEnum(id)}) catch unreachable,
+        // SAFETY: a worktree identifier and the fixed prefix fit the 64-byte label buffer.
         .worktree => |id| std.fmt.bufPrint(storage, "worktree {d}", .{@intFromEnum(id)}) catch unreachable,
     };
 }

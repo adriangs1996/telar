@@ -19,6 +19,7 @@ pub const limit = core.Limit.declare("chrome.band_hit_map_capacity", "chrome tar
 /// Bar components with a target, the overflow chip, the panel's close
 /// control and its buttons (or the overflow list's rows).
 const bar_targets = data.BarOverflow.capacity + 1 + 1 + data.bar_values.max_panel_nodes;
+// SAFETY: add writes each hit before increasing len; hitAt and find scan only that initialized prefix.
 items: [capacity]BandHit = undefined,
 len: usize = 0,
 /// Targets left out because the table was full; their controls still draw
@@ -63,7 +64,7 @@ pub fn hitAt(self: *const BandHitMap, point: [2]f64) ?BandHit {
     return null;
 }
 
-/// The first target carrying `intent`, for tests that click by identity.
+/// The first target carrying `intent`.
 /// Example: `const tab = hits.find(.{ .select_tab = id }) orelse return error.Missing;`
 pub fn find(self: *const BandHitMap, intent: client.Intent) ?BandHit {
     for (self.items[0..self.len]) |hit| {

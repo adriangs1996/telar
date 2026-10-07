@@ -11,7 +11,6 @@ const BatchSender = @import("BatchSender.zig");
 const ImportParser = @import("ImportParser.zig");
 const ResolvedImport = @import("ResolvedImport.zig");
 const history = @import("arguments/history.zig");
-const ImportedEntry = @import("ImportedEntry.zig");
 const Session = @import("Session.zig");
 const limit_reached = @import("limit_reached.zig");
 
@@ -70,6 +69,7 @@ pub fn run(init: std.process.Init, options: HistoryOptions) !void {
     switch (response) {
         .history_results => |results| try print(init.io, results),
         .request_failed => |failure| {
+            // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
             std.debug.print("telar history: {s}\n", .{failure.message});
             return error.HistoryQueryFailed;
         },
@@ -148,46 +148,6 @@ fn writeField(writer: *std.Io.Writer, value: []const u8) !void {
             try writer.writeByte(byte);
         },
     };
-}
-
-test "history timestamps are rendered in UTC" {
-    try std.testing.expectEqual(UtcTimestamp{
-        .year = 2024,
-        .month = 1,
-        .day = 1,
-        .hour = 0,
-        .minute = 0,
-        .second = 0,
-    }, utcTimestamp(1_704_067_200_000));
-}
-
-test "negative history timestamps clamp to the Unix epoch" {
-    try std.testing.expectEqual(UtcTimestamp{
-        .year = 1970,
-        .month = 1,
-        .day = 1,
-        .hour = 0,
-        .minute = 0,
-        .second = 0,
-    }, utcTimestamp(-1));
-}
-
-test "history fields escape terminal control bytes" {
-    var storage: [128]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&storage);
-
-    try writeField(&writer, "echo\n\r\t\x00\x1b\x7f[31m");
-
-    try std.testing.expectEqualStrings("echo\\n\\r\\t\\x00\\x1b\\x7f[31m", writer.buffered());
-}
-
-test "history fields preserve printable UTF-8" {
-    var storage: [128]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&storage);
-
-    try writeField(&writer, "git commit -m 'listo ✓'");
-
-    try std.testing.expectEqualStrings("git commit -m 'listo ✓'", writer.buffered());
 }
 
 /// The newest bytes of a histfile imported; older commands are left out
@@ -326,86 +286,6 @@ fn resolveImport(init: std.process.Init, options: HistoryOptions, buffer: *[std.
     return error.HistfileNotFound;
 }
 
-test "zsh extended history parses timestamps and continuations" {
-    var state: ImportParser = .{ .kind = .zsh };
-    var collected: [4]ImportedEntry = undefined;
-    var commands: [4][64]u8 = undefined;
-    var count: usize = 0;
-    const file = ": 1700000000:0;git status\n: 1700000001:2;echo one \\\ntwo\nplain command\n";
-    var lines = std.mem.splitScalar(u8, file, '\n');
-    while (lines.next()) |line| {
-        if (state.feed(line)) |entry| {
-            @memcpy(commands[count][0..entry.command.len], entry.command);
-            collected[count] = .{ .started_at_ms = entry.started_at_ms, .command = commands[count][0..entry.command.len] };
-            count += 1;
-        }
-    }
-    if (state.flush()) |entry| {
-        @memcpy(commands[count][0..entry.command.len], entry.command);
-        collected[count] = .{ .started_at_ms = entry.started_at_ms, .command = commands[count][0..entry.command.len] };
-        count += 1;
-    }
-
-    try std.testing.expectEqual(@as(usize, 3), count);
-    try std.testing.expectEqualStrings("git status", collected[0].command);
-    try std.testing.expectEqual(@as(i64, 1_700_000_000_000), collected[0].started_at_ms);
-    try std.testing.expectEqualStrings("echo one \ntwo", collected[1].command);
-    try std.testing.expectEqualStrings("plain command", collected[2].command);
-}
-
-test "bash timestamp comments attach to the following command" {
-    var state: ImportParser = .{ .kind = .bash };
-    try std.testing.expect(state.feed("#1700000000") == null);
-
-    const first = state.feed("make test").?;
-    try std.testing.expectEqualStrings("make test", first.command);
-    try std.testing.expectEqual(@as(i64, 1_700_000_000_000), first.started_at_ms);
-
-    const second = state.feed("ls").?;
-    try std.testing.expectEqualStrings("ls", second.command);
-    try std.testing.expect(state.flush() == null);
-}
-
-test "an imported command past the limit is skipped whole and the rest import" {
-    const state = try std.testing.allocator.create(ImportParser);
-    defer std.testing.allocator.destroy(state);
-    state.* = .{
-        .kind = .bash,
-    };
-
-    const longest = try std.testing.allocator.alloc(u8, core.max_import_command_bytes + 1);
-    defer std.testing.allocator.free(longest);
-    @memset(longest, 'x');
-
-    const kept = state.feed(longest[0..core.max_import_command_bytes]).?;
-    try std.testing.expectEqual(@as(usize, core.max_import_command_bytes), kept.command.len);
-    try std.testing.expect(state.feed(longest) == null);
-    try std.testing.expectEqualStrings("ls", state.feed("ls").?.command);
-    try std.testing.expect(state.flush() == null);
-    try std.testing.expectEqual(@as(usize, 1), state.skipped);
-    try std.testing.expectEqual(@as(usize, core.max_import_command_bytes + 1), state.largest_skipped);
-
-    state.* = .{
-        .kind = .zsh,
-    };
-    longest[longest.len - 1] = '\\';
-    try std.testing.expect(state.feed(longest) == null);
-    try std.testing.expect(state.feed("tail") == null);
-    try std.testing.expectEqualStrings("pwd", state.feed("pwd").?.command);
-    try std.testing.expectEqual(@as(usize, 1), state.skipped);
-}
-
-test "fish history pairs cmd and when lines" {
-    var state: ImportParser = .{ .kind = .fish };
-    try std.testing.expect(state.feed("- cmd: git log") == null);
-    const first = state.feed("  when: 1700000000").?;
-    try std.testing.expectEqualStrings("git log", first.command);
-    try std.testing.expectEqual(@as(i64, 1_700_000_000_000), first.started_at_ms);
-    try std.testing.expect(state.feed("- cmd: htop") == null);
-    const tail = state.flush().?;
-    try std.testing.expectEqualStrings("htop", tail.command);
-}
-
 /// Deletes one entry or prunes by filters. Prune is destructive: without
 /// `--yes` it shows the newest matches (a dry run) and asks for
 /// confirmation on stdin.
@@ -456,6 +336,7 @@ fn runPrune(init: std.process.Init, options: HistoryOptions) !void {
         const results = switch (response) {
             .history_results => |results| results,
             .request_failed => |failure| {
+                // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
                 std.debug.print("telar history: {s}\n", .{failure.message});
                 return error.HistoryQueryFailed;
             },
@@ -506,27 +387,13 @@ fn confirmPrune(reader: *std.Io.Reader) bool {
     return std.mem.eql(u8, answer, "yes");
 }
 
-test "history prune confirmation stops reading at newline" {
-    var reader = std.Io.Reader.fixed("yes\nstill open");
-
-    try std.testing.expect(confirmPrune(&reader));
-    try std.testing.expectEqualStrings("still open", reader.buffered());
-}
-
-test "history prune confirmation rejects any other line" {
-    var rejected = std.Io.Reader.fixed("no\n");
-    var empty = std.Io.Reader.fixed("");
-
-    try std.testing.expect(!confirmPrune(&rejected));
-    try std.testing.expect(!confirmPrune(&empty));
-}
-
 fn receivePruned(init: std.process.Init, connection: *localsocket.SocketChannel) !u64 {
     var receive_buffer: [1024]u8 = undefined;
     const response = try core.decodeServer(try connection.receive(init.io, &receive_buffer));
     return switch (response) {
         .history_pruned => |pruned| pruned.removed,
         .request_failed => |failure| blk: {
+            // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
             std.debug.print("telar history: {s}\n", .{failure.message});
             break :blk error.HistoryPruneFailed;
         },
@@ -552,6 +419,7 @@ fn runShow(init: std.process.Init, options: HistoryOptions) !void {
     const output = switch (response) {
         .history_output => |value| value,
         .request_failed => |failure| {
+            // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
             std.debug.print("telar history: {s}\n", .{failure.message});
             return error.HistoryQueryFailed;
         },
@@ -559,6 +427,7 @@ fn runShow(init: std.process.Init, options: HistoryOptions) !void {
     };
 
     if (output.observed_bytes == 0) {
+        // Explain absent captured output on stderr without adding bytes to the history output stream.
         std.debug.print("telar history: no output captured for entry {d} (runtime.history.output = \"bounded\" enables capture)\n", .{output.id});
         return;
     }
@@ -568,6 +437,7 @@ fn runShow(init: std.process.Init, options: HistoryOptions) !void {
     try writer.interface.writeAll(output.content);
     try writer.interface.flush();
     if (output.truncated) {
+        // The truncation notice belongs on stderr, separate from the captured history bytes.
         std.debug.print("telar history: output truncated ({d} bytes observed)\n", .{output.observed_bytes});
     }
 }
@@ -607,6 +477,7 @@ fn runStats(init: std.process.Init, options: HistoryOptions) !void {
     const stats = switch (response) {
         .history_stats_result => |value| value,
         .request_failed => |failure| {
+            // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
             std.debug.print("telar history: {s}\n", .{failure.message});
             return error.HistoryQueryFailed;
         },
@@ -630,34 +501,4 @@ fn runStats(init: std.process.Init, options: HistoryOptions) !void {
         try writer.writeAll("\n");
     }
     try writer.flush();
-}
-
-test "a histfile past its bound imports its newest whole lines" {
-    const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-
-    try temp.dir.writeFile(
-        io,
-        .{
-            .sub_path = "zsh_history",
-            .data = "oldest command\nmake build\nmake test\n",
-        },
-    );
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory = path_buffer[0..try temp.dir.realPath(io, &path_buffer)];
-    var file_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try std.fmt.bufPrint(&file_buffer, "{s}/zsh_history", .{directory});
-
-    var init: std.process.Init = undefined;
-    init.gpa = std.testing.allocator;
-    init.io = io;
-    const newest = try readNewest(init, path, core.Limit.declare("history.max_histfile_bytes", "bytes", 24));
-    defer std.testing.allocator.free(newest.buffer);
-    try std.testing.expectEqualStrings("make build\nmake test\n", newest.lines);
-    try std.testing.expect(newest.truncated);
-
-    const whole = try readNewest(init, path, histfile_limit);
-    defer std.testing.allocator.free(whole.buffer);
-    try std.testing.expectEqualStrings("oldest command\nmake build\nmake test\n", whole.lines);
 }

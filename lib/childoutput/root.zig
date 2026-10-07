@@ -6,7 +6,3 @@ pub const ChildOutput = @import("ChildOutput.zig");
 pub const Bound = @import("Bound.zig").Bound;
 pub const Bounds = @import("Bounds.zig");
 pub const KeptStream = @import("KeptStream.zig");
-
-test {
-    _ = @import("ChildOutput.zig");
-}

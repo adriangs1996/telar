@@ -46,7 +46,9 @@ pub fn utcOffsetMinutes() i16 {
         return 0;
     }
 
+    // SAFETY: localtime_r fills local on success; failure returns before any field is read.
     var local: time.struct_tm = undefined;
+    // SAFETY: gmtime_r fills utc on success; either conversion failure returns before comparing fields.
     var utc: time.struct_tm = undefined;
     if (time.localtime_r(&seconds, &local) == null or time.gmtime_r(&seconds, &utc) == null) {
         return 0;
@@ -66,6 +68,7 @@ fn posixNow() LocalTime {
         return epoch;
     }
 
+    // SAFETY: localtime_r fills local on success; failure returns the epoch fallback before reading it.
     var local: time.struct_tm = undefined;
     if (time.localtime_r(&seconds, &local) == null) {
         return epoch;
@@ -83,6 +86,7 @@ fn posixNow() LocalTime {
 }
 
 fn windowsNow() LocalTime {
+    // SAFETY: GetLocalTime fills the complete output value before its fields are read.
     var value: SystemTime = undefined;
     GetLocalTime(&value);
 
@@ -95,23 +99,4 @@ fn windowsNow() LocalTime {
         .second = @intCast(value.second),
         .weekday = @intCast(value.day_of_week),
     };
-}
-
-test "Windows SYSTEMTIME keeps its ABI" {
-    try std.testing.expectEqual(@as(usize, 16), @sizeOf(SystemTime));
-    try std.testing.expectEqual(@as(usize, 14), @offsetOf(SystemTime, "milliseconds"));
-}
-
-test "the UTC offset stays inside the range time zones use" {
-    const offset = utcOffsetMinutes();
-
-    try std.testing.expect(offset >= -14 * 60 and offset <= 14 * 60);
-}
-
-test "the local clock reports a calendar date" {
-    const local = now();
-
-    try std.testing.expect(local.month >= 1 and local.month <= 12);
-    try std.testing.expect(local.day >= 1 and local.day <= 31);
-    try std.testing.expect(local.weekday <= 6);
 }

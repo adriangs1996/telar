@@ -3,6 +3,7 @@ const Target = @import("../interaction/Target.zig");
 const Hits = @This();
 
 pub const max_visible = 2;
+// SAFETY: NotificationCard.register writes each target before increasing count; hit testing reads only targets below count.
 hits: [max_visible * 2]Target = undefined,
 count: usize = 0,
 

@@ -36,12 +36,15 @@ pub fn run(init: std.process.Init, options: WorkspaceOptions) !u8 {
     var output_buffer: [4096]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
     const writer = &output.interface;
-    defer writer.flush() catch {};
 
-    return execute(init, options, writer) catch |err| {
+    const result = execute(init, options, writer) catch |err| failure: {
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar workspace: {s}\n", .{describe(err)});
-        return agent.exit_failure;
+        break :failure agent.exit_failure;
     };
+
+    try writer.flush();
+    return result;
 }
 
 /// Asks the runtime to create a workspace rooted at an existing directory.

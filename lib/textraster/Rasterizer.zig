@@ -16,12 +16,14 @@ pixel_height: u16 = 0,
 /// `font` must outlive the rasterizer because FreeType keeps a borrowed
 /// pointer to memory-backed faces.
 pub fn initFont(font: []const u8) !Rasterizer {
+    // SAFETY: FT_Init_FreeType writes the library on success; failure returns before registering cleanup or using it.
     var library: freetype.c.FT_Library = undefined;
     if (freetype.c.FT_Init_FreeType(&library) != 0) {
         return error.FreeTypeInitFailed;
     }
     errdefer _ = freetype.c.FT_Done_FreeType(library);
 
+    // SAFETY: FT_New_Memory_Face writes the face on success; failure returns before cleanup or face operations.
     var face: freetype.c.FT_Face = undefined;
     if (freetype.c.FT_New_Memory_Face(
         library,
@@ -81,29 +83,6 @@ pub fn metrics(self: *const Rasterizer) Metrics {
         .descender = rasterizer_support.fixed26_6Round(raw.descender),
         .line_height = @intCast(@max(1, rasterizer_support.fixed26_6Round(raw.height))),
     };
-}
-
-/// Measures the same shaped advances used by drawText, without painting.
-/// Example: `const width = try rasterizer.measureText("1 nvim");`.
-pub fn measureText(self: *Rasterizer, text: []const u8) !u32 {
-    if (self.pixel_height == 0) {
-        return error.FontSizeNotSet;
-    }
-    if (text.len == 0) {
-        return 0;
-    }
-
-    const shaped = try self.shapeText(text);
-    var advance: i64 = 0;
-    for (shaped.glyphs, shaped.positions) |glyph, position| {
-        if (glyph.codepoint == 0) {
-            return error.MissingGlyph;
-        }
-
-        advance += position.x_advance;
-    }
-
-    return @intCast(@max(0, rasterizer_support.fixed26_6Round(advance)));
 }
 
 /// Draws one UTF-8 line and returns its pixel advance. The baseline and

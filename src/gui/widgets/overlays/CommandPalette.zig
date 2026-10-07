@@ -19,8 +19,6 @@ const CommandPalette = @This();
 
 pub const max_rows = PaletteHits.capacity;
 pub const width_px = PaletteLayout.width_px;
-pub const top_percent = 11;
-pub const radius_px = 12;
 projection: *const client.Projection,
 hits: *PaletteHits,
 modal: *?cellgrid.Rect,
@@ -84,6 +82,7 @@ pub fn draw(self: CommandPalette, canvas: *Canvas) !void {
         return;
     }
 
+    // SAFETY: Every reachable pick or palette branch initializes its selected union variant before collection and results.
     var matches: Matches = undefined;
     if (pick) {
         matches = .{ .pick = .{} };

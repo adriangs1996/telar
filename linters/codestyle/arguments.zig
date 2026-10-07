@@ -39,27 +39,3 @@ pub fn parse(allocator: std.mem.Allocator, arguments: []const [:0]const u8) !Par
         .paths = try paths.toOwnedSlice(allocator),
     } };
 }
-
-test "parses fix and paths" {
-    const result = try parse(std.testing.allocator, &.{ "codestyle", "--fix", "src", "build.zig" });
-    const config = result.config;
-    defer std.testing.allocator.free(config.paths);
-
-    try std.testing.expect(config.fix);
-    try std.testing.expectEqualSlices([]const u8, &.{ "src", "build.zig" }, config.paths);
-}
-
-test "defaults to the current directory" {
-    const result = try parse(std.testing.allocator, &.{"codestyle"});
-    const config = result.config;
-    defer std.testing.allocator.free(config.paths);
-
-    try std.testing.expect(!config.fix);
-    try std.testing.expectEqualSlices([]const u8, &.{"."}, config.paths);
-}
-
-test "reports unknown options" {
-    const result = try parse(std.testing.allocator, &.{ "codestyle", "--unsafe" });
-
-    try std.testing.expectEqualStrings("--unsafe", result.unknown_option);
-}

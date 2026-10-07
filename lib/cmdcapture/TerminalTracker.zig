@@ -29,6 +29,7 @@ phase: Phase = .idle,
 input: InputScanner = .{},
 command: ?[:0]const u8 = null,
 command_truncated: bool = false,
+// SAFETY: Command admission copies the directory before emitting the command; consumers read only command_cwd_len bytes.
 command_cwd: [std.fs.max_path_bytes]u8 = undefined,
 command_cwd_len: usize = 0,
 started_at_ms: i64 = 0,

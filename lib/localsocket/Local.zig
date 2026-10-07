@@ -1,6 +1,7 @@
 const std = @import("std");
 const Local = @This();
 
+// SAFETY: explicit and managed fill the path before returning it; path and managedDirectory expose only their written prefixes.
 storage: [std.Io.net.UnixAddress.max_len]u8 = undefined,
 path_len: usize,
 directory_len: usize = 0,

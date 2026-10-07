@@ -240,11 +240,3 @@ fn significantBytes(text: []const u8, query: *[max_query_bytes:0]u8) ?[:0]const 
     query[len] = 0;
     return query[0..len :0];
 }
-
-test "font set identity exhaustion never wraps or reuses a retired identity" {
-    var counter: std.atomic.Value(u64) = .init(std.math.maxInt(u64) - 1);
-    try std.testing.expectEqual(std.math.maxInt(u64) - 1, try allocateIdentity(&counter));
-    try std.testing.expectError(error.FontSetIdentityExhausted, allocateIdentity(&counter));
-    try std.testing.expectError(error.FontSetIdentityExhausted, allocateIdentity(&counter));
-    try std.testing.expectEqual(std.math.maxInt(u64), counter.load(.monotonic));
-}

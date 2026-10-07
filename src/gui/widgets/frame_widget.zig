@@ -3,6 +3,7 @@ const core = @import("telar-core");
 const Notifications = @import("overlays/Notifications.zig");
 const modal_widget = @import("overlays/modal_widget.zig");
 const Canvas = @import("Canvas.zig");
+const InteractionTargets = @import("InteractionTargets.zig");
 const GenericWidgetList = @import("GenericWidgetList.zig").Type;
 const TerminalPane = @import("TerminalPane.zig");
 const HoveredLink = @import("HoveredLink.zig");
@@ -19,7 +20,7 @@ const LinkStatus = @import("LinkStatus.zig");
 const ImagePreviewShelf = @import("ImagePreviewShelf.zig");
 const ImagePreviewModal = @import("overlays/ImagePreviewModal.zig");
 
-pub const capacity = core.max_panes_per_tab + 1 + 7 + 1 + Notifications.max_visible + 1 + 2;
+pub const capacity = core.max_panes_per_tab + 1 + 7 + 1 + Notifications.max_visible + 1 + 2 + 1;
 pub const limit = core.Limit.declare("chrome.frame_widget_capacity", "frame widgets", capacity);
 pub const List = GenericWidgetList(Widget, capacity);
 
@@ -39,6 +40,7 @@ pub const Widget = union(enum) {
     modal: modal_widget.Widget,
     image_shelf: ImagePreviewShelf,
     image_modal: ImagePreviewModal,
+    interaction_targets: InteractionTargets,
 
     /// Example: `try widget.draw(canvas);`
     pub fn draw(self: Widget, canvas: *Canvas) !void {

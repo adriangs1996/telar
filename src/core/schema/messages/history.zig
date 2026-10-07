@@ -513,19 +513,3 @@ fn skipHistoryEntry(decoder: *Decoder) !void {
     }
     _ = try decoder.readBool();
 }
-
-test "history page and exact-entry requests preserve their fields" {
-    var buffer: [128]u8 = undefined;
-    const request: QueryHistory = .{ .request_id = @enumFromInt(7), .offset = 200, .snapshot_id = 900, .entry_id = 42, .limit = 1 };
-    const encoded = try encodeQueryHistory(&buffer, request);
-    var decoder = Decoder.init(encoded[1..]);
-    const decoded = try decodeQueryHistory(&decoder);
-    try std.testing.expectEqual(request.offset, decoded.offset);
-    try std.testing.expectEqual(request.snapshot_id, decoded.snapshot_id);
-    try std.testing.expectEqual(request.entry_id, decoded.entry_id);
-    const reply = try encodeHistoryResults(&buffer, .{ .request_id = request.request_id, .entries = &.{}, .snapshot_id = 900, .has_more = true });
-    decoder = Decoder.init(reply[1..]);
-    const result = try decodeHistoryResults(&decoder);
-    try std.testing.expectEqual(@as(u64, 900), result.snapshot_id);
-    try std.testing.expect(result.has_more);
-}

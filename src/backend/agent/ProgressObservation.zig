@@ -2,8 +2,6 @@ const core = @import("telar-core");
 const Identity = @import("Identity.zig");
 const PlanChange = @import("PlanChange.zig");
 /// What one progress report changes on an agent.
-const ProgressObservation = @This();
-
 identity: Identity,
 /// The agent whose hook reported; `unknown` for a report the user sent.
 provider: core.AgentProvider = .unknown,

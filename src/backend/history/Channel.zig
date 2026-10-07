@@ -100,18 +100,6 @@ pub fn submit(self: *Channel, submission: Submission) bool {
     return false;
 }
 
-/// Waits for one request and transfers its ownership from the channel to
-/// the worker while releasing its observable queue position.
-///
-/// ```zig
-/// const request = try channel.receiveRequest(io, metrics);
-/// ```
-pub fn receiveRequest(self: *Channel, io: std.Io, metrics: *Counters) !model.Request {
-    const request = try self.requests.getOne(io);
-    metrics.completeDequeue();
-    return request;
-}
-
 /// Drains a bounded batch, waiting only for its first request.
 /// Example: `const count = try channel.receiveBatch(io, .{ .items = &items, .metrics = metrics });`.
 pub fn receiveBatch(self: *Channel, io: std.Io, batch: struct { items: []model.Request, metrics: *Counters }) !usize {

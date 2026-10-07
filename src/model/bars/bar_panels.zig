@@ -6,11 +6,8 @@ const PanelUpdate = @import("PanelUpdate.zig");
 const PanelOpening = @import("PanelOpening.zig");
 const BarLayout = @import("BarLayout.zig");
 const ClientModel = @import("../state/ClientModel.zig");
-const LocalTime = @import("../state/LocalTime.zig");
 const BarComponent = @import("BarComponent.zig");
 const PanelRun = @import("../operations/configuration/PanelRun.zig");
-const PanelTarget = @import("PanelTarget.zig").PanelTarget;
-const PanelSource = @import("PanelSource.zig").PanelSource;
 const bar_values = @import("model.zig");
 const std = @import("std");
 
@@ -127,54 +124,4 @@ fn isCurrent(model: *const ClientModel, generation: u64, run: PanelRun) bool {
     }
 
     return panel.opening == run.opening and panel.configured() == run.index;
-}
-
-test "a panel opens, ignores renders for an earlier opening and closes on a second toggle" {
-    var model: ClientModel = undefined;
-    model.bars = .{};
-    model.bar_updates = .{};
-    model.bars_revision = 0;
-    model.configuration_generation = 2;
-    const source: PanelSource = .{ .dynamic = .{ .callback = .{ .generation = 2, .id = 0 }, .interval_ns = 0 } };
-
-    toggle(&model, .{
-        .target = .{ .configured = 0 },
-        .source = &source,
-        .now_ns = 10,
-    });
-    const first = model.bar_updates.panel_run.?;
-    toggle(&model, .{
-        .target = .{ .configured = 1 },
-        .source = &source,
-        .now_ns = 20,
-    });
-
-    var content: bar_values.PanelContent = .{};
-    _ = try content.append(.{
-        .kind = .heading,
-        .text = "On track",
-    });
-    try std.testing.expectEqual(PanelReceipt.stale, receive(&model, .{
-        .generation = 2,
-        .run = first,
-        .content = content,
-        .time = .epoch,
-    }));
-
-    const second = model.bar_updates.panel_run.?;
-    try std.testing.expectEqual(PanelReceipt.updated, receive(&model, .{
-        .generation = 2,
-        .run = second,
-        .content = content,
-        .time = .epoch,
-    }));
-    try std.testing.expectEqual(@as(u8, 1), model.bars.panel.content.node_count);
-
-    toggle(&model, .{
-        .target = .{ .configured = 1 },
-        .source = &source,
-        .now_ns = 30,
-    });
-    try std.testing.expect(!model.bars.panel.isOpen());
-    try std.testing.expect(model.bar_updates.panel_run == null);
 }

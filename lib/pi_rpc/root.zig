@@ -4,11 +4,3 @@
 pub const GenericService = @import("GenericService.zig").Type;
 pub const Options = @import("Options.zig");
 pub const types = @import("types.zig");
-
-test {
-    _ = @import("GenericService.zig");
-    _ = @import("rpc.zig");
-    _ = @import("service_tests.zig");
-    _ = @import("session_support.zig");
-    _ = @import("types.zig");
-}

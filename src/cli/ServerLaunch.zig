@@ -21,14 +21,20 @@ process: std.process.Init,
 options: ServerOptions,
 connector: RuntimeConnector,
 config_generation: ?*client.Generation = null,
+// SAFETY: config.loadGeneration writes the selected path before loading it; no consumer reads the unused capacity.
 config_path_buffer: [std.fs.max_path_bytes]u8 = undefined,
+// SAFETY: applyConfig formats the path with its NUL terminator before assigning configured_history_path.
 configured_history_buffer: [std.fs.max_path_bytes]u8 = undefined,
 configured_history_path: ?[:0]const u8 = null,
 configured_proxy_directory: ?[]u8 = null,
+// SAFETY: proxyInterceptHosts fills the output entries before returning the slice stored in proxy_intercept_hosts.
 proxy_intercept_host_storage: [core.max_intercept_hosts][]const u8 = undefined,
 proxy_intercept_hosts: []const []const u8 = &.{},
+proxy_anonymous_tunnels: bool = false,
+// SAFETY: CommandSpec.arguments fills the output entries before returning the slice stored in agent_description_options.
 description_arguments: [data.config_values.max_agent_description_command_args][]const u8 = undefined,
 agent_description_options: ?backend.AgentDescriptionOptions = null,
+// SAFETY: CommandSpec.arguments fills the output entries before returning the slice stored in engine_options.
 engine_arguments: [data.config_values.max_agent_description_command_args][]const u8 = undefined,
 engine_options: ?pi_rpc.Options = null,
 agent_manifests: core.Table = core.builtin_table,
@@ -36,27 +42,41 @@ history_filters: core.Filters = .{},
 history_output_capture: bool = false,
 session_persist: bool = true,
 session_resume_agents: bool = true,
+// SAFETY: applyConfig formats the path before assigning configured_session_path.
 configured_session_buffer: [std.fs.max_path_bytes]u8 = undefined,
 configured_session_path: ?[]const u8 = null,
+// SAFETY: prepareRuntimeStorage formats the default session path before assigning session_path.
 session_buffer: [std.fs.max_path_bytes]u8 = undefined,
 session_path: ?[]const u8 = null,
+// SAFETY: resolveHistoryPath fills this buffer before returning the path used by runtime storage.
 history_buffer: [std.fs.max_path_bytes]u8 = undefined,
+// SAFETY: prepareRuntimeStorage assigns history_path before runtimeInitialization; background-launcher mode never calls that method.
 history_path: HistoryPath = undefined,
+// SAFETY: resolveProxyDirectory fills this buffer before its returned path is copied into owned storage.
 default_proxy_buffer: [std.fs.max_path_bytes]u8 = undefined,
 default_proxy_directory: ?[]u8 = null,
+// SAFETY: prepareRuntimeStorage formats the key path before publishing proxy_options.
 proxy_key_buffer: [std.fs.max_path_bytes]u8 = undefined,
+// SAFETY: prepareRuntimeStorage formats the certificate path before publishing proxy_options.
 proxy_cert_buffer: [std.fs.max_path_bytes]u8 = undefined,
+// SAFETY: prepareRuntimeStorage formats the bundle path before publishing proxy_options.
 proxy_bundle_buffer: [std.fs.max_path_bytes]u8 = undefined,
+// SAFETY: prepareRuntimeStorage formats the secret path before publishing proxy_options.
 proxy_secret_buffer: [std.fs.max_path_bytes]u8 = undefined,
+// SAFETY: ProxyPortMemory.path formats the port path before prepareRuntimeStorage publishes proxy_options.
 proxy_port_buffer: [std.fs.max_path_bytes]u8 = undefined,
+// SAFETY: prepareRuntimeStorage formats this path only when inherited and otherwise publishes a null legacy path.
 proxy_legacy_port_buffer: [std.fs.max_path_bytes]u8 = undefined,
 proxy_options: ?backend.Config = null,
 proxy_system_trusted: bool = false,
 proxy_capture: exchangecapture.Config = .{},
+// SAFETY: prepareTapPlugins constructs each spec before increasing tap_spec_count; runtimeInitialization uses only that prefix.
 tap_specs: [backend.max_workers]backend.ServiceSpec = undefined,
 tap_spec_count: u8 = 0,
+// SAFETY: ensureTapSnapshot formats and creates the directory before assigning tap_snapshot_directory.
 tap_snapshot_buffer: [std.fs.max_path_bytes]u8 = undefined,
 tap_snapshot_directory: ?[]const u8 = null,
+// SAFETY: prepareTapPlugins passes this as output to trustPath and reads only its returned slice.
 trust_path_buffer: [std.fs.max_path_bytes]u8 = undefined,
 
 pub fn prepare(self: *Launch, preparation: ServerPreparation) !void {
@@ -115,6 +135,7 @@ fn applyConfig(self: *Launch, generation: *client.Generation) !void {
     }
 
     self.proxy_intercept_hosts = runtime_config.proxyInterceptHosts(&self.proxy_intercept_host_storage);
+    self.proxy_anonymous_tunnels = runtime_config.proxy_anonymous_tunnels;
     self.proxy_capture = .{
         .enabled = runtime_config.proxy_capture_enabled,
         .max_part_bytes = runtime_config.proxy_capture_max_part_bytes,
@@ -193,6 +214,7 @@ fn prepareRuntimeStorage(self: *Launch) !void {
             .endpoint = endpoint,
             .system_authority = self.proxy_system_trusted,
             .intercept_hosts = self.proxy_intercept_hosts,
+            .anonymous_tunnels = self.proxy_anonymous_tunnels,
             .capture = self.proxy_capture,
         };
     }
@@ -267,6 +289,7 @@ fn ensureTapSnapshot(self: *Launch) ![]const u8 {
 /// ```
 pub fn removeTapSnapshot(self: *Launch) void {
     if (self.tap_snapshot_directory) |directory| {
+        // The child has stopped using this private snapshot; cleanup cannot replace its process result.
         std.Io.Dir.cwd().deleteTree(self.process.io, directory) catch {};
         self.tap_snapshot_directory = null;
     }

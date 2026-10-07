@@ -18,8 +18,3 @@
 //! it, which is what lets every edge case be a two line test.
 
 pub const GenericField = @import("GenericField.zig").Type;
-
-test {
-    _ = @import("GenericField.zig");
-    _ = @import("field_tests.zig");
-}

@@ -1,5 +1,4 @@
-//! `telar server bridge`: carries one remote client's connection
-//! (docs/flows/remote-attach.md). The client's ssh session is this
+//! `telar server bridge`: carries one remote client's connection. The client's ssh session is this
 //! process's standard input and output; the bridge connects to the running
 //! runtime and copies bytes both ways unchanged, so the runtime sees an
 //! ordinary client of the same user and its framing, bounds and
@@ -46,23 +45,4 @@ fn copy(io: std.Io, from: std.posix.fd_t, to: std.posix.fd_t) void {
 
         target.writeStreamingAll(io, buffer[0..read]) catch return;
     }
-}
-
-test "the bridge copies bytes unchanged until its source ends" {
-    const io = std.testing.io;
-    var source = try localsocket.pair();
-    defer source[1].deinit(io);
-    var target = try localsocket.pair();
-    defer target[0].deinit(io);
-    defer target[1].deinit(io);
-
-    try source[0].send(io, "frame one");
-    try source[0].send(io, "frame two");
-    source[0].deinit(io);
-
-    copy(io, source[1].stream.socket.handle, target[0].stream.socket.handle);
-
-    var buffer: [32]u8 = undefined;
-    try std.testing.expectEqualStrings("frame one", try target[1].receive(io, &buffer));
-    try std.testing.expectEqualStrings("frame two", try target[1].receive(io, &buffer));
 }

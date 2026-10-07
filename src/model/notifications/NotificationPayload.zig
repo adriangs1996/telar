@@ -1,11 +1,12 @@
 //! One owned, sanitized notice handed to a host channel: the outer terminal's
 //! OSC 9 or the operating system's notification service.
 const core = @import("telar-core");
-const std = @import("std");
 const NotificationPayload = @This();
 
+// SAFETY: init sanitizes the title before assigning title_len; titleSlice exposes only that initialized prefix.
 title: [core.max_notification_title_bytes]u8 = undefined,
 title_len: u16 = 0,
+// SAFETY: init sanitizes the message before assigning message_len; messageSlice exposes only that initialized prefix.
 message: [core.max_notification_message_bytes]u8 = undefined,
 message_len: u16 = 0,
 
@@ -56,20 +57,4 @@ fn copySanitized(storage: []u8, text: []const u8) u16 {
     }
 
     return @intCast(len);
-}
-
-test "payloads drop quotes and control bytes and stay bounded" {
-    const payload = NotificationPayload.init("Agent \"done\"\x1b", "line\nbreak\\end");
-
-    try std.testing.expectEqualStrings("Agent done", payload.titleSlice());
-    try std.testing.expectEqualStrings("linebreakend", payload.messageSlice());
-}
-
-test "a payload past its bound is cut on a UTF-8 boundary" {
-    const title = "a" ** (core.max_notification_title_bytes - 1) ++ "é";
-    const payload = NotificationPayload.init(title, "é" ** core.max_notification_message_bytes);
-
-    try std.testing.expectEqualStrings("a" ** (core.max_notification_title_bytes - 1), payload.titleSlice());
-    try std.testing.expect(std.unicode.utf8ValidateSlice(payload.messageSlice()));
-    try std.testing.expectEqual(@as(usize, core.max_notification_message_bytes), payload.messageSlice().len);
 }

@@ -25,7 +25,6 @@ pub const family: FamilyHelp = .{
             \\Exit 0; 1 when no runtime answers at the socket.
             \\
             ,
-            .examples = &.{&.{ "runtime", "status", "--json" }},
         },
         .{
             .name = "metrics",
@@ -40,7 +39,6 @@ pub const family: FamilyHelp = .{
             \\of a GiB), `battery_percent` (null without a battery). Exit 0.
             \\
             ,
-            .examples = &.{&.{ "runtime", "metrics", "--json" }},
         },
         .{
             .name = "watch",
@@ -58,7 +56,6 @@ pub const family: FamilyHelp = .{
             \\runtime stops; 1 after a resync notice (reconnect for a fresh snapshot).
             \\
             ,
-            .examples = &.{&.{ "runtime", "watch", "--jsonl", "--count", "5" }},
         },
     },
 };

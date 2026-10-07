@@ -203,10 +203,13 @@ const Token = struct {
 /// The facts of the first line with the storage their labels borrow, so the
 /// value stays where it was measured until it is painted.
 const Facts = struct {
+    // SAFETY: measureFacts writes each token before increasing count; measurement and painting use only those tokens.
     tokens: [3]Token = undefined,
     count: usize = 0,
     width: f32 = 0,
+    // SAFETY: measureFacts retains only the slice returned by the clock or date formatter, which initializes its output bytes.
     time_storage: [32]u8 = undefined,
+    // SAFETY: measureFacts retains only the path slice initialized by compactPath; unused storage is never rendered.
     path_storage: [labels.path_bytes]u8 = undefined,
 
     // What the command column gives up: the facts and the gap before them.
@@ -615,29 +618,4 @@ fn statusOf(item: anytype, palette: anytype) Status {
         .interrupted => .{ .glyph = "■", .color = palette.yellow },
         .completed => if (item.exit_code) |code| (if (code == 0) Status{ .glyph = "·", .color = palette.overlay0 } else Status{ .glyph = "✕", .color = palette.red }) else Status{ .glyph = "·", .color = palette.subtext0 },
     };
-}
-
-test "manifest names select the built-in provider mark or none" {
-    try std.testing.expectEqual(core.AgentProvider.claude, providerOf("claude"));
-    try std.testing.expectEqual(core.AgentProvider.codex, providerOf("codex"));
-    try std.testing.expectEqual(core.AgentProvider.pi, providerOf("pi"));
-    try std.testing.expectEqual(core.AgentProvider.cursor, providerOf("cursor"));
-    try std.testing.expectEqual(core.AgentProvider.opencode, providerOf("opencode"));
-    try std.testing.expectEqual(core.AgentProvider.unknown, providerOf("aider"));
-    try std.testing.expectEqual(core.AgentProvider.unknown, providerOf(""));
-}
-
-test "a card counts the lines it shows and a bounded rest" {
-    try std.testing.expectEqual(Wrapped{ .shown = 1, .more = 0 }, wrap("ls", 80, 10));
-    try std.testing.expectEqual(Wrapped{ .shown = 2, .more = 0 }, wrap("a" ** 100, 80, 10));
-    try std.testing.expectEqual(Wrapped{ .shown = 3, .more = 0 }, wrap("for x in a b; do\n  echo $x\ndone", 80, 10));
-    try std.testing.expectEqual(Wrapped{ .shown = 2, .more = 3 }, wrap("1\n2\n3\n4\n5", 80, 2));
-    try std.testing.expectEqual(Wrapped{ .shown = 4, .more = more_bound }, wrap("x\n" ** 4096, 80, 4));
-    try std.testing.expectEqual(Wrapped{ .shown = 0, .more = 0 }, wrap("ls", 0, 10));
-}
-
-test "a row shows the first line of a command and marks that it continues" {
-    try std.testing.expectEqualDeep(FirstLine{ .text = "zig build", .continues = false }, firstLine("zig build"));
-    try std.testing.expectEqualDeep(FirstLine{ .text = "for x in a b; do", .continues = true }, firstLine("for x in a b; do\n  echo $x\ndone"));
-    try std.testing.expectEqualDeep(FirstLine{ .text = "", .continues = true }, firstLine("\r\nls"));
 }

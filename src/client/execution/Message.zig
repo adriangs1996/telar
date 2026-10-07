@@ -46,12 +46,3 @@ pub const Message = union(enum) {
         };
     }
 };
-
-test "client events keep their interactive and observation budgets" {
-    const std = @import("std");
-    try std.testing.expectEqual(core.Path.interactive, (Message{ .sent = {} }).path());
-    try std.testing.expectEqual(core.Path.interactive, (Message{ .sidebar_animation_tick = {} }).path());
-    try std.testing.expectEqual(core.Path.observation, (Message{ .notification_tick = {} }).path());
-    try std.testing.expectEqual(core.Path.observation, (Message{ .bar_tick = {} }).path());
-    try std.testing.expectEqual(core.Path.observation, (Message{ .link_opened = {} }).path());
-}

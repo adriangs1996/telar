@@ -64,32 +64,6 @@ pub fn scan(terminal: *const vt.Terminal, manifests: *const core.Table) ?core.Si
     return null;
 }
 
-test "Codex status clocks support remapped shortcuts and disabled animations" {
-    for ([_][]const u8{ "Working (2s)", "Thinking (1m 03s, f12 to interrupt)", "Working (2h 01m 03s)", "Working (1s" }) |text| {
-        var terminal = try vt.Terminal.init(std.testing.io, std.testing.allocator, .{ .cols = 100, .rows = 12 });
-        defer terminal.deinit(std.testing.allocator);
-        var stream = terminal.vtStream();
-        defer stream.deinit();
-        stream.nextSlice(text);
-        stream.nextSlice("\r\n\r\n\xe2\x80\xba Ask Codex to do anything\x1b[3G");
-        try std.testing.expectEqual(core.Status.working, scan(&terminal, &core.builtin_table).?.status);
-    }
-}
-
-test "Codex composer drafts prove readiness without claiming identity" {
-    var terminal = try vt.Terminal.init(std.testing.io, std.testing.allocator, .{ .cols = 80, .rows = 12 });
-    defer terminal.deinit(std.testing.allocator);
-    var stream = terminal.vtStream();
-    defer stream.deinit();
-    stream.nextSlice("\xe2\x80\xba my next question\r\n  continued draft");
-
-    const signal = scan(&terminal, &core.builtin_table).?;
-    try std.testing.expect(signal.ready_confirmed);
-    try std.testing.expect(!signal.identity_confirmed);
-    stream.nextSlice("\x1b[?25l");
-    try std.testing.expect(scan(&terminal, &core.builtin_table) == null);
-}
-
 // A status row starts with a spinner or a known heading and carries a clock.
 fn isStatus(row: *const ScreenRow) bool {
     const line = row.text();

@@ -194,10 +194,6 @@ fn hasBackground(color: vt.Style.Color) bool {
     };
 }
 
-test {
-    std.testing.refAllDecls(@This());
-}
-
 const Scan = struct {
     provider: core.AgentProvider,
     confidence: u8,

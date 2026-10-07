@@ -1,4 +1,3 @@
-const data = @import("model");
 const core = @import("telar-core");
 const Generation = @import("../config/Generation.zig");
 const Registry = @import("../plugins/Registry.zig");

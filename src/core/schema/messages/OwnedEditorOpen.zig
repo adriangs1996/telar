@@ -7,8 +7,10 @@ pub const max_bytes = OpenEditor.max_bytes;
 request_id: id.RequestId,
 pane_id: id.PaneId,
 pane_generation: u64,
+// SAFETY: setTarget copies the validated executable before setting editor_len; editor reads only that prefix.
 editor_bytes: [max_bytes]u8 = undefined,
 editor_len: u16 = 0,
+// SAFETY: setTarget copies the validated path before setting path_len; path reads only that prefix.
 path_bytes: [max_bytes]u8 = undefined,
 path_len: u16 = 0,
 line: u32 = 0,

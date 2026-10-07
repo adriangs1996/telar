@@ -1,5 +1,4 @@
 const core = @import("telar-core");
-const RuntimeMetrics = @This();
 
 started_ns: u64,
 client_messages: u64 = 0,

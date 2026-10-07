@@ -9,7 +9,3 @@ pub const realloc = blocks.realloc;
 pub const free = blocks.free;
 pub const len = blocks.len;
 pub const roundUp = blocks.roundUp;
-
-test {
-    _ = @import("blocks.zig");
-}

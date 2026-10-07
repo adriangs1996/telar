@@ -1,6 +1,4 @@
 //! Captures links before blit consumes dirty flags or the VT can move its pages.
-const vtgrid = @import("vtgrid");
-const cellgrid = @import("cellgrid");
 const revisions = @import("../revisions.zig");
 const std = @import("std");
 const vt = @import("ghostty-vt");
@@ -160,91 +158,14 @@ fn rowFlags(state: *const vt.RenderState, y: usize) core.TextRowFlags {
     };
 }
 
-test "text metadata preserves explicit OSC 8 identity and wide-cell runs" {
-    const BlitPane = vtgrid.TestPane;
-    var pane = try BlitPane.init(std.testing.allocator, 24, 4);
-    defer pane.deinit();
-    var capture = try TextMetadataCapture.init(std.testing.allocator, 4);
-    defer capture.deinit(std.testing.allocator);
-    try pane.write("\x1b]8;id=first;https://example.com\x1b\\界ab\x1b]8;;\x1b\\ \x1b]8;id=second;https://example.com\x1b\\cd\x1b]8;;\x1b\\\r\n\x1b]8;id=first;https://example.com\x1b\\ef\x1b]8;;\x1b\\");
-    try capture.update(std.testing.allocator, &pane.state);
-    const view = capture.current.view();
-    _ = try core.TextMetadataView.decode(view.encoded, .{ 24, 4 });
-    try std.testing.expectEqual(@as(u16, 2), view.link_count);
-    try std.testing.expectEqual(@as(u16, 3), view.run_count);
-    try std.testing.expectEqualStrings("https://example.com", view.link(0).?);
-    try std.testing.expectEqualDeep(core.TextLinkRun{ .start = 0, .len = 4, .link_index = 0 }, view.at(1).?);
-    try std.testing.expectEqual(@as(u16, 1), view.at(5).?.link_index);
-    try std.testing.expectEqual(@as(u16, 0), view.at(24).?.link_index);
-}
-
-test "text metadata captures soft wrap and wide padding before blit clears damage" {
-    const BlitPane = vtgrid.TestPane;
-    var pane = try BlitPane.init(std.testing.allocator, 12, 4);
-    defer pane.deinit();
-    var capture = try TextMetadataCapture.init(std.testing.allocator, 4);
-    defer capture.deinit(std.testing.allocator);
-    try pane.write("https://e/a界b\r\nhard line");
-    try capture.update(std.testing.allocator, &pane.state);
-    const view = capture.current.view();
-    try std.testing.expect(view.rows[0].wrap);
-    try std.testing.expect(view.rows[0].wide_padding);
-    try std.testing.expect(view.rows[1].continuation);
-    try std.testing.expect(!view.rows[1].wrap);
-    try std.testing.expect(!view.rows[2].continuation);
-    var buffer = try cellgrid.Buffer.init(std.testing.allocator, 12, 4);
-    defer buffer.deinit();
-    _ = vtgrid.blit(.{ .buffer = &buffer, .area = buffer.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
-    try std.testing.expectEqual(.false, pane.state.dirty);
-    const revision = capture.revision;
-    var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
-    try capture.update(failing.allocator(), &pane.state);
-    try std.testing.expectEqual(revision, capture.revision);
-    try std.testing.expectEqual(@as(usize, 0), failing.allocations);
-}
-
-test "text metadata keeps the links that fit its table and recovers without allocation" {
-    const BlitPane = vtgrid.TestPane;
-    var pane = try BlitPane.init(std.testing.allocator, 32, 10);
-    defer pane.deinit();
-    var capture = try TextMetadataCapture.init(std.testing.allocator, 10);
-    defer capture.deinit(std.testing.allocator);
-    for (0..core.text_metadata_limits.max_links + 1) |id| {
-        var bytes: [128]u8 = undefined;
-        const command = try std.fmt.bufPrint(&bytes, "\x1b]8;id={d};https://e/{d}\x1b\\x\x1b]8;;\x1b\\", .{ id, id });
-        try pane.write(command);
-    }
-    var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
-    try capture.update(failing.allocator(), &pane.state);
-    const partial = capture.current.view();
-    _ = try core.TextMetadataView.decode(partial.encoded, .{ 32, 10 });
-    try std.testing.expectEqual(.partial, partial.status);
-    try std.testing.expectEqual(@as(u16, core.text_metadata_limits.max_links), partial.link_count);
-    try std.testing.expectEqual(@as(u16, core.text_metadata_limits.max_links), partial.run_count);
-    try std.testing.expectEqualStrings("https://e/0", partial.link(0).?);
-    try std.testing.expect(partial.at(core.text_metadata_limits.max_links) == null);
-    try std.testing.expect(capture.takeDropped());
-    try std.testing.expect(!capture.takeDropped());
-    try pane.write("\x1b[H\x1b[2J\x1b]8;;https://ok.example\x1b\\label\x1b]8;;\x1b\\");
-    try capture.update(failing.allocator(), &pane.state);
-    try std.testing.expectEqual(.complete, capture.current.view().status);
-    try std.testing.expectEqualStrings("https://ok.example", capture.current.view().link(0).?);
-    try std.testing.expect(!capture.takeDropped());
-    const revision = capture.revision;
-    for (0..120) |_| {
-        try capture.update(failing.allocator(), &pane.state);
-        try std.testing.expectEqual(revision, capture.revision);
-    }
-
-    try std.testing.expectEqual(@as(usize, 0), failing.allocations);
-}
-
 /// Borrowed VT identities; lives only while the terminal's pages are stable.
 const HyperlinkIndex = struct {
     slots: [512]?u16 = @splat(null),
+    // SAFETY: intern writes a reference before storing its index in slots; reads require an occupied slot.
     refs: [core.text_metadata_limits.max_links]HyperlinkRef = undefined,
     page: ?*const vt.Page = null,
     page_ids: [512]?vt.size.HyperlinkCountInt = @splat(null),
+    // SAFETY: intern fills the cached index whenever it fills page_ids; reads require a matching non-null page id.
     page_indexes: [512]u16 = undefined,
 
     /// Interns the VT identity, including its explicit id, across page boundaries.

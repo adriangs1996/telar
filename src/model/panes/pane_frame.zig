@@ -33,7 +33,6 @@ pub fn receive(model: *ClientModel, frame: core.FrameView) !PaneFrameOutcome {
         return .{
             .resync = .{
                 .pane_id = frame.pane_id,
-                .known_frame_id = pane.applied_frame_id,
             },
         };
     }

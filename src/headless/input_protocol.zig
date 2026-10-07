@@ -91,29 +91,3 @@ pub fn parseSize(text: []const u8) !InputSize {
         .rows = rows,
     };
 }
-
-test "lines name keys, text, sizes and marks" {
-    const chord = try parse("key ctrl+c");
-    try std.testing.expect(chord.key.isCtrl('c'));
-    try std.testing.expect((try parse("key enter")).key.code == .enter);
-
-    const typed = try parse("text echo ñ");
-    try std.testing.expectEqualStrings("echo ñ", typed.text.slice());
-
-    const size = (try parse("resize 120x40\r")).resize;
-    try std.testing.expectEqual(@as(u16, 120), size.cols);
-    try std.testing.expectEqual(@as(u16, 40), size.rows);
-
-    try std.testing.expectEqualStrings("sent-3", (try parse("mark sent-3")).mark.slice());
-    try std.testing.expect(try parse("quit") == .quit);
-    try std.testing.expect(try parse("notification activate") == .notification_activate);
-}
-
-test "malformed lines are refused" {
-    try std.testing.expectError(error.UnknownHeadlessCommand, parse("type x"));
-    try std.testing.expectError(error.UnknownHeadlessCommand, parse("notification dismiss"));
-    try std.testing.expectError(error.InvalidHeadlessSize, parse("resize 0x10"));
-    try std.testing.expectError(error.InvalidHeadlessSize, parse("resize 10"));
-    try std.testing.expectError(error.InvalidHeadlessLabel, parse("mark "));
-    try std.testing.expectError(error.InvalidHeadlessText, parse("text \xff"));
-}

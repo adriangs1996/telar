@@ -1,8 +1,6 @@
 const kitty_protocol = @import("kitty_protocol");
-const core = @import("telar-core");
 const SharedFrameKey = @import("SharedFrameKey.zig");
 const media = @import("media.zig");
-const SharedFrame = @This();
 
 start: usize,
 end: usize,

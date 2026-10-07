@@ -6,11 +6,3 @@ pub const Role = @import("role.zig").Role;
 pub const captures = @import("captures.zig");
 pub const language = @import("language.zig");
 pub const limits = @import("limits.zig");
-
-test {
-    _ = @import("captures.zig");
-    _ = @import("syntaxhl_tests.zig");
-    _ = @import("language.zig");
-    _ = @import("limits.zig");
-    _ = @import("role.zig");
-}

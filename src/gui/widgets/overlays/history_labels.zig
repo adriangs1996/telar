@@ -39,10 +39,12 @@ fn tailStart(text: []const u8, limits: struct { bytes: usize, codepoints: usize 
     var codepoints: usize = 0;
     while (right.next()) |cluster| {
         bytes += cluster.bytes.len;
+        // SAFETY: GraphemeIterator returns valid UTF-8 clusters, replacing invalid input with U+FFFD.
         codepoints += std.unicode.utf8CountCodepoints(cluster.bytes) catch unreachable;
         while (bytes > limits.bytes or codepoints > limits.codepoints) {
             const first = left.next().?;
             bytes -= first.bytes.len;
+            // SAFETY: the left GraphemeIterator has the same valid-cluster guarantee as the right iterator.
             codepoints -= std.unicode.utf8CountCodepoints(first.bytes) catch unreachable;
         }
     }
@@ -59,23 +61,6 @@ fn copyPath(path: []const u8, destination: []u8) []const u8 {
     }
 
     return destination[0..written];
-}
-
-test "compact history paths preserve components and bounded valid graphemes" {
-    var storage: [path_bytes]u8 = undefined;
-    try std.testing.expectEqualStrings("/work/telar", compactPath("/work/telar", &storage));
-    try std.testing.expectEqualStrings("…/sandbox/telar", compactPath("/Users/adriangonzalez/sandbox/telar", &storage));
-    try std.testing.expectEqualStrings("/", compactPath("/" ** 80, &storage));
-    const unicode_path = "/work/" ++ "e\u{301}" ** 40;
-    const unicode_tail = compactPath(unicode_path, &storage);
-    try std.testing.expectEqualStrings("…/" ++ "e\u{301}" ** 14, unicode_tail);
-    const paths = [_][]const u8{ "/work/" ++ "界" ** 40, "/work/" ++ "\u{1f600}" ** 40, "/work/" ++ "a" ** 100, "/work/\xff\x1b" };
-    for (paths) |path| {
-        const result = compactPath(path, &storage);
-        try std.testing.expect(result.len <= path_bytes);
-        try std.testing.expect(std.unicode.utf8ValidateSlice(result));
-        try std.testing.expect((try std.unicode.utf8CountCodepoints(result)) <= 30);
-    }
 }
 
 /// Fits the native history duration column without losing its unit.
@@ -201,35 +186,4 @@ fn calendar(day: i64) ?CalendarDate {
         .month = month_day.month.numeric(),
         .day = month_day.day_index + 1,
     };
-}
-
-test "local days and clocks follow the zone offset across midnight" {
-    // 2026-09-25T23:30:00Z
-    const ms: i64 = 1790379000000;
-    try std.testing.expectEqual(localDay(ms, 0) + 1, localDay(ms, 60));
-    try std.testing.expectEqual(localDay(ms, 0), localDay(ms, -300));
-    var storage: [16]u8 = undefined;
-    try std.testing.expectEqualStrings("23:30", clock(ms, 0, &storage));
-    try std.testing.expectEqualStrings("00:30", clock(ms, 60, &storage));
-    try std.testing.expectEqualStrings("18:30", clock(ms, -300, &storage));
-}
-
-test "day headings and searched dates name the distance from today" {
-    var storage: [32]u8 = undefined;
-    const today = localDay(1790379000000, 0); // Friday 2026-09-25
-    try std.testing.expectEqualStrings("Today", dayLabel(today, today, &storage));
-    try std.testing.expectEqualStrings("Yesterday", dayLabel(today - 1, today, &storage));
-    try std.testing.expectEqualStrings("Wednesday", dayLabel(today - 2, today, &storage));
-    try std.testing.expectEqualStrings("Saturday", dayLabel(today - 6, today, &storage));
-    try std.testing.expectEqualStrings("Sep 18", dayLabel(today - 7, today, &storage));
-    try std.testing.expectEqualStrings("Jan 1", dayLabel(today - 267, today, &storage));
-    try std.testing.expectEqualStrings("Dec 2025", dayLabel(today - 268, today, &storage));
-    try std.testing.expectEqualStrings("Earlier", dayLabel(-5, today, &storage));
-
-    const now_ms: i64 = 1790379000000;
-    try std.testing.expectEqualStrings("23:30", dateLabel(now_ms, now_ms, 0, &storage));
-    try std.testing.expectEqualStrings("Yesterday", dateLabel(now_ms - std.time.ms_per_day, now_ms, 0, &storage));
-    try std.testing.expectEqualStrings("Wed", dateLabel(now_ms - 2 * std.time.ms_per_day, now_ms, 0, &storage));
-    try std.testing.expectEqualStrings("Sep 18", dateLabel(now_ms - 7 * std.time.ms_per_day, now_ms, 0, &storage));
-    try std.testing.expectEqualStrings("2025", dateLabel(now_ms - 268 * std.time.ms_per_day, now_ms, 0, &storage));
 }

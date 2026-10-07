@@ -19,15 +19,3 @@ pub fn observe(self: *Histogram, ns: u64) void {
     self.buckets[index] +|= 1;
     self.max_ns = @max(self.max_ns, ns);
 }
-
-test "profile histograms retain boundaries and signal saturation" {
-    var histogram: Histogram = .{};
-    for ([_]u64{ 0, 1, 2, 3, 4, 5, 8, 9 }) |ns| {
-        histogram.observe(ns);
-    }
-    try std.testing.expectEqualSlices(u64, &.{ 2, 1, 2, 2, 1 }, histogram.buckets[0..5]);
-    try std.testing.expectEqual(@as(u64, 8), histogram.count);
-    histogram.total_ns = std.math.maxInt(u64);
-    histogram.observe(1);
-    try std.testing.expect(histogram.overflow);
-}

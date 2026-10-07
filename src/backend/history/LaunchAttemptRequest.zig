@@ -1,6 +1,5 @@
 const core = @import("telar-core");
 const model = @import("model.zig");
-const LaunchAttemptRequest = @This();
 
 pane_id: core.PaneId,
 pane_generation: u64,

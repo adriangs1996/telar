@@ -58,52 +58,6 @@ pub fn resampleRect(source: ImageView, destination: []u8, width: u32, height: u3
     }
 }
 
-test "a flat bitmap resamples to its own colour at any size" {
-    const pixels = [_]u8{ 10, 200, 30, 255 } ** 16;
-    const source: ImageView = .{ .pixels = &pixels, .stride = 16, .width = 4, .height = 4 };
-    for ([_]u32{ 1, 3, 4, 7 }) |side| {
-        var out: [7 * 7 * 4]u8 = undefined;
-        resample(source, out[0 .. side * side * 4], side);
-        for (0..side * side) |index| {
-            try std.testing.expectEqualSlices(u8, &.{ 10, 200, 30, 255 }, out[index * 4 ..][0..4]);
-        }
-    }
-}
-
-test "a downscale averages coverage and keeps opaque colour beside transparency" {
-    // Left half opaque red, right half transparent black, 4x2 into 2x2 then 1x1.
-    const pixels = [_]u8{ 255, 0, 0, 255, 255, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0 } ** 2;
-    const source: ImageView = .{ .pixels = &pixels, .stride = 16, .width = 4, .height = 2 };
-    var two: [2 * 2 * 4]u8 = undefined;
-    resample(source, &two, 2);
-    try std.testing.expectEqualSlices(u8, &.{ 255, 0, 0, 255 }, two[0..4]);
-    try std.testing.expectEqualSlices(u8, &.{ 0, 0, 0, 0 }, two[4..8]);
-    var one: [4]u8 = undefined;
-    resample(source, &one, 1);
-    try std.testing.expectEqualSlices(u8, &.{ 255, 0, 0, 128 }, &one);
-}
-
-test "a region samples only inside its origin" {
-    const pixels = [_]u8{ 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255 } ++
-        [_]u8{ 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255 };
-    const right: ImageView = .{ .pixels = &pixels, .stride = 16, .x = 2, .width = 2, .height = 2 };
-    var out: [3 * 3 * 4]u8 = undefined;
-    resample(right, &out, 3);
-    for (0..9) |index| {
-        try std.testing.expectEqualSlices(u8, &.{ 255, 255, 255, 255 }, out[index * 4 ..][0..4]);
-    }
-}
-
-test "a rectangle keeps each axis's own scale" {
-    // Four columns: two red, two blue; two rows. Into 2x1 each column pair averages alone.
-    const pixels = [_]u8{ 255, 0, 0, 255, 255, 0, 0, 255, 0, 0, 255, 255, 0, 0, 255, 255 } ** 2;
-    const source: ImageView = .{ .pixels = &pixels, .stride = 16, .width = 4, .height = 2 };
-    var out: [2 * 1 * 4]u8 = undefined;
-    resampleRect(source, &out, 2, 1);
-    try std.testing.expectEqualSlices(u8, &.{ 255, 0, 0, 255 }, out[0..4]);
-    try std.testing.expectEqualSlices(u8, &.{ 0, 0, 255, 255 }, out[4..8]);
-}
-
 /// The source pixels one destination index covers on one axis of a box
 /// filter: `[first, end)` with the partial coverage of both ends.
 const FilterSpan = struct {

@@ -29,12 +29,6 @@ const tab_snapshot = @import("../workspace/tab_snapshot.zig");
 const workspace_list_snapshot = @import("../workspace/workspace_list_snapshot.zig");
 const Client = @import("../execution/Client.zig");
 
-/// Applies one decoded reply while its borrowed payload remains valid.
-/// Example: `_ = try runtime_messages.handleServerMessage(client, try core.decodeServer(bytes));`
-pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
-    return receiveServerMessage(client, &message);
-}
-
 /// Applies the message the transport owns in place. The union is kilobytes
 /// for its largest reply while a pane frame is 168 bytes, so the runtime
 /// read never copies it whole.

@@ -20,8 +20,6 @@ const MachineSegment = @import("MachineSegment.zig");
 const PixelScroll = @import("PixelScroll.zig");
 const Sidebar = @This();
 
-pub const margin = SidebarRegions.margin;
-pub const header_gap = SidebarRegions.header_gap;
 pub const scrollbar_width: f32 = 3;
 
 state: *SidebarState,

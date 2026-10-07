@@ -1,7 +1,6 @@
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const layout_support = @import("../workspace/layout_support.zig");
-const RequestPaneSplit = @This();
 
 axis: layout_support.Axis,
 area: cellgrid.Rect,

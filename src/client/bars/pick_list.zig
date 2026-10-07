@@ -1,4 +1,4 @@
-//! Pick lists (docs/flows/pick-list.md): a configured pick opens the palette
+//! Pick lists: a configured pick opens the palette
 //! on its options, written in the configuration or printed by a command that
 //! runs off the event loop, and the chosen value runs the pick's `on_select`
 //! as an argv without a shell. After a successful choice the bar sources and
@@ -231,8 +231,3 @@ const Run = struct {
     purpose: PickCommandJob.Purpose,
     command: data.BarCommand,
 };
-
-test "failure reasons read after the command" {
-    try std.testing.expectEqualStrings("timed out", reason(error.Timeout));
-    try std.testing.expectEqualStrings("Unexpected", reason(error.Unexpected));
-}

@@ -82,10 +82,15 @@ pub fn parse(output: []const u8) !MachinePlatform {
     var home: ?ProbeValue = null;
     var target: ?ProbeValue = null;
     var result: MachinePlatform = .{
+        // SAFETY: The parsed optional os is required and assigned before return; the parsing loop only accesses other initialized fields.
         .os = undefined,
+        // SAFETY: The parsed optional arch is required and assigned before return; the parsing loop never reads result.arch.
         .arch = undefined,
+        // SAFETY: The parsed optional libc is required and assigned before return; the parsing loop never reads result.libc.
         .libc = undefined,
+        // SAFETY: The validated absolute home is required and assigned before return; the parsing loop never reads result.home.
         .home = undefined,
+        // SAFETY: The validated absolute target is required and assigned before return; the parsing loop never reads result.target.
         .target = undefined,
     };
 
@@ -170,38 +175,4 @@ fn absolute(value: []const u8) !ProbeValue {
     }
 
     return ProbeValue.init(value);
-}
-
-test "the probe's facts parse into a platform" {
-    const platform = try parse(
-        \\os=Linux
-        \\arch=aarch64
-        \\libc=musl
-        \\home=/home/dev
-        \\target=/home/dev/.local/share/telar/0.3.0/telar
-        \\installed=telar 0.3.0
-        \\tool=curl
-        \\tool=tar
-        \\node=v22.19.0
-        \\agent=codex:/home/dev/.local/bin/codex
-        \\
-    );
-
-    try std.testing.expectEqual(Os.linux, platform.os);
-    try std.testing.expectEqual(Libc.musl, platform.libc);
-    try std.testing.expectEqualStrings("telar-linux-aarch64-headless.tar.gz", platform.assetName());
-    try std.testing.expect(platform.installedVersion("0.3.0"));
-    try std.testing.expect(!platform.installedVersion("0.3.1"));
-    try std.testing.expect(platform.tools.contains(.curl) and !platform.tools.contains(.node));
-    try std.testing.expectEqualStrings("/home/dev/.local/bin/codex", platform.agents.get(.codex).?.slice());
-    try std.testing.expectEqual(@as(?ProbeValue, null), platform.agents.get(.claude));
-}
-
-test "unknown systems, noise and missing facts are refused" {
-    try std.testing.expectError(error.UnsupportedMachineSystem, parse("os=FreeBSD\n"));
-    try std.testing.expectError(error.UnsupportedMachineArchitecture, parse("os=Linux\narch=riscv64\n"));
-    try std.testing.expectError(error.MachineProbeUnreadable, parse("Welcome to box!\nos=Linux\n"));
-    try std.testing.expectError(error.MachineProbeUnreadable, parse("os=Linux\narch=x86_64\nlibc=gnu\nhome=/home/dev\n"));
-    try std.testing.expectError(error.MachineProbeUnreadable, parse("os=Linux\narch=x86_64\nlibc=gnu\nhome=relative\ntarget=/t\n"));
-    try std.testing.expectError(error.MachineProbeUnreadable, parse("os=Linux\narch=x86_64\nlibc=gnu\nhome=/h\x1b[2J\ntarget=/t\n"));
 }

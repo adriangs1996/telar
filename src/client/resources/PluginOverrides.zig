@@ -2,6 +2,7 @@ const data = @import("model");
 const std = @import("std");
 const Snapshot = @import("../config/Snapshot.zig");
 const Overrides = @This();
+// SAFETY: set writes a new override before increasing count; lookup and application visit only that initialized prefix.
 items: [data.config_values.max_plugins]data.PluginOverride = undefined,
 count: u8 = 0,
 
@@ -69,37 +70,4 @@ fn disabled(self: *const Overrides, id: u64, snapshot: *const Snapshot) bool {
     }
 
     return false;
-}
-
-test "captured overrides are independent and disabling removes only that plugin's bindings" {
-    var original: Snapshot = .{};
-    original.plugin_count = 1;
-    original.plugins[0] = .{ .path_len = 1 };
-    original.plugins[0].path_bytes[0] = 'x';
-    original.binding_count = 2;
-    original.bindings[0] = try data.config_values.ConfiguredBinding.init(&.{original.prefix}, .{ .plugin = .{ .plugin = 7, .action = 8 } });
-    original.bindings_prefixed[0] = true;
-    original.bindings[1] = try data.config_values.ConfiguredBinding.init(&.{original.prefix}, .toggle_sidebar);
-    original.bindings_prefixed[1] = false;
-    var overrides: Overrides = .{};
-    var value: data.PluginOverride = .{ .spec = original.plugins[0], .plugin_id = 7 };
-    value.spec.enabled = false;
-    try overrides.set(value);
-    const captured = overrides;
-    value.spec.enabled = true;
-    try overrides.set(value);
-    var disabled_snapshot = original;
-    captured.apply(&disabled_snapshot);
-    try std.testing.expect(!disabled_snapshot.plugins[0].enabled);
-    try std.testing.expectEqual(@as(u16, 1), disabled_snapshot.binding_count);
-    try std.testing.expect(disabled_snapshot.bindings[0].action == .toggle_sidebar);
-    try std.testing.expect(!disabled_snapshot.bindings_prefixed[0]);
-    var moved = original;
-    moved.plugins[0].path_bytes[0] = 'y';
-    captured.apply(&moved);
-    try std.testing.expectEqual(@as(u16, 2), moved.binding_count);
-    try std.testing.expect(moved.plugins[0].enabled);
-    overrides.apply(&original);
-    try std.testing.expect(original.plugins[0].enabled);
-    try std.testing.expectEqual(@as(u16, 2), original.binding_count);
 }

@@ -1,5 +1,3 @@
-const Stats = @This();
-
 output_bytes: u64 = 0,
 /// Shared frames folded because a newer frame of the same placement was
 /// available in the batch: latest-wins working as designed.

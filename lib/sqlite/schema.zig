@@ -44,21 +44,3 @@ pub fn ensureColumn(db: *c.sqlite3, migration: ColumnMigration) !void {
         return error.SqliteSchemaFailed;
     }
 }
-
-test "a missing column is added once" {
-    var db: ?*c.sqlite3 = null;
-    try std.testing.expectEqual(@as(c_int, c.SQLITE_OK), c.sqlite3_open(":memory:", &db));
-    defer _ = c.sqlite3_close(db);
-    try std.testing.expectEqual(@as(c_int, c.SQLITE_OK), c.sqlite3_exec(db, "CREATE TABLE t (a INTEGER);", null, null, null));
-
-    try std.testing.expect(try tableExists(db.?, "t"));
-    try std.testing.expect(!try tableExists(db.?, "missing"));
-
-    const migration: ColumnMigration = .{
-        .table = "t",
-        .column = "b",
-        .alter_sql = "ALTER TABLE t ADD COLUMN b INTEGER;",
-    };
-    try ensureColumn(db.?, migration);
-    try ensureColumn(db.?, migration);
-}

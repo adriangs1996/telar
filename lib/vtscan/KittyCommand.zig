@@ -1,6 +1,5 @@
 //! One Kitty graphics command a `KittyCommandScanner` saw end. The slices
 //! borrow the scanner and stay valid until its next call.
-const KittyCommand = @This();
 
 /// Index just past the command's terminator in the slice that ended it.
 end: usize,

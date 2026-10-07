@@ -25,7 +25,6 @@ pub const Stats = @import("Counters.zig");
 pub const StatsSnapshot = @import("Snapshot.zig");
 pub const LaunchAttemptRequest = @import("LaunchAttemptRequest.zig");
 pub const SessionStartRequest = @import("SessionStartRequest.zig");
-pub const CommandContext = @import("CommandContext.zig");
 pub const CommandRecord = @import("CommandRecord.zig");
 pub const AgentCommandRecord = @import("AgentCommandRecord.zig");
 
@@ -105,6 +104,7 @@ pub fn capturesOutput(self: *const Service) bool {
 /// const session_id = service.newSessionId(io);
 /// ```
 pub fn newSessionId(_: *Service, io: std.Io) model.SessionId {
+    // SAFETY: io.random fills every session-id byte before return.
     var session_id: model.SessionId = undefined;
     io.random(&session_id);
     return session_id;

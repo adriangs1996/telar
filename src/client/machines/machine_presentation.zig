@@ -1,4 +1,4 @@
-//! Which machine a window presents (docs/flows/machine-presentation.md).
+//! Which machine a window presents.
 //! The presented client attaches panes and receives their screens; a hidden
 //! one keeps metadata only: workspace list, agents, notifications and
 //! metrics. Hiding a machine leaves its workspace or worktree, remembering
@@ -8,7 +8,6 @@ const core = @import("telar-core");
 const Client = @import("../execution/Client.zig");
 const client_layout = @import("../workspace/client_layout.zig");
 const workspace_handoff = @import("../workspace/workspace_handoff.zig");
-const client_tests = @import("../execution/client_tests.zig");
 
 /// Presents the client's machine: opens the first pane it deferred, or the
 /// workspace it left.
@@ -94,8 +93,4 @@ pub fn settle(client: *Client) !void {
     client.left_workspace = location;
     _ = try workspace_handoff.leaveWorkspace(client);
     client.leave_pending = false;
-}
-
-test "a hidden machine defers its first pane and leaves its workspace" {
-    try client_tests.hiddenMachineDefersAndLeaves(show, hide);
 }

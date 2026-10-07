@@ -26,18 +26,6 @@ pane_gaps: bool = true,
 metrics: Metrics = .{},
 revision: u64 = 1,
 
-/// Installs presentation measurements without changing topology or ratios.
-/// Example: `_ = layout.setMetrics(.{ .border = 0, .gap = 0 });`.
-pub fn setMetrics(self: *Layout, metrics: Metrics) bool {
-    if (std.meta.eql(self.metrics, metrics)) {
-        return false;
-    }
-
-    self.metrics = metrics;
-    self.changed();
-    return true;
-}
-
 pub fn count(self: *const Layout) usize {
     return self.pane_count;
 }
@@ -323,17 +311,6 @@ pub fn restoreSaved(self: *Layout, saved: Layout, panes: PaneSet) bool {
     return true;
 }
 
-pub fn splitFocused(self: *Layout, pane_id: core.PaneId, axis: layout_support.Axis) !void {
-    const focused_pane = self.focused() orelse return error.LayoutEmpty;
-    try self.split(
-        .{
-            .existing_pane = focused_pane,
-            .new_pane = pane_id,
-            .axis = axis,
-        },
-    );
-}
-
 /// Replaces one leaf with a split containing the existing and new panes.
 ///
 /// ```zig
@@ -521,18 +498,6 @@ pub fn toggleFullscreen(self: *Layout) bool {
     self.fullscreen = !self.fullscreen;
     self.changed();
     return true;
-}
-
-/// Reports whether the target pane can be split inside the available area.
-///
-/// ```zig
-/// const allowed = layout.canSplit(.{ .pane_id = pane_id, .axis = .horizontal }, area);
-/// ```
-pub fn canSplit(self: *const Layout, target: SplitTarget, area: cellgrid.Rect) bool {
-    var geometry: LayoutSnapshot = .{};
-    self.snapshot(area, &geometry);
-
-    return geometry.prospectiveSplit(target, self.pane_count) != null;
 }
 
 /// Computes the target split geometry without mutating the layout.
@@ -760,4 +725,3 @@ fn changed(self: *Layout) void {
         self.revision = 1;
     }
 }
-

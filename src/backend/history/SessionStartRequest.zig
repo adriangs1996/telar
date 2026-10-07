@@ -1,6 +1,5 @@
 const core = @import("telar-core");
 const model = @import("model.zig");
-const SessionStartRequest = @This();
 
 session_id: model.SessionId,
 pane_id: core.PaneId,

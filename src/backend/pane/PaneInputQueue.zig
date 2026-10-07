@@ -13,6 +13,7 @@ const PaneInputQueue = @This();
 pub const capacity = 2 * core.max_input_bytes;
 pub const limit = core.Limit.declare("panes.input_queue_capacity", "queued input bytes", capacity);
 
+// SAFETY: push copies the accepted bytes before increasing len; nextChunk exposes only queued bytes.
 bytes: [capacity]u8 = undefined,
 head: usize = 0,
 len: usize = 0,

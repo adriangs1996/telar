@@ -68,11 +68,6 @@ pub const family: FamilyHelp = .{
                 \\setup or runtime refusal (the reason on stderr).
                 \\
             , .{ workspace_grammar.max_worktree_branch_bytes, core.max_worktree_title_bytes, core.max_tab_label_bytes, WorktreeOptions.max_command_arguments, worktree.launch_size.cols, worktree.launch_size.rows, core.max_worktree_entries }),
-            .examples = &.{
-                &.{ "worktree", "create", "fix-tab-order" },
-                &.{ "worktree", "create", "fix-tab-order", "--title", "Fix tab order", "--json", "--", "claude", "Fix the tab order; run the tests." },
-                &.{ "worktree", "create", "fix-tab-order", "--machine", "box", "--from", "main", "--title", "Fix tab order", "--setup", "--", "codex", "--no-daemon", "Read the brief." },
-            },
         },
         .{
             .name = "exec",
@@ -104,10 +99,6 @@ pub const family: FamilyHelp = .{
                 \\pane still running, exit 3.
                 \\
             , .{ core.max_tab_label_bytes, WorktreeOptions.default_wait_seconds, values.max_wait_timeout_seconds, WorktreeOptions.max_command_arguments, backend.ExitedPanes.kept_rows, backend.ExitedPanes.max_text_bytes / 1024, backend.ExitedPanes.capacity }),
-            .examples = &.{
-                &.{ "worktree", "exec", "fix-tab-order", "--label", "tests", "--", "zig", "build", "test" },
-                &.{ "worktree", "exec", "Fix tab order", "--wait", "--timeout", "900s", "--json", "--", "npm", "test" },
-            },
         },
         .{
             .name = "list",
@@ -130,10 +121,6 @@ pub const family: FamilyHelp = .{
             \\Match the user's words against `title`, `brief` and `branch`. Exit 0.
             \\
             ,
-            .examples = &.{
-                &.{ "worktree", "list", "--json" },
-                &.{ "worktree", "list", "--workspace", "4" },
-            },
         },
         .{
             .name = "open",
@@ -150,10 +137,6 @@ pub const family: FamilyHelp = .{
             \\Exit 0; 2 when the worktree or its workspace is unknown; 1 when no window is attached.
             \\
             ,
-            .examples = &.{
-                &.{ "worktree", "open", "fix-tab-order" },
-                &.{ "worktree", "open", "Fix tab order", "--client", "3", "--json" },
-            },
         },
         .{
             .name = "diff",
@@ -172,10 +155,6 @@ pub const family: FamilyHelp = .{
             \\questions about a task from this diff, not from its pane's screen.
             \\
             ,
-            .examples = &.{
-                &.{ "worktree", "diff", "fix-tab-order", "--stat" },
-                &.{ "worktree", "diff", "Fix tab order", "--uncommitted" },
-            },
         },
         .{
             .name = "remove",
@@ -196,10 +175,6 @@ pub const family: FamilyHelp = .{
             \\Exit 0; 1 when refused (changes present, no terminal to confirm, Git failed).
             \\
             ,
-            .examples = &.{
-                &.{ "worktree", "remove", "fix-tab-order" },
-                &.{ "worktree", "remove", "fix-tab-order", "--delete-branch", "--json" },
-            },
         },
         .{
             .name = "fetch",
@@ -218,9 +193,6 @@ pub const family: FamilyHelp = .{
             \\`ref`, `commit`. Exit 0; 1 on failure (Git's words on stderr).
             \\
             ,
-            .examples = &.{
-                &.{ "worktree", "fetch", "fix-tab-order", "--machine", "box", "--json" },
-            },
         },
         .{
             .name = "resolve",
@@ -241,9 +213,6 @@ pub const family: FamilyHelp = .{
                 \\match (name one with --workspace).
                 \\
             , .{WorktreeOptions.max_repository_bytes}),
-            .examples = &.{
-                &.{ "worktree", "resolve", "--repository", "github.com/adriangs1996/telar", "--json" },
-            },
         },
     },
 };

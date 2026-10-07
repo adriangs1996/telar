@@ -3,8 +3,10 @@ const std = @import("std");
 const interception_policy = @import("interception_policy.zig");
 const Policy = @This();
 
+// SAFETY: appendExact assigns each host before increasing exact_count; sorting and lookup use only that prefix.
 exact_storage: [core.max_intercept_hosts][]const u8 = undefined,
 exact_count: u16 = 0,
+// SAFETY: appendSuffix assigns each host before increasing suffix_count; sorting and lookup use only that prefix.
 suffix_storage: [core.max_intercept_hosts][]const u8 = undefined,
 suffix_count: u16 = 0,
 intercept_all: bool = false,

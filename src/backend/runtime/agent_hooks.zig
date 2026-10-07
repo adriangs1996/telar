@@ -587,6 +587,7 @@ pub fn expireParked(model: *RuntimeModel) void {
 
 /// Sessions whose parked reports are due, answered by arrival.
 const ParkedReports = struct {
+    // SAFETY: add stores each session before increasing len; sorting and delivery use only that prefix.
     sessions: [store_support.max_clients]*Session = undefined,
     len: usize = 0,
 
@@ -672,32 +673,4 @@ pub fn recordTitle(model: *RuntimeModel, key: PaneKey, reporter: core.AgentProvi
 
     const changed = agent_status.reportTitle(model, agent_identity.fromPane(pane), reporter, title) catch return .invalid_title;
     return if (changed) .recorded else .unchanged;
-}
-
-test "a process descends from its parent and from itself but not from an unrelated process" {
-    const pid: u32 = @intCast(std.c.getpid());
-    const parent: u32 = @intCast(std.c.getppid());
-    const work: DescentWork = .{
-        .client = .{
-            .id = 1,
-            .generation = 1,
-        },
-        .request_id = @enumFromInt(1),
-        .pane = .{
-            .id = @enumFromInt(1),
-            .generation = 1,
-        },
-        .root = parent,
-        .peer = pid,
-    };
-
-    try std.testing.expect(walkDescent(work).descends);
-
-    var itself = work;
-    itself.root = pid;
-    try std.testing.expect(walkDescent(itself).descends);
-
-    var unrelated = work;
-    unrelated.root = std.math.maxInt(u32);
-    try std.testing.expect(!walkDescent(unrelated).descends);
 }

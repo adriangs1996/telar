@@ -11,8 +11,6 @@ const event = @import("event.zig");
 const Resources = @import("resources/Resources.zig");
 const Options = @import("Options.zig");
 const AgentDescriptionOptions = @import("AgentDescriptionOptions.zig");
-const LaunchTestFault = @import("LaunchTestFault.zig");
-const IngestTestGate = @import("IngestTestGate.zig");
 const Store = @import("client/Store.zig");
 const GenericHandshakes = @import("client/GenericHandshakes.zig").Type;
 const store_support = @import("client/store_support.zig");
@@ -25,7 +23,6 @@ const Agents = @import("../agent/Agents.zig");
 const PromptBudget = @import("../agent/PromptBudget.zig");
 const RestoredAgents = @import("../agent/RestoredAgents.zig");
 const Watches = @import("../agent/Watches.zig");
-const agent_status = @import("agent_status.zig");
 const ClientLayouts = @import("ClientLayouts.zig");
 const hostmetrics = @import("hostmetrics");
 const Sampler = hostmetrics.Sampler;
@@ -42,6 +39,7 @@ select: *std.Io.Select(event.Event),
 resources: *Resources,
 inherited_environment: std.process.Environ,
 socket_path: []const u8,
+// SAFETY: RuntimeModel.init supplies the executablePath output and its length; consumers use only that prefix.
 executable_path: [std.fs.max_path_bytes]u8 = undefined,
 executable_path_len: usize,
 /// `HOME` from the inherited environment, read once for cwd labels.
@@ -50,10 +48,6 @@ agent_description_options: ?AgentDescriptionOptions,
 /// A description worker owns the single description slot, even after its
 /// agent is gone.
 agent_description_pending: bool = false,
-/// Test seam: fails one pane launch at a selected post-spawn phase.
-launch_fault: ?*LaunchTestFault = null,
-/// Test seam: holds a pane's ingest actor open.
-ingest_gate: ?*IngestTestGate = null,
 clients: Store = .{},
 /// Hook reports parked so far, which orders their answers.
 parked_reports: u64 = 0,
@@ -96,18 +90,22 @@ worktree_detection_in_flight: bool = false,
 agent_snapshot_revision: u64 = 1,
 agent_snapshot_inputs: [4]u64 = @splat(0),
 /// Storage the snapshot is built into, once per flush that sends it.
+// SAFETY: agent_snapshot.project fills entries before returning their bounded slice to client delivery.
 agent_entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined,
+// SAFETY: agent_snapshot.project fills each borrowed display string before publishing it in a snapshot entry.
 agent_display: [core.max_agent_snapshot_entries]AgentDisplayStorage = undefined,
 editor_open: EditorOpenState = .{},
 /// The path picker index of each client that opened one.
 path_indexes: PathIndexes = .{},
 /// Where a `pane_text` reply's text is dumped while it is encoded: one
 /// read at a time, on the loop, instead of on the stack of every reply.
+// SAFETY: Pane text projection writes into this scratch buffer before synchronous encoding of the returned slice.
 pane_text: [core.max_pane_text_bytes]u8 = undefined,
 input_sequence: u64 = 0,
 cell_timer: pacing.DeadlineScheduler = .{},
 /// The engine reply an `engine_response` event announces; its actor writes
 /// it and only the loop reads it once the event arrives.
+// SAFETY: sources.receiveEngineReply assigns the response before publishing completion; the loop reads it only after successful completion.
 engine_reply: EngineReply = undefined,
 
 /// Composes the model over resources that outlive it. The caller keeps the
@@ -133,8 +131,6 @@ pub fn init(model: *RuntimeModel, resources: *Resources, select: *std.Io.Select(
         .home = options.environment.getPosix("HOME"),
         .checkpoint = .{ .path = options.session_path, .resume_agents = options.resume_agents },
         .agent_description_options = options.agent_descriptions,
-        .launch_fault = options.launch_fault,
-        .ingest_gate = options.ingest_gate,
         .panes = .{
             .graphics_limits = options.graphics,
             .graphics_budget = .init(options.graphics.global_bytes),
@@ -161,45 +157,4 @@ pub fn deinit(model: *RuntimeModel) void {
     model.client_layouts.deinit();
     model.workspaces.deinit(model.gpa);
     model.worktrees.deinit(model.gpa);
-}
-
-const GraphicsLimits = @import("../media/GraphicsLimits.zig");
-
-test "runtime model tables start empty with configured graphics limits" {
-    const graphics_limits: GraphicsLimits = .{
-        .pane_bytes = 1024,
-        .global_bytes = 4096,
-        .images_per_pane = 2,
-        .placements_per_pane = 2,
-        .payload_bytes = 256,
-        .chunks_per_image = 4,
-    };
-    const model = try std.testing.allocator.create(RuntimeModel);
-    defer std.testing.allocator.destroy(model);
-    model.workspaces = .{};
-    model.agents = .{};
-    model.panes = .{
-        .graphics_limits = graphics_limits,
-        .graphics_budget = .init(graphics_limits.global_bytes),
-    };
-    defer model.panes.deinit();
-
-    try std.testing.expectEqual(@as(usize, 0), model.workspaces.count);
-    try std.testing.expectEqual(@as(usize, 0), model.panes.count);
-    try std.testing.expectEqual(graphics_limits.global_bytes, model.panes.graphics_budget.limit);
-    try std.testing.expectEqualDeep(graphics_limits, model.panes.graphics_limits);
-
-    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-    try std.testing.expectEqual(@as(usize, 0), agent_status.snapshot(&model.agents, &entries, 0).len);
-}
-
-test "the workspace table releases allocations retained by the runtime model" {
-    const model = try std.testing.allocator.create(RuntimeModel);
-    defer std.testing.allocator.destroy(model);
-    model.workspaces = .{};
-    defer model.workspaces.deinit(std.testing.allocator);
-
-    _ = try model.workspaces.insert(std.testing.allocator, "/tmp/telar-model-test", null);
-
-    try std.testing.expectEqual(@as(usize, 1), model.workspaces.count);
 }

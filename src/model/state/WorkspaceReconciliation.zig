@@ -1,9 +1,7 @@
 const core = @import("telar-core");
 const data = @import("../model.zig");
 const RemovedWorkspaceTabs = @import("RemovedWorkspaceTabs.zig");
-const WorkspaceReconciliation = @This();
 
-previous_active: core.TabLocation,
 active: core.TabLocation,
 removed_tabs: RemovedWorkspaceTabs = .{},
 removed_panes: data.RemovedWorkspacePanes = .{},

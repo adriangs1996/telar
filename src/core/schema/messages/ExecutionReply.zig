@@ -1,6 +1,5 @@
 const id = @import("../id.zig");
 const ExecutionRequest = @import("ExecutionRequest.zig");
-const ExecutionReply = @This();
 
 pub const State = enum(u8) { starting, running, exited, failed };
 request_id: id.RequestId = .none,

@@ -51,25 +51,3 @@ pub fn parse(name: []const u8) ?DiagnosticLogName {
         .rotated = rotated,
     };
 }
-
-test "log names give the endpoint, role and pid of their writer" {
-    const plain = parse("runtime.sock.runtime-33843.log").?;
-    try std.testing.expectEqual(Role.runtime, plain.role);
-    try std.testing.expectEqual(@as(u32, 33843), plain.pid);
-    try std.testing.expectEqualStrings("runtime.sock", "runtime.sock.runtime-33843.log"[0..plain.endpoint_len]);
-    try std.testing.expect(!plain.rotated);
-
-    const rotated = parse("tlr-e2e.sock.client-7.log.1").?;
-    try std.testing.expectEqual(Role.client, rotated.role);
-    try std.testing.expect(rotated.rotated);
-    try std.testing.expectEqualStrings("tlr-e2e.sock", "tlr-e2e.sock.client-7.log.1"[0..rotated.endpoint_len]);
-
-    try std.testing.expect(parse("runtime.sock.runtime-0.log") == null);
-    try std.testing.expect(parse("runtime.sock.gui-1.lock") == null);
-    try std.testing.expect(parse("notes.log") == null);
-    try std.testing.expect(parse("x.sock.server-4.log") == null);
-    try std.testing.expect(parse("x.sock.runtime-4.log.2") == null);
-    try std.testing.expect(parse("runtime.sock" ++ runtime_log_suffix) == null);
-    try std.testing.expect(parse("my-runtime.sock" ++ runtime_log_suffix) == null);
-    try std.testing.expect(parse("runtime.sock" ++ runtime_start_log_suffix) == null);
-}

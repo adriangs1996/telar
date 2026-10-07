@@ -1,5 +1,4 @@
 const vm_support = @import("vm_support.zig");
-const Limits = @This();
 
 memory: usize = vm_support.default_memory_limit,
 instructions: u64 = vm_support.default_load_instruction_limit,

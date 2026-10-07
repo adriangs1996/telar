@@ -5,10 +5,13 @@ const PendingNotification = @This();
 level: core.NotificationLevel,
 duration_ms: u32,
 target: core.NotificationTarget,
+// SAFETY: init copies the title before returning; view reads only title_len bytes.
 title_bytes: [core.max_notification_title_bytes]u8 = undefined,
 title_len: u16,
+// SAFETY: init copies the message before returning; view reads only message_len bytes.
 message_bytes: [core.max_notification_message_bytes]u8 = undefined,
 message_len: u16,
+// SAFETY: init copies the link before returning; view reads only link_len bytes.
 link_bytes: [core.max_notification_link_bytes]u8 = undefined,
 link_len: u16 = 0,
 

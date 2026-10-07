@@ -1,6 +1,5 @@
 const core = @import("telar-core");
 const std = @import("std");
-const Initialization = @This();
 
 io: std.Io,
 gpa: std.mem.Allocator,

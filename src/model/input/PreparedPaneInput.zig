@@ -1,6 +1,5 @@
 const PaneInputSource = @import("PaneInputSource.zig").PaneInputSource;
 const limits = @import("limits.zig");
-const PreparedPaneInput = @This();
 
 source: PaneInputSource,
 bytes: []const u8,

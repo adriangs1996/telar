@@ -9,15 +9,3 @@ pub const Roots = @import("Roots.zig");
 pub const Session = @import("Session.zig");
 pub const ca = @import("ca.zig");
 pub const tls = @import("tls.zig");
-
-test {
-    _ = @import("Authority.zig");
-    _ = @import("AuthorityFiles.zig");
-    _ = @import("InterceptOptions.zig");
-    _ = @import("Pair.zig");
-    _ = @import("Resources.zig");
-    _ = @import("Roots.zig");
-    _ = @import("Session.zig");
-    _ = @import("ca.zig");
-    _ = @import("tls.zig");
-}

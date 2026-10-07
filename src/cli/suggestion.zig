@@ -7,6 +7,7 @@ const control = @import("control.zig");
 /// Prints an engine proposal without sending it to a terminal. Example: `std.process.exit(suggestion.run(init, options));`
 pub fn run(init: std.process.Init, options: SuggestionOptions) u8 {
     return execute(init, options) catch |err| {
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar command suggest: {s}\n", .{control.describe(err)});
         return if (err == error.RuntimeTimeout) 3 else 1;
     };
@@ -30,6 +31,7 @@ fn execute(init: std.process.Init, options: SuggestionOptions) !u8 {
     } else if (value.status == .ready) {
         try output.interface.print("{s}\n", .{value.text});
     } else {
+        // A suggestion status is command feedback on stderr, separate from its structured stdout result.
         std.debug.print("telar command suggest: {s}\n", .{@tagName(value.status)});
     }
 

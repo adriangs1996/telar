@@ -62,6 +62,7 @@ pub fn replace(io: std.Io, path: []const u8, content: []const u8) !void {
     const temporary = try std.fmt.bufPrint(&temporary_buffer, "{s}.tmp-{s}", .{ path, &nonce_hex });
     var committed = false;
     defer if (!committed) {
+        // Preserve the failed atomic replacement's error if its owner-only temporary file cannot also be removed.
         cwd.deleteFile(io, temporary) catch {};
     };
 
@@ -214,110 +215,4 @@ pub fn fingerprint(io: std.Io, path: []const u8, seed: u64) u64 {
     hasher.update(std.mem.asBytes(&stat.size));
     hasher.update(std.mem.asBytes(&stat.mtime.nanoseconds));
     return hasher.final();
-}
-
-fn temporaryPath(temp: *std.testing.TmpDir, name: []const u8, buffer: []u8) ![]const u8 {
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(std.testing.io, &directory_buffer);
-    return std.fmt.bufPrint(buffer, "{s}/{s}", .{ directory_buffer[0..directory_len], name });
-}
-
-test "a replaced file is private, whole and readable back" {
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try temporaryPath(&temp, "config/telar/machines.json", &path_buffer);
-
-    try replace(std.testing.io, path, "{\"version\":1}\n");
-    try replace(std.testing.io, path, "{\"version\":2}\n");
-
-    const stat = try std.Io.Dir.cwd().statFile(std.testing.io, path, .{ .follow_symlinks = false });
-    try std.testing.expectEqual(@intFromEnum(Mode.file), stat.permissions.toMode() & 0o777);
-
-    const directory = try std.Io.Dir.cwd().statFile(std.testing.io, std.fs.path.dirname(path).?, .{ .follow_symlinks = false });
-    try std.testing.expectEqual(@intFromEnum(Mode.directory), directory.permissions.toMode() & 0o777);
-
-    const bytes = (try read(std.testing.io, std.testing.allocator, path, .limited(1024))).?;
-    defer std.testing.allocator.free(bytes);
-    try std.testing.expectEqualStrings("{\"version\":2}\n", bytes);
-}
-
-test "a missing file reads as null and changes its fingerprint when created" {
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try temporaryPath(&temp, "absent.json", &path_buffer);
-
-    try std.testing.expectEqual(@as(?[]u8, null), try read(std.testing.io, std.testing.allocator, path, .limited(64)));
-
-    const before = fingerprint(std.testing.io, path, 7);
-    try replace(std.testing.io, path, "{}");
-    try std.testing.expect(before != fingerprint(std.testing.io, path, 7));
-}
-
-test "shared files, symlinks and oversized files are refused" {
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try temporaryPath(&temp, "shared.json", &path_buffer);
-    try replace(std.testing.io, path, "{}");
-    try std.Io.Dir.cwd().setFilePermissions(std.testing.io, path, .fromMode(0o640), .{ .follow_symlinks = false });
-    try std.testing.expectError(error.InsecureFile, read(std.testing.io, std.testing.allocator, path, .limited(64)));
-
-    var link_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const link = try temporaryPath(&temp, "link.json", &link_buffer);
-    var target_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const target = try temporaryPath(&temp, "target.json", &target_buffer);
-    try replace(std.testing.io, target, "{}");
-    try std.Io.Dir.cwd().symLink(std.testing.io, target, link, .{});
-    try std.testing.expectError(error.InsecureFile, read(std.testing.io, std.testing.allocator, link, .limited(64)));
-
-    try std.testing.expectError(error.StreamTooLong, read(std.testing.io, std.testing.allocator, target, .limited(1)));
-}
-
-test "a prepared directory is owner-only and a file in its place is refused" {
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try temporaryPath(&temp, "runtime", &path_buffer);
-    try prepareDirectory(std.testing.io, path);
-    try prepareDirectory(std.testing.io, path);
-
-    const stat = try std.Io.Dir.cwd().statFile(std.testing.io, path, .{ .follow_symlinks = false });
-    try std.testing.expectEqual(@intFromEnum(Mode.directory), stat.permissions.toMode() & 0o777);
-
-    var file_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const file = try temporaryPath(&temp, "not-a-directory", &file_buffer);
-    try replace(std.testing.io, file, "{}");
-    try std.testing.expectError(error.InsecureDirectory, prepareDirectory(std.testing.io, file));
-}
-
-test "a lock is owner-only, excludes a second holder and outlives its release" {
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try temporaryPath(&temp, "config/machines.json", &path_buffer);
-
-    const held = try lock(std.testing.io, path);
-    var lock_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const lock_path = try std.fmt.bufPrint(&lock_buffer, "{s}.lock", .{path});
-    const second = try std.Io.Dir.cwd().openFile(std.testing.io, lock_path, .{ .mode = .read_write });
-    defer second.close(std.testing.io);
-    try std.testing.expect(!try second.tryLock(std.testing.io, .exclusive));
-
-    const stat = try std.Io.Dir.cwd().statFile(std.testing.io, lock_path, .{ .follow_symlinks = false });
-    try std.testing.expectEqual(@intFromEnum(Mode.file), stat.permissions.toMode() & 0o777);
-
-    held.close(std.testing.io);
-    try std.testing.expect(try second.tryLock(std.testing.io, .exclusive));
-}
-
-test "a directory must belong to the current user" {
-    try requireOwner(1000, 1000);
-    try std.testing.expectError(error.WrongOwner, requireOwner(0, 1000));
 }

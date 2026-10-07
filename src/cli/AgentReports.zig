@@ -17,6 +17,7 @@ output: ExecutionContext,
 /// Example: `try reports.run();`
 pub fn run(self: *AgentReports) !void {
     const pane = try self.resolve();
+    // Descent is optional for manual reports with an unknown provider; agent_hooks.refuseReporter still rejects named-agent reports without verified descent.
     self.session.verifyDescent(pane) catch {};
 
     switch (self.options.action) {

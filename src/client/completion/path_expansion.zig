@@ -118,42 +118,6 @@ pub fn basename(path: []const u8) []const u8 {
     return trimmed[split + 1 ..];
 }
 
-test "expansion resolves home, variables and relative paths against the pane" {
-    var environment = try TestEnvironment.init(&.{ .{ "HOME", "/home/me" }, .{ "PROJECT", "telar" } });
-    defer environment.deinit();
-    const environ = environment.environ();
-    var buffer: [max_path_bytes]u8 = undefined;
-
-    try std.testing.expectEqualStrings("/home/me", try expand(.{ .text = "~", .environ = environ, .base = "/work" }, &buffer));
-    try std.testing.expectEqualStrings("/home/me/sandbox/telar", try expand(.{ .text = "~/sandbox/$PROJECT/", .environ = environ, .base = "/work" }, &buffer));
-    try std.testing.expectEqualStrings("/home/me/telar-x", try expand(.{ .text = "${HOME}/${PROJECT}-x", .environ = environ, .base = "/work" }, &buffer));
-    try std.testing.expectEqualStrings("/work/new", try expand(.{ .text = "new", .environ = environ, .base = "/work" }, &buffer));
-    try std.testing.expectEqualStrings("/work", try expand(.{ .text = "", .environ = environ, .base = "/work" }, &buffer));
-    try std.testing.expectEqualStrings("/a/b", try expand(.{ .text = "//a//b/", .environ = environ, .base = "/work" }, &buffer));
-    try std.testing.expectEqualStrings("/", try expand(.{ .text = "/", .environ = environ, .base = "/work" }, &buffer));
-    try std.testing.expectEqualStrings("/home/me/sandbox/gwagent", try expand(.{ .text = "../gwagent", .environ = environ, .base = "/home/me/sandbox/telar" }, &buffer));
-    try std.testing.expectEqualStrings("/home/me/sandbox/telar", try expand(.{ .text = "./", .environ = environ, .base = "/home/me/sandbox/telar" }, &buffer));
-    try std.testing.expectEqualStrings("/a/c", try expand(.{ .text = "/a/./b/../c/.", .environ = environ, .base = "/work" }, &buffer));
-    try std.testing.expectEqualStrings("/", try expand(.{ .text = "/../..", .environ = environ, .base = "/work" }, &buffer));
-    try std.testing.expectEqualStrings("/x", try expand(.{ .text = "../../../x", .environ = environ, .base = "/work" }, &buffer));
-    try std.testing.expectEqualStrings("/tmp/$", try expand(.{ .text = "/tmp/$", .environ = environ, .base = "/work" }, &buffer));
-
-    try std.testing.expectError(error.UnknownVariable, expand(.{ .text = "$MISSING/x", .environ = environ, .base = "/work" }, &buffer));
-    try std.testing.expectError(error.UnterminatedVariable, expand(.{ .text = "${HOME", .environ = environ, .base = "/work" }, &buffer));
-    try std.testing.expectError(error.BaseUnavailable, expand(.{ .text = "new", .environ = environ, .base = "" }, &buffer));
-    try std.testing.expectError(error.HomeUnavailable, expand(.{ .text = "~/x", .environ = .empty, .base = "/work" }, &buffer));
-    const long = [_]u8{'x'} ** max_path_bytes;
-    try std.testing.expectError(error.PathTooLong, expand(.{ .text = &long, .environ = environ, .base = "/work" }, &buffer));
-}
-
-test "basename ignores trailing separators" {
-    try std.testing.expectEqualStrings("telar", basename("/work/telar/"));
-    try std.testing.expectEqualStrings("telar", basename("telar"));
-    try std.testing.expectEqualStrings("", basename("/"));
-    try std.testing.expect(endsWithSeparator("/work/"));
-    try std.testing.expect(!endsWithSeparator("/work"));
-}
-
 const ExpansionInput = struct {
     /// The typed directory as written by the user.
     text: []const u8,
@@ -161,29 +125,4 @@ const ExpansionInput = struct {
     /// Absolute directory relative paths resolve against, usually the focused
     /// pane's cwd; empty when the client does not know it.
     base: []const u8,
-};
-
-/// A process environment block built from test entries.
-const TestEnvironment = struct {
-    map: std.process.Environ.Map,
-    block: std.process.Environ.PosixBlock,
-
-    pub fn init(entries: []const [2][]const u8) !TestEnvironment {
-        var map = std.process.Environ.Map.init(std.testing.allocator);
-        errdefer map.deinit();
-        for (entries) |entry| {
-            try map.put(entry[0], entry[1]);
-        }
-        const block = try map.createPosixBlock(std.testing.allocator, .{});
-        return .{ .map = map, .block = block };
-    }
-
-    pub fn deinit(self: *TestEnvironment) void {
-        self.block.deinit(std.testing.allocator);
-        self.map.deinit();
-    }
-
-    pub fn environ(self: *const TestEnvironment) std.process.Environ {
-        return .{ .block = self.block };
-    }
 };

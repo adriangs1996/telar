@@ -27,10 +27,6 @@ scroll: Scroll,
 span_count: u16,
 encoded_spans: []const u8,
 
-pub fn isSnapshot(self: FrameView) bool {
-    return self.base_frame_id == 0;
-}
-
 pub fn spans(self: FrameView) SpanIterator {
     return .{
         .decoder = .init(self.encoded_spans),

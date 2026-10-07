@@ -81,6 +81,7 @@ pub fn connectOrStart(self: *const RuntimeConnector, config: RuntimeConfigSelect
         if (config.fresh) {
             var running = connection;
             running.deinit(self.io);
+            // This startup refusal must be visible to the CLI caller regardless of runtime logging levels.
             std.debug.print("telar: a runtime is already running; stop it first (telar server stop) or drop --fresh\n", .{});
             return error.RuntimeAlreadyRunning;
         }
@@ -94,7 +95,7 @@ pub fn connectOrStart(self: *const RuntimeConnector, config: RuntimeConfigSelect
         if (localsocket.connect(self.io, self.endpoint.path())) |connection| {
             return self.finishHandshake(connection);
         } else |_| {
-            self.io.sleep(.fromMilliseconds(runtime_connection.runtime_start_interval_ms), .awake) catch {};
+            try self.io.sleep(.fromMilliseconds(runtime_connection.runtime_start_interval_ms), .awake);
         }
     }
 
@@ -172,6 +173,7 @@ pub fn negotiate(io: std.Io, connection: localsocket.SocketChannel, report: ?*st
                 if (report) |writer| {
                     writer.print("the runtime speaks wire schema {s}; this telar speaks {s}. Update telar on one side", .{ &rejected.expected_schema, &core.schema_id }) catch {};
                 } else {
+                    // Report the expected wire schema directly to the connecting CLI caller before rejecting the connection.
                     std.debug.print("telar protocol mismatch: runtime expects schema {s}\n", .{&rejected.expected_schema});
                 }
 
@@ -181,6 +183,7 @@ pub fn negotiate(io: std.Io, connection: localsocket.SocketChannel, report: ?*st
                 if (report) |writer| {
                     writer.writeAll(client_limit_reached) catch {};
                 } else {
+                    // Explain the runtime client limit directly to the CLI caller before returning its failure.
                     std.debug.print("telar: {s}\n", .{client_limit_reached});
                 }
 

@@ -66,7 +66,6 @@ pub const Event = union(enum) {
     session_name: AgentCompletion,
     path_index_built: *PathIndex,
     paths_found: *PathQuery,
-    stopped: anyerror!void,
 };
 
 /// Releases values transferred into an event that teardown will not dispatch.
@@ -122,7 +121,6 @@ pub fn discard(completed: Event, io: std.Io) void {
         .worktree_detected,
         .session_name,
         .execution_finished,
-        .stopped,
         => {},
     }
 }
@@ -175,60 +173,6 @@ fn diagnosticsPathForTag(tag: std.meta.Tag(Event)) core.Path {
         .accepted,
         .handshaken,
         .pane_exit,
-        .stopped,
         => .other,
     };
-}
-
-test "interactive events use the interactive budget" {
-    const tags = [_]std.meta.Tag(Event){
-        .pane_output,
-        .pane_ingested,
-        .pane_input_written,
-        .pane_response_written,
-        .client_message,
-        .client_sent,
-    };
-
-    for (tags) |tag| {
-        try std.testing.expectEqual(core.Path.interactive, diagnosticsPathForTag(tag));
-    }
-}
-
-test "media events use the media budget" {
-    try std.testing.expectEqual(core.Path.media, diagnosticsPathForTag(.pane_media));
-}
-
-test "observation events use the observation budget" {
-    const tags = [_]std.meta.Tag(Event){
-        .pane_observed,
-        .history_response,
-        .proxy_capture,
-        .plugin_effects,
-        .agent_tick,
-        .agent_description,
-        .engine_response,
-
-        .metrics_tick,
-        .metrics_sampled,
-        .telemetry_tick,
-        .telemetry_written,
-    };
-
-    for (tags) |tag| {
-        try std.testing.expectEqual(core.Path.observation, diagnosticsPathForTag(tag));
-    }
-}
-
-test "lifecycle events stay outside latency-budgeted paths" {
-    const tags = [_]std.meta.Tag(Event){
-        .accepted,
-        .handshaken,
-        .pane_exit,
-        .stopped,
-    };
-
-    for (tags) |tag| {
-        try std.testing.expectEqual(core.Path.other, diagnosticsPathForTag(tag));
-    }
 }

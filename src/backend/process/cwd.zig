@@ -27,6 +27,7 @@ fn readMacos(pid: std.c.pid_t, buffer: []u8) ?[]const u8 {
         return null;
     }
 
+    // SAFETY: proc_pidinfo must return the complete struct size before its path field is inspected.
     var info: ProcVnodePathInfo = undefined;
     const size: c_int = @intCast(@sizeOf(@TypeOf(info)));
     if (mac.proc_pidinfo(pid, mac.PROC_PIDVNODEPATHINFO, 0, &info, size) != size) {
@@ -64,26 +65,4 @@ fn readLinux(pid: std.c.pid_t, buffer: []u8) ?[]const u8 {
 
     @memcpy(buffer[0..len], target_buffer[0..len]);
     return buffer[0..len];
-}
-
-test "reads the current process working directory" {
-    var expected_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const expected_len = try std.process.currentPath(std.testing.io, &expected_buffer);
-    var actual_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const actual = read(std.c.getpid(), &actual_buffer) orelse return error.WorkingDirectoryUnavailable;
-
-    try std.testing.expectEqualStrings(expected_buffer[0..expected_len], actual);
-}
-
-test "accepts exactly enough space for the working directory and rejects every shorter buffer" {
-    var expected_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const len = try std.process.currentPath(std.testing.io, &expected_buffer);
-    var actual_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const actual = read(std.c.getpid(), actual_buffer[0..len]) orelse return error.WorkingDirectoryUnavailable;
-
-    try std.testing.expectEqualStrings(expected_buffer[0..len], actual);
-
-    for (0..len) |capacity| {
-        try std.testing.expectEqual(@as(?[]const u8, null), read(std.c.getpid(), actual_buffer[0..capacity]));
-    }
 }

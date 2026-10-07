@@ -3,7 +3,6 @@ const std = @import("std");
 const Generation = @import("../config/Generation.zig");
 const Registry = @import("../plugins/Registry.zig");
 const Orphans = @import("Orphans.zig");
-const WaitArgs = @This();
 
 io: std.Io,
 gpa: std.mem.Allocator,

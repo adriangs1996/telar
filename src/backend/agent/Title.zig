@@ -3,6 +3,7 @@ const Agent = @import("Agent.zig");
 const Capture = @import("Capture.zig");
 const Title = @This();
 
+// SAFETY: Agent title updates copy the validated or generated text before exposing it; slice uses only len bytes.
 bytes: [core.max_agent_session_title_bytes]u8 = undefined,
 len: u8 = 0,
 source: core.AgentTitleSource = .telar,

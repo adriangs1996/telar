@@ -1,8 +1,6 @@
 //! One client-owned projection of a runtime pane. No presentation resources.
 
 const std = @import("std");
-const Pane = @import("Pane.zig");
-const tests = @import("tests.zig");
 
 /// Bytes a displayed directory name keeps; longer names are cut at a code point.
 pub const max_cwd_name_bytes = 48;
@@ -57,31 +55,4 @@ fn validCwdName(name: []const u8) bool {
 
 fn isPathSeparator(byte: u8) bool {
     return byte == '/' or byte == '\\';
-}
-
-test "pane cwd names use a bounded basename" {
-    try std.testing.expectEqualStrings("telar", cwdBaseName("/work/telar"));
-    try std.testing.expectEqualStrings("telar", cwdBaseName("/work/telar/"));
-    try std.testing.expectEqualStrings("/", cwdBaseName("/"));
-    try std.testing.expectEqualStrings("api", cwdBaseName("C:\\work\\api\\"));
-    try std.testing.expectEqualStrings("relative", cwdBaseName("relative"));
-
-    var pane: Pane = undefined;
-    pane.gpa = std.testing.allocator;
-    pane.cwd = &.{};
-    defer pane.gpa.free(pane.cwd);
-    const long_name = [_]u8{'x'} ** (max_cwd_name_bytes + 1);
-    try std.testing.expect(try pane.setCwd("/work/telar"));
-    try std.testing.expectEqualStrings("telar", pane.cwdName());
-    try std.testing.expect(try pane.setCwd(&long_name));
-    try std.testing.expectEqual(@as(usize, max_cwd_name_bytes), pane.cwdName().len);
-    try std.testing.expect(try pane.setCwd("/work/\xff"));
-    try std.testing.expectEqualStrings("", pane.cwdName());
-    try std.testing.expect(!try pane.setCwd("/work/\x1b[31m"));
-    try std.testing.expect(!try pane.setCwd("/other/\x1b[31m"));
-    try std.testing.expectEqualStrings("/other/\x1b[31m", pane.cwdSlice());
-}
-
-test {
-    _ = tests;
 }

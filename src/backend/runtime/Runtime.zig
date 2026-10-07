@@ -51,16 +51,12 @@ teardown_state: enum { running, shutting_down, stopped },
 /// defer runtime.deinit();
 /// ```
 pub fn init(self: *Runtime, initialization: Initialization) !void {
-    try self.start(initialization, false);
-}
-
-pub fn start(self: *Runtime, initialization: Initialization, comptime fail_after_actors: bool) !void {
     self.teardown_state = .running;
 
     try self.resources.init(initialization);
     errdefer self.resources.deinitUnstarted();
 
-    self.loop.init(self.resources.io(), initialization.options.stop);
+    self.loop.init(self.resources.io());
     errdefer self.loop.cancel();
 
     try self.model.init(&self.resources, self.loop.selector(), initialization.options);
@@ -72,10 +68,6 @@ pub fn start(self: *Runtime, initialization: Initialization, comptime fail_after
 
     session_checkpoint.restore(&self.model);
     try self.scheduleInitialEvents();
-
-    if (comptime fail_after_actors) {
-        return error.InjectedStartupFailure;
-    }
 }
 
 fn scheduleInitialEvents(self: *Runtime) !void {
@@ -83,7 +75,6 @@ fn scheduleInitialEvents(self: *Runtime) !void {
     var sources = Sources.init(resources.io(), self.loop.selector());
 
     try sources.acceptClient(&resources.listener);
-    try sources.waitForStop(self.loop.stop);
     try sources.receiveHistory(resources.history.service());
     if (resources.engineService()) |engine_service| {
         try sources.receiveEngine(engine_service, &self.model.engine_reply);
@@ -185,10 +176,6 @@ pub fn update(self: *Runtime, event: runtime_event.Event) !bool {
         core.profiling.add(eventMetric(event), 1);
     }
 
-    if (event == .stopped) {
-        return self.loop.completeStop(event.stopped);
-    }
-
     // A limit reached in one event skips that event, never the runtime.
     self.dispatch(event) catch |err| try limit_reached.absorb(model, @tagName(event), err);
     client_delivery.flush(model) catch |err| try limit_reached.absorb(model, "client_delivery", err);
@@ -219,7 +206,6 @@ fn eventMetric(event: runtime_event.Event) core.profiling.Metric {
 fn dispatch(self: *Runtime, event: runtime_event.Event) !void {
     const model = &self.model;
     switch (event) {
-        .stopped => unreachable,
         .execution_finished => |completion| execution.finish(model, completion),
         .accepted => |result| try client_connection.accept(model, result, &self.resources.listener),
         .handshaken => |completion| client_connection.finishHandshake(model, completion),

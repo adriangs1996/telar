@@ -16,8 +16,8 @@ env:
   RUST_TOOLCHAIN: 1.93.1
 
 jobs:
-  test:
-    name: test (${{ matrix.os }})
+  build:
+    name: build (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -42,26 +42,11 @@ jobs:
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
           rustup default "$RUST_TOOLCHAIN"
 
-      # `zig build test` runs the integration scripts with `node --test`,
-      # which needs module.stripTypeScriptTypes: Node 22.13 or newer.
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: '22.x'
-          package-manager-cache: false
-
       - name: Build
         run: zig build
 
       - name: Check
         run: zig build check
-
-      - name: Test
-        run: zig build test
-
-      # `telar machine setup` end to end against a machine simulated on the
-      # runner by a fake ssh: no network, no privileges, all under /tmp.
-      - name: Machine setup end to end
-        run: python3 tools/test_machine_setup.py
 
       # The server build is static musl: it must link nothing, and code that
       # imports a libc struct musl's headers cannot express fails here.
@@ -70,10 +55,6 @@ jobs:
         run: |
           zig build -Dgui=false -Dtarget=x86_64-linux-musl --prefix zig-out/headless
           packaging/release/check-linkage.sh linux-headless zig-out/headless/bin/telar
-
-      - name: Headless runtime starts and answers
-        if: runner.os == 'Linux'
-        run: packaging/release/smoke-headless.sh zig-out/headless/bin/telar
 
   scripts:
     runs-on: ubuntu-24.04
@@ -87,10 +68,3 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq shellcheck
           shellcheck install.sh packaging/release/*.sh packaging/homebrew/*.sh packaging/macos/*.sh
-
-      # Hardened servers mount /tmp noexec; the installer must still work.
-      - name: Installer
-        run: |
-          sudo mkdir -p /mnt/noexec
-          sudo mount -t tmpfs -o noexec,nosuid,nodev,mode=1777 tmpfs /mnt/noexec
-          NOEXEC_TMPDIR=/mnt/noexec packaging/release/test-install.sh

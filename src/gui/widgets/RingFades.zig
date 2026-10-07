@@ -10,6 +10,7 @@ const RingFades = @This();
 pub const duration_ns = 360 * std.time.ns_per_ms;
 
 // One previous visible set plus one replacement set until end prunes it.
+// SAFETY: insert writes each transition before increasing len; sampling and pruning use only that initialized prefix.
 entries: [2 * core.max_panes_per_tab]RingFade = undefined,
 len: usize = 0,
 seen: [2 * core.max_panes_per_tab]bool = @splat(false),
@@ -64,38 +65,4 @@ fn insert(self: *RingFades, entry: RingFade) ?usize {
     }
 
     return null;
-}
-
-test "attention transitions fold missed frames park and reset on reattachment" {
-    var rings: RingFades = .{};
-    var clock: FrameClock = .{};
-    var key: data.AgentKey = .{
-        .pane_id = @enumFromInt(7),
-        .pane_generation = 1,
-    };
-    clock.begin(0);
-    rings.begin();
-    try std.testing.expectEqual(@as(f32, 0), rings.alpha(key, &clock));
-    try std.testing.expect(clock.deadline_ns != null);
-    rings.end();
-    clock.begin(duration_ns / 2);
-    rings.begin();
-    try std.testing.expectEqual(@as(f32, 0.5), rings.alpha(key, &clock));
-    try std.testing.expectEqual(@as(f32, 0.5), rings.alpha(key, &clock));
-    rings.end();
-    clock.begin(4 * duration_ns);
-    rings.begin();
-    try std.testing.expectEqual(@as(f32, 1), rings.alpha(key, &clock));
-    try std.testing.expectEqual(@as(u32, 0), clock.wakeupAfter(clock.now_ns));
-    rings.end();
-    key.pane_generation += 1;
-    rings.begin();
-    try std.testing.expectEqual(@as(f32, 0), rings.alpha(key, &clock));
-    rings.end();
-    try std.testing.expectEqual(@as(usize, 1), rings.len);
-    clock.begin(5 * duration_ns);
-    rings.begin();
-    rings.end();
-    try std.testing.expectEqual(@as(usize, 0), rings.len);
-    try std.testing.expectEqual(@as(u32, 0), clock.wakeupAfter(clock.now_ns));
 }

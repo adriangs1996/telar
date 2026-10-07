@@ -2,6 +2,7 @@ const core = @import("telar-core");
 const TabDetachmentPlan = @This();
 
 location: core.TabLocation,
+// SAFETY: client_detach writes each membership before increasing len; slice exposes only those captured panes.
 panes: [core.max_panes_per_tab]Pane = undefined,
 len: u8 = 0,
 owns_paste: bool = false,

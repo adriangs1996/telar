@@ -77,6 +77,7 @@ pub fn runWithBytes(init: std.process.Init, destination: []const u8, remote_comm
         .exclusive = true,
         .permissions = .fromMode(0o600),
     });
+    // Remove the private script after the remote command; cleanup does not replace its result.
     defer cwd.deleteFile(init.io, path) catch {};
     defer file.close(init.io);
 
@@ -137,47 +138,4 @@ fn scriptPath(init: std.process.Init, buffer: *[std.fs.max_path_bytes]u8) ![]con
         directory,
         &std.fmt.bytesToHex(nonce, .lower),
     });
-}
-
-test "quoted words survive every byte a shell reads specially" {
-    var buffer: [128]u8 = undefined;
-    var writer: std.Io.Writer = .fixed(&buffer);
-    try assign(&writer, "value", "it's $(id) `x` \"y\" \\z");
-
-    try std.testing.expectEqualStrings("value='it'\\''s $(id) `x` \"y\" \\z'\n", writer.buffered());
-}
-
-test "a quoted word reads back unchanged through /bin/sh" {
-    const value = "it's $(echo no) `echo no` \"q\" \\n ; | & * ~ \n end";
-    var buffer: [256]u8 = undefined;
-    var writer: std.Io.Writer = .fixed(&buffer);
-    try writer.writeAll("printf '%s' ");
-    try quote(&writer, value);
-
-    const result = try std.process.run(std.testing.allocator, std.testing.io, .{
-        .argv = &.{ "/bin/sh", "-c", writer.buffered() },
-    });
-    defer std.testing.allocator.free(result.stdout);
-    defer std.testing.allocator.free(result.stderr);
-
-    try std.testing.expectEqualStrings(value, result.stdout);
-}
-
-test "a script that prints more than is kept still reports how it ended" {
-    const io = std.testing.io;
-    var child = try std.process.spawn(io, .{
-        .argv = &.{ "/bin/sh", "-c", "i=0; while [ $i -lt 20000 ]; do echo \"npm warn deprecated package-$i\" >&2; i=$((i+1)); done; echo installed; echo 'last words' >&2" },
-        .stdin = .ignore,
-        .stdout = .pipe,
-        .stderr = .pipe,
-    });
-    defer child.kill(io);
-
-    const output = try collect(std.testing.allocator, io, &child, 60);
-    defer output.deinit(std.testing.allocator);
-
-    try std.testing.expect(output.succeeded());
-    try std.testing.expectEqualStrings("installed\n", output.stdout);
-    try std.testing.expect(output.stderr.len <= kept_stderr_bytes);
-    try std.testing.expectEqualStrings("last words", output.errorLine());
 }

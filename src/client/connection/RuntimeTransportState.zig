@@ -9,6 +9,7 @@ connection: ?*localsocket.SocketChannel,
 send_buffer: []u8,
 receive_buffer: []u8,
 read_buffer: []u8,
+// SAFETY: read decodes the message and metadata before returning its address; a decode failure returns an error without exposing it.
 received: data.RuntimeMessage = undefined,
 receive_pending: bool = false,
 

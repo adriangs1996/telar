@@ -19,19 +19,16 @@ pub const family: FamilyHelp = .{
             .name = "get",
             .summary = "Print the active tab's layout token",
             .usage = "telar layout get --client ID [--json] [--socket PATH]",
-            .routed = &.{.layout_get},
             .text =
             \\Effects: read-only on the window. Results: the token; JSON `encoding`
             \\(`telar-layout-hex`) and `data`. Refused without an active tab or focused pane.
             \\
             ,
-            .examples = &.{&.{ "layout", "get", "--client", "1", "--json" }},
         },
         .{
             .name = "apply",
             .summary = "Restore a layout token on the active tab",
             .usage = "telar layout apply TOKEN --client ID [--json] [--socket PATH]",
-            .routed = &.{.layout_apply},
             .text =
             \\Effects: the window checks the token names its active tab and exactly its panes,
             \\then restores the split tree, surfaces, focus and fullscreen state and resizes
@@ -40,7 +37,6 @@ pub const family: FamilyHelp = .{
             \\the JSON of every routed command.
             \\
             ,
-            .examples = &.{&.{ "layout", "apply", "0a0b0c", "--client", "1" }},
         },
     },
 };

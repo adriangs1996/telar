@@ -6,6 +6,7 @@ const BarOverflow = @This();
 
 pub const capacity = 4 * bar_values.max_bar_nodes;
 
+// SAFETY: append writes each component before increasing count; slice exposes only that initialized prefix.
 items: [capacity]BarComponent = undefined,
 count: usize = 0,
 

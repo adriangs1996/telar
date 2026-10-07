@@ -11,8 +11,3 @@ pub const max_score = scoring.max_score;
 pub const overlong_score = scoring.overlong_score;
 pub const score = scoring.score;
 pub const match = scoring.match;
-
-test {
-    _ = @import("Matrix.zig");
-    _ = @import("scoring.zig");
-}

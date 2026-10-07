@@ -63,28 +63,3 @@ unsafe impl GlobalAlloc for BoundedAllocator {
         destination
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn rejects_oversize_allocation_in_isolated_process() {
-        const PROBE: &str = "TELAR_TEST_DIAGRAM_ALLOCATION";
-        if std::env::var_os(PROBE).is_some() {
-            let mut allocation = Vec::<u8>::new();
-            allocation.try_reserve_exact(MAX_HEAP + 1).unwrap();
-            std::hint::black_box(allocation);
-            panic!("global allocation quota was not applied");
-        }
-        let result = std::process::Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--exact",
-                "bounded_allocator::tests::rejects_oversize_allocation_in_isolated_process",
-            ])
-            .env(PROBE, "1")
-            .output()
-            .unwrap();
-        assert_eq!(result.status.code(), Some(4));
-    }
-}

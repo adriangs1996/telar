@@ -2,6 +2,7 @@ const core = @import("telar-core");
 const std = @import("std");
 const OwnedClientLayout = @This();
 
+// SAFETY: Outbox.claimClientLayout encodes into this buffer before publishing len and used; slice exposes only the encoded prefix.
 bytes: [core.max_client_layout_wire_bytes]u8 = undefined,
 len: u16 = 0,
 used: bool = false,

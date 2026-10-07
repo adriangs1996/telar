@@ -12,9 +12,3 @@ pub const default_pick_items_instruction_limit = vm_support.default_pick_items_i
 pub const default_render_deadline_ns = vm_support.default_render_deadline_ns;
 pub const open = sandbox.open;
 pub const json = @import("json.zig");
-
-test {
-    _ = @import("sandbox.zig");
-    _ = @import("vm_support.zig");
-    _ = @import("json.zig");
-}

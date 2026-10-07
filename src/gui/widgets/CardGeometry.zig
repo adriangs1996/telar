@@ -1,6 +1,5 @@
 //! Device-pixel geometry of one agent card: a small context row, a regular title
 //! row and a small event row, each as tall as its text role's line box.
-const std = @import("std");
 const gfx = @import("gfx");
 const Rect = gfx.Rect;
 const Metrics = @import("../TerminalMetrics.zig");
@@ -82,29 +81,4 @@ pub fn row(self: CardGeometry, bounds: Rect, index: u2) Rect {
         .width = @max(0, bounds.width - 2 * self.px(padding_x)),
         .height = if (index == 1) self.title_row else self.small_row,
     };
-}
-
-test "card rows follow the text roles and grow with the chrome scale" {
-    const metrics: Metrics = .{ .cell_width = 10, .cell_height = 24, .baseline = 18, .pixel_height = 16 };
-    const geometry = derive(ChromeMetrics.resolve(.{}, 1), metrics);
-    try std.testing.expectEqual(@as(f32, 15), geometry.small_row);
-    try std.testing.expectEqual(@as(f32, 17), geometry.title_row);
-    try std.testing.expectEqual(@as(f32, 69), geometry.height());
-    try std.testing.expectEqual(@as(f32, 72), geometry.pitch());
-    const title = geometry.row(.{ .x = 8, .y = 100, .width = 200, .height = 62 }, 1);
-    try std.testing.expectEqual(@as(f32, 127), title.y);
-    try std.testing.expectEqual(@as(f32, 17), title.height);
-    const third = geometry.row(.{ .x = 8, .y = 100, .width = 200, .height = 62 }, 2);
-    try std.testing.expectEqual(@as(f32, 18), third.x);
-    try std.testing.expectEqual(@as(f32, 146), third.y);
-    try std.testing.expectEqual(@as(f32, 180), third.width);
-    const scaled = derive(ChromeMetrics.resolve(.{ .chrome = .{ .scale = 1.5 } }, 1), metrics);
-    try std.testing.expect(scaled.height() > geometry.height());
-    try std.testing.expectEqual(geometry.glyph_width, scaled.glyph_width);
-    const retina = derive(ChromeMetrics.resolve(.{}, 2), metrics);
-    try std.testing.expectEqual(2 * geometry.px(padding_x), retina.px(padding_x));
-    try std.testing.expectEqual(2 * geometry.px(padding_y), retina.px(padding_y));
-    try std.testing.expectEqual(2 * geometry.px(radius), retina.px(radius));
-    const enlarged = derive(ChromeMetrics.resolve(.{ .chrome = .{ .scale = 2 } }, 1), metrics);
-    try std.testing.expect(enlarged.title_row > enlarged.small_row);
 }

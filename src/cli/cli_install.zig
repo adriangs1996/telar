@@ -33,6 +33,7 @@ pub fn run(init: std.process.Init, options: CliOptions) !void {
             try removeLink(init.io, link);
             std.Io.Dir.cwd().symLink(init.io, target, link, .{}) catch |err| switch (err) {
                 error.AccessDenied, error.PermissionDenied => {
+                    // The CLI permission error includes recovery instructions and leaves stdout free of diagnostics.
                     std.debug.print("telar cli: cannot write {s}; rerun with sudo or pass --dir ~/.local/bin\n", .{link});
                     return err;
                 },
@@ -59,6 +60,7 @@ fn removeLink(io: std.Io, link: []const u8) !void {
     _ = readLink(io, link, &buffer) catch |err| switch (err) {
         error.FileNotFound => return,
         error.NotLink => {
+            // Explain the refused replacement on stderr without changing the installation exit status.
             std.debug.print("telar cli: {s} exists and is not a symlink; refusing to replace it\n", .{link});
             return error.NotLink;
         },

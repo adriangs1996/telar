@@ -1,5 +1,3 @@
-const Snapshot = @This();
-
 depth: u8 = 0,
 high_water: u8 = 0,
 saturated: u64 = 0,

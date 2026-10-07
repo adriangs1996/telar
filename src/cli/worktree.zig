@@ -11,7 +11,6 @@ const pty = @import("pty");
 const WorktreeOptions = @import("arguments/WorktreeOptions.zig");
 const Session = @import("Session.zig");
 const Snapshot = @import("Snapshot.zig");
-const ControlAgent = @import("ControlAgent.zig");
 const WorktreeCatalog = @import("WorktreeCatalog.zig");
 const agent = @import("agent.zig");
 const control = @import("control.zig");
@@ -43,13 +42,17 @@ pub fn run(init: std.process.Init, options: WorktreeOptions) !u8 {
     var output_buffer: [16 * 1024]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
     const writer = &output.interface;
-    defer writer.flush() catch {};
 
-    return execute(init, options, writer) catch |err| {
+    const result = execute(init, options, writer) catch |err| failure: {
+        // Attempt to order partial stdout before the error diagnostic; the checked final flush in run still determines success.
         writer.flush() catch {};
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar worktree: {s}\n", .{describe(err)});
-        return exitStatus(err);
+        break :failure exitStatus(err);
     };
+
+    try writer.flush();
+    return result;
 }
 
 fn exitStatus(err: anyerror) u8 {
@@ -92,7 +95,9 @@ fn execute(init: std.process.Init, options: WorktreeOptions, writer: *std.Io.Wri
         // The runtime's own words say what it refused; the error names only
         // the kind of refusal. They borrow the session, so print them here.
         const reason = session.failure_reason orelse return err;
+        // Attempt to order partial stdout before the runtime refusal; run checks the final flush before returning.
         writer.flush() catch {};
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar worktree: {s}\n", .{reason});
         return exitStatus(err);
     };
@@ -237,6 +242,7 @@ fn waitForExit(command: Command, opened: core.PaneOpened) !u8 {
             } else {
                 try command.writer.print("{s}\n", .{output});
                 if (text.truncated) {
+                    // Keep the truncation notice separate from the worktree pane text returned on stdout.
                     std.debug.print("telar worktree: older rows were omitted\n", .{});
                 }
             }
@@ -245,11 +251,12 @@ fn waitForExit(command: Command, opened: core.PaneOpened) !u8 {
         }
 
         if (command.session.nowMs() >= deadline) {
+            // Report the still-running pane on stderr when the worktree wait deadline expires.
             std.debug.print("telar worktree: the command is still running after {d}s; pane {d}\n", .{ command.options.timeout_seconds, pane.pane_id });
             return agent.exit_timeout;
         }
 
-        command.session.sleepMs(wait_poll_ms);
+        try command.session.sleepMs(wait_poll_ms);
     }
 }
 
@@ -323,6 +330,7 @@ const untracked_limit = core.Limit.declare("worktrees.untracked_listing", "workt
 const UntrackedWorktrees = struct {
     gpa: std.mem.Allocator,
     bytes: []u8 = &.{},
+    // SAFETY: untrackedWorktrees writes each retained entry before increasing count and returns only that prefix.
     items: [max_untracked]ListedWorktree = undefined,
     count: usize = 0,
 
@@ -773,6 +781,7 @@ fn confirm(init: std.process.Init, question: []const u8) !bool {
         return error.ConfirmationNeedsTerminal;
     }
 
+    // This interactive prompt intentionally has no newline and must appear before stdin is read.
     std.debug.print("{s}? [y/N] ", .{question});
     var buffer: [16]u8 = undefined;
     var reader = stdin.readerStreaming(init.io, &buffer);
@@ -898,61 +907,4 @@ fn describe(err: anyerror) []const u8 {
         error.UnquotableSshOption => "telar's runtime directory has a quote in its path, which git cannot be given safely",
         else => control.describe(err),
     };
-}
-
-test "the brief joins prompt arguments and drops control bytes" {
-    var buffer: [core.max_worktree_brief_bytes]u8 = undefined;
-    try std.testing.expectEqualStrings("fix the\ttabs now", briefOf(&.{ "claude", "fix the\ttabs\x1b", "now" }, &buffer));
-    try std.testing.expectEqualStrings("", briefOf(&.{"claude"}, &buffer));
-}
-
-test "the most recently used client wins unless one is named" {
-    const clients = [_]core.ClientDescriptor{
-        .{ .id = 1, .generation = 1, .identity = 5, .attachments = 1, .last_input_pane = 0, .last_input_sequence = 3 },
-        .{ .id = 2, .generation = 1, .identity = 6, .attachments = 1, .last_input_pane = 0, .last_input_sequence = 9 },
-    };
-    try std.testing.expectEqual(@as(u64, 2), (try chooseClient(&clients, 0)).id);
-    try std.testing.expectEqual(@as(u64, 1), (try chooseClient(&clients, 1)).id);
-    try std.testing.expectError(error.ClientNotFound, chooseClient(&clients, 7));
-}
-
-test "worktree JSON exposes coordinator identity as a nullable object with a hex session" {
-    var record: CatalogWorktree = .{
-        .id = @enumFromInt(1),
-        .source = 1,
-        .workspace = 2,
-        .created_by = null,
-        .coordinator = .{ .session_id = .{1} ** 16, .pane_id = @enumFromInt(7), .pane_generation = 3 },
-        .origin = .telar,
-        .state = .active,
-        .path = "/work/fix",
-        .branch = "fix",
-        .base = "main",
-        .title = "Fix",
-        .brief = "",
-        .diff_added = 0,
-        .diff_removed = 0,
-        .diff_files = 0,
-        .commits_ahead = 0,
-        .command_label = "codex",
-        .command_state = .running,
-        .command_exit = 0,
-    };
-    const snapshot: Snapshot = .{};
-    var buffer: [2048]u8 = undefined;
-    var writer: std.Io.Writer = .fixed(&buffer);
-    try writeWorktreeJson(&writer, &record, &snapshot);
-    const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, writer.buffered(), .{});
-    defer parsed.deinit();
-    const reference = parsed.value.object.get("coordinator").?.object;
-    try std.testing.expectEqualStrings("01010101010101010101010101010101", reference.get("session_id").?.string);
-    try std.testing.expectEqual(@as(i64, 7), reference.get("pane_id").?.integer);
-    try std.testing.expectEqual(@as(i64, 3), reference.get("pane_generation").?.integer);
-
-    record.coordinator = null;
-    writer = .fixed(&buffer);
-    try writeWorktreeJson(&writer, &record, &snapshot);
-    const unattributed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, writer.buffered(), .{});
-    defer unattributed.deinit();
-    try std.testing.expect(unattributed.value.object.get("coordinator").? == .null);
 }

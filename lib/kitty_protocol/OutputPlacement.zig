@@ -1,5 +1,3 @@
-const OutputPlacement = @This();
-
 column: u32,
 row: u32,
 offset_x: u32,

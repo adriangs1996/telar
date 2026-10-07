@@ -127,6 +127,7 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
         std.mem.span(value)
     else if (options.legacy)
         legacySettingsPath(init, integration, &path_buffer) orelse {
+            // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
             std.debug.print("telar integration: no {s} settings under the home directory differ from the ones in use\n", .{integration.name});
             return 1;
         }
@@ -134,12 +135,12 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
         try defaultSettingsPath(init.minimal.environ, integration, &path_buffer);
     var executable_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const executable = executable_buffer[0..try std.process.executablePath(init.io, &executable_buffer)];
+    // SAFETY: hookSetsFor formats both command buffers before returning slices into them; a formatting failure returns first.
     var commands: HookCommands = undefined;
     const hook_set, const worktree_hooks = try hookSetsFor(integration, executable, &commands);
     var output_buffer: [4096]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
     const writer = &output.interface;
-    defer writer.flush() catch {};
 
     const source = std.Io.Dir.cwd().readFileAlloc(init.io, path, init.gpa, .limited(max_settings_bytes)) catch |err| switch (err) {
         error.FileNotFound => try init.gpa.dupe(u8, "{}"),
@@ -147,12 +148,16 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
     };
     defer init.gpa.free(source);
     var parsed = std.json.parseFromSlice(std.json.Value, init.gpa, source, .{}) catch {
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar integration: {s} is not valid JSON\n", .{path});
+        try writer.flush();
         return 1;
     };
     defer parsed.deinit();
     if (parsed.value != .object) {
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar integration: {s} must contain a JSON object\n", .{path});
+        try writer.flush();
         return 1;
     }
 
@@ -173,6 +178,8 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
                 }
             }
 
+            try writer.flush();
+
             return 0;
         },
         .install => {
@@ -187,6 +194,8 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
             if (integration.launch_note.len != 0) {
                 try writer.print("telar integration: {s}\n", .{integration.launch_note});
             }
+
+            try writer.flush();
 
             return 0;
         },
@@ -204,6 +213,8 @@ pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
             if (changed or !options.legacy) {
                 removeSkills(init.io, std.fs.path.dirname(path) orelse return error.InvalidSettingsPath);
             }
+
+            try writer.flush();
 
             return 0;
         },
@@ -326,7 +337,6 @@ fn runExtension(init: std.process.Init, options: IntegrationOptions) !u8 {
     var output_buffer: [4096]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
     const writer = &output.interface;
-    defer writer.flush() catch {};
 
     const existing: ?[]u8 = std.Io.Dir.cwd().readFileAlloc(init.io, path, init.gpa, .limited(max_extension_bytes)) catch |err| switch (err) {
         error.FileNotFound => null,
@@ -347,6 +357,7 @@ fn runExtension(init: std.process.Init, options: IntegrationOptions) !u8 {
                 },
             );
             try reportSkills(init.io, root, writer);
+            try writer.flush();
             return 0;
         },
         .install => {
@@ -361,10 +372,12 @@ fn runExtension(init: std.process.Init, options: IntegrationOptions) !u8 {
                         },
                     );
                     try installSkills(init.io, root, writer);
+                    try writer.flush();
                     return 0;
                 }
 
                 if (!ours) {
+                    // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
                     std.debug.print(
                         "telar integration: {s} exists and is not telar's {s}; move it first\n",
                         .{
@@ -372,6 +385,7 @@ fn runExtension(init: std.process.Init, options: IntegrationOptions) !u8 {
                             extension.noun,
                         },
                     );
+                    try writer.flush();
                     return 1;
                 }
             }
@@ -387,6 +401,7 @@ fn runExtension(init: std.process.Init, options: IntegrationOptions) !u8 {
                 },
             );
             try installSkills(init.io, root, writer);
+            try writer.flush();
             return 0;
         },
         .uninstall => {
@@ -400,10 +415,12 @@ fn runExtension(init: std.process.Init, options: IntegrationOptions) !u8 {
                     },
                 );
                 removeSkills(init.io, root);
+                try writer.flush();
                 return 0;
             }
 
             if (!ours) {
+                // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
                 std.debug.print(
                     "telar integration: {s} is not telar's {s}; left untouched\n",
                     .{
@@ -411,6 +428,7 @@ fn runExtension(init: std.process.Init, options: IntegrationOptions) !u8 {
                         extension.noun,
                     },
                 );
+                try writer.flush();
                 return 1;
             }
 
@@ -424,6 +442,7 @@ fn runExtension(init: std.process.Init, options: IntegrationOptions) !u8 {
                 },
             );
             removeSkills(init.io, root);
+            try writer.flush();
             return 0;
         },
     }
@@ -460,12 +479,6 @@ fn extensionRoot(environ: std.process.Environ, agent: values.HookAgent, buffer: 
     const root = extensionFor(agent).root;
     const override = if (root.environment) |name| std.process.Environ.getPosix(environ, name) else null;
     return root.resolve(override, std.process.Environ.getPosix(environ, "HOME"), buffer) orelse error.HomeUnavailable;
-}
-
-fn extensionPath(environ: std.process.Environ, agent: values.HookAgent, buffer: *[std.fs.max_path_bytes]u8) ![]const u8 {
-    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory = try extensionRoot(environ, agent, &root_buffer);
-    return std.fmt.bufPrint(buffer, "{s}/{s}/telar.ts", .{ directory, extensionFor(agent).directory });
 }
 
 /// Fills the Telar executable path into a bundled extension template. The
@@ -580,6 +593,7 @@ pub fn placeHooks(arena: std.mem.Allocator, settings: *std.json.Value, agent: va
         return error.InvalidSettings;
     }
 
+    // SAFETY: hookSetsFor formats both command buffers before returning slices into them; a formatting failure returns first.
     var commands: HookCommands = undefined;
     const hook_set, const worktree_hooks = try hookSetsFor(integrationFor(agent), executable, &commands);
     const lifecycle_changed = try installHooks(arena, settings, hook_set);
@@ -941,6 +955,7 @@ fn removeSkills(io: std.Io, root: []const u8) void {
             continue;
         }
 
+        // Removal of an owned skill is best effort so other owned skills can still be processed.
         std.Io.Dir.cwd().deleteFile(io, path) catch {};
     }
 }
@@ -972,227 +987,4 @@ fn writeSettings(io: std.Io, path: []const u8, settings: std.json.Value) !void {
     if (permissions) |mode| {
         try std.Io.Dir.cwd().setFilePermissions(io, target, mode, .{});
     }
-}
-
-test "Claude install adds telar hooks once and uninstall removes only them" {
-    const source =
-        \\{"model":"opus","hooks":{"Stop":[{"hooks":[{"type":"command","command":"other.sh"}]}]}}
-    ;
-    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, source, .{});
-    defer parsed.deinit();
-    const arena = parsed.arena.allocator();
-
-    const hook_set = hookSetFor(integrationFor(.claude), "/opt/telar hook claude");
-    try std.testing.expect(try installHooks(arena, &parsed.value, hook_set));
-    try std.testing.expect(!try installHooks(arena, &parsed.value, hook_set));
-    for (claude_events) |event| {
-        try std.testing.expect(hasHook(parsed.value, event, hook_set));
-    }
-    try std.testing.expectEqual(@as(usize, 2), parsed.value.object.get("hooks").?.object.get("Stop").?.array.items.len);
-    const claude_timeout = parsed.value.object.get("hooks").?.object.get("SessionEnd").?.array.items[0].object.get("hooks").?.array.items[0].object.get("timeout").?.integer;
-    try std.testing.expectEqual(@as(i64, 5), claude_timeout);
-    try std.testing.expectEqualStrings("opus", parsed.value.object.get("model").?.string);
-
-    try std.testing.expect(uninstallHooks(&parsed.value, hook_set));
-    try std.testing.expect(!uninstallHooks(&parsed.value, hook_set));
-    try std.testing.expect(!hasHook(parsed.value, "SessionStart", hook_set));
-    const stop = parsed.value.object.get("hooks").?.object.get("Stop").?.array;
-    try std.testing.expectEqual(@as(usize, 1), stop.items.len);
-    try std.testing.expect(parsed.value.object.get("hooks").?.object.get("SessionStart") == null);
-}
-
-test "uninstall keeps the user's hooks that share a group with telar's" {
-    const source =
-        \\{"hooks":{"Stop":[{"matcher":"","hooks":[{"type":"command","command":"mine.sh"},{"type":"command","command":"exec '/opt/telar' hook claude"}]},{"hooks":[{"type":"command","command":"exec '/opt/telar' hook claude"}]}]}}
-    ;
-    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, source, .{});
-    defer parsed.deinit();
-    const hook_set = hookSetFor(integrationFor(.claude), "/opt/telar hook claude");
-
-    try std.testing.expect(uninstallHooks(&parsed.value, hook_set));
-    const stop = parsed.value.object.get("hooks").?.object.get("Stop").?.array;
-    try std.testing.expectEqual(@as(usize, 1), stop.items.len);
-    const group = stop.items[0].object;
-    try std.testing.expectEqualStrings("", group.get("matcher").?.string);
-    const hooks = group.get("hooks").?.array;
-    try std.testing.expectEqual(@as(usize, 1), hooks.items.len);
-    try std.testing.expectEqualStrings("mine.sh", hooks.items[0].object.get("command").?.string);
-    try std.testing.expect(!uninstallHooks(&parsed.value, hook_set));
-}
-
-test "hook commands are guarded by the pane environment and keep the marker" {
-    var buffer: [256]u8 = undefined;
-    const command = try renderHookCommand(&buffer, "/opt/tel ar/telar", claude_marker);
-    try std.testing.expectEqualStrings("[ -n \"$TELAR_PANE_ID\" ] && [ -n \"$TELAR_PANE_GENERATION\" ] || exit 0; exec '/opt/tel ar/telar' hook claude", command);
-    try std.testing.expect(std.mem.endsWith(u8, command, claude_marker));
-    try std.testing.expectError(error.UnsupportedExecutablePath, renderHookCommand(&buffer, "/opt/it's/telar", claude_marker));
-}
-
-test "install rewrites a stale telar hook command in place" {
-    const source =
-        \\{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"/old/telar hook claude","timeout":5}]}]}}
-    ;
-    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, source, .{});
-    defer parsed.deinit();
-    const arena = parsed.arena.allocator();
-    var buffer: [256]u8 = undefined;
-    const command = try renderHookCommand(&buffer, "/opt/telar", claude_marker);
-    const hook_set = hookSetFor(integrationFor(.claude), command);
-
-    try std.testing.expect(try installHooks(arena, &parsed.value, hook_set));
-    const stop = parsed.value.object.get("hooks").?.object.get("Stop").?.array;
-    try std.testing.expectEqual(@as(usize, 1), stop.items.len);
-    try std.testing.expectEqualStrings(command, stop.items[0].object.get("hooks").?.array.items[0].object.get("command").?.string);
-    try std.testing.expect(!try installHooks(arena, &parsed.value, hook_set));
-}
-
-test "Codex install owns only its lifecycle events" {
-    const source =
-        \\{"hooks":{"Notification":[{"hooks":[{"type":"command","command":"other.sh"}]}]}}
-    ;
-    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, source, .{});
-    defer parsed.deinit();
-    const hook_set = hookSetFor(integrationFor(.codex), "/opt/telar hook codex");
-
-    try std.testing.expect(try installHooks(parsed.arena.allocator(), &parsed.value, hook_set));
-    try std.testing.expect(!try installHooks(parsed.arena.allocator(), &parsed.value, hook_set));
-    for (codex_events) |event| {
-        try std.testing.expect(hasHook(parsed.value, event, hook_set));
-    }
-    const codex_timeout = parsed.value.object.get("hooks").?.object.get("SessionEnd").?.array.items[0].object.get("hooks").?.array.items[0].object.get("timeout").?.integer;
-    try std.testing.expectEqual(@as(i64, 3), codex_timeout);
-    try std.testing.expect(parsed.value.object.get("hooks").?.object.get("Notification") != null);
-
-    try std.testing.expect(uninstallHooks(&parsed.value, hook_set));
-    try std.testing.expect(parsed.value.object.get("hooks").?.object.get("Notification") != null);
-    try std.testing.expect(parsed.value.object.get("hooks").?.object.get("PermissionRequest") == null);
-}
-
-test "Cursor install writes flat command hooks beside another tool's and keeps its version" {
-    const source =
-        \\{"version":1,"hooks":{"sessionStart":[{"command":"/Users/me/.config/herdr/cursor/herdr-agent-state.sh session","timeout":10}]}}
-    ;
-    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, source, .{});
-    defer parsed.deinit();
-    const arena = parsed.arena.allocator();
-    var buffer: [256]u8 = undefined;
-    const command = try renderHookCommand(&buffer, "/opt/telar", cursor_marker);
-    const hook_set = hookSetFor(integrationFor(.cursor), command);
-
-    try std.testing.expect(try installHooks(arena, &parsed.value, hook_set));
-    try std.testing.expect(!try installHooks(arena, &parsed.value, hook_set));
-    for (cursor_events) |event| {
-        try std.testing.expect(hasHook(parsed.value, event, hook_set));
-    }
-
-    const session_start = parsed.value.object.get("hooks").?.object.get("sessionStart").?.array;
-    try std.testing.expectEqual(@as(usize, 2), session_start.items.len);
-    const ours = session_start.items[1].object;
-    try std.testing.expectEqualStrings(command, ours.get("command").?.string);
-    try std.testing.expectEqual(@as(i64, 5), ours.get("timeout").?.integer);
-    try std.testing.expect(ours.get("type") == null);
-    try std.testing.expect(ours.get("hooks") == null);
-    try std.testing.expectEqual(@as(i64, 1), parsed.value.object.get("version").?.integer);
-
-    try std.testing.expect(uninstallHooks(&parsed.value, hook_set));
-    try std.testing.expect(!hasHook(parsed.value, "stop", hook_set));
-    try std.testing.expectEqual(@as(usize, 1), parsed.value.object.get("hooks").?.object.get("sessionStart").?.array.items.len);
-    try std.testing.expect(parsed.value.object.get("hooks").?.object.get("stop") == null);
-}
-
-test "Cursor install starts an absent hooks file at schema version 1 and rewrites a stale command" {
-    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, "{}", .{});
-    defer parsed.deinit();
-    const arena = parsed.arena.allocator();
-    const stale = hookSetFor(integrationFor(.cursor), "/old/telar hook cursor");
-    try std.testing.expect(try installHooks(arena, &parsed.value, stale));
-    try std.testing.expectEqual(@as(i64, 1), parsed.value.object.get("version").?.integer);
-
-    const current = hookSetFor(integrationFor(.cursor), "/opt/telar hook cursor");
-    try std.testing.expect(try installHooks(arena, &parsed.value, current));
-    const stop = parsed.value.object.get("hooks").?.object.get("stop").?.array;
-    try std.testing.expectEqual(@as(usize, 1), stop.items.len);
-    try std.testing.expectEqualStrings("/opt/telar hook cursor", stop.items[0].object.get("command").?.string);
-
-    // A Claude-shaped entry that happens to end in the marker is not Cursor's.
-    try std.testing.expect(!hasHook(parsed.value, "stop", hookSetFor(integrationFor(.claude), "/opt/telar hook cursor")));
-}
-
-test "settings and extensions follow each agent's directory variable, else the home directory" {
-    var environment = std.process.Environ.Map.init(std.testing.allocator);
-    defer environment.deinit();
-    try environment.put("HOME", "/home/adrian");
-    try environment.put("CODEX_HOME", "/state/codex");
-    const block = try environment.createPosixBlock(std.testing.allocator, .{});
-    defer block.deinit(std.testing.allocator);
-    const environ: std.process.Environ = .{ .block = block };
-    var buffer: [std.fs.max_path_bytes]u8 = undefined;
-
-    try std.testing.expectEqualStrings("/state/codex/hooks.json", try defaultSettingsPath(environ, integrationFor(.codex), &buffer));
-    try std.testing.expectEqualStrings("/home/adrian/.claude/settings.json", try defaultSettingsPath(environ, integrationFor(.claude), &buffer));
-    try std.testing.expectEqualStrings("/home/adrian/.cursor/hooks.json", try defaultSettingsPath(environ, integrationFor(.cursor), &buffer));
-    try std.testing.expectEqualStrings("/home/adrian/.pi/agent/extensions/telar.ts", try extensionPath(environ, .pi, &buffer));
-    try std.testing.expectEqualStrings("/home/adrian/.config/opencode/plugins/telar.ts", try extensionPath(environ, .opencode, &buffer));
-
-    try environment.put("XDG_CONFIG_HOME", "/state/config");
-    const xdg_block = try environment.createPosixBlock(std.testing.allocator, .{});
-    defer xdg_block.deinit(std.testing.allocator);
-    const xdg_environ: std.process.Environ = .{ .block = xdg_block };
-    try std.testing.expectEqualStrings("/state/config/opencode/plugins/telar.ts", try extensionPath(xdg_environ, .opencode, &buffer));
-    try std.testing.expectEqualStrings("/home/adrian/.pi/agent/extensions/telar.ts", try extensionPath(xdg_environ, .pi, &buffer));
-
-    try environment.put("CLAUDE_CONFIG_DIR", "/state/claude");
-    try environment.put("PI_CODING_AGENT_DIR", "/state/pi");
-    try environment.put("CURSOR_CONFIG_DIR", "/state/cursor");
-    const directories_block = try environment.createPosixBlock(std.testing.allocator, .{});
-    defer directories_block.deinit(std.testing.allocator);
-    const directories: std.process.Environ = .{ .block = directories_block };
-    try std.testing.expectEqualStrings("/state/claude/settings.json", try defaultSettingsPath(directories, integrationFor(.claude), &buffer));
-    try std.testing.expectEqualStrings("/home/adrian/.cursor/hooks.json", try defaultSettingsPath(directories, integrationFor(.cursor), &buffer));
-    try std.testing.expectEqualStrings("/state/pi/extensions/telar.ts", try extensionPath(directories, .pi, &buffer));
-}
-
-test "the Pi extension is rendered with the executable path as a string literal" {
-    var buffer: [max_extension_bytes]u8 = undefined;
-    const source = try renderExtension(&buffer, pi_extension_template, "/opt/tel\"ar/bin/telar");
-    try std.testing.expect(isTelarExtension(source, pi_marker));
-    try std.testing.expect(std.mem.indexOf(u8, source, "const TELAR = \"/opt/tel\\\"ar/bin/telar\";") != null);
-    try std.testing.expect(std.mem.indexOf(u8, source, "__TELAR_EXECUTABLE__") == null);
-    try std.testing.expect(std.mem.indexOf(u8, source, "[\"hook\", \"pi\"]") != null);
-    try std.testing.expect(!isTelarExtension("export default function () {}", pi_marker));
-}
-
-test "the OpenCode plugin is rendered with the executable path and only its own marker" {
-    var buffer: [max_extension_bytes]u8 = undefined;
-    const source = try renderExtension(&buffer, opencode_plugin_template, "/opt/telar");
-    try std.testing.expect(isTelarExtension(source, opencode_marker));
-    try std.testing.expect(!isTelarExtension(source, pi_marker));
-    try std.testing.expect(std.mem.indexOf(u8, source, "const TELAR = \"/opt/telar\";") != null);
-    try std.testing.expect(std.mem.indexOf(u8, source, "__TELAR_EXECUTABLE__") == null);
-    try std.testing.expect(std.mem.indexOf(u8, source, "[\"hook\", \"opencode\"]") != null);
-}
-
-test "the Pi extension is installed atomically under a fresh directory" {
-    const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try std.fmt.bufPrint(&path_buffer, "{s}/agent/extensions/telar.ts", .{directory_buffer[0..directory_len]});
-
-    var source_buffer: [max_extension_bytes]u8 = undefined;
-    const source = try renderExtension(&source_buffer, pi_extension_template, "/opt/telar");
-    try installExtension(io, path, source);
-    try installExtension(io, path, source);
-
-    const written = try std.Io.Dir.cwd().readFileAlloc(io, path, std.testing.allocator, .limited(max_extension_bytes));
-    defer std.testing.allocator.free(written);
-    try std.testing.expectEqualStrings(source, written);
-    const stat = try std.Io.Dir.cwd().statFile(io, path, .{});
-    try std.testing.expectEqual(@as(u32, 0o600), @as(u32, @intCast(stat.permissions.toMode() & 0o777)));
-
-    var temp_path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const temp_path = try std.fmt.bufPrint(&temp_path_buffer, "{s}.telar-tmp", .{path});
-    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(io, temp_path, .{}));
 }

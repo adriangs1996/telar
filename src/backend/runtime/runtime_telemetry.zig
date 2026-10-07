@@ -93,6 +93,7 @@ fn format(model: *RuntimeModel, buffer: []u8) ![]const u8 {
             .connection_limit_drops = proxy_metrics.connection_limit_drops,
             .h2_decode_failures = proxy_metrics.h2_decode_failures,
             .passthrough_connections = proxy_metrics.passthrough_connections,
+            .anonymous_tunnels = proxy_metrics.anonymous_tunnels,
             .upstream_connect_failures = proxy_metrics.upstream_connect_failures,
             .tls_context_failures = proxy_metrics.tls_context_failures,
             .tls_upstream_handshake_failures = proxy_metrics.tls_upstream_handshake_failures,

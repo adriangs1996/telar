@@ -1,6 +1,5 @@
 const BarLayout = @import("../bars/BarLayout.zig");
 const Config = @import("Config.zig");
-const ConfigurationInput = @This();
 
 generation: u64,
 sidebar_visible: bool,

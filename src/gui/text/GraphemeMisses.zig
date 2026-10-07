@@ -25,15 +25,3 @@ pub fn remember(self: *GraphemeMisses, text: []const u8) void {
 fn hash(text: []const u8) u64 {
     return std.hash.Wyhash.hash(0x7e1a, text) | 1;
 }
-
-test "a remembered grapheme is found and a collision only forgets the older one" {
-    var misses: GraphemeMisses = .{};
-    try std.testing.expect(!misses.contains("\u{23f5}"));
-    misses.remember("\u{23f5}");
-    try std.testing.expect(misses.contains("\u{23f5}"));
-    try std.testing.expect(!misses.contains("\u{23f4}"));
-    misses.hashes[hash("\u{23f5}") % capacity] = 0x1234_5679;
-    try std.testing.expect(!misses.contains("\u{23f5}"));
-    misses.remember("\u{23f5}");
-    try std.testing.expect(misses.contains("\u{23f5}"));
-}

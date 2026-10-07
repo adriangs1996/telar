@@ -16,7 +16,9 @@ pub const Protocol = enum { http11, h2 };
 
 pub fn deinit(self: *Session) void {
     const gpa = self.gpa;
+    // TLS close notification may fail after peer disconnect; session teardown must still close the other TLS end and free authentication state.
     self.child.connection.close() catch {};
+    // TLS close notification may fail after peer disconnect; authentication state must still be freed and wiped.
     self.origin.connection.close() catch {};
     self.auth.deinit(gpa);
     std.crypto.secureZero(u8, std.mem.asBytes(self));
@@ -37,6 +39,7 @@ pub fn halfClose(self: *Session, side: Side) void {
     // Each relay owns only the send direction of its destination. Closing
     // both directions here races the opposite relay and can truncate h2
     // or upgraded responses after the request side reaches EOF.
+    // The relay may observe a peer that already disconnected; this best-effort send shutdown must not close the opposite receive direction.
     self.end(side).stream.shutdown(self.io, .send) catch {};
 }
 
@@ -54,10 +57,15 @@ fn end(self: *Session, side: Side) *End {
 
 const End = struct {
     stream: std.Io.net.Stream,
+    // SAFETY: wire gives the reader empty input storage; only bytes filled by stream reads are exposed.
     input_buffer: [tlsz.input_buffer_len]u8 = undefined,
+    // SAFETY: wire gives the writer empty output storage; it flushes only bytes subsequently written.
     output_buffer: [tlsz.output_buffer_len]u8 = undefined,
+    // SAFETY: intercept calls wire at the final address before reading or creating either TLS connection.
     reader: std.Io.net.Stream.Reader = undefined,
+    // SAFETY: intercept calls wire at the final address before creating either TLS connection.
     writer: std.Io.net.Stream.Writer = undefined,
+    // SAFETY: intercept completes both handshakes before returning a Session; failed construction never calls Session.deinit.
     connection: tlsz.Connection = undefined,
 
     pub fn wire(self: *End, io: std.Io) void {

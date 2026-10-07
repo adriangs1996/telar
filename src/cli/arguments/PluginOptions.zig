@@ -5,6 +5,7 @@ const PluginOptions = @This();
 
 command: plugin.PluginCommand,
 path: [*:0]const u8,
+// SAFETY: Parsing assigns each accepted capability before increasing capability_count; consumers use only that prefix.
 capabilities: [@typeInfo(core.Capability).@"enum".fields.len]core.Capability = undefined,
 capability_count: u8 = 0,
 

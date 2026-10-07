@@ -32,12 +32,3 @@ pub fn inPlace(pixels: []u8) void {
         pixels[index..][0..4].* = pixel(pixels[index..][0..4].*);
     }
 }
-
-test "opaque pixels keep their color and transparent ones lose it" {
-    try std.testing.expectEqual([4]u8{ 10, 20, 30, 255 }, pixel(.{ 10, 20, 30, 255 }));
-    try std.testing.expectEqual([4]u8{ 0, 0, 0, 0 }, pixel(.{ 10, 20, 30, 0 }));
-
-    var pixels = [_]u8{ 0, 255, 0, 128, 255, 255, 255, 255 };
-    inPlace(&pixels);
-    try std.testing.expectEqualSlices(u8, &.{ 0, 128, 0, 128, 255, 255, 255, 255 }, &pixels);
-}

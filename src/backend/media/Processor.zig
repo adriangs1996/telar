@@ -193,6 +193,7 @@ fn ingestSharedFrame(self: *Processor, frame: SharedFrameView, stats: *Stats) bo
         &placement,
         "\x1b_Ga=p,i={d},p={d},C=1,q=2\x1b\\",
         .{ frame.image_id, frame.placement_id },
+        // SAFETY: Both ids are u32; the fixed placement command plus their at-most-ten-digit representations fits in 64 bytes.
     ) catch unreachable;
     self.ingestMediaOutput(command, stats);
     self.ingestMediaOutput(frame.bytes[frame.apc_end..], stats);
@@ -229,6 +230,7 @@ fn answerFileQuery(self: *Processor, query: FileQueryView) bool {
     const bytes = std.fmt.bufPrint(&reply, "\x1b_Gi={d};{s}\x1b\\", .{
         query.image_id,
         if (accepted) "OK" else "EBADF:file not accepted",
+        // SAFETY: A u32 image id and the longest fixed response message fit in this 64-byte buffer.
     }) catch unreachable;
     self.responses.write(bytes);
     return true;

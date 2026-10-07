@@ -5,8 +5,6 @@ const Options = @import("Options.zig");
 /// What the shared client cannot fabricate: allocators, the runtime
 /// connection, identity, options and the workbench grid metrics the adapter
 /// measured. Ports are bound by the adapter after construction.
-const ClientInit = @This();
-
 gpa: std.mem.Allocator,
 io: std.Io,
 /// A socket already connected and past its handshake, or null when the

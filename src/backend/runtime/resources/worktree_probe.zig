@@ -6,7 +6,6 @@ const core = @import("telar-core");
 const gitstatus = @import("gitstatus");
 const WorktreeProbeJob = @import("WorktreeProbeJob.zig");
 const WorktreeProbeCompletion = @import("WorktreeProbeCompletion.zig");
-const WorktreeProbe = @import("../../workspace/WorktreeProbe.zig");
 const git_probe = @import("git_probe.zig");
 
 /// A worktree running a command is measured this often.
@@ -96,53 +95,4 @@ fn fitsRow(path: []const u8, branch: []const u8) bool {
         .branch = branch,
     }) catch return false;
     return true;
-}
-
-test "a worktree registered without a base is measured against its main checkout's branch" {
-    const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const root = root_buffer[0..try temp.dir.realPath(io, &root_buffer)];
-    var main_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const main = try std.fmt.bufPrint(&main_buffer, "{s}/main", .{root});
-    var linked_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const linked = try std.fmt.bufPrint(&linked_buffer, "{s}/external", .{root});
-
-    testGit(&.{ "git", "init", "-q", "-b", "trunk", main }) catch return error.SkipZigTest;
-    try temp.dir.writeFile(io, .{ .sub_path = "main/a.txt", .data = "one\n" });
-    try testGit(&.{ "git", "-C", main, "add", "a.txt" });
-    try testGit(&.{ "git", "-C", main, "-c", "user.name=telar", "-c", "user.email=telar@localhost", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "one" });
-    try testGit(&.{ "git", "-C", main, "worktree", "add", "-q", "-b", "by-hand", linked });
-    try temp.dir.writeFile(io, .{ .sub_path = "external/a.txt", .data = "one\ntwo\n" });
-    try testGit(&.{ "git", "-C", linked, "-c", "user.name=telar", "-c", "user.email=telar@localhost", "-c", "commit.gpgsign=false", "commit", "-q", "-am", "two" });
-
-    var request: WorktreeProbe = .{
-        .worktree = @enumFromInt(1),
-        .path_len = @intCast(linked.len),
-        .base_len = 0,
-    };
-    @memcpy(request.path[0..linked.len], linked);
-    const completion = probe(.{ .io = io, .environ = std.testing.environ, .request = request });
-
-    try std.testing.expect(completion.measured);
-    try std.testing.expectEqualStrings("trunk", completion.foundBaseSlice());
-    try std.testing.expectEqual(@as(u32, 1), completion.stat.commits_ahead);
-    try std.testing.expectEqual(@as(u32, 1), completion.stat.added);
-}
-
-fn testGit(argv: []const []const u8) !void {
-    const result = try std.process.run(std.testing.allocator, std.testing.io, .{ .argv = argv });
-    defer std.testing.allocator.free(result.stdout);
-    defer std.testing.allocator.free(result.stderr);
-    if (result.term != .exited or result.term.exited != 0) {
-        return error.GitFailed;
-    }
-}
-
-test "a branch the row cannot hold whole is not reported" {
-    try std.testing.expect(fitsRow("/w/fix", "fix/tabs"));
-    try std.testing.expect(!fitsRow("/w/fix", "b" ** (core.max_git_branch_bytes + 1)));
-    try std.testing.expect(!fitsRow("/w/fix", "fix-\xc3"));
-    try std.testing.expect(!fitsRow("/w/fix", ""));
 }

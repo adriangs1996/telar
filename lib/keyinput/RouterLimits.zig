@@ -1,6 +1,5 @@
 //! A router's compile-time bounds: its bindings, their length, how many
 //! physical keys it tracks at once and how long a partial binding waits.
-const RouterLimits = @This();
 
 max_bindings: usize,
 max_keys: usize,

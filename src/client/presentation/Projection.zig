@@ -5,7 +5,6 @@ const hints_support = @import("../input/hints_support.zig");
 const CopyProjection = @import("../workspace/CopyProjection.zig");
 const Machines = @import("../machines/Machines.zig");
 const MachineActivity = @import("../machines/MachineActivity.zig");
-const Projection = @This();
 
 version: data.Version,
 geometry: data.Region,

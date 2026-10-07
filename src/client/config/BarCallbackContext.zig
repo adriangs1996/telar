@@ -1,6 +1,5 @@
 const data = @import("model");
 const BarMetrics = @import("BarMetrics.zig");
-const BarCallbackContext = @This();
 
 client: data.CallbackContext,
 time: BarTime,

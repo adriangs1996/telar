@@ -1,5 +1,4 @@
 const HostCapabilities = @import("HostCapabilities.zig");
-const HostCapabilitiesChange = @This();
 
 previous: HostCapabilities,
 current: HostCapabilities,

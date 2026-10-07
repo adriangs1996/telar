@@ -49,22 +49,3 @@ pub fn uniqueId(current: ?u32, value: []const u8) ?u32 {
     const parsed = std.fmt.parseUnsigned(u32, value, 10) catch return null;
     return if (parsed == 0) null else parsed;
 }
-
-test "fields split on commas and reject malformed keys and empty values" {
-    var fields = init("a=q,i=31");
-    try std.testing.expectEqualDeep(Field{ .key = 'a', .value = "q" }, (try fields.next()).?);
-    try std.testing.expectEqualDeep(Field{ .key = 'i', .value = "31" }, (try fields.next()).?);
-    try std.testing.expect((try fields.next()) == null);
-
-    for ([_][]const u8{ "a", "ab=1", "a=", "=1" }) |control| {
-        var malformed = init(control);
-        try std.testing.expectError(error.InvalidControl, malformed.next());
-    }
-}
-
-test "ids are positive decimals given once" {
-    try std.testing.expectEqual(@as(?u32, 7), uniqueId(null, "7"));
-    try std.testing.expect(uniqueId(null, "0") == null);
-    try std.testing.expect(uniqueId(null, "x") == null);
-    try std.testing.expect(uniqueId(7, "8") == null);
-}

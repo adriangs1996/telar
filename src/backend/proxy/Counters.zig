@@ -32,6 +32,7 @@ pub fn snapshot(self: *const Counters, live: LiveState) Snapshot {
         .connection_limit_drops = live.connections.limit_drops,
         .h2_decode_failures = self.load(.h2_decode_failure),
         .passthrough_connections = self.load(.passthrough_connection),
+        .anonymous_tunnels = self.load(.anonymous_tunnel),
         .upstream_connect_failures = self.load(.upstream_connect_failure),
         .tls_context_failures = self.load(.tls_context_failure),
         .tls_upstream_handshake_failures = self.load(.tls_upstream_handshake_failure),

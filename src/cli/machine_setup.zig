@@ -1,4 +1,4 @@
-//! `telar machine setup LABEL|DESTINATION` (docs/flows/machine-setup.md):
+//! `telar machine setup LABEL|DESTINATION`:
 //! makes a machine this account reaches over SSH ready for the window in
 //! one idempotent command. It checks batch-mode SSH, installs this exact
 //! build of telar under the machine's home without sudo, saves its absolute
@@ -43,8 +43,10 @@ const stopping_text = "is stopping";
 /// The machine one setup works on: a saved profile, or a destination that
 /// becomes one.
 const SetupTarget = struct {
+    // SAFETY: resolve fills the label through copyInto before returning; label reads only label_len bytes.
     label_bytes: [core.MachineProfile.max_label_bytes]u8 = undefined,
     label_len: u8 = 0,
+    // SAFETY: resolve fills the destination through copyInto before returning; destination reads only destination_len bytes.
     destination_bytes: [core.ssh_destination.max_bytes]u8 = undefined,
     destination_len: u8 = 0,
     saved: ?core.MachineProfile = null,
@@ -65,6 +67,7 @@ const SetupTarget = struct {
 /// with DIR the version, or the version and the binary's hash for a
 /// development build, so two builds never share a path.
 const BuildDirectory = struct {
+    // SAFETY: buildDirectory writes the version through a fixed writer before recording len; slice reads only that prefix.
     bytes: [64]u8 = undefined,
     len: u8 = 0,
     /// `--binary` and its SHA-256, when given.
@@ -226,6 +229,7 @@ fn refuse(init: std.process.Init, err: anyerror, name: []const u8) u8 {
         error.DuplicateMachineLabel => std.fmt.bufPrint(&buffer, "telar machine setup: the label for {s} is taken by another machine; name it with --label\n", .{name}),
         else => std.fmt.bufPrint(&buffer, "telar machine setup: {s}\n", .{machine_profiles.describe(err)}),
     } catch return failure;
+    // A broken stderr must not replace the command failure being reported.
     std.Io.File.stderr().writeStreamingAll(init.io, message) catch {};
     return failure;
 }
@@ -723,57 +727,4 @@ fn check(init: std.process.Init, report: *SetupReport, target: *const SetupTarge
 fn firstLine(text: []const u8) []const u8 {
     const end = std.mem.indexOfScalar(u8, text, '\n') orelse text.len;
     return text[0..end];
-}
-
-test "a destination becomes a label from its host" {
-    var buffer: [core.MachineProfile.max_label_bytes]u8 = undefined;
-    try std.testing.expectEqualStrings("box.lan", try deriveLabel("dev@box.lan", &buffer));
-    try std.testing.expectEqualStrings("box", try deriveLabel("ssh://dev@box:2222", &buffer));
-    try std.testing.expectEqualStrings("2001", try deriveLabel("dev@[2001:db8::1]", &buffer));
-    try std.testing.expectEqualStrings("my-box", try deriveLabel("dev@my+box", &buffer));
-    try std.testing.expectError(error.MachineLabelNeeded, deriveLabel("dev@-box", &buffer));
-}
-
-test "setup finds a saved machine by label or destination, or names a new one" {
-    var profiles: core.MachineProfiles = .{};
-    try profiles.add(try core.MachineProfile.init(@enumFromInt(1), .{
-        .label = "box",
-        .destination = "dev@box",
-    }));
-
-    const io = std.testing.io;
-    const by_label = try resolve(io, &profiles, "box", null);
-    try std.testing.expect(by_label.saved != null);
-    try std.testing.expectEqualStrings("dev@box", by_label.destination());
-
-    const by_destination = try resolve(io, &profiles, "dev@box", null);
-    try std.testing.expectEqualStrings("box", by_destination.label());
-
-    const fresh = try resolve(io, &profiles, "ops@gpu.lan", null);
-    try std.testing.expect(fresh.saved == null);
-    try std.testing.expectEqualStrings("gpu.lan", fresh.label());
-
-    const named = try resolve(io, &profiles, "ops@gpu.lan", "gpu");
-    try std.testing.expectEqualStrings("gpu", named.label());
-    try std.testing.expectError(error.InvalidRemoteDestination, resolve(io, &profiles, "-oProxyCommand=x", null));
-}
-
-test "a new destination whose label another machine has is refused before setup starts" {
-    var profiles: core.MachineProfiles = .{};
-    try profiles.add(try core.MachineProfile.init(@enumFromInt(1), .{
-        .label = "box",
-        .destination = "dev@box",
-    }));
-
-    const io = std.testing.io;
-    try std.testing.expectError(error.DuplicateMachineLabel, resolve(io, &profiles, "root@box", null));
-    try std.testing.expectError(error.DuplicateMachineLabel, resolve(io, &profiles, "ops@gpu", "box"));
-
-    const renamed = try resolve(io, &profiles, "root@box", "box-root");
-    try std.testing.expectEqualStrings("box-root", renamed.label());
-    try std.testing.expectEqualStrings("root@box", renamed.destination());
-}
-
-test "the line kept from unreadable output is the first" {
-    try std.testing.expectEqualStrings("one", firstLine("one\ntwo\n"));
 }

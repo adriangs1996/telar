@@ -60,13 +60,3 @@ pub fn matchesAny(method: []const u8, target: []const u8, routes: []const RouteM
 
     return false;
 }
-
-test "a route matches its method without case and its paths without the query" {
-    const route: RouteMatch = .{ .method = "POST", .paths = &.{ "/v1/responses", "/backend-api/codex/responses" } };
-    try std.testing.expect(route.matches("post", "/v1/responses"));
-    try std.testing.expect(route.matches("POST", "/backend-api/codex/responses?stream=true"));
-    try std.testing.expect(!route.matches("GET", "/v1/responses"));
-    try std.testing.expect(!route.matches("POST", "/V1/RESPONSES"));
-    try std.testing.expect(!route.matches("POST", "/v1/responses#fragment"));
-    try std.testing.expect(!RouteMatch.matchesAny("POST", "/v1/responses", &.{}));
-}

@@ -1,5 +1,4 @@
-//! A tab disappears from the client's workspace with its panes
-//! (docs/flows/tab-removal.md).
+//! A tab disappears from the client's workspace with its panes.
 const RemoveTab = @import("../state/RemoveTab.zig");
 const std = @import("std");
 const tab_removal = @import("tab_removal.zig");
@@ -77,10 +76,6 @@ pub fn commitRemoval(model: *ClientModel, command: RemoveTab) !TabRemovalCommit 
         .was_active = was_active,
         .active = active,
         .workspace_removed = workspace_removed,
-        .active_layout_revision = if (model.tabs.activeSlot()) |slot|
-            model.tabs.layout[slot].currentRevision()
-        else
-            0,
         .active_tab_revision_before = active_tab_revision_before,
         .workspace_revision = model.workspace_revision,
         .tabs_revision = model.tabs_revision,

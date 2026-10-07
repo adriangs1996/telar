@@ -1,6 +1,6 @@
 """Drives `telar-headless`, the client without a window, from tools and tests.
 
-The client reads one command per line on stdin (docs/flows/headless-client.md):
+The client reads one command per line on stdin:
 `key NAME`, `text UTF-8`, `resize COLSxROWS`, `mark LABEL` and `quit`. It
 writes its trace and dump only when it exits, so nothing here parses output
 while the client runs.

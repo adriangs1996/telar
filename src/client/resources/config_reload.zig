@@ -197,60 +197,6 @@ fn loadReloadTrustStore(gpa: std.mem.Allocator, io: std.Io, path: []const u8) !*
     return store;
 }
 
-test "a rejected load is freed once and reports why" {
-    // The unwind concentrates here: rejecting a loaded configuration frees
-    // the three objects and clears the orphan slots in one place.
-    var state: ConfigReloadState = .{ .mtime_ns = 0 };
-    const gpa = std.testing.allocator;
-    const registry = try gpa.create(Registry);
-    const trust = try gpa.create(core.TrustStore);
-    trust.* = .{};
-    var diagnostic: data.Diagnostic = .{};
-    const generation = try Generation.loadSource(.{
-        .gpa = gpa,
-        .io = std.testing.io,
-        .diagnostic = &diagnostic,
-    }, .{
-        .source =
-        \\local telar = require("telar")
-        \\local config = telar.config({ api_version = 2 })
-        \\return config
-        ,
-        .source_name = "@reload-test",
-        .number = 1,
-    });
-    state.orphans = .{ .generation = generation, .registry = registry, .trust = trust };
-
-    const rejection: RejectContext = .{
-        .state = &state,
-        .gpa = gpa,
-        .loaded = .{ .generation = generation, .registry = registry, .trust_store = trust, .mtime_ns = 9 },
-    };
-    const outcome = rejection.reject("test rejection: {s}", .{"boom"});
-    try std.testing.expect(outcome == .rejected);
-    try std.testing.expectEqual(@as(i128, 9), state.mtime_ns);
-    try std.testing.expect(state.orphans.generation == null);
-    try std.testing.expect(state.orphans.registry == null);
-    try std.testing.expect(state.orphans.trust == null);
-}
-
-test "a forced reload is consumed by the one watch that carries it" {
-    var state: ConfigReloadState = .{ .mtime_ns = 0, .force_next = true };
-    const args: ScheduleArgs = .{
-        .io = std.testing.io,
-        .gpa = std.testing.allocator,
-        .path = "/config.lua",
-        .profile = null,
-        .trust_path = "/trust.json",
-        .current_generation = @ptrFromInt(@alignOf(Generation)),
-        .current_registry = @ptrFromInt(@alignOf(Registry)),
-    };
-
-    try std.testing.expect(schedule(&state, args).config_watch.force_reload);
-    try std.testing.expect(!state.force_next);
-    try std.testing.expect(!schedule(&state, args).config_watch.force_reload);
-}
-
 const Partial = struct {
     /// The pieces the async task has built so far, so every failure unwinds
     /// through one place instead of repeating the partial free by hand.

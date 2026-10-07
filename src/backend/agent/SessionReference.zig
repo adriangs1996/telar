@@ -3,6 +3,7 @@ const core = @import("telar-core");
 /// typed and bounded so restore can rebuild a fixed argv from it.
 const SessionReference = @This();
 
+// SAFETY: init copies the validated session reference before setting len; slice reads only that prefix.
 bytes: [core.max_agent_session_reference_bytes]u8 = undefined,
 len: u8 = 0,
 observed_at_ms: i64 = 0,

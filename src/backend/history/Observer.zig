@@ -404,8 +404,10 @@ fn resetState(self: *Observer, cwd: []const u8, size: core.TerminalSize) !void {
 }
 
 const Batch = struct {
+    // SAFETY: pushBytes copies accepted bytes before increasing len; sealed events reference only those initialized ranges.
     bytes: [observer_support.batch_bytes]u8 = undefined,
     len: usize = 0,
+    // SAFETY: pushEvent writes an event before increasing event_count; the worker visits only the sealed prefix.
     events: [observer_support.batch_events]observer_support.Event = undefined,
     event_count: usize = 0,
     reset_before: bool = false,

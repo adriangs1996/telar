@@ -1,5 +1,4 @@
 const id = @import("../id.zig");
-const ExecutionRequest = @This();
 
 pub const Action = enum(u8) { start, status, input, eof, cancel, forget, list };
 pub const max_chunk = 4096;

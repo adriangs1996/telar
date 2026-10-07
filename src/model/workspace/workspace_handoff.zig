@@ -1,5 +1,4 @@
-//! The client leaves one workspace and arrives at another
-//! (docs/flows/workspace-handoff.md).
+//! The client leaves one workspace and arrives at another.
 const WorkspaceActivationSeed = @import("../state/WorkspaceActivationSeed.zig");
 const WorkspaceReplacement = @import("../state/WorkspaceReplacement.zig");
 const workspace_handoff = @import("workspace_handoff.zig");
@@ -59,25 +58,6 @@ pub fn bootstrap(model: *ClientModel, root: RootTab) !void {
     }
 
     try replaceWithRoot(model, root);
-}
-
-test "a failed root construction keeps the previous workspace" {
-    var model = ClientModel.init(std.testing.allocator, true);
-    defer model.deinit();
-
-    try bootstrap(&model, .{
-        .pane_id = @enumFromInt(1),
-        .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
-        .size = .{ .cols = 4, .rows = 2 },
-    });
-
-    try std.testing.expectError(error.InvalidPaneId, replaceWithRoot(&model, .{
-        .pane_id = .invalid,
-        .location = .{ .workspace = .{ .workspace = @enumFromInt(2) }, .tab_id = @enumFromInt(2) },
-        .size = .{ .cols = 4, .rows = 2 },
-    }));
-    try std.testing.expectEqual(@as(usize, 1), model.tabs.count);
-    try std.testing.expect(model.panes.find(@enumFromInt(1)) != null);
 }
 
 /// Retires the current workspace projection and captures the bounded

@@ -1,5 +1,4 @@
 const core = @import("telar-core");
-const GraphicsCounts = @This();
 
 images: u32,
 placements: u32,

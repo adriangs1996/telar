@@ -12,6 +12,7 @@ pending_time_ms: i64 = 0,
 /// Two alternating buffers: `flush` returns a slice into the active one
 /// and `begin` switches to the other, so a finished entry stays valid
 /// while the next command starts on the same fed line.
+// SAFETY: append fills the active command before increasing command_len; flush exposes only that initialized prefix.
 command_storage: [2][core.max_import_command_bytes]u8 = undefined,
 active: u1 = 0,
 /// Bytes of the active command kept in its buffer.

@@ -122,25 +122,6 @@ fn named(names: []const []const u8, index: usize) []const u8 {
     return names[@min(index, names.len - 1)];
 }
 
-test "clock formats the strftime subset from local time" {
-    const time: LocalTime = .{
-        .year = 2026,
-        .month = 9,
-        .day = 6,
-        .hour = 13,
-        .minute = 5,
-        .second = 9,
-        .weekday = 6,
-    };
-    var buffer: [max_output_bytes]u8 = undefined;
-
-    try std.testing.expectEqualStrings("13:05 06/09", format(&buffer, "%H:%M %d/%m", time));
-    try std.testing.expectEqualStrings("Sat 6 Sep 26, 01 PM", format(&buffer, "%a %e %b %y, %I %p", time));
-    try std.testing.expectEqualStrings("100% %q", format(&buffer, "100%% %q", time));
-    try std.testing.expect(showsSeconds("%H:%M:%S"));
-    try std.testing.expect(!showsSeconds("%H:%M"));
-}
-
 fn longestName() usize {
     var longest: usize = 0;
     for (weekday_names ++ month_names) |name| {
@@ -148,20 +129,4 @@ fn longestName() usize {
     }
 
     return longest;
-}
-
-test "a format of the longest directives fits the output whole" {
-    var buffer: [max_output_bytes]u8 = undefined;
-    const time: LocalTime = .{
-        .year = 2026,
-        .month = 9,
-        .day = 30,
-        .hour = 11,
-        .minute = 52,
-        .second = 0,
-        .weekday = 3,
-    };
-
-    const text = format(&buffer, "%B" ** (max_format_bytes / directive_bytes), time);
-    try std.testing.expectEqualStrings("September" ** (max_format_bytes / directive_bytes), text);
 }

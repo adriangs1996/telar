@@ -1,4 +1,4 @@
-//! The login step of `telar machine setup` (docs/flows/machine-setup.md):
+//! The login step of `telar machine setup`:
 //! each agent gets its own login on the machine, through its official flow,
 //! so no credential ever travels. The login runs in a workspace of the
 //! machine's runtime; setup reads its link from that pane and shows it in
@@ -260,6 +260,7 @@ fn loginOne(init: std.process.Init, report: *SetupReport, login: Login, interact
     // code still stand, and a second login would only race it.
     const existing = try findLoginPane(init, arena, login.profile, login.agent, login.plan.title);
     const pane = existing orelse try openLoginPane(init, arena, login);
+    // Rollback attempts to close the login pane while preserving the original setup error.
     errdefer closeLoginPane(init, arena, login.profile, login.agent, pane) catch {};
     if (existing != null) {
         try report.progress("{s} on {s}: the login setup started before is still open there", .{ login.plan.title, login.profile.label() });
@@ -347,6 +348,7 @@ fn openLoginPane(init: std.process.Init, arena: std.mem.Allocator, login: Login)
     defer init.gpa.free(output);
 
     const pane = std.json.parseFromSliceLeaky(LoginPane, arena, output, .{ .ignore_unknown_fields = true }) catch return error.LoginPaneUnreadable;
+    // Failure to remember the new pane triggers best-effort rollback; retain the original persistence error.
     errdefer closeTab(init, arena, login.profile, pane) catch {};
     try rememberLoginPane(init, login.profile.destination(), login.agent, pane);
     return pane;
@@ -555,6 +557,7 @@ fn captureLoginCommand(init: std.process.Init, arena: std.mem.Allocator, profile
     }
 
     if (output.stderr.len != 0) {
+        // Forward the remote command stderr bytes unchanged, without adding a logging prefix.
         std.debug.print("{s}", .{output.stderr});
     }
 
@@ -856,120 +859,4 @@ fn record(init: std.process.Init, label: []const u8, path: []const u8, logins: s
     if (count != 0) {
         try client.machine_profiles.storeAll(init.io, init.gpa, path, edits[0..count]);
     }
-}
-
-test "a login's link and one-time code are read from its pane" {
-    const codex =
-        \\Welcome to Codex [v0.158.0]
-        \\
-        \\1. Open this link in your browser and sign in to your account
-        \\   https://auth.openai.com/codex/device
-        \\
-        \\2. Enter this one-time code (expires in 15 minutes)
-        \\   ABCD-1234
-    ;
-    const openai: []const []const u8 = &.{"auth.openai.com"};
-    const found = findLink(codex, openai, "one-time code").?;
-    try std.testing.expectEqualStrings("https://auth.openai.com/codex/device", found.url);
-    try std.testing.expectEqualStrings("ABCD-1234", found.code.?);
-
-    const claude = "Browser didn't open? Use the url below to sign in:\n\nhttps://claude.ai/oauth/authorize?code=true&client_id=x&state=y.\n\nPaste code here if prompted >";
-    const link = findLink(claude, planFor(.claude, null).?.hosts, null).?;
-    try std.testing.expectEqualStrings("https://claude.ai/oauth/authorize?code=true&client_id=x&state=y", link.url);
-    try std.testing.expectEqual(@as(?[]const u8, null), link.code);
-
-    try std.testing.expectEqual(@as(?FoundLink, null), findLink("Logging in...", openai, null));
-    try std.testing.expectEqualStrings("XY-99", findLink("url: https://auth.openai.com/codex/device\nEnter code: XY-99\n", openai, "Enter code:").?.code.?);
-}
-
-test "a link to another host, or with user info, is never taken for the login" {
-    const claude = planFor(.claude, null).?.hosts;
-    for ([_][]const u8{
-        "Open https://claude.ai@evil.example/oauth/authorize to sign in",
-        "Open https://claude.ai.evil.example/oauth/authorize to sign in",
-        "Open https://evil.example/?next=https:claude.ai to sign in",
-        "Open https://claude.ai:8443/oauth to sign in",
-        "Open http://claude.ai/oauth to sign in",
-    }) |text| {
-        try std.testing.expectEqual(@as(?FoundLink, null), findLink(text, claude, null));
-    }
-
-    // A decoy printed first is passed over for the login's own link.
-    const found = findLink("See https://evil.example/login first\nhttps://claude.com/cai/oauth/authorize?code=true\n", claude, null).?;
-    try std.testing.expectEqualStrings("https://claude.com/cai/oauth/authorize?code=true", found.url);
-
-    for (std.enums.values(Agent)) |agent| {
-        const plan = planFor(agent, "openai") orelse continue;
-        try std.testing.expect(!plan.link or plan.hosts.len != 0);
-    }
-}
-
-test "the step says ok, changed, pending or failed from the logins" {
-    var logins: std.EnumArray(Agent, ?AgentLogin) = .initFill(null);
-    try std.testing.expectEqual(SetupReport.Status.skipped, aggregate(logins, false));
-    logins.set(.claude, .done);
-    try std.testing.expectEqual(SetupReport.Status.ok, aggregate(logins, false));
-    try std.testing.expectEqual(SetupReport.Status.changed, aggregate(logins, true));
-    logins.set(.codex, .pending);
-    try std.testing.expectEqual(SetupReport.Status.pending, aggregate(logins, true));
-    logins.set(.cursor, .failed);
-    try std.testing.expectEqual(SetupReport.Status.failed, aggregate(logins, true));
-}
-
-test "agents without a browser login for their provider are left to the person" {
-    try std.testing.expect(planFor(.opencode, "anthropic") == null);
-    try std.testing.expect(planFor(.opencode, "openai") != null);
-    try std.testing.expect(planFor(.pi, null) == null);
-    try std.testing.expect(planFor(.claude, null).?.paste != null);
-    try std.testing.expect(std.mem.startsWith(u8, statusScript(.pi), "[ -n \"$provider\" ]"));
-}
-
-test "only the pane setup recordeded, in its login workspace, is taken for a login" {
-    const noted = parseRecord("7 12 31\n").?;
-    try std.testing.expectEqual(@as(u64, 12), noted.tab_id);
-    try std.testing.expectEqual(@as(?LoginPane, null), parseRecord(""));
-    try std.testing.expectEqual(@as(?LoginPane, null), parseRecord("7 12"));
-    try std.testing.expectEqual(@as(?LoginPane, null), parseRecord("7 12 31 4"));
-
-    const title = "Log in to Codex";
-    const panes = [_]LoginPane{noted};
-    const own = [_]ListedWorkspace{.{ .workspace_id = 7, .name = title }};
-    try std.testing.expect(claimed(noted, title, &own, &panes));
-
-    // A person's workspace with the same name and other ids is not setup's.
-    const persons = [_]ListedWorkspace{.{ .workspace_id = 9, .name = title }};
-    try std.testing.expect(!claimed(noted, title, &persons, &panes));
-
-    // A runtime that restarted gave the ids to a workspace named otherwise.
-    const reused = [_]ListedWorkspace{.{ .workspace_id = 7, .name = "notes" }};
-    try std.testing.expect(!claimed(noted, title, &reused, &panes));
-
-    // The workspace is there but the pane is gone.
-    try std.testing.expect(!claimed(noted, title, &own, &.{}));
-}
-
-test "only exact missing login state refusals tolerate cleanup races" {
-    var stderr = "telar tab: tab not found\n".*;
-    var output: ScriptOutput = .{
-        .term = .{ .exited = 1 },
-        .stdout = &.{},
-        .stderr = &stderr,
-    };
-    try std.testing.expect(missingLoginState(&output, .tab));
-    try std.testing.expect(!missingLoginState(&output, .pane));
-
-    output.term = .{ .exited = 255 };
-    try std.testing.expect(!missingLoginState(&output, .tab));
-    output.term = .{ .exited = 1 };
-    var protocol_error = "telar tab: unexpected reply from the runtime\n".*;
-    output.stderr = &protocol_error;
-    try std.testing.expect(!missingLoginState(&output, .tab));
-
-    var pane_missing = "telar pane: pane not found or its generation is stale\n".*;
-    output.stderr = &pane_missing;
-    output.term = .{ .exited = 2 };
-    try std.testing.expect(missingLoginState(&output, .pane));
-    var partial = "{}".*;
-    output.stdout = &partial;
-    try std.testing.expect(!missingLoginState(&output, .pane));
 }

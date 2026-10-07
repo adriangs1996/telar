@@ -11,7 +11,6 @@ const bytecodec = @import("bytecodec");
 const core = @import("telar-core");
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
-const CheckpointWriter = @import("CheckpointWriter.zig");
 const WriteJob = @import("WriteJob.zig");
 const OwnedWrite = @import("OwnedWrite.zig");
 const Pane = @import("../pane/Pane.zig");
@@ -57,16 +56,19 @@ pub fn writeFile(job: WriteJob) anyerror!void {
     });
     file.writeStreamingAll(io, job.bytes()) catch |err| {
         file.close(io);
+        // Preserve the checkpoint write error if removing its private temporary file also fails.
         std.Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
         return err;
     };
     file.sync(io) catch |err| {
         file.close(io);
+        // Preserve the checkpoint sync error if removing its private temporary file also fails.
         std.Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
         return err;
     };
     file.close(io);
     std.Io.Dir.renameAbsolute(temp_path, job.path, io) catch |err| {
+        // Preserve the checkpoint rename error if removing its private temporary file also fails.
         std.Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
         return err;
     };
@@ -270,21 +272,15 @@ pub fn restore(model: *RuntimeModel) void {
     const io = model.io;
     const bytes = readFile(io, model.gpa, path) catch |err| switch (err) {
         error.FileNotFound => return,
-        else => {
-            model.checkpoint.restore_failed = true;
-            return;
-        },
+        else => return,
     };
     defer model.gpa.free(bytes);
 
     validate(bytes) catch {
-        model.checkpoint.restore_failed = true;
         quarantine(io, path);
         return;
     };
-    apply(model, bytes) catch {
-        model.checkpoint.restore_failed = true;
-    };
+    apply(model, bytes) catch {};
 }
 
 fn validate(bytes: []const u8) !void {
@@ -540,6 +536,7 @@ fn restoreLayout(model: *RuntimeModel, record: LayoutRecord) !void {
 fn quarantine(io: std.Io, path: []const u8) void {
     var corrupt_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const corrupt_path = std.fmt.bufPrint(&corrupt_buffer, "{s}.corrupt", .{path}) catch return;
+    // An invalid checkpoint is never restored; quarantine is best effort so a rename failure does not prevent a fresh runtime from starting.
     std.Io.Dir.renameAbsolute(path, corrupt_path, io) catch {};
 }
 
@@ -687,181 +684,3 @@ pub fn restoreAgentTitle(model: *RuntimeModel, pane: *const Pane, title: Session
         .state = .ready,
     });
 }
-
-test "resume commands exist only for built-in providers and references in their session format" {
-    var buffer: [max_resume_command_bytes]u8 = undefined;
-    const session = "0192aaaa-bbbb-cccc-dddd-eeeeffff0000";
-
-    try std.testing.expectEqualStrings("claude --resume " ++ session ++ "\r", resumeCommand(&buffer, .claude, session, false).?);
-    try std.testing.expectEqualStrings("codex resume " ++ session ++ "\r", resumeCommand(&buffer, .codex, session, false).?);
-    try std.testing.expectEqualStrings("codex resume --no-daemon " ++ session ++ "\r", resumeCommand(&buffer, .codex, session, true).?);
-    try std.testing.expectEqualStrings("claude --resume " ++ session ++ "\r", resumeCommand(&buffer, .claude, session, true).?);
-    try std.testing.expectEqualStrings("pi --session " ++ session ++ "\r", resumeCommand(&buffer, .pi, session, false).?);
-    try std.testing.expectEqualStrings("cursor-agent --resume " ++ session ++ "\r", resumeCommand(&buffer, .cursor, session, false).?);
-    const opencode_session = "ses_f212d4cc3ffeR3t3CA08EwN5Ap";
-    try std.testing.expectEqualStrings("opencode --session " ++ opencode_session ++ "\r", resumeCommand(&buffer, .opencode, opencode_session, false).?);
-    try std.testing.expect(resumeCommand(&buffer, .opencode, session, false) == null);
-    try std.testing.expect(resumeCommand(&buffer, .claude, opencode_session, false) == null);
-    try std.testing.expect(resumeCommand(&buffer, @enumFromInt(core.first_custom_agent_provider), session, false) == null);
-    try std.testing.expect(resumeCommand(&buffer, .claude, "not-a-uuid", false) == null);
-    try std.testing.expect(resumeCommand(&buffer, .claude, "0192aaaa-bbbb-cccc-dddd-eeeeffff000g", false) == null);
-}
-
-test "a pane that launched Codex itself resumes it with a fixed argv in the mode its session ran" {
-    var buffer: [256]u8 = undefined;
-    const reference = try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 0);
-    var session = try ResumeSession.init(.codex, reference);
-
-    var shared = bytecodec.Encoder.init(&buffer);
-    try std.testing.expectEqual(@as(?u16, 3), try directResumeArguments(&shared, "/opt/bin/codex", session));
-    var shared_words = bytecodec.Decoder.init(shared.finish());
-    for ([_][]const u8{ "/opt/bin/codex", "resume", reference.slice() }) |expected| {
-        try std.testing.expectEqualStrings(expected, try shared_words.readSized16());
-    }
-
-    session.in_pane = true;
-    var in_pane = bytecodec.Encoder.init(&buffer);
-    try std.testing.expectEqual(@as(?u16, 4), try directResumeArguments(&in_pane, "/opt/bin/codex", session));
-    var in_pane_words = bytecodec.Decoder.init(in_pane.finish());
-    for ([_][]const u8{ "/opt/bin/codex", "resume", "--no-daemon", reference.slice() }) |expected| {
-        try std.testing.expectEqualStrings(expected, try in_pane_words.readSized16());
-    }
-
-    var other = bytecodec.Encoder.init(&buffer);
-    try std.testing.expect(try directResumeArguments(&other, "/bin/zsh", session) == null);
-}
-
-test "checkpoint state debounces, coalesces and retries after failure" {
-    var state: CheckpointWriter = .{ .path = "/tmp/session.ckpt" };
-    try std.testing.expect(!state.due(0));
-
-    state.noteChange(1_000);
-    try std.testing.expect(!state.due(1_000 + debounce_ns - 1));
-    try std.testing.expect(state.due(1_000 + debounce_ns));
-
-    var scheduler: TestingScheduler = .{};
-    try state.startWrite(try testingWrite(), &scheduler);
-    try std.testing.expect(!state.due(std.math.maxInt(u64)));
-    state.noteChange(2_000);
-    state.completeWrite({});
-    try std.testing.expect(state.dirty);
-    try std.testing.expectEqual(@as(u64, 1), state.writes);
-
-    try state.startWrite(try testingWrite(), &scheduler);
-    state.completeWrite(error.NoSpaceLeft);
-    try std.testing.expect(state.dirty);
-    try std.testing.expectEqual(@as(u64, 1), state.failures);
-    try std.testing.expect(state.due(2_000 + debounce_ns));
-
-    var disabled: CheckpointWriter = .{};
-    disabled.noteChange(5);
-    try std.testing.expect(!disabled.dirty);
-}
-
-fn testingWrite() !OwnedWrite {
-    return .{
-        .allocator = std.testing.allocator,
-        .job = .{ .io = std.testing.io, .path = "/unused", .buffer = try std.testing.allocator.alloc(u8, 1), .len = 1 },
-    };
-}
-
-test "checkpoint startup failure releases ownership once and permits retry" {
-    var state: CheckpointWriter = .{ .path = "/unused", .dirty = true };
-    var scheduler: TestingScheduler = .{ .fail = true };
-    try std.testing.expectError(error.SchedulerUnavailable, state.startWrite(try testingWrite(), &scheduler));
-    try std.testing.expect(state.pending == null);
-    try std.testing.expect(state.dirty);
-    try std.testing.expectEqual(@as(u64, 1), state.failures);
-    state.completeWrite(error.SchedulerUnavailable);
-    try std.testing.expectEqual(@as(u64, 1), state.failures);
-
-    scheduler.fail = false;
-    try state.startWrite(try testingWrite(), &scheduler);
-    state.completeWrite({});
-    try std.testing.expect(!state.dirty);
-    try std.testing.expectEqual(@as(u64, 1), state.writes);
-}
-
-test "writeFile replaces the checkpoint atomically and keeps it private" {
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const root = root_buffer[0..try temp.dir.realPath(std.testing.io, &root_buffer)];
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try std.fmt.bufPrint(&path_buffer, "{s}/session.ckpt", .{root});
-    var payload = "first".*;
-
-    try writeFile(.{ .io = std.testing.io, .path = path, .buffer = &payload, .len = payload.len });
-    var second = "second!".*;
-    try writeFile(.{ .io = std.testing.io, .path = path, .buffer = &second, .len = second.len });
-
-    const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .limited(64));
-    defer std.testing.allocator.free(written);
-    try std.testing.expectEqualStrings("second!", written);
-    const stat = try std.Io.Dir.cwd().statFile(std.testing.io, path, .{ .follow_symlinks = false });
-    try std.testing.expectEqual(@as(u32, 0o600), stat.permissions.toMode() & 0o777);
-}
-
-test "a checkpoint as large as one write produces reads back whole" {
-    const gpa = std.testing.allocator;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const root = root_buffer[0..try temp.dir.realPath(std.testing.io, &root_buffer)];
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try std.fmt.bufPrint(&path_buffer, "{s}/session.ckpt", .{root});
-    const payload = try gpa.alloc(u8, snapshot_bytes);
-    defer gpa.free(payload);
-    @memset(payload, 'x');
-
-    try writeFile(.{ .io = std.testing.io, .path = path, .buffer = payload, .len = payload.len });
-    const read = try readFile(std.testing.io, gpa, path);
-    defer gpa.free(read);
-    try std.testing.expectEqual(snapshot_bytes, read.len);
-}
-
-test "checkpoint pane records fit the bounded restore storage before model" {
-    var buffer: [16384]u8 = undefined;
-    for ([_]usize{ PaneStore.capacity, PaneStore.capacity + 1 }) |count| {
-        var encoder = try PersistenceEncoder.init(&buffer, .{
-            .next_workspace_id = 2,
-            .next_tab_id = 2,
-            .next_pane_id = count + 1,
-            .next_pane_generation = count + 1,
-        });
-        for (0..count) |index| {
-            try encoder.pane(.{
-                .pane_id = index + 1,
-                .workspace_id = 1,
-                .tab_id = 1,
-                .cwd = "/",
-                .cols = 80,
-                .rows = 24,
-                .arguments = "/bin/sh\x00",
-                .argument_count = 1,
-            });
-        }
-
-        const bytes = try encoder.finish();
-        if (count <= PaneStore.capacity) {
-            try validate(bytes);
-        } else {
-            try std.testing.expectError(error.InvalidCheckpoint, validate(bytes));
-        }
-    }
-}
-
-const TestingScheduler = struct {
-    fail: bool = false,
-
-    // The signature implements std.Io.Select.concurrent for failure injection.
-    // codestyle: allow(maximum-parameter-count)
-    pub fn concurrent(self: *TestingScheduler, tag: anytype, function: anytype, args: anytype) !void {
-        _ = tag;
-        _ = function;
-        _ = args;
-        if (self.fail) {
-            return error.SchedulerUnavailable;
-        }
-    }
-};

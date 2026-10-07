@@ -58,29 +58,6 @@ pub fn splitBottom(self: Rect, rows: u16) [2]Rect {
     };
 }
 
-/// The overlap of two rectangles, empty if they do not touch.
-///
-/// Nested clips intersect rather than replace: a widget that pushes a clip
-/// bigger than its parent's would otherwise draw straight out of the box
-/// it was handed, which is the escape hatch clipping exists to close.
-pub fn intersect(self: Rect, b: Rect) Rect {
-    const x = @max(self.x, b.x);
-    const y = @max(self.y, b.y);
-    const right = @min(@as(u32, self.x) + self.w, @as(u32, b.x) + b.w);
-    const bottom = @min(@as(u32, self.y) + self.h, @as(u32, b.y) + b.h);
-    if (right <= x or bottom <= y) {
-        return .{ .x = x, .y = y };
-    }
-    // The overlap starts at a u16 corner and each edge is bounded by one
-    // input's width, so the differences fit u16 again.
-    return .{
-        .x = x,
-        .y = y,
-        .w = @intCast(right - x),
-        .h = @intCast(bottom - y),
-    };
-}
-
 pub fn isEmpty(self: Rect) bool {
     return self.w == 0 or self.h == 0;
 }

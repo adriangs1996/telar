@@ -1,6 +1,5 @@
 const core = @import("telar-core");
 const AgentKey = @import("AgentKey.zig");
-const AgentInput = @This();
 
 key: AgentKey,
 session_id: [16]u8 = @splat(0),

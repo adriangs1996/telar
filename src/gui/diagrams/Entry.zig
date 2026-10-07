@@ -3,6 +3,7 @@ const mermaid = @import("mermaid");
 const view = @import("view.zig");
 source: ?[]u8 = null,
 owner: u64 = 0,
+// SAFETY: Store assigns theme together with source; empty cache slots are skipped before theme comparisons or jobs.
 theme: mermaid.Theme = undefined,
 scale: f32 = 1,
 id: u64 = 0,

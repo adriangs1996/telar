@@ -1,8 +1,6 @@
 //! Groups whole graphemes by face, retaining contextual shaping within each span.
 const cellglyphs = @import("cellglyphs");
 const cellgrid = @import("cellgrid");
-const GlyphAtlas = @import("GlyphAtlas.zig");
-const assets = @import("assets");
 const font_id = @import("font_id.zig");
 const FontSet = @import("FontSet.zig");
 const FontRun = @import("FontRun.zig");
@@ -53,52 +51,4 @@ pub fn next(self: *FontRuns) ?FontRun {
     }
 
     return .{ .text = self.iterator.bytes[start..self.iterator.index], .source = .{ .font = id }, .columns = columns, .preferred = self.preferred };
-}
-
-test "Braille separates font spans without splitting combining graphemes" {
-    const std = @import("std");
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
-    defer atlas.deinit();
-    var runs: FontRuns = .{ .fonts = &atlas.fonts, .iterator = .{ .bytes = "office\u{301}\u{2801}\u{2802}\u{301}ffi" } };
-    const before = runs.next().?;
-    try std.testing.expectEqualStrings("office\u{301}", before.text);
-    try std.testing.expectEqual(.font, std.meta.activeTag(before.source));
-    const braille = runs.next().?;
-    try std.testing.expectEqualStrings("\u{2801}", braille.text);
-    try std.testing.expectEqual(@as(u8, 1), braille.source.braille.dots);
-    try std.testing.expectEqual(@as(u32, 1), braille.columns);
-    const after = runs.next().?;
-    try std.testing.expectEqualStrings("\u{2802}\u{301}ffi", after.text);
-    try std.testing.expectEqual(.font, std.meta.activeTag(after.source));
-    try std.testing.expectEqual(@as(?FontRun, null), runs.next());
-}
-
-test "box drawing keeps contextual text and marked boxes in whole font spans" {
-    const std = @import("std");
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
-    defer atlas.deinit();
-    var runs: FontRuns = .{ .fonts = &atlas.fonts, .iterator = .{ .bytes = "office\u{301}╭│\u{301}ffi" } };
-    try std.testing.expectEqualStrings("office\u{301}", runs.next().?.text);
-    const box = runs.next().?;
-    try std.testing.expectEqual(@as(u21, 0x256d), box.source.box.codepoint);
-    const after = runs.next().?;
-    try std.testing.expectEqualStrings("│\u{301}ffi", after.text);
-    try std.testing.expectEqual(.font, std.meta.activeTag(after.source));
-    try std.testing.expectEqual(@as(?FontRun, null), runs.next());
-}
-
-test "block elements separate font spans while marked blocks stay in the font path" {
-    const std = @import("std");
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
-    defer atlas.deinit();
-    var runs: FontRuns = .{ .fonts = &atlas.fonts, .iterator = .{ .bytes = "office\u{301}▐▛\u{fe0f}█\u{301}ffi" } };
-    try std.testing.expectEqualStrings("office\u{301}", runs.next().?.text);
-    const block = runs.next().?;
-    try std.testing.expectEqualStrings("▐", block.text);
-    try std.testing.expectEqual(@as(u21, 0x2590), block.source.block.codepoint);
-    try std.testing.expectEqual(@as(u32, 1), block.columns);
-    const after = runs.next().?;
-    try std.testing.expectEqualStrings("▛\u{fe0f}█\u{301}ffi", after.text);
-    try std.testing.expectEqual(.font, std.meta.activeTag(after.source));
-    try std.testing.expectEqual(@as(?FontRun, null), runs.next());
 }

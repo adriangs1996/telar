@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A Linux desktop machine under QEMU for testing Telar on any host.
 
-Usage: tools/vm/vm.py up|start|stop|status|shell|exec|sync|build|test|run|screenshot
+Usage: tools/vm/vm.py up|start|stop|status|shell|exec|sync|build|run|screenshot
 """
 import hashlib
 import http.server
@@ -438,9 +438,9 @@ def main():
         print(f"{NAME}: {'running, pid ' + str(pid) if pid else 'stopped'}; state in {STATE}")
     elif command == "sync":
         sync()
-    elif command in ("build", "test"):
+    elif command == "build":
         sync()
-        build(*(["test"] if command == "test" else []), *args)
+        build(*args)
     elif command == "run":
         sync()
         build()
@@ -464,8 +464,8 @@ exec ./zig-out/bin/telar "$@"
         gui_smoke(args[0] if args else STATE / "gui-smoke.png")
     else:
         print("Usage: tools/vm/vm.py COMMAND [--display] [ARGS]")
-        print("Commands: up, start, stop, status, shell, exec, sync, build, test, run, stop-runtime, screenshot, gui-smoke")
-        print("build/test/run sync first. Sync replaces guest source changes; edit on the host.")
+        print("Commands: up, start, stop, status, shell, exec, sync, build, run, stop-runtime, screenshot, gui-smoke")
+        print("build/run sync first. Sync replaces guest source changes; edit on the host.")
         if command != "help":
             raise SystemExit(2)
 

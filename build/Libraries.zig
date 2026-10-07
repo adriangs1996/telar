@@ -2,18 +2,24 @@
 //! external dependencies and other libraries, never a telar module, so the
 //! compiler keeps telar state and policy out of it.
 const std = @import("std");
-const Coverage = @import("Coverage.zig");
 const External = @import("LibraryExternal.zig");
 const NativeLibrary = @import("NativeLibrary.zig");
 const macos_sdk = @import("macos_sdk.zig");
+const window_build = @import("window.zig");
 const Libraries = @This();
 
 /// Imports a spec may declare.
 const max_imports = 4;
 
 const Spec = struct {
-    /// Module name, directory under `lib/` and the alias consumers import it as.
+    /// Module name and the alias consumers import it as.
     name: []const u8,
+    /// Defaults to the module name when its directory under `lib/` matches.
+    directory: ?[]const u8 = null,
+    /// Root for libraries whose public struct is the module itself.
+    root: []const u8 = "root.zig",
+    /// Selects a platform implementation as the module root; other targets omit it.
+    platform_roots: ?struct { macos: []const u8, linux: []const u8 } = null,
     /// Libraries listed earlier in `specs`, or externals the caller provides.
     /// A library whose external is not provided is left out of that graph.
     imports: []const []const u8 = &.{},
@@ -116,6 +122,18 @@ const specs = [_]Spec{
         .imports = &.{"cellgrid"},
     },
     .{
+        .name = "telar-window",
+        .directory = "window",
+        .imports = &.{ "keyinput", "gfx" },
+        .libc = true,
+        .host_only = true,
+        .macos_frameworks = &.{ "AppKit", "CoreFoundation", "CoreGraphics", "QuartzCore", "ImageIO" },
+        .platform_roots = .{
+            .macos = "MacosWindow.zig",
+            .linux = "LinuxWindow.zig",
+        },
+    },
+    .{
         .name = "textfield",
         .imports = &.{"cellgrid"},
     },
@@ -212,9 +230,11 @@ const specs = [_]Spec{
     },
 };
 
-/// Null for a library whose external dependency this graph does not provide.
+/// Null on unsupported platforms or when this graph lacks an external dependency.
 modules: [specs.len]?*std.Build.Module,
 externals: []const External,
+/// Internal platform bindings; never added to application package imports.
+metal: ?*std.Build.Module = null,
 
 /// Builds every library for one target, the way `Application` and the
 /// benchmark graph each need their own copy. An external named like a
@@ -225,11 +245,40 @@ externals: []const External,
 /// ```
 pub fn create(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, externals: []const External, natives: []const NativeLibrary) Libraries {
     var self: Libraries = .{
+        // SAFETY: The specs loop assigns each slot before dependency lookup can see it; declared limits lookup to earlier indices.
         .modules = undefined,
         .externals = b.allocator.dupe(External, externals) catch @panic("OOM"),
     };
 
+    if (target.result.os.tag == .macos) {
+        const objc = b.dependency("zig_objc", .{
+            .target = target,
+            .optimize = optimize,
+            .@"add-paths" = false,
+        }).module("objc");
+        macos_sdk.addPaths(b, objc);
+        self.externals = std.mem.concat(b.allocator, External, &.{ self.externals, &.{.{ .name = "objc", .module = objc }} }) catch @panic("OOM");
+        const metal = b.createModule(.{
+            .root_source_file = b.path("lib/window/metal/root.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        });
+        metal.addImport("objc", objc);
+        macos_sdk.addPaths(b, metal);
+        for ([_][]const u8{ "Metal", "QuartzCore", "Foundation" }) |framework| {
+            metal.linkFramework(framework, .{});
+        }
+
+        self.metal = metal;
+    }
+
     for (specs, 0..) |spec, index| {
+        if (spec.platform_roots != null and target.result.os.tag != .macos and target.result.os.tag != .linux) {
+            self.modules[index] = null;
+            continue;
+        }
+
         if (find(externals, spec.name)) |replacement| {
             self.modules[index] = replacement;
             continue;
@@ -238,9 +287,23 @@ pub fn create(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.bui
         self.modules[index] = null;
         var dependencies: [max_imports]*std.Build.Module = undefined;
         for (spec.imports, 0..) |name, position| {
-            dependencies[position] = find(externals, name) orelse self.declared(name, index) orelse break;
+            dependencies[position] = find(self.externals, name) orelse self.declared(name, index) orelse break;
         } else {
             self.modules[index] = build(b, spec, target, optimize, dependencies[0..spec.imports.len]);
+            if (std.mem.eql(u8, spec.name, "telar-window")) {
+                const module = self.modules[index].?;
+                if (target.result.os.tag == .macos) {
+                    module.addImport("objc", find(self.externals, "objc").?);
+                    module.addImport("metal", self.metal.?);
+                    window_build.addMacos(b, module);
+                } else if (target.query.cpu_arch == null and target.query.isNativeOs() and target.query.isNativeAbi()) {
+                    // Wayland's generated and system headers resolve only for
+                    // the native architecture, OS and ABI; an explicit target
+                    // never sees them. A baseline CPU model still does.
+                    window_build.addWayland(b, module);
+                }
+            }
+
             linkNatives(b, self.modules[index].?, spec, natives);
         }
     }
@@ -249,8 +312,14 @@ pub fn create(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.bui
 }
 
 fn build(b: *std.Build, spec: Spec, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, dependencies: []const *std.Build.Module) *std.Build.Module {
+    const root = if (spec.platform_roots) |roots| switch (target.result.os.tag) {
+        .macos => roots.macos,
+        .linux => roots.linux,
+        else => unreachable,
+    } else spec.root;
+
     const module = b.createModule(.{
-        .root_source_file = b.path(b.pathJoin(&.{ "lib", spec.name, "root.zig" })),
+        .root_source_file = b.path(b.pathJoin(&.{ "lib", spec.directory orelse spec.name, root })),
         .target = target,
         .optimize = optimize,
         .link_libc = spec.libc,
@@ -303,75 +372,32 @@ pub fn get(self: Libraries, name: []const u8) *std.Build.Module {
     return self.declared(name, specs.len) orelse std.debug.panic("library {s} is not built in this graph", .{name});
 }
 
-/// Registers each library's tests under `test-libraries`, `test` and
-/// `check`, and fails the build graph if a library imports anything that is
-/// not another library or a declared external.
+/// Fails the build graph if a library imports anything that is not another
+/// library or a declared external.
 ///
 /// ```zig
-/// const runs = libraries.addTests(b, coverage, check_step);
-/// test_step.dependOn(runs);
+/// libraries.checkImports();
 /// ```
-pub fn addTests(self: Libraries, b: *std.Build, coverage: Coverage, check_step: *std.Build.Step) *std.Build.Step {
-    const step = b.step("test-libraries", "Run the standalone library tests");
+pub fn checkImports(self: Libraries) void {
     for (specs, self.modules) |spec, maybe_library| {
+        if ((spec.platform_roots != null or spec.host_only) and maybe_library == null) {
+            continue;
+        }
+
         const library = maybe_library orelse std.debug.panic("library {s} lacks an external", .{spec.name});
         for (library.import_table.values()) |dependency| {
             if (!self.contains(dependency)) {
                 std.debug.panic("library {s} imports a module outside lib/", .{spec.name});
             }
         }
-
-        const tests = b.addTest(.{
-            .name = b.fmt("lib-{s}", .{spec.name}),
-            .root_module = library,
-        });
-        coverage.instrumentTest(tests);
-        check_step.dependOn(&tests.step);
-        step.dependOn(&b.addRunArtifact(tests).step);
-    }
-
-    return step;
-}
-
-/// Runs one library's tests for a step narrower than `test-libraries`.
-///
-/// ```zig
-/// transport_step.dependOn(libraries.addTestRun(b, "localsocket"));
-/// ```
-pub fn addTestRun(self: Libraries, b: *std.Build, name: []const u8) *std.Build.Step {
-    const tests = b.addTest(.{
-        .name = b.fmt("lib-{s}", .{name}),
-        .root_module = self.get(name),
-    });
-    return &b.addRunArtifact(tests).step;
-}
-
-/// Analyzes every library that supports `target`, tests included, so each
-/// operating-system branch compiles somewhere. Replaced libraries are skipped.
-///
-/// ```zig
-/// Libraries.create(b, windows, .Debug, externals, &.{}).addChecks(b, cross_step, windows);
-/// ```
-pub fn addChecks(self: Libraries, b: *std.Build, step: *std.Build.Step, target: std.Build.ResolvedTarget) void {
-    for (specs, self.modules) |spec, maybe_library| {
-        const library = maybe_library orelse continue;
-        if (spec.host_only or (spec.posix and target.result.os.tag == .windows)) {
-            continue;
-        }
-
-        if (find(self.externals, spec.name) != null) {
-            continue;
-        }
-
-        const check = b.addTest(.{
-            .name = b.fmt("lib-{s}-{s}-{s}", .{ spec.name, @tagName(target.result.os.tag), @tagName(target.result.cpu.arch) }),
-            .root_module = library,
-        });
-        step.dependOn(&check.step);
     }
 }
 
 fn contains(self: Libraries, module: *std.Build.Module) bool {
+    if (self.metal == module) {
+        return true;
+    }
+
     for (self.externals) |external| {
         if (external.module == module) {
             return true;

@@ -468,7 +468,8 @@ pub fn Type(comptime Delivery: type) type {
         pub fn clearPane(self: *Self, pane_id: core.PaneId) void {
             self.clearPaneData(pane_id, false);
             self.removeRevision(pane_id);
-            self.setPaneVisible(pane_id, true) catch {};
+            // clearPaneData removed every placement and marked damage already.
+            _ = self.hidden_panes.remove(pane_id);
         }
 
         fn clearPaneData(self: *Self, pane_id: core.PaneId, release_credit: bool) void {
@@ -809,6 +810,7 @@ const PixelAllocation = struct {
 };
 
 const SharedPixels = struct {
+    // SAFETY: Owned names are filled and terminated by bufPrintZ before len is published; adopted mappings have linked=false and never call sliceZ.
     name: [64]u8 = undefined,
     len: u8,
     /// Whether this store still owns the name: an object it created keeps

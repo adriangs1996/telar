@@ -1,9 +1,10 @@
+const Window = @import("telar-window");
 const PointerSample = @import("input/PointerSample.zig");
-const KeyInput = @import("input/KeyInput.zig");
+const KeyInput = @FieldType(Window.Input, "key");
 const TextCommit = @import("input/TextCommit.zig");
 const PasteChunk = @import("PasteChunk.zig");
 const ScrollSample = @import("input/ScrollSample.zig");
-const Composition = @import("input/Composition.zig");
+const Composition = @FieldType(Window.Input, "composition");
 const HeldText = @import("input/HeldText.zig");
 
 pub const Admission = enum { accepted, recovery };

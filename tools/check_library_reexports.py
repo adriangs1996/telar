@@ -20,11 +20,15 @@ SOURCE_ROOTS = ("src", "benchmarks")
 
 def libraries(root):
     folder = root / "lib"
-    return {p.name for p in folder.iterdir() if (p / "root.zig").is_file()} if folder.is_dir() else set()
+    return {p.name for p in folder.iterdir() if p.is_dir() and any(p.glob("*.zig"))} if folder.is_dir() else set()
 
 
 def library_aliases(text, names):
-    aliases = {m.group(1) for m in IMPORT.finditer(text) if m.group(2) in names}
+    aliases = {
+        m.group(1)
+        for m in IMPORT.finditer(text)
+        if m.group(2) in names or m.group(2).removeprefix("telar-") in names
+    }
     grown = True
     while grown:
         grown = False

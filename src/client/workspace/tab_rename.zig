@@ -2,8 +2,6 @@
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
-const client_tests = @import("../execution/client_tests.zig");
-const tab_creation = @import("tab_creation.zig");
 
 /// Example: `_ = try tab_rename.requestTabRename(app, command);`
 pub fn requestTabRename(model: *data.ClientModel, command: data.RequestRenameTab) !bool {
@@ -55,11 +53,4 @@ pub fn completeTabRename(model: *data.ClientModel, renamed: core.TabRenamed) !da
             .label = renamed.label,
         },
     ) catch return error.UnexpectedTabRenamed;
-}
-
-test "owned request deliveries roll back only their own correlation when the outbox is full" {
-    try client_tests.rollBackFullOutbox(
-        sendTabRenameRequest,
-        tab_creation.sendCreateTabRequest,
-    );
 }

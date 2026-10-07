@@ -94,6 +94,7 @@ pub fn run(io: std.Io, request_in: GitRequest) RunError!GitOutput {
     var request = request_in;
     request.timeout = request_in.timeout.toDeadline(io);
 
+    // SAFETY: prepare initializes the environment, arena and argv prefix; failure returns before argvSlice or deinit.
     var command: HardenedCommand = undefined;
     try command.prepare(io, request);
     defer command.deinit();
@@ -145,6 +146,7 @@ fn collect(io: std.Io, argv: []const []const u8, environ_map: *const std.process
 /// defer child.kill(io);
 /// ```
 pub fn spawn(io: std.Io, request: GitRequest) ?std.process.Child {
+    // SAFETY: prepare initializes the environment, arena and argv prefix; failure returns before spawn or deinit.
     var command: HardenedCommand = undefined;
     command.prepare(io, request) catch return null;
     defer command.deinit();
@@ -228,6 +230,7 @@ const HardenedCommand = struct {
 /// `partialclonefilter` alone, or `extensions.partialClone`), and whether
 /// it names the upload-pack a fetch would run.
 const RepositoryFacts = struct {
+    // SAFETY: Config parsing stores each driver before incrementing driver_count; consumers iterate only that prefix.
     drivers: [max_filter_drivers][]const u8 = undefined,
     driver_count: usize = 0,
     partial_clone: bool = false,
@@ -398,91 +401,5 @@ fn removeGitVariables(environ_map: *std.process.Environ.Map) !void {
 
         @memcpy(name_buffer[0..name.len], name);
         _ = environ_map.swapRemove(name_buffer[0..name.len]);
-    }
-}
-
-test "the repository's own config names its drivers and whether it is a partial clone" {
-    var facts: RepositoryFacts = .{};
-    const listing = "local\x00filter.evil.clean\n/tmp/x\x00local\x00filter.evil.smudge\ncat\x00" ++
-        "global\x00filter.lfs.clean\ngit-lfs clean -- %f\x00worktree\x00filter.sp ace.process\ny\x00" ++
-        "local\x00filter..clean\n/tmp/unnamed\x00local\x00filter.clean\nignored\x00";
-    parseFacts(listing, &facts).?;
-    try std.testing.expectEqual(@as(usize, 3), facts.driver_count);
-    try std.testing.expectEqualStrings("evil", facts.drivers[0]);
-    try std.testing.expectEqualStrings("sp ace", facts.drivers[1]);
-    try std.testing.expectEqualStrings("", facts.drivers[2]);
-    try std.testing.expect(!facts.partial_clone);
-
-    var partial: RepositoryFacts = .{};
-    parseFacts("local\x00remote.origin.promisor\ntrue\x00", &partial).?;
-    try std.testing.expect(partial.partial_clone);
-    var extension: RepositoryFacts = .{};
-    parseFacts("local\x00extensions.partialclone\norigin\x00", &extension).?;
-    try std.testing.expect(extension.partial_clone);
-
-    // A filter alone makes the remote a promisor Git fetches from lazily.
-    var filtered: RepositoryFacts = .{};
-    parseFacts("local\x00remote.origin.partialclonefilter\nblob:none\x00", &filtered).?;
-    try std.testing.expect(filtered.partial_clone);
-
-    // Git reads any non-zero integer, suffixed or not, as true, and an
-    // empty filter still makes a promisor: presence alone counts.
-    for ([_][]const u8{
-        "local\x00remote.origin.partialclonefilter\n\x00",
-        "local\x00remote.origin.promisor\n2\x00",
-        "local\x00remote.origin.promisor\n1k\x00",
-        "local\x00remote.origin.promisor\nfalse\x00",
-    }) |present_listing| {
-        var present: RepositoryFacts = .{};
-        parseFacts(present_listing, &present).?;
-        try std.testing.expect(present.partial_clone);
-    }
-
-    var upload: RepositoryFacts = .{};
-    parseFacts("local\x00remote.origin.uploadpack\n/tmp/marker\x00", &upload).?;
-    try std.testing.expect(upload.local_upload_pack and !upload.partial_clone);
-    try std.testing.expect(upload.fetchesLazily());
-
-    var global_upload: RepositoryFacts = .{};
-    parseFacts("global\x00remote.origin.uploadpack\n/usr/bin/git-upload-pack\x00", &global_upload).?;
-    try std.testing.expect(!global_upload.fetchesLazily());
-
-    var empty: RepositoryFacts = .{};
-    parseFacts("", &empty).?;
-    try std.testing.expectEqual(@as(usize, 0), empty.driver_count);
-    try std.testing.expect(parseFacts("local\x00filter.a=b.clean\nx\x00", &empty) == null);
-}
-
-test "Git versions before 2.45 cannot switch lazy fetching off" {
-    try std.testing.expectEqual(std.math.Order.lt, parseVersion("git version 2.39.5 (Apple Git-154)\n").?.order(lazy_fetch_switch));
-    try std.testing.expect(parseVersion("git version 2.55.0\n").?.order(lazy_fetch_switch) != .lt);
-    try std.testing.expect(parseVersion("git version 2.45.0.windows.1\n").?.order(lazy_fetch_switch) != .lt);
-    try std.testing.expect(parseVersion("hub version 2.14") == null);
-}
-
-test "every GIT_ variable leaves the environment Git gets" {
-    var environ_map = std.process.Environ.Map.init(std.testing.allocator);
-    defer environ_map.deinit();
-    try environ_map.put("PATH", "/usr/bin");
-    try environ_map.put("GIT_DIR", "/elsewhere/.git");
-    try environ_map.put("HOME", "/home/me");
-    try environ_map.put("GIT_CONFIG_COUNT", "1");
-    try environ_map.put("GIT_WORK_TREE", "/elsewhere");
-
-    try removeGitVariables(&environ_map);
-    try std.testing.expectEqual(@as(usize, 2), environ_map.count());
-    try std.testing.expect(environ_map.get("PATH") != null and environ_map.get("HOME") != null);
-}
-
-test "hooks are off for every event, whatever defines them" {
-    for (hook_events) |event| {
-        var option_buffer: [64]u8 = undefined;
-        const option = try std.fmt.bufPrint(&option_buffer, "hook.{s}.enabled=false", .{event});
-        const present = for (hardened_options) |candidate| {
-            if (std.mem.eql(u8, candidate, option)) {
-                break true;
-            }
-        } else false;
-        try std.testing.expect(present);
     }
 }

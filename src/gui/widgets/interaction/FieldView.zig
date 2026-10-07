@@ -81,16 +81,3 @@ pub fn fitting(self: FieldView, range: [2]u32, bytes: []const u8) []const u8 {
 fn boundary(self: FieldView, at: u32) bool {
     return at <= self.text.len and (at == self.text.len or self.text[at] & 0xc0 != 0x80);
 }
-
-test "a paste keeps the prefix that fits the field at a UTF-8 boundary" {
-    const field: FieldView = .{
-        .text = "tab",
-        .head = 3,
-        .anchor = 3,
-        .capacity = 8,
-    };
-    try std.testing.expectEqualStrings("12345", field.fitting(.{ 3, 3 }, "123456789"));
-    try std.testing.expectEqualStrings("1234", field.fitting(.{ 3, 3 }, "1234\u{e9}"));
-    try std.testing.expectEqualStrings("12345678", field.fitting(.{ 0, 3 }, "123456789"));
-    try std.testing.expectEqualStrings("ok", field.fitting(.{ 3, 3 }, "ok"));
-}

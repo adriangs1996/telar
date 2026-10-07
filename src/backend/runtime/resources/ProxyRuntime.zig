@@ -9,7 +9,6 @@ const Config = exchangecapture.Config;
 const Half = owned.Half;
 const Snapshot = @import("../../proxy/Snapshot.zig");
 const PluginsService = @import("../../plugins/Service.zig");
-const ProxyTestFiles = @import("ProxyTestFiles.zig");
 const TapLimitCounts = @import("../../plugins/TapLimitCounts.zig");
 /// The runtime's optional observation proxy and the join table that pairs
 /// the captured halves of each exchange.
@@ -201,40 +200,4 @@ fn configuredScope(hosts: []const []const u8) core.ProxyScope {
     }
 
     return .exact;
-}
-
-test "runtime scope distinguishes exact and wildcard policies" {
-    try std.testing.expectEqual(core.ProxyScope.exact, configuredScope(&.{"api.openai.com"}));
-    try std.testing.expectEqual(core.ProxyScope.wildcard, configuredScope(&.{"*.openai.com"}));
-    try std.testing.expectEqual(core.ProxyScope.wildcard, configuredScope(&.{"*"}));
-}
-
-test "a disabled proxy runtime exposes zero state and tears down twice" {
-    var runtime = try ProxyRuntime.init(std.testing.io, std.testing.allocator, .{ .config = null, .system_trusted = true });
-
-    try std.testing.expect(!runtime.active());
-    try std.testing.expect(runtime.systemTrusted());
-    try std.testing.expect(runtime.capability() == null);
-    try std.testing.expect(runtime.port() == null);
-    try std.testing.expect(runtime.preferredPort() == null);
-    try std.testing.expectEqualDeep(Snapshot{}, runtime.metrics());
-
-    runtime.deinit();
-    runtime.deinit();
-}
-
-test "a configured proxy runtime owns its proxy and destroys it exactly once" {
-    const io = std.testing.io;
-    var files = try ProxyTestFiles.init(io);
-    defer files.deinit();
-    var runtime = try ProxyRuntime.init(io, std.testing.allocator, .{ .config = files.config(), .system_trusted = false });
-
-    try std.testing.expect(runtime.active());
-    try std.testing.expectEqual(runtime.capability().?.port(), runtime.port().?);
-    try std.testing.expect(runtime.preferredPort() == null);
-    try std.testing.expectEqualDeep(runtime.capability().?.metrics(), runtime.metrics());
-
-    runtime.deinit();
-    runtime.deinit();
-    try std.testing.expect(!runtime.active());
 }

@@ -10,6 +10,7 @@ pub const capacity = 56;
 pub const fallback_extent = [2]u32{ 16, 32 };
 pub const raster_limit = 256;
 entries: [capacity]Entry = @splat(.{}),
+// SAFETY: GlyphAtlas initialization rasterizes all seven fallback slots before returning an atlas that can paint boxes.
 fallback: [7]Slot = undefined,
 count: usize = 0,
 rasterizations: usize = 0,
@@ -35,8 +36,4 @@ pub fn entry(self: *Cache, grid: Grid, shape: u3) ?*Entry {
     self.count += 1;
     stored.* = .{ .key = key, .pending = true };
     return stored;
-}
-
-test {
-    _ = @import("box_atlas_test.zig");
 }

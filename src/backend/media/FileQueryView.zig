@@ -4,8 +4,6 @@
 /// ```zig
 /// pub fn observeFileQuery(sink: *Sink, query: FileQueryView) bool
 /// ```
-const FileQueryView = @This();
-
 bytes: []const u8,
 encoded_path: []const u8,
 image_id: u32,

@@ -8,26 +8,34 @@ key: data.AgentKey,
 session_id: [16]u8 = @splat(0),
 location: core.TabLocation,
 pane_index: u16,
+// SAFETY: init copies the workspace label before publishing its length; presentation reads only workspace_label_len bytes.
 workspace_label: [core.max_agent_workspace_label_bytes]u8 = undefined,
 workspace_label_len: u8 = 0,
+// SAFETY: init copies the tab label before publishing its length; presentation reads only tab_label_len bytes.
 tab_label: [core.max_tab_label_bytes]u8 = undefined,
 tab_label_len: u8 = 0,
+// SAFETY: init copies the session title before publishing its length; presentation reads only session_title_len bytes.
 session_title: [core.max_agent_session_title_bytes]u8 = undefined,
 session_title_len: u8 = 0,
 title_source: core.AgentTitleSource,
 title_state: core.AgentTitleState,
+// SAFETY: init copies the working directory label before publishing its length; presentation reads only cwd_label_len bytes.
 cwd_label: [core.max_agent_cwd_label_bytes]u8 = undefined,
 cwd_label_len: u8 = 0,
+// SAFETY: init copies the provider name before publishing its length; providerName reads only that prefix or returns a literal fallback.
 provider_name: [core.max_agent_provider_name_bytes]u8 = undefined,
 provider_name_len: u8 = 0,
+// SAFETY: init copies the display name before publishing its length; displayName reads only that prefix or returns a literal fallback.
 display_name: [core.max_agent_display_name_bytes]u8 = undefined,
 display_name_len: u8 = 0,
+// SAFETY: init copies the icon before publishing icon_len; iconGlyph exposes only that prefix.
 icon: [core.max_agent_icon_bytes]u8 = undefined,
 icon_len: u8 = 0,
 attachments: core.AgentAttachmentMarkers,
 provider: core.AgentProvider,
 status: core.AgentStatus,
 blocked_reason: core.AgentBlockedReason,
+// SAFETY: init copies the event text before publishing last_event_len; lastEvent exposes only that prefix.
 last_event: [core.max_agent_last_event_bytes]u8 = undefined,
 last_event_len: u8 = 0,
 /// Seconds the status had held when the runtime encoded this revision.
@@ -36,10 +44,12 @@ status_age_s: u32,
 work_tree: core.WorktreeId = .invalid,
 /// The agent's final answer as the runtime sent it, lines kept; a task
 /// card shows its first line.
+// SAFETY: init copies the bounded final message before publishing its length; finalMessage and finalLine read only that prefix.
 final_message: [max_final_message_bytes]u8 = undefined,
 final_message_len: u16 = 0,
 plan_done: u16 = 0,
 plan_total: u16 = 0,
+// SAFETY: init copies the plan step before publishing plan_step_len; planStep exposes only that prefix.
 plan_step: [core.max_agent_plan_step_bytes]u8 = undefined,
 plan_step_len: u8 = 0,
 

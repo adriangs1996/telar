@@ -5,7 +5,6 @@ const core = @import("telar-core");
 const pty = @import("pty");
 const std = @import("std");
 const ControlAgent = @import("ControlAgent.zig");
-const Snapshot = @import("Snapshot.zig");
 
 /// Reads the pane identity the runtime injected into this process.
 ///
@@ -215,63 +214,4 @@ pub fn copyBounded(storage: []u8, value: []const u8) u8 {
     const len = @min(storage.len, value.len);
     @memcpy(storage[0..len], value[0..len]);
     return @intCast(len);
-}
-
-test "json strings escape quotes, backslashes and control bytes" {
-    var buffer: [64]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&buffer);
-
-    try writeJsonString(&writer, "a\"b\\c\nd\x01");
-
-    try std.testing.expectEqualStrings("\"a\\\"b\\\\c\\nd\\u0001\"", writer.buffered());
-}
-
-test "snapshot resolution prefers exact pane ids and rejects ambiguous titles" {
-    var snapshot: Snapshot = .{};
-    snapshot.entries[0] = ControlAgent.fromEntry(.{
-        .pane_id = try core.pane(7),
-        .pane_generation = 2,
-        .process_id = 1,
-        .session_id = .{0} ** 16,
-        .session_title = "Investigate proxy",
-        .provider = .claude,
-        .status = .done,
-        .source = .lifecycle_report,
-        .authority = .active,
-        .confidence = 90,
-        .sequence = 1,
-        .observed_at_ms = 0,
-        .expires_at_ms = 0,
-    });
-    snapshot.entries[1] = snapshot.entries[0];
-    snapshot.entries[1].pane_id = 8;
-    snapshot.count = 2;
-
-    try std.testing.expectEqual(@as(u64, 8), (try snapshot.resolve(.{ .pane = 8 }, .empty)).?.pane_id);
-    try std.testing.expect(try snapshot.resolve(.{ .pane = 9 }, .empty) == null);
-    try std.testing.expectError(error.AmbiguousAgentName, snapshot.resolve(.{ .name = "investigate PROXY" }, .empty));
-    try std.testing.expectError(error.NotInsideTelarPane, snapshot.resolve(.current, .empty));
-
-    snapshot.count = 1;
-    try std.testing.expectEqual(@as(u64, 7), (try snapshot.resolve(.{ .name = "investigate PROXY" }, .empty)).?.pane_id);
-}
-
-test "agent JSON exposes the same pane session identity coordinator references use" {
-    const agent: ControlAgent = .{
-        .pane_id = 7,
-        .pane_generation = 3,
-        .session_id = .{1} ** 16,
-        .workspace_id = 1,
-        .tab_id = 1,
-        .pane_index = 1,
-        .provider = .codex,
-        .status = .working,
-    };
-    var buffer: [1024]u8 = undefined;
-    var writer: std.Io.Writer = .fixed(&buffer);
-    try writeAgentJson(&writer, &agent);
-    const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, writer.buffered(), .{});
-    defer parsed.deinit();
-    try std.testing.expectEqualStrings("01010101010101010101010101010101", parsed.value.object.get("session_id").?.string);
-    try std.testing.expectEqual(@as(i64, 7), parsed.value.object.get("pane_id").?.integer);
 }

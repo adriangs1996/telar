@@ -1,6 +1,5 @@
 const Message = @import("Message.zig");
 const types = @import("types.zig");
-const Head = @This();
 
 message: Message,
 framing: types.BodyPlan,

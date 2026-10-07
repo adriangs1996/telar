@@ -69,8 +69,12 @@ pub fn run(self: *Tunnel) std.Io.Cancelable!void {
         },
     };
 
-    const target = switch (connect_authentication.authenticate(dependencies.secret, head[0..head_len])) {
+    const target = switch (connect_authentication.authenticate(dependencies.secret, dependencies.anonymous_tunnels, dependencies.tls.intercept_hosts, head[0..head_len])) {
         .authenticated => |value| value,
+        .anonymous => |value| anonymous: {
+            dependencies.tls.telemetry.record(.anonymous_tunnel);
+            break :anonymous value;
+        },
         .rejected => |rejection| {
             if (rejection.metric) |metric| {
                 tunnel_namespace.recordAuthenticationRejection(dependencies.tls.telemetry, metric);
@@ -181,6 +185,8 @@ const TunnelOptions = struct {
 const Dependencies = struct {
     tls: Resources,
     secret: *const identity.Secret,
+    /// A CONNECT without credentials may tunnel to a host the proxy does not intercept.
+    anonymous_tunnels: bool,
     connection_ids: *std.atomic.Value(u64),
     captures: *Producer,
     connections: *Connections,

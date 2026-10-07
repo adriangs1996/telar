@@ -9,6 +9,7 @@ const WorktreeDetectionCompletion = @This();
 pane: PaneKey,
 cwd_revision: u64,
 root_len: u16 = 0,
+// SAFETY: worktree_detection copies the branch before returning the completion; branchSlice reads only branch_len bytes.
 branch: [core.max_git_branch_bytes]u8 = undefined,
 branch_len: u8 = 0,
 

@@ -2,8 +2,6 @@
 
 Run these commands from the repository root. The September 2026 comparison
 tables below describe the retired terminal client, not the current native GUI.
-See [performance gates](performance-gates.md) for the validation policy and
-[performance investigations](performance/) for later measurements.
 
 Run the controlled interactive-path workloads with:
 
@@ -53,9 +51,6 @@ python3 tools/perf_gate.py \
   --candidate '/tmp/telar-after-*.jsonl'
 ```
 
-CI cadence and release-candidate requirements are recorded in
-[`docs/performance-gates.md`](performance-gates.md).
-
 ### End-to-end latency against tmux and herdr
 
 The microbenchmarks above time telar's own code. The numbers a user feels are
@@ -75,8 +70,8 @@ How the measurement works:
   every byte immediately, so what is timed is only the multiplexer.
 - telar runs as `telar-headless`. Each sample sends one token as an input
   line, and the latency runs from the client taking the line to the first
-  frame of that pane the client presents, read from its exit trace
-  ([headless client](flows/headless-client.md#reports)). It ends where
+  frame of that pane the client presents, read from its exit trace.
+  It ends where
   the client has the frame, not where a window or host terminal shows it.
 - Comparators run in a pty of 160x40 columns as its session leader. Each
   sample writes one token to the pty master and waits until that token
@@ -167,11 +162,4 @@ session. The 0-pane rows and every p99 in this table carry the noise of the
 busy host; idle rows measured 0.36-0.70 ms for both builds when alternated.
 
 Run-to-run noise on a quiet laptop is about 0.1 ms at p50 and 0.3 ms at p99;
-treat smaller differences as no verdict, as `docs/performance-gates.md`
-already requires for the microbenchmarks.
-
-The runtime proxy has its own gate:
-
-```sh
-zig build test-backend-proxy
-```
+treat smaller differences as no verdict.

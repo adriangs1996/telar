@@ -193,9 +193,8 @@ To publish a version:
 3. Watch the workflow. It publishes the release once every platform built.
 
 Every pull request and push to `main` runs [`ci.yml`](../.github/workflows/ci.yml):
-`zig build`, `zig build check` and `zig build test` on macOS arm64 and Linux
-x86_64 with Node 22 for the integration scripts' `node --test`, the headless linkage check, shellcheck on the release scripts and
-the installer tests.
+`zig build` and `zig build check` on macOS arm64 and Linux x86_64, the
+headless linkage check and shellcheck on the release scripts.
 
 ### Assets
 
@@ -508,13 +507,6 @@ curl -fsSL https://github.com/adriangs1996/telar/releases/latest/download/instal
 `--proto '=https,file'` refuses plain http, redirects to http included. `wget` has no equivalent: its `--https-only` applies only to
 recursive downloads, and GNU Wget 1.21.3 fetched an http URL with it.
 Ctrl-C, SIGTERM and SIGHUP stop it after removing its temporary directory.
-
-`packaging/release/test-install.sh` runs the installer against fake
-releases through `file://`, with `uname`, `sw_vers` and `ldconfig`
-stubbed: fallback, refusal, checksum, http and signal cases, plus `--app`
-where `hdiutil` exists. The http case serves the release over plain http,
-so only `--proto` refuses it. With `NOEXEC_TMPDIR` naming a directory on a
-noexec mount, as CI mounts one, it also installs with that as `TMPDIR`.
 
 The checksums come from the same release as the archive. They catch a
 corrupt download, not a tampered release; the attestation covers that.

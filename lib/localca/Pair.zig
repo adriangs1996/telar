@@ -4,6 +4,7 @@ const std = @import("std");
 const Pair = @This();
 
 key_pair: tls.x509.KeyPair,
+// SAFETY: Certificate generation or PEM decoding fills cert_buf before setting cert_len; readers use only that prefix.
 cert_buf: [ca.max_cert_len]u8 = undefined,
 cert_len: usize = 0,
 

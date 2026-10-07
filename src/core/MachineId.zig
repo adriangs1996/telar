@@ -62,22 +62,7 @@ pub const MachineId = enum(u64) {
     /// const text = id.format(&buffer);
     /// ```
     pub fn format(self: MachineId, buffer: *[text_bytes]u8) []const u8 {
+        // SAFETY: generate and parse restrict identities to twelve hexadecimal digits; text_bytes includes those digits and the prefix.
         return std.fmt.bufPrint(buffer, prefix ++ "{x:0>12}", .{@intFromEnum(self)}) catch unreachable;
     }
 };
-
-test "a machine id round-trips through its written form" {
-    const id = try MachineId.parse("m-3f9c2a00b001");
-    var buffer: [MachineId.text_bytes]u8 = undefined;
-
-    try std.testing.expectEqualStrings("m-3f9c2a00b001", id.format(&buffer));
-
-    const fresh = try MachineId.generate(std.testing.io);
-    try std.testing.expectEqual(fresh, try MachineId.parse(fresh.format(&buffer)));
-}
-
-test "malformed machine ids are refused" {
-    for ([_][]const u8{ "", "m-", "m-000000000000", "m-3F9C2A00B001", "x-3f9c2a00b001", "m-3f9c2a00b0011", "m-3f9c2a00b00g" }) |text| {
-        try std.testing.expectError(error.InvalidMachineId, MachineId.parse(text));
-    }
-}

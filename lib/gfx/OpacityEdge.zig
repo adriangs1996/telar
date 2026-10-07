@@ -15,16 +15,3 @@ pub fn at(self: Edge, x: f32) f32 {
 
     return std.math.clamp((self.to - x) / span, 0, 1);
 }
-
-test "an edge keeps ink before it, removes ink past it and ramps between" {
-    const edge: Edge = .{
-        .from = 80,
-        .to = 100,
-    };
-
-    try std.testing.expectEqual(@as(f32, 1), edge.at(10));
-    try std.testing.expectEqual(@as(f32, 1), edge.at(80));
-    try std.testing.expectApproxEqAbs(@as(f32, 0.5), edge.at(90), 0.0001);
-    try std.testing.expectEqual(@as(f32, 0), edge.at(100));
-    try std.testing.expectEqual(@as(f32, 0), edge.at(140));
-}

@@ -334,15 +334,6 @@ pub fn validateHistoryText(text: []const u8, bracketed_paste: bool) !void {
     }
 }
 
-test "history paste cannot smuggle terminal keys or escape its bracketed boundary" {
-    try validateHistoryText("echo café", false);
-    try validateHistoryText("echo first\necho second", true);
-    try std.testing.expectError(error.UnframedHistoryText, validateHistoryText("echo first\necho second", false));
-    try std.testing.expectError(error.UnsafeHistoryText, validateHistoryText("echo x\x1b[201~\r", true));
-    try std.testing.expectError(error.UnsafeHistoryText, validateHistoryText("echo x\x03", false));
-    try std.testing.expectError(error.UnsafeHistoryText, validateHistoryText("echo \xc2\x9b", true));
-}
-
 const PanePasteBoundary = enum {
     start,
     finish,

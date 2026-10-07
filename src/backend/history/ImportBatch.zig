@@ -20,6 +20,7 @@ pub fn init(gpa: std.mem.Allocator, view: core.ImportHistoryView) !*ImportBatch 
     errdefer gpa.destroy(batch);
     const seed_low = std.hash.Wyhash.hash(0x74656c6172_696d70, view.source);
     const seed_high = std.hash.Wyhash.hash(seed_low, view.source);
+    // SAFETY: The two writeInt calls fill the complete 16-byte session id before use.
     var session_id: model.SessionId = undefined;
     std.mem.writeInt(u64, session_id[0..8], seed_low, .little);
     std.mem.writeInt(u64, session_id[8..16], seed_high, .little);

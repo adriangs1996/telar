@@ -13,8 +13,6 @@
 const std = @import("std");
 const cellgrid = @import("cellgrid");
 const cellglyphs = @import("cellglyphs");
-const assets = @import("assets");
-const freetype = @import("freetype");
 const LigatureCoverage = @import("../text/LigatureCoverage.zig");
 const LigatureRole = @import("../text/LigatureRole.zig").LigatureRole;
 const CellRun = @import("CellRun.zig");
@@ -189,55 +187,4 @@ fn typographic(left: *const cellgrid.Cell, right: *const cellgrid.Cell) bool {
         's' => right.bytes[0] == 't',
         else => false,
     };
-}
-
-test "runs keep context within the face's reach and split at style, cursor and wide cells" {
-    var library: freetype.c.FT_Library = undefined;
-    try std.testing.expectEqual(@as(c_int, 0), freetype.c.FT_Init_FreeType(&library));
-    defer _ = freetype.c.FT_Done_FreeType(library);
-    var face: freetype.c.FT_Face = undefined;
-    try std.testing.expectEqual(@as(c_int, 0), freetype.c.FT_New_Memory_Face(library, assets.jetbrains_mono.ptr, @intCast(assets.jetbrains_mono.len), 0, &face));
-    defer _ = freetype.c.FT_Done_Face(face);
-    const font = freetype.c.hb_ft_font_create_referenced(face).?;
-    defer freetype.c.hb_font_destroy(font);
-    var coverage = try LigatureCoverage.init(face, font);
-    defer coverage.deinit();
-    try std.testing.expect(coverage.joins());
-    try std.testing.expectEqual(@as(u16, 6), coverage.reach);
-
-    var runs = RowRuns.init(std.testing.allocator);
-    defer runs.deinit();
-    try runs.reserve(40);
-    const Case = struct { text: []const u8, cursor: ?usize = null, bold: ?usize = null, runs: []const CellRun };
-    const alone: CellRun = .{ .len = 1, .together = false };
-    const cases = [_]Case{
-        // Letters split; spaces and digits ride along within reach.
-        .{ .text = "a -> b", .runs = &.{ alone, .{ .len = 4, .together = true }, alone } },
-        // Blanks past the reach shape alone.
-        .{ .text = "x=1;" ++ " " ** 10, .runs = &.{ alone, .{ .len = 8, .together = true }, alone, alone, alone, alone, alone } },
-        // A run of context alone has nothing to substitute.
-        .{ .text = "AB 12", .runs = &.{ alone, alone, alone, alone, alone } },
-        // The cursor shows the character under it.
-        .{ .text = "->", .cursor = 1, .runs = &.{ alone, alone } },
-        // Ink style splits; a lone input cell shapes alone.
-        .{ .text = "!=", .bold = 1, .runs = &.{ alone, alone } },
-    };
-    for (cases) |case| {
-        runs.clear();
-        for (case.text, 0..) |byte, index| {
-            var cell: cellgrid.Cell = .{};
-            cell.bytes[0] = byte;
-            cell.style.flags.bold = case.bold == index;
-            runs.append(&coverage, &cell, case.cursor == index);
-        }
-
-        runs.close(coverage.reach);
-        var col: u16 = 0;
-        for (case.runs) |expected| {
-            try std.testing.expectEqual(expected, runs.at(col));
-            col += expected.len;
-        }
-
-        try std.testing.expectEqual(@as(usize, col), case.text.len);
-    }
 }

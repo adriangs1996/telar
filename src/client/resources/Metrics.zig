@@ -1,7 +1,6 @@
 //! What the client counts for its diagnostics log; `client_telemetry`
 //! writes it once a second in builds with diagnostics.
 const core = @import("telar-core");
-const Metrics = @This();
 
 started_ns: u64,
 input_events: u64 = 0,

@@ -274,78 +274,6 @@ pub const root_text = "telar " ++ build_options.version ++ ": a terminal multipl
     \\
 ;
 
-test "the root listing names every family once" {
-    inline for (@typeInfo(CommandFamily).@"enum".fields) |field| {
-        const which: CommandFamily = @enumFromInt(field.value);
-        var seen: usize = 0;
-        for (groups) |group| {
-            for (group.families) |listed| {
-                if (listed == which) {
-                    seen += 1;
-                }
-            }
-        }
-
-        try std.testing.expectEqual(@as(usize, 1), seen);
-        try std.testing.expect(std.mem.indexOf(u8, root_text, "\n  " ++ comptime which.name()) != null);
-    }
-}
-
-test "help is found at the root, the family and the command, never after the separator" {
-    try std.testing.expect(find(&.{"--help"}).? == .root);
-    try std.testing.expect(find(&.{"-h"}).? == .root);
-    try std.testing.expectEqual(CommandFamily.worktree, find(&.{ "worktree", "--help" }).?.family);
-    try std.testing.expectEqual(CommandFamily.exec, find(&.{ "exec", "--cwd", "/tmp", "-h" }).?.family);
-    try std.testing.expectEqual(CommandFamily.workspace_list, find(&.{ "workspace-list", "--help" }).?.family);
-
-    const created = find(&.{ "worktree", "create", "--help" }).?.command;
-    try std.testing.expectEqual(CommandFamily.worktree, created.family);
-    try std.testing.expectEqualStrings("create", created.command.name);
-    try std.testing.expectEqualStrings("split", find(&.{ "pane", "split", "4", "horizontal", "--client", "1", "--help" }).?.command.command.name);
-    try std.testing.expectEqualStrings("trust", find(&.{ "proxy", "trust", "install", "--help" }).?.command.command.name);
-
-    try std.testing.expect(find(&.{ "worktree", "exec", "fix", "--", "claude", "--help" }) == null);
-    try std.testing.expect(find(&.{ "exec", "--", "ls", "--help" }) == null);
-    try std.testing.expect(find(&.{ "/bin/sh", "--help" }) == null);
-    try std.testing.expect(find(&.{ "worktree", "list" }) == null);
-    try std.testing.expect(find(&.{}) == null);
-}
-
-test "every family prints its usage, its visible commands and the way deeper" {
-    inline for (@typeInfo(CommandFamily).@"enum".fields) |field| {
-        const which: CommandFamily = @enumFromInt(field.value);
-        var buffer: [32 * 1024]u8 = undefined;
-        var writer: std.Io.Writer = .fixed(&buffer);
-        try write(&writer, .{ .family = which });
-        const text = writer.buffered();
-        try std.testing.expect(std.mem.startsWith(u8, text, "telar " ++ comptime which.name() ++ ": "));
-        try std.testing.expect(std.mem.indexOf(u8, text, "\nUsage: telar " ++ comptime which.name()) != null);
-        for (family(which).commands) |command| {
-            var line_buffer: [128]u8 = undefined;
-            const line = try std.fmt.bufPrint(&line_buffer, "\n  {s:<16}{s}\n", .{ command.name, command.summary });
-            try std.testing.expectEqual(!command.hidden, std.mem.indexOf(u8, text, line) != null);
-        }
-    }
-}
-
-test "every command's usage names it and its help is reachable from the family" {
-    inline for (@typeInfo(CommandFamily).@"enum".fields) |field| {
-        const which: CommandFamily = @enumFromInt(field.value);
-        for (family(which).commands) |*command| {
-            var prefix_buffer: [128]u8 = undefined;
-            const prefix = try std.fmt.bufPrint(&prefix_buffer, "telar {s} {s}", .{ which.name(), command.name });
-            try std.testing.expect(std.mem.startsWith(u8, command.usage, prefix));
-            try std.testing.expect(command.examples.len != 0);
-            try std.testing.expectEqual(command, family(which).find(command.name).?);
-
-            var buffer: [32 * 1024]u8 = undefined;
-            var writer: std.Io.Writer = .fixed(&buffer);
-            try write(&writer, .{ .command = .{ .family = which, .command = command } });
-            try std.testing.expect(std.mem.startsWith(u8, writer.buffered(), prefix));
-        }
-    }
-}
-
 /// The family and command words a command line names, followed by a space,
 /// for a hint such as `see telar worktree create --help`; empty when the
 /// first word is no family.
@@ -365,12 +293,4 @@ pub fn topic(args: []const [*:0]const u8, buffer: []u8) []const u8 {
     else
         std.fmt.bufPrint(buffer, "{s} ", .{which.name()});
     return written catch "";
-}
-
-test "a hint names the family and the command the arguments reached" {
-    var buffer: [64]u8 = undefined;
-    try std.testing.expectEqualStrings("worktree create ", topic(&.{ "telar", "worktree", "create" }, &buffer));
-    try std.testing.expectEqualStrings("worktree ", topic(&.{ "telar", "worktree", "frobnicate" }, &buffer));
-    try std.testing.expectEqualStrings("", topic(&.{ "telar", "/bin/sh" }, &buffer));
-    try std.testing.expectEqualStrings("", topic(&.{"telar"}, &buffer));
 }

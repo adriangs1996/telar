@@ -60,7 +60,7 @@ pub fn run(init: std.process.Init, input: Input) !void {
         .config_dir = std.fs.path.dirname(entry_path) orelse ".",
         .number = 1,
     }) catch |err| {
-        std.debug.print("plugin load failed: {s}\n", .{diagnostic.message()});
+        std.log.err("plugin load failed: {s}", .{diagnostic.message()});
         return err;
     };
     defer generation.deinit();
@@ -69,7 +69,7 @@ pub fn run(init: std.process.Init, input: Input) !void {
         else => return error.InvalidPluginAction,
     };
     const batch = generation.invokeCallback(.{ .reference = reference, .context = input.context }, &diagnostic) catch |err| {
-        std.debug.print("plugin action failed: {s}\n", .{diagnostic.message()});
+        std.log.err("plugin action failed: {s}", .{diagnostic.message()});
         return err;
     };
     var encoded: [protocol.max_bytes]u8 = undefined;

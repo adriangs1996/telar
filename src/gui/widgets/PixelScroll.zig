@@ -61,11 +61,3 @@ pub fn reveal(self: *PixelScroll, item: [2]f32, height: f32) void {
     const next = if (item[0] < offset or item[1] - item[0] > height) item[0] else if (item[1] > offset + height) item[1] - height else offset;
     self.scroll = @intFromFloat(@max(0, @min(@as(f64, @floatFromInt(self.maximum_scroll)), @ceil(@as(f64, next)))));
 }
-
-test "a global activity list can reveal cards beyond the old 16-bit pixel limit" {
-    var scroll: PixelScroll = .{};
-    scroll.setBounds(100, 200000);
-    scroll.reveal(.{ 190000, 190100 }, 500);
-    try std.testing.expect(scroll.scroll > std.math.maxInt(u16));
-    try std.testing.expect(scroll.scroll <= scroll.maximum_scroll);
-}

@@ -1,6 +1,5 @@
 const HookLayout = @import("HookLayout.zig").HookLayout;
 const core = @import("telar-core");
-const Integration = @This();
 
 name: []const u8,
 settings: core.HookSettings,

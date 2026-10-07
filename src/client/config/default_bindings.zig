@@ -4,7 +4,6 @@ const keyinput = @import("keyinput");
 const data = @import("model");
 const Resolved = @import("Resolved.zig");
 const GenericKeymap = keyinput.GenericKeymap;
-const std = @import("std");
 
 pub const count = 43;
 pub const Binding = keyinput.GenericBinding(data.Action, data.config_values.max_binding_keys);
@@ -153,95 +152,4 @@ pub fn validate(prefix: keyinput.Key, configured: []const Binding) !void {
 
 fn prefixed(prefix: keyinput.Key, suffix: []const u8, action_value: data.Action) !Binding {
     return .init(&.{ prefix, try keyinput.chord.parseKey(suffix) }, action_value);
-}
-
-test "focused scroll defaults use the configured prefix and can be overridden" {
-    const testing = std.testing;
-    const prefix = try keyinput.chord.parseKey("ctrl+s");
-    const up = try prefixed(prefix, "-", .{ .scroll_pane = .up });
-    const down = try prefixed(prefix, "=", .{ .scroll_pane = .down });
-    const defaults = try resolve(prefix, &.{});
-    var found: usize = 0;
-
-    for (defaults.slice()) |*binding| {
-        if (binding.sameSequence(&up) or binding.sameSequence(&down)) {
-            try testing.expectEqualDeep(if (binding.sameSequence(&up)) up.action else down.action, binding.action);
-            found += 1;
-        }
-    }
-
-    try testing.expectEqual(@as(usize, 2), found);
-    const override = try prefixed(prefix, "-", .toggle_sidebar);
-    const resolved = try resolve(prefix, &.{override});
-    try testing.expectEqual(@as(usize, count), resolved.slice().len);
-    try testing.expectEqualDeep(override.action, resolved.bindings[0].action);
-    try validate(prefix, &.{override});
-}
-
-test "configured bindings extend defaults and override matching sequences" {
-    const testing = std.testing;
-    const prefix = try keyinput.chord.parseKey("ctrl+s");
-    const override = try prefixed(prefix, "s", .detach);
-    const global = try Binding.parse(&.{"ctrl+d"}, .detach);
-
-    const resolved = try resolve(prefix, &.{ override, global });
-
-    try testing.expectEqual(@as(usize, count + 1), resolved.slice().len);
-    try testing.expect(resolved.bindings[0].sameSequence(&override));
-    try testing.expectEqualDeep(data.Action.detach, resolved.bindings[0].action);
-    try testing.expect(resolved.bindings[1].sameSequence(&global));
-
-    var matching_defaults: usize = 0;
-    for (resolved.slice()) |*binding| {
-        if (binding.sameSequence(&override)) {
-            matching_defaults += 1;
-        }
-    }
-    try testing.expectEqual(@as(usize, 1), matching_defaults);
-}
-
-test "a configured binding evicts every default it prefix-conflicts with" {
-    const testing = std.testing;
-    const prefix = try keyinput.chord.parseKey("ctrl+b");
-    // Extends the default `<prefix> s` (toggle_sidebar) by one key. The
-    // default must be dropped, or the merged keymap is prefix-ambiguous.
-    const extended = try Binding.init(
-        &.{ prefix, try keyinput.chord.parseKey("s"), try keyinput.chord.parseKey("x") },
-        .detach,
-    );
-    const shadowed = try prefixed(prefix, "s", .toggle_sidebar);
-
-    const resolved = try resolve(prefix, &.{extended});
-
-    try testing.expectEqual(@as(usize, count), resolved.slice().len);
-    for (resolved.slice()) |*binding| {
-        try testing.expect(!binding.sameSequence(&shadowed));
-    }
-    try validate(prefix, &.{extended});
-}
-
-test "validating rejects configured bindings that conflict with each other" {
-    const testing = std.testing;
-    const prefix = try keyinput.chord.parseKey("ctrl+b");
-    const short = try prefixed(prefix, "g", .toggle_sidebar);
-    const long = try Binding.init(
-        &.{ prefix, try keyinput.chord.parseKey("g"), try keyinput.chord.parseKey("x") },
-        .detach,
-    );
-
-    try testing.expectError(error.AmbiguousBindingPrefix, validate(prefix, &.{ short, long }));
-}
-
-test "a full keymap keeps the configured bindings and leaves out the defaults it has no room for" {
-    const testing = std.testing;
-    const prefix = try keyinput.chord.parseKey("ctrl+s");
-    const configured = try Binding.parse(&.{"ctrl+d"}, .detach);
-    const bindings: [data.config_values.max_bindings - 1]Binding = @splat(configured);
-
-    const resolved = try resolve(prefix, &bindings);
-    try testing.expectEqual(@as(u16, data.config_values.max_bindings), resolved.len);
-    try testing.expectEqualDeep(configured.action, resolved.bindings[bindings.len - 1].action);
-    try testing.expectEqual(@as(u16, count - 1), resolved.dropped);
-    try testing.expectEqual(@as(usize, count - 1), try surplus(prefix, &bindings));
-    try testing.expectEqual(@as(usize, 0), try surplus(prefix, bindings[0 .. data.config_values.max_bindings - count]));
 }

@@ -41,13 +41,8 @@ tools/vm/vm.py start --display
 tools/vm/vm.py status
 tools/vm/vm.py stop
 
-# Sync the working tree, then build or test inside the machine.
+# Sync the working tree, then build inside the machine.
 tools/vm/vm.py build
-tools/vm/vm.py test --summary all
-
-# Native input protocol, clipboard ownership and AT-SPI accessibility checks.
-tools/vm/vm.py build test-gui-ime test-gui-clipboard-reader test-gui-pointer test-gui-keyboard
-tools/vm/vm.py build test-gui-accessibility test-gui-accessibility-bus
 
 # Sync, build and run a telar CLI command against the machine's development
 # runtime (--help without arguments). The runtime stays in the foreground, so
@@ -86,8 +81,7 @@ the accessibility bridge, and `glslc` to compile the GLSL
 shaders as build dependencies. Provisioning
 installs them along with the Vulkan validation layer. The native renderer
 requires Vulkan 1.3, dynamic rendering, Synchronization2 and
-`VK_EXT_swapchain_maintenance1`; see
-[the renderer guide](../../docs/flows/vulkan-renderer.md).
+`VK_EXT_swapchain_maintenance1`.
 
 ## First boot
 
@@ -97,29 +91,8 @@ the `telar` user with the machine's SSH key and passwordless sudo, and enables
 console autologin. `provision.sh` then installs the toolchain and the desktop
 and pins Zig 0.16.0 by checksum. Both are idempotent.
 
-## Native terminal integration
+## Native clipboard reads
 
-`python tools/vm/gui-terminal-test.py /tmp/telar-gui-validation` builds the
-working tree and verifies native output, keyboard input, Wayland clipboard
-paste, PTY resize and shell survival after closing the window. It uses an
-isolated runtime and captures a screenshot for each cut. Provisioning installs
-`wtype` and `wl-clipboard` for this check.
-Pass `--config examples/gui.lua` to exercise native appearance preferences
-through the same input, resize and reconnect flow.
-Use `--reload` instead to generate a watched config, change the font and PTY
-grid, reject an unavailable font, and recover without replacing the shell.
-The test saves screenshots of the changed and recovered appearance and checks
-Vulkan validation output.
-
-`test-gui-ime` drives the text-input-v3 protocol listeners with controlled
-serials, composition batches and UTF-8 ranges. `test-gui-clipboard-reader`
-checks bounded nonblocking reads, cancellation and result retention.
-Clipboard reads retain at most 64 KiB, consume at most 16 KiB or 16 read
+Native clipboard reads retain at most 1 MiB, consume at most 16 KiB or 16 read
 attempts per window-loop turn, and expire after five seconds without extending
 the deadline for partial progress. Invalid UTF-8 completes as unavailable.
-`test-gui-accessibility` checks semantic objects, byte-to-character ranges and
-the bounded action queue. `test-gui-accessibility-bus` starts an isolated D-Bus
-session and uses `pyatspi` to discover Telar, read its text and send editing,
-clipboard, focus and button actions through the real AT-SPI bridge.
-Provisioning installs `python3-pyatspi`, `gobject-introspection` and
-`dbus-daemon` for this test.

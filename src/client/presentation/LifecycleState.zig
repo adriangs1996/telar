@@ -57,8 +57,10 @@ pub fn begin(self: *State, submission: Submission) !lifecycle.Token {
     self.active = .{
         .token = token,
         .observation = submission.observation,
+        // SAFETY: copyFrom assigns every geometry field and its live pane prefix before the flight can be consumed.
         .geometry = undefined,
         .delivery = .{
+            // SAFETY: copyFrom assigns the commit metadata and live pane prefix before the flight can be consumed.
             .commit = undefined,
             .media_pending = submission.media_pending,
         },
@@ -87,11 +89,13 @@ pub fn complete(self: *State, token: lifecycle.Token, outcome: lifecycle.Outcome
 
     self.delivered = flight.observation;
     if (self.delivered_geometry == null) {
+        // SAFETY: This only creates the optional's payload; the following copyFrom fills its metadata and live pane prefix before any read.
         self.delivered_geometry = @as(Geometry, undefined);
     }
 
     self.delivered_geometry.?.copyFrom(&flight.geometry);
     var delivery: PresentationDelivery = .{
+        // SAFETY: copyFrom fills the delivery commit's metadata and live pane prefix before return.
         .commit = undefined,
         .media_pending = flight.delivery.media_pending,
     };

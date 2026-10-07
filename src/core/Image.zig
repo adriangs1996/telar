@@ -1,6 +1,5 @@
 const kitty_protocol = @import("kitty_protocol");
 const ImageKey = @import("ImageKey.zig");
-const graphics = @import("graphics.zig");
 const std = @import("std");
 const Image = @This();
 

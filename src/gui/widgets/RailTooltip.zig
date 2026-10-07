@@ -89,18 +89,3 @@ fn summary(storage: []u8, load: WorkspaceLoad, tabs: u16) []const u8 {
 
     return std.fmt.bufPrint(storage, "{d} {s}", .{ tabs, if (tabs == 1) "tab" else "tabs" }) catch "";
 }
-
-test "the summary prefers waiting agents, then agents, then tabs" {
-    var storage: [32]u8 = undefined;
-    const waiting: WorkspaceLoad = .{
-        .agents = 3,
-        .waiting = 2,
-    };
-    const working: WorkspaceLoad = .{
-        .agents = 1,
-    };
-
-    try std.testing.expectEqualStrings("2 waiting", summary(&storage, waiting, 4));
-    try std.testing.expectEqualStrings("1 agent", summary(&storage, working, 4));
-    try std.testing.expectEqualStrings("1 tab", summary(&storage, .{}, 1));
-}

@@ -10,6 +10,7 @@ scope: name_prompt.HistoryScope = .global,
 author: core.HistoryAuthorFilter = .human,
 failed_only: bool = false,
 alternate: bool = false,
+// SAFETY: name_prompt copies the captured text before returning the snapshot; textSlice exposes only len bytes.
 text: [core.max_tab_label_bytes]u8 = undefined,
 len: u8 = 0,
 

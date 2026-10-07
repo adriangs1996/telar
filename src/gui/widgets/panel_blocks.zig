@@ -11,7 +11,6 @@ const std = @import("std");
 const Rect = gfx.Rect;
 const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
-const Context = @import("Context.zig");
 const Label = @import("Label.zig");
 const bar_tone = @import("bar_tone.zig");
 const inline_nodes = @import("inline_nodes.zig");

@@ -1,5 +1,4 @@
 //! What one probe of an agent session file found.
-const TitleProbe = @This();
 
 /// Where the next probe starts; null leaves the caller's offset unchanged.
 offset: ?u64 = null,

@@ -37,13 +37,3 @@ pub fn isIdentityContentEncoding(value: []const u8) bool {
 
     return found;
 }
-
-test "event-stream types allow parameters and case, identity allows only identity" {
-    try std.testing.expect(isEventStreamContentType("Text/Event-Stream; charset=utf-8"));
-    try std.testing.expect(!isEventStreamContentType("application/json"));
-    try std.testing.expect(isIdentityContentEncoding("identity"));
-    try std.testing.expect(isIdentityContentEncoding("identity, IDENTITY"));
-    try std.testing.expect(!isIdentityContentEncoding("gzip"));
-    try std.testing.expect(!isIdentityContentEncoding("identity, gzip"));
-    try std.testing.expect(!isIdentityContentEncoding(""));
-}

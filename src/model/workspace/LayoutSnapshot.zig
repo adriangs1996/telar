@@ -20,6 +20,7 @@ metrics: Metrics = .{},
 /// pane; empty when there is none or the pane has no room for it.
 reservation: ?PaneBottomReservation = null,
 reserved: cellgrid.Rect = .{},
+// SAFETY: append initializes each view before publishing len and its index; views and indexed lookup read only stored views.
 storage: [core.max_panes_per_tab]View = undefined,
 len: u8 = 0,
 index: layout_support.ViewIndex = .{},

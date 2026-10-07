@@ -1,6 +1,5 @@
 const path_marker = @import("path_marker.zig");
 const Position = @import("Position.zig");
-const Marker = @This();
 
 uuid: path_marker.Uuid,
 /// First cell of the path, which is the first `/` of the word holding

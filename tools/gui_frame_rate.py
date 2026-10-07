@@ -7,7 +7,7 @@ display's refresh rate, the interval the window reported and paced at, the
 presented rate, the cell frames a second the runtime sent (client telemetry,
 so build with `-Doptimize=ReleaseFast -Ddiagnostics=true`) and how long a
 frame took from preparation to GPU completion. A window presents at most at
-its display's rate, or at `gui.max_fps` below it (docs/flows/frame-pacing.md).
+its display's rate, or at `gui.max_fps` below it.
 
 The window opens where the window manager puts it. With AeroSpace,
 --aerospace-monitor moves only the test window to that monitor first.

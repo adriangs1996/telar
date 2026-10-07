@@ -1,4 +1,5 @@
-const ScrollEvent = @import("ScrollEvent.zig");
+const Window = @import("telar-window");
+const ScrollEvent = @FieldType(Window.Input, "scroll");
 
 event: ScrollEvent,
 geometry_revision: u64,

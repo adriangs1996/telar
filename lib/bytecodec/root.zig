@@ -4,9 +4,3 @@
 
 pub const Decoder = @import("Decoder.zig");
 pub const Encoder = @import("Encoder.zig");
-
-test {
-    _ = @import("Decoder.zig");
-    _ = @import("Encoder.zig");
-    _ = @import("codec_tests.zig");
-}

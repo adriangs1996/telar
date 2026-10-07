@@ -1,5 +1,4 @@
 const model = @import("model.zig");
-const Style = @This();
 
 foreground: ?model.Color = null,
 background: ?model.Color = null,

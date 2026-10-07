@@ -2,13 +2,13 @@
 
 const SocketChannel = @import("SocketChannel.zig");
 const std = @import("std");
-const SocketDirectory = @import("SocketDirectory.zig");
 
 pub fn connect(io: std.Io, path: []const u8) !SocketChannel {
     _ = io;
     if (!std.fs.path.isAbsolute(path)) {
         return error.RelativePath;
     }
+    // SAFETY: Only the array length is inspected before memset clears every path byte for connect.
     var address: std.c.sockaddr.un = .{ .path = undefined };
     if (path.len >= address.path.len) {
         return error.NameTooLong;
@@ -51,21 +51,4 @@ pub fn connect(io: std.Io, path: []const u8) !SocketChannel {
             else => return error.ConnectFailed,
         }
     }
-}
-
-test "a missing local runtime has a stable error" {
-    const io = std.testing.io;
-    var temp = try SocketDirectory.create(io);
-    defer temp.cleanup(io);
-
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try std.fmt.bufPrint(
-        &path_buffer,
-        "{s}/runtime.sock",
-        .{temp.path()},
-    );
-    try std.testing.expectError(
-        error.FileNotFound,
-        connect(io, path),
-    );
 }

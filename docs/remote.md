@@ -119,8 +119,7 @@ overwrite synchronized configuration on the destination. A running incompatible
 runtime requires an explicit restart decision. Save its work first.
 
 There are no published releases yet, so use `--binary` for this workflow rather
-than expecting setup to download a release. The [setup implementation guide](flows/machine-setup.md)
-explains the full synchronization and login behavior.
+than expecting setup to download a release.
 
 ## Remote worktrees
 
@@ -162,5 +161,4 @@ current branch. See [working with agents](agents.md) for task control.
 | Remote task lacks local edits | Commit required inputs before transfer; uncommitted files stay local. |
 
 `telar machine check box --json` checks discovery and protocol compatibility.
-It can start the remote runtime. For connection ownership and SSH details, see
-[remote attach](flows/remote-attach.md).
+It can start the remote runtime.

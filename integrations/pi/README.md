@@ -43,7 +43,3 @@ runtime = {
   },
 }
 ```
-
-See [`docs/flows/engine.md`](../../docs/flows/engine.md) for the runtime
-path and bounds, and [`docs/flows/agent-hooks.md`](../../docs/flows/agent-hooks.md)
-for the report mapping.

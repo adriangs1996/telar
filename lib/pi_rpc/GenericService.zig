@@ -19,6 +19,7 @@ pub fn Type(comptime Purpose: type) type {
         /// A bounded prompt and the caller's routing value.
         pub const Prompt = struct {
             purpose: Purpose,
+            // SAFETY: Prompt.init copies the validated text before return; slice exposes only bytes[0..len].
             bytes: [types.max_prompt_bytes]u8 = undefined,
             len: u16 = 0,
 
@@ -168,8 +169,7 @@ pub fn Type(comptime Purpose: type) type {
             }
         }
 
-        /// Applies one request on the actor. Public so tests drive the actor
-        /// synchronously; `run` is this in a loop.
+        /// Applies one request on the actor; `run` is this in a loop.
         ///
         /// ```zig
         /// service.handle(io, .idle_check);
@@ -185,6 +185,7 @@ pub fn Type(comptime Purpose: type) type {
                 },
                 .prompt => |*prompt| {
                     const response = self.answer(io, prompt);
+                    // A closed response queue or cancellation means its consumer has stopped; there is no remaining recipient for this answer.
                     self.responses.putOne(io, response) catch {};
                 },
             }

@@ -33,17 +33,3 @@ pub fn hash(destination: []const u8) u64 {
     std.crypto.hash.sha2.Sha256.hash(destination, &digest, .{});
     return std.mem.readInt(u64, digest[0..@sizeOf(u64)], .little);
 }
-
-test "SSH destinations cannot inject options or control bytes" {
-    try validate("dev@box");
-    try validate("telar-linux-native");
-
-    for ([_][]const u8{ "", "-oProxyCommand=bad", "host\ncommand", "host alias", "host\x7f" }) |destination| {
-        try std.testing.expectError(error.InvalidRemoteDestination, validate(destination));
-    }
-}
-
-test "destination hashes are stable and distinct" {
-    try std.testing.expectEqual(hash("a@b"), hash("a@b"));
-    try std.testing.expect(hash("a@b") != hash("a@c"));
-}

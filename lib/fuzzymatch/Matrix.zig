@@ -9,9 +9,9 @@ pub const max_needle_bytes = 64;
 pub const max_haystack_bytes = 1024;
 
 /// Best score of a match that ends by matching needle byte `i` at haystack byte `j`.
-ending: [max_needle_bytes][max_haystack_bytes]i32 = undefined,
+ending: [max_needle_bytes][max_haystack_bytes]i32,
 /// Best score of needle bytes `0..i` placed anywhere inside haystack bytes `0..j`.
-best: [max_needle_bytes][max_haystack_bytes]i32 = undefined,
+best: [max_needle_bytes][max_haystack_bytes]i32,
 
 /// Reserves one matrix on the heap.
 ///

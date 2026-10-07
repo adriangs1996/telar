@@ -2,7 +2,6 @@ const exchangecapture = @import("exchangecapture");
 const Protocol = @import("../Protocol.zig").Protocol;
 const Key = exchangecapture.Key;
 const buffer_support = exchangecapture.buffer_support;
-const StartOptions = @This();
 
 protocol: Protocol,
 key: Key,

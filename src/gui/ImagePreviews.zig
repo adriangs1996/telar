@@ -1,4 +1,4 @@
-//! The window's clipboard image previews (docs/flows/clipboard-image.md):
+//! The window's clipboard image previews:
 //! the shared attachment catalog bound as the window client's
 //! `AttachmentShelf`, and the decoded pixels behind each preview.
 //! Thumbnails share one texture, a sheet with one cell per catalog slot;
@@ -10,8 +10,7 @@ const std = @import("std");
 const data = @import("model");
 const client = @import("telar-client");
 const gfx = @import("gfx");
-const native = @import("native/native.zig");
-const diagram_texture = @import("native/DiagramTexture.zig");
+const diagram_texture = gfx.DiagramTexture;
 const DiagramStore = @import("diagrams/Store.zig");
 const PreviewImage = @import("image/PreviewImage.zig");
 const PremultipliedImage = @import("image/PremultipliedImage.zig");
@@ -129,8 +128,8 @@ pub fn beginFrame(self: *ImagePreviews) void {
 
 /// The sheet and modal textures of this frame; empty while nothing shows.
 /// Example: `renderer.diagrams[ImagePreviews.sheet_slot..][0..2].* = gui.previews.textures(shown);`
-pub fn textures(self: *ImagePreviews, shown: bool) [2]native.DiagramTexture {
-    var result: [2]native.DiagramTexture = @splat(.{});
+pub fn textures(self: *ImagePreviews, shown: bool) [2]gfx.DiagramTexture.DiagramTexture {
+    var result: [2]gfx.DiagramTexture.DiagramTexture = @splat(.{});
     if (!shown or !self.catalog.hasVisibleItems()) {
         return result;
     }
@@ -257,6 +256,7 @@ const Textures = struct {
         /// The modal copy the frame in flight samples.
         borrowed: ?[*]const u8 = null,
         /// Pixels retired since the last frame, freed by the next one.
+        // SAFETY: retire writes each retained image before increasing retired_len; freeing and compaction visit only that prefix.
         retired: [retired_capacity]PremultipliedImage = undefined,
         retired_len: u8 = 0,
     };

@@ -30,9 +30,11 @@ pub fn Type(comptime Message: type) type {
         tasks: std.Io.Group = .init,
         mutex: std.Io.Mutex = .init,
         ready: std.Io.Event = .unset,
+        // SAFETY: append writes the message before marking its slot ready; consumers select only ready slots under the mutex.
         items: [capacity]Message = undefined,
         states: [capacity]SlotState = @splat(.free),
         generations: [capacity]u64 = @splat(0),
+        // SAFETY: append writes the queued slot index before increasing len; consumers read only the live ring range under the mutex.
         order: [capacity]u8 = undefined,
         head: usize = 0,
         len: usize = 0,

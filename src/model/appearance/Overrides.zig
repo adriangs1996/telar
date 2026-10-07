@@ -1,8 +1,6 @@
 const cellgrid = @import("cellgrid");
 /// Optional color values map directly to future user configuration keys.
 /// `.default` means that the host terminal supplies the color.
-const Overrides = @This();
-
 accent: ?cellgrid.Color = null,
 panel_bg: ?cellgrid.Color = null,
 surface0: ?cellgrid.Color = null,

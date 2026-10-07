@@ -1,5 +1,5 @@
 //! Which pane frames one presentation carried, and retiring exactly those
-//! after the host confirms delivery (docs/invariants.md#presentation-delivery).
+//! after the host confirms delivery.
 const std = @import("std");
 const ClientModel = @import("../state/ClientModel.zig");
 const PresentationCommit = @import("PresentationCommit.zig");

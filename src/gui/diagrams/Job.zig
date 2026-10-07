@@ -6,6 +6,7 @@ pub const max_source_bytes = 48 * 1024;
 
 id: u64,
 slot: u8,
+// SAFETY: Store copies the source before launching the render job; text reads only source[0..len].
 source: [max_source_bytes]u8 = undefined,
 len: u32,
 theme: mermaid.Theme,

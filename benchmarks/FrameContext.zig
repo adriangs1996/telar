@@ -1,7 +1,6 @@
 const vtgrid = @import("vtgrid");
 const localsocket = @import("localsocket");
 const core = @import("telar-core");
-const backend = @import("telar-backend");
 const DamageContext = @import("DamageContext.zig");
 const std = @import("std");
 const Fixture = @import("Fixture.zig");

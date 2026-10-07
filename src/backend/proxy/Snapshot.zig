@@ -1,5 +1,3 @@
-const Snapshot = @This();
-
 active_connections: u32 = 0,
 rejected_connections: u64 = 0,
 invalid_authorization_rejections: u64 = 0,
@@ -7,6 +5,7 @@ unknown_credential_rejections: u64 = 0,
 connection_limit_drops: u64 = 0,
 h2_decode_failures: u64 = 0,
 passthrough_connections: u64 = 0,
+anonymous_tunnels: u64 = 0,
 upstream_connect_failures: u64 = 0,
 tls_context_failures: u64 = 0,
 tls_upstream_handshake_failures: u64 = 0,

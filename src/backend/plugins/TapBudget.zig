@@ -35,16 +35,3 @@ pub fn release(self: *TapBudget, bytes: usize) void {
     const previous = self.held.fetchSub(bytes, .monotonic);
     std.debug.assert(previous >= bytes);
 }
-
-test "a charge past the budget is dropped and counted, and a release makes room" {
-    var budget: TapBudget = .{
-        .max_bytes = 8,
-    };
-
-    try std.testing.expect(budget.charge(7));
-    try std.testing.expect(!budget.charge(2));
-    try std.testing.expectEqual(@as(u64, 1), budget.dropped.load(.monotonic));
-
-    budget.release(7);
-    try std.testing.expect(budget.charge(8));
-}

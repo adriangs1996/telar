@@ -1,7 +1,6 @@
 const core = @import("telar-core");
 const Generation = @import("../config/Generation.zig");
 const Registry = @import("../plugins/Registry.zig");
-const Loaded = @This();
 
 generation: *Generation,
 registry: *Registry,

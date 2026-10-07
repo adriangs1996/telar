@@ -1,5 +1,4 @@
 //! What the resolved placements were built from; any change rebuilds them.
-const ResolvedFrom = @This();
 
 machine: u8,
 ingress: u64,

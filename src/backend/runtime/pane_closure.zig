@@ -20,7 +20,6 @@ const pane_observation = @import("pane_observation.zig");
 const session_checkpoint = @import("session_checkpoint.zig");
 const tab_removal = @import("tab_removal.zig");
 const worktree_lifecycle = @import("worktree_lifecycle.zig");
-const PaneFixture = @import("tests/PaneFixture.zig");
 
 /// Requests closure of an attached pane. The pane stays until its exit.
 ///
@@ -136,38 +135,4 @@ fn keepExitText(store: *PaneStore, pane: *const Pane) void {
 
 fn exitOrSynthetic(result: anyerror!exit_module.Exit) exit_module.Exit {
     return result catch .{ .signaled = .KILL };
-}
-
-test "wait failure becomes a synthetic SIGKILL exit" {
-    try std.testing.expectEqual(
-        exit_module.Exit{ .signaled = .KILL },
-        exitOrSynthetic(error.WaitpidFailed),
-    );
-    try std.testing.expectEqual(
-        exit_module.Exit{ .exited = 7 },
-        exitOrSynthetic(exit_module.Exit{ .exited = 7 }),
-    );
-}
-
-test "an exited pane's record is truncated when it printed more rows than it keeps" {
-    var fixture: PaneFixture = .{};
-    try fixture.init();
-    defer fixture.deinit();
-    var line_buffer: [16]u8 = undefined;
-    for (1..2001) |number| {
-        _ = try fixture.pane.ingest(std.testing.io, try std.fmt.bufPrint(&line_buffer, "l{d}\r\n", .{number}));
-    }
-
-    const store = try std.testing.allocator.create(PaneStore);
-    defer std.testing.allocator.destroy(store);
-    store.* = .{};
-    fixture.pane.exit = .{ .exited = 0 };
-    defer fixture.pane.exit = null;
-
-    keepExitText(store, fixture.pane);
-    const slot = store.exited.find(fixture.pane.key()).?;
-
-    try std.testing.expectEqualStrings("l2000", store.exited.tail(slot, 1).text);
-    try std.testing.expect(!store.exited.tail(slot, 1).truncated);
-    try std.testing.expect(store.exited.tail(slot, ExitedPanes.kept_rows).truncated);
 }

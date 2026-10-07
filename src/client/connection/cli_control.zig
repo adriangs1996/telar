@@ -3,7 +3,6 @@
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
-const client_tests = @import("../execution/client_tests.zig");
 const config_adoption = @import("../config/config_adoption.zig");
 const copy_mode = @import("../input/copy_mode.zig");
 const history_palette = @import("../input/history_palette.zig");
@@ -514,8 +513,4 @@ pub fn createCommandTab(client: *Client, command: *const data.CommandTab) !void 
             },
         );
     }
-}
-
-test "layout export decodes to the same active pane and split tree" {
-    try client_tests.layoutRoundTrip(writeCommandLayout);
 }

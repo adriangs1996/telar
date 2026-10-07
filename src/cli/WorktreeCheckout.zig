@@ -1,6 +1,4 @@
 /// What `add` checks out.
-const WorktreeCheckout = @This();
-
 root: []const u8,
 directory: []const u8,
 branch: []const u8,

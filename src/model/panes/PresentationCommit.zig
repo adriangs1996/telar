@@ -4,6 +4,7 @@ const std = @import("std");
 const PresentationCommit = @This();
 
 location: ?core.TabLocation = null,
+// SAFETY: append initializes each pane before increasing len; copyFrom copies the source prefix before returning and slice exposes only that prefix.
 panes: [core.max_panes_per_tab]PaneCommit = undefined,
 len: u8 = 0,
 

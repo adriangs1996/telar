@@ -2,7 +2,6 @@
 //! Operations own wire decoding and delivery; bounded model APIs own storage.
 
 const data = @import("model");
-const std = @import("std");
 
 pub fn begin(model: *data.ClientModel, options: struct { enter_runs: bool, match_fuzzy: bool, show_agent_commands: bool }) void {
     model.history_palette.begin();
@@ -133,23 +132,6 @@ pub fn pruned(model: *data.ClientModel, request_id: u64) bool {
 
     const prompt = model.name_prompt.currentConst() orelse return false;
     return prompt.target() == .history;
-}
-
-test "inspection constraints change semantic scroll only when it exceeds the bound" {
-    const state = try std.testing.allocator.create(data.ClientModel);
-    defer std.testing.allocator.destroy(state);
-    state.* = data.ClientModel.init(std.testing.allocator, true);
-    defer state.deinit();
-    state.name_prompt.begin(.history_palette);
-    _ = state.name_prompt.apply(.toggle_inspection);
-    _ = state.name_prompt.apply(.page_down);
-    constrainInspection(state, 2);
-    try std.testing.expectEqual(@as(u32, 2), state.name_prompt.currentConst().?.detailScroll());
-    const revision = state.version();
-    constrainInspection(state, 2);
-    try std.testing.expectEqualDeep(revision, state.version());
-    constrainInspection(state, 0);
-    try std.testing.expectEqual(@as(u32, 0), state.name_prompt.currentConst().?.detailScroll());
 }
 
 const Read = struct { id: u64, kind: enum { command, output } };

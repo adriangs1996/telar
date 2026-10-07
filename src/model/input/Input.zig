@@ -1,5 +1,4 @@
 const core = @import("telar-core");
-const Input = @This();
 
 level: core.NotificationLevel = .info,
 duration_ms: u32 = core.default_notification_duration_ms,

@@ -4,6 +4,7 @@ const InputText = @This();
 /// The most text one line carries, in bytes.
 pub const max_bytes = 1024;
 
+// SAFETY: input_protocol copies the text before returning the parsed input; slice reads only len bytes.
 bytes: [max_bytes]u8 = undefined,
 len: u16 = 0,
 

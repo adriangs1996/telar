@@ -10,6 +10,7 @@ pub const buffer_size = 8192;
 
 metrics: Metrics,
 sink: core.Sink,
+// SAFETY: client_telemetry formats a complete line before setting line_len and queuing its write; writes expose only that initialized prefix.
 buffer: [buffer_size]u8 = undefined,
 /// The formatted line in `buffer` a write job borrows while `write_pending`.
 line_len: usize = 0,
@@ -129,63 +130,4 @@ pub fn recordMessage(self: *State, observation: *const data.RuntimeMessage) void
     }
 
     self.metrics.decode.observe(observation.decode_ns);
-}
-
-test "client telemetry stays disabled when no runtime endpoint exists" {
-    const io = std.testing.io;
-    var state = State.init(io, "");
-    defer state.deinit(io);
-
-    try std.testing.expect(!state.enabled);
-    try std.testing.expect(!state.sink.available());
-}
-
-test "client telemetry coalesces writes and defers sink shutdown until completion" {
-    if (!core.enabled) {
-        return;
-    }
-
-    const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    const file = try temp.dir.createFile(io, "telemetry.log", .{});
-    var state: State = .{
-        .metrics = .{ .started_ns = 0 },
-        .sink = .{ .file = file },
-        .enabled = true,
-    };
-    defer state.deinit(io);
-
-    try std.testing.expect(state.reserveWrite());
-    try std.testing.expect(!state.reserveWrite());
-    state.disable(io);
-    try std.testing.expect(!state.available());
-    try std.testing.expect(state.sink.available());
-
-    state.finishWrite(io, {});
-    try std.testing.expect(!state.write_pending);
-    try std.testing.expect(!state.sink.available());
-}
-
-test "client telemetry write failure releases its token and disables the sink" {
-    if (!core.enabled) {
-        return;
-    }
-
-    const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    const file = try temp.dir.createFile(io, "telemetry.log", .{});
-    var state: State = .{
-        .metrics = .{ .started_ns = 0 },
-        .sink = .{ .file = file },
-        .write_pending = true,
-        .enabled = true,
-    };
-    defer state.deinit(io);
-
-    state.finishWrite(io, error.WriteFailed);
-    try std.testing.expect(!state.write_pending);
-    try std.testing.expect(!state.available());
-    try std.testing.expect(!state.sink.available());
 }

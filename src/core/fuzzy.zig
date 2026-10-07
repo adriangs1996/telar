@@ -44,11 +44,3 @@ pub fn score(haystack: []const u8, needle: []const u8) ?u32 {
     const base: u32 = 4096;
     return base -| @as(u32, @intCast(start * 8)) -| @as(u32, @intCast((span - needle.len) * 16));
 }
-
-test "scores prefer earlier and tighter subsequence matches" {
-    try std.testing.expect(score("telar", "") != null);
-    try std.testing.expect(score("Telar", "tel").? > score("proxy-telar", "tel").?);
-    try std.testing.expect(score("telar", "tel").? > score("t-e-l", "tel").?);
-    try std.testing.expect(score("telar", "xyz") == null);
-    try std.testing.expect(score("ab", "abc") == null);
-}

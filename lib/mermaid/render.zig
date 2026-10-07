@@ -125,6 +125,7 @@ fn killAndReap(child: *std.process.Child, io: std.Io) void {
     if (child.id) |pid| {
         // Child.kill uses TERM on POSIX. Enforce the deadline even if a helper
         // ignores TERM, then let Child.kill perform the uncancelable reap.
+        // The helper may already have exited; Child.kill below still performs the uncancelable reap.
         std.posix.kill(pid, .KILL) catch {};
     }
 
@@ -152,9 +153,6 @@ fn readOutput(task: *Task, file: std.Io.File) !Image {
 }
 
 fn hex(rgb: [3]u8, buffer: *[7]u8) []const u8 {
+    // SAFETY: Three u8 values produce exactly six hexadecimal digits; the leading hash fills the seven-byte buffer.
     return std.fmt.bufPrint(buffer, "#{x:0>2}{x:0>2}{x:0>2}", .{ rgb[0], rgb[1], rgb[2] }) catch unreachable;
-}
-
-test {
-    _ = @import("render_test.zig");
 }

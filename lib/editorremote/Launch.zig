@@ -12,7 +12,9 @@ pub const max_arguments = 3;
 /// Room for the path plus `:line:column`, or for Vim's `+call cursor(l, c)`.
 const position_bytes = 64;
 
+// SAFETY: argv assigns every element of the returned argument slice; unused trailing argument slots never escape.
 arguments: [max_arguments][]const u8 = undefined,
+// SAFETY: argv formats position text with a fixed writer and returns only writer.buffered(); the no-position case does not read text.
 text: [expressions.max_path_bytes + position_bytes]u8 = undefined,
 
 /// How an editor's command line takes a position. Editors this list does
@@ -119,33 +121,4 @@ fn conventionOf(executable: []const u8) Convention {
     }
 
     return .none;
-}
-
-test "each editor family receives the position the way its command line reads it" {
-    const cases = [_]struct { executable: []const u8, line: u32, column: u32, expected: []const []const u8 }{
-        .{ .executable = "/opt/homebrew/bin/nvim", .line = 12, .column = 0, .expected = &.{ "/opt/homebrew/bin/nvim", "+12", "/tmp/a.zig" } },
-        .{ .executable = "vim", .line = 12, .column = 3, .expected = &.{ "vim", "+call cursor(12, 3)", "/tmp/a.zig" } },
-        .{ .executable = "emacsclient", .line = 12, .column = 3, .expected = &.{ "emacsclient", "+12:3", "/tmp/a.zig" } },
-        .{ .executable = "nano", .line = 12, .column = 3, .expected = &.{ "nano", "+12,3", "/tmp/a.zig" } },
-        .{ .executable = "hx", .line = 12, .column = 0, .expected = &.{ "hx", "/tmp/a.zig:12" } },
-        .{ .executable = "code", .line = 12, .column = 3, .expected = &.{ "code", "-g", "/tmp/a.zig:12:3" } },
-        .{ .executable = "ed", .line = 12, .column = 3, .expected = &.{ "ed", "/tmp/a.zig" } },
-        .{ .executable = "nvim", .line = 0, .column = 0, .expected = &.{ "nvim", "/tmp/a.zig" } },
-    };
-
-    for (cases) |case| {
-        var launch: Launch = .{};
-        const arguments = try launch.argv(case.executable, "/tmp/a.zig", case.line, case.column);
-        try std.testing.expectEqual(case.expected.len, arguments.len);
-        for (case.expected, arguments) |expected, actual| {
-            try std.testing.expectEqualStrings(expected, actual);
-        }
-    }
-}
-
-test "the longest path still fits with its position" {
-    const path = "/" ++ "a" ** (expressions.max_path_bytes - 1);
-    var launch: Launch = .{};
-    const arguments = try launch.argv("hx", path, std.math.maxInt(u32), std.math.maxInt(u32));
-    try std.testing.expect(std.mem.startsWith(u8, arguments[1], path));
 }

@@ -3,7 +3,6 @@
 //! no other change reuses until this one finishes.
 const std = @import("std");
 const MachineEdit = @import("MachineEdit.zig");
-const MachineEditJob = @This();
 
 edit: MachineEdit,
 environ: std.process.Environ,

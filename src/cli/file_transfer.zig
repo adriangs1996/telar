@@ -9,6 +9,7 @@ const bytes_limit = core.Limit.declare("file_transfer.max_bytes", "bytes", max_b
 /// Transfers a single bounded file through raw stdin/stdout. Example: `return file_transfer.run(init, options);`.
 pub fn run(init: std.process.Init, options: FileOptions) u8 {
     transfer(init, options) catch |err| {
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar file: {s}\n", .{@errorName(err)});
         return 1;
     };
@@ -53,6 +54,7 @@ fn transfer(init: std.process.Init, options: FileOptions) !void {
     const temporary = try std.fmt.bufPrint(&name_buffer, ".telar-file-{s}", .{&std.fmt.bytesToHex(nonce, .lower)});
     const file = try parent.createFile(init.io, temporary, .{ .exclusive = true, .permissions = .fromMode(0o600) });
     defer file.close(init.io);
+    // The successful rename consumes this path; failed transfers attempt cleanup without replacing the transfer error.
     defer parent.deleteFile(init.io, temporary) catch {};
     const size = try copy(init.io, std.Io.File.stdin(), file);
     if (size != options.bytes.?) {

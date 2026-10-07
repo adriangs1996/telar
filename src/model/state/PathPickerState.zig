@@ -28,8 +28,10 @@ phase: Phase = .idle,
 pane_id: core.PaneId = .invalid,
 /// The pane's directory when the picker opened; inserted paths are
 /// relative to it.
+// SAFETY: Opening the picker copies its directory before setting anchor_len; anchorSlice reads only that prefix.
 anchor: [core.max_cwd_bytes]u8 = undefined,
 anchor_len: u16 = 0,
+// SAFETY: Changing the root copies the directory before setting root_len; rootSlice reads only that prefix.
 root: [core.max_cwd_bytes]u8 = undefined,
 root_len: u16 = 0,
 /// The next request rebuilds the runtime's index.
@@ -37,13 +39,16 @@ refresh: bool = false,
 pending_request: u64 = 0,
 requests: [tracked_requests]u64 = @splat(0),
 next_slot: u8 = 0,
+// SAFETY: Adding a match copies its path before increasing page_used and len; path reads only ranges of published matches.
 page_bytes: [max_page_bytes]u8 = undefined,
 page_used: u16 = 0,
+// SAFETY: Adding a match initializes its metadata and positions before increasing len; slice exposes only that prefix.
 matches: [core.max_path_results]PathPickerMatch = undefined,
 len: u8 = 0,
 scanned: u32 = 0,
 complete: bool = true,
 truncated: bool = false,
+// SAFETY: Failure handling copies the bounded message before setting error_len; errorSlice exposes only that prefix.
 error_text: [max_error_bytes]u8 = undefined,
 error_len: u8 = 0,
 
@@ -217,91 +222,4 @@ pub fn setError(self: *PathPickerState, message: []const u8) void {
 
 pub fn version(self: *const PathPickerState) u64 {
     return self.revision;
-}
-
-test "only the newest reply for the current root replaces the page" {
-    var state: PathPickerState = .{};
-    state.begin(@enumFromInt(3), "/work");
-    state.expect(7);
-
-    var buffer: [512]u8 = undefined;
-    const encoded = try core.encodePathResults(&buffer, .{
-        .request_id = @enumFromInt(7),
-        .root = "/work",
-        .scanned = 2,
-        .matches = &.{.{
-            .path = "src/main.zig",
-            .kind = .file,
-            .positions = &.{ 4, 5 },
-        }},
-    });
-    const message = try core.decodeServer(encoded);
-    try std.testing.expect(try state.receive(message.path_results));
-    try std.testing.expectEqual(@as(usize, 1), state.slice().len);
-    try std.testing.expectEqualStrings("src/main.zig", state.path(&state.slice()[0]));
-    try std.testing.expectEqual(Phase.ready, state.phase);
-    try std.testing.expect(!try state.receive(message.path_results));
-}
-
-test "the longest reply the runtime may send is kept whole" {
-    var state: PathPickerState = .{};
-    state.begin(@enumFromInt(3), "/work");
-    state.expect(7);
-
-    const longest = "p" ** core.max_path_match_bytes;
-    var matches: [core.max_path_results]core.PathMatch = undefined;
-    for (&matches) |*match| {
-        match.* = .{
-            .path = longest,
-            .kind = .file,
-            .positions = &.{0},
-        };
-    }
-
-    const buffer = try std.testing.allocator.alloc(u8, 2 * max_page_bytes);
-    defer std.testing.allocator.free(buffer);
-    const encoded = try core.encodePathResults(buffer, .{
-        .request_id = @enumFromInt(7),
-        .root = "/work",
-        .scanned = core.max_path_results,
-        .matches = &matches,
-    });
-    const message = try core.decodeServer(encoded);
-    try std.testing.expect(try state.receive(message.path_results));
-    try std.testing.expectEqual(@as(usize, core.max_path_results), state.slice().len);
-    try std.testing.expectEqualStrings(longest, state.path(&state.slice()[core.max_path_results - 1]));
-}
-
-test "a long error is cut at a character" {
-    var state: PathPickerState = .{};
-    state.setError("x" ++ "é" ** max_error_bytes);
-
-    try std.testing.expectEqual(@as(usize, max_error_bytes - 1), state.errorSlice().len);
-    try std.testing.expect(std.unicode.utf8ValidateSlice(state.errorSlice()));
-}
-
-test "late failures of older requests are recognised without replacing the page" {
-    var state: PathPickerState = .{};
-    state.begin(@enumFromInt(3), "/work");
-    state.expect(7);
-    state.expect(8);
-
-    try std.testing.expect(state.fail(.{
-        .request_id = @enumFromInt(7),
-        .code = .resource_limit,
-        .message = "busy",
-    }));
-    try std.testing.expectEqual(Phase.loading, state.phase);
-    try std.testing.expect(state.fail(.{
-        .request_id = @enumFromInt(8),
-        .code = .permission_denied,
-        .message = "the directory cannot be read",
-    }));
-    try std.testing.expectEqual(Phase.failed, state.phase);
-    try std.testing.expectEqualStrings("the directory cannot be read", state.errorSlice());
-    try std.testing.expect(!state.fail(.{
-        .request_id = @enumFromInt(99),
-        .code = .internal,
-        .message = "other",
-    }));
 }

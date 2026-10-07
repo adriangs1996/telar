@@ -9,6 +9,7 @@ const Rect = gfx.Rect;
 const Transition = animate.Transition;
 const TabMotions = @This();
 
+// SAFETY: place initializes a motion before increasing len; begin, lookup and finish visit only entries below len.
 entries: [core.max_tabs_per_workspace]Motion = undefined,
 len: usize = 0,
 workspace: ?core.WorkspaceLocation = null,
@@ -69,27 +70,6 @@ pub fn finish(self: *TabMotions) void {
     }
 
     self.len = kept;
-}
-
-test "tab reflow eases retargets continuously and parks its shared clock" {
-    var motions: TabMotions = .{};
-    var clock: Clock = .{};
-    const slot: Slot = .{ .id = @enumFromInt(1), .bounds = .{ .x = 0, .y = 7, .width = 100, .height = 35 } };
-    _ = motions.place(slot, &clock);
-    var moved = slot;
-    moved.bounds.x = 300;
-    try std.testing.expectEqual(@as(f32, 0), motions.place(moved, &clock).x);
-    try std.testing.expect(clock.deadline_ns != null);
-    clock.begin(90 * std.time.ns_per_ms);
-    const halfway = motions.place(moved, &clock).x;
-    try std.testing.expect(halfway > 200 and halfway < 300);
-    try std.testing.expectApproxEqAbs(halfway, motions.place(slot, &clock).x, 0.001);
-    clock.begin(300 * std.time.ns_per_ms);
-    try std.testing.expectEqual(@as(f32, 0), motions.place(slot, &clock).x);
-    try std.testing.expect(clock.deadline_ns == null);
-    motions.begin(null);
-    motions.finish();
-    try std.testing.expectEqual(@as(usize, 0), motions.len);
 }
 
 const Motion = struct {

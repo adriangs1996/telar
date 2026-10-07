@@ -6,6 +6,7 @@ const std = @import("std");
 const Snapshot = @This();
 
 revision: u64 = 0,
+// SAFETY: replace validates and initializes every retained agent before setting count; slice and lookups use only that prefix.
 items: [core.max_agent_snapshot_entries]Agent = undefined,
 count: u8 = 0,
 
@@ -36,6 +37,7 @@ pub fn replace(self: *Snapshot, input: SnapshotInput) !bool {
     }
 
     for (input.agents, 0..) |agent, index| {
+        // SAFETY: the first pass validated every agent with the same pure constructor before this mutation pass.
         self.items[index] = Agent.init(agent) catch unreachable;
     }
 

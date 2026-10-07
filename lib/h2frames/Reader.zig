@@ -1,6 +1,7 @@
 const framing = @import("framing.zig");
 const Reader = @This();
 
+// SAFETY: feed copies each received prefix and calls decodeHeader only when header_len reaches header_bytes.
 header: [framing.header_bytes]u8 = undefined,
 header_len: u8 = 0,
 payload_len: usize = 0,

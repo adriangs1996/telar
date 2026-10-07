@@ -32,18 +32,3 @@ pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !GuiOpti
 
     return .{ .run = try RunOptions.parse(storage[0..count], environ), .login_shell = login_shell };
 }
-
-test "the login shell flag is stripped before the run options see it" {
-    const args = [_][*:0]const u8{ "--login-shell", "--no-config" };
-    const options = try GuiOptions.parse(&args, .empty);
-
-    try std.testing.expect(options.login_shell);
-    try std.testing.expect(options.run.no_config);
-}
-
-test "without the flag gui options are plain run options" {
-    const args = [_][*:0]const u8{"--no-config"};
-    const options = try GuiOptions.parse(&args, .empty);
-
-    try std.testing.expect(!options.login_shell);
-}

@@ -12,26 +12,34 @@ tab_id: u64,
 pane_index: u16,
 provider: core.AgentProvider,
 status: core.AgentStatus,
+// SAFETY: fromEntry copies the bounded text before recording its length; accessors read only that initialized prefix.
 workspace_label: [core.max_agent_workspace_label_bytes]u8 = undefined,
 workspace_label_len: u8 = 0,
+// SAFETY: fromEntry copies the bounded text before recording its length; accessors read only that initialized prefix.
 tab_label: [core.max_tab_label_bytes]u8 = undefined,
 tab_label_len: u8 = 0,
+// SAFETY: fromEntry copies the bounded text before recording its length; accessors read only that initialized prefix.
 title: [core.max_agent_session_title_bytes]u8 = undefined,
 title_len: u8 = 0,
+// SAFETY: fromEntry copies the bounded text before recording its length; accessors read only that initialized prefix.
 cwd_label: [core.max_agent_cwd_label_bytes]u8 = undefined,
 cwd_label_len: u8 = 0,
+// SAFETY: fromEntry copies the bounded text before recording its length; accessors read only that initialized prefix.
 provider_name: [core.max_agent_provider_name_bytes]u8 = undefined,
 provider_name_len: u8 = 0,
 blocked_reason: core.AgentBlockedReason = .none,
 status_age_s: u32 = 0,
 /// The tracked worktree the agent works in; zero when none.
 work_tree: u64 = 0,
+// SAFETY: fromEntry copies the bounded text before recording its length; accessors read only that initialized prefix.
 last_event: [core.max_agent_last_event_bytes]u8 = undefined,
 last_event_len: u8 = 0,
 plan_done: u16 = 0,
 plan_total: u16 = 0,
+// SAFETY: fromEntry copies the bounded text before recording its length; accessors read only that initialized prefix.
 plan_step: [core.max_agent_plan_step_bytes]u8 = undefined,
 plan_step_len: u8 = 0,
+// SAFETY: fromEntry copies the bounded text before recording its length; accessors read only that initialized prefix.
 final_message: [core.max_agent_final_message_bytes]u8 = undefined,
 final_message_len: u16 = 0,
 

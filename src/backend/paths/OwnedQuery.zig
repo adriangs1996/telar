@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const OwnedQuery = @This();
 
 request_id: core.RequestId = @enumFromInt(1),
+// SAFETY: init copies the validated query before returning; textSlice exposes only text_len bytes.
 text: [core.max_path_query_bytes]u8 = undefined,
 text_len: u8 = 0,
 kind: core.PathKindFilter = .any,

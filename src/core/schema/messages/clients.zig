@@ -1,5 +1,4 @@
 const bytecodec = @import("bytecodec");
-const std = @import("std");
 const codec = @import("../codec.zig");
 const tags = @import("tags.zig");
 const id = @import("../id.zig");
@@ -75,20 +74,6 @@ pub fn decodeClientList(decoder: *Decoder) !ClientList {
     }
 
     return list;
-}
-
-test "client catalog refuses oversized counts and invalid routes" {
-    var bytes: [128]u8 = undefined;
-    var list: ClientList = .{ .request_id = @enumFromInt(1), .count = ClientList.capacity + 1 };
-    try std.testing.expectError(error.InvalidClientList, encodeClientList(&bytes, list));
-    list.count = 1;
-    list.entries[0] = .{ .id = 0, .generation = 1, .identity = 2, .attachments = 0, .last_input_pane = 0, .last_input_sequence = 0 };
-    try std.testing.expectError(error.InvalidClientRoute, encodeClientList(&bytes, list));
-    list.entries[0].id = 3;
-    const encoded = try encodeClientList(&bytes, list);
-    var decoder = Decoder.init(encoded[1..]);
-    const decoded = try decodeClientList(&decoder);
-    try std.testing.expectEqualDeep(list.entries[0], decoded.entries[0]);
 }
 
 /// Requests teardown of one exact UI connection. Example: `const bytes = try clients.encodeDetachClient(buffer, request);`

@@ -6,6 +6,7 @@ const window_title = @import("window_title.zig");
 
 const State = @This();
 
+// SAFETY: sync copies a successfully delivered title before publishing sent_len and ever_sent; equality reads only that prefix.
 sent: [window_title.max_title_bytes]u8 = undefined,
 sent_len: u16 = 0,
 ever_sent: bool = false,

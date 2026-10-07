@@ -144,6 +144,19 @@ forbid it. A per-runtime secret would turn it into a `407`, but it would not
 isolate runtimes, since every process of the account can read the owner-only
 directory, and it would break the processes that inherited the current secret.
 
+Some clients never send the credential of the proxy URL on a CONNECT.
+`runtime.proxy.anonymous_tunnels = true` admits a CONNECT that carries no
+`Proxy-Authorization` field at all when its host is outside
+`intercept_hosts`. That tunnel stays opaque, so nothing anonymous reaches
+capture or the taps. A host the proxy intercepts still needs the secret, and
+a malformed or wrong credential is still refused with `407`. The setting is
+off by default and lives in each machine's `config.lua`, so one machine can
+admit anonymous tunnels while another keeps every CONNECT authenticated.
+Turn it on only where you trust every local account: any process that
+reaches the loopback port, including another user's, can then open
+passthrough tunnels and take connection slots. The runtime reads it when it
+starts.
+
 Telar injects both forms of `HTTPS_PROXY` and process-local CA variables into
 new panes. The generic variables cover OpenSSL, curl, Requests, Node.js, and
 AWS clients. `GIT_SSL_CAINFO` covers Git, while
@@ -336,19 +349,19 @@ receives an immutable value and returns typed notification effects. Zig
 validates the complete batch and its capabilities before applying anything.
 Timeouts, VM errors, stale identities, and full queues discard extension work.
 A Lua closure never enters the runtime loop, a TLS session, or a tunnel actor,
-and it never receives a Zig pointer. See [Proxy tap](flows/proxy-tap.md).
+and it never receives a Zig pointer.
 
 ## Counters
 
 Bounded counters distinguish rejected authentication, upstream connection
 failures, each TLS interception stage, HTTP/2 decode failures, passthrough
-connections, and capture starts, truncations, skipped halves, queue drops and
+connections, anonymous tunnels, and capture starts, truncations, skipped halves, queue drops and
 decode failures. No metric retains the destination hostname or payload.
 Runtime telemetry exposes them with a `proxy_` prefix.
 
 The proxy's threads only count the limits they reach. Once a second the
 runtime's maintenance tick reports every limit whose count grew with the
-[limit notice](flows/limit-reached.md): `proxy.max_connections`,
+limit notice: `proxy.max_connections`,
 `proxy.max_connect_head_bytes`, `proxy.connect_head_timeout_ms`,
 `proxy.establish_timeout_ms`, `proxy.max_resolutions`,
 `proxy.max_resolved_addresses`, `proxy.http1.max_head_bytes`,

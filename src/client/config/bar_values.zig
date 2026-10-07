@@ -27,62 +27,6 @@ pub fn parseBarInterval(state: *lua_api.c.lua_State, index: c_int, diagnostic: *
     return @as(u64, @intCast(value)) * std.time.ns_per_ms;
 }
 
-pub fn parseBarContent(state: *lua_api.c.lua_State, index: c_int, diagnostic: *data.Diagnostic) !data.Content {
-    const absolute = lua_api.c.lua_absindex(state, index);
-    var content: data.Content = .{};
-    if (lua_api.c.lua_type(state, absolute) == lua_api.c.LUA_TNIL) {
-        return content;
-    }
-    if (lua_value.string(state, absolute)) |value| {
-        content.append(.{ .text = value }) catch |err| {
-            diagnostic.set("invalid bar text: {s}", .{@errorName(err)});
-            return error.InvalidBarContent;
-        };
-        return content;
-    }
-    if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
-        diagnostic.set("bar render must return nil, text, a segment, or an array of segments", .{});
-        return error.InvalidBarContent;
-    }
-
-    _ = lua_api.c.lua_getfield(state, absolute, "text");
-    const has_text = lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL;
-    lua_value.pop(state, 1);
-    _ = lua_api.c.lua_getfield(state, absolute, "icon");
-    const has_icon = lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL;
-    lua_value.pop(state, 1);
-    if (has_text or has_icon) {
-        const segment = try parseBarSegment(state, absolute, diagnostic);
-        content.append(.{ .text = segment.text, .icon = segment.icon, .style = segment.style }) catch |err| {
-            diagnostic.set("invalid bar segment: {s}", .{@errorName(err)});
-            return error.InvalidBarContent;
-        };
-        return content;
-    }
-
-    const count = lua_api.c.lua_rawlen(state, absolute);
-    if (count > data.bar_values.max_segments) {
-        diagnostic.set("bar content exceeds {d} segments", .{data.bar_values.max_segments});
-        return error.InvalidBarContent;
-    }
-    try lua_value.ensureArrayOnly(state, .{ .index = absolute, .count = count, .path = "bar content" }, diagnostic);
-    for (0..count) |segment_index| {
-        _ = lua_api.c.lua_geti(state, absolute, @intCast(segment_index + 1));
-        const segment = parseBarSegment(state, -1, diagnostic) catch |err| {
-            lua_value.pop(state, 1);
-            return err;
-        };
-        content.append(.{ .text = segment.text, .icon = segment.icon, .style = segment.style }) catch |err| {
-            lua_value.pop(state, 1);
-            diagnostic.set("invalid bar segment {d}: {s}", .{ segment_index + 1, @errorName(err) });
-            return error.InvalidBarContent;
-        };
-        lua_value.pop(state, 1);
-    }
-
-    return content;
-}
-
 pub fn parseBarSegment(state: *lua_api.c.lua_State, index: c_int, diagnostic: *data.Diagnostic) !ParsedBarSegment {
     const absolute = lua_api.c.lua_absindex(state, index);
     if (lua_value.string(state, absolute)) |value| {

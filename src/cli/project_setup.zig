@@ -12,6 +12,7 @@ const Recipe = struct { version: u8, argv: []const []const u8 };
 /// Executes the explicitly requested declared recipe. Example: `return project_setup.run(init, options);`.
 pub fn run(init: std.process.Init, options: ProjectOptions) u8 {
     const id = prepare(init, options.cwd, true, options.detach, null) catch |err| {
+        // Print actionable setup failure details on stderr before returning the command failure status.
         std.debug.print("telar project: {s}; inspect the execution output, supply missing tools/access on this destination, then explicitly retry project setup\n", .{@errorName(err)});
         return 1;
     };
@@ -72,6 +73,7 @@ pub fn prepare(init: std.process.Init, cwd: []const u8, authorized: bool, detach
 
     var operation: core.ExecutionRequest = .{ .action = .start, .execution_id = id, .cwd = cwd, .argument_count = @intCast(recipe.argv.len) };
     @memcpy(operation.arguments[0..recipe.argv.len], recipe.argv);
+    // Report the setup execution ID immediately on stderr so detached setup remains discoverable.
     std.debug.print("telar project: setup execution {d}; each explicit invocation repeats the recipe\n", .{id});
     var reply = try execution.exchange(&session, operation);
     if (detach) {
@@ -102,7 +104,7 @@ pub fn prepare(init: std.process.Init, cwd: []const u8, authorized: bool, detach
             return error.SetupWaitTimedOutExecutionContinues;
         }
 
-        session.sleepMs(10);
+        try session.sleepMs(10);
         reply = try execution.exchange(&session, operation);
     }
 }

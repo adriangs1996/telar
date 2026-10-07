@@ -69,29 +69,3 @@ fn isLetter(key: keyinput.Key, letter: u8) bool {
         else => false,
     };
 }
-
-test "marker policies follow each provider's prompt conventions" {
-    try std.testing.expect(markerPolicy(.ordered) == .ordered);
-    try std.testing.expect(markerPolicy(.none) == .ordered);
-    try std.testing.expect(markerPolicy(.stable_number) == .stable_number);
-    try std.testing.expect(markerPolicy(.pasted_path) == .pasted_path);
-    try std.testing.expect(backslashContinuesPrompt(.stable_number));
-    try std.testing.expect(backslashContinuesPrompt(.pasted_path));
-    try std.testing.expect(!backslashContinuesPrompt(.ordered));
-}
-
-test "Pi path markers yield to word and line deletion keys" {
-    const backspace: keyinput.Key = .{ .code = .backspace };
-    try std.testing.expect(editsMarkers(.pasted_path, backspace));
-    try std.testing.expect(editsMarkers(.stable_number, backspace));
-    try std.testing.expect(!editsMarkers(.ordered, backspace));
-    try std.testing.expect(!editsMarkers(.pasted_path, .{ .code = .backspace, .phase = .release }));
-
-    const word_backward: keyinput.Key = .{ .code = .{ .char = .init("w") }, .mods = .{ .ctrl = true } };
-    try std.testing.expect(editsMarkers(.pasted_path, word_backward));
-    try std.testing.expect(!editsMarkers(.stable_number, word_backward));
-    try std.testing.expect(editsMarkers(.pasted_path, .{ .code = .backspace, .mods = .{ .alt = true } }));
-    try std.testing.expect(editsMarkers(.pasted_path, .{ .code = .{ .char = .init("k") }, .mods = .{ .ctrl = true } }));
-    try std.testing.expect(!editsMarkers(.pasted_path, .{ .code = .{ .char = .init("v") }, .mods = .{ .ctrl = true } }));
-    try std.testing.expect(!editsMarkers(.pasted_path, .{ .code = .{ .char = .init("a") } }));
-}

@@ -1,5 +1,4 @@
 const osc = @import("osc.zig");
-const Command = @This();
 
 bytes: []const u8,
 cwd: []const u8,

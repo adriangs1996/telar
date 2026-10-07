@@ -150,6 +150,7 @@ fn drawCounter(self: WorkspaceRail, canvas: *Canvas, bounds: Rect, range: [2]usi
         .context = self.context,
         .area = bounds,
         .intent = .{ .select_workspace = projection.workspaces.workspaceAt(nearest) },
+        // SAFETY: the bounded workspace list count and plus sign fit the eight-byte counter buffer.
         .text = std.fmt.bufPrint(&storage, "+{d}", .{range[1] - range[0]}) catch unreachable,
         .alignment = .center,
         .background = false,

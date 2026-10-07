@@ -1,7 +1,6 @@
 //! What `src/main.zig` reads from `build_options`: the build-time switches
 //! of one telar executable. The shipped build takes them from `-D` options;
 //! the cross check builds with the defaults.
-const BinaryFlags = @This();
 
 native_client: bool,
 diagnostics: bool = false,

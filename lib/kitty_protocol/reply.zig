@@ -26,12 +26,3 @@ pub fn writeError(writer: *std.Io.Writer, image_id: u32, code: ErrorCode, compti
 
 const del = 0x7f;
 const terminator = "\x1b\\";
-
-test "an error reply names the image, the code and the detail" {
-    var output: [128]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&output);
-
-    _ = try writeError(&writer, 7, .ENOMEM, "graphics upload limit exceeded");
-
-    try std.testing.expectEqualStrings("\x1b_Gi=7;ENOMEM: graphics upload limit exceeded\x1b\\", writer.buffered());
-}

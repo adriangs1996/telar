@@ -2,6 +2,7 @@ const model_data = @import("model");
 const Item = @import("Item.zig");
 const Snapshot = @This();
 
+// SAFETY: GenericCatalog.snapshot initializes each visible item before increasing len; sorting and slice use only that prefix.
 items: [model_data.attachment_types.max_items]Item = undefined,
 len: u8 = 0,
 modal: ?model_data.AttachmentId = null,

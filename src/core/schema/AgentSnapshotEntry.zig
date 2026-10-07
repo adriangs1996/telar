@@ -1,7 +1,6 @@
 const id = @import("id.zig");
 const TabLocation = @import("TabLocation.zig");
 const types = @import("types.zig");
-const AgentSnapshotEntry = @This();
 
 pane_id: id.PaneId,
 pane_generation: u64,

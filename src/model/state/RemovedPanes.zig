@@ -2,6 +2,7 @@ const core = @import("telar-core");
 const std = @import("std");
 const RemovedPanes = @This();
 
+// SAFETY: append writes a pane id before increasing count; slice exposes only that initialized prefix.
 items: [core.max_panes_per_tab]core.PaneId = undefined,
 count: u8 = 0,
 

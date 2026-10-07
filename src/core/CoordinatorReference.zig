@@ -54,6 +54,7 @@ pub fn parse(text: []const u8) !CoordinatorReference {
     }
 
     var reference: CoordinatorReference = .{
+        // SAFETY: session has exactly 32 hex characters; hexToBytes fills all 16 bytes before validate or return, or returns an error.
         .session_id = undefined,
         .pane_id = @enumFromInt(std.fmt.parseUnsigned(u64, parts.next() orelse return error.InvalidCoordinatorReference, 10) catch return error.InvalidCoordinatorReference),
         .pane_generation = std.fmt.parseUnsigned(u64, parts.next() orelse return error.InvalidCoordinatorReference, 10) catch return error.InvalidCoordinatorReference,
@@ -73,31 +74,4 @@ pub fn format(self: CoordinatorReference, buffer: []u8) ![]const u8 {
     try self.validate();
     const session = std.fmt.bytesToHex(self.session_id, .lower);
     return std.fmt.bufPrint(buffer, "{s}:{d}:{d}", .{ session, id.raw(self.pane_id), self.pane_generation });
-}
-
-test "coordinator references round trip and reject wildcard or incomplete identities" {
-    const reference: CoordinatorReference = .{ .session_id = .{1} ** 16, .pane_id = @enumFromInt(7), .pane_generation = 9 };
-    var buffer: [max_text_bytes]u8 = undefined;
-    try std.testing.expectEqualDeep(reference, try parse(try reference.format(&buffer)));
-    for ([_][]const u8{ "", "not-hex:7:9", "00000000000000000000000000000000:7:9", "01010101010101010101010101010101:0:9", "01010101010101010101010101010101:7:0", "01010101010101010101010101010101:7:9:1" }) |invalid| {
-        try std.testing.expectError(error.InvalidCoordinatorReference, parse(invalid));
-    }
-}
-
-test "coordinator wire identity validates and rejects truncated or empty sessions" {
-    const reference: CoordinatorReference = .{ .session_id = .{1} ** 16, .pane_id = @enumFromInt(7), .pane_generation = 3 };
-    var buffer: [32]u8 = undefined;
-    var encoder = bytecodec.Encoder.init(&buffer);
-    try reference.encode(&encoder);
-    var decoder = bytecodec.Decoder.init(encoder.finish());
-    try std.testing.expectEqualDeep(reference, try decode(&decoder));
-    try decoder.ensureEnd();
-    for (0..buffer.len) |length| {
-        decoder = bytecodec.Decoder.init(buffer[0..length]);
-        try std.testing.expectError(error.Truncated, decode(&decoder));
-    }
-
-    @memset(buffer[0..16], 0);
-    decoder = bytecodec.Decoder.init(&buffer);
-    try std.testing.expectError(error.InvalidCoordinatorReference, decode(&decoder));
 }

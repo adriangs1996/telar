@@ -92,7 +92,3 @@ fn commandSucceeded(io: std.Io, argv: []const []const u8) bool {
         else => false,
     };
 }
-
-test {
-    std.testing.refAllDecls(@This());
-}

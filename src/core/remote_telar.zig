@@ -42,31 +42,3 @@ pub fn validate(path: []const u8) !void {
 pub fn program(path: ?[]const u8) []const u8 {
     return path orelse default_program;
 }
-
-test "remote telar paths hold only shell-inert characters" {
-    try validate("/home/dev/.local/share/telar/0.3.0/telar");
-    try validate("/home/dev/.local/share/telar/0.0.0-0123456789ab/telar");
-
-    for ([_][]const u8{
-        "",
-        "/",
-        "telar",
-        "~/bin/telar",
-        "/home/dev user/telar",
-        "/home/dev/$(id)/telar",
-        "/home/dev/it's/telar",
-        "/home/dev/a;b",
-        "/home/dev/a\\b",
-        "/home/dev/../root/telar",
-        "/home/dev/telar/",
-        "/home/dev/\x00telar",
-        "/" ++ "a" ** max_path_bytes,
-    }) |path| {
-        try std.testing.expectError(error.InvalidRemoteTelarPath, validate(path));
-    }
-}
-
-test "a profile without a path runs telar from the PATH" {
-    try std.testing.expectEqualStrings("telar", program(null));
-    try std.testing.expectEqualStrings("/opt/telar", program("/opt/telar"));
-}

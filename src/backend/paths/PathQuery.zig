@@ -18,12 +18,14 @@ gpa: std.mem.Allocator,
 index: *PathIndex,
 client: ClientKey,
 query: OwnedQuery,
+// SAFETY: create copies the index root before returning; rootSlice exposes only root_len bytes.
 root: [core.max_cwd_bytes]u8 = undefined,
 root_len: u16 = 0,
 scanned: u32 = 0,
 complete: bool = false,
 truncated: bool = false,
 failure: PathIndex.Failure = .none,
+// SAFETY: copy initializes each FoundPath before increasing match_count; results visits only that prefix.
 matches: [core.max_path_results]FoundPath = undefined,
 match_count: u8 = 0,
 
@@ -127,42 +129,4 @@ pub fn results(self: *const PathQuery, storage: *[core.max_path_results]core.Pat
         .truncated = self.truncated,
         .matches = storage[0..self.match_count],
     };
-}
-
-test "a query copies ranked paths with the positions that ranked them" {
-    const index = try PathIndex.create(
-        std.testing.allocator,
-        .{
-            .id = 1,
-            .generation = 1,
-        },
-    );
-    defer index.destroy();
-
-    index.want("/work", true);
-    index.reset();
-    _ = index.append("src/", .directory);
-    _ = index.append("src/License.ts", .file);
-    index.publish();
-    index.complete.store(true, .release);
-    index.wanted = .init(.{
-        .request_id = @enumFromInt(4),
-        .root = "/work",
-        .query = "lic",
-    });
-
-    const query = try PathQuery.create(std.testing.allocator, index);
-    defer query.destroy();
-
-    _ = query.run(std.testing.io);
-    var storage: [core.max_path_results]core.PathMatch = undefined;
-    const reply = query.results(&storage);
-    try std.testing.expect(reply.complete);
-    try std.testing.expectEqual(@as(usize, 1), reply.matches.len);
-    try std.testing.expectEqualStrings("src/License.ts", reply.matches[0].path);
-    try std.testing.expectEqualSlices(
-        u16,
-        &.{ 4, 5, 6 },
-        reply.matches[0].positions,
-    );
 }

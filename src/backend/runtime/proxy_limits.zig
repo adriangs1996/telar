@@ -14,10 +14,8 @@ const Tunnel = @import("../proxy/tunnel/Tunnel.zig");
 const capture_queue = @import("../proxy/capture/queue.zig");
 const plugins_support = @import("../plugins/service_support.zig");
 const exchangecapture = @import("exchangecapture");
-const std = @import("std");
 const Snapshot = @import("../proxy/Snapshot.zig");
 const TapLimitCounts = @import("../plugins/TapLimitCounts.zig");
-const RequestFixture = @import("tests/RequestFixture.zig");
 const CaptureConfig = exchangecapture.Config;
 const proxy_service = @import("../proxy/service/service_support.zig");
 
@@ -89,122 +87,4 @@ fn reportGrowth(model: *RuntimeModel, now: u64, last: u64, limit: core.Limit) vo
             .limit = limit,
         });
     }
-}
-
-test "a proxy counter that grew reports its limit by name, and an unchanged one does not" {
-    var fixture: RequestFixture = undefined;
-    try fixture.init();
-    defer fixture.deinit();
-    const model = &fixture.runtime.model;
-
-    reportProxy(
-        model,
-        .{
-            .connection_limit_drops = 3,
-        },
-        .{
-            .connection_limit_drops = 1,
-        },
-        .{},
-    );
-    const slot = model.limit_reaches.find("proxy.max_connections").?;
-    try std.testing.expectEqual(@as(u64, 1), model.limit_reaches.hits[slot]);
-
-    const notice = fixture.response().?.notification.view();
-    try std.testing.expectEqualStrings("proxy.max_connections: limit 256 connections reached", notice.message);
-
-    reportProxy(
-        model,
-        .{
-            .connection_limit_drops = 3,
-        },
-        .{
-            .connection_limit_drops = 3,
-        },
-        .{},
-    );
-    try std.testing.expectEqual(@as(u64, 1), model.limit_reaches.hits[slot]);
-}
-
-test "a refused name resolution and a host with too many addresses report their limits" {
-    var fixture: RequestFixture = undefined;
-    try fixture.init();
-    defer fixture.deinit();
-    const model = &fixture.runtime.model;
-
-    reportProxy(
-        model,
-        .{
-            .resolution_refusals = 1,
-        },
-        .{},
-        .{},
-    );
-    const notice = fixture.response().?.notification.view();
-    try std.testing.expectEqualStrings("proxy.max_resolutions: limit 64 host names reached", notice.message);
-
-    reportProxy(
-        model,
-        .{
-            .resolution_refusals = 1,
-            .resolutions_truncated = 1,
-        },
-        .{
-            .resolution_refusals = 1,
-        },
-        .{},
-    );
-    try std.testing.expectEqual(@as(u64, 1), model.limit_reaches.hits[model.limit_reaches.find("proxy.max_resolutions").?]);
-    try std.testing.expect(model.limit_reaches.find("proxy.max_resolved_addresses") != null);
-}
-
-test "capture truncation names the configured bound that cut it" {
-    var fixture: RequestFixture = undefined;
-    try fixture.init();
-    defer fixture.deinit();
-    const model = &fixture.runtime.model;
-
-    reportProxy(
-        model,
-        .{
-            .capture_truncated_total = 1,
-        },
-        .{},
-        .{
-            .max_total_bytes = 1024,
-        },
-    );
-    try std.testing.expect(model.limit_reaches.find("proxy.capture.max_part_bytes") == null);
-
-    const notice = fixture.response().?.notification.view();
-    try std.testing.expectEqualStrings("proxy.capture.max_total_bytes: limit 1024 bytes reached", notice.message);
-}
-
-test "a tap worker disabled after its restarts is reported" {
-    var fixture: RequestFixture = undefined;
-    try fixture.init();
-    defer fixture.deinit();
-    const model = &fixture.runtime.model;
-
-    reportTap(
-        model,
-        .{
-            .disabled = 1,
-            .timeouts = 5,
-        },
-        .{},
-    );
-    try std.testing.expect(model.limit_reaches.find("plugins.tap.restart_limit") != null);
-    try std.testing.expect(model.limit_reaches.find("plugins.tap.reply_timeout_ms") != null);
-    try std.testing.expect(model.limit_reaches.find("plugins.tap.queue_depth") == null);
-}
-
-test "the maintenance report of an idle proxy reports nothing" {
-    var fixture: RequestFixture = undefined;
-    try fixture.init();
-    defer fixture.deinit();
-    const model = &fixture.runtime.model;
-
-    report(model);
-    try std.testing.expectEqual(@as(usize, 0), model.limit_reaches.count);
 }

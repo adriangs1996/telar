@@ -27,8 +27,10 @@ pub fn run(init: std.process.Init, options: Options) u8 {
         .limits => listLimits(init, options),
     };
     result catch |err| {
+        // The diagnostics command reports its own failure on stderr, separate from collected log output.
         std.debug.print("telar diagnostics: {s}\n", .{@errorName(err)});
         if (err == error.DiagnosticLogsNotFound) {
+            // Give diagnostic collection instructions on stderr after a missing-log failure.
             std.debug.print(
                 "  the background runtime writes {s} beside its socket once it starts;\n" ++
                     "  per-process telemetry needs a build with -Ddiagnostics.\n",
@@ -251,55 +253,4 @@ fn writeLimits(writer: *std.Io.Writer, list: core.LimitListView, json: bool) !vo
             list.refused_reports,
         });
     }
-}
-
-test "limits print one line per limit with where and when it was last reached" {
-    var runtime: core.LimitReaches = .{};
-    var clients: core.LimitReaches = .{};
-    _ = core.limit_reached.record(
-        &clients,
-        .{
-            .limit = core.Limit.declare("bars.max_bar_actions", "click actions", 4),
-            .requested = 17,
-        },
-        .{
-            .awake_ms = 0,
-            .real_ms = 45_296_000,
-        },
-        3,
-    );
-    _ = core.limit_reached.record(
-        &runtime,
-        core.limit_reached.unnamed(error.BufferTooSmall, "agent_tick"),
-        .{
-            .awake_ms = 0,
-            .real_ms = 45_297_000,
-        },
-        1,
-    );
-    clients.evicted = 2;
-
-    var wire: [512]u8 = undefined;
-    const bytes = try core.encodeLimitList(&wire, .{
-        .request_id = @enumFromInt(1),
-        .runtime = &runtime,
-        .clients = &clients,
-        .refused_reports = 0,
-    });
-    const decoded = try core.decodeServer(bytes);
-
-    var buffer: [1024]u8 = undefined;
-    var writer: std.Io.Writer = .fixed(&buffer);
-    try writeLimits(&writer, decoded.limit_list, false);
-    try std.testing.expectEqualStrings(
-        "BufferTooSmall: limit reached  (runtime, agent_tick, last 12:34:57 UTC)\n" ++
-            "bars.max_bar_actions: 17 click actions; limit 4 (3 times)  (client, last 12:34:56 UTC)\n" ++
-            "0 runtime and 2 client limits replaced by newer ones; 0 client reports refused\n",
-        writer.buffered(),
-    );
-
-    writer = .fixed(&buffer);
-    try writeLimits(&writer, decoded.limit_list, true);
-    try std.testing.expect(std.mem.startsWith(u8, writer.buffered(), "{\"runtime_evicted\":0,\"client_evicted\":2,\"refused_reports\":0,\"limits\":[{\"name\":\"BufferTooSmall\""));
-    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "\"route\":\"agent_tick\"") != null);
 }

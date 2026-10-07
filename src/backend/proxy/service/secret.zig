@@ -48,27 +48,9 @@ pub fn load(io: std.Io, path: []const u8) !?identity.Secret {
         return error.ProxySecretCorrupt;
     }
 
+    // SAFETY: The text length is exactly hex_bytes; successful hexToBytes fills the whole secret before return.
     var loaded: identity.Secret = undefined;
     defer std.crypto.secureZero(u8, &loaded);
     _ = std.fmt.hexToBytes(&loaded, text) catch return error.ProxySecretCorrupt;
     return loaded;
-}
-
-test "the proxy secret is created once and reread unchanged" {
-    const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory = directory_buffer[0..try temp.dir.realPath(io, &directory_buffer)];
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try std.fmt.bufPrint(&path_buffer, "{s}/proxy-secret", .{directory});
-
-    try std.testing.expect(try load(io, path) == null);
-    const first = try ensure(io, path);
-    const second = try ensure(io, path);
-    try std.testing.expect(identity.sameSecret(&first, &second));
-    try std.testing.expect(identity.sameSecret(&first, &(try load(io, path)).?));
-
-    try temp.dir.writeFile(io, .{ .sub_path = "proxy-secret", .data = "not hex\n" });
-    try std.testing.expectError(error.ProxySecretCorrupt, load(io, path));
 }

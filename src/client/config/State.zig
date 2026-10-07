@@ -5,12 +5,14 @@ const local_modules = @import("local_modules.zig");
 const State = @This();
 
 vm: *lua.Vm,
+// SAFETY: init copies the validated directory before setting config_dir_len; configDir and module loading read only that prefix.
 config_dir: [std.fs.max_path_bytes]u8 = undefined,
 config_dir_len: u16 = 0,
 module_cache_ref: c_int = lua_api.c.LUA_NOREF,
+// SAFETY: requireLocal copies the resolved path before increasing dependency_count; dependencyPath checks the index and uses its stored length.
 dependencies: [local_modules.max_local_modules][std.fs.max_path_bytes]u8 = undefined,
+// SAFETY: requireLocal writes each path length before increasing dependency_count; dependencyPath checks the index before reading it.
 dependency_lens: [local_modules.max_local_modules]u16 = undefined,
-dependency_mtimes: [local_modules.max_local_modules]i128 = undefined,
 dependency_count: u8 = 0,
 
 /// Creates the loader before any closure can borrow its stable address.

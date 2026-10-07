@@ -3,7 +3,6 @@
 const BarComponent = @import("BarComponent.zig");
 const PanelTarget = @import("PanelTarget.zig").PanelTarget;
 const PanelSource = @import("PanelSource.zig").PanelSource;
-const PanelOpening = @This();
 
 target: PanelTarget,
 anchor: ?BarComponent = null,

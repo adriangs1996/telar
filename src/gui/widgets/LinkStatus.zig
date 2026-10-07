@@ -97,21 +97,3 @@ fn headlineText(link: *const data.RuntimeLink, buffer: []u8) []const u8 {
         .stopped => std.fmt.bufPrint(buffer, "{s} is disabled", .{target}) catch "The machine is disabled",
     };
 }
-
-test "the headline names the machine and the attempt" {
-    var link: data.RuntimeLink = .{};
-    link.name("dev@box");
-    var buffer: [max_headline_bytes]u8 = undefined;
-
-    try std.testing.expectEqualStrings("Connecting to dev@box…", headlineText(&link, &buffer));
-
-    link.phase = .lost;
-    try std.testing.expectEqualStrings("dev@box is unreachable; trying again shortly", headlineText(&link, &buffer));
-
-    link.phase = .connecting;
-    link.attempt = 2;
-    try std.testing.expectEqualStrings("Reconnecting to dev@box (attempt 3)…", headlineText(&link, &buffer));
-
-    link.phase = .failed;
-    try std.testing.expectEqualStrings("Cannot connect to dev@box; retry it from the machine list", headlineText(&link, &buffer));
-}

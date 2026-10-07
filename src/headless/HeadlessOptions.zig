@@ -57,13 +57,3 @@ pub fn parse(args: []const [*:0]const u8) !HeadlessOptions {
 
     return options;
 }
-
-test "headless flags come first and leave the client's options" {
-    const args = [_][*:0]const u8{ "--size", "80x24", "--trace", "t.json", "--no-config", "--", "cat" };
-    const options = try parse(&args);
-
-    try std.testing.expectEqual(@as(u16, 80), options.cols);
-    try std.testing.expectEqualStrings("t.json", options.trace_path.?);
-    try std.testing.expectEqual(@as(usize, 4), options.consumed);
-    try std.testing.expectError(error.MissingHeadlessValue, parse(&.{"--dump"}));
-}

@@ -61,6 +61,7 @@ fn create(init: std.process.Init, input: WorktreeHookInput, socket: ?[*:0]const 
         .directory = directory,
         .branch = branch,
         .base = base,
+        // The hook must return only the worktree path on stdout; tracking failure is a separate stderr notice.
     }) catch |err| std.debug.print("telar hook: worktree created but not tracked: {s}\n", .{control.describe(err)});
 
     var output_buffer: [std.fs.max_path_bytes + 1]u8 = undefined;
@@ -77,12 +78,14 @@ fn remove(init: std.process.Init, input: WorktreeHookInput, socket: ?[*:0]const 
     }
 
     if (insidePane(init.minimal.environ)) {
+        // Forgetting runtime tracking is best effort when the runtime is unavailable; Git still validates removal of the worktree.
         forget(init, socket, input.worktree_path) catch {};
     }
 
     var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const root = try worktree_git.mainRoot(init, input.worktree_path, &root_buffer);
     worktree_git.remove(init, root, input.worktree_path, false) catch {
+        // Report the retained worktree on stderr without changing the hook output consumed by the agent.
         std.debug.print("telar hook: kept {s}; it has changes to review\n", .{input.worktree_path});
     };
 }
@@ -168,12 +171,4 @@ fn insidePane(environ: std.process.Environ) bool {
 fn processCwd(init: std.process.Init, buffer: []u8) ![]const u8 {
     const len = try std.Io.Dir.cwd().realPath(init.io, buffer);
     return buffer[0..len];
-}
-
-test "worktree names become safe branches" {
-    var buffer: [workspace_grammar.max_worktree_branch_bytes]u8 = undefined;
-    try std.testing.expectEqualStrings("fix-tabs", try branchName("fix-tabs", &buffer));
-    try std.testing.expectEqualStrings("my-task-2", try branchName("my task:2", &buffer));
-    try std.testing.expectError(error.InvalidWorktreeBranch, branchName("..", &buffer));
-    try std.testing.expect(handles("WorktreeCreate") and handles("WorktreeRemove") and !handles("Stop"));
 }

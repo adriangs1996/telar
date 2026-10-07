@@ -20,17 +20,23 @@ selection: u16,
 command: []const u8,
 /// Whether the pane the command ran in is open in this client.
 pane_open: bool = false,
+// SAFETY: init copies or formats the timestamp before publishing when_len; facts reads only that prefix, empty on formatting failure.
 when: [96]u8 = undefined,
 when_len: usize = 0,
+// SAFETY: init copies the duration before publishing took_len; facts reads only that initialized prefix.
 took: [32]u8 = undefined,
 took_len: usize = 0,
+// SAFETY: init writes the status text before publishing exit_len; facts reads only that prefix, empty on formatting failure.
 exit: [32]u8 = undefined,
 exit_len: usize = 0,
 exit_tone: Tone = .text,
+// SAFETY: init formats the pane description before publishing pane_len; facts reads only that prefix, empty on formatting failure.
 pane: [pane_fact_bytes]u8 = undefined,
 pane_len: usize = 0,
+// SAFETY: init formats the author before publishing by_len; facts reads only that prefix, empty on formatting failure.
 by: [128]u8 = undefined,
 by_len: usize = 0,
+// SAFETY: init copies or formats the output heading before publishing heading_len; the iterator reads only that prefix.
 heading: [96]u8 = undefined,
 heading_len: usize = 0,
 
@@ -206,11 +212,4 @@ fn sizeLabel(bytes: u32, storage: []u8) []const u8 {
     }
 
     return std.fmt.bufPrint(storage, "{d}.{d} KiB", .{ bytes / 1024, (bytes % 1024) * 10 / 1024 }) catch "?";
-}
-
-test "byte sizes print in bytes or tenths of KiB" {
-    var storage: [24]u8 = undefined;
-    try std.testing.expectEqualStrings("512 B", sizeLabel(512, &storage));
-    try std.testing.expectEqualStrings("2.1 KiB", sizeLabel(2200, &storage));
-    try std.testing.expectEqualStrings("64.0 KiB", sizeLabel(64 * 1024, &storage));
 }

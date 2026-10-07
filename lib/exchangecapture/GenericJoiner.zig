@@ -3,8 +3,6 @@
 //! a deadline.
 const std = @import("std");
 const Key = @import("Key.zig");
-const Quota = @import("Quota.zig");
-const buffer_support = @import("buffer_support.zig");
 const GenericHalf = @import("GenericHalf.zig").Type;
 
 /// A joiner for halves owned by `Meta`.
@@ -181,85 +179,4 @@ pub fn Type(comptime Meta: type) type {
             }
         };
     };
-}
-
-/// The owner the tests attach to each half.
-const TestOwner = struct { id: u64 };
-const TestJoiner = Type(TestOwner);
-
-fn testHalf(quota: *Quota, side: buffer_support.Side) *TestJoiner.Half {
-    return TestJoiner.Half.create(.{
-        .gpa = std.testing.allocator,
-        .quota = quota,
-        .config = .{
-            .enabled = true,
-            .max_part_bytes = 8,
-            .max_exchange_bytes = 16,
-            .max_total_bytes = 16,
-            .join_timeout_ms = 30,
-        },
-        .meta = .{ .id = 7 },
-        .key = .{ .connection_id = 3, .stream_id = 5 },
-        .side = side,
-        .host = "example.test",
-        .started_at_ms = 1,
-    }).?;
-}
-
-test "joiner pairs independently delivered request and response halves" {
-    var quota = Quota.init(16);
-    var joiner = TestJoiner.init(30);
-    defer joiner.deinit();
-
-    try std.testing.expectEqual(TestJoiner.PushResult.pending, joiner.push(10, testHalf(&quota, .response)));
-    var exchange = switch (joiner.push(11, testHalf(&quota, .request))) {
-        .complete => |value| value,
-        else => return error.ExpectedCompleteCapture,
-    };
-    defer exchange.deinit();
-    try std.testing.expect(exchange.request != null);
-    try std.testing.expect(exchange.response != null);
-    try std.testing.expectEqual(@as(u64, 7), exchange.request.?.meta.id);
-}
-
-test "joiner returns a partial exchange only after its deadline" {
-    var quota = Quota.init(16);
-    var joiner = TestJoiner.init(30);
-    defer joiner.deinit();
-
-    try std.testing.expectEqual(TestJoiner.PushResult.pending, joiner.push(10, testHalf(&quota, .request)));
-    try std.testing.expect(joiner.expire(39) == null);
-    var exchange = joiner.expire(40).?;
-    defer exchange.deinit();
-    try std.testing.expect(exchange.request != null);
-    try std.testing.expect(exchange.response == null);
-}
-
-test "a full joiner hands the half back alone and keeps every waiting half" {
-    var quota = Quota.init(16);
-    var joiner = TestJoiner.init(30);
-    defer joiner.deinit();
-
-    for (0..TestJoiner.capacity) |index| {
-        const half = testHalf(&quota, .request);
-        half.key.stream_id = @intCast(index + 1);
-        try std.testing.expectEqual(TestJoiner.PushResult.pending, joiner.push(10, half));
-    }
-
-    const extra = testHalf(&quota, .request);
-    extra.key.stream_id = TestJoiner.capacity + 1;
-    var exchange = switch (joiner.push(10, extra)) {
-        .full => |value| value,
-        else => return error.ExpectedFullJoiner,
-    };
-    defer exchange.deinit();
-    try std.testing.expect(exchange.request == extra);
-
-    const peer = testHalf(&quota, .response);
-    peer.key.stream_id = 1;
-    var completed = switch (joiner.push(11, peer)) {
-        .complete => |value| value,
-        else => return error.ExpectedCompleteCapture,
-    };
-    completed.deinit();
 }

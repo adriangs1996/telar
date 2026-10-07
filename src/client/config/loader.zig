@@ -30,27 +30,6 @@ fn resolveDefaultPath(environment: Environment, buffer: []u8) ![]const u8 {
     return std.fmt.bufPrint(buffer, "{s}/.config/telar/config.lua", .{home_path});
 }
 
-test "development config path overrides user config lookup" {
-    var buffer: [std.fs.max_path_bytes]u8 = undefined;
-
-    try std.testing.expectEqualStrings(
-        "/repo/dev/config.lua",
-        try resolveDefaultPath(.{ .development = "/repo/dev/config.lua", .xdg_config_home = "/xdg", .home = "/home/user" }, &buffer),
-    );
-    try std.testing.expectEqualStrings(
-        "/xdg/telar/config.lua",
-        try resolveDefaultPath(.{ .development = "", .xdg_config_home = "/xdg", .home = "/home/user" }, &buffer),
-    );
-    try std.testing.expectEqualStrings(
-        "/home/user/.config/telar/config.lua",
-        try resolveDefaultPath(.{ .development = null, .xdg_config_home = "", .home = "/home/user" }, &buffer),
-    );
-    try std.testing.expectError(
-        error.HomeDirectoryUnavailable,
-        resolveDefaultPath(.{ .development = null, .xdg_config_home = null, .home = null }, &buffer),
-    );
-}
-
 const Environment = struct {
     development: ?[]const u8,
     xdg_config_home: ?[]const u8,

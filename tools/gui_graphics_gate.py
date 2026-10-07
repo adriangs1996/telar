@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The window's graphics performance gate (docs/performance-gates.md).
+"""The window's graphics performance gate.
 
 Runs the macOS key-to-GPU-completion probe (gui_latency.py) three ways: an
 idle pane, the pane redrawing a text counter at --fps (the control), and the
@@ -12,8 +12,8 @@ idle run is reported for context. It passes when:
   generation counts the first time a frame draws it), with a real margin
   under the 60 Hz a window can present, and no single run stalls under half
   of it;
-- image-stream keystroke latency stays within the regression bounds of
-  performance-gates.md over the control (5% at p50, 8% at p95, 10% at p99),
+- image-stream keystroke latency stays within 5% at p50, 8% at p95 and
+  10% at p99 of the control,
   and its p99 under an absolute --ceiling, so a slower control can never
   hide a regression;
 - the runtime drops and resets no media and the client requests no graphics

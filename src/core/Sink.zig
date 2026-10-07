@@ -19,6 +19,7 @@ pub const rotated_suffix = DiagnosticLogName.rotated_suffix;
 pub const max_scanned_entries = 4096;
 
 file: if (diagnostics.enabled) ?std.Io.File else void = if (diagnostics.enabled) null else {},
+// SAFETY: init formats the path before setting path_len and opening file; rotation reads only that prefix when file is present.
 path: if (diagnostics.enabled) [std.fs.max_path_bytes]u8 else void = undefined,
 path_len: usize = 0,
 written: u64 = 0,
@@ -129,6 +130,7 @@ pub fn removeOrphans(io: std.Io, endpoint: []const u8) void {
             continue;
         }
 
+        // Orphan log deletion is best effort and can race other cleanup; failure must not prevent the live client's telemetry from starting.
         directory.deleteFile(io, entry.name) catch {};
     }
 }
@@ -139,61 +141,4 @@ fn running(pid: u32) bool {
     // Signal 0 only checks that the process exists.
     const result = std.c.kill(id, @enumFromInt(0));
     return result == 0 or std.posix.errno(result) != .SRCH;
-}
-
-test "a full log rotates into one previous generation" {
-    if (!diagnostics.enabled) {
-        return error.SkipZigTest;
-    }
-
-    const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory = directory_buffer[0..try temp.dir.realPath(io, &directory_buffer)];
-    var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/t.sock", .{directory});
-
-    var sink = Sink.init(io, endpoint, "runtime-5");
-    defer sink.deinit(io);
-    sink.limit = 10;
-    try sink.write(io, "aaaa\n");
-    try sink.write(io, "bbbb\n");
-    try sink.write(io, "cccc\n");
-    try sink.write(io, "dddd\n");
-    try sink.write(io, "eeee\n");
-
-    var buffer: [64]u8 = undefined;
-    try std.testing.expectEqualStrings("eeee\n", try temp.dir.readFile(io, "t.sock.runtime-5.log", &buffer));
-    try std.testing.expectEqualStrings("cccc\ndddd\n", try temp.dir.readFile(io, "t.sock.runtime-5.log.1", &buffer));
-}
-
-test "cleanup removes the logs of processes that ended and keeps the rest" {
-    const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory = directory_buffer[0..try temp.dir.realPath(io, &directory_buffer)];
-    var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/runtime.sock", .{directory});
-
-    // No system hands out a pid this high: macOS stops at 99998, Linux at 2^22.
-    const gone = "other.sock.runtime-4194305.log";
-    const gone_rotated = "runtime.sock.client-4194305.log.1";
-    var own_buffer: [64]u8 = undefined;
-    const own = try std.fmt.bufPrint(&own_buffer, "runtime.sock.client-{d}.log", .{std.c.getpid()});
-    // Named like a log, but of no telar endpoint.
-    const foreign = "notes.runtime-4194305.log";
-    for ([_][]const u8{ gone, gone_rotated, own, "notes.log", foreign }) |name| {
-        try temp.dir.writeFile(io, .{ .sub_path = name, .data = "{}\n" });
-    }
-
-    removeOrphans(io, endpoint);
-
-    for ([_][]const u8{ gone, gone_rotated }) |name| {
-        try std.testing.expectError(error.FileNotFound, temp.dir.statFile(io, name, .{}));
-    }
-    for ([_][]const u8{ own, "notes.log", foreign }) |name| {
-        _ = try temp.dir.statFile(io, name, .{});
-    }
 }

@@ -20,6 +20,7 @@ line: u32 = 0,
 column: u32 = 0,
 candidates: []Candidate,
 environment: std.process.Environ,
+// SAFETY: run stores io before calling remote.open; command is used by that discovery flow after run has started.
 io: std.Io = undefined,
 deadline: std.Io.Timeout = .none,
 entries_left: usize = max_entries,

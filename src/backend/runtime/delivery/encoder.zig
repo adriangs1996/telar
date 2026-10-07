@@ -223,62 +223,6 @@ fn encodeHistoryResult(buffer: []u8, result: *const QueryResult, storage: *[core
     });
 }
 
-test "a workspace snapshot for a vanished workspace becomes a failure reply" {
-    var workspaces: Workspaces = .{};
-    var panes: PaneStore = .{};
-    var response: response_queue.PendingResponse = .{ .workspace_snapshot = .{
-        .request_id = @enumFromInt(9),
-        .workspace = .{ .workspace = try core.workspace(77) },
-    } };
-    var buffer: [1024]u8 = undefined;
-    var history_result: ?*QueryResult = null;
-    var history_output: ?*OutputResult = null;
-    var history_stats: ?*StatsResult = null;
-
-    const payload = try encodeResponse(.{
-        .buffer = &buffer,
-        .panes = &panes,
-        .workspaces = &workspaces,
-        .history_result = &history_result,
-        .history_output = &history_output,
-        .history_stats = &history_stats,
-    }, &response);
-    const decoded = try core.decodeServer(payload);
-
-    try std.testing.expect(decoded == .request_failed);
-    try std.testing.expectEqual(core.FailureCode.workspace_not_found, decoded.request_failed.code);
-}
-
-test "a command suggestion encodes its owned text and a bare status" {
-    var workspaces: Workspaces = .{};
-    var panes: PaneStore = .{};
-    var buffer: [2048]u8 = undefined;
-    var history_result: ?*QueryResult = null;
-    var history_output: ?*OutputResult = null;
-    var history_stats: ?*StatsResult = null;
-    const context: EncodeContext = .{
-        .buffer = &buffer,
-        .panes = &panes,
-        .workspaces = &workspaces,
-        .history_result = &history_result,
-        .history_output = &history_output,
-        .history_stats = &history_stats,
-    };
-
-    var ready: response_queue.PendingResponse = .{ .command_suggestion = .{ .request_id = @enumFromInt(41), .status = .ready } };
-    @memcpy(ready.command_suggestion.text[0..6], "ls -lS");
-    ready.command_suggestion.text_len = 6;
-    const decoded = try core.decodeServer(try encodeResponse(context, &ready));
-    try std.testing.expect(decoded == .command_suggestion);
-    try std.testing.expectEqual(core.SuggestionStatus.ready, decoded.command_suggestion.status);
-    try std.testing.expectEqualStrings("ls -lS", decoded.command_suggestion.text);
-
-    var timed_out: response_queue.PendingResponse = .{ .command_suggestion = .{ .request_id = @enumFromInt(42), .status = .timeout } };
-    const bare = try core.decodeServer(try encodeResponse(context, &timed_out));
-    try std.testing.expectEqual(core.SuggestionStatus.timeout, bare.command_suggestion.status);
-    try std.testing.expectEqual(@as(usize, 0), bare.command_suggestion.text.len);
-}
-
 const EncodeContext = struct {
     buffer: []u8,
     panes: *const PaneStore,

@@ -65,8 +65,8 @@ from source to try it. Configuration and CLI interfaces are still evolving.
 
 | Platform | Desktop requirements |
 | --- | --- |
-| macOS | macOS 26 or later and a [Metal 4 GPU](docs/flows/metal4-renderer.md) |
-| Linux | Wayland and Vulkan 1.3 with the [required extensions](docs/flows/vulkan-renderer.md) |
+| macOS | macOS 26 or later and a Metal 4 GPU |
+| Linux | Wayland and Vulkan 1.3 with the required extensions |
 
 Install **Zig 0.16.0**, **Rust/Cargo 1.93.1 or newer**, and the
 [platform build dependencies](docs/development.md#build-requirements), then:
@@ -175,9 +175,7 @@ version or commit, reproduction steps and whether the runtime is local or
 remote. File reports in [GitHub Issues](https://github.com/adriangs1996/telar/issues).
 
 Start with the [development guide](docs/development.md) for dependencies,
-tests, diagnostics and benchmarks. Read the [architecture](docs/architecture.md)
-and relevant [invariants](docs/invariants.md) before changing runtime or client
-behavior.
+tests, diagnostics and benchmarks.
 
 ## Acknowledgements
 

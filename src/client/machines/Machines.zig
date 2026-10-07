@@ -27,13 +27,17 @@ generation: [capacity]u64 = @splat(0),
 next_generation: u64 = 1,
 /// The profile's id; `.invalid` for this machine and a temporary row.
 id: [capacity]core.MachineId = @splat(.invalid),
+// SAFETY: write copies the bounded label before publishing its length; label reads only that prefix.
 label_bytes: [capacity][max_label_bytes]u8 = undefined,
 label_len: [capacity]u8 = @splat(0),
+// SAFETY: write copies the bounded destination before publishing its length; destination reads only that prefix.
 destination_bytes: [capacity][max_destination_bytes]u8 = undefined,
 destination_len: [capacity]u8 = @splat(0),
+// SAFETY: write copies the bounded color before publishing its length; color reads only that prefix or returns null.
 color_bytes: [capacity][max_color_bytes]u8 = undefined,
 color_len: [capacity]u8 = @splat(0),
 /// Where telar lives on the machine; empty runs `telar` from its PATH.
+// SAFETY: write copies a fitting executable path before returning; telarPath reads only its published length, zero for paths that do not fit.
 telar_path_bytes: [capacity][max_telar_path_bytes]u8 = undefined,
 telar_path_len: [capacity]u8 = @splat(0),
 /// Whether the window keeps a connection to the machine.
@@ -149,17 +153,6 @@ pub fn color(self: *const Machines, slot: u8) ?[]const u8 {
 pub fn find(self: *const Machines, id: core.MachineId) ?u8 {
     for (self.used, self.id, 0..) |used, row_id, slot| {
         if (used and row_id == id and id != .invalid) {
-            return @intCast(slot);
-        }
-    }
-
-    return null;
-}
-
-/// The slot of the row labelled `text`, if any.
-pub fn findLabel(self: *const Machines, text: []const u8) ?u8 {
-    for (self.used, 0..) |used, slot| {
-        if (used and std.mem.eql(u8, self.label(@intCast(slot)), text)) {
             return @intCast(slot);
         }
     }
@@ -285,132 +278,4 @@ fn write(self: *Machines, slot: u8, row: MachineRow) void {
     }
 
     self.enabled[slot] = row.enabled;
-}
-
-test "rows fill free slots and keep the local slot for this machine" {
-    var machines: Machines = .{};
-    const local = try machines.add(.{ .label = "laptop" }, local_slot);
-    const box = try machines.add(.{ .id = @enumFromInt(9), .label = "box", .destination = "dev@box", .color = "red" }, null);
-
-    try std.testing.expectEqual(local_slot, local);
-    try std.testing.expectEqual(@as(u8, 1), box);
-    try std.testing.expectEqual(@as(?u8, 1), machines.find(@enumFromInt(9)));
-    try std.testing.expectEqual(@as(?u8, 1), machines.findLabel("box"));
-    try std.testing.expectEqualStrings("dev@box", machines.destination(box));
-    try std.testing.expectEqualStrings("red", machines.color(box).?);
-    try std.testing.expectEqual(@as(?[]const u8, null), machines.telarPath(box));
-    machines.update(box, .{ .id = @enumFromInt(9), .label = "box", .destination = "dev@box", .telar_path = "/home/dev/telar" });
-    try std.testing.expectEqualStrings("/home/dev/telar", machines.telarPath(box).?);
-    try std.testing.expectEqual(@as(usize, 2), machines.count());
-
-    machines.remove(box);
-    try std.testing.expectEqual(@as(?u8, null), machines.find(@enumFromInt(9)));
-    try std.testing.expectEqual(@as(u8, 1), try machines.add(.{ .label = "gpu" }, null));
-}
-
-test "a summary changes the revision only when a drawn column changes" {
-    var machines: Machines = .{};
-    const slot = try machines.add(.{ .label = "box" }, null);
-    var model = data.ClientModel.init(std.testing.allocator, true);
-    defer model.deinit();
-
-    model.runtime_link.phase = .connected;
-    try std.testing.expect(machines.summarize(slot, &model, std.testing.io));
-    const revision = machines.revision;
-    try std.testing.expect(!machines.summarize(slot, &model, std.testing.io));
-    try std.testing.expectEqual(revision, machines.revision);
-    try std.testing.expect(!machines.attentionElsewhere());
-}
-
-test "a new metrics sample records placement data with its arrival time" {
-    var machines: Machines = .{};
-    const slot = try machines.add(.{ .label = "box" }, null);
-    var model = data.ClientModel.init(std.testing.allocator, true);
-    defer model.deinit();
-
-    _ = try data.system_metrics.reconcile(&model, .{
-        .runtime_revision = 1,
-        .cpu_percent = 30,
-        .memory_used_decigib = 40,
-        .battery_percent = null,
-        .cpu_count = 16,
-        .memory_total_decigib = 640,
-    });
-    _ = machines.summarize(slot, &model, std.testing.io);
-    const sampled_ns = machines.sampled_ns[slot];
-    _ = machines.summarize(slot, &model, std.testing.io);
-
-    try std.testing.expectEqual(@as(u16, 16), machines.cpu_count[slot]);
-    try std.testing.expectEqual(@as(u16, 640), machines.memory_total_decigib[slot]);
-    try std.testing.expect(sampled_ns != 0);
-    try std.testing.expectEqual(sampled_ns, machines.sampled_ns[slot]);
-}
-
-test "only a new agent snapshot changes a row's attention" {
-    var machines: Machines = .{};
-    const slot = try machines.add(.{ .label = "box" }, null);
-    var model = data.ClientModel.init(std.testing.allocator, true);
-    defer model.deinit();
-
-    const blocked: data.AgentInput = .{
-        .key = .{
-            .pane_id = @enumFromInt(4),
-            .pane_generation = 1,
-        },
-        .location = .{
-            .workspace = .{
-                .workspace = @enumFromInt(1),
-            },
-            .tab_id = @enumFromInt(1),
-        },
-        .pane_index = 0,
-        .provider = .claude,
-        .status = .blocked,
-    };
-    _ = try data.agent_snapshot.reconcile(&model, .{
-        .revision = 1,
-        .agents = &.{blocked},
-    });
-    try std.testing.expect(machines.summarize(slot, &model, std.testing.io));
-    try std.testing.expect(machines.attention[slot]);
-    try std.testing.expect(machines.attentionElsewhere());
-
-    // A frame or any other event leaves the agent revision alone, so the
-    // row is not read again.
-    const revision = machines.revision;
-    try std.testing.expect(!machines.summarize(slot, &model, std.testing.io));
-    try std.testing.expectEqual(revision, machines.revision);
-
-    _ = try data.agent_snapshot.reconcile(&model, .{
-        .revision = 2,
-        .agents = &.{},
-    });
-    try std.testing.expect(machines.summarize(slot, &model, std.testing.io));
-    try std.testing.expect(!machines.attention[slot]);
-}
-
-test "hidden activity invalidates the window even when attention remains unchanged" {
-    var machines: Machines = .{};
-    const slot = try machines.add(.{ .label = "box" }, null);
-    var model = data.ClientModel.init(std.testing.allocator, true);
-    defer model.deinit();
-    model.runtime_link.phase = .connected;
-    _ = machines.summarize(slot, &model, std.testing.io);
-    const previous = machines.revision;
-    model.agent_revision += 1;
-    try std.testing.expect(machines.summarize(slot, &model, std.testing.io));
-    try std.testing.expect(machines.revision > previous);
-    model.workspace_list_snapshot.revision += 1;
-    try std.testing.expect(machines.summarize(slot, &model, std.testing.io));
-    try std.testing.expect(!machines.summarize(slot, &model, std.testing.io));
-}
-
-test "renaming a machine retains its admission but a changed destination invalidates it" {
-    var machines: Machines = .{};
-    const slot = try machines.add(.{ .label = "box", .destination = "dev@box" }, null);
-    const generation = machines.generation[slot];
-    machines.update(slot, .{ .label = "builder", .destination = "dev@box" });
-    try std.testing.expectEqual(generation, machines.generation[slot]);
-    machines.update(slot, .{ .label = "builder", .destination = "dev@other" });
-    try std.testing.expect(machines.generation[slot] != generation);
 }

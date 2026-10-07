@@ -1,7 +1,5 @@
 const std = @import("std");
 /// What `push` and `fetch` move between this clone and another machine's.
-const GitTransfer = @This();
-
 /// The local clone.
 root: []const u8,
 /// `ssh://DESTINATION/PATH` of the other machine's clone.

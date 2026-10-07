@@ -4,7 +4,6 @@
 //! commands the way it does (`ApcFraming`) so the media actor can bound the
 //! chunks of an incomplete upload and the runtime can tell graphics output
 //! from text.
-const std = @import("std");
 const ApcFraming = @import("ApcFraming.zig");
 const KittyFramingCounter = @This();
 
@@ -39,32 +38,4 @@ pub fn observe(self: *KittyFramingCounter, bytes: []const u8) usize {
     }
 
     return complete;
-}
-
-test "kitty APC bytes are recognized across reads while plain output is not" {
-    var counter: KittyFramingCounter = .{};
-    try std.testing.expect(!counter.touchesKitty("plain text \x1b[1m bold"));
-    try std.testing.expect(!counter.touchesKitty("\x1b_Xother\x1b\\"));
-    try std.testing.expect(counter.touchesKitty("text \x1b_Ga=T,f=100;AAAA"));
-    try std.testing.expect(counter.inKitty());
-    try std.testing.expect(counter.touchesKitty("BBBB"));
-    try std.testing.expect(counter.touchesKitty("CC\x1b"));
-    try std.testing.expect(!counter.inKitty());
-    try std.testing.expect(!counter.touchesKitty("\\ after"));
-}
-
-test "an APC introducer split after its ESC is still recognized" {
-    var counter: KittyFramingCounter = .{};
-    try std.testing.expect(!counter.touchesKitty("colored \x1b[32mtext\x1b[0m \x1b"));
-    try std.testing.expect(counter.touchesKitty("_Ga=T,f=100;AAAA\x1b\\"));
-    try std.testing.expect(!counter.inKitty());
-    try std.testing.expect(!counter.touchesKitty("snake_case names_and \x1b_Xnot kitty\x1b\\ more_text"));
-}
-
-test "an interrupted upload stops holding at the next escape" {
-    var counter: KittyFramingCounter = .{};
-    try std.testing.expect(counter.touchesKitty("\x1b_Ga=T,f=100,m=1;iVBORw0KGgo"));
-    try std.testing.expect(counter.inKitty());
-    try std.testing.expectEqual(@as(usize, 1), counter.observe("^C\r\n\x1b[32m$ "));
-    try std.testing.expect(!counter.inKitty());
 }

@@ -1,6 +1,5 @@
 const keyinput = @import("keyinput");
 const Mouse = keyinput.Mouse;
-const PointerCommand = @This();
 
 event: Mouse,
 exterior_pixels: bool,

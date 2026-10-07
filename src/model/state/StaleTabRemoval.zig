@@ -1,6 +1,5 @@
 const core = @import("telar-core");
 const TabRemovalAbsence = @import("../workspace/TabRemovalAbsence.zig").TabRemovalAbsence;
-const StaleTabRemoval = @This();
 
 location: core.TabLocation,
 absence: TabRemovalAbsence,

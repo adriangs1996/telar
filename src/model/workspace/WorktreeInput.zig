@@ -1,8 +1,6 @@
 const core = @import("telar-core");
 /// One tracked worktree as the runtime's workspace list carries it; slices
 /// borrow the decoded message.
-const WorktreeInput = @This();
-
 worktree: core.WorktreeId,
 source: core.WorkspaceId,
 workspace: ?core.WorkspaceId = null,

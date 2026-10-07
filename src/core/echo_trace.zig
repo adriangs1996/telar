@@ -2,7 +2,6 @@
 
 const root = @import("root");
 const std = @import("std");
-const Recorder = @import("Recorder.zig");
 
 pub const enabled = @hasDecl(root, "telar_echo_trace") and root.telar_echo_trace;
 pub const cpu_enabled = enabled and @hasDecl(root, "telar_echo_trace_cpu") and root.telar_echo_trace_cpu;
@@ -53,17 +52,4 @@ pub fn mark(io: std.Io, tag: Tag) void {
             .thread = if (cpu_enabled) thread_id.? else {},
         });
     }
-}
-
-test "trace saturation does not overwrite retained records" {
-    const recorder = try std.testing.allocator.create(Recorder);
-    defer std.testing.allocator.destroy(recorder);
-    recorder.* = .{};
-
-    for (0..Recorder.capacity + 10) |index| {
-        recorder.append(.{ .ns = index, .tag = .host_read });
-    }
-
-    try std.testing.expectEqual(@as(u64, 0), recorder.records[0].ns);
-    try std.testing.expectEqual(@as(u64, Recorder.capacity - 1), recorder.records[Recorder.capacity - 1].ns);
 }

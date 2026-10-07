@@ -3,7 +3,6 @@
 //! shipped build and the cross check assemble the same graph, so a target
 //! the check compiles is built the way it ships.
 const std = @import("std");
-const Coverage = @import("Coverage.zig");
 const Libraries = @import("Libraries.zig");
 const Modules = @import("Modules.zig");
 const NativeLibrary = @import("NativeLibrary.zig");
@@ -32,9 +31,9 @@ optimize: std.builtin.OptimizeMode,
 /// need C. Null while a lazy dependency is still being fetched.
 ///
 /// ```zig
-/// const graph = ModuleGraph.create(b, target, optimize, natives, coverage) orelse return null;
+/// const graph = ModuleGraph.create(b, target, optimize, natives) orelse return null;
 /// ```
-pub fn create(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, natives: []const NativeLibrary, coverage: Coverage) ?ModuleGraph {
+pub fn create(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, natives: []const NativeLibrary) ?ModuleGraph {
     // Parsing PTY output is the hottest part of the interactive path. Keep the
     // application debuggable, but build the third-party emulator as optimized
     // code just as herdr does; a Debug libghostty-vt makes terminal latency
@@ -54,11 +53,8 @@ pub fn create(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.bui
         .optimize = vt_optimize,
     }) orelse return null;
     const wuffs = wuffs_dep.module("wuffs");
-    coverage.excludeCSourceCoverage(b, ghostty_vt);
-    coverage.excludeCSourceCoverage(b, wuffs);
 
     const lua_api = lua_build.add(b, .{ .target = target, .optimize = optimize, .name = "lua" });
-    coverage.instrumentModule(lua_api);
     const telar_lua = b.createModule(.{
         .root_source_file = b.path("src/lua/lua.zig"),
         .target = target,
@@ -66,7 +62,6 @@ pub fn create(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.bui
         .link_libc = true,
     });
     telar_lua.addImport("lua-api", lua_api);
-    coverage.instrumentModule(telar_lua);
     const tls = b.dependency("tls", .{
         .target = target,
         .optimize = optimize,
@@ -74,7 +69,7 @@ pub fn create(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.bui
 
     // The width tables come from the emulator that renders the panes; the
     // drawing layer only names the `unicode` library, never its provider.
-    const freetype = freetype_build.add(b, .{ .target = target, .optimize = optimize, .disable_coverage = coverage.enabled });
+    const freetype = freetype_build.add(b, .{ .target = target, .optimize = optimize });
     const libraries = Libraries.create(b, target, optimize, &.{
         .{
             .name = "ghostty-vt",
@@ -93,9 +88,6 @@ pub fn create(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.bui
             .module = tls,
         },
     }, natives);
-    for (libraries.modules) |library| {
-        coverage.instrumentModule(library.?);
-    }
 
     // Runtime and client share values through core; neither common package
     // imports an adapter.
@@ -106,9 +98,7 @@ pub fn create(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.bui
     });
     libraries.addImports(core);
     libraries.addImports(telar_lua);
-    coverage.instrumentModule(core);
     const data = model_build.create(b, core, libraries);
-    coverage.instrumentModule(data);
     const client = client_build.add(
         b,
         .{
@@ -121,7 +111,6 @@ pub fn create(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.bui
             .libraries = libraries,
         },
     );
-    coverage.instrumentModule(client);
 
     const backend = b.createModule(.{
         .root_source_file = b.path("src/backend/backend.zig"),
@@ -135,7 +124,6 @@ pub fn create(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.bui
     backend.addImport("ghostty-vt", ghostty_vt);
     backend.addImport("tls", tls);
     libraries.addImports(backend);
-    coverage.instrumentModule(backend);
 
     return .{
         .libraries = libraries,

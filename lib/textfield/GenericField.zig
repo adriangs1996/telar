@@ -11,6 +11,7 @@ pub fn Type(comptime capacity: usize) type {
     return struct {
         const Self = @This();
 
+        // SAFETY: Text operations copy inserted bytes before returning with their new len; accessors and editing stay within the live text.
         bytes: [capacity]u8 = undefined,
         len: usize = 0,
 

@@ -98,29 +98,3 @@ fn tailOnRowBoundary(screen: []const u8, budget: usize) []const u8 {
     const newline = std.mem.indexOfScalar(u8, tail, '\n') orelse return tail;
     return tail[newline + 1 ..];
 }
-
-test "the prompt keeps the newest screen rows inside the engine cap" {
-    var buffer: [types.max_prompt_bytes]u8 = undefined;
-    const prompt = buildPrompt("/work/telar", "$ zig build\nerror: x\n", "fix it", &buffer);
-    try std.testing.expect(std.mem.endsWith(u8, prompt, "Last screen rows:\n$ zig build\nerror: x\n\nRequest: fix it\n"));
-    try std.testing.expect(std.mem.indexOf(u8, prompt, "Working directory: /work/telar\n") != null);
-
-    const row = "0123456789" ** 20 ++ "\n";
-    const long = row ** 40;
-    const truncated = buildPrompt("/", long, "x", &buffer);
-    try std.testing.expect(truncated.len <= types.max_prompt_bytes);
-    const rows = std.mem.indexOf(u8, truncated, "Last screen rows:\n").? + "Last screen rows:\n".len;
-    try std.testing.expect(std.mem.startsWith(u8, truncated[rows..], "0123456789"));
-    try std.testing.expect(std.mem.count(u8, truncated, "\n") < 40);
-}
-
-test "replies reduce to one command line" {
-    try std.testing.expectEqualStrings("ls -lS", extractCommand("ls -lS\n").?);
-    try std.testing.expectEqualStrings("ls -lS", extractCommand("\n  `ls -lS`  \nexplanation\n").?);
-    try std.testing.expectEqualStrings("git status", extractCommand("```sh\ngit status\n```\n").?);
-    try std.testing.expectEqualStrings("# cannot do that in one command", extractCommand("# cannot do that in one command").?);
-    try std.testing.expect(extractCommand("\n\n") == null);
-    try std.testing.expect(extractCommand("``") == null);
-    try std.testing.expect(extractCommand("ls\x07") == null);
-    try std.testing.expect(extractCommand("x" ** (core.max_suggestion_bytes + 1)) == null);
-}

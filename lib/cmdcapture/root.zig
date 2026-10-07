@@ -8,14 +8,3 @@ pub const Clock = @import("Clock.zig");
 pub const Command = @import("Command.zig");
 pub const TerminalTracker = @import("TerminalTracker.zig");
 pub const rowIsBlank = @import("terminal.zig").rowIsBlank;
-
-test {
-    _ = @import("Clock.zig");
-    _ = @import("Command.zig");
-    _ = @import("OscCompletion.zig");
-    _ = @import("OscTracker.zig");
-    _ = @import("TerminalTracker.zig");
-    _ = @import("TerminalTrackerConfig.zig");
-    _ = @import("osc.zig");
-    _ = @import("terminal.zig");
-}

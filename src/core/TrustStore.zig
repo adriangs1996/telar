@@ -6,6 +6,7 @@ const GrantUpdate = @import("GrantUpdate.zig");
 const Grant = @import("Grant.zig");
 const TrustStore = @This();
 
+// SAFETY: parse and upsert fill each grant before increasing count; consumers iterate only that prefix.
 entries: [plugin_ops.max_grants]StoredGrant = undefined,
 count: u8 = 0,
 
@@ -31,6 +32,7 @@ pub fn parse(gpa: std.mem.Allocator, source: []const u8) !TrustStore {
         if (!plugin_ops.validIdentifier(wire.plugin) or wire.plugin.len > plugin_ops.max_id_bytes) {
             return error.InvalidPluginId;
         }
+        // SAFETY: The length check requires exactly two hex characters per digest byte; successful hexToBytes fills the whole digest.
         var digest: plugin_ops.Digest = undefined;
         if (wire.digest.len != digest.len * 2) {
             return error.InvalidDigest;

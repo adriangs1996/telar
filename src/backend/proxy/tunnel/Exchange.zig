@@ -12,9 +12,11 @@ io: std.Io,
 telemetry: *Counters,
 connection_id: u64,
 protocol: Protocol,
+// SAFETY: Tunnel construction supplies the authenticated host; capture tests assign it before creating a capture stream.
 host: std.Io.net.HostName = undefined,
 /// The connection's row; null in tests that relay without admission.
 connections: ?*Connections = null,
+// SAFETY: Tunnel construction supplies slot with connections; methods return before reading slot when connections is null.
 slot: Connections.Slot = undefined,
 
 /// Records one outcome detected by a protocol adapter.

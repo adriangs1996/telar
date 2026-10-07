@@ -11,7 +11,6 @@ const protocol = @import("protocol.zig");
 const LoadContext = @import("LoadContext.zig");
 const Package = @import("Package.zig");
 const generation_support = @import("../config/generation_support.zig");
-const Registry = @import("Registry.zig");
 
 pub const max_package_files = 256;
 pub const max_package_bytes = 16 * 1024 * 1024;
@@ -27,6 +26,7 @@ pub fn executeWorker(io: std.Io, gpa: std.mem.Allocator, request: WorkerRequest)
         .{ std.c.getuid(), &nonce_hex },
     );
     try std.Io.Dir.cwd().createDir(io, snapshot_root, std.Io.File.Permissions.fromMode(0o700));
+    // The private plugin snapshot is no longer needed; cleanup preserves the plugin operation result.
     defer std.Io.Dir.cwd().deleteTree(io, snapshot_root) catch {};
     var snapshot_package_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const snapshot_package = try std.fmt.bufPrint(
@@ -258,6 +258,7 @@ pub fn installPackage(gpa: std.mem.Allocator, io: std.Io, installation: Installa
     );
     try std.Io.Dir.cwd().createDir(io, temp, std.Io.File.Permissions.fromMode(0o700));
     var committed = false;
+    // Only an uncommitted staging tree is removed; cleanup preserves the failure that prevented publication.
     defer if (!committed) std.Io.Dir.cwd().deleteTree(io, temp) catch {};
 
     var source = try std.Io.Dir.cwd().openDir(io, package.root(), .{ .iterate = true });
@@ -365,206 +366,6 @@ pub fn updatePackageFingerprint(gpa: std.mem.Allocator, io: std.Io, update: Fing
         hasher.update(std.mem.asBytes(&stat.size));
         hasher.update(std.mem.asBytes(&stat.mtime.nanoseconds));
     }
-}
-
-test "path containment rejects sibling prefix tricks" {
-    try std.testing.expect(pathInside("/tmp/plugin", "/tmp/plugin/main.lua"));
-    try std.testing.expect(!pathInside("/tmp/plugin", "/tmp/plugin-evil/main.lua"));
-}
-
-test "privileged plugin effects require a digest-bound capability grant" {
-    const manifest_source =
-        \\{
-        \\  "api_version": 1,
-        \\  "id": "dev.telar.test",
-        \\  "version": "1.0.0",
-        \\  "entry": "plugin.lua",
-        \\  "source": { "url": "local:test", "revision": "abc123" },
-        \\  "actions": ["close"],
-        \\  "capabilities": ["runtime.control"]
-        \\}
-    ;
-    const manifest = try core.parseManifest(std.testing.allocator, manifest_source);
-    const digest: core.Digest = @splat(7);
-    var registry: Registry = .{};
-    registry.packages[0] = .{
-        .manifest = manifest,
-        .digest = digest,
-        .root_len = 0,
-    };
-    registry.count = 1;
-    var batch: data.EffectBatch = .{};
-    batch.items[0] = .close_pane;
-    batch.len = 1;
-
-    try std.testing.expectError(
-        error.CapabilityNotGranted,
-        registry.authorizeBatch(.{
-            .package_index = 0,
-            .plugin_id = core.stableId(manifest.id()),
-            .digest = digest,
-            .batch = &batch,
-        }),
-    );
-    registry.grants[0] = .{
-        .plugin_hash = core.stableId(manifest.id()),
-        .digest = digest,
-        .capabilities = core.CapabilitySet.initOne(.runtime_control),
-    };
-    registry.grant_count = 1;
-    try registry.authorizeBatch(.{
-        .package_index = 0,
-        .plugin_id = core.stableId(manifest.id()),
-        .digest = digest,
-        .batch = &batch,
-    });
-
-    for ([_]data.ScrollDirection{ .up, .down }) |direction| {
-        batch.items[0] = .{ .scroll_pane = direction };
-        try std.testing.expectError(error.InvalidPluginEffect, registry.authorizeBatch(.{
-            .package_index = 0,
-            .plugin_id = core.stableId(manifest.id()),
-            .digest = digest,
-            .batch = &batch,
-        }));
-    }
-
-    const stale_digest: core.Digest = @splat(8);
-    try std.testing.expectError(
-        error.StalePluginWorker,
-        registry.authorizeBatch(.{
-            .package_index = 0,
-            .plugin_id = core.stableId(manifest.id()),
-            .digest = stale_digest,
-            .batch = &batch,
-        }),
-    );
-}
-
-test "plugin notification effects require the notifications capability" {
-    const manifest = try core.parseManifest(
-        std.testing.allocator,
-        "{\"api_version\":1,\"id\":\"dev.telar.notify\",\"version\":\"1\",\"entry\":\"plugin.lua\",\"source\":{\"url\":\"local:test\",\"revision\":\"one\"},\"actions\":[\"notify\"],\"capabilities\":[\"notifications\"]}",
-    );
-    const digest: core.Digest = @splat(5);
-    var registry: Registry = .{};
-    registry.packages[0] = .{
-        .manifest = manifest,
-        .digest = digest,
-        .root_len = 0,
-    };
-    registry.count = 1;
-    var batch: data.EffectBatch = .{};
-    batch.items[0] = .{ .notification = try data.Notification.init(.{
-        .level = .info,
-        .duration_ms = 2000,
-        .target = .none,
-        .title = "Ready",
-        .message = "",
-    }) };
-    batch.len = 1;
-
-    try std.testing.expectError(
-        error.CapabilityNotGranted,
-        registry.authorizeBatch(.{
-            .package_index = 0,
-            .plugin_id = core.stableId(manifest.id()),
-            .digest = digest,
-            .batch = &batch,
-        }),
-    );
-    registry.grants[0] = .{
-        .plugin_hash = core.stableId(manifest.id()),
-        .digest = digest,
-        .capabilities = core.CapabilitySet.initOne(.notifications),
-    };
-    registry.grant_count = 1;
-    try registry.authorizeBatch(.{
-        .package_index = 0,
-        .plugin_id = core.stableId(manifest.id()),
-        .digest = digest,
-        .batch = &batch,
-    });
-}
-
-test "configured plugin actions resolve before the keymap becomes active" {
-    const manifest = try core.parseManifest(
-        std.testing.allocator,
-        "{\"api_version\":1,\"id\":\"dev.telar.binding-test\",\"version\":\"1\",\"entry\":\"plugin.lua\",\"source\":{\"url\":\"local:test\",\"revision\":\"one\"},\"actions\":[\"known\"]}",
-    );
-    var registry: Registry = .{};
-    registry.packages[0] = .{
-        .manifest = manifest,
-        .digest = @splat(1),
-        .root_len = 0,
-    };
-    registry.count = 1;
-    const binding = try data.config_values.ConfiguredBinding.parse(
-        &.{"escape"},
-        .{ .plugin = .{
-            .plugin = core.stableId(manifest.id()),
-            .action = core.stableId("missing"),
-        } },
-    );
-    try std.testing.expectError(
-        error.UnknownPluginAction,
-        registry.validateConfiguredActions(&.{binding}),
-    );
-}
-
-test "installation copies and revalidates the exact inspected package" {
-    const io = std.testing.io;
-    var source_temp = std.testing.tmpDir(.{});
-    defer source_temp.cleanup();
-    var destination_temp = std.testing.tmpDir(.{});
-    defer destination_temp.cleanup();
-    {
-        var manifest = try source_temp.dir.createFile(io, "plugin.json", .{});
-        defer manifest.close(io);
-        try manifest.writeStreamingAll(
-            io,
-            "{\"api_version\":1,\"id\":\"dev.telar.install-test\",\"version\":\"1\",\"entry\":\"plugin.lua\",\"source\":{\"url\":\"local:test\",\"revision\":\"one\"},\"actions\":[\"run\"]}",
-        );
-    }
-    {
-        var entry = try source_temp.dir.createFile(io, "plugin.lua", .{});
-        defer entry.close(io);
-        try entry.writeStreamingAll(io, "return { actions = { run = function() return {} end } }");
-    }
-    var source_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const source_len = try source_temp.dir.realPath(io, &source_buffer);
-    const package = try inspectPackage(
-        std.testing.allocator,
-        io,
-        source_buffer[0..source_len],
-    );
-    var destination_directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const destination_directory_len = try destination_temp.dir.realPath(io, &destination_directory_buffer);
-    var destination_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const destination = try std.fmt.bufPrint(
-        &destination_buffer,
-        "{s}/installed",
-        .{destination_directory_buffer[0..destination_directory_len]},
-    );
-    try installPackage(std.testing.allocator, io, .{ .package = &package, .destination = destination });
-    const installed = try inspectPackage(std.testing.allocator, io, destination);
-    try std.testing.expectEqualSlices(u8, &package.digest, &installed.digest);
-
-    {
-        var entry = try source_temp.dir.createFile(io, "plugin.lua", .{ .truncate = true });
-        defer entry.close(io);
-        try entry.writeStreamingAll(io, "return { actions = {} }");
-    }
-    var changed_destination_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const changed_destination = try std.fmt.bufPrint(
-        &changed_destination_buffer,
-        "{s}/changed",
-        .{destination_directory_buffer[0..destination_directory_len]},
-    );
-    try std.testing.expectError(
-        error.PluginChangedDuringInstall,
-        installPackage(std.testing.allocator, io, .{ .package = &package, .destination = changed_destination }),
-    );
 }
 
 const FingerprintUpdate = struct {

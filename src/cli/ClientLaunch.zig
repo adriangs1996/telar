@@ -13,11 +13,15 @@ const Launch = @This();
 process: std.process.Init,
 options: *const RunOptions,
 endpoint: []const u8,
+// SAFETY: prepareChild writes each argument slice before increasing argument_count; consumers receive only that prefix.
 argument_storage: [pty.command_support.max_args][]const u8 = undefined,
 argument_count: usize = 0,
+// SAFETY: prepareChild fills cwd_buffer through realPathFile before recording cwd_len; frontendOptions uses only that prefix.
 cwd_buffer: [std.fs.max_path_bytes]u8 = undefined,
 cwd_len: usize = 0,
+// SAFETY: Configuration path helpers fill this output buffer before publishing config_path; disabled configuration publishes null.
 config_path_buffer: [std.fs.max_path_bytes]u8 = undefined,
+// SAFETY: preparePlugins fills the path through trustPath before loading the store or publishing trust_path.
 trust_path_buffer: [std.fs.max_path_bytes]u8 = undefined,
 generation: ?*client_module.Generation = null,
 config_path: ?[]const u8 = null,

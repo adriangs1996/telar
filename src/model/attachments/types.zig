@@ -47,6 +47,4 @@ comptime {
     std.debug.assert(2 * @as(usize, max_marker_navigation_steps) + 1 <= max_removal_keys);
 }
 
-pub const Id = @import("AttachmentId.zig").AttachmentId;
-
 pub const MarkerDeletion = @import("AttachmentMarkerDeletion.zig").AttachmentMarkerDeletion;

@@ -4,6 +4,7 @@ const Record = @This();
 
 backend: proxy.TrustBackend,
 fingerprint: [40]u8,
+// SAFETY: Trust-record parsing copies the validated path before setting store_path_len; storePath reads only that prefix.
 store_path: [std.fs.max_path_bytes]u8 = undefined,
 store_path_len: u16 = 0,
 

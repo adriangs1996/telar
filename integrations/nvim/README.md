@@ -224,10 +224,3 @@ to capture `stdout`, `stderr`, and the exit code for one navigation attempt.
 - After rebuilding changes to Telar's protocol or runtime navigation code,
   restart both the runtime and client.
 - After changing only the adapter's Lua files, restart Neovim.
-
-## Test the adapter
-
-```sh
-TELAR_NVIM_INTEGRATION="$PWD/integrations/nvim" nvim --headless -u NONE \
-  -l integrations/nvim/tests/telar_mux_spec.lua
-```

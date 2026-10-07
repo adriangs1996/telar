@@ -1,7 +1,6 @@
 const id = @import("../id.zig");
 const types = @import("../types.zig");
 const history = @import("history.zig");
-const QueryHistory = @This();
 
 request_id: id.RequestId,
 query: []const u8 = "",

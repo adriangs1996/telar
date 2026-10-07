@@ -1,5 +1,4 @@
 const core = @import("telar-core");
-const Stats = @This();
 
 input_bytes: u64 = 0,
 captured: u64 = 0,

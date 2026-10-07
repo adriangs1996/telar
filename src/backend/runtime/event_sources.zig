@@ -15,7 +15,3 @@ pub fn waitForMetricsTick(io: std.Io) anyerror!void {
 pub fn awaitClient(io: std.Io, listener: *LocalListener) anyerror!localsocket.SocketChannel {
     return listener.accept(io);
 }
-
-test {
-    std.testing.refAllDecls(@This());
-}

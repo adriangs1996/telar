@@ -5,7 +5,6 @@ const core = @import("telar-core");
 const ResponseQueue = @import("ResponseQueue.zig");
 const delivery_namespace = @import("delivery_namespace.zig");
 const std = @import("std");
-const response_queue = @import("response_queue.zig");
 const Sources = @import("Sources.zig");
 const QueryResult = @import("../../history/QueryResult.zig");
 const PathQuery = @import("../../paths/PathQuery.zig");
@@ -20,7 +19,6 @@ const Attachment = @import("../attachment/Attachment.zig");
 const ForegroundProjection = @import("ForegroundProjection.zig");
 const PaneStore = @import("../../pane/PaneStore.zig");
 const Attachments = @import("../attachment/Attachments.zig");
-const PaneKey = @import("../../pane/PaneKey.zig");
 const Delivery = @This();
 
 send_buffer: []u8,
@@ -58,10 +56,6 @@ pub fn deinit(self: *Delivery, gpa: std.mem.Allocator) void {
 pub fn close(self: *Delivery) void {
     self.phase = .closed;
     self.responses.clear();
-}
-
-pub fn enqueue(self: *Delivery, response: response_queue.PendingResponse) !void {
-    try self.responses.push(response);
 }
 
 pub fn requestWorkspaceResync(self: *Delivery, workspace: core.WorkspaceLocation, previous_workspace: ?core.WorkspaceId) void {

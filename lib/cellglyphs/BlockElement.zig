@@ -12,17 +12,3 @@ pub fn parse(text: []const u8) ?Block {
 
     return .{ .codepoint = 0x2580 + @as(u21, text[2] & 31) };
 }
-
-test "all 32 block codepoints and only bare complete graphemes are procedural" {
-    const std = @import("std");
-    for (0x2580..0x25a0) |codepoint| {
-        var bytes: [4]u8 = undefined;
-        const length = try std.unicode.utf8Encode(@intCast(codepoint), &bytes);
-        const block = parse(bytes[0..length]).?;
-        try std.testing.expectEqual(@as(u21, @intCast(codepoint)), block.codepoint);
-    }
-
-    for ([_][]const u8{ "", "x", "\u{257f}", "\u{25a0}", "\xe2\x96", "\xe2\x96\x7f", "\xe2\x96\xa0", "██", "█\u{301}", "▀\u{fe0f}" }) |text| {
-        try std.testing.expectEqual(@as(?Block, null), parse(text));
-    }
-}

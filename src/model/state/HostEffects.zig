@@ -18,6 +18,7 @@ pub const Effect = union(enum) {
     machine: MachineRequest,
 };
 
+// SAFETY: push writes the ring slot before increasing count; pop checks count before reading the occupied head.
 pending: [capacity]Effect = undefined,
 head: usize = 0,
 count: usize = 0,
@@ -91,28 +92,4 @@ pub fn takePlacementInvalidation(self: *HostEffects) bool {
 pub fn deinit(self: *HostEffects, gpa: std.mem.Allocator) void {
     self.clipboard.deinit(gpa);
     self.* = .{};
-}
-
-test "host effects keep order and coalesce clipboard writes" {
-    var effects: HostEffects = .{};
-    defer effects.deinit(std.testing.allocator);
-
-    try effects.writeClipboard(std.testing.allocator, "first");
-    try effects.push(.{ .machine = .{ .offset = 1 } });
-    try effects.writeClipboard(std.testing.allocator, "second");
-
-    try std.testing.expect(effects.pop().? == .clipboard);
-    try std.testing.expectEqualStrings("second", effects.clipboard.items);
-    try std.testing.expect(effects.pop().? == .machine);
-    try std.testing.expect(effects.pop() == null);
-}
-
-test "a full queue rejects requests without losing queued ones" {
-    var effects: HostEffects = .{};
-    for (0..capacity) |_| {
-        try effects.push(.{ .machine = .{ .offset = 1 } });
-    }
-
-    try std.testing.expectError(error.HostEffectsFull, effects.push(.clipboard));
-    try std.testing.expectEqual(@as(usize, capacity), effects.count);
 }

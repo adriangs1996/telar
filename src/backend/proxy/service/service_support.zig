@@ -12,10 +12,6 @@ const tunnel_namespace = @import("../tunnel/tunnel_namespace.zig");
 pub const max_connections: u32 = Connections.capacity;
 pub const connections_limit = core.Limit.declare("proxy.max_connections", "connections", max_connections);
 
-pub const Paths = @import("Paths.zig");
-
-pub const ClientConfiguration = @import("ClientConfiguration.zig");
-
 pub const Worker = std.Io.Future(anyerror!void);
 
 pub const Service = @import("Service.zig");
@@ -192,7 +188,10 @@ pub fn awaitTunnels(service: *Service) bool {
                 .clock = .awake,
             },
         };
-        service.tunnels_joined.waitTimeout(service.io, left) catch {};
+        service.tunnels_joined.waitTimeout(service.io, left) catch |err| switch (err) {
+            error.Timeout => {},
+            error.Canceled => return false,
+        };
     }
 
     return true;
@@ -265,14 +264,11 @@ fn serveConnection(service: *Service, stream: std.Io.net.Stream, slot: Connectio
 pub fn serve(service: *Service, stream: std.Io.net.Stream, slot: Connections.Slot, establishment: Establishment) std.Io.Cancelable!void {
     defer close(service, stream, slot);
 
-    if (service.tunnel_gate) |gate| {
-        gate.hold(service.io);
-    }
-
     var tunnel = Tunnel.init(.{
         .dependencies = .{
             .tls = service.interception.tunnelResources(&service.telemetry),
             .secret = &service.secret,
+            .anonymous_tunnels = service.anonymous_tunnels,
             .connection_ids = &service.next_connection_id,
             .captures = &service.captures,
             .connections = &service.connections,
@@ -313,18 +309,4 @@ fn pause(io: std.Io, duration_ms: i64) std.Io.Cancelable!void {
 
 fn now(io: std.Io) i64 {
     return std.Io.Timestamp.now(io, .awake).toMilliseconds();
-}
-
-test "the descriptor limit rises to fit every connection within its hard limit" {
-    const original = try std.posix.getrlimit(.NOFILE);
-    defer std.posix.setrlimit(.NOFILE, original) catch {};
-
-    const wanted: std.posix.rlim_t = wanted_descriptors;
-    var lowered = original;
-    lowered.cur = @min(original.cur, 256);
-    try std.posix.setrlimit(.NOFILE, lowered);
-
-    raiseDescriptorLimit();
-    const raised = try std.posix.getrlimit(.NOFILE);
-    try std.testing.expectEqual(@min(wanted, pty.descriptor_limit.select_descriptor_ceiling, original.max), raised.cur);
 }

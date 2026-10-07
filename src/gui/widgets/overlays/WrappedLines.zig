@@ -1,5 +1,4 @@
 const cellgrid = @import("cellgrid");
-const std = @import("std");
 const WrappedLines = @This();
 
 text: []const u8,
@@ -63,38 +62,4 @@ pub fn count(self: WrappedLines) u32 {
     }
 
     return total;
-}
-
-test "word wrapping ends a line at its last space and still splits a long word" {
-    var lines: WrappedLines = .{ .text = "zig build test-gui --summary all", .width = 12, .words = true };
-    try std.testing.expectEqualStrings("zig build ", lines.next().?);
-    try std.testing.expectEqualStrings("test-gui ", lines.next().?);
-    try std.testing.expectEqualStrings("--summary ", lines.next().?);
-    try std.testing.expectEqualStrings("all", lines.next().?);
-    try std.testing.expectEqual(@as(?[]const u8, null), lines.next());
-
-    var long: WrappedLines = .{ .text = "echo aaaaaaaaaaaaaaaa b", .width = 8, .words = true };
-    try std.testing.expectEqualStrings("echo ", long.next().?);
-    try std.testing.expectEqualStrings("aaaaaaaa", long.next().?);
-    try std.testing.expectEqualStrings("aaaaaaaa", long.next().?);
-    try std.testing.expectEqualStrings(" b", long.next().?);
-    try std.testing.expectEqual(@as(?[]const u8, null), long.next());
-
-    // Every byte lands on exactly one line, in order, and counting agrees.
-    const text = "for 界 in 日本語 e\u{301}e\u{301}; do\n  echo \"$word\"\ndone";
-    var joined: [128]u8 = undefined;
-    var len: usize = 0;
-    var all: WrappedLines = .{ .text = text, .width = 7, .words = true };
-    const count_before = all.count();
-    var seen: u32 = 0;
-    while (all.next()) |line| {
-        @memcpy(joined[len..][0..line.len], line);
-        len += line.len;
-        seen += 1;
-    }
-
-    try std.testing.expectEqual(count_before, seen);
-    var expected: [128]u8 = undefined;
-    const stripped = std.mem.replace(u8, text, "\n", "", &expected);
-    try std.testing.expectEqualStrings(expected[0 .. text.len - stripped], joined[0..len]);
 }

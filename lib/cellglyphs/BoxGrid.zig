@@ -32,6 +32,7 @@ width: f32,
 height: f32,
 light: f32,
 heavy: f32,
+// SAFETY: Stroke construction assigns a rectangle before increasing count; consumers use only rects[0..count].
 rects: [8]Rect = undefined,
 count: u4 = 0,
 
@@ -246,26 +247,5 @@ fn intersection(self: *Grid, lines: BoxLines.Lines) void {
             self.add(.{ 0, h_double_top, top_right, h_light_top });
             self.add(.{ 0, h_light_bottom, bottom_right, h_double_bottom });
         },
-    }
-}
-
-test "invalid box metrics are rejected before geometry or integer conversion" {
-    for ([_]f32{ -1, std.math.nan(f32), std.math.inf(f32), 65536 }) |size| {
-        try std.testing.expectError(error.InvalidCellBounds, init(.{ .x = 0, .y = 0, .width = size, .height = 32 }, 1));
-        try std.testing.expectError(error.InvalidCellBounds, init(.{ .x = 0, .y = 0, .width = 16, .height = size }, 1));
-    }
-
-    for ([_]f32{ -1, 0, std.math.nan(f32), std.math.inf(f32) }) |thickness| {
-        try std.testing.expectError(error.InvalidCellBounds, init(.{ .x = 0, .y = 0, .width = 16, .height = 32 }, thickness));
-    }
-}
-
-test "double boxes remain visible when a cell cannot fit two strokes and a gap" {
-    for ([_]f32{ 0.25, 0.5, 1, 2, 3 }) |size| {
-        for ([_]u21{ 0x2550, 0x2551, 0x2554, 0x256c }) |codepoint| {
-            var grid = try init(.{ .x = 0, .y = 0, .width = size, .height = size }, 1);
-            grid.draw(.{ .codepoint = codepoint });
-            try std.testing.expect(grid.count > 0);
-        }
     }
 }

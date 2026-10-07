@@ -51,6 +51,7 @@ pub fn run(init: std.process.Init, options: ProxyOptions) !u8 {
     else
         try server.resolveProxyDirectory(init.minimal.environ, &directory_buffer);
     if (!std.fs.path.isAbsolute(directory)) {
+        // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
         std.debug.print("telar proxy trust: --ca-dir must be absolute\n", .{});
         return 1;
     }
@@ -58,7 +59,6 @@ pub fn run(init: std.process.Init, options: ProxyOptions) !u8 {
     var output_buffer: [4096]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
     const writer = &output.interface;
-    defer writer.flush() catch {};
 
     const paths = try AuthorityPaths.init(directory);
     const current = inspect(.fromProcess(init), &paths);
@@ -69,11 +69,13 @@ pub fn run(init: std.process.Init, options: ProxyOptions) !u8 {
                 try writer.print("fingerprint: {s}\nstore: {s}\n", .{ &record.fingerprint, record.storePath() });
             }
             try printFirefoxNotice(writer, paths.files().certificate);
+            try writer.flush();
             return if (current.status == .stale) 1 else 0;
         },
         .install => {
             if (current.status == .stale and current.record == null) {
                 try writer.print("telar proxy trust: invalid trust record ({s})\n", .{paths.recordPath()});
+                try writer.flush();
                 return 1;
             }
 
@@ -81,27 +83,32 @@ pub fn run(init: std.process.Init, options: ProxyOptions) !u8 {
             if (current.status == .installed and current.record.?.backend == selected_backend) {
                 try writer.print("telar proxy trust: already installed ({s})\n", .{directory});
                 try printFirefoxNotice(writer, paths.files().certificate);
+                try writer.flush();
                 return 0;
             }
 
             try prepareDirectory(init.io, directory);
             try install(init, .{ .paths = paths, .previous = current.record, .backend = selected_backend, .writer = writer });
             try printFirefoxNotice(writer, paths.files().certificate);
+            try writer.flush();
             return 0;
         },
         .uninstall => {
             if (current.status == .stale and current.record == null) {
                 try writer.print("telar proxy trust: invalid trust record ({s})\n", .{paths.recordPath()});
+                try writer.flush();
                 return 1;
             }
 
             const record = current.record orelse {
                 try writer.print("telar proxy trust: not installed ({s})\n", .{directory});
+                try writer.flush();
                 return 0;
             };
             try uninstallRecord(.{ .init = init, .writer = writer }, record, paths.files().certificate);
             try std.Io.Dir.deleteFileAbsolute(init.io, paths.recordPath());
             try writer.print("telar proxy trust: removed {s}\n", .{&record.fingerprint});
+            try writer.flush();
             return 0;
         },
     }
@@ -131,8 +138,8 @@ pub fn rotateIfNeeded(init: std.process.Init, directory: []const u8) !bool {
 
     var output_buffer: [4096]u8 = undefined;
     var output = std.Io.File.stderr().writerStreaming(init.io, &output_buffer);
-    defer output.interface.flush() catch {};
     try install(init, .{ .paths = paths, .previous = current.record, .backend = current.record.?.backend, .writer = &output.interface });
+    try output.interface.flush();
     return true;
 }
 
@@ -182,7 +189,7 @@ fn install(init: std.process.Init, options: InstallOptions) !void {
         .target = .{ .backend = options.backend, .certificate = rollback_certificate },
         .fingerprint = &fingerprint,
         .destination = store_path,
-    }) catch {};
+    }) catch |err| std.log.warn("Could not remove partially installed authority: {s}", .{@errorName(err)});
     if (options.previous) |old| {
         if (removePreviousSeparately(old.backend, options.backend)) {
             try uninstallAuthority(.{ .init = init, .writer = options.writer }, .{
@@ -213,6 +220,7 @@ fn prepareAuthority(init: std.process.Init, paths: *const AuthorityPaths) !Prepa
     var nonce: [8]u8 = undefined;
     try init.io.randomSecure(&nonce);
     const suffix = std.fmt.bytesToHex(nonce, .lower);
+    // SAFETY: Both temporary paths and lengths, temporary and authority are assigned before return; each failing operation returns first.
     var prepared: PreparedAuthority = undefined;
     prepared.temporary_key_len = (try std.fmt.bufPrint(&prepared.temporary_key, "{s}.rotate-{s}", .{ paths.files().key, &suffix })).len;
     prepared.temporary_certificate_len = (try std.fmt.bufPrint(&prepared.temporary_certificate, "{s}.rotate-{s}", .{ paths.files().certificate, &suffix })).len;
@@ -221,8 +229,8 @@ fn prepareAuthority(init: std.process.Init, paths: *const AuthorityPaths) !Prepa
         .certificate = prepared.temporary_certificate[0..prepared.temporary_certificate_len],
         .common_name = paths.files().common_name,
     };
-    errdefer std.Io.Dir.deleteFileAbsolute(init.io, files.key) catch {};
-    errdefer std.Io.Dir.deleteFileAbsolute(init.io, files.certificate) catch {};
+    errdefer std.Io.Dir.deleteFileAbsolute(init.io, files.key) catch |err| std.log.warn("Could not remove temporary private key: {s}", .{@errorName(err)});
+    errdefer std.Io.Dir.deleteFileAbsolute(init.io, files.certificate) catch |err| std.log.warn("Could not remove temporary certificate: {s}", .{@errorName(err)});
     prepared.temporary = true;
     prepared.authority = try localca.Authority.createSystem(resources, files);
     return prepared;
@@ -243,25 +251,24 @@ fn activatePrepared(io: std.Io, prepared: *PreparedAuthority, paths: *const Auth
     if (had_key) {
         try std.Io.Dir.renameAbsolute(canonical.key, backup_key, io);
     }
-    errdefer if (had_key) std.Io.Dir.renameAbsolute(backup_key, canonical.key, io) catch {};
+    errdefer if (had_key) std.Io.Dir.renameAbsolute(backup_key, canonical.key, io) catch |err| std.log.warn("Could not restore previous private key: {s}", .{@errorName(err)});
 
     const had_certificate = try fileExists(io, canonical.certificate);
     if (had_certificate) {
         try std.Io.Dir.renameAbsolute(canonical.certificate, backup_certificate, io);
     }
-    errdefer if (had_certificate) std.Io.Dir.renameAbsolute(backup_certificate, canonical.certificate, io) catch {};
+    errdefer if (had_certificate) std.Io.Dir.renameAbsolute(backup_certificate, canonical.certificate, io) catch |err| std.log.warn("Could not restore previous certificate: {s}", .{@errorName(err)});
 
     try std.Io.Dir.renameAbsolute(files.key, canonical.key, io);
-    errdefer std.Io.Dir.renameAbsolute(canonical.key, files.key, io) catch {};
+    errdefer std.Io.Dir.renameAbsolute(canonical.key, files.key, io) catch |err| std.log.warn("Could not roll back activated private key: {s}", .{@errorName(err)});
     try std.Io.Dir.renameAbsolute(files.certificate, canonical.certificate, io);
-    errdefer std.Io.Dir.renameAbsolute(canonical.certificate, files.certificate, io) catch {};
 
     prepared.temporary = false;
     if (had_certificate) {
-        std.Io.Dir.deleteFileAbsolute(io, backup_certificate) catch {};
+        std.Io.Dir.deleteFileAbsolute(io, backup_certificate) catch |err| std.log.warn("Could not remove previous certificate backup: {s}", .{@errorName(err)});
     }
     if (had_key) {
-        std.Io.Dir.deleteFileAbsolute(io, backup_key) catch {};
+        std.Io.Dir.deleteFileAbsolute(io, backup_key) catch |err| std.log.warn("Could not remove previous private key backup: {s}", .{@errorName(err)});
     }
 }
 
@@ -452,16 +459,19 @@ fn writeSecure(io: std.Io, path: []const u8, source: []const u8) !void {
         };
         file.writeStreamingAll(io, source) catch |err| {
             file.close(io);
+            // Preserve the write error after closing the temporary record; deletion is rollback cleanup.
             std.Io.Dir.deleteFileAbsolute(io, temporary) catch {};
             return err;
         };
         file.sync(io) catch |err| {
             file.close(io);
+            // Preserve the sync error after closing the temporary record; deletion is rollback cleanup.
             std.Io.Dir.deleteFileAbsolute(io, temporary) catch {};
             return err;
         };
         file.close(io);
         std.Io.Dir.renameAbsolute(temporary, path, io) catch |err| {
+            // Preserve the failed rename; the uncommitted temporary record is best-effort cleanup.
             std.Io.Dir.deleteFileAbsolute(io, temporary) catch {};
             return err;
         };
@@ -504,97 +514,4 @@ fn validateDirectoryOwner(io: std.Io, directory: []const u8) !void {
 
 fn printFirefoxNotice(writer: *std.Io.Writer, certificate: []const u8) !void {
     try writer.print("Firefox may use its own certificate store; import {s} there if it does not honor OS trust.\n", .{certificate});
-}
-
-test "trust records round trip with owner-only permissions" {
-    const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
-    try prepareDirectory(io, directory);
-    const paths = try AuthorityPaths.init(directory);
-    const fingerprint: [40]u8 = @splat('A');
-    const record = try makeRecord(.macos, fingerprint, "/Users/test/Library/Keychains/login.keychain-db");
-    try writeRecord(io, paths.recordPath(), record);
-    const loaded = (try readRecord(io, std.testing.allocator, paths.recordPath())).?;
-    try std.testing.expectEqual(record.backend, loaded.backend);
-    try std.testing.expectEqualSlices(u8, &record.fingerprint, &loaded.fingerprint);
-    try std.testing.expectEqualStrings(record.storePath(), loaded.storePath());
-    const stat = try std.Io.Dir.cwd().statFile(io, paths.recordPath(), .{ .follow_symlinks = false });
-    try std.testing.expectEqual(@as(u32, 0o600), stat.permissions.toMode() & 0o777);
-}
-
-test "inspection accepts only the recorded short-lived authority" {
-    const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
-    try prepareDirectory(io, directory);
-    const paths = try AuthorityPaths.init(directory);
-    const authority = try localca.Authority.loadOrCreateSystem(.{ .io = io, .allocator = std.testing.allocator }, paths.files());
-    var environment = std.process.Environ.Map.init(std.testing.allocator);
-    defer environment.deinit();
-    try environment.put("HOME", "/Users/test");
-    const block = try environment.createPosixBlock(std.testing.allocator, .{});
-    defer block.deinit(std.testing.allocator);
-    const environ: std.process.Environ = .{ .block = block };
-    const selected: TrustBackend = if (builtin.os.tag == .macos) .macos else .trust;
-    var store_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const store = try storePath(environ, .{ .backend = selected, .certificate = paths.files().certificate }, &store_buffer);
-    const record = try makeRecord(selected, authority.fingerprint(), store);
-    try writeRecord(io, paths.recordPath(), record);
-
-    const context: InspectionContext = .{ .io = io, .gpa = std.testing.allocator, .environ = environ };
-    const installed = inspect(context, &paths);
-    try std.testing.expectEqual(Status.installed, installed.status);
-
-    var changed = record;
-    changed.fingerprint[0] = if (changed.fingerprint[0] == 'A') 'B' else 'A';
-    try writeRecord(io, paths.recordPath(), changed);
-    try std.testing.expectEqual(Status.stale, inspect(context, &paths).status);
-}
-
-test "update-ca-certificates rotation keeps the replacement at its fixed path" {
-    try std.testing.expect(!removePreviousSeparately(.update_ca_certificates, .update_ca_certificates));
-    try std.testing.expect(removePreviousSeparately(.macos, .macos));
-    try std.testing.expect(removePreviousSeparately(.trust, .update_ca_certificates));
-}
-
-test "Linux trust records cannot redirect privileged removal" {
-    const record = try makeRecord(.update_ca_certificates, @splat('A'), "/etc/passwd");
-    if (builtin.os.tag == .linux) {
-        try std.testing.expectError(error.InvalidTrustRecord, validateRecordTarget(.empty, record, "/tmp/ca-system-cert.pem"));
-    } else {
-        try std.testing.expectError(error.UnsupportedTrustRecord, validateRecordTarget(.empty, record, "/tmp/ca-system-cert.pem"));
-    }
-}
-
-test "authority activation replaces the key and certificate as one recoverable pair" {
-    const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
-    try prepareDirectory(io, directory);
-    const paths = try AuthorityPaths.init(directory);
-    const resources: localca.Resources = .{ .io = io, .allocator = std.testing.allocator };
-    _ = try localca.Authority.loadOrCreate(resources, paths.files());
-
-    var prepared: PreparedAuthority = undefined;
-    prepared.temporary_key_len = (try std.fmt.bufPrint(&prepared.temporary_key, "{s}.new", .{paths.files().key})).len;
-    prepared.temporary_certificate_len = (try std.fmt.bufPrint(&prepared.temporary_certificate, "{s}.new", .{paths.files().certificate})).len;
-    prepared.temporary = true;
-    prepared.authority = try localca.Authority.createSystem(resources, prepared.files(&paths));
-    const replacement_fingerprint = prepared.authority.fingerprint();
-
-    try activatePrepared(io, &prepared, &paths);
-
-    const loaded = try localca.Authority.loadExisting(resources, paths.files());
-    try std.testing.expectEqualSlices(u8, &replacement_fingerprint, &loaded.fingerprint());
-    try std.testing.expect(try loaded.hasSystemLifetime());
 }

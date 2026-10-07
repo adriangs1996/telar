@@ -1,6 +1,5 @@
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
-const View = @This();
 
 pane_id: core.PaneId,
 outer: cellgrid.Rect,

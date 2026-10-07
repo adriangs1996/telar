@@ -2,7 +2,6 @@
 const LocalTime = @import("../state/LocalTime.zig");
 const PanelRun = @import("../operations/configuration/PanelRun.zig");
 const bar_values = @import("model.zig");
-const PanelUpdate = @This();
 
 generation: u64,
 run: PanelRun,

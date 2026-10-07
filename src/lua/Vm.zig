@@ -29,6 +29,7 @@ pub fn init(io: std.Io, gpa: std.mem.Allocator, limits: Limits) !*Vm {
     owned.* = .{
         .io = io,
         .gpa = gpa,
+        // SAFETY: lua_newstate needs the initialized allocator userdata at its final address; allocate reads only gpa and meter. State is assigned before any Lua operation.
         .state = undefined,
         .meter = .{ .limit = limits.memory },
         .instruction_limit = limits.instructions,

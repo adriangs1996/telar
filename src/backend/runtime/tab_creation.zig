@@ -82,6 +82,7 @@ fn createTab(model: *RuntimeModel, session: *Session, request: core.CreateTabVie
         .request_id = request.request_id,
         .location = created,
         .position = position,
+        // SAFETY: memcpy fills label[0..label_len] before return; delivery reads only that prefix.
         .label = undefined,
         .label_len = @intCast(label.len),
         .root_pane_id = root_pane_id,

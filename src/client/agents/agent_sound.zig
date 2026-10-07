@@ -8,6 +8,7 @@ const AgentSoundOutcome = enum { stale, accepted };
 /// Host playback errors drop that sound without stopping the queue.
 /// Example: `try agent_sound.completeAgentSound(client, result);`
 pub fn completeAgentSound(client: *Client, result: anyerror!void) !void {
+    // Playback failure drops this sound; completing the queue below allows the next queued sound to run.
     _ = result catch {};
     const next = client.model.sound_playback.complete() orelse return;
 

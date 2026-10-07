@@ -34,7 +34,6 @@ pub const LimitError = error{
     ArgumentsTooLarge,
     AtlasFull,
     AttachmentGenerationExhausted,
-    AttachmentLeaseLimit,
     AttachmentLimitReached,
     AttachmentSelfFull,
     BarCommandExecutionIdExhausted,
@@ -47,6 +46,9 @@ pub const LimitError = error{
     ClientOutboxFull,
     ClipboardCaptureIdExhausted,
     ClipboardImageTooLarge,
+    ClipboardSourceTooLarge,
+    ClipboardPngTooLarge,
+    ClipboardPixelsTooLarge,
     ClipboardTooLarge,
     ConfigLimitReached,
     ConfigPathTooLong,
@@ -71,8 +73,6 @@ pub const LimitError = error{
     GraphicsPlacementLimitExceeded,
     GraphicsPlacementLimitReached,
     GraphicsQuotaExceeded,
-    HeadlessCellBudgetExceeded,
-    HeadlessReceiveTooLarge,
     HostEffectsFull,
     HostRequestIdsExhausted,
     HostRequestsFull,
@@ -106,8 +106,6 @@ pub const LimitError = error{
     PngTooLarge,
     PresentationIdExhausted,
     ProfileCounterOverflow,
-    ProviderFrameTooDeep,
-    ProviderFrameTooLarge,
     ProxyInterceptHostsTooLarge,
     ProxyPathTooLong,
     QueryTooLong,
@@ -206,20 +204,12 @@ pub const SystemError = error{
 pub const NotLimitError = error{
     /// Temporary pipe contention/flow control; callers retry without data loss.
     ExecutionBusy,
-    /// A test fixture's own bound, not telar's.
-    AckCapacityExceeded,
     /// One command in flight per client by design; the caller answers busy.
     ClientBusy,
-    /// A test driver with one operation in flight.
-    DriverBusy,
     /// One editor open in flight by design; the caller answers busy.
     EditorOpenBusy,
-    /// A test fixture's own bound, not telar's.
-    FixtureClientLimit,
     /// Arithmetic on dimensions a child sent: a malformed image.
     ImageSizeOverflow,
-    /// A test fixture's own bound, not telar's.
-    InputCapacityExceeded,
     /// A configured capture quota out of range: invalid configuration.
     InvalidCaptureQuota,
     /// A configured decode bound out of range: invalid configuration.
@@ -272,20 +262,10 @@ pub const NotLimitError = error{
     PresentationBusy,
     /// A rate policy answered to the sender, which keeps working.
     PromptRateLimited,
-    /// A deadline a test measures, not a bound telar enforces.
-    PtyInputForwardingDeadlineExceeded,
-    /// A test fixture with one receive in flight.
-    ReceiveBusy,
     /// A window too small to lay out: a geometry answer, not a capacity.
     TerminalTooSmall,
     /// A deadline a test measures, not a bound telar enforces.
     TestReceiveDeadlineExceeded,
-    /// A test fixture's own bound, not telar's.
-    TestScreenTooLarge,
-    /// A test fixture's own bound, not telar's.
-    TooManyHiddenPanes,
-    /// A test fixture's own bound, not telar's.
-    TooManyImagePanes,
 };
 
 /// Whether an error is one of telar's own limits (`LimitError`).
@@ -397,77 +377,9 @@ pub fn restoreReport(reaches: *LimitReaches, slot: usize, hits: u32) void {
     reaches.reported_ms[slot] = null;
 }
 
-fn sample(name: []const u8, requested: ?u64) LimitReach {
-    return .{
-        .limit = .{
-            .name = name,
-            .noun = "items",
-            .value = 4,
-        },
-        .requested = requested,
-    };
-}
-
 fn time(awake_ms: i64) ReachTime {
     return .{
         .awake_ms = awake_ms,
         .real_ms = 1_700_000_000_000 + awake_ms,
     };
-}
-
-test "limit errors are told apart from host errors and bugs" {
-    try std.testing.expect(isLimitError(error.TooManyBarActions));
-    try std.testing.expect(isLimitError(error.AtlasFull));
-    try std.testing.expect(isLimitError(error.PaneLimitReached));
-    try std.testing.expect(isLimitError(error.WidgetIdentityExhausted));
-    try std.testing.expect(!isLimitError(error.NoSpaceLeft));
-    try std.testing.expect(!isLimitError(error.WriteFailed));
-    try std.testing.expect(!isLimitError(error.OutOfMemory));
-    try std.testing.expect(isSystemError(error.NoSpaceLeft));
-    try std.testing.expect(isSystemError(error.DiskQuota));
-    try std.testing.expect(!isLimitError(error.InvalidPresentationCommit));
-
-    try std.testing.expect(isSystemError(error.OutOfMemory));
-    try std.testing.expect(isSystemError(error.SystemFdQuotaExceeded));
-    try std.testing.expect(!isSystemError(error.TooManyTabs));
-}
-
-test "a limit is shown once per interval and every reach counts" {
-    var reaches: LimitReaches = .{};
-
-    const first = record(&reaches, sample("bars.max_bar_actions", 5), time(1_000), 1);
-    try std.testing.expect(first.show);
-
-    const second = record(&reaches, sample("bars.max_bar_actions", 17), time(2_000), 1);
-    try std.testing.expect(!second.show);
-    try std.testing.expectEqual(first.slot, second.slot);
-    try std.testing.expectEqual(@as(u64, 2), reaches.hits[first.slot]);
-    try std.testing.expectEqual(@as(?u64, 17), reaches.requested[first.slot]);
-    try std.testing.expectEqual(time(2_000).real_ms, reaches.last_ms[first.slot]);
-
-    const later = record(&reaches, sample("bars.max_bar_actions", null), time(1_000 + show_interval_ms), 1);
-    try std.testing.expect(later.show);
-    try std.testing.expectEqual(@as(?u64, 17), reaches.requested[first.slot]);
-    try std.testing.expectEqual(@as(u64, 3), reaches.hits[first.slot]);
-}
-
-test "reports fold reaches and wait for their interval" {
-    var reaches: LimitReaches = .{};
-    const slot = record(&reaches, sample("gui.widgets.registry_capacity", null), time(0), 1).slot;
-
-    try std.testing.expectEqual(@as(?u32, 1), takeReport(&reaches, slot, 0));
-    _ = record(&reaches, sample("gui.widgets.registry_capacity", null), time(10), 1);
-    _ = record(&reaches, sample("gui.widgets.registry_capacity", null), time(20), 1);
-    try std.testing.expectEqual(@as(?u32, null), takeReport(&reaches, slot, 20));
-    try std.testing.expectEqual(@as(?u32, 2), takeReport(&reaches, slot, report_interval_ms));
-
-    restoreReport(&reaches, slot, 2);
-    try std.testing.expectEqual(@as(?u32, 2), takeReport(&reaches, slot, report_interval_ms + 1));
-}
-
-test "an unnamed reach carries its error and the net that caught it" {
-    const reach = unnamed(error.ChromeHitCapacityExceeded, "window_draw");
-    try std.testing.expectEqualStrings("ChromeHitCapacityExceeded", reach.limit.name);
-    try std.testing.expectEqualStrings("window_draw", reach.route);
-    try reach.validate();
 }

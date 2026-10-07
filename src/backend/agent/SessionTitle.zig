@@ -3,6 +3,7 @@ const core = @import("telar-core");
 /// checkpoint can carry it and restore can hand it back to a resumed agent.
 const SessionTitle = @This();
 
+// SAFETY: init copies the validated title before setting len; slice reads only that prefix.
 bytes: [core.max_agent_session_title_bytes]u8 = undefined,
 len: u8 = 0,
 source: core.AgentTitleSource,

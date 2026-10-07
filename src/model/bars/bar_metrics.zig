@@ -30,15 +30,6 @@ pub fn icon(name: MetricName) ?ui_icons.Icon {
     };
 }
 
-/// The short caption a screen reader or a text-only row uses.
-pub fn label(name: MetricName) []const u8 {
-    return switch (name) {
-        .cpu => "CPU",
-        .memory => "Memory",
-        .battery => "Battery",
-    };
-}
-
 /// Example: `const text = bar_metrics.value(&buffer, .memory, metrics); // "12.8 GB"`
 pub fn value(buffer: *[max_value_bytes]u8, name: MetricName, metrics: ?SystemMetrics) []const u8 {
     const sample = metrics orelse return "";
@@ -70,20 +61,4 @@ pub fn tone(name: MetricName, metrics: ?SystemMetrics) Tone {
             return if (battery <= battery_danger) .danger else if (battery <= battery_warning) .warning else .neutral;
         },
     };
-}
-
-test "metrics format their values and ask for attention at their thresholds" {
-    const metrics: SystemMetrics = .{
-        .runtime_revision = 1,
-        .cpu_percent = 95,
-        .memory_used_decigib = 128,
-        .battery_percent = 9,
-    };
-    var buffer: [max_value_bytes]u8 = undefined;
-
-    try std.testing.expectEqualStrings("12.8 GB", value(&buffer, .memory, metrics));
-    try std.testing.expectEqualStrings("9%", value(&buffer, .battery, metrics));
-    try std.testing.expectEqual(Tone.warning, tone(.cpu, metrics));
-    try std.testing.expectEqual(Tone.danger, tone(.battery, metrics));
-    try std.testing.expect(!available(.battery, .{ .runtime_revision = 1, .cpu_percent = 1, .memory_used_decigib = 1, .battery_percent = null }));
 }

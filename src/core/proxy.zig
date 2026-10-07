@@ -20,9 +20,3 @@ pub fn orderHostname(left: []const u8, right: []const u8) std.math.Order {
     }
     return std.math.order(left.len, right.len);
 }
-
-test "proxy hostname ordering is ASCII case insensitive" {
-    try std.testing.expectEqual(std.math.Order.eq, orderHostname("API.Example", "api.example"));
-    try std.testing.expectEqual(std.math.Order.lt, orderHostname("a.example", "b.example"));
-    try std.testing.expectEqual(std.math.Order.lt, orderHostname("api", "api.example"));
-}

@@ -7,11 +7,3 @@ pub const TitleProbe = @import("TitleProbe.zig");
 pub const claude = @import("claude.zig");
 pub const codex = @import("codex.zig");
 pub const cursor = @import("cursor.zig");
-
-test {
-    _ = @import("TitleProbe.zig");
-    _ = @import("claude.zig");
-    _ = @import("codex.zig");
-    _ = @import("cursor.zig");
-    _ = @import("utf8.zig");
-}

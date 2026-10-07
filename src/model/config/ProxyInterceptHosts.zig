@@ -3,8 +3,10 @@ const Reference = @import("Reference.zig");
 const std = @import("std");
 const ProxyInterceptHosts = @This();
 
+// SAFETY: append fills the lowercase hostname before recording its offset and length; value reads only recorded hostname ranges.
 bytes: [core.max_intercept_bytes]u8 = undefined,
 byte_len: u16 = 0,
+// SAFETY: append writes each reference before increasing count; sorting and slice materialization use only that prefix.
 references: [core.max_intercept_hosts]Reference = undefined,
 count: u16 = 0,
 

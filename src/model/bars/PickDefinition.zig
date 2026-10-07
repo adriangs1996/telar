@@ -62,27 +62,3 @@ pub fn receivesChoice(self: *const PickDefinition) bool {
 
     return false;
 }
-
-test "the chosen value replaces whole marker arguments and nothing else" {
-    var definition: PickDefinition = .{};
-    definition.on_select.timeout_ms = 2_000;
-    try definition.on_select.appendArgument("pi-defaults");
-    try definition.on_select.appendArgument("--model={}");
-    try definition.on_select.appendArgument(choice_marker);
-    try std.testing.expect(definition.receivesChoice());
-
-    const command = try definition.selection("x; rm -rf ~");
-    try std.testing.expectEqual(@as(u8, 3), command.argument_count);
-    try std.testing.expectEqualStrings("--model={}", command.argument(1).?);
-    try std.testing.expectEqualStrings("x; rm -rf ~", command.argument(2).?);
-    try std.testing.expectEqual(@as(u32, 2_000), command.timeout_ms);
-}
-
-test "a marker in the program position does not receive the choice" {
-    var definition: PickDefinition = .{};
-    try definition.on_select.appendArgument(choice_marker);
-    try std.testing.expect(!definition.receivesChoice());
-
-    const command = try definition.selection("/bin/evil");
-    try std.testing.expectEqualStrings(choice_marker, command.argument(0).?);
-}

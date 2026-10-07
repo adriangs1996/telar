@@ -3,6 +3,7 @@ const OwnedCreateWorkspace = @This();
 
 request_id: core.RequestId,
 size: core.TerminalSize,
+// SAFETY: Outbox.pushCreateWorkspace copies the validated name before queueing this value; view uses only name_len bytes.
 name: [core.max_tab_label_bytes]u8 = undefined,
 name_len: u8,
 launch: core.Launch,

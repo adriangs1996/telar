@@ -1,6 +1,5 @@
 const keyinput = @import("keyinput");
 const data = @import("model");
-const Callback = @This();
 
 registry_ref: c_int,
 expression: bool,

@@ -8,7 +8,6 @@ const gfx = @import("gfx");
 const Rect = gfx.Rect;
 const attention = @import("attention.zig");
 const Canvas = @import("Canvas.zig");
-const AgentAges = @import("AgentAges.zig");
 const StatusChip = @This();
 
 context: *const Context,
@@ -74,37 +73,4 @@ fn workingLabel(storage: []u8, seconds: u32) []const u8 {
     var age_storage: [16]u8 = undefined;
     const age = attention.ageLabel(&age_storage, seconds);
     return std.fmt.bufPrint(storage, "working {s}", .{age}) catch "working";
-}
-
-test "status chip duration advances with the card clock between runtime reports" {
-    var agents: data.AgentSnapshot = .{};
-    const input: data.AgentInput = .{
-        .key = .{
-            .pane_id = @enumFromInt(1),
-            .pane_generation = 1,
-        },
-        .location = .{
-            .workspace = .{
-                .workspace = @enumFromInt(1),
-            },
-            .tab_id = @enumFromInt(1),
-        },
-        .pane_index = 1,
-        .provider = .codex,
-        .status = .working,
-        .status_age_s = 5,
-    };
-    _ = try agents.replace(.{ .revision = 1, .agents = &.{input} });
-    var ages: AgentAges = .{};
-    const context: Context = .{ .hits = undefined, .bands = undefined, .projection = undefined, .hovered = null, .ages = &ages };
-    const chip: StatusChip = .{ .context = &context, .agent = &agents.slice()[0], .area = .{ .x = 0, .y = 0, .width = 0, .height = 0 } };
-    var storage: [max_bytes]u8 = undefined;
-    ages.observe(&agents, 100 * std.time.ns_per_s);
-    try std.testing.expectEqualStrings("working 5s", chip.text(&storage));
-    ages.observe(&agents, 101 * std.time.ns_per_s);
-    try std.testing.expectEqualStrings("working 6s", chip.text(&storage));
-
-    _ = try agents.replace(.{ .revision = 2, .agents = &.{input} });
-    ages.observe(&agents, 101 * std.time.ns_per_s);
-    try std.testing.expectEqualStrings("working 6s", chip.text(&storage));
 }

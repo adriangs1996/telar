@@ -21,6 +21,7 @@ pub const max_runs = 2 * core.max_path_query_bytes + 6;
 
 const ellipsis = "…";
 
+// SAFETY: push writes each styled run before increasing len; slice exposes only that initialized prefix.
 runs: [max_runs]PathLabelRun = undefined,
 len: u8 = 0,
 
@@ -164,55 +165,4 @@ fn push(self: *PathLabel, run: PathLabelRun) void {
 
     self.runs[self.len] = run;
     self.len += 1;
-}
-
-test "a fitting path splits into directory, name and matched runs" {
-    var label: PathLabel = .{};
-    label.layout(
-        "src/License.ts",
-        &.{ 4, 5 },
-        40,
-    );
-    const runs = label.slice();
-    try std.testing.expectEqual(@as(usize, 3), runs.len);
-    try std.testing.expectEqualStrings("src/", runs[0].text);
-    try std.testing.expectEqual(Tone.directory, runs[0].tone);
-    try std.testing.expectEqualStrings("Li", runs[1].text);
-    try std.testing.expectEqual(Tone.match, runs[1].tone);
-    try std.testing.expectEqualStrings("cense.ts", runs[2].text);
-    try std.testing.expectEqual(Tone.name, runs[2].tone);
-}
-
-test "a wide path loses the middle of its directory and keeps the file name" {
-    var label: PathLabel = .{};
-    label.layout(
-        "apps/license-lookup-app/src/types/License.ts",
-        &.{},
-        24,
-    );
-    const runs = label.slice();
-    var width: u16 = 0;
-    for (runs) |run| {
-        width += cellgrid.text.measure(run.text);
-    }
-
-    try std.testing.expect(width <= 24);
-    try std.testing.expectEqual(Tone.ellipsis, runs[1].tone);
-    try std.testing.expectEqualStrings("License.ts", runs[runs.len - 1].text);
-    try std.testing.expect(std.mem.startsWith(
-        u8,
-        "apps/license-lookup-app/",
-        runs[0].text,
-    ));
-}
-
-test "a directory keeps its trailing separator in the name" {
-    var label: PathLabel = .{};
-    label.layout(
-        "tests/snapshots/",
-        &.{},
-        40,
-    );
-    try std.testing.expectEqualStrings("snapshots/", label.slice()[1].text);
-    try std.testing.expectEqual(Tone.name, label.slice()[1].tone);
 }

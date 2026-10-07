@@ -8,6 +8,7 @@ session: *Session,
 workspace: ?core.WorkspaceId = null,
 tab: ?core.TabId = null,
 /// Every pane the runtime holds fits, so an unfiltered listing is whole.
+// SAFETY: loadTab assigns each pane record before increasing count; catalog consumers use only that prefix.
 entries: [core.max_panes]PaneRecord = undefined,
 count: usize = 0,
 

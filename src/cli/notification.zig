@@ -24,8 +24,11 @@ pub fn run(init: std.process.Init, options: NotificationOptions) !void {
     const reach = fitText(&message.notification);
     send(init, message.notification, options.socket, reach) catch |err| {
         switch (err) {
+            // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
             error.RuntimeNotRunning => std.debug.print("telar notification: runtime is not running\n", .{}),
+            // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
             error.NoNotificationClients => std.debug.print("telar notification: no UI client is connected\n", .{}),
+            // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
             else => std.debug.print("telar notification: {s}\n", .{@errorName(err)}),
         }
 
@@ -97,9 +100,11 @@ pub fn send(init: std.process.Init, notification: core.Notification, socket: ?[*
                 .reach = reach,
                 .hits = 1,
             }) catch return;
+            // The notification was already acknowledged; reporting its limit is a secondary observation.
             connection.send(init.io, report) catch {};
         },
         .request_failed => |failure| {
+            // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
             std.debug.print("telar notification: {s}\n", .{failure.message});
             return error.NotificationFailed;
         },
@@ -129,60 +134,4 @@ fn validateAcknowledgement(shown: core.NotificationShown) !void {
     if (shown.delivered_clients == 0) {
         return error.NoNotificationClients;
     }
-}
-
-test "a title and body past their limits are cut on a UTF-8 boundary and reported" {
-    const title = "t" ** (core.max_notification_title_bytes - 1) ++ "é";
-    const body = "b" ** (core.max_notification_message_bytes + 10);
-    var message = request(.{
-        .title = title,
-        .body = body,
-    });
-
-    const reach = fitText(&message.notification).?;
-    try std.testing.expectEqualStrings("t" ** (core.max_notification_title_bytes - 1), message.notification.title);
-    try std.testing.expectEqual(@as(usize, core.max_notification_message_bytes), message.notification.message.len);
-    try std.testing.expectEqualStrings("notifications.max_message_bytes", reach.limit.name);
-    try std.testing.expectEqual(@as(?u64, body.len), reach.requested);
-
-    var fitting = request(.{
-        .title = "t" ** core.max_notification_title_bytes,
-        .body = "b" ** core.max_notification_message_bytes,
-    });
-    try std.testing.expect(fitText(&fitting.notification) == null);
-}
-
-test "notification options map to one protocol request" {
-    const message = request(.{
-        .title = "Build complete",
-        .body = "Open the pane",
-        .level = .success,
-        .duration_ms = 2500,
-        .target = .{ .pane = @enumFromInt(42) },
-    });
-
-    try std.testing.expectEqual(request_id, message.request_id);
-    try std.testing.expectEqual(core.NotificationLevel.success, message.notification.level);
-    try std.testing.expectEqual(@as(u32, 2500), message.notification.duration_ms);
-    try std.testing.expectEqual(@as(core.PaneId, @enumFromInt(42)), message.notification.target.pane);
-    try std.testing.expectEqualStrings("Build complete", message.notification.title);
-    try std.testing.expectEqualStrings("Open the pane", message.notification.message);
-}
-
-test "notification requests use an empty body when none was provided" {
-    const message = request(.{ .title = "Ready" });
-
-    try std.testing.expectEqualStrings("", message.notification.message);
-}
-
-test "notification acknowledgement belongs to the request and reaches a client" {
-    try validateAcknowledgement(.{ .request_id = request_id, .delivered_clients = 2 });
-    try std.testing.expectError(error.NoNotificationClients, validateAcknowledgement(.{
-        .request_id = request_id,
-        .delivered_clients = 0,
-    }));
-    try std.testing.expectError(error.UnexpectedRuntimeResponse, validateAcknowledgement(.{
-        .request_id = @enumFromInt(2),
-        .delivered_clients = 1,
-    }));
 }

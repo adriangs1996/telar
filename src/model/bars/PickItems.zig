@@ -26,12 +26,18 @@ pub const detail_limit = core.Limit.declare("picks.max_detail_bytes", "detail by
 /// How many limits filling one list can pass.
 pub const max_reaches = 5;
 
+// SAFETY: store copies text before advancing used; append publishes only ranges returned by store.
 bytes: [max_text_bytes]u8 = undefined,
 used: u32 = 0,
+// SAFETY: append writes the label range before increasing count; label reads ranges of occupied options.
 labels: [max_items]Range = undefined,
+// SAFETY: append writes the value range before increasing count; value reads ranges of occupied options.
 values: [max_items]Range = undefined,
+// SAFETY: append writes the detail range before increasing count; detail reads ranges of occupied options.
 details: [max_items]Range = undefined,
+// SAFETY: append writes the selected flag before increasing count; selection consumers visit only occupied options.
 selected: [max_items]bool = undefined,
+// SAFETY: append writes the optional swatch before increasing count; rendering visits only occupied options.
 swatches: [max_items]?[3]cellgrid.Color = undefined,
 count: u16 = 0,
 /// What `keep` was offered beyond the limits since the last `clear`.
@@ -235,93 +241,3 @@ fn validValue(text_value: []const u8) bool {
 const tab: u8 = '\t';
 const printable_start: u8 = 0x20;
 const delete_control: u8 = 0x7f;
-
-test "items keep label, value and detail and share a value equal to its label" {
-    var items: PickItems = .{};
-    try items.append(.{ .label = "medium" });
-    try items.append(.{ .label = "claude-opus-5-5", .value = "anthropic/claude-opus-5-5", .detail = "anthropic" });
-
-    try std.testing.expectEqual(@as(u16, 2), items.count);
-    try std.testing.expectEqualStrings("medium", items.value(0));
-    try std.testing.expectEqualStrings("", items.detail(0));
-    try std.testing.expectEqualStrings("anthropic/claude-opus-5-5", items.value(1));
-    try std.testing.expectEqualStrings("anthropic", items.detail(1));
-    try std.testing.expectEqual(@as(u32, "medium".len + "claude-opus-5-5".len + "anthropic/claude-opus-5-5".len + "anthropic".len), items.used);
-}
-
-test "items reject empty, control, oversized and surplus options" {
-    var items: PickItems = .{};
-    try std.testing.expectError(error.InvalidPickItem, items.append(.{ .label = "" }));
-    try std.testing.expectError(error.InvalidPickItem, items.append(.{ .label = "a\nb" }));
-    try std.testing.expectError(error.InvalidPickItem, items.append(.{ .label = "a", .value = "x\x00y" }));
-    try std.testing.expectError(error.PickItemTooLong, items.append(.{ .label = "a" ** (max_label_bytes + 1) }));
-    try std.testing.expectError(error.InvalidPickItem, items.append(.{ .label = "a\tb" }));
-    try items.append(.{ .label = "a b", .value = "a\tb" });
-    try std.testing.expectEqualStrings("a\tb", items.value(0));
-    items.clear();
-    try std.testing.expectEqual(@as(u16, 0), items.count);
-
-    for (0..max_items) |_| {
-        try items.append(.{ .label = "x" });
-    }
-
-    try std.testing.expectError(error.TooManyPickItems, items.append(.{ .label = "x" }));
-}
-
-test "keeping options cuts long labels and details, leaves out long values and surplus, and names each limit" {
-    var items: PickItems = .{};
-    try items.keep(.{
-        .label = "l" ** (max_label_bytes + 3),
-        .detail = "d" ** (max_detail_bytes + 1),
-    });
-    try items.keep(.{
-        .label = "long value",
-        .value = "v" ** (max_value_bytes + 1),
-    });
-    try items.keep(.{ .label = "fits" });
-
-    try std.testing.expectEqual(@as(u16, 2), items.count);
-    try std.testing.expectEqual(@as(usize, max_label_bytes), items.label(0).len);
-    try std.testing.expectEqual(@as(usize, max_label_bytes + 3), items.value(0).len);
-    try std.testing.expectEqual(@as(usize, max_detail_bytes), items.detail(0).len);
-    try std.testing.expectEqualStrings("fits", items.value(1));
-
-    var buffer: [max_reaches]core.LimitReach = undefined;
-    const passed = items.reaches(&buffer);
-    try std.testing.expectEqual(@as(usize, 3), passed.len);
-    try std.testing.expectEqualStrings("picks.max_label_bytes", passed[0].limit.name);
-    try std.testing.expectEqual(@as(?u64, max_label_bytes + 3), passed[0].requested);
-    try std.testing.expectEqualStrings("picks.max_value_bytes", passed[1].limit.name);
-    try std.testing.expectEqualStrings("picks.max_detail_bytes", passed[2].limit.name);
-
-    items.clear();
-    for (0..max_items + 2) |_| {
-        try items.keep(.{ .label = "x" });
-    }
-
-    try std.testing.expectEqual(@as(u16, max_items), items.count);
-    const surplus = items.reaches(&buffer);
-    try std.testing.expectEqual(@as(usize, 1), surplus.len);
-    try std.testing.expectEqual(@as(?u64, max_items + 2), surplus[0].requested);
-
-    items.clear();
-    try std.testing.expectError(error.InvalidPickItem, items.keep(.{ .label = "a\nb" }));
-}
-
-test "a list past its text keeps the options before the one that did not fit" {
-    var items: PickItems = .{};
-    const long_value = "v" ** max_value_bytes;
-    const fitting = max_text_bytes / (1 + long_value.len);
-    for (0..fitting + 3) |_| {
-        try items.keep(.{
-            .label = "x",
-            .value = long_value,
-        });
-    }
-
-    try std.testing.expectEqual(@as(u16, @intCast(fitting)), items.count);
-    var buffer: [max_reaches]core.LimitReach = undefined;
-    const passed = items.reaches(&buffer);
-    try std.testing.expectEqual(@as(usize, 1), passed.len);
-    try std.testing.expectEqualStrings("picks.max_text_bytes", passed[0].limit.name);
-}

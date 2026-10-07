@@ -22,6 +22,7 @@ const max_drain_steps = 4096;
 
 runtime: *Runtime,
 dependencies: Dependencies,
+// SAFETY: init formats the endpoint before passing the returned slice to runtime and connection setup.
 endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined,
 peers: [store_support.max_clients]?localsocket.SocketChannel = @splat(null),
 peer_count: usize = 0,
@@ -40,13 +41,14 @@ pub fn init(self: *IdleDelivery, dependencies: Dependencies, shape: Shape) !void
     std.debug.assert(shape.clients != 0 and shape.clients <= store_support.max_clients);
     std.debug.assert(shape.panes != 0);
 
+    const runtime = try dependencies.allocator.create(Runtime);
+    errdefer dependencies.allocator.destroy(runtime);
+
     self.* = .{
-        .runtime = undefined,
+        .runtime = runtime,
         .dependencies = dependencies,
     };
     const endpoint = try std.fmt.bufPrint(&self.endpoint_buffer, "{s}/idle.sock", .{shape.directory});
-    self.runtime = try dependencies.allocator.create(Runtime);
-    errdefer dependencies.allocator.destroy(self.runtime);
 
     try self.runtime.init(.{
         .dependencies = dependencies,

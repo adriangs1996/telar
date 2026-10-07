@@ -139,6 +139,7 @@ fn workspace(self: WorkspaceIndicators, canvas: *Canvas, index: usize) !void {
     const chrome = canvas.chrome;
     const content_height = @max(0, bounds.height - chrome.px(5));
     var storage: [8]u8 = undefined;
+    // SAFETY: the index belongs to the bounded workspace list; its one-based label fits eight bytes.
     const label: Label = .{ .text = std.fmt.bufPrint(&storage, "{d}", .{index + 1}) catch unreachable, .color = ink, .bold = selected, .face = .sans, .size = .small };
     _ = try canvas.textAt(.{ .x = bounds.x + chrome.px(3), .y = bounds.y, .width = chrome.px(14), .height = content_height }, label);
 
@@ -177,8 +178,10 @@ fn overflowCounter(self: WorkspaceIndicators, canvas: *Canvas, range: [2]usize) 
     const total = range[1] - range[0];
     var storage: [16]u8 = undefined;
     const text = if (previous)
+        // SAFETY: the bounded workspace count plus the three-byte arrow fits the 16-byte buffer.
         std.fmt.bufPrint(&storage, "‹{d}", .{total}) catch unreachable
     else
+        // SAFETY: the bounded workspace count plus the three-byte arrow fits the 16-byte buffer.
         std.fmt.bufPrint(&storage, "{d}›", .{total}) catch unreachable;
     const button: PixelButton = .{
         .context = self.context,

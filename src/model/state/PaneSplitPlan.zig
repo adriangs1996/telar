@@ -1,6 +1,5 @@
 const core = @import("telar-core");
 const PaneSplit = @import("PaneSplit.zig");
-const PaneSplitPlan = @This();
 
 split: PaneSplit,
 provisional_resize: core.PaneResize,

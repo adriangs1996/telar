@@ -1,28 +1,15 @@
 const std = @import("std");
-const c_flags = @import("c_flags.zig");
 const macos_sdk = @import("macos_sdk.zig");
 
-/// Compile the native window adapter: `macos_gui.add(b, module, false)`.
-pub fn add(b: *std.Build, module: *std.Build.Module, disable_coverage: bool) void {
+/// Native font and image helpers used by GUI frame preparation. The window
+/// and its event loop are supplied exclusively by telar-window.
+pub fn add(b: *std.Build, module: *std.Build.Module) void {
     module.addCSourceFiles(.{
         .files = &.{
-            "src/gui/macos/window.m",
-            "src/gui/macos/TelarWindow.m",
-            "src/gui/macos/TelarBackgroundBlur.m",
-            "src/gui/macos/TelarView.m",
-            "src/gui/macos/TelarWindowBackground.m",
-            "src/gui/macos/TelarMetalRenderer.m",
-            "src/gui/macos/TelarTextInputView.m",
-            "src/gui/macos/text_ranges.m",
-            "src/gui/macos/TelarHostServices.m",
-            "src/gui/macos/TelarAccessibility.m",
-            "src/gui/macos/TelarPointerInputView.m",
-            "src/gui/macos/TelarPointerCursor.m",
             "src/gui/macos/font.m",
             "src/gui/macos/glyph_rasterizer.m",
-            "src/gui/macos/clipboard_capture.m",
         },
-        .flags = c_flags.forCoverage(b, &.{ "-fobjc-arc", "-std=c23" }, disable_coverage),
+        .flags = &.{ "-fobjc-arc", "-std=c23" },
     });
     macos_sdk.addPaths(b, module);
     module.linkFramework("AppKit", .{});

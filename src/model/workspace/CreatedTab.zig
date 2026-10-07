@@ -1,5 +1,4 @@
 const core = @import("telar-core");
-const CreatedTab = @This();
 
 location: core.TabLocation,
 position: u16,

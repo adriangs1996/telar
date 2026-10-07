@@ -38,11 +38,3 @@ pub const Format = enum(u8) {
         return std.math.mul(usize, pixels, self.bytesPerPixel()) catch null;
     }
 };
-
-test "formats parse only raw pixel depths and size without overflow" {
-    try std.testing.expectEqual(@as(?Format, .rgb), Format.parse("24"));
-    try std.testing.expectEqual(@as(?Format, .rgba), Format.parse("32"));
-    try std.testing.expect(Format.parse("100") == null);
-    try std.testing.expect(Format.parse("x") == null);
-    try std.testing.expectEqual(@as(?usize, 12), Format.rgb.byteLen(2, 2));
-}

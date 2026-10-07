@@ -1,6 +1,5 @@
 const core = @import("telar-core");
 const ReportedPaneFocus = @import("ReportedPaneFocus.zig");
-const PaneFocusReportTransition = @This();
 
 previous: ?ReportedPaneFocus,
 current: ?ReportedPaneFocus,

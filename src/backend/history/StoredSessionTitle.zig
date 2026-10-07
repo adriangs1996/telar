@@ -9,6 +9,7 @@ const StoredSessionTitle = @This();
 pub const Definition = @import("Definition.zig");
 
 id: model.SessionId,
+// SAFETY: init copies the validated title before returning; titleSlice reads only title_len bytes.
 title: [core.max_agent_session_title_bytes]u8 = undefined,
 title_len: u8 = 0,
 source: core.AgentTitleSource,

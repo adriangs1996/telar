@@ -28,7 +28,7 @@ display_interval_ns: u64 = pacing.pace.default_interval,
 /// widget animation clock asks for its frames at the same interval. Credit,
 /// grace and the cadence anchor carry over, so a window moved to another
 /// display keeps its burst and its next deadline stays monotonic.
-/// Example: `const interval_ns = pacer.pace(config.max_fps, &gui.chrome.animation);`
+/// Example: `const interval_ns = pacer.pace(config.max_fps, &gui.model.chrome.animation);`
 pub fn pace(self: *FramePacer, max_fps: ?u16, animation: *FrameClock) u64 {
     const cap: u64 = if (max_fps) |fps| std.time.ns_per_s / @as(u64, @max(fps, 1)) else 0;
     const interval = std.math.clamp(@max(self.display_interval_ns, cap), core.min_frame_interval_ns, core.max_frame_interval_ns);

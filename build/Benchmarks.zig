@@ -19,7 +19,7 @@ pub fn init(b: *std.Build, app: Application) @This() {
         .ReleaseFast
     else
         app.modules.optimize;
-    const bench_freetype = freetype_build.add(b, .{ .target = app.modules.target, .optimize = bench_optimize, .disable_coverage = false });
+    const bench_freetype = freetype_build.add(b, .{ .target = app.modules.target, .optimize = bench_optimize });
     const bench_libraries = Libraries.create(b, app.modules.target, bench_optimize, &.{
         .{
             .name = "ghostty-vt",

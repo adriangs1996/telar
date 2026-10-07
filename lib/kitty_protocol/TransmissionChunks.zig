@@ -1,5 +1,4 @@
 const Image = @import("Image.zig");
-const TransmissionChunks = @This();
 
 image_id: u32,
 image: Image,

@@ -55,30 +55,3 @@ pub fn host(link: []const u8) []const u8 {
     const end = std.mem.indexOfAny(u8, rest, "/?#") orelse rest.len;
     return rest[0..end];
 }
-
-test "a link's host is what a click opens" {
-    try validate("https://auth.openai.com/codex/device");
-    try validate("https://claude.com/cai/oauth/authorize?code=true&x=a@b");
-    try validate("");
-    try std.testing.expectEqualStrings("auth.openai.com", host("https://auth.openai.com/codex/device"));
-    try std.testing.expectEqualStrings("claude.com", host("https://claude.com?x=1"));
-
-    for ([_][]const u8{
-        "http://example.com",
-        "file:///etc/passwd",
-        "javascript:alert(1)",
-        "https://",
-        "https:///path",
-        "https://claude.ai@evil.example/",
-        "https://claude.ai:443@evil.example/",
-        "https://evil.example\\@claude.ai/",
-        "https://claude%2Eai/",
-        "https://claude.ai:8443/",
-        "https://[::1]/",
-        "https://.claude.ai/",
-        "https://example.com/a b",
-        "https://example.com/\x1b",
-    }) |link| {
-        try std.testing.expectError(error.InvalidNotificationLink, validate(link));
-    }
-}

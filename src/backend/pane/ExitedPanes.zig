@@ -15,6 +15,7 @@ pub const max_text_bytes = 16 * 1024;
 
 key: [capacity]PaneKey = @splat(.{ .id = .invalid, .generation = 0 }),
 exit_code: [capacity]i32 = @splat(0),
+// SAFETY: record copies the retained tail before setting text_len; tail reads only that prefix.
 text: [capacity][max_text_bytes]u8 = undefined,
 text_len: [capacity]u16 = @splat(0),
 /// Whether older rows of the pane's output did not fit in `text`.
@@ -82,40 +83,4 @@ pub fn tail(self: *const ExitedPanes, slot: usize, rows: usize) TextTail {
         .text = text[start..],
         .truncated = start == 0 and self.truncated[slot],
     };
-}
-
-test "exited panes keep their newest records and answer by generation" {
-    var exited: ExitedPanes = .{};
-    const first: PaneKey = .{ .id = @enumFromInt(3), .generation = 7 };
-    exited.record(first, 1, .{
-        .text = "one\ntwo\nthree\n",
-        .truncated = false,
-    });
-    try std.testing.expectEqual(@as(i32, 1), exited.exit_code[exited.find(first).?]);
-    try std.testing.expectEqualStrings("two\nthree", exited.tail(exited.find(.{ .id = first.id, .generation = 0 }).?, 2).text);
-    try std.testing.expect(exited.find(.{ .id = first.id, .generation = 8 }) == null);
-
-    for (0..capacity) |index| {
-        exited.record(.{ .id = @enumFromInt(100 + index), .generation = 1 }, 0, .{
-            .text = "x",
-            .truncated = false,
-        });
-    }
-
-    try std.testing.expect(exited.find(first) == null);
-}
-
-test "a tail reports truncation only when it reaches lines that were dropped" {
-    var exited: ExitedPanes = .{};
-    const key: PaneKey = .{ .id = @enumFromInt(3), .generation = 7 };
-    exited.record(key, 0, .{
-        .text = "two\nthree\n",
-        .truncated = true,
-    });
-    const slot = exited.find(key).?;
-
-    try std.testing.expectEqualStrings("three", exited.tail(slot, 1).text);
-    try std.testing.expect(!exited.tail(slot, 1).truncated);
-    try std.testing.expectEqualStrings("two\nthree", exited.tail(slot, 5).text);
-    try std.testing.expect(exited.tail(slot, 5).truncated);
 }

@@ -1,12 +1,14 @@
 //! A drag retains the delivered slots at press so moving labels cannot chase
 //! the pointer or oscillate between insertion positions beneath it.
+const Window = @import("telar-window");
 const std = @import("std");
 const core = @import("telar-core");
 const Slot = @import("../TabSlot.zig");
 const Registry = @import("Registry.zig");
-const Pointer = @import("../../input/PointerEvent.zig");
+const Pointer = @FieldType(Window.Input, "pointer");
 const TabDropSlots = @This();
 
+// SAFETY: capture writes each slot before increasing len; at visits only that initialized prefix.
 entries: [core.max_tabs_per_workspace]Slot = undefined,
 len: usize = 0,
 

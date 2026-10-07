@@ -8,6 +8,7 @@ const ScreenRow = @This();
 /// Longest row a scan reads; the rest is cut.
 pub const max_bytes = 1024;
 
+// SAFETY: read writes each retained screen character before increasing len; text reads only that prefix.
 bytes: [max_bytes]u8 = undefined,
 len: usize = 0,
 first: u21 = 0,

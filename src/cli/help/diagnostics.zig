@@ -38,7 +38,6 @@ pub const family: FamilyHelp = .{
                 \\when no log exists (with the reason); 1 otherwise.
                 \\
             , .{ DiagnosticsOptions.default_lines, DiagnosticsOptions.max_lines, DiagnosticLog.max_tail_bytes / (1024 * 1024), diagnostics.max_files }),
-            .examples = &.{ &.{ "diagnostics", "logs", "--lines", "200" }, &.{ "diagnostics", "logs", "--component", "runtime", "--json" } },
         },
         .{
             .name = "limits",
@@ -53,7 +52,6 @@ pub const family: FamilyHelp = .{
             \\1 when no runtime answers.
             \\
             ,
-            .examples = &.{&.{ "diagnostics", "limits", "--json" }},
         },
     },
 };

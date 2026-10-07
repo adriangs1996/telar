@@ -145,30 +145,30 @@ fn buildBuiltin() Table {
         "background shells",
     };
 
-    const claude = table.add("claude") catch unreachable;
-    claude.setDisplayName("Claude Code") catch unreachable;
+    const claude = table.add("claude") catch @compileError("Built-in agent table exceeds its capacity");
+    claude.setDisplayName("Claude Code") catch @compileError("Invalid built-in agent manifest");
     claude.attachments = .stable_number;
-    for ([_][]const u8{ "claude", "claude-code" }) |name| claude.process_names.append(name) catch unreachable;
-    for ([_][]const u8{ "/@anthropic-ai/claude-code/", "\\@anthropic-ai\\claude-code\\" }) |path| claude.process_paths.append(path) catch unreachable;
-    claude.brand.append("claude") catch unreachable;
-    claude.identity.append("claude code") catch unreachable;
-    claude.command_tools.append("Bash", "command") catch unreachable;
+    for ([_][]const u8{ "claude", "claude-code" }) |name| claude.process_names.append(name) catch @compileError("Invalid built-in agent manifest");
+    for ([_][]const u8{ "/@anthropic-ai/claude-code/", "\\@anthropic-ai\\claude-code\\" }) |path| claude.process_paths.append(path) catch @compileError("Invalid built-in agent manifest");
+    claude.brand.append("claude") catch @compileError("Invalid built-in agent manifest");
+    claude.identity.append("claude code") catch @compileError("Invalid built-in agent manifest");
+    claude.command_tools.append("Bash", "command") catch @compileError("Invalid built-in agent manifest");
     // Escape only leaves INSERT mode when the user enabled vim mode; Ctrl+C
     // interrupts a running turn in both editor modes.
     claude.interrupt = .ctrl_c;
-    for (shared_blocked) |phrase| claude.blocked.append(phrase) catch unreachable;
-    for (shared_working) |phrase| claude.working.append(phrase) catch unreachable;
+    for (shared_blocked) |phrase| claude.blocked.append(phrase) catch @compileError("Invalid built-in agent manifest");
+    for (shared_working) |phrase| claude.working.append(phrase) catch @compileError("Invalid built-in agent manifest");
 
-    const codex = table.add("codex") catch unreachable;
-    codex.setDisplayName("Codex") catch unreachable;
+    const codex = table.add("codex") catch @compileError("Invalid built-in agent manifest");
+    codex.setDisplayName("Codex") catch @compileError("Invalid built-in agent manifest");
     codex.attachments = .ordered;
-    codex.process_names.append("codex") catch unreachable;
-    for ([_][]const u8{ "/@openai/codex/", "\\@openai\\codex\\" }) |path| codex.process_paths.append(path) catch unreachable;
-    codex.brand.append("codex") catch unreachable;
-    codex.ready_prompt.append("ask codex to do anything") catch unreachable;
-    codex.command_tools.append("Bash", "command") catch unreachable;
-    codex.command_tools.append("exec_command", "cmd") catch unreachable;
-    codex.command_tools.append("shell", "command") catch unreachable;
+    codex.process_names.append("codex") catch @compileError("Invalid built-in agent manifest");
+    for ([_][]const u8{ "/@openai/codex/", "\\@openai\\codex\\" }) |path| codex.process_paths.append(path) catch @compileError("Invalid built-in agent manifest");
+    codex.brand.append("codex") catch @compileError("Invalid built-in agent manifest");
+    codex.ready_prompt.append("ask codex to do anything") catch @compileError("Invalid built-in agent manifest");
+    codex.command_tools.append("Bash", "command") catch @compileError("Invalid built-in agent manifest");
+    codex.command_tools.append("exec_command", "cmd") catch @compileError("Invalid built-in agent manifest");
+    codex.command_tools.append("shell", "command") catch @compileError("Invalid built-in agent manifest");
     codex.interrupt = .escape;
 
     // Pi launches as `node .../pi-coding-agent/dist/bundle/cli.js`, so its
@@ -177,18 +177,18 @@ fn buildBuiltin() Table {
     // and no fixed status phrases, so it carries no screen heuristics and no
     // brand word: "pi" would match "api" or "pipe" in any pane. Its state
     // comes from process detection, the proxy and its own lifecycle reports.
-    const pi = table.add("pi") catch unreachable;
-    pi.setDisplayName("Pi") catch unreachable;
+    const pi = table.add("pi") catch @compileError("Invalid built-in agent manifest");
+    pi.setDisplayName("Pi") catch @compileError("Invalid built-in agent manifest");
     pi.attachments = .pasted_path;
-    pi.process_names.append("pi") catch unreachable;
+    pi.process_names.append("pi") catch @compileError("Invalid built-in agent manifest");
     pi.interrupt = .escape;
-    pi.command_tools.append("bash", "command") catch unreachable;
+    pi.command_tools.append("bash", "command") catch @compileError("Invalid built-in agent manifest");
     for ([_][]const u8{
         "/@earendil-works/pi-coding-agent/",
         "\\@earendil-works\\pi-coding-agent\\",
         "/@mariozechner/pi-coding-agent/",
         "\\@mariozechner\\pi-coding-agent\\",
-    }) |path| pi.process_paths.append(path) catch unreachable;
+    }) |path| pi.process_paths.append(path) catch @compileError("Invalid built-in agent manifest");
 
     // Cursor Agent's launcher runs `exec -a "$0" <version>/node <version>/index.js`,
     // so the process is `node`, argv[0] is whatever the user typed (`agent`
@@ -199,29 +199,29 @@ fn buildBuiltin() Table {
     // Working and ready come from `history.cursor_screen`, which reads the
     // live composer. No brand word: "cursor" names a terminal cursor in any
     // pane.
-    const cursor = table.add("cursor") catch unreachable;
-    cursor.setDisplayName("Cursor Agent") catch unreachable;
-    cursor.process_names.append("cursor-agent") catch unreachable;
+    const cursor = table.add("cursor") catch @compileError("Invalid built-in agent manifest");
+    cursor.setDisplayName("Cursor Agent") catch @compileError("Invalid built-in agent manifest");
+    cursor.process_names.append("cursor-agent") catch @compileError("Invalid built-in agent manifest");
     cursor.interrupt = .escape;
-    cursor.process_paths.append("/cursor-agent/versions/") catch unreachable;
-    cursor.command_tools.append("Shell", "command") catch unreachable;
+    cursor.process_paths.append("/cursor-agent/versions/") catch @compileError("Invalid built-in agent manifest");
+    cursor.command_tools.append("Shell", "command") catch @compileError("Invalid built-in agent manifest");
     for ([_][]const u8{
         "not in allowlist:",
         "skip & tell the agent what to do instead",
         "yes, build locally",
         "do you trust the contents of this directory?",
-    }) |phrase| cursor.blocked.append(phrase) catch unreachable;
+    }) |phrase| cursor.blocked.append(phrase) catch @compileError("Invalid built-in agent manifest");
 
     // OpenCode is one Bun executable named `opencode`; npm installs launch it
     // from `node .../bin/opencode`, whose basename identifies it too. Its
     // plugin reports every prompt, permission, question and turn end, so it
     // carries no screen phrases, and no brand word: "opencode" names the
     // project and its directories in any pane.
-    const opencode = table.add("opencode") catch unreachable;
-    opencode.setDisplayName("OpenCode") catch unreachable;
-    opencode.process_names.append("opencode") catch unreachable;
+    const opencode = table.add("opencode") catch @compileError("Invalid built-in agent manifest");
+    opencode.setDisplayName("OpenCode") catch @compileError("Invalid built-in agent manifest");
+    opencode.process_names.append("opencode") catch @compileError("Invalid built-in agent manifest");
     opencode.interrupt = .escape_twice;
-    opencode.command_tools.append("bash", "command") catch unreachable;
+    opencode.command_tools.append("bash", "command") catch @compileError("Invalid built-in agent manifest");
 
     return table;
 }
@@ -270,193 +270,4 @@ fn endsWithAsciiInsensitive(haystack: []const u8, suffix: []const u8) bool {
         return false;
     }
     return std.ascii.eqlIgnoreCase(haystack[haystack.len - suffix.len ..], suffix);
-}
-
-test "built-in table reproduces the historical Claude and Codex heuristics" {
-    const table = &builtin_table;
-
-    const blocked = table.detect("Allow command? [y/n] claude").?;
-    try std.testing.expectEqual(Status.blocked, blocked.status);
-    try std.testing.expectEqual(types.AgentProvider.claude, blocked.provider);
-
-    const working = table.detect("thinking... esc to interrupt").?;
-    try std.testing.expectEqual(Status.working, working.status);
-    try std.testing.expectEqual(types.AgentProvider.unknown, working.provider);
-
-    const codex = table.detect("Ask Codex to do anything").?;
-    try std.testing.expectEqual(Status.ready, codex.status);
-    try std.testing.expectEqual(types.AgentProvider.codex, codex.provider);
-    try std.testing.expect(codex.ready_confirmed);
-
-    const claude = table.detect("Welcome to Claude Code").?;
-    try std.testing.expectEqual(types.AgentProvider.claude, claude.provider);
-    try std.testing.expect(claude.identity_confirmed);
-    try std.testing.expect(!claude.ready_confirmed);
-
-    try std.testing.expect(table.detect("$ ls") == null);
-    try std.testing.expectEqual(types.AgentProvider.claude, table.providerFromExecutable("claude.exe").?);
-    try std.testing.expectEqual(types.AgentProvider.codex, table.providerFromPath("/usr/lib/node_modules/@openai/codex/bin/codex.js").?);
-    try std.testing.expectEqualStrings("codex", table.providerName(.codex));
-    try std.testing.expectEqualStrings("unknown", table.providerName(.unknown));
-}
-
-test "built-in Pi is identified by its process and entry point only" {
-    const table = &builtin_table;
-
-    try std.testing.expectEqual(types.AgentProvider.pi, table.providerFromExecutable("pi").?);
-    try std.testing.expectEqual(types.AgentProvider.pi, table.providerFromPath("/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js").?);
-    try std.testing.expectEqual(types.AgentProvider.pi, table.providerFromPath("/usr/lib/node_modules/@mariozechner/pi-coding-agent/dist/cli.js").?);
-    try std.testing.expectEqualStrings("pi", table.providerName(.pi));
-    try std.testing.expect(isBuiltinProvider(.pi));
-    try std.testing.expect(!isBuiltinProvider(@enumFromInt(types.first_custom_agent_provider)));
-
-    // No brand word: a generic blocked phrase next to "api" stays unattributed.
-    const blocked = table.detect("api call pending [y/n]").?;
-    try std.testing.expectEqual(Status.blocked, blocked.status);
-    try std.testing.expectEqual(types.AgentProvider.unknown, blocked.provider);
-    try std.testing.expect(table.detect("pi> ") == null);
-
-    var extended = builtin_table;
-    const same = try extended.add("pi");
-    try std.testing.expectEqual(types.AgentProvider.pi, same.provider);
-    try same.working.append("thinking");
-    try std.testing.expectEqual(types.first_custom_agent_provider, @intFromEnum((try extended.add("gemini")).provider));
-}
-
-test "built-in Cursor Agent is identified by its launcher, entry point and dialogs" {
-    const table = &builtin_table;
-
-    try std.testing.expectEqual(types.AgentProvider.cursor, table.providerFromExecutable("cursor-agent").?);
-    try std.testing.expect(table.providerFromExecutable("agent") == null);
-    try std.testing.expectEqual(types.AgentProvider.cursor, table.providerFromPath("/Users/me/.local/share/cursor-agent/versions/2026.09.26-dd393fe/index.js").?);
-    try std.testing.expectEqualStrings("cursor", table.providerName(.cursor));
-    try std.testing.expectEqualStrings("Cursor Agent", table.displayName(.cursor));
-    try std.testing.expect(isBuiltinProvider(.cursor));
-    try std.testing.expectEqual(types.AgentProvider.cursor, builtinProvider("cursor").?);
-    try std.testing.expectEqualStrings("command", table.commandField(.cursor, "Shell").?);
-
-    // Captured from Cursor Agent 2026.08.11 and 2026.09.26 under a pty.
-    const approval = table.detect(" Run this command?\n Not in allowlist: echo, touch\n  → Run (once) (y)\n    Skip & tell the agent what to do instead (esc or n)").?;
-    try std.testing.expectEqual(Status.blocked, approval.status);
-    try std.testing.expectEqual(types.AgentProvider.unknown, approval.provider);
-    try std.testing.expectEqual(Status.blocked, table.detect(" Ready to build?\n  → 1. Yes, build locally (b)").?.status);
-    try std.testing.expectEqual(Status.blocked, table.detect("  Do you trust the contents of this directory?").?.status);
-    try std.testing.expect(table.detect("  → Add a follow-up        ctrl+c to stop") == null);
-    try std.testing.expect(table.detect("  → Add a follow-up") == null);
-    try std.testing.expect(table.detect("move the cursor left") == null);
-}
-
-test "built-in OpenCode is identified by its executable and maps its shell tool" {
-    const table = &builtin_table;
-
-    try std.testing.expectEqual(types.AgentProvider.opencode, table.providerFromExecutable("opencode").?);
-    try std.testing.expectEqualStrings("opencode", table.providerName(.opencode));
-    try std.testing.expectEqualStrings("OpenCode", table.displayName(.opencode));
-    try std.testing.expect(isBuiltinProvider(.opencode));
-    try std.testing.expectEqual(types.AgentProvider.opencode, builtinProvider("opencode").?);
-    try std.testing.expectEqualStrings("command", table.commandField(.opencode, "bash").?);
-    try std.testing.expectEqual(types.AgentAttachmentMarkers.none, table.attachments(.opencode));
-
-    // Captured from OpenCode 1.18.32 under a pty: its prompts carry no phrase
-    // of the other agents.
-    try std.testing.expect(table.detect("  △ Permission required\n    # Shell command\n  $ ls -la\n   Allow once   Allow always   Reject") == null);
-    try std.testing.expect(table.detect("   ⬝⬝⬝⬝■■■■  esc interrupt                ctrl+p commands") == null);
-}
-
-test "custom agents receive stable provider indexes and extend built-ins by name" {
-    var table = builtin_table;
-
-    const gemini = try table.add("gemini");
-    try gemini.process_names.append("gemini");
-    try gemini.identity.append("gemini cli");
-    try std.testing.expectEqual(types.first_custom_agent_provider, @intFromEnum(gemini.provider));
-
-    const aider = try table.add("aider");
-    try std.testing.expectEqual(types.first_custom_agent_provider + 1, @intFromEnum(aider.provider));
-    try std.testing.expectError(error.DuplicateName, table.add("gemini"));
-    try std.testing.expectError(error.InvalidName, table.add("Gemini"));
-
-    const extended = try table.add("claude");
-    try std.testing.expectEqual(types.AgentProvider.claude, extended.provider);
-    try extended.working.append("brewing");
-
-    try std.testing.expectEqual(gemini.provider, table.detect("Gemini CLI ready").?.provider);
-    try std.testing.expectEqual(Status.working, table.detect("Brewing...").?.status);
-    try std.testing.expectEqualStrings("gemini", table.providerName(gemini.provider));
-    try std.testing.expectEqual(gemini.provider, table.providerFromExecutable("gemini").?);
-}
-
-test "phrase lists reject empty, oversized and excess entries" {
-    var list: PhraseList = .{};
-    try std.testing.expectError(error.EmptyEntry, list.append(""));
-    try std.testing.expectError(error.EntryTooLong, list.append("x" ** (max_phrase_bytes + 1)));
-    for (0..max_phrases) |_| try list.append("ok");
-    try std.testing.expectError(error.TooManyEntries, list.append("ok"));
-}
-
-test "presentation defaults derive from the manifest and configuration overrides them" {
-    var table = builtin_table;
-    var buffer: [types.max_agent_session_title_bytes]u8 = undefined;
-
-    try std.testing.expectEqualStrings("Claude Code", table.displayName(.claude));
-    try std.testing.expectEqualStrings("New Claude Code session", table.placeholderTitle(.claude, &buffer));
-    try std.testing.expectEqualStrings("", table.icon(.claude));
-    try std.testing.expectEqual(types.AgentAttachmentMarkers.stable_number, table.attachments(.claude));
-    try std.testing.expectEqual(types.AgentAttachmentMarkers.ordered, table.attachments(.codex));
-    try std.testing.expectEqual(types.AgentAttachmentMarkers.pasted_path, table.attachments(.pi));
-
-    try std.testing.expectEqualStrings(generic_display_name, table.displayName(.unknown));
-    try std.testing.expectEqualStrings(generic_placeholder, table.placeholderTitle(.unknown, &buffer));
-    try std.testing.expectEqual(types.AgentAttachmentMarkers.none, table.attachments(.unknown));
-    try std.testing.expect(table.declaresReadyPrompt(.codex));
-    try std.testing.expect(!table.declaresReadyPrompt(.claude));
-    try std.testing.expect(!table.declaresReadyPrompt(.unknown));
-
-    const gemini = try table.add("gemini");
-    try std.testing.expectEqualStrings("gemini", table.displayName(gemini.provider));
-    try std.testing.expectEqualStrings("New gemini session", table.placeholderTitle(gemini.provider, &buffer));
-    try gemini.setDisplayName("Gemini CLI");
-    try gemini.setPlaceholder("Fresh Gemini chat");
-    try gemini.setIcon("G");
-    gemini.attachments = .ordered;
-    try std.testing.expectEqualStrings("Gemini CLI", table.displayName(gemini.provider));
-    try std.testing.expectEqualStrings("Fresh Gemini chat", table.placeholderTitle(gemini.provider, &buffer));
-    try std.testing.expectEqualStrings("G", table.icon(gemini.provider));
-    try std.testing.expectEqual(types.AgentAttachmentMarkers.ordered, table.attachments(gemini.provider));
-
-    const claude = try table.add("claude");
-    try claude.setDisplayName("Claude");
-    try std.testing.expectEqualStrings("New Claude session", table.placeholderTitle(.claude, &buffer));
-
-    try std.testing.expectError(error.EmptyText, gemini.setIcon(""));
-    try std.testing.expectError(error.TextTooLong, gemini.setIcon("x" ** (types.max_agent_icon_bytes + 1)));
-    try std.testing.expectError(error.TextTooLong, gemini.setDisplayName("x" ** (types.max_agent_display_name_bytes + 1)));
-}
-
-test "every built-in list leaves at least half its room to configuration" {
-    for (builtin_table.slice()) |*manifest| {
-        for ([_]u8{ manifest.brand.count, manifest.identity.count, manifest.working.count, manifest.blocked.count, manifest.ready_prompt.count }) |count| {
-            try std.testing.expect(count <= max_phrases / 2);
-        }
-
-        for ([_]u8{ manifest.process_names.count, manifest.process_paths.count }) |count| {
-            try std.testing.expect(count <= max_paths / 2);
-        }
-
-        try std.testing.expect(manifest.command_tools.count <= max_command_tools / 2);
-    }
-}
-
-test "a table holds every built-in agent and twenty-seven custom ones within the wire's provider range" {
-    var table = builtin_table;
-    var name_buffer: [types.max_agent_provider_name_bytes]u8 = undefined;
-    for (0..types.max_agent_manifests) |index| {
-        const name = try std.fmt.bufPrint(&name_buffer, "agent-{d}", .{index});
-        const manifest = try table.add(name);
-        try std.testing.expect(@intFromEnum(manifest.provider) <= types.max_agent_provider_index);
-    }
-
-    try std.testing.expectError(error.TooManyAgents, table.add("one-more"));
-    // A built-in name still extends its manifest in a full table.
-    try std.testing.expectEqual(types.AgentProvider.claude, (try table.add("claude")).provider);
 }

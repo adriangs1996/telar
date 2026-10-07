@@ -178,7 +178,9 @@ const ReadLimits = struct {
 // `Output.allocator`, which may hold a little more than the limit when it
 // is full.
 fn read(io: std.Io, child: *std.process.Child, limits: ReadLimits) ![]u8 {
+    // SAFETY: toStreams sets the count; MultiReader.init fills both contexts and initializes the operation batch before use.
     var buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
+    // SAFETY: init constructs the reader in place before reads or deferred deinit.
     var multi_reader: std.Io.File.MultiReader = undefined;
     multi_reader.init(Output.allocator, io, buffer.toStreams(), &.{ child.stdout.?, child.stderr.? });
     defer multi_reader.deinit();
@@ -293,11 +295,13 @@ fn stop(io: std.Io, child: *std.process.Child) void {
     }
 
     const group = -child.id.?;
+    // The process group may have exited before signaling; settle still observes and reaps the child.
     std.posix.kill(group, .TERM) catch {};
     if (settle(io, child, grace_ms)) {
         return;
     }
 
+    // The process group may already be gone; settle and release below still finish child ownership.
     std.posix.kill(group, .KILL) catch {};
     if (!settle(io, child, kill_wait_ms)) {
         release(io, child);
@@ -330,221 +334,4 @@ fn release(io: std.Io, child: *std.process.Child) void {
     }
 
     child.id = null;
-}
-
-test "command runner executes argv directly and validates one display line" {
-    if (comptime builtin.os.tag == .windows) {
-        return error.SkipZigTest;
-    }
-
-    var command: data.BarCommand = .{
-        .generation = 1,
-        .interval_ns = std.time.ns_per_s,
-        .timeout_ms = 1_000,
-    };
-    try command.appendArgument("/bin/sh");
-    try command.appendArgument("-c");
-    try command.appendArgument("printf 'quota 74%%\\n'");
-
-    var output = try run(std.testing.io, command);
-    defer output.deinit();
-
-    try std.testing.expectEqualStrings("quota 74%", output.slice());
-
-    var invalid = command;
-    invalid.argument_count = 0;
-    invalid.byte_len = 0;
-    try invalid.appendArgument("/bin/sh");
-    try invalid.appendArgument("-c");
-    try invalid.appendArgument("printf 'first\\nsecond\\n'");
-
-    try std.testing.expectError(error.InvalidBarCommandOutput, run(std.testing.io, invalid));
-}
-
-test "ignored output needs only a successful exit and a failure keeps its status" {
-    if (comptime builtin.os.tag == .windows) {
-        return error.SkipZigTest;
-    }
-
-    var command: data.BarCommand = .{
-        .generation = 1,
-        .interval_ns = 0,
-        .timeout_ms = 1_000,
-    };
-    try command.appendArgument("/bin/sh");
-    try command.appendArgument("-c");
-    try command.appendArgument("printf '\\033[1mdone\\n\\n'");
-
-    var output = try runFor(std.testing.io, command, .ignored);
-    defer output.deinit();
-    try std.testing.expectEqual(@as(usize, 0), output.slice().len);
-
-    var failing = command;
-    failing.argument_count = 0;
-    failing.byte_len = 0;
-    try failing.appendArgument("/bin/sh");
-    try failing.appendArgument("-c");
-    try failing.appendArgument("exit 3");
-    try std.testing.expectError(error.BarCommandFailed, runFor(std.testing.io, failing, .ignored));
-}
-
-test "the timeout bounds the whole run of a command that keeps printing" {
-    if (comptime builtin.os.tag == .windows) {
-        return error.SkipZigTest;
-    }
-
-    const command = try testCommand(300, "while :; do printf x; sleep 0.05; done");
-    const started = std.Io.Clock.Timestamp.now(std.testing.io, .awake);
-    try std.testing.expectError(error.Timeout, runFor(std.testing.io, command, .lines));
-    try expectWithin(started, 2_000);
-}
-
-test "a command that ignores TERM is killed with its group after the grace period" {
-    if (comptime builtin.os.tag == .windows) {
-        return error.SkipZigTest;
-    }
-
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const len = try temp.dir.realPathFile(std.testing.io, ".", &path_buffer);
-    const directory = path_buffer[0..len];
-
-    // The shell ignores TERM, and its grandchild records its pid and
-    // outlives it unless the whole group is killed.
-    var script_buffer: [std.fs.max_path_bytes + 128]u8 = undefined;
-    const script = try std.fmt.bufPrint(&script_buffer, "trap '' TERM; sleep 30 & echo $! > {s}/grandchild; wait", .{directory});
-    for ([_]OutputUse{ .lines, .ignored }) |use| {
-        const command = try testCommand(200, script);
-        const started = std.Io.Clock.Timestamp.now(std.testing.io, .awake);
-        try std.testing.expectError(error.Timeout, runFor(std.testing.io, command, use));
-        try expectWithin(started, 3_000);
-
-        var pid_buffer: [32]u8 = undefined;
-        const text = try temp.dir.readFile(std.testing.io, "grandchild", &pid_buffer);
-        const pid = try std.fmt.parseInt(std.posix.pid_t, std.mem.trim(u8, text, " \n"), 10);
-        try expectGone(pid);
-    }
-}
-
-test "ignored output never fails a command that exits cleanly" {
-    if (comptime builtin.os.tag == .windows) {
-        return error.SkipZigTest;
-    }
-
-    const command = try testCommand(5_000, "head -c 1048576 /dev/zero; head -c 65536 /dev/zero >&2");
-    var output = try runFor(std.testing.io, command, .ignored);
-    defer output.deinit();
-    try std.testing.expectEqual(@as(usize, 0), output.slice().len);
-}
-
-fn testCommand(timeout_ms: u32, script: []const u8) !data.BarCommand {
-    var command: data.BarCommand = .{
-        .generation = 1,
-        .interval_ns = 0,
-        .timeout_ms = timeout_ms,
-    };
-    try command.appendArgument("/bin/sh");
-    try command.appendArgument("-c");
-    try command.appendArgument(script);
-    return command;
-}
-
-fn expectWithin(started: std.Io.Clock.Timestamp, milliseconds: i96) !void {
-    const elapsed = started.durationTo(std.Io.Clock.Timestamp.now(std.testing.io, .awake));
-    try std.testing.expect(elapsed.raw.nanoseconds < milliseconds * std.time.ns_per_ms);
-}
-
-// A killed process may linger as a zombie of its reaper for a moment.
-fn expectGone(pid: std.posix.pid_t) !void {
-    for (0..100) |_| {
-        std.posix.kill(pid, @enumFromInt(0)) catch return;
-        try std.Io.sleep(std.testing.io, .fromMilliseconds(10), .awake);
-    }
-
-    return error.TestProcessStillRunning;
-}
-
-test "command output for a render callback may span lines" {
-    if (comptime builtin.os.tag == .windows) {
-        return error.SkipZigTest;
-    }
-
-    var command: data.BarCommand = .{
-        .generation = 1,
-        .interval_ns = std.time.ns_per_s,
-        .timeout_ms = 1_000,
-        .render = .{ .generation = 1, .id = 0 },
-    };
-    try command.appendArgument("/bin/sh");
-    try command.appendArgument("-c");
-    try command.appendArgument("printf '{\\n  \"used\": 22\\n}\\n'");
-
-    var output = try run(std.testing.io, command);
-    defer output.deinit();
-
-    try std.testing.expectEqualStrings("{\n  \"used\": 22\n}", output.slice());
-}
-
-test "a command that prints past its limit keeps its first whole lines and names the limit" {
-    if (comptime builtin.os.tag == .windows) {
-        return error.SkipZigTest;
-    }
-
-    var command: data.BarCommand = .{
-        .generation = 1,
-        .interval_ns = std.time.ns_per_s,
-        .timeout_ms = 5_000,
-    };
-    try command.appendArgument("/bin/sh");
-    try command.appendArgument("-c");
-    // 300 KiB of numbered lines on stdout and 64 KiB of noise on stderr.
-    try command.appendArgument("i=0; while [ $i -lt 30000 ]; do echo \"option-$i\"; i=$((i+1)); done; head -c 65536 /dev/zero | tr '\\0' e >&2");
-
-    var output = try runFor(std.testing.io, command, .options);
-    defer output.deinit();
-
-    const kept = output.slice();
-    try std.testing.expect(kept.len <= data.bar_values.max_pick_output_bytes);
-    try std.testing.expect(std.mem.startsWith(u8, kept, "option-0\noption-1\n"));
-    try std.testing.expect(std.mem.endsWith(u8, kept, "\n") or kept[kept.len - 1] != '-');
-    try std.testing.expectEqualStrings("picks.max_pick_output_bytes", output.limit.?.limit.name);
-    try std.testing.expect(output.limit.?.requested.? > data.bar_values.max_pick_output_bytes);
-
-    var line = command;
-    line.argument_count = 0;
-    line.byte_len = 0;
-    try line.appendArgument("/bin/sh");
-    try line.appendArgument("-c");
-    try line.appendArgument("head -c 2000 /dev/zero | tr '\\0' x");
-
-    var shown = try run(std.testing.io, line);
-    defer shown.deinit();
-
-    try std.testing.expectEqual(@as(usize, data.bar_values.max_text_bytes), shown.slice().len);
-    try std.testing.expectEqualStrings("bars.max_text_bytes", shown.limit.?.limit.name);
-}
-
-test "a command that never stops printing is stopped once what it keeps is full" {
-    if (comptime builtin.os.tag == .windows) {
-        return error.SkipZigTest;
-    }
-
-    var command: data.BarCommand = .{
-        .generation = 1,
-        .interval_ns = std.time.ns_per_s,
-        .timeout_ms = 10_000,
-    };
-    try command.appendArgument("/bin/sh");
-    try command.appendArgument("-c");
-    try command.appendArgument("exec yes");
-
-    const started = std.Io.Timestamp.now(std.testing.io, .awake);
-    var output = try runFor(std.testing.io, command, .options);
-    defer output.deinit();
-    const elapsed = started.durationTo(std.Io.Timestamp.now(std.testing.io, .awake));
-
-    try std.testing.expect(elapsed.toMilliseconds() < 5_000);
-    try std.testing.expect(std.mem.startsWith(u8, output.slice(), "y\ny\n"));
-    try std.testing.expectEqualStrings("picks.max_pick_output_bytes", output.limit.?.limit.name);
 }

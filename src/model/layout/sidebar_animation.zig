@@ -1,7 +1,6 @@
 //! The sidebar's activity animation: whether it runs and each step.
 
 const model_data = @import("../model.zig");
-const sidebar = @import("sidebar.zig");
 const ClientModel = @import("../state/ClientModel.zig");
 
 /// Reports whether the latest runtime state requires sidebar animation.

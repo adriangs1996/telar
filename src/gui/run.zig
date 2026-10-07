@@ -31,12 +31,16 @@ pub fn run(init: std.process.Init, connection: ?*localsocket.SocketChannel, opti
         .gpa = init.gpa,
         .io = init.io,
         .connection = connection,
-        .host_size = .{ .cols = 80, .rows = 24 },
+        .host_size = .{
+            .cols = 80,
+            .rows = 24,
+        },
         .client_identity = identity.value,
         .options = options,
     });
 
     adopted = true;
     defer app.deinit();
-    return app.run(GuiAdapter.default_title);
+
+    return app.loop();
 }

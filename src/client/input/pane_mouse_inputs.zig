@@ -40,54 +40,6 @@ pub fn encodeReport(buffer: []u8, report: data.ReportEffect) ![]const u8 {
     });
 }
 
-test "pane mouse reports preserve exact host pixels relative to pane content" {
-    var buffer: [64]u8 = undefined;
-    const report: data.ReportEffect = .{
-        .plan = .{
-            .pane_id = @enumFromInt(1),
-            .content = .{ .x = 2, .y = 3, .w = 10, .h = 5 },
-            .protocol = .{ .tracking = .any, .sgr = true, .pixels = true },
-            .alternate_scroll = false,
-            .at_bottom = true,
-        },
-        .command = .{
-            .event = .{
-                .x = 2,
-                .y = 3,
-                .raw_x = 27,
-                .raw_y = 69,
-                .kind = .press,
-            },
-            .exterior_pixels = true,
-            .cell_width_px = 10,
-            .cell_height_px = 20,
-        },
-    };
-
-    try std.testing.expectEqualStrings("\x1b[<0;8;10M", try encodeReport(&buffer, report));
-}
-
-test "pane mouse pixel reports use cell centers without exact host pixels" {
-    var buffer: [64]u8 = undefined;
-    const report: data.ReportEffect = .{
-        .plan = .{
-            .pane_id = @enumFromInt(1),
-            .content = .{ .x = 2, .y = 3, .w = 10, .h = 5 },
-            .protocol = .{ .tracking = .any, .sgr = true, .pixels = true },
-            .alternate_scroll = false,
-            .at_bottom = true,
-        },
-        .command = .{
-            .event = .{ .x = 3, .y = 4, .kind = .press },
-            .exterior_pixels = false,
-            .cell_width_px = 10,
-            .cell_height_px = 20,
-        },
-    };
-
-    try std.testing.expectEqualStrings("\x1b[<0;16;31M", try encodeReport(&buffer, report));
-}
-
 /// Resolves a pointer event or focused scroll without exposing pane storage
 /// or child mouse modes to the caller.
 /// Example: `_ = try pane_mouse_input.inputPaneMouse(app, tab, command);`

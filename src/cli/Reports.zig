@@ -2,8 +2,6 @@ const Report = @import("Report.zig");
 const CommandReport = @import("CommandReport.zig");
 const core = @import("telar-core");
 /// Lifecycle, title, command and progress observations for one provider session.
-const Reports = @This();
-
 lifecycle: ?Report = null,
 command: ?CommandReport = null,
 /// Empty clears an earlier agent title.

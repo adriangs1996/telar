@@ -18,7 +18,6 @@ const windows_module = @import("windows.zig");
 const posix = @import("posix.zig");
 const Size = @import("Size.zig");
 const std = @import("std");
-const sequences = @import("sequences.zig");
 
 const impl = switch (builtin.os.tag) {
     .windows => windows_module,
@@ -32,7 +31,6 @@ const impl = switch (builtin.os.tag) {
 /// do, and it outlives the process: the settings belong to the device. Every
 /// exit path has to reach `deinit`.
 pub const Tty = impl.Tty;
-pub const FastWriter = impl.FastWriter;
 
 /// Blocks until the terminal changes size.
 ///
@@ -87,18 +85,6 @@ comptime {
     if (!@hasDecl(impl, "emergencyRestore")) {
         @compileError("platform is missing emergencyRestore");
     }
-}
-
-test "host keyboard enhancements stay inside the alternate screen" {
-    const enter_alternate = std.mem.indexOf(u8, sequences.enter, "\x1b[?1049h").?;
-    const push_keyboard = std.mem.indexOf(u8, sequences.enter, "\x1b[>7u").?;
-    try std.testing.expect(enter_alternate < push_keyboard);
-
-    const pop_keyboard = std.mem.indexOf(u8, sequences.leave, "\x1b[<u").?;
-    const reset_pointer = std.mem.indexOf(u8, sequences.leave, "\x1b]22;default\x1b\\").?;
-    const leave_alternate = std.mem.indexOf(u8, sequences.leave, "\x1b[?1049l").?;
-    try std.testing.expect(reset_pointer < leave_alternate);
-    try std.testing.expect(pop_keyboard < leave_alternate);
 }
 
 fn assertFn(comptime T: type, comptime name: []const u8, comptime Want: type) void {

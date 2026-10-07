@@ -1,19 +1,20 @@
 //! Client-owned input routing over the last successfully delivered targets.
 //! The compositor may prepare new targets while input retains the visible
 //! ones. Gesture and physical-key leases keep their owner across focus changes.
+const Window = @import("telar-window");
 const keyinput = @import("keyinput");
-const event_module = @import("../../input/event.zig");
+const event_module = Window;
 const key_owner = @import("key_owner.zig");
 const data = @import("model");
 const std = @import("std");
-const Key = @import("../../input/KeyInput.zig");
-const Pointer = @import("../../input/PointerEvent.zig");
+const Key = @FieldType(Window.Input, "key");
+const Pointer = @FieldType(Window.Input, "pointer");
 const Id = @import("Id.zig");
 const Target = @import("Target.zig");
 const Registry = @import("Registry.zig");
 const Route = @import("Route.zig");
 const GenericPresentedState = @import("../../render/GenericPresentedState.zig").Type;
-const TextInput = @import("../../input/TextInput.zig");
+const TextInput = @FieldType(Window.Input, "text");
 const GenericTable = keyinput.GenericTable;
 const Dispatcher = @This();
 
@@ -28,26 +29,11 @@ revision: u64 = 0,
 window_focused: bool = true,
 next_id: u64 = 1,
 overflowed: bool = false,
-message_link_count: u8 = 0,
 
 /// Begins a replacement registry without changing input authority.
 /// Example: `const targets = dispatcher.begin();`
 pub fn begin(self: *Dispatcher) *Registry {
-    self.message_link_count = 0;
     return self.maps.begin();
-}
-
-/// Link fragments have a separate quota and leave room for conversation controls.
-/// Saturation keeps the styled label visible without adding a hover target.
-/// Example: `_ = try dispatcher.addMessageLink(target);`
-pub fn addMessageLink(self: *Dispatcher, target: Target) !?Id {
-    if (self.message_link_count == 64 or self.maps.preparing().len >= Registry.capacity - 64) {
-        return null;
-    }
-
-    const id = try self.add(target);
-    self.message_link_count += 1;
-    return id;
 }
 
 /// Assigns collision-free IDs by owned semantic identity, retaining an ID
@@ -127,7 +113,7 @@ pub fn present(self: *Dispatcher, delivered: bool) void {
 /// paste and IME use focused ownership, never hover. Call only on the client
 /// thread after native admission copied its borrowed bytes.
 /// Example: `const routed = dispatcher.route(event);`
-pub fn route(self: *Dispatcher, event: event_module.Event) Route {
+pub fn route(self: *Dispatcher, event: event_module.Input) Route {
     return switch (event) {
         .key => |value| self.key(value, true),
         .text => |value| if (value.physical != null) self.textKey(value) else self.text(),
@@ -209,13 +195,6 @@ fn textKey(self: *Dispatcher, value: TextInput) Route {
     var key_value: Key = .{ .code = .{ .char = .{ .bytes = @splat(0), .len = @intCast(@min(4, value.bytes.len)) } }, .phase = value.phase, .physical = value.physical, .target_id = value.target_id, .generation = value.generation };
     @memcpy(key_value.code.char.bytes[0..key_value.code.char.len], value.bytes[0..key_value.code.char.len]);
     return self.key(key_value, true);
-}
-
-/// Captures editor-menu navigation without traversing or abandoning its editor.
-/// Physical leases and explicit native target validation remain unchanged.
-/// Example: `const decision = dispatcher.editorKey(event);`
-pub fn editorKey(self: *Dispatcher, event: Key) Route {
-    return self.key(event, false);
 }
 
 fn key(self: *Dispatcher, event: Key, navigate: bool) Route {

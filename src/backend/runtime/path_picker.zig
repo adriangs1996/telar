@@ -2,7 +2,7 @@
 //! The loop only copies requests and starts workers; one build worker per
 //! client fills the index while one query worker at a time ranks what it
 //! has published, so every keystroke gets an answer without waiting for
-//! the walk. See `docs/flows/path-picker.md`.
+//! the walk.
 
 const core = @import("telar-core");
 const client_connection = @import("client_connection.zig");

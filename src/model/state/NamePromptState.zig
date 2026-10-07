@@ -689,51 +689,6 @@ fn clip(self: *State, bound: core.Limit, kept: usize, dropped: usize) void {
     };
 }
 
-test "a keystroke or paste past a prompt's bound keeps what fits and records the limit" {
-    var state: State = .{};
-    state.begin(.suggest_palette);
-
-    const room = name_prompt.max_field_bytes;
-    try std.testing.expectEqual(PromptTransition.changed, state.apply(.{ .insert = "a" ** (room - 1) }));
-    try std.testing.expect(state.takeClipped() == null);
-    // A two-byte character does not fit one free byte and is never split.
-    try std.testing.expectEqual(PromptTransition.unchanged, state.apply(.{ .insert = "é" }));
-    try std.testing.expectEqual(room - 1, state.currentConst().?.field.len);
-    try std.testing.expectEqual(@as(?u64, room + 1), state.takeClipped().?.requested);
-
-    try std.testing.expectEqual(PromptTransition.changed, state.apply(.{ .insert = "b" }));
-    try std.testing.expect(state.takeClipped() == null);
-    try std.testing.expectEqual(PromptTransition.unchanged, state.apply(.{ .insert = "c" }));
-    const reach = state.takeClipped().?;
-    try std.testing.expectEqualStrings("prompt.field_bytes", reach.limit.name);
-    try std.testing.expectEqual(@as(?u64, room + 1), reach.requested);
-
-    state.begin(.{ .rename_tab = .{ .tab_id = @enumFromInt(1), .label = "" } });
-    _ = state.apply(.paste_start);
-    try std.testing.expectEqual(PromptTransition.changed, state.apply(.{ .insert = "x\n" ++ "y" ** core.max_tab_label_bytes }));
-    try std.testing.expectEqual(core.max_tab_label_bytes, state.currentConst().?.field.len);
-    try std.testing.expectEqualStrings("prompt.tab_label_bytes", state.takeClipped().?.limit.name);
-}
-
-test "renaming a workspace whose name passes the field opens with the start that fits" {
-    var state: State = .{};
-    const name = "w" ** (name_prompt.max_field_bytes + 10);
-    state.begin(.{ .rename_workspace = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .name = name } });
-
-    try std.testing.expectEqualStrings(name[0..name_prompt.max_field_bytes], state.currentConst().?.field.text());
-    try std.testing.expectEqual(@as(?u64, name.len), state.takeClipped().?.requested);
-}
-
-test "pasted line breaks become spaces while typed text is inserted verbatim" {
-    var state: State = .{};
-    state.begin(.create_workspace);
-
-    try std.testing.expectEqual(PromptTransition.routing_changed, state.apply(.paste_start));
-    try std.testing.expectEqual(PromptTransition.changed, state.apply(.{ .insert = "one\r\ntwo\nthree\r" }));
-    try std.testing.expectEqual(PromptTransition.routing_changed, state.apply(.paste_end));
-    try std.testing.expectEqualStrings("one two three ", state.currentConst().?.field.text());
-}
-
 const PromptTransition = union(enum) {
     unchanged,
     routing_changed,

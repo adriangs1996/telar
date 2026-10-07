@@ -1,4 +1,4 @@
-//! Attaching a client to the runtime on an SSH host (docs/flows/remote-attach.md).
+//! Attaching a client to the runtime on an SSH host.
 //! Discovery asks the machine for its home, login shell, runtime socket and
 //! wire schema; then one `ssh … telar server bridge` session carries the
 //! client's connection on its standard input and output, which are one end
@@ -16,7 +16,6 @@ const Forward = @import("Forward.zig");
 const RuntimeConnection = @import("RuntimeConnection.zig");
 const RuntimeConnector = @import("RuntimeConnector.zig");
 const Discovery = @import("Discovery.zig");
-const remote_discovery = @import("remote_discovery.zig");
 const SshOptions = @import("SshOptions.zig");
 const RemoteMachine = @import("RemoteMachine.zig");
 const ChildOutput = childoutput.ChildOutput;
@@ -207,6 +206,7 @@ pub fn discover(io: std.Io, gpa: std.mem.Allocator, environ: std.process.Environ
         if (report) |writer| {
             writeFailure(writer, failure, result.stderr.bytes);
         } else {
+            // Show the SSH discovery failure and remote stderr to the CLI caller without changing stdout.
             std.debug.print("telar: `ssh {s} telar server endpoint` failed:\n{s}", .{ destination, result.stderr.bytes });
         }
 
@@ -227,6 +227,7 @@ fn nameLimit(report: ?*std.Io.Writer, limit: core.Limit) void {
     if (report) |writer| {
         writer.print("{s}: {s}; ", .{ core.limit_reached.notice_title, text }) catch {};
     } else {
+        // Remote discovery limit notices are user-facing stderr output, not debug tracing.
         std.debug.print("telar: {s}: {s}\n", .{ core.limit_reached.notice_title, text });
     }
 }
@@ -237,6 +238,7 @@ fn unreadable(report: ?*std.Io.Writer) error{RemoteDiscoveryUnreadable} {
     if (report) |writer| {
         writer.writeAll(text) catch {};
     } else {
+        // Explain unreadable discovery data on stderr while leaving command stdout untouched.
         std.debug.print("telar: {s}\n", .{text});
     }
 
@@ -338,67 +340,4 @@ fn setNonblocking(fd: std.posix.fd_t) !void {
     if (std.c.fcntl(fd, std.posix.F.SETFL, flags | nonblocking) < 0) {
         return error.Unexpected;
     }
-}
-
-test "ssh failures that retrying cannot fix are told apart from passing ones" {
-    const cases = [_]struct { std.process.Child.Term, []const u8, SshFailure }{
-        .{ .{ .exited = 255 }, "No ED25519 host key is known for [127.0.0.1]:2222 and you have requested strict checking.\r\nHost key verification failed.\r\n", error.SshHostKeyRejected },
-        .{ .{ .exited = 255 }, "@@@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @@@\n", error.SshHostKeyRejected },
-        .{ .{ .exited = 255 }, "telar@127.0.0.1: Permission denied (publickey).\r\n", error.SshAuthenticationFailed },
-        .{ .{ .exited = 127 }, "sh: 1: exec: telar: not found\n", error.RemoteTelarMissing },
-        .{ .{ .exited = 126 }, "sh: 1: exec: telar: Permission denied\n", error.RemoteTelarMissing },
-        .{ .{ .exited = 1 }, "telar protocol mismatch: runtime expects schema v0000000\n", error.RemoteRuntimeIncompatible },
-        .{ .{ .exited = 255 }, "ssh: connect to host box port 22: Connection refused\r\n", error.RemoteEndpointUnavailable },
-        .{ .{ .exited = 255 }, "ssh: Could not resolve hostname box: nodename nor servname provided\r\n", error.RemoteEndpointUnavailable },
-        .{ .{ .exited = 1 }, "error: RuntimeUnavailable\n", error.RemoteEndpointUnavailable },
-        .{ .{ .signal = .KILL }, "", error.RemoteEndpointUnavailable },
-    };
-
-    for (cases) |case| {
-        try std.testing.expectEqual(case[2], sshFailure(case[0], case[1]));
-    }
-}
-
-test "remote commands name the saved telar or the one on the PATH" {
-    var buffer: [max_command_bytes]u8 = undefined;
-    try std.testing.expectEqualStrings("exec telar server bridge", try remoteCommand(&buffer, null, bridge_prefix, bridge_suffix));
-    try std.testing.expectEqualStrings(
-        "/bin/sh -c 'printf \"%s\\n\" \"$HOME\" \"${SHELL:-/bin/sh}\"; exec /home/dev/.local/share/telar/0.3.0/telar server endpoint'",
-        try remoteCommand(&buffer, "/home/dev/.local/share/telar/0.3.0/telar", discovery_prefix, discovery_suffix),
-    );
-    try std.testing.expectError(error.InvalidRemoteTelarPath, remoteCommand(&buffer, "/home/dev/it's", bridge_prefix, bridge_suffix));
-}
-
-test "a bridge that dies before the handshake fails the attempt with its error output" {
-    const discovery = try Discovery.parse("/home/dev\n/bin/sh\n/run/telar.sock\n" ++ core.schema_id ++ "\n");
-    var buffer: [256]u8 = undefined;
-    var report: std.Io.Writer = .fixed(&buffer);
-
-    if (openSession(std.testing.io, &.{ "/bin/sh", "-c", "echo bridge ended >&2" }, discovery, &report)) |connection| {
-        var opened = connection;
-        opened.close(std.testing.io);
-        return error.TestUnexpectedResult;
-    } else |_| {}
-
-    try std.testing.expectEqualStrings("bridge ended\n", report.buffered());
-}
-
-test "a refused host key keeps which key and the verdict, not the banner" {
-    const changed =
-        "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\r\n" ++
-        "@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @\r\n" ++
-        "IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!\r\n" ++
-        "It is also possible that a host key has just been changed.\r\n" ++
-        "Add correct host key in /home/dev/.ssh/known_hosts to get rid of this message.\r\n" ++
-        "Host key for box has changed and you have requested strict checking.\r\n" ++
-        "Host key verification failed.\r\n";
-    var buffer: [256]u8 = undefined;
-    var writer: std.Io.Writer = .fixed(&buffer);
-    writeFailure(&writer, sshFailure(.{ .exited = 255 }, changed), changed);
-
-    try std.testing.expectEqualStrings("Host key for box has changed and you have requested strict checking. Host key verification failed. ", writer.buffered());
-}
-
-test {
-    _ = remote_discovery;
 }

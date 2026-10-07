@@ -20,6 +20,7 @@ accepts_pointer: bool = true,
 role: u8 = 2,
 scroll_limit: f64 = 0,
 scroll_step: f32 = 0,
+// SAFETY: labelled copies the UTF-8 prefix before publishing label_len; registry comparison and accessibility use only that prefix.
 label: [128]u8 = undefined,
 label_len: u8 = 0,
 

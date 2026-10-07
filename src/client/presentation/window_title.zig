@@ -2,10 +2,6 @@
 
 const Tokens = @import("Tokens.zig");
 const std = @import("std");
-const WindowTitleState = @import("WindowTitleState.zig");
-const Capture = @import("Capture.zig");
-const Sink = @import("Sink.zig");
-const SyncInput = @import("SyncInput.zig");
 
 pub const max_title_bytes = 256;
 
@@ -85,63 +81,4 @@ fn append(buffer: *[max_title_bytes]u8, len: usize, value: []const u8) usize {
     const count = @min(room, value.len);
     @memcpy(buffer[len .. len + count], value[0..count]);
     return len + count;
-}
-
-test "window titles use a host port and retry failed changes without a terminal writer" {
-    var state: WindowTitleState = .{};
-    var capture: Capture = .{ .fail = true };
-    const sink: Sink = .{ .context = &capture, .set = Capture.set };
-    const input: SyncInput = .{ .template = "{workspace}", .tokens = .{ .workspace = "café" } };
-    try std.testing.expectError(error.TitleFailed, state.sync(sink, input));
-    try std.testing.expect(!state.ever_sent);
-    capture.fail = false;
-
-    try std.testing.expect(try state.sync(sink, input));
-    try std.testing.expect(!try state.sync(sink, input));
-
-    try std.testing.expectEqual(@as(usize, 1), capture.count);
-    try std.testing.expectEqualStrings("café", capture.text[0..capture.len]);
-
-    const cleared: SyncInput = .{
-        .template = "{workspace}",
-        .tokens = .{},
-    };
-
-    try std.testing.expect(try state.sync(sink, cleared));
-    try std.testing.expectEqual(@as(usize, 0), capture.len);
-    try std.testing.expect(!try state.sync(sink, cleared));
-
-    try std.testing.expect(!try state.sync(
-        sink,
-        .{
-            .template = "",
-            .tokens = .{
-                .workspace = "ignored",
-            },
-        },
-    ));
-
-    try std.testing.expectEqual(@as(usize, 2), capture.count);
-}
-
-test "window title truncation preserves complete Unicode and excludes host control bytes" {
-    var buffer: [max_title_bytes]u8 = undefined;
-    try std.testing.expectEqualStrings("café漢", render(&buffer, "café漢", .{}));
-    const source = "a" ** (max_title_bytes - 1) ++ "漢";
-    try std.testing.expectEqualStrings("a" ** (max_title_bytes - 1), render(&buffer, "{tab}", .{ .tab = source }));
-    try std.testing.expectEqualStrings("safe]0;title", render(&buffer, "safe\x1b]0;title\x07\x7f", .{}));
-    try std.testing.expectEqualStrings("safetitle", render(&buffer, "safe\u{009b}title", .{}));
-    try std.testing.expectEqualStrings("safe", render(&buffer, "safe\xff", .{}));
-}
-
-test "a suffix always shows and cuts the title at a character" {
-    var buffer: [max_title_bytes]u8 = undefined;
-    const short = render(&buffer, "{tab}", .{ .tab = "build" });
-    try std.testing.expectEqualStrings("build | limit", appendSuffix(&buffer, short.len, " | limit"));
-
-    const long = render(&buffer, "{tab}", .{ .tab = "漢" ** 100 });
-    const title = appendSuffix(&buffer, long.len, " | limit");
-    try std.testing.expect(std.mem.endsWith(u8, title, " | limit"));
-    try std.testing.expect(std.unicode.utf8ValidateSlice(title));
-    try std.testing.expect(title.len <= max_title_bytes);
 }

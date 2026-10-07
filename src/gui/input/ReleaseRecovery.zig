@@ -1,11 +1,14 @@
 //! Native key identities are keycode + 1, bounded by both hosts' 256-key tables.
+const Window = @import("telar-window");
 const std = @import("std");
-const Key = @import("KeyInput.zig");
+const Key = @FieldType(Window.Input, "key");
 const Recovery = @This();
 
 pub const capacity = 256;
+// SAFETY: retain writes the key before enqueueing its index; next reads only indices in the pending queue.
 keys: [capacity]Key = undefined,
 pending: std.StaticBitSet(capacity) = .initEmpty(),
+// SAFETY: retain writes each queue index before increasing len; next reads only a queued index.
 order: [capacity]u8 = undefined,
 head: u8 = 0,
 len: usize = 0,

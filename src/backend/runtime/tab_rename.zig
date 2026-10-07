@@ -28,6 +28,7 @@ pub fn rename(model: *RuntimeModel, session: *Session, request: core.RenameTab) 
     var pending: PendingTabRenamed = .{
         .request_id = request.request_id,
         .location = request.location,
+        // SAFETY: memcpy fills label[0..label_len] before the response is queued; delivery reads only that prefix.
         .label = undefined,
         .label_len = @intCast(label.len),
     };

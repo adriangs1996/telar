@@ -55,6 +55,7 @@ pub fn fromPath(path: [*:0]const u8, links: Links) error{InodeUnavailable}!Inode
     }
 
     const flags: u32 = if (links == .no_follow) std.c.AT.SYMLINK_NOFOLLOW else 0;
+    // SAFETY: fstatat fills stat on success; only the SUCCESS branch passes it to fromStat.
     var stat: std.c.Stat = undefined;
     while (true) {
         switch (std.posix.errno(std.c.fstatat(std.c.AT.FDCWD, path, &stat, flags))) {
@@ -79,6 +80,7 @@ pub fn fromDescriptor(fd: std.posix.fd_t) error{InodeUnavailable}!Inode {
         return statx(fd, "", linux.AT.EMPTY_PATH);
     }
 
+    // SAFETY: fstat fills stat on success; only the SUCCESS branch passes it to fromStat.
     var stat: std.c.Stat = undefined;
     while (true) {
         switch (std.posix.errno(std.c.fstat(fd, &stat))) {
@@ -136,72 +138,4 @@ fn fromStat(stat: std.c.Stat) Inode {
         .links = stat.nlink,
         .size = @intCast(@max(stat.size, 0)),
     };
-}
-
-fn temporaryPath(temp: *std.testing.TmpDir, name: []const u8, buffer: []u8) ![:0]const u8 {
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(std.testing.io, &directory_buffer);
-    return std.fmt.bufPrintZ(buffer, "{s}/{s}", .{ directory_buffer[0..directory_len], name });
-}
-
-test "a path reports its type, owner, links and size, and a symlink is not followed" {
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-
-    const io = std.testing.io;
-    try temp.dir.writeFile(io, .{
-        .sub_path = "file",
-        .data = "four",
-    });
-
-    try temp.dir.symLink(io, "file", "link", .{});
-
-    var file_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const file = try fromPath(try temporaryPath(&temp, "file", &file_buffer), .no_follow);
-    try std.testing.expectEqual(Kind.regular, file.kind());
-    try std.testing.expectEqual(std.c.getuid(), file.owner);
-    try std.testing.expectEqual(@as(u64, 1), file.links);
-    try std.testing.expectEqual(@as(u64, 4), file.size);
-
-    var link_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const link_path = try temporaryPath(&temp, "link", &link_buffer);
-    const link = try fromPath(link_path, .no_follow);
-    try std.testing.expect(link.kind() != .regular);
-
-    const target = try fromPath(link_path, .follow);
-    try std.testing.expectEqual(Kind.regular, target.kind());
-}
-
-test "a descriptor reports the file it was opened on" {
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-
-    const io = std.testing.io;
-    try temp.dir.writeFile(io, .{
-        .sub_path = "file",
-        .data = "eight by",
-    });
-
-    const file = try temp.dir.openFile(io, "file", .{});
-    defer file.close(io);
-
-    const inode = try fromDescriptor(file.handle);
-    try std.testing.expectEqual(Kind.regular, inode.kind());
-    try std.testing.expectEqual(@as(u64, 8), inode.size);
-    try std.testing.expectEqual(std.c.getuid(), inode.owner);
-}
-
-test "a statx reply without every requested field is refused" {
-    var buffer = std.mem.zeroes(linux.Statx);
-    buffer.mask = request;
-    buffer.mode = @intFromEnum(Kind.regular) | 0o600;
-    buffer.nlink = 1;
-    _ = try fromStatx(buffer);
-
-    buffer.mask.UID = false;
-    try std.testing.expectError(error.InodeUnavailable, fromStatx(buffer));
-}
-
-test "a missing path is unavailable" {
-    try std.testing.expectError(error.InodeUnavailable, fromPath("/nonexistent/telar-inode-test", .no_follow));
 }

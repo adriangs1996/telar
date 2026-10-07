@@ -1,5 +1,3 @@
-const Options = @This();
-
 arguments: []const []const u8,
 /// Deadline for one prompt, from the command write to the assistant text.
 timeout_ms: u32,

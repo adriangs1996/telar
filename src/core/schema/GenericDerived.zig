@@ -1,5 +1,4 @@
 const bytecodec = @import("bytecodec");
-const tab = @import("messages/tab.zig");
 const Encoder = bytecodec.Encoder;
 const Decoder = bytecodec.Decoder;
 const id = @import("id.zig");
@@ -23,6 +22,7 @@ pub fn Type(comptime T: type) type {
         }
 
         pub fn decode(decoder: *Decoder) !T {
+            // SAFETY: The compile-time loop decodes every field before validation or return; a failed field decode returns immediately.
             var message: T = undefined;
             inline for (@typeInfo(T).@"struct".fields) |field| {
                 @field(message, field.name) = try decodeField(field.type, decoder);

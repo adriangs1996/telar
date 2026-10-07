@@ -1,6 +1,5 @@
 //! The focused pane's title and foreground process as the chrome shows them.
 
-const std = @import("std");
 const tab_layout = @import("../workspace/tab_layout.zig");
 const ClientModel = @import("../state/ClientModel.zig");
 

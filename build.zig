@@ -4,7 +4,7 @@ const Application = @import("build/Application.zig");
 const Benchmarks = @import("build/Benchmarks.zig");
 const packaging = @import("build/packaging.zig");
 const gui = @import("build/gui.zig");
-const tests = @import("build/tests.zig");
+const checks = @import("build/checks.zig");
 const cross = @import("build/cross.zig");
 const diagram_renderer = @import("build/diagram_renderer.zig");
 const headless = @import("build/headless.zig");
@@ -16,7 +16,6 @@ pub fn build(b: *std.Build) void {
     packaging.add(b, app, diagram_helper);
     app.modules.gui = gui.add(b, app, diagram_helper);
     run_widget.addBuild(b, app);
-    app.modules.headless = headless.add(b, app);
-    const parallel_tests = tests.add(b, app, bench);
-    parallel_tests.dependOn(cross.add(b));
+    headless.add(b, app);
+    checks.add(b, app, bench, cross.add(b));
 }

@@ -6,9 +6,6 @@ const ServiceSpec = @import("../plugins/ServiceSpec.zig");
 const AgentDescriptionOptions = @import("AgentDescriptionOptions.zig");
 const pi_rpc = @import("pi_rpc");
 const OptionsType = pi_rpc.Options;
-const IngestTestGate = @import("IngestTestGate.zig");
-const LaunchTestFault = @import("LaunchTestFault.zig");
-const Options = @This();
 
 endpoint: []const u8,
 graphics: GraphicsLimits = .{},
@@ -36,9 +33,3 @@ own_log: bool = false,
 session_path: ?[]const u8 = null,
 /// Type each restored agent's resume command into its relaunched shell.
 resume_agents: bool = true,
-/// Test seam: stops the otherwise long-lived runtime without signals.
-stop: ?*std.Io.Queue(u8) = null,
-/// Test seam: holds a pane's ingest actor open.
-ingest_gate: ?*IngestTestGate = null,
-/// Test seam: fails one pane launch at a selected post-spawn phase.
-launch_fault: ?*LaunchTestFault = null,

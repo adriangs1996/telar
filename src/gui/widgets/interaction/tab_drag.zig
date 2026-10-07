@@ -1,15 +1,16 @@
 //! Native tab gestures use only the dispatcher's delivered control geometry.
-const event_module = @import("../../input/event.zig");
-const GuiAdapter = @import("../../GuiAdapter.zig");
+const Window = @import("telar-window");
+const event_module = Window;
+const WindowModel = @import("../../WindowModel.zig");
 const Target = @import("Target.zig");
 const client = @import("telar-client");
 
 /// Runs after physical ownership has been recorded by the dispatcher.
 /// Example: `if (try tab_drag.apply(gui, event, result.target)) return true;`
-pub fn apply(gui: *GuiAdapter, event: event_module.Event, owner: ?Target) !bool {
-    const state = &gui.widgets;
+pub fn apply(model: *WindowModel, app: *client.Client, event: event_module.Input, owner: ?Target) !bool {
+    const state = &model.widgets;
     const drag = &state.tab_drag;
-    drag.validate(&gui.app.model);
+    drag.validate(&app.model);
     if (event == .focus and !event.focus) {
         drag.cancel();
     }
@@ -31,13 +32,13 @@ pub fn apply(gui: *GuiAdapter, event: event_module.Event, owner: ?Target) !bool 
     const point: [2]f64 = .{ pointer.x / state.tab_drag_step, pointer.y / state.tab_drag_step };
     if (pointer.kind == .press) {
         const target = owner orelse return false;
-        if (target.layer != 0 or !target.enabled or target.action != .intent or target.action.intent != .select_tab or gui.app.model.name_prompt.active()) {
+        if (target.layer != 0 or !target.enabled or target.action != .intent or target.action.intent != .select_tab or app.model.name_prompt.active()) {
             return false;
         }
 
         const tab_id = target.action.intent.select_tab;
-        const workspace = gui.app.model.workspace orelse return false;
-        if (gui.app.model.tabs.find(tab_id) != null) {
+        const workspace = app.model.workspace orelse return false;
+        if (app.model.tabs.find(tab_id) != null) {
             drag.begin(.{ .workspace = workspace, .tab_id = tab_id }, point);
             state.tab_drop_slots.capture(state.dispatcher.maps.presented());
             state.tab_pointer = .{ pointer.x, pointer.y };
@@ -68,7 +69,7 @@ pub fn apply(gui: *GuiAdapter, event: event_module.Event, owner: ?Target) !bool 
     if (pointer.kind == .release) {
         if (drag.finish()) |move| {
             if (try client.tab_move.requestTabMove(
-                &gui.app.model,
+                &app.model,
                 .{
                     .location = move.location,
                     .direction = move.direction,

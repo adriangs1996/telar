@@ -1,5 +1,4 @@
 const RouteMatch = @import("../RouteMatch.zig");
-const AnalyzeOptions = @This();
 
 is_response: bool,
 response_to_head: bool,

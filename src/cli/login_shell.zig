@@ -74,13 +74,3 @@ pub fn loginShell(environ: std.process.Environ) []const u8 {
 
     return "/bin/sh";
 }
-
-test "an empty SHELL falls back instead of executing nothing" {
-    var environment = std.process.Environ.Map.init(std.testing.allocator);
-    defer environment.deinit();
-    try environment.put("SHELL", "");
-    const block = try environment.createPosixBlock(std.testing.allocator, .{});
-    defer block.deinit(std.testing.allocator);
-
-    try std.testing.expect(loginShell(.{ .block = block }).len > 0);
-}

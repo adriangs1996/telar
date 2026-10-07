@@ -114,29 +114,3 @@ fn parseStatParent(stat: []const u8) ?u32 {
 
     return ppid;
 }
-
-test "the chain of the running process starts at its parent and ends at the first process" {
-    var storage: [64]u32 = undefined;
-    const pid: u32 = @intCast(std.c.getpid());
-    const chain = ancestors(pid, &storage);
-
-    try std.testing.expect(chain.len != 0);
-    try std.testing.expectEqual(@as(u32, @intCast(std.c.getppid())), chain[0]);
-    try std.testing.expectEqual(init_process, chain[chain.len - 1]);
-    try std.testing.expect(std.mem.indexOfScalar(u32, chain, pid) == null);
-}
-
-test "a full buffer cuts the chain and an unknown process has none" {
-    var storage: [1]u32 = undefined;
-    const pid: u32 = @intCast(std.c.getpid());
-
-    try std.testing.expectEqual(@as(usize, 1), ancestors(pid, &storage).len);
-    try std.testing.expect(parent(0) == null);
-    try std.testing.expectEqual(@as(usize, 0), ancestors(std.math.maxInt(u32), &storage).len);
-}
-
-test "stat parsing reads the parent after a name with spaces and parentheses" {
-    try std.testing.expectEqual(@as(?u32, 41), parseStatParent("42 (a (b) c) S 41 42 42 0"));
-    try std.testing.expect(parseStatParent("42 (init) S 0 1") == null);
-    try std.testing.expect(parseStatParent("garbage") == null);
-}

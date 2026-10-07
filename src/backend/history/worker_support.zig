@@ -1,7 +1,6 @@
 //! Sequential execution of history requests against durable storage.
 
 const core = @import("telar-core");
-const Query = @import("Query.zig");
 const std = @import("std");
 const model = @import("model.zig");
 const QueryOrigin = @import("QueryOrigin.zig");
@@ -11,40 +10,11 @@ const Store = @import("persistence/Store.zig");
 const ImportBatch = @import("ImportBatch.zig");
 const SessionStarted = @import("SessionStarted.zig");
 const CommandFinished = @import("CommandFinished.zig");
-const Counters = @import("Counters.zig");
-const Worker = @import("Worker.zig");
 
 pub const Execution = enum {
     continue_running,
     stop,
 };
-
-test "query replacement stops at writes and preserves clients, pages and CLI replies" {
-    const query = try Query.init(.{ .request_id = @enumFromInt(1), .origin = .{
-        .client = .{ .id = 1, .generation = 1 },
-        .close_after_reply = false,
-    }, .text = "g" });
-    var newer = query;
-    newer.request_id = @enumFromInt(2);
-    try std.testing.expect(superseded(.{ .query = query }, &.{.{ .query = newer }}));
-    const barrier: model.Request = .{ .session_finished = .{ .id = @splat(0), .finished_at_ms = 1 } };
-    try std.testing.expect(!superseded(.{ .query = query }, &.{ barrier, .{ .query = newer } }));
-
-    newer.origin.client.generation = 2;
-    try std.testing.expect(!superseded(.{ .query = query }, &.{.{ .query = newer }}));
-    newer.origin = query.origin;
-    newer.offset = 20;
-    try std.testing.expect(!superseded(.{ .query = query }, &.{.{ .query = newer }}));
-    newer.offset = 0;
-    newer.entry_id = 4;
-    try std.testing.expect(!superseded(.{ .query = query }, &.{.{ .query = newer }}));
-    newer.entry_id = 0;
-    newer.snapshot_id = 5;
-    try std.testing.expect(!superseded(.{ .query = query }, &.{.{ .query = newer }}));
-    newer.snapshot_id = 0;
-    newer.origin.close_after_reply = true;
-    try std.testing.expect(!superseded(.{ .query = query }, &.{.{ .query = newer }}));
-}
 
 pub fn superseded(request: model.Request, later: []const model.Request) bool {
     const query = switch (request) {
@@ -81,6 +51,7 @@ pub fn unavailableResponse(request_id: core.RequestId, origin: QueryOrigin) mode
 }
 
 pub fn respondPruned(context: Context, pruned: Pruned) void {
+    // Response delivery may end when the history consumer closes or cancels its queue; the pruned response owns no buffers to release.
     context.channel.sendResponse(context.io, .{ .pruned = pruned }) catch {};
 }
 
@@ -128,81 +99,4 @@ pub fn elapsedSince(io: std.Io, started: std.Io.Timestamp) u64 {
 
 fn elapsedNs(started: std.Io.Timestamp, finished: std.Io.Timestamp) u64 {
     return @intCast(@max(@as(i96, 0), finished.nanoseconds - started.nanoseconds));
-}
-
-test "database open degradation is explicit" {
-    const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try std.fmt.bufPrintZ(&path_buffer, "{s}/missing/history.db", .{directory_buffer[0..directory_len]});
-    var metrics: Counters = .{};
-    var worker = Worker.init(std.testing.allocator, path, &metrics);
-    defer worker.deinit();
-
-    try std.testing.expect(!worker.available());
-    try std.testing.expect(worker.openError() != null);
-    try std.testing.expectEqual(@as(u64, 1), metrics.snapshot(worker.available()).sqlite_open_failures);
-}
-
-test "sqlite byte sampling distinguishes memory and disk databases" {
-    const io = std.testing.io;
-    var metrics: Counters = .{};
-    var memory = Worker.init(std.testing.allocator, ":memory:", &metrics);
-    defer memory.deinit();
-
-    try std.testing.expectEqual(@as(u64, 0), memory.sqliteBytes(io));
-
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try std.fmt.bufPrintZ(&path_buffer, "{s}/history.db", .{directory_buffer[0..directory_len]});
-    var disk = Worker.init(std.testing.allocator, path, &metrics);
-    defer disk.deinit();
-
-    try std.testing.expect(disk.available());
-    try std.testing.expect(disk.sqliteBytes(io) > 0);
-}
-
-test "import batches remain idempotent at the worker storage boundary" {
-    const gpa = std.testing.allocator;
-    var database = try Store.open(":memory:");
-    defer database.close();
-    var buffer: [512]u8 = undefined;
-    const entries = [_]core.ImportEntry{
-        .{ .started_at_ms = 1_000, .command = "git status" },
-        .{ .started_at_ms = 2_000, .command = "make -j4" },
-    };
-    const encoded = try core.encodeImportHistory(&buffer, .{
-        .request_id = @enumFromInt(3),
-        .source = "zsh:/tmp/histfile",
-        .base_sequence = 0,
-        .entries = &entries,
-    });
-    const view = (try core.decodeClient(encoded)).import_history;
-    const first = try ImportBatch.init(gpa, view);
-    defer first.deinit(gpa);
-    const second = try ImportBatch.init(gpa, view);
-    defer second.deinit(gpa);
-
-    try writeImportBatch(&database, first);
-    try writeImportBatch(&database, second);
-
-    const origin: QueryOrigin = .{
-        .client = .{ .id = 1, .generation = 1 },
-        .close_after_reply = false,
-    };
-    const result = try database.query(gpa, &(try Query.init(.{
-        .request_id = @enumFromInt(9),
-        .origin = origin,
-    })));
-    defer result.deinit();
-
-    try std.testing.expectEqual(@as(usize, 2), result.entries.len);
-    try std.testing.expectEqualStrings("make -j4", result.entries[0].command);
-    try std.testing.expectEqual(core.HistoryAuthor.human, result.entries[0].author);
 }

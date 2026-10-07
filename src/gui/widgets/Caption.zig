@@ -25,6 +25,7 @@ pub fn draw(self: Caption, canvas: *Canvas) !void {
         while (iterator.index < iterator.bytes.len) {
             const before = iterator;
             const cluster = iterator.next() orelse break;
+            // SAFETY: GraphemeIterator returns valid UTF-8 clusters and substitutes U+FFFD for invalid input.
             const codepoints = std.unicode.utf8CountCodepoints(cluster.bytes) catch unreachable;
             if (len + cluster.bytes.len > 64 or count + codepoints > 30) {
                 if (len == 0) {

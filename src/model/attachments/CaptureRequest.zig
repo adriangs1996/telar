@@ -1,5 +1,4 @@
 const model_data = @import("../model.zig");
-const CaptureRequest = @This();
 
 target: model_data.AttachmentTarget,
 sequence: u64,

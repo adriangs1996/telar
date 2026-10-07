@@ -7,7 +7,7 @@ into disposable toast state. Notifications are not persisted and never become
 runtime lifecycle state.
 
 The runtime also publishes a warning notice when one of its own limits is
-reached, at most once a minute per limit ([Limit reached](flows/limit-reached.md)).
+reached, at most once a minute per limit.
 A client shows the notices for its own limits locally.
 
 Routine lifecycle changes are intentionally silent. Creating, renaming, or
@@ -24,8 +24,7 @@ snapshot, then applies its local `client.sound` policy.
 
 The runtime offers the event to every active UI client. Each client validates
 the pane identity and applies its own profile, so a remote profile can mute
-sounds without changing the runtime or another attached client. The complete
-worker lifecycle is documented in [Agent sound](flows/agent-sound.md).
+sounds without changing the runtime or another attached client.
 
 ## Delivery channels
 
@@ -172,6 +171,3 @@ different machine. It runs as an observation task and never delays input,
 rendering, PTY traffic, or another client. Each client keeps at most one sound
 in flight and one coalesced successor; a needs-input sound wins over a ready
 sound in the same burst.
-
-The [Agent sound flow](flows/agent-sound.md) records the exact identity gate,
-configuration replacement, host adapters, process bounds and failure policy.

@@ -1,4 +1,5 @@
 //! Disposable native controls. The shared client remains the sole navigation owner.
+const Window = @import("telar-window");
 const keyinput = @import("keyinput");
 const SidebarRegions = @import("SidebarRegions.zig");
 const core = @import("telar-core");
@@ -14,7 +15,7 @@ const AgentAges = @import("AgentAges.zig");
 const HitState = @import("HitState.zig");
 const RingFades = @import("RingFades.zig");
 const Favicons = @import("Favicons.zig");
-const PointerEvent = @import("../input/PointerEvent.zig");
+const PointerEvent = @FieldType(Window.Input, "pointer");
 const BandCommand = @import("BandCommand.zig");
 const BandHit = @import("BandHit.zig");
 const BandPlacement = @import("BandPlacement.zig").BandPlacement;

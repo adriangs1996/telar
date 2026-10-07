@@ -1,6 +1,7 @@
 //! Frequently read cell identity and used geometry length, separate from quads.
 const Paint = @import("CellPaint.zig");
 
+// SAFETY: CellMesh.replace assigns paint before marking valid; comparisons check valid and ink reads follow cell preparation.
 paint: Paint = undefined,
 valid: bool = false,
 /// The background quad differs from the theme background and must be drawn.

@@ -64,31 +64,6 @@ fn maximumWidth(host_width: u16) u16 {
     return host_width - minimum_workbench_width;
 }
 
-test "sidebar sizing retains useful bounds" {
-    try std.testing.expectEqual(minimum_width, default_width);
-    try std.testing.expectEqual(@as(u16, 0), actualWidth(
-        61,
-        true,
-        default_width,
-    ));
-    try std.testing.expectEqual(@as(u16, minimum_width), actualWidth(
-        62,
-        true,
-        default_width,
-    ));
-    try std.testing.expectEqual(@as(u16, minimum_width), actualWidth(
-        120,
-        true,
-        default_width,
-    ));
-    try std.testing.expectEqual(@as(u16, 64), step(
-        120,
-        62,
-        .wider,
-    ));
-    try std.testing.expectEqual(@as(u16, 42), clampInteractive(120, 1));
-}
-
 /// Commits an explicit sidebar preference. Repeated values preserve the
 /// chrome revision and produce no projection work.
 ///

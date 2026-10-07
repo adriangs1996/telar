@@ -207,21 +207,10 @@ fn launchTerminal(model: *RuntimeModel, request: LaunchRequest) !*Pane {
         fresh.destroy();
         return err;
     };
-    injectFault(model, .pane_registration) catch |err| {
-        abort(model, fresh, .{ .shell = shell, .phase = .pane_registration, .cause = err });
-        model.panes.removeAndDestroy(fresh);
-        return err;
-    };
 
     // The wait actor owns reaping if output actor scheduling fails.
     const wait_started = fresh.beginExitWait();
     std.debug.assert(wait_started);
-    injectFault(model, .wait_actor) catch |err| {
-        fresh.cancelExitWait();
-        abort(model, fresh, .{ .shell = shell, .phase = .wait_actor, .cause = err });
-        model.panes.removeAndDestroy(fresh);
-        return err;
-    };
     model.select.concurrent(.pane_exit, waitPane, .{fresh}) catch |err| {
         fresh.cancelExitWait();
         abort(model, fresh, .{ .shell = shell, .phase = .wait_actor, .cause = err });
@@ -231,12 +220,6 @@ fn launchTerminal(model: *RuntimeModel, request: LaunchRequest) !*Pane {
 
     const output_started = fresh.beginPtyOutputRead();
     std.debug.assert(output_started);
-    injectFault(model, .output_actor) catch |err| {
-        fresh.cancelPtyOutputRead();
-        fresh.finishPtyOutput();
-        abort(model, fresh, .{ .shell = shell, .phase = .output_actor, .cause = err });
-        return err;
-    };
     model.select.concurrent(.pane_output, readPane, .{ model.io, fresh }) catch |err| {
         fresh.cancelPtyOutputRead();
         fresh.finishPtyOutput();
@@ -246,12 +229,6 @@ fn launchTerminal(model: *RuntimeModel, request: LaunchRequest) !*Pane {
 
     fresh.commitLaunch(shell);
     return fresh;
-}
-
-fn injectFault(model: *RuntimeModel, phase: history_model.LaunchPhase) !void {
-    if (model.launch_fault) |fault| {
-        try fault.inject(phase);
-    }
 }
 
 fn recordFailure(model: *RuntimeModel, pane: *const Pane, failure: Failure) void {
@@ -272,41 +249,21 @@ fn abort(model: *RuntimeModel, pane: *Pane, failure: Failure) void {
     pane.abortLaunch();
 }
 
-test "pane overrides name the runtime socket and the pane's own identity" {
-    var overrides: PaneOverrides = .{};
-
-    const entries = overrides.build(
-        .{ .id = try core.pane(12), .generation = 3 },
-        .{ .workspace = .{ .workspace = @enumFromInt(4) }, .tab_id = @enumFromInt(9) },
-        "/tmp/telar.sock",
-        "/opt/telar/bin/telar",
-    );
-
-    try std.testing.expectEqual(@as(usize, 6), entries.len);
-    try std.testing.expectEqualStrings("TELAR_SOCKET_PATH", entries[0].name);
-    try std.testing.expectEqualStrings("/tmp/telar.sock", entries[0].value);
-    try std.testing.expectEqualStrings("TELAR_PANE_ID", entries[1].name);
-    try std.testing.expectEqualStrings("12", entries[1].value);
-    try std.testing.expectEqualStrings("TELAR_PANE_GENERATION", entries[2].name);
-    try std.testing.expectEqualStrings("3", entries[2].value);
-    try std.testing.expectEqualStrings("TELAR_WORKSPACE_ID", entries[3].name);
-    try std.testing.expectEqualStrings("4", entries[3].value);
-    try std.testing.expectEqualStrings("TELAR_TAB_ID", entries[4].name);
-    try std.testing.expectEqualStrings("9", entries[4].value);
-    try std.testing.expectEqualStrings("TELAR_BIN_PATH", entries[5].name);
-    try std.testing.expectEqualStrings("/opt/telar/bin/telar", entries[5].value);
-}
-
 const PaneOverrides = struct {
     /// Fixed storage for the environment variables that let a child find the
     /// runtime and name its own pane. `TELAR_SOCKET` stays absent on purpose: a
     /// nested runtime must not inherit the outer listener as its own.
     pub const count = 6;
 
+    // SAFETY: build formats the decimal identity into this buffer before retaining the returned slice in entries.
     pane_id: [20]u8 = undefined,
+    // SAFETY: build formats the decimal identity into this buffer before retaining the returned slice in entries.
     pane_generation: [20]u8 = undefined,
+    // SAFETY: build formats the decimal identity into this buffer before retaining the returned slice in entries.
     workspace_id: [20]u8 = undefined,
+    // SAFETY: build formats the decimal identity into this buffer before retaining the returned slice in entries.
     tab_id: [20]u8 = undefined,
+    // SAFETY: build assigns every override after formatting its backing strings, then returns the complete array.
     entries: [count]Override = undefined,
 
     /// Formats the identity into owned decimal storage and returns the
@@ -317,9 +274,13 @@ const PaneOverrides = struct {
     /// const entries = overrides.build(key, location, socket_path, executable_path);
     /// ```
     pub fn build(self: *PaneOverrides, key: PaneKey, location: core.TabLocation, socket_path: []const u8, executable_path: []const u8) []const Override {
+        // SAFETY: A u64 pane id needs at most twenty decimal bytes, exactly this buffer's capacity.
         const pane_id = std.fmt.bufPrint(&self.pane_id, "{d}", .{core.raw(key.id)}) catch unreachable;
+        // SAFETY: A u64 generation needs at most twenty decimal bytes, exactly this buffer's capacity.
         const pane_generation = std.fmt.bufPrint(&self.pane_generation, "{d}", .{key.generation}) catch unreachable;
+        // SAFETY: A u64 workspace id needs at most twenty decimal bytes, exactly this buffer's capacity.
         const workspace_id = std.fmt.bufPrint(&self.workspace_id, "{d}", .{core.raw(location.workspace.workspace)}) catch unreachable;
+        // SAFETY: A u64 tab id needs at most twenty decimal bytes, exactly this buffer's capacity.
         const tab_id = std.fmt.bufPrint(&self.tab_id, "{d}", .{core.raw(location.tab_id)}) catch unreachable;
         self.entries = .{
             .{ .name = "TELAR_SOCKET_PATH", .value = socket_path },

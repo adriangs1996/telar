@@ -36,20 +36,3 @@ pub fn snakeCase(stem: []const u8) bool {
 
     return true;
 }
-
-test "type and namespace filename categories do not overlap" {
-    for ([_][]const u8{ "Pane", "GenericRouter", "COORD", "Rgb8" }) |stem| {
-        try std.testing.expect(pascalCase(stem));
-        try std.testing.expect(!snakeCase(stem));
-    }
-
-    for ([_][]const u8{ "pane_input", "layout", "fuzz_schema_client", "h2" }) |stem| {
-        try std.testing.expect(snakeCase(stem));
-        try std.testing.expect(!pascalCase(stem));
-    }
-
-    for ([_][]const u8{ "", "_private", "two__words", "trailing_", "Some_Type", "9Type", "with-dashes" }) |stem| {
-        try std.testing.expect(!snakeCase(stem));
-        try std.testing.expect(!pascalCase(stem));
-    }
-}

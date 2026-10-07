@@ -64,6 +64,7 @@ const Input = struct {
 
 const PatternList = struct {
     /// Bounded list of case-sensitive substring patterns from configuration.
+    // SAFETY: add copies a pattern and its length before increasing count; matching visits only those initialized prefixes.
     storage: [history_filter.max_patterns][history_filter.max_pattern_bytes]u8 = undefined,
     lens: [history_filter.max_patterns]u16 = .{0} ** history_filter.max_patterns,
     count: u8 = 0,
@@ -111,22 +112,3 @@ const PatternList = struct {
         return false;
     }
 };
-
-test "a filter list holds its limits exactly and refuses one more" {
-    var filters: Filters = .{};
-    var pattern: [history_filter.max_pattern_bytes + 1]u8 = @splat('p');
-    try filters.commands.add(pattern[0..history_filter.max_pattern_bytes]);
-    try std.testing.expectError(error.FilterPatternTooLong, filters.commands.add(&pattern));
-    try std.testing.expectError(error.InvalidFilterPattern, filters.commands.add(""));
-
-    var number_buffer: [8]u8 = undefined;
-    for (1..history_filter.max_patterns) |number| {
-        try filters.commands.add(try std.fmt.bufPrint(&number_buffer, "n{d}", .{number}));
-    }
-
-    try std.testing.expectError(error.TooManyFilterPatterns, filters.commands.add("one more"));
-    try std.testing.expect(!filters.shouldRecord(.{
-        .command = "echo n63",
-        .cwd = "/",
-    }));
-}

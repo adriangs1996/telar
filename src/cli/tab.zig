@@ -23,6 +23,7 @@ pub fn run(init: std.process.Init, options: TabOptions) u8 {
 }
 
 fn fail(err: anyerror, reason: ?[]const u8) u8 {
+    // This is the command failure diagnostic on stderr; keep its CLI prefix and leave stdout available for results.
     std.debug.print("telar tab: {s}\n", .{reason orelse control.describe(err)});
     return if (err == error.RuntimeTimeout) 3 else 1;
 }

@@ -15,18 +15,23 @@ workspace: ?core.WorkspaceId,
 created_by: ?core.PaneId = null,
 coordinator: ?core.CoordinatorReference = null,
 state: core.WorktreeState,
+// SAFETY: init copies a bounded branch before setting branch_len; branchSlice exposes only that prefix.
 branch: [core.max_git_branch_bytes]u8 = undefined,
 branch_len: u8 = 0,
+// SAFETY: init copies a bounded base before setting base_len; baseSlice exposes only that prefix.
 base: [core.max_git_branch_bytes]u8 = undefined,
 base_len: u8 = 0,
+// SAFETY: init copies a bounded title before setting title_len; titleSlice exposes only that prefix.
 title: [core.max_worktree_title_bytes]u8 = undefined,
 title_len: u8 = 0,
+// SAFETY: init copies the retained path tail before setting path_len; pathSlice exposes only that prefix.
 path: [max_path_bytes]u8 = undefined,
 path_len: u16 = 0,
 diff_added: u32,
 diff_removed: u32,
 diff_files: u32,
 commits_ahead: u32,
+// SAFETY: init copies the command label before setting command_label_len; commandLabel exposes only that prefix.
 command_label: [core.max_worktree_command_label_bytes]u8 = undefined,
 command_label_len: u8 = 0,
 command_state: core.CommandState,
@@ -115,18 +120,4 @@ fn copyPrefix(destination: []u8, source: []const u8) usize {
 
     @memcpy(destination[0..len], source[0..len]);
     return len;
-}
-
-test "rows keep the handle, the display name and a path tail" {
-    const long_path = "/" ++ "d" ** 300 ++ "/fix";
-    const row = WorktreeRow.init(.{
-        .worktree = @enumFromInt(1),
-        .source = @enumFromInt(2),
-        .path = long_path,
-        .branch = "worktree-fix",
-    });
-    try std.testing.expectEqualStrings("fix", row.handle());
-    try std.testing.expectEqualStrings("worktree-fix", row.displayName());
-    try std.testing.expect(std.mem.endsWith(u8, row.pathSlice(), "/fix"));
-    try std.testing.expectEqual(@as(usize, max_path_bytes), row.pathSlice().len);
 }

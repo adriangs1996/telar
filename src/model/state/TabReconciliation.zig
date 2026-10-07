@@ -1,7 +1,6 @@
 const cellgrid = @import("cellgrid");
 const core = @import("telar-core");
 const data = @import("../model.zig");
-const TabReconciliation = @This();
 
 location: core.TabLocation,
 area: cellgrid.Rect,

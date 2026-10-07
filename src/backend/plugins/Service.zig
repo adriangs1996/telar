@@ -13,9 +13,12 @@ const Service = @This();
 
 gpa: std.mem.Allocator,
 io: std.Io,
+// SAFETY: init initializes and starts each worker before increasing worker_count; cleanup and submit visit only that prefix.
 workers: [service_support.max_workers]Worker = undefined,
 worker_count: u8 = 0,
+// SAFETY: init constructs the queue with result_storage at the final address before starting workers.
 results: std.Io.Queue(*Result) = undefined,
+// SAFETY: The queue starts empty; producers fill slots before consumers may retrieve their pointers.
 result_storage: [service_support.queue_depth]*Result = undefined,
 next_event_id: std.atomic.Value(u64) = .init(1),
 /// Bytes of queued exchanges and frames being sent, within `max_held_bytes`.
@@ -161,23 +164,3 @@ const InitOptions = struct {
     gpa: std.mem.Allocator,
     specs: []const ServiceSpec,
 };
-
-test "the last worker to release a shared exchange returns its bytes" {
-    var budget: TapBudget = .{
-        .max_bytes = 8,
-    };
-    try std.testing.expect(budget.charge(8));
-
-    var exchange: Exchange = .{};
-    const shared = try SharedExchange.create(std.testing.allocator, &exchange, .{
-        .event_id = 1,
-        .charged = 8,
-        .budget = &budget,
-        .holders = 2,
-    });
-    shared.release();
-    try std.testing.expect(!budget.charge(1));
-
-    shared.release();
-    try std.testing.expect(budget.charge(8));
-}

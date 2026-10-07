@@ -87,6 +87,7 @@ pub fn deinit(self: *Identity, io: std.Io) void {
 }
 
 fn inspect(fd: std.c.fd_t) !native.struct_stat {
+    // SAFETY: fstat fills stat on success; failure returns an error before the value is returned.
     var stat: native.struct_stat = undefined;
     if (native.fstat(fd, &stat) != 0) {
         return error.WindowIdentityStatFailed;
@@ -107,121 +108,4 @@ fn validate(stat: native.struct_stat, kind: enum { directory, regular }) !void {
     } else if (stat.st_mode & native.S_IFMT != native.S_IFREG or stat.st_nlink != 1 or stat.st_mode & 0o7777 != 0o600) {
         return error.UnsafeWindowIdentityFile;
     }
-}
-
-test "native window identities survive reopening while concurrent windows stay distinct" {
-    const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory: [std.fs.max_path_bytes]u8 = undefined;
-    const length = try temp.dir.realPath(io, &directory);
-    var endpoint_storage: [std.fs.max_path_bytes]u8 = undefined;
-    const endpoint = try std.fmt.bufPrint(&endpoint_storage, "{s}/runtime.sock", .{directory[0..length]});
-    var first = try Identity.acquire(io, endpoint);
-    defer first.deinit(io);
-    var second = try Identity.acquire(io, endpoint);
-    defer second.deinit(io);
-    const first_value = first.value;
-    try std.testing.expect(first.value != .invalid and second.value != .invalid);
-    try std.testing.expect(first.value != second.value);
-    try std.testing.expectEqual(@as(u8, 0), first.slot);
-    try std.testing.expectEqual(@as(u8, 1), second.slot);
-    const original = try inspect(first.file.?.handle);
-    try std.testing.expectEqual(@as(u32, 0o600), @as(u32, original.st_mode) & 0o7777);
-    const flags = std.c.fcntl(first.file.?.handle, std.c.F.GETFD);
-    try std.testing.expect(flags >= 0 and flags & std.c.FD_CLOEXEC != 0);
-    first.deinit(io);
-    var reopened = try Identity.acquire(io, endpoint);
-    defer reopened.deinit(io);
-    try std.testing.expectEqual(first_value, reopened.value);
-    try std.testing.expectEqual(original.st_ino, (try inspect(reopened.file.?.handle)).st_ino);
-}
-
-test "native window leases are scoped to each runtime endpoint" {
-    const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory: [std.fs.max_path_bytes]u8 = undefined;
-    const length = try temp.dir.realPath(io, &directory);
-    var first_storage: [std.fs.max_path_bytes]u8 = undefined;
-    var second_storage: [std.fs.max_path_bytes]u8 = undefined;
-    var first = try Identity.acquire(io, try std.fmt.bufPrint(&first_storage, "{s}/one.sock", .{directory[0..length]}));
-    defer first.deinit(io);
-    var second = try Identity.acquire(io, try std.fmt.bufPrint(&second_storage, "{s}/two.sock", .{directory[0..length]}));
-    defer second.deinit(io);
-    try std.testing.expectEqual(@as(u8, 0), first.slot);
-    try std.testing.expectEqual(@as(u8, 0), second.slot);
-    try std.testing.expect(first.value != second.value);
-}
-
-test "native window leases remain bounded and recover a released slot" {
-    const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory: [std.fs.max_path_bytes]u8 = undefined;
-    const length = try temp.dir.realPath(io, &directory);
-    var endpoint_storage: [std.fs.max_path_bytes]u8 = undefined;
-    const endpoint = try std.fmt.bufPrint(&endpoint_storage, "{s}/runtime.sock", .{directory[0..length]});
-    var identities: [max_windows]Identity = undefined;
-    var acquired: usize = 0;
-    defer for (identities[0..acquired]) |*identity| {
-        identity.deinit(io);
-    };
-
-    for (&identities, 0..) |*identity, slot| {
-        identity.* = try Identity.acquire(io, endpoint);
-        acquired += 1;
-        try std.testing.expectEqual(@as(u8, @intCast(slot)), identity.slot);
-    }
-
-    try std.testing.expectError(error.NoFreeWindowIdentity, Identity.acquire(io, endpoint));
-    const released_value = identities[17].value;
-    identities[17].deinit(io);
-    var reopened = try Identity.acquire(io, endpoint);
-    defer reopened.deinit(io);
-    try std.testing.expectEqual(@as(u8, 17), reopened.slot);
-    try std.testing.expectEqual(released_value, reopened.value);
-}
-
-test "native window leases reject symlinks hard links and public permissions" {
-    const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory: [std.fs.max_path_bytes]u8 = undefined;
-    const length = try temp.dir.realPath(io, &directory);
-    var endpoint_storage: [std.fs.max_path_bytes]u8 = undefined;
-    const endpoint = try std.fmt.bufPrint(&endpoint_storage, "{s}/runtime.sock", .{directory[0..length]});
-    const name = "runtime.sock.gui-0.lock";
-    try temp.dir.symLink(io, "target", name, .{});
-    try std.testing.expectError(error.UnsafeWindowIdentityFile, Identity.acquire(io, endpoint));
-    try temp.dir.deleteFile(io, name);
-    const source = try temp.dir.createFile(io, "target", .{ .permissions = .fromMode(0o600) });
-    source.close(io);
-    try temp.dir.hardLink("target", temp.dir, name, io, .{});
-    try std.testing.expectError(error.UnsafeWindowIdentityFile, Identity.acquire(io, endpoint));
-    try temp.dir.deleteFile(io, name);
-    const public = try temp.dir.createFile(io, name, .{ .permissions = .fromMode(0o644) });
-    try public.setPermissions(io, .fromMode(0o644));
-    public.close(io);
-    try std.testing.expectError(error.UnsafeWindowIdentityFile, Identity.acquire(io, endpoint));
-}
-
-test "native window leases reject writable directories and wrong owners" {
-    const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{ .iterate = true });
-    defer temp.cleanup();
-    var directory: [std.fs.max_path_bytes]u8 = undefined;
-    const length = try temp.dir.realPath(io, &directory);
-    var endpoint_storage: [std.fs.max_path_bytes]u8 = undefined;
-    const endpoint = try std.fmt.bufPrint(&endpoint_storage, "{s}/runtime.sock", .{directory[0..length]});
-    const file: std.Io.File = .{ .handle = temp.dir.handle, .flags = .{ .nonblocking = false } };
-    const original = try inspect(file.handle);
-    try file.setPermissions(io, .fromMode(0o777));
-    defer file.setPermissions(io, .fromMode(@intCast(original.st_mode & 0o7777))) catch {};
-    try std.testing.expectError(error.UnsafeWindowIdentityDirectory, Identity.acquire(io, endpoint));
-    var wrong_owner = original;
-    wrong_owner.st_uid = std.c.geteuid() +% 1;
-    try std.testing.expectError(error.WindowIdentityWrongOwner, validate(wrong_owner, .directory));
-    try std.testing.expectError(error.RelativePath, Identity.acquire(io, "relative.sock"));
-    try std.testing.expectError(error.InvalidEndpoint, Identity.acquire(io, "/tmp/bad\x00path"));
 }

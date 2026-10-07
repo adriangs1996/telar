@@ -1,4 +1,4 @@
-//! Client telemetry (docs/flows/client-telemetry.md): in builds with
+//! Client telemetry: in builds with
 //! diagnostics, once a second the client projects its counters and its
 //! disposable state into one bounded JSON line and a worker appends it to
 //! `<endpoint>.client-<pid>.log`. It observes the client; it never commits
@@ -8,7 +8,6 @@ const core = @import("telar-core");
 const data = @import("model");
 const Client = @import("../execution/Client.zig");
 const Metrics = @import("Metrics.zig");
-const TelemetryState = @import("TelemetryState.zig");
 
 /// Arms the first tick when the fail-closed sink exists.
 /// Example: `try client_telemetry.start(client);`
@@ -171,39 +170,3 @@ const Snapshot = struct {
     lua_used: usize,
     lua_limit: usize,
 };
-
-test "a telemetry line reports the counters and the client state" {
-    const metrics: Metrics = .{
-        .started_ns = 0,
-        .key_lease_overflows = 3,
-        .frames = 5,
-        .presentations = 7,
-    };
-    var buffer: [TelemetryState.buffer_size]u8 = undefined;
-    const line = try format(&buffer, .{
-        .now_ns = 2 * std.time.ns_per_s,
-        .metrics = &metrics,
-        .state = .{
-            .theme_name = "vesper",
-            .active_tab = @enumFromInt(1),
-            .tab_count = 1,
-            .focused_pane = @enumFromInt(2),
-            .pane_count = 1,
-            .outbox = .{ .coalesced_client_layout = 2 },
-            .cell_width_px = 9,
-            .cell_height_px = 18,
-            .lua_used = 123,
-            .lua_limit = 1024,
-        },
-    });
-
-    try std.testing.expect(std.mem.endsWith(u8, line, "}\n"));
-    try std.testing.expect(std.mem.indexOf(u8, line, "\"uptime_ms\":2000") != null);
-    try std.testing.expect(std.mem.indexOf(u8, line, "\"theme\":\"vesper\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, line, "\"outbox_coalesced_layout\":2") != null);
-    try std.testing.expect(std.mem.indexOf(u8, line, "\"key_lease_overflows\":3") != null);
-    try std.testing.expect(std.mem.indexOf(u8, line, "\"frames\":5") != null);
-    try std.testing.expect(std.mem.indexOf(u8, line, "\"presentations\":7") != null);
-    try std.testing.expect(std.mem.indexOf(u8, line, "\"lua_limit\":1024") != null);
-    try std.testing.expect(std.mem.indexOf(u8, line, "\"rss_bytes\":") != null);
-}

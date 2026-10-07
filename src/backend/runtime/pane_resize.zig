@@ -5,7 +5,6 @@ const pane_graphics = @import("pane_graphics.zig");
 const pane_observation = @import("pane_observation.zig");
 const core = @import("telar-core");
 const RuntimeModel = @import("RuntimeModel.zig");
-const pane_closure = @import("pane_closure.zig");
 const Session = @import("client/Session.zig");
 const geometry_lease = @import("geometry_lease.zig");
 const pane_attachment = @import("pane_attachment.zig");

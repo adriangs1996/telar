@@ -11,6 +11,7 @@ pub const max_cells = 3;
 pub const Sides = [max_cells]u16;
 
 sides: Sides,
+// SAFETY: favicon_worker fills every size through resize.square before returning the image; slice exposes only each initialized square.
 pixels: [max_cells][@as(usize, max_side) * max_side * 4]u8 = undefined,
 
 /// The `side * side` RGBA bytes of one size.

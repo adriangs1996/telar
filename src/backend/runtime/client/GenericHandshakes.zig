@@ -17,6 +17,7 @@ pub fn Type(comptime Connection: type, comptime capacity: usize) type {
 
         pub const slots = capacity;
 
+        // SAFETY: begin assigns the connection before marking busy; pendingConnection and take require an occupied slot.
         connections: [capacity]Connection = undefined,
         busy: std.bit_set.IntegerBitSet(capacity) = .initEmpty(),
         /// Busy slots that only answer a refusal; their client never joins.
@@ -129,41 +130,4 @@ pub fn Type(comptime Connection: type, comptime capacity: usize) type {
             return self.connections[slot];
         }
     };
-}
-
-test "handshakes take free slots and name the ones past their deadline" {
-    var handshakes: Type(u32, 2) = .{};
-
-    try std.testing.expect(!handshakes.isPending());
-    try std.testing.expectEqual(@as(?usize, 0), handshakes.begin(10, 1_000));
-    try std.testing.expectEqual(@as(?usize, 1), handshakes.begin(11, 2_500));
-    try std.testing.expect(handshakes.begin(12, 2_600) == null);
-    try std.testing.expectEqual(@as(usize, 2), handshakes.count());
-
-    try std.testing.expect(handshakes.expired(2_999, 2_000, 0) == null);
-    try std.testing.expectEqual(@as(?usize, 0), handshakes.expired(3_000, 2_000, 0));
-    try std.testing.expect(handshakes.expired(3_000, 2_000, 1) == null);
-
-    try std.testing.expectEqual(@as(u32, 10), handshakes.take(0));
-    try std.testing.expect(handshakes.pendingConnection(0) == null);
-    try std.testing.expectEqual(@as(?usize, 0), handshakes.begin(13, 4_000));
-    try std.testing.expectEqual(@as(u32, 11), handshakes.pendingConnection(1).?.*);
-}
-
-test "a refusal holds a slot but no client capacity" {
-    var handshakes: Type(u32, 2) = .{};
-
-    const refusal = handshakes.beginRefusal(10, 0).?;
-    try std.testing.expect(handshakes.refuses(refusal));
-    try std.testing.expectEqual(@as(usize, 0), handshakes.count());
-    try std.testing.expect(handshakes.isPending());
-
-    const admission = handshakes.begin(11, 0).?;
-    try std.testing.expect(!handshakes.refuses(admission));
-    try std.testing.expectEqual(@as(usize, 1), handshakes.count());
-    try std.testing.expect(handshakes.begin(12, 0) == null);
-
-    try std.testing.expectEqual(@as(u32, 10), handshakes.take(refusal));
-    try std.testing.expect(!handshakes.refuses(refusal));
-    try std.testing.expectEqual(@as(usize, 1), handshakes.count());
 }

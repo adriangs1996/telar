@@ -5,8 +5,6 @@ const Launch = @import("../Launch.zig");
 /// Opens the default pane in the workspace implied by `launch.cwd`, creating
 /// it when none exists, or attaches to a specific existing pane. This makes
 /// attach-or-create atomic.
-const OpenPane = @This();
-
 request_id: id.RequestId,
 target: types.PaneTarget = .default,
 size: TerminalSize,
