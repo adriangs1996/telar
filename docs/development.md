@@ -70,6 +70,8 @@ It is different from the headless client (`zig build headless`).
 
 Read the [Zig source layout](zig-source-layout.md).
 [Build navigation](../build/README.md) maps build targets to their definitions.
+The planned [Go proxy service migration](proxy-service.md) defines component
+ownership, the first IPC delivery and the native adapter validation gates.
 
 Check the tree before you commit:
 

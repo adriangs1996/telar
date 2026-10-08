@@ -42,6 +42,20 @@ run *args:
     mkdir -p -m 700 "{{ dev_runtime_dir }}"
     TELAR_SOCKET="{{ dev_runtime_dir }}/runtime.sock" TELAR_HISTORY="{{ dev_runtime_dir }}/history.db" zig build run -- {{ args }}
 
+# Run the Go proxy service. Extra arguments are passed to the service.
+[working-directory: "services/proxy"]
+proxy *args:
+    go run ./cmd/telar-proxy {{ args }}
+
+# Test the Go proxy module. Extra arguments are passed to `go test`.
+[working-directory: "services/proxy"]
+proxy-test *args:
+    go test {{ args }} ./...
+
+# Validate Linux TUN forwarding and NAT in an isolated Docker network.
+proxy-test-linux:
+    python3 services/proxy/tests/linux/run.py
+
 # Format the project Zig sources.
 fmt:
     zig fmt build.zig build.zig.zon src examples benchmarks linters

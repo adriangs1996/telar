@@ -154,9 +154,20 @@ The lifecycle of a pane whose launch has not settled. A pane is `starting`,
 A history record for a child process that was spawned but whose pane launch did
 not complete. It is distinct from a normal pane session.
 
+**Proxy service**:
+The Telar component that owns proxy traffic and inspection on one machine,
+independently of terminal sessions and open client windows.
+_Avoid_: Runtime proxy, Separate proxy application
+
+**Proxy activation**:
+The user's choice to route application connections through Telar's proxy on
+one machine. Activation is distinct from the service being available and from
+trusting its certificate authority.
+_Avoid_: Service running, System trust
+
 **Proxy secret**:
-The one capability that authorizes a child of the runtime to use Telar's
-proxy. It lives in the proxy directory, survives runtime restarts and rotates
+The capability that authorizes an explicit client to use Telar's CONNECT
+proxy. It lives in the proxy directory, survives proxy restarts and rotates
 only when its file is deleted.
 _Avoid_: Proxy credential, proxy token, proxy authentication
 
