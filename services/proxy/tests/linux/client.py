@@ -1,18 +1,25 @@
 import http.client
 from contextlib import closing
+from concurrent.futures import ThreadPoolExecutor
 import json
 import signal
 import socket
+import ssl
+import struct
 import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
+from ipv6_extensions import exercise_ipv6_extensions
 
 TUN_INTERFACE = "teltun1"
 TUN_ADDRESS = "192.0.2.1"
 HTTP_PORT = 8080
+HTTPS_PORT = 8443
 UDP_PORT = 5353
+TCP_STREAM_PORT = 9090
+TCP_PENDING_SOURCE_PORT = 45873
 TEST_TIMEOUT = 10
 SENTINEL_TABLE = "telar_test_sentinel"
 
@@ -34,6 +41,115 @@ def http_request(destination):
         response = connection.getresponse()
         assert response.status == 200
         return json.loads(response.read())
+
+
+def tls_request(destination, hostname, inspected=True):
+    authority = "inspection" if inspected else "origin"
+    context = ssl.create_default_context(cafile=f"/tests/tls-fixtures/{authority}-ca.pem")
+    context.set_alpn_protocols(["h2", "http/1.1"])
+    with socket.create_connection((destination, HTTPS_PORT), timeout=TEST_TIMEOUT) as raw:
+        with context.wrap_socket(raw, server_hostname=hostname) as secured:
+            assert secured.selected_alpn_protocol() == "http/1.1"
+            original = ssl.PEM_cert_to_DER_cert(Path("/tests/tls-fixtures/server.pem").read_text())
+            assert (secured.getpeercert(binary_form=True) != original) == inspected
+            with closing(http.client.HTTPConnection(destination, HTTPS_PORT, timeout=TEST_TIMEOUT)) as connection:
+                connection.sock = secured
+                connection.request("GET", "/", headers={"Host": hostname})
+                response = connection.getresponse()
+                assert response.status == 200
+                return json.loads(response.read())
+
+
+def exercise_tls(destinations, sources):
+    with tempfile.TemporaryDirectory(prefix="telar-proxy-tls-") as scratch:
+        log = Path(scratch) / "proxy.log"
+        for scope in ("proxy.test", "*"):
+            with log.open("w") as stream:
+                proxy = subprocess.Popen([
+                    "telar-proxy", "-all", "-inspect-host", scope,
+                    "-tls-ca-cert", "/tests/tls-fixtures/inspection-ca.pem",
+                    "-tls-ca-key", "/tests/tls-fixtures/inspection-key.pem",
+                    "-tls-upstream-ca", "/tests/tls-fixtures/origin-ca.pem",
+                ], stdout=stream, stderr=stream)
+                try:
+                    wait_ready(proxy, log)
+                    for destination, source in zip(destinations, sources):
+                        assert tls_request(destination, "proxy.test") == {"peer": source, "payload": "tcp-ok"}
+                        assert tls_request(destination, "bypass.test", inspected=scope == "*") == {"peer": source, "payload": "tcp-ok"}
+                        if scope == "*":
+                            assert tls_request(destination, destination) == {"peer": source, "payload": "tcp-ok"}
+                        assert http_request(destination) == {"peer": source, "payload": "tcp-ok"}
+                    assert 'Inspecting TLS host=proxy.test protocol="http/1.1"' in log.read_text()
+                    proxy.terminate()
+                    assert proxy.wait(timeout=TEST_TIMEOUT) == 0, log.read_text()
+                    for family in ("ip", "ip6"):
+                        assert command("nft", "list", "table", family, f"telar_proxy_{proxy.pid}", check=False).returncode != 0
+                    assert command("ip", "link", "show", TUN_INTERFACE, check=False).returncode != 0
+                    print(f"TLS scope {scope}: IPv4/IPv6 HTTPS, verified certificates, ALPN, passthrough, plain HTTP and cleanup passed", flush=True)
+                finally:
+                    if proxy.poll() is None:
+                        proxy.terminate()
+                        proxy.wait(timeout=TEST_TIMEOUT)
+                    print(log.read_text(), flush=True)
+
+
+def exercise_tcp_stream(destination, source):
+    payload = b"tcp-stream-data-" * 131072
+    with socket.create_connection((destination, TCP_STREAM_PORT), timeout=TEST_TIMEOUT) as connection:
+        assert connection.getsockname()[0] == (TUN_ADDRESS6 if ":" in destination else TUN_ADDRESS)
+        connection.sendall(payload)
+        connection.shutdown(socket.SHUT_WR)
+        with connection.makefile("rb") as response:
+            metadata = json.loads(response.readline())
+            assert metadata == {"peer": source, "size": len(payload)}, metadata
+            assert response.read() == payload[::-1], "TCP relay changed stream bytes or truncated the response after FIN"
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        replies = list(pool.map(http_request, [destination] * 4))
+    assert all(reply == {"peer": source, "payload": "tcp-ok"} for reply in replies)
+    try:
+        with socket.create_connection((destination, TCP_STREAM_PORT + 1), timeout=TEST_TIMEOUT):
+            raise AssertionError("closed origin port unexpectedly accepted a connection")
+    except ConnectionRefusedError:
+        pass
+    print(f"{destination}: TCP 2 MiB each way, half-close, concurrent connections and refused origin passed", flush=True)
+
+
+def assert_tcp_handler(log, destination):
+    target = f"[{destination}]" if ":" in destination else destination
+    assert f"to {target}:{HTTP_PORT} through " in log.read_text(), "TCP traffic did not use the socket relay"
+
+
+def pending_tcp_handshake(destination, table):
+    # Send a SYN without a kernel TCP socket. Suppress its automatic RST so
+    # netstack stays in SYN-RCVD until service shutdown aborts the handshake.
+    rules = f'''create table ip {table}
+add chain ip {table} output {{ type filter hook output priority filter; policy accept; }}
+add rule ip {table} output oifname "{TUN_INTERFACE}" ip saddr {TUN_ADDRESS} ip daddr {destination} tcp sport {TCP_PENDING_SOURCE_PORT} tcp flags & rst == rst drop
+'''
+    subprocess.run(["nft", "-f", "-"], input=rules, text=True, check=True)
+    header = struct.pack("!HHIIBBHHH", TCP_PENDING_SOURCE_PORT, TCP_STREAM_PORT, 12345, 0, 5 << 4, 2, 65535, 0, 0)
+    pseudo = socket.inet_aton(TUN_ADDRESS) + socket.inet_aton(destination) + struct.pack("!BBH", 0, socket.IPPROTO_TCP, len(header))
+    checksum = sum(struct.unpack("!16H", pseudo + header))
+    while checksum >> 16:
+        checksum = (checksum & 65535) + (checksum >> 16)
+    header = header[:16] + struct.pack("!H", (~checksum) & 65535) + header[18:]
+    connection = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
+    try:
+        connection.bind((TUN_ADDRESS, 0))
+        connection.settimeout(TEST_TIMEOUT)
+        connection.sendto(header, (destination, TCP_STREAM_PORT))
+        deadline = time.monotonic() + TEST_TIMEOUT
+        while time.monotonic() < deadline:
+            packet, peer = connection.recvfrom(4096)
+            offset = (packet[0] & 15) * 4
+            if peer[0] == destination and packet[offset + 13] & 18 == 18:
+                print("Pending TCP handshake: received SYN-ACK without completing it", flush=True)
+                return connection
+        raise AssertionError("no SYN-ACK for the pending TCP handshake")
+    except BaseException:
+        connection.close()
+        command("nft", "delete", "table", "ip", table, check=False)
+        raise
 
 
 def wait_ready(proxy, log):
@@ -78,7 +194,8 @@ def exercise_forwarding(destination, outbound_address):
 
     reply = http_request(destination)
     assert reply == {"peer": outbound_address, "payload": "tcp-ok"}, reply
-    print(f"{destination}: TCP response with translated source", flush=True)
+    exercise_tcp_stream(destination, outbound_address)
+    print(f"{destination}: TCP response through the socket relay", flush=True)
 
 
 def exercise(destination):
@@ -105,6 +222,12 @@ def exercise(destination):
                 try:
                     wait_ready(proxy, log)
                     exercise_forwarding(destination, outbound_address)
+                    assert_tcp_handler(log, destination)
+
+                    # Keep a connection idle while the service shuts down.
+                    idle = socket.create_connection((destination, TCP_STREAM_PORT), timeout=TEST_TIMEOUT)
+                    pending_table = f"telar_test_handshake_{proxy.pid}"
+                    pending = pending_tcp_handshake(destination, pending_table)
 
                     rules = json.loads(command("nft", "-j", "list", "table", "ip", table).stdout)
                     nat_packets = sum(
@@ -114,11 +237,16 @@ def exercise(destination):
                         for expression in item["rule"]["expr"]
                         if "counter" in expression
                     )
-                    assert nat_packets >= 3, rules
+                    # ICMP and UDP still use NAT; TCP now uses a separate socket.
+                    assert nat_packets >= 2, rules
                     assert "protocol=ICMP source=192.0.2.1" in log.read_text()
 
                     proxy.send_signal(stop_signal)
                     assert proxy.wait(timeout=TEST_TIMEOUT) == 0, log.read_text()
+                    idle.close()
+                    pending.close()
+                    command("nft", "delete", "table", "ip", pending_table)
+                    print("Shutdown joined both an idle TCP relay and an incomplete handshake", flush=True)
                     check_cleanup(destination, original_route, sentinel, table)
                     preserved = command("conntrack", "-L", "-p", "udp", "-s", outbound_address,
                                         "-d", destination, "--sport", direct_port)
@@ -181,6 +309,7 @@ def exercise_all(gateway, destinations):
                 wait_ready(proxy, log)
                 for destination in destinations:
                     exercise_forwarding(destination, source)
+                    assert_tcp_handler(log, destination)
                     assert f"source={TUN_ADDRESS} destination={destination}" in log.read_text()
 
                 # An explicitly bound physical interface intentionally bypasses capture.
@@ -275,7 +404,8 @@ def exercise_forwarding6(destination, source, interface=None):
             fragmented.send(payload.encode())
             assert json.loads(fragmented.recv(8192)) == {"peer": source, "payload": payload}
         assert http_request(destination) == {"peer": source, "payload": "tcp-ok"}
-        print(f"{destination}: IPv6 ICMP 3/3, UDP and TCP through TUN with NAT66", flush=True)
+        exercise_tcp_stream(destination, source)
+        print(f"{destination}: IPv6 ICMP 3/3 and UDP with NAT66; TCP through the socket relay", flush=True)
 
 
 def exercise_ipv6(gateway4, gateway6, destinations):
@@ -299,11 +429,15 @@ def exercise_ipv6(gateway4, gateway6, destinations):
                     wait_ready(proxy, log)
                     for destination in targets:
                         exercise_forwarding6(destination, source)
+                        assert_tcp_handler(log, destination)
                         exercise_forwarding6(destination, source, interface)
                     if args[0] == "-all":
                         assert "IPv4 capture active:" in log.read_text()
                         assert "IPv6 capture active:" in log.read_text()
                         exercise_forwarding("100.64.1.10", get_route(gateway4)["prefsrc"])
+                        exercise_ipv6_extensions(targets[0], TUN_ADDRESS6, source)
+                        assert f"Relaying TCP [{TUN_ADDRESS6}]:45874" in log.read_text()
+                        assert f"Relaying TCP [{TUN_ADDRESS6}]:45875" in log.read_text()
                     assert get_route6(gateway6)["dev"] == interface
                     proxy.send_signal(signal.SIGINT)
                     assert proxy.wait(timeout=TEST_TIMEOUT) == 0, log.read_text()
@@ -399,3 +533,4 @@ def exercise_ipv6(gateway4, gateway6, destinations):
 exercise(sys.argv[1])
 exercise_all(sys.argv[1], sys.argv[3:5])
 exercise_ipv6(sys.argv[1], sys.argv[2], sys.argv[5:])
+exercise_tls([sys.argv[4], sys.argv[5]], [get_route(sys.argv[1])["prefsrc"], get_route6(sys.argv[2])["prefsrc"]])

@@ -20,7 +20,8 @@ import (
 const tunnelMTU = 1500
 
 const (
-	packetOffset     = 4
+	// Linux's TUN writer needs a 10-byte virtio header; macOS uses the last four.
+	packetOffset     = 10
 	packetBufferSize = 65535
 )
 
@@ -85,7 +86,16 @@ func toIPString(address []byte) string {
 	)
 }
 
-func readPackets(device tun.Device, sender *ipv4.RawConn, sender6 ipv6Sender, localAddress, localAddress6 netip.Addr) error {
+type packetRelay struct {
+	sender        *ipv4.RawConn
+	sender6       ipv6Sender
+	localAddress  netip.Addr
+	localAddress6 netip.Addr
+	tcp           *TcpAdapter
+	fragments     ipv6FragmentDispatcher
+}
+
+func readPackets(device tun.Device, relay *packetRelay) error {
 	buffers := make([][]byte, device.BatchSize())
 	sizes := make([]int, len(buffers))
 
@@ -127,7 +137,6 @@ func readPackets(device tun.Device, sender *ipv4.RawConn, sender6 ipv6Sender, lo
 
 				source = packet[sourceOffset : sourceOffset+4]
 				destination = packet[destinationOffset : destinationOffset+4]
-				protocol = packet[protocolOffset]
 			case 6:
 				if len(packet) < ipv6.HeaderLen {
 					log.Printf("Dropping truncated IPv6 packet: %d bytes", len(packet))
@@ -136,8 +145,14 @@ func readPackets(device tun.Device, sender *ipv4.RawConn, sender6 ipv6Sender, lo
 
 				source = packet[sourceIPv6Offset : sourceIPv6Offset+16]
 				destination = packet[destinationIPv6Offset : destinationIPv6Offset+16]
-				protocol = packet[protocolIPv6Offset]
 			}
+
+			info, err := packetProtocol(packet)
+			if err != nil {
+				log.Printf("Dropping IPv%d packet: %v", version, err)
+				continue
+			}
+			protocol = info.protocol
 
 			log.Printf(
 				"Received IPv%d packet: %d bytes protocol=%s source=%s destination=%s ",
@@ -150,7 +165,7 @@ func readPackets(device tun.Device, sender *ipv4.RawConn, sender6 ipv6Sender, lo
 
 			destinationAddress, _ := netip.AddrFromSlice(destination)
 			frame := buffers[i][:packetOffset+sizes[i]]
-			if destinationAddress == localAddress || destinationAddress == localAddress6 {
+			if destinationAddress == relay.localAddress || destinationAddress == relay.localAddress6 {
 				// PF has already undone NAT and routed the response into the TUN.
 				// Inject it as received on the interface owning the temporary address.
 				if err := writeTunnelPacket(device, frame); err != nil {
@@ -166,12 +181,7 @@ func readPackets(device tun.Device, sender *ipv4.RawConn, sender6 ipv6Sender, lo
 				continue
 			}
 
-			var forwardErr error
-			if version == ipv4.Version && sender != nil {
-				forwardErr = forwardIPv4(sender, packet)
-			} else if version == ipv6.Version {
-				forwardErr = forwardIPv6(sender6, frame)
-			}
+			forwardErr := relay.fragments.dispatch(info, frame, relay.forwardProtocol)
 			if forwardErr != nil {
 				log.Printf("Forwarding IPv%d: %v", version, forwardErr)
 			}
@@ -180,7 +190,23 @@ func readPackets(device tun.Device, sender *ipv4.RawConn, sender6 ipv6Sender, lo
 	}
 }
 
-func run(ctx context.Context, config networkConfig) (resultErr error) {
+func (self *packetRelay) forwardProtocol(frame []byte, protocol byte) error {
+	packet := frame[packetOffset:]
+	if protocol == TCP && self.tcp != nil {
+		self.tcp.Inject(packet)
+		return nil
+	}
+	if packet[0]>>ipv4VersionShift == ipv4.Version && self.sender != nil {
+		return forwardIPv4(self.sender, packet)
+	}
+	if packet[0]>>ipv4VersionShift == ipv6.Version {
+		return forwardIPv6(self.sender6, frame)
+	}
+
+	return nil
+}
+
+func run(ctx context.Context, config networkConfig, inspector *TLSInspector) (resultErr error) {
 	configs, err := discoverNetworkConfigs(config)
 	if err != nil {
 		return err
@@ -239,6 +265,27 @@ func run(ctx context.Context, config networkConfig) (resultErr error) {
 		log.Printf("Opened outbound IPv%s sender on %s, source %s", configs[i].family(), configs[i].outboundInterface, configs[i].sourceAddress)
 	}
 
+	handler := &TcpHandler{tls: inspector}
+	for _, candidate := range configs {
+		if candidate.localAddress.Is4() {
+			handler.interface4 = candidate.outboundInterface
+		} else {
+			handler.interface6 = candidate.outboundInterface
+		}
+	}
+	adapter, err := NewTCPAdapter(ctx, handler)
+	if err != nil {
+		return fmt.Errorf("creating TCP adapter: %w", err)
+	}
+	defer adapter.Close()
+	relay := &packetRelay{
+		sender:        sender,
+		sender6:       sender6,
+		localAddress:  localAddress,
+		localAddress6: localAddress6,
+		tcp:           adapter,
+	}
+
 	// Each family owns its addresses, firewall state and routes. If the second
 	// activation fails, unwind both without publishing partial capture as active.
 	changes := make([]networkChange, len(configs))
@@ -275,21 +322,43 @@ func run(ctx context.Context, config networkConfig) (resultErr error) {
 	log.Printf("Capture ready")
 
 	readDone := make(chan error, 1)
+	writeDone := make(chan error, 1)
 	go func() {
-		readDone <- readPackets(device, sender, sender6, localAddress, localAddress6)
+		readDone <- readPackets(device, relay)
+	}()
+	go func() {
+		writeDone <- adapter.WriteReplies(device)
 	}()
 
+	var workerErr error
+	readFinished, writeFinished := false, false
 	select {
 	case <-ctx.Done():
-		// Withdraw capture before closing the TUN that unblocks the reader.
-		cleanupCalled = true
-		cleanupErr := cleanup()
-		closeErr := device.Close()
-		<-readDone
-		return errors.Join(cleanupErr, closeErr)
 	case err := <-readDone:
-		return fmt.Errorf("reading TUN: %w", err)
+		readFinished = true
+		workerErr = fmt.Errorf("reading TUN: %w", err)
+	case err := <-writeDone:
+		writeFinished = true
+		workerErr = err
 	}
+
+	// Withdraw capture before closing the TUN, then join both packet workers
+	// and the TCP callbacks before releasing the remaining network resources.
+	cleanupCalled = true
+	cleanupErr := cleanup()
+	closeErr := device.Close()
+	adapter.Close()
+	if !readFinished {
+		<-readDone
+	}
+	if !writeFinished {
+		<-writeDone
+	}
+	if ctx.Err() != nil {
+		workerErr = nil
+	}
+
+	return errors.Join(workerErr, cleanupErr, closeErr)
 }
 
 func main() {
@@ -302,7 +371,23 @@ func main() {
 	peerAddress := flag.String("tun-peer", "192.0.2.2", "peer IPv4 address for the test TUN")
 	localAddress6 := flag.String("tun-address6", defaultTunnelIPv6, "local IPv6 address for the TUN")
 	peerAddress6 := flag.String("tun-peer6", defaultPeerIPv6, "peer IPv6 address for the TUN")
+	var tlsConfig tlsOptions
+	flag.Func("inspect-host", "TLS inspection hostname, *.suffix or *; may be repeated", func(host string) error {
+		if len(tlsConfig.hosts) == tlsMaxHostRules {
+			return fmt.Errorf("at most %d TLS host rules are supported", tlsMaxHostRules)
+		}
+		tlsConfig.hosts = append(tlsConfig.hosts, host)
+		return nil
+	})
+	flag.StringVar(&tlsConfig.certificate, "tls-ca-cert", "", "existing TLS inspection CA certificate in PEM format")
+	flag.StringVar(&tlsConfig.key, "tls-ca-key", "", "existing TLS inspection CA private key in PEM format; mode 0600 or stricter")
+	flag.StringVar(&tlsConfig.upstreamBundle, "tls-upstream-ca", "", "optional additional trusted origin certificates in PEM format")
 	flag.Parse()
+	inspector, err := loadTLSInspector(tlsConfig)
+	if err != nil {
+		log.Print(err)
+		os.Exit(1)
+	}
 
 	local4, localErr := netip.ParseAddr(*localAddress)
 	peer4, peerErr := netip.ParseAddr(*peerAddress)
@@ -337,7 +422,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if err := run(ctx, config); err != nil {
+	if err := run(ctx, config, inspector); err != nil {
 		log.Print(err)
 		os.Exit(1)
 	}

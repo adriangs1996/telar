@@ -52,7 +52,7 @@ func TestIPv6ForwardingPreservesExtensionHeaders(t *testing.T) {
 func TestIPv6ReplyIsInjectedUnchanged(t *testing.T) {
 	local := netip.MustParseAddr(defaultTunnelIPv6)
 	device := &replyTestDevice{packet: ipv6Packet(local)}
-	err := readPackets(device, nil, nil, netip.Addr{}, local)
+	err := readPackets(device, &packetRelay{localAddress6: local})
 	if !errors.Is(err, io.EOF) || !bytes.Equal(device.packet, device.written) || device.writeCount != 1 {
 		t.Fatalf("modified reply: %x, writes = %d, error = %v", device.written, device.writeCount, err)
 	}

@@ -6,4 +6,5 @@ RUN apt-get update \
 
 COPY telar-proxy /usr/local/bin/telar-proxy
 COPY network-tests /tests/network-tests
-COPY server.py client.py /tests/
+COPY server.py client.py ipv6_extensions.py /tests/
+COPY tls-fixtures /tests/tls-fixtures

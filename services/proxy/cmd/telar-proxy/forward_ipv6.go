@@ -47,7 +47,7 @@ func writeTunnelPacket(device packetWriter, frame []byte) error {
 		return err
 	}
 
-	if written != len(buffers) {
+	if !tunnelWriteComplete(written, frame) {
 		return io.ErrShortWrite
 	}
 

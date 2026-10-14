@@ -32,7 +32,8 @@ def main():
         environment = dict(os.environ, GOOS="linux", GOARCH=architecture, CGO_ENABLED="0")
         command("go", "build", "-o", str(context / "telar-proxy"), "./cmd/telar-proxy", cwd=module, env=environment)
         command("go", "test", "-c", "-o", str(context / "network-tests"), "./cmd/telar-proxy", cwd=module, env=environment)
-        for file in ("Dockerfile", "server.py", "client.py"):
+        command("go", "run", "./tests/linux/tls_fixture.go", str(context / "tls-fixtures"), cwd=module)
+        for file in ("Dockerfile", "server.py", "client.py", "ipv6_extensions.py"):
             shutil.copyfile(tests / file, context / file)
         command("docker", "build", "--quiet", "-t", image, str(context))
 

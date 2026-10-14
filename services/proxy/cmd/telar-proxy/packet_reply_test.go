@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/netip"
+	"runtime"
 	"testing"
 
 	"golang.org/x/net/ipv4"
@@ -46,6 +47,10 @@ func (self *replyTestDevice) Write(buffers [][]byte, offset int) (int, error) {
 		return 0, nil
 	}
 
+	if runtime.GOOS == "linux" {
+		return len(buffers[0]), nil
+	}
+
 	return len(buffers), nil
 }
 
@@ -67,7 +72,7 @@ func TestRepliesAreInjectedUnchangedWithoutOutboundSender(t *testing.T) {
 	localAddress := netip.MustParseAddr("192.0.2.1")
 	for _, protocol := range []byte{ICMP, TCP} {
 		device := &replyTestDevice{packet: ipv4ReplyPacket(protocol, localAddress)}
-		err := readPackets(device, nil, nil, localAddress, netip.Addr{})
+		err := readPackets(device, &packetRelay{localAddress: localAddress})
 		if !errors.Is(err, io.EOF) {
 			t.Fatalf("reading packet: %v", err)
 		}
@@ -82,12 +87,12 @@ func TestReplyInjectionReportsWriteFailures(t *testing.T) {
 	localAddress := netip.MustParseAddr("192.0.2.1")
 	wantErr := errors.New("TUN write failed")
 	device := &replyTestDevice{packet: ipv4ReplyPacket(ICMP, localAddress), writeError: wantErr}
-	if err := readPackets(device, nil, nil, localAddress, netip.Addr{}); !errors.Is(err, wantErr) {
+	if err := readPackets(device, &packetRelay{localAddress: localAddress}); !errors.Is(err, wantErr) {
 		t.Fatalf("error = %v, want %v", err, wantErr)
 	}
 
 	device = &replyTestDevice{packet: ipv4ReplyPacket(ICMP, localAddress), shortWrite: true}
-	if err := readPackets(device, nil, nil, localAddress, netip.Addr{}); !errors.Is(err, io.ErrShortWrite) {
+	if err := readPackets(device, &packetRelay{localAddress: localAddress}); !errors.Is(err, io.ErrShortWrite) {
 		t.Fatalf("error = %v, want %v", err, io.ErrShortWrite)
 	}
 }
