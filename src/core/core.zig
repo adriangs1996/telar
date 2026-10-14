@@ -156,6 +156,7 @@ pub const PaneTextSource = types.PaneTextSource;
 pub const PaneTitle = @import("schema/messages/PaneTitle.zig");
 pub const Path = diagnostics.Path;
 pub const Placement = @import("Placement.zig");
+pub const PlacementLocation = @import("PlacementLocation.zig").PlacementLocation;
 pub const PluginManifest = @import("PluginManifest.zig");
 pub const PointerShape = frame_support.PointerShape;
 pub const ProxyScope = types.ProxyScope;

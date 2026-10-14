@@ -38,7 +38,9 @@ const InkTarget = @import("InkTarget.zig");
 const Quad = gfx.Quad.Quad;
 const kitty_protocol = @import("kitty_protocol");
 const ImagePlacement = @import("../image/ImagePlacement.zig");
+const unicode_placeholder = kitty_protocol.unicode_placeholder;
 const ImageDraw = gfx.ImageDraw;
+const PlaceholderGrid = @import("../image/PlaceholderGrid.zig");
 
 allocator: std.mem.Allocator,
 /// Only a consumed completion permits another rasterization.
@@ -479,6 +481,7 @@ pub fn drawPane(self: *Renderer, paint: PanePaint) !void {
     }
 
     try self.pushImages(paint, images, .below_text);
+    try self.pushPlaceholders(paint, images);
     const cursor = self.paneCursor(paint);
     if (cursor) |visible| {
         if (visible.style == .block) {
@@ -542,46 +545,208 @@ fn pushImages(self: *Renderer, paint: PanePaint, images: []const ImagePlacement,
     const cell_width: f32 = @floatFromInt(self.metrics.cell_width);
     const cell_height: f32 = @floatFromInt(self.metrics.cell_height);
     for (images) |placement| {
-        if (placement.layer != layer or placement.handle == 0) {
+        if (placement.layer != layer or placement.handle == 0 or placement.grid != null) {
             continue;
-        }
-
-        if (self.image_draw_count == self.image_draws.len) {
-            return;
         }
 
         const column: f32 = @floatFromInt(placement.column);
         const row: f32 = @floatFromInt(placement.row + back);
-        const before = self.quads.items().len;
-        try self.quads.pushClipped(
+        if (!try self.pushImage(
             .{
                 .x = bounds.x + column * cell_width + @as(f32, @floatFromInt(placement.box.offset_x)),
                 .y = bounds.y + row * cell_height + @as(f32, @floatFromInt(placement.box.offset_y)),
                 .width = @floatFromInt(placement.box.width),
                 .height = @floatFromInt(placement.box.height),
-                .u0 = placement.uv[0],
-                .v0 = placement.uv[1],
-                .u1 = placement.uv[2],
-                .v1 = placement.uv[3],
-                .r = 1,
-                .g = 1,
-                .b = 1,
-                .a = 1,
-                .texture = gfx.Quad.image_texture,
             },
-            bounds,
-        );
+            placement.uv,
+            .{
+                .handle = placement.handle,
+                .bounds = bounds,
+            },
+        )) {
+            return;
+        }
+    }
+}
 
-        if (self.quads.items().len == before) {
+/// Draws the image fragments the pane's Kitty Unicode placeholder cells
+/// name, over cell backgrounds and under text. Cells are read where they
+/// are shown, so scrollback and redraws move the fragments with them; a
+/// pane without placeholder placements skips the scan.
+fn pushPlaceholders(self: *Renderer, paint: PanePaint, images: []const ImagePlacement) !void {
+    if (!hasPlaceholders(images)) {
+        return;
+    }
+
+    const pane = paint.pane;
+    const area = paint.view.content;
+    const rows: u16 = @min(area.h, pane.buffer.h);
+    const cols: u16 = @min(area.w, pane.buffer.w);
+    for (0..rows) |row| {
+        const cells = pane.buffer.cells[row * pane.buffer.w ..][0..cols];
+        var run: ?kitty_protocol.PlaceholderRun = null;
+        for (cells, 0..) |*cell, col| {
+            const parsed = placeholderCell(cell) orelse {
+                if (run) |ended| {
+                    try self.pushRun(paint, images, ended, @intCast(row));
+                }
+
+                run = null;
+                continue;
+            };
+            if (run) |*current| {
+                if (current.extend(parsed)) {
+                    continue;
+                }
+
+                try self.pushRun(paint, images, current.*, @intCast(row));
+            }
+
+            run = kitty_protocol.PlaceholderRun.start(parsed, @intCast(col));
+        }
+
+        if (run) |ended| {
+            try self.pushRun(paint, images, ended, @intCast(row));
+        }
+    }
+}
+
+/// Draws one run's fragment of the placement it names: the one with its
+/// placement id, or the image's first placeholder placement when the cells
+/// name none. A run whose image or texture is not here draws nothing.
+fn pushRun(self: *Renderer, paint: PanePaint, images: []const ImagePlacement, run: kitty_protocol.PlaceholderRun, row: u16) !void {
+    const placement = placeholderPlacement(images, run) orelse return;
+    const grid = placement.grid.?;
+    const fragment = unicode_placeholder.draw(.{
+        .image_width = grid.source_width,
+        .image_height = grid.source_height,
+        .grid_columns = grid.columns,
+        .grid_rows = grid.rows,
+        .run = run,
+        .cell_width = self.metrics.cell_width,
+        .cell_height = self.metrics.cell_height,
+    }) orelse return;
+    const bounds = self.cellRect(paint.view.content);
+    const cell_width: f32 = @floatFromInt(self.metrics.cell_width);
+    const cell_height: f32 = @floatFromInt(self.metrics.cell_height);
+    const column: f32 = @floatFromInt(run.x);
+    const top: f32 = @floatFromInt(row);
+    _ = try self.pushImage(
+        .{
+            .x = bounds.x + column * cell_width + @as(f32, @floatFromInt(fragment.box.offset_x)),
+            .y = bounds.y + top * cell_height + @as(f32, @floatFromInt(fragment.box.offset_y)),
+            .width = @floatFromInt(fragment.box.width),
+            .height = @floatFromInt(fragment.box.height),
+        },
+        fragmentUv(placement.uv, grid, fragment),
+        .{
+            .handle = placement.handle,
+            .bounds = bounds,
+        },
+    );
+}
+
+/// Appends one textured quad clipped to its pane and records its draw.
+/// False once the frame holds as many image draws as it can.
+fn pushImage(self: *Renderer, rect: Rect, uv: [4]f32, target: ImageTarget) !bool {
+    if (self.image_draw_count == self.image_draws.len) {
+        return false;
+    }
+
+    const before = self.quads.items().len;
+    try self.quads.pushClipped(
+        .{
+            .x = rect.x,
+            .y = rect.y,
+            .width = rect.width,
+            .height = rect.height,
+            .u0 = uv[0],
+            .v0 = uv[1],
+            .u1 = uv[2],
+            .v1 = uv[3],
+            .r = 1,
+            .g = 1,
+            .b = 1,
+            .a = 1,
+            .texture = gfx.Quad.image_texture,
+        },
+        target.bounds,
+    );
+
+    if (self.quads.items().len == before) {
+        return true;
+    }
+
+    self.image_draws[self.image_draw_count] = .{
+        .quad = @intCast(before),
+        .handle = target.handle,
+    };
+    self.image_draw_count += 1;
+    return true;
+}
+
+fn hasPlaceholders(images: []const ImagePlacement) bool {
+    for (images) |placement| {
+        if (placement.grid != null and placement.handle != 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// The placeholder placement a run names, if its texture is ready.
+fn placeholderPlacement(images: []const ImagePlacement, run: kitty_protocol.PlaceholderRun) ?ImagePlacement {
+    for (images) |placement| {
+        const grid = placement.grid orelse continue;
+        if (placement.image_id != run.image_id or placement.handle == 0) {
             continue;
         }
 
-        self.image_draws[self.image_draw_count] = .{
-            .quad = @intCast(before),
-            .handle = placement.handle,
-        };
-        self.image_draw_count += 1;
+        if (run.placement_id == 0 or grid.placement_id == run.placement_id) {
+            return placement;
+        }
     }
+
+    return null;
+}
+
+// A placeholder cell carries the low 24 bits of its image id in its
+// foreground color and its placement id in its underline color.
+fn placeholderCell(cell: *const cellgrid.Cell) ?kitty_protocol.PlaceholderCell {
+    const text = cell.text();
+    if (!unicode_placeholder.starts(text)) {
+        return null;
+    }
+
+    return unicode_placeholder.parseCell(text, colorId(cell.style.fg), colorId(cell.style.underline_color));
+}
+
+fn colorId(value: cellgrid.Color) u24 {
+    return switch (value.kind) {
+        .default => 0,
+        .indexed => value.index(),
+        .rgb => (@as(u24, value.value[0]) << 16) | (@as(u24, value.value[1]) << 8) | value.value[2],
+    };
+}
+
+// The texture coordinates of a fragment, interpolated inside the span the
+// placement's own coordinates give its whole source rectangle.
+fn fragmentUv(uv: [4]f32, grid: PlaceholderGrid, fragment: kitty_protocol.PlaceholderDraw) [4]f32 {
+    const width: f32 = @floatFromInt(grid.source_width);
+    const height: f32 = @floatFromInt(grid.source_height);
+    const left: f32 = @floatFromInt(fragment.source_x);
+    const top: f32 = @floatFromInt(fragment.source_y);
+    const right: f32 = @floatFromInt(fragment.source_x + fragment.source_width);
+    const bottom: f32 = @floatFromInt(fragment.source_y + fragment.source_height);
+    const span_u = uv[2] - uv[0];
+    const span_v = uv[3] - uv[1];
+    return .{
+        uv[0] + span_u * left / width,
+        uv[1] + span_v * top / height,
+        uv[0] + span_u * right / width,
+        uv[1] + span_v * bottom / height,
+    };
 }
 
 /// Appends retained ink clipped to its pane, recolored under a block cursor.
@@ -907,7 +1072,9 @@ inline fn paintCell(self: *Renderer, paint: CellPaint, glyphs: ?ShapedRun) !void
     var background_rect = rect;
     background_rect.width = @floatFromInt(self.metrics.cell_width);
     try list.pushRect(background_rect, background);
-    if (cell.width == 0 or cell.style.flags.invisible) {
+    // A Kitty Unicode placeholder is never a glyph: its run draws the image
+    // fragment it names, or nothing when that image is not here.
+    if (cell.width == 0 or cell.style.flags.invisible or kitty_protocol.unicode_placeholder.starts(cell.text())) {
         return;
     }
 
@@ -968,3 +1135,8 @@ pub fn batch(self: *const Renderer, token: u64) gfx.DrawBatch.DrawBatch {
         .image_draw_count = self.image_draw_count,
     };
 }
+
+const ImageTarget = struct {
+    handle: u32,
+    bounds: Rect,
+};

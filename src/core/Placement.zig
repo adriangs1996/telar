@@ -1,9 +1,12 @@
 const ImageKey = @import("ImageKey.zig");
 const Image = @import("Image.zig");
 const Rect = @import("Rect.zig");
+const PlacementLocation = @import("PlacementLocation.zig").PlacementLocation;
 const std = @import("std");
 /// A placement relative to a pane's cell grid. Source values are pixels in the
-/// decoded image; offsets are pixels inside the anchor cell.
+/// decoded image; offsets are pixels inside the anchor cell. A placeholder
+/// placement has no anchor: `x`, `y` and the offsets are zero and its
+/// columns and rows size the grid its placeholder cells cut the image into.
 const Placement = @This();
 
 key: ImageKey,
@@ -22,6 +25,7 @@ rows: u32 = 0,
 offset_x: u32 = 0,
 offset_y: u32 = 0,
 z_index: i32 = 0,
+location: PlacementLocation = .cell,
 
 pub fn sourceRect(self: Placement, image: Image) !Rect {
     if (self.virtual_id == 0) {

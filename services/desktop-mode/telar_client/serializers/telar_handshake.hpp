@@ -19,7 +19,7 @@ namespace telar {
 
     // Matches the single current schema in src/core/schema/handshake.zig.
     inline constexpr SchemaId schema_id{
-        '8', '6', '6', 'b', '4', '8', '0', 'd',
+        '8', '7', '6', 'b', '4', '8', '0', 'd',
     };
 
   } // namespace handshake

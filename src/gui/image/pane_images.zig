@@ -226,6 +226,11 @@ fn resolve(images: *PaneImages, store: *Store, view: ImageView) void {
         };
         const image = store.images.getPtr(identity) orelse continue;
         const source = placement.sourceRect(image.metadata) catch continue;
+        if (placement.location == .placeholders) {
+            keepPlaceholders(images, pane_id, placement, source);
+            continue;
+        }
+
         const box = kitty_protocol.displayBox(.{
             .source_width = @intCast(source.width),
             .source_height = @intCast(source.height),
@@ -275,6 +280,42 @@ fn resolve(images: *PaneImages, store: *Store, view: ImageView) void {
 
     std.mem.sort(ImagePlacement, images.placements[0..images.placement_count], {}, ImagePlacement.lessThan);
     markStandIns(images);
+}
+
+// Keeps a placeholder placement so its image gets a texture; the renderer
+// finds the cells that draw it. Its fragments paint over cell backgrounds
+// and under text, as Ghostty draws them.
+fn keepPlaceholders(images: *PaneImages, pane_id: core.PaneId, placement: core.Placement, source: core.RectRect) void {
+    keep(
+        images,
+        .{
+            .pane_id = pane_id,
+            .layer = .below_text,
+            .z_index = placement.z_index,
+            .image_id = placement.key.image_id,
+            .generation = placement.key.generation,
+            .virtual_id = placement.virtual_id,
+            .handle = 0,
+            .column = 0,
+            .row = 0,
+            .box = .{
+                .offset_x = 0,
+                .offset_y = 0,
+                .width = 0,
+                .height = 0,
+            },
+            .uv = @splat(0),
+            .grid = .{
+                .placement_id = placement.placement_id,
+                .columns = placement.columns,
+                .rows = placement.rows,
+                // A validated image's sides fit its u32 dimensions.
+                .source_width = @intCast(source.width),
+                .source_height = @intCast(source.height),
+            },
+        },
+        source,
+    );
 }
 
 // Keeps a visible placement. A full list keeps the placements painted

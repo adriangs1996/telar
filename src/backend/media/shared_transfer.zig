@@ -181,22 +181,46 @@ fn decodeChildPath(encoded_path: []const u8, buffer: *[std.fs.max_path_bytes + 1
 /// absolute path, no symlink at the leaf, a regular file owned by this user,
 /// at least `byte_len` long. Returns the descriptor or null.
 fn openChildFile(encoded_path: []const u8, byte_len: usize) ?std.c.fd_t {
+    const file = openChildRegular(encoded_path) orelse return null;
+    if (file.size < byte_len) {
+        file.close();
+        return null;
+    }
+
+    return file.fd;
+}
+
+/// Opens a child-named regular file the runtime is willing to read: an
+/// absolute path, no symlink at the leaf, owned by this user. The open never
+/// blocks, so a FIFO or a device named by the child cannot stall the media
+/// actor before the type check refuses it.
+///
+/// ```zig
+/// const file = openChildRegular(encoded_path) orelse return false;
+/// defer file.close();
+/// ```
+pub fn openChildRegular(encoded_path: []const u8) ?ChildFile {
+    if (comptime !shm_supported) {
+        return null;
+    }
+
     var buffer: [std.fs.max_path_bytes + 1]u8 = undefined;
     const path = decodeChildPath(encoded_path, &buffer) orelse return null;
-    const fd = std.c.open(path, .{ .ACCMODE = .RDONLY, .NOFOLLOW = true, .CLOEXEC = true });
+    const fd = std.c.open(path, .{ .ACCMODE = .RDONLY, .NOFOLLOW = true, .CLOEXEC = true, .NONBLOCK = true });
     if (fd < 0) {
         return null;
     }
+
     const inode = Inode.fromDescriptor(fd) catch {
         _ = std.c.close(fd);
         return null;
     };
-
-    if (inode.kind() != .regular or inode.owner != std.c.getuid() or inode.size < byte_len) {
+    if (inode.kind() != .regular or inode.owner != std.c.getuid()) {
         _ = std.c.close(fd);
         return null;
     }
-    return fd;
+
+    return .{ .fd = fd, .size = inode.size };
 }
 
 /// Whether a child's file passes every check `mapChildFile` applies.
@@ -247,6 +271,16 @@ pub fn mapOwnObject(name: core.ShmName, byte_len: usize) ?[]align(std.heap.page_
     defer _ = std.c.close(fd);
     return std.posix.mmap(null, byte_len, .{ .READ = true }, std.c.MAP{ .TYPE = .SHARED }, fd, 0) catch null;
 }
+
+const ChildFile = struct {
+    /// A validated child file, open read-only until `close`.
+    fd: std.c.fd_t,
+    size: u64,
+
+    pub fn close(self: ChildFile) void {
+        _ = std.c.close(self.fd);
+    }
+};
 
 const ChildObject = struct {
     /// A child's shared object mapped read-only for one copy out of it.

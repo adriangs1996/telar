@@ -1,9 +1,12 @@
 //! One Kitty graphics placement resolved for drawing: its layer and paint
 //! order, the texture it samples and its box relative to its anchor cell.
 //! The anchor row is relative to the top of the pane's active screen; the
-//! renderer adds the pane's scroll and origin each frame.
+//! renderer adds the pane's scroll and origin each frame. A placeholder
+//! placement has no anchor or box: the renderer draws it wherever the
+//! pane's Unicode placeholder cells name it.
 const core = @import("telar-core");
 const kitty_protocol = @import("kitty_protocol");
+const PlaceholderGrid = @import("PlaceholderGrid.zig");
 const ImagePlacement = @This();
 
 pane_id: core.PaneId,
@@ -20,6 +23,8 @@ row: i32,
 box: kitty_protocol.DisplayBox,
 /// u0, v0, u1, v1 inside the texture.
 uv: [4]f32,
+/// Set for a placeholder placement; `column`, `row` and `box` are then unused.
+grid: ?PlaceholderGrid = null,
 
 /// Paint order: pane, then layer, then z-index, then image id, then the
 /// placement, so a lower image id draws below on equal z as the spec asks.

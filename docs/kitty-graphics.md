@@ -30,8 +30,12 @@ Both Chafa and kitten are external programs that can emit Kitty graphics.
 If no image appears, check the program's stderr, the file path and the protocol
 it emits. Telar supports a subset of Kitty graphics, not every terminal image
 protocol or Kitty feature. See [supported operations](#implemented-child-subset)
-and [limitations](#remaining-limitations). Unicode placeholder placements and
-animation are not a general compatibility promise.
+and [limitations](#remaining-limitations). Animation is not a general
+compatibility promise.
+
+Editors that draw images through Unicode placeholders, such as snacks.nvim
+pickers and inline images in Neovim, work too: they send the image from a
+local file (`t=f`) and place it with `U=1`.
 
 Image memory is bounded. To choose smaller runtime quotas, merge this field
 into your [config's root table](configuration.md#check-and-reload):
@@ -80,8 +84,10 @@ format values.
   any other shared command goes through the emulator, which copies the mapped
   bytes into quota-accounted storage. Either way the child's segment is
   unlinked after reading.
-- Regular file transmission (`t=f`) for complete frames and capability
-  queries, validated by the pane as described below.
+- Regular file transmission (`t=f`) for complete frames, complete transmits
+  and capability queries, validated by the pane as described below.
+- Unicode placeholders: virtual placements (`U=1`) and the U+10EEEE cells
+  that name them, as described below.
 - Zlib compression (`o=z`) with exact decompressed-length validation.
 - Transmit, transmit-and-display, put, query, and delete.
 - Child image IDs, placement IDs, runtime generations, and anonymous virtual
@@ -101,17 +107,44 @@ format values.
   pixels, as the window does, Telar preserves them relative to the pane.
   Otherwise it falls back to the measured center of the reported cell.
 
-Regular file media (`t=f`) is accepted for complete frames and for the
-`a=q` capability query, on the pane's validation rather than the emulator's:
-an absolute path with no symlink at the leaf, a regular file owned by the
-runtime's user, at least as long as the declared pixels, and within the screen
-cap. The file is mapped read-only for one copy and never written, kept open or
-deleted; anything else is answered `EBADF` or dropped as unavailable.
-Temporary file media (`t=t`) stays rejected. PNG uses the emulator's bounded
-loading path, including direct base64 chunks; the complete-file fast path
-still accepts only raw RGB/RGBA. Unicode virtual placements are not emitted
-because the pinned Ghostty VT does not
-expose them with enough information to preserve pane clipping and lifecycle.
+Regular file media (`t=f`) is accepted on the pane's validation rather than
+the emulator's, whose own file medium stays disabled: an absolute path with no
+symlink at the leaf, a regular file owned by the runtime's user, opened
+without blocking so a FIFO or device the child names cannot stall the media
+actor. The file is never written, kept open or deleted.
+
+- A complete terminal-browser frame is mapped read-only for one copy, at least
+  as long as its declared pixels and within the screen cap.
+- An `a=q` capability query is answered `OK` or `EBADF`.
+- Any other complete, unchunked transmit (`a=t`, `a=T` or no action) in any
+  format, PNG included, is replayed to the emulator as the chunked direct
+  upload the protocol defines (`t=d`, 4096 base64 bytes a chunk), honoring
+  `O` and `S` and bounded by the screen cap. The file streams through one
+  stack chunk at a time, so PNG decoding, quotas, display (`a=T`) and replies
+  stay on the emulator's bounded loading path. A command split across PTY
+  reads, or naming a file the pane refuses, reaches the emulator unchanged,
+  which refuses the medium.
+
+Temporary file media (`t=t`) stays rejected.
+
+### Unicode placeholders
+
+A virtual placement (`a=p,U=1`) has no anchor cell. The runtime sends it like
+any other placement, marked `location = placeholders`, with the columns and
+rows the child gave; it lives until the child deletes it or its image. The
+child then writes U+10EEEE cells: the foreground color carries the image id
+(its third diacritic the high byte), the underline color the placement id,
+and the first two diacritics the row and column of the image grid the cell
+shows. Cells without diacritics continue the cell to their left.
+
+The window resolves the cells itself, each frame, from the cells it shows, so
+redraws, scrolling and scrollback move the image with them, and each client
+sizes it with its own cell metrics. Consecutive cells of one row form a run;
+the image is fitted into the placement's grid keeping its aspect ratio and
+centered, as kitty and Ghostty do, and each run draws its fragment over cell
+backgrounds and under text (`lib/kitty_protocol/unicode_placeholder.zig`).
+Placeholder cells never draw a glyph, whether or not their image is there,
+and never ask for an installed font.
 
 ## Runtime-client flow control
 
@@ -241,12 +274,10 @@ sidebar, icons and marks itself; see [`sidebar.md`](sidebar.md).
 
 ## Remaining limitations
 
-- No temporary-file or Unicode-placeholder transport. File transport
-  covers complete frames and queries only; chunked or cropped file commands
-  are refused.
-- Unicode placeholders (`U=1`) and animation (`a=f`, `a=a`, `a=c`) are not
-  drawn: the pinned Ghostty VT drops virtual placements and does not
-  implement animation.
+- No temporary-file transport. File transport covers complete, unchunked
+  commands found whole in one PTY read; chunked file commands are refused.
+- Animation (`a=f`, `a=a`, `a=c`) is not drawn: the pinned Ghostty VT does
+  not implement it.
 - An image that scrolls past the media terminal's 10,000 bytes of history
   disappears from the scrollback.
 - The window's own client declares shared graphics; other machines' clients

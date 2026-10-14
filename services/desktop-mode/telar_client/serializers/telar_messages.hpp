@@ -378,6 +378,13 @@ namespace telar {
     rgba = 32,
   };
 
+  // Matches core.PlacementLocation: anchored at a cell, or drawn wherever
+  // Kitty Unicode placeholder cells name the image.
+  enum class PlacementLocation : Byte {
+    cell = 0,
+    placeholders = 1,
+  };
+
   // These are value types, not packed wire layouts. String and span members
   // borrow storage that must outlive the value; codecs derive lengths/counts.
   struct PaneTarget {
@@ -645,6 +652,7 @@ namespace telar {
     std::uint32_t offset_x = 0;
     std::uint32_t offset_y = 0;
     std::int32_t z_index = 0;
+    PlacementLocation location = PlacementLocation::cell;
   };
 
   template <> struct BodySchema<TerminalSize> : MessageSchema<TerminalSize> {
@@ -1235,7 +1243,11 @@ namespace telar {
                    Field<&GraphicsPlacement::rows, u32, "rows">,
                    Field<&GraphicsPlacement::offset_x, u32, "offset_x">,
                    Field<&GraphicsPlacement::offset_y, u32, "offset_y">,
-                   Field<&GraphicsPlacement::z_index, i32, "z_index">> {};
+                   Field<&GraphicsPlacement::z_index, i32, "z_index">,
+                   Field<&GraphicsPlacement::location,
+                         EnumChoiceByte<PlacementLocation, PlacementLocation::cell,
+                                        PlacementLocation::placeholders>,
+                         "location">> {};
 
   static_assert(BodySchema<TerminalSize>::payload_size == 8);
   static_assert(BodySchema<WorkspaceLocation>::payload_size == 9);
@@ -1246,7 +1258,7 @@ namespace telar {
   static_assert(BodySchema<GraphicsHeader>::payload_size == 16);
   static_assert(BodySchema<ImageKey>::payload_size == 12);
   static_assert(BodySchema<ImageDescription>::payload_size == 29);
-  static_assert(BodySchema<GraphicsPlacement>::payload_size == 68);
+  static_assert(BodySchema<GraphicsPlacement>::payload_size == 69);
   static_assert(MessageSchema<RequestRuntimeState>::payload_size == 10);
   static_assert(MessageSchema<SystemMetrics>::payload_size == 18);
 

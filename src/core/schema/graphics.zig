@@ -146,6 +146,7 @@ pub fn encodePlacement(e: *Encoder, value: Placement) !void {
     try e.writeInt(u32, p.offset_x);
     try e.writeInt(u32, p.offset_y);
     try e.writeInt(i32, p.z_index);
+    try e.writeByte(@intFromEnum(p.location));
 }
 
 pub fn decodePlacement(d: *Decoder) !Placement {
@@ -168,6 +169,11 @@ pub fn decodePlacement(d: *Decoder) !Placement {
             .offset_x = try d.readInt(u32),
             .offset_y = try d.readInt(u32),
             .z_index = try d.readInt(i32),
+            .location = switch (try d.readByte()) {
+                0 => .cell,
+                1 => .placeholders,
+                else => return error.InvalidPlacementLocation,
+            },
         },
     };
 }

@@ -11,6 +11,7 @@ const FileQueryView = @import("FileQueryView.zig");
 const vt = @import("ghostty-vt");
 const shared_transfer = @import("shared_transfer.zig");
 const PreparedTransfer = @import("PreparedTransfer.zig");
+const file_transmission = @import("file_transmission.zig");
 const Processor = @This();
 
 state: *State,
@@ -34,7 +35,7 @@ pub fn processMedia(self: *Processor, current_size: core.TerminalSize, stats: *S
         stats: *Stats,
 
         pub fn observe(sink: *@This(), bytes: []const u8) void {
-            sink.processor.ingestMediaOutput(bytes, sink.stats);
+            sink.processor.ingestOutput(bytes, sink.stats);
         }
 
         pub fn observeSharedFrame(sink: *@This(), frame: SharedFrameView) bool {
@@ -236,6 +237,33 @@ fn answerFileQuery(self: *Processor, query: FileQueryView) bool {
     return true;
 }
 
+/// Feeds child output to the emulator, replaying each complete `t=f`
+/// transmission the pane accepts as a chunked direct upload of the file.
+/// A refused file reaches the emulator unchanged, which refuses the medium.
+fn ingestOutput(self: *Processor, bytes: []const u8, stats: *Stats) void {
+    var emitted: usize = 0;
+    var search_from: usize = 0;
+    while (file_transmission.find(bytes, search_from)) |found| {
+        search_from = found.end;
+        var chunks: FileChunks = .{
+            .processor = self,
+            .stats = stats,
+        };
+        if (found.start != emitted) {
+            self.ingestMediaOutput(bytes[emitted..found.start], stats);
+        }
+
+        emitted = found.start;
+        if (file_transmission.forward(found, self.graphics_storage_limit, &chunks)) {
+            emitted = found.end;
+        }
+    }
+
+    if (emitted != bytes.len) {
+        self.ingestMediaOutput(bytes[emitted..], stats);
+    }
+}
+
 fn ingestMediaOutput(self: *Processor, bytes: []const u8, stats: *Stats) void {
     const loading_id = if (self.media.terminal.screens.active.kitty_images.loading) |loading|
         loading.image.id
@@ -303,6 +331,15 @@ pub fn queueGraphicsLimitResponse(self: *Processor, image_id: u32) void {
     _ = kitty_protocol.writeError(&writer, image_id, .ENOMEM, "graphics upload limit exceeded") catch return;
     self.responses.write(writer.buffered());
 }
+
+const FileChunks = struct {
+    processor: *Processor,
+    stats: *Stats,
+
+    pub fn observe(self: *FileChunks, bytes: []const u8) void {
+        self.processor.ingestMediaOutput(bytes, self.stats);
+    }
+};
 
 const GraphicsIngest = struct {
     io: std.Io,

@@ -463,7 +463,9 @@ pub fn placementVirtualId(key: vt.kitty.graphics.ImageStorage.PlacementKey) u64 
     return ((tag << 32) | key.placement_id.id) + 1;
 }
 
-/// Converts Ghostty's pinned placement into pane-relative coordinates.
+/// Converts Ghostty's pinned placement into pane-relative coordinates, and
+/// a virtual one (`U=1`) into a placeholder placement: the client finds its
+/// cells in the pane and sizes them against its columns and rows.
 ///
 /// Both the runtime sync path and the reduced terminal-browser example use
 /// this adapter. Keeping one implementation matters here: a second geometry
@@ -476,7 +478,7 @@ pub fn placementVirtualId(key: vt.kitty.graphics.ImageStorage.PlacementKey) u64 
 pub fn placementValue(terminal: *vt.Terminal, source_value: PlacementSource) ?core.Placement {
     const pin = switch (source_value.placement.location) {
         .pin => |value| value,
-        .virtual => return null,
+        .virtual => return placeholderValue(source_value),
     };
 
     if (pin.garbage) {
@@ -506,6 +508,30 @@ pub fn placementValue(terminal: *vt.Terminal, source_value: PlacementSource) ?co
         .offset_x = source_value.placement.x_offset,
         .offset_y = source_value.placement.y_offset,
         .z_index = source_value.placement.z,
+    };
+}
+
+// A virtual placement has no anchor, so it never leaves with the history:
+// it lives until the child deletes it or its image.
+fn placeholderValue(source_value: PlacementSource) core.Placement {
+    const source = source_value.placement.sourceRect(source_value.image);
+    return .{
+        .key = .{ .image_id = source_value.image.id, .generation = source_value.image.generation },
+        .virtual_id = placementVirtualId(source_value.key),
+        .placement_id = switch (source_value.key.placement_id.tag) {
+            .internal => 0,
+            .external => source_value.key.placement_id.id,
+        },
+        .x = 0,
+        .y = 0,
+        .source_x = source.x,
+        .source_y = source.y,
+        .source_width = source.width,
+        .source_height = source.height,
+        .columns = source_value.placement.columns,
+        .rows = source_value.placement.rows,
+        .z_index = source_value.placement.z,
+        .location = .placeholders,
     };
 }
 
