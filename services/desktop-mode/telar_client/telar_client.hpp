@@ -112,6 +112,18 @@ namespace telar {
       sendFrame(Codec::encode(message));
     }
 
+    template <typename Message> void send(const Message &message, std::span<Byte> frame_buffer) {
+      static_assert(MessageSchema<Message>::direction == Direction::client, "Can only send Client Messages");
+      if (frame_buffer.size() < frame_prefix_size) {
+        throw EncodingError{"Frame buffer too small"};
+      }
+
+      const auto payload = Codec::encode(message, frame_buffer.subspan(frame_prefix_size));
+      auto prefix = frame_buffer.first(frame_prefix_size);
+      u32::encode(static_cast<std::uint32_t>(payload.size()), prefix);
+      writeAll(frame_buffer.data(), frame_prefix_size + payload.size());
+    }
+
     std::span<const Byte> receiveFrame(std::span<Byte> buffer) _throw(SocketError) {
       try {
         std::array<Byte, frame_prefix_size> prefix{};

@@ -6,7 +6,9 @@
 #include <cstdint>
 #include <cstring>
 #include <exception>
+#include <memory>
 #include <span>
+#include <string_view>
 #include <type_traits>
 
 #ifdef TELAR_DEBUG
@@ -140,6 +142,40 @@ namespace telar {
 
   } // namespace debug
 #endif
+
+  // The frame owns decoded string bytes. This separate caller-owned buffer
+  // owns decoded list elements and must not overlap the frame or be reused
+  // while a decoded value still references it.
+  struct DecodeStorage {
+    std::span<Byte> remaining{};
+
+    template <typename T> std::span<T> allocate(std::size_t count) {
+      static_assert(std::is_trivially_destructible_v<T>);
+
+      if (count == 0) {
+        return {};
+      }
+      if (count > remaining.size() / sizeof(T)) {
+        throw EncodingError{"Decode storage is too small"};
+      }
+
+      const auto bytes = count * sizeof(T);
+      void *pointer = remaining.data();
+      auto available = remaining.size();
+      if (std::align(alignof(T), bytes, pointer, available) == nullptr) {
+        throw EncodingError{"Decode storage is too small after alignment"};
+      }
+
+      auto *elements = static_cast<T *>(pointer);
+      auto *next = static_cast<Byte *>(pointer) + bytes;
+      remaining = {next, available - bytes};
+      for (std::size_t i = 0; i < count; ++i) {
+        std::construct_at(elements + i);
+      }
+
+      return {elements, count};
+    }
+  };
 
   template <std::unsigned_integral T>
     requires(!std::same_as<T, bool>)
