@@ -1,5 +1,6 @@
-//! Fixed fallback order for resident faces; installed-font discovery runs
-//! only where a run is first shaped, never while painting a warm frame.
+//! Fixed fallback order for resident faces. Installed-font discovery never
+//! runs on the render thread: a cold shaping only queues the grapheme, a
+//! background lookup answers it, and the answer joins the set between frames.
 const font_id = @import("font_id.zig");
 const std = @import("std");
 const freetype = @import("freetype");
@@ -11,26 +12,26 @@ const FallbackPool = @import("FallbackPool.zig");
 const GraphemeMisses = @import("GraphemeMisses.zig");
 const AtlasOptions = @import("AtlasOptions.zig");
 const LigatureCoverage = @import("LigatureCoverage.zig");
-const FontMatch = @import("../native/FontMatch.zig").FontMatch;
+const FontQuery = @import("FontQuery.zig");
+const FontCandidate = @import("FontCandidate.zig");
+const kitty_protocol = @import("kitty_protocol");
 const FontSet = @This();
 
 var next_identity: std.atomic.Value(u64) = .init(1);
 
-/// The native port answering which installed face covers one grapheme.
-pub const Lookup = *const fn (text: [*:0]const u8, match: *FontMatch) callconv(.c) c_int;
-
-extern fn telar_gui_find_fallback_font(text: [*:0]const u8, match: *FontMatch) callconv(.c) c_int;
-
-/// The platform port: CoreText on macOS, Fontconfig on Linux.
-pub const native_lookup: Lookup = telar_gui_find_fallback_font;
-
-/// The longest UTF-8 grapheme a lookup queries, after dropping joiners
-/// and selectors; longer clusters keep the replacement glyph.
-pub const max_query_bytes = 64;
+/// Graphemes waiting for a lookup. A cold frame of unknown scripts queues
+/// at most this many; the rest ask again once the queue drains.
+pub const pending_capacity = 16;
+/// Times in a row a drained queue retires the shaping cache so turned-away
+/// graphemes ask again, with no face joining in between. Bounds the work a
+/// screen of distinct uncovered graphemes (binary output, say) can cause;
+/// a face joining restores it.
+pub const max_retries = 4;
 
 /// Never reused, including when a replacement set occupies the same address.
 identity: u64,
-/// Changes only when the resident fallback order changes, not on rasterization.
+/// Changes when the resident fallback order changes, and when graphemes the
+/// full queue turned away must be shaped (and so requested) again.
 revision: u64 = 0,
 primary: FontFace,
 /// What the primary face's ligature lookups join across terminal cells.
@@ -42,9 +43,16 @@ sans_semibold: FontFace,
 context: FaceContext,
 pool: FallbackPool = .{},
 misses: GraphemeMisses = .{},
-lookup: Lookup = native_lookup,
-/// Native lookups made so far; tests prove a grapheme is looked up once.
-lookups: usize = 0,
+// SAFETY: request writes each query before increasing pending_count; reads stay within the live ring range.
+pending: [pending_capacity]FontQuery = undefined,
+pending_head: u8 = 0,
+pending_count: u8 = 0,
+/// The query a background lookup is answering now.
+in_flight: ?FontQuery = null,
+/// A full queue turned a grapheme away since the queue last drained.
+turned_away: bool = false,
+/// Retries spent since a face last joined; see `max_retries`.
+retries: u8 = 0,
 
 /// Loads the configured face plus embedded text, symbols and the two chrome
 /// sans weights, sharing one page. Discovered faces join later.
@@ -124,50 +132,127 @@ pub fn source(self: *const FontSet, text: []const u8, preferred: font_id.Id) fon
     return if (self.pool.covering(text)) |slot| font_id.Id.fallback(slot) else .primary;
 }
 
-/// Asks the platform for an installed face covering a grapheme the chain
-/// lacks, loads it into the pool and answers whether one joined. Cold path
-/// only: one native lookup and at most one file read per new grapheme;
-/// misses, full pools and unusable files are remembered so the next cold
-/// shaping of the same grapheme asks nothing.
-/// Example: `if (fonts.discover(allocator, "\u{23f5}")) { ... }`
-pub fn discover(self: *FontSet, allocator: std.mem.Allocator, text: []const u8) bool {
+/// Queues a grapheme no resident face covers for a background lookup.
+/// Cold path only and allocation free: misses, duplicates, a full pool and
+/// Kitty Unicode placeholders, which are never glyphs, ask nothing.
+/// Example: `fonts.request("\u{23f5}");`
+pub fn request(self: *FontSet, text: []const u8) void {
     if (self.context.options.io == null or self.source(text, .primary) != .primary or self.primary.covers(text)) {
-        return false;
+        return;
     }
 
-    if (self.misses.contains(text)) {
-        return false;
+    if (kitty_protocol.unicode_placeholder.starts(text) or self.misses.contains(text) or self.queued(text)) {
+        return;
     }
 
-    var query: [max_query_bytes:0]u8 = undefined;
-    const significant = significantBytes(text, &query) orelse {
+    var buffer: [FontQuery.max_bytes:0]u8 = undefined;
+    const significant = significantBytes(text, &buffer) orelse {
         self.misses.remember(text);
-        return false;
+        return;
     };
     if (significant.len == 0 or self.pool.full()) {
         self.misses.remember(text);
-        return false;
+        return;
     }
 
-    var match: FontMatch = .{};
-    self.lookups += 1;
-    if (self.lookup(significant.ptr, &match) != 0 or self.pool.find(match) != null) {
+    const query = FontQuery.init(self.identity, text, significant) orelse {
         self.misses.remember(text);
-        return false;
+        return;
+    };
+    if (self.pending_count == pending_capacity) {
+        self.turned_away = true;
+        return;
     }
 
-    var face = FallbackFace.init(allocator, self.context, match) catch {
+    self.pending[(self.pending_head + self.pending_count) % pending_capacity] = query;
+    self.pending_count += 1;
+}
+
+/// Hands the oldest queued grapheme to a background lookup; null while one
+/// is in flight or nothing waits.
+/// Example: `const query = fonts.takeQuery() orelse return;`
+pub fn takeQuery(self: *FontSet) ?FontQuery {
+    if (self.in_flight != null or self.pending_count == 0) {
+        return null;
+    }
+
+    const query = self.pending[self.pending_head];
+    self.pending_head = @intCast((self.pending_head + 1) % pending_capacity);
+    self.pending_count -= 1;
+    self.in_flight = query;
+    return query;
+}
+
+/// Takes the background answer for the query in flight: a face that covers
+/// the grapheme joins the pool, anything else is remembered as a miss. Owns
+/// `candidate.bytes` either way. Returns whether the resident order changed,
+/// so retained geometry drawn with the replacement glyph must repaint.
+/// Example: `if (fonts.adopt(allocator, query, candidate)) retained.invalidate();`
+pub fn adopt(self: *FontSet, allocator: std.mem.Allocator, query: *const FontQuery, candidate: ?FontCandidate) bool {
+    const previous = self.revision;
+    if (self.in_flight) |*current| {
+        if (current.names(query.text())) {
+            self.in_flight = null;
+        }
+    }
+
+    self.join(allocator, query.text(), candidate);
+    if (self.revision != previous) {
+        self.retries = 0;
+    }
+
+    if (self.turned_away and self.pending_count == 0 and self.in_flight == null) {
+        // Graphemes the full queue refused were cached as shaped with the
+        // replacement glyph; retiring that cache lets them ask again.
+        self.turned_away = false;
+        if (self.retries < max_retries) {
+            self.retries += 1;
+            self.revision += 1;
+        }
+    }
+
+    return self.revision != previous;
+}
+
+fn join(self: *FontSet, allocator: std.mem.Allocator, text: []const u8, candidate: ?FontCandidate) void {
+    const found = candidate orelse {
         self.misses.remember(text);
-        return false;
+        return;
+    };
+    if (self.pool.full() or self.pool.find(found.match) != null) {
+        allocator.free(found.bytes);
+        self.misses.remember(text);
+        return;
+    }
+
+    var face = FallbackFace.init(self.context, found.match, found.bytes) catch {
+        allocator.free(found.bytes);
+        self.misses.remember(text);
+        return;
     };
     if (!face.face.covers(text)) {
         face.deinit(allocator);
         self.misses.remember(text);
-        return false;
+        return;
     }
 
     _ = self.addFallback(face).?;
-    return true;
+}
+
+fn queued(self: *const FontSet, text: []const u8) bool {
+    if (self.in_flight) |*current| {
+        if (current.names(text)) {
+            return true;
+        }
+    }
+
+    for (0..self.pending_count) |offset| {
+        if (self.pending[(self.pending_head + offset) % pending_capacity].names(text)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /// Takes a discovered face into the append-only pool and invalidates resolution caches.
@@ -217,7 +302,7 @@ fn allocateIdentity(counter: *std.atomic.Value(u64)) !u64 {
 
 // The codepoints `FontFace.covers` tests, NUL-terminated for the port; null
 // when the grapheme does not fit the query.
-fn significantBytes(text: []const u8, query: *[max_query_bytes:0]u8) ?[:0]const u8 {
+fn significantBytes(text: []const u8, query: *[FontQuery.max_bytes:0]u8) ?[:0]const u8 {
     var len: usize = 0;
     var iterator = std.unicode.Utf8View.initUnchecked(text).iterator();
     while (iterator.nextCodepointSlice()) |slice| {
@@ -229,7 +314,7 @@ fn significantBytes(text: []const u8, query: *[max_query_bytes:0]u8) ?[:0]const 
             continue;
         }
 
-        if (len + slice.len > max_query_bytes) {
+        if (len + slice.len > FontQuery.max_bytes) {
             return null;
         }
 

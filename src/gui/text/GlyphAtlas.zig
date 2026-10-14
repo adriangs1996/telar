@@ -331,9 +331,9 @@ pub fn measure(self: *GlyphAtlas, run: TextRun) !f32 {
     return total;
 }
 
-// A run reaches here only when its shaping result is not cached, so the
-// installed-font lookup and file read happen once per new grapheme and never
-// on a warm repaint. Failures keep the replacement glyph.
+// A run reaches here only when its shaping result is not cached. Uncovered
+// graphemes are only queued: the installed-font lookup and file read run in
+// the background, and the replacement glyph shows until a face joins.
 fn discoverFallbacks(self: *GlyphAtlas, run: TextRun) void {
     var iterator: cellgrid.GraphemeIterator = .{ .bytes = run.text };
     while (iterator.next()) |cluster| {
@@ -342,7 +342,7 @@ fn discoverFallbacks(self: *GlyphAtlas, run: TextRun) void {
         }
 
         if (self.fonts.source(cluster.bytes, run.face) == .primary) {
-            _ = self.fonts.discover(self.allocator, cluster.bytes);
+            self.fonts.request(cluster.bytes);
         }
     }
 }

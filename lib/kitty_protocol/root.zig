@@ -1,8 +1,8 @@
 //! Kitty graphics protocol commands written into a caller buffer: direct,
 //! chunked, PNG and shared-memory transmission, placement, deletion and
 //! aborting a partial transmission, error replies, the control fields of a
-//! received command, and the drawn size and layer of a placement. Nothing
-//! here allocates.
+//! received command, the drawn size and layer of a placement, and the
+//! fragments Unicode placeholder cells show. Nothing here allocates.
 
 const deletion = @import("deletion.zig");
 const display = @import("display.zig");
@@ -24,6 +24,11 @@ pub const Format = image_support.Format;
 pub const ErrorCode = reply.ErrorCode;
 pub const Image = @import("Image.zig");
 pub const OutputPlacement = @import("OutputPlacement.zig");
+pub const PlaceholderCell = @import("PlaceholderCell.zig");
+pub const PlaceholderDraw = @import("PlaceholderDraw.zig");
+pub const PlaceholderRequest = @import("PlaceholderRequest.zig");
+pub const PlaceholderRun = @import("PlaceholderRun.zig");
+pub const unicode_placeholder = @import("unicode_placeholder.zig");
 pub const writeDeleteImage = deletion.writeDeleteImage;
 pub const writeDeleteImageRange = deletion.writeDeleteImageRange;
 pub const writeDeletePlacement = deletion.writeDeletePlacement;

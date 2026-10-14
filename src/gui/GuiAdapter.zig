@@ -25,6 +25,7 @@ const Frame = @import("render/Frame.zig");
 const Window = @import("telar-window");
 const HostServices = @import("host/Services.zig");
 const DiagramService = @import("diagrams/Service.zig");
+const FontDiscovery = @import("text/FontDiscovery.zig");
 const FramePacer = @import("FramePacer.zig");
 const PaneImages = @import("image/PaneImages.zig");
 const FrameClock = animate.FrameClock;
@@ -129,6 +130,8 @@ graphics_stores: [machine_slots]client.retained_graphics.Store,
 /// The textures and resolved placements of the presented machine's images.
 images: PaneImages,
 diagrams: DiagramService,
+/// Installed-font lookups for graphemes the renderer's faces lack.
+font_discovery: FontDiscovery,
 /// The window client's clipboard image previews, bound as its attachment shelf.
 previews: ImagePreviews,
 /// The preview revision the chrome was last prepared at.
@@ -218,6 +221,7 @@ pub fn init(params: client.ClientInit) !*GuiAdapter {
     gui.images = .{};
 
     gui.diagrams = .init(params.gpa);
+    gui.font_discovery = .init(params.gpa);
 
     gui.app.machines = &gui.machines;
     gui.app.graphics = gui.graphicsRetention(client.Machines.local_slot);
@@ -247,6 +251,7 @@ pub fn deinit(self: *GuiAdapter) void {
     }
 
     self.diagrams.deinit();
+    self.font_discovery.deinit();
     self.previews.deinit();
     for (self.machines.live, 0..) |live, slot| {
         if (live and slot != client.Machines.local_slot) {
@@ -673,6 +678,7 @@ fn dispatch(self: *GuiAdapter, message: gui_event.Message) !?u8 {
             self.diagrams.notify();
             self.model.chrome.invalidate();
         },
+        .font_discovered => self.fontDiscovered(),
 
         .clipboard_image => |completion| try self.finish(completion),
     }
@@ -699,6 +705,7 @@ fn pathFor(message: gui_event.Message) core.Path {
         .profiles_changed,
         .favicon,
         .diagram_ready,
+        .font_discovered,
         => .observation,
         else => .interactive,
     };
@@ -2481,6 +2488,26 @@ fn drawn(self: *GuiAdapter, frame: *const Frame) void {
     if (self.diagrams.store.revision != revision) {
         self.model.chrome.invalidate();
     }
+
+    self.startFontDiscovery();
+}
+
+/// Adopts a finished installed-font lookup and starts the next. A face that
+/// joined repaints every retained cell, since cells drawn while it was being
+/// looked up show the replacement glyph.
+fn fontDiscovered(self: *GuiAdapter) void {
+    const fonts = if (self.renderer.atlas) |*atlas| &atlas.fonts else null;
+    if (self.font_discovery.finish(fonts)) {
+        self.renderer.retained.invalidate();
+        self.model.chrome.invalidate();
+    }
+
+    self.startFontDiscovery();
+}
+
+fn startFontDiscovery(self: *GuiAdapter) void {
+    const atlas = if (self.renderer.atlas) |*value| value else return;
+    self.font_discovery.start(&self.inbox, &atlas.fonts, self.app.io);
 }
 
 fn showsPreviews(self: *const GuiAdapter) bool {

@@ -15,6 +15,8 @@ pub const Message = union(enum) {
     binding_timeout: anyerror!void,
     favicon: client.FaviconCompletion,
     diagram_ready,
+    /// A background installed-font lookup finished; `FontDiscovery` holds it.
+    font_discovered,
     /// A clipboard image capture finished reading and decoding the pasteboard.
     clipboard_image: data.Completion,
 

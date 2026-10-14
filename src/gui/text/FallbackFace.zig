@@ -3,7 +3,6 @@
 //! match that identifies the file so one face is never loaded twice.
 const std = @import("std");
 const FontFace = @import("FontFace.zig");
-const FontSource = @import("FontSource.zig");
 const FaceContext = @import("FaceContext.zig");
 const FontMatch = @import("../native/FontMatch.zig").FontMatch;
 const FallbackFace = @This();
@@ -12,14 +11,11 @@ bytes: []const u8,
 face: FontFace,
 match: FontMatch,
 
-/// Reads the matched file within the shared bound and opens its face with
-/// the atlas's own options, refusing color and bitmap-only faces.
-/// Example: `var face = try FallbackFace.init(allocator, context, match);`
-pub fn init(allocator: std.mem.Allocator, context: FaceContext, match: FontMatch) !FallbackFace {
-    const io = context.options.io orelse return error.FontDiscoveryUnavailable;
-    const path = std.mem.sliceTo(&match.path, 0);
-    const bytes = try std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(FontSource.max_bytes));
-    errdefer allocator.free(bytes);
+/// Opens the matched face from file bytes a background lookup read, with the
+/// atlas's own options, refusing color and bitmap-only faces. Owns `bytes`
+/// on success; on failure the caller still does.
+/// Example: `var face = try FallbackFace.init(context, match, bytes);`
+pub fn init(context: FaceContext, match: FontMatch, bytes: []const u8) !FallbackFace {
     var options = context.options;
     options.font = bytes;
     options.face_index = match.face_index;
