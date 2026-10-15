@@ -1,3 +1,2 @@
 CompileFlags:
-  Remove: [-std=*]
-  Add: [-std=c++20, -DTELAR_DEBUG]
+  CompilationDatabase: out/debug

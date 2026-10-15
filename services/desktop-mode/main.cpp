@@ -1,10 +1,68 @@
-#include <cstdint>
 #include <cstdio>
-#include <exception>
 #include <unistd.h>
-#include <vector>
+#include <variant>
 
 #include "telar_client/telar.hpp"
+
+import app_context;
+import runtime_receiver_worker;
+
+#define MAX_SPACES 10
+#define MAX_TABS 1000
+#define MAX_PANES 10000
+
+struct Space {
+  std::uint16_t id;
+  std::uint16_t index;
+  std::uint16_t tabs_count = 0;
+};
+
+struct Tab {
+  std::uint16_t id;
+  std::uint16_t space_id;
+  std::uint16_t panes_count = 0;
+};
+
+struct Pane {
+  std::uint16_t id;
+  std::uint16_t tab_id;
+};
+
+template <typename... Ts> struct overloaded : Ts... {
+  using Ts::operator()...;
+};
+
+struct App {
+  Space spaces[MAX_SPACES] = {};
+  Tab tabs[MAX_TABS] = {};
+  Pane panes[MAX_PANES] = {};
+  bool exited = false;
+  std::uint8_t exit_code;
+
+  void loop(AppContext &context) {
+    while (!exited) {
+      for (auto input : context.input_queue.drain()) {
+        process(input);
+      }
+    }
+  }
+
+private:
+  void process(Event input) {
+    std::visit(overloaded{
+                   [&](KeyPress &keypress) {
+
+                   },
+                   [&](Exit &exitrequest) {
+                     exited = true;
+                     exit_code = exitrequest.code;
+                   },
+               },
+               input);
+  }
+};
+
+static App state{};
 
 int main(int argc, const char **argv) {
   if (argc != 2) {
@@ -12,65 +70,20 @@ int main(int argc, const char **argv) {
     return 1;
   }
 
+  EventQueue input_queue{};
+  auto client = telar::Client::init(argv[1]);
+  const AppContext context{.client = client, .input_queue = input_queue};
+
   try {
-    std::vector<telar::Byte> receive_buffer(telar::max_payload_size);
-    auto client = telar::Client::init(argv[1]);
-
-    try {
-      client.handshake();
-
-      const telar::RequestRuntimeState request{
-          .client_identity = static_cast<std::uint64_t>(getpid()),
-          .interactive = false,
-      };
-
-#ifdef TELAR_DEBUG
-      std::printf("Request: %s\n", telar::MessageSchema<telar::RequestRuntimeState>::name);
-      telar::Codec::pretty_print(request, stdout);
-      std::fflush(stdout);
-#endif
-
-      client.send(request);
-
-      // An observer receives other runtime events before or between metric samples.
-      while (true) {
-        const auto payload = client.receiveFrame(receive_buffer);
-        const auto tag = static_cast<telar::ServerTag>(payload.front());
-        switch (tag) {
-        case telar::ServerTag::runtime_stopping:
-          throw telar::SocketError{"Runtime stopped before sending metrics"};
-        case telar::ServerTag::request_failed:
-          throw telar::SocketError{"Runtime rejected the state subscription"};
-        case telar::ServerTag::resync_required:
-          throw telar::SocketError{"Runtime requires a new state subscription"};
-        case telar::ServerTag::system_metrics:
-          break;
-        default:
-          continue;
-        }
-
-        const auto response = telar::Codec::decode<telar::SystemMetrics>(payload);
-
-#ifdef TELAR_DEBUG
-        std::printf("\nResponse: %s\n", telar::MessageSchema<telar::SystemMetrics>::name);
-        telar::Codec::pretty_print(response, stdout);
-#else
-        std::printf("Runtime metrics received (revision %llu)\n",
-                    static_cast<unsigned long long>(response.revision));
-#endif
-
-        break;
-      }
-    } catch (...) {
-      client.deinit();
-      throw;
-    }
-
+    client.handshake();
+    auto runtime_reader = RuntimeReceiverWorker::init(context);
+    runtime_reader.wait();
+  } catch (...) {
     client.deinit();
-  } catch (const std::exception &error) {
-    std::fprintf(stderr, "%s\n", error.what());
-    return 1;
+    throw;
   }
 
-  return 0;
+  client.deinit();
+
+  return state.exit_code;
 }

@@ -37,6 +37,33 @@ app:
     mkdir -p -m 700 "{{ dev_runtime_dir }}"
     TELAR_SOCKET="{{ dev_runtime_dir }}/runtime.sock" TELAR_HISTORY="{{ dev_runtime_dir }}/history.db" zig build run -- gui
 
+# Build and run the C++ desktop client against an existing runtime in Debug mode.
+[working-directory: "services/desktop-mode"]
+desktop socket=(dev_runtime_dir / "runtime.sock"):
+    cmake --preset debug
+    cmake --build --preset debug --target telar-desktop
+    ./out/debug/telar-desktop "{{ socket }}"
+
+# Verify the C++23 toolchain and generate the clangd compilation database.
+[working-directory: "services/desktop-mode"]
+desktop-check:
+    cmake --preset debug
+    cmake --build --preset debug --target desktop-editor
+    ctest --preset debug
+
+# Refresh desktop modules and development programs for clangd without building main.cpp.
+[working-directory: "services/desktop-mode"]
+desktop-editor:
+    cmake --preset debug
+    cmake --build --preset debug --target desktop-editor
+
+# Build and run a program from services/desktop-mode/debug by its filename stem.
+[working-directory: "services/desktop-mode"]
+desktop-debug program *args:
+    cmake --preset debug
+    cmake --build --preset debug --target "{{ program }}"
+    "./out/debug/{{ program }}" {{ args }}
+
 # Build and run an isolated development runtime. Extra arguments are passed to Telar.
 run *args:
     mkdir -p -m 700 "{{ dev_runtime_dir }}"
