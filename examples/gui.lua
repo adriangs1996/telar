@@ -12,6 +12,7 @@ return telar.config({
     },
     font = {
       family = "JetBrains Mono", -- Bundled; an installed family name also works.
+      style = "Regular", -- The face's own style name: "Light", "SemiLight", "Medium"...
       size = 15,
       line_height = 1.15,
       letter_spacing = 0,

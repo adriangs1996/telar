@@ -125,7 +125,7 @@ pub fn configured(allocator: std.mem.Allocator, io: std.Io, options: RendererOpt
     renderer.io = io;
     renderer.config = options.config;
     renderer.theme = options.theme;
-    renderer.font = try FontSource.load(allocator, io, &options.config.font.family);
+    renderer.font = try FontSource.load(allocator, io, &options.config.font);
     _ = try renderer.measure(options.viewport);
     return renderer;
 }
@@ -292,6 +292,7 @@ fn openAtlas(self: *const Renderer, pixel_height: u16, side: u32) !GlyphAtlas {
             .side = side,
             .face_index = self.font.match.face_index,
             .postscript = std.mem.sliceTo(&self.font.match.postscript, 0),
+            .variation = self.font.match.variation,
             .thicken = self.config.font.thicken,
             .thicken_strength = self.config.font.thicken_strength,
             .io = self.io,

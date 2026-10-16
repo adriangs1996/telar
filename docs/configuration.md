@@ -133,7 +133,7 @@ settings on that machine; see [remote configuration](remote.md#open-and-reconnec
 | Problem | What to do |
 | --- | --- |
 | Syntax error or unknown field | Run `telar config check` against the same file and profile as the window; fix the reported setting. |
-| Check says OK but the font fails to load | Use an installed family name or remove `family` to use the bundled font. |
+| Check says OK but the font fails to load | Use an installed family name or remove `family` to use the bundled font. `FontStyleNotFound` means the family exists but has no face with that `style`; use a style name exactly as the font lists it (Font Book on macOS, `fc-list : family style` on Linux). |
 | Saving has no effect | Check `--config`, `--profile`, `--no-config` and CLI overrides; a failed reload preserves the old config. |
 | A binding disappeared | Check for conflicts with custom bindings and native text-editing shortcuts. |
 | History database cannot open | If you set `runtime.history.path`, create its parent directory. Relative paths are resolved beside `config.lua`. |
@@ -368,6 +368,7 @@ gui = {
   },
   font = {
     family = "JetBrains Mono",
+    style = "Regular",
     size = 15,
     line_height = 1.15,
     letter_spacing = 0,
@@ -389,6 +390,7 @@ gui = {
 | `window.padding.x` | `0` | Logical pixels on each horizontal edge, `0..256`, decimals allowed. |
 | `window.padding.y` | `0` | Logical pixels on each vertical edge, `0..256`, decimals allowed. |
 | `font.family` | bundled JetBrains Mono | Installed family name, at most 256 UTF-8 bytes, without NUL. An empty name or `JetBrains Mono` uses the bundled face. |
+| `font.style` | empty (regular) | The style name the font advertises for the face to use, such as `Light`, `SemiLight`, `Medium` or `Retina`; matching ignores case. It selects the face's weight, including a variable font's named instances. The bundled face only provides `Regular`; any other style with `JetBrains Mono` or an empty family uses the installed JetBrains Mono. A style the family does not provide fails at startup or rejects the reload instead of falling back to another face. Bold and italic text are still synthesized from this face. |
 | `font.size` | `15` | Logical pixel size, equivalent to points on macOS; `6..96`, decimals allowed. The display scale is applied once during rasterization. |
 | `font.line_height` | `1.0` | Multiplier of the font's natural line height; `0.75..3`. Extra space is distributed above and below the baseline. |
 | `font.letter_spacing` | `0` | Extra logical pixels per cell; `-5..20`. A combination producing a nonpositive cell width fails at startup or rejects the reload. |

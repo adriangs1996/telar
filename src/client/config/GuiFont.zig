@@ -1,6 +1,8 @@
-const FontFamily = @import("FontFamily.zig");
+const FontName = @import("FontName.zig");
 
-family: FontFamily = .{},
+family: FontName = .{},
+/// The face's advertised style name ("Light", "SemiLight"); empty is regular.
+style: FontName = .{},
 size: f32 = 15,
 line_height: f32 = 1,
 letter_spacing: f32 = 0,

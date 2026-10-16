@@ -66,6 +66,7 @@ pub fn init(library: freetype.c.FT_Library, options: AtlasOptions, pixels: []u8)
     var fallback = options;
     fallback.face_index = 0;
     fallback.postscript = "";
+    fallback.variation = .{};
     fallback.font = assets.jetbrains_mono;
     var text: ?FontFace = if (std.mem.eql(u8, options.font, assets.jetbrains_mono)) null else try FontFace.init(library, fallback, pixels);
     errdefer if (text) |*face| {

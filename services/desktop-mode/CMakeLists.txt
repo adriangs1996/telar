@@ -32,7 +32,33 @@ target_compile_definitions(desktop-core PUBLIC "$<$<CONFIG:Debug>:TELAR_DEBUG=1>
 add_executable(telar-desktop main.cpp)
 target_link_libraries(telar-desktop PRIVATE desktop-core)
 
+if(APPLE)
+  set(CMAKE_OBJCXX_COMPILER "${CMAKE_CXX_COMPILER}")
+  enable_language(OBJCXX)
+  set(CMAKE_OBJCXX_STANDARD 23)
+  set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
+  set(CMAKE_OBJCXX_EXTENSIONS OFF)
+
+  find_library(APPKIT_FRAMEWORK AppKit REQUIRED)
+  add_library(desktop-native OBJECT native-backends/macos/application.mm)
+  target_compile_options(desktop-native PRIVATE -fobjc-arc)
+
+  # Recent LLVM class-selector stubs require a newer Apple linker.
+  include(CheckCompilerFlag)
+  check_compiler_flag(OBJCXX "-fno-objc-msgsend-class-selector-stubs" desktop_has_class_selector_stub_flag)
+  if(desktop_has_class_selector_stub_flag)
+    target_compile_options(desktop-native PRIVATE -fno-objc-msgsend-class-selector-stubs)
+  endif()
+
+  target_link_libraries(desktop-native PUBLIC "${APPKIT_FRAMEWORK}")
+  target_link_libraries(telar-desktop PRIVATE desktop-native)
+endif()
+
 add_custom_target(desktop-editor DEPENDS desktop-core)
+
+if(TARGET desktop-native)
+  add_dependencies(desktop-editor desktop-native)
+endif()
 
 file(GLOB_RECURSE debug_support_modules CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/debug/support/*.cppm")
 file(GLOB_RECURSE debug_support_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/debug/support/*.cpp")

@@ -1,7 +1,9 @@
 #include <cstdio>
+#include <cstdlib>
 #include <unistd.h>
 #include <variant>
 
+#include "native-backends/application.hpp"
 #include "telar_client/telar.hpp"
 
 import app_context;
@@ -32,22 +34,28 @@ template <typename... Ts> struct overloaded : Ts... {
   using Ts::operator()...;
 };
 
-struct App {
+struct App final : ApplicationHost {
   Space spaces[MAX_SPACES] = {};
   Tab tabs[MAX_TABS] = {};
   Pane panes[MAX_PANES] = {};
   bool exited = false;
-  std::uint8_t exit_code;
+  std::uint8_t exit_code = 0;
 
-  void loop(AppContext &context) {
-    while (!exited) {
-      for (auto input : context.input_queue.drain()) {
-        process(input);
-      }
+  explicit App(AppContext &context) : context(context) {}
+
+  bool requestExit() override { return context.input_queue.push(Exit{}); }
+
+  bool update() override {
+    for (auto input : context.input_queue.drain()) {
+      process(input);
     }
+
+    return !exited;
   }
 
 private:
+  AppContext &context;
+
   void process(Event input) {
     std::visit(overloaded{
                    [&](KeyPress &keypress) {
@@ -62,8 +70,6 @@ private:
   }
 };
 
-static App state{};
-
 int main(int argc, const char **argv) {
   if (argc != 2) {
     std::fprintf(stderr, "Usage: %s SOCKET_PATH\n", argv[0]);
@@ -72,12 +78,20 @@ int main(int argc, const char **argv) {
 
   EventQueue input_queue{};
   auto client = telar::Client::init(argv[1]);
-  const AppContext context{.client = client, .input_queue = input_queue};
+  AppContext context{.client = client, .input_queue = input_queue};
+  App state(context);
 
   try {
     client.handshake();
     auto runtime_reader = RuntimeReceiverWorker::init(context);
-    runtime_reader.wait();
+
+    const int application_result = runApplication(state);
+    runtime_reader.stop();
+
+    if (application_result != EXIT_SUCCESS) {
+      state.exit_code = EXIT_FAILURE;
+    }
+
   } catch (...) {
     client.deinit();
     throw;

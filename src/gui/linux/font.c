@@ -22,30 +22,46 @@ static int fill(FcPattern *font, telar_font_match *match) {
     return 0;
 }
 
-int telar_gui_find_font(const char *family, telar_font_match *match) {
+// True when any of the pattern's values for `object` (Fontconfig lists
+// localized names too) equals `name`, ignoring case.
+static bool names(FcPattern *font, const char *object, const char *name) {
+    FcChar8 *value = NULL;
+    for (int i = 0; FcPatternGetString(font, object, i, &value) == FcResultMatch; i++) {
+        if (FcStrCmpIgnoreCase((const FcChar8 *)name, value) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// A style names the face directly; Fontconfig lists each named instance of a
+// variable font as its own pattern, with the instance encoded in FC_INDEX.
+int telar_gui_find_font(const char *family, const char *style, telar_font_match *match) {
     FcPattern *pattern = FcPatternCreate();
     if (pattern == NULL) {
-        return -1;
+        return TELAR_FONT_FAMILY_NOT_FOUND;
     }
     FcPatternAddString(pattern, FC_FAMILY, (const FcChar8 *)family);
-    FcPatternAddInteger(pattern, FC_WEIGHT, FC_WEIGHT_REGULAR);
-    FcPatternAddInteger(pattern, FC_SLANT, FC_SLANT_ROMAN);
+    if (style[0] != '\0') {
+        FcPatternAddString(pattern, FC_STYLE, (const FcChar8 *)style);
+    } else {
+        FcPatternAddInteger(pattern, FC_WEIGHT, FC_WEIGHT_REGULAR);
+        FcPatternAddInteger(pattern, FC_SLANT, FC_SLANT_ROMAN);
+    }
     FcConfigSubstitute(NULL, pattern, FcMatchPattern);
     FcDefaultSubstitute(pattern);
     FcResult result;
     FcPattern *font = FcFontMatch(NULL, pattern, &result);
     FcPatternDestroy(pattern);
     if (font == NULL) {
-        return -1;
+        return TELAR_FONT_FAMILY_NOT_FOUND;
     }
-    int status = -1;
-    FcChar8 *resolved = NULL;
-    bool exact = false;
-    for (int i = 0; FcPatternGetString(font, FC_FAMILY, i, &resolved) == FcResultMatch; i++) {
-        exact |= FcStrCmpIgnoreCase((const FcChar8 *)family, resolved) == 0;
+    int status = TELAR_FONT_FAMILY_NOT_FOUND;
+    if (names(font, FC_FAMILY, family)) {
+        status = style[0] == '\0' || names(font, FC_STYLE, style) ? TELAR_FONT_FOUND : TELAR_FONT_STYLE_NOT_FOUND;
     }
-    if (exact) {
-        status = fill(font, match);
+    if (status == TELAR_FONT_FOUND && fill(font, match) != 0) {
+        status = TELAR_FONT_FAMILY_NOT_FOUND;
     }
     FcPatternDestroy(font);
     return status;

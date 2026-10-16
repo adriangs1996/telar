@@ -63,6 +63,7 @@ pub const LimitError = error{
     ErrorMessageTooLarge,
     FontCollectionTooLarge,
     FontSetIdentityExhausted,
+    FontVariationTooLarge,
     FilterPatternTooLong,
     FrameTooLarge,
     GlyphTooLarge,

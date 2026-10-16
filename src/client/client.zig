@@ -134,7 +134,7 @@ pub const GuiChrome = @import("config/GuiChrome.zig");
 pub const GuiSidebar = @import("config/GuiSidebar.zig");
 pub const GuiFont = @import("config/GuiFont.zig");
 pub const GuiCursor = @import("config/GuiCursor.zig");
-pub const FontFamily = @import("config/FontFamily.zig");
+pub const FontName = @import("config/FontName.zig");
 
 pub const presentation_delivery = @import("connection/presentation_delivery.zig");
 pub const history_browser = @import("input/history_browser.zig");

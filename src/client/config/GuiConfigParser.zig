@@ -33,11 +33,17 @@ pub fn parse(self: Parser, initial: Config) !Config {
     var result = initial;
     _ = lua_api.c.lua_getfield(self.state, -1, "font");
     if (lua_api.c.lua_type(self.state, -1) != lua_api.c.LUA_TNIL) {
-        try self.table("config.gui.font", &.{ "family", "size", "line_height", "letter_spacing", "thicken", "thicken_strength" });
+        try self.table("config.gui.font", &.{ "family", "style", "size", "line_height", "letter_spacing", "thicken", "thicken_strength" });
         _ = lua_api.c.lua_getfield(self.state, -1, "family");
         if (lua_api.c.lua_type(self.state, -1) != lua_api.c.LUA_TNIL) {
             const name = value.string(self.state, -1) orelse return self.invalid("gui.font.family must be a string");
             result.font.family.set(name) catch return self.invalid("gui.font.family must be valid UTF-8, without NUL, at most 256 bytes");
+        }
+        value.pop(self.state, 1);
+        _ = lua_api.c.lua_getfield(self.state, -1, "style");
+        if (lua_api.c.lua_type(self.state, -1) != lua_api.c.LUA_TNIL) {
+            const name = value.string(self.state, -1) orelse return self.invalid("gui.font.style must be a string");
+            result.font.style.set(name) catch return self.invalid("gui.font.style must be valid UTF-8, without NUL, at most 256 bytes");
         }
         value.pop(self.state, 1);
         result.font.size = @floatCast(try self.number(.{ "size", 6, 96 }, result.font.size));

@@ -53,6 +53,50 @@ static CTFontRef font_from_data(const telar_glyph_rasterizer_options *options) {
     return font;
 }
 
+// Moves the face to the instance FreeType shapes with; no axes keeps it.
+static CTFontRef vary(CTFontRef font, const telar_font_variation *variation) {
+    if (font == NULL || variation == NULL || variation->count == 0) {
+        return font;
+    }
+    CTFontRef varied = NULL;
+    if (variation->count <= TELAR_FONT_MAX_AXES) {
+        CFMutableDictionaryRef axes = CFDictionaryCreateMutable(kCFAllocatorDefault, variation->count,
+                                                                &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+        for (uint32_t i = 0; axes != NULL && i < variation->count; i++) {
+            CFNumberRef tag = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &variation->tags[i]);
+            CFNumberRef value = CFNumberCreate(kCFAllocatorDefault, kCFNumberFloat32Type, &variation->values[i]);
+            if (tag != NULL && value != NULL) {
+                CFDictionarySetValue(axes, tag, value);
+            }
+            if (tag != NULL) {
+                CFRelease(tag);
+            }
+            if (value != NULL) {
+                CFRelease(value);
+            }
+        }
+        if (axes != NULL && (uint32_t)CFDictionaryGetCount(axes) == variation->count) {
+            const void *keys[] = {kCTFontVariationAttribute};
+            const void *values[] = {axes};
+            CFDictionaryRef attributes = CFDictionaryCreate(kCFAllocatorDefault, keys, values, 1,
+                                                            &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+            CTFontDescriptorRef descriptor = attributes != NULL ? CTFontDescriptorCreateWithAttributes(attributes) : NULL;
+            if (descriptor != NULL) {
+                varied = CTFontCreateCopyWithAttributes(font, CTFontGetSize(font), NULL, descriptor);
+                CFRelease(descriptor);
+            }
+            if (attributes != NULL) {
+                CFRelease(attributes);
+            }
+        }
+        if (axes != NULL) {
+            CFRelease(axes);
+        }
+    }
+    CFRelease(font);
+    return varied;
+}
+
 void telar_glyph_rasterizer_destroy(telar_glyph_rasterizer *self) {
     if (self == NULL) {
         return;
@@ -83,7 +127,7 @@ telar_glyph_rasterizer *telar_glyph_rasterizer_create(const telar_glyph_rasteriz
     }
     self->side = options->side;
     self->thicken = options->thicken != 0;
-    self->base = font_from_data(options);
+    self->base = vary(font_from_data(options), options->variation);
     CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceLinearGray);
     if (self->base != NULL && space != NULL) {
         self->context = CGBitmapContextCreate(options->pixels, options->side, options->side,

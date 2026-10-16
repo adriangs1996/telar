@@ -43,8 +43,7 @@ namespace telar {
         throw SocketError{"Error opening socket"};
       }
 
-      if (setsockopt(client._fd, SOL_SOCKET, SO_RCVTIMEO, &io_timeout, sizeof(io_timeout)) < 0 ||
-          setsockopt(client._fd, SOL_SOCKET, SO_SNDTIMEO, &io_timeout, sizeof(io_timeout)) < 0) {
+      if (setsockopt(client._fd, SOL_SOCKET, SO_SNDTIMEO, &io_timeout, sizeof(io_timeout)) < 0) {
         client.deinit();
         throw SocketError{"Error configuring runtime I/O timeout"};
       }
@@ -71,6 +70,15 @@ namespace telar {
     }
 
     void handshake() _throw(std::exception) {
+      timeval timeout{
+          .tv_sec = 30,
+          .tv_usec = 0,
+      };
+
+      if (setsockopt(_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+        throw SocketError{"Error enabling runtime receive timeout for handshake"};
+      }
+
       try {
         const ClientHello request{};
         sendFrame(HandshakeCodec::encode(request));
@@ -81,6 +89,11 @@ namespace telar {
         if (const auto *accepted = std::get_if<ServerAccept>(&response)) {
           if (accepted->schema != request.schema) {
             throw SocketError{"Runtime accepted an unexpected wire schema"};
+          }
+
+          timeout.tv_sec = 0;
+          if (setsockopt(_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+            throw SocketError{"Error disabling runtime receive timeout"};
           }
 
           return;
@@ -113,7 +126,8 @@ namespace telar {
     }
 
     template <typename Message> void send(const Message &message, std::span<Byte> frame_buffer) {
-      static_assert(MessageSchema<Message>::direction == Direction::client, "Can only send Client Messages");
+      static_assert(MessageSchema<Message>::direction == Direction::client,
+                    "Can only send Client Messages");
       if (frame_buffer.size() < frame_prefix_size) {
         throw EncodingError{"Frame buffer too small"};
       }
@@ -125,22 +139,29 @@ namespace telar {
     }
 
     std::span<const Byte> receiveFrame(std::span<Byte> buffer) _throw(SocketError) {
-      try {
-        std::array<Byte, frame_prefix_size> prefix{};
-        readAll(prefix.data(), prefix.size());
+      std::array<Byte, frame_prefix_size> prefix{};
+      readAll(prefix.data(), prefix.size());
 
-        std::span<const Byte> input = prefix;
-        const auto length = u32::decode(input);
-        if (length == 0 || length > max_payload_size || length > buffer.size()) {
-          throw SocketError{"Invalid runtime frame length"};
-        }
-
-        readAll(buffer.data(), length);
-        return buffer.first(length);
-      } catch (...) {
-        deinit();
-        throw;
+      std::span<const Byte> input = prefix;
+      const auto length = u32::decode(input);
+      if (length == 0 || length > max_payload_size || length > buffer.size()) {
+        throw SocketError{"Invalid runtime frame length"};
       }
+
+      readAll(buffer.data(), length);
+      return buffer.first(length);
+    }
+
+    void interruptRead() const noexcept {
+      if (_fd < 0) {
+        return;
+      }
+
+      int result;
+
+      do {
+        result = ::shutdown(_fd, SHUT_RD);
+      } while (result < 0 && errno == EINTR);
     }
 
   private:

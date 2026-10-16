@@ -1,14 +1,14 @@
 const std = @import("std");
-const FontFamily = @This();
+const FontName = @This();
 
 bytes: [256:0]u8 = @splat(0),
 len: u16 = 0,
 
-/// Owns a validated system font name. Empty selects the bundled face.
+/// Owns a validated font family or style name. Empty selects the default.
 /// Example: `try family.set("Iosevka Term");`
-pub fn set(self: *FontFamily, text: []const u8) !void {
+pub fn set(self: *FontName, text: []const u8) !void {
     if (text.len > self.bytes.len or !std.unicode.utf8ValidateSlice(text) or std.mem.indexOfScalar(u8, text, 0) != null) {
-        return error.InvalidFontFamily;
+        return error.InvalidFontName;
     }
 
     self.* = .{};
@@ -16,6 +16,6 @@ pub fn set(self: *FontFamily, text: []const u8) !void {
     self.len = @intCast(text.len);
 }
 
-pub fn name(self: *const FontFamily) [:0]const u8 {
+pub fn name(self: *const FontName) [:0]const u8 {
     return self.bytes[0..self.len :0];
 }

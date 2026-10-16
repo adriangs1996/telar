@@ -8,6 +8,7 @@ const freetype = @import("freetype");
 const AtlasOptions = @import("AtlasOptions.zig");
 const MacRasterizer = @import("MacRasterizer.zig");
 const FontSize = @import("FontSize.zig");
+const FontVariation = @import("../native/FontVariation.zig").FontVariation;
 const FontFace = @This();
 
 extern fn FT_New_Size(freetype.c.FT_Face, *freetype.c.FT_Size) freetype.c.FT_Error;
@@ -18,6 +19,9 @@ extern fn FT_Activate_Size(freetype.c.FT_Size) freetype.c.FT_Error;
 /// chrome roles and room for a size change in flight. More is an error, not
 /// an eviction, so a sized instance never disappears under a cached run.
 pub const max_sizes = 8;
+
+/// 1.0 in FreeType's 16.16 fixed point, which design coordinates use.
+const fixed_one = 65536.0;
 
 face: freetype.c.FT_Face,
 shaping_font: *freetype.c.hb_font_t,
@@ -65,8 +69,9 @@ pub fn init(library: freetype.c.FT_Library, options: AtlasOptions, pixels: []u8)
     if (freetype.c.FT_Select_Charmap(face, freetype.c.FT_ENCODING_UNICODE) != 0) {
         return error.UnicodeCharmapUnavailable;
     }
-    const shaping_font = freetype.c.hb_ft_font_create_referenced(face) orelse return error.ShapingFontInitFailed;
-    errdefer freetype.c.hb_font_destroy(shaping_font);
+
+    // The rasterizer finds the face by its default PostScript name, which
+    // FreeType renames once a variation applies, so it opens first.
     var mac_rasterizer: ?MacRasterizer = null;
     if (builtin.os.tag == .macos and options.thicken) {
         mac_rasterizer = try MacRasterizer.init(.{
@@ -77,13 +82,67 @@ pub fn init(library: freetype.c.FT_Library, options: AtlasOptions, pixels: []u8)
             .pixels = pixels.ptr,
             .side = @intCast(std.math.sqrt(pixels.len)),
             .strength = options.thicken_strength,
+            .variation = &options.variation,
         });
     }
     errdefer if (mac_rasterizer) |*rasterizer| {
         rasterizer.deinit();
     };
 
+    try vary(library, face, &options.variation);
+
+    // HarfBuzz reads the face's variation coordinates when it is created.
+    const shaping_font = freetype.c.hb_ft_font_create_referenced(face) orelse return error.ShapingFontInitFailed;
     return .{ .face = face, .shaping_font = shaping_font, .mac_rasterizer = mac_rasterizer };
+}
+
+/// Moves a variable face to the requested design coordinates; every other
+/// axis keeps its default. A tag the face lacks or a value outside its axis
+/// range is refused rather than clamped into a different instance.
+fn vary(library: freetype.c.FT_Library, face: freetype.c.FT_Face, variation: *const FontVariation) !void {
+    if (variation.count == 0) {
+        return;
+    }
+
+    if (variation.count > FontVariation.max_axes) {
+        return error.FontVariationTooLarge;
+    }
+
+    var master: [*c]freetype.c.FT_MM_Var = null;
+    if (freetype.c.FT_Get_MM_Var(face, &master) != 0) {
+        return error.FontVariationUnavailable;
+    }
+    defer _ = freetype.c.FT_Done_MM_Var(library, master);
+
+    const axes = master.*.axis[0..master.*.num_axis];
+    if (axes.len > FontVariation.max_axes) {
+        return error.FontVariationTooLarge;
+    }
+
+    // SAFETY: the loop below writes every coordinate FreeType reads, one per axis.
+    var coordinates: [FontVariation.max_axes]freetype.c.FT_Fixed = undefined;
+    for (axes, 0..) |axis, index| {
+        coordinates[index] = axis.def;
+    }
+
+    for (variation.tags[0..variation.count], variation.values[0..variation.count]) |tag, requested| {
+        const index = for (axes, 0..) |axis, position| {
+            if (axis.tag == tag) {
+                break position;
+            }
+        } else return error.FontVariationAxisMissing;
+
+        const fixed = @as(f64, requested) * fixed_one;
+        if (!std.math.isFinite(fixed) or fixed < @as(f64, @floatFromInt(axes[index].minimum)) or fixed > @as(f64, @floatFromInt(axes[index].maximum))) {
+            return error.FontVariationOutOfRange;
+        }
+
+        coordinates[index] = @intFromFloat(@round(fixed));
+    }
+
+    if (freetype.c.FT_Set_Var_Design_Coordinates(face, @intCast(axes.len), &coordinates) != 0) {
+        return error.FontVariationFailed;
+    }
 }
 
 pub fn deinit(self: *FontFace) void {

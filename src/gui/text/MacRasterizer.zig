@@ -2,6 +2,7 @@
 //! Call only on the owning atlas thread; cached glyphs bypass this port.
 const builtin = @import("builtin");
 const Glyph = @import("../native/GlyphRaster.zig").GlyphRaster;
+const FontVariation = @import("../native/FontVariation.zig").FontVariation;
 const Rasterizer = @This();
 
 handle: *anyopaque,
@@ -63,7 +64,8 @@ pub fn draw(self: *Rasterizer, glyph: Glyph) void {
     }
 }
 
-/// Mirrors telar_glyph_rasterizer_options. Both byte buffers outlive the rasterizer.
+/// Mirrors telar_glyph_rasterizer_options. Both byte buffers outlive the
+/// rasterizer; the variation is read only while it is created.
 const Options = extern struct {
     font: [*]const u8,
     font_len: usize,
@@ -73,4 +75,5 @@ const Options = extern struct {
     side: u32,
     thicken: u32 = 1,
     strength: u32 = 255,
+    variation: *const FontVariation,
 };

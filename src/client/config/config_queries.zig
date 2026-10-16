@@ -14,7 +14,7 @@ pub fn writeSection(snapshot: *const Snapshot, query: Query, writer: *std.Io.Wri
         .theme => try std.json.Stringify.value(.{ .base = snapshot.theme, .light = snapshot.theme_light, .dark = snapshot.theme_dark }, .{}, writer),
         .gui => {
             const gui = &snapshot.gui;
-            try std.json.Stringify.value(.{ .font = .{ .family = gui.font.family.name(), .size = gui.font.size, .line_height = gui.font.line_height, .letter_spacing = gui.font.letter_spacing, .thicken = gui.font.thicken, .thicken_strength = gui.font.thicken_strength }, .cursor = gui.cursor, .window = gui.window, .chrome = gui.chrome, .sidebar = gui.sidebar }, .{}, writer);
+            try std.json.Stringify.value(.{ .font = .{ .family = gui.font.family.name(), .style = gui.font.style.name(), .size = gui.font.size, .line_height = gui.font.line_height, .letter_spacing = gui.font.letter_spacing, .thicken = gui.font.thicken, .thicken_strength = gui.font.thicken_strength }, .cursor = gui.cursor, .window = gui.window, .chrome = gui.chrome, .sidebar = gui.sidebar }, .{}, writer);
         },
         .input => try std.json.Stringify.value(.{ .prefix = snapshot.prefix, .sequence_timeout_ns = snapshot.input_sequence_timeout_ns, .binding_count = snapshot.binding_count }, .{}, writer),
         .binding => {

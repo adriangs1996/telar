@@ -20,6 +20,7 @@ pub fn init(context: FaceContext, match: FontMatch, bytes: []const u8) !Fallback
     options.font = bytes;
     options.face_index = match.face_index;
     options.postscript = std.mem.sliceTo(&match.postscript, 0);
+    options.variation = match.variation;
     var face = try FontFace.init(context.library, options, context.pixels);
     errdefer face.deinit();
     if (!face.monochrome()) {
@@ -35,10 +36,11 @@ pub fn deinit(self: *FallbackFace, allocator: std.mem.Allocator) void {
     self.* = undefined;
 }
 
-/// Whether `match` names the same file and face already loaded here.
+/// Whether `match` names the same file, face and instance already loaded here.
 /// Example: `if (fallback.matches(match)) { ... }`
 pub fn matches(self: *const FallbackFace, match: FontMatch) bool {
     return self.match.face_index == match.face_index and
         std.mem.eql(u8, std.mem.sliceTo(&self.match.path, 0), std.mem.sliceTo(&match.path, 0)) and
-        std.mem.eql(u8, std.mem.sliceTo(&self.match.postscript, 0), std.mem.sliceTo(&match.postscript, 0));
+        std.mem.eql(u8, std.mem.sliceTo(&self.match.postscript, 0), std.mem.sliceTo(&match.postscript, 0)) and
+        std.meta.eql(self.match.variation, match.variation);
 }
