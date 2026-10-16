@@ -1,2 +1,9 @@
 CompileFlags:
   CompilationDatabase: out/debug
+
+---
+If:
+  PathMatch: native-backends/macos/.*\.hpp
+CompileFlags:
+  Remove: [-x, '-fmodule-file=*', '-fmodule-output=*']
+  Add: [-ObjC++, -fobjc-arc]

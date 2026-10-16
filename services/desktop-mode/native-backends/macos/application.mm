@@ -1,5 +1,6 @@
-#include "../../app_state.hpp"
 #include "../application.hpp"
+#include "../../app_state.hpp"
+#include "topbar.hpp"
 #import <AppKit/AppKit.h>
 #include <CoreFoundation/CFBase.h>
 #include <CoreFoundation/CFRunLoop.h>
@@ -116,6 +117,16 @@ int runApplication(ApplicationHost &host, ApplicationWakeup &wakeup, const AppSt
       return EXIT_FAILURE;
     }
 
+    NSScreen *screen = [NSScreen mainScreen];
+    if (!screen) {
+      return EXIT_FAILURE;
+    }
+
+    TelarTopBar *topbar = [[TelarTopBar alloc] initWithScreen:screen];
+    if (!topbar) {
+      return EXIT_FAILURE;
+    }
+
     TelarApplicationController *controller =
         [[TelarApplicationController alloc] initWithHost:&host state:&state];
 
@@ -129,6 +140,7 @@ int runApplication(ApplicationHost &host, ApplicationWakeup &wakeup, const AppSt
     CFRunLoopAddSource(signal.loop, signal.source, kCFRunLoopCommonModes);
 
     if (host.update()) {
+      [topbar orderFrontRegardless];
       [application run];
     }
 

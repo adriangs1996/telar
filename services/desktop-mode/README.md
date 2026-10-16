@@ -15,9 +15,11 @@ pass `-DCMAKE_CXX_COMPILER=/path/to/clang++` and `-DGCC_CXX=/path/to/g++`.
 Use a fresh build directory when changing the compiler or standard library.
 Apple Clang is not supported.
 
-On macOS, `desktop-native` compiles `native-backends/macos/application.mm`
-as Objective-C++23 with ARC, using the same LLVM compiler and libstdc++
-configuration as the C++ client. The executable links that library and AppKit.
+On macOS, `desktop-native` discovers all `.mm` files under
+`native-backends/macos/` and compiles them as Objective-C++23 with ARC,
+using the same LLVM compiler and libstdc++
+configuration as the C++ client. The executable links that library, AppKit,
+Metal and MetalKit.
 The editor target also builds the native library, and CMake includes its
 source in the compilation database. Native application lifecycle and windows
 belong in this platform layer.

@@ -39,7 +39,10 @@ if(APPLE)
   set(CMAKE_OBJCXX_EXTENSIONS OFF)
 
   find_library(APPKIT_FRAMEWORK AppKit REQUIRED)
-  add_library(desktop-native OBJECT native-backends/macos/application.mm)
+  find_library(METAL_FRAMEWORK Metal REQUIRED)
+  find_library(METALKIT_FRAMEWORK MetalKit REQUIRED)
+  file(GLOB_RECURSE desktop_native_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/native-backends/macos/*.mm")
+  add_library(desktop-native OBJECT ${desktop_native_sources})
   target_compile_options(desktop-native PRIVATE -fobjc-arc)
 
   # Recent LLVM class-selector stubs require a newer Apple linker.
@@ -49,7 +52,7 @@ if(APPLE)
     target_compile_options(desktop-native PRIVATE -fno-objc-msgsend-class-selector-stubs)
   endif()
 
-  target_link_libraries(desktop-native PUBLIC "${APPKIT_FRAMEWORK}")
+  target_link_libraries(desktop-native PUBLIC "${APPKIT_FRAMEWORK}" "${METAL_FRAMEWORK}" "${METALKIT_FRAMEWORK}")
   target_link_libraries(telar-desktop PRIVATE desktop-native)
 endif()
 
