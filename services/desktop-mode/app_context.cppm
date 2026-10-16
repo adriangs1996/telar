@@ -1,11 +1,18 @@
 module;
 #include "telar_client/telar_client.hpp"
+#include <concepts>
 #include <generator>
 #include <mutex>
 #include <variant>
 export module app_context;
 
 #define MAX_PARALLEL_EVENTS 1000
+#define _lock_autorelease_block
+
+export template <typename T>
+concept Notifier = requires(T &notifier) {
+  { notifier.wakeup() } noexcept -> std::same_as<void>;
+};
 
 export struct KeyPress {
   char key;
@@ -17,15 +24,21 @@ export struct Exit {
 
 export using Event = std::variant<KeyPress, Exit>;
 
-export struct EventQueue {
+export template <Notifier INotifier> struct EventQueue {
+  explicit EventQueue(INotifier &notifier) : notifier(notifier) {}
 
   bool push(Event event) {
-    std::lock_guard lock(mutex);
-    if (slot == MAX_PARALLEL_EVENTS) {
-      return false;
+    _lock_autorelease_block {
+      std::lock_guard lock(mutex);
+
+      if (slot == MAX_PARALLEL_EVENTS) {
+        return false;
+      }
+
+      buffer[slot++] = std::move(event);
     }
 
-    buffer[slot++] = std::move(event);
+    notifier.wakeup();
     return true;
   }
 
@@ -52,12 +65,13 @@ export struct EventQueue {
   }
 
 private:
+  INotifier &notifier;
   std::mutex mutex;
   std::uint16_t slot = 0;
   Event buffer[MAX_PARALLEL_EVENTS];
 };
 
-export struct AppContext {
+export template <Notifier INotifier> struct AppContext {
   telar::Client &client;
-  EventQueue &input_queue;
+  EventQueue<INotifier> &input_queue;
 };

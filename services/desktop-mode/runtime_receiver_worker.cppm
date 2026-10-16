@@ -10,7 +10,8 @@ import app_context;
 
 export struct RuntimeReceiverWorker {
 
-  static RuntimeReceiverWorker init(const AppContext &context) {
+  template <Notifier INotifier>
+  static RuntimeReceiverWorker init(const AppContext<INotifier> &context) {
     RuntimeReceiverWorker worker{};
 
     worker.reader = std::jthread{[&](std::stop_token stop) {

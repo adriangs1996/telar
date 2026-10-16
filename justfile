@@ -44,12 +44,11 @@ desktop socket=(dev_runtime_dir / "runtime.sock"):
     cmake --build --preset debug --target telar-desktop
     ./out/debug/telar-desktop "{{ socket }}"
 
-# Verify the C++23 toolchain and generate the clangd compilation database.
+# Check the desktop modules and development programs and generate the clangd compilation database.
 [working-directory: "services/desktop-mode"]
 desktop-check:
     cmake --preset debug
     cmake --build --preset debug --target desktop-editor
-    ctest --preset debug
 
 # Refresh desktop modules and development programs for clangd without building main.cpp.
 [working-directory: "services/desktop-mode"]

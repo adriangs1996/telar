@@ -1,14 +1,23 @@
 
 #include <cassert>
+#include <coroutine>
 #include <thread>
 #include <variant>
 
 import app_context;
 import debug.support.random_data;
 
+#define __test_block
+
+struct Waker {
+  void wakeup() noexcept {}
+};
+
 int main() {
-  EventQueue emulated_event_queue{};
-  {
+  Waker waker{};
+  EventQueue emulated_event_queue{waker};
+
+  __test_block {
     // test that an empty queue returns 0 events
     int count = 0;
     for (auto event : emulated_event_queue.drain()) {
@@ -17,7 +26,7 @@ int main() {
     assert(count == 0);
   }
 
-  {
+  __test_block {
     // Test that events arrive and can be drained sequentially
     auto keys = randomAscii(100);
     int pushes = 0;
@@ -37,7 +46,7 @@ int main() {
     assert(emulated_event_queue.count() == 0);
   }
 
-  {
+  __test_block {
     // Stress test with a concurrent workload
     const std::size_t elements = 10000000;
     auto keys = randomAscii(elements);
@@ -78,7 +87,7 @@ int main() {
     }
   }
 
-  {
+  __test_block {
     // Run a test with two producers
     const std::size_t elements = 1000000;
     auto keys = randomAscii(elements);

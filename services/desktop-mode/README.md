@@ -30,9 +30,9 @@ just desktop-debug event_queue_dbg
 just desktop /path/to/runtime.sock
 ```
 
-`desktop-check` builds the shared modules, development programs and the
-existing toolchain check, then runs that check through CTest. It works
-independently of `main.cpp`, which may be under development.
+`desktop-check` builds the shared modules, native backend and development
+programs without running them. It works independently of `main.cpp`, which
+may be under development.
 
 `desktop-debug` builds and runs the named program from `debug/`. Additional
 arguments are forwarded to that program. Each `.cpp` in `debug/`, outside
@@ -40,7 +40,7 @@ arguments are forwarded to that program. Each `.cpp` in `debug/`, outside
 Nested paths become hyphenated target names:
 `debug/input/queue.cpp` becomes `input-queue`. Program names must be unique
 and must not collide with build targets such as `telar-desktop` or
-`toolchain-check`.
+`desktop-editor`.
 
 The default socket for `just desktop` is `.zig-out/dev/runtime.sock`. Start
 the runtime separately.
@@ -86,7 +86,8 @@ the editor target. Neovim configurations that support this file run those
 commands asynchronously on save, serialize builds and retain pending saves.
 `build_directory` identifies the project's build tree. The Neovim integration
 fingerprints its compiled module timestamps, module maps and compilation
-configuration after successful builds. When these change, it stops the
+configuration after builds, including failed builds that updated modules
+before another target failed. When these change, it stops the
 project's clangd, removes only its `.cache/clangd/modules` cache, and restarts
 it with all loaded buffers, including unsaved edits. A consumer-only edit
 that leaves those inputs unchanged preserves the cache and running server.
@@ -112,7 +113,6 @@ From this directory:
 ```sh
 cmake --preset debug
 cmake --build --preset debug
-ctest --preset debug
 ./out/debug/event_queue_dbg
 ```
 

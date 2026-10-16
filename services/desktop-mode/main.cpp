@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <unistd.h>
 #include <variant>
+#include <coroutine>
 
 #include "native-backends/application.hpp"
 #include "telar_client/telar.hpp"
@@ -34,6 +35,8 @@ template <typename... Ts> struct overloaded : Ts... {
   using Ts::operator()...;
 };
 
+
+template <Notifier INotifier>
 struct App final : ApplicationHost {
   Space spaces[MAX_SPACES] = {};
   Tab tabs[MAX_TABS] = {};
@@ -41,7 +44,7 @@ struct App final : ApplicationHost {
   bool exited = false;
   std::uint8_t exit_code = 0;
 
-  explicit App(AppContext &context) : context(context) {}
+  explicit App(AppContext<INotifier> &context) : context(context) {}
 
   bool requestExit() override { return context.input_queue.push(Exit{}); }
 
@@ -54,7 +57,7 @@ struct App final : ApplicationHost {
   }
 
 private:
-  AppContext &context;
+  AppContext<INotifier> &context;
 
   void process(Event input) {
     std::visit(overloaded{
@@ -76,7 +79,9 @@ int main(int argc, const char **argv) {
     return 1;
   }
 
-  EventQueue input_queue{};
+  ApplicationWakeup wakeup;
+  EventQueue input_queue{wakeup};
+
   auto client = telar::Client::init(argv[1]);
   AppContext context{.client = client, .input_queue = input_queue};
   App state(context);
@@ -85,7 +90,7 @@ int main(int argc, const char **argv) {
     client.handshake();
     auto runtime_reader = RuntimeReceiverWorker::init(context);
 
-    const int application_result = runApplication(state);
+    const int application_result = runApplication(state, wakeup);
     runtime_reader.stop();
 
     if (application_result != EXIT_SUCCESS) {

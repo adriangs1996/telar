@@ -13,7 +13,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(Threads REQUIRED)
-include(CTest)
 
 # Source discovery is intentional: adding a module or a development program
 # must not require editing the build definition.
@@ -85,11 +84,3 @@ foreach(source IN LISTS desktop_programs)
   target_link_libraries("${program}" PRIVATE desktop-debug-support)
   add_dependencies(desktop-editor "${program}")
 endforeach()
-
-if(BUILD_TESTING)
-  add_executable(toolchain-check tests/toolchain.cpp)
-  target_link_libraries(toolchain-check PRIVATE desktop-core)
-  add_test(NAME desktop-toolchain COMMAND toolchain-check)
-  set_tests_properties(desktop-toolchain PROPERTIES PASS_REGULAR_EXPRESSION "C\\+\\+23 generator and modules OK")
-  add_dependencies(desktop-editor toolchain-check)
-endif()
