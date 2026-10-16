@@ -17,11 +17,12 @@ int main(int argc, const char **argv) {
     return 1;
   }
 
+  lua::Vm lua_vm;
   ApplicationWakeup wakeup;
   EventQueue input_queue{wakeup};
 
   auto client = telar::Client::init(argv[1]);
-  AppContext context{.client = client, .input_queue = input_queue};
+  AppContext context{.client = client, .input_queue = input_queue, .lua_vm = lua_vm};
   App app(context);
 
   try {

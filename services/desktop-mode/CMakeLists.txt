@@ -13,6 +13,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(Threads REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LUAJIT REQUIRED IMPORTED_TARGET luajit>=2.1)
 
 # Source discovery is intentional: adding a module or a development program
 # must not require editing the build definition.
@@ -26,6 +28,7 @@ add_library(desktop-core STATIC ${desktop_sources})
 target_sources(desktop-core PUBLIC FILE_SET CXX_MODULES FILES ${desktop_modules})
 target_include_directories(desktop-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(desktop-core PUBLIC Threads::Threads)
+target_link_libraries(desktop-core PRIVATE PkgConfig::LUAJIT)
 target_compile_definitions(desktop-core PUBLIC "$<$<CONFIG:Debug>:TELAR_DEBUG=1>")
 
 add_executable(telar-desktop main.cpp)

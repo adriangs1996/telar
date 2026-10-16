@@ -5,10 +5,16 @@ Upstream LLVM Clang, including `clang-scan-deps`, compiles the modules. GNU
 libstdc++ must provide `std::generator`. The verified macOS combination is
 LLVM 23 and GCC 16. The runtime and the rest of Telar still build with Zig.
 
-On macOS, install the dependencies with `brew install cmake ninja llvm gcc`.
+On macOS, install the dependencies with
+`brew install cmake ninja llvm gcc pkgconf luajit`.
 The build discovers LLVM through Homebrew and queries GCC for its standard
 library headers and library path. On Linux, install CMake, Ninja, Clang with
-`clang-scan-deps`, and GCC with libstdc++ development headers.
+`clang-scan-deps`, GCC with libstdc++ development headers, pkg-config and
+LuaJIT 2.1 development headers and libraries.
+
+CMake finds LuaJIT 2.1 or newer through pkg-config and links it privately to
+`desktop-core`. Set `PKG_CONFIG_PATH` if LuaJIT is installed under a custom
+prefix. The compilation database includes its header paths for core sources.
 
 Set `CXX` and `GXX` before the first configure to select other toolchains, or
 pass `-DCMAKE_CXX_COMPILER=/path/to/clang++` and `-DGCC_CXX=/path/to/g++`.

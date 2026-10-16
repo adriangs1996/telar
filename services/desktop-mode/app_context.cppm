@@ -8,6 +8,8 @@ export module app_context;
 
 export import app_state;
 
+export import lua_vm;
+
 #define MAX_PARALLEL_EVENTS 1000
 #define _lock_autorelease_block
 
@@ -81,4 +83,5 @@ private:
 export template <Notifier INotifier> struct AppContext {
   telar::Client &client;
   EventQueue<INotifier> &input_queue;
+  lua::Vm &lua_vm;
 };
