@@ -6,6 +6,8 @@ module;
 #include <variant>
 export module app_context;
 
+export import app_state;
+
 #define MAX_PARALLEL_EVENTS 1000
 #define _lock_autorelease_block
 
@@ -22,12 +24,17 @@ export struct Exit {
   std::uint8_t code = 0;
 };
 
-export using Event = std::variant<KeyPress, Exit>;
+export struct WorkspaceUpdated {
+  std::uint64_t revision = 0;
+  std::vector<WorkspaceSummary> workspaces;
+};
+
+export using Event = std::variant<KeyPress, Exit, WorkspaceUpdated>;
 
 export template <Notifier INotifier> struct EventQueue {
   explicit EventQueue(INotifier &notifier) : notifier(notifier) {}
 
-  bool push(Event event) {
+  bool push(Event &&event) {
     _lock_autorelease_block {
       std::lock_guard lock(mutex);
 

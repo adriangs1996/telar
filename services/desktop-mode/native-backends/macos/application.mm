@@ -1,3 +1,4 @@
+#include "../../app_state.hpp"
 #include "../application.hpp"
 #import <AppKit/AppKit.h>
 #include <CoreFoundation/CFBase.h>
@@ -7,7 +8,7 @@
 #include <objc/NSObject.h>
 
 struct ApplicationWakeup::Impl {
-  ApplicationHost *host = nullptr;
+  ApplicationHost *host = nullptr; // This is wired to the App struct
   CFRunLoopRef loop = CFRunLoopGetMain();
   CFRunLoopSourceRef source = nullptr;
 
@@ -62,21 +63,23 @@ void ApplicationWakeup::wakeup() noexcept {
 
 @interface TelarApplicationController : NSObject {
   ApplicationHost *_host;
+  const AppState *_state;
   NSStatusItem *_status_item;
 }
 
-- (instancetype)initWithHost:(ApplicationHost *)host;
+- (instancetype)initWithHost:(ApplicationHost *)host state:(const AppState *)state;
 - (void)requestExit:(id)sender;
 - (void)removeStatusItem;
 
 @end
 
 @implementation TelarApplicationController
-- (instancetype)initWithHost:(ApplicationHost *)host {
+- (instancetype)initWithHost:(ApplicationHost *)host state:(const AppState *)state {
   self = [super init];
 
   if (self) {
     _host = host;
+    _state = state;
     _status_item = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
     _status_item.button.title = @"Telar";
 
@@ -94,18 +97,8 @@ void ApplicationWakeup::wakeup() noexcept {
 }
 
 - (void)requestExit:(id)sender {
-  if (!_host->update()) {
-    [NSApp stop:sender];
-    return;
-  }
-
   if (!_host->requestExit()) {
     NSBeep();
-    return;
-  }
-
-  if (!_host->update()) {
-    [NSApp stop:sender];
   }
 }
 
@@ -115,7 +108,7 @@ void ApplicationWakeup::wakeup() noexcept {
 
 @end
 
-int runApplication(ApplicationHost &host, ApplicationWakeup &wakeup) {
+int runApplication(ApplicationHost &host, ApplicationWakeup &wakeup, const AppState &state) {
   @autoreleasepool {
     NSApplication *application = [NSApplication sharedApplication];
 
@@ -124,7 +117,7 @@ int runApplication(ApplicationHost &host, ApplicationWakeup &wakeup) {
     }
 
     TelarApplicationController *controller =
-        [[TelarApplicationController alloc] initWithHost:&host];
+        [[TelarApplicationController alloc] initWithHost:&host state:&state];
 
     if (!controller) {
       return EXIT_FAILURE;

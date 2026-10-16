@@ -1,12 +1,21 @@
 module;
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
 #include <cstdlib>
 #include <thread>
 #include <vector>
 export module runtime_receiver_worker;
 
 import app_context;
+
+constexpr std::size_t max_workspace_entries = 64;
+constexpr std::size_t max_worktree_entries = 64;
+
+constexpr std::size_t decode_capacity = max_worktree_entries * sizeof(telar::WorktreeListEntry) +
+                                        max_workspace_entries * sizeof(telar::WorkspaceListEntry) +
+                                        alignof(telar::WorkspaceListEntry) +
+                                        alignof(telar::WorktreeListEntry);
 
 export struct RuntimeReceiverWorker {
 
@@ -18,7 +27,9 @@ export struct RuntimeReceiverWorker {
       std::stop_callback interrupt{stop, [&context]() noexcept { context.client.interruptRead(); }};
 
       try {
+
         std::vector<telar::Byte> buffer(telar::max_payload_size);
+        std::vector<telar::Byte> decode_buffer(decode_capacity);
 
         while (!stop.stop_requested()) {
           const auto payload = context.client.receiveFrame(buffer);
@@ -49,7 +60,6 @@ export struct RuntimeReceiverWorker {
           case telar::ServerTag::proxy_status:
           case telar::ServerTag::agent_snapshot:
           case telar::ServerTag::system_metrics:
-          case telar::ServerTag::workspace_list:
           case telar::ServerTag::pane_cwd:
           case telar::ServerTag::pane_clipboard:
           case telar::ServerTag::notification:
@@ -77,6 +87,32 @@ export struct RuntimeReceiverWorker {
           case telar::ServerTag::limit_list:
           case telar::ServerTag::execution_reply:
             break;
+          case telar::ServerTag::workspace_list: {
+            telar::DecodeStorage storage{.remaining = decode_buffer};
+
+            const auto message = telar::Codec::decode<telar::WorkspaceList>(payload, storage);
+            WorkspaceUpdated update{.revision = message.revision};
+            update.workspaces.reserve(message.entries.size());
+
+            for (const auto &entry : message.entries) {
+              update.workspaces.push_back(WorkspaceSummary{
+                  .id = entry.workspace,
+                  .name = std::string(entry.name),
+                  .tab_count = entry.tab_count,
+              });
+            }
+
+            Event event{std::move(update)};
+            while (!stop.stop_requested()) {
+              if (context.input_queue.push(std::move(event))) {
+                break;
+              }
+
+              std::this_thread::yield();
+            }
+
+            break;
+          }
           }
         }
       } catch (const std::exception &error) {

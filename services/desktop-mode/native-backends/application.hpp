@@ -1,5 +1,7 @@
 #pragma once
 
+struct AppState;
+
 struct ApplicationHost {
   virtual ~ApplicationHost() = default;
   virtual bool requestExit() = 0;
@@ -19,7 +21,7 @@ private:
   struct Impl;
   Impl *impl;
 
-  friend int runApplication(ApplicationHost &host, ApplicationWakeup &wakeup);
+  friend int runApplication(ApplicationHost &host, ApplicationWakeup &wakeup, const AppState &state);
 };
 
-int runApplication(ApplicationHost &host, ApplicationWakeup &wakeup);
+int runApplication(ApplicationHost &host, ApplicationWakeup &wakeup, const AppState &state);
