@@ -3,6 +3,7 @@ module;
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <cstdlib>
+#include <stop_token>
 #include <thread>
 #include <vector>
 export module runtime_receiver_worker;

@@ -4,6 +4,8 @@
 #import <AppKit/AppKit.h>
 #include <CoreFoundation/CFBase.h>
 #include <CoreFoundation/CFRunLoop.h>
+#include <QCoreApplication>
+#include <QGuiApplication>
 #include <cstdlib>
 #include <new>
 #include <objc/NSObject.h>
@@ -21,19 +23,7 @@ struct ApplicationWakeup::Impl {
         return;
       }
 
-      [NSApp stop:nil];
-
-      NSEvent *event = [NSEvent otherEventWithType:NSEventTypeApplicationDefined
-                                          location:NSZeroPoint
-                                     modifierFlags:0
-                                         timestamp:0
-                                      windowNumber:0
-                                           context:nil
-                                           subtype:0
-                                             data1:0
-                                             data2:0];
-
-      [NSApp postEvent:event atStart:YES];
+      QCoreApplication::quit();
     }
   }
 };
@@ -110,7 +100,15 @@ void ApplicationWakeup::wakeup() noexcept {
 @end
 
 int runApplication(ApplicationHost &host, ApplicationWakeup &wakeup, const AppState &state) {
+  int result = EXIT_SUCCESS;
+
   @autoreleasepool {
+    int qt_argc = 1;
+    char application_name[] = "telar-desktop";
+    char *qt_argv[] = {application_name, nullptr};
+    QGuiApplication qt_application(qt_argc, qt_argv);
+    qt_application.setQuitOnLastWindowClosed(false);
+
     NSApplication *application = [NSApplication sharedApplication];
 
     if (![application setActivationPolicy:NSApplicationActivationPolicyAccessory]) {
@@ -141,14 +139,15 @@ int runApplication(ApplicationHost &host, ApplicationWakeup &wakeup, const AppSt
 
     if (host.update()) {
       [topbar orderFrontRegardless];
-      [application run];
+      result = qt_application.exec();
     }
 
     CFRunLoopRemoveSource(signal.loop, signal.source, kCFRunLoopCommonModes);
     signal.host = nullptr;
 
     [controller removeStatusItem];
+    [topbar close];
   }
 
-  return EXIT_SUCCESS;
+  return result;
 }

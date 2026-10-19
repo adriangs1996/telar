@@ -1,32 +1,42 @@
 # C++ desktop client
 
 CMake 3.28 or newer and Ninja 1.11 or newer build the C++23 desktop client.
-Upstream LLVM Clang, including `clang-scan-deps`, compiles the modules. GNU
-libstdc++ must provide `std::generator`. The verified macOS combination is
-LLVM 23 and GCC 16. The runtime and the rest of Telar still build with Zig.
+Upstream LLVM Clang, including `clang-scan-deps`, compiles the modules. On
+macOS, C++ and Objective-C++ use libc++ to match the installed Qt libraries.
+Qt 6.5 or newer provides QML, Qt Quick and Qt Quick Controls.
+The runtime and the rest of Telar still build with Zig.
 
 On macOS, install the dependencies with
-`brew install cmake ninja llvm gcc pkgconf luajit`.
-The build discovers LLVM through Homebrew and queries GCC for its standard
-library headers and library path. On Linux, install CMake, Ninja, Clang with
-`clang-scan-deps`, GCC with libstdc++ development headers, pkg-config and
-LuaJIT 2.1 development headers and libraries.
+`brew install cmake ninja llvm pkgconf luajit qtdeclarative`.
+The build discovers LLVM through Homebrew and uses the macOS SDK selected by
+`xcrun`. Set `CMAKE_OSX_SYSROOT` or `SDKROOT` to select a different SDK.
+On Linux, install CMake, Ninja,
+Clang with `clang-scan-deps`, libstdc++ development headers, pkg-config,
+LuaJIT 2.1 development headers and libraries, and the Qt QML, Qt Quick and
+Qt Quick Controls development packages.
 
 CMake finds LuaJIT 2.1 or newer through pkg-config and links it privately to
 `desktop-core`. Set `PKG_CONFIG_PATH` if LuaJIT is installed under a custom
 prefix. The compilation database includes its header paths for core sources.
 
-Set `CXX` and `GXX` before the first configure to select other toolchains, or
-pass `-DCMAKE_CXX_COMPILER=/path/to/clang++` and `-DGCC_CXX=/path/to/g++`.
-Use a fresh build directory when changing the compiler or standard library.
+Set `CXX` before the first configure to select another LLVM installation, or
+pass `-DCMAKE_CXX_COMPILER=/path/to/clang++`.
+Reconfigure with `cmake --fresh --preset debug` after changing the compiler
+or standard library so cached flags and compiled modules are regenerated.
 Apple Clang is not supported.
+
+CMake finds Qt through its package configuration. Set `CMAKE_PREFIX_PATH`
+when Qt is installed under a custom prefix.
+
+`desktop-ui` discovers `.cpp` files under `ui/` and links Qt QML, Quick and
+Quick Controls. This C++ library is shared across platform backends; Qt
+headers and libraries do not become dependencies of `desktop-core`.
 
 On macOS, `desktop-native` discovers all `.mm` files under
 `native-backends/macos/` and compiles them as Objective-C++23 with ARC,
-using the same LLVM compiler and libstdc++
-configuration as the C++ client. The executable links that library, AppKit,
-Metal and MetalKit.
-The editor target also builds the native library, and CMake includes its
+using the same LLVM compiler and libc++ as the C++ client. The executable
+links that library, `desktop-ui` and AppKit.
+The editor target also builds the UI and native libraries, and CMake includes their
 source in the compilation database. Native application lifecycle and windows
 belong in this platform layer.
 
@@ -56,10 +66,14 @@ the runtime separately.
 ## Adding source files
 
 Create shared `.cppm` modules and `.cpp` implementations anywhere under this
-directory, outside `debug/`, `tests/` and generated output directories. CMake
+directory, outside `ui/`, `debug/`, `tests/` and generated output directories. CMake
 discovers them automatically and Clang scans their module dependencies.
 `main.cpp` belongs to the application; files in `debug/` belong to their own
 executables. Each debug program links the shared modules.
+
+Put shared Qt UI headers and `.cpp` implementations under `ui/`. CMake
+discovers these implementations as part of `desktop-ui`, separately from
+the core modules and the platform-specific backends.
 
 Put modules and implementation files shared only by development programs in
 `debug/support/`, for example `debug/support/random_data.cppm`. CMake discovers

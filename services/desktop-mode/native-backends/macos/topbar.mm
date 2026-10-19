@@ -1,13 +1,14 @@
 #include "topbar.hpp"
-#include "metal_view.hpp"
+#include "ui/quick_surface.hpp"
 #include <AppKit/AppKit.h>
 #include <Foundation/Foundation.h>
+#include <memory>
 
-@implementation TelarTopBar
+@implementation TelarTopBar {
+  std::unique_ptr<QuickSurface> _surface;
+}
 
 - (instancetype)initWithScreen:(NSScreen *)screen {
-
-  // ** Configurar la ventana que contiene la Barra  **
   constexpr CGFloat bar_height = 36.0;
 
   const NSRect available = screen.visibleFrame;
@@ -33,18 +34,30 @@
   self.hasShadow = YES;
   self.title = @"Telar Top Bar";
 
-  // ** FIN DE CONFIGURACION DE VENTANA **
+  NSView *container = self.contentView;
+  const NSRect bounds = container.bounds;
 
-  // **     CREAR LA VISTA DE METAL QUE SE RENDEREA DENTRO DE LA VENTA CONFIGURADA **
-  TelarMetalView *view = [[TelarMetalView alloc] initWithFrame:self.contentView.bounds];
-  if (!view) {
-    return nil;
-  }
+  _surface = std::make_unique<QuickSurface>();
+  auto &window = _surface->window();
 
-  self.contentView = view;
-  // ** FIN DE LA CONFIGURACION DE METAL  **
+  window.setFlags(Qt::SubWindow);
+  window.resize(static_cast<int>(NSWidth(bounds)), static_cast<int>(NSHeight(bounds)));
+
+  NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window.winId());
+
+  view.frame = bounds;
+  view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+
+  [container addSubview:view];
+  window.show();
 
   return self;
+}
+
+- (void)close {
+  _surface.reset();
+
+  [super close];
 }
 
 @end

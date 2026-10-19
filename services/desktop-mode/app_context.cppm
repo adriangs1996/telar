@@ -1,7 +1,8 @@
 module;
 #include "telar_client/telar_client.hpp"
+#include <algorithm>
+#include <array>
 #include <concepts>
-#include <generator>
 #include <mutex>
 #include <variant>
 export module app_context;
@@ -34,6 +35,14 @@ export struct WorkspaceUpdated {
 export using Event = std::variant<KeyPress, Exit, WorkspaceUpdated>;
 
 export template <Notifier INotifier> struct EventQueue {
+  struct Batch {
+    std::array<Event, MAX_PARALLEL_EVENTS> events{};
+    std::uint16_t size = 0;
+
+    auto begin() { return events.begin(); }
+    auto end() { return events.begin() + size; }
+  };
+
   explicit EventQueue(INotifier &notifier) : notifier(notifier) {}
 
   bool push(Event &&event) {
@@ -51,21 +60,19 @@ export template <Notifier INotifier> struct EventQueue {
     return true;
   }
 
-  std::generator<Event> drain() {
-    std::array<Event, MAX_PARALLEL_EVENTS> batch;
-    std::uint16_t batch_size = 0;
-    {
+  Batch drain() {
+    Batch batch{};
+
+    _lock_autorelease_block {
       std::lock_guard lock(mutex);
       if (slot > 0) {
-        batch_size = slot;
+        batch.size = slot;
         std::move(buffer, buffer + slot, batch.begin());
         slot = 0;
       }
     }
 
-    for (std::uint16_t i = 0; i < batch_size; ++i) {
-      co_yield std::move(batch[i]);
-    }
+    return batch;
   }
 
   std::uint16_t count() {
