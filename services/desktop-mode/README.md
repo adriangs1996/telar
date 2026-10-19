@@ -16,8 +16,9 @@ LuaJIT 2.1 development headers and libraries, and the Qt QML, Qt Quick and
 Qt Quick Controls development packages.
 
 CMake finds LuaJIT 2.1 or newer through pkg-config and links it privately to
-`desktop-core`. Set `PKG_CONFIG_PATH` if LuaJIT is installed under a custom
-prefix. The compilation database includes its header paths for core sources.
+`desktop-core` and `desktop-ui`. Set `PKG_CONFIG_PATH` if LuaJIT is installed
+under a custom prefix. The compilation database includes its header paths
+for core and UI sources.
 
 Set `CXX` before the first configure to select another LLVM installation, or
 pass `-DCMAKE_CXX_COMPILER=/path/to/clang++`.
@@ -74,6 +75,12 @@ executables. Each debug program links the shared modules.
 Put shared Qt UI headers and `.cpp` implementations under `ui/`. CMake
 discovers these implementations as part of `desktop-ui`, separately from
 the core modules and the platform-specific backends.
+
+Lua scripts under `ui/` are discovered automatically and embedded in the
+`telar-desktop` executable as Qt resources. For example, `ui/topbar.lua`
+is available through `QFile` at `:/telar/ui/topbar.lua`, independently of
+the current working directory. Rebuild `telar-desktop` after editing a
+bundled script to update the embedded resource.
 
 Put modules and implementation files shared only by development programs in
 `debug/support/`, for example `debug/support/random_data.cppm`. CMake discovers

@@ -1,22 +1,14 @@
 #include "quick_surface.hpp"
+#include "lua_vm.hpp"
 #include <QColor>
 #include <QDebug>
+#include <QDir>
 #include <QQmlComponent>
 #include <QQmlError>
 #include <memory>
 #include <stdexcept>
 
-QuickSurface::QuickSurface() {
-  window_.setColor(QColor("#263449"));
-
-  createItem("QtQuick", "Text",
-             {
-                 {"text", QStringLiteral("Telar")},
-                 {"color", QColor("#cdd6f4")},
-                 {"x", 12},
-                 {"y", 8},
-             });
-}
+QuickSurface::QuickSurface(lua::Vm &lua_vm) : lua_vm(lua_vm) {}
 
 QQuickWindow &QuickSurface::window() noexcept { return window_; }
 

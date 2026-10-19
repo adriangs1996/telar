@@ -37,7 +37,7 @@ int main(int argc, const char **argv) {
         .interactive = true,
     });
 
-    const int application_result = runApplication(app, wakeup, app.state());
+    const int application_result = runApplication(app, wakeup, app.state(), lua_vm);
     runtime_reader.stop();
 
     if (application_result != EXIT_SUCCESS) {

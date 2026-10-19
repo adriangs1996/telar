@@ -1,5 +1,9 @@
 #pragma once
 
+namespace lua {
+  struct Vm;
+}
+
 struct AppState;
 
 struct ApplicationHost {
@@ -21,7 +25,8 @@ private:
   struct Impl;
   Impl *impl;
 
-  friend int runApplication(ApplicationHost &host, ApplicationWakeup &wakeup, const AppState &state);
+  friend int runApplication(ApplicationHost &host, ApplicationWakeup &wakeup, const AppState &state,
+                            lua::Vm &lua_vm);
 };
 
 int runApplication(ApplicationHost &host, ApplicationWakeup &wakeup, const AppState &state);

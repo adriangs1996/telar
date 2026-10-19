@@ -42,7 +42,7 @@ app:
 desktop socket=(dev_runtime_dir / "runtime.sock"):
     cmake --preset debug
     cmake --build --preset debug --target telar-desktop
-    ./out/debug/telar-desktop "{{ socket }}"
+    TELAR_DESKTOP_UI_DIR="${TELAR_DESKTOP_UI_DIR:-$PWD/ui}" ./out/debug/telar-desktop "{{ socket }}"
 
 # Check the desktop modules and development programs and generate the clangd compilation database.
 [working-directory: "services/desktop-mode"]

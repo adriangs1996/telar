@@ -1,7 +1,13 @@
+#pragma once
+
 #include "lua_api.hpp"
+#include <cstddef>
+#include <exception>
 #include <new>
 #include <stdexcept>
+#include <string>
 #include <string_view>
+#include <utility>
 
 namespace lua {
   struct Vm {
@@ -34,6 +40,44 @@ namespace lua {
     Vm &operator=(const Vm &) = delete;
 
     ~Vm() { lua_close(state); }
+
+    std::string readGlobalString(const char *name) {
+      struct Request {
+        const char *name;
+        std::string value;
+        std::exception_ptr error;
+      };
+
+      Request request{.name = name};
+
+      withState(
+          [](lua_State *state) -> int {
+            auto *request = static_cast<Request *>(lua_touserdata(state, 1));
+
+            lua_getglobal(state, request->name);
+            if (lua_type(state, -1) != LUA_TSTRING) {
+              return luaL_error(state, "Global '%s' must be a string", request->name);
+            }
+
+            std::size_t length = 0;
+            const char *value = lua_tolstring(state, -1, &length);
+
+            try {
+              request->value.assign(value, length);
+            } catch (...) {
+              request->error = std::current_exception();
+            }
+
+            return 0;
+          },
+          &request);
+
+      if (request.error) {
+        std::rethrow_exception(request.error);
+      }
+
+      return std::move(request.value);
+    }
 
     void checkStatus(int status) {
       if (status != 0) {

@@ -99,7 +99,8 @@ void ApplicationWakeup::wakeup() noexcept {
 
 @end
 
-int runApplication(ApplicationHost &host, ApplicationWakeup &wakeup, const AppState &state) {
+int runApplication(ApplicationHost &host, ApplicationWakeup &wakeup, const AppState &state,
+                   lua::Vm &lua_vm) {
   int result = EXIT_SUCCESS;
 
   @autoreleasepool {
@@ -120,7 +121,7 @@ int runApplication(ApplicationHost &host, ApplicationWakeup &wakeup, const AppSt
       return EXIT_FAILURE;
     }
 
-    TelarTopBar *topbar = [[TelarTopBar alloc] initWithScreen:screen];
+    TelarTopBar *topbar = [[TelarTopBar alloc] initWithScreen:screen luaVm:lua_vm];
     if (!topbar) {
       return EXIT_FAILURE;
     }

@@ -38,8 +38,18 @@ file(GLOB_RECURSE desktop_ui_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_D
 add_library(desktop-ui STATIC ${desktop_ui_sources})
 target_include_directories(desktop-ui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(desktop-ui PUBLIC Qt6::Qml Qt6::Quick Qt6::QuickControls2)
+target_link_libraries(desktop-ui PRIVATE PkgConfig::LUAJIT)
 
 add_executable(telar-desktop main.cpp)
+
+file(GLOB_RECURSE desktop_ui_scripts CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/ui/*.lua")
+if(desktop_ui_scripts)
+  qt_add_resources(telar-desktop desktop_ui_scripts
+    PREFIX "/telar/ui"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/ui"
+    FILES ${desktop_ui_scripts}
+  )
+endif()
 
 if(APPLE)
   set(CMAKE_OBJCXX_COMPILER "${CMAKE_CXX_COMPILER}")

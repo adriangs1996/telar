@@ -1,14 +1,14 @@
 #include "topbar.hpp"
-#include "ui/quick_surface.hpp"
+#include "ui/qttopbar.hpp"
 #include <AppKit/AppKit.h>
 #include <Foundation/Foundation.h>
 #include <memory>
 
 @implementation TelarTopBar {
-  std::unique_ptr<QuickSurface> _surface;
+  std::unique_ptr<QtTopBarSurface> _surface;
 }
 
-- (instancetype)initWithScreen:(NSScreen *)screen {
+- (instancetype)initWithScreen:(NSScreen *)screen luaVm:(lua::Vm &)lua_vm {
   constexpr CGFloat bar_height = 36.0;
 
   const NSRect available = screen.visibleFrame;
@@ -37,7 +37,7 @@
   NSView *container = self.contentView;
   const NSRect bounds = container.bounds;
 
-  _surface = std::make_unique<QuickSurface>();
+  _surface = std::make_unique<QtTopBarSurface>(lua_vm);
   auto &window = _surface->window();
 
   window.setFlags(Qt::SubWindow);
