@@ -1,0 +1,230 @@
+local core = _telar_ui
+_telar_ui = nil
+local io_core = _telar_io
+_telar_io = nil
+
+local ui = {}
+local fs = { config_dir = io_core.config_dir, home_dir = io_core.home_dir }
+local net = {}
+telar = { ui = ui, fs = fs, net = net }
+
+local function operation(fn, ...)
+  local identifier = fn(...)
+
+  return function()
+    if identifier then
+      io_core.cancel(identifier)
+      identifier = nil
+    end
+  end
+end
+
+function fs.read_file(path, callback)
+  return operation(io_core.read_file, path, callback)
+end
+
+function fs.write_file(path, contents, callback)
+  return operation(io_core.write_file, path, contents, callback)
+end
+
+function fs.list_dir(path, callback)
+  return operation(io_core.list_dir, path, callback)
+end
+
+function fs.watch(path, callback)
+  return operation(io_core.watch, path, callback)
+end
+
+function net.request(options, callback)
+  return operation(io_core.request, options, callback)
+end
+
+package = { path = "?.lua;?/init.lua", loaded = {}, preload = {} }
+local loading = {}
+
+function require(name)
+  assert(type(name) == "string" and name ~= "", "require expects a module name")
+
+  if package.loaded[name] then
+    return package.loaded[name]
+  end
+
+  if loading[name] then
+    error("Circular module dependency: " .. name, 2)
+  end
+
+  local loader = package.preload[name]
+
+  if not loader then
+    local module = io_core.module_source(name, package.path)
+    local message
+    loader, message = loadstring(module.source, "@" .. module.path)
+
+    if not loader then
+      error(message, 2)
+    end
+
+    setfenv(loader, _G)
+  end
+
+  loading[name] = true
+  local ok, result = xpcall(function()
+    return loader(name)
+  end, io_core.traceback)
+  loading[name] = nil
+
+  if not ok then
+    error(result, 2)
+  end
+
+  if result ~= nil then
+    package.loaded[name] = result
+  elseif package.loaded[name] == nil then
+    package.loaded[name] = true
+  end
+
+  return package.loaded[name]
+end
+
+package.loaded["_G"] = _G
+package.loaded["package"] = package
+package.loaded["table"] = table
+package.loaded["string"] = string
+package.loaded["math"] = math
+package.loaded["jit"] = jit
+package.loaded["telar"] = telar
+package.loaded["telar.ui"] = ui
+package.loaded["telar.fs"] = fs
+package.loaded["telar.net"] = net
+
+ui.create = core.create
+ui.get = core.get
+ui.set = core.set
+ui.append = core.append
+ui.animate = core.animate
+ui.focus = core.focus
+ui.input_method = core.input_method
+
+local event_methods = {}
+
+function event_methods:accept(action)
+  self.accepted = true
+  self.drop_action = action
+end
+
+function event_methods:stop_propagation()
+  self._stopped = true
+end
+
+function event_methods:capture_pointer()
+  self._capture = true
+  self.accepted = true
+end
+
+function event_methods:release_pointer()
+  self._release_capture = true
+end
+
+function event_methods:focus()
+  self._focus = true
+end
+
+function ui.on(target, name, callback)
+  assert(type(callback) == "function", "ui.on expects a callback")
+
+  if target == ui.surface then
+    target = core.root
+  end
+
+  local identifier = core.on(target, name, function(event)
+    setmetatable(event, { __index = event_methods })
+    callback(event)
+    return event
+  end)
+
+  return function()
+    if identifier then
+      core.off(identifier)
+      identifier = nil
+    end
+  end
+end
+
+ui.surface = setmetatable({}, {
+  __index = function(_, name)
+    if name == "root" then
+      return core.root
+    end
+
+    if name == "width" or name == "height" then
+      return core.root[name]
+    end
+
+    return core.surface_state()[name]
+  end,
+  __newindex = function()
+    error("Surface geometry is managed by the native backend")
+  end,
+})
+
+local function item(kind, options)
+  options = options or {}
+  local properties = {}
+
+  for name, value in pairs(options) do
+    if name ~= "parent" then
+      properties[name] = value
+    end
+  end
+
+  return core.create("QtQuick", kind, properties, options.parent)
+end
+
+function ui.item(options)
+  return item("Item", options)
+end
+
+function ui.text(options)
+  return item("Text", options)
+end
+
+function ui.image(options)
+  return item("Image", options)
+end
+
+-- A path is a composition of Qt objects; aliases keep its paint editable in Lua.
+function ui.path(options)
+  assert(type(options) == "table", "ui.path requires an options table")
+  assert(type(options.path) == "string", "ui.path requires an SVG path string")
+
+  local properties = { containsMode = "FillContains", fillMode = "Stretch" }
+
+  for name, value in pairs(options) do
+    if
+      name ~= "parent"
+      and name ~= "path"
+      and name ~= "fill"
+      and name ~= "stroke"
+      and name ~= "stroke_width"
+    then
+      properties[name] = value
+    end
+  end
+
+  local shape = core.create("QtQuick.Shapes", "Shape", properties, options.parent)
+  local paint = core.create("QtQuick.Shapes", "ShapePath", {
+    fillColor = options.fill or "transparent",
+    strokeColor = options.stroke or "transparent",
+    strokeWidth = options.stroke_width or 1,
+  }, shape)
+  local geometry = core.create("QtQuick", "PathSvg", { path = options.path }, paint)
+
+  core.append(paint, "pathElements", geometry)
+  core.append(shape, "data", paint)
+  core.alias(shape, "fill", paint, "fillColor")
+  core.alias(shape, "stroke", paint, "strokeColor")
+  core.alias(shape, "stroke_width", paint, "strokeWidth")
+  core.alias(shape, "path", geometry, "path")
+
+  return shape
+end

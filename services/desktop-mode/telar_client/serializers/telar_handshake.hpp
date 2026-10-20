@@ -14,12 +14,26 @@ namespace telar {
   namespace handshake {
 
     inline constexpr std::array<Byte, 8> magic{
-        'T', 'E', 'L', 'A', 'R', 'I', 'P', 'C',
+        'T',
+        'E',
+        'L',
+        'A',
+        'R',
+        'I',
+        'P',
+        'C',
     };
 
     // Matches the single current schema in src/core/schema/handshake.zig.
     inline constexpr SchemaId schema_id{
-        '8', '7', '6', 'b', '4', '8', '0', 'd',
+        '8',
+        '7',
+        '6',
+        'b',
+        '4',
+        '8',
+        '0',
+        'd',
     };
 
   } // namespace handshake
@@ -63,7 +77,8 @@ namespace telar {
       }
     }
 
-    static void encode(HandshakeRejectReason reason, std::span<Byte> &output) _throw(EncodingError) {
+    static void encode(HandshakeRejectReason reason, std::span<Byte> &output)
+        _throw(EncodingError) {
       u8::encode(static_cast<Byte>(validate(reason)), output);
     }
 
@@ -72,12 +87,15 @@ namespace telar {
     }
   };
 
-  template <Direction Side, HandshakeTag Tag, typename... Fields> struct HandshakeLayout : Schema<Side, Tag, Fields...> {
+  template <Direction Side, HandshakeTag Tag, typename... Fields>
+  struct HandshakeLayout : Schema<Side, Tag, Fields...> {
     static constexpr auto magic = handshake::magic;
-    static constexpr std::size_t payload_size = magic.size() + Schema<Side, Tag, Fields...>::payload_size;
+    static constexpr std::size_t payload_size =
+        magic.size() + Schema<Side, Tag, Fields...>::payload_size;
 
 #ifdef TELAR_DEBUG
-    template <typename Message> static void pretty_print(const Message &message, std::FILE *output = stderr);
+    template <typename Message>
+    static void pretty_print(const Message &message, std::FILE *output = stderr);
 #endif
   };
 
@@ -85,16 +103,22 @@ namespace telar {
 
   template <typename Message> struct HandshakeSchema;
 
-  template <> struct HandshakeSchema<ClientHello>
-      : HandshakeLayout<Direction::client, HandshakeTag::client_hello,
+  template <>
+  struct HandshakeSchema<ClientHello>
+      : HandshakeLayout<Direction::client,
+                        HandshakeTag::client_hello,
                         Field<&ClientHello::schema, SchemaIdCodec, "schema">> {};
 
-  template <> struct HandshakeSchema<ServerAccept>
-      : HandshakeLayout<Direction::server, HandshakeTag::server_accept,
+  template <>
+  struct HandshakeSchema<ServerAccept>
+      : HandshakeLayout<Direction::server,
+                        HandshakeTag::server_accept,
                         Field<&ServerAccept::schema, SchemaIdCodec, "schema">> {};
 
-  template <> struct HandshakeSchema<ServerReject>
-      : HandshakeLayout<Direction::server, HandshakeTag::server_reject,
+  template <>
+  struct HandshakeSchema<ServerReject>
+      : HandshakeLayout<Direction::server,
+                        HandshakeTag::server_reject,
                         Field<&ServerReject::reason, HandshakeReasonByte, "reason">,
                         Field<&ServerReject::expected_schema, SchemaIdCodec, "expected_schema">> {};
 

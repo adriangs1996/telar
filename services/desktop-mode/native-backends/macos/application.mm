@@ -28,7 +28,8 @@ struct ApplicationWakeup::Impl {
   }
 };
 
-ApplicationWakeup::ApplicationWakeup() : impl(new Impl({})) {
+ApplicationWakeup::ApplicationWakeup()
+    : impl(new Impl({})) {
   CFRunLoopSourceContext context{};
   context.info = impl;
   context.perform = &Impl::perform;
@@ -65,6 +66,7 @@ void ApplicationWakeup::wakeup() noexcept {
 @end
 
 @implementation TelarApplicationController
+
 - (instancetype)initWithHost:(ApplicationHost *)host state:(const AppState *)state {
   self = [super init];
 
@@ -99,7 +101,9 @@ void ApplicationWakeup::wakeup() noexcept {
 
 @end
 
-int runApplication(ApplicationHost &host, ApplicationWakeup &wakeup, const AppState &state,
+int runApplication(ApplicationHost &host,
+                   ApplicationWakeup &wakeup,
+                   const AppState &state,
                    lua::Vm &lua_vm) {
   int result = EXIT_SUCCESS;
 
@@ -117,11 +121,13 @@ int runApplication(ApplicationHost &host, ApplicationWakeup &wakeup, const AppSt
     }
 
     NSScreen *screen = [NSScreen mainScreen];
+
     if (!screen) {
       return EXIT_FAILURE;
     }
 
     TelarTopBar *topbar = [[TelarTopBar alloc] initWithScreen:screen luaVm:lua_vm];
+
     if (!topbar) {
       return EXIT_FAILURE;
     }

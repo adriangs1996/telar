@@ -1,16 +1,30 @@
+#pragma once
+
+#include "file_watch.hpp"
 #include "quick_surface.hpp"
-#include <QFileSystemWatcher>
+#include <QSize>
 #include <QTimer>
+#include <memory>
+
+namespace lua {
+  struct Vm;
+}
+
+namespace ui {
+  class LuaUi;
+}
 
 struct QtTopBarSurface final : QuickSurface {
-  explicit QtTopBarSurface(lua::Vm &lua_vm);
+  QtTopBarSurface(lua::Vm &lua_vm, const QSize &size);
+  ~QtTopBarSurface();
 
 private:
   QString script_path_;
-  QQuickItem *text_item_ = nullptr;
-  QFileSystemWatcher watcher_;
+  std::unique_ptr<ui::LuaUi> ui_;
+  ui::FileWatch watcher_;
   QTimer reload_timer_;
 
   void reload();
   void watchScript();
+  void rearmWatcher();
 };

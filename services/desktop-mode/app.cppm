@@ -17,11 +17,16 @@ export template <Notifier INotifier> struct App final : ApplicationHost {
   bool exited = false;
   std::uint8_t exit_code = 0;
 
-  explicit App(AppContext<INotifier> &context) : context(context) {}
+  explicit App(AppContext<INotifier> &context)
+      : context(context) {}
 
-  const AppState &state() const noexcept { return app_state; }
+  const AppState &state() const noexcept {
+    return app_state;
+  }
 
-  bool requestExit() override { return context.input_queue.push(Exit{}); }
+  bool requestExit() override {
+    return context.input_queue.push(Exit{});
+  }
 
   bool update() override {
     for (auto input : context.input_queue.drain()) {

@@ -191,7 +191,8 @@ namespace telar {
     }
   }
 
-  inline void validateWorkspaceClosure(const WorkspaceLocation &workspace, bool closed,
+  inline void validateWorkspaceClosure(const WorkspaceLocation &workspace,
+                                       bool closed,
                                        std::optional<std::uint64_t> previous) {
     if (previous && (!closed || workspace.kind != WorkspaceLocation::Kind::workspace ||
                      *previous == workspace.id)) {
@@ -243,14 +244,17 @@ namespace telar {
   struct ScopedHistoryValue {
     using value_type = HistoryScopeValue;
     static constexpr std::size_t min_width = 0;
+
     static std::size_t encodedSize(const value_type &value, HistoryScope scope) {
       return BodySchema<HistoryScopeValue>::encodedSize(value, scope);
     }
+
     static void encode(const value_type &value, std::span<Byte> &output, HistoryScope scope) {
       BodySchema<HistoryScopeValue>::encodeBody(value, output, scope);
     }
-    static value_type decode(std::span<const Byte> &input, DecodeStorage &storage,
-                             HistoryScope scope) {
+
+    static value_type
+    decode(std::span<const Byte> &input, DecodeStorage &storage, HistoryScope scope) {
       value_type value{};
       BodySchema<HistoryScopeValue>::decodeBody(input, value, storage, scope);
       return value;
@@ -260,20 +264,23 @@ namespace telar {
   struct TargetLaunch {
     using value_type = std::optional<Launch>;
     static constexpr std::size_t min_width = 0;
+
     static std::size_t encodedSize(const value_type &value, const PaneTarget &target) {
       if ((target.kind == PaneTarget::Kind::default_target) != value.has_value()) {
         throw EncodingError{"Launch and pane target do not match"};
       }
       return value ? ValueCodec<Launch>::encodedSize(*value) : 0;
     }
+
     static void encode(const value_type &value, std::span<Byte> &output, const PaneTarget &target) {
       (void)encodedSize(value, target);
       if (value) {
         ValueCodec<Launch>::encode(*value, output);
       }
     }
-    static value_type decode(std::span<const Byte> &input, DecodeStorage &storage,
-                             const PaneTarget &target) {
+
+    static value_type
+    decode(std::span<const Byte> &input, DecodeStorage &storage, const PaneTarget &target) {
       if (target.kind != PaneTarget::Kind::default_target) {
         return std::nullopt;
       }
@@ -285,16 +292,19 @@ namespace telar {
     std::int64_t started_at_ms = 0;
     std::string_view command{};
   };
+
   struct PaneDescriptor {
     std::uint64_t pane_id = 0;
     PaneLifecycle lifecycle{};
     std::uint64_t pane_generation = 0;
   };
+
   struct PaneMatch {
     std::uint16_t x = 0;
     std::uint32_t y = 0;
     std::uint16_t len = 0;
   };
+
   struct HistoryStatsEntry {
     std::uint64_t count = 0;
     std::string_view command{};
@@ -304,15 +314,19 @@ namespace telar {
   struct BodySchema<ImportHistoryEntry>
       : Serializer<Field<&ImportHistoryEntry::started_at_ms, i64, "started_at_ms">,
                    Field<&ImportHistoryEntry::command, Text16<65535, false>, "command">> {};
+
   template <>
   struct BodySchema<PaneDescriptor>
       : Serializer<Field<&PaneDescriptor::pane_id, NonzeroU64, "pane_id">,
                    Field<&PaneDescriptor::lifecycle, EnumByte<PaneLifecycle, 1>, "lifecycle">,
                    Field<&PaneDescriptor::pane_generation, u64, "pane_generation">> {};
+
   template <>
-  struct BodySchema<PaneMatch>
-      : Serializer<Field<&PaneMatch::x, u16, "x">, Field<&PaneMatch::y, u32, "y">,
-                   Field<&PaneMatch::len, BoundedInteger<u16, 1>, "len">> {};
+  struct BodySchema<PaneMatch> : Serializer<Field<&PaneMatch::x, u16, "x">,
+                                            Field<&PaneMatch::y, u32, "y">,
+                                            Field<&PaneMatch::len, BoundedInteger<u16, 1>, "len">> {
+  };
+
   template <>
   struct BodySchema<HistoryStatsEntry>
       : Serializer<Field<&HistoryStatsEntry::count, u64, "count">,
@@ -327,7 +341,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<OpenPane>
-      : Schema<Direction::client, ClientTag::open_pane,
+      : Schema<Direction::client,
+               ClientTag::open_pane,
                Field<&OpenPane::request_id, NonzeroU64, "request_id">,
                Field<&OpenPane::target, ValueCodec<PaneTarget>, "target">,
                Field<&OpenPane::size, ValueCodec<TerminalSize>, "size">,
@@ -339,7 +354,8 @@ namespace telar {
   };
 
   template <>
-  struct MessageSchema<PaneInput> : Schema<Direction::client, ClientTag::pane_input,
+  struct MessageSchema<PaneInput> : Schema<Direction::client,
+                                           ClientTag::pane_input,
                                            Field<&PaneInput::pane_id, NonzeroU64, "pane_id">,
                                            Field<&PaneInput::bytes, TailBytes<65536, 1>, "bytes">> {
   };
@@ -351,7 +367,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<PaneResize>
-      : Schema<Direction::client, ClientTag::pane_resize,
+      : Schema<Direction::client,
+               ClientTag::pane_resize,
                Field<&PaneResize::pane_id, NonzeroU64, "pane_id">,
                Field<&PaneResize::size, ValueCodec<TerminalSize>, "size">> {};
 
@@ -361,7 +378,8 @@ namespace telar {
   };
 
   template <>
-  struct MessageSchema<FrameAck> : Schema<Direction::client, ClientTag::frame_ack,
+  struct MessageSchema<FrameAck> : Schema<Direction::client,
+                                          ClientTag::frame_ack,
                                           Field<&FrameAck::pane_id, NonzeroU64, "pane_id">,
                                           Field<&FrameAck::frame_id, u64, "frame_id">> {};
 
@@ -372,7 +390,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<RequestSnapshot>
-      : Schema<Direction::client, ClientTag::request_snapshot,
+      : Schema<Direction::client,
+               ClientTag::request_snapshot,
                Field<&RequestSnapshot::pane_id, NonzeroU64, "pane_id">,
                Field<&RequestSnapshot::known_frame_id, u64, "known_frame_id">> {};
 
@@ -381,7 +400,8 @@ namespace telar {
   };
 
   template <>
-  struct MessageSchema<DetachPane> : Schema<Direction::client, ClientTag::detach_pane,
+  struct MessageSchema<DetachPane> : Schema<Direction::client,
+                                            ClientTag::detach_pane,
                                             Field<&DetachPane::pane_id, NonzeroU64, "pane_id">> {};
 
   struct RuntimeStop {};
@@ -396,7 +416,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<RequestTabSnapshot>
-      : Schema<Direction::client, ClientTag::request_tab_snapshot,
+      : Schema<Direction::client,
+               ClientTag::request_tab_snapshot,
                Field<&RequestTabSnapshot::request_id, NonzeroU64, "request_id">,
                Field<&RequestTabSnapshot::location, ValueCodec<TabLocation>, "location">> {};
 
@@ -409,7 +430,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<CreatePane>
-      : Schema<Direction::client, ClientTag::create_pane,
+      : Schema<Direction::client,
+               ClientTag::create_pane,
                Field<&CreatePane::request_id, NonzeroU64, "request_id">,
                Field<&CreatePane::location, ValueCodec<TabLocation>, "location">,
                Field<&CreatePane::size, ValueCodec<TerminalSize>, "size">,
@@ -421,7 +443,8 @@ namespace telar {
   };
 
   template <>
-  struct MessageSchema<ClosePane> : Schema<Direction::client, ClientTag::close_pane,
+  struct MessageSchema<ClosePane> : Schema<Direction::client,
+                                           ClientTag::close_pane,
                                            Field<&ClosePane::request_id, NonzeroU64, "request_id">,
                                            Field<&ClosePane::pane_id, NonzeroU64, "pane_id">> {};
 
@@ -442,11 +465,14 @@ namespace telar {
 
   template <>
   struct MessageSchema<QueryHistory>
-      : Schema<Direction::client, ClientTag::query_history,
+      : Schema<Direction::client,
+               ClientTag::query_history,
                Field<&QueryHistory::request_id, NonzeroU64, "request_id">,
                Field<&QueryHistory::query, Text16<1024>, "query">,
                Field<&QueryHistory::scope, EnumByte<HistoryScope, 3>, "scope">,
-               ContextField<&QueryHistory::scope_value, &QueryHistory::scope, ScopedHistoryValue,
+               ContextField<&QueryHistory::scope_value,
+                            &QueryHistory::scope,
+                            ScopedHistoryValue,
                             "scope_value">,
                Field<&QueryHistory::failed_only, BoolByte, "failed_only">,
                Field<&QueryHistory::author, EnumByte<HistoryAuthorFilter, 2>, "author">,
@@ -464,9 +490,11 @@ namespace telar {
 
   template <>
   struct MessageSchema<RequestWorkspaceSnapshot>
-      : Schema<Direction::client, ClientTag::request_workspace_snapshot,
+      : Schema<Direction::client,
+               ClientTag::request_workspace_snapshot,
                Field<&RequestWorkspaceSnapshot::request_id, NonzeroU64, "request_id">,
-               Field<&RequestWorkspaceSnapshot::workspace, ValueCodec<WorkspaceLocation>,
+               Field<&RequestWorkspaceSnapshot::workspace,
+                     ValueCodec<WorkspaceLocation>,
                      "workspace">> {};
 
   struct CreateTab {
@@ -479,7 +507,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<CreateTab>
-      : Schema<Direction::client, ClientTag::create_tab,
+      : Schema<Direction::client,
+               ClientTag::create_tab,
                Field<&CreateTab::request_id, NonzeroU64, "request_id">,
                Field<&CreateTab::workspace, ValueCodec<WorkspaceLocation>, "workspace">,
                Field<&CreateTab::label, DisplayText16<128>, "label">,
@@ -494,7 +523,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<RenameTab>
-      : Schema<Direction::client, ClientTag::rename_tab,
+      : Schema<Direction::client,
+               ClientTag::rename_tab,
                Field<&RenameTab::request_id, NonzeroU64, "request_id">,
                Field<&RenameTab::location, ValueCodec<TabLocation>, "location">,
                Field<&RenameTab::label, DisplayText16<128, false>, "label">> {};
@@ -506,7 +536,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<CloseTab>
-      : Schema<Direction::client, ClientTag::close_tab,
+      : Schema<Direction::client,
+               ClientTag::close_tab,
                Field<&CloseTab::request_id, NonzeroU64, "request_id">,
                Field<&CloseTab::location, ValueCodec<TabLocation>, "location">> {};
 
@@ -519,7 +550,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<MoveTab>
-      : Schema<Direction::client, ClientTag::move_tab,
+      : Schema<Direction::client,
+               ClientTag::move_tab,
                Field<&MoveTab::request_id, NonzeroU64, "request_id">,
                Field<&MoveTab::location, ValueCodec<TabLocation>, "location">,
                Field<&MoveTab::direction, EnumByte<TabMoveDirection, 1>, "direction">,
@@ -531,7 +563,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<RequestGraphicsSnapshot>
-      : Schema<Direction::client, ClientTag::request_graphics_snapshot,
+      : Schema<Direction::client,
+               ClientTag::request_graphics_snapshot,
                Field<&RequestGraphicsSnapshot::pane_id, NonzeroU64, "pane_id">> {};
 
   struct GraphicsCredit {
@@ -541,7 +574,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<GraphicsCredit>
-      : Schema<Direction::client, ClientTag::graphics_credit,
+      : Schema<Direction::client,
+               ClientTag::graphics_credit,
                Field<&GraphicsCredit::pane_id, NonzeroU64, "pane_id">,
                Field<&GraphicsCredit::bytes, u64, "bytes">> {};
 
@@ -551,7 +585,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<ConfigureGraphics>
-      : Schema<Direction::client, ClientTag::configure_graphics,
+      : Schema<Direction::client,
+               ClientTag::configure_graphics,
                Field<&ConfigureGraphics::shared, BoolByte, "shared">> {};
 
   struct CreateWorkspace {
@@ -564,7 +599,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<CreateWorkspace>
-      : Schema<Direction::client, ClientTag::create_workspace,
+      : Schema<Direction::client,
+               ClientTag::create_workspace,
                Field<&CreateWorkspace::request_id, NonzeroU64, "request_id">,
                Field<&CreateWorkspace::size, ValueCodec<TerminalSize>, "size">,
                Field<&CreateWorkspace::name, DisplayText16<128, false>, "name">,
@@ -579,7 +615,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<RenameWorkspace>
-      : Schema<Direction::client, ClientTag::rename_workspace,
+      : Schema<Direction::client,
+               ClientTag::rename_workspace,
                Field<&RenameWorkspace::request_id, NonzeroU64, "request_id">,
                Field<&RenameWorkspace::workspace, ValueCodec<WorkspaceLocation>, "workspace">,
                Field<&RenameWorkspace::name, DisplayText16<128, false>, "name">> {};
@@ -591,7 +628,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<SetPaneViewport>
-      : Schema<Direction::client, ClientTag::set_pane_viewport,
+      : Schema<Direction::client,
+               ClientTag::set_pane_viewport,
                Field<&SetPaneViewport::pane_id, NonzeroU64, "pane_id">,
                Field<&SetPaneViewport::offset, u32, "offset">> {};
 
@@ -606,7 +644,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<CopySelection>
-      : Schema<Direction::client, ClientTag::copy_selection,
+      : Schema<Direction::client,
+               ClientTag::copy_selection,
                Field<&CopySelection::pane_id, NonzeroU64, "pane_id">,
                Field<&CopySelection::start_x, u16, "start_x">,
                Field<&CopySelection::start_y, u32, "start_y">,
@@ -622,7 +661,8 @@ namespace telar {
   template <>
   struct MessageSchema<ShowNotification>
       : Schema<
-            Direction::client, ClientTag::show_notification,
+            Direction::client,
+            ClientTag::show_notification,
             Field<&ShowNotification::request_id, NonzeroU64, "request_id">,
             Field<&ShowNotification::notification, ValueCodec<NotificationBody>, "notification">> {
   };
@@ -644,14 +684,20 @@ namespace telar {
 
   template <>
   struct MessageSchema<UpdateClientLayout>
-      : Schema<Direction::client, ClientTag::update_client_layout,
+      : Schema<Direction::client,
+               ClientTag::update_client_layout,
                Field<&UpdateClientLayout::sidebar_visible, BoolByte, "sidebar_visible">,
                Field<&UpdateClientLayout::sidebar_width, u16, "sidebar_width">,
-               Field<&UpdateClientLayout::workspace_list_collapsed, BoolByte,
+               Field<&UpdateClientLayout::workspace_list_collapsed,
+                     BoolByte,
                      "workspace_list_collapsed">,
                Field<&UpdateClientLayout::active_tab, ValueCodec<TabLocation>, "active_tab">,
-               SpanCountField<&UpdateClientLayout::tabs, u16, ValueCodec<ClientTabLayout>, 256,
-                              "tab_count", 1>,
+               SpanCountField<&UpdateClientLayout::tabs,
+                              u16,
+                              ValueCodec<ClientTabLayout>,
+                              256,
+                              "tab_count",
+                              1>,
                SpanItemsField<&UpdateClientLayout::tabs, ValueCodec<ClientTabLayout>, "tabs">> {};
 
   struct AcknowledgeAgent {
@@ -661,7 +707,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<AcknowledgeAgent>
-      : Schema<Direction::client, ClientTag::acknowledge_agent,
+      : Schema<Direction::client,
+               ClientTag::acknowledge_agent,
                Field<&AcknowledgeAgent::pane_id, NonzeroU64, "pane_id">,
                Field<&AcknowledgeAgent::pane_generation, u64, "pane_generation">> {};
 
@@ -671,7 +718,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<QueryAgents>
-      : Schema<Direction::client, ClientTag::query_agents,
+      : Schema<Direction::client,
+               ClientTag::query_agents,
                Field<&QueryAgents::request_id, NonzeroU64, "request_id">> {};
 
   struct ReadPane {
@@ -684,7 +732,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<ReadPane>
-      : Schema<Direction::client, ClientTag::read_pane,
+      : Schema<Direction::client,
+               ClientTag::read_pane,
                Field<&ReadPane::request_id, NonzeroU64, "request_id">,
                Field<&ReadPane::pane_id, NonzeroU64, "pane_id">,
                Field<&ReadPane::pane_generation, u64, "pane_generation">,
@@ -708,7 +757,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<SendPaneText>
-      : Schema<Direction::client, ClientTag::send_pane_text,
+      : Schema<Direction::client,
+               ClientTag::send_pane_text,
                Field<&SendPaneText::request_id, NonzeroU64, "request_id">,
                Field<&SendPaneText::pane_id, NonzeroU64, "pane_id">,
                Field<&SendPaneText::pane_generation, u64, "pane_generation">,
@@ -722,12 +772,15 @@ namespace telar {
     std::uint64_t pane_generation{};
     std::string_view session{};
 
-    void validate() const { validateAgentSession(session, false); }
+    void validate() const {
+      validateAgentSession(session, false);
+    }
   };
 
   template <>
   struct MessageSchema<ReportAgentSession>
-      : Schema<Direction::client, ClientTag::report_agent_session,
+      : Schema<Direction::client,
+               ClientTag::report_agent_session,
                Field<&ReportAgentSession::request_id, NonzeroU64, "request_id">,
                Field<&ReportAgentSession::pane_id, NonzeroU64, "pane_id">,
                Field<&ReportAgentSession::pane_generation, u64, "pane_generation">,
@@ -756,7 +809,8 @@ namespace telar {
   template <>
   struct MessageSchema<ReportAgent>
       : Schema<
-            Direction::client, ClientTag::report_agent,
+            Direction::client,
+            ClientTag::report_agent,
             Field<&ReportAgent::request_id, NonzeroU64, "request_id">,
             Field<&ReportAgent::pane_id, NonzeroU64, "pane_id">,
             Field<&ReportAgent::pane_generation, u64, "pane_generation">,
@@ -764,7 +818,8 @@ namespace telar {
             Field<&ReportAgent::state, EnumByte<AgentReportState, 8>, "state">,
             Field<&ReportAgent::session, Text16<64>, "session">,
             Field<&ReportAgent::session_file, Text16<1024>, "session_file">,
-            Field<&ReportAgent::session_file_kind, EnumByte<AgentSessionFileKind, 2>,
+            Field<&ReportAgent::session_file_kind,
+                  EnumByte<AgentSessionFileKind, 2>,
                   "session_file_kind">,
             Field<&ReportAgent::blocked_reason, EnumByte<AgentBlockedReason, 4>, "blocked_reason">,
             Field<&ReportAgent::event, DisplayText16<96>, "event">> {};
@@ -777,7 +832,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<SearchPane>
-      : Schema<Direction::client, ClientTag::search_pane,
+      : Schema<Direction::client,
+               ClientTag::search_pane,
                Field<&SearchPane::request_id, NonzeroU64, "request_id">,
                Field<&SearchPane::pane_id, NonzeroU64, "pane_id">,
                Field<&SearchPane::needle, Text16<128, false>, "needle">> {};
@@ -791,12 +847,17 @@ namespace telar {
 
   template <>
   struct MessageSchema<ImportHistory>
-      : Schema<Direction::client, ClientTag::import_history,
+      : Schema<Direction::client,
+               ClientTag::import_history,
                Field<&ImportHistory::request_id, NonzeroU64, "request_id">,
                Field<&ImportHistory::source, Text16<256, false>, "source">,
                Field<&ImportHistory::base_sequence, u64, "base_sequence">,
-               SpanCountField<&ImportHistory::entries, u16, ValueCodec<ImportHistoryEntry>, 64,
-                              "entry_count", 1>,
+               SpanCountField<&ImportHistory::entries,
+                              u16,
+                              ValueCodec<ImportHistoryEntry>,
+                              64,
+                              "entry_count",
+                              1>,
                SpanItemsField<&ImportHistory::entries, ValueCodec<ImportHistoryEntry>, "entries">> {
   };
 
@@ -807,7 +868,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<DeleteHistory>
-      : Schema<Direction::client, ClientTag::delete_history,
+      : Schema<Direction::client,
+               ClientTag::delete_history,
                Field<&DeleteHistory::request_id, NonzeroU64, "request_id">,
                Field<&DeleteHistory::id, NonzeroU64, "id">> {};
 
@@ -822,10 +884,13 @@ namespace telar {
 
   template <>
   struct MessageSchema<PruneHistory>
-      : Schema<Direction::client, ClientTag::prune_history,
+      : Schema<Direction::client,
+               ClientTag::prune_history,
                Field<&PruneHistory::request_id, NonzeroU64, "request_id">,
                Field<&PruneHistory::scope, EnumByte<HistoryScope, 3>, "scope">,
-               ContextField<&PruneHistory::scope_value, &PruneHistory::scope, ScopedHistoryValue,
+               ContextField<&PruneHistory::scope_value,
+                            &PruneHistory::scope,
+                            ScopedHistoryValue,
                             "scope_value">,
                Field<&PruneHistory::before_ms, i64, "before_ms">,
                Field<&PruneHistory::failed_only, BoolByte, "failed_only">,
@@ -838,7 +903,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<ReadHistoryOutput>
-      : Schema<Direction::client, ClientTag::read_history_output,
+      : Schema<Direction::client,
+               ClientTag::read_history_output,
                Field<&ReadHistoryOutput::request_id, NonzeroU64, "request_id">,
                Field<&ReadHistoryOutput::id, NonzeroU64, "id">> {};
 
@@ -851,11 +917,14 @@ namespace telar {
 
   template <>
   struct MessageSchema<HistoryStatsQuery>
-      : Schema<Direction::client, ClientTag::history_stats,
+      : Schema<Direction::client,
+               ClientTag::history_stats,
                Field<&HistoryStatsQuery::request_id, NonzeroU64, "request_id">,
                Field<&HistoryStatsQuery::scope, EnumByte<HistoryScope, 3>, "scope">,
-               ContextField<&HistoryStatsQuery::scope_value, &HistoryStatsQuery::scope,
-                            ScopedHistoryValue, "scope_value">,
+               ContextField<&HistoryStatsQuery::scope_value,
+                            &HistoryStatsQuery::scope,
+                            ScopedHistoryValue,
+                            "scope_value">,
                Field<&HistoryStatsQuery::since_ms, i64, "since_ms">> {};
 
   struct RequestPaneFocus {
@@ -873,7 +942,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<RequestPaneFocus>
-      : Schema<Direction::client, ClientTag::request_pane_focus,
+      : Schema<Direction::client,
+               ClientTag::request_pane_focus,
                Field<&RequestPaneFocus::request_id, NonzeroU64, "request_id">,
                Field<&RequestPaneFocus::pane_id, NonzeroU64, "pane_id">,
                Field<&RequestPaneFocus::pane_generation, u64, "pane_generation">,
@@ -896,7 +966,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<CompletePaneFocus>
-      : Schema<Direction::client, ClientTag::complete_pane_focus,
+      : Schema<Direction::client,
+               ClientTag::complete_pane_focus,
                Field<&CompletePaneFocus::requester, ValueCodec<ClientRoute>, "requester">,
                Field<&CompletePaneFocus::request_id, NonzeroU64, "request_id">,
                Field<&CompletePaneFocus::pane_id, NonzeroU64, "pane_id">,
@@ -912,7 +983,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<SuggestCommand>
-      : Schema<Direction::client, ClientTag::suggest_command,
+      : Schema<Direction::client,
+               ClientTag::suggest_command,
                Field<&SuggestCommand::request_id, NonzeroU64, "request_id">,
                Field<&SuggestCommand::pane_id, NonzeroU64, "pane_id">,
                Field<&SuggestCommand::text, Text16<512, false>, "text">> {};
@@ -939,7 +1011,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<ReportAgentCommand>
-      : Schema<Direction::client, ClientTag::report_agent_command,
+      : Schema<Direction::client,
+               ClientTag::report_agent_command,
                Field<&ReportAgentCommand::request_id, NonzeroU64, "request_id">,
                Field<&ReportAgentCommand::pane_id, NonzeroU64, "pane_id">,
                Field<&ReportAgentCommand::pane_generation, u64, "pane_generation">,
@@ -961,7 +1034,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<ReportAgentTitle>
-      : Schema<Direction::client, ClientTag::report_agent_title,
+      : Schema<Direction::client,
+               ClientTag::report_agent_title,
                Field<&ReportAgentTitle::request_id, NonzeroU64, "request_id">,
                Field<&ReportAgentTitle::pane_id, NonzeroU64, "pane_id">,
                Field<&ReportAgentTitle::pane_generation, u64, "pane_generation">,
@@ -977,7 +1051,8 @@ namespace telar {
   template <>
   struct MessageSchema<ConfigureTerminalColors>
       : Schema<
-            Direction::client, ClientTag::configure_terminal_colors,
+            Direction::client,
+            ClientTag::configure_terminal_colors,
             Field<&ConfigureTerminalColors::foreground, OptionalValue<FixedBytes<3>>, "foreground">,
             Field<&ConfigureTerminalColors::background, OptionalValue<FixedBytes<3>>, "background">,
             Field<&ConfigureTerminalColors::palette, OptionalValue<FixedBytes<48>>, "palette">> {};
@@ -988,7 +1063,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<QueryClients>
-      : Schema<Direction::client, ClientTag::query_clients,
+      : Schema<Direction::client,
+               ClientTag::query_clients,
                Field<&QueryClients::request_id, NonzeroU64, "request_id">> {};
 
   struct DetachClient {
@@ -999,7 +1075,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<DetachClient>
-      : Schema<Direction::client, ClientTag::detach_client,
+      : Schema<Direction::client,
+               ClientTag::detach_client,
                Field<&DetachClient::request_id, NonzeroU64, "request_id">,
                Field<&DetachClient::client_id, NonzeroU64, "client_id">,
                Field<&DetachClient::client_generation, NonzeroU64, "client_generation">> {};
@@ -1007,16 +1084,16 @@ namespace telar {
   struct RequestClientCommand : ClientCommand {};
 
   template <>
-  struct MessageSchema<RequestClientCommand>
-      : MessageLayout<Direction::client, ClientTag::request_client_command,
-                      BodySchema<ClientCommand>> {};
+  struct MessageSchema<RequestClientCommand> : MessageLayout<Direction::client,
+                                                             ClientTag::request_client_command,
+                                                             BodySchema<ClientCommand>> {};
 
   struct CompleteClientCommand : ClientCommand {};
 
   template <>
-  struct MessageSchema<CompleteClientCommand>
-      : MessageLayout<Direction::client, ClientTag::complete_client_command,
-                      BodySchema<ClientCommand>> {};
+  struct MessageSchema<CompleteClientCommand> : MessageLayout<Direction::client,
+                                                              ClientTag::complete_client_command,
+                                                              BodySchema<ClientCommand>> {};
 
   struct OpenEditor {
     std::uint64_t request_id{};
@@ -1037,13 +1114,15 @@ namespace telar {
 
   template <>
   struct MessageSchema<OpenEditor>
-      : Schema<Direction::client, ClientTag::open_editor,
+      : Schema<Direction::client,
+               ClientTag::open_editor,
                Field<&OpenEditor::request_id, NonzeroU64, "request_id">,
                Field<&OpenEditor::pane_id, NonzeroU64, "pane_id">,
                Field<&OpenEditor::pane_generation, u64, "pane_generation">,
                Field<&OpenEditor::editor, DisplayText16<4096, false>, "editor">,
                Field<&OpenEditor::path, DisplayText16<4096, false>, "path">,
-               Field<&OpenEditor::line, u32, "line">, Field<&OpenEditor::column, u32, "column">> {};
+               Field<&OpenEditor::line, u32, "line">,
+               Field<&OpenEditor::column, u32, "column">> {};
 
   struct FindPaths {
     std::uint64_t request_id{};
@@ -1062,7 +1141,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<FindPaths>
-      : Schema<Direction::client, ClientTag::find_paths,
+      : Schema<Direction::client,
+               ClientTag::find_paths,
                Field<&FindPaths::request_id, NonzeroU64, "request_id">,
                Field<&FindPaths::root, Text16<4096, false>, "root">,
                Field<&FindPaths::query, SizedText<u16, 64, true, TextRule::utf8_no_nul>, "query">,
@@ -1092,7 +1172,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<RegisterWorktree>
-      : Schema<Direction::client, ClientTag::register_worktree,
+      : Schema<Direction::client,
+               ClientTag::register_worktree,
                Field<&RegisterWorktree::request_id, NonzeroU64, "request_id">,
                Field<&RegisterWorktree::source, NonzeroU64, "source">,
                Field<&RegisterWorktree::created_by, OptionalValue<NonzeroU64>, "created_by">,
@@ -1104,7 +1185,8 @@ namespace telar {
                Field<&RegisterWorktree::brief, MessageText16<512>, "brief">,
                Field<&RegisterWorktree::dispatched_from, DisplayText16<32>, "dispatched_from">,
                Field<&RegisterWorktree::coordinator,
-                     OptionalValue<ValueCodec<CoordinatorReference>>, "coordinator">> {};
+                     OptionalValue<ValueCodec<CoordinatorReference>>,
+                     "coordinator">> {};
 
   struct LaunchWorktree {
     std::uint64_t request_id{};
@@ -1116,7 +1198,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<LaunchWorktree>
-      : Schema<Direction::client, ClientTag::launch_worktree,
+      : Schema<Direction::client,
+               ClientTag::launch_worktree,
                Field<&LaunchWorktree::request_id, NonzeroU64, "request_id">,
                Field<&LaunchWorktree::worktree, NonzeroU64, "worktree">,
                Field<&LaunchWorktree::label, DisplayText16<128>, "label">,
@@ -1130,7 +1213,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<ForgetWorktree>
-      : Schema<Direction::client, ClientTag::forget_worktree,
+      : Schema<Direction::client,
+               ClientTag::forget_worktree,
                Field<&ForgetWorktree::request_id, NonzeroU64, "request_id">,
                Field<&ForgetWorktree::worktree, NonzeroU64, "worktree">> {};
 
@@ -1142,7 +1226,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<InterruptAgent>
-      : Schema<Direction::client, ClientTag::interrupt_agent,
+      : Schema<Direction::client,
+               ClientTag::interrupt_agent,
                Field<&InterruptAgent::request_id, NonzeroU64, "request_id">,
                Field<&InterruptAgent::pane_id, NonzeroU64, "pane_id">,
                Field<&InterruptAgent::pane_generation, u64, "pane_generation">> {};
@@ -1173,7 +1258,8 @@ namespace telar {
   template <>
   struct MessageSchema<ReportAgentProgress>
       : Schema<
-            Direction::client, ClientTag::report_agent_progress,
+            Direction::client,
+            ClientTag::report_agent_progress,
             Field<&ReportAgentProgress::request_id, NonzeroU64, "request_id">,
             Field<&ReportAgentProgress::pane_id, NonzeroU64, "pane_id">,
             Field<&ReportAgentProgress::pane_generation, u64, "pane_generation">,
@@ -1199,7 +1285,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<LaunchTab>
-      : Schema<Direction::client, ClientTag::launch_tab,
+      : Schema<Direction::client,
+               ClientTag::launch_tab,
                Field<&LaunchTab::request_id, NonzeroU64, "request_id">,
                Field<&LaunchTab::workspace, NonzeroU64, "workspace">,
                Field<&LaunchTab::label, DisplayText16<128>, "label">,
@@ -1214,7 +1301,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<VerifyPaneDescent>
-      : Schema<Direction::client, ClientTag::verify_pane_descent,
+      : Schema<Direction::client,
+               ClientTag::verify_pane_descent,
                Field<&VerifyPaneDescent::request_id, NonzeroU64, "request_id">,
                Field<&VerifyPaneDescent::pane_id, NonzeroU64, "pane_id">,
                Field<&VerifyPaneDescent::pane_generation, u64, "pane_generation">> {};
@@ -1226,7 +1314,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<ReportLimit>
-      : Schema<Direction::client, ClientTag::report_limit,
+      : Schema<Direction::client,
+               ClientTag::report_limit,
                Field<&ReportLimit::reach, ValueCodec<LimitReach>, "reach">,
                Field<&ReportLimit::hits, BoundedInteger<u32, 1>, "hits">> {};
 
@@ -1236,7 +1325,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<QueryLimits>
-      : Schema<Direction::client, ClientTag::query_limits,
+      : Schema<Direction::client,
+               ClientTag::query_limits,
                Field<&QueryLimits::request_id, NonzeroU64, "request_id">> {};
 
   struct ConfigureFrameInterval {
@@ -1245,9 +1335,11 @@ namespace telar {
 
   template <>
   struct MessageSchema<ConfigureFrameInterval>
-      : Schema<Direction::client, ClientTag::configure_frame_interval,
+      : Schema<Direction::client,
+               ClientTag::configure_frame_interval,
                Field<&ConfigureFrameInterval::interval_ns,
-                     BoundedInteger<u64, 1000000000 / 240, 1000000000 / 30>, "interval_ns">> {};
+                     BoundedInteger<u64, 1000000000 / 240, 1000000000 / 30>,
+                     "interval_ns">> {};
 
   struct ExecutionRequest {
     std::uint64_t request_id{};
@@ -1282,7 +1374,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<ExecutionRequest>
-      : Schema<Direction::client, ClientTag::execution_request,
+      : Schema<Direction::client,
+               ClientTag::execution_request,
                Field<&ExecutionRequest::request_id, NonzeroU64, "request_id">,
                Field<&ExecutionRequest::action, EnumByte<ExecutionAction, 6>, "action">,
                Field<&ExecutionRequest::execution_id, u64, "execution_id">,
@@ -1292,7 +1385,11 @@ namespace telar {
                Field<&ExecutionRequest::input_offset, u64, "input_offset">,
                Field<&ExecutionRequest::stdin_open, BoolByte, "stdin_open">,
                Field<&ExecutionRequest::cwd, Text16<4096>, "cwd">,
-               SpanCountField<&ExecutionRequest::arguments, u8, Text16<32768>, 64, "argument_count",
+               SpanCountField<&ExecutionRequest::arguments,
+                              u8,
+                              Text16<32768>,
+                              64,
+                              "argument_count",
                               0>,
                SpanItemsField<&ExecutionRequest::arguments, Text16<32768>, "arguments">,
                Field<&ExecutionRequest::bytes, SizedBytes<u16, 4096>, "bytes">> {};
@@ -1307,7 +1404,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<PaneOpened>
-      : Schema<Direction::server, ServerTag::pane_opened,
+      : Schema<Direction::server,
+               ServerTag::pane_opened,
                Field<&PaneOpened::request_id, NonzeroU64, "request_id">,
                Field<&PaneOpened::pane_id, NonzeroU64, "pane_id">,
                Field<&PaneOpened::location, ValueCodec<TabLocation>, "location">,
@@ -1321,7 +1419,8 @@ namespace telar {
   };
 
   template <>
-  struct MessageSchema<PaneExited> : Schema<Direction::server, ServerTag::pane_exited,
+  struct MessageSchema<PaneExited> : Schema<Direction::server,
+                                            ServerTag::pane_exited,
                                             Field<&PaneExited::pane_id, NonzeroU64, "pane_id">,
                                             Field<&PaneExited::kind, EnumByte<ExitKind, 1>, "kind">,
                                             Field<&PaneExited::value, u32, "value">> {};
@@ -1334,7 +1433,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<RequestFailed>
-      : Schema<Direction::server, ServerTag::request_failed,
+      : Schema<Direction::server,
+               ServerTag::request_failed,
                Field<&RequestFailed::request_id, u64, "request_id">,
                Field<&RequestFailed::code, EnumInteger<FailureCode, u16, 1, 16>, "code">,
                Field<&RequestFailed::message, Utf8Tail<1024>, "message">> {};
@@ -1362,11 +1462,16 @@ namespace telar {
 
   template <>
   struct MessageSchema<TabSnapshot>
-      : Schema<Direction::server, ServerTag::tab_snapshot,
+      : Schema<Direction::server,
+               ServerTag::tab_snapshot,
                Field<&TabSnapshot::request_id, NonzeroU64, "request_id">,
                Field<&TabSnapshot::location, ValueCodec<TabLocation>, "location">,
-               SpanCountField<&TabSnapshot::panes, u16, ValueCodec<PaneDescriptor>, 64,
-                              "pane_count", 0>,
+               SpanCountField<&TabSnapshot::panes,
+                              u16,
+                              ValueCodec<PaneDescriptor>,
+                              64,
+                              "pane_count",
+                              0>,
                SpanItemsField<&TabSnapshot::panes, ValueCodec<PaneDescriptor>, "panes">> {};
 
   struct HistoryResults {
@@ -1378,10 +1483,15 @@ namespace telar {
 
   template <>
   struct MessageSchema<HistoryResults>
-      : Schema<Direction::server, ServerTag::history_results,
+      : Schema<Direction::server,
+               ServerTag::history_results,
                Field<&HistoryResults::request_id, NonzeroU64, "request_id">,
-               SpanCountField<&HistoryResults::entries, u16, ValueCodec<HistoryEntry>, 1000,
-                              "entry_count", 0>,
+               SpanCountField<&HistoryResults::entries,
+                              u16,
+                              ValueCodec<HistoryEntry>,
+                              1000,
+                              "entry_count",
+                              0>,
                Field<&HistoryResults::snapshot_id, u64, "snapshot_id">,
                Field<&HistoryResults::has_more, BoolByte, "has_more">,
                SpanItemsField<&HistoryResults::entries, ValueCodec<HistoryEntry>, "entries">> {};
@@ -1395,12 +1505,17 @@ namespace telar {
 
   template <>
   struct MessageSchema<WorkspaceSnapshot>
-      : Schema<Direction::server, ServerTag::workspace_snapshot,
+      : Schema<Direction::server,
+               ServerTag::workspace_snapshot,
                Field<&WorkspaceSnapshot::request_id, NonzeroU64, "request_id">,
                Field<&WorkspaceSnapshot::workspace, ValueCodec<WorkspaceLocation>, "workspace">,
                Field<&WorkspaceSnapshot::name, Text16<256, false>, "name">,
-               SpanCountField<&WorkspaceSnapshot::tabs, u16, ValueCodec<TabDescriptor>, 64,
-                              "tab_count", 0>,
+               SpanCountField<&WorkspaceSnapshot::tabs,
+                              u16,
+                              ValueCodec<TabDescriptor>,
+                              64,
+                              "tab_count",
+                              0>,
                SpanItemsField<&WorkspaceSnapshot::tabs, ValueCodec<TabDescriptor>, "tabs">> {};
 
   struct TabCreated {
@@ -1414,7 +1529,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<TabCreated>
-      : Schema<Direction::server, ServerTag::tab_created,
+      : Schema<Direction::server,
+               ServerTag::tab_created,
                Field<&TabCreated::request_id, NonzeroU64, "request_id">,
                Field<&TabCreated::location, ValueCodec<TabLocation>, "location">,
                Field<&TabCreated::position, u16, "position">,
@@ -1430,7 +1546,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<TabRenamed>
-      : Schema<Direction::server, ServerTag::tab_renamed,
+      : Schema<Direction::server,
+               ServerTag::tab_renamed,
                Field<&TabRenamed::request_id, NonzeroU64, "request_id">,
                Field<&TabRenamed::location, ValueCodec<TabLocation>, "location">,
                Field<&TabRenamed::label, DisplayText16<128, false>, "label">> {};
@@ -1448,11 +1565,13 @@ namespace telar {
 
   template <>
   struct MessageSchema<TabClosed>
-      : Schema<Direction::server, ServerTag::tab_closed,
+      : Schema<Direction::server,
+               ServerTag::tab_closed,
                Field<&TabClosed::request_id, u64, "request_id">,
                Field<&TabClosed::location, ValueCodec<TabLocation>, "location">,
                Field<&TabClosed::workspace_closed, BoolByte, "workspace_closed">,
-               Field<&TabClosed::previous_workspace, OptionalValue<NonzeroU64>,
+               Field<&TabClosed::previous_workspace,
+                     OptionalValue<NonzeroU64>,
                      "previous_workspace">> {};
 
   struct TabMoved {
@@ -1463,7 +1582,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<TabMoved>
-      : Schema<Direction::server, ServerTag::tab_moved,
+      : Schema<Direction::server,
+               ServerTag::tab_moved,
                Field<&TabMoved::request_id, NonzeroU64, "request_id">,
                Field<&TabMoved::location, ValueCodec<TabLocation>, "location">,
                Field<&TabMoved::position, u16, "position">> {};
@@ -1475,7 +1595,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<GraphicsSnapshot>
-      : Schema<Direction::server, ServerTag::graphics_snapshot,
+      : Schema<Direction::server,
+               ServerTag::graphics_snapshot,
                Field<&GraphicsSnapshot::header, ValueCodec<GraphicsHeader>, "header">,
                Field<&GraphicsSnapshot::phase, EnumByte<SnapshotPhase, 1>, "phase">> {};
 
@@ -1486,7 +1607,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<GraphicsImage>
-      : Schema<Direction::server, ServerTag::graphics_image,
+      : Schema<Direction::server,
+               ServerTag::graphics_image,
                Field<&GraphicsImage::header, ValueCodec<GraphicsHeader>, "header">,
                Field<&GraphicsImage::image, ValueCodec<ImageDescription>, "image">> {};
 
@@ -1499,7 +1621,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<GraphicsImageChunk>
-      : Schema<Direction::server, ServerTag::graphics_image_chunk,
+      : Schema<Direction::server,
+               ServerTag::graphics_image_chunk,
                Field<&GraphicsImageChunk::header, ValueCodec<GraphicsHeader>, "header">,
                Field<&GraphicsImageChunk::key, ValueCodec<ImageKey>, "key">,
                Field<&GraphicsImageChunk::offset, u64, "offset">,
@@ -1512,9 +1635,11 @@ namespace telar {
 
   template <>
   struct MessageSchema<GraphicsPlacementMessage>
-      : Schema<Direction::server, ServerTag::graphics_placement,
+      : Schema<Direction::server,
+               ServerTag::graphics_placement,
                Field<&GraphicsPlacementMessage::header, ValueCodec<GraphicsHeader>, "header">,
-               Field<&GraphicsPlacementMessage::placement, ValueCodec<GraphicsPlacement>,
+               Field<&GraphicsPlacementMessage::placement,
+                     ValueCodec<GraphicsPlacement>,
                      "placement">> {};
 
   struct GraphicsDeleteImage {
@@ -1524,7 +1649,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<GraphicsDeleteImage>
-      : Schema<Direction::server, ServerTag::graphics_delete_image,
+      : Schema<Direction::server,
+               ServerTag::graphics_delete_image,
                Field<&GraphicsDeleteImage::header, ValueCodec<GraphicsHeader>, "header">,
                Field<&GraphicsDeleteImage::key, ValueCodec<ImageKey>, "key">> {};
 
@@ -1537,7 +1663,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<GraphicsDeletePlacement>
-      : Schema<Direction::server, ServerTag::graphics_delete_placement,
+      : Schema<Direction::server,
+               ServerTag::graphics_delete_placement,
                Field<&GraphicsDeletePlacement::header, ValueCodec<GraphicsHeader>, "header">,
                Field<&GraphicsDeletePlacement::key, ValueCodec<ImageKey>, "key">,
                Field<&GraphicsDeletePlacement::virtual_id, u64, "virtual_id">,
@@ -1555,10 +1682,12 @@ namespace telar {
 
   template <>
   struct MessageSchema<ResyncRequired>
-      : Schema<Direction::server, ServerTag::resync_required,
+      : Schema<Direction::server,
+               ServerTag::resync_required,
                Field<&ResyncRequired::workspace, ValueCodec<WorkspaceLocation>, "workspace">,
                Field<&ResyncRequired::workspace_closed, BoolByte, "workspace_closed">,
-               Field<&ResyncRequired::previous_workspace, OptionalValue<NonzeroU64>,
+               Field<&ResyncRequired::previous_workspace,
+                     OptionalValue<NonzeroU64>,
                      "previous_workspace">> {};
 
   struct GraphicsSharedImage {
@@ -1566,12 +1695,15 @@ namespace telar {
     ImageDescription image{};
     std::string_view name{};
 
-    void validate() const { validateSharedImageName(name); }
+    void validate() const {
+      validateSharedImageName(name);
+    }
   };
 
   template <>
   struct MessageSchema<GraphicsSharedImage>
-      : Schema<Direction::server, ServerTag::graphics_shared_image,
+      : Schema<Direction::server,
+               ServerTag::graphics_shared_image,
                Field<&GraphicsSharedImage::header, ValueCodec<GraphicsHeader>, "header">,
                Field<&GraphicsSharedImage::image, ValueCodec<ImageDescription>, "image">,
                Field<&GraphicsSharedImage::name, Text32<31, false>, "name">> {};
@@ -1586,7 +1718,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<ProxyStatus>
-      : Schema<Direction::server, ServerTag::proxy_status,
+      : Schema<Direction::server,
+               ServerTag::proxy_status,
                Field<&ProxyStatus::active, BoolByte, "active">,
                Field<&ProxyStatus::scope, EnumByte<ProxyScope, 1>, "scope">,
                Field<&ProxyStatus::system_trusted, BoolByte, "system_trusted">,
@@ -1600,10 +1733,15 @@ namespace telar {
 
   template <>
   struct MessageSchema<AgentSnapshot>
-      : Schema<Direction::server, ServerTag::agent_snapshot,
+      : Schema<Direction::server,
+               ServerTag::agent_snapshot,
                Field<&AgentSnapshot::revision, u64, "revision">,
-               SpanCountField<&AgentSnapshot::entries, u16, ValueCodec<AgentSnapshotEntry>, 64,
-                              "entry_count", 0>,
+               SpanCountField<&AgentSnapshot::entries,
+                              u16,
+                              ValueCodec<AgentSnapshotEntry>,
+                              64,
+                              "entry_count",
+                              0>,
                SpanItemsField<&AgentSnapshot::entries, ValueCodec<AgentSnapshotEntry>, "entries">> {
   };
 
@@ -1616,13 +1754,22 @@ namespace telar {
   template <>
   struct MessageSchema<WorkspaceList>
       : Schema<
-            Direction::server, ServerTag::workspace_list,
+            Direction::server,
+            ServerTag::workspace_list,
             Field<&WorkspaceList::revision, u64, "revision">,
-            SpanCountField<&WorkspaceList::entries, u16, ValueCodec<WorkspaceListEntry>, 64,
-                           "entry_count", 0>,
+            SpanCountField<&WorkspaceList::entries,
+                           u16,
+                           ValueCodec<WorkspaceListEntry>,
+                           64,
+                           "entry_count",
+                           0>,
             SpanItemsField<&WorkspaceList::entries, ValueCodec<WorkspaceListEntry>, "entries">,
-            SpanCountField<&WorkspaceList::worktrees, u16, ValueCodec<WorktreeListEntry>, 64,
-                           "worktree_count", 0>,
+            SpanCountField<&WorkspaceList::worktrees,
+                           u16,
+                           ValueCodec<WorktreeListEntry>,
+                           64,
+                           "worktree_count",
+                           0>,
             SpanItemsField<&WorkspaceList::worktrees, ValueCodec<WorktreeListEntry>, "worktrees">> {
   };
 
@@ -1632,7 +1779,8 @@ namespace telar {
   };
 
   template <>
-  struct MessageSchema<PaneCwd> : Schema<Direction::server, ServerTag::pane_cwd,
+  struct MessageSchema<PaneCwd> : Schema<Direction::server,
+                                         ServerTag::pane_cwd,
                                          Field<&PaneCwd::pane_id, NonzeroU64, "pane_id">,
                                          Field<&PaneCwd::cwd, Text16<4096, false>, "cwd">> {};
 
@@ -1643,7 +1791,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<PaneClipboard>
-      : Schema<Direction::server, ServerTag::pane_clipboard,
+      : Schema<Direction::server,
+               ServerTag::pane_clipboard,
                Field<&PaneClipboard::pane_id, NonzeroU64, "pane_id">,
                Field<&PaneClipboard::bytes, SizedBytes<u32, 1048576>, "bytes">> {};
 
@@ -1660,13 +1809,15 @@ namespace telar {
 
   template <>
   struct MessageSchema<NotificationShown>
-      : Schema<Direction::server, ServerTag::notification_shown,
+      : Schema<Direction::server,
+               ServerTag::notification_shown,
                Field<&NotificationShown::request_id, NonzeroU64, "request_id">,
                Field<&NotificationShown::delivered_clients, u8, "delivered_clients">> {};
 
   template <>
   struct MessageSchema<PaneForeground>
-      : Schema<Direction::server, ServerTag::pane_foreground,
+      : Schema<Direction::server,
+               ServerTag::pane_foreground,
                Field<&PaneForeground::pane_id, NonzeroU64, "pane_id">,
                Field<&PaneForeground::name, Text16<48, false>, "name">> {};
 
@@ -1678,7 +1829,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<AgentSoundNotification>
-      : Schema<Direction::server, ServerTag::agent_sound,
+      : Schema<Direction::server,
+               ServerTag::agent_sound,
                Field<&AgentSoundNotification::pane_id, NonzeroU64, "pane_id">,
                Field<&AgentSoundNotification::pane_generation, u64, "pane_generation">,
                Field<&AgentSoundNotification::sound, EnumByte<AgentSound, 1>, "sound">> {};
@@ -1707,16 +1859,23 @@ namespace telar {
 
   template <>
   struct MessageSchema<ClientLayoutSnapshot>
-      : Schema<Direction::server, ServerTag::client_layout_snapshot,
+      : Schema<Direction::server,
+               ServerTag::client_layout_snapshot,
                Field<&ClientLayoutSnapshot::restored, BoolByte, "restored">,
                Field<&ClientLayoutSnapshot::sidebar_visible, BoolByte, "sidebar_visible">,
                Field<&ClientLayoutSnapshot::sidebar_width, u16, "sidebar_width">,
-               Field<&ClientLayoutSnapshot::workspace_list_collapsed, BoolByte,
+               Field<&ClientLayoutSnapshot::workspace_list_collapsed,
+                     BoolByte,
                      "workspace_list_collapsed">,
-               Field<&ClientLayoutSnapshot::active_tab, OptionalValue<ValueCodec<TabLocation>>,
+               Field<&ClientLayoutSnapshot::active_tab,
+                     OptionalValue<ValueCodec<TabLocation>>,
                      "active_tab">,
-               SpanCountField<&ClientLayoutSnapshot::tabs, u16, ValueCodec<ClientTabLayout>, 256,
-                              "tab_count", 0>,
+               SpanCountField<&ClientLayoutSnapshot::tabs,
+                              u16,
+                              ValueCodec<ClientTabLayout>,
+                              256,
+                              "tab_count",
+                              0>,
                SpanItemsField<&ClientLayoutSnapshot::tabs, ValueCodec<ClientTabLayout>, "tabs">> {};
 
   struct PaneText {
@@ -1729,7 +1888,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<PaneText>
-      : Schema<Direction::server, ServerTag::pane_text,
+      : Schema<Direction::server,
+               ServerTag::pane_text,
                Field<&PaneText::request_id, NonzeroU64, "request_id">,
                Field<&PaneText::pane_id, NonzeroU64, "pane_id">,
                Field<&PaneText::truncated, BoolByte, "truncated">,
@@ -1742,7 +1902,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<RequestCompleted>
-      : Schema<Direction::server, ServerTag::request_completed,
+      : Schema<Direction::server,
+               ServerTag::request_completed,
                Field<&RequestCompleted::request_id, NonzeroU64, "request_id">> {};
 
   struct PaneTitle {
@@ -1751,7 +1912,8 @@ namespace telar {
   };
 
   template <>
-  struct MessageSchema<PaneTitle> : Schema<Direction::server, ServerTag::pane_title,
+  struct MessageSchema<PaneTitle> : Schema<Direction::server,
+                                           ServerTag::pane_title,
                                            Field<&PaneTitle::pane_id, NonzeroU64, "pane_id">,
                                            Field<&PaneTitle::title, Text16<256>, "title">> {};
 
@@ -1764,11 +1926,16 @@ namespace telar {
 
   template <>
   struct MessageSchema<PaneMatches>
-      : Schema<Direction::server, ServerTag::pane_matches,
+      : Schema<Direction::server,
+               ServerTag::pane_matches,
                Field<&PaneMatches::request_id, NonzeroU64, "request_id">,
                Field<&PaneMatches::pane_id, NonzeroU64, "pane_id">,
                Field<&PaneMatches::truncated, BoolByte, "truncated">,
-               SpanCountField<&PaneMatches::matches, u16, ValueCodec<PaneMatch>, 256, "match_count",
+               SpanCountField<&PaneMatches::matches,
+                              u16,
+                              ValueCodec<PaneMatch>,
+                              256,
+                              "match_count",
                               0>,
                SpanItemsField<&PaneMatches::matches, ValueCodec<PaneMatch>, "matches">> {};
 
@@ -1779,7 +1946,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<HistoryPruned>
-      : Schema<Direction::server, ServerTag::history_pruned,
+      : Schema<Direction::server,
+               ServerTag::history_pruned,
                Field<&HistoryPruned::request_id, NonzeroU64, "request_id">,
                Field<&HistoryPruned::removed, u64, "removed">> {};
 
@@ -1793,7 +1961,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<HistoryOutput>
-      : Schema<Direction::server, ServerTag::history_output,
+      : Schema<Direction::server,
+               ServerTag::history_output,
                Field<&HistoryOutput::request_id, NonzeroU64, "request_id">,
                Field<&HistoryOutput::id, u64, "id">,
                Field<&HistoryOutput::truncated, BoolByte, "truncated">,
@@ -1809,12 +1978,17 @@ namespace telar {
 
   template <>
   struct MessageSchema<HistoryStatsResult>
-      : Schema<Direction::server, ServerTag::history_stats_result,
+      : Schema<Direction::server,
+               ServerTag::history_stats_result,
                Field<&HistoryStatsResult::request_id, NonzeroU64, "request_id">,
                Field<&HistoryStatsResult::total, u64, "total">,
                Field<&HistoryStatsResult::unique, u64, "unique">,
-               SpanCountField<&HistoryStatsResult::top, u8, ValueCodec<HistoryStatsEntry>, 10,
-                              "top_count", 0>,
+               SpanCountField<&HistoryStatsResult::top,
+                              u8,
+                              ValueCodec<HistoryStatsEntry>,
+                              10,
+                              "top_count",
+                              0>,
                SpanItemsField<&HistoryStatsResult::top, ValueCodec<HistoryStatsEntry>, "top">> {};
 
   struct PaneFocusCommand {
@@ -1833,7 +2007,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<PaneFocusCommand>
-      : Schema<Direction::server, ServerTag::pane_focus_command,
+      : Schema<Direction::server,
+               ServerTag::pane_focus_command,
                Field<&PaneFocusCommand::requester, ValueCodec<ClientRoute>, "requester">,
                Field<&PaneFocusCommand::request_id, NonzeroU64, "request_id">,
                Field<&PaneFocusCommand::pane_id, NonzeroU64, "pane_id">,
@@ -1854,7 +2029,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<PaneFocusResult>
-      : Schema<Direction::server, ServerTag::pane_focus_result,
+      : Schema<Direction::server,
+               ServerTag::pane_focus_result,
                Field<&PaneFocusResult::request_id, NonzeroU64, "request_id">,
                Field<&PaneFocusResult::outcome, EnumByte<PaneFocusOutcome, 2>, "outcome">,
                Field<&PaneFocusResult::focused_pane_id, u64, "focused_pane_id">> {};
@@ -1873,7 +2049,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<CommandSuggestion>
-      : Schema<Direction::server, ServerTag::command_suggestion,
+      : Schema<Direction::server,
+               ServerTag::command_suggestion,
                Field<&CommandSuggestion::request_id, NonzeroU64, "request_id">,
                Field<&CommandSuggestion::status, EnumByte<SuggestionStatus, 3>, "status">,
                Field<&CommandSuggestion::text, Text16<1024>, "text">> {};
@@ -1896,7 +2073,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<PaneProgress>
-      : Schema<Direction::server, ServerTag::pane_progress,
+      : Schema<Direction::server,
+               ServerTag::pane_progress,
                Field<&PaneProgress::pane_id, NonzeroU64, "pane_id">,
                Field<&PaneProgress::state, EnumByte<PaneProgressState, 4>, "state">,
                Field<&PaneProgress::percent, PercentSentinel, "percent">> {};
@@ -1919,7 +2097,8 @@ namespace telar {
   template <>
   struct MessageSchema<ClientList>
       : Schema<
-            Direction::server, ServerTag::client_list,
+            Direction::server,
+            ServerTag::client_list,
             Field<&ClientList::request_id, NonzeroU64, "request_id">,
             SpanCountField<&ClientList::entries, u8, ValueCodec<ClientDescriptor>, 32, "count", 0>,
             SpanItemsField<&ClientList::entries, ValueCodec<ClientDescriptor>, "entries">> {};
@@ -1931,9 +2110,9 @@ namespace telar {
   struct ClientCommandResult : ClientCommand {};
 
   template <>
-  struct MessageSchema<ClientCommandResult>
-      : MessageLayout<Direction::server, ServerTag::client_command_result,
-                      BodySchema<ClientCommand>> {};
+  struct MessageSchema<ClientCommandResult> : MessageLayout<Direction::server,
+                                                            ServerTag::client_command_result,
+                                                            BodySchema<ClientCommand>> {};
 
   struct EditorOpened {
     std::uint64_t request_id{};
@@ -1950,7 +2129,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<EditorOpened>
-      : Schema<Direction::server, ServerTag::editor_opened,
+      : Schema<Direction::server,
+               ServerTag::editor_opened,
                Field<&EditorOpened::request_id, NonzeroU64, "request_id">,
                Field<&EditorOpened::outcome, EnumByte<EditorOutcome, 3>, "outcome">,
                Field<&EditorOpened::pane_id, u64, "pane_id">,
@@ -1974,7 +2154,8 @@ namespace telar {
   template <>
   struct MessageSchema<PathResults>
       : Schema<
-            Direction::server, ServerTag::path_results,
+            Direction::server,
+            ServerTag::path_results,
             Field<&PathResults::request_id, NonzeroU64, "request_id">,
             Field<&PathResults::root, Text16<4096, false>, "root">,
             Field<&PathResults::scanned, u32, "scanned">,
@@ -1991,7 +2172,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<WorktreeRegistered>
-      : Schema<Direction::server, ServerTag::worktree_registered,
+      : Schema<Direction::server,
+               ServerTag::worktree_registered,
                Field<&WorktreeRegistered::request_id, NonzeroU64, "request_id">,
                Field<&WorktreeRegistered::worktree, NonzeroU64, "worktree">,
                Field<&WorktreeRegistered::created, BoolByte, "created">> {};
@@ -2006,13 +2188,18 @@ namespace telar {
 
   template <>
   struct MessageSchema<LimitList>
-      : Schema<Direction::server, ServerTag::limit_list,
+      : Schema<Direction::server,
+               ServerTag::limit_list,
                Field<&LimitList::request_id, NonzeroU64, "request_id">,
                Field<&LimitList::runtime_evicted, u64, "runtime_evicted">,
                Field<&LimitList::client_evicted, u64, "client_evicted">,
                Field<&LimitList::refused_reports, u64, "refused_reports">,
-               SpanCountField<&LimitList::entries, u16, ValueCodec<LimitListEntry>, 256,
-                              "entry_count", 0>,
+               SpanCountField<&LimitList::entries,
+                              u16,
+                              ValueCodec<LimitListEntry>,
+                              256,
+                              "entry_count",
+                              0>,
                SpanItemsField<&LimitList::entries, ValueCodec<LimitListEntry>, "entries">> {};
 
   struct ExecutionReply {
@@ -2035,7 +2222,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<ExecutionReply>
-      : Schema<Direction::server, ServerTag::execution_reply,
+      : Schema<Direction::server,
+               ServerTag::execution_reply,
                Field<&ExecutionReply::request_id, NonzeroU64, "request_id">,
                Field<&ExecutionReply::execution_id, u64, "execution_id">,
                Field<&ExecutionReply::workspace_id, u64, "workspace_id">,

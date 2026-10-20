@@ -56,6 +56,16 @@ desktop-editor:
     cmake --preset debug
     cmake --build --preset debug --target desktop-editor
 
+# Format the desktop C++, Objective-C++ and Lua sources with their project rules.
+[working-directory: "services/desktop-mode"]
+desktop-fmt:
+    cmake -P cmake/format.cmake
+
+# Check desktop formatting without changing files.
+[working-directory: "services/desktop-mode"]
+desktop-fmt-check:
+    cmake -DCHECK=ON -P cmake/format.cmake
+
 # Build and run a program from services/desktop-mode/debug by its filename stem.
 [working-directory: "services/desktop-mode"]
 desktop-debug program *args:

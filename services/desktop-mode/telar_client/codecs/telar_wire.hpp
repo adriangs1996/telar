@@ -40,9 +40,12 @@ namespace telar {
   };
 
   struct EncodingError final : std::exception {
-    EncodingError(const char *message) : message{message} {}
+    EncodingError(const char *message)
+        : message{message} {}
 
-    const char *what() const noexcept override { return message; }
+    const char *what() const noexcept override {
+      return message;
+    }
 
   private:
     const char *message;
@@ -53,7 +56,11 @@ namespace telar {
   inline constexpr std::size_t max_payload_size = MEGA_BYTES(4);
   inline constexpr std::size_t frame_prefix_size = sizeof(std::uint32_t);
 
-  enum class Direction { client, server, either };
+  enum class Direction {
+    client,
+    server,
+    either
+  };
 
 #ifdef TELAR_DEBUG
   namespace debug {
@@ -67,7 +74,9 @@ namespace telar {
         if (byte >= 0x20 && byte <= 0x7e && byte != '"' && byte != '\\') {
           text[position++] = static_cast<char>(byte);
         } else {
-          std::snprintf(text.data() + position, text.size() - position, "\\x%02x",
+          std::snprintf(text.data() + position,
+                        text.size() - position,
+                        "\\x%02x",
                         static_cast<unsigned>(byte));
           position += 4;
         }
@@ -103,8 +112,11 @@ namespace telar {
       return width > value_width ? width : value_width;
     }
 
-    inline void printBytes(std::span<const Byte> bytes, const char *name, const char *value,
-                           std::FILE *output, bool more) {
+    inline void printBytes(std::span<const Byte> bytes,
+                           const char *name,
+                           const char *value,
+                           std::FILE *output,
+                           bool more) {
       for (std::size_t i = 0; i < bytes.size(); ++i) {
         if (i != 0) {
           std::fputc(' ', output);
@@ -120,8 +132,8 @@ namespace telar {
       }
     }
 
-    inline void printText(const char *text, std::size_t width, std::FILE *output,
-                          const char *separator) {
+    inline void
+    printText(const char *text, std::size_t width, std::FILE *output, const char *separator) {
       std::fputs(text, output);
 
       if (separator[0] != '\0') {
@@ -130,13 +142,19 @@ namespace telar {
       }
     }
 
-    inline void printLabel(std::size_t byte_count, const char *name, const char *value,
-                           std::FILE *output, bool more) {
+    inline void printLabel(std::size_t byte_count,
+                           const char *name,
+                           const char *value,
+                           std::FILE *output,
+                           bool more) {
       printText(name, columnWidth(byte_count, name, value), output, more ? "   " : "");
     }
 
-    inline void printValue(std::size_t byte_count, const char *name, const char *value,
-                           std::FILE *output, bool more) {
+    inline void printValue(std::size_t byte_count,
+                           const char *name,
+                           const char *value,
+                           std::FILE *output,
+                           bool more) {
       printText(value, columnWidth(byte_count, name, value), output, more ? " | " : "");
     }
 
@@ -180,7 +198,6 @@ namespace telar {
   template <std::unsigned_integral T>
     requires(!std::same_as<T, bool>)
   struct LittleEndian {
-
     using value_type = T;
 
     static constexpr std::size_t width = sizeof(T);

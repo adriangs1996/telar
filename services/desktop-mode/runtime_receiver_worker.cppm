@@ -19,16 +19,16 @@ constexpr std::size_t decode_capacity = max_worktree_entries * sizeof(telar::Wor
                                         alignof(telar::WorktreeListEntry);
 
 export struct RuntimeReceiverWorker {
-
   template <Notifier INotifier>
   static RuntimeReceiverWorker init(const AppContext<INotifier> &context) {
     RuntimeReceiverWorker worker{};
 
     worker.reader = std::jthread{[&](std::stop_token stop) {
-      std::stop_callback interrupt{stop, [&context]() noexcept { context.client.interruptRead(); }};
+      std::stop_callback interrupt{stop, [&context]() noexcept {
+                                     context.client.interruptRead();
+                                   }};
 
       try {
-
         std::vector<telar::Byte> buffer(telar::max_payload_size);
         std::vector<telar::Byte> decode_buffer(decode_capacity);
 

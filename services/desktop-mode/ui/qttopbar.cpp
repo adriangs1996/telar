@@ -1,86 +1,83 @@
 #include "qttopbar.hpp"
-#include "lua_vm.hpp"
-#include <QColor>
+#include "lua_ui.hpp"
+#include <QDebug>
 #include <QDir>
 #include <QFile>
-#include <QString>
+#include <QtGlobal>
 #include <chrono>
 #include <stdexcept>
 #include <string_view>
 
-#define REFRESH_DELAY_MS 200
+namespace {
+  constexpr auto refresh_delay = std::chrono::milliseconds{200};
 
-QtTopBarSurface::QtTopBarSurface(lua::Vm &lua_vm) : QuickSurface(lua_vm) {
-  const auto ui_directory = qEnvironmentVariable("TELAR_DESKTOP_UI_DIR");
-  script_path_ = ui_directory.isEmpty()
+  QByteArray readScript(const QString &path) {
+    QFile script(path);
+
+    if (!script.open(QIODevice::ReadOnly)) {
+      throw std::runtime_error(
+          QStringLiteral("%1: %2").arg(path, script.errorString()).toStdString());
+    }
+
+    auto source = script.readAll();
+
+    if (script.error() != QFileDevice::NoError) {
+      throw std::runtime_error(
+          QStringLiteral("%1: %2").arg(path, script.errorString()).toStdString());
+    }
+
+    return source;
+  }
+
+  std::string_view view(const QByteArray &bytes) {
+    return {bytes.constData(), static_cast<std::size_t>(bytes.size())};
+  }
+} // namespace
+
+QtTopBarSurface::QtTopBarSurface(lua::Vm &lua_vm, const QSize &size)
+    : ui_(std::make_unique<ui::LuaUi>(lua_vm, *this)) {
+  ui_->setReloadHandler([this] {
+    reload_timer_.start();
+  });
+
+  window_.resize(size);
+  const auto directory = qEnvironmentVariable("TELAR_DESKTOP_UI_DIR");
+  script_path_ = directory.isEmpty()
                      ? QStringLiteral(":/telar/ui/topbar.lua")
-                     : QDir(ui_directory).absoluteFilePath(QStringLiteral("topbar.lua"));
-
-  window_.setColor(QColor("#263449"));
-  text_item_ = &createItem("QtQuick", "Text",
-                           {
-                               {"text", QString{}},
-                               {"color", QColor("#cdd6f4")},
-                               {"x", 12},
-                               {"y", 8},
-                           });
+                     : QDir(directory).absoluteFilePath(QStringLiteral("topbar.lua"));
 
   reload();
   watchScript();
 }
 
+QtTopBarSurface::~QtTopBarSurface() = default;
+
 void QtTopBarSurface::reload() {
-  QFile script(script_path_);
-  if (!script.open(QIODevice::ReadOnly)) {
-    throw std::runtime_error(script.errorString().toStdString());
-  }
-
-  const auto source = script.readAll();
-  if (script.error() != QFileDevice::NoError) {
-    throw std::runtime_error(script.errorString().toStdString());
-  }
-
-  lua_vm.execute(std::string_view{
-      source.constData(),
-      static_cast<std::size_t>(source.size()),
-  });
-  const auto text = lua_vm.readGlobalString("topbar_text");
-  text_item_->setProperty("text", QString::fromStdString(text));
+  const auto api_source = readScript(QStringLiteral(":/telar/ui/api.lua"));
+  const auto source = readScript(script_path_);
+  const auto chunk_name = (QStringLiteral("@") + script_path_).toUtf8();
+  ui_->reload(view(api_source), view(source), view(chunk_name));
 }
 
 void QtTopBarSurface::watchScript() {
-  if (script_path_.startsWith(QStringLiteral(":/"))) {
-    return;
-  }
-
-  constexpr auto reload_delay = std::chrono::milliseconds{REFRESH_DELAY_MS};
   reload_timer_.setSingleShot(true);
-  reload_timer_.setInterval(reload_delay);
+  reload_timer_.setInterval(refresh_delay);
+  watcher_.setCallback([this](const QStringList &) {
+    reload_timer_.start();
+  });
 
-  const auto schedule_reload = [this](const QString &) { reload_timer_.start(); };
-
-  QObject::connect(&watcher_, &QFileSystemWatcher::directoryChanged, &reload_timer_,
-                   schedule_reload);
-  QObject::connect(&watcher_, &QFileSystemWatcher::fileChanged, &reload_timer_, schedule_reload);
   QObject::connect(&reload_timer_, &QTimer::timeout, &reload_timer_, [this] {
-    if (QFileInfo::exists(script_path_) && !watcher_.files().contains(script_path_)) {
-      if (!watcher_.addPath(script_path_)) {
-        qWarning() << "Unable to watch UI script:" << script_path_;
-      }
-    }
     try {
+      rearmWatcher();
       reload();
     } catch (const std::exception &error) {
       qWarning() << "UI reload failed:" << error.what();
     }
   });
 
-  const auto failed_paths = watcher_.addPaths({
-      script_path_,
-      QFileInfo(script_path_).absolutePath(),
-  });
+  rearmWatcher();
+}
 
-  if (!failed_paths.isEmpty()) {
-    qWarning() << "Unable to watch UI paths:" << failed_paths;
-  }
+void QtTopBarSurface::rearmWatcher() {
+  watcher_.setPaths({script_path_});
 }

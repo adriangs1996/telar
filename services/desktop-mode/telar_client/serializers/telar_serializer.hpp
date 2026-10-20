@@ -74,15 +74,19 @@ namespace telar {
     static constexpr std::size_t min_width = WireCodec::min_width;
 
     template <typename Message> static std::size_t encodedSize(const Message &message) {
-      return WireCodec::encodedSize(memberValue<Member>(message), memberValue<ContextMember>(message));
+      return WireCodec::encodedSize(memberValue<Member>(message),
+                                    memberValue<ContextMember>(message));
     }
 
-    template <typename Message> static void encode(const Message &message, std::span<Byte> &output) {
+    template <typename Message>
+    static void encode(const Message &message, std::span<Byte> &output) {
       WireCodec::encode(memberValue<Member>(message), output, memberValue<ContextMember>(message));
     }
 
-    template <typename Message> static void decode(std::span<const Byte> &input, Message &message, DecodeStorage &storage) {
-      memberValue<Member>(message) = WireCodec::decode(input, storage, memberValue<ContextMember>(message));
+    template <typename Message>
+    static void decode(std::span<const Byte> &input, Message &message, DecodeStorage &storage) {
+      memberValue<Member>(message) =
+          WireCodec::decode(input, storage, memberValue<ContextMember>(message));
     }
 
     template <typename Message, typename Visitor>
@@ -95,14 +99,19 @@ namespace telar {
 
   // Some messages put the count before other headers and the items afterwards.
   // This pair keeps that order without storing a redundant count in the DTO.
-  template <auto Member, typename CountCodec, typename ElementCodec, std::size_t Maximum,
-            FixedString Name, std::size_t Minimum = 0>
+  template <auto Member,
+            typename CountCodec,
+            typename ElementCodec,
+            std::size_t Maximum,
+            FixedString Name,
+            std::size_t Minimum = 0>
   struct SpanCountField {
     static constexpr std::size_t width = CountCodec::width;
     static constexpr std::size_t min_width = width;
 
     static void validate(std::size_t count) {
-      if (count < Minimum || count > Maximum || count > std::numeric_limits<typename CountCodec::value_type>::max()) {
+      if (count < Minimum || count > Maximum ||
+          count > std::numeric_limits<typename CountCodec::value_type>::max()) {
         throw EncodingError{"Invalid separated list count"};
       }
     }
@@ -112,12 +121,16 @@ namespace telar {
       return width;
     }
 
-    template <typename Message> static void encode(const Message &message, std::span<Byte> &output) {
+    template <typename Message>
+    static void encode(const Message &message, std::span<Byte> &output) {
       (void)encodedSize(message);
-      CountCodec::encode(static_cast<typename CountCodec::value_type>(memberValue<Member>(message).size()), output);
+      CountCodec::encode(
+          static_cast<typename CountCodec::value_type>(memberValue<Member>(message).size()),
+          output);
     }
 
-    template <typename Message> static void decode(std::span<const Byte> &input, Message &message, DecodeStorage &storage) {
+    template <typename Message>
+    static void decode(std::span<const Byte> &input, Message &message, DecodeStorage &storage) {
       const auto count = CountCodec::decode(input);
       validate(count);
       if (count > input.size() / minimumWidth<ElementCodec>()) {
@@ -144,13 +157,15 @@ namespace telar {
       return size;
     }
 
-    template <typename Message> static void encode(const Message &message, std::span<Byte> &output) {
+    template <typename Message>
+    static void encode(const Message &message, std::span<Byte> &output) {
       for (const auto &value : memberValue<Member>(message)) {
         ElementCodec::encode(value, output);
       }
     }
 
-    template <typename Message> static void decode(std::span<const Byte> &input, Message &message, DecodeStorage &storage) {
+    template <typename Message>
+    static void decode(std::span<const Byte> &input, Message &message, DecodeStorage &storage) {
       auto values = memberValue<Member>(message);
       if (values.size() > input.size() / minimumWidth<ElementCodec>()) {
         throw EncodingError{"Truncated separated list items"};
@@ -236,8 +251,7 @@ namespace telar {
     static constexpr std::size_t payload_size = u8::width + Body::payload_size;
   };
 
-  template <Direction Side, auto Tag, typename Body>
-  struct MessageLayout : MessageSize<Body> {
+  template <Direction Side, auto Tag, typename Body> struct MessageLayout : MessageSize<Body> {
     static constexpr Direction direction = Side;
     static constexpr auto tag = Tag;
 

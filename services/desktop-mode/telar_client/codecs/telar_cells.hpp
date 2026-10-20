@@ -7,7 +7,10 @@ namespace telar {
   // Styles are inherited only within one span. Text borrows the encoded frame.
   class CellReader {
   public:
-    CellReader(std::span<const Byte> bytes, std::uint32_t count) : input{bytes}, remaining{count} {}
+    CellReader(std::span<const Byte> bytes, std::uint32_t count)
+        : input{bytes},
+          remaining{count} {}
+
     std::optional<Cell> next() {
       if (remaining == 0) {
         if (!input.empty()) {
@@ -56,6 +59,7 @@ namespace telar {
       }
       return size;
     }
+
     static std::span<Byte> encode(std::span<const Cell> cells, std::span<Byte> buffer) {
       const auto size = encodedSize(cells);
       if (size > buffer.size()) {

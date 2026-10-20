@@ -1,4 +1,5 @@
 #include "topbar.hpp"
+#include "surface_bridge.hpp"
 #include "ui/qttopbar.hpp"
 #include <AppKit/AppKit.h>
 #include <Foundation/Foundation.h>
@@ -6,6 +7,7 @@
 
 @implementation TelarTopBar {
   std::unique_ptr<QtTopBarSurface> _surface;
+  TelarSurfaceBridge *_surface_bridge;
 }
 
 - (instancetype)initWithScreen:(NSScreen *)screen luaVm:(lua::Vm &)lua_vm {
@@ -15,10 +17,11 @@
   const NSRect frame =
       NSMakeRect(NSMinX(available), NSMaxY(available) - bar_height, NSWidth(available), bar_height);
 
-  self = [super initWithContentRect:frame
-                          styleMask:NSWindowStyleMaskBorderless
-                            backing:NSBackingStoreBuffered
-                              defer:NO];
+  self =
+      [super initWithContentRect:frame
+                       styleMask:NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel
+                         backing:NSBackingStoreBuffered
+                           defer:NO];
 
   if (!self) {
     return nil;
@@ -26,22 +29,24 @@
 
   self.releasedWhenClosed = NO;
   self.hidesOnDeactivate = NO;
+  self.becomesKeyOnlyIfNeeded = YES;
   self.level = NSFloatingWindowLevel;
   self.collectionBehavior =
       NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary;
 
-  self.backgroundColor = NSColor.windowBackgroundColor;
-  self.hasShadow = YES;
+  self.opaque = NO;
+  self.backgroundColor = NSColor.clearColor;
+  self.hasShadow = NO;
   self.title = @"Telar Top Bar";
 
   NSView *container = self.contentView;
   const NSRect bounds = container.bounds;
 
-  _surface = std::make_unique<QtTopBarSurface>(lua_vm);
+  const QSize size(static_cast<int>(NSWidth(bounds)), static_cast<int>(NSHeight(bounds)));
+  _surface = std::make_unique<QtTopBarSurface>(lua_vm, size);
   auto &window = _surface->window();
 
   window.setFlags(Qt::SubWindow);
-  window.resize(static_cast<int>(NSWidth(bounds)), static_cast<int>(NSHeight(bounds)));
 
   NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window.winId());
 
@@ -49,12 +54,22 @@
   view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
 
   [container addSubview:view];
+  _surface_bridge = [[TelarSurfaceBridge alloc] initWithView:view surface:*_surface];
   window.show();
 
   return self;
 }
 
+- (BOOL)canBecomeKeyWindow {
+  return YES;
+}
+
+- (BOOL)canBecomeMainWindow {
+  return NO;
+}
+
 - (void)close {
+  _surface_bridge = nil;
   _surface.reset();
 
   [super close];

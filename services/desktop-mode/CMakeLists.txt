@@ -15,7 +15,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(Threads REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LUAJIT REQUIRED IMPORTED_TARGET luajit>=2.1)
-find_package(Qt6 6.5 REQUIRED COMPONENTS Qml Quick QuickControls2)
+find_package(Qt6 6.7 REQUIRED COMPONENTS Qml Quick QuickControls2 QuickShapes Network Concurrent)
 
 # Source discovery is intentional: adding a module or a development program
 # must not require editing the build definition.
@@ -38,7 +38,7 @@ file(GLOB_RECURSE desktop_ui_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_D
 add_library(desktop-ui STATIC ${desktop_ui_sources})
 target_include_directories(desktop-ui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(desktop-ui PUBLIC Qt6::Qml Qt6::Quick Qt6::QuickControls2)
-target_link_libraries(desktop-ui PRIVATE PkgConfig::LUAJIT)
+target_link_libraries(desktop-ui PRIVATE desktop-core PkgConfig::LUAJIT Qt6::QuickShapes Qt6::Network Qt6::Concurrent)
 
 add_executable(telar-desktop main.cpp)
 
@@ -75,7 +75,7 @@ if(APPLE)
   target_link_libraries(telar-desktop PRIVATE desktop-native)
 endif()
 
-target_link_libraries(telar-desktop PRIVATE desktop-core desktop-ui)
+target_link_libraries(telar-desktop PRIVATE desktop-ui desktop-core)
 
 add_custom_target(desktop-editor DEPENDS desktop-core desktop-ui)
 

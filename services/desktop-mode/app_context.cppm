@@ -39,11 +39,17 @@ export template <Notifier INotifier> struct EventQueue {
     std::array<Event, MAX_PARALLEL_EVENTS> events{};
     std::uint16_t size = 0;
 
-    auto begin() { return events.begin(); }
-    auto end() { return events.begin() + size; }
+    auto begin() {
+      return events.begin();
+    }
+
+    auto end() {
+      return events.begin() + size;
+    }
   };
 
-  explicit EventQueue(INotifier &notifier) : notifier(notifier) {}
+  explicit EventQueue(INotifier &notifier)
+      : notifier(notifier) {}
 
   bool push(Event &&event) {
     _lock_autorelease_block {

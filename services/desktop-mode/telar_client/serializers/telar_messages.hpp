@@ -140,7 +140,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<RequestRuntimeState>
-      : Schema<Direction::client, ClientTag::request_runtime_state,
+      : Schema<Direction::client,
+               ClientTag::request_runtime_state,
                Field<&RequestRuntimeState::client_identity, u64, "client_identity">,
                Field<&RequestRuntimeState::interactive, BoolByte, "interactive">> {
     static constexpr const char *name = "RequestRuntimeState";
@@ -168,7 +169,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<SystemMetrics>
-      : Schema<Direction::server, ServerTag::system_metrics,
+      : Schema<Direction::server,
+               ServerTag::system_metrics,
                Field<&SystemMetrics::revision, u64, "revision">,
                Field<&SystemMetrics::cpu_percent, u8, "cpu_percent">,
                Field<&SystemMetrics::memory_used_decigib, u16, "memory_used_decigib">,
@@ -189,7 +191,8 @@ namespace telar {
 
   template <>
   struct MessageSchema<TerminalSize>
-      : Serializer<Field<&TerminalSize::cols, u16, "cols">, Field<&TerminalSize::rows, u16, "rows">,
+      : Serializer<Field<&TerminalSize::cols, u16, "cols">,
+                   Field<&TerminalSize::rows, u16, "rows">,
                    Field<&TerminalSize::cell_width_px, u16, "cell_width_px">,
                    Field<&TerminalSize::cell_height_px, u16, "cell_height_px">> {
     static constexpr const char *name = "TerminalSize";
@@ -738,8 +741,8 @@ namespace telar {
       throw EncodingError{"History scope and value do not match"};
     }
 
-    static void encodeBody(const HistoryScopeValue &value, std::span<Byte> &output,
-                           HistoryScope scope) {
+    static void
+    encodeBody(const HistoryScopeValue &value, std::span<Byte> &output, HistoryScope scope) {
       (void)encodedSize(value, scope);
       switch (scope) {
       case HistoryScope::global:
@@ -754,7 +757,9 @@ namespace telar {
       }
     }
 
-    static void decodeBody(std::span<const Byte> &input, HistoryScopeValue &value, DecodeStorage &,
+    static void decodeBody(std::span<const Byte> &input,
+                           HistoryScopeValue &value,
+                           DecodeStorage &,
                            HistoryScope scope) {
       EnumByte<HistoryScope, 3>::validate(scope);
       switch (scope) {
@@ -811,7 +816,8 @@ namespace telar {
             Field<&Launch::cwd_source, u64, "cwd_source">,
             Field<&Launch::arguments, CountedSpan<u16, Text16<65535>, 64, 1>, "arguments">,
             Field<&Launch::environment_mode, EnumByte<EnvironmentMode, 1>, "environment_mode">,
-            Field<&Launch::environment, CountedSpan<u16, ValueCodec<EnvironmentEntry>, 256>,
+            Field<&Launch::environment,
+                  CountedSpan<u16, ValueCodec<EnvironmentEntry>, 256>,
                   "environment">> {
     static void validate(const Launch &value) {
       if (value.arguments.empty() || value.arguments.size() > 64 ||
@@ -846,7 +852,8 @@ namespace telar {
                    Field<&TabDescriptor::pane_count, BoundedInteger<u16, 0, 64>, "pane_count">,
                    Field<&TabDescriptor::label, DisplayText16<128>, "label">,
                    Field<&TabDescriptor::foregrounds,
-                         CountedSpan<u16, ValueCodec<PaneForeground>, 64>, "foregrounds">> {
+                         CountedSpan<u16, ValueCodec<PaneForeground>, 64>,
+                         "foregrounds">> {
     static void validate(const TabDescriptor &value) {
       if (value.foregrounds.size() > value.pane_count) {
         throw EncodingError{"Too many foreground entries"};
@@ -885,7 +892,8 @@ namespace telar {
             Field<&WorktreeListEntry::title, DisplayText16<96>, "title">,
             Field<&WorktreeListEntry::brief, MessageText16<512>, "brief">,
             Field<&WorktreeListEntry::dispatched_from, DisplayText16<32>, "dispatched_from">,
-            Field<&WorktreeListEntry::coordinator, OptionalValue<ValueCodec<CoordinatorReference>>,
+            Field<&WorktreeListEntry::coordinator,
+                  OptionalValue<ValueCodec<CoordinatorReference>>,
                   "coordinator">,
             Field<&WorktreeListEntry::diff_added, u32, "diff_added">,
             Field<&WorktreeListEntry::diff_removed, u32, "diff_removed">,
@@ -932,15 +940,18 @@ namespace telar {
             Field<&AgentSnapshotEntry::title_source, EnumByte<AgentTitleSource, 4>, "title_source">,
             Field<&AgentSnapshotEntry::title_state, EnumByte<AgentTitleState, 3>, "title_state">,
             Field<&AgentSnapshotEntry::cwd_label, DisplayText16<48>, "cwd_label">,
-            Field<&AgentSnapshotEntry::provider, EnumByte<AgentProvider, max_agent_provider_index>,
+            Field<&AgentSnapshotEntry::provider,
+                  EnumByte<AgentProvider, max_agent_provider_index>,
                   "provider">,
             Field<&AgentSnapshotEntry::provider_name, DisplayText16<32>, "provider_name">,
             Field<&AgentSnapshotEntry::display_name, DisplayText16<32>, "display_name">,
             Field<&AgentSnapshotEntry::icon, DisplayText16<8>, "icon">,
-            Field<&AgentSnapshotEntry::attachments, EnumByte<AgentAttachmentMarkers, 3>,
+            Field<&AgentSnapshotEntry::attachments,
+                  EnumByte<AgentAttachmentMarkers, 3>,
                   "attachments">,
             Field<&AgentSnapshotEntry::status, EnumByte<AgentStatus, 5>, "status">,
-            Field<&AgentSnapshotEntry::blocked_reason, EnumByte<AgentBlockedReason, 4>,
+            Field<&AgentSnapshotEntry::blocked_reason,
+                  EnumByte<AgentBlockedReason, 4>,
                   "blocked_reason">,
             Field<&AgentSnapshotEntry::last_event, DisplayText16<96>, "last_event">,
             Field<&AgentSnapshotEntry::status_age_s, u32, "status_age_s">,
@@ -1038,8 +1049,8 @@ namespace telar {
       }
     }
 
-    static void decodeBody(std::span<const Byte> &input, ClientLayoutNode &value,
-                           DecodeStorage &storage) {
+    static void
+    decodeBody(std::span<const Byte> &input, ClientLayoutNode &value, DecodeStorage &storage) {
       switch (u8::decode(input)) {
       case 0:
         value = ValueCodec<ClientLayoutPane>::decode(input, storage);
@@ -1060,7 +1071,8 @@ namespace telar {
                    Field<&ClientTabLayout::fullscreen, BoolByte, "fullscreen">,
                    Field<&ClientTabLayout::workspace_active, BoolByte, "workspace_active">,
                    Field<&ClientTabLayout::nodes,
-                         CountedSpan<u16, ValueCodec<ClientLayoutNode>, 127, 1>, "nodes">> {
+                         CountedSpan<u16, ValueCodec<ClientLayoutNode>, 127, 1>,
+                         "nodes">> {
     static void validate(const ClientTabLayout &value) {
       if (value.nodes.empty() || value.nodes.size() > 127) {
         throw EncodingError{"Invalid layout node count"};
@@ -1163,7 +1175,6 @@ namespace telar {
                    Field<&LimitReach::value, u64, "value">,
                    Field<&LimitReach::requested, OptionalValue<u64>, "requested">,
                    Field<&LimitReach::route, Text16<32>, "route">> {
-
     static void validate(const LimitReach &value) {
       const auto alphanumeric = [](char byte) {
         return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') ||
@@ -1210,14 +1221,13 @@ namespace telar {
 
   template <>
   struct BodySchema<ImageDescription>
-      : Serializer<
-            Field<&ImageDescription::key, ValueCodec<ImageKey>, "key">,
-            Field<&ImageDescription::format,
-                  EnumChoiceByte<ImageFormat, ImageFormat::rgb, ImageFormat::rgba>, "format">,
-            Field<&ImageDescription::width, BoundedInteger<u32, 1>, "width">,
-            Field<&ImageDescription::height, BoundedInteger<u32, 1>, "height">,
-            Field<&ImageDescription::byte_len, u64, "byte_len">> {
-
+      : Serializer<Field<&ImageDescription::key, ValueCodec<ImageKey>, "key">,
+                   Field<&ImageDescription::format,
+                         EnumChoiceByte<ImageFormat, ImageFormat::rgb, ImageFormat::rgba>,
+                         "format">,
+                   Field<&ImageDescription::width, BoundedInteger<u32, 1>, "width">,
+                   Field<&ImageDescription::height, BoundedInteger<u32, 1>, "height">,
+                   Field<&ImageDescription::byte_len, u64, "byte_len">> {
     static void validate(const ImageDescription &value) {
       const auto pixels = static_cast<std::uint64_t>(value.width) * value.height;
       const auto channels = value.format == ImageFormat::rgb ? 3u : 4u;
@@ -1234,7 +1244,8 @@ namespace telar {
       : Serializer<Field<&GraphicsPlacement::key, ValueCodec<ImageKey>, "key">,
                    Field<&GraphicsPlacement::virtual_id, NonzeroU64, "virtual_id">,
                    Field<&GraphicsPlacement::placement_id, u32, "placement_id">,
-                   Field<&GraphicsPlacement::x, i32, "x">, Field<&GraphicsPlacement::y, i32, "y">,
+                   Field<&GraphicsPlacement::x, i32, "x">,
+                   Field<&GraphicsPlacement::y, i32, "y">,
                    Field<&GraphicsPlacement::source_x, u32, "source_x">,
                    Field<&GraphicsPlacement::source_y, u32, "source_y">,
                    Field<&GraphicsPlacement::source_width, u32, "source_width">,
@@ -1245,7 +1256,8 @@ namespace telar {
                    Field<&GraphicsPlacement::offset_y, u32, "offset_y">,
                    Field<&GraphicsPlacement::z_index, i32, "z_index">,
                    Field<&GraphicsPlacement::location,
-                         EnumChoiceByte<PlacementLocation, PlacementLocation::cell,
+                         EnumChoiceByte<PlacementLocation,
+                                        PlacementLocation::cell,
                                         PlacementLocation::placeholders>,
                          "location">> {};
 

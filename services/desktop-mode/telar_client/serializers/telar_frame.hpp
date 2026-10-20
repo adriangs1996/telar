@@ -5,10 +5,31 @@
 
 namespace telar {
 
-  enum class CursorShape : Byte { default_shape, block, bar, underline, hollow };
-  enum class MouseTracking : Byte { none, x10, normal, button, any };
-  enum class MetadataStatus : Byte { complete, omitted, partial };
-  enum class RowFlag : Byte { wrap = 1, continuation = 2, wide_padding = 4, hyperlinks = 8 };
+  enum class CursorShape : Byte {
+    default_shape,
+    block,
+    bar,
+    underline,
+    hollow
+  };
+  enum class MouseTracking : Byte {
+    none,
+    x10,
+    normal,
+    button,
+    any
+  };
+  enum class MetadataStatus : Byte {
+    complete,
+    omitted,
+    partial
+  };
+  enum class RowFlag : Byte {
+    wrap = 1,
+    continuation = 2,
+    wide_padding = 4,
+    hyperlinks = 8
+  };
   enum class PointerShape : Byte {
     default_shape,
     context_menu,
@@ -52,23 +73,28 @@ namespace telar {
     CursorShape shape = CursorShape::default_shape;
     bool blink = true;
   };
+
   struct Mouse {
     MouseTracking tracking{};
     bool sgr = false, pixels = false;
   };
+
   struct InputModes {
     bool cursor_keys = false, keypad_keys = false, bracketed_paste = false;
     bool focus_events = false, alternate_scroll = false, alternate_screen = false;
     Byte kitty_keyboard_flags = 0;
     bool modify_other_keys_2 = false;
   };
+
   struct Scroll {
     std::uint32_t total_rows = 0, offset = 0;
   };
+
   struct MetadataLink {
     std::uint32_t offset = 0;
     std::uint16_t len = 0;
   };
+
   struct MetadataRun {
     std::uint32_t start = 0, len = 0;
     std::uint16_t link_index = 0;
@@ -132,15 +158,18 @@ namespace telar {
   template <>
   struct BodySchema<MetadataLink> : Serializer<Field<&MetadataLink::offset, u32, "offset">,
                                                Field<&MetadataLink::len, u16, "len">> {};
+
   template <>
-  struct BodySchema<MetadataRun>
-      : Serializer<Field<&MetadataRun::start, u32, "start">, Field<&MetadataRun::len, u32, "len">,
-                   Field<&MetadataRun::link_index, u16, "link_index">> {};
+  struct BodySchema<MetadataRun> : Serializer<Field<&MetadataRun::start, u32, "start">,
+                                              Field<&MetadataRun::len, u32, "len">,
+                                              Field<&MetadataRun::link_index, u16, "link_index">> {
+  };
 
   // All four counts precede the row, link, run and URI arrays.
   template <> struct BodySchema<TextMetadata> {
     static constexpr bool fixed_size = false;
     static constexpr std::size_t min_width = 11;
+
     static std::size_t encodedSize(const TextMetadata &value) {
       if (value.row_flags.size() > 65535 || value.links.size() > 256 || value.runs.size() > 2048 ||
           value.uris.size() > 65536) {
@@ -149,6 +178,7 @@ namespace telar {
       return 11 + value.row_flags.size() + value.links.size() * 6 + value.runs.size() * 10 +
              value.uris.size();
     }
+
     static void encodeBody(const TextMetadata &value, std::span<Byte> &output) {
       (void)encodedSize(value);
       EnumByte<MetadataStatus, 2>::encode(value.status, output);
@@ -165,8 +195,9 @@ namespace telar {
       }
       TailBytes<65536>::encode(value.uris, output);
     }
-    static void decodeBody(std::span<const Byte> &input, TextMetadata &value,
-                           DecodeStorage &storage) {
+
+    static void
+    decodeBody(std::span<const Byte> &input, TextMetadata &value, DecodeStorage &storage) {
       value.status = EnumByte<MetadataStatus, 2>::decode(input);
       const auto rows = u16::decode(input);
       const auto links = u16::decode(input);
@@ -195,8 +226,8 @@ namespace telar {
     }
 
     template <typename Visitor>
-    static void visitFields(const TextMetadata &value, std::span<const Byte> &input,
-                            Visitor visitor) {
+    static void
+    visitFields(const TextMetadata &value, std::span<const Byte> &input, Visitor visitor) {
       const auto take = [&](std::size_t size) {
         const auto bytes = input.first(size);
         input = input.subspan(size);
@@ -217,15 +248,18 @@ namespace telar {
   struct FrameMetadataCodec {
     using value_type = std::optional<TextMetadata>;
     static constexpr std::size_t min_width = 4;
+
     static std::size_t encodedSize(const value_type &value) {
       return value ? 4 + BodySchema<TextMetadata>::encodedSize(*value) : 4;
     }
+
     static void encode(const value_type &value, std::span<Byte> &output) {
       u32::encode(static_cast<std::uint32_t>(encodedSize(value) - 4), output);
       if (value) {
         ValueCodec<TextMetadata>::encode(*value, output);
       }
     }
+
     static value_type decode(std::span<const Byte> &input, DecodeStorage &storage) {
       const auto length = u32::decode(input);
       if (length == 0) {
@@ -247,8 +281,12 @@ namespace telar {
   struct FrameSpan {
     std::uint32_t start = 0, count = 0;
     std::span<const Byte> cells{};
-    CellReader reader() const { return CellReader{cells, count}; }
+
+    CellReader reader() const {
+      return CellReader{cells, count};
+    }
   };
+
   template <>
   struct BodySchema<FrameSpan>
       : Serializer<Field<&FrameSpan::start, u32, "start">,
@@ -296,47 +334,111 @@ namespace telar {
     }
   };
 
-  using FrameSerializer = Serializer<
-      Field<&FrameBody::pane_id, NonzeroU64, "pane_id">,
-      Field<&FrameBody::frame_id, u64, "frame_id">,
-      Field<&FrameBody::base_frame_id, u64, "base_frame_id">, Field<&FrameBody::cols, u16, "cols">,
-      Field<&FrameBody::rows, u16, "rows">,
-      Field<[](auto &frame) -> auto & { return frame.cursor.visible; }, BoolByte, "cursor.visible">,
-      Field<[](auto &frame) -> auto & { return frame.cursor.x; }, u16, "cursor.x">,
-      Field<[](auto &frame) -> auto & { return frame.cursor.y; }, u16, "cursor.y">,
-      Field<[](auto &frame) -> auto & { return frame.mouse.tracking; }, EnumByte<MouseTracking, 4>,
-            "mouse.tracking">,
-      Field<[](auto &frame) -> auto & { return frame.mouse.sgr; }, BoolByte, "mouse.sgr">,
-      Field<[](auto &frame) -> auto & { return frame.mouse.pixels; }, BoolByte, "mouse.pixels">,
-      Field<[](auto &frame) -> auto & { return frame.input_modes.cursor_keys; }, BoolByte,
-            "input_modes.cursor_keys">,
-      Field<[](auto &frame) -> auto & { return frame.input_modes.keypad_keys; }, BoolByte,
-            "input_modes.keypad_keys">,
-      Field<[](auto &frame) -> auto & { return frame.input_modes.bracketed_paste; }, BoolByte,
-            "input_modes.bracketed_paste">,
-      Field<[](auto &frame) -> auto & { return frame.input_modes.focus_events; }, BoolByte,
-            "input_modes.focus_events">,
-      Field<[](auto &frame) -> auto & { return frame.input_modes.alternate_scroll; }, BoolByte,
-            "input_modes.alternate_scroll">,
-      Field<[](auto &frame) -> auto & { return frame.input_modes.alternate_screen; }, BoolByte,
-            "input_modes.alternate_screen">,
-      Field<[](auto &frame) -> auto & { return frame.input_modes.kitty_keyboard_flags; },
-            BoundedInteger<u8, 0, 31>, "input_modes.kitty_keyboard_flags">,
-      Field<[](auto &frame) -> auto & { return frame.input_modes.modify_other_keys_2; }, BoolByte,
-            "input_modes.modify_other_keys_2">,
-      Field<&FrameBody::pointer_shape, EnumByte<PointerShape, 33>, "pointer_shape">,
-      Field<[](auto &frame) -> auto & { return frame.scroll.total_rows; }, u32,
-            "scroll.total_rows">,
-      Field<[](auto &frame) -> auto & { return frame.scroll.offset; }, u32, "scroll.offset">,
-      SpanCountField<&FrameBody::spans, u16, ValueCodec<FrameSpan>, 4096, "span_count">,
-      Field<[](auto &frame) -> auto & { return frame.cursor.shape; }, EnumByte<CursorShape, 4>,
-            "cursor.shape">,
-      Field<[](auto &frame) -> auto & { return frame.cursor.blink; }, BoolByte, "cursor.blink">,
-      Field<&FrameBody::text_metadata, FrameMetadataCodec, "text_metadata">,
-      SpanItemsField<&FrameBody::spans, ValueCodec<FrameSpan>, "spans">>;
+  using FrameSerializer =
+      Serializer<Field<&FrameBody::pane_id, NonzeroU64, "pane_id">,
+                 Field<&FrameBody::frame_id, u64, "frame_id">,
+                 Field<&FrameBody::base_frame_id, u64, "base_frame_id">,
+                 Field<&FrameBody::cols, u16, "cols">,
+                 Field<&FrameBody::rows, u16, "rows">,
+                 Field<[](auto &frame) -> auto & {
+                   return frame.cursor.visible;
+                 },
+                       BoolByte,
+                       "cursor.visible">,
+                 Field<[](auto &frame) -> auto & {
+                   return frame.cursor.x;
+                 },
+                       u16,
+                       "cursor.x">,
+                 Field<[](auto &frame) -> auto & {
+                   return frame.cursor.y;
+                 },
+                       u16,
+                       "cursor.y">,
+                 Field<[](auto &frame) -> auto & {
+                   return frame.mouse.tracking;
+                 },
+                       EnumByte<MouseTracking, 4>,
+                       "mouse.tracking">,
+                 Field<[](auto &frame) -> auto & {
+                   return frame.mouse.sgr;
+                 },
+                       BoolByte,
+                       "mouse.sgr">,
+                 Field<[](auto &frame) -> auto & {
+                   return frame.mouse.pixels;
+                 },
+                       BoolByte,
+                       "mouse.pixels">,
+                 Field<[](auto &frame) -> auto & {
+                   return frame.input_modes.cursor_keys;
+                 },
+                       BoolByte,
+                       "input_modes.cursor_keys">,
+                 Field<[](auto &frame) -> auto & {
+                   return frame.input_modes.keypad_keys;
+                 },
+                       BoolByte,
+                       "input_modes.keypad_keys">,
+                 Field<[](auto &frame) -> auto & {
+                   return frame.input_modes.bracketed_paste;
+                 },
+                       BoolByte,
+                       "input_modes.bracketed_paste">,
+                 Field<[](auto &frame) -> auto & {
+                   return frame.input_modes.focus_events;
+                 },
+                       BoolByte,
+                       "input_modes.focus_events">,
+                 Field<[](auto &frame) -> auto & {
+                   return frame.input_modes.alternate_scroll;
+                 },
+                       BoolByte,
+                       "input_modes.alternate_scroll">,
+                 Field<[](auto &frame) -> auto & {
+                   return frame.input_modes.alternate_screen;
+                 },
+                       BoolByte,
+                       "input_modes.alternate_screen">,
+                 Field<[](auto &frame) -> auto & {
+                   return frame.input_modes.kitty_keyboard_flags;
+                 },
+                       BoundedInteger<u8, 0, 31>,
+                       "input_modes.kitty_keyboard_flags">,
+                 Field<[](auto &frame) -> auto & {
+                   return frame.input_modes.modify_other_keys_2;
+                 },
+                       BoolByte,
+                       "input_modes.modify_other_keys_2">,
+                 Field<&FrameBody::pointer_shape, EnumByte<PointerShape, 33>, "pointer_shape">,
+                 Field<[](auto &frame) -> auto & {
+                   return frame.scroll.total_rows;
+                 },
+                       u32,
+                       "scroll.total_rows">,
+                 Field<[](auto &frame) -> auto & {
+                   return frame.scroll.offset;
+                 },
+                       u32,
+                       "scroll.offset">,
+                 SpanCountField<&FrameBody::spans, u16, ValueCodec<FrameSpan>, 4096, "span_count">,
+                 Field<[](auto &frame) -> auto & {
+                   return frame.cursor.shape;
+                 },
+                       EnumByte<CursorShape, 4>,
+                       "cursor.shape">,
+                 Field<[](auto &frame) -> auto & {
+                   return frame.cursor.blink;
+                 },
+                       BoolByte,
+                       "cursor.blink">,
+                 Field<&FrameBody::text_metadata, FrameMetadataCodec, "text_metadata">,
+                 SpanItemsField<&FrameBody::spans, ValueCodec<FrameSpan>, "spans">>;
 
   template <> struct BodySchema<FrameBody> : FrameSerializer {
-    static void validate(const FrameBody &frame) { frame.validate(); }
+    static void validate(const FrameBody &frame) {
+      frame.validate();
+    }
 
     template <typename Frame> static void encodeBody(const Frame &frame, std::span<Byte> &output) {
       for (const auto &span : frame.spans) {
@@ -349,6 +451,7 @@ namespace telar {
   };
 
   struct PaneFrame : FrameBody {};
+
   template <>
   struct MessageSchema<PaneFrame>
       : MessageLayout<Direction::server, ServerTag::pane_frame, BodySchema<FrameBody>> {};

@@ -18,9 +18,12 @@
 namespace telar {
 
   struct SocketError final : std::exception {
-    SocketError(const char *message) : message{message} {}
+    SocketError(const char *message)
+        : message{message} {}
 
-    const char *what() const noexcept override { return message; }
+    const char *what() const noexcept override {
+      return message;
+    }
 
   private:
     const char *message;

@@ -2,16 +2,16 @@
 
 #include "lua_api.hpp"
 #include <cstddef>
-#include <exception>
 #include <new>
 #include <stdexcept>
-#include <string>
 #include <string_view>
-#include <utility>
 
 namespace lua {
+  struct Environment;
+
   struct Vm {
-    Vm() : state(luaL_newstate()) {
+    Vm()
+        : state(luaL_newstate()) {
       if (!state) {
         throw std::bad_alloc{};
       }
@@ -19,6 +19,20 @@ namespace lua {
       try {
         withState(
             [](lua_State *state) -> int {
+              const luaL_Reg libraries[] = {
+                  {"", luaopen_base},
+                  {LUA_TABLIBNAME, luaopen_table},
+                  {LUA_STRLIBNAME, luaopen_string},
+                  {LUA_MATHLIBNAME, luaopen_math},
+                  {nullptr, nullptr},
+              };
+
+              for (const auto *library = libraries; library->func; ++library) {
+                lua_pushcfunction(state, library->func);
+                lua_pushstring(state, library->name);
+                lua_call(state, 1, 0);
+              }
+
               lua_pushcfunction(state, luaopen_jit);
               lua_pushliteral(state, LUA_JITLIBNAME);
               lua_call(state, 1, 0);
@@ -39,47 +53,11 @@ namespace lua {
     Vm(const Vm &) = delete;
     Vm &operator=(const Vm &) = delete;
 
-    ~Vm() { lua_close(state); }
-
-    std::string readGlobalString(const char *name) {
-      struct Request {
-        const char *name;
-        std::string value;
-        std::exception_ptr error;
-      };
-
-      Request request{.name = name};
-
-      withState(
-          [](lua_State *state) -> int {
-            auto *request = static_cast<Request *>(lua_touserdata(state, 1));
-
-            lua_getglobal(state, request->name);
-            if (lua_type(state, -1) != LUA_TSTRING) {
-              return luaL_error(state, "Global '%s' must be a string", request->name);
-            }
-
-            std::size_t length = 0;
-            const char *value = lua_tolstring(state, -1, &length);
-
-            try {
-              request->value.assign(value, length);
-            } catch (...) {
-              request->error = std::current_exception();
-            }
-
-            return 0;
-          },
-          &request);
-
-      if (request.error) {
-        std::rethrow_exception(request.error);
-      }
-
-      return std::move(request.value);
+    ~Vm() {
+      lua_close(state);
     }
 
-    void checkStatus(int status) {
+    static void checkStatus(lua_State *state, int status) {
       if (status != 0) {
         const auto message = lua_type(state, -1) == LUA_TSTRING
                                  ? lua_tostring(state, -1)
@@ -91,23 +69,26 @@ namespace lua {
     void execute(std::string_view source) {
       StackRestore restore{state, lua_gettop(state)};
 
-      checkStatus(luaL_loadbufferx(state, source.data(), source.size(), "@telar", "t"));
-      checkStatus(lua_pcall(state, 0, 0, 0));
+      checkStatus(state, luaL_loadbufferx(state, source.data(), source.size(), "@telar", "t"));
+      checkStatus(state, lua_pcall(state, 0, 0, 0));
     }
 
     void withState(lua_CFunction function, void *context) {
       StackRestore restore{state, lua_gettop(state)};
-      checkStatus(lua_cpcall(state, function, context));
+      checkStatus(state, lua_cpcall(state, function, context));
     }
 
   private:
+    friend struct Environment;
     lua_State *state;
 
     struct StackRestore {
       lua_State *state;
       int top;
 
-      ~StackRestore() { lua_settop(state, top); }
+      ~StackRestore() {
+        lua_settop(state, top);
+      }
     };
   };
 }; // namespace lua

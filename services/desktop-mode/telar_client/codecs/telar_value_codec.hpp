@@ -27,8 +27,10 @@ namespace telar {
   using i32 = SignedLittleEndian<std::int32_t>;
   using i64 = SignedLittleEndian<std::int64_t>;
 
-  template <typename IntegerCodec, typename IntegerCodec::value_type Minimum,
-            typename IntegerCodec::value_type Maximum = std::numeric_limits<typename IntegerCodec::value_type>::max()>
+  template <typename IntegerCodec,
+            typename IntegerCodec::value_type Minimum,
+            typename IntegerCodec::value_type Maximum =
+                std::numeric_limits<typename IntegerCodec::value_type>::max()>
   struct BoundedInteger : CodecWidth<IntegerCodec> {
     using value_type = typename IntegerCodec::value_type;
 
@@ -96,7 +98,14 @@ namespace telar {
     }
   };
 
-  enum class TextRule { bytes, utf8, utf8_no_nul, display, multiline, opaque };
+  enum class TextRule {
+    bytes,
+    utf8,
+    utf8_no_nul,
+    display,
+    multiline,
+    opaque
+  };
 
   inline void validateUtf8(std::string_view value) {
     std::size_t index = 0;
@@ -107,9 +116,10 @@ namespace telar {
         continue;
       }
 
-      const std::size_t length = lead >= 0xc2 && lead <= 0xdf ? 2 :
-                                 lead >= 0xe0 && lead <= 0xef ? 3 :
-                                 lead >= 0xf0 && lead <= 0xf4 ? 4 : 0;
+      const std::size_t length = lead >= 0xc2 && lead <= 0xdf   ? 2
+                                 : lead >= 0xe0 && lead <= 0xef ? 3
+                                 : lead >= 0xf0 && lead <= 0xf4 ? 4
+                                                                : 0;
       if (length == 0 || length > value.size() - index) {
         throw EncodingError{"Invalid UTF-8"};
       }
@@ -129,7 +139,10 @@ namespace telar {
     }
   }
 
-  template <typename LengthCodec, std::size_t Maximum, bool EmptyAllowed = true, TextRule Rule = TextRule::bytes>
+  template <typename LengthCodec,
+            std::size_t Maximum,
+            bool EmptyAllowed = true,
+            TextRule Rule = TextRule::bytes>
   struct SizedText {
     using value_type = std::string_view;
     static constexpr std::size_t min_width = LengthCodec::width;
@@ -203,11 +216,9 @@ namespace telar {
   template <std::size_t Maximum>
   using MessageText16 = SizedText<u16, Maximum, true, TextRule::multiline>;
 
-  template <std::size_t Maximum>
-  using Utf8Text16 = SizedText<u16, Maximum, true, TextRule::utf8>;
+  template <std::size_t Maximum> using Utf8Text16 = SizedText<u16, Maximum, true, TextRule::utf8>;
 
-  template <typename LengthCodec, std::size_t Maximum, std::size_t Minimum = 0>
-  struct SizedBytes {
+  template <typename LengthCodec, std::size_t Maximum, std::size_t Minimum = 0> struct SizedBytes {
     using value_type = std::span<const Byte>;
     static constexpr std::size_t min_width = LengthCodec::width + Minimum;
     static_assert(Maximum <= std::numeric_limits<typename LengthCodec::value_type>::max());
@@ -241,8 +252,7 @@ namespace telar {
     }
   };
 
-  template <std::size_t Maximum, std::size_t Minimum = 0>
-  struct TailBytes {
+  template <std::size_t Maximum, std::size_t Minimum = 0> struct TailBytes {
     using value_type = std::span<const Byte>;
     static constexpr std::size_t min_width = Minimum;
 
@@ -285,7 +295,8 @@ namespace telar {
 
     static void encode(value_type value, std::span<Byte> &output) {
       (void)encodedSize(value);
-      TailBytes<Maximum>::encode({reinterpret_cast<const Byte *>(value.data()), value.size()}, output);
+      TailBytes<Maximum>::encode({reinterpret_cast<const Byte *>(value.data()), value.size()},
+                                 output);
     }
 
     static value_type decode(std::span<const Byte> &input) {
@@ -296,13 +307,19 @@ namespace telar {
     }
   };
 
-  template <typename Enum, typename IntegerCodec, typename IntegerCodec::value_type Minimum,
+  template <typename Enum,
+            typename IntegerCodec,
+            typename IntegerCodec::value_type Minimum,
             typename IntegerCodec::value_type Maximum>
   struct EnumInteger : CodecWidth<IntegerCodec> {
     using value_type = Enum;
+
     static void encode(Enum value, std::span<Byte> &output) {
-      BoundedInteger<IntegerCodec, Minimum, Maximum>::encode(static_cast<typename IntegerCodec::value_type>(value), output);
+      BoundedInteger<IntegerCodec, Minimum, Maximum>::encode(
+          static_cast<typename IntegerCodec::value_type>(value),
+          output);
     }
+
     static Enum decode(std::span<const Byte> &input) {
       return static_cast<Enum>(BoundedInteger<IntegerCodec, Minimum, Maximum>::decode(input));
     }
@@ -311,12 +328,14 @@ namespace telar {
   struct PercentSentinel {
     using value_type = std::optional<Byte>;
     static constexpr std::size_t width = 1;
+
     static void encode(value_type value, std::span<Byte> &output) {
       if (value && *value > 100) {
         throw EncodingError{"Invalid progress percentage"};
       }
       u8::encode(value.value_or(255), output);
     }
+
     static value_type decode(std::span<const Byte> &input) {
       const auto value = u8::decode(input);
       if (value == 255) {
@@ -357,11 +376,15 @@ namespace telar {
     }
   };
 
-  template <typename CountCodec, typename ElementCodec, std::size_t Maximum, std::size_t Minimum = 0>
+  template <typename CountCodec,
+            typename ElementCodec,
+            std::size_t Maximum,
+            std::size_t Minimum = 0>
   struct CountedSpan {
     using Element = typename ElementCodec::value_type;
     using value_type = std::span<const Element>;
-    static constexpr std::size_t min_width = CountCodec::width + Minimum * minimumWidth<ElementCodec>();
+    static constexpr std::size_t min_width =
+        CountCodec::width + Minimum * minimumWidth<ElementCodec>();
     static_assert(Maximum <= std::numeric_limits<typename CountCodec::value_type>::max());
     static_assert(minimumWidth<ElementCodec>() > 0);
 

@@ -20,7 +20,8 @@ namespace telar {
       return payload;
     }
 
-    template <typename Message> static Message decode(std::span<const Byte> input) _throw(EncodingError) {
+    template <typename Message>
+    static Message decode(std::span<const Byte> input) _throw(EncodingError) {
       if (decodeHeader(input) != HandshakeSchema<Message>::tag) {
         throw EncodingError{"Unexpected handshake message"};
       }
@@ -40,7 +41,8 @@ namespace telar {
     }
 
 #ifdef TELAR_DEBUG
-    template <typename Message> static void pretty_print(const Message &message, std::FILE *output = stderr) {
+    template <typename Message>
+    static void pretty_print(const Message &message, std::FILE *output = stderr) {
       const auto payload = encode(message);
       debug::printFrame<HandshakeSchema<Message>>(payload, output);
     }
@@ -69,7 +71,8 @@ namespace telar {
       }
     }
 
-    template <typename Message> static Message decodeBody(std::span<const Byte> input) _throw(EncodingError) {
+    template <typename Message>
+    static Message decodeBody(std::span<const Byte> input) _throw(EncodingError) {
       using Sch = HandshakeSchema<Message>;
       if (input.size() != Sch::payload_size - header_size) {
         throw EncodingError{"Invalid handshake response length"};
@@ -84,7 +87,8 @@ namespace telar {
 #ifdef TELAR_DEBUG
   template <Direction Side, HandshakeTag Tag, typename... Fields>
   template <typename Message>
-  void HandshakeLayout<Side, Tag, Fields...>::pretty_print(const Message &message, std::FILE *output) {
+  void HandshakeLayout<Side, Tag, Fields...>::pretty_print(const Message &message,
+                                                           std::FILE *output) {
     HandshakeCodec::pretty_print(message, output);
   }
 #endif
