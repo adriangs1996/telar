@@ -16,6 +16,7 @@
 #include <QGuiApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QMetaObject>
 #include <QSaveFile>
 #include <QScreen>
 #include <QTimer>
@@ -99,6 +100,15 @@ namespace workbench {
       int shown_order = 0;
       QString error;
       bool visible = false;
+      QMetaObject::Connection activation;
+
+      ~View() {
+        // QWindow emits activeChanged while being destroyed, before QObject disconnects it.
+        QObject::disconnect(activation);
+        if (terminal) {
+          terminal->focused = {};
+        }
+      }
     };
 
     struct Tab {
@@ -186,6 +196,7 @@ namespace workbench {
     }
 
     ~Impl() {
+      changing = true;
       services.runtime.unsubscribe(runtime_subscription);
       services.desktop.unsubscribe(desktop_subscription);
       desktop.changed = {};
@@ -305,7 +316,7 @@ namespace workbench {
         };
 
         view->terminal->focused = [this, &tab, id] {
-          if (tab.layout.focused() != id) {
+          if (!changing && tab.layout.focused() != id) {
             tab.layout.focus(id);
             schedule();
             save_timer.start();
@@ -315,22 +326,28 @@ namespace workbench {
         view->terminal->configure(options);
       }
 
-      QObject::connect(&window, &QWindow::activeChanged, &window, [this, id, raw] {
-        if (raw->surface->window().isActive()) {
-          for (auto &[workspace_id, workspace] : workspaces) {
-            for (auto &[tab_id, tab] : workspace.tabs) {
-              if (tab.views.contains(id) && tab.layout.focused() != id) {
-                tab.layout.focus(id);
-                schedule();
+      view->activation =
+          QObject::connect(&window, &QWindow::activeChanged, &window, [this, id, raw] {
+            // Native focus can change synchronously while tabs or windows are being removed.
+            if (changing) {
+              return;
+            }
+
+            if (raw->surface->window().isActive()) {
+              for (auto &[workspace_id, workspace] : workspaces) {
+                for (auto &[tab_id, tab] : workspace.tabs) {
+                  if (tab.views.contains(id) && tab.layout.focused() != id) {
+                    tab.layout.focus(id);
+                    schedule();
+                  }
+                }
+              }
+
+              if (raw->terminal) {
+                raw->terminal->forceActiveFocus();
               }
             }
-          }
-
-          if (raw->terminal) {
-            raw->terminal->forceActiveFocus();
-          }
-        }
-      });
+          });
 
       tab.layout.insert(std::move(element), tab.next_axis);
       auto &result = *view;
@@ -366,6 +383,7 @@ namespace workbench {
           }
         }
 
+        const auto previous_focus = tab.layout.focused();
         std::erase_if(tab.views, [&](const auto &entry) {
           if (entry.second->pane && !live.contains(entry.first)) {
             tab.layout.remove(entry.first);
@@ -374,6 +392,12 @@ namespace workbench {
 
           return false;
         });
+
+        if (tab.layout.focused() != previous_focus && workspace.visible &&
+            workspace.space == services.desktop.state().focused_space) {
+          focus_pending = true;
+          focus_workspace = workspace_id;
+        }
 
         if (!tab.restored && !panes.empty()) {
           tab.restored = true;

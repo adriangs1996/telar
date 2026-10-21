@@ -10,6 +10,7 @@ local background = ui.create("QtQuick", "Rectangle", {
   ["border.width"] = 1,
   ["border.color"] = colors.border or "#393142",
 })
+
 local title = ui.text({
   color = colors.foreground or "#cdd6f4",
   textFormat = "PlainText",
@@ -17,6 +18,7 @@ local title = ui.text({
   x = 12,
   y = 6,
 })
+
 local close =
   ui.text({ text = "×", color = colors.foreground or "#cdd6f4", y = 4, ["font.pixelSize"] = 16 })
 local header = ui.item({ height = header_height })
@@ -37,6 +39,7 @@ end
 
 ui.on(ui.surface, "resize", update)
 workbench.on_change(update)
+
 ui.on(header, "pointer_down", function(event)
   workbench.command("focus")
   if ui.surface.floating then
@@ -45,6 +48,7 @@ ui.on(header, "pointer_down", function(event)
   end
   event:accept()
 end)
+
 ui.on(resize, "pointer_down", function(event)
   if ui.surface.floating then
     drag = { position = event.global_position, frame = ui.surface.geometry, resize = true }
@@ -79,8 +83,10 @@ for _, item in ipairs({ header, resize }) do
     drag = nil
   end)
 end
+
 ui.on(close, "click", function(event)
   workbench.command("close")
   event:accept()
 end)
+
 update()
