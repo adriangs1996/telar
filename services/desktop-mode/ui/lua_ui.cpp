@@ -9,6 +9,8 @@
 #include "shortcut_binding.hpp"
 #include "services.hpp"
 #include "surface_events.hpp"
+#include "workbench/controller.hpp"
+#include "workbench/lua_binding.hpp"
 #include <QColor>
 #include <QDebug>
 #include <QEasingCurve>
@@ -56,6 +58,10 @@ namespace {
     configure_surface,
     animate,
     runtime_state,
+    workbench_state,
+    workbench_command,
+    workbench_on,
+    workbench_off,
     runtime_on,
     runtime_off,
     runtime_select,
@@ -440,7 +446,7 @@ namespace {
       }
 
       if ((call->operation == Operation::on || call->operation == Operation::runtime_on ||
-           call->operation == Operation::desktop_on ||
+           call->operation == Operation::workbench_on || call->operation == Operation::desktop_on ||
            call->operation == Operation::shortcut_bind) &&
           index == 2) {
         luaL_checktype(state, -1, LUA_TFUNCTION);
@@ -490,7 +496,8 @@ namespace {
                QuickSurface *surface,
                const EnvironmentSettings &settings,
                std::function<void(const QString &)> observe_module)
-        : surface_(surface),
+        : services_(services),
+          surface_(surface),
           surface_config_(settings.surface),
           environment_(services.vm),
           lifetime_(std::make_unique<QObject>()) {
@@ -516,6 +523,7 @@ namespace {
       runtime_ =
           std::make_unique<ui::RuntimeBinding>(environment_, services.runtime, services.desktop);
       shortcuts_ = std::make_unique<ui::ShortcutBinding>(environment_, services.shortcuts);
+      workbench_ = std::make_unique<workbench::LuaBinding>(environment_, services);
       shortcuts_->setPrefix(settings.prefix);
       installApi();
       io_ =
@@ -526,6 +534,7 @@ namespace {
       deactivate();
       shortcuts_.reset();
       runtime_.reset();
+      workbench_.reset();
       io_.reset();
       events_.reset();
 
@@ -579,6 +588,7 @@ namespace {
 
       io_->activate();
       runtime_->activate();
+      workbench_->activate();
 
       if (events_) {
         events_->activate();
@@ -596,6 +606,7 @@ namespace {
     void deactivate() {
       shortcuts_->deactivate();
       runtime_->deactivate();
+      workbench_->deactivate();
 
       if (events_) {
         events_->deactivate();
@@ -696,6 +707,34 @@ namespace {
         break;
       case Operation::runtime_state:
         return encode(runtime_->state());
+      case Operation::workbench_state:
+        return encode(services_.workbench ? services_.workbench->state() : QVariantMap{});
+      case Operation::workbench_command: {
+        if (!active_ || !services_.workbench) {
+          throw std::runtime_error(
+              "Workbench commands are available in callbacks after UI activation");
+        }
+        auto options = mapValue(values[1]);
+        if (surface_ && surface_->nativeState().contains("element")) {
+          for (const auto &key : {"workspace", "tab"}) {
+            if (!options.contains(key)) {
+              options.insert(key, surface_->nativeState().value(key));
+            }
+          }
+          if (!options.contains("id")) {
+            options.insert("id", surface_->nativeState().value("element"));
+          }
+        }
+        return encode(services_.workbench->command(stringValue(values[0]), options));
+      }
+      case Operation::workbench_on: {
+        const auto id = workbench_->subscribe(request.callback);
+        request.callback = LUA_NOREF;
+        return encode(static_cast<double>(id));
+      }
+      case Operation::workbench_off:
+        workbench_->unsubscribe(values[0].toULongLong());
+        break;
       case Operation::desktop_state:
         return encode(runtime_->desktopState());
       case Operation::runtime_on:
@@ -771,6 +810,7 @@ namespace {
     }
 
   private:
+    ui::Services &services_;
     QuickSurface *surface_;
     QVariantMap surface_config_;
     QVariantMap configured_surfaces_;
@@ -781,6 +821,7 @@ namespace {
     std::unique_ptr<ui::SurfaceEvents> events_;
     std::unique_ptr<ui::RuntimeBinding> runtime_;
     std::unique_ptr<ui::ShortcutBinding> shortcuts_;
+    std::unique_ptr<workbench::LuaBinding> workbench_;
     QHash<quint64, int> callbacks_;
     QPointer<QQuickItem> pending_focus_;
     QHash<QPair<QObject *, QString>, PropertyTarget> aliases_;
@@ -793,7 +834,7 @@ namespace {
       }
 
       if (name != QStringLiteral("topbar") && name != QStringLiteral("sidebar") &&
-          name != QStringLiteral("wallpaper")) {
+          name != QStringLiteral("wallpaper") && name != QStringLiteral("workbench")) {
         throw std::runtime_error("Unknown desktop surface");
       }
 
@@ -888,6 +929,10 @@ namespace {
                 {"surface_config", Operation::surface_config},
                 {"configure_surface", Operation::configure_surface},
                 {"runtime_state", Operation::runtime_state},
+                {"workbench_state", Operation::workbench_state},
+                {"workbench_command", Operation::workbench_command},
+                {"workbench_on", Operation::workbench_on},
+                {"workbench_off", Operation::workbench_off},
                 {"runtime_on", Operation::runtime_on},
                 {"runtime_off", Operation::runtime_off},
                 {"runtime_select", Operation::runtime_select},

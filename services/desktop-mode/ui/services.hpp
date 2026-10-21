@@ -1,5 +1,11 @@
 #pragma once
 
+#include <string>
+
+namespace workbench {
+  class Controller;
+}
+
 namespace lua {
   struct Vm;
 }
@@ -14,5 +20,7 @@ namespace ui {
     RuntimeSession &runtime;
     DesktopSession &desktop;
     Shortcuts &shortcuts;
+    std::string runtime_socket;
+    workbench::Controller *workbench = nullptr;
   };
 } // namespace ui

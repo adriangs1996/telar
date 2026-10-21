@@ -1,6 +1,7 @@
 local shortcuts = require("telar.shortcuts")
 local runtime = require("telar.runtime")
 local desktop = require("telar.desktop")
+local workbench = require("telar.workbench")
 
 local function active_index(state)
   for index, tab in ipairs(state.tabs) do
@@ -72,6 +73,33 @@ local function step_space(offset)
 end
 
 return function()
+  shortcuts.bind({ "%" }, function()
+    workbench.command("split", { axis = "horizontal" })
+  end)
+  shortcuts.bind({ '"' }, function()
+    workbench.command("split", { axis = "vertical" })
+  end)
+  shortcuts.bind({ "x" }, function()
+    workbench.command("close")
+  end)
+  shortcuts.bind({ "z" }, function()
+    workbench.command("maximize")
+  end)
+  shortcuts.bind({ "f" }, function()
+    workbench.command("float")
+  end)
+  shortcuts.bind({ "o" }, function()
+    workbench.command("cycle")
+  end)
+  for _, direction in ipairs({ "left", "right", "up", "down" }) do
+    local target = direction
+    shortcuts.bind({ direction }, function()
+      workbench.command("navigate", { direction = target })
+    end)
+    shortcuts.bind({ "alt+" .. direction }, function()
+      workbench.command("resize", { direction = target })
+    end)
+  end
   -- Match the GUI's tab bindings. Actions without a desktop implementation stay unbound.
   shortcuts.bind({ "n" }, function()
     step_tab(1, false)

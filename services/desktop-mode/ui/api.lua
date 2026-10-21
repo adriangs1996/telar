@@ -9,7 +9,33 @@ local net = {}
 local runtime = {}
 local desktop = {}
 local shortcuts = {}
-telar = { ui = ui, fs = fs, net = net, runtime = runtime, desktop = desktop, shortcuts = shortcuts }
+local workbench = {}
+telar = {
+  ui = ui,
+  fs = fs,
+  net = net,
+  runtime = runtime,
+  desktop = desktop,
+  shortcuts = shortcuts,
+  workbench = workbench,
+}
+
+workbench.state = core.workbench_state
+
+function workbench.command(action, options)
+  return core.workbench_command(action, options or {})
+end
+
+function workbench.on_change(callback)
+  assert(type(callback) == "function", "workbench.on_change expects a callback")
+  local id = core.workbench_on(nil, nil, callback)
+  return function()
+    if id then
+      core.workbench_off(id)
+      id = nil
+    end
+  end
+end
 
 shortcuts.set_prefix = core.shortcut_prefix
 shortcuts.state = core.shortcut_state
@@ -173,6 +199,7 @@ package.loaded["telar.net"] = net
 package.loaded["telar.runtime"] = runtime
 package.loaded["telar.desktop"] = desktop
 package.loaded["telar.shortcuts"] = shortcuts
+package.loaded["telar.workbench"] = workbench
 
 ui.create = core.create
 ui.get = core.get

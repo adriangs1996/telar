@@ -104,6 +104,16 @@ _Avoid_: Overflow, Limit hit, Capacity failure
 The runtime-owned workspace identity, path, name and ordered tabs.
 _Avoid_: Workspace aggregate, Workspace store, Workspace record
 
+**Tab**:
+A workspace's group of terminal panes, Telar views and external application
+windows. Selecting a tab presents its own group and arrangement.
+_Avoid_: Space, Window
+
+**Workbench**:
+The area of a client's desktop where the visible tabs' panes, Telar views and
+external application windows are presented and arranged.
+_Avoid_: Terminal grid, Workspace
+
 **Tab removal**:
 The committed disappearance of a tab from its workspace, whether requested
 directly or caused by the loss of its final pane. It also removes a workspace
@@ -224,8 +234,8 @@ The one-based position of a pane in its tab's visible ordering, shown as
 _Avoid_: Pane ID, focused position
 
 **Tab layout**:
-The client-owned arrangement of a tab's pane splits, including their direction
-and relative size. Pane focus and pane display position do not define it.
+The client-owned arrangement of a tab's panes, Telar views and external application
+windows, including split directions and relative sizes. Focus does not define it.
 _Avoid_: Pane order, workspace layout
 
 **Workspace bookmark**:

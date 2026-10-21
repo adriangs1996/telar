@@ -4,6 +4,8 @@
 #include "lua_ui.hpp"
 #include "surface_kind.hpp"
 #include <QTimer>
+#include <QRectF>
+#include <cstdint>
 #include <map>
 #include <set>
 
@@ -17,6 +19,9 @@ namespace ui {
     Services &services() noexcept;
     void attach(LuaSurface &surface, SurfaceKind kind);
     void detach(LuaSurface &surface);
+    QVariantMap options(SurfaceKind kind) const;
+    QRectF workArea(std::uint32_t display, QRectF available) const;
+    std::function<void()> changed;
 
   private:
     Services &services_;

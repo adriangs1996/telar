@@ -48,7 +48,7 @@ static int runDesktop(int argc, const char **argv) {
     });
 
     auto runtime_reader = RuntimeReceiverWorker::init(context);
-    ui::Services services{lua_vm, runtime, desktop, shortcuts};
+    ui::Services services{lua_vm, runtime, desktop, shortcuts, argv[1]};
     const int application_result = runApplication(app, wakeup, app.state(), services);
     runtime_reader.stop();
 

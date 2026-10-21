@@ -44,6 +44,10 @@ namespace {
     int (*spaceType)(int, std::uint64_t) = load<decltype(spaceType)>("SLSSpaceGetType");
     CGError (*activateDisplay)(int, CFStringRef, CFStringRef) =
         load<decltype(activateDisplay)>("SLSSetActiveMenuBarDisplayIdentifier");
+    void (*moveWindows)(int, CFArrayRef, std::uint64_t) =
+        load<decltype(moveWindows)>("SLSMoveWindowsToManagedSpace");
+    CFArrayRef (*copyWindowSpaces)(int, int, CFArrayRef) =
+        load<decltype(copyWindowSpaces)>("SLSCopySpacesForWindows");
 
     template <typename Function> Function load(const char *name) {
       return library ? reinterpret_cast<Function>(dlsym(library, name)) : nullptr;
@@ -182,6 +186,27 @@ namespace {
 } // namespace
 
 namespace macos::spaces {
+  void moveWindow(std::uint32_t window, std::uint64_t space) {
+    auto &api = skyLight();
+    if (!window || !space || !api.moveWindows || !api.copyWindowSpaces) {
+      throw std::runtime_error("Window placement in Spaces is unavailable");
+    }
+
+    NSArray *windows = @[ @(window) ];
+    constexpr int all_spaces = 7;
+    NSArray *before = CFBridgingRelease(
+        api.copyWindowSpaces(api.mainConnection(), all_spaces, (__bridge CFArrayRef)windows));
+    if ([before containsObject:@(space)] && before.count == 1) {
+      return;
+    }
+    api.moveWindows(api.mainConnection(), (__bridge CFArrayRef)windows, space);
+    NSArray *after = CFBridgingRelease(
+        api.copyWindowSpaces(api.mainConnection(), all_spaces, (__bridge CFArrayRef)windows));
+    if (![after containsObject:@(space)]) {
+      throw std::runtime_error("macOS refused to place the window in its workspace Space");
+    }
+  }
+
   DesktopState snapshot() {
     ensureBridge();
     auto &api = skyLight();

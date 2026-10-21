@@ -10,11 +10,15 @@ namespace ui {
 } // namespace ui
 
 struct LuaSurface final : QuickSurface {
-  LuaSurface(ui::DesktopUi &desktop, const QSize &size, ui::SurfaceKind kind);
+  LuaSurface(ui::DesktopUi &desktop,
+             const QSize &size,
+             ui::SurfaceKind kind,
+             QVariantMap configuration = {});
   ~LuaSurface();
 
 private:
   friend class ui::DesktopUi;
   ui::DesktopUi &desktop_;
   ui::LuaUi ui_;
+  QVariantMap configuration_;
 };

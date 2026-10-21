@@ -926,13 +926,18 @@ namespace ui {
       safe.insert("right", margins.right());
       safe.insert("bottom", margins.bottom());
 #endif
-      return {{"width", window.width()},
-              {"height", window.height()},
-              {"screen", native.value("screen", screen)},
-              {"scale", native.value("scale", window.devicePixelRatio())},
-              {"safe_area", native.value("safe_area", safe)},
-              {"visible", native.value("visible", window.isVisible())},
-              {"active", native.value("active", window.isActive())}};
+      auto result = native;
+      const QVariantMap standard{{"width", window.width()},
+                                 {"height", window.height()},
+                                 {"screen", native.value("screen", screen)},
+                                 {"scale", native.value("scale", window.devicePixelRatio())},
+                                 {"safe_area", native.value("safe_area", safe)},
+                                 {"visible", native.value("visible", window.isVisible())},
+                                 {"active", native.value("active", window.isActive())}};
+      for (auto it = standard.cbegin(); it != standard.cend(); ++it) {
+        result.insert(it.key(), it.value());
+      }
+      return result;
     }
 
     void watchScreen() {

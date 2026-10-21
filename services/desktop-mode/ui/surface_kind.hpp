@@ -4,6 +4,7 @@ namespace ui {
   enum class SurfaceKind {
     topbar,
     sidebar,
-    wallpaper
+    wallpaper,
+    workbench
   };
 } // namespace ui

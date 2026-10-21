@@ -47,6 +47,117 @@ belong in this platform layer.
 
 ## From the repository root
 
+### Desktop workbench
+
+`ui/workbench/` implements the desktop workbench in C++. It uses the existing
+C++ wire codecs and Qt Quick scene graph. It does not link the Zig GUI or a Zig
+terminal renderer. Cocoa window placement and Accessibility operations live in
+`native-backends/macos/workbench.mm`.
+
+Each runtime tab has an independent split tree and focus. Its elements can be
+terminal panes, Lua views or explicitly adopted external windows. Each terminal
+and Lua view has its own window. A visible workspace uses one asynchronous runtime
+connection shared by its terminal panes. Switching tabs detaches hidden terminals;
+switching away from a workspace disconnects its presentation session. These
+operations leave the processes running in the runtime.
+
+The default prefix remains `ctrl+b`. The default `shortcuts` module binds:
+
+| After the prefix | Action |
+| --- | --- |
+| `%` / `"` | Split horizontally / vertically |
+| Arrow keys / `o` | Directional focus / next element |
+| `alt+arrow` | Move the nearest split boundary |
+| `z` / `f` | Toggle maximization / floating |
+| `x` | Close the terminal, remove the Lua view, or release an external window |
+
+Floating panes can be moved by dragging their header and resized from the bottom
+right corner. Closing an external element releases its adoption; it does not quit
+the external application. Existing tab and workspace shortcuts remain available.
+
+Configure pane decoration and geometry independently of the GUI configuration:
+
+```lua
+desktop.configure_surface("workbench", {
+  module = "workbench",
+  options = {
+    margin = 8,
+    gap = 8,
+    padding = 8,
+    header_height = 28,
+    font_size = 14,
+    colors = { background = "#1b1723", foreground = "#cdd6f4", accent = "#c4a7e7" },
+  },
+})
+```
+
+Geometry uses logical desktop coordinates, including negative monitor origins.
+The available area excludes the OS menu bar/Dock and the actual topbar/sidebar
+rectangles. Setting `options.overlay = true` on either chrome surface removes its
+reservation. Each display can present a different workspace. When a split's
+minimum sizes no longer fit, only the focused element is shown; the split tree
+remains intact and returns when space is available. Terminal rows and columns
+come from the content rectangle and font metrics. Pixel cell sizes include the
+display scale. Resize messages are coalesced and sent only when effective dimensions
+change. The runtime's geometry lease still decides which client may resize a PTY.
+
+`require("telar.workbench")` is available in every surface and in `desktop.lua`.
+Commands execute from callbacks after the UI has activated. IDs are strings.
+
+| API | Meaning |
+| --- | --- |
+| `state()` | Visible workspaces, tabs, focused element, requested/actual geometry and errors |
+| `on_change(callback)` | Subscribe to workbench changes; returns an unsubscribe function |
+| `command("split", { axis = "horizontal" })` | Create a runtime terminal next to the focused element |
+| `command("focus", { id = "pane:123" })` | Focus an element |
+| `command("navigate", { direction = "left" })` | Find the nearest element in a direction |
+| `command("cycle", { step = -1 })` | Cycle focus |
+| `command("swap", { id = "pane:123", with = "pane:456" })` | Exchange split positions |
+| `command("resize", { direction = "right", amount = 0.05 })` | Move a split boundary by a ratio |
+| `command("maximize")` | Toggle workbench maximization |
+| `command("float", { id = "pane:123", enabled = true })` | Toggle or set floating mode |
+| `command("frame", { frame = { x = 0.1, y = 0.1, width = 0.6, height = 0.6 } })` | Set a floating frame relative to the work area |
+| `command("constraints", { minimum = { width = 160, height = 90 }, aspect = 0 })` | Set minimum/maximum dimensions and optional aspect ratio |
+| `command("view", { module = "my_view", options = {} })` | Create a Lua surface in the current tab; returns its element ID |
+| `command("windows")` | Enumerate external windows available for explicit adoption |
+| `command("adopt", { window = "1234" })` | Adopt an external window into the current tab |
+| `command("move", { id = "view:...", tab = "2" })` | Move a Lua view or external element to another tab |
+| `command("close", { id = "pane:123" })` | Close/release one element |
+
+Commands without `id` use the focused element. Inside a workbench surface they
+default to that surface's element instead. A pane's Lua module can read
+`ui.surface.element`, `pane`, `workspace`, `tab`, `focused`, `floating`, `area`,
+`geometry` and `content`. The native terminal item lives outside the replaceable
+Lua tree, so changing the module does not recreate the terminal connection.
+
+The terminal renderer owns decoded cells and updates changed rows through Qt's
+GPU text nodes. Input includes UTF-8 text, IME composition, bracketed paste, VT
+keys, keyboard protocol modes, mouse reporting, scrollback and visible-cell
+selection/copy. Transport buffers and pending requests are bounded. A missing
+delta base requests a snapshot; a disconnected connection disables input and
+reconnects without replaying process-creation or closure commands.
+
+Layouts, focus and Lua view modules are saved atomically per runtime socket in
+the desktop state directory. External application windows are retained by their
+Accessibility identity during the desktop session and must be adopted again after
+restarting desktop. Tab switching minimizes them individually. Releasing an
+adoption restores windows hidden by the workbench. The backend exposes refused
+geometry changes through `requested`, `actual` and `error` instead of assuming
+the requested rectangle was applied.
+
+Two operations require a runtime protocol extension and are deliberately not
+emulated by client-only state: moving a terminal to another tab, and retaining a
+tab/workspace containing only Lua views or external windows after its final terminal
+exits. The runtime currently removes such a tab. External-window management is
+implemented for macOS; a Linux window-manager integration is still required.
+
+For manual review, start the development runtime and run `just desktop`. Split a
+terminal, send output to both panes, change focus, resize, switch tabs and return.
+Then change the workbench Lua module and check that the shell processes and layout
+remain. External-window adoption additionally requires Accessibility permission.
+
+### Build and run
+
 ```sh
 just desktop-check
 just desktop-debug event_queue_dbg

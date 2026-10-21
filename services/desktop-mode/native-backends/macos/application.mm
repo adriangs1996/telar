@@ -4,6 +4,7 @@
 #include "../../ui/services.hpp"
 #include "../../ui/desktop_control.hpp"
 #include "../../ui/desktop_ui.hpp"
+#include "../../ui/workbench/controller.hpp"
 #include "surface_panel.hpp"
 #include "wallpaper_panels.hpp"
 #import <AppKit/AppKit.h>
@@ -188,6 +189,7 @@ int runApplication(ApplicationHost &host,
     }
 
     NativeShortcuts shortcuts(services.shortcuts);
+    workbench::Controller workbench(desktop_ui);
 
     TelarApplicationController *controller =
         [[TelarApplicationController alloc] initWithHost:&host state:&state];

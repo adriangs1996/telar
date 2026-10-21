@@ -169,6 +169,7 @@ namespace {
   }
 
   _surface->setNativeState({{"screen", monitor},
+                            {"geometry", rectangle(desktopRect(frame))},
                             {"scale", panel.backingScaleFactor},
                             {"safe_area", safe},
                             {"visible", static_cast<bool>(panel.visible && !panel.miniaturized)},
