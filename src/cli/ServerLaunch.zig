@@ -15,6 +15,7 @@ const proxy_cli = @import("proxy.zig");
 const plugin_cli = @import("plugin.zig");
 const privatefile = @import("privatefile");
 const Inode = privatefile.Inode;
+const clone_session = @import("clone_session.zig");
 const Launch = @This();
 
 process: std.process.Init,
@@ -99,10 +100,17 @@ pub fn prepare(self: *Launch, preparation: ServerPreparation) !void {
 
     if (self.options.mode != .background_launcher) {
         try self.prepareRuntimeStorage();
+        if (self.options.clone_session != null) {
+            try clone_session.prepare(self.process, self.options, self.session_path orelse return error.CloneRequiresPersistence, self.connector.endpointPath());
+        }
         if (self.options.fresh) {
             if (self.session_path) |path| {
                 _ = try server.setSessionAside(self.process.io, path);
             }
+
+            var origin_buffer: [std.fs.max_path_bytes]u8 = undefined;
+            const origin_path = try std.fmt.bufPrint(&origin_buffer, "{s}.desktop-clone.json", .{self.connector.endpointPath()});
+            _ = try server.setSessionAside(self.process.io, origin_path);
         }
         if (self.config_generation) |generation| {
             try self.prepareTapPlugins(generation);
@@ -332,7 +340,7 @@ pub fn launchDaemon(self: *const Launch) !void {
     const pane_mib = try std.fmt.bufPrint(&pane_mib_buffer, "{d}", .{self.options.graphics.pane_bytes / (1024 * 1024)});
     var global_mib_buffer: [32]u8 = undefined;
     const global_mib = try std.fmt.bufPrint(&global_mib_buffer, "{d}", .{self.options.graphics.global_bytes / (1024 * 1024)});
-    var argv: [14][]const u8 = undefined;
+    var argv: [18][]const u8 = undefined;
     var argc: usize = 0;
     for ([_][]const u8{
         executable,
@@ -351,6 +359,13 @@ pub fn launchDaemon(self: *const Launch) !void {
     if (self.options.fresh) {
         argv[argc] = "--fresh";
         argc += 1;
+    }
+    if (self.options.clone_session) |path| {
+        argv[argc] = "--clone-session";
+        argv[argc + 1] = std.mem.span(path);
+        argv[argc + 2] = "--clone-from";
+        argv[argc + 3] = std.mem.span(self.options.clone_from.?);
+        argc += 4;
     }
     if (self.options.config) |path| {
         argv[argc] = "--config";

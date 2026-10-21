@@ -15,6 +15,8 @@ no_config: bool = false,
 profile: ?[*:0]const u8 = null,
 /// Set the previous session checkpoint aside instead of restoring it.
 fresh: bool = false,
+clone_session: ?[*:0]const u8 = null,
+clone_from: ?[*:0]const u8 = null,
 
 pub fn parse(args: []const [*:0]const u8) !ServerOptions {
     var options: ServerOptions = .{};
@@ -93,6 +95,18 @@ pub fn parse(args: []const [*:0]const u8) !ServerOptions {
             const value = try cursor.require(error.MissingProfileName);
 
             options.profile = value;
+        } else if (std.mem.eql(u8, arg, "--clone-session")) {
+            if (options.clone_session != null) {
+                return error.DuplicateCloneOption;
+            }
+
+            options.clone_session = try cursor.require(error.MissingCloneSession);
+        } else if (std.mem.eql(u8, arg, "--clone-from")) {
+            if (options.clone_from != null) {
+                return error.DuplicateCloneOption;
+            }
+
+            options.clone_from = try cursor.require(error.MissingCloneSourceSocket);
         } else if (std.mem.eql(u8, arg, "--fresh")) {
             if (options.fresh) {
                 return error.DuplicateFreshOption;
@@ -108,6 +122,12 @@ pub fn parse(args: []const [*:0]const u8) !ServerOptions {
     }
     if (options.fresh and options.action != .run) {
         return error.FreshRequiresRun;
+    }
+    if ((options.clone_session == null) != (options.clone_from == null)) {
+        return error.CloneRequiresSessionAndSourceSocket;
+    }
+    if (options.clone_session != null and (options.fresh or options.action != .run or !options.no_config)) {
+        return error.CloneRequiresRunWithoutConfigOrFresh;
     }
     if (options.no_config and options.profile != null) {
         return error.ProfileWithoutConfig;
