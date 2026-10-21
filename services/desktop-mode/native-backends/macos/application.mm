@@ -3,7 +3,7 @@
 #include "../shortcuts.hpp"
 #include "../../ui/services.hpp"
 #include "../../ui/desktop_control.hpp"
-#include "topbar.hpp"
+#include "surface_panel.hpp"
 #import <AppKit/AppKit.h>
 #include <CoreFoundation/CFBase.h>
 #include <CoreFoundation/CFRunLoop.h>
@@ -148,9 +148,20 @@ int runApplication(ApplicationHost &host,
 
     host.start();
     host.update();
-    TelarTopBar *topbar = [[TelarTopBar alloc] initWithScreen:screen services:services];
+    TelarSurfacePanel *topbar = [[TelarSurfacePanel alloc] initWithScreen:screen
+                                                                     kind:ui::SurfaceKind::topbar
+                                                                 services:services];
 
     if (!topbar) {
+      return EXIT_FAILURE;
+    }
+
+    TelarSurfacePanel *sidebar = [[TelarSurfacePanel alloc] initWithScreen:screen
+                                                                      kind:ui::SurfaceKind::sidebar
+                                                                  services:services];
+
+    if (!sidebar) {
+      [topbar close];
       return EXIT_FAILURE;
     }
 
@@ -160,15 +171,19 @@ int runApplication(ApplicationHost &host,
         [[TelarApplicationController alloc] initWithHost:&host state:&state];
 
     if (!controller) {
+      [sidebar close];
+      [topbar close];
       return EXIT_FAILURE;
     }
 
     if (host.update()) {
       [topbar orderFrontRegardless];
+      [sidebar orderFrontRegardless];
       result = qt_application.exec();
     }
 
     [controller removeStatusItem];
+    [sidebar close];
     [topbar close];
   }
 

@@ -184,10 +184,19 @@ formatters preserve that grouping but cannot decide it for the author.
 
 ## Lua desktop UI
 
-`ui/topbar.lua` creates the bar through `telar.ui`. The default script shows
+`ui/topbar/init.lua` creates the bar through `telar.ui`. The default script shows
 the focused macOS Space's associated workspace and tabs, with click selection and animated
-drag reordering. `ui/components/tabs.lua` implements layout and interaction
+drag reordering. `ui/topbar/tabs.lua` implements layout and interaction
 entirely in Lua. The native backend owns the panel; Qt Quick draws its contents.
+
+`ui/sidebar/init.lua` creates the left sidebar. It lists runtime workspaces and their
+tab counts, highlights the focused workspace, and activates a workspace's macOS
+Space on click. The list scrolls when it exceeds the panel height. Selection is
+disabled while disconnected or while a Space operation is pending.
+
+Both panels use `TelarSurfacePanel` for native window behavior and `LuaSurface`
+for Lua loading and reloads. They share the runtime connection and LuaJIT VM,
+with separate UI roots, globals, module caches and event subscriptions.
 
 The desktop has its own Lua entry point, separate from the GUI's `config.lua`:
 
@@ -208,7 +217,14 @@ shortcuts.set_prefix("ctrl+s")
 require("topbar")
 ```
 
-The file owns UI composition: omit `require("topbar")` to construct your own UI.
+The file owns topbar composition: omit `require("topbar")` to construct your own UI.
+It runs once, in the topbar environment, so global shortcuts are not registered
+again for the sidebar. The sidebar independently loads `require("sidebar")`.
+To replace it, put `sidebar/init.lua` in the directory containing `desktop.lua`;
+during development, edit `ui/sidebar/init.lua` or add an override at
+`dev/sidebar/init.lua`. Do not load the
+sidebar from `desktop.lua`: that would draw it inside the topbar. Shared Lua
+components can be imported by both surfaces, with separate local state.
 Local modules resolve relative to `desktop.lua`. Modules not found there are
 looked up in `TELAR_DESKTOP_UI_DIR`, if set, then in the bundled UI resources.
 `just desktop` and `just desktop-dev` explicitly select the repository's
@@ -223,8 +239,10 @@ an external `api.lua` cannot replace it. Changes to the official API require
 rebuilding the executable.
 
 Saving `desktop.lua` or a Lua module loaded with `require` reloads the UI after
-a 200 ms debounce. Creating the default config while the desktop is running
-also reloads it; removing it restores the bundled entry point.
+a 200 ms debounce. Module changes reload each surface that imports them; a
+sidebar-only edit leaves the topbar and its shortcuts intact. Creating the default
+config while the desktop is running also reloads the topbar; removing it restores
+the bundled entry point.
 The watcher follows file replacements made by editors. Each reload builds
 a hidden candidate with its own Lua globals in the existing LuaJIT VM.
 Success replaces the previous objects, callbacks and animations. A script
@@ -270,9 +288,14 @@ Colors read back as Qt ARGB strings. Image sources accept Qt URL strings.
 Reading a value does not establish a reactive binding; subscribe to the
 corresponding surface event to react to changes.
 
-Item dimensions do not resize the native panel, which is currently 36
-logical points high on macOS. Content extending beyond the surface is
-clipped by the window; allow for the item's `y` offset when choosing its height.
+Item dimensions do not resize the native panels. On macOS the topbar is 36
+logical points high; the sidebar is 280 points wide, inset 8 points from the
+left and bottom of the screen's available area and separated from the topbar
+by the same margin. Both attach to the main screen at startup and follow its
+geometry changes, falling back to the current main screen if it is removed.
+They are visible across Spaces. The sidebar overlays application windows;
+it does not yet reserve their layout area or collapse. Content extending beyond
+a surface is clipped by its window.
 
 For compositions without a helper, use
 `ui.create(module, type, properties, parent)` and
@@ -299,7 +322,7 @@ launching it during development. The backend retries when permission is granted;
 it does not change system permissions. `shortcuts.state()` exposes `available`,
 `error`, `prefix` and `pending`.
 
-The default topbar loads `components.shortcuts` and uses `Ctrl+B`, followed by:
+The default topbar loads `topbar.shortcuts` and uses `Ctrl+B`, followed by:
 
 | Suffix | Action |
 | --- | --- |
@@ -318,7 +341,7 @@ the topbar; it does not change a separate GUI client's focus.
 The desktop keymap belongs to its Lua UI; it does not import the GUI's
 `client.prefix` or `client.keybindings`. To use `Ctrl+S`, add
 `require("telar.shortcuts").set_prefix("ctrl+s")` to `desktop.lua` before loading
-`topbar`. A custom topbar can omit `components.shortcuts` and define its own map:
+`topbar`. A custom topbar can omit `topbar.shortcuts` and define its own map:
 
 ```lua
 local shortcuts = require("telar.shortcuts")
@@ -600,8 +623,14 @@ discovers these implementations as part of `desktop-ui`, separately from
 the core modules and the platform-specific backends.
 
 Lua scripts under `ui/` are discovered automatically and embedded in the
-`telar-desktop` executable as Qt resources. For example, `ui/topbar.lua`
-is available through `QFile` at `:/telar/ui/topbar.lua`, independently of
+`telar-desktop` executable as Qt resources. Each surface has its own directory:
+`ui/topbar/` and `ui/sidebar/`, with `init.lua` as its entry point and its
+surface-specific components alongside it. `require("topbar")` and
+`require("sidebar")` resolve those entry points through the `?/init.lua` pattern.
+Shared UI infrastructure remains directly under `ui/`.
+
+For example, `ui/topbar/init.lua`
+is available through `QFile` at `:/telar/ui/topbar/init.lua`, independently of
 the current working directory. Rebuild `telar-desktop` after editing a
 bundled script to update the embedded resource.
 

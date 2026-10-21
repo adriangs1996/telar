@@ -48,7 +48,11 @@ namespace ui {
   }
 
   void ShortcutBinding::activate(const ShortcutBinding *replacing) {
-    shortcuts_.install(this, prefix_, bindings(prefix_, entries_), replacing);
+    // Reloading a surface without shortcuts must not reset another surface's pending prefix.
+    if (!entries_.empty() || (replacing && !replacing->entries_.empty())) {
+      shortcuts_.install(this, prefix_, bindings(prefix_, entries_), replacing);
+    }
+
     active_ = true;
   }
 

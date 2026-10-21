@@ -1,9 +1,9 @@
 local ui = require("telar.ui")
 local runtime = require("telar.runtime")
 local desktop = require("telar.desktop")
-local Spaces = require("components.spaces")
-local Tabs = require("components.tabs")
-require("components.shortcuts")()
+local Spaces = require("topbar.spaces")
+local Tabs = require("topbar.tabs")
+require("topbar.shortcuts")()
 
 local background = ui.create("QtQuick", "Rectangle", {
   color = "#1b1723",

@@ -2,6 +2,7 @@
 
 #include "file_watch.hpp"
 #include "quick_surface.hpp"
+#include "surface_kind.hpp"
 #include <QSize>
 #include <QTimer>
 #include <memory>
@@ -11,11 +12,12 @@ namespace ui {
   class LuaUi;
 } // namespace ui
 
-struct QtTopBarSurface final : QuickSurface {
-  QtTopBarSurface(ui::Services &services, const QSize &size);
-  ~QtTopBarSurface();
+struct LuaSurface final : QuickSurface {
+  LuaSurface(ui::Services &services, const QSize &size, ui::SurfaceKind kind);
+  ~LuaSurface();
 
 private:
+  ui::SurfaceKind kind_;
   QString config_path_;
   bool config_required_ = false;
   std::unique_ptr<ui::LuaUi> ui_;

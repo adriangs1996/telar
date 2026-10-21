@@ -1,4 +1,4 @@
-#include "qttopbar.hpp"
+#include "lua_surface.hpp"
 #include "lua_ui.hpp"
 #include <QDebug>
 #include <QDir>
@@ -35,8 +35,9 @@ namespace {
   }
 } // namespace
 
-QtTopBarSurface::QtTopBarSurface(ui::Services &services, const QSize &size)
-    : ui_(std::make_unique<ui::LuaUi>(services, *this)) {
+LuaSurface::LuaSurface(ui::Services &services, const QSize &size, ui::SurfaceKind kind)
+    : kind_(kind),
+      ui_(std::make_unique<ui::LuaUi>(services, *this)) {
   ui_->setReloadHandler([this] {
     reload_timer_.start();
   });
@@ -63,11 +64,19 @@ QtTopBarSurface::QtTopBarSurface(ui::Services &services, const QSize &size)
   watchScript();
 }
 
-QtTopBarSurface::~QtTopBarSurface() = default;
+LuaSurface::~LuaSurface() = default;
 
-void QtTopBarSurface::reload() {
+void LuaSurface::reload() {
   const auto api_source = readScript(QStringLiteral(":/telar/ui/api.lua"));
   const QFileInfo config(config_path_);
+
+  // Only the topbar runs desktop.lua, which owns the global shortcut configuration.
+  // Other surfaces load their own module in an isolated UI environment.
+  if (kind_ == ui::SurfaceKind::sidebar) {
+    ui_->reload(view(api_source), "require(\"sidebar\")", "@telar/sidebar", config.absolutePath());
+    return;
+  }
+
   const auto source_path = config_required_ || config.exists() || config.isSymLink()
                                ? config_path_
                                : QStringLiteral(":/telar/ui/desktop.lua");
@@ -76,7 +85,7 @@ void QtTopBarSurface::reload() {
   ui_->reload(view(api_source), view(source), view(chunk_name), config.absolutePath());
 }
 
-void QtTopBarSurface::watchScript() {
+void LuaSurface::watchScript() {
   reload_timer_.setSingleShot(true);
   reload_timer_.setInterval(refresh_delay);
   watcher_.setCallback([this](const QStringList &) {
@@ -88,13 +97,16 @@ void QtTopBarSurface::watchScript() {
       rearmWatcher();
       reload();
     } catch (const std::exception &error) {
-      qWarning() << "UI reload failed:" << error.what();
+      const auto name = kind_ == ui::SurfaceKind::topbar ? "topbar" : "sidebar";
+      qWarning() << name << "UI reload failed:" << error.what();
     }
   });
 
   rearmWatcher();
 }
 
-void QtTopBarSurface::rearmWatcher() {
-  watcher_.setPaths({config_path_});
+void LuaSurface::rearmWatcher() {
+  if (kind_ == ui::SurfaceKind::topbar) {
+    watcher_.setPaths({config_path_});
+  }
 }
