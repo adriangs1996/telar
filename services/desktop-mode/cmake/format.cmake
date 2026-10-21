@@ -37,6 +37,7 @@ execute_process(COMMAND "${desktop_clang_format}" --style=file ${clang_format_ar
   WORKING_DIRECTORY "${desktop_directory}"
   COMMAND_ERROR_IS_FATAL ANY)
 execute_process(COMMAND "${desktop_stylua}" --verify ${stylua_arguments}
-    --config-path "${desktop_directory}/.stylua.toml" "${desktop_directory}/ui"
+    --config-path "${desktop_directory}/.stylua.toml"
+    "${desktop_directory}/ui" "${desktop_directory}/../../dev/desktop.lua"
   WORKING_DIRECTORY "${desktop_directory}"
   COMMAND_ERROR_IS_FATAL ANY)

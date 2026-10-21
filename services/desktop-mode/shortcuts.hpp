@@ -1,6 +1,6 @@
 #pragma once
 
-#include "keymap_bridge.h"
+#include "keybindings-engine/router.hpp"
 #include <functional>
 #include <map>
 #include <span>
@@ -26,8 +26,7 @@ public:
     std::function<void()> invoke;
   };
 
-  Shortcuts();
-  ~Shortcuts();
+  Shortcuts() = default;
   Shortcuts(const Shortcuts &) = delete;
   Shortcuts &operator=(const Shortcuts &) = delete;
 
@@ -39,7 +38,7 @@ public:
                const void *replacing = nullptr);
   void remove(const void *owner);
   void setSink(std::function<bool(Request)> sink);
-  bool route(const TelarShortcutKey &key);
+  bool route(const keybindings::KeyEvent &key);
   void dispatch(Request request);
   void cancel();
   bool pending() const;
@@ -54,7 +53,7 @@ private:
 
   std::map<const void *, Group> groups_;
   std::function<bool(Request)> sink_;
-  void *router_;
+  keybindings::Router router_;
   std::uint64_t next_id_ = 1;
   std::uint64_t epoch_ = 0;
   void compile(const std::map<const void *, Group> &groups);

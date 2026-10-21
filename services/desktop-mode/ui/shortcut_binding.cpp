@@ -66,7 +66,10 @@ namespace ui {
   }
 
   std::uint64_t ShortcutBinding::bind(const QVariantList &keys, bool global, int callback) {
-    if (keys.empty() || keys.size() > (global ? 1 : 4) || entries_.size() == 256) {
+    const auto limit = global ? 1 : keybindings::maxSequenceLength - 1;
+
+    if (keys.empty() || static_cast<std::size_t>(keys.size()) > limit ||
+        entries_.size() == keybindings::maxBindings) {
       throw std::runtime_error(
           "Shortcuts accept 1–4 suffix keys, or one global chord; maximum 256 bindings");
     }

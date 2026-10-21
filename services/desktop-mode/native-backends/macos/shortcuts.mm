@@ -211,21 +211,21 @@ struct NativeShortcuts::Impl {
         return event;
       }
 
-      const auto phase = type == kCGEventKeyUp ? TELAR_KEY_RELEASE
+      const auto phase = type == kCGEventKeyUp ? keybindings::KeyPhase::Release
                          : CGEventGetIntegerValueField(event, kCGKeyboardEventAutorepeat)
-                             ? TELAR_KEY_REPEAT
-                             : TELAR_KEY_PRESS;
+                             ? keybindings::KeyPhase::Repeat
+                             : keybindings::KeyPhase::Press;
 
       const auto physical =
           static_cast<std::uint32_t>(CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode));
       constexpr auto modifiers =
           kCGEventFlagMaskControl | kCGEventFlagMaskAlternate | kCGEventFlagMaskCommand;
-      const bool translate = phase == TELAR_KEY_PRESS &&
+      const bool translate = phase == keybindings::KeyPhase::Press &&
                              (self.shortcuts.pending() || (CGEventGetFlags(event) & modifiers));
-      const TelarShortcutKey key{translate ? chord([NSEvent eventWithCGEvent:event]).UTF8String
-                                           : "",
-                                 physical,
-                                 static_cast<std::uint32_t>(phase)};
+      const keybindings::KeyEvent key{translate ? chord([NSEvent eventWithCGEvent:event]).UTF8String
+                                                : "",
+                                      physical,
+                                      phase};
       return self.shortcuts.route(key) ? nullptr : event;
     }
   }

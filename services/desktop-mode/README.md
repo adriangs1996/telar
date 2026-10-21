@@ -5,15 +5,12 @@ Upstream LLVM Clang, including `clang-scan-deps`, compiles the modules. On
 macOS, C++ and Objective-C++ use libc++ to match the installed Qt libraries.
 Qt 6.7 or newer provides QML, Qt Quick, Qt Quick Controls, Qt Quick Shapes,
 Qt Network and Qt Concurrent.
-The runtime and the rest of Telar still build with Zig. Desktop also needs Zig 0.16
-to compile `lib/keyinput`, the same shortcut router used by the GUI, through a
-small C ABI. CMake builds this library without building the runtime or GUI.
-`TELAR_ZIG_EXECUTABLE` selects Zig; `TELAR_KEYINPUT_TARGET` overrides its target
-triple for cross compilation. macOS builds follow `CMAKE_OSX_ARCHITECTURES` and
-`CMAKE_OSX_DEPLOYMENT_TARGET`; build universal binaries one architecture at a time.
+The desktop keybinding engine is a standalone C++ library in `keybindings-engine/`.
+Building the desktop does not require Zig. The runtime and the rest of Telar
+still build with Zig.
 
 On macOS, install the dependencies with
-`brew install cmake ninja llvm pkgconf luajit qtdeclarative zig`.
+`brew install cmake ninja llvm pkgconf luajit qtdeclarative`.
 The build discovers LLVM through Homebrew and uses the macOS SDK selected by
 `xcrun`. Set `CMAKE_OSX_SYSROOT` or `SDKROOT` to select a different SDK.
 On Linux, install CMake, Ninja,
@@ -192,15 +189,42 @@ the focused macOS Space's associated workspace and tabs, with click selection an
 drag reordering. `ui/components/tabs.lua` implements layout and interaction
 entirely in Lua. The native backend owns the panel; Qt Quick draws its contents.
 
-`just desktop` loads `topbar.lua` from the source `ui/` directory. Set
-`TELAR_DESKTOP_UI_DIR` to use another directory containing `topbar.lua`.
-Without a directory override, the executable loads its bundled `topbar.lua`.
+The desktop has its own Lua entry point, separate from the GUI's `config.lua`:
+
+1. `TELAR_DESKTOP_CONFIG`, when set, selects a specific file. A missing file is an error.
+2. Otherwise, load `$XDG_CONFIG_HOME/telar/desktop.lua`, or `~/.config/telar/desktop.lua`
+   when `XDG_CONFIG_HOME` is unset or empty.
+3. If that default file does not exist, run the bundled `ui/desktop.lua`, which
+   loads the standard bar with `require("topbar")`.
+
+The desktop does not load `config.lua` or use `TELAR_DEVELOPMENT_CONFIG`.
+Its configuration is an executable Lua script using the desktop API, rather than
+the GUI's configuration table. For example, `desktop.lua` can contain:
+
+```lua
+local shortcuts = require("telar.shortcuts")
+shortcuts.set_prefix("ctrl+s")
+
+require("topbar")
+```
+
+The file owns UI composition: omit `require("topbar")` to construct your own UI.
+Local modules resolve relative to `desktop.lua`. Modules not found there are
+looked up in `TELAR_DESKTOP_UI_DIR`, if set, then in the bundled UI resources.
+`just desktop` and `just desktop-dev` explicitly select the repository's
+`dev/desktop.lua` through `TELAR_DESKTOP_CONFIG`, independently of the installed
+desktop configuration. They also set `TELAR_DESKTOP_UI_DIR` to the source `ui/`
+directory unless it is already set. Edit `dev/desktop.lua` for development;
+its changes and imported modules reload automatically. The GUI continues to use
+its own `dev/config.lua`. Running the desktop executable directly follows the
+configuration lookup above.
 Telar always loads its official API from the bundled `api.lua` resource;
 an external `api.lua` cannot replace it. Changes to the official API require
 rebuilding the executable.
 
-Saving the external `topbar.lua` or a Lua module loaded with `require` reloads
-the UI after a 200 ms debounce.
+Saving `desktop.lua` or a Lua module loaded with `require` reloads the UI after
+a 200 ms debounce. Creating the default config while the desktop is running
+also reloads it; removing it restores the bundled entry point.
 The watcher follows file replacements made by editors. Each reload builds
 a hidden candidate with its own Lua globals in the existing LuaJIT VM.
 Success replaces the previous objects, callbacks and animations. A script
@@ -293,8 +317,8 @@ the topbar; it does not change a separate GUI client's focus.
 
 The desktop keymap belongs to its Lua UI; it does not import the GUI's
 `client.prefix` or `client.keybindings`. To use `Ctrl+S`, add
-`require("telar.shortcuts").set_prefix("ctrl+s")` to `topbar.lua` before loading
-`components.shortcuts`. A custom topbar can omit that module and define its own map:
+`require("telar.shortcuts").set_prefix("ctrl+s")` to `desktop.lua` before loading
+`topbar`. A custom topbar can omit `components.shortcuts` and define its own map:
 
 ```lua
 local shortcuts = require("telar.shortcuts")
@@ -310,14 +334,14 @@ end)
 ```
 
 `bind` accepts one to four suffix chords; `bind_global` accepts a single modified
-chord. Both return an idempotent unbind function. Chords use the GUI's parser,
-including its spelling, case and modifier rules. Prefixes require Ctrl, Alt or
+chord. Both return an idempotent unbind function. The C++ chord parser preserves
+the GUI's spelling, case and modifier rules. Prefixes require Ctrl, Alt or
 Command/Super. Arbitrary unprefixed multi-key sequences are intentionally rejected:
 replaying buffered input into a different application is not implemented.
 
 The prefix waits without a timeout. Escape, an invalid suffix, a mouse press,
 switching applications or Spaces, or a successful UI reload cancels it. A held
-key invokes its callback once. The shared router retains intercepted key releases
+key invokes its callback once. The router retains intercepted key releases
 across reloads and focus changes. Duplicate or ambiguous bindings are rejected;
 the whole desktop holds at most 256 bindings, with one shared prefix across surfaces.
 
@@ -326,6 +350,19 @@ bindings; a rejected replacement leaves the previous map active. Queued actions
 from an obsolete generation or focus context are discarded. Native capture only
 queues action IDs in `App`'s event queue. Lua runs when `App` drains that queue,
 outside the macOS event tap callback.
+
+The `keybindings-engine` CMake target has no Qt, Lua or native dependencies:
+
+- `chord.hpp/.cpp` parses and normalizes key names, modifiers and UTF-8 characters.
+- `keymap.hpp/.cpp` validates and sorts bindings, rejecting duplicate and ambiguous sequences.
+- `router.hpp/.cpp` resolves events into consumed/pass-through decisions and action IDs.
+
+Routing uses binary searches within the remaining candidates and a bounded table
+of 64 held physical keys, without allocating. If that table is full, a new press
+passes through and cancels the sequence so its eventual release also reaches the
+focused application. Configuration replacement is transactional and preserves
+already intercepted keys until release. `Shortcuts` manages callback ownership
+and queued action generations; the platform backend owns global keyboard capture.
 
 ## Native Spaces and runtime tabs
 
@@ -478,11 +515,11 @@ string; invalid arguments raise a Lua error immediately.
 | `net.request(options, callback)` | An HTTP response containing `status`, `body`, `headers`, `raw_headers` and final `url`. |
 
 Filesystem access is local to the machine running the desktop client.
-Paths resolve relative to the directory containing `topbar.lua`.
+Paths resolve relative to the directory containing `desktop.lua`, including when
+the bundled entry point is used because the default config has not been created.
 Absolute paths and `~/` are supported. `fs.config_dir` exposes that base
 directory and `fs.home_dir` exposes the user's home directory. Bundled
-resources have a `:/telar/ui` base and are read-only; use a filesystem path
-when writing data. Read/write payloads are limited to 16 MiB. Directory
+resources under `:/telar/ui` are read-only. Read/write payloads are limited to 16 MiB. Directory
 listings are limited to 10000 entries.
 
 File reads, writes and directory listings run on Qt's thread pool. HTTP
@@ -534,7 +571,8 @@ end)
 ## Lua modules
 
 `require("widgets.clock")` searches `widgets/clock.lua`, then
-`widgets/clock/init.lua`, relative to the UI directory. Modules return
+`widgets/clock/init.lua`, relative to the directory containing `desktop.lua`,
+then in `TELAR_DESKTOP_UI_DIR` and the bundled UI resources. Modules return
 their public value, commonly a table. `package.path`, `package.preload`
 and `package.loaded` are available. `telar`, `telar.ui`, `telar.fs`,
 `telar.net` and `telar.runtime` are preloaded.

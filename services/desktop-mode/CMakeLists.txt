@@ -17,41 +17,11 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(LUAJIT REQUIRED IMPORTED_TARGET luajit>=2.1)
 find_package(Qt6 6.7 REQUIRED COMPONENTS Qml Quick QuickControls2 QuickShapes Network Concurrent)
 
-# Compile only the shared key router, without building the runtime or GUI.
-find_program(TELAR_ZIG_EXECUTABLE zig REQUIRED)
-set(TELAR_KEYINPUT_TARGET "" CACHE STRING "Override the Zig target triple for the shared key router")
-set(keyinput_target "${TELAR_KEYINPUT_TARGET}")
-if(NOT keyinput_target OR keyinput_target STREQUAL "native")
-  set(keyinput_target native)
-  if(APPLE)
-    set(keyinput_arch "${CMAKE_SYSTEM_PROCESSOR}")
-    if(CMAKE_OSX_ARCHITECTURES)
-      list(LENGTH CMAKE_OSX_ARCHITECTURES keyinput_arch_count)
-      if(NOT keyinput_arch_count EQUAL 1)
-        message(FATAL_ERROR "Build each macOS architecture separately before combining the desktop binaries")
-      endif()
-      set(keyinput_arch "${CMAKE_OSX_ARCHITECTURES}")
-    endif()
-    string(REPLACE "arm64" "aarch64" keyinput_arch "${keyinput_arch}")
-    set(keyinput_target "${keyinput_arch}-macos")
-    if(CMAKE_OSX_DEPLOYMENT_TARGET)
-      string(APPEND keyinput_target ".${CMAKE_OSX_DEPLOYMENT_TARGET}")
-    endif()
-  endif()
-endif()
-file(GLOB keyinput_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../../lib/keyinput/*.zig")
-set(keyinput_library "${CMAKE_CURRENT_BINARY_DIR}/libtelar-keyinput.a")
-add_custom_command(OUTPUT "${keyinput_library}"
-  COMMAND "${TELAR_ZIG_EXECUTABLE}" build-lib -static -O ReleaseSafe -lc -fcompiler-rt
-    -target "${keyinput_target}" "-femit-bin=${keyinput_library}"
-    --dep keyinput "-Mroot=${CMAKE_CURRENT_SOURCE_DIR}/keymap_bridge.zig"
-    "-Mkeyinput=${CMAKE_CURRENT_SOURCE_DIR}/../../lib/keyinput/root.zig"
-  DEPENDS keymap_bridge.zig ${keyinput_sources}
-  VERBATIM)
-add_custom_target(desktop-keyinput-build DEPENDS "${keyinput_library}")
-add_library(desktop-keyinput STATIC IMPORTED)
-set_target_properties(desktop-keyinput PROPERTIES IMPORTED_LOCATION "${keyinput_library}")
-add_dependencies(desktop-keyinput desktop-keyinput-build)
+# The keybinding engine uses only the C++ standard library.
+file(GLOB keybindings_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/keybindings-engine/*.cpp")
+add_library(keybindings-engine STATIC ${keybindings_sources})
+target_include_directories(keybindings-engine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_features(keybindings-engine PUBLIC cxx_std_23)
 
 # Source discovery is intentional: adding a module or a development program
 # must not require editing the build definition.
@@ -61,6 +31,7 @@ list(FILTER desktop_modules EXCLUDE REGEX "(^|/)(out|zig-out|\\.zig-cache|debug|
 list(FILTER desktop_sources EXCLUDE REGEX "(^|/)(out|zig-out|\\.zig-cache|debug|tests)/")
 list(FILTER desktop_modules EXCLUDE REGEX "^ui/")
 list(FILTER desktop_sources EXCLUDE REGEX "^ui/")
+list(FILTER desktop_sources EXCLUDE REGEX "^keybindings-engine/")
 list(REMOVE_ITEM desktop_sources main.cpp)
 
 add_library(desktop-core STATIC ${desktop_sources})
@@ -69,7 +40,7 @@ target_include_directories(desktop-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(desktop-core PUBLIC Threads::Threads)
 target_link_libraries(desktop-core PRIVATE Qt6::Core)
 target_link_libraries(desktop-core PRIVATE PkgConfig::LUAJIT)
-target_link_libraries(desktop-core PRIVATE desktop-keyinput)
+target_link_libraries(desktop-core PUBLIC keybindings-engine)
 target_compile_definitions(desktop-core PUBLIC "$<$<CONFIG:Debug>:TELAR_DEBUG=1>")
 
 file(GLOB_RECURSE desktop_ui_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/ui/*.cpp")

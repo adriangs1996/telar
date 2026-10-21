@@ -9,6 +9,7 @@ namespace ui {
 }
 
 struct QuickSurface;
+class QString;
 
 namespace ui {
   class LuaUi final {
@@ -19,7 +20,10 @@ namespace ui {
     LuaUi(const LuaUi &) = delete;
     LuaUi &operator=(const LuaUi &) = delete;
 
-    void reload(std::string_view api_source, std::string_view source, std::string_view chunk_name);
+    void reload(std::string_view api_source,
+                std::string_view source,
+                std::string_view chunk_name,
+                const QString &directory);
     void setReloadHandler(std::function<void()> handler);
 
   private:

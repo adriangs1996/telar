@@ -16,7 +16,8 @@ struct QtTopBarSurface final : QuickSurface {
   ~QtTopBarSurface();
 
 private:
-  QString script_path_;
+  QString config_path_;
+  bool config_required_ = false;
   std::unique_ptr<ui::LuaUi> ui_;
   ui::FileWatch watcher_;
   QTimer reload_timer_;

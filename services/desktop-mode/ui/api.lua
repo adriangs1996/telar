@@ -107,7 +107,7 @@ function net.request(options, callback)
   return operation(io_core.request, options, callback)
 end
 
-package = { path = "?.lua;?/init.lua", loaded = {}, preload = {} }
+package = { path = io_core.module_path, loaded = {}, preload = {} }
 local loading = {}
 
 function require(name)

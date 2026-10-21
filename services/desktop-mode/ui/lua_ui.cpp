@@ -12,7 +12,6 @@
 #include <QDebug>
 #include <QEasingCurve>
 #include <QEvent>
-#include <QFileInfo>
 #include <QHash>
 #include <QMetaEnum>
 #include <QPointer>
@@ -1295,12 +1294,11 @@ namespace ui {
     impl_->active.reset();
   }
 
-  void
-  LuaUi::reload(std::string_view api_source, std::string_view source, std::string_view chunk_name) {
+  void LuaUi::reload(std::string_view api_source,
+                     std::string_view source,
+                     std::string_view chunk_name,
+                     const QString &directory) {
     impl_->attempted_modules.clear();
-    const auto file =
-        QString::fromUtf8(chunk_name.data(), static_cast<qsizetype>(chunk_name.size()));
-    const auto directory = QFileInfo(file.startsWith('@') ? file.mid(1) : file).absolutePath();
     auto candidate = std::make_unique<Generation>(impl_->services,
                                                   impl_->surface,
                                                   directory,

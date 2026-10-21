@@ -39,12 +39,14 @@ app:
     mkdir -p -m 700 "{{ dev_runtime_dir }}"
     TELAR_SOCKET="{{ dev_runtime_dir }}/runtime.sock" TELAR_HISTORY="{{ dev_runtime_dir }}/history.db" zig build run -- gui
 
-# Build and run the C++ desktop client against an existing runtime in Debug mode.
+# Build and run Desktop with dev/desktop.lua against an existing runtime.
 [working-directory: "services/desktop-mode"]
 desktop socket=desktop_socket:
     cmake --preset debug
     cmake --build --preset debug --target telar-desktop
-    TELAR_DESKTOP_UI_DIR="${TELAR_DESKTOP_UI_DIR:-$PWD/ui}" ./out/debug/telar-desktop "{{ socket }}"
+    TELAR_DESKTOP_CONFIG="{{ justfile_directory() }}/dev/desktop.lua" \
+        TELAR_DESKTOP_UI_DIR="${TELAR_DESKTOP_UI_DIR:-$PWD/ui}" \
+        ./out/debug/telar-desktop "{{ socket }}"
 
 # Seed a separate desktop runtime once, using a checkpoint and the socket of its source runtime.
 desktop-runtime $source="" $session="":

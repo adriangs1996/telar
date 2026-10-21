@@ -3,6 +3,7 @@
 #include <QDebug>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QtGlobal>
 #include <chrono>
 #include <stdexcept>
@@ -41,10 +42,22 @@ QtTopBarSurface::QtTopBarSurface(ui::Services &services, const QSize &size)
   });
 
   window_.resize(size);
-  const auto directory = qEnvironmentVariable("TELAR_DESKTOP_UI_DIR");
-  script_path_ = directory.isEmpty()
-                     ? QStringLiteral(":/telar/ui/topbar.lua")
-                     : QDir(directory).absoluteFilePath(QStringLiteral("topbar.lua"));
+  config_path_ = qEnvironmentVariable("TELAR_DESKTOP_CONFIG");
+  config_required_ = !config_path_.isEmpty();
+
+  if (!config_required_) {
+    auto directory = qEnvironmentVariable("XDG_CONFIG_HOME");
+
+    if (directory.isEmpty()) {
+      directory = QDir::home().filePath(QStringLiteral(".config"));
+    }
+
+    config_path_ = QDir(directory).filePath(QStringLiteral("telar/desktop.lua"));
+  } else if (config_path_.startsWith(QStringLiteral("~/"))) {
+    config_path_ = QDir::home().filePath(config_path_.mid(2));
+  }
+
+  config_path_ = QFileInfo(config_path_).absoluteFilePath();
 
   reload();
   watchScript();
@@ -54,9 +67,13 @@ QtTopBarSurface::~QtTopBarSurface() = default;
 
 void QtTopBarSurface::reload() {
   const auto api_source = readScript(QStringLiteral(":/telar/ui/api.lua"));
-  const auto source = readScript(script_path_);
-  const auto chunk_name = (QStringLiteral("@") + script_path_).toUtf8();
-  ui_->reload(view(api_source), view(source), view(chunk_name));
+  const QFileInfo config(config_path_);
+  const auto source_path = config_required_ || config.exists() || config.isSymLink()
+                               ? config_path_
+                               : QStringLiteral(":/telar/ui/desktop.lua");
+  const auto source = readScript(source_path);
+  const auto chunk_name = (QStringLiteral("@") + source_path).toUtf8();
+  ui_->reload(view(api_source), view(source), view(chunk_name), config.absolutePath());
 }
 
 void QtTopBarSurface::watchScript() {
@@ -79,5 +96,5 @@ void QtTopBarSurface::watchScript() {
 }
 
 void QtTopBarSurface::rearmWatcher() {
-  watcher_.setPaths({script_path_});
+  watcher_.setPaths({config_path_});
 }

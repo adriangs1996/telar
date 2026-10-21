@@ -425,12 +425,25 @@ namespace ui {
     void install() {
       const auto config = directory.toUtf8().toStdString();
       const auto home = QDir::homePath().toUtf8().toStdString();
+      QStringList module_patterns{QStringLiteral("?.lua"), QStringLiteral("?/init.lua")};
+      const auto development_directory = qEnvironmentVariable("TELAR_DESKTOP_UI_DIR");
+
+      if (!development_directory.isEmpty()) {
+        const QDir development(development_directory);
+        module_patterns.append(development.absoluteFilePath(QStringLiteral("?.lua")));
+        module_patterns.append(development.absoluteFilePath(QStringLiteral("?/init.lua")));
+      }
+
+      module_patterns.append(QStringLiteral(":/telar/ui/?.lua"));
+      module_patterns.append(QStringLiteral(":/telar/ui/?/init.lua"));
+      const auto module_path = module_patterns.join(';').toUtf8().toStdString();
 
       struct Request {
         Impl *self;
         const std::string *config;
         const std::string *home;
-      } request{this, &config, &home};
+        const std::string *module_path;
+      } request{this, &config, &home, &module_path};
 
       environment.withState(
           [](lua_State *state) -> int {
@@ -462,6 +475,8 @@ namespace ui {
             lua_setfield(state, 3, "config_dir");
             lua_pushlstring(state, request->home->data(), request->home->size());
             lua_setfield(state, 3, "home_dir");
+            lua_pushlstring(state, request->module_path->data(), request->module_path->size());
+            lua_setfield(state, 3, "module_path");
             lua_pushcfunction(state, lua::Environment::traceback);
             lua_setfield(state, 3, "traceback");
             lua_setglobal(state, "_telar_io");
