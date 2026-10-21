@@ -26,6 +26,13 @@ public:
     std::function<void()> invoke;
   };
 
+  struct Replacement {
+    const void *owner;
+    const void *previous;
+    std::string prefix;
+    std::vector<Binding> bindings;
+  };
+
   Shortcuts() = default;
   Shortcuts(const Shortcuts &) = delete;
   Shortcuts &operator=(const Shortcuts &) = delete;
@@ -37,6 +44,7 @@ public:
                std::span<const Binding> bindings,
                const void *replacing = nullptr);
   void remove(const void *owner);
+  void replace(std::span<const Replacement> replacements);
   void setSink(std::function<bool(Request)> sink);
   bool route(const keybindings::KeyEvent &key);
   void dispatch(Request request);

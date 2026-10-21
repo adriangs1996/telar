@@ -4,11 +4,11 @@
 #import <AppKit/AppKit.h>
 
 namespace ui {
-  struct Services;
+  class DesktopUi;
 }
 
 @interface TelarSurfacePanel : NSPanel
 - (instancetype)initWithScreen:(NSScreen *)screen
                           kind:(ui::SurfaceKind)kind
-                      services:(ui::Services &)services;
+                       desktop:(ui::DesktopUi &)desktop;
 @end

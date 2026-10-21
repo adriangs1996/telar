@@ -56,11 +56,30 @@ void Shortcuts::install(const void *owner,
                         const std::string &prefix,
                         std::span<const Binding> bindings,
                         const void *replacing) {
+  const Replacement replacement{owner, replacing, prefix, {bindings.begin(), bindings.end()}};
+  replace(std::span(&replacement, 1));
+}
+
+void Shortcuts::replace(std::span<const Replacement> replacements) {
   auto candidate = groups_;
-  candidate.erase(replacing);
-  candidate[owner] = {prefix, {bindings.begin(), bindings.end()}};
-  compile(candidate);
-  groups_.swap(candidate);
+  bool changed = false;
+
+  for (const auto &replacement : replacements) {
+    changed |= candidate.erase(replacement.previous) != 0;
+    changed |= candidate.erase(replacement.owner) != 0;
+  }
+
+  for (const auto &replacement : replacements) {
+    if (!replacement.bindings.empty()) {
+      candidate[replacement.owner] = {replacement.prefix, replacement.bindings};
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    compile(candidate);
+    groups_.swap(candidate);
+  }
 }
 
 void Shortcuts::remove(const void *owner) {

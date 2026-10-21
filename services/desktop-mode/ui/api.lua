@@ -44,6 +44,12 @@ desktop.activate_space = core.desktop_activate
 desktop.bind_space = core.desktop_bind
 desktop.remove_space = core.desktop_remove
 
+function desktop.configure_surface(name, settings)
+  assert(type(name) == "string", "configure_surface expects a surface name")
+  assert(type(settings) == "table", "configure_surface expects a settings table")
+  core.configure_surface(name, settings)
+end
+
 function desktop.create_space(options)
   assert(
     options == nil or type(options) == "table",
@@ -221,8 +227,16 @@ function ui.on(target, name, callback)
   end
 end
 
+local surface_config = core.root and core.surface_config()
+
 ui.surface = setmetatable({}, {
   __index = function(_, name)
+    assert(surface_config, "desktop.lua has no surface; configure surfaces through telar.desktop")
+
+    if name == "options" or name == "module" or name == "name" then
+      return surface_config[name]
+    end
+
     if name == "root" then
       return core.root
     end

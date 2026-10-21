@@ -10,9 +10,14 @@ namespace lua {
 namespace ui {
   class ShortcutBinding final {
   public:
+    struct Activation {
+      ShortcutBinding *candidate;
+      const ShortcutBinding *previous;
+    };
+
     ShortcutBinding(lua::Environment &environment, Shortcuts &shortcuts);
     ~ShortcutBinding();
-    void activate(const ShortcutBinding *replacing);
+    static void activate(std::span<const Activation> activations);
     void deactivate();
     void setPrefix(const QString &prefix);
     std::uint64_t bind(const QVariantList &keys, bool global, int callback);

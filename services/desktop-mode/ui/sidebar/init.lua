@@ -1,6 +1,7 @@
 local ui = require("telar.ui")
 local runtime = require("telar.runtime")
 local desktop = require("telar.desktop")
+local options = ui.surface.options
 
 local colors = {
   background = "#1b1723",
@@ -14,6 +15,10 @@ local colors = {
   pending = "#574361",
   error = "#e6a2a7",
 }
+
+for name, value in pairs(options.colors or {}) do
+  colors[name] = value
+end
 
 local metrics = {
   padding = 14,
@@ -39,7 +44,7 @@ local background = ui.create("QtQuick", "Rectangle", {
 })
 
 local title = ui.text({
-  text = "Telar",
+  text = options.title or "Telar",
   color = colors.text,
   ["font.pixelSize"] = metrics.title_size,
   ["font.weight"] = 600,

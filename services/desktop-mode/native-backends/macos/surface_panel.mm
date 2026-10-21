@@ -38,7 +38,7 @@ namespace {
 
 - (instancetype)initWithScreen:(NSScreen *)screen
                           kind:(ui::SurfaceKind)kind
-                      services:(ui::Services &)services {
+                       desktop:(ui::DesktopUi &)desktop {
   self =
       [super initWithContentRect:surfaceFrame(screen, kind)
                        styleMask:NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel
@@ -68,7 +68,7 @@ namespace {
   const NSRect bounds = container.bounds;
 
   const QSize size(static_cast<int>(NSWidth(bounds)), static_cast<int>(NSHeight(bounds)));
-  _surface = std::make_unique<LuaSurface>(services, size, kind);
+  _surface = std::make_unique<LuaSurface>(desktop, size, kind);
   auto &window = _surface->window();
 
   window.setFlags(Qt::SubWindow);

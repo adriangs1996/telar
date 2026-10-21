@@ -195,8 +195,10 @@ Space on click. The list scrolls when it exceeds the panel height. Selection is
 disabled while disconnected or while a Space operation is pending.
 
 Both panels use `TelarSurfacePanel` for native window behavior and `LuaSurface`
-for Lua loading and reloads. They share the runtime connection and LuaJIT VM,
-with separate UI roots, globals, module caches and event subscriptions.
+for their Qt/Lua contents. `DesktopUi` owns configuration and coordinates reloads.
+Configuration and surfaces share the runtime connection, desktop service, shortcut
+engine and LuaJIT VM, with separate globals, module caches and subscriptions.
+Only surface environments have a visual root.
 
 The desktop has its own Lua entry point, separate from the GUI's `config.lua`:
 
@@ -204,7 +206,7 @@ The desktop has its own Lua entry point, separate from the GUI's `config.lua`:
 2. Otherwise, load `$XDG_CONFIG_HOME/telar/desktop.lua`, or `~/.config/telar/desktop.lua`
    when `XDG_CONFIG_HOME` is unset or empty.
 3. If that default file does not exist, run the bundled `ui/desktop.lua`, which
-   loads the standard bar with `require("topbar")`.
+   configures both surfaces and registers the default shortcuts.
 
 The desktop does not load `config.lua` or use `TELAR_DEVELOPMENT_CONFIG`.
 Its configuration is an executable Lua script using the desktop API, rather than
@@ -212,19 +214,48 @@ the GUI's configuration table. For example, `desktop.lua` can contain:
 
 ```lua
 local shortcuts = require("telar.shortcuts")
+local desktop = require("telar.desktop")
 shortcuts.set_prefix("ctrl+s")
+require("shortcuts")()
 
-require("topbar")
+local colors = { background = "#1b1723", accent = "#c4a7e7" }
+
+desktop.configure_surface("topbar", {
+  module = "topbar",
+  options = { colors = colors },
+})
+
+desktop.configure_surface("sidebar", {
+  module = "sidebar",
+  options = { colors = colors, title = "My fleet" },
+})
 ```
 
-The file owns topbar composition: omit `require("topbar")` to construct your own UI.
-It runs once, in the topbar environment, so global shortcuts are not registered
-again for the sidebar. The sidebar independently loads `require("sidebar")`.
-To replace it, put `sidebar/init.lua` in the directory containing `desktop.lua`;
-during development, edit `ui/sidebar/init.lua` or add an override at
-`dev/sidebar/init.lua`. Do not load the
-sidebar from `desktop.lua`: that would draw it inside the topbar. Shared Lua
-components can be imported by both surfaces, with separate local state.
+`desktop.lua` executes once at startup and once per configuration reload, in an
+environment independent of both panels. It registers global shortcuts and chooses
+each surface's module and options. UI creation belongs inside a surface module;
+calling UI operations from the global environment raises an error. Existing
+configurations should replace `require("topbar")` with `require("shortcuts")()`
+and `desktop.configure_surface(...)` calls.
+
+`configure_surface(name, settings)` accepts `topbar` or `sidebar`, with optional
+`module` and `options` fields. The default module matches the surface name, with
+empty options. Options are copied data tables, including nested tables and dense
+arrays of up to 4096 entries, with at most 16 levels of table nesting;
+functions and UI objects cannot cross environments. Each surface reads its own
+copy through `ui.surface.options`. `ui.surface.name` and `ui.surface.module`
+identify the surface and its configured module. Local edits to an options table
+do not change the global configuration or another surface.
+
+Both built-in surfaces accept a `colors` table; the sidebar also accepts `title`.
+Custom modules can interpret their options freely. These options configure UI
+content, not native panel geometry.
+
+To replace the sidebar, select another module or put `sidebar/init.lua` in the
+directory containing `desktop.lua`; during development, edit
+`ui/sidebar/init.lua` or add an override at `dev/sidebar/init.lua`. The same
+rules apply to the topbar. Shared Lua components can be imported by both
+surfaces, with separate local state.
 Local modules resolve relative to `desktop.lua`. Modules not found there are
 looked up in `TELAR_DESKTOP_UI_DIR`, if set, then in the bundled UI resources.
 `just desktop` and `just desktop-dev` explicitly select the repository's
@@ -238,15 +269,22 @@ Telar always loads its official API from the bundled `api.lua` resource;
 an external `api.lua` cannot replace it. Changes to the official API require
 rebuilding the executable.
 
-Saving `desktop.lua` or a Lua module loaded with `require` reloads the UI after
-a 200 ms debounce. Module changes reload each surface that imports them; a
-sidebar-only edit leaves the topbar and its shortcuts intact. Creating the default
-config while the desktop is running also reloads the topbar; removing it restores
-the bundled entry point.
-The watcher follows file replacements made by editors. Each reload builds
-a hidden candidate with its own Lua globals in the existing LuaJIT VM.
-Success replaces the previous objects, callbacks and animations. A script
-or property error discards the candidate and leaves the current UI visible.
+Saving `desktop.lua` or a module it imports prepares a new configuration and all
+attached surfaces after a 200 ms debounce. Scripts, properties and the combined
+shortcut map must validate before any live environment is replaced. A rejected
+reload keeps the previous configuration, interfaces and bindings; fixing an
+imported file retries the complete pending configuration.
+
+An edit imported only by a surface reloads that surface. It does not execute
+`desktop.lua` or recreate the other panel. Reloading a surface without bindings
+also preserves a pending global shortcut sequence. Creating the default config
+while the desktop is running reloads the desktop; removing it restores the
+bundled entry point.
+
+The watcher follows file replacements made by editors. Candidates have their
+own Lua globals in the existing LuaJIT VM and remain hidden while being built.
+Success replaces the previous objects, callbacks and animations. A script or
+property error leaves the current UI visible.
 Reloading replaces local UI state; it does not reconcile individual objects.
 Errors include a Lua stack trace. An invalid initial script still prevents
 startup, since no previous UI exists to retain.
@@ -322,7 +360,7 @@ launching it during development. The backend retries when permission is granted;
 it does not change system permissions. `shortcuts.state()` exposes `available`,
 `error`, `prefix` and `pending`.
 
-The default topbar loads `topbar.shortcuts` and uses `Ctrl+B`, followed by:
+The default `desktop.lua` loads `shortcuts` and uses `Ctrl+B`, followed by:
 
 | Suffix | Action |
 | --- | --- |
@@ -338,21 +376,23 @@ workspaces/tabs, palettes and terminal rendering are not connected to this keyma
 Tab selection currently changes the desktop's selected tab, as with a click on
 the topbar; it does not change a separate GUI client's focus.
 
-The desktop keymap belongs to its Lua UI; it does not import the GUI's
-`client.prefix` or `client.keybindings`. To use `Ctrl+S`, add
-`require("telar.shortcuts").set_prefix("ctrl+s")` to `desktop.lua` before loading
-`topbar`. A custom topbar can omit `topbar.shortcuts` and define its own map:
+The desktop keymap does not import the GUI's `client.prefix` or `client.keybindings`.
+Global bindings belong in `desktop.lua`, independently of any surface. To use
+`Ctrl+S`, call `require("telar.shortcuts").set_prefix("ctrl+s")` there before
+registering bindings. Each surface inherits that prefix and can register its own
+bindings for UI actions. Omit `require("shortcuts")()` to define a complete custom
+global map. For example:
 
 ```lua
 local shortcuts = require("telar.shortcuts")
 shortcuts.set_prefix("ctrl+s")
 
 local unbind = shortcuts.bind({ "g", "t" }, function()
-  -- Run an action, focus a UI element, or call telar.runtime/telar.desktop.
+  -- Dispatch work through telar.runtime or telar.desktop.
 end)
 
 shortcuts.bind_global("cmd+shift+p", function()
-  -- Open a custom Lua palette without the prefix.
+  -- Run a global action without the prefix.
 end)
 ```
 
@@ -363,13 +403,14 @@ Command/Super. Arbitrary unprefixed multi-key sequences are intentionally reject
 replaying buffered input into a different application is not implemented.
 
 The prefix waits without a timeout. Escape, an invalid suffix, a mouse press,
-switching applications or Spaces, or a successful UI reload cancels it. A held
+switching applications or Spaces, or replacing bindings cancels it. A held
 key invokes its callback once. The router retains intercepted key releases
 across reloads and focus changes. Duplicate or ambiguous bindings are rejected;
 the whole desktop holds at most 256 bindings, with one shared prefix across surfaces.
 
-Each UI generation owns its callbacks. A successful reload atomically replaces its
-bindings; a rejected replacement leaves the previous map active. Queued actions
+Each environment owns its callbacks. A configuration reload validates and replaces
+all affected groups together, including when the shared prefix changes. A rejected
+replacement leaves the previous map active. Queued actions
 from an obsolete generation or focus context are discarded. Native capture only
 queues action IDs in `App`'s event queue. Lua runs when `App` drains that queue,
 outside the macOS event tap callback.
@@ -427,6 +468,7 @@ Fullscreen Spaces are excluded from this reconciliation.
 
 | API | Behavior |
 | --- | --- |
+| `desktop.configure_surface(name, settings)` | Configure `topbar` or `sidebar` with `module` and `options`. Available only while loading the global configuration. |
 | `desktop.state()` | Snapshot with `available`, `accessibility`, `displays`, `spaces`, optional `focused_space`, `pending_space`, and `error`. |
 | `desktop.on_change(callback)` | Subscribe to changed desktop snapshots; returns an unsubscribe function and delivers the current state on mount. |
 | `desktop.activate_space(id)` | Request activation of an existing Space. Completion is confirmed from macOS; failures appear in `error`. |
@@ -438,7 +480,7 @@ Display entries contain `id`, `uuid` and global screen bounds (`x`, `y`,
 `width`, `height`). Space entries contain `id`, `uuid`, `display`, `index`,
 `visible`, `focused`, `fullscreen`, `managed` and optional `workspace`. Several
 displays can have a visible Space simultaneously; `focused` identifies the active one.
-The current implementation hosts one bar on the initial main screen, following
+The current implementation hosts the topbar and sidebar on the initial main screen, following
 the globally focused Space, including when focus moves to another display.
 
 `require("telar.runtime")` exposes:

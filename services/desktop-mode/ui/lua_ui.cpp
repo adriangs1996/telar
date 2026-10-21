@@ -1,4 +1,5 @@
 #include "lua_ui.hpp"
+#include "lua_script.hpp"
 #include "file_watch.hpp"
 #include "lua_environment.hpp"
 #include "lua_io.hpp"
@@ -36,6 +37,7 @@ namespace {
   constexpr auto object_metatable = "telar.ui.object";
   constexpr int max_arguments = 4;
   constexpr int max_table_depth = 16;
+  constexpr std::size_t max_option_array_size = 4096;
   constexpr int error_capacity = 1024;
   constexpr auto maximum_event_identifier =
       (std::uint64_t{1} << std::numeric_limits<double>::digits) - 1;
@@ -50,6 +52,8 @@ namespace {
     focus,
     input_method,
     surface_state,
+    surface_config,
+    configure_surface,
     animate,
     runtime_state,
     runtime_on,
@@ -78,6 +82,32 @@ namespace {
   };
 
   class Generation;
+
+  struct EnvironmentSettings {
+    QString directory;
+    QVariantMap surface;
+    QString prefix;
+  };
+
+  bool needsSurface(Operation operation) {
+    switch (operation) {
+    case Operation::create:
+    case Operation::get:
+    case Operation::set:
+    case Operation::append:
+    case Operation::on:
+    case Operation::off:
+    case Operation::focus:
+    case Operation::input_method:
+    case Operation::surface_state:
+    case Operation::surface_config:
+    case Operation::animate:
+    case Operation::alias:
+      return true;
+    default:
+      return false;
+    }
+  }
 
   struct Handle {
     Generation *generation;
@@ -262,6 +292,51 @@ namespace {
         return luaL_error(state, "UI property tables are nested too deeply"), false;
       }
 
+      const auto count = lua_objlen(state, index);
+
+      if (call.operation == Operation::configure_surface && count > 0) {
+        if (count > max_option_array_size) {
+          return luaL_error(state, "Surface option array is too large"), false;
+        }
+
+        try {
+          value = QVariantList(static_cast<qsizetype>(count));
+        } catch (...) {
+          call.error = std::current_exception();
+          return false;
+        }
+
+        std::size_t entries = 0;
+        lua_pushnil(state);
+
+        while (lua_next(state, index)) {
+          const auto key = lua_tonumber(state, -2);
+
+          if (lua_type(state, -2) != LUA_TNUMBER || !std::isfinite(key) || key < 1 || key > count ||
+              std::floor(key) != key) {
+            return luaL_error(state,
+                              "Surface option arrays must be dense and contain only numeric keys"),
+                   false;
+          }
+
+          auto &element =
+              (*static_cast<QVariantList *>(value.data()))[static_cast<qsizetype>(key) - 1];
+
+          if (!decodeValue(state, -1, element, call, depth + 1)) {
+            return false;
+          }
+
+          ++entries;
+          lua_pop(state, 1);
+        }
+
+        if (entries != count) {
+          return luaL_error(state, "Surface option arrays cannot contain holes"), false;
+        }
+
+        return true;
+      }
+
       try {
         value = QVariantMap{};
       } catch (...) {
@@ -412,30 +487,39 @@ namespace {
   class Generation final : public QObject {
   public:
     Generation(ui::Services &services,
-               QuickSurface &surface,
-               const QString &directory,
+               QuickSurface *surface,
+               const EnvironmentSettings &settings,
                std::function<void(const QString &)> observe_module)
         : surface_(surface),
+          surface_config_(settings.surface),
           environment_(services.vm),
-          root_(std::make_unique<QQuickItem>()),
           lifetime_(std::make_unique<QObject>()) {
-      root_->setVisible(false);
-      root_->setSize(surface_.window().size());
+      if (surface_) {
+        root_ = std::make_unique<QQuickItem>();
+        root_->setVisible(false);
+        root_->setSize(surface_->window().size());
 
-      QObject::connect(&surface_.window(), &QQuickWindow::widthChanged, lifetime_.get(), [this] {
-        root_->setWidth(surface_.window().width());
-      });
+        QObject::connect(&surface_->window(), &QQuickWindow::widthChanged, lifetime_.get(), [this] {
+          root_->setWidth(surface_->window().width());
+        });
 
-      QObject::connect(&surface_.window(), &QQuickWindow::heightChanged, lifetime_.get(), [this] {
-        root_->setHeight(surface_.window().height());
-      });
+        QObject::connect(&surface_->window(),
+                         &QQuickWindow::heightChanged,
+                         lifetime_.get(),
+                         [this] {
+                           root_->setHeight(surface_->window().height());
+                         });
 
-      events_ = std::make_unique<ui::SurfaceEvents>(surface_, *root_);
+        events_ = std::make_unique<ui::SurfaceEvents>(*surface_, *root_);
+      }
+
       runtime_ =
           std::make_unique<ui::RuntimeBinding>(environment_, services.runtime, services.desktop);
       shortcuts_ = std::make_unique<ui::ShortcutBinding>(environment_, services.shortcuts);
+      shortcuts_->setPrefix(settings.prefix);
       installApi();
-      io_ = std::make_unique<ui::LuaIo>(environment_, directory, std::move(observe_module));
+      io_ =
+          std::make_unique<ui::LuaIo>(environment_, settings.directory, std::move(observe_module));
     }
 
     ~Generation() override {
@@ -467,14 +551,25 @@ namespace {
       return io_->modulePaths();
     }
 
-    void activateShortcuts(const Generation *replacing) {
-      shortcuts_->activate(replacing ? replacing->shortcuts_.get() : nullptr);
+    ui::ShortcutBinding::Activation shortcutActivation(const Generation *replacing) {
+      return {shortcuts_.get(), replacing ? replacing->shortcuts_.get() : nullptr};
+    }
+
+    const QVariantMap &settings() const {
+      return configured_surfaces_;
+    }
+
+    QString prefix() const {
+      return shortcuts_->state().value("prefix").toString();
     }
 
     void activate() {
-      root_->setParentItem(surface_.window().contentItem());
       active_ = true;
-      root_->setVisible(true);
+
+      if (root_) {
+        root_->setParentItem(surface_->window().contentItem());
+        root_->setVisible(true);
+      }
 
       for (const auto &animation : animations_) {
         if (animation) {
@@ -484,7 +579,10 @@ namespace {
 
       io_->activate();
       runtime_->activate();
-      events_->activate();
+
+      if (events_) {
+        events_->activate();
+      }
 
       if (pending_focus_) {
         try {
@@ -498,11 +596,20 @@ namespace {
     void deactivate() {
       shortcuts_->deactivate();
       runtime_->deactivate();
-      events_->deactivate();
+
+      if (events_) {
+        events_->deactivate();
+      }
+
       active_ = false;
     }
 
     int call(Operation operation, int arguments) {
+      if (!surface_ && needsSurface(operation)) {
+        throw std::runtime_error(
+            "Create UI inside a surface module; desktop.lua configures the desktop");
+      }
+
       Call request{environment_, lifetime_.get(), operation, arguments};
       environment_.withState(decodeCall, &request);
 
@@ -582,6 +689,11 @@ namespace {
         break;
       case Operation::surface_state:
         return encode(events_->state());
+      case Operation::surface_config:
+        return encode(surface_config_);
+      case Operation::configure_surface:
+        configureSurface(stringValue(values[0]), mapValue(values[1]));
+        break;
       case Operation::runtime_state:
         return encode(runtime_->state());
       case Operation::desktop_state:
@@ -659,7 +771,9 @@ namespace {
     }
 
   private:
-    QuickSurface &surface_;
+    QuickSurface *surface_;
+    QVariantMap surface_config_;
+    QVariantMap configured_surfaces_;
     lua::Environment environment_;
     std::unique_ptr<QQuickItem> root_;
     std::unique_ptr<QObject> lifetime_;
@@ -672,6 +786,34 @@ namespace {
     QHash<QPair<QObject *, QString>, PropertyTarget> aliases_;
     QHash<QPair<QObject *, QString>, QPointer<QPropertyAnimation>> animations_;
     bool active_ = false;
+
+    void configureSurface(const QString &name, const QVariantMap &settings) {
+      if (surface_ || active_) {
+        throw std::runtime_error("configure_surface is only available while loading desktop.lua");
+      }
+
+      if (name != QStringLiteral("topbar") && name != QStringLiteral("sidebar")) {
+        throw std::runtime_error("Unknown desktop surface");
+      }
+
+      for (auto it = settings.cbegin(); it != settings.cend(); ++it) {
+        if (it.key() != QStringLiteral("module") && it.key() != QStringLiteral("options")) {
+          throw std::runtime_error("Surface configuration accepts module and options");
+        }
+      }
+
+      const auto module = stringValue(settings.value("module", name));
+
+      if (module.isEmpty() || module.contains(QChar::Null)) {
+        throw std::runtime_error("Surface module must be a non-empty name without NUL bytes");
+      }
+
+      const auto options =
+          settings.contains("options") ? mapValue(settings.value("options")) : QVariantMap{};
+      configured_surfaces_.insert(
+          name,
+          QVariantMap{{"name", name}, {"module", module}, {"options", options}});
+    }
 
     struct Push {
       Generation *generation;
@@ -742,6 +884,8 @@ namespace {
                 {"focus", Operation::focus},
                 {"input_method", Operation::input_method},
                 {"surface_state", Operation::surface_state},
+                {"surface_config", Operation::surface_config},
+                {"configure_surface", Operation::configure_surface},
                 {"runtime_state", Operation::runtime_state},
                 {"runtime_on", Operation::runtime_on},
                 {"runtime_off", Operation::runtime_off},
@@ -778,8 +922,12 @@ namespace {
             lua_pop(state, 1);
             request->object = request->generation->root_.get();
 
-            if (!pushHandle(state, *request)) {
-              return 0;
+            if (request->object) {
+              if (!pushHandle(state, *request)) {
+                return 0;
+              }
+            } else {
+              lua_pushnil(state);
             }
 
             lua_setfield(state, 2, "root");
@@ -890,7 +1038,7 @@ namespace {
                     const QString &type,
                     const QVariantMap &properties,
                     QObject *parent) {
-      auto object = surface_.createObject(module, type, {});
+      auto object = surface_->createObject(module, type, {});
 
       if (qobject_cast<QWindow *>(object.get())) {
         throw std::runtime_error(
@@ -950,7 +1098,7 @@ namespace {
     }
 
     QQmlProperty checkedProperty(const PropertyTarget &target) const {
-      QQmlProperty property(target.object.data(), target.name, &surface_.engine());
+      QQmlProperty property(target.object.data(), target.name, &surface_->engine());
 
       if (target.object.isNull() || !property.isProperty()) {
         throw std::runtime_error(
@@ -1263,8 +1411,9 @@ namespace {
 namespace ui {
   struct LuaUi::Impl {
     ui::Services &services;
-    QuickSurface &surface;
+    QuickSurface *surface;
     std::unique_ptr<Generation> active;
+    std::unique_ptr<Generation> prepared;
     QSet<QString> attempted_modules;
     FileWatch module_watcher;
     std::function<void()> reload_handler;
@@ -1280,7 +1429,7 @@ namespace ui {
     }
   };
 
-  LuaUi::LuaUi(ui::Services &services, QuickSurface &surface)
+  LuaUi::LuaUi(ui::Services &services, QuickSurface *surface)
       : impl_(std::make_unique<Impl>(services, surface)) {
     impl_->module_watcher.setCallback([this](const QStringList &) {
       if (impl_->reload_handler) {
@@ -1291,36 +1440,85 @@ namespace ui {
 
   LuaUi::~LuaUi() {
     impl_->reload_handler = {};
+    impl_->prepared.reset();
     impl_->active.reset();
   }
 
-  void LuaUi::reload(std::string_view api_source,
-                     std::string_view source,
-                     std::string_view chunk_name,
-                     const QString &directory) {
+  void LuaUi::prepare(std::string_view source,
+                      std::string_view chunk_name,
+                      const QString &directory,
+                      const QVariantMap &surface_config,
+                      const QString &prefix) {
+    impl_->prepared.reset();
     impl_->attempted_modules.clear();
-    auto candidate = std::make_unique<Generation>(impl_->services,
-                                                  impl_->surface,
-                                                  directory,
-                                                  [this](const QString &path) {
-                                                    impl_->attempted_modules.insert(path);
-                                                    impl_->refreshModuleWatches();
-                                                  });
+    auto candidate =
+        std::make_unique<Generation>(impl_->services,
+                                     impl_->surface,
+                                     EnvironmentSettings{directory, surface_config, prefix},
+                                     [this](const QString &path) {
+                                       impl_->attempted_modules.insert(path);
+                                       impl_->refreshModuleWatches();
+                                     });
 
-    candidate->execute(api_source, "@telar/ui/api.lua");
+    const auto api_source = readScript(QStringLiteral(":/telar/ui/api.lua"));
+    candidate->execute(scriptView(api_source), "@telar/ui/api.lua");
     candidate->execute(source, chunk_name);
+    impl_->prepared = std::move(candidate);
+  }
 
-    // Validate and atomically replace bindings before dismantling the working UI.
-    candidate->activateShortcuts(impl_->active.get());
+  void LuaUi::commit(std::span<LuaUi *const> environments) {
+    std::vector<ShortcutBinding::Activation> bindings;
+    bindings.reserve(environments.size());
 
-    if (impl_->active) {
-      impl_->active->deactivate();
+    for (auto *environment : environments) {
+      auto &impl = *environment->impl_;
+
+      if (!impl.prepared) {
+        throw std::runtime_error("No prepared Lua generation to commit");
+      }
+
+      bindings.push_back(impl.prepared->shortcutActivation(impl.active.get()));
     }
 
-    candidate->activate();
-    impl_->active.swap(candidate);
-    impl_->attempted_modules.clear();
-    impl_->refreshModuleWatches();
+    // Validate the complete new keymap before changing any live environment.
+    ShortcutBinding::activate(bindings);
+
+    for (auto *environment : environments) {
+      auto &impl = *environment->impl_;
+
+      if (impl.active) {
+        impl.active->deactivate();
+      }
+    }
+
+    for (auto *environment : environments) {
+      auto &impl = *environment->impl_;
+      impl.active.swap(impl.prepared);
+      impl.active->activate();
+      impl.prepared.reset();
+      impl.attempted_modules.clear();
+      impl.refreshModuleWatches();
+    }
+  }
+
+  void LuaUi::discard() {
+    impl_->prepared.reset();
+  }
+
+  QVariantMap LuaUi::preparedSettings() const {
+    if (!impl_->prepared) {
+      throw std::runtime_error("No prepared desktop configuration");
+    }
+
+    return impl_->prepared->settings();
+  }
+
+  QString LuaUi::preparedPrefix() const {
+    if (!impl_->prepared) {
+      throw std::runtime_error("No prepared desktop configuration");
+    }
+
+    return impl_->prepared->prefix();
   }
 
   void LuaUi::setReloadHandler(std::function<void()> handler) {

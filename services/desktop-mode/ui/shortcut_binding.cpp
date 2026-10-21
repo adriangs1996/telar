@@ -47,13 +47,33 @@ namespace ui {
     }
   }
 
-  void ShortcutBinding::activate(const ShortcutBinding *replacing) {
-    // Reloading a surface without shortcuts must not reset another surface's pending prefix.
-    if (!entries_.empty() || (replacing && !replacing->entries_.empty())) {
-      shortcuts_.install(this, prefix_, bindings(prefix_, entries_), replacing);
+  void ShortcutBinding::activate(std::span<const Activation> activations) {
+    if (activations.empty()) {
+      return;
     }
 
-    active_ = true;
+    auto &shortcuts = activations.front().candidate->shortcuts_;
+    std::vector<Shortcuts::Replacement> replacements;
+    replacements.reserve(activations.size());
+
+    for (const auto &activation : activations) {
+      auto &candidate = *activation.candidate;
+
+      if (&candidate.shortcuts_ != &shortcuts) {
+        throw std::runtime_error("UI generations must share the shortcut service");
+      }
+
+      replacements.push_back({&candidate,
+                              activation.previous,
+                              candidate.prefix_,
+                              candidate.bindings(candidate.prefix_, candidate.entries_)});
+    }
+
+    shortcuts.replace(replacements);
+
+    for (const auto &activation : activations) {
+      activation.candidate->active_ = true;
+    }
   }
 
   void ShortcutBinding::deactivate() {

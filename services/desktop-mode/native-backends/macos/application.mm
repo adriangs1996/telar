@@ -3,6 +3,7 @@
 #include "../shortcuts.hpp"
 #include "../../ui/services.hpp"
 #include "../../ui/desktop_control.hpp"
+#include "../../ui/desktop_ui.hpp"
 #include "surface_panel.hpp"
 #import <AppKit/AppKit.h>
 #include <CoreFoundation/CFBase.h>
@@ -148,20 +149,32 @@ int runApplication(ApplicationHost &host,
 
     host.start();
     host.update();
-    TelarSurfacePanel *topbar = [[TelarSurfacePanel alloc] initWithScreen:screen
-                                                                     kind:ui::SurfaceKind::topbar
-                                                                 services:services];
 
-    if (!topbar) {
+    ui::DesktopUi desktop_ui(services);
+
+    struct Panels {
+      TelarSurfacePanel *topbar = nil;
+      TelarSurfacePanel *sidebar = nil;
+
+      ~Panels() {
+        [sidebar close];
+        [topbar close];
+      }
+    } panels;
+
+    panels.topbar = [[TelarSurfacePanel alloc] initWithScreen:screen
+                                                         kind:ui::SurfaceKind::topbar
+                                                      desktop:desktop_ui];
+
+    if (!panels.topbar) {
       return EXIT_FAILURE;
     }
 
-    TelarSurfacePanel *sidebar = [[TelarSurfacePanel alloc] initWithScreen:screen
-                                                                      kind:ui::SurfaceKind::sidebar
-                                                                  services:services];
+    panels.sidebar = [[TelarSurfacePanel alloc] initWithScreen:screen
+                                                          kind:ui::SurfaceKind::sidebar
+                                                       desktop:desktop_ui];
 
-    if (!sidebar) {
-      [topbar close];
+    if (!panels.sidebar) {
       return EXIT_FAILURE;
     }
 
@@ -171,20 +184,16 @@ int runApplication(ApplicationHost &host,
         [[TelarApplicationController alloc] initWithHost:&host state:&state];
 
     if (!controller) {
-      [sidebar close];
-      [topbar close];
       return EXIT_FAILURE;
     }
 
     if (host.update()) {
-      [topbar orderFrontRegardless];
-      [sidebar orderFrontRegardless];
+      [panels.topbar orderFrontRegardless];
+      [panels.sidebar orderFrontRegardless];
       result = qt_application.exec();
     }
 
     [controller removeStatusItem];
-    [sidebar close];
-    [topbar close];
   }
 
   return result;
