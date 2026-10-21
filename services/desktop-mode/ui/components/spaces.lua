@@ -13,9 +13,10 @@ function Spaces.new(options)
   self.add = ui.create("QtQuick", "Rectangle", { color = "#2b2336", radius = 6 }, self.root)
   self.add_label =
     ui.text({ parent = self.add, text = "+", color = "#c4a7e7", ["font.pixelSize"] = 18 })
+  self.add.visible = self.create ~= nil
 
   ui.on(self.add, "pointer_up", function(event)
-    if event.button == "left" and not self.busy then
+    if event.button == "left" and self.create and not self.busy then
       self.create()
       event:stop_propagation()
     end
@@ -110,7 +111,7 @@ function Spaces:update(state)
     self.views[index].panel.visible = false
   end
 
-  self.total_width = self.spaces_width + 34
+  self.total_width = self.spaces_width + (self.create and 34 or 0)
   self.add.opacity = self.busy and 0.4 or 1
   self:arrange()
 end

@@ -1,7 +1,8 @@
 #include "desktop_session.hpp"
 #include "native-backends/application.hpp"
 #include "runtime_session.hpp"
-#include "support/spaces_bridge.hpp"
+#include "shortcuts.hpp"
+#include "support/spaces_probe.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include "telar_client/telar_client.hpp"
 #include <QDir>
@@ -44,7 +45,7 @@ namespace {
     std::fflush(stdout);
   }
 
-  // Nested Qt loops keep runtime delivery and the experimental native bridge polling alive.
+  // Nested Qt loops keep runtime delivery and native operation confirmation alive.
   void await(const std::function<bool()> &condition,
              const char *description,
              std::chrono::milliseconds timeout = step_timeout) {
@@ -359,16 +360,32 @@ namespace {
     EventQueue queue{notifier};
     RuntimeSession runtime{transport};
     DesktopSession desktop;
-    AppContext context{transport, queue, vm, runtime, desktop};
+    Shortcuts shortcuts;
+    bool hold_creation_confirmation = false;
+    AppContext context{transport, queue, vm, runtime, desktop, shortcuts};
     App application{context};
     notifier.host = &application;
     transport.handshake();
     transport.send(telar::RequestRuntimeState{1, false});
     auto reader = RuntimeReceiverWorker::init(context);
-    application.start();
+    // Delay delivery of a real creation result to exercise a concurrent workspace exit.
+    desktop.start(
+        [&](DesktopState state) {
+          if (hold_creation_confirmation && state.completed_operation &&
+              state.completed_operation->operation.kind == SpaceOperation::Kind::create &&
+              state.completed_operation->succeeded) {
+            return false;
+          }
+
+          return queue.push(DesktopUpdated{std::move(state)});
+        },
+        [&](DesktopCommand command) {
+          return queue.push(DesktopRequested{std::move(command)});
+        });
     std::set<std::string> baseline;
     std::vector<std::uint64_t> original_visible;
     std::uint64_t original_focus = 0;
+    std::uint64_t manual_space = 0;
     std::exception_ptr failure;
 
     const auto check = [&] {
@@ -435,12 +452,11 @@ namespace {
         }
       }
 
-      require(desktop.state().accessibility,
-              "The reused DesktopSession currently requires Accessibility; the experimental "
-              "bridge itself does not. Enable it for spaces_dbg or its terminal host");
       require(original_focus != 0, "The initial focused Space is unavailable");
       require(runtime.state().workspaces.empty(), "The isolated runtime must start empty");
-      pass("Isolated runtime and experimental SkyLight bridge are ready");
+      std::printf("[INFO] Accessibility granted: %s\n",
+                  desktop.state().accessibility ? "yes" : "no");
+      pass("Isolated runtime and production SkyLight backend are ready");
 
       Driver driver{sandbox.socket};
       const auto first_path = sandbox.workspacePath("first");
@@ -534,7 +550,7 @@ namespace {
       settle(0, 0);
       pass("A natural process exit also closes the final workspace and its Space");
 
-      probe.holdCreationConfirmation(true);
+      hold_creation_confirmation = true;
       const auto rapid = driver.createWorkspace(sandbox.workspacePath("rapid"));
       await(
           [&] {
@@ -550,14 +566,43 @@ namespace {
             return runtime.state().workspaces.empty();
           },
           "removing the workspace before acknowledging its Space");
-      probe.holdCreationConfirmation(false);
+      hold_creation_confirmation = false;
       settle(0, 0);
       pass("Closing a workspace before Space creation is confirmed leaves no orphan Space");
+
+      const auto focused =
+          std::ranges::find(desktop.state().spaces, original_focus, &DesktopSpace::id);
+      require(focused != desktop.state().spaces.end(), "The original Space disappeared");
+      const auto other = std::ranges::find_if(desktop.state().displays, [&](const auto &display) {
+        return display.id != focused->display;
+      });
+
+      if (other != desktop.state().displays.end()) {
+        const auto display = other->id;
+        const auto request = desktop.createSpace(display, std::nullopt);
+        await(
+            [&] {
+              check();
+              return desktop.state().completed_operation &&
+                     desktop.state().completed_operation->operation.id == request;
+            },
+            "creating a Space on the requested secondary display");
+        manual_space = desktop.state().completed_operation->operation.space;
+        const auto created =
+            std::ranges::find(desktop.state().spaces, manual_space, &DesktopSpace::id);
+        require(created != desktop.state().spaces.end() && created->display == display &&
+                    created->managed && !baseline.contains(created->uuid),
+                "The new Space was not placed on the requested secondary display");
+        desktop.removeSpace(manual_space);
+        settle(0, 0);
+        manual_space = 0;
+        pass("Creation on a secondary display confirms placement and removes only the new Space");
+      }
     } catch (...) {
       failure = std::current_exception();
     }
 
-    probe.holdCreationConfirmation(false);
+    hold_creation_confirmation = false;
 
     // Stop metadata delivery before forcing empty reconciliation. Cleanup never deletes baseline Spaces.
     reader.stop();
@@ -565,6 +610,16 @@ namespace {
     desktop.reconcile({});
 
     try {
+      if (manual_space) {
+        const auto found =
+            std::ranges::find(desktop.state().spaces, manual_space, &DesktopSpace::id);
+
+        if (found != desktop.state().spaces.end() && found->managed &&
+            !baseline.contains(found->uuid)) {
+          desktop.removeSpace(manual_space);
+        }
+      }
+
       await(
           [&] {
             const auto &state = desktop.state();

@@ -1,4 +1,6 @@
 dev_runtime_dir := justfile_directory() / ".zig-out/dev"
+desktop_runtime_dir := justfile_directory() / ".zig-out/desktop-dev"
+desktop_socket := if path_exists(desktop_runtime_dir / "runtime.sock.desktop-clone.json") == "true" { desktop_runtime_dir / "runtime.sock" } else { dev_runtime_dir / "runtime.sock" }
 
 # Show the available commands.
 default:
@@ -39,10 +41,30 @@ app:
 
 # Build and run the C++ desktop client against an existing runtime in Debug mode.
 [working-directory: "services/desktop-mode"]
-desktop socket=(dev_runtime_dir / "runtime.sock"):
+desktop socket=desktop_socket:
     cmake --preset debug
     cmake --build --preset debug --target telar-desktop
     TELAR_DESKTOP_UI_DIR="${TELAR_DESKTOP_UI_DIR:-$PWD/ui}" ./out/debug/telar-desktop "{{ socket }}"
+
+# Seed a separate desktop runtime once, using a checkpoint and the socket of its source runtime.
+desktop-runtime $source="" $session="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p -m 700 "{{ desktop_runtime_dir }}"
+    set --
+    if [[ -n "$source" || -n "$session" ]]; then
+        set -- --clone-from "$source" --clone-session "$session"
+    elif [[ ! -f "{{ desktop_runtime_dir }}/runtime.sock.desktop-clone.json" || ! -f "{{ desktop_runtime_dir }}/session.ckpt" ]]; then
+        echo 'First use: just desktop-runtime SOURCE_SOCKET SOURCE_CHECKPOINT' >&2
+        exit 1
+    fi
+    export TELAR_SOCKET="{{ desktop_runtime_dir }}/runtime.sock"
+    export TELAR_HISTORY="{{ desktop_runtime_dir }}/history.db"
+    exec zig build run -- server --no-config "$@"
+
+# Run Desktop against the cloned runtime started by desktop-runtime.
+desktop-dev:
+    just desktop "{{ desktop_runtime_dir }}/runtime.sock"
 
 # Check the desktop modules and development programs and generate the clangd compilation database.
 [working-directory: "services/desktop-mode"]

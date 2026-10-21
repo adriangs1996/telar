@@ -2,17 +2,20 @@
 
 #include "app_state.hpp"
 #include "native-backends/desktop.hpp"
+#include "desktop_registry.hpp"
 #include <map>
 
 // Application-thread projection. Native observations and Lua requests enter App through its queue.
 class DesktopSession final {
 public:
+  DesktopSession() = default;
+  explicit DesktopSession(std::string runtime_socket);
   using Commands = std::function<bool(DesktopCommand)>;
 
   void start(NativeDesktop::Sink observations, Commands commands);
   void stop();
   void apply(DesktopState state);
-  void reconcile(const std::vector<WorkspaceSummary> &workspaces);
+  void reconcile(const std::vector<WorkspaceSummary> &workspaces, bool ready = true);
   void execute(const DesktopCommand &command);
   const DesktopState &state() const noexcept;
   std::optional<std::uint64_t> focusedWorkspace() const;
@@ -42,9 +45,14 @@ private:
   std::map<std::string, std::uint64_t> managed_;
   std::uint64_t next_request_ = 1;
   bool automatic_paused_ = false;
+  bool runtime_ready_ = false;
+  bool associations_restored_ = false;
+  std::string persistence_error_;
+  std::optional<DesktopRegistry> registry_;
 
   void associate();
   void synchronizeLifecycle();
+  void synchronizeOwnedSpaces();
   void beginOperation(Pending pending);
   void completeOperation(const SpaceCompletion &completion);
   std::uint32_t focusedDisplay() const;

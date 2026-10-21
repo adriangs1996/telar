@@ -268,6 +268,7 @@ struct RuntimeSession::Impl {
       switch (static_cast<telar::ServerTag>(payload.front())) {
       case telar::ServerTag::workspace_list: {
         const auto reply = decode<telar::WorkspaceList>(payload);
+        state.workspaces_ready = true;
         state.workspaces_revision = reply.revision;
         state.workspaces.clear();
 

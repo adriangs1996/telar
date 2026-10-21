@@ -20,6 +20,7 @@ struct RuntimeTab {
 
 struct RuntimeState {
   bool connected = false;
+  bool workspaces_ready = false;
   std::optional<RuntimeWorkspace> workspace;
   std::string workspace_name;
   std::uint64_t active_tab = 0;

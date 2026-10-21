@@ -7,13 +7,14 @@
 #include "telar_client/telar.hpp"
 #include "runtime_session.hpp"
 #include "desktop_session.hpp"
+#include "shortcuts.hpp"
 #include "ui/services.hpp"
 
 import app;
 import app_context;
 import runtime_receiver_worker;
 
-int main(int argc, const char **argv) {
+static int runDesktop(int argc, const char **argv) {
   if (argc != 2) {
     std::fprintf(stderr, "Usage: %s SOCKET_PATH\n", argv[0]);
     return 1;
@@ -25,12 +26,14 @@ int main(int argc, const char **argv) {
 
   auto client = telar::Client::init(argv[1]);
   RuntimeSession runtime{client};
-  DesktopSession desktop;
+  DesktopSession desktop{argv[1]};
+  Shortcuts shortcuts;
   AppContext context{.client = client,
                      .input_queue = input_queue,
                      .lua_vm = lua_vm,
                      .runtime = runtime,
-                     .desktop = desktop};
+                     .desktop = desktop,
+                     .shortcuts = shortcuts};
   App app(context);
 
   try {
@@ -45,7 +48,7 @@ int main(int argc, const char **argv) {
     });
 
     auto runtime_reader = RuntimeReceiverWorker::init(context);
-    ui::Services services{lua_vm, runtime, desktop};
+    ui::Services services{lua_vm, runtime, desktop, shortcuts};
     const int application_result = runApplication(app, wakeup, app.state(), services);
     runtime_reader.stop();
 
@@ -61,4 +64,13 @@ int main(int argc, const char **argv) {
   client.deinit();
 
   return app.exit_code;
+}
+
+int main(int argc, const char **argv) {
+  try {
+    return runDesktop(argc, argv);
+  } catch (const std::exception &error) {
+    std::fprintf(stderr, "Telar Desktop: %s\n", error.what());
+    return EXIT_FAILURE;
+  }
 }

@@ -1,5 +1,8 @@
 #include "../application.hpp"
 #include "../../app_state.hpp"
+#include "../shortcuts.hpp"
+#include "../../ui/services.hpp"
+#include "../../ui/desktop_control.hpp"
 #include "topbar.hpp"
 #import <AppKit/AppKit.h>
 #include <CoreFoundation/CFBase.h>
@@ -126,6 +129,8 @@ int runApplication(ApplicationHost &host,
       return EXIT_FAILURE;
     }
 
+    DesktopControl control(host, services.desktop, services.runtime);
+
     auto &signal = *wakeup.impl;
     signal.host = &host;
     CFRunLoopAddSource(signal.loop, signal.source, kCFRunLoopCommonModes);
@@ -148,6 +153,8 @@ int runApplication(ApplicationHost &host,
     if (!topbar) {
       return EXIT_FAILURE;
     }
+
+    NativeShortcuts shortcuts(services.shortcuts);
 
     TelarApplicationController *controller =
         [[TelarApplicationController alloc] initWithHost:&host state:&state];

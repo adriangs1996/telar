@@ -2,6 +2,7 @@ module;
 #include "native-backends/application.hpp"
 #include "runtime_session.hpp" // IWYU pragma: export
 #include "desktop_session.hpp" // IWYU pragma: export
+#include "shortcuts.hpp"       // IWYU pragma: export
 #include <cstdint>
 #include <utility>
 #include <variant>
@@ -26,6 +27,10 @@ export template <Notifier INotifier> struct App final : ApplicationHost {
   }
 
   void start() override {
+    context.shortcuts.setSink([this](Shortcuts::Request request) {
+      return context.input_queue.push(std::move(request));
+    });
+
     context.desktop.start(
         [this](DesktopState state) {
           return context.input_queue.push(DesktopUpdated{std::move(state)});
@@ -36,6 +41,7 @@ export template <Notifier INotifier> struct App final : ApplicationHost {
   }
 
   void stop() override {
+    context.shortcuts.setSink({});
     context.desktop.stop();
   }
 
@@ -68,16 +74,25 @@ private:
                      app_state.workspaces_revision = event.state.workspaces_revision;
                      app_state.workspaces = event.state.workspaces;
                      context.runtime.apply(std::move(event.state));
-                     context.desktop.reconcile(app_state.workspaces);
+                     context.desktop.reconcile(app_state.workspaces,
+                                               context.runtime.state().connected &&
+                                                   context.runtime.state().workspaces_ready);
                      synchronizeWorkspace();
                    },
                    [&](DesktopUpdated &event) {
+                     if (context.desktop.state().focused_space != event.state.focused_space) {
+                       context.shortcuts.cancel();
+                     }
+
                      context.desktop.apply(std::move(event.state));
                      synchronizeWorkspace();
                    },
                    [&](DesktopRequested &event) {
                      context.desktop.execute(event.command);
                      synchronizeWorkspace();
+                   },
+                   [&](Shortcuts::Request &event) {
+                     context.shortcuts.dispatch(event);
                    },
                },
                input);

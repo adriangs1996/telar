@@ -12,7 +12,6 @@ public:
   bool windowVisible(std::uint32_t window) const;
   bool windowInSpace(std::uint32_t window, std::uint64_t space) const;
   unsigned missionControlEntries() const;
-  void holdCreationConfirmation(bool hold);
 
 private:
   struct Impl;

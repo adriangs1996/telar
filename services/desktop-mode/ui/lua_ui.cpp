@@ -5,6 +5,7 @@
 #include "lua_value.hpp"
 #include "quick_surface.hpp"
 #include "runtime_binding.hpp"
+#include "shortcut_binding.hpp"
 #include "services.hpp"
 #include "surface_events.hpp"
 #include <QColor>
@@ -62,6 +63,10 @@ namespace {
     desktop_bind,
     desktop_create,
     desktop_remove,
+    shortcut_prefix,
+    shortcut_bind,
+    shortcut_unbind,
+    shortcut_state,
     alias
   };
   enum class ResultKind {
@@ -302,6 +307,45 @@ namespace {
     }
   }
 
+  bool decodeShortcutKeys(lua_State *state, Call &call) {
+    luaL_checktype(state, -1, LUA_TTABLE);
+    const auto count = lua_objlen(state, -1);
+
+    if (count == 0 || count > 4) {
+      return luaL_error(state, "Shortcuts require an array of 1 to 4 keys"), false;
+    }
+
+    try {
+      call.values[0] = QVariantList(static_cast<qsizetype>(count));
+    } catch (...) {
+      call.error = std::current_exception();
+      return false;
+    }
+
+    lua_pushnil(state);
+
+    while (lua_next(state, 3)) {
+      const auto index = lua_tonumber(state, -2);
+
+      if (lua_type(state, -2) != LUA_TNUMBER || !std::isfinite(index) || index < 1 ||
+          index > count || index != std::floor(index)) {
+        return luaL_error(state, "Shortcut keys must be a dense array"), false;
+      }
+
+      luaL_checktype(state, -1, LUA_TSTRING);
+      auto &value =
+          (*static_cast<QVariantList *>(call.values[0].data()))[static_cast<qsizetype>(index) - 1];
+
+      if (!decodeValue(state, -1, value, call, 0)) {
+        return false;
+      }
+
+      lua_pop(state, 1);
+    }
+
+    return true;
+  }
+
   int decodeCall(lua_State *state) {
     auto *call = static_cast<Call *>(lua_touserdata(state, 1));
     luaL_checkstack(state,
@@ -312,8 +356,18 @@ namespace {
     for (int index = 0; index < max_arguments; ++index) {
       lua_rawgeti(state, 2, index + 1);
 
+      if (call->operation == Operation::shortcut_bind && index == 0) {
+        if (!decodeShortcutKeys(state, *call)) {
+          return 0;
+        }
+
+        lua_pop(state, 1);
+        continue;
+      }
+
       if ((call->operation == Operation::on || call->operation == Operation::runtime_on ||
-           call->operation == Operation::desktop_on) &&
+           call->operation == Operation::desktop_on ||
+           call->operation == Operation::shortcut_bind) &&
           index == 2) {
         luaL_checktype(state, -1, LUA_TFUNCTION);
         call->callback = luaL_ref(state, LUA_REGISTRYINDEX);
@@ -380,12 +434,14 @@ namespace {
       events_ = std::make_unique<ui::SurfaceEvents>(surface_, *root_);
       runtime_ =
           std::make_unique<ui::RuntimeBinding>(environment_, services.runtime, services.desktop);
+      shortcuts_ = std::make_unique<ui::ShortcutBinding>(environment_, services.shortcuts);
       installApi();
       io_ = std::make_unique<ui::LuaIo>(environment_, directory, std::move(observe_module));
     }
 
     ~Generation() override {
       deactivate();
+      shortcuts_.reset();
       runtime_.reset();
       io_.reset();
       events_.reset();
@@ -410,6 +466,10 @@ namespace {
 
     QStringList modulePaths() const {
       return io_->modulePaths();
+    }
+
+    void activateShortcuts(const Generation *replacing) {
+      shortcuts_->activate(replacing ? replacing->shortcuts_.get() : nullptr);
     }
 
     void activate() {
@@ -437,6 +497,7 @@ namespace {
     }
 
     void deactivate() {
+      shortcuts_->deactivate();
       runtime_->deactivate();
       events_->deactivate();
       active_ = false;
@@ -558,6 +619,32 @@ namespace {
         return encode(runtime_->createSpace(mapValue(values[0])));
       case Operation::desktop_remove:
         return encode(runtime_->removeSpace(values[0]));
+      case Operation::shortcut_prefix:
+        shortcuts_->setPrefix(stringValue(values[0]));
+        break;
+      case Operation::shortcut_state:
+        return encode(shortcuts_->state());
+      case Operation::shortcut_bind: {
+        if (values[0].metaType().id() != QMetaType::QVariantList ||
+            values[1].metaType().id() != QMetaType::Bool) {
+          throw std::runtime_error("Expected shortcut keys and a global flag");
+        }
+
+        const auto id = shortcuts_->bind(values[0].toList(), values[1].toBool(), request.callback);
+        request.callback = LUA_NOREF;
+        return encode(static_cast<double>(id));
+      }
+      case Operation::shortcut_unbind: {
+        const auto number = values[0].toDouble();
+
+        if (values[0].metaType().id() != QMetaType::Double || !std::isfinite(number) ||
+            number < 1 || number > maximum_event_identifier || std::floor(number) != number) {
+          throw std::runtime_error("Invalid shortcut identifier");
+        }
+
+        shortcuts_->unbind(static_cast<std::uint64_t>(number));
+        break;
+      }
       case Operation::animate:
         animate(objectValue(values[0]), stringValue(values[1]), mapValue(values[2]));
         break;
@@ -580,6 +667,7 @@ namespace {
     std::unique_ptr<ui::LuaIo> io_;
     std::unique_ptr<ui::SurfaceEvents> events_;
     std::unique_ptr<ui::RuntimeBinding> runtime_;
+    std::unique_ptr<ui::ShortcutBinding> shortcuts_;
     QHash<quint64, int> callbacks_;
     QPointer<QQuickItem> pending_focus_;
     QHash<QPair<QObject *, QString>, PropertyTarget> aliases_;
@@ -666,6 +754,10 @@ namespace {
                 {"desktop_bind", Operation::desktop_bind},
                 {"desktop_create", Operation::desktop_create},
                 {"desktop_remove", Operation::desktop_remove},
+                {"shortcut_prefix", Operation::shortcut_prefix},
+                {"shortcut_bind", Operation::shortcut_bind},
+                {"shortcut_unbind", Operation::shortcut_unbind},
+                {"shortcut_state", Operation::shortcut_state},
                 {"animate", Operation::animate},
                 {"alias", Operation::alias},
             };
@@ -1219,6 +1311,9 @@ namespace ui {
 
     candidate->execute(api_source, "@telar/ui/api.lua");
     candidate->execute(source, chunk_name);
+
+    // Validate and atomically replace bindings before dismantling the working UI.
+    candidate->activateShortcuts(impl_->active.get());
 
     if (impl_->active) {
       impl_->active->deactivate();

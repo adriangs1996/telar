@@ -1,0 +1,40 @@
+#pragma once
+
+#include "shortcuts.hpp"
+#include <QVariantMap>
+
+namespace lua {
+  struct Environment;
+}
+
+namespace ui {
+  class ShortcutBinding final {
+  public:
+    ShortcutBinding(lua::Environment &environment, Shortcuts &shortcuts);
+    ~ShortcutBinding();
+    void activate(const ShortcutBinding *replacing);
+    void deactivate();
+    void setPrefix(const QString &prefix);
+    std::uint64_t bind(const QVariantList &keys, bool global, int callback);
+    void unbind(std::uint64_t id);
+    QVariantMap state() const;
+
+  private:
+    struct Entry {
+      std::uint64_t id;
+      std::vector<std::string> keys;
+      bool global;
+      int callback;
+    };
+
+    lua::Environment &environment_;
+    Shortcuts &shortcuts_;
+    std::string prefix_ = "ctrl+b";
+    std::vector<Entry> entries_;
+    bool active_ = false;
+    std::vector<Shortcuts::Binding> bindings(const std::string &prefix,
+                                             const std::vector<Entry> &entries);
+    void update(const std::string &prefix, const std::vector<Entry> &entries);
+    void deliver(int callback);
+  };
+} // namespace ui

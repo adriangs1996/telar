@@ -1,5 +1,5 @@
-Gesture synthesis reference: asmvik/yabai, commit dd845723416f5fe92af49fad5ebab00369e07edd
-https://github.com/asmvik/yabai/blob/dd845723416f5fe92af49fad5ebab00369e07edd/src/space_manager.c
+Display focus reference: asmvik/yabai, commit dd845723416f5fe92af49fad5ebab00369e07edd
+https://github.com/asmvik/yabai/blob/dd845723416f5fe92af49fad5ebab00369e07edd/src/display_manager.c
 
 The MIT License (MIT)
 

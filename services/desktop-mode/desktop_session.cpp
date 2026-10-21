@@ -2,6 +2,10 @@
 #include <algorithm>
 #include <stdexcept>
 #include <utility>
+#include <tuple>
+
+DesktopSession::DesktopSession(std::string runtime_socket)
+    : registry_(std::in_place, std::move(runtime_socket)) {}
 
 void DesktopSession::start(NativeDesktop::Sink observations, Commands commands) {
   commands_ = std::move(commands);
@@ -29,6 +33,10 @@ void DesktopSession::apply(DesktopState state) {
 
   state_ = std::move(state);
 
+  if (!persistence_error_.empty()) {
+    state_.error = persistence_error_;
+  }
+
   if (state_.completed_operation && pending_ &&
       state_.completed_operation->operation.id == pending_->operation.id) {
     completeOperation(*state_.completed_operation);
@@ -39,8 +47,11 @@ void DesktopSession::apply(DesktopState state) {
   notify();
 }
 
-void DesktopSession::reconcile(const std::vector<WorkspaceSummary> &workspaces) {
-  if (workspaces_ == workspaces) {
+void DesktopSession::reconcile(const std::vector<WorkspaceSummary> &workspaces, bool ready) {
+  const bool was_ready = runtime_ready_;
+  runtime_ready_ = ready;
+
+  if (!ready || (was_ready && workspaces_ == workspaces)) {
     return;
   }
 
@@ -72,7 +83,7 @@ void DesktopSession::associate() {
 
   for (auto &space : state_.spaces) {
     const auto found = bindings_.find(space.uuid);
-    space.managed = managed_.contains(space.uuid);
+    space.managed = !space.fullscreen && (registry_.has_value() || managed_.contains(space.uuid));
     space.workspace = found == bindings_.end() ? std::nullopt : found->second;
 
     if (space.workspace && !hasWorkspace(*space.workspace)) {
@@ -82,6 +93,24 @@ void DesktopSession::associate() {
 }
 
 void DesktopSession::execute(const DesktopCommand &command) {
+  if (registry_ && !runtime_ready_) {
+    state_.error = "Wait for the runtime workspace catalog before changing Spaces";
+    notify();
+    return;
+  }
+
+  if (registry_ && command.kind == DesktopCommand::Kind::create && !command.workspace) {
+    state_.error = "Create a workspace in the runtime to create its Space";
+    state_.completed_operation =
+        SpaceCompletion{{.id = command.request,
+                         .kind = SpaceOperation::Kind::create,
+                         .display = command.display ? command.display : focusedDisplay()},
+                        false,
+                        state_.error};
+    notify();
+    return;
+  }
+
   if (command.kind == DesktopCommand::Kind::create ||
       command.kind == DesktopCommand::Kind::remove) {
     SpaceOperation operation{.id = command.request,
@@ -216,8 +245,21 @@ std::uint32_t DesktopSession::focusedDisplay() const {
 }
 
 void DesktopSession::synchronizeLifecycle() {
-  if (!commands_ || pending_ || state_.pending_space || automatic_paused_ || !state_.available ||
-      !state_.accessibility) {
+  if (!commands_ || !runtime_ready_ || pending_ || state_.pending_space || automatic_paused_ ||
+      !state_.available) {
+    return;
+  }
+
+  if (registry_) {
+    try {
+      synchronizeOwnedSpaces();
+      persistence_error_.clear();
+    } catch (const std::exception &error) {
+      automatic_paused_ = true;
+      persistence_error_ = error.what();
+      state_.error = persistence_error_;
+    }
+
     return;
   }
 
@@ -254,6 +296,118 @@ void DesktopSession::synchronizeLifecycle() {
           {{next_request_++, SpaceOperation::Kind::create, focusedDisplay()}, workspace.id, true});
       return;
     }
+  }
+}
+
+void DesktopSession::synchronizeOwnedSpaces() {
+  registry_->load();
+
+  if (!associations_restored_) {
+    for (const auto &workspace : workspaces_) {
+      const auto uuid = registry_->space(workspace.id);
+
+      if (!uuid) {
+        continue;
+      }
+
+      const auto found = std::ranges::find(state_.spaces, *uuid, &DesktopSpace::uuid);
+
+      if (found != state_.spaces.end() && !found->fullscreen && !found->workspace) {
+        bindings_[found->uuid] = workspace.id;
+        found->workspace = workspace.id;
+      }
+    }
+
+    associations_restored_ = true;
+  }
+
+  const auto bound = [&](std::uint32_t display) {
+    return std::ranges::count_if(state_.spaces, [&](const auto &space) {
+      return space.display == display && space.workspace.has_value();
+    });
+  };
+
+  for (const auto &workspace : workspaces_) {
+    if (std::ranges::any_of(state_.spaces, [&](const auto &space) {
+          return space.workspace == workspace.id;
+        })) {
+      continue;
+    }
+
+    auto candidate = state_.spaces.end();
+
+    for (auto it = state_.spaces.begin(); it != state_.spaces.end(); ++it) {
+      if (it->fullscreen || it->workspace) {
+        continue;
+      }
+
+      const auto rank = [&](const auto &space) {
+        return std::tuple{bound(space.display) != 0, !space.visible, !space.focused, space.index};
+      };
+
+      if (candidate == state_.spaces.end() || rank(*it) < rank(*candidate)) {
+        candidate = it;
+      }
+    }
+
+    if (candidate == state_.spaces.end()) {
+      registry_->save(state_);
+      beginOperation(
+          {{next_request_++, SpaceOperation::Kind::create, focusedDisplay()}, workspace.id, true});
+      return;
+    }
+
+    candidate->workspace = workspace.id;
+    bindings_[candidate->uuid] = workspace.id;
+  }
+
+  // Keep an association on each display when possible; macOS cannot remove its final desktop.
+  for (const auto &display : state_.displays) {
+    if (bound(display.id) != 0) {
+      continue;
+    }
+
+    auto receiver = std::ranges::find_if(state_.spaces, [&](const auto &space) {
+      return space.display == display.id && !space.fullscreen && !space.workspace && space.visible;
+    });
+    auto donor = std::ranges::find_if(state_.spaces, [&](const auto &space) {
+      return space.workspace && !space.visible && bound(space.display) > 1;
+    });
+
+    if (receiver != state_.spaces.end() && donor != state_.spaces.end()) {
+      receiver->workspace = donor->workspace;
+      donor->workspace.reset();
+      bindings_[receiver->uuid] = receiver->workspace;
+      bindings_[donor->uuid] = std::nullopt;
+    }
+  }
+
+  registry_->save(state_);
+  auto redundant = state_.spaces.end();
+
+  for (auto it = state_.spaces.begin(); it != state_.spaces.end(); ++it) {
+    if (it->workspace || it->fullscreen) {
+      continue;
+    }
+
+    const auto count = std::ranges::count_if(state_.spaces, [&](const auto &space) {
+      return space.display == it->display && !space.fullscreen;
+    });
+
+    if (count <= 1) {
+      continue;
+    }
+
+    if (redundant == state_.spaces.end() || (redundant->visible && !it->visible)) {
+      redundant = it;
+    }
+  }
+
+  if (redundant != state_.spaces.end()) {
+    beginOperation(
+        {{next_request_++, SpaceOperation::Kind::remove, redundant->display, redundant->id},
+         {},
+         true});
   }
 }
 

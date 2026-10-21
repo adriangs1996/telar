@@ -2,6 +2,7 @@ module;
 #include "telar_client/telar_client.hpp"
 #include "runtime_session.hpp"
 #include "desktop_session.hpp"
+#include "shortcuts.hpp"
 #include <algorithm>
 #include <array>
 #include <concepts>
@@ -41,7 +42,8 @@ export struct DesktopRequested {
   DesktopCommand command;
 };
 
-export using Event = std::variant<KeyPress, Exit, RuntimeUpdated, DesktopUpdated, DesktopRequested>;
+export using Event = std::
+    variant<KeyPress, Exit, RuntimeUpdated, DesktopUpdated, DesktopRequested, Shortcuts::Request>;
 
 export template <Notifier INotifier> struct EventQueue {
   struct Batch {
@@ -108,4 +110,5 @@ export template <Notifier INotifier> struct AppContext {
   lua::Vm &lua_vm;
   RuntimeSession &runtime;
   DesktopSession &desktop;
+  Shortcuts &shortcuts;
 };

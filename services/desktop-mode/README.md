@@ -5,10 +5,15 @@ Upstream LLVM Clang, including `clang-scan-deps`, compiles the modules. On
 macOS, C++ and Objective-C++ use libc++ to match the installed Qt libraries.
 Qt 6.7 or newer provides QML, Qt Quick, Qt Quick Controls, Qt Quick Shapes,
 Qt Network and Qt Concurrent.
-The runtime and the rest of Telar still build with Zig.
+The runtime and the rest of Telar still build with Zig. Desktop also needs Zig 0.16
+to compile `lib/keyinput`, the same shortcut router used by the GUI, through a
+small C ABI. CMake builds this library without building the runtime or GUI.
+`TELAR_ZIG_EXECUTABLE` selects Zig; `TELAR_KEYINPUT_TARGET` overrides its target
+triple for cross compilation. macOS builds follow `CMAKE_OSX_ARCHITECTURES` and
+`CMAKE_OSX_DEPLOYMENT_TARGET`; build universal binaries one architecture at a time.
 
 On macOS, install the dependencies with
-`brew install cmake ninja llvm pkgconf luajit qtdeclarative`.
+`brew install cmake ninja llvm pkgconf luajit qtdeclarative zig`.
 The build discovers LLVM through Homebrew and uses the macOS SDK selected by
 `xcrun`. Set `CMAKE_OSX_SYSROOT` or `SDKROOT` to select a different SDK.
 On Linux, install CMake, Ninja,
@@ -32,7 +37,8 @@ when Qt is installed under a custom prefix.
 
 `desktop-ui` discovers `.cpp` files under `ui/` and links Qt QML, Quick and
 Quick Controls and Shapes. This C++ library is shared across platform backends; Qt
-headers and libraries do not become dependencies of `desktop-core`.
+Quick headers and libraries do not become dependencies of `desktop-core`.
+The core uses Qt Core privately for the persistent Space registry.
 
 On macOS, `desktop-native` discovers all `.mm` files under
 `native-backends/macos/` and compiles them as Objective-C++23 with ARC,
@@ -62,8 +68,57 @@ Nested paths become hyphenated target names:
 and must not collide with build targets such as `telar-desktop` or
 `desktop-editor`.
 
-The default socket for `just desktop` is `.zig-out/dev/runtime.sock`. Start
-the runtime separately.
+The default socket for `just desktop` is `.zig-out/dev/runtime.sock` until a
+desktop clone has been prepared, then `.zig-out/desktop-dev/runtime.sock`. An
+explicit socket always takes precedence. Start the runtime separately.
+
+### Switching between the regular runtime and a development clone
+
+Create a separate development environment from the regular runtime's checkpoint:
+
+```sh
+just desktop-runtime /absolute/path/to/regular/runtime.sock /absolute/path/to/session.ckpt
+```
+
+This runs the cloned runtime in the foreground, under `.zig-out/desktop-dev`.
+In another terminal, run `just desktop` or `just desktop-dev`. After stopping the
+clone, `just desktop-runtime` restores it without needing the source arguments again.
+To return to the regular runtime,
+run `just desktop /absolute/path/to/regular/runtime.sock`. A new Desktop asks
+the previous Desktop to exit and waits for exclusive ownership before touching
+Spaces or registering global shortcuts. Both runtimes and their processes remain
+running. A pending Space operation delays the handoff; retry once it finishes.
+
+The clone copies the checkpoint's workspace and tab IDs, names, directories,
+pane sizes and saved client layouts. Each pane starts a fresh `$SHELL`, falling
+back to `/bin/sh`. Agent resumes, original launch commands and worktree ownership
+are excluded. Files in those directories are shared; this is not a filesystem
+sandbox. The checkpoint is an atomic, coherent snapshot, which may lag the live
+runtime until its next checkpoint write. Reading it does not stop the source.
+
+Later starts reuse the clone's own checkpoint. Seeding refuses to overwrite an
+existing environment without matching origin metadata. The ordinary development
+runtime in `.zig-out/dev` is unaffected. `--fresh` explicitly resets a runtime and
+also sets its desktop clone origin aside.
+
+Desktop manages the session's ordinary Spaces. It restores saved associations,
+adopts existing Spaces before creating any, and removes surplus ordinary Spaces.
+The clone's original workspaces reuse the source's associations; workspaces created
+later in development have their own identities. Switching after creating or closing
+workspaces reconciles the difference with the selected runtime. The selected Space
+is retained when it survives reconciliation. There is no automatic merge back into
+the source runtime.
+
+The registry lives in Qt's user data directory under `telar/desktop/spaces.json`,
+with owner-only permissions and atomic writes. `TELAR_DESKTOP_STATE_DIR` overrides
+the registry and controller endpoint together, for isolated diagnostics. Corrupt
+state stops automatic reconciliation. No Spaces are removed before a complete,
+connected runtime workspace catalog is received.
+
+macOS requires at least one ordinary Space per display. If there are fewer
+workspaces than displays, the last Space of an unassigned display remains.
+Fullscreen Spaces are owned by the applications' fullscreen lifecycle and are
+excluded from ordinary-Space reconciliation.
 
 ### Workspaces and native Spaces integration check
 
@@ -79,10 +134,9 @@ relative to the repository, independently of the working directory.
 
 `debug/spaces_dbg.cpp` starts its own runtime, Unix socket and history database
 inside a temporary directory. It uses the production `App`, event queue,
-`RuntimeReceiverWorker`, `RuntimeSession` and `DesktopSession`. This executable
-links `debug/support/spaces_bridge.mm` in place of the production native backend.
-It experiments with SkyLight's `SLSBridged` operations for creating, destroying
-and switching Spaces. `telar-desktop` continues to use its existing backend.
+`RuntimeReceiverWorker`, `RuntimeSession`, `DesktopSession` and native backend.
+Both this executable and `telar-desktop` link the same SkyLight implementation.
+`debug/support/spaces_probe.mm` only supplies probe windows and observations.
 A second wire client emits `CreateWorkspace`, `CreatePane`, `CreateTab` and
 `ClosePane`, acknowledges terminal frames and waits for authoritative exits.
 `CreateWorkspace` is the same request the GUI submits after the prefix + N
@@ -92,23 +146,26 @@ The checks cover a new dedicated Space per workspace, two simultaneous
 workspaces, multiple panes/tabs without extra Spaces, closing a non-final pane,
 closing a non-final tab, removing the Space after the final pane of the final
 tab exits, natural process exit, and closing before native Space creation is
-confirmed. The last check holds the bridge's completion until the runtime has
-removed the workspace, then verifies that reconciliation removes the orphan.
+confirmed. The last check delays delivery of the production backend's completion
+until the runtime has removed the workspace, then verifies orphan cleanup.
 Probe windows verify that switching changes actual window visibility and that
 destroying the active Space migrates its window to a surviving Space. The check
 also observes Mission Control entry notifications and fails if one is received.
+When another managed display is attached, it also checks creation and removal
+on that display without changing its visible Space.
 
 This is a real system integration check: the focused Space changes during the
-run, and Mission Control must remain closed. The experimental bridge does not
-require Accessibility, but the reused production `DesktopSession` still gates
-workspace reconciliation on that permission, so the runner currently needs it.
+run, and Mission Control must remain closed. Neither the bridge nor workspace
+reconciliation requires Accessibility. The runner prints its current permission
+status; the lifecycle also passes when launched as an app without that permission.
 The bridge was investigated on macOS 26.6.2 and checks private API availability;
 it does not fall back to Mission Control on unsupported versions.
 Pre-existing Spaces must remain untouched. Each stage has a timeout; normal
 completion and failures both attempt to remove all Spaces created by this run,
 restore each display's original Space and the original focus, stop the isolated
-runtime and remove its temporary files. Each confirmed stage prints `[PASS]`; failure exits nonzero. It never
-connects to an existing runtime or launches another Telar GUI.
+runtime and remove its temporary files. Each confirmed stage prints `[PASS]`;
+failure exits nonzero. It never connects to an existing runtime or launches
+another Telar GUI.
 
 ## Formatting
 
@@ -207,6 +264,69 @@ state/bindings and native window geometry controls are not implemented yet.
 On macOS, safe-area state includes notch exclusion rectangles where they
 intersect the surface; the current bar normally sits below the menu bar.
 
+## Desktop shortcuts
+
+`require("telar.shortcuts")` registers desktop-wide shortcuts from Lua. macOS
+captures matching keys even when another application is focused, including the
+Telar GUI. Desktop shortcuts take priority without focusing the bar. Other keys
+pass through unchanged; after its prefix, the desktop owns the whole sequence.
+Capture requires Accessibility permission for the desktop process, or the terminal
+launching it during development. The backend retries when permission is granted;
+it does not change system permissions. `shortcuts.state()` exposes `available`,
+`error`, `prefix` and `pending`.
+
+The default topbar loads `components.shortcuts` and uses `Ctrl+B`, followed by:
+
+| Suffix | Action |
+| --- | --- |
+| `1`–`9` | Select that tab in the active Space's workspace. |
+| `n`, `p` | Select the next or previous tab, wrapping at the ends. |
+| `,`, `.` | Move the selected tab before or after its neighbor. |
+
+`Ctrl+Left` and `Ctrl+Right` are global bindings without the prefix. They select
+the previous or next ordinary Space on the focused display, wrapping at the ends.
+
+These actions use the existing runtime and desktop APIs. Pane operations, creating
+workspaces/tabs, palettes and terminal rendering are not connected to this keymap.
+Tab selection currently changes the desktop's selected tab, as with a click on
+the topbar; it does not change a separate GUI client's focus.
+
+The desktop keymap belongs to its Lua UI; it does not import the GUI's
+`client.prefix` or `client.keybindings`. To use `Ctrl+S`, add
+`require("telar.shortcuts").set_prefix("ctrl+s")` to `topbar.lua` before loading
+`components.shortcuts`. A custom topbar can omit that module and define its own map:
+
+```lua
+local shortcuts = require("telar.shortcuts")
+shortcuts.set_prefix("ctrl+s")
+
+local unbind = shortcuts.bind({ "g", "t" }, function()
+  -- Run an action, focus a UI element, or call telar.runtime/telar.desktop.
+end)
+
+shortcuts.bind_global("cmd+shift+p", function()
+  -- Open a custom Lua palette without the prefix.
+end)
+```
+
+`bind` accepts one to four suffix chords; `bind_global` accepts a single modified
+chord. Both return an idempotent unbind function. Chords use the GUI's parser,
+including its spelling, case and modifier rules. Prefixes require Ctrl, Alt or
+Command/Super. Arbitrary unprefixed multi-key sequences are intentionally rejected:
+replaying buffered input into a different application is not implemented.
+
+The prefix waits without a timeout. Escape, an invalid suffix, a mouse press,
+switching applications or Spaces, or a successful UI reload cancels it. A held
+key invokes its callback once. The shared router retains intercepted key releases
+across reloads and focus changes. Duplicate or ambiguous bindings are rejected;
+the whole desktop holds at most 256 bindings, with one shared prefix across surfaces.
+
+Each UI generation owns its callbacks. A successful reload atomically replaces its
+bindings; a rejected replacement leaves the previous map active. Queued actions
+from an obsolete generation or focus context are discarded. Native capture only
+queues action IDs in `App`'s event queue. Lua runs when `App` drains that queue,
+outside the macOS event tap callback.
+
 ## Native Spaces and runtime tabs
 
 The desktop connects directly as a control client to the socket passed to
@@ -223,24 +343,25 @@ workspaces, and `RuntimeSession` retrieves their snapshots on its worker.
 Lua only receives detached snapshots on the application thread. A workspace
 transition clears the previous tab projection until the new snapshot arrives.
 
-Each runtime workspace receives its own newly created ordinary Space on the
-focused display, even when pre-existing unassociated Spaces are available.
-Adding tabs or panes does not create more Spaces. The runtime removes a
-workspace when the final pane in its final tab is collected; that catalog
-change causes Telar to remove the workspace's Space. Other workspaces and
-pre-existing system Spaces remain untouched.
+Each runtime workspace receives an ordinary Space. Desktop first restores its
+saved association, then adopts available Spaces, and creates one only when none
+is available. Visible Spaces and displays without an associated workspace are
+preferred during adoption. Adding tabs or panes does not create more Spaces.
+Closing the final pane in the final tab removes the runtime workspace and its
+Space, subject to macOS's minimum of one ordinary Space per display. Surplus
+ordinary Spaces are removed after all live workspaces have an association.
 
-A Space's `managed` flag identifies Spaces created by this desktop session.
-Associations use the native Space UUID where available, so reordering Spaces
-does not change them. macOS may omit a UUID; those Spaces use a display UUID
-and session-local Space ID instead. Bindings, ownership and selected tabs are
-in memory, surviving Lua reloads but not a desktop restart.
+The `managed` flag covers all ordinary Spaces while Desktop controls the session.
+Associations persist by runtime identity, workspace ID and native Space UUID, so
+desktop restarts and Space reordering preserve them. macOS may omit a UUID; those
+Spaces use a display UUID and session-local Space ID instead. Selected tabs still
+live in memory. Development clones share only their original workspaces' identities.
 
 A live workspace retains its dedicated Space. Lua cannot remove or unbind it
 before the workspace closes, or assign another Space to the same workspace.
 If its Space is removed externally through Mission Control, Telar creates a
-replacement while the workspace remains alive. Unassociated Spaces show an
-empty strip; fullscreen and pre-existing Spaces are never automatically adopted.
+replacement while the workspace remains alive, adopting an available Space first.
+Fullscreen Spaces are excluded from this reconciliation.
 
 `require("telar.desktop")` exposes:
 
@@ -250,7 +371,7 @@ empty strip; fullscreen and pre-existing Spaces are never automatically adopted.
 | `desktop.on_change(callback)` | Subscribe to changed desktop snapshots; returns an unsubscribe function and delivers the current state on mount. |
 | `desktop.activate_space(id)` | Request activation of an existing Space. Completion is confirmed from macOS; failures appear in `error`. |
 | `desktop.bind_space(space_id, workspace_id)` | Associate an unbound managed Space with a workspace that has no Space or pending creation. A live association cannot be changed or cleared. |
-| `desktop.create_space(options)` | Create an ordinary Space. Optional `display` selects a display ID; optional `workspace` associates a runtime workspace ID. Defaults to the focused display and no association. Returns a request ID. |
+| `desktop.create_space(options)` | Create an ordinary Space for the required `workspace` ID, if it has no Space yet. Optional `display` selects a display ID; the default is the focused display. Returns a request ID. Normal workspace reconciliation handles creation automatically. |
 | `desktop.remove_space(space_id)` | Remove an unassociated ordinary Space. A live workspace's Space must close through its final pane. Returns a request ID. |
 
 Display entries contain `id`, `uuid` and global screen bounds (`x`, `y`,
@@ -287,15 +408,15 @@ Space creation/removal are serialized transactions. `pending_operation` contains
 `id`, `kind`, `display` and the target `space` when applicable.
 `completed_operation` contains those fields plus `succeeded` and optional
 `error`; a successful creation includes the new `space` ID. Completion follows
-an observed catalog change, not just an accepted Accessibility action. Observe
+an observed catalog change, not just a submitted bridge operation. Observe
 these snapshots before issuing the next mutation. A failed automatic mutation
 pauses further automatic mutations until the workspace catalog gains/loses a
 workspace, or a manual mutation succeeds.
 
-The default Lua bar has a `+` button to create an unassociated Space. Its `×`
-buttons and middle-click remove unassociated ordinary Spaces when another
-ordinary Space remains on their display. Workspace Spaces have no independent
-close control: their lifetime follows the runtime workspace.
+The default Lua bar creates no standalone Spaces. Its `×` buttons and middle-click
+can remove surplus ordinary Spaces while another ordinary Space remains on their
+display. Workspace Spaces have no independent close control: their lifetime
+follows the runtime workspace.
 
 Runtime transport, decoding and command writes run on a worker, with a bounded
 64-command queue. Workspace subscriptions deliver tab changes without polling
@@ -308,38 +429,37 @@ to reconnect in this version.
 
 ### macOS implementation and limits
 
-Enumeration dynamically resolves private SkyLight functions. Existing Spaces
-are activated with synthetic Dock gestures, then checked against the actual
-native state, with a bounded timeout and one observed hop at a time. Focusing
-another display may activate and raise one of its visible application windows
-through Accessibility. Telar neither invokes nor connects to yabai and does not
-inject code into Dock or require SIP changes. The gesture reference's MIT
-attribution is retained in `licenses/yabai.txt`.
+Enumeration dynamically resolves private SkyLight functions. Mutation uses
+SkyLight's `SLSBridged` operations through `performWithWMBridgeDelegate`.
+Creation returns a Space ID synchronously; removal and switching are asynchronous.
+Switching shows the destination, hides the source and updates the display's
+current Space. These are separate operations, without a custom animation.
 
-Activation requires Accessibility permission for the executable or its host.
-If it is missing, the desktop snapshot reports the System Settings location.
-Ordinary changes are driven by Space/application/screen/wake notifications;
-a two-second catalog fallback also detects Mission Control reordering and
-permission changes. During activation, confirmation runs every 80 ms.
+Creating, removing and changing the visible Space require neither Accessibility
+nor SIP changes. Telar does not inject into Dock, synthesize gestures, open
+Mission Control or depend on yabai. The `accessibility` snapshot field remains
+informational. Moving keyboard focus to another display is separate: when
+permission exists, Telar can raise a visible application window through AX.
+If macOS changes visibility but does not grant display focus, activation reports
+that distinction instead of claiming success.
 
-Creating and removing Spaces uses Telar's own asynchronous Accessibility
-implementation against Mission Control's Dock controls. Mission Control briefly
-appears while these operations run; there is no coordinate-based clicking or
-external automation dependency. The Accessibility structure was studied from
-Hammerspoon's `hs.spaces`; its MIT attribution is in `licenses/hammerspoon.txt`.
-Telar switches away from a visible Space before removing it. Fullscreen Spaces
-and the last ordinary Space on a display cannot be removed. If cleanup reaches
-that last Space, it remains as an unassociated desktop. Opening Mission Control
-manually during an operation may cause it to fail; requests made while Mission
-Control is already open are rejected.
+Space/application/screen/wake notifications drive observation. A two-second
+fallback catches external catalog changes; pending operations are checked every
+20 ms, with a five-second timeout. A full event queue causes publication to be
+retried. Creation on another display waits for the new Space's placement before
+reporting success. Failed placement attempts to remove that newly created Space.
 
-The native APIs, Accessibility structure and gesture fields are undocumented
-and may change between macOS versions. Missing symbols, vanished Spaces and
-rejected transitions are reported as errors. This version does not reorder native Spaces, restore
-bindings/ownership from disk, or move application windows between Spaces.
-Ownership is session-local: Spaces left by an earlier desktop process are not
-silently reclaimed or removed. On restart, live runtime workspaces receive new
-managed Spaces; persistent restoration of previous associations is not implemented.
+macOS handles window migration when an active Space is destroyed. Fullscreen
+Spaces and the last ordinary Space on a display cannot be removed. If automatic
+cleanup reaches that last Space, it remains as an unassociated desktop.
+
+The private API was verified on macOS 26.6.2. Required classes, selectors and
+operation return types are checked at runtime. Missing APIs, vanished Spaces and
+rejected transitions are reported as errors, with no Mission Control fallback.
+This version does not expose native Space reordering or move individual
+application windows between Spaces. Native UUID persistence across macOS reboots
+depends on the operating system; missing identities fall back to ordinary-Space
+adoption.
 
 ## Filesystem and HTTP
 

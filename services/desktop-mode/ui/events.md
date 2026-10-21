@@ -98,6 +98,7 @@ not supply reliable pixel deltas. `inverted` describes natural scrolling.
 `scan_code` is the platform's physical scan code. Keyboard and text events
 propagate from the focused element, or from the root if no element has focus.
 They are local to the surface and do not register global shortcuts.
+For desktop-wide bindings, use [`telar.shortcuts`](../README.md#desktop-shortcuts).
 
 Printable key presses produce `text_input` unless their `key_down` was
 accepted. Input methods produce pending composition and committed text

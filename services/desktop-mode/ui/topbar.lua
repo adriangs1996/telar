@@ -3,6 +3,7 @@ local runtime = require("telar.runtime")
 local desktop = require("telar.desktop")
 local Spaces = require("components.spaces")
 local Tabs = require("components.tabs")
+require("components.shortcuts")()
 
 local background = ui.create("QtQuick", "Rectangle", {
   color = "#1b1723",
@@ -31,7 +32,6 @@ local state = runtime.state()
 local desktop_state = desktop.state()
 local spaces = Spaces.new({
   activate = desktop.activate_space,
-  create = desktop.create_space,
   remove = desktop.remove_space,
 })
 

@@ -8,7 +8,33 @@ local fs = { config_dir = io_core.config_dir, home_dir = io_core.home_dir }
 local net = {}
 local runtime = {}
 local desktop = {}
-telar = { ui = ui, fs = fs, net = net, runtime = runtime, desktop = desktop }
+local shortcuts = {}
+telar = { ui = ui, fs = fs, net = net, runtime = runtime, desktop = desktop, shortcuts = shortcuts }
+
+shortcuts.set_prefix = core.shortcut_prefix
+shortcuts.state = core.shortcut_state
+
+local function bind_shortcut(keys, global, callback)
+  assert(type(keys) == "table", "Shortcut keys must be an array")
+  assert(type(callback) == "function", "Shortcut requires a callback")
+  local identifier = core.shortcut_bind(keys, global, callback)
+
+  return function()
+    if identifier then
+      core.shortcut_unbind(identifier)
+      identifier = nil
+    end
+  end
+end
+
+function shortcuts.bind(keys, callback)
+  return bind_shortcut(keys, false, callback)
+end
+
+function shortcuts.bind_global(key, callback)
+  assert(type(key) == "string", "Global shortcut must be one modified chord")
+  return bind_shortcut({ key }, true, callback)
+end
 
 runtime.state = core.runtime_state
 runtime.select_tab = core.runtime_select
@@ -140,6 +166,7 @@ package.loaded["telar.fs"] = fs
 package.loaded["telar.net"] = net
 package.loaded["telar.runtime"] = runtime
 package.loaded["telar.desktop"] = desktop
+package.loaded["telar.shortcuts"] = shortcuts
 
 ui.create = core.create
 ui.get = core.get
