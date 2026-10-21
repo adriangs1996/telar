@@ -2,10 +2,10 @@
 
 #import <AppKit/AppKit.h>
 
-namespace lua {
-  struct Vm;
+namespace ui {
+  struct Services;
 }
 
 @interface TelarTopBar : NSPanel
-- (instancetype)initWithScreen:(NSScreen *)screen luaVm:(lua::Vm &)lua_vm;
+- (instancetype)initWithScreen:(NSScreen *)screen services:(ui::Services &)services;
 @end

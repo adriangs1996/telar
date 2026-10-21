@@ -167,6 +167,16 @@ namespace telar {
       } while (result < 0 && errno == EINTR);
     }
 
+    int descriptor() const noexcept {
+      return _fd;
+    }
+
+    void interrupt() const noexcept {
+      if (_fd >= 0) {
+        ::shutdown(_fd, SHUT_RDWR);
+      }
+    }
+
   private:
     static constexpr timeval io_timeout{
         .tv_sec = 30,

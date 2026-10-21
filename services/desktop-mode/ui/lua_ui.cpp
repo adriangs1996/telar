@@ -4,6 +4,8 @@
 #include "lua_io.hpp"
 #include "lua_value.hpp"
 #include "quick_surface.hpp"
+#include "runtime_binding.hpp"
+#include "services.hpp"
 #include "surface_events.hpp"
 #include <QColor>
 #include <QDebug>
@@ -49,6 +51,17 @@ namespace {
     input_method,
     surface_state,
     animate,
+    runtime_state,
+    runtime_on,
+    runtime_off,
+    runtime_select,
+    runtime_move,
+    desktop_state,
+    desktop_on,
+    desktop_activate,
+    desktop_bind,
+    desktop_create,
+    desktop_remove,
     alias
   };
   enum class ResultKind {
@@ -299,7 +312,9 @@ namespace {
     for (int index = 0; index < max_arguments; ++index) {
       lua_rawgeti(state, 2, index + 1);
 
-      if (call->operation == Operation::on && index == 2) {
+      if ((call->operation == Operation::on || call->operation == Operation::runtime_on ||
+           call->operation == Operation::desktop_on) &&
+          index == 2) {
         luaL_checktype(state, -1, LUA_TFUNCTION);
         call->callback = luaL_ref(state, LUA_REGISTRYINDEX);
         continue;
@@ -343,12 +358,12 @@ namespace {
 
   class Generation final : public QObject {
   public:
-    Generation(lua::Vm &vm,
+    Generation(ui::Services &services,
                QuickSurface &surface,
                const QString &directory,
                std::function<void(const QString &)> observe_module)
         : surface_(surface),
-          environment_(vm),
+          environment_(services.vm),
           root_(std::make_unique<QQuickItem>()),
           lifetime_(std::make_unique<QObject>()) {
       root_->setVisible(false);
@@ -363,12 +378,15 @@ namespace {
       });
 
       events_ = std::make_unique<ui::SurfaceEvents>(surface_, *root_);
+      runtime_ =
+          std::make_unique<ui::RuntimeBinding>(environment_, services.runtime, services.desktop);
       installApi();
       io_ = std::make_unique<ui::LuaIo>(environment_, directory, std::move(observe_module));
     }
 
     ~Generation() override {
       deactivate();
+      runtime_.reset();
       io_.reset();
       events_.reset();
 
@@ -406,6 +424,7 @@ namespace {
       }
 
       io_->activate();
+      runtime_->activate();
       events_->activate();
 
       if (pending_focus_) {
@@ -418,6 +437,7 @@ namespace {
     }
 
     void deactivate() {
+      runtime_->deactivate();
       events_->deactivate();
       active_ = false;
     }
@@ -502,6 +522,42 @@ namespace {
         break;
       case Operation::surface_state:
         return encode(events_->state());
+      case Operation::runtime_state:
+        return encode(runtime_->state());
+      case Operation::desktop_state:
+        return encode(runtime_->desktopState());
+      case Operation::runtime_on:
+      case Operation::desktop_on: {
+        const auto identifier =
+            runtime_->subscribe(request.callback, request.operation == Operation::desktop_on);
+        request.callback = LUA_NOREF;
+        return encode(static_cast<double>(identifier));
+      }
+      case Operation::runtime_off: {
+        const auto number = values[0].toDouble();
+
+        if (values[0].metaType().id() != QMetaType::Double || !std::isfinite(number) ||
+            number < 1 || number > maximum_event_identifier || std::floor(number) != number) {
+          throw std::runtime_error("Invalid runtime subscription identifier");
+        }
+
+        runtime_->unsubscribe(static_cast<std::uint64_t>(number));
+        break;
+      }
+      case Operation::runtime_select:
+        return encode(runtime_->selectTab(values[0]));
+      case Operation::runtime_move:
+        return encode(runtime_->moveTab(values[0], mapValue(values[1])));
+      case Operation::desktop_activate:
+        runtime_->activateSpace(values[0]);
+        break;
+      case Operation::desktop_bind:
+        runtime_->bindSpace(values[0], values[1]);
+        break;
+      case Operation::desktop_create:
+        return encode(runtime_->createSpace(mapValue(values[0])));
+      case Operation::desktop_remove:
+        return encode(runtime_->removeSpace(values[0]));
       case Operation::animate:
         animate(objectValue(values[0]), stringValue(values[1]), mapValue(values[2]));
         break;
@@ -523,6 +579,7 @@ namespace {
     std::unique_ptr<QObject> lifetime_;
     std::unique_ptr<ui::LuaIo> io_;
     std::unique_ptr<ui::SurfaceEvents> events_;
+    std::unique_ptr<ui::RuntimeBinding> runtime_;
     QHash<quint64, int> callbacks_;
     QPointer<QQuickItem> pending_focus_;
     QHash<QPair<QObject *, QString>, PropertyTarget> aliases_;
@@ -598,6 +655,17 @@ namespace {
                 {"focus", Operation::focus},
                 {"input_method", Operation::input_method},
                 {"surface_state", Operation::surface_state},
+                {"runtime_state", Operation::runtime_state},
+                {"runtime_on", Operation::runtime_on},
+                {"runtime_off", Operation::runtime_off},
+                {"runtime_select", Operation::runtime_select},
+                {"runtime_move", Operation::runtime_move},
+                {"desktop_state", Operation::desktop_state},
+                {"desktop_on", Operation::desktop_on},
+                {"desktop_activate", Operation::desktop_activate},
+                {"desktop_bind", Operation::desktop_bind},
+                {"desktop_create", Operation::desktop_create},
+                {"desktop_remove", Operation::desktop_remove},
                 {"animate", Operation::animate},
                 {"alias", Operation::alias},
             };
@@ -1103,7 +1171,7 @@ namespace {
 
 namespace ui {
   struct LuaUi::Impl {
-    lua::Vm &vm;
+    ui::Services &services;
     QuickSurface &surface;
     std::unique_ptr<Generation> active;
     QSet<QString> attempted_modules;
@@ -1121,8 +1189,8 @@ namespace ui {
     }
   };
 
-  LuaUi::LuaUi(lua::Vm &vm, QuickSurface &surface)
-      : impl_(std::make_unique<Impl>(vm, surface)) {
+  LuaUi::LuaUi(ui::Services &services, QuickSurface &surface)
+      : impl_(std::make_unique<Impl>(services, surface)) {
     impl_->module_watcher.setCallback([this](const QStringList &) {
       if (impl_->reload_handler) {
         impl_->reload_handler();
@@ -1141,7 +1209,7 @@ namespace ui {
     const auto file =
         QString::fromUtf8(chunk_name.data(), static_cast<qsizetype>(chunk_name.size()));
     const auto directory = QFileInfo(file.startsWith('@') ? file.mid(1) : file).absolutePath();
-    auto candidate = std::make_unique<Generation>(impl_->vm,
+    auto candidate = std::make_unique<Generation>(impl_->services,
                                                   impl_->surface,
                                                   directory,
                                                   [this](const QString &path) {

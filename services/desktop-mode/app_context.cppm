@@ -1,5 +1,7 @@
 module;
 #include "telar_client/telar_client.hpp"
+#include "runtime_session.hpp"
+#include "desktop_session.hpp"
 #include <algorithm>
 #include <array>
 #include <concepts>
@@ -27,12 +29,19 @@ export struct Exit {
   std::uint8_t code = 0;
 };
 
-export struct WorkspaceUpdated {
-  std::uint64_t revision = 0;
-  std::vector<WorkspaceSummary> workspaces;
+export struct RuntimeUpdated {
+  RuntimeState state;
 };
 
-export using Event = std::variant<KeyPress, Exit, WorkspaceUpdated>;
+export struct DesktopUpdated {
+  DesktopState state;
+};
+
+export struct DesktopRequested {
+  DesktopCommand command;
+};
+
+export using Event = std::variant<KeyPress, Exit, RuntimeUpdated, DesktopUpdated, DesktopRequested>;
 
 export template <Notifier INotifier> struct EventQueue {
   struct Batch {
@@ -97,4 +106,6 @@ export template <Notifier INotifier> struct AppContext {
   telar::Client &client;
   EventQueue<INotifier> &input_queue;
   lua::Vm &lua_vm;
+  RuntimeSession &runtime;
+  DesktopSession &desktop;
 };

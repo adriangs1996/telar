@@ -6,7 +6,49 @@ _telar_io = nil
 local ui = {}
 local fs = { config_dir = io_core.config_dir, home_dir = io_core.home_dir }
 local net = {}
-telar = { ui = ui, fs = fs, net = net }
+local runtime = {}
+local desktop = {}
+telar = { ui = ui, fs = fs, net = net, runtime = runtime, desktop = desktop }
+
+runtime.state = core.runtime_state
+runtime.select_tab = core.runtime_select
+runtime.move_tab = core.runtime_move
+desktop.state = core.desktop_state
+desktop.activate_space = core.desktop_activate
+desktop.bind_space = core.desktop_bind
+desktop.remove_space = core.desktop_remove
+
+function desktop.create_space(options)
+  assert(
+    options == nil or type(options) == "table",
+    "desktop.create_space expects an options table"
+  )
+  return core.desktop_create(options or {})
+end
+
+function desktop.on_change(callback)
+  assert(type(callback) == "function", "desktop.on_change expects a callback")
+  local identifier = core.desktop_on(nil, nil, callback)
+
+  return function()
+    if identifier then
+      core.runtime_off(identifier)
+      identifier = nil
+    end
+  end
+end
+
+function runtime.on_change(callback)
+  assert(type(callback) == "function", "runtime.on_change expects a callback")
+  local identifier = core.runtime_on(nil, nil, callback)
+
+  return function()
+    if identifier then
+      core.runtime_off(identifier)
+      identifier = nil
+    end
+  end
+end
 
 local function operation(fn, ...)
   local identifier = fn(...)
@@ -96,6 +138,8 @@ package.loaded["telar"] = telar
 package.loaded["telar.ui"] = ui
 package.loaded["telar.fs"] = fs
 package.loaded["telar.net"] = net
+package.loaded["telar.runtime"] = runtime
+package.loaded["telar.desktop"] = desktop
 
 ui.create = core.create
 ui.get = core.get

@@ -6,16 +6,13 @@
 #include <QTimer>
 #include <memory>
 
-namespace lua {
-  struct Vm;
-}
-
 namespace ui {
+  struct Services;
   class LuaUi;
-}
+} // namespace ui
 
 struct QtTopBarSurface final : QuickSurface {
-  QtTopBarSurface(lua::Vm &lua_vm, const QSize &size);
+  QtTopBarSurface(ui::Services &services, const QSize &size);
   ~QtTopBarSurface();
 
 private:

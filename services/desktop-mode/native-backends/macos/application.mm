@@ -104,7 +104,7 @@ void ApplicationWakeup::wakeup() noexcept {
 int runApplication(ApplicationHost &host,
                    ApplicationWakeup &wakeup,
                    const AppState &state,
-                   lua::Vm &lua_vm) {
+                   ui::Services &services) {
   int result = EXIT_SUCCESS;
 
   @autoreleasepool {
@@ -126,7 +126,24 @@ int runApplication(ApplicationHost &host,
       return EXIT_FAILURE;
     }
 
-    TelarTopBar *topbar = [[TelarTopBar alloc] initWithScreen:screen luaVm:lua_vm];
+    auto &signal = *wakeup.impl;
+    signal.host = &host;
+    CFRunLoopAddSource(signal.loop, signal.source, kCFRunLoopCommonModes);
+
+    struct Lifecycle {
+      ApplicationHost &host;
+      ApplicationWakeup::Impl &signal;
+
+      ~Lifecycle() {
+        host.stop();
+        CFRunLoopRemoveSource(signal.loop, signal.source, kCFRunLoopCommonModes);
+        signal.host = nullptr;
+      }
+    } lifecycle{host, signal};
+
+    host.start();
+    host.update();
+    TelarTopBar *topbar = [[TelarTopBar alloc] initWithScreen:screen services:services];
 
     if (!topbar) {
       return EXIT_FAILURE;
@@ -139,18 +156,10 @@ int runApplication(ApplicationHost &host,
       return EXIT_FAILURE;
     }
 
-    auto &signal = *wakeup.impl;
-    signal.host = &host;
-
-    CFRunLoopAddSource(signal.loop, signal.source, kCFRunLoopCommonModes);
-
     if (host.update()) {
       [topbar orderFrontRegardless];
       result = qt_application.exec();
     }
-
-    CFRunLoopRemoveSource(signal.loop, signal.source, kCFRunLoopCommonModes);
-    signal.host = nullptr;
 
     [controller removeStatusItem];
     [topbar close];

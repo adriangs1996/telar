@@ -19,4 +19,8 @@ pub fn snapshot(model: *RuntimeModel, session: *Session, request: core.RequestWo
         .request_id = request.request_id,
         .workspace = request.workspace,
     } });
+
+    if (session.role == .control and session.delivery.runtime_state_requested) {
+        session.workspace = request.workspace;
+    }
 }

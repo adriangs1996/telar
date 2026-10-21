@@ -4,8 +4,8 @@
 #include <memory>
 #include <string_view>
 
-namespace lua {
-  struct Vm;
+namespace ui {
+  struct Services;
 }
 
 struct QuickSurface;
@@ -13,7 +13,7 @@ struct QuickSurface;
 namespace ui {
   class LuaUi final {
   public:
-    LuaUi(lua::Vm &vm, QuickSurface &surface);
+    LuaUi(ui::Services &services, QuickSurface &surface);
     ~LuaUi();
 
     LuaUi(const LuaUi &) = delete;

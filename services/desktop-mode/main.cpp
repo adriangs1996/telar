@@ -5,6 +5,9 @@
 
 #include "native-backends/application.hpp"
 #include "telar_client/telar.hpp"
+#include "runtime_session.hpp"
+#include "desktop_session.hpp"
+#include "ui/services.hpp"
 
 import app;
 import app_context;
@@ -21,23 +24,29 @@ int main(int argc, const char **argv) {
   EventQueue input_queue{wakeup};
 
   auto client = telar::Client::init(argv[1]);
-  AppContext context{.client = client, .input_queue = input_queue, .lua_vm = lua_vm};
+  RuntimeSession runtime{client};
+  DesktopSession desktop;
+  AppContext context{.client = client,
+                     .input_queue = input_queue,
+                     .lua_vm = lua_vm,
+                     .runtime = runtime,
+                     .desktop = desktop};
   App app(context);
 
   try {
     client.handshake();
-    auto runtime_reader = RuntimeReceiverWorker::init(context);
-
     std::random_device entropy;
     std::uniform_int_distribution<std::uint64_t> identities(1);
     const auto client_identity = identities(entropy);
 
     client.send(telar::RequestRuntimeState{
         .client_identity = client_identity,
-        .interactive = true,
+        .interactive = false,
     });
 
-    const int application_result = runApplication(app, wakeup, app.state(), lua_vm);
+    auto runtime_reader = RuntimeReceiverWorker::init(context);
+    ui::Services services{lua_vm, runtime, desktop};
+    const int application_result = runApplication(app, wakeup, app.state(), services);
     runtime_reader.stop();
 
     if (application_result != EXIT_SUCCESS) {

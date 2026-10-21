@@ -1,7 +1,7 @@
 #pragma once
 
-namespace lua {
-  struct Vm;
+namespace ui {
+  struct Services;
 }
 
 struct AppState;
@@ -10,6 +10,8 @@ struct ApplicationHost {
   virtual ~ApplicationHost() = default;
   virtual bool requestExit() = 0;
   virtual bool update() = 0;
+  virtual void start() = 0;
+  virtual void stop() = 0;
 };
 
 struct ApplicationWakeup final {
@@ -28,7 +30,10 @@ private:
   friend int runApplication(ApplicationHost &host,
                             ApplicationWakeup &wakeup,
                             const AppState &state,
-                            lua::Vm &lua_vm);
+                            ui::Services &services);
 };
 
-int runApplication(ApplicationHost &host, ApplicationWakeup &wakeup, const AppState &state);
+int runApplication(ApplicationHost &host,
+                   ApplicationWakeup &wakeup,
+                   const AppState &state,
+                   ui::Services &services);

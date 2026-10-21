@@ -10,7 +10,7 @@
   TelarSurfaceBridge *_surface_bridge;
 }
 
-- (instancetype)initWithScreen:(NSScreen *)screen luaVm:(lua::Vm &)lua_vm {
+- (instancetype)initWithScreen:(NSScreen *)screen services:(ui::Services &)services {
   constexpr CGFloat bar_height = 36.0;
 
   const NSRect available = screen.visibleFrame;
@@ -43,7 +43,7 @@
   const NSRect bounds = container.bounds;
 
   const QSize size(static_cast<int>(NSWidth(bounds)), static_cast<int>(NSHeight(bounds)));
-  _surface = std::make_unique<QtTopBarSurface>(lua_vm, size);
+  _surface = std::make_unique<QtTopBarSurface>(services, size);
   auto &window = _surface->window();
 
   window.setFlags(Qt::SubWindow);

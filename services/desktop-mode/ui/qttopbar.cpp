@@ -34,8 +34,8 @@ namespace {
   }
 } // namespace
 
-QtTopBarSurface::QtTopBarSurface(lua::Vm &lua_vm, const QSize &size)
-    : ui_(std::make_unique<ui::LuaUi>(lua_vm, *this)) {
+QtTopBarSurface::QtTopBarSurface(ui::Services &services, const QSize &size)
+    : ui_(std::make_unique<ui::LuaUi>(services, *this)) {
   ui_->setReloadHandler([this] {
     reload_timer_.start();
   });

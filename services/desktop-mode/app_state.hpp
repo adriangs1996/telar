@@ -8,6 +8,8 @@ struct WorkspaceSummary {
   std::uint64_t id = 0;
   std::string name;
   std::uint16_t tab_count = 0;
+
+  bool operator==(const WorkspaceSummary &) const = default;
 };
 
 struct AppState {
