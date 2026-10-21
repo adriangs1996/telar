@@ -194,7 +194,16 @@ tab counts, highlights the focused workspace, and activates a workspace's macOS
 Space on click. The list scrolls when it exceeds the panel height. Selection is
 disabled while disconnected or while a Space operation is pending.
 
-Both panels use `TelarSurfacePanel` for native window behavior and `LuaSurface`
+`ui/wallpaper/init.lua` creates a background shared by all monitors and Spaces.
+The native backend maintains one wallpaper panel per connected monitor, covering
+its full frame, and removes the panel when that monitor is disconnected.
+Wallpaper panels ignore mouse input and cannot take keyboard focus. They use a
+window level above the system wallpaper and below desktop icons, with
+`CanJoinAllSpaces`, `Stationary` and `IgnoresCycle` collection behaviors.
+Closing Telar reveals the system wallpaper; system wallpaper preferences are
+unchanged. Login and lock-screen backgrounds are outside this surface.
+
+All panels use `TelarSurfacePanel` for native window behavior and `LuaSurface`
 for their Qt/Lua contents. `DesktopUi` owns configuration and coordinates reloads.
 Configuration and surfaces share the runtime connection, desktop service, shortcut
 engine and LuaJIT VM, with separate globals, module caches and subscriptions.
@@ -206,7 +215,7 @@ The desktop has its own Lua entry point, separate from the GUI's `config.lua`:
 2. Otherwise, load `$XDG_CONFIG_HOME/telar/desktop.lua`, or `~/.config/telar/desktop.lua`
    when `XDG_CONFIG_HOME` is unset or empty.
 3. If that default file does not exist, run the bundled `ui/desktop.lua`, which
-   configures both surfaces and registers the default shortcuts.
+   configures all surfaces and registers the default shortcuts.
 
 The desktop does not load `config.lua` or use `TELAR_DEVELOPMENT_CONFIG`.
 Its configuration is an executable Lua script using the desktop API, rather than
@@ -220,6 +229,15 @@ require("shortcuts")()
 
 local colors = { background = "#1b1723", accent = "#c4a7e7" }
 
+desktop.configure_surface("wallpaper", {
+  module = "wallpaper",
+  options = {
+    color = "#16131d",
+    image = "~/Pictures/wallpaper.jpg",
+    fit = "cover",
+  },
+})
+
 desktop.configure_surface("topbar", {
   module = "topbar",
   options = { colors = colors },
@@ -232,13 +250,13 @@ desktop.configure_surface("sidebar", {
 ```
 
 `desktop.lua` executes once at startup and once per configuration reload, in an
-environment independent of both panels. It registers global shortcuts and chooses
+environment independent of the panels. It registers global shortcuts and chooses
 each surface's module and options. UI creation belongs inside a surface module;
 calling UI operations from the global environment raises an error. Existing
 configurations should replace `require("topbar")` with `require("shortcuts")()`
 and `desktop.configure_surface(...)` calls.
 
-`configure_surface(name, settings)` accepts `topbar` or `sidebar`, with optional
+`configure_surface(name, settings)` accepts `topbar`, `sidebar` or `wallpaper`, with optional
 `module` and `options` fields. The default module matches the surface name, with
 empty options. Options are copied data tables, including nested tables and dense
 arrays of up to 4096 entries, with at most 16 levels of table nesting;
@@ -247,14 +265,30 @@ copy through `ui.surface.options`. `ui.surface.name` and `ui.surface.module`
 identify the surface and its configured module. Local edits to an options table
 do not change the global configuration or another surface.
 
-Both built-in surfaces accept a `colors` table; the sidebar also accepts `title`.
+The topbar and sidebar accept a `colors` table; the sidebar also accepts `title`.
 Custom modules can interpret their options freely. These options configure UI
 content, not native panel geometry.
+
+The wallpaper accepts `color`, optional `image` and `fit`. The image can be a Qt
+URL, an absolute path, a path starting with `~/`, or a path relative to
+`desktop.lua`. `cover` fills the monitor with cropping, `contain` shows the whole
+image with the background color around it, `center` keeps the image centered at
+its natural size, and `stretch` fills the monitor without preserving aspect ratio.
+The default is a solid color with `fit = "cover"`. Images load asynchronously;
+an image load error leaves the background color visible and is reported by Qt.
+
+All monitors receive the same wallpaper options. Each instance has its own size
+and Lua state, and receives screen and resize events through the shared surface
+API. Global shortcuts belong in `desktop.lua`, so adding monitors does not register
+the same shortcut repeatedly. The default wallpaper subscribes only to resize
+events and does not run a timer or animation loop. The wallpaper module can be
+replaced like any other surface; it has the same runtime, filesystem and network
+APIs. Its native window remains noninteractive even with a custom module.
 
 To replace the sidebar, select another module or put `sidebar/init.lua` in the
 directory containing `desktop.lua`; during development, edit
 `ui/sidebar/init.lua` or add an override at `dev/sidebar/init.lua`. The same
-rules apply to the topbar. Shared Lua components can be imported by both
+rules apply to the topbar and wallpaper. Shared Lua components can be imported by all
 surfaces, with separate local state.
 Local modules resolve relative to `desktop.lua`. Modules not found there are
 looked up in `TELAR_DESKTOP_UI_DIR`, if set, then in the bundled UI resources.
@@ -275,8 +309,9 @@ shortcut map must validate before any live environment is replaced. A rejected
 reload keeps the previous configuration, interfaces and bindings; fixing an
 imported file retries the complete pending configuration.
 
-An edit imported only by a surface reloads that surface. It does not execute
-`desktop.lua` or recreate the other panel. Reloading a surface without bindings
+An edit imported only by a surface reloads all instances of that surface type
+together. It does not execute `desktop.lua` or recreate unrelated panels.
+Reloading a surface without bindings
 also preserves a pending global shortcut sequence. Creating the default config
 while the desktop is running reloads the desktop; removing it restores the
 bundled entry point.

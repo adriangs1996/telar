@@ -16,6 +16,5 @@ struct LuaSurface final : QuickSurface {
 private:
   friend class ui::DesktopUi;
   ui::DesktopUi &desktop_;
-  ui::SurfaceKind kind_;
   ui::LuaUi ui_;
 };

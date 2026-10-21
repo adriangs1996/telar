@@ -792,7 +792,8 @@ namespace {
         throw std::runtime_error("configure_surface is only available while loading desktop.lua");
       }
 
-      if (name != QStringLiteral("topbar") && name != QStringLiteral("sidebar")) {
+      if (name != QStringLiteral("topbar") && name != QStringLiteral("sidebar") &&
+          name != QStringLiteral("wallpaper")) {
         throw std::runtime_error("Unknown desktop surface");
       }
 

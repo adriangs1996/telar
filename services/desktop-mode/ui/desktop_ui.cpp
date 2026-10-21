@@ -18,6 +18,8 @@ namespace {
       return QStringLiteral("topbar");
     case ui::SurfaceKind::sidebar:
       return QStringLiteral("sidebar");
+    case ui::SurfaceKind::wallpaper:
+      return QStringLiteral("wallpaper");
     }
 
     throw std::runtime_error("Unknown desktop surface");
@@ -86,7 +88,7 @@ namespace ui {
   }
 
   void DesktopUi::attach(LuaSurface &surface, SurfaceKind kind) {
-    if (surfaces_.contains(kind)) {
+    if (surfaces_.contains(&surface)) {
       throw std::runtime_error("Desktop surface is already attached");
     }
 
@@ -99,24 +101,18 @@ namespace ui {
 
     const std::array environments{&surface.ui_};
     LuaUi::commit(environments);
-    surfaces_.emplace(kind, &surface);
+    surfaces_.emplace(&surface, kind);
   }
 
-  void DesktopUi::detach(SurfaceKind kind) {
-    const auto found = surfaces_.find(kind);
-
-    if (found != surfaces_.end()) {
-      found->second->ui_.setReloadHandler({});
-      surfaces_.erase(found);
-    }
-
-    dirty_surfaces_.erase(kind);
+  void DesktopUi::detach(LuaSurface &surface) {
+    surface.ui_.setReloadHandler({});
+    surfaces_.erase(&surface);
   }
 
   void DesktopUi::reloadConfiguration() {
     std::vector<LuaUi *> environments{&configuration_};
 
-    for (const auto &[_, surface] : surfaces_) {
+    for (const auto &[surface, _] : surfaces_) {
       environments.push_back(&surface->ui_);
     }
 
@@ -132,7 +128,7 @@ namespace ui {
       auto settings = configuration_.preparedSettings();
       auto prefix = configuration_.preparedPrefix();
 
-      for (const auto &[kind, surface] : surfaces_) {
+      for (const auto &[surface, kind] : surfaces_) {
         prepareSurface(*surface, kind, settings, prefix);
       }
 
@@ -166,20 +162,24 @@ namespace ui {
     }
 
     for (const auto kind : dirty) {
-      const auto found = surfaces_.find(kind);
-
-      if (found == surfaces_.end()) {
-        continue;
-      }
-
-      auto &surface = *found->second;
+      std::vector<LuaUi *> environments;
 
       try {
-        prepareSurface(surface, kind, settings_, prefix_);
-        const std::array environments{&surface.ui_};
-        LuaUi::commit(environments);
+        for (const auto &[surface, attached_kind] : surfaces_) {
+          if (attached_kind == kind) {
+            environments.push_back(&surface->ui_);
+            prepareSurface(*surface, kind, settings_, prefix_);
+          }
+        }
+
+        if (!environments.empty()) {
+          LuaUi::commit(environments);
+        }
       } catch (const std::exception &error) {
-        surface.ui_.discard();
+        for (auto *environment : environments) {
+          environment->discard();
+        }
+
         qWarning() << surfaceName(kind) << "UI reload failed:" << error.what();
       }
     }

@@ -3,6 +3,7 @@
 #include "ui/lua_surface.hpp"
 #include <AppKit/AppKit.h>
 #include <Foundation/Foundation.h>
+#include <CoreGraphics/CGWindowLevel.h>
 #include <algorithm>
 #include <memory>
 
@@ -10,8 +11,13 @@ namespace {
   constexpr CGFloat topbar_height = 36.0;
   constexpr CGFloat sidebar_width = 280.0;
   constexpr CGFloat sidebar_margin = 8.0;
+  constexpr CGWindowLevel wallpaper_level_offset = 1;
 
   NSRect surfaceFrame(NSScreen *screen, ui::SurfaceKind kind) {
+    if (kind == ui::SurfaceKind::wallpaper) {
+      return screen.frame;
+    }
+
     const NSRect available = screen.visibleFrame;
 
     if (kind == ui::SurfaceKind::topbar) {
@@ -64,6 +70,17 @@ namespace {
   self.hasShadow = NO;
   self.title = kind == ui::SurfaceKind::topbar ? @"Telar Top Bar" : @"Telar Sidebar";
 
+  if (kind == ui::SurfaceKind::wallpaper) {
+    // Stay above the system wallpaper and below the desktop icons.
+    self.level = CGWindowLevelForKey(kCGDesktopWindowLevelKey) + wallpaper_level_offset;
+    self.collectionBehavior |=
+        NSWindowCollectionBehaviorStationary | NSWindowCollectionBehaviorIgnoresCycle;
+    self.ignoresMouseEvents = YES;
+    self.excludedFromWindowsMenu = YES;
+    self.animationBehavior = NSWindowAnimationBehaviorNone;
+    self.title = @"Telar Wallpaper";
+  }
+
   NSView *container = self.contentView;
   const NSRect bounds = container.bounds;
 
@@ -72,6 +89,10 @@ namespace {
   auto &window = _surface->window();
 
   window.setFlags(Qt::SubWindow);
+
+  if (kind == ui::SurfaceKind::wallpaper) {
+    window.setFlags(Qt::SubWindow | Qt::WindowDoesNotAcceptFocus | Qt::WindowTransparentForInput);
+  }
 
   NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window.winId());
 
@@ -91,7 +112,7 @@ namespace {
 }
 
 - (void)updateGeometry:(NSNotification *)notification {
-  NSScreen *screen = NSScreen.mainScreen;
+  NSScreen *screen = _kind == ui::SurfaceKind::wallpaper ? nil : NSScreen.mainScreen;
 
   for (NSScreen *candidate in NSScreen.screens) {
     if ([candidate.deviceDescription[@"NSScreenNumber"] isEqual:_display_id]) {
@@ -110,7 +131,7 @@ namespace {
 }
 
 - (BOOL)canBecomeKeyWindow {
-  return YES;
+  return _kind != ui::SurfaceKind::wallpaper;
 }
 
 - (BOOL)canBecomeMainWindow {

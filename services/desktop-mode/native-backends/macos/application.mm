@@ -5,6 +5,7 @@
 #include "../../ui/desktop_control.hpp"
 #include "../../ui/desktop_ui.hpp"
 #include "surface_panel.hpp"
+#include "wallpaper_panels.hpp"
 #import <AppKit/AppKit.h>
 #include <CoreFoundation/CFBase.h>
 #include <CoreFoundation/CFRunLoop.h>
@@ -155,12 +156,20 @@ int runApplication(ApplicationHost &host,
     struct Panels {
       TelarSurfacePanel *topbar = nil;
       TelarSurfacePanel *sidebar = nil;
+      TelarWallpaperPanels *wallpapers = nil;
 
       ~Panels() {
+        [wallpapers close];
         [sidebar close];
         [topbar close];
       }
     } panels;
+
+    panels.wallpapers = [[TelarWallpaperPanels alloc] initWithDesktop:desktop_ui];
+
+    if (!panels.wallpapers) {
+      return EXIT_FAILURE;
+    }
 
     panels.topbar = [[TelarSurfacePanel alloc] initWithScreen:screen
                                                          kind:ui::SurfaceKind::topbar
@@ -188,6 +197,7 @@ int runApplication(ApplicationHost &host,
     }
 
     if (host.update()) {
+      [panels.wallpapers show];
       [panels.topbar orderFrontRegardless];
       [panels.sidebar orderFrontRegardless];
       result = qt_application.exec();

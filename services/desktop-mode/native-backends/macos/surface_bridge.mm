@@ -38,13 +38,16 @@ namespace {
     _panel = view.window;
     _surface = &surface;
     _window = &surface.window();
-    const auto options = NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved |
-                         NSTrackingActiveAlways | NSTrackingInVisibleRect;
-    _tracking_area = [[NSTrackingArea alloc] initWithRect:NSZeroRect
-                                                  options:options
-                                                    owner:self
-                                                 userInfo:nil];
-    [view addTrackingArea:_tracking_area];
+
+    if (!_panel.ignoresMouseEvents) {
+      const auto options = NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved |
+                           NSTrackingActiveAlways | NSTrackingInVisibleRect;
+      _tracking_area = [[NSTrackingArea alloc] initWithRect:NSZeroRect
+                                                    options:options
+                                                      owner:self
+                                                   userInfo:nil];
+      [view addTrackingArea:_tracking_area];
+    }
 
     __weak TelarSurfaceBridge *weak_self = self;
     surface.setFocusHandler([weak_self] {
@@ -52,6 +55,11 @@ namespace {
 
       if (bridge) {
         NSWindow *panel = bridge->_panel;
+
+        if (!panel.canBecomeKeyWindow) {
+          return;
+        }
+
         [panel makeKeyWindow];
         [panel makeFirstResponder:bridge->_view];
         [bridge updateState:nil];
@@ -87,7 +95,9 @@ namespace {
 
 - (void)dealloc {
   [NSNotificationCenter.defaultCenter removeObserver:self];
-  [_view removeTrackingArea:_tracking_area];
+  if (_tracking_area) {
+    [_view removeTrackingArea:_tracking_area];
+  }
 
   if (_window) {
     _surface->setFocusHandler({});

@@ -16,7 +16,7 @@ namespace ui {
 
     Services &services() noexcept;
     void attach(LuaSurface &surface, SurfaceKind kind);
-    void detach(SurfaceKind kind);
+    void detach(LuaSurface &surface);
 
   private:
     Services &services_;
@@ -25,7 +25,7 @@ namespace ui {
     bool config_required_ = false;
     QVariantMap settings_;
     QString prefix_;
-    std::map<SurfaceKind, LuaSurface *> surfaces_;
+    std::map<LuaSurface *, SurfaceKind> surfaces_;
     FileWatch watcher_;
     QTimer reload_timer_;
     std::set<SurfaceKind> dirty_surfaces_;

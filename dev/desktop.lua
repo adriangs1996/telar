@@ -95,6 +95,11 @@ require("shortcuts")()
 
 local colors = { background = "#1b1723", accent = "#c4a7e7" }
 
+desktop.configure_surface("wallpaper", {
+  module = "wallpaper",
+  options = { color = "#16131d", fit = "cover" },
+})
+
 desktop.configure_surface("topbar", {
   module = "topbar",
   options = { colors = colors },
