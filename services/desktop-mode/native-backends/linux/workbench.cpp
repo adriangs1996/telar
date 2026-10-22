@@ -19,7 +19,7 @@ namespace workbench::native {
   Display display(std::uint32_t identifier) {
     for (const auto &output : linux_desktop::Session::get().snapshot().outputs) {
       if (output.id == identifier) {
-        return {output.geometry, output.scale};
+        return {output.available, output.scale};
       }
     }
     return {};

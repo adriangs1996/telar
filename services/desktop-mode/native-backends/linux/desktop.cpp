@@ -22,6 +22,15 @@ struct NativeDesktop::Impl {
     if (state.pending_space == state.focused_space) {
       state.pending_space = 0;
     }
+    if (!snapshot.outputs.empty()) {
+      for (auto &space : state.spaces) {
+        if (std::ranges::none_of(snapshot.outputs, [&](const auto &output) {
+              return output.id == space.display;
+            })) {
+          space.display = snapshot.outputs.front().id;
+        }
+      }
+    }
     state.displays.clear();
     for (const auto &output : snapshot.outputs) {
       state.displays.push_back({output.id,
@@ -30,12 +39,19 @@ struct NativeDesktop::Impl {
                                 double(output.geometry.y()),
                                 double(output.geometry.width()),
                                 double(output.geometry.height())});
-      if (std::ranges::none_of(state.spaces, [&](const auto &space) {
-            return space.display == output.id;
-          })) {
+      const auto space = std::ranges::find(state.spaces, output.space, &DesktopSpace::id);
+      if (space == state.spaces.end()) {
         state.spaces.push_back(
             {.id = output.space, .uuid = output.name.toStdString() + ":1", .display = output.id});
+      } else {
+        space->display = output.id;
       }
+    }
+    for (auto &space : state.spaces) {
+      space.visible = false;
+      space.focused = false;
+    }
+    for (const auto &output : snapshot.outputs) {
       std::uint32_t index = 0;
       for (auto &space : state.spaces) {
         if (space.display != output.id) {
@@ -46,11 +62,6 @@ struct NativeDesktop::Impl {
         space.focused = space.id == state.focused_space;
       }
     }
-    std::erase_if(state.spaces, [&](const auto &space) {
-      return std::ranges::none_of(snapshot.outputs, [&](const auto &output) {
-        return space.display == output.id;
-      });
-    });
     publish();
   }
 };

@@ -24,6 +24,7 @@ struct telar_output_info {
   uint32_t id;
   const char *name;
   struct telar_box box;
+  struct telar_box usable;
   float scale;
   uint64_t space;
 };
@@ -64,6 +65,7 @@ struct telar_hooks {
   void (*changed)(void *context);
   bool (*key)(void *context, const struct telar_key_event *event);
   void (*cancel_shortcuts)(void *context);
+  void (*lock)(void *context);
 };
 
 // A nonzero resource addresses a surface owned by this process; otherwise id is a
@@ -107,6 +109,7 @@ void telar_server_focus(struct telar_server *server, struct telar_target target)
 void telar_server_raise(struct telar_server *server, struct telar_target target);
 void telar_server_close(struct telar_server *server, struct telar_target target);
 void telar_server_space(struct telar_server *server, uint32_t output, uint64_t space);
+void telar_server_workarea(struct telar_server *server, uint32_t output, struct telar_box box);
 void telar_server_move_space(struct telar_server *server, uint64_t from, uint64_t to);
 
 #ifdef __cplusplus

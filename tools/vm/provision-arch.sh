@@ -9,8 +9,12 @@ fi
 sudo pacman -Syu --noconfirm --needed \
     base-devel clang cmake ninja git curl python rsync pkgconf luajit \
     qt6-base qt6-declarative qt6-wayland wlroots0.20 wayland wayland-protocols \
-    libxkbcommon pixman libdrm mesa xorg-xwayland foot ttf-dejavu \
-    grim wl-clipboard xorg-xeyes xorg-xprop dbus sqlite brotli libnghttp2
+    libxkbcommon pixman libdrm mesa xorg-xwayland foot ttf-dejavu noto-fonts-cjk \
+    grim slurp wl-clipboard xorg-xeyes xorg-xprop dbus sqlite brotli libnghttp2 \
+    wlr-protocols wlr-randr swaylock swayidle xdg-desktop-portal-wlr \
+    xdg-desktop-portal-gtk wireplumber xdg-utils mako dex fcitx5 \
+    fcitx5-chinese-addons python-gobject gtk3 gstreamer gst-plugins-base \
+    gst-plugin-pipewire wmctrl
 
 sudo mkdir -p /etc/systemd/system/getty@tty1.service.d
 printf '[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin %s --noclear %%I $TERM\n' "$USER" |

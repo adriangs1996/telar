@@ -1,6 +1,7 @@
 #include "../application.hpp"
 #include "../shortcuts.hpp"
 #include "session.hpp"
+#include "session_services.hpp"
 #include "../../desktop_registry.hpp"
 #include "../../ui/services.hpp"
 #include "../../ui/desktop_ui.hpp"
@@ -128,7 +129,7 @@ namespace {
                                  ui::SurfaceKind::sidebar};
       for (const auto &output : outputs) {
         for (const auto kind : kinds) {
-          QRect frame = output.geometry;
+          QRect frame = kind == ui::SurfaceKind::wallpaper ? output.geometry : output.available;
           if (kind == ui::SurfaceKind::topbar) {
             frame.setHeight(std::min(frame.height(), topbar_height));
           }
@@ -161,7 +162,7 @@ namespace {
                QVariantMap{{"id", output.id},
                            {"name", output.name},
                            {"geometry", rectangle(output.geometry)},
-                           {"available_geometry", rectangle(output.geometry)}}},
+                           {"available_geometry", rectangle(output.available)}}},
               {"geometry", rectangle(frame)},
               {"scale", output.scale},
               {"safe_area",
@@ -181,6 +182,12 @@ namespace {
                                kind != ui::SurfaceKind::wallpaper);
         }
       }
+      for (const auto &output : outputs) {
+        const QRect area = desktop_.workArea(output.id, output.available).toAlignedRect();
+        linux_desktop::Session::get().post([id = output.id, area](telar_server *server) {
+          telar_server_workarea(server, id, {area.x(), area.y(), area.width(), area.height()});
+        });
+      }
       if (desktop_.changed) {
         desktop_.changed();
       }
@@ -199,13 +206,20 @@ int runApplication(ApplicationHost &host,
     throw std::runtime_error("A Telar Desktop session is already running");
   }
 
+  const auto backends = qEnvironmentVariable("WLR_BACKENDS");
+  const bool standalone = !qEnvironmentVariableIsSet("WAYLAND_DISPLAY") &&
+                          !qEnvironmentVariableIsSet("DISPLAY") && !backends.contains("headless") &&
+                          !backends.contains("wayland") && !backends.contains("x11");
   linux_desktop::Session compositor;
+  linux_desktop::SessionServices::prepare(standalone);
   int argc = 1;
   char application_name[] = "telar-desktop";
   char *argv[] = {application_name, nullptr};
   QGuiApplication application(argc, argv);
+  application.setDesktopFileName("telar-desktop");
   application.setQuitOnLastWindowClosed(false);
   compositor.attach();
+  linux_desktop::SessionServices session_services(standalone);
   QSocketNotifier termination(wakeup.impl->signal_guard.fd, QSocketNotifier::Read);
   QObject::connect(&termination, &QSocketNotifier::activated, &application, [&] {
     signalfd_siginfo info;

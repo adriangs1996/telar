@@ -16,6 +16,7 @@ namespace linux_desktop {
     std::uint32_t id;
     QString name;
     QRect geometry;
+    QRect available;
     double scale;
     std::uint64_t space;
     bool operator==(const Output &) const = default;
@@ -51,6 +52,7 @@ namespace linux_desktop {
     const Snapshot &snapshot() const;
     void capture(Shortcuts::Capture capture);
     std::function<void(Shortcuts::Request)> shortcut;
+    std::function<void()> lockRequest;
 
   private:
     static Session *current_;
@@ -58,6 +60,7 @@ namespace linux_desktop {
     int updates_fd_ = -1;
     std::thread thread_;
     std::atomic<bool> stopping_ = false;
+    std::atomic<bool> lock_requested_ = false;
     std::mutex mutex_;
     std::deque<std::function<void(telar_server *)>> commands_;
     std::vector<Shortcuts::Request> requests_;

@@ -686,12 +686,16 @@ namespace workbench {
         return;
       }
 
-      followed_focus = foreign.focused;
       const auto home = homes.find(foreign.focused);
-      if (home == homes.end() || !home->second.first->visible) {
+      if (home == homes.end()) {
+        followed_focus = foreign.focused;
+        return;
+      }
+      if (!home->second.first->visible) {
         return;
       }
 
+      followed_focus = foreign.focused;
       if (home->second.first->runtime->activeTab() == home->second.second) {
         requestFocus("window:" + QString::number(foreign.focused));
         return;

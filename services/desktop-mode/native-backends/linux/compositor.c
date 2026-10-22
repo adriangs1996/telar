@@ -1,184 +1,20 @@
 #define _POSIX_C_SOURCE 200809L
 // Adapted from wlroots tinywl 0.20.2; see ../../licenses/wlroots.txt.
-#include "compositor.h"
-#include <errno.h>
-#include <string.h>
-#include <wlr/types/wlr_viewporter.h>
-#include <wlr/types/wlr_fractional_scale_v1.h>
-#include <wlr/types/wlr_xdg_output_v1.h>
-#include <wlr/types/wlr_xdg_decoration_v1.h>
-#include <wlr/types/wlr_primary_selection.h>
-#include <wlr/types/wlr_primary_selection_v1.h>
-#include <wlr/types/wlr_screencopy_v1.h>
-#include <wlr/types/wlr_data_control_v1.h>
-#include <wlr/types/wlr_cursor_shape_v1.h>
-#include <wlr/xwayland/xwayland.h>
-#include <assert.h>
-#include <getopt.h>
-#include <stdbool.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <time.h>
-#include <unistd.h>
-#include <wayland-server-core.h>
-#include <wlr/backend.h>
-#include <wlr/backend/session.h>
-#include <wlr/render/allocator.h>
-#include <wlr/render/wlr_renderer.h>
-#include <wlr/types/wlr_cursor.h>
-#include <wlr/types/wlr_compositor.h>
-#include <wlr/types/wlr_data_device.h>
-#include <wlr/types/wlr_input_device.h>
-#include <wlr/types/wlr_keyboard.h>
-#include <wlr/types/wlr_output.h>
-#include <wlr/types/wlr_output_layout.h>
-#include <wlr/types/wlr_pointer.h>
-#include <wlr/types/wlr_scene.h>
-#include <wlr/types/wlr_seat.h>
-#include <wlr/types/wlr_subcompositor.h>
-#include <wlr/types/wlr_xcursor_manager.h>
-#include <wlr/types/wlr_xdg_shell.h>
-#include <wlr/util/log.h>
-#include <xkbcommon/xkbcommon.h>
-
-enum telar_cursor_mode {
-  TELAR_CURSOR_PASSTHROUGH,
-  TELAR_CURSOR_MOVE,
-  TELAR_CURSOR_RESIZE,
-};
-
-enum {
-  max_windows = 2048,
-  initial_window_width = 640,
-  initial_window_height = 480
-};
-
-struct native_placement {
-  struct wl_list link;
-  struct telar_placement value;
-};
-
-struct telar_server {
-  struct telar_hooks hooks;
-  struct wl_event_source *commands;
-  struct wl_event_source *changed_idle;
-  const char *socket_name;
-  struct wl_list natives;
-  uint32_t next_window;
-  uint32_t next_output;
-  uint32_t focused;
-  struct telar_target focus_request;
-  uint64_t focused_space;
-  bool destroying;
-  struct wlr_scene_tree *layers[3];
-  struct wlr_compositor *compositor;
-  struct wl_listener primary_selection;
-  struct wl_listener cursor_shape;
-  struct wlr_xwayland *xwayland;
-  struct wl_listener new_xwayland;
-  struct wl_listener xwayland_ready;
-  struct wl_list xwindows;
-  struct wl_display *wl_display;
-  struct wlr_backend *backend;
-  struct wlr_session *session;
-  struct wlr_renderer *renderer;
-  struct wlr_allocator *allocator;
-  struct wlr_scene *scene;
-  struct wlr_scene_output_layout *scene_layout;
-
-  struct wlr_xdg_shell *xdg_shell;
-  struct wl_listener new_xdg_toplevel;
-  struct wl_listener new_xdg_popup;
-  struct wl_list toplevels;
-
-  struct wlr_cursor *cursor;
-  struct wlr_xcursor_manager *cursor_mgr;
-  struct wl_listener cursor_motion;
-  struct wl_listener cursor_motion_absolute;
-  struct wl_listener cursor_button;
-  struct wl_listener cursor_axis;
-  struct wl_listener cursor_frame;
-
-  struct wlr_seat *seat;
-  struct wl_listener new_input;
-  struct wl_listener request_cursor;
-  struct wl_listener pointer_focus_change;
-  struct wl_listener request_set_selection;
-  struct wl_list keyboards;
-  enum telar_cursor_mode cursor_mode;
-  struct telar_toplevel *grabbed_toplevel;
-  double grab_x, grab_y;
-  struct wlr_box grab_geobox;
-  uint32_t resize_edges;
-
-  struct wlr_output_layout *output_layout;
-  struct wl_list outputs;
-  struct wl_listener new_output;
-};
-
-struct telar_output {
-  uint32_t id;
-  uint64_t space;
-  struct wl_list link;
-  struct telar_server *server;
-  struct wlr_output *wlr_output;
-  struct wl_listener frame;
-  struct wl_listener request_state;
-  struct wl_listener destroy;
-};
-
-struct telar_toplevel {
-  uint32_t id;
-  uint32_t resource;
-  pid_t pid;
-  uint64_t space;
-  bool own;
-  bool mapped;
-  bool visible;
-  bool focusable;
-  enum telar_layer layer;
-  struct wl_listener title;
-  struct wl_listener app_id;
-  int last_width, last_height;
-  struct wl_list link;
-  struct telar_server *server;
-  struct wlr_xdg_toplevel *xdg_toplevel;
-  struct wlr_scene_tree *scene_tree;
-  struct wl_listener map;
-  struct wl_listener unmap;
-  struct wl_listener commit;
-  struct wl_listener destroy;
-  struct wl_listener request_move;
-  struct wl_listener request_resize;
-  struct wl_listener request_maximize;
-  struct wl_listener request_fullscreen;
-};
-
-struct telar_popup {
-  struct wlr_xdg_popup *xdg_popup;
-  struct wl_listener commit;
-  struct wl_listener destroy;
-};
-
-struct telar_keyboard {
-  struct wl_list link;
-  struct telar_server *server;
-  struct wlr_keyboard *wlr_keyboard;
-
-  struct wl_listener modifiers;
-  struct wl_listener key;
-  struct wl_listener destroy;
-};
+#include "compositor_internal.h"
+#include <wlr/types/wlr_session_lock_v1.h>
+#include <wlr/types/wlr_layer_shell_v1.h>
+#include <wlr/types/wlr_virtual_keyboard_v1.h>
 
 static void changed(void *data) {
   struct telar_server *server = data;
   server->changed_idle = NULL;
   if (!server->destroying && server->hooks.changed) {
+    telar_shell_visibility(server);
     server->hooks.changed(server->hooks.context);
   }
 }
 
-static void notify(struct telar_server *server) {
+void telar_notify(struct telar_server *server) {
   if (!server->destroying && !server->changed_idle) {
     server->changed_idle =
         wl_event_loop_add_idle(wl_display_get_event_loop(server->wl_display), changed, server);
@@ -191,7 +27,8 @@ static bool space_visible(struct telar_server *server, uint64_t space) {
   }
   struct telar_output *output;
   wl_list_for_each(output, &server->outputs, link) {
-    if (output->space == space) {
+    if (output->space == space &&
+        wlr_output_layout_get(server->output_layout, output->wlr_output)) {
       return true;
     }
   }
@@ -225,12 +62,113 @@ static void deactivate_surface(struct wlr_surface *surface) {
   }
 }
 
+bool telar_focus_allowed(struct telar_server *server, struct wlr_surface *surface) {
+  if (!surface) {
+    return false;
+  }
+  if (server->locked) {
+    return wlr_session_lock_surface_v1_try_from_wlr_surface(
+               wlr_surface_get_root_surface(surface)) != NULL;
+  }
+  return !telar_shell_exclusive(server, surface);
+}
+
+void telar_focus_surface(struct telar_server *server, struct wlr_surface *surface) {
+  if (!telar_focus_allowed(server, surface) ||
+      server->seat->keyboard_state.focused_surface == surface) {
+    return;
+  }
+  struct wlr_surface *previous = server->seat->keyboard_state.focused_surface;
+  if (previous) {
+    deactivate_surface(previous);
+  }
+  struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(server->seat);
+  if (keyboard) {
+    if (server->locked) {
+      wlr_seat_keyboard_enter(server->seat,
+                              surface,
+                              keyboard->keycodes,
+                              keyboard->num_keycodes,
+                              &keyboard->modifiers);
+    } else {
+      wlr_seat_keyboard_notify_enter(server->seat,
+                                     surface,
+                                     keyboard->keycodes,
+                                     keyboard->num_keycodes,
+                                     &keyboard->modifiers);
+    }
+  }
+}
+
+struct telar_output *telar_output_for_space(struct telar_server *server, uint64_t space) {
+  struct telar_output *output, *fallback = NULL;
+  wl_list_for_each(output, &server->outputs, link) {
+    if (!wlr_output_layout_get(server->output_layout, output->wlr_output)) {
+      continue;
+    }
+    if (output->space == space) {
+      return output;
+    }
+    fallback = output;
+  }
+  return fallback;
+}
+
+static void arrange_toplevel(struct telar_toplevel *window) {
+  struct wlr_box box = window->placement;
+  struct telar_output *output = telar_output_for_space(window->server, window->space);
+  if (output && (window->fullscreen || window->maximized)) {
+    box = wlr_box_empty(&output->workarea) ? output->usable : output->workarea;
+    if (window->fullscreen) {
+      wlr_output_layout_get_box(window->server->output_layout, output->wlr_output, &box);
+    }
+  }
+  if (box.width < 1 || box.height < 1) {
+    return;
+  }
+  struct wlr_scene_tree *layer =
+      window->fullscreen ? window->server->fullscreen_tree : window->server->layers[window->layer];
+  wlr_scene_node_reparent(&window->scene_tree->node, layer);
+  wlr_scene_node_set_position(&window->scene_tree->node, box.x, box.y);
+  if (window->xdg_toplevel->base->initialized) {
+    wlr_xdg_toplevel_set_size(window->xdg_toplevel, box.width, box.height);
+  }
+}
+
+static void arrange_xwindows(struct telar_server *server);
+
+void telar_arrange_windows(struct telar_server *server) {
+  arrange_xwindows(server);
+  struct telar_toplevel *window;
+  wl_list_for_each(window, &server->toplevels, link) {
+    if (window->fullscreen || window->maximized) {
+      arrange_toplevel(window);
+    }
+  }
+}
+
+void telar_server_workarea(struct telar_server *server, uint32_t id, struct telar_box box) {
+  struct telar_output *output;
+  wl_list_for_each(output, &server->outputs, link) {
+    if (output->id == id) {
+      struct wlr_box area = {box.x, box.y, box.width, box.height};
+      if (wlr_box_intersection(&output->workarea, &area, &output->usable)) {
+        telar_arrange_windows(server);
+      }
+      return;
+    }
+  }
+}
+
 static void focus_toplevel(struct telar_toplevel *toplevel) {
   if (toplevel == NULL || !toplevel->mapped || !toplevel->focusable || !toplevel->visible ||
       !space_visible(toplevel->server, toplevel->space)) {
     return;
   }
   struct telar_server *server = toplevel->server;
+  if (!telar_focus_allowed(server, toplevel->xdg_toplevel->base->surface)) {
+    return;
+  }
   struct wlr_seat *seat = server->seat;
   struct wlr_surface *prev_surface = seat->keyboard_state.focused_surface;
   struct wlr_surface *surface = toplevel->xdg_toplevel->base->surface;
@@ -248,7 +186,7 @@ static void focus_toplevel(struct telar_toplevel *toplevel) {
   if (toplevel->space) {
     server->focused_space = toplevel->space;
   }
-  notify(server);
+  telar_notify(server);
 
   wlr_xdg_toplevel_set_activated(toplevel->xdg_toplevel, true);
 
@@ -264,6 +202,13 @@ static void focus_toplevel(struct telar_toplevel *toplevel) {
 static void keyboard_handle_modifiers(struct wl_listener *listener, void *data) {
   struct telar_keyboard *keyboard = wl_container_of(listener, keyboard, modifiers);
 
+  if (keyboard->server->locked &&
+      wlr_input_device_get_virtual_keyboard(&keyboard->wlr_keyboard->base)) {
+    return;
+  }
+  if (telar_input_method_modifiers(keyboard->server, keyboard->wlr_keyboard)) {
+    return;
+  }
   wlr_seat_set_keyboard(keyboard->server->seat, keyboard->wlr_keyboard);
 
   wlr_seat_keyboard_notify_modifiers(keyboard->server->seat, &keyboard->wlr_keyboard->modifiers);
@@ -275,6 +220,16 @@ static void keyboard_handle_key(struct wl_listener *listener, void *data) {
   struct wlr_keyboard_key_event *event = data;
   struct wlr_seat *seat = server->seat;
 
+  bool virtual = wlr_input_device_get_virtual_keyboard(&keyboard->wlr_keyboard->base) != NULL;
+  if (server->locked) {
+    if (!virtual && telar_focus_allowed(server, seat->keyboard_state.focused_surface)) {
+      telar_shell_activity(server);
+      wlr_seat_set_keyboard(seat, keyboard->wlr_keyboard);
+      wlr_seat_keyboard_send_key(seat, event->time_msec, event->keycode, event->state);
+    }
+    return;
+  }
+  telar_shell_activity(server);
   uint32_t keycode = event->keycode + 8;
 
   const xkb_keysym_t *syms;
@@ -301,7 +256,16 @@ static void keyboard_handle_key(struct wl_listener *listener, void *data) {
       .modifiers = mask,
       .pressed = event->state == WL_KEYBOARD_KEY_STATE_PRESSED,
   };
-  bool handled = server->hooks.key && server->hooks.key(server->hooks.context, &key);
+  bool handled = !virtual && server->hooks.key && server->hooks.key(server->hooks.context, &key);
+  if (!handled && !virtual && mask == TELAR_SUPER && nsyms && syms[0] == XKB_KEY_l) {
+    if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED && server->hooks.lock) {
+      server->hooks.lock(server->hooks.context);
+    }
+    handled = true;
+  }
+  if (!handled) {
+    handled = telar_input_method_key(server, keyboard->wlr_keyboard, event);
+  }
 
   if (!handled) {
     wlr_seat_set_keyboard(seat, keyboard->wlr_keyboard);
@@ -315,10 +279,23 @@ static void keyboard_handle_destroy(struct wl_listener *listener, void *data) {
   wl_list_remove(&keyboard->key.link);
   wl_list_remove(&keyboard->destroy.link);
   wl_list_remove(&keyboard->link);
+  struct telar_server *server = keyboard->server;
+  if (wlr_seat_get_keyboard(server->seat) == keyboard->wlr_keyboard) {
+    struct telar_keyboard *replacement = NULL;
+    if (!wl_list_empty(&server->keyboards)) {
+      replacement = wl_container_of(server->keyboards.next, replacement, link);
+    }
+    wlr_seat_set_keyboard(server->seat, replacement ? replacement->wlr_keyboard : NULL);
+  }
+  uint32_t capabilities = server->seat->capabilities & ~WL_SEAT_CAPABILITY_KEYBOARD;
+  if (!wl_list_empty(&server->keyboards)) {
+    capabilities |= WL_SEAT_CAPABILITY_KEYBOARD;
+  }
+  wlr_seat_set_capabilities(server->seat, capabilities);
   free(keyboard);
 }
 
-static void server_new_keyboard(struct telar_server *server, struct wlr_input_device *device) {
+void telar_new_keyboard(struct telar_server *server, struct wlr_input_device *device) {
   struct wlr_keyboard *wlr_keyboard = wlr_keyboard_from_input_device(device);
 
   struct telar_keyboard *keyboard = calloc(1, sizeof(*keyboard));
@@ -328,22 +305,25 @@ static void server_new_keyboard(struct telar_server *server, struct wlr_input_de
   keyboard->server = server;
   keyboard->wlr_keyboard = wlr_keyboard;
 
-  struct xkb_context *context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-  if (!context) {
-    free(keyboard);
-    return;
-  }
-  struct xkb_keymap *keymap = xkb_keymap_new_from_names(context, NULL, XKB_KEYMAP_COMPILE_NO_FLAGS);
+  if (!wlr_input_device_get_virtual_keyboard(device)) {
+    struct xkb_context *context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+    if (!context) {
+      free(keyboard);
+      return;
+    }
+    struct xkb_keymap *keymap =
+        xkb_keymap_new_from_names(context, NULL, XKB_KEYMAP_COMPILE_NO_FLAGS);
 
-  if (!keymap) {
+    if (!keymap) {
+      xkb_context_unref(context);
+      free(keyboard);
+      return;
+    }
+    wlr_keyboard_set_keymap(wlr_keyboard, keymap);
+    xkb_keymap_unref(keymap);
     xkb_context_unref(context);
-    free(keyboard);
-    return;
+    wlr_keyboard_set_repeat_info(wlr_keyboard, 25, 600);
   }
-  wlr_keyboard_set_keymap(wlr_keyboard, keymap);
-  xkb_keymap_unref(keymap);
-  xkb_context_unref(context);
-  wlr_keyboard_set_repeat_info(wlr_keyboard, 25, 600);
 
   keyboard->modifiers.notify = keyboard_handle_modifiers;
   wl_signal_add(&wlr_keyboard->events.modifiers, &keyboard->modifiers);
@@ -353,11 +333,13 @@ static void server_new_keyboard(struct telar_server *server, struct wlr_input_de
   wl_signal_add(&device->events.destroy, &keyboard->destroy);
 
   wlr_seat_set_keyboard(server->seat, keyboard->wlr_keyboard);
+  wlr_seat_set_capabilities(server->seat, server->seat->capabilities | WL_SEAT_CAPABILITY_KEYBOARD);
 
   wl_list_insert(&server->keyboards, &keyboard->link);
 }
 
 static void server_new_pointer(struct telar_server *server, struct wlr_input_device *device) {
+  telar_pointer_configure(device);
   wlr_cursor_attach_input_device(server->cursor, device);
 }
 
@@ -366,7 +348,7 @@ static void server_new_input(struct wl_listener *listener, void *data) {
   struct wlr_input_device *device = data;
   switch (device->type) {
   case WLR_INPUT_DEVICE_KEYBOARD:
-    server_new_keyboard(server, device);
+    telar_new_keyboard(server, device);
     break;
   case WLR_INPUT_DEVICE_POINTER:
     server_new_pointer(server, device);
@@ -412,8 +394,20 @@ static struct telar_toplevel *desktop_toplevel_at(struct telar_server *server,
                                                   struct wlr_surface **surface,
                                                   double *sx,
                                                   double *sy) {
-  struct wlr_scene_node *node =
-      wlr_scene_node_at(&server->scene->tree.node, server->cursor->x, server->cursor->y, sx, sy);
+  struct wlr_scene_node *node = NULL;
+  if (server->locked) {
+    node =
+        wlr_scene_node_at(&server->scene->tree.node, server->cursor->x, server->cursor->y, sx, sy);
+  } else {
+    // A drag icon is rendered above its destination but must never receive input.
+    struct wlr_scene_node *layer;
+    wl_list_for_each_reverse(layer, &server->desktop_tree->children, link) {
+      if (layer != &server->drag_tree->node &&
+          (node = wlr_scene_node_at(layer, server->cursor->x, server->cursor->y, sx, sy))) {
+        break;
+      }
+    }
+  }
   if (node == NULL || node->type != WLR_SCENE_NODE_BUFFER) {
     return NULL;
   }
@@ -442,7 +436,7 @@ static void process_cursor_move(struct telar_server *server) {
   wlr_scene_node_set_position(&toplevel->scene_tree->node,
                               server->cursor->x - server->grab_x,
                               server->cursor->y - server->grab_y);
-  notify(server);
+  telar_notify(server);
 }
 
 static void process_cursor_resize(struct telar_server *server) {
@@ -485,10 +479,11 @@ static void process_cursor_resize(struct telar_server *server) {
   int new_width = new_right - new_left;
   int new_height = new_bottom - new_top;
   wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, new_width, new_height);
-  notify(server);
+  telar_notify(server);
 }
 
 static void process_cursor_motion(struct telar_server *server, uint32_t time) {
+  telar_shell_pointer(server);
   if (server->cursor_mode == TELAR_CURSOR_MOVE) {
     process_cursor_move(server);
     return;
@@ -504,6 +499,15 @@ static void process_cursor_motion(struct telar_server *server, uint32_t time) {
   if (!surface) {
     wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, "default");
   }
+  if (server->locked) {
+    if (surface && telar_focus_allowed(server, surface)) {
+      wlr_seat_pointer_enter(seat, surface, sx, sy);
+      wlr_seat_pointer_send_motion(seat, time, sx, sy);
+    } else {
+      wlr_seat_pointer_clear_focus(seat);
+    }
+    return;
+  }
   if (surface) {
     wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
     wlr_seat_pointer_notify_motion(seat, time, sx, sy);
@@ -516,14 +520,18 @@ static void server_cursor_motion(struct wl_listener *listener, void *data) {
   struct telar_server *server = wl_container_of(listener, server, cursor_motion);
   struct wlr_pointer_motion_event *event = data;
 
-  wlr_cursor_move(server->cursor, &event->pointer->base, event->delta_x, event->delta_y);
+  if (!telar_pointer_relative(server, event)) {
+    wlr_cursor_move(server->cursor, &event->pointer->base, event->delta_x, event->delta_y);
+  }
   process_cursor_motion(server, event->time_msec);
 }
 
 static void server_cursor_motion_absolute(struct wl_listener *listener, void *data) {
   struct telar_server *server = wl_container_of(listener, server, cursor_motion_absolute);
   struct wlr_pointer_motion_absolute_event *event = data;
-  wlr_cursor_warp_absolute(server->cursor, &event->pointer->base, event->x, event->y);
+  if (!telar_pointer_absolute(server, event)) {
+    wlr_cursor_warp_absolute(server->cursor, &event->pointer->base, event->x, event->y);
+  }
   process_cursor_motion(server, event->time_msec);
 }
 
@@ -535,22 +543,31 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
   }
   process_cursor_motion(server, event->time_msec);
 
-  wlr_seat_pointer_notify_button(server->seat, event->time_msec, event->button, event->state);
-  if (event->state == WL_POINTER_BUTTON_STATE_RELEASED) {
-    reset_cursor_mode(server);
-  } else {
+  if (server->locked) {
+    telar_focus_surface(server, server->seat->pointer_state.focused_surface);
+    wlr_seat_pointer_send_button(server->seat, event->time_msec, event->button, event->state);
+    return;
+  }
+  // Focus before sending the press: toolkits use the newest input serial when
+  // starting a drag, so a later keyboard-enter must not replace the grab serial.
+  if (event->state == WL_POINTER_BUTTON_STATE_PRESSED && !server->seat->drag) {
     double sx, sy;
     struct wlr_surface *surface = NULL;
     struct telar_toplevel *toplevel = desktop_toplevel_at(server, &surface, &sx, &sy);
-    if (!focus_xwindow(server, surface)) {
+    if (!telar_shell_focus(server, surface) && !focus_xwindow(server, surface)) {
       focus_toplevel(toplevel);
     }
+  }
+  wlr_seat_pointer_notify_button(server->seat, event->time_msec, event->button, event->state);
+  if (event->state == WL_POINTER_BUTTON_STATE_RELEASED) {
+    reset_cursor_mode(server);
   }
 }
 
 static void server_cursor_axis(struct wl_listener *listener, void *data) {
   struct telar_server *server = wl_container_of(listener, server, cursor_axis);
   struct wlr_pointer_axis_event *event = data;
+  telar_shell_activity(server);
 
   wlr_seat_pointer_notify_axis(server->seat,
                                event->time_msec,
@@ -584,12 +601,22 @@ static void output_request_state(struct wl_listener *listener, void *data) {
   struct telar_output *output = wl_container_of(listener, output, request_state);
   const struct wlr_output_event_request_state *event = data;
   wlr_output_commit_state(output->wlr_output, event->state);
-  notify(output->server);
+  telar_notify(output->server);
+}
+
+static void output_commit(struct wl_listener *listener, void *data) {
+  struct telar_output *output = wl_container_of(listener, output, commit);
+  struct wlr_output_event_commit *event = data;
+  if (event->state->committed & (WLR_OUTPUT_STATE_MODE | WLR_OUTPUT_STATE_SCALE |
+                                 WLR_OUTPUT_STATE_TRANSFORM | WLR_OUTPUT_STATE_ENABLED)) {
+    telar_shell_outputs(output->server);
+  }
 }
 
 static void output_destroy(struct wl_listener *listener, void *data) {
   struct telar_output *output = wl_container_of(listener, output, destroy);
 
+  wl_list_remove(&output->commit.link);
   wl_list_remove(&output->frame.link);
   wl_list_remove(&output->request_state.link);
   wl_list_remove(&output->destroy.link);
@@ -603,10 +630,8 @@ static void output_destroy(struct wl_listener *listener, void *data) {
   if (server->focused_space == output->space) {
     server->focused_space = replacement;
   }
-  if (!server->destroying) {
-    telar_server_move_space(server, output->space, replacement);
-  }
-  notify(output->server);
+
+  telar_notify(output->server);
   free(output);
 }
 
@@ -645,6 +670,8 @@ static void server_new_output(struct wl_listener *listener, void *data) {
   output->wlr_output = wlr_output;
   output->server = server;
 
+  output->commit.notify = output_commit;
+  wl_signal_add(&wlr_output->events.commit, &output->commit);
   output->frame.notify = output_frame;
   wl_signal_add(&wlr_output->events.frame, &output->frame);
 
@@ -660,7 +687,8 @@ static void server_new_output(struct wl_listener *listener, void *data) {
       wlr_output_layout_add_auto(server->output_layout, wlr_output);
   struct wlr_scene_output *scene_output = wlr_scene_output_create(server->scene, wlr_output);
   wlr_scene_output_layout_add_output(server->scene_layout, l_output, scene_output);
-  notify(server);
+  telar_shell_outputs(server);
+  telar_notify(server);
 }
 
 static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
@@ -675,7 +703,7 @@ static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
   if (!toplevel->own || toplevel->server->focus_request.resource == toplevel->resource) {
     focus_toplevel(toplevel);
   }
-  notify(toplevel->server);
+  telar_notify(toplevel->server);
 }
 
 static void xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
@@ -687,21 +715,27 @@ static void xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
 
   toplevel->mapped = false;
   update_visibility(toplevel);
-  notify(toplevel->server);
+  telar_notify(toplevel->server);
 }
 
 static void xdg_toplevel_commit(struct wl_listener *listener, void *data) {
   struct telar_toplevel *toplevel = wl_container_of(listener, toplevel, commit);
 
   if (toplevel->xdg_toplevel->base->initial_commit) {
+    wlr_xdg_toplevel_set_wm_capabilities(toplevel->xdg_toplevel,
+                                         WLR_XDG_TOPLEVEL_WM_CAPABILITIES_MAXIMIZE |
+                                             WLR_XDG_TOPLEVEL_WM_CAPABILITIES_FULLSCREEN);
     wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, initial_window_width, initial_window_height);
+    wlr_xdg_toplevel_set_fullscreen(toplevel->xdg_toplevel, toplevel->fullscreen);
+    wlr_xdg_toplevel_set_maximized(toplevel->xdg_toplevel, toplevel->maximized);
+    arrange_toplevel(toplevel);
     apply_native(toplevel);
   }
   struct wlr_box box = toplevel->xdg_toplevel->base->geometry;
   if (box.width != toplevel->last_width || box.height != toplevel->last_height) {
     toplevel->last_width = box.width;
     toplevel->last_height = box.height;
-    notify(toplevel->server);
+    telar_notify(toplevel->server);
   }
 }
 
@@ -732,7 +766,7 @@ static void xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
   if (toplevel->server->focused == toplevel->id) {
     toplevel->server->focused = 0;
   }
-  notify(toplevel->server);
+  telar_notify(toplevel->server);
   free(toplevel);
 }
 
@@ -786,26 +820,30 @@ static void xdg_toplevel_request_resize(struct wl_listener *listener, void *data
 
 static void xdg_toplevel_request_maximize(struct wl_listener *listener, void *data) {
   struct telar_toplevel *toplevel = wl_container_of(listener, toplevel, request_maximize);
+  toplevel->maximized = toplevel->xdg_toplevel->requested.maximized;
   if (toplevel->xdg_toplevel->base->initialized) {
-    wlr_xdg_surface_schedule_configure(toplevel->xdg_toplevel->base);
+    wlr_xdg_toplevel_set_maximized(toplevel->xdg_toplevel, toplevel->maximized);
+    arrange_toplevel(toplevel);
   }
 }
 
 static void xdg_toplevel_request_fullscreen(struct wl_listener *listener, void *data) {
   struct telar_toplevel *toplevel = wl_container_of(listener, toplevel, request_fullscreen);
+  toplevel->fullscreen = toplevel->xdg_toplevel->requested.fullscreen;
   if (toplevel->xdg_toplevel->base->initialized) {
-    wlr_xdg_surface_schedule_configure(toplevel->xdg_toplevel->base);
+    wlr_xdg_toplevel_set_fullscreen(toplevel->xdg_toplevel, toplevel->fullscreen);
+    arrange_toplevel(toplevel);
   }
 }
 
 static void toplevel_title(struct wl_listener *listener, void *data) {
   struct telar_toplevel *window = wl_container_of(listener, window, title);
-  notify(window->server);
+  telar_notify(window->server);
 }
 
 static void toplevel_app_id(struct wl_listener *listener, void *data) {
   struct telar_toplevel *window = wl_container_of(listener, window, app_id);
-  notify(window->server);
+  telar_notify(window->server);
 }
 
 static void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
@@ -831,6 +869,7 @@ static void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
   toplevel->visible = !toplevel->own;
   toplevel->focusable = true;
   toplevel->layer = TELAR_WINDOWS;
+  toplevel->placement = (struct wlr_box){0, 0, initial_window_width, initial_window_height};
   wl_list_insert(&server->toplevels, &toplevel->link);
   toplevel->server = server;
   toplevel->xdg_toplevel = xdg_toplevel;
@@ -872,6 +911,25 @@ static void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
 
 static void xdg_popup_commit(struct wl_listener *listener, void *data) {
   struct telar_popup *popup = wl_container_of(listener, popup, commit);
+  struct wlr_surface *root = popup->xdg_popup->parent;
+  for (size_t depth = 0; root && depth < max_windows; ++depth) {
+    struct wlr_xdg_surface *xdg = wlr_xdg_surface_try_from_wlr_surface(root);
+    if (!xdg || xdg->role != WLR_XDG_SURFACE_ROLE_POPUP) {
+      break;
+    }
+    root = xdg->popup->parent;
+  }
+  struct wlr_scene_tree *tree = telar_surface_tree(popup->server, root);
+  int x = 0, y = 0;
+  wlr_scene_node_coords(&(tree ? tree : popup->parent)->node, &x, &y);
+  struct telar_output *output = telar_output_for_space(popup->server, popup->server->focused_space);
+  if (output) {
+    struct wlr_box box;
+    wlr_output_layout_get_box(popup->server->output_layout, output->wlr_output, &box);
+    box.x -= x;
+    box.y -= y;
+    wlr_xdg_popup_unconstrain_from_box(popup->xdg_popup, &box);
+  }
 
   if (popup->xdg_popup->base->initial_commit) {
     wlr_xdg_surface_schedule_configure(popup->xdg_popup->base);
@@ -887,35 +945,44 @@ static void xdg_popup_destroy(struct wl_listener *listener, void *data) {
   free(popup);
 }
 
-static void server_new_xdg_popup(struct wl_listener *listener, void *data) {
-  struct wlr_xdg_popup *xdg_popup = data;
-
+void telar_create_popup(struct telar_server *server,
+                        struct wlr_xdg_popup *xdg_popup,
+                        struct wlr_scene_tree *parent_tree) {
+  if (xdg_popup->base->data) {
+    return;
+  }
   struct telar_popup *popup = calloc(1, sizeof(*popup));
   if (!popup) {
     wl_client_post_no_memory(wl_resource_get_client(xdg_popup->resource));
     return;
   }
+  popup->server = server;
+  popup->parent = parent_tree;
   popup->xdg_popup = xdg_popup;
-
-  struct wlr_xdg_surface *parent = wlr_xdg_surface_try_from_wlr_surface(xdg_popup->parent);
-  if (!parent || !parent->data) {
-    wlr_xdg_popup_destroy(xdg_popup);
-    free(popup);
-    return;
-  }
-  struct wlr_scene_tree *parent_tree = parent->data;
   xdg_popup->base->data = wlr_scene_xdg_surface_create(parent_tree, xdg_popup->base);
   if (!xdg_popup->base->data) {
     free(popup);
     wl_client_post_no_memory(wl_resource_get_client(xdg_popup->resource));
     return;
   }
-
   popup->commit.notify = xdg_popup_commit;
   wl_signal_add(&xdg_popup->base->surface->events.commit, &popup->commit);
-
   popup->destroy.notify = xdg_popup_destroy;
   wl_signal_add(&xdg_popup->events.destroy, &popup->destroy);
+}
+
+static void server_new_xdg_popup(struct wl_listener *listener, void *data) {
+  struct telar_server *server = wl_container_of(listener, server, new_xdg_popup);
+  struct wlr_xdg_popup *popup = data;
+  if (popup->base->data) {
+    return;
+  }
+  struct wlr_scene_tree *parent = telar_surface_tree(server, popup->parent);
+  if (parent) {
+    telar_create_popup(server, popup, parent);
+  } else if (popup->parent) {
+    wlr_xdg_popup_destroy(popup);
+  }
 }
 
 struct telar_xwindow {
@@ -926,9 +993,105 @@ struct telar_xwindow {
   uint32_t id;
   uint64_t space;
   bool visible;
+  bool fullscreen, maximized;
+  struct wlr_box placement;
+  struct wl_listener fullscreen_request, maximize_request, activate_request;
   struct wl_listener associate, dissociate, map, unmap, destroy, configure, title, class_name,
       geometry;
 };
+
+static void arrange_xwindow(struct telar_xwindow *window) {
+  struct wlr_box box = window->placement;
+  struct telar_output *output = telar_output_for_space(window->server, window->space);
+  if (output && (window->fullscreen || window->maximized)) {
+    box = wlr_box_empty(&output->workarea) ? output->usable : output->workarea;
+    if (window->fullscreen) {
+      wlr_output_layout_get_box(window->server->output_layout, output->wlr_output, &box);
+    }
+  }
+  if (box.width < 1 || box.height < 1) {
+    return;
+  }
+  wlr_xwayland_surface_configure(window->surface, box.x, box.y, box.width, box.height);
+  if (window->tree) {
+    wlr_scene_node_reparent(&window->tree->node,
+                            window->fullscreen ? window->server->fullscreen_tree
+                                               : window->server->layers[TELAR_WINDOWS]);
+    wlr_scene_node_set_position(&window->tree->node, box.x, box.y);
+  }
+}
+
+static void arrange_xwindows(struct telar_server *server) {
+  struct telar_xwindow *window;
+  wl_list_for_each(window, &server->xwindows, link) {
+    if (window->fullscreen || window->maximized) {
+      arrange_xwindow(window);
+    }
+  }
+}
+
+static void xwindow_activate(struct wl_listener *listener, void *data) {
+  struct telar_xwindow *window = wl_container_of(listener, window, activate_request);
+  telar_activate_surface(window->server, window->surface->surface);
+}
+
+static void xwindow_fullscreen(struct wl_listener *listener, void *data) {
+  struct telar_xwindow *window = wl_container_of(listener, window, fullscreen_request);
+  window->fullscreen = window->surface->fullscreen;
+  wlr_xwayland_surface_set_fullscreen(window->surface, window->fullscreen);
+  arrange_xwindow(window);
+  telar_notify(window->server);
+}
+
+static void xwindow_maximize(struct wl_listener *listener, void *data) {
+  struct telar_xwindow *window = wl_container_of(listener, window, maximize_request);
+  window->maximized = window->surface->maximized_horz && window->surface->maximized_vert;
+  wlr_xwayland_surface_set_maximized(window->surface, window->maximized, window->maximized);
+  arrange_xwindow(window);
+  telar_notify(window->server);
+}
+
+struct wlr_scene_tree *telar_surface_tree(struct telar_server *server,
+                                          struct wlr_surface *surface) {
+  if (!surface) {
+    return NULL;
+  }
+  surface = wlr_surface_get_root_surface(surface);
+  struct wlr_xdg_surface *xdg = wlr_xdg_surface_try_from_wlr_surface(surface);
+  if (xdg) {
+    return xdg->data;
+  }
+  struct wlr_layer_surface_v1 *layer = wlr_layer_surface_v1_try_from_wlr_surface(surface);
+  if (layer) {
+    return layer->data;
+  }
+  struct telar_xwindow *window;
+  wl_list_for_each(window, &server->xwindows, link) {
+    if (window->surface->surface == surface) {
+      return window->tree;
+    }
+  }
+  return NULL;
+}
+
+void telar_restore_focus(struct telar_server *server) {
+  if (server->locked || server->destroying || server->seat->keyboard_state.focused_surface) {
+    return;
+  }
+  struct telar_toplevel *window;
+  wl_list_for_each_reverse(window, &server->toplevels, link) {
+    focus_toplevel(window);
+    if (server->seat->keyboard_state.focused_surface) {
+      return;
+    }
+  }
+  struct telar_xwindow *xwindow;
+  wl_list_for_each(xwindow, &server->xwindows, link) {
+    if (focus_xwindow(server, xwindow->surface->surface)) {
+      return;
+    }
+  }
+}
 
 static void xwindow_visibility(struct telar_xwindow *window) {
   if (!window->tree) {
@@ -968,7 +1131,7 @@ static void notify_xwindows_visibility(struct telar_server *server) {
 }
 
 static bool focus_xwindow(struct telar_server *server, struct wlr_surface *surface) {
-  if (!surface) {
+  if (!surface || !telar_focus_allowed(server, surface)) {
     return false;
   }
   struct telar_xwindow *window;
@@ -997,7 +1160,7 @@ static bool focus_xwindow(struct telar_server *server, struct wlr_surface *surfa
     server->focus_request = (struct telar_target){0};
     server->focused = window->id;
     server->focused_space = window->space;
-    notify(server);
+    telar_notify(server);
     return true;
   }
   return false;
@@ -1012,24 +1175,32 @@ static void xwindow_map(struct wl_listener *listener, void *data) {
     struct telar_xwindow *parent = window->surface->parent->data;
     window->space = parent->space;
   }
+  if (window->fullscreen || window->maximized) {
+    arrange_xwindow(window);
+  }
   notify_xwindows_visibility(window->server);
   if (!window->surface->override_redirect) {
     focus_xwindow(window->server, window->surface->surface);
   }
-  notify(window->server);
+  telar_notify(window->server);
 }
 
 static void xwindow_unmap(struct wl_listener *listener, void *data) {
   struct telar_xwindow *window = wl_container_of(listener, window, unmap);
   notify_xwindows_visibility(window->server);
-  notify(window->server);
+  telar_notify(window->server);
 }
 
 static void xwindow_associate(struct wl_listener *listener, void *data) {
   struct telar_xwindow *window = wl_container_of(listener, window, associate);
-  window->tree = wlr_scene_subsurface_tree_create(window->server->layers[TELAR_WINDOWS],
-                                                  window->surface->surface);
-  if (!window->tree) {
+  // The subsurface helper dies with wl_surface, before XWayland's dissociate
+  // event. Own a separate parent so either teardown order is safe.
+  window->tree = wlr_scene_tree_create(window->server->layers[TELAR_WINDOWS]);
+  if (!window->tree || !wlr_scene_subsurface_tree_create(window->tree, window->surface->surface)) {
+    if (window->tree) {
+      wlr_scene_node_destroy(&window->tree->node);
+      window->tree = NULL;
+    }
     return;
   }
   wlr_scene_node_set_position(&window->tree->node, window->surface->x, window->surface->y);
@@ -1049,12 +1220,15 @@ static void xwindow_dissociate(struct wl_listener *listener, void *data) {
   wl_list_remove(&window->unmap.link);
   wlr_scene_node_destroy(&window->tree->node);
   window->tree = NULL;
-  notify(window->server);
+  telar_notify(window->server);
 }
 
 static void xwindow_destroy(struct wl_listener *listener, void *data) {
   struct telar_xwindow *window = wl_container_of(listener, window, destroy);
   xwindow_dissociate(&window->dissociate, NULL);
+  wl_list_remove(&window->activate_request.link);
+  wl_list_remove(&window->fullscreen_request.link);
+  wl_list_remove(&window->maximize_request.link);
   wl_list_remove(&window->associate.link);
   wl_list_remove(&window->dissociate.link);
   wl_list_remove(&window->destroy.link);
@@ -1066,7 +1240,7 @@ static void xwindow_destroy(struct wl_listener *listener, void *data) {
   if (window->server->focused == window->id) {
     window->server->focused = 0;
   }
-  notify(window->server);
+  telar_notify(window->server);
   free(window);
 }
 
@@ -1092,12 +1266,12 @@ static void xwindow_configure(struct wl_listener *listener, void *data) {
 
 static void xwindow_title(struct wl_listener *listener, void *data) {
   struct telar_xwindow *window = wl_container_of(listener, window, title);
-  notify(window->server);
+  telar_notify(window->server);
 }
 
 static void xwindow_class(struct wl_listener *listener, void *data) {
   struct telar_xwindow *window = wl_container_of(listener, window, class_name);
-  notify(window->server);
+  telar_notify(window->server);
 }
 
 static void xwindow_geometry(struct wl_listener *listener, void *data) {
@@ -1105,7 +1279,7 @@ static void xwindow_geometry(struct wl_listener *listener, void *data) {
   if (window->tree) {
     wlr_scene_node_set_position(&window->tree->node, window->surface->x, window->surface->y);
   }
-  notify(window->server);
+  telar_notify(window->server);
 }
 
 static void server_new_xwayland(struct wl_listener *listener, void *data) {
@@ -1122,6 +1296,16 @@ static void server_new_xwayland(struct wl_listener *listener, void *data) {
   window->surface->data = window;
   window->id = ++server->next_window;
   window->visible = true;
+  window->placement = (struct wlr_box){window->surface->x,
+                                       window->surface->y,
+                                       window->surface->width,
+                                       window->surface->height};
+  window->activate_request.notify = xwindow_activate;
+  wl_signal_add(&window->surface->events.request_activate, &window->activate_request);
+  window->fullscreen_request.notify = xwindow_fullscreen;
+  window->maximize_request.notify = xwindow_maximize;
+  wl_signal_add(&window->surface->events.request_fullscreen, &window->fullscreen_request);
+  wl_signal_add(&window->surface->events.request_maximize, &window->maximize_request);
   window->associate.notify = xwindow_associate;
   wl_signal_add(&window->surface->events.associate, &window->associate);
   window->dissociate.notify = xwindow_dissociate;
@@ -1157,8 +1341,11 @@ static void place_toplevel(struct telar_toplevel *window, const struct telar_pla
     window->layer = placement->layer;
     wlr_scene_node_reparent(&window->scene_tree->node, window->server->layers[placement->layer]);
   }
-  wlr_scene_node_set_position(&window->scene_tree->node, placement->box.x, placement->box.y);
-  wlr_xdg_toplevel_set_size(window->xdg_toplevel, placement->box.width, placement->box.height);
+  window->placement = (struct wlr_box){placement->box.x,
+                                       placement->box.y,
+                                       placement->box.width,
+                                       placement->box.height};
+  arrange_toplevel(window);
   update_visibility(window);
 }
 
@@ -1202,7 +1389,7 @@ void telar_server_place(struct telar_server *server, const struct telar_placemen
   wl_list_for_each(window, &server->toplevels, link) {
     if (matches(window, placement->target)) {
       place_toplevel(window, placement);
-      notify(server);
+      telar_notify(server);
       return;
     }
   }
@@ -1213,16 +1400,13 @@ void telar_server_place(struct telar_server *server, const struct telar_placemen
     }
     xwindow->space = placement->space;
     xwindow->visible = placement->visible;
-    wlr_xwayland_surface_configure(xwindow->surface,
-                                   placement->box.x,
-                                   placement->box.y,
-                                   placement->box.width,
-                                   placement->box.height);
-    if (xwindow->tree) {
-      wlr_scene_node_set_position(&xwindow->tree->node, placement->box.x, placement->box.y);
-    }
+    xwindow->placement = (struct wlr_box){placement->box.x,
+                                          placement->box.y,
+                                          placement->box.width,
+                                          placement->box.height};
+    arrange_xwindow(xwindow);
     notify_xwindows_visibility(server);
-    notify(server);
+    telar_notify(server);
     return;
   }
 }
@@ -1250,7 +1434,7 @@ void telar_server_visible(struct telar_server *server, struct telar_target targe
   if (!target.resource) {
     notify_xwindows_visibility(server);
   }
-  notify(server);
+  telar_notify(server);
 }
 
 void telar_server_focus(struct telar_server *server, struct telar_target target) {
@@ -1298,20 +1482,73 @@ void telar_server_close(struct telar_server *server, struct telar_target target)
   }
 }
 
-void telar_server_space(struct telar_server *server, uint32_t id, uint64_t space) {
-  struct telar_output *output;
-  wl_list_for_each(output, &server->outputs, link) {
-    if (output->id == id) {
-      output->space = space;
-      server->focused_space = space;
-    }
+void telar_update_visibility(struct telar_server *server) {
+  if (!space_visible(server, server->focused_space)) {
+    struct telar_output *output = telar_output_for_space(server, 0);
+    server->focused_space = output ? output->space : 0;
   }
   struct telar_toplevel *window;
   wl_list_for_each(window, &server->toplevels, link) {
     update_visibility(window);
   }
   notify_xwindows_visibility(server);
-  notify(server);
+  telar_notify(server);
+}
+
+void telar_server_space(struct telar_server *server, uint32_t id, uint64_t space) {
+  struct telar_output *target = NULL, *output;
+  wl_list_for_each(output, &server->outputs, link) {
+    if (output->id == id) {
+      target = output;
+      break;
+    }
+  }
+  if (!target || !space) {
+    return;
+  }
+  // Keep a workspace unique even when its previous output is disabled.
+  wl_list_for_each(output, &server->outputs, link) {
+    if (output != target && output->space == space) {
+      output->space = target->space;
+    }
+  }
+  target->space = space;
+  server->focused_space = space;
+  telar_update_visibility(server);
+}
+
+void telar_activate_surface(struct telar_server *server, struct wlr_surface *surface) {
+  if (!telar_focus_allowed(server, surface) || server->locked) {
+    return;
+  }
+  struct telar_toplevel *window;
+  wl_list_for_each(window, &server->toplevels, link) {
+    if (window->xdg_toplevel->base->surface != surface || !window->mapped) {
+      continue;
+    }
+    struct telar_output *output = telar_output_for_space(server, window->space);
+    if (output && window->space) {
+      telar_server_space(server, output->id, window->space);
+    }
+    window->visible = true;
+    update_visibility(window);
+    focus_toplevel(window);
+    return;
+  }
+  struct telar_xwindow *xwindow;
+  wl_list_for_each(xwindow, &server->xwindows, link) {
+    if (xwindow->surface->surface != surface || !surface->mapped) {
+      continue;
+    }
+    struct telar_output *output = telar_output_for_space(server, xwindow->space);
+    if (output) {
+      telar_server_space(server, output->id, xwindow->space);
+    }
+    xwindow->visible = true;
+    xwindow_visibility(xwindow);
+    focus_xwindow(server, surface);
+    return;
+  }
 }
 
 void telar_server_move_space(struct telar_server *server, uint64_t from, uint64_t to) {
@@ -1335,7 +1572,7 @@ void telar_server_move_space(struct telar_server *server, uint64_t from, uint64_
     }
   }
   notify_xwindows_visibility(server);
-  notify(server);
+  telar_notify(server);
 }
 
 void telar_server_outputs(struct telar_server *server,
@@ -1343,12 +1580,16 @@ void telar_server_outputs(struct telar_server *server,
                           void (*visit)(void *, const struct telar_output_info *)) {
   struct telar_output *output;
   wl_list_for_each(output, &server->outputs, link) {
+    if (!wlr_output_layout_get(server->output_layout, output->wlr_output)) {
+      continue;
+    }
     struct wlr_box box;
     wlr_output_layout_get_box(server->output_layout, output->wlr_output, &box);
     struct telar_output_info info = {
         .id = output->id,
         .name = output->wlr_output->name,
         .box = {box.x, box.y, box.width, box.height},
+        .usable = {output->usable.x, output->usable.y, output->usable.width, output->usable.height},
         .scale = output->wlr_output->scale,
         .space = output->space,
     };
@@ -1528,11 +1769,21 @@ struct telar_server *telar_server_create(const struct telar_hooks *hooks, int co
   if (!server->scene) {
     goto fail;
   }
+  server->desktop_tree = wlr_scene_tree_create(&server->scene->tree);
+  if (!server->desktop_tree) {
+    goto fail;
+  }
   for (int i = 0; i < 3; ++i) {
-    server->layers[i] = wlr_scene_tree_create(&server->scene->tree);
+    server->layers[i] = wlr_scene_tree_create(server->desktop_tree);
     if (!server->layers[i]) {
       goto fail;
     }
+  }
+  server->fullscreen_tree = wlr_scene_tree_create(server->desktop_tree);
+  server->popup_tree = wlr_scene_tree_create(server->desktop_tree);
+  server->drag_tree = wlr_scene_tree_create(server->desktop_tree);
+  if (!server->fullscreen_tree || !server->popup_tree || !server->drag_tree) {
+    goto fail;
   }
   server->scene_layout = wlr_scene_attach_output_layout(server->scene, server->output_layout);
   if (!server->scene_layout) {
@@ -1540,7 +1791,7 @@ struct telar_server *telar_server_create(const struct telar_hooks *hooks, int co
   }
 
   wl_list_init(&server->toplevels);
-  server->xdg_shell = wlr_xdg_shell_create(server->wl_display, 3);
+  server->xdg_shell = wlr_xdg_shell_create(server->wl_display, 6);
   if (!server->xdg_shell) {
     goto fail;
   }
@@ -1586,6 +1837,10 @@ struct telar_server *telar_server_create(const struct telar_hooks *hooks, int co
   server->request_set_selection.notify = seat_request_set_selection;
   wl_signal_add(&server->seat->events.request_set_selection, &server->request_set_selection);
 
+  if (!telar_shell_init(server) || !telar_input_method_init(server) ||
+      !telar_pointer_init(server) || !telar_lock_init(server)) {
+    goto fail;
+  }
   wlr_viewporter_create(server->wl_display);
   wlr_fractional_scale_manager_v1_create(server->wl_display, 1);
   wlr_xdg_output_manager_v1_create(server->wl_display, server->output_layout);
@@ -1657,6 +1912,10 @@ void telar_server_destroy(struct telar_server *server) {
   if (server->wl_display) {
     wl_display_destroy_clients(server->wl_display);
   }
+  telar_lock_finish(server);
+  telar_pointer_finish(server);
+  telar_input_method_finish(server);
+  telar_shell_finish(server);
   if (server->new_xdg_toplevel.link.next) {
     wl_list_remove(&server->new_xdg_toplevel.link);
   }

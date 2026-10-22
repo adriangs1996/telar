@@ -104,6 +104,11 @@ namespace linux_desktop {
           [](void *context) {
             static_cast<Session *>(context)->router_.cancel();
           },
+          [](void *context) {
+            auto &session = *static_cast<Session *>(context);
+            session.lock_requested_ = true;
+            signal(session.updates_fd_);
+          },
       };
       server_ = telar_server_create(&hooks, commands_fd_);
       if (!server_) {
@@ -127,6 +132,7 @@ namespace linux_desktop {
       qputenv("QT_QPA_PLATFORM", "wayland");
       qputenv("XDG_SESSION_TYPE", "wayland");
       qputenv("XDG_CURRENT_DESKTOP", "Telar");
+      qputenv("XDG_SESSION_DESKTOP", "Telar");
       current_ = this;
     } catch (...) {
       thread_.join();
@@ -198,6 +204,7 @@ namespace linux_desktop {
               {output->id,
                QString::fromUtf8(output->name),
                {output->box.x, output->box.y, output->box.width, output->box.height},
+               {output->usable.x, output->usable.y, output->usable.width, output->usable.height},
                output->scale,
                output->space});
         });
@@ -237,6 +244,9 @@ namespace linux_desktop {
 
   void Session::deliver() {
     clear(updates_fd_);
+    if (lock_requested_.exchange(false) && lockRequest) {
+      lockRequest();
+    }
     std::unique_ptr<Snapshot> pending;
     std::vector<Shortcuts::Request> requests;
     {

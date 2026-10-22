@@ -10,6 +10,22 @@ if [[ ${1:-} == --reset ]]; then
     if systemctl is-active --quiet telar-desktop-smoke; then
         sudo systemctl stop telar-desktop-smoke
     fi
+    lock_file="$run_dir/desktop-state/control.lock"
+    if [[ -f $lock_file ]]; then
+        read -r desktop_pid < "$lock_file" || true
+        if [[ ${desktop_pid:-} =~ ^[0-9]+$ ]]; then
+            for ((attempt = 0; attempt < 100; ++attempt)); do
+                if ! kill -0 "$desktop_pid" 2>/dev/null; then
+                    break
+                fi
+                sleep .2
+            done
+            if kill -0 "$desktop_pid" 2>/dev/null; then
+                echo "Previous Desktop ($desktop_pid) has not exited; keeping its state." >&2
+                exit 1
+            fi
+        fi
+    fi
     if [[ -S $run_dir/runtime.sock ]]; then
         TELAR_SOCKET="$run_dir/runtime.sock" "$runtime_binary" server stop
     fi
@@ -23,6 +39,7 @@ fi
 mkdir -p "$run_dir"
 chmod 700 "$run_dir"
 printf '%s\n' "$runtime_binary" > "$run_dir/runtime-binary"
+printf '%s\n' "$desktop_binary" > "$run_dir/desktop-binary"
 cp "$source_dir/tools/vm/desktop-smoke/smoke.lua" "$run_dir/smoke.lua"
 export TELAR_SOCKET="$run_dir/runtime.sock"
 export TELAR_HISTORY="$run_dir/history.db"
@@ -38,5 +55,5 @@ sudo systemd-run --unit=telar-desktop-smoke --collect \
     "HOME=$HOME" "XDG_RUNTIME_DIR=/run/user/$UID" \
     "TELAR_DESKTOP_CONFIG=$run_dir/smoke.lua" \
     "TELAR_DESKTOP_STATE_DIR=$run_dir/desktop-state" \
-    WLR_BACKENDS=drm,libinput WLR_RENDERER=pixman QT_QUICK_BACKEND=software \
+    TELAR_IDLE_TIMEOUT=0 WLR_BACKENDS=drm,libinput WLR_RENDERER=pixman QT_QUICK_BACKEND=software \
     "$desktop_binary" "$TELAR_SOCKET"

@@ -193,11 +193,14 @@ def main():
     survivor = wait("runtime starts a persistent process", lambda:
                     guest(f'cat "$HOME/{RUN}/survivor" 2>/dev/null || true').strip())
     assert survivor.isdigit()
+    graphical(f'nohup xeyes -title "X11 shutdown" > "$HOME/{RUN}/x11-shutdown.log" 2>&1 </dev/null &')
+    wait("X11 client remains mapped for compositor teardown", lambda:
+         any(item.get("title") == "X11 shutdown" for item in elements()))
     guest("sudo systemctl stop telar-desktop-smoke")
     guest(f"kill -0 {survivor}")
     guest(f'TELAR_SOCKET="$HOME/{RUN}/runtime.sock" "$(cat "$HOME/{RUN}/runtime-binary")" runtime status')
-    assert "Desktop session exiting with 0" in guest(f'cat "$HOME/{RUN}/desktop-state/logs/latest.log"')
-    print("PASS compositor shuts down cleanly while runtime and child process survive", flush=True)
+    wait("compositor shuts down cleanly while runtime and child process survive", lambda:
+         "Desktop session exiting with 0" in guest(f'cat "$HOME/{RUN}/desktop-state/logs/latest.log"'))
     print(f"Artifacts: {ARTIFACTS}", flush=True)
 
 

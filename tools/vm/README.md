@@ -96,7 +96,7 @@ export TELAR_VM_SSH_PORT=2224
 tools/vm/vm.py prepare
 tools/vm/vm.py exec bash -lc 'cd ~/src/telar && zig build -Dgui=false'
 tools/vm/vm.py exec bash -lc 'cd ~/src/telar && cmake -S services/desktop-mode -B services/desktop-mode/out/arch -G Ninja -DCMAKE_BUILD_TYPE=Debug'
-tools/vm/vm.py exec bash -lc 'cd ~/src/telar && cmake --build services/desktop-mode/out/arch --target telar-desktop'
+tools/vm/vm.py exec bash -lc 'cd ~/src/telar && cmake --build services/desktop-mode/out/arch --target telar-desktop && sudo cmake --install services/desktop-mode/out/arch'
 tools/vm/vm.py exec bash -lc '~/src/telar/tools/vm/desktop-smoke/start.sh'
 tools/vm/desktop-smoke.py
 tools/vm/vm.py screenshot /tmp/telar-desktop-arch.png
@@ -122,6 +122,51 @@ can select binaries built elsewhere. Sync preserves Desktop's `out/` directory.
 Stop the graphical session with `sudo systemctl stop telar-desktop-smoke`;
 the isolated runtime remains alive. The VM is disposable, and stopping the
 whole VM ends its processes.
+
+## Desktop integration tests
+
+After the smoke test stops Desktop, start it again without `--reset`. Install
+the CMake target first so D-Bus portal discovery sees `telar-portals.conf`.
+The host needs Pillow (`python3 -m pip install Pillow`); Arch provisioning
+installs the guest protocol headers, GTK, Fcitx/Pinyin, GStreamer/PipeWire and
+`wmctrl` used by these tests.
+
+```sh
+tools/vm/vm.py exec bash -lc '~/src/telar/tools/vm/desktop-smoke/start.sh'
+python3 tools/vm/desktop-protocols.py
+python3 tools/vm/desktop-integration.py
+python3 tools/vm/desktop-portals.py
+python3 tools/vm/desktop-outputs.py
+```
+
+Run these scripts sequentially: they share the VM keyboard and pointer.
+`desktop-protocols.py` builds a small Wayland client in the guest and tests
+fullscreen, maximize, layer-shell, text-input/input-method, pointer locking,
+relative motion, output power, scaling, rotation and GTK file drag-and-drop. It kills a locker
+after the locked acknowledgement, checks that the display stays black and
+shortcuts stay blocked even after an output power cycle, then unlocks with a
+replacement locker. It creates a fresh tab for the GTK drag fixtures and stops Fcitx
+before the synthetic input-method probe so the single IME seat is available.
+The vendored input-method-v2 XML comes from wlroots 0.20.2 and retains its
+license in the file.
+
+`desktop-integration.py` temporarily configures Pinyin, types Chinese into a
+real GTK application, and restores the previous Fcitx profile. It sets a random
+password for the disposable VM account to exercise `Super+L` and PAM unlocking,
+then restores the previous password hash without logging either password.
+It also tests X11 fullscreen, restoring tiling and activating a window from a
+hidden tab. These fixtures are intended only for the disposable VM.
+
+`desktop-portals.py` calls the public Screenshot and ScreenCast APIs, selects a
+monitor through the visible chooser, and consumes actual video pixels from the
+portal's PipeWire remote. `desktop-outputs.py` starts an isolated headless session
+with two outputs and verifies workspace ownership after disabling and reenabling
+one of them. It uses the same Desktop binary recorded by the starter and stops
+its own runtime and session afterward.
+
+Logs, screenshots and captured video frames are saved under
+`<VM state>/desktop-protocols/`. The integration tests leave the main Desktop
+running. Restart it to run the normal XDG autostart entries again after testing.
 
 ## First boot
 
