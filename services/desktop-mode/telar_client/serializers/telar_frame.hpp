@@ -306,28 +306,35 @@ namespace telar {
 
     void validate() const {
       const auto cells = static_cast<std::uint32_t>(cols) * rows;
+
       if (pane_id == 0 || frame_id == 0 || base_frame_id >= frame_id || cols == 0 || rows == 0 ||
           cells > 130359 || spans.size() > 4096) {
         throw EncodingError{"Invalid frame header"};
       }
+
       if ((cursor.visible && (cursor.x >= cols || cursor.y >= rows)) ||
           (!cursor.visible && (cursor.x != 0 || cursor.y != 0)) || scroll.total_rows < rows ||
           scroll.offset > scroll.total_rows - rows) {
         throw EncodingError{"Invalid cursor or scroll"};
       }
+
       std::uint64_t previous_end = 0;
       for (const auto &span : spans) {
         const auto end = static_cast<std::uint64_t>(span.start) + span.count;
+
         if (span.count == 0 || span.start < previous_end || end > cells ||
             span.cells.size() < span.count) {
           throw EncodingError{"Invalid frame span"};
         }
+
         previous_end = end;
       }
+
       if (base_frame_id == 0 &&
           (!text_metadata || spans.size() != 1 || spans[0].start != 0 || spans[0].count != cells)) {
         throw EncodingError{"Invalid screen snapshot"};
       }
+
       if (text_metadata) {
         text_metadata->validate(cols, rows);
       }

@@ -541,6 +541,22 @@ namespace telar {
                Field<&CloseTab::request_id, NonzeroU64, "request_id">,
                Field<&CloseTab::location, ValueCodec<TabLocation>, "location">> {};
 
+  // Keeps a tab with no panes while this client shows something else there; see
+  // src/core/schema/messages/HoldTab.zig.
+  struct HoldTab {
+    std::uint64_t request_id{};
+    TabLocation location{};
+    bool held{};
+  };
+
+  template <>
+  struct MessageSchema<HoldTab>
+      : Schema<Direction::client,
+               ClientTag::hold_tab,
+               Field<&HoldTab::request_id, NonzeroU64, "request_id">,
+               Field<&HoldTab::location, ValueCodec<TabLocation>, "location">,
+               Field<&HoldTab::held, BoolByte, "held">> {};
+
   struct MoveTab {
     std::uint64_t request_id{};
     TabLocation location{};

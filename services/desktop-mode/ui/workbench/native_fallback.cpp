@@ -3,7 +3,6 @@
 #include <QGuiApplication>
 #include <QScreen>
 #include <QWindow>
-#include <stdexcept>
 
 namespace workbench::native {
   Display display(std::uint32_t) {
@@ -20,46 +19,18 @@ namespace workbench::native {
 
   void commitComposition(QWindow &) {}
 
-  QVariantList windows() {
-    return {};
-  }
+  struct WindowObserver::Impl {};
 
-  struct ExternalWindow::Impl {};
+  WindowObserver::WindowObserver(QObject &, Delivery) {}
 
-  ExternalWindow::ExternalWindow(std::uint32_t) {
-    throw std::runtime_error("External windows require a native desktop backend");
-  }
+  WindowObserver::~WindowObserver() = default;
 
-  ExternalWindow::~ExternalWindow() = default;
+  void WindowObserver::place(std::uint32_t, QRectF) {}
 
-  bool ExternalWindow::alive() const {
-    return false;
-  }
+  void WindowObserver::move(std::uint32_t, QPointF) {}
 
-  QRectF ExternalWindow::frame() const {
-    return {};
-  }
+  void WindowObserver::focus(std::uint32_t) {}
 
-  QRectF ExternalWindow::place(const QRectF &) {
-    return {};
-  }
-
-  void ExternalWindow::show(bool) {}
-
-  void ExternalWindow::focus() {}
-
-  QString ExternalWindow::title() const {
-    return {};
-  }
-
-  void ExternalWindow::setSpace(std::uint64_t) {}
-
-  bool ExternalWindow::geometryChanged() const {
-    return false;
-  }
-
-  bool ExternalWindow::focused() const {
-    return false;
-  }
+  void WindowObserver::close(std::uint32_t) {}
 } // namespace workbench::native
 #endif

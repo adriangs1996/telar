@@ -51,7 +51,34 @@ physical source address can bypass it. On Linux, explicitly binding the physical
 interface, for example with `ping -I <interface>`, provides the intentional
 bypass. Binding only an address has OS-dependent behavior.
 
-IPv4 packets use a raw socket bound to the original interface. Linux IPv6 uses
+TCP packets are dispatched to gVisor netstack, which owns the application's
+TCP handshake, acknowledgements, retransmissions and stream assembly. Its
+virtual NIC accepts original destinations and responds using their addresses.
+A Go TCP socket bound to the original interface connects to each destination;
+the handler relays bytes both ways and preserves half-closes. IPv4 and IPv6
+select their outbound interfaces independently. TLS is opaque by default.
+Explicit host rules and an existing signing authority enable TLS inspection
+as described below. Telar IPC is still pending.
+
+The adapter owns packet bytes copied from the reusable TUN read buffers. Its
+outbound channel is bounded to 256 packets, and it admits at most 256 concurrent
+TCP connections, including pending handshakes. Shutdown cancels dials and
+relays, aborts incomplete handshakes, and joins callbacks and stack workers.
+IPv4 and IPv6 TCP fragments are processed by netstack. IPv6 hop-by-hop,
+routing, destination options and gVisor's experiment header are recognized,
+including chains after the fragment header. The first fragment supplies the
+transport protocol for the datagram. If later fragments arrive first, a bounded
+dispatcher holds copies until the first arrives, then delivers the original
+packets unchanged to the TCP adapter or native sender. This uses the first
+fragment's complete header chain described in [RFC 8200](https://datatracker.ietf.org/doc/html/rfc8200#section-4.5).
+It does not reassemble IP packets. Decisions use both IPv6 addresses and the fragment ID, expire after
+60 seconds and are capped at 1024 datagrams. Pending packet data is limited to
+4 MiB and 64 fragments per datagram. Expiry is checked on fragment arrival.
+Conflicting fragment protocols are rejected; atomic fragments are dispatched
+independently without affecting a pending datagram with the same ID, as required
+by [RFC 6946](https://www.rfc-editor.org/rfc/rfc6946.html#section-4).
+
+Other IPv4 packets use a raw socket bound to the original interface. Linux IPv6 uses
 a bound raw socket with `IPV6_HDRINCL` and sends complete packets, keeping
 extension headers and transport bytes opaque. macOS does not provide the same
 IPv6 raw-header interface, so IPv6 uses a second, private egress TUN. Go writes
@@ -60,8 +87,9 @@ original interface and gateway. The egress TUN has a scoped link-local IPv6
 address to enable IPv6 input, and its generated control traffic is drained.
 Private PF scrub rules reassemble IPv6 fragments before NAT and let the kernel
 refragment them for transmission. The PF route-to gateway retains its interface
-zone, including for the refragmented path. Neither implementation enables global IP forwarding or implements a transport
-stack. IPv6 jumbograms are unsupported; ordinary IPv6 fragments are forwarded.
+zone, including for the refragmented path. Neither native sender enables global
+IP forwarding. IPv6 jumbograms are unsupported; ordinary non-TCP IPv6 fragments
+are forwarded.
 
 macOS uses one private PF anchor per active family under `com.apple/*` and
 acquires an enable reference with `pfctl -E` for each. The main ruleset must
@@ -107,7 +135,76 @@ dual-stack capture, activation on IPv6-only networks, interface-bound bypass, SI
 activation, and preservation of unrelated rules, connections and default routes.
 Startup failure tests preserve pre-existing routes and unwind both families.
 A closed log pipe test verifies that forwarding continues and shutdown cleans up.
+TCP checks require evidence that the socket handler ran, relay 2 MiB in each
+direction after a client half-close, exercise concurrent connections and a
+refused origin port, and stop the service with an idle connection and an
+incomplete TCP handshake. Unit
+tests also check opaque TLS with certificate verification and cancellation.
+IPv6 tests send real TCP, UDP and ICMPv6 packets with options before and after
+the fragment header, in both arrival orders, and verify atomic-fragment TCP
+handshakes. Unit tests check queued buffer ownership, expiry, memory limits,
+address isolation and rejection of conflicting protocol decisions.
 Containers and the network are removed after the test; the cached image remains.
+
+## TLS inspection prototype
+
+Load the certificate and key of an existing Telar authority. The service does
+not create an authority, overwrite CA files or install OS trust. Applications
+must trust the selected authority; for a controlled test, curl's `--cacert`
+selects it without changing system trust.
+
+```sh
+sudo .zig-out/dev/bin/telar-proxy -all \
+  -inspect-host api.example.com \
+  -tls-ca-cert /path/to/ca-cert.pem \
+  -tls-ca-key /path/to/ca-key.pem
+
+curl --noproxy '*' --cacert /path/to/ca-cert.pem https://api.example.com/
+```
+
+Repeat `-inspect-host` for additional rules. `*.example.com` matches proper
+subdomains; `*` explicitly selects all visible hostnames and IP destinations.
+Quote wildcards to keep the shell from expanding them. Missing rules leave
+TLS inspection disabled. `-tls-upstream-ca /path/to/roots.pem` optionally adds
+private origin roots to system roots. It does not disable certificate or
+hostname validation. Invalid configuration fails before network activation.
+Telar's private files are `ca-cert.pem` and `ca-key.pem` under its configured
+`ca_dir`; the system-trust pair uses `ca-system-cert.pem` and
+`ca-system-key.pem`. Select the pair the application trusts.
+
+The handler detects direct TLS independently of the destination port. It uses
+Go's bounded ClientHello parser to read SNI and ALPN, preserving consumed bytes
+for replay. A concurrent peek of the origin preserves server-first protocols.
+The initial peek waits at most ten seconds; TLS setup has a thirty-second
+budget. Certificate files must be regular and not writable by other accounts;
+keys must have mode 0600 or stricter. Symlink files and files larger than 64 KiB are
+rejected. Leaves are cached for at most 256 hosts and expire within 24 hours
+or the signing authority's validity period, whichever comes first.
+
+For selected hosts, the origin handshake is verified before minting a leaf or
+starting the application's TLS handshake. The origin receives the client's
+HTTP ALPN offer, and only its selected protocol is advertised downstream.
+TLS 1.2 and 1.3 provide decrypted streams for HTTP/1.1 and HTTP/2. Streams are
+relayed unchanged with half-close handling. `TLSInspector.observe` receives
+borrowed plaintext buffers in both directions; a consumer must copy bytes it
+retains and support concurrent callbacks. The CLI logs host, ALPN and plaintext
+byte counts, without logging headers, bodies or keys. Structured HTTP exchange
+capture, modification policy and delivery to Telar remain subsequent steps.
+
+Excluded hosts, non-HTTP ALPN offers and ECH-bearing ClientHellos pass through
+with their original TLS identity. ECH hides the inner hostname, so this stage
+does not inspect it. QUIC remains on the UDP forwarding path. Selected hosts
+fail closed on origin validation or downstream TLS errors; a client that pins
+the origin certificate or does not trust the inspection authority may reject
+the replacement certificate. TLS upgraded within an already relayed plaintext
+protocol, such as STARTTLS, is outside this initial detector.
+
+Docker TLS tests use separate ephemeral origin and inspection authorities and
+verify HTTPS inspection over IPv4 and IPv6, original certificates outside the
+selected scope, wildcard scope, no-SNI IP certificates, ALPN and cleanup. Unit
+tests verify TLS 1.2/1.3 plaintext in both directions, an actual HTTP/2 exchange,
+untrusted or incorrectly named origins, ECH passthrough, server-first traffic,
+half-closes and cancellation. Test authorities never enter an OS trust store.
 
 ## Ownership
 

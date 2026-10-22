@@ -18,6 +18,7 @@ const path_picker = @import("path_picker.zig");
 const client_request = @import("client_request.zig");
 const limit_reached = @import("limit_reached.zig");
 const geometry_lease = @import("geometry_lease.zig");
+const tab_hold = @import("tab_hold.zig");
 const pane_attachment = @import("pane_attachment.zig");
 const handshake = @import("../transport/handshake.zig");
 const request_role = @import("client/request_role.zig");
@@ -273,6 +274,7 @@ pub fn drop(model: *RuntimeModel, key: ClientKey) void {
         pane_attachment.clear(model, session);
         session.delivery.close();
         geometry_lease.releaseAll(model, key);
+        tab_hold.releaseAll(model, session);
     }
 
     finalize(model, key);

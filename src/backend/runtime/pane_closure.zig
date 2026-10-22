@@ -18,6 +18,7 @@ const geometry_lease = @import("geometry_lease.zig");
 const pane_attachment = @import("pane_attachment.zig");
 const pane_observation = @import("pane_observation.zig");
 const session_checkpoint = @import("session_checkpoint.zig");
+const tab_hold = @import("tab_hold.zig");
 const tab_removal = @import("tab_removal.zig");
 const worktree_lifecycle = @import("worktree_lifecycle.zig");
 
@@ -87,7 +88,7 @@ pub fn collect(model: *RuntimeModel) void {
         pane.destroy();
         session_checkpoint.noteChange(model);
 
-        if (!store.hasAt(location) and model.workspaces.contains(location)) {
+        if (!store.hasAt(location) and model.workspaces.contains(location) and !tab_hold.held(model, location)) {
             const removed = model.workspaces.removeTab(model.gpa, location).?;
             tab_removal.announce(model, removed);
             if (removed.workspace_removed) {

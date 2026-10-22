@@ -1,10 +1,13 @@
 #pragma once
 
 #include <QRectF>
-#include <QVariantList>
+#include <QString>
 #include <cstdint>
+#include <functional>
 #include <memory>
+#include <vector>
 
+class QObject;
 class QWindow;
 
 namespace workbench::native {
@@ -20,22 +23,52 @@ namespace workbench::native {
   void prepareInputWindow(QWindow &window);
   // Commits the input method composition in progress in the window, if there is one.
   void commitComposition(QWindow &window);
-  QVariantList windows();
 
-  // An explicit adoption retains the AX identity, never merely a reusable window ID.
-  class ExternalWindow final {
+  // Another application's window, as the window server and Accessibility describe it. Frames are
+  // in global coordinates with the origin at the top left of the main display.
+  struct ForeignWindow {
+    std::uint32_t id = 0;
+    std::int64_t pid = 0;
+    // The bundle identifier, or the application's name when it has none.
+    QString application;
+    QString title;
+    QRectF frame;
+    std::uint64_t space = 0;
+    // Dialogs, sheets and windows that cannot be resized float instead of tiling.
+    bool floating = false;
+
+    bool operator==(const ForeignWindow &) const = default;
+  };
+
+  struct ForeignWindows {
+    std::vector<ForeignWindow> windows;
+    // The active application's focused window, when it is one of the windows above.
+    std::uint32_t focused = 0;
+
+    bool operator==(const ForeignWindows &) const = default;
+  };
+
+  // Watches the windows of every application with a Dock icon, on a thread of its own: reads come
+  // from the window server, which answers even for an application that hangs, and Accessibility
+  // notifications only tell it when to read again. Writes go through Accessibility on a queue per
+  // application, so one that hangs delays only its own windows, each call bounded by a short
+  // timeout. A window's later writes replace its earlier ones that have not run yet.
+  class WindowObserver final {
   public:
-    explicit ExternalWindow(std::uint32_t identifier);
-    ~ExternalWindow();
-    bool alive() const;
-    QRectF frame() const;
-    QRectF place(const QRectF &requested);
-    void show(bool visible);
-    void focus();
-    QString title() const;
-    void setSpace(std::uint64_t space);
-    bool geometryChanged() const;
-    bool focused() const;
+    using Delivery = std::function<void(ForeignWindows windows)>;
+
+    // Deliveries run on the thread `receiver` belongs to, which must outlive the observer, and
+    // only when something changed.
+    WindowObserver(QObject &receiver, Delivery deliver);
+    ~WindowObserver();
+    WindowObserver(const WindowObserver &) = delete;
+    WindowObserver &operator=(const WindowObserver &) = delete;
+
+    void place(std::uint32_t window, QRectF frame);
+    void move(std::uint32_t window, QPointF position);
+    void focus(std::uint32_t window);
+    // Presses the window's close button, as clicking it would.
+    void close(std::uint32_t window);
 
   private:
     struct Impl;

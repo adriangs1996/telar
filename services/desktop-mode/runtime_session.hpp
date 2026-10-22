@@ -3,6 +3,7 @@
 #include "runtime_state.hpp"
 #include <functional>
 #include <memory>
+#include <set>
 #include <stop_token>
 #include <string>
 #include <vector>
@@ -36,6 +37,9 @@ public:
   // The workspaces on screen, one per display, and the focused one among them.
   void showWorkspaces(std::vector<RuntimeWorkspace> visible,
                       std::optional<RuntimeWorkspace> focused);
+  // The tabs, by workspace, that must outlive their last terminal because the desktop shows other
+  // windows in them. The runtime lets go of them when this session ends.
+  void holdTabs(std::set<std::pair<RuntimeWorkspace, std::uint64_t>> tabs);
 
 private:
   struct Impl;

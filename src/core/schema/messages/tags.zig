@@ -64,6 +64,7 @@ pub const ClientTag = enum(u8) {
     report_limit = 0x43,
     query_limits = 0x44,
     configure_frame_interval = 0x45,
+    hold_tab = 0x47,
 };
 
 pub const ServerTag = enum(u8) {

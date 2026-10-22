@@ -71,6 +71,7 @@ namespace telar {
     report_limit = 0x43,
     query_limits = 0x44,
     configure_frame_interval = 0x45,
+    hold_tab = 0x47,
     execution_request = 0x46,
   };
 
