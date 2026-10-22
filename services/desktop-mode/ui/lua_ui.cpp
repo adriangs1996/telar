@@ -1,6 +1,6 @@
 #include "lua_ui.hpp"
 #include "lua_script.hpp"
-#include "file_watch.hpp"
+#include "module_watch.hpp"
 #include "lua_environment.hpp"
 #include "lua_io.hpp"
 #include "lua_value.hpp"
@@ -520,6 +520,9 @@ namespace {
                          });
 
         events_ = std::make_unique<ui::SurfaceEvents>(*surface_, *root_);
+        events_->setVisibilityObserver([this](bool visible) {
+          pauseAnimations(!visible);
+        });
       }
 
       runtime_ =
@@ -590,6 +593,7 @@ namespace {
         }
       }
 
+      pauseAnimations(!shown());
       io_->activate();
       runtime_->activate();
       workbench_->activate();
@@ -1411,6 +1415,28 @@ namespace {
 
       if (active_) {
         adopted->start();
+        pauseAnimations(!shown());
+      }
+    }
+
+    bool shown() const {
+      return !events_ || events_->state().value("visible").toBool();
+    }
+
+    // A surface nobody can see should draw nothing, so its animations wait until it is visible:
+    // the workbench leaves a retired pane's window up, transparent, instead of hiding it.
+    void pauseAnimations(bool paused) {
+      TELAR_TRACE("lua_ui.pause_animations");
+      for (const auto &animation : animations_) {
+        if (!animation) {
+          continue;
+        }
+
+        if (paused && animation->state() == QAbstractAnimation::Running) {
+          animation->pause();
+        } else if (!paused && animation->state() == QAbstractAnimation::Paused) {
+          animation->resume();
+        }
       }
     }
   };
@@ -1475,32 +1501,42 @@ namespace ui {
     std::unique_ptr<Generation> active;
     std::unique_ptr<Generation> prepared;
     QSet<QString> attempted_modules;
-    FileWatch module_watcher;
+    std::uint64_t module_watch = 0;
     std::function<void()> reload_handler;
     bool preparing = false;
 
     void refreshModuleWatches() {
       TELAR_TRACE("lua_ui.refresh_module_watches");
-      auto paths = attempted_modules.values();
+      auto *modules = services.modules;
+      if (!modules) {
+        return;
+      }
 
+      if (!module_watch) {
+        module_watch = modules->subscribe([this] {
+          if (reload_handler) {
+            reload_handler();
+          }
+        });
+      }
+
+      auto paths = attempted_modules.values();
       if (active) {
         paths.append(active->modulePaths());
       }
 
-      module_watcher.setPaths(paths);
+      modules->setPaths(module_watch, paths);
     }
   };
 
   LuaUi::LuaUi(ui::Services &services, QuickSurface *surface)
-      : impl_(std::make_unique<Impl>(services, surface)) {
-    impl_->module_watcher.setCallback([this](const QStringList &) {
-      if (impl_->reload_handler) {
-        impl_->reload_handler();
-      }
-    });
-  }
+      : impl_(std::make_unique<Impl>(services, surface)) {}
 
   LuaUi::~LuaUi() {
+    if (impl_->module_watch && impl_->services.modules) {
+      impl_->services.modules->unsubscribe(impl_->module_watch);
+    }
+
     impl_->reload_handler = {};
     impl_->prepared.reset();
     impl_->active.reset();

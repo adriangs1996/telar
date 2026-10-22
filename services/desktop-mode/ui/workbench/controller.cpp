@@ -1,4 +1,5 @@
 #include "controller.hpp"
+#include "idle_work.hpp"
 #include "keyboard_router.hpp"
 #include "layout.hpp"
 #include "native.hpp"
@@ -99,8 +100,11 @@ namespace workbench {
   } // namespace
 
   struct Controller::Impl {
+    // A view exists for every element of every tab, but its surface is made only when it is
+    // presented or prewarmed: making one is the expensive part.
     struct View {
       std::uint64_t pane = 0;
+      QString title;
       std::unique_ptr<LuaSurface> surface;
       std::unique_ptr<TerminalItem> terminal;
       std::unique_ptr<native::ExternalWindow> external;
@@ -115,9 +119,15 @@ namespace workbench {
       ~View() {
         QObject::disconnect(first_frame);
       }
+
+      // Its window is still up, transparent, but the user cannot see it: see hide.
+      bool retired() const {
+        return surface && !visible && surface->window().isVisible();
+      }
     };
 
     struct Tab {
+      std::uint64_t id = 0;
       Layout layout;
       std::map<QString, std::unique_ptr<View>> views;
       std::set<QString> closing;
@@ -127,6 +137,7 @@ namespace workbench {
     };
 
     struct Workspace {
+      std::uint64_t id = 0;
       std::unique_ptr<RuntimeConnection> runtime;
       std::map<std::uint64_t, Tab> tabs;
       std::uint64_t space = 0;
@@ -141,6 +152,9 @@ namespace workbench {
     ui::Services &services;
     // Declared before the workspaces, whose pane windows it routes to, so it outlives them.
     KeyboardRouter keyboard;
+    IdleWork prewarming{[this] {
+      return prewarm();
+    }};
     QTimer update_timer, monitor_timer, save_timer, retire_timer;
     std::uint64_t monitor_ticks = 0;
     // Windows are transparent until their first frame, so a switch keeps the outgoing ones up
@@ -305,66 +319,66 @@ namespace workbench {
       }
     }
 
-    View &createSurface(Workspace &workspace,
-                        Tab &tab,
-                        Element element,
-                        QVariantMap configuration = {},
-                        std::uint64_t pane = 0) {
-      TELAR_TRACE("workbench.create_surface");
+    View &addView(Tab &tab, Element element, QVariantMap configuration = {}, std::uint64_t pane = 0) {
+      TELAR_TRACE("workbench.add_view");
       if (tab.views.size() >= Layout::capacity) {
         throw std::runtime_error("Tab surface limit reached");
       }
 
-      qCInfo(telar_log::workbench) << "create surface" << element.id << "pane" << pane;
       auto view = std::make_unique<View>();
       view->pane = pane;
-      view->configuration = configuration;
-      view->surface = std::make_unique<LuaSurface>(desktop,
-                                                   QSize(320, 240),
-                                                   ui::SurfaceKind::workbench,
-                                                   configuration);
-      auto &window = view->surface->window();
+      view->title = element.title;
+      view->configuration = std::move(configuration);
+      const auto id = element.id;
+      tab.layout.insert(std::move(element), tab.next_axis);
+      auto &result = *view;
+      tab.views.emplace(id, std::move(view));
+      return result;
+    }
+
+    void materialize(Workspace &workspace, const QString &id, View &view) {
+      TELAR_TRACE("workbench.create_surface");
+      qCInfo(telar_log::workbench) << "create surface" << id << "pane" << view.pane;
+      view.surface = std::make_unique<LuaSurface>(desktop,
+                                                  QSize(320, 240),
+                                                  ui::SurfaceKind::workbench,
+                                                  view.configuration);
+      auto &window = view.surface->window();
       // Qt's default persistence keeps a hidden window's scene graph, so showing it again draws
       // at once instead of rebuilding every terminal row before its first frame.
       window.setFlags(Qt::Window | Qt::FramelessWindowHint);
-      window.setTitle(element.title.isEmpty() ? QStringLiteral("Telar Pane") : element.title);
-      const auto id = element.id;
+      window.setTitle(view.title.isEmpty() ? QStringLiteral("Telar Pane") : view.title);
       // The pane never becomes the key window: a press on it, or Lua focusing one of its items,
       // moves the tab's focus to it, and focusCurrent routes the keyboard there.
       keyboard.adopt(window, [this, id] {
         requestFocus(id);
       });
 
-      view->surface->setFocusHandler([this, id] {
+      view.surface->setFocusHandler([this, id] {
         requestFocus(id);
       });
 
-      if (pane) {
-        view->terminal =
+      if (const auto pane = view.pane) {
+        view.terminal =
             std::make_unique<TerminalItem>(workspace.runtime->screen(pane), window.contentItem());
-        view->terminal->setZ(1);
-        view->terminal->send = [&runtime = *workspace.runtime, pane](const QByteArray &bytes) {
+        view.terminal->setZ(1);
+        view.terminal->send = [&runtime = *workspace.runtime, pane](const QByteArray &bytes) {
           runtime.input(pane, bytes);
         };
 
-        view->terminal->resized = [&runtime = *workspace.runtime, pane](telar::TerminalSize size) {
+        view.terminal->resized = [&runtime = *workspace.runtime, pane](telar::TerminalSize size) {
           runtime.resize(pane, size);
         };
 
-        view->terminal->scrolled = [&runtime = *workspace.runtime, pane](std::uint32_t offset) {
+        view.terminal->scrolled = [&runtime = *workspace.runtime, pane](std::uint32_t offset) {
           runtime.viewport(pane, offset);
         };
 
         // The terminal is the focus of its window, so it has active focus while the window holds
         // the keyboard.
-        view->terminal->setFocus(true);
-        view->terminal->configure(options);
+        view.terminal->setFocus(true);
+        view.terminal->configure(options);
       }
-
-      tab.layout.insert(std::move(element), tab.next_axis);
-      auto &result = *view;
-      tab.views.emplace(id, std::move(view));
-      return result;
     }
 
     void synchronize(Workspace &workspace, std::uint64_t workspace_id) {
@@ -372,8 +386,10 @@ namespace workbench {
       const auto &snapshots = workspace.runtime->tabs();
       for (const auto &[tab_id, panes] : snapshots) {
         auto &tab = workspace.tabs[tab_id];
-        // Empty here can mean its first snapshot has not arrived yet.
-        if (tab_id != workspace.runtime->activeTab() || !workspace.runtime->hasSnapshot(tab_id)) {
+        tab.id = tab_id;
+        // Empty here can mean its first snapshot has not arrived yet. Every other tab is
+        // synchronized too, so their windows can be prewarmed before they are visited.
+        if (!workspace.runtime->hasSnapshot(tab_id)) {
           continue;
         }
 
@@ -386,7 +402,7 @@ namespace workbench {
                             ContentKind::terminal,
                             QStringLiteral("Pane ") + QString::number(pane)};
             element.constraints.minimum = {160, 90};
-            createSurface(workspace, tab, element, {}, pane);
+            addView(tab, element, {}, pane);
             if (tab.focus_new) {
               tab.layout.focus(id);
               focus_pending = true;
@@ -427,10 +443,9 @@ namespace workbench {
             }
 
             try {
-              createSurface(workspace,
-                            tab,
-                            Element{id, ContentKind::view, "Telar View"},
-                            record.value("configuration").toObject().toVariantMap());
+              addView(tab,
+                      Element{id, ContentKind::view, "Telar View"},
+                      record.value("configuration").toObject().toVariantMap());
             } catch (const std::exception &failure) {
               qWarning() << "Cannot restore Telar view:" << failure.what();
             }
@@ -526,6 +541,11 @@ namespace workbench {
       });
     }
 
+    // A pane window that has been shown is never hidden again: hiding asks the window server
+    // whether it is on screen, makes Qt list every window, and waits for its render thread, which
+    // together take several frames. It turns transparent instead, which also lets the mouse
+    // through, and its surface reports itself hidden, so Lua treats it as gone and pauses its
+    // animations. With its terminal detached, it has nothing left to draw.
     void hide(View &view) {
       TELAR_TRACE("workbench.hide");
       if (!view.visible) {
@@ -533,7 +553,10 @@ namespace workbench {
       }
 
       if (view.surface) {
-        view.surface->window().hide();
+        view.surface->window().setOpacity(0);
+        auto state = view.surface->nativeState();
+        state.insert("visible", false);
+        view.surface->setNativeState(state);
       }
 
       if (view.external) {
@@ -543,11 +566,50 @@ namespace workbench {
       view.visible = false;
     }
 
+    // Puts a pane window where the layout places it, on its workspace's Space, and tells its
+    // surface where it is and whether the user sees it. Showing the window is up to the caller.
+    void layOut(Workspace &workspace, Tab &tab, const Placement &placement, View &view, bool shown) {
+      TELAR_TRACE("workbench.lay_out");
+      const auto padding = metric(options, "padding", default_padding);
+      const auto header = metric(options, "header_height", default_header);
+      auto &window = view.surface->window();
+      const QRect geometry(
+          QPoint(qRound(placement.frame.left()), qRound(placement.frame.top())),
+          QSize(qRound(placement.frame.right()) - qRound(placement.frame.left()),
+                qRound(placement.frame.bottom()) - qRound(placement.frame.top())));
+      if (window.geometry() != geometry) {
+        window.setGeometry(geometry);
+      }
+
+      if (view.placed_space != workspace.space) {
+        native::place(window, workspace.space);
+        view.placed_space = workspace.space;
+      }
+
+      const QRectF content(padding,
+                           header,
+                           std::max(0.0, placement.frame.width() - padding * 2),
+                           std::max(0.0, placement.frame.height() - header - padding));
+      view.surface->setNativeState(
+          {{"element", placement.id},
+           {"pane", view.pane ? QVariant(QString::number(view.pane)) : QVariant{}},
+           {"workspace", QString::number(workspace.id)},
+           {"tab", QString::number(tab.id)},
+           {"focused", tab.layout.focused() == placement.id},
+           {"floating", tab.layout.element(placement.id)->floating},
+           {"visible", shown},
+           {"area", rectangle(workspace.area)},
+           {"geometry", rectangle(placement.frame)},
+           {"content", rectangle(content)}});
+      if (view.terminal) {
+        view.terminal->setPosition(content.topLeft());
+        view.terminal->setSize(content.size());
+      }
+    }
+
     void present(Workspace &workspace, std::uint64_t workspace_id, bool reconfigure) {
       TELAR_TRACE("workbench.present");
       const auto gap = metric(options, "gap", default_gap);
-      const auto padding = metric(options, "padding", default_padding);
-      const auto header = metric(options, "header_height", default_header);
       const auto active_tab = workspace.runtime->activeTab();
       std::set<QString> shown;
       for (auto &[tab_id, tab] : workspace.tabs) {
@@ -594,59 +656,36 @@ namespace workbench {
                 tab.layout.focus(placement.id);
               }
             } else {
+              if (!view.surface) {
+                materialize(workspace, placement.id, view);
+              }
+
               auto &window = view.surface->window();
-              const QRect geometry(
-                  QPoint(qRound(placement.frame.left()), qRound(placement.frame.top())),
-                  QSize(qRound(placement.frame.right()) - qRound(placement.frame.left()),
-                        qRound(placement.frame.bottom()) - qRound(placement.frame.top())));
-              if (window.geometry() != geometry) {
-                window.setGeometry(geometry);
-              }
-
-              if (view.placed_space != workspace.space) {
-                native::place(window, workspace.space);
-                view.placed_space = workspace.space;
-              }
-
-              const bool selected = tab.layout.focused() == placement.id;
-              view.surface->setNativeState(
-                  {{"element", placement.id},
-                   {"pane", view.pane ? QVariant(QString::number(view.pane)) : QVariant{}},
-                   {"workspace", QString::number(workspace_id)},
-                   {"tab", QString::number(tab_id)},
-                   {"focused", selected},
-                   {"floating", tab.layout.element(placement.id)->floating},
-                   {"area", rectangle(workspace.area)},
-                   {"geometry", rectangle(placement.frame)},
-                   {"content",
-                    rectangle(
-                        QRectF(padding,
-                               header,
-                               std::max(0.0, placement.frame.width() - padding * 2),
-                               std::max(0.0, placement.frame.height() - header - padding)))}});
+              layOut(workspace, tab, placement, view, true);
               if (view.terminal) {
                 if (reconfigure) {
                   view.terminal->configure(options);
                 }
 
                 view.terminal->setPresented(true);
-
-                view.terminal->setPosition({padding, header});
-                view.terminal->setSize(
-                    {std::max(0.0, placement.frame.width() - padding * 2),
-                     std::max(0.0, placement.frame.height() - header - padding)});
               }
 
-              const bool appearing = !view.visible;
+              // A retired window still holds its last frame, so only a window shown for the
+              // first time has to draw before the outgoing ones go.
+              const bool first = !window.isVisible();
+              if (!view.visible) {
+                qCDebug(telar_log::workbench)
+                    << "show" << placement.id << "at" << placement.frame << "in tab" << tab_id;
+                window.setOpacity(1);
+              }
+
               {
                 TELAR_TRACE("workbench.window.show");
                 window.show();
               }
 
               retiring.erase(placement.id);
-              if (appearing) {
-                qCDebug(telar_log::workbench)
-                    << "show" << placement.id << "at" << placement.frame << "in tab" << tab_id;
+              if (first) {
                 incoming.insert(placement.id);
                 QObject::disconnect(view.first_frame);
                 view.first_frame = QObject::connect(
@@ -717,6 +756,55 @@ namespace workbench {
       }
     }
 
+    // Prepares the panes the user is not looking at, one phase of one pane per call, so the first
+    // visit to any tab, in any workspace, finds windows that exist, sit on their Space and have
+    // drawn, as when returning to a tab. A phase is making the surface, making the native window
+    // and placing it, or showing it transparent so it draws; each fits in a frame. Visible
+    // workspaces go first. Returns whether anything is left.
+    bool prewarm() {
+      TELAR_TRACE("workbench.prewarm");
+      const auto gap = metric(options, "gap", default_gap);
+      for (const bool visible : {true, false}) {
+        for (auto &[workspace_id, workspace] : workspaces) {
+          if (workspace.visible != visible || !workspace.space) {
+            continue;
+          }
+
+          for (auto &[tab_id, tab] : workspace.tabs) {
+            for (auto &[id, view] : tab.views) {
+              if (view->external || view->visible || view->retired()) {
+                continue;
+              }
+
+              if (!view->surface) {
+                materialize(workspace, id, *view);
+                return true;
+              }
+
+              if (view->placed_space != workspace.space) {
+                for (const auto &placement :
+                     tab.layout.arrange(workspace.area, gap, workspace.scale)) {
+                  if (placement.id == id) {
+                    layOut(workspace, tab, placement, *view, false);
+                    return true;
+                  }
+                }
+
+                continue;
+              }
+
+              auto &window = view->surface->window();
+              window.setOpacity(0);
+              window.show();
+              return true;
+            }
+          }
+        }
+      }
+
+      return false;
+    }
+
     void reconcile() {
       TELAR_TRACE("workbench.reconcile");
       if (changing) {
@@ -745,13 +833,16 @@ namespace workbench {
           focus_workspace = services.desktop.focusedWorkspace().value_or(0);
         }
 
+        // Hidden workspaces too: their tabs are loaded and their windows prewarmed on their own
+        // Space, so switching to one is as cheap as switching tabs.
         for (const auto &space : services.desktop.state().spaces) {
-          if (!space.workspace || !space.visible || space.fullscreen) {
+          if (!space.workspace || space.fullscreen) {
             continue;
           }
 
           const auto id = *space.workspace;
           auto &workspace = workspaces[id];
+          workspace.id = id;
           if (!workspace.runtime) {
             workspace.runtime = std::make_unique<RuntimeConnection>(
                 QString::fromStdString(services.runtime_socket),
@@ -777,6 +868,11 @@ namespace workbench {
           workspace.area = desktop.workArea(space.display, monitor.available)
                                .adjusted(margin, margin, -margin, -margin);
           workspace.scale = monitor.scale;
+          if (!space.visible) {
+            workspace.runtime->load();
+            continue;
+          }
+
           workspace.visible = true;
           if (catalog.workspace && catalog.workspace->id == id && catalog.active_tab) {
             if (workspace.runtime->activeTab() != catalog.active_tab && space.focused) {
@@ -847,6 +943,7 @@ namespace workbench {
       }
 
       changing = false;
+      prewarming.wake();
       const auto current = state();
       if (notified_state != current) {
         notified_state = current;
@@ -880,7 +977,11 @@ namespace workbench {
       if (view.external) {
         view.external->focus();
       } else {
-        view.surface->window().raise();
+        // Raising asks the window server to restack; only a floating pane can be covered.
+        if (tab.layout.element(target->first)->floating) {
+          view.surface->window().raise();
+        }
+
         keyboard.route(view.surface->window());
       }
 
@@ -896,7 +997,8 @@ namespace workbench {
 
       for (auto &[workspace_id, workspace] : workspaces) {
         for (auto &[tab_id, tab] : workspace.tabs) {
-          if (tab.views.contains(id)) {
+          if (const auto found = tab.views.find(id);
+              found != tab.views.end() && !found->second->retired()) {
             tab.layout.focus(id);
             focus_pending = true;
             focus_workspace = workspace_id;
@@ -1096,11 +1198,9 @@ namespace workbench {
         }
 
         const auto view_id = "view:" + QUuid::createUuid().toString(QUuid::WithoutBraces);
-        createSurface(
-            *workspace,
-            tab,
-            Element{view_id, ContentKind::view, args.value("title", "Telar View").toString()},
-            {{"module", module}, {"options", args.value("options", QVariantMap{})}});
+        addView(tab,
+                Element{view_id, ContentKind::view, args.value("title", "Telar View").toString()},
+                {{"module", module}, {"options", args.value("options", QVariantMap{})}});
         tab.layout.focus(view_id);
         focus_pending = true;
         result = view_id;

@@ -111,7 +111,7 @@ namespace workbench {
 
   void RuntimeConnection::connect() {
     TELAR_TRACE("connection.connect");
-    if (!visible_ || socket_.state() != QLocalSocket::UnconnectedState) {
+    if ((!visible_ && !loading_) || socket_.state() != QLocalSocket::UnconnectedState) {
       return;
     }
 
@@ -140,7 +140,7 @@ namespace workbench {
       }
     }
 
-    if (visible_) {
+    if (visible_ || loading_) {
       retry_.start();
     }
 
@@ -166,6 +166,7 @@ namespace workbench {
     }
 
     linger_.stop();
+    loading_ = false;
 
     if (!ready()) {
       connect();
@@ -269,6 +270,8 @@ namespace workbench {
       if (visible_) {
         refresh();
         refresh_.start();
+      } else if (loading_) {
+        refresh();
       }
 
       notify();
@@ -300,8 +303,20 @@ namespace workbench {
         active_tab_ = value.tabs.empty() ? 0 : value.tabs.front().tab_id;
       }
 
+      // The active tab every time, to follow its panes; the others once, so the workbench can
+      // prepare their windows before they are visited.
       if (active_tab_) {
         requestTab(active_tab_);
+      }
+
+      for (const auto &tab : value.tabs) {
+        if (!snapshots_.contains(tab.tab_id)) {
+          requestTab(tab.tab_id);
+        }
+      }
+
+      if (value.tabs.empty() && loading_) {
+        finishLoading();
       }
 
       synchronizeAttachments();
@@ -328,6 +343,10 @@ namespace workbench {
       }
 
       snapshots_.insert(value.location.tab_id);
+      if (loading_ && !waiting(RequestKind::tab)) {
+        finishLoading();
+      }
+
       synchronizeAttachments();
       notify();
       break;
@@ -465,7 +484,7 @@ namespace workbench {
 
   void RuntimeConnection::refresh() {
     TELAR_TRACE("connection.refresh");
-    if (!ready() || !visible_) {
+    if (!ready() || (!visible_ && !loading_)) {
       return;
     }
 
@@ -505,6 +524,29 @@ namespace workbench {
     if (tab && !waiting(RequestKind::tab, tab)) {
       send(telar::RequestTabSnapshot{request(RequestKind::tab, tab), {workspace_, tab}});
     }
+  }
+
+  void RuntimeConnection::load() {
+    TELAR_TRACE("connection.load");
+    if (visible_ || loading_ || ready() || !snapshots_.empty()) {
+      return;
+    }
+
+    qCInfo(telar_log::connection) << "ws" << workspace_.id << "loading the hidden workspace";
+    loading_ = true;
+    connect();
+  }
+
+  void RuntimeConnection::finishLoading() {
+    loading_ = false;
+    if (visible_) {
+      return;
+    }
+
+    qCInfo(telar_log::connection) << "ws" << workspace_.id << "loaded" << snapshots_.size()
+                                  << "tabs; closing the hidden workspace's session";
+    // Aborting emits disconnected, which resets the session.
+    socket_.abort();
   }
 
   void RuntimeConnection::selectTab(std::uint64_t tab) {

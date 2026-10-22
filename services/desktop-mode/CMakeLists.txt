@@ -122,6 +122,8 @@ endif()
 set(spaces_dbg_native_sources debug/support/spaces_probe.mm)
 set(spaces_dbg_native_libraries desktop-native)
 set(input_router_dbg_native_libraries desktop-native)
+set(window_hide_dbg_native_sources debug/support/window_hide_probe.mm)
+set(window_hide_dbg_native_libraries desktop-native)
 
 file(GLOB_RECURSE desktop_programs CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/debug/*.cpp")
 list(FILTER desktop_programs EXCLUDE REGEX "/debug/support/")

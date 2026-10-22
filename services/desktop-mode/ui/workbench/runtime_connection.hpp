@@ -20,6 +20,9 @@ namespace workbench {
     std::function<void(std::uint64_t)> painted;
     void selectTab(std::uint64_t tab);
     void setVisible(bool visible);
+    // Fetches a hidden workspace's tabs and their panes once, attaching none, so its windows can
+    // be prepared before it is shown; the session closes once every tab has arrived.
+    void load();
     void refresh();
     void attach(std::uint64_t pane);
     void input(std::uint64_t pane, const QByteArray &bytes);
@@ -64,7 +67,7 @@ namespace workbench {
     std::map<std::uint64_t, Pending> pending_;
     QElapsedTimer clock_;
     std::uint64_t identity_ = 0, request_ = 1, active_tab_ = 0;
-    bool handshake_ = false, visible_ = false, reading_ = false;
+    bool handshake_ = false, visible_ = false, reading_ = false, loading_ = false;
     QString error_;
 
     void connect();
@@ -77,6 +80,7 @@ namespace workbench {
     std::uint64_t request(RequestKind kind, std::uint64_t target = 0);
     bool waiting(RequestKind kind, std::uint64_t target = 0) const;
     void requestTab(std::uint64_t tab);
+    void finishLoading();
     static const char *describe(RequestKind kind);
 
     template <typename Message> void send(const Message &message) {

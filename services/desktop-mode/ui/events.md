@@ -159,7 +159,10 @@ supplies displacement in `delta`. Two-finger scrolling uses `scroll`.
 
 Read the current values through `ui.surface.width`, `height`, `screen`,
 `scale`, `safe_area`, `visible` and `active`. These are snapshots, not reactive
-bindings. Monitor descriptions include `name`, `geometry` and
+bindings. `visible` is what the user can see: a host may report a surface whose
+window stays up as hidden, such as a retired workbench pane, and animations
+started with `ui.animate` pause while a surface is hidden. Monitor descriptions
+include `name`, `geometry` and
 `available_geometry`; a platform may also provide `id`. Monitor rectangles
 use desktop logical coordinates. `scale` converts logical sizes to backing
 pixel sizes.

@@ -15,6 +15,8 @@ class DesktopSession;
 class Shortcuts;
 
 namespace ui {
+  class ModuleWatch;
+
   struct Services {
     lua::Vm &vm;
     RuntimeSession &runtime;
@@ -22,5 +24,7 @@ namespace ui {
     Shortcuts &shortcuts;
     std::string runtime_socket;
     workbench::Controller *workbench = nullptr;
+    // Owned by the desktop UI; null without one, and then nothing reloads on change.
+    ModuleWatch *modules = nullptr;
   };
 } // namespace ui

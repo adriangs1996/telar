@@ -17,6 +17,7 @@ namespace workbench {
       setOpacity(0);
       // Only route activates it.
       setProperty("_q_showWithoutActivating", true);
+
       if (auto *screen = QGuiApplication::primaryScreen()) {
         setGeometry(QRect(screen->availableGeometry().topLeft(), QSize(1, 1)));
       }
@@ -157,7 +158,8 @@ namespace workbench {
 
     handing_over_ = true;
     QWindowSystemInterface::handleFocusWindowChanged<QWindowSystemInterface::SynchronousDelivery>(
-        &window, Qt::ActiveWindowFocusReason);
+        &window,
+        Qt::ActiveWindowFocusReason);
     handing_over_ = false;
   }
 
@@ -174,7 +176,8 @@ namespace workbench {
 
     const auto place = [this, window] {
       QWindowSystemInterface::handleGeometryChange<QWindowSystemInterface::SynchronousDelivery>(
-          input_.get(), QRect(window->position(), input_->size()));
+          input_.get(),
+          QRect(window->position(), input_->size()));
     };
 
     follow_x_ = QObject::connect(window, &QWindow::xChanged, this, place);

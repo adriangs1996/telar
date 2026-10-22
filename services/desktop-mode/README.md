@@ -63,9 +63,26 @@ so the session never leaves its workspace; switching away from a workspace
 detaches all of its terminals and keeps its
 presentation session open for one minute, so returning skips the handshake. A
 detached terminal keeps its last frame, as the GUI does, until the next attachment
-delivers a full one. Pane windows are transparent until they draw, so on a tab
-switch the outgoing windows stay up until every incoming one has presented its
-first frame, or for at most 250 ms. Pane windows never become the key window,
+delivers a full one.
+
+Every tab of every workspace is prewarmed. A visible workspace's connection
+fetches the panes of all its tabs, and a hidden workspace's connection loads
+them once and closes. A view exists for each pane right away; its surface and
+window are made in idle time, one phase of one pane per turn of the event loop
+(`ui/workbench/idle_work.cpp`): the surface, then the native window on its Space,
+then showing it transparent so it draws. Each phase fits in a frame, and visible
+workspaces go first. The first visit to a tab, or to a workspace, then costs the
+same as returning to one. Like the GUI, only the visible tab's terminals are
+attached, so a prewarmed terminal fills in with its first attached frame. A pane
+that has not been prewarmed yet when its tab is shown is made on the spot. A pane window that has been shown is never hidden again:
+hiding a window takes several frames of window server round trips and render
+thread waits. Retiring a pane makes its window transparent, which also lets the
+mouse through, and reports its surface as not `visible`, so Lua treats it as
+gone and its `ui.animate` animations pause until it is visible again. Showing it
+again restores its opacity and its last frame at once. A window shown for the
+first time is transparent until it draws, so on a tab switch the outgoing windows
+stay up until every new one has presented its first frame, or for at most
+250 ms. Pane windows never become the key window,
 because every change of key window makes macOS switch the input method context
 with blocking round trips. The keyboard router (`ui/workbench/keyboard_router.cpp`)
 keeps an invisible input window on every Space as the key window, while Qt treats
@@ -307,6 +324,19 @@ uses the workbench's keyboard router, so no pane ever becomes key. Physical
 ctrl+h/j/k/l and clicks move the focus, and every key window change is printed;
 one that reaches a pane in `router` mode is marked unexpected. `--bench N`
 measures N moves once the application is active.
+
+```sh
+just desktop-debug window_hide_dbg --strategy alpha --windows 13 --switches 40
+```
+
+`debug/window_hide_dbg.cpp` measures switching between two tabs of pane windows
+that share the same rectangles, with the windows adopted by the keyboard router,
+the application active and an animation in every window. `--strategy hide` hides
+the outgoing windows; `--strategy alpha` leaves them ordered in, transparent,
+without mouse events and with invisible content. It reports both halves of each
+switch, the frames the outgoing windows draw in one second, where a mouse down at
+each pane's centre lands and the memory footprint. `--hold` keeps the windows up,
+to inspect them in Mission Control.
 
 ## Session logs
 
@@ -890,7 +920,9 @@ including files encountered by a failed reload, so fixing a module error
 or creating a missing module can recover the UI automatically. Failed
 reloads keep the current UI and its operations running. A generation's imports
 are watched in one batch when it finishes loading: on macOS every watch change
-flushes the file event stream synchronously.
+flushes the file event stream synchronously. Every Lua environment, one per
+surface, shares a single watch (`ui/module_watch.cpp`), which changes only when
+the union of their modules does.
 
 This loader supports Lua source modules and Qt resources. C modules,
 `package.loadlib`, LuaRocks searchers and the standard `io`/`os` libraries

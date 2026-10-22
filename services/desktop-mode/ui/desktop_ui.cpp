@@ -1,6 +1,7 @@
 #include "desktop_ui.hpp"
 #include "lua_script.hpp"
 #include "lua_surface.hpp"
+#include "services.hpp"
 #include "../trace.hpp"
 #include <QDebug>
 #include <QDir>
@@ -34,6 +35,7 @@ namespace ui {
       : services_(services),
         configuration_(services) {
     TELAR_TRACE("ui.desktop.start");
+    services_.modules = &modules_;
     config_path_ = qEnvironmentVariable("TELAR_DESKTOP_CONFIG");
     config_required_ = !config_path_.isEmpty();
 
@@ -58,7 +60,7 @@ namespace ui {
       reload_timer_.start();
     });
 
-    watcher_.setCallback([this](const QStringList &) {
+    config_watch_ = modules_.subscribe([this] {
       configuration_dirty_ = true;
       reload_timer_.start();
     });
@@ -67,8 +69,12 @@ namespace ui {
       reloadPending();
     });
 
-    watcher_.setPaths({config_path_});
+    modules_.setPaths(config_watch_, {config_path_});
     reloadConfiguration();
+  }
+
+  DesktopUi::~DesktopUi() {
+    services_.modules = nullptr;
   }
 
   Services &DesktopUi::services() noexcept {
@@ -169,7 +175,7 @@ namespace ui {
 
     if (global) {
       try {
-        watcher_.setPaths({config_path_});
+        modules_.setPaths(config_watch_, {config_path_});
         reloadConfiguration();
         retry_configuration_ = false;
       } catch (const std::exception &error) {

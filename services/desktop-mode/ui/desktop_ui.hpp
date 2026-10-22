@@ -1,7 +1,7 @@
 #pragma once
 
-#include "file_watch.hpp"
 #include "lua_ui.hpp"
+#include "module_watch.hpp"
 #include "surface_kind.hpp"
 #include <QQmlEngine>
 #include <QTimer>
@@ -16,6 +16,7 @@ namespace ui {
   class DesktopUi final {
   public:
     explicit DesktopUi(Services &services);
+    ~DesktopUi();
 
     Services &services() noexcept;
     QQmlEngine &engine() noexcept;
@@ -29,13 +30,15 @@ namespace ui {
     Services &services_;
     // Shared by every surface, which must not outlive it.
     QQmlEngine engine_;
+    // Shared by every Lua environment, which must not outlive it.
+    ModuleWatch modules_;
     LuaUi configuration_;
     QString config_path_;
     bool config_required_ = false;
     QVariantMap settings_;
     QString prefix_;
     std::map<LuaSurface *, SurfaceKind> surfaces_;
-    FileWatch watcher_;
+    std::uint64_t config_watch_ = 0;
     QTimer reload_timer_;
     std::set<SurfaceKind> dirty_surfaces_;
     bool configuration_dirty_ = false;

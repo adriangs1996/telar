@@ -39,6 +39,8 @@ namespace ui {
     void focus(QQuickItem *item);
     void setInputMethod(QQuickItem *item, const QVariantMap &options);
     QVariantMap state() const;
+    // Called when the surface becomes visible or hidden, after Lua has been told.
+    void setVisibilityObserver(std::function<void(bool)> observer);
     void activate();
     void deactivate();
 

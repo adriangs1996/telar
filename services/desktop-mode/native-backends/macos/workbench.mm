@@ -101,17 +101,27 @@ namespace workbench::native {
 
   void place(QWindow &window, std::uint64_t space) {
     TELAR_TRACE("native.place");
-    NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window.winId());
+    NSView *view = nil;
+    {
+      // The first call creates the native window.
+      TELAR_TRACE("native.place.win_id");
+      view = (__bridge NSView *)reinterpret_cast<void *>(window.winId());
+    }
+
     NSWindow *native = view.window;
     if (!native) {
       throw std::runtime_error("Qt did not create a native pane window");
     }
 
-    native.collectionBehavior =
-        NSWindowCollectionBehaviorManaged | NSWindowCollectionBehaviorFullScreenAuxiliary;
-    native.hidesOnDeactivate = NO;
-    native.animationBehavior = NSWindowAnimationBehaviorNone;
-    native.level = NSNormalWindowLevel;
+    {
+      TELAR_TRACE("native.place.configure");
+      native.collectionBehavior =
+          NSWindowCollectionBehaviorManaged | NSWindowCollectionBehaviorFullScreenAuxiliary;
+      native.hidesOnDeactivate = NO;
+      native.animationBehavior = NSWindowAnimationBehaviorNone;
+      native.level = NSNormalWindowLevel;
+    }
+
     macos::spaces::moveWindow(static_cast<std::uint32_t>(native.windowNumber), space);
   }
 
@@ -119,6 +129,7 @@ namespace workbench::native {
     TELAR_TRACE("native.prepare_input_window");
     NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window.winId());
     NSWindow *native = view.window;
+
     if (!native) {
       throw std::runtime_error("Qt did not create the native keyboard window");
     }

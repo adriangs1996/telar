@@ -233,6 +233,7 @@ namespace ui {
 
     QList<QMetaObject::Connection> screen_connections;
     QVariantMap previous_state;
+    std::function<void(bool)> visibility_observer;
 
     QVariantMap drag_data;
 
@@ -1026,6 +1027,10 @@ namespace ui {
         dispatch(Kind::state, &root, {{"value", current}}, false);
       }
 
+      if (old.value("visible") != current.value("visible") && visibility_observer) {
+        visibility_observer(current.value("visible").toBool());
+      }
+
       if (!current.value("visible").toBool()) {
         cancel(QStringLiteral("surface_hidden"));
         hover({}, true);
@@ -1690,6 +1695,10 @@ namespace ui {
 
   QVariantMap SurfaceEvents::state() const {
     return impl_->state();
+  }
+
+  void SurfaceEvents::setVisibilityObserver(std::function<void(bool)> observer) {
+    impl_->visibility_observer = std::move(observer);
   }
 
   void SurfaceEvents::activate() {
