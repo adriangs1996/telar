@@ -17,6 +17,10 @@ On Linux, install CMake, Ninja,
 Clang with `clang-scan-deps`, libstdc++ development headers, pkg-config,
 LuaJIT 2.1 development headers and libraries, and the Qt QML, Qt Quick and
 Qt Quick Controls, Qt Quick Shapes, Qt Network and Qt Concurrent development packages.
+The Linux native backend additionally requires wlroots 0.20, libwayland,
+xkbcommon, Qt Wayland and XWayland. See
+[`native-backends/linux/README.md`](native-backends/linux/README.md) for building
+and starting Telar as its own Wayland session.
 
 CMake finds LuaJIT 2.1 or newer through pkg-config and links it privately to
 `desktop-core` and `desktop-ui`. Set `PKG_CONFIG_PATH` if LuaJIT is installed
@@ -224,8 +228,9 @@ resized. Writes go through Accessibility on a serial queue per application, each
 call bounded by 50 ms, so an application that hangs delays only its own windows,
 and a window's queued write is replaced by a newer one. The debug programs
 `external_window_dbg`, `window_observer_dbg` and `space_switch_dbg` hold the
-measurements behind these choices. Other applications' windows are managed on
-macOS only; a Linux window-manager integration is still required.
+measurements behind these choices. On Linux, Telar's own wlroots compositor
+observes and places Wayland and XWayland windows directly. Hidden tabs disable
+their scene nodes rather than moving them offscreen.
 
 For manual review, run `just desktop`. Split a
 terminal, send output to both panes, change focus, resize, switch tabs and return.

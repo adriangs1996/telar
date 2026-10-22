@@ -41,8 +41,6 @@ namespace workbench {
     constexpr std::uint64_t resource_trace_ticks = 10;
     constexpr std::size_t mebibyte = 1024 * 1024;
     constexpr int default_gap = 8, default_padding = 8, default_header = 28;
-    // What stays on screen of a parked window: macOS pulls one wholly off every display back.
-    constexpr double park_sliver = 1;
     constexpr int maximum_metric = 256;
     constexpr qsizetype persistence_limit = 4 * 1024 * 1024;
 
@@ -587,7 +585,7 @@ namespace workbench {
       }
 
       if (view.surface) {
-        view.surface->window().setOpacity(0);
+        native::setVisible(view.surface->window(), false);
         auto state = view.surface->nativeState();
         state.insert("visible", false);
         view.surface->setNativeState(state);
@@ -595,7 +593,7 @@ namespace workbench {
 
       if (view.external && !view.parked) {
         if (const auto *window = foreignWindow(view.external)) {
-          windows->move(view.external, parkPosition(window->frame));
+          windows->hide(view.external, window->frame);
           view.parked = true;
         }
       }
@@ -606,32 +604,6 @@ namespace workbench {
     const native::ForeignWindow *foreignWindow(std::uint32_t id) const {
       const auto found = std::ranges::find(foreign.windows, id, &native::ForeignWindow::id);
       return found == foreign.windows.end() ? nullptr : &*found;
-    }
-
-    // Where a window waits while its tab is not shown: past the bottom corner of its display,
-    // leaving a sliver on screen. Of the two bottom corners, the one with less of another display
-    // beyond it, or the parked window would show there.
-    QPointF parkPosition(const QRectF &frame) const {
-      const auto *home = QGuiApplication::screenAt(frame.center().toPoint());
-      if (!home) {
-        home = QGuiApplication::primaryScreen();
-      }
-
-      const QRectF bounds = home->geometry();
-      const QPointF right(bounds.right() - park_sliver, bounds.bottom() - park_sliver);
-      const QPointF left(bounds.left() - frame.width() + park_sliver,
-                         bounds.bottom() - park_sliver);
-      const auto spill = [&](QPointF origin) {
-        double area = 0;
-        for (const auto *screen : QGuiApplication::screens()) {
-          const auto shared = QRectF(origin, frame.size()).intersected(QRectF(screen->geometry()));
-          area += screen == home ? 0 : shared.width() * shared.height();
-        }
-
-        return area;
-      };
-
-      return spill(left) < spill(right) ? left : right;
     }
 
     // tile, float or ignore, from the workbench's `windows` option, keyed by application. Without
@@ -716,8 +688,12 @@ namespace workbench {
 
       followed_focus = foreign.focused;
       const auto home = homes.find(foreign.focused);
-      if (home == homes.end() || !home->second.first->visible ||
-          home->second.first->runtime->activeTab() == home->second.second) {
+      if (home == homes.end() || !home->second.first->visible) {
+        return;
+      }
+
+      if (home->second.first->runtime->activeTab() == home->second.second) {
+        requestFocus("window:" + QString::number(foreign.focused));
         return;
       }
 
@@ -747,8 +723,8 @@ namespace workbench {
       const QRect geometry(QPoint(qRound(placement.frame.left()), qRound(placement.frame.top())),
                            QSize(qRound(placement.frame.right()) - qRound(placement.frame.left()),
                                  qRound(placement.frame.bottom()) - qRound(placement.frame.top())));
-      if (window.geometry() != geometry) {
-        window.setGeometry(geometry);
+      if (native::frame(window) != geometry) {
+        native::setFrame(window, geometry);
       }
 
       if (view.placed_space != workspace.space) {
@@ -846,7 +822,7 @@ namespace workbench {
               if (!view.visible) {
                 qCDebug(telar_log::workbench)
                     << "show" << placement.id << "at" << placement.frame << "in tab" << tab_id;
-                window.setOpacity(1);
+                native::setVisible(window, true);
               }
 
               {
@@ -869,11 +845,11 @@ namespace workbench {
               }
 
               if (view.shown_order != placement.order) {
-                window.raise();
+                native::raise(window);
                 view.shown_order = placement.order;
               }
 
-              view.actual = window.geometry();
+              view.actual = native::frame(window);
             }
 
             view.visible = true;
@@ -964,7 +940,7 @@ namespace workbench {
               }
 
               auto &window = view->surface->window();
-              window.setOpacity(0);
+              native::setVisible(window, false);
               window.show();
               return true;
             }
@@ -1184,7 +1160,7 @@ namespace workbench {
       } else {
         // Raising asks the window server to restack; only a floating pane can be covered.
         if (tab.layout.element(target->first)->floating) {
-          view.surface->window().raise();
+          native::raise(view.surface->window());
         }
 
         keyboard.route(view.surface->window());

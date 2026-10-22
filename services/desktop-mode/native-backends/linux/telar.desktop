@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Telar
+Comment=Telar Wayland desktop
+Exec=telar-desktop
+Type=Application
+DesktopNames=Telar

@@ -33,6 +33,15 @@ public:
     std::vector<Binding> bindings;
   };
 
+  struct Capture {
+    keybindings::Router router;
+    std::uint64_t epoch;
+  };
+
+  // Copies the callback-free engine to a native input thread when the map changes.
+  void setCapture(std::function<void(Capture)> capture);
+  void submit(Request request);
+
   Shortcuts() = default;
   Shortcuts(const Shortcuts &) = delete;
   Shortcuts &operator=(const Shortcuts &) = delete;
@@ -62,6 +71,7 @@ private:
   std::map<const void *, Group> groups_;
   std::function<bool(Request)> sink_;
   keybindings::Router router_;
+  std::function<void(Capture)> capture_;
   std::uint64_t next_id_ = 1;
   std::uint64_t epoch_ = 0;
   void compile(const std::map<const void *, Group> &groups);

@@ -141,10 +141,20 @@ namespace {
 
     posix_spawnattr_t attributes;
     posix_spawnattr_init(&attributes);
+    short flags = 0;
+#if defined(__linux__)
+    // The compositor blocks session signals before starting any worker. A new
+    // runtime and its login shell must retain normal signal delivery.
+    sigset_t mask;
+    sigemptyset(&mask);
+    posix_spawnattr_setsigmask(&attributes, &mask);
+    flags |= POSIX_SPAWN_SETSIGMASK;
+#endif
 #if defined(POSIX_SPAWN_CLOEXEC_DEFAULT)
     // Only the three standard streams reach telar, never another descriptor of this process.
-    posix_spawnattr_setflags(&attributes, POSIX_SPAWN_CLOEXEC_DEFAULT);
+    flags |= POSIX_SPAWN_CLOEXEC_DEFAULT;
 #endif
+    posix_spawnattr_setflags(&attributes, flags);
 
     pid_t child = 0;
     const int failure =

@@ -17,7 +17,11 @@ namespace workbench::native {
   };
 
   Display display(std::uint32_t identifier);
+  QRect frame(QWindow &window);
+  void setFrame(QWindow &window, QRect frame);
   void place(QWindow &window, std::uint64_t space);
+  void raise(QWindow &window);
+  void setVisible(QWindow &window, bool visible);
   // Prepares the window that holds the keyboard for the panes: present on every Space, and
   // invisible to the mouse, Mission Control and the window cycle.
   void prepareInputWindow(QWindow &window);
@@ -48,11 +52,8 @@ namespace workbench::native {
     bool operator==(const ForeignWindows &) const = default;
   };
 
-  // Watches the windows of every application with a Dock icon, on a thread of its own: reads come
-  // from the window server, which answers even for an application that hangs, and Accessibility
-  // notifications only tell it when to read again. Writes go through Accessibility on a queue per
-  // application, so one that hangs delays only its own windows, each call bounded by a short
-  // timeout. A window's later writes replace its earlier ones that have not run yet.
+  // Observes application windows and applies workbench policy through the platform's
+  // window server. Linux owns the surfaces; macOS uses its window server and Accessibility.
   class WindowObserver final {
   public:
     using Delivery = std::function<void(ForeignWindows windows)>;
@@ -66,6 +67,7 @@ namespace workbench::native {
 
     void place(std::uint32_t window, QRectF frame);
     void move(std::uint32_t window, QPointF position);
+    void hide(std::uint32_t window, QRectF frame);
     void focus(std::uint32_t window);
     // Presses the window's close button, as clicking it would.
     void close(std::uint32_t window);

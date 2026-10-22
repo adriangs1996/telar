@@ -1,4 +1,5 @@
 #include "login_shell.hpp"
+#include <array>
 #include <cstdlib>
 #include <pwd.h>
 #include <unistd.h>
@@ -42,11 +43,36 @@ namespace login_shell {
       shell_ = "/bin/sh";
     }
 
-    arguments_ = {shell_, "-l", "-i"};
-    count_ = script(shell_) ? arguments_.size() : 1;
+#if defined(__linux__)
+    // The runtime may predate this compositor. Pass display discovery to new
+    // panes as argv, without shell interpolation or replacing its environment.
+    if (const char *desktop = std::getenv("XDG_CURRENT_DESKTOP");
+        desktop && std::string_view(desktop) == "Telar") {
+      storage_.emplace_back("/usr/bin/env");
+      constexpr std::array names{"WAYLAND_DISPLAY",
+                                 "DISPLAY",
+                                 "XDG_RUNTIME_DIR",
+                                 "XDG_SESSION_TYPE",
+                                 "XDG_CURRENT_DESKTOP",
+                                 "DBUS_SESSION_BUS_ADDRESS"};
+      for (const auto *name : names) {
+        if (const auto *value = std::getenv(name)) {
+          storage_.push_back(std::string(name) + "=" + value);
+        }
+      }
+    }
+#endif
+    storage_.push_back(shell_);
+    if (script(shell_)) {
+      storage_.push_back("-l");
+      storage_.push_back("-i");
+    }
+    for (const auto &argument : storage_) {
+      arguments_.push_back(argument);
+    }
   }
 
   std::span<const std::string_view> Command::arguments() const {
-    return std::span(arguments_).first(count_);
+    return arguments_;
   }
 } // namespace login_shell

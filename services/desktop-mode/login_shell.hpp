@@ -1,6 +1,6 @@
 #pragma once
 
-#include <array>
+#include <vector>
 #include <span>
 #include <string>
 #include <string_view>
@@ -26,7 +26,7 @@ namespace login_shell {
 
   private:
     std::string shell_;
-    std::array<std::string_view, 3> arguments_;
-    std::size_t count_ = 1;
+    std::vector<std::string> storage_;
+    std::vector<std::string_view> arguments_;
   };
 } // namespace login_shell
