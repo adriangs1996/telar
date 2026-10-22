@@ -1,6 +1,8 @@
 #include "shortcuts.hpp"
+#include "log_categories.hpp"
+#include "trace.hpp"
+#include <QString>
 #include <array>
-#include <cstdio>
 #include <stdexcept>
 #include <utility>
 
@@ -31,6 +33,7 @@ void Shortcuts::validate(const std::string &prefix, std::span<const Binding> bin
 }
 
 void Shortcuts::compile(const std::map<const void *, Group> &groups) {
+  TELAR_TRACE("shortcuts.compile");
   std::string prefix;
   std::vector<Binding> bindings;
 
@@ -50,17 +53,21 @@ void Shortcuts::compile(const std::map<const void *, Group> &groups) {
   const auto entries = engineBindings(bindings);
   router_.configure(prefix.empty() ? "ctrl+b" : prefix, std::span(entries).first(bindings.size()));
   ++epoch_;
+  qCInfo(telar_log::shortcuts) << "keymap compiled:" << bindings.size() << "bindings under"
+                               << (prefix.empty() ? "ctrl+b" : prefix.c_str());
 }
 
 void Shortcuts::install(const void *owner,
                         const std::string &prefix,
                         std::span<const Binding> bindings,
                         const void *replacing) {
+  TELAR_TRACE("shortcuts.install");
   const Replacement replacement{owner, replacing, prefix, {bindings.begin(), bindings.end()}};
   replace(std::span(&replacement, 1));
 }
 
 void Shortcuts::replace(std::span<const Replacement> replacements) {
+  TELAR_TRACE("shortcuts.replace");
   auto candidate = groups_;
   bool changed = false;
 
@@ -83,6 +90,7 @@ void Shortcuts::replace(std::span<const Replacement> replacements) {
 }
 
 void Shortcuts::remove(const void *owner) {
+  TELAR_TRACE("shortcuts.remove");
   if (!groups_.contains(owner)) {
     return;
   }
@@ -99,16 +107,19 @@ void Shortcuts::setSink(std::function<bool(Request)> sink) {
 }
 
 bool Shortcuts::route(const keybindings::KeyEvent &key) {
+  TELAR_TRACE("shortcuts.route");
   const auto decision = router_.route(key);
 
   if (decision.action && sink_ && !sink_({decision.action, epoch_})) {
-    std::fputs("Desktop shortcut dropped: application event queue is full\n", stderr);
+    qCWarning(telar_log::shortcuts)
+        << "shortcut" << decision.action << "dropped: application event queue is full";
   }
 
   return decision.consumed;
 }
 
 void Shortcuts::dispatch(Request request) {
+  TELAR_TRACE("shortcuts.dispatch");
   if (request.epoch != epoch_) {
     return;
   }
@@ -116,6 +127,12 @@ void Shortcuts::dispatch(Request request) {
   for (const auto &[_, group] : groups_) {
     for (const auto &binding : group.bindings) {
       if (binding.id == request.id) {
+        QString keys;
+        for (const auto &key : binding.keys) {
+          keys += (keys.isEmpty() ? "" : " ") + QString::fromStdString(key);
+        }
+
+        qCInfo(telar_log::shortcuts).noquote() << "shortcut" << keys;
         auto callback = binding.invoke;
         callback();
         return;
@@ -125,6 +142,7 @@ void Shortcuts::dispatch(Request request) {
 }
 
 void Shortcuts::cancel() {
+  TELAR_TRACE("shortcuts.cancel");
   ++epoch_;
   router_.cancel();
 }

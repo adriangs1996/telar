@@ -11,6 +11,7 @@
 #include "surface_events.hpp"
 #include "workbench/controller.hpp"
 #include "workbench/lua_binding.hpp"
+#include "../trace.hpp"
 #include <QColor>
 #include <QDebug>
 #include <QEasingCurve>
@@ -501,6 +502,7 @@ namespace {
           surface_config_(settings.surface),
           environment_(services.vm),
           lifetime_(std::make_unique<QObject>()) {
+      TELAR_TRACE("lua_ui.generation.create");
       if (surface_) {
         root_ = std::make_unique<QQuickItem>();
         root_->setVisible(false);
@@ -531,6 +533,7 @@ namespace {
     }
 
     ~Generation() override {
+      TELAR_TRACE("lua_ui.generation.destroy");
       deactivate();
       shortcuts_.reset();
       runtime_.reset();
@@ -573,6 +576,7 @@ namespace {
     }
 
     void activate() {
+      TELAR_TRACE("lua_ui.activate");
       active_ = true;
 
       if (root_) {
@@ -604,6 +608,7 @@ namespace {
     }
 
     void deactivate() {
+      TELAR_TRACE("lua_ui.deactivate");
       shortcuts_->deactivate();
       runtime_->deactivate();
       workbench_->deactivate();
@@ -616,6 +621,7 @@ namespace {
     }
 
     int call(Operation operation, int arguments) {
+      TELAR_TRACE("lua_ui.call");
       if (!surface_ && needsSurface(operation)) {
         throw std::runtime_error(
             "Create UI inside a surface module; desktop.lua configures the desktop");
@@ -829,6 +835,7 @@ namespace {
     bool active_ = false;
 
     void configureSurface(const QString &name, const QVariantMap &settings) {
+      TELAR_TRACE("lua_ui.configure_surface");
       if (surface_ || active_) {
         throw std::runtime_error("configure_surface is only available while loading desktop.lua");
       }
@@ -890,6 +897,7 @@ namespace {
     }
 
     void installApi() {
+      TELAR_TRACE("lua_ui.install_api");
       Push request{this, lifetime_.get()};
 
       environment_.withState(
@@ -1084,6 +1092,7 @@ namespace {
                     const QString &type,
                     const QVariantMap &properties,
                     QObject *parent) {
+      TELAR_TRACE("lua_ui.create");
       auto object = surface_->createObject(module, type, {});
 
       if (qobject_cast<QWindow *>(object.get())) {
@@ -1194,6 +1203,7 @@ namespace {
     }
 
     void set(QObject *object, const QString &name, const QVariant &value) {
+      TELAR_TRACE("lua_ui.set");
       if (name == QStringLiteral("parent")) {
         adopt(object, objectValue(value));
         return;
@@ -1210,6 +1220,7 @@ namespace {
     }
 
     int subscribe(QObject *object, const QString &event, Call &request) {
+      TELAR_TRACE("lua_ui.subscribe");
       const auto reference = request.callback;
       const auto identifier = events_->subscribe(qobject_cast<QQuickItem *>(object),
                                                  event,
@@ -1230,6 +1241,8 @@ namespace {
     }
 
     ui::EventReply deliver(int callback, const ui::SurfaceEvent &event) {
+      TELAR_TRACE("lua_ui.deliver");
+
       struct Delivery {
         Generation *generation;
         int callback;
@@ -1324,6 +1337,7 @@ namespace {
     }
 
     void animate(QObject *object, const QString &name, const QVariantMap &options) {
+      TELAR_TRACE("lua_ui.animate");
       for (auto it = options.cbegin(); it != options.cend(); ++it) {
         if (it.key() != QStringLiteral("to") && it.key() != QStringLiteral("duration_ms") &&
             it.key() != QStringLiteral("easing")) {
@@ -1463,8 +1477,10 @@ namespace ui {
     QSet<QString> attempted_modules;
     FileWatch module_watcher;
     std::function<void()> reload_handler;
+    bool preparing = false;
 
     void refreshModuleWatches() {
+      TELAR_TRACE("lua_ui.refresh_module_watches");
       auto paths = attempted_modules.values();
 
       if (active) {
@@ -1495,6 +1511,7 @@ namespace ui {
                       const QString &directory,
                       const QVariantMap &surface_config,
                       const QString &prefix) {
+    TELAR_TRACE("lua_ui.prepare");
     impl_->prepared.reset();
     impl_->attempted_modules.clear();
     auto candidate =
@@ -1503,16 +1520,36 @@ namespace ui {
                                      EnvironmentSettings{directory, surface_config, prefix},
                                      [this](const QString &path) {
                                        impl_->attempted_modules.insert(path);
-                                       impl_->refreshModuleWatches();
+                                       if (!impl_->preparing) {
+                                         impl_->refreshModuleWatches();
+                                       }
                                      });
 
-    const auto api_source = readScript(QStringLiteral(":/telar/ui/api.lua"));
-    candidate->execute(scriptView(api_source), "@telar/ui/api.lua");
-    candidate->execute(source, chunk_name);
+    // Every watch change makes macOS flush its file event stream synchronously, so the modules
+    // a preparation requires are watched once at its end, failed or not, instead of one by one.
+    impl_->preparing = true;
+    try {
+      const auto api_source = readScript(QStringLiteral(":/telar/ui/api.lua"));
+      candidate->execute(scriptView(api_source), "@telar/ui/api.lua");
+      candidate->execute(source, chunk_name);
+    } catch (...) {
+      impl_->preparing = false;
+      try {
+        impl_->refreshModuleWatches();
+      } catch (const std::exception &error) {
+        qWarning() << "UI module watch failed:" << error.what();
+      }
+
+      throw;
+    }
+
+    impl_->preparing = false;
+    impl_->refreshModuleWatches();
     impl_->prepared = std::move(candidate);
   }
 
   void LuaUi::commit(std::span<LuaUi *const> environments) {
+    TELAR_TRACE("lua_ui.commit");
     std::vector<ShortcutBinding::Activation> bindings;
     bindings.reserve(environments.size());
 

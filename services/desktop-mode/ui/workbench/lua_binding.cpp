@@ -1,6 +1,7 @@
 #include "lua_binding.hpp"
 #include "controller.hpp"
 #include "../services.hpp"
+#include "../../trace.hpp"
 #include <QDebug>
 #include <QTimer>
 #include <stdexcept>
@@ -19,6 +20,7 @@ namespace workbench {
   }
 
   void LuaBinding::activate() {
+    TELAR_TRACE("lua.workbench.activate");
     active_ = true;
     if (services_.workbench) {
       subscription_ = services_.workbench->subscribe([this] {
@@ -36,6 +38,7 @@ namespace workbench {
   }
 
   void LuaBinding::deactivate() {
+    TELAR_TRACE("lua.workbench.deactivate");
     active_ = false;
     if (services_.workbench && subscription_) {
       services_.workbench->unsubscribe(subscription_);
@@ -64,6 +67,7 @@ namespace workbench {
   }
 
   void LuaBinding::deliver() {
+    TELAR_TRACE("lua.workbench.deliver");
     if (!active_) {
       return;
     }

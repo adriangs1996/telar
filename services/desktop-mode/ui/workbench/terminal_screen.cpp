@@ -1,20 +1,17 @@
 #include "terminal_screen.hpp"
+#include "../../trace.hpp"
 #include <algorithm>
 
 namespace workbench {
-  void TerminalScreen::discard() {
+  // Keeps the last cells on screen, as the GUI does, until the next attachment's full frame
+  // replaces them. Forgetting the frame id makes any delta against it request a snapshot.
+  void TerminalScreen::detach() {
     frame = 0;
-    columns = rows = 0;
     connected = false;
-    cursor = {};
-    scroll = {};
-    std::vector<TerminalCell>().swap(cells);
-    std::vector<std::uint64_t>().swap(revisions);
-    std::vector<telar::Byte>().swap(row_flags);
-    ++revision;
   }
 
   bool TerminalScreen::apply(const telar::PaneFrame &value) {
+    TELAR_TRACE("terminal.screen.apply");
     if (value.base_frame_id != 0 &&
         (value.base_frame_id != frame || columns != value.cols || rows != value.rows)) {
       return false;

@@ -1,6 +1,9 @@
 #include "controller.hpp"
+#include "keyboard_router.hpp"
 #include "layout.hpp"
 #include "native.hpp"
+#include "../../log_categories.hpp"
+#include "../../session_log.hpp"
 #include "runtime_connection.hpp"
 #include "terminal_item.hpp"
 #include "../desktop_ui.hpp"
@@ -9,6 +12,7 @@
 #include "../../desktop_registry.hpp"
 #include "../../desktop_session.hpp"
 #include "../../runtime_session.hpp"
+#include "../../trace.hpp"
 #include <QCryptographicHash>
 #include <QDebug>
 #include <QDir>
@@ -17,6 +21,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QMetaObject>
+#include <QQuickWindow>
 #include <QSaveFile>
 #include <QScreen>
 #include <QTimer>
@@ -24,11 +29,16 @@
 #include <algorithm>
 #include <cmath>
 #include <set>
+#include <utility>
 
 namespace workbench {
   namespace {
     constexpr int geometry_interval_ms = 1000;
     constexpr int persistence_delay_ms = 300;
+    // Outgoing windows wait for the incoming ones' first frame, but never longer than this.
+    constexpr int first_frame_timeout_ms = 250;
+    constexpr std::uint64_t resource_trace_ticks = 10;
+    constexpr std::size_t mebibyte = 1024 * 1024;
     constexpr int default_gap = 8, default_padding = 8, default_header = 28;
     constexpr int maximum_metric = 256;
     constexpr qsizetype persistence_limit = 4 * 1024 * 1024;
@@ -100,14 +110,10 @@ namespace workbench {
       int shown_order = 0;
       QString error;
       bool visible = false;
-      QMetaObject::Connection activation;
+      QMetaObject::Connection first_frame;
 
       ~View() {
-        // QWindow emits activeChanged while being destroyed, before QObject disconnects it.
-        QObject::disconnect(activation);
-        if (terminal) {
-          terminal->focused = {};
-        }
+        QObject::disconnect(first_frame);
       }
     };
 
@@ -133,7 +139,13 @@ namespace workbench {
     Controller &owner;
     ui::DesktopUi &desktop;
     ui::Services &services;
-    QTimer update_timer, monitor_timer, save_timer;
+    // Declared before the workspaces, whose pane windows it routes to, so it outlives them.
+    KeyboardRouter keyboard;
+    QTimer update_timer, monitor_timer, save_timer, retire_timer;
+    std::uint64_t monitor_ticks = 0;
+    // Windows are transparent until their first frame, so a switch keeps the outgoing ones up
+    // until every incoming one has drawn.
+    std::set<QString> incoming, retiring;
     std::uint64_t runtime_subscription = 0, desktop_subscription = 0;
     std::map<std::uint64_t, Workspace> workspaces;
     std::map<std::uint64_t, std::function<void()>> subscribers;
@@ -151,6 +163,7 @@ namespace workbench {
         : owner(owner),
           desktop(desktop),
           services(desktop.services()) {
+      TELAR_TRACE("workbench.start");
       const auto data = QByteArray::fromStdString(services.runtime_socket);
       const auto hash = QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex();
 
@@ -166,6 +179,8 @@ namespace workbench {
       save_timer.setSingleShot(true);
       save_timer.setInterval(persistence_delay_ms);
       monitor_timer.setInterval(geometry_interval_ms);
+      retire_timer.setSingleShot(true);
+      retire_timer.setInterval(first_frame_timeout_ms);
 
       QObject::connect(&update_timer, &QTimer::timeout, &owner, [this] {
         reconcile();
@@ -173,10 +188,21 @@ namespace workbench {
 
       QObject::connect(&monitor_timer, &QTimer::timeout, &owner, [this] {
         schedule();
+        traceResources();
       });
 
       QObject::connect(&save_timer, &QTimer::timeout, &owner, [this] {
         save();
+      });
+
+      QObject::connect(&retire_timer, &QTimer::timeout, &owner, [this] {
+        for (const auto &id : incoming) {
+          qCInfo(telar_log::workbench)
+              << "no first frame from" << id << "in time; hiding the outgoing windows anyway";
+        }
+
+        incoming.clear();
+        retire();
       });
 
       runtime_subscription = services.runtime.subscribe([this] {
@@ -218,6 +244,7 @@ namespace workbench {
     }
 
     void notify() {
+      TELAR_TRACE("workbench.notify");
       const auto copy = subscribers;
       for (const auto &[id, callback] : copy) {
         if (subscribers.contains(id)) {
@@ -233,6 +260,7 @@ namespace workbench {
     }
 
     void remember(std::uint64_t workspace_id, std::uint64_t tab_id, const Tab &tab) {
+      TELAR_TRACE("workbench.remember");
       if (!tab.restored) {
         return;
       }
@@ -256,6 +284,7 @@ namespace workbench {
     }
 
     void save() {
+      TELAR_TRACE("workbench.save");
       for (const auto &[id, workspace] : workspaces) {
         for (const auto &[tab_id, tab] : workspace.tabs) {
           remember(id, tab_id, tab);
@@ -281,10 +310,12 @@ namespace workbench {
                         Element element,
                         QVariantMap configuration = {},
                         std::uint64_t pane = 0) {
+      TELAR_TRACE("workbench.create_surface");
       if (tab.views.size() >= Layout::capacity) {
         throw std::runtime_error("Tab surface limit reached");
       }
 
+      qCInfo(telar_log::workbench) << "create surface" << element.id << "pane" << pane;
       auto view = std::make_unique<View>();
       view->pane = pane;
       view->configuration = configuration;
@@ -293,12 +324,21 @@ namespace workbench {
                                                    ui::SurfaceKind::workbench,
                                                    configuration);
       auto &window = view->surface->window();
-      window.setPersistentGraphics(false);
-      window.setPersistentSceneGraph(false);
+      // Qt's default persistence keeps a hidden window's scene graph, so showing it again draws
+      // at once instead of rebuilding every terminal row before its first frame.
       window.setFlags(Qt::Window | Qt::FramelessWindowHint);
       window.setTitle(element.title.isEmpty() ? QStringLiteral("Telar Pane") : element.title);
-      auto *raw = view.get();
       const auto id = element.id;
+      // The pane never becomes the key window: a press on it, or Lua focusing one of its items,
+      // moves the tab's focus to it, and focusCurrent routes the keyboard there.
+      keyboard.adopt(window, [this, id] {
+        requestFocus(id);
+      });
+
+      view->surface->setFocusHandler([this, id] {
+        requestFocus(id);
+      });
+
       if (pane) {
         view->terminal =
             std::make_unique<TerminalItem>(workspace.runtime->screen(pane), window.contentItem());
@@ -315,39 +355,11 @@ namespace workbench {
           runtime.viewport(pane, offset);
         };
 
-        view->terminal->focused = [this, &tab, id] {
-          if (!changing && tab.layout.focused() != id) {
-            tab.layout.focus(id);
-            schedule();
-            save_timer.start();
-          }
-        };
-
+        // The terminal is the focus of its window, so it has active focus while the window holds
+        // the keyboard.
+        view->terminal->setFocus(true);
         view->terminal->configure(options);
       }
-
-      view->activation =
-          QObject::connect(&window, &QWindow::activeChanged, &window, [this, id, raw] {
-            // Native focus can change synchronously while tabs or windows are being removed.
-            if (changing) {
-              return;
-            }
-
-            if (raw->surface->window().isActive()) {
-              for (auto &[workspace_id, workspace] : workspaces) {
-                for (auto &[tab_id, tab] : workspace.tabs) {
-                  if (tab.views.contains(id) && tab.layout.focused() != id) {
-                    tab.layout.focus(id);
-                    schedule();
-                  }
-                }
-              }
-
-              if (raw->terminal) {
-                raw->terminal->forceActiveFocus();
-              }
-            }
-          });
 
       tab.layout.insert(std::move(element), tab.next_axis);
       auto &result = *view;
@@ -356,6 +368,7 @@ namespace workbench {
     }
 
     void synchronize(Workspace &workspace, std::uint64_t workspace_id) {
+      TELAR_TRACE("workbench.synchronize");
       const auto &snapshots = workspace.runtime->tabs();
       for (const auto &[tab_id, panes] : snapshots) {
         auto &tab = workspace.tabs[tab_id];
@@ -437,7 +450,84 @@ namespace workbench {
       });
     }
 
+    // Every few seconds, what the windows cost: hidden windows keep their scene graph.
+    void traceResources() {
+#if TELAR_DEBUG
+      if (++monitor_ticks % resource_trace_ticks != 0) {
+        return;
+      }
+
+      std::size_t shown = 0, hidden = 0;
+      for (const auto &[workspace_id, workspace] : workspaces) {
+        for (const auto &[tab_id, tab] : workspace.tabs) {
+          for (const auto &[id, view] : tab.views) {
+            ++(view->visible ? shown : hidden);
+          }
+        }
+      }
+
+      qCInfo(telar_log::workbench)
+          << "resources: resident" << session_log::residentBytes() / mebibyte << "MiB; windows"
+          << shown << "shown" << hidden << "hidden";
+#endif
+    }
+
+    View *findView(const QString &id) {
+      for (auto &[workspace_id, workspace] : workspaces) {
+        for (auto &[tab_id, tab] : workspace.tabs) {
+          if (const auto found = tab.views.find(id); found != tab.views.end()) {
+            return found->second.get();
+          }
+        }
+      }
+
+      return nullptr;
+    }
+
+    void arrived(const QString &id) {
+      TELAR_TRACE("workbench.arrived");
+      if (auto *view = findView(id)) {
+        QObject::disconnect(view->first_frame);
+      }
+
+      if (incoming.erase(id)) {
+        qCDebug(telar_log::workbench) << "first frame from" << id;
+      }
+
+      std::erase_if(incoming, [this](const auto &pending) {
+        return !findView(pending);
+      });
+
+      if (incoming.empty()) {
+        retire();
+      }
+    }
+
+    void retire() {
+      TELAR_TRACE("workbench.retire");
+      retire_timer.stop();
+      for (const auto &id : std::exchange(retiring, {})) {
+        if (auto *view = findView(id)) {
+          qCDebug(telar_log::workbench) << "hide outgoing" << id;
+          try {
+            hide(*view);
+          } catch (const std::exception &failure) {
+            view->error = QString::fromUtf8(failure.what());
+          }
+        }
+      }
+    }
+
+    // A hidden workspace keeps its windows on its own Space, which macOS already keeps out of
+    // sight, so returning to it shows their last frame instead of transparent windows.
+    bool keepsSpace(const Workspace &workspace, std::uint64_t workspace_id) const {
+      return std::ranges::any_of(services.desktop.state().spaces, [&](const auto &space) {
+        return space.id == workspace.space && space.workspace == workspace_id && !space.fullscreen;
+      });
+    }
+
     void hide(View &view) {
+      TELAR_TRACE("workbench.hide");
       if (!view.visible) {
         return;
       }
@@ -454,10 +544,12 @@ namespace workbench {
     }
 
     void present(Workspace &workspace, std::uint64_t workspace_id, bool reconfigure) {
+      TELAR_TRACE("workbench.present");
       const auto gap = metric(options, "gap", default_gap);
       const auto padding = metric(options, "padding", default_padding);
       const auto header = metric(options, "header_height", default_header);
       const auto active_tab = workspace.runtime->activeTab();
+      std::set<QString> shown;
       for (auto &[tab_id, tab] : workspace.tabs) {
         // Lua can close its own surface. Retire it after the callback has returned.
         for (const auto &id : tab.closing) {
@@ -468,7 +560,6 @@ namespace workbench {
         const bool visible = workspace.visible && tab_id == active_tab;
         const auto placements = visible ? tab.layout.arrange(workspace.area, gap, workspace.scale)
                                         : std::vector<Placement>{};
-        std::set<QString> shown;
         for (const auto &placement : placements) {
           auto found = tab.views.find(placement.id);
           if (found == tab.views.end()) {
@@ -538,13 +629,36 @@ namespace workbench {
                   view.terminal->configure(options);
                 }
 
+                view.terminal->setPresented(true);
+
                 view.terminal->setPosition({padding, header});
                 view.terminal->setSize(
                     {std::max(0.0, placement.frame.width() - padding * 2),
                      std::max(0.0, placement.frame.height() - header - padding)});
               }
 
-              window.show();
+              const bool appearing = !view.visible;
+              {
+                TELAR_TRACE("workbench.window.show");
+                window.show();
+              }
+
+              retiring.erase(placement.id);
+              if (appearing) {
+                qCDebug(telar_log::workbench)
+                    << "show" << placement.id << "at" << placement.frame << "in tab" << tab_id;
+                incoming.insert(placement.id);
+                QObject::disconnect(view.first_frame);
+                view.first_frame = QObject::connect(
+                    &window,
+                    &QQuickWindow::frameSwapped,
+                    &owner,
+                    [this, id = placement.id] {
+                      arrived(id);
+                    },
+                    Qt::QueuedConnection);
+              }
+
               if (view.shown_order != placement.order) {
                 window.raise();
                 view.shown_order = placement.order;
@@ -557,6 +671,8 @@ namespace workbench {
             view.error.clear();
           } catch (const std::exception &failure) {
             view.error = QString::fromUtf8(failure.what());
+            qCWarning(telar_log::workbench)
+                << "cannot present" << placement.id << ":" << view.error;
             if (view.surface) {
               view.surface->window().hide();
             }
@@ -564,26 +680,56 @@ namespace workbench {
             view.visible = false;
           }
         }
+      }
 
+      const bool keep = !workspace.visible && keepsSpace(workspace, workspace_id);
+      for (auto &[tab_id, tab] : workspace.tabs) {
         for (auto &[id, view] : tab.views) {
-          if (!shown.contains(id)) {
-            try {
-              hide(*view);
-            } catch (const std::exception &failure) {
-              view->error = QString::fromUtf8(failure.what());
+          if (shown.contains(id)) {
+            continue;
+          }
+
+          if (view->terminal) {
+            view->terminal->setPresented(false);
+          }
+
+          if (keep || !view->visible) {
+            continue;
+          }
+
+          if (!incoming.empty()) {
+            qCDebug(telar_log::workbench) << "keep" << id << "until the incoming windows draw";
+            retiring.insert(id);
+            if (!retire_timer.isActive()) {
+              retire_timer.start();
             }
+
+            continue;
+          }
+
+          qCDebug(telar_log::workbench) << "hide" << id << "of tab" << tab_id;
+          try {
+            hide(*view);
+          } catch (const std::exception &failure) {
+            view->error = QString::fromUtf8(failure.what());
           }
         }
       }
     }
 
     void reconcile() {
+      TELAR_TRACE("workbench.reconcile");
       if (changing) {
         schedule();
         return;
       }
 
       changing = true;
+      std::map<std::uint64_t, bool> was_visible;
+      for (const auto &[id, workspace] : workspaces) {
+        was_visible[id] = workspace.visible;
+      }
+
       try {
         const auto configured = desktop.options(ui::SurfaceKind::workbench);
         const bool reconfigure = configured != options;
@@ -641,12 +787,25 @@ namespace workbench {
           }
         }
 
-        for (auto &[id, workspace] : workspaces) {
-          workspace.runtime->setVisible(workspace.visible);
-          synchronize(workspace, id);
-          present(workspace, id, reconfigure);
-          for (const auto &[tab_id, tab] : workspace.tabs) {
-            remember(id, tab_id, tab);
+        // Incoming workspaces go first, so their windows are up before the outgoing ones hide.
+        for (const bool visible : {true, false}) {
+          for (auto &[id, workspace] : workspaces) {
+            if (workspace.visible != visible) {
+              continue;
+            }
+
+            if (was_visible[id] != workspace.visible) {
+              qCInfo(telar_log::workbench)
+                  << "workspace" << id << (workspace.visible ? "visible" : "hidden") << "on space"
+                  << workspace.space << "tab" << workspace.runtime->activeTab();
+            }
+
+            workspace.runtime->setVisible(workspace.visible);
+            synchronize(workspace, id);
+            present(workspace, id, reconfigure);
+            for (const auto &[tab_id, tab] : workspace.tabs) {
+              remember(id, tab_id, tab);
+            }
           }
         }
 
@@ -684,7 +843,7 @@ namespace workbench {
         error.clear();
       } catch (const std::exception &failure) {
         error = QString::fromUtf8(failure.what());
-        qWarning() << "Workbench reconciliation failed:" << error;
+        qCWarning(telar_log::workbench) << "reconciliation failed:" << error;
       }
 
       changing = false;
@@ -696,6 +855,7 @@ namespace workbench {
     }
 
     bool focusCurrent() {
+      TELAR_TRACE("workbench.focus_current");
       auto *workspace = focusedWorkspace();
       if (focus_workspace && workspaces.contains(focus_workspace)) {
         workspace = &workspaces.at(focus_workspace);
@@ -721,16 +881,35 @@ namespace workbench {
         view.external->focus();
       } else {
         view.surface->window().raise();
-        view.surface->window().requestActivate();
-        if (view.terminal) {
-          view.terminal->forceActiveFocus();
-        }
+        keyboard.route(view.surface->window());
       }
 
       return true;
     }
 
+    void requestFocus(const QString &id) {
+      TELAR_TRACE("workbench.request_focus");
+      // Focus can be requested while tabs or windows are being removed.
+      if (changing) {
+        return;
+      }
+
+      for (auto &[workspace_id, workspace] : workspaces) {
+        for (auto &[tab_id, tab] : workspace.tabs) {
+          if (tab.views.contains(id)) {
+            tab.layout.focus(id);
+            focus_pending = true;
+            focus_workspace = workspace_id;
+            save_timer.start();
+            schedule();
+            return;
+          }
+        }
+      }
+    }
+
     QVariantMap state() const {
+      TELAR_TRACE("workbench.state");
       QVariantList workspace_list;
       for (const auto &[id, workspace] : workspaces) {
         QVariantList tabs;
@@ -778,6 +957,8 @@ namespace workbench {
     }
 
     QVariant command(const QString &action, const QVariantMap &args) {
+      TELAR_TRACE("workbench.command");
+      qCInfo(telar_log::workbench) << "command" << action << args;
       if (action == "windows") {
         return native::windows();
       }

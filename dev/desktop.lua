@@ -1,5 +1,7 @@
 local shortcuts = require("telar.shortcuts")
 local desktop = require("telar.desktop")
+local workbench = require("telar.workbench")
+local actions = require("shortcuts").actions
 
 local function move_workspace(offset)
   local state = desktop.state()
@@ -73,7 +75,9 @@ local function select_workspace(index)
   end
 end
 
-shortcuts.set_prefix("ctrl+b")
+-- Mirrors the effective keymap of dev/config.lua: its client.keybindings plus the GUI
+-- defaults they leave in place. GUI actions without a desktop equivalent stay unbound.
+shortcuts.set_prefix("ctrl+s")
 
 shortcuts.bind_global("cmd+h", function()
   move_workspace(-1)
@@ -91,7 +95,64 @@ for index = 1, 9 do
   end)
 end
 
-require("shortcuts")()
+local function command(action, options)
+  return function()
+    workbench.command(action, options)
+  end
+end
+
+local arrows = { "left", "right", "up", "down" }
+local vim = { h = "left", j = "down", k = "up", l = "right" }
+
+-- Splits: s/t from dev/config.lua, % and " from the GUI defaults.
+shortcuts.bind({ "s" }, command("split", { axis = "horizontal" }))
+shortcuts.bind({ "t" }, command("split", { axis = "vertical" }))
+shortcuts.bind({ "%" }, command("split", { axis = "horizontal" }))
+shortcuts.bind({ '"' }, command("split", { axis = "vertical" }))
+
+shortcuts.bind({ "x" }, command("close"))
+shortcuts.bind({ "f" }, command("maximize"))
+shortcuts.bind({ "z" }, command("maximize"))
+
+for _, direction in ipairs(arrows) do
+  shortcuts.bind({ direction }, command("navigate", { direction = direction }))
+  shortcuts.bind({ "shift+" .. direction }, command("resize", { direction = direction }))
+end
+
+for key, direction in pairs(vim) do
+  shortcuts.bind_global("ctrl+" .. key, command("navigate", { direction = direction }))
+  shortcuts.bind_global("alt+" .. key, command("resize", { direction = direction }))
+end
+
+-- Tabs. `n` is new_tab in the GUI, which the desktop cannot do yet.
+shortcuts.bind({ "p" }, function()
+  actions.step_tab(-1, false)
+end)
+shortcuts.bind({ "," }, function()
+  actions.step_tab(-1, true)
+end)
+shortcuts.bind({ "." }, function()
+  actions.step_tab(1, true)
+end)
+
+for index = 1, 9 do
+  shortcuts.bind({ tostring(index) }, function()
+    actions.select_tab(index)
+  end)
+  shortcuts.bind_global("alt+" .. index, function()
+    actions.select_workspace(index)
+  end)
+end
+
+-- Desktop-only actions, on keys the GUI leaves free.
+shortcuts.bind({ "o" }, command("cycle"))
+shortcuts.bind({ "F" }, command("float"))
+shortcuts.bind_global("ctrl+left", function()
+  actions.step_space(-1)
+end)
+shortcuts.bind_global("ctrl+right", function()
+  actions.step_space(1)
+end)
 
 local colors = { background = "#1b1723", accent = "#c4a7e7" }
 

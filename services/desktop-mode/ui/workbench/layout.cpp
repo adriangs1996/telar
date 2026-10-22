@@ -1,4 +1,5 @@
 #include "layout.hpp"
+#include "../../trace.hpp"
 #include <QJsonArray>
 #include <algorithm>
 #include <cmath>
@@ -165,6 +166,7 @@ namespace workbench {
   }
 
   bool Layout::insert(Element element, Axis axis) {
+    TELAR_TRACE("layout.insert");
     if (element.id.isEmpty() || contains(element.id) || elements_.size() >= capacity) {
       return false;
     }
@@ -228,6 +230,7 @@ namespace workbench {
   }
 
   void Layout::remove(const QString &id) {
+    TELAR_TRACE("layout.remove");
     const auto index = find(id);
 
     if (index == none) {
@@ -295,6 +298,7 @@ namespace workbench {
   }
 
   bool Layout::focus(const QString &id) {
+    TELAR_TRACE("layout.focus");
     const auto index = find(id);
 
     if (index == none || !elements_[index].focusable) {
@@ -307,6 +311,7 @@ namespace workbench {
   }
 
   bool Layout::cycle(int step) {
+    TELAR_TRACE("layout.cycle");
     std::array<Index, capacity> leaves;
     std::size_t count = 0;
     std::size_t current = 0;
@@ -482,6 +487,7 @@ namespace workbench {
   }
 
   std::vector<Placement> Layout::arrange(const QRectF &area, double gap, double scale) const {
+    TELAR_TRACE("layout.arrange");
     std::vector<Placement> result;
 
     if (area.isEmpty()) {
@@ -552,6 +558,7 @@ namespace workbench {
   }
 
   bool Layout::navigate(Direction direction, const QRectF &area, double gap) {
+    TELAR_TRACE("layout.navigate");
     const auto placements = arrange(area, gap, 1);
     if (placements.size() == 1 && elements_.size() > 1) {
       return cycle(forward(direction) ? 1 : -1);
@@ -595,6 +602,7 @@ namespace workbench {
 
   // Elements trade places; the floating state belongs to the place, not to the element.
   bool Layout::swap(const QString &first, const QString &second) {
+    TELAR_TRACE("layout.swap");
     const auto a = find(first);
     const auto b = find(second);
 
@@ -618,6 +626,7 @@ namespace workbench {
   // Moves the border next to the focused branch, inside the closest container along the
   // direction's axis. The border on the direction's side grows the branch, the other shrinks it.
   bool Layout::resize(Direction direction, double amount) {
+    TELAR_TRACE("layout.resize");
     if (focused_ == none || !std::isfinite(amount)) {
       return false;
     }
@@ -661,12 +670,14 @@ namespace workbench {
   }
 
   void Layout::floatElement(const QString &id, bool enabled) {
+    TELAR_TRACE("layout.float_element");
     if (auto *value = element(id)) {
       value->floating = enabled;
     }
   }
 
   void Layout::setFloatingFrame(const QString &id, const QRectF &relative) {
+    TELAR_TRACE("layout.set_floating_frame");
     if (auto *value = element(id); value && relative.isValid() && std::isfinite(relative.x()) &&
                                    std::isfinite(relative.y()) && std::isfinite(relative.width()) &&
                                    std::isfinite(relative.height())) {
@@ -693,6 +704,7 @@ namespace workbench {
   }
 
   QJsonObject Layout::save() const {
+    TELAR_TRACE("layout.save");
     QJsonObject floating;
     for (const auto &element : elements_) {
       if (element.floating) {
@@ -794,6 +806,7 @@ namespace workbench {
   }
 
   void Layout::restore(const QJsonObject &value) {
+    TELAR_TRACE("layout.restore");
     const auto nodes = nodes_;
     const auto root = root_;
     const auto free_list = free_;

@@ -58,8 +58,27 @@ Each runtime tab has an independent split tree and focus. Its elements can be
 terminal panes, Lua views or explicitly adopted external windows. Each terminal
 and Lua view has its own window. A visible workspace uses one asynchronous runtime
 connection shared by its terminal panes. Switching tabs detaches hidden terminals;
-switching away from a workspace disconnects its presentation session. These
-operations leave the processes running in the runtime.
+a tab switch attaches the incoming terminals before detaching the outgoing ones,
+so the session never leaves its workspace; switching away from a workspace
+detaches all of its terminals and keeps its
+presentation session open for one minute, so returning skips the handshake. A
+detached terminal keeps its last frame, as the GUI does, until the next attachment
+delivers a full one. Pane windows are transparent until they draw, so on a tab
+switch the outgoing windows stay up until every incoming one has presented its
+first frame, or for at most 250 ms. Pane windows never become the key window,
+because every change of key window makes macOS switch the input method context
+with blocking round trips. The keyboard router (`ui/workbench/keyboard_router.cpp`)
+keeps an invisible input window on every Space as the key window, while Qt treats
+the focused pane as its focus window: Qt Quick focus, the input method and Lua's
+`active` state behave as if the pane were key. The input window forwards key
+events to the pane. Moving the keyboard between panes skips the input method
+commit Qt Quick makes on focus changes, because it would switch the native input
+context; a composition in progress is committed in its pane first. Pressing a
+pane, or Lua focusing one of its items, focuses it. Adopted external windows belong to other applications and are still activated.
+A hidden workspace keeps its windows on its own
+Space, which macOS already keeps out of sight; returning shows their last frame. A
+terminal shows "Connecting to runtime…" only after 750 ms in view without a live
+attachment. These operations leave the processes running in the runtime.
 
 The default prefix remains `ctrl+b`. The default `shortcuts` module binds:
 
@@ -127,7 +146,9 @@ Commands execute from callbacks after the UI has activated. IDs are strings.
 Commands without `id` use the focused element. Inside a workbench surface they
 default to that surface's element instead. A pane's Lua module can read
 `ui.surface.element`, `pane`, `workspace`, `tab`, `focused`, `floating`, `area`,
-`geometry` and `content`. The native terminal item lives outside the replaceable
+`geometry` and `content`, and follow them with the surface's `state_changed`
+event rather than `workbench.on_change`, which runs for every change of every
+workbench. The native terminal item lives outside the replaceable
 Lua tree, so changing the module does not recreate the terminal connection.
 
 The terminal renderer owns decoded cells and updates changed rows through Qt's
@@ -275,6 +296,72 @@ runtime and remove its temporary files. Each confirmed stage prints `[PASS]`;
 failure exits nonzero. It never connects to an existing runtime or launches
 another Telar GUI.
 
+```sh
+just desktop-debug input_router_dbg --mode router --panes 9
+just desktop-debug input_router_dbg --mode activate --panes 9 --bench 100 --quit
+```
+
+`debug/input_router_dbg.cpp` compares two ways of moving the keyboard focus
+between pane windows. `activate` makes the focused pane the key window. `router`
+uses the workbench's keyboard router, so no pane ever becomes key. Physical
+ctrl+h/j/k/l and clicks move the focus, and every key window change is printed;
+one that reaches a pane in `router` mode is marked unexpected. `--bench N`
+measures N moves once the application is active.
+
+## Session logs
+
+Debug builds, including `just desktop`, write one log per desktop session to
+`logs/` in the desktop state directory: `~/Library/Application Support/telar/desktop/logs`
+on macOS, or `$TELAR_DESKTOP_STATE_DIR/logs` when that variable is set. Startup prints
+the file's path, and `logs/latest.log` always points to the newest one. The 20 most
+recent sessions are kept; a file stops growing at 64 MiB.
+
+Every line has the wall clock, seconds since startup, level, category and thread,
+and the source location:
+
+```
+2026-10-21T16:35:38.106 +12.403 D telar.desktop.connection [1f137a180] ws 3 attach pane 12 (runtime_connection.cpp:569)
+```
+
+| Category | Traces |
+| --- | --- |
+| `telar.desktop.session` | Process start, runtime handshake and exit |
+| `telar.desktop.catalog` | Workspace list, tab selection and moves, the runtime message that invalidated each snapshot, catalog failures |
+| `telar.desktop.spaces` | Focused Space changes, Space commands and their results |
+| `telar.desktop.shortcuts` | Compiled keymaps and the bound sequence each shortcut matched |
+| `telar.desktop.workbench` | Workspace visibility, surfaces created, windows shown and hidden and their first frames, resident memory and window counts every 10 s, commands |
+| `telar.desktop.connection` | Each workspace's runtime session: handshake, snapshots, attach and detach, resyncs, failures |
+| `telar.desktop.terminal` | Terminals showing "Connecting to runtime…" |
+| `telar.desktop.frames` | Every terminal frame; off by default |
+
+Other Qt messages, including Lua errors, land in the same file. Warnings and
+errors still reach the console. Filter a log with `grep`, or change what is
+recorded with `QT_LOGGING_RULES`, which overrides the defaults; for example
+`QT_LOGGING_RULES="telar.desktop.frames.debug=true"` adds every frame.
+
+Logs never contain terminal input, screen contents or keys that pass through to
+other applications; shortcuts are recorded only as the bound sequence that
+matched. Files are created owner-only, without following symbolic links. Release
+builds define `QT_NO_DEBUG_OUTPUT` and `QT_NO_INFO_OUTPUT`: they write no session
+log, and debug and info traces compile to nothing.
+
+### Timing traces
+
+Logs say what happened; timing goes to a trace written next to each log,
+`desktop-….trace.json`, with `logs/latest.trace.json` pointing to the newest. Open
+it in [Perfetto](https://ui.perfetto.dev): every thread gets a track, and nested
+calls show where a slow one spent its time.
+
+A function is timed by its first statement, `TELAR_TRACE("component.function");`
+from `trace.hpp`, which records from there to the end of the scope. A block such
+as one native call can be timed the same way inside braces. Names are string
+literals, checked at compile time, so a trace holds no content. Each scope costs
+about 0.1 µs; a writer thread formats and writes the records, at least once a
+second, so a crash loses at most the last second. A trace stops at 256 MiB. Release
+builds expand `TELAR_TRACE` to nothing and never evaluate its argument.
+
+Timing comes from traces only: logs carry no durations.
+
 ## Formatting
 
 Run `just desktop-fmt` to format desktop C++, C++ modules, Objective-C,
@@ -317,7 +404,9 @@ unchanged. Login and lock-screen backgrounds are outside this surface.
 All panels use `TelarSurfacePanel` for native window behavior and `LuaSurface`
 for their Qt/Lua contents. `DesktopUi` owns configuration and coordinates reloads.
 Configuration and surfaces share the runtime connection, desktop service, shortcut
-engine and LuaJIT VM, with separate globals, module caches and subscriptions.
+engine, LuaJIT VM and one QML engine owned by `DesktopUi`, with separate globals,
+module caches and subscriptions. The shared QML engine compiles each Qt Quick type
+once, instead of giving every surface its own type cache and JavaScript heap.
 Only surface environments have a visual root.
 
 The desktop has its own Lua entry point, separate from the GUI's `config.lua`:
@@ -542,6 +631,11 @@ shortcuts.bind_global("cmd+shift+p", function()
 end)
 ```
 
+A custom map can reuse the default module's actions without installing its keys:
+`require("shortcuts").actions` provides `select_tab(index)`,
+`step_tab(offset, move)`, `step_space(offset)` and `select_workspace(index)`. The
+last one activates the Space bound to the runtime's workspace at that position.
+
 `bind` accepts one to four suffix chords; `bind_global` accepts a single modified
 chord. Both return an idempotent unbind function. The C++ chord parser preserves
 the GUI's spelling, case and modifier rules. Prefixes require Ctrl, Alt or
@@ -589,6 +683,8 @@ Space determines the desktop's runtime workspace. Native notifications enter
 workspaces, and `RuntimeSession` retrieves their snapshots on its worker.
 Lua only receives detached snapshots on the application thread. A workspace
 transition clears the previous tab projection until the new snapshot arrives.
+Runtime notifications that invalidate the snapshot, such as foreground process
+changes, refresh it at most every 100 ms; selecting a workspace refreshes it at once.
 
 Each runtime workspace receives an ordinary Space. Desktop first restores its
 saved association, then adopts available Spaces, and creates one only when none
@@ -792,7 +888,9 @@ Module loading is synchronous and cached within the current generation.
 Each successful UI reload gets a fresh cache. Imported files are watched,
 including files encountered by a failed reload, so fixing a module error
 or creating a missing module can recover the UI automatically. Failed
-reloads keep the current UI and its operations running.
+reloads keep the current UI and its operations running. A generation's imports
+are watched in one batch when it finishes loading: on macOS every watch change
+flushes the file event stream synchronously.
 
 This loader supports Lua source modules and Qt resources. C modules,
 `package.loadlib`, LuaRocks searchers and the standard `io`/`os` libraries

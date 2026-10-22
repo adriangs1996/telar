@@ -16,6 +16,10 @@ namespace workbench::native {
 
   void place(QWindow &, std::uint64_t) {}
 
+  void prepareInputWindow(QWindow &) {}
+
+  void commitComposition(QWindow &) {}
+
   QVariantList windows() {
     return {};
   }

@@ -1,5 +1,6 @@
 #include "../desktop.hpp"
 #include "spaces_bridge.hpp"
+#include "../../trace.hpp"
 #import <AppKit/AppKit.h>
 #include <QPointer>
 #include <QTimer>
@@ -159,6 +160,7 @@ struct NativeDesktop::Impl {
   }
 
   void publishState(DesktopState state) {
+    TELAR_TRACE("native.desktop.publish_state");
     state.pending_space = target;
     state.pending_operation = pending ? std::optional{pending->operation} : std::nullopt;
     state.completed_operation = completion;
@@ -178,6 +180,7 @@ struct NativeDesktop::Impl {
   }
 
   void refresh() {
+    TELAR_TRACE("native.desktop.refresh");
     if (!publish || refreshing) {
       return;
     }
@@ -254,6 +257,7 @@ void NativeDesktop::stop() {
 }
 
 void NativeDesktop::activate(std::uint64_t space) {
+  TELAR_TRACE("native.desktop.activate");
   if (impl_->pending || impl_->target) {
     impl_->error = "Wait for the current Space operation to finish";
     impl_->refresh();
@@ -276,6 +280,7 @@ void NativeDesktop::activate(std::uint64_t space) {
 }
 
 void NativeDesktop::changeSpace(SpaceOperation operation) {
+  TELAR_TRACE("native.desktop.change_space");
   if (impl_->pending || impl_->target) {
     impl_->completion = SpaceCompletion{operation, false, "Another Space operation is in progress"};
     impl_->error = impl_->completion->error;

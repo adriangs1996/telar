@@ -1,5 +1,6 @@
 #include "shortcut_binding.hpp"
 #include "lua_environment.hpp"
+#include "../trace.hpp"
 #include <QDebug>
 #include <algorithm>
 #include <stdexcept>
@@ -38,6 +39,7 @@ namespace ui {
   }
 
   void ShortcutBinding::update(const std::string &prefix, const std::vector<Entry> &entries) {
+    TELAR_TRACE("lua.shortcuts.update");
     const auto values = bindings(prefix, entries);
 
     if (active_) {
@@ -48,6 +50,7 @@ namespace ui {
   }
 
   void ShortcutBinding::activate(std::span<const Activation> activations) {
+    TELAR_TRACE("lua.shortcuts.activate");
     if (activations.empty()) {
       return;
     }
@@ -77,6 +80,7 @@ namespace ui {
   }
 
   void ShortcutBinding::deactivate() {
+    TELAR_TRACE("lua.shortcuts.deactivate");
     if (active_) {
       shortcuts_.remove(this);
       active_ = false;
@@ -84,6 +88,7 @@ namespace ui {
   }
 
   void ShortcutBinding::setPrefix(const QString &prefix) {
+    TELAR_TRACE("lua.shortcuts.set_prefix");
     const auto text = prefix.toStdString();
     update(text, entries_);
     prefix_ = text;
@@ -140,6 +145,7 @@ namespace ui {
   }
 
   void ShortcutBinding::deliver(int callback) {
+    TELAR_TRACE("lua.shortcuts.deliver");
     if (!active_) {
       return;
     }

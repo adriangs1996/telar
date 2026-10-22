@@ -1,4 +1,5 @@
 #include "terminal_input.hpp"
+#include "../../trace.hpp"
 #include <array>
 
 namespace workbench {
@@ -57,6 +58,7 @@ namespace workbench {
   }
 
   QByteArray terminalKey(const QKeyEvent &event, const telar::InputModes &modes) {
+    TELAR_TRACE("terminal.input.key");
     const auto flags = modes.kitty_keyboard_flags;
     const bool released = event.type() == QEvent::KeyRelease;
     if (released && (!(flags & report_events) || event.isAutoRepeat())) {
@@ -241,6 +243,7 @@ namespace workbench {
   }
 
   QByteArray terminalPaste(const QString &text, const telar::InputModes &modes) {
+    TELAR_TRACE("terminal.input.paste");
     auto bytes = text.toUtf8();
     bytes.replace("\r\n", "\n");
     bytes.replace('\n', '\r');

@@ -15,7 +15,17 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(Threads REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LUAJIT REQUIRED IMPORTED_TARGET luajit>=2.1)
-find_package(Qt6 6.7 REQUIRED COMPONENTS Qml Quick QuickControls2 QuickShapes Network Concurrent)
+# The keyboard router uses Qt's platform interface on purpose.
+set(QT_NO_PRIVATE_MODULE_WARNING ON)
+find_package(Qt6 6.7 REQUIRED COMPONENTS Gui GuiPrivate Qml Quick QuickControls2 QuickShapes Network Concurrent)
+
+# Debug builds trace every session to its own log file. Release builds compile debug and info
+# traces out entirely.
+add_compile_definitions(
+  "$<$<CONFIG:Debug>:TELAR_DEBUG=1>"
+  "$<$<NOT:$<CONFIG:Debug>>:QT_NO_DEBUG_OUTPUT>"
+  "$<$<NOT:$<CONFIG:Debug>>:QT_NO_INFO_OUTPUT>"
+)
 
 # The keybinding engine uses only the C++ standard library.
 file(GLOB keybindings_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/keybindings-engine/*.cpp")
@@ -41,13 +51,13 @@ target_link_libraries(desktop-core PUBLIC Threads::Threads)
 target_link_libraries(desktop-core PRIVATE Qt6::Core)
 target_link_libraries(desktop-core PRIVATE PkgConfig::LUAJIT)
 target_link_libraries(desktop-core PUBLIC keybindings-engine)
-target_compile_definitions(desktop-core PUBLIC "$<$<CONFIG:Debug>:TELAR_DEBUG=1>")
 
 file(GLOB_RECURSE desktop_ui_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/ui/*.cpp")
 add_library(desktop-ui STATIC ${desktop_ui_sources})
 target_include_directories(desktop-ui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(desktop-ui PUBLIC Qt6::Qml Qt6::Quick Qt6::QuickControls2)
-target_link_libraries(desktop-ui PRIVATE desktop-core PkgConfig::LUAJIT Qt6::QuickShapes Qt6::Network Qt6::Concurrent)
+# The keyboard router sets Qt's focus window through the platform interface.
+target_link_libraries(desktop-ui PRIVATE desktop-core PkgConfig::LUAJIT Qt6::GuiPrivate Qt6::QuickShapes Qt6::Network Qt6::Concurrent)
 
 add_executable(telar-desktop main.cpp)
 
@@ -108,24 +118,28 @@ else()
   target_link_libraries(desktop-debug-support INTERFACE desktop-core)
 endif()
 
+# Programs that drive the native backend name its libraries and their own Objective-C++ sources.
+set(spaces_dbg_native_sources debug/support/spaces_probe.mm)
+set(spaces_dbg_native_libraries desktop-native)
+set(input_router_dbg_native_libraries desktop-native)
+
 file(GLOB_RECURSE desktop_programs CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/debug/*.cpp")
 list(FILTER desktop_programs EXCLUDE REGEX "/debug/support/")
 foreach(source IN LISTS desktop_programs)
   file(RELATIVE_PATH program "${CMAKE_CURRENT_SOURCE_DIR}/debug" "${source}")
   string(REGEX REPLACE "\\.cpp$" "" program "${program}")
   string(REPLACE "/" "-" program "${program}")
-  if(program STREQUAL "spaces_dbg" AND NOT TARGET desktop-native)
+  if(DEFINED ${program}_native_libraries AND NOT TARGET desktop-native)
     continue()
   endif()
   add_executable("${program}" "${source}")
-  target_link_libraries("${program}" PRIVATE desktop-debug-support)
-  if(program STREQUAL "spaces_dbg")
-    target_sources("${program}" PRIVATE debug/support/spaces_probe.mm)
+  target_link_libraries("${program}" PRIVATE desktop-debug-support ${${program}_native_libraries})
+  if(DEFINED ${program}_native_sources)
+    target_sources("${program}" PRIVATE ${${program}_native_sources})
     target_compile_options("${program}" PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>")
     if(desktop_has_class_selector_stub_flag)
       target_compile_options("${program}" PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fno-objc-msgsend-class-selector-stubs>")
     endif()
-    target_link_libraries("${program}" PRIVATE desktop-native)
   endif()
   add_dependencies(desktop-editor "${program}")
 endforeach()

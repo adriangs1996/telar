@@ -11,7 +11,10 @@ local function active_index(state)
   end
 end
 
-local function select_tab(index)
+-- Exposed so a custom desktop.lua can bind the same actions to its own keys.
+local actions = {}
+
+function actions.select_tab(index)
   local state = runtime.state()
   local tab = state.tabs[index]
 
@@ -20,7 +23,7 @@ local function select_tab(index)
   end
 end
 
-local function step_tab(offset, move)
+function actions.step_tab(offset, move)
   local state = runtime.state()
   local index = active_index(state)
 
@@ -39,7 +42,7 @@ local function step_tab(offset, move)
   end
 end
 
-local function step_space(offset)
+function actions.step_space(offset)
   local state = desktop.state()
   local current
 
@@ -72,7 +75,23 @@ local function step_space(offset)
   end
 end
 
-return function()
+function actions.select_workspace(index)
+  local workspace = runtime.state().workspaces[index]
+  local state = desktop.state()
+
+  if not workspace or state.pending_space then
+    return
+  end
+
+  for _, space in ipairs(state.spaces) do
+    if space.workspace == workspace.id and not space.fullscreen then
+      desktop.activate_space(space.id)
+      return
+    end
+  end
+end
+
+local function install()
   shortcuts.bind({ "%" }, function()
     workbench.command("split", { axis = "horizontal" })
   end)
@@ -102,29 +121,35 @@ return function()
   end
   -- Match the GUI's tab bindings. Actions without a desktop implementation stay unbound.
   shortcuts.bind({ "n" }, function()
-    step_tab(1, false)
+    actions.step_tab(1, false)
   end)
   shortcuts.bind({ "p" }, function()
-    step_tab(-1, false)
+    actions.step_tab(-1, false)
   end)
   shortcuts.bind({ "," }, function()
-    step_tab(-1, true)
+    actions.step_tab(-1, true)
   end)
   shortcuts.bind({ "." }, function()
-    step_tab(1, true)
+    actions.step_tab(1, true)
   end)
 
   for index = 1, 9 do
     local tab_index = index
     shortcuts.bind({ tostring(index) }, function()
-      select_tab(tab_index)
+      actions.select_tab(tab_index)
     end)
   end
 
   shortcuts.bind_global("ctrl+left", function()
-    step_space(-1)
+    actions.step_space(-1)
   end)
   shortcuts.bind_global("ctrl+right", function()
-    step_space(1)
+    actions.step_space(1)
   end)
 end
+
+return setmetatable({ actions = actions }, {
+  __call = function()
+    install()
+  end,
+})

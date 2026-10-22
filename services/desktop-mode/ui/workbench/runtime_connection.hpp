@@ -39,7 +39,7 @@ namespace workbench {
     QString path_;
     telar::WorkspaceLocation workspace_;
     QLocalSocket socket_;
-    QTimer retry_, refresh_, deadline_, resize_timer_;
+    QTimer retry_, refresh_, deadline_, resize_timer_, linger_;
     QByteArray input_;
     std::vector<telar::Byte> arena_;
     std::map<std::uint64_t, std::vector<std::uint64_t>> tabs_;
@@ -77,6 +77,7 @@ namespace workbench {
     std::uint64_t request(RequestKind kind, std::uint64_t target = 0);
     bool waiting(RequestKind kind, std::uint64_t target = 0) const;
     void requestTab(std::uint64_t tab);
+    static const char *describe(RequestKind kind);
 
     template <typename Message> void send(const Message &message) {
       std::vector<telar::Byte> bytes(telar::Codec::encodedSize(message));

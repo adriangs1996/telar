@@ -10,7 +10,9 @@
 #include <memory>
 
 struct QuickSurface {
-  QuickSurface();
+  // Surfaces share one engine, which caches every loaded QML type: an engine of its own would
+  // cost each surface its own type cache and JavaScript heap. The engine must outlive the surface.
+  explicit QuickSurface(QQmlEngine &engine);
 
   QQuickWindow &window() noexcept;
   QQmlEngine &engine() noexcept;
@@ -24,10 +26,7 @@ struct QuickSurface {
   static QEvent::Type nativeStateEvent();
 
 protected:
-  // Keep engine first and window after, because
-  // destructors run in reverse order and we want the engine to hold
-  // the reference to its components when destroyed
-  QQmlEngine engine_;
+  QQmlEngine &engine_;
   QQuickWindow window_;
 
 private:

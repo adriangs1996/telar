@@ -3,6 +3,7 @@
 #include "lua_value.hpp"
 #include "runtime_session.hpp"
 #include "desktop_session.hpp"
+#include "../trace.hpp"
 #include <QDebug>
 #include <charconv>
 #include <map>
@@ -30,6 +31,7 @@ namespace {
   }
 
   lua::Value snapshot(const RuntimeState &state, bool include_workspace) {
+    TELAR_TRACE("lua.runtime.snapshot");
     lua::Value::Array tabs;
     lua::Value::Array workspaces;
 
@@ -91,6 +93,7 @@ namespace {
   }
 
   lua::Value snapshot(const DesktopState &state) {
+    TELAR_TRACE("lua.desktop.snapshot");
     lua::Value::Array spaces;
     lua::Value::Array displays;
 
@@ -230,6 +233,7 @@ namespace ui {
     bool active = false;
 
     void deliver(std::uint64_t identifier) {
+      TELAR_TRACE("lua.runtime.deliver");
       const auto found = callbacks.find(identifier);
 
       if (!active || found == callbacks.end()) {
@@ -263,6 +267,7 @@ namespace ui {
     }
 
     void notify(bool desktop_changed = false) {
+      TELAR_TRACE("lua.runtime.notify");
       std::vector<std::uint64_t> identifiers;
 
       for (const auto &[identifier, callback] : callbacks) {
@@ -316,6 +321,7 @@ namespace ui {
   }
 
   void RuntimeBinding::activate() {
+    TELAR_TRACE("lua.runtime.activate");
     impl_->active = true;
     impl_->subscription = impl_->session.subscribe([this] {
       impl_->notify();
@@ -329,6 +335,7 @@ namespace ui {
   }
 
   void RuntimeBinding::deactivate() {
+    TELAR_TRACE("lua.runtime.deactivate");
     impl_->active = false;
     impl_->session.unsubscribe(std::exchange(impl_->subscription, 0));
     impl_->desktop.unsubscribe(std::exchange(impl_->desktop_subscription, 0));
@@ -367,6 +374,7 @@ namespace ui {
   }
 
   QString RuntimeBinding::moveTab(const QVariant &tab, const QVariantMap &options) {
+    TELAR_TRACE("lua.runtime.move_tab");
     impl_->requireWorkspace();
     const bool after = options.contains("after");
 
@@ -393,6 +401,7 @@ namespace ui {
   }
 
   QString RuntimeBinding::createSpace(const QVariantMap &options) {
+    TELAR_TRACE("lua.runtime.create_space");
     impl_->requireActive();
 
     for (auto found = options.cbegin(); found != options.cend(); ++found) {

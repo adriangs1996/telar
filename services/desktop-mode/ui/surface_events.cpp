@@ -1,5 +1,6 @@
 #include "surface_events.hpp"
 #include "quick_surface.hpp"
+#include "../trace.hpp"
 #include <QCursor>
 #include <QDebug>
 #include <QDragEnterEvent>
@@ -52,6 +53,7 @@ namespace ui {
       safe_area,
       visibility,
       activation,
+      state,
       drag_enter,
       drag_move,
       drag_leave,
@@ -82,6 +84,7 @@ namespace ui {
         "safe_area_changed",
         "visibility_changed",
         "activation_changed",
+        "state_changed",
         "drag_enter",
         "drag_move",
         "drag_leave",
@@ -305,6 +308,7 @@ namespace ui {
     }
 
     void observe(QQuickItem *item) {
+      TELAR_TRACE("events.observe");
       while (owns(item)) {
         if (!observed.contains(item)) {
           observed.insert(item);
@@ -372,13 +376,14 @@ namespace ui {
     }
 
     quint64 subscribe(QQuickItem *item, const QString &name, Callback callback) {
+      TELAR_TRACE("events.subscribe");
       if (!owns(item) || stopping) {
         throw std::runtime_error("Events require a live visual object in this UI generation");
       }
 
       const auto kind = eventKind(name);
 
-      if (kind >= Kind::resize && kind <= Kind::activation && item != &root) {
+      if (kind >= Kind::resize && kind <= Kind::state && item != &root) {
         throw std::runtime_error("Surface events must be registered on ui.surface");
       }
 
@@ -570,6 +575,7 @@ namespace ui {
     }
 
     EventReply dispatch(Kind kind, QQuickItem *target, QVariantMap data = {}, bool bubble = true) {
+      TELAR_TRACE("events.dispatch");
       EventReply result;
 
       if (!active || !target || !interested(kind)) {
@@ -678,6 +684,7 @@ namespace ui {
     }
 
     void syncFocus() {
+      TELAR_TRACE("events.sync_focus");
       auto *target = surface.window().activeFocusItem();
 
       if (owns(target)) {
@@ -709,6 +716,7 @@ namespace ui {
     }
 
     void hover(const QPointF &position, bool leaving = false) {
+      TELAR_TRACE("events.hover");
       if (!interested(Kind::hover) && hovered.isEmpty()) {
         return;
       }
@@ -755,6 +763,7 @@ namespace ui {
     }
 
     void cancel(const QString &reason, bool unavailable_only = false) {
+      TELAR_TRACE("events.cancel");
       const auto keys = pointers.keys();
 
       for (const auto &key : keys) {
@@ -803,6 +812,7 @@ namespace ui {
     }
 
     bool pointerEvent(Kind kind, QPointerEvent *event, const QEventPoint &event_point) {
+      TELAR_TRACE("events.pointer");
       const auto *mouse = dynamic_cast<QMouseEvent *>(event);
       const auto *tablet = dynamic_cast<QTabletEvent *>(event);
       const auto button = mouse ? mouse->button() : tablet ? tablet->button() : Qt::LeftButton;
@@ -904,6 +914,7 @@ namespace ui {
     }
 
     QVariantMap state() const {
+      TELAR_TRACE("events.state");
       auto &window = surface.window();
       const auto &native = surface.nativeState();
       QVariantMap screen;
@@ -973,6 +984,7 @@ namespace ui {
     }
 
     void syncState() {
+      TELAR_TRACE("events.sync_state");
       if (!active) {
         return;
       }
@@ -1008,6 +1020,12 @@ namespace ui {
         }
       }
 
+      // Any field, including those the host sets, such as a workbench pane's focus: a surface
+      // follows its own state here instead of every change of the whole desktop.
+      if (old != current) {
+        dispatch(Kind::state, &root, {{"value", current}}, false);
+      }
+
       if (!current.value("visible").toBool()) {
         cancel(QStringLiteral("surface_hidden"));
         hover({}, true);
@@ -1022,6 +1040,7 @@ namespace ui {
     }
 
     void lifecycle(Kind kind) {
+      TELAR_TRACE("events.lifecycle");
       QList<QPointer<QQuickItem>> items;
 
       for (const auto &subscription : subscriptions) {
@@ -1042,6 +1061,7 @@ namespace ui {
     }
 
     void activate() {
+      TELAR_TRACE("events.activate");
       previous_state = state();
       active = true;
       lifecycle(Kind::mount);
@@ -1049,6 +1069,7 @@ namespace ui {
     }
 
     void deactivate() {
+      TELAR_TRACE("events.deactivate");
       if (!active || stopping) {
         return;
       }
@@ -1070,6 +1091,7 @@ namespace ui {
     }
 
     bool keyboard(QKeyEvent *event) {
+      TELAR_TRACE("events.keyboard");
       auto *target = surface.window().activeFocusItem();
 
       if (!owns(target)) {
@@ -1106,6 +1128,7 @@ namespace ui {
     }
 
     bool composition(QInputMethodEvent *event, QQuickItem *target) {
+      TELAR_TRACE("events.composition");
       if (!owns(target)) {
         return false;
       }
@@ -1317,6 +1340,7 @@ namespace ui {
     }
 
     bool drag(QDropEvent *event) {
+      TELAR_TRACE("events.drag");
       const auto position = event->position();
 
       if (event->type() == QEvent::DragEnter || drag_data.isEmpty()) {
@@ -1380,6 +1404,7 @@ namespace ui {
     }
 
     bool gesture(QNativeGestureEvent *event) {
+      TELAR_TRACE("events.gesture");
       QString kind;
       QString phase = QStringLiteral("update");
 
@@ -1433,6 +1458,7 @@ namespace ui {
     }
 
     bool process(QEvent *event) {
+      TELAR_TRACE("events.process");
       switch (event->type()) {
       case QEvent::Enter:
         hover(static_cast<QEnterEvent *>(event)->position());

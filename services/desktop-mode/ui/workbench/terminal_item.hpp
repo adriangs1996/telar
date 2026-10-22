@@ -15,9 +15,9 @@ namespace workbench {
     std::function<void(const QByteArray &)> send;
     std::function<void(telar::TerminalSize)> resized;
     std::function<void(std::uint32_t)> scrolled;
-    std::function<void()> focused;
     void configure(const QVariantMap &options);
     void refresh();
+    void setPresented(bool presented);
     QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
     QSizeF cellSize() const;
 
@@ -43,8 +43,9 @@ namespace workbench {
     QSizeF cell_{8, 16};
     double ascent_ = 12;
     std::uint64_t appearance_ = 1;
-    QTimer blink_;
-    bool cursor_on_ = true, selecting_ = false, mouse_report_ = false;
+    QTimer blink_, waiting_timer_;
+    bool cursor_on_ = true, selecting_ = false, mouse_report_ = false, waiting_ = false,
+         presented_ = false, keyboard_ = false;
     int anchor_ = -1, end_ = -1;
     QString preedit_;
     QSet<int> pressed_keys_;
@@ -52,6 +53,8 @@ namespace workbench {
     int captured_button_ = 0;
     QPointF captured_position_;
     void resizeTerminal();
+    void syncKeyboard();
+    void watchConnection();
     int indexAt(QPointF point) const;
     void reportMouse(QMouseEvent *event, bool release, bool motion);
     void mousePacket(int button, QPointF point, bool release);

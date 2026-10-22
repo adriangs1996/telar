@@ -1,5 +1,7 @@
 #include "terminal_item.hpp"
 #include "terminal_input.hpp"
+#include "../../log_categories.hpp"
+#include "../../trace.hpp"
 #include <QClipboard>
 #include <QFontDatabase>
 #include <QFontInfo>
@@ -18,6 +20,8 @@
 namespace workbench {
   namespace {
     constexpr int cursor_interval_ms = 600;
+    // Reattaching after a tab or workspace switch takes a few frames; only a longer wait is news.
+    constexpr int connecting_grace_ms = 750;
     constexpr int maximum_cells = 130359;
     constexpr int maximum_dimension = 4096;
     constexpr int wheel_unit = 120;
@@ -108,6 +112,7 @@ namespace workbench {
       : QQuickItem(parent),
         screen_(std::move(screen)),
         font_(QFontDatabase::systemFont(QFontDatabase::FixedFont)) {
+    TELAR_TRACE("terminal.create");
     setFlag(ItemHasContents);
     setFlag(ItemAcceptsInputMethod);
     setAcceptedMouseButtons(Qt::LeftButton | Qt::MiddleButton | Qt::RightButton);
@@ -116,14 +121,32 @@ namespace workbench {
     configure({});
     blink_.setInterval(cursor_interval_ms);
     QObject::connect(&blink_, &QTimer::timeout, this, [this] {
-      if (isVisible() && hasActiveFocus() && screen_->cursor.blink) {
+      if (isVisible() && keyboard_ && screen_->cursor.blink) {
         cursor_on_ = !cursor_on_;
         update();
       }
     });
 
     blink_.start();
-    QObject::connect(this, &QQuickItem::windowChanged, this, [this](QQuickWindow *window) {
+    if (auto *pane = window()) {
+      QObject::connect(pane, &QWindow::activeChanged, this, [this] {
+        syncKeyboard();
+      });
+    }
+
+    waiting_timer_.setSingleShot(true);
+    waiting_timer_.setInterval(connecting_grace_ms);
+    QObject::connect(&waiting_timer_, &QTimer::timeout, this, [this] {
+      if (!screen_->connected && presented_) {
+        qCInfo(telar_log::terminal) << window()->title() << "still has no frame after"
+                                    << waiting_timer_.interval() << "ms; showing the placeholder";
+        waiting_ = true;
+        update();
+      }
+    });
+    // The base constructor already placed the item in its parent's window, before any
+    // connection here existed, so that window is followed explicitly as well.
+    const auto follow = [this](QQuickWindow *window) {
       if (window) {
         QObject::connect(window, &QWindow::screenChanged, this, [this] {
           resizeTerminal();
@@ -131,10 +154,14 @@ namespace workbench {
 
         resizeTerminal();
       }
-    });
+    };
+
+    QObject::connect(this, &QQuickItem::windowChanged, this, follow);
+    follow(window());
   }
 
   void TerminalItem::configure(const QVariantMap &options) {
+    TELAR_TRACE("terminal.configure");
     font_ = QFontDatabase::systemFont(QFontDatabase::FixedFont);
     if (options.contains("font")) {
       font_.setFamily(options.value("font").toString());
@@ -166,17 +193,40 @@ namespace workbench {
   }
 
   void TerminalItem::refresh() {
+    TELAR_TRACE("terminal.refresh");
     if (end_ >= static_cast<int>(screen_->cells.size())) {
       anchor_ = end_ = -1;
       ++appearance_;
     }
 
     cursor_on_ = true;
-    if (hasActiveFocus()) {
+    if (keyboard_) {
       QGuiApplication::inputMethod()->update(Qt::ImCursorRectangle);
     }
 
+    watchConnection();
     update();
+  }
+
+  // The controller says when the pane is part of what the user is looking at. Window state
+  // cannot: a hidden workspace keeps its windows shown on its own Space.
+  void TerminalItem::setPresented(bool presented) {
+    presented_ = presented;
+    watchConnection();
+  }
+
+  // The grace period only runs while the pane is presented, so a pane presented again after a
+  // switch starts a fresh one instead of inheriting the time it spent out of sight.
+  void TerminalItem::watchConnection() {
+    if (screen_->connected || !presented_) {
+      waiting_timer_.stop();
+      waiting_ = false;
+      return;
+    }
+
+    if (!waiting_ && !waiting_timer_.isActive()) {
+      waiting_timer_.start();
+    }
   }
 
   QSizeF TerminalItem::cellSize() const {
@@ -184,6 +234,7 @@ namespace workbench {
   }
 
   void TerminalItem::resizeTerminal() {
+    TELAR_TRACE("terminal.resize");
     if (!resized || width() < cell_.width() || height() < cell_.height()) {
       return;
     }
@@ -201,11 +252,13 @@ namespace workbench {
   }
 
   void TerminalItem::geometryChange(const QRectF &current, const QRectF &previous) {
+    TELAR_TRACE("terminal.geometry_change");
     QQuickItem::geometryChange(current, previous);
     resizeTerminal();
   }
 
   QSGNode *TerminalItem::updatePaintNode(QSGNode *previous, UpdatePaintNodeData *) {
+    TELAR_TRACE("terminal.update_paint_node");
     auto *node = previous ? static_cast<ScreenNode *>(previous) : new ScreenNode;
     node->background->setRect(boundingRect());
     node->background->setColor(background_);
@@ -321,7 +374,7 @@ namespace workbench {
 
     clear(node->overlay);
     const auto &cursor = screen_->cursor;
-    if (cursor.visible && cursor_on_ && screen_->connected && hasActiveFocus()) {
+    if (cursor.visible && cursor_on_ && screen_->connected && keyboard_) {
       QRectF rect(cursor.x * cell_.width(),
                   cursor.y * cell_.height(),
                   cell_.width(),
@@ -338,7 +391,7 @@ namespace workbench {
       node->overlay->appendChildNode(new QSGSimpleRectNode(rect, paint));
     }
 
-    if (!preedit_.isEmpty() || !screen_->connected) {
+    if (!preedit_.isEmpty() || (!screen_->connected && waiting_)) {
       auto *text = window()->createTextNode();
       text->setColor(foreground_);
       const QString message =
@@ -360,6 +413,7 @@ namespace workbench {
   }
 
   void TerminalItem::keyPressEvent(QKeyEvent *event) {
+    TELAR_TRACE("terminal.key_press");
     if (event->matches(QKeySequence::Copy) && anchor_ >= 0) {
       QGuiApplication::clipboard()->setText(selectionText());
     } else if (event->matches(QKeySequence::Paste)) {
@@ -378,6 +432,7 @@ namespace workbench {
   }
 
   void TerminalItem::keyReleaseEvent(QKeyEvent *event) {
+    TELAR_TRACE("terminal.key_release");
     if (!pressed_keys_.contains(event->key())) {
       event->accept();
       return;
@@ -396,6 +451,7 @@ namespace workbench {
   }
 
   void TerminalItem::inputMethodEvent(QInputMethodEvent *event) {
+    TELAR_TRACE("terminal.input_method");
     if (send && !event->commitString().isEmpty()) {
       send(event->commitString().toUtf8());
     }
@@ -406,6 +462,7 @@ namespace workbench {
   }
 
   QVariant TerminalItem::inputMethodQuery(Qt::InputMethodQuery query) const {
+    TELAR_TRACE("terminal.input_method_query");
     switch (query) {
     case Qt::ImEnabled:
       return screen_->connected;
@@ -424,28 +481,40 @@ namespace workbench {
   }
 
   void TerminalItem::focusInEvent(QFocusEvent *event) {
+    TELAR_TRACE("terminal.focus_in");
     QQuickItem::focusInEvent(event);
-    if (focused) {
-      focused();
-    }
-
-    if (send && screen_->modes.focus_events) {
-      send("\x1b[I");
-    }
-
-    cursor_on_ = true;
-    update();
+    syncKeyboard();
   }
 
   void TerminalItem::focusOutEvent(QFocusEvent *event) {
-    if (send && screen_->modes.focus_events) {
-      send("\x1b[O");
+    TELAR_TRACE("terminal.focus_out");
+    syncKeyboard();
+    QQuickItem::focusOutEvent(event);
+  }
+
+  // Keys arrive while the terminal has active focus in the active window. Active focus alone is
+  // not enough: the keyboard router leaves a pane its focus item when the keyboard moves to
+  // another pane, and only deactivates its window.
+  void TerminalItem::syncKeyboard() {
+    TELAR_TRACE("terminal.sync_keyboard");
+    const bool keyboard = hasActiveFocus() && window() && window()->isActive();
+    if (keyboard == keyboard_) {
+      return;
     }
 
-    preedit_.clear();
-    pressed_keys_.clear();
-    mouseUngrabEvent();
-    QQuickItem::focusOutEvent(event);
+    keyboard_ = keyboard;
+    if (send && screen_->modes.focus_events) {
+      send(keyboard ? "\x1b[I" : "\x1b[O");
+    }
+
+    if (keyboard) {
+      cursor_on_ = true;
+    } else {
+      preedit_.clear();
+      pressed_keys_.clear();
+      mouseUngrabEvent();
+    }
+
     update();
   }
 
@@ -482,6 +551,7 @@ namespace workbench {
   }
 
   void TerminalItem::reportMouse(QMouseEvent *event, bool release, bool motion) {
+    TELAR_TRACE("terminal.report_mouse");
     if (release && screen_->mouse.tracking == telar::MouseTracking::x10) {
       return;
     }
@@ -521,7 +591,9 @@ namespace workbench {
   }
 
   void TerminalItem::mousePressEvent(QMouseEvent *event) {
-    forceActiveFocus(Qt::MouseFocusReason);
+    TELAR_TRACE("terminal.mouse_press");
+    // Focus within the window only: the keyboard router decides when the window holds the keyboard.
+    setFocus(true, Qt::MouseFocusReason);
     mouse_report_ = screen_->mouse.tracking != telar::MouseTracking::none &&
                     !event->modifiers().testFlag(Qt::ShiftModifier);
     if (mouse_report_) {
@@ -537,6 +609,7 @@ namespace workbench {
   }
 
   void TerminalItem::mouseMoveEvent(QMouseEvent *event) {
+    TELAR_TRACE("terminal.mouse_move");
     if (mouse_report_) {
       reportMouse(event, false, true);
     } else if (selecting_) {
@@ -549,6 +622,7 @@ namespace workbench {
   }
 
   void TerminalItem::mouseReleaseEvent(QMouseEvent *event) {
+    TELAR_TRACE("terminal.mouse_release");
     if (mouse_report_) {
       reportMouse(event, true, false);
     }
@@ -566,6 +640,7 @@ namespace workbench {
   }
 
   void TerminalItem::wheelEvent(QWheelEvent *event) {
+    TELAR_TRACE("terminal.wheel");
     const auto delta = event->angleDelta().y();
     if (delta == 0 && event->pixelDelta().y() == 0) {
       event->accept();
@@ -598,6 +673,7 @@ namespace workbench {
   }
 
   QString TerminalItem::selectionText() const {
+    TELAR_TRACE("terminal.selection_text");
     QString result;
     if (anchor_ < 0 || end_ < 0 || !screen_->columns) {
       return result;

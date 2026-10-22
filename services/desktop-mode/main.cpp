@@ -2,8 +2,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <random>
+#include <unistd.h>
 
+#include "log_categories.hpp"
 #include "native-backends/application.hpp"
+#include "session_log.hpp"
 #include "telar_client/telar.hpp"
 #include "runtime_session.hpp"
 #include "desktop_session.hpp"
@@ -20,6 +23,8 @@ static int runDesktop(int argc, const char **argv) {
     return 1;
   }
 
+  qCInfo(telar_log::session) << "Desktop session starting; pid" << ::getpid() << "runtime socket"
+                             << argv[1];
   lua::Vm lua_vm;
   ApplicationWakeup wakeup;
   EventQueue input_queue{wakeup};
@@ -38,6 +43,7 @@ static int runDesktop(int argc, const char **argv) {
 
   try {
     client.handshake();
+    qCInfo(telar_log::session) << "Runtime handshake completed";
     std::random_device entropy;
     std::uniform_int_distribution<std::uint64_t> identities(1);
     const auto client_identity = identities(entropy);
@@ -50,6 +56,7 @@ static int runDesktop(int argc, const char **argv) {
     auto runtime_reader = RuntimeReceiverWorker::init(context);
     ui::Services services{lua_vm, runtime, desktop, shortcuts, argv[1]};
     const int application_result = runApplication(app, wakeup, app.state(), services);
+    qCInfo(telar_log::session) << "Application loop finished with" << application_result;
     runtime_reader.stop();
 
     if (application_result != EXIT_SUCCESS) {
@@ -67,10 +74,17 @@ static int runDesktop(int argc, const char **argv) {
 }
 
 int main(int argc, const char **argv) {
+  session_log::open();
+  int result = EXIT_FAILURE;
+
   try {
-    return runDesktop(argc, argv);
+    result = runDesktop(argc, argv);
   } catch (const std::exception &error) {
-    std::fprintf(stderr, "Telar Desktop: %s\n", error.what());
-    return EXIT_FAILURE;
+    // Critical messages also reach the console, in release builds too.
+    qCCritical(telar_log::session) << "Telar Desktop:" << error.what();
   }
+
+  qCInfo(telar_log::session) << "Desktop session exiting with" << result;
+  session_log::close();
+  return result;
 }

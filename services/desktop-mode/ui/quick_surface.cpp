@@ -1,4 +1,5 @@
 #include "quick_surface.hpp"
+#include "../trace.hpp"
 #include <QColor>
 #include <QCoreApplication>
 #include <QDebug>
@@ -8,7 +9,9 @@
 #include <memory>
 #include <stdexcept>
 
-QuickSurface::QuickSurface() {
+QuickSurface::QuickSurface(QQmlEngine &engine)
+    : engine_(engine) {
+  TELAR_TRACE("ui.quick_surface.create");
   auto format = window_.requestedFormat();
   format.setAlphaBufferSize(8);
   window_.setFormat(format);
@@ -30,6 +33,7 @@ QEvent::Type QuickSurface::nativeStateEvent() {
 }
 
 void QuickSurface::setNativeState(const QVariantMap &state) {
+  TELAR_TRACE("ui.quick_surface.set_native_state");
   if (native_state_ == state) {
     return;
   }
@@ -48,6 +52,7 @@ void QuickSurface::setFocusHandler(std::function<void()> handler) {
 }
 
 void QuickSurface::requestFocus() {
+  TELAR_TRACE("ui.quick_surface.request_focus");
   if (focus_handler_) {
     focus_handler_();
   } else {
@@ -58,6 +63,7 @@ void QuickSurface::requestFocus() {
 std::unique_ptr<QObject> QuickSurface::createObject(const QString &module_name,
                                                     const QString &type_name,
                                                     const QVariantMap &properties) {
+  TELAR_TRACE("ui.quick_surface.create_object");
   QQmlComponent component(&engine_);
   component.loadFromModule(module_name, type_name);
 

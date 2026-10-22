@@ -1,6 +1,7 @@
 #include "desktop_ui.hpp"
 #include "lua_script.hpp"
 #include "lua_surface.hpp"
+#include "../trace.hpp"
 #include <QDebug>
 #include <QDir>
 #include <QFileInfo>
@@ -32,6 +33,7 @@ namespace ui {
   DesktopUi::DesktopUi(Services &services)
       : services_(services),
         configuration_(services) {
+    TELAR_TRACE("ui.desktop.start");
     config_path_ = qEnvironmentVariable("TELAR_DESKTOP_CONFIG");
     config_required_ = !config_path_.isEmpty();
 
@@ -73,10 +75,15 @@ namespace ui {
     return services_;
   }
 
+  QQmlEngine &DesktopUi::engine() noexcept {
+    return engine_;
+  }
+
   void DesktopUi::prepareSurface(LuaSurface &surface,
                                  SurfaceKind kind,
                                  const QVariantMap &settings,
                                  const QString &prefix) {
+    TELAR_TRACE("ui.desktop.prepare_surface");
     const auto name = surfaceName(kind);
     auto config =
         settings
@@ -93,6 +100,7 @@ namespace ui {
   }
 
   void DesktopUi::attach(LuaSurface &surface, SurfaceKind kind) {
+    TELAR_TRACE("ui.desktop.attach");
     if (surfaces_.contains(&surface)) {
       throw std::runtime_error("Desktop surface is already attached");
     }
@@ -110,11 +118,13 @@ namespace ui {
   }
 
   void DesktopUi::detach(LuaSurface &surface) {
+    TELAR_TRACE("ui.desktop.detach");
     surface.ui_.setReloadHandler({});
     surfaces_.erase(&surface);
   }
 
   void DesktopUi::reloadConfiguration() {
+    TELAR_TRACE("ui.desktop.reload_configuration");
     std::vector<LuaUi *> environments{&configuration_};
 
     for (const auto &[surface, _] : surfaces_) {
@@ -153,6 +163,7 @@ namespace ui {
   }
 
   void DesktopUi::reloadPending() {
+    TELAR_TRACE("ui.desktop.reload_pending");
     const bool global = std::exchange(configuration_dirty_, false) || retry_configuration_;
     const auto dirty = std::exchange(dirty_surfaces_, {});
 
@@ -198,6 +209,7 @@ namespace ui {
   }
 
   QRectF DesktopUi::workArea(std::uint32_t display, QRectF available) const {
+    TELAR_TRACE("ui.desktop.work_area");
     for (const auto &[surface, kind] : surfaces_) {
       if (kind != SurfaceKind::topbar && kind != SurfaceKind::sidebar) {
         continue;

@@ -1,8 +1,27 @@
 #include "desktop_session.hpp"
+#include "log_categories.hpp"
+#include "trace.hpp"
 #include <algorithm>
 #include <stdexcept>
 #include <utility>
 #include <tuple>
+
+namespace {
+  const char *describe(DesktopCommand::Kind kind) {
+    switch (kind) {
+    case DesktopCommand::Kind::activate:
+      return "activate";
+    case DesktopCommand::Kind::bind:
+      return "bind";
+    case DesktopCommand::Kind::create:
+      return "create";
+    case DesktopCommand::Kind::remove:
+      return "remove";
+    }
+
+    return "unknown";
+  }
+} // namespace
 
 DesktopSession::DesktopSession(std::string runtime_socket)
     : registry_(std::in_place, std::move(runtime_socket)) {}
@@ -19,6 +38,18 @@ void DesktopSession::stop() {
 }
 
 void DesktopSession::apply(DesktopState state) {
+  TELAR_TRACE("spaces.apply");
+  if (state.focused_space != state_.focused_space || state.pending_space != state_.pending_space ||
+      state.spaces.size() != state_.spaces.size() || state.available != state_.available) {
+    qCInfo(telar_log::spaces) << "focused space" << state.focused_space << "pending"
+                              << state.pending_space << "spaces" << state.spaces.size()
+                              << "available" << state.available;
+  }
+
+  if (state.error != state_.error && !state.error.empty()) {
+    qCWarning(telar_log::spaces) << "desktop error:" << state.error.c_str();
+  }
+
   if (state.available) {
     for (const auto &previous : state_.spaces) {
       if (std::ranges::any_of(state.spaces, [&](const auto &space) {
@@ -48,6 +79,7 @@ void DesktopSession::apply(DesktopState state) {
 }
 
 void DesktopSession::reconcile(const std::vector<WorkspaceSummary> &workspaces, bool ready) {
+  TELAR_TRACE("spaces.reconcile");
   const bool was_ready = runtime_ready_;
   runtime_ready_ = ready;
 
@@ -71,6 +103,7 @@ void DesktopSession::reconcile(const std::vector<WorkspaceSummary> &workspaces, 
 }
 
 void DesktopSession::associate() {
+  TELAR_TRACE("spaces.associate");
   if (state_.available) {
     std::erase_if(bindings_, [&](const auto &binding) {
       const bool space_exists = std::ranges::any_of(state_.spaces, [&](const auto &space) {
@@ -93,6 +126,10 @@ void DesktopSession::associate() {
 }
 
 void DesktopSession::execute(const DesktopCommand &command) {
+  TELAR_TRACE("spaces.execute");
+  qCInfo(telar_log::spaces) << "command" << describe(command.kind) << "space" << command.space
+                            << "workspace" << command.workspace.value_or(0);
+
   if (registry_ && !runtime_ready_) {
     state_.error = "Wait for the runtime workspace catalog before changing Spaces";
     notify();
@@ -203,6 +240,7 @@ void DesktopSession::execute(const DesktopCommand &command) {
 }
 
 void DesktopSession::beginOperation(Pending pending) {
+  TELAR_TRACE("spaces.begin_operation");
   state_.pending_operation = pending.operation;
   state_.error.clear();
   pending_ = pending;
@@ -210,9 +248,13 @@ void DesktopSession::beginOperation(Pending pending) {
 }
 
 void DesktopSession::completeOperation(const SpaceCompletion &completion) {
+  TELAR_TRACE("spaces.complete_operation");
   const auto pending = *pending_;
   pending_.reset();
   state_.pending_operation.reset();
+  qCInfo(telar_log::spaces) << "space operation" << completion.operation.id
+                            << (completion.succeeded ? "succeeded" : "failed:")
+                            << completion.error.c_str();
 
   if (!completion.succeeded) {
     if (pending.automatic) {
@@ -245,6 +287,7 @@ std::uint32_t DesktopSession::focusedDisplay() const {
 }
 
 void DesktopSession::synchronizeLifecycle() {
+  TELAR_TRACE("spaces.synchronize_lifecycle");
   if (!commands_ || !runtime_ready_ || pending_ || state_.pending_space || automatic_paused_ ||
       !state_.available) {
     return;
@@ -300,6 +343,7 @@ void DesktopSession::synchronizeLifecycle() {
 }
 
 void DesktopSession::synchronizeOwnedSpaces() {
+  TELAR_TRACE("spaces.synchronize_owned_spaces");
   registry_->load();
 
   if (!associations_restored_) {
@@ -437,6 +481,7 @@ void DesktopSession::unsubscribe(std::uint64_t identifier) {
 }
 
 void DesktopSession::notify() {
+  TELAR_TRACE("spaces.notify");
   std::vector<std::uint64_t> identifiers;
 
   for (const auto &[identifier, _] : subscribers_) {
@@ -452,6 +497,7 @@ void DesktopSession::notify() {
 }
 
 void DesktopSession::request(DesktopCommand command) {
+  TELAR_TRACE("spaces.request");
   if (!commands_ || !commands_(std::move(command))) {
     throw std::runtime_error("The desktop event queue is unavailable or full");
   }

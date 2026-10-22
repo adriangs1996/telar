@@ -15,6 +15,11 @@ namespace workbench::native {
 
   Display display(std::uint32_t identifier);
   void place(QWindow &window, std::uint64_t space);
+  // Prepares the window that holds the keyboard for the panes: present on every Space, and
+  // invisible to the mouse, Mission Control and the window cycle.
+  void prepareInputWindow(QWindow &window);
+  // Commits the input method composition in progress in the window, if there is one.
+  void commitComposition(QWindow &window);
   QVariantList windows();
 
   // An explicit adoption retains the AX identity, never merely a reusable window ID.

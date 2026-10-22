@@ -155,6 +155,7 @@ supplies displacement in `delta`. Two-finger scrolling uses `scroll`.
 | `safe_area_changed` | `value` and `previous` safe-area descriptions. |
 | `visibility_changed` | `value` and `previous` visibility booleans. |
 | `activation_changed` | `value` and `previous` keyboard activation booleans. |
+| `state_changed` | `value`, a snapshot of every `ui.surface` state field. Any of them changed, including those set by the host, such as a workbench pane's `focused`. Reading the snapshot is cheaper than reading `ui.surface` fields one by one. |
 
 Read the current values through `ui.surface.width`, `height`, `screen`,
 `scale`, `safe_area`, `visible` and `active`. These are snapshots, not reactive

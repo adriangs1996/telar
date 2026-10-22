@@ -2,6 +2,7 @@
 #include "file_watch.hpp"
 #include "lua_environment.hpp"
 #include "lua_value.hpp"
+#include "../trace.hpp"
 #include <QDebug>
 #include <QDir>
 #include <QDirIterator>
@@ -423,6 +424,7 @@ namespace ui {
     }
 
     void install() {
+      TELAR_TRACE("lua_io.install");
       const auto config = directory.toUtf8().toStdString();
       const auto home = QDir::homePath().toUtf8().toStdString();
       QStringList module_patterns{QStringLiteral("?.lua"), QStringLiteral("?/init.lua")};
@@ -522,6 +524,7 @@ namespace ui {
     }
 
     int call(Operation operation, int arguments) {
+      TELAR_TRACE("lua_io.call");
       Call request{environment, operation, arguments};
       environment.withState(decodeCall, &request);
 
@@ -639,6 +642,8 @@ namespace ui {
     }
 
     void deliver(int callback, const Result &result) {
+      TELAR_TRACE("lua_io.deliver");
+
       struct Request {
         int callback;
         const Result *result;
@@ -676,6 +681,7 @@ namespace ui {
     }
 
     void finish(std::uint64_t identifier, Result result) {
+      TELAR_TRACE("lua_io.finish");
       const auto found = jobs.find(identifier);
 
       if (found == jobs.end()) {
@@ -693,6 +699,7 @@ namespace ui {
                    Operation operation,
                    const QString &path,
                    const QByteArray &data) {
+      TELAR_TRACE("lua_io.start_file");
       auto &job = *jobs.at(identifier);
       auto *watcher = new QFutureWatcher<Result>(context.get());
       job.observer = watcher;
@@ -718,6 +725,7 @@ namespace ui {
     }
 
     void startWatch(std::uint64_t identifier, const QString &path) {
+      TELAR_TRACE("lua_io.start_watch");
       if (!QFileInfo::exists(path)) {
         finish(identifier, {{}, fileError(path, QStringLiteral("Watch target does not exist"))});
         return;
@@ -808,6 +816,7 @@ namespace ui {
     }
 
     void drainReply(std::uint64_t identifier) {
+      TELAR_TRACE("lua_io.drain_reply");
       const auto found = jobs.find(identifier);
 
       if (found == jobs.end()) {
@@ -843,6 +852,7 @@ namespace ui {
                       const QByteArray &method,
                       const QByteArray &body,
                       int timeout) {
+      TELAR_TRACE("lua_io.start_request");
       if (!network) {
         network = new QNetworkAccessManager(context.get());
       }
@@ -917,6 +927,7 @@ namespace ui {
     }
 
     Value moduleSource(const Value &name_value, const Value &path_value) {
+      TELAR_TRACE("lua_io.module_source");
       auto name = textValue(name_value);
       name.replace('.', '/');
       const auto patterns = textValue(path_value).split(';', Qt::SkipEmptyParts);

@@ -1,5 +1,6 @@
 #include "lua_environment.hpp"
 #include "lua_vm.hpp"
+#include "trace.hpp"
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -8,6 +9,8 @@ namespace lua {
   // A rooted coroutine shares the VM and JIT, but owns globals and library tables.
   Environment::Environment(Vm &vm)
       : vm_(vm) {
+    TELAR_TRACE("lua.environment.create");
+
     struct Request {
       lua_State *state = nullptr;
       int reference = LUA_NOREF;
@@ -73,6 +76,7 @@ namespace lua {
   }
 
   void Environment::execute(std::string_view source, std::string_view chunk_name) {
+    TELAR_TRACE("lua.environment.execute");
     const std::string name(chunk_name);
 
     struct Request {

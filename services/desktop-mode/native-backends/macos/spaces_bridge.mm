@@ -1,4 +1,5 @@
 #include "spaces_bridge.hpp"
+#include "../../trace.hpp"
 #import <AppKit/AppKit.h>
 #import <ApplicationServices/ApplicationServices.h>
 #import <objc/message.h>
@@ -187,6 +188,7 @@ namespace {
 
 namespace macos::spaces {
   void moveWindow(std::uint32_t window, std::uint64_t space) {
+    TELAR_TRACE("native.spaces.move_window");
     auto &api = skyLight();
     if (!window || !space || !api.moveWindows || !api.copyWindowSpaces) {
       throw std::runtime_error("Window placement in Spaces is unavailable");
@@ -208,6 +210,7 @@ namespace macos::spaces {
   }
 
   DesktopState snapshot() {
+    TELAR_TRACE("native.spaces.snapshot");
     ensureBridge();
     auto &api = skyLight();
     DesktopState state;
@@ -323,6 +326,7 @@ namespace macos::spaces {
   }
 
   std::uint64_t create() {
+    TELAR_TRACE("native.spaces.create");
     const auto type =
         operationClass(@"SLSBridgedSpaceCreateOperation", @selector(initWithOptions:values:));
     id operation = [[type alloc] initWithOptions:0 values:@{}];
@@ -337,12 +341,14 @@ namespace macos::spaces {
   }
 
   void remove(std::uint64_t space) {
+    TELAR_TRACE("native.spaces.remove");
     const auto type =
         operationClass(@"SLSBridgedSpaceDestroyOperation", @selector(initWithSpaceID:));
     performAsync([[type alloc] initWithSpaceID:space]);
   }
 
   void activate(const DesktopState &state, std::uint64_t space) {
+    TELAR_TRACE("native.spaces.activate");
     const auto target = std::ranges::find(state.spaces, space, &DesktopSpace::id);
 
     if (target == state.spaces.end()) {
@@ -380,6 +386,7 @@ namespace macos::spaces {
   }
 
   void move(std::uint64_t space, const DesktopDisplay &display, unsigned index) {
+    TELAR_TRACE("native.spaces.move");
     const auto type = operationClass(@"SLSBridgedMoveManagedSpaceToDisplayIndexOperation",
                                      @selector(initWithSpaceID:displayIdentifier:index:));
     performAsync([[type alloc] initWithSpaceID:space
@@ -388,6 +395,7 @@ namespace macos::spaces {
   }
 
   void focusDisplay(const DesktopDisplay &display) {
+    TELAR_TRACE("native.spaces.focus_display");
     auto &api = skyLight();
     NSString *identifier = [NSString stringWithUTF8String:display.uuid.c_str()];
 

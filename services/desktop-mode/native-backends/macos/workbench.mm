@@ -1,5 +1,6 @@
 #include "../../ui/workbench/native.hpp"
 #include "spaces_bridge.hpp"
+#include "../../trace.hpp"
 #include <AppKit/AppKit.h>
 #include <ApplicationServices/ApplicationServices.h>
 #include <QWindow>
@@ -83,6 +84,7 @@ namespace workbench::native {
   } // namespace
 
   Display display(std::uint32_t identifier) {
+    TELAR_TRACE("native.display");
     for (NSScreen *screen in NSScreen.screens) {
       if ([screen.deviceDescription[@"NSScreenNumber"] unsignedIntValue] != identifier) {
         continue;
@@ -98,6 +100,7 @@ namespace workbench::native {
   }
 
   void place(QWindow &window, std::uint64_t space) {
+    TELAR_TRACE("native.place");
     NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window.winId());
     NSWindow *native = view.window;
     if (!native) {
@@ -112,7 +115,35 @@ namespace workbench::native {
     macos::spaces::moveWindow(static_cast<std::uint32_t>(native.windowNumber), space);
   }
 
+  void prepareInputWindow(QWindow &window) {
+    TELAR_TRACE("native.prepare_input_window");
+    NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window.winId());
+    NSWindow *native = view.window;
+    if (!native) {
+      throw std::runtime_error("Qt did not create the native keyboard window");
+    }
+
+    native.collectionBehavior =
+        NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorTransient |
+        NSWindowCollectionBehaviorIgnoresCycle | NSWindowCollectionBehaviorFullScreenAuxiliary;
+    native.ignoresMouseEvents = YES;
+    native.hidesOnDeactivate = NO;
+    native.animationBehavior = NSWindowAnimationBehaviorNone;
+  }
+
+  void commitComposition(QWindow &window) {
+    TELAR_TRACE("native.commit_composition");
+    auto *view = (__bridge NSView<NSTextInputClient> *)reinterpret_cast<void *>(window.winId());
+    if (![view hasMarkedText]) {
+      return;
+    }
+
+    [view unmarkText];
+    [view.inputContext discardMarkedText];
+  }
+
   QVariantList windows() {
+    TELAR_TRACE("native.windows");
     QVariantList result;
     NSArray *windows = CFBridgingRelease(CGWindowListCopyWindowInfo(
         kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
@@ -240,6 +271,7 @@ namespace workbench::native {
   }
 
   QRectF ExternalWindow::place(const QRectF &requested) {
+    TELAR_TRACE("native.external.place");
     CGPoint point{requested.x(), requested.y()};
     CGSize size{requested.width(), requested.height()};
     const auto position = AXValueCreate(kAXValueTypeCGPoint, &point);
@@ -252,6 +284,7 @@ namespace workbench::native {
   }
 
   void ExternalWindow::show(bool visible) {
+    TELAR_TRACE("native.external.show");
     if (impl_->hidden == !visible) {
       return;
     }
@@ -267,6 +300,7 @@ namespace workbench::native {
   }
 
   void ExternalWindow::focus() {
+    TELAR_TRACE("native.external.focus");
     show(true);
     pid_t pid = 0;
     AXUIElementGetPid(impl_->window, &pid);
@@ -291,6 +325,7 @@ namespace workbench::native {
   }
 
   void ExternalWindow::setSpace(std::uint64_t space) {
+    TELAR_TRACE("native.external.set_space");
     macos::spaces::moveWindow(impl_->identifier, space);
   }
 

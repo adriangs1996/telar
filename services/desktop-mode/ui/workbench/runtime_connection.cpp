@@ -1,5 +1,7 @@
 #include "runtime_connection.hpp"
+#include "../../log_categories.hpp"
 #include "../../telar_client/codecs/telar_handshake.hpp"
+#include "../../trace.hpp"
 #include <QElapsedTimer>
 #include <QRandomGenerator>
 #include <QDebug>
@@ -14,6 +16,8 @@ namespace workbench {
     constexpr int request_timeout_ms = 10000;
     constexpr std::size_t pending_limit = 256;
     constexpr int resize_delay_ms = 30;
+    // A hidden workspace keeps its session this long, so returning to it skips the handshake.
+    constexpr int linger_ms = 60000;
     constexpr qint64 read_budget_ms = 4;
     constexpr std::size_t decode_capacity = 512 * 1024;
     constexpr qsizetype input_chunk = 64 * 1024;
@@ -39,11 +43,14 @@ namespace workbench {
     refresh_.setInterval(snapshot_interval_ms);
     resize_timer_.setSingleShot(true);
     resize_timer_.setInterval(resize_delay_ms);
+    linger_.setSingleShot(true);
+    linger_.setInterval(linger_ms);
     QObject::connect(&retry_, &QTimer::timeout, this, [this] {
       connect();
     });
 
     QObject::connect(&deadline_, &QTimer::timeout, this, [this] {
+      qCWarning(telar_log::connection) << "ws" << workspace_.id << "handshake timed out";
       error_ = "Runtime handshake timed out";
       socket_.abort();
       disconnected();
@@ -53,7 +60,16 @@ namespace workbench {
       refresh();
     });
 
+    // The screens keep their last frame: the workspace's windows still show it on their Space.
+    QObject::connect(&linger_, &QTimer::timeout, this, [this] {
+      qCInfo(telar_log::connection)
+          << "ws" << workspace_.id << "closing the hidden workspace's session";
+      socket_.abort();
+      disconnected();
+    });
+
     QObject::connect(&socket_, &QLocalSocket::connected, this, [this] {
+      qCDebug(telar_log::connection) << "ws" << workspace_.id << "socket connected";
       write(telar::HandshakeCodec::encode(telar::ClientHello{}));
     });
 
@@ -63,6 +79,7 @@ namespace workbench {
 
     QObject::connect(&socket_, &QLocalSocket::errorOccurred, this, [this](auto) {
       error_ = socket_.errorString();
+      qCWarning(telar_log::connection) << "ws" << workspace_.id << "socket error:" << error_;
       disconnected();
     });
 
@@ -80,6 +97,8 @@ namespace workbench {
             (!sent_sizes_.contains(id) || !equal(sent_sizes_.at(id), size))) {
           send(telar::PaneResize{id, size});
           sent_sizes_[id] = size;
+          qCDebug(telar_log::connection)
+              << "ws" << workspace_.id << "resize pane" << id << size.cols << "x" << size.rows;
         }
       }
     });
@@ -91,16 +110,22 @@ namespace workbench {
   }
 
   void RuntimeConnection::connect() {
+    TELAR_TRACE("connection.connect");
     if (!visible_ || socket_.state() != QLocalSocket::UnconnectedState) {
       return;
     }
 
+    qCInfo(telar_log::connection) << "ws" << workspace_.id << "connecting to" << path_;
     input_.clear();
     socket_.connectToServer(path_);
     deadline_.start();
   }
 
   void RuntimeConnection::disconnected() {
+    TELAR_TRACE("connection.disconnected");
+    qCInfo(telar_log::connection) << "ws" << workspace_.id << "disconnected; visible" << visible_
+                                  << "attached" << attached_.size() << "pending" << pending_.size()
+                                  << "error" << error_;
     handshake_ = false;
     attached_.clear();
     sent_sizes_.clear();
@@ -109,7 +134,7 @@ namespace workbench {
     deadline_.stop();
 
     for (auto &[id, screen] : screens_) {
-      screen->connected = false;
+      screen->detach();
       if (painted) {
         painted(id);
       }
@@ -123,30 +148,44 @@ namespace workbench {
   }
 
   void RuntimeConnection::setVisible(bool visible) {
+    TELAR_TRACE("connection.set_visible");
     if (visible_ == visible) {
       return;
     }
 
     visible_ = visible;
+    qCInfo(telar_log::connection) << "ws" << workspace_.id << (visible ? "shown" : "hidden")
+                                  << "ready" << ready() << "attached" << attached_.size();
 
-    if (visible) {
-      connect();
-    } else {
+    if (!visible) {
       retry_.stop();
-      socket_.abort();
-      disconnected();
-      for (auto &[id, screen] : screens_) {
-        screen->discard();
-      }
+      refresh_.stop();
+      synchronizeAttachments();
+      linger_.start();
+      return;
     }
+
+    linger_.stop();
+
+    if (!ready()) {
+      connect();
+      return;
+    }
+
+    refresh();
+    refresh_.start();
+    synchronizeAttachments();
   }
 
   void RuntimeConnection::write(std::span<const telar::Byte> payload) {
+    TELAR_TRACE("connection.write");
     if (socket_.state() != QLocalSocket::ConnectedState) {
       return;
     }
 
     if (socket_.bytesToWrite() + static_cast<qint64>(payload.size()) > output_limit) {
+      qCWarning(telar_log::connection) << "ws" << workspace_.id << "output queue overflow;"
+                                       << socket_.bytesToWrite() << "bytes queued";
       error_ = "Runtime input queue overflow; connection reset";
       socket_.abort();
       return;
@@ -160,6 +199,7 @@ namespace workbench {
   }
 
   void RuntimeConnection::read() {
+    TELAR_TRACE("connection.read");
     if (reading_) {
       return;
     }
@@ -204,6 +244,7 @@ namespace workbench {
       }
     } catch (const std::exception &error) {
       error_ = QString::fromUtf8(error.what());
+      qCWarning(telar_log::connection) << "ws" << workspace_.id << "protocol error:" << error_;
       socket_.abort();
     }
 
@@ -211,6 +252,7 @@ namespace workbench {
   }
 
   void RuntimeConnection::consume(std::span<const telar::Byte> payload) {
+    TELAR_TRACE("connection.consume");
     if (!handshake_) {
       const auto response = telar::HandshakeCodec::decodeResponse(payload);
       const auto *accepted = std::get_if<telar::ServerAccept>(&response);
@@ -221,9 +263,14 @@ namespace workbench {
       handshake_ = true;
       error_.clear();
       deadline_.stop();
+      qCInfo(telar_log::connection)
+          << "ws" << workspace_.id << "handshake accepted; visible" << visible_;
       send(telar::RequestRuntimeState{identity_, true});
-      refresh();
-      refresh_.start();
+      if (visible_) {
+        refresh();
+        refresh_.start();
+      }
+
       notify();
       return;
     }
@@ -235,6 +282,9 @@ namespace workbench {
       if (!pending_.erase(value.request_id)) {
         break;
       }
+
+      qCDebug(telar_log::connection)
+          << "ws" << workspace_.id << "workspace snapshot;" << value.tabs.size() << "tabs";
 
       std::set<std::uint64_t> live;
       for (const auto &tab : value.tabs) {
@@ -264,6 +314,9 @@ namespace workbench {
         break;
       }
 
+      qCDebug(telar_log::connection) << "ws" << workspace_.id << "tab" << value.location.tab_id
+                                     << "snapshot;" << value.panes.size() << "panes";
+
       if (!tabs_.contains(value.location.tab_id)) {
         break;
       }
@@ -281,7 +334,19 @@ namespace workbench {
     }
     case telar::ServerTag::pane_opened: {
       const auto value = telar::Codec::decode<telar::PaneOpened>(payload, storage);
+      const auto pending = pending_.find(value.request_id);
+      // A detach sent while the attachment was in flight already released the pane.
+      const bool released = pending != pending_.end() &&
+                            pending->second.kind == RequestKind::attach &&
+                            !attached_.contains(value.pane_id);
       pending_.erase(value.request_id);
+      qCDebug(telar_log::connection) << "ws" << workspace_.id << "pane" << value.pane_id
+                                     << (value.created ? "created" : "opened")
+                                     << (released ? "after its detach; ignored" : "");
+      if (released) {
+        break;
+      }
+
       if (value.created) {
         auto &panes = tabs_[value.location.tab_id];
         if (std::find(panes.begin(), panes.end(), value.pane_id) == panes.end()) {
@@ -302,6 +367,10 @@ namespace workbench {
       }
 
       auto target = screen(value.pane_id);
+      qCDebug(telar_log::frames) << "ws" << workspace_.id << "pane" << value.pane_id << "frame"
+                                 << value.frame_id << "base" << value.base_frame_id << "size"
+                                 << value.cols << "x" << value.rows << "spans"
+                                 << value.spans.size();
       if (target->apply(value)) {
         if (painted) {
           painted(value.pane_id);
@@ -309,6 +378,9 @@ namespace workbench {
 
         send(telar::FrameAck{value.pane_id, value.frame_id});
       } else {
+        qCDebug(telar_log::connection)
+            << "ws" << workspace_.id << "pane" << value.pane_id << "frame" << value.frame_id
+            << "does not apply on" << target->frame << "; requesting a snapshot";
         send(telar::RequestSnapshot{value.pane_id, target->frame});
       }
 
@@ -316,6 +388,7 @@ namespace workbench {
     }
     case telar::ServerTag::pane_exited: {
       const auto value = telar::Codec::decode<telar::PaneExited>(payload, storage);
+      qCInfo(telar_log::connection) << "ws" << workspace_.id << "pane" << value.pane_id << "exited";
       std::erase_if(pending_, [&](const auto &entry) {
         return entry.second.kind == RequestKind::close && entry.second.target == value.pane_id;
       });
@@ -335,6 +408,7 @@ namespace workbench {
     case telar::ServerTag::request_failed: {
       const auto value = telar::Codec::decode<telar::RequestFailed>(payload, storage);
       const auto pending = pending_.find(value.request_id);
+      const char *kind = pending == pending_.end() ? "unknown" : describe(pending->second.kind);
       if (pending != pending_.end()) {
         if (pending->second.kind == RequestKind::attach) {
           attached_.erase(pending->second.target);
@@ -344,18 +418,23 @@ namespace workbench {
       }
 
       error_ = QString::fromUtf8(value.message.data(), value.message.size());
-      qWarning().noquote() << "Workbench runtime request failed:" << error_;
+      qCWarning(telar_log::connection).noquote()
+          << "ws" << workspace_.id << kind << "request failed:" << error_;
       notify();
       break;
     }
     case telar::ServerTag::request_completed: {
       const auto value = telar::Codec::decode<telar::RequestCompleted>(payload, storage);
       pending_.erase(value.request_id);
+      qCDebug(telar_log::connection)
+          << "ws" << workspace_.id << "request" << value.request_id << "completed";
       refresh();
       break;
     }
     case telar::ServerTag::tab_closed: {
       const auto value = telar::Codec::decode<telar::TabClosed>(payload, storage);
+      qCInfo(telar_log::connection)
+          << "ws" << workspace_.id << "tab" << value.location.tab_id << "closed";
       pending_.erase(value.request_id);
       tabs_.erase(value.location.tab_id);
       snapshots_.erase(value.location.tab_id);
@@ -365,6 +444,8 @@ namespace workbench {
       break;
     }
     case telar::ServerTag::resync_required:
+      qCInfo(telar_log::connection)
+          << "ws" << workspace_.id << "resync required;" << attached_.size() << "attached panes";
       refresh();
       sent_sizes_.clear();
       resize_timer_.start();
@@ -374,6 +455,7 @@ namespace workbench {
 
       break;
     case telar::ServerTag::runtime_stopping:
+      qCInfo(telar_log::connection) << "ws" << workspace_.id << "runtime stopping";
       socket_.abort();
       break;
     default:
@@ -382,12 +464,15 @@ namespace workbench {
   }
 
   void RuntimeConnection::refresh() {
-    if (!ready()) {
+    TELAR_TRACE("connection.refresh");
+    if (!ready() || !visible_) {
       return;
     }
 
     for (const auto &[id, pending] : pending_) {
       if (clock_.elapsed() - pending.started > request_timeout_ms) {
+        qCWarning(telar_log::connection) << "ws" << workspace_.id << describe(pending.kind)
+                                         << "request" << id << "timed out; reconnecting";
         error_ = "Runtime request timed out; reconnecting without replaying mutations";
         socket_.abort();
         return;
@@ -416,16 +501,20 @@ namespace workbench {
   }
 
   void RuntimeConnection::requestTab(std::uint64_t tab) {
+    TELAR_TRACE("connection.request_tab");
     if (tab && !waiting(RequestKind::tab, tab)) {
       send(telar::RequestTabSnapshot{request(RequestKind::tab, tab), {workspace_, tab}});
     }
   }
 
   void RuntimeConnection::selectTab(std::uint64_t tab) {
+    TELAR_TRACE("connection.select_tab");
     if (active_tab_ == tab) {
       return;
     }
 
+    qCInfo(telar_log::connection) << "ws" << workspace_.id << "tab" << active_tab_ << "->" << tab
+                                  << "snapshot cached" << snapshots_.contains(tab);
     active_tab_ = tab;
     synchronizeAttachments();
     if (ready() && tab) {
@@ -433,21 +522,34 @@ namespace workbench {
     }
   }
 
+  // A hidden workspace wants no pane attached; its session stays open until linger_ expires.
   void RuntimeConnection::synchronizeAttachments() {
-    if (!ready() || (active_tab_ && !snapshots_.contains(active_tab_))) {
+    TELAR_TRACE("connection.synchronize_attachments");
+    if (!ready() || (visible_ && active_tab_ && !snapshots_.contains(active_tab_))) {
       return;
     }
 
     std::set<std::uint64_t> wanted;
-    if (tabs_.contains(active_tab_)) {
+    if (visible_ && tabs_.contains(active_tab_)) {
       wanted.insert(tabs_.at(active_tab_).begin(), tabs_.at(active_tab_).end());
+    }
+
+    // Attach before detaching: once a session's last pane goes, the runtime takes it out of the
+    // workspace, releases its geometry lease and resyncs the other clients, and the next attach
+    // pays to enter it again.
+    for (const auto pane : wanted) {
+      attach(pane);
     }
 
     for (auto it = attached_.begin(); it != attached_.end();) {
       if (!wanted.contains(*it)) {
+        qCDebug(telar_log::connection) << "ws" << workspace_.id << "detach pane" << *it;
         send(telar::DetachPane{*it});
         if (screens_.contains(*it)) {
-          screens_.at(*it)->discard();
+          screens_.at(*it)->detach();
+          if (painted) {
+            painted(*it);
+          }
         }
 
         sent_sizes_.erase(*it);
@@ -456,17 +558,15 @@ namespace workbench {
         ++it;
       }
     }
-
-    for (const auto pane : wanted) {
-      attach(pane);
-    }
   }
 
   void RuntimeConnection::attach(std::uint64_t pane) {
-    if (!ready() || attached_.contains(pane)) {
+    TELAR_TRACE("connection.attach");
+    if (!ready() || !visible_ || attached_.contains(pane)) {
       return;
     }
 
+    qCDebug(telar_log::connection) << "ws" << workspace_.id << "attach pane" << pane;
     attached_.insert(pane);
     send(telar::OpenPane{request(RequestKind::attach, pane),
                          {telar::PaneTarget::Kind::pane, pane},
@@ -475,6 +575,7 @@ namespace workbench {
   }
 
   void RuntimeConnection::input(std::uint64_t pane, const QByteArray &bytes) {
+    TELAR_TRACE("connection.input");
     if (!ready() || !attached_.contains(pane) || !screen(pane)->connected) {
       return;
     }
@@ -496,6 +597,7 @@ namespace workbench {
   }
 
   void RuntimeConnection::resize(std::uint64_t pane, telar::TerminalSize size) {
+    TELAR_TRACE("connection.resize");
     if (sizes_.contains(pane) && equal(sizes_.at(pane), size)) {
       return;
     }
@@ -511,6 +613,7 @@ namespace workbench {
   }
 
   void RuntimeConnection::split(std::uint64_t source) {
+    TELAR_TRACE("connection.split");
     if (!ready() || !active_tab_ || !hasSnapshot(active_tab_)) {
       throw std::runtime_error("Workspace is waiting for its tab snapshot");
     }
@@ -549,6 +652,8 @@ namespace workbench {
                                source,
                                std::span(arguments).first(login ? arguments.size() : 1)};
     const auto request_id = request(RequestKind::create);
+    qCInfo(telar_log::connection) << "ws" << workspace_.id << "split pane" << source << "in tab"
+                                  << active_tab_;
     try {
       send(telar::CreatePane{request_id, {workspace_, active_tab_}, initial_size, launch});
     } catch (...) {
@@ -558,9 +663,28 @@ namespace workbench {
   }
 
   void RuntimeConnection::close(std::uint64_t pane) {
+    TELAR_TRACE("connection.close");
     if (ready() && !waiting(RequestKind::close, pane)) {
+      qCInfo(telar_log::connection) << "ws" << workspace_.id << "close pane" << pane;
       send(telar::ClosePane{request(RequestKind::close, pane), pane});
     }
+  }
+
+  const char *RuntimeConnection::describe(RequestKind kind) {
+    switch (kind) {
+    case RequestKind::workspace:
+      return "workspace snapshot";
+    case RequestKind::tab:
+      return "tab snapshot";
+    case RequestKind::attach:
+      return "attach";
+    case RequestKind::create:
+      return "create";
+    case RequestKind::close:
+      return "close";
+    }
+
+    return "unknown";
   }
 
   std::shared_ptr<TerminalScreen> RuntimeConnection::screen(std::uint64_t pane) {
@@ -581,7 +705,7 @@ namespace workbench {
   }
 
   bool RuntimeConnection::ready() const {
-    return visible_ && handshake_ && socket_.state() == QLocalSocket::ConnectedState;
+    return handshake_ && socket_.state() == QLocalSocket::ConnectedState;
   }
 
   bool RuntimeConnection::hasSnapshot(std::uint64_t tab) const {
@@ -593,6 +717,7 @@ namespace workbench {
   }
 
   void RuntimeConnection::notify() {
+    TELAR_TRACE("connection.notify");
     if (changed) {
       changed();
     }

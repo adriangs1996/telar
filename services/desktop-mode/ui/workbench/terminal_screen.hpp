@@ -28,6 +28,6 @@ namespace workbench {
     bool connected = false;
 
     bool apply(const telar::PaneFrame &value);
-    void discard();
+    void detach();
   };
 } // namespace workbench

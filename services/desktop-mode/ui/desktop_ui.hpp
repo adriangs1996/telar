@@ -3,6 +3,7 @@
 #include "file_watch.hpp"
 #include "lua_ui.hpp"
 #include "surface_kind.hpp"
+#include <QQmlEngine>
 #include <QTimer>
 #include <QRectF>
 #include <cstdint>
@@ -17,6 +18,7 @@ namespace ui {
     explicit DesktopUi(Services &services);
 
     Services &services() noexcept;
+    QQmlEngine &engine() noexcept;
     void attach(LuaSurface &surface, SurfaceKind kind);
     void detach(LuaSurface &surface);
     QVariantMap options(SurfaceKind kind) const;
@@ -25,6 +27,8 @@ namespace ui {
 
   private:
     Services &services_;
+    // Shared by every surface, which must not outlive it.
+    QQmlEngine engine_;
     LuaUi configuration_;
     QString config_path_;
     bool config_required_ = false;

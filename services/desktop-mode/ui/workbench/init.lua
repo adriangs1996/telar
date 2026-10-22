@@ -25,20 +25,24 @@ local header = ui.item({ height = header_height })
 local resize = ui.item({ width = 8, height = 8 })
 local drag
 
-local function update()
-  background.width = ui.surface.width
-  background.height = ui.surface.height
-  header.width = ui.surface.width - 32
-  close.x = ui.surface.width - 24
-  resize.x = ui.surface.width - 8
-  resize.y = ui.surface.height - 8
-  title.text = ui.surface.pane and ("Pane " .. ui.surface.pane) or "Telar"
-  background["border.color"] = ui.surface.focused and (colors.accent or "#c4a7e7")
+-- Reads one snapshot: each ui.surface field read builds the whole surface state.
+local function update(state)
+  background.width = state.width
+  background.height = state.height
+  header.width = state.width - 32
+  close.x = state.width - 24
+  resize.x = state.width - 8
+  resize.y = state.height - 8
+  title.text = state.pane and ("Pane " .. state.pane) or "Telar"
+  background["border.color"] = state.focused and (colors.accent or "#c4a7e7")
     or (colors.border or "#393142")
 end
 
-ui.on(ui.surface, "resize", update)
-workbench.on_change(update)
+-- The pane's own state carries its size, focus and pane, so a change elsewhere in the
+-- workbench does not run every pane's update.
+ui.on(ui.surface, "state_changed", function(event)
+  update(event.value)
+end)
 
 ui.on(header, "pointer_down", function(event)
   workbench.command("focus")
@@ -89,4 +93,9 @@ ui.on(close, "click", function(event)
   event:accept()
 end)
 
-update()
+update({
+  width = ui.surface.width,
+  height = ui.surface.height,
+  pane = ui.surface.pane,
+  focused = ui.surface.focused,
+})
