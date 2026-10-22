@@ -1,8 +1,8 @@
 #include "../desktop.hpp"
 #include "spaces_bridge.hpp"
+#include "spaces_observer.hpp"
 #include "../../trace.hpp"
 #import <AppKit/AppKit.h>
-#include <QPointer>
 #include <QTimer>
 #include <algorithm>
 #include <chrono>
@@ -14,8 +14,8 @@ namespace {
   using Clock = std::chrono::steady_clock;
   using namespace std::chrono_literals;
   constexpr auto operation_timeout = 5s;
-  constexpr auto confirmation_interval = 20ms;
-  constexpr auto catalog_interval = 2s;
+  // How soon a publication the event queue refused is tried again.
+  constexpr auto retry_interval = 20ms;
 } // namespace
 
 struct NativeDesktop::Impl {
@@ -28,35 +28,43 @@ struct NativeDesktop::Impl {
   };
 
   Sink publish;
+  // Retries a publication the event queue refused.
   QTimer timer;
   NSMutableArray *observers = [NSMutableArray array];
+  // The latest snapshot, which commands check themselves against instead of taking one.
+  DesktopState observed;
   DesktopState previous;
   std::optional<Pending> pending;
   std::optional<SpaceCompletion> completion;
   std::uint64_t target = 0;
   Clock::time_point activation_deadline;
   bool display_focus_sent = false;
-  bool refreshing = false;
+  bool observing = false;
   std::string error;
+  // Declared after the timer it delivers through, so it stops before the timer goes.
+  macos::spaces::Observer observer{timer, [this](DesktopState state, std::string failure) {
+                                     observe(std::move(state), std::move(failure));
+                                   }};
 
   Impl() {
     timer.setSingleShot(true);
+    // The observer delivers only changes while nothing is pending, so the retry publishes the
+    // latest snapshot itself.
     QObject::connect(&timer, &QTimer::timeout, &timer, [this] {
-      refresh();
+      publishState(observed);
     });
   }
 
+  // stop removes the notification observers before the observer can go away.
   void watch(NSNotificationCenter *center, NSNotificationName name) {
-    const QPointer<QTimer> observed_timer{&timer};
-    id observer = [center addObserverForName:name
-                                      object:nil
-                                       queue:NSOperationQueue.mainQueue
-                                  usingBlock:^(NSNotification *) {
-                                    if (observed_timer) {
-                                      observed_timer->start(0);
-                                    }
-                                  }];
-    [observers addObject:observer];
+    auto *spaces = &observer;
+    id notification = [center addObserverForName:name
+                                          object:nil
+                                           queue:NSOperationQueue.mainQueue
+                                      usingBlock:^(NSNotification *) {
+                                        spaces->wake();
+                                      }];
+    [observers addObject:notification];
   }
 
   void finish(bool succeeded, std::string message = {}) {
@@ -154,7 +162,11 @@ struct NativeDesktop::Impl {
         throw std::runtime_error("The target display is unavailable");
       }
 
-      macos::spaces::focusDisplay(*display);
+      // Focusing a display can wait on another application through Accessibility.
+      observer.post([display = *display] {
+        macos::spaces::focusDisplay(display);
+      });
+
       display_focus_sent = true;
     }
   }
@@ -166,30 +178,33 @@ struct NativeDesktop::Impl {
     state.completed_operation = completion;
     state.error = error;
 
-    bool retry = false;
-
     if (state != previous) {
       if (publish(state)) {
         previous = std::move(state);
       } else {
-        retry = true;
+        timer.start(retry_interval);
       }
     }
 
-    timer.start(target || pending || retry ? confirmation_interval : catalog_interval);
+    // Something pending is confirmed, or times out, from a snapshot every frame.
+    observer.setUrgent(target || pending);
   }
 
-  void refresh() {
-    TELAR_TRACE("native.desktop.refresh");
-    if (!publish || refreshing) {
+  // Acts on a snapshot, taken by the observer off this thread: confirms or times out what is
+  // pending, then publishes.
+  void observe(DesktopState state, std::string failure) {
+    TELAR_TRACE("native.desktop.observe");
+    if (!publish || observing) {
       return;
     }
 
-    refreshing = true;
-    DesktopState state;
-
+    observing = true;
     try {
-      state = macos::spaces::snapshot();
+      if (!failure.empty()) {
+        throw std::runtime_error(failure);
+      }
+
+      observed = state;
       advanceOperation(state);
       advanceActivation(state);
     } catch (const std::exception &exception) {
@@ -202,12 +217,19 @@ struct NativeDesktop::Impl {
     }
 
     publishState(std::move(state));
-    refreshing = false;
+    observing = false;
+  }
+
+  // Publishes what a command changed at once; the observer confirms the rest.
+  void announce() {
+    publishState(observed);
+    observer.wake();
   }
 
   void stop() {
     publish = {};
     timer.stop();
+    observer.stop();
 
     for (id observer in observers) {
       [NSWorkspace.sharedWorkspace.notificationCenter removeObserver:observer];
@@ -228,6 +250,7 @@ struct NativeDesktop::Impl {
     pending.reset();
     completion.reset();
     target = 0;
+    observed = {};
     previous = {};
     error.clear();
   }
@@ -249,7 +272,19 @@ void NativeDesktop::start(Sink publish) {
   impl_->watch(workspace, NSWorkspaceDidWakeNotification);
   impl_->watch(NSNotificationCenter.defaultCenter,
                NSApplicationDidChangeScreenParametersNotification);
-  impl_->refresh();
+
+  // The first snapshot is taken here, on the UI thread, so the desktop has a state before
+  // anything asks for one, and SkyLight is set up before another thread uses it.
+  DesktopState state;
+  std::string failure;
+  try {
+    state = macos::spaces::snapshot();
+  } catch (const std::exception &exception) {
+    failure = exception.what();
+  }
+
+  impl_->observe(std::move(state), std::move(failure));
+  impl_->observer.start();
 }
 
 void NativeDesktop::stop() {
@@ -260,15 +295,14 @@ void NativeDesktop::activate(std::uint64_t space) {
   TELAR_TRACE("native.desktop.activate");
   if (impl_->pending || impl_->target) {
     impl_->error = "Wait for the current Space operation to finish";
-    impl_->refresh();
+    impl_->announce();
     return;
   }
 
   impl_->error.clear();
 
   try {
-    const auto state = macos::spaces::snapshot();
-    macos::spaces::activate(state, space);
+    macos::spaces::activate(impl_->observed, space);
     impl_->target = space;
     impl_->display_focus_sent = false;
     impl_->activation_deadline = Clock::now() + operation_timeout;
@@ -276,7 +310,7 @@ void NativeDesktop::activate(std::uint64_t space) {
     impl_->error = exception.what();
   }
 
-  impl_->refresh();
+  impl_->announce();
 }
 
 void NativeDesktop::changeSpace(SpaceOperation operation) {
@@ -284,7 +318,7 @@ void NativeDesktop::changeSpace(SpaceOperation operation) {
   if (impl_->pending || impl_->target) {
     impl_->completion = SpaceCompletion{operation, false, "Another Space operation is in progress"};
     impl_->error = impl_->completion->error;
-    impl_->refresh();
+    impl_->announce();
     return;
   }
 
@@ -292,7 +326,7 @@ void NativeDesktop::changeSpace(SpaceOperation operation) {
   impl_->completion.reset();
 
   try {
-    const auto state = macos::spaces::snapshot();
+    const auto &state = impl_->observed;
 
     if (!state.available) {
       throw std::runtime_error("The macOS Spaces catalog is unavailable");
@@ -338,7 +372,7 @@ void NativeDesktop::changeSpace(SpaceOperation operation) {
       macos::spaces::remove(operation.space);
     }
 
-    impl_->publishState(state);
+    impl_->announce();
   } catch (const std::exception &exception) {
     if (impl_->pending) {
       impl_->failOperation(exception.what());
@@ -347,6 +381,6 @@ void NativeDesktop::changeSpace(SpaceOperation operation) {
       impl_->error = exception.what();
     }
 
-    impl_->refresh();
+    impl_->announce();
   }
 }

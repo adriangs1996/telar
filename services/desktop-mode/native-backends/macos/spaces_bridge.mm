@@ -5,7 +5,9 @@
 #import <objc/message.h>
 #import <objc/runtime.h>
 #include <algorithm>
+#include <array>
 #include <dlfcn.h>
+#include <span>
 #include <stdexcept>
 #include <unistd.h>
 
@@ -23,6 +25,7 @@
 
 namespace {
   constexpr std::size_t space_limit = 512;
+  constexpr std::uint32_t display_limit = 32;
 
   std::string text(NSString *value) {
     return [value isKindOfClass:NSString.class] ? std::string(value.UTF8String ?: "") : "";
@@ -37,12 +40,8 @@ namespace {
                            RTLD_NOW | RTLD_LOCAL);
     int (*mainConnection)() = load<decltype(mainConnection)>("SLSMainConnectionID");
     CFArrayRef (*copyDisplays)(int) = load<decltype(copyDisplays)>("SLSCopyManagedDisplaySpaces");
-    std::uint64_t (*currentSpace)(int, CFStringRef) =
-        load<decltype(currentSpace)>("SLSManagedDisplayGetCurrentSpace");
     CFStringRef (*activeDisplay)(int) =
         load<decltype(activeDisplay)>("SLSCopyActiveMenuBarDisplayIdentifier");
-    CFStringRef (*spaceName)(int, std::uint64_t) = load<decltype(spaceName)>("SLSSpaceCopyName");
-    int (*spaceType)(int, std::uint64_t) = load<decltype(spaceType)>("SLSSpaceGetType");
     CGError (*activateDisplay)(int, CFStringRef, CFStringRef) =
         load<decltype(activateDisplay)>("SLSSetActiveMenuBarDisplayIdentifier");
     void (*moveWindows)(int, CFArrayRef, std::uint64_t) =
@@ -55,8 +54,7 @@ namespace {
     }
 
     bool available() const {
-      return mainConnection && copyDisplays && currentSpace && activeDisplay && spaceName &&
-             spaceType;
+      return mainConnection && copyDisplays && activeDisplay;
     }
   };
 
@@ -227,14 +225,24 @@ namespace macos::spaces {
       throw std::runtime_error("macOS did not return a Spaces catalog");
     }
 
+    // Every call is a round trip to the window server, which during a Space switch waits for its
+    // animation. The catalog already holds each Space's name and type and each display's current
+    // Space, so these two calls are all a snapshot makes, whatever the number of Spaces.
     NSString *focused_display = CFBridgingRelease(api.activeDisplay(connection));
-    state.focused_space = [focused_display isKindOfClass:NSString.class]
-                              ? api.currentSpace(connection, (__bridge CFStringRef)focused_display)
-                              : 0;
+    if (![focused_display isKindOfClass:NSString.class]) {
+      focused_display = nil;
+    }
 
-    for (NSScreen *screen in NSScreen.screens) {
-      const auto id =
-          static_cast<CGDirectDisplayID>(number(screen.deviceDescription[@"NSScreenNumber"]));
+    // CoreGraphics rather than NSScreen: the observer takes snapshots off the main thread, where
+    // AppKit must not be used. Like NSScreen's, the list starts with the main display; mirrors,
+    // which NSScreen leaves out, own no Space and are dropped below.
+    std::array<CGDirectDisplayID, display_limit> identifiers{};
+    std::uint32_t display_count = 0;
+    if (CGGetActiveDisplayList(display_limit, identifiers.data(), &display_count) != kCGErrorSuccess) {
+      throw std::runtime_error("macOS did not list the active displays");
+    }
+
+    for (const auto id : std::span(identifiers).first(display_count)) {
       CFUUIDRef uuid = CGDisplayCreateUUIDFromDisplayID(id);
       NSString *identifier = uuid ? CFBridgingRelease(CFUUIDCreateString(nullptr, uuid)) : nil;
 
@@ -273,6 +281,10 @@ namespace macos::spaces {
         continue;
       }
 
+      if ([focused_display isEqualToString:display[@"Display Identifier"]]) {
+        state.focused_space = current;
+      }
+
       if (uuid == "Main") {
         auto main = std::ranges::find(state.displays, display_id, &DesktopDisplay::id);
 
@@ -298,8 +310,7 @@ namespace macos::spaces {
           continue;
         }
 
-        NSString *name = CFBridgingRelease(api.spaceName(connection, id));
-        auto space_uuid = text(name);
+        auto space_uuid = text(entry[@"uuid"]);
 
         if (space_uuid.empty()) {
           space_uuid = uuid + ":" + std::to_string(id);
@@ -311,7 +322,7 @@ namespace macos::spaces {
                                 .index = ++index,
                                 .visible = current == id,
                                 .focused = state.focused_space == id,
-                                .fullscreen = api.spaceType(connection, id) != 0});
+                                .fullscreen = number(entry[@"type"]) != 0});
       }
     }
 
@@ -408,6 +419,7 @@ namespace macos::spaces {
 
     // Window focus is separate from Space visibility and remains optional when AX is unavailable.
     if (AXIsProcessTrusted()) {
+      TELAR_TRACE("native.spaces.focus_display_window");
       focusDisplayWindow(display);
     }
   }

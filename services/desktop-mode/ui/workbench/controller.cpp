@@ -223,8 +223,13 @@ namespace workbench {
         schedule();
       });
 
+      // Windows follow Spaces, their displays and the focus; an operation or a status change alone
+      // leaves them where they are.
       desktop_subscription = services.desktop.subscribe([this] {
-        schedule();
+        const auto &changes = services.desktop.changes();
+        if (changes.focus || changes.spaces || changes.displays) {
+          schedule();
+        }
       });
 
       desktop.changed = [this] {
@@ -319,7 +324,8 @@ namespace workbench {
       }
     }
 
-    View &addView(Tab &tab, Element element, QVariantMap configuration = {}, std::uint64_t pane = 0) {
+    View &
+    addView(Tab &tab, Element element, QVariantMap configuration = {}, std::uint64_t pane = 0) {
       TELAR_TRACE("workbench.add_view");
       if (tab.views.size() >= Layout::capacity) {
         throw std::runtime_error("Tab surface limit reached");
@@ -568,15 +574,15 @@ namespace workbench {
 
     // Puts a pane window where the layout places it, on its workspace's Space, and tells its
     // surface where it is and whether the user sees it. Showing the window is up to the caller.
-    void layOut(Workspace &workspace, Tab &tab, const Placement &placement, View &view, bool shown) {
+    void
+    layOut(Workspace &workspace, Tab &tab, const Placement &placement, View &view, bool shown) {
       TELAR_TRACE("workbench.lay_out");
       const auto padding = metric(options, "padding", default_padding);
       const auto header = metric(options, "header_height", default_header);
       auto &window = view.surface->window();
-      const QRect geometry(
-          QPoint(qRound(placement.frame.left()), qRound(placement.frame.top())),
-          QSize(qRound(placement.frame.right()) - qRound(placement.frame.left()),
-                qRound(placement.frame.bottom()) - qRound(placement.frame.top())));
+      const QRect geometry(QPoint(qRound(placement.frame.left()), qRound(placement.frame.top())),
+                           QSize(qRound(placement.frame.right()) - qRound(placement.frame.left()),
+                                 qRound(placement.frame.bottom()) - qRound(placement.frame.top())));
       if (window.geometry() != geometry) {
         window.setGeometry(geometry);
       }
@@ -847,6 +853,7 @@ namespace workbench {
             workspace.runtime = std::make_unique<RuntimeConnection>(
                 QString::fromStdString(services.runtime_socket),
                 telar::WorkspaceLocation{telar::WorkspaceLocation::Kind::workspace, id});
+
             workspace.runtime->changed = [this] {
               schedule();
             };
@@ -854,6 +861,7 @@ namespace workbench {
             workspace.runtime->painted = [&workspace](std::uint64_t pane) {
               for (auto &[tab_id, tab] : workspace.tabs) {
                 const auto found = tab.views.find(paneId(pane));
+
                 if (found != tab.views.end() && found->second->terminal) {
                   found->second->terminal->refresh();
                 }
@@ -865,8 +873,10 @@ namespace workbench {
           workspace.display = space.display;
           const auto monitor = native::display(space.display);
           const auto margin = metric(options, "margin", default_gap);
+
           workspace.area = desktop.workArea(space.display, monitor.available)
                                .adjusted(margin, margin, -margin, -margin);
+
           workspace.scale = monitor.scale;
           if (!space.visible) {
             workspace.runtime->load();
@@ -899,6 +909,7 @@ namespace workbench {
             workspace.runtime->setVisible(workspace.visible);
             synchronize(workspace, id);
             present(workspace, id, reconfigure);
+
             for (const auto &[tab_id, tab] : workspace.tabs) {
               remember(id, tab_id, tab);
             }

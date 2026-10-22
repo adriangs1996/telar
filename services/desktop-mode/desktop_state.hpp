@@ -66,6 +66,27 @@ struct DesktopState {
   bool operator==(const DesktopState &) const = default;
 };
 
+// What a desktop state differs in from the one subscribers saw last, so each can skip the work
+// for what did not change. The state itself always comes whole: a subscriber that ignores these
+// can still reconcile from it.
+struct DesktopChanges {
+  // The focused Space, or which Space each display shows.
+  bool focus = false;
+  // Spaces appearing, disappearing, moving or changing their workspace.
+  bool spaces = false;
+  bool displays = false;
+  // A Space activation or operation starting, progressing or completing.
+  bool operation = false;
+  // Availability, Accessibility permission or the error.
+  bool status = false;
+
+  bool any() const {
+    return focus || spaces || displays || operation || status;
+  }
+
+  bool operator==(const DesktopChanges &) const = default;
+};
+
 struct DesktopCommand {
   enum class Kind {
     activate,

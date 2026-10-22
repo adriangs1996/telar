@@ -72,15 +72,30 @@ local function busy()
     or desktop_state.pending_operation
 end
 
+-- Every change repaints every row, but a row only touches what differs from its last paint: a
+-- Space switch changes two rows, and restarting the other rows' animations is wasted work.
 local function paint(row)
   local color = row.selected and colors.selected
     or (row.space == desktop_state.pending_space and row.space and colors.pending)
     or (row.hovered and colors.hover)
     or colors.row
+  local opacity = row.space and not busy() and 1 or 0.55
+  local name_color = row.selected and colors.accent or colors.text
 
-  row.panel.opacity = row.space and not busy() and 1 or 0.55
-  row.name.color = row.selected and colors.accent or colors.text
-  ui.animate(row.panel, "color", { to = color, duration_ms = metrics.transition_ms })
+  if row.painted_opacity ~= opacity then
+    row.painted_opacity = opacity
+    row.panel.opacity = opacity
+  end
+
+  if row.painted_name_color ~= name_color then
+    row.painted_name_color = name_color
+    row.name.color = name_color
+  end
+
+  if row.painted_color ~= color then
+    row.painted_color = color
+    ui.animate(row.panel, "color", { to = color, duration_ms = metrics.transition_ms })
+  end
 end
 
 local function make_row()
@@ -211,9 +226,12 @@ runtime.on_change(function(next_state)
   update()
 end)
 
-desktop.on_change(function(next_state)
+desktop.on_change(function(next_state, changes)
   desktop_state = next_state
-  update()
+  -- Displays alone change nothing the sidebar shows.
+  if changes.focus or changes.spaces or changes.operation or changes.status then
+    update()
+  end
 end)
 
 ui.on(ui.surface, "resize", layout)

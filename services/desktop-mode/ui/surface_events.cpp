@@ -1693,8 +1693,10 @@ namespace ui {
     impl_->setInputMethod(item, options);
   }
 
+  // While active, the state is the one syncState keeps up to date from the window's signals:
+  // building it asks the platform about the screen, which can wait for the window server.
   QVariantMap SurfaceEvents::state() const {
-    return impl_->state();
+    return impl_->active ? impl_->previous_state : impl_->state();
   }
 
   void SurfaceEvents::setVisibilityObserver(std::function<void(bool)> observer) {

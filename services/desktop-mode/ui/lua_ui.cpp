@@ -521,6 +521,7 @@ namespace {
 
         events_ = std::make_unique<ui::SurfaceEvents>(*surface_, *root_);
         events_->setVisibilityObserver([this](bool visible) {
+          shown_ = visible;
           pauseAnimations(!visible);
         });
       }
@@ -593,7 +594,8 @@ namespace {
         }
       }
 
-      pauseAnimations(!shown());
+      shown_ = !events_ || events_->state().value("visible").toBool();
+      pauseAnimations(!shown_);
       io_->activate();
       runtime_->activate();
       workbench_->activate();
@@ -837,6 +839,8 @@ namespace {
     QHash<QPair<QObject *, QString>, PropertyTarget> aliases_;
     QHash<QPair<QObject *, QString>, QPointer<QPropertyAnimation>> animations_;
     bool active_ = false;
+    // Whether the user can see the surface; animations run only while they can.
+    bool shown_ = true;
 
     void configureSurface(const QString &name, const QVariantMap &settings) {
       TELAR_TRACE("lua_ui.configure_surface");
@@ -1415,12 +1419,11 @@ namespace {
 
       if (active_) {
         adopted->start();
-        pauseAnimations(!shown());
+        // A zero-length animation has already finished.
+        if (!shown_ && adopted->state() == QAbstractAnimation::Running) {
+          adopted->pause();
+        }
       }
-    }
-
-    bool shown() const {
-      return !events_ || events_->state().value("visible").toBool();
     }
 
     // A surface nobody can see should draw nothing, so its animations wait until it is visible:

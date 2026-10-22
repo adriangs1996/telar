@@ -18,6 +18,8 @@ public:
   void reconcile(const std::vector<WorkspaceSummary> &workspaces, bool ready = true);
   void execute(const DesktopCommand &command);
   const DesktopState &state() const noexcept;
+  // What the state being notified differs in from the one notified before it.
+  const DesktopChanges &changes() const noexcept;
   std::optional<std::uint64_t> focusedWorkspace() const;
   std::uint64_t subscribe(std::function<void()> callback);
   void unsubscribe(std::uint64_t identifier);
@@ -29,6 +31,8 @@ public:
 private:
   NativeDesktop native_;
   DesktopState state_;
+  DesktopState notified_;
+  DesktopChanges changes_;
   std::vector<WorkspaceSummary> workspaces_;
   std::map<std::string, std::optional<std::uint64_t>> bindings_;
   std::map<std::uint64_t, std::function<void()>> subscribers_;

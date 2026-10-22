@@ -742,7 +742,7 @@ Fullscreen Spaces are excluded from this reconciliation.
 | --- | --- |
 | `desktop.configure_surface(name, settings)` | Configure `topbar` or `sidebar` with `module` and `options`. Available only while loading the global configuration. |
 | `desktop.state()` | Snapshot with `available`, `accessibility`, `displays`, `spaces`, optional `focused_space`, `pending_space`, and `error`. |
-| `desktop.on_change(callback)` | Subscribe to changed desktop snapshots; returns an unsubscribe function and delivers the current state on mount. |
+| `desktop.on_change(callback)` | Subscribe to changed desktop snapshots; returns an unsubscribe function and delivers the current state on mount. The callback gets the whole state and a second table telling what changed since the last delivery: `focus` (focused or visible Spaces), `spaces` (Spaces added, removed, moved or rebound), `displays`, `operation` (a pending activation or Space operation) and `status` (availability, Accessibility, error). The first delivery marks everything changed, and a state equal to the last is not delivered. |
 | `desktop.activate_space(id)` | Request activation of an existing Space. Completion is confirmed from macOS; failures appear in `error`. |
 | `desktop.bind_space(space_id, workspace_id)` | Associate an unbound managed Space with a workspace that has no Space or pending creation. A live association cannot be changed or cleared. |
 | `desktop.create_space(options)` | Create an ordinary Space for the required `workspace` ID, if it has no Space yet. Optional `display` selects a display ID; the default is the focused display. Returns a request ID. Normal workspace reconciliation handles creation automatically. |
@@ -819,8 +819,15 @@ that distinction instead of claiming success.
 
 Space/application/screen/wake notifications drive observation. A two-second
 fallback catches external catalog changes; pending operations are checked every
-20 ms, with a five-second timeout. A full event queue causes publication to be
-retried. Creation on another display waits for the new Space's placement before
+frame, with a five-second timeout. A full event queue causes publication to be
+retried. Snapshots are read on a thread of their own
+(`native-backends/macos/spaces_observer.mm`): during a Space switch the window
+server answers only after its animation, and the UI thread must not wait for it.
+Commands to SkyLight, and confirming or timing out what is pending, stay on the
+UI thread, which checks commands against the latest snapshot instead of taking
+one. A snapshot makes two window server calls whatever the number of Spaces: the
+catalog already carries each Space's name and type and each display's current
+Space. It lists displays through CoreGraphics, since AppKit is main-thread only. Creation on another display waits for the new Space's placement before
 reporting success. Failed placement attempts to remove that newly created Space.
 
 macOS handles window migration when an active Space is destroyed. Fullscreen

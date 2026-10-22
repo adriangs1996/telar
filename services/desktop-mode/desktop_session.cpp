@@ -7,6 +7,39 @@
 #include <tuple>
 
 namespace {
+  // A Space's place in the catalog, without what changes when the focus moves.
+  auto catalogEntry(const DesktopSpace &space) {
+    return std::tie(space.id,
+                    space.uuid,
+                    space.display,
+                    space.index,
+                    space.fullscreen,
+                    space.managed,
+                    space.workspace);
+  }
+
+  DesktopChanges changesBetween(const DesktopState &before, const DesktopState &after) {
+    DesktopChanges changes;
+    changes.displays = before.displays != after.displays;
+    changes.operation = before.pending_space != after.pending_space ||
+                        before.pending_operation != after.pending_operation ||
+                        before.completed_operation != after.completed_operation;
+    changes.status = before.available != after.available ||
+                     before.accessibility != after.accessibility || before.error != after.error;
+    changes.focus = before.focused_space != after.focused_space;
+    changes.spaces = before.spaces.size() != after.spaces.size();
+    const auto common = std::min(before.spaces.size(), after.spaces.size());
+    for (std::size_t index = 0; index < common; ++index) {
+      const auto &previous = before.spaces[index];
+      const auto &current = after.spaces[index];
+      changes.spaces = changes.spaces || catalogEntry(previous) != catalogEntry(current);
+      changes.focus = changes.focus || previous.visible != current.visible ||
+                      previous.focused != current.focused;
+    }
+
+    return changes;
+  }
+
   const char *describe(DesktopCommand::Kind kind) {
     switch (kind) {
     case DesktopCommand::Kind::activate:
@@ -465,6 +498,10 @@ const DesktopState &DesktopSession::state() const noexcept {
   return state_;
 }
 
+const DesktopChanges &DesktopSession::changes() const noexcept {
+  return changes_;
+}
+
 std::optional<std::uint64_t> DesktopSession::focusedWorkspace() const {
   const auto found = std::ranges::find(state_.spaces, state_.focused_space, &DesktopSpace::id);
   return found == state_.spaces.end() ? std::nullopt : found->workspace;
@@ -480,8 +517,16 @@ void DesktopSession::unsubscribe(std::uint64_t identifier) {
   subscribers_.erase(identifier);
 }
 
+// Subscribers learn what changed through changes(); a state equal to the last one notified is not
+// news, so nobody hears of it.
 void DesktopSession::notify() {
   TELAR_TRACE("spaces.notify");
+  changes_ = changesBetween(notified_, state_);
+  if (!changes_.any()) {
+    return;
+  }
+
+  notified_ = state_;
   std::vector<std::uint64_t> identifiers;
 
   for (const auto &[identifier, _] : subscribers_) {

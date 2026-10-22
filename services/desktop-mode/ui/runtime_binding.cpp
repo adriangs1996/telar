@@ -232,7 +232,19 @@ namespace ui {
     std::uint64_t desktop_subscription = 0;
     bool active = false;
 
-    void deliver(std::uint64_t identifier) {
+    // Desktop callbacks also get what changed, so they can skip the work for the rest.
+    static lua::Value changesValue(const DesktopChanges &changes) {
+      return lua::Value{lua::Value::Object{{"focus", lua::Value{changes.focus}},
+                                           {"spaces", lua::Value{changes.spaces}},
+                                           {"displays", lua::Value{changes.displays}},
+                                           {"operation", lua::Value{changes.operation}},
+                                           {"status", lua::Value{changes.status}}}};
+    }
+
+    // A callback's first delivery has seen nothing yet.
+    static constexpr DesktopChanges everything{true, true, true, true, true};
+
+    void deliver(std::uint64_t identifier, const DesktopChanges &changes) {
       TELAR_TRACE("lua.runtime.deliver");
       const auto found = callbacks.find(identifier);
 
@@ -240,11 +252,16 @@ namespace ui {
         return;
       }
 
+      const bool desktop_callback = found->second.desktop;
       struct Call {
         int callback;
         lua::Value value;
+        lua::Value changes;
+        int arguments;
       } call{found->second.reference,
-             found->second.desktop ? snapshot(desktop.state()) : runtimeSnapshot()};
+             desktop_callback ? snapshot(desktop.state()) : runtimeSnapshot(),
+             desktop_callback ? changesValue(changes) : lua::Value{},
+             desktop_callback ? 2 : 1};
 
       try {
         environment.withState(
@@ -253,8 +270,11 @@ namespace ui {
               lua_pushcfunction(state, lua::Environment::traceback);
               lua_rawgeti(state, LUA_REGISTRYINDEX, call->callback);
               lua::pushValue(state, call->value);
+              if (call->arguments == 2) {
+                lua::pushValue(state, call->changes);
+              }
 
-              if (lua_pcall(state, 1, 0, 2) != 0) {
+              if (lua_pcall(state, call->arguments, 0, 2) != 0) {
                 return lua_error(state);
               }
 
@@ -266,7 +286,7 @@ namespace ui {
       }
     }
 
-    void notify(bool desktop_changed = false) {
+    void notify(bool desktop_changed = false, const DesktopChanges &changes = everything) {
       TELAR_TRACE("lua.runtime.notify");
       std::vector<std::uint64_t> identifiers;
 
@@ -277,7 +297,7 @@ namespace ui {
       }
 
       for (const auto identifier : identifiers) {
-        deliver(identifier);
+        deliver(identifier, changes);
       }
     }
 
@@ -326,9 +346,13 @@ namespace ui {
     impl_->subscription = impl_->session.subscribe([this] {
       impl_->notify();
     });
+    // A runtime snapshot depends on the desktop only through the focused Space's workspace.
     impl_->desktop_subscription = impl_->desktop.subscribe([this] {
-      impl_->notify(true);
-      impl_->notify();
+      const auto &changes = impl_->desktop.changes();
+      impl_->notify(true, changes);
+      if (changes.focus || changes.spaces) {
+        impl_->notify();
+      }
     });
     impl_->notify(true);
     impl_->notify();
