@@ -122,10 +122,13 @@ desktop.configure_surface("workbench", {
     padding = 8,
     header_height = 28,
     font_size = 14,
-    colors = { background = "#1b1723", foreground = "#cdd6f4", accent = "#c4a7e7" },
   },
 })
 ```
+
+Pane and terminal colors, the terminal's ANSI palette and its font family come
+from the theme (see [Themes](#themes)). A pane whose agent is blocked or failed
+takes that status's border color even when another pane has the focus.
 
 Geometry uses logical desktop coordinates, including negative monitor origins.
 The available area excludes the OS menu bar/Dock and the actual topbar/sidebar
@@ -448,10 +451,13 @@ the focused macOS Space's associated workspace and tabs, with click selection an
 drag reordering. `ui/topbar/tabs.lua` implements layout and interaction
 entirely in Lua. The native backend owns the panel; Qt Quick draws its contents.
 
-`ui/sidebar/init.lua` creates the left sidebar. It lists runtime workspaces and their
-tab counts, highlights the focused workspace, and activates a workspace's macOS
-Space on click. The list scrolls when it exceeds the panel height. Selection is
-disabled while disconnected or while a Space operation is pending.
+`ui/sidebar/init.lua` creates the left sidebar: the agents panel. It lists every
+agent of the runtime in attention order, grouped as needs you, working, done, idle
+and unknown. Each card shows the session title, the provider and status, the age of
+the status, the last event, the plan's progress and where the agent runs. Clicking
+a card activates its workspace's Space, selects its tab and focuses its pane.
+Ages refresh with each agent snapshot; there is no timer. `ui/agent_status.lua`
+holds the status words, glyphs and colors every surface shares.
 
 `ui/wallpaper/init.lua` creates a background shared by all monitors and Spaces.
 The native backend maintains one wallpaper panel per connected monitor, covering
@@ -488,26 +494,18 @@ local desktop = require("telar.desktop")
 shortcuts.set_prefix("ctrl+s")
 require("shortcuts")()
 
-local colors = { background = "#1b1723", accent = "#c4a7e7" }
+desktop.theme({ colors = { accent = "#8FB8FF" } })
 
 desktop.configure_surface("wallpaper", {
   module = "wallpaper",
   options = {
-    color = "#16131d",
     image = "~/Pictures/wallpaper.jpg",
     fit = "cover",
   },
 })
 
-desktop.configure_surface("topbar", {
-  module = "topbar",
-  options = { colors = colors },
-})
-
-desktop.configure_surface("sidebar", {
-  module = "sidebar",
-  options = { colors = colors, title = "My fleet" },
-})
+desktop.configure_surface("topbar", { module = "topbar" })
+desktop.configure_surface("sidebar", { module = "sidebar" })
 ```
 
 `desktop.lua` executes once at startup and once per configuration reload, in an
@@ -526,11 +524,49 @@ copy through `ui.surface.options`. `ui.surface.name` and `ui.surface.module`
 identify the surface and its configured module. Local edits to an options table
 do not change the global configuration or another surface.
 
-The topbar and sidebar accept a `colors` table; the sidebar also accepts `title`.
 Custom modules can interpret their options freely. These options configure UI
-content, not native panel geometry.
+content, not native panel geometry; colors, fonts and radii belong to the theme.
 
-The wallpaper accepts `color`, optional `image` and `fit`. The image can be a Qt
+### Themes
+
+`desktop.theme(settings)` chooses how every surface and terminal looks. It is
+available only in `desktop.lua`; without a call, the desktop uses the `dark` theme.
+
+```lua
+desktop.theme({
+  preset = "dark",
+  colors = { accent = "#8FB8FF" },
+  status = { blocked = { color = "#FFB454" } },
+  fonts = { ui = "Inter", mono = "JetBrains Mono" },
+})
+```
+
+`preset` names a module under `themes/`, resolved like any other module: a
+`themes/<name>.lua` beside `desktop.lua` comes first, then `TELAR_DESKTOP_UI_DIR`,
+then the bundled themes. A preset module returns the tokens it changes. The other
+fields of `settings` change single tokens on top of the preset. Editing
+`desktop.lua` or a preset module reloads every surface with the new theme.
+
+`ui/themes/dark.lua` is the default theme and names every token: every theme is
+applied on top of it. A token that does not exist, a value of another type or a
+color that is not `#RRGGBB` or `#AARRGGBB` raises an error that names the token, and
+the previous configuration stays in place.
+
+| Group | Tokens |
+| --- | --- |
+| `colors` | `ground`, `chrome`, `raised`, `hover`, `selected`, `border`, `border_strong`, `text`, `muted`, `label`, `accent`, `on_accent`, `error` |
+| `status.<status>` | `color`, `text`, `background`, `border`, for `working`, `blocked`, `failed`, `done`, `ready` and `unknown` |
+| `terminal` | `background`, `foreground`, `selection` and the 16 `ansi` colors, from `black` to `bright_white` |
+| `fonts` | `ui` and `mono` families; empty uses the system's |
+| `radius` | `small`, `medium`, `large` |
+
+Every Lua environment reads the resolved theme with `require("telar.theme")`.
+`ui.text` uses `fonts.ui` unless the text sets `font.family`. The terminal renderer
+reads `terminal` and `fonts.mono`; the workbench's `font_size` option still sets the
+terminal's size.
+
+The wallpaper accepts optional `image` and `fit`; its background is the theme's
+`colors.ground`. The image can be a Qt
 URL, an absolute path, a path starting with `~/`, or a path relative to
 `desktop.lua`. `cover` fills the monitor with cropping, `contain` shows the whole
 image with the background color around it, `center` keeps the image centered at
@@ -804,7 +840,9 @@ counts the focused display's workspaces, and a new workspace goes to the focused
 | API | Behavior |
 | --- | --- |
 | `runtime.state()` | Detached snapshot with `connected`, workspace catalog `workspaces`, and `views`, one per workspace on screen (one per display), each with `workspace`, optional `active_tab` and ordered `tabs`. The focused workspace's `workspace`, `active_tab` and `tabs` also sit at the top level. |
-| `runtime.on_change(callback)` | Subscribe on the application thread; returns an unsubscribe function and delivers the current snapshot on mount. |
+| `runtime.on_change(callback)` | Subscribe on the application thread; returns an unsubscribe function and delivers the current snapshot on mount. Agent snapshots do not run it. |
+| `runtime.agents()` | The agents of the runtime's latest snapshot, in attention order: blocked and failed, working, done, ready, unknown; inside a group, the latest status change first. Each has `pane`, `generation`, `workspace`, `workspace_kind`, `tab`, `pane_index`, `workspace_label`, `tab_label`, `title`, `cwd_label`, `provider`, `name`, `status`, `last_event` and `status_age_s`; `blocked_reason` (`permission`, `question`, `plan` or `other`) while blocked, and `plan = {done, total, step}` while it has steps. Empty while disconnected. |
+| `runtime.on_agents(callback)` | Subscribe to agent snapshots; delivers `runtime.agents()` on mount and each time the runtime sends a new snapshot. Returns an unsubscribe function. |
 | `runtime.select_tab(id)` | Select a tab in whichever workspace on screen holds it. Returns a request ID. |
 | `runtime.move_tab(id, {before = anchor})` | Insert a tab before another tab in its workspace; `{after = anchor}` inserts after it. Returns a request ID. |
 | `runtime.create_workspace()` | Open a workspace on `$HOME` on the focused display, whose first pane runs the login shell. Returns a request ID; `created = {request, workspace}` reports the latest creation, without `workspace` when it failed. |

@@ -1,4 +1,5 @@
 local ui = require("telar.ui")
+local theme = require("telar.theme")
 
 local Spaces = {}
 Spaces.__index = Spaces
@@ -10,9 +11,18 @@ function Spaces.new(options)
   self.remove = options.remove
   self.root = ui.item({ clip = true })
   self.total_width = 0
-  self.add = ui.create("QtQuick", "Rectangle", { color = "#2b2336", radius = 6 }, self.root)
-  self.add_label =
-    ui.text({ parent = self.add, text = "+", color = "#c4a7e7", ["font.pixelSize"] = 18 })
+  self.add = ui.create(
+    "QtQuick",
+    "Rectangle",
+    { color = theme.colors.raised, radius = theme.radius.small },
+    self.root
+  )
+  self.add_label = ui.text({
+    parent = self.add,
+    text = "+",
+    color = theme.colors.accent,
+    ["font.pixelSize"] = 18,
+  })
   self.add.visible = self.create ~= nil
 
   ui.on(self.add, "pointer_up", function(event)
@@ -39,7 +49,7 @@ end
 
 function Spaces:make_view()
   local view = {}
-  view.panel = ui.create("QtQuick", "Rectangle", { radius = 6 }, self.root)
+  view.panel = ui.create("QtQuick", "Rectangle", { radius = theme.radius.small }, self.root)
   view.label = ui.text({
     parent = view.panel,
     textFormat = "PlainText",
@@ -51,7 +61,7 @@ function Spaces:make_view()
   view.close_label = ui.text({
     parent = view.close,
     text = "×",
-    color = "#aca3bb",
+    color = theme.colors.muted,
     ["font.pixelSize"] = 14,
   })
 
@@ -96,13 +106,14 @@ function Spaces:update(state)
     view.removable = not space.workspace and not space.fullscreen and counts[space.display] > 1
     view.width = view.removable and 52 or 34
     view.close.visible = view.removable
-    view.close_label.color = space.focused and "#1b1723" or "#aca3bb"
+    view.close_label.color = space.focused and theme.colors.on_accent or theme.colors.muted
     self.spaces_width = self.spaces_width + view.width + 4
     view.panel.visible = true
     view.label.text = tostring(space.index) .. (space.fullscreen and " ◇" or "")
-    view.label.color = space.focused and "#1b1723" or "#c4a7e7"
+    view.label.color = space.focused and theme.colors.on_accent or theme.colors.accent
     ui.animate(view.panel, "color", {
-      to = space.focused and "#c4a7e7" or (space.id == self.pending and "#574361" or "#2b2336"),
+      to = space.focused and theme.colors.accent
+        or (space.id == self.pending and theme.colors.border_strong or theme.colors.raised),
       duration_ms = 140,
     })
   end

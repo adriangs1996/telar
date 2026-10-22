@@ -1,42 +1,126 @@
 local ui = require("telar.ui")
+local runtime = require("telar.runtime")
 local workbench = require("telar.workbench")
+local theme = require("telar.theme")
+local AgentStatus = require("agent_status")
 local options = ui.surface.options
-local colors = options.colors or {}
+local colors = theme.colors
 local header_height = options.header_height or 28
+local title_x = 12
+local chip_padding = 8
+local chip_height = 20
 
 local background = ui.create("QtQuick", "Rectangle", {
-  color = colors.background or "#1b1723",
-  radius = 8,
+  color = colors.chrome,
+  radius = theme.radius.medium,
   ["border.width"] = 1,
-  ["border.color"] = colors.border or "#393142",
+  ["border.color"] = colors.border,
 })
 
+local glyph = AgentStatus.new_glyph()
+glyph.visible = false
+
 local title = ui.text({
-  color = colors.foreground or "#cdd6f4",
+  color = colors.text,
   textFormat = "PlainText",
+  elide = "ElideRight",
   ["font.pixelSize"] = 12,
-  x = 12,
+  x = title_x,
   y = 6,
 })
 
-local close =
-  ui.text({ text = "×", color = colors.foreground or "#cdd6f4", y = 4, ["font.pixelSize"] = 16 })
+local chip = ui.create("QtQuick", "Rectangle", {
+  height = chip_height,
+  radius = theme.radius.small,
+  visible = false,
+})
+
+local chip_label = ui.text({
+  parent = chip,
+  textFormat = "PlainText",
+  x = chip_padding,
+  ["font.pixelSize"] = 11,
+})
+
+local close = ui.text({
+  text = "×",
+  color = colors.muted,
+  y = 4,
+  ["font.pixelSize"] = 16,
+})
+
 local header = ui.item({ height = header_height })
 local resize = ui.item({ width = 8, height = 8 })
 local drag
+local pane_state = {}
+local agents = runtime.agents()
+local agent
+
+local function find_agent()
+  for _, candidate in ipairs(agents) do
+    if candidate.pane == pane_state.pane then
+      return candidate
+    end
+  end
+end
+
+-- An agent that needs the person colors the border even when the pane is not focused.
+local function paint()
+  local width = pane_state.width or 0
+  local palette = agent and AgentStatus.colors(agent)
+  local urgent = agent and AgentStatus.group(agent) == "needs_input"
+  local text_x = title_x
+
+  glyph.visible = agent ~= nil
+  chip.visible = agent ~= nil and agent.status ~= "ready"
+
+  if agent then
+    AgentStatus.paint_glyph(glyph, agent)
+    glyph.x = title_x
+    glyph.y = math.floor((header_height - AgentStatus.glyph_size) / 2)
+    text_x = title_x + AgentStatus.glyph_size + 8
+    title.text = agent.name .. "  " .. AgentStatus.title(agent)
+    chip.color = palette.background
+    chip_label.color = palette.text
+    chip_label.text = AgentStatus.label(agent) .. " · " .. AgentStatus.age(agent.status_age_s)
+    chip.width = chip_label.implicitWidth + 2 * chip_padding
+    chip.x = width - 32 - chip.width
+    chip.y = math.floor((header_height - chip_height) / 2)
+    chip_label.y = math.floor((chip_height - chip_label.implicitHeight) / 2)
+  else
+    title.text = pane_state.pane and ("Pane " .. pane_state.pane) or "Telar"
+  end
+
+  title.x = text_x
+  title.width = math.max(0, (chip.visible and chip.x or width - 32) - text_x - 8)
+  background["border.color"] = (urgent and palette.border)
+    or (pane_state.focused and colors.accent)
+    or colors.border
+end
 
 -- Reads one snapshot: each ui.surface field read builds the whole surface state.
 local function update(state)
+  local moved = state.pane ~= pane_state.pane
+  pane_state = state
   background.width = state.width
   background.height = state.height
   header.width = state.width - 32
   close.x = state.width - 24
   resize.x = state.width - 8
   resize.y = state.height - 8
-  title.text = state.pane and ("Pane " .. state.pane) or "Telar"
-  background["border.color"] = state.focused and (colors.accent or "#c4a7e7")
-    or (colors.border or "#393142")
+
+  if moved then
+    agent = find_agent()
+  end
+
+  paint()
 end
+
+runtime.on_agents(function(next_agents)
+  agents = next_agents
+  agent = find_agent()
+  paint()
+end)
 
 -- The pane's own state carries its size, focus and pane, so a change elsewhere in the
 -- workbench does not run every pane's update.

@@ -2,19 +2,19 @@ local desktop = require("telar.desktop")
 
 require("shortcuts")()
 
-local colors = { background = "#1b1723", accent = "#c4a7e7" }
+-- The default theme; pick another with preset = "<name>" (themes/<name>.lua in this directory)
+-- and override single tokens, e.g. colors = { accent = "#8FB8FF" }.
+desktop.theme({ preset = "dark" })
 
 desktop.configure_surface("wallpaper", {
   module = "wallpaper",
-  options = { color = "#16131d", fit = "cover" },
+  options = { fit = "cover" },
 })
 
 desktop.configure_surface("topbar", {
   module = "topbar",
-  options = { colors = colors },
 })
 
 desktop.configure_surface("sidebar", {
   module = "sidebar",
-  options = { colors = colors },
 })

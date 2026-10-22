@@ -5,7 +5,9 @@
 #include "desktop_session.hpp"
 #include "../trace.hpp"
 #include <QDebug>
+#include <algorithm>
 #include <charconv>
+#include <chrono>
 #include <map>
 #include <limits>
 #include <stdexcept>
@@ -200,6 +202,58 @@ namespace {
     return {std::move(result)};
   }
 
+  // Workspace, tab and pane IDs match the ones in the runtime and workbench snapshots. A reason
+  // appears only while the agent is blocked, and a plan only while it has steps.
+  lua::Value agentsSnapshot(const RuntimeAgents &agents) {
+    TELAR_TRACE("lua.runtime.agents");
+    lua::Value::Array result;
+
+    if (!agents) {
+      return {std::move(result)};
+    }
+
+    const auto now = std::chrono::steady_clock::now();
+
+    for (const auto &agent : *agents) {
+      const auto age =
+          std::chrono::duration_cast<std::chrono::seconds>(now - agent.status_changed).count();
+      lua::Value::Object value{
+          {"pane", {std::to_string(agent.pane)}},
+          {"generation", {std::to_string(agent.generation)}},
+          {"workspace", {std::to_string(agent.workspace.id)}},
+          {"workspace_kind", {std::string(agent.workspace.worktree ? "worktree" : "workspace")}},
+          {"tab", {std::to_string(agent.tab)}},
+          {"pane_index", {static_cast<double>(agent.pane_index)}},
+          {"workspace_label", {agent.workspace_label}},
+          {"tab_label", {agent.tab_label}},
+          {"title", {agent.title}},
+          {"cwd_label", {agent.cwd_label}},
+          {"provider", {agent.provider}},
+          {"name", {agent.name}},
+          {"status", {agent.status}},
+          {"last_event", {agent.last_event}},
+          {"status_age_s", {static_cast<double>(std::max<std::int64_t>(0, age))}},
+      };
+
+      if (agent.blocked_reason != "none") {
+        value.emplace("blocked_reason", lua::Value{agent.blocked_reason});
+      }
+
+      if (agent.plan_total) {
+        value.emplace("plan",
+                      lua::Value{lua::Value::Object{
+                          {"done", {static_cast<double>(agent.plan_done)}},
+                          {"total", {static_cast<double>(agent.plan_total)}},
+                          {"step", {agent.plan_step}},
+                      }});
+      }
+
+      result.push_back({std::move(value)});
+    }
+
+    return {std::move(result)};
+  }
+
   QVariant variant(const lua::Value &value) {
     if (const auto *fields = std::get_if<lua::Value::Object>(&value.data)) {
       QVariantMap result;
@@ -245,13 +299,14 @@ namespace ui {
 
     struct Callback {
       int reference;
-      bool desktop;
+      Channel channel;
     };
 
     std::map<std::uint64_t, Callback> callbacks;
     std::uint64_t next_identifier = 1;
     std::uint64_t subscription = 0;
     std::uint64_t desktop_subscription = 0;
+    std::uint64_t agents_subscription = 0;
     bool active = false;
 
     // Desktop callbacks also get what changed, so they can skip the work for the rest.
@@ -274,7 +329,8 @@ namespace ui {
         return;
       }
 
-      const bool desktop_callback = found->second.desktop;
+      const auto channel = found->second.channel;
+      const bool desktop_callback = channel == Channel::desktop;
 
       struct Call {
         int callback;
@@ -282,7 +338,7 @@ namespace ui {
         lua::Value changes;
         int arguments;
       } call{found->second.reference,
-             desktop_callback ? snapshot(desktop.state()) : runtimeSnapshot(),
+             value(channel),
              desktop_callback ? changesValue(changes) : lua::Value{},
              desktop_callback ? 2 : 1};
 
@@ -309,12 +365,25 @@ namespace ui {
       }
     }
 
-    void notify(bool desktop_changed = false, const DesktopChanges &changes = everything) {
+    lua::Value value(Channel channel) const {
+      switch (channel) {
+      case Channel::runtime:
+        return runtimeSnapshot();
+      case Channel::desktop:
+        return snapshot(desktop.state());
+      case Channel::agents:
+        return agentsSnapshot(session.state().agents);
+      }
+
+      return {};
+    }
+
+    void notify(Channel channel, const DesktopChanges &changes = everything) {
       TELAR_TRACE("lua.runtime.notify");
       std::vector<std::uint64_t> identifiers;
 
       for (const auto &[identifier, callback] : callbacks) {
-        if (callback.desktop == desktop_changed) {
+        if (callback.channel == channel) {
           identifiers.push_back(identifier);
         }
       }
@@ -358,24 +427,29 @@ namespace ui {
     TELAR_TRACE("lua.runtime.activate");
     impl_->active = true;
     impl_->subscription = impl_->session.subscribe([this] {
-      impl_->notify();
+      impl_->notify(Channel::runtime);
+    });
+    impl_->agents_subscription = impl_->session.subscribeAgents([this] {
+      impl_->notify(Channel::agents);
     });
     // A runtime snapshot depends on the desktop only through the focused Space's workspace.
     impl_->desktop_subscription = impl_->desktop.subscribe([this] {
       const auto &changes = impl_->desktop.changes();
-      impl_->notify(true, changes);
+      impl_->notify(Channel::desktop, changes);
       if (changes.focus || changes.spaces) {
-        impl_->notify();
+        impl_->notify(Channel::runtime);
       }
     });
-    impl_->notify(true);
-    impl_->notify();
+    impl_->notify(Channel::desktop);
+    impl_->notify(Channel::runtime);
+    impl_->notify(Channel::agents);
   }
 
   void RuntimeBinding::deactivate() {
     TELAR_TRACE("lua.runtime.deactivate");
     impl_->active = false;
     impl_->session.unsubscribe(std::exchange(impl_->subscription, 0));
+    impl_->session.unsubscribe(std::exchange(impl_->agents_subscription, 0));
     impl_->desktop.unsubscribe(std::exchange(impl_->desktop_subscription, 0));
   }
 
@@ -387,13 +461,17 @@ namespace ui {
     return variant(snapshot(impl_->desktop.state())).toMap();
   }
 
-  std::uint64_t RuntimeBinding::subscribe(int callback, bool desktop) {
+  QVariantList RuntimeBinding::agents() const {
+    return variant(agentsSnapshot(impl_->session.state().agents)).toList();
+  }
+
+  std::uint64_t RuntimeBinding::subscribe(int callback, Channel channel) {
     if (impl_->callbacks.size() == subscription_limit) {
       throw std::runtime_error("Too many runtime subscriptions in one UI generation");
     }
 
     const auto identifier = impl_->next_identifier++;
-    impl_->callbacks.emplace(identifier, Impl::Callback{callback, desktop});
+    impl_->callbacks.emplace(identifier, Impl::Callback{callback, channel});
     return identifier;
   }
 

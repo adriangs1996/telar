@@ -63,6 +63,7 @@ function shortcuts.bind_global(key, callback)
 end
 
 runtime.state = core.runtime_state
+runtime.agents = core.runtime_agents
 runtime.select_tab = core.runtime_select
 runtime.move_tab = core.runtime_move
 runtime.create_workspace = core.runtime_create_workspace
@@ -88,6 +89,18 @@ end
 function desktop.on_change(callback)
   assert(type(callback) == "function", "desktop.on_change expects a callback")
   local identifier = core.desktop_on(nil, nil, callback)
+
+  return function()
+    if identifier then
+      core.runtime_off(identifier)
+      identifier = nil
+    end
+  end
+end
+
+function runtime.on_agents(callback)
+  assert(type(callback) == "function", "runtime.on_agents expects a callback")
+  local identifier = core.agents_on(nil, nil, callback)
 
   return function()
     if identifier then
@@ -202,6 +215,89 @@ package.loaded["telar.desktop"] = desktop
 package.loaded["telar.shortcuts"] = shortcuts
 package.loaded["telar.workbench"] = workbench
 
+local default_theme = "dark"
+
+local function copy(value)
+  if type(value) ~= "table" then
+    return value
+  end
+
+  local result = {}
+
+  for key, element in pairs(value) do
+    result[key] = copy(element)
+  end
+
+  return result
+end
+
+-- The default theme names every token, so an override must name one of them and keep its type.
+-- A token whose default is a color takes only #RRGGBB or #AARRGGBB.
+local function apply_theme(into, overrides, path)
+  for key, value in pairs(overrides) do
+    if type(key) ~= "string" then
+      error("Theme keys must be names, found " .. tostring(key) .. " in " .. path, 3)
+    end
+
+    local name = path == "" and key or (path .. "." .. key)
+    local current = into[key]
+
+    if current == nil then
+      error("Unknown theme token " .. name, 3)
+    end
+
+    if type(value) ~= type(current) then
+      error("Theme token " .. name .. " must be a " .. type(current), 3)
+    end
+
+    if type(current) == "table" then
+      apply_theme(current, value, name)
+    else
+      local color = type(current) == "string" and current:sub(1, 1) == "#"
+
+      if color and not (value:match("^#%x+$") and (#value == 7 or #value == 9)) then
+        error("Theme token " .. name .. " must be a #RRGGBB or #AARRGGBB color", 3)
+      end
+
+      into[key] = value
+    end
+  end
+end
+
+-- `preset` names a module under themes/, so a theme can live in the configuration directory as
+-- themes/<name>.lua and return the tokens it changes. The other fields override single tokens.
+local function resolve_theme(settings)
+  assert(type(settings) == "table", "desktop.theme expects a settings table")
+  local preset = settings.preset or default_theme
+  assert(
+    type(preset) == "string" and preset:match("^[%w_-]+$"),
+    "Theme preset must be a name of letters, digits, - or _"
+  )
+
+  local resolved = copy(require("themes." .. default_theme))
+
+  if preset ~= default_theme then
+    local tokens = require("themes." .. preset)
+    assert(type(tokens) == "table", "Theme preset " .. preset .. " must return a table")
+    apply_theme(resolved, tokens, "")
+  end
+
+  local overrides = copy(settings)
+  overrides.preset = nil
+  apply_theme(resolved, overrides, "")
+
+  return resolved
+end
+
+function desktop.theme(settings)
+  local resolved = resolve_theme(settings or {})
+  core.configure_theme(resolved)
+  telar.theme = resolved
+  package.loaded["telar.theme"] = resolved
+
+  return resolved
+end
+
 ui.create = core.create
 ui.get = core.get
 ui.set = core.set
@@ -257,6 +353,20 @@ end
 
 local surface_config = core.root and core.surface_config()
 
+-- Surfaces receive the theme desktop.lua resolved; desktop.lua starts from the default one.
+if surface_config then
+  telar.theme = surface_config.theme
+  package.loaded["telar.theme"] = surface_config.theme
+else
+  desktop.theme()
+end
+
+local text_defaults = {}
+
+if telar.theme.fonts.ui ~= "" then
+  text_defaults["font.family"] = telar.theme.fonts.ui
+end
+
 ui.surface = setmetatable({}, {
   __index = function(_, name)
     assert(surface_config, "desktop.lua has no surface; configure surfaces through telar.desktop")
@@ -280,9 +390,13 @@ ui.surface = setmetatable({}, {
   end,
 })
 
-local function item(kind, options)
+local function item(kind, options, defaults)
   options = options or {}
   local properties = {}
+
+  for name, value in pairs(defaults or {}) do
+    properties[name] = value
+  end
 
   for name, value in pairs(options) do
     if name ~= "parent" then
@@ -298,7 +412,7 @@ function ui.item(options)
 end
 
 function ui.text(options)
-  return item("Text", options)
+  return item("Text", options, text_defaults)
 end
 
 function ui.image(options)

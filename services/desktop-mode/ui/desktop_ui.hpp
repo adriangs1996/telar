@@ -23,6 +23,8 @@ namespace ui {
     void attach(LuaSurface &surface, SurfaceKind kind);
     void detach(LuaSurface &surface);
     QVariantMap options(SurfaceKind kind) const;
+    // The resolved theme desktop.lua chose; every surface receives it as `telar.theme`.
+    const QVariantMap &theme() const noexcept;
     QRectF workArea(std::uint32_t display, QRectF available) const;
     std::function<void()> changed;
 
@@ -37,6 +39,7 @@ namespace ui {
     bool config_required_ = false;
     QVariantMap settings_;
     QString prefix_;
+    QVariantMap theme_;
     std::map<LuaSurface *, SurfaceKind> surfaces_;
     std::uint64_t config_watch_ = 0;
     QTimer reload_timer_;
@@ -49,6 +52,7 @@ namespace ui {
     void prepareSurface(LuaSurface &surface,
                         SurfaceKind kind,
                         const QVariantMap &settings,
-                        const QString &prefix);
+                        const QString &prefix,
+                        const QVariantMap &theme);
   };
 } // namespace ui

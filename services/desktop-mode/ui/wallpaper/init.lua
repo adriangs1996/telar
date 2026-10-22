@@ -1,5 +1,6 @@
 local ui = require("telar.ui")
 local fs = require("telar.fs")
+local theme = require("telar.theme")
 local options = ui.surface.options
 
 local fill_modes = {
@@ -37,7 +38,7 @@ local function image_source(path)
 end
 
 local background = ui.create("QtQuick", "Rectangle", {
-  color = options.color or "#16131d",
+  color = theme.colors.ground,
   clip = true,
 })
 

@@ -827,7 +827,8 @@ namespace workbench {
       }
 
       try {
-        const auto configured = desktop.options(ui::SurfaceKind::workbench);
+        auto configured = desktop.options(ui::SurfaceKind::workbench);
+        configured.insert(QStringLiteral("theme"), desktop.theme());
         const bool reconfigure = configured != options;
         options = configured;
         for (auto &[id, workspace] : workspaces) {

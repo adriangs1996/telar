@@ -57,13 +57,16 @@ namespace {
     surface_state,
     surface_config,
     configure_surface,
+    configure_theme,
     animate,
     runtime_state,
+    runtime_agents,
     workbench_state,
     workbench_command,
     workbench_on,
     workbench_off,
     runtime_on,
+    agents_on,
     runtime_off,
     runtime_select,
     runtime_move,
@@ -448,7 +451,8 @@ namespace {
       }
 
       if ((call->operation == Operation::on || call->operation == Operation::runtime_on ||
-           call->operation == Operation::workbench_on || call->operation == Operation::desktop_on ||
+           call->operation == Operation::agents_on || call->operation == Operation::workbench_on ||
+           call->operation == Operation::desktop_on ||
            call->operation == Operation::shortcut_bind) &&
           index == 2) {
         luaL_checktype(state, -1, LUA_TFUNCTION);
@@ -574,6 +578,10 @@ namespace {
 
     const QVariantMap &settings() const {
       return configured_surfaces_;
+    }
+
+    const QVariantMap &theme() const {
+      return configured_theme_;
     }
 
     QString prefix() const {
@@ -718,8 +726,17 @@ namespace {
       case Operation::configure_surface:
         configureSurface(stringValue(values[0]), mapValue(values[1]));
         break;
+      case Operation::configure_theme:
+        if (surface_ || active_) {
+          throw std::runtime_error("desktop.theme is only available while loading desktop.lua");
+        }
+
+        configured_theme_ = mapValue(values[0]);
+        break;
       case Operation::runtime_state:
         return encode(runtime_->state());
+      case Operation::runtime_agents:
+        return encode(runtime_->agents());
       case Operation::workbench_state:
         return encode(services_.workbench ? services_.workbench->state() : QVariantMap{});
       case Operation::workbench_command: {
@@ -751,9 +768,13 @@ namespace {
       case Operation::desktop_state:
         return encode(runtime_->desktopState());
       case Operation::runtime_on:
+      case Operation::agents_on:
       case Operation::desktop_on: {
-        const auto identifier =
-            runtime_->subscribe(request.callback, request.operation == Operation::desktop_on);
+        const auto channel =
+            request.operation == Operation::desktop_on  ? ui::RuntimeBinding::Channel::desktop
+            : request.operation == Operation::agents_on ? ui::RuntimeBinding::Channel::agents
+                                                        : ui::RuntimeBinding::Channel::runtime;
+        const auto identifier = runtime_->subscribe(request.callback, channel);
         request.callback = LUA_NOREF;
         return encode(static_cast<double>(identifier));
       }
@@ -829,6 +850,7 @@ namespace {
     QuickSurface *surface_;
     QVariantMap surface_config_;
     QVariantMap configured_surfaces_;
+    QVariantMap configured_theme_;
     lua::Environment environment_;
     std::unique_ptr<QQuickItem> root_;
     std::unique_ptr<QObject> lifetime_;
@@ -947,12 +969,15 @@ namespace {
                 {"surface_state", Operation::surface_state},
                 {"surface_config", Operation::surface_config},
                 {"configure_surface", Operation::configure_surface},
+                {"configure_theme", Operation::configure_theme},
                 {"runtime_state", Operation::runtime_state},
+                {"runtime_agents", Operation::runtime_agents},
                 {"workbench_state", Operation::workbench_state},
                 {"workbench_command", Operation::workbench_command},
                 {"workbench_on", Operation::workbench_on},
                 {"workbench_off", Operation::workbench_off},
                 {"runtime_on", Operation::runtime_on},
+                {"agents_on", Operation::agents_on},
                 {"runtime_off", Operation::runtime_off},
                 {"runtime_select", Operation::runtime_select},
                 {"runtime_move", Operation::runtime_move},
@@ -1645,6 +1670,14 @@ namespace ui {
     }
 
     return impl_->prepared->prefix();
+  }
+
+  QVariantMap LuaUi::preparedTheme() const {
+    if (!impl_->prepared) {
+      throw std::runtime_error("No prepared desktop configuration");
+    }
+
+    return impl_->prepared->theme();
   }
 
   void LuaUi::setReloadHandler(std::function<void()> handler) {

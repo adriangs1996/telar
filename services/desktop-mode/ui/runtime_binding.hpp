@@ -14,6 +14,13 @@ namespace lua {
 namespace ui {
   class RuntimeBinding final {
   public:
+    // What a Lua subscription follows: the runtime catalog, the desktop's Spaces or the agents.
+    enum class Channel {
+      runtime,
+      desktop,
+      agents
+    };
+
     RuntimeBinding(lua::Environment &environment, RuntimeSession &session, DesktopSession &desktop);
     ~RuntimeBinding();
 
@@ -21,7 +28,8 @@ namespace ui {
     void deactivate();
     QVariantMap state() const;
     QVariantMap desktopState() const;
-    std::uint64_t subscribe(int callback, bool desktop = false);
+    QVariantList agents() const;
+    std::uint64_t subscribe(int callback, Channel channel);
     void unsubscribe(std::uint64_t identifier);
     QString selectTab(const QVariant &tab);
     QString moveTab(const QVariant &tab, const QVariantMap &options);

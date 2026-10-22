@@ -25,7 +25,10 @@ public:
   void interrupt() noexcept;
   void apply(RuntimeState state);
   const RuntimeState &state() const noexcept;
+  // Catalog subscribers run when anything but the agents changes; agent subscribers run when a
+  // new agent snapshot arrives. Both share one identifier space.
   std::uint64_t subscribe(std::function<void()> callback);
+  std::uint64_t subscribeAgents(std::function<void()> callback);
   void unsubscribe(std::uint64_t identifier);
 
   // Act on the visible workspace that holds the tab.

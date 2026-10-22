@@ -31,6 +31,7 @@ namespace ui {
     void discard();
     QVariantMap preparedSettings() const;
     QString preparedPrefix() const;
+    QVariantMap preparedTheme() const;
     void setReloadHandler(std::function<void()> handler);
 
   private:

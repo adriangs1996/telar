@@ -1,14 +1,19 @@
 #pragma once
 
 #include "terminal_screen.hpp"
+#include <QColor>
 #include <QQuickItem>
 #include <QTimer>
 #include <QFont>
 #include <QSet>
+#include <array>
 #include <functional>
 #include <memory>
 
 namespace workbench {
+  // The first 16 indexed colors.
+  using TerminalPalette = std::array<QColor, 16>;
+
   class TerminalItem final : public QQuickItem {
   public:
     explicit TerminalItem(std::shared_ptr<TerminalScreen> screen, QQuickItem *parent);
@@ -39,7 +44,9 @@ namespace workbench {
     std::shared_ptr<TerminalScreen> screen_;
     QFont font_;
     bool fixed_pitch_ = true;
-    QColor foreground_{"#cdd6f4"}, background_{"#1b1723"}, selection_{"#45475a"};
+    // The theme sets these on configure; until then cells paint with Qt's defaults.
+    QColor foreground_, background_, selection_;
+    TerminalPalette palette_{};
     QSizeF cell_{8, 16};
     double ascent_ = 12;
     std::uint64_t appearance_ = 1;

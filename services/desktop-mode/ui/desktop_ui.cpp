@@ -88,7 +88,8 @@ namespace ui {
   void DesktopUi::prepareSurface(LuaSurface &surface,
                                  SurfaceKind kind,
                                  const QVariantMap &settings,
-                                 const QString &prefix) {
+                                 const QString &prefix,
+                                 const QVariantMap &theme) {
     TELAR_TRACE("ui.desktop.prepare_surface");
     const auto name = surfaceName(kind);
     auto config =
@@ -98,6 +99,8 @@ namespace ui {
     for (auto it = surface.configuration_.cbegin(); it != surface.configuration_.cend(); ++it) {
       config.insert(it.key(), it.value());
     }
+
+    config.insert(QStringLiteral("theme"), theme);
     surface.ui_.prepare("require(require(\"telar.ui\").surface.module)",
                         "@telar/surface",
                         QFileInfo(config_path_).absolutePath(),
@@ -111,7 +114,7 @@ namespace ui {
       throw std::runtime_error("Desktop surface is already attached");
     }
 
-    prepareSurface(surface, kind, settings_, prefix_);
+    prepareSurface(surface, kind, settings_, prefix_, theme_);
 
     surface.ui_.setReloadHandler([this, kind] {
       dirty_surfaces_.insert(kind);
@@ -148,14 +151,16 @@ namespace ui {
 
       auto settings = configuration_.preparedSettings();
       auto prefix = configuration_.preparedPrefix();
+      auto theme = configuration_.preparedTheme();
 
       for (const auto &[surface, kind] : surfaces_) {
-        prepareSurface(*surface, kind, settings, prefix);
+        prepareSurface(*surface, kind, settings, prefix, theme);
       }
 
       LuaUi::commit(environments);
       settings_.swap(settings);
       prefix_.swap(prefix);
+      theme_.swap(theme);
       if (changed) {
         changed();
       }
@@ -193,7 +198,7 @@ namespace ui {
         for (const auto &[surface, attached_kind] : surfaces_) {
           if (attached_kind == kind) {
             environments.push_back(&surface->ui_);
-            prepareSurface(*surface, kind, settings_, prefix_);
+            prepareSurface(*surface, kind, settings_, prefix_, theme_);
           }
         }
 
@@ -212,6 +217,10 @@ namespace ui {
 
   QVariantMap DesktopUi::options(SurfaceKind kind) const {
     return settings_.value(surfaceName(kind)).toMap().value("options").toMap();
+  }
+
+  const QVariantMap &DesktopUi::theme() const noexcept {
+    return theme_;
   }
 
   QRectF DesktopUi::workArea(std::uint32_t display, QRectF available) const {

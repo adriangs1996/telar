@@ -1,4 +1,5 @@
 local ui = require("telar.ui")
+local theme = require("telar.theme")
 
 local Tabs = {}
 Tabs.__index = Tabs
@@ -6,12 +7,12 @@ Tabs.__index = Tabs
 local gap = 6
 local drag_threshold = 6
 local colors = {
-  selected = "#3b344b",
-  hover = "#282331",
-  idle = "#1d1925",
-  text = "#e8e1f3",
-  muted = "#aca3bb",
-  accent = "#c4a7e7",
+  selected = theme.colors.selected,
+  hover = theme.colors.hover,
+  idle = theme.colors.raised,
+  text = theme.colors.text,
+  muted = theme.colors.muted,
+  accent = theme.colors.accent,
 }
 
 local function copy(values)
@@ -107,7 +108,7 @@ function Tabs:make_view()
   local view = {
     panel = ui.create("QtQuick", "Rectangle", {
       height = self.height,
-      radius = 8,
+      radius = theme.radius.small,
       color = colors.idle,
     }, self.viewport),
   }

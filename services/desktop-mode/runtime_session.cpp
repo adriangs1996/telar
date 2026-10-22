@@ -20,6 +20,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 #include <unistd.h>
@@ -83,6 +84,69 @@ namespace {
       }
     }
   };
+
+  // The attention order every client shares (src/client/agents/attention.zig).
+  enum class AttentionGroup {
+    needs_input,
+    working,
+    ready_unseen,
+    idle,
+    unknown
+  };
+
+  AttentionGroup attention(telar::AgentStatus status) {
+    switch (status) {
+    case telar::AgentStatus::blocked:
+    case telar::AgentStatus::failed:
+      return AttentionGroup::needs_input;
+    case telar::AgentStatus::working:
+      return AttentionGroup::working;
+    case telar::AgentStatus::done:
+      return AttentionGroup::ready_unseen;
+    case telar::AgentStatus::ready:
+      return AttentionGroup::idle;
+    case telar::AgentStatus::unknown:
+      return AttentionGroup::unknown;
+    }
+
+    return AttentionGroup::unknown;
+  }
+
+  const char *describe(telar::AgentStatus status) {
+    switch (status) {
+    case telar::AgentStatus::working:
+      return "working";
+    case telar::AgentStatus::blocked:
+      return "blocked";
+    case telar::AgentStatus::ready:
+      return "ready";
+    case telar::AgentStatus::failed:
+      return "failed";
+    case telar::AgentStatus::done:
+      return "done";
+    case telar::AgentStatus::unknown:
+      return "unknown";
+    }
+
+    return "unknown";
+  }
+
+  const char *describe(telar::AgentBlockedReason reason) {
+    switch (reason) {
+    case telar::AgentBlockedReason::permission:
+      return "permission";
+    case telar::AgentBlockedReason::question:
+      return "question";
+    case telar::AgentBlockedReason::plan:
+      return "plan";
+    case telar::AgentBlockedReason::other:
+      return "other";
+    case telar::AgentBlockedReason::none:
+      return "none";
+    }
+
+    return "none";
+  }
 
   RuntimeWorkspace workspace(const telar::WorkspaceLocation &value) {
     return {value.id, value.kind == telar::WorkspaceLocation::Kind::worktree};
@@ -150,6 +214,7 @@ struct RuntimeSession::Impl {
   std::atomic<std::uint64_t> next_request{1};
   std::uint64_t next_subscription = 1;
   std::map<std::uint64_t, std::function<void()>> subscribers;
+  std::map<std::uint64_t, std::function<void()>> agent_subscribers;
   std::mutex mutex;
   std::deque<Command> commands;
   std::optional<Command> pending_show;
@@ -181,6 +246,23 @@ struct RuntimeSession::Impl {
   void wake() noexcept {
     const char byte = 1;
     while (::write(signal[1], &byte, 1) < 0 && errno == EINTR) {
+    }
+  }
+
+  // A callback may subscribe or unsubscribe others, so each runs only while still subscribed.
+  static void notify(std::map<std::uint64_t, std::function<void()>> &callbacks) {
+    std::vector<std::uint64_t> identifiers;
+    identifiers.reserve(callbacks.size());
+
+    for (const auto &[identifier, _] : callbacks) {
+      identifiers.push_back(identifier);
+    }
+
+    for (const auto identifier : identifiers) {
+      if (const auto callback = callbacks.find(identifier); callback != callbacks.end()) {
+        auto invoke = callback->second;
+        invoke();
+      }
     }
   }
 
@@ -480,6 +562,55 @@ struct RuntimeSession::Impl {
       complete(reply.request_id, true);
     }
 
+    // Ordered once here, so every surface lists agents the same way.
+    void agents(const telar::AgentSnapshot &reply) {
+      TELAR_TRACE("catalog.agents");
+      std::vector<const telar::AgentSnapshotEntry *> entries;
+      entries.reserve(reply.entries.size());
+
+      for (const auto &entry : reply.entries) {
+        entries.push_back(&entry);
+      }
+
+      std::ranges::sort(entries, {}, [](const telar::AgentSnapshotEntry *entry) {
+        return std::tuple{attention(entry->status),
+                          entry->status_age_s,
+                          entry->pane_id,
+                          entry->pane_generation};
+      });
+
+      const auto now = Clock::now();
+      auto list = std::make_shared<std::vector<RuntimeAgent>>();
+      list->reserve(entries.size());
+
+      for (const auto *entry : entries) {
+        list->push_back({
+            .pane = entry->pane_id,
+            .generation = entry->pane_generation,
+            .workspace = workspace(entry->location.workspace),
+            .tab = entry->location.tab_id,
+            .pane_index = entry->pane_index,
+            .workspace_label = std::string(entry->workspace_label),
+            .tab_label = std::string(entry->tab_label),
+            .title = std::string(entry->session_title),
+            .cwd_label = std::string(entry->cwd_label),
+            .provider = std::string(entry->provider_name),
+            .name = std::string(entry->display_name),
+            .status = describe(entry->status),
+            .blocked_reason = describe(entry->blocked_reason),
+            .last_event = std::string(entry->last_event),
+            .plan_step = std::string(entry->plan_step),
+            .plan_done = entry->plan_done,
+            .plan_total = entry->plan_total,
+            .status_changed = now - std::chrono::seconds{entry->status_age_s},
+        });
+      }
+
+      qCDebug(telar_log::catalog) << "agent snapshot revision" << reply.revision << "with"
+                                  << list->size() << "agents";
+      state.agents = std::move(list);
+    }
+
     void receive(std::span<const telar::Byte> payload) {
       TELAR_TRACE("catalog.receive");
       switch (static_cast<telar::ServerTag>(payload.front())) {
@@ -551,6 +682,9 @@ struct RuntimeSession::Impl {
 
       case telar::ServerTag::tab_moved:
         moved(decode<telar::TabMoved>(payload));
+        break;
+      case telar::ServerTag::agent_snapshot:
+        agents(decode<telar::AgentSnapshot>(payload));
         break;
       case telar::ServerTag::resync_required:
         invalidate("resync required");
@@ -635,6 +769,7 @@ struct RuntimeSession::Impl {
         if (!stop.stop_requested()) {
           qCWarning(telar_log::catalog) << "runtime session lost:" << error.what();
           state.connected = false;
+          state.agents.reset();
           clearViews();
           state.error = error.what();
           publish(sink);
@@ -661,20 +796,17 @@ void RuntimeSession::interrupt() noexcept {
 
 void RuntimeSession::apply(RuntimeState state) {
   TELAR_TRACE("catalog.apply");
-  impl_->state = std::move(state);
-  std::vector<std::uint64_t> identifiers;
-  identifiers.reserve(impl_->subscribers.size());
+  auto previous = std::exchange(impl_->state, std::move(state));
+  const bool agents = previous.agents != impl_->state.agents;
+  previous.agents = impl_->state.agents;
+  const bool catalog = previous != impl_->state;
 
-  for (const auto &[identifier, _] : impl_->subscribers) {
-    identifiers.push_back(identifier);
+  if (catalog) {
+    Impl::notify(impl_->subscribers);
   }
 
-  for (const auto identifier : identifiers) {
-    if (const auto callback = impl_->subscribers.find(identifier);
-        callback != impl_->subscribers.end()) {
-      auto invoke = callback->second;
-      invoke();
-    }
+  if (agents) {
+    Impl::notify(impl_->agent_subscribers);
   }
 }
 
@@ -688,8 +820,15 @@ std::uint64_t RuntimeSession::subscribe(std::function<void()> callback) {
   return identifier;
 }
 
+std::uint64_t RuntimeSession::subscribeAgents(std::function<void()> callback) {
+  const auto identifier = impl_->next_subscription++;
+  impl_->agent_subscribers.emplace(identifier, std::move(callback));
+  return identifier;
+}
+
 void RuntimeSession::unsubscribe(std::uint64_t identifier) {
   impl_->subscribers.erase(identifier);
+  impl_->agent_subscribers.erase(identifier);
 }
 
 std::uint64_t RuntimeSession::selectTab(std::uint64_t tab) {

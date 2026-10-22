@@ -152,19 +152,17 @@ shortcuts.bind_global("ctrl+right", function()
 	actions.step_space(1)
 end)
 
-local colors = { background = "#1b1723", accent = "#c4a7e7" }
+desktop.theme({ preset = "dark" })
 
 desktop.configure_surface("wallpaper", {
 	module = "wallpaper",
-	options = { color = "#16131d", fit = "cover" },
+	options = { fit = "cover" },
 })
 
 desktop.configure_surface("topbar", {
 	module = "topbar",
-	options = { colors = colors },
 })
 
 desktop.configure_surface("sidebar", {
 	module = "sidebar",
-	options = { colors = colors, title = "Telar" },
 })

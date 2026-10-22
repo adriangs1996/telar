@@ -1,22 +1,22 @@
 local ui = require("telar.ui")
 local runtime = require("telar.runtime")
 local desktop = require("telar.desktop")
+local theme = require("telar.theme")
 local displays = require("displays")
 local Spaces = require("topbar.spaces")
 local Tabs = require("topbar.tabs")
 
-local options = ui.surface.options
-local colors = options.colors or {}
+local colors = theme.colors
 
 local background = ui.create("QtQuick", "Rectangle", {
-  color = colors.background or "#1b1723",
-  radius = 10,
-  ["border.color"] = colors.border or "#393142",
+  color = colors.chrome,
+  radius = theme.radius.medium,
+  ["border.color"] = colors.border,
   ["border.width"] = 1,
 })
 
 local workspace_name = ui.text({
-  color = colors.accent or "#c4a7e7",
+  color = colors.accent,
   textFormat = "PlainText",
   elide = "ElideRight",
   ["font.pixelSize"] = 12,
@@ -24,7 +24,7 @@ local workspace_name = ui.text({
 })
 
 local status = ui.text({
-  color = colors.muted or "#aca3bb",
+  color = colors.muted,
   textFormat = "PlainText",
   elide = "ElideRight",
   ["font.pixelSize"] = 12,
@@ -134,7 +134,7 @@ local function update()
   workspace_name.text = state.workspace and state.workspace.name or "Telar"
   local error = state.error or desktop_state.error
   status.visible = #state.tabs == 0 or error ~= nil
-  status.color = error and (colors.error or "#e6a2a7") or (colors.muted or "#aca3bb")
+  status.color = error and colors.error or colors.muted
   status.text = error
     or (not state.connected and "Connecting to runtime…")
     or (not desktop_state.available and "Waiting for macOS Spaces…")

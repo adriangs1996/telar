@@ -31,28 +31,29 @@ namespace workbench {
     constexpr int mouse_shift = 4, mouse_alt = 8, mouse_control = 16;
     constexpr int legacy_mouse_offset = 32, legacy_mouse_limit = 223;
     constexpr int underline_shift = 8, underline_mask = 7;
-    constexpr std::array<const char *, 16> palette{"#45475a",
-                                                   "#f38ba8",
-                                                   "#a6e3a1",
-                                                   "#f9e2af",
-                                                   "#89b4fa",
-                                                   "#f5c2e7",
-                                                   "#94e2d5",
-                                                   "#bac2de",
-                                                   "#585b70",
-                                                   "#f38ba8",
-                                                   "#a6e3a1",
-                                                   "#f9e2af",
-                                                   "#89b4fa",
-                                                   "#f5c2e7",
-                                                   "#94e2d5",
-                                                   "#a6adc8"};
+    // The theme's `terminal.ansi` names, in the order of the first 16 indexed colors.
+    constexpr std::array<const char *, 16> ansi_names{"black",
+                                                      "red",
+                                                      "green",
+                                                      "yellow",
+                                                      "blue",
+                                                      "magenta",
+                                                      "cyan",
+                                                      "white",
+                                                      "bright_black",
+                                                      "bright_red",
+                                                      "bright_green",
+                                                      "bright_yellow",
+                                                      "bright_blue",
+                                                      "bright_magenta",
+                                                      "bright_cyan",
+                                                      "bright_white"};
 
     bool has(const telar::CellStyle &style, telar::CellAttribute flag) {
       return style.flags & static_cast<std::uint16_t>(flag);
     }
 
-    QColor color(const telar::CellColor &value, QColor fallback) {
+    QColor color(const telar::CellColor &value, QColor fallback, const TerminalPalette &palette) {
       if (value.kind == telar::CellColor::Kind::default_color) {
         return fallback;
       }
@@ -63,7 +64,7 @@ namespace workbench {
 
       const int index = value.channels[0];
       if (index < static_cast<int>(palette.size())) {
-        return QColor(palette[index]);
+        return palette[index];
       }
 
       constexpr int gray_start = 232, gray_base = 8, gray_step = 10, cube_start = 16, cube_side = 6,
@@ -162,9 +163,11 @@ namespace workbench {
 
   void TerminalItem::configure(const QVariantMap &options) {
     TELAR_TRACE("terminal.configure");
+    const auto theme = options.value("theme").toMap();
+    const auto family = theme.value("fonts").toMap().value("mono").toString();
     font_ = QFontDatabase::systemFont(QFontDatabase::FixedFont);
-    if (options.contains("font")) {
-      font_.setFamily(options.value("font").toString());
+    if (!family.isEmpty()) {
+      font_.setFamily(family);
     }
 
     font_.setPixelSize(std::clamp(options.value("font_size", default_font_size).toInt(),
@@ -176,9 +179,24 @@ namespace workbench {
     const QFontMetricsF metrics(font_);
     cell_ = {std::ceil(metrics.horizontalAdvance(QLatin1Char('M'))), std::ceil(metrics.height())};
     ascent_ = metrics.ascent();
-    const auto colors = options.value("colors").toMap();
-    const QColor fg(colors.value("foreground", "#cdd6f4").toString());
-    const QColor bg(colors.value("background", "#1b1723").toString());
+    const auto colors = theme.value("terminal").toMap();
+    const auto ansi = colors.value("ansi").toMap();
+    const QColor fg(colors.value("foreground").toString());
+    const QColor bg(colors.value("background").toString());
+    const QColor selection(colors.value("selection").toString());
+
+    for (std::size_t index = 0; index < ansi_names.size(); ++index) {
+      const QColor value(ansi.value(QLatin1StringView(ansi_names[index])).toString());
+
+      if (value.isValid()) {
+        palette_[index] = value;
+      }
+    }
+
+    if (selection.isValid()) {
+      selection_ = selection;
+    }
+
     if (fg.isValid()) {
       foreground_ = fg;
     }
@@ -290,8 +308,8 @@ namespace workbench {
         const auto &cell = screen_->cells[index];
         const bool selected =
             anchor_ >= 0 && index >= std::min(anchor_, end_) && index <= std::max(anchor_, end_);
-        auto fg = color(cell.style.foreground, foreground_);
-        auto bg = color(cell.style.background, background_);
+        auto fg = color(cell.style.foreground, foreground_, palette_);
+        auto bg = color(cell.style.background, background_, palette_);
         if (has(cell.style, telar::CellAttribute::inverse)) {
           std::swap(fg, bg);
         }
