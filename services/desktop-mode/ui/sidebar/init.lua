@@ -1,6 +1,7 @@
 local ui = require("telar.ui")
 local runtime = require("telar.runtime")
 local desktop = require("telar.desktop")
+local displays = require("displays")
 local options = ui.surface.options
 
 local colors = {
@@ -168,30 +169,34 @@ local function layout()
   arrange()
 end
 
+-- Only this display's workspaces, in the order of their Spaces; the one it shows is selected.
 local function update()
-  local spaces = {}
+  local workspaces = {}
 
-  for _, space in ipairs(desktop_state.spaces) do
-    if space.workspace and not space.fullscreen then
-      spaces[space.workspace] = space
+  for _, workspace in ipairs(state.workspaces) do
+    workspaces[workspace.id] = workspace
+  end
+
+  count = 0
+
+  for _, space in ipairs(displays.workspaces(desktop_state, displays.of(ui.surface))) do
+    local workspace = workspaces[space.workspace]
+
+    if workspace then
+      count = count + 1
+      local row = rows[count] or make_row()
+      rows[count] = row
+      row.space = space.id
+      row.selected = space.visible
+      row.name.text = workspace.name
+      row.detail.text =
+        string.format("%d %s", workspace.tab_count, workspace.tab_count == 1 and "tab" or "tabs")
+      row.panel.visible = true
+      paint(row)
     end
   end
 
-  count = #state.workspaces
   heading.text = string.format("WORKSPACES · %d", count)
-
-  for index, workspace in ipairs(state.workspaces) do
-    local row = rows[index] or make_row()
-    local space = spaces[workspace.id]
-    rows[index] = row
-    row.space = space and space.id
-    row.selected = space and space.focused
-    row.name.text = workspace.name
-    row.detail.text =
-      string.format("%d %s", workspace.tab_count, workspace.tab_count == 1 and "tab" or "tabs")
-    row.panel.visible = true
-    paint(row)
-  end
 
   for index = count + 1, #rows do
     rows[index].panel.visible = false
@@ -235,4 +240,5 @@ desktop.on_change(function(next_state, changes)
 end)
 
 ui.on(ui.surface, "resize", layout)
+ui.on(ui.surface, "screen_changed", update)
 update()

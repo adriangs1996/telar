@@ -65,6 +65,7 @@ end
 runtime.state = core.runtime_state
 runtime.select_tab = core.runtime_select
 runtime.move_tab = core.runtime_move
+runtime.create_workspace = core.runtime_create_workspace
 desktop.state = core.desktop_state
 desktop.activate_space = core.desktop_activate
 desktop.bind_space = core.desktop_bind

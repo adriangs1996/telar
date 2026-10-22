@@ -145,6 +145,7 @@ Commands execute from callbacks after the UI has activated. IDs are strings.
 | `state()` | Visible workspaces, tabs, focused element, requested/actual geometry and errors |
 | `on_change(callback)` | Subscribe to workbench changes; returns an unsubscribe function |
 | `command("split", { axis = "horizontal" })` | Create a runtime terminal next to the focused element |
+| `command("new_tab")` | Open a tab in the focused workspace whose shell starts in the focused pane's directory, and select it once the runtime lists it |
 | `command("focus", { id = "pane:123" })` | Focus an element |
 | `command("navigate", { direction = "left" })` | Find the nearest element in a direction |
 | `command("cycle", { step = -1 })` | Cycle focus |
@@ -189,7 +190,7 @@ tab/workspace containing only Lua views or external windows after its final term
 exits. The runtime currently removes such a tab. External-window management is
 implemented for macOS; a Linux window-manager integration is still required.
 
-For manual review, start the development runtime and run `just desktop`. Split a
+For manual review, run `just desktop`. Split a
 terminal, send output to both panes, change focus, resize, switch tabs and return.
 Then change the workbench Lua module and check that the shell processes and layout
 remain. External-window adoption additionally requires Accessibility permission.
@@ -199,6 +200,7 @@ remain. External-window adoption additionally requires Accessibility permission.
 ```sh
 just desktop-check
 just desktop-debug event_queue_dbg
+just desktop
 just desktop /path/to/runtime.sock
 ```
 
@@ -214,9 +216,38 @@ Nested paths become hyphenated target names:
 and must not collide with build targets such as `telar-desktop` or
 `desktop-editor`.
 
-The default socket for `just desktop` is `.zig-out/dev/runtime.sock` until a
-desktop clone has been prepared, then `.zig-out/desktop-dev/runtime.sock`. An
-explicit socket always takes precedence. Start the runtime separately.
+Without a socket, `just desktop` starts a new environment on every run: it
+builds `telar`, stops the runtime a previous run left behind, removes
+`.zig-out/desktop`, starts a runtime there with its own history, and stops it
+when the desktop exits. The workbench layout saved for that socket is removed
+too. Space associations, session logs and the desktop's exclusive control stay
+in the regular desktop state directory, so a run hands off with another desktop
+as usual and reuses the Spaces of the previous run. With a socket, it connects to
+that runtime, which must already be running, and changes nothing else.
+
+### The user's runtime
+
+`telar-desktop SOCKET` connects to a runtime someone else started and never
+starts one, so a development runtime with its own history is never replaced by
+one without it. Without a socket, the desktop uses the user's own runtime, the
+one `telar` in a terminal uses, and starts it when none runs: it runs
+`telar server endpoint` and connects to the socket that prints
+(`runtime_endpoint.cpp`). The runtime detaches from the desktop, so quitting the
+desktop leaves it, its panes and its agents running.
+
+- **Environment.** A launch from Finder or at login carries launchd's
+  environment, and the runtime passes its own environment to every pane.
+  `telar` therefore runs through the user's login shell (`$SHELL -l -c`, with
+  the same per-shell script as `lib/pty/login_shell.zig`), so a runtime started
+  here sees the PATH, EDITOR and SHELL a terminal would. A runtime that was
+  already running keeps the environment it has.
+- **Which `telar`.** The one beside `telar-desktop`, then
+  `../Resources/bin/telar` for an application bundle, then whatever the login
+  shell finds on PATH.
+- **Failures.** The answer must be exactly the socket path and the schema, one
+  per line; anything else, such as output from a shell startup file, is refused.
+  A schema other than the desktop's names both versions. telar has 30 seconds
+  to answer, which covers starting the runtime, and is killed after that.
 
 ### Switching between the regular runtime and a development clone
 
@@ -227,7 +258,7 @@ just desktop-runtime /absolute/path/to/regular/runtime.sock /absolute/path/to/se
 ```
 
 This runs the cloned runtime in the foreground, under `.zig-out/desktop-dev`.
-In another terminal, run `just desktop` or `just desktop-dev`. After stopping the
+In another terminal, run `just desktop-dev`. After stopping the
 clone, `just desktop-runtime` restores it without needing the source arguments again.
 To return to the regular runtime,
 run `just desktop /absolute/path/to/regular/runtime.sock`. A new Desktop asks
@@ -594,9 +625,9 @@ corresponding surface event to react to changes.
 Item dimensions do not resize the native panels. On macOS the topbar is 36
 logical points high; the sidebar is 280 points wide, inset 8 points from the
 left and bottom of the screen's available area and separated from the topbar
-by the same margin. Both attach to the main screen at startup and follow its
-geometry changes, falling back to the current main screen if it is removed.
-They are visible across Spaces. The sidebar overlays application windows;
+by the same margin. Every display gets its own wallpaper, topbar and sidebar,
+created and closed as displays come and go (`native-backends/macos/screen_panels.mm`),
+and each follows its display's geometry. They are visible across Spaces. The sidebar overlays application windows;
 it does not yet reserve their layout area or collapse. Content extending beyond
 a surface is clipped by its window.
 
@@ -663,8 +694,12 @@ end)
 
 A custom map can reuse the default module's actions without installing its keys:
 `require("shortcuts").actions` provides `select_tab(index)`,
-`step_tab(offset, move)`, `step_space(offset)` and `select_workspace(index)`. The
-last one activates the Space bound to the runtime's workspace at that position.
+`step_tab(offset, move)`, `step_space(offset)`, `select_workspace(index)`,
+`create_tab()` and `create_workspace()`. `select_workspace` activates the focused
+display's workspace at that position, in the order of its Spaces. `create_workspace`
+opens a workspace on `$HOME` on the focused display and activates its Space once
+the desktop has given it one.
+The default map binds them to prefix + `c` and prefix + `N`, as the GUI does.
 
 `bind` accepts one to four suffix chords; `bind_global` accepts a single modified
 chord. Both return an idempotent unbind function. The C++ chord parser preserves
@@ -701,7 +736,9 @@ and queued action generations; the platform backend owns global keyboard capture
 ## Native Spaces and runtime tabs
 
 The desktop connects directly as a control client to the socket passed to
-`just desktop /path/to/runtime.sock`. No other Telar client needs to be running.
+`just desktop /path/to/runtime.sock`, or to the user's runtime when no socket is
+passed (see [The user's runtime](#the-users-runtime)). No other Telar client
+needs to be running.
 The runtime owns workspaces, tab identities and tab order. The desktop owns
 its selected workspace and tab, remembering tab focus per workspace for its
 lifetime. Selecting a tab currently changes this desktop state; it does not
@@ -752,17 +789,25 @@ Display entries contain `id`, `uuid` and global screen bounds (`x`, `y`,
 `width`, `height`). Space entries contain `id`, `uuid`, `display`, `index`,
 `visible`, `focused`, `fullscreen`, `managed` and optional `workspace`. Several
 displays can have a visible Space simultaneously; `focused` identifies the active one.
-The current implementation hosts the topbar and sidebar on the initial main screen, following
-the globally focused Space, including when focus moves to another display.
+
+Each display is a desktop of its own. A workspace belongs to the display its Space is on, and
+the surfaces on a display show only that display: the sidebar lists its workspaces in the order
+of their Spaces, and the topbar shows the workspace on its visible Space with that workspace's
+tabs and the display's Spaces. Actions act on the focused display: `select_workspace(index)`
+counts the focused display's workspaces, and a new workspace goes to the focused display.
+`require("displays")` finds what belongs to a display: `of(ui.surface)`, `focused(state)`,
+`spaces(state, display)`, `workspaces(state, display)` and
+`view(runtime_state, desktop_state, display)`.
 
 `require("telar.runtime")` exposes:
 
 | API | Behavior |
 | --- | --- |
-| `runtime.state()` | Detached snapshot with `connected`, workspace catalog `workspaces`, optional `workspace`, `active_tab`, and ordered `tabs`. |
+| `runtime.state()` | Detached snapshot with `connected`, workspace catalog `workspaces`, and `views`, one per workspace on screen (one per display), each with `workspace`, optional `active_tab` and ordered `tabs`. The focused workspace's `workspace`, `active_tab` and `tabs` also sit at the top level. |
 | `runtime.on_change(callback)` | Subscribe on the application thread; returns an unsubscribe function and delivers the current snapshot on mount. |
-| `runtime.select_tab(id)` | Select a tab in the desktop's current workspace. Returns a request ID. |
+| `runtime.select_tab(id)` | Select a tab in whichever workspace on screen holds it. Returns a request ID. |
 | `runtime.move_tab(id, {before = anchor})` | Insert a tab before another tab in its workspace; `{after = anchor}` inserts after it. Returns a request ID. |
+| `runtime.create_workspace()` | Open a workspace on `$HOME` on the focused display, whose first pane runs the login shell. Returns a request ID; `created = {request, workspace}` reports the latest creation, without `workspace` when it failed. |
 
 IDs are decimal **strings**, preserving complete unsigned 64-bit values in
 LuaJIT. Workspaces expose `id`, `kind` and `name`; tabs expose `id`, `label`
@@ -770,6 +815,18 @@ and foreground process names in `foregrounds`. `context` identifies the
 current native Space. Missing optional fields are `nil`. Runtime requests
 report their latest completion through `completed_request`,
 `request_succeeded` and optional `error`.
+
+No display stays without a workspace. When a display has none, at startup, after
+its last workspace closes or when it is connected, the desktop opens one on
+`$HOME` for it, one creation at a time; after a failure the next attempt waits
+for the catalog to change. A created workspace goes to the display it was
+created for: a free Space there, or a new one. A workspace never moves to
+another display by itself; macOS moves the Spaces of a disconnected display,
+and their workspaces with them. A workspace is created on a short connection of its own, as
+`telar workspace create` does: the runtime attaches the first pane to the
+connection that asked and leases it the workspace's geometry, and both end with
+it, leaving the workspace free for the workbench. A tab is created on the
+workbench's own connection to its workspace, which already holds that lease.
 
 Commands require a mounted generation; startup commands can be issued from a
 subscription's initial callback or a `mount` callback. Invalid input raises

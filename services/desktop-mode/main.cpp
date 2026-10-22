@@ -2,12 +2,14 @@
 #include <cstdio>
 #include <cstdlib>
 #include <random>
+#include <string>
 #include <unistd.h>
 
 #include "log_categories.hpp"
 #include "native-backends/application.hpp"
 #include "session_log.hpp"
 #include "telar_client/telar.hpp"
+#include "runtime_endpoint.hpp"
 #include "runtime_session.hpp"
 #include "desktop_session.hpp"
 #include "shortcuts.hpp"
@@ -18,20 +20,23 @@ import app_context;
 import runtime_receiver_worker;
 
 static int runDesktop(int argc, const char **argv) {
-  if (argc != 2) {
-    std::fprintf(stderr, "Usage: %s SOCKET_PATH\n", argv[0]);
+  if (argc > 2) {
+    std::fprintf(stderr, "Usage: %s [SOCKET_PATH]\n", argv[0]);
     return 1;
   }
 
+  // An explicit socket names a runtime someone else started, such as a development one with its
+  // own history, so it is never started from here.
+  const std::string socket = argc == 2 ? argv[1] : runtime_endpoint::resolve();
   qCInfo(telar_log::session) << "Desktop session starting; pid" << ::getpid() << "runtime socket"
-                             << argv[1];
+                             << socket.c_str();
   lua::Vm lua_vm;
   ApplicationWakeup wakeup;
   EventQueue input_queue{wakeup};
 
-  auto client = telar::Client::init(argv[1]);
-  RuntimeSession runtime{client};
-  DesktopSession desktop{argv[1]};
+  auto client = telar::Client::init(socket.c_str());
+  RuntimeSession runtime{client, socket};
+  DesktopSession desktop{socket};
   Shortcuts shortcuts;
   AppContext context{.client = client,
                      .input_queue = input_queue,
@@ -54,7 +59,7 @@ static int runDesktop(int argc, const char **argv) {
     });
 
     auto runtime_reader = RuntimeReceiverWorker::init(context);
-    ui::Services services{lua_vm, runtime, desktop, shortcuts, argv[1]};
+    ui::Services services{lua_vm, runtime, desktop, shortcuts, socket};
     const int application_result = runApplication(app, wakeup, app.state(), services);
     qCInfo(telar_log::session) << "Application loop finished with" << application_result;
     runtime_reader.stop();

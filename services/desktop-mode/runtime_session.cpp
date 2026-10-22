@@ -1,5 +1,7 @@
 #include "runtime_session.hpp"
 #include "log_categories.hpp"
+#include "login_shell.hpp"
+#include <QDir>
 #include <QString>
 #include "telar_client/serializers/telar_protocol.hpp"
 #include "telar_client/telar_client.hpp"
@@ -13,25 +15,32 @@
 #include <fcntl.h>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <poll.h>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <utility>
+#include <vector>
 #include <unistd.h>
 
 namespace {
   using Clock = std::chrono::steady_clock;
   constexpr auto request_timeout = std::chrono::seconds{5};
   // Runtime notifications can arrive a hundred times a second while a pane is busy; they
-  // refresh the snapshot at most this often. Selecting a workspace refreshes it at once.
+  // refresh each view's snapshot at most this often. Focusing a workspace refreshes it at once.
   constexpr auto snapshot_interval = std::chrono::milliseconds{100};
   constexpr int pending_poll_ms = 100;
   constexpr std::size_t command_limit = 64;
   constexpr std::size_t decode_capacity = 512 * 1024;
+  // A new workspace's first pane starts at this size; the workbench resizes it once attached.
+  constexpr telar::TerminalSize workspace_size{80, 24, 8, 16};
 
   enum class CommandKind {
     select,
     move,
-    workspace
+    show,
+    create_workspace
   };
 
   const char *describe(CommandKind kind) {
@@ -40,8 +49,10 @@ namespace {
       return "select tab";
     case CommandKind::move:
       return "move tab";
-    case CommandKind::workspace:
-      return "select workspace";
+    case CommandKind::show:
+      return "show workspaces";
+    case CommandKind::create_workspace:
+      return "create workspace";
     }
 
     return "unknown";
@@ -51,6 +62,7 @@ namespace {
     CommandKind kind;
     std::uint64_t id = 0;
     std::optional<RuntimeWorkspace> workspace;
+    std::vector<RuntimeWorkspace> visible;
     std::uint64_t tab = 0;
     std::uint64_t relative_to = 0;
     bool after = false;
@@ -82,22 +94,71 @@ namespace {
             value.id};
   }
 
+  bool contains(const RuntimeView &view, std::uint64_t tab) {
+    return std::ranges::find(view.tabs, tab, &RuntimeTab::id) != view.tabs.end();
+  }
+
+  // The view on screen that holds a tab.
+  const RuntimeView &owner(const RuntimeState &state, std::uint64_t tab) {
+    const auto found = std::ranges::find_if(state.views, [tab](const RuntimeView &view) {
+      return contains(view, tab);
+    });
+
+    if (!state.connected || found == state.views.end()) {
+      throw std::runtime_error("The tab is not in a workspace on screen");
+    }
+
+    return *found;
+  }
+
+  // A runtime connection closed when it goes out of scope.
+  struct Connection {
+    telar::Client client;
+
+    ~Connection() {
+      client.deinit();
+    }
+  };
+
+  void await(const telar::Client &client, Clock::time_point deadline) {
+    while (true) {
+      const auto left = std::chrono::ceil<std::chrono::milliseconds>(deadline - Clock::now());
+
+      if (left.count() <= 0) {
+        throw std::runtime_error("Runtime request timed out");
+      }
+
+      pollfd descriptor{client.descriptor(), POLLIN, 0};
+      const auto ready = ::poll(&descriptor, 1, static_cast<int>(left.count()));
+
+      if (ready > 0) {
+        return;
+      }
+
+      if (ready < 0 && errno != EINTR) {
+        throw std::runtime_error("Could not wait for runtime input");
+      }
+    }
+  }
+
 } // namespace
 
 struct RuntimeSession::Impl {
   telar::Client &client;
+  std::string socket;
   RuntimeState state;
   std::atomic<std::uint64_t> next_request{1};
   std::uint64_t next_subscription = 1;
   std::map<std::uint64_t, std::function<void()>> subscribers;
   std::mutex mutex;
   std::deque<Command> commands;
-  std::optional<Command> pending_workspace;
+  std::optional<Command> pending_show;
   std::array<int, 2> signal{-1, -1};
-  std::optional<RuntimeWorkspace> desired_workspace;
+  std::optional<std::pair<std::vector<RuntimeWorkspace>, std::optional<RuntimeWorkspace>>> shown;
 
-  explicit Impl(telar::Client &transport)
-      : client(transport) {
+  Impl(telar::Client &transport, std::string path)
+      : client(transport),
+        socket(std::move(path)) {
     if (::pipe(signal.data()) != 0) {
       throw std::runtime_error("Could not create runtime command signal");
     }
@@ -140,8 +201,8 @@ struct RuntimeSession::Impl {
   std::optional<Command> takeCommand() {
     std::lock_guard lock(mutex);
 
-    if (pending_workspace) {
-      return std::exchange(pending_workspace, std::nullopt);
+    if (pending_show) {
+      return std::exchange(pending_show, std::nullopt);
     }
 
     if (commands.empty()) {
@@ -159,14 +220,18 @@ struct RuntimeSession::Impl {
     RuntimeState previous;
     std::vector<telar::Byte> buffer = std::vector<telar::Byte>(telar::max_payload_size);
     std::vector<telar::Byte> storage = std::vector<telar::Byte>(decode_capacity);
+
+    // When a view's snapshot is stale, and when it may be requested again.
+    struct Refresh {
+      bool dirty = false;
+      Clock::time_point due{};
+    };
+
     Pending snapshot;
     Pending move;
-    std::optional<RuntimeWorkspace> snapshot_workspace;
-    std::uint64_t workspace_revision = 0;
-    std::uint64_t snapshot_revision = 0;
-    std::map<std::pair<bool, std::uint64_t>, std::uint64_t> active_tabs;
-    bool snapshot_dirty = false;
-    Clock::time_point next_snapshot{};
+    std::map<RuntimeWorkspace, Refresh> refreshes;
+    // Each workspace's active tab, kept while it is off screen.
+    std::map<RuntimeWorkspace, std::uint64_t> active_tabs;
 
     explicit Worker(Impl &session)
         : session(session) {}
@@ -176,13 +241,16 @@ struct RuntimeSession::Impl {
       return telar::Codec::decode<Message>(payload, arena);
     }
 
-    void clearWorkspace() {
+    void clearViews() {
       state.workspace.reset();
-      state.workspace_name.clear();
-      state.active_tab = 0;
-      state.tabs.clear();
+      state.views.clear();
       state.error.clear();
-      snapshot_dirty = false;
+      refreshes.clear();
+    }
+
+    RuntimeView *view(const RuntimeWorkspace &visible) {
+      const auto found = std::ranges::find(state.views, visible, &RuntimeView::workspace);
+      return found == state.views.end() ? nullptr : &*found;
     }
 
     void complete(std::uint64_t request, bool success, std::string error = {}) {
@@ -191,28 +259,60 @@ struct RuntimeSession::Impl {
       state.error = std::move(error);
     }
 
-    bool containsTab(std::uint64_t id) const {
-      return std::ranges::any_of(state.tabs, [id](const RuntimeTab &tab) {
-        return tab.id == id;
-      });
-    }
-
+    // Most notifications do not say which workspace they concern, so every view refreshes.
     void invalidate(const char *reason) {
-      if (!snapshot_dirty) {
-        qCDebug(telar_log::catalog) << "snapshot invalidated by" << reason;
-      }
+      for (auto &[visible, refresh] : refreshes) {
+        if (!refresh.dirty) {
+          qCDebug(telar_log::catalog) << "workspace" << visible.id << "invalidated by" << reason;
+        }
 
-      snapshot_dirty = true;
+        refresh.dirty = true;
+      }
     }
 
     // How long poll may sleep: until a throttled snapshot is due, or the pending-request check.
     int pollDelay(Clock::time_point now) const {
-      if (state.workspace && snapshot_dirty && !snapshot.id) {
-        const auto due = std::chrono::ceil<std::chrono::milliseconds>(next_snapshot - now);
-        return static_cast<int>(std::max<std::int64_t>(0, due.count()));
+      if (!snapshot.id) {
+        std::optional<Clock::time_point> next;
+
+        for (const auto &[visible, refresh] : refreshes) {
+          if (refresh.dirty && (!next || refresh.due < *next)) {
+            next = refresh.due;
+          }
+        }
+
+        if (next) {
+          const auto due = std::chrono::ceil<std::chrono::milliseconds>(*next - now);
+          return static_cast<int>(std::max<std::int64_t>(0, due.count()));
+        }
       }
 
       return snapshot.id || move.id ? pending_poll_ms : -1;
+    }
+
+    // The views follow the visible workspaces: one that stays keeps its tabs, a new one waits
+    // for its first snapshot, and the focused one refreshes at once.
+    void show(const Command &request) {
+      std::vector<RuntimeView> views;
+      std::map<RuntimeWorkspace, Refresh> next;
+
+      for (const auto &visible : request.visible) {
+        if (auto *existing = view(visible)) {
+          views.push_back(std::move(*existing));
+          next[visible] = refreshes[visible];
+        } else {
+          views.push_back({.workspace = visible, .active_tab = active_tabs[visible]});
+          next[visible] = {.dirty = true};
+        }
+      }
+
+      state.views = std::move(views);
+      state.workspace = request.workspace;
+      refreshes = std::move(next);
+
+      if (state.workspace && refreshes.contains(*state.workspace)) {
+        refreshes[*state.workspace] = {.dirty = true};
+      }
     }
 
     void command(Command request) {
@@ -220,28 +320,33 @@ struct RuntimeSession::Impl {
       qCInfo(telar_log::catalog) << "command" << describe(request.kind) << "workspace"
                                  << (request.workspace ? request.workspace->id : 0) << "tab"
                                  << request.tab;
-      if (request.kind == CommandKind::workspace) {
-        ++workspace_revision;
-        clearWorkspace();
-        state.workspace = request.workspace;
-        snapshot_dirty = state.workspace.has_value();
-        next_snapshot = {};
+      if (request.kind == CommandKind::create_workspace) {
+        createWorkspace(request.id);
         return;
       }
 
-      if (!state.workspace || request.workspace != state.workspace || !containsTab(request.tab)) {
-        complete(request.id, false, "The desktop workspace changed before the command was sent");
+      if (request.kind == CommandKind::show) {
+        show(request);
+        return;
+      }
+
+      auto *target = request.workspace ? view(*request.workspace) : nullptr;
+
+      if (!target || !contains(*target, request.tab)) {
+        complete(request.id,
+                 false,
+                 "The tab's workspace left the screen before the command was sent");
         return;
       }
 
       if (request.kind == CommandKind::select) {
-        state.active_tab = request.tab;
-        active_tabs[{state.workspace->worktree, state.workspace->id}] = request.tab;
+        target->active_tab = request.tab;
+        active_tabs[target->workspace] = request.tab;
         complete(request.id, true);
         return;
       }
 
-      if (request.tab == request.relative_to || !containsTab(request.relative_to)) {
+      if (request.tab == request.relative_to || !contains(*target, request.relative_to)) {
         complete(request.id, false, "The tab insertion anchor is no longer available");
         return;
       }
@@ -249,13 +354,70 @@ struct RuntimeSession::Impl {
       session.client.send(
           telar::MoveTab{
               .request_id = request.id,
-              .location = {workspace(*state.workspace), request.tab},
+              .location = {workspace(target->workspace), request.tab},
               .direction =
                   request.after ? telar::TabMoveDirection::next : telar::TabMoveDirection::previous,
               .relative_to = request.relative_to,
           },
           buffer);
       move.begin(request.id);
+    }
+
+    // A workspace comes from a short connection of its own, as `telar workspace create` does:
+    // the runtime attaches the first pane to whoever asked and leases it the workspace's
+    // geometry, and both end with that connection, leaving the workspace to the workbench.
+    void createWorkspace(std::uint64_t request) {
+      TELAR_TRACE("catalog.create_workspace");
+      const auto home = QDir::homePath().toStdString();
+      auto name = std::string_view(home).substr(home.find_last_of('/') + 1);
+      const login_shell::Command shell;
+      qCInfo(telar_log::catalog) << "create workspace; request" << request;
+
+      if (name.empty()) {
+        name = "home";
+      }
+
+      try {
+        Connection connection{telar::Client::init(session.socket.c_str())};
+        connection.client.handshake();
+        connection.client.send(
+            telar::CreateWorkspace{
+                .request_id = request,
+                .size = workspace_size,
+                .name = name,
+                .launch = {.cwd = home, .arguments = shell.arguments()},
+            },
+            buffer);
+
+        const auto deadline = Clock::now() + request_timeout;
+
+        while (true) {
+          await(connection.client, deadline);
+          const auto payload = connection.client.receiveFrame(buffer);
+          const auto tag = static_cast<telar::ServerTag>(payload.front());
+
+          if (tag == telar::ServerTag::pane_opened) {
+            const auto reply = decode<telar::PaneOpened>(payload);
+
+            if (reply.request_id == request) {
+              qCInfo(telar_log::catalog) << "workspace" << reply.location.workspace.id << "created";
+              state.created = {request, reply.location.workspace.id};
+              complete(request, true);
+              return;
+            }
+          } else if (tag == telar::ServerTag::request_failed) {
+            const auto reply = decode<telar::RequestFailed>(payload);
+
+            if (reply.request_id == request) {
+              throw std::runtime_error(std::string(reply.message));
+            }
+          }
+        }
+      } catch (const std::exception &error) {
+        qCWarning(telar_log::catalog) << "workspace creation failed:" << error.what();
+        state.created = {request, 0};
+        complete(request, false, error.what());
+      }
     }
 
     void schedule() {
@@ -274,16 +436,22 @@ struct RuntimeSession::Impl {
         }
       }
 
-      if (state.workspace && snapshot_dirty && !snapshot.id && now >= next_snapshot) {
-        next_snapshot = now + snapshot_interval;
+      if (snapshot.id) {
+        return;
+      }
+
+      for (auto &[visible, refresh] : refreshes) {
+        if (!refresh.dirty || now < refresh.due) {
+          continue;
+        }
+
+        refresh = {.due = now + snapshot_interval};
         snapshot.begin(session.next_request.fetch_add(1));
-        snapshot_workspace = state.workspace;
-        snapshot_revision = workspace_revision;
-        snapshot_dirty = false;
         session.client.send(telar::RequestWorkspaceSnapshot{
             .request_id = snapshot.id,
-            .workspace = workspace(*state.workspace),
+            .workspace = workspace(visible),
         });
+        return;
       }
     }
 
@@ -295,14 +463,15 @@ struct RuntimeSession::Impl {
 
       move.id = 0;
 
-      if (state.workspace == workspace(reply.location.workspace)) {
-        const auto found = std::ranges::find(state.tabs, reply.location.tab_id, &RuntimeTab::id);
+      if (auto *target = view(workspace(reply.location.workspace))) {
+        auto &tabs = target->tabs;
+        const auto found = std::ranges::find(tabs, reply.location.tab_id, &RuntimeTab::id);
 
-        if (found != state.tabs.end()) {
+        if (found != tabs.end()) {
           auto tab = std::move(*found);
-          state.tabs.erase(found);
-          const auto position = std::min<std::size_t>(reply.position, state.tabs.size());
-          state.tabs.insert(state.tabs.begin() + position, std::move(tab));
+          tabs.erase(found);
+          const auto position = std::min<std::size_t>(reply.position, tabs.size());
+          tabs.insert(tabs.begin() + position, std::move(tab));
         }
 
         invalidate("tab moved");
@@ -327,9 +496,9 @@ struct RuntimeSession::Impl {
         }
 
         std::erase_if(active_tabs, [&](const auto &entry) {
-          return !entry.first.first &&
+          return !entry.first.worktree &&
                  !std::ranges::any_of(state.workspaces, [&](const auto &workspace) {
-                   return workspace.id == entry.first.second;
+                   return workspace.id == entry.first.id;
                  });
         });
 
@@ -345,14 +514,15 @@ struct RuntimeSession::Impl {
         }
 
         snapshot.id = 0;
+        auto *target = view(workspace(reply.workspace));
 
-        if (workspace_revision != snapshot_revision || state.workspace != snapshot_workspace ||
-            state.workspace != workspace(reply.workspace)) {
+        // The workspace left the screen while its snapshot was on the way.
+        if (!target) {
           break;
         }
 
-        state.workspace_name = reply.name;
-        state.tabs.clear();
+        target->name = reply.name;
+        target->tabs.clear();
         auto tabs = std::vector(reply.tabs.begin(), reply.tabs.end());
         std::ranges::sort(tabs, {}, &telar::TabDescriptor::position);
 
@@ -363,19 +533,19 @@ struct RuntimeSession::Impl {
             tab.foregrounds.emplace_back(foreground.name);
           }
 
-          state.tabs.push_back(std::move(tab));
+          target->tabs.push_back(std::move(tab));
         }
 
-        auto &active = active_tabs[{state.workspace->worktree, state.workspace->id}];
+        auto &active = active_tabs[target->workspace];
 
-        if (!containsTab(active)) {
-          active = state.tabs.empty() ? 0 : state.tabs.front().id;
+        if (!contains(*target, active)) {
+          active = target->tabs.empty() ? 0 : target->tabs.front().id;
         }
 
-        state.active_tab = active;
+        target->active_tab = active;
         state.error.clear();
-        qCDebug(telar_log::catalog) << "workspace" << state.workspace->id << "snapshot with"
-                                    << state.tabs.size() << "tabs; active tab" << active;
+        qCDebug(telar_log::catalog) << "workspace" << target->workspace.id << "snapshot with"
+                                    << target->tabs.size() << "tabs; active tab" << active;
         break;
       }
 
@@ -465,7 +635,7 @@ struct RuntimeSession::Impl {
         if (!stop.stop_requested()) {
           qCWarning(telar_log::catalog) << "runtime session lost:" << error.what();
           state.connected = false;
-          clearWorkspace();
+          clearViews();
           state.error = error.what();
           publish(sink);
         }
@@ -474,8 +644,8 @@ struct RuntimeSession::Impl {
   };
 };
 
-RuntimeSession::RuntimeSession(telar::Client &client)
-    : impl_(std::make_unique<Impl>(client)) {}
+RuntimeSession::RuntimeSession(telar::Client &client, std::string socket)
+    : impl_(std::make_unique<Impl>(client, std::move(socket))) {}
 
 RuntimeSession::~RuntimeSession() = default;
 
@@ -523,36 +693,42 @@ void RuntimeSession::unsubscribe(std::uint64_t identifier) {
 }
 
 std::uint64_t RuntimeSession::selectTab(std::uint64_t tab) {
-  if (!state().connected || !state().workspace) {
-    throw std::runtime_error("No desktop workspace is available");
-  }
-
-  return impl_->enqueue({.kind = CommandKind::select, .workspace = state().workspace, .tab = tab});
+  const auto &view = owner(state(), tab);
+  return impl_->enqueue({.kind = CommandKind::select, .workspace = view.workspace, .tab = tab});
 }
 
 std::uint64_t RuntimeSession::moveTab(std::uint64_t tab, std::uint64_t relative_to, bool after) {
-  if (!state().connected || !state().workspace) {
-    throw std::runtime_error("No desktop workspace is available");
-  }
-
+  const auto &view = owner(state(), tab);
   return impl_->enqueue({.kind = CommandKind::move,
-                         .workspace = state().workspace,
+                         .workspace = view.workspace,
                          .tab = tab,
                          .relative_to = relative_to,
                          .after = after});
 }
 
-void RuntimeSession::selectWorkspace(std::optional<RuntimeWorkspace> workspace) {
-  TELAR_TRACE("catalog.select_workspace");
-  if (workspace == impl_->desired_workspace) {
+std::uint64_t RuntimeSession::createWorkspace() {
+  if (!state().connected) {
+    throw std::runtime_error("The runtime is disconnected");
+  }
+
+  return impl_->enqueue({.kind = CommandKind::create_workspace});
+}
+
+void RuntimeSession::showWorkspaces(std::vector<RuntimeWorkspace> visible,
+                                    std::optional<RuntimeWorkspace> focused) {
+  TELAR_TRACE("catalog.show_workspaces");
+  auto shown = std::pair{std::move(visible), focused};
+
+  if (shown == impl_->shown) {
     return;
   }
 
   {
     std::lock_guard lock(impl_->mutex);
-    impl_->pending_workspace = Command{.kind = CommandKind::workspace, .workspace = workspace};
+    impl_->pending_show =
+        Command{.kind = CommandKind::show, .workspace = focused, .visible = shown.first};
   }
 
-  impl_->desired_workspace = workspace;
+  impl_->shown = std::move(shown);
   impl_->wake();
 }

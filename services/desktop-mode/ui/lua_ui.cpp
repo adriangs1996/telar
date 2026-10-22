@@ -67,6 +67,7 @@ namespace {
     runtime_off,
     runtime_select,
     runtime_move,
+    runtime_create_workspace,
     desktop_state,
     desktop_on,
     desktop_activate,
@@ -771,6 +772,8 @@ namespace {
         return encode(runtime_->selectTab(values[0]));
       case Operation::runtime_move:
         return encode(runtime_->moveTab(values[0], mapValue(values[1])));
+      case Operation::runtime_create_workspace:
+        return encode(runtime_->createWorkspace());
       case Operation::desktop_activate:
         runtime_->activateSpace(values[0]);
         break;
@@ -953,6 +956,7 @@ namespace {
                 {"runtime_off", Operation::runtime_off},
                 {"runtime_select", Operation::runtime_select},
                 {"runtime_move", Operation::runtime_move},
+                {"runtime_create_workspace", Operation::runtime_create_workspace},
                 {"desktop_state", Operation::desktop_state},
                 {"desktop_on", Operation::desktop_on},
                 {"desktop_activate", Operation::desktop_activate},

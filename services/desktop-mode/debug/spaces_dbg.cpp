@@ -358,7 +358,7 @@ namespace {
     lua::Vm vm;
     Notifier notifier;
     EventQueue queue{notifier};
-    RuntimeSession runtime{transport};
+    RuntimeSession runtime{transport, sandbox.socket.toStdString()};
     DesktopSession desktop;
     Shortcuts shortcuts;
     bool hold_creation_confirmation = false;

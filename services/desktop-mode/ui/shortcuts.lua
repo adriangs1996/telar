@@ -2,6 +2,7 @@ local shortcuts = require("telar.shortcuts")
 local runtime = require("telar.runtime")
 local desktop = require("telar.desktop")
 local workbench = require("telar.workbench")
+local displays = require("displays")
 
 local function active_index(state)
   for index, tab in ipairs(state.tabs) do
@@ -75,19 +76,81 @@ function actions.step_space(offset)
   end
 end
 
+-- Stops following the workspace the previous create_workspace asked for.
+local stop_following
+
+-- Activates the Space of the workspace `request` creates, once the desktop has given it one.
+local function follow_created(request)
+  local workspace
+  local stop_runtime, stop_desktop
+
+  local function stop()
+    stop_runtime()
+    stop_desktop()
+    stop_following = nil
+  end
+
+  local function focus()
+    local state = desktop.state()
+
+    if not workspace or state.pending_space then
+      return
+    end
+
+    for _, space in ipairs(state.spaces) do
+      if space.workspace == workspace and not space.fullscreen then
+        stop()
+        desktop.activate_space(space.id)
+        return
+      end
+    end
+  end
+
+  stop_runtime = runtime.on_change(function(state)
+    local created = state.created
+
+    if workspace or not created or created.request ~= request then
+      return
+    end
+
+    if not created.workspace then
+      stop()
+      return
+    end
+
+    workspace = created.workspace
+    focus()
+  end)
+  stop_desktop = desktop.on_change(focus)
+  stop_following = stop
+end
+
+-- Opens a workspace on $HOME on the focused display and moves to its Space once it has one.
+function actions.create_workspace()
+  if stop_following then
+    stop_following()
+  end
+
+  follow_created(runtime.create_workspace())
+end
+
+-- Opens a tab in the current workspace, in the focused pane's directory.
+function actions.create_tab()
+  workbench.command("new_tab")
+end
+
+-- The focused display's workspace at a position, in the order of its Spaces.
 function actions.select_workspace(index)
-  local workspace = runtime.state().workspaces[index]
   local state = desktop.state()
 
-  if not workspace or state.pending_space then
+  if state.pending_space then
     return
   end
 
-  for _, space in ipairs(state.spaces) do
-    if space.workspace == workspace.id and not space.fullscreen then
-      desktop.activate_space(space.id)
-      return
-    end
+  local space = displays.workspaces(state, displays.focused(state))[index]
+
+  if space then
+    desktop.activate_space(space.id)
   end
 end
 
@@ -120,6 +183,8 @@ local function install()
     end)
   end
   -- Match the GUI's tab bindings. Actions without a desktop implementation stay unbound.
+  shortcuts.bind({ "c" }, actions.create_tab)
+  shortcuts.bind({ "N" }, actions.create_workspace)
   shortcuts.bind({ "n" }, function()
     actions.step_tab(1, false)
   end)

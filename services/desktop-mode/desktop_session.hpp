@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_state.hpp"
+#include "runtime_state.hpp"
 #include "native-backends/desktop.hpp"
 #include "desktop_registry.hpp"
 #include <map>
@@ -11,11 +12,18 @@ public:
   DesktopSession() = default;
   explicit DesktopSession(std::string runtime_socket);
   using Commands = std::function<bool(DesktopCommand)>;
+  // Asks the runtime for a workspace on $HOME and returns the request, whose outcome comes back
+  // through reconcile.
+  using WorkspaceCreator = std::function<std::uint64_t()>;
 
-  void start(NativeDesktop::Sink observations, Commands commands);
+  void start(NativeDesktop::Sink observations,
+             Commands commands,
+             WorkspaceCreator create_workspace = {});
   void stop();
   void apply(DesktopState state);
-  void reconcile(const std::vector<WorkspaceSummary> &workspaces, bool ready = true);
+  void reconcile(const std::vector<WorkspaceSummary> &workspaces,
+                 bool ready = true,
+                 const WorkspaceCreation &created = {});
   void execute(const DesktopCommand &command);
   const DesktopState &state() const noexcept;
   // What the state being notified differs in from the one notified before it.
@@ -27,6 +35,8 @@ public:
   void bindSpace(std::uint64_t space, std::optional<std::uint64_t> workspace);
   std::uint64_t createSpace(std::uint32_t display, std::optional<std::uint64_t> workspace);
   std::uint64_t removeSpace(std::uint64_t space);
+  // A workspace for the focused display.
+  std::uint64_t createWorkspace();
 
 private:
   NativeDesktop native_;
@@ -38,6 +48,12 @@ private:
   std::map<std::uint64_t, std::function<void()>> subscribers_;
   std::uint64_t next_subscription_ = 1;
   Commands commands_;
+  WorkspaceCreator create_workspace_;
+  // The display each pending workspace creation is for, by request.
+  std::map<std::uint64_t, std::uint32_t> creating_;
+  // The display each created workspace goes to, until it has a Space there.
+  std::map<std::uint64_t, std::uint32_t> placements_;
+  bool fill_paused_ = false;
 
   struct Pending {
     SpaceOperation operation;
@@ -57,6 +73,9 @@ private:
   void associate();
   void synchronizeLifecycle();
   void synchronizeOwnedSpaces();
+  void fillDisplays();
+  std::uint64_t createWorkspace(std::uint32_t display);
+  bool learn(const WorkspaceCreation &created);
   void beginOperation(Pending pending);
   void completeOperation(const SpaceCompletion &completion);
   std::uint32_t focusedDisplay() const;

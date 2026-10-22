@@ -5,8 +5,7 @@
 #include "../../ui/desktop_control.hpp"
 #include "../../ui/desktop_ui.hpp"
 #include "../../ui/workbench/controller.hpp"
-#include "surface_panel.hpp"
-#include "wallpaper_panels.hpp"
+#include "screen_panels.hpp"
 #import <AppKit/AppKit.h>
 #include <CoreFoundation/CFBase.h>
 #include <CoreFoundation/CFRunLoop.h>
@@ -126,9 +125,7 @@ int runApplication(ApplicationHost &host,
       return EXIT_FAILURE;
     }
 
-    NSScreen *screen = [NSScreen mainScreen];
-
-    if (!screen) {
+    if (!NSScreen.mainScreen) {
       return EXIT_FAILURE;
     }
 
@@ -155,36 +152,16 @@ int runApplication(ApplicationHost &host,
     ui::DesktopUi desktop_ui(services);
 
     struct Panels {
-      TelarSurfacePanel *topbar = nil;
-      TelarSurfacePanel *sidebar = nil;
-      TelarWallpaperPanels *wallpapers = nil;
+      TelarScreenPanels *screens = nil;
 
       ~Panels() {
-        [wallpapers close];
-        [sidebar close];
-        [topbar close];
+        [screens close];
       }
     } panels;
 
-    panels.wallpapers = [[TelarWallpaperPanels alloc] initWithDesktop:desktop_ui];
+    panels.screens = [[TelarScreenPanels alloc] initWithDesktop:desktop_ui];
 
-    if (!panels.wallpapers) {
-      return EXIT_FAILURE;
-    }
-
-    panels.topbar = [[TelarSurfacePanel alloc] initWithScreen:screen
-                                                         kind:ui::SurfaceKind::topbar
-                                                      desktop:desktop_ui];
-
-    if (!panels.topbar) {
-      return EXIT_FAILURE;
-    }
-
-    panels.sidebar = [[TelarSurfacePanel alloc] initWithScreen:screen
-                                                          kind:ui::SurfaceKind::sidebar
-                                                       desktop:desktop_ui];
-
-    if (!panels.sidebar) {
+    if (!panels.screens) {
       return EXIT_FAILURE;
     }
 
@@ -199,9 +176,7 @@ int runApplication(ApplicationHost &host,
     }
 
     if (host.update()) {
-      [panels.wallpapers show];
-      [panels.topbar orderFrontRegardless];
-      [panels.sidebar orderFrontRegardless];
+      [panels.screens show];
       result = qt_application.exec();
     }
 

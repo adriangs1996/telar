@@ -1,6 +1,7 @@
 local ui = require("telar.ui")
 local runtime = require("telar.runtime")
 local desktop = require("telar.desktop")
+local displays = require("displays")
 local Spaces = require("topbar.spaces")
 local Tabs = require("topbar.tabs")
 
@@ -30,8 +31,34 @@ local status = ui.text({
 })
 
 local tabs = Tabs.new({ on_select = runtime.select_tab, on_move = runtime.move_tab })
-local state = runtime.state()
+local runtime_state = runtime.state()
 local desktop_state = desktop.state()
+
+-- What this display shows: the workspace on its visible Space and that workspace's tabs.
+local function screen_state()
+  local view, space = displays.view(runtime_state, desktop_state, displays.of(ui.surface))
+
+  return {
+    connected = runtime_state.connected,
+    error = runtime_state.error,
+    completed_request = runtime_state.completed_request,
+    context = space and space.id,
+    workspace = view and view.workspace,
+    tabs = view and view.tabs or {},
+    active_tab = view and view.active_tab,
+  }
+end
+
+-- This display's Spaces, for the strip.
+local function screen_spaces()
+  return {
+    pending_space = desktop_state.pending_space,
+    pending_operation = desktop_state.pending_operation,
+    spaces = displays.spaces(desktop_state, displays.of(ui.surface)),
+  }
+end
+
+local state = screen_state()
 local spaces = Spaces.new({
   activate = desktop.activate_space,
   remove = desktop.remove_space,
@@ -100,10 +127,10 @@ local function layout()
   )
 end
 
-local function update(next_state)
+local function update()
   local previous_error = state.error
   local previously_had_tabs = #state.tabs > 0
-  state = next_state
+  state = screen_state()
   workspace_name.text = state.workspace and state.workspace.name or "Telar"
   local error = state.error or desktop_state.error
   status.visible = #state.tabs == 0 or error ~= nil
@@ -120,16 +147,21 @@ local function update(next_state)
   end
 end
 
-spaces:update(desktop_state)
-update(state)
-layout()
+local function refresh()
+  spaces:update(screen_spaces())
+  update()
+  layout()
+end
+
+refresh()
 desktop.on_change(function(next_state)
   desktop_state = next_state
-  spaces:update(next_state)
-  update(runtime.state())
-  layout()
+  refresh()
 end)
-runtime.on_change(update)
+runtime.on_change(function(next_state)
+  runtime_state = next_state
+  update()
+end)
 ui.on(ui.surface, "resize", layout)
 ui.on(ui.surface, "safe_area_changed", layout)
-ui.on(ui.surface, "screen_changed", layout)
+ui.on(ui.surface, "screen_changed", refresh)

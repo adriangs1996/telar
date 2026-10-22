@@ -6,6 +6,7 @@ module;
 #include <cstdint>
 #include <utility>
 #include <variant>
+#include <vector>
 export module app;
 
 import app_context;
@@ -37,6 +38,9 @@ export template <Notifier INotifier> struct App final : ApplicationHost {
         },
         [this](DesktopCommand command) {
           return context.input_queue.push(DesktopRequested{std::move(command)});
+        },
+        [this] {
+          return context.runtime.createWorkspace();
         });
   }
 
@@ -76,7 +80,8 @@ private:
                      context.runtime.apply(std::move(event.state));
                      context.desktop.reconcile(app_state.workspaces,
                                                context.runtime.state().connected &&
-                                                   context.runtime.state().workspaces_ready);
+                                                   context.runtime.state().workspaces_ready,
+                                               context.runtime.state().created);
                      synchronizeWorkspace();
                    },
                    [&](DesktopUpdated &event) {
@@ -98,9 +103,20 @@ private:
                input);
   }
 
+  // The catalog follows every workspace on screen, one per display; input goes to the focused
+  // one.
   void synchronizeWorkspace() {
+    std::vector<RuntimeWorkspace> visible;
+
+    for (const auto &space : context.desktop.state().spaces) {
+      if (space.visible && space.workspace && !space.fullscreen) {
+        visible.push_back({*space.workspace});
+      }
+    }
+
     const auto workspace = context.desktop.focusedWorkspace();
-    context.runtime.selectWorkspace(workspace ? std::optional{RuntimeWorkspace{*workspace}}
-                                              : std::nullopt);
+    context.runtime.showWorkspaces(std::move(visible),
+                                   workspace ? std::optional{RuntimeWorkspace{*workspace}}
+                                             : std::nullopt);
   }
 };

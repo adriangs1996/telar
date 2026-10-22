@@ -145,6 +145,8 @@ namespace workbench {
       QRectF area;
       double scale = 1;
       bool visible = false;
+      // A tab this workbench created, selected once the runtime catalog lists it.
+      std::uint64_t created_tab = 0;
     };
 
     Controller &owner;
@@ -858,6 +860,11 @@ namespace workbench {
               schedule();
             };
 
+            workspace.runtime->created = [this, &workspace](std::uint64_t tab) {
+              workspace.created_tab = tab;
+              schedule();
+            };
+
             workspace.runtime->painted = [&workspace](std::uint64_t pane) {
               for (auto &[tab_id, tab] : workspace.tabs) {
                 const auto found = tab.views.find(paneId(pane));
@@ -884,12 +891,19 @@ namespace workbench {
           }
 
           workspace.visible = true;
-          if (catalog.workspace && catalog.workspace->id == id && catalog.active_tab) {
-            if (workspace.runtime->activeTab() != catalog.active_tab && space.focused) {
+          const auto *view = catalog.view(RuntimeWorkspace{id});
+          if (view && workspace.created_tab &&
+              std::ranges::find(view->tabs, workspace.created_tab, &RuntimeTab::id) !=
+                  view->tabs.end()) {
+            services.runtime.selectTab(std::exchange(workspace.created_tab, 0));
+          }
+
+          if (view && view->active_tab) {
+            if (workspace.runtime->activeTab() != view->active_tab && space.focused) {
               focus_pending = true;
             }
 
-            workspace.runtime->selectTab(catalog.active_tab);
+            workspace.runtime->selectTab(view->active_tab);
           }
         }
 
@@ -1189,6 +1203,9 @@ namespace workbench {
         workspace->runtime->split(source == tab.views.end() ? 0 : source->second->pane);
         tab.next_axis = axis == "vertical" ? Axis::vertical : Axis::horizontal;
         tab.focus_new = true;
+      } else if (action == "new_tab") {
+        const auto source = tab.views.find(id);
+        workspace->runtime->createTab(source == tab.views.end() ? 0 : source->second->pane);
       } else if (action == "close") {
         const auto view = tab.views.find(id);
         if (view == tab.views.end()) {

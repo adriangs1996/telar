@@ -4,75 +4,75 @@ local workbench = require("telar.workbench")
 local actions = require("shortcuts").actions
 
 local function move_workspace(offset)
-  local state = desktop.state()
+	local state = desktop.state()
 
-  if state.pending_space then
-    return
-  end
+	if state.pending_space then
+		return
+	end
 
-  local current
+	local current
 
-  for _, space in ipairs(state.spaces) do
-    if space.id == state.focused_space then
-      current = space
-      break
-    end
-  end
+	for _, space in ipairs(state.spaces) do
+		if space.id == state.focused_space then
+			current = space
+			break
+		end
+	end
 
-  if not current then
-    return
-  end
+	if not current then
+		return
+	end
 
-  local spaces = {}
-  local index
+	local spaces = {}
+	local index
 
-  for _, space in ipairs(state.spaces) do
-    if space.display == current.display and space.workspace and not space.fullscreen then
-      spaces[#spaces + 1] = space
-      if space.id == current.id then
-        index = #spaces
-      end
-    end
-  end
+	for _, space in ipairs(state.spaces) do
+		if space.display == current.display and space.workspace and not space.fullscreen then
+			spaces[#spaces + 1] = space
+			if space.id == current.id then
+				index = #spaces
+			end
+		end
+	end
 
-  if index and #spaces > 1 then
-    local target = (index - 1 + offset) % #spaces + 1
-    desktop.activate_space(spaces[target].id)
-  end
+	if index and #spaces > 1 then
+		local target = (index - 1 + offset) % #spaces + 1
+		desktop.activate_space(spaces[target].id)
+	end
 end
 
 local function select_workspace(index)
-  local state = desktop.state()
+	local state = desktop.state()
 
-  if state.pending_space then
-    return
-  end
+	if state.pending_space then
+		return
+	end
 
-  local display
+	local display
 
-  for _, space in ipairs(state.spaces) do
-    if space.id == state.focused_space then
-      display = space.display
-      break
-    end
-  end
+	for _, space in ipairs(state.spaces) do
+		if space.id == state.focused_space then
+			display = space.display
+			break
+		end
+	end
 
-  if not display then
-    return
-  end
+	if not display then
+		return
+	end
 
-  local position = 0
+	local position = 0
 
-  for _, space in ipairs(state.spaces) do
-    if space.display == display and space.workspace and not space.fullscreen then
-      position = position + 1
+	for _, space in ipairs(state.spaces) do
+		if space.display == display and space.workspace and not space.fullscreen then
+			position = position + 1
 
-      if position == index then
-        desktop.activate_space(space.id)
-        return
-      end
-    end
-  end
+			if position == index then
+				desktop.activate_space(space.id)
+				return
+			end
+		end
+	end
 end
 
 -- Mirrors the effective keymap of dev/config.lua: its client.keybindings plus the GUI
@@ -80,25 +80,25 @@ end
 shortcuts.set_prefix("ctrl+s")
 
 shortcuts.bind_global("cmd+h", function()
-  move_workspace(-1)
+	move_workspace(-1)
 end)
 
 shortcuts.bind_global("cmd+l", function()
-  move_workspace(1)
+	move_workspace(1)
 end)
 
 for index = 1, 9 do
-  local target = index
+	local target = index
 
-  shortcuts.bind_global("cmd+" .. target, function()
-    select_workspace(target)
-  end)
+	shortcuts.bind_global("cmd+" .. target, function()
+		select_workspace(target)
+	end)
 end
 
 local function command(action, options)
-  return function()
-    workbench.command(action, options)
-  end
+	return function()
+		workbench.command(action, options)
+	end
 end
 
 local arrows = { "left", "right", "up", "down" }
@@ -107,66 +107,64 @@ local vim = { h = "left", j = "down", k = "up", l = "right" }
 -- Splits: s/t from dev/config.lua, % and " from the GUI defaults.
 shortcuts.bind({ "s" }, command("split", { axis = "horizontal" }))
 shortcuts.bind({ "t" }, command("split", { axis = "vertical" }))
-shortcuts.bind({ "%" }, command("split", { axis = "horizontal" }))
-shortcuts.bind({ '"' }, command("split", { axis = "vertical" }))
 
 shortcuts.bind({ "x" }, command("close"))
 shortcuts.bind({ "f" }, command("maximize"))
-shortcuts.bind({ "z" }, command("maximize"))
 
 for _, direction in ipairs(arrows) do
-  shortcuts.bind({ direction }, command("navigate", { direction = direction }))
-  shortcuts.bind({ "shift+" .. direction }, command("resize", { direction = direction }))
+	shortcuts.bind({ direction }, command("navigate", { direction = direction }))
+	shortcuts.bind_global("alt+" .. direction, command("resize", { direction = direction }))
 end
 
 for key, direction in pairs(vim) do
-  shortcuts.bind_global("ctrl+" .. key, command("navigate", { direction = direction }))
-  shortcuts.bind_global("alt+" .. key, command("resize", { direction = direction }))
+	shortcuts.bind_global("ctrl+" .. key, command("navigate", { direction = direction }))
 end
 
--- Tabs. `n` is new_tab in the GUI, which the desktop cannot do yet.
+-- Tabs and workspaces: n and N from dev/config.lua.
+shortcuts.bind({ "n" }, actions.create_tab)
+shortcuts.bind({ "N" }, actions.create_workspace)
 shortcuts.bind({ "p" }, function()
-  actions.step_tab(-1, false)
+	actions.step_tab(-1, false)
 end)
 shortcuts.bind({ "," }, function()
-  actions.step_tab(-1, true)
+	actions.step_tab(-1, true)
 end)
 shortcuts.bind({ "." }, function()
-  actions.step_tab(1, true)
+	actions.step_tab(1, true)
 end)
 
 for index = 1, 9 do
-  shortcuts.bind({ tostring(index) }, function()
-    actions.select_tab(index)
-  end)
-  shortcuts.bind_global("alt+" .. index, function()
-    actions.select_workspace(index)
-  end)
+	shortcuts.bind({ tostring(index) }, function()
+		actions.select_tab(index)
+	end)
+	shortcuts.bind_global("alt+" .. index, function()
+		actions.select_workspace(index)
+	end)
 end
 
 -- Desktop-only actions, on keys the GUI leaves free.
 shortcuts.bind({ "o" }, command("cycle"))
 shortcuts.bind({ "F" }, command("float"))
 shortcuts.bind_global("ctrl+left", function()
-  actions.step_space(-1)
+	actions.step_space(-1)
 end)
 shortcuts.bind_global("ctrl+right", function()
-  actions.step_space(1)
+	actions.step_space(1)
 end)
 
 local colors = { background = "#1b1723", accent = "#c4a7e7" }
 
 desktop.configure_surface("wallpaper", {
-  module = "wallpaper",
-  options = { color = "#16131d", fit = "cover" },
+	module = "wallpaper",
+	options = { color = "#16131d", fit = "cover" },
 })
 
 desktop.configure_surface("topbar", {
-  module = "topbar",
-  options = { colors = colors },
+	module = "topbar",
+	options = { colors = colors },
 })
 
 desktop.configure_surface("sidebar", {
-  module = "sidebar",
-  options = { colors = colors, title = "Telar" },
+	module = "sidebar",
+	options = { colors = colors, title = "Telar" },
 })

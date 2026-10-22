@@ -25,6 +25,7 @@ namespace ui {
     void unsubscribe(std::uint64_t identifier);
     QString selectTab(const QVariant &tab);
     QString moveTab(const QVariant &tab, const QVariantMap &options);
+    QString createWorkspace();
     void activateSpace(const QVariant &space);
     void bindSpace(const QVariant &space, const QVariant &workspace);
     QString createSpace(const QVariantMap &options);

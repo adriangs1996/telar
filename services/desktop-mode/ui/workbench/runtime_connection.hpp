@@ -18,6 +18,8 @@ namespace workbench {
     ~RuntimeConnection() override;
     std::function<void()> changed;
     std::function<void(std::uint64_t)> painted;
+    // A tab this session created, with its root pane attached.
+    std::function<void(std::uint64_t)> created;
     void selectTab(std::uint64_t tab);
     void setVisible(bool visible);
     // Fetches a hidden workspace's tabs and their panes once, attaching none, so its windows can
@@ -29,6 +31,8 @@ namespace workbench {
     void resize(std::uint64_t pane, telar::TerminalSize size);
     void viewport(std::uint64_t pane, std::uint32_t offset);
     void split(std::uint64_t source);
+    // Opens a tab whose shell starts in the source pane's directory, or in $HOME without one.
+    void createTab(std::uint64_t source);
     void close(std::uint64_t pane);
     std::shared_ptr<TerminalScreen> screen(std::uint64_t pane);
     const std::map<std::uint64_t, std::vector<std::uint64_t>> &tabs() const;

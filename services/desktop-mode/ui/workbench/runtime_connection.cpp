@@ -1,5 +1,6 @@
 #include "runtime_connection.hpp"
 #include "../../log_categories.hpp"
+#include "../../login_shell.hpp"
 #include "../../telar_client/codecs/telar_handshake.hpp"
 #include "../../trace.hpp"
 #include <QElapsedTimer>
@@ -450,6 +451,26 @@ namespace workbench {
       refresh();
       break;
     }
+    // The runtime attached the new tab's root pane to this session. It stays attached when the tab
+    // becomes the active one before the next synchronization, which is what selecting it asks.
+    case telar::ServerTag::tab_created: {
+      const auto value = telar::Codec::decode<telar::TabCreated>(payload, storage);
+      if (!pending_.erase(value.request_id)) {
+        break;
+      }
+
+      qCInfo(telar_log::connection) << "ws" << workspace_.id << "tab" << value.location.tab_id
+                                    << "created with pane" << value.root_pane_id;
+      tabs_[value.location.tab_id] = {value.root_pane_id};
+      snapshots_.insert(value.location.tab_id);
+      attached_.insert(value.root_pane_id);
+      if (created) {
+        created(value.location.tab_id);
+      }
+
+      notify();
+      break;
+    }
     case telar::ServerTag::tab_closed: {
       const auto value = telar::Codec::decode<telar::TabClosed>(payload, storage);
       qCInfo(telar_log::connection)
@@ -674,30 +695,39 @@ namespace workbench {
       throw std::runtime_error("Split requires an attached terminal in the active tab");
     }
 
-    auto shell = qEnvironmentVariable("SHELL").toStdString();
-    if (shell.empty() || shell.front() != '/') {
-      shell = "/bin/sh";
-    }
-
-    const std::string_view name = std::string_view(shell).substr(shell.find_last_of('/') + 1);
-    constexpr std::array<std::string_view, 6> login_shells{"sh",
-                                                           "bash",
-                                                           "zsh",
-                                                           "ksh",
-                                                           "dash",
-                                                           "fish"};
-    const bool login = std::ranges::find(login_shells, name) != login_shells.end();
-    const std::array<std::string_view, 3> arguments{shell, "-l", "-i"};
+    const login_shell::Command shell;
     const auto cwd = QDir::homePath().toStdString();
     // The runtime resolves cwd_source from its live pane, keeping directory authority there.
-    const telar::Launch launch{cwd,
-                               source,
-                               std::span(arguments).first(login ? arguments.size() : 1)};
+    const telar::Launch launch{cwd, source, shell.arguments()};
     const auto request_id = request(RequestKind::create);
     qCInfo(telar_log::connection) << "ws" << workspace_.id << "split pane" << source << "in tab"
                                   << active_tab_;
     try {
       send(telar::CreatePane{request_id, {workspace_, active_tab_}, initial_size, launch});
+    } catch (...) {
+      pending_.erase(request_id);
+      throw;
+    }
+  }
+
+  void RuntimeConnection::createTab(std::uint64_t source) {
+    TELAR_TRACE("connection.create_tab");
+    if (!ready()) {
+      throw std::runtime_error("Workspace is not connected to the runtime");
+    }
+
+    if (waiting(RequestKind::create)) {
+      throw std::runtime_error("A pane is already being created");
+    }
+
+    const login_shell::Command shell;
+    const auto cwd = QDir::homePath().toStdString();
+    // Without a source pane the tab opens in $HOME; with one, in that pane's directory.
+    const telar::Launch launch{cwd, attached_.contains(source) ? source : 0, shell.arguments()};
+    const auto request_id = request(RequestKind::create);
+    qCInfo(telar_log::connection) << "ws" << workspace_.id << "create tab from pane" << source;
+    try {
+      send(telar::CreateTab{request_id, workspace_, {}, initial_size, launch});
     } catch (...) {
       pending_.erase(request_id);
       throw;

@@ -20,6 +20,7 @@ namespace {
 
   DesktopChanges changesBetween(const DesktopState &before, const DesktopState &after) {
     DesktopChanges changes;
+
     changes.displays = before.displays != after.displays;
     changes.operation = before.pending_space != after.pending_space ||
                         before.pending_operation != after.pending_operation ||
@@ -29,6 +30,7 @@ namespace {
     changes.focus = before.focused_space != after.focused_space;
     changes.spaces = before.spaces.size() != after.spaces.size();
     const auto common = std::min(before.spaces.size(), after.spaces.size());
+
     for (std::size_t index = 0; index < common; ++index) {
       const auto &previous = before.spaces[index];
       const auto &current = after.spaces[index];
@@ -59,14 +61,19 @@ namespace {
 DesktopSession::DesktopSession(std::string runtime_socket)
     : registry_(std::in_place, std::move(runtime_socket)) {}
 
-void DesktopSession::start(NativeDesktop::Sink observations, Commands commands) {
+void DesktopSession::start(NativeDesktop::Sink observations,
+                           Commands commands,
+                           WorkspaceCreator create_workspace) {
   commands_ = std::move(commands);
+  create_workspace_ = std::move(create_workspace);
   native_.start(std::move(observations));
 }
 
 void DesktopSession::stop() {
   native_.stop();
   commands_ = {};
+  create_workspace_ = {};
+  creating_.clear();
   pending_.reset();
 }
 
@@ -111,12 +118,30 @@ void DesktopSession::apply(DesktopState state) {
   notify();
 }
 
-void DesktopSession::reconcile(const std::vector<WorkspaceSummary> &workspaces, bool ready) {
+void DesktopSession::reconcile(const std::vector<WorkspaceSummary> &workspaces,
+                               bool ready,
+                               const WorkspaceCreation &created) {
   TELAR_TRACE("spaces.reconcile");
   const bool was_ready = runtime_ready_;
   runtime_ready_ = ready;
 
-  if (!ready || (was_ready && workspaces_ == workspaces)) {
+  // A creation that never reports back would stop every later placement.
+  if (!ready) {
+    creating_.clear();
+    return;
+  }
+
+  const bool listed = !was_ready || workspaces_ != workspaces;
+
+  // A creation reports back before the catalog lists its workspace, so a placement waits for one
+  // catalog change: its workspace arrives with it, or it is gone.
+  if (listed) {
+    std::erase_if(placements_, [&](const auto &entry) {
+      return std::ranges::find(workspaces, entry.first, &WorkspaceSummary::id) == workspaces.end();
+    });
+  }
+
+  if (!learn(created) && !listed) {
     return;
   }
 
@@ -128,6 +153,7 @@ void DesktopSession::reconcile(const std::vector<WorkspaceSummary> &workspaces, 
 
   if (changed_ids) {
     automatic_paused_ = false;
+    fill_paused_ = false;
   }
 
   associate();
@@ -398,31 +424,40 @@ void DesktopSession::synchronizeOwnedSpaces() {
     associations_restored_ = true;
   }
 
-  const auto bound = [&](std::uint32_t display) {
-    return std::ranges::count_if(state_.spaces, [&](const auto &space) {
-      return space.display == display && space.workspace.has_value();
-    });
-  };
+  // A workspace whose creation has not reported back yet would land on the focused display
+  // instead of the one it was created for.
+  if (!creating_.empty()) {
+    return;
+  }
 
+  // Each display is a desktop of its own: a workspace stays where it was placed, and a new one
+  // goes to the display it was created for, or else to the focused one.
   for (const auto &workspace : workspaces_) {
     if (std::ranges::any_of(state_.spaces, [&](const auto &space) {
           return space.workspace == workspace.id;
         })) {
+      placements_.erase(workspace.id);
       continue;
+    }
+
+    const auto placed = placements_.find(workspace.id);
+    auto display = focusedDisplay();
+
+    if (placed != placements_.end() &&
+        std::ranges::find(state_.displays, placed->second, &DesktopDisplay::id) !=
+            state_.displays.end()) {
+      display = placed->second;
     }
 
     auto candidate = state_.spaces.end();
 
     for (auto it = state_.spaces.begin(); it != state_.spaces.end(); ++it) {
-      if (it->fullscreen || it->workspace) {
+      if (it->display != display || it->fullscreen || it->workspace) {
         continue;
       }
 
-      const auto rank = [&](const auto &space) {
-        return std::tuple{bound(space.display) != 0, !space.visible, !space.focused, space.index};
-      };
-
-      if (candidate == state_.spaces.end() || rank(*it) < rank(*candidate)) {
+      if (candidate == state_.spaces.end() ||
+          std::tuple{!it->visible, it->index} < std::tuple{!candidate->visible, candidate->index}) {
         candidate = it;
       }
     }
@@ -430,35 +465,16 @@ void DesktopSession::synchronizeOwnedSpaces() {
     if (candidate == state_.spaces.end()) {
       registry_->save(state_);
       beginOperation(
-          {{next_request_++, SpaceOperation::Kind::create, focusedDisplay()}, workspace.id, true});
+          {{next_request_++, SpaceOperation::Kind::create, display}, workspace.id, true});
       return;
     }
 
     candidate->workspace = workspace.id;
     bindings_[candidate->uuid] = workspace.id;
+    placements_.erase(workspace.id);
   }
 
-  // Keep an association on each display when possible; macOS cannot remove its final desktop.
-  for (const auto &display : state_.displays) {
-    if (bound(display.id) != 0) {
-      continue;
-    }
-
-    auto receiver = std::ranges::find_if(state_.spaces, [&](const auto &space) {
-      return space.display == display.id && !space.fullscreen && !space.workspace && space.visible;
-    });
-    auto donor = std::ranges::find_if(state_.spaces, [&](const auto &space) {
-      return space.workspace && !space.visible && bound(space.display) > 1;
-    });
-
-    if (receiver != state_.spaces.end() && donor != state_.spaces.end()) {
-      receiver->workspace = donor->workspace;
-      donor->workspace.reset();
-      bindings_[receiver->uuid] = receiver->workspace;
-      bindings_[donor->uuid] = std::nullopt;
-    }
-  }
-
+  fillDisplays();
   registry_->save(state_);
   auto redundant = state_.spaces.end();
 
@@ -486,6 +502,62 @@ void DesktopSession::synchronizeOwnedSpaces() {
          {},
          true});
   }
+}
+
+// A display without a workspace gets one on $HOME, one creation at a time. After a failure the
+// next attempt waits for the workspace catalog to change.
+void DesktopSession::fillDisplays() {
+  if (!create_workspace_ || fill_paused_) {
+    return;
+  }
+
+  for (const auto &display : state_.displays) {
+    const bool placing = std::ranges::any_of(placements_, [&](const auto &entry) {
+      return entry.second == display.id;
+    });
+
+    if (placing || std::ranges::any_of(state_.spaces, [&](const auto &space) {
+          return space.display == display.id && space.workspace;
+        })) {
+      continue;
+    }
+
+    qCInfo(telar_log::spaces) << "display" << display.id << "has no workspace; creating one";
+    createWorkspace(display.id);
+    return;
+  }
+}
+
+std::uint64_t DesktopSession::createWorkspace() {
+  return createWorkspace(focusedDisplay());
+}
+
+std::uint64_t DesktopSession::createWorkspace(std::uint32_t display) {
+  if (!create_workspace_) {
+    throw std::runtime_error("This desktop cannot create workspaces");
+  }
+
+  const auto request = create_workspace_();
+  creating_[request] = display;
+  return request;
+}
+
+// The display a creation asked for becomes the workspace's placement.
+bool DesktopSession::learn(const WorkspaceCreation &created) {
+  const auto found = creating_.find(created.request);
+
+  if (found == creating_.end()) {
+    return false;
+  }
+
+  if (created.workspace) {
+    placements_[created.workspace] = found->second;
+  } else {
+    fill_paused_ = true;
+  }
+
+  creating_.erase(found);
+  return true;
 }
 
 bool DesktopSession::hasWorkspace(std::uint64_t identifier) const {

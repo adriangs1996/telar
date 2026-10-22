@@ -30,23 +30,11 @@ namespace {
     return number;
   }
 
-  lua::Value snapshot(const RuntimeState &state, bool include_workspace) {
-    TELAR_TRACE("lua.runtime.snapshot");
+  // A workspace on screen, in the shape the focused one also takes at the snapshot's top level.
+  void describe(const RuntimeView &view, lua::Value::Object &into) {
     lua::Value::Array tabs;
-    lua::Value::Array workspaces;
 
-    for (const auto &workspace : state.workspaces) {
-      workspaces.push_back({lua::Value::Object{
-          {"id", {std::to_string(workspace.id)}},
-          {"name", {workspace.name}},
-          {"tab_count", {static_cast<double>(workspace.tab_count)}},
-      }});
-    }
-
-    for (const auto &tab : state.tabs) {
-      if (!include_workspace) {
-        break;
-      }
+    for (const auto &tab : view.tabs) {
       lua::Value::Array foregrounds;
 
       for (const auto &name : tab.foregrounds) {
@@ -60,29 +48,63 @@ namespace {
       }});
     }
 
+    into.insert_or_assign(
+        "workspace",
+        lua::Value{lua::Value::Object{
+            {"id", {std::to_string(view.workspace.id)}},
+            {"kind", {std::string(view.workspace.worktree ? "worktree" : "workspace")}},
+            {"name", {view.name}},
+        }});
+    into.insert_or_assign("tabs", lua::Value{std::move(tabs)});
+
+    if (view.active_tab) {
+      into.insert_or_assign("active_tab", lua::Value{std::to_string(view.active_tab)});
+    }
+  }
+
+  lua::Value snapshot(const RuntimeState &state, bool include_workspace) {
+    TELAR_TRACE("lua.runtime.snapshot");
+    lua::Value::Array workspaces;
+    lua::Value::Array views;
+
+    for (const auto &workspace : state.workspaces) {
+      workspaces.push_back({lua::Value::Object{
+          {"id", {std::to_string(workspace.id)}},
+          {"name", {workspace.name}},
+          {"tab_count", {static_cast<double>(workspace.tab_count)}},
+      }});
+    }
+
+    for (const auto &view : state.views) {
+      lua::Value::Object value;
+      describe(view, value);
+      views.push_back({std::move(value)});
+    }
+
     lua::Value::Object result{
         {"connected", {state.connected}},
         {"workspaces", {std::move(workspaces)}},
-        {"tabs", {std::move(tabs)}},
+        {"views", {std::move(views)}},
+        {"tabs", {lua::Value::Array{}}},
         {"request_succeeded", {state.request_succeeded}},
     };
 
-    if (state.workspace && include_workspace) {
-      result.emplace(
-          "workspace",
-          lua::Value{lua::Value::Object{
-              {"id", {std::to_string(state.workspace->id)}},
-              {"kind", {std::string(state.workspace->worktree ? "worktree" : "workspace")}},
-              {"name", {state.workspace_name}},
-          }});
-    }
-
-    if (state.active_tab && include_workspace) {
-      result.emplace("active_tab", lua::Value{std::to_string(state.active_tab)});
+    if (const auto *focused = state.focused(); focused && include_workspace) {
+      describe(*focused, result);
     }
 
     if (state.completed_request) {
       result.emplace("completed_request", lua::Value{std::to_string(state.completed_request)});
+    }
+
+    if (state.created.request) {
+      lua::Value::Object created{{"request", {std::to_string(state.created.request)}}};
+
+      if (state.created.workspace) {
+        created.emplace("workspace", lua::Value{std::to_string(state.created.workspace)});
+      }
+
+      result.emplace("created", lua::Value{std::move(created)});
     }
 
     if (!state.error.empty()) {
@@ -253,6 +275,7 @@ namespace ui {
       }
 
       const bool desktop_callback = found->second.desktop;
+
       struct Call {
         int callback;
         lua::Value value;
@@ -309,15 +332,6 @@ namespace ui {
       std::get<lua::Value::Object>(value.data)
           .emplace("context", lua::Value{std::to_string(desktop.state().focused_space)});
       return value;
-    }
-
-    void requireWorkspace() const {
-      requireActive();
-
-      if (!session.state().workspace || session.state().workspace->worktree ||
-          desktop.focusedWorkspace() != session.state().workspace->id) {
-        throw std::runtime_error("The active Space's workspace is not ready");
-      }
     }
 
     void requireActive() const {
@@ -393,13 +407,13 @@ namespace ui {
   }
 
   QString RuntimeBinding::selectTab(const QVariant &tab) {
-    impl_->requireWorkspace();
+    impl_->requireActive();
     return QString::number(impl_->session.selectTab(identifier(tab)));
   }
 
   QString RuntimeBinding::moveTab(const QVariant &tab, const QVariantMap &options) {
     TELAR_TRACE("lua.runtime.move_tab");
-    impl_->requireWorkspace();
+    impl_->requireActive();
     const bool after = options.contains("after");
 
     if (after == options.contains("before") || options.size() != 1) {
@@ -410,6 +424,12 @@ namespace ui {
         impl_->session.moveTab(identifier(tab),
                                identifier(options.value(after ? "after" : "before")),
                                after));
+  }
+
+  QString RuntimeBinding::createWorkspace() {
+    TELAR_TRACE("lua.runtime.create_workspace");
+    impl_->requireActive();
+    return QString::number(impl_->desktop.createWorkspace());
   }
 
   void RuntimeBinding::activateSpace(const QVariant &space) {

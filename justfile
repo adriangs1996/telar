@@ -1,6 +1,6 @@
 dev_runtime_dir := justfile_directory() / ".zig-out/dev"
 desktop_runtime_dir := justfile_directory() / ".zig-out/desktop-dev"
-desktop_socket := if path_exists(desktop_runtime_dir / "runtime.sock.desktop-clone.json") == "true" { desktop_runtime_dir / "runtime.sock" } else { dev_runtime_dir / "runtime.sock" }
+desktop_fresh_dir := justfile_directory() / ".zig-out/desktop"
 
 # Show the available commands.
 default:
@@ -39,14 +39,47 @@ app:
     mkdir -p -m 700 "{{ dev_runtime_dir }}"
     TELAR_SOCKET="{{ dev_runtime_dir }}/runtime.sock" TELAR_HISTORY="{{ dev_runtime_dir }}/history.db" zig build run -- gui
 
-# Build and run Desktop with dev/desktop.lua against an existing runtime.
+# Without a socket, every run starts a new runtime under .zig-out/desktop,
+# drops the workbench layout saved for it, and stops the runtime on exit.
+# Build and run Desktop with dev/desktop.lua on a new runtime each run, or on SOCKET.
 [working-directory: "services/desktop-mode"]
-desktop socket=desktop_socket:
+desktop socket="":
+    #!/usr/bin/env bash
+    set -euo pipefail
     cmake --preset debug
     cmake --build --preset debug --target telar-desktop
-    TELAR_DESKTOP_CONFIG="{{ justfile_directory() }}/dev/desktop.lua" \
-        TELAR_DESKTOP_UI_DIR="${TELAR_DESKTOP_UI_DIR:-$PWD/ui}" \
-        ./out/debug/telar-desktop "{{ socket }}"
+    export TELAR_DESKTOP_CONFIG="{{ justfile_directory() }}/dev/desktop.lua"
+    export TELAR_DESKTOP_UI_DIR="${TELAR_DESKTOP_UI_DIR:-$PWD/ui}"
+    socket="{{ socket }}"
+    if [[ -n "$socket" ]]; then
+        exec ./out/debug/telar-desktop "$socket"
+    fi
+
+    (cd "{{ justfile_directory() }}" && zig build)
+    telar="{{ justfile_directory() }}/zig-out/bin/telar"
+    runtime="{{ desktop_fresh_dir }}"
+    export TELAR_SOCKET="$runtime/runtime.sock"
+    export TELAR_HISTORY="$runtime/history.db"
+    # A run that was killed leaves its runtime behind; it must stop before its files go.
+    "$telar" server stop >/dev/null
+    for _ in {1..50}; do
+        [[ -S "$TELAR_SOCKET" ]] || break
+        sleep 0.1
+    done
+    if [[ -S "$TELAR_SOCKET" ]]; then
+        echo "The previous desktop runtime did not stop: $TELAR_SOCKET" >&2
+        exit 1
+    fi
+
+    rm -rf "$runtime"
+    mkdir -p -m 700 "$runtime"
+    # The desktop saves the workbench layout per runtime socket, named by its SHA-256.
+    state="${TELAR_DESKTOP_STATE_DIR:-$HOME/Library/Application Support/telar/desktop}"
+    layout="workbench-$(printf '%s' "$TELAR_SOCKET" | shasum -a 256 | cut -d ' ' -f 1).json"
+    rm -f "$state/$layout"
+    trap '"$telar" server stop >/dev/null' EXIT
+    "$telar" server endpoint >/dev/null
+    ./out/debug/telar-desktop "$TELAR_SOCKET"
 
 # Seed a separate desktop runtime once, using a checkpoint and the socket of its source runtime.
 desktop-runtime $source="" $session="":
