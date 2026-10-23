@@ -154,6 +154,63 @@ function actions.select_workspace(index)
   end
 end
 
+-- Takes the focused window, another application's, out of every layout into the backstage.
+function actions.send_to_backstage()
+  workbench.command("send_to_backstage")
+end
+
+-- Brings the focused display's layout back over a window that took it over.
+function actions.end_takeover()
+  workbench.command("end_takeover")
+end
+
+-- Binds the backstage switcher to a modified chord, as Cmd+Tab: each press opens it or moves
+-- on, the chord with shift moves back, releasing the modifier lets the selected window take over
+-- the display, and the modifier with escape closes it untouched. Returns a function that unbinds
+-- it.
+function actions.bind_backstage_switcher(chord)
+  local modifiers, key = chord:match("^(.+)%+([^+]+)$")
+  assert(modifiers, "The backstage switcher needs a modified chord")
+  local stop_cancel
+
+  local function close()
+    if stop_cancel then
+      stop_cancel()
+      stop_cancel = nil
+    end
+  end
+
+  local function cycle(step)
+    return function()
+      if workbench.command("cycle_backstage", { step = step }) and not stop_cancel then
+        stop_cancel = shortcuts.bind_global(modifiers .. "+escape", function()
+          close()
+          workbench.command("close_backstage")
+        end)
+      end
+    end
+  end
+
+  local function commit()
+    if stop_cancel then
+      close()
+      workbench.command("take_over_selected")
+    end
+  end
+
+  local stops = {
+    shortcuts.bind_global(chord, cycle(1), { on_release = commit }),
+    shortcuts.bind_global(modifiers .. "+shift+" .. key, cycle(-1), { on_release = commit }),
+  }
+
+  return function()
+    close()
+    for _, stop in ipairs(stops) do
+      stop()
+    end
+  end
+end
+
 local function install()
   shortcuts.bind({ "%" }, function()
     workbench.command("split", { axis = "horizontal" })
@@ -211,6 +268,10 @@ local function install()
   shortcuts.bind_global("ctrl+right", function()
     actions.step_space(1)
   end)
+
+  actions.bind_backstage_switcher("alt+tab")
+  shortcuts.bind_global("alt+b", actions.send_to_backstage)
+  shortcuts.bind_global("alt+enter", actions.end_takeover)
 end
 
 return setmetatable({ actions = actions }, {

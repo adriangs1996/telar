@@ -11,10 +11,10 @@
 #include <vector>
 
 namespace macos::spaces {
-  // Reads the Spaces catalog on a thread of its own. During a Space switch the window server
-  // answers only once its animation lets it, and the UI thread must never wait for that. Besides
-  // reads, only posted commands that keep no state on the UI thread run here; the commands that
-  // do, and everything that acts on a snapshot, stay on the UI thread.
+  // Reads the displays and macOS's own Spaces on a thread of its own, and runs the commands that
+  // wait on WindowManager or another application, such as making a layer, which can take longer
+  // than a frame. Only posted commands that keep no state on the UI thread run here; everything
+  // that acts on a snapshot stays on the UI thread.
   class Observer final {
   public:
     // On the UI thread: a snapshot, or the error that prevented one.

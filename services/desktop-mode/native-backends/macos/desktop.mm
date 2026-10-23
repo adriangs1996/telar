@@ -247,13 +247,6 @@ void NativeDesktop::changeSpace(SpaceOperation operation) {
       }
 
       operation.display = target->display;
-      const auto remaining = std::ranges::count_if(state.spaces, [&](const auto &space) {
-        return space.display == target->display && !space.fullscreen;
-      });
-
-      if (remaining <= 1) {
-        throw std::runtime_error("The last Space of a display cannot be removed");
-      }
     }
 
     if (std::ranges::find(state.displays, operation.display, &DesktopDisplay::id) ==

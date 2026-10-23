@@ -8,6 +8,7 @@
 #include <QObject>
 #include <condition_variable>
 #include <dlfcn.h>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -22,6 +23,11 @@ namespace workbench::native {
 
     // Each Accessibility call waits at most this long for an application that does not answer.
     constexpr float accessibility_timeout = 0.05f;
+    // A window larger than the size written to it by more than this kept a size of its own.
+    constexpr double size_tolerance = 1;
+    // How long after refusing a size a window is read again, so a size the application had not
+    // laid out yet is not taken for one it keeps.
+    constexpr std::int64_t refusal_settle_ns = 150 * NSEC_PER_MSEC;
     // An application gets its Dock icon after macOS announces its launch, and a notification can
     // be missed: this often the observer attaches to new applications and reads again anyway.
     constexpr CFTimeInterval rescan_interval = 2;
@@ -84,18 +90,52 @@ namespace workbench::native {
     struct Writes {
       std::mutex mutex;
       std::map<std::uint32_t, Write> pending;
+      // The smallest size each window's application keeps, learned from sizes it refused; a
+      // dimension it never refused stays 0.
+      std::map<std::uint32_t, QSizeF> minimums;
+      // Asks the observer for a read; cleared before the observer goes away.
+      std::function<void()> wake;
     };
 
-    void apply(AXUIElementRef window, std::int64_t pid, const Write &write) {
+    std::optional<QSizeF> sizeOf(AXUIElementRef window) {
+      CFTypeRef value = nullptr;
+      CGSize size{};
+      const bool read = AXUIElementCopyAttributeValue(window, kAXSizeAttribute, &value) ==
+                            kAXErrorSuccess &&
+                        value && CFGetTypeID(value) == AXValueGetTypeID() &&
+                        AXValueGetValue(static_cast<AXValueRef>(value), kAXValueTypeCGSize, &size);
+      if (value) {
+        CFRelease(value);
+      }
+
+      return read ? std::optional{QSizeF(size.width, size.height)} : std::nullopt;
+    }
+
+    // The dimensions of `kept` that exceed what was written, 0 for the others.
+    QSizeF exceeding(QSizeF kept, QSizeF written) {
+      return {kept.width() > written.width() + size_tolerance ? kept.width() : 0,
+              kept.height() > written.height() + size_tolerance ? kept.height() : 0};
+    }
+
+    // Returns the size the window kept when its application accepted the call but not the size,
+    // as some do below their minimum.
+    std::optional<QSizeF> apply(AXUIElementRef window, std::int64_t pid, const Write &write) {
+      std::optional<QSizeF> kept;
       if (write.frame) {
         CGSize size{write.frame->width(), write.frame->height()};
         CGPoint origin{write.frame->x(), write.frame->y()};
         const auto dimensions = AXValueCreate(kAXValueTypeCGSize, &size);
         const auto position = AXValueCreate(kAXValueTypeCGPoint, &origin);
-        AXUIElementSetAttributeValue(window, kAXSizeAttribute, dimensions);
+        const bool sized =
+            AXUIElementSetAttributeValue(window, kAXSizeAttribute, dimensions) == kAXErrorSuccess;
         AXUIElementSetAttributeValue(window, kAXPositionAttribute, position);
         CFRelease(dimensions);
         CFRelease(position);
+
+        const auto actual = sized ? sizeOf(window) : std::nullopt;
+        if (actual && !exceeding(*actual, write.frame->size()).isNull()) {
+          kept = actual;
+        }
       } else if (write.position) {
         CGPoint origin{write.position->x(), write.position->y()};
         const auto position = AXValueCreate(kAXValueTypeCGPoint, &origin);
@@ -114,7 +154,7 @@ namespace workbench::native {
           CFRelease(button);
         }
 
-        return;
+        return kept;
       }
 
       if (write.focus) {
@@ -123,6 +163,8 @@ namespace workbench::native {
         AXUIElementPerformAction(window, kAXRaiseAction);
         AXUIElementSetAttributeValue(window, kAXMainAttribute, kCFBooleanTrue);
       }
+
+      return kept;
     }
   } // namespace
 
@@ -398,11 +440,26 @@ namespace workbench::native {
         }
       }
 
+      {
+        std::lock_guard lock(writes->mutex);
+        std::erase_if(writes->minimums, [&](const auto &entry) {
+          return !bounds.contains(entry.first);
+        });
+
+        for (auto &window : next.windows) {
+          if (const auto found = writes->minimums.find(window.id);
+              found != writes->minimums.end()) {
+            window.minimum = found->second;
+          }
+        }
+      }
+
       const auto &spaces = macos::spaces::VirtualSpaces::get();
       for (auto &window : next.windows) {
         const auto center = window.frame.center();
-        window.space =
-            spaces.resolve(macos::spaces::spaceOf(window.id), CGPointMake(center.x(), center.y()));
+        const auto space = macos::spaces::spaceOf(window.id);
+        window.backstage = spaces.offstage(space);
+        window.space = spaces.resolve(space, CGPointMake(center.x(), center.y()));
         if (window.id == focused) {
           next.focused = focused;
         }
@@ -496,6 +553,15 @@ namespace workbench::native {
           started.notify_all();
         }
 
+        {
+          std::lock_guard lock(writes->mutex);
+          writes->wake = [this] {
+            post(^{
+              schedule();
+            });
+          };
+        }
+
         watchWorkspace();
         rescan();
         CFRunLoopRun();
@@ -542,6 +608,7 @@ namespace workbench::native {
 
       const auto element = static_cast<AXUIElementRef>(CFRetain(found->second.element));
       const auto pid = found->second.pid;
+      const auto target = queue;
       dispatch_async(queue, ^{
         Write latest;
         {
@@ -550,8 +617,28 @@ namespace workbench::native {
           shared->pending.erase(window);
         }
 
-        apply(element, pid, latest);
-        CFRelease(element);
+        const auto kept = apply(element, pid, latest);
+        if (!kept) {
+          CFRelease(element);
+          return;
+        }
+
+        // The size counts once it holds and no newer write has changed what was asked.
+        const auto written = latest.frame->size();
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, refusal_settle_ns), target, ^{
+          const auto again = sizeOf(element);
+          CFRelease(element);
+          std::lock_guard inner(shared->mutex);
+          if (!again || *again != *kept || shared->pending.contains(window)) {
+            return;
+          }
+
+          auto &minimum = shared->minimums.try_emplace(window, 0, 0).first->second;
+          minimum = minimum.expandedTo(exceeding(*kept, written));
+          if (shared->wake) {
+            shared->wake();
+          }
+        });
       });
     }
   };
@@ -575,6 +662,11 @@ namespace workbench::native {
   WindowObserver::~WindowObserver() {
     if (!impl_->thread.joinable()) {
       return;
+    }
+
+    {
+      std::lock_guard lock(impl_->writes->mutex);
+      impl_->writes->wake = {};
     }
 
     CFRunLoopStop(impl_->loop);
@@ -609,6 +701,28 @@ namespace workbench::native {
     TELAR_TRACE("native.windows.hide");
     const std::uint32_t windows[] = {window};
     macos::spaces::moveToLayer(windows, macos::spaces::VirtualSpaces::get().shelf(space));
+  }
+
+  void WindowObserver::sendToBackstage(std::uint32_t window) {
+    TELAR_TRACE("native.windows.send_to_backstage");
+    const std::uint32_t windows[] = {window};
+    macos::spaces::VirtualSpaces::get().sendToBackstage(windows);
+  }
+
+  void WindowObserver::takeOver(std::uint32_t window, std::uint32_t display, QRectF area) {
+    TELAR_TRACE("native.windows.take_over");
+    const std::uint32_t windows[] = {window};
+    macos::spaces::VirtualSpaces::get().takeOver(display, windows);
+    impl_->write(window, ^(Write &write) {
+      write.frame = area;
+      write.position.reset();
+      write.focus = true;
+    });
+  }
+
+  void WindowObserver::endTakeover(std::uint32_t display) {
+    TELAR_TRACE("native.windows.end_takeover");
+    macos::spaces::VirtualSpaces::get().endTakeover(display);
   }
 
   void WindowObserver::focus(std::uint32_t window) {

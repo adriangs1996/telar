@@ -97,7 +97,7 @@ commit Qt Quick makes on focus changes, because it would switch the native input
 context; a composition in progress is committed in its pane first. Pressing a
 pane, or Lua focusing one of its items, focuses it. Other applications' windows are still activated, as they belong to their applications.
 A hidden workspace keeps its windows on its own
-Space, which macOS already keeps out of sight; returning shows their last frame. A
+Space, whose layer is hidden; returning shows their last frame. A
 terminal shows "Connecting to runtime…" only after 750 ms in view without a live
 attachment. These operations leave the processes running in the runtime.
 
@@ -148,7 +148,7 @@ Commands execute from callbacks after the UI has activated. IDs are strings.
 
 | API | Meaning |
 | --- | --- |
-| `state()` | Visible workspaces, tabs, focused element, requested/actual geometry and errors |
+| `state()` | Visible workspaces, tabs, focused element, requested/actual geometry and errors; `backstage`, its windows most recently used first, each with `window`, `application`, `title`, `pid` and `taking_over`; and `switcher`, `{display, window}` while the backstage switcher is open |
 | `on_change(callback)` | Subscribe to workbench changes; returns an unsubscribe function |
 | `command("split", { axis = "horizontal" })` | Create a runtime terminal next to the focused element |
 | `command("new_tab")` | Open a tab in the focused workspace whose shell starts in the focused pane's directory, and select it once the runtime lists it |
@@ -165,6 +165,12 @@ Commands execute from callbacks after the UI has activated. IDs are strings.
 | `command("windows")` | List the other applications' windows the desktop watches, with `id`, `application`, `title` and `floating` |
 | `command("adopt", { window = "1234" })` | Manage a window whose application a rule ignores; it joins the tab shown on its Space |
 | `command("move", { id = "view:...", tab = "2" })` | Move a Lua view or external element to another tab |
+| `command("send_to_backstage", { window = "1234" })` | Send another application's window to the backstage; without `window`, the focused element, which must be one |
+| `command("take_over", { window = "1234" })` | Show a backstage window alone over the focused display's workspace |
+| `command("end_takeover")` | Bring the focused display's layout back; the window returns to the backstage |
+| `command("cycle_backstage", { step = 1 })` | Open the backstage switcher on the focused display, or move its selection |
+| `command("take_over_selected")` | Close the switcher; its selected window takes over the display |
+| `command("close_backstage")` | Close the switcher without changing anything |
 | `command("close", { id = "pane:123" })` | Close/release one element |
 
 Commands without `id` use the focused element. Inside a workbench surface they
@@ -195,10 +201,17 @@ applications' windows outlives its final terminal: see below.
 
 The desktop manages every application with a Dock icon. A window that appears on a
 workspace's Space joins the tab shown there, tiled, or floating when it is a dialog
-or cannot be resized; minimizing it, hiding its application or closing it takes it
-out of its tab, and one that moves to another workspace's Space joins the tab shown
-there. The workbench's `windows` option sets a rule per application, by bundle
-identifier, or by name for an application without one: `tile`, `float` or `ignore`.
+or cannot be resized. A tiled window splits the tab's largest element along its
+longer side, so windows arriving together fill the area as a grid; a split the
+user makes still halves the focused element. An application may accept a size
+through Accessibility and keep a larger one, as Spotify keeps 800 points of width:
+after each write the observer reads the size back, and once a larger one holds for
+150 ms with no newer write pending, it becomes the element's minimum and the layout
+makes room for it instead of letting it cover its neighbours. Minimizing a window,
+hiding its application or closing it takes it out of its tab, and one that moves
+to another workspace's Space joins the tab shown there. The workbench's `windows` option sets a rule per application, by bundle
+identifier, or by name for an application without one: `tile`, `float`, `ignore`
+or `backstage` (see [The backstage](#the-backstage)).
 
 ```lua
 desktop.configure_surface("workbench", {
@@ -207,17 +220,17 @@ desktop.configure_surface("workbench", {
     windows = {
       ["com.apple.systempreferences"] = "float",
       ["com.1password.1password"] = "ignore",
+      ["com.spotify.client"] = "backstage",
     },
   },
 })
 ```
 
-A tab that is not shown parks its windows past a bottom corner of their display,
-leaving a one point sliver: macOS pulls a window that is wholly off every display
-back into view, and no window may sit above the top edge. Of the two bottom
-corners, the one with less of another display beyond it is used, so a parked
-window does not show on a neighbouring display. Activating a parked window, with
-Cmd+Tab or the Dock, shows its tab. A tab holding other applications' windows is
+A tab that is not shown moves its windows to its Space's shelf, a layer that is
+never shown (see [Telar's Spaces on macOS](#telars-spaces-on-macos)): nothing of
+them stays on screen, and hiding needs nothing from their application, so it
+works for one that hangs. Activating a hidden window, with Cmd+Tab or the Dock,
+shows its tab. A tab holding other applications' windows is
 held in the runtime (`hold_tab`), so it survives its last terminal while the
 desktop runs; the runtime lets go when the desktop disconnects.
 
@@ -229,7 +242,7 @@ what the window server does not: titles, subroles and whether a window can be
 resized. Writes go through Accessibility on a serial queue per application, each
 call bounded by 50 ms, so an application that hangs delays only its own windows,
 and a window's queued write is replaced by a newer one. The debug programs
-`external_window_dbg`, `window_observer_dbg` and `space_switch_dbg` hold the
+`external_window_dbg`, `window_observer_dbg` and `layers_dbg` hold the
 measurements behind these choices. On Linux, Telar's own wlroots compositor
 observes and places Wayland and XWayland windows directly. Hidden tabs disable
 their scene nodes rather than moving them offscreen.
@@ -240,6 +253,68 @@ Amethyst and KiwiDesk, found by process name, and Stage Manager while it is on.
 The sidebar shows them as a warning and the session log records each. The list
 is refreshed at most every two seconds (`native-backends/macos/window_managers.mm`),
 since scanning the processes takes a few milliseconds.
+
+### Telar's Spaces on macOS
+
+Telar does not use Mission Control's Spaces. Each display keeps the one desktop
+macOS gives it, and Telar's Spaces are made of layers
+(`native-backends/macos/virtual_spaces.mm`), as the Linux compositor makes its own.
+A layer is an unmanaged Space that WindowManager creates on Telar's behalf through
+SkyLight's bridged operations: Mission Control does not list it, it holds windows
+of any application, and the window server shows or hides it whole. Each Telar
+Space has two:
+
+| Layer | Holds | Shown |
+| --- | --- | --- |
+| stage | the panes and windows of the tab on screen | while its display shows the Space |
+| shelf | the windows of the Space's hidden tabs | never |
+
+Switching Spaces shows one stage and hides the other in one batched call, with no
+animation. Stages sit at level 0, where their windows interleave with the
+desktop's by the usual ordering and window levels: above both wallpapers, below
+Telar's bars, menus and floating panels, and in front of or behind unmanaged
+applications as the user clicks. A layer below level 0 would sit behind macOS's
+wallpaper; one above it, in front of every desktop window. A shown layer stays on
+screen whichever macOS desktop its display shows.
+
+Making a layer is a round trip to WindowManager that can take longer than a frame,
+so Spaces are made and removed on the Spaces observer's thread; moving windows,
+showing and hiding take microseconds. Each layer is stamped with the process that
+made it, by identifier and start time. On start, Telar returns the windows of
+layers a Telar that is no longer running left behind to their desktops and
+destroys those layers; on stop, it does the same with its own. Telar's Spaces are
+made anew on every start, so a workspace's Space does not survive a restart.
+
+An application's new window appears on its display's desktop; the window
+observer reports it on the Space that display shows, so it joins that Space's
+tab. A window that goes full screen leaves Telar's Spaces while it lasts: macOS
+makes it a full-screen Space, which Telar lists but does not manage.
+
+### The backstage
+
+Some applications belong to no workspace and have no place in a layout: a music
+player, a chat. The backstage holds them out of every layout and out of sight.
+Its windows belong to no Space; a window there can take over a display, shown
+alone over the workspace area while that display's stage is hidden, until the
+layout comes back. Two more layers serve every display: the backstage, never
+shown, and the takeover layer, shown while any display has a window taking it
+over.
+
+| Action | Default key | Effect |
+| --- | --- | --- |
+| Send to the backstage | `alt+b` | The focused window, another application's, leaves its tab |
+| Switcher | `alt+tab`, `alt+shift+tab` | Hold Alt: each press opens the switcher on the focused display or moves its selection; releasing Alt lets the selected window take over the display; `alt+escape` closes it untouched |
+| Back to the layout | `alt+enter` | The display's layout returns; the window goes back to the backstage |
+
+Going anywhere else in that display's layout also ends a takeover: another tab,
+another Space, or any workbench command on it. Cmd+Tab or the Dock reaching a
+backstage window lets it take over the focused display. An application with the
+`backstage` rule sends its windows there as they appear; one it opens while it
+takes over a display stays in front of it, and joins the backstage once the
+takeover ends. The switcher (`ui/backstage/init.lua`) shows each window's
+application icon, from the `image://app-icon/<pid>` provider, over its title.
+Only other applications' windows go to the backstage. It is not available on
+Linux yet: its commands fail with an error there.
 
 For manual review, run `just desktop`. Split a
 terminal, send output to both panes, change focus, resize, switch tabs and return.
@@ -272,9 +347,8 @@ Without a socket, `just desktop` starts a new environment on every run: it
 builds `telar`, stops the runtime a previous run left behind, removes
 `.zig-out/desktop`, starts a runtime there with its own history, and stops it
 when the desktop exits. The workbench layout saved for that socket is removed
-too. Space associations, session logs and the desktop's exclusive control stay
-in the regular desktop state directory, so a run hands off with another desktop
-as usual and reuses the Spaces of the previous run. With a socket, it connects to
+too. Session logs and the desktop's exclusive control stay in the regular desktop
+state directory, so a run hands off with another desktop as usual. With a socket, it connects to
 that runtime, which must already be running, and changes nothing else.
 
 ### The user's runtime
@@ -330,13 +404,10 @@ existing environment without matching origin metadata. The ordinary development
 runtime in `.zig-out/dev` is unaffected. `--fresh` explicitly resets a runtime and
 also sets its desktop clone origin aside.
 
-Desktop manages the session's ordinary Spaces. It restores saved associations,
-adopts existing Spaces before creating any, and removes surplus ordinary Spaces.
-The clone's original workspaces reuse the source's associations; workspaces created
-later in development have their own identities. Switching after creating or closing
-workspaces reconciles the difference with the selected runtime. The selected Space
-is retained when it survives reconciliation. There is no automatic merge back into
-the source runtime.
+Desktop gives each of the selected runtime's workspaces a Space of its own and
+removes surplus ones. Switching after creating or closing workspaces reconciles the
+difference with the selected runtime. There is no automatic merge back into the
+source runtime.
 
 The registry lives in Qt's user data directory under `telar/desktop/spaces.json`,
 with owner-only permissions and atomic writes. `TELAR_DESKTOP_STATE_DIR` overrides
@@ -344,10 +415,9 @@ the registry and controller endpoint together, for isolated diagnostics. Corrupt
 state stops automatic reconciliation. No Spaces are removed before a complete,
 connected runtime workspace catalog is received.
 
-macOS requires at least one ordinary Space per display. If there are fewer
-workspaces than displays, the last Space of an unassigned display remains.
-Fullscreen Spaces are owned by the applications' fullscreen lifecycle and are
-excluded from ordinary-Space reconciliation.
+A display keeps its last Space, unbound, for its next workspace. Full-screen
+Spaces are owned by the applications' full-screen lifecycle and are excluded from
+reconciliation.
 
 ### Workspaces and native Spaces integration check
 
@@ -371,30 +441,23 @@ A second wire client emits `CreateWorkspace`, `CreatePane`, `CreateTab` and
 `CreateWorkspace` is the same request the GUI submits after the prefix + N
 workspace prompt; the program does not synthesize keyboard shortcuts.
 
-The checks cover a new dedicated Space per workspace, two simultaneous
-workspaces, multiple panes/tabs without extra Spaces, closing a non-final pane,
-closing a non-final tab, removing the Space after the final pane of the final
-tab exits, natural process exit, and closing before native Space creation is
-confirmed. The last check delays delivery of the production backend's completion
-until the runtime has removed the workspace, then verifies orphan cleanup.
-Probe windows verify that switching changes actual window visibility and that
-destroying the active Space migrates its window to a surviving Space. The check
-also observes Mission Control entry notifications and fails if one is received.
-When another managed display is attached, it also checks creation and removal
-on that display without changing its visible Space.
+The checks cover a Space of its own per workspace, two simultaneous workspaces,
+switching between them changing real window visibility, multiple panes/tabs
+without extra Spaces, closing a non-final pane, closing a non-final tab, removing
+a workspace's Space after the final pane of its final tab exits, natural process
+exit, and closing before Space creation is confirmed. The last check delays
+delivery of the production backend's completion until the runtime has removed the
+workspace, then verifies orphan cleanup. The check also observes Mission Control
+entry notifications and fails if one is received. When another display is
+attached, it also checks creation and removal on that display.
 
-This is a real system integration check: the focused Space changes during the
-run, and Mission Control must remain closed. Neither the bridge nor workspace
-reconciliation requires Accessibility. The runner prints its current permission
-status; the lifecycle also passes when launched as an app without that permission.
-The bridge was investigated on macOS 26.6.2 and checks private API availability;
-it does not fall back to Mission Control on unsupported versions.
-Pre-existing Spaces must remain untouched. Each stage has a timeout; normal
-completion and failures both attempt to remove all Spaces created by this run,
-restore each display's original Space and the original focus, stop the isolated
-runtime and remove its temporary files. Each confirmed stage prints `[PASS]`;
-failure exits nonzero. It never connects to an existing runtime or launches
-another Telar GUI.
+Neither the layers nor workspace reconciliation require Accessibility. The runner
+prints its current permission status. The bridge was investigated on macOS 26.6.2
+and checks private API availability; it does not fall back to Mission Control on
+unsupported versions. Each stage has a timeout. Stopping the desktop destroys
+every layer the run made, then the isolated runtime stops and its temporary files
+are removed. Each confirmed stage prints `[PASS]`; failure exits nonzero. It never
+connects to an existing runtime or launches another Telar GUI.
 
 ```sh
 just desktop-debug input_router_dbg --mode router --panes 9
@@ -409,19 +472,6 @@ one that reaches a pane in `router` mode is marked unexpected. `--bench N`
 measures N moves once the application is active.
 
 ```sh
-just desktop-debug window_hide_dbg --strategy alpha --windows 13 --switches 40
-```
-
-`debug/window_hide_dbg.cpp` measures switching between two tabs of pane windows
-that share the same rectangles, with the windows adopted by the keyboard router,
-the application active and an animation in every window. `--strategy hide` hides
-the outgoing windows; `--strategy alpha` leaves them ordered in, transparent,
-without mouse events and with invisible content. It reports both halves of each
-switch, the frames the outgoing windows draw in one second, where a mouse down at
-each pane's centre lands and the memory footprint. `--hold` keeps the windows up,
-to inspect them in Mission Control.
-
-```sh
 just desktop-debug external_window_dbg --switches 20 --hang 3 --timeout 0.05
 just desktop-debug external_window_dbg --strategy offscreen --app Safari
 ```
@@ -431,8 +481,8 @@ a tab switch. A helper process, the same program with `--serve`, owns two tabs o
 windows sharing the same rectangles; `--app` uses a running application's
 windows instead. `minimize` minimizes them through Accessibility, `offscreen`
 moves them to their display's bottom right corner leaving `--sliver` points on
-screen, and `space` moves them to a parking Space through SkyLight, created for the
-run when the display has no spare one and removed afterwards. It reports how long
+screen, and `layer` moves them into a hidden layer, made for the run and destroyed
+afterwards, and back to the desktop. It reports how long
 the calls block the calling thread, when the window server shows the incoming
 windows and drops the outgoing ones, refused calls and what stays visible of a
 hidden window. `--hang` freezes the helper's main thread and times one hide and
@@ -440,16 +490,33 @@ one show per strategy; `--timeout` sets the Accessibility messaging timeout.
 It needs Accessibility permission for the terminal that runs it.
 
 ```sh
-just desktop-debug space_switch_dbg --switches 20
+just desktop-debug layers_dbg --hold 25 --app TextEdit
 ```
 
-`debug/space_switch_dbg.cpp` measures how long a Space switch through the
-desktop's SkyLight bridge takes to show. It creates a temporary Space on the
-focused display, puts one of its own windows on that Space and another on the
-current one, and switches between them, reporting when the destination's window
-appears, when the origin's disappears and how long both are on screen together.
-On macOS 26.6 both land in one or two frames, with no overlap: the bridge switch
-has no slide animation. The temporary Space is removed afterwards.
+`debug/layers_dbg.cpp` checks the layers Telar's Spaces are made of, with the
+desktop's own `VirtualSpaces`. It makes two Spaces on the focused display, a pane
+on the first one's stage, a wallpaper at the level of Telar's and a window left on
+the desktop, and holds the scene for `--hold` seconds to look at: the pane in front
+of the wallpaper, the later window in front of the pane, and clicks bringing
+either forward. `--app` moves a running application's first window onto the
+stage, to open its menus. Then it measures that a pane on the hidden Space draws
+its first frame, that a switch shows it and hides the first Space within a frame,
+and that raising and activating it keep it on its stage. Every window returns to
+its desktop at the end.
+
+```sh
+just desktop-debug layout_dbg
+just desktop-debug refused_size_dbg --app com.spotify.client --width 440
+```
+
+`debug/layout_dbg.cpp` prints how a tab is arranged when a pane and four windows
+arrive one after another: halving the focused element, as a user's split does, and
+beside the largest element, as adoption does; then with the narrowest window
+keeping a minimum width larger than its share. `debug/refused_size_dbg.cpp` puts a
+running application's first window on a Space of its own through the desktop's
+window observer, asks for `--width` points, and reports the minimum the observer
+learns when the application keeps a larger size; the window gets its frame back and
+returns to its desktop at the end. It needs Accessibility permission.
 
 ```sh
 just desktop-debug window_observer_dbg --rounds 10 --hang 2
@@ -811,7 +878,8 @@ The default `desktop.lua` loads `shortcuts` and uses `Ctrl+B`, followed by:
 | `,`, `.` | Move the selected tab before or after its neighbor. |
 
 `Ctrl+Left` and `Ctrl+Right` are global bindings without the prefix. They select
-the previous or next ordinary Space on the focused display, wrapping at the ends.
+the previous or next Space on the focused display, wrapping at the ends. `Alt+Tab`,
+`Alt+B` and `Alt+Enter` drive [the backstage](#the-backstage).
 
 These actions use the existing runtime and desktop APIs. Pane operations, creating
 workspaces/tabs, palettes and terminal rendering are not connected to this keymap.
@@ -841,14 +909,21 @@ end)
 A custom map can reuse the default module's actions without installing its keys:
 `require("shortcuts").actions` provides `select_tab(index)`,
 `step_tab(offset, move)`, `step_space(offset)`, `select_workspace(index)`,
-`create_tab()` and `create_workspace()`. `select_workspace` activates the focused
+`create_tab()`, `create_workspace()`, `send_to_backstage()`, `end_takeover()` and
+`bind_backstage_switcher(chord)`, which binds the switcher to a modified chord and
+returns a function that unbinds it. `select_workspace` activates the focused
 display's workspace at that position, in the order of its Spaces. `create_workspace`
 opens a workspace on `$HOME` on the focused display and activates its Space once
 the desktop has given it one.
 The default map binds them to prefix + `c` and prefix + `N`, as the GUI does.
 
 `bind` accepts one to four suffix chords; `bind_global` accepts a single modified
-chord. Both return an idempotent unbind function. The C++ chord parser preserves
+chord. Both return an idempotent unbind function. `bind_global(key, callback,
+{ on_release = fn })` also runs `fn` once a modifier held when the chord fired comes
+up, as Cmd+Tab commits when Cmd is released; Shift does not count, so it can
+reverse a cycle. Native capture keeps only which of Ctrl, Alt and Cmd are down,
+never which key changed them. Release is delivered on macOS; the Linux compositor
+does not report it yet. The C++ chord parser preserves
 the GUI's spelling, case and modifier rules. Prefixes require Ctrl, Alt or
 Command/Super. Arbitrary unprefixed multi-key sequences are intentionally rejected:
 replaying buffered input into a different application is not implemented.
@@ -890,8 +965,9 @@ its selected workspace and tab, remembering tab focus per workspace for its
 lifetime. Selecting a tab currently changes this desktop state; it does not
 attach or render a terminal, send PTY input, or control another GUI.
 
-On macOS, Telar enumerates displays and existing Spaces itself. The focused
-Space determines the desktop's runtime workspace. Native notifications enter
+On macOS, Telar enumerates displays itself and makes its own Spaces (see
+[Telar's Spaces on macOS](#telars-spaces-on-macos)). The focused display's Space
+determines the desktop's runtime workspace. Native notifications enter
 `App` through its event queue; `DesktopSession` associates Spaces with runtime
 workspaces, and `RuntimeSession` retrieves their snapshots on its worker.
 Lua only receives detached snapshots on the application thread. A workspace
@@ -899,25 +975,12 @@ transition clears the previous tab projection until the new snapshot arrives.
 Runtime notifications that invalidate the snapshot, such as foreground process
 changes, refresh it at most every 100 ms; selecting a workspace refreshes it at once.
 
-Each runtime workspace receives an ordinary Space. Desktop first restores its
-saved association, then adopts available Spaces, and creates one only when none
-is available. Visible Spaces and displays without an associated workspace are
-preferred during adoption. Adding tabs or panes does not create more Spaces.
-Closing the final pane in the final tab removes the runtime workspace and its
-Space, subject to macOS's minimum of one ordinary Space per display. Surplus
-ordinary Spaces are removed after all live workspaces have an association.
-
-The `managed` flag covers all ordinary Spaces while Desktop controls the session.
-Associations persist by runtime identity, workspace ID and native Space UUID, so
-desktop restarts and Space reordering preserve them. macOS may omit a UUID; those
-Spaces use a display UUID and session-local Space ID instead. Selected tabs still
-live in memory. Development clones share only their original workspaces' identities.
-
-A live workspace retains its dedicated Space. Lua cannot remove or unbind it
-before the workspace closes, or assign another Space to the same workspace.
-If its Space is removed externally through Mission Control, Telar creates a
-replacement while the workspace remains alive, adopting an available Space first.
-Fullscreen Spaces are excluded from this reconciliation.
+Each runtime workspace receives a Space of its own, on the display it was created
+for. Adding tabs or panes does not create more Spaces. Closing the final pane in
+the final tab removes the runtime workspace and its Space; a display keeps its last
+Space, unbound, for its next workspace. A live workspace retains its Space: Lua
+cannot remove or unbind it before the workspace closes, or assign another Space to
+the same workspace. Full-screen Spaces are excluded from this reconciliation.
 
 `require("telar.desktop")` exposes:
 
@@ -926,10 +989,10 @@ Fullscreen Spaces are excluded from this reconciliation.
 | `desktop.configure_surface(name, settings)` | Configure `topbar` or `sidebar` with `module` and `options`. Available only while loading the global configuration. |
 | `desktop.state()` | Snapshot with `available`, `accessibility`, `window_managers`, `displays`, `spaces`, optional `focused_space`, `pending_space`, and `error`. |
 | `desktop.on_change(callback)` | Subscribe to changed desktop snapshots; returns an unsubscribe function and delivers the current state on mount. The callback gets the whole state and a second table telling what changed since the last delivery: `focus` (focused or visible Spaces), `spaces` (Spaces added, removed, moved or rebound), `displays`, `operation` (a pending activation or Space operation) and `status` (availability, Accessibility, error). The first delivery marks everything changed, and a state equal to the last is not delivered. |
-| `desktop.activate_space(id)` | Request activation of an existing Space. Completion is confirmed from macOS; failures appear in `error`. |
+| `desktop.activate_space(id)` | Show an existing Space on its display, and focus that display. Failures appear in `error`. |
 | `desktop.bind_space(space_id, workspace_id)` | Associate an unbound managed Space with a workspace that has no Space or pending creation. A live association cannot be changed or cleared. |
-| `desktop.create_space(options)` | Create an ordinary Space for the required `workspace` ID, if it has no Space yet. Optional `display` selects a display ID; the default is the focused display. Returns a request ID. Normal workspace reconciliation handles creation automatically. |
-| `desktop.remove_space(space_id)` | Remove an unassociated ordinary Space. A live workspace's Space must close through its final pane. Returns a request ID. |
+| `desktop.create_space(options)` | Create a Space for the required `workspace` ID, if it has no Space yet. Optional `display` selects a display ID; the default is the focused display. Returns a request ID. Normal workspace reconciliation handles creation automatically. |
+| `desktop.remove_space(space_id)` | Remove an unassociated Space. A live workspace's Space must close through its final pane. Returns a request ID. |
 
 Display entries contain `id`, `uuid` and global screen bounds (`x`, `y`,
 `width`, `height`). Space entries contain `id`, `uuid`, `display`, `index`,
@@ -987,14 +1050,13 @@ Space creation/removal are serialized transactions. `pending_operation` contains
 `id`, `kind`, `display` and the target `space` when applicable.
 `completed_operation` contains those fields plus `succeeded` and optional
 `error`; a successful creation includes the new `space` ID. Completion follows
-an observed catalog change, not just a submitted bridge operation. Observe
+the layers being made or destroyed on the observer's thread. Observe
 these snapshots before issuing the next mutation. A failed automatic mutation
 pauses further automatic mutations until the workspace catalog gains/loses a
 workspace, or a manual mutation succeeds.
 
 The default Lua bar creates no standalone Spaces. Its `×` buttons and middle-click
-can remove surplus ordinary Spaces while another ordinary Space remains on their
-display. Workspace Spaces have no independent close control: their lifetime
+can remove surplus Spaces while another Space remains on their display. Workspace Spaces have no independent close control: their lifetime
 follows the runtime workspace.
 
 Runtime transport, decoding and command writes run on a worker, with a bounded
@@ -1008,44 +1070,29 @@ to reconnect in this version.
 
 ### macOS implementation and limits
 
-Enumeration dynamically resolves private SkyLight functions. Mutation uses
-SkyLight's `SLSBridged` operations through `performWithWMBridgeDelegate`.
-Creation returns a Space ID synchronously; removal and switching are asynchronous.
-Switching shows the destination, hides the source and updates the display's
-current Space. These are separate operations, without a custom animation.
+Enumeration dynamically resolves private SkyLight functions. Layers use SkyLight's
+`SLSBridged` operations through `performWithWMBridgeDelegate`, which WindowManager
+carries out on Telar's behalf. Creating a layer returns its ID synchronously;
+moving windows, showing, hiding and destroying are asynchronous. A Space switch
+shows the destination's stage and hides the source's in one call, with no
+animation.
 
-Creating, removing and changing the visible Space require neither Accessibility
-nor SIP changes. Telar does not inject into Dock, synthesize gestures, open
-Mission Control or depend on yabai. The `accessibility` snapshot field remains
-informational. Moving keyboard focus to another display is separate: when
-permission exists, Telar can raise a visible application window through AX.
-If macOS changes visibility but does not grant display focus, activation reports
-that distinction instead of claiming success.
+None of this requires Accessibility or SIP changes. Telar does not inject into
+Dock, synthesize gestures, open Mission Control or depend on yabai. Accessibility
+is needed to resize other applications' windows and to watch them. Moving keyboard
+focus to another display is separate: when permission exists, Telar can raise a
+visible application window through AX.
 
-Space/application/screen/wake notifications drive observation. A two-second
-fallback catches external catalog changes; pending operations are checked every
-frame, with a five-second timeout. A full event queue causes publication to be
-retried. Snapshots are read on a thread of their own
-(`native-backends/macos/spaces_observer.mm`): during a Space switch the window
-server answers only after its animation, and the UI thread must not wait for it.
-Commands to SkyLight, and confirming or timing out what is pending, stay on the
-UI thread, which checks commands against the latest snapshot instead of taking
-one. A snapshot makes two window server calls whatever the number of Spaces: the
-catalog already carries each Space's name and type and each display's current
-Space. It lists displays through CoreGraphics, since AppKit is main-thread only. Creation on another display waits for the new Space's placement before
-reporting success. Failed placement attempts to remove that newly created Space.
-
-macOS handles window migration when an active Space is destroyed. Fullscreen
-Spaces and the last ordinary Space on a display cannot be removed. If automatic
-cleanup reaches that last Space, it remains as an unassociated desktop.
+Application/screen/wake notifications drive observation, with a two-second
+fallback; pending operations are checked every frame. A full event queue causes
+publication to be retried. Snapshots of displays and full-screen Spaces are read
+on a thread of their own (`native-backends/macos/spaces_observer.mm`), which also
+makes and removes layers, so the UI thread never waits on WindowManager. A
+snapshot lists displays through CoreGraphics, since AppKit is main-thread only.
 
 The private API was verified on macOS 26.6.2. Required classes, selectors and
 operation return types are checked at runtime. Missing APIs, vanished Spaces and
 rejected transitions are reported as errors, with no Mission Control fallback.
-This version does not expose native Space reordering or move individual
-application windows between Spaces. Native UUID persistence across macOS reboots
-depends on the operating system; missing identities fall back to ordinary-Space
-adoption.
 
 ## Filesystem and HTTP
 

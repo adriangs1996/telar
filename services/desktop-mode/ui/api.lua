@@ -40,10 +40,10 @@ end
 shortcuts.set_prefix = core.shortcut_prefix
 shortcuts.state = core.shortcut_state
 
-local function bind_shortcut(keys, global, callback)
+local function bind_shortcut(keys, global, callback, releasing)
   assert(type(keys) == "table", "Shortcut keys must be an array")
   assert(type(callback) == "function", "Shortcut requires a callback")
-  local identifier = core.shortcut_bind(keys, global, callback)
+  local identifier = core.shortcut_bind(keys, global, callback, releasing == true)
 
   return function()
     if identifier then
@@ -57,9 +57,24 @@ function shortcuts.bind(keys, callback)
   return bind_shortcut(keys, false, callback)
 end
 
-function shortcuts.bind_global(key, callback)
+-- options.on_release runs once the chord's modifiers come up after it fired, as Cmd+Tab
+-- commits when Cmd is released.
+function shortcuts.bind_global(key, callback, options)
   assert(type(key) == "string", "Global shortcut must be one modified chord")
-  return bind_shortcut({ key }, true, callback)
+  local on_release = options and options.on_release
+
+  if on_release == nil then
+    return bind_shortcut({ key }, true, callback)
+  end
+
+  assert(type(on_release) == "function", "on_release must be a function")
+  return bind_shortcut({ key }, true, function(released)
+    if released then
+      on_release()
+    else
+      callback()
+    end
+  end, true)
 end
 
 runtime.state = core.runtime_state

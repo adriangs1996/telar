@@ -4,6 +4,7 @@
 #include <QWindow>
 #include <QVariant>
 #include <algorithm>
+#include <stdexcept>
 
 namespace workbench::native {
   QRect frame(QWindow &window) {
@@ -117,6 +118,18 @@ namespace workbench::native {
     linux_desktop::Session::get().post([window](telar_server *server) {
       telar_server_focus(server, {window, 0});
     });
+  }
+
+  void WindowObserver::sendToBackstage(std::uint32_t) {
+    throw std::runtime_error("The backstage is not available on Linux yet");
+  }
+
+  void WindowObserver::takeOver(std::uint32_t, std::uint32_t, QRectF) {
+    throw std::runtime_error("The backstage is not available on Linux yet");
+  }
+
+  void WindowObserver::endTakeover(std::uint32_t) {
+    throw std::runtime_error("The backstage is not available on Linux yet");
   }
 
   void WindowObserver::close(std::uint32_t window) {

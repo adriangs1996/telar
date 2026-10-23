@@ -152,6 +152,12 @@ shortcuts.bind_global("ctrl+right", function()
 	actions.step_space(1)
 end)
 
+-- The backstage: alt+tab picks a window out of it, Cmd+Tab style; alt+b sends the focused window
+-- there and alt+enter brings the layout back.
+actions.bind_backstage_switcher("alt+tab")
+shortcuts.bind_global("alt+b", actions.send_to_backstage)
+shortcuts.bind_global("alt+enter", actions.end_takeover)
+
 desktop.theme({ preset = "dark" })
 
 desktop.configure_surface("wallpaper", {
@@ -165,4 +171,13 @@ desktop.configure_surface("topbar", {
 
 desktop.configure_surface("sidebar", {
 	module = "sidebar",
+})
+
+desktop.configure_surface("workbench", {
+	module = "workbench",
+	options = {
+		windows = {
+			["com.spotify.client"] = "backstage",
+		},
+	},
 })

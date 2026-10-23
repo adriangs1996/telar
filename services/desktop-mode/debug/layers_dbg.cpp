@@ -10,7 +10,8 @@
 //
 // Then it measures what the workbench relies on: a pane placed on the hidden second Space and
 // shown transparent draws its first frame, a switch shows it and hides the first Space, and
-// raising and activating it keep it on its stage. Every window returns to its desktop at the end.
+// raising and activating it keep it on its stage, and that the backstage hides a window and lets
+// it take the display over and give it back. Every window returns to its desktop at the end.
 
 #include "native-backends/macos/spaces_bridge.hpp"
 #include "native-backends/macos/virtual_spaces.hpp"
@@ -226,6 +227,52 @@ namespace {
              return shown(pane_id[0]);
            },
            switch_deadline));
+
+    std::printf("the backstage\n");
+    macos::spaces::moveToLayer(incoming_id, spaces.stage(first));
+    report("a window moved between stages comes on screen", until([&] {
+             return shown(incoming_id[0]);
+           },
+           switch_deadline));
+    check("and leaves the stage it was on", macos::spaces::spaceOf(incoming_id[0]) == first);
+
+    spaces.sendToBackstage(incoming_id);
+    report("a window sent there leaves the screen", until([&] {
+             return !shown(incoming_id[0]);
+           },
+           switch_deadline));
+    check("and is in the backstage", spaces.offstage(macos::spaces::spaceOf(incoming_id[0])));
+    check("which is on no Space", spaces.resolve(macos::spaces::spaceOf(incoming_id[0]), {}) == 0);
+
+    spaces.takeOver(display, incoming_id);
+    report("taking over: the window comes on screen", until([&] {
+             return shown(incoming_id[0]);
+           },
+           switch_deadline));
+    report("and the layout leaves it", until([&] {
+             return !shown(pane_id[0]);
+           },
+           switch_deadline));
+    check("the purple window stays on screen", shown(desktop_id));
+
+    spaces.endTakeover(display);
+    report("ending it: the layout comes back", until([&] {
+             return shown(pane_id[0]);
+           },
+           switch_deadline));
+    report("and the window returns to the backstage", until([&] {
+             return !shown(incoming_id[0]);
+           },
+           switch_deadline));
+
+    spaces.takeOver(display, incoming_id);
+    pump(settle);
+    spaces.show(second);
+    report("switching Spaces ends a takeover", until([&] {
+             return !shown(incoming_id[0]) && spaces.takingOver(display).empty();
+           },
+           switch_deadline));
+    spaces.show(first);
 
     spaces.release();
     pump(settle);

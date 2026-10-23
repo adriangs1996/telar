@@ -1,21 +1,14 @@
 #include "spaces_probe.hpp"
+#include "native-backends/macos/spaces_bridge.hpp"
+#include "native-backends/macos/virtual_spaces.hpp"
 #import <AppKit/AppKit.h>
 #import <ApplicationServices/ApplicationServices.h>
-#import <objc/message.h>
 #include <atomic>
 #include <dlfcn.h>
 #include <stdexcept>
 
-// Read-only operation signatures inspected in SkyLight on macOS 26.6.2.
-@interface NSObject (TelarDebugSpacesBridge)
-- (instancetype)initWithOptions:(unsigned)options windows:(NSArray *)windows;
-- (NSArray *)propertyListArray;
-- (NSArray *)numbers;
-@end
-
 namespace {
   constexpr std::uint32_t mission_control_enter = 1204;
-  constexpr unsigned all_window_spaces = 7;
 
   void require(bool condition, const char *message) {
     if (!condition) {
@@ -53,69 +46,15 @@ namespace {
     }
   };
 
-  Class operationClass(NSString *name, SEL initializer) {
-    Bridge::shared();
-    const auto type = NSClassFromString(name);
-    require(type && [type instancesRespondToSelector:initializer] &&
-                [type instancesRespondToSelector:sel_registerName("performWithWMBridgeDelegate")],
-            "A required SkyLight bridge operation is unavailable");
-    return type;
-  }
-
-  id performSync(id operation) {
-    require(operation != nil, "SkyLight did not initialize a synchronous operation");
-    return reinterpret_cast<id (*)(id, SEL)>(
-        objc_msgSend)(operation, sel_registerName("performWithWMBridgeDelegate"));
-  }
-
-  NSArray *catalog() {
-    const auto type =
-        operationClass(@"SLSBridgedCopyManagedDisplaySpacesOperation", @selector(init));
-    id result = performSync([[type alloc] init]);
-    require([result respondsToSelector:@selector(propertyListArray)],
-            "SkyLight returned an unexpected catalog result");
-    NSArray *displays = [result propertyListArray];
-    require([displays isKindOfClass:NSArray.class] && displays.count,
-            "SkyLight returned no managed displays");
-    return displays;
-  }
-
-  NSDictionary *displayFor(NSArray *displays, std::uint64_t space) {
-    for (NSDictionary *display in displays) {
-      for (NSDictionary *entry in display[@"Spaces"]) {
-        if ([entry[@"id64"] unsignedLongLongValue] == space) {
-          return display;
-        }
-      }
-    }
-
-    return nil;
-  }
-
-  NSString *screenIdentifier(NSScreen *screen) {
-    const auto identifier = [screen.deviceDescription[@"NSScreenNumber"] unsignedIntValue];
-    CFUUIDRef uuid = CGDisplayCreateUUIDFromDisplayID(identifier);
-    NSString *value = uuid ? CFBridgingRelease(CFUUIDCreateString(nullptr, uuid)) : nil;
-
-    if (uuid) {
-      CFRelease(uuid);
-    }
-
-    return value;
-  }
-
-  NSScreen *screenFor(NSString *identifier) {
+  NSScreen *screenFor(std::uint32_t display) {
     for (NSScreen *screen in NSScreen.screens) {
-      if ([screenIdentifier(screen) isEqual:identifier] ||
-          ([identifier isEqual:@"Main"] &&
-           [screen.deviceDescription[@"NSScreenNumber"] unsignedIntValue] == CGMainDisplayID())) {
+      if ([screen.deviceDescription[@"NSScreenNumber"] unsignedIntValue] == display) {
         return screen;
       }
     }
 
     return nil;
   }
-
 } // namespace
 
 struct SpacesProbe::Impl {
@@ -151,10 +90,9 @@ SpacesProbe::SpacesProbe()
 SpacesProbe::~SpacesProbe() = default;
 
 std::uint32_t SpacesProbe::showWindow(std::uint64_t space) {
-  NSDictionary *display = displayFor(catalog(), space);
-  NSScreen *screen = screenFor(display[@"Display Identifier"]);
-  require(screen && [display[@"Current Space"][@"id64"] unsignedLongLongValue] == space,
-          "The probe window requires a visible Space on an attached display");
+  auto &spaces = macos::spaces::VirtualSpaces::get();
+  NSScreen *screen = screenFor(spaces.display(space));
+  require(screen, "The probe window requires a Space on an attached display");
   NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(screen.frame.origin.x + 100,
                                                                       screen.frame.origin.y + 100,
                                                                       260,
@@ -166,7 +104,9 @@ std::uint32_t SpacesProbe::showWindow(std::uint64_t space) {
   window.title = @"Telar Spaces debug probe";
   [impl_->windows addObject:window];
   [window orderFront:nil];
-  return static_cast<std::uint32_t>(window.windowNumber);
+  const std::uint32_t windows[] = {static_cast<std::uint32_t>(window.windowNumber)};
+  macos::spaces::moveToLayer(windows, spaces.stage(space));
+  return windows[0];
 }
 
 bool SpacesProbe::windowVisible(std::uint32_t identifier) const {
@@ -183,12 +123,7 @@ bool SpacesProbe::windowVisible(std::uint32_t identifier) const {
 }
 
 bool SpacesProbe::windowInSpace(std::uint32_t window, std::uint64_t space) const {
-  const auto type = operationClass(@"SLSBridgedCopySpacesForWindowsOperation",
-                                   @selector(initWithOptions:windows:));
-  id result = performSync([[type alloc] initWithOptions:all_window_spaces windows:@[ @(window) ]]);
-  require([result respondsToSelector:@selector(numbers)],
-          "SkyLight returned an unexpected window membership result");
-  return [[result numbers] containsObject:@(space)];
+  return macos::spaces::spaceOf(window) == space;
 }
 
 unsigned SpacesProbe::missionControlEntries() const {

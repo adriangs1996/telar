@@ -8,6 +8,7 @@ namespace ui {
 }
 
 @interface TelarSurfacePanel : NSPanel
+@property(readonly) ui::SurfaceKind kind;
 - (instancetype)initWithScreen:(NSScreen *)screen
                           kind:(ui::SurfaceKind)kind
                        desktop:(ui::DesktopUi &)desktop;

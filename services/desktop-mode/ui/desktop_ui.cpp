@@ -1,4 +1,5 @@
 #include "desktop_ui.hpp"
+#include "app_icons.hpp"
 #include "bundled_fonts.hpp"
 #include "lua_script.hpp"
 #include "lua_surface.hpp"
@@ -7,6 +8,7 @@
 #include <QDebug>
 #include <QDir>
 #include <QFileInfo>
+#include <QQuickImageProvider>
 #include <array>
 #include <chrono>
 #include <stdexcept>
@@ -25,6 +27,8 @@ namespace {
       return QStringLiteral("wallpaper");
     case ui::SurfaceKind::workbench:
       return QStringLiteral("workbench");
+    case ui::SurfaceKind::backstage:
+      return QStringLiteral("backstage");
     }
 
     throw std::runtime_error("Unknown desktop surface");
@@ -38,6 +42,7 @@ namespace ui {
     TELAR_TRACE("ui.desktop.start");
     // Before any surface or terminal resolves a family name.
     bundledFonts();
+    engine_.addImageProvider(QStringLiteral("app-icon"), appIcons());
     services_.modules = &modules_;
     config_path_ = qEnvironmentVariable("TELAR_DESKTOP_CONFIG");
     config_required_ = !config_path_.isEmpty();

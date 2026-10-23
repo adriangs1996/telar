@@ -20,7 +20,8 @@ namespace ui {
     static void activate(std::span<const Activation> activations);
     void deactivate();
     void setPrefix(const QString &prefix);
-    std::uint64_t bind(const QVariantList &keys, bool global, int callback);
+    // A releasing binding also calls back, with true, once its modifiers come up.
+    std::uint64_t bind(const QVariantList &keys, bool global, int callback, bool releasing);
     void unbind(std::uint64_t id);
     QVariantMap state() const;
 
@@ -30,6 +31,7 @@ namespace ui {
       std::vector<std::string> keys;
       bool global;
       int callback;
+      bool releasing;
     };
 
     lua::Environment &environment_;
@@ -40,6 +42,6 @@ namespace ui {
     std::vector<Shortcuts::Binding> bindings(const std::string &prefix,
                                              const std::vector<Entry> &entries);
     void update(const std::string &prefix, const std::vector<Entry> &entries);
-    void deliver(int callback);
+    void deliver(int callback, bool released);
   };
 } // namespace ui

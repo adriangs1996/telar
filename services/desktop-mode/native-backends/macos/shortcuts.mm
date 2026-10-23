@@ -166,6 +166,7 @@ struct NativeShortcuts::Impl {
     }
 
     constexpr auto mask = CGEventMaskBit(kCGEventKeyDown) | CGEventMaskBit(kCGEventKeyUp) |
+                          CGEventMaskBit(kCGEventFlagsChanged) |
                           CGEventMaskBit(kCGEventLeftMouseDown) |
                           CGEventMaskBit(kCGEventRightMouseDown) |
                           CGEventMaskBit(kCGEventOtherMouseDown);
@@ -203,6 +204,19 @@ struct NativeShortcuts::Impl {
         self.shortcuts.cancel();
         CGEventTapEnable(self.tap, true);
         self.shortcuts.status.available = CGEventTapIsEnabled(self.tap);
+        return event;
+      }
+
+      // Only which modifiers are down is kept, never which key changed them.
+      if (type == kCGEventFlagsChanged || type == kCGEventKeyDown || type == kCGEventKeyUp) {
+        const auto flags = CGEventGetFlags(event);
+        self.shortcuts.setModifiers(
+            ((flags & kCGEventFlagMaskControl) ? Shortcuts::control : 0) |
+            ((flags & kCGEventFlagMaskAlternate) ? Shortcuts::alt : 0) |
+            ((flags & kCGEventFlagMaskCommand) ? Shortcuts::command : 0));
+      }
+
+      if (type == kCGEventFlagsChanged) {
         return event;
       }
 

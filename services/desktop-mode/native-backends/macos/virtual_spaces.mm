@@ -36,6 +36,15 @@ namespace macos::spaces {
     for (const auto layer : stray) {
       destroyLayer(layer);
     }
+
+    const auto backstage = createLayer(static_cast<int>(Level::stage));
+    const auto takeover = createLayer(static_cast<int>(Level::stage));
+    const std::uint64_t hidden[] = {backstage, takeover};
+    showLayers({}, hidden);
+
+    std::scoped_lock lock(mutex_);
+    backstage_ = backstage;
+    takeover_ = takeover;
   }
 
   std::uint64_t VirtualSpaces::create(std::uint32_t display) {
@@ -72,6 +81,7 @@ namespace macos::spaces {
   void VirtualSpaces::remove(std::uint64_t space) {
     TELAR_TRACE("native.virtual_spaces.remove");
     std::optional<Space> removed;
+
     {
       std::scoped_lock lock(mutex_);
       removed = find(space);
@@ -99,6 +109,7 @@ namespace macos::spaces {
   void VirtualSpaces::release() {
     TELAR_TRACE("native.virtual_spaces.release");
     std::vector<std::uint64_t> layers;
+
     {
       std::scoped_lock lock(mutex_);
       for (const auto &space : spaces_) {
@@ -106,8 +117,17 @@ namespace macos::spaces {
         layers.push_back(space.shelf);
       }
 
+      for (const auto layer : {backstage_, takeover_}) {
+        if (layer) {
+          layers.push_back(layer);
+        }
+      }
+
       spaces_.clear();
       shown_.clear();
+      takeovers_.clear();
+      backstage_ = 0;
+      takeover_ = 0;
     }
 
     evacuate(layers);
@@ -118,7 +138,7 @@ namespace macos::spaces {
 
   void VirtualSpaces::show(std::uint64_t space) {
     TELAR_TRACE("native.virtual_spaces.show");
-    std::uint64_t previous = 0;
+    Changes changes;
     {
       std::scoped_lock lock(mutex_);
       const auto found = find(space);
@@ -126,17 +146,135 @@ namespace macos::spaces {
         throw std::runtime_error("The requested Space no longer exists");
       }
 
+      changes.backstage = backstage_;
+      endTakeover(found->display, changes);
       auto &shown = shown_[found->display];
-      if (shown == space) {
-        return;
-      }
 
-      previous = std::exchange(shown, space);
+      if (shown != space) {
+        const auto previous = std::exchange(shown, space);
+        std::erase(changes.shown, previous);
+        changes.shown.push_back(space);
+
+        if (previous) {
+          changes.hidden.push_back(previous);
+        }
+      }
     }
 
-    const std::uint64_t incoming[] = {space};
-    const std::uint64_t outgoing[] = {previous};
-    showLayers(incoming, previous ? outgoing : std::span<const std::uint64_t>());
+    apply(changes);
+  }
+
+  VirtualSpaces::Changes VirtualSpaces::start() const {
+    if (!backstage_ || !takeover_) {
+      throw std::runtime_error("The backstage is not ready yet");
+    }
+
+    return {.backstage = backstage_, .takeover = takeover_};
+  }
+
+  void VirtualSpaces::apply(const Changes &changes) {
+    moveToLayer(changes.backstaged, changes.backstage);
+    moveToLayer(changes.taking_over, changes.takeover);
+    showLayers(changes.shown, changes.hidden);
+  }
+
+  void VirtualSpaces::endTakeover(std::uint32_t display, Changes &changes) {
+    const auto found = takeovers_.find(display);
+
+    if (found == takeovers_.end()) {
+      return;
+    }
+
+    changes.backstaged.insert(changes.backstaged.end(), found->second.begin(), found->second.end());
+    takeovers_.erase(found);
+
+    if (const auto shown = shown_.find(display); shown != shown_.end()) {
+      changes.shown.push_back(shown->second);
+    }
+
+    if (takeovers_.empty()) {
+      changes.hidden.push_back(takeover_);
+    }
+  }
+
+  void VirtualSpaces::leaveTakeovers(std::span<const std::uint32_t> windows, Changes &changes) {
+    std::vector<std::uint32_t> emptied;
+    for (auto &[display, taking] : takeovers_) {
+      std::erase_if(taking, [&](const auto window) {
+        return std::ranges::find(windows, window) != windows.end();
+      });
+
+      if (taking.empty()) {
+        emptied.push_back(display);
+      }
+    }
+
+    for (const auto display : emptied) {
+      endTakeover(display, changes);
+    }
+  }
+
+  void VirtualSpaces::sendToBackstage(std::span<const std::uint32_t> windows) {
+    TELAR_TRACE("native.virtual_spaces.send_to_backstage");
+    Changes changes;
+    {
+      std::scoped_lock lock(mutex_);
+      changes = start();
+      leaveTakeovers(windows, changes);
+      changes.backstaged.insert(changes.backstaged.end(), windows.begin(), windows.end());
+    }
+
+    apply(changes);
+  }
+
+  void VirtualSpaces::takeOver(std::uint32_t display, std::span<const std::uint32_t> windows) {
+    TELAR_TRACE("native.virtual_spaces.take_over");
+    Changes changes;
+    {
+      std::scoped_lock lock(mutex_);
+      changes = start();
+      leaveTakeovers(windows, changes);
+      endTakeover(display, changes);
+      changes.taking_over.assign(windows.begin(), windows.end());
+      takeovers_[display] = changes.taking_over;
+
+      // What ending the previous takeover undid on this display, taking over redoes.
+      std::erase(changes.hidden, takeover_);
+      std::erase_if(changes.backstaged, [&](const auto window) {
+        return std::ranges::find(windows, window) != windows.end();
+      });
+
+      changes.shown.push_back(takeover_);
+      if (const auto shown = shown_.find(display); shown != shown_.end()) {
+        std::erase(changes.shown, shown->second);
+        changes.hidden.push_back(shown->second);
+      }
+    }
+
+    apply(changes);
+  }
+
+  void VirtualSpaces::endTakeover(std::uint32_t display) {
+    TELAR_TRACE("native.virtual_spaces.end_takeover");
+    Changes changes;
+    {
+      std::scoped_lock lock(mutex_);
+      changes = start();
+      endTakeover(display, changes);
+    }
+
+    apply(changes);
+  }
+
+  std::vector<std::uint32_t> VirtualSpaces::takingOver(std::uint32_t display) const {
+    std::scoped_lock lock(mutex_);
+    const auto found = takeovers_.find(display);
+    return found == takeovers_.end() ? std::vector<std::uint32_t>{} : found->second;
+  }
+
+  bool VirtualSpaces::offstage(std::uint64_t layer) const {
+    std::scoped_lock lock(mutex_);
+    return layer && (layer == backstage_ || layer == takeover_);
   }
 
   std::uint64_t VirtualSpaces::stage(std::uint64_t space) const {
@@ -169,6 +307,10 @@ namespace macos::spaces {
     std::scoped_lock lock(mutex_);
     if (fullscreen_.contains(space)) {
       return space;
+    }
+
+    if (space && (space == backstage_ || space == takeover_)) {
+      return 0;
     }
 
     for (const auto &entry : spaces_) {
@@ -219,6 +361,13 @@ namespace macos::spaces {
              state.displays.end();
     };
 
+    Changes changes{.backstage = backstage_, .takeover = takeover_};
+    for (const auto &[display, taking] : std::map(takeovers_)) {
+      if (gone(display)) {
+        endTakeover(display, changes);
+      }
+    }
+
     std::vector<std::uint64_t> orphans;
     std::erase_if(shown_, [&](const auto &entry) {
       if (gone(entry.first)) {
@@ -235,7 +384,12 @@ namespace macos::spaces {
       }
     }
 
-    showLayers({}, orphans);
+    for (const auto orphan : orphans) {
+      std::erase(changes.shown, orphan);
+      changes.hidden.push_back(orphan);
+    }
+
+    apply(changes);
 
     if (!focused_fullscreen) {
       const auto shown = shown_.find(focused_display);

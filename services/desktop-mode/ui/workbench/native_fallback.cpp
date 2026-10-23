@@ -3,6 +3,7 @@
 #include <QGuiApplication>
 #include <QScreen>
 #include <QWindow>
+#include <stdexcept>
 
 namespace workbench::native {
   Display display(std::uint32_t) {
@@ -48,6 +49,18 @@ namespace workbench::native {
   void WindowObserver::hide(std::uint32_t, std::uint64_t) {}
 
   void WindowObserver::focus(std::uint32_t) {}
+
+  void WindowObserver::sendToBackstage(std::uint32_t) {
+    throw std::runtime_error("The backstage is not available on this platform yet");
+  }
+
+  void WindowObserver::takeOver(std::uint32_t, std::uint32_t, QRectF) {
+    throw std::runtime_error("The backstage is not available on this platform yet");
+  }
+
+  void WindowObserver::endTakeover(std::uint32_t) {
+    throw std::runtime_error("The backstage is not available on this platform yet");
+  }
 
   void WindowObserver::close(std::uint32_t) {}
 } // namespace workbench::native

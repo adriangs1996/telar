@@ -60,7 +60,12 @@ namespace workbench {
   class Layout final {
   public:
     static constexpr std::size_t capacity = 128;
+
+    // Splits the focused element along the axis, as a user's split does.
     bool insert(Element element, Axis axis = Axis::horizontal);
+    // Splits the tiled element with the largest area along its longer side, so elements added
+    // one after another fill the area as a grid instead of halving one element each time.
+    bool insertBesideLargest(Element element, const QRectF &area, double gap);
     void remove(const QString &id);
     bool contains(const QString &id) const;
     Element *element(const QString &id);
@@ -123,6 +128,7 @@ namespace workbench {
     int next_order_ = 1;
 
     Index find(const QString &id) const;
+    bool insertAt(Index target, Element element, Axis axis);
     Index allocate();
     void release(Index node);
     void attach(Index parent, Index after, Index child);

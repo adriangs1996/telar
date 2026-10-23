@@ -1,4 +1,5 @@
 #include "desktop_session.hpp"
+#include "native-backends/macos/virtual_spaces.hpp"
 #include "native-backends/application.hpp"
 #include "runtime_session.hpp"
 #include "shortcuts.hpp"
@@ -30,6 +31,7 @@ import runtime_receiver_worker;
 
 namespace {
   using namespace std::chrono_literals;
+  using macos::spaces::VirtualSpaces;
   constexpr auto step_timeout = 15s;
   constexpr telar::TerminalSize terminal_size{80, 24, 8, 16};
   constexpr std::array<std::string_view, 3> command{"/bin/sh", "-c", "read line"};
@@ -383,9 +385,6 @@ namespace {
           return queue.push(DesktopRequested{std::move(command)});
         });
     std::set<std::string> baseline;
-    std::vector<std::uint64_t> original_visible;
-    std::uint64_t original_focus = 0;
-    std::uint64_t manual_space = 0;
     std::exception_ptr failure;
 
     const auto check = [&] {
@@ -397,7 +396,7 @@ namespace {
       require(desktop.state().error.empty(), desktop.state().error);
       require(probe.missionControlEntries() == 0, "Mission Control opened during the bridge check");
       const auto current = identities(desktop.state());
-      require(std::ranges::includes(current, baseline), "A pre-existing system Space disappeared");
+      require(std::ranges::includes(current, baseline), "A full-screen Space disappeared");
     };
 
     const auto settle = [&](std::size_t workspaces, std::size_t extra_spaces) {
@@ -422,7 +421,7 @@ namespace {
       }
 
       require(found && found->managed && !baseline.contains(found->uuid),
-              "The workspace must own a newly created Space, not reuse a pre-existing one");
+              "The workspace must own a Space of its own");
       return found->id;
     };
 
@@ -433,7 +432,7 @@ namespace {
             check();
             return desktop.state().focused_space == space && !desktop.state().pending_space;
           },
-          "switching Spaces through the SkyLight bridge");
+          "switching Spaces by showing and hiding their layers");
     };
 
     try {
@@ -443,49 +442,20 @@ namespace {
             return desktop.state().available && runtime.state().connected;
           },
           "reading the native Spaces catalog");
+      // Telar's Spaces start empty; full-screen Spaces of other applications stay listed.
       baseline = identities(desktop.state());
-      original_focus = desktop.state().focused_space;
-
-      for (const auto &space : desktop.state().spaces) {
-        if (space.visible) {
-          original_visible.push_back(space.id);
-        }
-      }
-
-      require(original_focus != 0, "The initial focused Space is unavailable");
+      require(!desktop.state().displays.empty(), "No display is available");
       require(runtime.state().workspaces.empty(), "The isolated runtime must start empty");
       std::printf("[INFO] Accessibility granted: %s\n",
                   desktop.state().accessibility ? "yes" : "no");
-      pass("Isolated runtime and production SkyLight backend are ready");
+      pass("Isolated runtime and production layer backend are ready");
 
       Driver driver{sandbox.socket};
       const auto first_path = sandbox.workspacePath("first");
       const auto first = driver.createWorkspace(first_path);
       settle(1, 1);
       const auto first_space = spaceFor(first.location.workspace.id);
-      pass("CreateWorkspace creates a dedicated system Space, even with existing desktops "
-           "available");
-
-      activate(original_focus);
-      const auto sentinel = probe.showWindow(original_focus);
-      await(
-          [&] {
-            return probe.windowVisible(sentinel) && probe.windowInSpace(sentinel, original_focus);
-          },
-          "showing the window in the original Space");
-      activate(first_space);
-      await(
-          [&] {
-            return !probe.windowVisible(sentinel);
-          },
-          "hiding the original Space's window");
-      activate(original_focus);
-      await(
-          [&] {
-            return probe.windowVisible(sentinel);
-          },
-          "restoring the original Space's window");
-      pass("Switching Spaces changes real window visibility in both directions");
+      pass("CreateWorkspace creates a Space of its own");
 
       const auto sibling = driver.createPane(first.location, first_path);
       const auto tab = driver.createTab(first.location.workspace, first_path);
@@ -498,8 +468,31 @@ namespace {
       const auto second = driver.createWorkspace(sandbox.workspacePath("second"));
       settle(2, 2);
       const auto second_space = spaceFor(second.location.workspace.id);
-      require(second_space != first_space, "Two workspaces shared a system Space");
+      require(second_space != first_space, "Two workspaces shared a Space");
       pass("A second workspace receives a distinct Space");
+
+      if (VirtualSpaces::get().display(first_space) == VirtualSpaces::get().display(second_space)) {
+        activate(first_space);
+        const auto sentinel = probe.showWindow(first_space);
+        await(
+            [&] {
+              return probe.windowVisible(sentinel) && probe.windowInSpace(sentinel, first_space);
+            },
+            "showing a window on the first Space");
+        activate(second_space);
+        await(
+            [&] {
+              return !probe.windowVisible(sentinel);
+            },
+            "hiding the first Space's window");
+        activate(first_space);
+        await(
+            [&] {
+              return probe.windowVisible(sentinel);
+            },
+            "showing the first Space's window again");
+        pass("Switching Spaces changes real window visibility in both directions");
+      }
 
       driver.closePane(first.pane);
       driver.expectPanes(first.location, 1);
@@ -523,32 +516,16 @@ namespace {
               "Closing a non-final tab removed its Space");
       pass("Closing the last pane of one tab preserves the Space while another tab remains");
 
-      activate(first_space);
-      const auto migrating = probe.showWindow(first_space);
-      await(
-          [&] {
-            return probe.windowVisible(migrating) && probe.windowInSpace(migrating, first_space);
-          },
-          "showing a window in the Space about to be destroyed");
       driver.closePane(tab.pane);
       settle(1, 1);
       require(spaceFor(second.location.workspace.id) == second_space,
               "Closing one workspace affected another");
-      pass("Closing the final pane of the final tab removes only that workspace's visible Space");
+      pass("Closing the final pane of the final tab removes only that workspace's Space");
 
-      await(
-          [&] {
-            return probe.windowVisible(migrating) && !probe.windowInSpace(migrating, first_space) &&
-                   std::ranges::any_of(desktop.state().spaces, [&](const auto &space) {
-                     return probe.windowInSpace(migrating, space.id);
-                   });
-          },
-          "migrating the destroyed Space's window to a surviving Space");
-      pass("Destroying the active Space migrates its window to a surviving Space");
-
+      // A display keeps its last Space, unbound, for the next workspace.
       driver.closePane(second.pane, true);
-      settle(0, 0);
-      pass("A natural process exit also closes the final workspace and its Space");
+      settle(0, 1);
+      pass("A natural process exit also closes the final workspace and unbinds its Space");
 
       hold_creation_confirmation = true;
       const auto rapid = driver.createWorkspace(sandbox.workspacePath("rapid"));
@@ -567,14 +544,11 @@ namespace {
           },
           "removing the workspace before acknowledging its Space");
       hold_creation_confirmation = false;
-      settle(0, 0);
+      settle(0, 1);
       pass("Closing a workspace before Space creation is confirmed leaves no orphan Space");
 
-      const auto focused =
-          std::ranges::find(desktop.state().spaces, original_focus, &DesktopSpace::id);
-      require(focused != desktop.state().spaces.end(), "The original Space disappeared");
       const auto other = std::ranges::find_if(desktop.state().displays, [&](const auto &display) {
-        return display.id != focused->display;
+        return display.id != VirtualSpaces::get().display(first_space);
       });
 
       if (other != desktop.state().displays.end()) {
@@ -587,15 +561,14 @@ namespace {
                      desktop.state().completed_operation->operation.id == request;
             },
             "creating a Space on the requested secondary display");
-        manual_space = desktop.state().completed_operation->operation.space;
+        const auto manual_space = desktop.state().completed_operation->operation.space;
         const auto created =
             std::ranges::find(desktop.state().spaces, manual_space, &DesktopSpace::id);
         require(created != desktop.state().spaces.end() && created->display == display &&
-                    created->managed && !baseline.contains(created->uuid),
+                    !baseline.contains(created->uuid),
                 "The new Space was not placed on the requested secondary display");
         desktop.removeSpace(manual_space);
-        settle(0, 0);
-        manual_space = 0;
+        settle(0, 1);
         pass("Creation on a secondary display confirms placement and removes only the new Space");
       }
     } catch (...) {
@@ -604,70 +577,9 @@ namespace {
 
     hold_creation_confirmation = false;
 
-    // Stop metadata delivery before forcing empty reconciliation. Cleanup never deletes baseline Spaces.
+    // Stopping the desktop destroys every layer it made.
     reader.stop();
     application.update();
-    desktop.reconcile({});
-
-    try {
-      if (manual_space) {
-        const auto found =
-            std::ranges::find(desktop.state().spaces, manual_space, &DesktopSpace::id);
-
-        if (found != desktop.state().spaces.end() && found->managed &&
-            !baseline.contains(found->uuid)) {
-          desktop.removeSpace(manual_space);
-        }
-      }
-
-      await(
-          [&] {
-            const auto &state = desktop.state();
-            return !state.pending_operation && !state.pending_space &&
-                   identities(state) == baseline;
-          },
-          "cleaning up the Spaces created by this run",
-          30s);
-
-      for (const auto space : original_visible) {
-        const auto found = std::ranges::find(desktop.state().spaces, space, &DesktopSpace::id);
-        require(found != desktop.state().spaces.end(), "An original visible Space disappeared");
-
-        if (found->visible) {
-          continue;
-        }
-
-        desktop.activateSpace(space);
-        await(
-            [&] {
-              return desktop.state().focused_space == space && !desktop.state().pending_space;
-            },
-            "restoring a display's original visible Space");
-      }
-
-      if (original_focus) {
-        desktop.activateSpace(original_focus);
-        await(
-            [&] {
-              return desktop.state().focused_space == original_focus &&
-                     !desktop.state().pending_space;
-            },
-            "restoring the original Space");
-      }
-
-      for (const auto space : original_visible) {
-        const auto found = std::ranges::find(desktop.state().spaces, space, &DesktopSpace::id);
-        require(found != desktop.state().spaces.end() && found->visible,
-                "A display's original Space was not restored");
-      }
-    } catch (const std::exception &error) {
-      std::fprintf(stderr, "[CLEANUP] %s\n", error.what());
-
-      if (!failure) {
-        failure = std::current_exception();
-      }
-    }
-
     application.stop();
     notifier.host = nullptr;
     transport.deinit();
@@ -676,7 +588,6 @@ namespace {
       std::rethrow_exception(failure);
     }
 
-    pass("All original Spaces and the original focus were preserved");
     require(probe.missionControlEntries() == 0, "Mission Control opened during the bridge check");
     pass("No Mission Control entry was observed during the complete lifecycle");
     return 0;

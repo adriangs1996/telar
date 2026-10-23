@@ -52,6 +52,14 @@ void Shortcuts::compile(const std::map<const void *, Group> &groups) {
 
   const auto entries = engineBindings(bindings);
   router_.configure(prefix.empty() ? "ctrl+b" : prefix, std::span(entries).first(bindings.size()));
+  releasing_.clear();
+  for (const auto &binding : bindings) {
+    if (binding.release) {
+      releasing_.insert(binding.id);
+    }
+  }
+
+  held_binding_.reset();
   ++epoch_;
   if (capture_) {
     capture_({router_, epoch_});
@@ -115,9 +123,22 @@ bool Shortcuts::route(const keybindings::KeyEvent &key) {
 
   if (decision.action) {
     submit({decision.action, epoch_});
+    if (releasing_.contains(decision.action) && held_) {
+      held_binding_ = Held{decision.action, held_};
+    }
   }
 
   return decision.consumed;
+}
+
+void Shortcuts::setModifiers(std::uint8_t held) {
+  held_ = held;
+  if (!held_binding_ || (held & held_binding_->modifiers) == held_binding_->modifiers) {
+    return;
+  }
+
+  submit({held_binding_->id, epoch_, true});
+  held_binding_.reset();
 }
 
 void Shortcuts::dispatch(Request request) {
@@ -134,9 +155,13 @@ void Shortcuts::dispatch(Request request) {
           keys += (keys.isEmpty() ? "" : " ") + QString::fromStdString(key);
         }
 
-        qCInfo(telar_log::shortcuts).noquote() << "shortcut" << keys;
-        auto callback = binding.invoke;
-        callback();
+        qCInfo(telar_log::shortcuts).noquote()
+            << "shortcut" << keys << (request.release ? "released" : "");
+        auto callback = request.release ? binding.release : binding.invoke;
+        if (callback) {
+          callback();
+        }
+
         return;
       }
     }

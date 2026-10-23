@@ -812,11 +812,13 @@ namespace {
         return encode(shortcuts_->state());
       case Operation::shortcut_bind: {
         if (values[0].metaType().id() != QMetaType::QVariantList ||
-            values[1].metaType().id() != QMetaType::Bool) {
-          throw std::runtime_error("Expected shortcut keys and a global flag");
+            values[1].metaType().id() != QMetaType::Bool ||
+            values[3].metaType().id() != QMetaType::Bool) {
+          throw std::runtime_error("Expected shortcut keys, a global flag and a releasing flag");
         }
 
-        const auto id = shortcuts_->bind(values[0].toList(), values[1].toBool(), request.callback);
+        const auto id = shortcuts_->bind(
+            values[0].toList(), values[1].toBool(), request.callback, values[3].toBool());
         request.callback = LUA_NOREF;
         return encode(static_cast<double>(id));
       }

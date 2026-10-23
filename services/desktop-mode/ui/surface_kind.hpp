@@ -5,6 +5,8 @@ namespace ui {
     topbar,
     sidebar,
     wallpaper,
-    workbench
+    workbench,
+    // The backstage switcher, shown over a display while the user picks a window.
+    backstage
   };
 } // namespace ui

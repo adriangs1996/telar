@@ -30,9 +30,17 @@ namespace ui {
         keys.insert(keys.begin(), prefix);
       }
 
-      result.push_back({entry.id, std::move(keys), [this, callback = entry.callback] {
-                          deliver(callback);
-                        }});
+      Shortcuts::Binding binding{entry.id, std::move(keys), [this, callback = entry.callback] {
+                                   deliver(callback, false);
+                                 }};
+
+      if (entry.releasing) {
+        binding.release = [this, callback = entry.callback] {
+          deliver(callback, true);
+        };
+      }
+
+      result.push_back(std::move(binding));
     }
 
     return result;
@@ -94,7 +102,8 @@ namespace ui {
     prefix_ = text;
   }
 
-  std::uint64_t ShortcutBinding::bind(const QVariantList &keys, bool global, int callback) {
+  std::uint64_t
+  ShortcutBinding::bind(const QVariantList &keys, bool global, int callback, bool releasing) {
     const auto limit = global ? 1 : keybindings::maxSequenceLength - 1;
 
     if (keys.empty() || static_cast<std::size_t>(keys.size()) > limit ||
@@ -103,7 +112,11 @@ namespace ui {
           "Shortcuts accept 1–4 suffix keys, or one global chord; maximum 256 bindings");
     }
 
-    Entry entry{shortcuts_.nextId(), {}, global, callback};
+    if (releasing && !global) {
+      throw std::runtime_error("Only a global shortcut can wait for its modifiers to come up");
+    }
+
+    Entry entry{shortcuts_.nextId(), {}, global, callback, releasing};
 
     for (const auto &key : keys) {
       if (key.metaType().id() != QMetaType::QString) {
@@ -144,26 +157,32 @@ namespace ui {
             {"pending", shortcuts_.pending()}};
   }
 
-  void ShortcutBinding::deliver(int callback) {
+  void ShortcutBinding::deliver(int callback, bool released) {
     TELAR_TRACE("lua.shortcuts.deliver");
     if (!active_) {
       return;
     }
 
+    struct Delivery {
+      int callback;
+      bool released;
+    } delivery{callback, released};
+
     try {
       environment_.withState(
           [](lua_State *state) -> int {
-            const auto reference = *static_cast<int *>(lua_touserdata(state, 1));
+            const auto &delivery = *static_cast<Delivery *>(lua_touserdata(state, 1));
             lua_pushcfunction(state, lua::Environment::traceback);
-            lua_rawgeti(state, LUA_REGISTRYINDEX, reference);
+            lua_rawgeti(state, LUA_REGISTRYINDEX, delivery.callback);
+            lua_pushboolean(state, delivery.released);
 
-            if (lua_pcall(state, 0, 0, 2) != 0) {
+            if (lua_pcall(state, 1, 0, 2) != 0) {
               return lua_error(state);
             }
 
             return 0;
           },
-          &callback);
+          &delivery);
     } catch (const std::exception &error) {
       qWarning() << "Desktop shortcut callback failed:" << error.what();
     }

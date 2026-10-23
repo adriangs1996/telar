@@ -171,6 +171,28 @@ namespace workbench {
     native::ForeignWindows foreign;
     // Windows adopted on request although a rule ignores their application.
     std::set<std::uint32_t> adopted;
+    // Other applications' windows out of every layout, most recently used first. They belong to
+    // no workspace.
+    std::vector<std::uint32_t> backstage;
+
+    // A backstage window shown alone over the workspace a display shows, until the user goes
+    // back to that workspace's layout.
+    struct Takeover {
+      std::uint32_t window = 0;
+      std::uint64_t space = 0;
+      std::uint64_t tab = 0;
+    };
+
+    std::map<std::uint32_t, Takeover> takeovers;
+
+    // The backstage switcher, open on one display while the user cycles through the backstage
+    // as with Cmd+Tab.
+    struct Switcher {
+      std::uint32_t display = 0;
+      std::size_t selected = 0;
+    };
+
+    std::optional<Switcher> switcher;
     // The focused external window the workbench last brought its tab forward for.
     std::uint32_t followed_focus = 0;
     // Declared after the workspaces, so it stops before them.
@@ -606,11 +628,12 @@ namespace workbench {
       return found == foreign.windows.end() ? nullptr : &*found;
     }
 
-    // tile, float or ignore, from the workbench's `windows` option, keyed by application. Without
-    // a rule a window tiles, unless it is a dialog or cannot be resized.
+    // tile, float, ignore or backstage, from the workbench's `windows` option, keyed by
+    // application. Without a rule a window tiles, unless it is a dialog or cannot be resized.
     QString ruleFor(const native::ForeignWindow &window) const {
       const auto rule = options.value("windows").toMap().value(window.application).toString();
-      if (adopted.contains(window.id) || (rule != "float" && rule != "ignore" && rule != "tile")) {
+      if (adopted.contains(window.id) ||
+          (rule != "float" && rule != "ignore" && rule != "tile" && rule != "backstage")) {
         return window.floating ? "float" : "tile";
       }
 
@@ -636,6 +659,13 @@ namespace workbench {
               continue;
             }
 
+            // A size its application refused becomes the element's minimum, so the layout
+            // makes room for it instead of letting it cover its neighbours.
+            if (window && !window->minimum.isNull()) {
+              auto &limits = tab.layout.element(it->first)->constraints;
+              limits.minimum = limits.minimum.expandedTo(window->minimum).boundedTo(limits.maximum);
+            }
+
             if (id) {
               homes[id] = {&workspace, tab_id};
             }
@@ -645,13 +675,31 @@ namespace workbench {
         }
       }
 
+      updateBackstage();
       for (const auto &window : foreign.windows) {
         const auto rule = ruleFor(window);
         const auto home = std::ranges::find_if(workspaces, [&](const auto &entry) {
           return entry.second.space && entry.second.space == window.space;
         });
 
-        if (homes.contains(window.id) || rule == "ignore" || home == workspaces.end()) {
+        if (homes.contains(window.id) || window.backstage || rule == "ignore" ||
+            home == workspaces.end()) {
+          continue;
+        }
+
+        // A window its application opens while it takes over the display stays in front of it,
+        // and joins the backstage once the takeover ends.
+        if (rule == "backstage") {
+          const auto takeover = takeovers.find(home->second.display);
+          const auto *taking = takeover == takeovers.end() ? nullptr
+                                                           : foreignWindow(takeover->second.window);
+          // The observer reads the window's new layer on its next pass; until then the
+          // backstage already lists it.
+          if ((!taking || taking->pid != window.pid) &&
+              !std::ranges::contains(backstage, window.id)) {
+            sendToBackstage(window.id);
+          }
+
           continue;
         }
 
@@ -668,7 +716,13 @@ namespace workbench {
           element.floating_frame = relative(window.frame, workspace.area);
         }
 
-        if (!tab->second.layout.insert(element, tab->second.next_axis)) {
+        // Windows arriving together fill the tab as a grid, each halving the largest element.
+        auto &layout = tab->second.layout;
+        const auto gap = metric(options, "gap", default_gap);
+        const bool inserted = element.floating
+                                  ? layout.insert(element, tab->second.next_axis)
+                                  : layout.insertBesideLargest(element, workspace.area, gap);
+        if (!inserted) {
           continue;
         }
 
@@ -683,6 +737,19 @@ namespace workbench {
       }
 
       if (foreign.focused == followed_focus) {
+        return;
+      }
+
+      // Cmd+Tab or the Dock reaching a backstage window brings it over the focused display.
+      if (std::ranges::contains(backstage, foreign.focused) && !takingOver(foreign.focused)) {
+        followed_focus = foreign.focused;
+        try {
+          takeOver(foreign.focused);
+        } catch (const std::exception &failure) {
+          qCWarning(telar_log::workbench) << "cannot take over for the focused window:"
+                                          << failure.what();
+        }
+
         return;
       }
 
@@ -706,6 +773,159 @@ namespace workbench {
       } catch (const std::exception &failure) {
         qCWarning(telar_log::workbench)
             << "cannot show the focused window's tab:" << failure.what();
+      }
+    }
+
+    // The backstage keeps the windows the observer still lists, and takes back any found in it
+    // that it lost track of, as when their application was hidden for a while. A takeover whose
+    // window is gone ends.
+    void updateBackstage() {
+      std::erase_if(backstage, [&](const auto id) {
+        return !foreignWindow(id);
+      });
+
+      for (const auto &window : foreign.windows) {
+        if (window.backstage && !std::ranges::contains(backstage, window.id)) {
+          backstage.push_back(window.id);
+        }
+      }
+
+      for (const auto &[display, takeover] : std::map(takeovers)) {
+        if (!foreignWindow(takeover.window)) {
+          endTakeover(display);
+        }
+      }
+
+      if (switcher && backstage.empty()) {
+        switcher.reset();
+      } else if (switcher) {
+        switcher->selected = std::min(switcher->selected, backstage.size() - 1);
+      }
+    }
+
+    // Opens the switcher on the focused display, on the most recent window not already taking
+    // it over, or moves its selection by `step`.
+    bool cycleBackstage(int step) {
+      if (backstage.empty()) {
+        return false;
+      }
+
+      const auto count = static_cast<std::ptrdiff_t>(backstage.size());
+      if (switcher) {
+        const auto next = (static_cast<std::ptrdiff_t>(switcher->selected) + step) % count;
+        switcher->selected = static_cast<std::size_t>(next < 0 ? next + count : next);
+        schedule();
+        return true;
+      }
+
+      const auto *workspace = focusedWorkspace();
+      if (!workspace || !workspace->visible) {
+        throw std::runtime_error("No visible workspace is focused");
+      }
+
+      const auto taking = takeovers.find(workspace->display);
+      const bool skip_first = taking != takeovers.end() && taking->second.window == backstage[0];
+      std::size_t selected = skip_first && count > 1 ? 1 : 0;
+      if (step < 0) {
+        selected = static_cast<std::size_t>(count - 1);
+      }
+
+      switcher = Switcher{workspace->display, selected};
+      schedule();
+      return true;
+    }
+
+    bool takingOver(std::uint32_t window) const {
+      return std::ranges::any_of(takeovers, [&](const auto &entry) {
+        return entry.second.window == window;
+      });
+    }
+
+    // Most recently used first.
+    void touchBackstage(std::uint32_t window) {
+      std::erase(backstage, window);
+      backstage.insert(backstage.begin(), window);
+    }
+
+    void sendToBackstage(std::uint32_t window) {
+      TELAR_TRACE("workbench.send_to_backstage");
+      windows->sendToBackstage(window);
+      std::erase_if(takeovers, [&](const auto &entry) {
+        return entry.second.window == window;
+      });
+
+      for (auto &[workspace_id, workspace] : workspaces) {
+        for (auto &[tab_id, tab] : workspace.tabs) {
+          const auto id = "window:" + QString::number(window);
+          if (tab.views.erase(id)) {
+            tab.layout.remove(id);
+            focus_pending = true;
+          }
+        }
+      }
+
+      touchBackstage(window);
+      qCInfo(telar_log::workbench) << "window" << window << "sent to the backstage";
+      schedule();
+    }
+
+    // Over the workspace the focused display shows.
+    void takeOver(std::uint32_t window) {
+      TELAR_TRACE("workbench.take_over");
+      if (!std::ranges::contains(backstage, window)) {
+        throw std::runtime_error("The window is not in the backstage");
+      }
+
+      auto *workspace = focusedWorkspace();
+      if (!workspace || !workspace->visible || !workspace->area.isValid()) {
+        throw std::runtime_error("No visible workspace is focused");
+      }
+
+      windows->takeOver(window, workspace->display, workspace->area);
+      std::erase_if(takeovers, [&](const auto &entry) {
+        return entry.second.window == window;
+      });
+
+      takeovers[workspace->display] = {window, workspace->space, workspace->runtime->activeTab()};
+      followed_focus = window;
+      touchBackstage(window);
+      qCInfo(telar_log::workbench) << "window" << window << "takes over display"
+                                   << workspace->display;
+      schedule();
+    }
+
+    // The display's layout comes back, with the keyboard.
+    void endTakeover(std::uint32_t display) {
+      TELAR_TRACE("workbench.end_takeover");
+      const auto found = takeovers.find(display);
+      if (found == takeovers.end()) {
+        return;
+      }
+
+      const auto space = found->second.space;
+      takeovers.erase(found);
+      windows->endTakeover(display);
+      for (const auto &[id, workspace] : workspaces) {
+        if (workspace.space == space) {
+          focus_pending = true;
+          focus_workspace = id;
+        }
+      }
+
+      schedule();
+    }
+
+    // Going anywhere else in a display's layout ends its takeover: another Space or another tab.
+    void followTakeovers() {
+      for (const auto &[display, takeover] : std::map(takeovers)) {
+        const auto workspace = std::ranges::find_if(workspaces, [&](const auto &entry) {
+          return entry.second.space == takeover.space;
+        });
+
+        if (workspace == workspaces.end() || !workspace->second.visible ||
+            workspace->second.runtime->activeTab() != takeover.tab) {
+          endTakeover(display);
+        }
       }
     }
 
@@ -1050,6 +1270,7 @@ namespace workbench {
           }
         }
 
+        followTakeovers();
         adoptWindows();
 
         // Incoming workspaces go first, so their windows are up before the outgoing ones hide.
@@ -1238,10 +1459,40 @@ namespace workbench {
                         {"tabs", tabs}});
       }
 
+      QVariantList backstage_list;
+      for (const auto id : backstage) {
+        if (const auto *window = foreignWindow(id)) {
+          backstage_list.append(QVariantMap{{"window", QString::number(id)},
+                                            {"application", window->application},
+                                            {"title", window->title},
+                                            {"pid", QString::number(window->pid)},
+                                            {"taking_over", takingOver(id)}});
+        }
+      }
+
+      QVariant switcher_state;
+      if (switcher && switcher->selected < backstage.size()) {
+        switcher_state =
+            QVariantMap{{"display", QString::number(switcher->display)},
+                        {"window", QString::number(backstage[switcher->selected])}};
+      }
+
       const auto current = services.desktop.focusedWorkspace();
       return {{"workspace", current ? QVariant(QString::number(*current)) : QVariant{}},
               {"workspaces", workspace_list},
+              {"backstage", backstage_list},
+              {"switcher", switcher_state},
               {"error", error}};
+    }
+
+    std::uint32_t windowArgument(const QVariantMap &args) const {
+      const auto id = identifier(args.value("window"));
+      if (id > std::numeric_limits<std::uint32_t>::max() ||
+          !foreignWindow(static_cast<std::uint32_t>(id))) {
+        throw std::runtime_error("No managed application has that window");
+      }
+
+      return static_cast<std::uint32_t>(id);
     }
 
     QVariant command(const QString &action, const QVariantMap &args) {
@@ -1257,6 +1508,46 @@ namespace workbench {
         }
 
         return list;
+      }
+
+      if (action == "take_over") {
+        takeOver(windowArgument(args));
+        return true;
+      }
+
+      if (action == "cycle_backstage") {
+        return cycleBackstage(args.value("step", 1).toInt());
+      }
+
+      if (action == "take_over_selected") {
+        const auto chosen = std::exchange(switcher, std::nullopt);
+        schedule();
+        if (!chosen || chosen->selected >= backstage.size()) {
+          return false;
+        }
+
+        takeOver(backstage[chosen->selected]);
+        return true;
+      }
+
+      if (action == "close_backstage") {
+        switcher.reset();
+        schedule();
+        return true;
+      }
+
+      if (action == "end_takeover") {
+        const auto *focused = focusedWorkspace();
+        if (focused) {
+          endTakeover(focused->display);
+        }
+
+        return true;
+      }
+
+      if (action == "send_to_backstage" && args.contains("window")) {
+        sendToBackstage(windowArgument(args));
+        return true;
       }
 
       auto *workspace = focusedWorkspace();
@@ -1282,6 +1573,18 @@ namespace workbench {
 
       auto &tab = found->second;
       const auto id = args.value("id", tab.layout.focused()).toString();
+      if (action == "send_to_backstage") {
+        const auto view = tab.views.find(id);
+        if (view == tab.views.end() || !view->second->external) {
+          throw std::runtime_error("Only other applications' windows go to the backstage");
+        }
+
+        sendToBackstage(view->second->external);
+        return true;
+      }
+
+      // Acting on the layout brings it back.
+      endTakeover(workspace->display);
       QVariant result = true;
       if (action == "focus") {
         result = tab.layout.focus(id);
@@ -1476,6 +1779,10 @@ namespace workbench {
 
   QVariantMap Controller::state() const {
     return impl_->state();
+  }
+
+  std::optional<std::uint32_t> Controller::switcherDisplay() const {
+    return impl_->switcher ? std::optional{impl_->switcher->display} : std::nullopt;
   }
 
   QVariant Controller::command(const QString &action, const QVariantMap &options) {

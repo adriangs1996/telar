@@ -24,6 +24,7 @@
 - (instancetype)initWithSpaceID:(uint64_t)space
                         windows:(NSArray *)windows
                         options:(unsigned)options;
+- (instancetype)initWithWindows:(NSArray *)windows spaces:(NSArray *)spaces;
 - (uint64_t)spaceID;
 - (NSDictionary *)propertyListDictionary;
 @end
@@ -172,6 +173,8 @@ namespace {
       operationClass(@"SLSBridgedSpaceCopyValuesOperation", @selector(initWithSpaceID:));
       operationClass(@"SLSBridgedSpaceAddWindowsAndRemoveFromSpacesOperation",
                      @selector(initWithSpaceID:windows:options:));
+      operationClass(@"SLSBridgedRemoveWindowsFromSpacesOperation",
+                     @selector(initWithWindows:spaces:));
       return true;
     }();
     (void)available;
@@ -504,9 +507,22 @@ namespace macos::spaces {
       return;
     }
 
-    const auto type = operationClass(@"SLSBridgedSpaceAddWindowsAndRemoveFromSpacesOperation",
-                                     @selector(initWithSpaceID:windows:options:));
-    perform([[type alloc] initWithSpaceID:layer windows:numbers(windows) options:every_space]);
+    // Adding leaves this process's own windows in the layers they were in as well, so they are
+    // taken out of those explicitly.
+    auto &api = skyLight();
+    NSArray *moved = numbers(windows);
+    NSMutableArray *previous = [CFBridgingRelease(api.copyWindowSpaces(
+        api.mainConnection(), any_space_kind, (__bridge CFArrayRef)moved)) mutableCopy];
+    [previous removeObject:@(layer)];
+
+    const auto add = operationClass(@"SLSBridgedSpaceAddWindowsAndRemoveFromSpacesOperation",
+                                    @selector(initWithSpaceID:windows:options:));
+    perform([[add alloc] initWithSpaceID:layer windows:moved options:every_space]);
+    if (previous.count) {
+      const auto remove = operationClass(@"SLSBridgedRemoveWindowsFromSpacesOperation",
+                                         @selector(initWithWindows:spaces:));
+      perform([[remove alloc] initWithWindows:moved spaces:previous]);
+    }
   }
 
   void showLayers(std::span<const std::uint64_t> shown, std::span<const std::uint64_t> hidden) {
@@ -530,8 +546,6 @@ namespace macos::spaces {
       return;
     }
 
-    const auto type = operationClass(@"SLSBridgedSpaceAddWindowsAndRemoveFromSpacesOperation",
-                                     @selector(initWithSpaceID:windows:options:));
     auto &api = skyLight();
     NSArray *catalog = CFBridgingRelease(api.copyDisplays(api.mainConnection()));
     const auto self = getpid();
@@ -547,9 +561,8 @@ namespace macos::spaces {
       const auto desktop =
           desktopAt(catalog, CGPointMake(CGRectGetMidX(entry.frame), CGRectGetMidY(entry.frame)));
       if (desktop) {
-        perform([[type alloc] initWithSpaceID:desktop
-                                      windows:@[ @(entry.window) ]
-                                      options:every_space]);
+        const std::uint32_t window[] = {entry.window};
+        moveToLayer(window, desktop);
       }
     }
   }

@@ -14,7 +14,7 @@ namespace {
   constexpr CGWindowLevel wallpaper_level_offset = 1;
 
   NSRect surfaceFrame(NSScreen *screen, ui::SurfaceKind kind) {
-    if (kind == ui::SurfaceKind::wallpaper) {
+    if (kind == ui::SurfaceKind::wallpaper || kind == ui::SurfaceKind::backstage) {
       return screen.frame;
     }
 
@@ -38,7 +38,6 @@ namespace {
 @implementation TelarSurfacePanel {
   std::unique_ptr<LuaSurface> _surface;
   TelarSurfaceBridge *_surface_bridge;
-  ui::SurfaceKind _kind;
   NSNumber *_display_id;
 }
 
@@ -81,6 +80,17 @@ namespace {
     self.title = @"Telar Wallpaper";
   }
 
+  // Over every window, the keyboard left with the application in front: the switcher's keys
+  // arrive as global shortcuts while their modifier is held.
+  if (kind == ui::SurfaceKind::backstage) {
+    self.level = NSPopUpMenuWindowLevel;
+    self.collectionBehavior |= NSWindowCollectionBehaviorIgnoresCycle;
+    self.ignoresMouseEvents = YES;
+    self.excludedFromWindowsMenu = YES;
+    self.animationBehavior = NSWindowAnimationBehaviorNone;
+    self.title = @"Telar Backstage";
+  }
+
   NSView *container = self.contentView;
   const NSRect bounds = container.bounds;
 
@@ -90,7 +100,7 @@ namespace {
 
   window.setFlags(Qt::SubWindow);
 
-  if (kind == ui::SurfaceKind::wallpaper) {
+  if (kind == ui::SurfaceKind::wallpaper || kind == ui::SurfaceKind::backstage) {
     window.setFlags(Qt::SubWindow | Qt::WindowDoesNotAcceptFocus | Qt::WindowTransparentForInput);
   }
 
@@ -112,7 +122,9 @@ namespace {
 }
 
 - (void)updateGeometry:(NSNotification *)notification {
-  NSScreen *screen = _kind == ui::SurfaceKind::wallpaper ? nil : NSScreen.mainScreen;
+  NSScreen *screen = _kind == ui::SurfaceKind::topbar || _kind == ui::SurfaceKind::sidebar
+                         ? NSScreen.mainScreen
+                         : nil;
 
   for (NSScreen *candidate in NSScreen.screens) {
     if ([candidate.deviceDescription[@"NSScreenNumber"] isEqual:_display_id]) {
@@ -131,7 +143,7 @@ namespace {
 }
 
 - (BOOL)canBecomeKeyWindow {
-  return _kind != ui::SurfaceKind::wallpaper;
+  return _kind == ui::SurfaceKind::topbar || _kind == ui::SurfaceKind::sidebar;
 }
 
 - (BOOL)canBecomeMainWindow {

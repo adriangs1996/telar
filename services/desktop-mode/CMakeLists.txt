@@ -160,7 +160,9 @@ else()
   target_link_libraries(desktop-debug-support INTERFACE desktop-core)
 endif()
 
-# Programs that drive the native backend name its libraries and their own Objective-C++ sources.
+# Programs name the libraries they need beyond the core; those that drive the native backend
+# name its libraries and their own Objective-C++ sources.
+set(layout_dbg_libraries desktop-ui)
 set(spaces_dbg_native_sources debug/support/spaces_probe.mm)
 set(spaces_dbg_native_libraries desktop-native)
 set(input_router_dbg_native_libraries desktop-native)
@@ -168,6 +170,7 @@ set(external_window_dbg_native_sources debug/support/external_window_probe.mm)
 set(external_window_dbg_native_libraries desktop-native "-framework QuartzCore")
 set(layers_dbg_native_sources debug/support/external_window_probe.mm debug/support/layers_probe.mm)
 set(layers_dbg_native_libraries desktop-native Qt6::Quick "-framework QuartzCore")
+set(refused_size_dbg_native_libraries desktop-native)
 set(window_observer_dbg_native_sources debug/support/external_window_probe.mm debug/support/window_observer_probe.mm)
 set(window_observer_dbg_native_libraries desktop-native "-framework QuartzCore")
 
@@ -181,7 +184,7 @@ foreach(source IN LISTS desktop_programs)
     continue()
   endif()
   add_executable("${program}" "${source}")
-  target_link_libraries("${program}" PRIVATE desktop-debug-support ${${program}_native_libraries})
+  target_link_libraries("${program}" PRIVATE desktop-debug-support ${${program}_native_libraries} ${${program}_libraries})
   if(DEFINED ${program}_native_sources)
     target_sources("${program}" PRIVATE ${${program}_native_sources})
     target_compile_options("${program}" PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>")

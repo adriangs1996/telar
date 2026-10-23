@@ -40,6 +40,11 @@ namespace workbench::native {
     std::uint64_t space = 0;
     // Dialogs, sheets and windows that cannot be resized float instead of tiling.
     bool floating = false;
+    // In the backstage, or taking over a display from it; on no Space then.
+    bool backstage = false;
+    // The smallest size its application keeps, learned from sizes it refused; a dimension it
+    // never refused is 0.
+    QSizeF minimum{0, 0};
 
     bool operator==(const ForeignWindow &) const = default;
   };
@@ -71,6 +76,14 @@ namespace workbench::native {
     // Keeps the window out of sight while its tab is not shown, still on the Space.
     void hide(std::uint32_t window, std::uint64_t space);
     void focus(std::uint32_t window);
+    // Takes the window out of every layout and out of sight, into the backstage the user picks
+    // windows from.
+    void sendToBackstage(std::uint32_t window);
+    // Shows a backstage window alone over the display's workspace area, with the keyboard, while
+    // the workspace's layout waits out of sight.
+    void takeOver(std::uint32_t window, std::uint32_t display, QRectF area);
+    // Brings the display's layout back, and the windows that took it over to the backstage.
+    void endTakeover(std::uint32_t display);
     // Presses the window's close button, as clicking it would.
     void close(std::uint32_t window);
 

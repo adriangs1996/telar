@@ -167,15 +167,46 @@ namespace workbench {
 
   bool Layout::insert(Element element, Axis axis) {
     TELAR_TRACE("layout.insert");
+    return insertAt(focused_ != none ? focused_ : root_, std::move(element), axis);
+  }
+
+  bool Layout::insertBesideLargest(Element element, const QRectF &area, double gap) {
+    TELAR_TRACE("layout.insert_beside_largest");
+    if (root_ == none || area.isEmpty()) {
+      return insert(std::move(element));
+    }
+
+    Pass pass{.gap = gap};
+    std::vector<Placement> placements;
+    measure(root_, pass);
+    place(root_, area, pass, placements);
+
+    const auto extent = [](const Placement &placement) {
+      return placement.frame.width() * placement.frame.height();
+    };
+
+    const auto largest = std::ranges::max_element(placements, {}, extent);
+    if (largest == placements.end()) {
+      return insert(std::move(element));
+    }
+
+    const auto axis =
+        largest->frame.width() >= largest->frame.height() ? Axis::horizontal : Axis::vertical;
+
+    return insertAt(leaves_[find(largest->id)], std::move(element), axis);
+  }
+
+  bool Layout::insertAt(Index target, Element element, Axis axis) {
     if (element.id.isEmpty() || contains(element.id) || elements_.size() >= capacity) {
       return false;
     }
 
-    const auto target = focused_ != none ? focused_ : root_;
     const auto parent = target == none ? none : nodes_[target].parent;
     const bool sibling = parent != none && nodes_[parent].axis == axis;
+
     const bool append =
         target != none && nodes_[target].element == none && nodes_[target].axis == axis;
+
     const auto leaf = allocate();
     const auto container = target == none || sibling || append ? none : allocate();
 
