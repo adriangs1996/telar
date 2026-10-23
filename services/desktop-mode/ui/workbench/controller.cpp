@@ -109,7 +109,7 @@ namespace workbench {
       std::unique_ptr<TerminalItem> terminal;
       // Another application's window, by its window server number.
       std::uint32_t external = 0;
-      // The external window waits off screen while its tab is not shown.
+      // The external window waits out of sight, still on its Space, while its tab is not shown.
       bool parked = false;
       QVariantMap configuration;
       QRectF requested, actual, applied;
@@ -593,7 +593,7 @@ namespace workbench {
 
       if (view.external && !view.parked) {
         if (const auto *window = foreignWindow(view.external)) {
-          windows->hide(view.external, window->frame);
+          windows->hide(view.external, window->space);
           view.parked = true;
         }
       }
@@ -795,7 +795,7 @@ namespace workbench {
                 tab.layout.setFloatingFrame(placement.id, relative(window->frame, workspace.area));
                 view.applied = window->frame;
               } else if (view.parked || !view.visible || view.applied != placement.frame) {
-                windows->place(view.external, placement.frame);
+                windows->place(view.external, workspace.space, placement.frame);
                 view.applied = placement.frame;
                 view.parked = false;
               }

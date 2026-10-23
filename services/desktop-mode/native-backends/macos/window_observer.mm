@@ -1,4 +1,6 @@
 #include "../../ui/workbench/native.hpp"
+#include "spaces_bridge.hpp"
+#include "virtual_spaces.hpp"
 #include "../../trace.hpp"
 #import <AppKit/AppKit.h>
 #include <ApplicationServices/ApplicationServices.h>
@@ -17,43 +19,18 @@
 namespace workbench::native {
   namespace {
     using WindowIdentifier = AXError (*)(AXUIElementRef, CGWindowID *);
-    using CopySpacesForWindows = CFArrayRef (*)(int, int, CFArrayRef);
-    using MainConnection = int (*)();
 
     // Each Accessibility call waits at most this long for an application that does not answer.
     constexpr float accessibility_timeout = 0.05f;
     // An application gets its Dock icon after macOS announces its launch, and a notification can
     // be missed: this often the observer attaches to new applications and reads again anyway.
     constexpr CFTimeInterval rescan_interval = 2;
-    // Every Space a window belongs to, current or not.
-    constexpr int all_spaces = 7;
 
     std::uint32_t idOf(AXUIElementRef element) {
       static const auto identifier =
           reinterpret_cast<WindowIdentifier>(dlsym(RTLD_DEFAULT, "_AXUIElementGetWindow"));
       CGWindowID id = 0;
       return identifier && identifier(element, &id) == kAXErrorSuccess ? id : 0;
-    }
-
-    std::uint64_t spaceOf(std::uint32_t window) {
-      static void *library = dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight",
-                                    RTLD_NOW | RTLD_LOCAL);
-      static const auto connection =
-          library ? reinterpret_cast<MainConnection>(dlsym(library, "SLSMainConnectionID"))
-                  : nullptr;
-      static const auto copy =
-          library
-              ? reinterpret_cast<CopySpacesForWindows>(dlsym(library, "SLSCopySpacesForWindows"))
-              : nullptr;
-      if (!connection || !copy) {
-        return 0;
-      }
-
-      NSArray *spaces =
-          CFBridgingRelease(copy(connection(), all_spaces, (__bridge CFArrayRef) @[ @(window) ]));
-      return [spaces.firstObject isKindOfClass:NSNumber.class]
-                 ? [spaces.firstObject unsignedLongLongValue]
-                 : 0;
     }
 
     QString text(CFTypeRef value) {
@@ -421,8 +398,11 @@ namespace workbench::native {
         }
       }
 
+      const auto &spaces = macos::spaces::VirtualSpaces::get();
       for (auto &window : next.windows) {
-        window.space = spaceOf(window.id);
+        const auto center = window.frame.center();
+        window.space =
+            spaces.resolve(macos::spaces::spaceOf(window.id), CGPointMake(center.x(), center.y()));
         if (window.id == focused) {
           next.focused = focused;
         }
@@ -605,8 +585,10 @@ namespace workbench::native {
     }
   }
 
-  void WindowObserver::place(std::uint32_t window, QRectF frame) {
+  void WindowObserver::place(std::uint32_t window, std::uint64_t space, QRectF frame) {
     TELAR_TRACE("native.windows.place");
+    const std::uint32_t windows[] = {window};
+    macos::spaces::moveToLayer(windows, macos::spaces::VirtualSpaces::get().stage(space));
     impl_->write(window, ^(Write &write) {
       write.frame = frame;
       write.position.reset();
@@ -619,6 +601,14 @@ namespace workbench::native {
       write.position = position;
       write.frame.reset();
     });
+  }
+
+  // The window waits on its Space's shelf, a layer that is never shown, which needs nothing from
+  // its application.
+  void WindowObserver::hide(std::uint32_t window, std::uint64_t space) {
+    TELAR_TRACE("native.windows.hide");
+    const std::uint32_t windows[] = {window};
+    macos::spaces::moveToLayer(windows, macos::spaces::VirtualSpaces::get().shelf(space));
   }
 
   void WindowObserver::focus(std::uint32_t window) {

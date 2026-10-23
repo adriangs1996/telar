@@ -87,15 +87,11 @@ namespace workbench::native {
 
   WindowObserver::~WindowObserver() = default;
 
-  void WindowObserver::place(std::uint32_t window, QRectF frame) {
-    const auto found = std::ranges::find(impl_->current.windows, window, &ForeignWindow::id);
-    if (found == impl_->current.windows.end()) {
-      return;
-    }
+  void WindowObserver::place(std::uint32_t window, std::uint64_t space, QRectF frame) {
     const auto box = frame.toRect();
     const telar_placement placement{{window, 0},
                                     {box.x(), box.y(), box.width(), box.height()},
-                                    found->space,
+                                    space,
                                     TELAR_WINDOWS,
                                     true,
                                     true};
@@ -107,11 +103,11 @@ namespace workbench::native {
   void WindowObserver::move(std::uint32_t window, QPointF position) {
     const auto found = std::ranges::find(impl_->current.windows, window, &ForeignWindow::id);
     if (found != impl_->current.windows.end()) {
-      place(window, {position, found->frame.size()});
+      place(window, found->space, {position, found->frame.size()});
     }
   }
 
-  void WindowObserver::hide(std::uint32_t window, QRectF) {
+  void WindowObserver::hide(std::uint32_t window, std::uint64_t) {
     linux_desktop::Session::get().post([window](telar_server *server) {
       telar_server_visible(server, {window, 0}, false);
     });

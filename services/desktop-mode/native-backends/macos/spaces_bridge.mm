@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <array>
 #include <dlfcn.h>
+#include <libproc.h>
+#include <set>
 #include <span>
 #include <stdexcept>
 #include <unistd.h>
@@ -17,16 +19,26 @@
 - (instancetype)initWithOptions:(unsigned)options values:(NSDictionary *)values;
 - (instancetype)initWithSpaceID:(uint64_t)space;
 - (instancetype)initWithSpaces:(NSArray *)spaces;
-- (instancetype)initWithDisplayIdentifier:(NSString *)display spaceID:(uint64_t)space;
+- (instancetype)initWithSpaceID:(uint64_t)space level:(int)level;
+- (instancetype)initWithSpaceID:(uint64_t)space values:(NSDictionary *)values;
 - (instancetype)initWithSpaceID:(uint64_t)space
-              displayIdentifier:(NSString *)display
-                          index:(unsigned)index;
+                        windows:(NSArray *)windows
+                        options:(unsigned)options;
 - (uint64_t)spaceID;
+- (NSDictionary *)propertyListDictionary;
 @end
 
 namespace {
   constexpr std::size_t space_limit = 512;
   constexpr std::uint32_t display_limit = 32;
+  // SpaceCreate option: an unmanaged Space, which Mission Control does not list.
+  constexpr unsigned unmanaged_space = 0x1;
+  // SpaceAddWindowsAndRemoveFromSpaces option: out of every Space the window was in.
+  constexpr unsigned every_space = 7;
+  // SLSCopySpacesForWindows mask that includes unmanaged Spaces.
+  constexpr int any_space_kind = 0xffff;
+  // The value a layer is stamped with: the Telar process that made it.
+  NSString *const layer_owner_key = @"telar.process";
 
   std::string text(NSString *value) {
     return [value isKindOfClass:NSString.class] ? std::string(value.UTF8String ?: "") : "";
@@ -45,8 +57,6 @@ namespace {
         load<decltype(activeDisplay)>("SLSCopyActiveMenuBarDisplayIdentifier");
     CGError (*activateDisplay)(int, CFStringRef, CFStringRef) =
         load<decltype(activateDisplay)>("SLSSetActiveMenuBarDisplayIdentifier");
-    void (*moveWindows)(int, CFArrayRef, std::uint64_t) =
-        load<decltype(moveWindows)>("SLSMoveWindowsToManagedSpace");
     CFArrayRef (*copyWindowSpaces)(int, int, CFArrayRef) =
         load<decltype(copyWindowSpaces)>("SLSCopySpacesForWindows");
 
@@ -156,58 +166,145 @@ namespace {
       operationClass(@"SLSBridgedSpaceDestroyOperation", @selector(initWithSpaceID:));
       operationClass(@"SLSBridgedShowSpacesOperation", @selector(initWithSpaces:));
       operationClass(@"SLSBridgedHideSpacesOperation", @selector(initWithSpaces:));
-      operationClass(@"SLSBridgedManagedDisplaySetCurrentSpaceOperation",
-                     @selector(initWithDisplayIdentifier:spaceID:));
+      operationClass(@"SLSBridgedSpaceSetAbsoluteLevelOperation",
+                     @selector(initWithSpaceID:level:));
+      operationClass(@"SLSBridgedSpaceSetValuesOperation", @selector(initWithSpaceID:values:));
+      operationClass(@"SLSBridgedSpaceCopyValuesOperation", @selector(initWithSpaceID:));
+      operationClass(@"SLSBridgedSpaceAddWindowsAndRemoveFromSpacesOperation",
+                     @selector(initWithSpaceID:windows:options:));
       return true;
     }();
     (void)available;
   }
 
-  SEL performer(id operation, char result_type) {
+  // Runs a bridged operation. Synchronous ones answer with a result, asynchronous ones return
+  // at once, and SkyLight decides which an operation is.
+  id perform(id operation) {
     SEL selector = sel_registerName("performWithWMBridgeDelegate");
-    Method method = class_getInstanceMethod([operation class], selector);
+    Method method = operation ? class_getInstanceMethod([operation class], selector) : nullptr;
     char encoding[8]{};
 
     if (method) {
       method_getReturnType(method, encoding, sizeof(encoding));
     }
 
-    if (!operation || encoding[0] != result_type) {
+    if (encoding[0] == '@') {
+      return reinterpret_cast<id (*)(id, SEL)>(objc_msgSend)(operation, selector);
+    }
+
+    if (encoding[0] != 'v') {
       throw std::runtime_error("SkyLight bridge operation has an unsupported return type");
     }
 
-    return selector;
+    reinterpret_cast<void (*)(id, SEL)>(objc_msgSend)(operation, selector);
+    return nil;
   }
 
-  void performAsync(id operation) {
-    const auto selector = performer(operation, 'v');
-    reinterpret_cast<void (*)(id, SEL)>(objc_msgSend)(operation, selector);
+  NSArray *numbers(auto values) {
+    NSMutableArray *array = [NSMutableArray arrayWithCapacity:values.size()];
+    for (const auto value : values) {
+      [array addObject:@(value)];
+    }
+
+    return array;
+  }
+
+  // A process, by its identifier and the time it started, so a reused identifier is not mistaken
+  // for the process that made a layer.
+  NSString *processMark(pid_t pid) {
+    proc_bsdinfo info{};
+    if (proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, sizeof(info)) != sizeof(info)) {
+      return nil;
+    }
+
+    return [NSString
+        stringWithFormat:@"%d:%llu.%llu", pid, info.pbi_start_tvsec, info.pbi_start_tvusec];
+  }
+
+  bool running(NSString *mark) {
+    NSString *process = [mark componentsSeparatedByString:@":"].firstObject;
+    const auto pid = static_cast<pid_t>(process.intValue);
+    return pid > 0 && [processMark(pid) isEqualToString:mark];
+  }
+
+  // The Spaces each window of the window server belongs to, unmanaged ones included.
+  struct Membership {
+    std::uint32_t window = 0;
+    pid_t owner = 0;
+    CGRect frame{};
+    NSArray *spaces;
+  };
+
+  std::vector<Membership> memberships() {
+    auto &api = skyLight();
+    if (!api.copyWindowSpaces) {
+      throw std::runtime_error("This macOS version does not report the Spaces of windows");
+    }
+
+    NSArray *windows =
+        CFBridgingRelease(CGWindowListCopyWindowInfo(kCGWindowListOptionAll, kCGNullWindowID));
+    std::vector<Membership> result;
+    result.reserve(windows.count);
+    for (NSDictionary *window in windows) {
+      Membership entry;
+      entry.window =
+          static_cast<std::uint32_t>(number(window[(__bridge NSString *)kCGWindowNumber]));
+      entry.owner = static_cast<pid_t>(number(window[(__bridge NSString *)kCGWindowOwnerPID]));
+      id bounds = window[(__bridge NSString *)kCGWindowBounds];
+      if (!entry.window || ![bounds isKindOfClass:NSDictionary.class] ||
+          !CGRectMakeWithDictionaryRepresentation((__bridge CFDictionaryRef)bounds, &entry.frame)) {
+        continue;
+      }
+
+      entry.spaces = CFBridgingRelease(api.copyWindowSpaces(
+          api.mainConnection(), any_space_kind, (__bridge CFArrayRef) @[ @(entry.window) ]));
+      if (entry.spaces.count) {
+        result.push_back(entry);
+      }
+    }
+
+    return result;
+  }
+
+  // The desktop the display under a point shows, from the Spaces catalog; the main display's when
+  // no display is there.
+  std::uint64_t desktopAt(NSArray *catalog, CGPoint point) {
+    std::array<CGDirectDisplayID, display_limit> identifiers{};
+    std::uint32_t count = 0;
+    CGGetDisplaysWithPoint(point, display_limit, identifiers.data(), &count);
+    NSString *wanted = nil;
+    if (count) {
+      CFUUIDRef uuid = CGDisplayCreateUUIDFromDisplayID(identifiers[0]);
+      wanted = uuid ? CFBridgingRelease(CFUUIDCreateString(nullptr, uuid)) : nil;
+      if (uuid) {
+        CFRelease(uuid);
+      }
+    }
+
+    std::uint64_t main = 0;
+    for (NSDictionary *display in catalog) {
+      if (![display isKindOfClass:NSDictionary.class]) {
+        continue;
+      }
+
+      id current = display[@"Current Space"];
+      const auto space = [current isKindOfClass:NSDictionary.class] ? number(current[@"id64"]) : 0;
+      NSString *identifier = display[@"Display Identifier"];
+      if (wanted && [identifier isKindOfClass:NSString.class] &&
+          [identifier caseInsensitiveCompare:wanted] == NSOrderedSame) {
+        return space;
+      }
+
+      if ([identifier isEqual:@"Main"] || !main) {
+        main = space;
+      }
+    }
+
+    return main;
   }
 } // namespace
 
 namespace macos::spaces {
-  void moveWindow(std::uint32_t window, std::uint64_t space) {
-    TELAR_TRACE("native.spaces.move_window");
-    auto &api = skyLight();
-    if (!window || !space || !api.moveWindows || !api.copyWindowSpaces) {
-      throw std::runtime_error("Window placement in Spaces is unavailable");
-    }
-
-    NSArray *windows = @[ @(window) ];
-    constexpr int all_spaces = 7;
-    NSArray *before = CFBridgingRelease(
-        api.copyWindowSpaces(api.mainConnection(), all_spaces, (__bridge CFArrayRef)windows));
-    if ([before containsObject:@(space)] && before.count == 1) {
-      return;
-    }
-    api.moveWindows(api.mainConnection(), (__bridge CFArrayRef)windows, space);
-    NSArray *after = CFBridgingRelease(
-        api.copyWindowSpaces(api.mainConnection(), all_spaces, (__bridge CFArrayRef)windows));
-    if (![after containsObject:@(space)]) {
-      throw std::runtime_error("macOS refused to place the window in its workspace Space");
-    }
-  }
-
   DesktopState snapshot() {
     TELAR_TRACE("native.spaces.snapshot");
     ensureBridge();
@@ -339,75 +436,6 @@ namespace macos::spaces {
     return state;
   }
 
-  std::uint64_t create() {
-    TELAR_TRACE("native.spaces.create");
-    const auto type =
-        operationClass(@"SLSBridgedSpaceCreateOperation", @selector(initWithOptions:values:));
-    id operation = [[type alloc] initWithOptions:0 values:@{}];
-    id result =
-        reinterpret_cast<id (*)(id, SEL)>(objc_msgSend)(operation, performer(operation, '@'));
-
-    if (![result respondsToSelector:@selector(spaceID)] || ![result spaceID]) {
-      throw std::runtime_error("SkyLight did not return a new Space ID");
-    }
-
-    return [result spaceID];
-  }
-
-  void remove(std::uint64_t space) {
-    TELAR_TRACE("native.spaces.remove");
-    const auto type =
-        operationClass(@"SLSBridgedSpaceDestroyOperation", @selector(initWithSpaceID:));
-    performAsync([[type alloc] initWithSpaceID:space]);
-  }
-
-  void activate(const DesktopState &state, std::uint64_t space) {
-    TELAR_TRACE("native.spaces.activate");
-    const auto target = std::ranges::find(state.spaces, space, &DesktopSpace::id);
-
-    if (target == state.spaces.end()) {
-      throw std::runtime_error("The requested Space no longer exists");
-    }
-
-    const auto display = std::ranges::find(state.displays, target->display, &DesktopDisplay::id);
-    const auto previous = std::ranges::find_if(state.spaces, [&](const auto &entry) {
-      return entry.display == target->display && entry.visible;
-    });
-
-    if (display == state.displays.end() || previous == state.spaces.end()) {
-      throw std::runtime_error("The target display is unavailable");
-    }
-
-    if (previous->id == target->id) {
-      return;
-    }
-
-    const auto show = operationClass(@"SLSBridgedShowSpacesOperation", @selector(initWithSpaces:));
-    const auto hide = operationClass(@"SLSBridgedHideSpacesOperation", @selector(initWithSpaces:));
-    const auto current = operationClass(@"SLSBridgedManagedDisplaySetCurrentSpaceOperation",
-                                        @selector(initWithDisplayIdentifier:spaceID:));
-    NSString *identifier = [NSString stringWithUTF8String:display->uuid.c_str()];
-    id show_operation = [[show alloc] initWithSpaces:@[ @(space) ]];
-    id hide_operation = [[hide alloc] initWithSpaces:@[ @(previous->id) ]];
-    id current_operation = [[current alloc] initWithDisplayIdentifier:identifier spaceID:space];
-    performer(show_operation, 'v');
-    performer(hide_operation, 'v');
-    performer(current_operation, 'v');
-
-    performAsync(show_operation);
-    performAsync(hide_operation);
-    performAsync(current_operation);
-  }
-
-  void move(std::uint64_t space, const DesktopDisplay &display, unsigned index) {
-    TELAR_TRACE("native.spaces.move");
-    const auto type = operationClass(@"SLSBridgedMoveManagedSpaceToDisplayIndexOperation",
-                                     @selector(initWithSpaceID:displayIdentifier:index:));
-    performAsync([[type alloc] initWithSpaceID:space
-                             displayIdentifier:[NSString stringWithUTF8String:display.uuid.c_str()]
-                                         index:index]);
-  }
-
   void focusDisplay(const DesktopDisplay &display) {
     TELAR_TRACE("native.spaces.focus_display");
     auto &api = skyLight();
@@ -425,5 +453,141 @@ namespace macos::spaces {
       TELAR_TRACE("native.spaces.focus_display_window");
       focusDisplayWindow(display);
     }
+  }
+
+  std::uint64_t spaceOf(std::uint32_t window) {
+    auto &api = skyLight();
+    if (!api.mainConnection || !api.copyWindowSpaces) {
+      return 0;
+    }
+
+    NSArray *spaces = CFBridgingRelease(api.copyWindowSpaces(
+        api.mainConnection(), any_space_kind, (__bridge CFArrayRef) @[ @(window) ]));
+    return number(spaces.firstObject);
+  }
+
+  std::uint64_t createLayer(int level) {
+    TELAR_TRACE("native.spaces.create_layer");
+    const auto create =
+        operationClass(@"SLSBridgedSpaceCreateOperation", @selector(initWithOptions:values:));
+    const auto stamp =
+        operationClass(@"SLSBridgedSpaceSetValuesOperation", @selector(initWithSpaceID:values:));
+    const auto order = operationClass(@"SLSBridgedSpaceSetAbsoluteLevelOperation",
+                                      @selector(initWithSpaceID:level:));
+    NSString *mark = processMark(getpid());
+    if (!mark) {
+      throw std::runtime_error("Telar cannot read its own process start time");
+    }
+
+    id result = perform([[create alloc] initWithOptions:unmanaged_space values:@{}]);
+    const std::uint64_t layer =
+        [result respondsToSelector:@selector(spaceID)] ? [result spaceID] : 0;
+    if (!layer) {
+      throw std::runtime_error("SkyLight did not return a new layer");
+    }
+
+    perform([[stamp alloc] initWithSpaceID:layer values:@{layer_owner_key : mark}]);
+    perform([[order alloc] initWithSpaceID:layer level:level]);
+    return layer;
+  }
+
+  void destroyLayer(std::uint64_t layer) {
+    TELAR_TRACE("native.spaces.destroy_layer");
+    const auto type =
+        operationClass(@"SLSBridgedSpaceDestroyOperation", @selector(initWithSpaceID:));
+    perform([[type alloc] initWithSpaceID:layer]);
+  }
+
+  void moveToLayer(std::span<const std::uint32_t> windows, std::uint64_t layer) {
+    TELAR_TRACE("native.spaces.move_to_layer");
+    if (windows.empty()) {
+      return;
+    }
+
+    const auto type = operationClass(@"SLSBridgedSpaceAddWindowsAndRemoveFromSpacesOperation",
+                                     @selector(initWithSpaceID:windows:options:));
+    perform([[type alloc] initWithSpaceID:layer windows:numbers(windows) options:every_space]);
+  }
+
+  void showLayers(std::span<const std::uint64_t> shown, std::span<const std::uint64_t> hidden) {
+    TELAR_TRACE("native.spaces.show_layers");
+    if (!shown.empty()) {
+      const auto show =
+          operationClass(@"SLSBridgedShowSpacesOperation", @selector(initWithSpaces:));
+      perform([[show alloc] initWithSpaces:numbers(shown)]);
+    }
+
+    if (!hidden.empty()) {
+      const auto hide =
+          operationClass(@"SLSBridgedHideSpacesOperation", @selector(initWithSpaces:));
+      perform([[hide alloc] initWithSpaces:numbers(hidden)]);
+    }
+  }
+
+  void evacuate(std::span<const std::uint64_t> layers) {
+    TELAR_TRACE("native.spaces.evacuate");
+    if (layers.empty()) {
+      return;
+    }
+
+    const auto type = operationClass(@"SLSBridgedSpaceAddWindowsAndRemoveFromSpacesOperation",
+                                     @selector(initWithSpaceID:windows:options:));
+    auto &api = skyLight();
+    NSArray *catalog = CFBridgingRelease(api.copyDisplays(api.mainConnection()));
+    const auto self = getpid();
+    for (const auto &entry : memberships()) {
+      const bool inside = std::ranges::any_of(layers, [&](const auto layer) {
+        return [entry.spaces containsObject:@(layer)];
+      });
+
+      if (!inside || entry.owner == self) {
+        continue;
+      }
+
+      const auto desktop =
+          desktopAt(catalog, CGPointMake(CGRectGetMidX(entry.frame), CGRectGetMidY(entry.frame)));
+      if (desktop) {
+        perform([[type alloc] initWithSpaceID:desktop
+                                      windows:@[ @(entry.window) ]
+                                      options:every_space]);
+      }
+    }
+  }
+
+  std::vector<std::uint64_t> strayLayers() {
+    TELAR_TRACE("native.spaces.stray_layers");
+    auto &api = skyLight();
+    const auto copy =
+        operationClass(@"SLSBridgedSpaceCopyValuesOperation", @selector(initWithSpaceID:));
+    std::set<std::uint64_t> managed;
+    NSArray *catalog = CFBridgingRelease(api.copyDisplays(api.mainConnection()));
+    for (NSDictionary *display in catalog) {
+      for (NSDictionary *space in display[@"Spaces"]) {
+        managed.insert(number(space[@"id64"]));
+      }
+    }
+
+    std::set<std::uint64_t> candidates;
+    for (const auto &entry : memberships()) {
+      for (NSNumber *space in entry.spaces) {
+        if (!managed.contains(space.unsignedLongLongValue)) {
+          candidates.insert(space.unsignedLongLongValue);
+        }
+      }
+    }
+
+    std::vector<std::uint64_t> stray;
+    for (const auto candidate : candidates) {
+      id result = perform([[copy alloc] initWithSpaceID:candidate]);
+      NSDictionary *values = [result respondsToSelector:@selector(propertyListDictionary)]
+                                 ? [result propertyListDictionary]
+                                 : nil;
+      id mark = [values isKindOfClass:NSDictionary.class] ? values[layer_owner_key] : nil;
+      if ([mark isKindOfClass:NSString.class] && !running(mark)) {
+        stray.push_back(candidate);
+      }
+    }
+
+    return stray;
   }
 } // namespace macos::spaces

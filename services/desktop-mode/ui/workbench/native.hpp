@@ -65,9 +65,11 @@ namespace workbench::native {
     WindowObserver(const WindowObserver &) = delete;
     WindowObserver &operator=(const WindowObserver &) = delete;
 
-    void place(std::uint32_t window, QRectF frame);
+    // Shows the window on the Space, at the frame.
+    void place(std::uint32_t window, std::uint64_t space, QRectF frame);
     void move(std::uint32_t window, QPointF position);
-    void hide(std::uint32_t window, QRectF frame);
+    // Keeps the window out of sight while its tab is not shown, still on the Space.
+    void hide(std::uint32_t window, std::uint64_t space);
     void focus(std::uint32_t window);
     // Presses the window's close button, as clicking it would.
     void close(std::uint32_t window);

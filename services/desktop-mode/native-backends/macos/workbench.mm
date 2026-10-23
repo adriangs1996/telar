@@ -1,5 +1,6 @@
 #include "../../ui/workbench/native.hpp"
 #include "spaces_bridge.hpp"
+#include "virtual_spaces.hpp"
 #include "../../trace.hpp"
 #include <AppKit/AppKit.h>
 #include <QWindow>
@@ -45,7 +46,8 @@ namespace workbench::native {
       native.level = NSNormalWindowLevel;
     }
 
-    macos::spaces::moveWindow(static_cast<std::uint32_t>(native.windowNumber), space);
+    const std::uint32_t windows[] = {static_cast<std::uint32_t>(native.windowNumber)};
+    macos::spaces::moveToLayer(windows, macos::spaces::VirtualSpaces::get().stage(space));
   }
 
   void prepareInputWindow(QWindow &window) {

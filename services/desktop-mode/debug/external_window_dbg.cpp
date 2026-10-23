@@ -7,7 +7,8 @@
 //   minimize   Accessibility minimizes and restores them.
 //   offscreen  Accessibility moves them to the bottom right corner of their display and back,
 //              leaving --sliver points on screen.
-//   space      SkyLight moves them to a parking Space on their display and back.
+//   layer      SkyLight moves them into a hidden layer, an unmanaged Space, and back to the
+//              desktop.
 //   behind     A window of this process at the normal level, the wall, covers the display:
 //              showing raises the incoming windows through Accessibility, and hiding is one
 //              window server call that orders the wall right below them.
@@ -54,6 +55,8 @@ namespace {
   constexpr int tab_count = 2;
   constexpr int screen_margin = 80;
   constexpr int window_gap = 12;
+  // Below every desktop window; hidden anyway.
+  constexpr int parking_level = -1;
   constexpr auto helper_deadline = std::chrono::seconds{10};
   constexpr auto settle_poll = std::chrono::milliseconds{2};
   constexpr auto settle_deadline = std::chrono::seconds{2};
@@ -197,11 +200,13 @@ namespace {
     }
 
     ~Bench() {
-      if (created_parking_) {
+      if (parking_) {
         try {
-          macos::spaces::remove(parking_);
+          const std::uint64_t layers[] = {parking_};
+          macos::spaces::evacuate(layers);
+          macos::spaces::destroyLayer(parking_);
         } catch (const std::exception &error) {
-          std::printf("could not remove the parking Space: %s\n", error.what());
+          std::printf("could not remove the parking layer: %s\n", error.what());
         }
       }
     }
@@ -225,7 +230,7 @@ namespace {
            [](Placed &placed) {
              return placed.window.setPosition(placed.frame.topLeft());
            }},
-          {"space",
+          {"layer",
            [this](Placed &placed) {
              return move(placed, parking());
            },
@@ -406,32 +411,24 @@ namespace {
       return *wall_;
     }
 
-    // A Space on the windows' display that no display shows, made on first use if there is none.
+    // A hidden layer, made on first use, and the desktop the windows return to.
     std::uint64_t parking() {
       if (parking_) {
         return parking_;
       }
 
-      const auto state = macos::spaces::snapshot();
-      home_ = state.focused_space;
-      const auto home = std::ranges::find(state.spaces, home_, &DesktopSpace::id);
-      for (const auto &space : state.spaces) {
-        if (home != state.spaces.end() && space.display == home->display && !space.visible &&
-            !space.fullscreen) {
-          parking_ = space.id;
-          return parking_;
-        }
-      }
-
-      parking_ = macos::spaces::create();
-      created_parking_ = true;
-      std::printf("created parking Space %llu\n", static_cast<unsigned long long>(parking_));
+      home_ = macos::spaces::snapshot().focused_space;
+      parking_ = macos::spaces::createLayer(parking_level);
+      const std::uint64_t hidden[] = {parking_};
+      macos::spaces::showLayers({}, hidden);
+      std::printf("created parking layer %llu\n", static_cast<unsigned long long>(parking_));
       return parking_;
     }
 
     bool move(Placed &placed, std::uint64_t space) {
       try {
-        macos::spaces::moveWindow(placed.window.id(), space);
+        const std::uint32_t windows[] = {placed.window.id()};
+        macos::spaces::moveToLayer(windows, space);
         return true;
       } catch (const std::exception &) {
         return false;
@@ -492,7 +489,6 @@ namespace {
     int current_ = 0;
     std::uint64_t home_ = 0;
     std::uint64_t parking_ = 0;
-    bool created_parking_ = false;
     Clock::time_point frozen_until_;
   };
 
@@ -530,7 +526,7 @@ int main(int argc, char **argv) {
   parser.addHelpOption();
   const QCommandLineOption serve_option("serve", "Run as the helper application.", "per-tab");
   const QCommandLineOption strategy_option("strategy",
-                                           "minimize, offscreen, space, behind or all (default).",
+                                           "minimize, offscreen, layer, behind or all (default).",
                                            "strategy",
                                            "all");
   const QCommandLineOption windows_option("windows",

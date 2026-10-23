@@ -41,11 +41,11 @@ namespace workbench::native {
 
   WindowObserver::~WindowObserver() = default;
 
-  void WindowObserver::place(std::uint32_t, QRectF) {}
+  void WindowObserver::place(std::uint32_t, std::uint64_t, QRectF) {}
 
   void WindowObserver::move(std::uint32_t, QPointF) {}
 
-  void WindowObserver::hide(std::uint32_t, QRectF) {}
+  void WindowObserver::hide(std::uint32_t, std::uint64_t) {}
 
   void WindowObserver::focus(std::uint32_t) {}
 
