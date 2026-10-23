@@ -1,49 +1,80 @@
+-- A pane's chrome: its frame, and a header that names what runs in it and how its agent is doing.
 local ui = require("telar.ui")
 local runtime = require("telar.runtime")
 local workbench = require("telar.workbench")
 local theme = require("telar.theme")
 local AgentStatus = require("agent_status")
+local Icons = require("icons")
+local Color = require("color")
 local options = ui.surface.options
 local colors = theme.colors
-local header_height = options.header_height or 28
-local title_x = 12
-local chip_padding = 8
-local chip_height = 20
+local opacity = theme.terminal.background_opacity
 
--- One background covers the pane, including padding. Text and the border keep their opacity.
-local function background_color()
-  local opacity = theme.terminal.background_opacity
+local metrics = {
+  -- Until the workbench reports where the terminal starts.
+  header_height = options.header_height or 34,
+  padding_x = 12,
+  icon = 14,
+  gap = 8,
+  chip_padding = 8,
+  chip_height = 20,
+  close = 22,
+  close_icon = 12,
+  cwd_width = 160,
+  hover_ms = 120,
+  focus_ms = 160,
+}
 
-  if opacity == 1 then
-    return colors.chrome
-  end
+local function rectangle(properties)
+  local parent = properties.parent
+  properties.parent = nil
 
-  local color = theme.terminal.background
-  local alpha = #color == 9 and tonumber(color:sub(2, 3), 16) or 255
-  return string.format("#%02x%s", math.floor(alpha * opacity + 0.5), color:sub(-6))
+  return ui.create("QtQuick", "Rectangle", properties, parent)
 end
 
-local background = ui.create("QtQuick", "Rectangle", {
-  color = background_color(),
+-- One background covers the pane, including padding. Text and the border keep their opacity.
+local background = rectangle({
+  color = opacity == 1 and colors.chrome or Color.fade(theme.terminal.background, opacity),
   radius = theme.radius.medium,
   ["border.width"] = 1,
   ["border.color"] = colors.border,
 })
 
-local glyph = AgentStatus.new_glyph()
-glyph.visible = false
+local band = rectangle({
+  parent = background,
+  x = 1,
+  y = 1,
+  topLeftRadius = theme.radius.medium - 1,
+  topRightRadius = theme.radius.medium - 1,
+  bottomLeftRadius = 0,
+  bottomRightRadius = 0,
+  color = Color.fade(colors.chrome, opacity),
+})
 
-local title = ui.text({
+local divider = rectangle({ parent = background, x = 1, height = 1, color = colors.border })
+local glyph = AgentStatus.new_glyph(background, metrics.icon)
+local shell_icon = Icons.new("terminal", { parent = background, color = colors.label, size = 14 })
+
+local name = ui.text({
+  parent = background,
   color = colors.text,
   textFormat = "PlainText",
   elide = "ElideRight",
-  ["font.pixelSize"] = 12,
-  x = title_x,
-  y = 6,
+  ["font.pixelSize"] = 12.5,
+  ["font.weight"] = 600,
 })
 
-local chip = ui.create("QtQuick", "Rectangle", {
-  height = chip_height,
+local title = ui.text({
+  parent = background,
+  color = colors.muted,
+  textFormat = "PlainText",
+  elide = "ElideRight",
+  ["font.pixelSize"] = 12,
+})
+
+local chip = rectangle({
+  parent = background,
+  height = metrics.chip_height,
   radius = theme.radius.small,
   visible = false,
 })
@@ -51,23 +82,57 @@ local chip = ui.create("QtQuick", "Rectangle", {
 local chip_label = ui.text({
   parent = chip,
   textFormat = "PlainText",
-  x = chip_padding,
+  x = metrics.chip_padding,
   ["font.pixelSize"] = 11,
 })
 
-local close = ui.text({
-  text = "×",
-  color = colors.muted,
-  y = 4,
-  ["font.pixelSize"] = 16,
+local cwd = ui.text({
+  parent = background,
+  color = colors.label,
+  textFormat = "PlainText",
+  elide = "ElideLeft",
+  horizontalAlignment = "AlignRight",
+  ["font.pixelSize"] = 11,
 })
 
-local header = ui.item({ height = header_height })
-local resize = ui.item({ width = 8, height = 8 })
+if theme.fonts.mono ~= "" then
+  cwd["font.family"] = theme.fonts.mono
+end
+
+local close = rectangle({
+  parent = background,
+  width = metrics.close,
+  height = metrics.close,
+  radius = metrics.close / 2,
+  color = "transparent",
+})
+
+local close_icon = Icons.new("close", {
+  parent = close,
+  color = colors.muted,
+  size = metrics.close_icon,
+})
+close_icon.x = (metrics.close - metrics.close_icon) / 2
+close_icon.y = (metrics.close - metrics.close_icon) / 2
+
+-- Focus and urgency draw a second frame over the plain one, which fades in and out.
+local highlight = rectangle({
+  parent = background,
+  color = "transparent",
+  radius = theme.radius.medium,
+  opacity = 0,
+  ["border.width"] = 1.5,
+})
+
+local header = ui.item({ parent = background })
+local resize = ui.item({ parent = background, width = 8, height = 8 })
 local drag
 local pane_state = {}
+local runtime_state = runtime.state()
 local agents = runtime.agents()
 local agent
+local cancel_tick
+local paint
 
 local function find_agent()
   for _, candidate in ipairs(agents) do
@@ -77,38 +142,120 @@ local function find_agent()
   end
 end
 
--- An agent that needs the person colors the border even when the pane is not focused.
-local function paint()
+-- The process in front of the pane, from its tab in the runtime's catalog.
+local function foreground()
+  for _, view in ipairs(runtime_state.views or {}) do
+    for _, tab in ipairs(view.tabs) do
+      for _, entry in ipairs(tab.foregrounds) do
+        if entry.pane == pane_state.pane then
+          return entry.name
+        end
+      end
+    end
+  end
+end
+
+local function header_height()
+  local content = pane_state.content
+
+  return content and content.y or metrics.header_height
+end
+
+local function schedule_tick()
+  if cancel_tick then
+    cancel_tick()
+    cancel_tick = nil
+  end
+
+  if agent and chip.visible then
+    cancel_tick = ui.after(AgentStatus.next_change_ms(agent), function()
+      cancel_tick = nil
+      agents = runtime.agents()
+      agent = find_agent()
+      paint()
+    end)
+  end
+end
+
+-- An agent that needs the person colors the frame even when the pane is not focused.
+paint = function()
   local width = pane_state.width or 0
+  local height = header_height()
   local palette = agent and AgentStatus.colors(agent)
   local urgent = agent and AgentStatus.group(agent) == "needs_input"
-  local text_x = title_x
+  local center = function(item_height)
+    return math.floor((height - item_height) / 2)
+  end
 
+  band.width = math.max(0, width - 2)
+  band.height = math.max(0, height - 1)
+  band.color = Color.fade(urgent and palette.background or colors.chrome, opacity)
+  divider.y = height
+  divider.width = math.max(0, width - 2)
+  divider.color = urgent and palette.border or colors.border
   glyph.visible = agent ~= nil
+  shell_icon.visible = agent == nil
   chip.visible = agent ~= nil and agent.status ~= "ready"
+
+  local icon = agent and glyph or shell_icon
+  icon.x = metrics.padding_x
+  icon.y = center(metrics.icon)
 
   if agent then
     AgentStatus.paint_glyph(glyph, agent)
-    glyph.x = title_x
-    glyph.y = math.floor((header_height - AgentStatus.glyph_size) / 2)
-    text_x = title_x + AgentStatus.glyph_size + 8
-    title.text = agent.name .. "  " .. AgentStatus.title(agent)
-    chip.color = palette.background
-    chip_label.color = palette.text
-    chip_label.text = AgentStatus.label(agent) .. " · " .. AgentStatus.age(agent.status_age_s)
-    chip.width = chip_label.implicitWidth + 2 * chip_padding
-    chip.x = width - 32 - chip.width
-    chip.y = math.floor((header_height - chip_height) / 2)
-    chip_label.y = math.floor((chip_height - chip_label.implicitHeight) / 2)
+    name.text = agent.name
+    title.text = AgentStatus.title(agent) or ""
+    cwd.text = agent.cwd_label
   else
-    title.text = pane_state.pane and ("Pane " .. pane_state.pane) or "Telar"
+    name.text = foreground() or "Terminal"
+    title.text = ""
+    cwd.text = ""
   end
 
-  title.x = text_x
-  title.width = math.max(0, (chip.visible and chip.x or width - 32) - text_x - 8)
-  background["border.color"] = (urgent and palette.border)
-    or (pane_state.focused and colors.accent)
-    or colors.border
+  close.x = width - metrics.padding_x - metrics.close + 4
+  close.y = center(metrics.close)
+  local right = close.x - metrics.gap
+  cwd.visible = cwd.text ~= ""
+
+  if cwd.visible then
+    cwd.width = math.min(metrics.cwd_width, cwd.implicitWidth)
+    cwd.x = right - cwd.width
+    cwd.y = center(cwd.implicitHeight)
+    right = cwd.x - metrics.gap - 4
+  end
+
+  if chip.visible then
+    chip.color = palette.background
+    chip["border.width"] = 1
+    chip["border.color"] = Color.fade(palette.border, 0.6)
+    chip_label.color = palette.text
+    chip_label.text = agent.status == "working" and AgentStatus.corner(agent)
+      or (AgentStatus.label(agent) .. " · " .. AgentStatus.age(agent.status_age_s))
+    chip.width = chip_label.implicitWidth + 2 * metrics.chip_padding
+    chip.x = right - chip.width
+    chip.y = center(metrics.chip_height)
+    chip_label.y = math.floor((metrics.chip_height - chip_label.implicitHeight) / 2)
+    right = chip.x - metrics.gap
+  end
+
+  name.x = metrics.padding_x + metrics.icon + metrics.gap
+  name.y = center(name.implicitHeight)
+  name.width = math.max(0, math.min(name.implicitWidth, right - name.x))
+  title.visible = title.text ~= ""
+  title.x = name.x + name.width + metrics.gap
+  title.y = center(title.implicitHeight)
+  title.width = math.max(0, right - title.x)
+
+  header.width = math.max(0, close.x - 4)
+  header.height = height
+  local highlighted = urgent or pane_state.focused
+
+  if highlighted then
+    highlight["border.color"] = urgent and palette.border or colors.accent
+  end
+
+  ui.animate(highlight, "opacity", { to = highlighted and 1 or 0, duration_ms = metrics.focus_ms })
+  schedule_tick()
 end
 
 -- Reads one snapshot: each ui.surface field read builds the whole surface state.
@@ -117,8 +264,8 @@ local function update(state)
   pane_state = state
   background.width = state.width
   background.height = state.height
-  header.width = state.width - 32
-  close.x = state.width - 24
+  highlight.width = state.width
+  highlight.height = state.height
   resize.x = state.width - 8
   resize.y = state.height - 8
 
@@ -133,6 +280,14 @@ runtime.on_agents(function(next_agents)
   agents = next_agents
   agent = find_agent()
   paint()
+end)
+
+runtime.on_change(function(next_state)
+  runtime_state = next_state
+
+  if not agent then
+    paint()
+  end
 end)
 
 -- The pane's own state carries its size, focus and pane, so a change elsewhere in the
@@ -185,14 +340,24 @@ for _, item in ipairs({ header, resize }) do
   end)
 end
 
+ui.on(close, "hover", function(event)
+  ui.animate(close, "color", {
+    to = event.inside and colors.hover or Color.fade(colors.hover, 0),
+    duration_ms = metrics.hover_ms,
+  })
+  close_icon.stroke = event.inside and colors.text or colors.muted
+end)
+
 ui.on(close, "click", function(event)
   workbench.command("close")
   event:accept()
 end)
 
+local initial = ui.surface
 update({
-  width = ui.surface.width,
-  height = ui.surface.height,
-  pane = ui.surface.pane,
-  focused = ui.surface.focused,
+  width = initial.width,
+  height = initial.height,
+  pane = initial.pane,
+  focused = initial.focused,
+  content = initial.content,
 })

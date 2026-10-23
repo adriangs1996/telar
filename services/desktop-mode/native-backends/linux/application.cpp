@@ -79,8 +79,9 @@ void ApplicationWakeup::wakeup() noexcept {
 }
 
 namespace {
-  constexpr int topbar_height = 36;
-  constexpr int sidebar_width = 280;
+  constexpr int topbar_height = 44;
+  constexpr int sidebar_width = 300;
+  constexpr int sidebar_minimum_width = 40;
   constexpr int panel_margin = 8;
 
   QVariantMap rectangle(QRect rectangle) {
@@ -108,6 +109,8 @@ namespace {
     std::uint64_t subscription_ = 0;
     std::vector<linux_desktop::Output> outputs_;
     std::map<std::pair<std::uint32_t, ui::SurfaceKind>, std::unique_ptr<LuaSurface>> surfaces_;
+    // The width each output's sidebar asked for.
+    std::map<std::uint32_t, int> sidebar_widths_;
 
     void reconcile(const std::vector<linux_desktop::Output> &outputs) {
       // Workspace switches do not rebuild panel surfaces.
@@ -119,6 +122,22 @@ namespace {
         return;
       }
       outputs_ = geometry;
+      place(outputs);
+    }
+
+    void resizeSidebar(std::uint32_t output, double width) {
+      const auto clamped = static_cast<int>(std::max<double>(sidebar_minimum_width, width));
+      auto &current = sidebar_widths_.try_emplace(output, sidebar_width).first->second;
+
+      if (current == clamped) {
+        return;
+      }
+
+      current = clamped;
+      place(outputs_);
+    }
+
+    void place(const std::vector<linux_desktop::Output> &outputs) {
       std::erase_if(surfaces_, [&](const auto &entry) {
         return std::ranges::none_of(outputs, [&](const auto &output) {
           return output.id == entry.first.first;
@@ -135,7 +154,9 @@ namespace {
           }
           if (kind == ui::SurfaceKind::sidebar) {
             frame.adjust(panel_margin, topbar_height + panel_margin, -panel_margin, -panel_margin);
-            frame.setWidth(std::min(frame.width(), sidebar_width));
+            const auto found = sidebar_widths_.find(output.id);
+            const auto width = found == sidebar_widths_.end() ? sidebar_width : found->second;
+            frame.setWidth(std::min(frame.width() / 2, width));
           }
           auto &surface = surfaces_[{output.id, kind}];
           if (!surface) {
@@ -148,6 +169,11 @@ namespace {
             surface->setFocusHandler([pointer = surface.get()] {
               linux_desktop::focus(pointer->window());
             });
+            if (kind == ui::SurfaceKind::sidebar) {
+              surface->setWidthHandler([this, id = output.id](double width) {
+                resizeSidebar(id, width);
+              });
+            }
           }
           auto &window = surface->window();
           for (auto *screen : QGuiApplication::screens()) {

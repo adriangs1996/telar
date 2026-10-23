@@ -9,6 +9,7 @@
 #include "shortcut_binding.hpp"
 #include "services.hpp"
 #include "surface_events.hpp"
+#include "timer_binding.hpp"
 #include "workbench/controller.hpp"
 #include "workbench/lua_binding.hpp"
 #include "workbench/terminal_font.hpp"
@@ -82,6 +83,9 @@ namespace {
     shortcut_bind,
     shortcut_unbind,
     shortcut_state,
+    after,
+    after_cancel,
+    surface_width,
     alias
   };
   enum class ResultKind {
@@ -114,6 +118,7 @@ namespace {
     case Operation::surface_state:
     case Operation::surface_config:
     case Operation::animate:
+    case Operation::surface_width:
     case Operation::alias:
       return true;
     default:
@@ -453,7 +458,7 @@ namespace {
 
       if ((call->operation == Operation::on || call->operation == Operation::runtime_on ||
            call->operation == Operation::agents_on || call->operation == Operation::workbench_on ||
-           call->operation == Operation::desktop_on ||
+           call->operation == Operation::desktop_on || call->operation == Operation::after ||
            call->operation == Operation::shortcut_bind) &&
           index == 2) {
         luaL_checktype(state, -1, LUA_TFUNCTION);
@@ -536,6 +541,7 @@ namespace {
           std::make_unique<ui::RuntimeBinding>(environment_, services.runtime, services.desktop);
       shortcuts_ = std::make_unique<ui::ShortcutBinding>(environment_, services.shortcuts);
       workbench_ = std::make_unique<workbench::LuaBinding>(environment_, services);
+      timers_ = std::make_unique<ui::TimerBinding>(environment_);
       shortcuts_->setPrefix(settings.prefix);
       installApi();
       io_ =
@@ -548,6 +554,7 @@ namespace {
       shortcuts_.reset();
       runtime_.reset();
       workbench_.reset();
+      timers_.reset();
       io_.reset();
       events_.reset();
 
@@ -609,6 +616,7 @@ namespace {
       io_->activate();
       runtime_->activate();
       workbench_->activate();
+      timers_->activate();
 
       if (events_) {
         events_->activate();
@@ -628,6 +636,7 @@ namespace {
       shortcuts_->deactivate();
       runtime_->deactivate();
       workbench_->deactivate();
+      timers_->deactivate();
 
       if (events_) {
         events_->deactivate();
@@ -841,6 +850,35 @@ namespace {
       case Operation::animate:
         animate(objectValue(values[0]), stringValue(values[1]), mapValue(values[2]));
         break;
+      case Operation::after: {
+        const auto delay = values[0].toDouble();
+
+        if (values[0].metaType().id() != QMetaType::Double || std::floor(delay) != delay ||
+            delay < 0 || delay > ui::TimerBinding::maximum_delay_ms) {
+          throw std::runtime_error("ui.after expects whole milliseconds within 0..86400000");
+        }
+
+        const auto id = timers_->start(request.callback, static_cast<int>(delay));
+        request.callback = LUA_NOREF;
+        return encode(static_cast<double>(id));
+      }
+      case Operation::after_cancel:
+        timers_->cancel(values[0].toULongLong());
+        break;
+      case Operation::surface_width: {
+        const auto width = values[0].toDouble();
+
+        if (!active_) {
+          throw std::runtime_error("Surface width requests are available after UI activation");
+        }
+
+        if (values[0].metaType().id() != QMetaType::Double || !std::isfinite(width)) {
+          throw std::runtime_error("Surface width must be a number");
+        }
+
+        surface_->requestWidth(width);
+        break;
+      }
       case Operation::alias: {
         const auto target = resolve(objectValue(values[2]), stringValue(values[3]));
         checkedProperty(target);
@@ -866,6 +904,7 @@ namespace {
     std::unique_ptr<ui::RuntimeBinding> runtime_;
     std::unique_ptr<ui::ShortcutBinding> shortcuts_;
     std::unique_ptr<workbench::LuaBinding> workbench_;
+    std::unique_ptr<ui::TimerBinding> timers_;
     QHash<quint64, int> callbacks_;
     QPointer<QQuickItem> pending_focus_;
     QHash<QPair<QObject *, QString>, PropertyTarget> aliases_;
@@ -1000,6 +1039,9 @@ namespace {
                 {"shortcut_unbind", Operation::shortcut_unbind},
                 {"shortcut_state", Operation::shortcut_state},
                 {"animate", Operation::animate},
+                {"after", Operation::after},
+                {"after_cancel", Operation::after_cancel},
+                {"surface_width", Operation::surface_width},
                 {"alias", Operation::alias},
             };
 

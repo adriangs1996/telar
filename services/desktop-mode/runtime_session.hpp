@@ -37,6 +37,8 @@ public:
   std::uint64_t moveTab(std::uint64_t tab, std::uint64_t relative_to, bool after);
   // Opens a workspace on $HOME with the login shell; the outcome arrives as `created`.
   std::uint64_t createWorkspace();
+  // Tells the runtime the person saw a done agent's turn, which makes it ready again.
+  void acknowledgeAgent(std::uint64_t pane, std::uint64_t generation);
   // The workspaces on screen, one per display, and the focused one among them.
   void showWorkspaces(std::vector<RuntimeWorkspace> visible,
                       std::optional<RuntimeWorkspace> focused);

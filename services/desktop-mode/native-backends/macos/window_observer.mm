@@ -13,6 +13,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <thread>
 #include <unistd.h>
 #include <utility>
@@ -31,6 +32,11 @@ namespace workbench::native {
     // An application gets its Dock icon after macOS announces its launch, and a notification can
     // be missed: this often the observer attaches to new applications and reads again anyway.
     constexpr CFTimeInterval rescan_interval = 2;
+    // How many reads in a row a window the window server lists, but the observer does not know,
+    // makes its application's windows be read again. Its creation notification can be missed or
+    // come before the window says what it is; a window that never becomes one to manage, such
+    // as a helper window, stops costing a read after these.
+    constexpr int catch_up_attempts = 5;
 
     std::uint32_t idOf(AXUIElementRef element) {
       static const auto identifier =
@@ -186,6 +192,8 @@ namespace workbench::native {
     // The observer's thread only.
     std::map<std::int64_t, AXObserverRef> observers;
     std::map<std::int64_t, QString> applications;
+    // Reads left for each listed window the observer does not know yet.
+    std::map<std::uint32_t, int> catch_up;
     std::uint32_t focused = 0;
     ForeignWindows delivered;
     bool delivered_once = false;
@@ -334,21 +342,7 @@ namespace workbench::native {
       }
 
       CFRunLoopAddSource(loop, AXObserverGetRunLoopSource(observer), kCFRunLoopDefaultMode);
-      CFTypeRef windows = nullptr;
-      if (AXUIElementCopyAttributeValue(element, kAXWindowsAttribute, &windows) ==
-              kAXErrorSuccess &&
-          windows && CFGetTypeID(windows) == CFArrayGetTypeID()) {
-        const auto list = static_cast<CFArrayRef>(windows);
-        for (CFIndex index = 0; index < CFArrayGetCount(list); ++index) {
-          learn(
-              static_cast<AXUIElementRef>(const_cast<void *>(CFArrayGetValueAtIndex(list, index))),
-              pid);
-        }
-      }
-
-      if (windows) {
-        CFRelease(windows);
-      }
+      learnWindows(element, pid);
 
       if (application.active) {
         CFTypeRef window = nullptr;
@@ -363,6 +357,56 @@ namespace workbench::native {
       }
 
       CFRelease(element);
+    }
+
+    void learnWindows(AXUIElementRef application, pid_t pid) {
+      CFTypeRef windows = nullptr;
+      if (AXUIElementCopyAttributeValue(application, kAXWindowsAttribute, &windows) ==
+              kAXErrorSuccess &&
+          windows && CFGetTypeID(windows) == CFArrayGetTypeID()) {
+        const auto list = static_cast<CFArrayRef>(windows);
+        for (CFIndex index = 0; index < CFArrayGetCount(list); ++index) {
+          learn(
+              static_cast<AXUIElementRef>(const_cast<void *>(CFArrayGetValueAtIndex(list, index))),
+              pid);
+        }
+      }
+
+      if (windows) {
+        CFRelease(windows);
+      }
+    }
+
+    // Reads again the windows of applications that own a listed window the observer does not
+    // know, a few times per window.
+    void catchUp(const std::map<std::uint32_t, std::int64_t> &owners) {
+      std::set<std::int64_t> stale;
+      {
+        std::lock_guard lock(mutex);
+        std::erase_if(catch_up, [&](const auto &entry) {
+          return !owners.contains(entry.first) || known.contains(entry.first);
+        });
+
+        for (const auto &[id, pid] : owners) {
+          if (known.contains(id) || !observers.contains(pid)) {
+            continue;
+          }
+
+          auto &left = catch_up.try_emplace(id, catch_up_attempts).first->second;
+          if (left > 0) {
+            --left;
+            stale.insert(pid);
+          }
+        }
+      }
+
+      for (const auto pid : stale) {
+        TELAR_TRACE("native.windows.catch_up");
+        AXUIElementRef element = AXUIElementCreateApplication(static_cast<pid_t>(pid));
+        AXUIElementSetMessagingTimeout(element, accessibility_timeout);
+        learnWindows(element, static_cast<pid_t>(pid));
+        CFRelease(element);
+      }
     }
 
     void detach(pid_t pid) {
@@ -395,15 +439,20 @@ namespace workbench::native {
           CGWindowListCopyWindowInfo(kCGWindowListOptionAll | kCGWindowListExcludeDesktopElements,
                                      kCGNullWindowID));
       std::map<std::uint32_t, CGRect> bounds;
+      std::map<std::uint32_t, std::int64_t> owners;
       for (NSDictionary *entry in list) {
         CGRect frame{};
         if ([entry[(__bridge NSString *)kCGWindowLayer] intValue] == 0 &&
             CGRectMakeWithDictionaryRepresentation(
                 (__bridge CFDictionaryRef)entry[(__bridge NSString *)kCGWindowBounds],
                 &frame)) {
-          bounds.emplace([entry[(__bridge NSString *)kCGWindowNumber] unsignedIntValue], frame);
+          const auto id = [entry[(__bridge NSString *)kCGWindowNumber] unsignedIntValue];
+          bounds.emplace(id, frame);
+          owners.emplace(id, [entry[(__bridge NSString *)kCGWindowOwnerPID] longLongValue]);
         }
       }
+
+      catchUp(owners);
 
       // An application hidden with Cmd+H keeps its windows listed, out of sight like minimized
       // ones.

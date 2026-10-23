@@ -66,13 +66,17 @@ target_link_libraries(desktop-ui PRIVATE desktop-core PkgConfig::LUAJIT Qt6::Gui
 add_executable(telar-desktop main.cpp)
 
 file(GLOB_RECURSE desktop_ui_scripts CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/ui/*.lua")
-if(desktop_ui_scripts)
-  qt_add_resources(telar-desktop desktop_ui_scripts
+
+# A program that runs the Lua UI embeds its scripts.
+function(desktop_embed_ui_scripts target)
+  qt_add_resources(${target} ${target}_ui_scripts
     PREFIX "/telar/ui"
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/ui"
     FILES ${desktop_ui_scripts}
   )
-endif()
+endfunction()
+
+desktop_embed_ui_scripts(telar-desktop)
 
 # The faces the GUI embeds, so terminal panes render with the same font by default. A program
 # that draws terminals embeds them too.
@@ -179,8 +183,10 @@ set(layout_dbg_libraries desktop-ui)
 # Terminals draw optical text through the native backend on macOS.
 if(APPLE)
   set(terminal_ui_dbg_libraries desktop-native)
+  set(surfaces_dbg_libraries desktop-native PkgConfig::LUAJIT)
 else()
   set(terminal_ui_dbg_libraries desktop-ui)
+  set(surfaces_dbg_libraries desktop-ui PkgConfig::LUAJIT)
 endif()
 set(spaces_dbg_native_sources debug/support/spaces_probe.mm)
 set(spaces_dbg_native_libraries desktop-native)
@@ -217,3 +223,5 @@ foreach(source IN LISTS desktop_programs)
 endforeach()
 
 desktop_embed_fonts(terminal_ui_dbg)
+desktop_embed_fonts(surfaces_dbg)
+desktop_embed_ui_scripts(surfaces_dbg)

@@ -51,6 +51,17 @@ void QuickSurface::setFocusHandler(std::function<void()> handler) {
   focus_handler_ = std::move(handler);
 }
 
+void QuickSurface::setWidthHandler(std::function<void(double)> handler) {
+  width_handler_ = std::move(handler);
+}
+
+void QuickSurface::requestWidth(double width) {
+  TELAR_TRACE("ui.quick_surface.request_width");
+  if (width_handler_) {
+    width_handler_(width);
+  }
+}
+
 void QuickSurface::requestFocus() {
   TELAR_TRACE("ui.quick_surface.request_focus");
   if (focus_handler_) {

@@ -396,6 +396,19 @@ ui.animate = core.animate
 ui.focus = core.focus
 ui.input_method = core.input_method
 
+-- Runs `callback` once after `delay_ms`; returns a function that cancels it.
+function ui.after(delay_ms, callback)
+  assert(type(callback) == "function", "ui.after expects a callback")
+  local identifier = core.after(delay_ms, nil, callback)
+
+  return function()
+    if identifier then
+      core.after_cancel(identifier)
+      identifier = nil
+    end
+  end
+end
+
 local event_methods = {}
 
 function event_methods:accept(action)
@@ -467,6 +480,11 @@ ui.surface = setmetatable({}, {
 
     if name == "root" then
       return core.root
+    end
+
+    -- Asks the native backend for another width; only the sidebar takes one.
+    if name == "request_width" then
+      return core.surface_width
     end
 
     if name == "width" or name == "height" then

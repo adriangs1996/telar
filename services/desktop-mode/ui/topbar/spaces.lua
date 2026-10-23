@@ -1,8 +1,35 @@
+-- The strip of a display's Spaces: each shows its Mission Control number, the workspace it holds
+-- and a dot in the color of that workspace's most urgent agent.
 local ui = require("telar.ui")
 local theme = require("telar.theme")
+local AgentStatus = require("agent_status")
+local Icons = require("icons")
+local Color = require("color")
+
+local colors = theme.colors
 
 local Spaces = {}
 Spaces.__index = Spaces
+
+local metrics = {
+  badge = 20,
+  padding_left = 5,
+  padding_right = 10,
+  gap = 8,
+  dot = 7,
+  close = 16,
+  name_width = 140,
+  spacing = 4,
+  add = 30,
+  hover_ms = 140,
+}
+
+local function rectangle(properties)
+  local parent = properties.parent
+  properties.parent = nil
+
+  return ui.create("QtQuick", "Rectangle", properties, parent)
+end
 
 function Spaces.new(options)
   local self = setmetatable({ views = {}, scroll = 0, width = 0, height = 0 }, Spaces)
@@ -11,19 +38,13 @@ function Spaces.new(options)
   self.remove = options.remove
   self.root = ui.item({ clip = true })
   self.total_width = 0
-  self.add = ui.create(
-    "QtQuick",
-    "Rectangle",
-    { color = theme.colors.raised, radius = theme.radius.small },
-    self.root
-  )
-  self.add_label = ui.text({
-    parent = self.add,
-    text = "+",
-    color = theme.colors.accent,
-    ["font.pixelSize"] = 18,
+  self.add = rectangle({
+    parent = self.root,
+    color = "transparent",
+    radius = theme.radius.small,
+    visible = self.create ~= nil,
   })
-  self.add.visible = self.create ~= nil
+  self.add_icon = Icons.new("plus", { parent = self.add, color = colors.muted, size = 12 })
 
   ui.on(self.add, "pointer_up", function(event)
     if event.button == "left" and self.create and not self.busy then
@@ -47,23 +68,53 @@ function Spaces.new(options)
   return self
 end
 
+function Spaces:paint(view)
+  local fill = view.focused and colors.selected
+    or (view.pending and colors.border_strong)
+    or (view.hovered and colors.hover)
+    or Color.fade(colors.chrome, 0)
+
+  ui.animate(view.panel, "color", { to = fill, duration_ms = metrics.hover_ms })
+  view.badge.color = view.focused and colors.accent or colors.raised
+  view.number.color = view.focused and colors.on_accent or colors.muted
+  view.label.color = view.focused and colors.text or colors.muted
+end
+
 function Spaces:make_view()
   local view = {}
-  view.panel = ui.create("QtQuick", "Rectangle", { radius = theme.radius.small }, self.root)
+  view.panel = rectangle({ parent = self.root, radius = theme.radius.small + 3 })
+  view.badge = rectangle({
+    parent = view.panel,
+    x = metrics.padding_left,
+    width = metrics.badge,
+    height = metrics.badge,
+    radius = theme.radius.small,
+  })
+  view.number = ui.text({
+    parent = view.badge,
+    ["font.pixelSize"] = 11,
+    ["font.weight"] = 600,
+  })
   view.label = ui.text({
     parent = view.panel,
     textFormat = "PlainText",
-    ["font.pixelSize"] = 12,
-    ["font.weight"] = 600,
+    elide = "ElideRight",
+    x = metrics.padding_left + metrics.badge + metrics.gap,
+    ["font.pixelSize"] = 13,
   })
+  view.dot = rectangle({
+    parent = view.panel,
+    width = metrics.dot,
+    height = metrics.dot,
+    radius = metrics.dot / 2,
+  })
+  view.close = ui.item({ parent = view.panel, width = metrics.close })
+  view.close_icon = Icons.new("close", { parent = view.close, color = colors.muted, size = 10 })
 
-  view.close = ui.item({ parent = view.panel, width = 16 })
-  view.close_label = ui.text({
-    parent = view.close,
-    text = "×",
-    color = theme.colors.muted,
-    ["font.pixelSize"] = 14,
-  })
+  ui.on(view.panel, "hover", function(event)
+    view.hovered = event.inside
+    self:paint(view)
+  end)
 
   ui.on(view.close, "pointer_up", function(event)
     if event.button == "left" and view.removable and not self.busy then
@@ -85,6 +136,7 @@ function Spaces:make_view()
   return view
 end
 
+-- `state.names` maps workspace IDs to names; `state.agents` lists the runtime's agents.
 function Spaces:update(state)
   self.pending = state.pending_space
   self.busy = state.pending_space or state.pending_operation
@@ -103,26 +155,55 @@ function Spaces:update(state)
     local view = self.views[index] or self:make_view()
     self.views[index] = view
     view.id = space.id
+    view.focused = space.focused
+    view.pending = space.id == self.pending
     view.removable = not space.workspace and not space.fullscreen and counts[space.display] > 1
-    view.width = view.removable and 52 or 34
+    view.number.text = tostring(space.index)
+    view.label.text = space.fullscreen and "Full screen"
+      or (space.workspace and state.names[space.workspace])
+      or ""
+    view.label.width = math.min(metrics.name_width, view.label.implicitWidth)
+
+    local agent = space.workspace
+      and AgentStatus.most_urgent(state.agents, function(candidate)
+        return candidate.workspace == space.workspace and AgentStatus.active(candidate)
+      end)
+
+    view.dot.visible = agent ~= nil
+
+    if agent then
+      view.dot.color = AgentStatus.colors(agent).color
+    end
+
+    local width = metrics.padding_left + metrics.badge
+
+    if view.label.text ~= "" then
+      width = width + metrics.gap + view.label.width
+    end
+
+    if view.dot.visible then
+      view.dot.x = width + metrics.gap
+      width = view.dot.x + metrics.dot
+    end
+
     view.close.visible = view.removable
-    view.close_label.color = space.focused and theme.colors.on_accent or theme.colors.muted
-    self.spaces_width = self.spaces_width + view.width + 4
+
+    if view.removable then
+      view.close.x = width + 4
+      width = view.close.x + metrics.close
+    end
+
+    view.width = width + (view.label.text ~= "" and metrics.padding_right or metrics.padding_left)
+    self.spaces_width = self.spaces_width + view.width + metrics.spacing
     view.panel.visible = true
-    view.label.text = tostring(space.index) .. (space.fullscreen and " ◇" or "")
-    view.label.color = space.focused and theme.colors.on_accent or theme.colors.accent
-    ui.animate(view.panel, "color", {
-      to = space.focused and theme.colors.accent
-        or (space.id == self.pending and theme.colors.border_strong or theme.colors.raised),
-      duration_ms = 140,
-    })
+    self:paint(view)
   end
 
   for index = self.count + 1, #self.views do
     self.views[index].panel.visible = false
   end
 
-  self.total_width = self.spaces_width + (self.create and 34 or 0)
+  self.total_width = self.spaces_width + (self.create and metrics.add or 0)
   self.add.opacity = self.busy and 0.4 or 1
   self:arrange()
 end
@@ -131,10 +212,10 @@ function Spaces:arrange()
   self.scroll = math.max(0, math.min(self.scroll, (self.total_width or 0) - self.width))
 
   self.add.x = (self.spaces_width or 0) - self.scroll
-  self.add.width = 34
+  self.add.width = metrics.add
   self.add.height = self.height
-  self.add_label.x = math.floor((34 - self.add_label.implicitWidth) / 2)
-  self.add_label.y = math.floor((self.height - self.add_label.implicitHeight) / 2)
+  self.add_icon.x = (metrics.add - 12) / 2
+  self.add_icon.y = (self.height - 12) / 2
 
   local offset = -self.scroll
 
@@ -142,14 +223,16 @@ function Spaces:arrange()
     local view = self.views[index]
     view.panel.x = offset
     view.panel.width = view.width
-    offset = offset + view.width + 4
     view.panel.height = self.height
-    view.close.x = view.width - 18
+    offset = offset + view.width + metrics.spacing
+    view.badge.y = (self.height - metrics.badge) / 2
+    view.number.x = (metrics.badge - view.number.implicitWidth) / 2
+    view.number.y = (metrics.badge - view.number.implicitHeight) / 2
+    view.label.y = (self.height - view.label.implicitHeight) / 2
+    view.dot.y = (self.height - metrics.dot) / 2
     view.close.height = self.height
-    view.close_label.x = math.floor((16 - view.close_label.implicitWidth) / 2)
-    view.close_label.y = math.floor((self.height - view.close_label.implicitHeight) / 2)
-    view.label.x = math.floor((34 - view.label.implicitWidth) / 2)
-    view.label.y = math.floor((self.height - view.label.implicitHeight) / 2)
+    view.close_icon.x = (metrics.close - 10) / 2
+    view.close_icon.y = (self.height - 10) / 2
   end
 end
 

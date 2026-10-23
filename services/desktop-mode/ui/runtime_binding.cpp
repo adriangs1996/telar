@@ -39,8 +39,11 @@ namespace {
     for (const auto &tab : view.tabs) {
       lua::Value::Array foregrounds;
 
-      for (const auto &name : tab.foregrounds) {
-        foregrounds.push_back({name});
+      for (const auto &foreground : tab.foregrounds) {
+        foregrounds.push_back({lua::Value::Object{
+            {"pane", {std::to_string(foreground.pane)}},
+            {"name", {foreground.name}},
+        }});
       }
 
       tabs.push_back({lua::Value::Object{
@@ -70,11 +73,49 @@ namespace {
     lua::Value::Array views;
 
     for (const auto &workspace : state.workspaces) {
-      workspaces.push_back({lua::Value::Object{
+      lua::Value::Object entry{
           {"id", {std::to_string(workspace.id)}},
           {"name", {workspace.name}},
           {"tab_count", {static_cast<double>(workspace.tab_count)}},
-      }});
+      };
+      const auto checkout =
+          std::ranges::find(state.checkouts, workspace.id, &RuntimeCheckout::workspace);
+
+      if (checkout != state.checkouts.end()) {
+        entry.emplace("branch", lua::Value{checkout->branch});
+        entry.emplace("dirty", lua::Value{checkout->dirty});
+      }
+
+      workspaces.push_back({std::move(entry)});
+    }
+
+    lua::Value::Array worktrees;
+
+    for (const auto &worktree : state.worktrees) {
+      lua::Value::Object entry{
+          {"id", {std::to_string(worktree.id)}},
+          {"branch", {worktree.branch}},
+          {"title", {worktree.title}},
+          {"diff_added", {static_cast<double>(worktree.diff_added)}},
+          {"diff_removed", {static_cast<double>(worktree.diff_removed)}},
+          {"diff_files", {static_cast<double>(worktree.diff_files)}},
+          {"commits_ahead", {static_cast<double>(worktree.commits_ahead)}},
+      };
+
+      if (worktree.workspace) {
+        entry.emplace("workspace", lua::Value{std::to_string(worktree.workspace)});
+      }
+
+      if (!worktree.command_state.empty()) {
+        entry.emplace("command",
+                      lua::Value{lua::Value::Object{
+                          {"label", {worktree.command_label}},
+                          {"state", {worktree.command_state}},
+                          {"exit", {static_cast<double>(worktree.command_exit)}},
+                      }});
+      }
+
+      worktrees.push_back({std::move(entry)});
     }
 
     for (const auto &view : state.views) {
@@ -86,6 +127,7 @@ namespace {
     lua::Value::Object result{
         {"connected", {state.connected}},
         {"workspaces", {std::move(workspaces)}},
+        {"worktrees", {std::move(worktrees)}},
         {"views", {std::move(views)}},
         {"tabs", {lua::Value::Array{}}},
         {"request_succeeded", {state.request_succeeded}},
@@ -238,8 +280,13 @@ namespace {
           {"name", {agent.name}},
           {"status", {agent.status}},
           {"last_event", {agent.last_event}},
+          {"final_message", {agent.final_message}},
           {"status_age_s", {static_cast<double>(std::max<std::int64_t>(0, age))}},
       };
+
+      if (agent.work_tree) {
+        value.emplace("work_tree", lua::Value{std::to_string(agent.work_tree)});
+      }
 
       if (agent.blocked_reason != "none") {
         value.emplace("blocked_reason", lua::Value{agent.blocked_reason});

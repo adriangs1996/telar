@@ -23,6 +23,10 @@ struct QuickSurface {
   const QVariantMap &nativeState() const noexcept;
   void setFocusHandler(std::function<void()> handler);
   void requestFocus();
+  // The native backend decides whether and how a surface takes another width; without a handler
+  // the request does nothing.
+  void setWidthHandler(std::function<void(double)> handler);
+  void requestWidth(double width);
   static QEvent::Type nativeStateEvent();
 
 protected:
@@ -32,4 +36,5 @@ protected:
 private:
   QVariantMap native_state_;
   std::function<void()> focus_handler_;
+  std::function<void(double)> width_handler_;
 };

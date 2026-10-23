@@ -1,3 +1,5 @@
+-- The top bar of a display: its Spaces and their workspaces, the tabs of the workspace on screen,
+-- and whether the runtime answers.
 local ui = require("telar.ui")
 local runtime = require("telar.runtime")
 local desktop = require("telar.desktop")
@@ -8,31 +10,71 @@ local Tabs = require("topbar.tabs")
 
 local colors = theme.colors
 
+local metrics = {
+  inset = 1,
+  item_height = 30,
+  logo = 18,
+  padding = 12,
+  gap = 12,
+  separator_height = 20,
+  spaces_share = 0.45,
+  dot = 7,
+  status_width = 320,
+  margin = 8,
+}
+
+-- Three warp threads crossed by two weft waves.
+local logo_path =
+  "M5 3v16M11 3v16M17 3v16 M2 8c3 0 3 2 6 2s3-2 6-2 3 2 6 2 M2 14c3 0 3-2 6-2s3 2 6 2 3-2 6-2"
+
 local background = ui.create("QtQuick", "Rectangle", {
   color = colors.chrome,
-  radius = theme.radius.medium,
+  radius = theme.radius.large,
   ["border.color"] = colors.border,
   ["border.width"] = 1,
 })
 
-local workspace_name = ui.text({
-  color = colors.accent,
-  textFormat = "PlainText",
-  elide = "ElideRight",
-  ["font.pixelSize"] = 12,
-  ["font.weight"] = 600,
+local logo = ui.path({
+  path = logo_path,
+  width = 22,
+  height = 22,
+  fillMode = "NoResize",
+  scale = metrics.logo / 22,
+  transformOrigin = "TopLeft",
+  stroke = colors.accent,
+  stroke_width = 1.8,
 })
 
-local status = ui.text({
+local separator = ui.create("QtQuick", "Rectangle", {
+  width = 1,
+  height = metrics.separator_height,
+  color = colors.border,
+})
+
+local message = ui.text({
   color = colors.muted,
   textFormat = "PlainText",
   elide = "ElideRight",
   ["font.pixelSize"] = 12,
 })
 
+local status_dot = ui.create("QtQuick", "Rectangle", {
+  width = metrics.dot,
+  height = metrics.dot,
+  radius = metrics.dot / 2,
+})
+
+local status = ui.text({
+  textFormat = "PlainText",
+  elide = "ElideLeft",
+  horizontalAlignment = "AlignRight",
+  ["font.pixelSize"] = 11,
+})
+
 local tabs = Tabs.new({ on_select = runtime.select_tab, on_move = runtime.move_tab })
 local runtime_state = runtime.state()
 local desktop_state = desktop.state()
+local agents = runtime.agents()
 
 -- What this display shows: the workspace on its visible Space and that workspace's tabs.
 local function screen_state()
@@ -46,19 +88,30 @@ local function screen_state()
     workspace = view and view.workspace,
     tabs = view and view.tabs or {},
     active_tab = view and view.active_tab,
+    agents = agents,
   }
 end
 
 -- This display's Spaces, for the strip.
 local function screen_spaces()
+  local names = {}
+
+  for _, workspace in ipairs(runtime_state.workspaces or {}) do
+    names[workspace.id] = workspace.name
+  end
+
   return {
     pending_space = desktop_state.pending_space,
     pending_operation = desktop_state.pending_operation,
     spaces = displays.spaces(desktop_state, displays.of(ui.surface)),
+    names = names,
+    agents = agents,
   }
 end
 
 local state = screen_state()
+-- What the layout depends on besides the surface: relaying out cancels a tab drag.
+local laid_out
 local spaces = Spaces.new({
   activate = desktop.activate_space,
   remove = desktop.remove_space,
@@ -95,54 +148,60 @@ local function available_region()
     best_left, best_right = left, right
   end
 
-  return best_left + 8, math.max(0, best_right - best_left - 16)
+  return best_left + metrics.margin, math.max(0, best_right - best_left - 2 * metrics.margin)
 end
 
 local function layout()
+  laid_out = string.format("%g|%s", spaces.total_width or 0, status.text)
   local left, width = available_region()
   local height = ui.surface.height
-  local spaces_width = math.min(spaces.total_width or 0, width * 0.3)
-  local label_width = math.min(140, width * 0.2) + spaces_width + 16
-  local error_width = (state.error or desktop_state.error)
-      and #state.tabs > 0
-      and math.min(320, width * 0.35)
-    or 0
+  local item_y = (height - metrics.item_height) / 2
+  local right = left + width - metrics.padding
 
   background.x = left
-  background.y = 1
+  background.y = metrics.inset
   background.width = width
-  background.height = math.max(0, height - 2)
-  spaces:set_geometry(left + 6, 4, spaces_width, height - 8)
-  workspace_name.x = left + spaces_width + 18
-  workspace_name.y = math.floor((height - workspace_name.implicitHeight) / 2)
-  workspace_name.width = math.max(0, label_width - spaces_width - 26)
-  status.x = error_width > 0 and left + width - error_width or left + label_width
-  status.y = math.floor((height - status.implicitHeight) / 2)
-  status.width = math.max(0, error_width > 0 and error_width - 12 or width - label_width - 12)
-  tabs:set_geometry(
-    left + label_width,
-    4,
-    math.max(0, width - label_width - error_width - 8),
-    height - 8
-  )
+  background.height = math.max(0, height - 2 * metrics.inset)
+
+  logo.x = left + metrics.padding
+  logo.y = (height - metrics.logo) / 2
+  local x = logo.x + metrics.logo + metrics.gap
+
+  status.width = math.min(metrics.status_width, status.implicitWidth)
+  status.x = right - status.width
+  status.y = (height - status.implicitHeight) / 2
+  status_dot.x = status.x - 6 - metrics.dot
+  status_dot.y = (height - metrics.dot) / 2
+  right = status_dot.x - metrics.gap
+
+  local spaces_width = math.min(spaces.total_width or 0, (right - x) * metrics.spaces_share)
+  spaces:set_geometry(x, item_y, spaces_width, metrics.item_height)
+  x = x + spaces_width + metrics.gap
+  separator.x = x
+  separator.y = (height - metrics.separator_height) / 2
+  x = x + 1 + metrics.gap
+
+  message.x = x
+  message.y = (height - message.implicitHeight) / 2
+  message.width = math.max(0, right - x)
+  tabs:set_geometry(x, item_y, math.max(0, right - x), metrics.item_height)
 end
 
 local function update()
-  local previous_error = state.error
-  local previously_had_tabs = #state.tabs > 0
   state = screen_state()
-  workspace_name.text = state.workspace and state.workspace.name or "Telar"
   local error = state.error or desktop_state.error
-  status.visible = #state.tabs == 0 or error ~= nil
-  status.color = error and colors.error or colors.muted
-  status.text = error
-    or (not state.connected and "Connecting to runtime…")
+  message.visible = #state.tabs == 0
+  message.text = (not state.connected and "Connecting to runtime…")
     or (not desktop_state.available and "Waiting for macOS Spaces…")
     or (not state.workspace and "No runtime workspace is bound to this Space")
     or "Waiting for the active workspace…"
+  status_dot.color = error and colors.error
+    or (state.connected and theme.status.done.color or theme.status.blocked.color)
+  status.color = error and colors.error or colors.muted
+  status.text = error or (state.connected and "runtime" or "connecting")
   tabs:update(state)
 
-  if state.error ~= previous_error or previously_had_tabs ~= (#state.tabs > 0) then
+  if laid_out ~= string.format("%g|%s", spaces.total_width or 0, status.text) then
     layout()
   end
 end
@@ -150,7 +209,6 @@ end
 local function refresh()
   spaces:update(screen_spaces())
   update()
-  layout()
 end
 
 refresh()
@@ -160,7 +218,11 @@ desktop.on_change(function(next_state)
 end)
 runtime.on_change(function(next_state)
   runtime_state = next_state
-  update()
+  refresh()
+end)
+runtime.on_agents(function(next_agents)
+  agents = next_agents
+  refresh()
 end)
 ui.on(ui.surface, "resize", layout)
 ui.on(ui.surface, "safe_area_changed", layout)

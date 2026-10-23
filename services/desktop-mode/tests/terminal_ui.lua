@@ -9,6 +9,7 @@ local function background(opacity, color)
   local ui = {
     surface = { options = {}, width = 800, height = 600 },
     on = function() end,
+    animate = function() end,
     create = function(_, _, settings)
       rectangle = rectangle or settings
       return settings
@@ -18,9 +19,13 @@ local function background(opacity, color)
     end,
     text = function(settings)
       assert(settings.opacity == nil)
+      settings.implicitWidth, settings.implicitHeight = 0, 0
       return settings
     end,
   }
+  local function shape()
+    return {}
+  end
   local modules = {
     ["telar.ui"] = ui,
     ["telar.theme"] = theme,
@@ -29,13 +34,15 @@ local function background(opacity, color)
       agents = function()
         return {}
       end,
-      on_agents = function() end,
-    },
-    agent_status = {
-      new_glyph = function()
-        return {}
+      state = function()
+        return { views = {} }
       end,
+      on_agents = function() end,
+      on_change = function() end,
     },
+    agent_status = { new_glyph = shape },
+    icons = { new = shape },
+    color = assert(loadfile(ui_directory .. "/color.lua"))(),
   }
   local environment = setmetatable({
     require = function(name)

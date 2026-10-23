@@ -1,17 +1,23 @@
 local ui = require("telar.ui")
 local theme = require("telar.theme")
+local AgentStatus = require("agent_status")
+local Icons = require("icons")
+local Color = require("color")
 
 local Tabs = {}
 Tabs.__index = Tabs
 
 local gap = 6
 local drag_threshold = 6
+local underline = 2
+local icon_size = 14
 local colors = {
   selected = theme.colors.selected,
   hover = theme.colors.hover,
-  idle = theme.colors.raised,
+  idle = Color.fade(theme.colors.chrome, 0),
   text = theme.colors.text,
   muted = theme.colors.muted,
+  label = theme.colors.label,
   accent = theme.colors.accent,
 }
 
@@ -50,6 +56,7 @@ end
 local function label(tab)
   local name = tab.label ~= "" and tab.label or "Terminal"
   local foreground = tab.foregrounds[1]
+  foreground = foreground and foreground.name
 
   if foreground and foreground ~= "" and foreground ~= name then
     return name .. " · " .. foreground
@@ -101,7 +108,22 @@ function Tabs:paint(view)
     selected and colors.selected or view.hovered and colors.hover or colors.idle
   )
   view.title.color = selected and colors.text or colors.muted
-  view.icon.color = selected and colors.accent or colors.muted
+  view.icon.stroke = selected and colors.accent or colors.label
+  ui.animate(view.underline, "opacity", { to = selected and 1 or 0, duration_ms = 180 })
+end
+
+-- A tab with an agent at work shows that agent's status where the terminal icon was.
+function Tabs:paint_agent(view, agents)
+  local agent = AgentStatus.most_urgent(agents or {}, function(candidate)
+    return candidate.tab == view.id and AgentStatus.active(candidate)
+  end)
+
+  view.glyph.visible = agent ~= nil
+  view.icon.visible = agent == nil
+
+  if agent then
+    AgentStatus.paint_glyph(view.glyph, agent)
+  end
 end
 
 function Tabs:make_view()
@@ -113,19 +135,19 @@ function Tabs:make_view()
     }, self.viewport),
   }
 
-  view.icon = ui.text({
-    parent = view.panel,
-    text = "›_",
-    x = 10,
-    y = 5,
-    color = colors.muted,
-    ["font.pixelSize"] = 13,
-  })
+  view.icon = Icons.new("terminal", { parent = view.panel, color = colors.label, size = icon_size })
+  view.glyph = AgentStatus.new_glyph(view.panel, icon_size)
+  view.underline = ui.create("QtQuick", "Rectangle", {
+    height = underline,
+    radius = underline / 2,
+    color = colors.accent,
+    opacity = 0,
+  }, view.panel)
+  view.icon.x, view.glyph.x = 12, 12
 
   view.title = ui.text({
     parent = view.panel,
-    x = 33,
-    y = 5,
+    x = 34,
     color = colors.text,
     textFormat = "PlainText",
     elide = "ElideRight",
@@ -383,9 +405,17 @@ function Tabs:update(state)
 
     view.id = tab.id
     view.title.text = label(tab)
+    view.title.y = (self.height - view.title.implicitHeight) / 2
     view.width = clamp(view.title.implicitWidth + 48, 100, 240)
     view.panel.width = view.width
-    view.title.width = view.width - 43
+    view.panel.height = self.height
+    view.title.width = view.width - 44
+    view.underline.x = 10
+    view.underline.width = view.width - 20
+    view.underline.y = self.height - underline
+    view.icon.y = (self.height - icon_size) / 2
+    view.glyph.y = view.icon.y
+    self:paint_agent(view, state.agents)
     view.panel.visible = true
     self.total_width = self.total_width + view.width + gap
     self:paint(view)
@@ -403,13 +433,16 @@ end
 
 function Tabs:set_geometry(x, y, width, height)
   self:cancel_drag()
+  local resized = height ~= self.height
   self.x, self.y, self.width, self.height = x, y, width, height
   ui.set(self.viewport, "x", x)
   ui.set(self.viewport, "y", y)
   ui.set(self.viewport, "width", width)
   ui.set(self.viewport, "height", height)
 
-  if self.state then
+  if self.state and resized then
+    self:update(self.state)
+  elseif self.state then
     self.scroll = clamp(self.scroll, 0, math.max(0, self.total_width - width))
     self:reveal_active()
     self:arrange(false)

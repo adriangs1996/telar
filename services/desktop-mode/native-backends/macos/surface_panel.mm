@@ -1,5 +1,6 @@
 #include "surface_panel.hpp"
 #include "surface_bridge.hpp"
+#include "ui/desktop_ui.hpp"
 #include "ui/lua_surface.hpp"
 #include <AppKit/AppKit.h>
 #include <Foundation/Foundation.h>
@@ -8,12 +9,13 @@
 #include <memory>
 
 namespace {
-  constexpr CGFloat topbar_height = 36.0;
-  constexpr CGFloat sidebar_width = 280.0;
+  constexpr CGFloat topbar_height = 44.0;
+  constexpr CGFloat sidebar_width = 300.0;
+  constexpr CGFloat sidebar_minimum_width = 40.0;
   constexpr CGFloat sidebar_margin = 8.0;
   constexpr CGWindowLevel wallpaper_level_offset = 1;
 
-  NSRect surfaceFrame(NSScreen *screen, ui::SurfaceKind kind) {
+  NSRect surfaceFrame(NSScreen *screen, ui::SurfaceKind kind, CGFloat width) {
     if (kind == ui::SurfaceKind::wallpaper || kind == ui::SurfaceKind::backstage) {
       return screen.frame;
     }
@@ -30,7 +32,7 @@ namespace {
     return NSMakeRect(
         NSMinX(available) + sidebar_margin,
         NSMinY(available) + sidebar_margin,
-        std::max(0.0, std::min(sidebar_width, NSWidth(available) - 2 * sidebar_margin)),
+        std::max(0.0, std::min(width, NSWidth(available) / 2 - sidebar_margin)),
         std::max(0.0, NSHeight(available) - topbar_height - 2 * sidebar_margin));
   }
 } // namespace
@@ -39,13 +41,15 @@ namespace {
   std::unique_ptr<LuaSurface> _surface;
   TelarSurfaceBridge *_surface_bridge;
   NSNumber *_display_id;
+  ui::DesktopUi *_desktop;
+  CGFloat _width;
 }
 
 - (instancetype)initWithScreen:(NSScreen *)screen
                           kind:(ui::SurfaceKind)kind
                        desktop:(ui::DesktopUi &)desktop {
   self =
-      [super initWithContentRect:surfaceFrame(screen, kind)
+      [super initWithContentRect:surfaceFrame(screen, kind, sidebar_width)
                        styleMask:NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel
                          backing:NSBackingStoreBuffered
                            defer:NO];
@@ -56,6 +60,8 @@ namespace {
 
   _kind = kind;
   _display_id = screen.deviceDescription[@"NSScreenNumber"];
+  _desktop = &desktop;
+  _width = sidebar_width;
 
   self.releasedWhenClosed = NO;
   self.hidesOnDeactivate = NO;
@@ -113,12 +119,36 @@ namespace {
   _surface_bridge = [[TelarSurfaceBridge alloc] initWithView:view surface:*_surface];
   window.show();
 
+  // The sidebar takes the width its Lua asks for, and the workbench gives up or takes back the
+  // difference.
+  if (kind == ui::SurfaceKind::sidebar) {
+    __weak TelarSurfacePanel *weak = self;
+    _surface->setWidthHandler([weak](double width) {
+      [weak resizeTo:width];
+    });
+  }
+
   [NSNotificationCenter.defaultCenter addObserver:self
                                          selector:@selector(updateGeometry:)
                                              name:NSApplicationDidChangeScreenParametersNotification
                                            object:nil];
 
   return self;
+}
+
+- (void)resizeTo:(double)width {
+  const auto clamped = std::max<CGFloat>(sidebar_minimum_width, width);
+
+  if (clamped == _width) {
+    return;
+  }
+
+  _width = clamped;
+  [self updateGeometry:nil];
+
+  if (_desktop->changed) {
+    _desktop->changed();
+  }
 }
 
 - (void)updateGeometry:(NSNotification *)notification {
@@ -134,7 +164,7 @@ namespace {
   }
 
   if (screen) {
-    [self setFrame:surfaceFrame(screen, _kind) display:YES];
+    [self setFrame:surfaceFrame(screen, _kind, _width) display:YES];
   }
 }
 

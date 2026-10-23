@@ -14,10 +14,18 @@ struct RuntimeWorkspace {
   auto operator<=>(const RuntimeWorkspace &) const = default;
 };
 
+// The process in front of one of a tab's panes.
+struct RuntimeForeground {
+  std::uint64_t pane = 0;
+  std::string name;
+
+  bool operator==(const RuntimeForeground &) const = default;
+};
+
 struct RuntimeTab {
   std::uint64_t id = 0;
   std::string label;
-  std::vector<std::string> foregrounds;
+  std::vector<RuntimeForeground> foregrounds;
 
   bool operator==(const RuntimeTab &) const = default;
 };
@@ -49,6 +57,10 @@ struct RuntimeAgent {
   std::string status;
   std::string blocked_reason;
   std::string last_event;
+  // The agent's closing words for its last turn.
+  std::string final_message;
+  // The worktree it works in, when the runtime tracks one; 0 otherwise.
+  std::uint64_t work_tree = 0;
   std::string plan_step;
   std::uint16_t plan_done = 0;
   std::uint16_t plan_total = 0;
@@ -56,6 +68,33 @@ struct RuntimeAgent {
   std::chrono::steady_clock::time_point status_changed{};
 
   bool operator==(const RuntimeAgent &) const = default;
+};
+
+// A workspace's own checkout: the branch it is on and whether it has uncommitted changes.
+struct RuntimeCheckout {
+  std::uint64_t workspace = 0;
+  std::string branch;
+  bool dirty = false;
+
+  bool operator==(const RuntimeCheckout &) const = default;
+};
+
+// A worktree the runtime tracks, usually an agent's task, and how far it moved from its base.
+struct RuntimeWorktree {
+  std::uint64_t id = 0;
+  std::uint64_t workspace = 0;
+  std::string branch;
+  std::string title;
+  std::uint32_t diff_added = 0;
+  std::uint32_t diff_removed = 0;
+  std::uint32_t diff_files = 0;
+  std::uint32_t commits_ahead = 0;
+  // The last command run in it, "running" or "exited" with its exit code; empty without one.
+  std::string command_label;
+  std::string command_state;
+  std::int32_t command_exit = 0;
+
+  bool operator==(const RuntimeWorktree &) const = default;
 };
 
 // Immutable once published, so threads and copies of the state share one list.
@@ -78,6 +117,8 @@ struct RuntimeState {
   std::vector<RuntimeView> views;
   std::uint64_t workspaces_revision = 0;
   std::vector<WorkspaceSummary> workspaces;
+  std::vector<RuntimeCheckout> checkouts;
+  std::vector<RuntimeWorktree> worktrees;
   std::uint64_t completed_request = 0;
   bool request_succeeded = true;
   WorkspaceCreation created;

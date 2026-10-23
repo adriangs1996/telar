@@ -1,17 +1,7 @@
 -- Builds a theme preset from a Neovim colorscheme's palette: its surface, diagnostic, diff
 -- and ANSI roles become the desktop's chrome, agent status and terminal colors. Presets in
 -- themes/ call it; it is not a preset itself.
-local function blend(color, background, opacity)
-  local channels = {}
-
-  for index = 2, 6, 2 do
-    local foreground = tonumber(color:sub(index, index + 1), 16)
-    local behind = tonumber(background:sub(index, index + 1), 16)
-    channels[#channels + 1] = math.floor(foreground * opacity + behind * (1 - opacity) + 0.5)
-  end
-
-  return string.format("#%02x%02x%02x", unpack(channels))
-end
+local blend = require("color").blend
 
 return function(palette)
   local colors = {

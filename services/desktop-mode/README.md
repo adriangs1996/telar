@@ -124,7 +124,7 @@ desktop.configure_surface("workbench", {
     margin = 8,
     gap = 8,
     padding = 8,
-    header_height = 28,
+    header_height = 34,
   },
 })
 ```
@@ -630,17 +630,45 @@ formatters preserve that grouping but cannot decide it for the author.
 ## Lua desktop UI
 
 `ui/topbar/init.lua` creates the bar through `telar.ui`. The default script shows
-the focused macOS Space's associated workspace and tabs, with click selection and animated
-drag reordering. `ui/topbar/tabs.lua` implements layout and interaction
-entirely in Lua. The native backend owns the panel; Qt Quick draws its contents.
+the display's Spaces, each with its Mission Control number, its workspace's name and a dot in
+the color of that workspace's most urgent working or waiting agent; then the tabs of the
+workspace on screen, with click selection and animated drag reordering, and whether the runtime
+answers. A tab with such an agent shows its status glyph instead of the terminal icon.
+`ui/topbar/tabs.lua` implements layout and interaction entirely in Lua. The native backend owns
+the panel; Qt Quick draws its contents.
 
 `ui/sidebar/init.lua` creates the left sidebar: the agents panel. It lists every
 agent of the runtime in attention order, grouped as needs you, working, done, idle
-and unknown. Each card shows the session title, the provider and status, the age of
-the status, the last event, the plan's progress and where the agent runs. Clicking
-a card activates its workspace's Space, selects its tab and focuses its pane.
-Ages refresh with each agent snapshot; there is no timer. `ui/agent_status.lua`
-holds the status words, glyphs and colors every surface shares.
+and unknown. `ui/sidebar/card.lua` draws each agent in three rows, as the GUI does: its
+provider, workspace and branch (or, for an agent in a tracked worktree, the worktree's branch,
+diff, commits ahead and last command), with its status at the right; the session title; then
+what happens now: the question or approval it waits on, its plan as cells with its current
+step, its last event while it works, or its final message once done. The card of the focused
+pane is selected, and an agent that needs the person keeps a bar
+of its status color. Clicking a card activates its workspace's Space, selects its tab and
+focuses its pane.
+
+The chips above the list switch between every agent and those of the workspace on screen.
+Cards fade in, move to their new place when an agent changes group, flash in their new color
+when its status changes and fade out when it leaves. Working glyphs pulse on a 120 ms timer
+that stops when no agent works. Working durations count seconds during the first minute and
+ages count minutes; a timer refreshes them when the next one changes.
+
+A done agent stays done until the person sees it: when the focused pane of the focused
+workspace's active tab belongs to a done agent, the workbench acknowledges it once, and the
+runtime reports it ready, as the GUI does.
+
+The button in the sidebar's header folds it into a rail of status buttons, one per agent in
+attention order, that jump like the cards do. Folding animates the panel inside its window and
+then asks for the rail's width, and the workbench takes the freed width; unfolding takes the
+width back first. The folded width outlives a reload of the sidebar's Lua, which reads it to
+start folded. `ui/agent_status.lua` holds the status words, glyphs and colors every surface
+shares, `ui/icons.lua` the chrome's icons and the providers' symbols from `src/assets`, and
+`ui/color.lua` the color arithmetic.
+
+A pane's header names its agent with its status glyph, the session title, a chip with the status
+and its age, and the agent's directory; a pane without an agent shows the process in front of
+it. The focused pane, or one whose agent needs the person, fades in a highlighted frame.
 
 `ui/wallpaper/init.lua` creates a background shared by all monitors and Spaces.
 The native backend maintains one wallpaper panel per connected monitor, covering
@@ -831,6 +859,17 @@ cmake --build --preset debug --target terminal_ui_dbg
 QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software ./out/debug/terminal_ui_dbg
 ```
 
+`debug/surfaces_dbg.cpp` renders the top bar, the sidebar (unfolded, folded and empty) and three
+pane headers against a made-up runtime with agents in every status, and saves them as PNG files
+in an existing directory. It reads `TELAR_DESKTOP_CONFIG` and `TELAR_DESKTOP_UI_DIR` like the
+desktop, keeps the Space bindings it makes in that directory, and creates its stand-in runtime
+socket in the working directory:
+
+```sh
+cmake --build --preset debug --target surfaces_dbg
+QT_QPA_PLATFORM=offscreen TELAR_DESKTOP_UI_DIR="$PWD/ui" ./out/debug/surfaces_dbg --images DIR
+```
+
 The wallpaper accepts optional `image` and `fit`. Without an `image` option, it
 uses `theme.wallpaper.image`; its background is the theme's `colors.ground`.
 An explicit `image = ""` disables the image. The image can be a Qt URL,
@@ -933,6 +972,8 @@ The helper API provides:
 | `ui.focus(node)` | Request keyboard focus explicitly. |
 | `ui.input_method(node, options)` | Supply caret and surrounding text information for a custom text input. |
 | `ui.animate(node, property, options)` | Animate a numeric or color property. Requires `to` and integer `duration_ms`; optional `easing` defaults to `out_cubic`. |
+| `ui.after(delay_ms, callback)` | Run `callback` once after `delay_ms` (`0..86400000`). Returns a function that cancels it. A generation holds at most 256 timers; they run only while it is active. |
+| `ui.surface.request_width(width)` | Ask the native backend for another surface width, in callbacks after activation. Only the sidebar takes one, at least 40 points and at most half its display, and the workbench's area follows it; elsewhere the request does nothing. |
 
 On macOS, the native panel forwards hover while Telar is inactive, so
 interacting with the bar does not require activating the application.
@@ -959,14 +1000,14 @@ Colors read back as Qt ARGB strings. Image sources accept Qt URL strings.
 Reading a value does not establish a reactive binding; subscribe to the
 corresponding surface event to react to changes.
 
-Item dimensions do not resize the native panels. On macOS the topbar is 36
-logical points high; the sidebar is 280 points wide, inset 8 points from the
+Item dimensions do not resize the native panels. On macOS the topbar is 44
+logical points high; the sidebar is 300 points wide until its Lua asks for another width, inset
+8 points from the
 left and bottom of the screen's available area and separated from the topbar
 by the same margin. Every display gets its own wallpaper, topbar and sidebar,
 created and closed as displays come and go (`native-backends/macos/screen_panels.mm`),
-and each follows its display's geometry. They are visible across Spaces. The sidebar overlays application windows;
-it does not yet reserve their layout area or collapse. Content extending beyond
-a surface is clipped by its window.
+and each follows its display's geometry. They are visible across Spaces. The workbench's area
+starts where the sidebar ends. Content extending beyond a surface is clipped by its window.
 
 For compositions without a helper, use
 `ui.create(module, type, properties, parent)` and
@@ -1138,15 +1179,19 @@ counts the focused display's workspaces, and a new workspace goes to the focused
 | --- | --- |
 | `runtime.state()` | Detached snapshot with `connected`, workspace catalog `workspaces`, and `views`, one per workspace on screen (one per display), each with `workspace`, optional `active_tab` and ordered `tabs`. The focused workspace's `workspace`, `active_tab` and `tabs` also sit at the top level. |
 | `runtime.on_change(callback)` | Subscribe on the application thread; returns an unsubscribe function and delivers the current snapshot on mount. Agent snapshots do not run it. |
-| `runtime.agents()` | The agents of the runtime's latest snapshot, in attention order: blocked and failed, working, done, ready, unknown; inside a group, the latest status change first. Each has `pane`, `generation`, `workspace`, `workspace_kind`, `tab`, `pane_index`, `workspace_label`, `tab_label`, `title`, `cwd_label`, `provider`, `name`, `status`, `last_event` and `status_age_s`; `blocked_reason` (`permission`, `question`, `plan` or `other`) while blocked, and `plan = {done, total, step}` while it has steps. Empty while disconnected. |
+| `runtime.agents()` | The agents of the runtime's latest snapshot, in attention order: blocked and failed, working, done, ready, unknown; inside a group, the latest status change first. Each has `pane`, `generation`, `workspace`, `workspace_kind`, `tab`, `pane_index`, `workspace_label`, `tab_label`, `title`, `cwd_label`, `provider`, `name`, `status`, `last_event`, `final_message` and `status_age_s`; `blocked_reason` (`permission`, `question`, `plan` or `other`) while blocked, `plan = {done, total, step}` while it has steps, and `work_tree`, the ID of the tracked worktree it works in. Empty while disconnected. |
 | `runtime.on_agents(callback)` | Subscribe to agent snapshots; delivers `runtime.agents()` on mount and each time the runtime sends a new snapshot. Returns an unsubscribe function. |
 | `runtime.select_tab(id)` | Select a tab in whichever workspace on screen holds it. Returns a request ID. |
 | `runtime.move_tab(id, {before = anchor})` | Insert a tab before another tab in its workspace; `{after = anchor}` inserts after it. Returns a request ID. |
 | `runtime.create_workspace()` | Open a workspace on `$HOME` on the focused display, whose first pane runs the login shell. Returns a request ID; `created = {request, workspace}` reports the latest creation, without `workspace` when it failed. |
 
 IDs are decimal **strings**, preserving complete unsigned 64-bit values in
-LuaJIT. Workspaces expose `id`, `kind` and `name`; tabs expose `id`, `label`
-and foreground process names in `foregrounds`. `context` identifies the
+LuaJIT. Workspaces expose `id`, `kind` and `name`; the `workspaces` list also carries each
+one's `branch` and whether it is `dirty`, and `worktrees` lists the tracked worktrees with `id`,
+`workspace`, `branch`, `title`, `diff_added`, `diff_removed`, `diff_files`, `commits_ahead` and,
+after a command ran in it, `command = {label, state, exit}`. Tabs expose `id`, `label`
+and `foregrounds`, one `{pane, name}` per pane with the process in front of it.
+`context` identifies the
 current native Space. Missing optional fields are `nil`. Runtime requests
 report their latest completion through `completed_request`,
 `request_succeeded` and optional `error`.

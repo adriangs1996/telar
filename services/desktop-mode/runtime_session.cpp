@@ -43,7 +43,8 @@ namespace {
     move,
     show,
     create_workspace,
-    hold
+    hold,
+    acknowledge
   };
 
   const char *describe(CommandKind kind) {
@@ -58,6 +59,8 @@ namespace {
       return "create workspace";
     case CommandKind::hold:
       return "hold tabs";
+    case CommandKind::acknowledge:
+      return "acknowledge agent";
     }
 
     return "unknown";
@@ -72,6 +75,9 @@ namespace {
     std::uint64_t tab = 0;
     std::uint64_t relative_to = 0;
     bool after = false;
+    // The agent an acknowledgement is for.
+    std::uint64_t pane = 0;
+    std::uint64_t generation = 0;
   };
 
   struct Pending {
@@ -430,6 +436,14 @@ struct RuntimeSession::Impl {
         return;
       }
 
+      if (request.kind == CommandKind::acknowledge) {
+        session.client.send(telar::AcknowledgeAgent{
+            .pane_id = request.pane,
+            .pane_generation = request.generation,
+        });
+        return;
+      }
+
       auto *target = request.workspace ? view(*request.workspace) : nullptr;
 
       if (!target || !contains(*target, request.tab)) {
@@ -638,6 +652,8 @@ struct RuntimeSession::Impl {
             .status = describe(entry->status),
             .blocked_reason = describe(entry->blocked_reason),
             .last_event = std::string(entry->last_event),
+            .final_message = std::string(entry->final_message),
+            .work_tree = entry->work_tree,
             .plan_step = std::string(entry->plan_step),
             .plan_done = entry->plan_done,
             .plan_total = entry->plan_total,
@@ -660,9 +676,32 @@ struct RuntimeSession::Impl {
         state.workspaces_ready = true;
         state.workspaces_revision = reply.revision;
         state.workspaces.clear();
+        state.checkouts.clear();
+        state.worktrees.clear();
 
         for (const auto &entry : reply.entries) {
           state.workspaces.push_back({entry.workspace, std::string(entry.name), entry.tab_count});
+          state.checkouts.push_back({.workspace = entry.workspace,
+                                     .branch = std::string(entry.branch),
+                                     .dirty = entry.dirty});
+        }
+
+        for (const auto &entry : reply.worktrees) {
+          state.worktrees.push_back({
+              .id = entry.worktree,
+              .workspace = entry.workspace.value_or(0),
+              .branch = std::string(entry.branch),
+              .title = std::string(entry.title),
+              .diff_added = entry.diff_added,
+              .diff_removed = entry.diff_removed,
+              .diff_files = entry.diff_files,
+              .commits_ahead = entry.commits_ahead,
+              .command_label = std::string(entry.command_label),
+              .command_state = entry.command_state == telar::CommandState::running  ? "running"
+                               : entry.command_state == telar::CommandState::exited ? "exited"
+                                                                                    : "",
+              .command_exit = entry.command_exit,
+          });
         }
 
         std::erase_if(active_tabs, [&](const auto &entry) {
@@ -700,7 +739,8 @@ struct RuntimeSession::Impl {
           RuntimeTab tab{.id = entry.tab_id, .label = std::string(entry.label)};
 
           for (const auto &foreground : entry.foregrounds) {
-            tab.foregrounds.emplace_back(foreground.name);
+            tab.foregrounds.push_back(
+                {.pane = foreground.pane_id, .name = std::string(foreground.name)});
           }
 
           target->tabs.push_back(std::move(tab));
@@ -882,6 +922,10 @@ std::uint64_t RuntimeSession::moveTab(std::uint64_t tab, std::uint64_t relative_
                          .tab = tab,
                          .relative_to = relative_to,
                          .after = after});
+}
+
+void RuntimeSession::acknowledgeAgent(std::uint64_t pane, std::uint64_t generation) {
+  impl_->enqueue({.kind = CommandKind::acknowledge, .pane = pane, .generation = generation});
 }
 
 std::uint64_t RuntimeSession::createWorkspace() {

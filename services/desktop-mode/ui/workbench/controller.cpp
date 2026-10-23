@@ -40,7 +40,7 @@ namespace workbench {
     constexpr int first_frame_timeout_ms = 250;
     constexpr std::uint64_t resource_trace_ticks = 10;
     constexpr std::size_t mebibyte = 1024 * 1024;
-    constexpr int default_gap = 8, default_padding = 8, default_header = 28;
+    constexpr int default_gap = 8, default_padding = 8, default_header = 34;
     constexpr int maximum_metric = 256;
     // Points between another application's focused window and the ring outlining it, which fits
     // in the default gap.
@@ -168,7 +168,9 @@ namespace workbench {
     // Windows are transparent until their first frame, so a switch keeps the outgoing ones up
     // until every incoming one has drawn.
     std::set<QString> incoming, retiring;
-    std::uint64_t runtime_subscription = 0, desktop_subscription = 0;
+    std::uint64_t runtime_subscription = 0, desktop_subscription = 0, agents_subscription = 0;
+    // The done agent last acknowledged, by pane and generation.
+    std::optional<std::pair<std::uint64_t, std::uint64_t>> acknowledged;
     std::map<std::uint64_t, Workspace> workspaces;
     // Other applications' windows, as the observer last delivered them.
     native::ForeignWindows foreign;
@@ -209,6 +211,8 @@ namespace workbench {
     FocusRing focus_ring;
     // The focused external window the workbench last brought its tab forward for.
     std::uint32_t followed_focus = 0;
+    // Each window the workbench saw but did not adopt, with the reason last logged for it.
+    std::map<std::uint32_t, const char *> unadopted;
     // Declared after the workspaces, so it stops before them.
     std::unique_ptr<native::WindowObserver> windows;
     std::map<std::uint64_t, std::function<void()>> subscribers;
@@ -272,6 +276,10 @@ namespace workbench {
         schedule();
       });
 
+      agents_subscription = services.runtime.subscribeAgents([this] {
+        acknowledgeFocusedAgent();
+      });
+
       // Windows follow Spaces, their displays and the focus; an operation or a status change alone
       // leaves them where they are.
       desktop_subscription = services.desktop.subscribe([this] {
@@ -298,6 +306,7 @@ namespace workbench {
     ~Impl() {
       changing = true;
       services.runtime.unsubscribe(runtime_subscription);
+      services.runtime.unsubscribe(agents_subscription);
       services.desktop.unsubscribe(desktop_subscription);
       desktop.changed = {};
       save();
@@ -655,6 +664,18 @@ namespace workbench {
       return rule;
     }
 
+    // Logs once per reason why a window the observer reports stays out of the layout.
+    void skipped(const native::ForeignWindow &window, const char *reason) {
+      auto &logged = unadopted[window.id];
+      if (logged == reason) {
+        return;
+      }
+
+      logged = reason;
+      qCInfo(telar_log::workbench) << "not adopting window" << window.id << window.application
+                                   << "on space" << window.space << "because" << reason;
+    }
+
     // Every managed window belongs to one tab. A window seen for the first time joins the tab
     // shown on its workspace's Space; one that is gone, or now on another Space, leaves its tab
     // and joins the one shown there. Activating a window whose tab is not shown, with Cmd+Tab or
@@ -691,14 +712,22 @@ namespace workbench {
       }
 
       updateBackstage();
+      std::erase_if(unadopted, [&](const auto &entry) {
+        return !foreignWindow(entry.first);
+      });
+
       for (const auto &window : foreign.windows) {
         const auto rule = ruleFor(window);
         const auto home = std::ranges::find_if(workspaces, [&](const auto &entry) {
           return entry.second.space && entry.second.space == window.space;
         });
 
-        if (homes.contains(window.id) || window.backstage || rule == "ignore" ||
-            home == workspaces.end()) {
+        if (homes.contains(window.id) || window.backstage || rule == "ignore") {
+          continue;
+        }
+
+        if (home == workspaces.end()) {
+          skipped(window, "its Space holds no visible workspace");
           continue;
         }
 
@@ -721,6 +750,7 @@ namespace workbench {
         auto &workspace = home->second;
         const auto tab = workspace.tabs.find(workspace.runtime->activeTab());
         if (tab == workspace.tabs.end() || tab->second.views.size() >= Layout::capacity) {
+          skipped(window, "its workspace has no tab with room");
           continue;
         }
 
@@ -738,6 +768,7 @@ namespace workbench {
                                   ? layout.insert(element, tab->second.next_axis)
                                   : layout.insertBesideLargest(element, workspace.area, gap);
         if (!inserted) {
+          skipped(window, "the layout refused it");
           continue;
         }
 
@@ -747,6 +778,7 @@ namespace workbench {
         view->actual = window.frame;
         tab->second.views.emplace(id, std::move(view));
         homes[window.id] = {&workspace, tab->first};
+        unadopted.erase(window.id);
         qCInfo(telar_log::workbench) << "adopted" << id << window.application << "into tab"
                                      << tab->first << (element.floating ? "floating" : "tiled");
       }
@@ -1357,6 +1389,7 @@ namespace workbench {
         }
 
         outlineFocus();
+        acknowledgeFocusedAgent();
 
         error.clear();
       } catch (const std::exception &failure) {
@@ -1370,6 +1403,61 @@ namespace workbench {
       if (notified_state != current) {
         notified_state = current;
         notify();
+      }
+    }
+
+    // A done agent stays done until the client showing its pane focused acknowledges it, once
+    // per turn, as the GUI does; the runtime then reports it ready.
+    void acknowledgeFocusedAgent() {
+      TELAR_TRACE("workbench.acknowledge_focused_agent");
+      const auto agents = services.runtime.state().agents;
+      if (!agents) {
+        return;
+      }
+
+      const auto done = [&](std::uint64_t pane, std::uint64_t generation) {
+        return std::ranges::find_if(*agents, [&](const RuntimeAgent &agent) {
+          return agent.pane == pane && (!generation || agent.generation == generation) &&
+                 agent.status == "done";
+        });
+      };
+
+      if (acknowledged && done(acknowledged->first, acknowledged->second) == agents->end()) {
+        acknowledged.reset();
+      }
+
+      auto *workspace = focusedWorkspace();
+      if (!workspace || !workspace->visible) {
+        return;
+      }
+
+      const auto tab = workspace->tabs.find(workspace->runtime->activeTab());
+      if (tab == workspace->tabs.end()) {
+        return;
+      }
+
+      const auto view = tab->second.views.find(tab->second.layout.focused());
+      if (view == tab->second.views.end() || !view->second->pane) {
+        return;
+      }
+
+      const auto agent = done(view->second->pane, 0);
+      if (agent == agents->end()) {
+        return;
+      }
+
+      const std::pair key{agent->pane, agent->generation};
+      if (acknowledged == key) {
+        return;
+      }
+
+      acknowledged = key;
+      qCDebug(telar_log::workbench) << "acknowledge done agent of pane" << key.first;
+      try {
+        services.runtime.acknowledgeAgent(key.first, key.second);
+      } catch (const std::exception &failure) {
+        acknowledged.reset();
+        qCWarning(telar_log::workbench) << "cannot acknowledge the agent:" << failure.what();
       }
     }
 

@@ -53,6 +53,13 @@ function AgentStatus.group(agent)
   return groups[agent.status] or "unknown"
 end
 
+-- Whether the agent is doing something the person may want to see from afar.
+function AgentStatus.active(agent)
+  local group = AgentStatus.group(agent)
+
+  return group == "needs_input" or group == "working"
+end
+
 function AgentStatus.colors(agent)
   return theme.status[agent.status] or theme.status.unknown
 end
@@ -65,9 +72,10 @@ function AgentStatus.label(agent)
   return labels[agent.status] or labels.unknown
 end
 
+-- Minutes at the finest, so an age changes at most once a minute.
 function AgentStatus.age(seconds)
   if seconds < 60 then
-    return seconds < 5 and "now" or string.format("%ds", seconds)
+    return "now"
   end
 
   if seconds < 3600 then
@@ -81,21 +89,99 @@ function AgentStatus.age(seconds)
   return string.format("%dd", math.floor(seconds / 86400))
 end
 
+-- What the agent is about, when its title says more than its name. Agents put a spinner or
+-- symbol before their terminal title ("✳ Claude Code"), which says nothing here.
 function AgentStatus.title(agent)
-  if agent.title ~= "" then
-    return agent.title
+  local title = agent.title:gsub("^[\128-\255]+%s+", "")
+
+  if title == "" or title:lower() == agent.name:lower() then
+    return nil
   end
 
-  return agent.name ~= "" and agent.name or agent.provider
+  return title
 end
 
-function AgentStatus.new_glyph(parent)
+-- The agent's title, or its name when the title adds nothing.
+function AgentStatus.headline(agent)
+  return AgentStatus.title(agent) or (agent.name ~= "" and agent.name or agent.provider)
+end
+
+function AgentStatus.location(agent)
+  local place = agent.workspace_label
+
+  if agent.tab_label ~= "" then
+    place = place .. " › " .. agent.tab_label
+  end
+
+  return string.format("%s · pane %d", place, agent.pane_index)
+end
+
+-- The first agent `accepts`, which is the most urgent one since agents come in attention order.
+function AgentStatus.most_urgent(agents, accepts)
+  for _, agent in ipairs(agents) do
+    if accepts(agent) then
+      return agent
+    end
+  end
+end
+
+-- How long a working agent has been at it: seconds during its first minute, then as `age`.
+function AgentStatus.duration(seconds)
+  if seconds < 60 then
+    return string.format("%ds", seconds)
+  end
+
+  return AgentStatus.age(seconds)
+end
+
+-- What the status corner of a card says: the duration while working, the age while idle and
+-- the status word otherwise.
+function AgentStatus.corner(agent)
+  if agent.status == "working" then
+    return "Working " .. AgentStatus.duration(agent.status_age_s)
+  end
+
+  if agent.status == "ready" then
+    return AgentStatus.age(agent.status_age_s)
+  end
+
+  return AgentStatus.label(agent)
+end
+
+-- How long until what `corner` writes for the agent changes, in milliseconds.
+function AgentStatus.next_change_ms(agent)
+  local seconds = agent.status_age_s
+
+  if agent.status == "working" and seconds < 60 then
+    return 1000
+  end
+
+  local step = seconds < 3600 and 60 or seconds < 86400 and 3600 or 86400
+
+  return (step - seconds % step) * 1000
+end
+
+-- The working glyph's opacity at a pulse frame: six steps between 1 and 0.65 over 17 frames,
+-- as the GUI pulses it.
+AgentStatus.pulse_interval_ms = 120
+
+function AgentStatus.pulse(frame)
+  local step = math.floor((frame % 17) * 6 / 17)
+
+  return 0.65 + 0.35 * math.abs(step - 3) / 3
+end
+
+function AgentStatus.new_glyph(parent, size)
+  size = size or AgentStatus.glyph_size
+
   return ui.path({
     parent = parent,
     path = glyphs.unknown,
-    width = AgentStatus.glyph_size,
-    height = AgentStatus.glyph_size,
+    width = size,
+    height = size,
     fillMode = "NoResize",
+    scale = size / AgentStatus.glyph_size,
+    transformOrigin = "TopLeft",
     stroke_width = 1.5,
   })
 end
