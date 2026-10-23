@@ -21,6 +21,8 @@ namespace workbench::native {
   void setFrame(QWindow &window, QRect frame);
   void place(QWindow &window, std::uint64_t space);
   void raise(QWindow &window);
+  // Orders the window right above another one, whichever application owns it.
+  void orderAbove(QWindow &window, std::uint32_t other);
   void setVisible(QWindow &window, bool visible);
   // Prepares the window that holds the keyboard for the panes: present on every Space, and
   // invisible to the mouse, Mission Control and the window cycle.

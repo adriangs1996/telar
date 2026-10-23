@@ -40,6 +40,11 @@ namespace workbench::native {
     linux_desktop::place(window, space, TELAR_WINDOWS, true);
   }
 
+  // The compositor has no ordering relative to another surface yet: on top of its layer.
+  void orderAbove(QWindow &window, std::uint32_t) {
+    raise(window);
+  }
+
   void raise(QWindow &window) {
     const auto target = linux_desktop::target(window);
     linux_desktop::Session::get().post([target](telar_server *server) {

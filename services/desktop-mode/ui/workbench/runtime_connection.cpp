@@ -690,15 +690,13 @@ namespace workbench {
       source = panes.front();
     }
 
-    if (!attached_.contains(source) ||
-        std::find(panes.begin(), panes.end(), source) == panes.end()) {
-      throw std::runtime_error("Split requires an attached terminal in the active tab");
-    }
-
+    // The runtime resolves cwd_source from its live pane, keeping directory authority there. A tab
+    // without an attached terminal, such as one holding only other applications' windows, gets
+    // its terminal in $HOME, as a tab created without a source does.
+    const bool sourced = attached_.contains(source) && std::ranges::contains(panes, source);
     const login_shell::Command shell;
     const auto cwd = QDir::homePath().toStdString();
-    // The runtime resolves cwd_source from its live pane, keeping directory authority there.
-    const telar::Launch launch{cwd, source, shell.arguments()};
+    const telar::Launch launch{cwd, sourced ? source : 0, shell.arguments()};
     const auto request_id = request(RequestKind::create);
     qCInfo(telar_log::connection) << "ws" << workspace_.id << "split pane" << source << "in tab"
                                   << active_tab_;

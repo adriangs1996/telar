@@ -50,6 +50,12 @@ namespace workbench::native {
     macos::spaces::moveToLayer(windows, macos::spaces::VirtualSpaces::get().stage(space));
   }
 
+  void orderAbove(QWindow &window, std::uint32_t other) {
+    TELAR_TRACE("native.order_above");
+    NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window.winId());
+    [view.window orderWindow:NSWindowAbove relativeTo:static_cast<NSInteger>(other)];
+  }
+
   void prepareInputWindow(QWindow &window) {
     TELAR_TRACE("native.prepare_input_window");
     NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window.winId());

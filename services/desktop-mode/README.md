@@ -153,7 +153,7 @@ Commands execute from callbacks after the UI has activated. IDs are strings.
 | `command("split", { axis = "horizontal" })` | Create a runtime terminal next to the focused element |
 | `command("new_tab")` | Open a tab in the focused workspace whose shell starts in the focused pane's directory, and select it once the runtime lists it |
 | `command("focus", { id = "pane:123" })` | Focus an element |
-| `command("navigate", { direction = "left" })` | Find the nearest element in a direction |
+| `command("navigate", { direction = "left" })` | Focus the tiled element past the focused one's edge in a direction: the nearest edge, then the best aligned, as the GUI does; floating elements are reached with `cycle` |
 | `command("cycle", { step = -1 })` | Cycle focus |
 | `command("swap", { id = "pane:123", with = "pane:456" })` | Exchange split positions |
 | `command("resize", { direction = "right", amount = 0.05 })` | Move a split boundary by a ratio |
@@ -209,7 +209,13 @@ after each write the observer reads the size back, and once a larger one holds f
 150 ms with no newer write pending, it becomes the element's minimum and the layout
 makes room for it instead of letting it cover its neighbours. Minimizing a window,
 hiding its application or closing it takes it out of its tab, and one that moves
-to another workspace's Space joins the tab shown there. The workbench's `windows` option sets a rule per application, by bundle
+to another workspace's Space joins the tab shown there. While such a window has the
+focus, a ring in the theme's accent color (`ui/focus_ring/init.lua`, 2 points)
+outlines it in the gap around it, as a pane's own border does: it follows the frame
+the window actually has, sits on its Space right above it and lets every click
+through. It is not shown while a backstage window takes the display over. On Linux
+the ring goes on top of its layer, since the compositor cannot yet order it right
+above another surface. The workbench's `windows` option sets a rule per application, by bundle
 identifier, or by name for an application without one: `tile`, `float`, `ignore`
 or `backstage` (see [The backstage](#the-backstage)).
 
@@ -241,7 +247,10 @@ Accessibility notifications only say when to read again, and Accessibility tells
 what the window server does not: titles, subroles and whether a window can be
 resized. Writes go through Accessibility on a serial queue per application, each
 call bounded by 50 ms, so an application that hangs delays only its own windows,
-and a window's queued write is replaced by a newer one. The debug programs
+and a window's queued write is replaced by a newer one. A frame is written as
+position, size and position again: AppKit cuts a new size down to what fits on
+screen from where the window is, so a window growing from the right would keep
+its width. The debug programs
 `external_window_dbg`, `window_observer_dbg` and `layers_dbg` hold the
 measurements behind these choices. On Linux, Telar's own wlroots compositor
 observes and places Wayland and XWayland windows directly. Hidden tabs disable

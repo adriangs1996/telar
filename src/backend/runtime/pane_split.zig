@@ -1,5 +1,6 @@
 //! A client splits a tab: the runtime launches a sibling pane in that tab
-//! and attaches the requesting client to it.
+//! and attaches the requesting client to it. A held tab whose last pane has
+//! closed gets its next pane the same way.
 
 const core = @import("telar-core");
 const RuntimeModel = @import("RuntimeModel.zig");
@@ -11,6 +12,7 @@ const launch_cwd = @import("client/launch_cwd.zig");
 const pane_attachment = @import("pane_attachment.zig");
 const pane_launch = @import("pane_launch.zig");
 const resync_required = @import("resync_required.zig");
+const tab_hold = @import("tab_hold.zig");
 
 /// Launches a pane beside the tab's existing ones and attaches to it.
 ///
@@ -44,7 +46,7 @@ fn launchSibling(model: *RuntimeModel, session: *Session, request: core.CreatePa
         return error.TabNotFound;
     }
 
-    if (model.panes.countAt(request.location) == 0) {
+    if (model.panes.countAt(request.location) == 0 and !tab_hold.held(model, request.location)) {
         return error.TabNotFound;
     }
 

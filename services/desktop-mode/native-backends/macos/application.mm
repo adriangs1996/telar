@@ -106,6 +106,21 @@ void ApplicationWakeup::wakeup() noexcept {
 
 @end
 
+namespace {
+  // A held key repeats in the panes instead of opening the accent menu, as in the GUI. The
+  // preference is process-local, in the volatile arguments domain, never a change to the user's
+  // saved defaults, and must be set before AppKit initializes text input.
+  void repeatHeldKeys() {
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    NSDictionary *current = [defaults volatileDomainForName:NSArgumentDomain];
+    NSMutableDictionary *arguments =
+        current ? [current mutableCopy] : [NSMutableDictionary dictionary];
+
+    arguments[@"ApplePressAndHoldEnabled"] = @NO;
+    [defaults setVolatileDomain:arguments forName:NSArgumentDomain];
+  }
+} // namespace
+
 int runApplication(ApplicationHost &host,
                    ApplicationWakeup &wakeup,
                    const AppState &state,
@@ -113,6 +128,7 @@ int runApplication(ApplicationHost &host,
   int result = EXIT_SUCCESS;
 
   @autoreleasepool {
+    repeatHeldKeys();
     int qt_argc = 1;
     char application_name[] = "telar-desktop";
     char *qt_argv[] = {application_name, nullptr};

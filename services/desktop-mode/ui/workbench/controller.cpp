@@ -42,6 +42,9 @@ namespace workbench {
     constexpr std::size_t mebibyte = 1024 * 1024;
     constexpr int default_gap = 8, default_padding = 8, default_header = 28;
     constexpr int maximum_metric = 256;
+    // Points between another application's focused window and the ring outlining it, which fits
+    // in the default gap.
+    constexpr int focus_ring_thickness = 2;
     constexpr qsizetype persistence_limit = 4 * 1024 * 1024;
 
     std::uint64_t identifier(const QVariant &value) {
@@ -193,6 +196,17 @@ namespace workbench {
     };
 
     std::optional<Switcher> switcher;
+
+    // Outlines the focused window of another application; panes draw their own border.
+    struct FocusRing {
+      std::unique_ptr<LuaSurface> surface;
+      QRect frame;
+      std::uint64_t space = 0;
+      std::uint32_t target = 0;
+      bool shown = false;
+    };
+
+    FocusRing focus_ring;
     // The focused external window the workbench last brought its tab forward for.
     std::uint32_t followed_focus = 0;
     // Declared after the workspaces, so it stops before them.
@@ -294,6 +308,7 @@ namespace workbench {
         workspace.tabs.clear();
       }
 
+      focus_ring.surface.reset();
       workspaces.clear();
     }
 
@@ -1341,6 +1356,8 @@ namespace workbench {
           focus_workspace = 0;
         }
 
+        outlineFocus();
+
         error.clear();
       } catch (const std::exception &failure) {
         error = QString::fromUtf8(failure.what());
@@ -1393,6 +1410,84 @@ namespace workbench {
       }
 
       return true;
+    }
+
+    // The focused element when it is another application's window shown on the focused display,
+    // unless a backstage window has taken that display over.
+    const native::ForeignWindow *focusedForeignWindow() {
+      auto *workspace = focusedWorkspace();
+      if (!workspace || !workspace->visible || takeovers.contains(workspace->display)) {
+        return nullptr;
+      }
+
+      const auto tab = workspace->tabs.find(workspace->runtime->activeTab());
+      if (tab == workspace->tabs.end()) {
+        return nullptr;
+      }
+
+      const auto view = tab->second.views.find(tab->second.layout.focused());
+      if (view == tab->second.views.end() || !view->second->external || !view->second->visible ||
+          view->second->parked) {
+        return nullptr;
+      }
+
+      return foreignWindow(view->second->external);
+    }
+
+    // Puts the ring around the window the observer last saw, its actual frame rather than the
+    // one asked for, on the window's Space and right above it. Hiding it turns it transparent,
+    // as a retired pane does.
+    void outlineFocus() {
+      TELAR_TRACE("workbench.outline_focus");
+      const auto *target = focusedForeignWindow();
+      if (!target) {
+        if (focus_ring.shown) {
+          native::setVisible(focus_ring.surface->window(), false);
+          focus_ring.shown = false;
+          focus_ring.target = 0;
+        }
+
+        return;
+      }
+
+      if (!focus_ring.surface) {
+        const QVariantMap options{{"thickness", focus_ring_thickness}};
+        focus_ring.surface = std::make_unique<LuaSurface>(
+            desktop,
+            QSize(1, 1),
+            ui::SurfaceKind::workbench,
+            QVariantMap{{"module", "focus_ring"}, {"options", options}});
+        auto &window = focus_ring.surface->window();
+        window.setFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowDoesNotAcceptFocus |
+                        Qt::WindowTransparentForInput);
+        window.setTitle(QStringLiteral("Telar Focus Ring"));
+      }
+
+      auto &window = focus_ring.surface->window();
+      const auto frame = target->frame.toAlignedRect().adjusted(-focus_ring_thickness,
+                                                                -focus_ring_thickness,
+                                                                focus_ring_thickness,
+                                                                focus_ring_thickness);
+      if (focus_ring.frame != frame) {
+        native::setFrame(window, frame);
+        focus_ring.frame = frame;
+      }
+
+      const auto space = focusedWorkspace()->space;
+      if (focus_ring.space != space) {
+        native::place(window, space);
+        focus_ring.space = space;
+      }
+
+      if (focus_ring.shown && focus_ring.target == target->id) {
+        return;
+      }
+
+      native::setVisible(window, true);
+      window.show();
+      native::orderAbove(window, target->id);
+      focus_ring.shown = true;
+      focus_ring.target = target->id;
     }
 
     void requestFocus(const QString &id) {

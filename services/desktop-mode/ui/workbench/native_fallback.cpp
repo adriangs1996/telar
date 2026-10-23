@@ -28,6 +28,10 @@ namespace workbench::native {
     window.raise();
   }
 
+  void orderAbove(QWindow &window, std::uint32_t) {
+    window.raise();
+  }
+
   void setVisible(QWindow &window, bool visible) {
     window.setOpacity(visible ? 1 : 0);
   }

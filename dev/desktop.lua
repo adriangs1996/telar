@@ -178,6 +178,7 @@ desktop.configure_surface("workbench", {
 	options = {
 		windows = {
 			["com.spotify.client"] = "backstage",
+			["com.gather.GatherV2"] = "backstage",
 		},
 	},
 })

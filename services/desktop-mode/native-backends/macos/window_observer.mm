@@ -126,6 +126,10 @@ namespace workbench::native {
         CGPoint origin{write.frame->x(), write.frame->y()};
         const auto dimensions = AXValueCreate(kAXValueTypeCGSize, &size);
         const auto position = AXValueCreate(kAXValueTypeCGPoint, &origin);
+        // AppKit cuts a new size down to what fits on screen from where the window is, so a window
+        // growing from the right would keep its width: it moves first, then grows, then moves
+        // again in case the new size shifted it.
+        AXUIElementSetAttributeValue(window, kAXPositionAttribute, position);
         const bool sized =
             AXUIElementSetAttributeValue(window, kAXSizeAttribute, dimensions) == kAXErrorSuccess;
         AXUIElementSetAttributeValue(window, kAXPositionAttribute, position);
