@@ -158,7 +158,20 @@ actions.bind_backstage_switcher("alt+tab")
 shortcuts.bind_global("alt+b", actions.send_to_backstage)
 shortcuts.bind_global("alt+enter", actions.end_takeover)
 
-desktop.theme({ preset = "dark" })
+desktop.theme({
+	preset = "cybervenom",
+	terminal = {
+		background_opacity = 0.9,
+		font = {
+			family = "Iosevka Nerd Font Mono",
+			size = 19,
+			line_height = 1.4,
+			thicken_strength = 250,
+			thicken = true,
+			letter_spacing = 0,
+		},
+	},
+})
 
 desktop.configure_surface("wallpaper", {
 	module = "wallpaper",

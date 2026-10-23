@@ -11,6 +11,7 @@
 #include "surface_events.hpp"
 #include "workbench/controller.hpp"
 #include "workbench/lua_binding.hpp"
+#include "workbench/terminal_font.hpp"
 #include "../trace.hpp"
 #include <QColor>
 #include <QDebug>
@@ -731,7 +732,11 @@ namespace {
           throw std::runtime_error("desktop.theme is only available while loading desktop.lua");
         }
 
-        configured_theme_ = mapValue(values[0]);
+        {
+          auto theme = mapValue(values[0]);
+          workbench::TerminalFont::validate(theme.value("terminal").toMap().value("font").toMap());
+          configured_theme_ = std::move(theme);
+        }
         break;
       case Operation::runtime_state:
         return encode(runtime_->state());

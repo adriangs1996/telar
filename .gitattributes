@@ -1,0 +1,1 @@
+services/desktop-mode/assets/wallpapers/* filter=lfs diff=lfs merge=lfs -text

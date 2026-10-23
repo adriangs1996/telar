@@ -2,12 +2,14 @@
 #include "file_watch.hpp"
 #include "lua_environment.hpp"
 #include "lua_value.hpp"
+#include "../log_categories.hpp"
 #include "../trace.hpp"
 #include <QDebug>
 #include <QDir>
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QCoreApplication>
 #include <QFutureWatcher>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -15,6 +17,7 @@
 #include <QPointer>
 #include <QSaveFile>
 #include <QSet>
+#include <QStandardPaths>
 #include <QTimer>
 #include <QtConcurrentRun>
 #include <algorithm>
@@ -53,6 +56,55 @@ namespace {
     Value value;
     std::string error;
   };
+
+  // Where a wallpaper named by file name is looked for, in order: the user's own and the system's
+  // data directories, then those beside an installed executable (share/ on Linux, the bundle's
+  // Resources/ on macOS), then the source tree's while developing.
+  QStringList wallpaperDirectories() {
+    QStringList directories;
+    for (const auto &data : QStandardPaths::standardLocations(QStandardPaths::GenericDataLocation)) {
+      directories.append(QDir(data).filePath(QStringLiteral("telar/wallpapers")));
+    }
+
+    const QDir executable(QCoreApplication::applicationDirPath());
+    directories.append(executable.filePath(QStringLiteral("../share/telar/wallpapers")));
+    directories.append(executable.filePath(QStringLiteral("../Resources/wallpapers")));
+
+    const auto development = qEnvironmentVariable("TELAR_DESKTOP_ASSETS_DIR");
+    if (!development.isEmpty()) {
+      directories.append(QDir(development).filePath(QStringLiteral("wallpapers")));
+    }
+
+    return directories;
+  }
+
+  // fs.find_wallpaper(name): the path of the first wallpaper directory's file by that name, or
+  // nil. A name is one file name, so it never reaches outside those directories.
+  int findWallpaper(lua_State *state) {
+    std::size_t length = 0;
+    const char *text = luaL_checklstring(state, 1, &length);
+    const std::string_view name(text, length);
+    if (name.empty() || name == "." || name == ".." ||
+        name.find_first_of("/\\") != std::string_view::npos ||
+        name.find('\0') != std::string_view::npos) {
+      return luaL_error(state, "A wallpaper is named by its file name alone");
+    }
+
+    const auto file = QString::fromUtf8(text, static_cast<qsizetype>(length));
+    for (const auto &directory : wallpaperDirectories()) {
+      const QFileInfo candidate(QDir(directory).filePath(file));
+      if (candidate.isFile()) {
+        const auto path = candidate.absoluteFilePath().toUtf8();
+        lua_pushlstring(state, path.constData(), static_cast<std::size_t>(path.size()));
+        return 1;
+      }
+    }
+
+    qCWarning(telar_log::session) << "wallpaper" << file
+                                  << "is in no wallpaper directory; the theme's color shows";
+    lua_pushnil(state);
+    return 1;
+  }
 
   struct Call {
     lua::Environment &environment;
@@ -481,6 +533,8 @@ namespace ui {
             lua_setfield(state, 3, "module_path");
             lua_pushcfunction(state, lua::Environment::traceback);
             lua_setfield(state, 3, "traceback");
+            lua_pushcfunction(state, findWallpaper);
+            lua_setfield(state, 3, "find_wallpaper");
             lua_setglobal(state, "_telar_io");
 
             return 0;

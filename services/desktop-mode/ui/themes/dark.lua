@@ -1,6 +1,11 @@
--- The default theme. Every other theme is applied on top of it, so this file also defines
+-- The legacy theme. Every other theme is applied on top of it, so this file also defines
 -- which tokens exist: a theme can only change a token named here, and must keep its type.
 return {
+  wallpaper = {
+    -- A file in Telar's wallpaper directories, or a path or URL; empty for the ground color alone.
+    image = "ghostwire-neon-skyline.png",
+  },
+
   colors = {
     -- Behind every surface, where no wallpaper image covers it.
     ground = "#0C0B10",
@@ -64,9 +69,11 @@ return {
   },
 
   terminal = {
+    background_opacity = 1,
     background = "#0F0E14",
     foreground = "#D7D2E0",
     selection = "#3A3050",
+    cursor_color = "#D7D2E0",
     ansi = {
       black = "#2A2634",
       red = "#FF8A80",
@@ -98,6 +105,8 @@ return {
       line_height = 1,
       -- Extra logical pixels per cell, -5..20.
       letter_spacing = 0,
+      thicken = false,
+      thicken_strength = 255,
     },
   },
 

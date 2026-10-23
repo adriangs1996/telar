@@ -47,8 +47,11 @@ namespace workbench {
     // Regular, bold, italic and bold italic, each spaced so its advance is one cell.
     std::array<QFont, 4> faces_;
     bool fixed_pitch_ = true;
+    bool thicken_ = false;
+    std::uint8_t thicken_strength_ = 255;
+    qreal background_opacity_ = 1;
     // The theme sets these on configure; until then cells paint with Qt's defaults.
-    QColor foreground_, background_, selection_;
+    QColor foreground_, background_, selection_, cursor_color_;
     TerminalPalette palette_{};
     QSizeF cell_{8, 16};
     // From the top of a cell, in logical pixels on the physical pixel grid.

@@ -50,6 +50,7 @@ desktop socket="":
     cmake --build --preset debug --target telar-desktop
     export TELAR_DESKTOP_CONFIG="{{ justfile_directory() }}/dev/desktop.lua"
     export TELAR_DESKTOP_UI_DIR="${TELAR_DESKTOP_UI_DIR:-$PWD/ui}"
+    export TELAR_DESKTOP_ASSETS_DIR="${TELAR_DESKTOP_ASSETS_DIR:-$PWD/assets}"
     socket="{{ socket }}"
     if [[ -n "$socket" ]]; then
         exec ./out/debug/telar-desktop "$socket"

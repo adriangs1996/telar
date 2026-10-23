@@ -1,6 +1,7 @@
 #import <CoreText/CoreText.h>
 #import <CoreGraphics/CoreGraphics.h>
 #include "../native/glyph_rasterizer.h"
+#include "../native/font_smoothing.h"
 #include <math.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -141,18 +142,7 @@ telar_glyph_rasterizer *telar_glyph_rasterizer_create(const telar_glyph_rasteriz
         return NULL;
     }
 
-    CGContextSetAllowsFontSmoothing(self->context, true);
-    CGContextSetShouldSmoothFonts(self->context, self->thicken);
-    CGContextSetAllowsFontSubpixelPositioning(self->context, true);
-    CGContextSetShouldSubpixelPositionFonts(self->context, true);
-    CGContextSetAllowsFontSubpixelQuantization(self->context, false);
-    CGContextSetShouldSubpixelQuantizeFonts(self->context, false);
-    CGContextSetAllowsAntialiasing(self->context, true);
-    CGContextSetShouldAntialias(self->context, true);
-    // CoreGraphics uses the gray value for optical weight even in an alpha-only
-    // context. This is Ghostty's strength control; alpha itself remains one.
-    CGContextSetGrayFillColor(self->context, options->strength / 255.0, 1);
-    CGContextSetGrayStrokeColor(self->context, options->strength / 255.0, 1);
+    telar_font_smoothing(self->context, self->thicken, (uint8_t)options->strength);
     return self;
 }
 

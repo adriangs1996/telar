@@ -1,18 +1,15 @@
 #include "terminal_item.hpp"
 #include "terminal_input.hpp"
-#include "../bundled_fonts.hpp"
+#include "terminal_font.hpp"
+#include "optical_text.hpp"
 #include "../../log_categories.hpp"
 #include "../../trace.hpp"
 #include <QClipboard>
-#include <QFontDatabase>
-#include <QFontInfo>
-#include <QFontMetricsF>
 #include <QGuiApplication>
 #include <QInputMethod>
 #include <QInputMethodEvent>
 #include <QKeyEvent>
 #include <QQuickWindow>
-#include <QScreen>
 #include <QSGSimpleRectNode>
 #include <QSGTextNode>
 #include <QSGTransformNode>
@@ -29,15 +26,14 @@ namespace workbench {
     constexpr int maximum_dimension = 4096;
     constexpr int wheel_unit = 120;
     constexpr int wheel_rows = 3;
-    // The bounds and defaults of the GUI's `gui.font`.
-    constexpr double default_font_size = 15, minimum_font_size = 6, maximum_font_size = 96;
-    constexpr double default_line_height = 1, minimum_line_height = 0.75, maximum_line_height = 3;
-    constexpr double minimum_letter_spacing = -5, maximum_letter_spacing = 20;
-    constexpr double points_per_inch = 72;
     constexpr int mouse_release = 3, mouse_motion = 32, mouse_wheel_up = 64, mouse_wheel_down = 65;
     constexpr int mouse_shift = 4, mouse_alt = 8, mouse_control = 16;
     constexpr int legacy_mouse_offset = 32, legacy_mouse_limit = 223;
     constexpr int underline_shift = 8, underline_mask = 7;
+    // Optical text draws a row into a buffer reaching this many rows above and below it, for
+    // glyphs that overflow their cell.
+    constexpr int optical_margin_rows = 1;
+    constexpr int optical_rows = 1 + 2 * optical_margin_rows;
     // The theme's `terminal.ansi` names, in the order of the first 16 indexed colors.
     constexpr std::array<const char *, 16> ansi_names{"black",
                                                       "red",
@@ -58,6 +54,12 @@ namespace workbench {
 
     bool has(const telar::CellStyle &style, telar::CellAttribute flag) {
       return style.flags & static_cast<std::uint16_t>(flag);
+    }
+
+    // Letters a programming font joins into one ligature glyph across two cells. A run ends
+    // between them, so each letter keeps its own cell.
+    bool joins(char previous, char next) {
+      return (previous == 'f' && (next == 'i' || next == 'l')) || (previous == 's' && next == 't');
     }
 
     // Bits of an index into the terminal's faces.
@@ -114,6 +116,8 @@ namespace workbench {
     };
 
     struct ScreenNode final : QSGTransformNode {
+      // Only while the theme thickens text, and only where the platform can.
+      std::unique_ptr<OpticalText> optical;
       QSGSimpleRectNode *background = new QSGSimpleRectNode;
       QSGNode *rows = new QSGTransformNode;
       QSGNode *overlay = new QSGTransformNode;
@@ -190,10 +194,15 @@ namespace workbench {
     const auto theme = options.value("theme").toMap();
     const auto colors = theme.value("terminal").toMap();
     font_settings_ = colors.value("font").toMap();
+    background_opacity_ = std::clamp(setting(colors, "background_opacity", 1), 0.0, 1.0);
+    thicken_ = font_settings_.value("thicken", false).toBool();
+    thicken_strength_ = static_cast<std::uint8_t>(
+        std::clamp(setting(font_settings_, "thicken_strength", 255), 0.0, 255.0));
     const auto ansi = colors.value("ansi").toMap();
     const QColor fg(colors.value("foreground").toString());
     const QColor bg(colors.value("background").toString());
     const QColor selection(colors.value("selection").toString());
+    const QColor cursor_color(colors.value("cursor_color").toString());
 
     for (std::size_t index = 0; index < ansi_names.size(); ++index) {
       const QColor value(ansi.value(QLatin1StringView(ansi_names[index])).toString());
@@ -215,88 +224,19 @@ namespace workbench {
       background_ = bg;
     }
 
+    cursor_color_ = cursor_color.isValid() ? cursor_color : foreground_;
+
     measure();
   }
 
-  // The GUI's metrics: the size rounds to physical pixels, the cell to whole physical pixels,
-  // and extra line height is split above and below the baseline. Lua validates the settings;
-  // the clamps only keep a hand-built map from producing an unusable grid.
   void TerminalItem::measure() {
     TELAR_TRACE("terminal.measure");
     const auto scale = window() ? window()->devicePixelRatio() : 1.0;
-    const auto size = std::clamp(setting(font_settings_, "size", default_font_size),
-                                 minimum_font_size,
-                                 maximum_font_size);
-    const auto line_height = std::clamp(setting(font_settings_, "line_height", default_line_height),
-                                        minimum_line_height,
-                                        maximum_line_height);
-    const auto letter_spacing = std::clamp(setting(font_settings_, "letter_spacing", 0),
-                                           minimum_letter_spacing,
-                                           maximum_letter_spacing);
-    const auto style = font_settings_.value("style").toString();
-    auto family = font_settings_.value("family").toString();
-    auto families = ui::bundledFonts();
-
-    if (!family.isEmpty() && !QFontDatabase::hasFamily(family)) {
-      qCWarning(telar_log::terminal)
-          << "font family" << family << "is not installed; using the bundled one";
-      family.clear();
-    }
-
-    if (!family.isEmpty()) {
-      families.prepend(family);
-    }
-
-    QFont base = QFontDatabase::systemFont(QFontDatabase::FixedFont);
-    if (!families.isEmpty()) {
-      base.setFamilies(families);
-    }
-
-    if (!style.isEmpty()) {
-      const auto styles = QFontDatabase::styles(QFontInfo(base).family());
-      const auto found = std::ranges::find_if(styles, [&style](const QString &candidate) {
-        return candidate.compare(style, Qt::CaseInsensitive) == 0;
-      });
-
-      if (found == styles.end()) {
-        qCWarning(telar_log::terminal) << "font" << QFontInfo(base).family() << "has no style"
-                                       << style << "; using its regular face";
-      } else {
-        base.setStyleName(*found);
-      }
-    }
-
-    const auto *screen = QGuiApplication::primaryScreen();
-    const auto dpi = screen ? screen->logicalDotsPerInchY() : points_per_inch;
-    base.setPointSizeF(std::round(size * scale) / scale * points_per_inch / dpi);
-    base.setKerning(false);
-    base.setStyleHint(QFont::Monospace);
-
-    const QFontMetricsF metrics(base);
-    const auto natural = (metrics.ascent() + metrics.descent()) * scale;
-    const auto height = std::max(1.0, std::round(natural * line_height));
-    const auto width = std::max(
-        1.0,
-        std::round((metrics.horizontalAdvance(QLatin1Char('M')) + letter_spacing) * scale));
-    cell_ = {width / scale, height / scale};
-    baseline_ = std::round(metrics.ascent() * scale + (height - natural) / 2) / scale;
-
-    // A style name pins one face, so bold and italic come from the family instead.
-    for (std::size_t index = 0; index < faces_.size(); ++index) {
-      auto variant = base;
-
-      if (index != FaceStyle::regular) {
-        variant.setStyleName({});
-        variant.setBold(index & FaceStyle::bold);
-        variant.setItalic(index & FaceStyle::italic);
-      }
-
-      const auto advance = QFontMetricsF(variant).horizontalAdvance(QLatin1Char('M'));
-      variant.setLetterSpacing(QFont::AbsoluteSpacing, cell_.width() - advance);
-      faces_[index] = variant;
-    }
-
-    fixed_pitch_ = QFontInfo(faces_[FaceStyle::regular]).fixedPitch();
+    auto font = TerminalFont::resolve(font_settings_, scale);
+    faces_ = std::move(font.faces);
+    cell_ = font.cell;
+    baseline_ = font.baseline;
+    fixed_pitch_ = font.fixed_pitch;
     ++appearance_;
     resizeTerminal();
     update();
@@ -371,7 +311,15 @@ namespace workbench {
     TELAR_TRACE("terminal.update_paint_node");
     auto *node = previous ? static_cast<ScreenNode *>(previous) : new ScreenNode;
     node->background->setRect(boundingRect());
-    node->background->setColor(background_);
+    // Translucent panes have one rounded background supplied by the Lua chrome. Drawing it
+    // again here would increase its opacity; explicit cell backgrounds keep their own alpha.
+    node->background->setColor(background_opacity_ < 1 ? Qt::transparent : background_);
+    if (thicken_ && !node->optical) {
+      node->optical = OpticalText::create();
+    } else if (!thicken_) {
+      node->optical.reset();
+    }
+
     if (node->rows->childCount() != screen_->rows || node->columns != screen_->columns) {
       clear(node->rows);
       for (int row = 0; row < screen_->rows; ++row) {
@@ -394,6 +342,13 @@ namespace workbench {
       auto *text = window()->createTextNode();
       // The platform rasterizer, as the GUI's: distance fields blur glyphs at terminal sizes.
       text->setRenderType(QSGTextNode::NativeRendering);
+      if (node->optical) {
+        node->optical->begin({width(), cell_.height() * optical_rows},
+                             window()->devicePixelRatio(),
+                             thicken_strength_);
+      }
+
+      const bool cursor_row = screen_->cursor.visible && screen_->cursor.y == row;
       // ASCII runs share a layout. Other graphemes retain their exact cell origin,
       // including wide characters and fallback fonts whose metrics differ.
       for (int column = 0; column < screen_->columns;) {
@@ -426,11 +381,15 @@ namespace workbench {
         if (ascii) {
           while (column + count < screen_->columns) {
             const auto &next = screen_->cells[index + count];
+            // The cursor's cell is a run of its own, so the cursor never covers part of a run.
+            const bool at_cursor =
+                cursor_row && (screen_->cursor.x == column || screen_->cursor.x == column + count);
+            const bool joined = joins(screen_->cells[index + count - 1].text[0], next.text[0]);
             const bool next_selected = anchor_ >= 0 && index + count >= std::min(anchor_, end_) &&
                                        index + count <= std::max(anchor_, end_);
             if (next.width != telar::CellWidth::single || next.length != 1 ||
                 static_cast<unsigned char>(next.text[0]) >= 128 || next.style != cell.style ||
-                selected != next_selected) {
+                selected != next_selected || at_cursor || joined) {
               break;
             }
 
@@ -447,7 +406,8 @@ namespace workbench {
           line->appendChildNode(new QSGSimpleRectNode(rect, bg));
         }
 
-        if (cell.width != telar::CellWidth::continuation && !string.isEmpty()) {
+        if (cell.width != telar::CellWidth::continuation && !string.isEmpty() &&
+            !has(cell.style, telar::CellAttribute::invisible)) {
           QTextLayout layout(string, faces_[face(cell.style)]);
           QTextOption option;
           option.setTextDirection(Qt::LeftToRight);
@@ -465,10 +425,21 @@ namespace workbench {
           text_line.setNumColumns(string.size());
           text_line.setPosition({0, baseline_ - text_line.ascent()});
           layout.endLayout();
-          text->addTextLayout(rect.topLeft(), &layout);
+          if (node->optical) {
+            node->optical->add(layout, {rect.x(), cell_.height() * optical_margin_rows}, fg);
+          } else {
+            text->addTextLayout(rect.topLeft(), &layout);
+          }
         }
 
         column += count;
+      }
+
+      if (node->optical) {
+        const QPointF origin(0, (row - optical_margin_rows) * cell_.height());
+        if (auto *ink = node->optical->node(*window(), origin)) {
+          line->appendChildNode(ink);
+        }
       }
 
       line->appendChildNode(text);
@@ -481,7 +452,7 @@ namespace workbench {
                   cursor.y * cell_.height(),
                   cell_.width(),
                   cell_.height());
-      QColor paint = foreground_;
+      QColor paint = cursor_color_;
       if (cursor.shape == telar::CursorShape::bar) {
         rect.setWidth(2);
       } else if (cursor.shape == telar::CursorShape::underline) {

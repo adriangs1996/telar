@@ -42,12 +42,29 @@ local background = ui.create("QtQuick", "Rectangle", {
   clip = true,
 })
 
-local image
+-- The surface's own image wins. A theme names its wallpaper by file name, found in Telar's
+-- wallpaper directories; a path or URL in the theme is used as it is.
+local function theme_wallpaper()
+  local name = theme.wallpaper.image
 
-if options.image and options.image ~= "" then
+  if name == "" or name:find("/", 1, true) or name:match("^%a[%w+.-]*:") then
+    return name
+  end
+
+  return fs.find_wallpaper(name) or ""
+end
+
+local image
+local path = options.image
+
+if path == nil then
+  path = theme_wallpaper()
+end
+
+if path ~= "" then
   image = ui.image({
     parent = background,
-    source = image_source(options.image),
+    source = image_source(path),
     fillMode = fill_mode,
     asynchronous = true,
   })

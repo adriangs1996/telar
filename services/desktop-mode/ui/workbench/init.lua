@@ -10,8 +10,21 @@ local title_x = 12
 local chip_padding = 8
 local chip_height = 20
 
+-- One background covers the pane, including padding. Text and the border keep their opacity.
+local function background_color()
+  local opacity = theme.terminal.background_opacity
+
+  if opacity == 1 then
+    return colors.chrome
+  end
+
+  local color = theme.terminal.background
+  local alpha = #color == 9 and tonumber(color:sub(2, 3), 16) or 255
+  return string.format("#%02x%s", math.floor(alpha * opacity + 0.5), color:sub(-6))
+end
+
 local background = ui.create("QtQuick", "Rectangle", {
-  color = colors.chrome,
+  color = background_color(),
   radius = theme.radius.medium,
   ["border.width"] = 1,
   ["border.color"] = colors.border,

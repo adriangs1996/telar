@@ -713,15 +713,26 @@ content, not native panel geometry; colors, fonts and radii belong to the theme.
 ### Themes
 
 `desktop.theme(settings)` chooses how every surface and terminal looks. It is
-available only in `desktop.lua`; without a call, the desktop uses the `dark` theme.
+available only in `desktop.lua`; without a call, the desktop uses `cybervenom`.
 
 ```lua
 desktop.theme({
-  preset = "dark",
+  preset = "cybervenom",
   colors = { accent = "#8FB8FF" },
   status = { blocked = { color = "#FFB454" } },
   fonts = { ui = "Inter" },
-  terminal = { font = { family = "Iosevka", style = "Medium", size = 14, line_height = 1.15 } },
+  terminal = {
+    background_opacity = 0.85,
+    font = {
+      family = "Iosevka",
+      style = "Medium",
+      size = 14,
+      line_height = 1.15,
+      letter_spacing = 0,
+      thicken = true,
+      thicken_strength = 128,
+    },
+  },
 })
 ```
 
@@ -731,49 +742,138 @@ then the bundled themes. A preset module returns the tokens it changes. The othe
 fields of `settings` change single tokens on top of the preset. Editing
 `desktop.lua` or a preset module reloads every surface with the new theme.
 
-`ui/themes/dark.lua` is the default theme and names every token: every theme is
-applied on top of it. A token that does not exist, a value of another type or a
-color that is not `#RRGGBB` or `#AARRGGBB` raises an error that names the token, and
+`ui/themes/dark.lua` defines the token schema and keeps the original desktop
+appearance as the `dark` preset. Other bundled presets supply all chrome, status and
+terminal colors, inheriting font and radius settings from it. A token that does
+not exist, a value of another type or a color that is not `#RRGGBB` or `#AARRGGBB`
+raises an error that names the token, and
 the previous configuration stays in place.
 
 | Group | Tokens |
 | --- | --- |
 | `colors` | `ground`, `chrome`, `raised`, `hover`, `selected`, `border`, `border_strong`, `text`, `muted`, `label`, `accent`, `on_accent`, `error` |
 | `status.<status>` | `color`, `text`, `background`, `border`, for `working`, `blocked`, `failed`, `done`, `ready` and `unknown` |
-| `terminal` | `background`, `foreground`, `selection` and the 16 `ansi` colors, from `black` to `bright_white` |
-| `terminal.font` | `family`, `style`, `size` (`6..96`), `line_height` (`0.75..3`), `letter_spacing` (`-5..20`), with the meaning of the GUI's `gui.font` |
+| `terminal` | `background`, `foreground`, `selection`, `cursor_color`, `background_opacity` (`0..1`, default `1`) and the 16 `ansi` colors, from `black` to `bright_white` |
+| `terminal.font` | All GUI font settings: `family`, `style`, `size` (`6..96`), `line_height` (`0.75..3`), `letter_spacing` (`-5..20`), `thicken` (default `false`), `thicken_strength` (integer `0..255`, default `255`) |
 | `fonts` | `ui` and `mono` families for the chrome; an empty `ui` uses the system's |
 | `radius` | `small`, `medium`, `large` |
+| `wallpaper` | `image`: a file name in the wallpaper directories (see below), or a path or URL; an empty string keeps a solid background |
 
 Every Lua environment reads the resolved theme with `require("telar.theme")`.
 `ui.text` uses `fonts.ui` unless the text sets `font.family`. The terminal renderer
 reads `terminal`.
 
+The bundled presets include the GUI themes and these system theme packs:
+
+| Family | Presets |
+| --- | --- |
+| Cybervenom | `cybervenom` (default) |
+| Catppuccin | `catppuccin-latte` (light), `catppuccin-frappe`, `catppuccin-macchiato`, `catppuccin-mocha` |
+| Kanagawa | `kanagawa-wave`, `kanagawa-dragon`, `kanagawa-dragon-vivid`, `kanagawa-lotus` (light) |
+| Other GUI themes | `vesper`, `tokyo-night`, `pierre-dark`, `pierre-dark-soft`, `osaka-jade` |
+| Native defaults and legacy | `terminal`, `dark` |
+
+Each preset is a file in `ui/themes/` and needs no files from a user's configuration.
+Most build their tokens from a Neovim colorscheme's palette with
+`ui/theme_palette.lua`, which is not a preset itself; their comments name the
+Neovim reference module. Neovim's editor, window and inset
+backgrounds map to ground, chrome and raised surfaces; cursorline and visual
+selection map to hover and selected rows. Diagnostics supply working, blocked,
+failed and done colors. Diff backgrounds supply their chips where available;
+other chip backgrounds and borders blend the diagnostic color over the theme's
+own background. The terminal uses the Neovim foreground, background, selection,
+cursor and ANSI colors, including the locally adjusted palettes. `terminal` uses
+the GUI's native terminal defaults instead.
+
+Validate preset coverage and configuration behavior with
+`luajit tests/themes.lua` from `services/desktop-mode`.
+
 The desktop bundles the faces the GUI embeds: JetBrains Mono and the Nerd Font
 symbols, registered once at startup. An empty `terminal.font.family` uses JetBrains
 Mono. A grapheme the configured face lacks falls back to JetBrains Mono, then to
 the Nerd Font symbols, then to whatever system font Qt finds. A family that is not
-installed, or a `style` the family does not list (matched ignoring case), logs a
-warning in `telar.desktop.terminal` and uses the bundled face or the regular style;
-unlike the GUI, it does not reject the configuration, because the theme is resolved
-in Lua before any font is opened. Bold and italic come from the family's own faces,
-or are synthesized when it has none.
+installed, or a `style` the family does not list, rejects the configuration before
+it is committed. Style matching ignores case and supports variable fonts' named
+instances. Bold and italic retain the selected style rather than switching a
+Light or Medium face back to Regular. Programming ligatures stay enabled with
+custom spacing, split at the cursor, and keep typographic `fi`, `fl` and `st`
+as separate characters.
 
 Cell metrics follow the GUI: the size is rounded to physical pixels, the cell width
 is the face's advance plus `letter_spacing`, the height is the natural line height
 times `line_height`, both rounded to whole physical pixels, and extra height is
 split above and below the baseline. Moving a pane to a display with another scale
 measures again. Glyphs use the platform's rasterizer (CoreText on macOS) instead of
-Qt's distance fields. The GUI's `thicken` setting has no equivalent here.
+Qt's distance fields. On macOS, `thicken` draws text through CoreText with the
+GUI's own font smoothing (`src/gui/native/font_smoothing.h`, shared with the
+GUI's glyph atlas): `ui/workbench/optical_text.hpp` is the interface, and
+`native-backends/macos/optical_text.mm` the implementation, which reads the
+CoreText font behind Qt's through a private Qt header. `thicken_strength = 0` selects the lightest smoothing;
+`255` selects the strongest. Neither changes cell metrics, PTY size, text opacity
+or the terminal's bold attribute. Linux accepts these settings and ignores them,
+as the GUI does. Changed rows retain their own text textures; clean rows do not
+reshape or rasterize again.
 
-The wallpaper accepts optional `image` and `fit`; its background is the theme's
-`colors.ground`. The image can be a Qt
-URL, an absolute path, a path starting with `~/`, or a path relative to
+`terminal.background_opacity` changes the pane background, including its header
+and padding. Below `1`, the default pane module supplies one rounded fill in the
+terminal's background color; the renderer does not add another translucent fill.
+Text, cursor, borders and controls retain their opacity. Selection and cell
+backgrounds differing from the terminal default retain their own colors and
+alpha. A custom workbench module owns this background policy in its own Lua UI. Validate the
+default pane module's single translucent fill with `luajit tests/terminal_ui.lua`
+from `services/desktop-mode`.
+
+The native rendering checks can run without starting a desktop session, and exit
+nonzero when one fails; `--images DIR` also saves the frames they compare:
+
+```sh
+cmake --build --preset debug --target terminal_ui_dbg
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software ./out/debug/terminal_ui_dbg
+```
+
+The wallpaper accepts optional `image` and `fit`. Without an `image` option, it
+uses `theme.wallpaper.image`; its background is the theme's `colors.ground`.
+An explicit `image = ""` disables the image. The image can be a Qt URL,
+an absolute path, a path starting with `~/`, or a path relative to
 `desktop.lua`. `cover` fills the monitor with cropping, `contain` shows the whole
 image with the background color around it, `center` keeps the image centered at
 its natural size, and `stretch` fills the monitor without preserving aspect ratio.
-The default is a solid color with `fit = "cover"`. Images load asynchronously;
+The default is the selected theme's wallpaper with `fit = "cover"`. Images load asynchronously;
 an image load error leaves the background color visible and is reported by Qt.
+
+A theme names its wallpaper by file name. The desktop looks for it, in order, in
+the user's and the system's data directories under `telar/wallpapers/`
+(`~/Library/Application Support/telar/wallpapers/` on macOS,
+`$XDG_DATA_HOME/telar/wallpapers/` and `$XDG_DATA_DIRS` on Linux), then beside the
+installed executable (`../share/telar/wallpapers/`, or the bundle's
+`Resources/wallpapers/`), then in `$TELAR_DESKTOP_ASSETS_DIR/wallpapers/`, which
+`just desktop` points at the source tree's `assets/`. The first match wins, so a
+file of the same name in the user's directory replaces a shipped one. A name no
+directory holds leaves the theme's ground color and logs a warning. Wallpapers
+are files, not resources inside the executable: the Linux install copies
+`assets/wallpapers/` to `share/telar/wallpapers/`. Git stores them through LFS
+(`.gitattributes`). The shipped associations are:
+
+| Presets | Image |
+| --- | --- |
+| `cybervenom`, `dark` | `ghostwire-neon-skyline.png` |
+| Catppuccin flavors | `catppuccin-<flavor>-wisteria.png` |
+| `kanagawa-wave`, `tokyo-night` | `kanagawa-wave-city.png` |
+| `kanagawa-dragon` | `kanagawa-dragon-city.png` |
+| `kanagawa-dragon-vivid` | `kanagawa-dragon-vivid-city.png` |
+| `kanagawa-lotus` | `catppuccin-latte-wisteria.png` |
+| `vesper` | `vesper-city.png` |
+| `osaka-jade` | `osaka-jade-bg.jpg` |
+| `pierre-dark`, `pierre-dark-soft`, `terminal` | `vesper-city-pierre-blue.png` |
+
+The source images were imported from the user's wallpaper collection, except
+`ghostwire-neon-skyline.png`, converted from the supplied WebP download to PNG
+without resizing or changing its decoded pixels. Shared images are stored once.
+Set `wallpaper = { image = "" }` in `desktop.theme` for a solid background, or set
+the wallpaper surface's `options.image` to override the theme's choice.
+
+Validate image selection, custom paths, fitting and resize behavior with
+`luajit tests/wallpaper.lua` from `services/desktop-mode`.
 
 All monitors receive the same wallpaper options. Each instance has its own size
 and Lua state, and receives screen and resize events through the shared surface

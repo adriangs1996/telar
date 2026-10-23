@@ -74,15 +74,23 @@ if(desktop_ui_scripts)
   )
 endif()
 
-# The faces the GUI embeds, so terminal panes render with the same font by default.
+# The faces the GUI embeds, so terminal panes render with the same font by default. A program
+# that draws terminals embeds them too.
 set(desktop_font_directory "${CMAKE_CURRENT_SOURCE_DIR}/../../src/assets")
-qt_add_resources(telar-desktop desktop_fonts
-  PREFIX "/telar/fonts"
-  BASE "${desktop_font_directory}"
-  FILES
-    "${desktop_font_directory}/JetBrainsMono-Regular.ttf"
-    "${desktop_font_directory}/SymbolsNerdFontMono-Regular.ttf"
+set(desktop_fonts
+  "${desktop_font_directory}/JetBrainsMono-Regular.ttf"
+  "${desktop_font_directory}/SymbolsNerdFontMono-Regular.ttf"
 )
+
+function(desktop_embed_fonts target)
+  qt_add_resources(${target} ${target}_fonts
+    PREFIX "/telar/fonts"
+    BASE "${desktop_font_directory}"
+    FILES ${desktop_fonts}
+  )
+endfunction()
+
+desktop_embed_fonts(telar-desktop)
 
 if(APPLE)
   set(CMAKE_OBJCXX_COMPILER "${CMAKE_CXX_COMPILER}")
@@ -90,9 +98,9 @@ if(APPLE)
   set(CMAKE_OBJCXX_STANDARD 23)
   set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
   set(CMAKE_OBJCXX_EXTENSIONS OFF)
-
   find_library(APPKIT_FRAMEWORK AppKit REQUIRED)
   find_library(APPLICATION_SERVICES_FRAMEWORK ApplicationServices REQUIRED)
+  find_library(CORE_TEXT_FRAMEWORK CoreText REQUIRED)
   file(GLOB_RECURSE desktop_native_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/native-backends/macos/*.mm")
   add_library(desktop-native OBJECT ${desktop_native_sources})
   target_compile_options(desktop-native PRIVATE -fobjc-arc)
@@ -104,8 +112,11 @@ if(APPLE)
     target_compile_options(desktop-native PRIVATE -fno-objc-msgsend-class-selector-stubs)
   endif()
 
-  target_link_libraries(desktop-native PUBLIC "${APPKIT_FRAMEWORK}" "${APPLICATION_SERVICES_FRAMEWORK}")
+  target_link_libraries(desktop-native PUBLIC "${APPKIT_FRAMEWORK}" "${APPLICATION_SERVICES_FRAMEWORK}" "${CORE_TEXT_FRAMEWORK}")
   target_link_libraries(desktop-native PUBLIC desktop-ui)
+  # Optical text shares the GUI's font smoothing and reads the CoreText font behind Qt's.
+  target_include_directories(desktop-native PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/native")
+  target_link_libraries(desktop-native PRIVATE Qt6::GuiPrivate)
   target_link_libraries(telar-desktop PRIVATE desktop-native)
 endif()
 
@@ -135,6 +146,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   install(FILES native-backends/linux/telar-desktop.desktop DESTINATION share/applications)
   install(FILES licenses/wlroots.txt DESTINATION share/licenses/telar-desktop)
   install(FILES native-backends/linux/telar-portals.conf DESTINATION share/xdg-desktop-portal)
+  # Wallpapers stay files the desktop finds by name, not resources inside the executable.
+  install(DIRECTORY assets/wallpapers/ DESTINATION share/telar/wallpapers)
 endif()
 
 target_link_libraries(telar-desktop PRIVATE desktop-ui desktop-core)
@@ -163,6 +176,12 @@ endif()
 # Programs name the libraries they need beyond the core; those that drive the native backend
 # name its libraries and their own Objective-C++ sources.
 set(layout_dbg_libraries desktop-ui)
+# Terminals draw optical text through the native backend on macOS.
+if(APPLE)
+  set(terminal_ui_dbg_libraries desktop-native)
+else()
+  set(terminal_ui_dbg_libraries desktop-ui)
+endif()
 set(spaces_dbg_native_sources debug/support/spaces_probe.mm)
 set(spaces_dbg_native_libraries desktop-native)
 set(input_router_dbg_native_libraries desktop-native)
@@ -196,3 +215,5 @@ foreach(source IN LISTS desktop_programs)
   endif()
   add_dependencies(desktop-editor "${program}")
 endforeach()
+
+desktop_embed_fonts(terminal_ui_dbg)

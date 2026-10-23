@@ -4,7 +4,11 @@ local io_core = _telar_io
 _telar_io = nil
 
 local ui = {}
-local fs = { config_dir = io_core.config_dir, home_dir = io_core.home_dir }
+local fs = {
+  config_dir = io_core.config_dir,
+  home_dir = io_core.home_dir,
+  find_wallpaper = io_core.find_wallpaper,
+}
 local net = {}
 local runtime = {}
 local desktop = {}
@@ -230,15 +234,58 @@ package.loaded["telar.desktop"] = desktop
 package.loaded["telar.shortcuts"] = shortcuts
 package.loaded["telar.workbench"] = workbench
 
-local default_theme = "dark"
+local default_theme = "cybervenom"
+-- Names every token; every preset is applied on top of it.
+local base_theme = "dark"
 local family_limit = 256
 
 -- Numeric tokens with bounds, as the GUI bounds its font settings.
 local theme_ranges = {
+  ["terminal.background_opacity"] = { 0, 1 },
   ["terminal.font.size"] = { 6, 96 },
   ["terminal.font.line_height"] = { 0.75, 3 },
   ["terminal.font.letter_spacing"] = { -5, 20 },
+  ["terminal.font.thicken_strength"] = { 0, 255 },
 }
+
+local function valid_utf8(text)
+  local index = 1
+
+  while index <= #text do
+    local first = text:byte(index)
+    local size = first < 0x80 and 1
+      or first >= 0xC2 and first <= 0xDF and 2
+      or first >= 0xE0 and first <= 0xEF and 3
+      or first >= 0xF0 and first <= 0xF4 and 4
+
+    if not size or index + size - 1 > #text then
+      return false
+    end
+
+    for offset = 1, size - 1 do
+      local byte = text:byte(index + offset)
+
+      if byte < 0x80 or byte > 0xBF then
+        return false
+      end
+    end
+
+    local second = text:byte(index + 1) or 0
+
+    if
+      (first == 0xE0 and second < 0xA0)
+      or (first == 0xED and second >= 0xA0)
+      or (first == 0xF0 and second < 0x90)
+      or (first == 0xF4 and second >= 0x90)
+    then
+      return false
+    end
+
+    index = index + size
+  end
+
+  return true
+end
 
 local function copy(value)
   if type(value) ~= "table" then
@@ -254,7 +301,7 @@ local function copy(value)
   return result
 end
 
--- The default theme names every token, so an override must name one of them and keep its type.
+-- The base theme names every token, so an override must name one of them and keep its type.
 -- A token whose default is a color takes only #RRGGBB or #AARRGGBB.
 local function apply_theme(into, overrides, path)
   for key, value in pairs(overrides) do
@@ -286,10 +333,20 @@ local function apply_theme(into, overrides, path)
         error("Theme token " .. name .. " must be at most 256 bytes without NUL", 3)
       end
 
+      if
+        (name == "terminal.font.family" or name == "terminal.font.style") and not valid_utf8(value)
+      then
+        error("Theme token " .. name .. " must be valid UTF-8", 3)
+      end
+
       local range = theme_ranges[name]
 
       if range and not (value >= range[1] and value <= range[2]) then
         error(string.format("Theme token %s must be within %g..%g", name, range[1], range[2]), 3)
+      end
+
+      if name == "terminal.font.thicken_strength" and value ~= math.floor(value) then
+        error("Theme token terminal.font.thicken_strength must be an integer", 3)
       end
 
       into[key] = value
@@ -307,9 +364,9 @@ local function resolve_theme(settings)
     "Theme preset must be a name of letters, digits, - or _"
   )
 
-  local resolved = copy(require("themes." .. default_theme))
+  local resolved = copy(require("themes." .. base_theme))
 
-  if preset ~= default_theme then
+  if preset ~= base_theme then
     local tokens = require("themes." .. preset)
     assert(type(tokens) == "table", "Theme preset " .. preset .. " must return a table")
     apply_theme(resolved, tokens, "")
