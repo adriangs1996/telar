@@ -20,7 +20,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
-NAME = os.environ.get("TELAR_VM_NAME", "telar-vm")
+DISTRO = os.environ.get("TELAR_VM_DISTRO", "fedora")
+if DISTRO not in ("fedora", "arch"):
+    raise SystemExit("TELAR_VM_DISTRO must be fedora or arch")
+NAME = os.environ.get("TELAR_VM_NAME", "telar-arch" if DISTRO == "arch" else "telar-vm")
 STATE = Path(os.environ.get("TELAR_VM_STATE", Path.home() / ".cache/telar-vm")) / NAME
 FEDORA = "43"
 FEDORA_BUILD = "1.6"
@@ -34,11 +37,16 @@ GUEST_SRC = "src/telar"
 
 
 def guest_arch():
+    if DISTRO == "arch":
+        return "x86_64"
     machine = platform.machine().lower()
     return "aarch64" if machine in ("arm64", "aarch64") else "x86_64"
 
 
 def accelerator():
+    host = "aarch64" if platform.machine().lower() in ("arm64", "aarch64") else "x86_64"
+    if guest_arch() != host:
+        return "tcg"
     if sys.platform == "darwin":
         return "hvf"
     if Path("/dev/kvm").exists():
@@ -64,10 +72,14 @@ def firmware_dir():
 
 
 def image_name():
+    if DISTRO == "arch":
+        return "Arch-Linux-x86_64-cloudimg.qcow2"
     return f"Fedora-Cloud-Base-Generic-{FEDORA}-{FEDORA_BUILD}.{guest_arch()}.qcow2"
 
 
 def image_url(name):
+    if DISTRO == "arch":
+        return f"https://geo.mirror.pkgbuild.com/images/latest/{name}"
     return f"{MIRROR}/{FEDORA}/Cloud/{guest_arch()}/images/{name}"
 
 
@@ -85,10 +97,15 @@ def fetch_base_image():
         return base
     STATE.mkdir(parents=True, exist_ok=True)
     checksum_file = STATE / "CHECKSUM"
-    download(image_url(f"Fedora-Cloud-{FEDORA}-{FEDORA_BUILD}-{guest_arch()}-CHECKSUM"), checksum_file)
+    checksum_name = (image_name() + ".SHA256" if DISTRO == "arch"
+                     else f"Fedora-Cloud-{FEDORA}-{FEDORA_BUILD}-{guest_arch()}-CHECKSUM")
+    download(image_url(checksum_name), checksum_file)
     checksums = checksum_file.read_text()
     expected = None
     for line in checksums.splitlines():
+        fields = line.split()
+        if DISTRO == "arch" and len(fields) == 2 and fields[1].lstrip("*") == image_name():
+            expected = fields[0]
         if line.startswith(f"SHA256 ({image_name()}) = "):
             expected = line.rsplit(" ", 1)[1]
     if expected is None:
@@ -194,7 +211,9 @@ def machine_args():
     accel = accelerator()
     if guest_arch() == "aarch64":
         return ["-machine", f"virt,accel={accel}", "-cpu", "host" if accel != "tcg" else "max"]
-    return ["-machine", f"q35,accel={accel}", "-cpu", "host" if accel != "tcg" else "max"]
+    # The explicit virtio GPU is the only display; QEMU otherwise adds a VGA
+    # device too, which turns a single-screen test into a multi-GPU session.
+    return ["-machine", f"q35,accel={accel}", "-cpu", "host" if accel != "tcg" else "max", "-vga", "none"]
 
 
 def display_args(display):
@@ -266,7 +285,7 @@ def ssh_command(*args, **kwargs):
         "-o", "IdentitiesOnly=yes",
         "-o", f"UserKnownHostsFile={STATE / 'known_hosts'}",
         "-o", "StrictHostKeyChecking=accept-new",
-        "-o", "ConnectTimeout=5",
+        "-o", "ConnectTimeout=30",
         "-o", "ServerAliveInterval=15",
         "-o", "LogLevel=ERROR",
         *(["-t"] if kwargs.get("tty") else []),
@@ -308,7 +327,7 @@ stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 tar -xf - -C "$stage"
 mkdir -p "$HOME/{GUEST_SRC}"
-rsync -a --delete --exclude=/.zig-cache/ --exclude=/zig-out/ --exclude=/.zig-out/ --exclude=/zig-pkg/ \\
+rsync -a --delete --exclude=/.zig-cache/ --exclude=/zig-out/ --exclude=/.zig-out/ --exclude=/zig-pkg/ --exclude=/services/desktop-mode/out/ \\
     "$stage/" "$HOME/{GUEST_SRC}/"
 '''
     with subprocess.Popen(ssh_command("bash", "-c", script), stdin=subprocess.PIPE) as process:
@@ -406,7 +425,7 @@ def screenshot(path):
     print(target)
 
 
-def up(display):
+def up(display, compile_project=True):
     first_boot = not (STATE / "disk.qcow2").exists()
     seed = serve_seed() if first_boot else None
     launch(display, seed.server_port if seed else None)
@@ -415,10 +434,14 @@ def up(display):
         # cloud-init keeps reading the seed until it finishes the first boot.
         guest("cloud-init status --wait > /dev/null || true")
         seed.shutdown()
-    with (HERE / "provision.sh").open("rb") as script:
+    provision = "provision-arch.sh" if DISTRO == "arch" else "provision.sh"
+    with (HERE / provision).open("rb") as script:
+        guest("bash -s", stdin=script)
+    with (HERE / "install-zig.sh").open("rb") as script:
         guest("bash -s", stdin=script)
     sync()
-    build()
+    if compile_project:
+        build(*(["-Dgui=false"] if DISTRO == "arch" else []))
 
 
 def main():
@@ -428,6 +451,8 @@ def main():
     args = [arg for arg in args if arg != "--display"]
     if command == "up":
         up(display)
+    elif command == "prepare":
+        up(display, compile_project=False)
     elif command == "start":
         launch(display)
         wait_for_ssh()
@@ -464,7 +489,7 @@ exec ./zig-out/bin/telar "$@"
         gui_smoke(args[0] if args else STATE / "gui-smoke.png")
     else:
         print("Usage: tools/vm/vm.py COMMAND [--display] [ARGS]")
-        print("Commands: up, start, stop, status, shell, exec, sync, build, run, stop-runtime, screenshot, gui-smoke")
+        print("Commands: prepare, up, start, stop, status, shell, exec, sync, build, run, stop-runtime, screenshot, gui-smoke")
         print("build/run sync first. Sync replaces guest source changes; edit on the host.")
         if command != "help":
             raise SystemExit(2)

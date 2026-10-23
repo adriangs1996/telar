@@ -13,6 +13,7 @@
 #include <QQuickWindow>
 #include <QSGSimpleRectNode>
 #include <QSGTextNode>
+#include <QSGTransformNode>
 #include <QTextLayout>
 #include <algorithm>
 #include <cmath>
@@ -84,14 +85,16 @@ namespace workbench {
               component(cube % cube_side)};
     }
 
-    struct RowNode final : QSGNode {
+    // The software renderer caches inherited transforms at transform nodes. Basic
+    // grouping nodes lose that state when a child is replaced during a row update.
+    struct RowNode final : QSGTransformNode {
       std::uint64_t revision = 0, appearance = 0;
     };
 
-    struct ScreenNode final : QSGNode {
+    struct ScreenNode final : QSGTransformNode {
       QSGSimpleRectNode *background = new QSGSimpleRectNode;
-      QSGNode *rows = new QSGNode;
-      QSGNode *overlay = new QSGNode;
+      QSGNode *rows = new QSGTransformNode;
+      QSGNode *overlay = new QSGTransformNode;
       int columns = 0;
 
       ScreenNode() {

@@ -14,6 +14,7 @@
 #include <deque>
 #include <fcntl.h>
 #include <map>
+#include <set>
 #include <mutex>
 #include <optional>
 #include <poll.h>
@@ -41,7 +42,8 @@ namespace {
     select,
     move,
     show,
-    create_workspace
+    create_workspace,
+    hold
   };
 
   const char *describe(CommandKind kind) {
@@ -54,6 +56,8 @@ namespace {
       return "show workspaces";
     case CommandKind::create_workspace:
       return "create workspace";
+    case CommandKind::hold:
+      return "hold tabs";
     }
 
     return "unknown";
@@ -64,6 +68,7 @@ namespace {
     std::uint64_t id = 0;
     std::optional<RuntimeWorkspace> workspace;
     std::vector<RuntimeWorkspace> visible;
+    std::set<std::pair<RuntimeWorkspace, std::uint64_t>> holds;
     std::uint64_t tab = 0;
     std::uint64_t relative_to = 0;
     bool after = false;
@@ -218,8 +223,10 @@ struct RuntimeSession::Impl {
   std::mutex mutex;
   std::deque<Command> commands;
   std::optional<Command> pending_show;
+  std::optional<Command> pending_hold;
   std::array<int, 2> signal{-1, -1};
   std::optional<std::pair<std::vector<RuntimeWorkspace>, std::optional<RuntimeWorkspace>>> shown;
+  std::set<std::pair<RuntimeWorkspace, std::uint64_t>> holding;
 
   Impl(telar::Client &transport, std::string path)
       : client(transport),
@@ -287,6 +294,10 @@ struct RuntimeSession::Impl {
       return std::exchange(pending_show, std::nullopt);
     }
 
+    if (pending_hold) {
+      return std::exchange(pending_hold, std::nullopt);
+    }
+
     if (commands.empty()) {
       return {};
     }
@@ -314,6 +325,8 @@ struct RuntimeSession::Impl {
     std::map<RuntimeWorkspace, Refresh> refreshes;
     // Each workspace's active tab, kept while it is off screen.
     std::map<RuntimeWorkspace, std::uint64_t> active_tabs;
+    // The tabs the runtime has been told this session holds.
+    std::set<std::pair<RuntimeWorkspace, std::uint64_t>> held;
 
     explicit Worker(Impl &session)
         : session(session) {}
@@ -412,6 +425,11 @@ struct RuntimeSession::Impl {
         return;
       }
 
+      if (request.kind == CommandKind::hold) {
+        hold(request.holds);
+        return;
+      }
+
       auto *target = request.workspace ? view(*request.workspace) : nullptr;
 
       if (!target || !contains(*target, request.tab)) {
@@ -443,6 +461,27 @@ struct RuntimeSession::Impl {
           },
           buffer);
       move.begin(request.id);
+    }
+
+    // Tells the runtime only what changed; a tab it no longer knows fails harmlessly.
+    void hold(const std::set<std::pair<RuntimeWorkspace, std::uint64_t>> &tabs) {
+      for (const auto &[workspace_value, tab] : tabs) {
+        if (!held.contains({workspace_value, tab})) {
+          session.client.send(telar::HoldTab{session.next_request.fetch_add(1),
+                                             {workspace(workspace_value), tab},
+                                             true});
+        }
+      }
+
+      for (const auto &[workspace_value, tab] : held) {
+        if (!tabs.contains({workspace_value, tab})) {
+          session.client.send(telar::HoldTab{session.next_request.fetch_add(1),
+                                             {workspace(workspace_value), tab},
+                                             false});
+        }
+      }
+
+      held = tabs;
     }
 
     // A workspace comes from a short connection of its own, as `telar workspace create` does:
@@ -851,6 +890,21 @@ std::uint64_t RuntimeSession::createWorkspace() {
   }
 
   return impl_->enqueue({.kind = CommandKind::create_workspace});
+}
+
+void RuntimeSession::holdTabs(std::set<std::pair<RuntimeWorkspace, std::uint64_t>> tabs) {
+  TELAR_TRACE("catalog.hold_tabs");
+  if (tabs == impl_->holding) {
+    return;
+  }
+
+  {
+    std::lock_guard lock(impl_->mutex);
+    impl_->pending_hold = Command{.kind = CommandKind::hold, .holds = tabs};
+  }
+
+  impl_->holding = std::move(tabs);
+  impl_->wake();
 }
 
 void RuntimeSession::showWorkspaces(std::vector<RuntimeWorkspace> visible,

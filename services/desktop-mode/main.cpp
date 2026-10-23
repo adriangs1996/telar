@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <random>
+#include <optional>
 #include <string>
 #include <unistd.h>
 
@@ -19,7 +20,7 @@ import app;
 import app_context;
 import runtime_receiver_worker;
 
-static int runDesktop(int argc, const char **argv) {
+static int runDesktop(int argc, const char **argv, ApplicationWakeup &wakeup) {
   if (argc > 2) {
     std::fprintf(stderr, "Usage: %s [SOCKET_PATH]\n", argv[0]);
     return 1;
@@ -31,7 +32,6 @@ static int runDesktop(int argc, const char **argv) {
   qCInfo(telar_log::session) << "Desktop session starting; pid" << ::getpid() << "runtime socket"
                              << socket.c_str();
   lua::Vm lua_vm;
-  ApplicationWakeup wakeup;
   EventQueue input_queue{wakeup};
 
   auto client = telar::Client::init(socket.c_str());
@@ -79,11 +79,14 @@ static int runDesktop(int argc, const char **argv) {
 }
 
 int main(int argc, const char **argv) {
-  session_log::open();
+  // Signal handling must precede even the trace writer thread, and outlive it.
+  std::optional<ApplicationWakeup> wakeup;
   int result = EXIT_FAILURE;
 
   try {
-    result = runDesktop(argc, argv);
+    wakeup.emplace();
+    session_log::open();
+    result = runDesktop(argc, argv, *wakeup);
   } catch (const std::exception &error) {
     // Critical messages also reach the console, in release builds too.
     qCCritical(telar_log::session) << "Telar Desktop:" << error.what();

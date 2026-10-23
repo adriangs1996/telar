@@ -28,6 +28,7 @@ const pane_viewport = @import("pane_viewport.zig");
 const suggest_command = @import("suggest_command.zig");
 const tab_creation = @import("tab_creation.zig");
 const tab_move = @import("tab_move.zig");
+const tab_hold = @import("tab_hold.zig");
 const tab_removal = @import("tab_removal.zig");
 const tab_rename = @import("tab_rename.zig");
 const tab_snapshot_reconciliation = @import("tab_snapshot_reconciliation.zig");
@@ -79,6 +80,7 @@ pub fn receive(model: *RuntimeModel, session: *Session, message: core.ClientMess
         .create_tab => |request| tab_creation.create(model, session, request),
         .rename_tab => |request| tab_rename.rename(model, session, request),
         .close_tab => |request| tab_removal.remove(model, session, request),
+        .hold_tab => |request| tab_hold.hold(model, session, request),
         .move_tab => |request| tab_move.move(model, session, request),
         .request_workspace_snapshot => |request| workspace_reconciliation.snapshot(model, session, request),
         .create_workspace => |request| workspace_creation.create(model, session, request),

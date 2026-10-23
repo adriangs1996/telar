@@ -53,6 +53,9 @@ void Shortcuts::compile(const std::map<const void *, Group> &groups) {
   const auto entries = engineBindings(bindings);
   router_.configure(prefix.empty() ? "ctrl+b" : prefix, std::span(entries).first(bindings.size()));
   ++epoch_;
+  if (capture_) {
+    capture_({router_, epoch_});
+  }
   qCInfo(telar_log::shortcuts) << "keymap compiled:" << bindings.size() << "bindings under"
                                << (prefix.empty() ? "ctrl+b" : prefix.c_str());
 }
@@ -110,9 +113,8 @@ bool Shortcuts::route(const keybindings::KeyEvent &key) {
   TELAR_TRACE("shortcuts.route");
   const auto decision = router_.route(key);
 
-  if (decision.action && sink_ && !sink_({decision.action, epoch_})) {
-    qCWarning(telar_log::shortcuts)
-        << "shortcut" << decision.action << "dropped: application event queue is full";
+  if (decision.action) {
+    submit({decision.action, epoch_});
   }
 
   return decision.consumed;
@@ -145,6 +147,9 @@ void Shortcuts::cancel() {
   TELAR_TRACE("shortcuts.cancel");
   ++epoch_;
   router_.cancel();
+  if (capture_) {
+    capture_({router_, epoch_});
+  }
 }
 
 bool Shortcuts::pending() const {
@@ -159,4 +164,18 @@ bool Shortcuts::empty() const {
   }
 
   return true;
+}
+
+void Shortcuts::setCapture(std::function<void(Capture)> capture) {
+  capture_ = std::move(capture);
+  if (capture_) {
+    capture_({router_, epoch_});
+  }
+}
+
+void Shortcuts::submit(Request request) {
+  if (sink_ && !sink_(request)) {
+    qCWarning(telar_log::shortcuts)
+        << "shortcut" << request.id << "dropped: application event queue is full";
+  }
 }

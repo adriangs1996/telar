@@ -13,6 +13,7 @@
 // reaches, to try clicks and Mission Control by hand. --keep-mouse leaves mouse events enabled on
 // alpha's outgoing windows, to find out whether a transparent window takes clicks at all.
 
+#include "support/samples.hpp"
 #include "support/window_hide_probe.hpp"
 #include "ui/workbench/keyboard_router.hpp"
 #include <QCommandLineParser>
@@ -69,31 +70,6 @@ Rectangle {
     }
 }
 )qml";
-
-  double percentile(const std::vector<double> &sorted, int percent) {
-    const auto index = std::min(sorted.size() - 1, sorted.size() * percent / 100);
-    return sorted[index];
-  }
-
-  void report(const char *label, std::vector<double> values) {
-    if (values.empty()) {
-      std::printf("  %-8s no samples\n", label);
-      return;
-    }
-
-    std::sort(values.begin(), values.end());
-    double total = 0;
-    for (const auto value : values) {
-      total += value;
-    }
-
-    std::printf("  %-8s p50 %7.3f ms  p95 %7.3f ms  max %7.3f ms  total %8.1f ms\n",
-                label,
-                percentile(values, 50),
-                percentile(values, 95),
-                values.back(),
-                total);
-  }
 
   struct Pane {
     std::unique_ptr<QQuickWindow> window;
@@ -281,13 +257,13 @@ Rectangle {
     // Runs once the switches are over, with the last tab presented.
     void check() {
       std::printf("%d tab switches of %zu windows\n", switches_, tabs_[current_].size());
-      report("present", presents_);
-      report("retire", retires_);
-      report("window", windows_);
+      samples::report("present", presents_);
+      samples::report("retire", retires_);
+      samples::report("window", windows_);
       if (strategy_ == Strategy::alpha) {
-        report("opacity", opacity_steps_);
-        report("mouse", mouse_steps_);
-        report("content", content_steps_);
+        samples::report("opacity", opacity_steps_);
+        samples::report("mouse", mouse_steps_);
+        samples::report("content", content_steps_);
       }
 
       int misses = 0;

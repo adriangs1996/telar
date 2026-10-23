@@ -30,6 +30,7 @@ const RequestWorkspaceSnapshot = @import("RequestWorkspaceSnapshot.zig");
 const CreateTabView = @import("CreateTabView.zig");
 const RenameTab = @import("RenameTab.zig");
 const CloseTab = @import("CloseTab.zig");
+const HoldTab = @import("HoldTab.zig");
 const MoveTab = @import("MoveTab.zig");
 const RequestGraphicsSnapshot = @import("RequestGraphicsSnapshot.zig");
 const GraphicsCredit = @import("GraphicsCredit.zig");
@@ -159,6 +160,7 @@ pub const ClientMessage = union(enum) {
     create_tab: CreateTabView,
     rename_tab: RenameTab,
     close_tab: CloseTab,
+    hold_tab: HoldTab,
     move_tab: MoveTab,
     request_graphics_snapshot: RequestGraphicsSnapshot,
     graphics_credit: GraphicsCredit,
@@ -280,6 +282,7 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
 
         .rename_tab => .{ .rename_tab = try tab.decodeRenameTab(&decoder) },
         .close_tab => .{ .close_tab = try GenericDerived(CloseTab).decode(&decoder) },
+        .hold_tab => .{ .hold_tab = try GenericDerived(HoldTab).decode(&decoder) },
         .move_tab => .{ .move_tab = try GenericDerived(MoveTab).decode(&decoder) },
         .request_graphics_snapshot => .{
             .request_graphics_snapshot = try GenericDerived(RequestGraphicsSnapshot).decode(&decoder),

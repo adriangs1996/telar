@@ -107,7 +107,10 @@ namespace workbench {
       QString title;
       std::unique_ptr<LuaSurface> surface;
       std::unique_ptr<TerminalItem> terminal;
-      std::unique_ptr<native::ExternalWindow> external;
+      // Another application's window, by its window server number.
+      std::uint32_t external = 0;
+      // The external window waits off screen while its tab is not shown.
+      bool parked = false;
       QVariantMap configuration;
       QRectF requested, actual, applied;
       std::uint64_t placed_space = 0;
@@ -164,6 +167,14 @@ namespace workbench {
     std::set<QString> incoming, retiring;
     std::uint64_t runtime_subscription = 0, desktop_subscription = 0;
     std::map<std::uint64_t, Workspace> workspaces;
+    // Other applications' windows, as the observer last delivered them.
+    native::ForeignWindows foreign;
+    // Windows adopted on request although a rule ignores their application.
+    std::set<std::uint32_t> adopted;
+    // The focused external window the workbench last brought its tab forward for.
+    std::uint32_t followed_focus = 0;
+    // Declared after the workspaces, so it stops before them.
+    std::unique_ptr<native::WindowObserver> windows;
     std::map<std::uint64_t, std::function<void()>> subscribers;
     std::uint64_t next_subscription = 1;
     std::uint64_t focused_space = 0;
@@ -237,6 +248,12 @@ namespace workbench {
       desktop.changed = [this] {
         schedule();
       };
+
+      windows =
+          std::make_unique<native::WindowObserver>(owner, [this](native::ForeignWindows next) {
+            foreign = std::move(next);
+            schedule();
+          });
 
       monitor_timer.start();
       schedule();
@@ -466,6 +483,13 @@ namespace workbench {
       std::erase_if(workspace.tabs, [&](const auto &entry) {
         if (!snapshots.contains(entry.first) && workspace.runtime->ready()) {
           persisted.remove(tabKey(workspace_id, entry.first));
+          // Its external windows, parked if the tab was hidden, join the tab shown instead.
+          if (std::ranges::any_of(entry.second.views, [](const auto &view) {
+                return view.second->external != 0;
+              })) {
+            schedule();
+          }
+
           return true;
         }
 
@@ -561,17 +585,135 @@ namespace workbench {
       }
 
       if (view.surface) {
-        view.surface->window().setOpacity(0);
+        native::setVisible(view.surface->window(), false);
         auto state = view.surface->nativeState();
         state.insert("visible", false);
         view.surface->setNativeState(state);
       }
 
-      if (view.external) {
-        view.external->show(false);
+      if (view.external && !view.parked) {
+        if (const auto *window = foreignWindow(view.external)) {
+          windows->hide(view.external, window->frame);
+          view.parked = true;
+        }
       }
 
       view.visible = false;
+    }
+
+    const native::ForeignWindow *foreignWindow(std::uint32_t id) const {
+      const auto found = std::ranges::find(foreign.windows, id, &native::ForeignWindow::id);
+      return found == foreign.windows.end() ? nullptr : &*found;
+    }
+
+    // tile, float or ignore, from the workbench's `windows` option, keyed by application. Without
+    // a rule a window tiles, unless it is a dialog or cannot be resized.
+    QString ruleFor(const native::ForeignWindow &window) const {
+      const auto rule = options.value("windows").toMap().value(window.application).toString();
+      if (adopted.contains(window.id) || (rule != "float" && rule != "ignore" && rule != "tile")) {
+        return window.floating ? "float" : "tile";
+      }
+
+      return rule;
+    }
+
+    // Every managed window belongs to one tab. A window seen for the first time joins the tab
+    // shown on its workspace's Space; one that is gone, or now on another Space, leaves its tab
+    // and joins the one shown there. Activating a window whose tab is not shown, with Cmd+Tab or
+    // the Dock, shows its tab.
+    void adoptWindows() {
+      TELAR_TRACE("workbench.adopt_windows");
+      std::map<std::uint32_t, std::pair<Workspace *, std::uint64_t>> homes;
+      for (auto &[workspace_id, workspace] : workspaces) {
+        for (auto &[tab_id, tab] : workspace.tabs) {
+          for (auto it = tab.views.begin(); it != tab.views.end();) {
+            const auto id = it->second->external;
+            const auto *window = id ? foreignWindow(id) : nullptr;
+            if (id && (!window || window->space != workspace.space)) {
+              tab.layout.remove(it->first);
+              it = tab.views.erase(it);
+              focus_pending = true;
+              continue;
+            }
+
+            if (id) {
+              homes[id] = {&workspace, tab_id};
+            }
+
+            ++it;
+          }
+        }
+      }
+
+      for (const auto &window : foreign.windows) {
+        const auto rule = ruleFor(window);
+        const auto home = std::ranges::find_if(workspaces, [&](const auto &entry) {
+          return entry.second.space && entry.second.space == window.space;
+        });
+
+        if (homes.contains(window.id) || rule == "ignore" || home == workspaces.end()) {
+          continue;
+        }
+
+        auto &workspace = home->second;
+        const auto tab = workspace.tabs.find(workspace.runtime->activeTab());
+        if (tab == workspace.tabs.end() || tab->second.views.size() >= Layout::capacity) {
+          continue;
+        }
+
+        const auto id = "window:" + QString::number(window.id);
+        Element element{id, ContentKind::external, window.title};
+        if (rule == "float" && workspace.area.isValid()) {
+          element.floating = true;
+          element.floating_frame = relative(window.frame, workspace.area);
+        }
+
+        if (!tab->second.layout.insert(element, tab->second.next_axis)) {
+          continue;
+        }
+
+        auto view = std::make_unique<View>();
+        view->external = window.id;
+        view->title = window.title;
+        view->actual = window.frame;
+        tab->second.views.emplace(id, std::move(view));
+        homes[window.id] = {&workspace, tab->first};
+        qCInfo(telar_log::workbench) << "adopted" << id << window.application << "into tab"
+                                     << tab->first << (element.floating ? "floating" : "tiled");
+      }
+
+      if (foreign.focused == followed_focus) {
+        return;
+      }
+
+      const auto home = homes.find(foreign.focused);
+      if (home == homes.end()) {
+        followed_focus = foreign.focused;
+        return;
+      }
+      if (!home->second.first->visible) {
+        return;
+      }
+
+      followed_focus = foreign.focused;
+      if (home->second.first->runtime->activeTab() == home->second.second) {
+        requestFocus("window:" + QString::number(foreign.focused));
+        return;
+      }
+
+      try {
+        services.runtime.selectTab(home->second.second);
+      } catch (const std::exception &failure) {
+        qCWarning(telar_log::workbench)
+            << "cannot show the focused window's tab:" << failure.what();
+      }
+    }
+
+    static QRectF relative(const QRectF &frame, const QRectF &area) {
+      return {(frame.x() - area.x()) / area.width(),
+              (frame.y() - area.y()) / area.height(),
+              frame.width() / area.width(),
+              frame.height() / area.height()};
     }
 
     // Puts a pane window where the layout places it, on its workspace's Space, and tells its
@@ -585,8 +727,8 @@ namespace workbench {
       const QRect geometry(QPoint(qRound(placement.frame.left()), qRound(placement.frame.top())),
                            QSize(qRound(placement.frame.right()) - qRound(placement.frame.left()),
                                  qRound(placement.frame.bottom()) - qRound(placement.frame.top())));
-      if (window.geometry() != geometry) {
-        window.setGeometry(geometry);
+      if (native::frame(window) != geometry) {
+        native::setFrame(window, geometry);
       }
 
       if (view.placed_space != workspace.space) {
@@ -641,26 +783,26 @@ namespace workbench {
           view.requested = placement.frame;
           try {
             if (view.external) {
-              if (!view.external->alive()) {
-                tab.layout.remove(placement.id);
-                tab.views.erase(found);
+              const auto *window = foreignWindow(view.external);
+              if (!window) {
                 continue;
               }
 
-              view.external->show(true);
-              if (view.placed_space != workspace.space) {
-                view.external->setSpace(workspace.space);
-                view.placed_space = workspace.space;
+              // A floating window the user moved stays where they left it.
+              const auto *element = tab.layout.element(placement.id);
+              if (element->floating && !view.parked && view.visible &&
+                  window->frame != view.applied && workspace.area.isValid()) {
+                tab.layout.setFloatingFrame(placement.id, relative(window->frame, workspace.area));
+                view.applied = window->frame;
+              } else if (view.parked || !view.visible || view.applied != placement.frame) {
+                windows->place(view.external, placement.frame);
+                view.applied = placement.frame;
+                view.parked = false;
               }
 
-              if (view.applied != placement.frame || !view.visible) {
-                view.actual = view.external->place(placement.frame);
-                view.applied = placement.frame;
-              } else if (view.external->geometryChanged()) {
-                view.actual = view.external->frame();
-              }
+              view.actual = window->frame;
               if (!focus_pending && workspace.space == services.desktop.state().focused_space &&
-                  view.external->focused() && tab.layout.focused() != placement.id) {
+                  foreign.focused == view.external && tab.layout.focused() != placement.id) {
                 tab.layout.focus(placement.id);
               }
             } else {
@@ -684,7 +826,7 @@ namespace workbench {
               if (!view.visible) {
                 qCDebug(telar_log::workbench)
                     << "show" << placement.id << "at" << placement.frame << "in tab" << tab_id;
-                window.setOpacity(1);
+                native::setVisible(window, true);
               }
 
               {
@@ -707,11 +849,11 @@ namespace workbench {
               }
 
               if (view.shown_order != placement.order) {
-                window.raise();
+                native::raise(window);
                 view.shown_order = placement.order;
               }
 
-              view.actual = window.geometry();
+              view.actual = native::frame(window);
             }
 
             view.visible = true;
@@ -802,7 +944,7 @@ namespace workbench {
               }
 
               auto &window = view->surface->window();
-              window.setOpacity(0);
+              native::setVisible(window, false);
               window.show();
               return true;
             }
@@ -908,6 +1050,8 @@ namespace workbench {
           }
         }
 
+        adoptWindows();
+
         // Incoming workspaces go first, so their windows are up before the outgoing ones hide.
         for (const bool visible : {true, false}) {
           for (auto &[id, workspace] : workspaces) {
@@ -957,6 +1101,20 @@ namespace workbench {
           });
         }
 
+        // A tab showing other applications' windows outlives its last terminal.
+        std::set<std::pair<RuntimeWorkspace, std::uint64_t>> holds;
+        for (const auto &[workspace_id, workspace] : workspaces) {
+          for (const auto &[tab_id, tab] : workspace.tabs) {
+            if (std::ranges::any_of(tab.views, [](const auto &view) {
+                  return view.second->external != 0;
+                })) {
+              holds.insert({RuntimeWorkspace{workspace_id}, tab_id});
+            }
+          }
+        }
+
+        services.runtime.holdTabs(std::move(holds));
+
         if (focus_pending && focusCurrent()) {
           focus_pending = false;
           focus_workspace = 0;
@@ -1001,11 +1159,13 @@ namespace workbench {
 
       auto &view = *target->second;
       if (view.external) {
-        view.external->focus();
+        if (foreign.focused != view.external) {
+          windows->focus(view.external);
+        }
       } else {
         // Raising asks the window server to restack; only a floating pane can be covered.
         if (tab.layout.element(target->first)->floating) {
-          view.surface->window().raise();
+          native::raise(view.surface->window());
         }
 
         keyboard.route(view.surface->window());
@@ -1088,7 +1248,15 @@ namespace workbench {
       TELAR_TRACE("workbench.command");
       qCInfo(telar_log::workbench) << "command" << action << args;
       if (action == "windows") {
-        return native::windows();
+        QVariantList list;
+        for (const auto &window : foreign.windows) {
+          list.append(QVariantMap{{"id", QString::number(window.id)},
+                                  {"application", window.application},
+                                  {"title", window.title},
+                                  {"floating", window.floating}});
+        }
+
+        return list;
       }
 
       auto *workspace = focusedWorkspace();
@@ -1213,8 +1381,11 @@ namespace workbench {
           return false;
         }
 
+        // The window leaves its tab once its application has closed it.
         if (view->second->pane) {
           workspace->runtime->close(view->second->pane);
+        } else if (view->second->external) {
+          windows->close(view->second->external);
         } else {
           tab.closing.insert(id);
         }
@@ -1234,33 +1405,17 @@ namespace workbench {
         focus_pending = true;
         result = view_id;
       } else if (action == "adopt") {
+        // A rule may ignore the window's application; adopting it overrides that, and it joins
+        // the tab shown on its Space.
         const auto window_id = identifier(args.value("window"));
-        if (window_id > std::numeric_limits<std::uint32_t>::max()) {
-          throw std::runtime_error("Invalid native window ID");
+        if (window_id > std::numeric_limits<std::uint32_t>::max() ||
+            !foreignWindow(static_cast<std::uint32_t>(window_id))) {
+          throw std::runtime_error("No managed application has that window");
         }
 
-        const auto element_id = "window:" + QString::number(window_id);
-        for (const auto &[wid, existing] : workspaces) {
-          for (const auto &[tid, candidate] : existing.tabs) {
-            if (candidate.views.contains(element_id)) {
-              throw std::runtime_error("Window already belongs to a tab");
-            }
-          }
-        }
-
-        if (tab.views.size() >= Layout::capacity) {
-          throw std::runtime_error("Tab element limit reached");
-        }
-
-        auto view = std::make_unique<View>();
-        view->external =
-            std::make_unique<native::ExternalWindow>(static_cast<std::uint32_t>(window_id));
-        view->external->setSpace(workspace->space);
-        view->placed_space = workspace->space;
-        view->actual = view->external->frame();
-        tab.layout.insert(Element{element_id, ContentKind::external, view->external->title()});
-        tab.views.emplace(element_id, std::move(view));
-        result = element_id;
+        adopted.insert(static_cast<std::uint32_t>(window_id));
+        schedule();
+        result = "window:" + QString::number(window_id);
       } else if (action == "move") {
         const auto destination = identifier(args.value("tab"));
         if (!workspace->tabs.contains(destination)) {

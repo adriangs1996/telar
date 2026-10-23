@@ -14,6 +14,7 @@ const LaunchTab = @import("LaunchTab.zig");
 const LaunchTabView = @import("LaunchTabView.zig");
 const RenameTab = @import("RenameTab.zig");
 const CloseTab = @import("CloseTab.zig");
+const HoldTab = @import("HoldTab.zig");
 const MoveTab = @import("MoveTab.zig");
 const TabSnapshot = @import("TabSnapshot.zig");
 const types = @import("../types.zig");
@@ -116,6 +117,10 @@ pub fn decodeRenameTab(decoder: *Decoder) !RenameTab {
 
 pub fn encodeCloseTab(buffer: []u8, message: CloseTab) ![]const u8 {
     return codec.encodeDerived(@intFromEnum(tags.ClientTag.close_tab), buffer, message);
+}
+
+pub fn encodeHoldTab(buffer: []u8, message: HoldTab) ![]const u8 {
+    return codec.encodeDerived(@intFromEnum(tags.ClientTag.hold_tab), buffer, message);
 }
 
 pub fn encodeMoveTab(buffer: []u8, message: MoveTab) ![]const u8 {

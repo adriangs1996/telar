@@ -17,6 +17,10 @@ On Linux, install CMake, Ninja,
 Clang with `clang-scan-deps`, libstdc++ development headers, pkg-config,
 LuaJIT 2.1 development headers and libraries, and the Qt QML, Qt Quick and
 Qt Quick Controls, Qt Quick Shapes, Qt Network and Qt Concurrent development packages.
+The Linux native backend additionally requires wlroots 0.20, libwayland,
+xkbcommon, Qt Wayland and XWayland. See
+[`native-backends/linux/README.md`](native-backends/linux/README.md) for building
+and starting Telar as its own Wayland session.
 
 CMake finds LuaJIT 2.1 or newer through pkg-config and links it privately to
 `desktop-core` and `desktop-ui`. Set `PKG_CONFIG_PATH` if LuaJIT is installed
@@ -55,7 +59,7 @@ terminal renderer. Cocoa window placement and Accessibility operations live in
 `native-backends/macos/workbench.mm`.
 
 Each runtime tab has an independent split tree and focus. Its elements can be
-terminal panes, Lua views or explicitly adopted external windows. Each terminal
+terminal panes, Lua views or other applications' windows. Each terminal
 and Lua view has its own window. A visible workspace uses one asynchronous runtime
 connection shared by its terminal panes. Switching tabs detaches hidden terminals;
 a tab switch attaches the incoming terminals before detaching the outgoing ones,
@@ -91,7 +95,7 @@ the focused pane as its focus window: Qt Quick focus, the input method and Lua's
 events to the pane. Moving the keyboard between panes skips the input method
 commit Qt Quick makes on focus changes, because it would switch the native input
 context; a composition in progress is committed in its pane first. Pressing a
-pane, or Lua focusing one of its items, focuses it. Adopted external windows belong to other applications and are still activated.
+pane, or Lua focusing one of its items, focuses it. Other applications' windows are still activated, as they belong to their applications.
 A hidden workspace keeps its windows on its own
 Space, which macOS already keeps out of sight; returning shows their last frame. A
 terminal shows "Connecting to runtime…" only after 750 ms in view without a live
@@ -105,11 +109,11 @@ The default prefix remains `ctrl+b`. The default `shortcuts` module binds:
 | Arrow keys / `o` | Directional focus / next element |
 | `alt+arrow` | Move the nearest split boundary |
 | `z` / `f` | Toggle maximization / floating |
-| `x` | Close the terminal, remove the Lua view, or release an external window |
+| `x` | Close the terminal, remove the Lua view, or close an external window |
 
 Floating panes can be moved by dragging their header and resized from the bottom
-right corner. Closing an external element releases its adoption; it does not quit
-the external application. Existing tab and workspace shortcuts remain available.
+right corner. Closing an external element presses its window's close button, as
+clicking it would; the application decides what that means. Existing tab and workspace shortcuts remain available.
 
 Configure pane decoration and geometry independently of the GUI configuration:
 
@@ -159,8 +163,8 @@ Commands execute from callbacks after the UI has activated. IDs are strings.
 | `command("frame", { frame = { x = 0.1, y = 0.1, width = 0.6, height = 0.6 } })` | Set a floating frame relative to the work area |
 | `command("constraints", { minimum = { width = 160, height = 90 }, aspect = 0 })` | Set minimum/maximum dimensions and optional aspect ratio |
 | `command("view", { module = "my_view", options = {} })` | Create a Lua surface in the current tab; returns its element ID |
-| `command("windows")` | Enumerate external windows available for explicit adoption |
-| `command("adopt", { window = "1234" })` | Adopt an external window into the current tab |
+| `command("windows")` | List the other applications' windows the desktop watches, with `id`, `application`, `title` and `floating` |
+| `command("adopt", { window = "1234" })` | Manage a window whose application a rule ignores; it joins the tab shown on its Space |
 | `command("move", { id = "view:...", tab = "2" })` | Move a Lua view or external element to another tab |
 | `command("close", { id = "pane:123" })` | Close/release one element |
 
@@ -180,23 +184,62 @@ delta base requests a snapshot; a disconnected connection disables input and
 reconnects without replaying process-creation or closure commands.
 
 Layouts, focus and Lua view modules are saved atomically per runtime socket in
-the desktop state directory. External application windows are retained by their
-Accessibility identity during the desktop session and must be adopted again after
-restarting desktop. Tab switching minimizes them individually. Releasing an
-adoption restores windows hidden by the workbench. The backend exposes refused
-geometry changes through `requested`, `actual` and `error` instead of assuming
-the requested rectangle was applied.
+the desktop state directory. The backend exposes refused geometry changes through
+`requested`, `actual` and `error` instead of assuming the requested rectangle was
+applied.
 
-Two operations require a runtime protocol extension and are deliberately not
-emulated by client-only state: moving a terminal to another tab, and retaining a
-tab/workspace containing only Lua views or external windows after its final terminal
-exits. The runtime currently removes such a tab. External-window management is
-implemented for macOS; a Linux window-manager integration is still required.
+Moving a terminal to another tab requires a runtime protocol extension and is
+deliberately not emulated by client-only state. A tab that shows other
+applications' windows outlives its final terminal: see below.
+
+### Other applications' windows
+
+The desktop manages every application with a Dock icon. A window that appears on a
+workspace's Space joins the tab shown there, tiled, or floating when it is a dialog
+or cannot be resized; minimizing it, hiding its application or closing it takes it
+out of its tab, and one that moves to another workspace's Space joins the tab shown
+there. The workbench's `windows` option sets a rule per application, by bundle
+identifier, or by name for an application without one: `tile`, `float` or `ignore`.
+
+```lua
+desktop.configure_surface("workbench", {
+  module = "workbench",
+  options = {
+    windows = {
+      ["com.apple.systempreferences"] = "float",
+      ["com.1password.1password"] = "ignore",
+    },
+  },
+})
+```
+
+A tab that is not shown parks its windows past a bottom corner of their display,
+leaving a one point sliver: macOS pulls a window that is wholly off every display
+back into view, and no window may sit above the top edge. Of the two bottom
+corners, the one with less of another display beyond it is used, so a parked
+window does not show on a neighbouring display. Activating a parked window, with
+Cmd+Tab or the Dock, shows its tab. A tab holding other applications' windows is
+held in the runtime (`hold_tab`), so it survives its last terminal while the
+desktop runs; the runtime lets go when the desktop disconnects.
+
+`native-backends/macos/window_observer.mm` watches the windows on a thread of its
+own. Reads come from the window server, which answers even for an application
+that hangs: the window list, `SLSCopySpacesForWindows` for each window's Space.
+Accessibility notifications only say when to read again, and Accessibility tells
+what the window server does not: titles, subroles and whether a window can be
+resized. Writes go through Accessibility on a serial queue per application, each
+call bounded by 50 ms, so an application that hangs delays only its own windows,
+and a window's queued write is replaced by a newer one. The debug programs
+`external_window_dbg`, `window_observer_dbg` and `space_switch_dbg` hold the
+measurements behind these choices. On Linux, Telar's own wlroots compositor
+observes and places Wayland and XWayland windows directly. Hidden tabs disable
+their scene nodes rather than moving them offscreen.
 
 For manual review, run `just desktop`. Split a
 terminal, send output to both panes, change focus, resize, switch tabs and return.
 Then change the workbench Lua module and check that the shell processes and layout
-remain. External-window adoption additionally requires Accessibility permission.
+remain. Managing other applications' windows additionally requires Accessibility
+permission.
 
 ### Build and run
 
@@ -371,6 +414,49 @@ without mouse events and with invisible content. It reports both halves of each
 switch, the frames the outgoing windows draw in one second, where a mouse down at
 each pane's centre lands and the memory footprint. `--hold` keeps the windows up,
 to inspect them in Mission Control.
+
+```sh
+just desktop-debug external_window_dbg --switches 20 --hang 3 --timeout 0.05
+just desktop-debug external_window_dbg --strategy offscreen --app Safari
+```
+
+`debug/external_window_dbg.cpp` measures hiding another application's windows on
+a tab switch. A helper process, the same program with `--serve`, owns two tabs of
+windows sharing the same rectangles; `--app` uses a running application's
+windows instead. `minimize` minimizes them through Accessibility, `offscreen`
+moves them to their display's bottom right corner leaving `--sliver` points on
+screen, and `space` moves them to a parking Space through SkyLight, created for the
+run when the display has no spare one and removed afterwards. It reports how long
+the calls block the calling thread, when the window server shows the incoming
+windows and drops the outgoing ones, refused calls and what stays visible of a
+hidden window. `--hang` freezes the helper's main thread and times one hide and
+one show per strategy; `--timeout` sets the Accessibility messaging timeout.
+It needs Accessibility permission for the terminal that runs it.
+
+```sh
+just desktop-debug space_switch_dbg --switches 20
+```
+
+`debug/space_switch_dbg.cpp` measures how long a Space switch through the
+desktop's SkyLight bridge takes to show. It creates a temporary Space on the
+focused display, puts one of its own windows on that Space and another on the
+current one, and switches between them, reporting when the destination's window
+appears, when the origin's disappears and how long both are on screen together.
+On macOS 26.6 both land in one or two frames, with no overlap: the bridge switch
+has no slide animation. The temporary Space is removed afterwards.
+
+```sh
+just desktop-debug window_observer_dbg --rounds 10 --hang 2
+```
+
+`debug/window_observer_dbg.cpp` measures watching other applications' windows
+from a thread with its own run loop, as the desktop's window observer does. It
+times attaching Accessibility observers to every running application, then
+drives a helper application, the same program with `--serve`, that creates,
+moves, focuses and closes windows, and reports how long each notification takes
+to arrive, timed with the system's uptime clock in both processes. With the
+helper frozen it times attaching to it again and compares reading a frame from
+the window server (`SLSGetWindowBounds`) with reading it through Accessibility.
 
 ## Session logs
 

@@ -388,9 +388,10 @@ fn paneIdLessThan(_: void, left: PaneRecord, right: PaneRecord) bool {
 /// Retires every restored tab that came back without a pane, through
 /// the same operation the final pane exit uses, so a workspace left
 /// without tabs goes with it. A tab exists for clients only together
-/// with a running pane: the tab snapshot query answers `tab_not_found`
-/// for an empty one, and a client that selects it treats that reply
-/// as fatal. Tabs stay empty when a pane record fails to relaunch,
+/// with a running pane, or while a client holds it (`tab_hold`), and
+/// no client holds one yet when the checkpoint is restored: the tab
+/// snapshot query answers `tab_not_found` for an empty one, and a client
+/// that selects it treats that reply as fatal. Tabs stay empty when a pane record fails to relaunch,
 /// for example because its working directory is gone.
 fn dropEmptyTabs(model: *RuntimeModel) void {
     while (findEmptyTab(&model.workspaces, &model.panes)) |location| {

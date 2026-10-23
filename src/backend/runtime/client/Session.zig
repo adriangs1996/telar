@@ -52,6 +52,10 @@ descent_pending: bool = false,
 /// check walked them.
 // SAFETY: agent_hooks copies the verified lineage before returning to the loop; readers use only hook_lineage_len entries.
 hook_lineage: [max_hook_lineage]u32 = undefined,
+/// The tabs this client holds; see `tab_hold`.
+// SAFETY: tab_hold writes each location before increasing held_tab_count; readers use only that prefix.
+held_tabs: [core.max_tabs_per_workspace]core.TabLocation = undefined,
+held_tab_count: u8 = 0,
 hook_lineage_len: u8 = 0,
 /// A hook report held while the pane's process is identified again. The
 /// connection reads nothing more until it is answered, so the report's

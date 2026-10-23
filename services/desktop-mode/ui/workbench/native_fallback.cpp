@@ -1,9 +1,8 @@
 #include "native.hpp"
-#ifndef Q_OS_MACOS
+#if !defined(Q_OS_MACOS) && !defined(Q_OS_LINUX)
 #include <QGuiApplication>
 #include <QScreen>
 #include <QWindow>
-#include <stdexcept>
 
 namespace workbench::native {
   Display display(std::uint32_t) {
@@ -16,50 +15,40 @@ namespace workbench::native {
 
   void place(QWindow &, std::uint64_t) {}
 
+  QRect frame(QWindow &window) {
+    return window.geometry();
+  }
+
+  void setFrame(QWindow &window, QRect frame) {
+    window.setGeometry(frame);
+  }
+
+  void raise(QWindow &window) {
+    window.raise();
+  }
+
+  void setVisible(QWindow &window, bool visible) {
+    window.setOpacity(visible ? 1 : 0);
+  }
+
   void prepareInputWindow(QWindow &) {}
 
   void commitComposition(QWindow &) {}
 
-  QVariantList windows() {
-    return {};
-  }
+  struct WindowObserver::Impl {};
 
-  struct ExternalWindow::Impl {};
+  WindowObserver::WindowObserver(QObject &, Delivery) {}
 
-  ExternalWindow::ExternalWindow(std::uint32_t) {
-    throw std::runtime_error("External windows require a native desktop backend");
-  }
+  WindowObserver::~WindowObserver() = default;
 
-  ExternalWindow::~ExternalWindow() = default;
+  void WindowObserver::place(std::uint32_t, QRectF) {}
 
-  bool ExternalWindow::alive() const {
-    return false;
-  }
+  void WindowObserver::move(std::uint32_t, QPointF) {}
 
-  QRectF ExternalWindow::frame() const {
-    return {};
-  }
+  void WindowObserver::hide(std::uint32_t, QRectF) {}
 
-  QRectF ExternalWindow::place(const QRectF &) {
-    return {};
-  }
+  void WindowObserver::focus(std::uint32_t) {}
 
-  void ExternalWindow::show(bool) {}
-
-  void ExternalWindow::focus() {}
-
-  QString ExternalWindow::title() const {
-    return {};
-  }
-
-  void ExternalWindow::setSpace(std::uint64_t) {}
-
-  bool ExternalWindow::geometryChanged() const {
-    return false;
-  }
-
-  bool ExternalWindow::focused() const {
-    return false;
-  }
+  void WindowObserver::close(std::uint32_t) {}
 } // namespace workbench::native
 #endif
