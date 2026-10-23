@@ -74,6 +74,16 @@ if(desktop_ui_scripts)
   )
 endif()
 
+# The faces the GUI embeds, so terminal panes render with the same font by default.
+set(desktop_font_directory "${CMAKE_CURRENT_SOURCE_DIR}/../../src/assets")
+qt_add_resources(telar-desktop desktop_fonts
+  PREFIX "/telar/fonts"
+  BASE "${desktop_font_directory}"
+  FILES
+    "${desktop_font_directory}/JetBrainsMono-Regular.ttf"
+    "${desktop_font_directory}/SymbolsNerdFontMono-Regular.ttf"
+)
+
 if(APPLE)
   set(CMAKE_OBJCXX_COMPILER "${CMAKE_CXX_COMPILER}")
   enable_language(OBJCXX)

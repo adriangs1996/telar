@@ -125,13 +125,12 @@ desktop.configure_surface("workbench", {
     gap = 8,
     padding = 8,
     header_height = 28,
-    font_size = 14,
   },
 })
 ```
 
-Pane and terminal colors, the terminal's ANSI palette and its font family come
-from the theme (see [Themes](#themes)). A pane whose agent is blocked or failed
+Pane and terminal colors, the terminal's ANSI palette and its font come from the
+theme (see [Themes](#themes)). A pane whose agent is blocked or failed
 takes that status's border color even when another pane has the focus.
 
 Geometry uses logical desktop coordinates, including negative monitor origins.
@@ -234,6 +233,13 @@ and a window's queued write is replaced by a newer one. The debug programs
 measurements behind these choices. On Linux, Telar's own wlroots compositor
 observes and places Wayland and XWayland windows directly. Hidden tabs disable
 their scene nodes rather than moving them offscreen.
+
+Another program that places windows on its own fights the desktop over them.
+`window_managers` in the desktop state names the ones running: AeroSpace, yabai,
+Amethyst and KiwiDesk, found by process name, and Stage Manager while it is on.
+The sidebar shows them as a warning and the session log records each. The list
+is refreshed at most every two seconds (`native-backends/macos/window_managers.mm`),
+since scanning the processes takes a few milliseconds.
 
 For manual review, run `just desktop`. Split a
 terminal, send output to both panes, change focus, resize, switch tabs and return.
@@ -623,7 +629,8 @@ desktop.theme({
   preset = "dark",
   colors = { accent = "#8FB8FF" },
   status = { blocked = { color = "#FFB454" } },
-  fonts = { ui = "Inter", mono = "JetBrains Mono" },
+  fonts = { ui = "Inter" },
+  terminal = { font = { family = "Iosevka", style = "Medium", size = 14, line_height = 1.15 } },
 })
 ```
 
@@ -643,13 +650,30 @@ the previous configuration stays in place.
 | `colors` | `ground`, `chrome`, `raised`, `hover`, `selected`, `border`, `border_strong`, `text`, `muted`, `label`, `accent`, `on_accent`, `error` |
 | `status.<status>` | `color`, `text`, `background`, `border`, for `working`, `blocked`, `failed`, `done`, `ready` and `unknown` |
 | `terminal` | `background`, `foreground`, `selection` and the 16 `ansi` colors, from `black` to `bright_white` |
-| `fonts` | `ui` and `mono` families; empty uses the system's |
+| `terminal.font` | `family`, `style`, `size` (`6..96`), `line_height` (`0.75..3`), `letter_spacing` (`-5..20`), with the meaning of the GUI's `gui.font` |
+| `fonts` | `ui` and `mono` families for the chrome; an empty `ui` uses the system's |
 | `radius` | `small`, `medium`, `large` |
 
 Every Lua environment reads the resolved theme with `require("telar.theme")`.
 `ui.text` uses `fonts.ui` unless the text sets `font.family`. The terminal renderer
-reads `terminal` and `fonts.mono`; the workbench's `font_size` option still sets the
-terminal's size.
+reads `terminal`.
+
+The desktop bundles the faces the GUI embeds: JetBrains Mono and the Nerd Font
+symbols, registered once at startup. An empty `terminal.font.family` uses JetBrains
+Mono. A grapheme the configured face lacks falls back to JetBrains Mono, then to
+the Nerd Font symbols, then to whatever system font Qt finds. A family that is not
+installed, or a `style` the family does not list (matched ignoring case), logs a
+warning in `telar.desktop.terminal` and uses the bundled face or the regular style;
+unlike the GUI, it does not reject the configuration, because the theme is resolved
+in Lua before any font is opened. Bold and italic come from the family's own faces,
+or are synthesized when it has none.
+
+Cell metrics follow the GUI: the size is rounded to physical pixels, the cell width
+is the face's advance plus `letter_spacing`, the height is the natural line height
+times `line_height`, both rounded to whole physical pixels, and extra height is
+split above and below the baseline. Moving a pane to a display with another scale
+measures again. Glyphs use the platform's rasterizer (CoreText on macOS) instead of
+Qt's distance fields. The GUI's `thicken` setting has no equivalent here.
 
 The wallpaper accepts optional `image` and `fit`; its background is the theme's
 `colors.ground`. The image can be a Qt
@@ -900,7 +924,7 @@ Fullscreen Spaces are excluded from this reconciliation.
 | API | Behavior |
 | --- | --- |
 | `desktop.configure_surface(name, settings)` | Configure `topbar` or `sidebar` with `module` and `options`. Available only while loading the global configuration. |
-| `desktop.state()` | Snapshot with `available`, `accessibility`, `displays`, `spaces`, optional `focused_space`, `pending_space`, and `error`. |
+| `desktop.state()` | Snapshot with `available`, `accessibility`, `window_managers`, `displays`, `spaces`, optional `focused_space`, `pending_space`, and `error`. |
 | `desktop.on_change(callback)` | Subscribe to changed desktop snapshots; returns an unsubscribe function and delivers the current state on mount. The callback gets the whole state and a second table telling what changed since the last delivery: `focus` (focused or visible Spaces), `spaces` (Spaces added, removed, moved or rebound), `displays`, `operation` (a pending activation or Space operation) and `status` (availability, Accessibility, error). The first delivery marks everything changed, and a state equal to the last is not delivered. |
 | `desktop.activate_space(id)` | Request activation of an existing Space. Completion is confirmed from macOS; failures appear in `error`. |
 | `desktop.bind_space(space_id, workspace_id)` | Associate an unbound managed Space with a workspace that has no Space or pending creation. A live association cannot be changed or cleared. |
