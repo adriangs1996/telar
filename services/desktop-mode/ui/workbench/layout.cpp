@@ -3,10 +3,15 @@
 #include <QJsonArray>
 #include <algorithm>
 #include <cmath>
+#include <optional>
+#include <tuple>
 
 namespace workbench {
   namespace {
     constexpr double minimum_share = 0.05;
+    // Frames are laid out at whole points with a gap between neighbours; half a point absorbs
+    // the rounding of their edges.
+    constexpr double edge_tolerance = 0.5;
 
     QRectF constrained(QRectF frame, const Constraints &limits) {
       frame.setWidth(std::min(frame.width(), limits.maximum.width()));
@@ -29,6 +34,43 @@ namespace workbench {
 
     bool forward(Direction direction) {
       return direction == Direction::right || direction == Direction::down;
+    }
+
+    // How far a candidate lies in a direction from the focused frame: the gap between their
+    // facing edges, then how far apart their centres are across the direction.
+    struct Reach {
+      double edge = 0;
+      double offset = 0;
+    };
+
+    // Nothing when the candidate does not start past the frame's edge in that direction.
+    std::optional<Reach> reach(const QRectF &from, const QRectF &to, Direction direction) {
+      double edge = 0;
+      switch (direction) {
+      case Direction::left:
+        edge = from.left() - to.right();
+        break;
+      case Direction::right:
+        edge = to.left() - from.right();
+        break;
+      case Direction::up:
+        edge = from.top() - to.bottom();
+        break;
+      case Direction::down:
+        edge = to.top() - from.bottom();
+        break;
+      }
+
+      if (edge < -edge_tolerance) {
+        return std::nullopt;
+      }
+
+      const auto across = horizontal(direction) ? to.center().y() - from.center().y()
+                                                : to.center().x() - from.center().x();
+      return Reach{
+          .edge = std::max(0.0, edge),
+          .offset = std::abs(across),
+      };
     }
   } // namespace
 
@@ -588,6 +630,9 @@ namespace workbench {
     return result;
   }
 
+  // Moves the focus to the tiled element past the focused one's edge in the direction: the
+  // nearest edge, then the best aligned, as the GUI's pane navigation does. Floating elements
+  // are never a destination; cycle reaches them.
   bool Layout::navigate(Direction direction, const QRectF &area, double gap) {
     TELAR_TRACE("layout.navigate");
     const auto placements = arrange(area, gap, 1);
@@ -596,35 +641,24 @@ namespace workbench {
     }
 
     const auto &focused_id = focused();
-    const auto current = std::find_if(placements.begin(), placements.end(), [&](const auto &p) {
-      return p.id == focused_id;
-    });
-
+    const auto current = std::ranges::find(placements, focused_id, &Placement::id);
     if (current == placements.end()) {
       return cycle(1);
     }
 
     QString candidate;
-    double best = std::numeric_limits<double>::max();
-
-    for (const auto &p : placements) {
-      if (p.id == focused_id || !elements_[find(p.id)].focusable) {
+    std::optional<Reach> best;
+    for (const auto &placement : placements) {
+      const auto &element = elements_[find(placement.id)];
+      if (placement.id == focused_id || element.floating || !element.focusable) {
         continue;
       }
 
-      const auto delta = p.frame.center() - current->frame.center();
-      const auto primary = horizontal(direction) ? delta.x() : delta.y();
-
-      if ((forward(direction) && primary <= 0) || (!forward(direction) && primary >= 0)) {
-        continue;
-      }
-
-      const auto secondary = horizontal(direction) ? delta.y() : delta.x();
-      const auto score = primary * primary + secondary * secondary;
-
-      if (score < best) {
-        best = score;
-        candidate = p.id;
+      const auto found = reach(current->frame, placement.frame, direction);
+      if (found && (!best || std::tie(found->edge, found->offset) <
+                                 std::tie(best->edge, best->offset))) {
+        best = found;
+        candidate = placement.id;
       }
     }
 
