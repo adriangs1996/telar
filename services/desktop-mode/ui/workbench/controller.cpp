@@ -1381,20 +1381,26 @@ namespace workbench {
       }
 
       if (!workspace || !workspace->visible) {
+        qCDebug(telar_log::workbench) << "focus waits: no visible workspace";
         return false;
       }
 
       const auto found = workspace->tabs.find(workspace->runtime->activeTab());
       if (found == workspace->tabs.end()) {
+        qCDebug(telar_log::workbench) << "focus waits: tab" << workspace->runtime->activeTab()
+                                      << "not loaded";
         return false;
       }
 
       auto &tab = found->second;
       const auto target = tab.views.find(tab.layout.focused());
       if (target == tab.views.end() || !target->second->visible) {
+        qCDebug(telar_log::workbench) << "focus waits:" << tab.layout.focused() << "of tab"
+                                      << tab.id << "not shown";
         return false;
       }
 
+      qCDebug(telar_log::workbench) << "focus" << target->first << "of tab" << tab.id;
       auto &view = *target->second;
       if (view.external) {
         if (foreign.focused != view.external) {

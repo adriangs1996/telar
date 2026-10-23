@@ -21,6 +21,12 @@ namespace workbench::native {
   void setFrame(QWindow &window, QRect frame);
   void place(QWindow &window, std::uint64_t space);
   void raise(QWindow &window);
+  // Makes the window this process's key window and brings the process to the front, even while
+  // another application is in front, as a click on the window would.
+  void activate(QWindow &window);
+  // Whether the window receives the keyboard now: this process is in front and it is the key
+  // window.
+  bool holdsKeyboard(QWindow &window);
   // Orders the window right above another one, whichever application owns it.
   void orderAbove(QWindow &window, std::uint32_t other);
   void setVisible(QWindow &window, bool visible);

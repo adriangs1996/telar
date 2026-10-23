@@ -40,6 +40,14 @@ namespace workbench::native {
     linux_desktop::place(window, space, TELAR_WINDOWS, true);
   }
 
+  void activate(QWindow &window) {
+    window.requestActivate();
+  }
+
+  bool holdsKeyboard(QWindow &window) {
+    return window.isActive();
+  }
+
   // The compositor has no ordering relative to another surface yet: on top of its layer.
   void orderAbove(QWindow &window, std::uint32_t) {
     raise(window);

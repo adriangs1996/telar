@@ -50,6 +50,17 @@ namespace workbench::native {
     macos::spaces::moveToLayer(windows, macos::spaces::VirtualSpaces::get().stage(space));
   }
 
+  void activate(QWindow &window) {
+    TELAR_TRACE("native.activate");
+    NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window.winId());
+    macos::spaces::bringForward(static_cast<std::uint32_t>(view.window.windowNumber));
+  }
+
+  bool holdsKeyboard(QWindow &window) {
+    NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window.winId());
+    return NSApp.isActive && view.window.isKeyWindow;
+  }
+
   void orderAbove(QWindow &window, std::uint32_t other) {
     TELAR_TRACE("native.order_above");
     NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window.winId());

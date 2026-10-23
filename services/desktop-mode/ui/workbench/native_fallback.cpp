@@ -28,6 +28,14 @@ namespace workbench::native {
     window.raise();
   }
 
+  void activate(QWindow &window) {
+    window.requestActivate();
+  }
+
+  bool holdsKeyboard(QWindow &window) {
+    return window.isActive();
+  }
+
   void orderAbove(QWindow &window, std::uint32_t) {
     window.raise();
   }

@@ -171,6 +171,8 @@ set(external_window_dbg_native_libraries desktop-native "-framework QuartzCore")
 set(layers_dbg_native_sources debug/support/external_window_probe.mm debug/support/layers_probe.mm)
 set(layers_dbg_native_libraries desktop-native Qt6::Quick "-framework QuartzCore")
 set(refused_size_dbg_native_libraries desktop-native)
+set(keyboard_focus_dbg_native_sources debug/support/external_window_probe.mm debug/support/keyboard_focus_probe.mm)
+set(keyboard_focus_dbg_native_libraries desktop-native "-framework QuartzCore")
 set(window_observer_dbg_native_sources debug/support/external_window_probe.mm debug/support/window_observer_probe.mm)
 set(window_observer_dbg_native_libraries desktop-native "-framework QuartzCore")
 

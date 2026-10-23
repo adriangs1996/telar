@@ -469,6 +469,21 @@ are removed. Each confirmed stage prints `[PASS]`; failure exits nonzero. It nev
 connects to an existing runtime or launches another Telar GUI.
 
 ```sh
+just desktop-debug keyboard_focus_dbg
+```
+
+`debug/keyboard_focus_dbg.cpp` checks that the workbench's keyboard router gives a
+pane the keyboard with another application in front before the desktop ever had it,
+with the desktop in front, with another application in front again, and after the
+pane that held it closed, as when the focus moves from another application's window
+to a pane; it exits nonzero when the pane does not get the keyboard. AppKit alone
+cannot take the keyboard back from the application in front: the router brings the
+process forward through SkyLight, then asks Qt to activate the input window, since
+Qt only learns of activations it asked for itself. It decides from AppKit's state,
+not Qt's record, which goes stale when the focused pane closes: Qt drops a destroyed
+focus window without announcing it, and then never reports losing the keyboard.
+
+```sh
 just desktop-debug input_router_dbg --mode router --panes 9
 just desktop-debug input_router_dbg --mode activate --panes 9 --bench 100 --quit
 ```

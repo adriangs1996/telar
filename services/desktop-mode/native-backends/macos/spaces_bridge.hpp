@@ -8,6 +8,10 @@
 namespace macos::spaces {
   DesktopState snapshot();
   void focusDisplay(const DesktopDisplay &display);
+  // Brings this process to the front with one of its windows as the key window, as a click on it
+  // would, even while another application is in front. AppKit's own activation cannot: an
+  // application in front keeps the keyboard.
+  void bringForward(std::uint32_t window);
   // The first Space the window server lists for a window, layers included; 0 when none.
   std::uint64_t spaceOf(std::uint32_t window);
 

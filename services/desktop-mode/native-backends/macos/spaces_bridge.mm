@@ -7,6 +7,7 @@
 #import <objc/runtime.h>
 #include <algorithm>
 #include <array>
+#include <cstring>
 #include <dlfcn.h>
 #include <libproc.h>
 #include <set>
@@ -31,6 +32,30 @@
 
 namespace {
   constexpr std::size_t space_limit = 512;
+  // _SLPSSetFrontProcessWithOptions: activation as the user's own, which another application in
+  // front cannot refuse.
+  constexpr std::uint32_t user_generated = 0x200;
+
+  // The window server's event record that makes a window key, as yabai builds it: its length,
+  // kind and window at fixed offsets, sent once as a press and once as a release.
+  constexpr std::size_t key_record_length = 0xf8;
+  constexpr std::size_t key_record_any_length = 0x10;
+
+  enum class KeyRecord : std::size_t {
+    length = 0x04,
+    phase = 0x08,
+    any = 0x20,
+    kind = 0x3a,
+    window = 0x3c,
+  };
+
+  enum class KeyRecordValue : std::uint8_t {
+    length = 0xf8,
+    kind = 0x10,
+    any = 0xff,
+    press = 0x01,
+    release = 0x02,
+  };
   constexpr std::uint32_t display_limit = 32;
   // SpaceCreate option: an unmanaged Space, which Mission Control does not list.
   constexpr unsigned unmanaged_space = 0x1;
@@ -60,6 +85,10 @@ namespace {
         load<decltype(activateDisplay)>("SLSSetActiveMenuBarDisplayIdentifier");
     CFArrayRef (*copyWindowSpaces)(int, int, CFArrayRef) =
         load<decltype(copyWindowSpaces)>("SLSCopySpacesForWindows");
+    CGError (*frontProcess)(ProcessSerialNumber *, std::uint32_t, std::uint32_t) =
+        load<decltype(frontProcess)>("_SLPSSetFrontProcessWithOptions");
+    CGError (*postEventRecord)(ProcessSerialNumber *, std::uint8_t *) =
+        load<decltype(postEventRecord)>("SLPSPostEventRecordTo");
 
     template <typename Function> Function load(const char *name) {
       return library ? reinterpret_cast<Function>(dlsym(library, name)) : nullptr;
@@ -456,6 +485,31 @@ namespace macos::spaces {
       TELAR_TRACE("native.spaces.focus_display_window");
       focusDisplayWindow(display);
     }
+  }
+
+  void bringForward(std::uint32_t window) {
+    TELAR_TRACE("native.spaces.bring_forward");
+    auto &api = skyLight();
+    if (!api.frontProcess || !api.postEventRecord) {
+      throw std::runtime_error("This macOS version cannot bring Telar's windows forward");
+    }
+
+    ProcessSerialNumber process{0, kCurrentProcess};
+    std::array<std::uint8_t, key_record_length> record{};
+    const auto at = [&](KeyRecord offset) -> std::uint8_t & {
+      return record[static_cast<std::size_t>(offset)];
+    };
+
+    at(KeyRecord::length) = static_cast<std::uint8_t>(KeyRecordValue::length);
+    at(KeyRecord::kind) = static_cast<std::uint8_t>(KeyRecordValue::kind);
+    std::memcpy(&at(KeyRecord::window), &window, sizeof(window));
+    std::memset(&at(KeyRecord::any), static_cast<int>(KeyRecordValue::any), key_record_any_length);
+
+    api.frontProcess(&process, window, user_generated);
+    at(KeyRecord::phase) = static_cast<std::uint8_t>(KeyRecordValue::press);
+    api.postEventRecord(&process, record.data());
+    at(KeyRecord::phase) = static_cast<std::uint8_t>(KeyRecordValue::release);
+    api.postEventRecord(&process, record.data());
   }
 
   std::uint64_t spaceOf(std::uint32_t window) {

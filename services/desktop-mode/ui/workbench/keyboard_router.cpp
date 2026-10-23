@@ -1,5 +1,6 @@
 #include "keyboard_router.hpp"
 #include "native.hpp"
+#include "../../log_categories.hpp"
 #include "../../trace.hpp"
 #include <QGuiApplication>
 #include <QScreen>
@@ -96,16 +97,29 @@ namespace workbench {
     }
 
     target_ = &window;
+    // Qt's record can be stale: it drops a destroyed focus window without announcing it, and then
+    // never reports losing the keyboard to another application. AppKit decides.
+    const bool key = input_key_ && native::holdsKeyboard(*input_);
+    // A pane's title can come from its terminal, so it stays out of the log.
+    qCDebug(telar_log::workbench)
+        << "keyboard to a pane" << (key ? "by hand-over" : "by activation");
+    if (!key) {
+      // Asking Qt alone leaves the keyboard with the application in front, so the process comes
+      // to the front first; Qt only learns of activations it asked for itself. focusWindowChanged
+      // hands the focus over once Qt sees the input window active.
+      native::activate(*input_);
+      input_->requestActivate();
+    }
+
+    // Qt may already count the input window active and announce nothing.
     if (input_key_) {
       handOver(window);
-    } else {
-      // focusWindowChanged hands the focus over once AppKit has made the input window key.
-      input_->requestActivate();
     }
   }
 
   bool KeyboardRouter::holds(const QQuickWindow &window) const {
-    return input_key_ && QGuiApplication::focusWindow() == &window;
+    return input_key_ && QGuiApplication::focusWindow() == &window &&
+           native::holdsKeyboard(*input_);
   }
 
   bool KeyboardRouter::eventFilter(QObject *watched, QEvent *event) {
@@ -136,6 +150,11 @@ namespace workbench {
   void KeyboardRouter::focusWindowChanged(QWindow *window) {
     TELAR_TRACE("workbench.keyboard.focus_window_changed");
     const bool pane = clients_.contains(window);
+    qCDebug(telar_log::workbench) << "focus window"
+                                  << (window == input_.get() ? "input"
+                                      : pane                 ? "pane"
+                                      : window               ? "other"
+                                                             : "none");
     if (window == input_.get()) {
       input_key_ = true;
       // Asynchronous: this runs inside Qt's own focus change.
