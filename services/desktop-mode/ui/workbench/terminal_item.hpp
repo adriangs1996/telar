@@ -42,13 +42,17 @@ namespace workbench {
 
   private:
     std::shared_ptr<TerminalScreen> screen_;
-    QFont font_;
+    // The theme's `terminal.font`; measured again when the display scale changes.
+    QVariantMap font_settings_;
+    // Regular, bold, italic and bold italic, each spaced so its advance is one cell.
+    std::array<QFont, 4> faces_;
     bool fixed_pitch_ = true;
     // The theme sets these on configure; until then cells paint with Qt's defaults.
     QColor foreground_, background_, selection_;
     TerminalPalette palette_{};
     QSizeF cell_{8, 16};
-    double ascent_ = 12;
+    // From the top of a cell, in logical pixels on the physical pixel grid.
+    double baseline_ = 12;
     std::uint64_t appearance_ = 1;
     QTimer blink_, waiting_timer_;
     bool cursor_on_ = true, selecting_ = false, mouse_report_ = false, waiting_ = false,
@@ -59,6 +63,7 @@ namespace workbench {
     int wheel_remainder_ = 0;
     int captured_button_ = 0;
     QPointF captured_position_;
+    void measure();
     void resizeTerminal();
     void syncKeyboard();
     void watchConnection();

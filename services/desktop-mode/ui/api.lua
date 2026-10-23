@@ -216,6 +216,14 @@ package.loaded["telar.shortcuts"] = shortcuts
 package.loaded["telar.workbench"] = workbench
 
 local default_theme = "dark"
+local family_limit = 256
+
+-- Numeric tokens with bounds, as the GUI bounds its font settings.
+local theme_ranges = {
+  ["terminal.font.size"] = { 6, 96 },
+  ["terminal.font.line_height"] = { 0.75, 3 },
+  ["terminal.font.letter_spacing"] = { -5, 20 },
+}
 
 local function copy(value)
   if type(value) ~= "table" then
@@ -257,6 +265,16 @@ local function apply_theme(into, overrides, path)
 
       if color and not (value:match("^#%x+$") and (#value == 7 or #value == 9)) then
         error("Theme token " .. name .. " must be a #RRGGBB or #AARRGGBB color", 3)
+      end
+
+      if type(value) == "string" and (#value > family_limit or value:find("%z")) then
+        error("Theme token " .. name .. " must be at most 256 bytes without NUL", 3)
+      end
+
+      local range = theme_ranges[name]
+
+      if range and not (value >= range[1] and value <= range[2]) then
+        error(string.format("Theme token %s must be within %g..%g", name, range[1], range[2]), 3)
       end
 
       into[key] = value

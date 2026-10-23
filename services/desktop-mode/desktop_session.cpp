@@ -26,7 +26,8 @@ namespace {
                         before.pending_operation != after.pending_operation ||
                         before.completed_operation != after.completed_operation;
     changes.status = before.available != after.available ||
-                     before.accessibility != after.accessibility || before.error != after.error;
+                     before.accessibility != after.accessibility || before.error != after.error ||
+                     before.window_managers != after.window_managers;
     changes.focus = before.focused_space != after.focused_space;
     changes.spaces = before.spaces.size() != after.spaces.size();
     const auto common = std::min(before.spaces.size(), after.spaces.size());
@@ -84,6 +85,13 @@ void DesktopSession::apply(DesktopState state) {
     qCInfo(telar_log::spaces) << "focused space" << state.focused_space << "pending"
                               << state.pending_space << "spaces" << state.spaces.size()
                               << "available" << state.available;
+  }
+
+  if (state.window_managers != state_.window_managers) {
+    for (const auto &manager : state.window_managers) {
+      qCWarning(telar_log::spaces)
+          << manager.c_str() << "also places windows; it fights the desktop over them";
+    }
   }
 
   if (state.error != state_.error && !state.error.empty()) {

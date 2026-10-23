@@ -55,6 +55,8 @@ struct SpaceCompletion {
 struct DesktopState {
   bool available = false;
   bool accessibility = false;
+  // Other programs that place windows on their own and fight the desktop over them.
+  std::vector<std::string> window_managers;
   std::uint64_t focused_space = 0;
   std::uint64_t pending_space = 0;
   std::vector<DesktopDisplay> displays;

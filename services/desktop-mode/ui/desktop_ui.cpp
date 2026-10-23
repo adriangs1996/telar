@@ -1,4 +1,5 @@
 #include "desktop_ui.hpp"
+#include "bundled_fonts.hpp"
 #include "lua_script.hpp"
 #include "lua_surface.hpp"
 #include "services.hpp"
@@ -35,6 +36,8 @@ namespace ui {
       : services_(services),
         configuration_(services) {
     TELAR_TRACE("ui.desktop.start");
+    // Before any surface or terminal resolves a family name.
+    bundledFonts();
     services_.modules = &modules_;
     config_path_ = qEnvironmentVariable("TELAR_DESKTOP_CONFIG");
     config_required_ = !config_path_.isEmpty();

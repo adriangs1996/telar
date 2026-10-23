@@ -1,4 +1,5 @@
 #include "spaces_bridge.hpp"
+#include "window_managers.hpp"
 #include "../../trace.hpp"
 #import <AppKit/AppKit.h>
 #import <ApplicationServices/ApplicationServices.h>
@@ -213,6 +214,7 @@ namespace macos::spaces {
     auto &api = skyLight();
     DesktopState state;
     state.accessibility = AXIsProcessTrusted();
+    state.window_managers = macos::windowManagers();
 
     if (!api.available()) {
       throw std::runtime_error("This macOS version does not expose the required Spaces functions");
@@ -238,7 +240,8 @@ namespace macos::spaces {
     // which NSScreen leaves out, own no Space and are dropped below.
     std::array<CGDirectDisplayID, display_limit> identifiers{};
     std::uint32_t display_count = 0;
-    if (CGGetActiveDisplayList(display_limit, identifiers.data(), &display_count) != kCGErrorSuccess) {
+    if (CGGetActiveDisplayList(display_limit, identifiers.data(), &display_count) !=
+        kCGErrorSuccess) {
       throw std::runtime_error("macOS did not list the active displays");
     }
 

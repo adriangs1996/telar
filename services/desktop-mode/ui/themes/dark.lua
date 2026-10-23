@@ -85,12 +85,26 @@ return {
       bright_cyan = "#A8E2E4",
       bright_white = "#F2EFF7",
     },
+    -- The same settings as the GUI's `gui.font`. An empty family uses the bundled JetBrains
+    -- Mono; graphemes the face lacks fall back to it, then to the bundled Nerd Font symbols,
+    -- then to the system's fonts.
+    font = {
+      family = "",
+      -- The face's style name, such as "Light" or "Medium"; empty is the regular face.
+      style = "",
+      -- Logical pixels, 6..96; decimals allowed.
+      size = 15,
+      -- Multiplier of the font's natural line height, 0.75..3.
+      line_height = 1,
+      -- Extra logical pixels per cell, -5..20.
+      letter_spacing = 0,
+    },
   },
 
-  -- Font families; empty uses the system's UI or fixed-width font.
+  -- Font families for the chrome; an empty `ui` uses the system's. JetBrains Mono is bundled.
   fonts = {
     ui = "",
-    mono = "",
+    mono = "JetBrains Mono",
   },
 
   radius = {

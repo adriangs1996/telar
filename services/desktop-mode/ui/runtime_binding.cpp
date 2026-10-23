@@ -120,6 +120,11 @@ namespace {
     TELAR_TRACE("lua.desktop.snapshot");
     lua::Value::Array spaces;
     lua::Value::Array displays;
+    lua::Value::Array managers;
+
+    for (const auto &manager : state.window_managers) {
+      managers.push_back({manager});
+    }
 
     for (const auto &display : state.displays) {
       displays.push_back({lua::Value::Object{
@@ -154,6 +159,7 @@ namespace {
     lua::Value::Object result{
         {"available", {state.available}},
         {"accessibility", {state.accessibility}},
+        {"window_managers", {managers}},
         {"spaces", {std::move(spaces)}},
         {"displays", {std::move(displays)}},
     };

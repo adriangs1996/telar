@@ -22,8 +22,9 @@ namespace workbench::native {
 
     // Each Accessibility call waits at most this long for an application that does not answer.
     constexpr float accessibility_timeout = 0.05f;
-    // The observer's run loop never needs to wake for this; it only keeps the loop running.
-    constexpr CFTimeInterval keep_alive = 1e9;
+    // An application gets its Dock icon after macOS announces its launch, and a notification can
+    // be missed: this often the observer attaches to new applications and reads again anyway.
+    constexpr CFTimeInterval rescan_interval = 2;
     // Every Space a window belongs to, current or not.
     constexpr int all_spaces = 7;
 
@@ -487,15 +488,26 @@ namespace workbench::native {
       });
     }
 
+    void rescan() {
+      @autoreleasepool {
+        for (NSRunningApplication *application in NSWorkspace.sharedWorkspace.runningApplications) {
+          attach(application);
+        }
+
+        read();
+      }
+    }
+
     void run() {
       @autoreleasepool {
         CFRunLoopTimerRef timer =
             CFRunLoopTimerCreateWithHandler(nullptr,
-                                            CFAbsoluteTimeGetCurrent() + keep_alive,
+                                            CFAbsoluteTimeGetCurrent() + rescan_interval,
+                                            rescan_interval,
                                             0,
                                             0,
-                                            0,
-                                            ^(CFRunLoopTimerRef){
+                                            ^(CFRunLoopTimerRef) {
+                                              rescan();
                                             });
         CFRunLoopAddTimer(CFRunLoopGetCurrent(), timer, kCFRunLoopDefaultMode);
         {
@@ -504,12 +516,8 @@ namespace workbench::native {
           started.notify_all();
         }
 
-        for (NSRunningApplication *application in NSWorkspace.sharedWorkspace.runningApplications) {
-          attach(application);
-        }
-
         watchWorkspace();
-        read();
+        rescan();
         CFRunLoopRun();
 
         for (id token in notifications) {

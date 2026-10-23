@@ -1,5 +1,6 @@
 #include "terminal_item.hpp"
 #include "terminal_input.hpp"
+#include "../bundled_fonts.hpp"
 #include "../../log_categories.hpp"
 #include "../../trace.hpp"
 #include <QClipboard>
@@ -11,6 +12,7 @@
 #include <QInputMethodEvent>
 #include <QKeyEvent>
 #include <QQuickWindow>
+#include <QScreen>
 #include <QSGSimpleRectNode>
 #include <QSGTextNode>
 #include <QSGTransformNode>
@@ -27,7 +29,11 @@ namespace workbench {
     constexpr int maximum_dimension = 4096;
     constexpr int wheel_unit = 120;
     constexpr int wheel_rows = 3;
-    constexpr int minimum_font_size = 6, maximum_font_size = 72, default_font_size = 14;
+    // The bounds and defaults of the GUI's `gui.font`.
+    constexpr double default_font_size = 15, minimum_font_size = 6, maximum_font_size = 96;
+    constexpr double default_line_height = 1, minimum_line_height = 0.75, maximum_line_height = 3;
+    constexpr double minimum_letter_spacing = -5, maximum_letter_spacing = 20;
+    constexpr double points_per_inch = 72;
     constexpr int mouse_release = 3, mouse_motion = 32, mouse_wheel_up = 64, mouse_wheel_down = 65;
     constexpr int mouse_shift = 4, mouse_alt = 8, mouse_control = 16;
     constexpr int legacy_mouse_offset = 32, legacy_mouse_limit = 223;
@@ -52,6 +58,22 @@ namespace workbench {
 
     bool has(const telar::CellStyle &style, telar::CellAttribute flag) {
       return style.flags & static_cast<std::uint16_t>(flag);
+    }
+
+    // Bits of an index into the terminal's faces.
+    enum FaceStyle : std::size_t {
+      regular = 0,
+      bold = 1,
+      italic = 2
+    };
+
+    std::size_t face(const telar::CellStyle &style) {
+      return (has(style, telar::CellAttribute::bold) ? FaceStyle::bold : FaceStyle::regular) |
+             (has(style, telar::CellAttribute::italic) ? FaceStyle::italic : FaceStyle::regular);
+    }
+
+    double setting(const QVariantMap &settings, const char *name, double fallback) {
+      return settings.value(QLatin1StringView(name), fallback).toDouble();
     }
 
     QColor color(const telar::CellColor &value, QColor fallback, const TerminalPalette &palette) {
@@ -114,8 +136,7 @@ namespace workbench {
 
   TerminalItem::TerminalItem(std::shared_ptr<TerminalScreen> screen, QQuickItem *parent)
       : QQuickItem(parent),
-        screen_(std::move(screen)),
-        font_(QFontDatabase::systemFont(QFontDatabase::FixedFont)) {
+        screen_(std::move(screen)) {
     TELAR_TRACE("terminal.create");
     setFlag(ItemHasContents);
     setFlag(ItemAcceptsInputMethod);
@@ -153,10 +174,10 @@ namespace workbench {
     const auto follow = [this](QQuickWindow *window) {
       if (window) {
         QObject::connect(window, &QWindow::screenChanged, this, [this] {
-          resizeTerminal();
+          measure();
         });
 
-        resizeTerminal();
+        measure();
       }
     };
 
@@ -167,22 +188,8 @@ namespace workbench {
   void TerminalItem::configure(const QVariantMap &options) {
     TELAR_TRACE("terminal.configure");
     const auto theme = options.value("theme").toMap();
-    const auto family = theme.value("fonts").toMap().value("mono").toString();
-    font_ = QFontDatabase::systemFont(QFontDatabase::FixedFont);
-    if (!family.isEmpty()) {
-      font_.setFamily(family);
-    }
-
-    font_.setPixelSize(std::clamp(options.value("font_size", default_font_size).toInt(),
-                                  minimum_font_size,
-                                  maximum_font_size));
-    font_.setKerning(false);
-    font_.setStyleHint(QFont::Monospace);
-    fixed_pitch_ = QFontInfo(font_).fixedPitch();
-    const QFontMetricsF metrics(font_);
-    cell_ = {std::ceil(metrics.horizontalAdvance(QLatin1Char('M'))), std::ceil(metrics.height())};
-    ascent_ = metrics.ascent();
     const auto colors = theme.value("terminal").toMap();
+    font_settings_ = colors.value("font").toMap();
     const auto ansi = colors.value("ansi").toMap();
     const QColor fg(colors.value("foreground").toString());
     const QColor bg(colors.value("background").toString());
@@ -208,6 +215,88 @@ namespace workbench {
       background_ = bg;
     }
 
+    measure();
+  }
+
+  // The GUI's metrics: the size rounds to physical pixels, the cell to whole physical pixels,
+  // and extra line height is split above and below the baseline. Lua validates the settings;
+  // the clamps only keep a hand-built map from producing an unusable grid.
+  void TerminalItem::measure() {
+    TELAR_TRACE("terminal.measure");
+    const auto scale = window() ? window()->devicePixelRatio() : 1.0;
+    const auto size = std::clamp(setting(font_settings_, "size", default_font_size),
+                                 minimum_font_size,
+                                 maximum_font_size);
+    const auto line_height = std::clamp(setting(font_settings_, "line_height", default_line_height),
+                                        minimum_line_height,
+                                        maximum_line_height);
+    const auto letter_spacing = std::clamp(setting(font_settings_, "letter_spacing", 0),
+                                           minimum_letter_spacing,
+                                           maximum_letter_spacing);
+    const auto style = font_settings_.value("style").toString();
+    auto family = font_settings_.value("family").toString();
+    auto families = ui::bundledFonts();
+
+    if (!family.isEmpty() && !QFontDatabase::hasFamily(family)) {
+      qCWarning(telar_log::terminal)
+          << "font family" << family << "is not installed; using the bundled one";
+      family.clear();
+    }
+
+    if (!family.isEmpty()) {
+      families.prepend(family);
+    }
+
+    QFont base = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    if (!families.isEmpty()) {
+      base.setFamilies(families);
+    }
+
+    if (!style.isEmpty()) {
+      const auto styles = QFontDatabase::styles(QFontInfo(base).family());
+      const auto found = std::ranges::find_if(styles, [&style](const QString &candidate) {
+        return candidate.compare(style, Qt::CaseInsensitive) == 0;
+      });
+
+      if (found == styles.end()) {
+        qCWarning(telar_log::terminal) << "font" << QFontInfo(base).family() << "has no style"
+                                       << style << "; using its regular face";
+      } else {
+        base.setStyleName(*found);
+      }
+    }
+
+    const auto *screen = QGuiApplication::primaryScreen();
+    const auto dpi = screen ? screen->logicalDotsPerInchY() : points_per_inch;
+    base.setPointSizeF(std::round(size * scale) / scale * points_per_inch / dpi);
+    base.setKerning(false);
+    base.setStyleHint(QFont::Monospace);
+
+    const QFontMetricsF metrics(base);
+    const auto natural = (metrics.ascent() + metrics.descent()) * scale;
+    const auto height = std::max(1.0, std::round(natural * line_height));
+    const auto width = std::max(
+        1.0,
+        std::round((metrics.horizontalAdvance(QLatin1Char('M')) + letter_spacing) * scale));
+    cell_ = {width / scale, height / scale};
+    baseline_ = std::round(metrics.ascent() * scale + (height - natural) / 2) / scale;
+
+    // A style name pins one face, so bold and italic come from the family instead.
+    for (std::size_t index = 0; index < faces_.size(); ++index) {
+      auto variant = base;
+
+      if (index != FaceStyle::regular) {
+        variant.setStyleName({});
+        variant.setBold(index & FaceStyle::bold);
+        variant.setItalic(index & FaceStyle::italic);
+      }
+
+      const auto advance = QFontMetricsF(variant).horizontalAdvance(QLatin1Char('M'));
+      variant.setLetterSpacing(QFont::AbsoluteSpacing, cell_.width() - advance);
+      faces_[index] = variant;
+    }
+
+    fixed_pitch_ = QFontInfo(faces_[FaceStyle::regular]).fixedPitch();
     ++appearance_;
     resizeTerminal();
     update();
@@ -303,7 +392,8 @@ namespace workbench {
       line->revision = screen_->revisions[row];
       line->appearance = appearance_;
       auto *text = window()->createTextNode();
-      text->setRenderType(QSGTextNode::QtRendering);
+      // The platform rasterizer, as the GUI's: distance fields blur glyphs at terminal sizes.
+      text->setRenderType(QSGTextNode::NativeRendering);
       // ASCII runs share a layout. Other graphemes retain their exact cell origin,
       // including wide characters and fallback fonts whose metrics differ.
       for (int column = 0; column < screen_->columns;) {
@@ -358,31 +448,22 @@ namespace workbench {
         }
 
         if (cell.width != telar::CellWidth::continuation && !string.isEmpty()) {
-          QFont font = font_;
-          font.setBold(has(cell.style, telar::CellAttribute::bold));
-          font.setItalic(has(cell.style, telar::CellAttribute::italic));
-          font.setStrikeOut(has(cell.style, telar::CellAttribute::strikethrough));
-          font.setOverline(has(cell.style, telar::CellAttribute::overline));
-          font.setUnderline(((cell.style.flags >> underline_shift) & underline_mask) != 0);
-          if (ascii) {
-            font.setLetterSpacing(QFont::AbsoluteSpacing,
-                                  cell_.width() -
-                                      QFontMetricsF(font).horizontalAdvance(QLatin1Char('M')));
-          }
-
-          QTextLayout layout(string, font);
+          QTextLayout layout(string, faces_[face(cell.style)]);
           QTextOption option;
           option.setTextDirection(Qt::LeftToRight);
           option.setWrapMode(QTextOption::NoWrap);
           layout.setTextOption(option);
           QTextCharFormat format;
           format.setForeground(fg);
+          format.setFontStrikeOut(has(cell.style, telar::CellAttribute::strikethrough));
+          format.setFontOverline(has(cell.style, telar::CellAttribute::overline));
+          format.setFontUnderline(((cell.style.flags >> underline_shift) & underline_mask) != 0);
           layout.setFormats({{0, static_cast<int>(string.size()), format}});
           layout.beginLayout();
           auto text_line = layout.createLine();
           // Shape the line before reading its ascent; createLine alone has no font metrics.
           text_line.setNumColumns(string.size());
-          text_line.setPosition({0, ascent_ - text_line.ascent()});
+          text_line.setPosition({0, baseline_ - text_line.ascent()});
           layout.endLayout();
           text->addTextLayout(rect.topLeft(), &layout);
         }
@@ -414,14 +495,15 @@ namespace workbench {
 
     if (!preedit_.isEmpty() || (!screen_->connected && waiting_)) {
       auto *text = window()->createTextNode();
+      text->setRenderType(QSGTextNode::NativeRendering);
       text->setColor(foreground_);
       const QString message =
           screen_->connected ? preedit_ : QStringLiteral("Connecting to runtime…");
-      QTextLayout layout(message, font_);
+      QTextLayout layout(message, faces_[FaceStyle::regular]);
       layout.beginLayout();
       auto text_line = layout.createLine();
       text_line.setNumColumns(message.size());
-      text_line.setPosition({0, ascent_ - text_line.ascent()});
+      text_line.setPosition({0, baseline_ - text_line.ascent()});
       layout.endLayout();
       const QPointF point = screen_->connected
                                 ? QPointF(cursor.x * cell_.width(), cursor.y * cell_.height())
@@ -493,7 +575,7 @@ namespace workbench {
                     cell_.width(),
                     cell_.height());
     case Qt::ImFont:
-      return font_;
+      return faces_[FaceStyle::regular];
     case Qt::ImHints:
       return static_cast<int>(Qt::ImhNoPredictiveText | Qt::ImhNoAutoUppercase);
     default:

@@ -330,7 +330,10 @@ local function render()
 end
 
 local function update_status()
-  local error = state.error or desktop_state.error
+  local managers = desktop_state.window_managers or {}
+  local conflict = #managers > 0
+    and (table.concat(managers, ", ") .. " also places windows. Quit it so Telar can.")
+  local error = state.error or desktop_state.error or conflict
   status.color = error and colors.error or colors.muted
   status.text = error
     or (not state.connected and "Connecting to runtime…")
