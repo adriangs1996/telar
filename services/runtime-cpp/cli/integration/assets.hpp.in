@@ -1,0 +1,12 @@
+#pragma once
+
+#include <string_view>
+
+namespace telar::runtime::cli::integration::assets {
+
+inline constexpr std::string_view pi_extension = R"TelarAsset(@TELAR_PI_INTEGRATION@)TelarAsset";
+inline constexpr std::string_view opencode_extension = R"TelarAsset(@TELAR_OPENCODE_INTEGRATION@)TelarAsset";
+inline constexpr std::string_view telar_skill = R"TelarAsset(@TELAR_AGENT_SKILL@)TelarAsset";
+inline constexpr std::string_view coordinator_skill = R"TelarAsset(@TELAR_COORDINATOR_SKILL@)TelarAsset";
+
+}

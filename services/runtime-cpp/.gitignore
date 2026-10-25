@@ -1,0 +1,5 @@
+/out/
+/out-*/
+/dependencies/
+__pycache__/
+/measurements/**/*.rgba

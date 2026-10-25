@@ -536,7 +536,7 @@ namespace workbench {
 
   bool RuntimeConnection::waiting(RequestKind kind, std::uint64_t target) const {
     return std::any_of(pending_.begin(), pending_.end(), [&](const auto &entry) {
-      return entry.second.kind == kind && entry.second.target == target;
+      return entry.second.kind == kind && (target == 0 || entry.second.target == target);
     });
   }
 
