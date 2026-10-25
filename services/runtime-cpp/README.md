@@ -13,6 +13,12 @@ and Zig 0.16.0. SQLite and zlib come from the macOS SDK. Zig builds only
 libghostty-vt for production; the executable links no
 Telar Zig runtime code.
 
+The optional interface capture helper uses the macOS SDK's libpcap. The
+[traffic subscription guide](../../docs/traffic-capture.md) describes its
+activation, Desktop Lua API, HTTP exchange delivery and focused checks.
+Transparent interception and rewriting remain pending. Repeater workflows
+belong to client applications.
+
 From this directory:
 
 ```sh
@@ -134,13 +140,20 @@ the runtime's production C++ sources with `.clang-tidy`. The runner looks beside
 the configured compiler before searching PATH. It runs two processes by default;
 `just runtime-lint 4` selects four.
 
-The checks cover memory and resource errors, unsafe API use, dangling handles,
-use after move and selected CERT rules. Files under `tests/` are excluded from
-the runner and header diagnostics; `.clangd` also disables clang-tidy checks for
-those files in the editor. Diagnostics include runtime headers and exclude
-dependencies and generated headers. Warnings remain advisory during
-the initial review; invalid configuration and compilation errors fail the command.
-No fixes are applied.
+All general clang-tidy checks are enabled, including the static analyzer, CERT,
+concurrency, C++ Core Guidelines, bugprone, performance, portability, modernization
+and readability checks. Presets for unrelated projects, libraries and platforms
+are excluded in `.clang-tidy`.
+
+Compiler diagnostics are also enabled. `-Weverything` is added only during
+clang-tidy analysis, with compatibility warnings for standards older than C++23
+disabled. This does not change the application's build flags.
+
+Files under `tests/` are excluded from the runner and header diagnostics;
+`.clangd` also disables clang-tidy checks for those files in the editor.
+Diagnostics include runtime headers and exclude dependencies and generated
+headers. Warnings remain advisory during the initial review; invalid
+configuration and compilation errors fail the command. No fixes are applied.
 
 ## Components and dependency injection
 

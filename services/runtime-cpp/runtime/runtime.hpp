@@ -973,4 +973,8 @@ private:
   [[no_unique_address]] diagnostics::RuntimeTelemetry telemetry_;
 };
 
+template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
+  requires BackgroundExecutor<Background, Memory>
+Runtime(Memory &memory, Poller &poller, Background &background, const RuntimeOptions &options, ProxyClientConfiguration proxy = {}) -> Runtime<Memory, Poller, Background>;
+
 }

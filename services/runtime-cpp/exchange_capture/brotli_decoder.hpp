@@ -43,6 +43,9 @@ private:
 };
 
 template <Allocator Memory>
+BrotliDecoder(Memory &memory) -> BrotliDecoder<Memory>;
+
+template <Allocator Memory>
 [[gnu::noinline]] std::optional<std::size_t> decodeBrotli(Memory &memory, std::span<const std::uint8_t> input, std::span<std::uint8_t> output) noexcept {
   // Isolate scratch storage from the stack frames of the other content decoders.
   constexpr std::size_t decoder_scratch_capacity = 32 * 1024;

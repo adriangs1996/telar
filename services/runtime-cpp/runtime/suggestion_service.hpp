@@ -34,4 +34,7 @@ private:
   SuggestionEngine<Memory> engine_;
 };
 
+template <ConcurrentAllocator Memory>
+SuggestionService(Memory &memory, SuggestionOptions options) -> SuggestionService<Memory>;
+
 }

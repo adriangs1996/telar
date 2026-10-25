@@ -63,4 +63,7 @@ private:
   std::size_t reserved_bytes_ = 0;
 };
 
+template <Allocator Memory>
+ImageAllocation(MediaAllocator<Memory> &memory, std::size_t byte_count) -> ImageAllocation<Memory>;
+
 }

@@ -38,6 +38,9 @@ private:
   TlsSide side_;
 };
 
+template <ConcurrentAllocator Memory>
+TlsStream(TlsSession<Memory> &session, TlsSide side) -> TlsStream<Memory>;
+
 static_assert(ByteStream<TlsStream<SystemAllocator>>);
 static_assert(PeekableByteStream<TlsStream<SystemAllocator>>);
 static_assert(BufferedByteStream<TlsStream<SystemAllocator>>);

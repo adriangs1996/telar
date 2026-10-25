@@ -190,7 +190,7 @@ static std::string authorization(const ProxySecret &secret) {
 static void testHandshake() {
   SystemAllocator memory;
   ProxyOptions options{memory};
-  const auto secret = ProxySecret::random();
+  const auto secret = ProxySecret::generate();
   const auto credential = authorization(secret);
   ProxyCounters counters;
   auto origin = ProxyListener::bind(std::nullopt, {});

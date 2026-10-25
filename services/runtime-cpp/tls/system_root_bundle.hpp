@@ -37,4 +37,7 @@ private:
   ByteQueue<Memory> bytes_;
 };
 
+template <Allocator Memory>
+SystemRootBundle(Memory &memory) -> SystemRootBundle<Memory>;
+
 }

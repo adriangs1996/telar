@@ -18,7 +18,7 @@ public:
   static constexpr std::size_t byte_count = 32;
   static constexpr std::size_t hexadecimal_bytes = byte_count * 2;
 
-  static ProxySecret random() noexcept {
+  static ProxySecret generate() noexcept {
     ProxySecret secret;
     ::arc4random_buf(secret.bytes_.data(), secret.bytes_.size());
     return secret;

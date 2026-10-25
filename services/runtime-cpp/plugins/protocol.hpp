@@ -22,9 +22,9 @@ enum class EffectKind : Byte {
 class Protocol {
 public:
   template <Allocator Memory>
-  static std::span<const Byte> encodeExchange(std::span<Byte> output, ExchangeIdentity identity, const CapturedExchange<Memory> &exchange) {
+  static std::span<const Byte> encodeExchange(std::span<Byte> output, ExchangeIdentity identity, const CapturedExchange<Memory> &exchange, std::size_t part_limit = SIZE_MAX) {
     FrameWriter writer{output};
-    writeExchange(writer, identity, exchange);
+    writeExchange(writer, identity, exchange, part_limit);
     return writer.finish();
   }
 
@@ -114,7 +114,7 @@ public:
 
 private:
   template <FrameOutput Output, Allocator Memory>
-  static void writeExchange(Output &writer, ExchangeIdentity identity, const CapturedExchange<Memory> &exchange) {
+  static void writeExchange(Output &writer, ExchangeIdentity identity, const CapturedExchange<Memory> &exchange, std::size_t part_limit = SIZE_MAX) {
     const auto *representative = exchange.request ? exchange.request.get() : exchange.response.get();
     if (representative == nullptr) {
       throw EncodingError{"Cannot encode an empty capture"};
@@ -130,8 +130,8 @@ private:
     writer.text(representative->method());
     writer.text(representative->target());
     writer.timestamp(representative->started_at_ms);
-    writeHalf(writer, exchange.request.get());
-    writeHalf(writer, exchange.response.get());
+    writeHalf(writer, exchange.request.get(), part_limit);
+    writeHalf(writer, exchange.response.get(), part_limit);
   }
 
   static ExchangeProtocol exchangeProtocol(CaptureProtocol protocol) {
@@ -147,18 +147,18 @@ private:
   }
 
   template <FrameOutput Output, Allocator Memory>
-  static void writeHalf(Output &writer, const CaptureHalf<Memory> *half) {
+  static void writeHalf(Output &writer, const CaptureHalf<Memory> *half, std::size_t part_limit) {
     writer.boolean(half != nullptr);
     if (half == nullptr) {
       return;
     }
 
-    writer.bytes(half->head.bytes());
-    writer.bytes(half->body.bytes());
+    writer.bytes(half->head.bytes().first(std::min(half->head.size(), part_limit)));
+    writer.bytes(half->body.bytes().first(std::min(half->body.size(), part_limit)));
     writer.text(half->encoding());
     writer.boolean(half->body_decoded);
-    writer.boolean(half->head.truncated);
-    writer.boolean(half->body.truncated);
+    writer.boolean(half->head.truncated || half->head.size() > part_limit);
+    writer.boolean(half->body.truncated || half->body.size() > part_limit);
     writer.integer(half->status_code);
     writer.tag(half->outcome);
     writer.timestamp(half->finished_at_ms);
@@ -174,7 +174,7 @@ private:
     half.body = reader.bytes();
     half.encoding = reader.text();
     half.decoded = reader.boolean();
-    reader.boolean();
+    half.head_truncated = reader.boolean();
     half.body_truncated = reader.boolean();
     half.status_code = reader.integer<std::uint16_t>();
     half.outcome = reader.tag(CaptureOutcome::reset);

@@ -11,6 +11,7 @@ local fs = {
 }
 local net = {}
 local runtime = {}
+local traffic = {}
 local desktop = {}
 local shortcuts = {}
 local workbench = {}
@@ -19,6 +20,7 @@ telar = {
   fs = fs,
   net = net,
   runtime = runtime,
+  traffic = traffic,
   desktop = desktop,
   shortcuts = shortcuts,
   workbench = workbench,
@@ -152,6 +154,12 @@ local function operation(fn, ...)
   end
 end
 
+function traffic.subscribe(options, callback)
+  assert(type(options) == "table", "traffic.subscribe expects options")
+  assert(type(callback) == "function", "traffic.subscribe expects a callback")
+  return operation(io_core.traffic_subscribe, options, callback)
+end
+
 function fs.read_file(path, callback)
   return operation(io_core.read_file, path, callback)
 end
@@ -230,6 +238,7 @@ package.loaded["telar.ui"] = ui
 package.loaded["telar.fs"] = fs
 package.loaded["telar.net"] = net
 package.loaded["telar.runtime"] = runtime
+package.loaded["telar.traffic"] = traffic
 package.loaded["telar.desktop"] = desktop
 package.loaded["telar.shortcuts"] = shortcuts
 package.loaded["telar.workbench"] = workbench

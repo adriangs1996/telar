@@ -52,4 +52,7 @@ private:
   plugins::TapMetrics previous_;
 };
 
+template <Allocator Memory>
+PluginDelivery(ClientControl<Memory> &clients, LimitService<Memory> &limits) -> PluginDelivery<Memory>;
+
 }

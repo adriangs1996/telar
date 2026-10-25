@@ -97,4 +97,7 @@ private:
   RuntimeModel<Memory> &model_;
 };
 
+template <Allocator Memory>
+ResponseProjection(Memory &memory, RuntimeModel<Memory> &model) -> ResponseProjection<Memory>;
+
 }

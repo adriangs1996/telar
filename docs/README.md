@@ -28,3 +28,7 @@ output of `telar --version`.
 
 For contributors, [development](development.md) covers build dependencies and
 tests.
+
+The C++ runtime's initial [traffic subscription API](traffic-capture.md) exposes
+packets and captured HTTP exchanges to Desktop Lua. Its
+[target contract](traffic-platform.md) covers the remaining interception work.

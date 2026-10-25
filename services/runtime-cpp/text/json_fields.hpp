@@ -51,4 +51,7 @@ private:
   String<Memory> text_;
 };
 
+template <Allocator Memory, std::size_t Count>
+JsonFields(Memory &memory, const JsonValue &object, const std::array<std::string_view, Count> &names) -> JsonFields<Memory, Count>;
+
 }

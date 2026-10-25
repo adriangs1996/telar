@@ -51,4 +51,7 @@ private:
   std::size_t size_;
 };
 
+template <Allocator Memory>
+SensitiveAllocation(Memory &memory, std::size_t size) -> SensitiveAllocation<Memory>;
+
 }

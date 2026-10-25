@@ -1,29 +1,27 @@
 InheritParentConfig: false
 Checks: >-
-  -*,
-  clang-analyzer-core.*,
-  clang-analyzer-cplusplus.*,
-  clang-analyzer-deadcode.*,
-  clang-analyzer-nullability.*,
-  clang-analyzer-security.*,
-  clang-analyzer-unix.*,
-  bugprone-dangling-handle,
-  bugprone-misplaced-pointer-arithmetic-in-alloc,
-  bugprone-not-null-terminated-result,
-  bugprone-posix-return,
-  bugprone-sizeof-container,
-  bugprone-sizeof-expression,
-  bugprone-stringview-nullptr,
-  bugprone-suspicious-memory-comparison,
-  bugprone-suspicious-memset-usage,
-  bugprone-suspicious-realloc-usage,
-  bugprone-undefined-memory-manipulation,
-  bugprone-unused-raii,
-  bugprone-use-after-move,
-  cert-con54-cpp,
-  cert-env33-c,
-  cert-err34-c,
-  cert-str34-c
+  *,
+  -abseil-*,
+  -altera-*,
+  -android-*,
+  -boost-*,
+  -fuchsia-*,
+  -google-*,
+  -linuxkernel-*,
+  -llvm-*,
+  -llvmlibc-*,
+  -mpi-*,
+  -objc-*,
+  -openmp-*,
+  -zircon-*
+ExtraArgs:
+  - -Weverything
+  - -Wno-c++98-compat
+  - -Wno-c++98-compat-pedantic
+  - -Wno-c++11-compat
+  - -Wno-c++14-compat
+  - -Wno-c++17-compat
+  - -Wno-c++20-compat
 WarningsAsErrors: ''
 HeaderFilterRegex: '(^|/)services/runtime-cpp/'
 ExcludeHeaderFilterRegex: '(^|/)(dependencies|generated|out[^/]*|tests|third_party|vendor)/'

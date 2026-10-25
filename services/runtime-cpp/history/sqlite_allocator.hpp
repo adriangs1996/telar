@@ -113,4 +113,7 @@ private:
   sqlite3_mem_methods previous_{};
 };
 
+template <ConcurrentAllocator Memory>
+SqliteAllocator(Memory &memory) -> SqliteAllocator<Memory>;
+
 }

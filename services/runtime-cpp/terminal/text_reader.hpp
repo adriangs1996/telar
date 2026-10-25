@@ -149,4 +149,7 @@ private:
   bool wrapped_ = false;
 };
 
+template <Allocator Memory>
+TextReader(Memory &memory, Terminal<Memory> &terminal, std::size_t capacity) -> TextReader<Memory>;
+
 }

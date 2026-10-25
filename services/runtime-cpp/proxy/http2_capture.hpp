@@ -49,4 +49,7 @@ private:
   Http2CaptureStreams<Memory, Clock> response_;
 };
 
+template <ConcurrentAllocator Memory>
+Http2Capture(CaptureProducer<Memory> *producer, ProxyCounters &counters, CaptureStart context) -> Http2Capture<Memory>;
+
 }

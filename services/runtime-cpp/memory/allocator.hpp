@@ -122,6 +122,9 @@ private:
 };
 
 template <Allocator Upstream>
+BudgetAllocator(Upstream &upstream, std::size_t limit) -> BudgetAllocator<Upstream>;
+
+template <Allocator Upstream>
 class SynchronizedAllocator {
 public:
   static constexpr bool thread_safe = true;
@@ -150,6 +153,9 @@ private:
   Upstream &upstream_;
   mutable std::mutex mutex_;
 };
+
+template <Allocator Upstream>
+SynchronizedAllocator(Upstream &upstream) -> SynchronizedAllocator<Upstream>;
 
 template <typename Memory>
 concept ConcurrentAllocator = Allocator<Memory> && Memory::thread_safe;

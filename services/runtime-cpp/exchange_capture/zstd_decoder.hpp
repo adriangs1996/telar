@@ -145,4 +145,7 @@ private:
   ZSTD_DCtx *state_ = nullptr;
 };
 
+template <Allocator Memory>
+ZstdDecoder(Memory &memory) -> ZstdDecoder<Memory>;
+
 }

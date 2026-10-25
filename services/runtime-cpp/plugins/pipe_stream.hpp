@@ -90,4 +90,7 @@ private:
   Wait wait_;
 };
 
+template <PipeWait Wait = BlockingPipeWait>
+PipeStream(int input, int output, Wait wait = {}) -> PipeStream<Wait>;
+
 }

@@ -157,4 +157,7 @@ private:
   bool reject_duplicates_;
 };
 
+template <Allocator Memory>
+Object(Memory &memory, JsonValue value, bool reject_duplicates = false) -> Object<Memory>;
+
 }

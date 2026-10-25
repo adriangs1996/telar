@@ -37,4 +37,7 @@ private:
   Vector<Package, Memory> packages_;
 };
 
+template <Allocator Memory>
+PackageRegistry(Memory &memory, std::string_view directory, std::span<const ConfiguredPlugin> specifications) -> PackageRegistry<Memory>;
+
 }

@@ -63,4 +63,7 @@ private:
   std::uint64_t total_ = 0;
 };
 
+template <Allocator Memory>
+RetainedStream(Memory &memory, std::size_t capacity) -> RetainedStream<Memory>;
+
 }

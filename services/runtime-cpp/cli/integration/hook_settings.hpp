@@ -174,4 +174,7 @@ private:
   String<Memory> worktree_command_;
 };
 
+template <Allocator Memory>
+HookSettings(Memory &memory, Provider provider, std::string_view executable) -> HookSettings<Memory>;
+
 }

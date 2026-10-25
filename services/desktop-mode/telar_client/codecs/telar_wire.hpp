@@ -39,6 +39,9 @@ namespace telar {
     }
   };
 
+  template <std::size_t N>
+  FixedString(const char (&text)[N]) -> FixedString<N>;
+
   struct EncodingError final : std::exception {
     EncodingError(const char *message)
         : message{message} {}

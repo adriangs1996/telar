@@ -25,6 +25,9 @@ private:
   CaptureSide side_;
 };
 
+template <Http1CapturePolicy Capture>
+Http1TransportObserver(ProxyCounters &counters, Capture &capture, CaptureSide side) -> Http1TransportObserver<Capture>;
+
 static_assert(Http1Observer<Http1TransportObserver<IgnoreHttp1Capture>>);
 
 }

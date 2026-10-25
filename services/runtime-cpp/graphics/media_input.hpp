@@ -34,4 +34,7 @@ private:
   const std::atomic<unsigned> &shared_clients_;
 };
 
+template <Allocator Memory>
+MediaInput(MediaAllocator<Memory> &memory, MediaTerminal<MediaAllocator<Memory>> &terminal, PreparedImages<Memory> &prepared, const std::atomic<unsigned> &shared_clients) -> MediaInput<Memory>;
+
 }

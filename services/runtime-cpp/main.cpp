@@ -3,6 +3,7 @@
 #include "cli/plugin.hpp"
 #include "cli/proxy_trust.hpp"
 #include "cli/server.hpp"
+#include "cli/traffic.hpp"
 #include "plugins/run_worker.hpp"
 #include <cstdio>
 #include <cstring>
@@ -13,6 +14,11 @@ int main(int argc, char **argv) {
     SystemAllocator system;
     constexpr std::size_t memory_budget = std::size_t{2} * 1024 * 1024 * 1024;
     BudgetAllocator budget{system, memory_budget};
+
+    if (argc >= 2 && std::string_view{argv[1]} == "traffic") {
+      cli::runTraffic(budget, {argv + 2, static_cast<std::size_t>(argc - 2)});
+      return 0;
+    }
 
     if (argc >= 2 && std::string_view{argv[1]} == "integration") {
       const auto options = cli::IntegrationOptions::parse({argv + 2, static_cast<std::size_t>(argc - 2)});

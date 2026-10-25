@@ -63,4 +63,7 @@ private:
   std::size_t count_ = 0;
 };
 
+template <Allocator Memory, EnvironmentLookup Environment>
+TapConfiguration(Memory &memory, std::string_view directory, std::span<const ConfiguredPlugin> configured, const Environment &environment) -> TapConfiguration<Memory>;
+
 }

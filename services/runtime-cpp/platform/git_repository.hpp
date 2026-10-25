@@ -122,4 +122,7 @@ private:
   Vector<String<Memory>, Memory> overrides_;
 };
 
+template <Allocator Memory>
+GitRepository(Memory &memory, std::string_view root, typename GitRepository<Memory>::Clock::time_point deadline, const std::atomic<bool> &cancelled) -> GitRepository<Memory>;
+
 }

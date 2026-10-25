@@ -28,4 +28,7 @@ private:
   Upstream &upstream_;
 };
 
+template <Allocator Upstream>
+ErasingAllocator(Upstream &upstream) -> ErasingAllocator<Upstream>;
+
 }

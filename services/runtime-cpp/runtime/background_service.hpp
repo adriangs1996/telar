@@ -154,4 +154,7 @@ private:
   [[no_unique_address]] HistoryCounters counters_;
 };
 
+template <ConcurrentAllocator Memory>
+BackgroundService(Memory &memory, const char *history_path, const HistoryFilters &filters = default_history_filters) -> BackgroundService<Memory>;
+
 }

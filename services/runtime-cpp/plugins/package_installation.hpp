@@ -64,4 +64,7 @@ private:
   Memory &memory_;
 };
 
+template <Allocator Memory>
+PackageInstallation(Memory &memory) -> PackageInstallation<Memory>;
+
 }

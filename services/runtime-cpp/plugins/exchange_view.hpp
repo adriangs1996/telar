@@ -21,6 +21,7 @@ struct HalfView {
   std::uint16_t status_code = 0;
   CaptureOutcome outcome = CaptureOutcome::failed;
   std::int64_t finished_at_ms = 0;
+  bool head_truncated = false;
 };
 
 struct ExchangeIdentity {

@@ -17,6 +17,7 @@ find_path(NGHTTP2_INCLUDE_DIR nghttp2/nghttp2.h HINTS "${NGHTTP2_ROOT}/include" 
 find_library(NGHTTP2_LIBRARY NAMES libnghttp2.a nghttp2 HINTS "${NGHTTP2_ROOT}/lib" REQUIRED)
 
 find_library(ZLIB_LIBRARY NAMES z REQUIRED)
+find_library(PCAP_LIBRARY NAMES pcap PATHS "${CMAKE_OSX_SYSROOT}/usr/lib" REQUIRED)
 
 set(BROTLI_ROOT "" CACHE PATH "Installed Brotli prefix")
 find_path(BROTLI_INCLUDE_DIR brotli/decode.h HINTS "${BROTLI_ROOT}/include" REQUIRED)

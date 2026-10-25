@@ -51,4 +51,7 @@ private:
   Memory &memory_;
 };
 
+template <Allocator Memory>
+PackageCopy(Memory &memory) -> PackageCopy<Memory>;
+
 }

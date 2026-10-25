@@ -1,4 +1,5 @@
 #include "lua_io.hpp"
+#include "traffic_stream.hpp"
 #include "file_watch.hpp"
 #include "lua_environment.hpp"
 #include "lua_value.hpp"
@@ -48,6 +49,7 @@ namespace {
     list_dir,
     watch,
     request,
+    traffic_subscribe,
     cancel,
     module_source
   };
@@ -370,6 +372,7 @@ namespace ui {
       int callback = LUA_NOREF;
       std::shared_ptr<std::atomic_bool> canceled = std::make_shared<std::atomic_bool>(false);
       std::function<void()> start;
+      std::function<void()> cleanup;
       QPointer<QObject> observer;
       QPointer<QNetworkReply> reply;
       QPointer<QTimer> timer;
@@ -380,6 +383,7 @@ namespace ui {
 
     lua::Environment &environment;
     QString directory;
+    std::string runtime_socket;
     std::function<void(const QString &)> observe_module;
     QSet<QString> modules;
     std::unique_ptr<QObject> context = std::make_unique<QObject>();
@@ -392,9 +396,11 @@ namespace ui {
 
     Impl(lua::Environment &environment,
          QString directory,
-         std::function<void(const QString &)> observe_module)
+         std::function<void(const QString &)> observe_module,
+         std::string runtime_socket)
         : environment(environment),
           directory(std::move(directory)),
+          runtime_socket(std::move(runtime_socket)),
           observe_module(std::move(observe_module)) {
       try {
         install();
@@ -514,6 +520,7 @@ namespace ui {
                 {"list_dir", Operation::list_dir},
                 {"watch", Operation::watch},
                 {"request", Operation::request},
+                {"traffic_subscribe", Operation::traffic_subscribe},
                 {"cancel", Operation::cancel},
                 {"module_source", Operation::module_source},
             };
@@ -612,6 +619,8 @@ namespace ui {
 
       if (operation == Operation::request) {
         prepareRequest(*job, identifier, objectValue(request.values[0]));
+      } else if (operation == Operation::traffic_subscribe) {
+        prepareTraffic(*job, identifier, objectValue(request.values[0]));
       } else {
         const auto path = resolvePath(request.values[0]);
         QByteArray data;
@@ -675,6 +684,9 @@ namespace ui {
       auto job = std::move(found->second);
       jobs.erase(found);
       job->canceled->store(true);
+      if (job->cleanup) {
+        job->cleanup();
+      }
       environment.releaseReference(job->callback);
 
       if (job->observer) {
@@ -796,6 +808,60 @@ namespace ui {
       });
 
       watcher->setPaths({path});
+    }
+
+    void prepareTraffic(Job &job, std::uint64_t identifier, const Value::Object &options) {
+      std::string filter;
+      auto selection = telar::runtime::traffic::Selection::packets;
+      for (const auto &[name, value] : options) {
+        if (name == "filter") {
+          filter = stringValue(value);
+        } else if (name == "events") {
+          const auto *events = std::get_if<Value::Object>(&value.data);
+          if (!events || events->empty()) {
+            throw std::runtime_error("Traffic events must select packet or exchange");
+          }
+          telar::Byte mask = 0;
+          for (const auto &[name, enabled] : *events) {
+            const auto bit = name == "packet" ? telar::runtime::traffic::Selection::packets : telar::runtime::traffic::Selection::exchanges;
+            if (name != "packet" && name != "exchange") {
+              throw std::runtime_error("Unknown traffic event: " + name);
+            }
+            const auto *selected = std::get_if<bool>(&enabled.data);
+            if (!selected) {
+              throw std::runtime_error("Traffic event selection must be boolean");
+            }
+            if (*selected) {
+              mask |= static_cast<telar::Byte>(bit);
+            }
+          }
+          if (mask == 0) {
+            throw std::runtime_error("Traffic events must select packet or exchange");
+          }
+          selection = static_cast<telar::runtime::traffic::Selection>(mask);
+        } else {
+          throw std::runtime_error("Unknown traffic subscription option: " + name);
+        }
+      }
+      if (runtime_socket.empty()) {
+        throw std::runtime_error("Traffic subscriptions require a local runtime endpoint");
+      }
+
+      job.start = [this, identifier, filter = std::move(filter), selection] {
+        auto *stream = new TrafficStream(
+            {QString::fromStdString(runtime_socket + std::string{telar::runtime::traffic::socket_suffix}), filter, selection},
+            [this, identifier](Value event) {
+              const auto found = jobs.find(identifier);
+              if (found != jobs.end()) {
+                deliver(found->second->callback, {std::move(event), {}});
+              }
+            },
+            [this, identifier](std::string error) { finish(identifier, {{}, std::move(error)}); },
+            context.get());
+        auto &job = *jobs.at(identifier);
+        job.observer = stream;
+        job.cleanup = [stream] { stream->stop(); };
+      };
     }
 
     void prepareRequest(Job &job, std::uint64_t identifier, const Value::Object &options) {
@@ -1021,8 +1087,9 @@ namespace ui {
 
   LuaIo::LuaIo(lua::Environment &environment,
                const QString &directory,
-               std::function<void(const QString &)> observe_module)
-      : impl_(std::make_unique<Impl>(environment, directory, std::move(observe_module))) {}
+               std::function<void(const QString &)> observe_module,
+               std::string runtime_socket)
+      : impl_(std::make_unique<Impl>(environment, directory, std::move(observe_module), std::move(runtime_socket))) {}
 
   LuaIo::~LuaIo() = default;
 

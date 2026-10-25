@@ -140,4 +140,7 @@ private:
   bool saved_certificate_ = false;
 };
 
+template <ConcurrentAllocator Memory>
+PreparedAuthority(Memory &memory, const TlsLibrary<Memory> &library, int directory) -> PreparedAuthority<Memory>;
+
 }

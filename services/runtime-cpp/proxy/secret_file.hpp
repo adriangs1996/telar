@@ -35,7 +35,7 @@ public:
       return *existing;
     }
 
-    const auto secret = ProxySecret::random();
+    const auto secret = ProxySecret::generate();
     SensitiveBuffer<ProxySecret::hexadecimal_bytes + 1> line;
     secret.formatHexadecimal({reinterpret_cast<char *>(line.bytes().data()), ProxySecret::hexadecimal_bytes});
     line.bytes().back() = '\n';

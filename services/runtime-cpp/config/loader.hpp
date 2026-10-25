@@ -94,4 +94,7 @@ private:
   RuntimeValues<Memory> &values_;
 };
 
+template <Allocator Memory>
+Loader(Memory &memory, RuntimeValues<Memory> &values) -> Loader<Memory>;
+
 }

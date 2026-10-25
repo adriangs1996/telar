@@ -88,4 +88,7 @@ private:
   std::string_view keychain_;
 };
 
+template <ConcurrentAllocator Memory, TrustCommandExecutor Executor>
+Service(Memory &memory, const TlsLibrary<Memory> &library, const Paths<Memory> &paths, Executor &executor, std::string_view keychain) -> Service<Memory, Executor>;
+
 }

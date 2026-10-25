@@ -66,4 +66,7 @@ private:
   Memory &memory_;
 };
 
+template <Allocator Memory>
+CAllocationBlocks(Memory &memory) -> CAllocationBlocks<Memory>;
+
 }

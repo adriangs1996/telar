@@ -16,6 +16,7 @@ struct ProxyOptions {
   ProxyCaptureLimits capture;
   bool enabled = false;
   bool anonymous_tunnels = false;
+  bool network_capture = false;
 };
 
 }

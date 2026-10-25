@@ -137,4 +137,7 @@ private:
   RuntimeValues<Memory> &values_;
 };
 
+template <Allocator Memory>
+RuntimeReader(RuntimeValues<Memory> &values) -> RuntimeReader<Memory>;
+
 }

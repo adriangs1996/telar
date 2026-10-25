@@ -1,5 +1,10 @@
 # Go proxy service migration
 
+The new traffic platform is being built in C++, with Go retained only as a
+reference. See [the current C++ observation API](traffic-capture.md) and
+[its target contract](traffic-platform.md). The Go migration plan below is
+historical; its prototype notes still describe the Go executable.
+
 Implementation plan, not an installed feature. The current proxy remains
 documented in [ProxyTLS](proxy-tls.md). The architectural decision is recorded
 in [ADR 0001](adr/0001-independent-go-proxy-service.md).

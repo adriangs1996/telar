@@ -196,4 +196,7 @@ private:
   lua_State *state_ = nullptr;
 };
 
+template <Allocator Memory>
+Vm(Memory &memory, Limits limits = {}) -> Vm<Memory>;
+
 }

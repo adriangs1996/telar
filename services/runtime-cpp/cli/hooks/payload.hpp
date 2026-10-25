@@ -140,4 +140,10 @@ private:
   std::optional<String<Memory>> workspace_;
 };
 
+template <Allocator Memory>
+Payload(Memory &memory, AgentProvider provider, JsonValue input) -> Payload<Memory>;
+
+template <Allocator Memory>
+Payload(Memory &memory, AgentProvider provider, Object<Memory> input) -> Payload<Memory>;
+
 }

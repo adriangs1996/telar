@@ -69,4 +69,7 @@ private:
   inline static bool used_ = false;
 };
 
+template <ConcurrentAllocator Memory>
+TlsLibrary(Memory &memory) -> TlsLibrary<Memory>;
+
 }

@@ -125,4 +125,7 @@ private:
   std::uint64_t received_ = 0;
 };
 
+template <Allocator Memory>
+Input(Memory &memory) -> Input<Memory>;
+
 }

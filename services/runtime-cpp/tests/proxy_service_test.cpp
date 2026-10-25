@@ -182,7 +182,7 @@ static void checkService(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> 
     check(options.intercept_hosts.append("origin.test"));
     options.intercept_hosts.finish();
   }
-  const auto secret = ProxySecret::random();
+  const auto secret = ProxySecret::generate();
   auto origin_listener = ProxyListener::bind(std::nullopt, {});
   ProxyService<TlsTestMemory, Poller, ServiceResolver> service{memory, options, secret, interception, ProxyListener::bind(std::nullopt, {})};
   auto child = connectLocal(service.port());
@@ -292,7 +292,7 @@ static void checkAdmissionAndStop(TlsTestMemory &memory, const TlsLibrary<TlsTes
   TlsContexts contexts{memory, library, trust};
   TlsInterception interception{contexts, authority};
   ProxyOptions options{memory};
-  const auto secret = ProxySecret::random();
+  const auto secret = ProxySecret::generate();
   std::optional<ProxyService<TlsTestMemory, Kqueue, ServiceResolver>> service;
   service.emplace(memory, options, secret, interception, ProxyListener::bind(std::nullopt, {}));
   std::array<FileDescriptor, ProxyConnectionPolicy::maximum_unauthenticated> silent;

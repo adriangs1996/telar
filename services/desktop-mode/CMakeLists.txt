@@ -183,6 +183,7 @@ endif()
 # Programs name the libraries they need beyond the core; those that drive the native backend
 # name its libraries and their own Objective-C++ sources.
 set(layout_dbg_libraries desktop-ui)
+set(traffic_dbg_libraries desktop-ui PkgConfig::LUAJIT)
 # Terminals draw optical text through the native backend on macOS.
 if(APPLE)
   set(terminal_ui_dbg_libraries desktop-native)

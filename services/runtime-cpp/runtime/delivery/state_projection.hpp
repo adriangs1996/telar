@@ -66,4 +66,7 @@ private:
   const Proxy &proxy_;
 };
 
+template <typename Workspaces, typename Agents, typename Metrics, typename Layouts, typename Proxy>
+StateProjection(Workspaces &workspaces, Agents &agents, Metrics &metrics, Layouts &layouts, const Proxy &proxy) -> StateProjection<Workspaces, Agents, Metrics, Layouts, Proxy>;
+
 }

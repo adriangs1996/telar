@@ -118,7 +118,7 @@ void LocalListener::cleanup() noexcept {
   bound_ = false;
 }
 
-FileDescriptor LocalListener::accept() {
+FileDescriptor LocalListener::accept(LocalPeerPolicy policy) {
   FileDescriptor connection{::accept(socket_.get(), nullptr, nullptr)};
   if (!connection) {
     if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
@@ -130,7 +130,7 @@ FileDescriptor LocalListener::accept() {
 
   uid_t peer_user = 0;
   gid_t peer_group = 0;
-  if (::getpeereid(connection.get(), &peer_user, &peer_group) != 0 || peer_user != ::geteuid()) {
+  if (::getpeereid(connection.get(), &peer_user, &peer_group) != 0 || (peer_user != ::geteuid() && !(policy == LocalPeerPolicy::same_user_or_root && peer_user == 0))) {
     return FileDescriptor{};
   }
 

@@ -80,4 +80,7 @@ private:
   CapturedExchange<Memory> exchange_;
 };
 
+template <ConcurrentAllocator Memory>
+Http1Capture(Memory &memory, CaptureProducer<Memory> *producer, CaptureStart context) -> Http1Capture<Memory>;
+
 }

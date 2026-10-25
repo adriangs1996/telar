@@ -141,4 +141,7 @@ private:
   RuntimeModel<Memory> &model_;
 };
 
+template <Allocator Memory>
+ClientDelivery(Memory &memory, RuntimeModel<Memory> &model) -> ClientDelivery<Memory>;
+
 }

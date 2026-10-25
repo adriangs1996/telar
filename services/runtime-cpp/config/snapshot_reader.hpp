@@ -86,4 +86,7 @@ private:
   RuntimeValues<Memory> &values_;
 };
 
+template <Allocator Memory>
+SnapshotReader(Memory &memory, RuntimeValues<Memory> &values) -> SnapshotReader<Memory>;
+
 }

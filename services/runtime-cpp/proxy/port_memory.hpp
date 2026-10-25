@@ -222,4 +222,7 @@ private:
   std::optional<std::uint16_t> legacy_;
 };
 
+template <Allocator Memory>
+ProxyPortMemory(Memory &memory, int directory, std::string_view endpoint, bool inherit_legacy) -> ProxyPortMemory<Memory>;
+
 }

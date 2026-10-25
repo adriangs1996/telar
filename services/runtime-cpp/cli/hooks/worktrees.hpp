@@ -260,6 +260,9 @@ private:
 };
 
 template <Allocator Memory, EnvironmentLookup Environment>
+Worktrees(Memory &memory, const Environment &environment, std::string_view socket) -> Worktrees<Memory, Environment>;
+
+template <Allocator Memory, EnvironmentLookup Environment>
 std::optional<int> answerWorktree(Memory &memory, const Environment &environment, Object<Memory> &fields, std::string_view socket) {
   try {
     for (const auto name : {"hook_event_name", "cwd", "name", "worktree_path"}) {

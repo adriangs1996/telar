@@ -77,4 +77,7 @@ private:
   String<Memory> directory_;
 };
 
+template <Allocator Memory>
+Paths(Memory &memory, std::string_view directory) -> Paths<Memory>;
+
 }

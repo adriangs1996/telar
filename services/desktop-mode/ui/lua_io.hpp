@@ -4,6 +4,7 @@
 #include <QStringList>
 #include <functional>
 #include <memory>
+#include <string>
 
 namespace lua {
   struct Environment;
@@ -14,7 +15,8 @@ namespace ui {
   public:
     LuaIo(lua::Environment &environment,
           const QString &directory,
-          std::function<void(const QString &)> observe_module);
+          std::function<void(const QString &)> observe_module,
+          std::string runtime_socket = {});
     ~LuaIo();
     LuaIo(const LuaIo &) = delete;
     LuaIo &operator=(const LuaIo &) = delete;

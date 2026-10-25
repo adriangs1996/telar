@@ -159,4 +159,7 @@ private:
   int callback_reference_ = LUA_NOREF;
 };
 
+template <Allocator Memory>
+Host(Memory &memory, const char *entry_path) -> Host<Memory>;
+
 }

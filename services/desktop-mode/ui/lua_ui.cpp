@@ -545,7 +545,7 @@ namespace {
       shortcuts_->setPrefix(settings.prefix);
       installApi();
       io_ =
-          std::make_unique<ui::LuaIo>(environment_, settings.directory, std::move(observe_module));
+          std::make_unique<ui::LuaIo>(environment_, settings.directory, std::move(observe_module), services.runtime_socket);
     }
 
     ~Generation() override {

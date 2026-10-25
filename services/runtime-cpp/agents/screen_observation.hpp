@@ -238,6 +238,9 @@ private:
   const AgentManifests &manifests_;
 };
 
+template <Allocator Memory>
+AgentScreenReader(const Terminal<Memory> &terminal, const AgentManifests &manifests = builtin_manifests) -> AgentScreenReader<Memory>;
+
 inline bool hasIdleScreen(AgentProvider provider) noexcept {
   return provider == AgentProvider::claude || provider == AgentProvider::codex || provider == AgentProvider::cursor;
 }

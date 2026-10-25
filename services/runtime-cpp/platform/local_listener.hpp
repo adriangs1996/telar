@@ -9,6 +9,8 @@
 
 namespace telar::runtime {
 
+enum class LocalPeerPolicy { same_user, same_user_or_root };
+
 class LocalListener {
 public:
   explicit LocalListener(std::string_view path);
@@ -20,7 +22,7 @@ public:
     return socket_.get();
   }
 
-  FileDescriptor accept();
+  FileDescriptor accept(LocalPeerPolicy policy = LocalPeerPolicy::same_user);
 
   std::string_view path() const noexcept {
     return path_.data();

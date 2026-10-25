@@ -102,6 +102,9 @@ private:
 };
 
 template <ConcurrentAllocator Memory>
+Service(Memory &memory, std::span<const ServiceSpec> specifications, const char *executable, std::string_view trace_prefix = {}) -> Service<Memory>;
+
+template <ConcurrentAllocator Memory>
 class ShutdownGuard {
 public:
   explicit ShutdownGuard(Service<Memory> &service) noexcept : service_(service) {}
@@ -113,5 +116,8 @@ public:
 private:
   Service<Memory> &service_;
 };
+
+template <ConcurrentAllocator Memory>
+ShutdownGuard(Service<Memory> &service) -> ShutdownGuard<Memory>;
 
 }

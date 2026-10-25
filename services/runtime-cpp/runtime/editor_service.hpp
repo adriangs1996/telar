@@ -20,4 +20,7 @@ private:
   RemoteEditor<Memory> editor_;
 };
 
+template <ConcurrentAllocator Memory>
+EditorService(Memory &memory) -> EditorService<Memory>;
+
 }

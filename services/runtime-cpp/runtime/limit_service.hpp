@@ -89,4 +89,7 @@ private:
   RuntimeModel<Memory> &model_;
 };
 
+template <Allocator Memory>
+LimitService(RuntimeModel<Memory> &model) -> LimitService<Memory>;
+
 }

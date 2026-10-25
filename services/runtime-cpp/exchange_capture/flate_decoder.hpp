@@ -108,4 +108,7 @@ private:
   bool initialized_ = false;
 };
 
+template <Allocator Memory>
+FlateDecoder(Memory &memory) -> FlateDecoder<Memory>;
+
 }

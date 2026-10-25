@@ -81,6 +81,9 @@ private:
   bool active_ = false;
 };
 
+template <Allocator Memory>
+Session(Memory &memory, const char *path) -> Session<Memory>;
+
 }
 
 #define TELAR_TRACE_JOIN_(left, right) left##right

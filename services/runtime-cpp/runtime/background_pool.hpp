@@ -128,4 +128,7 @@ private:
   std::atomic<std::uint64_t> history_submission_failures_{0};
 };
 
+template <ConcurrentAllocator Memory, typename History, typename Paths, typename Editor, typename Suggestions>
+BackgroundPool(Memory &memory, History &history, Paths &paths, Editor &editor, Suggestions &suggestions) -> BackgroundPool<Memory, History, Paths, Editor, Suggestions>;
+
 }

@@ -193,4 +193,7 @@ private:
   bool restorable_;
 };
 
+template <Allocator Memory>
+Command(Memory &memory, const Launch &launch, CommandPurpose purpose = CommandPurpose::terminal) -> Command<Memory>;
+
 }

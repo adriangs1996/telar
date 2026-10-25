@@ -185,4 +185,7 @@ private:
   std::uint64_t clock_ = 0;
 };
 
+template <ConcurrentAllocator Memory>
+PathService(Memory &memory) -> PathService<Memory>;
+
 }

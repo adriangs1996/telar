@@ -138,4 +138,7 @@ private:
   Memory &memory_;
 };
 
+template <Allocator Memory>
+CaptureContentDecoder(Memory &memory) -> CaptureContentDecoder<Memory>;
+
 }

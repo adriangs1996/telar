@@ -184,4 +184,7 @@ private:
   bool resume_agents_;
 };
 
+template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
+Restore(Memory &memory, RuntimeModel<Memory> &model, PaneService<Memory, Poller, History> &panes, ClientLayouts<Memory> &layouts, bool resume_agents) -> Restore<Memory, Poller, History>;
+
 }

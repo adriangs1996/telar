@@ -184,4 +184,7 @@ private:
   std::uint64_t occupied_ = 0;
 };
 
+template <Allocator Memory>
+AttachmentDelivery(RuntimeModel<Memory> &model, ClientSession<Memory> &client) -> AttachmentDelivery<Memory>;
+
 }

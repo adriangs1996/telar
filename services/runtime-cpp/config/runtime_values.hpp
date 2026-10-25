@@ -47,4 +47,7 @@ struct RuntimeValues {
   bool resume_agents = true;
 };
 
+template <Allocator Memory>
+RuntimeValues(Memory &memory) -> RuntimeValues<Memory>;
+
 }

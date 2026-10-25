@@ -68,6 +68,7 @@ add_library(runtime-core STATIC
   terminal/cell_projection.cpp)
 target_include_directories(runtime-core PUBLIC . ../desktop-mode "${CMAKE_CURRENT_BINARY_DIR}/generated" "${NGHTTP2_INCLUDE_DIR}")
 target_link_libraries(runtime-core PUBLIC "${NGHTTP2_LIBRARY}")
+target_link_libraries(runtime-core PUBLIC "${PCAP_LIBRARY}")
 target_include_directories(runtime-core PUBLIC "${BROTLI_INCLUDE_DIR}" "${ZSTD_INCLUDE_DIR}")
 target_link_libraries(runtime-core PUBLIC "${ZLIB_LIBRARY}" "${BROTLI_DECODER_LIBRARY}" "${BROTLI_COMMON_LIBRARY}" "${ZSTD_LIBRARY}")
 target_link_libraries(runtime-core PUBLIC ghostty-vt runtime-lua "${SQLITE3_LIBRARY}" Threads::Threads OpenSSL::SSL OpenSSL::Crypto "${PNG_LIBRARY}" "-framework IOKit" "-framework CoreFoundation" "-framework Security")

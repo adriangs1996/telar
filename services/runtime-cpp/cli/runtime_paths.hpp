@@ -129,4 +129,7 @@ private:
   }
 };
 
+template <Allocator Memory, EnvironmentLookup Environment>
+RuntimePaths(Memory &memory, const ServerOptions &options, const Environment &environment) -> RuntimePaths<Memory>;
+
 }

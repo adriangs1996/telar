@@ -13,9 +13,10 @@ public:
       return;
     }
 
-    table.onlyFields({"enabled", "anonymous_tunnels", "ca_dir", "intercept_hosts", "capture"});
+    table.onlyFields({"enabled", "anonymous_tunnels", "ca_dir", "intercept_hosts", "capture", "network_capture"});
     values.enabled = table.field("enabled").boolean(values.enabled);
     values.anonymous_tunnels = table.field("anonymous_tunnels").boolean(values.anonymous_tunnels);
+    values.network_capture = table.field("network_capture").boolean(values.network_capture);
     capture(table.field("capture"), values.capture);
     const auto directory = table.field("ca_dir");
     if (directory.present()) {

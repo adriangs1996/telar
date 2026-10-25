@@ -48,4 +48,7 @@ private:
   std::size_t used_ = 0;
 };
 
+template <Allocator Upstream>
+BufferAllocator(Upstream &upstream, std::span<std::byte> buffer) -> BufferAllocator<Upstream>;
+
 }

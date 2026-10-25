@@ -66,4 +66,7 @@ private:
   Vector<Entry, Memory> entries_;
 };
 
+template <Allocator Memory>
+PackageFiles(Memory &memory, int directory) -> PackageFiles<Memory>;
+
 }

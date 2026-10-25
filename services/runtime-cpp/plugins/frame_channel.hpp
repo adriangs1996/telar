@@ -85,4 +85,7 @@ private:
   StreamReadBuffer<input_capacity> input_;
 };
 
+template <FrameStream Stream>
+FrameChannel(Stream &stream) -> FrameChannel<Stream>;
+
 }

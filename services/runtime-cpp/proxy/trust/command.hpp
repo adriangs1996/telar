@@ -69,4 +69,7 @@ private:
   FILE *output_;
 };
 
+template <Allocator Memory>
+SystemCommand(Memory &memory, FILE *output) -> SystemCommand<Memory>;
+
 }

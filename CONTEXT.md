@@ -165,8 +165,9 @@ A history record for a child process that was spawned but whose pane launch did
 not complete. It is distinct from a normal pane session.
 
 **Proxy service**:
-The Telar component that owns proxy traffic and inspection on one machine,
-independently of terminal sessions and open client windows.
+The Telar component that provides traffic capture, connection handling and
+inspection on one machine, independently of terminal sessions and open client
+windows. User applications own traffic analysis and workflows built on it.
 _Avoid_: Runtime proxy, Separate proxy application
 
 **Proxy activation**:
@@ -174,6 +175,23 @@ The user's choice to route application connections through Telar's proxy on
 one machine. Activation is distinct from the service being available and from
 trusting its certificate authority.
 _Avoid_: Service running, System trust
+
+**Traffic observation**:
+A read-only record of traffic seen at a named interface or connection on the
+runtime's machine. Observation does not imply control over delivery or access
+to plaintext.
+_Avoid_: Interception, Decrypted traffic
+
+**Traffic interception**:
+The user's choice to put selected connections through Telar before their bytes
+reach the peer. It allows inspection and authorized modification within the
+connection's supported protocols.
+_Avoid_: Packet capture, Traffic observation
+
+**Traffic consumer**:
+A user application that subscribes to Telar's traffic observations. Its
+subscriptions and presentation do not own the intercepted connections.
+_Avoid_: Agent tracker, Proxy owner
 
 **Proxy secret**:
 The capability that authorizes an explicit client to use Telar's CONNECT

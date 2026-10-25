@@ -76,4 +76,7 @@ private:
   String<Memory> name_;
 };
 
+template <Allocator Memory>
+FileStore(Memory &memory, std::string_view path) -> FileStore<Memory>;
+
 }

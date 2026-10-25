@@ -35,11 +35,12 @@ namespace telar {
       Client client{};
       client._address.sun_family = AF_UNIX;
 
-      if (std::strlen(socket_path) >= sizeof(client._address.sun_path)) {
+      const auto path_length = std::strlen(socket_path);
+      if (path_length >= sizeof(client._address.sun_path)) {
         throw SocketError{"Socket path too long"};
       }
 
-      std::strcpy(client._address.sun_path, socket_path);
+      std::memcpy(client._address.sun_path, socket_path, path_length + 1);
 
       client._fd = socket(AF_UNIX, SOCK_STREAM, 0);
       if (client._fd < 0) {
