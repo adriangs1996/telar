@@ -1,0 +1,82 @@
+name: C++ runtime
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runtime-cpp-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runtime:
+    runs-on: macos-26
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - configuration: Release
+            sanitizers: "OFF"
+            distributable: "ON"
+          - configuration: Debug
+            sanitizers: "ON"
+            distributable: "OFF"
+    name: macOS ARM64 (${{ matrix.configuration }})
+    defaults:
+      run:
+        working-directory: services/runtime-cpp
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install dependencies
+        run: |
+          test "$(uname -m)" = arm64
+          brew install cmake ninja llvm openssl@3 libpng libnghttp2 brotli zstd
+          ../../packaging/release/install-zig.sh "$RUNNER_TEMP/zig"
+          echo "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
+
+      - name: Build libghostty-vt
+        run: python3 tools/build_ghostty.py --build-dir "$RUNNER_TEMP/ghostty-build" --prefix "$RUNNER_TEMP/ghostty"
+
+      - name: Configure
+        run: |
+          cmake -S . -B out -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} \
+            -DCMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++" \
+            -DGHOSTTY_VT_ROOT="$RUNNER_TEMP/ghostty" \
+            -DOPENSSL_ROOT_DIR="$(brew --prefix openssl@3)" \
+            -DNGHTTP2_ROOT="$(brew --prefix libnghttp2)" \
+            -DBROTLI_ROOT="$(brew --prefix brotli)" \
+            -DZSTD_ROOT="$(brew --prefix zstd)" \
+            -DPNG_ROOT="$(brew --prefix libpng)" \
+            -DTELAR_RUNTIME_DISTRIBUTABLE=${{ matrix.distributable }} \
+            -DTELAR_RUNTIME_INSTALL_DESKTOP_COMMAND=ON \
+            -DTELAR_RUNTIME_SANITIZERS=${{ matrix.sanitizers }}
+
+      - name: Build and test
+        run: |
+          cmake --build out --target telar-runtime runtime-tests tls-tests hook-tests desktop-launch-probe --parallel 3
+          ctest --test-dir out --output-on-failure -R '^(runtime-tests|tls-tests|hook-tests)$'
+
+      - name: Install and exercise Desktop discovery
+        run: |
+          cmake --install out --prefix "$RUNNER_TEMP/stage"
+          python3 tools/check_desktop_launch.py \
+            --cpp "$RUNNER_TEMP/stage/bin/telar" \
+            --probe out/desktop-launch-probe \
+            --output out/desktop-launch.json
+
+      - name: Retain validation reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: runtime-cpp-${{ matrix.configuration }}
+          path: |
+            services/runtime-cpp/out/CMakeCache.txt
+            services/runtime-cpp/out/Testing/Temporary/LastTest.log
+            services/runtime-cpp/out/desktop-launch.json

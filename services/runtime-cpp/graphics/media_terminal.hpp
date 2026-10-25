@@ -1,0 +1,151 @@
+#pragma once
+
+#include "../diagnostics/trace.hpp"
+#include "../terminal/pty_response_queue.hpp"
+#include "atomic_frame.hpp"
+#include "file_input.hpp"
+#include "limits.hpp"
+#include "storage.hpp"
+#include "upload_limits.hpp"
+#include <charconv>
+
+namespace telar::runtime {
+
+template <Allocator Memory>
+class MediaTerminal {
+public:
+  explicit MediaTerminal(Memory &memory, TerminalSize size, GraphicsLimits limits, std::shared_ptr<PtyResponseQueue> responses = {})
+      : graphics(memory),
+        allocator_(memory),
+        responses_(responses ? std::move(responses) : std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory})),
+        storage_limit_(limits.screenBytes()),
+        uploads_(limits.screenBytes()) {
+    checkGhostty(ghostty_terminal_new(allocator_.get(), terminal_.output(), size.cols, size.rows));
+    checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_USERDATA, this));
+    checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_WRITE_PTY, reinterpret_cast<const void *>(&receiveResponse)));
+    const auto storage = limits.screenBytes();
+    checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_KITTY_IMAGE_STORAGE_LIMIT, &storage));
+    checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_APC_MAX_BYTES_KITTY, &GraphicsLimits::payload_bytes));
+    const bool disabled = false;
+    const bool enabled = true;
+    checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_GLYPH_PROTOCOL, &disabled));
+    checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_KITTY_IMAGE_MEDIUM_FILE, &disabled));
+    checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_KITTY_IMAGE_MEDIUM_TEMP_FILE, nullptr));
+    checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_KITTY_IMAGE_MEDIUM_SHARED_MEM, &enabled));
+    resize(size);
+  }
+
+  void feed(std::span<const Byte> bytes) {
+    GraphicsFileInput::feed(bytes, storage_limit_, *this);
+  }
+
+  void reply(std::span<const Byte> bytes) {
+    responses_->push(bytes);
+  }
+
+  void ingest(std::span<const Byte> bytes) {
+    TELAR_TRACE("media.terminal.feed");
+    write(bytes, uploads_.observe(terminal_.get(), bytes));
+  }
+
+  void ingestEncodedChunk(std::span<const Byte> bytes) {
+    TELAR_TRACE("media.terminal.feed");
+    write(bytes, uploads_.observeEncodedChunk(terminal_.get()));
+  }
+
+  void resize(TerminalSize size) {
+    checkGhostty(ghostty_terminal_resize(terminal_.get(), size.cols, size.rows, size.cell_width_px, size.cell_height_px));
+  }
+
+  void refresh() {
+    graphics.update(terminal_.get());
+  }
+
+  bool insertImage(const AtomicFrameControl &control, std::span<const Byte> data) noexcept {
+    const GhosttyKittyGraphicsImageInsert image{
+        .size = sizeof(GhosttyKittyGraphicsImageInsert),
+        .image_id = control.key.image_id,
+        .width = control.width,
+        .height = control.height,
+        .format = control.depth == 24 ? GHOSTTY_KITTY_IMAGE_FORMAT_RGB : GHOSTTY_KITTY_IMAGE_FORMAT_RGBA,
+        .data = data.data(),
+        .data_len = data.size(),
+    };
+    return ghostty_kitty_graphics_image_insert(terminal_.get(), &image) == GHOSTTY_SUCCESS;
+  }
+
+  ImageKey imageKey(std::uint32_t identity) {
+    GhosttyKittyGraphics storage = nullptr;
+    checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_KITTY_GRAPHICS, &storage));
+    const auto image = ghostty_kitty_graphics_image(storage, identity);
+    ImageKey key{identity, 0};
+    checkGhostty(ghostty_kitty_graphics_image_get(image, GHOSTTY_KITTY_IMAGE_DATA_GENERATION, &key.generation));
+    return key;
+  }
+
+#if TELAR_DIAGNOSTICS
+  diagnostics::GraphicsStorageSnapshot storageMetrics() {
+    return graphics.storageMetrics(terminal_.get());
+  }
+#endif
+
+  std::size_t storageLimit() const noexcept {
+    return storage_limit_;
+  }
+
+  std::span<const Byte> responses() const noexcept {
+    return responses_->readable();
+  }
+
+  void consumeResponses(std::size_t count) noexcept {
+    responses_->consume(count);
+  }
+
+  GraphicsUploadLimits::Reached takeUploadLimits() noexcept {
+    return uploads_.takeReached();
+  }
+
+  GraphicsStorage<Memory> graphics;
+
+private:
+  void write(std::span<const Byte> bytes, const GraphicsUploadLimits::Observation &observation) {
+    ghostty_terminal_vt_write(terminal_.get(), bytes.data(), bytes.size());
+    if (const auto image = uploads_.enforce(terminal_.get(), observation)) {
+      replyUploadLimit(*image);
+    }
+
+    bool processing_error = false;
+    checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_VT_PROCESSING_ERROR, &processing_error));
+    if (processing_error) {
+      throw TerminalError{GHOSTTY_OUT_OF_MEMORY};
+    }
+  }
+
+  void replyUploadLimit(std::uint32_t image) {
+    constexpr std::string_view prefix = "\x1b_Gi=";
+    constexpr std::string_view suffix = ";ENOMEM: graphics upload limit exceeded\x1b\\";
+    std::array<char, prefix.size() + 10 + suffix.size()> response;
+    auto *identity = std::copy(prefix.begin(), prefix.end(), response.data());
+    const auto formatted = std::to_chars(identity, identity + 10, image);
+    const auto *end = std::copy(suffix.begin(), suffix.end(), formatted.ptr);
+    responses_->push({reinterpret_cast<const Byte *>(response.data()), static_cast<std::size_t>(end - response.data())});
+  }
+
+  static void receiveResponse(GhosttyTerminal, void *context, const Byte *bytes, std::size_t count) noexcept {
+    constexpr std::string_view kitty_response = "\x1b_G";
+    if (count < kitty_response.size() || std::memcmp(bytes, kitty_response.data(), kitty_response.size()) != 0) {
+      return;
+    }
+
+    auto &self = *static_cast<MediaTerminal *>(context);
+    self.responses_->push({bytes, count});
+  }
+
+  GhosttyAllocatorBridge<Memory> allocator_;
+  TerminalHandle terminal_;
+  std::shared_ptr<PtyResponseQueue> responses_;
+  std::size_t storage_limit_;
+  GraphicsUploadLimits uploads_;
+};
+
+}

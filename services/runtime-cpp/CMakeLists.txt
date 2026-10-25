@@ -1,0 +1,109 @@
+cmake_minimum_required(VERSION 3.24)
+set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0" CACHE STRING "Minimum supported macOS version")
+project(telar_runtime LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+include(cmake/lua.cmake)
+
+include(cmake/dependencies.cmake)
+
+add_library(ghostty-vt UNKNOWN IMPORTED)
+set_target_properties(ghostty-vt PROPERTIES
+  IMPORTED_LOCATION "${GHOSTTY_VT_LIBRARY}"
+  INTERFACE_INCLUDE_DIRECTORIES "${GHOSTTY_VT_INCLUDE_DIR}")
+
+include(CheckCXXSourceCompiles)
+set(CMAKE_REQUIRED_INCLUDES "${GHOSTTY_VT_INCLUDE_DIR}")
+check_cxx_source_compiles("#include <ghostty/vt.h>
+int main() {
+  static_assert(sizeof(&ghostty_terminal_page_bytes) > 0);
+  GhosttyCodepointsBuffer buffer{};
+  return buffer.len + sizeof(GhosttyKittyGraphicsImageInsert) + GHOSTTY_TERMINAL_DATA_CURSOR_IS_DEFAULT + GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_IS_INTERNAL + GHOSTTY_TERMINAL_OPT_KITTY_PROTOCOL + GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_BOTTOM + GHOSTTY_KITTY_GRAPHICS_DATA_LOADING_BYTES + GHOSTTY_TERMINAL_OPT_ACTIVE_SCREEN;
+}" GHOSTTY_VT_HAS_RUNTIME_STORAGE_STATE)
+unset(CMAKE_REQUIRED_INCLUDES)
+if(NOT GHOSTTY_VT_HAS_RUNTIME_STORAGE_STATE)
+  message(FATAL_ERROR "Build the pinned libghostty-vt with tools/build_ghostty.py first")
+endif()
+
+add_executable(ghostty-manifest tools/ghostty_manifest.cpp)
+target_link_libraries(ghostty-manifest PRIVATE ghostty-vt)
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
+include(cmake/integration.cmake)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../../src/client/config/bootstrap.lua" TELAR_CONFIG_BOOTSTRAP)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../../src/client/config/bootstrap.lua")
+configure_file(config/bootstrap.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/config_bootstrap.hpp" @ONLY)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../../src/backend/plugins/bootstrap.lua" TELAR_PLUGIN_BOOTSTRAP)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../../src/backend/plugins/bootstrap.lua")
+configure_file(plugins/bootstrap.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/plugin_bootstrap.hpp" @ONLY)
+add_custom_command(
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/cell_layout.hpp"
+  COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_cell_layout.py"
+          "$<TARGET_FILE:ghostty-manifest>" "${CMAKE_CURRENT_BINARY_DIR}/generated/cell_layout.hpp"
+  DEPENDS ghostty-manifest tools/generate_cell_layout.py
+  VERBATIM)
+add_custom_target(cell-layout DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/cell_layout.hpp")
+
+if(NOT APPLE OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
+  message(FATAL_ERROR "The initial runtime target is macOS ARM64")
+endif()
+
+add_library(runtime-core STATIC
+  cli/integration.cpp
+  cli/runtime_connection.cpp
+  cli/daemon.cpp
+  graphics/png_decoder.cpp
+  diagnostics/trace.cpp
+  platform/file_descriptor.cpp
+  platform/pty_process.cpp
+  platform/pipe_process.cpp
+  platform/process_inspector.cpp
+  platform/host_metrics.cpp
+  platform/local_listener.cpp
+  platform/event_loop.cpp
+  history/database.cpp
+  terminal/cell_projection.cpp)
+target_include_directories(runtime-core PUBLIC . ../desktop-mode "${CMAKE_CURRENT_BINARY_DIR}/generated" "${NGHTTP2_INCLUDE_DIR}")
+target_link_libraries(runtime-core PUBLIC "${NGHTTP2_LIBRARY}")
+target_include_directories(runtime-core PUBLIC "${BROTLI_INCLUDE_DIR}" "${ZSTD_INCLUDE_DIR}")
+target_link_libraries(runtime-core PUBLIC "${ZLIB_LIBRARY}" "${BROTLI_DECODER_LIBRARY}" "${BROTLI_COMMON_LIBRARY}" "${ZSTD_LIBRARY}")
+target_link_libraries(runtime-core PUBLIC ghostty-vt runtime-lua "${SQLITE3_LIBRARY}" Threads::Threads OpenSSL::SSL OpenSSL::Crypto "${PNG_LIBRARY}" "-framework IOKit" "-framework CoreFoundation" "-framework Security")
+target_include_directories(runtime-core PRIVATE "${PNG_INCLUDE_DIR}")
+option(TELAR_RUNTIME_DIAGNOSTICS "Enable runtime telemetry outside Debug builds" OFF)
+target_compile_definitions(runtime-core PUBLIC TELAR_DEBUG=$<CONFIG:Debug> TELAR_DIAGNOSTICS=$<OR:$<CONFIG:Debug>,$<BOOL:${TELAR_RUNTIME_DIAGNOSTICS}>>)
+target_compile_options(runtime-core PUBLIC -Wall -Wextra -Wpedantic)
+add_dependencies(runtime-core cell-layout)
+
+option(TELAR_RUNTIME_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
+if(TELAR_RUNTIME_SANITIZERS)
+  if(TELAR_RUNTIME_DISTRIBUTABLE)
+    message(FATAL_ERROR "Sanitizer builds require their compiler runtime and cannot use the distributable linkage check")
+  endif()
+  target_compile_options(runtime-lua PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+  target_compile_options(runtime-core PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
+  target_link_options(runtime-core PUBLIC -fsanitize=address,undefined)
+endif()
+
+include(CTest)
+add_executable(telar-runtime main.cpp)
+target_link_libraries(telar-runtime PRIVATE runtime-core)
+option(TELAR_RUNTIME_INSTALL_DESKTOP_COMMAND "Install as telar for Desktop's existing discovery" OFF)
+if(TELAR_RUNTIME_INSTALL_DESKTOP_COMMAND)
+  install(PROGRAMS "$<TARGET_FILE:telar-runtime>" DESTINATION bin RENAME telar)
+else()
+  install(TARGETS telar-runtime RUNTIME DESTINATION bin)
+endif()
+
+if(TELAR_RUNTIME_DISTRIBUTABLE)
+  add_custom_command(TARGET telar-runtime POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E env "TELAR_MACOS_MIN=${CMAKE_OSX_DEPLOYMENT_TARGET}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/../../packaging/release/check-linkage.sh" macos "$<TARGET_FILE:telar-runtime>"
+    VERBATIM)
+endif()
+
+if(BUILD_TESTING)
+  include(cmake/tests.cmake)
+endif()

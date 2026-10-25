@@ -1,0 +1,817 @@
+--- a/include/ghostty/vt/grid_ref.h
++++ b/include/ghostty/vt/grid_ref.h
+@@ -184,6 +184,12 @@
+  *
+  * @ingroup grid_ref
+  */
++/** Borrowed URI and identity, valid until the next terminal mutation.
++ * Returns GHOSTTY_NO_VALUE for an unlinked cell. An empty explicit_id denotes
++ * an implicit identity. Compare URI and identity together across pages. */
++GHOSTTY_API GhosttyResult ghostty_grid_ref_hyperlink(const GhosttyGridRef *ref,
++    GhosttyString *uri, GhosttyString *explicit_id, uint64_t *implicit_id);
++
+ GHOSTTY_API GhosttyResult ghostty_grid_ref_hyperlink_uri(
+     const GhosttyGridRef *ref,
+     uint8_t *buf,
+--- a/include/ghostty/vt/kitty_graphics.h
++++ b/include/ghostty/vt/kitty_graphics.h
+@@ -164,6 +164,11 @@
+    * Output type: uint64_t *
+    */
+   GHOSTTY_KITTY_GRAPHICS_DATA_GENERATION = 2,
++  GHOSTTY_KITTY_GRAPHICS_DATA_IMAGE_ITERATOR = 3,
++  GHOSTTY_KITTY_GRAPHICS_DATA_IMAGE_COUNT = 4,
++  GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_COUNT = 5,
++  GHOSTTY_KITTY_GRAPHICS_DATA_LOADING_IMAGE_ID = 6,
++  GHOSTTY_KITTY_GRAPHICS_DATA_LOADING_BYTES = 7,
+   GHOSTTY_KITTY_GRAPHICS_DATA_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
+ } GhosttyKittyGraphicsData;
+ 
+@@ -259,6 +264,8 @@
+    * Output type: int32_t *
+    */
+   GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_Z = 12,
++  GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_IS_INTERNAL = 13,
++  GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_GRID_REF = 14,
+ 
+   GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
+ } GhosttyKittyGraphicsPlacementData;
+@@ -432,6 +439,7 @@
+    * Output type: uint64_t *
+    */
+   GHOSTTY_KITTY_IMAGE_DATA_GENERATION = 9,
++  GHOSTTY_KITTY_IMAGE_DATA_PLACEMENT_COUNT = 10,
+ 
+   GHOSTTY_KITTY_IMAGE_DATA_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
+ } GhosttyKittyGraphicsImageData;
+@@ -797,6 +805,29 @@
+  *
+  * @ingroup kitty_graphics
+  */
++GHOSTTY_API GhosttyResult ghostty_kitty_graphics_image_ids(GhosttyKittyGraphics graphics, uint32_t* ids, size_t capacity, size_t* count);
++typedef struct GhosttyKittyGraphicsImageIteratorImpl* GhosttyKittyGraphicsImageIterator;
++GHOSTTY_API GhosttyResult ghostty_kitty_graphics_image_iterator_new(const GhosttyAllocator* allocator, GhosttyKittyGraphicsImageIterator* iterator);
++GHOSTTY_API void ghostty_kitty_graphics_image_iterator_free(GhosttyKittyGraphicsImageIterator iterator);
++GHOSTTY_API GhosttyKittyGraphicsImage ghostty_kitty_graphics_image_next(GhosttyKittyGraphicsImageIterator iterator);
++GHOSTTY_API GhosttyResult ghostty_kitty_graphics_loading_abort(GhosttyTerminal terminal);
++
++typedef struct {
++  size_t size;
++  uint32_t image_id;
++  uint32_t width;
++  uint32_t height;
++  GhosttyKittyImageFormat format;
++  const uint8_t* data;
++  size_t data_len;
++} GhosttyKittyGraphicsImageInsert;
++
++/** Replaces an image. On success, the terminal owns data and frees it through its allocator; on failure, the caller retains ownership. */
++GHOSTTY_API GhosttyResult ghostty_kitty_graphics_image_insert(GhosttyTerminal terminal, const GhosttyKittyGraphicsImageInsert* image);
++GHOSTTY_API GhosttyResult ghostty_kitty_graphics_image_remove(GhosttyTerminal terminal, uint32_t image_id);
++GHOSTTY_API GhosttyResult ghostty_kitty_graphics_placement_remove(GhosttyKittyGraphicsPlacementIterator iterator, GhosttyTerminal terminal);
++GHOSTTY_API GhosttyResult ghostty_kitty_graphics_placement_anchor(GhosttyKittyGraphicsPlacementIterator iterator, GhosttyTerminal terminal, int32_t* column, int32_t* row);
++
+ GHOSTTY_API GhosttyResult ghostty_kitty_graphics_placement_viewport_pos(
+     GhosttyKittyGraphicsPlacementIterator iterator,
+     GhosttyKittyGraphicsImage image,
+--- a/include/ghostty/vt/render.h
++++ b/include/ghostty/vt/render.h
+@@ -263,6 +263,8 @@
+    *  to the C header or without high FFI costs should use `ghostty_cell_get`.
+    */
+   GHOSTTY_RENDER_STATE_ROW_DATA_CELLS_RAW = 5,
++  /** Output type: GhosttyGridRef*. Borrowed row origin until terminal mutation. */
++  GHOSTTY_RENDER_STATE_ROW_DATA_GRID_REF = 6,
+   GHOSTTY_RENDER_STATE_ROW_DATA_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
+ } GhosttyRenderStateRowData;
+ 
+@@ -718,6 +720,15 @@
+ GHOSTTY_API GhosttyResult ghostty_render_state_row_cells_new(
+     const GhosttyAllocator* allocator,
+     GhosttyRenderStateRowCells* out_cells);
++
++/** Caller-owned storage for a prefix of extra grapheme codepoints.
++ * Excludes the base codepoint. At most cap elements are copied and len is
++ * the number written. A null ptr writes no elements. */
++typedef struct {
++  uint32_t *ptr;
++  size_t cap;
++  size_t len;
++} GhosttyCodepointsBuffer;
+ 
+ /**
+  * Queryable data kinds for ghostty_render_state_row_cells_get().
+@@ -788,6 +799,8 @@
+    * buffer size in bytes.
+    */
+   GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_GRAPHEMES_UTF8 = 9,
++  /** Input/output type: GhosttyCodepointsBuffer*. Extra codepoint prefix. */
++  GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_GRAPHEMES_EXTRA = 10,
+   GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
+ } GhosttyRenderStateRowCellsData;
+ 
+--- a/include/ghostty/vt/terminal.h
++++ b/include/ghostty/vt/terminal.h
+@@ -1230,6 +1230,14 @@
+    * Input type: GhosttyString*
+    */
+   GHOSTTY_TERMINAL_OPT_TERMINFO_NAME = 37,
++  /** Input type: bool*. Enables or disables Kitty APC parsing. */
++  GHOSTTY_TERMINAL_OPT_KITTY_PROTOCOL = 38,
++  /** Input type: bool*. Sets pending wrap without feeding the VT parser. */
++  GHOSTTY_TERMINAL_OPT_CURSOR_PENDING_WRAP = 39,
++  /** Input type: uint16_t*. Zero-based absolute cursor column, clamped to the screen. */
++  GHOSTTY_TERMINAL_OPT_CURSOR_X = 40,
++  /** Select an existing screen without changing modes or cursor state. */
++  GHOSTTY_TERMINAL_OPT_ACTIVE_SCREEN = 41,
+   GHOSTTY_TERMINAL_OPT_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
+ } GhosttyTerminalOption;
+ 
+@@ -1627,6 +1635,23 @@
+    * Output type: bool *
+    */
+   GHOSTTY_TERMINAL_DATA_CURSOR_AT_PROMPT = 39,
++  /** Output type: bool*. True when DECSCUSR selects the configured default. */
++  GHOSTTY_TERMINAL_DATA_CURSOR_IS_DEFAULT = 40,
++  /** Output type: GhosttyString*. Borrowed CSS pointer shape name. */
++  GHOSTTY_TERMINAL_DATA_MOUSE_SHAPE = 41,
++  /** Output type: bool*. XTerm modifyOtherKeys level 2. */
++  GHOSTTY_TERMINAL_DATA_MODIFY_OTHER_KEYS_2 = 42,
++  /** Output type: GhosttyColorRgb*. GHOSTTY_NO_VALUE when no OSC override exists. */
++  GHOSTTY_TERMINAL_DATA_COLOR_FOREGROUND_OVERRIDE = 43,
++  /** Output type: GhosttyColorRgb*. GHOSTTY_NO_VALUE when no OSC override exists. */
++  GHOSTTY_TERMINAL_DATA_COLOR_BACKGROUND_OVERRIDE = 44,
++  /** Output type: uint8_t[256]*. One when that entry has an OSC override. */
++  GHOSTTY_TERMINAL_DATA_COLOR_PALETTE_OVERRIDES = 45,
++  /** Output type: uint16_t*. Inclusive, zero-based scrolling region edges. */
++  GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_TOP = 46,
++  GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_BOTTOM = 47,
++  GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_LEFT = 48,
++  GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_RIGHT = 49,
+   GHOSTTY_TERMINAL_DATA_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
+ } GhosttyTerminalData;
+ 
+@@ -1749,6 +1774,9 @@
+  *
+  * @ingroup terminal
+  */
++/** Performs IND independently of the VT parser's current state. */
++GHOSTTY_API GhosttyResult ghostty_terminal_index(GhosttyTerminal terminal);
++
+ GHOSTTY_API void ghostty_terminal_vt_write(GhosttyTerminal terminal,
+                                 const uint8_t* data,
+                                 size_t len);
+@@ -1965,6 +1993,10 @@
+  *
+  * @ingroup terminal
+  */
++/** Page allocation bytes across both screens, including active cells and history.
++ * Excludes render snapshots, graphics and other terminal allocations. */
++GHOSTTY_API GhosttyResult ghostty_terminal_page_bytes(GhosttyTerminal terminal, size_t *out_bytes);
++
+ GHOSTTY_API GhosttyResult ghostty_terminal_get(GhosttyTerminal terminal,
+                                     GhosttyTerminalData data,
+                                     void *out);
+--- a/src/lib_vt.zig
++++ b/src/lib_vt.zig
+@@ -309,12 +309,14 @@
+         @export(&c.terminal_reset, .{ .name = "ghostty_terminal_reset" });
+         @export(&c.terminal_resize, .{ .name = "ghostty_terminal_resize" });
+         @export(&c.terminal_set, .{ .name = "ghostty_terminal_set" });
++        @export(&c.terminal_index, .{ .name = "ghostty_terminal_index" });
+         @export(&c.terminal_vt_write, .{ .name = "ghostty_terminal_vt_write" });
+         @export(&c.terminal_vt_write_until_ground, .{ .name = "ghostty_terminal_vt_write_until_ground" });
+         @export(&c.terminal_scroll_viewport, .{ .name = "ghostty_terminal_scroll_viewport" });
+         @export(&c.terminal_compression_activity, .{ .name = "ghostty_terminal_compression_activity" });
+         @export(&c.terminal_compress, .{ .name = "ghostty_terminal_compress" });
+         @export(&c.terminal_get, .{ .name = "ghostty_terminal_get" });
++        @export(&c.terminal_page_bytes, .{ .name = "ghostty_terminal_page_bytes" });
+         @export(&c.terminal_get_multi, .{ .name = "ghostty_terminal_get_multi" });
+         @export(&c.terminal_continuation_write, .{ .name = "ghostty_terminal_continuation_write" });
+         @export(&c.terminal_continuation_buf, .{ .name = "ghostty_terminal_continuation_buf" });
+@@ -364,6 +366,16 @@
+             @export(&c.snapshot_decoder_decode, .{ .name = "ghostty_snapshot_decoder_decode" });
+         }
+         if (features.kitty_graphics) {
++            @export(&c.kitty_graphics_image_ids, .{ .name = "ghostty_kitty_graphics_image_ids" });
++            @export(&c.kitty_graphics_image_iterator_new, .{ .name = "ghostty_kitty_graphics_image_iterator_new" });
++            @export(&c.kitty_graphics_image_iterator_free, .{ .name = "ghostty_kitty_graphics_image_iterator_free" });
++            @export(&c.kitty_graphics_image_next, .{ .name = "ghostty_kitty_graphics_image_next" });
++            @export(&c.kitty_graphics_image_insert, .{ .name = "ghostty_kitty_graphics_image_insert" });
++            @export(&c.kitty_graphics_loading_abort, .{ .name = "ghostty_kitty_graphics_loading_abort" });
++            @export(&c.kitty_graphics_image_remove, .{ .name = "ghostty_kitty_graphics_image_remove" });
++            @export(&c.kitty_graphics_placement_remove, .{ .name = "ghostty_kitty_graphics_placement_remove" });
++            @export(&c.kitty_graphics_placement_anchor, .{ .name = "ghostty_kitty_graphics_placement_anchor" });
++
+             @export(&c.kitty_graphics_get, .{ .name = "ghostty_kitty_graphics_get" });
+             @export(&c.kitty_graphics_image, .{ .name = "ghostty_kitty_graphics_image" });
+             @export(&c.kitty_graphics_image_get, .{ .name = "ghostty_kitty_graphics_image_get" });
+@@ -385,6 +397,7 @@
+             @export(&c.grid_ref_cell, .{ .name = "ghostty_grid_ref_cell" });
+             @export(&c.grid_ref_row, .{ .name = "ghostty_grid_ref_row" });
+             @export(&c.grid_ref_graphemes, .{ .name = "ghostty_grid_ref_graphemes" });
++            @export(&c.grid_ref_hyperlink, .{ .name = "ghostty_grid_ref_hyperlink" });
+             @export(&c.grid_ref_hyperlink_uri, .{ .name = "ghostty_grid_ref_hyperlink_uri" });
+             @export(&c.grid_ref_style, .{ .name = "ghostty_grid_ref_style" });
+             @export(&c.tracked_grid_ref_free, .{ .name = "ghostty_tracked_grid_ref_free" });
+--- a/src/terminal/c/grid_ref.zig
++++ b/src/terminal/c/grid_ref.zig
+@@ -91,6 +91,30 @@
+     return .success;
+ }
+ 
++pub fn grid_ref_hyperlink(ref: *const CGridRef, uri: *lib.String, explicit_id: *lib.String, implicit_id: *u64) callconv(lib.calling_conv) Result {
++    const pin = ref.toPin() orelse return .invalid_value;
++    const terminal_page = pin.node.page();
++    const cell = pin.rowAndCell().cell;
++    const id = terminal_page.lookupHyperlink(cell) orelse return .no_value;
++    const entry = terminal_page.hyperlink_set.get(terminal_page.memory, id);
++    const bytes = entry.uri.slice(terminal_page.memory);
++    uri.* = .{ .ptr = bytes.ptr, .len = bytes.len };
++
++    switch (entry.id) {
++        .implicit => |value| {
++            explicit_id.* = .{ .ptr = "", .len = 0 };
++            implicit_id.* = value;
++        },
++        .explicit => |value| {
++            const text = value.slice(terminal_page.memory);
++            explicit_id.* = .{ .ptr = text.ptr, .len = text.len };
++            implicit_id.* = 0;
++        },
++    }
++
++    return .success;
++}
++
+ pub fn grid_ref_hyperlink_uri(
+     ref: *const CGridRef,
+     out_buf: ?[*]u8,
+--- a/src/terminal/c/kitty_graphics.zig
++++ b/src/terminal/c/kitty_graphics.zig
+@@ -24,6 +24,13 @@
+ else
+     ?*const anyopaque;
+ 
++pub const ImageIterator = if (build_options.kitty_graphics) ?*ImageIteratorWrapper else ?*anyopaque;
++
++const ImageIteratorWrapper = if (build_options.kitty_graphics) struct {
++    alloc: std.mem.Allocator,
++    inner: @FieldType(kitty_storage.ImageStorage, "images").Iterator = undefined,
++} else void;
++
+ /// C: GhosttyKittyGraphicsPlacementIterator
+ pub const PlacementIterator = if (build_options.kitty_graphics)
+     ?*PlacementIteratorWrapper
+@@ -53,12 +60,20 @@
+     invalid = 0,
+     placement_iterator = 1,
+     generation = 2,
++    image_iterator = 3,
++    image_count = 4,
++    placement_count = 5,
++    loading_image_id = 6,
++    loading_bytes = 7,
+ 
+     pub fn OutType(comptime self: Data) type {
+         return switch (self) {
+             .invalid => void,
+             .placement_iterator => PlacementIterator,
+             .generation => u64,
++            .image_iterator => ImageIterator,
++            .image_count, .placement_count, .loading_bytes => usize,
++            .loading_image_id => u32,
+         };
+     }
+ };
+@@ -78,12 +93,15 @@
+     columns = 10,
+     rows = 11,
+     z = 12,
++    is_internal = 13,
++    grid_ref = 14,
+ 
+     pub fn OutType(comptime self: PlacementData) type {
+         return switch (self) {
+             .invalid => void,
+             .image_id, .placement_id => u32,
+-            .is_virtual => bool,
++            .is_virtual, .is_internal => bool,
++            .grid_ref => grid_ref.CGridRef,
+             .x_offset,
+             .y_offset,
+             .source_x,
+@@ -132,6 +150,14 @@
+             };
+         },
+         .generation => out.* = storage.generation,
++        .image_iterator => {
++            const iterator = out.* orelse return .invalid_value;
++            iterator.inner = storage.images.iterator();
++        },
++        .image_count => out.* = storage.images.count(),
++        .placement_count => out.* = storage.placements.count(),
++        .loading_image_id => out.* = (storage.loading orelse return .no_value).image.id,
++        .loading_bytes => out.* = (storage.loading orelse return .no_value).data.items.len,
+     }
+     return .success;
+ }
+@@ -182,6 +208,7 @@
+     data_ptr = 7,
+     data_len = 8,
+     generation = 9,
++    placement_count = 10,
+ 
+     pub fn OutType(comptime self: ImageData) type {
+         return switch (self) {
+@@ -190,7 +217,7 @@
+             .format => ImageFormat,
+             .compression => ImageCompression,
+             .data_ptr => [*]const u8,
+-            .data_len => usize,
++            .data_len, .placement_count => usize,
+             .generation => u64,
+         };
+     }
+@@ -264,6 +291,7 @@
+         .data_ptr => out.* = (image.data.bytes() orelse return .no_value).ptr,
+         .data_len => out.* = image.data.len(),
+         .generation => out.* = image.generation,
++        .placement_count => out.* = image.metadata.placement_count,
+     }
+ 
+     return .success;
+@@ -396,6 +424,15 @@
+         .image_id => out.* = key.image_id,
+         .placement_id => out.* = key.placement_id.id,
+         .is_virtual => out.* = val.location == .virtual,
++        .is_internal => out.* = key.placement_id.tag == .internal,
++        .grid_ref => {
++            const pin = switch (val.location) {
++                .pin => |pin| pin,
++                .virtual => return .no_value,
++            };
++            if (pin.garbage) return .no_value;
++            out.* = grid_ref.CGridRef.fromPin(pin.*);
++        },
+         .x_offset => out.* = val.x_offset,
+         .y_offset => out.* = val.y_offset,
+         .source_x => out.* = val.source_x,
+@@ -2101,3 +2138,121 @@
+     try testing.expectEqual(Result.success, get(graphics, .generation, @ptrCast(&gen)));
+     try testing.expect(gen > gen_alt);
+ }
++
++
++pub fn image_iterator_new(alloc_: ?*const CAllocator, out: *ImageIterator) callconv(lib.calling_conv) Result {
++    out.* = null;
++    if (comptime !build_options.kitty_graphics) return .no_value;
++    const alloc = lib.alloc.default(alloc_);
++    const iterator = alloc.create(ImageIteratorWrapper) catch return .out_of_memory;
++    iterator.* = .{ .alloc = alloc };
++    out.* = iterator;
++    return .success;
++}
++
++pub const ImageInsert = extern struct {
++    size: usize,
++    image_id: u32,
++    width: u32,
++    height: u32,
++    format: ImageFormat,
++    data: ?[*]const u8,
++    data_len: usize,
++};
++
++pub fn image_insert(terminal_: terminal_c.Terminal, image: *const ImageInsert) callconv(lib.calling_conv) Result {
++    if (comptime !build_options.kitty_graphics) return .no_value;
++    const wrapper = terminal_ orelse return .invalid_value;
++    if (image.size != @sizeOf(ImageInsert) or image.image_id == 0 or image.width == 0 or image.height == 0 or image.data_len == 0) return .invalid_value;
++    if (image.format != .rgb and image.format != .rgba) return .invalid_value;
++    const data = image.data orelse return .invalid_value;
++    const terminal = wrapper.terminal;
++    const screen = terminal.screens.active;
++    screen.kitty_images.addImage(wrapper.io.io(), terminal.gpa(), screen, .{
++        .id = image.image_id,
++        .width = image.width,
++        .height = image.height,
++        .format = image.format,
++        .data = .{ .complete = data[0..image.data_len] },
++    }) catch return .out_of_memory;
++    return .success;
++}
++
++pub fn image_iterator_free(iter_: ImageIterator) callconv(lib.calling_conv) void {
++    if (comptime !build_options.kitty_graphics) return;
++    const iterator = iter_ orelse return;
++    iterator.alloc.destroy(iterator);
++}
++
++pub fn image_next(iter_: ImageIterator) callconv(lib.calling_conv) ImageHandle {
++    if (comptime !build_options.kitty_graphics) return null;
++    const iterator = iter_ orelse return null;
++    const entry = iterator.inner.next() orelse return null;
++    return entry.value_ptr;
++}
++
++pub fn loading_abort(terminal_: terminal_c.Terminal) callconv(lib.calling_conv) Result {
++    if (comptime !build_options.kitty_graphics) return .no_value;
++    const wrapper = terminal_ orelse return .invalid_value;
++    const storage = &wrapper.terminal.screens.active.kitty_images;
++    const loading = storage.loading orelse return .no_value;
++    loading.destroy(wrapper.terminal.gpa());
++    storage.loading = null;
++    return .success;
++}
++
++pub fn image_ids(graphics_: KittyGraphics, ids: ?[*]u32, capacity: usize, count: *usize) callconv(lib.calling_conv) Result {
++    if (comptime !build_options.kitty_graphics) return .no_value;
++    count.* = graphics_.images.count();
++    const output = ids orelse return if (capacity == 0) .success else .invalid_value;
++    var iterator = graphics_.images.keyIterator();
++    var index: usize = 0;
++    while (index < capacity) : (index += 1) {
++        const key = iterator.next() orelse break;
++        output[index] = key.*;
++    }
++    return .success;
++}
++
++pub fn image_remove(terminal_: terminal_c.Terminal, image_id: u32) callconv(lib.calling_conv) Result {
++    if (comptime !build_options.kitty_graphics) return .no_value;
++    const wrapper = terminal_ orelse return .invalid_value;
++    const terminal = wrapper.terminal;
++    terminal.screens.active.kitty_images.delete(wrapper.io.io(), terminal.gpa(), terminal, .{ .id = .{ .image_id = image_id, .placement_id = 0, .delete = true } });
++    return .success;
++}
++
++pub fn placement_remove(iter_: PlacementIterator, terminal_: terminal_c.Terminal) callconv(lib.calling_conv) Result {
++    if (comptime !build_options.kitty_graphics) return .no_value;
++    const wrapper = terminal_ orelse return .invalid_value;
++    const iter = iter_ orelse return .invalid_value;
++    const entry = iter.entry orelse return .invalid_value;
++    const screen = wrapper.terminal.screens.active;
++    const storage = &screen.kitty_images;
++    const image = storage.images.getPtr(entry.key_ptr.image_id) orelse return .invalid_value;
++    entry.value_ptr.deinit(screen);
++    image.metadata.placement_count -= 1;
++    storage.placements.removeByPtr(entry.key_ptr);
++    storage.markMutated(wrapper.io.io());
++    iter.entry = null;
++    return .success;
++}
++
++/// Unlike visible-position queries, this preserves anchors outside the viewport.
++pub fn placement_anchor(iter_: PlacementIterator, terminal_: terminal_c.Terminal, column: *i32, row: *i32) callconv(lib.calling_conv) Result {
++    if (comptime !build_options.kitty_graphics) return .no_value;
++    const wrapper = terminal_ orelse return .invalid_value;
++    const iter = iter_ orelse return .invalid_value;
++    const entry = iter.entry orelse return .invalid_value;
++    const pin = switch (entry.value_ptr.location) {
++        .pin => |value| value,
++        .virtual => return .no_value,
++    };
++    if (pin.garbage) return .no_value;
++    const pages = &wrapper.terminal.screens.active.pages;
++    const anchor = pages.pointFromPin(.screen, pin.*) orelse return .no_value;
++    const viewport = pages.pointFromPin(.screen, pages.getTopLeft(.viewport)) orelse return .no_value;
++    column.* = @intCast(anchor.screen.x);
++    row.* = @as(i32, @intCast(anchor.screen.y)) - @as(i32, @intCast(viewport.screen.y));
++    return .success;
++}
+--- a/src/terminal/c/main.zig
++++ b/src/terminal/c/main.zig
+@@ -183,12 +183,14 @@
+ pub const terminal_reset = terminal.reset;
+ pub const terminal_resize = terminal.resize;
+ pub const terminal_set = terminal.set;
++pub const terminal_index = terminal.advance_index;
+ pub const terminal_vt_write = terminal.vt_write;
+ pub const terminal_vt_write_until_ground = terminal.vt_write_until_ground;
+ pub const terminal_scroll_viewport = terminal.scroll_viewport;
+ pub const terminal_compression_activity = terminal.compression_activity;
+ pub const terminal_compress = terminal.compress;
+ pub const terminal_get = terminal.get;
++pub const terminal_page_bytes = terminal.page_bytes;
+ pub const terminal_get_multi = terminal.get_multi;
+ pub const terminal_continuation_write = terminal.continuation_write;
+ pub const terminal_continuation_buf = terminal.continuation_buf;
+@@ -239,6 +241,7 @@
+ pub const grid_ref_cell = grid_ref.grid_ref_cell;
+ pub const grid_ref_row = grid_ref.grid_ref_row;
+ pub const grid_ref_graphemes = grid_ref.grid_ref_graphemes;
++pub const grid_ref_hyperlink = grid_ref.grid_ref_hyperlink;
+ pub const grid_ref_hyperlink_uri = grid_ref.grid_ref_hyperlink_uri;
+ pub const grid_ref_style = grid_ref.grid_ref_style;
+ pub const tracked_grid_ref_free = grid_ref_tracked.tracked_grid_ref_free;
+@@ -282,3 +285,13 @@
+     // We want to make sure we run the tests for the C allocator interface.
+     _ = @import("../../lib/allocator.zig");
+ }
++
++pub const kitty_graphics_image_ids = kitty_graphics.image_ids;
++pub const kitty_graphics_image_iterator_new = kitty_graphics.image_iterator_new;
++pub const kitty_graphics_image_iterator_free = kitty_graphics.image_iterator_free;
++pub const kitty_graphics_image_next = kitty_graphics.image_next;
++pub const kitty_graphics_image_insert = kitty_graphics.image_insert;
++pub const kitty_graphics_loading_abort = kitty_graphics.loading_abort;
++pub const kitty_graphics_image_remove = kitty_graphics.image_remove;
++pub const kitty_graphics_placement_remove = kitty_graphics.placement_remove;
++pub const kitty_graphics_placement_anchor = kitty_graphics.placement_anchor;
+--- a/src/terminal/c/render.zig
++++ b/src/terminal/c/render.zig
+@@ -14,6 +14,8 @@
+ const Result = @import("result.zig").Result;
+ const cell_c = @import("cell.zig");
+ const row = @import("row.zig");
++const grid_ref = @import("grid_ref.zig");
++const PageList = @import("../PageList.zig");
+ const style_c = @import("style.zig");
+ 
+ const log = std.log.scoped(.render_state_c);
+@@ -38,6 +40,7 @@
+ 
+     /// These are the raw pointers into the render state data.
+     raws: []const page.Row,
++    pins: []const PageList.Pin,
+     cells: []const std.MultiArrayList(renderpkg.RenderState.Cell),
+     selection: []const ?[2]size.CellCountInt,
+     dirty: []bool,
+@@ -327,6 +330,7 @@
+                 .alloc = it.alloc,
+                 .y = position_none,
+                 .raws = row_data.items(.raw),
++                .pins = row_data.items(.pin),
+                 .cells = row_data.items(.cells),
+                 .selection = row_data.items(.selection),
+                 .dirty = row_data.items(.dirty),
+@@ -547,6 +551,7 @@
+         .alloc = alloc,
+         .y = undefined,
+         .raws = undefined,
++        .pins = undefined,
+         .cells = undefined,
+         .selection = undefined,
+         .dirty = undefined,
+@@ -646,6 +651,12 @@
+     alloc.destroy(cells);
+ }
+ 
++pub const CodepointsBuffer = extern struct {
++    ptr: ?[*]u32,
++    cap: usize,
++    len: usize,
++};
++
+ /// C: GhosttyRenderStateRowCellsData
+ pub const RowCellsData = enum(c_int) {
+     invalid = 0,
+@@ -658,6 +669,7 @@
+     selected = 7,
+     has_styling = 8,
+     graphemes_utf8 = 9,
++    graphemes_extra = 10,
+ 
+     /// Output type expected for querying the data of the given kind.
+     pub fn OutType(comptime self: RowCellsData) type {
+@@ -670,6 +682,7 @@
+             .bg_color, .fg_color => colorpkg.RGB.C,
+             .selected, .has_styling => bool,
+             .graphemes_utf8 => lib.Buffer,
++            .graphemes_extra => CodepointsBuffer,
+         };
+     }
+ };
+@@ -758,6 +771,14 @@
+             style_c.Style.write(cells.styles[x], out);
+         } else {
+             out.* = style_c.Style.default;
++        },
++        .graphemes_extra => {
++            const extra = if (cell.hasGrapheme()) cells.graphemes[x] else &[_]u21{};
++            const count = if (out.ptr == null) 0 else @min(extra.len, out.cap);
++            for (extra[0..count], 0..) |codepoint, index| {
++                out.ptr.?[index] = codepoint;
++            }
++            out.len = count;
+         },
+         .graphemes_len => {
+             if (!cell.hasText()) {
+@@ -881,6 +902,7 @@
+     cells = 3,
+     selection = 4,
+     cells_raw = 5,
++    grid_ref = 6,
+ 
+     /// Output type expected for querying the data of the given kind.
+     pub fn OutType(comptime self: RowData) type {
+@@ -891,6 +913,7 @@
+             .cells => RowCells,
+             .selection => RowSelection,
+             .cells_raw => cell_c.CellsView,
++            .grid_ref => grid_ref.CGridRef,
+         };
+     }
+ };
+@@ -985,6 +1008,7 @@
+     switch (data) {
+         .invalid => return .invalid_value,
+         .dirty => out.* = it.dirty[y],
++        .grid_ref => out.* = grid_ref.CGridRef.fromPin(it.pins[y]),
+         .raw => out.* = it.raws[y].cval(),
+         .cells => {
+             const cells = out.* orelse return .invalid_value;
+--- a/src/terminal/c/terminal.zig
++++ b/src/terminal/c/terminal.zig
+@@ -1021,6 +1021,10 @@
+     unknown_sequence = 35,
+     unknown_max_bytes = 36,
+     terminfo_name = 37,
++    kitty_protocol = 38,
++    cursor_pending_wrap = 39,
++    cursor_x = 40,
++    active_screen = 41,
+ 
+     /// Input type expected for setting the option.
+     pub fn InType(comptime self: Option) type {
+@@ -1046,6 +1050,8 @@
+             .kitty_image_medium_file,
+             .kitty_image_medium_shared_mem,
+             .glyph_protocol,
++            .kitty_protocol,
++            .cursor_pending_wrap,
+             .title_report,
+             => ?*const bool,
+             .kitty_image_medium_temp_file => ?*const lib.String,
+@@ -1060,6 +1066,8 @@
+             .default_cursor_style => ?*const TerminalCursorStyle,
+             .default_cursor_blink => ?*const bool,
+             .mode, .mode_default => ?*const ModeConfig,
++            .cursor_x => ?*const size.CellCountInt,
++            .active_screen => ?*const TerminalScreen,
+         };
+     }
+ };
+@@ -1209,6 +1217,21 @@
+                 wrapper.stream.handler.apc_handler.max_bytes.remove(.kitty);
+             }
+         },
++        .kitty_protocol => {
++            wrapper.stream.handler.apc_handler.enable(.kitty, (value orelse return .success).*);
++        },
++        .cursor_pending_wrap => {
++            wrapper.terminal.screens.active.cursor.pending_wrap = (value orelse return .success).*;
++        },
++        .cursor_x => {
++            wrapper.terminal.screens.active.cursorHorizontalAbsolute((value orelse return .success).*);
++        },
++        .active_screen => {
++            const key = (value orelse return .invalid_value).*;
++            const screen = wrapper.terminal.screens.get(key) orelse return .no_value;
++            wrapper.terminal.screens.active_key = key;
++            wrapper.terminal.screens.active = screen;
++        },
+         .glyph_protocol => {
+             const enabled = (value orelse return .success).*;
+             wrapper.stream.handler.apc_handler.enable(.glyph, enabled);
+@@ -1375,12 +1398,23 @@
+     mode = 37,
+     vt_ground = 38,
+     cursor_at_prompt = 39,
++    cursor_is_default = 40,
++    mouse_shape = 41,
++    modify_other_keys_2 = 42,
++    color_foreground_override = 43,
++    color_background_override = 44,
++    color_palette_overrides = 45,
++    scrolling_region_top = 46,
++    scrolling_region_bottom = 47,
++    scrolling_region_left = 48,
++    scrolling_region_right = 49,
+ 
+     /// Output type expected for querying the data of the given kind.
+     pub fn OutType(comptime self: TerminalData) type {
+         return switch (self) {
+             .invalid => void,
+-            .cols, .rows, .cursor_x, .cursor_y => size.CellCountInt,
++            .cols, .rows, .cursor_x, .cursor_y,
++            .scrolling_region_top, .scrolling_region_bottom, .scrolling_region_left, .scrolling_region_right => size.CellCountInt,
+             .cursor_pending_wrap,
+             .cursor_visible,
+             .mouse_tracking,
+@@ -1388,12 +1422,15 @@
+             .vt_processing_error,
+             .vt_ground,
+             .cursor_at_prompt,
++            .cursor_is_default,
++            .modify_other_keys_2,
+             => bool,
+             .active_screen => TerminalScreen,
+             .kitty_keyboard_flags => u8,
+             .scrollbar => TerminalScrollbar,
+             .cursor_style => style_c.Style,
+-            .title, .pwd => lib.String,
++            .title, .pwd, .mouse_shape => lib.String,
++            .color_palette_overrides => [256]u8,
+             .total_rows,
+             .scrollback_rows,
+             .scrollback_max_bytes,
+@@ -1404,6 +1441,8 @@
+             .color_foreground,
+             .color_background,
+             .color_cursor,
++            .color_foreground_override,
++            .color_background_override,
+             .color_foreground_default,
+             .color_background_default,
+             .color_cursor_default,
+@@ -1421,6 +1460,20 @@
+     }
+ };
+ 
++pub fn page_bytes(terminal_: Terminal, out_bytes: ?*usize) callconv(lib.calling_conv) Result {
++    const wrapper = terminal_ orelse return .invalid_value;
++    const output = out_bytes orelse return .invalid_value;
++    var total: usize = 0;
++    for (std.enums.values(ScreenSet.Key)) |key| {
++        if (wrapper.terminal.screens.get(key)) |screen| {
++            total +|= screen.pages.page_size;
++        }
++    }
++
++    output.* = total;
++    return .success;
++}
++
+ pub fn get(
+     terminal_: Terminal,
+     data: TerminalData,
+@@ -1475,6 +1528,23 @@
+     const t: *ZigTerminal = wrapper.terminal;
+     switch (data) {
+         .invalid => return .invalid_value,
++        .cursor_is_default => out.* = t.cursor.is_default,
++        .mouse_shape => {
++            const name = @tagName(t.mouse_shape);
++            out.* = .{ .ptr = name.ptr, .len = name.len };
++        },
++        .modify_other_keys_2 => out.* = t.flags.modify_other_keys_2,
++        .color_foreground_override => out.* = (t.colors.foreground.override orelse return .no_value).cval(),
++        .color_background_override => out.* = (t.colors.background.override orelse return .no_value).cval(),
++        .color_palette_overrides => {
++            for (out, 0..) |*value, index| {
++                value.* = @intFromBool(t.colors.palette.mask.isSet(index));
++            }
++        },
++        .scrolling_region_top => out.* = t.scrolling_region.top,
++        .scrolling_region_bottom => out.* = t.scrolling_region.bottom,
++        .scrolling_region_left => out.* = t.scrolling_region.left,
++        .scrolling_region_right => out.* = t.scrolling_region.right,
+         .cols => out.* = t.cols,
+         .rows => out.* = t.rows,
+         .cursor_x => out.* = t.screens.active.cursor.x,
+@@ -5603,3 +5673,33 @@
+     var values = [_]?*anyopaque{@ptrCast(&cols)};
+     try testing.expectEqual(Result.invalid_value, get_multi(null, 1, null, &values, null));
+ }
++
++/// Performs IND independently of the VT parser's current state.
++pub fn advance_index(terminal_: Terminal) callconv(lib.calling_conv) Result {
++    const wrapper = terminal_ orelse return .invalid_value;
++    wrapper.terminal.index() catch return .out_of_memory;
++    return .success;
++}
++
++
++test "page bytes include both screens without changing the viewport" {
++    var terminal: Terminal = null;
++    try testing.expectEqual(Result.success, new(&lib.alloc.test_allocator, &terminal, 80, 24));
++    defer free(terminal);
++
++    var allocated: usize = 0;
++    try testing.expectEqual(Result.invalid_value, page_bytes(null, &allocated));
++    try testing.expectEqual(Result.invalid_value, page_bytes(terminal, null));
++    try testing.expectEqual(Result.success, page_bytes(terminal, &allocated));
++    const primary = terminal.?.terminal.screens.get(.primary).?;
++    try testing.expectEqual(primary.pages.page_size, allocated);
++    try testing.expect(allocated > 0);
++
++    const alternate = "\x1b[?1049h";
++    vt_write(terminal, alternate.ptr, alternate.len);
++    const active = terminal.?.terminal.screens.active;
++    const alternate_bytes = active.pages.page_size;
++    try testing.expectEqual(Result.success, page_bytes(terminal, &allocated));
++    try testing.expectEqual(primary.pages.page_size + alternate_bytes, allocated);
++    try testing.expectEqual(active, terminal.?.terminal.screens.active);
++}
+--- a/src/terminal/kitty/graphics_storage.zig
++++ b/src/terminal/kitty/graphics_storage.zig
+@@ -192,7 +192,7 @@
+     /// screen switches); those must set only the dirty flag directly.
+     /// Bumping the generation for geometry changes would break the
+     /// contract that an unchanged generation means unchanged contents.
+-    fn markMutated(self: *ImageStorage, io: std.Io) void {
++    pub fn markMutated(self: *ImageStorage, io: std.Io) void {
+         self.dirty = true;
+         self.generation = nextGeneration(io);
+     }
