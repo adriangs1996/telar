@@ -20,8 +20,11 @@ new agent session inside a Telar pane.
 Integrations add hooks or a Telar extension/plugin in the agent's configuration.
 They report lifecycle events and supported shell-tool calls. The Codex flag
 keeps the session and hooks attached to the correct pane instead of a shared
-daemon. Run the installation from the Telar executable you intend to keep;
-hooks contain its path. Repeat installation after moving that executable.
+daemon. Inside a pane, integrations use `TELAR_BIN_PATH`, the executable of
+the runtime that owns it, so an older installed Telar does not send an
+incompatible protocol to a newer runtime. The executable that installed the
+integration is the fallback when that variable is absent. Reinstall to update
+existing hook commands or plugins, and restart the agent to load them.
 
 For example, inspect or remove the Claude integration with:
 

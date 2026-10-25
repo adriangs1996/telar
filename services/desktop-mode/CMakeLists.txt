@@ -84,6 +84,9 @@ set(desktop_font_directory "${CMAKE_CURRENT_SOURCE_DIR}/../../src/assets")
 set(desktop_fonts
   "${desktop_font_directory}/JetBrainsMono-Regular.ttf"
   "${desktop_font_directory}/SymbolsNerdFontMono-Regular.ttf"
+  "${desktop_font_directory}/IBMPlexSans-Regular.ttf"
+  "${desktop_font_directory}/IBMPlexSans-SemiBold.ttf"
+  "${desktop_font_directory}/provider-symbols-320x64.rgba"
 )
 
 function(desktop_embed_fonts target)

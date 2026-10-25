@@ -11,6 +11,13 @@ namespace {
   QStringList registerFonts() {
     QStringList families;
 
+    for (const auto *resource :
+         {":/telar/fonts/IBMPlexSans-Regular.ttf", ":/telar/fonts/IBMPlexSans-SemiBold.ttf"}) {
+      if (QFontDatabase::addApplicationFont(QString::fromLatin1(resource)) < 0) {
+        qWarning() << "Could not register the bundled chrome font" << resource;
+      }
+    }
+
     for (const auto *resource : resources) {
       const auto id = QFontDatabase::addApplicationFont(QString::fromLatin1(resource));
 

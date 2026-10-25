@@ -27,7 +27,7 @@ local metrics = {
   chip_padding = 10,
   list_gap = 10,
   group_height = 30,
-  card_gap = 4,
+  card_gap = 3,
   line_height = 16,
   glyph = 14,
   footer_height = 34,
@@ -60,6 +60,8 @@ local headers = {}
 local rail_buttons = {}
 local scroll = 0
 local content_height = 0
+local card_spacing = metrics.card_gap
+local card_pitch = metrics.line_height * 3
 local cancel_tick
 local cancel_pulse
 local pulse_frame = 0
@@ -269,28 +271,14 @@ local function make_card()
     card:set_hovered(inside)
   end)
 
-  pressable(card.panel, function()
-    if card.agent then
+  ui.on(card.panel, "click", function(event)
+    if event.button == "left" and card.agent then
       jump(card.agent)
+      event:stop_propagation()
     end
   end)
 
   return card
-end
-
--- The checkouts and worktrees cards name, by ID.
-local function card_context()
-  local checkouts, worktrees = {}, {}
-
-  for _, workspace in ipairs(state.workspaces or {}) do
-    checkouts[workspace.id] = workspace
-  end
-
-  for _, worktree in ipairs(state.worktrees or {}) do
-    worktrees[worktree.id] = worktree
-  end
-
-  return { checkouts = checkouts, worktrees = worktrees }
 end
 
 -- The pane focused in the active tab of the focused workspace, as the workbench reports it.
@@ -378,7 +366,19 @@ local function header_for(group)
 end
 
 local function render_list(list, width)
-  local context = card_context()
+  local context = { branches = {}, paths = {}, coordinators = {}, connected = state.connected }
+
+  for _, workspace in ipairs(state.workspaces or {}) do
+    context.branches[workspace.id] = workspace.branch or ""
+    context.paths[workspace.id] = workspace.path or ""
+  end
+
+  for _, worktree in ipairs(state.worktrees or {}) do
+    if worktree.created_by then
+      context.coordinators[worktree.created_by] = true
+    end
+  end
+
   local y = 0
   local counts, seen, seen_groups = {}, {}, {}
 
@@ -419,17 +419,21 @@ local function render_list(list, width)
     revive(card.panel, card)
     card.selected = agent.pane == selected_pane
     local height = card:fill(agent, context, width)
-    place(card.panel, card, y)
-    y = y + height + metrics.card_gap
+    card_spacing = card:spacing()
+    card_pitch = height + card_spacing
+    card.panel.y = y
+    card.panel.opacity = 1
+    card.placed = true
+    card.target_y = y
+    y = y + card_pitch
   end
 
   for pane, card in pairs(cards) do
     if not seen[pane] then
       cards[pane] = nil
       card:release()
-      retire(card.panel, card, function()
-        pool[#pool + 1] = card
-      end)
+      card.panel.visible = false
+      pool[#pool + 1] = card
     end
   end
 
@@ -644,7 +648,7 @@ local function pulse()
   local opacity = AgentStatus.pulse(pulse_frame)
 
   for _, card in pairs(cards) do
-    card:pulse(opacity)
+    card:pulse(pulse_frame)
   end
 
   for _, button in ipairs(rail_buttons) do
@@ -679,7 +683,7 @@ function render()
   count_pill.y = (metrics.header_height - count_pill.height) / 2
   update_chips()
   content.width = viewport.width
-  content_height = math.max(0, render_list(list, viewport.width) - metrics.card_gap)
+  content_height = math.max(0, render_list(list, viewport.width) - card_spacing)
   content.height = content_height
   render_empty(list)
   render_rail(agents)
@@ -785,7 +789,7 @@ ui.on(viewport, "scroll", function(event)
   local delta = event.pixel_delta.y
 
   if delta == 0 then
-    delta = event.angle_delta.y / metrics.wheel_step * metrics.line_height * 3
+    delta = event.angle_delta.y / metrics.wheel_step * card_pitch
   end
 
   scroll = scroll - delta

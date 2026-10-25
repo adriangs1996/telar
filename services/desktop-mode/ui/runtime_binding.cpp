@@ -76,6 +76,7 @@ namespace {
       lua::Value::Object entry{
           {"id", {std::to_string(workspace.id)}},
           {"name", {workspace.name}},
+          {"path", {workspace.path}},
           {"tab_count", {static_cast<double>(workspace.tab_count)}},
       };
       const auto checkout =
@@ -104,6 +105,10 @@ namespace {
 
       if (worktree.workspace) {
         entry.emplace("workspace", lua::Value{std::to_string(worktree.workspace)});
+      }
+
+      if (worktree.created_by) {
+        entry.emplace("created_by", lua::Value{std::to_string(worktree.created_by)});
       }
 
       if (!worktree.command_state.empty()) {
@@ -277,6 +282,7 @@ namespace {
           {"title", {agent.title}},
           {"cwd_label", {agent.cwd_label}},
           {"provider", {agent.provider}},
+          {"icon", {agent.icon}},
           {"name", {agent.name}},
           {"status", {agent.status}},
           {"last_event", {agent.last_event}},

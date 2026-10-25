@@ -1,5 +1,6 @@
 #include "desktop_ui.hpp"
 #include "app_icons.hpp"
+#include "artwork.hpp"
 #include "bundled_fonts.hpp"
 #include "lua_script.hpp"
 #include "lua_surface.hpp"
@@ -43,6 +44,7 @@ namespace ui {
     // Before any surface or terminal resolves a family name.
     bundledFonts();
     engine_.addImageProvider(QStringLiteral("app-icon"), appIcons());
+    engine_.addImageProvider(QStringLiteral("artwork"), artwork());
     services_.modules = &modules_;
     config_path_ = qEnvironmentVariable("TELAR_DESKTOP_CONFIG");
     config_required_ = !config_path_.isEmpty();

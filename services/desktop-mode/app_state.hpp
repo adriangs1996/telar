@@ -8,6 +8,7 @@ struct WorkspaceSummary {
   std::uint64_t id = 0;
   std::string name;
   std::uint16_t tab_count = 0;
+  std::string path;
 
   bool operator==(const WorkspaceSummary &) const = default;
 };

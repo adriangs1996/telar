@@ -13,6 +13,7 @@ int main(int argc, char **argv) {
     SystemAllocator system;
     constexpr std::size_t memory_budget = std::size_t{2} * 1024 * 1024 * 1024;
     BudgetAllocator budget{system, memory_budget};
+
     if (argc >= 2 && std::string_view{argv[1]} == "integration") {
       const auto options = cli::IntegrationOptions::parse({argv + 2, static_cast<std::size_t>(argc - 2)});
       return cli::runIntegration(budget, options);
@@ -28,10 +29,12 @@ int main(int argc, char **argv) {
       cli::runPlugin(budget, options, ProcessEnvironment{});
       return 0;
     }
+
     if (argc >= 3 && std::string_view{argv[1]} == "tap-worker") {
       if (argc != 3 && (argc != 5 || std::string_view{argv[3]} != "--trace")) {
         throw std::invalid_argument{"Expected tap-worker ENTRY [--trace PATH]"};
       }
+
 #if TELAR_DEBUG
       trace::Session tracing{budget, argc == 5 ? argv[4] : nullptr};
 #else

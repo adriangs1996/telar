@@ -4,8 +4,11 @@
 #include "../../trace.hpp"
 #import <AppKit/AppKit.h>
 #include <ApplicationServices/ApplicationServices.h>
+#include <QDebug>
 #include <QMetaObject>
 #include <QObject>
+#include <array>
+#include <chrono>
 #include <condition_variable>
 #include <dlfcn.h>
 #include <functional>
@@ -29,6 +32,16 @@ namespace workbench::native {
     // How long after refusing a size a window is read again, so a size the application had not
     // laid out yet is not taken for one it keeps.
     constexpr std::int64_t refusal_settle_ns = 150 * NSEC_PER_MSEC;
+    // The waits before writing again a size cut short. A window moved to another display is cut
+    // to the display it left until the window server has moved it, which takes longer on a busy
+    // machine: each wait doubles, and the last one gives up, 1.55 s after the first write.
+    constexpr std::array resize_retries{
+        std::chrono::milliseconds{50},
+        std::chrono::milliseconds{100},
+        std::chrono::milliseconds{200},
+        std::chrono::milliseconds{400},
+        std::chrono::milliseconds{800},
+    };
     // An application gets its Dock icon after macOS announces its launch, and a notification can
     // be missed: this often the observer attaches to new applications and reads again anyway.
     constexpr CFTimeInterval rescan_interval = 2;
@@ -117,6 +130,12 @@ namespace workbench::native {
       return read ? std::optional{QSizeF(size.width, size.height)} : std::nullopt;
     }
 
+    // Whether `kept` falls short of what was written in some dimension.
+    bool shortOf(QSizeF kept, QSizeF written) {
+      return kept.width() + size_tolerance < written.width() ||
+             kept.height() + size_tolerance < written.height();
+    }
+
     // The dimensions of `kept` that exceed what was written, 0 for the others.
     QSizeF exceeding(QSizeF kept, QSizeF written) {
       return {kept.width() > written.width() + size_tolerance ? kept.width() : 0,
@@ -125,7 +144,10 @@ namespace workbench::native {
 
     // Returns the size the window kept when its application accepted the call but not the size,
     // as some do below their minimum.
-    std::optional<QSizeF> apply(AXUIElementRef window, std::int64_t pid, const Write &write) {
+    std::optional<QSizeF> apply(AXUIElementRef window,
+                                std::int64_t pid,
+                                const Write &write,
+                                const std::function<bool()> &superseded) {
       std::optional<QSizeF> kept;
       if (write.frame) {
         CGSize size{write.frame->width(), write.frame->height()};
@@ -135,14 +157,37 @@ namespace workbench::native {
         // AppKit cuts a new size down to what fits on screen from where the window is, so a window
         // growing from the right would keep its width: it moves first, then grows, then moves
         // again in case the new size shifted it.
-        AXUIElementSetAttributeValue(window, kAXPositionAttribute, position);
-        const bool sized =
-            AXUIElementSetAttributeValue(window, kAXSizeAttribute, dimensions) == kAXErrorSuccess;
-        AXUIElementSetAttributeValue(window, kAXPositionAttribute, position);
+        const auto place = [&] {
+          AXUIElementSetAttributeValue(window, kAXPositionAttribute, position);
+          const bool sized =
+              AXUIElementSetAttributeValue(window, kAXSizeAttribute, dimensions) == kAXErrorSuccess;
+          AXUIElementSetAttributeValue(window, kAXPositionAttribute, position);
+          return sized;
+        };
+
+        bool sized = place();
+        auto actual = sized ? sizeOf(window) : std::nullopt;
+
+        // A window that came from another display is still cut to that display's size until the
+        // window server has moved it, so a size cut short is written again until it holds, unless
+        // a newer write for the window is waiting.
+        for (const auto wait : resize_retries) {
+          if (!actual || !shortOf(*actual, write.frame->size()) || superseded()) {
+            break;
+          }
+
+          std::this_thread::sleep_for(wait);
+          sized = place();
+          actual = sized ? sizeOf(window) : std::nullopt;
+        }
+
+        if (actual && shortOf(*actual, write.frame->size()) && !superseded()) {
+          qWarning() << "Window of process" << pid << "kept" << *actual << "instead of"
+                     << write.frame->size();
+        }
+
         CFRelease(dimensions);
         CFRelease(position);
-
-        const auto actual = sized ? sizeOf(window) : std::nullopt;
         if (actual && !exceeding(*actual, write.frame->size()).isNull()) {
           kept = actual;
         }
@@ -670,7 +715,10 @@ namespace workbench::native {
           shared->pending.erase(window);
         }
 
-        const auto kept = apply(element, pid, latest);
+        const auto kept = apply(element, pid, latest, [&] {
+          std::lock_guard inner(shared->mutex);
+          return shared->pending.contains(window);
+        });
         if (!kept) {
           CFRelease(element);
           return;

@@ -51,6 +51,17 @@ belong in this platform layer.
 
 ## From the repository root
 
+Run `just desktop` with a fresh Zig runtime, or `just native-desktop` with a
+fresh C++ runtime. Both build Desktop and use `dev/desktop.lua`. The C++ recipe
+requires macOS ARM64 and `services/runtime-cpp/out/` configured with the
+[runtime dependencies](../runtime-cpp/README.md#build-and-run).
+
+The recipes reset their runtime directory, `.zig-out/desktop` for Zig or
+`.zig-out/native-desktop` for C++, and its saved workbench layout on every run,
+then stop that runtime when Desktop exits. Pass a socket, for example
+`just native-desktop /path/to/runtime.sock`, to attach to an existing runtime
+without resetting or stopping it.
+
 ### Desktop workbench
 
 `ui/workbench/` implements the desktop workbench in C++. It uses the existing
@@ -250,7 +261,12 @@ call bounded by 50 ms, so an application that hangs delays only its own windows,
 and a window's queued write is replaced by a newer one. A frame is written as
 position, size and position again: AppKit cuts a new size down to what fits on
 screen from where the window is, so a window growing from the right would keep
-its width. The debug programs
+its width. A window moved to another display is still cut to the display it left
+until the window server has moved it, which takes longer on a busy machine, so a
+size cut short is written again after 50, 100, 200, 400 and 800 ms until it
+holds, a newer write for the window comes, or the waits run out, which is logged. A window the window server lists but whose
+creation notification never arrived, as with an application just launched, makes
+the observer read its application's windows again, up to five times per window. The debug programs
 `external_window_dbg`, `window_observer_dbg` and `layers_dbg` hold the
 measurements behind these choices. On Linux, Telar's own wlroots compositor
 observes and places Wayland and XWayland windows directly. Hidden tabs disable
@@ -639,20 +655,30 @@ the panel; Qt Quick draws its contents.
 
 `ui/sidebar/init.lua` creates the left sidebar: the agents panel. It lists every
 agent of the runtime in attention order, grouped as needs you, working, done, idle
-and unknown. `ui/sidebar/card.lua` draws each agent in three rows, as the GUI does: its
-provider, workspace and branch (or, for an agent in a tracked worktree, the worktree's branch,
-diff, commits ahead and last command), with its status at the right; the session title; then
-what happens now: the question or approval it waits on, its plan as cells with its current
-step, its last event while it works, or its final message once done. The card of the focused
-pane is selected, and an agent that needs the person keeps a bar
-of its status color. Clicking a card activates its workspace's Space, selects its tab and
+and unknown. `ui/sidebar/card.lua` implements the normal agent card in Lua: workspace
+favicon or folder, workspace name and right-aligned status; a regular-weight session title;
+then the live event while working or that workspace's branch otherwise, with a dimmed provider
+mark on the right. All cards keep three rows, including when the event or branch is empty.
+Status words distinguish approvals, questions and plans to review. Working durations retain
+seconds during the first minute; idle cards show their status age without a glyph. Narrow
+cards drop the duration, then the status word before clipping the glyph. Labels elide independently.
+Only the working glyph pulses. Selection follows the focused pane and uses a raised fill
+with an inner one-device-pixel border; hover uses the border surface. Cards have no status
+flash or press scaling. Clicking a card activates its workspace's Space, selects its tab and
 focuses its pane.
 
 The chips above the list switch between every agent and those of the workspace on screen.
-Cards fade in, move to their new place when an agent changes group, flash in their new color
-when its status changes and fade out when it leaves. Working glyphs pulse on a 120 ms timer
+Working glyphs pulse on a 120 ms timer
 that stops when no agent works. Working durations count seconds during the first minute and
 ages count minutes; a timer refreshes them when the next one changes.
+
+Card metrics, fonts, colors, composition and interaction stay in Lua for user customization.
+`Card.metrics`, `Card.palette` and `Card.font_family` hold the defaults; a replacement
+`sidebar/card.lua` can change any of them. Chrome text uses the bundled IBM Plex Sans
+regular face and native text rendering. Run `luajit tests/agent_card.lua` to check the card's
+data selection, status labels, fitting, focus, display scaling and customization.
+The `artwork` image provider only loads bounded favicon files, samples embedded provider
+artwork and rasterizes standalone glyphs off the interactive path. It links no GUI code or Zig.
 
 A done agent stays done until the person sees it: when the focused pane of the focused
 workspace's active tab belongs to a done agent, the workbench acknowledges it once, and the

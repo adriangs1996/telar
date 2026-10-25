@@ -1,6 +1,7 @@
 dev_runtime_dir := justfile_directory() / ".zig-out/dev"
 desktop_runtime_dir := justfile_directory() / ".zig-out/desktop-dev"
 desktop_fresh_dir := justfile_directory() / ".zig-out/desktop"
+native_desktop_fresh_dir := justfile_directory() / ".zig-out/native-desktop"
 
 # Show the available commands.
 default:
@@ -39,11 +40,16 @@ app:
     mkdir -p -m 700 "{{ dev_runtime_dir }}"
     TELAR_SOCKET="{{ dev_runtime_dir }}/runtime.sock" TELAR_HISTORY="{{ dev_runtime_dir }}/history.db" zig build run -- gui
 
-# Without a socket, every run starts a new runtime under .zig-out/desktop,
-# drops the workbench layout saved for it, and stops the runtime on exit.
-# Build and run Desktop with dev/desktop.lua on a new runtime each run, or on SOCKET.
+# Build and run Desktop with dev/desktop.lua and a fresh Zig runtime, or on SOCKET.
+desktop socket="": (_desktop socket "zig")
+
+# Build and run Desktop with dev/desktop.lua and a fresh C++ runtime, or on SOCKET.
+native-desktop socket="": (_desktop socket "cpp")
+
+# Without a socket, reset the runtime and its saved layout, then stop it on exit.
+[private]
 [working-directory: "services/desktop-mode"]
-desktop socket="":
+_desktop socket implementation:
     #!/usr/bin/env bash
     set -euo pipefail
     cmake --preset debug
@@ -56,9 +62,17 @@ desktop socket="":
         exec ./out/debug/telar-desktop "$socket"
     fi
 
-    (cd "{{ justfile_directory() }}" && zig build)
-    telar="{{ justfile_directory() }}/zig-out/bin/telar"
     runtime="{{ desktop_fresh_dir }}"
+    if [[ "{{ implementation }}" == cpp ]]; then
+        cmake -S ../runtime-cpp -B ../runtime-cpp/out
+        cmake --build ../runtime-cpp/out --target telar-runtime
+        telar="{{ justfile_directory() }}/services/runtime-cpp/out/telar-runtime"
+        runtime="{{ native_desktop_fresh_dir }}"
+    else
+        (cd "{{ justfile_directory() }}" && zig build)
+        telar="{{ justfile_directory() }}/zig-out/bin/telar"
+    fi
+
     export TELAR_SOCKET="$runtime/runtime.sock"
     export TELAR_HISTORY="$runtime/history.db"
     # A run that was killed leaves its runtime behind; it must stop before its files go.
@@ -113,6 +127,17 @@ desktop-check:
 desktop-editor:
     cmake --preset debug
     cmake --build --preset debug --target desktop-editor
+
+# Refresh the C++ runtime compilation database and generated headers for clangd.
+[working-directory: "services/runtime-cpp"]
+runtime-editor:
+    cmake -S . -B out
+    cmake --build out --target cell-layout
+
+# Analyze the production C++ runtime sources without applying fixes.
+[working-directory: "services/runtime-cpp"]
+runtime-lint jobs="2": runtime-editor
+    cmake "-DJOBS={{ jobs }}" -P cmake/lint.cmake
 
 # Format the desktop C++, Objective-C++ and Lua sources with their project rules.
 [working-directory: "services/desktop-mode"]

@@ -648,6 +648,7 @@ struct RuntimeSession::Impl {
             .title = std::string(entry->session_title),
             .cwd_label = std::string(entry->cwd_label),
             .provider = std::string(entry->provider_name),
+            .icon = std::string(entry->icon),
             .name = std::string(entry->display_name),
             .status = describe(entry->status),
             .blocked_reason = describe(entry->blocked_reason),
@@ -680,7 +681,8 @@ struct RuntimeSession::Impl {
         state.worktrees.clear();
 
         for (const auto &entry : reply.entries) {
-          state.workspaces.push_back({entry.workspace, std::string(entry.name), entry.tab_count});
+          state.workspaces.push_back(
+              {entry.workspace, std::string(entry.name), entry.tab_count, std::string(entry.path)});
           state.checkouts.push_back({.workspace = entry.workspace,
                                      .branch = std::string(entry.branch),
                                      .dirty = entry.dirty});
@@ -690,6 +692,7 @@ struct RuntimeSession::Impl {
           state.worktrees.push_back({
               .id = entry.worktree,
               .workspace = entry.workspace.value_or(0),
+              .created_by = entry.created_by.value_or(0),
               .branch = std::string(entry.branch),
               .title = std::string(entry.title),
               .diff_added = entry.diff_added,

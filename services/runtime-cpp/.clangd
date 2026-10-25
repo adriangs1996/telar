@@ -1,0 +1,9 @@
+CompileFlags:
+  CompilationDatabase: out
+
+---
+If:
+  PathMatch: (.*/)?tests/.*
+Diagnostics:
+  ClangTidy:
+    Remove: '*'

@@ -23,8 +23,8 @@ pub const family: FamilyHelp = .{
     .text = files_text ++
         \\
         \\
-        \\The hooks run `telar hook AGENT` with the executable that installed them, guarded so
-        \\that outside a telar pane nothing runs. Through them the runtime learns an agent's
+        \\The hooks run `telar hook AGENT` with the pane's TELAR_BIN_PATH, falling back to
+        \\the executable that installed them, and run only inside a pane. The runtime learns an agent's
         \\official state, its session for restore and the commands it runs. Nothing here
         \\contacts a runtime.
         \\

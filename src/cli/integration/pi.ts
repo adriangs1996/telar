@@ -8,7 +8,7 @@
 import { spawn } from "node:child_process";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-const TELAR = "__TELAR_EXECUTABLE__";
+const TELAR = process.env.TELAR_BIN_PATH || "__TELAR_EXECUTABLE__";
 // Bytes of one pending payload; 32 of them wait at most.
 const MAX_PAYLOAD_BYTES = 64 * 1024;
 // Characters of a tool input string an oversized payload still carries: the

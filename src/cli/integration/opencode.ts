@@ -8,7 +8,7 @@
 // Outside a Telar pane the plugin does nothing.
 import { spawn } from "node:child_process";
 
-const TELAR = "__TELAR_EXECUTABLE__";
+const TELAR = process.env.TELAR_BIN_PATH || "__TELAR_EXECUTABLE__";
 
 type Blocked = "permission" | "question";
 

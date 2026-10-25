@@ -53,6 +53,7 @@ struct RuntimeAgent {
   std::string title;
   std::string cwd_label;
   std::string provider;
+  std::string icon;
   std::string name;
   std::string status;
   std::string blocked_reason;
@@ -83,6 +84,7 @@ struct RuntimeCheckout {
 struct RuntimeWorktree {
   std::uint64_t id = 0;
   std::uint64_t workspace = 0;
+  std::uint64_t created_by = 0;
   std::string branch;
   std::string title;
   std::uint32_t diff_added = 0;

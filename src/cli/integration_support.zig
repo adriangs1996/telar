@@ -109,7 +109,9 @@ const Extension = struct {
 /// Shell prefix of every installed hook command. The agent runs the command
 /// through `sh -c`, so outside a telar pane the guard exits before the telar
 /// executable is spawned at all, mirroring the Pi extension's early return.
-pub const pane_guard = "[ -n \"$TELAR_PANE_ID\" ] && [ -n \"$TELAR_PANE_GENERATION\" ] || exit 0; exec ";
+pub const pane_guard = "[ -n \"$TELAR_PANE_ID\" ] && [ -n \"$TELAR_PANE_GENERATION\" ] || exit 0; ";
+const hook_executable_format = "telar_hook_bin=${{TELAR_BIN_PATH:-'{s}'}}; exec \"$telar_hook_bin\"{s}";
+const max_hook_marker_bytes = @max(claude_marker.len, codex_marker.len, cursor_marker.len);
 
 /// Runs one integration command and returns the process exit code.
 ///
@@ -528,44 +530,45 @@ pub fn installExtension(io: std.Io, path: []const u8, source: []const u8) !void 
     try temp.commit();
 }
 
-/// Renders the guarded shell command an agent runs on each hook event. The
-/// command still ends with the marker so `hasHook` and uninstall find it.
+/// Renders a guarded hook command using the pane's runtime executable, with
+/// the installer as fallback. The marker remains last so uninstall finds it.
 ///
 /// ```zig
 /// const command = try renderHookCommand(&buffer, "/opt/telar", claude_marker);
-/// // [ -n "$TELAR_PANE_ID" ] && [ -n "$TELAR_PANE_GENERATION" ] || exit 0; exec '/opt/telar' hook claude
+/// // Inside a pane, TELAR_BIN_PATH selects its runtime's wire schema.
 /// ```
 pub fn renderHookCommand(buffer: []u8, executable: []const u8, marker: []const u8) ![]const u8 {
     if (std.mem.indexOfScalar(u8, executable, '\'') != null) {
         return error.UnsupportedExecutablePath;
     }
 
-    return std.fmt.bufPrint(buffer, pane_guard ++ "'{s}'{s}", .{ executable, marker });
+    return std.fmt.bufPrint(buffer, pane_guard ++ hook_executable_format, .{ executable, marker });
 }
 
-/// Renders a hook command without the pane guard, for hooks an agent needs
-/// answered in every session.
+/// Renders the same executable selection without the pane guard, for hooks
+/// an agent needs answered in every session.
 ///
 /// ```zig
 /// const command = try renderUnguardedCommand(&buffer, "/opt/telar", claude_marker);
-/// // exec '/opt/telar' hook claude
+/// // Outside a pane, /opt/telar answers the worktree hook.
 /// ```
 pub fn renderUnguardedCommand(buffer: []u8, executable: []const u8, marker: []const u8) ![]const u8 {
     if (std.mem.indexOfScalar(u8, executable, '\'') != null) {
         return error.UnsupportedExecutablePath;
     }
 
-    return std.fmt.bufPrint(buffer, "exec '{s}'{s}", .{ executable, marker });
+    return std.fmt.bufPrint(buffer, hook_executable_format, .{ executable, marker });
 }
 
 /// The rendered commands a pair of hook sets borrows.
 const HookCommands = struct {
-    lifecycle: [std.fs.max_path_bytes + pane_guard.len + 32]u8,
-    worktree: [std.fs.max_path_bytes + 32]u8,
+    lifecycle: [std.fs.max_path_bytes + pane_guard.len + hook_executable_format.len + max_hook_marker_bytes]u8,
+    worktree: [std.fs.max_path_bytes + hook_executable_format.len + max_hook_marker_bytes]u8,
 };
 
 // The lifecycle hooks, guarded to telar panes, and the worktree hooks an
-// agent needs answered in every session, both running `executable`.
+// agent needs answered in every session. Both prefer the pane's runtime
+// executable and fall back to the installer.
 fn hookSetsFor(integration: Integration, executable: []const u8, commands: *HookCommands) !struct { HookSet, HookSet } {
     const command = try renderHookCommand(&commands.lifecycle, executable, integration.settings.marker);
     const worktree_command = try renderUnguardedCommand(&commands.worktree, executable, integration.settings.marker);
