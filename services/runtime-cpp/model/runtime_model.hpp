@@ -27,6 +27,16 @@ struct RuntimeModel {
     return slot ? std::uint32_t{1} << *slot : 0;
   }
 
+  bool tabHeld(TabLocation location) const noexcept {
+    for (const auto *client : clients.items()) {
+      if (client != nullptr && !client->connection.closing && client->held_tabs.contains(location)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   GraphicsLimits graphics_limits;
   RuntimeLimits limits;
   [[no_unique_address]] diagnostics::RuntimeCounters metrics;

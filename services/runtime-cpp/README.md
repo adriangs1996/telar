@@ -1,7 +1,7 @@
 # C++ runtime
 
-An independent C++23 runtime for macOS ARM64. It handles all 61 client request
-tags. The Zig runtime remains the
+An independent C++23 runtime for macOS ARM64. It handles all 62 client request
+tags, including Desktop's `HoldTab`. The Zig runtime remains the
 compatibility reference. This executable is opt-in. An installation option
 provides the `telar` command used by Desktop's existing discovery.
 
@@ -142,10 +142,17 @@ workspace and 64 attachments per client. Each request worker admits 32 jobs.
 History, paths, editors and suggestions run on separate workers; Git observation
 has its own single-job worker. Their queues and replies have explicit limits.
 
+Each client can hold 64 tabs using inline storage. A held tab survives its last
+terminal so Desktop can keep other applications' windows there, request an empty
+snapshot and open another terminal. The last release or client disconnect removes
+an empty tab; an explicit `CloseTab` still closes it. Holds are not restored from
+a session checkpoint.
+
 ## Added protocol requests
 
 | Family | Requests |
 | --- | --- |
+| Tabs | `HoldTab`. |
 | Agents | `ReportAgent`, `ReportAgentSession`, `ReportAgentTitle`, `ReportAgentProgress`, `ReportAgentCommand`, `QueryAgents`, `AcknowledgeAgent`, `InterruptAgent`, `VerifyPaneDescent`. |
 | Graphics | `ConfigureGraphics`, `GraphicsCredit`, `RequestGraphicsSnapshot`. |
 | Worktrees | `RegisterWorktree`, `LaunchWorktree`, `ForgetWorktree`, `LaunchTab`. |
@@ -285,7 +292,7 @@ the adjacent and bundle cases really use their installed command.
 
 ## Compatibility limits
 
-All 61 request tags are handled. Replacement acceptance remains open for the
+All 62 request tags are handled. Replacement acceptance remains open for the
 contracts below; the detailed evidence is in [parity.md](parity.md).
 
 - Client delivery now bounds pending responses at 128, reserves notification

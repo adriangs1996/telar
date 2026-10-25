@@ -14,6 +14,7 @@ inline void check(bool condition, std::source_location location = std::source_lo
 void testMemory();
 void testOutgoingFrames();
 void testDeferredResponses();
+void testTabHolds();
 void testClientDelivery();
 void testTerminal();
 void testFrameSync();

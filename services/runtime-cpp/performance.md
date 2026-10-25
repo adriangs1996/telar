@@ -2055,3 +2055,65 @@ An eight-second diagnostic sample during 500,000 scroll iterations records
 This does not establish the cause of the paired scroll regression. The raw
 profile, driver and logs remain under `/tmp/telar-cpp-state-scroll-profile-v1`;
 no optimization is accepted on the basis of those sample counts.
+
+
+## Branch integration and HoldTab (2026-10-25)
+
+The runtime is merged into `feat/desktop-lua-ui` at `f5a4323dd`. The branch
+added `HoldTab` and changed the wire schema after the original `23c87dfcb`
+reference. This integration implements the new request, bringing dispatch to
+62 tags. The current branch's Zig build is the reference for this section;
+older sections retain their original binaries and conclusions.
+
+The change stores at most 64 tab locations inline per client and shares empty-tab
+removal between pane collection and hold release. Holds survive the final pane,
+allow an empty snapshot and a replacement terminal, and end on explicit release
+or disconnect. An explicit tab close overrides holds. Debug builds trace
+`runtime.holdTab`; Release removes that tracing. The ARM64 handler uses an
+80-byte stack frame and inlines the bounded hold lookup and insertion. The hold
+container does not allocate; replies use the existing connection queue.
+
+Frozen binaries are under `/tmp/telar-cpp-branch-integration-v2`. Release SHA-256
+is `ac59d9ccbdf7f67409e76ccec9ecfdd2f74c522ec0d48ae00fe4bbb45749288b`;
+ASan/UBSan is `9b3ddc58d6c1df26ccd14ba7c2c7081a53ffe6a96e48bd92b0785c864dd3ddec`.
+The preceding C++ build, with the branch's serializers but without HoldTab,
+is `bfa251e1f250d27d789704795fe66d10122a1e4a53db038015966cb44b0c120e`.
+Current Zig SHA-256 is
+`26bdd754a1d745929ed2c61c0325cd22cd7d39f515e339c6100dea77424f1f45`.
+
+Release and ASan/UBSan runtime/diagnostic suites pass. Three alternating live
+pairs per build match exact normalized reply bytes for multiple holders,
+last-pane closure, empty snapshots, replacement panes, release, disconnect and
+explicit tab closure. Six standalone headers pass. A freshly built probe using
+this branch's Desktop connection and screen code passes with sh, bash and zsh
+against both runtimes in Release and ASan/UBSan. The initial five-suite Release
+integration run also passes runtime, diagnostics, TLS, hooks and integrations.
+
+Seven alternating pairs measure 3,000 hold/release exchanges or 160 terminal
+iterations per process. Every paired terminal output matches byte for byte.
+Builds, tests and assembly inspection run outside the timed sessions.
+
+| Workload | Wins vs preceding C++ | Median ratio | Wins vs current Zig | Median ratio |
+| --- | ---: | ---: | ---: | ---: |
+| `sparse` | 7/7 | 0.824495 | 7/7 | 0.559151 |
+| `full` | 3/7 | 1.002214 | 7/7 | 0.710959 |
+| `scroll` | 2/7 | 1.018314 | 7/7 | 0.551503 |
+| `unicode` | 3/7 | 1.057037 | 7/7 | 0.589280 |
+| `modes` | 5/7 | 0.989460 | 7/7 | 0.547172 |
+| `links` | 3/7 | 1.012825 | 7/7 | 0.644479 |
+| `colors` | 2/7 | 1.008043 | 7/7 | 0.529978 |
+| `mixed` | 3/7 | 1.004097 | 7/7 | 0.560493 |
+| `bulk` | 5/7 | 0.972600 | 7/7 | 0.731742 |
+| `graphemes` | 4/7 | 0.995732 | 7/7 | 0.582095 |
+| `tab-hold-roundtrip` | unavailable | unavailable | 7/7 | 0.679402 |
+
+The eleven measured workloads pass the six-of-seven Zig gate. The C++ controls
+remain mixed: Unicode is 5.70% slower by median with 3/7 wins, scroll 1.83%
+slower with 2/7, and colors 0.80% slower with 2/7. Causes are not established.
+The new functionality is retained for compatibility with the branch. These
+results do not establish a general performance improvement over preceding C++,
+or close the earlier graphics, proxy, Brotli, concurrency or provider gates.
+
+Evidence: `measurements/experiments/branch-integration-v2-*.json`, with the
+source manifest, binary fingerprints, raw pairs, functional reports and suite
+logs. The disassembly is `branch-integration-v2-hold-tab-0.asm`.

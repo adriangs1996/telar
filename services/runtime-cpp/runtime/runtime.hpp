@@ -235,7 +235,9 @@ private:
 
     background_.cancel(identity);
     deferred_reports_.cancel(*client);
+    client->connection.closing = true;
     panes_.detachAll(*client);
+    workspaces_.releaseHeldTabs(*client);
     releaseAllGeometry(model_, identity);
     client_control_.abandon(identity);
     poller_.remove(client->connection.descriptor());
@@ -543,6 +545,10 @@ private:
 
   void handle(ClientSession<Memory> &client, const CloseTab &message) {
     workspaces_.closeTab(client, message);
+  }
+
+  void handle(ClientSession<Memory> &client, const HoldTab &message) {
+    workspaces_.holdTab(client, message);
   }
 
   void handle(ClientSession<Memory> &client, const MoveTab &message) {

@@ -16,6 +16,7 @@ int main(int argc, char **argv) {
     testMemory();
     testOutgoingFrames();
     testDeferredResponses();
+    testTabHolds();
     testClientDelivery();
     testTerminal();
     testFrameSync();

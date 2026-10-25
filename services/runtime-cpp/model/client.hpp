@@ -9,6 +9,7 @@
 #include "../terminal/text_search.hpp"
 #include "../transport/connection.hpp"
 #include "client_role.hpp"
+#include "held_tabs.hpp"
 #include "pending_clipboard.hpp"
 #include <bit>
 #include <optional>
@@ -120,6 +121,7 @@ public:
   std::array<ForegroundStamp, 256> foregrounds;
   std::optional<TextSearch> search;
   ConfigureTerminalColors colors{};
+  HeldTabs held_tabs;
 };
 
 }

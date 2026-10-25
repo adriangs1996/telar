@@ -160,7 +160,7 @@ public:
   void createPane(ClientSession<Memory> &client, const CreatePane &request) {
     const auto *workspace = model_.workspaces.find(request.location.workspace.id);
     const auto *tab = workspace == nullptr ? nullptr : workspace->tab(request.location.tab_id);
-    if (request.location.workspace.kind != WorkspaceLocation::Kind::workspace || tab == nullptr || firstPane(*tab) == nullptr) {
+    if (request.location.workspace.kind != WorkspaceLocation::Kind::workspace || tab == nullptr || (firstPane(*tab) == nullptr && !model_.tabHeld(request.location))) {
       throw RequestError{FailureCode::pane_not_found, "tab not found"};
     }
 
@@ -251,37 +251,32 @@ public:
       }
 
       std::erase(tab->panes, identity);
-      if (!tab->panes.empty()) {
-        leaveEmptyViews(location.workspace.id);
-        continue;
-      }
-
-      std::erase_if(workspace->tabs, [&](const auto &entry) { return entry.id == location.tab_id; });
-      const bool workspace_closed = workspace->tabs.empty();
-      const auto previous = workspace_closed ? previousWorkspace(model_, workspace->id) : std::nullopt;
-      if (workspace_closed) {
-        model_.workspaces.erase(workspace->id);
-      }
-
-      ++model_.workspace_revision;
-      for (auto *client : model_.clients.items()) {
-        if (client == nullptr || client->workspace != location.workspace.id) {
-          continue;
-        }
-
-        try {
-          publishTabClosed(*client, TabClosed{.location = location,
-                                              .workspace_closed = workspace_closed,
-                                              .previous_workspace = previous});
-        } catch (...) {
-          client->connection.closing = true;
-        }
-
-        if (workspace_closed) {
-          panes_.detachAll(*client);
-        }
-      }
+      releaseEmptyTab(location);
       leaveEmptyViews(location.workspace.id);
+    }
+  }
+
+  void holdTab(ClientSession<Memory> &client, const HoldTab &request) {
+    TELAR_TRACE("runtime.holdTab");
+    const auto *workspace = model_.workspaces.find(request.location.workspace.id);
+    if (request.location.workspace.kind != WorkspaceLocation::Kind::workspace || workspace == nullptr || workspace->tab(request.location.tab_id) == nullptr) {
+      throw RequestError{FailureCode::tab_not_found, "tab not found"};
+    }
+
+    if (request.held && !client.held_tabs.insert(request.location)) {
+      throw RequestError{FailureCode::resource_limit, "this client holds too many tabs"};
+    }
+
+    if (!request.held && client.held_tabs.erase(request.location)) {
+      releaseEmptyTab(request.location);
+    }
+
+    client.connection.send(RequestCompleted{.request_id = request.request_id});
+  }
+
+  void releaseHeldTabs(ClientSession<Memory> &client) {
+    while (const auto location = client.held_tabs.pop()) {
+      releaseEmptyTab(*location);
     }
   }
 
@@ -315,7 +310,7 @@ public:
   void tabSnapshot(ClientSession<Memory> &client, const RequestTabSnapshot &request) {
     const auto *workspace = model_.workspaces.find(request.location.workspace.id);
     const auto *tab = workspace == nullptr ? nullptr : workspace->tab(request.location.tab_id);
-    if (request.location.workspace.kind != WorkspaceLocation::Kind::workspace || tab == nullptr || firstPane(*tab) == nullptr) {
+    if (request.location.workspace.kind != WorkspaceLocation::Kind::workspace || tab == nullptr || (firstPane(*tab) == nullptr && !model_.tabHeld(request.location))) {
       throw RequestError{FailureCode::tab_not_found, "tab not found"};
     }
 
@@ -366,6 +361,31 @@ public:
   }
 
 private:
+  void releaseEmptyTab(TabLocation location) {
+    auto *workspace = model_.workspaces.find(location.workspace.id);
+    auto *tab = workspace == nullptr ? nullptr : workspace->tab(location.tab_id);
+    if (tab == nullptr || !tab->panes.empty() || model_.tabHeld(location)) {
+      return;
+    }
+
+    const auto closed = removeTab(location);
+    for (auto *client : model_.clients.items()) {
+      if (client == nullptr || !client->connection.negotiated || client->connection.closing || client->workspace != location.workspace.id) {
+        continue;
+      }
+
+      try {
+        publishTabClosed(*client, closed);
+      } catch (...) {
+        client->connection.closing = true;
+      }
+
+      if (closed.workspace_closed) {
+        panes_.detachAll(*client);
+      }
+    }
+  }
+
   static void publishTabClosed(ClientSession<Memory> &client, const TabClosed &closed) {
     if (!client.connection.trySend(closed)) {
       client.workspace_resync = ResyncRequired{.workspace = closed.location.workspace,

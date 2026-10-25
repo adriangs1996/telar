@@ -67,6 +67,9 @@ bool dispatchRequest(ClientTag tag, Consumer &&consume) {
   case ClientTag::close_tab:
     consume.template operator()<CloseTab>();
     return true;
+  case ClientTag::hold_tab:
+    consume.template operator()<HoldTab>();
+    return true;
   case ClientTag::move_tab:
     consume.template operator()<MoveTab>();
     return true;

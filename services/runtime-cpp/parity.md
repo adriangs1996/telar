@@ -6,6 +6,18 @@ code and non-Zig services may be reused. Compatibility means equivalent
 observable behavior, including failure, restart and resource-limit paths.
 Handling a request tag alone does not establish compatibility.
 
+
+The service is now integrated into `feat/desktop-lua-ui` as an opt-in executable.
+That branch added `HoldTab` and changed the schema after the original reference.
+The C++ runtime handles all 62 tags, including per-client tab holds, empty held
+tab snapshots, terminal recreation, last-holder release and disconnect cleanup.
+Release and ASan/UBSan unit tests and three live pairs per build pass against the
+current branch's Zig runtime. Desktop connection/screen checks pass with sh,
+bash and zsh. See the branch integration section of [performance.md](performance.md)
+and `measurements/experiments/branch-integration-v2-validation.json` for the exact
+binaries, source manifest and remaining performance limits. Earlier unresolved
+contracts below remain open.
+
 History saturation now matches the reference's separate bounds: 64 pending
 requests, a drained batch of at most 64, and four queued responses. Admission
 does not count an active batch or responses. The fixed queues allocate through
