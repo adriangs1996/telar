@@ -139,6 +139,10 @@ bool decodePng(void *, const GhosttyAllocator *allocator, const Byte *bytes, std
 
 }
 
+bool decodePngImage(const GhosttyAllocator *allocator, std::span<const std::uint8_t> bytes, GhosttySysImage &image) {
+  return decodePng(nullptr, allocator, bytes.data(), bytes.size(), &image);
+}
+
 void installPngDecoder() {
   checkGhostty(ghostty_sys_set(GHOSTTY_SYS_OPT_DECODE_PNG, reinterpret_cast<const void *>(&decodePng)));
 }
