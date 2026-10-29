@@ -26,6 +26,45 @@ public:
   // Response bytes are initialized when a slot is published, without clearing the entire queue at construction.
   PtyResponseQueue() noexcept {}
 
+  // A controller batches consecutive native replies under one lock. It must
+  // release this lease before any backend write or callback can produce data.
+  class Producer {
+  public:
+    explicit Producer(PtyResponseQueue &queue) : queue_(queue), lock_(queue.mutex_, std::defer_lock) {}
+
+    bool tryPush(std::span<const std::uint8_t> response) noexcept {
+      acquire();
+      return queue_.append(response, {});
+    }
+
+    bool tryPushOwned(std::span<const std::uint8_t> response, std::shared_ptr<const void> owner) noexcept {
+      acquire();
+      return queue_.append(response, std::move(owner));
+    }
+
+    void release() noexcept {
+      if (lock_.owns_lock()) {
+        lock_.unlock();
+      }
+    }
+
+  private:
+    void acquire() {
+      if (!lock_.owns_lock()) {
+        lock_.lock();
+      }
+    }
+
+    PtyResponseQueue &queue_;
+    std::unique_lock<std::mutex> lock_;
+  };
+
+  struct Batch {
+    std::array<std::span<const std::uint8_t>, message_capacity> messages;
+    std::size_t count = 0;
+    std::size_t bytes = 0;
+  };
+
   bool push(std::span<const std::uint8_t> response) noexcept {
     const std::lock_guard lock{mutex_};
     if (!append(response, {})) {
@@ -84,6 +123,34 @@ public:
     return head.subspan(offset_);
   }
 
+  Batch peekBatch() const noexcept {
+    const std::lock_guard lock{mutex_};
+    Batch batch;
+    for (std::size_t position = 0; position < count_; ++position) {
+      const auto index = (head_ + position) % message_capacity;
+      const auto bytes = owned_[index] ? views_[index] : std::span<const std::uint8_t>{bytes_[index]}.first(lengths_[index]);
+      batch.messages[batch.count++] = bytes.subspan(position == 0 ? offset_ : 0);
+      batch.bytes += batch.messages[position].size();
+    }
+    return batch;
+  }
+
+  // Single-consumer ownership is identical to peek(): appenders cannot mutate
+  // borrowed slots, and only this consumer may consume or clear the queue.
+  void consumeBytes(std::size_t bytes) noexcept {
+    const std::lock_guard lock{mutex_};
+    assert(bytes <= byte_count_);
+    while (count_ != 0) {
+      const auto remaining = lengths_[head_] - offset_;
+      const auto count = std::min<std::size_t>(remaining, bytes);
+      consumeHead(count);
+      bytes -= count;
+      if (count < remaining || (bytes == 0 && (count_ == 0 || lengths_[head_] != 0))) {
+        break;
+      }
+    }
+  }
+
   std::span<const std::uint8_t> readable() const noexcept {
     return peek().value_or(std::span<const std::uint8_t>{});
   }
@@ -91,6 +158,11 @@ public:
   void consume(std::size_t bytes) noexcept {
     const std::lock_guard lock{mutex_};
     assert(count_ != 0 && bytes <= lengths_[head_] - offset_);
+    consumeHead(bytes);
+  }
+
+private:
+  void consumeHead(std::size_t bytes) noexcept {
     offset_ += bytes;
     byte_count_ -= bytes;
     if (offset_ == lengths_[head_]) {
@@ -102,6 +174,7 @@ public:
     }
   }
 
+public:
   bool empty() const noexcept {
     const std::lock_guard lock{mutex_};
     return count_ == 0;

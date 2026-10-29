@@ -49,7 +49,7 @@ static void testConcurrentResponses() {
     for (std::uint32_t sequence = 0; sequence < responses_per_producer; ++sequence) {
       const std::array<std::uint32_t, 2> payload{producer, sequence};
       const auto bytes = std::span{reinterpret_cast<const std::uint8_t *>(payload.data()), sizeof(payload)};
-      while (!queue.push(bytes)) {
+      while (!queue.tryPush(bytes)) {
         std::this_thread::yield();
       }
     }
@@ -72,7 +72,7 @@ static void testConcurrentResponses() {
     check(std::memcmp(payload.data(), response->data(), response->size()) == 0);
     queue.consume(response->size());
   }
-  check(queue.empty());
+  check(queue.empty() && queue.snapshot().dropped == 0);
 }
 
 static void testOwnedResponseLifetime() {
@@ -93,8 +93,36 @@ static void testOwnedResponseLifetime() {
   queue.clear();
 }
 
+static void testBatchedResponses() {
+  PtyResponseQueue queue;
+  auto storage = std::make_shared<std::vector<std::uint8_t>>(8192, 42);
+  const std::weak_ptr<std::vector<std::uint8_t>> lifetime = storage;
+  {
+    PtyResponseQueue::Producer producer{queue};
+    check(producer.tryPush({}));
+    check(producer.tryPushOwned(*storage, storage));
+    producer.release();
+    check(queue.tryPush(std::span{*storage}.first(3)));
+    check(producer.tryPush(std::span{*storage}.first(2)));
+  }
+  storage.reset();
+  auto batch = queue.peekBatch();
+  check(batch.count == 4 && batch.bytes == 8197 && batch.messages[1][8191] == 42);
+  queue.consumeBytes(8191);
+  check(!lifetime.expired());
+  batch = queue.peekBatch();
+  check(batch.count == 3 && batch.bytes == 6 && batch.messages[0].size() == 1);
+  queue.consumeBytes(4);
+  check(lifetime.expired());
+  batch = queue.peekBatch();
+  check(batch.count == 1 && batch.bytes == 2);
+  queue.consumeBytes(2);
+  check(queue.empty());
+}
+
 void testPtyResponseQueue() {
   testQueueBoundaries();
   testConcurrentResponses();
   testOwnedResponseLifetime();
+  testBatchedResponses();
 }
