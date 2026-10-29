@@ -9,7 +9,7 @@ provides the `telar` command used by Desktop's existing discovery.
 ## Build and run
 
 The initial target requires macOS 26 and its SDK, CMake, Ninja, a C++23
-compiler, Python 3, libpng, OpenSSL 3, nghttp2, Brotli and Zstd headers/libraries,
+compiler, Python 3, OpenSSL 3, nghttp2, Brotli and Zstd headers/libraries,
 and Zig 0.17.0. SQLite and zlib come from the macOS SDK. Zig builds only
 libghostty-vt for production; the executable links no
 Telar Zig runtime code.
@@ -36,6 +36,14 @@ when its revision or patch changes. `--source /path/to/ghostty-checkout` archive
 the pinned revision into its own local repository; the script checks both patch
 application and its reverse before compiling. This is an isolated dependency
 prefix, not an application installation.
+
+The same prepared prefix contains the pinned generic Wuffs PNG codec header
+and its MIT notice. The script verifies its SHA against
+[vendor/wuffs-codec.json](vendor/wuffs-codec.json); `--wuffs-header /path/to/wuffs-v0.4.c`
+can supply that exact header when Zig stores packages elsewhere. The C++ adapter
+uses only generic image decoding from the existing archive. Query recognition,
+policy and replies use Telar C++ code. Decoder, pixels and workspace each have
+a size limit and share the pane/global allocation budget.
 
 The state-only `ghostty_grid_ref_cells` accessor lends a contiguous physical row
 until the next terminal mutation. C++ consumers clip their rectangle to that
@@ -87,7 +95,7 @@ accessors; no offsets from a different Ghostty build are assumed.
 
 For an installation independent of Homebrew's dynamic libraries, configure a
 fresh Release build with `-DTELAR_RUNTIME_DISTRIBUTABLE=ON`, keeping the same
-compiler and dependency prefixes. This requires static OpenSSL 3, libpng,
+compiler and dependency prefixes. This requires static OpenSSL 3,
 nghttp2, Brotli, Zstd and Ghostty archives. Each link runs the project's macOS
 dependency check and rejects non-system dynamic libraries. A cached dynamic
 dependency causes a configuration error instead of silently being retained.
@@ -204,7 +212,7 @@ The composition root chooses concrete implementations; there is no virtual
 service dispatch or runtime dependency container. Tests inject process
 inspectors, services and allocators through the same interfaces.
 
-The application allocation budget is 2 GiB. Owned containers, Ghostty, libpng,
+The application allocation budget is 2 GiB. Owned containers, Ghostty, PNG codec,
 SQLite and trace buffers use that allocator. Allocator callbacks at C library
 boundaries are unavoidable ABI adapters. OS resources and libc/standard-library
 internal allocations are outside the byte counter.

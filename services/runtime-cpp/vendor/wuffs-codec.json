@@ -1,0 +1,8 @@
+{
+  "revision": "7411f488fe2e2c205c3d3b3d28638b7356522930",
+  "zig_package": "N-V-__8AAP5JWgCGP_AD0teWpa4krRvE9VPZzvviGdbmN4jI",
+  "source_path": "release/c/wuffs-v0.4.c",
+  "installed_path": "include/ghostty/wuffs-v0.4.h",
+  "header_sha256": "1f8039ef82911604c063f6ac2ed57254bdb17d742aebdeae06356530d4a0fde7",
+  "role": "Generic PNG decoder already present in the pinned VT archive; no query handler API"
+}

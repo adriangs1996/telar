@@ -554,6 +554,102 @@ void checkedAtomicSharedMemory() {
   check(!GraphicsChildSharedMemory::read(backing.get(), output, 0));
 }
 
+std::vector<Byte> pngPixels(unsigned depth, unsigned color, unsigned interlace, std::span<const Byte> raw) {
+  std::vector<Byte> result{137, 80, 78, 71, 13, 10, 26, 10};
+  const auto integer = [&](std::uint32_t value) {
+    for (int shift = 24; shift >= 0; shift -= 8) {
+      result.push_back(static_cast<Byte>(value >> shift));
+    }
+  };
+  const auto chunk = [&](std::string_view kind, std::span<const Byte> payload) {
+    integer(static_cast<std::uint32_t>(payload.size()));
+    const auto start = result.size();
+    result.insert(result.end(), kind.begin(), kind.end());
+    result.insert(result.end(), payload.begin(), payload.end());
+    integer(static_cast<std::uint32_t>(::crc32(0, result.data() + start, result.size() - start)));
+  };
+  const std::array<Byte, 13> header{0, 0, 0, 3, 0, 0, 0, 3, static_cast<Byte>(depth), static_cast<Byte>(color), 0, 0, static_cast<Byte>(interlace)};
+  chunk("IHDR", header);
+  if (color == 3) {
+    constexpr std::array<Byte, 12> palette{255, 0, 0, 0, 255, 0, 0, 0, 0, 0, 0, 255};
+    constexpr std::array<Byte, 4> alpha{255, 128, 0, 255};
+    chunk("PLTE", palette);
+    chunk("tRNS", alpha);
+  }
+
+  std::vector<Byte> compressed(::compressBound(raw.size()));
+  auto length = static_cast<uLongf>(compressed.size());
+  check(::compress(compressed.data(), &length, raw.data(), raw.size()) == Z_OK);
+  compressed.resize(length);
+  chunk("IDAT", compressed);
+  chunk("IEND", {});
+  return result;
+}
+
+void pngPixelFormats() {
+  SystemAllocator system;
+  BudgetAllocator memory{system, 64 * 1024 * 1024};
+  GhosttyAllocatorBridge allocator{memory};
+  constexpr std::array<std::array<Byte, 4>, 4> palette{{{255, 0, 0, 255}, {0, 255, 0, 128}, {0, 0, 0, 0}, {0, 0, 255, 255}}};
+  constexpr std::array<unsigned, 9> indices{0, 1, 2, 3, 0, 1, 2, 3, 0};
+  std::vector<Byte> expected;
+  for (const auto index : indices) {
+    expected.insert(expected.end(), palette[index].begin(), palette[index].end());
+  }
+  const auto verify = [&](const std::vector<Byte> &png) {
+    GhosttySysImage decoded{};
+    check(decodePngImage(allocator.get(), png, decoded));
+    check(decoded.width == 3 && decoded.height == 3 && decoded.data_len == expected.size());
+    check(std::equal(expected.begin(), expected.end(), decoded.data));
+    ghostty_free(allocator.get(), decoded.data, decoded.data_len);
+    check(memory.liveBytes() == 0);
+  };
+  constexpr std::array<Byte, 6> indexed{0, 0x18, 0, 0xc4, 0, 0xb0};
+  verify(pngPixels(2, 3, 0, indexed));
+
+  std::vector<Byte> rgba16;
+  for (std::size_t row = 0; row < 3; ++row) {
+    rgba16.push_back(0);
+    for (std::size_t column = 0; column < 12; ++column) {
+      // Samples multiplied by 257 have an exact independent 8-bit result.
+      const auto sample = expected[row * 12 + column];
+      rgba16.insert(rgba16.end(), {sample, sample});
+    }
+  }
+  verify(pngPixels(16, 6, 0, rgba16));
+
+  std::vector<Byte> adam7;
+  // Nonempty scanlines of the seven Adam7 passes for a 3x3 image.
+  constexpr unsigned absent = indices.size();
+  constexpr std::array<std::array<unsigned, 3>, 6> rows{{{0, absent, absent}, {2, absent, absent}, {6, 8, absent}, {1, absent, absent}, {7, absent, absent}, {3, 4, 5}}};
+  for (const auto &row : rows) {
+    adam7.push_back(0);
+    for (const auto pixel : row) {
+      if (pixel != absent) {
+        adam7.insert(adam7.end(), expected.begin() + pixel * 4, expected.begin() + pixel * 4 + 4);
+      }
+    }
+  }
+  verify(pngPixels(8, 6, 1, adam7));
+}
+
+struct FailingCodecAllocator {
+  SystemAllocator upstream;
+  unsigned remaining;
+
+  void *allocate(std::size_t size, std::size_t alignment) noexcept {
+    if (remaining == 0) {
+      return nullptr;
+    }
+    --remaining;
+    return upstream.allocate(size, alignment);
+  }
+
+  void deallocate(void *pointer, std::size_t size, std::size_t alignment) noexcept {
+    upstream.deallocate(pointer, size, alignment);
+  }
+};
+
 void pngFailureCleanup() {
   // Independent 1x1 RGBA red PNG fixture: Python zlib plus PNG CRC32 chunks.
   constexpr std::array<Byte, 70> png{
@@ -568,7 +664,8 @@ void pngFailureCleanup() {
   for (std::size_t length = 0; length <= png.size(); ++length) {
     GhosttySysImage image{};
     const bool decoded = decodePngImage(allocator.get(), std::span{png}.first(length), image);
-    check(decoded == (length == png.size()));
+    constexpr std::size_t complete_frame_bytes = 58;
+    check(decoded == (length >= complete_frame_bytes));
     if (decoded) {
       const std::array<Byte, 4> expected{255, 0, 0, 255};
       check(image.width == 1 && image.height == 1 && image.data_len == expected.size());
@@ -588,6 +685,21 @@ void pngFailureCleanup() {
   }
   GhosttySysImage image{};
   check(!decodePngImage(allocator.get(), png, image, 2) && memory.liveBytes() == 0);
+
+  for (unsigned permitted = 0; permitted <= 3; ++permitted) {
+    FailingCodecAllocator upstream{{}, permitted};
+    BudgetAllocator budget{upstream, 64 * 1024 * 1024};
+    GhosttyAllocatorBridge bridge{budget};
+    GhosttySysImage decoded{};
+    const bool success = decodePngImage(bridge.get(), png, decoded);
+    check(success == (permitted == 3));
+    if (success) {
+      ghostty_free(bridge.get(), decoded.data, decoded.data_len);
+    } else {
+      check(decoded.data == nullptr && decoded.data_len == 0);
+    }
+    check(budget.liveBytes() == 0);
+  }
 }
 }
 
@@ -609,6 +721,7 @@ int main() {
   retainedAtomicFrames();
   checkedAtomicSharedMemory();
   pngFailureCleanup();
+  pngPixelFormats();
   check(memory.liveBytes() == 0);
   std::puts("Native graphics query file, shared memory and budget tests passed");
 }

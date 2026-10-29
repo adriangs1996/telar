@@ -251,8 +251,7 @@ the state-bridge port (process-local `ulimit -n 8192`). Later edits still requir
 their appropriate final checks.
 
 Acceptance is blocked by actual unresolved work: Qt can materialize clipboard
-contents before their 1 MiB transport bound is checked; PNG tail acceptance
-differs in newly added cases; worst-case graphics work measurements,
+contents before their 1 MiB transport bound is checked; worst-case graphics work measurements,
 allocation/copy accounting and complete lifecycle
 adversarial coverage remain open. The default clipboard policy is not weakened
 to hide these issues.
@@ -293,7 +292,7 @@ The six focused Release and ASan/UBSan targets and Qt offscreen test pass;
 settles one asynchronous operation before another starts. Real transport,
 generation cancellation and concurrency are separate native tests, not
 represented by these response comparisons. Actual Surface user-paste events,
-Qt materialization bounds, PNG tail semantics, final PTY/allocation
+Qt materialization bounds, final PTY/allocation
 measurements and the remaining performance regressions are still open.
 
 The bounded ACK outbox now retains non-query graphics responses without replay,
@@ -331,3 +330,11 @@ Single-query comparisons are noisy/inconclusive; 32-response round trips win
 7/7 with a median paired ratio of 0.251159 against original Telar. This does
 not replace the separate actual-application component comparison, which still
 fails multiple workloads. There is no final task acceptance.
+
+
+Candidate21 replaces generic libpng with the existing pinned Wuffs PNG codec
+C API. All query parsing, validation policy and replies remain C++.
+`wuffs-png-review.md` and `wuffs-png-validation.json` record 68,672 PNG split
+comparisons with zero differences, exact pixel/cleanup tests, Release/ASan/UBSan
+results, memory limits and seven-pair measurements. This resolves the new PNG
+completion differences. Performance and integration gates remain open.

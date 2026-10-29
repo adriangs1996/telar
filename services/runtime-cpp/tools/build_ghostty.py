@@ -3,6 +3,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import shutil
 import subprocess
 
 
@@ -15,12 +16,27 @@ def run(arguments, directory):
     subprocess.run(arguments, cwd=directory, check=True)
 
 
+def install_codec_header(source, prefix, supplied=None):
+    vendor = Path(__file__).resolve().parent.parent / "vendor"
+    codec = json.loads((vendor / "wuffs-codec.json").read_text())
+    header = supplied if supplied is not None else source / "zig-pkg" / codec["zig_package"] / codec["source_path"]
+    if not header.is_file() or hashlib.sha256(header.read_bytes()).hexdigest() != codec["header_sha256"]:
+        raise RuntimeError("Pinned Wuffs header missing or mismatched; supply its original release/c/wuffs-v0.4.c with --wuffs-header")
+    target = prefix / codec["installed_path"]
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(header, target)
+    license_path = prefix / "share/licenses/wuffs/LICENSE-MIT"
+    license_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(vendor / "wuffs-LICENSE-MIT", license_path)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Build the pinned libghostty-vt C API for Telar")
     parser.add_argument("--build-dir", type=Path, required=True)
     parser.add_argument("--prefix", type=Path, required=True)
     parser.add_argument("--source", type=Path, help="Existing Git checkout containing the pinned commit; archives that immutable revision")
     parser.add_argument("--zig", default="zig")
+    parser.add_argument("--wuffs-header", type=Path, help="Pinned generated header when Zig stores packages outside the source's zig-pkg directory")
     arguments = parser.parse_args()
     build = arguments.build_dir.resolve()
     prefix = arguments.prefix.resolve()
@@ -68,7 +84,8 @@ def main():
         "-Demit-macos-app=false", "-Demit-docs=false", "-Dversion-string=" + GHOSTTY_APP_VERSION,
         "-Doptimize=ReleaseFast", "--prefix", str(prefix),
     ], source)
-    print(f"libghostty-vt installed at {prefix}")
+    install_codec_header(source, prefix, arguments.wuffs_header)
+    print(f"libghostty-vt prepared at {prefix}")
 
 
 if __name__ == "__main__":

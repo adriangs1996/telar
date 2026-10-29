@@ -25,9 +25,19 @@ int main() {
   GhosttyCodepointsBuffer buffer{};
   return buffer.len + sizeof(GhosttyKittyGraphicsImageInsert) + GHOSTTY_TERMINAL_DATA_CURSOR_IS_DEFAULT + GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_IS_INTERNAL + GHOSTTY_TERMINAL_OPT_KITTY_PROTOCOL + GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_BOTTOM + GHOSTTY_KITTY_GRAPHICS_DATA_LOADING_BYTES + GHOSTTY_TERMINAL_OPT_ACTIVE_SCREEN;
 }" GHOSTTY_VT_HAS_RUNTIME_STORAGE_STATE)
-unset(CMAKE_REQUIRED_INCLUDES)
 if(NOT GHOSTTY_VT_HAS_RUNTIME_STORAGE_STATE)
   message(FATAL_ERROR "Build the pinned libghostty-vt with tools/build_ghostty.py first")
+endif()
+set(CMAKE_REQUIRED_LIBRARIES "${GHOSTTY_VT_LIBRARY}")
+check_cxx_source_compiles("#include <ghostty/wuffs-v0.4.h>
+int main() {
+  auto result = wuffs_png__decoder__initialize(nullptr, sizeof__wuffs_png__decoder(), WUFFS_VERSION, 0);
+  return wuffs_base__status__is_ok(&result);
+}" GHOSTTY_VT_HAS_WUFFS_PNG)
+unset(CMAKE_REQUIRED_LIBRARIES)
+unset(CMAKE_REQUIRED_INCLUDES)
+if(NOT GHOSTTY_VT_HAS_WUFFS_PNG)
+  message(FATAL_ERROR "The pinned VT archive must include its generic Wuffs PNG codec")
 endif()
 
 add_executable(ghostty-manifest tools/ghostty_manifest.cpp)
@@ -73,8 +83,7 @@ target_link_libraries(runtime-core PUBLIC "${NGHTTP2_LIBRARY}")
 target_link_libraries(runtime-core PUBLIC "${PCAP_LIBRARY}")
 target_include_directories(runtime-core PUBLIC "${BROTLI_INCLUDE_DIR}" "${ZSTD_INCLUDE_DIR}")
 target_link_libraries(runtime-core PUBLIC "${ZLIB_LIBRARY}" "${BROTLI_DECODER_LIBRARY}" "${BROTLI_COMMON_LIBRARY}" "${ZSTD_LIBRARY}")
-target_link_libraries(runtime-core PUBLIC ghostty-vt runtime-lua "${SQLITE3_LIBRARY}" Threads::Threads OpenSSL::SSL OpenSSL::Crypto "${PNG_LIBRARY}" "-framework IOKit" "-framework CoreFoundation" "-framework Security")
-target_include_directories(runtime-core PRIVATE "${PNG_INCLUDE_DIR}")
+target_link_libraries(runtime-core PUBLIC ghostty-vt runtime-lua "${SQLITE3_LIBRARY}" Threads::Threads OpenSSL::SSL OpenSSL::Crypto "-framework IOKit" "-framework CoreFoundation" "-framework Security")
 option(TELAR_RUNTIME_DIAGNOSTICS "Enable runtime telemetry outside Debug builds" OFF)
 target_compile_definitions(runtime-core PUBLIC TELAR_DEBUG=$<CONFIG:Debug> TELAR_DIAGNOSTICS=$<OR:$<CONFIG:Debug>,$<BOOL:${TELAR_RUNTIME_DIAGNOSTICS}>>)
 target_compile_options(runtime-core PUBLIC -Wall -Wextra -Wpedantic)

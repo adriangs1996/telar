@@ -2,6 +2,7 @@
 """Alternating, real-handler component timings. Partial results are not acceptance."""
 import argparse
 import atexit
+import binascii
 import ctypes
 import datetime
 import hashlib
@@ -12,10 +13,23 @@ import os
 import resource
 from pathlib import Path
 import statistics
+import struct
 import subprocess
 import sys
 import time
+import zlib
+import base64
 from control_query_oracle import ROOT, GHOSTTY, NATIVE
+
+
+def png_query(width, height):
+    def chunk(kind, data):
+        return struct.pack('!I', len(data)) + kind + data + struct.pack('!I', binascii.crc32(kind + data))
+    raw = (b'\0' + b'\xff\0\0\xff' * width) * height
+    image = (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('!IIBBBBB', width, height, 8, 6, 0, 0, 0)) +
+             chunk(b'IDAT', zlib.compress(raw)) + chunk(b'IEND', b''))
+    return b'\x1b_Ga=q,i=9,f=100;' + base64.b64encode(image) + b'\x1b\\'
+
 
 WORKLOADS = {
     'operating-status': (b'\x1b[5n', 1, 0),
@@ -45,6 +59,11 @@ WORKLOADS = {
     'checksum-grapheme-screen': (b'\x1b[1;1;1;1;24;80*y', 1, 0),
     'unknown-long': (b'\x1bP+q'+b'BAD;'*2048+b'\x1b\\', 1, 0),
     'graphics-payload': (b'\x1b_Ga=q,i=9,s=128,v=64;'+b'AAAA'*10922+b'AAA=\x1b\\', 1, 0),
+    'graphics-png-1x1': (png_query(1, 1), 1, 0),
+    'graphics-png-128x64': (png_query(128, 64), 1, 0),
+    'graphics-png-512x512': (png_query(512, 512), 1, 0),
+    'graphics-png-byte-fragments': (png_query(1, 1), 1, 1),
+    'graphics-png-16-byte-fragments': (png_query(128, 64), 1, 16),
 }
 
 
