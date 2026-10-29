@@ -91,7 +91,7 @@ public:
       MediaInput input{memory_, *terminal_, prepared_, shared_clients_};
       for (const auto &event : batch.events()) {
         if (const auto *output = std::get_if<MediaBatch::Output>(&event)) {
-          [[maybe_unused]] const auto statistics = input.feed(batch.bytes(*output), scratch_);
+          [[maybe_unused]] const auto statistics = input.feed(batch.bytes(*output));
           TELAR_DIAGNOSTIC(diagnostics::accumulate(batch_metrics_.discarded_frames, statistics.discarded));
           TELAR_DIAGNOSTIC(diagnostics::accumulate(batch_metrics_.unavailable_frames, statistics.unavailable));
           TELAR_DIAGNOSTIC(diagnostics::accumulate(batch_metrics_.forwarded_frames, statistics.forwarded));
@@ -220,7 +220,6 @@ private:
   GraphicsLimits limits_;
   std::optional<MediaTerminal<AllocatedMemory>> terminal_;
   std::array<MediaBatch, 2> batches_;
-  std::array<Byte, MediaBatch::byte_capacity> scratch_;
   KittyFraming framing_;
   TerminalSize current_size_;
   TerminalSize sealed_size_{};

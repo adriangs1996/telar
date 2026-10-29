@@ -14,10 +14,9 @@ public:
         atomic_frames_(memory, terminal, prepared),
         shared_clients_(shared_clients) {}
 
-  AtomicFrameFilter::Statistics feed(std::span<const Byte> bytes, std::span<Byte> scratch) {
-    const auto remaining = GraphicsFileInput::stripQueries(bytes, scratch, terminal_.storageLimit(), terminal_);
+  AtomicFrameFilter::Statistics feed(std::span<const Byte> bytes) {
     GraphicsFrameSource source;
-    return AtomicFrameFilter::feed(remaining, terminal_.storageLimit(), source, *this);
+    return AtomicFrameFilter::feed(bytes, terminal_.storageLimit(), source, *this);
   }
 
   void output(std::span<const Byte> bytes) {

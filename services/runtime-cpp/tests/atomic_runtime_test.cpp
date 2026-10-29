@@ -1,5 +1,6 @@
 #include "check.hpp"
 #include "graphics/pane_media.hpp"
+#include "terminal/terminal.hpp"
 #include <filesystem>
 
 using namespace telar;
@@ -76,7 +77,9 @@ static void process(PaneMedia<SystemAllocator> &media, std::string_view bytes) {
 static void testAtomicPipeline(SystemAllocator &memory, GraphicsInputMedium medium, bool shared_transport) {
   MediaBudget budget{GraphicsLimits::maximum_global_bytes};
   {
-    PaneMedia media{memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 8, 16}};
+    auto responses = std::make_shared<PtyResponseQueue>();
+    Terminal queries{memory, TerminalSize{80, 24, 8, 16}, TerminalPurpose::separate_media, responses};
+    PaneMedia media{memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 8, 16}, responses};
     if (shared_transport) {
       media.noteSharedTransport(true);
     }
@@ -107,7 +110,10 @@ static void testAtomicPipeline(SystemAllocator &memory, GraphicsInputMedium medi
       check(placement.y == (placement.placement_id == 9 ? 3 : 0));
     }
     if (medium == GraphicsInputMedium::file) {
+      check(terminal.responses().empty());
+      queries.feed(inputBytes(query));
       check(std::ranges::equal(terminal.responses(), inputBytes("\x1b_Gi=9;OK\x1b\\")));
+      queries.consumeResponses(queries.responses().size());
     }
 
     if (shared_transport) {

@@ -1,6 +1,8 @@
 #pragma once
 
 #include "../diagnostics/trace.hpp"
+#include "../terminal/control/parser.hpp"
+#include "../terminal/control/classification.hpp"
 #include "../terminal/pty_response_queue.hpp"
 #include "atomic_frame.hpp"
 #include "file_input.hpp"
@@ -16,6 +18,7 @@ class MediaTerminal {
 public:
   explicit MediaTerminal(Memory &memory, TerminalSize size, GraphicsLimits limits, std::shared_ptr<PtyResponseQueue> responses = {})
       : graphics(memory),
+        control_parser_(memory),
         allocator_(memory),
         responses_(responses ? std::move(responses) : std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory})),
         storage_limit_(limits.screenBytes()),
@@ -36,7 +39,48 @@ public:
   }
 
   void feed(std::span<const Byte> bytes) {
+    const auto consumed = control_parser_.feed(bytes, *this);
+    if (consumed != bytes.size()) {
+      throw std::logic_error{"Media control filter failed to consume input"};
+    }
+  }
+
+  void ordinary(std::span<const Byte> bytes) {
     GraphicsFileInput::feed(bytes, storage_limit_, *this);
+  }
+
+  bool enquire() const noexcept {
+    return true;
+  }
+
+  bool streamable(control::Sequence sequence) const noexcept {
+    return sequence.kind != control::Kind::apc && control::streamable(sequence);
+  }
+
+  bool complete(control::Sequence sequence) {
+    if (sequence.kind == control::Kind::csi) {
+      const auto parameters = control::Parameters::parse(sequence.body());
+      if (parameters && !parameters->colon && parameters->modifiers() == "?" && (parameters->final == 'h' || parameters->final == 'l' || parameters->final == 's' || parameters->final == 'r')) {
+        for (const auto mode : std::span{parameters->values}.first(parameters->count)) {
+          if (std::find(control::desktop_modes.begin(), control::desktop_modes.end(), mode) == control::desktop_modes.end()) {
+            control::forwardPrivateMode(mode, parameters->final, [this](auto command) { ordinary(command); });
+          }
+        }
+        return true;
+      }
+    }
+    if (!control::query(sequence)) {
+      if (sequence.kind == control::Kind::apc) {
+        GraphicsFileInput::frame(sequence.bytes, sequence.terminator(), storage_limit_, *this);
+        return true;
+      }
+      ordinary(sequence.bytes);
+      if (sequence.ending != control::Ending::final_byte) {
+        const auto terminator = sequence.terminator();
+        ordinary({reinterpret_cast<const Byte *>(terminator.data()), terminator.size()});
+      }
+    }
+    return true;
   }
 
   void reply(std::span<const Byte> bytes) {
@@ -141,6 +185,7 @@ private:
     self.responses_->push({bytes, count});
   }
 
+  control::Parser<Memory> control_parser_;
   GhosttyAllocatorBridge<Memory> allocator_;
   TerminalHandle terminal_;
   std::shared_ptr<PtyResponseQueue> responses_;

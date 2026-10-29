@@ -12,6 +12,7 @@ struct PngInput {
   const GhosttyAllocator *allocator;
   const Byte *bytes;
   std::size_t remaining;
+  std::size_t limit;
 };
 
 struct alignas(std::max_align_t) PngAllocation {
@@ -22,7 +23,7 @@ constexpr auto allocation_alignment = static_cast<std::uint8_t>(std::countr_zero
 
 void *allocatePng(png_structp decoder, png_alloc_size_t size) {
   const auto *input = static_cast<const PngInput *>(png_get_mem_ptr(decoder));
-  if (size > graphics_screen_bytes - sizeof(PngAllocation)) {
+  if (input->limit < sizeof(PngAllocation) || size > input->limit - sizeof(PngAllocation)) {
     return nullptr;
   }
   const auto length = size + sizeof(PngAllocation);
@@ -59,8 +60,9 @@ void failPng(png_structp decoder, png_const_charp) {
 
 void warnPng(png_structp, png_const_charp) {}
 
-bool decodePng(void *, const GhosttyAllocator *allocator, const Byte *bytes, std::size_t length, GhosttySysImage *image) {
-  PngInput input{allocator, bytes, length};
+bool decodePng(void *context, const GhosttyAllocator *allocator, const Byte *bytes, std::size_t length, GhosttySysImage *image) {
+  const auto limit = context == nullptr ? graphics_screen_bytes : *static_cast<const std::size_t *>(context);
+  PngInput input{allocator, bytes, length, limit};
   png_structp decoder = png_create_read_struct_2(PNG_LIBPNG_VER_STRING, nullptr, failPng, warnPng, &input, allocatePng, freePng);
   if (decoder == nullptr) {
     return false;
@@ -87,7 +89,7 @@ bool decodePng(void *, const GhosttyAllocator *allocator, const Byte *bytes, std
   png_read_info(decoder, info);
   const auto width = png_get_image_width(decoder, info);
   const auto height = png_get_image_height(decoder, info);
-  if (width == 0 || height == 0 || std::uint64_t{width} * height * 4 > graphics_screen_bytes) {
+  if (width == 0 || height == 0 || std::uint64_t{width} * height * 4 > input.limit) {
     png_error(decoder, "PNG exceeds image budget");
   }
   const int depth = png_get_bit_depth(decoder, info);
@@ -139,8 +141,8 @@ bool decodePng(void *, const GhosttyAllocator *allocator, const Byte *bytes, std
 
 }
 
-bool decodePngImage(const GhosttyAllocator *allocator, std::span<const std::uint8_t> bytes, GhosttySysImage &image) {
-  return decodePng(nullptr, allocator, bytes.data(), bytes.size(), &image);
+bool decodePngImage(const GhosttyAllocator *allocator, std::span<const std::uint8_t> bytes, GhosttySysImage &image, std::size_t limit) {
+  return decodePng(&limit, allocator, bytes.data(), bytes.size(), &image);
 }
 
 void installPngDecoder() {

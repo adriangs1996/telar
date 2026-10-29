@@ -193,7 +193,9 @@ static void testFileInput(SystemAllocator &memory) {
 
   MediaBudget budget{GraphicsLimits::maximum_global_bytes};
   MediaAllocator allocator{memory, budget, GraphicsLimits::maximum_pane_bytes};
-  MediaTerminal terminal{allocator, TerminalSize{10, 4, 8, 16}, GraphicsLimits{}};
+  auto responses = std::make_shared<PtyResponseQueue>();
+  Terminal queries{memory, TerminalSize{10, 4, 8, 16}, TerminalPurpose::separate_media, responses};
+  MediaTerminal terminal{allocator, TerminalSize{10, 4, 8, 16}, GraphicsLimits{}, responses};
   terminal.feed(mediaBytes("\x1b_Ga=T,t=f,f=32,s=1,v=1,i=7,C=1,q=2,O=4,S=4;" + encodedPath(file_path) + "\x1b\\"));
   terminal.refresh();
   check(terminal.graphics.images().size() == 1);
@@ -201,15 +203,18 @@ static void testFileInput(SystemAllocator &memory) {
   check(pixels.size() == 4 && pixels[0] == 255 && pixels[3] == 255);
 
   const auto query = [&](std::string_view path) {
-    terminal.feed(mediaBytes("\x1b_Ga=q,t=f,f=32,s=1,v=1,i=9;" + encodedPath(path) + "\x1b\\"));
-    const auto response = terminal.responses();
+    const auto request = "\x1b_Ga=q,t=f,f=32,s=2,v=1,i=9;" + encodedPath(path) + "\x1b\\";
+    terminal.feed(mediaBytes(request));
+    check(responses->empty());
+    queries.feed(mediaBytes(request));
+    const auto response = queries.responses();
     const std::string text{reinterpret_cast<const char *>(response.data()), response.size()};
-    terminal.consumeResponses(response.size());
+    queries.consumeResponses(response.size());
     return text;
   };
   check(query(file_path) == "\x1b_Gi=9;OK\x1b\\");
   for (const auto &path : {(root / "symlink").string(), (root / "pipe").string(), (root / "missing").string(), root.string(), std::string{"relative"}, std::string{"/tmp/a\0b", 8}}) {
-    check(query(path) == "\x1b_Gi=9;EBADF:file not accepted\x1b\\");
+    check(query(path) == "\x1b_Gi=9;EINVAL: invalid data\x1b\\");
   }
   check(std::filesystem::exists(file_path));
   std::filesystem::remove_all(root);

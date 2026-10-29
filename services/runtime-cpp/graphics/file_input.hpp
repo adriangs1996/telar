@@ -1,6 +1,7 @@
 #pragma once
 
 #include "child_file.hpp"
+#include "temporary_path.hpp"
 #include "kitty_file_control.hpp"
 #include "kitty_framing.hpp"
 #include <algorithm>
@@ -24,12 +25,6 @@ public:
     std::size_t search_from = 0;
     while (const auto parsed = nextCommand(text, search_from)) {
       const auto &[start, control, path] = *parsed;
-      if (const auto query = KittyFileQuery::parse(control)) {
-        sink.ingest(bytes.subspan(emitted, start - emitted));
-        answer(*query, path, storage_limit, sink);
-        emitted = search_from;
-        continue;
-      }
       const auto command = text.substr(start + introducer.size(), search_from - terminator.size() - start - introducer.size());
       if (control.size() > control_capacity || !std::ranges::all_of(command, [](unsigned char byte) { return KittyFraming::content(byte); })) {
         continue;
@@ -51,36 +46,26 @@ public:
     }
   }
 
+  // The native control parser owns this complete, non-query APC. Its
+  // terminator is separate, so inspect the frame without copying its payload.
   template <MediaInputSink Sink>
-  static std::span<const std::uint8_t> stripQueries(std::span<const std::uint8_t> bytes, std::span<std::uint8_t> scratch, std::size_t limit, Sink &sink) {
-    if (scratch.size() < bytes.size()) {
-      return bytes;
-    }
-
-    const std::string_view text{reinterpret_cast<const char *>(bytes.data()), bytes.size()};
-    std::size_t search_from = 0;
-    std::size_t copied_until = 0;
-    std::size_t kept = 0;
-    while (const auto command = nextCommand(text, search_from)) {
-      const auto query = KittyFileQuery::parse(command->control);
-      if (!query) {
-        continue;
+  static void frame(std::span<const std::uint8_t> bytes, std::string_view ending, std::size_t storage_limit, Sink &sink) {
+    if (bytes.size() >= introducer.size() && bytes[0] == 0x1b && bytes[2] == 'G') {
+      const std::string_view body{reinterpret_cast<const char *>(bytes.data() + introducer.size()), bytes.size() - introducer.size()};
+      const auto separator = body.find(';');
+      if (separator != std::string_view::npos && separator <= control_capacity && std::ranges::all_of(body, [](unsigned char byte) { return KittyFraming::content(byte); })) {
+        const auto control = body.substr(0, separator);
+        if (const auto range = KittyFileRange::parse(control)) {
+          if (forward(Transmission{control, body.substr(separator + 1), *range, storage_limit}, sink)) {
+            return;
+          }
+        }
       }
-
-      answer(*query, command->path, limit, sink);
-      const auto preceding = bytes.subspan(copied_until, command->start - copied_until);
-      std::ranges::copy(preceding, scratch.data() + kept);
-      kept += preceding.size();
-      copied_until = search_from;
     }
-    if (copied_until == 0) {
-      return bytes;
-    }
-
-    const auto tail = bytes.subspan(copied_until);
-    std::ranges::copy(tail, scratch.data() + kept);
-    return scratch.first(kept + tail.size());
+    sink.ingest(bytes);
+    sink.ingest({reinterpret_cast<const std::uint8_t *>(ending.data()), ending.size()});
   }
+
 
 private:
   struct Command {
@@ -117,21 +102,13 @@ private:
   };
 
   template <MediaInputSink Sink>
-  static void answer(KittyFileQuery query, std::string_view path, std::size_t limit, Sink &sink) {
-    const auto file = query.bytes <= limit ? GraphicsChildFile::open(path) : std::nullopt;
-    const bool accepted = file && file->size >= query.bytes;
-    std::array<char, 64> response;
-    auto *end = std::copy_n("\x1b_Gi=", 5, response.data());
-    end = std::to_chars(end, response.data() + response.size(), query.image_id).ptr;
-    const std::string_view status = accepted ? ";OK\x1b\\" : ";EBADF:file not accepted\x1b\\";
-    end = std::copy(status.begin(), status.end(), end);
-    sink.reply({reinterpret_cast<const std::uint8_t *>(response.data()), static_cast<std::size_t>(end - response.data())});
-  }
-
-  template <MediaInputSink Sink>
   static bool forward(const Transmission &request, Sink &sink) {
     const auto file = GraphicsChildFile::open(request.path);
     if (!file || request.range.offset > file->size) {
+      return false;
+    }
+    GraphicsTemporaryPath temporary{*file};
+    if (request.range.temporary && !temporary.authorize().empty()) {
       return false;
     }
 

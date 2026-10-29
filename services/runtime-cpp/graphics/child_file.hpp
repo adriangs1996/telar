@@ -19,6 +19,15 @@ struct GraphicsChildFile {
   static std::optional<GraphicsChildFile> open(std::string_view encoded_path) noexcept {
     std::array<std::uint8_t, PATH_MAX + 1> path;
     const auto *decoded = decodeGraphicsName(encoded_path, path);
+    return openPath(decoded);
+  }
+
+  static std::optional<GraphicsChildFile> openDecoded(std::span<const std::uint8_t> decoded_path) noexcept {
+    std::array<std::uint8_t, PATH_MAX + 1> path;
+    return openPath(copyGraphicsName(decoded_path, path));
+  }
+
+  static std::optional<GraphicsChildFile> openPath(const char *decoded) noexcept {
     if (decoded == nullptr || decoded[0] != '/') {
       return std::nullopt;
     }
