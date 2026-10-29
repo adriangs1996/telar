@@ -1,0 +1,366 @@
+#pragma once
+
+#include "../../memory/allocator.hpp"
+#include "sequence.hpp"
+#include <array>
+#include <cstring>
+
+namespace telar::runtime::control {
+
+template <Allocator Memory>
+class Parser {
+public:
+  static constexpr std::size_t inline_bytes = 256;
+  static constexpr std::size_t header_limit = 8192;
+  static constexpr std::size_t dcs_limit = 1024 * 1024 + header_limit;
+  static constexpr std::size_t osc_limit = 8 * 1024 * 1024;
+  static constexpr std::size_t apc_limit = 65 * 1024 * 1024;
+  static constexpr std::size_t string_limit = apc_limit;
+
+  explicit Parser(Memory &memory) : overflow_(AllocatorRef<std::uint8_t, Memory>{memory}) {}
+
+  // Consumers borrow a sequence only during complete(). A false result leaves
+  // its owned bytes unchanged, including across calls with an empty input.
+  template <typename Consumer>
+  std::size_t feed(std::span<const std::uint8_t> input, Consumer &consumer) {
+    std::size_t consumed = 0;
+    while (true) {
+      if (phase_ == Phase::ready) {
+        if (!consumer.complete(Sequence{kind_, bytes(), ending_})) {
+          return consumed;
+        }
+
+        clear();
+        phase_ = after_ready_;
+        if (phase_ == Phase::escape) {
+          append(escape);
+        }
+      }
+
+      if (consumed == input.size()) {
+        return consumed;
+      }
+
+      if (phase_ == Phase::ground) {
+        const auto remaining = input.subspan(consumed);
+        const auto *first_escape = static_cast<const std::uint8_t *>(std::memchr(remaining.data(), escape, remaining.size()));
+        const auto *first_enquiry = static_cast<const std::uint8_t *>(std::memchr(remaining.data(), enquiry, remaining.size()));
+        auto count = remaining.size();
+        if (first_escape != nullptr) {
+          count = static_cast<std::size_t>(first_escape - remaining.data());
+        }
+        if (first_enquiry != nullptr) {
+          count = std::min(count, static_cast<std::size_t>(first_enquiry - remaining.data()));
+        }
+        if (count != 0) {
+          consumer.ordinary(remaining.first(count));
+          consumed += count;
+          continue;
+        }
+      }
+
+      const auto byte = input[consumed];
+      const bool string = phase_ == Phase::string || phase_ == Phase::streaming || phase_ == Phase::discard_string;
+      if (string) {
+        if (byte == escape || byte == cancel || byte == substitute || (kind_ == Kind::osc && byte == bell) || (kind_ == Kind::apc && byte == c1_st)) {
+          ++consumed;
+          if (byte == cancel || byte == substitute) {
+            if ((kind_ == Kind::dcs || kind_ == Kind::apc) && phase_ == Phase::string) {
+              ending_ = Ending::escape;
+              after_ready_ = Phase::ground;
+              phase_ = Phase::ready;
+              ++cancelled_;
+              continue;
+            }
+            if (phase_ == Phase::streaming) {
+              consumer.ordinary(input.subspan(consumed - 1, 1));
+            }
+            clear();
+            phase_ = Phase::ground;
+            ++cancelled_;
+            continue;
+          }
+
+          ending_ = byte == bell ? Ending::bell : byte == c1_st ? Ending::c1 : Ending::escape;
+          after_ready_ = byte == escape ? Phase::escape : Phase::ground;
+          if (phase_ == Phase::streaming) {
+            const auto terminator = ending_ == Ending::bell ? std::string_view{"\a"} : std::string_view{"\x1b\\"};
+            consumer.ordinary(asBytes(terminator));
+            clear();
+            phase_ = after_ready_;
+            if (phase_ == Phase::escape) {
+              append(escape);
+            }
+          } else if (phase_ == Phase::discard_string) {
+            clear();
+            phase_ = after_ready_;
+            if (phase_ == Phase::escape) {
+              append(escape);
+            }
+          } else {
+            phase_ = Phase::ready;
+          }
+          continue;
+        }
+
+        if (kind_ == Kind::apc && byte >= c1_first && byte <= c1_last) {
+          if (phase_ == Phase::streaming) {
+            consumer.ordinary(asBytes("\x18"));
+          }
+          clear();
+          phase_ = Phase::escape;
+          ++cancelled_;
+          if (!startC1(byte)) {
+            phase_ = Phase::ground;
+          }
+          ++consumed;
+          continue;
+        }
+
+        if (phase_ == Phase::streaming) {
+          std::size_t end = consumed + 1;
+          while (end < input.size() && !stringControl(input[end])) {
+            ++end;
+          }
+          consumer.ordinary(input.subspan(consumed, end - consumed));
+          consumed = end;
+          continue;
+        }
+
+        ++consumed;
+        if (phase_ == Phase::discard_string) {
+          continue;
+        }
+
+        if (kind_ == Kind::dcs && byte == delete_byte) {
+          continue;
+        }
+        const auto limit = kind_ == Kind::osc ? osc_limit : kind_ == Kind::dcs ? dcs_limit : apc_limit;
+        if (size_ == limit || !append(byte)) {
+          phase_ = Phase::discard_string;
+          ++over_limit_;
+          continue;
+        }
+
+        const bool dcs_hook = kind_ == Kind::dcs && !dcs_payload_ && byte >= final_first && byte <= final_last;
+        dcs_payload_ |= dcs_hook;
+        if ((byte == ';' && kind_ != Kind::dcs) || dcs_hook) {
+          if (consumer.streamable(Sequence{kind_, bytes(), Ending::final_byte})) {
+            consumer.ordinary(bytes());
+            clear();
+            phase_ = Phase::streaming;
+          }
+        }
+        continue;
+      }
+
+      if (byte == enquiry) {
+        if (!consumer.enquire()) {
+          return consumed;
+        }
+        ++consumed;
+        continue;
+      }
+
+      ++consumed;
+      if (byte == cancel || byte == substitute) {
+        clear();
+        phase_ = Phase::ground;
+        consumer.ordinary(input.subspan(consumed - 1, 1));
+        ++cancelled_;
+        continue;
+      }
+
+      if (byte == escape) {
+        clear();
+        append(byte);
+        phase_ = Phase::escape;
+        continue;
+      }
+
+      if (phase_ != Phase::ground && byte >= c1_first && byte <= c1_last) {
+        clear();
+        if (!startC1(byte)) {
+          consumer.ordinary(input.subspan(consumed - 1, 1));
+          phase_ = Phase::ground;
+        }
+        continue;
+      }
+
+      if (phase_ == Phase::ground) {
+        consumer.ordinary(input.subspan(consumed - 1, 1));
+        continue;
+      }
+
+      if (byte < space) {
+        consumer.ordinary(input.subspan(consumed - 1, 1));
+        continue;
+      }
+
+      if (phase_ == Phase::discard_csi) {
+        if (byte >= final_first && byte <= final_last) {
+          phase_ = Phase::ground;
+          clear();
+        }
+        continue;
+      }
+
+      if (phase_ == Phase::escape && size_ == 1) {
+        if (startEscape(byte)) {
+          continue;
+        }
+      }
+
+      if (size_ >= header_limit || !append(byte)) {
+        clear();
+        phase_ = Phase::discard_csi;
+        ++over_limit_;
+        continue;
+      }
+
+      const bool final = phase_ == Phase::csi ? byte >= final_first && byte <= final_last : byte >= escape_final_first && byte <= final_last;
+      if (final) {
+        kind_ = phase_ == Phase::csi ? Kind::csi : Kind::escape;
+        ending_ = Ending::final_byte;
+        after_ready_ = Phase::ground;
+        phase_ = Phase::ready;
+      }
+    }
+  }
+
+  bool ground() const noexcept {
+    return phase_ == Phase::ground;
+  }
+
+  bool blocked() const noexcept {
+    return phase_ == Phase::ready;
+  }
+
+  std::uint64_t overLimit() const noexcept {
+    return over_limit_;
+  }
+
+private:
+  enum class Phase : std::uint8_t {
+    ground,
+    escape,
+    csi,
+    string,
+    streaming,
+    discard_csi,
+    discard_string,
+    ready
+  };
+
+  static constexpr std::uint8_t enquiry = 0x05;
+  static constexpr std::uint8_t bell = 0x07;
+  static constexpr std::uint8_t cancel = 0x18;
+  static constexpr std::uint8_t substitute = 0x1a;
+  static constexpr std::uint8_t escape = 0x1b;
+  static constexpr std::uint8_t space = 0x20;
+  static constexpr std::uint8_t escape_final_first = 0x30;
+  static constexpr std::uint8_t final_first = 0x40;
+  static constexpr std::uint8_t final_last = 0x7e;
+  static constexpr std::uint8_t delete_byte = 0x7f;
+  static constexpr std::uint8_t c1_first = 0x80;
+  static constexpr std::uint8_t c1_last = 0x9f;
+  static constexpr std::uint8_t c1_st = 0x9c;
+
+  static std::span<const std::uint8_t> asBytes(std::string_view text) noexcept {
+    return {reinterpret_cast<const std::uint8_t *>(text.data()), text.size()};
+  }
+
+  bool stringControl(std::uint8_t byte) const noexcept {
+    return byte == escape || byte == cancel || byte == substitute || (kind_ == Kind::osc && byte == bell) || (kind_ == Kind::apc && byte >= c1_first && byte <= c1_last);
+  }
+
+  bool startEscape(std::uint8_t byte) {
+    switch (byte) {
+    case '[':
+      kind_ = Kind::csi;
+      phase_ = Phase::csi;
+      break;
+    case ']':
+      kind_ = Kind::osc;
+      phase_ = Phase::string;
+      break;
+    case 'P':
+      kind_ = Kind::dcs;
+      phase_ = Phase::string;
+      break;
+    case '_':
+    case '^':
+    case 'X':
+      kind_ = Kind::apc;
+      phase_ = Phase::string;
+      break;
+    default:
+      return false;
+    }
+
+    dcs_payload_ = false;
+    append(byte);
+    return true;
+  }
+
+  bool startC1(std::uint8_t byte) {
+    char introducer = 0;
+    switch (byte) {
+    case 0x90: introducer = 'P'; break;
+    case 0x98: introducer = 'X'; break;
+    case 0x9b: introducer = '['; break;
+    case 0x9d: introducer = ']'; break;
+    case 0x9e: introducer = '^'; break;
+    case 0x9f: introducer = '_'; break;
+    default: return false;
+    }
+
+    append(escape);
+    return startEscape(static_cast<std::uint8_t>(introducer));
+  }
+
+  std::span<const std::uint8_t> bytes() const noexcept {
+    return overflow_.empty() ? std::span<const std::uint8_t>{inline_}.first(size_) : std::span<const std::uint8_t>{overflow_};
+  }
+
+  bool append(std::uint8_t byte) {
+    if (size_ == string_limit) {
+      return false;
+    }
+
+    if (size_ < inline_.size()) {
+      inline_[size_++] = byte;
+      return true;
+    }
+
+    if (overflow_.empty()) {
+      overflow_.reserve(inline_.size() * 2);
+      overflow_.insert(overflow_.end(), inline_.begin(), inline_.end());
+    }
+
+    if (overflow_.size() == overflow_.capacity()) {
+      overflow_.reserve(std::min(string_limit, overflow_.capacity() * 2));
+    }
+    overflow_.push_back(byte);
+    ++size_;
+    return true;
+  }
+
+  void clear() noexcept {
+    size_ = 0;
+    overflow_.clear();
+  }
+
+  std::array<std::uint8_t, inline_bytes> inline_;
+  Vector<std::uint8_t, Memory> overflow_;
+  std::size_t size_ = 0;
+  Phase phase_ = Phase::ground;
+  Phase after_ready_ = Phase::ground;
+  Kind kind_ = Kind::escape;
+  Ending ending_ = Ending::final_byte;
+  bool dcs_payload_ = false;
+  std::uint64_t cancelled_ = 0;
+  std::uint64_t over_limit_ = 0;
+};
+
+}
