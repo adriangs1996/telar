@@ -8,6 +8,8 @@
 #include "effects.hpp"
 #include "ghostty_allocator.hpp"
 #include "graphics_cursor.hpp"
+#include "control/engine.hpp"
+#include "../memory/byte_queue.hpp"
 #include "pty_response_queue.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 
@@ -22,18 +24,21 @@ enum class TerminalPurpose {
 template <Allocator Memory>
 class Terminal {
 public:
-  explicit Terminal(Memory &memory, TerminalSize size, TerminalPurpose purpose = TerminalPurpose::interactive, std::shared_ptr<PtyResponseQueue> responses = {})
+  explicit Terminal(Memory &memory, TerminalSize size, TerminalPurpose purpose = TerminalPurpose::interactive, std::shared_ptr<PtyResponseQueue> responses = {}, GraphicsLimits limits = {})
       : screen(memory),
         effects(memory),
         graphics(memory),
         allocator_(memory),
         responses_(responses ? std::move(responses) : std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory})),
+        control_(memory, *responses_, purpose != TerminalPurpose::observation, limits),
+        pending_control_input_(memory, control_input_limit),
         purpose_(purpose) {
     screen.resize(size.cols, size.rows);
     checkGhostty(ghostty_terminal_new(allocator_.get(), terminal_.output(), size.cols, size.rows));
     checkGhostty(ghostty_render_state_new(allocator_.get(), render_state_.output()));
     checkGhostty(ghostty_render_state_row_iterator_new(allocator_.get(), row_iterator_.output()));
     checkGhostty(ghostty_render_state_row_cells_new(allocator_.get(), row_cells_.output()));
+    control_.bind(terminal_.get(), render_state_.get(), purpose == TerminalPurpose::separate_media);
 
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_USERDATA, this));
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_WRITE_PTY, reinterpret_cast<const void *>(&receiveResponse)));
@@ -46,6 +51,10 @@ public:
     const std::size_t scrollback_bytes = 10'000'000;
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_BYTES, &scrollback_bytes));
 
+    const GhosttyColorRgb foreground{255, 255, 255};
+    const GhosttyColorRgb background{0, 0, 0};
+    checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_COLOR_FOREGROUND, &foreground));
+    checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_COLOR_BACKGROUND, &background));
     const bool blink = true;
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_DEFAULT_CURSOR_BLINK, &blink));
     const bool disabled = false;
@@ -81,22 +90,50 @@ public:
   void feed(std::span<const Byte> bytes) {
     TELAR_TRACE("terminal.feed");
     ++content_revision_;
-    if (purpose_ == TerminalPurpose::separate_media) {
-      graphics_cursor_.feed(terminal_.get(), bytes, size_);
+    resumeControl();
+    if (hasPendingControl()) {
+      pending_control_input_.append(bytes);
     } else {
-      ghostty_terminal_vt_write(terminal_.get(), bytes.data(), bytes.size());
+      const auto consumed = control_.feed(bytes);
+      if (consumed < bytes.size()) {
+        pending_control_input_.append(bytes.subspan(consumed));
+      }
     }
-    dirty_ = true;
-    effects.refresh(terminal_.get());
-    if (purpose_ == TerminalPurpose::interactive) {
-      graphics.update(terminal_.get());
-    }
+    finishControlInput();
+  }
 
-    bool processing_error = false;
-    checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_VT_PROCESSING_ERROR, &processing_error));
-    if (processing_error) {
-      throw TerminalError{GHOSTTY_OUT_OF_MEMORY};
+  void resumeControl() {
+    const bool pending = hasPendingControl();
+    if (!pending) {
+      return;
     }
+    const auto consumed = control_.feed(pending_control_input_.readable());
+    pending_control_input_.consume(consumed);
+    if (pending) {
+      ++content_revision_;
+      finishControlInput();
+    }
+  }
+
+  bool hasPendingControl() const noexcept {
+    return control_.blocked() || !pending_control_input_.empty();
+  }
+
+  void configureClientFacts(control::ClientFacts facts) {
+    control_.configureFacts(facts);
+    control_.publishReports();
+  }
+
+  control::Policy &controlPolicy() noexcept {
+    return control_.policy;
+  }
+
+  control::Clipboard<Memory> &clipboardControl() noexcept {
+    return control_.clipboard();
+  }
+
+  bool pasteEvents() const noexcept {
+    return control_.pasteEvents();
   }
 
   void resize(TerminalSize size) {
@@ -111,6 +148,8 @@ public:
     }
 
     size_ = size;
+    control_.configureSize(size);
+    resumeControl();
     ++content_revision_;
     dirty_ = true;
     force_ = true;
@@ -121,10 +160,10 @@ public:
   }
 
   void configureColors(const ConfigureTerminalColors &colors) {
-    const auto foreground = colors.foreground ? GhosttyColorRgb{(*colors.foreground)[0], (*colors.foreground)[1], (*colors.foreground)[2]} : GhosttyColorRgb{};
+    const auto foreground = colors.foreground ? GhosttyColorRgb{(*colors.foreground)[0], (*colors.foreground)[1], (*colors.foreground)[2]} : GhosttyColorRgb{255, 255, 255};
     const auto background = colors.background ? GhosttyColorRgb{(*colors.background)[0], (*colors.background)[1], (*colors.background)[2]} : GhosttyColorRgb{};
-    checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_COLOR_FOREGROUND, colors.foreground ? &foreground : nullptr));
-    checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_COLOR_BACKGROUND, colors.background ? &background : nullptr));
+    checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_COLOR_FOREGROUND, &foreground));
+    checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_COLOR_BACKGROUND, &background));
     auto palette = default_palette_;
     if (colors.palette) {
       for (std::size_t index = 0; index < colors.palette->size() / 3; ++index) {
@@ -132,8 +171,16 @@ public:
       }
     }
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_COLOR_PALETTE, palette.data()));
+    control_.invalidateColors();
     dirty_ = true;
     force_ = true;
+  }
+
+  void configureCursorColor(std::optional<std::array<Byte, 3>> color) {
+    const GhosttyColorRgb rgb = color ? GhosttyColorRgb{(*color)[0], (*color)[1], (*color)[2]} : GhosttyColorRgb{};
+    checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_COLOR_CURSOR, color ? &rgb : nullptr));
+    control_.invalidateColors();
+    dirty_ = true;
   }
 
   bool mode(GhosttyMode mode) const {
@@ -146,7 +193,7 @@ public:
   bool outputSettled() const {
     bool ground = false;
     checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_VT_GROUND, &ground));
-    return ground && !mode(GHOSTTY_MODE_SYNC_OUTPUT);
+    return ground && control_.ground() && !hasPendingControl() && !mode(GHOSTTY_MODE_SYNC_OUTPUT);
   }
 
   void refresh() {
@@ -220,8 +267,9 @@ public:
     return responses_->readable();
   }
 
-  void consumeResponses(std::size_t count) noexcept {
+  void consumeResponses(std::size_t count) {
     responses_->consume(count);
+    resumeControl();
   }
 
   void discardResponses() noexcept {
@@ -257,6 +305,20 @@ public:
   GraphicsStorage<Memory> graphics;
 
 private:
+  void finishControlInput() {
+    dirty_ = true;
+    effects.refresh(terminal_.get());
+    if (purpose_ == TerminalPurpose::interactive) {
+      graphics.update(terminal_.get());
+    }
+
+    bool processing_error = false;
+    checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_VT_PROCESSING_ERROR, &processing_error));
+    if (processing_error) {
+      throw TerminalError{GHOSTTY_OUT_OF_MEMORY};
+    }
+  }
+
   static void titleChanged(GhosttyTerminal, void *context) noexcept {
     static_cast<Terminal *>(context)->effects.title_pending = true;
   }
@@ -266,7 +328,11 @@ private:
   }
 
   static GhosttyClipboardWriteResult clipboardWrite(GhosttyTerminal, void *context, const GhosttyClipboardWrite *write) noexcept {
-    return static_cast<Terminal *>(context)->effects.receiveClipboard(*write);
+    // Clipboard protocols are owned by the native controller. A backend
+    // callback indicates a filter failure and must never bypass its policy.
+    (void)context;
+    (void)write;
+    return GHOSTTY_CLIPBOARD_WRITE_RESULT_DENIED;
   }
 
   static void progressReported(GhosttyTerminal, void *context, const GhosttyTerminalProgressReport *report) noexcept {
@@ -293,7 +359,10 @@ private:
   static void receiveResponse(GhosttyTerminal, void *context, const Byte *bytes, std::size_t count) noexcept {
     auto &terminal = *static_cast<Terminal *>(context);
 
-    terminal.responses_->push({bytes, count});
+    constexpr std::string_view graphics_prefix = "\x1b_G";
+    if (terminal.purpose_ != TerminalPurpose::observation && count >= graphics_prefix.size() && std::memcmp(bytes, graphics_prefix.data(), graphics_prefix.size()) == 0) {
+      terminal.responses_->push({bytes, count});
+    }
   }
 
   static Byte readRowFlags(GhosttyRenderStateRowIterator iterator) {
@@ -440,8 +509,10 @@ private:
   RowIteratorHandle row_iterator_;
   RowCellsHandle row_cells_;
   std::shared_ptr<PtyResponseQueue> responses_;
+  static constexpr std::size_t control_input_limit = 128 * 1024;
+  control::Engine<Memory> control_;
+  ByteQueue<Memory> pending_control_input_;
   TerminalPurpose purpose_;
-  GraphicsCursor graphics_cursor_;
   CellProjection projection_;
   TerminalSize size_{};
   std::array<GhosttyColorRgb, 256> default_palette_{};

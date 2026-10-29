@@ -6,6 +6,7 @@
 #include "../proxy/client_configuration.hpp"
 #include "../terminal/text_reader.hpp"
 #include "geometry_lease.hpp"
+#include "clipboard_service.hpp"
 #include "launch_failure_cause.hpp"
 #include "limit_service.hpp"
 #include "pane_launch_options.hpp"
@@ -30,7 +31,8 @@ public:
         poller_(poller),
         history_(history),
         socket_path_(options.socket),
-        proxy_(options.proxy) {}
+        proxy_(options.proxy),
+        control_policy_(options.control_policy) {}
 
   Pane<Memory> &require(std::uint64_t identity) const {
     auto *pane = model_.panes.find(identity);
@@ -109,6 +111,7 @@ public:
 
     if (auto *pane = model_.panes.find(identity)) {
       pane->observers &= ~model_.clientBit(client.id);
+      refreshAfterDetach(*pane);
     }
 
     return removed != 0;
@@ -118,6 +121,8 @@ public:
     for (const auto &attachment : client.attachments) {
       if (auto *pane = model_.panes.find(attachment->pane_id)) {
         pane->observers &= ~model_.clientBit(client.id);
+        attachment->desktop.reset();
+        refreshAfterDetach(*pane);
       }
     }
 
@@ -178,6 +183,7 @@ public:
     }
 
     recordInputOrigin(client, pane.id);
+    ClipboardService{model_}.configure(pane);
   }
 
   bool admitInput(Pane<Memory> &pane, std::size_t bytes) {
@@ -216,6 +222,63 @@ public:
     }
   }
 
+  void configureDesktop(ClientSession<Memory> &client, const ConfigurePaneDesktop &request) {
+    auto &pane = requireGeneration(request.pane_id, request.pane_generation);
+    auto *attachment = client.attachment(pane.id);
+    if (attachment == nullptr || client.connection.closing) {
+      throw RequestError{FailureCode::invalid_request, "Desktop state requires a live pane attachment"};
+    }
+    if (attachment->desktop == request) {
+      return;
+    }
+
+    attachment->desktop = request;
+    refreshDesktop(pane);
+    flushInput(pane);
+  }
+
+  // Visibility is the union of explicit live reports. The oldest visible
+  // reporter supplies theme facts; focus and the geometry lease cannot steal it.
+  void refreshDesktop(Pane<Memory> &pane) {
+    control::ClientFacts facts;
+    const ConfigurePaneDesktop *theme = nullptr;
+    std::uint64_t theme_client = UINT64_MAX;
+    for (const auto *client : model_.clients.items()) {
+      if (client == nullptr || client->connection.closing) {
+        continue;
+      }
+      const auto *attachment = client->attachment(pane.id);
+      if (attachment == nullptr || !attachment->desktop || attachment->desktop->pane_generation != pane.generation) {
+        continue;
+      }
+      const auto &desktop = *attachment->desktop;
+      facts.visible |= desktop.visible;
+      facts.focused |= desktop.focused && desktop.visible;
+      if (desktop.visible && client->id < theme_client) {
+        theme_client = client->id;
+        theme = &desktop;
+      }
+    }
+
+    if (theme != nullptr) {
+      facts.light = theme->light;
+      const auto &previous = pane.desktop_theme;
+      if (!previous || previous->foreground != theme->foreground || previous->background != theme->background || previous->palette != theme->palette || previous->cursor != theme->cursor) {
+        pane.terminal.configureColors({theme->foreground, theme->background, theme->palette});
+        pane.terminal.configureCursorColor(theme->cursor);
+      }
+      pane.desktop_theme = *theme;
+    } else if (pane.desktop_theme) {
+      pane.desktop_theme.reset();
+      const auto *workspace = model_.workspaces.find(pane.location.workspace.id);
+      const auto *owner = workspace != nullptr && workspace->geometry_client ? model_.clients.find(*workspace->geometry_client) : nullptr;
+      pane.terminal.configureColors(owner != nullptr && !owner->connection.closing ? owner->colors : ConfigureTerminalColors{});
+      pane.terminal.configureCursorColor(std::nullopt);
+    }
+    pane.terminal.configureClientFacts(facts);
+    ClipboardService{model_}.configure(pane);
+  }
+
   void configureColors(ClientSession<Memory> &client, const ConfigureTerminalColors &request) {
     if (client.colors.foreground == request.foreground && client.colors.background == request.background && client.colors.palette == request.palette) {
       return;
@@ -224,7 +287,7 @@ public:
     client.colors = request;
     for (auto *pane : model_.panes.items()) {
       const auto *workspace = pane == nullptr ? nullptr : model_.workspaces.find(pane->location.workspace.id);
-      if (workspace != nullptr && workspace->geometry_client == client.id) {
+      if (workspace != nullptr && workspace->geometry_client == client.id && !pane->desktop_theme) {
         pane->terminal.configureColors(request);
       }
     }
@@ -295,6 +358,36 @@ public:
     }
 
     pane.last_input = std::chrono::steady_clock::now();
+    flushInput(pane);
+    client.connection.send(RequestCompleted{.request_id = request.request_id});
+  }
+
+  void pasteClipboard(ClientSession<Memory> &client, const PastePaneClipboard &request) {
+    auto &pane = requireGeneration(request.pane_id, request.pane_generation);
+    if (!ClipboardService<Memory>::eligible(client, pane) || pane.output_closed) {
+      throw RequestError{FailureCode::invalid_request, "Clipboard paste requires a live visible attachment"};
+    }
+    if (pane.terminal.pasteEvents()) {
+      if (!pane.terminal.clipboardControl().paste({client.id, client.generation}, request.primary, request.available)) {
+        throw RequestError{FailureCode::resource_limit, "Clipboard response is pending"};
+      }
+      pane.terminal.resumeControl();
+    } else {
+      const bool bracketed = pane.terminal.mode(GHOSTTY_MODE_BRACKETED_PASTE);
+      constexpr std::array<Byte, 6> start{0x1b, '[', '2', '0', '0', '~'};
+      constexpr std::array<Byte, 6> end{0x1b, '[', '2', '0', '1', '~'};
+      if (!admitInput(pane, request.text.size() + (bracketed ? start.size() + end.size() : 0))) {
+        throw RequestError{FailureCode::resource_limit, "Paste exceeds available pane input capacity"};
+      }
+      if (bracketed) {
+        pane.enqueueInput(start);
+      }
+      pane.enqueueInput(request.text);
+      if (bracketed) {
+        pane.enqueueInput(end);
+      }
+    }
+    recordInputOrigin(client, pane.id);
     flushInput(pane);
     client.connection.send(RequestCompleted{.request_id = request.request_id});
   }
@@ -386,6 +479,7 @@ private:
     auto pane = makeOwned<Pane<Memory>>(memory_, memory_, identity.id, location, command, PaneLaunch{size, model_.media_budget, model_.graphics_limits});
     TELAR_DIAGNOSTIC(pane->counters = &model_.metrics.panes);
     pane->generation = identity.generation;
+    pane->terminal.controlPolicy() = control_policy_;
     const auto *workspace = model_.workspaces.find(location.workspace.id);
     const HistorySession session{.id = pane->history_session, .pane = pane->id, .location = location, .started_at_ms = ObservationTime::now().milliseconds, .workspace_path = workspace == nullptr ? std::string_view{} : std::string_view{workspace->path}, .shell = command.arguments().front()};
     auto &result = *pane;
@@ -420,6 +514,15 @@ private:
     return result;
   }
 
+  void refreshAfterDetach(Pane<Memory> &pane) noexcept {
+    try {
+      refreshDesktop(pane);
+      flushInput(pane);
+    } catch (...) {
+      pane.requestClose();
+    }
+  }
+
   static constexpr std::size_t pane_capacity = 256;
 
   Memory &memory_;
@@ -428,6 +531,7 @@ private:
   History &history_;
   std::string_view socket_path_;
   ProxyClientConfiguration proxy_;
+  control::Policy control_policy_;
 };
 
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "classification.hpp"
+#include "color_value.hpp"
 #include "policy.hpp"
 #include "reply.hpp"
 #include "vt_state.hpp"
@@ -18,36 +19,13 @@ public:
   bool handle(Sequence sequence, bool enabled) {
     enabled_ = enabled;
     auto remaining = sequence.body();
-    const auto operation = decimal(takeField(remaining));
+    const auto operation = oscOperation(takeField(remaining));
     if (!operation) {
       return false;
     }
 
     if (*operation == 21) {
       kittyColors(remaining, sequence.terminator());
-      return true;
-    }
-    if (*operation == 4 || *operation == 5) {
-      while (!remaining.empty()) {
-        const auto index_field = takeField(remaining);
-        const auto index = decimal(index_field);
-        const auto value = takeField(remaining);
-        if (!index || *index >= 256 || value.empty()) {
-          continue;
-        }
-
-        if (value == "?") {
-          if (*operation == 4) {
-            traditionalColor(4, *index, sequence.terminator());
-          }
-        } else {
-          // Each value is a single token: the forwarded setter cannot contain
-          // a later query or a control-string terminator.
-          const auto start = index_field.data();
-          const auto count = static_cast<std::size_t>(value.data() + value.size() - start);
-          forwardOsc(*operation, {start, count});
-        }
-      }
       return true;
     }
     if (*operation >= 10 && *operation <= 19) {
@@ -64,6 +42,56 @@ public:
       return true;
     }
     return false;
+  }
+
+  // The parser retains the input while blocked. Only offsets survive a call;
+  // no borrowed input or state is retained across queue retries.
+  template <typename Sink>
+  bool palette(Sequence sequence, bool enabled, Sink &queue) {
+    enabled_ = enabled;
+    auto body = sequence.body();
+    const auto operation = oscOperation(takeField(body));
+    if (!palette_active_) {
+      palette_active_ = true;
+      palette_offset_ = 0;
+      reply_.clear();
+    }
+    while (true) {
+      if (palette_publishing_) {
+        if (!reply_.publish(queue)) {
+          return false;
+        }
+        reply_.clear();
+        palette_publishing_ = false;
+      }
+      auto remaining = body.substr(palette_offset_);
+      if (remaining.empty()) {
+        palette_active_ = false;
+        return true;
+      }
+      while (!remaining.empty()) {
+        const auto index_field = takeField(remaining);
+        const auto index = decimal(index_field);
+        const auto value = takeField(remaining);
+        palette_offset_ = body.size() - remaining.size();
+        if (index && *index < 256 && !value.empty()) {
+          if (value == "?") {
+            if (*operation == 4) {
+              traditionalColor(4, *index, sequence.terminator());
+            }
+          } else {
+            queue.release();
+            const auto count = static_cast<std::size_t>(value.data() + value.size() - index_field.data());
+            forwardOsc(*operation, {index_field.data(), count});
+          }
+        }
+        constexpr std::size_t maximum_color_reply = 64;
+        if (reply_.size() > PtyResponseQueue::message_byte_capacity - maximum_color_reply) {
+          break;
+        }
+      }
+      palette_publishing_ = true;
+    }
   }
 
 private:
@@ -125,13 +153,48 @@ private:
       return VtState::cursor_color;
     }
 
+    if (key.starts_with('+')) {
+      key.remove_prefix(1);
+    }
     const auto index = decimal(key);
     return index && *index < 256 ? index : std::nullopt;
   }
 
-  void kittyColors(std::string_view remaining, std::string_view terminator) {
-    constexpr unsigned maximum_keys = (256 + 8) * 2;
+  // The frozen application bounds the complete transaction at 526 items.
+  static constexpr unsigned maximum_keys = 526;
+  static constexpr std::array unsupported_colors{"selection_foreground", "selection_background", "cursor_text", "visual_bell", "second_transparent_background"};
+
+  static bool validKittyColors(std::string_view remaining) noexcept {
+    if (std::count(remaining.begin(), remaining.end(), ';') < maximum_keys) {
+      return true;
+    }
     unsigned keys = 0;
+    while (true) {
+      if (keys == maximum_keys) {
+        return false;
+      }
+      const bool had_separator = remaining.find(';') != std::string_view::npos;
+      const auto pair = takeField(remaining);
+      const auto equal = pair.find('=');
+      const auto key = pair.substr(0, equal);
+      auto value = equal == std::string_view::npos ? std::string_view{} : pair.substr(equal + 1);
+      const auto first = value.find_first_not_of(' ');
+      value = first == std::string_view::npos ? std::string_view{} : value.substr(first, value.find_last_not_of(' ') - first + 1);
+      const bool known = colorKey(key).has_value() || std::find(unsupported_colors.begin(), unsupported_colors.end(), key) != unsupported_colors.end();
+      if (known && (value.empty() || value == "?" || colorValue(value))) {
+        ++keys;
+      }
+      if (remaining.empty()) {
+        return keys != maximum_keys || !had_separator;
+      }
+    }
+  }
+
+  void kittyColors(std::string_view remaining, std::string_view terminator) {
+    constexpr std::size_t maximum_kitty_color_bytes = 2048;
+    if (remaining.size() > maximum_kitty_color_bytes || !validKittyColors(remaining)) {
+      return;
+    }
     while (!remaining.empty()) {
       const auto pair = takeField(remaining);
       const auto separator = pair.find('=');
@@ -146,17 +209,11 @@ private:
 
       const auto selector = colorKey(key);
       if (!selector) {
-        constexpr std::array unsupported{"selection_foreground", "selection_background", "cursor_text", "visual_bell", "second_transparent_background"};
-        if (enabled_ && value == "?" && std::find(unsupported.begin(), unsupported.end(), key) != unsupported.end() && reply_.size() == 0) {
+        if (enabled_ && value == "?" && std::find(unsupported_colors.begin(), unsupported_colors.end(), key) != unsupported_colors.end() && reply_.size() == 0) {
           reply_.append("\x1b]21");
         }
         continue;
       }
-      if (++keys > maximum_keys) {
-        reply_.clear();
-        return;
-      }
-
       if (value != "?") {
         forwardOsc(21, pair);
         continue;
@@ -189,6 +246,9 @@ private:
   Reply<Memory> &reply_;
   const Policy &policy_;
   bool enabled_ = false;
+  bool palette_active_ = false;
+  bool palette_publishing_ = false;
+  std::size_t palette_offset_ = 0;
 };
 
 }

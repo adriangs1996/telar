@@ -96,8 +96,8 @@ void testTerminal() {
     terminal.feed(bytes("\x1b]2;safe\x07\x1b]7;file://localhost/tmp/hello%20world\x07\x1b]52;c;aGVsbG8=\x07"));
     check(terminal.effects.title() == "safe");
     check(terminal.effects.cwd() == "/tmp/hello world");
-    check(terminal.effects.clipboard.size() == 5);
-    check(std::equal(terminal.effects.clipboard.begin(), terminal.effects.clipboard.end(), "hello"));
+    check(terminal.effects.clipboard.empty());
+    check(!terminal.clipboardControl().route());
     terminal.feed(bytes("\x1b]9;4;1;42\x07"));
     check(terminal.effects.progress_state == PaneProgressState::set && terminal.effects.progress_percent == 42);
     const auto progress_revision = terminal.effects.progress_revision;

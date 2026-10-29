@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../memory/allocator.hpp"
+#include "../terminal/control/identity.hpp"
 #include "../memory/erasing_allocator.hpp"
 #include "error.hpp"
 #include "pty_process.hpp"
@@ -74,7 +75,8 @@ public:
     });
 
     if (purpose == CommandPurpose::terminal) {
-      setEnvironment("TERM_PROGRAM", "ghostty");
+      setEnvironment("TERM_PROGRAM", control::program_name);
+      setEnvironment("TERM_PROGRAM_VERSION", control::program_version);
       setEnvironment("TELAR_TERM_PROGRAM", "telar");
       setEnvironment("TERM", "xterm-256color");
       setEnvironment("COLORTERM", "truecolor");

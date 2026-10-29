@@ -7,6 +7,7 @@
 #include "../plugins/specifications.hpp"
 #include "../proxy/options.hpp"
 #include "limit_notices.hpp"
+#include "../terminal/control/policy.hpp"
 #include <chrono>
 #include <limits.h>
 
@@ -42,6 +43,7 @@ struct RuntimeValues {
   AgentManifests manifests = builtin_manifests;
   LimitNotices limits;
   GraphicsLimits graphics;
+  control::Policy control_policy{};
   bool capture_output = false;
   bool persist_session = true;
   bool resume_agents = true;

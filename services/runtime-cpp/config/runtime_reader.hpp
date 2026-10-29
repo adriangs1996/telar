@@ -4,6 +4,7 @@
 #include "agent_reader.hpp"
 #include "proxy_reader.hpp"
 #include "runtime_values.hpp"
+#include "control_reader.hpp"
 
 namespace telar::runtime::config {
 
@@ -18,13 +19,14 @@ public:
       return;
     }
 
-    runtime.onlyFields({"history", "session", "engine", "agent_descriptions", "graphics", "proxy", "agents"});
+    runtime.onlyFields({"history", "session", "engine", "agent_descriptions", "graphics", "proxy", "agents", "control_queries"});
     history(runtime.field("history"));
     session(runtime.field("session"));
     helper(runtime.field("engine"), values_.engine, true);
     helper(runtime.field("agent_descriptions"), values_.descriptions, false);
     AgentReader{values_.manifests, values_.limits}.read(runtime.field("agents"));
     graphics(runtime.field("graphics"));
+    readControlPolicy(runtime.field("control_queries"), values_.control_policy);
     ProxyReader<Memory>::read(runtime.field("proxy"), values_.proxy);
   }
 

@@ -4,6 +4,7 @@
 #include "../agents/description.hpp"
 #include "../graphics/limits.hpp"
 #include "../persistence/options.hpp"
+#include "../terminal/control/policy.hpp"
 
 namespace telar::runtime {
 
@@ -17,6 +18,7 @@ struct RuntimeOptions {
   DescriptionOptions descriptions;
   checkpoint::CloneOptions clone{};
   GraphicsLimits graphics;
+  control::Policy control_policy{};
 };
 
 }

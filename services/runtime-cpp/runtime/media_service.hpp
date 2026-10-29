@@ -56,7 +56,7 @@ public:
       return;
     }
 
-    const bool paused = pane.media->holdsRead(Pane<Memory>::read_buffer_size);
+    const bool paused = pane.terminal.hasPendingControl() || pane.media->holdsRead(Pane<Memory>::read_buffer_size);
     if (paused != pane.read_paused) {
       poller_.readInterest(pane.process->descriptor(), eventToken(EventSource::pane, pane.event_identity), !paused);
       pane.read_paused = paused;

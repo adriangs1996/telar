@@ -14,6 +14,7 @@
 #include <chrono>
 #include <csignal>
 #include <sys/wait.h>
+#include <sys/uio.h>
 
 namespace telar::runtime {
 
@@ -32,7 +33,7 @@ public:
         pty_responses(std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory})),
         observer(std::allocate_shared<PaneObserver<Memory>>(AllocatorRef<PaneObserver<Memory>, Memory>{memory}, memory, settings.size, command.cwd())),
         media(std::allocate_shared<PaneMedia<Memory>>(AllocatorRef<PaneMedia<Memory>, Memory>{memory}, memory, settings.media_budget, settings.graphics, settings.size, pty_responses)),
-        terminal(memory, settings.size, TerminalPurpose::separate_media, pty_responses),
+        terminal(memory, settings.size, TerminalPurpose::separate_media, pty_responses, settings.graphics),
         input(memory, input_limit),
         cwd(command.cwd(), AllocatorRef<char, Memory>{memory}) {
     ::arc4random_buf(history_session.data(), history_session.size());
@@ -51,7 +52,7 @@ public:
     const unsigned read_limit = mode == ReadMode::burst ? batch_read_limit : 1;
     for (unsigned attempt = 0; attempt < read_limit && batch_bytes < batch_byte_limit; ++attempt) {
       const auto capacity = std::min(buffer.size(), batch_byte_limit - batch_bytes);
-      if (media->holdsRead(capacity)) {
+      if (terminal.hasPendingControl() || media->holdsRead(capacity)) {
         TELAR_DIAGNOSTIC(media->noteHeldRead());
         return true;
       }
@@ -84,22 +85,34 @@ public:
   }
 
   void write() {
-    const auto response = pty_responses->peek();
-    const auto bytes = response.value_or(input.readable());
-    if (bytes.empty()) {
-      if (response) {
-        pty_responses->consume(0);
-      }
+    const auto batch = pty_responses->peekBatch();
+    const bool response = batch.count != 0;
+    const auto bytes = input.readable();
+    if (response && batch.bytes == 0) {
+      pty_responses->consumeBytes(0);
+      terminal.resumeControl();
+      return;
+    }
+    if (!response && bytes.empty()) {
       return;
     }
 
     const auto count = [&] {
       TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{counters == nullptr ? nullptr : &counters->input_write});
+      if (response) {
+        std::array<iovec, PtyResponseQueue::message_capacity> vectors;
+        for (std::size_t index = 0; index < batch.count; ++index) {
+          const auto message = batch.messages[index];
+          vectors[index] = {const_cast<Byte *>(message.data()), message.size()};
+        }
+        return ::writev(process->descriptor(), vectors.data(), static_cast<int>(batch.count));
+      }
       return ::write(process->descriptor(), bytes.data(), bytes.size());
     }();
     if (count > 0) {
       if (response) {
-        pty_responses->consume(static_cast<std::size_t>(count));
+        pty_responses->consumeBytes(static_cast<std::size_t>(count));
+        terminal.resumeControl();
       } else {
         input.consume(static_cast<std::size_t>(count));
       }
@@ -180,6 +193,7 @@ public:
 #endif
   std::uint64_t id;
   std::uint64_t event_identity = 0;
+  std::optional<ConfigurePaneDesktop> desktop_theme;
   std::uint64_t generation = 1;
   std::array<Byte, 16> history_session;
   TabLocation location;

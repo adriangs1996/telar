@@ -19,28 +19,29 @@ namespace telar::runtime::control {
 template <Allocator Memory>
 class Engine {
 public:
-  explicit Engine(Memory &memory, PtyResponseQueue &responses, TerminalEffects<Memory> &effects, bool enabled)
-      : parser_(memory), reply_(memory), checksum_(memory), clipboard_(memory, effects), graphics_queries_(memory), reports_(memory), colors_(state_, reply_, policy), responses_(responses), enabled_(enabled) {}
+  explicit Engine(Memory &memory, PtyResponseQueue &responses, bool enabled, GraphicsLimits limits = {})
+      : parser_(memory), reply_(memory), checksum_(memory), clipboard_(memory), graphics_queries_(memory, limits), reports_(memory), colors_(state_, reply_, policy), responses_(responses), enabled_(enabled) {}
 
   void bind(GhosttyTerminal terminal, GhosttyRenderState render, bool separate_media) noexcept {
     state_.bind(terminal, render, separate_media);
   }
 
   std::size_t feed(std::span<const std::uint8_t> input) {
+    const ReleaseProducer release{responses_};
     if (parser_.blocked()) {
       parser_.feed({}, *this);
       if (parser_.blocked()) {
         return 0;
       }
     }
-    if (!reports_.publish(responses_, state_, facts_, enabled_)) {
+    if ((clipboard_.hasReply() && !clipboard_.publish(responses_)) || !reports_.publish(responses_, state_, facts_, enabled_)) {
       return 0;
     }
     return parser_.feed(input, *this);
   }
 
   bool blocked() const noexcept {
-    return parser_.blocked() || reports_.pending();
+    return parser_.blocked() || reports_.pending() || clipboard_.hasReply();
   }
 
   bool ground() const noexcept {
@@ -48,7 +49,15 @@ public:
   }
 
   void ordinary(std::span<const std::uint8_t> input) {
+    responses_.release();
     state_.write(input);
+  }
+
+  void escapeBoundary() {
+    if (state_.needsEscapeBoundary()) {
+      responses_.release();
+      state_.escapeBoundary();
+    }
   }
 
   bool streamable(Sequence sequence) const noexcept {
@@ -56,6 +65,7 @@ public:
   }
 
   bool enquire() {
+    escapeBoundary();
     if (!enabled_ || policy.answerback_length == 0) {
       return true;
     }
@@ -65,11 +75,17 @@ public:
   // The first attempt snapshots state and applies mutations once. Retrying a
   // full queue only publishes that owned reply; it never re-executes setters.
   bool complete(Sequence sequence) {
+    if (sequence.kind == Kind::osc) {
+      const auto operation = oscOperation(sequence.body().substr(0, sequence.body().find(';')));
+      if (operation == 4 || operation == 5) {
+        return colors_.palette(sequence, enabled_, responses_);
+      }
+    }
     if (sequence.kind == Kind::dcs) {
       const auto header_end = sequence.body().find_first_of("@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~");
       if (header_end != std::string_view::npos) {
         const auto parameters = Parameters::parse(sequence.body().substr(0, header_end + 1));
-        if (parameters && parameters->final == 'q' && parameters->modifiers() == "+") {
+        if (parameters && !parameters->colon && parameters->final == 'q' && parameters->modifiers() == "+") {
           return termcap(sequence.body().substr(header_end + 1));
         }
       }
@@ -84,15 +100,23 @@ public:
       case Kind::osc: osc(sequence); break;
       case Kind::apc: apc(sequence); break;
       }
+      clipboard_before_reply_ = clipboard_.hasReply();
       prepared_ = true;
     }
 
+    if (enabled_ && clipboard_before_reply_ && clipboard_.hasReply() && !clipboard_.publish(responses_)) {
+      return false;
+    }
     if (enabled_ && !reply_.publish(responses_)) {
       return false;
     }
 
     reply_.clear();
+    if (enabled_ && clipboard_.hasReply() && !clipboard_.publish(responses_)) {
+      return false;
+    }
     prepared_ = false;
+    clipboard_before_reply_ = false;
     return true;
   }
 
@@ -117,7 +141,8 @@ public:
   }
 
   void publishReports() {
-    if (!parser_.blocked()) {
+    const ReleaseProducer release{responses_};
+    if (!parser_.blocked() && (!clipboard_.hasReply() || clipboard_.publish(responses_))) {
       reports_.publish(responses_, state_, facts_, enabled_);
     }
   }
@@ -126,10 +151,25 @@ public:
     state_.invalidateColors();
   }
 
+  Clipboard<Memory> &clipboard() noexcept {
+    return clipboard_;
+  }
+
+  bool pasteEvents() const noexcept {
+    return paste_events_;
+  }
+
   Policy policy;
 
 private:
+  struct ReleaseProducer {
+    PtyResponseQueue::Producer &producer;
+
+    ~ReleaseProducer() { producer.release(); }
+  };
+
   void passthrough(Sequence sequence) {
+    responses_.release();
     state_.write(sequence.bytes);
     if (sequence.ending != Ending::final_byte) {
       const auto terminator = sequence.terminator();
@@ -138,6 +178,9 @@ private:
   }
 
   void escape(Sequence sequence) {
+    if (sequence.body() == "\\") {
+      return;
+    }
     if (sequence.body() == "Z") {
       attributes(false);
       return;
@@ -146,7 +189,8 @@ private:
     if (sequence.body() == "c") {
       checksum_.flags = 0;
       paste_events_ = false;
-      saved_paste_events_ = false;
+      saved_desktop_modes_.fill(false);
+      clipboard_.reset();
     }
     passthrough(sequence);
   }
@@ -178,28 +222,14 @@ private:
     case 'h':
     case 'l':
       if (modifiers == "?") {
-        passthrough(sequence);
-        const bool set = parameters.final == 'h';
-        for (std::size_t index = 0; index < parameters.count; ++index) {
-          modeEffect(parameters.values[index], set);
-        }
+        privateModes(parameters);
         return;
       }
       break;
     case 's':
     case 'r':
       if (modifiers == "?") {
-        passthrough(sequence);
-        for (std::size_t index = 0; index < parameters.count; ++index) {
-          const auto mode = parameters.values[index];
-          if (parameters.final == 's') {
-            if (mode == paste_events_mode) {
-              saved_paste_events_ = paste_events_;
-            }
-          } else {
-            modeEffect(mode, mode == paste_events_mode ? saved_paste_events_ : state_.mode(mode));
-          }
-        }
+        privateModes(parameters);
         return;
       }
       break;
@@ -272,6 +302,26 @@ private:
     }
 
     passthrough(sequence);
+  }
+
+  void privateModes(const Parameters &parameters) {
+    for (std::size_t index = 0; index < parameters.count; ++index) {
+      const auto mode = parameters.values[index];
+      const auto owned = std::find(desktop_modes.begin(), desktop_modes.end(), mode);
+      if (owned != desktop_modes.end()) {
+        const auto slot = static_cast<std::size_t>(owned - desktop_modes.begin());
+        if (parameters.final == 's') {
+          saved_desktop_modes_[slot] = state_.mode(mode);
+          continue;
+        }
+        const bool enabled = parameters.final == 'r' ? saved_desktop_modes_[slot] : parameters.final == 'h';
+        state_.setMode(mode, enabled);
+        modeEffect(mode, enabled);
+        continue;
+      }
+
+      forwardPrivateMode(mode, parameters.final, [this](auto command) { ordinary(command); });
+    }
   }
 
   void modeEffect(unsigned mode, bool set) {
@@ -472,7 +522,7 @@ private:
     const auto end = sequence.body().find_first_of("@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~");
     if (end != std::string_view::npos) {
       const auto parameters = Parameters::parse(sequence.body().substr(0, end + 1));
-      if (parameters && parameters->final == 'q' && parameters->modifiers() == "$") {
+      if (parameters && !parameters->colon && parameters->final == 'q' && parameters->modifiers() == "$") {
         statusString(sequence.body().substr(end + 1));
         return;
       }
@@ -556,18 +606,22 @@ private:
   }
 
   void osc(Sequence sequence) {
+    responses_.release();
     if (colors_.handle(sequence, enabled_)) {
       return;
     }
     auto remaining = sequence.body();
-    const auto operation = decimal(takeField(remaining));
+    const auto operation = oscOperation(takeField(remaining));
     if (operation == 52) {
       if (enabled_) {
-        clipboard_.traditional(remaining, policy.clipboard_write);
+        clipboard_.traditional(remaining, policy);
       }
       return;
     }
     if (operation == 5522) {
+      if (enabled_) {
+        clipboard_.kitty(remaining, sequence.ending, policy, reply_);
+      }
       return;
     }
     passthrough(sequence);
@@ -615,12 +669,13 @@ private:
   Reports<Memory> reports_;
   ColorQueries<Memory> colors_;
   ClientFacts facts_;
-  PtyResponseQueue &responses_;
+  PtyResponseQueue::Producer responses_;
   bool enabled_;
   bool prepared_ = false;
+  bool clipboard_before_reply_ = false;
+  std::array<bool, desktop_modes.size()> saved_desktop_modes_{};
   std::size_t capability_offset_ = 0;
   bool paste_events_ = false;
-  bool saved_paste_events_ = false;
 };
 
 }

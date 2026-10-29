@@ -55,7 +55,7 @@ public:
         limits_(model_),
         admissions_(model_, poller_, limits_),
         client_layouts_(memory, model_),
-        panes_(memory, model_, poller, PaneLaunchOptions{listener_.path(), proxy}, background),
+        panes_(memory, model_, poller, PaneLaunchOptions{listener_.path(), proxy, options.control_policy}, background),
         workspaces_(memory, model_, panes_),
         worktrees_(memory, model_, workspaces_, limits_),
         executions_(memory, model_, poller_),
@@ -571,6 +571,21 @@ private:
     panes_.resize(client, message);
   }
 
+  void handle(ClientSession<Memory> &client, const CompleteClipboardDesktop &message) {
+    if (auto *pane = ClipboardService{model_}.complete(client, message)) {
+      panes_.flushInput(*pane);
+      media_.updateReadInterest(*pane);
+    }
+  }
+
+  void handle(ClientSession<Memory> &client, const PastePaneClipboard &message) {
+    panes_.pasteClipboard(client, message);
+  }
+
+  void handle(ClientSession<Memory> &client, const ConfigurePaneDesktop &message) {
+    panes_.configureDesktop(client, message);
+  }
+
   void handle(ClientSession<Memory> &client, const ConfigureTerminalColors &message) {
     panes_.configureColors(client, message);
   }
@@ -812,6 +827,10 @@ private:
     media_.collect();
     std::chrono::nanoseconds timeout = std::chrono::milliseconds{100};
     for (auto *pane : model_.panes.items()) {
+      if (pane != nullptr && !pane->output_closed && ClipboardService{model_}.advance(*pane, now)) {
+        panes_.flushInput(*pane);
+        media_.updateReadInterest(*pane);
+      }
       if (pane != nullptr && !pane->exit_status) {
         pane->exit_status = pane->process->reap();
       }

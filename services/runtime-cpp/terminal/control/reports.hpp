@@ -33,7 +33,8 @@ public:
 
   // Unencoded desktop updates coalesce to the latest facts. Once encoded,
   // bytes remain immutable until the PTY queue admits the entire report.
-  bool publish(PtyResponseQueue &queue, const VtState &state, ClientFacts facts, bool enabled) {
+  template <typename Sink>
+  bool publish(Sink &queue, const VtState &state, ClientFacts facts, bool enabled) {
     while (pending()) {
       if (!prepared_) {
         for (const auto report : {Report::scheme, Report::visibility, Report::focus, Report::size}) {

@@ -28,6 +28,7 @@ struct Attachment {
   FrameSync<Memory> frames;
   GraphicsSynchronizer<Memory> graphics;
   std::optional<std::uint32_t> viewport;
+  std::optional<ConfigurePaneDesktop> desktop;
   bool exit_sent = false;
   std::uint64_t title_revision = 1;
   std::uint64_t cwd_revision = 0;

@@ -1,14 +1,17 @@
 # Native control query contract
 
-Status: inventory and baseline preparation. This document is an acceptance
-ledger, not a statement that the implementation or performance gates pass.
+Status: implementation and validation in progress. Coverage, security and
+performance gates remain open. This document is an acceptance ledger.
 
 The task starts at Telar `2ac4d6016dd23592e61d7f03a4c24d83aab7ba9f`.
 The application oracle is Ghostty
 `df1c99c8a5ec32c73963e5dc3fad3c9df7a3d137`, revalidated against the remote
-main ref on 2026-10-29. The production VT dependency remains
-`a4edca2a90d6cf89900bb058e71cb6860cec78c5` with the checked-in state patch.
-The two revisions and artifacts have different purposes. No Zig Telar runtime
+main ref on 2026-10-29. The frozen baseline used VT dependency
+`a4edca2a90d6cf89900bb058e71cb6860cec78c5`. The working implementation ports
+only the state bridge to the same frozen application revision, correcting
+non-query CAN semantics and versioning the extended C API. The original
+baseline artifacts remain immutable. The VT and application oracle builds
+have different purposes. No Zig Telar runtime
 is an oracle for this task.
 
 ## Source map
@@ -95,7 +98,8 @@ separate case results. A row marked pending blocks acceptance.
 
 Framing must account for the application's actual parser, not assumed xterm
 behavior. At ground high bytes are UTF-8; C1 introducers act inside escapes.
-OSC and DCS payload treat high bytes as data. APC accepts C1 ST. CAN/SUB abort;
+OSC and DCS payload treat high bytes as data. APC drops bytes A0–FF and
+accepts C1 ST; ESC/CSI and pre-hook DCS ignore A0–FF. CAN/SUB abort;
 ESC leaves a string and is then the introducer of the next escape. The oracle
 must distinguish termination from cancellation and document deliberate safer
 behavior. Unknown sequences, binary data and over-limit strings must make
@@ -181,7 +185,7 @@ Elapsed times in these functional fixtures are not performance evidence.
 An initial runtime startup failure used an overlong UNIX socket pathname;
 the passing fixture uses a private short path under `/private/tmp`.
 
-## Blocking baseline prerequisite
+## Historical baseline prerequisite (resolved)
 
 The unmodified pinned application build reaches shader compilation and fails:
 
@@ -204,8 +208,60 @@ configuration and response-encoding sources in the reference remain unchanged.
 No missing baseline is replaced by a libghostty-vt result or the installed
 Ghostty 1.3.1 application, which is a different revision.
 
-Installing the missing Xcode component crosses the task's explicit prohibition
-on real installations. Authorization for that specific action was requested.
-Until it is resolved, the required application baseline, differential coverage,
-native product implementation, sanitizer acceptance and seven-pair performance
-comparison remain incomplete. No success or portable performance claim is made.
+Adrian authorized installing only the missing Metal Toolchain. The component
+installation and subsequent unmodified application-core ReleaseFast build
+succeeded; `baseline-ghostty-application.json` records the command and archive
+hash. The earlier failures above and `preparation-blocker.json` remain historical
+evidence, not a current blocker. No Telar application was installed.
+
+## Implementation in progress
+
+The native controller implements CSI reports, DECRQSS, all 273 frozen termcap
+keys/aliases, color reports, checksum, ENQ, keyboard and graphics queries.
+File, temporary-file and shared-memory queries validate their own data, use
+configured pane budgets, and never enter the VT query handler. Generic PNG and
+zlib codecs receive bounded allocators. Native parsing owns fragmented requests
+and retains admitted replies under queue pressure. Media and observation
+consumers suppress intercepted queries and desktop subscriptions. Glyph support
+reports an empty format set because the C++ client cannot render session glyphs;
+this deliberate limitation is not literal Ghostty rendering parity.
+
+`differential-mutation-header.json` records 2,339 passing cases, including seeded
+mutations and foreign-callback spies. `differential-bulk-parser-splits.json`
+records 38,855 passing executions for the subsequent parser experiment. Earlier
+failing reports remain evidence of corrected defects. These are fixture counts,
+not exhaustive coverage percentages. Checksum covers all 32 flag combinations;
+identity, TN and no-client focus/visibility use independent expectations.
+
+Desktop state and clipboard routing now carry pane/client generations and a
+nonce. The UI sends consent before inspecting resources; the runtime checks a
+fresh deadline and sends a separate execution grant. Reset, stale completions,
+timeouts and disconnects revoke work before that grant. A grant already admitted
+to the client's connection is the authorization commit; an effect that already
+started cannot be undone. A received cancellation removes work that has not
+started. Replies own immutable encoded storage before pending state is released.
+Clipboard session grants are scoped to the client generation and operation.
+
+Six focused native control targets pass ASan/UBSan with the pinned VT library
+outside instrumentation. Queue ownership/concurrency passes TSan. Parser and
+queue tests also pass x86-64 under Rosetta; this is not native x86 performance.
+The offscreen Qt tests use only in-memory MIME objects, including a source that
+invalidates itself during retrieval. The complete runtime suite passed after
+the state-bridge port (process-local `ulimit -n 8192`). Later edits still require
+their appropriate final checks.
+
+Acceptance is blocked by actual unresolved work: Qt can materialize clipboard
+contents before their 1 MiB transport bound is checked; legacy non-query graphics
+ACK callbacks still use the dropping queue path; clipboard desktop differential
+coverage, final PTY latency, allocation/copy accounting and complete lifecycle
+adversarial coverage remain open. The default clipboard policy is not weakened
+to hide these issues.
+
+`performance-component-complete-07.json` contains seven alternating pairs for
+24 component workloads using the real application handler. Its scope is
+exploratory despite the filename: no GUI/PTY or overall acceptance claim. It
+measures a 12.064× checksum-screen ratio, 40.088× graphics-payload ratio and
+1.102× ordinary-text ratio against Ghostty, with regressions in other families.
+Subsequent parser experiments are retained separately and are not accepted by
+averaging away short-query regressions. All inventory rows remain acceptance
+gates; this checkpoint does not finish the task.

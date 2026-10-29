@@ -76,6 +76,15 @@ bool dispatchRequest(ClientTag tag, Consumer &&consume) {
   case ClientTag::configure_frame_interval:
     consume.template operator()<ConfigureFrameInterval>();
     return true;
+  case ClientTag::complete_clipboard_desktop:
+    consume.template operator()<CompleteClipboardDesktop>();
+    return true;
+  case ClientTag::paste_pane_clipboard:
+    consume.template operator()<PastePaneClipboard>();
+    return true;
+  case ClientTag::configure_pane_desktop:
+    consume.template operator()<ConfigurePaneDesktop>();
+    return true;
   case ClientTag::configure_terminal_colors:
     consume.template operator()<ConfigureTerminalColors>();
     return true;

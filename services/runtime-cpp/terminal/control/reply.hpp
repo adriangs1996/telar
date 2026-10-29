@@ -68,7 +68,8 @@ public:
     append({bytes.data() + offset, bytes.size() - offset});
   }
 
-  bool publish(PtyResponseQueue &queue) {
+  template <typename Sink>
+  bool publish(Sink &queue) {
     if (size_ == 0) {
       return true;
     }
@@ -77,10 +78,14 @@ public:
       return queue.tryPush(std::span<const std::uint8_t>{inline_}.first(size_));
     }
 
-    if (!owned_) {
+    seal();
+    return queue.tryPushOwned(owned_->bytes, owned_);
+  }
+
+  void seal() {
+    if (size_ > inline_.size() && !owned_) {
       owned_ = std::allocate_shared<Storage>(AllocatorRef<Storage, Memory>{memory_}, std::move(overflow_));
     }
-    return queue.tryPushOwned(owned_->bytes, owned_);
   }
 
   void clear() noexcept {

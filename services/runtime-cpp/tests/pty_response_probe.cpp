@@ -70,11 +70,11 @@ static void exercise(const char *socket, const char *executable, const char *dum
   peer.send(RequestRuntimeState{.client_identity = 101, .interactive = true});
   const std::array<std::string_view, 2> arguments{executable, "--pty-child"};
   const auto opened = peer.exchange<PaneOpened>(OpenPane{.request_id = 2, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
-  waitForText(peer, opened.pane_id, "pty-responses:64,1,64");
+  waitForText(peer, opened.pane_id, "pty-responses:65,1,65");
   peer.exchange<RequestCompleted>(SendPaneText{.request_id = 3, .pane_id = opened.pane_id, .pane_generation = opened.pane_generation, .mode = PaneTextMode::raw, .text = "input-after-saturation"});
   waitForText(peer, opened.pane_id, "input-after-saturation");
   std::ofstream dump{dump_path, std::ios::binary};
-  dump << "pty-responses:64,1,64\ninput-after-saturation\n";
+  dump << "pty-responses:65,1,65\ninput-after-saturation\n";
   check(dump.good());
   peer.send(ClosePane{.request_id = 4, .pane_id = opened.pane_id});
 }

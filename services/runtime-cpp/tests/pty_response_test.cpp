@@ -20,19 +20,21 @@ static void testSharedTerminalResponses() {
   }
 
   terminal.feed(responseBytes("\x1b[6n"));
-  check(queue->snapshot().dropped == 1 && queue->snapshot().messages == PtyResponseQueue::message_capacity);
+  check(queue->snapshot().dropped == 0 && queue->snapshot().messages == PtyResponseQueue::message_capacity);
   check(std::ranges::equal(terminal.responses(), responseBytes("graphics reply")));
   terminal.consumeResponses(terminal.responses().size());
   terminal.feed(responseBytes("\x1b[6n"));
   for (std::size_t index = 1; index < PtyResponseQueue::message_capacity; ++index) {
     check(std::ranges::equal(media.responses(), responseBytes("graphics reply")));
-    media.consumeResponses(media.responses().size());
+    terminal.consumeResponses(media.responses().size());
   }
   check(std::ranges::equal(media.responses(), responseBytes("\x1b[1;1R")));
-  media.consumeResponses(media.responses().size());
+  terminal.consumeResponses(media.responses().size());
+  check(std::ranges::equal(terminal.responses(), responseBytes("\x1b[1;1R")));
+  terminal.consumeResponses(terminal.responses().size());
 
   media.reply(responseBytes(std::string(PtyResponseQueue::message_byte_capacity + 1, 'x')));
-  check(queue->empty() && queue->snapshot().dropped == 2);
+  check(queue->empty() && queue->snapshot().dropped == 1);
   terminal.feed(responseBytes("still usable"));
   terminal.refresh();
   check(terminal.screen.cells.front().text.front() == 's');

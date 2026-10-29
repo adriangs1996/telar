@@ -115,6 +115,7 @@ void runRuntime(Memory &memory, const ServerOptions &options, const RuntimePaths
                                                   .descriptions = {.arguments = std::span{description_arguments}.first(configuration.descriptions.arguments.size()), .timeout = configuration.descriptions.timeout},
                                                   .clone = {.source_checkpoint = options.clone_session, .source_socket = options.clone_from, .shell = shell.empty() ? "/bin/sh" : shell},
                                                   .graphics = configuration.graphics,
+                                                  .control_policy = configuration.control_policy,
                                               },
                   proxy.clientConfiguration()};
   runtime.run(proxy, plugin_service);

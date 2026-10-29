@@ -1,17 +1,48 @@
 #include "terminal/terminal.hpp"
 #include <chrono>
 #include <memory>
+#include <utility>
 
 using namespace telar;
 using namespace telar::runtime;
 
 namespace {
+volatile std::uint64_t observed_terminal_output;
+
 struct Probe {
+  inline static thread_local Probe *active = nullptr;
+  std::uint64_t foreign_calls = 0;
+
+  struct Active {
+    explicit Active(Probe &probe) : previous(std::exchange(active, &probe)) {}
+    ~Active() { active = previous; }
+    Probe *previous;
+  };
+
+  static void foreignReply(GhosttyTerminal, void *, const Byte *, std::size_t) noexcept {
+    if (active != nullptr) {
+      ++active->foreign_calls;
+    }
+  }
+
+  static GhosttyClipboardWriteResult foreignClipboard(GhosttyTerminal, void *, const GhosttyClipboardWrite *) noexcept {
+    if (active != nullptr) {
+      ++active->foreign_calls;
+    }
+    return GHOSTTY_CLIPBOARD_WRITE_RESULT_DENIED;
+  }
   SystemAllocator system;
   BudgetAllocator<SystemAllocator> memory{system, 64 * 1024 * 1024};
   Terminal<BudgetAllocator<SystemAllocator>> terminal;
 
-  explicit Probe(TerminalSize size) : terminal(memory, size, TerminalPurpose::separate_media) {}
+  explicit Probe(TerminalSize size) : terminal(memory, size, TerminalPurpose::separate_media) {
+    ConfigureTerminalColors colors{};
+    colors.foreground = {255, 255, 255};
+    colors.background = {0, 0, 0};
+    terminal.configureColors(colors);
+    checkGhostty(ghostty_terminal_set(terminal.handle(), GHOSTTY_TERMINAL_OPT_WRITE_PTY, reinterpret_cast<const void *>(&foreignReply)));
+    checkGhostty(ghostty_terminal_set(terminal.handle(), GHOSTTY_TERMINAL_OPT_CLIPBOARD_WRITE, reinterpret_cast<const void *>(&foreignClipboard)));
+  }
 };
 }
 
@@ -29,7 +60,9 @@ extern "C" void query_probe_free(void *context) noexcept {
 
 extern "C" bool query_probe_feed(void *context, const Byte *bytes, std::size_t size) noexcept {
   try {
-    static_cast<Probe *>(context)->terminal.feed({bytes, size});
+    auto &probe = *static_cast<Probe *>(context);
+    const Probe::Active active{probe};
+    probe.terminal.feed({bytes, size});
     return true;
   } catch (...) {
     return false;
@@ -37,7 +70,9 @@ extern "C" bool query_probe_feed(void *context, const Byte *bytes, std::size_t s
 }
 
 extern "C" std::size_t query_probe_drain(void *context, Byte *destination, std::size_t capacity) noexcept {
-  auto &terminal = static_cast<Probe *>(context)->terminal;
+  auto &probe = *static_cast<Probe *>(context);
+  const Probe::Active active{probe};
+  auto &terminal = probe.terminal;
   std::size_t written = 0;
   while (!terminal.responses().empty()) {
     const auto bytes = terminal.responses();
@@ -57,18 +92,45 @@ extern "C" std::uint64_t query_probe_benchmark(const Byte *bytes, std::size_t si
   try {
     Probe probe{TerminalSize{80, 24, 9, 18}};
     std::array<Byte, 65536> output;
+    const Probe::Active active{probe};
+    std::uint64_t observed = 0;
     const auto started = std::chrono::steady_clock::now();
     for (std::size_t iteration = 0; iteration < iterations; ++iteration) {
       for (std::size_t offset = 0; offset < size;) {
         const auto count = std::min(fragment == 0 ? size : fragment, size - offset);
         probe.terminal.feed({bytes + offset, count});
         offset += count;
-        query_probe_drain(&probe, output.data(), output.size());
+        const auto written = query_probe_drain(&probe, output.data(), output.size());
+        if (written != 0) {
+          observed += output.front() + output[written - 1];
+        }
       }
     }
 
-    return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count();
+    const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count();
+    observed_terminal_output = observed;
+    return elapsed;
   } catch (...) {
     return 0;
   }
+}
+
+extern "C" bool query_probe_policy(void *context, std::uint32_t flags, const char *answerback, std::size_t length) noexcept {
+  auto &policy = static_cast<Probe *>(context)->terminal.controlPolicy();
+  if (length > policy.answerback.size()) {
+    return false;
+  }
+  policy.title_report = (flags & 1) != 0;
+  policy.checksum_report = (flags & 2) != 0;
+  policy.color_format = (flags & 4) != 0 ? control::ColorFormat::eight_bit : (flags & 8) != 0 ? control::ColorFormat::none : control::ColorFormat::sixteen_bit;
+  policy.clipboard_write = (flags & 16) != 0 ? control::Access::deny : control::Access::allow;
+  if (length != 0) {
+    std::copy_n(answerback, length, policy.answerback.begin());
+  }
+  policy.answerback_length = static_cast<std::uint16_t>(length);
+  return true;
+}
+
+extern "C" std::uint64_t query_probe_foreign_calls(void *context) noexcept {
+  return static_cast<Probe *>(context)->foreign_calls;
 }
