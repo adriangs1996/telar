@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../text/base64.hpp"
+#include "graphics_base64_block.hpp"
 
 namespace telar::runtime::control {
 
@@ -24,7 +25,13 @@ inline std::optional<std::size_t> decodeGraphicsPayload(std::string_view encoded
     }
     return true;
   };
-  for (const auto byte : encoded) {
+  std::size_t offset = 0;
+  while (encoded.size() - offset >= graphics_base64_block_input && output.size() - written >= graphics_base64_block_output && decodeGraphicsBlock(encoded.data() + offset, output.data() + written)) {
+    offset += graphics_base64_block_input;
+    written += graphics_base64_block_output;
+  }
+  for (std::size_t index = offset; index < encoded.size(); ++index) {
+    const auto byte = encoded[index];
     if (byte == ' ' || byte == '\t' || byte == '\r' || byte == '\n' || byte == '\f') {
       continue;
     }
