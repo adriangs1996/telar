@@ -44,3 +44,21 @@ The prebuilt VT archive, system libraries, Qt and platform clipboard implementat
 1. **Qt clipboard materialization precedes the transport bound.** An in-memory `QMimeData` test supplies 16 MiB; the provider rejects the result against its 1 MiB bound only after Qt materializes those 16 MiB. No real host clipboard is used. The existing public Qt/Cocoa whole-value getters do not provide a verified preallocation size/streaming contract for arbitrary MIME values. A separate resource probe tried 96 MiB `RLIMIT_AS` and `RLIMIT_DATA`; both returned EINVAL on this host and a 128 MiB touched allocation succeeded. This proves those two exact experiments failed, not that every possible isolation design is impossible. A bounded provider/isolation design remains required.
 2. **Legacy non-query graphics ACK saturation.** `MediaTerminal::reply`, the upload-limit reply and the external graphics callback still use the dropping queue API. Native queries bypass those handlers and are retained, but the shared transport contract is not complete. A resumable media/file-transfer/atomic-frame pipeline is required; blocking the single media worker would obstruct other panes and retirement.
 3. **Coverage and performance certification.** Desktop clipboard differential fixtures, full lifecycle/PTY saturation recovery and final allocation/copy/latency accounting remain incomplete. Existing paired measurements include material regressions against the actual Ghostty application handler. No security or performance waiver is inferred from the default clipboard policy.
+
+
+The follow-up process-limit experiment installs and verifies a valid AS limit,
+found by binary search against the actual initial map instead of assuming a
+96 MiB total process. `clipboard-mach-limits.json` records the source/binary,
+compiler, host/kernel, exact command and raw values. With 8 MiB headroom, malloc
+and mmap 32 MiB fail with ENOMEM, while a synthetic queued Mach OOL receive maps
+16 MiB and leaves VM above the installed limit. The physical-footprint setter
+for this disposable process returns KERN_NO_ACCESS(8). No privilege escalation
+was attempted. Earlier rendezvous versions timed out and are not evidence for
+OOL enforcement. No real clipboard or other session was contacted.
+
+This blocks accepting an RLIMIT-only Qt helper as a bounded-memory solution.
+It does not prove all alternative platform adapters impossible. A helper can
+still bound IPC, wall/CPU time and GUI responsiveness; its memory bound needs
+a different, verified mechanism. Native Wayland/X11 bounded reads and a macOS
+resource adapter remain possible engineering directions, not implemented
+protections. The existing Qt materialization issue remains an acceptance gate.
