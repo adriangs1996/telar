@@ -147,6 +147,7 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
   connect(this, &Application::windowGeometryChanged, this, &Application::refreshPeek);
   connect(this, &Application::windowGeometryChanged, this, &Application::runtimeLinkChanged);
   connect(this, &Application::machineChanged, this, &Application::runtimeLinkChanged);
+  connect(this, &Application::machineChanged, this, &Application::hostMetricsChanged);
   connect(&workspaces_, &QAbstractItemModel::rowsInserted, this, &Application::sidebarGeometryChanged);
   connect(&workspaces_, &QAbstractItemModel::rowsRemoved, this, &Application::sidebarGeometryChanged);
   connect(&workspaces_, &QAbstractItemModel::rowsMoved, this, &Application::sidebarGeometryChanged);

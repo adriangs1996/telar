@@ -5,6 +5,7 @@
 #include "gui_wait.hpp"
 #include "machines/machine_token.hpp"
 #include "machines/machines.hpp"
+#include "metrics_fixture.hpp"
 #include "qml_fixture.hpp"
 #include "qt/application.hpp"
 #include "qt/external_link_opener.hpp"
@@ -40,14 +41,14 @@
 #include <QVariantMap>
 #include <QtCore/qcontainerfwd.h>
 #include <QtCore/qnamespace.h>
-#include <QtCore/qtypes.h>
-#include <QtCore/qtmetamacros.h>
 #include <QtCore/qobjectdefs.h>
-#include <QtTest/QTest>
+#include <QtCore/qtmetamacros.h>
+#include <QtCore/qtypes.h>
 #include <QtTest/QSignalSpy>
+#include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
-#include <QtTest/qtestmouse.h>
 #include <QtTest/qtestkeyboard.h>
+#include <QtTest/qtestmouse.h>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -392,6 +393,54 @@ class MachineWindowTest : public QObject {
     QVERIFY(remote.presented());
     QVERIFY(!MachineWindow::client(application, Machines::local_slot).session.presented());
     QVERIFY(window.isVisible());
+  }
+
+  Q_SLOT static void metricProjectionFollowsSelectionLossAndReplacement() {
+    MachineFixture fixture;
+    QQuickWindow window;
+    constexpr QSize size{800, 600};
+    window.resize(size);
+    auto &application = fixture.application;
+    application.setWindow(window);
+    QVERIFY(fixture.start());
+    fixture.local_runtime->send(ClientLayoutSnapshot{});
+    fixture.remote_runtime->send(ClientLayoutSnapshot{});
+    QVERIFY(finishOpening(*fixture.local_runtime));
+    const QSignalSpy changed{&application, &Application::hostMetricsChanged};
+    constexpr std::uint8_t local_cpu = 11;
+    constexpr std::uint8_t remote_cpu = 92;
+    constexpr std::uint8_t replacement_cpu = 37;
+    constexpr std::uint64_t revision = 9;
+    const auto percent = [&] {
+      return application.hostMetrics().value(QStringLiteral("cpu")).toMap().value(QStringLiteral("percent")).toInt();
+    };
+    fixture.local_runtime->send(hostSample(revision, local_cpu));
+    QTRY_COMPARE_WITH_TIMEOUT(percent(), local_cpu, wait_ms);
+    const auto local_changes = changed.size();
+    const auto &remote = MachineWindow::client(application, fixture.remote.machine.slot);
+    fixture.remote_runtime->send(hostSample(revision, remote_cpu));
+    QTRY_COMPARE_WITH_TIMEOUT(remote.session.metrics().cpu_percent, remote_cpu, wait_ms);
+    QCOMPARE(changed.size(), local_changes);
+    MachineWindow::select(application, fixture.remote.machine);
+    QVERIFY(finishOpening(*fixture.remote_runtime));
+    QCOMPARE(percent(), remote_cpu);
+    QVERIFY(changed.size() > local_changes);
+    fixture.remote_socket_->disconnectFromServer();
+    QTRY_VERIFY_WITH_TIMEOUT(!remote.session.ready(), wait_ms);
+    QCOMPARE(percent(), remote_cpu);
+    fixture.remote_runtime.reset();
+    fixture.remote_socket_ = nullptr;
+    QTRY_VERIFY_WITH_TIMEOUT(fixture.remote_listener_.hasPendingConnections(), wait_ms);
+    fixture.remote_socket_.reset(fixture.remote_listener_.nextPendingConnection());
+    fixture.remote_runtime = std::make_unique<WireRuntime>(*fixture.remote_socket_);
+    const auto lost_changes = changed.size();
+    QTRY_VERIFY_WITH_TIMEOUT(remote.session.ready(), wait_ms);
+    QVERIFY(changed.size() > lost_changes);
+    QVERIFY(!application.hostMetrics().value(QStringLiteral("cpu")).toMap().value(QStringLiteral("available")).toBool());
+    fixture.remote_runtime->send(hostSample(1, replacement_cpu));
+    QTRY_COMPARE_WITH_TIMEOUT(percent(), replacement_cpu, wait_ms);
+    MachineWindow::select(application, MachineWindow::client(application, Machines::local_slot).key.machine);
+    QCOMPARE(percent(), local_cpu);
   }
 
   Q_SLOT static void machineSwitcherRoutesClicksAndFitsHiddenControls() {

@@ -139,6 +139,7 @@ void Application::connectMachine(MachineClient &client) {
       summarizeMachine(*source);
       if (key.machine.slot == machines_.active()) {
         emit stateChanged();
+        emit hostMetricsChanged();
       }
     }
   });

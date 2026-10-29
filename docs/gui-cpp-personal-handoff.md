@@ -258,7 +258,37 @@ Final lint and actual Neovim clangd on the model/controller/adapter test are
 clean. Read the report, archived verifier and manifest. Continue remaining
 handshake/build failures, full connection/navigation/task matrices, metrics,
 theme/density/Linux, native exit leaks and measured performance. No global gate
-is closed. The window-adapter checkpoint records 82 Cocoa/Metal scale-1
+is closed. The subsequent
+[retained metrics checkpoint](../services/gui-cpp/measurements/retained-metrics.md)
+keeps host samples, CPU history and proxy status during loss, then clears them
+at replacement adoption. It also notifies metric bindings on machine selection
+and active reconnect. Both pre-fix core/window regressions fail. Three affected
+groups pass Release and clean ASan/UBSan. Its optional owned framed proxy passes
+all requests and other messages unchanged, replacing only the first metric per
+connection with distinct Local/Remote revision-one values and withholding later
+metrics for deterministic visual history. Actual SSH loss/input isolation and
+restored actor identity still pass in the final corrected fixture. Keep the first
+three controlled runs' cleanup failure: the proxy moved the local endpoint and
+the collector missed its SSH master socket, which the verifier rejects as a
+missing control_stop receipt. An exact-ControlPath/PID audit terminates only
+those three owned orphans and records disappearance with unknown exit status.
+Final collection visits both owned socket directories and confirms master exit
+before deleting proxy endpoints. All final resources finish normally. Offline and
+recovered complete footers match. The dimmed Local footer initially differs in
+136 one-level pixels: QColor encodes 0.25 as 0.250003814697. Giving CommandDialog's
+black backdrop item opacity preserves original 0.25 and makes all three complete
+footers match 122,720 pixels each. All three terminal rectangles match 2,336,768
+pixels each, and the full picker matches 1,187,840. The offline whole window
+retains 15 card pixels; Local-picker/recovered full scenes retain 7,587/10,291
+header/sidebar pixels. Continue these actual-position differences and the older
+intentional-stop status gap. Current native Quick passes 88 entries without
+warnings, and window suites pass 28 assertions. Instrumented exit still leaks
+261,084 bytes/1,011 allocations; keep the initial 259,472-byte/1,002-allocation
+report too, without suppression. Final lint and actual Neovim clangd are clean.
+Read the report/manifest/verifier. Remaining handshake/build failures,
+navigation/task states, Linux/theme/density scenes, native exit leaks and measured
+comparative performance remain open. No global gate closes at this checkpoint.
+The window-adapter checkpoint records 82 Cocoa/Metal scale-1
 passes, before the transport/profile changes, after the
 owned-window focus/geometry barrier; twenty selected regressions pass.
 Native sanitizer assertions pass, but exit leak acceptance remains OPEN.

@@ -4,6 +4,20 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [retained metrics checkpoint](measurements/retained-metrics.md) keeps the
+sample, CPU history and proxy status through outage, clears them at adoption and
+notifies machine-selection/reconnect bindings. Both pre-fix regressions fail;
+three affected groups pass Release and clean ASan/UBSan. Controlled SystemMetrics
+over actual owned SSH give three exact 122,720-pixel footers, three exact
+2,336,768-pixel terminal regions and an exact 1,187,840-pixel picker. Modal item
+opacity preserves the original 0.25 and removes 136 dimmed-footer differences.
+Current native Quick passes 88 entries without warnings; window assertions pass
+28, while final exit leak detection fails (261,084 bytes/1,011 allocations).
+The complete offline scene retains 15 card pixels; other complete scenes retain
+header/sidebar differences. Intentional-stop status, other failure/navigation/
+task states, full platform/theme/density visuals, exit leaks and measured
+performance stay open.
+
 The [runtime-link checkpoint](measurements/runtime-link.md) adds the original
 bounded failure/headline state, capped exponential retry, healthy-session reset
 and centered workbench dim/status. Its 4,988 text/backoff and 5,536 geometry

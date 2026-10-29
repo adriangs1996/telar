@@ -69,7 +69,8 @@ Popup {
     }
 
     Overlay.modal: Rectangle {
-        color: Qt.rgba(0, 0, 0, root.pathMode || root.machineMode || root.peekMode ? 0 : root.dimmingAlpha)
+        color: "black"
+        opacity: root.pathMode || root.machineMode || root.peekMode ? 0 : root.dimmingAlpha
     }
 
     background: Loader {

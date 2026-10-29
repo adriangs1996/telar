@@ -162,6 +162,8 @@ public:
 
   void connected(std::uint64_t identity) {
     ready_ = true;
+    metrics_ = {};
+    proxy_ = {};
     transport_.send(RequestRuntimeState{.client_identity = identity, .interactive = true});
     transport_.send(ConfigureGraphics{false});
     configureCadence();
@@ -233,8 +235,6 @@ public:
     graphics_pauses_.reset();
     agents_.resetSource();
     workspaces_.resetSource();
-    metrics_ = {};
-    proxy_ = {};
     copy_mode_.reset();
     copy_search_request_ = 0;
     history_.suspend();

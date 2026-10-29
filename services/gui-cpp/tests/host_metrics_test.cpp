@@ -1,11 +1,13 @@
 #include "application/host_metrics.hpp"
 #include "application/session.hpp"
+#include "assertions.hpp"
 #include "core/cpu_history.hpp"
 #include "core/memory.hpp"
 #include "metrics_fixture.hpp"
 #include "presentation/bar_metrics.hpp"
 #include "session_fixture.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -65,12 +67,21 @@ void connectionReplacementAcceptsARevisionRestart() {
   SystemAllocator memory;
   telar::gui::test::Transport transport;
   Session session{memory, transport};
+  session.connected(1);
   constexpr std::uint64_t previous_revision = 9;
   require(telar::gui::test::deliver(session, hostSample(previous_revision, initial_cpu)) == Change::metrics, "Metrics must publish their own change category");
   require(telar::gui::test::deliver(session, hostSample(previous_revision, old_cpu)) == Change::none, "Duplicate wire messages must not invalidate the UI");
+  const ProxyStatus proxy{.active = true, .scope = ProxyScope::wildcard, .system_trusted = true};
+  require(telar::gui::test::deliver(session, proxy) == Change::model, "Proxy status must join the same runtime session");
   session.disconnected();
   CpuHistory::Samples buffer;
-  require(session.metrics().revision == 0 && session.hostMetrics().history().ordered(buffer).empty(), "A lost runtime must clear its metric replica and history");
+  require(session.metrics().revision == previous_revision && session.metrics().cpu_percent == initial_cpu && session.hostMetrics().history().ordered(buffer).size() == 1, "A lost runtime must retain its last metric sample and CPU history until replacement adoption");
+  require(session.proxyStatus().active && session.proxyStatus().scope == ProxyScope::wildcard && session.proxyStatus().system_trusted, "A lost runtime must retain proxy status while the old session stays visible");
+  session.disconnected();
+  require(session.metrics().revision == previous_revision, "Failed retries must not retire the last visible metric sample");
+  session.connected(2);
+  require(session.metrics().revision == 0 && session.hostMetrics().history().ordered(buffer).empty(), "Adopting the replacement runtime must clear the old metric replica and history");
+  require(!session.proxyStatus().active && session.proxyStatus().scope == ProxyScope::exact && !session.proxyStatus().system_trusted, "Adopting the replacement runtime must reset its proxy status");
   require(telar::gui::test::deliver(session, hostSample(1, initial_cpu)) == Change::metrics, "A replacement runtime may restart its revision counter");
 }
 

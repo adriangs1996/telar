@@ -42,6 +42,15 @@ native suite passes 88 entries without warnings; window assertions pass 27,
 but exit leaks remain (257,028 bytes/988 allocations). Complete visuals,
 connection policy and comparative performance remain open.
 
+[Retained machine metrics](measurements/retained-metrics.md) now survive link
+loss and reset at replacement adoption; window bindings follow machine selection
+and reconnect. A paired real SSH fixture supplies controlled metric messages,
+giving exact complete footers in all three measured states and exact following
+terminal/picker regions. Preserving the original modal float alpha also removes
+136 footer differences. Current window/native suites pass 28/88 entries, with
+window exit leaks still open (261,084 bytes/1,011 allocations). Full scenes and
+measured performance remain unaccepted.
+
 Native startup selects Metal on macOS and Vulkan on Linux, matching the original
 GUI's backends. Explicit Qt backend environment settings take precedence.
 The tab atlas still exposes OpenGL edge differences; that override has no
