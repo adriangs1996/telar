@@ -131,9 +131,24 @@ receives input after reconnect. Both complete resource cleanups exit zero. The
 native outage picker retains five differing pixels in 1,187,840 (two boundary
 and three single-channel hint pixels); no masking/alignment is used. Only the
 measurement harness changes; C++ binaries remain identical to the qualified
-peek checkpoint. Read the new report/manifest, then continue actual setup
-installation, runtime restart/permanent SSH failures, native open/stop/diff and
-full task/plan peek qualification, and all remaining PARITY.md gates. Complete
+peek checkpoint. The subsequent
+[native setup checkpoint](../services/gui-cpp/measurements/machine-setup.md)
+validates missing-build picker/real declined confirmation in both GUIs and an
+actual managed OpenSSH installation through the original development build's
+`--binary` path, with agents/config/logins explicitly skipped. The executable's
+SHA256 and 0755 mode match; repeat returns ready=true/changed=false. Both windows
+observe the profile's managed-program update, admit it without manual reload and
+execute input in its remote shell. Local/installed runtimes, GUIs, sshd and SSH
+masters all exit zero. The managed-terminal region matches 2,336,768 pixels; the
+missing-build picker retains three one-level green-channel hint differences in
+1,187,840. The first Qt fixture polls a retired setup pane for final output and
+its injected helper aborts; recovered read-only history proves n/exit-zero. The
+corrected live fixture checks that history plus unchanged profile/installation.
+Keep the failed run and recovery provenance. Affirmative GUI release downloads,
+agent/config/login setup, other platforms and complete visuals stay open. Read
+the new report/manifest, then continue the hint pixel differences, runtime
+restart/permanent SSH failures, native open/stop/diff, full task/plan peek,
+exit leaks/performance and all remaining PARITY.md gates. Complete
 theme/density/Linux visuals, native exit leaks and comparative performance stay
 open. No global gate is closed. The window-adapter checkpoint records 82 Cocoa/Metal scale-1
 passes, before the transport/profile changes, after the
