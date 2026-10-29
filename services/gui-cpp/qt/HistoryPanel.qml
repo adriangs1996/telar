@@ -18,6 +18,11 @@ Item {
     readonly property var regions: controller.historyGeometry
     property alias searchHost: historySearch.fieldHost
     property alias rowsView: results
+    property bool retiringRows: false
+
+    function restoreRows() {
+        root.retiringRows = false;
+    }
 
     function revealSelection() {
         if (root.actionable) {
@@ -188,7 +193,7 @@ Item {
             visible: width > 0
             clip: true
             spacing: 0
-            model: root.controller.history
+            model: root.retiringRows ? null : root.controller.history
             opacity: historySearch.rowsOpacity
             verticalLayoutDirection: ListView.BottomToTop
             currentIndex: root.browserState.selection
@@ -357,6 +362,16 @@ Item {
         y: root.regions.search.y
         width: root.regions.search.width
         height: root.regions.search.height
+    }
+
+    Connections {
+        target: root.controller.history
+        function onRowsAboutToBeRemoved() {
+            root.retiringRows = true;
+        }
+        function onRowsRemoved() {
+            Qt.callLater(root.restoreRows);
+        }
     }
 
     Connections {

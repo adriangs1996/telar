@@ -161,9 +161,24 @@ historyGeometryAndFocusSurviveInspection. The verifier caught it; keep the raw
 log and investigate its cause, without filtering/suppressing it or inferring it
 from a subsequent passing run. Keep the earlier three/five-pixel comparisons.
 Other translucent roles, themes/densities, native exit leaks and comparative
-performance remain open. Read the new report/manifest, then continue runtime
-restart/permanent SSH failures, native open/stop/diff, full task/plan peek,
-exit leaks/performance and all remaining PARITY.md gates. Complete
+performance remain open. The subsequent
+[history delegate retirement checkpoint](../services/gui-cpp/measurements/history-delegate-retirement.md)
+reproduces that warning with paused incubation and an actual ListView flick;
+an empty reply yields index-out-of-range 24/0 and fails the controlled test.
+HistoryPanel now disconnects before rows are removed and reconnects after Qt's
+structural notifications finish. Its original row structure is preserved; the
+intermediate loader/record-cache prototypes and failures are archived. Empty and
+uniquely filtered one-row replies, visible counts, finished incubations and
+wide/narrow inspection focus/geometry pass. Current native Quick has 88 passes
+and zero QML warnings. Clang-tidy and actual Neovim clangd are clean. Five native
+sanitizer entries pass without warnings, but exit leaks remain (554,436 bytes in
+2,808 allocations). The first sanitizer exit observation is interrupted by an
+external AeroSpace query timeout; do not claim its exit result. The accepted
+controller only admits the initial owned window and then observes process exit.
+The older configuredBindings timing failure remains unproven. Read the new
+report/manifest, then continue runtime restart/permanent SSH failures, native
+open/stop/diff, full task/plan peek, exit leaks/performance and all remaining
+PARITY.md gates. Complete
 theme/density/Linux visuals, native exit leaks and comparative performance stay
 open. No global gate is closed. The window-adapter checkpoint records 82 Cocoa/Metal scale-1
 passes, before the transport/profile changes, after the

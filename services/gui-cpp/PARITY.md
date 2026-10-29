@@ -94,6 +94,16 @@ exit leak detection fails (203,128 bytes/859 allocations). Full chrome visual
 qualification, alternate/peek navigation, setup installation, live recovery and
 all global acceptance gates remain open.
 
+The [history delegate retirement checkpoint](measurements/history-delegate-retirement.md)
+retires pending ListView delegates before result rows lose their indices, then
+reconnects after Qt finishes structural notifications. A controlled flick with
+paused incubation reproduces the original cancellation warning and fails before
+the change. Empty/one-row replies and inspection geometry pass afterward. The
+current native suite passes 88 entries without QML warnings. Five sanitizer
+assertions pass but exit leak detection fails (554,436 bytes/2,808 allocations);
+the interrupted first exit observation and all prototypes remain retained.
+Complete visual/performance and native exit-leak gates remain open.
+
 The [palette hint opacity checkpoint](measurements/palette-hint-opacity.md)
 preserves the original float32 transparency through Qt item opacity. It removes
 the three measured selected-hint pixels: complete shade Retina setup and

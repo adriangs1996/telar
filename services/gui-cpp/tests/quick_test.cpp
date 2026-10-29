@@ -47,6 +47,7 @@
 #include "ui/bundled_fonts.hpp"
 #include <QClipboard>
 #include <QCursor>
+#include <QDateTime>
 #include <QDebug>
 #include <QDir>
 #include <QFile>
@@ -60,7 +61,9 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQmlExpression>
+#include <QQmlIncubationController>
 #include <QQuickStyle>
+#include <QRegularExpression>
 #include <QScreen>
 #include <QSignalSpy>
 #include <QSizeF>
@@ -2919,6 +2922,14 @@ return {api_version=2, client={keybindings={
     QCOMPARE(client_->error(), QString{});
   }
 
+  Q_SLOT void historyEmptyReplyRetiresPendingDelegatesBeforeTheirRows() {
+    verifyHistoryDelegateRetirement(QStringLiteral("GUI_HISTORY_GEOMETRY_NO_MATCH"), 0);
+  }
+
+  Q_SLOT void historyFilteredReplyRetiresPendingDelegatesBeforeTheirRows() {
+    verifyHistoryDelegateRetirement(QStringLiteral("GUI_BROWSER_PAGE_DELEGATE_SINGLE_TARGET"), 1);
+  }
+
   Q_SLOT void historyGeometryAndFocusSurviveInspection() {
     const auto previous_size = window_->size();
     const auto restore = qScopeGuard([this, previous_size] {
@@ -3818,6 +3829,37 @@ return {api_version=2, client={keybindings={
     results,
     inspector,
   };
+
+  void verifyHistoryDelegateRetirement(const QString &query, int expected_rows) {
+    seedHistoryPages();
+    const std::array entries{telar::ImportHistoryEntry{.started_at_ms = QDateTime::currentMSecsSinceEpoch(), .command = "echo GUI_BROWSER_PAGE_DELEGATE_SINGLE_TARGET"}};
+    importHistory(entries, "gui-delegate-retirement");
+    auto *const previous_controller = engine_->incubationController();
+    QQmlIncubationController deferred;
+    const auto restore = qScopeGuard([&] {
+      engine_->setIncubationController(previous_controller);
+      client_->execute(Application::Action::cancel);
+    });
+    engine_->setIncubationController(&deferred);
+    client_->execute(Application::Action::history);
+    client_->searchHistory(QStringLiteral("GUI_BROWSER_PAGE"));
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() > 0, runtime_wait_ms);
+    auto *const results = window_->findChild<QQuickItem *>(QStringLiteral("historyResults"));
+    if (results == nullptr) {
+      QFAIL("Required history result view is missing");
+    }
+
+    QCOMPARE(qmlEngine(results), engine_.get());
+    QCOMPARE(engine_->incubationController(), &deferred);
+    QVERIFY(QMetaObject::invokeMethod(results, "flick", Qt::DirectConnection, qreal{0}, results->height()));
+    QTRY_VERIFY_WITH_TIMEOUT(deferred.incubatingObjectCount() > 0, runtime_wait_ms);
+    QTest::failOnWarning(QRegularExpression{QStringLiteral("DelegateModel::cancel:.*")});
+    client_->searchHistory(query);
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == expected_rows, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    QCOMPARE(results->property("count").toInt(), expected_rows);
+    QCOMPARE(deferred.incubatingObjectCount(), 0);
+  }
 
   void verifyHistoryCompositionEscape(HistoryView view) {
     const auto inspecting = view == HistoryView::inspector;
