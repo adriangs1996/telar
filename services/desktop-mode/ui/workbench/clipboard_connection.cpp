@@ -46,22 +46,23 @@ namespace workbench {
       send(telar::CompleteClipboardDesktop{.ticket = request.ticket, .prepared = true});
       return;
     }
-    auto operation = std::make_unique<DesktopClipboardOperation>(request, clipboard_epoch_);
+    const auto ticket = request.ticket;
+    const auto epoch = clipboard_epoch_;
+    auto operation = std::make_unique<DesktopClipboardOperation>(request, epoch);
     const bool prompt = operation->task.prompt;
     clipboard_operations_.emplace(nonce, std::move(operation));
     if (!prompt) {
-      completeClipboard(nonce, ClipboardConsent::once);
+      completeClipboard(ticket, epoch, ClipboardConsent::once);
       return;
     }
     const QPointer<RuntimeConnection> connection{this};
-    const auto epoch = clipboard_epoch_;
-    QTimer::singleShot(0, this, [connection, nonce, epoch] {
+    QTimer::singleShot(0, this, [connection, nonce, ticket, epoch] {
       try {
         if (!connection || connection->clipboard_epoch_ != epoch) {
           return;
         }
         const auto found = connection->clipboard_operations_.find(nonce);
-        if (found == connection->clipboard_operations_.end()) {
+        if (found == connection->clipboard_operations_.end() || found->second->task.ticket != ticket || found->second->prepared) {
           return;
         }
         const auto task = found->second->task;
@@ -80,9 +81,9 @@ namespace workbench {
           connection->send(telar::CompleteClipboardDesktop{.ticket = task.ticket, .status = telar::ClipboardDesktopStatus::unsupported, .prepared = true});
           return;
         }
-        DesktopClipboardOperation::Prompt prompt{new ClipboardConsentWindow(task, *connection, [connection, nonce](ClipboardConsent consent) {
+        DesktopClipboardOperation::Prompt prompt{new ClipboardConsentWindow(task, *connection, [connection, ticket, epoch](ClipboardConsent consent) {
           if (connection) {
-            connection->completeClipboard(nonce, consent);
+            connection->completeClipboard(ticket, epoch, consent);
           }
         })};
         if (!connection || connection->clipboard_epoch_ != epoch) {
@@ -94,20 +95,24 @@ namespace workbench {
         }
       } catch (const std::bad_alloc &) {
         if (connection && connection->clipboard_epoch_ == epoch) {
-          connection->completeClipboard(nonce, ClipboardConsent::deny);
+          connection->completeClipboard(ticket, epoch, ClipboardConsent::deny);
         }
       }
     });
-    QTimer::singleShot(30000, this, [connection, nonce] {
+    QTimer::singleShot(30000, this, [connection, ticket, epoch] {
       if (connection) {
-        connection->completeClipboard(nonce, ClipboardConsent::deny);
+        connection->completeClipboard(ticket, epoch, ClipboardConsent::deny);
       }
     });
   }
 
-  void RuntimeConnection::completeClipboard(std::uint64_t nonce, ClipboardConsent consent) {
+  void RuntimeConnection::completeClipboard(telar::ClipboardTicket ticket, std::uint64_t expected_epoch, ClipboardConsent consent) {
+    if (expected_epoch != clipboard_epoch_) {
+      return;
+    }
+    const auto nonce = ticket.nonce;
     const auto found = clipboard_operations_.find(nonce);
-    if (found == clipboard_operations_.end()) {
+    if (found == clipboard_operations_.end() || found->second->task.ticket != ticket) {
       return;
     }
     auto &operation = *found->second;
@@ -118,7 +123,6 @@ namespace workbench {
     if (operation.prepared && consent != ClipboardConsent::deny) {
       return;
     }
-    const auto ticket = operation.task.ticket;
     const bool remember = operation.task.rememberable && consent == ClipboardConsent::session;
     auto prompt = std::move(operation.prompt);
     const QPointer<RuntimeConnection> connection{this};
@@ -147,7 +151,11 @@ namespace workbench {
     }
   }
 
-  void RuntimeConnection::executeClipboardTask(const telar::ClipboardDesktopExecute &execution) {
+  void RuntimeConnection::executeClipboardTask(telar::ClipboardDesktopExecute execution, std::uint64_t expected_epoch) {
+    if (expected_epoch != clipboard_epoch_) {
+      return;
+    }
+
     const auto found = clipboard_operations_.find(execution.ticket.nonce);
     if (found == clipboard_operations_.end() || !found->second->prepared || found->second->task.ticket != execution.ticket) {
       return;

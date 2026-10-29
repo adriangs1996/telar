@@ -46,6 +46,8 @@ namespace workbench {
     const QString &error() const;
 
   private:
+    friend struct ClipboardConnectionTest;
+
     static constexpr qsizetype output_limit = telar::max_payload_size + telar::frame_prefix_size;
     QString path_;
     telar::WorkspaceLocation workspace_;
@@ -90,8 +92,8 @@ namespace workbench {
     void synchronizeAttachments();
     void sendDesktop(std::uint64_t pane);
     void clipboardRequest(const telar::ClipboardDesktopRequest &request);
-    void completeClipboard(std::uint64_t nonce, ClipboardConsent consent);
-    void executeClipboardTask(const telar::ClipboardDesktopExecute &execution);
+    void completeClipboard(telar::ClipboardTicket ticket, std::uint64_t epoch, ClipboardConsent consent);
+    void executeClipboardTask(telar::ClipboardDesktopExecute execution, std::uint64_t epoch);
     void cancelClipboardTask(const telar::CancelClipboardDesktop &cancellation);
     void cancelClipboard(std::uint64_t pane);
     void notify();

@@ -404,7 +404,7 @@ namespace workbench {
     }
     case telar::ServerTag::clipboard_desktop_execute: {
       const auto execution = telar::Codec::decode<telar::ClipboardDesktopExecute>(payload, storage);
-      QTimer::singleShot(0, this, [this, execution] { executeClipboardTask(execution); });
+      QTimer::singleShot(0, this, [this, execution, epoch = clipboard_epoch_] { executeClipboardTask(execution, epoch); });
       break;
     }
     case telar::ServerTag::clipboard_desktop_cancel: {
