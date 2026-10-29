@@ -31,6 +31,10 @@ public:
     state_.failWrite();
   }
 
+  void enableMediaBoundaries() noexcept { media_boundaries_ = true; }
+  bool awaitingMedia() const noexcept { return awaiting_media_; }
+  void mediaComplete() noexcept { awaiting_media_ = false; }
+
   void discard() noexcept {
     closed_ = true;
     responses_.release();
@@ -44,11 +48,16 @@ public:
     prepared_ = false;
     clipboard_before_reply_ = false;
     capability_offset_ = 0;
+    awaiting_media_ = false;
+    streamed_media_ = false;
   }
 
   std::size_t feed(std::span<const std::uint8_t> input) {
     if (closed_) {
       return input.size();
+    }
+    if (awaiting_media_) {
+      return 0;
     }
     const ReleaseProducer release{responses_};
     if (parser_.blocked()) {
@@ -63,8 +72,27 @@ public:
     return parser_.feed(input, *this);
   }
 
+  // Only a verified quiet atomic envelope may cross multiple graphics
+  // boundaries. Its fixed suffix has no queries; the caller bounds the group.
+  std::size_t feedAtomicMedia(std::span<const std::uint8_t> input) {
+    assert(media_boundaries_ && !blocked() && parser_.ground());
+    media_boundaries_ = false;
+    try {
+      const auto consumed = feed(input);
+      media_boundaries_ = true;
+      if (consumed != input.size()) {
+        throw std::logic_error{"Atomic graphics envelope was interrupted"};
+      }
+      awaiting_media_ = true;
+      return consumed;
+    } catch (...) {
+      media_boundaries_ = true;
+      throw;
+    }
+  }
+
   bool blocked() const noexcept {
-    return parser_.blocked() || reports_.pending() || clipboard_.hasReply();
+    return awaiting_media_ || parser_.blocked() || reports_.pending() || clipboard_.hasReply();
   }
 
   bool ground() const noexcept {
@@ -83,8 +111,20 @@ public:
     }
   }
 
-  bool streamable(Sequence sequence) const noexcept {
-    return control::streamable(sequence);
+  bool streamable(Sequence sequence) noexcept {
+    const bool stream = control::streamable(sequence);
+    if (stream && media_boundaries_ && sequence.kind == Kind::apc && sequence.body().starts_with('G')) {
+      streamed_media_ = true;
+    }
+    return stream;
+  }
+
+  bool streamComplete() noexcept {
+    if (std::exchange(streamed_media_, false)) {
+      awaiting_media_ = true;
+      return false;
+    }
+    return true;
   }
 
   bool enquire() {
@@ -98,6 +138,9 @@ public:
   // The first attempt snapshots state and applies mutations once. Retrying a
   // full queue only publishes that owned reply; it never re-executes setters.
   bool complete(Sequence sequence) {
+    if (awaiting_media_) {
+      return false;
+    }
     if (sequence.kind == Kind::osc) {
       const auto operation = oscOperation(sequence.body().substr(0, sequence.body().find(';')));
       if (operation == 4 || operation == 5) {
@@ -125,6 +168,10 @@ public:
       }
       clipboard_before_reply_ = clipboard_.hasReply();
       prepared_ = true;
+      if (media_boundaries_ && sequence.kind == Kind::apc && sequence.body().starts_with('G')) {
+        awaiting_media_ = true;
+        return false;
+      }
     }
 
     if (enabled_ && clipboard_before_reply_ && clipboard_.hasReply() && !clipboard_.publish(responses_)) {
@@ -168,7 +215,7 @@ public:
   }
 
   void publishReports() {
-    if (closed_) {
+    if (closed_ || awaiting_media_) {
       return;
     }
     const ReleaseProducer release{responses_};
@@ -702,6 +749,9 @@ private:
   PtyResponseQueue::Producer responses_;
   bool enabled_;
   bool closed_ = false;
+  bool media_boundaries_ = false;
+  bool awaiting_media_ = false;
+  bool streamed_media_ = false;
   bool prepared_ = false;
   bool clipboard_before_reply_ = false;
   std::array<bool, desktop_modes.size()> saved_desktop_modes_{};

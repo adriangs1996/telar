@@ -79,7 +79,7 @@ separate case results. A row marked pending blocks acceptance.
 | clipboard-osc | `OSC 52;selection;? BEL/ST` | Read defaults to ask; policy deny is silent, explicit user denial replies empty. Reads use standard desktop clipboard while echoing selection c/s/p (unknown kinds fall back to c); writes honor location. Strict alphabet accepts absent padding; no authorized client means no disclosure | handler:1045; Surface:1099,6400 | pending |
 | clipboard-kitty-read | `OSC 5522;type=read[:metadata][;base64 MIME list] BEL/ST` | Permission denial EPERM, unsupported resource ENOSYS, failure EIO. Success OK, optional targets DATA, requested MIME DATA chunks, DONE. Targets-only does not consume one-time grants. IDs sanitized and bounded; strict UTF-8/base64 metadata/payload | handler:1076–1227; Surface:6447; clipboard_response.zig | pending |
 | clipboard-kitty-write | OSC5522 write/wdata/walias/commit transactions | Related control acknowledgements: denied begin EPERM, invalid EINVAL, oversize EFBIG; commit permission/desktop failure. MIME aliases, replacement, cancellation, reset, session/one-time grants. Distinct from query read but affects permission/report state | handler:1230–1477; clipboard_write.zig | pending |
-| graphics-query | `APC G a=q,…;payload ST`, quiet/id/format/medium variants | Own recognition/validation/response. File/shared medium checks and payload processing remain existing non-query graphics machinery through a narrow adapter; no duplicate interactive/media replies | handler:512; terminal/kitty/graphics.zig and exec.zig | pending |
+| graphics-query | `APC G a=q,…;payload ST`, quiet/id/format/medium variants | Own recognition, validation and response; generic file/shared readers and PNG/zlib codecs only, no external query handler and no duplicate interactive/media replies | handler:512; terminal/kitty/graphics.zig and exec.zig | pending |
 | glyph-support | `APC 25a1;s ST` | `APC 25a1;s;fmt=glyf ST` in Ghostty. Telar may not claim rendering formats that clients cannot consume | handler:531; glyph/execute.zig:14,40; response:153 | pending |
 | glyph-coverage | `APC 25a1;q;cp=HEX ST` | Actual session glossary coverage (system coverage is not populated by application stream handler); normalized lower hex in reply; register/clear affects result | glyph/execute.zig:48; response:184 | pending |
 
@@ -251,9 +251,9 @@ the state-bridge port (process-local `ulimit -n 8192`). Later edits still requir
 their appropriate final checks.
 
 Acceptance is blocked by actual unresolved work: Qt can materialize clipboard
-contents before their 1 MiB transport bound is checked; separate graphics ACKs
-can follow a native query which appeared later in the stream; aggregate graphics
-resource CPU bounds, allocation/copy accounting and complete lifecycle
+contents before their 1 MiB transport bound is checked; PNG tail acceptance
+differs in newly added cases; worst-case graphics work measurements,
+allocation/copy accounting and complete lifecycle
 adversarial coverage remain open. The default clipboard policy is not weakened
 to hide these issues.
 
@@ -293,7 +293,7 @@ The six focused Release and ASan/UBSan targets and Qt offscreen test pass;
 settles one asynchronous operation before another starts. Real transport,
 generation cancellation and concurrency are separate native tests, not
 represented by these response comparisons. Actual Surface user-paste events,
-Qt materialization bounds, cross-producer ACK order, final PTY/allocation
+Qt materialization bounds, PNG tail semantics, final PTY/allocation
 measurements and the remaining performance regressions are still open.
 
 The bounded ACK outbox now retains non-query graphics responses without replay,
@@ -312,3 +312,22 @@ PTY comparison. Individual/fragmented query regressions remain visible.
 `performance-response-outbox-vs-17.json` and
 `performance-response-outbox-vs-ghostty.json` retain component comparisons:
 the safety change has costs and the actual application performance gate fails.
+
+`candidate-19-freeze.json` adds a sequence boundary between native control and
+the media worker. Tests now preserve both `image → DSR` and `DSR → image` reply
+orders, across every two-fragment split and seven actual PTY pairs. Quiet queries
+also yield. Verified complete atomic envelopes remain grouped, capped at eight
+and 128 MiB declared pixels, preserving direct import and coalescing within each
+group. This bounds admitted operations rather than promising a hard I/O timeout.
+`media-boundary-validation.json` records ownership, resize overflow handling,
+shared-reader and PNG cleanup checks, current differential suites, x86 objects
+and Rosetta limits. New PNG comparisons expose 12 missing-tail differences;
+the accepted-pixel completion rule still needs implementation.
+
+`performance-media-boundary-pty.json` retains all raw samples and intervals.
+All seven runs preserve both reply orders and all 5,000 saturation responses;
+the original daemon inverts image-first ordering and retains 319 responses.
+Single-query comparisons are noisy/inconclusive; 32-response round trips win
+7/7 with a median paired ratio of 0.251159 against original Telar. This does
+not replace the separate actual-application component comparison, which still
+fails multiple workloads. There is no final task acceptance.

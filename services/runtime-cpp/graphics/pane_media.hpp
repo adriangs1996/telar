@@ -29,6 +29,8 @@ public:
     terminal_.emplace(memory_, size, limits, responses_);
   }
 
+  void requireOrderedInput() noexcept { ordered_input_ = true; }
+
   void output(std::span<const Byte> bytes) noexcept {
     if (cancelled_) {
       return;
@@ -36,6 +38,11 @@ public:
     const bool kitty = framing_.touches(bytes);
     auto &batch = batches_[active_];
     if (!batch.append(bytes)) {
+      if (ordered_input_) {
+        ingress_failed_ = true;
+        responses_->stopProducing();
+        return;
+      }
       dropActive(bytes.size());
       batch.append(bytes);
     }
@@ -50,6 +57,11 @@ public:
     current_size_ = size;
     auto &batch = batches_[active_];
     if (!batch.resize(size)) {
+      if (ordered_input_) {
+        ingress_failed_ = true;
+        responses_->stopProducing();
+        return;
+      }
       dropActive(0);
       batch.resize(size);
     }
@@ -57,7 +69,7 @@ public:
   }
 
   bool holdsRead(std::size_t bytes) const noexcept {
-    return pending_responses_ || (busy_ && !batches_[active_].hasReadCapacity(bytes) && (batches_[active_].kitty || batches_[sealed_].kitty || framing_.inside()));
+    return pending_responses_ || (!batches_[active_].hasReadCapacity(bytes) && (ordered_input_ || (busy_ && (batches_[active_].kitty || batches_[sealed_].kitty || framing_.inside()))));
   }
 
   bool seal() noexcept {
@@ -181,7 +193,7 @@ public:
     }
   }
 
-  bool failed() const noexcept { return failed_; }
+  bool failed() const noexcept { return failed_ || ingress_failed_; }
 
 #if TELAR_DIAGNOSTICS
   diagnostics::GraphicsStorageSnapshot storageMetrics() {
@@ -309,6 +321,8 @@ private:
   diagnostics::MediaQueue queue_metrics_;
 #endif
   bool busy_ = false;
+  bool ordered_input_ = false;
+  bool ingress_failed_ = false;
   bool drain_only_ = false;
   bool pending_responses_ = false;
   bool failed_ = false;

@@ -106,6 +106,16 @@ def main():
                                'p99_ns': percentile(samples, .99)} for name, samples in values.items()}
         summary[case].update({'pair_median_ratios': ratios, 'median_ratio': statistics.median(ratios),
                               'native_wins': sum(ratio < 1 for ratio in ratios)})
+        if len(ratios) >= 7:
+            logs = [math.log(ratio) for ratio in ratios]
+            center = statistics.mean(logs)
+            half = 2.447 * statistics.stdev(logs) / math.sqrt(len(logs))
+            interval = [math.exp(center - half), math.exp(center + half)]
+            summary[case]['ratio_95pct_t_interval'] = interval
+            summary[case]['status'] = ('regression' if interval[0] > 1.05 else
+                                      'improvement' if interval[1] < .95 else
+                                      'equivalent_within_5_percent' if interval[0] >= .95 and interval[1] <= 1.05 else
+                                      'inconclusive')
     report = {'started_at': started, 'finished_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
               'platform': platform.platform(), 'architecture': platform.machine(), 'pairs': pairs, 'summary': summary,
               'hashes': {str(path.resolve()): hashlib.sha256(path.read_bytes()).hexdigest()

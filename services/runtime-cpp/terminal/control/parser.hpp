@@ -113,6 +113,9 @@ public:
             clear();
             phase_ = Phase::ground;
             ++cancelled_;
+            if (!finishStream(consumer)) {
+              return consumed;
+            }
             continue;
           }
 
@@ -125,6 +128,9 @@ public:
             phase_ = after_ready_;
             if (phase_ == Phase::escape) {
               append(escape);
+            }
+            if (!finishStream(consumer)) {
+              return consumed;
             }
           } else if (phase_ == Phase::discard_string) {
             clear();
@@ -147,7 +153,8 @@ public:
             ++consumed;
             continue;
           }
-          if (phase_ == Phase::streaming) {
+          const bool streamed = phase_ == Phase::streaming;
+          if (streamed) {
             consumer.ordinary(asBytes("\x18"));
           }
           clear();
@@ -158,6 +165,9 @@ public:
             phase_ = Phase::ground;
           }
           ++consumed;
+          if (streamed && !finishStream(consumer)) {
+            return consumed;
+          }
           continue;
         }
 
@@ -332,6 +342,14 @@ private:
   static constexpr std::uint8_t c1_last = 0x9f;
   static constexpr std::uint8_t c1_st = 0x9c;
   static constexpr std::uint8_t c1_decid = 0x9a;
+
+  template <typename Consumer>
+  static bool finishStream(Consumer &consumer) {
+    if constexpr (requires { consumer.streamComplete(); }) {
+      return consumer.streamComplete();
+    }
+    return true;
+  }
 
   template <typename Consumer>
   static void beforeEscape(Consumer &consumer) {

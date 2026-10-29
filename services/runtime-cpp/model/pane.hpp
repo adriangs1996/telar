@@ -43,6 +43,7 @@ public:
     const auto executable = std::string_view{command.arguments().front()};
     foreground.assign(utf8Prefix(executable.substr(executable.rfind('/') + 1), 48));
     process.emplace(command.specification(settings.size));
+    terminal.attachMedia(*media);
   }
 
   bool read(ReadMode mode = ReadMode::once) {
@@ -65,7 +66,6 @@ public:
         const auto foreground = needs_foreground_observation ? shellForeground() : std::nullopt;
         expireProgress(foreground);
         observer->bytes(ObservationKind::output, bytes, foreground);
-        media->output(bytes);
         {
           TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{counters == nullptr ? nullptr : &counters->ingest});
           terminal.feed(bytes);

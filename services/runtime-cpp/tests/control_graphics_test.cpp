@@ -3,6 +3,8 @@
 #include "graphics/shared_image_storage.hpp"
 #include "graphics/media_processor.hpp"
 #include "platform/observation_worker.hpp"
+#include "runtime/media_service.hpp"
+#include "runtime/limit_service.hpp"
 #include "check.hpp"
 #include <filesystem>
 #include <fstream>
@@ -370,6 +372,223 @@ void cancelBusyMedia() {
   media->output(bytes(command));
   check(!media->seal() && media->idle());
 }
+
+void orderedMediaBoundaries() {
+  constexpr std::string_view first = "\x1b_Ga=t,f=24,s=1,v=1,i=7;/wAA\x1b\\";
+  constexpr std::string_view second = "\x1b_Ga=t,f=24,s=1,v=1,i=8;AP8A\x1b\\";
+  const std::string input = std::string{"\x1b[5n"} + std::string{first} + "\x1b[5n" + std::string{second} + "\x1b[5n";
+  const std::string expected = "\x1b[0n\x1b_Gi=7;OK\x1b\\\x1b[0n\x1b_Gi=8;OK\x1b\\\x1b[0n";
+  for (std::size_t split = 0; split <= input.size(); ++split) {
+    SystemAllocator system;
+    BudgetAllocator memory{system, 64 * 1024 * 1024};
+    MediaBudget budget{GraphicsLimits::maximum_global_bytes};
+    auto queue = std::make_shared<PtyResponseQueue>();
+    PaneMedia media{memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue};
+    Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, queue};
+    terminal.attachMedia(media);
+    terminal.feed(bytes(input).first(split));
+    terminal.feed(bytes(input).subspan(split));
+    std::string actual;
+    std::size_t jobs = 0;
+    for (unsigned attempt = 0; terminal.hasPendingControl() || !media.idle() || !queue->empty(); ++attempt) {
+      check(attempt < 100);
+      if (media.seal()) {
+        media.process();
+        media.complete();
+        ++jobs;
+      }
+      terminal.resumeControl();
+      if (const auto response = queue->readable(); !response.empty()) {
+        const auto count = std::min<std::size_t>(3, response.size());
+        actual.append(reinterpret_cast<const char *>(response.data()), count);
+        terminal.consumeResponses(count);
+      }
+    }
+    check(actual == expected && jobs >= 2 && queue->snapshot().dropped == 0);
+  }
+
+  SystemAllocator system;
+  BudgetAllocator memory{system, 64 * 1024 * 1024};
+  MediaBudget budget{GraphicsLimits::maximum_global_bytes};
+  auto queue = std::make_shared<PtyResponseQueue>();
+  PaneMedia media{memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue};
+  Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, queue};
+  terminal.attachMedia(media);
+  std::string quiet;
+  constexpr unsigned commands = 32;
+  for (unsigned index = 0; index < commands; ++index) {
+    quiet += "\x1b_Ga=q,q=2,i=9,s=1,v=1;AAAAAA==\x1b\\";
+  }
+  terminal.feed(bytes(quiet));
+  unsigned jobs = 0;
+  while (terminal.hasPendingControl() || !media.idle()) {
+    check(media.seal());
+    media.process();
+    media.complete();
+    ++jobs;
+    terminal.resumeControl();
+    check(queue->empty());
+  }
+  check(jobs >= commands && jobs <= commands + 1);
+}
+
+void orderedResizeFailure() {
+  for (bool start_worker : {false, true}) {
+    SystemAllocator memory;
+    RuntimeModel model{memory};
+    Kqueue poller;
+    PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/control-resize-failure.sock"}};
+    LimitService limits{model};
+    MediaService service{model, panes, poller, limits};
+    const std::array<std::string_view, 1> arguments{"/bin/cat"};
+    const Launch launch{.cwd = "/tmp", .arguments = arguments};
+    const TabLocation location{.workspace = {.id = 7}, .tab_id = 1};
+    auto &failed = panes.launch(launch, location, {80, 24, 9, 18});
+    auto &healthy = panes.launch(launch, location, {80, 24, 9, 18});
+    failed.media->resize({80, 25, 9, 18});
+    for (unsigned index = 0; index < MediaBatch::event_capacity / 2; ++index) {
+      failed.media->output(bytes("x"));
+      if (index + 1 < MediaBatch::event_capacity / 2) {
+        failed.media->resize({80, 25, 9, 18});
+      }
+    }
+    failed.resize({80, 26, 9, 18});
+    check(failed.media->failed() && failed.pty_responses->closed() && !failed.output_closed);
+    if (start_worker) {
+      service.start();
+    } else {
+      panes.flushInput(failed);
+    }
+    check(failed.output_closed && failed.close_requested && !failed.terminal.hasPendingControl());
+    healthy.terminal.feed(bytes("\x1b[5n"));
+    check(!healthy.output_closed && healthy.terminal.responses().size() == 4);
+    service.finish();
+    const auto failed_id = failed.id;
+    const auto healthy_id = healthy.id;
+    panes.remove(failed_id);
+    panes.remove(healthy_id);
+  }
+}
+
+void retainedAtomicFrames() {
+  std::array<char, 64> directory;
+  std::strcpy(directory.data(), "/tmp/telar-control-atomic-boundary-XXXXXX");
+  check(::mkdtemp(directory.data()) != nullptr);
+  const std::filesystem::path root{directory.data()};
+  const auto path = (root / "pixels").string();
+  {
+    std::ofstream file{path, std::ios::binary};
+    file.write("\xff\0\0\xff", 4);
+    check(file.good());
+  }
+  const auto name = encoded(bytes(path));
+  const auto frame = std::string{AtomicFrame::cursor_save} + std::string{AtomicFrame::prefix} + "a=T,t=f,f=32,s=1,v=1,i=7,p=1,C=1,q=2;" + name + std::string{AtomicFrame::suffix} + std::string{AtomicFrame::cursor_restore};
+  SystemAllocator system;
+  BudgetAllocator memory{system, 64 * 1024 * 1024};
+  MediaBudget budget{GraphicsLimits::maximum_global_bytes};
+  auto queue = std::make_shared<PtyResponseQueue>();
+  PaneMedia media{memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue};
+  Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, queue};
+  terminal.attachMedia(media);
+  std::string input;
+  for (unsigned index = 0; index < 9; ++index) {
+    input += frame;
+  }
+  input += "\x1b[5n";
+  terminal.feed(bytes(input));
+  check(queue->empty() && terminal.hasPendingControl());
+  check(media.seal() && !media.process());
+#if TELAR_DIAGNOSTICS
+  check(media.batchMetrics().direct_frames == 1 && media.batchMetrics().discarded_frames == 7);
+#endif
+  media.complete();
+  check(media.terminal()->graphics.images().size() == 1);
+  const auto first = media.terminal()->imageKey(7);
+  terminal.resumeControl();
+  check(queue->empty() && media.seal() && !media.process());
+#if TELAR_DIAGNOSTICS
+  check(media.batchMetrics().direct_frames == 1 && media.batchMetrics().discarded_frames == 0);
+#endif
+  media.complete();
+  const auto second = media.terminal()->imageKey(7);
+  check(first.generation != second.generation);
+  terminal.resumeControl();
+  check(terminal.responses().size() == 4 && !terminal.hasPendingControl());
+  std::filesystem::remove_all(root);
+}
+
+void checkedAtomicSharedMemory() {
+  constexpr std::size_t size = 4096;
+  auto storage = SharedImageStorage::create(size);
+  check(storage.has_value());
+  std::ranges::fill(storage->mapping().bytes(), 23);
+  const auto name = storage->takeName();
+  FileDescriptor writer{::shm_open(name.data(), O_RDWR, 0)};
+  check(static_cast<bool>(writer));
+  const auto payload = encoded(bytes(name.data()));
+  const auto pixels = GraphicsFramePixels::open({payload, size, size, GraphicsInputMedium::shared_memory});
+  check(pixels.has_value());
+  std::array<Byte, size> output;
+  check(pixels->copyTo(output) && output.front() == 23 && output.back() == 23);
+  const auto truncated = ::ftruncate(writer.get(), 0);
+#if defined(__APPLE__)
+  // Darwin may reject resizing an already-sized POSIX SHM object.
+  check(truncated == 0 || errno == EINVAL);
+#else
+  check(truncated == 0);
+#endif
+  if (truncated == 0) {
+    check(!pixels->copyTo(output));
+  }
+  FileDescriptor reopened{::shm_open(name.data(), O_RDONLY, 0)};
+  check(!reopened && errno == ENOENT);
+
+  std::array<char, 64> path;
+  std::strcpy(path.data(), "/tmp/telar-control-copy-XXXXXX");
+  FileDescriptor backing{::mkstemp(path.data())};
+  check(static_cast<bool>(backing) && ::unlink(path.data()) == 0);
+  output.fill(41);
+  check(::write(backing.get(), output.data(), output.size()) == static_cast<ssize_t>(output.size()));
+  check(GraphicsChildSharedMemory::read(backing.get(), output, 0) && output.front() == 41);
+  check(::ftruncate(backing.get(), 0) == 0);
+  check(!GraphicsChildSharedMemory::read(backing.get(), output, 0));
+}
+
+void pngFailureCleanup() {
+  // Independent 1x1 RGBA red PNG fixture: Python zlib plus PNG CRC32 chunks.
+  constexpr std::array<Byte, 70> png{
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d, 0x49, 0x48, 0x44, 0x52,
+      0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 0x1f, 0x15, 0xc4, 0x89, 0, 0, 0, 0x0d,
+      0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0xf0, 0x1f, 0, 5, 0, 1, 0xff,
+      0x89, 0x99, 0x3d, 0x1d, 0, 0, 0, 0, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+  };
+  SystemAllocator system;
+  BudgetAllocator memory{system, 64 * 1024 * 1024};
+  GhosttyAllocatorBridge allocator{memory};
+  for (std::size_t length = 0; length <= png.size(); ++length) {
+    GhosttySysImage image{};
+    const bool decoded = decodePngImage(allocator.get(), std::span{png}.first(length), image);
+    check(decoded == (length == png.size()));
+    if (decoded) {
+      const std::array<Byte, 4> expected{255, 0, 0, 255};
+      check(image.width == 1 && image.height == 1 && image.data_len == expected.size());
+      check(std::equal(expected.begin(), expected.end(), image.data));
+      ghostty_free(allocator.get(), image.data, image.data_len);
+    }
+    check(memory.liveBytes() == 0);
+  }
+  for (std::size_t position = 0; position < png.size(); ++position) {
+    auto mutated = png;
+    mutated[position] ^= 0x80;
+    GhosttySysImage image{};
+    if (decodePngImage(allocator.get(), mutated, image)) {
+      ghostty_free(allocator.get(), image.data, image.data_len);
+    }
+    check(memory.liveBytes() == 0);
+  }
+  GhosttySysImage image{};
+  check(!decodePngImage(allocator.get(), png, image, 2) && memory.liveBytes() == 0);
+}
 }
 
 int main() {
@@ -385,6 +604,11 @@ int main() {
   mediaAllocationFailure();
   interactiveAllocationFailure();
   cancelBusyMedia();
+  orderedMediaBoundaries();
+  orderedResizeFailure();
+  retainedAtomicFrames();
+  checkedAtomicSharedMemory();
+  pngFailureCleanup();
   check(memory.liveBytes() == 0);
   std::puts("Native graphics query file, shared memory and budget tests passed");
 }

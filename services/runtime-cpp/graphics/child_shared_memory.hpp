@@ -19,7 +19,11 @@ class GraphicsChildSharedMemory {
 public:
   static FileDescriptor open(std::string_view encoded_name, std::span<std::uint8_t> name) noexcept {
     const auto *decoded = decodeGraphicsName(encoded_name, name);
-    return FileDescriptor{decoded == nullptr ? -1 : ::shm_open(decoded, O_RDONLY, 0)};
+    FileDescriptor descriptor{decoded == nullptr ? -1 : ::shm_open(decoded, O_RDONLY, 0)};
+    if (descriptor && ::fcntl(descriptor.get(), F_SETFD, FD_CLOEXEC) != 0) {
+      return FileDescriptor{};
+    }
+    return descriptor;
   }
 
   static FileDescriptor openDecoded(std::span<const std::uint8_t> decoded_name, std::span<std::uint8_t> name) noexcept {

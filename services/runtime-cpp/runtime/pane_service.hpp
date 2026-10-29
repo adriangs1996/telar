@@ -218,7 +218,12 @@ public:
     if (pane.output_closed) {
       return;
     }
+    if (pane.media->failed()) {
+      failOutput(pane);
+      return;
+    }
     try {
+      pane.terminal.resumeControl();
       pane.write();
       const bool needs_write = pane.hasInput();
       if (needs_write != pane.write_interest) {

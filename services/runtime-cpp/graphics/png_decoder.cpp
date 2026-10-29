@@ -60,9 +60,8 @@ void failPng(png_structp decoder, png_const_charp) {
 
 void warnPng(png_structp, png_const_charp) {}
 
-bool decodePng(void *context, const GhosttyAllocator *allocator, const Byte *bytes, std::size_t length, GhosttySysImage *image) {
-  const auto limit = context == nullptr ? graphics_screen_bytes : *static_cast<const std::size_t *>(context);
-  PngInput input{allocator, bytes, length, limit};
+bool readPngImage(PngInput &input, GhosttySysImage *image) {
+  const auto *allocator = input.allocator;
   png_structp decoder = png_create_read_struct_2(PNG_LIBPNG_VER_STRING, nullptr, failPng, warnPng, &input, allocatePng, freePng);
   if (decoder == nullptr) {
     return false;
@@ -137,6 +136,14 @@ bool decodePng(void *context, const GhosttyAllocator *allocator, const Byte *byt
                            .data = pixels,
                            .data_len = pixel_bytes};
   return true;
+}
+
+bool decodePng(void *context, const GhosttyAllocator *allocator, const Byte *bytes, std::size_t length, GhosttySysImage *image) {
+  const auto limit = context == nullptr ? graphics_screen_bytes : *static_cast<const std::size_t *>(context);
+  // Keep the mutable cursor outside the function containing setjmp. Its
+  // allocator remains defined when an error jumps back and destroys libpng.
+  PngInput input{allocator, bytes, length, limit};
+  return readPngImage(input, image);
 }
 
 }

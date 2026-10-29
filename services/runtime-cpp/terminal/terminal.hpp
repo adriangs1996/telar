@@ -4,6 +4,7 @@
 #include "../diagnostics/trace.hpp"
 
 #include "../graphics/storage.hpp"
+#include "../graphics/pane_media.hpp"
 #include "cell_projection.hpp"
 #include "effects.hpp"
 #include "ghostty_allocator.hpp"
@@ -96,7 +97,7 @@ public:
     if (hasPendingControl()) {
       pending_control_input_.append(bytes);
     } else {
-      const auto consumed = control_.feed(bytes);
+      const auto consumed = feedControl(bytes);
       if (consumed < bytes.size()) {
         pending_control_input_.append(bytes.subspan(consumed));
       }
@@ -109,15 +110,30 @@ public:
     if (!pending) {
       return;
     }
+    if (control_.awaitingMedia()) {
+      if (media_ == nullptr || !media_->idle()) {
+        return;
+      }
+      control_.mediaComplete();
+    }
     if (!response_outbox_.drain()) {
       return;
     }
-    const auto consumed = control_.feed(pending_control_input_.readable());
+    const auto consumed = feedControl(pending_control_input_.readable());
     pending_control_input_.consume(consumed);
     if (pending) {
       ++content_revision_;
       finishControlInput();
     }
+  }
+
+  // Pane owns both objects and destroys Terminal before PaneMedia. Only the
+  // runtime touches this borrowed ingress port; workers own sealed batches.
+  void attachMedia(PaneMedia<Memory> &media) noexcept {
+    assert(purpose_ == TerminalPurpose::separate_media && media_ == nullptr);
+    media_ = &media;
+    media.requireOrderedInput();
+    control_.enableMediaBoundaries();
   }
 
   bool hasPendingControl() const noexcept {
@@ -283,6 +299,7 @@ public:
   }
 
   void abortControl() noexcept {
+    media_ = nullptr;
     control_.discard();
     response_outbox_.discard();
     pending_control_input_.clear();
@@ -318,6 +335,36 @@ public:
   GraphicsStorage<Memory> graphics;
 
 private:
+  std::size_t feedControl(std::span<const Byte> bytes) {
+    const auto atomic = media_ != nullptr && control_.ground() && !control_.blocked() ? atomicMediaPrefix(bytes) : 0;
+    const auto consumed = atomic != 0 ? control_.feedAtomicMedia(bytes.first(atomic)) : control_.feed(bytes);
+    if (media_ != nullptr && consumed != 0) {
+      media_->output(bytes.first(consumed));
+      if (media_->failed()) {
+        throw TerminalError{GHOSTTY_OUT_OF_MEMORY};
+      }
+    }
+    return consumed;
+  }
+
+  static std::size_t atomicMediaPrefix(std::span<const Byte> bytes) noexcept {
+    constexpr unsigned maximum_frames = 8;
+    constexpr std::size_t maximum_pixels_bytes = GraphicsLimits::maximum_pane_bytes / 2;
+    constexpr std::string_view filename_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+    const std::string_view input{reinterpret_cast<const char *>(bytes.data()), bytes.size()};
+    std::size_t consumed = 0;
+    std::size_t pixels = 0;
+    for (unsigned count = 0; count < maximum_frames; ++count) {
+      const auto frame = AtomicFrame::at(input, consumed);
+      if (!frame || frame->control.byte_count > maximum_pixels_bytes - pixels || frame->encoded_name.find_first_not_of(filename_alphabet) != std::string_view::npos) {
+        break;
+      }
+      consumed = frame->end;
+      pixels += frame->control.byte_count;
+    }
+    return consumed;
+  }
+
   void finishControlInput() {
     response_outbox_.drain();
     dirty_ = true;
@@ -529,6 +576,7 @@ private:
   RowCellsHandle row_cells_;
   std::shared_ptr<PtyResponseQueue> responses_;
   ResponseOutbox<Memory> response_outbox_;
+  PaneMedia<Memory> *media_ = nullptr;
   static constexpr std::size_t control_input_limit = 128 * 1024;
   control::Engine<Memory> control_;
   ByteQueue<Memory> pending_control_input_;

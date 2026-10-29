@@ -31,6 +31,12 @@ public:
       if (pane == nullptr) {
         continue;
       }
+      if (pane->media->failed()) {
+        if (!pane->output_closed) {
+          panes_.failOutput(*pane);
+        }
+        continue;
+      }
 
       if (!pane->media->busy()) {
         pane->media->discardUnwantedTransfers([&](ImageKey key, bool shared) { return wanted(*pane, key, shared); });
@@ -155,7 +161,6 @@ private:
         }
       }
 
-      updateReadInterest(*pane);
       if (auto *terminal = pane->media->terminal()) {
         reportLimits(*terminal);
         stageTransfers(*pane, terminal->graphics);
@@ -164,6 +169,7 @@ private:
       if (!pane->output_closed) {
         panes_.flushInput(*pane);
       }
+      updateReadInterest(*pane);
     }
   }
 

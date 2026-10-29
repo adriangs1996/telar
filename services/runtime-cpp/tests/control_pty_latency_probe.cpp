@@ -83,6 +83,49 @@ static void measure(std::ostream &output, const Workload &workload) {
   output << "]}";
 }
 
+static std::string hexBytes(std::string_view bytes) {
+  constexpr std::string_view digits = "0123456789abcdef";
+  std::string encoded;
+  for (const auto byte : bytes) {
+    const auto value = static_cast<unsigned char>(byte);
+    encoded += digits[value >> 4];
+    encoded += digits[value & 15];
+  }
+  return encoded;
+}
+
+static void measureOrder(std::ostream &output) {
+  constexpr std::string_view image = "\x1b_Ga=t,f=24,s=1,v=1,i=7;/wAA\x1b\\";
+  constexpr std::string_view dsr = "\x1b[5n";
+  constexpr std::string_view ack = "\x1b_Gi=7;OK\x1b\\";
+  output << "\"ordering\":[";
+  for (unsigned order = 0; order < 2; ++order) {
+    const std::string input = order == 0 ? std::string{image} + std::string{dsr} : std::string{dsr} + std::string{image};
+    const std::string expected = order == 0 ? std::string{ack} + "\x1b[0n" : "\x1b[0n" + std::string{ack};
+    writeAll(input);
+    std::string actual;
+    const auto deadline = Clock::now() + response_timeout;
+    while (!actual.contains("\x1b_G") || !actual.contains("\x1b\\") || !actual.contains("\x1b[0n")) {
+      check(Clock::now() < deadline);
+      pollfd input{STDIN_FILENO, POLLIN, 0};
+      const auto ready = ::poll(&input, 1, 50);
+      check(ready >= 0 || errno == EINTR);
+      if (ready <= 0) {
+        continue;
+      }
+      std::array<char, 4096> bytes;
+      const auto count = ::read(STDIN_FILENO, bytes.data(), bytes.size());
+      check(count > 0);
+      actual.append(bytes.data(), static_cast<std::size_t>(count));
+      check(actual.size() <= bytes.size());
+    }
+    output << (order ? "," : "") << "{\"image_first\":" << (order == 0 ? "true" : "false")
+           << ",\"expected_hex\":\"" << hexBytes(expected) << "\",\"actual_hex\":\"" << hexBytes(actual)
+           << "\",\"matches\":" << (actual == expected ? "true" : "false") << "}";
+  }
+  output << "]";
+}
+
 // Stop reading responses for 100 ms while submitting 5000 DSRs. Both PTY
 // directions remain nonblocking; resumption pumps them together to avoid a
 // fixture deadlock when the runtime correctly applies read backpressure.
@@ -164,6 +207,8 @@ static int child(const char *report_path) {
     measure(output, workloads[index]);
   }
   output << "},";
+  measureOrder(output);
+  output << ",";
   saturate(output);
   output << "}\n";
   output.close();

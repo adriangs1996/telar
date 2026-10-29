@@ -44,9 +44,21 @@ The prebuilt VT archive, system libraries, Qt and platform clipboard implementat
 ## Unresolved acceptance gates
 
 1. **Qt clipboard materialization precedes the transport bound.** An in-memory `QMimeData` test supplies 16 MiB; the provider rejects the result against its 1 MiB bound only after Qt materializes those 16 MiB. No real host clipboard is used. The existing public Qt/Cocoa whole-value getters do not provide a verified preallocation size/streaming contract for arbitrary MIME values. A separate resource probe tried 96 MiB `RLIMIT_AS` and `RLIMIT_DATA`; both returned EINVAL on this host and a 128 MiB touched allocation succeeded. This proves those two exact experiments failed, not that every possible isolation design is impossible. A bounded provider/isolation design remains required.
-2. **Ordering across native control and separate graphics processing.** ACK loss under saturation is fixed by bounded staging, exact-capacity retry, and cancellation/failure handling. This does not establish total stream order across producers. For an initially idle pane, `image transmit → DSR` can publish DSR during the native feed before the media worker produces the preceding image ACK. The runtime flushes input before starting that worker. Reserving priority for the entire read would instead misorder a DSR preceding the image; a sequence-position boundary is required. This pre-existing limitation remains open.
-3. **Aggregate graphics resource CPU work.** Cancellation is checked before resource operations, but a 64 KiB batch can contain many quiet file/shared-memory commands, each admitting substantial bounded work. Per-object size and allocator bounds do not establish a useful aggregate scheduling bound. A resumable resource pipeline is still required.
-4. **Coverage and performance certification.** The actual Surface clipboard fixture now checks 44,815 split cases without a difference, separately from 48,107 stream cases. Full lifecycle/PTY saturation recovery and final allocation/copy/latency accounting remain incomplete. Existing paired measurements include material regressions against the actual Ghostty application handler. No security or performance waiver is inferred from the default clipboard policy.
+2. **Resource scheduling measurements.** Sequence boundaries now yield after each graphics command, including quiet queries, before admitting later input. Complete quiet atomic envelopes retain their direct path in groups of at most eight and 128 MiB of declared raw data. This is a bounded count/size admission rule; it does not establish a hard filesystem wall-time deadline or bound all copy traffic to 128 MiB. A failed direct import followed by fallback may copy again. Worst-case work and complete allocation/copy accounting remain to be measured.
+3. **PNG tail semantics.** Follow-up comparison with the actual application found 12 complete-pixel/missing-tail variants accepted by Ghostty and rejected by the strict libpng adapter. The before-fix fixture is retained. Matching safe generic decoder completion semantics remains open.
+4. **Coverage and performance certification.** The actual Surface clipboard fixture now checks 44,815 split cases without a difference, separately from 48,107 stream cases. Real PTY tests verify both ACK/DSR orders and 5,000-response retention in seven pairs; remaining lifecycle cases and final allocation/copy accounting are incomplete. Existing paired measurements include material regressions against the actual Ghostty application handler. No waiver is inferred from the default clipboard policy.
+
+The previous ACK/DSR inversion is reproduced against the frozen original Telar
+daemon and fixed by forwarding only the native parser's consumed raw prefix to
+the media worker. Native parsing resumes after that prefix and its pending ACKs
+finish publication. A borrowed, statically dispatched `PaneMedia` port is owned
+by the same Pane, which destroys Terminal first. Overflow of ordered output or
+resize events closes explicitly even without an active worker completion.
+`media-boundary-validation.json` records six Release/sanitizer suites, broad
+runtime runs, diagnostic direct/coalescing counters, parser Rosetta behavior and
+x86 object compilation. Shared imports now use the checked descriptor reader;
+PNG mutable input state lives outside the function containing setjmp, preserving
+allocator validity during error cleanup. All tests use owned synthetic resources.
 
 
 The follow-up process-limit experiment installs and verifies a valid AS limit,
