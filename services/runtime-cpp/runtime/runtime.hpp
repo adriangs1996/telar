@@ -293,6 +293,7 @@ private:
       observations_.observe(*pane);
       media_.updateReadInterest(*pane);
     } catch (const std::exception &) {
+      pane->terminal.abortControl();
       pane->requestClose();
       pane->output_closed = true;
       poller_.remove(pane->process->descriptor());
@@ -827,9 +828,18 @@ private:
     media_.collect();
     std::chrono::nanoseconds timeout = std::chrono::milliseconds{100};
     for (auto *pane : model_.panes.items()) {
-      if (pane != nullptr && !pane->output_closed && ClipboardService{model_}.advance(*pane, now)) {
-        panes_.flushInput(*pane);
-        media_.updateReadInterest(*pane);
+      if (pane != nullptr) {
+        try {
+          if (ClipboardService{model_}.advance(*pane, now) && !pane->output_closed) {
+            panes_.flushInput(*pane);
+            media_.updateReadInterest(*pane);
+          }
+        } catch (const std::exception &) {
+          pane->terminal.abortControl();
+          pane->requestClose();
+          pane->output_closed = true;
+          poller_.remove(pane->process->descriptor());
+        }
       }
       if (pane != nullptr && !pane->exit_status) {
         pane->exit_status = pane->process->reap();

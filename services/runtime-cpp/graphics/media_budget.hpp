@@ -5,6 +5,11 @@
 
 namespace telar::runtime {
 
+struct MediaUsage {
+  // Accessed only while holding its associated MediaBudget mutex.
+  std::size_t bytes = 0;
+};
+
 class MediaBudget {
 public:
   explicit MediaBudget(std::size_t limit) noexcept
@@ -12,7 +17,7 @@ public:
 
   bool reserve(std::size_t &pane_used, std::size_t pane_limit, std::size_t bytes) noexcept {
     const std::lock_guard lock{mutex_};
-    if (bytes > pane_limit - pane_used || bytes > limit_ - used_) {
+    if (pane_used > pane_limit || bytes > pane_limit - pane_used || bytes > limit_ - used_) {
       return false;
     }
     pane_used += bytes;
@@ -47,10 +52,11 @@ class MediaAllocator {
 public:
   static constexpr bool thread_safe = ConcurrentAllocator<Upstream>;
 
-  explicit MediaAllocator(Upstream &upstream, MediaBudget &budget, std::size_t pane_limit) noexcept
+  explicit MediaAllocator(Upstream &upstream, MediaBudget &budget, std::size_t pane_limit, MediaUsage *usage = nullptr) noexcept
       : upstream_(upstream),
         budget_(budget),
-        limit_(pane_limit) {}
+        limit_(pane_limit),
+        usage_(usage != nullptr ? *usage : local_usage_) {}
 
   MediaAllocator(const MediaAllocator &) = delete;
   MediaAllocator &operator=(const MediaAllocator &) = delete;
@@ -82,15 +88,19 @@ public:
   }
 
   bool reserve(std::size_t bytes) noexcept {
-    return budget_.reserve(used_, limit_, bytes);
+    return budget_.reserve(usage_.bytes, limit_, bytes);
   }
 
   void release(std::size_t bytes) noexcept {
-    budget_.release(used_, bytes);
+    budget_.release(usage_.bytes, bytes);
   }
 
   std::size_t used() const noexcept {
-    return budget_.usedBy(used_);
+    return budget_.usedBy(usage_.bytes);
+  }
+
+  MediaUsage &usage() noexcept {
+    return usage_;
   }
 
   bool adoptMapping(const void *placeholder, MappedRegion &pixels) noexcept {
@@ -105,7 +115,8 @@ private:
   Upstream &upstream_;
   MediaBudget &budget_;
   std::size_t limit_;
-  std::size_t used_ = 0;
+  MediaUsage local_usage_;
+  MediaUsage &usage_;
   MappedImages mappings_;
 };
 

@@ -19,6 +19,10 @@ class Checksum {
 public:
   explicit Checksum(Memory &memory) : graphemes_(AllocatorRef<std::uint32_t, Memory>{memory}) {}
 
+  void discard() noexcept {
+    Vector<std::uint32_t, Memory>{graphemes_.get_allocator()}.swap(graphemes_);
+  }
+
   std::uint16_t compute(const VtState &state, const Parameters &request) {
     const auto size = state.size();
     if (size.cols == 0 || size.rows == 0) {

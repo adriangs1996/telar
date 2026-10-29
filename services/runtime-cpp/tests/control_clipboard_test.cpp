@@ -344,6 +344,43 @@ void actualRouting(SystemAllocator &memory) {
   check(service.complete(second.session(), completion) == nullptr);
   panes.remove(pane.id);
 }
+
+void deferredAllocationFailure() {
+  FailingAllocator upstream;
+  BudgetAllocator memory{upstream, 64 * 1024 * 1024};
+  {
+    RuntimeModel model{memory};
+    Kqueue poller;
+    PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/control-failure.sock"}};
+    const std::array<std::string_view, 1> arguments{"/bin/cat"};
+    const Launch launch{.cwd = "/tmp", .arguments = arguments};
+    const TabLocation location{.workspace = {.id = 7}, .tab_id = 1};
+    auto &failed = panes.launch(launch, location, {80, 24, 9, 18});
+    auto &healthy = panes.launch(launch, location, {80, 24, 9, 18});
+    const auto failed_id = failed.id;
+    const auto healthy_id = healthy.id;
+    std::string input;
+    for (unsigned index = 0; index < 65; ++index) {
+      input.append("\x1b[5n");
+    }
+    input.append("\x1bP+q");
+    input.append(4096, 'A');
+    input.append("\x1b\\");
+    failed.terminal.feed(bytes(input));
+    check(failed.terminal.hasPendingControl());
+    upstream.fail = true;
+    panes.flushInput(failed);
+    check(failed.output_closed && failed.close_requested);
+    check(!failed.terminal.hasPendingControl() && failed.pty_responses->empty());
+    upstream.fail = false;
+    healthy.terminal.feed(bytes("\x1b[5n"));
+    check(drain(healthy.terminal) == "\x1b[0n");
+    check(!healthy.output_closed);
+    panes.remove(failed_id);
+    panes.remove(healthy_id);
+  }
+  check(memory.liveBytes() == 0);
+}
 }
 
 int main() {
@@ -361,5 +398,6 @@ int main() {
   encodingFailure(false, true);
   encodingFailure(true, true);
   actualRouting(system);
+  deferredAllocationFailure();
   std::puts("Native clipboard protocol, consent, routing and ownership tests passed");
 }

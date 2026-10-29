@@ -44,7 +44,8 @@ void localMedia(auto &memory) {
   const std::filesystem::path root{directory.data()};
   const auto path = (root / "tty-graphics-protocol-image").string();
   const auto wrong = (root / "ordinary-file").string();
-  for (const auto &target : {path, wrong}) {
+  const auto quiet = (root / "tty-graphics-protocol-quiet").string();
+  for (const auto &target : {path, wrong, quiet}) {
     std::ofstream file{target, std::ios::binary};
     file.write("\0\0\0\0", 4);
     check(file.good());
@@ -61,6 +62,8 @@ void localMedia(auto &memory) {
   }
   check(query(terminal, "t=t,s=1,v=1", encoded(bytes(path))) == "\x1b_Gi=9;OK\x1b\\");
   check(!std::filesystem::exists(path));
+  check(query(terminal, "t=t,s=1,v=1,q=2", encoded(bytes(quiet))).empty());
+  check(!std::filesystem::exists(quiet));
   auto storage = SharedImageStorage::create(4);
   check(storage.has_value());
   std::ranges::fill(storage->mapping().bytes(), 0);
@@ -81,6 +84,47 @@ void configuredLimits(auto &memory) {
   compressed.resize(length);
   check(query(terminal, "s=256,v=256,o=z", encoded(compressed)) == "\x1b_Gi=9;EINVAL: dimensions too large\x1b\\");
   check(query(terminal, "s=1,v=1", "AAAAAA==") == "\x1b_Gi=9;OK\x1b\\");
+  Terminal disabled{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, {}, GraphicsLimits{.pane_bytes = 0}};
+  check(query(disabled, "s=1,v=1", "AAAAAA==").empty());
+}
+
+void sharedPaneBudget(auto &memory) {
+  constexpr std::size_t pane_limit = 64 * 1024;
+  constexpr std::size_t held_bytes = 48 * 1024;
+  MediaBudget global{256 * 1024};
+  MediaAllocator media{memory, global, pane_limit};
+  auto *held = media.allocate(held_bytes, alignof(std::max_align_t));
+  check(held != nullptr);
+  {
+    const GraphicsQueryResources resources{GraphicsLimits{.pane_bytes = pane_limit, .global_bytes = 256 * 1024}, global, &media.usage()};
+    Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, {}, resources};
+    const std::vector<Byte> pixels(held_bytes / 2, 0);
+    check(query(terminal, "s=128,v=48", encoded(pixels)) == "\x1b_Gi=9;ENOMEM: out of memory\x1b\\");
+    check(media.used() == held_bytes);
+    media.deallocate(held, held_bytes, alignof(std::max_align_t));
+    check(query(terminal, "s=128,v=48", encoded(pixels)) == "\x1b_Gi=9;OK\x1b\\");
+    check(media.used() == pixels.size());
+    terminal.abortControl();
+    check(media.used() == 0);
+  }
+  check(global.used() == 0);
+}
+
+void sharedBudget(auto &memory) {
+  MediaBudget global{4092};
+  {
+    const GraphicsQueryResources resources{GraphicsLimits{.pane_bytes = 8192, .global_bytes = 4092}, global};
+    Terminal first{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, {}, resources};
+    Terminal second{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, {}, resources};
+    const std::vector<Byte> pixels(4092, 0);
+    check(query(first, "s=31,v=33", encoded(pixels)) == "\x1b_Gi=9;OK\x1b\\");
+    check(global.used() == pixels.size());
+    check(query(second, "s=1,v=1", "AAAAAA==") == "\x1b_Gi=9;ENOMEM: out of memory\x1b\\");
+    first.abortControl();
+    check(global.used() == 0);
+    check(query(second, "s=1,v=1", "AAAAAA==") == "\x1b_Gi=9;OK\x1b\\");
+  }
+  check(global.used() == 0);
 }
 }
 
@@ -90,6 +134,8 @@ int main() {
   BudgetAllocator memory{system, 64 * 1024 * 1024};
   localMedia(memory);
   configuredLimits(memory);
+  sharedBudget(memory);
+  sharedPaneBudget(memory);
   check(memory.liveBytes() == 0);
   std::puts("Native graphics query file, shared memory and budget tests passed");
 }

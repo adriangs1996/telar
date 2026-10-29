@@ -19,14 +19,32 @@ namespace telar::runtime::control {
 template <Allocator Memory>
 class Engine {
 public:
-  explicit Engine(Memory &memory, PtyResponseQueue &responses, bool enabled, GraphicsLimits limits = {})
-      : parser_(memory), reply_(memory), checksum_(memory), clipboard_(memory), graphics_queries_(memory, limits), reports_(memory), colors_(state_, reply_, policy), responses_(responses), enabled_(enabled) {}
+  explicit Engine(Memory &memory, PtyResponseQueue &responses, bool enabled, GraphicsQueryResources resources = {})
+      : parser_(memory), reply_(memory), checksum_(memory), clipboard_(memory), graphics_queries_(memory, resources), reports_(memory), colors_(state_, reply_, policy), responses_(responses), enabled_(enabled) {}
 
   void bind(GhosttyTerminal terminal, GhosttyRenderState render, bool separate_media) noexcept {
     state_.bind(terminal, render, separate_media);
   }
 
+  void discard() noexcept {
+    closed_ = true;
+    responses_.release();
+    parser_.discard();
+    reply_.discard();
+    checksum_.discard();
+    clipboard_.discard();
+    graphics_queries_.discard();
+    reports_.discard();
+    colors_.discard();
+    prepared_ = false;
+    clipboard_before_reply_ = false;
+    capability_offset_ = 0;
+  }
+
   std::size_t feed(std::span<const std::uint8_t> input) {
+    if (closed_) {
+      return input.size();
+    }
     const ReleaseProducer release{responses_};
     if (parser_.blocked()) {
       parser_.feed({}, *this);
@@ -122,12 +140,16 @@ public:
 
   void configureSize(TerminalSize size) {
     state_.configureSize(size);
-    if (state_.mode(size_events_mode)) {
+    if (!closed_ && state_.mode(size_events_mode)) {
       reports_.changed(Report::size);
     }
   }
 
   void configureFacts(ClientFacts facts) noexcept {
+    if (closed_) {
+      facts_ = facts;
+      return;
+    }
     if (facts.light != facts_.light) {
       reports_.changed(Report::scheme);
     }
@@ -141,6 +163,9 @@ public:
   }
 
   void publishReports() {
+    if (closed_) {
+      return;
+    }
     const ReleaseProducer release{responses_};
     if (!parser_.blocked() && (!clipboard_.hasReply() || clipboard_.publish(responses_))) {
       reports_.publish(responses_, state_, facts_, enabled_);
@@ -671,6 +696,7 @@ private:
   ClientFacts facts_;
   PtyResponseQueue::Producer responses_;
   bool enabled_;
+  bool closed_ = false;
   bool prepared_ = false;
   bool clipboard_before_reply_ = false;
   std::array<bool, desktop_modes.size()> saved_desktop_modes_{};

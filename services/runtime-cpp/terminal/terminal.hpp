@@ -24,13 +24,13 @@ enum class TerminalPurpose {
 template <Allocator Memory>
 class Terminal {
 public:
-  explicit Terminal(Memory &memory, TerminalSize size, TerminalPurpose purpose = TerminalPurpose::interactive, std::shared_ptr<PtyResponseQueue> responses = {}, GraphicsLimits limits = {})
+  explicit Terminal(Memory &memory, TerminalSize size, TerminalPurpose purpose = TerminalPurpose::interactive, std::shared_ptr<PtyResponseQueue> responses = {}, GraphicsQueryResources resources = {})
       : screen(memory),
         effects(memory),
         graphics(memory),
         allocator_(memory),
         responses_(responses ? std::move(responses) : std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory})),
-        control_(memory, *responses_, purpose != TerminalPurpose::observation, limits),
+        control_(memory, *responses_, purpose != TerminalPurpose::observation, resources),
         pending_control_input_(memory, control_input_limit),
         purpose_(purpose) {
     screen.resize(size.cols, size.rows);
@@ -274,6 +274,12 @@ public:
 
   void discardResponses() noexcept {
     responses_->clear();
+  }
+
+  void abortControl() noexcept {
+    control_.discard();
+    pending_control_input_.clear();
+    responses_->close();
   }
 
   bool dirty() const noexcept {

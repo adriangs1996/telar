@@ -289,6 +289,15 @@ public:
     return phase_ == Phase::ground;
   }
 
+  void discard() noexcept {
+    Vector<std::uint8_t, Memory>{overflow_.get_allocator()}.swap(overflow_);
+    clear();
+    phase_ = Phase::ground;
+    after_ready_ = Phase::ground;
+    dcs_payload_ = false;
+    following_c1_ = 0;
+  }
+
   bool blocked() const noexcept {
     return phase_ == Phase::ready;
   }

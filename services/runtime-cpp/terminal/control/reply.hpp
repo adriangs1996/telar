@@ -98,6 +98,11 @@ public:
     return size_;
   }
 
+  void discard() noexcept {
+    clear();
+    Vector<std::uint8_t, Memory>{overflow_.get_allocator()}.swap(overflow_);
+  }
+
 private:
   Memory &memory_;
   std::array<std::uint8_t, PtyResponseQueue::message_byte_capacity> inline_;

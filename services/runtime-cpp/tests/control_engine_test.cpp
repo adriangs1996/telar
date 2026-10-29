@@ -118,6 +118,19 @@ void uniqueReplies(Memory &memory) {
 }
 
 template <Allocator Memory>
+void abortedControl(Memory &memory) {
+  Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
+  terminal.feed(bytes("\x1b[?2031;2033;1004;2048h"));
+  drain(terminal);
+  terminal.abortControl();
+  terminal.configureClientFacts({.light = true, .visible = true, .focused = true});
+  terminal.resize({90, 30, 8, 16});
+  terminal.feed(bytes("\x1b[5n\x1b]52;c;?\x1b\\"));
+  require(terminal.responses().empty());
+  require(!terminal.hasPendingControl());
+}
+
+template <Allocator Memory>
 void clipboardWrites(Memory &memory) {
   Terminal terminal{memory, TerminalSize{80, 24, 9, 18}};
   terminal.feed(bytes("\x1b]52;c;aGVsbG8=\x1b\\"));
@@ -253,6 +266,7 @@ int main(int argc, char **argv) {
   longPaletteReply(memory);
   uniqueReplies(memory);
   clipboardWrites(memory);
+  abortedControl(memory);
   reports(memory);
   testPtyResponseQueue();
   require(budget.liveBytes() == 0);

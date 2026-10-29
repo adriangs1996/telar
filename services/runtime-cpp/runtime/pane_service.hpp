@@ -214,11 +214,21 @@ public:
   }
 
   void flushInput(Pane<Memory> &pane) {
-    pane.write();
-    const bool needs_write = pane.hasInput() && !pane.output_closed;
-    if (needs_write != pane.write_interest) {
-      poller_.writeInterest(pane.process->descriptor(), eventToken(EventSource::pane, pane.event_identity), needs_write);
-      pane.write_interest = needs_write;
+    if (pane.output_closed) {
+      return;
+    }
+    try {
+      pane.write();
+      const bool needs_write = pane.hasInput();
+      if (needs_write != pane.write_interest) {
+        poller_.writeInterest(pane.process->descriptor(), eventToken(EventSource::pane, pane.event_identity), needs_write);
+        pane.write_interest = needs_write;
+      }
+    } catch (const std::exception &) {
+      pane.terminal.abortControl();
+      pane.requestClose();
+      pane.output_closed = true;
+      poller_.remove(pane.process->descriptor());
     }
   }
 

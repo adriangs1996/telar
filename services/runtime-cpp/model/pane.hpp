@@ -15,6 +15,7 @@
 #include <csignal>
 #include <sys/wait.h>
 #include <sys/uio.h>
+#include <system_error>
 
 namespace telar::runtime {
 
@@ -33,7 +34,7 @@ public:
         pty_responses(std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory})),
         observer(std::allocate_shared<PaneObserver<Memory>>(AllocatorRef<PaneObserver<Memory>, Memory>{memory}, memory, settings.size, command.cwd())),
         media(std::allocate_shared<PaneMedia<Memory>>(AllocatorRef<PaneMedia<Memory>, Memory>{memory}, memory, settings.media_budget, settings.graphics, settings.size, pty_responses)),
-        terminal(memory, settings.size, TerminalPurpose::separate_media, pty_responses, settings.graphics),
+        terminal(memory, settings.size, TerminalPurpose::separate_media, pty_responses, GraphicsQueryResources{settings.graphics, settings.media_budget, &media->queryUsage()}),
         input(memory, input_limit),
         cwd(command.cwd(), AllocatorRef<char, Memory>{memory}) {
     ::arc4random_buf(history_session.data(), history_session.size());
@@ -78,6 +79,7 @@ public:
       }
 
       output_closed = true;
+      terminal.abortControl();
       return false;
     }
 
@@ -126,6 +128,7 @@ public:
 
     input.clear();
     pty_responses->clear();
+    throw std::system_error{count < 0 ? errno : EIO, std::generic_category(), "PTY write failed"};
   }
 
   bool hasInput() const noexcept {

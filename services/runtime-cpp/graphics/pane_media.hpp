@@ -148,6 +148,10 @@ public:
   }
 #endif
 
+  MediaUsage &queryUsage() noexcept {
+    return memory_.usage();
+  }
+
   bool busy() const noexcept {
     return busy_;
   }

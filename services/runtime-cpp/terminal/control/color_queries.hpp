@@ -13,6 +13,12 @@ namespace telar::runtime::control {
 template <Allocator Memory>
 class ColorQueries {
 public:
+  void discard() noexcept {
+    palette_active_ = false;
+    palette_publishing_ = false;
+    palette_offset_ = 0;
+  }
+
   explicit ColorQueries(VtState &state, Reply<Memory> &reply, const Policy &policy)
       : state_(state), reply_(reply), policy_(policy) {}
 

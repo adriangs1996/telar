@@ -1,6 +1,7 @@
 #include "check.hpp"
 #include "terminal/pty_response_queue.hpp"
 #include <thread>
+#include <atomic>
 #include <vector>
 
 using namespace telar::runtime;
@@ -120,9 +121,42 @@ static void testBatchedResponses() {
   check(queue.empty());
 }
 
+static void testClosedGeneration() {
+  PtyResponseQueue queue;
+  auto storage = std::make_shared<std::vector<std::uint8_t>>(8192, 42);
+  const std::weak_ptr<std::vector<std::uint8_t>> lifetime = storage;
+  check(queue.tryPushOwned(*storage, storage));
+  storage.reset();
+  std::atomic<bool> callback_ready = false;
+  std::atomic<bool> resume_callback = false;
+  std::jthread worker{[&] {
+    callback_ready.store(true, std::memory_order_release);
+    while (!resume_callback.load(std::memory_order_acquire)) {
+      std::this_thread::yield();
+    }
+    const std::array<std::uint8_t, 4> response{27, '[', '0', 'n'};
+    check(!queue.push(response));
+    check(!queue.tryPush(response));
+    PtyResponseQueue::Producer producer{queue};
+    check(!producer.tryPush(response));
+  }};
+  while (!callback_ready.load(std::memory_order_acquire)) {
+    std::this_thread::yield();
+  }
+  queue.close();
+  check(lifetime.expired());
+  resume_callback.store(true, std::memory_order_release);
+  worker.join();
+  queue.clear();
+  check(queue.empty() && !queue.hasCapacity());
+  check(queue.snapshot().dropped == 0);
+  check(!queue.tryPushOwned({}, std::make_shared<int>(1)));
+}
+
 void testPtyResponseQueue() {
   testQueueBoundaries();
   testConcurrentResponses();
   testOwnedResponseLifetime();
   testBatchedResponses();
+  testClosedGeneration();
 }

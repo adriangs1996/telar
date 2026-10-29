@@ -67,6 +67,9 @@ public:
 
   bool push(std::span<const std::uint8_t> response) noexcept {
     const std::lock_guard lock{mutex_};
+    if (closed_) {
+      return false;
+    }
     if (!append(response, {})) {
       diagnostics::accumulate(dropped_);
       return false;
@@ -89,12 +92,12 @@ public:
 
   bool hasCapacity() const noexcept {
     const std::lock_guard lock{mutex_};
-    return count_ != message_capacity && byte_count_ < total_byte_capacity;
+    return !closed_ && count_ != message_capacity && byte_count_ < total_byte_capacity;
   }
 
 private:
   bool append(std::span<const std::uint8_t> response, std::shared_ptr<const void> owner) noexcept {
-    if (count_ == message_capacity || response.size() > total_byte_capacity - byte_count_ || (response.size() > message_byte_capacity && !owner)) {
+    if (closed_ || count_ == message_capacity || response.size() > total_byte_capacity - byte_count_ || (response.size() > message_byte_capacity && !owner)) {
       return false;
     }
 
@@ -180,8 +183,20 @@ public:
     return count_ == 0;
   }
 
+  // Closing permanently cancels this pane generation, including late worker callbacks.
+  void close() noexcept {
+    const std::lock_guard lock{mutex_};
+    closed_ = true;
+    clearLocked();
+  }
+
   void clear() noexcept {
     const std::lock_guard lock{mutex_};
+    clearLocked();
+  }
+
+private:
+  void clearLocked() noexcept {
     for (auto &owner : owned_) {
       owner.reset();
     }
@@ -191,6 +206,7 @@ public:
     byte_count_ = 0;
   }
 
+public:
   Snapshot snapshot() const noexcept {
     const std::lock_guard lock{mutex_};
     return {count_, byte_count_, dropped_};
@@ -207,6 +223,7 @@ private:
   std::size_t offset_ = 0;
   std::size_t byte_count_ = 0;
   std::uint64_t dropped_ = 0;
+  bool closed_ = false;
 };
 
 }

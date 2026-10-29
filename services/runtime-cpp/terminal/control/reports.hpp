@@ -31,6 +31,12 @@ public:
     return pending_ != 0 || prepared_;
   }
 
+  void discard() noexcept {
+    reply_.discard();
+    pending_ = 0;
+    prepared_ = false;
+  }
+
   // Unencoded desktop updates coalesce to the latest facts. Once encoded,
   // bytes remain immutable until the PTY queue admits the entire report.
   template <typename Sink>

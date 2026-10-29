@@ -7,6 +7,8 @@
 #include "../../graphics/temporary_path.hpp"
 #include "../../graphics/png_decoder.hpp"
 #include "../../graphics/limits.hpp"
+#include "../../graphics/query_resources.hpp"
+#include "../../graphics/media_budget.hpp"
 #include "../ghostty_allocator.hpp"
 #include <zlib.h>
 
@@ -145,13 +147,21 @@ struct GraphicsQuery {
 template <Allocator Memory>
 class GraphicsQueries {
 public:
-  explicit GraphicsQueries(Memory &memory, GraphicsLimits limits = {})
-      : memory_(memory, limits.pane_bytes), allocator_(memory_), decoded_(AllocatorRef<std::uint8_t, QueryMemory>{memory_}), inflated_(AllocatorRef<std::uint8_t, QueryMemory>{memory_}), image_limit_(limits.screenBytes()) {}
+  explicit GraphicsQueries(Memory &memory, GraphicsQueryResources resources = {})
+      : local_budget_(resources.limits.global_bytes), memory_(memory, resources.budget != nullptr ? *resources.budget : local_budget_, resources.limits.pane_bytes, resources.budget != nullptr ? resources.usage : nullptr), allocator_(memory_), decoded_(AllocatorRef<std::uint8_t, QueryMemory>{memory_}), inflated_(AllocatorRef<std::uint8_t, QueryMemory>{memory_}), image_limit_(std::min(resources.limits.screenBytes(), resources.limits.global_bytes)) {}
+
+  void discard() noexcept {
+    Vector<std::uint8_t, QueryMemory>{decoded_.get_allocator()}.swap(decoded_);
+    Vector<std::uint8_t, QueryMemory>{inflated_.get_allocator()}.swap(inflated_);
+  }
 
   void respond(std::string_view body, Reply<Memory> &reply) {
+    if (image_limit_ == 0) {
+      return;
+    }
     const auto separator = body.find(';');
     const auto request = GraphicsQuery::parse(body.substr(1, separator == std::string_view::npos ? separator : separator - 1), separator != std::string_view::npos);
-    if (!request || request->quiet > 1 || request->image == 0) {
+    if (!request || request->image == 0) {
       return;
     }
 
@@ -173,7 +183,7 @@ public:
     } catch (const std::length_error &) {
       result = "ENOMEM: out of memory";
     }
-    if (result == invalid_encoding || (request->quiet == 1 && result == "OK")) {
+    if (result == invalid_encoding || request->quiet > 1 || (request->quiet == 1 && result == "OK")) {
       return;
     }
 
@@ -302,7 +312,7 @@ public:
   static constexpr std::string_view invalid_encoding = "invalid-base64";
 
 private:
-  using QueryMemory = BudgetAllocator<Memory>;
+  using QueryMemory = MediaAllocator<Memory>;
   struct alignas(std::max_align_t) InflateAllocation {
     std::size_t bytes;
   };
@@ -330,6 +340,7 @@ private:
   static constexpr std::size_t maximum_encoded_bytes = 65 * 1024 * 1024;
   static constexpr std::size_t inflate_chunk_bytes = 64 * 1024;
   static constexpr unsigned maximum_dimension = 10000;
+  MediaBudget local_budget_;
   QueryMemory memory_;
   GhosttyAllocatorBridge<QueryMemory> allocator_;
   Vector<std::uint8_t, QueryMemory> decoded_;

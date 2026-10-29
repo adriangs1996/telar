@@ -257,6 +257,21 @@ private:
   }
 
 public:
+  void discard() noexcept {
+    if (pending_) {
+      cancelPending();
+    }
+    pending_.reset();
+    transaction_.reset();
+    grants_.clear();
+    Vector<std::uint8_t, Memory>{decoded_.get_allocator()}.swap(decoded_);
+    for (auto &reply : asynchronous_replies_) {
+      reply.discard();
+    }
+    reply_count_ = 0;
+    reply_head_ = 0;
+  }
+
   void expire(Clock::time_point now) {
     if (pending_ && now >= pending_->deadline) {
       cancelPending();
