@@ -354,7 +354,7 @@ void TerminalScene::paintHoveredLink(const TerminalPresentation &frame) {
 
 void TerminalScene::paintCursor(const TerminalPresentation &frame) {
   const auto &cursor = frame.cursor_override ? *frame.cursor_override : frame.screen.cursor();
-  if (!cursor.visible || !frame.attached || !frame.pane_focused || (!frame.cursor_on && !frame.cursor_override)) {
+  if (!cursor.visible || !frame.pane_focused || (!frame.cursor_on && !frame.cursor_override)) {
     return;
   }
 

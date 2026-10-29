@@ -234,7 +234,31 @@ remaining build/protocol failures, active transient offline input, native
 open/stop/diff, full task/plan peek, exit leaks/performance and all remaining
 PARITY.md gates. Complete
 theme/density/Linux visuals, native exit leaks and comparative performance stay
-open. No global gate is closed. The window-adapter checkpoint records 82 Cocoa/Metal scale-1
+open. The subsequent
+[runtime-link checkpoint](../services/gui-cpp/measurements/runtime-link.md)
+adds original bounded UTF-8 failures/headlines, capped exponential retry and the
+centered workbench dim/status. Text/backoff matches 4,988 source cases and status
+geometry matches 5,536 in Release and clean ASan/UBSan. Keep the first saturated
+counter prototype's 84 differences, the initial synchronous-failure observation
+fixture failure, both no-test CTest selections and all initial lint findings.
+Active transient and actual authentication-failed SSH scenes discard offline
+input, keep Local isolated and restore the same remote pane/generation. Their
+entire offline terminals match 2,336,768 pixels each; all owned cleanup exits
+zero. The original keeps a cursor on its stale screen; removing attachment from
+the paint-only cursor policy removes 720 differences without enabling input.
+Disabled cards also retain Qt hover after losing their hit target: a controlled
+regression fails before an enabled gate and passes afterward. The final transient
+whole window still differs in 2,705 pixels: 15 card and 2,690 metric-footer pixels.
+Original link loss retains metrics while Session.disconnected clears them;
+continue that projection and the older runtime-stop status gap. Current native
+Quick passes 88 entries without warnings, and 8 card/36 scene/27 window entries
+pass. Three link/transport groups pass Release and clean native ASan/UBSan;
+window assertions pass 27 but exit leaks remain (257,028 bytes/988 allocations).
+Final lint and actual Neovim clangd on the model/controller/adapter test are
+clean. Read the report, archived verifier and manifest. Continue remaining
+handshake/build failures, full connection/navigation/task matrices, metrics,
+theme/density/Linux, native exit leaks and measured performance. No global gate
+is closed. The window-adapter checkpoint records 82 Cocoa/Metal scale-1
 passes, before the transport/profile changes, after the
 owned-window focus/geometry barrier; twenty selected regressions pass.
 Native sanitizer assertions pass, but exit leak acceptance remains OPEN.

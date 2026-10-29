@@ -165,6 +165,29 @@ private:
     QCOMPARE(selected.front().front().toString(), QStringLiteral("42"));
   }
 
+  Q_SLOT static void offlineCardsRetireTheirHoveredBackground() {
+    SystemAllocator memory;
+    Agent agent{memory};
+    agent.pane_id = pane_id;
+    QQuickWindow window;
+    QQmlEngine engine;
+    const auto card = createChrome(engine, QStringLiteral("AgentCard"), properties(agentRecord(agent, {.machine = {}, .branch = {}})));
+    card->setParentItem(window.contentItem());
+    window.resize(static_cast<int>(list_width), viewport_height);
+    const auto background = visualItems(*card, QStringLiteral("agentCardBackground"));
+    QCOMPARE(background.size(), 1);
+    window.show();
+    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
+    constexpr QPoint card_center{128, 34};
+    QTest::mouseMove(&window, card_center);
+    QTRY_VERIFY_WITH_TIMEOUT(background.front()->isVisible(), wait_ms);
+    QVERIFY(card->setProperty("record", agentRecord(agent, {.machine = {}, .branch = {}, .connected = false})));
+    QTRY_VERIFY_WITH_TIMEOUT(!card->isEnabled(), wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(!background.front()->isVisible(), wait_ms);
+    QVERIFY(card->setProperty("heldHover", true));
+    QVERIFY(!background.front()->isVisible());
+  }
+
   Q_SLOT static void projectsKeepTheirOrderBeforeAgentAttention() {
     SystemAllocator memory;
     std::array agents{Agent{memory}, Agent{memory}, Agent{memory}, Agent{memory}};

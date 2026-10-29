@@ -171,6 +171,17 @@ void Application::connectMachine(MachineClient &client) {
     }
   });
 
+  connect(&client.connection, &RuntimeConnection::linkChanged, this, [this, key] {
+    if (auto *source = findClient(key)) {
+      source->phase = source->connection.link().phase;
+      source->needs_setup = source->connection.link().setup_repairs;
+      summarizeMachine(*source);
+      if (key.machine.slot == machines_.active()) {
+        emit runtimeLinkChanged();
+      }
+    }
+  });
+
   connect(&client.connection, &RuntimeConnection::errorChanged, this, [this, key] {
     if (findClient(key) != nullptr && key.machine.slot == machines_.active()) {
       emit stateChanged();

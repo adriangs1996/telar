@@ -98,6 +98,8 @@ class Application final : public QObject {
   Q_PROPERTY(qreal chromeRatio READ chromeRatio NOTIFY configurationChanged)
   Q_PROPERTY(qreal chromeTextScale READ chromeTextScale NOTIFY configurationChanged)
   Q_PROPERTY(QVariantMap windowGeometry READ windowGeometry NOTIFY windowGeometryChanged)
+  Q_PROPERTY(QVariantMap runtimeLinkState READ runtimeLinkState NOTIFY runtimeLinkChanged)
+  Q_PROPERTY(QVariantMap runtimeLinkGeometry READ runtimeLinkGeometry NOTIFY runtimeLinkChanged)
   Q_PROPERTY(QVariantMap sidebarGeometry READ sidebarGeometry NOTIFY sidebarGeometryChanged)
   Q_PROPERTY(QVariantMap workspaceContext READ workspaceContext NOTIFY stateChanged)
   Q_PROPERTY(bool sidebarVisible READ sidebarVisible NOTIFY configurationChanged)
@@ -324,6 +326,8 @@ public:
   [[nodiscard]] qreal chromeRatio() const;
   [[nodiscard]] qreal chromeTextScale() const;
   [[nodiscard]] QVariantMap windowGeometry() const;
+  [[nodiscard]] QVariantMap runtimeLinkState() const;
+  [[nodiscard]] QVariantMap runtimeLinkGeometry() const;
   [[nodiscard]] QVariantMap pathPickerState() const;
   [[nodiscard]] QVariantMap pathPickerGeometry() const;
   [[nodiscard]] QVariantMap historyGeometry() const;
@@ -356,6 +360,7 @@ signals:
   void hostMetricsChanged();
   void configurationChanged();
   void windowGeometryChanged();
+  void runtimeLinkChanged();
   void sidebarGeometryChanged();
   void dialogChanged();
   void terminalChanged(qulonglong pane_id);

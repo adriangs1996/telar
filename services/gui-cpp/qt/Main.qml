@@ -88,6 +88,10 @@ Window {
         onDiagnosticDismissed: telar.dismissDiagnostic()
     }
 
+    LinkStatus {
+        controller: telar
+    }
+
     CommandDialog {
         id: commandDialog
 

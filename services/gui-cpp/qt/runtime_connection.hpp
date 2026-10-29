@@ -7,6 +7,7 @@
 #include "telar_client/codecs/telar_handshake.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include "transport/frame_stream.hpp"
+#include "transport/runtime_link.hpp"
 #include <QByteArrayView>
 #include <QLocalSocket>
 #include <QTimer>
@@ -22,7 +23,6 @@ class RuntimeConnection final : public QObject {
 public:
   static constexpr qint64 output_limit = qint64{4} * 1024 * 1024;
   static constexpr std::size_t read_chunk_size = std::size_t{64} * 1024;
-  static constexpr int reconnect_delay_ms = 1000;
   static constexpr int handshake_timeout_ms = 5000;
 
   explicit RuntimeConnection(ApplicationAllocator &memory, QObject *parent = nullptr);
@@ -36,11 +36,12 @@ public:
   void openRemote(RemoteTarget target);
   void remoteDiscovered(const RemoteDiscovery &discovery);
   void remoteChannelReady(runtime::FileDescriptor channel);
-  void remoteFailed(MachineError error, const QString &detail);
+  void remoteFailed(MachineError error, std::string_view detail);
   [[nodiscard]] std::optional<MachineError> remoteError() const noexcept;
   void close();
   void retryNow();
   [[nodiscard]] bool ready() const noexcept;
+  [[nodiscard]] const RuntimeLink &link() const noexcept;
   [[nodiscard]] QString error() const;
   void dismissError();
   void recover(std::string_view reason);
@@ -66,6 +67,7 @@ signals:
   void disconnected();
   void payloadReceived(QByteArrayView payload);
   void errorChanged();
+  void linkChanged();
   void paneWillDetach(qulonglong pane_id);
 
 private:
@@ -80,6 +82,7 @@ private:
   void consume(std::span<const Byte> payload);
   void write(std::span<const Byte> payload);
   void fail(const QString &message);
+  void fail(std::string_view message);
 
   QLocalSocket socket_;
   QTimer retry_;
@@ -87,13 +90,14 @@ private:
   FrameStream<ApplicationAllocator> stream_;
   Vector<Byte, ApplicationAllocator> output_;
   std::array<char, read_chunk_size> read_buffer_{};
+  RuntimeLink link_;
   QString path_;
   QString error_;
   std::optional<QString> pending_failure_;
   bool dispatching_payload_ = false;
   bool accepted_ = false;
+  bool connecting_ = false;
   bool handshake_sent_ = false;
-  bool retry_permitted_ = true;
   bool closed_ = true;
   bool read_queued_ = false;
   std::optional<RemoteTarget> remote_target_;

@@ -36,7 +36,6 @@ struct TerminalPresentation {
   qreal scale = 1;
   std::uint64_t appearance = 0;
   std::optional<float> box_stroke = std::nullopt;
-  bool attached = false;
   bool pane_focused = false;
   bool keyboard = false;
   bool cursor_on = true;

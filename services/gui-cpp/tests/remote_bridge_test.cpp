@@ -24,6 +24,7 @@
 #include <optional>
 #include <span>
 #include <stdexcept>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -111,9 +112,9 @@ struct Observer {
     ++channels;
   }
 
-  void remoteFailed(MachineError error, const QString &message) {
+  void remoteFailed(MachineError error, std::string_view message) {
     failure = error;
-    detail = message;
+    detail = QString::fromUtf8(message.data(), static_cast<qsizetype>(message.size()));
     ++failures;
   }
 };

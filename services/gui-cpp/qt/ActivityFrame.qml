@@ -13,6 +13,7 @@ Item {
     property var pulseAlpha: undefined
     property bool animate: true
     property bool heldHover: false
+    readonly property bool hovered: enabled && (pointer.containsMouse || heldHover)
     readonly property real outlinePhysicalWidth: 1
     readonly property real density: Screen.devicePixelRatio
     default property alias content: cardContent.data
@@ -27,8 +28,8 @@ Item {
         objectName: "agentCardBackground"
         anchors.fill: parent
         radius: root.geometry.radius
-        color: root.record.selected ? root.colors.surface0 : pointer.containsMouse || root.heldHover ? root.colors.surface1 : "transparent"
-        visible: root.record.selected || pointer.containsMouse || root.heldHover
+        color: root.record.selected ? root.colors.surface0 : root.hovered ? root.colors.surface1 : "transparent"
+        visible: root.record.selected || root.hovered
     }
 
     NativeRoundedRectangle {

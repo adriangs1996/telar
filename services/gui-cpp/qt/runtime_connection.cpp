@@ -1,7 +1,8 @@
 #include "runtime_connection.hpp"
 #include "application/dependencies.hpp"
-#include "machines/connection_policy.hpp"
 #include "machines/failure.hpp"
+#include "machines/machine_row.hpp"
+#include "platform/awake_clock.hpp"
 #include "platform/file_descriptor.hpp"
 #include "platform/peer_identity.hpp"
 #include "remote_bridge.hpp"
@@ -36,7 +37,6 @@ RuntimeConnection::RuntimeConnection(ApplicationAllocator &memory, QObject *pare
       output_(AllocatorRef<Byte, ApplicationAllocator>{memory}) {
   socket_.setReadBufferSize(max_payload_size + frame_prefix_size);
   retry_.setSingleShot(true);
-  retry_.setInterval(reconnect_delay_ms);
   deadline_.setSingleShot(true);
   deadline_.setInterval(handshake_timeout_ms);
 
@@ -62,7 +62,9 @@ void RuntimeConnection::open(const QString &path) {
   close();
   path_ = path;
   closed_ = false;
-  retry_permitted_ = true;
+  link_.start("this machine");
+  error_.clear();
+  emit linkChanged();
   connectSocket();
 }
 
@@ -74,7 +76,10 @@ void RuntimeConnection::openRemote(RemoteTarget target) {
   }
 
   closed_ = false;
-  retry_permitted_ = true;
+  const auto destination = remote_target_->destination.toUtf8();
+  link_.start({destination.constData(), static_cast<std::size_t>(destination.size())});
+  error_.clear();
+  emit linkChanged();
   connectSocket();
 }
 
@@ -102,17 +107,19 @@ void RuntimeConnection::remoteChannelReady(runtime::FileDescriptor channel) {
   beginHandshake();
 }
 
-void RuntimeConnection::remoteFailed(MachineError error, const QString &detail) {
+void RuntimeConnection::remoteFailed(MachineError error, std::string_view detail) {
   if (closed_ || !remote_target_) {
     return;
   }
 
   remote_error_ = error;
-  retry_permitted_ = !MachineConnectionPolicy::permanent(error);
-  const auto name = QString::fromLatin1(MachineFailure::name(error));
-  const auto message = detail.isEmpty() ? name : name + QStringLiteral(": ") + detail;
+  const std::string_view fallback = link_.phase == MachinePhase::connected ? "EndOfStream" : MachineFailure::name(error);
+  const auto message = detail.empty() ? fallback : detail;
   if (dispatching_payload_) {
-    pending_failure_ = message;
+    RuntimeLink bounded;
+    bounded.fail(message);
+    const auto kept = bounded.failure().value_or(std::string_view{});
+    pending_failure_ = QString::fromUtf8(kept.data(), static_cast<qsizetype>(kept.size()));
   } else {
     fail(message);
   }
@@ -123,20 +130,18 @@ std::optional<MachineError> RuntimeConnection::remoteError() const noexcept {
 }
 
 void RuntimeConnection::retryNow() {
-  if (ready()) {
+  if (closed_ || connecting_ || socket_.state() != QLocalSocket::UnconnectedState || !link_.retryNow()) {
     return;
   }
 
-  if (remote_target_) {
-    openRemote(*remote_target_);
-  } else {
-    open(path_);
-  }
+  retry_.stop();
+  connectSocket();
 }
 
 void RuntimeConnection::close() {
   closed_ = true;
   accepted_ = false;
+  connecting_ = false;
   handshake_sent_ = false;
   retry_.stop();
   deadline_.stop();
@@ -146,11 +151,16 @@ void RuntimeConnection::close() {
 
   remote_target_.reset();
   remote_error_.reset();
+  link_.stop();
   socket_.abort();
 }
 
 bool RuntimeConnection::ready() const noexcept {
   return accepted_;
+}
+
+const RuntimeLink &RuntimeConnection::link() const noexcept {
+  return link_;
 }
 
 QString RuntimeConnection::error() const {
@@ -186,10 +196,25 @@ bool RuntimeConnection::report(const ReportLimit &message) {
 }
 
 void RuntimeConnection::connectSocket() {
-  if (closed_ || socket_.state() != QLocalSocket::UnconnectedState) {
+  if (closed_ || connecting_) {
     return;
   }
 
+  if (socket_.state() != QLocalSocket::UnconnectedState) {
+    if (link_.phase == MachinePhase::lost) {
+      retry_.start(link_.retryDelayMilliseconds());
+    }
+
+    return;
+  }
+
+  if (link_.phase == MachinePhase::lost) {
+    static_cast<void>(link_.retry());
+  } else if (link_.phase != MachinePhase::connecting) {
+    return;
+  }
+
+  connecting_ = true;
   stream_.reset();
   pending_failure_.reset();
   remote_error_.reset();
@@ -201,12 +226,14 @@ void RuntimeConnection::connectSocket() {
     }
 
     remote_->open(*remote_target_);
+    emit linkChanged();
 
     return;
   }
 
-  socket_.connectToServer(path_);
   deadline_.start();
+  socket_.connectToServer(path_);
+  emit linkChanged();
 }
 
 void RuntimeConnection::beginHandshake() {
@@ -240,12 +267,7 @@ void RuntimeConnection::socketDisconnected() {
     return;
   }
 
-  accepted_ = false;
-  deadline_.stop();
-  emit disconnected();
-  if (retry_permitted_) {
-    retry_.start();
-  }
+  fail(std::string_view{"EndOfStream"});
 }
 
 void RuntimeConnection::socketFailed(QLocalSocket::LocalSocketError error) {
@@ -257,7 +279,7 @@ void RuntimeConnection::socketFailed(QLocalSocket::LocalSocketError error) {
     return;
   }
 
-  fail(socket_.errorString());
+  fail(error == QLocalSocket::PeerClosedError ? QStringLiteral("EndOfStream") : socket_.errorString());
 }
 
 void RuntimeConnection::read() {
@@ -322,10 +344,13 @@ void RuntimeConnection::consume(std::span<const Byte> payload) {
     }
 
     accepted_ = true;
+    connecting_ = false;
+    link_.adopt(platform::AwakeClock::nowNanoseconds());
     deadline_.stop();
     error_.clear();
     emit errorChanged();
     emit connected();
+    emit linkChanged();
 
     return;
   }
@@ -360,8 +385,21 @@ void RuntimeConnection::write(std::span<const Byte> payload) {
 }
 
 void RuntimeConnection::fail(const QString &message) {
-  error_ = message;
+  const auto utf8 = message.toUtf8();
+  fail(std::string_view{utf8.constData(), static_cast<std::size_t>(utf8.size())});
+}
+
+void RuntimeConnection::fail(std::string_view message) {
+  if (link_.phase == MachinePhase::connected) {
+    link_.lose(message, platform::AwakeClock::nowNanoseconds());
+  } else {
+    link_.connectionFailed(remote_error_.value_or(MachineError::endpoint_unavailable), message);
+  }
+
+  const auto detail = link_.failure().value_or(std::string_view{});
+  error_ = QString::fromUtf8(detail.data(), static_cast<qsizetype>(detail.size()));
   accepted_ = false;
+  connecting_ = false;
   if (remote_) {
     remote_->close();
   }
@@ -374,9 +412,10 @@ void RuntimeConnection::fail(const QString &message) {
   deadline_.stop();
   emit errorChanged();
   emit disconnected();
+  emit linkChanged();
 
-  if (!closed_ && retry_permitted_) {
-    retry_.start();
+  if (!closed_ && link_.phase == MachinePhase::lost) {
+    retry_.start(link_.retryDelayMilliseconds());
   }
 }
 

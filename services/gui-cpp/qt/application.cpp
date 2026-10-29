@@ -16,7 +16,6 @@
 #include "login_shell.hpp"
 #include "launch_arguments.hpp"
 #include "machine_client.hpp"
-#include "machines/connection_policy.hpp"
 #include "machines/machine_row.hpp"
 #include "machines/machines.hpp"
 #include "metrics_projection.hpp"
@@ -146,6 +145,8 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
   connect(this, &Application::windowGeometryChanged, this, &Application::sidebarGeometryChanged);
   connect(this, &Application::windowGeometryChanged, this, &Application::historyChanged);
   connect(this, &Application::windowGeometryChanged, this, &Application::refreshPeek);
+  connect(this, &Application::windowGeometryChanged, this, &Application::runtimeLinkChanged);
+  connect(this, &Application::machineChanged, this, &Application::runtimeLinkChanged);
   connect(&workspaces_, &QAbstractItemModel::rowsInserted, this, &Application::sidebarGeometryChanged);
   connect(&workspaces_, &QAbstractItemModel::rowsRemoved, this, &Application::sidebarGeometryChanged);
   connect(&workspaces_, &QAbstractItemModel::rowsMoved, this, &Application::sidebarGeometryChanged);
@@ -230,9 +231,8 @@ void Application::runtimeDisconnected(MachineClient &client) {
 
   client.session.disconnected();
   static_cast<void>(client.session.settlePresentation());
-  const auto remote_error = client.connection.remoteError();
-  client.phase = remote_error && MachineConnectionPolicy::permanent(*remote_error) ? MachinePhase::failed : MachinePhase::lost;
-  client.needs_setup = remote_error && MachineConnectionPolicy::setupRepairs(*remote_error);
+  client.phase = client.connection.link().phase;
+  client.needs_setup = client.connection.link().setup_repairs;
   summarizeMachine(client);
   if (client.key.machine.slot != machines_.active()) {
     return;
@@ -1356,7 +1356,7 @@ QString Application::error() const {
     return error_;
   }
 
-  return connection().error().isEmpty() ? toQString(session().error()) : connection().error();
+  return toQString(session().error());
 }
 
 }

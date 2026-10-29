@@ -180,7 +180,6 @@ public:
                   .selection = no_selection,
                   .bounds = {0, 0, font_.cell.width(), font_.cell.height()},
                   .appearance = 1,
-                  .attached = true,
                   .pane_focused = true,
                   .keyboard = true,
               },

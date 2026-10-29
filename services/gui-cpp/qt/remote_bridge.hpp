@@ -54,7 +54,7 @@ concept SshHost = requires(QProcess &process, const QStringList &arguments) {
 };
 
 template <typename Observer>
-concept RemoteBridgeObserver = requires(Observer &observer, const RemoteDiscovery &discovery, runtime::FileDescriptor channel, MachineError error, const QString &detail) {
+concept RemoteBridgeObserver = requires(Observer &observer, const RemoteDiscovery &discovery, runtime::FileDescriptor channel, MachineError error, std::string_view detail) {
   { observer.remoteDiscovered(discovery) } -> std::same_as<void>;
   { observer.remoteChannelReady(std::move(channel)) } -> std::same_as<void>;
   { observer.remoteFailed(error, detail) } -> std::same_as<void>;
@@ -353,7 +353,7 @@ private:
       process_.kill();
     }
 
-    observer_.remoteFailed(error, QString::fromUtf8(errors_));
+    observer_.remoteFailed(error, {errors_.constData(), static_cast<std::size_t>(errors_.size())});
   }
 
   Observer &observer_;

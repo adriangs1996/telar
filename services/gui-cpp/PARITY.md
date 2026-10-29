@@ -4,6 +4,21 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [runtime-link checkpoint](measurements/runtime-link.md) adds the original
+bounded failure/headline state, capped exponential retry, healthy-session reset
+and centered workbench dim/status. Its 4,988 text/backoff and 5,536 geometry
+comparisons match original source in Release and clean ASan/UBSan. Real SSH
+transient/authentication-failure scenes discard active offline input, retain
+Local isolation and restore the original remote pane. Each complete offline
+terminal matches 2,336,768 pixels. A controlled disabled-card hover regression
+fails before its fix. Current native Quick passes 88 entries without warnings;
+8 card, 36 scene and 27 window entries pass. Instrumented window assertions pass
+27 but exit leaks remain (257,028 bytes/988 allocations). The final transient
+whole window retains 2,705 differences (15 card and 2,690 metric-footer pixels).
+Retained metric projection, stop-status chrome, remaining build/protocol failures,
+complete platform/theme/density scenes, exit leaks and measured performance stay
+open. This does not close any global gate.
+
 The [machine components](measurements/machine-components.md) have standalone
 profile and remote-protocol comparisons against the original Zig sources on
 macOS and Linux, including sanitizers. These original component comparisons do not establish live SSH, profile

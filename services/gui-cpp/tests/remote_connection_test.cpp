@@ -1,14 +1,18 @@
 #include "application/dependencies.hpp"
 #include "machines/failure.hpp"
+#include "machines/machine_row.hpp"
 #include "remote_bridge.hpp"
 #include "runtime_connection.hpp"
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
+#include "transport/runtime_link.hpp"
 #include <QByteArray>
 #include <QByteArrayView>
 #include <QCoreApplication>
+#include <QElapsedTimer>
 #include <QFile>
+#include <QLocalServer>
 #include <QString>
 #include <QTemporaryDir>
 #include <QtCore/qcontainerfwd.h>
@@ -21,6 +25,10 @@
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
 #include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -33,6 +41,81 @@ class RemoteConnectionTest : public QObject {
   Q_OBJECT
 
 private:
+  Q_SLOT static void retryBackoffKeepsAnInProgressHandshake() {
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    ApplicationAllocator memory;
+    RuntimeConnection connection{memory};
+    QElapsedTimer elapsed;
+    elapsed.start();
+
+    struct Attempt {
+      std::uint16_t number;
+      qint64 started_ms;
+    };
+
+    std::vector<Attempt> attempts;
+    QObject::connect(&connection, &RuntimeConnection::linkChanged, &connection, [&] {
+      const auto &link = connection.link();
+      if (link.phase == MachinePhase::lost && (attempts.empty() || attempts.back().number != link.attempt)) {
+        attempts.push_back({.number = link.attempt, .started_ms = elapsed.elapsed()});
+      }
+    });
+    connection.open(directory.filePath(QStringLiteral("missing.sock")));
+    QTRY_COMPARE(connection.link().phase, MachinePhase::lost);
+    QTRY_COMPARE(connection.link().attempt, 2);
+    QCOMPARE(attempts.size(), std::size_t{3});
+    constexpr qint64 earliest_first_ms = (qint64{RuntimeLink::first_retry_ms} * 9) / 10;
+    QVERIFY(attempts[1].started_ms - attempts[0].started_ms >= earliest_first_ms);
+    QVERIFY(attempts[2].started_ms - attempts[1].started_ms >= earliest_first_ms * 2);
+
+    QLocalServer listener;
+    QVERIFY(listener.listen(directory.filePath(QStringLiteral("waiting.sock"))));
+    const auto attempt = connection.link().attempt;
+    connection.open(listener.fullServerName());
+    QTRY_VERIFY(listener.hasPendingConnections());
+    const std::unique_ptr<QLocalSocket> peer{listener.nextPendingConnection()};
+    QVERIFY(peer != nullptr);
+    QTRY_VERIFY(peer->bytesAvailable() > 0);
+    connection.retryNow();
+    constexpr int observe_handshake_ms = RuntimeLink::first_retry_ms * 2;
+    QTest::qWait(observe_handshake_ms);
+    QCOMPARE(connection.link().phase, MachinePhase::connecting);
+    QCOMPARE(connection.link().attempt, attempt);
+    QVERIFY(!listener.hasPendingConnections());
+    QVERIFY(connection.error().isEmpty());
+  }
+
+  Q_SLOT static void explicitRetryFromFailureDoesNotArmAnOlderTimer() {
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    ApplicationAllocator memory;
+    RuntimeConnection connection{memory};
+    QLocalServer listener;
+    QVERIFY(listener.listen(directory.filePath(QStringLiteral("waiting.sock"))));
+    connection.open(listener.fullServerName());
+    QTRY_VERIFY(listener.hasPendingConnections());
+    const std::unique_ptr<QLocalSocket> first{listener.nextPendingConnection()};
+    QVERIFY(first != nullptr);
+    std::size_t failures = 0;
+    QObject::connect(&connection, &RuntimeConnection::disconnected, &connection, [&] {
+      ++failures;
+      connection.retryNow();
+    });
+    connection.recover("fixture failure");
+    QTRY_VERIFY(listener.hasPendingConnections());
+    const std::unique_ptr<QLocalSocket> second{listener.nextPendingConnection()};
+    QVERIFY(second != nullptr);
+    QTRY_VERIFY(second->bytesAvailable() > 0);
+    constexpr int observe_handshake_ms = RuntimeLink::first_retry_ms * 2;
+    QTest::qWait(observe_handshake_ms);
+    QCOMPARE(failures, std::size_t{1});
+    QCOMPARE(connection.link().phase, MachinePhase::connecting);
+    QCOMPARE(connection.link().attempt, 0);
+    QCOMPARE(connection.link().failure(), std::optional<std::string_view>{"fixture failure"});
+    QVERIFY(!listener.hasPendingConnections());
+  }
+
   Q_SLOT static void framedSshTransportAndPermanentFailure() {
     const QTemporaryDir directory;
     QVERIFY(directory.isValid());
@@ -82,11 +165,19 @@ private:
     QCOMPARE(connection.remoteError(), std::optional{MachineError::authentication_failed});
     QVERIFY(connection.error().contains(QStringLiteral("Permission denied")));
     QCOMPARE(disconnects, std::size_t{1});
-    constexpr int beyond_retry_ms = RuntimeConnection::reconnect_delay_ms + 100;
+    constexpr int beyond_retry_ms = (RuntimeLink::first_retry_ms * 2) + 100;
     QTest::qWait(beyond_retry_ms);
     QCOMPARE(disconnects, std::size_t{1});
     QCOMPARE(handshakes, std::size_t{1});
     QVERIFY(!connection.ready());
+    connection.retryNow();
+    QTRY_COMPARE(disconnects, std::size_t{2});
+    QCOMPARE(connection.link().phase, MachinePhase::failed);
+    QCOMPARE(connection.link().attempt, 0);
+    connection.remoteFailed(MachineError::authentication_failed, "\xff");
+    QCOMPARE(connection.link().phase, MachinePhase::failed);
+    QVERIFY(!connection.link().failure());
+    QVERIFY(connection.error().isEmpty());
   }
 };
 

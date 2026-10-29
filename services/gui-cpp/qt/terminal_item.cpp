@@ -397,7 +397,6 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *previous, [[maybe_unused]] Updat
       .scale = window()->effectiveDevicePixelRatio(),
       .appearance = appearance_,
       .box_stroke = font_grid_.box_stroke,
-      .attached = current->attached,
       .pane_focused = hasActiveFocus(),
       .keyboard = keyboard_,
       .cursor_on = cursor_on_,

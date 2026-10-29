@@ -50,7 +50,8 @@ void Application::initializeMachineProfiles() {
   connect(this, &Application::configurationChanged, this, &Application::machinePromptChanged);
 
   machine_retry_.setSingleShot(true);
-  machine_retry_.setInterval(RuntimeConnection::reconnect_delay_ms);
+  constexpr int profile_retry_ms = 1000;
+  machine_retry_.setInterval(profile_retry_ms);
   connect(&machine_profiles_, &MachineProfilesSource::changed, this, &Application::applyMachineProfiles);
   connect(&machine_retry_, &QTimer::timeout, this, &Application::applyMachineProfiles);
   connect(&machine_profiles_, &MachineProfilesSource::failed, this, [this] {

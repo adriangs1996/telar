@@ -33,6 +33,15 @@ Its complete modal and following terminal regions match exactly. Ten core groups
 pass Release/sanitizers; 27 window and 88 native entries pass, with window exit
 leaks still open. Full navigation, visuals and performance remain unaccepted.
 
+[Runtime-link status and active offline input](measurements/runtime-link.md)
+add the original centered dim/status and exponential retry policy. Original
+text/backoff and geometry match 4,988/5,536 cases in Release and clean core
+sanitizers. Actual transient and authentication-failed SSH scenes discard offline
+input, recover isolated input and match each entire offline terminal. The final
+native suite passes 88 entries without warnings; window assertions pass 27,
+but exit leaks remain (257,028 bytes/988 allocations). Complete visuals,
+connection policy and comparative performance remain open.
+
 Native startup selects Metal on macOS and Vulkan on Linux, matching the original
 GUI's backends. Explicit Qt backend environment settings take precedence.
 The tab atlas still exposes OpenGL edge differences; that override has no
