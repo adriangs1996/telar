@@ -19,7 +19,10 @@ returns to Local on remote terminal status and recovers a new remote shell in
 paired real SSH runs. Its 27 window checks pass; the outage picker retains 1,804
 status pixels and sanitizer exit leaks remain open. Complete visuals,
 affirmative GUI release installation, remaining failure scenarios and comparative
-performance remain open.
+performance remain open. [Actual SSH authentication and host-key rejection](measurements/ssh-permanent-failures.md)
+now pass in both GUIs with strict trust, explicit retry and isolated restored
+input. Both controlled failure pickers match 1,187,840 pixels each; complete
+failure/visual/performance acceptance remains open.
 
 Native startup selects Metal on macOS and Vulkan on Linux, matching the original
 GUI's backends. Explicit Qt backend environment settings take precedence.

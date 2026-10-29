@@ -190,8 +190,18 @@ native Quick passes 88 entries without QML warnings. Window sanitizers pass
 outage picker retains 1,804 status pixels: Zig holds its old connected CPU sample
 while Qt reports unreachable. Complete stop-status/retry policy stays open; do
 not infer full visual acceptance from successful input recovery. Read the new
-report/manifest, then continue permanent SSH failures, active transient offline
-input, native
+report/manifest. The subsequent
+[actual permanent SSH failure checkpoint](../services/gui-cpp/measurements/ssh-permanent-failures.md)
+passes authentication and host-key rejection/recovery in both GUIs through real
+OpenSSH, keeping strict trust. Owned ControlMasters are stopped before fresh
+checks. After repairing fixture keys, no new SSH invocation appears during the
+bounded 2.6-second observation; native Enter retries, retains window identity and
+routes text to the original remote pane/generation. Local input stays isolated.
+All four complete cleanups exit zero. Both complete controlled outage pickers
+match 1,187,840 pixels each. Binaries are unchanged from runtime-stop; no product
+rebuild/test is used to infer these SSH results. Keep stop-status pixels and
+native exit leaks open, then continue remaining build/protocol failures, active
+transient offline input, native
 open/stop/diff, full task/plan peek, exit leaks/performance and all remaining
 PARITY.md gates. Complete
 theme/density/Linux visuals, native exit leaks and comparative performance stay
