@@ -73,6 +73,9 @@ namespace telar {
     configure_frame_interval = 0x45,
     hold_tab = 0x47,
     execution_request = 0x46,
+    configure_pane_desktop = 0x48,
+    complete_clipboard_desktop = 0x49,
+    paste_pane_clipboard = 0x4a,
   };
 
   enum class ServerTag : Byte {
@@ -126,6 +129,9 @@ namespace telar {
     worktree_registered = 0xb4,
     limit_list = 0xb5,
     execution_reply = 0xb6,
+    clipboard_desktop_request = 0xb7,
+    clipboard_desktop_execute = 0xb8,
+    clipboard_desktop_cancel = 0xb9,
   };
 
   struct RequestRuntimeState {

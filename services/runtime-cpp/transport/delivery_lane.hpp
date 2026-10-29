@@ -93,6 +93,9 @@ constexpr DeliveryLane deliveryLane(ServerTag tag) {
   case ServerTag::worktree_registered:
   case ServerTag::limit_list:
   case ServerTag::execution_reply:
+  case ServerTag::clipboard_desktop_request:
+  case ServerTag::clipboard_desktop_execute:
+  case ServerTag::clipboard_desktop_cancel:
     return DeliveryLane::management;
   }
 

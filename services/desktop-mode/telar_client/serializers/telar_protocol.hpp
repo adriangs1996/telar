@@ -1073,6 +1073,42 @@ namespace telar {
             Field<&ConfigureTerminalColors::background, OptionalValue<FixedBytes<3>>, "background">,
             Field<&ConfigureTerminalColors::palette, OptionalValue<FixedBytes<48>>, "palette">> {};
 
+  struct ConfigurePaneDesktop {
+    std::uint64_t pane_id{};
+    std::uint64_t pane_generation{};
+    bool visible{};
+    bool focused{};
+    bool light{};
+    bool clipboard{};
+    std::optional<std::array<Byte, 3>> foreground{};
+    std::optional<std::array<Byte, 3>> background{};
+    std::optional<std::array<Byte, 3>> cursor{};
+    std::optional<std::array<Byte, 48>> palette{};
+
+    void validate() const {
+      if (focused && !visible) {
+        throw EncodingError{"A focused pane must be visible"};
+      }
+    }
+
+    bool operator==(const ConfigurePaneDesktop &) const = default;
+  };
+
+  template <>
+  struct MessageSchema<ConfigurePaneDesktop>
+      : Schema<Direction::client,
+               ClientTag::configure_pane_desktop,
+               Field<&ConfigurePaneDesktop::pane_id, NonzeroU64, "pane_id">,
+               Field<&ConfigurePaneDesktop::pane_generation, NonzeroU64, "pane_generation">,
+               Field<&ConfigurePaneDesktop::visible, BoolByte, "visible">,
+               Field<&ConfigurePaneDesktop::focused, BoolByte, "focused">,
+               Field<&ConfigurePaneDesktop::light, BoolByte, "light">,
+               Field<&ConfigurePaneDesktop::clipboard, BoolByte, "clipboard">,
+               Field<&ConfigurePaneDesktop::foreground, OptionalValue<FixedBytes<3>>, "foreground">,
+               Field<&ConfigurePaneDesktop::background, OptionalValue<FixedBytes<3>>, "background">,
+               Field<&ConfigurePaneDesktop::cursor, OptionalValue<FixedBytes<3>>, "cursor">,
+               Field<&ConfigurePaneDesktop::palette, OptionalValue<FixedBytes<48>>, "palette">> {};
+
   struct QueryClients {
     std::uint64_t request_id{};
   };
@@ -2257,3 +2293,5 @@ namespace telar {
                Field<&ExecutionReply::stderr_bytes, SizedBytes<u16, 4096>, "stderr">> {};
 
 } // namespace telar
+
+#include "telar_clipboard_protocol.hpp"
