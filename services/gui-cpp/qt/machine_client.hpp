@@ -4,7 +4,9 @@
 #include "application/session.hpp"
 #include "application_effects.hpp"
 #include "machine_client_key.hpp"
+#include "machines/limits.hpp"
 #include "machines/machine_row.hpp"
+#include "memory/fixed_text.hpp"
 #include "platform/awake_clock.hpp"
 #include "platform/window_lease.hpp"
 #include "runtime_connection.hpp"
@@ -23,6 +25,7 @@ struct MachineClient {
   std::uint64_t identity = 0;
   MachinePhase phase = MachinePhase::connecting;
   bool needs_setup = false;
+  runtime::FixedText<MachineLimits::program_bytes> admitted_program;
 
   explicit MachineClient(ApplicationAllocator &memory, Application &application, MachineClientKey admission)
       : key(admission),

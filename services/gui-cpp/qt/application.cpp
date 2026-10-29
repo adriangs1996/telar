@@ -17,6 +17,7 @@
 #include "links/link_target.hpp"
 #include "login_shell.hpp"
 #include "machine_client.hpp"
+#include "machines/connection_policy.hpp"
 #include "machines/machine_row.hpp"
 #include "machines/machines.hpp"
 #include "metrics_projection.hpp"
@@ -126,6 +127,7 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
     : QObject(parent),
       memory_(memory),
       configuration_source_(memory),
+      machine_profiles_(memory),
       key_bindings_(*this),
       pointer_dispatcher_(*this),
       link_opener_(*this),
@@ -133,6 +135,7 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
       system_notifier_(memory),
       hostname_(platform::hostName()) {
   initializeMachines();
+  initializeMachineProfiles();
   key_bindings_.configure(configuration_source_.input(), configuration_source_.keymap());
 
   connect(this, &Application::configurationChanged, this, &Application::windowGeometryChanged);
@@ -214,7 +217,9 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
 void Application::runtimeDisconnected(MachineClient &client) {
   client.session.disconnected();
   static_cast<void>(client.session.settlePresentation());
-  client.phase = MachinePhase::lost;
+  const auto remote_error = client.connection.remoteError();
+  client.phase = remote_error && MachineConnectionPolicy::permanent(*remote_error) ? MachinePhase::failed : MachinePhase::lost;
+  client.needs_setup = remote_error && MachineConnectionPolicy::setupRepairs(*remote_error);
   summarizeMachine(client);
   if (client.key.machine.slot != machines_.active()) {
     return;
@@ -260,6 +265,7 @@ void Application::configureLaunch(const QString &directory, const QStringList &a
 
   const auto command = arguments.isEmpty() ? shell.arguments() : std::span<const std::string_view>{views}.first(static_cast<std::size_t>(storage.size()));
   session().setLaunch(Launch{.cwd = {cwd.constData(), static_cast<std::size_t>(cwd.size())}, .arguments = command});
+  restore_layout_ = restore;
   session().setRestoreLayout(restore);
 }
 

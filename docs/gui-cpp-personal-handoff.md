@@ -24,10 +24,11 @@ selection and the original stopped phase. Read
 `services/gui-cpp/measurements/machine-window.md` and its validation manifest
 for the current scope. Earlier reports and manifests remain historical.
 
-The normal executable still initializes only the local client. Profile source
-admission, the picker/actions and native machine pixels are the
-next work; the action catalogue remains 25/29. No global parity gate is closed.
-The current native Cocoa/Metal scale-1 suite passes all 82 entries after the
+The latest admission checkpoint now loads saved profiles and starts enabled
+SSH clients in the normal executable. The picker/actions and native machine
+pixels are the next work; the action catalogue remains 25/29. No global parity
+gate is closed. The window-adapter checkpoint records 82 Cocoa/Metal scale-1
+passes, before the transport/profile changes, after the
 owned-window focus/geometry barrier; twenty selected regressions pass.
 Native sanitizer assertions pass, but exit leak acceptance remains OPEN.
 An independent Qt-only font-metrics control also reports leaks. Retain failed
@@ -35,7 +36,7 @@ runs; do not suppress them or infer that every GUI leak is explained by that
 control. The standalone opener and expanded registry oracle pass sanitizers
 with leak detection enabled.
 
-The following transport checkpoint adds `qt/RemoteBridge` and
+The following transport checkpoint adds `qt::RemoteBridge` and
 `RuntimeConnection::openRemote`: bounded discovery and stderr, cancellable
 request generations, managed SSH options and a native socketpair carrying the
 existing framed connection. Read `measurements/machine-transport.md` and its
@@ -45,7 +46,21 @@ that reused the Qt-linked test executable failed discovery because its child
 exited with a CoreFoundation leak; the retained independent control reproduces
 64 bytes. The accepted fixture is a separate protocol-only executable with no
 Qt linkage, instrumented in sanitizer builds. No suppression or disabled leak
-check was introduced. Saved-profile admission is still the next integration.
+check was introduced.
+
+Saved-profile admission is now implemented in `qt/machine_profile_controller.cpp`.
+Read `services/gui-cpp/measurements/machine-admission.md` and its manifest. It reconciles stable
+IDs, program/destination incarnations, pinned temporary rows, retirement to
+local and destination-scoped identities derived from the local window lease.
+Discovery gives the session its owned home/shell defaults. Managed runtime
+location and secure directory preparation have independent coverage. Four
+profile-window cases run through the production source and subprocess path;
+six selected Release and five ASan/UBSan CTests pass, including the window
+cases, with leak detection enabled. The normal Cocoa/Metal executable also
+opens a shell on an isolated owned reference runtime. Its first smoke fixture
+contained an invalid local label; preserve the rejected capture and the later
+valid one. The four machine actions remain unwired (25/29). Continue the picker,
+forms/setup and source composition, then all remaining PARITY.md gates.
 
 The sections below describe the transfer baseline; prefer this checkpoint and
 the latest window-adapter report where the implementation has since advanced.

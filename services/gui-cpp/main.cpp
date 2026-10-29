@@ -61,6 +61,17 @@ QString configurationPath(const QCommandLineParser &parser) {
   return QFileInfo::exists(path) ? path : QString{};
 }
 
+QString machineProfilesPath() {
+  const auto base = qEnvironmentVariable("XDG_CONFIG_HOME");
+  if (!base.isEmpty()) {
+    return base + QStringLiteral("/telar/machines.json");
+  }
+
+  const auto home = qEnvironmentVariable("HOME");
+
+  return home.isEmpty() ? QString{} : home + QStringLiteral("/.config/telar/machines.json");
+}
+
 QString runtimeEndpoint(const QCommandLineParser &parser) {
   auto endpoint = parser.value(QStringLiteral("socket"));
   if (endpoint.isEmpty()) {
@@ -139,6 +150,7 @@ int main(int argc, char **argv) {
 
     client.setWindow(*window);
     client.open(runtimeEndpoint(parser));
+    client.openMachines(machineProfilesPath());
     scheduleSmokeTest(parser, client, *window);
 
     return QGuiApplication::exec();

@@ -10,15 +10,16 @@ macOS and Linux, including sanitizers. The four machine actions remain unported;
 this does not establish live SSH, profile filesystem, switching or visual parity.
 
 [Machine profile persistence](measurements/machine-storage.md) now has standalone
-domain, native filesystem and Qt worker validation. Window integration, the four
-machine actions, live SSH and their native visual acceptance remain open.
+domain, native filesystem and Qt worker validation. The later admission
+checkpoint below integrates the window; the four machine actions, live SSH and
+native visual acceptance remain open.
 
 [Machine session presentation](measurements/machine-presentation.md) now supports
 metadata-only hidden sessions, deferred layout restoration and releasing pane
 screens without closing runtime processes. The window adapter now owns separate
 allocator-backed client/session/connection slots while sharing window resources.
-Production profile admission, machine actions, SSH and their visual acceptance
-remain pending.
+The later profile-admission checkpoint below connects saved rows and SSH
+clients. Machine actions and complete visual acceptance remain pending.
 
 The [window machine table and picker](measurements/machine-registry.md) now
 retain bounded owned rows, destination admission generations, event-driven
@@ -34,8 +35,8 @@ clients settle presentation after each event, cached summaries avoid hidden
 model scans, and window presentation, physical key ownership, notification
 callbacks, sound completion and queued link completion retain their origin.
 Twenty selected regressions and a complete Cocoa/Metal scale-1 run pass.
-The normal executable still initializes only the local client; saved profile
-and SSH admission are the next integration step. Native sanitizer assertions
+That checkpoint initialized only the local client; the profile-admission
+checkpoint below now connects saved rows to the window. Native sanitizer assertions
 pass, but the unsuppressed exit leak gate remains open. A Qt-only font control
 also reproduces leaks; this does not establish ownership of every GUI leak.
 
@@ -45,8 +46,18 @@ adopts a native stdio socket pair into the existing framed `RuntimeConnection`.
 Controlled subprocess tests cover duplex messages, permanent failures,
 cancellation and destination replacement. Both standalone transport suites pass
 ASan/UBSan with leak detection enabled. This does not establish a live SSH-host
-comparison. Production profile admission and machine actions remain pending;
-the executable still starts only its local client.
+comparison. The later profile-admission checkpoint below connects the
+transport to saved machines; the four machine actions remain pending.
+
+The [saved-profile window adapter](measurements/machine-admission.md) now loads
+`machines.json` in production, admits enabled SSH clients in the background,
+reconciles stable IDs and returns to local before retiring a visible machine.
+Remote launch defaults and destination-scoped window identities are connected.
+Six selected Release CTests and five ASan/UBSan CTests pass with leak detection
+enabled, including the profile-window cases. A production Cocoa/Metal smoke
+opens a shell on an isolated reference runtime. The action catalogue remains
+25/29; picker/actions, setup, real SSH hosts, Linux integration, complete native
+visual acceptance and comparative performance remain open.
 
 Two initial Cocoa/Metal runs each recorded 81 passes and one failure: editor terminal
 focus in the first, history inspection geometry in the second. The editor case
@@ -55,8 +66,8 @@ passes alone and in three repetitions of its preceding sequence. The
 logs and the focus trace. A [later investigation](measurements/native-window-control.md)
 reproduces external window-manager interference and records two complete runs
 with 82 passes after preparing the owned window's geometry and focus. This is
-Cocoa/Metal scale-1 regression evidence; the current window adapter retains a
-fresh complete 82-case run. Complete visual acceptance remains open.
+Cocoa/Metal scale-1 regression evidence; the window-adapter report retains an
+82-case run from before the transport and profile-admission changes. Complete visual acceptance remains open.
 
 ## Visual acceptance remains open
 
@@ -1316,7 +1327,7 @@ performance.
 | Runtime control | Remaining routed CLI commands |
 | History browser | Retained semantic-action captures across selected-card replacement, complete modal input lifecycle and the DelegateModel page-replacement warning, inspector facts/content, exact day-group placement/scroll admission and older-row placement, expansion/leaving animation, remaining filter theme/density/hover and Linux paired pixels, remaining query notification/synchronization, additional loading themes/densities and physical scheduling, footer error-caption shaping, entrance animation and complete paired pixels; remaining focus, gesture and status behavior; comparative cache-pressure profiling. Physical panel/search/inspection geometry, compact paths, metadata/action and footer fitting, calendar/status labels, word wrapping, bounded card height/remainder, visible fuzzy matching, selection containment, row/footer revisions, capture retirement and reusable components have scoped coverage. One complete selected card, browse/inspect footers, six filter-header scenes and seven search bands match paired Cocoa pixels; other states/themes/densities and the complete window remain open. |
 | Activity | Remote source connection adapters and source composition; favicons and peeks; remaining density/icon pixels; complete scrolling, selection and task interactions; complete paired task/working frames on both platforms; physical suspend/resume validation. The generic bounded forest, coordinator ancestry, full/compact tasks, tracked commands, project progress/attention, plan cells and status clocks have original-source/component coverage. Scoped macOS live pairs verify worktree/hook projection and listed exact regions, including mixed-font task facts and project rows. |
-| Navigation | Remote machines, SSH forwarding, machine profiles, workspace/worktree navigation history, remaining worktree management and nested picks. `goto-picker` opens a fuzzy native palette for contexts, current-context tabs and agents, with complete identities and query-preserving prefixes. The generated catalogue exposes 25 implemented actions out of 29. The runtime path picker browses directories and inserts quoted relative or absolute paths; file-icon sampling, complete native path interactions, failure scenes and other theme/density pixels remain open. Suggestions use the runtime engine, retain retryable failures, discard stale replies and paste without Enter; returning to actions restores the query, selected row and editor selection. Leaving a linked worktree selects its project; cleanup only forgets gone rows without tabs. Machine actions remain unported. Four palette panels, one empty path panel and eight suggestion panels have scoped exact Cocoa pixels; complete visual and interaction coverage remains open. |
+| Navigation | Machine picker/actions and setup, actual SSH hosts, workspace/worktree navigation history, remaining worktree management and nested picks. `goto-picker` opens a fuzzy native palette for contexts, current-context tabs and agents, with complete identities and query-preserving prefixes. The generated catalogue exposes 25 implemented actions out of 29. The runtime path picker browses directories and inserts quoted relative or absolute paths; file-icon sampling, complete native path interactions, failure scenes and other theme/density pixels remain open. Suggestions use the runtime engine, retain retryable failures, discard stale replies and paste without Enter; returning to actions restores the query, selected row and editor selection. Leaving a linked worktree selects its project; cleanup only forgets gone rows without tabs. Machine actions remain unported. Four palette panels, one empty path panel and eight suggestion panels have scoped exact Cocoa pixels; complete visual and interaction coverage remains open. |
 | Extensibility | Plugins, custom bars, dynamic widgets, panels and picks; command-action integration with these surfaces |
 | Footer | Configured bar positions/content, full priority fitting and overflow; exact diagnostic fitting and complete battery/badge/mode-chip density/theme geometry; complete mode-label font fallback. Default metrics, CPU history, TLS, dismissible diagnostics and prefix/copy hint layout are implemented. |
 | Attachments and links | Clipboard image shelf, attachment lifecycle, diagrams and complete native link/preview interaction equivalence, including chrome interception and layout edge cases |

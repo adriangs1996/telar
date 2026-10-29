@@ -14,7 +14,9 @@
 #include "list_model.hpp"
 #include "machine_client.hpp"
 #include "machine_client_key.hpp"
+#include "machine_profiles_source.hpp"
 #include "machines/machines.hpp"
+#include "machines/profile.hpp"
 #include "palette/navigation_target.hpp"
 #include "palette/query.hpp"
 #include "palette/ranked_matches.hpp"
@@ -58,6 +60,7 @@ namespace telar::gui::test {
 struct HistoryPresentation;
 struct FramePacing;
 struct MachineWindow;
+struct MachineProfileWindow;
 }
 
 namespace telar::gui::qt {
@@ -67,6 +70,7 @@ class TerminalItem;
 class Application final : public QObject {
   friend struct ApplicationEffects;
   friend struct test::MachineWindow;
+  friend struct test::MachineProfileWindow;
 
   Q_OBJECT
   QML_NAMED_ELEMENT(GuiController)
@@ -176,6 +180,7 @@ public:
   Application &operator=(Application &&) = delete;
 
   void open(const QString &endpoint);
+  void openMachines(const QString &path);
   void loadConfiguration(const QString &path, const QString &profile, const QString &theme);
   void configureLaunch(const QString &directory, const QStringList &arguments, bool restore);
   void setWindow(QQuickWindow &window);
@@ -324,6 +329,7 @@ signals:
   void notification(const QString &message);
   void notificationsChanged();
   void machineChanged();
+  void machinesChanged();
 
 private:
   friend struct test::HistoryPresentation;
@@ -345,6 +351,18 @@ private:
   static constexpr std::size_t palette_capacity = WorkspaceReplica<ApplicationAllocator>::maximum_workspaces + GuiSession::maximum_workspace_tabs + AgentReplica<ApplicationAllocator>::capacity;
   using PaletteMatches = RankedMatches<PaletteTarget, palette_capacity>;
 
+  enum class MachineRetirement : std::uint8_t {
+    disabled,
+    removed,
+  };
+
+  void initializeMachineProfiles();
+  void applyMachineProfiles();
+  void reconcileMachines();
+  void reconcileMachine(const MachineProfile &profile);
+  void admitMachine(Machines::Slot slot);
+  void retireMachine(Machines::Slot slot, MachineRetirement reason);
+  static void discoveredMachine(MachineClient &client, const RemoteDiscovery &discovery);
   void initializeMachines();
   void configureClients();
   void setClientsDisplayRefresh(std::uint16_t fps);
@@ -467,6 +485,11 @@ private:
   std::uint64_t machine_view_revision_ = 0;
   std::optional<MachineClientKey> sound_owner_;
   ConfigurationSource configuration_source_;
+  MachineProfilesSource machine_profiles_;
+  QTimer machine_retry_;
+  QString machine_control_endpoint_;
+  bool prepare_machine_directory_ = false;
+  bool restore_layout_ = true;
   std::optional<WindowFramePacer<>> frame_pacer_;
   KeyBindings key_bindings_;
   PointerDispatcher pointer_dispatcher_;

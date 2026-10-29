@@ -1,3 +1,4 @@
+#include "platform/managed_directory.hpp"
 #include "platform/peer_identity.hpp"
 #include "platform/temporary_directory.hpp"
 #include "platform/window_lease.hpp"
@@ -73,6 +74,39 @@ void windowLease() {
   require(::chmod(directory_path.c_str(), owner_only_directory) == 0, "restore endpoint directory permissions");
 }
 
+void managedDirectorySafety() {
+  const telar::runtime::TemporaryDirectory directory{(std::filesystem::temp_directory_path() / "telar-gui-managed-XXXXXX").string()};
+  const std::filesystem::path base{directory.path()};
+  const auto managed = (base / "telar").string();
+  telar::gui::platform::prepareManagedDirectory(managed);
+  constexpr mode_t shared_mode = 0777;
+  require(::chmod(managed.c_str(), shared_mode) == 0, "prepare owned permissive directory");
+  telar::gui::platform::prepareManagedDirectory(managed);
+  struct stat state{};
+  constexpr mode_t permissions = 0777;
+  constexpr mode_t owner_only = 0700;
+  require(::stat(managed.c_str(), &state) == 0 && (state.st_mode & permissions) == owner_only, "managed runtime directories must be restricted owner-only");
+  const auto link = base / "link";
+  std::filesystem::create_directory_symlink(managed, link);
+  bool rejected = false;
+  try {
+    telar::gui::platform::prepareManagedDirectory(link.string());
+  } catch (const std::exception &) {
+    rejected = true;
+  }
+
+  require(rejected, "managed directory preparation must never follow a final symlink");
+  rejected = false;
+  const auto missing = base / "absent";
+  try {
+    telar::gui::platform::prepareManagedDirectory((missing / "telar").string());
+  } catch (const std::exception &) {
+    rejected = true;
+  }
+
+  require(rejected && !std::filesystem::exists(missing), "a missing environment base must fail without creating ancestors");
+}
+
 void peerCredentials() {
   std::array<int, 2> descriptors{};
   require(::socketpair(AF_UNIX, SOCK_STREAM, 0, descriptors.data()) == 0, "create peer credential fixture");
@@ -101,6 +135,7 @@ int main() {
   try {
     windowLease();
     peerCredentials();
+    managedDirectorySafety();
     temporaryDirectoryCleanup();
     std::puts("gui-platform: passed");
   } catch (const std::exception &error) {

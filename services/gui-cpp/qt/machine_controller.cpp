@@ -8,6 +8,7 @@
 #include "machines/machines.hpp"
 #include "platform/awake_clock.hpp"
 #include "presentation/agent_order.hpp"
+#include "remote_bridge.hpp"
 #include "runtime_connection.hpp"
 #include <QByteArrayView>
 #include <QRandomGenerator>
@@ -57,6 +58,7 @@ MachineClient &Application::createClient(Machines::Slot slot) {
   const MachineClientKey key{.machine = machines_.token(slot), .generation = next_client_generation_++};
   auto owned = makeOwned<MachineClient>(memory_, memory_, *this, key);
   auto *client = owned.get();
+  client->admitted_program.assign(machines_.row(slot).program.view());
   client->identity = QRandomGenerator::system()->generate64() | std::uint64_t{1};
   client->session.configure(configuration_source_.configuration());
   client->session.setPresented(slot == machines_.active());
@@ -121,9 +123,16 @@ const RuntimeConnection &Application::connection() const noexcept {
 
 void Application::connectMachine(MachineClient &client) {
   const auto key = client.key;
+  connect(&client.connection, &RuntimeConnection::discovered, this, [this, key](const RemoteDiscovery &discovery) {
+    if (auto *source = findClient(key)) {
+      discoveredMachine(*source, discovery);
+    }
+  },
+          Qt::DirectConnection);
   connect(&client.connection, &RuntimeConnection::connected, this, [this, key] {
     if (auto *source = findClient(key)) {
       source->phase = MachinePhase::connected;
+      source->needs_setup = false;
       source->session.connected(source->identity);
       summarizeMachine(*source);
       if (key.machine.slot == machines_.active()) {
@@ -183,6 +192,7 @@ void Application::selectMachine(MachineToken target) {
   }
 
   emit machineChanged();
+  emit machinesChanged();
   synchronizeWorkbenchGeometry();
   session().setPresented(true);
   configureWindow();
@@ -251,7 +261,9 @@ void Application::summarizeMachine(const MachineClient &client) {
     });
   }
 
-  static_cast<void>(machines_.summarize(slot, observation));
+  if (machines_.summarize(slot, observation)) {
+    emit machinesChanged();
+  }
 }
 
 }

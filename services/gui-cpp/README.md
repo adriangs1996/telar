@@ -204,19 +204,21 @@ The [machine components](measurements/machine-components.md) now preserve the
 original saved profile format, stable identities, remote discovery and SSH error
 policies without Qt. Their original-source comparisons cover 14,494 profile
 cases and 15,638 remote cases on macOS and Linux, in Release and under
-ASan/UBSan. The machine picker, multiple runtime clients, profile filesystem
-integration, live SSH and their visual acceptance remain unported.
+ASan/UBSan. Those comparisons cover the independent components; later window
+and saved-profile checkpoints connect them to runtime clients. The machine
+picker, actual SSH-host acceptance and native visuals remain pending.
 
 The [machine profile store](measurements/machine-storage.md) adds atomic batches,
 private filesystem storage and an independent Qt worker with polling, owned edit
 requests and cancellable lock waits. Its component tests pass on both platforms
-in Release and under ASan/UBSan. Connecting it to machine navigation and runtime
-sessions remains pending.
+in Release and under ASan/UBSan. The later saved-profile adapter connects it to
+runtime sessions; machine navigation actions remain pending.
 
 The [machine presentation lifecycle](measurements/machine-presentation.md) adds
 deferred hidden startup, screen release, remembered pane restoration and bounded
-workspace fallback to the platform-independent session. The running window still
-has one local runtime client; machine navigation and SSH integration remain pending.
+workspace fallback to the platform-independent session. The later window and
+saved-profile adapters extend this to one client per
+enabled machine; picker actions and complete SSH acceptance remain pending.
 
 ```sh
 python3 services/gui-cpp/tools/check_row_text.py --output-dir /tmp/telar-row-text
@@ -1381,12 +1383,14 @@ the shared `Application` keeps fonts, input dispatch, native effects and scene
 resources. Two framed socket fixtures verify presentation switching and origin
 isolation, including colliding pane/frame identifiers and held keys. The
 [window adapter report](measurements/machine-window.md) records the validation
-and unsuppressed native leak gate. Production profile and SSH admission remain
-pending, and the normal executable still opens only the local machine.
+and unsuppressed native leak gate. This was the checkpoint before saved profile admission was connected.
 The [SSH transport report](measurements/machine-transport.md) adds a bounded
 subprocess discovery/stdio bridge to the existing framing transport, with
-controlled process coverage and unsuppressed ASan/UBSan acceptance. Profile
-admission, actual SSH-host validation and the four machine actions remain open.
+controlled process coverage and unsuppressed ASan/UBSan acceptance. The
+[saved-profile adapter](measurements/machine-admission.md) now admits enabled
+SSH clients in production, reconciles stable IDs and scopes remote window
+identities by destination. Actual SSH-host validation and the four machine
+actions remain open.
 
 ## Build and run
 
@@ -1532,7 +1536,7 @@ and local host name. Unknown tokens remain literal. `WindowTitle` expands into
 256 bytes, removes ASCII/C1 controls and discards an incomplete or invalid UTF-8
 tail. It can run without Qt, an allocator, a session or a window. Its bounded
 suffix operation is available independently; held-limit suffix delivery and
-saved machine-label overrides remain unported.
+native saved machine-label presentation remains unverified.
 
 Routed `sidebar_resize` requests validate and clamp semantic column widths,
 preserving visibility and at least twenty workbench columns. The minimum

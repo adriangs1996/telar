@@ -1,6 +1,10 @@
+#include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/codecs/telar_handshake.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_handshake.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -48,8 +52,57 @@ void writeFrame(std::span<const Byte> payload) {
   }
 }
 
+template <typename Message>
+void sendMessage(const Message &message) {
+  std::vector<Byte> storage(Codec::encodedSize(message));
+  writeFrame(Codec::encode(message, storage));
+}
+
+void windowMessage(std::span<const Byte> payload) {
+  constexpr TabLocation location{.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
+  constexpr std::uint64_t pane_id = 1;
+  constexpr std::size_t decode_capacity = 4096;
+  std::array<Byte, decode_capacity> scratch{};
+  DecodeStorage decode{scratch};
+  switch (static_cast<ClientTag>(payload.front())) {
+  case ClientTag::request_runtime_state:
+    sendMessage(ClientLayoutSnapshot{});
+    break;
+  case ClientTag::open_pane: {
+    const auto request = Codec::decode<OpenPane>(payload, decode);
+    const std::array<std::string_view, 3> expected{"/bin/sh", "-l", "-i"};
+    if (!request.launch || request.launch->cwd != "/home/remote" || !std::ranges::equal(request.launch->arguments, expected)) {
+      throw std::runtime_error{"Remote launch did not adopt discovered home and shell"};
+    }
+
+    sendMessage(PaneOpened{.request_id = request.request_id, .pane_id = pane_id, .location = location, .created = true, .pane_generation = 1});
+    break;
+  }
+  case ClientTag::request_tab_snapshot: {
+    const auto request = Codec::decode<RequestTabSnapshot>(payload, decode);
+    const std::array panes{PaneDescriptor{.pane_id = pane_id, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+    sendMessage(TabSnapshot{.request_id = request.request_id, .location = location, .panes = panes});
+    break;
+  }
+  case ClientTag::request_workspace_snapshot: {
+    const auto request = Codec::decode<RequestWorkspaceSnapshot>(payload, decode);
+    const std::array tabs{TabDescriptor{.tab_id = location.tab_id, .pane_count = 1}};
+    sendMessage(WorkspaceSnapshot{.request_id = request.request_id, .workspace = location.workspace, .name = "remote", .tabs = tabs});
+    break;
+  }
+  default:
+    break;
+  }
+}
+
 int sshFixture(std::span<char *> arguments) {
   const std::string_view destination{arguments[arguments.size() - 2]};
+  if (destination == "missing") {
+    constexpr int command_missing = 127;
+
+    return command_missing;
+  }
+
   if (destination == "denied") {
     static_cast<void>(std::fputs("Permission denied (publickey).", stderr));
     constexpr int ssh_failed = 255;
@@ -76,7 +129,11 @@ int sshFixture(std::span<char *> arguments) {
       return 0;
     }
 
-    writeFrame(payload);
+    if (destination.starts_with("window")) {
+      windowMessage(payload);
+    } else {
+      writeFrame(payload);
+    }
   }
 }
 

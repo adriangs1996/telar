@@ -60,7 +60,7 @@ public:
   }
 
 signals:
-  void discovered(QByteArrayView home, QByteArrayView shell, QByteArrayView endpoint);
+  void discovered(const RemoteDiscovery &discovery);
   void connected();
   void disconnected();
   void payloadReceived(QByteArrayView payload);

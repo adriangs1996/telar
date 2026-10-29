@@ -6,6 +6,7 @@
 #include "machines/field_rules.hpp"
 #include "machines/remote_command.hpp"
 #include "platform/file_descriptor.hpp"
+#include "platform/managed_directory.hpp"
 #include "platform/path_limits.hpp"
 #include "platform/stdio_socket.hpp"
 #include "ssh_options.hpp"
@@ -36,6 +37,7 @@ struct RemoteTarget {
   QString destination;
   QString program;
   QString local_endpoint;
+  bool prepare_directory = false;
 };
 
 struct NativeSshHost {
@@ -175,6 +177,12 @@ private:
     options_task_.setFuture(QtConcurrent::run([request, generation] {
       OptionsResult result{.arguments = {}, .generation = generation};
       try {
+        if (request.prepare_directory) {
+          const auto endpoint = request.local_endpoint.toUtf8();
+          const auto directory = view(endpoint).substr(0, view(endpoint).rfind('/'));
+          platform::prepareManagedDirectory(directory);
+        }
+
         result.arguments = SshOptions::prepare(request.local_endpoint, request.destination.toUtf8());
       } catch (const MachineFailure &failure) {
         result.error = failure.code();

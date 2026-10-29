@@ -9,6 +9,10 @@
 
 namespace telar::gui::platform {
 
+std::uint32_t currentUserId() noexcept {
+  return ::getuid();
+}
+
 bool isCurrentUser(std::intptr_t descriptor) noexcept {
 #if defined(__APPLE__) || defined(__FreeBSD__)
   uid_t user = 0;

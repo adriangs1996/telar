@@ -83,10 +83,7 @@ void RuntimeConnection::remoteDiscovered(const RemoteDiscovery &discovery) {
     return;
   }
 
-  const auto view = [](std::string_view text) {
-    return QByteArrayView{text.data(), static_cast<qsizetype>(text.size())};
-  };
-  emit discovered(view(discovery.home()), view(discovery.shell()), view(discovery.endpoint()));
+  emit discovered(discovery);
 }
 
 void RuntimeConnection::remoteChannelReady(runtime::FileDescriptor channel) {

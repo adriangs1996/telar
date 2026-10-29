@@ -1,5 +1,6 @@
 #include "application/dependencies.hpp"
 #include "machines/failure.hpp"
+#include "remote_bridge.hpp"
 #include "runtime_connection.hpp"
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
@@ -57,8 +58,9 @@ private:
     QObject::connect(&connection, &RuntimeConnection::disconnected, &connection, [&] {
       ++disconnects;
     });
-    QObject::connect(&connection, &RuntimeConnection::discovered, &connection, [&](QByteArrayView remote_home, QByteArrayView, QByteArrayView) {
-      home = remote_home.toByteArray();
+    QObject::connect(&connection, &RuntimeConnection::discovered, &connection, [&](const RemoteDiscovery &discovery) {
+      const auto remote_home = discovery.home();
+      home = QByteArray{remote_home.data(), static_cast<qsizetype>(remote_home.size())};
     });
     QObject::connect(&connection, &RuntimeConnection::payloadReceived, &connection, [&](QByteArrayView payload) {
       received = payload.toByteArray();
