@@ -3,8 +3,21 @@
 #include "parameters.hpp"
 #include "sequence.hpp"
 #include "../../graphics/kitty_control.hpp"
+#include <charconv>
 
 namespace telar::runtime::control {
+
+inline constexpr std::array<std::uint16_t, 5> desktop_modes{1004, 2031, 2033, 2048, 5522};
+
+template <typename Writer>
+void forwardPrivateMode(std::uint16_t mode, char final, Writer &&write) {
+  std::array<char, 16> command;
+  constexpr std::string_view prefix = "\x1b[?";
+  std::copy(prefix.begin(), prefix.end(), command.begin());
+  const auto number = std::to_chars(command.data() + prefix.size(), command.data() + command.size() - 1, mode);
+  *number.ptr = final;
+  write(std::span<const std::uint8_t>{reinterpret_cast<const std::uint8_t *>(command.data()), static_cast<std::size_t>(number.ptr + 1 - command.data())});
+}
 
 inline bool nativeOsc(unsigned number) noexcept {
   return number == 4 || number == 5 || (number >= 10 && number <= 21) || number == 52 || (number >= 104 && number <= 119) || number == 5522;
@@ -25,6 +38,13 @@ inline std::optional<unsigned> decimal(std::string_view text) noexcept {
   return value;
 }
 
+inline std::optional<unsigned> oscOperation(std::string_view text) noexcept {
+  if (text.size() > 1 && text.front() == '0') {
+    return std::nullopt;
+  }
+  return decimal(text);
+}
+
 inline bool graphicsQuery(std::string_view body) noexcept {
   if (!body.starts_with('G')) {
     return false;
@@ -35,6 +55,9 @@ inline bool graphicsQuery(std::string_view body) noexcept {
   while (!remaining.empty()) {
     const auto comma = remaining.find(',');
     const auto field = remaining.substr(0, comma);
+    if (field.size() < 3 || field[1] != '=' || field.size() - 2 > 11) {
+      break;
+    }
     if (field.starts_with("a=")) {
       auto value = field.substr(2);
       if (value.starts_with('+')) {
@@ -51,7 +74,7 @@ inline bool streamable(Sequence sequence) noexcept {
   const auto body = sequence.body();
   switch (sequence.kind) {
   case Kind::osc: {
-    const auto number = decimal(body.substr(0, body.find(';')));
+    const auto number = oscOperation(body.substr(0, body.find(';')));
     return !number || !nativeOsc(*number);
   }
   case Kind::dcs:
@@ -80,7 +103,7 @@ inline bool query(Sequence sequence) noexcept {
     return header && header->final == 'q' && (header->modifiers() == "+" || header->modifiers() == "$");
   }
   if (sequence.kind == Kind::osc) {
-    const auto operation = decimal(body.substr(0, body.find(';')));
+    const auto operation = oscOperation(body.substr(0, body.find(';')));
     return operation && nativeOsc(*operation);
   }
   if (sequence.kind == Kind::escape) {

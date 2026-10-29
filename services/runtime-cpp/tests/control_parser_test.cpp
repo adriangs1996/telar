@@ -144,6 +144,9 @@ int main() {
   partitions("\x1bP$qm\x18", {"2:$qm:1"});
   partitions("\x1bP$q\x7f" "m\x1b\\", {"2:$qm:1", "0:\\:0"});
   partitions("\x1b_25a1;s\x1a", {"4:25a1;s:1"});
+  partitions("\x1bP+\x9b" "5n", {"1:5n:0"});
+  partitions("\x1bP\x9d" "10;?\x1b\\", {"3:10;?:1", "0:\\:0"});
+  partitions("\x1b_\x9a", {"4::1", "0:Z:0"});
   backpressure();
   boundedFuzz();
   oversizedRecovery();

@@ -4,6 +4,7 @@
 #include "sequence.hpp"
 #include <array>
 #include <cstring>
+#include <utility>
 
 namespace telar::runtime::control {
 
@@ -24,6 +25,8 @@ public:
   template <typename Consumer>
   std::size_t feed(std::span<const std::uint8_t> input, Consumer &consumer) {
     std::size_t consumed = 0;
+    std::size_t next_escape = 0;
+    bool escape_searched = false;
     while (true) {
       if (phase_ == Phase::ready) {
         if (!consumer.complete(Sequence{kind_, bytes(), ending_})) {
@@ -32,7 +35,15 @@ public:
 
         clear();
         phase_ = after_ready_;
-        if (phase_ == Phase::escape) {
+        if (following_c1_ != 0) {
+          const auto control = std::exchange(following_c1_, 0);
+          if (!startC1(control)) {
+            executeC1(control, consumer);
+            phase_ = Phase::ground;
+          } else {
+            continue;
+          }
+        } else if (phase_ == Phase::escape) {
           append(escape);
         }
       }
@@ -41,16 +52,40 @@ public:
         return consumed;
       }
 
-      if (phase_ == Phase::ground) {
+      if (phase_ == Phase::ground && input[consumed] == escape) {
         const auto remaining = input.subspan(consumed);
-        const auto *first_escape = static_cast<const std::uint8_t *>(std::memchr(remaining.data(), escape, remaining.size()));
-        const auto *first_enquiry = static_cast<const std::uint8_t *>(std::memchr(remaining.data(), enquiry, remaining.size()));
-        auto count = remaining.size();
-        if (first_escape != nullptr) {
-          count = static_cast<std::size_t>(first_escape - remaining.data());
+        if (const auto length = completeCsi(remaining)) {
+          beforeEscape(consumer);
+          const auto sequence = remaining.first(length);
+          consumed += length;
+          if (consumer.complete(Sequence{Kind::csi, sequence, Ending::final_byte})) {
+            continue;
+          }
+          // Only a blocked request needs a retained copy. The successful
+          // whole-slice path lends input for this synchronous callback.
+          clear();
+          for (const auto byte : sequence) {
+            append(byte);
+          }
+          kind_ = Kind::csi;
+          ending_ = Ending::final_byte;
+          after_ready_ = Phase::ground;
+          phase_ = Phase::ready;
+          return consumed;
         }
+      }
+
+      if (phase_ == Phase::ground && input[consumed] != escape && input[consumed] != enquiry) {
+        const auto remaining = input.subspan(consumed);
+        if (!escape_searched || consumed > next_escape) {
+          const auto *found = static_cast<const std::uint8_t *>(std::memchr(remaining.data(), escape, remaining.size()));
+          next_escape = found == nullptr ? input.size() : static_cast<std::size_t>(found - input.data());
+          escape_searched = true;
+        }
+        auto count = next_escape - consumed;
+        const auto *first_enquiry = static_cast<const std::uint8_t *>(std::memchr(remaining.data(), enquiry, count));
         if (first_enquiry != nullptr) {
-          count = std::min(count, static_cast<std::size_t>(first_enquiry - remaining.data()));
+          count = static_cast<std::size_t>(first_enquiry - remaining.data());
         }
         if (count != 0) {
           consumer.ordinary(remaining.first(count));
@@ -103,7 +138,15 @@ public:
           continue;
         }
 
-        if (kind_ == Kind::apc && byte >= c1_first && byte <= c1_last) {
+        if ((kind_ == Kind::apc || (kind_ == Kind::dcs && !dcs_payload_)) && byte >= c1_first && byte <= c1_last) {
+          if (kind_ == Kind::apc && phase_ == Phase::string) {
+            ending_ = Ending::escape;
+            after_ready_ = Phase::ground;
+            following_c1_ = byte;
+            phase_ = Phase::ready;
+            ++consumed;
+            continue;
+          }
           if (phase_ == Phase::streaming) {
             consumer.ordinary(asBytes("\x18"));
           }
@@ -111,6 +154,7 @@ public:
           phase_ = Phase::escape;
           ++cancelled_;
           if (!startC1(byte)) {
+            executeC1(byte, consumer);
             phase_ = Phase::ground;
           }
           ++consumed;
@@ -132,7 +176,16 @@ public:
           continue;
         }
 
+        // OSC ignores C0 throughout its body; DCS ignores them only before
+        // the final header byte. Normalize before classification so ignored
+        // controls cannot disguise a native query as a backend operation.
+        if (byte < space && (kind_ == Kind::osc || (kind_ == Kind::dcs && !dcs_payload_))) {
+          continue;
+        }
         if (kind_ == Kind::dcs && byte == delete_byte) {
+          continue;
+        }
+        if (byte > c1_last && (kind_ == Kind::apc || (kind_ == Kind::dcs && !dcs_payload_))) {
           continue;
         }
         const auto limit = kind_ == Kind::osc ? osc_limit : kind_ == Kind::dcs ? dcs_limit : apc_limit;
@@ -172,6 +225,7 @@ public:
       }
 
       if (byte == escape) {
+        beforeEscape(consumer);
         clear();
         append(byte);
         phase_ = Phase::escape;
@@ -181,7 +235,7 @@ public:
       if (phase_ != Phase::ground && byte >= c1_first && byte <= c1_last) {
         clear();
         if (!startC1(byte)) {
-          consumer.ordinary(input.subspan(consumed - 1, 1));
+          executeC1(byte, consumer);
           phase_ = Phase::ground;
         }
         continue;
@@ -192,6 +246,9 @@ public:
         continue;
       }
 
+      if (byte == delete_byte || byte > c1_last) {
+        continue;
+      }
       if (byte < space) {
         consumer.ordinary(input.subspan(consumed - 1, 1));
         continue;
@@ -265,6 +322,39 @@ private:
   static constexpr std::uint8_t c1_first = 0x80;
   static constexpr std::uint8_t c1_last = 0x9f;
   static constexpr std::uint8_t c1_st = 0x9c;
+  static constexpr std::uint8_t c1_decid = 0x9a;
+
+  template <typename Consumer>
+  static void beforeEscape(Consumer &consumer) {
+    if constexpr (requires { consumer.escapeBoundary(); }) {
+      consumer.escapeBoundary();
+    }
+  }
+
+  template <typename Consumer>
+  static void executeC1(std::uint8_t byte, Consumer &consumer) {
+    // C1 controls executed inside a control sequence are not UTF-8 text.
+    // Preserve that context for the non-query backend using an ESC prefix.
+    const std::array<std::uint8_t, 2> control{escape, byte};
+    consumer.ordinary(control);
+  }
+
+  static std::size_t completeCsi(std::span<const std::uint8_t> input) noexcept {
+    if (input.size() < 3 || input[1] != '[') {
+      return 0;
+    }
+    const auto limit = std::min(input.size(), header_limit);
+    for (std::size_t index = 2; index < limit; ++index) {
+      const auto byte = input[index];
+      if (byte >= final_first && byte <= final_last) {
+        return index + 1;
+      }
+      if (byte < space || byte > '?') {
+        return 0;
+      }
+    }
+    return 0;
+  }
 
   static std::span<const std::uint8_t> asBytes(std::string_view text) noexcept {
     return {reinterpret_cast<const std::uint8_t *>(text.data()), text.size()};
@@ -304,6 +394,15 @@ private:
   }
 
   bool startC1(std::uint8_t byte) {
+    if (byte == c1_decid) {
+      append(escape);
+      append('Z');
+      kind_ = Kind::escape;
+      ending_ = Ending::final_byte;
+      after_ready_ = Phase::ground;
+      phase_ = Phase::ready;
+      return true;
+    }
     char introducer = 0;
     switch (byte) {
     case 0x90: introducer = 'P'; break;
@@ -359,6 +458,7 @@ private:
   Kind kind_ = Kind::escape;
   Ending ending_ = Ending::final_byte;
   bool dcs_payload_ = false;
+  std::uint8_t following_c1_ = 0;
   std::uint64_t cancelled_ = 0;
   std::uint64_t over_limit_ = 0;
 };
