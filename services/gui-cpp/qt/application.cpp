@@ -646,6 +646,11 @@ void Application::consume(MachineClient &client, QByteArrayView payload) {
     }
 
     summarizeMachine(client);
+    if (active && client.key.machine.slot != Machines::local_slot && (change == Change::stopped || change == Change::closed)) {
+      selectMachine(machines_.token(Machines::local_slot));
+      return;
+    }
+
     settleActivity();
     if (!active) {
       if (change == Change::model || change == Change::stopped) {
@@ -717,15 +722,11 @@ void Application::presentChange(Change change) {
     emit hostMetricsChanged();
     break;
   case Change::model:
-  case Change::stopped:
-    if (change == Change::stopped) {
-      emit hostMetricsChanged();
-    }
-
     if (!refresh_timer_.isActive()) {
       refresh_timer_.start();
     }
     break;
+  case Change::stopped:
   case Change::closed:
     if (window_ != nullptr) {
       window_->close();

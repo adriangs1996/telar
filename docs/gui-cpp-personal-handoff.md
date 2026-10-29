@@ -175,8 +175,23 @@ sanitizer entries pass without warnings, but exit leaks remain (554,436 bytes in
 2,808 allocations). The first sanitizer exit observation is interrupted by an
 external AeroSpace query timeout; do not claim its exit result. The accepted
 controller only admits the initial owned window and then observes process exit.
-The older configuredBindings timing failure remains unproven. Read the new
-report/manifest, then continue runtime restart/permanent SSH failures, native
+The older configuredBindings timing failure remains unproven. The subsequent
+[intentional runtime-stop checkpoint](../services/gui-cpp/measurements/runtime-stop.md)
+returns to Local on remote stop/last-workspace closure and closes only for local
+terminal status. Four pre-fix policy checks fail; 27 final window entries pass.
+Both actual owned OpenSSH runtime restarts return outage input to Local, then
+restore a new remote shell/pane generation with stable window identity and normal
+cleanup. The first Zig driver incorrectly expected the outage input to be
+ignored; retain that failed contract and the pre-fix Qt behavior. Two initial
+window fixtures lacked valid dimensions, and an early lint saw a stale generated
+moc; retain those failures without counting them as product negatives. Current
+native Quick passes 88 entries without QML warnings. Window sanitizers pass
+27 entries but exit leaks remain (256,632 bytes/984 allocations). The actual
+outage picker retains 1,804 status pixels: Zig holds its old connected CPU sample
+while Qt reports unreachable. Complete stop-status/retry policy stays open; do
+not infer full visual acceptance from successful input recovery. Read the new
+report/manifest, then continue permanent SSH failures, active transient offline
+input, native
 open/stop/diff, full task/plan peek, exit leaks/performance and all remaining
 PARITY.md gates. Complete
 theme/density/Linux visuals, native exit leaks and comparative performance stay

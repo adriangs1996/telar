@@ -273,6 +273,127 @@ struct MachineFixture {
 class MachineWindowTest : public QObject {
   Q_OBJECT
 
+  Q_SLOT static void remoteRuntimeStoppingReturnsToLocalWithoutClosingWindow() {
+    MachineFixture fixture;
+    QQuickWindow window;
+    constexpr QSize size{800, 600};
+    window.resize(size);
+    auto &application = fixture.application;
+    application.setWindow(window);
+    QVERIFY(fixture.start());
+    fixture.local_runtime->send(ClientLayoutSnapshot{});
+    fixture.remote_runtime->send(ClientLayoutSnapshot{});
+    QVERIFY(finishOpening(*fixture.local_runtime));
+    MachineWindow::select(application, fixture.remote.machine);
+    QVERIFY(finishOpening(*fixture.remote_runtime));
+    window.show();
+    fixture.remote_runtime->send(RuntimeStopping{});
+    const auto &local = MachineWindow::client(application, Machines::local_slot).session;
+    const auto &remote = MachineWindow::client(application, fixture.remote.machine.slot).session;
+    QTRY_VERIFY_WITH_TIMEOUT(local.presented(), wait_ms);
+    QVERIFY(!remote.presented());
+    QVERIFY(!remote.ready());
+    QVERIFY(window.isVisible());
+    QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::open_pane), 2, wait_ms);
+    const auto opening = fixture.local_runtime->last<OpenPane>();
+    fixture.local_runtime->send(PaneOpened{.request_id = opening.request_id, .pane_id = pane_id, .location = location, .pane_generation = 1});
+    QTRY_VERIFY_WITH_TIMEOUT(local.findPane(pane_id) != nullptr && local.findPane(pane_id)->attached, wait_ms);
+    application.input(pane_id, QByteArrayLiteral("LOCAL_AFTER_REMOTE_STOP"));
+    QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::pane_input), 1, wait_ms);
+    QCOMPARE(textView(fixture.local_runtime->last<PaneInput>().bytes), std::string_view{"LOCAL_AFTER_REMOTE_STOP"});
+    QCOMPARE(fixture.remote_runtime->count(ClientTag::pane_input), 0);
+  }
+
+  Q_SLOT static void lastRemoteTabReturnsToLocal() {
+    verifyRemoteWorkspaceClosure(false);
+  }
+
+  Q_SLOT static void remoteWorkspaceResyncReturnsToLocal() {
+    verifyRemoteWorkspaceClosure(true);
+  }
+
+  static void verifyRemoteWorkspaceClosure(bool resync) {
+    MachineFixture fixture;
+    QQuickWindow window;
+    constexpr QSize size{800, 600};
+    window.resize(size);
+    auto &application = fixture.application;
+    application.setWindow(window);
+    QVERIFY(fixture.start());
+    fixture.local_runtime->send(ClientLayoutSnapshot{});
+    fixture.remote_runtime->send(ClientLayoutSnapshot{});
+    QVERIFY(finishOpening(*fixture.local_runtime));
+    MachineWindow::select(application, fixture.remote.machine);
+    QVERIFY(finishOpening(*fixture.remote_runtime));
+    window.show();
+    if (resync) {
+      fixture.remote_runtime->send(ResyncRequired{.workspace = location.workspace, .workspace_closed = true});
+    } else {
+      fixture.remote_runtime->send(TabClosed{.location = location, .workspace_closed = true});
+    }
+
+    QTRY_VERIFY_WITH_TIMEOUT(MachineWindow::client(application, Machines::local_slot).session.presented(), wait_ms);
+    QVERIFY(!MachineWindow::client(application, fixture.remote.machine.slot).session.presented());
+    QVERIFY(window.isVisible());
+    QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::open_pane), 2, wait_ms);
+    const auto opening = fixture.local_runtime->last<OpenPane>();
+    fixture.local_runtime->send(PaneOpened{.request_id = opening.request_id, .pane_id = pane_id, .location = location, .pane_generation = 1});
+  }
+
+  Q_SLOT static void localRuntimeStoppingClosesItsWindow() {
+    MachineFixture fixture;
+    QQuickWindow window;
+    constexpr QSize size{800, 600};
+    window.resize(size);
+    fixture.application.setWindow(window);
+    QVERIFY(fixture.start());
+    window.show();
+    fixture.local_runtime->send(RuntimeStopping{});
+    QTRY_VERIFY_WITH_TIMEOUT(!window.isVisible(), wait_ms);
+  }
+
+  Q_SLOT static void hiddenRemoteRuntimeStoppingPreservesLocalPresentation() {
+    MachineFixture fixture;
+    QQuickWindow window;
+    constexpr QSize size{800, 600};
+    window.resize(size);
+    auto &application = fixture.application;
+    application.setWindow(window);
+    QVERIFY(fixture.start());
+    fixture.local_runtime->send(ClientLayoutSnapshot{});
+    QVERIFY(finishOpening(*fixture.local_runtime));
+    window.show();
+    fixture.remote_runtime->send(RuntimeStopping{});
+    QTRY_VERIFY_WITH_TIMEOUT(!MachineWindow::client(application, fixture.remote.machine.slot).session.ready(), wait_ms);
+    QVERIFY(MachineWindow::client(application, Machines::local_slot).session.presented());
+    QVERIFY(window.isVisible());
+    application.input(pane_id, QByteArrayLiteral("LOCAL_WITH_HIDDEN_STOP"));
+    QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::pane_input), 1, wait_ms);
+    QCOMPARE(fixture.local_runtime->count(ClientTag::open_pane), 1);
+    QCOMPARE(fixture.remote_runtime->count(ClientTag::open_pane), 0);
+    QCOMPARE(fixture.remote_runtime->count(ClientTag::pane_input), 0);
+  }
+
+  Q_SLOT static void transientRemoteLossPreservesItsSelectedPresentation() {
+    MachineFixture fixture;
+    QQuickWindow window;
+    constexpr QSize size{800, 600};
+    window.resize(size);
+    auto &application = fixture.application;
+    application.setWindow(window);
+    QVERIFY(fixture.start());
+    fixture.remote_runtime->send(ClientLayoutSnapshot{});
+    MachineWindow::select(application, fixture.remote.machine);
+    QVERIFY(finishOpening(*fixture.remote_runtime));
+    window.show();
+    fixture.remote_socket_->disconnectFromServer();
+    const auto &remote = MachineWindow::client(application, fixture.remote.machine.slot).session;
+    QTRY_VERIFY_WITH_TIMEOUT(!remote.ready(), wait_ms);
+    QVERIFY(remote.presented());
+    QVERIFY(!MachineWindow::client(application, Machines::local_slot).session.presented());
+    QVERIFY(window.isVisible());
+  }
+
   Q_SLOT static void machineSwitcherRoutesClicksAndFitsHiddenControls() {
     MachineFixture fixture;
     QQuickWindow window;

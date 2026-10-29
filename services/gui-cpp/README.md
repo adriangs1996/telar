@@ -14,8 +14,12 @@ shade Retina modals, controls and terminal regions match exactly. The
 [hint opacity correction](measurements/palette-hint-opacity.md) also gives exact
 setup and controlled outage pickers. The [history delegate retirement](measurements/history-delegate-retirement.md)
 regression brings the current native Quick suite to 88 passes without QML
-warnings. Complete visuals, affirmative GUI release installation, remaining
-failure scenarios, native exit leaks and comparative performance remain open.
+warnings. The [intentional runtime-stop fallback](measurements/runtime-stop.md)
+returns to Local on remote terminal status and recovers a new remote shell in
+paired real SSH runs. Its 27 window checks pass; the outage picker retains 1,804
+status pixels and sanitizer exit leaks remain open. Complete visuals,
+affirmative GUI release installation, remaining failure scenarios and comparative
+performance remain open.
 
 Native startup selects Metal on macOS and Vulkan on Linux, matching the original
 GUI's backends. Explicit Qt backend environment settings take precedence.
