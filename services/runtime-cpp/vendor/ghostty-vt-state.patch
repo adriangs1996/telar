@@ -15,7 +15,7 @@
      uint8_t *buf,
 --- a/include/ghostty/vt/kitty_graphics.h
 +++ b/include/ghostty/vt/kitty_graphics.h
-@@ -164,6 +164,11 @@
+@@ -267,6 +267,11 @@
     * Output type: uint64_t *
     */
    GHOSTTY_KITTY_GRAPHICS_DATA_GENERATION = 2,
@@ -27,7 +27,7 @@
    GHOSTTY_KITTY_GRAPHICS_DATA_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
  } GhosttyKittyGraphicsData;
  
-@@ -259,6 +264,8 @@
+@@ -369,6 +374,8 @@
     * Output type: int32_t *
     */
    GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_Z = 12,
@@ -36,7 +36,7 @@
  
    GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
  } GhosttyKittyGraphicsPlacementData;
-@@ -432,6 +439,7 @@
+@@ -563,6 +570,7 @@
     * Output type: uint64_t *
     */
    GHOSTTY_KITTY_IMAGE_DATA_GENERATION = 9,
@@ -44,7 +44,7 @@
  
    GHOSTTY_KITTY_IMAGE_DATA_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
  } GhosttyKittyGraphicsImageData;
-@@ -797,6 +805,29 @@
+@@ -981,6 +989,29 @@
   *
   * @ingroup kitty_graphics
   */
@@ -76,16 +76,15 @@
      GhosttyKittyGraphicsImage image,
 --- a/include/ghostty/vt/render.h
 +++ b/include/ghostty/vt/render.h
-@@ -263,6 +263,8 @@
-    *  to the C header or without high FFI costs should use `ghostty_cell_get`.
-    */
-   GHOSTTY_RENDER_STATE_ROW_DATA_CELLS_RAW = 5,
-+  /** Output type: GhosttyGridRef*. Borrowed row origin until terminal mutation. */
-+  GHOSTTY_RENDER_STATE_ROW_DATA_GRID_REF = 6,
+@@ -971,6 +971,7 @@
+    *  works with or without overscan. See "Row Identity" in the render
+    *  state overview. */
+   GHOSTTY_RENDER_STATE_ROW_DATA_ID = 7,
++  GHOSTTY_RENDER_STATE_ROW_DATA_GRID_REF = 8,
    GHOSTTY_RENDER_STATE_ROW_DATA_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
  } GhosttyRenderStateRowData;
  
-@@ -718,6 +720,15 @@
+@@ -1433,6 +1434,15 @@
  GHOSTTY_API GhosttyResult ghostty_render_state_row_cells_new(
      const GhosttyAllocator* allocator,
      GhosttyRenderStateRowCells* out_cells);
@@ -101,7 +100,7 @@
  
  /**
   * Queryable data kinds for ghostty_render_state_row_cells_get().
-@@ -788,6 +799,8 @@
+@@ -1503,6 +1513,8 @@
     * buffer size in bytes.
     */
    GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_GRAPHEMES_UTF8 = 9,
@@ -112,46 +111,44 @@
  
 --- a/include/ghostty/vt/terminal.h
 +++ b/include/ghostty/vt/terminal.h
-@@ -1230,6 +1230,14 @@
-    * Input type: GhosttyString*
+@@ -6,6 +6,8 @@
+ 
+ #ifndef GHOSTTY_VT_TERMINAL_H
+ #define GHOSTTY_VT_TERMINAL_H
++
++#define GHOSTTY_TELAR_STATE_VERSION 2
+ 
+ #include <stdbool.h>
+ #include <stddef.h>
+@@ -2780,6 +2782,10 @@
+    * Input type: GhosttyTerminalResizeWindowFn
     */
-   GHOSTTY_TERMINAL_OPT_TERMINFO_NAME = 37,
-+  /** Input type: bool*. Enables or disables Kitty APC parsing. */
-+  GHOSTTY_TERMINAL_OPT_KITTY_PROTOCOL = 38,
-+  /** Input type: bool*. Sets pending wrap without feeding the VT parser. */
-+  GHOSTTY_TERMINAL_OPT_CURSOR_PENDING_WRAP = 39,
-+  /** Input type: uint16_t*. Zero-based absolute cursor column, clamped to the screen. */
-+  GHOSTTY_TERMINAL_OPT_CURSOR_X = 40,
-+  /** Select an existing screen without changing modes or cursor state. */
-+  GHOSTTY_TERMINAL_OPT_ACTIVE_SCREEN = 41,
+   GHOSTTY_TERMINAL_OPT_RESIZE_WINDOW = 47,
++  GHOSTTY_TERMINAL_OPT_KITTY_PROTOCOL = 48,
++  GHOSTTY_TERMINAL_OPT_CURSOR_PENDING_WRAP = 49,
++  GHOSTTY_TERMINAL_OPT_CURSOR_X = 50,
++  GHOSTTY_TERMINAL_OPT_ACTIVE_SCREEN = 51,
    GHOSTTY_TERMINAL_OPT_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
  } GhosttyTerminalOption;
  
-@@ -1627,6 +1635,23 @@
-    * Output type: bool *
+@@ -3210,6 +3216,16 @@
+    * Output type: GhosttyTerminalMemoryUsage *
     */
-   GHOSTTY_TERMINAL_DATA_CURSOR_AT_PROMPT = 39,
-+  /** Output type: bool*. True when DECSCUSR selects the configured default. */
-+  GHOSTTY_TERMINAL_DATA_CURSOR_IS_DEFAULT = 40,
-+  /** Output type: GhosttyString*. Borrowed CSS pointer shape name. */
-+  GHOSTTY_TERMINAL_DATA_MOUSE_SHAPE = 41,
-+  /** Output type: bool*. XTerm modifyOtherKeys level 2. */
-+  GHOSTTY_TERMINAL_DATA_MODIFY_OTHER_KEYS_2 = 42,
-+  /** Output type: GhosttyColorRgb*. GHOSTTY_NO_VALUE when no OSC override exists. */
-+  GHOSTTY_TERMINAL_DATA_COLOR_FOREGROUND_OVERRIDE = 43,
-+  /** Output type: GhosttyColorRgb*. GHOSTTY_NO_VALUE when no OSC override exists. */
-+  GHOSTTY_TERMINAL_DATA_COLOR_BACKGROUND_OVERRIDE = 44,
-+  /** Output type: uint8_t[256]*. One when that entry has an OSC override. */
-+  GHOSTTY_TERMINAL_DATA_COLOR_PALETTE_OVERRIDES = 45,
-+  /** Output type: uint16_t*. Inclusive, zero-based scrolling region edges. */
-+  GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_TOP = 46,
-+  GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_BOTTOM = 47,
-+  GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_LEFT = 48,
-+  GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_RIGHT = 49,
+   GHOSTTY_TERMINAL_DATA_MEMORY_USAGE = 42,
++  GHOSTTY_TERMINAL_DATA_CURSOR_IS_DEFAULT = 43,
++  GHOSTTY_TERMINAL_DATA_MOUSE_SHAPE_NAME = 44,
++  GHOSTTY_TERMINAL_DATA_MODIFY_OTHER_KEYS_2 = 45,
++  GHOSTTY_TERMINAL_DATA_COLOR_FOREGROUND_OVERRIDE = 46,
++  GHOSTTY_TERMINAL_DATA_COLOR_BACKGROUND_OVERRIDE = 47,
++  GHOSTTY_TERMINAL_DATA_COLOR_PALETTE_OVERRIDES = 48,
++  GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_TOP = 49,
++  GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_BOTTOM = 50,
++  GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_LEFT = 51,
++  GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_RIGHT = 52,
    GHOSTTY_TERMINAL_DATA_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
  } GhosttyTerminalData;
  
-@@ -1749,6 +1774,9 @@
+@@ -3339,6 +3355,9 @@
   *
   * @ingroup terminal
   */
@@ -161,7 +158,7 @@
  GHOSTTY_API void ghostty_terminal_vt_write(GhosttyTerminal terminal,
                                  const uint8_t* data,
                                  size_t len);
-@@ -1965,6 +1993,10 @@
+@@ -3655,6 +3674,10 @@
   *
   * @ingroup terminal
   */
@@ -174,22 +171,22 @@
                                      void *out);
 --- a/src/lib_vt.zig
 +++ b/src/lib_vt.zig
-@@ -309,12 +309,14 @@
+@@ -328,12 +328,14 @@
+         @export(&c.terminal_free, .{ .name = "ghostty_terminal_free" });
          @export(&c.terminal_reset, .{ .name = "ghostty_terminal_reset" });
          @export(&c.terminal_resize, .{ .name = "ghostty_terminal_resize" });
-         @export(&c.terminal_set, .{ .name = "ghostty_terminal_set" });
 +        @export(&c.terminal_index, .{ .name = "ghostty_terminal_index" });
+         @export(&c.terminal_set, .{ .name = "ghostty_terminal_set" });
          @export(&c.terminal_vt_write, .{ .name = "ghostty_terminal_vt_write" });
-         @export(&c.terminal_vt_write_until_ground, .{ .name = "ghostty_terminal_vt_write_until_ground" });
+         @export(&c.terminal_vt_write_until, .{ .name = "ghostty_terminal_vt_write_until" });
          @export(&c.terminal_scroll_viewport, .{ .name = "ghostty_terminal_scroll_viewport" });
          @export(&c.terminal_compression_activity, .{ .name = "ghostty_terminal_compression_activity" });
          @export(&c.terminal_compress, .{ .name = "ghostty_terminal_compress" });
-         @export(&c.terminal_get, .{ .name = "ghostty_terminal_get" });
 +        @export(&c.terminal_page_bytes, .{ .name = "ghostty_terminal_page_bytes" });
+         @export(&c.terminal_get, .{ .name = "ghostty_terminal_get" });
          @export(&c.terminal_get_multi, .{ .name = "ghostty_terminal_get_multi" });
          @export(&c.terminal_continuation_write, .{ .name = "ghostty_terminal_continuation_write" });
-         @export(&c.terminal_continuation_buf, .{ .name = "ghostty_terminal_continuation_buf" });
-@@ -364,6 +366,16 @@
+@@ -394,6 +396,15 @@
              @export(&c.snapshot_decoder_decode, .{ .name = "ghostty_snapshot_decoder_decode" });
          }
          if (features.kitty_graphics) {
@@ -202,11 +199,10 @@
 +            @export(&c.kitty_graphics_image_remove, .{ .name = "ghostty_kitty_graphics_image_remove" });
 +            @export(&c.kitty_graphics_placement_remove, .{ .name = "ghostty_kitty_graphics_placement_remove" });
 +            @export(&c.kitty_graphics_placement_anchor, .{ .name = "ghostty_kitty_graphics_placement_anchor" });
-+
              @export(&c.kitty_graphics_get, .{ .name = "ghostty_kitty_graphics_get" });
+             @export(&c.kitty_graphics_animation_tick, .{ .name = "ghostty_kitty_graphics_animation_tick" });
              @export(&c.kitty_graphics_image, .{ .name = "ghostty_kitty_graphics_image" });
-             @export(&c.kitty_graphics_image_get, .{ .name = "ghostty_kitty_graphics_image_get" });
-@@ -385,6 +397,7 @@
+@@ -416,6 +427,7 @@
              @export(&c.grid_ref_cell, .{ .name = "ghostty_grid_ref_cell" });
              @export(&c.grid_ref_row, .{ .name = "ghostty_grid_ref_row" });
              @export(&c.grid_ref_graphemes, .{ .name = "ghostty_grid_ref_graphemes" });
@@ -249,7 +245,7 @@
      out_buf: ?[*]u8,
 --- a/src/terminal/c/kitty_graphics.zig
 +++ b/src/terminal/c/kitty_graphics.zig
-@@ -24,6 +24,13 @@
+@@ -25,6 +25,13 @@
  else
      ?*const anyopaque;
  
@@ -263,7 +259,7 @@
  /// C: GhosttyKittyGraphicsPlacementIterator
  pub const PlacementIterator = if (build_options.kitty_graphics)
      ?*PlacementIteratorWrapper
-@@ -53,12 +60,20 @@
+@@ -54,12 +61,20 @@
      invalid = 0,
      placement_iterator = 1,
      generation = 2,
@@ -284,7 +280,7 @@
          };
      }
  };
-@@ -78,12 +93,15 @@
+@@ -79,12 +94,15 @@
      columns = 10,
      rows = 11,
      z = 12,
@@ -301,7 +297,7 @@
              .x_offset,
              .y_offset,
              .source_x,
-@@ -132,6 +150,14 @@
+@@ -133,6 +151,14 @@
              };
          },
          .generation => out.* = storage.generation,
@@ -316,7 +312,7 @@
      }
      return .success;
  }
-@@ -182,6 +208,7 @@
+@@ -183,6 +209,7 @@
      data_ptr = 7,
      data_len = 8,
      generation = 9,
@@ -324,7 +320,7 @@
  
      pub fn OutType(comptime self: ImageData) type {
          return switch (self) {
-@@ -190,7 +217,7 @@
+@@ -191,7 +218,7 @@
              .format => ImageFormat,
              .compression => ImageCompression,
              .data_ptr => [*]const u8,
@@ -333,15 +329,15 @@
              .generation => u64,
          };
      }
-@@ -264,6 +291,7 @@
-         .data_ptr => out.* = (image.data.bytes() orelse return .no_value).ptr,
-         .data_len => out.* = image.data.len(),
+@@ -292,6 +319,7 @@
+         .data_ptr => out.* = (image.renderData().bytes() orelse return .no_value).ptr,
+         .data_len => out.* = image.renderData().len(),
          .generation => out.* = image.generation,
 +        .placement_count => out.* = image.metadata.placement_count,
      }
  
      return .success;
-@@ -396,6 +424,15 @@
+@@ -424,6 +452,15 @@
          .image_id => out.* = key.image_id,
          .placement_id => out.* = key.placement_id.id,
          .is_virtual => out.* = val.location == .virtual,
@@ -349,7 +345,7 @@
 +        .grid_ref => {
 +            const pin = switch (val.location) {
 +                .pin => |pin| pin,
-+                .virtual => return .no_value,
++                .virtual, .relative => return .no_value,
 +            };
 +            if (pin.garbage) return .no_value;
 +            out.* = grid_ref.CGridRef.fromPin(pin.*);
@@ -357,11 +353,10 @@
          .x_offset => out.* = val.x_offset,
          .y_offset => out.* = val.y_offset,
          .source_x => out.* = val.source_x,
-@@ -2101,3 +2138,121 @@
-     try testing.expectEqual(Result.success, get(graphics, .generation, @ptrCast(&gen)));
-     try testing.expect(gen > gen_alt);
+@@ -2284,3 +2321,120 @@
+     try testing.expectEqual(Result.success, terminal_c.get(t, .kitty_graphics, @ptrCast(&graphics)));
+     try testing.expectEqual(Result.invalid_value, animation_tick(graphics, 0, null));
  }
-+
 +
 +pub fn image_iterator_new(alloc_: ?*const CAllocator, out: *ImageIterator) callconv(lib.calling_conv) Result {
 +    out.* = null;
@@ -469,7 +464,7 @@
 +    const entry = iter.entry orelse return .invalid_value;
 +    const pin = switch (entry.value_ptr.location) {
 +        .pin => |value| value,
-+        .virtual => return .no_value,
++        .virtual, .relative => return .no_value,
 +    };
 +    if (pin.garbage) return .no_value;
 +    const pages = &wrapper.terminal.screens.active.pages;
@@ -481,13 +476,13 @@
 +}
 --- a/src/terminal/c/main.zig
 +++ b/src/terminal/c/main.zig
-@@ -183,12 +183,14 @@
+@@ -192,12 +192,14 @@
  pub const terminal_reset = terminal.reset;
  pub const terminal_resize = terminal.resize;
  pub const terminal_set = terminal.set;
 +pub const terminal_index = terminal.advance_index;
  pub const terminal_vt_write = terminal.vt_write;
- pub const terminal_vt_write_until_ground = terminal.vt_write_until_ground;
+ pub const terminal_vt_write_until = terminal.vt_write_until;
  pub const terminal_scroll_viewport = terminal.scroll_viewport;
  pub const terminal_compression_activity = terminal.compression_activity;
  pub const terminal_compress = terminal.compress;
@@ -496,7 +491,7 @@
  pub const terminal_get_multi = terminal.get_multi;
  pub const terminal_continuation_write = terminal.continuation_write;
  pub const terminal_continuation_buf = terminal.continuation_buf;
-@@ -239,6 +241,7 @@
+@@ -256,6 +258,7 @@
  pub const grid_ref_cell = grid_ref.grid_ref_cell;
  pub const grid_ref_row = grid_ref.grid_ref_row;
  pub const grid_ref_graphemes = grid_ref.grid_ref_graphemes;
@@ -504,7 +499,7 @@
  pub const grid_ref_hyperlink_uri = grid_ref.grid_ref_hyperlink_uri;
  pub const grid_ref_style = grid_ref.grid_ref_style;
  pub const tracked_grid_ref_free = grid_ref_tracked.tracked_grid_ref_free;
-@@ -282,3 +285,13 @@
+@@ -300,3 +303,13 @@
      // We want to make sure we run the tests for the C allocator interface.
      _ = @import("../../lib/allocator.zig");
  }
@@ -520,40 +515,15 @@
 +pub const kitty_graphics_placement_anchor = kitty_graphics.placement_anchor;
 --- a/src/terminal/c/render.zig
 +++ b/src/terminal/c/render.zig
-@@ -14,6 +14,8 @@
+@@ -14,6 +14,7 @@
  const Result = @import("result.zig").Result;
  const cell_c = @import("cell.zig");
  const row = @import("row.zig");
 +const grid_ref = @import("grid_ref.zig");
-+const PageList = @import("../PageList.zig");
  const style_c = @import("style.zig");
+ const PageList = @import("../PageList.zig");
  
- const log = std.log.scoped(.render_state_c);
-@@ -38,6 +40,7 @@
- 
-     /// These are the raw pointers into the render state data.
-     raws: []const page.Row,
-+    pins: []const PageList.Pin,
-     cells: []const std.MultiArrayList(renderpkg.RenderState.Cell),
-     selection: []const ?[2]size.CellCountInt,
-     dirty: []bool,
-@@ -327,6 +330,7 @@
-                 .alloc = it.alloc,
-                 .y = position_none,
-                 .raws = row_data.items(.raw),
-+                .pins = row_data.items(.pin),
-                 .cells = row_data.items(.cells),
-                 .selection = row_data.items(.selection),
-                 .dirty = row_data.items(.dirty),
-@@ -547,6 +551,7 @@
-         .alloc = alloc,
-         .y = undefined,
-         .raws = undefined,
-+        .pins = undefined,
-         .cells = undefined,
-         .selection = undefined,
-         .dirty = undefined,
-@@ -646,6 +651,12 @@
+@@ -758,6 +759,12 @@
      alloc.destroy(cells);
  }
  
@@ -566,7 +536,7 @@
  /// C: GhosttyRenderStateRowCellsData
  pub const RowCellsData = enum(c_int) {
      invalid = 0,
-@@ -658,6 +669,7 @@
+@@ -770,6 +777,7 @@
      selected = 7,
      has_styling = 8,
      graphemes_utf8 = 9,
@@ -574,7 +544,7 @@
  
      /// Output type expected for querying the data of the given kind.
      pub fn OutType(comptime self: RowCellsData) type {
-@@ -670,6 +682,7 @@
+@@ -782,6 +790,7 @@
              .bg_color, .fg_color => colorpkg.RGB.C,
              .selected, .has_styling => bool,
              .graphemes_utf8 => lib.Buffer,
@@ -582,7 +552,7 @@
          };
      }
  };
-@@ -758,6 +771,14 @@
+@@ -870,6 +879,14 @@
              style_c.Style.write(cells.styles[x], out);
          } else {
              out.* = style_c.Style.default;
@@ -597,23 +567,23 @@
          },
          .graphemes_len => {
              if (!cell.hasText()) {
-@@ -881,6 +902,7 @@
-     cells = 3,
-     selection = 4,
+@@ -995,6 +1012,7 @@
      cells_raw = 5,
-+    grid_ref = 6,
+     viewport_y = 6,
+     id = 7,
++    grid_ref = 8,
  
      /// Output type expected for querying the data of the given kind.
      pub fn OutType(comptime self: RowData) type {
-@@ -891,6 +913,7 @@
+@@ -1005,6 +1023,7 @@
              .cells => RowCells,
              .selection => RowSelection,
              .cells_raw => cell_c.CellsView,
 +            .grid_ref => grid_ref.CGridRef,
+             .viewport_y => i32,
+             .id => RowId,
          };
-     }
- };
-@@ -985,6 +1008,7 @@
+@@ -1101,6 +1120,7 @@
      switch (data) {
          .invalid => return .invalid_value,
          .dirty => out.* = it.dirty[y],
@@ -623,27 +593,28 @@
              const cells = out.* orelse return .invalid_value;
 --- a/src/terminal/c/terminal.zig
 +++ b/src/terminal/c/terminal.zig
-@@ -1021,6 +1021,10 @@
-     unknown_sequence = 35,
-     unknown_max_bytes = 36,
-     terminfo_name = 37,
-+    kitty_protocol = 38,
-+    cursor_pending_wrap = 39,
-+    cursor_x = 40,
-+    active_screen = 41,
+@@ -1485,6 +1485,11 @@
+     xt_checksum_extension = 45,
+     program_status = 46,
+     resize_window = 47,
++    kitty_protocol = 48,
++    cursor_pending_wrap = 49,
++    cursor_x = 50,
++    active_screen = 51,
++
  
      /// Input type expected for setting the option.
      pub fn InType(comptime self: Option) type {
-@@ -1046,6 +1050,8 @@
+@@ -1517,6 +1522,8 @@
              .kitty_image_medium_file,
              .kitty_image_medium_shared_mem,
              .glyph_protocol,
 +            .kitty_protocol,
 +            .cursor_pending_wrap,
              .title_report,
-             => ?*const bool,
-             .kitty_image_medium_temp_file => ?*const lib.String,
-@@ -1060,6 +1066,8 @@
+             .xt_checksum_report,
+             .resize_pull_scrollback,
+@@ -1534,6 +1541,8 @@
              .default_cursor_style => ?*const TerminalCursorStyle,
              .default_cursor_blink => ?*const bool,
              .mode, .mode_default => ?*const ModeConfig,
@@ -652,7 +623,7 @@
          };
      }
  };
-@@ -1209,6 +1217,21 @@
+@@ -1723,6 +1732,21 @@
                  wrapper.stream.handler.apc_handler.max_bytes.remove(.kitty);
              }
          },
@@ -674,20 +645,21 @@
          .glyph_protocol => {
              const enabled = (value orelse return .success).*;
              wrapper.stream.handler.apc_handler.enable(.glyph, enabled);
-@@ -1375,12 +1398,23 @@
-     mode = 37,
-     vt_ground = 38,
-     cursor_at_prompt = 39,
-+    cursor_is_default = 40,
-+    mouse_shape = 41,
-+    modify_other_keys_2 = 42,
-+    color_foreground_override = 43,
-+    color_background_override = 44,
-+    color_palette_overrides = 45,
-+    scrolling_region_top = 46,
-+    scrolling_region_bottom = 47,
-+    scrolling_region_left = 48,
-+    scrolling_region_right = 49,
+@@ -1966,12 +1990,24 @@
+     clipboard_write_max_bytes = 40,
+     mouse_shape = 41,
+     memory_usage = 42,
++    cursor_is_default = 43,
++    mouse_shape_name = 44,
++    modify_other_keys_2 = 45,
++    color_foreground_override = 46,
++    color_background_override = 47,
++    color_palette_overrides = 48,
++    scrolling_region_top = 49,
++    scrolling_region_bottom = 50,
++    scrolling_region_left = 51,
++    scrolling_region_right = 52,
++
  
      /// Output type expected for querying the data of the given kind.
      pub fn OutType(comptime self: TerminalData) type {
@@ -699,24 +671,25 @@
              .cursor_pending_wrap,
              .cursor_visible,
              .mouse_tracking,
-@@ -1388,12 +1422,15 @@
+@@ -1979,13 +2015,16 @@
              .vt_processing_error,
              .vt_ground,
              .cursor_at_prompt,
 +            .cursor_is_default,
 +            .modify_other_keys_2,
              => bool,
+             .mouse_shape => mouse.Shape,
              .active_screen => TerminalScreen,
              .kitty_keyboard_flags => u8,
              .scrollbar => TerminalScrollbar,
              .cursor_style => style_c.Style,
 -            .title, .pwd => lib.String,
-+            .title, .pwd, .mouse_shape => lib.String,
++            .title, .pwd, .mouse_shape_name => lib.String,
 +            .color_palette_overrides => [256]u8,
              .total_rows,
              .scrollback_rows,
              .scrollback_max_bytes,
-@@ -1404,6 +1441,8 @@
+@@ -1997,6 +2036,8 @@
              .color_foreground,
              .color_background,
              .color_cursor,
@@ -725,7 +698,7 @@
              .color_foreground_default,
              .color_background_default,
              .color_cursor_default,
-@@ -1421,6 +1460,20 @@
+@@ -2015,6 +2056,20 @@
      }
  };
  
@@ -746,12 +719,12 @@
  pub fn get(
      terminal_: Terminal,
      data: TerminalData,
-@@ -1475,6 +1528,23 @@
+@@ -2069,6 +2124,23 @@
      const t: *ZigTerminal = wrapper.terminal;
      switch (data) {
          .invalid => return .invalid_value,
 +        .cursor_is_default => out.* = t.cursor.is_default,
-+        .mouse_shape => {
++        .mouse_shape_name => {
 +            const name = @tagName(t.mouse_shape);
 +            out.* = .{ .ptr = name.ptr, .len = name.len };
 +        },
@@ -770,48 +743,14 @@
          .cols => out.* = t.cols,
          .rows => out.* = t.rows,
          .cursor_x => out.* = t.screens.active.cursor.x,
-@@ -5603,3 +5673,33 @@
-     var values = [_]?*anyopaque{@ptrCast(&cols)};
-     try testing.expectEqual(Result.invalid_value, get_multi(null, 1, null, &values, null));
+@@ -7911,3 +7983,10 @@
+     try testing.expectEqual(Result.success, get(t, .mouse_shape, @ptrCast(&shape)));
+     try testing.expectEqual(mouse.Shape.wait, shape);
  }
 +
-+/// Performs IND independently of the VT parser's current state.
++/// Performs IND independently of the VT parser state.
 +pub fn advance_index(terminal_: Terminal) callconv(lib.calling_conv) Result {
 +    const wrapper = terminal_ orelse return .invalid_value;
 +    wrapper.terminal.index() catch return .out_of_memory;
 +    return .success;
 +}
-+
-+
-+test "page bytes include both screens without changing the viewport" {
-+    var terminal: Terminal = null;
-+    try testing.expectEqual(Result.success, new(&lib.alloc.test_allocator, &terminal, 80, 24));
-+    defer free(terminal);
-+
-+    var allocated: usize = 0;
-+    try testing.expectEqual(Result.invalid_value, page_bytes(null, &allocated));
-+    try testing.expectEqual(Result.invalid_value, page_bytes(terminal, null));
-+    try testing.expectEqual(Result.success, page_bytes(terminal, &allocated));
-+    const primary = terminal.?.terminal.screens.get(.primary).?;
-+    try testing.expectEqual(primary.pages.page_size, allocated);
-+    try testing.expect(allocated > 0);
-+
-+    const alternate = "\x1b[?1049h";
-+    vt_write(terminal, alternate.ptr, alternate.len);
-+    const active = terminal.?.terminal.screens.active;
-+    const alternate_bytes = active.pages.page_size;
-+    try testing.expectEqual(Result.success, page_bytes(terminal, &allocated));
-+    try testing.expectEqual(primary.pages.page_size + alternate_bytes, allocated);
-+    try testing.expectEqual(active, terminal.?.terminal.screens.active);
-+}
---- a/src/terminal/kitty/graphics_storage.zig
-+++ b/src/terminal/kitty/graphics_storage.zig
-@@ -192,7 +192,7 @@
-     /// screen switches); those must set only the dirty flag directly.
-     /// Bumping the generation for geometry changes would break the
-     /// contract that an unchanged generation means unchanged contents.
--    fn markMutated(self: *ImageStorage, io: std.Io) void {
-+    pub fn markMutated(self: *ImageStorage, io: std.Io) void {
-         self.dirty = true;
-         self.generation = nextGeneration(io);
-     }

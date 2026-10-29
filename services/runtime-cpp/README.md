@@ -9,7 +9,7 @@ provides the `telar` command used by Desktop's existing discovery.
 
 The initial target requires macOS 26 and its SDK, CMake, Ninja, a C++23
 compiler, Python 3, libpng, OpenSSL 3, nghttp2, Brotli and Zstd headers/libraries,
-and Zig 0.16.0. SQLite and zlib come from the macOS SDK. Zig builds only
+and Zig 0.17.0. SQLite and zlib come from the macOS SDK. Zig builds only
 libghostty-vt for production; the executable links no
 Telar Zig runtime code.
 
@@ -60,10 +60,12 @@ their bodies. Small gzip, deflate and Zstd pass the paired Zig comparison;
 small Brotli and whole-runtime proxy acceptance remain open.
 
 The dependency script fetches Ghostty commit
-`a4edca2a90d6cf89900bb058e71cb6860cec78c5`, applies
+`df1c99c8a5ec32c73963e5dc3fad3c9df7a3d137`, applies
 [vendor/ghostty-vt-state.patch](vendor/ghostty-vt-state.patch), and installs
-libghostty-vt. `--source /path/to/pinned/ghostty` copies an existing source tree
-instead; that tree must match the pinned revision. The patch extends the C API
+libghostty-vt. `--source /path/to/pinned/ghostty` archives the immutable revision from an existing Git checkout
+instead; that checkout must contain the pinned revision. Working edits are
+excluded from the archive. The build pins the upstream version string too, so
+Git metadata from a surrounding checkout cannot change the library identity. The patch extends the C API
 with terminal state, bounded grapheme access, graphics enumeration, deletion
 and placement anchors. It contains no Telar runtime services.
 

@@ -3,11 +3,11 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
-import shutil
 import subprocess
 
 
-GHOSTTY_COMMIT = "a4edca2a90d6cf89900bb058e71cb6860cec78c5"
+GHOSTTY_COMMIT = "df1c99c8a5ec32c73963e5dc3fad3c9df7a3d137"
+GHOSTTY_APP_VERSION = "1.4.1-dev+df1c99c8"
 GHOSTTY_REPOSITORY = "https://github.com/ghostty-org/ghostty.git"
 
 
@@ -19,13 +19,13 @@ def main():
     parser = argparse.ArgumentParser(description="Build the pinned libghostty-vt C API for Telar")
     parser.add_argument("--build-dir", type=Path, required=True)
     parser.add_argument("--prefix", type=Path, required=True)
-    parser.add_argument("--source", type=Path, help="Optional existing source at the pinned commit; copied before patching")
+    parser.add_argument("--source", type=Path, help="Existing Git checkout containing the pinned commit; archives that immutable revision")
     parser.add_argument("--zig", default="zig")
     arguments = parser.parse_args()
     build = arguments.build_dir.resolve()
     prefix = arguments.prefix.resolve()
     patch = Path(__file__).resolve().parent.parent / "vendor" / "ghostty-vt-state.patch"
-    expected = {"commit": GHOSTTY_COMMIT, "patch_sha256": hashlib.sha256(patch.read_bytes()).hexdigest()}
+    expected = {"commit": GHOSTTY_COMMIT, "app_version": GHOSTTY_APP_VERSION, "patch_sha256": hashlib.sha256(patch.read_bytes()).hexdigest()}
     marker = build / "telar-ghostty-build.json"
     source = build / "source"
 
@@ -37,7 +37,15 @@ def main():
             raise RuntimeError("Source directory already exists without a matching build manifest")
         build.mkdir(parents=True, exist_ok=True)
         if arguments.source:
-            shutil.copytree(arguments.source.resolve(), source, ignore=shutil.ignore_patterns(".git", ".zig-cache", "zig-out"))
+            source.mkdir()
+            checkout = arguments.source.resolve()
+            with subprocess.Popen(["git", "archive", "--format=tar", GHOSTTY_COMMIT], cwd=checkout, stdout=subprocess.PIPE) as archive:
+                try:
+                    subprocess.run(["tar", "-xf", "-", "-C", str(source)], stdin=archive.stdout, check=True)
+                finally:
+                    archive.stdout.close()
+                if archive.wait() != 0:
+                    raise RuntimeError("Could not archive the immutable Ghostty revision")
         else:
             source.mkdir()
             run(["git", "init", "--quiet"], source)
@@ -50,7 +58,8 @@ def main():
         marker.write_text(json.dumps(expected, indent=2) + "\n")
 
     run([
-        arguments.zig, "build", "-Demit-lib-vt", "-Demit-xcframework=false",
+        arguments.zig, "build", "-j2", "-Demit-lib-vt", "-Demit-xcframework=false",
+        "-Demit-macos-app=false", "-Demit-docs=false", "-Dversion-string=" + GHOSTTY_APP_VERSION,
         "-Doptimize=ReleaseFast", "--prefix", str(prefix),
     ], source)
     print(f"libghostty-vt installed at {prefix}")
