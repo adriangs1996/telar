@@ -1,6 +1,7 @@
 #include "check.hpp"
 #include "terminal/pty_response_queue.hpp"
 #include <thread>
+#include <vector>
 
 using namespace telar::runtime;
 
@@ -74,7 +75,26 @@ static void testConcurrentResponses() {
   check(queue.empty());
 }
 
+static void testOwnedResponseLifetime() {
+  PtyResponseQueue queue;
+  auto storage = std::make_shared<std::vector<std::uint8_t>>(8192, 17);
+  const std::weak_ptr<std::vector<std::uint8_t>> lifetime = storage;
+  check(queue.tryPushOwned(*storage, storage));
+  storage.reset();
+  queue.consume(8191);
+  check(!lifetime.expired() && queue.readable().size() == 1 && queue.readable()[0] == 17);
+  queue.consume(1);
+  check(lifetime.expired() && queue.empty());
+  check(queue.snapshot().dropped == 0);
+  for (std::size_t index = 0; index < PtyResponseQueue::message_capacity; ++index) {
+    check(queue.tryPush({}));
+  }
+  check(!queue.tryPush({}) && queue.snapshot().dropped == 0);
+  queue.clear();
+}
+
 void testPtyResponseQueue() {
   testQueueBoundaries();
   testConcurrentResponses();
+  testOwnedResponseLifetime();
 }

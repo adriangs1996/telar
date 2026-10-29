@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cstring>
 #include <mutex>
+#include <memory>
 #include <optional>
 #include <span>
 
@@ -14,6 +15,7 @@ class PtyResponseQueue {
 public:
   static constexpr std::size_t message_capacity = 64;
   static constexpr std::size_t message_byte_capacity = 1024;
+  static constexpr std::size_t total_byte_capacity = 2 * 1024 * 1024;
 
   struct Snapshot {
     std::size_t messages;
@@ -26,21 +28,51 @@ public:
 
   bool push(std::span<const std::uint8_t> response) noexcept {
     const std::lock_guard lock{mutex_};
-    if (response.size() > message_byte_capacity || count_ == message_capacity) {
+    if (!append(response, {})) {
       diagnostics::accumulate(dropped_);
       return false;
     }
 
+    return true;
+  }
+
+  bool tryPush(std::span<const std::uint8_t> response) noexcept {
+    const std::lock_guard lock{mutex_};
+    return append(response, {});
+  }
+
+  // Large replies retain immutable allocator-owned storage as one message, so
+  // other producers cannot interleave bytes in the middle of a control string.
+  bool tryPushOwned(std::span<const std::uint8_t> response, std::shared_ptr<const void> owner) noexcept {
+    const std::lock_guard lock{mutex_};
+    return append(response, std::move(owner));
+  }
+
+  bool hasCapacity() const noexcept {
+    const std::lock_guard lock{mutex_};
+    return count_ != message_capacity && byte_count_ < total_byte_capacity;
+  }
+
+private:
+  bool append(std::span<const std::uint8_t> response, std::shared_ptr<const void> owner) noexcept {
+    if (count_ == message_capacity || response.size() > total_byte_capacity - byte_count_ || (response.size() > message_byte_capacity && !owner)) {
+      return false;
+    }
+
     const auto index = (head_ + count_) % message_capacity;
-    if (!response.empty()) {
+    if (owner) {
+      owned_[index] = std::move(owner);
+      views_[index] = response;
+    } else if (!response.empty()) {
       std::memcpy(bytes_[index].data(), response.data(), response.size());
     }
-    lengths_[index] = static_cast<std::uint16_t>(response.size());
+    lengths_[index] = static_cast<std::uint32_t>(response.size());
     byte_count_ += response.size();
     ++count_;
     return true;
   }
 
+public:
   // A single consumer may borrow the head until consume or clear; producers only append behind it.
   std::optional<std::span<const std::uint8_t>> peek() const noexcept {
     const std::lock_guard lock{mutex_};
@@ -48,7 +80,8 @@ public:
       return std::nullopt;
     }
 
-    return std::span{bytes_[head_]}.subspan(offset_, lengths_[head_] - offset_);
+    const auto head = owned_[head_] ? views_[head_] : std::span<const std::uint8_t>{bytes_[head_]}.first(lengths_[head_]);
+    return head.subspan(offset_);
   }
 
   std::span<const std::uint8_t> readable() const noexcept {
@@ -61,6 +94,8 @@ public:
     offset_ += bytes;
     byte_count_ -= bytes;
     if (offset_ == lengths_[head_]) {
+      owned_[head_].reset();
+      views_[head_] = {};
       head_ = (head_ + 1) % message_capacity;
       offset_ = 0;
       --count_;
@@ -74,6 +109,9 @@ public:
 
   void clear() noexcept {
     const std::lock_guard lock{mutex_};
+    for (auto &owner : owned_) {
+      owner.reset();
+    }
     head_ = 0;
     count_ = 0;
     offset_ = 0;
@@ -88,7 +126,9 @@ public:
 private:
   mutable std::mutex mutex_;
   std::array<std::array<std::uint8_t, message_byte_capacity>, message_capacity> bytes_;
-  std::array<std::uint16_t, message_capacity> lengths_;
+  std::array<std::uint32_t, message_capacity> lengths_;
+  std::array<std::shared_ptr<const void>, message_capacity> owned_;
+  std::array<std::span<const std::uint8_t>, message_capacity> views_;
   std::size_t head_ = 0;
   std::size_t count_ = 0;
   std::size_t offset_ = 0;
