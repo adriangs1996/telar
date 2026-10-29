@@ -3,6 +3,7 @@
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <algorithm>
 #include <array>
+#include <cinttypes>
 #include <cstdio>
 
 namespace telar::runtime::config {
@@ -34,11 +35,11 @@ public:
       std::fprintf(stderr, "telar config: limit reached, the excess was left out: %.*s: ", static_cast<int>(entry.name.size()), entry.name.data());
       const auto *separator = entry.noun.empty() ? "" : " ";
       if (entry.requested) {
-        std::fprintf(stderr, "%llu%s%.*s; limit %llu\n", *entry.requested, separator, static_cast<int>(entry.noun.size()), entry.noun.data(), entry.value);
+        std::fprintf(stderr, "%" PRIu64 "%s%.*s; limit %" PRIu64 "\n", *entry.requested, separator, static_cast<int>(entry.noun.size()), entry.noun.data(), entry.value);
       } else if (entry.value == 0) {
         std::fputs("limit reached\n", stderr);
       } else {
-        std::fprintf(stderr, "limit %llu%s%.*s reached\n", entry.value, separator, static_cast<int>(entry.noun.size()), entry.noun.data());
+        std::fprintf(stderr, "limit %" PRIu64 "%s%.*s reached\n", entry.value, separator, static_cast<int>(entry.noun.size()), entry.noun.data());
       }
     }
   }

@@ -2,6 +2,10 @@
 
 #include "../text/ascii.hpp"
 #include <cstddef>
+#include <arpa/inet.h>
+#include <array>
+#include <algorithm>
+#include <optional>
 #include <string_view>
 
 namespace telar::runtime {
@@ -14,6 +18,7 @@ public:
     if (pattern.empty() || pattern.size() > maximum_bytes) {
       return false;
     }
+    if (pattern.contains(':')) { return ipv6(pattern).has_value(); }
     if (pattern == "*") {
       return true;
     }
@@ -27,10 +32,19 @@ public:
     if (hostname.empty() || hostname.size() > maximum_bytes) {
       return false;
     }
+    if (hostname.contains(':')) { return ipv6(hostname).has_value(); }
     if (hostname.ends_with('.')) {
       hostname.remove_suffix(1);
     }
     return validLabels(hostname);
+  }
+
+  static std::optional<in6_addr> ipv6(std::string_view host) noexcept {
+    if (host.empty() || host.size() >= INET6_ADDRSTRLEN || host.contains('\0')) { return {}; }
+    std::array<char, INET6_ADDRSTRLEN> text{};
+    std::ranges::copy(host, text.begin());
+    in6_addr address{};
+    return ::inet_pton(AF_INET6, text.data(), &address) == 1 ? std::optional{address} : std::nullopt;
   }
 
 private:

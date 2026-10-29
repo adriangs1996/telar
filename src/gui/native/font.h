@@ -2,7 +2,7 @@
 #include <stdint.h>
 
 // The largest font file either port reports; the Zig side reads with the same bound.
-#define TELAR_FONT_MAX_BYTES (64u << 20)
+#define TELAR_FONT_MAX_BYTES (64u << 20u)
 
 // Variation axes one match carries; a face with more is refused, never truncated.
 #define TELAR_FONT_MAX_AXES 16

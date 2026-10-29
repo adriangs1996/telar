@@ -1,0 +1,15 @@
+BasedOnStyle: LLVM
+IndentWidth: 2
+ColumnLimit: 0
+BreakConstructorInitializers: BeforeColon
+PackConstructorInitializers: Never
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortEnumsOnASingleLine: false
+InsertBraces: true
+SeparateDefinitionBlocks: Always
+NamespaceIndentation: None
+FixNamespaceComments: false
+AllowShortLambdasOnASingleLine: None
+BinPackArguments: false

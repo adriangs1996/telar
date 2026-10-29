@@ -26,6 +26,11 @@ public:
       return false;
     }
 
+    std::array<char, INET6_ADDRSTRLEN> numeric{};
+    if (const auto address = ProxyHostname::ipv6(pattern)) {
+      ::inet_ntop(AF_INET6, &*address, numeric.data(), numeric.size());
+      pattern = numeric.data();
+    }
     patterns_.emplace_back(pattern, AllocatorRef<char, Memory>{patterns_.get_allocator().memory()});
     std::ranges::transform(patterns_.back(), patterns_.back().begin(), asciiLower);
     return true;
@@ -50,6 +55,12 @@ public:
     }
     if (hostname.size() > maximum_hostname_bytes) {
       return false;
+    }
+
+    if (const auto address = ProxyHostname::ipv6(hostname)) {
+      std::array<char, INET6_ADDRSTRLEN> numeric{};
+      ::inet_ntop(AF_INET6, &*address, numeric.data(), numeric.size());
+      return find(numeric.data());
     }
 
     std::array<char, maximum_hostname_bytes + wildcard_prefix.size()> canonical;

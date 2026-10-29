@@ -1,0 +1,371 @@
+#include "configuration_source.hpp"
+#include "appearance.hpp"
+#include "application/client_view_state.hpp"
+#include "application/dependencies.hpp"
+#include "config/action_descriptions.hpp"
+#include "config/binding_query.hpp"
+#include "config/callback.hpp"
+#include "config/client_query.hpp"
+#include "config/command_tab_view.hpp"
+#include "config/generation.hpp"
+#include "config/gui_query.hpp"
+#include "config/input_query.hpp"
+#include "config/query.hpp"
+#include "config/runtime_query.hpp"
+#include "config/theme_query.hpp"
+#include "config/themes.hpp"
+#include "configuration_loader.hpp"
+#include "core/configuration.hpp"
+#include "core/theme_values.hpp"
+#include "font_resolver.hpp"
+#include "input/action.hpp"
+#include "input/binding.hpp"
+#include "memory/allocator.hpp"
+#include "platform/window.hpp"
+#include "presentation/theme.hpp"
+#include <QByteArray>
+#include <QFileInfo>
+#include <QFuture>
+#include <QGuiApplication>
+#include <QPointer>
+#include <QStyleHints>
+#include <QtConcurrentRun>
+#include <QtCore/qlogging.h>
+#include <QtCore/qnamespace.h>
+#include <QtCore/qobject.h>
+#include <QtCore/qstring.h>
+#include <QtCore/qtimer.h>
+#include <QtCore/qtmetamacros.h>
+#include <QtCore/qtypes.h>
+#include <cstddef>
+#include <exception>
+#include <optional>
+#include <stdexcept>
+#include <string_view>
+#include <utility>
+
+namespace telar::gui::qt {
+
+namespace {
+
+std::optional<std::string_view> optionalText(const QByteArray &bytes) noexcept {
+  if (bytes.isEmpty()) {
+    return std::nullopt;
+  }
+
+  return std::string_view{bytes.constData(), static_cast<std::size_t>(bytes.size())};
+}
+
+}
+
+static_assert(runtime::ConcurrentAllocator<ApplicationAllocator>);
+
+ConfigurationSource::ConfigurationSource(ApplicationAllocator &memory, QObject *parent)
+    : QObject(parent),
+      memory_(memory),
+      fonts_(memory),
+      default_keymap_(default_input_.compile()),
+      generation_(nullptr, runtime::AllocationDeleter<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator>{memory}) {
+  debounce_.setSingleShot(true);
+  constexpr int reload_debounce_ms = 100;
+  debounce_.setInterval(reload_debounce_ms);
+  constexpr int dependency_poll_ms = 1000;
+  poll_.setInterval(dependency_poll_ms);
+  connect(&poll_, &QTimer::timeout, this, &ConfigurationSource::poll);
+  connect(&debounce_, &QTimer::timeout, this, &ConfigurationSource::reload);
+  connect(&task_, &QFutureWatcher<PreparedConfiguration>::finished, this, &ConfigurationSource::complete);
+  configuration_.themes.base = themeValuesByName("shade");
+  configuration_.theme = projectTheme(configuration_.themes.base);
+  const auto *style_hints = QGuiApplication::styleHints();
+  appearance_ = hostAppearance(style_hints->colorScheme());
+  connect(style_hints, &QStyleHints::colorSchemeChanged, this, [this](Qt::ColorScheme scheme) {
+    updateAppearance(hostAppearance(scheme));
+  });
+}
+
+ConfigurationSource::~ConfigurationSource() {
+  auto future = task_.future();
+  if (!future.isValid()) {
+    return;
+  }
+
+  try {
+    future.waitForFinished();
+    if (future.isValid() && future.resultCount() != 0) {
+      static_cast<void>(future.takeResult());
+    }
+  } catch (const std::exception &error) {
+    qWarning("Configuration worker failed during shutdown: %s", error.what());
+  }
+}
+
+const InputConfiguration &ConfigurationSource::input() const noexcept {
+  return generation_ ? generation_->input() : default_input_;
+}
+
+const BindingMap<BindingAction> &ConfigurationSource::keymap() const noexcept {
+  return generation_ ? generation_->keymap() : default_keymap_;
+}
+
+BindingEffects ConfigurationSource::invoke(BindingAction action, BindingContext context) {
+  if (!generation_) {
+    throw std::runtime_error{"ConfigurationNotLoaded"};
+  }
+
+  try {
+    const auto effects = generation_->invoke(action, context);
+    trackModules();
+
+    return effects;
+  } catch (...) {
+    trackModules();
+    throw;
+  }
+}
+
+InputExpression ConfigurationSource::expression(BindingAction action, BindingContext context) {
+  if (!generation_) {
+    throw std::runtime_error{"ConfigurationNotLoaded"};
+  }
+
+  try {
+    auto expression = generation_->expression(action, context);
+    trackModules();
+
+    return expression;
+  } catch (...) {
+    trackModules();
+    throw;
+  }
+}
+
+std::optional<runtime::config::CommandTabView> ConfigurationSource::commandTab(BindingAction action) const {
+  if (!generation_) {
+    throw std::runtime_error{"ConfigurationNotLoaded"};
+  }
+
+  return generation_->commandTab(action);
+}
+
+std::optional<NotificationActionDescription> ConfigurationSource::notificationAction(BindingAction action) const {
+  if (!generation_) {
+    throw std::runtime_error{"ConfigurationNotLoaded"};
+  }
+
+  return generation_->notificationAction(action);
+}
+
+void ConfigurationSource::open(const ConfigurationSelection &selection) {
+  debounce_.stop();
+  poll_.stop();
+  watch_ = {};
+  loaded_ = false;
+  pending_poll_ = false;
+  pending_reload_ = false;
+  ++revision_;
+  path_ = selection.path.isEmpty() ? QString{} : QFileInfo{selection.path}.absoluteFilePath();
+  profile_ = selection.profile;
+  source_path_ = selection.path.toUtf8();
+  profile_name_ = selection.profile.toUtf8();
+  theme_ = selection.theme;
+  const QPointer<ConfigurationSource> lifetime{this};
+
+  try {
+    adopt(ConfigurationLoader::prepare(memory_, request(true)));
+  } catch (const std::exception &error) {
+    fail(error);
+  }
+
+  if (lifetime != nullptr && !path_.isEmpty()) {
+    poll_.start();
+  }
+}
+
+void ConfigurationSource::requestReload() {
+  if (!loaded_ || path_.isEmpty()) {
+    throw std::runtime_error{"ConfigurationNotLoaded"};
+  }
+
+  ++revision_;
+  debounce_.start();
+}
+
+const Configuration &ConfigurationSource::configuration() const noexcept {
+  return configuration_;
+}
+
+ResolvedFont ConfigurationSource::resolveFont(const FontConfiguration &font, qreal scale) {
+  return fonts_.resolve(font, scale);
+}
+
+QString ConfigurationSource::error() const {
+  return error_;
+}
+
+std::string_view ConfigurationSource::query(ConfigurationQuery query, const ClientViewState &view) {
+  if (!generation_) {
+    throw std::runtime_error{"ConfigurationNotLoaded"};
+  }
+
+  if (query.section != ConfigurationQuery::Section::client && query.index < 0) {
+    throw std::invalid_argument{"InvalidIndex"};
+  }
+
+  switch (query.section) {
+  case ConfigurationQuery::Section::client: {
+    const ClientQueryContext context{
+        .source = optionalText(source_path_),
+        .profile = optionalText(profile_name_),
+        .generation = generation_->number(),
+        .view = view,
+    };
+
+    return ClientQuery::write(generation_->configuration(), context, query_buffer_);
+  }
+  case ConfigurationQuery::Section::binding:
+    if (!std::in_range<std::size_t>(query.index)) {
+      throw std::runtime_error{"BindingNotFound"};
+    }
+
+    return BindingQuery::write(generation_->input(), static_cast<std::size_t>(query.index), generation_->actionDescriptions(), generation_->commandTabs(), query_buffer_);
+  case ConfigurationQuery::Section::runtime:
+    return RuntimeQuery::write(generation_->runtimeValues(), query_buffer_);
+  case ConfigurationQuery::Section::gui:
+    return GuiQuery::write(generation_->configuration(), query_buffer_, platform::defaultTitlebar());
+  case ConfigurationQuery::Section::input:
+    return InputQuery::write(generation_->input(), query_buffer_);
+  case ConfigurationQuery::Section::theme:
+    return ThemeQuery::write(generation_->configuration().themes, query_buffer_);
+  default:
+    throw std::runtime_error{"ConfigurationSectionUnavailable"};
+  }
+}
+
+void ConfigurationSource::poll() {
+  if (!debounce_.isActive() && !path_.isEmpty()) {
+    schedule(false);
+  }
+}
+
+void ConfigurationSource::trackModules() {
+  if (generation_ && generation_->localModuleCount() != static_cast<std::size_t>(watch_.modules.size())) {
+    ConfigurationLoader::trackModules(*generation_, module_root_, watch_.modules);
+  }
+}
+
+ConfigurationReloadRequest ConfigurationSource::request(bool force) {
+  return {.selection = {.path = path_, .profile = profile_, .theme = theme_}, .watch = watch_, .revision = revision_, .generation = next_generation_, .force = force};
+}
+
+void ConfigurationSource::schedule(bool force) {
+  if (busy_) {
+    pending_reload_ = pending_reload_ || force;
+    pending_poll_ = pending_poll_ || !force;
+
+    return;
+  }
+
+  try {
+    auto work = request(force);
+    active_revision_ = work.revision;
+
+    const auto future = QtConcurrent::run([memory = &memory_, work = std::move(work)] {
+      return ConfigurationLoader::prepare(*memory, work);
+    });
+
+    busy_ = true;
+    task_.setFuture(future);
+  } catch (const std::exception &error) {
+    busy_ = false;
+    fail(error);
+  }
+}
+
+void ConfigurationSource::complete() {
+  busy_ = false;
+  const auto completed_revision = active_revision_;
+  const QPointer<ConfigurationSource> lifetime{this};
+
+  try {
+    adopt(task_.future().takeResult());
+  } catch (const std::exception &error) {
+    if (completed_revision == revision_) {
+      fail(error);
+    }
+  }
+
+  if (lifetime == nullptr || busy_ || debounce_.isActive()) {
+    return;
+  }
+
+  if (std::exchange(pending_reload_, false)) {
+    pending_poll_ = false;
+    schedule(true);
+  } else if (std::exchange(pending_poll_, false)) {
+    schedule(false);
+  }
+}
+
+void ConfigurationSource::adopt(PreparedConfiguration result) {
+  if (!result || result->revision != revision_) {
+    return;
+  }
+
+  watch_.root = result->observed.root;
+  for (auto iterator = result->observed.modules.cbegin(); iterator != result->observed.modules.cend(); ++iterator) {
+    const auto found = watch_.modules.find(iterator.key());
+    if (found != watch_.modules.end() && found->path == iterator->path) {
+      found->stamp = iterator->stamp;
+    }
+  }
+
+  switch (result->state) {
+  case ConfigurationPreparation::State::unchanged:
+    return;
+  case ConfigurationPreparation::State::failed:
+    error_ = std::move(result->error);
+    result.reset();
+    emit failed();
+
+    return;
+  case ConfigurationPreparation::State::ready:
+    break;
+  }
+
+  static_cast<void>(fonts_.resolve(result->configuration.font, 1));
+  configuration_ = std::move(result->configuration);
+  locked_theme_ = result->locked_theme;
+  configuration_.theme = projectTheme(configuration_.themes.resolve(appearance_, locked_theme_));
+  generation_ = std::move(result->generation);
+  if (generation_) {
+    next_generation_ = generation_->number() + 1;
+  }
+  module_root_ = std::move(result->directory);
+  watch_.modules = std::move(result->modules);
+  loaded_ = !path_.isEmpty();
+  error_.clear();
+  result.reset();
+  emit changed();
+}
+
+void ConfigurationSource::reload() {
+  schedule(true);
+}
+
+void ConfigurationSource::fail(const std::exception &error) {
+  error_ = QString::fromUtf8(error.what());
+  emit failed();
+}
+
+void ConfigurationSource::updateAppearance(Appearance appearance) {
+  appearance_ = appearance;
+  const auto selected = projectTheme(configuration_.themes.resolve(appearance_, locked_theme_));
+  if (selected == configuration_.theme) {
+    return;
+  }
+
+  configuration_.theme = selected;
+  emit themeChanged();
+}
+
+}

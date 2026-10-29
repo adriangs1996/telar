@@ -1,0 +1,26 @@
+CompileFlags:
+  CompilationDatabase: out
+
+---
+If:
+  PathMatch: config/.*\.hpp
+CompileFlags:
+  CompilationDatabase: out/clangd/config
+
+---
+If:
+  PathMatch: (application|core|fonts|graphics|history|input|links|machines|palette|paths|platform|presentation|suggestions|terminal|text|transport)/.*\.hpp
+CompileFlags:
+  CompilationDatabase: out/clangd/domain
+
+---
+If:
+  PathMatch: (qt/.*|platform/environment)\.hpp
+CompileFlags:
+  CompilationDatabase: out/clangd/qt
+
+---
+If:
+  PathMatch: tests/.*\.hpp
+CompileFlags:
+  CompilationDatabase: out/clangd/tests

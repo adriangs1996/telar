@@ -29,6 +29,35 @@ public:
   LocalModules(const LocalModules &) = delete;
   LocalModules &operator=(const LocalModules &) = delete;
 
+  [[nodiscard]] std::size_t configurationModuleCount() const noexcept requires(domain == ModuleDomain::configuration) {
+    return static_cast<std::size_t>(loaded_);
+  }
+
+  template <typename Visitor>
+  void visitLoadedNames(lua_State *state, Visitor &&visit) const {
+    constexpr int traversal_slots = 3;
+    if (lua_checkstack(state, traversal_slots) == 0) {
+      throw Error{"Cannot inspect local module dependencies"};
+    }
+
+    const auto initial_top = lua_gettop(state);
+    lua_rawgeti(state, LUA_REGISTRYINDEX, cache_);
+    lua_pushnil(state);
+    try {
+      while (lua_next(state, -2) != 0) {
+        std::size_t length = 0;
+        const auto *name = lua_tolstring(state, -2, &length);
+        visit(std::string_view{name, length});
+        lua_pop(state, 1);
+      }
+    } catch (...) {
+      lua_settop(state, initial_top);
+      throw;
+    }
+
+    lua_settop(state, initial_top);
+  }
+
 private:
   static int raise(lua_State *state, const char *configuration, const char *package) {
     lua_pushstring(state, domain == ModuleDomain::configuration ? configuration : package);

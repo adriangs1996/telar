@@ -1,0 +1,95 @@
+#pragma once
+
+#include "application/dependencies.hpp"
+#include "cell_glyphs.hpp"
+#include "core/cell_rectangle.hpp"
+#include "core/configuration.hpp"
+#include "graphics/store.hpp"
+#include "graphics_scene.hpp"
+#include "links/link_match.hpp"
+#include "terminal/screen.hpp"
+#include "terminal/selection.hpp"
+#include "text_scene.hpp"
+#include "ui/workbench/terminal_font.hpp"
+#include <QList>
+#include <QQuickWindow>
+#include <QRectF>
+#include <QSGNode>
+#include <QSGSimpleRectNode>
+#include <QSGTransformNode>
+#include <QString>
+#include <cstddef>
+#include <cstdint>
+
+namespace telar::gui::qt {
+
+struct TerminalPresentation {
+  const Screen<ApplicationAllocator> &screen;
+  const GraphicsStore<ApplicationAllocator> &graphics;
+  const Configuration &configuration;
+  const workbench::TerminalFont &font;
+  const QString &preedit;
+  std::shared_ptr<const FontCollection> fonts;
+  FontGrid grid;
+  CellSelection selection;
+  QRectF bounds;
+  qreal scale = 1;
+  std::uint64_t appearance = 0;
+  std::optional<float> box_stroke = std::nullopt;
+  bool attached = false;
+  bool pane_focused = false;
+  bool keyboard = false;
+  bool cursor_on = true;
+  std::optional<Cursor> cursor_override = std::nullopt;
+  const LinkMatch *hovered_link = nullptr;
+  QQuickItem *owner = nullptr;
+};
+
+class TerminalScene final : public QSGTransformNode {
+public:
+  explicit TerminalScene(QQuickWindow &window);
+  ~TerminalScene() override;
+  TerminalScene(const TerminalScene &) = delete;
+  TerminalScene &operator=(const TerminalScene &) = delete;
+  TerminalScene(TerminalScene &&) = delete;
+  TerminalScene &operator=(TerminalScene &&) = delete;
+
+  void synchronize(QQuickWindow &window, const TerminalPresentation &frame);
+  static QSGNode *synchronizeNode(QSGNode *previous, QQuickWindow &window, const TerminalPresentation &frame);
+
+private:
+  struct Row {
+    QSGNode *text = nullptr;
+    QSGNode *background = nullptr;
+    std::uint64_t revision = 0;
+    std::uint64_t appearance = 0;
+    CellSelection selection{};
+    std::optional<std::size_t> cursor = std::nullopt;
+  };
+
+  void synchronizeGrid(CellRectangle visible);
+  void paintRow(const TerminalPresentation &frame, Row &row, std::size_t row_index);
+  void paintCursor(const TerminalPresentation &frame);
+  void paintPreedit(const TerminalPresentation &frame);
+  void paintHoveredLink(const TerminalPresentation &frame);
+
+  QQuickWindow &window_;
+  QSGSimpleRectNode &background_;
+  QSGTransformNode &below_background_;
+  QSGNode &cell_backgrounds_;
+  QSGTransformNode &below_text_;
+  QSGNode &rows_;
+  QSGTransformNode &above_text_;
+  QSGNode &overlay_;
+  GraphicsScene images_;
+  CellGlyphs glyphs_;
+  TextScene text_;
+  TextScene overlay_text_;
+  QList<Row> row_nodes_;
+  QRectF bounds_;
+  std::uint16_t columns_ = 0;
+  std::uint64_t appearance_ = 0;
+  qreal scale_ = 0;
+};
+
+}

@@ -1,0 +1,520 @@
+#pragma once
+
+#include "application/session.hpp"
+#include "application_effects.hpp"
+#include "configuration_source.hpp"
+#include "core/calendar_sample.hpp"
+#include "core/metrics.hpp"
+#include "core/terminal_size.hpp"
+#include "core/view_version.hpp"
+#include "external_link_opener.hpp"
+#include "font_resolver.hpp"
+#include "history/choice.hpp"
+#include "input/history_scroll.hpp"
+#include "key_bindings.hpp"
+#include "list_model.hpp"
+#include "palette/navigation_target.hpp"
+#include "palette/query.hpp"
+#include "palette/ranked_matches.hpp"
+#include "platform/window_lease.hpp"
+#include "pointer_dispatcher.hpp"
+#include "presentation/display_metrics.hpp"
+#include "presentation/frame_pacer.hpp"
+#include "presentation/history_modal_geometry.hpp"
+#include "presentation/palette_row_window.hpp"
+#include "presentation/path_picker_placement.hpp"
+#include "presentation/tab_caption.hpp"
+#include "runtime_connection.hpp"
+#include "scroll_event.hpp"
+#include "sound_player.hpp"
+#include "system_notifier.hpp"
+#include "terminal_preparation.hpp"
+#include "text/bounded_text.hpp"
+#include "window_frame_pacer.hpp"
+#include <QByteArray>
+#include <QColor>
+#include <QHash>
+#include <QObject>
+#include <QPointer>
+#include <QQuickItem>
+#include <QQuickWindow>
+#include <QTimer>
+#include <QWheelEvent>
+#include <QtCore/qbytearrayview.h>
+#include <QtCore/qtypes.h>
+#include <QtQml/qqmlregistration.h>
+#include <array>
+#include <concepts>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <optional>
+#include <span>
+#include <string_view>
+#include <variant>
+
+namespace telar::gui::test {
+struct HistoryPresentation;
+struct FramePacing;
+}
+
+namespace telar::gui::qt {
+
+using GuiSession = Session<ApplicationAllocator, RuntimeConnection, platform::AwakeClock, ApplicationEffects>;
+class TerminalItem;
+
+class Application final : public QObject {
+  friend struct ApplicationEffects;
+
+  Q_OBJECT
+  QML_NAMED_ELEMENT(GuiController)
+  QML_UNCREATABLE("Use the running GUI controller")
+  Q_PROPERTY(QAbstractItemModel *workspaces READ workspaces CONSTANT)
+  Q_PROPERTY(QAbstractItemModel *tabs READ tabs CONSTANT)
+  Q_PROPERTY(QAbstractItemModel *panes READ panes CONSTANT)
+  Q_PROPERTY(QAbstractItemModel *dividers READ dividers CONSTANT)
+  Q_PROPERTY(QAbstractItemModel *agents READ agents CONSTANT)
+  Q_PROPERTY(QAbstractItemModel *history READ history CONSTANT)
+  Q_PROPERTY(bool historyLoading READ historyLoading NOTIFY historyChanged)
+  Q_PROPERTY(QVariantMap historyState READ historyState NOTIFY historyChanged)
+  Q_PROPERTY(QVariantMap historyGeometry READ historyGeometry NOTIFY historyChanged)
+  Q_PROPERTY(QString historyCommand READ historyCommand NOTIFY historyChanged)
+  Q_PROPERTY(QString historyOutput READ historyOutput NOTIFY historyChanged)
+  Q_PROPERTY(QVariantMap historyInspection READ historyInspection NOTIFY historyChanged)
+  Q_PROPERTY(int controlModifier READ controlModifier CONSTANT)
+  Q_PROPERTY(int superModifier READ superModifier CONSTANT)
+  Q_PROPERTY(QVariantMap colors READ colors NOTIFY configurationChanged)
+  Q_PROPERTY(QVariantMap font READ font NOTIFY configurationChanged)
+  Q_PROPERTY(qreal chromeRatio READ chromeRatio NOTIFY configurationChanged)
+  Q_PROPERTY(qreal chromeTextScale READ chromeTextScale NOTIFY configurationChanged)
+  Q_PROPERTY(QVariantMap windowGeometry READ windowGeometry NOTIFY windowGeometryChanged)
+  Q_PROPERTY(QVariantMap sidebarGeometry READ sidebarGeometry NOTIFY sidebarGeometryChanged)
+  Q_PROPERTY(QVariantMap workspaceContext READ workspaceContext NOTIFY stateChanged)
+  Q_PROPERTY(bool sidebarVisible READ sidebarVisible NOTIFY configurationChanged)
+  Q_PROPERTY(qreal sidebarWidth READ sidebarWidth NOTIFY configurationChanged)
+  Q_PROPERTY(bool workspaceListCollapsed READ workspaceListCollapsed NOTIFY configurationChanged)
+  Q_PROPERTY(qreal windowControls READ windowControls NOTIFY windowGeometryChanged)
+  Q_PROPERTY(QString title READ title NOTIFY stateChanged)
+  Q_PROPERTY(QVariantMap statusMode READ statusMode NOTIFY statusModeChanged)
+  Q_PROPERTY(QVariantMap hostMetrics READ hostMetrics NOTIFY hostMetricsChanged)
+  Q_PROPERTY(QString error READ error NOTIFY stateChanged)
+  Q_PROPERTY(QString tlsBadgeColor READ tlsBadgeColor NOTIFY stateChanged)
+  Q_PROPERTY(bool connected READ connected NOTIFY stateChanged)
+  Q_PROPERTY(bool copyModeActive READ copyModeActive NOTIFY stateChanged)
+  Q_PROPERTY(bool prefixPending READ prefixPending NOTIFY prefixChanged)
+  Q_PROPERTY(QString dialog READ dialog NOTIFY dialogChanged)
+  Q_PROPERTY(QString dialogText READ dialogText NOTIFY dialogChanged)
+  Q_PROPERTY(QVariantList commands READ commands NOTIFY configurationChanged)
+  Q_PROPERTY(QVariantMap paletteState READ paletteState NOTIFY paletteChanged)
+  Q_PROPERTY(QVariantMap paletteGeometry READ paletteGeometry NOTIFY paletteChanged)
+  Q_PROPERTY(QVariantMap suggestionState READ suggestionState NOTIFY paletteChanged)
+  Q_PROPERTY(QVariantMap suggestionGeometry READ suggestionGeometry NOTIFY paletteChanged)
+  Q_PROPERTY(QVariantMap pathPickerState READ pathPickerState NOTIFY pathPickerChanged)
+  Q_PROPERTY(QVariantMap pathPickerGeometry READ pathPickerGeometry NOTIFY pathPickerGeometryChanged)
+
+public:
+  enum class Action : quint8 {
+    none,
+    new_tab,
+    select_tab,
+    select_tab_index,
+    next_tab,
+    previous_tab,
+    move_tab_next,
+    move_tab_previous,
+    focus_left,
+    focus_right,
+    focus_up,
+    focus_down,
+    resize_left,
+    resize_right,
+    resize_up,
+    resize_down,
+    detach,
+    close_tab,
+    select_workspace,
+    focus_pane,
+    select_agent,
+    split_horizontal,
+    split_vertical,
+    close_pane,
+    fullscreen,
+    toggle_sidebar,
+    toggle_workspace_list,
+    history,
+    palette,
+    goto_picker,
+    leave_worktree,
+    forget_gone_worktrees,
+    new_workspace,
+    rename_tab,
+    rename_workspace,
+    cancel,
+    copy_mode,
+    path_picker,
+    suggest_command,
+  };
+  Q_ENUM(Action)
+
+  enum class HistoryAction : quint8 {
+    copy,
+    erase,
+    visit,
+    inspect,
+    older,
+    newer,
+  };
+  Q_ENUM(HistoryAction)
+
+  explicit Application(ApplicationAllocator &memory, QObject *parent = nullptr);
+  ~Application() override;
+  Application(const Application &) = delete;
+  Application &operator=(const Application &) = delete;
+  Application(Application &&) = delete;
+  Application &operator=(Application &&) = delete;
+
+  void open(const QString &endpoint);
+  void loadConfiguration(const QString &path, const QString &profile, const QString &theme);
+  void configureLaunch(const QString &directory, const QStringList &arguments, bool restore);
+  void setWindow(QQuickWindow &window);
+  bool eventFilter(QObject *watched, QEvent *event) override;
+  [[nodiscard]] Pane<ApplicationAllocator> *pane(std::uint64_t identity) const noexcept;
+  [[nodiscard]] const Configuration &configuration() const noexcept;
+  [[nodiscard]] ResolvedFont resolveFont(qreal scale);
+  [[nodiscard]] ViewVersion viewVersion() const noexcept;
+  [[nodiscard]] Qt::KeyboardModifiers pointerModifiers() const noexcept;
+  void observePointerModifiers(Qt::KeyboardModifiers modifiers);
+  void registerTerminal(TerminalItem &terminal);
+  void unregisterTerminal(TerminalItem &terminal);
+  [[nodiscard]] const NotificationCenter &notifications() const noexcept;
+  [[nodiscard]] bool notificationTargetVisible(NotificationTarget target) const noexcept;
+  [[nodiscard]] DisplayMetrics displayMetrics(qreal density) const;
+  [[nodiscard]] Rect notificationHost(const DisplayMetrics &display) const;
+  void publishNotification(NotificationInput input);
+  void soundPlaybackFinished(std::optional<CommandFailure> failure);
+  Q_INVOKABLE void dismissNotification(const QString &identity);
+  Q_INVOKABLE void activateNotification(const QString &identity);
+  [[nodiscard]] PointerDispatcher &pointerDispatcher() noexcept;
+  [[nodiscard]] std::shared_ptr<const LinkHit> shareLinkHit(const LinkHit &hit);
+
+  Q_INVOKABLE void execute(Action action, const QString &target = {});
+  Q_INVOKABLE void submitDialog(const QVariantMap &input);
+  Q_INVOKABLE void useHistory(const QString &entry_id, bool alternate = false);
+  Q_INVOKABLE void useHistoryRow(int row, bool alternate = false);
+  Q_INVOKABLE void usePresentedHistory(const QString &revision, bool alternate = false);
+  [[nodiscard]] bool historyLoading() const;
+  [[nodiscard]] QString historyCommand() const;
+  [[nodiscard]] QVariantMap historyState() const;
+  [[nodiscard]] QString historyOutput() const;
+  [[nodiscard]] QVariantMap historyInspection() const;
+  [[nodiscard]] static int controlModifier();
+  [[nodiscard]] static int superModifier();
+  Q_INVOKABLE void executeHistory(HistoryAction action, const QString &entry_id = {});
+  Q_INVOKABLE void selectHistoryRow(int row);
+  Q_INVOKABLE void selectPresentedHistoryRow(int row, const QString &revision);
+  Q_INVOKABLE void registerHistoryPanel(QQuickItem *panel);
+  Q_INVOKABLE void setHistoryFilters(const QVariantMap &filters);
+  Q_INVOKABLE void setSidebarWidth(qreal width);
+  Q_INVOKABLE void searchHistory(const QString &query);
+  Q_INVOKABLE void reportHistoryQueryLimit(qulonglong requested_bytes);
+  Q_INVOKABLE void searchPalette(const QString &text);
+  Q_INVOKABLE void searchPaths(const QString &text);
+  Q_INVOKABLE void reportPathQueryLimit(qulonglong requested_bytes);
+  Q_INVOKABLE void movePathSelection(int delta);
+  Q_INVOKABLE void descendPath();
+  Q_INVOKABLE void ascendPath();
+  Q_INVOKABLE void insertPath(bool absolute);
+  Q_INVOKABLE void activatePath(const QVariantMap &choice);
+  Q_INVOKABLE void reportPaletteQueryLimit(qulonglong requested_bytes);
+  Q_INVOKABLE void movePalette(int delta);
+  Q_INVOKABLE void setPaletteMode(int mode);
+  Q_INVOKABLE void usePaletteResult(const QVariantMap &choice);
+  Q_INVOKABLE void submitSuggestion(const QString &revision);
+  Q_INVOKABLE void resizeDivider(int index, qreal x, qreal y, bool commit);
+
+  void input(std::uint64_t pane_id, const QByteArray &bytes, PaneInputSource source = PaneInputSource::keyboard);
+  void paste(std::uint64_t pane_id, const QString &text);
+  void resize(std::uint64_t pane_id, TerminalSize size);
+  void scroll(PaneScrollDelta delta);
+  bool handleBindingKey(QKeyEvent &event, QQuickItem &recipient, bool captures = false);
+  void interruptBindings();
+  [[nodiscard]] bool copyModeActive() const noexcept;
+  [[nodiscard]] const std::optional<CopyState> &copyState() const noexcept;
+  bool handleCopyKey(std::uint64_t pane_id, const QKeyEvent &event);
+  bool beginSelection(std::uint64_t pane_id, CopyPoint local);
+  bool handleCopyPointer(const CopyPointerInput &input);
+  void copySelection(std::uint64_t pane_id);
+  bool openLink(const LinkTarget &target, std::optional<std::uint64_t> source_id = {});
+  void linkOpeningFinished(std::optional<LinkOpeningFailure> failure);
+
+  QAbstractItemModel *workspaces() noexcept {
+    return &workspaces_;
+  }
+
+  QAbstractItemModel *tabs() noexcept {
+    return &tabs_;
+  }
+
+  QAbstractItemModel *panes() noexcept {
+    return &panes_;
+  }
+
+  QAbstractItemModel *agents() noexcept {
+    return &agents_;
+  }
+
+  QAbstractItemModel *dividers() noexcept {
+    return &dividers_;
+  }
+
+  QAbstractItemModel *history() noexcept {
+    return &history_;
+  }
+
+  [[nodiscard]] QVariantMap colors() const;
+  [[nodiscard]] QVariantMap font() const;
+  [[nodiscard]] QVariantList commands() const;
+  [[nodiscard]] QVariantMap paletteState() const;
+  [[nodiscard]] QVariantMap suggestionState() const;
+  [[nodiscard]] QVariantMap suggestionGeometry() const;
+  [[nodiscard]] QVariantMap paletteGeometry() const;
+  [[nodiscard]] qreal chromeRatio() const;
+  [[nodiscard]] qreal chromeTextScale() const;
+  [[nodiscard]] QVariantMap windowGeometry() const;
+  [[nodiscard]] QVariantMap pathPickerState() const;
+  [[nodiscard]] QVariantMap pathPickerGeometry() const;
+  [[nodiscard]] QVariantMap historyGeometry() const;
+  [[nodiscard]] QVariantMap sidebarGeometry() const;
+  [[nodiscard]] QVariantMap workspaceContext() const;
+  [[nodiscard]] bool sidebarVisible() const;
+  [[nodiscard]] qreal sidebarWidth() const;
+  [[nodiscard]] bool workspaceListCollapsed() const;
+  [[nodiscard]] qreal windowControls() const;
+  [[nodiscard]] QString title() const;
+  [[nodiscard]] QVariantMap statusMode() const;
+  [[nodiscard]] QVariantMap hostMetrics() const;
+  [[nodiscard]] bool prefixPending() const noexcept;
+  [[nodiscard]] QString error() const;
+  [[nodiscard]] QString tlsBadgeColor() const;
+  Q_INVOKABLE void dismissDiagnostic();
+  [[nodiscard]] bool connected() const;
+  [[nodiscard]] QString dialog() const;
+  [[nodiscard]] QString dialogText() const;
+
+signals:
+  void historyInspectionScrolled(int lines);
+  void prefixChanged();
+  void historyChanged();
+  void paletteChanged();
+  void pathPickerChanged();
+  void pathPickerGeometryChanged();
+  void stateChanged();
+  void statusModeChanged();
+  void hostMetricsChanged();
+  void configurationChanged();
+  void windowGeometryChanged();
+  void sidebarGeometryChanged();
+  void dialogChanged();
+  void terminalChanged(qulonglong pane_id);
+  void pointerModifiersChanged();
+  void inputReleasing(qulonglong pane_id);
+  void notification(const QString &message);
+  void notificationsChanged();
+
+private:
+  friend struct test::HistoryPresentation;
+  friend struct test::FramePacing;
+  friend class KeyBindings;
+  friend class PointerDispatcher;
+  friend class TerminalItem;
+
+  [[nodiscard]] BindingContext bindingContext() const;
+  [[nodiscard]] std::optional<BindingRepeat> bindingRepeat(BindingAction action) const;
+  bool runBinding(BindingAction action);
+  void executeBinding(BindingAction action);
+  void executeCommandTab(BindingAction action);
+  void executeNotificationBinding(BindingAction action);
+  void applyExpression(const InputExpression &expression);
+  void scrollBinding(ScrollDirection direction);
+  [[nodiscard]] QString bindingShortcut(BindingActionKind action) const;
+  using PaletteTarget = std::variant<NavigationTarget, Action>;
+  static constexpr std::size_t palette_capacity = WorkspaceReplica<ApplicationAllocator>::maximum_workspaces + GuiSession::maximum_workspace_tabs + AgentReplica<ApplicationAllocator>::capacity;
+  using PaletteMatches = RankedMatches<PaletteTarget, palette_capacity>;
+
+  void runtimeDisconnected();
+  void cancelCurrentInteraction();
+  void showPalette(PaletteMode mode);
+  void refreshPalette();
+  bool restorePaletteParent();
+  bool updatePaletteResults();
+  void collectPaletteNavigation(PaletteMatches &matches, std::string_view query) const;
+  [[nodiscard]] QVariantMap paletteRecord(const PaletteTarget &target, bool queried) const;
+  bool navigatePaletteTarget(const NavigationTarget &target);
+  void showPathPicker();
+  void refreshPathPicker();
+  [[nodiscard]] PathPickerPlacement pathPlacement() const;
+  QString path_query_;
+  std::size_t path_selection_ = 0;
+  static constexpr Viewport default_viewport{.width = 1200, .height = 800, .scale = 1};
+
+  struct PresentedPane {
+    TerminalPreparation frame;
+    QPointer<TerminalItem> terminal;
+  };
+
+  struct PresentedHistory {
+    HistoryChoice choice;
+    std::uint64_t dialog_generation = 0;
+    bool enter_runs = false;
+  };
+
+  struct PresentedFrame {
+    std::array<PresentedPane, PaneLayout::maximum_panes> panes;
+    std::size_t pane_count = 0;
+    std::uint64_t preparation_ns = 0;
+    std::optional<PresentedHistory> history;
+    HistoryScrollSurface history_surface;
+  };
+
+  void consume(QByteArrayView payload);
+  void executeHostCommand(const ClientCommand &message, CompleteClientCommand &reply);
+  void synchronizeFontMetrics();
+  void synchronizeWorkbenchGeometry();
+  void synchronizeDisplay();
+  void synchronizeScreen();
+  void synchronizeWindowSize();
+  bool updateViewport(qreal width, qreal height);
+  void observeFrames(QQuickWindow &window);
+  void submitHistory(std::uint64_t entry_id, bool alternate);
+  [[nodiscard]] const PresentedHistory *presentedHistory(const QString &revision) const;
+  void refreshHistory();
+  [[nodiscard]] QString historyScopeValue();
+  [[nodiscard]] std::string_view historyTabName(const Pane<ApplicationAllocator> *pane) const;
+  void refresh();
+  void refreshAgents();
+  void refreshPanes();
+  [[nodiscard]] HistoryModalMetrics historyMetrics() const;
+  [[nodiscard]] HistoryScrollSurface historyScrollSurface(const HistoryModalMetrics &metrics) const;
+  [[nodiscard]] bool handleHistoryWheel(QWheelEvent &event);
+  void moveHistoryRows(std::int32_t steps);
+  [[nodiscard]] QVariantList fullscreenEntries(const Tab<ApplicationAllocator> &tab);
+  void showDialog(const QString &kind, const QString &text = {});
+  void fail(const std::exception &error);
+  void publishCopyChange(std::uint64_t previous_pane);
+  void leaveKeyboardCopyMode();
+  void openCopyLink(std::uint64_t pane_id, CellPosition point);
+  void present(const PresentedFrame &frame);
+  void prepareFrame(PresentedFrame &frame);
+  void prepareTerminalFrames(PresentedFrame &frame);
+  void recordPreparedFrame(const PresentedFrame &frame);
+  [[nodiscard]] TerminalItem *visibleTerminal(std::uint64_t pane_id) const;
+  [[nodiscard]] std::size_t collectPacingPanes(std::span<FramePacer::Pane, PaneLayout::maximum_panes> panes) const;
+  void reconsiderFrame();
+  void configureFramePacer();
+  void prepareImagePlacements();
+  void configureWindow();
+  void synchronizeCadence();
+  void refreshNotifications();
+  void scheduleNotifications();
+  void initializeNotifications();
+  void initializeGraphicsRecovery();
+  void scheduleGraphicsRecovery();
+  void restoreTerminalFocus();
+  bool executeNavigation(Action action, const QString &target);
+  bool executePane(Action action, std::uint64_t identity);
+  void executeWindowAction(Action action);
+
+  template <std::invocable Mutation>
+  void applyInteraction(Mutation mutate) {
+    try {
+      mutate();
+      refresh();
+    } catch (const std::exception &error) {
+      if (dialog_ == QLatin1StringView("history")) {
+        session_.reportHistoryError(error.what());
+        refreshHistory();
+      } else {
+        fail(error);
+      }
+    }
+  }
+
+  ApplicationAllocator &memory_;
+  RuntimeConnection connection_;
+  ConfigurationSource configuration_source_;
+  GuiSession session_;
+  std::optional<WindowFramePacer<>> frame_pacer_;
+  KeyBindings key_bindings_;
+  PointerDispatcher pointer_dispatcher_;
+  ExternalLinkOpener<ApplicationLinkHost, Application> link_opener_;
+  SoundPlayer<ApplicationSoundHost, Application> sound_player_;
+  SystemNotifier<ApplicationNotificationHost, ApplicationAllocator> system_notifier_;
+  ListModel workspaces_;
+  QVariantMap workspace_context_;
+  ListModel tabs_;
+  ListModel panes_;
+  ListModel dividers_;
+  ListModel agents_;
+  ListModel history_;
+  QString palette_query_;
+
+  struct PaletteEditorPosition {
+    int anchor = 0;
+    int cursor = 0;
+    std::uint64_t revision = 0;
+  };
+
+  struct PaletteParent {
+    QString query;
+    std::size_t selection = 0;
+    PaletteEditorPosition editor;
+  };
+
+  std::optional<PaletteParent> palette_parent_;
+  PaletteEditorPosition palette_editor_restore_;
+  QVariantList palette_rows_;
+  QVariantList palette_commands_;
+  std::array<PaletteTarget, palette_capacity> palette_targets_{};
+  std::array<PaletteRowKind, palette_capacity> palette_kinds_{};
+  std::size_t palette_selection_ = 0;
+  std::uint64_t palette_revision_ = 0;
+  QTimer refresh_timer_;
+  QTimer history_timer_;
+  QTimer notification_timer_;
+  QTimer graphics_resume_timer_;
+  QString history_query_;
+  CalendarSample history_calendar_;
+  HistoryFilters history_filters_;
+  std::uint64_t history_view_version_ = 0;
+  std::uint64_t history_rows_version_ = 0;
+  QByteArray history_directory_source_;
+  QString history_directory_value_;
+  QString history_scope_value_;
+  BoundedText<TabCaption::capacity> history_tab_name_;
+  bool history_pane_open_ = false;
+  HistoryScroll history_scroll_;
+  ScrollEventSequence history_wheel_sequence_;
+  QPointer<QQuickItem> history_panel_;
+  QPointer<QQuickItem> history_viewport_;
+  QPointer<QQuickItem> history_content_;
+  QPointer<QQuickItem> history_search_host_;
+  QString error_;
+  QString dialog_;
+  QString dialog_text_;
+  std::uint64_t dialog_generation_ = 0;
+  QPointer<QQuickWindow> window_;
+  std::uint64_t window_generation_ = 0;
+  QMetaObject::Connection screen_refresh_connection_;
+  Viewport viewport_ = default_viewport;
+  CellMetrics cell_metrics_;
+  TerminalGrid terminal_grid_;
+  std::optional<PresentedHistory> presented_history_;
+  HistoryScrollSurface presented_history_surface_;
+  QHash<std::uint64_t, QPointer<TerminalItem>> terminals_;
+  std::optional<platform::WindowLease> identity_lease_;
+  QByteArray hostname_;
+  std::uint64_t identity_ = 0;
+  Qt::KeyboardModifiers pointer_modifiers_;
+};
+
+}

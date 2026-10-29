@@ -5,6 +5,7 @@
 #include <array>
 #include <cstdlib>
 #include <limits.h>
+#include <string_view>
 #include <sys/stat.h>
 
 namespace telar::runtime {

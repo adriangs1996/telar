@@ -5,9 +5,10 @@
 
 namespace telar::runtime::config {
 
+template <CommandTabStore Commands>
 class BarsValidator {
 public:
-  explicit BarsValidator(const ActionValidator &actions, LimitNotices &limits)
+  explicit BarsValidator(const BasicActionValidator<Commands> &actions, LimitNotices &limits)
       : actions_(actions),
         limits_(limits) {}
 
@@ -80,7 +81,7 @@ private:
   }
 
   static constexpr std::size_t maximum_footer_slots = 3;
-  const ActionValidator &actions_;
+  const BasicActionValidator<Commands> &actions_;
   LimitNotices &limits_;
 };
 

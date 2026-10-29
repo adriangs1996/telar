@@ -1,0 +1,37 @@
+{
+  "source_image": "/tmp/telar-icon-capture-v1/0-tabs-gui/window.png",
+  "source_image_sha256": "232e6b363f4ede55381a4f3249e5de50c1ba8c3527f283658d62a7ffc035cee0",
+  "original_binary_sha256": "1fcbfdfcbb6e43d5f9bcccfb27db196fc326368ac8d64c2bd370395670290eba",
+  "configuration_sha256": "7e481280d891b0131370f291c38f7b138ffbf62d28e67aca6e902d74c021ed41",
+  "original_filter_sources": [
+    "lib/window/shaders/quad.metal",
+    "lib/window/vulkan/vulkan_pipeline.c"
+  ],
+  "operation": "Unmodified crops at absolute physical pixel coordinates; no registration, scaling or recoloring",
+  "crops": [
+    {
+      "file": "folder-small.png",
+      "rect": [
+        18,
+        162,
+        27,
+        177
+      ],
+      "sha256": "8da267f9383556b446ad6bff3b5adc0e01f25aba920a2ccaa775a4b361b0d089"
+    },
+    {
+      "file": "unknown-status.png",
+      "rect": [
+        191,
+        162,
+        202,
+        177
+      ],
+      "sha256": "cd6fc761683255acd8cb197e8bf345f08a897bca18cc8ea7eda164e259452b21"
+    }
+  ],
+  "comparison": {
+    "metal": "Exact RGBA against the original Metal crops.",
+    "other_backends": "At most one channel level against the original Metal crops. Observed software and Mesa OpenGL outputs share the same one-level compositing differences; this is not a same-backend Vulkan reference."
+  }
+}

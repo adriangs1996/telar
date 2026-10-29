@@ -9,7 +9,8 @@ namespace telar::runtime::config {
 
 class ClientValidator {
 public:
-  static void validate(const lua::Value &client, LimitNotices &limits, ClientValidationState &state, const lua::Value *inherited = nullptr) {
+  template <CommandTabStore Commands>
+  static void validate(const lua::Value &client, LimitNotices &limits, BasicClientValidationState<Commands> &state, const lua::Value *inherited = nullptr) {
     if (!client.present()) {
       return;
     }
@@ -30,7 +31,7 @@ public:
     history(client.field("history"));
     ClientDefinitionsValidator::validate(client, limits);
     const ClientDefinitions definitions{client, inherited};
-    const ActionValidator actions{definitions, limits, state.commands};
+    const BasicActionValidator actions{definitions, limits, state.commands};
     BindingValidator::validate(client.field("keybindings"), actions, state.keymap, limits);
     BarsValidator{actions, limits}.validate(client.field("bars"));
   }

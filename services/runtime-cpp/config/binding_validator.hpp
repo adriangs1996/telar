@@ -8,7 +8,8 @@ namespace telar::runtime::config {
 
 class BindingValidator {
 public:
-  static void validate(const lua::Value &bindings, const ActionValidator &actions, BindingKeymap &keymap, LimitNotices &limits) {
+  template <CommandTabStore Commands>
+  static void validate(const lua::Value &bindings, const BasicActionValidator<Commands> &actions, BindingKeymap &keymap, LimitNotices &limits) {
     if (!bindings.present()) {
       return;
     }

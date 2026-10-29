@@ -1,0 +1,106 @@
+#pragma once
+
+#include "list_model.hpp"
+#include "presentation/agent_card_geometry.hpp"
+#include "presentation/display_metrics.hpp"
+#include "presentation/sidebar_geometry.hpp"
+#include "presentation/task_card_labels.hpp"
+#include "presentation/workspace_rail_geometry.hpp"
+#include "projection.hpp"
+#include <QVariantList>
+#include <QVariantMap>
+#include <QtCore/qtypes.h>
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+
+namespace telar::gui::qt {
+
+inline QVariantMap agentCardGeometryRecord(const DisplayMetrics &display, float list_width) {
+  const auto &chrome = display.chrome;
+  const auto density = display.density;
+  const auto geometry = AgentCardGeometry::derive(chrome);
+  const Rect bounds{.width = geometry.cardWidth(list_width), .height = geometry.height()};
+
+  return {
+      {QStringLiteral("width"), bounds.width / density},
+      {QStringLiteral("height"), bounds.height / density},
+      {QStringLiteral("compactHeight"), geometry.compactHeight() / density},
+      {QStringLiteral("compactPadding"), geometry.px(AgentCardGeometry::compact_vertical_padding) / density},
+      {QStringLiteral("taskIndent"), geometry.px(AgentCardGeometry::task_indent) / density},
+      {QStringLiteral("planCellWidth"), geometry.px(TaskCardLabels::plan_cell_width) / density},
+      {QStringLiteral("planCellGap"), geometry.px(TaskCardLabels::plan_cell_gap) / density},
+      {QStringLiteral("planCellHeight"), geometry.px(TaskCardLabels::plan_cell_height) / density},
+      {QStringLiteral("context"), toQRectF(geometry.row(bounds, AgentCardGeometry::Row::context), density)},
+      {QStringLiteral("title"), toQRectF(geometry.row(bounds, AgentCardGeometry::Row::title), density)},
+      {QStringLiteral("detail"), toQRectF(geometry.row(bounds, AgentCardGeometry::Row::detail), density)},
+      {QStringLiteral("radius"), geometry.px(AgentCardGeometry::radius) / density},
+      {QStringLiteral("gap"), geometry.px(AgentCardGeometry::gap) / density},
+      {QStringLiteral("projectLabelGap"), geometry.px(AgentCardGeometry::project_label_gap) / density},
+      {QStringLiteral("minimumProjectLabel"), geometry.px(AgentCardGeometry::project_label_minimum) / density},
+      {QStringLiteral("statusGap"), geometry.px(AgentCardGeometry::gap) / density},
+      {QStringLiteral("statusSide"), std::round(static_cast<float>(chrome.title) * AgentCardGeometry::icon_size_ratio) / density},
+      {QStringLiteral("projectSide"), std::round(static_cast<float>(chrome.small) * AgentCardGeometry::icon_size_ratio) / density},
+      {QStringLiteral("providerSide"), std::round(chrome.px(AgentCardGeometry::mark_side)) / density},
+      {QStringLiteral("providerAlpha"), AgentCardGeometry::provider_alpha},
+      {QStringLiteral("spacing"), geometry.px(AgentCardGeometry::spacing) / density},
+      {QStringLiteral("groupGap"), geometry.px(AgentCardGeometry::group_gap) / density},
+      {QStringLiteral("scrollbarWidth"), chrome.px(AgentCardGeometry::scrollbar_width) / density},
+  };
+}
+
+inline QVariantMap sidebarRegionsRecord(Rect area, const DisplayMetrics &display, std::size_t count) {
+  const auto &chrome = display.chrome;
+  const auto density = display.density;
+  const auto geometry = SidebarGeometry::measure(area, chrome, count);
+
+  return {
+      {QStringLiteral("projectsHeader"), toQRectF(geometry.projects_header, density)},
+      {QStringLiteral("projects"), toQRectF(geometry.projects, density)},
+      {QStringLiteral("activityHeader"), toQRectF(geometry.activity_header, density)},
+      {QStringLiteral("activity"), toQRectF(geometry.activity, density)},
+      {QStringLiteral("workspaceHeight"), SidebarGeometry::workspaceHeight(chrome) / density},
+      {QStringLiteral("cards"), agentCardGeometryRecord(display, geometry.activity.width)},
+      {QStringLiteral("edgeWidth"), SidebarGeometry::edge_width / density},
+      {QStringLiteral("activitySeparatorY"), (std::floor(geometry.activity_header.y + (geometry.activity_header.height / 2)) - geometry.activity_header.y) / density},
+  };
+}
+
+inline QVariantMap workspaceRailRecord(const ListModel &workspaces, Rect area, const DisplayMetrics &display, int selected) {
+  const auto &chrome = display.chrome;
+  const auto density = display.density;
+  const auto geometry = WorkspaceRailGeometry::measure(area, chrome.ratio, {.count = static_cast<std::size_t>(workspaces.rowCount()), .active = static_cast<std::size_t>(std::max(0, selected))});
+  QVariantList marks;
+  auto bounds = geometry.firstMark();
+  for (std::size_t position = 0; position < geometry.window.count; ++position) {
+    if (bounds.empty()) {
+      break;
+    }
+
+    const auto index = static_cast<int>(geometry.window.first + position);
+    marks.append(QVariantMap{
+        {QStringLiteral("bounds"), toQRectF(bounds, density)},
+        {QStringLiteral("record"), workspaces.data(workspaces.index(index), ListModel::record_role)},
+    });
+    bounds = geometry.nextMark(bounds);
+  }
+
+  QVariantMap result{
+      {QStringLiteral("marks"), marks},
+      {QStringLiteral("previousBounds"), toQRectF(geometry.previous, density)},
+      {QStringLiteral("nextBounds"), toQRectF(geometry.next, density)},
+      {QStringLiteral("previousCount"), static_cast<qulonglong>(geometry.window.first)},
+      {QStringLiteral("nextCount"), static_cast<qulonglong>(geometry.window.total - geometry.window.first - geometry.window.count)},
+  };
+  if (const auto previous = geometry.window.previous(); previous && !geometry.previous.empty()) {
+    result.insert(QStringLiteral("previousKey"), workspaces.data(workspaces.index(static_cast<int>(*previous)), ListModel::record_role).toMap().value(QStringLiteral("key")));
+  }
+
+  if (const auto next = geometry.window.next(); next && !geometry.next.empty()) {
+    result.insert(QStringLiteral("nextKey"), workspaces.data(workspaces.index(static_cast<int>(*next)), ListModel::record_role).toMap().value(QStringLiteral("key")));
+  }
+
+  return result;
+}
+
+}

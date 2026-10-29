@@ -1,0 +1,438 @@
+#include "terminal_scene.hpp"
+#include "cell_glyphs.hpp"
+#include "core/cell_rectangle.hpp"
+#include "core/color.hpp"
+#include "core/placeholder_prefix.hpp"
+#include "core/terminal_size.hpp"
+#include "fonts/glyph_bitmap_view.hpp"
+#include "links/link_grid.hpp"
+#include "links/link_regions.hpp"
+#include "projection.hpp"
+#include "scene_nodes.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include "terminal/glyphs/symbol.hpp"
+#include "terminal/screen.hpp"
+#include "terminal_decorations.hpp"
+#include "text_scene.hpp"
+#include <QPointF>
+#include <QRectF>
+#include <QString>
+#include <QTextCharFormat>
+#include <QtCore/qchar.h>
+#include <QtCore/qnamespace.h>
+#include <QtCore/qtypes.h>
+#include <QtGui/qcolor.h>
+#include <QtQuick/qquickwindow.h>
+#include <QtQuick/qsggeometry.h>
+#include <QtQuick/qsgnode.h>
+#include <QtQuick/qsgsimplerectnode.h>
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <span>
+#include <utility>
+
+namespace telar::gui::qt {
+
+namespace {
+
+struct CellRun {
+  CellStyle style;
+  QString text;
+  std::optional<glyphs::Symbol> symbol;
+  Color foreground;
+  Color background;
+  std::size_t consumed_cells = 1;
+  std::size_t columns = 1;
+  bool visible = true;
+};
+
+struct RowLayers {
+  QSGNode &shapes;
+  QSGNode &backgrounds;
+  QSGNode &decorations;
+  QQuickWindow &window;
+};
+
+std::size_t faceIndex(const CellStyle &style) noexcept {
+  constexpr std::size_t regular = 0;
+  constexpr std::size_t bold = 1;
+  constexpr std::size_t italic = 2;
+
+  return (hasAttribute(style, CellAttribute::bold) ? bold : regular) | (hasAttribute(style, CellAttribute::italic) ? italic : regular);
+}
+
+fonts::GlyphStyle glyphStyle(const CellStyle &style) noexcept {
+  return {.bold = hasAttribute(style, CellAttribute::bold), .italic = hasAttribute(style, CellAttribute::italic)};
+}
+
+bool joinsLatinLigature(Byte previous, Byte next) noexcept {
+  return (previous == 'f' && (next == 'i' || next == 'l')) || (previous == 's' && next == 't');
+}
+
+UnderlineStyle underlineStyle(const CellStyle &style) noexcept {
+  constexpr unsigned underline_shift = 8;
+  constexpr unsigned underline_mask = 7;
+
+  return static_cast<UnderlineStyle>((static_cast<unsigned>(style.flags) >> underline_shift) & underline_mask);
+}
+
+QTextCharFormat textFormat(Color foreground) {
+  QTextCharFormat format;
+  format.setForeground(toQColor(foreground));
+
+  return format;
+}
+
+CellRectangle visibleCells(const TerminalPresentation &frame) {
+  const TerminalGrid grid{.cell_width_px = frame.grid.width, .cell_height_px = frame.grid.height};
+  const auto fitted = grid.fit(std::round(frame.bounds.width() * frame.scale), std::round(frame.bounds.height() * frame.scale));
+  if (!fitted) {
+    return {};
+  }
+
+  return {.width = std::min(fitted->cols, frame.screen.columns()), .height = std::min(fitted->rows, frame.screen.rows())};
+}
+
+std::optional<std::size_t> cursorColumn(const TerminalPresentation &frame, std::size_t row, std::size_t columns) {
+  const auto &cursor = frame.cursor_override ? *frame.cursor_override : frame.screen.cursor();
+  if (!frame.pane_focused || !cursor.visible || cursor.y != row || cursor.x >= columns) {
+    return std::nullopt;
+  }
+
+  auto column = static_cast<std::size_t>(cursor.x);
+  if (column != 0 && frame.screen.row(row)[column].width == CellWidth::continuation) {
+    --column;
+  }
+
+  return column;
+}
+
+CellRun cellRun(const TerminalPresentation &frame, std::size_t row_index, std::size_t column) {
+  const auto row = frame.screen.row(row_index);
+  const auto &cell = row[column];
+  const auto &theme = frame.configuration.theme;
+  const auto selected = frame.selection.contains((row_index * frame.screen.columns()) + column);
+  const auto symbol = CellGlyphs::parse(cell.utf8());
+  CellRun run{
+      .style = cell.style,
+      .text = {},
+      .symbol = symbol,
+      .foreground = theme.resolve(cell.style.foreground, theme.foreground),
+      .background = theme.resolve(cell.style.background, theme.background),
+      .visible = cell.width != CellWidth::continuation && !cell.utf8().empty() && !cell.utf8().starts_with(placeholder_prefix) && !hasAttribute(cell.style, CellAttribute::invisible),
+  };
+
+  if (hasAttribute(cell.style, CellAttribute::inverse) != selected) {
+    std::swap(run.foreground, run.background);
+  }
+
+  if (hasAttribute(cell.style, CellAttribute::faint)) {
+    constexpr float faint_opacity = 0.5F;
+    run.foreground.a *= faint_opacity;
+  }
+
+  run.columns = cell.width == CellWidth::wide ? 2 : 1;
+
+  return run;
+}
+
+CellRun textRun(const TerminalPresentation &frame, std::size_t row_index, std::size_t column, std::size_t columns) {
+  auto run = cellRun(frame, row_index, column);
+  const auto row = frame.screen.row(row_index).first(columns);
+  const auto &cell = row[column];
+  const auto selected = frame.selection.contains((row_index * frame.screen.columns()) + column);
+  run.text = run.symbol ? QString{} : toQString(cell.utf8());
+  constexpr Byte ascii_limit = 128;
+  if (frame.font.fixed_pitch && cell.width == CellWidth::single && cell.length == 1 && cell.text[0] < ascii_limit) {
+    while (column + run.consumed_cells < row.size()) {
+      const auto &next = row[column + run.consumed_cells];
+      const auto next_selected = frame.selection.contains((row_index * frame.screen.columns()) + column + run.consumed_cells);
+      if (next.width != CellWidth::single || next.length != 1 || next.text[0] >= ascii_limit || next.style != cell.style || next_selected != selected || joinsLatinLigature(row[column + run.consumed_cells - 1].text[0], next.text[0])) {
+        break;
+      }
+
+      run.text += QLatin1Char(static_cast<char>(next.text[0]));
+      ++run.consumed_cells;
+    }
+  }
+
+  run.columns = cell.width == CellWidth::wide ? 2 : run.consumed_cells;
+
+  return run;
+}
+
+void paintUnderline(RowLayers layers, const CellRun &run, const TerminalPresentation &frame, const QRectF &bounds) {
+  constexpr qreal underline_inset_pixels = 2;
+  const auto thickness = 1 / frame.scale;
+  const auto y = bounds.bottom() - (underline_inset_pixels / frame.scale);
+  const auto color = frame.configuration.theme.resolve(run.style.underline_color, run.foreground);
+  TerminalDecorations::rectangle(layers.window, layers.decorations, {bounds.x(), y, bounds.width(), thickness}, color, frame.scale);
+}
+
+void paintRun(RowLayers layers, const CellRun &run, const TerminalPresentation &frame, const QPointF &origin, CellGlyphs &glyphs) {
+  const QRectF bounds{origin, QSizeF{static_cast<qreal>(run.columns) * frame.font.cell.width(), frame.font.cell.height()}};
+  const auto &theme = frame.configuration.theme;
+  if (run.background != theme.background) {
+    appendSceneNode<QSGSimpleRectNode>(layers.backgrounds, bounds, toQColor(run.background));
+  }
+
+  if (!run.visible) {
+    return;
+  }
+
+  if (run.symbol) {
+    glyphs.paint(layers.shapes, *run.symbol, bounds, frame.scale, run.foreground);
+  }
+
+  if (underlineStyle(run.style) != UnderlineStyle::none) {
+    paintUnderline(layers, run, frame, bounds);
+  }
+
+  if (hasAttribute(run.style, CellAttribute::strikethrough)) {
+    constexpr qreal strike_position = 0.5;
+    TerminalDecorations::rectangle(layers.window, layers.decorations, {bounds.x(), bounds.y() + (bounds.height() * strike_position), bounds.width(), 1 / frame.scale}, run.foreground, frame.scale);
+  }
+}
+
+void paintOutline(QSGNode &parent, const QRectF &bounds, const QColor &color, qreal thickness) {
+  appendSceneNode<QSGSimpleRectNode>(parent, QRectF{bounds.left(), bounds.top(), bounds.width(), thickness}, color);
+  appendSceneNode<QSGSimpleRectNode>(parent, QRectF{bounds.left(), bounds.bottom() - thickness, bounds.width(), thickness}, color);
+  appendSceneNode<QSGSimpleRectNode>(parent, QRectF{bounds.left(), bounds.top(), thickness, bounds.height()}, color);
+  appendSceneNode<QSGSimpleRectNode>(parent, QRectF{bounds.right() - thickness, bounds.top(), thickness, bounds.height()}, color);
+}
+
+}
+
+TerminalScene::TerminalScene(QQuickWindow &window)
+    : window_(window),
+      background_(appendSceneNode<QSGSimpleRectNode>(*this)),
+      below_background_(appendSceneNode<QSGTransformNode>(*this)),
+      cell_backgrounds_(appendSceneNode<QSGTransformNode>(*this)),
+      below_text_(appendSceneNode<QSGTransformNode>(*this)),
+      rows_(appendSceneNode<QSGTransformNode>(*this)),
+      above_text_(appendSceneNode<QSGTransformNode>(*this)),
+      overlay_(appendSceneNode<QSGTransformNode>(*this)),
+      images_({.below_background = &below_background_, .below_text = &below_text_, .above_text = &above_text_}),
+      glyphs_(window),
+      text_(window),
+      overlay_text_(window) {}
+
+TerminalScene::~TerminalScene() {
+  images_.clearNodes();
+}
+
+QSGNode *TerminalScene::synchronizeNode(QSGNode *previous, QQuickWindow &window, const TerminalPresentation &frame) {
+  std::unique_ptr<QSGNode> node{previous};
+  auto *scene = dynamic_cast<TerminalScene *>(node.get());
+  if (scene == nullptr) {
+    auto replacement = std::make_unique<TerminalScene>(window);
+    scene = replacement.get();
+    node = std::move(replacement);
+  }
+
+  scene->synchronize(window, frame);
+
+  return node.release();
+}
+
+void TerminalScene::synchronizeGrid(CellRectangle visible) {
+  if (std::cmp_equal(row_nodes_.size(), visible.height) && columns_ == visible.width) {
+    return;
+  }
+
+  clearSceneChildren(rows_);
+  clearSceneChildren(cell_backgrounds_);
+  row_nodes_.clear();
+  row_nodes_.reserve(visible.height);
+  for (std::size_t index = 0; index < visible.height; ++index) {
+    row_nodes_.append({.text = &appendSceneNode<QSGTransformNode>(rows_), .background = &appendSceneNode<QSGTransformNode>(cell_backgrounds_)});
+  }
+
+  columns_ = visible.width;
+}
+
+void TerminalScene::paintRow(const TerminalPresentation &frame, Row &row, std::size_t row_index) {
+  clearSceneChildren(*row.text);
+  clearSceneChildren(*row.background);
+  auto &shapes = appendSceneNode<QSGNode>(*row.text);
+  const QRectF row_bounds{0, static_cast<qreal>(row_index) * frame.font.cell.height(), columns_ * frame.font.cell.width(), frame.font.cell.height()};
+  text_.begin(row_bounds, frame.scale, frame.bounds);
+  const auto cursor_column = cursorColumn(frame, row_index, columns_);
+
+  const auto grouped_text = text_.prepare(frame.screen.row(row_index).first(columns_), {.pixel_height = frame.grid.pixel_height, .cell_width = frame.grid.width, .cursor = cursor_column, .selection = frame.selection, .first_cell = row_index * frame.screen.columns()});
+  auto decorations = std::make_unique<QSGNode>();
+  for (std::size_t column = 0; column < columns_; ++column) {
+    const auto run = cellRun(frame, row_index, column);
+    std::unique_ptr<QSGNode> inline_ink;
+    if (grouped_text && run.visible && (run.symbol || underlineStyle(run.style) != UnderlineStyle::none || hasAttribute(run.style, CellAttribute::strikethrough))) {
+      inline_ink = std::make_unique<QSGNode>();
+    }
+
+    const RowLayers layers{.shapes = inline_ink ? *inline_ink : shapes, .backgrounds = *row.background, .decorations = inline_ink ? *inline_ink : *decorations, .window = window_};
+    const QPointF origin{static_cast<qreal>(column) * frame.font.cell.width(), static_cast<qreal>(row_index) * frame.font.cell.height()};
+    paintRun(layers, run, frame, origin, glyphs_);
+    if (grouped_text && run.visible && !run.symbol) {
+      text_.addCell(column, frame.font.faces[faceIndex(run.style)], run.foreground, glyphStyle(run.style));
+    }
+
+    if (inline_ink) {
+      text_.appendInline(std::move(inline_ink));
+    }
+  }
+
+  if (!grouped_text) {
+    for (std::size_t column = 0; column < columns_;) {
+      const auto run = textRun(frame, row_index, column, columns_);
+      if (run.visible && !run.symbol) {
+        const QPointF origin{static_cast<qreal>(column) * frame.font.cell.width(), static_cast<qreal>(row_index) * frame.font.cell.height()};
+        text_.add(run.text, frame.font.faces[faceIndex(run.style)], textFormat(run.foreground), {.origin = origin, .baseline = frame.font.baseline, .style = glyphStyle(run.style)});
+      }
+
+      column += run.consumed_cells;
+    }
+  }
+
+  text_.append(*row.text);
+  adoptSceneNode(*row.text, std::move(decorations));
+  row.revision = frame.screen.rowRevision(row_index);
+  row.appearance = frame.appearance;
+  row.selection = frame.selection.within(row_index * frame.screen.columns(), frame.screen.columns());
+  row.cursor = cursor_column;
+}
+
+void TerminalScene::synchronize(QQuickWindow &window, const TerminalPresentation &frame) {
+  background_.setRect(frame.bounds);
+  background_.setColor(frame.configuration.background_opacity < 1 ? QColor{Qt::transparent} : toQColor(frame.configuration.theme.background));
+  synchronizeGrid(visibleCells(frame));
+
+  const auto glyphs_changed = appearance_ != frame.appearance || scale_ != frame.scale;
+  if (glyphs_changed) {
+    glyphs_.configure(frame.font.faces.front(), frame.scale, frame.box_stroke);
+    text_.configure(frame.configuration.font, frame.grid, frame.fonts);
+    overlay_text_.configure(frame.configuration.font, frame.grid, frame.fonts);
+  }
+
+  for (qsizetype index = 0; index < row_nodes_.size(); ++index) {
+    auto &row = row_nodes_[index];
+    const auto selection = frame.selection.within(static_cast<std::size_t>(index) * frame.screen.columns(), frame.screen.columns());
+    if (glyphs_changed || bounds_ != frame.bounds || row.revision != frame.screen.rowRevision(static_cast<std::size_t>(index)) || row.appearance != frame.appearance || row.selection != selection || row.cursor != cursorColumn(frame, static_cast<std::size_t>(index), columns_)) {
+      paintRow(frame, row, static_cast<std::size_t>(index));
+    }
+  }
+
+  images_.synchronize(frame.owner != nullptr ? *frame.owner : *window.contentItem(), frame.graphics, frame.screen, frame.font.cell, frame.scale);
+  clearSceneChildren(overlay_);
+  paintCursor(frame);
+  paintPreedit(frame);
+  paintHoveredLink(frame);
+  appearance_ = frame.appearance;
+  scale_ = frame.scale;
+  bounds_ = frame.bounds;
+}
+
+void TerminalScene::paintHoveredLink(const TerminalPresentation &frame) {
+  if (frame.hovered_link == nullptr) {
+    return;
+  }
+
+  const auto &screen = frame.screen;
+  const LinkGrid grid{.cells = screen.cells(), .columns = screen.columns(), .rows = screen.rows(), .scroll = screen.scroll(), .row_flags = screen.rowFlags()};
+  LinkRegions regions{*frame.hovered_link, grid, screen.linkRuns(), {.columns = columns_, .rows = static_cast<std::uint16_t>(row_nodes_.size())}};
+  constexpr qreal underline_inset_pixels = 2;
+  constexpr qreal underline_thickness_pixels = 1;
+  while (const auto area = regions.next()) {
+    const QRectF bounds{area->x * frame.font.cell.width(), ((area->y + 1) * frame.font.cell.height()) - (underline_inset_pixels / frame.scale), area->width * frame.font.cell.width(), underline_thickness_pixels / frame.scale};
+    appendSceneNode<QSGSimpleRectNode>(overlay_, bounds, toQColor(frame.configuration.theme.accent));
+  }
+}
+
+void TerminalScene::paintCursor(const TerminalPresentation &frame) {
+  const auto &cursor = frame.cursor_override ? *frame.cursor_override : frame.screen.cursor();
+  if (!cursor.visible || !frame.attached || !frame.pane_focused || (!frame.cursor_on && !frame.cursor_override)) {
+    return;
+  }
+
+  if (std::cmp_greater_equal(cursor.y, row_nodes_.size()) || cursor.x >= columns_) {
+    return;
+  }
+
+  const auto row = frame.screen.row(cursor.y);
+  if (cursor.x >= row.size()) {
+    return;
+  }
+
+  auto column = static_cast<std::size_t>(cursor.x);
+  if (column != 0 && row[column].width == CellWidth::continuation) {
+    --column;
+  }
+
+  const auto &cell = row[column];
+  const auto cell_columns = cell.width == CellWidth::wide ? 2 : 1;
+
+  auto shape = cursor.shape == CursorShape::default_shape ? frame.configuration.cursor : cursor.shape;
+  if (!frame.keyboard) {
+    shape = CursorShape::hollow;
+  }
+
+  const auto &theme = frame.configuration.theme;
+  QRectF bounds{static_cast<qreal>(column) * frame.font.cell.width(), cursor.y * frame.font.cell.height(), cell_columns * frame.font.cell.width(), frame.font.cell.height()};
+  const auto color = toQColor(theme.cursor);
+  constexpr qreal cursor_thickness = 2;
+  if (shape == CursorShape::hollow) {
+    paintOutline(overlay_, bounds, color, 1 / frame.scale);
+
+    return;
+  }
+
+  if (shape == CursorShape::bar) {
+    bounds.setWidth(cursor_thickness);
+  } else if (shape == CursorShape::underline) {
+    bounds.setTop(bounds.bottom() - cursor_thickness);
+  }
+
+  appendSceneNode<QSGSimpleRectNode>(overlay_, bounds, color);
+  if (shape != CursorShape::block) {
+    return;
+  }
+
+  if (hasAttribute(cell.style, CellAttribute::invisible) || cell.utf8().starts_with(placeholder_prefix)) {
+    return;
+  }
+
+  const auto foreground = theme.cursor_text.value_or(theme.background);
+  if (const auto symbol = CellGlyphs::parse(cell.utf8())) {
+    glyphs_.paint(overlay_, *symbol, bounds, frame.scale, foreground);
+
+    return;
+  }
+
+  overlay_text_.begin(bounds, frame.scale, frame.bounds);
+  QTextCharFormat format;
+  format.setForeground(toQColor(foreground));
+  overlay_text_.add(toQString(cell.utf8()), frame.font.faces[faceIndex(cell.style)], format, {.origin = bounds.topLeft(), .baseline = frame.font.baseline, .style = glyphStyle(cell.style)});
+  overlay_text_.append(overlay_);
+}
+
+void TerminalScene::paintPreedit(const TerminalPresentation &frame) {
+  if (frame.preedit.isEmpty() || frame.screen.cursor().x >= columns_ || std::cmp_greater_equal(frame.screen.cursor().y, row_nodes_.size())) {
+    return;
+  }
+
+  const auto &cursor = frame.screen.cursor();
+  const QRectF bounds{cursor.x * frame.font.cell.width(), cursor.y * frame.font.cell.height(), static_cast<qreal>(frame.preedit.size()) * frame.font.cell.width(), frame.font.cell.height()};
+  overlay_text_.begin(bounds, frame.scale, frame.bounds);
+  QTextCharFormat format;
+  format.setForeground(toQColor(frame.configuration.theme.foreground));
+  overlay_text_.add(frame.preedit, frame.font.faces[0], format, {.origin = bounds.topLeft(), .baseline = frame.font.baseline});
+  overlay_text_.append(overlay_);
+  constexpr qreal underline_inset_pixels = 2;
+  TerminalDecorations::rectangle(window_, overlay_, {bounds.x(), bounds.bottom() - (underline_inset_pixels / frame.scale), bounds.width(), 1 / frame.scale}, frame.configuration.theme.foreground, frame.scale);
+}
+
+}
