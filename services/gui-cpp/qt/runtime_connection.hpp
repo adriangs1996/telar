@@ -39,6 +39,7 @@ public:
   void remoteFailed(MachineError error, const QString &detail);
   [[nodiscard]] std::optional<MachineError> remoteError() const noexcept;
   void close();
+  void retryNow();
   [[nodiscard]] bool ready() const noexcept;
   [[nodiscard]] QString error() const;
   void dismissError();

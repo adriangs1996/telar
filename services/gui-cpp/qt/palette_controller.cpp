@@ -2,6 +2,7 @@
 #include "application/dependencies.hpp"
 #include "application/records.hpp"
 #include "core/geometry.hpp"
+#include "machines/picker_target.hpp"
 #include "palette/navigation_label.hpp"
 #include "palette/navigation_target.hpp"
 #include "palette/query.hpp"
@@ -228,6 +229,10 @@ void Application::collectPaletteNavigation(PaletteMatches &matches, std::string_
 bool Application::updatePaletteResults() {
   const auto text = palette_query_.toUtf8();
   const auto query = PaletteQuery::parse(bytes(text));
+  if (query.mode == PaletteMode::machines) {
+    return updateMachinePickerResults(query.text);
+  }
+
   PaletteMatches matches;
   if (query.mode == PaletteMode::navigate) {
     collectPaletteNavigation(matches, query.text);
@@ -442,6 +447,12 @@ void Application::usePaletteResult(const QVariantMap &choice) {
   const auto index = static_cast<std::size_t>(found - palette_rows_.begin());
   const auto target = palette_targets_[index];
   applyInteraction([&] {
+    if (const auto *machine = std::get_if<MachinePickerTarget>(&target)) {
+      chooseMachine(*machine, choice.value(QStringLiteral("alternate"), false).toBool());
+
+      return;
+    }
+
     if (const auto *navigation = std::get_if<NavigationTarget>(&target)) {
       if (navigatePaletteTarget(*navigation)) {
         showDialog({});

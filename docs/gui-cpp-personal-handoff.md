@@ -24,10 +24,18 @@ selection and the original stopped phase. Read
 `services/gui-cpp/measurements/machine-window.md` and its validation manifest
 for the current scope. Earlier reports and manifests remain historical.
 
-The latest admission checkpoint now loads saved profiles and starts enabled
-SSH clients in the normal executable. The picker/actions and native machine
-pixels are the next work; the action catalogue remains 25/29. No global parity
-gate is closed. The window-adapter checkpoint records 82 Cocoa/Metal scale-1
+The admission checkpoint loads saved profiles and starts enabled SSH clients
+in the normal executable. The later [machine UI](../services/gui-cpp/measurements/machine-ui.md)
+checkpoint wires all 29 catalogue actions, the picker, cyclic selection,
+rename/remove, two-step forms and local setup command tabs. Prompt geometry
+matches 5,329 original-source hosts in Release and sanitizers. Paired native
+captures use an own Zig GUI reference, built unchanged with the installed
+macOS 15.4 SDK (newer SDKs fail the CoreFoundation cimport). Its binary is
+`services/gui-cpp/out-dependencies/reference-gui/bin/telar`. A native capture
+caught the macOS physical-Control mapping bug; the picker now uses the existing
+keyboard adapter, and its tests use the platform modifier. Read the new report
+and manifest for qualified runs and pixel differences. No global parity gate
+is closed. The window-adapter checkpoint records 82 Cocoa/Metal scale-1
 passes, before the transport/profile changes, after the
 owned-window focus/geometry barrier; twenty selected regressions pass.
 Native sanitizer assertions pass, but exit leak acceptance remains OPEN.
@@ -59,8 +67,9 @@ six selected Release and five ASan/UBSan CTests pass, including the window
 cases, with leak detection enabled. The normal Cocoa/Metal executable also
 opens a shell on an isolated owned reference runtime. Its first smoke fixture
 contained an invalid local label; preserve the rejected capture and the later
-valid one. The four machine actions remain unwired (25/29). Continue the picker,
-forms/setup and source composition, then all remaining PARITY.md gates.
+valid one. The later machine UI wires the four actions. Continue actual SSH, setup
+installation, source composition and remote CLI launch, then all remaining
+PARITY.md gates.
 
 The sections below describe the transfer baseline; prefer this checkpoint and
 the latest window-adapter report where the implementation has since advanced.

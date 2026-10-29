@@ -76,6 +76,10 @@ std::optional<Application::Action> nativeAction(BindingActionKind kind) noexcept
       {Binding::forget_gone_worktrees, Native::forget_gone_worktrees},
       {Binding::detach, Native::detach},
       {Binding::copy_mode, Native::copy_mode},
+      {Binding::machine_picker, Native::machine_picker},
+      {Binding::next_machine, Native::next_machine},
+      {Binding::previous_machine, Native::previous_machine},
+      {Binding::add_machine, Native::add_machine},
   });
   const auto *const found = std::ranges::find(actions, kind, &decltype(actions)::value_type::first);
 

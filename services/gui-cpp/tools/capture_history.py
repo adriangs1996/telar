@@ -214,7 +214,7 @@ def capture(kind, binary, cpp_gui, output, settings):
                     break
 
         if not (directory / 'settled.at').is_file():
-            raise RuntimeError(f'{kind}: history actions did not settle; inspect {directory}')
+            raise RuntimeError(f'{kind}: history actions did not settle (process exit: {process.poll()}); inspect {directory}')
         if process.poll() not in [None, 0]:
             raise RuntimeError(f'Qt history capture did not exit successfully: {process.poll()}')
         if not (directory / 'window.png.json').is_file():

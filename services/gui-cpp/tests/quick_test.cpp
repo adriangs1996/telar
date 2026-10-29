@@ -1672,9 +1672,12 @@ return {api_version=2, client={keybindings={
 
   Q_SLOT void paletteActionsUseOriginalLabelsAndReorderExistingTabs() {
     const auto commands = client_->commands();
-    QCOMPARE(commands.size(), qsizetype{25});
+    QCOMPARE(commands.size(), qsizetype{29});
     QCOMPARE(commands.front().toMap().value(QStringLiteral("label")).toString(), QStringLiteral("Split right"));
-    QCOMPARE(commands.back().toMap().value(QStringLiteral("label")).toString(), QStringLiteral("Insert a path"));
+    const QStringList tail{QStringLiteral("Insert a path"), QStringLiteral("Switch machine"), QStringLiteral("Next machine"), QStringLiteral("Previous machine"), QStringLiteral("Add machine")};
+    for (qsizetype index = 0; index < tail.size(); ++index) {
+      QCOMPARE(commands[commands.size() - tail.size() + index].toMap().value(QStringLiteral("label")).toString(), tail[index]);
+    }
     QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
     const auto original_pane = firstPane()->id;
     const auto original_tab = firstPane()->location.tab_id;
@@ -1724,6 +1727,86 @@ return {api_version=2, client={keybindings={
     client_->execute(Application::Action::select_tab, QString::number(original_tab));
     QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id == original_pane, runtime_wait_ms);
     restore.dismiss();
+  }
+
+  Q_SLOT void machinePickerKeyboardRenamesAndRemovesSavedRows() {
+    const auto path = directory_.filePath(QStringLiteral("machines.json"));
+    QFile profiles{path};
+    QVERIFY(profiles.open(QIODevice::WriteOnly));
+    const QByteArray source{R"({"version":1,"machines":[{"id":"m-000000000001","label":"Offline","destination":"offline@fixture","enabled":false}]})"};
+    QCOMPARE(profiles.write(source), source.size());
+    QVERIFY(profiles.setPermissions(QFile::ReadOwner | QFile::WriteOwner));
+    profiles.close();
+    const auto cleanup = qScopeGuard([this, path] {
+      client_->execute(Application::Action::cancel);
+      static_cast<void>(QFile::remove(path));
+    });
+    client_->openMachines(path);
+    client_->execute(Application::Action::machine_picker);
+    client_->searchPalette(QStringLiteral(":Offline"));
+    QTRY_COMPARE_WITH_TIMEOUT(client_->paletteState().value(QStringLiteral("count")).toInt(), 2, runtime_wait_ms);
+    auto *search = window_->findChild<NativeFormField *>(QStringLiteral("commandSearch"));
+    QVERIFY(search != nullptr);
+    QTRY_VERIFY_WITH_TIMEOUT(search->hasActiveFocus(), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_R, Qt::KeyboardModifiers{Application::superModifier()});
+    QCOMPARE(client_->dialog(), QStringLiteral("palette"));
+    QTest::keyClick(window_, Qt::Key_R, Qt::KeyboardModifiers{Application::controlModifier()});
+    QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), QStringLiteral("machine"), runtime_wait_ms);
+    search = window_->findChild<NativeFormField *>(QStringLiteral("commandSearch"));
+    QVERIFY(search != nullptr);
+    QTRY_VERIFY_WITH_TIMEOUT(search->hasActiveFocus(), runtime_wait_ms);
+    QCOMPARE(search->text(), QStringLiteral("Offline"));
+    search->selectAll();
+    QInputMethodEvent commit;
+    commit.setCommitString(QStringLiteral("Renamed"));
+    QCoreApplication::sendEvent(search, &commit);
+    QTest::keyClick(window_, Qt::Key_Return);
+    QTRY_VERIFY_WITH_TIMEOUT(client_->dialog().isEmpty(), runtime_wait_ms);
+    client_->execute(Application::Action::machine_picker);
+    client_->searchPalette(QStringLiteral(":Renamed"));
+    QTRY_COMPARE_WITH_TIMEOUT(client_->paletteState().value(QStringLiteral("count")).toInt(), 2, runtime_wait_ms);
+    search = window_->findChild<NativeFormField *>(QStringLiteral("commandSearch"));
+    QVERIFY(search != nullptr);
+    QTRY_VERIFY_WITH_TIMEOUT(search->hasActiveFocus(), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_D, Qt::KeyboardModifiers{Application::controlModifier()});
+    QTRY_COMPARE_WITH_TIMEOUT(client_->paletteState().value(QStringLiteral("count")).toInt(), 1, runtime_wait_ms);
+    QCOMPARE(client_->dialog(), QStringLiteral("palette"));
+  }
+
+  Q_SLOT void machinePromptKeepsCompositionAndByteBounds() {
+    client_->execute(Application::Action::add_machine);
+    const auto cleanup = qScopeGuard([this] {
+      client_->execute(Application::Action::cancel);
+    });
+    auto *search = window_->findChild<NativeFormField *>(QStringLiteral("commandSearch"));
+    QVERIFY(search != nullptr);
+    QTRY_VERIFY_WITH_TIMEOUT(search->hasActiveFocus(), runtime_wait_ms);
+    QInputMethodEvent preedit{QStringLiteral("中"), {{QInputMethodEvent::Cursor, 1, 1, {}}}};
+    QCoreApplication::sendEvent(search, &preedit);
+    QTRY_VERIFY_WITH_TIMEOUT(search->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Escape);
+    QCOMPARE(client_->dialog(), QStringLiteral("machine"));
+    QTRY_VERIFY_WITH_TIMEOUT(!search->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
+    const auto maximum = client_->machinePromptState().value(QStringLiteral("maximumBytes")).toInt();
+    const QString retained(maximum, QLatin1Char('x'));
+    QInputMethodEvent commit;
+    commit.setCommitString(retained + QStringLiteral("🧵"));
+    QCoreApplication::sendEvent(search, &commit);
+    QCOMPARE(search->text(), retained);
+    QCOMPARE(client_->machinePromptState().value(QStringLiteral("editorText")).toString(), retained);
+    const auto find_notice = [this] {
+      return std::ranges::find_if(client_->notifications().items(), [](const auto &notice) {
+        return notice.title.view() == "Limit reached" && notice.message.view().find("prompt.machine_label_bytes") != std::string_view::npos;
+      });
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(find_notice() != client_->notifications().items().end(), runtime_wait_ms);
+    const auto notice = find_notice()->id;
+    client_->dismissNotification(client_->notificationIdentity(notice));
+    QTest::keyClick(window_, Qt::Key_Return);
+    QCOMPARE(client_->machinePromptState().value(QStringLiteral("title")).toString(), QStringLiteral("Its SSH destination: user@host or an alias"));
+    QCOMPARE(search->text(), QString{});
+    QTest::keyClick(window_, Qt::Key_Escape);
+    QVERIFY(client_->dialog().isEmpty());
   }
 
   Q_SLOT void paletteCompositionAndUtf8LimitsKeepTheEditorOwned() {
@@ -2357,6 +2440,7 @@ return {api_version=2, client={keybindings={
     client_->setHistoryFilters({{QStringLiteral("author"), QStringLiteral("agent")}});
     QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading(), runtime_wait_ms);
     QCOMPARE(search->property("text").toString(), query);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
     QVERIFY(search->property("layout").toMap().value(QStringLiteral("composing")).toBool());
     QCOMPARE(search->property("selectionStart").toInt(), 0);
     QCOMPARE(search->property("selectionEnd").toInt(), 1);

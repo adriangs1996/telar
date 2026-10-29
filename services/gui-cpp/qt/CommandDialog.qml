@@ -9,8 +9,9 @@ Popup {
     property real ratio: 1
     readonly property bool historyMode: telar.dialog === "history"
     readonly property bool pathMode: telar.dialog === "paths"
-    readonly property bool customMode: historyMode || paletteMode || pathMode
-    readonly property var activeSearch: pathMode ? (pathBrowser.item?.queryField ?? search) : historyMode ? historyQuery : paletteMode ? (paletteBrowser.item?.queryField ?? search) : search
+    readonly property bool machineMode: telar.dialog === "machine"
+    readonly property bool customMode: historyMode || paletteMode || pathMode || machineMode
+    readonly property var activeSearch: machineMode ? (machineBrowser.item?.queryField ?? search) : pathMode ? (pathBrowser.item?.queryField ?? search) : historyMode ? historyQuery : paletteMode ? (paletteBrowser.item?.queryField ?? search) : search
     readonly property bool paletteMode: telar.dialog === "palette"
     readonly property bool workspaceMode: telar.dialog === "new-workspace"
     readonly property bool copySearchMode: telar.dialog === "copy-search"
@@ -23,7 +24,7 @@ Popup {
                 telar.useHistoryRow(telar.historyState.selection, alternate);
             }
         } else if (paletteMode) {
-            paletteBrowser.item?.submit();
+            paletteBrowser.item?.submit(alternate);
         }
     }
 
@@ -51,10 +52,11 @@ Popup {
     readonly property rect historyBounds: telar.historyGeometry.bounds
     readonly property rect paletteBounds: paletteMode ? telar.paletteGeometry.bounds : Qt.rect(0, 0, 0, 0)
     readonly property rect pathBounds: pathMode ? telar.pathPickerGeometry.bounds : Qt.rect(0, 0, 0, 0)
-    x: pathMode ? pathBounds.x : historyMode ? historyBounds.x : paletteMode ? paletteBounds.x : (parent.width - width) / 2
-    y: pathMode ? pathBounds.y : historyMode ? historyBounds.y : paletteMode ? paletteBounds.y : (parent.height - height) / 2
-    width: pathMode ? pathBounds.width : historyMode ? historyBounds.width : paletteMode ? paletteBounds.width : Math.min(parent.width - 32, 640 * ratio)
-    height: pathMode ? pathBounds.height : historyMode ? historyBounds.height : paletteMode ? paletteBounds.height : contentItem.implicitHeight + topPadding + bottomPadding
+    readonly property rect machineBounds: machineMode ? telar.machinePromptGeometry.bounds : Qt.rect(0, 0, 0, 0)
+    x: machineMode ? machineBounds.x : pathMode ? pathBounds.x : historyMode ? historyBounds.x : paletteMode ? paletteBounds.x : (parent.width - width) / 2
+    y: machineMode ? machineBounds.y : pathMode ? pathBounds.y : historyMode ? historyBounds.y : paletteMode ? paletteBounds.y : (parent.height - height) / 2
+    width: machineMode ? machineBounds.width : pathMode ? pathBounds.width : historyMode ? historyBounds.width : paletteMode ? paletteBounds.width : Math.min(parent.width - 32, 640 * ratio)
+    height: machineMode ? machineBounds.height : pathMode ? pathBounds.height : historyMode ? historyBounds.height : paletteMode ? paletteBounds.height : contentItem.implicitHeight + topPadding + bottomPadding
     modal: true
     focus: true
     padding: customMode ? 0 : 20 * ratio
@@ -65,11 +67,20 @@ Popup {
     }
 
     Overlay.modal: Rectangle {
-        color: Qt.rgba(0, 0, 0, root.pathMode ? 0 : root.dimmingAlpha)
+        color: Qt.rgba(0, 0, 0, root.pathMode || root.machineMode ? 0 : root.dimmingAlpha)
     }
 
     background: Loader {
-        sourceComponent: root.pathMode ? pathSurface : root.historyMode || root.paletteMode ? historySurface : standardSurface
+        sourceComponent: root.machineMode ? machineSurface : root.pathMode ? pathSurface : root.historyMode || root.paletteMode ? historySurface : standardSurface
+    }
+
+    Component {
+        id: machineSurface
+        Rectangle {
+            color: telar.colors.panel_bg
+            border.color: telar.colors.accent
+            border.width: 1 / Screen.devicePixelRatio
+        }
     }
 
     Component {
@@ -114,7 +125,7 @@ Popup {
         target: telar
         function onDialogChanged() {
             if (telar.dialog.length > 0) {
-                if (!root.paletteMode && !root.pathMode) {
+                if (!root.paletteMode && !root.pathMode && !root.machineMode) {
                     root.activeSearch.text = "";
                 }
                 directory.text = "";
@@ -141,6 +152,16 @@ Popup {
 
     contentItem: Item {
         implicitHeight: standardContent.implicitHeight
+
+        Loader {
+            id: machineBrowser
+            anchors.fill: parent
+            active: root.machineMode
+            sourceComponent: MachinePromptPanel {
+                controller: telar
+                ratio: root.ratio
+            }
+        }
 
         Loader {
             id: pathBrowser

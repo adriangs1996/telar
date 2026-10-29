@@ -98,13 +98,13 @@ void MachineProfilesSource::poll() {
 
 bool MachineProfilesSource::edit(const MachineEdit &edit) {
   if (editing()) {
-    fail(errorText(MachineProfileMessages::edit_pending));
+    fail(errorText(MachineProfileMessages::edit_pending), FailureSource::edit);
 
     return false;
   }
 
   if (path_.isEmpty()) {
-    fail(QStringLiteral("Machine profile path is unavailable"));
+    fail(QStringLiteral("Machine profile path is unavailable"), FailureSource::edit);
 
     return false;
   }
@@ -112,7 +112,7 @@ bool MachineProfilesSource::edit(const MachineEdit &edit) {
   try {
     pending_edit_ = OwnedMachineEdit::copy(edit);
   } catch (const MachineFailure &failure) {
-    fail(errorText(MachineProfileMessages::failure(failure.code())));
+    fail(errorText(MachineProfileMessages::failure(failure.code())), FailureSource::edit);
 
     return false;
   }
@@ -131,6 +131,10 @@ const MachineProfiles &MachineProfilesSource::profiles() const noexcept {
 
 const QString &MachineProfilesSource::error() const noexcept {
   return error_;
+}
+
+bool MachineProfilesSource::editError() const noexcept {
+  return failure_source_ == FailureSource::edit;
 }
 
 bool MachineProfilesSource::editing() const noexcept {
@@ -187,6 +191,7 @@ void MachineProfilesSource::start() {
     return;
   }
 
+  const auto failure_source = pending_edit_ ? FailureSource::edit : FailureSource::profile;
   try {
     cancellation_ = std::stop_source{};
     Request request{
@@ -209,7 +214,7 @@ void MachineProfilesSource::start() {
     busy_ = false;
     editing_ = false;
     pending_edit_.reset();
-    fail(QString::fromUtf8(error.what()));
+    fail(QString::fromUtf8(error.what()), failure_source);
     emit editingChanged();
   }
 }
@@ -233,11 +238,11 @@ void MachineProfilesSource::complete() {
       }
 
       if (!result.error.isEmpty()) {
-        fail(std::move(result.error));
+        fail(std::move(result.error), was_editing ? FailureSource::edit : FailureSource::profile);
       }
     }
   } catch (const std::exception &error) {
-    fail(QString::fromUtf8(error.what()));
+    fail(QString::fromUtf8(error.what()), was_editing ? FailureSource::edit : FailureSource::profile);
   }
 
   if (was_editing) {
@@ -249,7 +254,8 @@ void MachineProfilesSource::complete() {
   }
 }
 
-void MachineProfilesSource::fail(QString message) {
+void MachineProfilesSource::fail(QString message, FailureSource source) {
+  failure_source_ = source;
   error_ = std::move(message);
   emit failed();
 }

@@ -8,4 +8,5 @@ namespace runtime_endpoint {
   // Finder or login launch gets the PATH, EDITOR and SHELL a terminal would, and so do its panes.
   // Blocks until telar answers or a deadline passes; throws when it fails.
   std::string resolve();
+  std::string program();
 } // namespace runtime_endpoint

@@ -1101,6 +1101,10 @@ bool Application::executePane(Action action, std::uint64_t identity) {
 }
 
 void Application::executeWindowAction(Action action) {
+  if (executeMachineAction(action)) {
+    return;
+  }
+
   if (action == Action::detach) {
     if (window_ != nullptr) {
       window_->close();
@@ -1249,6 +1253,10 @@ void Application::scroll(PaneScrollDelta delta) {
 }
 
 void Application::showDialog(const QString &kind, const QString &text) {
+  if (kind != QLatin1StringView("machine")) {
+    machine_prompt_.reset();
+  }
+
   if (kind != QLatin1StringView("palette")) {
     palette_parent_.reset();
     palette_editor_restore_ = {};

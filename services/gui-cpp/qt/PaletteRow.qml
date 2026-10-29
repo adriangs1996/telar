@@ -86,15 +86,18 @@ Item {
         color: root.colors.text
     }
 
-    ChromeText {
+    Loader {
         x: root.bodyLeft
         y: root.upperTop + root.upperHeight
         width: root.labelWidth
         height: Math.min(root.typography.smallRow, Math.max(0, root.height - y))
-        text: root.record.secondary
-        pixelSize: root.typography.small
-        color: Qt.alpha(root.colors.text, root.detailAlpha)
-        visible: root.stacked
+        active: root.stacked
+        sourceComponent: ChromeText {
+            anchors.fill: parent
+            text: root.record.secondary
+            pixelSize: root.typography.small
+            color: Qt.alpha(root.colors.text, root.detailAlpha)
+        }
     }
 
     ChromeText {

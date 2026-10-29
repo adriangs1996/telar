@@ -129,6 +129,7 @@ void Application::connectMachine(MachineClient &client) {
     }
   },
           Qt::DirectConnection);
+
   connect(&client.connection, &RuntimeConnection::connected, this, [this, key] {
     if (auto *source = findClient(key)) {
       source->phase = MachinePhase::connected;

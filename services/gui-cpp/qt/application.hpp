@@ -16,6 +16,7 @@
 #include "machine_client_key.hpp"
 #include "machine_profiles_source.hpp"
 #include "machines/machines.hpp"
+#include "machines/picker_target.hpp"
 #include "machines/profile.hpp"
 #include "palette/navigation_target.hpp"
 #include "palette/query.hpp"
@@ -111,6 +112,8 @@ class Application final : public QObject {
   Q_PROPERTY(QString dialog READ dialog NOTIFY dialogChanged)
   Q_PROPERTY(QString dialogText READ dialogText NOTIFY dialogChanged)
   Q_PROPERTY(QVariantList commands READ commands NOTIFY configurationChanged)
+  Q_PROPERTY(QVariantMap machinePromptState READ machinePromptState NOTIFY machinePromptChanged)
+  Q_PROPERTY(QVariantMap machinePromptGeometry READ machinePromptGeometry NOTIFY machinePromptChanged)
   Q_PROPERTY(QVariantMap paletteState READ paletteState NOTIFY paletteChanged)
   Q_PROPERTY(QVariantMap paletteGeometry READ paletteGeometry NOTIFY paletteChanged)
   Q_PROPERTY(QVariantMap suggestionState READ suggestionState NOTIFY paletteChanged)
@@ -159,8 +162,25 @@ public:
     copy_mode,
     path_picker,
     suggest_command,
+    machine_picker,
+    next_machine,
+    previous_machine,
+    add_machine,
   };
   Q_ENUM(Action)
+
+  enum class MachineEditAction : quint8 {
+    rename,
+    remove,
+  };
+  Q_ENUM(MachineEditAction)
+
+  Q_INVOKABLE void editMachineResult(const QVariantMap &choice, MachineEditAction action);
+  Q_INVOKABLE void searchMachinePrompt(const QString &text);
+  Q_INVOKABLE void submitMachinePrompt(const QString &revision);
+  Q_INVOKABLE void reportMachinePromptLimit(qulonglong requested_bytes);
+  [[nodiscard]] QVariantMap machinePromptState() const;
+  [[nodiscard]] QVariantMap machinePromptGeometry() const;
 
   enum class HistoryAction : quint8 {
     copy,
@@ -330,6 +350,7 @@ signals:
   void notificationsChanged();
   void machineChanged();
   void machinesChanged();
+  void machinePromptChanged();
 
 private:
   friend struct test::HistoryPresentation;
@@ -347,7 +368,7 @@ private:
   void applyExpression(const InputExpression &expression);
   void scrollBinding(ScrollDirection direction);
   [[nodiscard]] QString bindingShortcut(BindingActionKind action) const;
-  using PaletteTarget = std::variant<NavigationTarget, Action>;
+  using PaletteTarget = std::variant<NavigationTarget, Action, MachinePickerTarget>;
   static constexpr std::size_t palette_capacity = WorkspaceReplica<ApplicationAllocator>::maximum_workspaces + GuiSession::maximum_workspace_tabs + AgentReplica<ApplicationAllocator>::capacity;
   using PaletteMatches = RankedMatches<PaletteTarget, palette_capacity>;
 
@@ -356,6 +377,29 @@ private:
     removed,
   };
 
+  enum class MachinePromptMode : std::uint8_t {
+    add_label,
+    add_destination,
+    rename,
+  };
+
+  struct MachinePrompt {
+    MachinePromptMode mode = MachinePromptMode::add_label;
+    QString text;
+    QString label;
+    std::optional<MachineToken> renamed;
+  };
+
+  bool executeMachineAction(Action action);
+  void moveMachine(int delta);
+  void chooseMachine(MachinePickerTarget target, bool alternate);
+  void showMachinePrompt(std::optional<MachineToken> renamed = {});
+  void setupMachine(MachineToken target);
+  void refreshMachinePicker();
+  bool updateMachinePickerResults(std::string_view query);
+  [[nodiscard]] QVariantMap machinePickerRecord(MachinePickerTarget target) const;
+  [[nodiscard]] std::optional<MachinePickerTarget> chosenMachine(const QVariantMap &choice) const;
+  [[nodiscard]] std::size_t machinePromptLimit() const noexcept;
   void initializeMachineProfiles();
   void applyMachineProfiles();
   void reconcileMachines();
@@ -486,6 +530,7 @@ private:
   std::optional<MachineClientKey> sound_owner_;
   ConfigurationSource configuration_source_;
   MachineProfilesSource machine_profiles_;
+  std::optional<MachinePrompt> machine_prompt_;
   QTimer machine_retry_;
   QString machine_control_endpoint_;
   bool prepare_machine_directory_ = false;

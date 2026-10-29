@@ -9,6 +9,8 @@
 #include "qt/machine_client.hpp"
 #include "qt/machine_client_key.hpp"
 #include "qt/machine_profiles_source.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
 #include "ui/bundled_fonts.hpp"
 #include "wire_runtime.hpp"
 #include <QByteArray>
@@ -19,6 +21,8 @@
 #include <QLocalSocket>
 #include <QString>
 #include <QTemporaryDir>
+#include <QVariantMap>
+#include <QtCore/qcontainerfwd.h>
 #include <QtCore/qtenvironmentvariables.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
@@ -65,6 +69,7 @@ struct MachineProfileWindow {
 
 namespace {
 
+using namespace telar;
 using namespace telar::gui;
 using namespace telar::gui::qt;
 using namespace telar::gui::test;
@@ -152,10 +157,171 @@ Machines::Slot remoteSlot(const Application &application) {
   return *slot;
 }
 
+QVariantMap machineChoice(const Application &application, const QString &label) {
+  const auto rows = application.paletteGeometry().value(QStringLiteral("rows")).toList();
+  for (const auto &value : rows) {
+    const auto row = value.toMap();
+    if (row.value(QStringLiteral("primary")).toString() == label) {
+      return {{QStringLiteral("key"), row.value(QStringLiteral("key"))}, {QStringLiteral("revision"), application.paletteState().value(QStringLiteral("revision"))}};
+    }
+  }
+
+  throw std::runtime_error{"Expected visible machine picker result"};
+}
+
+bool openLocalPane(ProfileFixture &fixture) {
+  constexpr TabLocation location{.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
+  auto &runtime = *fixture.runtime;
+  runtime.send(ClientLayoutSnapshot{});
+  if (!waitForGuiCondition([&] {
+        return runtime.count(ClientTag::open_pane) != 0;
+      },
+                           wait_ms)) {
+    return false;
+  }
+
+  const auto opening = runtime.last<OpenPane>();
+  runtime.send(PaneOpened{.request_id = opening.request_id, .pane_id = 1, .location = location, .created = true, .pane_generation = 1});
+  if (!waitForGuiCondition([&] {
+        return runtime.count(ClientTag::request_tab_snapshot) != 0 && runtime.count(ClientTag::request_workspace_snapshot) != 0;
+      },
+                           wait_ms)) {
+    return false;
+  }
+
+  const std::array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+  runtime.send(TabSnapshot{.request_id = runtime.last<RequestTabSnapshot>().request_id, .location = location, .panes = panes});
+  const std::array tabs{TabDescriptor{.tab_id = 1, .pane_count = 1}};
+  runtime.send(WorkspaceSnapshot{.request_id = runtime.last<RequestWorkspaceSnapshot>().request_id, .workspace = location.workspace, .name = "local", .tabs = tabs});
+
+  return waitForGuiCondition([&] {
+    return fixture.application.pane(1) != nullptr;
+  },
+                             wait_ms);
+}
+
 class MachineProfileWindowTest : public QObject {
   Q_OBJECT
 
 private:
+  Q_SLOT static void machineActionsCycleAndPickerEnablesWithoutSelecting() {
+    ProfileFixture fixture;
+    QVERIFY(fixture.start(R"({"version":1,"local_label":"Personal","machines":[{"id":"m-000000000001","label":"Build","destination":"window@fixture","enabled":true},{"id":"m-000000000002","label":"Offline","destination":"window-other@fixture","enabled":false}]})"));
+    auto &application = fixture.application;
+    const auto &machines = MachineProfileWindow::machines(application);
+    const auto slot = remoteSlot(application);
+    QTRY_VERIFY(MachineProfileWindow::client(application, slot)->session.ready());
+    constexpr qsizetype action_count = 29;
+    QCOMPARE(application.commands().size(), action_count);
+    application.execute(Application::Action::next_machine);
+    QCOMPARE(machines.active(), slot);
+    application.execute(Application::Action::next_machine);
+    QCOMPARE(machines.active(), Machines::local_slot);
+    application.execute(Application::Action::previous_machine);
+    QCOMPARE(machines.active(), slot);
+    application.execute(Application::Action::machine_picker);
+    QCOMPARE(application.paletteState().value(QStringLiteral("count")).toInt(), 4);
+    const auto offline = requireValue(machines.find(MachineId::fromRaw(2)), "Expected disabled picker row");
+    application.usePaletteResult(machineChoice(application, QStringLiteral("Offline")));
+    QVERIFY(application.dialog().isEmpty());
+    QTRY_VERIFY(machines.row(offline).enabled);
+    QCOMPARE(machines.active(), slot);
+    application.execute(Application::Action::machine_picker);
+    auto toggle = machineChoice(application, QStringLiteral("Offline"));
+    toggle.insert(QStringLiteral("alternate"), true);
+    application.usePaletteResult(toggle);
+    QTRY_VERIFY(!machines.row(offline).enabled);
+    QCOMPARE(machines.active(), slot);
+    application.execute(Application::Action::machine_picker);
+    auto local = machineChoice(application, QStringLiteral("Personal"));
+    local.insert(QStringLiteral("alternate"), true);
+    application.usePaletteResult(local);
+    QVERIFY(application.dialog().isEmpty());
+    QCOMPARE(machines.active(), slot);
+    QVERIFY(machines.row(Machines::local_slot).enabled);
+  }
+
+  Q_SLOT static void twoStepAddRenameAndRemoveFromPicker() {
+    ProfileFixture fixture;
+    QVERIFY(fixture.start(R"({"version":1,"machines":[]})"));
+    auto &application = fixture.application;
+    application.execute(Application::Action::machine_picker);
+    application.searchPalette(QStringLiteral(":unmatched"));
+    QCOMPARE(application.paletteState().value(QStringLiteral("count")).toInt(), 1);
+    application.usePaletteResult(machineChoice(application, QStringLiteral("Add machine…")));
+    QCOMPARE(application.dialog(), QStringLiteral("machine"));
+    const auto first_revision = application.machinePromptState().value(QStringLiteral("revision")).toString();
+    application.searchMachinePrompt(QStringLiteral("Added"));
+    application.submitMachinePrompt(first_revision);
+    QCOMPARE(application.machinePromptState().value(QStringLiteral("title")).toString(), QStringLiteral("Its SSH destination: user@host or an alias"));
+    const auto second_revision = application.machinePromptState().value(QStringLiteral("revision")).toString();
+    QVERIFY(first_revision != second_revision);
+    application.searchMachinePrompt(QStringLiteral("window-added@fixture"));
+    application.submitMachinePrompt(first_revision);
+    QVERIFY(!MachineProfileWindow::profiles(application).editing());
+    QCOMPARE(application.dialog(), QStringLiteral("machine"));
+    application.submitMachinePrompt(second_revision);
+    QVERIFY(application.dialog().isEmpty());
+    const auto &machines = MachineProfileWindow::machines(application);
+    QTRY_VERIFY(machines.findDestination("window-added@fixture").has_value());
+    const auto slot = requireValue(machines.findDestination("window-added@fixture"), "Expected newly saved destination");
+    application.execute(Application::Action::machine_picker);
+    application.editMachineResult(machineChoice(application, QStringLiteral("Added")), Application::MachineEditAction::rename);
+    QCOMPARE(application.machinePromptState().value(QStringLiteral("editorText")).toString(), QStringLiteral("Added"));
+    application.searchMachinePrompt(QStringLiteral("Renamed"));
+    application.submitMachinePrompt(application.machinePromptState().value(QStringLiteral("revision")).toString());
+    QTRY_COMPARE(machines.row(slot).label.view(), std::string_view{"Renamed"});
+    application.execute(Application::Action::machine_picker);
+    application.editMachineResult(machineChoice(application, QStringLiteral("Renamed")), Application::MachineEditAction::remove);
+    QTRY_VERIFY(!machines.row(slot).used);
+    QCOMPARE(application.dialog(), QStringLiteral("palette"));
+    QCOMPARE(application.paletteState().value(QStringLiteral("count")).toInt(), 2);
+  }
+
+  Q_SLOT static void stalePickerAndInvalidEditsKeepTheirTargets() {
+    ProfileFixture fixture;
+    QVERIFY(fixture.start(R"({"version":1,"machines":[{"id":"m-000000000001","label":"Build","destination":"window@fixture","enabled":false}]})"));
+    auto &application = fixture.application;
+    const auto slot = remoteSlot(application);
+    application.execute(Application::Action::machine_picker);
+    const auto stale = machineChoice(application, QStringLiteral("Build"));
+    fixture.replace(R"({"version":1,"machines":[{"id":"m-000000000001","label":"Renamed","destination":"window@fixture","enabled":false}]})");
+    QTRY_VERIFY(application.paletteState().value(QStringLiteral("revision")) != stale.value(QStringLiteral("revision")));
+    application.editMachineResult(stale, Application::MachineEditAction::remove);
+    QVERIFY(!MachineProfileWindow::profiles(application).editing());
+    QVERIFY(MachineProfileWindow::machines(application).row(slot).used);
+    application.execute(Application::Action::add_machine);
+    application.searchMachinePrompt(QStringLiteral("invalid label"));
+    application.submitMachinePrompt(application.machinePromptState().value(QStringLiteral("revision")).toString());
+    application.searchMachinePrompt(QStringLiteral("window-invalid@fixture"));
+    application.submitMachinePrompt(application.machinePromptState().value(QStringLiteral("revision")).toString());
+    QTRY_VERIFY(!application.notifications().items().empty());
+    QCOMPARE(application.notifications().items().front().title.view(), std::string_view{"Machine not saved"});
+    QVERIFY(!MachineProfileWindow::machines(application).findDestination("window-invalid@fixture"));
+  }
+
+  Q_SLOT static void setupOpensOriginalCommandOnTheLocalMachine() {
+    ProfileFixture fixture;
+    QVERIFY(fixture.start(R"({"version":1,"machines":[{"id":"m-000000000001","label":"Missing","destination":"missing","enabled":true}]})"));
+    QVERIFY(openLocalPane(fixture));
+    auto &application = fixture.application;
+    const auto slot = remoteSlot(application);
+    QTRY_VERIFY(MachineProfileWindow::machines(application).row(slot).needs_setup);
+    application.execute(Application::Action::machine_picker);
+    application.usePaletteResult(machineChoice(application, QStringLiteral("Missing")));
+    QTRY_COMPARE(fixture.runtime->count(ClientTag::create_tab), std::size_t{1});
+    const auto request = fixture.runtime->last<CreateTab>();
+    QCOMPARE(request.label, std::string_view{"Set up Missing"});
+    constexpr std::size_t setup_arguments = 5;
+    QCOMPARE(request.launch.arguments.size(), setup_arguments);
+    QVERIFY(!request.launch.arguments.front().empty());
+    QCOMPARE(request.launch.arguments[1], std::string_view{"machine"});
+    QCOMPARE(request.launch.arguments[2], std::string_view{"setup"});
+    QCOMPARE(request.launch.arguments[3], std::string_view{"Missing"});
+    QCOMPARE(request.launch.arguments[4], std::string_view{"--confirm"});
+    QCOMPARE(MachineProfileWindow::machines(application).active(), Machines::local_slot);
+  }
+
   Q_SLOT static void hiddenAdmissionAndVisibleDisable() {
     ProfileFixture fixture;
     QVERIFY(fixture.start(R"({"version":1,"local_label":"Personal","machines":[{"id":"m-000000000001","label":"Build","destination":"window@fixture","enabled":true},{"id":"m-000000000002","label":"Offline","destination":"offline@fixture","enabled":false}]})"));

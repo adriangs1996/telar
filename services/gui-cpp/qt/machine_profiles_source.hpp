@@ -33,6 +33,7 @@ public:
   [[nodiscard]] const MachineProfiles &profiles() const noexcept;
   [[nodiscard]] const QString &error() const noexcept;
   [[nodiscard]] bool editing() const noexcept;
+  [[nodiscard]] bool editError() const noexcept;
   [[nodiscard]] bool busy() const noexcept;
   [[nodiscard]] bool loaded() const noexcept;
   [[nodiscard]] std::uint64_t revision() const noexcept;
@@ -43,6 +44,11 @@ signals:
   void editingChanged();
 
 private:
+  enum class FailureSource : std::uint8_t {
+    profile,
+    edit,
+  };
+
   struct Request {
     QByteArray path;
     QByteArray local_label;
@@ -64,7 +70,7 @@ private:
   [[nodiscard]] static Result prepare(ApplicationAllocator &memory, const Request &request);
   void start();
   void complete();
-  void fail(QString message);
+  void fail(QString message, FailureSource source = FailureSource::profile);
 
   ApplicationAllocator &memory_;
   QTimer poll_;
@@ -81,6 +87,7 @@ private:
   bool loaded_ = false;
   bool busy_ = false;
   bool editing_ = false;
+  FailureSource failure_source_ = FailureSource::profile;
   bool reopen_pending_ = false;
   bool rescan_pending_ = false;
 };

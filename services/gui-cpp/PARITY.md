@@ -6,20 +6,22 @@ equal-or-better performance remain acceptance requirements.
 
 The [machine components](measurements/machine-components.md) have standalone
 profile and remote-protocol comparisons against the original Zig sources on
-macOS and Linux, including sanitizers. The four machine actions remain unported;
-this does not establish live SSH, profile filesystem, switching or visual parity.
+macOS and Linux, including sanitizers. These original component comparisons do not establish live SSH, profile
+filesystem, switching or visual parity; the later machine-UI checkpoint below
+now wires the four machine actions.
 
 [Machine profile persistence](measurements/machine-storage.md) now has standalone
 domain, native filesystem and Qt worker validation. The later admission
-checkpoint below integrates the window; the four machine actions, live SSH and
-native visual acceptance remain open.
+checkpoint below integrates the window and the machine-UI checkpoint adds
+actions; live SSH and complete native visual acceptance remain open.
 
 [Machine session presentation](measurements/machine-presentation.md) now supports
 metadata-only hidden sessions, deferred layout restoration and releasing pane
 screens without closing runtime processes. The window adapter now owns separate
 allocator-backed client/session/connection slots while sharing window resources.
 The later profile-admission checkpoint below connects saved rows and SSH
-clients. Machine actions and complete visual acceptance remain pending.
+clients. The machine-UI checkpoint adds actions; complete visual acceptance
+remains pending.
 
 The [window machine table and picker](measurements/machine-registry.md) now
 retain bounded owned rows, destination admission generations, event-driven
@@ -27,7 +29,7 @@ summaries and the original disabled-row ranking and submission decisions.
 The original-source comparison matches 8,091 stateful operations on Personal
 in Release and ASan/UBSan. The later window integration extends the oracle to
 7,360 operations including remote selection and the original stopped phase.
-The four machine actions remain unported.
+The later machine-UI checkpoint below wires the four machine actions.
 
 The [multiple-client window adapter](measurements/machine-window.md) has two
 framed socket fixtures with colliding pane/frame/attachment identifiers. Hidden
@@ -47,7 +49,7 @@ Controlled subprocess tests cover duplex messages, permanent failures,
 cancellation and destination replacement. Both standalone transport suites pass
 ASan/UBSan with leak detection enabled. This does not establish a live SSH-host
 comparison. The later profile-admission checkpoint below connects the
-transport to saved machines; the four machine actions remain pending.
+transport to saved machines; the later machine-UI checkpoint adds actions.
 
 The [saved-profile window adapter](measurements/machine-admission.md) now loads
 `machines.json` in production, admits enabled SSH clients in the background,
@@ -55,9 +57,18 @@ reconciles stable IDs and returns to local before retiring a visible machine.
 Remote launch defaults and destination-scoped window identities are connected.
 Six selected Release CTests and five ASan/UBSan CTests pass with leak detection
 enabled, including the profile-window cases. A production Cocoa/Metal smoke
-opens a shell on an isolated reference runtime. The action catalogue remains
-25/29; picker/actions, setup, real SSH hosts, Linux integration, complete native
-visual acceptance and comparative performance remain open.
+opens a shell on an isolated reference runtime. This checkpoint had 25/29
+catalogue actions; the later machine-UI checkpoint below adds the remaining four.
+
+The [machine UI](measurements/machine-ui.md) now exposes all 29 catalogue actions,
+cyclic machine selection, disabled-row enabling, toggles, rename/remove, two-step
+add forms and local setup command tabs. Original-source prompt geometry matches
+5,329 hosts in Release and ASan/UBSan. Native AppKit capture caught and corrected
+a physical-Control mapping error on macOS. Scoped paired captures cover the
+picker and three prompt states, retaining their exact pixel differences.
+Actual SSH hosts, setup installation, source-composed activity, CLI remote
+launch, Linux integration, complete native visuals and comparative performance
+remain open.
 
 Two initial Cocoa/Metal runs each recorded 81 passes and one failure: editor terminal
 focus in the first, history inspection geometry in the second. The editor case
@@ -1327,7 +1338,7 @@ performance.
 | Runtime control | Remaining routed CLI commands |
 | History browser | Retained semantic-action captures across selected-card replacement, complete modal input lifecycle and the DelegateModel page-replacement warning, inspector facts/content, exact day-group placement/scroll admission and older-row placement, expansion/leaving animation, remaining filter theme/density/hover and Linux paired pixels, remaining query notification/synchronization, additional loading themes/densities and physical scheduling, footer error-caption shaping, entrance animation and complete paired pixels; remaining focus, gesture and status behavior; comparative cache-pressure profiling. Physical panel/search/inspection geometry, compact paths, metadata/action and footer fitting, calendar/status labels, word wrapping, bounded card height/remainder, visible fuzzy matching, selection containment, row/footer revisions, capture retirement and reusable components have scoped coverage. One complete selected card, browse/inspect footers, six filter-header scenes and seven search bands match paired Cocoa pixels; other states/themes/densities and the complete window remain open. |
 | Activity | Remote source connection adapters and source composition; favicons and peeks; remaining density/icon pixels; complete scrolling, selection and task interactions; complete paired task/working frames on both platforms; physical suspend/resume validation. The generic bounded forest, coordinator ancestry, full/compact tasks, tracked commands, project progress/attention, plan cells and status clocks have original-source/component coverage. Scoped macOS live pairs verify worktree/hook projection and listed exact regions, including mixed-font task facts and project rows. |
-| Navigation | Machine picker/actions and setup, actual SSH hosts, workspace/worktree navigation history, remaining worktree management and nested picks. `goto-picker` opens a fuzzy native palette for contexts, current-context tabs and agents, with complete identities and query-preserving prefixes. The generated catalogue exposes 25 implemented actions out of 29. The runtime path picker browses directories and inserts quoted relative or absolute paths; file-icon sampling, complete native path interactions, failure scenes and other theme/density pixels remain open. Suggestions use the runtime engine, retain retryable failures, discard stale replies and paste without Enter; returning to actions restores the query, selected row and editor selection. Leaving a linked worktree selects its project; cleanup only forgets gone rows without tabs. Machine actions remain unported. Four palette panels, one empty path panel and eight suggestion panels have scoped exact Cocoa pixels; complete visual and interaction coverage remains open. |
+| Navigation | Machine setup installation, actual SSH hosts, source-composed machine activity, CLI remote launch, workspace/worktree navigation history, remaining worktree management and nested picks. `goto-picker` opens a fuzzy native palette for contexts, current-context tabs and agents, with complete identities and query-preserving prefixes. The generated catalogue exposes all 29 actions, including the four machine actions. The runtime path picker browses directories and inserts quoted relative or absolute paths; file-icon sampling, complete native path interactions, failure scenes and other theme/density pixels remain open. Suggestions use the runtime engine, retain retryable failures, discard stale replies and paste without Enter; returning to actions restores the query, selected row and editor selection. Leaving a linked worktree selects its project; cleanup only forgets gone rows without tabs. Machine picker/form actions have controlled coverage; live SSH remains open. Four earlier palette panels, one empty path panel and eight suggestion panels have scoped exact Cocoa pixels; complete visual and interaction coverage remains open. |
 | Extensibility | Plugins, custom bars, dynamic widgets, panels and picks; command-action integration with these surfaces |
 | Footer | Configured bar positions/content, full priority fitting and overflow; exact diagnostic fitting and complete battery/badge/mode-chip density/theme geometry; complete mode-label font fallback. Default metrics, CPU history, TLS, dismissible diagnostics and prefix/copy hint layout are implemented. |
 | Attachments and links | Clipboard image shelf, attachment lifecycle, diagrams and complete native link/preview interaction equivalence, including chrome interception and layout edge cases |

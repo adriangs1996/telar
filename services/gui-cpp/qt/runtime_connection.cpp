@@ -122,6 +122,18 @@ std::optional<MachineError> RuntimeConnection::remoteError() const noexcept {
   return remote_error_;
 }
 
+void RuntimeConnection::retryNow() {
+  if (ready()) {
+    return;
+  }
+
+  if (remote_target_) {
+    openRemote(*remote_target_);
+  } else {
+    open(path_);
+  }
+}
+
 void RuntimeConnection::close() {
   closed_ = true;
   accepted_ = false;

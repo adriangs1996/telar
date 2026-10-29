@@ -32,17 +32,17 @@ Item {
 
     clip: true
 
-    function submit() {
+    function submit(alternate = false) {
         if (root.suggesting) {
             root.controller.submitSuggestion(root.controller.suggestionState.revision);
         } else {
-            choose(root.state.selectedKey ?? "", root.state.revision);
+            choose(root.state.selectedKey ?? "", root.state.revision, alternate);
         }
     }
 
-    function choose(key, revision) {
+    function choose(key, revision, alternate = false) {
         const anchor = query.selectionStart === query.cursorPosition ? query.selectionEnd : query.selectionStart;
-        root.controller.usePaletteResult({key: key, revision: revision, anchor: anchor, cursor: query.cursorPosition});
+        root.controller.usePaletteResult({key: key, revision: revision, anchor: anchor, cursor: query.cursorPosition, alternate: alternate});
     }
 
     function synchronizeEditor() {
@@ -123,8 +123,24 @@ Item {
             onLimitReached: requested => root.controller.reportPaletteQueryLimit(requested)
             Keys.onDownPressed: root.controller.movePalette(1)
             Keys.onUpPressed: root.controller.movePalette(-1)
-            Keys.onReturnPressed: root.submit()
-            Keys.onEnterPressed: root.submit()
+            Keys.onReturnPressed: event => root.submit((event.modifiers & Qt.ShiftModifier) !== 0)
+            Keys.onEnterPressed: event => root.submit((event.modifiers & Qt.ShiftModifier) !== 0)
+            Keys.onPressed: event => {
+                if (root.state.mode !== root.machinesMode || (event.modifiers & root.controller.controlModifier) === 0) {
+                    event.accepted = false;
+                    return;
+                }
+                const choice = {key: root.state.selectedKey ?? "", revision: root.state.revision};
+                if (event.key === Qt.Key_R) {
+                    root.controller.editMachineResult(choice, GuiController.MachineEditAction.rename);
+                    event.accepted = true;
+                } else if (event.key === Qt.Key_D) {
+                    root.controller.editMachineResult(choice, GuiController.MachineEditAction.remove);
+                    event.accepted = true;
+                } else {
+                    event.accepted = false;
+                }
+            }
             Keys.onEscapePressed: {
                 if (!query.cancelComposition()) {
                     root.controller.execute(GuiController.Action.cancel);

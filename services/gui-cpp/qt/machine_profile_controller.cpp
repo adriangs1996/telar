@@ -45,13 +45,18 @@ std::string_view bytes(QByteArrayView text) {
 }
 
 void Application::initializeMachineProfiles() {
+  connect(this, &Application::machinesChanged, this, &Application::refreshMachinePicker);
+  connect(this, &Application::windowGeometryChanged, this, &Application::machinePromptChanged);
+  connect(this, &Application::configurationChanged, this, &Application::machinePromptChanged);
+
   machine_retry_.setSingleShot(true);
   machine_retry_.setInterval(RuntimeConnection::reconnect_delay_ms);
   connect(&machine_profiles_, &MachineProfilesSource::changed, this, &Application::applyMachineProfiles);
   connect(&machine_retry_, &QTimer::timeout, this, &Application::applyMachineProfiles);
   connect(&machine_profiles_, &MachineProfilesSource::failed, this, [this] {
     const auto detail = machine_profiles_.error().toUtf8();
-    publishNotification({.level = NotificationLevel::failure, .title = "machines.json not applied", .message = bytes(detail), .link = {}});
+    const auto *const title = machine_profiles_.editError() ? "Machine not saved" : "machines.json not applied";
+    publishNotification({.level = NotificationLevel::failure, .title = title, .message = bytes(detail), .link = {}});
   });
 }
 

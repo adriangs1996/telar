@@ -206,19 +206,22 @@ policies without Qt. Their original-source comparisons cover 14,494 profile
 cases and 15,638 remote cases on macOS and Linux, in Release and under
 ASan/UBSan. Those comparisons cover the independent components; later window
 and saved-profile checkpoints connect them to runtime clients. The machine
-picker, actual SSH-host acceptance and native visuals remain pending.
+UI is wired by the later [machine UI](measurements/machine-ui.md) checkpoint;
+actual SSH-host acceptance and complete native visuals remain pending.
 
 The [machine profile store](measurements/machine-storage.md) adds atomic batches,
 private filesystem storage and an independent Qt worker with polling, owned edit
 requests and cancellable lock waits. Its component tests pass on both platforms
 in Release and under ASan/UBSan. The later saved-profile adapter connects it to
-runtime sessions; machine navigation actions remain pending.
+runtime sessions; the later machine UI adds navigation, edit forms and setup
+command tabs.
 
 The [machine presentation lifecycle](measurements/machine-presentation.md) adds
 deferred hidden startup, screen release, remembered pane restoration and bounded
 workspace fallback to the platform-independent session. The later window and
 saved-profile adapters extend this to one client per
-enabled machine; picker actions and complete SSH acceptance remain pending.
+enabled machine; the later machine UI adds picker actions. Complete SSH
+acceptance remains pending.
 
 ```sh
 python3 services/gui-cpp/tools/check_row_text.py --output-dir /tmp/telar-row-text
