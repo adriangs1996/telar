@@ -19,11 +19,15 @@
 #include "wire_runtime.hpp"
 #include <QAbstractItemModel>
 #include <QCoreApplication>
+#include <QEvent>
 #include <QGuiApplication>
 #include <QKeyEvent>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QObject>
+#include <QQuickItem>
+#include <QQuickWindow>
+#include <QSize>
 #include <QString>
 #include <QTemporaryDir>
 #include <QtCore/qnamespace.h>
@@ -193,6 +197,67 @@ struct MachineFixture {
 
 class MachineWindowTest : public QObject {
   Q_OBJECT
+
+  Q_SLOT static void retiredNotificationFocusKeepsItsWindowAndMachine() {
+    MachineFixture fixture;
+    auto &application = fixture.application;
+    QQuickWindow previous;
+    QQuickWindow current;
+    constexpr QSize window_size{320, 240};
+    previous.resize(window_size);
+    current.resize(window_size);
+    previous.show();
+    current.show();
+    current.requestActivate();
+    QTRY_VERIFY_WITH_TIMEOUT(current.isActive(), wait_ms);
+    application.setWindow(previous);
+    QVERIFY(fixture.start());
+    fixture.local_runtime->send(ClientLayoutSnapshot{});
+    fixture.remote_runtime->send(ClientLayoutSnapshot{});
+    QVERIFY(finishOpening(*fixture.local_runtime));
+    QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane_id) != nullptr && application.pane(pane_id)->attached, wait_ms);
+    TerminalItem old_terminal{previous.contentItem()};
+    old_terminal.setApplication(&application);
+    old_terminal.setPaneId(QString::number(pane_id));
+    TerminalItem terminal{current.contentItem()};
+    terminal.setApplication(&application);
+    terminal.setPaneId(QString::number(pane_id));
+    application.publishNotification({.title = "Local", .message = "local focus", .link = {}});
+    const auto local_key = application.notificationIdentity(application.notifications().items().front().id);
+    previous.contentItem()->forceActiveFocus();
+    application.retireNotificationFocus(local_key);
+    application.setWindow(current);
+    current.contentItem()->forceActiveFocus();
+    QCoreApplication::sendPostedEvents(&application, QEvent::MetaCall);
+    QCOMPARE(current.activeFocusItem(), current.contentItem());
+
+    application.retireNotificationFocus(local_key);
+    QCoreApplication::sendPostedEvents(&application, QEvent::MetaCall);
+    QCOMPARE(current.activeFocusItem(), &terminal);
+    terminal.setFocus(false);
+    current.contentItem()->forceActiveFocus();
+    QCOMPARE(current.activeFocusItem(), current.contentItem());
+    application.retireNotificationFocus(local_key);
+    QQuickItem editor{current.contentItem()};
+    editor.forceActiveFocus();
+    QCoreApplication::sendPostedEvents(&application, QEvent::MetaCall);
+    QCOMPARE(current.activeFocusItem(), &editor);
+
+    MachineWindow::select(application, fixture.remote.machine);
+    QVERIFY(finishOpening(*fixture.remote_runtime));
+    QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane_id) != nullptr && application.pane(pane_id)->attached, wait_ms);
+    application.publishNotification({.title = "Remote", .message = "remote focus", .link = {}});
+    const auto remote_key = application.notificationIdentity(application.notifications().items().front().id);
+    editor.setFocus(false);
+    current.contentItem()->forceActiveFocus();
+    QCOMPARE(current.activeFocusItem(), current.contentItem());
+    application.retireNotificationFocus(local_key);
+    QCoreApplication::sendPostedEvents(&application, QEvent::MetaCall);
+    QCOMPARE(current.activeFocusItem(), current.contentItem());
+    application.retireNotificationFocus(remote_key);
+    QCoreApplication::sendPostedEvents(&application, QEvent::MetaCall);
+    QCOMPARE(current.activeFocusItem(), &terminal);
+  }
 
   Q_SLOT static void heldKeysCannotRepeatOnAnotherMachine() {
     MachineFixture fixture;

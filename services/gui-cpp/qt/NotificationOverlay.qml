@@ -10,12 +10,18 @@ NotificationLayout {
     required property var colors
 
     component NotificationButton: AbstractButton {
+        required property string identity
         signal activated
 
         hoverEnabled: true
         focusPolicy: Qt.StrongFocus
         padding: 0
         onPressed: activated()
+        onEnabledChanged: {
+            if (!enabled) {
+                root.controller.retireNotificationFocus(identity);
+            }
+        }
         Keys.onReturnPressed: activated()
         Keys.onEnterPressed: activated()
     }
@@ -74,6 +80,7 @@ NotificationLayout {
                 NotificationButton {
                     id: bodyControl
                     objectName: "notificationBody"
+                    identity: card.record.key
 
                     anchors.fill: parent
                     enabled: card.record.enabled
@@ -179,6 +186,7 @@ NotificationLayout {
                 NotificationButton {
                     id: closeControl
                     objectName: "notificationClose"
+                    identity: card.record.key
 
                     x: card.record.closeBounds.x
                     y: card.record.closeBounds.y

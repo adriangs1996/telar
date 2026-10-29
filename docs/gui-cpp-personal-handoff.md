@@ -49,8 +49,16 @@ selectors. Fourteen profile-window cases include initial-file failure, capacity,
 slot reuse and launch arguments. A first current Quick suite has one
 notification-focus failure; traced sequence/full runs pass, but its cause is
 unproven and its gate remains open. Keep that failed run and the traces. Continue
-focus retirement, source composition, live recovery/setup and all remaining
-PARITY.md gates. No global parity gate is closed. The window-adapter checkpoint records 82 Cocoa/Metal scale-1
+source composition, live recovery/setup and all remaining PARITY.md gates.
+The later [notification retirement](../services/gui-cpp/measurements/notification-retirement.md)
+checkpoint adds a deterministic real-protocol focus regression and queues
+restoration after a disabled control retires, fenced by window, machine, pane
+and attachment identity. Current Cocoa/Metal Quick has 85 passes and no QML
+warnings; two selected Release CTests pass. Both corresponding sanitizer suites
+pass assertions but fail exit leak detection (213,024 bytes/817 allocations and
+174,444 bytes/870 allocations); preserve those full reports, with no local
+suppression. The earlier pointer-close failure's exact timing remains unproven.
+Continue activity source composition next. No global parity gate is closed. The window-adapter checkpoint records 82 Cocoa/Metal scale-1
 passes, before the transport/profile changes, after the
 owned-window focus/geometry barrier; twenty selected regressions pass.
 Native sanitizer assertions pass, but exit leak acceptance remains OPEN.

@@ -79,6 +79,12 @@ remote home/command adoption and the original 64-argument startup limit. Five
 selected Release and sanitizer groups pass; real OpenSSH runs cover both CLI
 selectors. A first current native suite has one notification-focus failure;
 traced sequence/full runs pass, but the failure's cause remains unproven.
+The later [notification retirement](measurements/notification-retirement.md)
+checkpoint fixes a deterministic real-protocol case: retiring a focused control
+left keyboard ownership on the root item. Deferred, origin-checked restoration
+now returns it to the terminal. Current Cocoa/Metal Quick passes 85 cases without
+QML warnings, and two selected Release suites pass. Both corresponding sanitizer
+suites pass assertions but fail exit leak detection; that gate remains open.
 
 Two initial Cocoa/Metal runs each recorded 81 passes and one failure: editor terminal
 focus in the first, history inspection geometry in the second. The editor case

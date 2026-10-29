@@ -229,7 +229,10 @@ The [initial-machine launch](measurements/machine-launch.md) also wires
 command/home adoption. Its real OpenSSH runs cover both selectors; five selected
 Release and sanitizer groups pass. The native notification-focus investigation
 retains its first failure and later traced passes without claiming its cause
-is fixed.
+is fixed. A later [retirement correction](measurements/notification-retirement.md)
+returns keyboard ownership after a focused notification is removed by the
+runtime, with window/machine/pane guards. Its current native suite passes 85
+cases; native exit leak detection remains open.
 
 ```sh
 python3 services/gui-cpp/tools/check_row_text.py --output-dir /tmp/telar-row-text

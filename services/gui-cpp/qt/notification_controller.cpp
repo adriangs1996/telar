@@ -10,7 +10,9 @@
 #include "telar_client/serializers/telar_messages.hpp"
 #include "terminal_item.hpp"
 #include <QByteArray>
+#include <QMetaObject>
 #include <QObject>
+#include <QQuickItem>
 #include <QQuickWindow>
 #include <QString>
 #include <QTimer>
@@ -25,6 +27,26 @@
 #include <optional>
 
 namespace telar::gui::qt {
+
+namespace {
+
+struct NotificationFocus {
+  std::uint64_t window;
+  std::uint64_t machine;
+  std::uint64_t pane;
+  std::uint64_t generation;
+  std::uint64_t attachment;
+
+  bool operator==(const NotificationFocus &) const = default;
+};
+
+bool keyboardFocusVacant(const QQuickWindow &window) {
+  const auto *item = window.activeFocusItem();
+
+  return item == nullptr || item == window.contentItem() || !item->isEnabled();
+}
+
+}
 
 void Application::initializeNotifications() {
   notification_timer_.setSingleShot(true);
@@ -144,6 +166,33 @@ void Application::activateNotification(const QString &identity) {
       restoreTerminalFocus();
     }
   });
+}
+
+void Application::retireNotificationFocus(const QString &identity) {
+  const auto *pane = session().focusedPane();
+  if (!resolveNotification(identity) || pane == nullptr || !pane->attached || window_ == nullptr || !keyboardFocusVacant(*window_)) {
+    return;
+  }
+
+  const NotificationFocus target{.window = window_generation_, .machine = machine_view_revision_, .pane = pane->id, .generation = pane->generation, .attachment = pane->attachment_generation};
+  // Disabling a control can still be changing Qt focus while its binding runs.
+  // Complete that transition before restoring the captured pane's keyboard owner.
+  QMetaObject::invokeMethod(this, [this, target] {
+    if (window_ == nullptr || !dialog_.isEmpty()) {
+      return;
+    }
+
+    const auto *current = session().focusedPane();
+    if (!keyboardFocusVacant(*window_) || current == nullptr || !current->attached) {
+      return;
+    }
+
+    const NotificationFocus present{.window = window_generation_, .machine = machine_view_revision_, .pane = current->id, .generation = current->generation, .attachment = current->attachment_generation};
+    if (present == target) {
+      restoreTerminalFocus();
+    }
+  },
+                            Qt::QueuedConnection);
 }
 
 void Application::restoreTerminalFocus() {
