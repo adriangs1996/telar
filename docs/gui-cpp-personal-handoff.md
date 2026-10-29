@@ -200,7 +200,17 @@ routes text to the original remote pane/generation. Local input stays isolated.
 All four complete cleanups exit zero. Both complete controlled outage pickers
 match 1,187,840 pixels each. Binaries are unchanged from runtime-stop; no product
 rebuild/test is used to infer these SSH results. Keep stop-status pixels and
-native exit leaks open, then continue remaining build/protocol failures, active
+native exit leaks open. The subsequent
+[peek labels/native action checkpoint](../services/gui-cpp/measurements/peek-labels-actions.md)
+compares the unchanged original facts/title body and Agent/WorktreeRow methods
+against production PeekLabels: 7,456 cases match in Release and clean core
+ASan/UBSan, including 1,502 full-capacity facts. Both native /open and /stop pass
+through owned OpenSSH in Qt and Zig, isolating text/SIGINT to the inspected remote
+pane; stop has its actual correlated protocol acknowledgment. All four complete
+cleanups exit zero. Both before/after modal-coordinate rectangles match
+1,624,320 pixels each for each action. Clang-tidy and actual Neovim clangd are
+clean; GUI binaries remain unchanged. Native task/plan projection/rendering and
+actual /diff stay open. Continue those, remaining build/protocol failures, active
 transient offline input, native
 open/stop/diff, full task/plan peek, exit leaks/performance and all remaining
 PARITY.md gates. Complete

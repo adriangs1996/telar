@@ -23,6 +23,10 @@ performance remain open. [Actual SSH authentication and host-key rejection](meas
 now pass in both GUIs with strict trust, explicit retry and isolated restored
 input. Both controlled failure pickers match 1,187,840 pixels each; complete
 failure/visual/performance acceptance remains open.
+[Peek labels and native open/stop actions](measurements/peek-labels-actions.md)
+now have 7,456 exact source comparisons, clean core sanitizers and paired real SSH
+actions with exact before/after modal rectangles. Actual task/plan rendering and
+native diff qualification remain open.
 
 Native startup selects Metal on macOS and Vulkan on Linux, matching the original
 GUI's backends. Explicit Qt backend environment settings take precedence.
