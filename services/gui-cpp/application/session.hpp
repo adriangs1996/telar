@@ -37,9 +37,14 @@
 #include "paths/insertion.hpp"
 #include "paths/limits.hpp"
 #include "paths/page.hpp"
+#include "peek/command.hpp"
+#include "peek/limits.hpp"
+#include "peek/screen.hpp"
+#include "peek/target.hpp"
 #include "platform/awake_clock.hpp"
 #include "platform/observation_time.hpp"
 #include "presentation/agent_card_labels.hpp"
+#include "presentation/agent_order.hpp"
 #include "presentation/frame_pacer.hpp"
 #include "presentation/sidebar_columns.hpp"
 #include "presentation/window_title.hpp"
@@ -82,6 +87,7 @@ enum class Change : std::uint8_t {
   copy_mode,
   paths,
   suggestion,
+  peek,
 };
 
 template <Allocator Memory, RuntimeTransport Transport, MonotonicClock Clock = platform::AwakeClock, HostEffects Effects = DiscardHostEffects>
@@ -108,6 +114,7 @@ public:
         workspaces_(memory),
         agents_(memory),
         history_(memory),
+        peek_(memory),
         decode_(AllocatorRef<Byte, Memory>{memory}),
         clipboard_(AllocatorRef<char, Memory>{memory}),
         notice_(AllocatorRef<char, Memory>{memory}),
@@ -178,6 +185,10 @@ public:
 
     presented_ = presented;
     leave_pending_ = !presented;
+    if (!presented) {
+      closePeek();
+    }
+
     if (presented) {
       if (ready_) {
         restoreMachinePresentation();
@@ -227,6 +238,7 @@ public:
     copy_search_request_ = 0;
     history_.suspend();
     path_picker_.close();
+    peek_.close();
     suggestion_.invalidate();
     pending_count_ = 0;
     editor_opening_.reset();
@@ -314,6 +326,8 @@ public:
       return dispatch.template operator()<PaneClipboard>();
     case ServerTag::pane_matches:
       return dispatch.template operator()<PaneMatches>();
+    case ServerTag::pane_text:
+      return dispatch.template operator()<PaneText>();
     case ServerTag::agent_snapshot:
       return dispatch.template operator()<AgentSnapshot>();
     case ServerTag::agent_sound:
@@ -932,6 +946,72 @@ public:
     return true;
   }
 
+  [[nodiscard]] const auto &peek() const noexcept {
+    return peek_;
+  }
+
+  [[nodiscard]] const Agent<Memory> *peekAgent() const noexcept {
+    if (!peek_.target()) {
+      return nullptr;
+    }
+
+    return findPeekAgent(*peek_.target());
+  }
+
+  bool openPeek(PeekTarget target) {
+    if (!ready_ || !presented_ || findPeekAgent(target) == nullptr) {
+      return false;
+    }
+
+    peek_.show(target);
+    try {
+      requestPeekScreen();
+    } catch (...) {
+      peek_.close();
+      throw;
+    }
+
+    return true;
+  }
+
+  void closePeek() noexcept {
+    if (peek_.target()) {
+      peek_.close();
+    }
+  }
+
+  bool submitPeek(std::string_view text) {
+    const auto *agent = ready_ && presented_ ? peekAgent() : nullptr;
+    if (agent == nullptr) {
+      closePeek();
+
+      return false;
+    }
+
+    if (text.size() > PeekLimits::message_bytes) {
+      throw std::length_error{"PeekMessageTooLong"};
+    }
+
+    switch (PeekInput::command(text)) {
+    case PeekCommand::open:
+      static_cast<void>(focusAgent(agent->pane_id, agent->pane_generation));
+      break;
+    case PeekCommand::stop:
+      sendPeekAction(InterruptAgent{.pane_id = agent->pane_id, .pane_generation = agent->pane_generation}, agent->pane_id);
+      break;
+    case PeekCommand::diff:
+      openPeekDiff(*agent);
+      break;
+    case PeekCommand::message:
+      sendPeekAction(SendPaneText{.pane_id = agent->pane_id, .pane_generation = agent->pane_generation, .mode = PaneTextMode::prompt, .text = PeekInput::trim(text), .sender = {}}, agent->pane_id);
+      break;
+    }
+
+    closePeek();
+
+    return true;
+  }
+
   void deleteHistory(std::uint64_t entry_id) {
     sendHistory(history_.erase(entry_id, nextRequest()));
   }
@@ -1491,6 +1571,9 @@ private:
     tab_snapshot,
     workspace_snapshot,
     restore_machine,
+    peek_screen,
+    peek_action,
+    peek_diff,
   };
 
   struct Pending {
@@ -1513,6 +1596,75 @@ private:
     TerminalSize existing;
     TerminalSize added;
   };
+
+  [[nodiscard]] const Agent<Memory> *findPeekAgent(const PeekTarget &target) const noexcept {
+    const auto found = std::ranges::find_if(agents_, [&](const auto &agent) {
+      return agent.pane_id == target.agent.pane_id && agent.pane_generation == target.agent.pane_generation && agent.session_id == target.session;
+    });
+
+    return found == agents_.end() ? nullptr : std::addressof(*found);
+  }
+
+  void requestPeekScreen() {
+    if (!peek_.target() || peek_.reading()) {
+      return;
+    }
+
+    const auto request_id = pending(RequestKind::peek_screen);
+    try {
+      if (const auto request = peek_.request(request_id)) {
+        transport_.send(*request);
+      } else {
+        complete(request_id);
+      }
+    } catch (...) {
+      peek_.fail(request_id);
+      complete(request_id);
+      throw;
+    }
+  }
+
+  template <typename Request>
+    requires(std::same_as<Request, InterruptAgent> || std::same_as<Request, SendPaneText> || std::same_as<Request, LaunchWorktree>)
+  void sendPeekAction(Request request, std::uint64_t pane_id) {
+    constexpr auto kind = std::same_as<Request, LaunchWorktree> ? RequestKind::peek_diff : RequestKind::peek_action;
+    request.request_id = pending(kind, pane_id);
+    try {
+      transport_.send(request);
+    } catch (...) {
+      complete(request.request_id);
+      throw;
+    }
+  }
+
+  void openPeekDiff(const Agent<Memory> &agent) {
+    const auto *row = AgentOrder::taskRow(workspaces_, agent);
+    if (row == nullptr) {
+      return;
+    }
+
+    constexpr std::string_view script = R"("$TELAR_BIN_PATH" worktree diff "$1" --stat; echo; "$TELAR_BIN_PATH" worktree diff "$1"; exec "${SHELL:-/bin/sh}")";
+    constexpr TerminalSize size{.cols = 160, .rows = 48, .cell_width_px = 0, .cell_height_px = 0};
+    const std::array<std::string_view, 5> arguments{"sh", "-c", script, "sh", row->branch};
+    sendPeekAction(LaunchWorktree{.worktree = row->id, .label = "diff", .size = size, .launch = {.cwd = row->path.empty() ? std::string_view{"/"} : std::string_view{row->path}, .arguments = arguments}}, agent.pane_id);
+  }
+
+  std::optional<Change> failPeekRequest(const Pending &request, const RequestFailed &failure) {
+    if (request.kind == RequestKind::peek_screen) {
+      peek_.fail(failure.request_id);
+
+      return Change::none;
+    }
+
+    if (request.kind != RequestKind::peek_action && request.kind != RequestKind::peek_diff) {
+      return std::nullopt;
+    }
+
+    constexpr std::uint64_t duration_ns = 7'000'000'000;
+    publishNotification({.level = NotificationLevel::failure, .target = {.kind = NotificationTarget::Kind::pane, .id = request.pane_id}, .title = "The agent did not take it", .message = failure.message, .link = {}, .duration_ns = duration_ns});
+
+    return Change::notification;
+  }
 
   [[nodiscard]] TerminalSize launchSize() const {
     const auto size = workbench_geometry_.launchSize();
@@ -1563,14 +1715,18 @@ private:
     }
   }
 
-  void completeSnapshot(RequestKind kind, std::uint64_t request_id) noexcept {
+  bool completeRequest(RequestKind kind, std::uint64_t request_id) noexcept {
     const auto requests = std::span{pending_}.first(pending_count_);
     const auto found = std::ranges::find_if(requests, [&](const Pending &request) {
       return request.id == request_id && request.kind == kind;
     });
-    if (found != requests.end()) {
-      complete(request_id);
+    if (found == requests.end()) {
+      return false;
     }
+
+    complete(request_id);
+
+    return true;
   }
 
   [[nodiscard]] bool hasPaneOperation() const noexcept {
@@ -2398,6 +2554,14 @@ private:
       return adoptSplit(*request, message);
     }
 
+    if (request->kind == RequestKind::peek_diff) {
+      if (presented_ && message.location.workspace.kind == WorkspaceLocation::Kind::workspace && !requestsPending()) {
+        visitPane(message.pane_id, message.pane_generation);
+      }
+
+      return Change::model;
+    }
+
     const bool discovered = findPane(message.pane_id) != nullptr;
     auto &pane = ensurePane(message.pane_id, message.location);
     if (pane.generation != message.pane_generation) {
@@ -2505,7 +2669,7 @@ private:
   }
 
   Change apply(const TabSnapshot &message) {
-    completeSnapshot(RequestKind::tab_snapshot, message.request_id);
+    completeRequest(RequestKind::tab_snapshot, message.request_id);
     if (!presented_ && !leave_pending_) {
       return Change::none;
     }
@@ -2555,7 +2719,7 @@ private:
   }
 
   Change apply(const WorkspaceSnapshot &message) {
-    completeSnapshot(RequestKind::workspace_snapshot, message.request_id);
+    completeRequest(RequestKind::workspace_snapshot, message.request_id);
     std::array<TabLocation, maximum_tabs> removed;
     std::size_t removed_count = 0;
     for (const auto &tab : tabs_) {
@@ -2874,6 +3038,14 @@ private:
       return Change::none;
     }
 
+    if (peek_.target()) {
+      if (peekAgent() == nullptr) {
+        closePeek();
+      } else {
+        requestPeekScreen();
+      }
+    }
+
     acknowledgeFocusedAgent();
     AgentAlerts::publish(agents_.statusChanges(), [&](const AgentStatusChange &change) {
       const auto agent = std::ranges::find_if(agents_, [&](const auto &candidate) {
@@ -2945,6 +3117,10 @@ private:
     }
 
     if (const auto request = complete(message.request_id)) {
+      if (const auto change = failPeekRequest(*request, message)) {
+        return *change;
+      }
+
       if (request->kind == RequestKind::restore_machine && request->fallback_workspace && message.code == FailureCode::pane_not_found) {
         sendOpeningRequest(RequestKind::open_default, OpenPane{.target = {.kind = PaneTarget::Kind::workspace, .id = *request->fallback_workspace}, .size = launchSize()});
 
@@ -3041,6 +3217,23 @@ private:
     }
 
     return Change::model;
+  }
+
+  Change apply(const PaneText &message) {
+    if (!completeRequest(RequestKind::peek_screen, message.request_id)) {
+      return Change::none;
+    }
+
+    const auto dropped = peek_.store(message);
+    if (!dropped) {
+      return Change::none;
+    }
+
+    if (*dropped != 0) {
+      reportLimit({.name = "peek.text_bytes", .noun = "bytes", .value = PeekLimits::text_bytes, .requested = message.text.size()});
+    }
+
+    return Change::peek;
   }
 
   Change apply(const ResyncRequired &message) {
@@ -3537,6 +3730,7 @@ private:
   NotificationCenter notifications_;
   std::uint64_t notification_revision_ = 0;
   HistoryBrowser<Memory> history_;
+  PeekScreen<Memory> peek_;
   PathPickerPage path_picker_;
   SuggestionState suggestion_;
   Vector<Byte, Memory> decode_;

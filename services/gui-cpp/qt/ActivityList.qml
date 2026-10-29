@@ -10,7 +10,9 @@ ListView {
     required property var geometry
     property real ratio: 1
     property real textScale: 1
+    property string hoverIdentity: ""
     signal selected(string key)
+    signal peekRequested(string key)
 
     clip: true
     cacheBuffer: 0
@@ -48,7 +50,9 @@ ListView {
                 typography: root.typography
                 ratio: root.ratio
                 animate: entry.animate
+                heldHover: entry.record.key === root.hoverIdentity
                 onSelected: key => root.selected(key)
+                onPeekRequested: key => root.peekRequested(key)
             }
         }
 
@@ -63,7 +67,9 @@ ListView {
                 typography: root.typography
                 ratio: root.ratio
                 animate: entry.animate
+                heldHover: entry.record.key === root.hoverIdentity
                 onSelected: key => root.selected(key)
+                onPeekRequested: key => root.peekRequested(key)
             }
         }
 

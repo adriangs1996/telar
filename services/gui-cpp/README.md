@@ -5,13 +5,14 @@ input delivery and scene graph; QML owns the application chrome. The Zig GUI
 remains the default. This port does **not** yet meet the requested functional,
 visual or performance parity gates. [PARITY.md](PARITY.md) records the remaining work.
 
-The latest [machine chrome checkpoint](measurements/machine-chrome.md) adds the
-sidebar switcher and top-bar segment, with bounded folding, profile ink and
-cross-machine attention. Scoped native shade Retina controls match the original
-exactly; the activity displacement is corrected, with 15 card pixels still
-different. Native interaction, original-source geometry/colors and selected
-regressions pass. Native exit leaks and complete visual/performance acceptance
-remain open.
+The latest [agent peek checkpoint](measurements/agent-peek.md) adds secondary
+agent activation, source-owned recent text and the original open/stop/diff/prompt
+commands. Scoped native shade Retina wide/narrow modals and a blocked refusal
+card match exactly. Real SSH validates isolated prompt delivery and both refusal
+policies. Native Quick passes all 86 entries; an earlier bindings equality
+failure remains retained with unproven cause. Instrumented window assertions
+pass all 21 entries but retain exit leaks. Complete visuals, setup/recovery,
+native exit leaks and comparative performance remain open.
 
 Native startup selects Metal on macOS and Vulkan on Linux, matching the original
 GUI's backends. Explicit Qt backend environment settings take precedence.

@@ -48,6 +48,16 @@ struct CellRectangle {
     return {.x = left, .y = top, .width = static_cast<std::uint16_t>(end - left), .height = static_cast<std::uint16_t>(lower - top)};
   }
 
+  [[nodiscard]] CellRectangle row(std::uint16_t index) const noexcept {
+    if (index >= height) {
+      return {.x = x, .y = y};
+    }
+
+    constexpr auto maximum = std::numeric_limits<std::uint16_t>::max();
+
+    return {.x = x, .y = static_cast<std::uint16_t>(std::min(static_cast<std::uint32_t>(y) + index, static_cast<std::uint32_t>(maximum))), .width = width, .height = 1};
+  }
+
   bool operator==(const CellRectangle &) const = default;
 };
 

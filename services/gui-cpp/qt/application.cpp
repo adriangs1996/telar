@@ -145,6 +145,7 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
   connect(this, &Application::windowGeometryChanged, this, &Application::synchronizeWorkbenchGeometry);
   connect(this, &Application::windowGeometryChanged, this, &Application::sidebarGeometryChanged);
   connect(this, &Application::windowGeometryChanged, this, &Application::historyChanged);
+  connect(this, &Application::windowGeometryChanged, this, &Application::refreshPeek);
   connect(&workspaces_, &QAbstractItemModel::rowsInserted, this, &Application::sidebarGeometryChanged);
   connect(&workspaces_, &QAbstractItemModel::rowsRemoved, this, &Application::sidebarGeometryChanged);
   connect(&workspaces_, &QAbstractItemModel::rowsMoved, this, &Application::sidebarGeometryChanged);
@@ -241,7 +242,7 @@ void Application::runtimeDisconnected(MachineClient &client) {
     emit paletteChanged();
   }
 
-  if (dialog_ == QLatin1StringView("paths")) {
+  if (dialog_ == QLatin1StringView("paths") || dialog_ == QLatin1StringView("peek")) {
     showDialog({});
   }
 
@@ -302,6 +303,10 @@ void Application::open(const QString &endpoint) {
 void Application::setWindow(QQuickWindow &window) {
   if (window_ == &window) {
     return;
+  }
+
+  if (dialog_ == QLatin1StringView("peek")) {
+    showDialog({});
   }
 
   if (window_ != nullptr) {
@@ -658,61 +663,7 @@ void Application::consume(MachineClient &client, QByteArrayView payload) {
       scheduleGraphicsRecovery();
     }
 
-    switch (change) {
-    case Change::configuration:
-      emit configurationChanged();
-      refresh();
-      break;
-    case Change::terminal:
-      emit terminalChanged(session().changedPane());
-      if (dialog_ == QLatin1StringView("paths")) {
-        emit pathPickerGeometryChanged();
-      }
-
-      reconsiderFrame();
-      break;
-    case Change::paths:
-      refreshPathPicker();
-      break;
-    case Change::suggestion:
-      emit paletteChanged();
-      break;
-    case Change::copy_mode:
-      emit stateChanged();
-      if (const auto &copy = session().copyMode().state()) {
-        emit terminalChanged(copy->pane_id);
-      }
-
-      break;
-    case Change::clipboard:
-      QGuiApplication::clipboard()->setText(toQString(session().clipboard()));
-      break;
-    case Change::history:
-      refreshHistory();
-      break;
-    case Change::notification:
-      break;
-    case Change::metrics:
-      emit hostMetricsChanged();
-      break;
-    case Change::model:
-    case Change::stopped:
-      if (change == Change::stopped) {
-        emit hostMetricsChanged();
-      }
-
-      if (!refresh_timer_.isActive()) {
-        refresh_timer_.start();
-      }
-      break;
-    case Change::closed:
-      if (window_ != nullptr) {
-        window_->close();
-      }
-      break;
-    case Change::none:
-      break;
-    }
+    presentChange(change);
   } catch (const std::exception &error) {
     if (client.key.machine.slot == machines_.active()) {
       fail(error);
@@ -720,6 +671,68 @@ void Application::consume(MachineClient &client, QByteArrayView payload) {
     } else {
       client.connection.recover(error.what());
     }
+  }
+}
+
+void Application::presentChange(Change change) {
+  switch (change) {
+  case Change::configuration:
+    emit configurationChanged();
+    refresh();
+    break;
+  case Change::terminal:
+    emit terminalChanged(session().changedPane());
+    if (dialog_ == QLatin1StringView("paths")) {
+      emit pathPickerGeometryChanged();
+    }
+
+    reconsiderFrame();
+    break;
+  case Change::paths:
+    refreshPathPicker();
+    break;
+  case Change::suggestion:
+    emit paletteChanged();
+    break;
+  case Change::peek:
+    refreshPeek();
+    emit stateChanged();
+    break;
+  case Change::copy_mode:
+    emit stateChanged();
+    if (const auto &copy = session().copyMode().state()) {
+      emit terminalChanged(copy->pane_id);
+    }
+
+    break;
+  case Change::clipboard:
+    QGuiApplication::clipboard()->setText(toQString(session().clipboard()));
+    break;
+  case Change::history:
+    refreshHistory();
+    break;
+  case Change::notification:
+    break;
+  case Change::metrics:
+    emit hostMetricsChanged();
+    break;
+  case Change::model:
+  case Change::stopped:
+    if (change == Change::stopped) {
+      emit hostMetricsChanged();
+    }
+
+    if (!refresh_timer_.isActive()) {
+      refresh_timer_.start();
+    }
+    break;
+  case Change::closed:
+    if (window_ != nullptr) {
+      window_->close();
+    }
+    break;
+  case Change::none:
+    break;
   }
 }
 
@@ -803,6 +816,7 @@ void Application::refresh() {
 
   tabs_.reconcile(std::move(tabs));
   refreshAgents();
+  refreshPeek();
   refreshHistory();
   refreshPanes();
   refreshPalette();
@@ -1217,6 +1231,12 @@ void Application::scroll(PaneScrollDelta delta) {
 }
 
 void Application::showDialog(const QString &kind, const QString &text) {
+  if (kind != QLatin1StringView("peek")) {
+    session().closePeek();
+    peek_origin_.reset();
+    peek_editor_.clear();
+  }
+
   if (kind != QLatin1StringView("machine")) {
     machine_prompt_.reset();
   }

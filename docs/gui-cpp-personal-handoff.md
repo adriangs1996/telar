@@ -102,8 +102,28 @@ native Quick retains 86 passes and zero QML warnings. Instrumented window has
 sixteen assertion passes but fails exit leaks (203,128 bytes/859 allocations).
 Offscreen controls retain a roughly 600 ms missing Sans Serif alias warning,
 also seen in pre-existing notification controls; native runs do not emit it.
-Read the new report/manifest, then continue alternate activity/peek, actual setup
-installation, live failure/recovery and all remaining PARITY.md gates. Complete
+Read the new report/manifest. The subsequent
+[agent peek checkpoint](../services/gui-cpp/measurements/agent-peek.md) adds
+secondary agent activation, bounded per-session recent text, source/window/agent
+session fences and the original open/stop/diff/prompt commands. Real SSH proves
+remote prompt isolation and actual focused/blocked refusals (codes 12/9), without
+terminal input on rejection. Scoped shade Retina wide/narrow modals match
+1,624,320 and 309,600 pixels; the retained card hover perimeter and blocked
+refusal region match 5,216 and 177,472 pixels. A resize regression caught cached
+QML geometry retaining an editor after C++ reduced its height to zero; shared
+post-settlement peek notification fixes it, with the failing probes retained.
+The first blocked Qt check read only AXLabel; a diagnostic shows the native
+Dismiss notification AXButton in AXTitle, and the corrected harness checks both
+attributes plus the role. Keep both failed harness invocations. Original command
+and last-lines bodies match 2,527 cases in Release and ASan/UBSan; eight adjacent
+session groups also pass both builds. Two Release groups pass with 21 window
+entries. Native Quick passes 86 entries with zero QML warnings, after an earlier
+85/1 configuredBindings equality failure; its exact cause stays unproven, and
+the assertion now retains full differing screens. Window sanitizer assertions
+pass all 21 entries but exit leak detection fails (235,304 bytes/1,004 allocations).
+Keep the full report unsuppressed. Read the new report/manifest, then continue
+actual setup installation, live failure/recovery, native open/stop/diff and full
+task/plan peek qualification, and all remaining PARITY.md gates. Complete
 theme/density/Linux visuals, native exit leaks and comparative performance stay
 open. No global gate is closed. The window-adapter checkpoint records 82 Cocoa/Metal scale-1
 passes, before the transport/profile changes, after the

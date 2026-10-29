@@ -16,6 +16,7 @@ Rectangle {
     property bool expanded: true
     signal workspaceSelected(string key)
     signal agentSelected(string key)
+    signal agentPeekRequested(string key)
     signal sidebarResized(real requestedWidth)
 
     readonly property real headerInset: 8 * ratio
@@ -98,6 +99,7 @@ Rectangle {
         width: root.regions.activity.width
         height: root.regions.activity.height
         model: root.expanded ? root.agentModel : null
+        hoverIdentity: root.controller?.activityHover ?? ""
         colors: root.colors
         typography: root.typography
         geometry: root.regions.cards
@@ -105,6 +107,7 @@ Rectangle {
         textScale: root.textScale
         visible: root.expanded
         onSelected: key => root.agentSelected(key)
+        onPeekRequested: key => root.agentPeekRequested(key)
     }
 
     WorkspaceRail {

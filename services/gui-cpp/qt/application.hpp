@@ -117,6 +117,9 @@ class Application final : public QObject {
   Q_PROPERTY(QVariantList commands READ commands NOTIFY configurationChanged)
   Q_PROPERTY(QVariantMap machinePromptState READ machinePromptState NOTIFY machinePromptChanged)
   Q_PROPERTY(QVariantMap machinePromptGeometry READ machinePromptGeometry NOTIFY machinePromptChanged)
+  Q_PROPERTY(QVariantMap peekState READ peekState NOTIFY peekChanged)
+  Q_PROPERTY(QVariantMap peekGeometry READ peekGeometry NOTIFY peekChanged)
+  Q_PROPERTY(QString activityHover READ activityHover NOTIFY activityHoverChanged)
   Q_PROPERTY(QVariantMap paletteState READ paletteState NOTIFY paletteChanged)
   Q_PROPERTY(QVariantMap paletteGeometry READ paletteGeometry NOTIFY paletteChanged)
   Q_PROPERTY(QVariantMap suggestionState READ suggestionState NOTIFY paletteChanged)
@@ -184,6 +187,13 @@ public:
   Q_INVOKABLE void reportMachinePromptLimit(qulonglong requested_bytes);
   [[nodiscard]] QVariantMap machinePromptState() const;
   [[nodiscard]] QVariantMap machinePromptGeometry() const;
+  Q_INVOKABLE void peekActivity(const QString &identity);
+  Q_INVOKABLE void searchPeek(const QString &text);
+  Q_INVOKABLE void submitPeek(const QString &revision);
+  Q_INVOKABLE void reportPeekLimit(qulonglong requested_bytes);
+  [[nodiscard]] QVariantMap peekState() const;
+  [[nodiscard]] QVariantMap peekGeometry() const;
+  [[nodiscard]] QString activityHover() const;
 
   enum class HistoryAction : quint8 {
     copy,
@@ -356,6 +366,8 @@ signals:
   void machineChanged();
   void machinesChanged();
   void machinePromptChanged();
+  void peekChanged();
+  void activityHoverChanged();
   void machineLaunchFailed(const QString &error);
 
 private:
@@ -487,8 +499,14 @@ private:
   void refresh();
   void refreshAgents();
   [[nodiscard]] bool activityAvailable(const MachineActivityTarget &target) const;
-  void selectActivity(const QString &identity);
+  void selectActivity(const QString &identity, bool peek = false);
   void settleActivity();
+  [[nodiscard]] bool peekOriginValid() const;
+  void refreshPeek();
+  void openActivityPeek(const MachineActivityTarget &target, const QString &identity, std::uint64_t pointer_revision);
+  void observeActivityPointer();
+  void clearActivityHover();
+  void presentChange(Change change);
   void refreshPanes();
   [[nodiscard]] HistoryModalMetrics historyMetrics() const;
   [[nodiscard]] HistoryScrollSurface historyScrollSurface(const HistoryModalMetrics &metrics) const;
@@ -572,12 +590,23 @@ private:
   struct PendingActivity {
     MachineActivityTarget target;
     std::uint64_t window;
+    bool peek = false;
+    std::uint64_t pointer_revision = 0;
+  };
+
+  struct PeekOrigin {
+    MachineActivityTarget target;
+    std::uint64_t window;
   };
 
   std::array<std::optional<ActivitySourceVersion>, Machines::capacity> activity_versions_;
   std::optional<ActivitySelection> activity_selection_;
   Vector<ActivityRowTarget, ApplicationAllocator> activity_targets_;
   std::optional<PendingActivity> pending_activity_;
+  std::optional<PeekOrigin> peek_origin_;
+  QString peek_editor_;
+  QString activity_hover_;
+  std::uint64_t pointer_revision_ = 0;
   std::optional<MachineClientKey> sound_owner_;
   ConfigurationSource configuration_source_;
   MachineProfilesSource machine_profiles_;

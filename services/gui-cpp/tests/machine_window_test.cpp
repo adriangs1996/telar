@@ -29,20 +29,25 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QObject>
+#include <QPoint>
 #include <QQmlEngine>
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QSize>
 #include <QString>
+#include <QStringList>
 #include <QTemporaryDir>
 #include <QVariantMap>
 #include <QtCore/qcontainerfwd.h>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtypes.h>
 #include <QtCore/qtmetamacros.h>
+#include <QtCore/qobjectdefs.h>
 #include <QtTest/QTest>
+#include <QtTest/QSignalSpy>
 #include <QtTest/qtestcase.h>
 #include <QtTest/qtestmouse.h>
+#include <QtTest/qtestkeyboard.h>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -79,6 +84,10 @@ struct MachineWindow {
 
   static bool pendingActivity(const qt::Application &application) {
     return application.pending_activity_.has_value();
+  }
+
+  static void pointerMoved(qt::Application &application) {
+    application.observeActivityPointer();
   }
 
   static void rename(qt::Application &application, Machines::Slot slot, std::string_view label) {
@@ -379,6 +388,216 @@ class MachineWindowTest : public QObject {
     QVERIFY(!fixture.application.connected());
   }
 
+  Q_SLOT static void activityButtonsRoutePrimaryAndSecondaryOnPress() {
+    ApplicationAllocator memory;
+    Application application{memory};
+    QQuickWindow window;
+    QQmlEngine engine;
+    constexpr QSize size{400, 240};
+    window.resize(size);
+    application.setWindow(window);
+    const auto geometry = application.sidebarGeometry().value(QStringLiteral("cards")).toMap();
+    QVariantMap record{{QStringLiteral("key"), QStringLiteral("owned")}, {QStringLiteral("enabled"), true}, {QStringLiteral("selected"), false}, {QStringLiteral("depth"), 0}, {QStringLiteral("compact"), false}, {QStringLiteral("command"), false}};
+    constexpr qreal card_width = 200;
+    constexpr qreal card_height = 80;
+    auto frame = createChrome(engine, QStringLiteral("ActivityFrame"), {{QStringLiteral("colors"), application.colors()}, {QStringLiteral("geometry"), geometry}, {QStringLiteral("record"), record}, {QStringLiteral("width"), card_width}, {QStringLiteral("height"), card_height}});
+    frame->setParentItem(window.contentItem());
+    const QSignalSpy selected{frame.get(), SIGNAL(selected(QString))};
+    const QSignalSpy peeked{frame.get(), SIGNAL(peekRequested(QString))};
+    QVERIFY(selected.isValid() && peeked.isValid());
+    window.show();
+    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
+    const auto point = frame->boundingRect().center().toPoint();
+    QTest::mousePress(&window, Qt::LeftButton, Qt::NoModifier, point);
+    QCOMPARE(selected.count(), 1);
+    QCOMPARE(peeked.count(), 0);
+    QTest::mouseRelease(&window, Qt::LeftButton, Qt::NoModifier, point);
+    QCOMPARE(selected.count(), 1);
+    QTest::mousePress(&window, Qt::RightButton, Qt::NoModifier, point);
+    QCOMPARE(peeked.count(), 1);
+    QCOMPARE(peeked.front().front().toString(), QStringLiteral("owned"));
+    QTest::mouseRelease(&window, Qt::RightButton, Qt::NoModifier, point);
+    QCOMPARE(peeked.count(), 1);
+    record.insert(QStringLiteral("command"), true);
+    frame->setProperty("record", record);
+    QTest::mouseClick(&window, Qt::RightButton, Qt::NoModifier, point);
+    QCOMPARE(peeked.count(), 1);
+    QCOMPARE(selected.count(), 1);
+  }
+
+  Q_SLOT static void remotePeekReadsAndSubmitsOnlyToItsOwnedSource() {
+    MachineFixture fixture;
+    QQuickWindow window;
+    QQmlEngine engine;
+    constexpr QSize size{800, 600};
+    window.resize(size);
+    auto &application = fixture.application;
+    application.setWindow(window);
+    QVERIFY(fixture.start());
+    fixture.local_runtime->send(ClientLayoutSnapshot{});
+    fixture.remote_runtime->send(ClientLayoutSnapshot{});
+    QVERIFY(finishOpening(*fixture.local_runtime));
+    constexpr std::uint64_t inspected_pane = 9;
+    auto agent = activityAgent("Remote inspected");
+    agent.pane_id = inspected_pane;
+    agent.session_id.front() = 1;
+    std::array agents{agent};
+    fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
+    QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
+    const auto key = activityRow(application, 0).value(QStringLiteral("key")).toString();
+    application.peekActivity(key);
+    QVERIFY(MachineWindow::pendingActivity(application));
+    QVERIFY(finishOpening(*fixture.remote_runtime));
+    QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), QStringLiteral("peek"), wait_ms);
+    QCOMPARE(application.activityHover(), key);
+    QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::read_pane), 1, wait_ms);
+    QCOMPARE(fixture.local_runtime->count(ClientTag::read_pane), 0);
+    QVERIFY(MachineWindow::client(application, fixture.remote.machine.slot).session.findPane(inspected_pane) == nullptr);
+    const auto read = fixture.remote_runtime->last<ReadPane>();
+    QCOMPARE(read.pane_id, inspected_pane);
+    fixture.remote_runtime->send(PaneText{.request_id = read.request_id, .pane_id = inspected_pane, .text = "OWNED_REMOTE_PEEK", .exit_code = {}});
+    QTRY_VERIFY_WITH_TIMEOUT(application.peekState().value(QStringLiteral("lines")).toStringList().contains(QStringLiteral("OWNED_REMOTE_PEEK")), wait_ms);
+    const auto bounds = application.peekGeometry().value(QStringLiteral("bounds")).toRectF();
+    auto panel = createChrome(engine, QStringLiteral("PeekPanel"), {{QStringLiteral("controller"), QVariant::fromValue(&application)}, {QStringLiteral("width"), bounds.width()}, {QStringLiteral("height"), bounds.height()}});
+    panel->setParentItem(window.contentItem());
+    window.show();
+    QTRY_VERIFY_WITH_TIMEOUT(window.activeFocusItem() != nullptr && window.activeFocusItem()->objectName() == QStringLiteral("commandSearch"), wait_ms);
+    QTest::mouseMove(&window, QPoint{});
+    QTRY_VERIFY_WITH_TIMEOUT(application.activityHover().isEmpty(), wait_ms);
+    for (const auto byte : std::string_view{"Continue the remote task"}) {
+      QTest::keyClick(&window, byte);
+    }
+    QTRY_COMPARE_WITH_TIMEOUT(application.peekState().value(QStringLiteral("editorText")).toString(), QStringLiteral("Continue the remote task"), wait_ms);
+    QTest::keyClick(&window, Qt::Key_Return);
+    QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::send_pane_text), 1, wait_ms);
+    const auto message = fixture.remote_runtime->last<SendPaneText>();
+    QCOMPARE(message.pane_id, inspected_pane);
+    QCOMPARE(message.mode, PaneTextMode::prompt);
+    QCOMPARE(message.text, "Continue the remote task");
+    QCOMPARE(fixture.local_runtime->count(ClientTag::send_pane_text), 0);
+    QCOMPARE(application.dialog(), QString{});
+    panel.reset();
+    fixture.remote_runtime->send(RequestCompleted{.request_id = message.request_id});
+    QTRY_VERIFY_WITH_TIMEOUT(!MachineWindow::client(application, fixture.remote.machine.slot).session.requestsPending(), wait_ms);
+    application.peekActivity(key);
+    QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), QStringLiteral("peek"), wait_ms);
+    const auto stale_revision = application.peekState().value(QStringLiteral("revision")).toString();
+    QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::read_pane), 2, wait_ms);
+    const auto retired = fixture.remote_runtime->last<ReadPane>();
+    ++agents.front().session_id.front();
+    fixture.remote_runtime->send(AgentSnapshot{.revision = 2, .entries = agents});
+    QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), QString{}, wait_ms);
+    application.searchPeek(QStringLiteral("/stop"));
+    application.submitPeek(stale_revision);
+    QCOMPARE(fixture.remote_runtime->count(ClientTag::interrupt_agent), 0);
+    fixture.remote_runtime->send(PaneText{.request_id = retired.request_id, .pane_id = inspected_pane, .text = "RETIRED_PEEK", .exit_code = {}});
+    QVERIFY(application.peekState().value(QStringLiteral("lines")).toStringList().isEmpty());
+  }
+
+  Q_SLOT static void peekSubmissionsRejectRetiredWindowsAndDialogRevisions() {
+    MachineFixture fixture;
+    QQuickWindow window;
+    QQuickWindow replacement;
+    constexpr QSize size{800, 600};
+    window.resize(size);
+    replacement.resize(size);
+    auto &application = fixture.application;
+    application.setWindow(window);
+    QVERIFY(fixture.start());
+    fixture.local_runtime->send(ClientLayoutSnapshot{});
+    QVERIFY(finishOpening(*fixture.local_runtime));
+    const std::array agents{activityAgent("Local inspected")};
+    fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
+    QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
+    const auto key = activityRow(application, 0).value(QStringLiteral("key")).toString();
+    application.peekActivity(key);
+    QCOMPARE(application.dialog(), QStringLiteral("peek"));
+    const auto retired = application.peekState().value(QStringLiteral("revision")).toString();
+    QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::read_pane), 1, wait_ms);
+    const auto retired_read = fixture.local_runtime->last<ReadPane>();
+    application.setWindow(replacement);
+    QCOMPARE(application.dialog(), QString{});
+    application.searchPeek(QStringLiteral("/stop"));
+    application.submitPeek(retired);
+    QCOMPARE(fixture.local_runtime->count(ClientTag::interrupt_agent), 0);
+    fixture.local_runtime->send(PaneText{.request_id = retired_read.request_id, .pane_id = pane_id, .text = "Retired window", .exit_code = {}});
+    QTRY_VERIFY_WITH_TIMEOUT(!MachineWindow::client(application, Machines::local_slot).session.requestsPending(), wait_ms);
+    application.setWindow(window);
+    application.peekActivity(key);
+    QCOMPARE(application.dialog(), QStringLiteral("peek"));
+    application.searchPeek(QStringLiteral("/stop"));
+    application.submitPeek(retired);
+    QCOMPARE(fixture.local_runtime->count(ClientTag::interrupt_agent), 0);
+    application.submitPeek(application.peekState().value(QStringLiteral("revision")).toString());
+    QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::interrupt_agent), 1, wait_ms);
+    QCOMPARE(fixture.local_runtime->last<InterruptAgent>().pane_id, pane_id);
+  }
+
+  Q_SLOT static void aPointerMoveWhilePeekWaitsDoesNotRestoreOldHover() {
+    MachineFixture fixture;
+    QQuickWindow window;
+    constexpr QSize size{800, 600};
+    window.resize(size);
+    auto &application = fixture.application;
+    application.setWindow(window);
+    QVERIFY(fixture.start());
+    fixture.local_runtime->send(ClientLayoutSnapshot{});
+    fixture.remote_runtime->send(ClientLayoutSnapshot{});
+    QVERIFY(finishOpening(*fixture.local_runtime));
+    const std::array agents{activityAgent("Remote inspected")};
+    fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
+    QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
+    application.peekActivity(activityRow(application, 0).value(QStringLiteral("key")).toString());
+    QVERIFY(MachineWindow::pendingActivity(application));
+    MachineWindow::pointerMoved(application);
+    QVERIFY(finishOpening(*fixture.remote_runtime));
+    QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), QStringLiteral("peek"), wait_ms);
+    QVERIFY(application.activityHover().isEmpty());
+  }
+
+  Q_SLOT static void resizingPeekShowsTheRecentTailAndRetiresItsHiddenEditor() {
+    MachineFixture fixture;
+    QQuickWindow window;
+    QQmlEngine engine;
+    constexpr QSize wide{800, 600};
+    constexpr QSize narrow{800, 300};
+    constexpr QSize tiny{800, 80};
+    window.resize(wide);
+    auto &application = fixture.application;
+    application.setWindow(window);
+    QVERIFY(fixture.start());
+    fixture.local_runtime->send(ClientLayoutSnapshot{});
+    QVERIFY(finishOpening(*fixture.local_runtime));
+    const std::array agents{activityAgent("Local inspected")};
+    fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
+    QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
+    application.peekActivity(activityRow(application, 0).value(QStringLiteral("key")).toString());
+    QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::read_pane), 1, wait_ms);
+    const auto read = fixture.local_runtime->last<ReadPane>();
+    fixture.local_runtime->send(PaneText{.request_id = read.request_id, .pane_id = pane_id, .text = "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\nRECENT_TAIL", .exit_code = {}});
+    constexpr qsizetype line_count = 11;
+    QTRY_COMPARE_WITH_TIMEOUT(application.peekState().value(QStringLiteral("lines")).toStringList().size(), line_count, wait_ms);
+    const auto bounds = application.peekGeometry().value(QStringLiteral("bounds")).toRectF();
+    auto panel = createChrome(engine, QStringLiteral("PeekPanel"), {{QStringLiteral("controller"), QVariant::fromValue(&application)}, {QStringLiteral("width"), bounds.width()}, {QStringLiteral("height"), bounds.height()}});
+    panel->setParentItem(window.contentItem());
+    const auto lines = [&] {
+      return panel->property("state").toMap().value(QStringLiteral("lines")).toStringList();
+    };
+    window.show();
+    QTRY_VERIFY_WITH_TIMEOUT(window.activeFocusItem() != nullptr && window.activeFocusItem()->objectName() == QStringLiteral("commandSearch"), wait_ms);
+    const auto *editor = window.activeFocusItem();
+    window.resize(narrow);
+    QTRY_VERIFY_WITH_TIMEOUT(lines().size() < line_count, wait_ms);
+    QVERIFY(!lines().isEmpty());
+    QCOMPARE(lines().back(), QStringLiteral("RECENT_TAIL"));
+    window.resize(wide);
+    QTRY_COMPARE_WITH_TIMEOUT(lines().size(), line_count, wait_ms);
+    window.resize(tiny);
+    QTRY_VERIFY2_WITH_TIMEOUT(!editor->isEnabled() && !editor->hasActiveFocus(), qPrintable(QStringLiteral("window=%1x%2 field=%3x%4 enabled=%5 focused=%6 owner=%7 dialog=%8 model=%9 qml=%10").arg(window.width()).arg(window.height()).arg(editor->width()).arg(editor->height()).arg(editor->isEnabled()).arg(editor->hasActiveFocus()).arg(window.activeFocusItem() == nullptr ? QStringLiteral("none") : window.activeFocusItem()->objectName()).arg(application.dialog()).arg(application.peekGeometry().value(QStringLiteral("field")).toRectF().height()).arg(panel->property("regions").toMap().value(QStringLiteral("field")).toRectF().height())), wait_ms);
+    QTest::keyClick(&window, Qt::Key_Escape);
+    QTRY_VERIFY_WITH_TIMEOUT(application.dialog().isEmpty(), wait_ms);
+  }
+
   Q_SLOT static void activityCombinesSourcesWithoutOpeningHiddenScreens() {
     MachineFixture fixture;
     QVERIFY(fixture.start());
@@ -414,6 +633,9 @@ class MachineWindowTest : public QObject {
     const auto command = activityNamed(application, QStringLiteral("Remote command"));
     QCOMPARE(command.value(QStringLiteral("depth")).toUInt(), 1U);
     QVERIFY(command.value(QStringLiteral("key")) != activityNamed(application, QStringLiteral("Local command")).value(QStringLiteral("key")));
+    application.peekActivity(command.value(QStringLiteral("key")).toString());
+    QVERIFY(application.dialog().isEmpty());
+    QVERIFY(application.connected());
     QCOMPARE(activityRow(application, 0).value(QStringLiteral("title")).toString(), QStringLiteral("Local agent"));
     QVERIFY(remote.session.panes().empty());
     QCOMPARE(fixture.remote_runtime->count(ClientTag::open_pane), 0);

@@ -20,11 +20,11 @@ struct NamePromptGeometry {
   CellRectangle field;
   CellRectangle footer;
 
-  [[nodiscard]] static NamePromptGeometry measure(CellRectangle host) noexcept {
+  [[nodiscard]] static NamePromptGeometry measure(CellRectangle host, CellRectangle wanted = {.width = requested_width, .height = requested_height}) noexcept {
     const auto margin_x = host.width > horizontal_threshold ? horizontal_margin : 0;
     const auto margin_y = host.height > vertical_threshold ? vertical_margin : 0;
-    const auto width = std::min(requested_width, static_cast<std::uint16_t>(host.width - (margin_x * 2)));
-    const auto height = std::min(requested_height, static_cast<std::uint16_t>(host.height - (margin_y * 2)));
+    const auto width = std::min(wanted.width, static_cast<std::uint16_t>(host.width - (margin_x * 2)));
+    const auto height = std::min(wanted.height, static_cast<std::uint16_t>(host.height - (margin_y * 2)));
     NamePromptGeometry result;
     result.bounds = {.x = coordinate(static_cast<std::uint32_t>(host.x) + ((host.width - width) / 2)), .y = coordinate(static_cast<std::uint32_t>(host.y) + ((host.height - height) / 2)), .width = width, .height = height};
     const auto content = width > 2 && height > 2 ? result.bounds.inner(1) : result.bounds;

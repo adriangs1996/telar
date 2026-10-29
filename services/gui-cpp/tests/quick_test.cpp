@@ -1383,7 +1383,8 @@ private:
     const auto before_consume = screenText(pane->screen);
     QTest::keyClick(window_, Qt::Key_V, Qt::AltModifier);
     QTest::qWait(frame_settle_ms);
-    QCOMPARE(screenText(pane->screen), before_consume);
+    const auto after_consume = screenText(pane->screen);
+    QVERIFY2(after_consume == before_consume, qPrintable(QStringLiteral("Before consume:\n%1\nAfter consume:\n%2\n%3").arg(before_consume, after_consume, windowObservation(*window_))));
     QCOMPARE(client_->error(), QString{});
   }
 

@@ -184,6 +184,7 @@ void Application::selectMachine(MachineToken target) {
   }
 
   pending_activity_.reset();
+  clearActivityHover();
   releaseMachineInput();
   showDialog({});
   session().invalidateSuggestion();

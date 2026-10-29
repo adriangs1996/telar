@@ -59,6 +59,7 @@ Window {
         textScale: telar.chromeTextScale
         onWorkspaceSelected: key => telar.execute(GuiController.Action.select_workspace, key)
         onAgentSelected: key => telar.execute(GuiController.Action.select_agent, key)
+        onAgentPeekRequested: key => telar.peekActivity(key)
         onSidebarResized: requestedWidth => telar.setSidebarWidth(requestedWidth)
     }
 

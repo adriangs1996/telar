@@ -386,6 +386,14 @@ if(BUILD_TESTING)
   add_test(NAME gui-worktree-actions COMMAND gui-worktree-actions-test)
   add_dependencies(gui-lint gui-worktree-actions-test)
 
+  add_executable(gui-agent-peek-test tests/agent_peek_test.cpp)
+  target_link_libraries(gui-agent-peek-test PRIVATE gui-core)
+  add_test(NAME gui-agent-peek COMMAND gui-agent-peek-test)
+  add_dependencies(gui-lint gui-agent-peek-test)
+  add_executable(gui-agent-peek-probe tools/agent_peek_probe.cpp)
+  target_link_libraries(gui-agent-peek-probe PRIVATE gui-core)
+  add_dependencies(gui-lint gui-agent-peek-probe)
+
   add_executable(gui-path-picker-session-test tests/path_picker_session_test.cpp)
   target_link_libraries(gui-path-picker-session-test PRIVATE gui-core)
   add_test(NAME gui-path-picker-session COMMAND gui-path-picker-session-test)
@@ -691,6 +699,7 @@ if(TELAR_GUI_NATIVE)
   target_sources(gui-quick PRIVATE qt/history_controller.cpp qt/history_pointer.cpp qt/binding_controller.cpp qt/key_bindings.cpp qt/copy_controller.cpp qt/link_controller.cpp)
   target_sources(gui-quick PRIVATE qt/palette_controller.cpp qt/path_picker_controller.cpp qt/path_picker_projection.cpp qt/suggestion_controller.cpp)
   target_sources(gui-quick PRIVATE qt/machine_controller.cpp qt/machine_profile_controller.cpp qt/machine_picker_controller.cpp qt/machine_prompt_controller.cpp qt/machine_launch_controller.cpp qt/machine_activity_controller.cpp)
+  target_sources(gui-quick PRIVATE qt/peek_controller.cpp)
   set_source_files_properties(qt/palette_controller.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
   target_sources(gui-quick PRIVATE qt/history_empty_layout.cpp qt/history_empty_layout.hpp qt/history_loading_layout.cpp qt/history_loading_layout.hpp)
   set_source_files_properties(qt/history_empty_layout.cpp qt/history_loading_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
@@ -757,7 +766,7 @@ if(TELAR_GUI_NATIVE)
     VERSION 1.0
     OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Telar/Gui"
     SOURCES qt/native_agent_status.cpp qt/native_agent_status.hpp qt/native_rounded_rectangle.cpp qt/native_rounded_rectangle.hpp qt/application.cpp qt/application.hpp qt/runtime_connection.cpp qt/runtime_connection.hpp qt/terminal_item.cpp qt/terminal_item.hpp qt/configuration_source.cpp qt/configuration_source.hpp qt/graphics_scene.cpp qt/graphics_scene.hpp qt/tab_strip_layout.cpp qt/tab_strip_layout.hpp qt/provider_mark.cpp qt/provider_mark.hpp qt/native_chrome_text.cpp qt/native_chrome_text.hpp qt/native_chrome_icon.cpp qt/native_chrome_icon.hpp qt/native_cell_text.cpp qt/native_cell_text.hpp qt/native_mode_layout.cpp qt/native_mode_layout.hpp
-    QML_FILES qt/MachineChrome.qml qt/MachinePromptPanel.qml qt/FormTextField.qml qt/ActionPointer.qml qt/Main.qml qt/DialogSurface.qml qt/Sidebar.qml qt/TerminalTabs.qml qt/PaneArea.qml qt/PaneHeader.qml qt/FullscreenStrip.qml qt/PaneStatusChip.qml qt/PaneProgress.qml qt/CommandDialog.qml qt/PathPickerPanel.qml qt/PalettePanel.qml qt/SuggestionPanel.qml qt/PaletteRow.qml qt/PaletteKeycap.qml qt/PaletteButton.qml qt/HistoryPanel.qml qt/HistoryEmpty.qml qt/HistoryInspector.qml qt/FormButton.qml qt/HistoryRow.qml qt/HistoryMeta.qml qt/HistoryHint.qml qt/HistoryFooter.qml qt/HistoryFilters.qml qt/HistoryFilterChip.qml qt/HistorySearchBar.qml qt/LinkPreview.qml qt/ChromeText.qml qt/ChromeIcon.qml qt/ChromeButton.qml qt/ApplicationMark.qml qt/WorkspaceList.qml qt/ProjectRow.qml qt/WorkspaceRail.qml qt/ActivityList.qml qt/ActivityFrame.qml qt/AgentCard.qml qt/AgentStatus.qml qt/TaskCard.qml qt/TaskPlan.qml qt/CommandCard.qml qt/NavigationBar.qml qt/BarBattery.qml qt/BarSparkline.qml qt/BarMetric.qml qt/MetricsGroup.qml qt/StatusBar.qml qt/BarBadge.qml qt/CellText.qml qt/ModeBar.qml qt/NotificationOverlay.qml)
+    QML_FILES qt/PeekPanel.qml qt/MachineChrome.qml qt/MachinePromptPanel.qml qt/FormTextField.qml qt/ActionPointer.qml qt/Main.qml qt/DialogSurface.qml qt/Sidebar.qml qt/TerminalTabs.qml qt/PaneArea.qml qt/PaneHeader.qml qt/FullscreenStrip.qml qt/PaneStatusChip.qml qt/PaneProgress.qml qt/CommandDialog.qml qt/PathPickerPanel.qml qt/PalettePanel.qml qt/SuggestionPanel.qml qt/PaletteRow.qml qt/PaletteKeycap.qml qt/PaletteButton.qml qt/HistoryPanel.qml qt/HistoryEmpty.qml qt/HistoryInspector.qml qt/FormButton.qml qt/HistoryRow.qml qt/HistoryMeta.qml qt/HistoryHint.qml qt/HistoryFooter.qml qt/HistoryFilters.qml qt/HistoryFilterChip.qml qt/HistorySearchBar.qml qt/LinkPreview.qml qt/ChromeText.qml qt/ChromeIcon.qml qt/ChromeButton.qml qt/ApplicationMark.qml qt/WorkspaceList.qml qt/ProjectRow.qml qt/WorkspaceRail.qml qt/ActivityList.qml qt/ActivityFrame.qml qt/AgentCard.qml qt/AgentStatus.qml qt/TaskCard.qml qt/TaskPlan.qml qt/CommandCard.qml qt/NavigationBar.qml qt/BarBattery.qml qt/BarSparkline.qml qt/BarMetric.qml qt/MetricsGroup.qml qt/StatusBar.qml qt/BarBadge.qml qt/CellText.qml qt/ModeBar.qml qt/NotificationOverlay.qml)
 
   qt_add_executable(telar-gui main.cpp)
   target_link_libraries(telar-gui PRIVATE gui-quick gui-quickplugin)

@@ -39,9 +39,11 @@ void PointerDispatcher::setWindow(QQuickWindow &window) {
   }
 
   window_ = &window;
+  application_.observeActivityPointer();
   window.installEventFilter(this);
   connect(&window, &QWindow::activeChanged, this, [this] {
     if (window_ != nullptr && !window_->isActive()) {
+      application_.observeActivityPointer();
       cancel();
     }
   });
@@ -274,9 +276,14 @@ bool PointerDispatcher::eventFilter(QObject *watched, QEvent *event) {
       return application_.handleHistoryWheel(dynamic_cast<QWheelEvent &>(*event));
     case QEvent::MouseButtonPress:
     case QEvent::MouseButtonDblClick:
+      application_.observeActivityPointer();
       return press(dynamic_cast<QMouseEvent &>(*event));
     case QEvent::MouseMove:
+      application_.observeActivityPointer();
       return move(dynamic_cast<QMouseEvent &>(*event));
+    case QEvent::Leave:
+      application_.observeActivityPointer();
+      return false;
     case QEvent::MouseButtonRelease:
       return release(dynamic_cast<QMouseEvent &>(*event));
     default:

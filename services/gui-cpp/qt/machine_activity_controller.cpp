@@ -17,6 +17,7 @@
 #include <QtCore/qchar.h>
 #include <QtCore/qcontainerfwd.h>
 #include <QtCore/qtypes.h>
+#include <QtCore/qtmetamacros.h>
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -169,16 +170,16 @@ bool Application::activityAvailable(const MachineActivityTarget &target) const {
   return row != nullptr && row->workspace && *row->workspace == command.workspace;
 }
 
-void Application::selectActivity(const QString &identity) {
+void Application::selectActivity(const QString &identity, bool peek) {
   pending_activity_.reset();
   const auto row = std::ranges::find(activity_targets_, identity, &ActivityRowTarget::identity);
-  if (row == activity_targets_.end() || !activityAvailable(row->target)) {
+  if (row == activity_targets_.end() || !activityAvailable(row->target) || (peek && !std::holds_alternative<MachineActivityTarget::Agent>(row->target.owner))) {
     return;
   }
 
   const auto target = row->target;
   selectMachine(target.source.machine);
-  pending_activity_ = PendingActivity{.target = target, .window = window_generation_};
+  pending_activity_ = PendingActivity{.target = target, .window = window_generation_, .peek = peek, .pointer_revision = pointer_revision_};
   settleActivity();
 }
 
@@ -200,10 +201,32 @@ void Application::settleActivity() {
 
   pending_activity_.reset();
   if (const auto *agent = std::get_if<MachineActivityTarget::Agent>(&pending.target.owner)) {
-    static_cast<void>(session().focusAgent(agent->key.pane_id, agent->key.pane_generation));
+    if (pending.peek) {
+      openActivityPeek(pending.target, activityIdentity(pending.target), pending.pointer_revision);
+    } else {
+      static_cast<void>(session().focusAgent(agent->key.pane_id, agent->key.pane_generation));
+    }
   } else {
     static_cast<void>(session().openWorktree(std::get<MachineActivityTarget::Command>(pending.target.owner).worktree));
   }
+}
+
+QString Application::activityHover() const {
+  return activity_hover_;
+}
+
+void Application::clearActivityHover() {
+  if (activity_hover_.isEmpty()) {
+    return;
+  }
+
+  activity_hover_.clear();
+  emit activityHoverChanged();
+}
+
+void Application::observeActivityPointer() {
+  ++pointer_revision_;
+  clearActivityHover();
 }
 
 }
