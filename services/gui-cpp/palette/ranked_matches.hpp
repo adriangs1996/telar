@@ -32,8 +32,12 @@ public:
       return;
     }
 
+    addScored(std::move(target), *score);
+  }
+
+  void addScored(Target target, std::uint32_t score) {
     auto position = length_;
-    while (position != 0 && matches_[position - 1].score < *score) {
+    while (position != 0 && matches_[position - 1].score < score) {
       --position;
     }
 
@@ -47,7 +51,7 @@ public:
       --tail;
     }
 
-    matches_[position] = {.target = std::move(target), .score = *score};
+    matches_[position] = {.target = std::move(target), .score = score};
     length_ = std::min(length_ + 1, Capacity);
   }
 

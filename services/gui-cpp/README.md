@@ -1370,6 +1370,14 @@ validators from `runtime-cpp`. Theme presets and the Kitty placeholder table
 are generated from the original sources at build time. No Zig GUI object code
 is linked into this executable.
 
+`Machines` retains the seventeen window slots and their admission generations,
+owned profile fields and event-updated summaries without Qt or dynamic storage.
+`MachinePicker` shares the bounded fuzzy ranker and preserves label-first
+matching, slot-order ties and disabled machines. Its submission policy rejects
+retired identities and keeps local toggles inert. The
+[registry comparison](measurements/machine-registry.md) covers this independent
+foundation; window switching and SSH integration remain pending.
+
 ## Build and run
 
 Dependencies are CMake 3.24+, Ninja, Python 3, a C++23 compiler and Qt 6.7+

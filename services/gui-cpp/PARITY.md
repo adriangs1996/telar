@@ -18,6 +18,13 @@ metadata-only hidden sessions, deferred layout restoration and releasing pane
 screens without closing runtime processes. The multiple-client window adapter,
 machine actions, SSH and their visual acceptance remain pending.
 
+The [window machine table and picker](measurements/machine-registry.md) now
+retain bounded owned rows, destination admission generations, event-driven
+summaries and the original disabled-row ranking and submission decisions.
+The original-source comparison matches 8,091 stateful operations on Personal
+in Release and ASan/UBSan. This independent foundation is not yet connected
+to the window; the four machine actions remain unported.
+
 The presentation change's expanded native regression check is still open. Two
 initial Cocoa/Metal runs each record 81 passes and one failure: editor terminal
 focus in the first, history inspection geometry in the second. The editor case
