@@ -121,9 +121,19 @@ entries. Native Quick passes 86 entries with zero QML warnings, after an earlier
 85/1 configuredBindings equality failure; its exact cause stays unproven, and
 the assertion now retains full differing screens. Window sanitizer assertions
 pass all 21 entries but exit leak detection fails (235,304 bytes/1,004 allocations).
-Keep the full report unsuppressed. Read the new report/manifest, then continue
-actual setup installation, live failure/recovery, native open/stop/diff and full
-task/plan peek qualification, and all remaining PARITY.md gates. Complete
+Keep the full report unsuppressed. The subsequent
+[real SSH recovery checkpoint](../services/gui-cpp/measurements/machine-recovery.md)
+validates loss and automatic recovery of an owned OpenSSH bridge in both Qt and
+the unchanged Zig GUI. The runtime stays alive; its GUI client disappears during
+the cut and reconnects with a new id/generation while retaining window identity.
+Local receives input during the outage and the same remote pane/generation
+receives input after reconnect. Both complete resource cleanups exit zero. The
+native outage picker retains five differing pixels in 1,187,840 (two boundary
+and three single-channel hint pixels); no masking/alignment is used. Only the
+measurement harness changes; C++ binaries remain identical to the qualified
+peek checkpoint. Read the new report/manifest, then continue actual setup
+installation, runtime restart/permanent SSH failures, native open/stop/diff and
+full task/plan peek qualification, and all remaining PARITY.md gates. Complete
 theme/density/Linux visuals, native exit leaks and comparative performance stay
 open. No global gate is closed. The window-adapter checkpoint records 82 Cocoa/Metal scale-1
 passes, before the transport/profile changes, after the

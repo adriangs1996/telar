@@ -5,7 +5,15 @@ input delivery and scene graph; QML owns the application chrome. The Zig GUI
 remains the default. This port does **not** yet meet the requested functional,
 visual or performance parity gates. [PARITY.md](PARITY.md) records the remaining work.
 
-The latest [agent peek checkpoint](measurements/agent-peek.md) adds secondary
+The latest [real SSH recovery checkpoint](measurements/machine-recovery.md)
+validates loss and automatic recovery of an owned bridge in Qt and the unchanged
+Zig GUI. Local input remains usable during the outage; the same remote agent
+receives input after the connection generation changes. All owned resources
+exit normally. The native outage picker retains five differing pixels in
+1,187,840. Runtime restart, permanent SSH failures, setup installation, complete
+visuals, native exit leaks and comparative performance remain open.
+
+The preceding [agent peek checkpoint](measurements/agent-peek.md) adds secondary
 agent activation, source-owned recent text and the original open/stop/diff/prompt
 commands. Scoped native shade Retina wide/narrow modals and a blocked refusal
 card match exactly. Real SSH validates isolated prompt delivery and both refusal

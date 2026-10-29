@@ -94,6 +94,14 @@ exit leak detection fails (203,128 bytes/859 allocations). Full chrome visual
 qualification, alternate/peek navigation, setup installation, live recovery and
 all global acceptance gates remain open.
 
+The subsequent [real SSH recovery checkpoint](measurements/machine-recovery.md)
+validates loss and automatic recovery of an owned bridge in Qt and the unchanged
+Zig GUI. Local input remains usable during the outage; the same remote agent
+receives input after the connection generation changes. All owned resources
+exit normally. The native outage picker retains five differing pixels in
+1,187,840. Runtime restart, permanent SSH failures, setup installation, complete
+visuals, native exit leaks and comparative performance remain open.
+
 The subsequent [agent peek checkpoint](measurements/agent-peek.md) adds secondary
 agent activation, source-owned recent text and the original open/stop/diff/prompt
 commands. Scoped native shade Retina wide/narrow modals and a blocked refusal
