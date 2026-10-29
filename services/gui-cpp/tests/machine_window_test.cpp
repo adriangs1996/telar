@@ -476,6 +476,9 @@ class MachineWindowTest : public QObject {
     current.contentItem()->forceActiveFocus();
     QCoreApplication::sendPostedEvents(&application, QEvent::MetaCall);
     QCOMPARE(current.activeFocusItem(), current.contentItem());
+    application.retireNotificationFocus(local_key, &old_terminal);
+    QCoreApplication::sendPostedEvents(&application, QEvent::MetaCall);
+    QCOMPARE(current.activeFocusItem(), current.contentItem());
 
     application.retireNotificationFocus(local_key);
     QCoreApplication::sendPostedEvents(&application, QEvent::MetaCall);

@@ -29,6 +29,7 @@
 #include "qt/key_adapter.hpp"
 #include "qt/native_form_field.hpp"
 #include "qt/native_mode_layout.hpp"
+#include "qt/notification_layout.hpp"
 #include "qt/pane_attention_value.hpp"
 #include "qt/runtime_connection.hpp"
 #include "qt/terminal_item.hpp"
@@ -1267,6 +1268,35 @@ private:
       });
     };
     QTRY_VERIFY2_WITH_TIMEOUT(restored_output(), qPrintable(screenText(firstPane()->screen, ScreenTextLayout::logical)), runtime_wait_ms);
+  }
+
+  Q_SLOT void removingFocusedNotificationWithoutDisabledFrameReturnsToTerminal() {
+    QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+    client_->publishNotification({.level = telar::NotificationLevel::info, .title = "Removed delivered control", .message = "No intermediate disabled record", .link = {}, .duration_ns = telar::max_notification_duration_ms * NotificationInput::nanoseconds_per_millisecond});
+    const auto closes = [&] {
+      return test::visualItems(*window_->contentItem(), QStringLiteral("notificationClose"));
+    };
+    QTRY_COMPARE_WITH_TIMEOUT(closes().size(), 1, runtime_wait_ms);
+    const auto identity = client_->notificationIdentity(client_->notifications().items().front().id);
+    const auto cleanup = qScopeGuard([this, identity] {
+      client_->dismissNotification(identity);
+    });
+    auto *close = closes().front();
+    QVERIFY(close->isEnabled());
+    close->forceActiveFocus(Qt::TabFocusReason);
+    QTRY_COMPARE_WITH_TIMEOUT(window_->activeFocusItem(), close, runtime_wait_ms);
+    auto *owner = close->parentItem();
+    while (owner != nullptr && qobject_cast<NotificationLayout *>(owner) == nullptr) {
+      owner = owner->parentItem();
+    }
+
+    auto *layout = qobject_cast<NotificationLayout *>(owner);
+    QVERIFY(layout != nullptr);
+    auto *records = dynamic_cast<ListModel *>(layout->cards());
+    QVERIFY(records != nullptr);
+    QCOMPARE(records->rowCount(), 1);
+    records->reconcile({});
+    QTRY_VERIFY2_WITH_TIMEOUT(window_->activeFocusItem() == terminalIn(window_->contentItem()), qPrintable(windowObservation(*window_)), runtime_wait_ms);
   }
 
   Q_SLOT void configuredBindings() {

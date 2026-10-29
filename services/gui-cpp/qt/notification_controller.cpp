@@ -168,15 +168,15 @@ void Application::activateNotification(const QString &identity) {
   });
 }
 
-void Application::retireNotificationFocus(const QString &identity) {
+void Application::retireNotificationFocus(const QString &identity, QQuickItem *retiring_owner) {
   const auto *pane = session().focusedPane();
-  if (!resolveNotification(identity) || pane == nullptr || !pane->attached || window_ == nullptr || !keyboardFocusVacant(*window_)) {
+  if (!resolveNotification(identity) || pane == nullptr || !pane->attached || window_ == nullptr || (retiring_owner != nullptr && retiring_owner->window() != window_) || (!keyboardFocusVacant(*window_) && window_->activeFocusItem() != retiring_owner)) {
     return;
   }
 
   const NotificationFocus target{.window = window_generation_, .machine = machine_view_revision_, .pane = pane->id, .generation = pane->generation, .attachment = pane->attachment_generation};
-  // Disabling a control can still be changing Qt focus while its binding runs.
-  // Complete that transition before restoring the captured pane's keyboard owner.
+  // A delivered control can disappear before its disabled record is painted.
+  // Complete its retirement before restoring the captured pane's keyboard owner.
   QMetaObject::invokeMethod(this, [this, target] {
     if (window_ == nullptr || !dialog_.isEmpty()) {
       return;

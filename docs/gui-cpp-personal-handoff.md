@@ -73,8 +73,20 @@ errors but actual-position acceptance is OPEN. The current full native suite is
 84 passed/1 failed in routed notification-focus retirement. Its diagnostic's
 focusedPane=0 means root keyboard ownership, not a missing session pane. Keep
 that failure and investigate with actual focus/pane transition observations.
-Continue the original MachineSwitcher/MachineSegment integration and native
-focus investigation, then the remaining PARITY.md gates. No global gate is closed. The window-adapter checkpoint records 82 Cocoa/Metal scale-1
+The subsequent [delivered notification removal](../services/gui-cpp/measurements/notification-removal.md)
+checkpoint reproduces that routed failure with an attached pane and visible
+terminal: removing the focused delivered card can skip its disabled-record hook.
+The overlay now captures matching focused ownership on rowsAboutToBeRemoved,
+then uses the same deferred numeric origin guards. A still-enabled-card
+regression fails when that new connection alone is removed and passes with it.
+Keep the first default-lifetime ablation, which was a false positive after
+expiry, and the corrected longer-lived negative control. Current full native
+Quick has 86 passes/0 failures/0 skips/0 QML warnings, and two Release groups
+pass. Native sanitizer assertions pass (13 and 8 entries), but both exit leak
+checks fail: 268,712 bytes/932 allocations and 170,884 bytes/838 allocations.
+Temporary probe logging was removed; raw sources and logs are archived. The
+older pointer failure's exact timing remains unproven. Continue the original
+MachineSwitcher/MachineSegment integration and the remaining PARITY.md gates. No global gate is closed. The window-adapter checkpoint records 82 Cocoa/Metal scale-1
 passes, before the transport/profile changes, after the
 owned-window focus/geometry barrier; twenty selected regressions pass.
 Native sanitizer assertions pass, but exit leak acceptance remains OPEN.

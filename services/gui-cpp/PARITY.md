@@ -60,6 +60,15 @@ enabled, including the profile-window cases. A production Cocoa/Metal smoke
 opens a shell on an isolated reference runtime. This checkpoint had 25/29
 catalogue actions; the later machine-UI checkpoint below adds the remaining four.
 
+The subsequent [delivered notification removal](measurements/notification-removal.md)
+checkpoint captures keyboard ownership before the delivered list removes a
+focused card, including removal without an intermediate disabled record. A
+controlled ablation fails; the final current native suite passes 86 entries with
+no QML warnings, and two selected Release groups pass. Both native sanitizer
+suites pass assertions but retain exit leaks (268,712 bytes/932 allocations and
+170,884 bytes/838 allocations). Full native qualification and global gates stay
+open; the older pointer failure's exact timing remains unproven.
+
 The later [global machine activity](measurements/machine-activity.md) composes
 all live replicas with cached source revisions and origin-owned targets. Five
 Release groups and three core sanitizer groups pass; profile-window sanitizers

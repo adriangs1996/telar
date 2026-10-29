@@ -19,6 +19,7 @@
 #include <QAbstractItemModel>
 #include <QList>
 #include <QMetaObject>
+#include <QModelIndex>
 #include <QObject>
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -81,6 +82,10 @@ QString symbol(NotificationLevel level) {
 
 NotificationLayout::NotificationLayout(QQuickItem *parent)
     : QQuickItem(parent) {
+  connect(&cards_, &QAbstractItemModel::rowsAboutToBeRemoved, this, [this](const QModelIndex &, int first, int last) {
+    retireRemovedFocus(first, last);
+  });
+
   bindWindow();
 }
 
@@ -147,6 +152,30 @@ std::optional<std::uint64_t> NotificationLayout::deadline(std::uint64_t now_ns) 
 void NotificationLayout::sample(std::uint64_t now_ns) {
   now_ns_ = now_ns;
   polish();
+}
+
+void NotificationLayout::retireRemovedFocus(int first, int last) {
+  if (!controller_ || window() == nullptr) {
+    return;
+  }
+
+  auto *focused = window()->activeFocusItem();
+  if (focused == nullptr || !isAncestorOf(focused)) {
+    return;
+  }
+
+  const auto identity = focused->property("identity").toString();
+  if (identity.isEmpty()) {
+    return;
+  }
+
+  for (int index = first; index <= last; ++index) {
+    const auto record = cards_.data(cards_.index(index), ListModel::record_role).toMap();
+    if (record.value(QStringLiteral("key")).toString() == identity) {
+      controller_->retireNotificationFocus(identity, focused);
+      return;
+    }
+  }
 }
 
 void NotificationLayout::invalidate() {

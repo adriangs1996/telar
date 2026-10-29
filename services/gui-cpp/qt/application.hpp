@@ -224,7 +224,7 @@ public:
   void soundPlaybackFinished(std::optional<CommandFailure> failure);
   Q_INVOKABLE void dismissNotification(const QString &identity);
   Q_INVOKABLE void activateNotification(const QString &identity);
-  Q_INVOKABLE void retireNotificationFocus(const QString &identity);
+  Q_INVOKABLE void retireNotificationFocus(const QString &identity, QQuickItem *retiring_owner = nullptr);
   [[nodiscard]] PointerDispatcher &pointerDispatcher() noexcept;
   [[nodiscard]] std::shared_ptr<const LinkHit> shareLinkHit(const LinkHit &hit);
 

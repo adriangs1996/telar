@@ -239,7 +239,11 @@ source revisions. Real SSH/native runs prove remote-card input isolation with
 colliding pane IDs. Five selected Release groups and three core sanitizer groups
 pass. Its current full native suite retains one notification-focus failure;
 actual-position visual acceptance awaits the missing machine switcher/segment.
-Read its manifest for the retained failures and narrower accepted scope.
+Read its manifest for the retained failures and narrower accepted scope. A
+later [delivered-row removal](measurements/notification-removal.md) fixes the
+routed focus failure when a card disappears before a disabled record reaches
+QML. The current native suite has 86 passes and no QML warnings; native exit
+leaks, machine chrome and global acceptance remain open.
 
 ```sh
 python3 services/gui-cpp/tools/check_row_text.py --output-dir /tmp/telar-row-text

@@ -76,6 +76,7 @@ private:
     float action_line_height = 0;
   };
 
+  void retireRemovedFocus(int first, int last);
   void invalidate();
   void scheduleLayout();
   void bindWindow();
