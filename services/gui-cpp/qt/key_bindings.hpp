@@ -56,6 +56,7 @@ private:
     QPointer<QQuickItem> item;
     std::uint64_t owner = 0;
     bool copy_mode = false;
+    std::uint64_t machine_view = 0;
   };
 
   using Router = KeyRouter<BindingAction, RoutedKey>;

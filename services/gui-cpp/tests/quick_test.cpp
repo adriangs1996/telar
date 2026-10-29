@@ -1666,7 +1666,7 @@ return {api_version=2, client={keybindings={
     };
     QTRY_VERIFY_WITH_TIMEOUT(notices() != client_->notifications().items().end(), runtime_wait_ms);
     const auto identity = notices()->id;
-    client_->dismissNotification(QString::number(identity.value));
+    client_->dismissNotification(client_->notificationIdentity(identity));
     QTRY_VERIFY_WITH_TIMEOUT(client_->notifications().find(identity) == nullptr, runtime_wait_ms);
   }
 
@@ -1752,7 +1752,7 @@ return {api_version=2, client={keybindings={
     };
     QTRY_VERIFY_WITH_TIMEOUT(find_notice() != client_->notifications().items().end(), runtime_wait_ms);
     const auto identity = find_notice()->id;
-    client_->dismissNotification(QString::number(identity.value));
+    client_->dismissNotification(client_->notificationIdentity(identity));
     QTRY_VERIFY_WITH_TIMEOUT(client_->notifications().find(identity) == nullptr, runtime_wait_ms);
     QTest::keyClick(window_, Qt::Key_Escape);
     QCOMPARE(client_->dialog(), QString{});
@@ -2390,7 +2390,7 @@ return {api_version=2, client={keybindings={
     });
     const auto identity = notice->id;
     captureHistoryArtifact(QStringLiteral("history-query-limit"));
-    client_->dismissNotification(QString::number(identity.value));
+    client_->dismissNotification(client_->notificationIdentity(identity));
     QTRY_VERIFY_WITH_TIMEOUT(client_->notifications().find(identity) == nullptr, runtime_wait_ms);
 
     const QString retained(maximum - 1, QLatin1Char('x'));

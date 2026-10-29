@@ -1225,6 +1225,10 @@ public:
     return agents_.entries();
   }
 
+  [[nodiscard]] std::uint64_t agentRevision() const noexcept {
+    return agents_.revision();
+  }
+
   [[nodiscard]] const auto &history() const noexcept {
     return history_.rows();
   }

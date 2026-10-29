@@ -109,7 +109,7 @@ void Application::showPalette(PaletteMode mode) {
   palette_parent_.reset();
   palette_editor_restore_ = {};
   if (mode == PaletteMode::suggest) {
-    session_.beginSuggestion();
+    session().beginSuggestion();
   }
 
   palette_query_ = QChar{static_cast<char>(mode)};
@@ -122,7 +122,7 @@ void Application::showPalette(PaletteMode mode) {
 
 void Application::reportPaletteQueryLimit(qulonglong requested_bytes) {
   if (dialog_ == QLatin1StringView("palette") && requested_bytes > PaletteQuery::maximum_bytes) {
-    session_.reportLimit({.name = "prompt.field_bytes", .noun = "bytes", .value = PaletteQuery::maximum_bytes, .requested = requested_bytes, .route = {}});
+    session().reportLimit({.name = "prompt.field_bytes", .noun = "bytes", .value = PaletteQuery::maximum_bytes, .requested = requested_bytes, .route = {}});
     refreshNotifications();
   }
 }
@@ -144,7 +144,7 @@ void Application::searchPalette(const QString &text) {
   const auto current_bytes = palette_query_.toUtf8();
   const auto current = PaletteQuery::parse(bytes(current_bytes));
   if (current.mode == PaletteMode::suggest && (before.mode != PaletteMode::suggest || before.text != current.text)) {
-    session_.invalidateSuggestion();
+    session().invalidateSuggestion();
   }
 
   static_cast<void>(updatePaletteResults());
@@ -191,7 +191,7 @@ void Application::refreshPalette() {
 }
 
 void Application::collectPaletteNavigation(PaletteMatches &matches, std::string_view query) const {
-  for (const auto &workspace : session_.workspaces()) {
+  for (const auto &workspace : session().workspaces()) {
     NavigationLabel label;
     label.append(workspace.name);
     label.appendDetail(workspace.branch);
@@ -200,8 +200,8 @@ void Application::collectPaletteNavigation(PaletteMatches &matches, std::string_
 
   std::array<const Tab<ApplicationAllocator> *, GuiSession::maximum_workspace_tabs> tabs{};
   std::size_t count = 0;
-  const auto *active = session_.activeTab();
-  for (const auto &tab : session_.tabs()) {
+  const auto *active = session().activeTab();
+  for (const auto &tab : session().tabs()) {
     if (active != nullptr && sameWorkspace(tab->location.workspace, active->location.workspace) && count < tabs.size()) {
       tabs[count++] = tab.get();
     }
@@ -212,11 +212,11 @@ void Application::collectPaletteNavigation(PaletteMatches &matches, std::string_
   for (const auto *tab : ordered) {
     NavigationLabel label;
     label.append(NavigationLabel::tab_prefix);
-    label.append(tab->label.empty() ? tab->applicationName(session_.findPane(tab->focused_pane)) : std::string_view{tab->label});
+    label.append(tab->label.empty() ? tab->applicationName(session().findPane(tab->focused_pane)) : std::string_view{tab->label});
     matches.add(NavigationTarget{tab->location}, label.view(), query);
   }
 
-  for (const auto &agent : session_.agents()) {
+  for (const auto &agent : session().agents()) {
     NavigationLabel label;
     label.append(agent.provider_name);
     label.appendDetail(agent.title);
@@ -286,10 +286,10 @@ QVariantMap Application::paletteRecord(const PaletteTarget &target, bool queried
   const auto &navigation = std::get<NavigationTarget>(target);
   NavigationLabel label;
   if (const auto *workspace = std::get_if<WorkspaceLocation>(&navigation)) {
-    const auto found = std::ranges::find_if(session_.workspaces(), [&](const auto &row) {
+    const auto found = std::ranges::find_if(session().workspaces(), [&](const auto &row) {
       return sameWorkspace(row.location, *workspace);
     });
-    if (found != session_.workspaces().end()) {
+    if (found != session().workspaces().end()) {
       label.append(found->name);
       label.appendDetail(found->branch);
     }
@@ -298,22 +298,22 @@ QVariantMap Application::paletteRecord(const PaletteTarget &target, bool queried
   }
 
   if (const auto *tab = std::get_if<TabLocation>(&navigation)) {
-    const auto found = std::ranges::find_if(session_.tabs(), [&](const auto &row) {
+    const auto found = std::ranges::find_if(session().tabs(), [&](const auto &row) {
       return sameTab(row->location, *tab);
     });
-    if (found != session_.tabs().end()) {
+    if (found != session().tabs().end()) {
       label.append(NavigationLabel::tab_prefix);
-      label.append((*found)->label.empty() ? (*found)->applicationName(session_.findPane((*found)->focused_pane)) : std::string_view{(*found)->label});
+      label.append((*found)->label.empty() ? (*found)->applicationName(session().findPane((*found)->focused_pane)) : std::string_view{(*found)->label});
     }
 
     return navigationRecord(navigation, label, PaletteRowKind::tab, queried);
   }
 
   const auto identity = std::get<AgentNavigationTarget>(navigation);
-  const auto found = std::ranges::find_if(session_.agents(), [&](const auto &row) {
+  const auto found = std::ranges::find_if(session().agents(), [&](const auto &row) {
     return row.pane_id == identity.pane_id && row.pane_generation == identity.pane_generation;
   });
-  if (found == session_.agents().end()) {
+  if (found == session().agents().end()) {
     return {};
   }
 
@@ -395,34 +395,34 @@ QVariantMap Application::paletteGeometry() const {
 
 bool Application::navigatePaletteTarget(const NavigationTarget &target) {
   if (const auto *workspace = std::get_if<WorkspaceLocation>(&target)) {
-    const auto found = std::ranges::find_if(session_.workspaces(), [&](const auto &row) {
+    const auto found = std::ranges::find_if(session().workspaces(), [&](const auto &row) {
       return sameWorkspace(row.location, *workspace);
     });
-    if (found == session_.workspaces().end()) {
+    if (found == session().workspaces().end()) {
       return false;
     }
 
-    session_.selectWorkspace(*workspace);
+    session().selectWorkspace(*workspace);
 
     return true;
   }
 
   if (const auto *tab = std::get_if<TabLocation>(&target)) {
-    const auto found = std::ranges::find_if(session_.tabs(), [&](const auto &row) {
+    const auto found = std::ranges::find_if(session().tabs(), [&](const auto &row) {
       return sameTab(row->location, *tab);
     });
-    if (found == session_.tabs().end()) {
+    if (found == session().tabs().end()) {
       return false;
     }
 
-    session_.selectTab(*tab);
+    session().selectTab(*tab);
 
     return true;
   }
 
   const auto agent = std::get<AgentNavigationTarget>(target);
 
-  return session_.focusAgent(agent.pane_id, agent.pane_generation);
+  return session().focusAgent(agent.pane_id, agent.pane_generation);
 }
 
 void Application::usePaletteResult(const QVariantMap &choice) {

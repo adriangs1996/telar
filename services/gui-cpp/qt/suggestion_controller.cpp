@@ -28,7 +28,7 @@
 namespace telar::gui::qt {
 
 QVariantMap Application::suggestionState() const {
-  const auto &suggestion = session_.suggestion();
+  const auto &suggestion = session().suggestion();
   const auto phase = suggestion.phase();
   const auto encoded = palette_query_.toUtf8();
   const auto query = PaletteQuery::parse({encoded.constData(), static_cast<std::size_t>(encoded.size())});
@@ -56,7 +56,7 @@ void Application::submitSuggestion(const QString &revision) {
   }
 
   applyInteraction([&] {
-    if (session_.submitSuggestion(query.text)) {
+    if (session().submitSuggestion(query.text)) {
       showDialog({});
     }
 
@@ -96,11 +96,11 @@ QVariantMap Application::suggestionGeometry() const {
 
   QVariantList lines;
   QVariantMap grid;
-  if (session_.suggestion().phase() == SuggestionPhase::ready) {
+  if (session().suggestion().phase() == SuggestionPhase::ready) {
     const auto &font = configuration().font;
     const auto resolved = FormTextGrid::resolve(toQString(font.family.view()), toQString(font.style.view()), display.chrome.body);
     grid = resolved.record(density);
-    SuggestionPreview preview{session_.suggestion().text(), geometry.preview, resolved.metrics};
+    SuggestionPreview preview{session().suggestion().text(), geometry.preview, resolved.metrics};
     while (const auto line = preview.next()) {
       lines.append(QVariantMap{{QStringLiteral("text"), toQString(line->text)}, {QStringLiteral("bounds"), local(line->bounds)}, {QStringLiteral("shortened"), line->shortened}});
     }

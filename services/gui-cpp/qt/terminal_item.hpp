@@ -100,6 +100,7 @@ private:
   void resizeTerminal();
   void synchronizeFocus();
   void releaseKeys();
+  void invalidateMachine();
   void releaseMouse();
   void send(const QByteArray &bytes, PaneInputSource source = PaneInputSource::keyboard);
   [[nodiscard]] ChildMouseView childMouseView() const;

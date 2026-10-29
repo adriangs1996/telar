@@ -254,7 +254,7 @@ QVariantMap NotificationLayout::contentRecord(const NotificationItem &item, Cont
   const auto accessible = item.link.view().empty() ? toQString(item.title.view()) + QStringLiteral(": ") + toQString(item.message.view()) : toQString(item.title.view()) + QStringLiteral(", opens ") + toQString(item.linkHost()) + QStringLiteral(": ") + toQString(item.message.view());
 
   return {
-      {QStringLiteral("key"), QString::number(item.id.value)},
+      {QStringLiteral("key"), controller_->notificationIdentity(item.id)},
       {QStringLiteral("title"), toQString(item.title.view())},
       {QStringLiteral("titleBounds"), logical(geometry.title(), density_)},
       {QStringLiteral("body"), body},
@@ -271,6 +271,13 @@ QVariantMap NotificationLayout::contentRecord(const NotificationItem &item, Cont
 }
 
 void NotificationLayout::rebuild() {
+  const auto machine_view = controller_ ? controller_->viewVersion().machine : 0;
+  if (machine_view != machine_view_) {
+    machine_view_ = machine_view;
+    contents_ = {};
+    stack_ = {};
+  }
+
   if (!eligible() || window() == nullptr) {
     cards_.reconcile({});
     stack_ = {};

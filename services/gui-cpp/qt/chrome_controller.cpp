@@ -1,4 +1,5 @@
 #include "application.hpp"
+#include "application/workbench_geometry.hpp"
 #include "core/configuration.hpp"
 #include "core/geometry.hpp"
 #include "core/metrics.hpp"
@@ -96,7 +97,7 @@ HistoryModalMetrics Application::historyMetrics() const {
 QVariantMap Application::historyGeometry() const {
   const auto density = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
   const auto metrics = historyMetrics();
-  const auto geometry = HistoryModalGeometry::measure(metrics, session_.historyBrowser().state().inspecting);
+  const auto geometry = HistoryModalGeometry::measure(metrics, session().historyBrowser().state().inspecting);
   const auto local = [&](Rect area) {
     area.x -= geometry.bounds.x;
     area.y -= geometry.bounds.y;
@@ -127,14 +128,19 @@ void Application::synchronizeWorkbenchGeometry() {
   auto grid = terminal_grid_;
   grid.scale = 1;
 
-  session_.setWorkbenchGeometry({
+  const WorkbenchGeometry workbench{
       .area = {.width = geometry.terminal.width, .height = geometry.terminal.height},
       .grid = grid,
       .layout_metrics = {.gap = static_cast<std::uint8_t>(configuration.pane_gaps)},
-  });
+  };
 
   const auto columns = std::clamp(std::floor(geometry.terminal.width / static_cast<float>(grid.cell_width_px)), 1.0F, static_cast<float>(std::numeric_limits<std::uint16_t>::max()));
-  session_.setHostColumns(static_cast<std::uint16_t>(columns));
+  for (auto &client : clients_) {
+    if (client) {
+      (*client)->session.setWorkbenchGeometry(workbench);
+      (*client)->session.setHostColumns(static_cast<std::uint16_t>(columns));
+    }
+  }
 }
 
 }

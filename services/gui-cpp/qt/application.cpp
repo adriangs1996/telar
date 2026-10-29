@@ -16,6 +16,9 @@
 #include "history/search.hpp"
 #include "links/link_target.hpp"
 #include "login_shell.hpp"
+#include "machine_client.hpp"
+#include "machines/machine_row.hpp"
+#include "machines/machines.hpp"
 #include "metrics_projection.hpp"
 #include "mode_projection.hpp"
 #include "palette/query.hpp"
@@ -46,7 +49,6 @@
 #include <QGuiApplication>
 #include <QPointer>
 #include <QQuickItem>
-#include <QRandomGenerator>
 #include <QScreen>
 #include <QStringView>
 #include <QVariant>
@@ -123,16 +125,14 @@ auto dialogName(Application::Action action) -> QString {
 Application::Application(ApplicationAllocator &memory, QObject *parent)
     : QObject(parent),
       memory_(memory),
-      connection_(memory),
       configuration_source_(memory),
-      session_(memory, connection_, ApplicationEffects{*this}),
       key_bindings_(*this),
       pointer_dispatcher_(*this),
       link_opener_(*this),
       sound_player_(*this),
       system_notifier_(memory),
-      hostname_(platform::hostName()),
-      identity_(QRandomGenerator::system()->generate64() | std::uint64_t{1}) {
+      hostname_(platform::hostName()) {
+  initializeMachines();
   key_bindings_.configure(configuration_source_.input(), configuration_source_.keymap());
 
   connect(this, &Application::configurationChanged, this, &Application::windowGeometryChanged);
@@ -153,7 +153,7 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
   const login_shell::Command shell;
   const auto directory = QDir::currentPath().toUtf8();
 
-  session_.setLaunch(Launch{
+  session().setLaunch(Launch{
       .cwd = {
           directory.constData(),
           static_cast<std::size_t>(directory.size()),
@@ -169,26 +169,11 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
   constexpr int history_debounce_ms = 60;
   history_timer_.setInterval(history_debounce_ms);
 
-  connect(&connection_, &RuntimeConnection::connected, this, [this] {
-    session_.connected(identity_);
-    emit stateChanged();
-  });
-
-  connect(&connection_, &RuntimeConnection::payloadReceived, this, &Application::consume, Qt::DirectConnection);
-  connect(&connection_, &RuntimeConnection::paneWillDetach, this, &Application::inputReleasing, Qt::DirectConnection);
-
-  connect(&connection_, &RuntimeConnection::disconnected, this, &Application::runtimeDisconnected);
-
-  connect(&connection_, &RuntimeConnection::errorChanged, this, &Application::stateChanged);
-
   connect(&configuration_source_, &ConfigurationSource::changed, this, [this] {
     error_.clear();
     key_bindings_.configure(configuration_source_.input(), configuration_source_.keymap());
-    session_.configure(configuration_source_.configuration());
+    configureClients();
     synchronizeFontMetrics();
-    if (session_.ready()) {
-      session_.configureCadence();
-    }
 
     emit configurationChanged();
     emit historyChanged();
@@ -202,7 +187,11 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
   });
 
   connect(&configuration_source_, &ConfigurationSource::themeChanged, this, [this] {
-    session_.setTheme(configuration_source_.configuration().theme);
+    for (auto &client : clients_) {
+      if (client) {
+        (*client)->session.setTheme(configuration_source_.configuration().theme);
+      }
+    }
     emit configurationChanged();
     refresh();
   });
@@ -212,7 +201,7 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
   connect(&history_timer_, &QTimer::timeout, this, [this] {
     try {
       const auto query = history_query_.toUtf8();
-      session_.queryHistory(std::string_view{query.constData(), static_cast<std::size_t>(query.size())}, history_filters_);
+      session().queryHistory(std::string_view{query.constData(), static_cast<std::size_t>(query.size())}, history_filters_);
     } catch (const std::exception &error) {
       fail(error);
     }
@@ -222,8 +211,15 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
   synchronizeWorkbenchGeometry();
 }
 
-void Application::runtimeDisconnected() {
-  session_.disconnected();
+void Application::runtimeDisconnected(MachineClient &client) {
+  client.session.disconnected();
+  static_cast<void>(client.session.settlePresentation());
+  client.phase = MachinePhase::lost;
+  summarizeMachine(client);
+  if (client.key.machine.slot != machines_.active()) {
+    return;
+  }
+
   if (dialog_ == QLatin1StringView("palette")) {
     emit paletteChanged();
   }
@@ -263,8 +259,8 @@ void Application::configureLaunch(const QString &directory, const QStringList &a
   }
 
   const auto command = arguments.isEmpty() ? shell.arguments() : std::span<const std::string_view>{views}.first(static_cast<std::size_t>(storage.size()));
-  session_.setLaunch(Launch{.cwd = {cwd.constData(), static_cast<std::size_t>(cwd.size())}, .arguments = command});
-  session_.setRestoreLayout(restore);
+  session().setLaunch(Launch{.cwd = {cwd.constData(), static_cast<std::size_t>(cwd.size())}, .arguments = command});
+  session().setRestoreLayout(restore);
 }
 
 Application::~Application() {
@@ -275,26 +271,31 @@ Application::~Application() {
 
   frame_pacer_.reset();
   QObject::disconnect(screen_refresh_connection_);
-  connection_.disconnect(this);
-  connection_.close();
+  for (auto &client : clients_) {
+    if (client) {
+      (*client)->connection.disconnect(this);
+      (*client)->connection.close();
+    }
+  }
 }
 
 void Application::open(const QString &endpoint) {
+  auto &client = clientAt(Machines::local_slot);
   const auto path = endpoint.toUtf8();
-  identity_lease_.emplace(std::string_view{path.constData(), static_cast<std::size_t>(path.size())});
+  client.identity_lease.emplace(std::string_view{path.constData(), static_cast<std::size_t>(path.size())});
   QCryptographicHash hash{QCryptographicHash::Sha256};
   constexpr auto identity_namespace = std::to_array("telar-gui-window-v1");
-  const auto canonical_endpoint = identity_lease_->endpoint();
+  const auto canonical_endpoint = client.identity_lease->endpoint();
   hash.addData(QByteArrayView{identity_namespace.data(), static_cast<qsizetype>(identity_namespace.size())});
   hash.addData(QByteArrayView{canonical_endpoint.data(), static_cast<qsizetype>(canonical_endpoint.size())});
   constexpr char separator = '\0';
   hash.addData(QByteArrayView{&separator, 1});
-  const auto slot = static_cast<char>(identity_lease_->slot());
+  const auto slot = static_cast<char>(client.identity_lease->slot());
   hash.addData(QByteArrayView{&slot, 1});
   const auto digest = hash.result();
   auto identity_bytes = byteView({digest.constData(), static_cast<std::size_t>(digest.size())}).first(sizeof(std::uint64_t));
-  identity_ = u64::decode(identity_bytes) | std::uint64_t{1};
-  connection_.open(endpoint);
+  client.identity = u64::decode(identity_bytes) | std::uint64_t{1};
+  client.connection.open(endpoint);
 }
 
 void Application::setWindow(QQuickWindow &window) {
@@ -411,7 +412,7 @@ void Application::prepareImagePlacements() {
 
   std::array<ImagePlacementSource, PaneLayout::maximum_panes> sources;
   std::size_t count = 0;
-  const auto *tab = session_.activeTab();
+  const auto *tab = session().activeTab();
   if (tab != nullptr) {
     for (const auto &node : tab->layout.nodes()) {
       const auto *leaf = std::get_if<ClientLayoutPane>(&node);
@@ -419,7 +420,7 @@ void Application::prepareImagePlacements() {
         continue;
       }
 
-      const auto *pane = session_.findPane(leaf->pane_id);
+      const auto *pane = session().findPane(leaf->pane_id);
       const auto terminal = terminals_.constFind(leaf->pane_id);
       if (pane != nullptr && pane->attached && terminal != terminals_.cend() && *terminal != nullptr && (*terminal)->window() == window_ && (*terminal)->isVisible()) {
         sources[count++] = {.owner = *terminal, .store = &pane->graphics, .cell = (*terminal)->cellSize()};
@@ -428,19 +429,20 @@ void Application::prepareImagePlacements() {
   }
 
   if (const auto reach = WindowImages::forWindow(*window_).preparePlacements(std::span{sources}.first(count))) {
-    session_.reportLimit(*reach);
+    session().reportLimit(*reach);
     refreshNotifications();
   }
 }
 
 void Application::prepareFrame(PresentedFrame &frame) {
   frame = {};
+  frame.machine_view = machine_view_revision_;
   frame.preparation_ns = platform::AwakeClock::nowNanoseconds();
   if (window_ != nullptr) {
     auto *images = WindowImages::findWindow(*window_);
     if (images != nullptr && !images->empty()) {
       images->beginCatalogSnapshot();
-      for (const auto &pane : session_.panes()) {
+      for (const auto &pane : session().panes()) {
         images->observeCatalog(pane->graphics);
       }
     }
@@ -450,12 +452,12 @@ void Application::prepareFrame(PresentedFrame &frame) {
     return;
   }
 
-  const auto &history = session_.historyBrowser();
+  const auto &history = session().historyBrowser();
   if (dialog_ == QLatin1StringView("history") && !historyLoading() && history_view_version_ == history.viewVersion()) {
     frame.history_surface = historyScrollSurface(historyMetrics());
 
     if (const auto choice = history.choice()) {
-      frame.history = {.choice = *choice, .dialog_generation = dialog_generation_, .enter_runs = session_.configuration().history.enter_runs};
+      frame.history = {.choice = *choice, .dialog_generation = dialog_generation_, .enter_runs = session().configuration().history.enter_runs};
     }
   }
 }
@@ -465,7 +467,7 @@ void Application::prepareTerminalFrames(PresentedFrame &frame) {
     return;
   }
 
-  const auto *tab = session_.activeTab();
+  const auto *tab = session().activeTab();
   if (tab == nullptr) {
     return;
   }
@@ -476,7 +478,7 @@ void Application::prepareTerminalFrames(PresentedFrame &frame) {
       continue;
     }
 
-    if (const auto *pane = session_.findPane(leaf->pane_id); pane != nullptr && pane->attached) {
+    if (const auto *pane = session().findPane(leaf->pane_id); pane != nullptr && pane->attached) {
       auto *terminal = visibleTerminal(pane->id);
       if (terminal == nullptr) {
         continue;
@@ -502,7 +504,7 @@ TerminalItem *Application::visibleTerminal(std::uint64_t pane_id) const {
 }
 
 std::size_t Application::collectPacingPanes(std::span<FramePacer::Pane, PaneLayout::maximum_panes> panes) const {
-  const auto *tab = session_.activeTab();
+  const auto *tab = session().activeTab();
   if (window_ == nullptr || tab == nullptr) {
     return 0;
   }
@@ -514,7 +516,7 @@ std::size_t Application::collectPacingPanes(std::span<FramePacer::Pane, PaneLayo
       continue;
     }
 
-    if (const auto *pane = session_.findPane(leaf->pane_id); pane != nullptr && pane->attached) {
+    if (const auto *pane = session().findPane(leaf->pane_id); pane != nullptr && pane->attached) {
       panes[count++] = {.pane_id = pane->id, .frame_id = pane->screen.frameId(), .attached = true, .attachment_generation = pane->attachment_generation};
     }
   }
@@ -558,10 +560,8 @@ void Application::synchronizeCadence() {
 
   const auto rate = window_->screen()->refreshRate();
   if (std::isfinite(rate) && rate > 0) {
-    session_.setDisplayRefreshRate(static_cast<std::uint16_t>(std::clamp(std::round(rate), qreal{Configuration::minimum_fps}, qreal{Configuration::maximum_fps})));
-    if (session_.ready()) {
-      session_.configureCadence();
-    }
+    const auto fps = static_cast<std::uint16_t>(std::clamp(std::round(rate), qreal{Configuration::minimum_fps}, qreal{Configuration::maximum_fps}));
+    setClientsDisplayRefresh(fps);
   }
 
   configureFramePacer();
@@ -572,7 +572,7 @@ void Application::configureWindow() {
     return;
   }
 
-  const auto &configuration = session_.configuration();
+  const auto &configuration = session().configuration();
   WindowAnimationClock::forWindow(*window_).setMaximumFrameRate(configuration.max_fps == 0 ? std::nullopt : std::optional{configuration.max_fps});
   configureFramePacer();
   const QPointer<Application> lifetime{this};
@@ -587,13 +587,17 @@ void Application::configureWindow() {
 }
 
 void Application::present(const PresentedFrame &frame) {
+  if (frame.machine_view != machine_view_revision_) {
+    return;
+  }
+
   presented_history_ = frame.history;
   presented_history_surface_ = frame.history_surface;
 
   try {
     for (const auto &pane : std::span{frame.panes}.first(frame.pane_count)) {
       const auto &identity = pane.frame.pane;
-      const auto *current = session_.findPane(identity.pane_id);
+      const auto *current = session().findPane(identity.pane_id);
       if (current == nullptr || !current->attached || current->attachment_generation != identity.attachment_generation) {
         continue;
       }
@@ -602,7 +606,7 @@ void Application::present(const PresentedFrame &frame) {
         pane.terminal->presentFrame(pane.frame);
       }
 
-      session_.presented(identity.pane_id, identity.frame_id);
+      session().presented(identity.pane_id, identity.frame_id);
     }
   } catch (const std::exception &error) {
     fail(error);
@@ -610,25 +614,40 @@ void Application::present(const PresentedFrame &frame) {
 }
 
 Pane<ApplicationAllocator> *Application::pane(std::uint64_t identity) const noexcept {
-  return session_.findPane(identity);
+  return session().findPane(identity);
 }
 
 const Configuration &Application::configuration() const noexcept {
-  return session_.configuration();
+  return session().configuration();
 }
 
-void Application::consume(QByteArrayView payload) {
+void Application::consume(MachineClient &client, QByteArrayView payload) {
   try {
-    const auto handler = [this](const ClientCommand &message, CompleteClientCommand &reply) {
-      executeHostCommand(message, reply);
+    const bool active = client.key.machine.slot == machines_.active();
+    const auto handler = [this, active](const ClientCommand &message, CompleteClientCommand &reply) {
+      if (active) {
+        executeHostCommand(message, reply);
+      } else {
+        UnsupportedClientCommand{}(message, reply);
+      }
     };
-    const auto notification_revision = session_.notificationRevision();
-    const auto graphics_revision = session_.graphicsRecoveryRevision();
-    const auto change = session_.consume(byteView({payload.data(), static_cast<std::size_t>(payload.size())}), handler);
-    if (notification_revision != session_.notificationRevision()) {
+    const auto notification_revision = client.session.notificationRevision();
+    const auto graphics_revision = client.session.graphicsRecoveryRevision();
+    const auto change = client.session.consume(byteView({payload.data(), static_cast<std::size_t>(payload.size())}), handler);
+    static_cast<void>(client.session.settlePresentation());
+    if (change == Change::stopped) {
+      client.phase = MachinePhase::stopped;
+    }
+
+    summarizeMachine(client);
+    if (!active) {
+      return;
+    }
+
+    if (notification_revision != session().notificationRevision()) {
       refreshNotifications();
     }
-    if (graphics_revision != session_.graphicsRecoveryRevision()) {
+    if (graphics_revision != session().graphicsRecoveryRevision()) {
       refreshPanes();
       scheduleGraphicsRecovery();
     }
@@ -639,7 +658,7 @@ void Application::consume(QByteArrayView payload) {
       refresh();
       break;
     case Change::terminal:
-      emit terminalChanged(session_.changedPane());
+      emit terminalChanged(session().changedPane());
       if (dialog_ == QLatin1StringView("paths")) {
         emit pathPickerGeometryChanged();
       }
@@ -654,13 +673,13 @@ void Application::consume(QByteArrayView payload) {
       break;
     case Change::copy_mode:
       emit stateChanged();
-      if (session_.copyMode().state()) {
-        emit terminalChanged(session_.copyMode().state().value().pane_id);
+      if (const auto &copy = session().copyMode().state()) {
+        emit terminalChanged(copy->pane_id);
       }
 
       break;
     case Change::clipboard:
-      QGuiApplication::clipboard()->setText(toQString(session_.clipboard()));
+      QGuiApplication::clipboard()->setText(toQString(session().clipboard()));
       break;
     case Change::history:
       refreshHistory();
@@ -689,15 +708,19 @@ void Application::consume(QByteArrayView payload) {
       break;
     }
   } catch (const std::exception &error) {
-    fail(error);
-    refreshHistory();
+    if (client.key.machine.slot == machines_.active()) {
+      fail(error);
+      refreshHistory();
+    } else {
+      client.connection.recover(error.what());
+    }
   }
 }
 
 void Application::executeHostCommand(const ClientCommand &message, CompleteClientCommand &reply) {
   switch (message.action) {
   case ClientAction::config_show:
-    reply.text = configuration_source_.query(ConfigurationQuery::parse(message.text, message.value), session_.clientViewState());
+    reply.text = configuration_source_.query(ConfigurationQuery::parse(message.text, message.value), session().clientViewState());
     break;
   case ClientAction::config_reload:
     configuration_source_.requestReload();
@@ -713,7 +736,7 @@ void Application::executeHostCommand(const ClientCommand &message, CompleteClien
       throw EncodingError{"InvalidLink"};
     }
 
-    const auto *focused = session_.focusedPane();
+    const auto *focused = session().focusedPane();
     if (!openLink(*target, focused == nullptr ? std::nullopt : std::optional{focused->id})) {
       throw EncodingError{"LinkOpeningUnavailable"};
     }
@@ -729,22 +752,22 @@ void Application::executeHostCommand(const ClientCommand &message, CompleteClien
 
 void Application::refresh() {
   QList<QVariantMap> workspaces;
-  const auto *active = session_.activeTab();
+  const auto *active = session().activeTab();
   QVariantMap workspace_context;
   std::optional<std::uint64_t> selected_project;
   if (active != nullptr && active->location.workspace.kind == WorkspaceLocation::Kind::workspace) {
-    selected_project = session_.workspaceList().projectOf(active->location.workspace.id);
-    const auto current = std::ranges::find_if(session_.workspaces(), [&](const auto &workspace) {
+    selected_project = session().workspaceList().projectOf(active->location.workspace.id);
+    const auto current = std::ranges::find_if(session().workspaces(), [&](const auto &workspace) {
       return sameWorkspace(workspace.location, active->location.workspace);
     });
-    if (current != session_.workspaces().end()) {
+    if (current != session().workspaces().end()) {
       workspace_context = workspaceRecord(*current, true);
     }
   }
 
-  for (const auto &workspace : session_.workspaceList().projects()) {
+  for (const auto &workspace : session().workspaceList().projects()) {
     const bool selected = selected_project == workspace.location.id;
-    auto record = projectRecord(workspace, session_.workspaceList(), std::span<const Agent<ApplicationAllocator>>{session_.agents()}, selected);
+    auto record = projectRecord(workspace, session().workspaceList(), std::span<const Agent<ApplicationAllocator>>{session().agents()}, selected);
     record.insert(QStringLiteral("index"), workspaces.size());
     if (selected) {
       workspace_context.insert(QStringLiteral("index"), workspaces.size());
@@ -757,7 +780,7 @@ void Application::refresh() {
   workspaces_.reconcile(std::move(workspaces));
 
   QList<const Tab<ApplicationAllocator> *> ordered_tabs;
-  for (const auto &tab : session_.tabs()) {
+  for (const auto &tab : session().tabs()) {
     if (active != nullptr && sameWorkspace(tab->location.workspace, active->location.workspace)) {
       ordered_tabs.append(tab.get());
     }
@@ -768,8 +791,8 @@ void Application::refresh() {
   });
   QList<QVariantMap> tabs;
   for (const auto *tab : ordered_tabs) {
-    const auto *pane = session_.findPane(tab->focused_pane);
-    tabs.append(tabRecord(*tab, pane, std::span<const Agent<ApplicationAllocator>>{session_.agents()}, tab == active));
+    const auto *pane = session().findPane(tab->focused_pane);
+    tabs.append(tabRecord(*tab, pane, std::span<const Agent<ApplicationAllocator>>{session().agents()}, tab == active));
   }
 
   tabs_.reconcile(std::move(tabs));
@@ -788,21 +811,21 @@ void Application::refresh() {
 
 void Application::refreshAgents() {
   QList<QVariantMap> agents;
-  const auto *active = session_.activeTab();
-  const auto agent_entries = std::span<const Agent<ApplicationAllocator>>{session_.agents()};
-  const auto workspace_entries = std::span<const Workspace<ApplicationAllocator>>{session_.workspaces()};
+  const auto *active = session().activeTab();
+  const auto agent_entries = std::span<const Agent<ApplicationAllocator>>{session().agents()};
+  const auto workspace_entries = std::span<const Workspace<ApplicationAllocator>>{session().workspaces()};
   using Order = ActivityOrder<ApplicationAllocator>;
-  const std::array sources{Order::Source{.agents = agent_entries, .workspaces = session_.workspaceList(), .focused = active == nullptr ? std::nullopt : std::optional{active->focused_pane}}};
+  const std::array sources{Order::Source{.agents = agent_entries, .workspaces = session().workspaceList(), .focused = active == nullptr ? std::nullopt : std::optional{active->focused_pane}}};
   Order::Plan order;
   Order::write(sources, sources.front().slot, order);
   for (const auto &entry : order.view()) {
-    AgentRecordContext context{.machine = {hostname_.constData(), static_cast<std::size_t>(hostname_.size())}, .branch = {}, .connected = session_.ready(), .coordinator = entry.coordinator, .starts_project = entry.first_in_project, .depth = entry.depth};
+    AgentRecordContext context{.machine = {hostname_.constData(), static_cast<std::size_t>(hostname_.size())}, .branch = {}, .connected = session().ready(), .coordinator = entry.coordinator, .starts_project = entry.first_in_project, .depth = entry.depth};
     if (!entry.agent) {
       if (!entry.worktree) {
         throw std::logic_error{"ActivityEntryWithoutOwner"};
       }
 
-      agents.append(commandRecord(session_.workspaceList().worktrees()[*entry.worktree], context));
+      agents.append(commandRecord(session().workspaceList().worktrees()[*entry.worktree], context));
       continue;
     }
 
@@ -813,7 +836,7 @@ void Application::refreshAgents() {
     context.branch = workspace == workspace_entries.end() ? std::string_view{} : std::string_view{workspace->branch};
     context.selected = active != nullptr && agent.pane_id == active->focused_pane && sameTab(agent.location, active->location);
     if (entry.worktree) {
-      agents.append(taskRecord(agent, session_.workspaceList().worktrees()[*entry.worktree], context, entry.card == ActivityCard::task_compact));
+      agents.append(taskRecord(agent, session().workspaceList().worktrees()[*entry.worktree], context, entry.card == ActivityCard::task_compact));
     } else {
       agents.append(agentRecord(agent, context));
     }
@@ -829,11 +852,11 @@ QVariantList Application::fullscreenEntries(const Tab<ApplicationAllocator> &tab
   }
 
   std::uint16_t index = 0;
-  const auto agents = std::span<const Agent<ApplicationAllocator>>{session_.agents()};
+  const auto agents = std::span<const Agent<ApplicationAllocator>>{session().agents()};
   for (const auto &node : tab.layout.nodes()) {
     if (const auto *leaf = std::get_if<ClientLayoutPane>(&node)) {
       ++index;
-      entries.append(fullscreenPaneRecord(session_.findPane(leaf->pane_id), agents, {.pane_id = leaf->pane_id, .index = index, .focused = tab.focused_pane == leaf->pane_id}));
+      entries.append(fullscreenPaneRecord(session().findPane(leaf->pane_id), agents, {.pane_id = leaf->pane_id, .index = index, .focused = tab.focused_pane == leaf->pane_id}));
     }
   }
 
@@ -841,16 +864,16 @@ QVariantList Application::fullscreenEntries(const Tab<ApplicationAllocator> &tab
 }
 
 void Application::refreshPanes() {
-  auto *tab = session_.activeTab();
+  auto *tab = session().activeTab();
   QList<QVariantMap> panes;
   QList<QVariantMap> dividers;
   if (tab != nullptr) {
-    const auto &geometry = session_.workbenchGeometry();
+    const auto &geometry = session().workbenchGeometry();
     const auto fullscreen = tab->fullscreen ? std::optional{tab->focused_pane} : std::nullopt;
     const auto fullscreen_entries = fullscreenEntries(*tab);
 
     for (const auto &placement : tab->layout.arrange(geometry.cellArea(), geometry.layout_metrics, fullscreen)) {
-      const auto *pane = session_.findPane(placement.pane_id);
+      const auto *pane = session().findPane(placement.pane_id);
       if (pane == nullptr) {
         continue;
       }
@@ -860,7 +883,7 @@ void Application::refreshPanes() {
       if (tab->fullscreen) {
         record.insert(QStringLiteral("fullscreenEntries"), fullscreen_entries);
       }
-      record.insert(QStringLiteral("chrome"), paneChromeRecord(*pane, std::span<const Agent<ApplicationAllocator>>{session_.agents()}, placement.display_index, session_.graphicsPaused(pane->id)));
+      record.insert(QStringLiteral("chrome"), paneChromeRecord(*pane, std::span<const Agent<ApplicationAllocator>>{session().agents()}, placement.display_index, session().graphicsPaused(pane->id)));
       panes.append(std::move(record));
     }
 
@@ -883,7 +906,7 @@ void Application::refreshPanes() {
 
 void Application::resizeDivider(int index, qreal x, qreal y, bool commit) {
   try {
-    auto *tab = session_.activeTab();
+    auto *tab = session().activeTab();
     if (tab == nullptr || tab->fullscreen || !std::isfinite(x) || !std::isfinite(y) || index < 0) {
       return;
     }
@@ -896,7 +919,7 @@ void Application::resizeDivider(int index, qreal x, qreal y, bool commit) {
       return;
     }
 
-    const auto &geometry = session_.workbenchGeometry();
+    const auto &geometry = session().workbenchGeometry();
     const auto parent_bounds = geometry.pixels(divider->parent_bounds);
     const auto divider_bounds = geometry.pixels(divider->bounds);
     const bool horizontal = divider->axis == ClientLayoutAxis::horizontal;
@@ -908,12 +931,12 @@ void Application::resizeDivider(int index, qreal x, qreal y, bool commit) {
 
     const auto ratio = static_cast<std::uint16_t>(std::clamp(offset / extent, 0.0, 1.0) * PaneLayout::ratio_maximum);
     if (tab->layout.setSplitRatio({.node_index = static_cast<std::size_t>(index), .ratio = ratio})) {
-      session_.invalidateView();
+      session().invalidateView();
       refreshPanes();
     }
 
     if (commit) {
-      session_.retainLayout();
+      session().retainLayout();
     }
   } catch (const std::exception &error) {
     fail(error);
@@ -939,13 +962,13 @@ void Application::submitDialog(const QVariantMap &input) {
     const auto path = input.value(QStringLiteral("path")).toString().toUtf8();
     const std::string_view text{name.constData(), static_cast<std::size_t>(name.size())};
     if (dialog_ == QLatin1StringView("new-workspace")) {
-      session_.createWorkspace({.name = text, .path = {path.constData(), static_cast<std::size_t>(path.size())}});
+      session().createWorkspace({.name = text, .path = {path.constData(), static_cast<std::size_t>(path.size())}});
     } else if (dialog_ == QLatin1StringView("rename-tab")) {
-      session_.renameTab(text);
+      session().renameTab(text);
     } else if (dialog_ == QLatin1StringView("rename-workspace")) {
-      session_.renameWorkspace(text);
+      session().renameWorkspace(text);
     } else if (dialog_ == QLatin1StringView("copy-search")) {
-      session_.searchCopy(text);
+      session().searchCopy(text);
     }
 
     showDialog({});
@@ -966,14 +989,14 @@ void Application::submitHistory(std::uint64_t entry_id, bool alternate) {
       throw EncodingError{"History search is still loading"};
     }
 
-    session_.pasteHistory(entry_id, alternate);
+    session().pasteHistory(entry_id, alternate);
     error_.clear();
     showDialog({});
   });
 }
 
 void Application::useHistoryRow(int row, bool alternate) {
-  const auto &entries = session_.history();
+  const auto &entries = session().history();
   if (row < 0 || static_cast<std::size_t>(row) >= entries.size()) {
     return;
   }
@@ -983,11 +1006,11 @@ void Application::useHistoryRow(int row, bool alternate) {
 
 void Application::usePresentedHistory(const QString &revision, bool alternate) {
   const auto *presented = presentedHistory(revision);
-  if (presented == nullptr || presented->enter_runs != session_.configuration().history.enter_runs) {
+  if (presented == nullptr || presented->enter_runs != session().configuration().history.enter_runs) {
     return;
   }
 
-  const auto &browser = session_.historyBrowser();
+  const auto &browser = session().historyBrowser();
   if (!browser.accepts(presented->choice)) {
     return;
   }
@@ -1011,35 +1034,35 @@ const Application::PresentedHistory *Application::presentedHistory(const QString
 }
 
 bool Application::historyLoading() const {
-  return history_timer_.isActive() || session_.historyLoading();
+  return history_timer_.isActive() || session().historyLoading();
 }
 
 bool Application::executeNavigation(Action action, const QString &target) {
   const auto identity = target.toULongLong();
   if (action == Action::new_tab) {
-    session_.createTab();
+    session().createTab();
   } else if (action == Action::select_tab) {
-    if (const auto *active = session_.activeTab()) {
-      session_.selectTab({.workspace = active->location.workspace, .tab_id = identity});
+    if (const auto *active = session().activeTab()) {
+      session().selectTab({.workspace = active->location.workspace, .tab_id = identity});
     }
   } else if (action == Action::select_tab_index) {
-    session_.selectTabIndex(static_cast<std::size_t>(identity));
+    session().selectTabIndex(static_cast<std::size_t>(identity));
   } else if (action == Action::next_tab || action == Action::previous_tab) {
-    session_.selectTabOffset(action == Action::next_tab ? 1 : -1);
+    session().selectTabOffset(action == Action::next_tab ? 1 : -1);
   } else if (action == Action::move_tab_next || action == Action::move_tab_previous) {
-    session_.moveTab(action == Action::move_tab_next ? TabMoveDirection::next : TabMoveDirection::previous);
+    session().moveTab(action == Action::move_tab_next ? TabMoveDirection::next : TabMoveDirection::previous);
   } else if (action == Action::close_tab) {
-    if (const auto *active = session_.activeTab()) {
-      session_.closeTab({.workspace = active->location.workspace, .tab_id = identity == 0 ? active->location.tab_id : identity});
+    if (const auto *active = session().activeTab()) {
+      session().closeTab({.workspace = active->location.workspace, .tab_id = identity == 0 ? active->location.tab_id : identity});
     }
   } else if (action == Action::select_workspace) {
-    session_.selectWorkspace(parseLocation(target));
+    session().selectWorkspace(parseLocation(target));
   } else if (action == Action::leave_worktree) {
-    session_.leaveWorktree();
+    session().leaveWorktree();
   } else if (action == Action::forget_gone_worktrees) {
-    session_.forgetGoneWorktrees();
+    session().forgetGoneWorktrees();
   } else if (action == Action::select_agent && target.startsWith(QLatin1StringView("command:"))) {
-    session_.openWorktree(target.section(QLatin1Char(':'), 1).toULongLong());
+    session().openWorktree(target.section(QLatin1Char(':'), 1).toULongLong());
   } else {
     return false;
   }
@@ -1049,21 +1072,21 @@ bool Application::executeNavigation(Action action, const QString &target) {
 
 bool Application::executePane(Action action, std::uint64_t identity) {
   if (action == Action::focus_left || action == Action::focus_right || action == Action::focus_up || action == Action::focus_down) {
-    session_.focusDirection(paneDirection(action));
+    session().focusDirection(paneDirection(action));
   } else if (action == Action::resize_left || action == Action::resize_right || action == Action::resize_up || action == Action::resize_down) {
-    session_.resizeDirection(paneDirection(action));
+    session().resizeDirection(paneDirection(action));
   } else if (action == Action::focus_pane || action == Action::select_agent) {
-    session_.focusPane(identity);
+    session().focusPane(identity);
   } else if (action == Action::split_horizontal) {
-    session_.split(ClientLayoutAxis::horizontal);
+    session().split(ClientLayoutAxis::horizontal);
   } else if (action == Action::split_vertical) {
-    session_.split(ClientLayoutAxis::vertical);
+    session().split(ClientLayoutAxis::vertical);
   } else if (action == Action::close_pane) {
-    if (const auto *pane = session_.focusedPane()) {
-      session_.closePane(identity == 0 ? pane->id : identity);
+    if (const auto *pane = session().focusedPane()) {
+      session().closePane(identity == 0 ? pane->id : identity);
     }
   } else if (action == Action::fullscreen) {
-    session_.toggleFullscreen();
+    session().toggleFullscreen();
   } else {
     return false;
   }
@@ -1077,14 +1100,14 @@ void Application::executeWindowAction(Action action) {
       window_->close();
     }
   } else if (action == Action::toggle_sidebar) {
-    session_.setSidebarVisible(!session_.configuration().sidebar_visible);
+    session().setSidebarVisible(!session().configuration().sidebar_visible);
     emit configurationChanged();
   } else if (action == Action::toggle_workspace_list) {
-    session_.setWorkspaceListCollapsed(!session_.workspaceListCollapsed());
+    session().setWorkspaceListCollapsed(!session().workspaceListCollapsed());
     emit configurationChanged();
   } else if (action == Action::history) {
-    history_filters_ = {.author = session_.configuration().history.show_agent_commands ? HistoryAuthorFilter::all : HistoryAuthorFilter::human};
-    session_.inspectHistory(false);
+    history_filters_ = {.author = session().configuration().history.show_agent_commands ? HistoryAuthorFilter::all : HistoryAuthorFilter::human};
+    session().inspectHistory(false);
     showDialog(QStringLiteral("history"));
     searchHistory({});
   } else if (action == Action::palette || action == Action::goto_picker) {
@@ -1097,10 +1120,10 @@ void Application::executeWindowAction(Action action) {
     showDialog(dialogName(action));
   } else if (action == Action::copy_mode) {
     if (dialog_.isEmpty()) {
-      static_cast<void>(session_.enterCopyMode());
+      static_cast<void>(session().enterCopyMode());
       emit stateChanged();
-      if (session_.copyMode().state()) {
-        emit terminalChanged(session_.copyMode().state().value().pane_id);
+      if (const auto &copy = session().copyMode().state()) {
+        emit terminalChanged(copy->pane_id);
       }
     }
   } else if (action == Action::cancel) {
@@ -1109,15 +1132,15 @@ void Application::executeWindowAction(Action action) {
 }
 
 void Application::cancelCurrentInteraction() {
-  session_.invalidateSuggestion();
+  session().invalidateSuggestion();
   if (restorePaletteParent()) {
     return;
   }
 
-  const auto &copy = session_.copyMode().state();
+  const auto &copy = session().copyMode().state();
   if (dialog_.isEmpty() && copy && !copy->pointer) {
     const auto pane_id = copy->pane_id;
-    session_.leaveCopyMode();
+    session().leaveCopyMode();
     emit terminalChanged(pane_id);
     emit stateChanged();
   }
@@ -1126,7 +1149,7 @@ void Application::cancelCurrentInteraction() {
 }
 
 void Application::setSidebarWidth(qreal width) {
-  session_.setSidebarWidth(static_cast<float>(std::clamp(width, qreal{Configuration::minimum_sidebar_width}, qreal{Configuration::maximum_sidebar_width})));
+  session().setSidebarWidth(static_cast<float>(std::clamp(width, qreal{Configuration::minimum_sidebar_width}, qreal{Configuration::maximum_sidebar_width})));
   emit configurationChanged();
 }
 
@@ -1149,7 +1172,7 @@ bool Application::updateViewport(qreal width, qreal height) {
 
   const Viewport next{.width = static_cast<std::uint32_t>(std::clamp(width, 0.0, maximum_dimension)), .height = static_cast<std::uint32_t>(std::clamp(height, 0.0, maximum_dimension)), .scale = 1};
   if (viewport_ != next) {
-    session_.invalidateView();
+    session().invalidateView();
     viewport_ = next;
 
     return true;
@@ -1181,15 +1204,15 @@ void Application::searchHistory(const QString &query) {
 }
 
 void Application::input(std::uint64_t pane_id, const QByteArray &bytes, PaneInputSource source) {
-  const auto &copy = session_.copyMode().state();
+  const auto &copy = session().copyMode().state();
   const auto previous = copy && copy->pointer ? copy->pane_id : 0;
   try {
-    session_.input(pane_id, {bytes.constData(), static_cast<std::size_t>(bytes.size())}, source);
+    session().input(pane_id, {bytes.constData(), static_cast<std::size_t>(bytes.size())}, source);
   } catch (const std::exception &error) {
     fail(error);
   }
 
-  if (previous != 0 && !session_.copyMode().state()) {
+  if (previous != 0 && !session().copyMode().state()) {
     publishCopyChange(previous);
   }
 }
@@ -1197,7 +1220,7 @@ void Application::input(std::uint64_t pane_id, const QByteArray &bytes, PaneInpu
 void Application::paste(std::uint64_t pane_id, const QString &text) {
   try {
     const auto bytes = text.toUtf8();
-    session_.paste(pane_id, {bytes.constData(), static_cast<std::size_t>(bytes.size())});
+    session().paste(pane_id, {bytes.constData(), static_cast<std::size_t>(bytes.size())});
   } catch (const std::exception &error) {
     fail(error);
   }
@@ -1205,7 +1228,7 @@ void Application::paste(std::uint64_t pane_id, const QString &text) {
 
 void Application::resize(std::uint64_t pane_id, TerminalSize size) {
   try {
-    session_.resize(pane_id, size);
+    session().resize(pane_id, size);
   } catch (const std::exception &error) {
     fail(error);
   }
@@ -1213,7 +1236,7 @@ void Application::resize(std::uint64_t pane_id, TerminalSize size) {
 
 void Application::scroll(PaneScrollDelta delta) {
   try {
-    session_.scroll(delta);
+    session().scroll(delta);
   } catch (const std::exception &error) {
     fail(error);
   }
@@ -1226,7 +1249,7 @@ void Application::showDialog(const QString &kind, const QString &text) {
   }
 
   if (dialog_ == QLatin1StringView("paths") && kind != QLatin1StringView("paths")) {
-    session_.closePathPicker();
+    session().closePathPicker();
   }
 
   key_bindings_.cancelSequence();
@@ -1244,15 +1267,15 @@ void Application::fail(const std::exception &error) {
 }
 
 QVariantMap Application::colors() const {
-  return themeColors(session_.configuration());
+  return themeColors(session().configuration());
 }
 
 QVariantMap Application::font() const {
-  return fontSettings(session_.configuration().font);
+  return fontSettings(session().configuration().font);
 }
 
 ResolvedFont Application::resolveFont(qreal scale) {
-  return configuration_source_.resolveFont(session_.configuration().font, scale);
+  return configuration_source_.resolveFont(session().configuration().font, scale);
 }
 
 QVariantMap Application::workspaceContext() const {
@@ -1260,15 +1283,15 @@ QVariantMap Application::workspaceContext() const {
 }
 
 bool Application::sidebarVisible() const {
-  return session_.configuration().sidebar_visible;
+  return session().configuration().sidebar_visible;
 }
 
 qreal Application::sidebarWidth() const {
-  return session_.configuration().sidebar_width;
+  return session().configuration().sidebar_width;
 }
 
 bool Application::workspaceListCollapsed() const {
-  return session_.workspaceListCollapsed();
+  return session().workspaceListCollapsed();
 }
 
 qreal Application::windowControls() const {
@@ -1284,11 +1307,11 @@ QString Application::dialogText() const {
 }
 
 bool Application::connected() const {
-  return connection_.ready();
+  return connection().ready();
 }
 
 QString Application::title() const {
-  const auto title = session_.windowTitle({hostname_.constData(), static_cast<std::size_t>(hostname_.size())});
+  const auto title = session().windowTitle({hostname_.constData(), static_cast<std::size_t>(hostname_.size())});
 
   return toQString(title.view());
 }
@@ -1306,11 +1329,11 @@ QVariantMap Application::statusMode() const {
 }
 
 QVariantMap Application::hostMetrics() const {
-  return metricsRecord(session_.hostMetrics());
+  return metricsRecord(session().hostMetrics());
 }
 
 QString Application::tlsBadgeColor() const {
-  const auto &proxy = session_.proxyStatus();
+  const auto &proxy = session().proxyStatus();
   if (!proxy.active && !proxy.system_trusted) {
     return {};
   }
@@ -1324,8 +1347,8 @@ QString Application::tlsBadgeColor() const {
 
 void Application::dismissDiagnostic() {
   error_.clear();
-  session_.dismissDiagnostic();
-  connection_.dismissError();
+  session().dismissDiagnostic();
+  connection().dismissError();
   emit stateChanged();
 }
 
@@ -1334,7 +1357,7 @@ QString Application::error() const {
     return error_;
   }
 
-  return connection_.error().isEmpty() ? toQString(session_.error()) : connection_.error();
+  return connection().error().isEmpty() ? toQString(session().error()) : connection().error();
 }
 
 }

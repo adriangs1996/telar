@@ -31,7 +31,7 @@ void Application::registerHistoryPanel(QQuickItem *panel) {
 
 HistoryScrollSurface Application::historyScrollSurface(const HistoryModalMetrics &metrics) const {
   const auto density = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
-  const auto &browser = session_.historyBrowser();
+  const auto &browser = session().historyBrowser();
   HistoryScrollSurface surface{
       .generation = dialog_generation_,
       .revision = browser.revision(),
@@ -85,7 +85,7 @@ bool Application::handleHistoryWheel(QWheelEvent &event) {
     return true;
   }
 
-  const auto &browser = session_.historyBrowser();
+  const auto &browser = session().historyBrowser();
   const auto &view = browser.state();
   const HistoryScrollState state{.generation = dialog_generation_, .revision = browser.revision(), .ready = !historyLoading() && view.phase == HistoryPhase::ready, .inspecting = view.inspecting};
   const auto &surface = presented_history_surface_;
@@ -111,7 +111,7 @@ bool Application::handleHistoryWheel(QWheelEvent &event) {
 }
 
 void Application::moveHistoryRows(std::int32_t steps) {
-  const auto &browser = session_.historyBrowser();
+  const auto &browser = session().historyBrowser();
   for (std::int32_t remaining = std::abs(steps); remaining > 0; --remaining) {
     if (historyLoading() || browser.rows().empty()) {
       break;
@@ -120,14 +120,14 @@ void Application::moveHistoryRows(std::int32_t steps) {
     const auto selected = browser.state().selection;
     if (steps < 0) {
       if (selected + 1 < browser.rows().size()) {
-        session_.selectHistoryRow(selected + 1);
+        session().selectHistoryRow(selected + 1);
       } else {
-        session_.pageHistory(HistoryPage::older);
+        session().pageHistory(HistoryPage::older);
       }
     } else if (selected > 0) {
-      session_.selectHistoryRow(selected - 1);
+      session().selectHistoryRow(selected - 1);
     } else {
-      session_.pageHistory(HistoryPage::newer);
+      session().pageHistory(HistoryPage::newer);
     }
   }
 }

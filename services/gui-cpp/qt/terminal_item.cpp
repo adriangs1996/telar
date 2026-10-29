@@ -143,6 +143,7 @@ void TerminalItem::setApplication(QObject *application) {
     });
 
     connect(application_, &Application::configurationChanged, this, &TerminalItem::measure);
+    connect(application_, &Application::machineChanged, this, &TerminalItem::invalidateMachine);
     connect(application_, &Application::stateChanged, this, &TerminalItem::refreshLinkHover);
     connect(application_, &Application::dialogChanged, this, &TerminalItem::refreshLinkHover);
     connect(application_, &Application::pointerModifiersChanged, this, &TerminalItem::refreshLinkHover);
@@ -236,6 +237,22 @@ void TerminalItem::measure() {
   } catch (const std::exception &error) {
     qWarning("Terminal font: %s", error.what());
   }
+}
+
+void TerminalItem::invalidateMachine() {
+  wheel_.reset();
+  preedit_.clear();
+  font_row_revisions_.clear();
+  prepared_frame_.pane = {};
+  prepared_frame_.links.reset();
+  presented_frame_id_ = 0;
+  link_gesture_.cancel();
+  clearLinkHover();
+  keyboard_ = false;
+  blink_.stop();
+  ++appearance_;
+  polish();
+  update();
 }
 
 void TerminalItem::resizeTerminal() {

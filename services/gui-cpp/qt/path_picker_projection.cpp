@@ -98,14 +98,14 @@ QVariantList pathRows(const PathPickerPage &page, const PathPickerGeometry &geom
 }
 
 PathPickerPlacement Application::pathPlacement() const {
-  const auto &workbench = session_.workbenchGeometry();
+  const auto &workbench = session().workbenchGeometry();
   const auto host = workbench.cellArea();
-  auto *tab = session_.activeTab();
+  auto *tab = session().activeTab();
   std::optional<CellPosition> cursor;
   if (tab != nullptr) {
     const auto fullscreen = tab->fullscreen ? std::optional{tab->focused_pane} : std::nullopt;
     for (const auto &placement : tab->layout.arrange(host, workbench.layout_metrics, fullscreen)) {
-      const auto *pane = session_.findPane(placement.pane_id);
+      const auto *pane = session().findPane(placement.pane_id);
       if (pane == nullptr || pane->id != tab->focused_pane || !pane->attached) {
         continue;
       }
@@ -119,14 +119,14 @@ PathPickerPlacement Application::pathPlacement() const {
     }
   }
 
-  return PathPickerPlacement::forPage(host, cursor, static_cast<std::uint16_t>(session_.pathPicker().matches().size()));
+  return PathPickerPlacement::forPage(host, cursor, static_cast<std::uint16_t>(session().pathPicker().matches().size()));
 }
 
 QVariantMap Application::pathPickerGeometry() const {
   const auto density = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
   const auto display = displayMetrics(density);
-  const auto &workbench = session_.workbenchGeometry();
-  const auto &page = session_.pathPicker();
+  const auto &workbench = session().workbenchGeometry();
+  const auto &page = session().pathPicker();
   const auto placement = pathPlacement();
   const auto count_text = PathPickerLabels::count(page);
   const auto geometry = PathPickerGeometry::measure(placement, page.matches().size(), path_selection_, {

@@ -24,7 +24,7 @@
 namespace telar::gui::qt {
 
 void Application::showPathPicker() {
-  if (!session_.beginPathPicker()) {
+  if (!session().beginPathPicker()) {
     return;
   }
 
@@ -35,7 +35,7 @@ void Application::showPathPicker() {
 }
 
 void Application::refreshPathPicker() {
-  const auto count = session_.pathPicker().matches().size();
+  const auto count = session().pathPicker().matches().size();
   path_selection_ = count == 0 ? 0 : std::min(path_selection_, count - 1);
   emit pathPickerChanged();
 }
@@ -54,7 +54,7 @@ void Application::searchPaths(const QString &text) {
   path_selection_ = 0;
   const auto query = path_query_.toUtf8();
   applyInteraction([&] {
-    session_.requestPaths({query.constData(), static_cast<std::size_t>(query.size())});
+    session().requestPaths({query.constData(), static_cast<std::size_t>(query.size())});
     refreshPathPicker();
   });
 
@@ -65,13 +65,13 @@ void Application::searchPaths(const QString &text) {
 
 void Application::reportPathQueryLimit(qulonglong requested_bytes) {
   if (dialog_ == QLatin1StringView("paths") && requested_bytes > PathPickerLimits::query_bytes) {
-    session_.reportLimit({.name = "prompt.path_query_bytes", .noun = "bytes", .value = PathPickerLimits::query_bytes, .requested = requested_bytes, .route = {}});
+    session().reportLimit({.name = "prompt.path_query_bytes", .noun = "bytes", .value = PathPickerLimits::query_bytes, .requested = requested_bytes, .route = {}});
     refreshNotifications();
   }
 }
 
 void Application::movePathSelection(int delta) {
-  const auto count = session_.pathPicker().matches().size();
+  const auto count = session().pathPicker().matches().size();
   if (dialog_ != QLatin1StringView("paths")) {
     return;
   }
@@ -85,7 +85,7 @@ void Application::movePathSelection(int delta) {
 
 void Application::descendPath() {
   applyInteraction([&] {
-    if (dialog_ == QLatin1StringView("paths") && session_.descendPath(path_selection_)) {
+    if (dialog_ == QLatin1StringView("paths") && session().descendPath(path_selection_)) {
       path_query_.clear();
       path_selection_ = 0;
       refreshPathPicker();
@@ -95,7 +95,7 @@ void Application::descendPath() {
 
 void Application::ascendPath() {
   applyInteraction([&] {
-    if (dialog_ == QLatin1StringView("paths") && session_.ascendPath()) {
+    if (dialog_ == QLatin1StringView("paths") && session().ascendPath()) {
       path_query_.clear();
       path_selection_ = 0;
       refreshPathPicker();
@@ -109,7 +109,7 @@ void Application::insertPath(bool absolute) {
       return;
     }
 
-    if (session_.insertPath(path_selection_, absolute)) {
+    if (session().insertPath(path_selection_, absolute)) {
       showDialog({});
     }
 
@@ -118,7 +118,7 @@ void Application::insertPath(bool absolute) {
 }
 
 void Application::activatePath(const QVariantMap &choice) {
-  const auto &page = session_.pathPicker();
+  const auto &page = session().pathPicker();
   if (dialog_ != QLatin1StringView("paths") || choice.value(QStringLiteral("revision")).toString() != QString::number(page.revision())) {
     return;
   }
@@ -137,7 +137,7 @@ void Application::activatePath(const QVariantMap &choice) {
 }
 
 QVariantMap Application::pathPickerState() const {
-  const auto &page = session_.pathPicker();
+  const auto &page = session().pathPicker();
   return {
       {QStringLiteral("editorText"), path_query_},
       {QStringLiteral("root"), toQString(page.root())},

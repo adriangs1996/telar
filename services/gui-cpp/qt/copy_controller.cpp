@@ -16,11 +16,11 @@
 namespace telar::gui::qt {
 
 bool Application::copyModeActive() const noexcept {
-  return session_.copyMode().active();
+  return session().copyMode().active();
 }
 
 const std::optional<CopyState> &Application::copyState() const noexcept {
-  return session_.copyMode().state();
+  return session().copyMode().state();
 }
 
 bool Application::handleCopyKey(std::uint64_t pane_id, const QKeyEvent &event) {
@@ -35,7 +35,7 @@ bool Application::handleCopyKey(std::uint64_t pane_id, const QKeyEvent &event) {
   }
 
   try {
-    const auto effect = session_.copyKey(*semantic);
+    const auto effect = session().copyKey(*semantic);
     if (effect.search) {
       showDialog(QStringLiteral("copy-search"));
     }
@@ -70,7 +70,7 @@ void Application::leaveKeyboardCopyMode() {
   const auto &copy = copyState();
   if (copy && !copy->pointer) {
     const auto pane_id = copy->pane_id;
-    session_.leaveCopyMode();
+    session().leaveCopyMode();
     publishCopyChange(pane_id);
   }
 }
@@ -83,7 +83,7 @@ bool Application::beginSelection(std::uint64_t pane_id, CopyPoint local) {
   key_bindings_.cancelSequence();
   const auto &copy = copyState();
   const auto previous = copy ? copy->pane_id : 0;
-  const auto began = session_.beginSelection({.pane_id = pane_id, .position = local, .now_ns = key_bindings_.nowNanoseconds()});
+  const auto began = session().beginSelection({.pane_id = pane_id, .position = local, .now_ns = key_bindings_.nowNanoseconds()});
   if (began) {
     publishCopyChange(previous);
   }
@@ -92,7 +92,7 @@ bool Application::beginSelection(std::uint64_t pane_id, CopyPoint local) {
 }
 
 bool Application::handleCopyPointer(const CopyPointerInput &input) {
-  const auto owner = session_.copyMode().pointerOwner();
+  const auto owner = session().copyMode().pointerOwner();
   if (!dialog_.isEmpty() && (!owner || !owner->dragging)) {
     return true;
   }
@@ -103,10 +103,10 @@ bool Application::handleCopyPointer(const CopyPointerInput &input) {
 
   const auto &copy = copyState();
   const auto previous = copy ? copy->pane_id : 0;
-  const auto revision = session_.copyMode().revision();
+  const auto revision = session().copyMode().revision();
   try {
-    const auto outcome = session_.pointer(input);
-    if (session_.copyMode().revision() != revision) {
+    const auto outcome = session().pointer(input);
+    if (session().copyMode().revision() != revision) {
       publishCopyChange(previous);
     }
 
@@ -120,7 +120,7 @@ bool Application::handleCopyPointer(const CopyPointerInput &input) {
 
 void Application::copySelection(std::uint64_t pane_id) {
   try {
-    static_cast<void>(session_.copySelection(pane_id));
+    static_cast<void>(session().copySelection(pane_id));
   } catch (const std::exception &error) {
     fail(error);
   }

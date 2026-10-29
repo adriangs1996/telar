@@ -14,6 +14,7 @@
 #include <QQuickWindow>
 #include <QString>
 #include <QTimer>
+#include <QtCore/qchar.h>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
@@ -30,7 +31,7 @@ void Application::initializeNotifications() {
   notification_timer_.setTimerType(Qt::PreciseTimer);
 
   connect(&notification_timer_, &QTimer::timeout, this, [this] {
-    session_.advanceNotifications(platform::AwakeClock::nowNanoseconds());
+    session().advanceNotifications(platform::AwakeClock::nowNanoseconds());
     refreshNotifications();
   });
 
@@ -49,11 +50,29 @@ void Application::initializeNotifications() {
 }
 
 const NotificationCenter &Application::notifications() const noexcept {
-  return session_.notifications();
+  return session().notifications();
+}
+
+QString Application::notificationIdentity(NotificationId identity) const {
+  return QString::number(machine_view_revision_) + QLatin1Char(':') + QString::number(identity.value);
+}
+
+std::optional<NotificationId> Application::resolveNotification(const QString &identity) const {
+  const auto separator = identity.indexOf(QLatin1Char(':'));
+  if (separator < 0) {
+    return std::nullopt;
+  }
+
+  bool valid_view = false;
+  bool valid_id = false;
+  const auto view = identity.first(separator).toULongLong(&valid_view);
+  const auto raw_id = identity.sliced(separator + 1).toULongLong(&valid_id);
+
+  return valid_view && valid_id && view == machine_view_revision_ ? std::optional{NotificationId{raw_id}} : std::nullopt;
 }
 
 bool Application::notificationTargetVisible(NotificationTarget target) const noexcept {
-  return session_.notificationTargetVisible(target);
+  return session().notificationTargetVisible(target);
 }
 
 Rect Application::notificationHost(const DisplayMetrics &display) const {
@@ -66,7 +85,7 @@ Rect Application::notificationHost(const DisplayMetrics &display) const {
 }
 
 void Application::publishNotification(NotificationInput input) {
-  session_.publishNotification(input);
+  session().publishNotification(input);
   refreshNotifications();
 }
 
@@ -85,7 +104,7 @@ void Application::initializeGraphicsRecovery() {
   graphics_resume_timer_.setTimerType(Qt::PreciseTimer);
   connect(&graphics_resume_timer_, &QTimer::timeout, this, [this] {
     try {
-      session_.resumeGraphics();
+      session().resumeGraphics();
     } catch (const std::exception &error) {
       fail(error);
     }
@@ -96,29 +115,27 @@ void Application::initializeGraphicsRecovery() {
 }
 
 void Application::scheduleGraphicsRecovery() {
-  scheduleDeadline(graphics_resume_timer_, session_.ready() ? session_.graphicsResumeDeadline() : std::nullopt, platform::AwakeClock::nowNanoseconds());
+  scheduleDeadline(graphics_resume_timer_, session().ready() ? session().graphicsResumeDeadline() : std::nullopt, platform::AwakeClock::nowNanoseconds());
 }
 
 void Application::dismissNotification(const QString &identity) {
-  bool valid = false;
-  const NotificationId id{identity.toULongLong(&valid)};
-  if (valid && session_.dismissNotification(id)) {
+  const auto id = resolveNotification(identity);
+  if (id && session().dismissNotification(*id)) {
     refreshNotifications();
     restoreTerminalFocus();
   }
 }
 
 void Application::activateNotification(const QString &identity) {
-  bool valid = false;
-  const NotificationId id{identity.toULongLong(&valid)};
-  const auto *item = valid ? notifications().find(id) : nullptr;
+  const auto id = resolveNotification(identity);
+  const auto *item = id ? notifications().find(*id) : nullptr;
   if (item == nullptr) {
     return;
   }
 
   const auto link = LinkTarget::fromUri(item->link.view());
   applyInteraction([&] {
-    if (session_.activateNotification(id)) {
+    if (session().activateNotification(*id)) {
       if (link) {
         static_cast<void>(openLink(*link));
       }
@@ -130,7 +147,7 @@ void Application::activateNotification(const QString &identity) {
 }
 
 void Application::restoreTerminalFocus() {
-  const auto *pane = session_.focusedPane();
+  const auto *pane = session().focusedPane();
   const auto terminal = pane != nullptr ? terminals_.value(pane->id) : nullptr;
   if (terminal && terminal->isVisible() && dialog_.isEmpty()) {
     terminal->forceActiveFocus(Qt::OtherFocusReason);

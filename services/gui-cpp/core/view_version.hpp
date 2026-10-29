@@ -12,6 +12,7 @@ struct ViewVersion {
   std::uint64_t host = 0;
   std::uint64_t configuration = 0;
   std::uint64_t viewport = 0;
+  std::uint64_t machine = 0;
 
   bool operator==(const ViewVersion &) const = default;
 };

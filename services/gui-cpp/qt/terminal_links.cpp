@@ -37,7 +37,10 @@
 namespace telar::gui::qt {
 
 ViewVersion Application::viewVersion() const noexcept {
-  return session_.viewVersion();
+  auto version = session().viewVersion();
+  version.machine = machine_view_revision_;
+
+  return version;
 }
 
 Qt::KeyboardModifiers Application::pointerModifiers() const noexcept {

@@ -100,6 +100,7 @@ private:
   QRectF host_;
   qreal density_ = 1;
   std::uint64_t now_ns_ = 0;
+  std::uint64_t machine_view_ = 0;
   std::optional<std::uint64_t> motion_end_ns_;
 };
 

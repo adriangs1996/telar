@@ -6,7 +6,7 @@ namespace telar::gui {
 
 struct MachineLimits {
   static constexpr std::size_t profiles = 16;
-  static constexpr std::size_t slots = profiles + 1;
+  static constexpr std::size_t window_slots = profiles + 1;
   static constexpr std::size_t label_bytes = 32;
   static constexpr std::size_t destination_bytes = 255;
   static constexpr std::size_t color_bytes = 24;

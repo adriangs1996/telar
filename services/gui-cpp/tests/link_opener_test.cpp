@@ -3,8 +3,8 @@
 #include "platform/environment.hpp"
 #include "platform/external_links.hpp"
 #include "projection.hpp"
-#include <QCoreApplication>
 #include <QByteArray>
+#include <QCoreApplication>
 #include <QProcess>
 #include <QString>
 #include <QStringList>
@@ -20,11 +20,14 @@
 #include <cerrno>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <stdexcept>
 #include <string_view>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <utility>
+#include <variant>
 #include <vector>
 
 namespace {
@@ -35,7 +38,7 @@ using namespace telar::gui::qt;
 struct Observer {
   std::vector<std::optional<LinkOpeningFailure>> results;
 
-  void linkOpeningFinished(std::optional<LinkOpeningFailure> failure) {
+  void linkOpeningFinished([[maybe_unused]] std::monostate context, std::optional<LinkOpeningFailure> failure) {
     results.push_back(failure);
   }
 
@@ -43,6 +46,14 @@ struct Observer {
     return QTest::qWaitFor([&] {
       return results.size() == count;
     });
+  }
+};
+
+struct ContextObserver {
+  std::vector<std::pair<std::uint64_t, std::optional<LinkOpeningFailure>>> results;
+
+  void linkOpeningFinished(std::uint64_t context, std::optional<LinkOpeningFailure> failure) {
+    results.emplace_back(context, failure);
   }
 };
 
@@ -127,6 +138,24 @@ private:
     QVERIFY(!opener.active());
     QCOMPARE(TestHost::started, (QStringList{toQString(first.text()), toQString(last.text())}));
     QVERIFY(!observer.results.front() && !observer.results.back());
+  }
+
+  Q_SLOT static void completionsKeepTheirOriginalContext() {
+    ContextObserver observer;
+    ExternalLinkOpener<TestHost, ContextObserver, std::uint64_t> opener{observer};
+    constexpr std::uint64_t first_context = 11;
+    constexpr std::uint64_t replaced_context = 12;
+    constexpr std::uint64_t last_context = 13;
+    opener.request(target("https://failure.test"), first_context);
+    opener.request(target("https://omitted.test"), replaced_context);
+    opener.request(target("https://last.test"), last_context);
+    QVERIFY(QTest::qWaitFor([&] {
+      return observer.results.size() == 2;
+    }));
+    QCOMPARE(observer.results[0].first, first_context);
+    QCOMPARE(observer.results[0].second, std::optional{LinkOpeningFailure::process});
+    QCOMPARE(observer.results[1].first, last_context);
+    QVERIFY(!observer.results[1].second);
   }
 
   Q_SLOT static void failuresAndRecovery() {

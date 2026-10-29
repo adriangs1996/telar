@@ -8,15 +8,11 @@
 #include "qml_fixture.hpp"
 #include "qt/application.hpp"
 #include "qt/list_model.hpp"
-#include "telar_client/codecs/telar_codec.hpp"
-#include "telar_client/codecs/telar_handshake.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_handshake.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
-#include "telar_client/serializers/telar_serializer.hpp"
-#include "transport/frame_stream.hpp"
 #include "ui/bundled_fonts.hpp"
+#include "wire_runtime.hpp"
 #include <QAbstractItemModel>
 #include <QFont>
 #include <QGuiApplication>
@@ -36,13 +32,11 @@
 #include <QtCore/qtypes.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <span>
-#include <vector>
 
 namespace {
 
@@ -57,88 +51,16 @@ constexpr int header_height = 30;
 constexpr std::uint32_t image_side = 2;
 constexpr std::uint64_t pixel_bytes = std::uint64_t{image_side} * image_side * 4;
 
-class WireRuntime {
-public:
-  explicit WireRuntime(QLocalSocket &socket)
-      : socket_(socket),
-        stream_(memory_) {
-    QObject::connect(&socket_, &QLocalSocket::readyRead, &socket_, [this] {
-      const auto bytes = socket_.readAll();
-      const auto consume = [this](std::span<const Byte> payload) {
-        if (!greeted_) {
-          static_cast<void>(HandshakeCodec::decode<ClientHello>(payload));
-          greeted_ = true;
-        } else {
-          received_.emplace_back(payload.begin(), payload.end());
-        }
-      };
-      stream_.feed(byteView({bytes.constData(), static_cast<std::size_t>(bytes.size())}), consume);
-    });
-    write(HandshakeCodec::encode(ServerAccept{handshake::schema_id}));
+void failedSnapshot(WireRuntime &runtime, std::uint64_t revision) {
+  const GraphicsHeader snapshot{.pane_id = 1, .revision = revision};
+  runtime.send(GraphicsSnapshot{.header = snapshot, .phase = SnapshotPhase::begin});
+  constexpr auto overflow = GraphicsStore<SystemAllocator>::image_capacity + 1;
+  for (std::uint32_t id = 1; id <= overflow; ++id) {
+    runtime.send(GraphicsImage{.header = snapshot, .image = {.key = {.image_id = id, .generation = 1}, .format = ImageFormat::rgba, .width = image_side, .height = image_side, .byte_len = pixel_bytes}});
   }
 
-  ~WireRuntime() {
-    QObject::disconnect(&socket_, nullptr, &socket_, nullptr);
-  }
-
-  WireRuntime(const WireRuntime &) = delete;
-  WireRuntime &operator=(const WireRuntime &) = delete;
-  WireRuntime(WireRuntime &&) = delete;
-  WireRuntime &operator=(WireRuntime &&) = delete;
-
-  template <typename Message>
-  void send(const Message &message) {
-    std::vector<Byte> bytes(Codec::encodedSize(message));
-    write(Codec::encode(message, bytes));
-  }
-
-  [[nodiscard]] std::size_t count(ClientTag tag) const {
-    return static_cast<std::size_t>(std::ranges::count_if(received_, [tag](const auto &bytes) {
-      return bytes.front() == static_cast<Byte>(tag);
-    }));
-  }
-
-  template <typename Message>
-  [[nodiscard]] Message last() const {
-    const auto found = std::find_if(received_.rbegin(), received_.rend(), [](const auto &bytes) {
-      return bytes.front() == static_cast<Byte>(MessageSchema<Message>::tag);
-    });
-
-    DecodeStorage storage{decode_};
-
-    return Codec::decode<Message>(*found, storage);
-  }
-
-  void failedSnapshot(std::uint64_t revision) {
-    const GraphicsHeader snapshot{.pane_id = 1, .revision = revision};
-    send(GraphicsSnapshot{.header = snapshot, .phase = SnapshotPhase::begin});
-    constexpr auto overflow = GraphicsStore<SystemAllocator>::image_capacity + 1;
-    for (std::uint32_t id = 1; id <= overflow; ++id) {
-      send(GraphicsImage{.header = snapshot, .image = {.key = {.image_id = id, .generation = 1}, .format = ImageFormat::rgba, .width = image_side, .height = image_side, .byte_len = pixel_bytes}});
-    }
-
-    send(GraphicsSnapshot{.header = snapshot, .phase = SnapshotPhase::end});
-  }
-
-private:
-  void write(std::span<const Byte> payload) {
-    std::array<Byte, frame_prefix_size> prefix{};
-    std::span<Byte> output{prefix};
-    u32::encode(static_cast<std::uint32_t>(payload.size()), output);
-    const auto prefix_text = textView(prefix);
-    const auto payload_text = textView(payload);
-    socket_.write(prefix_text.data(), static_cast<qint64>(prefix_text.size()));
-    socket_.write(payload_text.data(), static_cast<qint64>(payload_text.size()));
-  }
-
-  QLocalSocket &socket_;
-  SystemAllocator memory_;
-  FrameStream<SystemAllocator> stream_;
-  std::vector<std::vector<Byte>> received_;
-  static constexpr std::size_t decode_capacity = 4096;
-  mutable std::array<Byte, decode_capacity> decode_{};
-  bool greeted_ = false;
-};
+  runtime.send(GraphicsSnapshot{.header = snapshot, .phase = SnapshotPhase::end});
+}
 
 QVariantMap paneChrome(Application &application) {
   const auto *model = application.panes();
@@ -190,7 +112,7 @@ class GraphicsRecoverySceneTest : public QObject {
     QVERIFY(!label->isVisible());
     window.show();
     for (std::uint64_t revision = 1; revision <= 3; ++revision) {
-      runtime.failedSnapshot(revision);
+      failedSnapshot(runtime, revision);
     }
 
     QTRY_COMPARE_WITH_TIMEOUT(runtime.count(ClientTag::request_graphics_snapshot), 3, wait_ms);
@@ -202,7 +124,7 @@ class GraphicsRecoverySceneTest : public QObject {
 
     constexpr auto window_ns = GraphicsPauses::healthy_window_ns;
     ControlledAwakeClock::set(window_ns - NotificationInput::nanoseconds_per_millisecond);
-    runtime.failedSnapshot(4);
+    failedSnapshot(runtime, 4);
     QTRY_COMPARE_WITH_TIMEOUT(application.pane(1)->graphics.revision(), 4, wait_ms);
     QCOMPARE(runtime.count(ClientTag::request_graphics_snapshot), 3);
     ControlledAwakeClock::set(window_ns);

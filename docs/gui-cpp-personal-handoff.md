@@ -1,5 +1,43 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## Personal continuation checkpoint
+
+Personal now has its own pinned Ghostty, FreeType and HarfBuzz dependencies,
+LLVM 23/Qt 6.12 Release build in `services/gui-cpp/out`, core sanitizers in
+`out-core-sanitizers` and native sanitizers in `out-native-sanitizers`.
+`gui-editor` is built and the actual Neovim configuration attached clangd to
+the machine registry header without diagnostics. The local reference runtime
+is `services/gui-cpp/out-dependencies/reference-runtime/bin/telar`. Build it
+with `DEVELOPER_DIR=/Library/Developer/CommandLineTools`, the repository's
+`packaging/macos/sdk-libc.sh` output and `-Dtarget=aarch64-macos.13.0 --libc ...`:
+the active Xcode 27 SDK failed while building Zig's libc++ (`INFINITY`). All
+artifacts stay inside this worktree, and the separate main checkout is intact.
+
+The bounded machine registry/picker checkpoint is commit `45e322f0`, with an
+8,091-operation original-source comparison and archived validation. The later
+window adapter extracts one allocator-owned `qt::MachineClient` per admitted
+slot, retaining shared window resources. It validates two framed socket
+connections, hidden presentation settlement, cached summaries and origin
+isolation for frames, held keys, notification callbacks, sounds and pending
+external links. Its expanded oracle covers 7,360 operations with remote
+selection and the original stopped phase. Read
+`services/gui-cpp/measurements/machine-window.md` and its validation manifest
+for the current scope. Earlier reports and manifests remain historical.
+
+The normal executable still initializes only the local client. Profile source
+admission, SSH transport, the picker/actions and native machine pixels are the
+next work; the action catalogue remains 25/29. No global parity gate is closed.
+The current native Cocoa/Metal scale-1 suite passes all 82 entries after the
+owned-window focus/geometry barrier; twenty selected regressions pass.
+Native sanitizer assertions pass, but exit leak acceptance remains OPEN.
+An independent Qt-only font-metrics control also reports leaks. Retain failed
+runs; do not suppress them or infer that every GUI leak is explained by that
+control. The standalone opener and expanded registry oracle pass sanitizers
+with leak detection enabled.
+
+The sections below describe the transfer baseline; prefer this checkpoint and
+the latest window-adapter report where the implementation has since advanced.
+
 The user explicitly requested moving the ongoing implementation to their saved machine Personal. Continue implementation here until the complete objective is met. This is a continuation, not a new GUI or a redesign. Keep this task active across checkpoints. Use available goal facilities to pursue the complete objective if supported. Do not declare completion from an incremental checkpoint.
 
 ## Objective and user requirements

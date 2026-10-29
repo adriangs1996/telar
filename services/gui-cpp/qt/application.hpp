@@ -1,6 +1,5 @@
 #pragma once
 
-#include "application/session.hpp"
 #include "application_effects.hpp"
 #include "configuration_source.hpp"
 #include "core/calendar_sample.hpp"
@@ -13,10 +12,12 @@
 #include "input/history_scroll.hpp"
 #include "key_bindings.hpp"
 #include "list_model.hpp"
+#include "machine_client.hpp"
+#include "machine_client_key.hpp"
+#include "machines/machines.hpp"
 #include "palette/navigation_target.hpp"
 #include "palette/query.hpp"
 #include "palette/ranked_matches.hpp"
-#include "platform/window_lease.hpp"
 #include "pointer_dispatcher.hpp"
 #include "presentation/display_metrics.hpp"
 #include "presentation/frame_pacer.hpp"
@@ -56,15 +57,16 @@
 namespace telar::gui::test {
 struct HistoryPresentation;
 struct FramePacing;
+struct MachineWindow;
 }
 
 namespace telar::gui::qt {
 
-using GuiSession = Session<ApplicationAllocator, RuntimeConnection, platform::AwakeClock, ApplicationEffects>;
 class TerminalItem;
 
 class Application final : public QObject {
   friend struct ApplicationEffects;
+  friend struct test::MachineWindow;
 
   Q_OBJECT
   QML_NAMED_ELEMENT(GuiController)
@@ -187,6 +189,7 @@ public:
   void registerTerminal(TerminalItem &terminal);
   void unregisterTerminal(TerminalItem &terminal);
   [[nodiscard]] const NotificationCenter &notifications() const noexcept;
+  [[nodiscard]] QString notificationIdentity(NotificationId identity) const;
   [[nodiscard]] bool notificationTargetVisible(NotificationTarget target) const noexcept;
   [[nodiscard]] DisplayMetrics displayMetrics(qreal density) const;
   [[nodiscard]] Rect notificationHost(const DisplayMetrics &display) const;
@@ -245,7 +248,7 @@ public:
   bool handleCopyPointer(const CopyPointerInput &input);
   void copySelection(std::uint64_t pane_id);
   bool openLink(const LinkTarget &target, std::optional<std::uint64_t> source_id = {});
-  void linkOpeningFinished(std::optional<LinkOpeningFailure> failure);
+  void linkOpeningFinished(MachineClientKey source, std::optional<LinkOpeningFailure> failure);
 
   QAbstractItemModel *workspaces() noexcept {
     return &workspaces_;
@@ -320,6 +323,7 @@ signals:
   void inputReleasing(qulonglong pane_id);
   void notification(const QString &message);
   void notificationsChanged();
+  void machineChanged();
 
 private:
   friend struct test::HistoryPresentation;
@@ -341,7 +345,22 @@ private:
   static constexpr std::size_t palette_capacity = WorkspaceReplica<ApplicationAllocator>::maximum_workspaces + GuiSession::maximum_workspace_tabs + AgentReplica<ApplicationAllocator>::capacity;
   using PaletteMatches = RankedMatches<PaletteTarget, palette_capacity>;
 
-  void runtimeDisconnected();
+  void initializeMachines();
+  void configureClients();
+  void setClientsDisplayRefresh(std::uint16_t fps);
+  [[nodiscard]] MachineClient &createClient(Machines::Slot slot);
+  [[nodiscard]] MachineClient &clientAt(Machines::Slot slot) const noexcept;
+  void selectMachine(MachineToken target);
+  void releaseMachineInput();
+  void forgetMachineView();
+  void summarizeMachine(const MachineClient &client);
+  void connectMachine(MachineClient &client);
+  [[nodiscard]] MachineClient *findClient(MachineClientKey key) const noexcept;
+  [[nodiscard]] GuiSession &session() noexcept;
+  [[nodiscard]] const GuiSession &session() const noexcept;
+  [[nodiscard]] RuntimeConnection &connection() noexcept;
+  [[nodiscard]] const RuntimeConnection &connection() const noexcept;
+  void runtimeDisconnected(MachineClient &client);
   void cancelCurrentInteraction();
   void showPalette(PaletteMode mode);
   void refreshPalette();
@@ -369,6 +388,7 @@ private:
   };
 
   struct PresentedFrame {
+    std::uint64_t machine_view = 0;
     std::array<PresentedPane, PaneLayout::maximum_panes> panes;
     std::size_t pane_count = 0;
     std::uint64_t preparation_ns = 0;
@@ -376,7 +396,7 @@ private:
     HistoryScrollSurface history_surface;
   };
 
-  void consume(QByteArrayView payload);
+  void consume(MachineClient &client, QByteArrayView payload);
   void executeHostCommand(const ClientCommand &message, CompleteClientCommand &reply);
   void synchronizeFontMetrics();
   void synchronizeWorkbenchGeometry();
@@ -420,6 +440,7 @@ private:
   void initializeGraphicsRecovery();
   void scheduleGraphicsRecovery();
   void restoreTerminalFocus();
+  [[nodiscard]] std::optional<NotificationId> resolveNotification(const QString &identity) const;
   bool executeNavigation(Action action, const QString &target);
   bool executePane(Action action, std::uint64_t identity);
   void executeWindowAction(Action action);
@@ -431,7 +452,7 @@ private:
       refresh();
     } catch (const std::exception &error) {
       if (dialog_ == QLatin1StringView("history")) {
-        session_.reportHistoryError(error.what());
+        session().reportHistoryError(error.what());
         refreshHistory();
       } else {
         fail(error);
@@ -440,13 +461,16 @@ private:
   }
 
   ApplicationAllocator &memory_;
-  RuntimeConnection connection_;
+  Machines machines_;
+  std::array<std::optional<Owned<MachineClient, ApplicationAllocator>>, Machines::capacity> clients_;
+  std::uint64_t next_client_generation_ = 1;
+  std::uint64_t machine_view_revision_ = 0;
+  std::optional<MachineClientKey> sound_owner_;
   ConfigurationSource configuration_source_;
-  GuiSession session_;
   std::optional<WindowFramePacer<>> frame_pacer_;
   KeyBindings key_bindings_;
   PointerDispatcher pointer_dispatcher_;
-  ExternalLinkOpener<ApplicationLinkHost, Application> link_opener_;
+  ExternalLinkOpener<ApplicationLinkHost, Application, MachineClientKey> link_opener_;
   SoundPlayer<ApplicationSoundHost, Application> sound_player_;
   SystemNotifier<ApplicationNotificationHost, ApplicationAllocator> system_notifier_;
   ListModel workspaces_;
@@ -511,9 +535,7 @@ private:
   std::optional<PresentedHistory> presented_history_;
   HistoryScrollSurface presented_history_surface_;
   QHash<std::uint64_t, QPointer<TerminalItem>> terminals_;
-  std::optional<platform::WindowLease> identity_lease_;
   QByteArray hostname_;
-  std::uint64_t identity_ = 0;
   Qt::KeyboardModifiers pointer_modifiers_;
 };
 

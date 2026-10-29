@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import random
+import re
 import shutil
 import struct
 import subprocess
@@ -14,7 +15,7 @@ from check_notification_center import function_source
 
 
 model = r'''
-pub const RuntimeLink = struct { pub const Phase = enum(u8) { connecting, connected, lost, failed }; };
+pub const RuntimeLink = struct { __PHASE__ };
 pub const Status = enum { ready, needs_input };
 pub const Metrics = struct { cpu_percent: u8, cpu_count: u16, memory_used_decigib: u16, memory_total_decigib: u16 };
 pub const ClientModel = struct {
@@ -177,13 +178,24 @@ def prepare(repository, output):
     collect = function_source((source / 'machine_picker.zig').read_text(), 'collect')
     (output / 'machines/machine_picker.zig').write_text('const core = @import("telar-core");\nconst Machines = @import("Machines.zig");\nconst MachineResults = @import("MachineResults.zig");\n' + collect)
     (output / 'agents/attention.zig').write_text('const data = @import("model");\npub fn group(status: data.Status) data.Status { return status; }\n')
-    (output / 'model.zig').write_text(model)
+    link = (repository / 'src/model/connection/RuntimeLink.zig').read_text()
+    phase = re.search(r'pub const Phase = enum \{[^}]+\};', link).group(0)
+    (output / 'model.zig').write_text(model.replace('__PHASE__', phase))
     (output / 'pacing.zig').write_text('const std = @import("std");\npub const clock = struct { pub var now_ns: u64 = 0; pub fn monotonic(_: std.Io) u64 { return now_ns; } };\n')
     shutil.copy2(repository / 'src/core/fuzzy.zig', output / 'fuzzy.zig')
-    (output / 'core.zig').write_text('pub const MachineProfiles = struct { pub const capacity = 16; };\n'
-                                   'pub const MachineProfile = struct { pub const max_label_bytes = 32; pub const max_color_bytes = 24; };\n'
-                                   'pub const ssh_destination = struct { pub const max_bytes = 255; };\n'
-                                   'pub const remote_telar = struct { pub const max_path_bytes = 255; };\n'
+    def limit(filename, name):
+        source = (repository / 'src/core' / filename).read_text()
+        return int(re.search(r'pub const ' + name + r' = ([0-9]+);', source).group(1))
+
+    capacity = limit('MachineProfiles.zig', 'capacity')
+    label_bytes = limit('MachineProfile.zig', 'max_label_bytes')
+    color_bytes = limit('MachineProfile.zig', 'max_color_bytes')
+    destination_bytes = limit('ssh_destination.zig', 'max_bytes')
+    program_bytes = limit('remote_telar.zig', 'max_path_bytes')
+    (output / 'core.zig').write_text(f'pub const MachineProfiles = struct {{ pub const capacity = {capacity}; }};\n'
+                                   f'pub const MachineProfile = struct {{ pub const max_label_bytes = {label_bytes}; pub const max_color_bytes = {color_bytes}; }};\n'
+                                   f'pub const ssh_destination = struct {{ pub const max_bytes = {destination_bytes}; }};\n'
+                                   f'pub const remote_telar = struct {{ pub const max_path_bytes = {program_bytes}; }};\n'
                                    'pub const MachineId = enum(u64) { invalid = 0, _ };\n'
                                    'pub const score = @import("fuzzy.zig").score;\n')
     (output / 'protocol.zig').write_text(protocol)
@@ -209,6 +221,11 @@ def fixtures():
         yield 'local-live', b'\5\0\1'
         used = {0}
         active = 0
+        live = {slot: slot == 0 for slot in range(17)}
+        enabled = {slot: slot == 0 for slot in range(17)}
+        destinations = {0: ''}
+        generations = {0: 1}
+        next_generation = 2
         for index in range(180):
             operation = rng.randrange(10)
             available = [slot for slot in range(1, 17) if slot not in used and slot != active]
@@ -217,37 +234,56 @@ def fixtures():
                 slot = available[0]
                 used.add(slot)
                 size = rng.choice([0, 1, 31, 32, 33, 254, 255, 256])
-                row = fields(identity=rng.randrange(3), label=rng.choice(['Work', 'Build', 'xbox', 'box', 'é中', 'x' * size]),
-                             destination=rng.choice(['box', 'dev@work', 'host', 'x' * size]), color=rng.choice(['', 'red', 'y' * size]),
-                             enabled=rng.choice([False, True]), program=rng.choice(['', '/telar', '/' + 'p' * size]))
+                label = rng.choice(['Work', 'Build', 'xbox', 'box', 'é中', 'x' * size])
+                destination = rng.choice(['box', 'dev@work', 'host', 'x' * size])
+                color = rng.choice(['', 'red', 'y' * size])
+                enabled[slot] = rng.choice([False, True])
+                program = rng.choice(['', '/telar', '/' + 'p' * size])
+                row = fields(identity=rng.randrange(3), label=label, destination=destination, color=color, enabled=enabled[slot], program=program)
+                destinations[slot] = destination[:255]
+                generations[slot] = next_generation
+                next_generation += 1
                 yield 'add', b'\2' + row + b'\xff'
             elif operation == 1 and remotes:
                 slot = rng.choice(remotes)
-                yield 'update', b'\3' + bytes([slot]) + fields(identity=rng.randrange(3), label=rng.choice(['Renamed', 'box']), destination=rng.choice(['box', 'other']), enabled=rng.choice([False, True]))
+                identity = rng.randrange(3)
+                label = rng.choice(['Renamed', 'box'])
+                destination = rng.choice(['box', 'other'])
+                enabled[slot] = rng.choice([False, True])
+                if destinations[slot] != destination:
+                    generations[slot] = next_generation
+                    next_generation += 1
+                destinations[slot] = destination
+                yield 'update', b'\3' + bytes([slot]) + fields(identity=identity, label=label, destination=destination, enabled=enabled[slot])
             elif operation == 2 and remotes:
                 slot = rng.choice(remotes)
                 used.remove(slot)
+                enabled[slot] = False
                 yield 'remove', b'\4' + bytes([slot])
             elif operation == 3:
                 slot = rng.choice(sorted(used))
-                yield 'live', b'\5' + bytes([slot, rng.randrange(2)])
+                live[slot] = bool(rng.randrange(2))
+                yield 'live', b'\5' + bytes([slot, live[slot]])
             elif operation == 4:
-                # Selection eligibility is exercised by both implementations; keep the generator's
-                # active slot conservative by selecting local only, which cannot lose its enabled flag.
-                active = 0
-                yield 'select-local', b'\5\0\1'
-                yield 'select-local', b'\6\0'
+                slot = rng.randrange(17)
+                if slot in used and enabled[slot] and live[slot]:
+                    active = slot
+                yield 'select', b'\6' + bytes([slot])
             elif operation == 5 and remotes:
-                yield 'pin', b'\7' + bytes([rng.choice(remotes)])
+                slot = rng.choice(remotes)
+                enabled[slot] = True
+                yield 'pin', b'\7' + bytes([slot])
             elif operation == 6 and remotes:
                 yield 'unpin', b'\10' + bytes([rng.choice(remotes)])
             elif operation == 7:
                 slot = rng.choice(sorted(used))
-                yield 'summarize', b'\11' + struct.pack('<6B3H4Q', slot, rng.randrange(4), rng.randrange(2), rng.randrange(2), rng.randrange(2), rng.randrange(101), rng.randrange(65), rng.randrange(100), rng.randrange(100, 1000), rng.randrange(4), rng.randrange(4), rng.randrange(4), series * 1000 + index)
+                yield 'summarize', b'\11' + struct.pack('<6B3H4Q', slot, rng.randrange(5), rng.randrange(2), rng.randrange(2), rng.randrange(2), rng.randrange(101), rng.randrange(65), rng.randrange(100), rng.randrange(100, 1000), rng.randrange(4), rng.randrange(4), rng.randrange(4), series * 1000 + index)
             elif operation == 8:
                 yield 'collect', b'\12' + text(rng.choice(['', 'box', 'WORK', 'x', 'é', 'other', 'missing', 'z' * 300]))
             else:
-                yield 'contains', b'\13' + struct.pack('<BQ', rng.randrange(20), rng.randrange(50))
+                slot = rng.randrange(20)
+                generation = generations.get(slot, 0) if rng.randrange(2) else rng.randrange(50)
+                yield 'contains', b'\13' + struct.pack('<BQ', slot, generation)
         yield 'collect', b'\12' + text('')
 
 
@@ -300,7 +336,8 @@ def main():
         (output / 'mismatches.json').write_text(json.dumps(mismatches, indent=2) + '\n')
         raise AssertionError(f'{len(mismatches)} machine operations differ; evidence retained in {output}')
     original_sources = ['src/client/machines/' + name for name in ['Machines.zig', 'MachineRow.zig', 'MachineResults.zig', 'machine_picker.zig']]
-    original_sources += ['src/core/fuzzy.zig']
+    original_sources += ['src/core/fuzzy.zig', 'src/model/connection/RuntimeLink.zig']
+    original_sources += ['src/core/' + name for name in ['MachineProfiles.zig', 'MachineProfile.zig', 'ssh_destination.zig', 'remote_telar.zig']]
     cpp_sources = ['services/gui-cpp/machines/' + name for name in ['machines.hpp', 'machine_row.hpp', 'machine_token.hpp', 'picker.hpp']]
     cpp_sources += ['services/gui-cpp/palette/ranked_matches.hpp', 'services/gui-cpp/tools/machines_probe.cpp', 'services/gui-cpp/tools/check_machines.py']
     report = dict(cases=len(cases), cases_by_kind=dict(Counter(kind for kind, _ in cases)), input_sha256=hashlib.sha256(payload).hexdigest(),

@@ -1376,7 +1376,13 @@ owned profile fields and event-updated summaries without Qt or dynamic storage.
 matching, slot-order ties and disabled machines. Its submission policy rejects
 retired identities and keeps local toggles inert. The
 [registry comparison](measurements/machine-registry.md) covers this independent
-foundation; window switching and SSH integration remain pending.
+foundation. `qt::MachineClient` now owns each admitted session and connection;
+the shared `Application` keeps fonts, input dispatch, native effects and scene
+resources. Two framed socket fixtures verify presentation switching and origin
+isolation, including colliding pane/frame identifiers and held keys. The
+[window adapter report](measurements/machine-window.md) records the validation
+and unsuppressed native leak gate. Production profile and SSH admission remain
+pending, and the normal executable still opens only the local machine.
 
 ## Build and run
 

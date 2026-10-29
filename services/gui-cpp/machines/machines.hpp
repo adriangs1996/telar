@@ -19,7 +19,7 @@ class Machines {
 public:
   using Slot = std::uint8_t;
   static constexpr Slot local_slot = 0;
-  static constexpr std::size_t capacity = MachineLimits::slots;
+  static constexpr std::size_t capacity = MachineLimits::window_slots;
 
   [[nodiscard]] Slot add(MachineFields fields, std::optional<Slot> wanted = std::nullopt) {
     const auto slot = wanted ? wanted : freeSlot();

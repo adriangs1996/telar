@@ -204,10 +204,16 @@ bool KeyBindings::forward(const RoutedKey &event) {
     if (lease != recipients_.end()) {
       const auto &copy = application_.copyState();
       const auto copying = copy && !copy->pointer && application_.dialog().isEmpty();
-      *lease = {.physical = event.physical, .item = event.recipient, .owner = copying ? copy->pane_id : event.owner, .copy_mode = copying};
+      *lease = {.physical = event.physical, .item = event.recipient, .owner = copying ? copy->pane_id : event.owner, .copy_mode = copying, .machine_view = application_.viewVersion().machine};
     }
 
   } else if (lease == recipients_.end()) {
+    return true;
+  }
+
+  if (lease != recipients_.end() && lease->machine_view != application_.viewVersion().machine) {
+    *lease = {};
+
     return true;
   }
 

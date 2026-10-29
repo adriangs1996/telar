@@ -4,6 +4,8 @@
 #include "links/file_path.hpp"
 #include "links/link_target.hpp"
 #include "links/link_text.hpp"
+#include "machine_client.hpp"
+#include "machine_client_key.hpp"
 #include "platform/environment.hpp"
 #include "projection.hpp"
 #include "terminal/cell_position.hpp"
@@ -22,9 +24,9 @@ bool Application::openLink(const LinkTarget &target, std::optional<std::uint64_t
       const platform::ProcessEnvironment environment;
       const auto configured = configuration().editor.view();
       const auto executable = configured.empty() ? environment("EDITOR").value_or(std::string_view{}) : configured;
-      session_.openFile(FilePath::parse(target), executable, environment, source_id);
+      session().openFile(FilePath::parse(target), executable, environment, source_id);
     } else {
-      link_opener_.request(target);
+      link_opener_.request(target, clientAt(machines_.active()).key);
     }
   } catch (const std::exception &error) {
     emit notification(QStringLiteral("Could not open link: ") + toQString(error.what()));
@@ -36,7 +38,7 @@ bool Application::openLink(const LinkTarget &target, std::optional<std::uint64_t
 }
 
 void Application::openCopyLink(std::uint64_t pane_id, CellPosition point) {
-  const auto *pane = session_.findPane(pane_id);
+  const auto *pane = session().findPane(pane_id);
   if (pane == nullptr) {
     return;
   }
@@ -47,24 +49,31 @@ void Application::openCopyLink(std::uint64_t pane_id, CellPosition point) {
   }
 }
 
-void Application::linkOpeningFinished(std::optional<LinkOpeningFailure> failure) {
-  if (!failure) {
+void Application::linkOpeningFinished(MachineClientKey source, std::optional<LinkOpeningFailure> failure) {
+  auto *client = findClient(source);
+  if (client == nullptr || !failure) {
     return;
   }
 
+  std::string_view message;
   switch (*failure) {
   case LinkOpeningFailure::launch:
-    emit notification(QStringLiteral("Could not open link: host opener is unavailable"));
+    message = "Could not open link: host opener is unavailable";
     break;
   case LinkOpeningFailure::process:
-    emit notification(QStringLiteral("Could not open link: host opener failed"));
+    message = "Could not open link: host opener failed";
     break;
   case LinkOpeningFailure::timeout:
-    emit notification(QStringLiteral("Could not open link: host opener timed out"));
+    message = "Could not open link: host opener timed out";
     break;
   case LinkOpeningFailure::output_limit:
-    emit notification(QStringLiteral("Could not open link: host opener exceeded its output limit"));
+    message = "Could not open link: host opener exceeded its output limit";
     break;
+  }
+
+  client->session.publishNotification({.title = "Telar", .message = message, .link = {}});
+  if (source.machine.slot == machines_.active()) {
+    refreshNotifications();
   }
 }
 

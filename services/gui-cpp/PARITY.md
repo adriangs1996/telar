@@ -15,25 +15,39 @@ machine actions, live SSH and their native visual acceptance remain open.
 
 [Machine session presentation](measurements/machine-presentation.md) now supports
 metadata-only hidden sessions, deferred layout restoration and releasing pane
-screens without closing runtime processes. The multiple-client window adapter,
-machine actions, SSH and their visual acceptance remain pending.
+screens without closing runtime processes. The window adapter now owns separate
+allocator-backed client/session/connection slots while sharing window resources.
+Production profile admission, machine actions, SSH and their visual acceptance
+remain pending.
 
 The [window machine table and picker](measurements/machine-registry.md) now
 retain bounded owned rows, destination admission generations, event-driven
 summaries and the original disabled-row ranking and submission decisions.
 The original-source comparison matches 8,091 stateful operations on Personal
-in Release and ASan/UBSan. This independent foundation is not yet connected
-to the window; the four machine actions remain unported.
+in Release and ASan/UBSan. The later window integration extends the oracle to
+7,360 operations including remote selection and the original stopped phase.
+The four machine actions remain unported.
 
-The presentation change's expanded native regression check is still open. Two
-initial Cocoa/Metal runs each record 81 passes and one failure: editor terminal
+The [multiple-client window adapter](measurements/machine-window.md) has two
+framed socket fixtures with colliding pane/frame/attachment identifiers. Hidden
+clients settle presentation after each event, cached summaries avoid hidden
+model scans, and window presentation, physical key ownership, notification
+callbacks, sound completion and queued link completion retain their origin.
+Twenty selected regressions and a complete Cocoa/Metal scale-1 run pass.
+The normal executable still initializes only the local client; saved profile
+and SSH admission are the next integration step. Native sanitizer assertions
+pass, but the unsuppressed exit leak gate remains open. A Qt-only font control
+also reproduces leaks; this does not establish ownership of every GUI leak.
+
+Two initial Cocoa/Metal runs each recorded 81 passes and one failure: editor terminal
 focus in the first, history inspection geometry in the second. The editor case
 passes alone and in three repetitions of its preceding sequence. The
 [presentation report](measurements/machine-presentation.md) retains both full
 logs and the focus trace. A [later investigation](measurements/native-window-control.md)
 reproduces external window-manager interference and records two complete runs
 with 82 passes after preparing the owned window's geometry and focus. This is
-Cocoa/Metal scale-1 regression evidence; complete visual acceptance remains open.
+Cocoa/Metal scale-1 regression evidence; the current window adapter retains a
+fresh complete 82-case run. Complete visual acceptance remains open.
 
 ## Visual acceptance remains open
 

@@ -140,8 +140,8 @@ QString Application::bindingShortcut(BindingActionKind action) const {
 }
 
 BindingContext Application::bindingContext() const {
-  BindingContext context{.sidebar_visible = session_.configuration().sidebar_visible};
-  const auto *active = session_.activeTab();
+  BindingContext context{.sidebar_visible = session().configuration().sidebar_visible};
+  const auto *active = session().activeTab();
   if (active == nullptr) {
     return context;
   }
@@ -151,7 +151,7 @@ BindingContext Application::bindingContext() const {
   context.pane_count = static_cast<std::uint16_t>(std::ranges::count_if(active->layout.nodes(), [](const auto &node) {
     return std::holds_alternative<ClientLayoutPane>(node);
   }));
-  context.tab_count = static_cast<std::uint16_t>(std::ranges::count_if(session_.tabs(), [&](const auto &tab) {
+  context.tab_count = static_cast<std::uint16_t>(std::ranges::count_if(session().tabs(), [&](const auto &tab) {
     return sameWorkspace(tab->location.workspace, active->location.workspace);
   }));
 
@@ -163,7 +163,7 @@ std::optional<BindingRepeat> Application::bindingRepeat(BindingAction action) co
     return {};
   }
 
-  const auto *pane = session_.focusedPane();
+  const auto *pane = session().focusedPane();
   if (pane == nullptr || !pane->attached || pane->exited) {
     return {};
   }
@@ -225,19 +225,19 @@ void Application::executeBinding(BindingAction action) {
   }
 
   if (const auto direction = navigationDirection(action.kind)) {
-    session_.navigateDirection(*direction);
+    session().navigateDirection(*direction);
     return;
   }
 
   switch (action.kind) {
   case BindingActionKind::select_tab:
-    session_.selectTabIndex(static_cast<std::size_t>(action.parameter));
+    session().selectTabIndex(static_cast<std::size_t>(action.parameter));
     break;
   case BindingActionKind::select_tab_offset:
-    session_.selectTabOffset(action.parameter);
+    session().selectTabOffset(action.parameter);
     break;
   case BindingActionKind::select_workspace:
-    session_.selectWorkspaceIndex(static_cast<std::size_t>(action.parameter));
+    session().selectWorkspaceIndex(static_cast<std::size_t>(action.parameter));
     break;
   case BindingActionKind::scroll_pane_up:
   case BindingActionKind::scroll_pane_down:
@@ -273,7 +273,7 @@ void Application::executeCommandTab(BindingAction action) {
   const auto command = configuration_source_.commandTab(action);
   if (!command) {
     emit notification(QStringLiteral("That command tab expired"));
-  } else if (session_.createCommandTab(*command) == TabCreationOutcome::busy) {
+  } else if (session().createCommandTab(*command) == TabCreationOutcome::busy) {
     emit notification(QStringLiteral("tabs.one_operation_in_flight: limit 1 tab operation reached"));
   }
 }
@@ -283,13 +283,13 @@ void Application::applyExpression(const InputExpression &expression) {
     return;
   }
 
-  const auto *pane = session_.focusedPane();
+  const auto *pane = session().focusedPane();
   if (pane == nullptr || !pane->attached || pane->exited) {
     throw std::runtime_error{"No terminal is ready for expression input"};
   }
 
   if (expression.kind == InputExpression::Kind::paste) {
-    session_.paste(pane->id, expression.paste.view());
+    session().paste(pane->id, expression.paste.view());
   } else {
     for (const auto key : std::span{expression.keys}.first(expression.length)) {
       key_bindings_.synthetic(key, pane->id, pane->screen.modes());
@@ -298,8 +298,8 @@ void Application::applyExpression(const InputExpression &expression) {
 }
 
 void Application::scrollBinding(ScrollDirection direction) {
-  session_.scrollFocused(direction);
-  if (const auto *pane = session_.focusedPane()) {
+  session().scrollFocused(direction);
+  if (const auto *pane = session().focusedPane()) {
     emit terminalChanged(pane->id);
   }
 }

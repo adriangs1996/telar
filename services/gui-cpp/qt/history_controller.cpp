@@ -97,10 +97,10 @@ QString phaseName(HistoryPhase phase) {
 }
 
 void Application::refreshHistory() {
-  const auto &browser = session_.historyBrowser();
+  const auto &browser = session().historyBrowser();
   const auto scope_value = dialog_ == QLatin1StringView("history") ? historyScopeValue() : QString{};
   const auto selection = browser.state().selection;
-  const auto *pane = dialog_ == QLatin1StringView("history") && selection < browser.rows().size() ? session_.findPane(browser.rows()[selection].pane_id) : nullptr;
+  const auto *pane = dialog_ == QLatin1StringView("history") && selection < browser.rows().size() ? session().findPane(browser.rows()[selection].pane_id) : nullptr;
   BoundedText<TabCaption::capacity> tab_name;
   tab_name.append(historyTabName(pane));
   const auto pane_open = pane != nullptr;
@@ -135,9 +135,9 @@ void Application::refreshHistory() {
 
 std::string_view Application::historyTabName(const Pane<ApplicationAllocator> *pane) const {
   if (pane != nullptr) {
-    for (const auto &tab : session_.tabs()) {
+    for (const auto &tab : session().tabs()) {
       if (sameTab(tab->location, pane->location)) {
-        return tab->label.empty() ? tab->applicationName(session_.findPane(tab->focused_pane)) : std::string_view{tab->label};
+        return tab->label.empty() ? tab->applicationName(session().findPane(tab->focused_pane)) : std::string_view{tab->label};
       }
     }
   }
@@ -146,15 +146,15 @@ std::string_view Application::historyTabName(const Pane<ApplicationAllocator> *p
 }
 
 QString Application::historyScopeValue() {
-  if (session_.historyBrowser().scope() == HistoryScope::workspace) {
+  if (session().historyBrowser().scope() == HistoryScope::workspace) {
     return workspace_context_.value(QStringLiteral("name")).toString();
   }
 
-  if (session_.historyBrowser().scope() != HistoryScope::cwd) {
+  if (session().historyBrowser().scope() != HistoryScope::cwd) {
     return {};
   }
 
-  const auto *pane = session_.focusedPane();
+  const auto *pane = session().focusedPane();
   if (pane == nullptr) {
     return {};
   }
@@ -171,7 +171,7 @@ QString Application::historyScopeValue() {
 }
 
 QVariantMap Application::historyState() const {
-  const auto &browser = session_.historyBrowser();
+  const auto &browser = session().historyBrowser();
   const auto &state = browser.state();
   const auto &rows = browser.rows();
   const bool selected_detail = state.selection < rows.size() && rows[state.selection].id == state.command_id;
@@ -193,7 +193,7 @@ QVariantMap Application::historyState() const {
       {QStringLiteral("maximumQueryBytes"), static_cast<int>(HistorySearch::maximum_query_bytes)},
       {QStringLiteral("inspectionKey"), platform::usesCommandKey() ? QStringLiteral("⌃O") : QStringLiteral("Ctrl+O")},
       {QStringLiteral("macStyle"), platform::usesCommandKey()},
-      {QStringLiteral("paneOpen"), state.selection < rows.size() && session_.findPane(rows[state.selection].pane_id) != nullptr},
+      {QStringLiteral("paneOpen"), state.selection < rows.size() && session().findPane(rows[state.selection].pane_id) != nullptr},
       {QStringLiteral("commandLoaded"), state.selection < rows.size() && (rows[state.selection].command_complete || (selected_detail && state.command_phase == HistoryPhase::ready))},
       {QStringLiteral("canOlder"), browser.canPage(HistoryPage::older)},
       {QStringLiteral("hasMore"), state.has_more},
@@ -204,7 +204,7 @@ QVariantMap Application::historyState() const {
       {QStringLiteral("count"), static_cast<int>(browser.rows().size())},
       {QStringLiteral("canSubmit"), browser.canSubmit()},
       {QStringLiteral("commandPhase"), phaseName(selected_detail ? state.command_phase : HistoryPhase::idle)},
-      {QStringLiteral("enterRuns"), session_.configuration().history.enter_runs},
+      {QStringLiteral("enterRuns"), session().configuration().history.enter_runs},
       {QStringLiteral("inspecting"), state.inspecting},
       {QStringLiteral("outputPhase"), phaseName(state.output_phase)},
       {QStringLiteral("outputTruncated"), state.output_truncated},
@@ -214,22 +214,22 @@ QVariantMap Application::historyState() const {
 }
 
 QString Application::historyOutput() const {
-  return toQString(session_.historyBrowser().output());
+  return toQString(session().historyBrowser().output());
 }
 
 QString Application::historyCommand() const {
-  return toQString(session_.historyBrowser().selectedCommand());
+  return toQString(session().historyBrowser().selectedCommand());
 }
 
 QVariantMap Application::historyInspection() const {
-  const auto &browser = session_.historyBrowser();
+  const auto &browser = session().historyBrowser();
   const auto &state = browser.state();
   if (state.selection >= browser.rows().size()) {
     return {};
   }
 
   const auto &entry = browser.rows()[state.selection];
-  const auto *pane = session_.findPane(entry.pane_id);
+  const auto *pane = session().findPane(entry.pane_id);
   const auto tab_name = historyTabName(pane);
 
   const auto details = HistoryInspectionFacts::derive({.directory = entry.cwd, .provider = entry.provider, .tab = tab_name, .id = entry.id, .pane_id = entry.pane_id, .started_at_ms = entry.started_at_ms, .duration_ns = entry.duration_ns, .exit_code = entry.exit_code, .status = entry.status, .author = entry.author, .origin = entry.origin, .pane_open = pane != nullptr}, history_calendar_);
@@ -263,7 +263,7 @@ void Application::reportHistoryQueryLimit(qulonglong requested_bytes) {
     return;
   }
 
-  session_.reportLimit({.name = "prompt.history_query_bytes", .noun = "bytes", .value = HistorySearch::maximum_query_bytes, .requested = requested_bytes, .route = {}});
+  session().reportLimit({.name = "prompt.history_query_bytes", .noun = "bytes", .value = HistorySearch::maximum_query_bytes, .requested = requested_bytes, .route = {}});
   refreshNotifications();
 }
 
@@ -293,7 +293,7 @@ void Application::selectHistoryRow(int row) {
   }
 
   applyInteraction([&] {
-    session_.selectHistoryRow(static_cast<std::size_t>(row));
+    session().selectHistoryRow(static_cast<std::size_t>(row));
   });
 }
 
@@ -304,12 +304,12 @@ void Application::selectPresentedHistoryRow(int row, const QString &revision) {
   }
 
   const HistoryChoice choice{.index = static_cast<std::size_t>(row), .revision = presented->choice.revision};
-  if (!session_.historyBrowser().acceptsRow(choice)) {
+  if (!session().historyBrowser().acceptsRow(choice)) {
     return;
   }
 
   applyInteraction([&] {
-    session_.selectHistoryRow(choice.index);
+    session().selectHistoryRow(choice.index);
   });
 }
 
@@ -320,20 +320,20 @@ void Application::executeHistory(HistoryAction action, const QString &entry_id) 
 
   applyInteraction([&] {
     if (action == HistoryAction::older || action == HistoryAction::newer) {
-      session_.pageHistory(action == HistoryAction::older ? HistoryPage::older : HistoryPage::newer);
+      session().pageHistory(action == HistoryAction::older ? HistoryPage::older : HistoryPage::newer);
     } else if (action == HistoryAction::inspect) {
-      session_.inspectHistory(!session_.historyBrowser().state().inspecting);
+      session().inspectHistory(!session().historyBrowser().state().inspecting);
     } else {
-      const auto &browser = session_.historyBrowser();
+      const auto &browser = session().historyBrowser();
       const auto &rows = browser.rows();
       const auto identity = entry_id.isEmpty() && !rows.empty() ? rows[browser.state().selection].id : entry_id.toULongLong();
       if (action == HistoryAction::copy) {
-        session_.copyHistory(identity);
-        QGuiApplication::clipboard()->setText(toQString(session_.clipboard()));
+        session().copyHistory(identity);
+        QGuiApplication::clipboard()->setText(toQString(session().clipboard()));
       } else if (action == HistoryAction::erase) {
-        session_.deleteHistory(identity);
+        session().deleteHistory(identity);
       } else if (action == HistoryAction::visit) {
-        session_.visitHistory(identity);
+        session().visitHistory(identity);
         showDialog({});
       }
     }

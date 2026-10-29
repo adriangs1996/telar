@@ -12,6 +12,7 @@
 #include <concepts>
 #include <optional>
 #include <stdexcept>
+#include <variant>
 
 namespace telar::gui::qt {
 
@@ -34,12 +35,12 @@ using ApplicationLinkHost = TELAR_GUI_LINK_HOST;
 template <typename Host>
 concept ExternalLinkHost = CommandHost<Host, LinkTarget>;
 
-template <typename Observer>
-concept LinkOpeningObserver = requires(Observer &observer, std::optional<LinkOpeningFailure> failure) {
-  { observer.linkOpeningFinished(failure) } -> std::same_as<void>;
+template <typename Observer, typename Context>
+concept LinkOpeningObserver = requires(Observer &observer, Context context, std::optional<LinkOpeningFailure> failure) {
+  { observer.linkOpeningFinished(context, failure) } -> std::same_as<void>;
 };
 
-template <ExternalLinkHost Host, typename Observer>
+template <ExternalLinkHost Host, typename Observer, std::semiregular Context = std::monostate>
 class ExternalLinkOpener final {
 public:
   static constexpr std::size_t output_limit = CommandProcess<Host, LinkTarget, ExternalLinkOpener>::output_limit;
@@ -47,7 +48,7 @@ public:
   explicit ExternalLinkOpener(Observer &observer)
       : observer_(observer),
         process_(*this) {
-    static_assert(LinkOpeningObserver<Observer>);
+    static_assert(LinkOpeningObserver<Observer, Context>);
   }
 
   ~ExternalLinkOpener() = default;
@@ -56,13 +57,16 @@ public:
   ExternalLinkOpener(ExternalLinkOpener &&) = delete;
   ExternalLinkOpener &operator=(ExternalLinkOpener &&) = delete;
 
-  void request(const LinkTarget &target) {
+  void request(const LinkTarget &target, Context context = {}) {
     if (target.scheme() == LinkScheme::file || target.scheme() == LinkScheme::path) {
       throw std::invalid_argument{"File links require the editor flow"};
     }
 
     if (opening_.request(target)) {
+      current_context_ = context;
       process_.start(target);
+    } else {
+      pending_context_ = context;
     }
   }
 
@@ -71,16 +75,20 @@ public:
   }
 
   void commandFinished(std::optional<CommandFailure> failure) {
+    const auto completed = current_context_;
     if (const auto next = opening_.complete()) {
+      current_context_ = pending_context_;
       process_.start(*next);
     }
 
-    observer_.linkOpeningFinished(failure);
+    observer_.linkOpeningFinished(completed, failure);
   }
 
 private:
   Observer &observer_;
   LinkOpening opening_;
+  Context current_context_{};
+  Context pending_context_{};
   CommandProcess<Host, LinkTarget, ExternalLinkOpener> process_;
 };
 

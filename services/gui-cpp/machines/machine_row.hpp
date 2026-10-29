@@ -23,6 +23,7 @@ enum class MachinePhase : std::uint8_t {
   connected,
   lost,
   failed,
+  stopped,
 };
 
 struct MachineMetrics {
