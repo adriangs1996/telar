@@ -13,6 +13,7 @@
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -21,11 +22,13 @@
 #include <limits>
 #include <new>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -44,12 +47,19 @@ AgentSnapshotEntry agent() {
 struct PeekTransport {
   Transport recorded;
   bool reject = false;
+  bool reject_open = false;
 
   template <typename Message>
   void send(const Message &message) {
     if constexpr (std::is_same_v<Message, ReadPane> || std::is_same_v<Message, InterruptAgent>) {
       if (reject) {
         throw EncodingError{"Peek delivery rejected"};
+      }
+    }
+
+    if constexpr (std::is_same_v<Message, OpenPane>) {
+      if (reject_open && message.target.kind == PaneTarget::Kind::pane && message.target.id == target.agent.pane_id) {
+        throw EncodingError{"Workspace target transport is full"};
       }
     }
 
@@ -249,6 +259,140 @@ void diffLaunchQuotesItsBranchAsAnArgumentAndWaitsForHandoff() {
   require(open.target.kind == PaneTarget::Kind::pane && open.target.id == diff_pane && client.findPane(diff_pane) == nullptr, "a launched diff must await the normal canonical pane handoff instead of constructing an incomplete screen");
 }
 
+void openingTaskPeekDetachesBeforeItsCanonicalPaneHandoff() {
+  SystemAllocator memory;
+  Transport transport;
+  Session client{memory, transport};
+  openFirstPane(client, transport);
+  const std::array agents{agent()};
+  deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
+  require(client.openPeek(target), "a task agent must admit its read");
+  const auto read = transport.last<ReadPane>();
+  deliver(client, PaneText{.request_id = read.request_id, .pane_id = read.pane_id, .text = "Task", .exit_code = {}});
+  const auto first = transport.sent.size();
+  require(client.submitPeek("/open"), "the task peek must close after handing off its source");
+  require(transport.count(ClientTag::detach_pane) == 1 && transport.detaching == std::vector<std::uint64_t>{1}, "the current workspace must release its input and attachment before entering another");
+  const auto messages = std::span{transport.sent}.subspan(first);
+  const auto detach = std::ranges::find_if(messages, [](const auto &bytes) {
+    return bytes.front() == static_cast<Byte>(ClientTag::detach_pane);
+  });
+  const auto opening = std::ranges::find_if(messages, [](const auto &bytes) {
+    return bytes.front() == static_cast<Byte>(ClientTag::open_pane);
+  });
+  require(detach < opening && opening != messages.end(), "the runtime must see the departure before the target attachment");
+  require(client.activeTab() == nullptr && client.panes().empty(), "screens must retire after the complete handoff is queued, awaiting a canonical root");
+  const auto request = transport.last<OpenPane>();
+  require(request.target.kind == PaneTarget::Kind::pane && request.target.id == target.agent.pane_id && !request.launch, "a task visit must reopen an existing pane without a new process");
+  deliver(client, PaneOpened{.request_id = request.request_id, .pane_id = target.agent.pane_id, .location = location, .pane_generation = target.agent.pane_generation});
+  require(client.focusedPane() != nullptr && client.focusedPane()->id == target.agent.pane_id && client.focusedPane()->attached && sameTab(client.activeTab()->location, location), "the canonical reply must activate only the requested task pane and workspace");
+}
+
+void aBusyTaskPeekOpenClosesWithoutLeavingItsCurrentWorkspace() {
+  SystemAllocator memory;
+  Transport transport;
+  Session client{memory, transport};
+  openFirstPane(client, transport);
+  const std::array agents{agent()};
+  deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
+  require(client.openPeek(target), "a task peek read must remain tracked");
+  const auto read = transport.last<ReadPane>();
+  const auto openings = transport.count(ClientTag::open_pane);
+  require(client.submitPeek("/open") && !client.peek().target(), "a busy open still closes its peek as the original does");
+  require(transport.count(ClientTag::open_pane) == openings && transport.count(ClientTag::detach_pane) == 0 && client.focusedPane()->id == 1 && client.focusedPane()->attached, "an outstanding canonical reply must fence workspace departure");
+  deliver(client, PaneText{.request_id = read.request_id, .pane_id = read.pane_id, .text = "Late read", .exit_code = {}});
+  require(!client.requestsPending(), "the closed peek's late reply must release its original correlation");
+}
+
+void aMissingTaskPaneRetriesItsWorkspaceOnlyOnce() {
+  SystemAllocator memory;
+  Transport transport;
+  Session client{memory, transport};
+  openFirstPane(client, transport);
+  const std::array agents{agent()};
+  deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
+  require(client.focusAgent(target.agent.pane_id, target.agent.pane_generation), "the known agent must admit navigation");
+  const auto request = transport.last<OpenPane>();
+  deliver(client, RequestFailed{.request_id = request.request_id, .code = FailureCode::pane_not_found, .message = "Task pane gone"});
+  const auto fallback = transport.last<OpenPane>();
+  require(fallback.request_id != request.request_id && fallback.target.kind == PaneTarget::Kind::workspace && fallback.target.id == location.workspace.id && !fallback.launch, "a disappeared agent pane must fall back once to its authoritative workspace");
+  const auto openings = transport.count(ClientTag::open_pane);
+  deliver(client, RequestFailed{.request_id = fallback.request_id, .code = FailureCode::workspace_not_found, .message = "Task workspace gone"});
+  require(transport.count(ClientTag::open_pane) == openings && !client.requestsPending(), "a failed workspace fallback must not start an unbounded open loop");
+}
+
+void aRejectedTaskOpenRestoresItsDepartingAttachment() {
+  SystemAllocator memory;
+  PeekTransport transport;
+  Session client{memory, transport};
+  openFirstPane(client, transport.recorded);
+  const auto source = client.activeTab()->location;
+  const std::array agents{agent()};
+  deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
+  transport.reject_open = true;
+  bool rejected = false;
+  try {
+    static_cast<void>(client.focusAgent(target.agent.pane_id, target.agent.pane_generation));
+  } catch (const EncodingError &) {
+    rejected = true;
+  }
+
+  require(rejected && client.activeTab() != nullptr && sameTab(client.activeTab()->location, source) && client.findPane(1) != nullptr && client.findPane(target.agent.pane_id) == nullptr, "rejected target delivery must retain the old projection and its owned screens");
+  require(transport.recorded.count(ClientTag::detach_pane) == 1, "the fixture must exercise rejection after an accepted departure");
+  const auto repair = transport.recorded.last<OpenPane>();
+  require(repair.target.kind == PaneTarget::Kind::pane && repair.target.id == 1 && client.findPane(1)->attaching, "accepted detaches must be repaired through a fresh correlated attachment");
+  deliver(client, PaneOpened{.request_id = repair.request_id, .pane_id = 1, .location = source, .pane_generation = 1});
+  require(client.focusedPane()->id == 1 && client.focusedPane()->attached && !client.requestsPending(), "the source's canonical repair must restore its original usable pane");
+}
+
+void aPartialTaskDepartureRepairsOnlyItsAcceptedDetaches() {
+  SystemAllocator memory;
+  Transport transport;
+  Session client{memory, transport};
+  openFirstPane(client, transport);
+  const auto source = client.activeTab()->location;
+  const std::array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}, PaneDescriptor{.pane_id = 2, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+  deliver(client, TabSnapshot{.request_id = 1, .location = source, .panes = panes});
+  const auto attachment = transport.last<OpenPane>();
+  deliver(client, PaneOpened{.request_id = attachment.request_id, .pane_id = 2, .location = source, .pane_generation = 1});
+  const std::array agents{agent()};
+  deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
+  transport.reject_detach_after = 1;
+  bool rejected = false;
+  try {
+    static_cast<void>(client.focusAgent(target.agent.pane_id, target.agent.pane_generation));
+  } catch (const EncodingError &) {
+    rejected = true;
+  }
+
+  require(rejected && client.panes().size() == panes.size() && sameTab(client.activeTab()->location, source), "partial departure must retain the complete previous projection");
+  require(transport.count(ClientTag::detach_pane) == 1 && client.findPane(2)->attached, "an unaccepted detach must leave its original attachment committed");
+  const auto repair = transport.last<OpenPane>();
+  require(repair.target.id == 1 && client.findPane(1)->attaching, "only the successfully detached pane must request repair");
+  deliver(client, PaneOpened{.request_id = repair.request_id, .pane_id = 1, .location = source, .pane_generation = 1});
+  require(client.findPane(1)->attached && client.findPane(2)->attached && !client.requestsPending(), "canonical repair must leave both previous panes usable");
+}
+
+void aDiffArrivalWithPendingPeekReadKeepsItsCurrentWorkspace() {
+  SystemAllocator memory;
+  Transport transport;
+  Session client{memory, transport};
+  openFirstPane(client, transport);
+  const std::array agents{agent()};
+  const std::array worktrees{WorktreeListEntry{.worktree = worktree_id, .source = 1, .workspace = location.workspace.id, .path = "/project/checkout", .branch = "worktree/task"}};
+  deliver(client, WorkspaceList{.revision = 1, .worktrees = worktrees});
+  deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
+  require(client.openPeek(target), "the busy diff fixture must keep its real peek read pending");
+  const auto read = transport.last<ReadPane>();
+  require(client.submitPeek("/diff"), "a diff may launch before its retained read finishes");
+  const auto launch = transport.last<LaunchWorktree>();
+  const auto openings = transport.count(ClientTag::open_pane);
+  constexpr std::uint64_t diff_pane = 77;
+  deliver(client, PaneOpened{.request_id = launch.request_id, .pane_id = diff_pane, .location = location, .pane_generation = 1});
+  require(transport.count(ClientTag::open_pane) == openings && transport.count(ClientTag::detach_pane) == 0 && client.focusedPane()->id == 1 && client.focusedPane()->attached, "a pending canonical read must fence automatic navigation to a launched diff");
+  deliver(client, PaneText{.request_id = read.request_id, .pane_id = read.pane_id, .text = "Closed read", .exit_code = {}});
+  require(!client.requestsPending() && transport.count(ClientTag::open_pane) == openings && client.findPane(diff_pane) == nullptr, "a retired read must not start a delayed handoff that the original ignored");
+}
+
 void peekReadFailuresRetryAndRejectedActionsNotifyTheirPane() {
   SystemAllocator memory;
   Transport transport;
@@ -286,6 +430,12 @@ int main() {
     snapshotsRefreshMetadataWithoutAttachingThePeekedPane();
     peekMessagesAndInterruptsKeepTheOriginalProtocol();
     diffLaunchQuotesItsBranchAsAnArgumentAndWaitsForHandoff();
+    openingTaskPeekDetachesBeforeItsCanonicalPaneHandoff();
+    aBusyTaskPeekOpenClosesWithoutLeavingItsCurrentWorkspace();
+    aMissingTaskPaneRetriesItsWorkspaceOnlyOnce();
+    aRejectedTaskOpenRestoresItsDepartingAttachment();
+    aPartialTaskDepartureRepairsOnlyItsAcceptedDetaches();
+    aDiffArrivalWithPendingPeekReadKeepsItsCurrentWorkspace();
     peekReadFailuresRetryAndRejectedActionsNotifyTheirPane();
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';

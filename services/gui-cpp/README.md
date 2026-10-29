@@ -26,7 +26,12 @@ failure/visual/performance acceptance remains open.
 [Peek labels and native open/stop actions](measurements/peek-labels-actions.md)
 now have 7,456 exact source comparisons, clean core sanitizers and paired real SSH
 actions with exact before/after modal rectangles. Actual task/plan rendering and
-native diff qualification remain open.
+native diff qualification remain open at that historical checkpoint. The later
+[task workspace handoff](measurements/task-peek-handoff.md) fixes detach-before-open
+navigation and qualifies a native task with plan plus actual diff in both GUIs.
+Its complete modal and following terminal regions match exactly. Ten core groups
+pass Release/sanitizers; 27 window and 88 native entries pass, with window exit
+leaks still open. Full navigation, visuals and performance remain unaccepted.
 
 Native startup selects Metal on macOS and Vulkan on Linux, matching the original
 GUI's backends. Explicit Qt backend environment settings take precedence.

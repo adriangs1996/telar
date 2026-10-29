@@ -61,6 +61,7 @@
 #include "workspace_replica.hpp"
 #include <array>
 #include <concepts>
+#include <exception>
 #include <limits>
 #include <string_view>
 #include <utility>
@@ -220,7 +221,7 @@ public:
       left_machine_ = bookmark;
     }
 
-    releaseMachinePresentation();
+    releaseWorkspacePresentation();
     leave_pending_ = false;
 
     return true;
@@ -925,11 +926,19 @@ public:
   }
 
   void visitPane(std::uint64_t pane_id, std::optional<std::uint64_t> generation = {}) {
+    if (!ready_ || !presented_) {
+      return;
+    }
+
     const auto *pane = findPane(pane_id);
-    if (pane != nullptr && (!generation || pane->generation == *generation)) {
+    if (pane != nullptr && (!generation || pane->generation == *generation) && active_tab_ && sameWorkspace(pane->location.workspace, active_tab_->workspace)) {
       focusPane(pane_id);
-    } else {
-      sendOpeningRequest(RequestKind::visit_pane, OpenPane{.target = {PaneTarget::Kind::pane, pane_id}, .size = launchSize()});
+    } else if (!requestsPending()) {
+      const auto agent = std::ranges::find_if(agents_, [&](const auto &entry) {
+        return entry.pane_id == pane_id && (!generation || entry.pane_generation == *generation);
+      });
+      const auto fallback = agent != agents_.end() && agent->location.workspace.kind == WorkspaceLocation::Kind::workspace ? std::optional{agent->location.workspace.id} : std::nullopt;
+      handoffPane(pane_id, fallback);
     }
   }
 
@@ -2085,7 +2094,45 @@ private:
     return MachineBookmark{.location = tab->location, .pane_id = tab->focused_pane, .fallback_workspace = fallback};
   }
 
-  void releaseMachinePresentation() noexcept {
+  bool recoverMissingWorkspacePane(const Pending &request, const RequestFailed &failure) {
+    if ((request.kind != RequestKind::restore_machine && request.kind != RequestKind::visit_pane) || !request.fallback_workspace || failure.code != FailureCode::pane_not_found) {
+      return false;
+    }
+
+    sendOpeningRequest(RequestKind::open_default, OpenPane{.target = {.kind = PaneTarget::Kind::workspace, .id = *request.fallback_workspace}, .size = launchSize()});
+
+    return true;
+  }
+
+  void handoffPane(std::uint64_t pane_id, std::optional<std::uint64_t> fallback_workspace) {
+    const OpenPane opening{.target = {.kind = PaneTarget::Kind::pane, .id = pane_id}, .size = launchSize()};
+    try {
+      retainLayout();
+      for (auto &pane : panes_) {
+        if (pane->attached || pane->attaching) {
+          prepareDetach(pane->id);
+          transport_.send(DetachPane{pane->id});
+          pane->attached = false;
+          pane->attaching = false;
+        }
+      }
+
+      sendOpeningRequest(RequestKind::visit_pane, opening, {}, fallback_workspace);
+    } catch (...) {
+      const auto failure = std::current_exception();
+      try {
+        synchronizeAttachments();
+      } catch (...) {
+        std::rethrow_exception(failure);
+      }
+
+      throw;
+    }
+
+    releaseWorkspacePresentation();
+  }
+
+  void releaseWorkspacePresentation() noexcept {
     panes_.clear();
     active_tab_.reset();
     requested_workspace_.reset();
@@ -2556,7 +2603,7 @@ private:
 
     if (request->kind == RequestKind::peek_diff) {
       if (presented_ && message.location.workspace.kind == WorkspaceLocation::Kind::workspace && !requestsPending()) {
-        visitPane(message.pane_id, message.pane_generation);
+        handoffPane(message.pane_id, message.location.workspace.id);
       }
 
       return Change::model;
@@ -3121,9 +3168,7 @@ private:
         return *change;
       }
 
-      if (request->kind == RequestKind::restore_machine && request->fallback_workspace && message.code == FailureCode::pane_not_found) {
-        sendOpeningRequest(RequestKind::open_default, OpenPane{.target = {.kind = PaneTarget::Kind::workspace, .id = *request->fallback_workspace}, .size = launchSize()});
-
+      if (recoverMissingWorkspacePane(*request, message)) {
         return Change::model;
       }
 

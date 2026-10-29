@@ -793,6 +793,11 @@ void agentNavigationUsesCommittedGenerationsAndExistingPanes() {
   require(opening.target.kind == PaneTarget::Kind::pane && opening.target.id == destination_id && !opening.launch, "uncached agent navigation must open its existing pane without launching a process");
   deliver(client, PaneOpened{.request_id = opening.request_id, .pane_id = destination_id, .location = destination, .pane_generation = destination_generation});
   require(client.focusedPane()->id == destination_id && sameTab(client.activeTab()->location, destination), "the authoritative open reply must choose the agent's workspace and tab");
+  const std::array descriptors{PaneDescriptor{.pane_id = destination_id, .lifecycle = PaneLifecycle::running, .pane_generation = destination_generation}};
+  deliver(client, TabSnapshot{.request_id = transport.last<RequestTabSnapshot>().request_id, .location = destination, .panes = descriptors});
+  const std::array tabs{TabDescriptor{.tab_id = destination.tab_id, .pane_count = 1}};
+  deliver(client, WorkspaceSnapshot{.request_id = transport.last<RequestWorkspaceSnapshot>().request_id, .workspace = destination.workspace, .name = "Remote project", .tabs = tabs});
+  require(!client.requestsPending(), "the first navigation must settle its canonical snapshots before another workspace departure");
   const auto openings = transport.count(ClientTag::open_pane);
   require(client.focusAgent(destination_id, destination_generation), "an already known agent must remain navigable");
   require(transport.count(ClientTag::open_pane) == openings, "known agent navigation must reuse its current local pane");

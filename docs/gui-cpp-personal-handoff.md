@@ -210,8 +210,27 @@ pane; stop has its actual correlated protocol acknowledgment. All four complete
 cleanups exit zero. Both before/after modal-coordinate rectangles match
 1,624,320 pixels each for each action. Clang-tidy and actual Neovim clangd are
 clean; GUI binaries remain unchanged. Native task/plan projection/rendering and
-actual /diff stay open. Continue those, remaining build/protocol failures, active
-transient offline input, native
+actual /diff stay open at that checkpoint. The subsequent
+[task workspace handoff checkpoint](../services/gui-cpp/measurements/task-peek-handoff.md)
+reproduces a real cross-workspace /open failure in Qt while Zig succeeds. Qt now
+detaches before opening, retires screens only after accepted target delivery,
+repairs partial departures, fences busy requests and falls back once for a gone
+pane. Six new regressions pass; ten core groups pass Release and clean ASan/UBSan.
+An old session fixture needs its previous canonical snapshots completed before
+generation replacement; all old assertions remain. Keep that nine-pass/one-fail
+run and the lint failures (swappable optionals and complexity 26/25).
+Actual task-with-plan /open and /diff now pass in both GUIs over owned SSH, with
+original argv, real Git patch, new shell input and normal cleanup. Keep the
+pre-fix Qt failure and the first diff driver's incorrect created=true expectation:
+original addTab returns false for an existing workspace. An early read-only
+catalog query inherits the harness cwd; its optional mixed external catalog is
+excluded with hash/reason, and the final collector uses its own repository.
+Both full native modals match 1,624,320 pixels, and the entire terminal after
+each action matches 2,336,768 pixels. Current Release window/native Quick pass
+27/88 entries with no native QML warnings; instrumented window assertions pass
+27 but exit leaks remain (256,632 bytes/984 allocations). Actual Neovim clangd
+and final lint are clean. Continue complete navigation/task-state/source matrices,
+remaining build/protocol failures, active transient offline input, native
 open/stop/diff, full task/plan peek, exit leaks/performance and all remaining
 PARITY.md gates. Complete
 theme/density/Linux visuals, native exit leaks and comparative performance stay
