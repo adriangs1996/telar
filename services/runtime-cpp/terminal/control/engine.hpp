@@ -26,6 +26,11 @@ public:
     state_.bind(terminal, render, separate_media);
   }
 
+  void failWrite() noexcept {
+    closed_ = true;
+    state_.failWrite();
+  }
+
   void discard() noexcept {
     closed_ = true;
     responses_.release();

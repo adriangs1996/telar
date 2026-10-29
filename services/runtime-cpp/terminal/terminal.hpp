@@ -11,6 +11,7 @@
 #include "control/engine.hpp"
 #include "../memory/byte_queue.hpp"
 #include "pty_response_queue.hpp"
+#include "response_outbox.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 
 namespace telar::runtime {
@@ -30,6 +31,7 @@ public:
         graphics(memory),
         allocator_(memory),
         responses_(responses ? std::move(responses) : std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory})),
+        response_outbox_(memory, *responses_),
         control_(memory, *responses_, purpose != TerminalPurpose::observation, resources),
         pending_control_input_(memory, control_input_limit),
         purpose_(purpose) {
@@ -107,6 +109,9 @@ public:
     if (!pending) {
       return;
     }
+    if (!response_outbox_.drain()) {
+      return;
+    }
     const auto consumed = control_.feed(pending_control_input_.readable());
     pending_control_input_.consume(consumed);
     if (pending) {
@@ -116,7 +121,7 @@ public:
   }
 
   bool hasPendingControl() const noexcept {
-    return control_.blocked() || !pending_control_input_.empty();
+    return response_outbox_.pending() || control_.blocked() || !pending_control_input_.empty();
   }
 
   void configureClientFacts(control::ClientFacts facts) {
@@ -273,11 +278,13 @@ public:
   }
 
   void discardResponses() noexcept {
+    response_outbox_.discard();
     responses_->clear();
   }
 
   void abortControl() noexcept {
     control_.discard();
+    response_outbox_.discard();
     pending_control_input_.clear();
     responses_->close();
   }
@@ -312,6 +319,7 @@ public:
 
 private:
   void finishControlInput() {
+    response_outbox_.drain();
     dirty_ = true;
     effects.refresh(terminal_.get());
     if (purpose_ == TerminalPurpose::interactive) {
@@ -367,7 +375,12 @@ private:
 
     constexpr std::string_view graphics_prefix = "\x1b_G";
     if (terminal.purpose_ != TerminalPurpose::observation && count >= graphics_prefix.size() && std::memcmp(bytes, graphics_prefix.data(), graphics_prefix.size()) == 0) {
-      terminal.responses_->push({bytes, count});
+      try {
+        terminal.response_outbox_.append({bytes, count});
+      } catch (...) {
+        terminal.control_.failWrite();
+        terminal.responses_->stopProducing();
+      }
     }
   }
 
@@ -515,6 +528,7 @@ private:
   RowIteratorHandle row_iterator_;
   RowCellsHandle row_cells_;
   std::shared_ptr<PtyResponseQueue> responses_;
+  ResponseOutbox<Memory> response_outbox_;
   static constexpr std::size_t control_input_limit = 128 * 1024;
   control::Engine<Memory> control_;
   ByteQueue<Memory> pending_control_input_;

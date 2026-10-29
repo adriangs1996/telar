@@ -15,7 +15,8 @@ public:
         shared_clients_(shared_clients) {}
 
   AtomicFrameFilter::Statistics feed(std::span<const Byte> bytes) {
-    GraphicsFrameSource source;
+    terminal_.requireOpen();
+    CheckedSource source{{}, terminal_};
     return AtomicFrameFilter::feed(bytes, terminal_.storageLimit(), source, *this);
   }
 
@@ -24,10 +25,26 @@ public:
   }
 
   bool atomicFrame(const AtomicFrameView &frame) {
+    terminal_.requireOpen();
     return atomic_frames_.load(frame, shared_clients_.load(std::memory_order_acquire) != 0);
   }
 
 private:
+  struct CheckedSource {
+    GraphicsFrameSource source;
+    MediaTerminal<MediaAllocator<Memory>> &terminal;
+
+    bool available(const AtomicFrameResource &resource) {
+      terminal.requireOpen();
+      return source.available(resource);
+    }
+
+    void release(const AtomicFrameResource &resource) {
+      terminal.requireOpen();
+      source.release(resource);
+    }
+  };
+
   MediaTerminal<MediaAllocator<Memory>> &terminal_;
   AtomicFrameLoader<Memory> atomic_frames_;
   const std::atomic<unsigned> &shared_clients_;

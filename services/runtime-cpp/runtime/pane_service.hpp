@@ -155,6 +155,7 @@ public:
     }
 
     pane->observer->finishSession();
+    pane->media->cancel();
     pane->observer->retired_next = std::move(model_.retired_observers);
     model_.retired_observers = pane->observer;
     ++model_.retired_observer_count;
@@ -225,11 +226,16 @@ public:
         pane.write_interest = needs_write;
       }
     } catch (const std::exception &) {
-      pane.terminal.abortControl();
-      pane.requestClose();
-      pane.output_closed = true;
-      poller_.remove(pane.process->descriptor());
+      failOutput(pane);
     }
+  }
+
+  void failOutput(Pane<Memory> &pane) noexcept {
+    pane.terminal.abortControl();
+    pane.media->cancel();
+    pane.requestClose();
+    pane.output_closed = true;
+    poller_.remove(pane.process->descriptor());
   }
 
   void configureDesktop(ClientSession<Memory> &client, const ConfigurePaneDesktop &request) {

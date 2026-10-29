@@ -41,7 +41,12 @@ public:
     } else {
       ghostty_terminal_vt_write(terminal_, bytes.data(), bytes.size());
     }
+    if (write_failed_) {
+      throw TerminalError{GHOSTTY_OUT_OF_MEMORY};
+    }
   }
+
+  void failWrite() noexcept { write_failed_ = true; }
 
   // An intercepted ESC must still resolve a partial UTF-8 character in the
   // non-query backend at that exact stream position. Only framing/cancellation
@@ -240,6 +245,7 @@ private:
   bool palette_valid_ = false;
   bool possibly_pending_input_ = false;
   bool separate_media_ = false;
+  bool write_failed_ = false;
 };
 
 }

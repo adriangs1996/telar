@@ -4,6 +4,7 @@
 #include "../terminal/control/parser.hpp"
 #include "../terminal/control/classification.hpp"
 #include "../terminal/pty_response_queue.hpp"
+#include "../terminal/response_outbox.hpp"
 #include "atomic_frame.hpp"
 #include "file_input.hpp"
 #include "limits.hpp"
@@ -21,6 +22,7 @@ public:
         control_parser_(memory),
         allocator_(memory),
         responses_(responses ? std::move(responses) : std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory})),
+        response_outbox_(memory, *responses_),
         storage_limit_(limits.screenBytes()),
         uploads_(limits.screenBytes()) {
     checkGhostty(ghostty_terminal_new(allocator_.get(), terminal_.output(), size.cols, size.rows));
@@ -39,9 +41,19 @@ public:
   }
 
   void feed(std::span<const Byte> bytes) {
-    const auto consumed = control_parser_.feed(bytes, *this);
-    if (consumed != bytes.size()) {
-      throw std::logic_error{"Media control filter failed to consume input"};
+    try {
+      requireOpen();
+      const auto consumed = control_parser_.feed(bytes, *this);
+      if (consumed != bytes.size()) {
+        throw std::logic_error{"Media control filter failed to consume input"};
+      }
+      response_outbox_.drain();
+    } catch (...) {
+      response_failed_ |= !responses_->closed();
+      responses_->stopProducing();
+      control_parser_.discard();
+      response_outbox_.discard();
+      throw;
     }
   }
 
@@ -84,15 +96,18 @@ public:
   }
 
   void reply(std::span<const Byte> bytes) {
-    responses_->push(bytes);
+    response_outbox_.append(bytes);
+    response_outbox_.drain();
   }
 
   void ingest(std::span<const Byte> bytes) {
+    requireOpen();
     TELAR_TRACE("media.terminal.feed");
     write(bytes, uploads_.observe(terminal_.get(), bytes));
   }
 
   void ingestEncodedChunk(std::span<const Byte> bytes) {
+    requireOpen();
     TELAR_TRACE("media.terminal.feed");
     write(bytes, uploads_.observeEncodedChunk(terminal_.get()));
   }
@@ -143,6 +158,18 @@ public:
 
   void consumeResponses(std::size_t count) noexcept {
     responses_->consume(count);
+    response_outbox_.drain();
+  }
+
+  bool drainResponses() noexcept { return response_outbox_.drain(); }
+  bool pendingResponses() const noexcept { return response_outbox_.pending(); }
+  std::size_t nextResponseSize() const noexcept { return response_outbox_.nextSize(); }
+  bool responseFailed() const noexcept { return response_failed_; }
+
+  void requireOpen() const {
+    if (responses_->closed()) {
+      throw ResponseFailure{};
+    }
   }
 
   GraphicsUploadLimits::Reached takeUploadLimits() noexcept {
@@ -152,8 +179,13 @@ public:
   GraphicsStorage<Memory> graphics;
 
 private:
+  struct ResponseFailure {};
+
   void write(std::span<const Byte> bytes, const GraphicsUploadLimits::Observation &observation) {
     ghostty_terminal_vt_write(terminal_.get(), bytes.data(), bytes.size());
+    if (response_failed_) {
+      throw ResponseFailure{};
+    }
     if (const auto image = uploads_.enforce(terminal_.get(), observation)) {
       replyUploadLimit(*image);
     }
@@ -172,7 +204,7 @@ private:
     auto *identity = std::copy(prefix.begin(), prefix.end(), response.data());
     const auto formatted = std::to_chars(identity, identity + 10, image);
     const auto *end = std::copy(suffix.begin(), suffix.end(), formatted.ptr);
-    responses_->push({reinterpret_cast<const Byte *>(response.data()), static_cast<std::size_t>(end - response.data())});
+    reply({reinterpret_cast<const Byte *>(response.data()), static_cast<std::size_t>(end - response.data())});
   }
 
   static void receiveResponse(GhosttyTerminal, void *context, const Byte *bytes, std::size_t count) noexcept {
@@ -182,15 +214,24 @@ private:
     }
 
     auto &self = *static_cast<MediaTerminal *>(context);
-    self.responses_->push({bytes, count});
+    try {
+      self.response_outbox_.append({bytes, count});
+    } catch (...) {
+      // No exception may cross the foreign callback. The enclosing write
+      // fails after it returns, cancelling this pane generation explicitly.
+      self.response_failed_ = true;
+      self.responses_->stopProducing();
+    }
   }
 
   control::Parser<Memory> control_parser_;
   GhosttyAllocatorBridge<Memory> allocator_;
   TerminalHandle terminal_;
   std::shared_ptr<PtyResponseQueue> responses_;
+  ResponseOutbox<Memory> response_outbox_;
   std::size_t storage_limit_;
   GraphicsUploadLimits uploads_;
+  bool response_failed_ = false;
 };
 
 }

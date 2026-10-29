@@ -30,6 +30,9 @@ public:
   }
 
   void output(std::span<const Byte> bytes) noexcept {
+    if (cancelled_) {
+      return;
+    }
     const bool kitty = framing_.touches(bytes);
     auto &batch = batches_[active_];
     if (!batch.append(bytes)) {
@@ -41,6 +44,9 @@ public:
   }
 
   void resize(TerminalSize size) noexcept {
+    if (cancelled_) {
+      return;
+    }
     current_size_ = size;
     auto &batch = batches_[active_];
     if (!batch.resize(size)) {
@@ -51,14 +57,30 @@ public:
   }
 
   bool holdsRead(std::size_t bytes) const noexcept {
-    return busy_ && !batches_[active_].hasReadCapacity(bytes) && (batches_[active_].kitty || batches_[sealed_].kitty || framing_.inside());
+    return pending_responses_ || (busy_ && !batches_[active_].hasReadCapacity(bytes) && (batches_[active_].kitty || batches_[sealed_].kitty || framing_.inside()));
   }
 
   bool seal() noexcept {
-    if (busy_ || batches_[active_].events().empty()) {
+    if (busy_) {
+      return false;
+    }
+    if (cancelled_ || responses_->closed()) {
+      cancel();
+      return false;
+    }
+    if (pending_responses_) {
+      if (!responses_->hasCapacityFor(next_response_bytes_)) {
+        return false;
+      }
+      drain_only_ = true;
+      busy_ = true;
+      return true;
+    }
+    if (batches_[active_].events().empty()) {
       return false;
     }
 
+    drain_only_ = false;
     sealed_ = active_;
     active_ ^= 1;
     sealed_size_ = current_size_;
@@ -67,15 +89,36 @@ public:
   }
 
   void complete() noexcept {
-    batches_[sealed_].clear();
+    if (!drain_only_) {
+      batches_[sealed_].clear();
+    }
+    pending_responses_ = progress_.pending_responses;
+    next_response_bytes_ = progress_.next_response_bytes;
+    failed_ = progress_.failed;
+    failures_ += progress_.failed;
     busy_ = false;
+    if (cancelled_ || progress_.cancelled) {
+      cancel();
+    }
     TELAR_DIAGNOSTIC(observeQueue());
   }
 
   bool process() noexcept {
+    progress_ = {};
+    TELAR_DIAGNOSTIC(batch_metrics_ = {});
+    if (responses_->closed()) {
+      progress_.cancelled = true;
+      return false;
+    }
+    if (drain_only_) {
+      if (terminal_) {
+        terminal_->drainResponses();
+        responseProgress();
+      }
+      return false;
+    }
     TELAR_TRACE("media.process");
     TELAR_DIAGNOSTIC(AllocationScope allocation_scope{AllocationPath::media});
-    TELAR_DIAGNOSTIC(batch_metrics_ = {});
     TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{batch_metrics_.ingest});
     const auto &batch = batches_[sealed_];
     TELAR_DIAGNOSTIC(batch_metrics_.bytes = batch.byteCount());
@@ -107,17 +150,38 @@ public:
       }
       requests_.process(terminal_->graphics.images());
     } catch (...) {
+      progress_.failed = !responses_->closed() || (terminal_ && terminal_->responseFailed());
+      progress_.cancelled = !progress_.failed;
+      responses_->stopProducing();
       prepared_.clear();
       requests_.clear();
       terminal_.reset();
       reset = true;
-      ++failures_;
-      TELAR_DIAGNOSTIC(batch_metrics_.failures = 1);
+      TELAR_DIAGNOSTIC(batch_metrics_.failures = progress_.failed);
     }
+    responseProgress();
     TELAR_DIAGNOSTIC(batch_metrics_.prepared_frames = prepared_.takePreparedCount());
     TELAR_DIAGNOSTIC(batch_metrics_.resets = reset);
     return reset;
   }
+
+  // Only the runtime calls cancel/complete. A busy worker observes the closed
+  // queue, then ownership returns through ObservationWorker before cleanup.
+  void cancel() noexcept {
+    cancelled_ = true;
+    responses_->close();
+    if (!busy_) {
+      batches_[0].clear();
+      batches_[1].clear();
+      terminal_.reset();
+      prepared_.clear();
+      requests_.clear();
+      pending_responses_ = false;
+      next_response_bytes_ = 0;
+    }
+  }
+
+  bool failed() const noexcept { return failed_; }
 
 #if TELAR_DIAGNOSTICS
   diagnostics::GraphicsStorageSnapshot storageMetrics() {
@@ -184,7 +248,7 @@ public:
   }
 
   bool idle() const noexcept {
-    return !busy_ && batches_[active_].events().empty();
+    return !busy_ && !pending_responses_ && batches_[active_].events().empty();
   }
 
   MediaTerminal<AllocatedMemory> *terminal() noexcept {
@@ -202,6 +266,15 @@ public:
   std::shared_ptr<PaneMedia> retired_next;
 
 private:
+  void responseProgress() noexcept {
+    if (terminal_) {
+      terminal_->drainResponses();
+      progress_.pending_responses = terminal_->pendingResponses();
+      progress_.next_response_bytes = terminal_->nextResponseSize();
+    }
+    progress_.cancelled |= responses_->closed() && !progress_.failed;
+  }
+
 #if TELAR_DIAGNOSTICS
   void observeQueue() noexcept {
     queue_metrics_.observe(batches_[0].events().size() + batches_[1].events().size(), batches_[0].byteCount() + batches_[1].byteCount());
@@ -236,6 +309,19 @@ private:
   diagnostics::MediaQueue queue_metrics_;
 #endif
   bool busy_ = false;
+  bool drain_only_ = false;
+  bool pending_responses_ = false;
+  bool failed_ = false;
+  bool cancelled_ = false;
+  std::size_t next_response_bytes_ = 0;
+  // The worker owns Progress while busy; complete imports it only after the
+  // ObservationWorker acquire boundary. Runtime scheduling reads copied facts.
+  struct Progress {
+    std::size_t next_response_bytes = 0;
+    bool pending_responses = false;
+    bool failed = false;
+    bool cancelled = false;
+  } progress_;
   std::atomic<unsigned> shared_clients_{0};
 };
 

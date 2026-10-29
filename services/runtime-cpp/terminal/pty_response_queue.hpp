@@ -33,12 +33,16 @@ public:
     explicit Producer(PtyResponseQueue &queue) : queue_(queue), lock_(queue.mutex_, std::defer_lock) {}
 
     bool tryPush(std::span<const std::uint8_t> response) noexcept {
-      acquire();
+      if (!acquire()) {
+        return false;
+      }
       return queue_.append(response, {});
     }
 
     bool tryPushOwned(std::span<const std::uint8_t> response, std::shared_ptr<const void> owner) noexcept {
-      acquire();
+      if (!acquire()) {
+        return false;
+      }
       return queue_.append(response, std::move(owner));
     }
 
@@ -49,10 +53,15 @@ public:
     }
 
   private:
-    void acquire() {
+    bool acquire() {
       if (!lock_.owns_lock()) {
         lock_.lock();
+        if (queue_.priority_workers_ != 0) {
+          lock_.unlock();
+          return false;
+        }
       }
+      return true;
     }
 
     PtyResponseQueue &queue_;
@@ -93,6 +102,33 @@ public:
   bool hasCapacity() const noexcept {
     const std::lock_guard lock{mutex_};
     return !closed_ && count_ != message_capacity && byte_count_ < total_byte_capacity;
+  }
+
+  bool hasCapacityFor(std::size_t bytes) const noexcept {
+    const std::lock_guard lock{mutex_};
+    return !closed_ && count_ != message_capacity && bytes <= total_byte_capacity - byte_count_;
+  }
+
+  bool closed() const noexcept {
+    const std::lock_guard lock{mutex_};
+    return closed_;
+  }
+
+  // A retained worker ACK owns the next free slot. Native producers yield
+  // their lease while the worker drains, avoiding starvation under query load.
+  bool retainWorkerPriority() noexcept {
+    const std::lock_guard lock{mutex_};
+    if (closed_) {
+      return false;
+    }
+    ++priority_workers_;
+    return true;
+  }
+
+  void releaseWorkerPriority() noexcept {
+    const std::lock_guard lock{mutex_};
+    assert(priority_workers_ != 0);
+    --priority_workers_;
   }
 
 private:
@@ -183,6 +219,13 @@ public:
     return count_ == 0;
   }
 
+  // Workers may reject future publication, but only the single consumer may
+  // clear storage: it can still be borrowing an owned reply for writev.
+  void stopProducing() noexcept {
+    const std::lock_guard lock{mutex_};
+    closed_ = true;
+  }
+
   // Closing permanently cancels this pane generation, including late worker callbacks.
   void close() noexcept {
     const std::lock_guard lock{mutex_};
@@ -224,6 +267,7 @@ private:
   std::size_t byte_count_ = 0;
   std::uint64_t dropped_ = 0;
   bool closed_ = false;
+  std::size_t priority_workers_ = 0;
 };
 
 }

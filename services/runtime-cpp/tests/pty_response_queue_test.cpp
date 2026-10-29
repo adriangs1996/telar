@@ -1,5 +1,6 @@
 #include "check.hpp"
 #include "terminal/pty_response_queue.hpp"
+#include "terminal/response_outbox.hpp"
 #include <thread>
 #include <atomic>
 #include <vector>
@@ -153,10 +154,146 @@ static void testClosedGeneration() {
   check(!queue.tryPushOwned({}, std::make_shared<int>(1)));
 }
 
+static void testResponseOutbox() {
+  SystemAllocator system;
+  BudgetAllocator memory{system, 4096};
+  PtyResponseQueue queue;
+  const std::array<std::uint8_t, 3> ack{'A', 'C', 'K'};
+  {
+    ResponseOutbox first{memory, queue};
+    ResponseOutbox second{memory, queue};
+    first.append(ack);
+    second.append(ack);
+    check(first.drain());
+    PtyResponseQueue::Producer native{queue};
+    check(!native.tryPush(ack));
+    check(second.drain());
+    check(native.tryPush(ack));
+    native.release();
+    check(queue.snapshot().messages == 3);
+    queue.clear();
+  }
+  auto storage = std::make_shared<std::vector<std::uint8_t>>(PtyResponseQueue::total_byte_capacity - 1, 42);
+  check(queue.tryPushOwned(*storage, storage));
+  {
+    ResponseOutbox outbox{memory, queue};
+    outbox.append(ack);
+    check(queue.hasCapacity() && !queue.hasCapacityFor(ack.size()));
+    check(!outbox.drain() && outbox.nextSize() == ack.size());
+    queue.consume(1);
+    check(!queue.hasCapacityFor(ack.size()));
+    queue.consume(2);
+    check(queue.hasCapacityFor(ack.size()) && outbox.drain());
+    queue.clear();
+    check(!outbox.pending());
+  }
+  {
+    ResponseOutbox outbox{memory, queue};
+    const std::array<std::uint8_t, 1024> message{};
+    for (unsigned index = 0; index < 3; ++index) {
+      outbox.append(message);
+    }
+    check(memory.liveBytes() == 4096);
+    bool failed = false;
+    try {
+      outbox.append(message);
+    } catch (const std::bad_alloc &) {
+      failed = true;
+    }
+    check(failed && outbox.pending());
+    check(outbox.drain() && queue.snapshot().messages == 3);
+    check(memory.liveBytes() == 0);
+    queue.clear();
+    outbox.append(ack);
+    queue.close();
+    check(outbox.drain() && !outbox.pending());
+    outbox.append(ack);
+    check(!outbox.pending() && queue.empty());
+  }
+  check(memory.liveBytes() == 0 && queue.snapshot().dropped == 0);
+}
+
+static void testWorkerPublicationFailure() {
+  PtyResponseQueue queue;
+  auto storage = std::make_shared<std::vector<std::uint8_t>>(8192, 42);
+  const std::weak_ptr<std::vector<std::uint8_t>> lifetime = storage;
+  check(queue.tryPushOwned(*storage, storage));
+  storage.reset();
+  const auto borrowed = queue.peekBatch();
+  std::jthread worker{[&] { queue.stopProducing(); }};
+  worker.join();
+  check(queue.closed() && !lifetime.expired());
+  check(borrowed.count == 1 && borrowed.messages[0].front() == 42 && borrowed.messages[0].back() == 42);
+  check(!queue.tryPush({}));
+  queue.close();
+  check(lifetime.expired() && queue.empty());
+}
+
+static void testWorkerPriority() {
+  PtyResponseQueue queue;
+  const std::array<std::uint8_t, 1> native_bytes{'N'};
+  const std::array<std::uint8_t, 3> ack{'A', 'C', 'K'};
+  for (unsigned index = 0; index < PtyResponseQueue::message_capacity; ++index) {
+    check(queue.tryPush(native_bytes));
+  }
+  std::atomic<bool> staged = false;
+  std::atomic<bool> drained = false;
+  std::atomic<std::size_t> yielded = 0;
+  std::jthread worker{[&] {
+    SystemAllocator memory;
+    ResponseOutbox outbox{memory, queue};
+    for (unsigned index = 0; index < 100; ++index) {
+      outbox.append(ack);
+    }
+    staged.store(true, std::memory_order_release);
+    while (!outbox.drain()) {
+      std::this_thread::yield();
+    }
+    drained.store(true, std::memory_order_release);
+  }};
+  while (!staged.load(std::memory_order_acquire)) {
+    std::this_thread::yield();
+  }
+  {
+    PtyResponseQueue::Producer native{queue};
+    check(!native.tryPush(native_bytes));
+  }
+  std::jthread native{[&] {
+    while (!drained.load(std::memory_order_acquire)) {
+      PtyResponseQueue::Producer producer{queue};
+      if (!producer.tryPush(native_bytes)) {
+        yielded.fetch_add(1, std::memory_order_relaxed);
+      }
+      producer.release();
+      std::this_thread::yield();
+    }
+  }};
+  unsigned received = 0;
+  while (!drained.load(std::memory_order_acquire) || !queue.empty()) {
+    if (const auto message = queue.peek()) {
+      if (message->front() == ack.front()) {
+        check(message->size() == ack.size() && std::equal(message->begin(), message->end(), ack.begin()));
+        ++received;
+      } else {
+        check(message->size() == native_bytes.size() && message->front() == native_bytes.front());
+      }
+      queue.consume(message->size());
+    } else {
+      std::this_thread::yield();
+    }
+  }
+  worker.join();
+  native.join();
+  check(received == 100 && queue.snapshot().dropped == 0);
+}
+
 void testPtyResponseQueue() {
   testQueueBoundaries();
   testConcurrentResponses();
   testOwnedResponseLifetime();
   testBatchedResponses();
   testClosedGeneration();
+  testResponseOutbox();
+  testWorkerPublicationFailure();
+  testWorkerPriority();
 }

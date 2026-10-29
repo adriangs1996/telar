@@ -64,6 +64,14 @@ public:
   }
 
   void finish() noexcept {
+    for (auto *pane : model_.panes.items()) {
+      if (pane != nullptr) {
+        pane->media->cancel();
+      }
+    }
+    for (auto media = model_.retired_media; media; media = media->retired_next) {
+      media->cancel();
+    }
     for (;;) {
       worker_.wait([&](const typename Processor::Result &result) {
         pending_ = false;
@@ -134,6 +142,10 @@ private:
       if (pane == nullptr || pane->generation != entry.generation) {
         continue;
       }
+      if (entry.media->failed()) {
+        panes_.failOutput(*pane);
+        continue;
+      }
 
       if (entry.reset) {
         for (auto *client : model_.clients.items()) {
@@ -148,9 +160,9 @@ private:
         reportLimits(*terminal);
         stageTransfers(*pane, terminal->graphics);
 
-        if (!pane->output_closed) {
-          panes_.flushInput(*pane);
-        }
+      }
+      if (!pane->output_closed) {
+        panes_.flushInput(*pane);
       }
     }
   }

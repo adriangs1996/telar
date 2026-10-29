@@ -251,9 +251,9 @@ the state-bridge port (process-local `ulimit -n 8192`). Later edits still requir
 their appropriate final checks.
 
 Acceptance is blocked by actual unresolved work: Qt can materialize clipboard
-contents before their 1 MiB transport bound is checked; legacy non-query graphics
-ACK callbacks still use the dropping queue path; clipboard desktop differential
-coverage, final PTY latency, allocation/copy accounting and complete lifecycle
+contents before their 1 MiB transport bound is checked; separate graphics ACKs
+can follow a native query which appeared later in the stream; aggregate graphics
+resource CPU bounds, allocation/copy accounting and complete lifecycle
 adversarial coverage remain open. The default clipboard policy is not weakened
 to hide these issues.
 
@@ -293,5 +293,22 @@ The six focused Release and ASan/UBSan targets and Qt offscreen test pass;
 settles one asynchronous operation before another starts. Real transport,
 generation cancellation and concurrency are separate native tests, not
 represented by these response comparisons. Actual Surface user-paste events,
-Qt materialization bounds, graphics ACK saturation, final PTY/allocation
+Qt materialization bounds, cross-producer ACK order, final PTY/allocation
 measurements and the remaining performance regressions are still open.
+
+The bounded ACK outbox now retains non-query graphics responses without replay,
+with exact-capacity scheduling, producer priority, explicit failure, and busy
+worker cancellation. Six focused suites and the broad runtime suite pass in
+Release and ASan/UBSan; diagnostic drain-only checks, queue TSan and x86 Rosetta
+checks pass. `response-outbox-validation.json` records their precise scope.
+
+`candidate-18-freeze.json` freezes the new binaries and source patch.
+`performance-response-outbox-pty.json` measures seven alternating pairs against
+the unmodified Telar C++ baseline: 500 samples per workload after 50 warmups,
+actual child PTY write/read, P50/P95/P99, runtime CPU/RSS, and recovery after a
+100 ms response-read pause. All seven native runs retain 5,000 of 5,000 DSRs;
+all seven original-baseline runs retain 319. This is not a Ghostty application
+PTY comparison. Individual/fragmented query regressions remain visible.
+`performance-response-outbox-vs-17.json` and
+`performance-response-outbox-vs-ghostty.json` retain component comparisons:
+the safety change has costs and the actual application performance gate fails.

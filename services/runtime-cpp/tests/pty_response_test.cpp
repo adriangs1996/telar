@@ -33,8 +33,13 @@ static void testSharedTerminalResponses() {
   check(std::ranges::equal(terminal.responses(), responseBytes("\x1b[1;1R")));
   terminal.consumeResponses(terminal.responses().size());
 
-  media.reply(responseBytes(std::string(PtyResponseQueue::message_byte_capacity + 1, 'x')));
-  check(queue->empty() && queue->snapshot().dropped == 1);
+  bool rejected = false;
+  try {
+    media.reply(responseBytes(std::string(PtyResponseQueue::message_byte_capacity + 1, 'x')));
+  } catch (const std::length_error &) {
+    rejected = true;
+  }
+  check(rejected && queue->empty() && queue->snapshot().dropped == 0);
   terminal.feed(responseBytes("still usable"));
   terminal.refresh();
   check(terminal.screen.cells.front().text.front() == 's');
