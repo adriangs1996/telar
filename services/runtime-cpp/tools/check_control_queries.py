@@ -163,6 +163,13 @@ def main():
         ('checksum-origin', CSI+b'3;19r'+CSI+b'?69h'+CSI+b'4;71s'+CSI+b'?6h'+b'hello'+CSI+b'7;1;1;1;2;20*y'),
         ('checksum-empty', CSI+b'7;1;12;12;1;1*y'),
         ('checksum-defaults', CSI+b'*y'),
+        ('checksum-style-runs', b'A'+CSI+b'1;2;3m'+b'B'+CSI+b'0m'+b'C'+CSI+b'1;2;3m'+b'D'+CSI+b'7;1;1;1;2;80*y'),
+        ('checksum-protected', CSI+b'1\"q'+b'A'+CSI+b'0\"q'+b'B'+CSI+b'7;1;1;1;2;80*y'),
+        ('checksum-background-only', CSI+b'41m'+CSI+b'2J'+CSI+b'7;1;1;1;2;80*y'),
+        ('checksum-wide-wrap', CSI+b'1;80H'+'界'.encode()+CSI+b'7;1;1;1;2;80*y'),
+        ('checksum-many-graphemes', ('A'+'\u0301'*24).encode()+CSI+b'7;1;1;1;2;80*y'),
+        ('checksum-scrolled-pages', b'row\r\n'*280+b'last'+CSI+b'7;1;1;1;24;80*y'),
+        ('checksum-alt-roundtrip', b'primary'+CSI+b'?1049h'+b'alt'+CSI+b'7;1;1;1;24;80*y'+CSI+b'?1049l'+CSI+b'8;1;1;1;24;80*y'),
     ]
     for checksum_flags in range(32):
         for name, data in opt_in:
@@ -173,7 +180,8 @@ def main():
                 expected = reference.run(data)
             finally:
                 reference.close()
-            for split in range(len(data)+1) if args.all_splits else [None]:
+            splits = range(len(data)+1) if len(data) <= 1024 else [0, 1, len(data)//2, len(data)-1, len(data)]
+            for split in splits if args.all_splits else [None]:
                 candidate = Probe(args.native)
                 try:
                     candidate.policy(2)
