@@ -1,8 +1,9 @@
 # C++ runtime
 
-An independent C++23 runtime for macOS ARM64. It handles all 62 client request
-tags, including Desktop's `HoldTab`. The Zig runtime remains the
-compatibility reference. This executable is opt-in. An installation option
+An independent C++23 runtime for macOS ARM64. It handles client requests,
+including Desktop's `HoldTab`. Native control-query acceptance is tracked in
+[control-queries.md](control-queries.md), using the frozen Ghostty application
+as its reference. This executable is opt-in. An installation option
 provides the `telar` command used by Desktop's existing discovery.
 
 ## Build and run
@@ -29,6 +30,17 @@ ctest --test-dir out --output-on-failure
 runtime_directory=$(mktemp -d)
 out/telar-runtime --socket "$runtime_directory/runtime.sock"
 ```
+
+The VT dependency requires Telar state ABI version 3. Use a new build directory
+when its revision or patch changes. `--source /path/to/ghostty-checkout` archives
+the pinned revision into its own local repository; the script checks both patch
+application and its reverse before compiling. This is an isolated dependency
+prefix, not an application installation.
+
+The state-only `ghostty_grid_ref_cells` accessor lends a contiguous physical row
+until the next terminal mutation. C++ consumers clip their rectangle to that
+row and decode fields using the generated cell-layout manifest. Protocol
+recognition, checksum arithmetic, policy and response encoding remain native.
 
 Pass `-DCMAKE_CXX_COMPILER=/path/to/clang++` if the default compiler lacks the
 C++23 features used by Desktop's shared protocol serializers. The measured

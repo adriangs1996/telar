@@ -46,6 +46,8 @@ def main():
                     archive.stdout.close()
                 if archive.wait() != 0:
                     raise RuntimeError("Could not archive the immutable Ghostty revision")
+            # Keep patch paths relative to this archive instead of the enclosing worktree.
+            run(["git", "init", "--quiet"], source)
         else:
             source.mkdir()
             run(["git", "init", "--quiet"], source)
@@ -56,6 +58,10 @@ def main():
         run(["git", "apply", "--check", str(patch)], source)
         run(["git", "apply", str(patch)], source)
         marker.write_text(json.dumps(expected, indent=2) + "\n")
+
+    if subprocess.check_output(["git", "rev-parse", "--show-toplevel"], cwd=source, text=True).strip() != str(source):
+        raise RuntimeError("Dependency source is not an isolated checkout; use a new build directory")
+    run(["git", "apply", "--reverse", "--check", str(patch)], source)
 
     run([
         arguments.zig, "build", "-j2", "-Demit-lib-vt", "-Demit-xcframework=false",

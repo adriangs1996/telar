@@ -118,6 +118,38 @@ void uniqueReplies(Memory &memory) {
 }
 
 template <Allocator Memory>
+void rowStateViews(Memory &memory) {
+  Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
+  for (const TerminalSize size : {TerminalSize{80, 24, 9, 18}, TerminalSize{120, 12, 9, 18}, TerminalSize{40, 48, 9, 18}}) {
+    terminal.resize(size);
+    terminal.feed(bytes("\x1b[1;1Hplain\x1b[1;3mstyle\x1b[0mÁ界\r\n"));
+    for (std::uint16_t row = 0; row < size.rows; ++row) {
+      auto reference = ghosttySized<GhosttyGridRef>();
+      const GhosttyPoint point{.tag = GHOSTTY_POINT_TAG_ACTIVE, .value = {.coordinate = {0, row}}};
+      checkGhostty(ghostty_terminal_grid_ref(terminal.handle(), point, &reference));
+      GhosttyCellsView cells{};
+      checkGhostty(ghostty_grid_ref_cells(&reference, &cells));
+      require(cells.ptr != nullptr && cells.len != 0);
+      for (std::size_t column = 0; column < cells.len; ++column) {
+        reference.x = static_cast<std::uint16_t>(column);
+        GhosttyCell single = 0;
+        checkGhostty(ghostty_grid_ref_cell(&reference, &single));
+        require(single == cells.ptr[column]);
+      }
+      reference.x = static_cast<std::uint16_t>(cells.len);
+      require(ghostty_grid_ref_cells(&reference, &cells) == GHOSTTY_INVALID_VALUE);
+      reference.x = 0;
+      reference.y = UINT16_MAX;
+      require(ghostty_grid_ref_cells(&reference, &cells) == GHOSTTY_INVALID_VALUE);
+    }
+  }
+  auto invalid = ghosttySized<GhosttyGridRef>();
+  GhosttyCellsView cells{};
+  require(ghostty_grid_ref_cells(&invalid, &cells) == GHOSTTY_INVALID_VALUE);
+  require(terminal.responses().empty());
+}
+
+template <Allocator Memory>
 void abortedControl(Memory &memory) {
   Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
   terminal.feed(bytes("\x1b[?2031;2033;1004;2048h"));
@@ -267,6 +299,7 @@ int main(int argc, char **argv) {
   uniqueReplies(memory);
   clipboardWrites(memory);
   abortedControl(memory);
+  rowStateViews(memory);
   reports(memory);
   testPtyResponseQueue();
   require(budget.liveBytes() == 0);

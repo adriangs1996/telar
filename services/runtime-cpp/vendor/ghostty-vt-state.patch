@@ -1,6 +1,20 @@
+diff --git a/include/ghostty/vt/grid_ref.h b/include/ghostty/vt/grid_ref.h
 --- a/include/ghostty/vt/grid_ref.h
 +++ b/include/ghostty/vt/grid_ref.h
-@@ -184,6 +184,12 @@
+@@ -124,6 +124,12 @@
+ GHOSTTY_API GhosttyResult ghostty_grid_ref_cell(const GhosttyGridRef *ref,
+                                     GhosttyCell *out_cell);
+ 
++/** Borrow all cells of the referenced row, from column zero. The view is valid
++ * only until the next terminal mutation (including resize/free). This accessor
++ * reads state and performs no terminal protocol operations. */
++GHOSTTY_API GhosttyResult ghostty_grid_ref_cells(const GhosttyGridRef *ref,
++    GhosttyCellsView *out_cells);
++
+ /**
+  * Get the row from a grid reference.
+  *
+@@ -184,6 +190,12 @@
   *
   * @ingroup grid_ref
   */
@@ -13,6 +27,7 @@
  GHOSTTY_API GhosttyResult ghostty_grid_ref_hyperlink_uri(
      const GhosttyGridRef *ref,
      uint8_t *buf,
+diff --git a/include/ghostty/vt/kitty_graphics.h b/include/ghostty/vt/kitty_graphics.h
 --- a/include/ghostty/vt/kitty_graphics.h
 +++ b/include/ghostty/vt/kitty_graphics.h
 @@ -267,6 +267,11 @@
@@ -74,6 +89,7 @@
  GHOSTTY_API GhosttyResult ghostty_kitty_graphics_placement_viewport_pos(
      GhosttyKittyGraphicsPlacementIterator iterator,
      GhosttyKittyGraphicsImage image,
+diff --git a/include/ghostty/vt/render.h b/include/ghostty/vt/render.h
 --- a/include/ghostty/vt/render.h
 +++ b/include/ghostty/vt/render.h
 @@ -971,6 +971,7 @@
@@ -109,6 +125,7 @@
    GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
  } GhosttyRenderStateRowCellsData;
  
+diff --git a/include/ghostty/vt/terminal.h b/include/ghostty/vt/terminal.h
 --- a/include/ghostty/vt/terminal.h
 +++ b/include/ghostty/vt/terminal.h
 @@ -6,6 +6,8 @@
@@ -116,7 +133,7 @@
  #ifndef GHOSTTY_VT_TERMINAL_H
  #define GHOSTTY_VT_TERMINAL_H
 +
-+#define GHOSTTY_TELAR_STATE_VERSION 2
++#define GHOSTTY_TELAR_STATE_VERSION 3
  
  #include <stdbool.h>
  #include <stddef.h>
@@ -169,6 +186,7 @@
  GHOSTTY_API GhosttyResult ghostty_terminal_get(GhosttyTerminal terminal,
                                      GhosttyTerminalData data,
                                      void *out);
+diff --git a/src/lib_vt.zig b/src/lib_vt.zig
 --- a/src/lib_vt.zig
 +++ b/src/lib_vt.zig
 @@ -328,12 +328,14 @@
@@ -202,20 +220,49 @@
              @export(&c.kitty_graphics_get, .{ .name = "ghostty_kitty_graphics_get" });
              @export(&c.kitty_graphics_animation_tick, .{ .name = "ghostty_kitty_graphics_animation_tick" });
              @export(&c.kitty_graphics_image, .{ .name = "ghostty_kitty_graphics_image" });
-@@ -416,6 +427,7 @@
+@@ -414,8 +425,10 @@
+         }
+         if (features.grid_introspection) {
              @export(&c.grid_ref_cell, .{ .name = "ghostty_grid_ref_cell" });
++            @export(&c.grid_ref_cells, .{ .name = "ghostty_grid_ref_cells" });
              @export(&c.grid_ref_row, .{ .name = "ghostty_grid_ref_row" });
              @export(&c.grid_ref_graphemes, .{ .name = "ghostty_grid_ref_graphemes" });
 +            @export(&c.grid_ref_hyperlink, .{ .name = "ghostty_grid_ref_hyperlink" });
              @export(&c.grid_ref_hyperlink_uri, .{ .name = "ghostty_grid_ref_hyperlink_uri" });
              @export(&c.grid_ref_style, .{ .name = "ghostty_grid_ref_style" });
              @export(&c.tracked_grid_ref_free, .{ .name = "ghostty_tracked_grid_ref_free" });
+diff --git a/src/terminal/c/grid_ref.zig b/src/terminal/c/grid_ref.zig
 --- a/src/terminal/c/grid_ref.zig
 +++ b/src/terminal/c/grid_ref.zig
-@@ -91,6 +91,30 @@
+@@ -49,6 +49,21 @@
      return .success;
  }
  
++pub fn grid_ref_cells(ref: *const CGridRef, out: *cell_c.CellsView) callconv(lib.calling_conv) Result {
++    const pin = ref.toPin() orelse return .invalid_value;
++    const terminal_page = pin.node.page();
++    if (pin.y >= terminal_page.size.rows or pin.x >= terminal_page.size.cols) {
++        return .invalid_value;
++    }
++
++    const cells = terminal_page.getCells(terminal_page.getRow(pin.y));
++    out.* = .{
++        .ptr = @ptrCast(cells.ptr),
++        .len = cells.len,
++    };
++    return .success;
++}
++
+ pub fn grid_ref_row(
+     ref: *const CGridRef,
+     out: ?*row_c.CRow,
+@@ -88,6 +103,30 @@
+     };
+ 
+     out_len.* = total;
++    return .success;
++}
++
 +pub fn grid_ref_hyperlink(ref: *const CGridRef, uri: *lib.String, explicit_id: *lib.String, implicit_id: *u64) callconv(lib.calling_conv) Result {
 +    const pin = ref.toPin() orelse return .invalid_value;
 +    const terminal_page = pin.node.page();
@@ -237,12 +284,10 @@
 +        },
 +    }
 +
-+    return .success;
-+}
-+
- pub fn grid_ref_hyperlink_uri(
-     ref: *const CGridRef,
-     out_buf: ?[*]u8,
+     return .success;
+ }
+ 
+diff --git a/src/terminal/c/kitty_graphics.zig b/src/terminal/c/kitty_graphics.zig
 --- a/src/terminal/c/kitty_graphics.zig
 +++ b/src/terminal/c/kitty_graphics.zig
 @@ -25,6 +25,13 @@
@@ -474,6 +519,7 @@
 +    row.* = @as(i32, @intCast(anchor.screen.y)) - @as(i32, @intCast(viewport.screen.y));
 +    return .success;
 +}
+diff --git a/src/terminal/c/main.zig b/src/terminal/c/main.zig
 --- a/src/terminal/c/main.zig
 +++ b/src/terminal/c/main.zig
 @@ -192,12 +192,14 @@
@@ -491,15 +537,18 @@
  pub const terminal_get_multi = terminal.get_multi;
  pub const terminal_continuation_write = terminal.continuation_write;
  pub const terminal_continuation_buf = terminal.continuation_buf;
-@@ -256,6 +258,7 @@
+@@ -254,8 +256,10 @@
+ pub const unicode_grapheme_width = unicode.grapheme_width;
+ 
  pub const grid_ref_cell = grid_ref.grid_ref_cell;
++pub const grid_ref_cells = grid_ref.grid_ref_cells;
  pub const grid_ref_row = grid_ref.grid_ref_row;
  pub const grid_ref_graphemes = grid_ref.grid_ref_graphemes;
 +pub const grid_ref_hyperlink = grid_ref.grid_ref_hyperlink;
  pub const grid_ref_hyperlink_uri = grid_ref.grid_ref_hyperlink_uri;
  pub const grid_ref_style = grid_ref.grid_ref_style;
  pub const tracked_grid_ref_free = grid_ref_tracked.tracked_grid_ref_free;
-@@ -300,3 +303,13 @@
+@@ -300,3 +304,13 @@
      // We want to make sure we run the tests for the C allocator interface.
      _ = @import("../../lib/allocator.zig");
  }
@@ -513,6 +562,7 @@
 +pub const kitty_graphics_image_remove = kitty_graphics.image_remove;
 +pub const kitty_graphics_placement_remove = kitty_graphics.placement_remove;
 +pub const kitty_graphics_placement_anchor = kitty_graphics.placement_anchor;
+diff --git a/src/terminal/c/render.zig b/src/terminal/c/render.zig
 --- a/src/terminal/c/render.zig
 +++ b/src/terminal/c/render.zig
 @@ -14,6 +14,7 @@
@@ -591,6 +641,7 @@
          .raw => out.* = it.raws[y].cval(),
          .cells => {
              const cells = out.* orelse return .invalid_value;
+diff --git a/src/terminal/c/terminal.zig b/src/terminal/c/terminal.zig
 --- a/src/terminal/c/terminal.zig
 +++ b/src/terminal/c/terminal.zig
 @@ -1485,6 +1485,11 @@
