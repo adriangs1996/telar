@@ -25,7 +25,7 @@ selection and the original stopped phase. Read
 for the current scope. Earlier reports and manifests remain historical.
 
 The normal executable still initializes only the local client. Profile source
-admission, SSH transport, the picker/actions and native machine pixels are the
+admission, the picker/actions and native machine pixels are the
 next work; the action catalogue remains 25/29. No global parity gate is closed.
 The current native Cocoa/Metal scale-1 suite passes all 82 entries after the
 owned-window focus/geometry barrier; twenty selected regressions pass.
@@ -34,6 +34,18 @@ An independent Qt-only font-metrics control also reports leaks. Retain failed
 runs; do not suppress them or infer that every GUI leak is explained by that
 control. The standalone opener and expanded registry oracle pass sanitizers
 with leak detection enabled.
+
+The following transport checkpoint adds `qt/RemoteBridge` and
+`RuntimeConnection::openRemote`: bounded discovery and stderr, cancellable
+request generations, managed SSH options and a native socketpair carrying the
+existing framed connection. Read `measurements/machine-transport.md` and its
+manifest. Controlled process suites pass Release and ASan/UBSan with leak
+detection enabled; actual SSH-host validation remains open. An earlier fixture
+that reused the Qt-linked test executable failed discovery because its child
+exited with a CoreFoundation leak; the retained independent control reproduces
+64 bytes. The accepted fixture is a separate protocol-only executable with no
+Qt linkage, instrumented in sanitizer builds. No suppression or disabled leak
+check was introduced. Saved-profile admission is still the next integration.
 
 The sections below describe the transfer baseline; prefer this checkpoint and
 the latest window-adapter report where the implementation has since advanced.

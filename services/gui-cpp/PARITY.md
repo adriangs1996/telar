@@ -39,6 +39,15 @@ and SSH admission are the next integration step. Native sanitizer assertions
 pass, but the unsuppressed exit leak gate remains open. A Qt-only font control
 also reproduces leaks; this does not establish ownership of every GUI leak.
 
+The [SSH transport adapter](measurements/machine-transport.md) now performs
+bounded discovery, uses the original managed SSH arguments and commands, and
+adopts a native stdio socket pair into the existing framed `RuntimeConnection`.
+Controlled subprocess tests cover duplex messages, permanent failures,
+cancellation and destination replacement. Both standalone transport suites pass
+ASan/UBSan with leak detection enabled. This does not establish a live SSH-host
+comparison. Production profile admission and machine actions remain pending;
+the executable still starts only its local client.
+
 Two initial Cocoa/Metal runs each recorded 81 passes and one failure: editor terminal
 focus in the first, history inspection geometry in the second. The editor case
 passes alone and in three repetitions of its preceding sequence. The

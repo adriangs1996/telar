@@ -1383,6 +1383,10 @@ isolation, including colliding pane/frame identifiers and held keys. The
 [window adapter report](measurements/machine-window.md) records the validation
 and unsuppressed native leak gate. Production profile and SSH admission remain
 pending, and the normal executable still opens only the local machine.
+The [SSH transport report](measurements/machine-transport.md) adds a bounded
+subprocess discovery/stdio bridge to the existing framing transport, with
+controlled process coverage and unsuppressed ASan/UBSan acceptance. Profile
+admission, actual SSH-host validation and the four machine actions remain open.
 
 ## Build and run
 

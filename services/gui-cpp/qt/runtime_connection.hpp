@@ -1,6 +1,9 @@
 #pragma once
 
 #include "application/dependencies.hpp"
+#include "machines/failure.hpp"
+#include "platform/file_descriptor.hpp"
+#include "remote_bridge.hpp"
 #include "telar_client/codecs/telar_handshake.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include "transport/frame_stream.hpp"
@@ -30,6 +33,11 @@ public:
   RuntimeConnection &operator=(RuntimeConnection &&) = delete;
 
   void open(const QString &path);
+  void openRemote(RemoteTarget target);
+  void remoteDiscovered(const RemoteDiscovery &discovery);
+  void remoteChannelReady(runtime::FileDescriptor channel);
+  void remoteFailed(MachineError error, const QString &detail);
+  [[nodiscard]] std::optional<MachineError> remoteError() const noexcept;
   void close();
   [[nodiscard]] bool ready() const noexcept;
   [[nodiscard]] QString error() const;
@@ -52,6 +60,7 @@ public:
   }
 
 signals:
+  void discovered(QByteArrayView home, QByteArrayView shell, QByteArrayView endpoint);
   void connected();
   void disconnected();
   void payloadReceived(QByteArrayView payload);
@@ -60,6 +69,9 @@ signals:
 
 private:
   void connectSocket();
+  void beginHandshake();
+  void socketDisconnected();
+  void socketFailed(QLocalSocket::LocalSocketError error);
   void read();
   void drainInput();
   bool readChunk();
@@ -79,8 +91,13 @@ private:
   std::optional<QString> pending_failure_;
   bool dispatching_payload_ = false;
   bool accepted_ = false;
+  bool handshake_sent_ = false;
+  bool retry_permitted_ = true;
   bool closed_ = true;
   bool read_queued_ = false;
+  std::optional<RemoteTarget> remote_target_;
+  std::optional<MachineError> remote_error_;
+  std::optional<RemoteBridge<NativeSshHost, RuntimeConnection>> remote_;
 };
 
 }

@@ -1,6 +1,10 @@
 #include "runtime_connection.hpp"
 #include "application/dependencies.hpp"
+#include "machines/connection_policy.hpp"
+#include "machines/failure.hpp"
+#include "platform/file_descriptor.hpp"
 #include "platform/peer_identity.hpp"
+#include "remote_bridge.hpp"
 #include "telar_client/codecs/telar_handshake.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_handshake.hpp"
@@ -11,6 +15,7 @@
 #include <QtCore/qnamespace.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qobjectdefs.h>
+#include <QtCore/qstring.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <array>
@@ -43,29 +48,9 @@ RuntimeConnection::RuntimeConnection(ApplicationAllocator &memory, QObject *pare
 
   connect(&socket_, &QLocalSocket::readyRead, this, &RuntimeConnection::read);
 
-  connect(&socket_, &QLocalSocket::connected, this, [this] {
-    if (!platform::isCurrentUser(socket_.socketDescriptor())) {
-      fail(QStringLiteral("Runtime socket belongs to another user"));
-
-      return;
-    }
-
-    write(HandshakeCodec::encode(ClientHello{}));
-  });
-
-  connect(&socket_, &QLocalSocket::disconnected, this, [this] {
-    accepted_ = false;
-    deadline_.stop();
-    emit disconnected();
-
-    if (!closed_) {
-      retry_.start();
-    }
-  });
-
-  connect(&socket_, &QLocalSocket::errorOccurred, this, [this](auto) {
-    fail(socket_.errorString());
-  });
+  connect(&socket_, &QLocalSocket::connected, this, &RuntimeConnection::beginHandshake);
+  connect(&socket_, &QLocalSocket::disconnected, this, &RuntimeConnection::socketDisconnected);
+  connect(&socket_, &QLocalSocket::errorOccurred, this, &RuntimeConnection::socketFailed);
 }
 
 RuntimeConnection::~RuntimeConnection() {
@@ -77,14 +62,81 @@ void RuntimeConnection::open(const QString &path) {
   close();
   path_ = path;
   closed_ = false;
+  retry_permitted_ = true;
   connectSocket();
+}
+
+void RuntimeConnection::openRemote(RemoteTarget target) {
+  close();
+  remote_target_ = std::move(target);
+  if (!remote_) {
+    remote_.emplace(*this);
+  }
+
+  closed_ = false;
+  retry_permitted_ = true;
+  connectSocket();
+}
+
+void RuntimeConnection::remoteDiscovered(const RemoteDiscovery &discovery) {
+  if (closed_ || !remote_target_) {
+    return;
+  }
+
+  const auto view = [](std::string_view text) {
+    return QByteArrayView{text.data(), static_cast<qsizetype>(text.size())};
+  };
+  emit discovered(view(discovery.home()), view(discovery.shell()), view(discovery.endpoint()));
+}
+
+void RuntimeConnection::remoteChannelReady(runtime::FileDescriptor channel) {
+  if (closed_ || !remote_target_) {
+    return;
+  }
+
+  if (!socket_.setSocketDescriptor(channel.get(), QLocalSocket::ConnectedState)) {
+    fail(socket_.errorString());
+
+    return;
+  }
+
+  static_cast<void>(channel.release());
+  deadline_.start();
+  beginHandshake();
+}
+
+void RuntimeConnection::remoteFailed(MachineError error, const QString &detail) {
+  if (closed_ || !remote_target_) {
+    return;
+  }
+
+  remote_error_ = error;
+  retry_permitted_ = !MachineConnectionPolicy::permanent(error);
+  const auto name = QString::fromLatin1(MachineFailure::name(error));
+  const auto message = detail.isEmpty() ? name : name + QStringLiteral(": ") + detail;
+  if (dispatching_payload_) {
+    pending_failure_ = message;
+  } else {
+    fail(message);
+  }
+}
+
+std::optional<MachineError> RuntimeConnection::remoteError() const noexcept {
+  return remote_error_;
 }
 
 void RuntimeConnection::close() {
   closed_ = true;
   accepted_ = false;
+  handshake_sent_ = false;
   retry_.stop();
   deadline_.stop();
+  if (remote_) {
+    remote_->close();
+  }
+
+  remote_target_.reset();
+  remote_error_.reset();
   socket_.abort();
 }
 
@@ -131,9 +183,72 @@ void RuntimeConnection::connectSocket() {
 
   stream_.reset();
   pending_failure_.reset();
+  remote_error_.reset();
   accepted_ = false;
+  handshake_sent_ = false;
+  if (remote_target_) {
+    if (!remote_) {
+      throw std::logic_error{"Remote transport was not initialized"};
+    }
+
+    remote_->open(*remote_target_);
+
+    return;
+  }
+
   socket_.connectToServer(path_);
   deadline_.start();
+}
+
+void RuntimeConnection::beginHandshake() {
+  if (closed_ || handshake_sent_ || socket_.state() != QLocalSocket::ConnectedState) {
+    return;
+  }
+
+  if (!remote_target_ && !platform::isCurrentUser(socket_.socketDescriptor())) {
+    fail(QStringLiteral("Runtime socket belongs to another user"));
+
+    return;
+  }
+
+  handshake_sent_ = true;
+  try {
+    write(HandshakeCodec::encode(ClientHello{}));
+  } catch (const std::exception &error) {
+    fail(QString::fromUtf8(error.what()));
+  }
+}
+
+void RuntimeConnection::socketDisconnected() {
+  if (closed_) {
+    return;
+  }
+
+  if (remote_ && remote_->active()) {
+    accepted_ = false;
+    deadline_.start();
+
+    return;
+  }
+
+  accepted_ = false;
+  deadline_.stop();
+  emit disconnected();
+  if (retry_permitted_) {
+    retry_.start();
+  }
+}
+
+void RuntimeConnection::socketFailed(QLocalSocket::LocalSocketError error) {
+  if (closed_) {
+    return;
+  }
+
+  if (remote_ && remote_->active() && error == QLocalSocket::PeerClosedError) {
+    return;
+  }
+
+  fail(socket_.errorString());
 }
 
 void RuntimeConnection::read() {
@@ -238,12 +353,20 @@ void RuntimeConnection::write(std::span<const Byte> payload) {
 void RuntimeConnection::fail(const QString &message) {
   error_ = message;
   accepted_ = false;
-  socket_.abort();
+  if (remote_) {
+    remote_->close();
+  }
+
+  {
+    const QScopedValueRollback aborting{closed_, true};
+    socket_.abort();
+  }
+
   deadline_.stop();
   emit errorChanged();
   emit disconnected();
 
-  if (!closed_) {
+  if (!closed_ && retry_permitted_) {
     retry_.start();
   }
 }
