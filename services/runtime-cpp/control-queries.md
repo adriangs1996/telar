@@ -76,7 +76,7 @@ separate case results. A row marked pending blocks acceptance.
 | special-palette | `OSC 5;index;? BEL/ST` | Recognized but unimplemented special colors: no response, like application | handler:1769 | pending |
 | dynamic-colors | `OSC 10;?`,11,12 and chained selectors through 19; BEL/ST | Foreground/background/cursor supported, cursor falls back to foreground. Other dynamic selectors silently omitted. Set/reset in OSC 10–19/110–119 must affect subsequent queries | handler:1745; osc/color.zig | pending |
 | kitty-colors | `OSC 21;key=?[;key=?…] BEL/ST` | Palette and foreground/background/cursor; aggregate `OSC 21;key=rgb:rr/gg/bb…` matching terminator. Unset cursor returns empty value (different from OSC12); unsupported special keys ignored. Set/reset mixed in request order | handler:1858; kitty/color.zig | pending |
-| clipboard-osc | `OSC 52;selection;? BEL/ST` | Read defaults to ask; deny silent. Granted read returns base64 data. Selection c/s/p and fallback map to desktop resources; no authorized client means no disclosure | handler:1045; Surface:1099,6400 | pending |
+| clipboard-osc | `OSC 52;selection;? BEL/ST` | Read defaults to ask; policy deny is silent, explicit user denial replies empty. Reads use standard desktop clipboard while echoing selection c/s/p (unknown kinds fall back to c); writes honor location. Strict alphabet accepts absent padding; no authorized client means no disclosure | handler:1045; Surface:1099,6400 | pending |
 | clipboard-kitty-read | `OSC 5522;type=read[:metadata][;base64 MIME list] BEL/ST` | Permission denial EPERM, unsupported resource ENOSYS, failure EIO. Success OK, optional targets DATA, requested MIME DATA chunks, DONE. Targets-only does not consume one-time grants. IDs sanitized and bounded; strict UTF-8/base64 metadata/payload | handler:1076–1227; Surface:6447; clipboard_response.zig | pending |
 | clipboard-kitty-write | OSC5522 write/wdata/walias/commit transactions | Related control acknowledgements: denied begin EPERM, invalid EINVAL, oversize EFBIG; commit permission/desktop failure. MIME aliases, replacement, cancellation, reset, session/one-time grants. Distinct from query read but affects permission/report state | handler:1230–1477; clipboard_write.zig | pending |
 | graphics-query | `APC G a=q,…;payload ST`, quiet/id/format/medium variants | Own recognition/validation/response. File/shared medium checks and payload processing remain existing non-query graphics machinery through a narrow adapter; no duplicate interactive/media replies | handler:512; terminal/kitty/graphics.zig and exec.zig | pending |
@@ -265,3 +265,33 @@ measures a 12.064× checksum-screen ratio, 40.088× graphics-payload ratio and
 Subsequent parser experiments are retained separately and are not accepted by
 averaging away short-query regressions. All inventory rows remain acceptance
 gates; this checkpoint does not finish the task.
+
+
+The clipboard differential oracle now dispatches the immutable application's
+actual `Surface.handleMessage`, embedded clipboard request flow,
+`completeClipboardRequest` and `denyClipboardRequest`, with memory resources
+instead of the host clipboard. `experimental/ghostty_clipboard_fixture.zig`
+documents the partial Surface/App fixture fields and borrowed mailbox lifetime.
+The library and source/build hashes are frozen by `candidate-16-freeze.json`.
+The earlier adapter that answered EPERM directly is retained as historical
+limited coverage, not evidence for granted desktop operations.
+
+`differential-clipboard-current-splits.json` compares 44,815 executions across
+five permission/consent policies, OSC52 selectors and padding, binary data,
+Kitty MIME aliases/listings, unsupported primary selection, malformed packets,
+BEL/ST/C1 terminators and all two-fragment boundaries. All match byte-exact
+responses and in-memory clipboard contents. The first run exposed 98 failures
+in 855 cases; retained diagnostics are `differential-clipboard-before.json`.
+Corrections include OSC52 empty user denial, standard-resource read routing,
+optional padding/noncanonical tail bits, required-padding Kitty decode, and
+rejecting data after terminal padding in the same wdata packet. Independent
+padded wdata packets remain accepted. Client primary-selection support is
+checked as a platform capability before prompting, without inspecting contents.
+
+The six focused Release and ASan/UBSan targets and Qt offscreen test pass;
+`clipboard-surface-validation.json` retains logs and limits. This fixture
+settles one asynchronous operation before another starts. Real transport,
+generation cancellation and concurrency are separate native tests, not
+represented by these response comparisons. Actual Surface user-paste events,
+Qt materialization bounds, graphics ACK saturation, final PTY/allocation
+measurements and the remaining performance regressions are still open.

@@ -44,7 +44,8 @@ public:
       entry.length = 0;
     }
 
-    for (const auto byte : encoded) {
+    for (std::size_t index = 0; index < encoded.size(); ++index) {
+      const auto byte = encoded[index];
       if (byte != '=' && base64::alphabet.find(byte) == std::string_view::npos) {
         return ClipboardStatus::invalid;
       }
@@ -53,8 +54,8 @@ public:
         continue;
       }
       std::array<std::uint8_t, 3> decoded;
-      const auto count = base64::decode({group_.data(), group_.size()}, decoded);
-      if (!count) {
+      const auto count = base64::decode<base64::Padding::required>({group_.data(), group_.size()}, decoded);
+      if (!count || (*count != decoded.size() && index + 1 != encoded.size())) {
         return ClipboardStatus::invalid;
       }
       if (*count > limit_ - spool_.size()) {
@@ -73,7 +74,7 @@ public:
       return ClipboardStatus::too_large;
     }
     decoded.resize(encoded.size() / 4 * 3);
-    const auto length = base64::decode(encoded, decoded);
+    const auto length = base64::decode<base64::Padding::required>(encoded, decoded);
     if (!length) {
       return ClipboardStatus::invalid;
     }

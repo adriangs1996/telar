@@ -49,6 +49,10 @@ enum class ClipboardConsent {
   session
 };
 
+inline bool clipboardTextMime(std::string_view mime) noexcept {
+  return mime == "text/plain" || mime == "text/plain;charset=utf-8" || mime == "UTF8_STRING" || mime == "STRING" || mime == "TEXT";
+}
+
 // Providers perform synchronous desktop effects on their owning UI thread.
 // Consent is checked here before a provider can inspect even clipboard types.
 // Results own their bytes; neither a wire frame nor a platform MIME view is

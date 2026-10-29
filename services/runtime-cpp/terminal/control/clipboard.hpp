@@ -40,10 +40,8 @@ public:
     if (separator == std::string_view::npos || separator > 1) {
       return;
     }
-    const char selection = separator == 0 ? 'c' : payload.front();
-    if (selection != 'c' && selection != 'p' && selection != 's') {
-      return;
-    }
+    const char kind = separator == 0 ? 'c' : payload.front();
+    const char selection = kind == 'p' || kind == 's' ? kind : 'c';
     const auto encoded = payload.substr(separator + 1);
     const bool read = encoded == "?";
     const auto access = read ? policy.clipboard_read : policy.clipboard_write;
@@ -51,7 +49,7 @@ public:
       return;
     }
     try {
-      if (!read && !decode(encoded)) {
+      if (!read && !decode<base64::Padding::optional>(encoded)) {
         return;
       }
       pending_ = makeOwned<Pending>(memory_, memory_);
@@ -59,7 +57,9 @@ public:
       request.traditional = true;
       request.selection = selection;
       request.write = !read;
-      request.metadata.primary = selection == 'p' || selection == 's';
+      // Application OSC52 reads use the standard desktop clipboard while
+      // echoing the requested selection name in the terminal response.
+      request.metadata.primary = !read && (selection == 'p' || selection == 's');
       request.metadata.operation = read ? ClipboardOperation::read : ClipboardOperation::write;
       request.route = *preferred_;
       request.prompt = access == Access::ask;
@@ -182,7 +182,14 @@ public:
         return false;
       }
       if (completion.status != ClipboardDesktopStatus::success) {
-        finish(ClipboardStatus::denied);
+        if (pending_->traditional && !pending_->write && completion.status == ClipboardDesktopStatus::denied) {
+          auto builder = buildReply();
+          builder.reply().append("\x1b]52;");
+          builder.reply().append({&pending_->selection, 1});
+          builder.reply().append(";\x1b\\");
+          builder.commit();
+        }
+        finish(completion.status == ClipboardDesktopStatus::unsupported ? ClipboardStatus::unsupported : completion.status == ClipboardDesktopStatus::denied ? ClipboardStatus::denied : ClipboardStatus::io_error);
         return true;
       }
       pending_->prepared = true;
@@ -385,12 +392,13 @@ private:
     return std::find(routes_.begin(), routes_.begin() + route_count_, route) != routes_.begin() + route_count_;
   }
 
+  template <base64::Padding Rule = base64::Padding::required>
   bool decode(std::string_view encoded) {
     if (encoded.size() > maximum_encoded_bytes) {
       return false;
     }
-    decoded_.resize(std::min(maximum_bytes, encoded.size() / 4 * 3));
-    const auto size = base64::decode(encoded, decoded_);
+    decoded_.resize(std::min(maximum_bytes, encoded.size() / 4 * 3 + encoded.size() % 4 * 3 / 4));
+    const auto size = base64::decode<Rule>(encoded, decoded_);
     if (!size) {
       return false;
     }

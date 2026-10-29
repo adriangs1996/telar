@@ -1,4 +1,5 @@
 #include "terminal/terminal.hpp"
+#include "control_clipboard_fixture.hpp"
 #include <chrono>
 #include <memory>
 #include <utility>
@@ -34,6 +35,7 @@ struct Probe {
   SystemAllocator system;
   BudgetAllocator<SystemAllocator> memory{system, 64 * 1024 * 1024};
   Terminal<BudgetAllocator<SystemAllocator>> terminal;
+  std::unique_ptr<control_test::MemoryClipboard> clipboard;
 
   explicit Probe(TerminalSize size) : terminal(memory, size, TerminalPurpose::separate_media) {
     ConfigureTerminalColors colors{};
@@ -63,6 +65,9 @@ extern "C" bool query_probe_feed(void *context, const Byte *bytes, std::size_t s
     auto &probe = *static_cast<Probe *>(context);
     const Probe::Active active{probe};
     probe.terminal.feed({bytes, size});
+    if (probe.clipboard) {
+      probe.clipboard->settle(probe.terminal);
+    }
     return true;
   } catch (...) {
     return false;
@@ -133,4 +138,55 @@ extern "C" bool query_probe_policy(void *context, std::uint32_t flags, const cha
 
 extern "C" std::uint64_t query_probe_foreign_calls(void *context) noexcept {
   return static_cast<Probe *>(context)->foreign_calls;
+}
+
+extern "C" bool query_probe_clipboard_config(void *context, std::uint32_t flags) noexcept {
+  try {
+    auto &probe = *static_cast<Probe *>(context);
+    if (!probe.clipboard) {
+      probe.clipboard = std::make_unique<control_test::MemoryClipboard>();
+      constexpr std::array<control::ClipboardRoute, 1> routes{{{1, 13}}};
+      probe.terminal.clipboardControl().routes(routes, routes[0]);
+    }
+    const auto access = [](unsigned value) { return value == 0 ? control::Access::deny : value == 1 ? control::Access::ask : control::Access::allow; };
+    auto &policy = probe.terminal.controlPolicy();
+    policy.clipboard_read = access(flags & 3);
+    policy.clipboard_write = access((flags >> 2) & 3);
+    probe.clipboard->consent = (flags >> 4 & 3) == 0 ? workbench::ClipboardConsent::deny : (flags >> 4 & 3) == 1 ? workbench::ClipboardConsent::once : workbench::ClipboardConsent::session;
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+
+extern "C" void query_probe_clipboard_clear(void *context) noexcept {
+  static_cast<Probe *>(context)->clipboard->contents.clear();
+}
+
+extern "C" bool query_probe_clipboard_put(void *context, const char *mime, const Byte *data, std::size_t length) noexcept {
+  try {
+    auto &contents = static_cast<Probe *>(context)->clipboard->contents;
+    if (contents.size() == 16 || std::char_traits<char>::length(mime) > 256 || length > 4 * 1024 * 1024) {
+      return false;
+    }
+    contents.push_back({mime, {data, data + length}});
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+
+extern "C" std::size_t query_probe_clipboard_get(void *context, const char *mime, Byte *data, std::size_t capacity) noexcept {
+  for (const auto &content : static_cast<Probe *>(context)->clipboard->contents) {
+    if (content.mime == mime) {
+      std::copy_n(content.data.begin(), std::min(capacity, content.data.size()), data);
+      return content.data.size();
+    }
+  }
+  return SIZE_MAX;
+}
+
+extern "C" std::uint64_t query_probe_clipboard_count(void *context, std::uint32_t kind) noexcept {
+  auto &fixture = *static_cast<Probe *>(context)->clipboard;
+  return kind == 0 ? fixture.reads : kind == 1 ? fixture.writes : fixture.prompts;
 }

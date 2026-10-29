@@ -171,7 +171,7 @@ void protocolAndPermissions(auto &memory) {
   task = take(terminal);
   check(task.prompt && !task.rememberable);
   complete(terminal, task, ClipboardConsent::deny, provider);
-  check(drain(terminal).empty());
+  check(drain(terminal) == "\x1b]52;c;\x1b\\");
   terminal.controlPolicy().clipboard_read = control::Access::allow;
   provider.contents = {{"text/plain", {'h', 'e', 'l', 'l', 'o'}}};
   terminal.feed(bytes("\x1b]52;c;?\a"));
@@ -221,6 +221,46 @@ void lifetimeAndPressure(auto &memory) {
                   "\x1b]5522;type=read:status=DONE:id=x\x1b\\");
   check(drain(terminal) == expected);
   check(!terminal.hasPendingControl() && provider.reads == 1);
+}
+
+void traditionalEncoding(auto &memory) {
+  Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
+  auto &clipboard = terminal.clipboardControl();
+  const std::array<control::ClipboardRoute, 1> routes{{{1, 13}}};
+  clipboard.routes(routes, routes[0]);
+  MemoryClipboard provider;
+  for (const auto encoded : {"YQ==", "YQ", "YR==", "YR", "YWI=", "YWI", "YWJ=", "YWJ"}) {
+    terminal.feed(bytes(std::string{"\x1b]52;c;"} + encoded + "\a"));
+    const auto task = take(terminal);
+    check(task.write && task.contents.size() == 1);
+    const std::string expected = std::string_view{encoded}.starts_with("YQ") || std::string_view{encoded}.starts_with("YR") ? "a" : "ab";
+    check(std::string_view{reinterpret_cast<const char *>(task.contents[0].data.data()), task.contents[0].data.size()} == expected);
+    complete(terminal, task, ClipboardConsent::once, provider);
+    check(drain(terminal).empty());
+  }
+  for (const auto encoded : {"YQ=", "Y===", "YQ===", "YQ==YQ==", "Y Q==", "!!", "A", "AB=C"}) {
+    terminal.feed(bytes(std::string{"\x1b]52;c;"} + encoded + "\a"));
+    check(!clipboard.request(7, 11));
+    check(drain(terminal).empty());
+  }
+
+  for (const auto selection : {'c', 'p', 's', 'x'}) {
+    const auto sequence = std::string{"\x1b]52;"} + selection + ";?\a";
+    terminal.feed(bytes(sequence));
+    const auto task = take(terminal);
+    check(!task.primary && task.prompt);
+    const auto inspections = provider.inspections;
+    complete(terminal, task, ClipboardConsent::deny, provider);
+    const auto response_kind = selection == 'x' ? 'c' : selection;
+    check(drain(terminal) == std::string{"\x1b]52;"} + response_kind + ";\x1b\\");
+    check(provider.inspections == inspections);
+  }
+  terminal.feed(bytes("\x1b]52;c;?\a"));
+  const auto task = take(terminal);
+  clipboard.routes({}, {});
+  terminal.resumeControl();
+  check(drain(terminal).empty());
+  check(!clipboard.complete(routes[0], CompleteClipboardDesktop{.ticket = task.ticket, .status = ClipboardDesktopStatus::denied, .prepared = true}));
 }
 
 struct FailingAllocator {
@@ -388,6 +428,7 @@ int main() {
   {
     BudgetAllocator memory{system, 64 * 1024 * 1024};
     protocolAndPermissions(memory);
+    traditionalEncoding(memory);
     lifetimeAndPressure(memory);
     resetBeforeConsent(memory);
     asynchronousOrder(memory);

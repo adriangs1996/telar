@@ -130,7 +130,7 @@ private:
       return MetadataValue::overflow;
     }
     std::array<std::uint8_t, Capacity + 2> output;
-    const auto length = base64::decode(encoded, output);
+    const auto length = base64::decode<base64::Padding::required>(encoded, output);
     if (!length) {
       return MetadataValue::invalid;
     }

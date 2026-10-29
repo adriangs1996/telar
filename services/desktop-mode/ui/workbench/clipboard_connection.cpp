@@ -65,6 +65,21 @@ namespace workbench {
           return;
         }
         const auto task = found->second->task;
+        // Platform selection support is a capability, not clipboard content.
+        // Reject an unavailable location before asking for consent.
+        const bool supported = QtClipboardProvider{}.supports(task.primary);
+        if (!connection || connection->clipboard_epoch_ != epoch) {
+          return;
+        }
+        const auto checked = connection->clipboard_operations_.find(nonce);
+        if (checked == connection->clipboard_operations_.end() || checked->second->task.ticket != task.ticket) {
+          return;
+        }
+        if (!supported) {
+          connection->clipboard_operations_.erase(checked);
+          connection->send(telar::CompleteClipboardDesktop{.ticket = task.ticket, .status = telar::ClipboardDesktopStatus::unsupported, .prepared = true});
+          return;
+        }
         DesktopClipboardOperation::Prompt prompt{new ClipboardConsentWindow(task, *connection, [connection, nonce](ClipboardConsent consent) {
           if (connection) {
             connection->completeClipboard(nonce, consent);

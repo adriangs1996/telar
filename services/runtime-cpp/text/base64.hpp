@@ -11,6 +11,12 @@ namespace telar::runtime::base64 {
 
 inline constexpr std::string_view alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
+enum class Padding {
+  canonical,
+  required,
+  optional
+};
+
 inline constexpr auto encoded_pairs = [] {
   std::array<std::array<char, 2>, alphabet.size() * alphabet.size()> pairs;
   for (std::size_t index = 0; index < pairs.size(); ++index) {
@@ -19,13 +25,16 @@ inline constexpr auto encoded_pairs = [] {
   return pairs;
 }();
 
+template <Padding Rule = Padding::canonical>
 inline std::optional<std::size_t> decode(std::string_view encoded, std::span<std::uint8_t> destination) noexcept {
-  if (encoded.size() % 4 != 0) {
+  const auto remainder = encoded.size() % 4;
+  if (remainder != 0 && (Rule != Padding::optional || remainder == 1)) {
     return std::nullopt;
   }
 
   std::size_t written = 0;
-  for (std::size_t offset = 0; offset < encoded.size(); offset += 4) {
+  const auto complete = encoded.size() - remainder;
+  for (std::size_t offset = 0; offset < complete; offset += 4) {
     const auto first = alphabet.find(encoded[offset]);
     const auto second = alphabet.find(encoded[offset + 1]);
     const auto third = alphabet.find(encoded[offset + 2]);
@@ -36,7 +45,8 @@ inline std::optional<std::size_t> decode(std::string_view encoded, std::span<std
                                                     : 3;
     if (first == std::string_view::npos || second == std::string_view::npos ||
         (!double_padding && third == std::string_view::npos) || (!padding && fourth == std::string_view::npos) ||
-        (double_padding && (!padding || (second & 15) != 0)) || (padding && !double_padding && (third & 3) != 0) ||
+        (double_padding && (!padding || (Rule == Padding::canonical && (second & 15) != 0))) ||
+        (Rule == Padding::canonical && padding && !double_padding && (third & 3) != 0) ||
         (padding && offset + 4 != encoded.size()) || static_cast<std::size_t>(count) > destination.size() - written) {
       return std::nullopt;
     }
@@ -47,6 +57,19 @@ inline std::optional<std::size_t> decode(std::string_view encoded, std::span<std
     }
     if (count > 2) {
       destination[written++] = static_cast<std::uint8_t>((third << 6) | fourth);
+    }
+  }
+
+  if (remainder != 0) {
+    const auto first = alphabet.find(encoded[complete]);
+    const auto second = alphabet.find(encoded[complete + 1]);
+    const auto third = remainder == 3 ? alphabet.find(encoded[complete + 2]) : 0;
+    if (first == std::string_view::npos || second == std::string_view::npos || third == std::string_view::npos || remainder - 1 > destination.size() - written) {
+      return std::nullopt;
+    }
+    destination[written++] = static_cast<std::uint8_t>((first << 2) | (second >> 4));
+    if (remainder == 3) {
+      destination[written++] = static_cast<std::uint8_t>((second << 4) | (third >> 2));
     }
   }
   return written;

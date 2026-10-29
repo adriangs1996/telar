@@ -60,7 +60,7 @@ public:
       }
       const auto format = QString::fromUtf8(mime.data(), static_cast<qsizetype>(mime.size()));
       ClipboardContent content{mime, {}};
-      if (textMime(mime)) {
+      if (clipboardTextMime(mime)) {
         const bool available = data->hasText();
         if (!data) {
           return {.status = telar::ClipboardDesktopStatus::failure};
@@ -109,7 +109,7 @@ public:
     for (const auto &content : task.contents) {
       const auto format = QString::fromUtf8(content.mime.data(), static_cast<qsizetype>(content.mime.size()));
       const QByteArray bytes{reinterpret_cast<const char *>(content.data.data()), static_cast<qsizetype>(content.data.size())};
-      if (textMime(content.mime)) {
+      if (clipboardTextMime(content.mime)) {
         data->setText(QString::fromUtf8(bytes));
       } else {
         data->setData(format, bytes);
@@ -127,9 +127,6 @@ private:
     return primary ? QClipboard::Selection : QClipboard::Clipboard;
   }
 
-  static bool textMime(std::string_view mime) noexcept {
-    return mime == "text/plain" || mime == "text/plain;charset=utf-8" || mime == "UTF8_STRING" || mime == "STRING" || mime == "TEXT";
-  }
 };
 
 }
