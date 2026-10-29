@@ -25,7 +25,7 @@ above, under https://github.com/ghostty-org/ghostty/tree/df1c99c8a5ec32c73963e5d
 | status | `src/terminal/device_status.zig`, `src/termio/stream_handler.zig:850` |
 | strings | `src/terminal/dcs.zig:58`, 188, 260 (DECRQSS encoding) |
 | capabilities | `src/terminfo/Source.zig` (`xtgettcapMap`), `src/terminfo/ghostty.zig` (entire capability table including generated key variants) |
-| colors | `src/terminal/osc/color.zig`, `src/terminal/kitty/color.zig`, `src/termio/stream_handler.zig:1615`, 1858 |
+| colors | `src/terminal/osc/parsers/color.zig`, `src/terminal/kitty/color.zig`, `src/termio/stream_handler.zig:1615`, 1858 |
 | desktop | `src/Surface.zig:1039` (title), 1099 (OSC 52 read), 6400–6600 (clipboard permission and replies) |
 | notifications | `src/termio/Termio.zig:771` (scheme), 805 (visibility), resize/focus/config mailbox consumers in `src/termio/Thread.zig` |
 | checksum | `src/terminal/xt_checksum.zig`, `src/termio/stream_handler.zig:606` |
@@ -88,6 +88,7 @@ separate case results. A row marked pending blocks acceptance.
 | visibility-subscription | DEC2033 set/reset/save/restore; hide/show, attach/detach, disconnect | Initial report on enable, later actual visibility changes; no report after unsubscribe. Durable runtime view is aggregate visibility from eligible attached clients | pending |
 | size-subscription | DEC2048 set/reset/save/restore; resize, owner change, disconnect | Initial in-band report then `CSI 48;rows;cols;pixel_height;pixel_width t` on resize; no client required for rows/columns | pending |
 | focus-subscription | DEC1004 set/reset/save/restore; actual focus changes | Initial I/O report on enable and subsequent focus transitions. Never derive visibility from focus | pending |
+| clipboard-paste-subscription | DEC5522 set/reset/save/restore; user paste, one-time password, read completion | Unsolicited OSC5522 targets listing replaces ordinary paste while enabled; one-time read grants do not survive reset or pane lifetime. Targets-only reads do not consume a grant. Actual source: `Surface.zig:6230,6347`, `terminal/modes.zig:410` | pending |
 | reset | RIS, DECSTR, primary/alternate switch | Correct terminal state at stream position; clear the appropriate subscription, keyboard, checksum, client-operation and grant state; do not clear unrelated durable client facts | pending |
 | client-operation-lifetime | queued/read/consent reply; disconnect, pane close/reuse, policy change | Owned bounded request and result; pane identity/generation, client identity/generation, request nonce and deadline all validated before completion; stale results rejected | pending |
 | saturation | full PTY queue, partial writes, EINTR/EAGAIN, worker producers | Bound resources and pause ingestion before accepting additional responding queries. Same-thread callbacks never wait for the runtime consumer. No silent loss of admitted replies | pending |
@@ -157,3 +158,54 @@ A private downloaded toolchain is verified against the official index hash.
 Preparation failures and build logs stay under `dependencies/` and are not
 reported as passing validation. Existing historical Zig comparisons in
 `performance.md` and `parity.md` do not certify this task.
+
+The compiler requirement is specifically the 0.17 series, not any newer Zig.
+The private 0.17.0 archive has SHA-256
+`b607e9b9234790a008116ae5bdb71c6243b84b9fb42a53a9e70fde41c06c536a`,
+matching the official download index. A first 0.18 development download was
+not used as the accepted toolchain.
+
+The frozen Telar binary has SHA-256
+`df1438ba4ad5e6763562a2f1aef8e7c1ba2a2a271f7c46c0c56aee80d2e9446d`.
+`measurements/control-queries/baseline-telar.json` records its compiler, flags,
+cache/command-manifest hashes, VT dependency hash and machine (M1 Pro, 32 GiB).
+The frozen files are in `dependencies/control-baselines/telar/` and must not
+be overwritten when building candidates.
+
+The direct terminal probe reproduces the existing gaps byte for byte in
+`baseline-reproductions.json`. The real isolated PTY reproduction passes in
+`baseline-pty-live.json`: 65-query bursts return 64 replies, recovery returns
+one reply, a second burst returns 64 replies, and subsequent input is usable.
+This is a successful reproduction of a defect, not accepted query behavior.
+Elapsed times in these functional fixtures are not performance evidence.
+An initial runtime startup failure used an overlong UNIX socket pathname;
+the passing fixture uses a private short path under `/private/tmp`.
+
+## Blocking baseline prerequisite
+
+The unmodified pinned application build reaches shader compilation and fails:
+
+```
+error: cannot execute tool 'metal' due to missing Metal Toolchain
+```
+
+`xcodebuild -showComponent MetalToolchain -json` reports build `27A266a`,
+status `uninstalled`, for Xcode 27.1 (`27A9275`). Selecting OpenGL still
+unconditionally compiles Metal shaders in upstream build wiring. A recorded
+test-only build adjustment removes that unrelated shader dependency, but the
+OpenGL application then fails in `pkg/opengl/egl.zig:99`: `eglGetPlatformDisplay`
+expects a pointer while `EGLNativeDisplayType` is `c_int` on this SDK. The
+experimental application-handler adapter encounters the same problem. It is
+unbuilt and cannot serve as an accepted oracle or performance baseline.
+
+`preparation-blocker.json`, the complete build logs and
+`ghostty-oracle-preparation.patch` retain the attempts. Query parser, handler,
+configuration and response-encoding sources in the reference remain unchanged.
+No missing baseline is replaced by a libghostty-vt result or the installed
+Ghostty 1.3.1 application, which is a different revision.
+
+Installing the missing Xcode component crosses the task's explicit prohibition
+on real installations. Authorization for that specific action was requested.
+Until it is resolved, the required application baseline, differential coverage,
+native product implementation, sanitizer acceptance and seven-pair performance
+comparison remain incomplete. No success or portable performance claim is made.
