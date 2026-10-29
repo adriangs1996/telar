@@ -5,6 +5,7 @@
 #include "../../log_categories.hpp"
 #include "../../trace.hpp"
 #include <QClipboard>
+#include <QMimeData>
 #include <QGuiApplication>
 #include <QInputMethod>
 #include <QInputMethodEvent>
@@ -181,10 +182,13 @@ namespace workbench {
           measure();
         });
 
+        QObject::connect(window, &QWindow::visibilityChanged, this, [this] { reportDesktop(); });
         measure();
+        reportDesktop();
       }
     };
 
+    QObject::connect(this, &QQuickItem::visibleChanged, this, [this] { reportDesktop(); });
     QObject::connect(this, &QQuickItem::windowChanged, this, follow);
     follow(window());
   }
@@ -225,6 +229,7 @@ namespace workbench {
     }
 
     cursor_color_ = cursor_color.isValid() ? cursor_color : foreground_;
+    reportDesktop();
 
     measure();
   }
@@ -262,6 +267,7 @@ namespace workbench {
   // cannot: a hidden workspace keeps its windows shown on its own Space.
   void TerminalItem::setPresented(bool presented) {
     presented_ = presented;
+    reportDesktop();
     watchConnection();
   }
 
@@ -491,8 +497,10 @@ namespace workbench {
     if (event->matches(QKeySequence::Copy) && anchor_ >= 0) {
       QGuiApplication::clipboard()->setText(selectionText());
     } else if (event->matches(QKeySequence::Paste)) {
-      if (send) {
-        send(terminalPaste(QGuiApplication::clipboard()->text(), screen_->modes));
+      if (paste) {
+        const auto *clipboard = QGuiApplication::clipboard();
+        const auto *data = clipboard->mimeData();
+        paste(clipboard->text(), data != nullptr ? data->formats() : QStringList{});
       }
     } else if (preedit_.isEmpty()) {
       const auto bytes = terminalKey(*event, screen_->modes);
@@ -569,6 +577,36 @@ namespace workbench {
   // Keys arrive while the terminal has active focus in the active window. Active focus alone is
   // not enough: the keyboard router leaves a pane its focus item when the keyboard moves to
   // another pane, and only deactivates its window.
+  void TerminalItem::reportDesktop() {
+    if (!desktopChanged) {
+      return;
+    }
+    telar::ConfigurePaneDesktop state;
+    state.visible = presented_ && isVisible() && window() && window()->isVisible() && window()->visibility() != QWindow::Minimized;
+    state.focused = state.visible && keyboard_;
+    // Report the actual pane appearance, including a custom terminal theme.
+    state.light = background_.isValid() && background_.lightnessF() > 0.5;
+    state.clipboard = true;
+    const auto rgb = [](QColor color) -> std::optional<std::array<telar::Byte, 3>> {
+      if (!color.isValid()) {
+        return std::nullopt;
+      }
+      return std::array<telar::Byte, 3>{static_cast<telar::Byte>(color.red()), static_cast<telar::Byte>(color.green()), static_cast<telar::Byte>(color.blue())};
+    };
+    state.foreground = rgb(foreground_);
+    state.background = rgb(background_);
+    state.cursor = rgb(cursor_color_);
+    if (std::all_of(palette_.begin(), palette_.end(), [](QColor value) { return value.isValid(); })) {
+      std::array<telar::Byte, 48> palette;
+      for (std::size_t index = 0; index < palette_.size(); ++index) {
+        const auto color = *rgb(palette_[index]);
+        std::copy(color.begin(), color.end(), palette.begin() + index * 3);
+      }
+      state.palette = palette;
+    }
+    desktopChanged(state);
+  }
+
   void TerminalItem::syncKeyboard() {
     TELAR_TRACE("terminal.sync_keyboard");
     const bool keyboard = hasActiveFocus() && window() && window()->isActive();
@@ -577,9 +615,7 @@ namespace workbench {
     }
 
     keyboard_ = keyboard;
-    if (send && screen_->modes.focus_events) {
-      send(keyboard ? "\x1b[I" : "\x1b[O");
-    }
+    reportDesktop();
 
     if (keyboard) {
       cursor_on_ = true;

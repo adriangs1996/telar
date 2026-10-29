@@ -1,4 +1,5 @@
 #include "runtime_connection.hpp"
+#include "clipboard_consent.hpp"
 #include "../../log_categories.hpp"
 #include "../../login_shell.hpp"
 #include "../../telar_client/codecs/telar_handshake.hpp"
@@ -123,6 +124,10 @@ namespace workbench {
   }
 
   void RuntimeConnection::disconnected() {
+    clipboard_operations_.clear();
+    if (++clipboard_epoch_ == 0) {
+      clipboard_epoch_ = 1;
+    }
     TELAR_TRACE("connection.disconnected");
     qCInfo(telar_log::connection) << "ws" << workspace_.id << "disconnected; visible" << visible_
                                   << "attached" << attached_.size() << "pending" << pending_.size()
@@ -130,6 +135,7 @@ namespace workbench {
     handshake_ = false;
     attached_.clear();
     sent_sizes_.clear();
+    generations_.clear();
     pending_.clear();
     refresh_.stop();
     deadline_.stop();
@@ -207,6 +213,8 @@ namespace workbench {
     }
 
     reading_ = true;
+    const QPointer<RuntimeConnection> connection{this};
+    const auto clipboard_epoch = clipboard_epoch_;
     QElapsedTimer budget;
     budget.start();
 
@@ -235,6 +243,13 @@ namespace workbench {
         }
 
         consume(bytes.first(length));
+        if (!connection) {
+          return;
+        }
+        if (clipboard_epoch_ != clipboard_epoch) {
+          reading_ = false;
+          return;
+        }
         input_.remove(0, length + telar::frame_prefix_size);
         if (budget.elapsed() >= read_budget_ms) {
           QTimer::singleShot(0, this, [this] {
@@ -245,12 +260,17 @@ namespace workbench {
         }
       }
     } catch (const std::exception &error) {
+      if (!connection) {
+        return;
+      }
       error_ = QString::fromUtf8(error.what());
       qCWarning(telar_log::connection) << "ws" << workspace_.id << "protocol error:" << error_;
       socket_.abort();
     }
 
-    reading_ = false;
+    if (connection) {
+      connection->reading_ = false;
+    }
   }
 
   void RuntimeConnection::consume(std::span<const telar::Byte> payload) {
@@ -375,9 +395,24 @@ namespace workbench {
       }
 
       attached_.insert(value.pane_id);
+      generations_[value.pane_id] = value.pane_generation;
+      sendDesktop(value.pane_id);
       synchronizeAttachments();
       resize_timer_.start();
       notify();
+      break;
+    }
+    case telar::ServerTag::clipboard_desktop_execute: {
+      const auto execution = telar::Codec::decode<telar::ClipboardDesktopExecute>(payload, storage);
+      QTimer::singleShot(0, this, [this, execution] { executeClipboardTask(execution); });
+      break;
+    }
+    case telar::ServerTag::clipboard_desktop_cancel: {
+      cancelClipboardTask(telar::Codec::decode<telar::CancelClipboardDesktop>(payload, storage));
+      break;
+    }
+    case telar::ServerTag::clipboard_desktop_request: {
+      clipboardRequest(telar::Codec::decode<telar::ClipboardDesktopRequest>(payload, storage));
       break;
     }
     case telar::ServerTag::pane_frame: {
@@ -417,6 +452,7 @@ namespace workbench {
         std::erase(panes, value.pane_id);
       }
 
+      cancelClipboard(value.pane_id);
       attached_.erase(value.pane_id);
       screens_.erase(value.pane_id);
       sizes_.erase(value.pane_id);
@@ -570,6 +606,31 @@ namespace workbench {
     socket_.abort();
   }
 
+  void RuntimeConnection::desktop(std::uint64_t pane, telar::ConfigurePaneDesktop state) {
+    state.pane_id = pane;
+    state.pane_generation = 0;
+    const auto previous = desktop_.find(pane);
+    if (previous != desktop_.end() && previous->second == state) {
+      return;
+    }
+    if (!state.visible || !state.clipboard) {
+      cancelClipboard(pane);
+    }
+    desktop_[pane] = state;
+    sendDesktop(pane);
+  }
+
+  void RuntimeConnection::sendDesktop(std::uint64_t pane) {
+    const auto state = desktop_.find(pane);
+    const auto generation = generations_.find(pane);
+    if (!ready() || !attached_.contains(pane) || state == desktop_.end() || generation == generations_.end() || generation->second == 0) {
+      return;
+    }
+    auto message = state->second;
+    message.pane_generation = generation->second;
+    send(message);
+  }
+
   void RuntimeConnection::selectTab(std::uint64_t tab) {
     TELAR_TRACE("connection.select_tab");
     if (active_tab_ == tab) {
@@ -607,6 +668,7 @@ namespace workbench {
     for (auto it = attached_.begin(); it != attached_.end();) {
       if (!wanted.contains(*it)) {
         qCDebug(telar_log::connection) << "ws" << workspace_.id << "detach pane" << *it;
+        cancelClipboard(*it);
         send(telar::DetachPane{*it});
         if (screens_.contains(*it)) {
           screens_.at(*it)->detach();

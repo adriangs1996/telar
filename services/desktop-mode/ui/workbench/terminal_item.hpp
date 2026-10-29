@@ -1,6 +1,7 @@
 #pragma once
 
 #include "terminal_screen.hpp"
+#include "../../telar_client/serializers/telar_protocol.hpp"
 #include <QColor>
 #include <QQuickItem>
 #include <QTimer>
@@ -20,6 +21,8 @@ namespace workbench {
     std::function<void(const QByteArray &)> send;
     std::function<void(telar::TerminalSize)> resized;
     std::function<void(std::uint32_t)> scrolled;
+    std::function<void(telar::ConfigurePaneDesktop)> desktopChanged;
+    std::function<void(const QString &, const QStringList &)> paste;
     void configure(const QVariantMap &options);
     void refresh();
     void setPresented(bool presented);
@@ -69,6 +72,7 @@ namespace workbench {
     void measure();
     void resizeTerminal();
     void syncKeyboard();
+    void reportDesktop();
     void watchConnection();
     int indexAt(QPointF point) const;
     void reportMouse(QMouseEvent *event, bool release, bool motion);

@@ -437,6 +437,14 @@ namespace workbench {
           runtime.input(pane, bytes);
         };
 
+        view.terminal->paste = [&runtime = *workspace.runtime, pane](const QString &text, const QStringList &available) {
+          runtime.paste(pane, text, available);
+        };
+
+        view.terminal->desktopChanged = [&runtime = *workspace.runtime, pane](telar::ConfigurePaneDesktop state) {
+          runtime.desktop(pane, state);
+        };
+
         view.terminal->resized = [&runtime = *workspace.runtime, pane](telar::TerminalSize size) {
           runtime.resize(pane, size);
         };

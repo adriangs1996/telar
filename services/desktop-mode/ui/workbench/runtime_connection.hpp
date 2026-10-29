@@ -9,8 +9,10 @@
 #include <functional>
 #include <map>
 #include <set>
+#include "clipboard_task.hpp"
 
 namespace workbench {
+  struct DesktopClipboardOperation;
   // One asynchronous attachment session per visible workspace, shared by its panes.
   class RuntimeConnection final : public QObject {
   public:
@@ -30,6 +32,8 @@ namespace workbench {
     void input(std::uint64_t pane, const QByteArray &bytes);
     void resize(std::uint64_t pane, telar::TerminalSize size);
     void viewport(std::uint64_t pane, std::uint32_t offset);
+    void desktop(std::uint64_t pane, telar::ConfigurePaneDesktop state);
+    void paste(std::uint64_t pane, const QString &text, const QStringList &available);
     void split(std::uint64_t source);
     // Opens a tab whose shell starts in the source pane's directory, or in $HOME without one.
     void createTab(std::uint64_t source);
@@ -42,7 +46,7 @@ namespace workbench {
     const QString &error() const;
 
   private:
-    static constexpr qsizetype output_limit = 1024 * 1024;
+    static constexpr qsizetype output_limit = telar::max_payload_size + telar::frame_prefix_size;
     QString path_;
     telar::WorkspaceLocation workspace_;
     QLocalSocket socket_;
@@ -53,6 +57,9 @@ namespace workbench {
     std::map<std::uint64_t, std::shared_ptr<TerminalScreen>> screens_;
     std::map<std::uint64_t, telar::TerminalSize> sizes_, sent_sizes_;
     std::set<std::uint64_t> attached_;
+    std::map<std::uint64_t, std::unique_ptr<DesktopClipboardOperation>> clipboard_operations_;
+    std::map<std::uint64_t, std::uint64_t> generations_;
+    std::map<std::uint64_t, telar::ConfigurePaneDesktop> desktop_;
     std::set<std::uint64_t> snapshots_;
     enum class RequestKind {
       workspace,
@@ -71,6 +78,7 @@ namespace workbench {
     std::map<std::uint64_t, Pending> pending_;
     QElapsedTimer clock_;
     std::uint64_t identity_ = 0, request_ = 1, active_tab_ = 0;
+    std::uint64_t clipboard_epoch_ = 1;
     bool handshake_ = false, visible_ = false, reading_ = false, loading_ = false;
     QString error_;
 
@@ -80,6 +88,12 @@ namespace workbench {
     void consume(std::span<const telar::Byte> payload);
     void write(std::span<const telar::Byte> payload);
     void synchronizeAttachments();
+    void sendDesktop(std::uint64_t pane);
+    void clipboardRequest(const telar::ClipboardDesktopRequest &request);
+    void completeClipboard(std::uint64_t nonce, ClipboardConsent consent);
+    void executeClipboardTask(const telar::ClipboardDesktopExecute &execution);
+    void cancelClipboardTask(const telar::CancelClipboardDesktop &cancellation);
+    void cancelClipboard(std::uint64_t pane);
     void notify();
     std::uint64_t request(RequestKind kind, std::uint64_t target = 0);
     bool waiting(RequestKind kind, std::uint64_t target = 0) const;
