@@ -5,6 +5,10 @@
 #include "policy.hpp"
 #include "reply.hpp"
 #include "vt_state.hpp"
+#include <algorithm>
+#include <array>
+#include <cassert>
+#include <charconv>
 
 namespace telar::runtime::control {
 
@@ -91,7 +95,6 @@ public:
             forwardOsc(*operation, {index_field.data(), count});
           }
         }
-        constexpr std::size_t maximum_color_reply = 64;
         if (reply_.size() > PtyResponseQueue::message_byte_capacity - maximum_color_reply) {
           break;
         }
@@ -101,6 +104,8 @@ public:
   }
 
 private:
+  static constexpr std::size_t maximum_color_reply = 64;
+
   void forwardOsc(unsigned operation, std::string_view payload) {
     std::array<char, 16> header;
     const auto start = std::copy_n("\x1b]", 2, header.data());
@@ -137,15 +142,38 @@ private:
       return;
     }
 
-    reply_.append("\x1b]");
-    reply_.number(operation);
-    reply_.append(";");
+    std::array<char, maximum_color_reply> encoded;
+    auto *position = std::copy_n("\x1b]", 2, encoded.data());
+    const auto number = [&](unsigned value) {
+      const auto formatted = std::to_chars(position, encoded.data() + encoded.size(), value);
+      assert(formatted.ec == std::errc{});
+      position = formatted.ptr;
+    };
+    number(operation);
+    *position++ = ';';
     if (index) {
-      reply_.number(*index);
-      reply_.append(";");
+      number(*index);
+      *position++ = ';';
     }
-    rgb(*color, policy_.color_format == ColorFormat::sixteen_bit);
-    reply_.append(terminator);
+    position = std::copy_n("rgb:", 4, position);
+    constexpr std::string_view digits = "0123456789abcdef";
+    const std::array components{color->r, color->g, color->b};
+    const bool sixteen_bit = policy_.color_format == ColorFormat::sixteen_bit;
+    for (std::size_t component = 0; component < components.size(); ++component) {
+      if (component != 0) {
+        *position++ = '/';
+      }
+      const auto high = digits[components[component] >> 4];
+      const auto low = digits[components[component] & 0x0f];
+      *position++ = high;
+      *position++ = low;
+      if (sixteen_bit) {
+        *position++ = high;
+        *position++ = low;
+      }
+    }
+    position = std::copy(terminator.begin(), terminator.end(), position);
+    reply_.append({encoded.data(), static_cast<std::size_t>(position - encoded.data())});
   }
 
   static std::optional<unsigned> colorKey(std::string_view key) noexcept {

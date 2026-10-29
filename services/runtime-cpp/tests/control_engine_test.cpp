@@ -85,6 +85,48 @@ void saturation(Memory &memory) {
 }
 
 template <Allocator Memory>
+void colorEncodings(Memory &memory) {
+  Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
+  for (const auto format : {control::ColorFormat::eight_bit, control::ColorFormat::sixteen_bit, control::ColorFormat::none}) {
+    terminal.controlPolicy().color_format = format;
+    const unsigned factor = format == control::ColorFormat::sixteen_bit ? 257 : 1;
+    const int width = format == control::ColorFormat::sixteen_bit ? 4 : 2;
+    for (unsigned sample = 0; sample <= UINT8_MAX; ++sample) {
+      const unsigned green = UINT8_MAX - sample;
+      const unsigned blue = sample ^ 0x55;
+      for (const unsigned operation : {4u, 10u, 11u, 12u}) {
+        std::array<char, 64> input;
+        const int setter = operation == 4
+            ? std::snprintf(input.data(), input.size(), "\x1b]4;%u;#%02x%02x%02x\x1b\\", sample, sample, green, blue)
+            : std::snprintf(input.data(), input.size(), "\x1b]%u;#%02x%02x%02x\x1b\\", operation, sample, green, blue);
+        require(setter > 0 && static_cast<std::size_t>(setter) < input.size());
+        terminal.feed(bytes({input.data(), static_cast<std::size_t>(setter)}));
+        require(drain(terminal).empty());
+
+        for (const auto *ending : {"\a", "\x1b\\"}) {
+          const int query = operation == 4
+              ? std::snprintf(input.data(), input.size(), "\x1b]4;%u;?%s", sample, ending)
+              : std::snprintf(input.data(), input.size(), "\x1b]%u;?%s", operation, ending);
+          require(query > 0 && static_cast<std::size_t>(query) < input.size());
+          terminal.feed(bytes({input.data(), static_cast<std::size_t>(query)}));
+          if (format == control::ColorFormat::none) {
+            require(drain(terminal).empty());
+            continue;
+          }
+
+          std::array<char, 64> expected;
+          const int count = operation == 4
+              ? std::snprintf(expected.data(), expected.size(), "\x1b]4;%u;rgb:%0*x/%0*x/%0*x%s", sample, width, sample * factor, width, green * factor, width, blue * factor, ending)
+              : std::snprintf(expected.data(), expected.size(), "\x1b]%u;rgb:%0*x/%0*x/%0*x%s", operation, width, sample * factor, width, green * factor, width, blue * factor, ending);
+          require(count > 0 && static_cast<std::size_t>(count) < expected.size());
+          require(drain(terminal) == std::string_view{expected.data(), static_cast<std::size_t>(count)});
+        }
+      }
+    }
+  }
+}
+
+template <Allocator Memory>
 void longPaletteReply(Memory &memory) {
   Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
   terminal.feed(bytes("\x1b]4;0;#000000\x1b\\"));
@@ -294,6 +336,7 @@ int main(int argc, char **argv) {
   noForeignQueries(memory);
   deferredEffects(memory);
   streamOrder(memory);
+  colorEncodings(memory);
   saturation(memory);
   longPaletteReply(memory);
   uniqueReplies(memory);

@@ -347,3 +347,11 @@ same-state/no-action table. Current evidence is in `c1-apc-validation.json`.
 the large payload improved substantially, but unrelated consistent losses
 failed the optimization gate. Their binaries and source patches remain frozen;
 the productive parser retains only the functional C1 correction.
+
+
+Candidate26 reduces traditional color formatting to one bounded local response
+and one owned append. `color-encoding-review.md` records7/7 target improvements,
+normalized linked-code evidence for the sole unrelated consistent variation,
+6,144 independent format cases,48,107 differential cases and final Release/
+ASan/UBSan runtime and six-control-suite results. This accepts one optimization
+relative to25; multiple actual-application and integration gates remain open.
