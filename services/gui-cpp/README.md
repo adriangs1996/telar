@@ -232,7 +232,14 @@ retains its first failure and later traced passes without claiming its cause
 is fixed. A later [retirement correction](measurements/notification-retirement.md)
 returns keyboard ownership after a focused notification is removed by the
 runtime, with window/machine/pane guards. Its current native suite passes 85
-cases; native exit leak detection remains open.
+cases at that checkpoint; native exit leak detection remains open.
+The later [global activity](measurements/machine-activity.md) composes every live
+machine's agents, tasks and commands, retaining owned origin targets and cached
+source revisions. Real SSH/native runs prove remote-card input isolation with
+colliding pane IDs. Five selected Release groups and three core sanitizer groups
+pass. Its current full native suite retains one notification-focus failure;
+actual-position visual acceptance awaits the missing machine switcher/segment.
+Read its manifest for the retained failures and narrower accepted scope.
 
 ```sh
 python3 services/gui-cpp/tools/check_row_text.py --output-dir /tmp/telar-row-text

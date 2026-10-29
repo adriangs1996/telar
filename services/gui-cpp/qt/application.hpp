@@ -12,6 +12,7 @@
 #include "input/history_scroll.hpp"
 #include "key_bindings.hpp"
 #include "list_model.hpp"
+#include "machine_activity_target.hpp"
 #include "machine_client.hpp"
 #include "machine_client_key.hpp"
 #include "machine_profiles_source.hpp"
@@ -483,6 +484,9 @@ private:
   [[nodiscard]] std::string_view historyTabName(const Pane<ApplicationAllocator> *pane) const;
   void refresh();
   void refreshAgents();
+  [[nodiscard]] bool activityAvailable(const MachineActivityTarget &target) const;
+  void selectActivity(const QString &identity);
+  void settleActivity();
   void refreshPanes();
   [[nodiscard]] HistoryModalMetrics historyMetrics() const;
   [[nodiscard]] HistoryScrollSurface historyScrollSurface(const HistoryModalMetrics &metrics) const;
@@ -519,6 +523,7 @@ private:
   template <std::invocable Mutation>
   void applyInteraction(Mutation mutate) {
     try {
+      pending_activity_.reset();
       mutate();
       refresh();
     } catch (const std::exception &error) {
@@ -536,6 +541,41 @@ private:
   std::array<std::optional<Owned<MachineClient, ApplicationAllocator>>, Machines::capacity> clients_;
   std::uint64_t next_client_generation_ = 1;
   std::uint64_t machine_view_revision_ = 0;
+  struct ActivitySourceVersion {
+    MachineClientKey source;
+    std::uint64_t runtime_generation;
+    std::uint64_t agents;
+    std::uint64_t workspaces;
+    bool connected;
+    runtime::FixedText<MachineLimits::label_bytes> label;
+
+    bool operator==(const ActivitySourceVersion &other) const noexcept {
+      return source == other.source && runtime_generation == other.runtime_generation && agents == other.agents && workspaces == other.workspaces && connected == other.connected && label.view() == other.label.view();
+    }
+  };
+
+  struct ActivitySelection {
+    Machines::Slot slot;
+    std::uint64_t tabs;
+    std::uint64_t panes;
+
+    bool operator==(const ActivitySelection &) const noexcept = default;
+  };
+
+  struct ActivityRowTarget {
+    QString identity;
+    MachineActivityTarget target;
+  };
+
+  struct PendingActivity {
+    MachineActivityTarget target;
+    std::uint64_t window;
+  };
+
+  std::array<std::optional<ActivitySourceVersion>, Machines::capacity> activity_versions_;
+  std::optional<ActivitySelection> activity_selection_;
+  Vector<ActivityRowTarget, ApplicationAllocator> activity_targets_;
+  std::optional<PendingActivity> pending_activity_;
   std::optional<MachineClientKey> sound_owner_;
   ConfigurationSource configuration_source_;
   MachineProfilesSource machine_profiles_;

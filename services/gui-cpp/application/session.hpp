@@ -159,6 +159,10 @@ public:
     configureCadence();
   }
 
+  [[nodiscard]] bool requestsPending() const noexcept {
+    return pending_count_ != 0;
+  }
+
   [[nodiscard]] bool presented() const noexcept {
     return presented_;
   }

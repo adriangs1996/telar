@@ -132,6 +132,7 @@ void Application::connectMachine(MachineClient &client) {
 
   connect(&client.connection, &RuntimeConnection::connected, this, [this, key] {
     if (auto *source = findClient(key)) {
+      ++source->runtime_generation;
       source->phase = MachinePhase::connected;
       source->needs_setup = false;
       source->session.connected(source->identity);
@@ -182,6 +183,7 @@ void Application::selectMachine(MachineToken target) {
     return;
   }
 
+  pending_activity_.reset();
   releaseMachineInput();
   showDialog({});
   session().invalidateSuggestion();
@@ -217,6 +219,7 @@ void Application::forgetMachineView() {
   tabs_.reconcile({});
   workspaces_.reconcile({});
   agents_.reconcile({});
+  activity_selection_.reset();
   history_.reconcile({});
   history_view_version_ = 0;
   history_rows_version_ = 0;

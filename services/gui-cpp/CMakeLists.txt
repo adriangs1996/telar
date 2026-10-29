@@ -678,7 +678,7 @@ if(TELAR_GUI_NATIVE)
 
   target_sources(gui-quick PRIVATE qt/history_controller.cpp qt/history_pointer.cpp qt/binding_controller.cpp qt/key_bindings.cpp qt/copy_controller.cpp qt/link_controller.cpp)
   target_sources(gui-quick PRIVATE qt/palette_controller.cpp qt/path_picker_controller.cpp qt/path_picker_projection.cpp qt/suggestion_controller.cpp)
-  target_sources(gui-quick PRIVATE qt/machine_controller.cpp qt/machine_profile_controller.cpp qt/machine_picker_controller.cpp qt/machine_prompt_controller.cpp qt/machine_launch_controller.cpp)
+  target_sources(gui-quick PRIVATE qt/machine_controller.cpp qt/machine_profile_controller.cpp qt/machine_picker_controller.cpp qt/machine_prompt_controller.cpp qt/machine_launch_controller.cpp qt/machine_activity_controller.cpp)
   set_source_files_properties(qt/palette_controller.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
   target_sources(gui-quick PRIVATE qt/history_empty_layout.cpp qt/history_empty_layout.hpp qt/history_loading_layout.cpp qt/history_loading_layout.hpp)
   set_source_files_properties(qt/history_empty_layout.cpp qt/history_loading_layout.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")

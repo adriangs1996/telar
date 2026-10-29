@@ -1,6 +1,4 @@
 #include "application.hpp"
-#include "activity_projection.hpp"
-#include "agent_projection.hpp"
 #include "application/dependencies.hpp"
 #include "application/pane_layout.hpp"
 #include "application/records.hpp"
@@ -28,8 +26,6 @@
 #include "platform/awake_clock.hpp"
 #include "platform/host_name.hpp"
 #include "platform/window.hpp"
-#include "presentation/activity_card.hpp"
-#include "presentation/activity_order.hpp"
 #include "presentation/frame_pacer.hpp"
 #include "presentation/mode_hints.hpp"
 #include "project_projection.hpp"
@@ -74,7 +70,6 @@
 #include <memory>
 #include <optional>
 #include <span>
-#include <stdexcept>
 #include <utility>
 #include <variant>
 
@@ -127,6 +122,7 @@ auto dialogName(Application::Action action) -> QString {
 Application::Application(ApplicationAllocator &memory, QObject *parent)
     : QObject(parent),
       memory_(memory),
+      activity_targets_(AllocatorRef<ActivityRowTarget, ApplicationAllocator>{memory}),
       configuration_source_(memory),
       machine_profiles_(memory),
       key_bindings_(*this),
@@ -201,6 +197,11 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
   });
 
   connect(&refresh_timer_, &QTimer::timeout, this, &Application::refresh);
+  connect(this, &Application::machinesChanged, this, [this] {
+    if (!refresh_timer_.isActive()) {
+      refresh_timer_.start();
+    }
+  });
 
   connect(&history_timer_, &QTimer::timeout, this, [this] {
     try {
@@ -216,6 +217,10 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
 }
 
 void Application::runtimeDisconnected(MachineClient &client) {
+  if (pending_activity_ && pending_activity_->target.source == client.key) {
+    pending_activity_.reset();
+  }
+
   client.session.disconnected();
   static_cast<void>(client.session.settlePresentation());
   const auto remote_error = client.connection.remoteError();
@@ -630,7 +635,12 @@ void Application::consume(MachineClient &client, QByteArrayView payload) {
     }
 
     summarizeMachine(client);
+    settleActivity();
     if (!active) {
+      if (change == Change::model || change == Change::stopped) {
+        refresh_timer_.start();
+      }
+
       return;
     }
 
@@ -797,42 +807,6 @@ void Application::refresh() {
   scheduleGraphicsRecovery();
   emit stateChanged();
   reconsiderFrame();
-}
-
-void Application::refreshAgents() {
-  QList<QVariantMap> agents;
-  const auto *active = session().activeTab();
-  const auto agent_entries = std::span<const Agent<ApplicationAllocator>>{session().agents()};
-  const auto workspace_entries = std::span<const Workspace<ApplicationAllocator>>{session().workspaces()};
-  using Order = ActivityOrder<ApplicationAllocator>;
-  const std::array sources{Order::Source{.agents = agent_entries, .workspaces = session().workspaceList(), .focused = active == nullptr ? std::nullopt : std::optional{active->focused_pane}}};
-  Order::Plan order;
-  Order::write(sources, sources.front().slot, order);
-  for (const auto &entry : order.view()) {
-    AgentRecordContext context{.machine = {hostname_.constData(), static_cast<std::size_t>(hostname_.size())}, .branch = {}, .connected = session().ready(), .coordinator = entry.coordinator, .starts_project = entry.first_in_project, .depth = entry.depth};
-    if (!entry.agent) {
-      if (!entry.worktree) {
-        throw std::logic_error{"ActivityEntryWithoutOwner"};
-      }
-
-      agents.append(commandRecord(session().workspaceList().worktrees()[*entry.worktree], context));
-      continue;
-    }
-
-    const auto &agent = agent_entries[*entry.agent];
-    const auto workspace = std::ranges::find_if(workspace_entries, [&](const auto &candidate) {
-      return agent.location.workspace.kind == WorkspaceLocation::Kind::workspace && sameWorkspace(agent.location.workspace, candidate.location);
-    });
-    context.branch = workspace == workspace_entries.end() ? std::string_view{} : std::string_view{workspace->branch};
-    context.selected = active != nullptr && agent.pane_id == active->focused_pane && sameTab(agent.location, active->location);
-    if (entry.worktree) {
-      agents.append(taskRecord(agent, session().workspaceList().worktrees()[*entry.worktree], context, entry.card == ActivityCard::task_compact));
-    } else {
-      agents.append(agentRecord(agent, context));
-    }
-  }
-
-  agents_.reconcile(std::move(agents));
 }
 
 QVariantList Application::fullscreenEntries(const Tab<ApplicationAllocator> &tab) {
@@ -1051,8 +1025,8 @@ bool Application::executeNavigation(Action action, const QString &target) {
     session().leaveWorktree();
   } else if (action == Action::forget_gone_worktrees) {
     session().forgetGoneWorktrees();
-  } else if (action == Action::select_agent && target.startsWith(QLatin1StringView("command:"))) {
-    session().openWorktree(target.section(QLatin1Char(':'), 1).toULongLong());
+  } else if (action == Action::select_agent) {
+    selectActivity(target);
   } else {
     return false;
   }
@@ -1065,7 +1039,7 @@ bool Application::executePane(Action action, std::uint64_t identity) {
     session().focusDirection(paneDirection(action));
   } else if (action == Action::resize_left || action == Action::resize_right || action == Action::resize_up || action == Action::resize_down) {
     session().resizeDirection(paneDirection(action));
-  } else if (action == Action::focus_pane || action == Action::select_agent) {
+  } else if (action == Action::focus_pane) {
     session().focusPane(identity);
   } else if (action == Action::split_horizontal) {
     session().split(ClientLayoutAxis::horizontal);

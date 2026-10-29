@@ -23,6 +23,7 @@ struct MachineClient {
   GuiSession session;
   std::optional<platform::WindowLease> identity_lease;
   std::uint64_t identity = 0;
+  std::uint64_t runtime_generation = 0;
   MachinePhase phase = MachinePhase::connecting;
   bool needs_setup = false;
   bool named_launch = false;

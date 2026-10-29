@@ -216,6 +216,7 @@ bool Application::runBinding(BindingAction action) {
 }
 
 void Application::executeBinding(BindingAction action) {
+  pending_activity_.reset();
   if (action.kind != BindingActionKind::copy_mode) {
     leaveKeyboardCopyMode();
   }

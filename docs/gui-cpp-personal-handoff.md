@@ -58,7 +58,23 @@ warnings; two selected Release CTests pass. Both corresponding sanitizer suites
 pass assertions but fail exit leak detection (213,024 bytes/817 allocations and
 174,444 bytes/870 allocations); preserve those full reports, with no local
 suppression. The earlier pointer-close failure's exact timing remains unproven.
-Continue activity source composition next. No global parity gate is closed. The window-adapter checkpoint records 82 Cocoa/Metal scale-1
+The later [global machine activity](../services/gui-cpp/measurements/machine-activity.md)
+checkpoint supplies all live replicas to the shared sidebar, with cached source
+versions and owned action targets fenced by admission/client/connection and
+agent session or command workspace. Five Release groups and three core sanitizer
+groups pass; five new window cases cover hidden metadata, coordinator nesting,
+colliding IDs, canonical waits, cancellation and restarted revisions after a
+real socket reconnect. Profile-window sanitizer exit passes; machine-window has
+13 assertion passes but fails exit leaks (247,716 bytes/907 allocations in the final run; the earlier 268,712-byte/932-allocation failure is retained).
+Real loopback SSH captures of both GUIs prove remote-card input isolation and
+normal resource cleanup. They expose missing machine chrome: the sidebar row
+shifts activity by 23 logical pixels; diagnostic alignment leaves 15 pixel
+errors but actual-position acceptance is OPEN. The current full native suite is
+84 passed/1 failed in routed notification-focus retirement. Its diagnostic's
+focusedPane=0 means root keyboard ownership, not a missing session pane. Keep
+that failure and investigate with actual focus/pane transition observations.
+Continue the original MachineSwitcher/MachineSegment integration and native
+focus investigation, then the remaining PARITY.md gates. No global gate is closed. The window-adapter checkpoint records 82 Cocoa/Metal scale-1
 passes, before the transport/profile changes, after the
 owned-window focus/geometry barrier; twenty selected regressions pass.
 Native sanitizer assertions pass, but exit leak acceptance remains OPEN.
