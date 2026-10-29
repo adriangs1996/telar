@@ -5,6 +5,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+class ForeignResponse(AssertionError):
+    def __init__(self, reply, calls):
+        super().__init__('A control input reached a foreign response handler')
+        self.reply = reply
+        self.calls = calls
+
 class Probe:
     def __init__(self, library, geometry=(80, 24, 9, 18)):
         self.lib = ctypes.CDLL(str(library))
@@ -15,6 +21,10 @@ class Probe:
         self.lib.query_probe_feed.restype = ctypes.c_bool
         self.lib.query_probe_drain.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t]
         self.lib.query_probe_drain.restype = ctypes.c_size_t
+        self.foreign_calls = getattr(self.lib, 'query_probe_foreign_calls', None)
+        if self.foreign_calls:
+            self.foreign_calls.argtypes = [ctypes.c_void_p]
+            self.foreign_calls.restype = ctypes.c_uint64
         self.ptr = self.lib.query_probe_new(*geometry)
         if not self.ptr:
             raise RuntimeError('Probe construction failed')
@@ -49,7 +59,10 @@ class Probe:
         else:
             self.feed(data[:split])
             self.feed(data[split:])
-        return self.drain()
+        result = self.drain()
+        if self.foreign_calls and self.foreign_calls(self.ptr):
+            raise ForeignResponse(result, self.foreign_calls(self.ptr))
+        return result
 
-GHOSTTY = ROOT / 'dependencies/control-baselines/ghostty-application/libghostty-control-oracle.dylib'
-NATIVE = ROOT / 'out-control-native/libcontrol-query-probe.dylib'
+GHOSTTY = ROOT / 'dependencies/control-baselines/ghostty-application/libghostty-control-oracle-threaded.dylib'
+NATIVE = ROOT / 'out-control-native-df/libcontrol-query-probe.dylib'
