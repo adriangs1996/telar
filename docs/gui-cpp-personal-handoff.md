@@ -146,7 +146,22 @@ its injected helper aborts; recovered read-only history proves n/exit-zero. The
 corrected live fixture checks that history plus unchanged profile/installation.
 Keep the failed run and recovery provenance. Affirmative GUI release downloads,
 agent/config/login setup, other platforms and complete visuals stay open. Read
-the new report/manifest, then continue the hint pixel differences, runtime
+the new report/manifest. The subsequent
+[palette hint opacity checkpoint](../services/gui-cpp/measurements/palette-hint-opacity.md)
+replaces QColor-encoded hint alpha with inherited Qt item opacity, preserving
+the original float32 scalar. The independent control measures 0.649999976158
+versus QColor's 0.650003790855. The full setup picker now matches 1,187,840 pixels.
+For the recovery pair, both actors clear their initial fixture command echo;
+this removes differing underlying contents at two rounded-boundary pixels,
+without alignment/masking or changes to captured images. The full controlled
+outage picker also matches 1,187,840 pixels. The managed terminal remains exact,
+all real setup/recovery cleanup exits zero and current native Quick passes
+86 entries, but emits one DelegateModel::cancel index-out-of-range warning in
+historyGeometryAndFocusSurviveInspection. The verifier caught it; keep the raw
+log and investigate its cause, without filtering/suppressing it or inferring it
+from a subsequent passing run. Keep the earlier three/five-pixel comparisons.
+Other translucent roles, themes/densities, native exit leaks and comparative
+performance remain open. Read the new report/manifest, then continue runtime
 restart/permanent SSH failures, native open/stop/diff, full task/plan peek,
 exit leaks/performance and all remaining PARITY.md gates. Complete
 theme/density/Linux visuals, native exit leaks and comparative performance stay

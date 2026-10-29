@@ -10,8 +10,9 @@ source-owned activity/peek targets. Real OpenSSH fixtures validate [bridge loss
 and automatic recovery](measurements/machine-recovery.md), [managed installation
 and profile admission](measurements/machine-setup.md), and [isolated agent prompts
 and refusals](measurements/agent-peek.md) against the unchanged Zig GUI. Selected
-shade Retina modals, controls and terminal regions match exactly; machine-picker
-hints retain a few pixel differences. The current native Quick suite passes
+shade Retina modals, controls and terminal regions match exactly. The
+[hint opacity correction](measurements/palette-hint-opacity.md) also gives exact
+setup and controlled outage pickers. The current native Quick suite passes
 86 entries. Complete visuals, affirmative GUI release installation, remaining
 failure scenarios, native exit leaks and comparative performance remain open.
 

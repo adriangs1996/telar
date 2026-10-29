@@ -94,6 +94,14 @@ exit leak detection fails (203,128 bytes/859 allocations). Full chrome visual
 qualification, alternate/peek navigation, setup installation, live recovery and
 all global acceptance gates remain open.
 
+The [palette hint opacity checkpoint](measurements/palette-hint-opacity.md)
+preserves the original float32 transparency through Qt item opacity. It removes
+the three measured selected-hint pixels: complete shade Retina setup and
+controlled outage pickers now match 1,187,840 pixels each. The managed terminal
+also remains exact; current native Quick passes 86 entries with one history
+delegate warning whose cause remains unproven.
+Other translucent roles, themes/densities, exit leaks and performance remain open.
+
 The subsequent [native machine setup checkpoint](measurements/machine-setup.md)
 validates the missing-build picker and real declined setup confirmation in Qt
 and Zig, followed by actual managed SSH installation through the original

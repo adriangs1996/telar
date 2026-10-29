@@ -107,7 +107,8 @@ Item {
         height: root.height
         text: root.hint
         pixelSize: root.typography.small
-        color: Qt.alpha(root.colors.text, root.detailAlpha)
+        color: root.colors.text
+        opacity: root.detailAlpha
         visible: !root.record.shortcut
     }
 
