@@ -34,8 +34,14 @@ macOS 15.4 SDK (newer SDKs fail the CoreFoundation cimport). Its binary is
 `services/gui-cpp/out-dependencies/reference-gui/bin/telar`. A native capture
 caught the macOS physical-Control mapping bug; the picker now uses the existing
 keyboard adapter, and its tests use the platform modifier. Read the new report
-and manifest for qualified runs and pixel differences. No global parity gate
-is closed. The window-adapter checkpoint records 82 Cocoa/Metal scale-1
+and manifest for qualified runs and pixel differences. The subsequent
+[real SSH checkpoint](../services/gui-cpp/measurements/machine-live.md) exercises
+the production GUI with an owned OpenSSH server on loopback and two isolated
+original runtimes. Remote/local/remote switching preserves separate input and
+pane contents, and GUI/runtime/server cleanup succeeds. Its private fixture
+keys are not archived. Further host platforms, live failure/recovery, setup
+installation, source composition and `--remote`/`--machine` launch remain open.
+No global parity gate is closed. The window-adapter checkpoint records 82 Cocoa/Metal scale-1
 passes, before the transport/profile changes, after the
 owned-window focus/geometry barrier; twenty selected regressions pass.
 Native sanitizer assertions pass, but exit leak acceptance remains OPEN.

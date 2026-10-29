@@ -220,8 +220,10 @@ The [machine presentation lifecycle](measurements/machine-presentation.md) adds
 deferred hidden startup, screen release, remembered pane restoration and bounded
 workspace fallback to the platform-independent session. The later window and
 saved-profile adapters extend this to one client per
-enabled machine; the later machine UI adds picker actions. Complete SSH
-acceptance remains pending.
+enabled machine; the later machine UI adds picker actions. A
+[production OpenSSH loopback run](measurements/machine-live.md) now covers
+remote/local/remote input isolation with separate original runtimes. Additional
+host platforms, live failure/recovery and complete SSH acceptance remain pending.
 
 ```sh
 python3 services/gui-cpp/tools/check_row_text.py --output-dir /tmp/telar-row-text
