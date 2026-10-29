@@ -49,12 +49,13 @@ inline QVariantMap agentCardGeometryRecord(const DisplayMetrics &display, float 
   };
 }
 
-inline QVariantMap sidebarRegionsRecord(Rect area, const DisplayMetrics &display, std::size_t count) {
+inline QVariantMap sidebarRegionsRecord(Rect area, const DisplayMetrics &display, std::size_t count, bool machines_shown = false) {
   const auto &chrome = display.chrome;
   const auto density = display.density;
-  const auto geometry = SidebarGeometry::measure(area, chrome, count);
+  const auto geometry = SidebarGeometry::measure(area, chrome, count, machines_shown);
 
   return {
+      {QStringLiteral("machines"), toQRectF(geometry.machines, density)},
       {QStringLiteral("projectsHeader"), toQRectF(geometry.projects_header, density)},
       {QStringLiteral("projects"), toQRectF(geometry.projects, density)},
       {QStringLiteral("activityHeader"), toQRectF(geometry.activity_header, density)},

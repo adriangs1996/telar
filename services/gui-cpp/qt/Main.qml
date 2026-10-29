@@ -17,6 +17,7 @@ Window {
     readonly property real sidebarWidth: geometry.sidebar.width
 
     NavigationBar {
+        controller: telar
         x: root.geometry.navigation.x
         y: root.geometry.navigation.y
         width: root.geometry.navigation.width
@@ -41,6 +42,7 @@ Window {
 
     Sidebar {
         id: sidebar
+        controller: telar
 
         x: root.geometry.sidebar.x
         y: root.geometry.sidebar.y

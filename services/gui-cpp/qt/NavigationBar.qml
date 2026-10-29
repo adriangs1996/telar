@@ -1,4 +1,5 @@
 import QtQuick
+import Telar.Gui
 
 Rectangle {
     id: root
@@ -9,6 +10,7 @@ Rectangle {
     required property var tabModel
     required property real controlsInset
     required property real workbenchLeft
+    property var controller: null
     property real ratio: 1
     property real textScale: 1
     property bool rail: false
@@ -22,13 +24,15 @@ Rectangle {
     readonly property real padding: 8 * ratio
     readonly property real toggleSide: 28 * ratio
     readonly property real controlGap: 8 * ratio
+    readonly property real machineControlHeight: 26 * ratio
     readonly property real contextInset: 4 * ratio
     readonly property real contextMaximum: 160 * ratio
     readonly property real separatorGap: 10 * ratio
     readonly property real separatorHeight: 18 * ratio
     readonly property real controlsRight: toggle.x + toggle.width + controlGap
-    readonly property real contextWidth: rail ? Math.max(0, Math.min(contextName.implicitWidth, contextMaximum, (width - padding - controlsRight) / 3 - contextInset)) : 0
-    readonly property real contextRight: controlsRight + contextInset + contextWidth + 2 * separatorGap + 1
+    readonly property real machineRight: machine.shown ? machine.x + machine.width + controlGap : controlsRight
+    readonly property real contextWidth: rail ? Math.max(0, Math.min(contextName.implicitWidth, contextMaximum, (width - padding - machineRight) / 3 - contextInset)) : 0
+    readonly property real contextRight: machineRight + contextInset + contextWidth + 2 * separatorGap + 1
 
     color: colors.panelBackground
     clip: true
@@ -49,9 +53,21 @@ Rectangle {
         onClicked: root.sidebarToggled()
     }
 
+    MachineChrome {
+        id: machine
+        objectName: "topBarMachineSegment"
+        controller: root.controller
+        segment: true
+        x: root.controlsRight
+        y: (root.height - height) / 2
+        width: Math.max(0, Math.min(preferredWidth, (root.width - root.padding - x) / 3))
+        height: Math.min(root.height, root.machineControlHeight)
+        colors: root.colors
+    }
+
     ChromeText {
         id: contextName
-        x: root.controlsRight + root.contextInset
+        x: root.machineRight + root.contextInset
         width: root.contextWidth
         height: parent.height
         text: root.workspace.name ?? "workspace"
@@ -73,7 +89,7 @@ Rectangle {
     }
 
     TerminalTabs {
-        x: root.rail && root.contextWidth > 0 ? root.contextRight : Math.max(root.controlsRight, root.workbenchLeft)
+        x: root.rail && root.contextWidth > 0 ? root.contextRight : Math.max(root.machineRight, root.workbenchLeft)
         width: Math.max(0, parent.width - root.padding - x)
         height: parent.height
         model: root.tabModel

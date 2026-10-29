@@ -1,4 +1,5 @@
 import QtQuick
+import Telar.Gui
 
 Rectangle {
     id: root
@@ -9,6 +10,7 @@ Rectangle {
     required property var workspaceModel
     required property var agentModel
     required property real preferredWidth
+    property var controller: null
     property real ratio: 1
     property real textScale: 1
     property bool expanded: true
@@ -23,6 +25,18 @@ Rectangle {
 
     color: colors.panelBackground
     clip: true
+
+    MachineChrome {
+        objectName: "sidebarMachineSwitcher"
+        controller: root.controller
+        segment: false
+        x: root.regions.machines?.x ?? 0
+        y: root.regions.machines?.y ?? 0
+        width: root.regions.machines?.width ?? 0
+        height: root.regions.machines?.height ?? 0
+        colors: root.colors
+        visible: root.expanded && shown
+    }
 
     ChromeText {
         x: root.regions.projectsHeader.x + root.headerInset

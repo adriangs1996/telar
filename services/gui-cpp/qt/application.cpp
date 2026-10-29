@@ -198,6 +198,12 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
 
   connect(&refresh_timer_, &QTimer::timeout, this, &Application::refresh);
   connect(this, &Application::machinesChanged, this, [this] {
+    const bool shown = machines_.count() > 1;
+    if (shown != sidebar_machine_row_shown_) {
+      sidebar_machine_row_shown_ = shown;
+      emit sidebarGeometryChanged();
+    }
+
     if (!refresh_timer_.isActive()) {
       refresh_timer_.start();
     }

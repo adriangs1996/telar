@@ -85,8 +85,27 @@ Quick has 86 passes/0 failures/0 skips/0 QML warnings, and two Release groups
 pass. Native sanitizer assertions pass (13 and 8 entries), but both exit leak
 checks fail: 268,712 bytes/932 allocations and 170,884 bytes/838 allocations.
 Temporary probe logging was removed; raw sources and logs are archived. The
-older pointer failure's exact timing remains unproven. Continue the original
-MachineSwitcher/MachineSegment integration and the remaining PARITY.md gates. No global gate is closed. The window-adapter checkpoint records 82 Cocoa/Metal scale-1
+older pointer failure's exact timing remains unproven. The subsequent
+[machine chrome](../services/gui-cpp/measurements/machine-chrome.md) checkpoint
+integrates the original sidebar MachineSwitcher and top-bar MachineSegment.
+The native shade Retina switcher/segment regions match exactly (18,156 and
+8,320 pixels); cards now occupy their actual original coordinates, with 15
+remaining differences in 154,056 pixels. Actual segment/sidebar clicks and
+remote-card input isolation pass through loopback OpenSSH, with normal cleanup.
+Keep the first chrome-navigation exit-wait failure: its harness timed out before
+the existing 45-second smoke timer, after input isolation had passed. Original
+widget/layout geometry matches 4,728 controlled hosts after correcting floored
+fold centering; the pre-fix comparison has 1,389 differences and is archived.
+Written machine colors match 47,646 original cases. Both comparisons and core
+tests pass ASan/UBSan with leak detection. Three Release groups pass; current
+native Quick retains 86 passes and zero QML warnings. Instrumented window has
+sixteen assertion passes but fails exit leaks (203,128 bytes/859 allocations).
+Offscreen controls retain a roughly 600 ms missing Sans Serif alias warning,
+also seen in pre-existing notification controls; native runs do not emit it.
+Read the new report/manifest, then continue alternate activity/peek, actual setup
+installation, live failure/recovery and all remaining PARITY.md gates. Complete
+theme/density/Linux visuals, native exit leaks and comparative performance stay
+open. No global gate is closed. The window-adapter checkpoint records 82 Cocoa/Metal scale-1
 passes, before the transport/profile changes, after the
 owned-window focus/geometry barrier; twenty selected regressions pass.
 Native sanitizer assertions pass, but exit leak acceptance remains OPEN.

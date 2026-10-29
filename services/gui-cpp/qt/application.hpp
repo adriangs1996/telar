@@ -68,9 +68,11 @@ struct MachineProfileWindow;
 namespace telar::gui::qt {
 
 class TerminalItem;
+class MachineChromeLayout;
 
 class Application final : public QObject {
   friend struct ApplicationEffects;
+  friend class MachineChromeLayout;
   friend struct test::MachineWindow;
   friend struct test::MachineProfileWindow;
 
@@ -584,6 +586,7 @@ private:
   QTimer machine_retry_;
   QString machine_control_endpoint_;
   bool prepare_machine_directory_ = false;
+  bool sidebar_machine_row_shown_ = false;
   bool restore_layout_ = true;
   std::optional<WindowFramePacer<>> frame_pacer_;
   KeyBindings key_bindings_;

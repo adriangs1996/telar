@@ -5,9 +5,11 @@
 #include "gui_wait.hpp"
 #include "machines/machine_token.hpp"
 #include "machines/machines.hpp"
+#include "qml_fixture.hpp"
 #include "qt/application.hpp"
 #include "qt/external_link_opener.hpp"
 #include "qt/list_model.hpp"
+#include "qt/machine_chrome_layout.hpp"
 #include "qt/machine_client.hpp"
 #include "qt/machine_client_key.hpp"
 #include "qt/terminal_item.hpp"
@@ -27,16 +29,20 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QObject>
+#include <QQmlEngine>
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QSize>
 #include <QString>
 #include <QTemporaryDir>
+#include <QVariantMap>
 #include <QtCore/qcontainerfwd.h>
 #include <QtCore/qnamespace.h>
+#include <QtCore/qtypes.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
+#include <QtTest/qtestmouse.h>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -79,6 +85,23 @@ struct MachineWindow {
     const auto &row = application.machines_.row(slot);
     application.machines_.update(slot, {.label = label, .destination = row.destination.view()});
     emit application.machinesChanged();
+  }
+
+  static void recolor(qt::Application &application, Machines::Slot slot, std::string_view color) {
+    const auto &row = application.machines_.row(slot);
+    application.machines_.update(slot, {.id = row.id, .label = row.label.view(), .destination = row.destination.view(), .color = color, .enabled = row.enabled, .program = row.program.view()});
+    emit application.machinesChanged();
+  }
+
+  static qt::MachineClientKey reuse(qt::Application &application, Machines::Slot slot) {
+    application.retireMachine(slot, qt::Application::MachineRetirement::removed);
+    application.clients_[slot].reset();
+    application.machines_.remove(slot);
+    const auto added = application.machines_.add({.label = "Replacement", .destination = "dev@replacement"}, slot);
+    const auto key = application.createClient(added).key;
+    emit application.machinesChanged();
+
+    return key;
   }
 
   static auto capture(qt::Application &application) {
@@ -240,6 +263,121 @@ struct MachineFixture {
 
 class MachineWindowTest : public QObject {
   Q_OBJECT
+
+  Q_SLOT static void machineSwitcherRoutesClicksAndFitsHiddenControls() {
+    MachineFixture fixture;
+    QQuickWindow window;
+    QQmlEngine engine;
+    constexpr QSize size{400, 240};
+    window.resize(size);
+    fixture.application.setWindow(window);
+    QVERIFY(fixture.start());
+    fixture.local_runtime->send(ClientLayoutSnapshot{});
+    fixture.remote_runtime->send(ClientLayoutSnapshot{});
+    QVERIFY(finishOpening(*fixture.local_runtime));
+    constexpr qreal row_width = 300;
+    constexpr qreal row_height = 17;
+    auto chrome = createChrome(engine, QStringLiteral("MachineChrome"), {{QStringLiteral("controller"), QVariant::fromValue(&fixture.application)}, {QStringLiteral("colors"), fixture.application.colors()}, {QStringLiteral("width"), row_width}, {QStringLiteral("height"), row_height}});
+    chrome->setParentItem(window.contentItem());
+    window.show();
+    auto *layout = qobject_cast<MachineChromeLayout *>(chrome.get());
+    QVERIFY(layout != nullptr);
+    QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 2, wait_ms);
+    const auto remote = layout->items()->data(layout->items()->index(1, 0), ListModel::record_role).toMap();
+    const auto bounds = remote.value(QStringLiteral("bounds")).toRectF();
+    QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, bounds.center().toPoint());
+    QTRY_VERIFY_WITH_TIMEOUT(MachineWindow::client(fixture.application, fixture.remote.machine.slot).session.presented(), wait_ms);
+    QVERIFY(!MachineWindow::client(fixture.application, Machines::local_slot).session.presented());
+    QVERIFY(finishOpening(*fixture.remote_runtime));
+    constexpr qreal narrow_width = 20;
+    chrome->setWidth(narrow_width);
+    QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 1, wait_ms);
+    const auto folded = layout->items()->data(layout->items()->index(0, 0), ListModel::record_role).toMap();
+    QCOMPARE(folded.value(QStringLiteral("text")).toString(), QStringLiteral("+2"));
+    QVERIFY(folded.value(QStringLiteral("bounds")).toRectF().width() <= narrow_width);
+    layout->activate(folded.value(QStringLiteral("key")).toString());
+    QCOMPARE(fixture.application.dialog(), QStringLiteral("palette"));
+    fixture.application.execute(Application::Action::cancel);
+  }
+
+  Q_SLOT static void machineSegmentCarriesAttentionAndProfileInk() {
+    MachineFixture fixture;
+    QQuickWindow window;
+    QQmlEngine engine;
+    constexpr QSize size{400, 240};
+    window.resize(size);
+    fixture.application.setWindow(window);
+    QVERIFY(fixture.start());
+    const std::array agents{activityAgent("Remote waiting")};
+    auto blocked = agents;
+    blocked.front().status = AgentStatus::blocked;
+    blocked.front().blocked_reason = AgentBlockedReason::question;
+    fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = blocked});
+    constexpr qreal segment_width = 200;
+    constexpr qreal segment_height = 26;
+    auto chrome = createChrome(engine, QStringLiteral("MachineChrome"), {{QStringLiteral("controller"), QVariant::fromValue(&fixture.application)}, {QStringLiteral("colors"), fixture.application.colors()}, {QStringLiteral("width"), segment_width}, {QStringLiteral("height"), segment_height}});
+    chrome->setParentItem(window.contentItem());
+    auto *layout = qobject_cast<MachineChromeLayout *>(chrome.get());
+    QVERIFY(layout != nullptr);
+    layout->setSegment(true);
+    window.show();
+    QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 1, wait_ms);
+    const auto row = [&] {
+      return layout->items()->data(layout->items()->index(0, 0), ListModel::record_role).toMap();
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(row().value(QStringLiteral("attentionBounds")).toRectF().width() > 0, wait_ms);
+    QVERIFY(layout->preferredWidth() > 0 && layout->preferredWidth() <= segment_width);
+    QVERIFY(row().value(QStringLiteral("text")).toString().endsWith(QStringLiteral(" ▾")));
+    MachineWindow::recolor(fixture.application, Machines::local_slot, "default");
+    QTRY_COMPARE_WITH_TIMEOUT(row().value(QStringLiteral("ink")).value<QColor>().alpha(), 0, wait_ms);
+    MachineWindow::recolor(fixture.application, Machines::local_slot, "red");
+    QTRY_COMPARE_WITH_TIMEOUT(row().value(QStringLiteral("ink")).value<QColor>(), fixture.application.colors().value(QStringLiteral("red")).value<QColor>(), wait_ms);
+    chrome->setVisible(false);
+    QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 0, wait_ms);
+    chrome->setVisible(true);
+    QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 1, wait_ms);
+  }
+
+  Q_SLOT static void machineControlsRejectRetiredAdmissionsAndWindows() {
+    MachineFixture fixture;
+    QQuickWindow window;
+    QQuickWindow replacement;
+    QQmlEngine engine;
+    constexpr QSize size{400, 240};
+    window.resize(size);
+    fixture.application.setWindow(window);
+    QVERIFY(fixture.start());
+    constexpr qreal row_width = 300;
+    constexpr qreal row_height = 17;
+    auto chrome = createChrome(engine, QStringLiteral("MachineChrome"), {{QStringLiteral("controller"), QVariant::fromValue(&fixture.application)}, {QStringLiteral("colors"), fixture.application.colors()}, {QStringLiteral("width"), row_width}, {QStringLiteral("height"), row_height}});
+    chrome->setParentItem(window.contentItem());
+    window.show();
+    auto *layout = qobject_cast<MachineChromeLayout *>(chrome.get());
+    QVERIFY(layout != nullptr);
+    QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 2, wait_ms);
+    const auto remote_key = [&] {
+      return layout->items()->data(layout->items()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
+    };
+    const auto retired = remote_key();
+    const auto bounds = layout->items()->data(layout->items()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("bounds")).toRectF();
+    QTest::mousePress(&window, Qt::LeftButton, Qt::NoModifier, bounds.center().toPoint());
+    const auto admitted = MachineWindow::reuse(fixture.application, fixture.remote.machine.slot);
+    QTRY_VERIFY_WITH_TIMEOUT(remote_key() != retired, wait_ms);
+    QTest::mouseRelease(&window, Qt::LeftButton, Qt::NoModifier, bounds.center().toPoint());
+    QVERIFY(fixture.application.connected());
+    QVERIFY(!MachineWindow::client(fixture.application, admitted.machine.slot).session.presented());
+    layout->activate(retired);
+    QVERIFY(fixture.application.connected());
+    QVERIFY(!MachineWindow::client(fixture.application, admitted.machine.slot).session.presented());
+    fixture.application.setWindow(replacement);
+    layout->activate(remote_key());
+    QVERIFY(fixture.application.connected());
+    QVERIFY(!MachineWindow::client(fixture.application, admitted.machine.slot).session.presented());
+    fixture.application.setWindow(window);
+    layout->activate(remote_key());
+    QVERIFY(MachineWindow::client(fixture.application, admitted.machine.slot).session.presented());
+    QVERIFY(!fixture.application.connected());
+  }
 
   Q_SLOT static void activityCombinesSourcesWithoutOpeningHiddenScreens() {
     MachineFixture fixture;

@@ -73,7 +73,7 @@ QVariantMap Application::sidebarGeometry() const {
       .height = geometry.sidebar.height,
   };
 
-  auto result = sidebarRegionsRecord(area, display, static_cast<std::size_t>(workspaces_.rowCount()));
+  auto result = sidebarRegionsRecord(area, display, static_cast<std::size_t>(workspaces_.rowCount()), machines_.count() > 1);
   result.insert(QStringLiteral("typography"), chromeTypographyRecord(display, configuration().font));
 
   if (geometry.rail) {
