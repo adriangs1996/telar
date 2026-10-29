@@ -25,6 +25,7 @@ struct MachineClient {
   std::uint64_t identity = 0;
   MachinePhase phase = MachinePhase::connecting;
   bool needs_setup = false;
+  bool named_launch = false;
   runtime::FixedText<MachineLimits::program_bytes> admitted_program;
 
   explicit MachineClient(ApplicationAllocator &memory, Application &application, MachineClientKey admission)

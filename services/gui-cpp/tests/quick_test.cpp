@@ -74,6 +74,7 @@
 #include <QtCore/qcoreevent.h>
 #include <QtCore/qhashfunctions.h>
 #include <QtCore/qlist.h>
+#include <QtCore/qlogging.h>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qobjectdefs.h>
@@ -1208,12 +1209,28 @@ private:
       return telar::gui::test::visualItems(*window_->contentItem(), QStringLiteral("notificationClose"));
     };
     QTRY_COMPARE_WITH_TIMEOUT(closes().size(), 1, runtime_wait_ms);
+    const auto trace_focus = qEnvironmentVariableIsSet("TELAR_GUI_TEST_FOCUS_TRACE");
+    const auto observation = [this, trace_focus] {
+      if (trace_focus) {
+        const auto *terminal = terminalIn(window_->contentItem());
+        qInfo().noquote() << "notification focus" << windowObservation(*window_) << "terminal=" << terminal << "visible=" << (terminal != nullptr && terminal->isVisible()) << "focus=" << (terminal != nullptr && terminal->hasActiveFocus()) << "dialog=" << client_->dialog();
+      }
+    };
+    const auto focus_connection = QObject::connect(window_, &QQuickWindow::activeFocusItemChanged, window_, observation);
+    const auto stop_observation = qScopeGuard([&] {
+      QObject::disconnect(focus_connection);
+    });
     const auto *close = closes().front();
     const auto point = close->mapToScene({close->width() / 2, close->height() / 2}).toPoint();
     QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, point);
+    auto release_click = qScopeGuard([&] {
+      QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, point);
+    });
     QCOMPARE(client_->notifications().items().front().phase, telar::gui::NotificationItem::Phase::exiting);
-    QTRY_COMPARE_WITH_TIMEOUT(window_->activeFocusItem(), terminalIn(window_->contentItem()), runtime_wait_ms);
+    observation();
+    QTRY_VERIFY2_WITH_TIMEOUT(window_->activeFocusItem() == terminalIn(window_->contentItem()), qPrintable(windowObservation(*window_)), runtime_wait_ms);
     QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, point);
+    release_click.dismiss();
     QTRY_VERIFY_WITH_TIMEOUT(client_->notifications().items().empty(), runtime_wait_ms);
   }
 

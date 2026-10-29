@@ -58,7 +58,7 @@ void sendMessage(const Message &message) {
   writeFrame(Codec::encode(message, storage));
 }
 
-void windowMessage(std::span<const Byte> payload) {
+void windowMessage(std::span<const Byte> payload, bool named_launch) {
   constexpr TabLocation location{.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
   constexpr std::uint64_t pane_id = 1;
   constexpr std::size_t decode_capacity = 4096;
@@ -71,7 +71,9 @@ void windowMessage(std::span<const Byte> payload) {
   case ClientTag::open_pane: {
     const auto request = Codec::decode<OpenPane>(payload, decode);
     const std::array<std::string_view, 3> expected{"/bin/sh", "-l", "-i"};
-    if (!request.launch || request.launch->cwd != "/home/remote" || !std::ranges::equal(request.launch->arguments, expected)) {
+    const std::array<std::string_view, 2> named{"/bin/echo", "REMOTE_NAMED"};
+    const auto arguments = named_launch ? std::span<const std::string_view>{named} : std::span<const std::string_view>{expected};
+    if (!request.launch || request.launch->cwd != "/home/remote" || !std::ranges::equal(request.launch->arguments, arguments)) {
       throw std::runtime_error{"Remote launch did not adopt discovered home and shell"};
     }
 
@@ -130,7 +132,7 @@ int sshFixture(std::span<char *> arguments) {
     }
 
     if (destination.starts_with("window")) {
-      windowMessage(payload);
+      windowMessage(payload, destination == "window-command@fixture");
     } else {
       writeFrame(payload);
     }

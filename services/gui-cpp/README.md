@@ -224,6 +224,12 @@ enabled machine; the later machine UI adds picker actions. A
 [production OpenSSH loopback run](measurements/machine-live.md) now covers
 remote/local/remote input isolation with separate original runtimes. Additional
 host platforms, live failure/recovery and complete SSH acceptance remain pending.
+The [initial-machine launch](measurements/machine-launch.md) also wires
+`--remote`/`--machine`, local-label selection, window-only pinning and remote
+command/home adoption. Its real OpenSSH runs cover both selectors; five selected
+Release and sanitizer groups pass. The native notification-focus investigation
+retains its first failure and later traced passes without claiming its cause
+is fixed.
 
 ```sh
 python3 services/gui-cpp/tools/check_row_text.py --output-dir /tmp/telar-row-text

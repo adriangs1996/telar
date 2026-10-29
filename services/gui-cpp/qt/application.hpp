@@ -203,6 +203,7 @@ public:
   void openMachines(const QString &path);
   void loadConfiguration(const QString &path, const QString &profile, const QString &theme);
   void configureLaunch(const QString &directory, const QStringList &arguments, bool restore);
+  void configureRemoteLaunch(const QString &destination, const QStringList &arguments);
   void setWindow(QQuickWindow &window);
   bool eventFilter(QObject *watched, QEvent *event) override;
   [[nodiscard]] Pane<ApplicationAllocator> *pane(std::uint64_t identity) const noexcept;
@@ -351,6 +352,7 @@ signals:
   void machineChanged();
   void machinesChanged();
   void machinePromptChanged();
+  void machineLaunchFailed(const QString &error);
 
 private:
   friend struct test::HistoryPresentation;
@@ -390,6 +392,11 @@ private:
     std::optional<MachineToken> renamed;
   };
 
+  struct RemoteLaunch {
+    QString destination;
+    QStringList arguments;
+  };
+
   bool executeMachineAction(Action action);
   void moveMachine(int delta);
   void chooseMachine(MachinePickerTarget target, bool alternate);
@@ -402,6 +409,7 @@ private:
   [[nodiscard]] std::size_t machinePromptLimit() const noexcept;
   void initializeMachineProfiles();
   void applyMachineProfiles();
+  void openRequestedMachine();
   void reconcileMachines();
   void reconcileMachine(const MachineProfile &profile);
   void admitMachine(Machines::Slot slot);
@@ -531,6 +539,7 @@ private:
   ConfigurationSource configuration_source_;
   MachineProfilesSource machine_profiles_;
   std::optional<MachinePrompt> machine_prompt_;
+  std::optional<RemoteLaunch> remote_launch_;
   QTimer machine_retry_;
   QString machine_control_endpoint_;
   bool prepare_machine_directory_ = false;

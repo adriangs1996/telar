@@ -57,6 +57,9 @@ void Application::initializeMachineProfiles() {
     const auto detail = machine_profiles_.error().toUtf8();
     const auto *const title = machine_profiles_.editError() ? "Machine not saved" : "machines.json not applied";
     publishNotification({.level = NotificationLevel::failure, .title = title, .message = bytes(detail), .link = {}});
+    if (remote_launch_) {
+      applyMachineProfiles();
+    }
   });
 }
 
@@ -79,12 +82,22 @@ void Application::openMachines(const QString &path) {
 }
 
 void Application::applyMachineProfiles() {
-  if (!machine_profiles_.loaded()) {
+  if (!machine_profiles_.loaded() && (!remote_launch_ || machine_profiles_.error().isEmpty())) {
     return;
   }
 
   try {
-    reconcileMachines();
+    if (machine_profiles_.loaded()) {
+      reconcileMachines();
+    }
+
+    try {
+      openRequestedMachine();
+    } catch (const MachineFailure &failure) {
+      remote_launch_.reset();
+      emit machineLaunchFailed(QString::fromUtf8(failure.what()));
+    }
+
     machine_retry_.stop();
     emit machinesChanged();
   } catch (const std::exception &error) {
@@ -194,6 +207,12 @@ void Application::retireMachine(Machines::Slot slot, MachineRetirement reason) {
 }
 
 void Application::discoveredMachine(MachineClient &client, const RemoteDiscovery &discovery) {
+  if (client.named_launch) {
+    client.session.setLaunchDirectory(discovery.home());
+
+    return;
+  }
+
   const auto path = discovery.shell();
   const std::array arguments{path, std::string_view{"-l"}, std::string_view{"-i"}};
   client.session.setLaunch({.cwd = discovery.home(), .arguments = std::span{arguments}.first(login_shell::script(path) != nullptr ? arguments.size() : 1)});

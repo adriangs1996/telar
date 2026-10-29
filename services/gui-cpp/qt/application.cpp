@@ -16,6 +16,7 @@
 #include "history/search.hpp"
 #include "links/link_target.hpp"
 #include "login_shell.hpp"
+#include "launch_arguments.hpp"
 #include "machine_client.hpp"
 #include "machines/connection_policy.hpp"
 #include "machines/machine_row.hpp"
@@ -245,25 +246,8 @@ void Application::loadConfiguration(const QString &path, const QString &profile,
 void Application::configureLaunch(const QString &directory, const QStringList &arguments, bool restore) {
   const auto cwd = QDir{directory.isEmpty() ? QDir::currentPath() : directory}.absolutePath().toUtf8();
   const login_shell::Command shell;
-  constexpr std::size_t maximum_arguments = 32;
-
-  if (arguments.size() > static_cast<qsizetype>(maximum_arguments)) {
-    throw std::length_error{"Launch command exceeds its argument capacity"};
-  }
-
-  QList<QByteArray> storage;
-  storage.reserve(arguments.size());
-
-  for (const auto &argument : arguments) {
-    storage.append(argument.toUtf8());
-  }
-
-  std::array<std::string_view, maximum_arguments> views{};
-  for (qsizetype index = 0; index < storage.size(); ++index) {
-    views[static_cast<std::size_t>(index)] = {storage[index].constData(), static_cast<std::size_t>(storage[index].size())};
-  }
-
-  const auto command = arguments.isEmpty() ? shell.arguments() : std::span<const std::string_view>{views}.first(static_cast<std::size_t>(storage.size()));
+  const LaunchArguments prepared{arguments};
+  const auto command = arguments.isEmpty() ? shell.arguments() : prepared.argv();
   session().setLaunch(Launch{.cwd = {cwd.constData(), static_cast<std::size_t>(cwd.size())}, .arguments = command});
   restore_layout_ = restore;
   session().setRestoreLayout(restore);

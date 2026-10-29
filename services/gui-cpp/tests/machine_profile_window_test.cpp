@@ -2,6 +2,7 @@
 #include "assertions.hpp"
 #include "gui_wait.hpp"
 #include "machines/identity.hpp"
+#include "machines/limits.hpp"
 #include "machines/machine_row.hpp"
 #include "machines/machines.hpp"
 #include "platform/profile_file.hpp"
@@ -22,7 +23,9 @@
 #include <QString>
 #include <QTemporaryDir>
 #include <QVariantMap>
+#include <QSignalSpy>
 #include <QtCore/qcontainerfwd.h>
+#include <QtCore/qchar.h>
 #include <QtCore/qtenvironmentvariables.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
@@ -30,6 +33,7 @@
 #include <QtTest/qtestcase.h>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -75,6 +79,11 @@ using namespace telar::gui::qt;
 using namespace telar::gui::test;
 constexpr int wait_ms = 5000;
 
+enum class ProfileLoad : std::uint8_t {
+  loaded,
+  rejected,
+};
+
 struct ProfileFixture {
   QTemporaryDir directory;
   ApplicationAllocator memory;
@@ -107,7 +116,7 @@ struct ProfileFixture {
   ProfileFixture(ProfileFixture &&) = delete;
   ProfileFixture &operator=(ProfileFixture &&) = delete;
 
-  bool start(std::string_view profiles) {
+  bool start(std::string_view profiles, ProfileLoad expected = ProfileLoad::loaded) {
     if (!directory.isValid() || !listener.listen(directory.filePath(QStringLiteral("runtime.sock"))) || !QFile::link(QCoreApplication::applicationDirPath() + QStringLiteral("/gui-ssh-runtime-fixture"), directory.filePath(QStringLiteral("ssh")))) {
       return false;
     }
@@ -130,7 +139,10 @@ struct ProfileFixture {
     application.openMachines(path());
 
     return waitForGuiCondition([&] {
-      return MachineProfileWindow::profiles(application).loaded() && application.connected();
+      const auto &source = MachineProfileWindow::profiles(application);
+      const auto settled = expected == ProfileLoad::loaded ? source.loaded() : !source.error().isEmpty();
+
+      return settled && application.connected();
     },
                                wait_ms);
   }
@@ -204,6 +216,98 @@ class MachineProfileWindowTest : public QObject {
   Q_OBJECT
 
 private:
+  Q_SLOT static void requestedRemoteSurvivesRejectedInitialProfiles() {
+    ProfileFixture fixture;
+    fixture.application.configureRemoteLaunch(QStringLiteral("window@fixture"), {});
+    QVERIFY(fixture.start(R"({"version":1,"machines":false})", ProfileLoad::rejected));
+    const auto &machines = MachineProfileWindow::machines(fixture.application);
+    QTRY_VERIFY_WITH_TIMEOUT(machines.active() != Machines::local_slot, wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(fixture.application.panes()->rowCount(), 1, wait_ms);
+    QVERIFY(machines.row(machines.active()).pinned);
+    QVERIFY(!MachineProfileWindow::profiles(fixture.application).error().isEmpty());
+  }
+
+  Q_SLOT static void unavailableInitialMachineReportsItsCapacityFailure() {
+    ProfileFixture fixture;
+    fixture.application.configureRemoteLaunch(QStringLiteral("window@fixture"), {});
+    const QSignalSpy failures{&fixture.application, &Application::machineLaunchFailed};
+    QStringList rows;
+    constexpr int hexadecimal_base = 16;
+    for (std::size_t index = 0; index < MachineLimits::profiles; ++index) {
+      const auto identity = QString::number(index + 1, hexadecimal_base).rightJustified(static_cast<qsizetype>(MachineId::hex_digits), QLatin1Char('0'));
+      rows.append(QStringLiteral("{\"id\":\"m-%1\",\"label\":\"slot-%2\",\"destination\":\"disabled-%2\",\"enabled\":false}").arg(identity).arg(index));
+    }
+
+    const auto profiles = (QStringLiteral("{\"version\":1,\"machines\":[") + rows.join(QLatin1Char(',')) + QStringLiteral("]}")).toUtf8();
+    QVERIFY(fixture.start({profiles.constData(), static_cast<std::size_t>(profiles.size())}));
+    QCOMPARE(failures.size(), qsizetype{1});
+    QCOMPARE(failures.front().front().toString(), QStringLiteral("TooManyMachines"));
+    QCOMPARE(MachineProfileWindow::machines(fixture.application).active(), Machines::local_slot);
+    QVERIFY_THROWS_EXCEPTION(std::logic_error, fixture.application.configureRemoteLaunch(QStringLiteral("other"), {}));
+  }
+
+  Q_SLOT static void requestedDisabledMachineRunsTheNamedCommandInRemoteHome() {
+    ProfileFixture fixture;
+    auto &application = fixture.application;
+    application.configureLaunch(fixture.directory.path(), {QStringLiteral("/bin/sh")}, false);
+    application.configureRemoteLaunch(QStringLiteral("window-command@fixture"), {QStringLiteral("/bin/echo"), QStringLiteral("REMOTE_NAMED")});
+    QVERIFY(fixture.start(R"({"version":1,"machines":[{"id":"m-000000000001","label":"Saved","destination":"window-command@fixture","enabled":false}]})"));
+    const auto slot = remoteSlot(application);
+    const auto &machines = MachineProfileWindow::machines(application);
+    QCOMPARE(machines.active(), slot);
+    QVERIFY(machines.row(slot).pinned && machines.row(slot).enabled);
+    QVERIFY(!MachineProfileWindow::profiles(application).profiles().rows().front().enabled());
+    QTRY_COMPARE_WITH_TIMEOUT(application.panes()->rowCount(), 1, wait_ms);
+    QVERIFY(MachineProfileWindow::client(application, slot)->named_launch);
+    QCOMPARE(fixture.runtime->count(ClientTag::open_pane), std::size_t{0});
+    QCOMPARE(application.error(), QString{});
+  }
+
+  Q_SLOT static void requestedMachineLabelUsesItsSavedDestination() {
+    ProfileFixture fixture;
+    fixture.application.configureRemoteLaunch(QStringLiteral("Saved"), {});
+    QVERIFY(fixture.start(R"({"version":1,"machines":[{"id":"m-000000000001","label":"Saved","destination":"window@fixture","enabled":false}]})"));
+    const auto &machines = MachineProfileWindow::machines(fixture.application);
+    QCOMPARE(machines.active(), remoteSlot(fixture.application));
+    QVERIFY(machines.row(machines.active()).pinned);
+    QTRY_COMPARE_WITH_TIMEOUT(fixture.application.panes()->rowCount(), 1, wait_ms);
+    QVERIFY(!MachineProfileWindow::client(fixture.application, machines.active())->named_launch);
+  }
+
+  Q_SLOT static void requestedTemporaryMachineAdoptsASavedProfile() {
+    ProfileFixture temporary;
+    temporary.application.configureRemoteLaunch(QStringLiteral("window-command@fixture"), {QStringLiteral("/bin/echo"), QStringLiteral("REMOTE_NAMED")});
+    QVERIFY(temporary.start(R"({"version":1,"machines":[]})"));
+    const auto &machines = MachineProfileWindow::machines(temporary.application);
+    const auto selected = machines.active();
+    QVERIFY(selected != Machines::local_slot);
+    QVERIFY(machines.row(selected).pinned && machines.row(selected).id.value() == 0);
+    QTRY_COMPARE_WITH_TIMEOUT(temporary.application.panes()->rowCount(), 1, wait_ms);
+    temporary.replace(R"({"version":1,"machines":[{"id":"m-000000000001","label":"Saved","destination":"window-command@fixture","enabled":false}]})");
+    auto *const client = MachineProfileWindow::client(temporary.application, selected);
+    QTRY_COMPARE_WITH_TIMEOUT(machines.row(selected).id.value(), std::uint64_t{1}, wait_ms);
+    QCOMPARE(MachineProfileWindow::client(temporary.application, selected), client);
+    QVERIFY(machines.row(selected).enabled && machines.row(selected).pinned);
+  }
+
+  Q_SLOT static void launchArgumentsRetainTheOriginalSixtyFourArgumentLimit() {
+    ProfileFixture fixture;
+    QVERIFY(fixture.start(R"({"version":1,"machines":[]})"));
+    constexpr qsizetype reference_argument_limit = 64;
+    const QStringList arguments(reference_argument_limit, QStringLiteral("argument"));
+    fixture.application.configureLaunch(fixture.directory.path(), arguments, false);
+    auto overflow = arguments;
+    overflow.append(QStringLiteral("overflow"));
+    QVERIFY_THROWS_EXCEPTION(std::length_error, fixture.application.configureLaunch(fixture.directory.path(), overflow, false));
+    QVERIFY(openLocalPane(fixture));
+    const auto opening = fixture.runtime->last<OpenPane>();
+    QVERIFY(opening.launch.has_value());
+    QCOMPARE(opening.launch->arguments.size(), static_cast<std::size_t>(reference_argument_limit));
+    for (const auto argument : opening.launch->arguments) {
+      QCOMPARE(argument, std::string_view{"argument"});
+    }
+  }
+
   Q_SLOT static void machineActionsCycleAndPickerEnablesWithoutSelecting() {
     ProfileFixture fixture;
     QVERIFY(fixture.start(R"({"version":1,"local_label":"Personal","machines":[{"id":"m-000000000001","label":"Build","destination":"window@fixture","enabled":true},{"id":"m-000000000002","label":"Offline","destination":"window-other@fixture","enabled":false}]})"));

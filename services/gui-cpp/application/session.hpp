@@ -135,6 +135,19 @@ public:
     }
   }
 
+  void setLaunchDirectory(std::string_view directory) {
+    auto launch = defaultLaunch();
+    launch.cwd = directory;
+    BodySchema<Launch>::validate(launch);
+    launch_cwd_ = directory;
+  }
+
+  void setLaunchArguments(std::span<const std::string_view> arguments) {
+    auto launch = defaultLaunch();
+    launch.arguments = arguments;
+    setLaunch(launch);
+  }
+
   void setRestoreLayout(bool enabled) noexcept {
     restore_layout_ = enabled;
   }

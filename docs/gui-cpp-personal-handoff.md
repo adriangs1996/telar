@@ -40,8 +40,17 @@ the production GUI with an owned OpenSSH server on loopback and two isolated
 original runtimes. Remote/local/remote switching preserves separate input and
 pane contents, and GUI/runtime/server cleanup succeeds. Its private fixture
 keys are not archived. Further host platforms, live failure/recovery, setup
-installation, source composition and `--remote`/`--machine` launch remain open.
-No global parity gate is closed. The window-adapter checkpoint records 82 Cocoa/Metal scale-1
+installation and source composition remain open. The subsequent
+[initial-machine launch](../services/gui-cpp/measurements/machine-launch.md)
+checkpoint wires `--remote`/`--machine`, local-label selection, disabled/temporary
+pinning, remote home/command adoption and the original 64-argument startup limit.
+Five selected Release and sanitizer groups pass, and real SSH runs cover both
+selectors. Fourteen profile-window cases include initial-file failure, capacity,
+slot reuse and launch arguments. A first current Quick suite has one
+notification-focus failure; traced sequence/full runs pass, but its cause is
+unproven and its gate remains open. Keep that failed run and the traces. Continue
+focus retirement, source composition, live recovery/setup and all remaining
+PARITY.md gates. No global parity gate is closed. The window-adapter checkpoint records 82 Cocoa/Metal scale-1
 passes, before the transport/profile changes, after the
 owned-window focus/geometry barrier; twenty selected regressions pass.
 Native sanitizer assertions pass, but exit leak acceptance remains OPEN.
