@@ -338,3 +338,12 @@ C API. All query parsing, validation policy and replies remain C++.
 comparisons with zero differences, exact pixel/cleanup tests, Release/ASan/UBSan
 results, memory limits and seven-pair measurements. This resolves the new PNG
 completion differences. Performance and integration gates remain open.
+
+
+The long APC oracle additionally identified same-kind C1 introducers98/9e/9f
+inside APC. Native parsing now ignores them, matching the immutable application
+same-state/no-action table. Current evidence is in `c1-apc-validation.json`.
+`borrowed-apc-experiments.md` records three rejected borrowing optimizations:
+the large payload improved substantially, but unrelated consistent losses
+failed the optimization gate. Their binaries and source patches remain frozen;
+the productive parser retains only the functional C1 correction.

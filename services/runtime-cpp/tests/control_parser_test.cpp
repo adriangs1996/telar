@@ -134,6 +134,11 @@ void boundedFuzz() {
 }
 
 int main() {
+  for (const auto control : {std::uint8_t{0x98}, std::uint8_t{0x9e}, std::uint8_t{0x9f}}) {
+    const auto input = std::string{"\x1b_Ga=q,i=9;"} + static_cast<char>(control) + "AAAA\x1b\\";
+    partitions(input, {"4:Ga=q,i=9;AAAA:1", "0:\\:0"});
+  }
+
   partitions("A\x1b[6nB\x1b[?6n", {"text:A", "1:6n:0", "text:B", "1:?6n:0"});
   partitions("\x1bP$qm\x1b\\", {"2:$qm:1", "0:\\:0"});
   partitions("\x1b]4;1;?\a", {"3:4;1;?:2"});

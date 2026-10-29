@@ -145,6 +145,11 @@ public:
         }
 
         if ((kind_ == Kind::apc || (kind_ == Kind::dcs && !dcs_payload_)) && byte >= c1_first && byte <= c1_last) {
+          // Same-kind string introducers have no exit/entry action in APC.
+          if (kind_ == Kind::apc && (byte == c1_sos || byte == c1_pm || byte == c1_apc)) {
+            ++consumed;
+            continue;
+          }
           if (kind_ == Kind::apc && phase_ == Phase::string) {
             ending_ = Ending::escape;
             after_ready_ = Phase::ground;
@@ -342,6 +347,9 @@ private:
   static constexpr std::uint8_t c1_last = 0x9f;
   static constexpr std::uint8_t c1_st = 0x9c;
   static constexpr std::uint8_t c1_decid = 0x9a;
+  static constexpr std::uint8_t c1_sos = 0x98;
+  static constexpr std::uint8_t c1_pm = 0x9e;
+  static constexpr std::uint8_t c1_apc = 0x9f;
 
   template <typename Consumer>
   static bool finishStream(Consumer &consumer) {

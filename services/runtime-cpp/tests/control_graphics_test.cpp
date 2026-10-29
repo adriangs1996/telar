@@ -376,8 +376,10 @@ void cancelBusyMedia() {
 void orderedMediaBoundaries() {
   constexpr std::string_view first = "\x1b_Ga=t,f=24,s=1,v=1,i=7;/wAA\x1b\\";
   constexpr std::string_view second = "\x1b_Ga=t,f=24,s=1,v=1,i=8;AP8A\x1b\\";
-  const std::string input = std::string{"\x1b[5n"} + std::string{first} + "\x1b[5n" + std::string{second} + "\x1b[5n";
-  const std::string expected = "\x1b[0n\x1b_Gi=7;OK\x1b\\\x1b[0n\x1b_Gi=8;OK\x1b\\\x1b[0n";
+  const std::vector<Byte> pixels(16 * 16 * 4, 0);
+  const std::string large_query = "\x1b_Ga=q,i=9,s=16,v=16;" + encoded(pixels) + "\x1b\\";
+  const std::string input = std::string{"\x1b[5n"} + std::string{first} + "\x1b[5n" + large_query + std::string{second} + "\x1b[5n";
+  const std::string expected = "\x1b[0n\x1b_Gi=7;OK\x1b\\\x1b[0n\x1b_Gi=9;OK\x1b\\\x1b_Gi=8;OK\x1b\\\x1b[0n";
   for (std::size_t split = 0; split <= input.size(); ++split) {
     SystemAllocator system;
     BudgetAllocator memory{system, 64 * 1024 * 1024};
