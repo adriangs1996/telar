@@ -2,6 +2,178 @@
 
 ## Personal continuation checkpoint
 
+### Current probe repair before retained text work (04:57 UTC)
+
+Goal ACTIVE/incomplete/unbudgeted; no final checkpoints, agents, publish or merge.
+HEAD a553fda4c. New accepted-scope tool repair is ready to commit: root
+services/gui-cpp/tools/text_scene_probe.cpp was obsolete (paintCellText removed).
+Actual prebuild fails undeclaredidentifier, preserved. Now FontCollection plus
+paintChromeText, same3lengths32/128/512 andcreate/rebuild/repaint. Releasebuild
+PASS,native9casesPASS; each3operationssamegeometrydigest. Strict500lintCLEAN,
+actualNeovimclangd deliveredemptydiagnostics. ASANbuildruns9same EXACTdigests,
+butEXIT1 leaks347332bytes2037alloc; runtimebuiltin12/480table,noLSAN_OPTIONS/no
+localsuppression. Reporttext-scene-probe.md, validationJSON, source/logarchive
+andverify_text_scene_probe.py --check-current-source PASS. RootGUIbinaryremains
+2c4a; C++ renderer unchanged. BuildDID regenerateoriginalQSB/RCC androotlibgui-
+quick.a resourceobject (timestamps), sofutureprivatebuilderscopyupdatedrootlib;
+oldfrozenA/GUIbaseline/privatecandidatebinaries unchanged. Do notrewriteoldSHA.
+
+V2single matrixFINISHED21valid0invalid: Qt/v2 all7pairs p5029.0495→24.9123ms
+wins7,p9541.0702→37.3065wins5,p99wins5; inputCPU492.072→445.381ms wins7; RSS
+190.609→200.875MiBwins2. Zig/v2p5024.8189→24.9123wins1/7,p9533.1593→37.3065wins1,
+p99wins0,CPU346.906→445.381mswins0,RSS127.281→200.875wins0. NOTadopted. Report
+personal-frame-delivery.md isDRAFTuntracked; noarchiveyet. PARITYdirtyCLIprovenance
+correction distinguisheshistoricalmissingrunner fromcurrenttools; sourcehost
+historicalrawarchiveswerenottransferred, notmissingimplementation.
+
+Loadedfirstcontrol local/perf-cocoa-v2-three-way-splits-load-1: threeactualgrids
+match25x19primary/11x19,4x19,5x19background,marker952,423. Nativeall100responses
+PASS, butQtANDv2FAIL5%producer-rateguard at0.125MiB/s. Zigmetrate. Donotaccept
+thesecomparativelatenciesorrelaxguard. Thenprofiles1 samplesGUI AND ownruntime
+only AFTERsetup+2s (6samplecommandsallreturn0). Isolatedprofilingjobs excluded;
+Zig/v2profiledloadmetrate,Qtprofiledloadfailed. Profilesdominatedwaits; rowtext
+scene rebuild hasactualallocation/renderwork, no sustainedhotspotproveswrite
+stalls. No productruntimechangeauthorizedbythiswork; originalruntimeunchanged.
+
+Diagnostic writertrace harnessperf-personal-trace-1/harness CLONESimmutableB,
+addsbounded16384-recordmmap ofdeadline/prewait/wake/writeend/newdeadline/bytes
+perbackgroundproducer. Rootfixture/FrozenBunchanged. Tracejobslabeleddiagnostic
+andEXCLUDED evenifvalid; classifiernowexplicitlyexcludesprofiled/diagnostic.
+Driverbeforeedits copiedbySHA tolocal/perf-source-epochs. Trace1 Zig/Qtmetrate,
+v2failed. Allclientswake tails~10–11ms; writecostalsovaries. Meanwriter-rate
+andtailfailuresvariable, exactcauseunestablished. Actualdata+analysislocal/
+perf-cocoa-v2-splits-load-writer-trace-1/. No timingsacceptedfromtraces/profiles.
+NO activeUI/build/test/benchmarknow (all sessions polledfinished). Ownruntimes
+cleanupgood, userruntimeuntouched.
+
+NEXTfinishlocalcommitprobe repair, then newPERFexperiment withoracleFIRST.
+Observed TextScene::begin allocatesroot andflushCells usespaintChromeText(nullptr)
+forchangedrows. ChromeScene::rebuild alsoalwaysdeletesGlyphMeshes onrevision.
+Plan1: retainGlyphMesh/geometrybuffers andswapownedglyphlists duringrebuild,
+checkingatlascomparisonKey/blend/placement, preservingchildorder anddeleting
+surplusnodes. Keepsoftwarepathsemantics. Existingrepairedsceneprobe9case digest
+baseline available but MUSTaddtransitionoracle(multiplelengths/empty/recolor/
+blend/fontsource/scale/clip) beforeopt; finaldigestalonecouldmissintermediate
+bugs. Thenpaired7microbenchall3ops, actualpixels/lifetime/sanitizerchecks. No
+implementationofmeshreuseyet. Plan2later:retainrowTextSceneroot acrossdirtyrow
+updates; carefulinline/shapes/Qt fallback/opticalordering. Donotpackownerctx to
+hideparams orchangeZig/layoutsemantics. OtherfullPARITYgatesremainopen inclnative
+leaks,12/23glyphpixels, CPU/RSS/Linux andplugins/custombars/clipboardimagesetc.
+KeepSpanishupdates<=60s; longanalysisSTILLviolatedcadence—useactualclockearly.
+
+### Current v2 timing (04:26 UTC; exec41875)
+
+HEAD a553fda4c fixture correction; only docs handoff and PARITY dirty. NO product
+Qt/C++ edits accepted; GUIbaseline2c4a unchanged. Persistentgoalactive/incomplete.
+Private experiment continues; neverfinalatcheckpoints. No agents/publish/merge.
+
+v1 threeway single1 FINISHED21jobs. Classifier local/classify_cocoa_matrix.py
+success:20valid1invalid (round6Zig nativepresentedTimezero atfirstmarker, error21).
+Qt/v1 all7pairs: p50 medians29.051/25.367ms, v1wins7/7; p9541.328/38.144ms wins6/7;
+p99v1wins2/7; CPU4/7,RSS4/7. Zig/v1 only6validpairs, v1p50/p95/p99wins1/6,CPU/RSS0.
+Notadopted/fullparityopen. Firstv1rawfullQuickSIGSEGV remainsretained. Private
+lifetime-safe+strongidentity diagnosticQuick: baselinefull87pass1failureon
+reopeningRestoresLayout workspaceListCollapsed, v1full88pass noQWARN. Isolated
+baseline/v1 focuscases4passboth. Exactintermittentcausesnotestablished.
+
+v2 is PRIVATE in local/perf-cocoa-candidate-2. Integrates nativeadmission into
+existing WindowFramePacer timer instead ofv1separateQObject/atomicframeclock.
+Compile-time NativeWindowFrameDelivery policy/concept; boundedcurrentpanearray;
+uses ORIGINAL FramePacer::waitUntil incl16frame/30msinputgrace andallsource/
+attachment/generation checks. Cocoa/Metal/exposed/pending/QPAwindowtimer guards
+retained. Existingmachine_controller resetsFramePacer onmachinechange, preventing
+oldsession grace/cachedrequests surviving. Empty/oversizednativepanes cancel
+queuedadmission butpreserveanordinaryQtrequestalreadyheldbythepacer.
+
+Oracles BEFOREimplementation: stubrequestfailscoalescedordinarydelivery; then
+initialv2passes15checks. Additionalcancellationnegative FAILS initialv2(empty
+requestleftoldnativewakequeued). Correctedfinal19controlsPASS Release and
+ASAN/UBSANexit0withleakdetection; observedbuiltin3alloc120byteObjCtable,NO LSAN_
+OPTIONS/localsuppression. Finalexistingwindow-frame-pacertest9pass; independent
+nativeCocoa bridge12assertionspass; FULLnativeQuickv2 88pass0QWARN. Testfixture
+forQuick remainsprivate diagnosticcopy; no rootquicktestedit.
+
+V2 changesWindowFramePacer template/layout, which changes optionalfield layout
+insideApplication. To avoid mixedABI, local/build_cocoa_candidate2.py uses Clang
+VFS overlay of application.cpp, window_frame_pacer.hpp,newpolicyheader andprivate
+Quickdiagnostic source. It recompiles ALL34production/main/Quick/pacer objects
+whoseNinja deps includeApplication/windowpacer header. Copieslibgui-quick.a and
+replacesaffectedobjects, linksprivateGUI/tests only. Rootoutobjects/libs untouched.
+Buildepoch1initialbinary084c... notmeasured; finalcancellationbuild2GUI SHA
+6d22bd99c827b7ce70a84414ede6e75168a78a70c22d59533cdbfad966ae06a9,
+Quick1b3acef630847ec71df22fbf73bb37510bb40c420a74b3838cb91e6ff7d3d601,
+pacertestbac5b6ea606a1277948b2cada0931e252174e32273cf832878f36620586da0c8.
+Build2/sourcehashes/overlay andcommands retained. Strictunchanged500checktidy1
+flagsmissingdirectQStringincludeandconstdispatcher; fixedboth. Targetedtidy2
+clean. const-include-build.json PROVES ALL3binaries byte-identicalafterfix, so
+native88/pacer9 applyexactly. NoarchitecturespecificintrinsicinV2; crossplatform/
+Qtversions/visual/idleCPU/RSS/loadedqualification stillopen.
+
+CURRENT exec41875: perf_gui_run.py --name perf-cocoa-v2-three-way-single-1 --rounds7
+--samples100 --probeprobe-presented-v3.dylib --candidate-binarylocal/perf-cocoa-
+candidate-2/telar-gui. Allsource/config/binaryidentitiesfrozenatstartup. SAMEB
+fixture/AcurrentQt/original runtime/config, strictnativeVSync/presentationprobev3.
+At04:26:04 sevenof21jobscompleted, allnativevalid; earlyv2p50~25–26msstillaboveZig.
+NO BUILDS/TESTS/PROFILES/otherUIwhiletiming. Keepupdates<=60secondsusingclock.
+Afterexit classifywithclassify_cocoa_matrix.py; preservefailures, rejectgeometry
+andinsufficientpairs. Then loaded/split/tab cases important: v2gracebenefitshould
+showundercontinuousframeactivity; ordinarysinglekeysmostlyoverdueanyway. Don't
+assumeimprovement. Needpixels, nativeleaks, CPU/RSS, platform and remainingfull
+functional/visualgates. Needarchivecurrentprobes/harness/candidates/rejectedlogs
+andreport (notyetwritten/committed). v1privatecandidatecodegen/lint/cross remain
+unqualified; V2strictflowslintclean. Roottoolsfixturecommit isonlyacceptedcode.
+
+### Current three-way timing (04:07 UTC, session79938)
+
+Local commit a553fda4c accepted the fixture resize correction, report/archive and
+5 focused controls. C++ product baseline remains2c4a; goalactive/incomplete.
+PARITY.md now DIRTY only to distinguish historical absent runner options/raw
+archives from the current transferred GPU-only shared runner. No production
+Qt/C++ edit accepted. No external publish/merge/delegation.
+
+Private native candidate independent control passes12 assertions (Metalwindow,
+CocoaCVDisplayLink deliveryonce/noduplicate, fallbacktimeruntouched, hiddenreject).
+Candidate v1 GUI7c52260e1680b10f406375a8cef9b5c03ee0950732d99cbd59de1ae16d3ecf51.
+Its rawQuick full1 failed withSIGSEGV inQTest QObject::objectName for failedraw
+close-pointer focuscomparison. Focusedbaseline1 andcandidate1 bothpass4entries.
+A PRIVATE diagnostic Quick source usesQPointer, booleanfocusassertion andstrong
+identity/enabled/currentnotification checks, no relaxedexpectations. Sourcein
+perf-cocoa-candidate-1/focus-diagnostic/quick_test.cpp; builderlocal/build_focus_
+diagnostic.py; baseline/candidateexe linked SAME diagnosticobject to respective
+GUIlibrary. Fullbaseline1 then passesnotificationfocus butFAILSreopeningRestores_
+Layout workspaceListCollapsed afterreopen (87pass1fail). Fullcandidate1passes88,
+noQWARN. Failurecauses remainOPEN; don'tblamev1orclaimallflakinessfixed. No root
+quicktestedit yet. Own crashreport gui-quick-test-2026-10-30-045947.ips hasonly
+QTest reportstack causingSIGSEGV, notnativehelperstack. Noorphanruntimefromcrash
+was found; currentactiveownedruntimeisnormaltestdescendant. Otheruserruntime
+untouched. OldrawfullQuickfail preserved. RootQuickcapturesrawpointer unsafe
+onfailure; consider lifetime-safe diagnostic withoutweakeningfocus inlaterstep.
+
+CURRENTexec79938 runs local/perf_gui_run.py --name perf-cocoa-three-way-single-1
+--rounds7 --samples100 --probe probe-presented-v3.dylib --candidate-binary
+local/perf-cocoa-candidate-1/telar-gui. LOG out-dependencies/perf-cocoa-three-way-
+single-1.log; resultslocal/perf-cocoa-three-way-single-1/. FrozenBfixture epoch,
+Aoriginal/currentQt binaries+probev3, v1candidate7c. Orders rotateall6permutations
+for3variants; sameconfig/grids/case. identities.json freezesfilehashes. Eightof21
+jobs doneat04:07:43, allvalidnative. FirsttwoQt/candidatep50improvements~2/6ms,
+butcandidate stilllosesZig. NOT finalperformanceacceptance. NO BUILD/TEST/PROFILE
+orotherUIwhiletiming! Read/write lightweightnotesonly and updates<=60seconds.
+Needwaitactualexit0thenclassify, preserveallfailures/pairgeometry/controlrejects.
+local/classify_cocoa_matrix.py written butNOTexecuted/testedyet (don'truntests
+whiletiming). It usesstrictvalidate_result andcomparisonszig/qt,qt/candidate,
+zig/candidate; reportsallvalid/invalid/excluded, pairgridsandbackgrounddimensions.
+No optimization accepted untilpaired7andothermodes/perf/visual/nativechecks.
+
+PotentialNEXT hypothesis only, NOT implemented: v1 waitsoneordinaryinterval
+sincebeforeSynchronizing and maydefervalidper-paneinputgrace. ExistingFramePacer
+alreadyprovidesinputgrace16frames/30ms; consultitsactualwaitUntil decision rather
+thaninventanotherclockpolicy. CouldcoalesceanddeliverwithinWindowFramePacer
+existingwindowresource usingcompile-time deliverypolicy andboundedpanes, preserving
+CocoaQPAfallbacktimer andordinarydeferred-eventhandling. Thiscouldavoidv1atomic/
+childlookup/newQObject resource. Needsoraclebeforeimplementation andmeasurement
+againstpreviousv1/Qt, notassumedgain. Finishv1experimentfirst. Otherplatforms,
+nativeexit leaks, fullvisual12/23pixels, plugins/bars/etcremainopen. DO NOTfinal.
+
 ### Current native candidate control and fixture correction (04:01 UTC)
 
 HEAD still923d4b8d8, global goal ACTIVE/incomplete/unbudgeted. No publishing,

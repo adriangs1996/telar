@@ -7,7 +7,7 @@
 #include "qt/alpha_mask_vertex.hpp"
 #include "qt/chrome_glyph_images.hpp"
 #include "qt/chrome_text_scene.hpp"
-#include "qt/font_asset.hpp"
+#include "qt/font_collection.hpp"
 #include "qt/resident_fonts.hpp"
 #include "terminal/font_grid.hpp"
 #include "ui/bundled_fonts.hpp"
@@ -150,9 +150,9 @@ QByteArray sceneDigest(const QSGNode &root) {
 
 class TextCase {
 public:
-  TextCase(QQuickWindow &window, const std::shared_ptr<const FontAsset> &source, unsigned length)
-      : source_(source),
-        fonts_(ResidentFonts::shared(source)),
+  TextCase(QQuickWindow &window, const std::shared_ptr<const FontCollection> &collection, unsigned length)
+      : collection_(collection),
+        fonts_(ResidentFonts::shared(collection)),
         images_(ChromeGlyphImages<ResidentFonts>::shared(window, fonts_)) {
     constexpr std::string_view alphabet = "0123456789abcdef ABCDEF -> != ffi ";
     std::string text;
@@ -182,12 +182,12 @@ public:
     return paint_;
   }
 
-  [[nodiscard]] const std::shared_ptr<const FontAsset> &source() const noexcept {
-    return source_;
+  [[nodiscard]] const std::shared_ptr<const FontCollection> &collection() const noexcept {
+    return collection_;
   }
 
 private:
-  std::shared_ptr<const FontAsset> source_;
+  std::shared_ptr<const FontCollection> collection_;
   std::shared_ptr<ResidentFonts> fonts_;
   std::shared_ptr<ChromeGlyphImages<ResidentFonts>> images_;
   std::vector<fonts::ShapedGlyph> glyphs_;
@@ -209,7 +209,7 @@ public:
       ++paint_.revision;
     }
 
-    node_.reset(paintCellText(node_.release(), window_, paint_, text_.source()));
+    node_.reset(paintChromeText(node_.release(), window_, paint_, text_.collection()));
   }
 
   [[nodiscard]] QByteArray digest() const {
@@ -245,9 +245,9 @@ void measure(QQuickWindow &window, const TextCase &text, Operation operation, Op
   std::cout << QJsonDocument{row}.toJson(QJsonDocument::Compact).constData() << '\n';
 }
 
-void runCases(QQuickWindow &window, const std::shared_ptr<const FontAsset> &source, Options options) {
+void runCases(QQuickWindow &window, const std::shared_ptr<const FontCollection> &collection, Options options) {
   for (const auto length : text_lengths) {
-    const TextCase text{window, source, length};
+    const TextCase text{window, collection, length};
     for (const auto operation : {Operation::create, Operation::rebuild, Operation::repaint}) {
       measure(window, text, operation, options);
     }
@@ -262,7 +262,9 @@ int main(int argc, char **argv) {
   try {
     const auto options = parseOptions(application);
     static_cast<void>(ui::bundledFonts());
-    const auto source = ResidentFonts::resolveSource({}, {});
+    const auto collection = std::make_shared<const FontCollection>(FontCollection{
+        .primary = ResidentFonts::resolveSource({}, {}),
+    });
     QQuickWindow window;
     window.resize(window_side, window_side);
     std::exception_ptr failure;
@@ -274,7 +276,7 @@ int main(int argc, char **argv) {
 
       completed = true;
       try {
-        runCases(window, source, options);
+        runCases(window, collection, options);
       } catch (...) {
         failure = std::current_exception();
       }
