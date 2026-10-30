@@ -1,12 +1,11 @@
 #include "assertions.hpp"
+#include "erasure_allocator.hpp"
 #include "attachments/catalog.hpp"
 #include "attachments/sensitive_bytes.hpp"
 #include "attachments/types.hpp"
 #include "attachments/marker_screen.hpp"
 #include "attachments/marker_removal.hpp"
 #include "terminal/screen.hpp"
-#include "core/memory.hpp"
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -30,34 +29,7 @@ constexpr std::byte sensitive{0x5a};
 constexpr std::uint64_t fifth_id = AttachmentLimits::maximum_items + 1;
 constexpr std::uint64_t sixth_id = fifth_id + 1;
 
-struct CheckedMemory {
-  void *allocate(std::size_t size, std::size_t alignment) noexcept {
-    if (fail) {
-      return nullptr;
-    }
-
-    void *const result = upstream_.allocate(size, alignment);
-    if (result != nullptr) {
-      std::fill_n(static_cast<std::byte *>(result), size, std::byte{});
-      live += size;
-    }
-
-    return result;
-  }
-
-  void deallocate(void *pointer, std::size_t size, std::size_t alignment) noexcept {
-    const std::span bytes{static_cast<const std::byte *>(pointer), size};
-    dirty_release = dirty_release || std::ranges::any_of(bytes, [](std::byte value) { return value != std::byte{}; });
-    upstream_.deallocate(pointer, size, alignment);
-    live -= size;
-  }
-
-  std::size_t live = 0;
-  bool dirty_release = false;
-  bool fail = false;
-
-  SystemAllocator upstream_;
-};
+using CheckedMemory = telar::gui::test::ErasureAllocator;
 
 struct Delivery {
   struct SlotState {

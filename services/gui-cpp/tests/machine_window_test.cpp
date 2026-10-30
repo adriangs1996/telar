@@ -10,12 +10,13 @@
 #include "metrics_fixture.hpp"
 #include "qml_fixture.hpp"
 #include "qt/application.hpp"
+#include <QByteArray>
+#ifdef __APPLE__
 #include "qt/attachment_shelf.hpp"
 #include "qt/key_adapter.hpp"
 #include "application/pane_bottom_reservation.hpp"
 #include "platform/private_clipboard.hpp"
 #include <QBuffer>
-#include <QByteArray>
 #include <QImage>
 #include <QDebug>
 #include <QtCore/qlogging.h>
@@ -25,6 +26,7 @@
 #include <QtGui/qtestsupport_gui.h>
 #include <QIODevice>
 #include <span>
+#endif
 #include "qt/external_link_opener.hpp"
 #include "qt/list_model.hpp"
 #include "qt/machine_chrome_layout.hpp"
@@ -215,6 +217,7 @@ void sendFrame(WireRuntime &runtime) {
   runtime.send(PaneFrame{FrameBody{.pane_id = pane_id, .frame_id = 1, .cols = 1, .rows = 1, .scroll = {.total_rows = 1}, .text_metadata = TextMetadata{.row_flags = flags}, .spans = spans}});
 }
 
+#ifdef __APPLE__
 void sendAttachmentFrame(WireRuntime &runtime) {
   constexpr std::string_view marker = "[Image #1]";
   constexpr std::size_t columns = 12;
@@ -243,6 +246,8 @@ bool attachmentRendererMatchesRequest(const QQuickWindow &window) {
 
   return qEnvironmentVariable("QSG_RHI_BACKEND") != QStringLiteral("metal") || api == QSGRendererInterface::Metal;
 }
+
+#endif
 
 QVariantMap activityRow(Application &application, int row) {
   const auto *model = application.agents();

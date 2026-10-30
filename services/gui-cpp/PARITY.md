@@ -1598,6 +1598,20 @@ expanded session run's notification fixture failure reproduces with HEAD; its
 canonical protocol preparation is corrected and passes Release/ASan/UBSan.
 This is not full attachment acceptance.
 
+The subsequent [bounded Wayland transfer](measurements/clipboard-wayland.md)
+replaces external GUI-thread PNG materialization with an owned pipe on the image
+worker. Nine original-source Zig comparisons match bytes/error precedence under
+clean C++ core ASan/UBSan; six private Sway provider cases pass, including a total
+five-second stall with 501 GUI timer callbacks. Linux machine-window passes37;
+Mac scene37 and selected native clipboard5 pass after shared-worker factoring.
+All six native worker cases also exit cleanly with ASan/UBSan/leak detection in
+an owned D-Bus session; no-bus Qt initialization leaks344bytes in both receiver
+and no-worker control and remains recorded. An unequal source/PNG-cap negative
+fails before its storage-bound correction. Final Mac Quick88 passes after
+waiting for the exact delivered notification widget in the fixture; the earlier
+86/2 failure is retained. Paired attachment visuals, seat/selection lifecycle,
+XCB provider bounds, general native leaks and comparative performance stay open.
+
 ## Remaining functional work
 
 | Area | Missing or incomplete behavior |

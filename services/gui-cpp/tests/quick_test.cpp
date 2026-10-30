@@ -1209,8 +1209,16 @@ private:
 
     constexpr std::uint64_t focus_notice_request = 5;
     peer.showNotification({.request_id = focus_notice_request, .notification = {.level = telar::NotificationLevel::info, .duration_ms = telar::max_notification_duration_ms, .title = "Dismiss and type", .message = "Keep the terminal ready"}});
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->notifications().items().empty() && client_->notifications().items().front().title.view() == "Dismiss and type", runtime_wait_ms);
+    const auto focus_id = client_->notifications().items().front().id;
+    const auto focus_key = client_->notificationIdentity(focus_id);
     const auto closes = [&] {
-      return telar::gui::test::visualItems(*window_->contentItem(), QStringLiteral("notificationClose"));
+      auto items = telar::gui::test::visualItems(*window_->contentItem(), QStringLiteral("notificationClose"));
+      items.removeIf([&](const QQuickItem *item) {
+        return item->property("identity").toString() != focus_key || !item->isEnabled();
+      });
+
+      return items;
     };
     QTRY_COMPARE_WITH_TIMEOUT(closes().size(), 1, runtime_wait_ms);
     const auto trace_focus = qEnvironmentVariableIsSet("TELAR_GUI_TEST_FOCUS_TRACE");
@@ -1230,7 +1238,8 @@ private:
     auto release_click = qScopeGuard([&] {
       QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, point);
     });
-    QCOMPARE(client_->notifications().items().front().phase, telar::gui::NotificationItem::Phase::exiting);
+    QVERIFY(client_->notifications().find(focus_id) != nullptr);
+    QCOMPARE(client_->notifications().find(focus_id)->phase, telar::gui::NotificationItem::Phase::exiting);
     observation();
     QTRY_VERIFY2_WITH_TIMEOUT(window_->activeFocusItem() == terminalIn(window_->contentItem()), qPrintable(windowObservation(*window_)), runtime_wait_ms);
     QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, point);

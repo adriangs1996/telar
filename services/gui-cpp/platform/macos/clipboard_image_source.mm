@@ -1,4 +1,5 @@
 #include "platform/clipboard_image_source.hpp"
+#include "platform/clipboard_image_monitor.hpp"
 #include "application/dependencies.hpp"
 #include "attachments/catalog.hpp"
 #include "attachments/sensitive_bytes.hpp"
@@ -317,6 +318,18 @@ AttachmentCapture<ApplicationAllocator> ClipboardImageSource::read(ApplicationAl
 
     return {.request = request, .png = encode(memory, source.get()), .width = size.width, .height = size.height};
   }
+}
+
+struct ClipboardImageMonitor::Native {};
+
+ClipboardImageMonitor::ClipboardImageMonitor(ApplicationAllocator &memory)
+    : memory_(memory),
+      native_(nullptr, runtime::AllocationDeleter<Native, ApplicationAllocator>{memory}) {}
+
+ClipboardImageMonitor::~ClipboardImageMonitor() = default;
+
+ClipboardImageSource ClipboardImageMonitor::snapshot() {
+  return ClipboardImageSource::snapshot(memory_);
 }
 
 }

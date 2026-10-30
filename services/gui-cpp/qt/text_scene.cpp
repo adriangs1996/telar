@@ -12,9 +12,12 @@
 #include "scene_nodes.hpp"
 #include "terminal/font_grid.hpp"
 #include "terminal/screen.hpp"
+#ifdef Q_OS_MACOS
 #include "ui/workbench/optical_text.hpp"
+#endif
 #include <QBrush>
 #include <QFont>
+#include <QPointF>
 #include <QQuickWindow>
 #include <QRectF>
 #include <QSGNode>
@@ -39,7 +42,8 @@ TextScene::TextScene(QQuickWindow &window)
       layout_(memory_),
       row_(memory_) {}
 
-void TextScene::configure(const FontConfiguration &font, FontGrid grid, const std::shared_ptr<const FontCollection> &collection) {
+void TextScene::configure([[maybe_unused]] const FontConfiguration &font, FontGrid grid, const std::shared_ptr<const FontCollection> &collection) {
+#ifdef Q_OS_MACOS
   if (!font.thicken) {
     optical_.reset();
   } else if (!optical_) {
@@ -47,6 +51,7 @@ void TextScene::configure(const FontConfiguration &font, FontGrid grid, const st
   }
 
   strength_ = font.thicken_strength;
+#endif
   grid_ = grid;
   collection_ = collection;
   fonts_ = ResidentFonts::shared(collection_);
@@ -60,13 +65,16 @@ void TextScene::begin(const QRectF &bounds, qreal scale, const QRectF &clip, std
   clip_ = clip;
   scale_ = scale;
   next_chunk_ = nullptr;
+#ifdef Q_OS_MACOS
   if (optical_) {
     text_.reset();
     const auto overhang = bounds.height();
     const auto raster = bounds.adjusted(-overhang, -overhang, overhang, overhang);
     origin_ = raster.topLeft();
     optical_->begin(raster.size(), scale, strength_);
-  } else {
+  } else
+#endif
+  {
     ++revision_;
     text_ = previous ? std::move(previous) : std::make_unique<QSGNode>();
     next_chunk_ = text_->firstChild();
@@ -74,9 +82,11 @@ void TextScene::begin(const QRectF &bounds, qreal scale, const QRectF &clip, std
 }
 
 bool TextScene::prepare(std::span<const CellValue> cells, fonts::RowTextRequest request) {
+#ifdef Q_OS_MACOS
   if (optical_) {
     return false;
   }
+#endif
 
   try {
     row_.shape(*fonts_, cells, request);
@@ -180,10 +190,12 @@ void TextScene::appendInline(std::unique_ptr<QSGNode> node) {
 }
 
 void TextScene::add(const QString &text, const QFont &font, const QTextCharFormat &format, TextPlacement placement) {
+#ifdef Q_OS_MACOS
   if (optical_) {
     addQtText(text, font, format, placement);
     return;
   }
+#endif
 
   try {
     const auto bytes = text.toUtf8();
@@ -217,9 +229,12 @@ void TextScene::addQtText(const QString &text, const QFont &font, const QTextCha
   line.setPosition({0, placement.baseline - line.ascent()});
   layout.endLayout();
 
+#ifdef Q_OS_MACOS
   if (optical_) {
     optical_->add(layout, placement.origin - origin_, format.foreground().color());
-  } else {
+  } else
+#endif
+  {
     const auto previous = takeChunk();
     std::unique_ptr<QSGTextNode> node{window_.createTextNode()};
     node->setRenderType(QSGTextNode::NativeRendering);
@@ -230,6 +245,7 @@ void TextScene::addQtText(const QString &text, const QFont &font, const QTextCha
 
 QSGNode *TextScene::append(QSGNode &parent) {
   flushCells();
+#ifdef Q_OS_MACOS
   if (optical_) {
     std::unique_ptr<QSGNode> node{optical_->node(window_, origin_)};
     if (node) {
@@ -238,6 +254,7 @@ QSGNode *TextScene::append(QSGNode &parent) {
 
     return nullptr;
   }
+#endif
 
   while (next_chunk_ != nullptr) {
     const auto discarded = takeChunk();

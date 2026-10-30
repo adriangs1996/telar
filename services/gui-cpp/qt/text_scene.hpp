@@ -9,7 +9,10 @@
 #include "fonts/text_layout.hpp"
 #include "resident_fonts.hpp"
 #include "terminal/font_grid.hpp"
+#include <QtCore/qsystemdetection.h>
+#ifdef Q_OS_MACOS
 #include "ui/workbench/optical_text.hpp"
+#endif
 #include <QFont>
 #include <QPointF>
 #include <QQuickWindow>
@@ -78,12 +81,16 @@ private:
   QRectF bounds_;
   QRectF clip_;
   qreal scale_ = 1;
+#ifdef Q_OS_MACOS
   std::unique_ptr<workbench::OpticalText> optical_;
+#endif
   std::unique_ptr<QSGNode> text_;
   QSGNode *next_chunk_ = nullptr;
   std::uint64_t revision_ = 0;
+#ifdef Q_OS_MACOS
   QPointF origin_;
   std::uint8_t strength_ = FontConfiguration::maximum_thicken_strength;
+#endif
 };
 
 }

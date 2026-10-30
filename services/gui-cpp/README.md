@@ -2177,3 +2177,8 @@ invalid bounds and stroke thickness, all Braille masks, every block and box
 element, all seven curves, and raster padding and storage guards. It does not
 compare GPU rendering or the complete native font-metric pipeline. The adapted glyph algorithms retain their
 [MIT notice](terminal/glyphs/LICENSE), installed with the native executable.
+
+The [bounded Wayland image transfer](measurements/clipboard-wayland.md) now keeps
+external PNG reception on the joined worker with a single five-second deadline.
+Original-source pipe comparisons and private compositor cases pass; full native
+sanitizer, visual and comparative performance acceptance remains open.

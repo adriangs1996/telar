@@ -100,7 +100,7 @@ public:
     created.mask = mask;
     created.left = bitmap.left;
     created.top = bitmap.top;
-    const auto inserted = images_.insert(key, std::move(created));
+    const auto inserted = images_.emplace(key, std::move(created));
     mask_bytes_ += mask_bytes;
 
     return inserted.value();

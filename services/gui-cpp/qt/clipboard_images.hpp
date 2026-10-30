@@ -6,6 +6,7 @@
 #include "attachments/types.hpp"
 #include "machine_client_key.hpp"
 #include "platform/clipboard_image_source.hpp"
+#include "platform/clipboard_image_monitor.hpp"
 #include <QFutureWatcher>
 #include <QObject>
 #include <QString>
@@ -56,6 +57,7 @@ private:
   void startQueued();
 
   ApplicationAllocator &memory_;
+  platform::ClipboardImageMonitor clipboard_;
   QFutureWatcher<ClipboardImageResult> task_;
   std::optional<ClipboardImageJob> running_;
   std::optional<ClipboardImageJob> queued_;

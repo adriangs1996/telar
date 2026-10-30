@@ -1,5 +1,89 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## Wayland checkpoint ready; continue paired visual work (15:36 UTC)
+
+Final archive+offline verifier --check-current-source PASS;442artifacts, program
+sources only (exclude unrelated desktop wallpapers/old measurements), source
+count recorded in measurements/clipboard-wayland-validation.json. Historical
+clipboard-images verifierPASS, historical manifest unmodified. Local checkpoint
+commit next; no publish/merge. Current only unrelated personal-frame-delivery.md
+must stay out. No host GUI/build currentlyactive. NativeQuick final88PASS,
+notification directed4PASS, broadfixturelintPASS; all results below verified.
+NEXT continue nativepaired shelf/modalactualGui capture, not finalization.
+
+## Final clipboard Wayland evidence being archived (15:34 UTC)
+
+Supersedes active sessions below: final Mac Quick native2 PASS88/noQWARN orQFATAL,
+actualbinarySHA/exit in clipboard-final-quick-native-2.json. First fullnative1
+ACTUALexit2,86PASS/2FAIL: notification fixture counted old retired close widget
+before next notice delivered; that left maxduration notice for following test.
+Fixture now waits actual"Dismiss and type" identity+enabledclose and checks that
+identity's exiting phase. Directed4PASS, finalfull88PASS. Product notification
+behavior/deadlines unchanged. Before source retainedlocal/clipboard-notification-before.
+Mac finalfixture broadlint pending inspect45489 (workerthreeunitslintalreadyPASS).
+Linux final pipe oracle4 and nativeASANdbus4 PASS with immutablebinarychecks and
+explicitenvironmentreceipt detectleaks1/UBSANhalt1/LSANnull. ASAN3core Mac2corePASS.
+Native no-bus baseline344bytes preserved, ownDBus controlclean, scopedworker6clean.
+No source C++ build/test active except possiblyfinishedsessions needpoll before
+newwork. Archive/verifier nowimplemented measurements/clipboard-wayland/{archive_wayland.py,verify_wayland.py};
+NOTRUNYET. Finalmanifest notcreatedyet. Finish archive/verify thenlocalcheckpoint
+commit (doNOTpublish), thenCONTINUE nativepaired Zig shelf/modalcapture. Existing
+capture_driver inlocal/chrome-tracking-single-paint-final-1 uses actual owned
+runtime+GUI andafter-presentationMetalreadback. Need adaptforprivatepasteboard
+swizzle+controlledfakeclaudeagent andidenticalterminalbefore claimingpixels.
+Do NOT end atcheckpoint. Otherglobalgates remainOPEN. VMstillrunning/needed.
+
+## Linux bounded Wayland transfer validated; continue visual parity (15:28 UTC)
+
+Historical clipboard checkpoint af25e3ec9d remains unchanged; do not rewrite its
+manifest. Current Linux/worker changes are UNCOMMITTED and report/archive work
+continues. Same owned VM PID7158/SSH55984; Qt6.8.2/Clang23.1.5. Release full GUI
+and machine-window build PASS, full Linux machine-window37PASS/no skips. Mac
+shared-worker build PASS; scene37 and selected native clipboard5PASS. New final
+Mac Quick88 native run ACTIVE session73649, labelclipboard-final-quick-native-1;
+wrapper exit0 alone is insufficient: inspect JSON realexit and Totals/QWARN.
+Final Mac build79308 ACTUAL0. No other host build currently active.
+
+New concrete clipboard monitor uses exported generated Wayland protocol wrappers
+with separate RAII registry/device/offer objects; hidden Qt methods cannot link.
+Only owned pipe FD crosses to worker. Total5second deadline never restarts,
+EOF required, separate source/PNG caps, zeroing; source storage now respects the
+smaller cap too. Negative reverting only that cap fails resource assertion.
+Linux ASAN core3 and Mac core2 pass; final9-case original-source Zig pipe oracle
+PASS in clipboard-pipe-differential-4, actual C++ ASAN exit0 each. Earlier
+-differential-3 may span a fixture-only binary rebuild; do NOT use it as final.
+Final scripts now verify unchanged binary SHA over each qualification.
+
+Private Sway provider driver6casesPASS Release and ASAN; final ASAN directory
+/home/parity/clipboard-wayland-asan-dbus-4 uses standard detect_leaks1/UBSANhalt1,
+noLSAN/no local suppressions. Real external PNG+all24previewbytes exact; empty,
+invalid,pixels,32MiB+1,provider8s stall all correct with GUI heartbeats.
+WITHOUT D-Bus both receiver and samebinary no-worker control fail344bytes/4allocs.
+Slow-unwind traces resolve QGenericUnixServices ctor/QDBusPendingCallWatcher;
+Qt6.8.2 original source confirms unparented watcher deleted in finished callback.
+WITH owned dbus-run-session control AND six receiver cases exitclean. No product
+workaround/suppression. Retain no-bus failures, globalnativeleaks stillOPEN.
+
+Final Linux lint1 sixunits passed except new CLI probe issues; probe corrections
+followed by lint3 PASS with unchanged profile. Mac threeaffectedQtunitsPASS;
+actualNeovim workerheader clangd delivered empty. Final source delta19 is synced;
+latest C++ probe fromdelta18 builtASAN5 actual0; no C++ edits after that.
+CMake now single gui-clipboard-images staticlib, no duplicateMOC, probe/provider
+skip irrelevant QML import scanning; actual production library still tested.
+No need for extra private-header search; matching QtPrivate dependency retained.
+
+NEXT finish receipts/archive/report (clipboard-wayland.md, PARITY.md already
+updated partly), inspect Quick88 and follow fullmachinewindow if warranted,
+sourcefreeze/localcommit, then CONTINUE paired native original Zig shelf/modal
+pixels and physical ownership, selection/seat lifecycle, full-clientperformance.
+Do not end at checkpoint. VM remainsneeded for Linux native qualification; keys
+ONLY ignored VMdir, never archiveidentity/known_hosts/disks. Standalone Sway9469
+from earlier exploration stillowned/running; each final driver starts and stops
+its OWN compositor/keyboard/provider. Stop only ownedVM/removeidentity when
+qualificationends. No user runtime/checkouts/publish/merge/agents touched.
+Spanishupdates<=60sec. Goal API blocked/no resume method; explicit user resume
+authorizes continued work. Unrelated personal-frame-delivery.md stays separate.
+
 ## Clipboard checkpoint verified; continue with Wayland (14:05 UTC)
 
 All clipboard source changes below are now implemented and verified in the

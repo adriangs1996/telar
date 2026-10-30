@@ -1,4 +1,6 @@
 #include "platform/clipboard_image_source.hpp"
+#include "platform/clipboard_image_pipe.hpp"
+#include "platform/file_descriptor.hpp"
 #include "application/dependencies.hpp"
 #include "attachments/catalog.hpp"
 #include "attachments/secure_erase.hpp"
@@ -16,6 +18,7 @@
 #include <QMimeData>
 #include <QSize>
 #include <QString>
+#include <QtCore/qstringliteral.h>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -28,6 +31,7 @@ namespace {
 struct Transfer {
   ApplicationAllocator &memory;
   SensitiveBytes<ApplicationAllocator> png;
+  runtime::FileDescriptor pipe;
 };
 
 void erase(QByteArray &bytes) noexcept {
@@ -47,10 +51,9 @@ ClipboardImageSource ClipboardImageSource::snapshot(ApplicationAllocator &memory
     throw ClipboardImageFailure{ClipboardImageError::no_image};
   }
 
-  // Qt owns selection negotiation on its GUI thread. Keep the encoded transfer;
-  // metadata validation and all decoding remain on the media worker.
+  auto transfer = makeOwned<Transfer>(memory, Transfer{.memory = memory, .png = SensitiveBytes{memory}, .pipe = runtime::FileDescriptor{}});
+
   QByteArray encoded = mime->data(QStringLiteral("image/png"));
-  auto transfer = makeOwned<Transfer>(memory, Transfer{.memory = memory, .png = SensitiveBytes{memory}});
   try {
     if (encoded.isEmpty()) {
       throw ClipboardImageFailure{ClipboardImageError::no_image};
@@ -67,6 +70,12 @@ ClipboardImageSource ClipboardImageSource::snapshot(ApplicationAllocator &memory
   }
 
   erase(encoded);
+
+  return ClipboardImageSource{transfer.release(), 0};
+}
+
+ClipboardImageSource ClipboardImageSource::fromPipe(ApplicationAllocator &memory, runtime::FileDescriptor descriptor) {
+  auto transfer = makeOwned<Transfer>(memory, Transfer{.memory = memory, .png = SensitiveBytes{memory}, .pipe = std::move(descriptor)});
 
   return ClipboardImageSource{transfer.release(), 0};
 }
@@ -103,14 +112,21 @@ AttachmentCapture<ApplicationAllocator> ClipboardImageSource::read(ApplicationAl
   }
 
   const auto &transfer = *static_cast<const Transfer *>(native_);
-  const QByteArrayView bytes{transfer.png.unsignedBytes()};
+  SensitiveBytes png{memory};
+  if (transfer.pipe) {
+    png = ClipboardImagePipe::read(memory, transfer.pipe.get());
+  } else {
+    png.append(transfer.png.view(), AttachmentLimits::maximum_png_bytes);
+  }
+
+  const QByteArrayView bytes{png.unsignedBytes()};
   QByteArray encoded = QByteArray::fromRawData(bytes.data(), bytes.size());
   QBuffer buffer{&encoded};
   if (!buffer.open(QIODevice::ReadOnly)) {
     throw ClipboardImageFailure{ClipboardImageError::read_failed};
   }
 
-  QImageReader reader{&buffer, "PNG"};
+  const QImageReader reader{&buffer, "PNG"};
   const auto size = reader.size();
   if (!size.isValid() || size.isEmpty()) {
     throw ClipboardImageFailure{ClipboardImageError::invalid_image};
@@ -121,8 +137,6 @@ AttachmentCapture<ApplicationAllocator> ClipboardImageSource::read(ApplicationAl
   }
 
   request.capture.target.validate();
-  SensitiveBytes png{memory};
-  png.append(transfer.png.view(), AttachmentLimits::maximum_png_bytes);
 
   return {.request = request, .png = std::move(png), .width = static_cast<std::uint32_t>(size.width()), .height = static_cast<std::uint32_t>(size.height())};
 }

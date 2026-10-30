@@ -3,6 +3,7 @@
 #include "application/dependencies.hpp"
 #include "attachments/catalog.hpp"
 #include "attachments/types.hpp"
+#include "platform/file_descriptor.hpp"
 #include <cstdint>
 #include <exception>
 
@@ -37,7 +38,6 @@ private:
 // The source retains native clipboard ownership without retaining a window.
 class ClipboardImageSource {
 public:
-  [[nodiscard]] static ClipboardImageSource snapshot(ApplicationAllocator &memory);
 #ifdef __APPLE__
   [[nodiscard]] static ClipboardImageSource retainPasteboard(void *pasteboard);
 #endif
@@ -50,6 +50,11 @@ public:
   [[nodiscard]] AttachmentCapture<ApplicationAllocator> read(ApplicationAllocator &memory, ClipboardCaptureRequest request) const;
 
 private:
+  friend class ClipboardImageMonitor;
+  [[nodiscard]] static ClipboardImageSource snapshot(ApplicationAllocator &memory);
+#ifndef __APPLE__
+  [[nodiscard]] static ClipboardImageSource fromPipe(ApplicationAllocator &memory, runtime::FileDescriptor descriptor);
+#endif
   explicit ClipboardImageSource(void *native, std::int64_t revision) noexcept;
   void clear() noexcept;
 

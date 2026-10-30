@@ -20,7 +20,8 @@ static_assert(runtime::ConcurrentAllocator<ApplicationAllocator>);
 
 ClipboardImages::ClipboardImages(ApplicationAllocator &memory, QObject *parent)
     : QObject(parent),
-      memory_(memory) {
+      memory_(memory),
+      clipboard_(memory) {
   connect(this, &ClipboardImages::queued, this, &ClipboardImages::startQueued, Qt::QueuedConnection);
   connect(&task_, &QFutureWatcher<ClipboardImageResult>::finished, this, &ClipboardImages::complete);
 }
@@ -79,7 +80,7 @@ void ClipboardImages::start(ClipboardImageJob job) {
   busy_ = true;
   running_ = job;
   try {
-    auto source = platform::ClipboardImageSource::snapshot(memory_);
+    auto source = clipboard_.snapshot();
     task_.setFuture(QtConcurrent::run([memory = &memory_, job, source = std::move(source)] mutable {
       return prepare(*memory, job, std::move(source));
     }));
