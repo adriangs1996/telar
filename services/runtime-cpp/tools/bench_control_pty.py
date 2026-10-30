@@ -15,11 +15,18 @@ import tempfile
 import time
 
 
-def process_snapshot():
-    snapshot = subprocess.check_output(['ps', '-Ao', 'comm,%cpu'], text=True)
+def build_processes(snapshot):
+    result = []
     for line in snapshot.splitlines()[1:]:
         if Path(line.rsplit(None, 1)[0]).name in {'clang', 'clang++', 'zig', 'ninja', 'ld', 'cc1', 'cc1plus'}:
-            raise RuntimeError('Concurrent build invalidates measurement: ' + line)
+            result.append(line)
+    return result
+
+
+def process_snapshot(reject_builds=True):
+    snapshot = subprocess.check_output(['ps', '-Ao', 'comm,%cpu'], text=True)
+    if reject_builds and (compilers := build_processes(snapshot)):
+        raise RuntimeError('Concurrent build invalidates measurement: ' + repr(compilers))
     return snapshot
 
 
@@ -108,12 +115,17 @@ def main():
     before = process_snapshot()
     started = datetime.datetime.now(datetime.timezone.utc).isoformat()
     pairs = []
+    observations = []
     for index in range(args.pairs):
         order = ['native', 'baseline'] if index % 2 == 0 else ['baseline', 'native']
         pair = {'order': order, 'load_before': os.getloadavg()}
         for name in order:
+            observations.append({'pair': index + 1, 'variant': name, 'position': 'before',
+                                 'builds': build_processes(process_snapshot(False))})
             probe = args.baseline_probe if name == 'baseline' and args.baseline_probe else args.probe
             pair[name] = run(getattr(args, name).resolve(), probe.resolve(), allow_loss=name == 'baseline' and args.allow_baseline_loss)
+            observations.append({'pair': index + 1, 'variant': name, 'position': 'after',
+                                 'builds': build_processes(process_snapshot(False))})
         pairs.append(pair)
         print('pair', index + 1, {name: pair[name]['saturation'] for name in order}, flush=True)
     summary = {}
@@ -136,12 +148,19 @@ def main():
                                       'improvement' if interval[1] < .95 else
                                       'equivalent_within_5_percent' if interval[0] >= .95 and interval[1] <= 1.05 else
                                       'inconclusive')
+    after = process_snapshot(False)
+    invalid = bool(build_processes(after)) or any(item['builds'] for item in observations)
+    if invalid:
+        for case in summary.values():
+            case['status'] = 'invalid_concurrent_build'
     report = {'started_at': started, 'finished_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
               'platform': platform.platform(), 'baseline_loss_explicitly_allowed': args.allow_baseline_loss,
               'native_saturation_requires_all_replies': True, 'warmup_minimum_ns_per_variant_per_case': 150_000_000, 'architecture': platform.machine(), 'pairs': pairs, 'summary': summary,
               'hashes': {str(path.resolve()): hashlib.sha256(path.read_bytes()).hexdigest()
                          for path in [args.native, args.baseline, args.probe, *( [args.baseline_probe] if args.baseline_probe else []), Path(__file__)]},
-              'processes_before': before, 'processes_after': process_snapshot(),
+              'processes_before': before, 'processes_after': after,
+              'valid_timing': not invalid, 'build_observations': observations,
+              'observation_scope': 'Snapshots before and after every owned runtime, outside its measured workload. Short builds between snapshots may escape observation.',
               'scope': 'Actual PTY child write through runtime to PTY child read. Baseline is original Telar C++ runtime, not Ghostty application. Burst latency is per 32-response round trip. Byte writes may coalesce in kernel.',
               'limits': ['No per-query allocations/copy counts; runtime maxrss covers its full lifetime including initialization.',
                          'Parent performs ReadPane every 2ms to drain/ack UI frames; this is part of both workloads.',
@@ -149,6 +168,8 @@ def main():
                          'Latency workloads use final-byte markers; saturation and recovery check complete response bytes. Other byte-exact semantics are checked separately.',
                          'CPU/RSS accounting from wait4 covers only the owned runtime process, excluding probe, pane child and other sessions.']}
     args.output.write_text(json.dumps(report, indent=2) + '\n')
+    if invalid:
+        raise RuntimeError('Concurrent build invalidates timing; raw samples preserved at ' + str(args.output))
 
 
 if __name__ == '__main__':
