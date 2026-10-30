@@ -57,6 +57,7 @@ def main():
     parser.add_argument('--iterations', type=int, default=100)
     parser.add_argument('--warmup', type=int, default=100)
     parser.add_argument('--case', action='append', choices=WORKLOADS)
+    parser.add_argument('--copy-boundaries', action='store_true')
     args = parser.parse_args()
     if not 1 <= args.iterations <= 100000 or not 0 <= args.warmup <= 100000:
         parser.error('Iteration counts exceed the accounting probe bounds')
@@ -75,8 +76,10 @@ def main():
                 command = [str(probe), str(payload), str(args.iterations), str(fragment), str(setup), str(warmup)]
                 run = subprocess.run(command, check=True, capture_output=True, text=True, timeout=60)
                 result = json.loads(run.stdout)
-                if result['version'] != 1 or len(result['phases']) != 5:
+                if result['version'] != (2 if args.copy_boundaries else 1) or len(result['phases']) != 5:
                     raise RuntimeError('Unexpected accounting ABI')
+                if args.copy_boundaries and any(len(phase['copy_boundaries']) != 5 for phase in result['phases']):
+                    raise RuntimeError('Unexpected copy-boundary layout')
                 if result['phases'][-1]['live_end'] != 0:
                     raise RuntimeError('Owned allocation lifetime was not balanced')
                 result['warmup_iterations'] = warmup
@@ -104,11 +107,18 @@ def main():
               'verification_library_sha256': hashlib.sha256(args.verify_library.read_bytes()).hexdigest() if args.verify_library else None,
               'source_sha256': {p: hashlib.sha256((root / p).read_bytes()).hexdigest() for p in sources},
               'phases': ['setup', 'seed', 'warmup', 'workload', 'destroy'],
-              'scope': 'Native component fixture; allocator requests reaching the supplied Memory, and explicit queue-to-sink copies. No latency claim.',
+              'copy_boundary_order': ['parser_retention', 'parser_growth', 'reply_materialization',
+                                      'reply_growth', 'queue_publication'] if args.copy_boundaries else [],
+              'scope': 'Native component fixture; allocator requests reaching the supplied Memory, explicit queue-to-sink copies'
+                       + (' and selected parser/reply/queue boundaries' if args.copy_boundaries else '') + '. No latency claim.',
               'limits': ['Direct VT page mappings bypass this allocator; these peaks are not RSS.',
                          'Input and reporting allocations outside supplied Memory are excluded.',
-                         'Requested bytes are not bytes copied; parser/reply/internal VT copies are not counted.',
-                         'Component fixture mirrors control_component_probe.cpp; the reference application is not yet instrumented.',
+                         'Requested bytes are not bytes copied; internal VT copies are not counted.'
+                         + ('' if args.copy_boundaries else ' Parser/reply copies are not counted.'),
+                         'Component fixture mirrors control_component_probe.cpp; the application uses a separate adapter and report.',
+                         *(['Copy counters cover the specified parser/reply/queue boundaries only; parser retention includes synthesized framing bytes.',
+                            'Vector growth counts logical bytes preserved between buffers, not physical cache/memory traffic.',
+                            'Other formatter buffers, VT, graphics scanners, codecs and general process copies remain outside this instrumentation.'] if args.copy_boundaries else []),
                          'Warmup is a fixed iteration count for accounting, not the timing harness150ms warmup.'],
               'results': results}
     args.output.write_text(json.dumps(report, indent=2) + '\n')

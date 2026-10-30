@@ -407,3 +407,24 @@ resumption behind a full response queue through real PaneService and private
 PTYs. The runtime owner cancels the failed generation before flushing its new
 responses; allocator ownership balances and a healthy pane remains usable.
 The final sticky error check is not a per-operation rollback mechanism.
+
+### Allocator and copy-boundary measurements
+
+[Application allocator census](measurements/control-queries/application-accounting-review.md)
+now covers the exact frozen application revision/version in all35flows, cold
+and after retained-fixture warmup. All70outputs match its unmodified reference
+and accepted native70, with zero outstanding counted ownership after destruction.
+These interface-request counts are logical sizes, not physical capacity or RSS.
+
+[Copy-boundary evidence](measurements/control-queries/copy-boundaries-review.md)
+adds selected parser/reply/queue/image boundaries. All70native Release and70
+ASan/UBSan runs agree exactly, and all70application outputs match. Explicit
+copies, logical inline-message transfers and unknown allocator remap work remain
+separate; these are not complete all-process copy totals or timing claims.
+
+[Rejected experiments75–77](measurements/control-queries/scanner-and-entry-review.md)
+retain complete sources, three architecture listings, real state/reply oracles
+and seven-pair35-flow measurements. Styled batching and joint control scanning
+improve their targets but consistently lose on other query flows. All are
+rejected; productive query code remains at accepted70. The application throughput
+gaps and Qt intermediate clipboard materialization remain acceptance blockers.

@@ -20,6 +20,13 @@ PHASE_FIELDS = [
     'free_calls', 'free_bytes', 'live_begin', 'live_end', 'peak_live',
 ]
 
+COPY_FIELDS = [
+    'parser_payload_retention_bytes', 'reply_materialization_bytes',
+    'image_payload_copy_bytes', 'image_pixel_copy_bytes',
+    'inline_push_payload_bytes', 'inline_pop_payload_bytes',
+    'remap_moved_preserved_range_bytes',
+]
+
 
 class Phase(ctypes.Structure):
     _fields_ = [(name, ctypes.c_uint64) for name in PHASE_FIELDS]
@@ -33,6 +40,16 @@ class Report(ctypes.Structure):
     _fields_ = [('version', ctypes.c_size_t), ('phase_count', ctypes.c_size_t),
                ('sink_copy_bytes', ctypes.c_uint64), ('output_fnv1a', ctypes.c_uint64),
                ('phases', Phase * 5)]
+
+
+class CopyPhase(Phase):
+    _fields_ = [(name, ctypes.c_uint64) for name in COPY_FIELDS]
+
+
+class CopyReport(ctypes.Structure):
+    _fields_ = [('version', ctypes.c_size_t), ('phase_count', ctypes.c_size_t),
+               ('sink_copy_bytes', ctypes.c_uint64), ('output_fnv1a', ctypes.c_uint64),
+               ('phases', CopyPhase * 5)]
 
 
 def verification_worker(connection, library):
@@ -55,20 +72,25 @@ def main():
     parser.add_argument('--iterations', type=int, default=100)
     parser.add_argument('--warmup', type=int, default=100)
     parser.add_argument('--case', action='append', choices=WORKLOADS)
+    parser.add_argument('--copy-boundaries', action='store_true')
     args = parser.parse_args()
     if not 1 <= args.iterations <= 100000 or not 0 <= args.warmup <= 100000:
         parser.error('Accounting iterations exceed the adapter limits')
     library = ctypes.CDLL(str(args.application.resolve()))
+    phase_type = CopyPhase if args.copy_boundaries else Phase
+    report_type = CopyReport if args.copy_boundaries else Report
+    phase_fields = PHASE_FIELDS + (COPY_FIELDS if args.copy_boundaries else [])
+    expected_version = 2 if args.copy_boundaries else 1
     layout = library.query_probe_accounting_layout
     layout.argtypes = [ctypes.POINTER(ctypes.c_size_t), ctypes.c_size_t]
     layout.restype = ctypes.c_size_t
     actual = (ctypes.c_size_t * 6)()
-    expected_layout = [ctypes.sizeof(Options), ctypes.sizeof(Report), ctypes.sizeof(Phase),
-                       Report.phases.offset, Report.output_fnv1a.offset, Phase.sink_copy_bytes.offset]
+    expected_layout = [ctypes.sizeof(Options), ctypes.sizeof(report_type), ctypes.sizeof(phase_type),
+                       report_type.phases.offset, report_type.output_fnv1a.offset, phase_type.sink_copy_bytes.offset]
     if layout(actual, len(actual)) != len(actual) or list(actual) != expected_layout:
         raise RuntimeError('Accounting FFI layout differs from compiled application')
     measure = library.query_probe_accounting
-    measure.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(Options), ctypes.POINTER(Report)]
+    measure.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(Options), ctypes.POINTER(report_type)]
     measure.restype = ctypes.c_bool
     native = json.loads(args.native_accounting.read_text())
     if native['iterations'] != args.iterations:
@@ -95,16 +117,16 @@ def main():
                 native_case = native['results'][name]['runs'][label]
                 if native_case['warmup_iterations'] != warmup:
                     raise RuntimeError('Retained-state warmup differs: ' + name)
-                output = Report()
+                output = report_type()
                 options = Options(args.iterations, fragment, setup, warmup)
                 success = measure(data, len(data), ctypes.byref(options), ctypes.byref(output))
-                phases = [{field: getattr(phase, field) for field in PHASE_FIELDS} for phase in output.phases]
+                phases = [{field: getattr(phase, field) for field in phase_fields} for phase in output.phases]
                 result = {'completed': bool(success), 'version': output.version,
                           'phase_count': output.phase_count, 'phases': phases,
                           'sink_copy_bytes': output.sink_copy_bytes, 'output_fnv1a': output.output_fnv1a,
                           'warmup_iterations': warmup}
                 cases[label] = result
-                if not success or output.version != 1 or output.phase_count != 5 or phases[-1]['live_end']:
+                if not success or output.version != expected_version or output.phase_count != 5 or phases[-1]['live_end']:
                     raise RuntimeError(f'Application accounting failed or retained ownership: {name}, {label}')
                 if any(phase['alloc_calls'] != phase['alloc_successes'] for phase in phases):
                     raise RuntimeError(f'Application allocation failure invalidates this row: {name}, {label}')
@@ -140,16 +162,25 @@ def main():
               'architecture': platform.machine(), 'iterations': args.iterations,
               'phases': ['setup', 'seed', 'warmup', 'workload', 'destroy'],
               'accounting_ffi_layout': expected_layout, 'completed': failure is None, 'failure': failure,
+              'additional_copy_boundary_fields': COPY_FIELDS if args.copy_boundaries else [],
               'verification_in_separate_spawned_process': True,
-              'scope': 'Allocator interface requests on the synchronous fixture thread; explicit queue-to-sink copies. No timing claim.',
+              'scope': 'Allocator interface requests on the synchronous fixture thread; explicit queue-to-sink copies'
+                       + (' and selected parser/message/image boundaries' if args.copy_boundaries else '') + '. No timing claim.',
               'limits': [
                   'Cold uses a fresh fixture and matches the benchmark invocation state; warm retains the same terminal and sink after fixed-iteration warmup.',
                   'Timing warmup instead invokes fresh fixtures; retained-state rows do not represent those timing intervals.',
                   'Direct VT page mappings, other threads, global IoThreaded and allocators outside the supplied allocator are excluded.',
                   'Live bytes are requested logical lengths, not physical malloc capacity or RSS.',
                   'Resize/remap sizes are complete requested lengths; failed resize/remap may be normal fallback, not allocation failure.',
-                  'Requested bytes cannot be added together as copied bytes; internal message, realloc and ArrayList growth copies are excluded.',
+                  'Requested bytes cannot be added together as copied bytes; realloc and ArrayList growth copies are excluded.'
+                  + ('' if args.copy_boundaries else ' Internal message copies are excluded.'),
                   'Native allocator requests have a different operation interface; counts are reported separately without an aggregate speed claim.',
+                  *([
+                      'Copy-boundary mode counts specified OSC/DCS/APC payload retention, MessageData materialization, LoadingImage input and PNG-pixel copies only.',
+                      'Inline push/pop fields count logical active-payload transfers, not physical ABI copy instructions; they are separate from explicit copies.',
+                      'Remap moved preserved range is a possible internal allocator copy, not an observed memcpy; never add it to explicit copy counts.',
+                      'ArrayList/Writer capacity growth, formatted literal copies, VT internals, codecs and other buffers remain outside these boundary counters.',
+                  ] if args.copy_boundaries else []),
               ],
               'hashes': {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in
                          [args.application, args.verify_library, args.native_accounting, Path(__file__)]},
