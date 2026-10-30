@@ -134,7 +134,12 @@ QQuickItem *historyCardHint(const QQuickWindow &window, int selected, const QStr
     }
 
     for (auto *hint : test::visualItems(*row, QStringLiteral("historyHint"))) {
-      if (hint->isVisible() && hint->property("label").toMap().value(QStringLiteral("action")).toString() == action) {
+      const auto *card = hint->parentItem();
+      while (card != nullptr && card->objectName() != QStringLiteral("historyRow")) {
+        card = card->parentItem();
+      }
+
+      if (card != nullptr && card->property("open").toReal() == 1 && hint->isVisible() && hint->property("label").toMap().value(QStringLiteral("action")).toString() == action) {
         return hint;
       }
     }
@@ -2080,11 +2085,7 @@ return {api_version=2, client={keybindings={
   }
 
   Q_SLOT void historyCardActionsSurviveSelectionChanges() {
-    const std::array entries{
-        telar::ImportHistoryEntry{.started_at_ms = 200, .command = "echo GUI_HISTORY_RETAINED_ONE"},
-        telar::ImportHistoryEntry{.started_at_ms = 201, .command = "echo GUI_HISTORY_RETAINED_TWO"},
-    };
-    importHistory(entries, "gui-history-retained");
+    importRetainedHistory();
     const auto restore = qScopeGuard([this] { client_->execute(Application::Action::cancel); });
     client_->execute(Application::Action::history);
     client_->searchHistory(QStringLiteral("GUI_HISTORY_RETAINED"));
@@ -2120,6 +2121,9 @@ return {api_version=2, client={keybindings={
     QTest::mouseMove(window_, release_position);
     QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, release_position);
     held = false;
+    // The zero-open frame retires card targets and consumes this old release.
+    QCOMPARE(clipboard->text(), sentinel);
+    QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, release_position);
     QCOMPARE(clipboard->text(), QStringLiteral("echo GUI_HISTORY_RETAINED_ONE"));
     QCOMPARE(client_->dialog(), QStringLiteral("history"));
     previous = selected_copy();
@@ -4119,6 +4123,14 @@ return {api_version=2, client={keybindings={
     }
 
     importHistory(entries, "gui-browser-page");
+  }
+
+  void importRetainedHistory() {
+    const std::array entries{
+        telar::ImportHistoryEntry{.started_at_ms = 200, .command = "echo GUI_HISTORY_RETAINED_ONE"},
+        telar::ImportHistoryEntry{.started_at_ms = 201, .command = "echo GUI_HISTORY_RETAINED_TWO"},
+    };
+    importHistory(entries, "gui-history-retained");
   }
 
   void importHistory(std::span<const telar::ImportHistoryEntry> entries, std::string_view source) {

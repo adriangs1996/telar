@@ -4,6 +4,21 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [History semantic hover and selection motion evidence](measurements/history-semantic-hover-motion.md)
+replaces scoped row-admission gates with presented row/card identities and the
+original140ms transition. Original-source hover552/33926 and motion530/32819
+sequence/sample comparisons pass in Mac/Linux sanitizers. Six guarded Cocoa pairs
+match567296 or744576 result pixels, including consumed old release and fresh-click
+recovery. Shared-clock six-group checks pass72 assertions on both systems; Linux
+sanitizer components exit0. Final native Release passes five cases and exits0 on
+both systems. Native Mac ASan passes five cases but exits1 with549106bytes/2805
+leaked allocations; Linux native ASan passes five but exits1 with the separately
+isolated Qt6.8.2 composition leak147982/148. Broad lint and real editor diagnostics
+pass. Cocoa and Carbon clipboard routes are now independently checked and the
+real general board change counter is guarded; earlier Cocoa-only isolation was
+unqualified for Qt Carbon writes. Footer/filter hover, intermediate animation hit
+geometry, other themes/platforms, leaks and full-client performance remain open.
+
 The [self-owned Wayland clipboard correction](measurements/clipboard-wayland-owned.md)
 rejects Qt's stale local PNG after registry retirement, including fresh monitor
 construction against a surviving retired Qt seat. A dedicated single capture

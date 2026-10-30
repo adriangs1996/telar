@@ -1,4 +1,5 @@
 #include "application.hpp"
+#include "input/history_hover.hpp"
 #include "application/dependencies.hpp"
 #include "application/pane_layout.hpp"
 #include "application/records.hpp"
@@ -324,6 +325,7 @@ void Application::setWindow(QQuickWindow &window) {
   presented_history_.reset();
   presented_history_surface_ = {};
   presented_history_actions_ = {};
+  presented_history_hover_.reset();
   pointer_dispatcher_.presentHistoryActions({});
   key_bindings_.setWindow(window);
   pointer_dispatcher_.setWindow(window);
@@ -466,10 +468,18 @@ void Application::prepareFrame(PresentedFrame &frame) {
   const auto &history = session().historyBrowser();
   if (dialog_ == QLatin1StringView("history")) {
     frame.history_actions = historyActionSurface();
+    auto &hover = frame.history_hover.emplace();
+    const auto surface = historyScrollSurface(historyMetrics(), hover);
+    for (const auto &target : frame.history_actions.targets) {
+      hover.append({.identity = {.action = target.action, .generation = frame.history_actions.generation}, .bounds = target.bounds});
+    }
+
+    if (!historyLoading() && history_view_version_ == history.viewVersion()) {
+      frame.history_surface = surface;
+    }
   }
 
   if (dialog_ == QLatin1StringView("history") && !historyLoading() && history_view_version_ == history.viewVersion()) {
-    frame.history_surface = historyScrollSurface(historyMetrics());
 
     if (const auto choice = history.choice()) {
       frame.history = {.choice = *choice, .dialog_generation = dialog_generation_, .enter_runs = session().configuration().history.enter_runs};
@@ -610,6 +620,8 @@ void Application::present(const PresentedFrame &frame) {
   presented_history_surface_ = frame.history_surface;
   presented_history_actions_ = frame.history_actions;
   pointer_dispatcher_.presentHistoryActions(presented_history_actions_);
+  presented_history_hover_ = frame.history_hover;
+  pointer_dispatcher_.presentHistoryHover(presented_history_hover_ ? presented_history_hover_->view() : std::span<const HistoryHoverTarget>{});
 
   try {
     for (const auto &pane : std::span{frame.panes}.first(frame.pane_count)) {
@@ -1281,10 +1293,9 @@ void Application::showDialog(const QString &kind, const QString &text) {
   presented_history_.reset();
   presented_history_surface_ = {};
   presented_history_actions_ = {};
+  presented_history_hover_.reset();
   pointer_dispatcher_.presentHistoryActions({});
-  if (kind == QStringView{u"history"}) {
-    pointer_dispatcher_.retireHistoryHover();
-  }
+  pointer_dispatcher_.retireHistoryHover();
 
   dialog_ = kind;
   dialog_text_ = text;

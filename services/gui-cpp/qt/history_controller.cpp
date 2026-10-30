@@ -24,9 +24,9 @@
 #include <QtCore/qbytearrayview.h>
 #include <QtCore/qcontainerfwd.h>
 #include <QtCore/qlist.h>
-#include <QtCore/qnamespace.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qstring.h>
+#include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <cstddef>
@@ -179,6 +179,8 @@ QVariantMap Application::historyState() const {
   const auto parsed = HistorySearch::parse({query.constData(), static_cast<std::size_t>(query.size())}, history_filters_.failed_only);
 
   return {
+      {QStringLiteral("generation"), QString::number(dialog_generation_)},
+      {QStringLiteral("selectedId"), state.selection < rows.size() ? QString::number(rows[state.selection].id) : QString{}},
       {QStringLiteral("phase"), phaseName(state.phase)},
       {QStringLiteral("hasPage"), state.has_page},
       {QStringLiteral("revision"), QString::number(browser.revision())},

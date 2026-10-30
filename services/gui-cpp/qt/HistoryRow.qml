@@ -14,10 +14,12 @@ HistoryRowLayout {
     property real ratio: 1
     property bool selected: false
     property bool expanded: false
+    property real open: expanded ? 1 : 0
+    property real highlight: selected ? 1 : 0
+    readonly property bool cardVisible: open > 0
     property bool grouped: true
     property bool showCwd: true
     property bool interactive: true
-    property bool rowHoverEnabled: true
     property var actionController: null
     property string revision: ""
     readonly property var regions: layout
@@ -28,7 +30,7 @@ HistoryRowLayout {
     property string inspectionKey: "Ctrl+O"
     property bool macStyle: false
     property bool paneOpen: false
-    implicitHeight: expanded ? regions.cardHeight : rowHeight
+    implicitHeight: cardVisible ? regions.cardHeight : rowHeight
     signal activated(string revision)
     signal actionTriggered(string action)
 
@@ -47,7 +49,8 @@ HistoryRowLayout {
         showCwd: root.showCwd,
         hasCwd: root.record.cwd.length > 0,
         hasTime: timestamp.text.length > 0,
-        expanded: root.expanded
+        expanded: root.cardVisible,
+        open: root.open
     })
 
     Accessible.role: Accessible.ListItem
@@ -63,23 +66,23 @@ HistoryRowLayout {
         width: root.regions.frame.width
         height: root.regions.frame.height
         radius: root.regions.radius
-        color: Qt.alpha(root.colors.surface0, root.selected ? 1 : (root.rowHoverEnabled && pointer.containsMouse ? root.regions.hoverAlpha : 0))
+        color: Qt.alpha(root.colors.surface0, root.highlight > 0 ? root.highlight : ((root.actionController ? (root.actionController.historyHoveredRow === root.historyIndex && root.actionController.historyHoveredRowRevision === root.revision) : pointer.containsMouse) ? root.regions.hoverAlpha : 0))
     }
 
     NativeRoundedRectangle {
         anchors.fill: background
         radius: root.regions.radius
-        color: Qt.alpha(root.colors.accent, root.regions.selectionTintAlpha)
-        visible: root.selected
+        color: Qt.alpha(root.colors.accent, root.regions.selectionTintAlpha * root.highlight)
+        visible: root.highlight > 0
     }
 
     NativeRoundedRectangle {
         anchors.fill: background
         radius: root.regions.radius
         color: "transparent"
-        borderColor: Qt.alpha(root.colors.accent, root.regions.selectionRingAlpha)
+        borderColor: Qt.alpha(root.colors.accent, root.regions.selectionRingAlpha * root.highlight)
         borderWidth: root.regions.stroke
-        visible: root.selected
+        visible: root.highlight > 0
     }
 
     Item {
@@ -230,7 +233,7 @@ HistoryRowLayout {
                 y: root.regions.meta.y
                 width: root.regions.meta.width
                 height: root.regions.meta.height
-                active: root.expanded
+                active: root.cardVisible
                 sourceComponent: HistoryMeta {
                     record: root.record
                     colors: root.colors

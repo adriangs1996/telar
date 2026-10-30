@@ -8,11 +8,13 @@
 #include "qt/projection.hpp"
 #include "qt/scroll_event.hpp"
 #include "qt/history_loading_layout.hpp"
+#include "qt/history_selection_layout.hpp"
 #include "qt/history_empty_layout.hpp"
 #include "input/wheel_accumulator.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "ui/bundled_fonts.hpp"
 #include <QColor>
+#include <QList>
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QPointF>
@@ -311,6 +313,63 @@ class HistoryControlsTest final : public QObject {
     const auto *timer = window.findChild<QTimer *>(QStringLiteral("agentStatusAnimation"));
     QVERIFY(timer != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(!timer->isActive(), wait_ms);
+  }
+
+  Q_SLOT static void selectionMotionStartsOnAFrameAndParksItsClock() {
+    QQuickWindow window;
+    window.resize(wide_width, search_height);
+    QVERIFY(showComponentWindow(window, wait_ms));
+    HistorySelectionLayout motion(window.contentItem());
+    const auto selection = [](int index, const QString &identity) {
+      return QVariantMap{
+          {QStringLiteral("active"), true},
+          {QStringLiteral("generation"), QStringLiteral("41")},
+          {QStringLiteral("index"), index},
+          {QStringLiteral("id"), identity},
+      };
+    };
+    motion.setSelection(selection(0, QStringLiteral("9007199254740993")));
+    QVERIFY(waitForSynchronizedFrame(window, wait_ms));
+    QCOMPARE(motion.selectedOpen(), qreal{1});
+    QCOMPARE(motion.leavingIndex(), -1);
+    QList<qreal> samples;
+    QObject::connect(&motion, &HistorySelectionLayout::frameChanged, &window, [&] { samples.append(motion.selectedOpen()); });
+    motion.setSelection(selection(1, QStringLiteral("9007199254740995")));
+    QCOMPARE(motion.selectedOpen(), qreal{1});
+    QTRY_VERIFY_WITH_TIMEOUT(!samples.isEmpty(), wait_ms);
+    QCOMPARE(samples.front(), qreal{0});
+    QCOMPARE(motion.leavingIndex(), 0);
+    QCOMPARE(motion.leavingKey(), QStringLiteral("9007199254740993"));
+    QTRY_COMPARE_WITH_TIMEOUT(motion.selectedOpen(), qreal{1}, wait_ms);
+    QCOMPARE(motion.leavingIndex(), -1);
+    QVERIFY(std::ranges::any_of(samples, [](qreal open) { return open > 0 && open < 1; }));
+    const auto *timer = window.findChild<QTimer *>(QStringLiteral("agentStatusAnimation"));
+    QVERIFY(timer != nullptr);
+    QTRY_VERIFY_WITH_TIMEOUT(!timer->isActive(), wait_ms);
+    QCOMPARE(window.findChildren<QTimer *>(QStringLiteral("agentStatusAnimation")).size(), 1);
+    motion.setSelection(selection(2, QStringLiteral("9007199254740997")));
+    QTRY_VERIFY_WITH_TIMEOUT(motion.selectedOpen() < 1, wait_ms);
+    motion.setVisible(false);
+    QTRY_VERIFY_WITH_TIMEOUT(!timer->isActive(), wait_ms);
+    motion.setVisible(true);
+    QTRY_COMPARE_WITH_TIMEOUT(motion.selectedOpen(), qreal{1}, wait_ms);
+    QCOMPARE(motion.leavingIndex(), -1);
+  }
+
+  Q_SLOT static void selectionClockRetiresDestroyedItems() {
+    QQuickWindow window;
+    window.resize(wide_width, search_height);
+    QVERIFY(showComponentWindow(window, wait_ms));
+    auto motion = std::make_unique<HistorySelectionLayout>(window.contentItem());
+    motion->setSelection({{QStringLiteral("active"), true}, {QStringLiteral("generation"), QStringLiteral("1")}, {QStringLiteral("id"), QStringLiteral("1")}, {QStringLiteral("index"), 0}});
+    QVERIFY(waitForSynchronizedFrame(window, wait_ms));
+    motion->setSelection({{QStringLiteral("active"), true}, {QStringLiteral("generation"), QStringLiteral("1")}, {QStringLiteral("id"), QStringLiteral("2")}, {QStringLiteral("index"), 1}});
+    QTRY_VERIFY_WITH_TIMEOUT(motion->selectedOpen() < 1, wait_ms);
+    const auto *timer = window.findChild<QTimer *>(QStringLiteral("agentStatusAnimation"));
+    QVERIFY(timer != nullptr);
+    motion.reset();
+    QTRY_VERIFY_WITH_TIMEOUT(!timer->isActive(), wait_ms);
+    QVERIFY(waitForSynchronizedFrame(window, wait_ms));
   }
 
   Q_SLOT static void loadingClockRetiresDestroyedItems() {

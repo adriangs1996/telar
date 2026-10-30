@@ -21,15 +21,21 @@ class HistoryRowLayout : public QQuickItem {
   QML_ELEMENT
   Q_PROPERTY(QVariantMap measurements READ measurements WRITE setMeasurements NOTIFY measurementsChanged)
   Q_PROPERTY(QVariantMap layout READ layout NOTIFY layoutChanged)
+  Q_PROPERTY(int historyIndex READ historyIndex WRITE setHistoryIndex NOTIFY historyIndexChanged)
 
 public:
+  enum class Index : std::int8_t { missing = -1 };
+
   explicit HistoryRowLayout(QQuickItem *parent = nullptr);
   [[nodiscard]] QVariantMap measurements() const;
   void setMeasurements(const QVariantMap &measurements);
   [[nodiscard]] QVariantMap layout() const;
   [[nodiscard]] Rect physicalFrame() const noexcept;
+  [[nodiscard]] int historyIndex() const noexcept { return history_index_; }
+  void setHistoryIndex(int index);
 
 signals:
+  void historyIndexChanged();
   void measurementsChanged();
   void layoutChanged();
 
@@ -56,6 +62,7 @@ private:
   float cell_width_ = 1;
   float cell_height_ = 1;
   std::uint32_t first_line_columns_ = 0;
+  int history_index_ = static_cast<int>(Index::missing);
   bool measurements_dirty_ = true;
   bool expanded_ = false;
 };

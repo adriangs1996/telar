@@ -20,6 +20,16 @@ Item {
     property alias rowsView: results
     property bool retiringRows: false
 
+    HistorySelectionLayout {
+        id: selectionMotion
+        selection: ({
+            active: root.visible && !root.browserState.inspecting && root.browserState.count > 0,
+            generation: root.browserState.generation ?? "",
+            id: root.browserState.selectedId ?? "",
+            index: root.browserState.selection
+        })
+    }
+
     function restoreRows() {
         root.retiringRows = false;
     }
@@ -206,7 +216,9 @@ Item {
                 required property int index
                 required property var record
                 readonly property bool selected: results.currentIndex === index
-                readonly property bool expanded: selected && !root.browserState.inspecting
+                readonly property bool leaving: !selected && selectionMotion.leavingIndex === index && selectionMotion.leavingKey === record.key
+                readonly property real open: root.browserState.inspecting ? 0 : (selected ? selectionMotion.selectedOpen : (leaving ? selectionMotion.leavingOpen : 0))
+                readonly property real highlight: selected ? 1 : (leaving ? selectionMotion.leavingOpen : 0)
                 readonly property real headingHeight: root.browserState.grouped && record.groupEnds ? root.regions.groupHeight : 0
                 width: results.width
                 height: headingHeight + commandRow.implicitHeight
@@ -242,12 +254,13 @@ Item {
                     rowHeight: root.regions.rowHeight
                     ratio: root.ratio
                     selected: result.selected
-                    expanded: result.expanded
+                    open: result.open
+                    highlight: result.highlight
                     grouped: root.browserState.grouped
                     showCwd: root.browserState.effectiveScope === "global" || root.browserState.effectiveScope === "workspace"
                     interactive: root.actionable
                     actionController: root.controller
-                    rowHoverEnabled: root.controller.historyRowHoverEnabled ?? true
+                    historyIndex: result.index
                     revision: root.browserState.revision
                     onActivated: revision => root.controller.selectPresentedHistoryRow(result.index, revision)
                     onActionTriggered: action => {

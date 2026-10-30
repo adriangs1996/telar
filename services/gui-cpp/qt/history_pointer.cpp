@@ -1,4 +1,10 @@
 #include "input/history_action_capture.hpp"
+#include "input/history_hover.hpp"
+#include "application/dependencies.hpp"
+#include "history/browser.hpp"
+#include <cstddef>
+#include <utility>
+#include "history/choice.hpp"
 #include "presentation/history_actions.hpp"
 #include "application.hpp"
 #include "core/geometry.hpp"
@@ -13,6 +19,9 @@
 #include <QQuickWindow>
 #include <QRectF>
 #include <QStringView>
+#include <QString>
+#include <QtCore/qstringliteral.h>
+#include <variant>
 #include <QWheelEvent>
 #include <QtCore/qobject.h>
 #include <QtCore/qtmetamacros.h>
@@ -30,8 +39,36 @@ void Application::registerHistoryPanel(QQuickItem *panel) {
   history_content_ = history_viewport_ == nullptr ? nullptr : history_viewport_->property("contentItem").value<QQuickItem *>();
 }
 
-bool Application::historyRowHoverEnabled() const {
-  return pointer_dispatcher_.historyRowHoverEnabled();
+int Application::historyHoveredRow() const {
+  const auto &identity = pointer_dispatcher_.historyHover().hovered();
+  const auto *row = identity ? std::get_if<HistoryChoice>(&identity->action) : nullptr;
+
+  return row == nullptr ? static_cast<int>(HistoryRowLayout::Index::missing) : static_cast<int>(row->index);
+}
+
+QString Application::historyHoveredRowRevision() const {
+  const auto &identity = pointer_dispatcher_.historyHover().hovered();
+  if (!identity || !std::holds_alternative<HistoryChoice>(identity->action)) {
+    return {};
+  }
+
+  return pointer_dispatcher_.historyHoverRevision();
+}
+
+QString Application::historyHoveredCardAction() const {
+  const auto &identity = pointer_dispatcher_.historyHover().hovered();
+  const auto *action = identity ? std::get_if<HistoryCardAction>(&identity->action) : nullptr;
+  if (action == nullptr) {
+    return {};
+  }
+
+  switch (*action) {
+  case HistoryCardAction::copy: return QStringLiteral("copy");
+  case HistoryCardAction::erase: return QStringLiteral("erase");
+  case HistoryCardAction::visit: return QStringLiteral("visit");
+  }
+
+  return {};
 }
 
 void Application::registerHistoryActions(QQuickItem *actions) {
@@ -55,9 +92,11 @@ void Application::activateHistoryCardAction(HistoryCardAction action) {
   }
 }
 
-HistoryScrollSurface Application::historyScrollSurface(const HistoryModalMetrics &metrics) const {
+HistoryScrollSurface Application::historyScrollSurface(const HistoryModalMetrics &metrics, HistoryHoverFrame &hover) const {
   const auto density = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
   const auto &browser = session().historyBrowser();
+  hover.generation = dialog_generation_;
+  hover.scale = density;
   HistoryScrollSurface surface{
       .generation = dialog_generation_,
       .revision = browser.revision(),
@@ -91,6 +130,11 @@ HistoryScrollSurface Application::historyScrollSurface(const HistoryModalMetrics
       }
 
       row_height = row_height ? std::min(*row_height, frame.height) : frame.height;
+      const auto index = row->historyIndex();
+      if (index >= 0 && std::cmp_less(index, HistoryBrowser<ApplicationAllocator>::page_entries)) {
+        const auto bounds = row->mapRectToScene(toQRectF(frame, density)).intersected(viewport);
+        hover.append({.identity = {.action = HistoryChoice{.index = static_cast<std::size_t>(index), .revision = browser.revision()}, .generation = dialog_generation_}, .bounds = {.x = static_cast<float>(bounds.x() * density), .y = static_cast<float>(bounds.y() * density), .width = static_cast<float>(bounds.width() * density), .height = static_cast<float>(bounds.height() * density)}});
+      }
     }
   }
 

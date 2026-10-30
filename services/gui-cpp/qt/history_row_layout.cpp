@@ -69,6 +69,13 @@ QVariantMap HistoryRowLayout::layout() const {
   };
 }
 
+void HistoryRowLayout::setHistoryIndex(int index) {
+  if (history_index_ != index) {
+    history_index_ = index;
+    emit historyIndexChanged();
+  }
+}
+
 Rect HistoryRowLayout::physicalFrame() const noexcept {
   return geometry_.frame;
 }
@@ -164,6 +171,16 @@ void HistoryRowLayout::updatePolish() {
     cell_height_ = cell_height;
     expanded_ = measured.expanded;
     card_ = expanded_ ? HistoryCard::measure(geometry_, chrome, {.cell_width = cell_width, .cell_height = cell_height, .row_height = row_height, .viewport_height = advance(QStringLiteral("viewportHeight"))}, {command_bytes_.constData(), static_cast<std::size_t>(command_bytes_.size())}) : HistoryCard{};
+    if (expanded_) {
+      const auto raw_open = measurements_.value(QStringLiteral("open"), 1).toFloat();
+      const auto open = std::isfinite(raw_open) ? std::clamp(raw_open, 0.0F, 1.0F) : 0.0F;
+      const auto delta = std::max(0.0F, card_.intrinsic_height - row_height) * open;
+      const auto opened = std::round(row_height + delta);
+      const auto viewport_height = advance(QStringLiteral("viewportHeight"));
+      const auto tallest = std::max(row_height, viewport_height - chrome.px(HistoryCard::viewport_clearance));
+      card_.height = viewport_height > 0 ? std::min(tallest, opened) : opened;
+    }
+
     measurements_dirty_ = false;
     emit layoutChanged();
   }

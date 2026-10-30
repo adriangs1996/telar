@@ -1,6 +1,9 @@
 #pragma once
 
 #include "application_effects.hpp"
+#include "application/dependencies.hpp"
+#include "history/browser.hpp"
+#include "input/history_hover.hpp"
 #include "attachment_shelf.hpp"
 #include "configuration_source.hpp"
 #include "core/calendar_sample.hpp"
@@ -92,7 +95,9 @@ class Application final : public QObject {
   Q_PROPERTY(QAbstractItemModel *agents READ agents CONSTANT)
   Q_PROPERTY(QAbstractItemModel *history READ history CONSTANT)
   Q_PROPERTY(bool historyLoading READ historyLoading NOTIFY historyChanged)
-  Q_PROPERTY(bool historyRowHoverEnabled READ historyRowHoverEnabled NOTIFY historyRowHoverEnabledChanged)
+  Q_PROPERTY(int historyHoveredRow READ historyHoveredRow NOTIFY historyHoverChanged)
+  Q_PROPERTY(QString historyHoveredRowRevision READ historyHoveredRowRevision NOTIFY historyHoverChanged)
+  Q_PROPERTY(QString historyHoveredCardAction READ historyHoveredCardAction NOTIFY historyHoverChanged)
   Q_PROPERTY(QVariantMap historyState READ historyState NOTIFY historyChanged)
   Q_PROPERTY(QVariantMap historyGeometry READ historyGeometry NOTIFY historyChanged)
   Q_PROPERTY(QString historyCommand READ historyCommand NOTIFY historyChanged)
@@ -261,7 +266,9 @@ public:
   Q_INVOKABLE void useHistoryRow(int row, bool alternate = false);
   Q_INVOKABLE void usePresentedHistory(const QString &revision, bool alternate = false);
   [[nodiscard]] bool historyLoading() const;
-  [[nodiscard]] bool historyRowHoverEnabled() const;
+  [[nodiscard]] int historyHoveredRow() const;
+  [[nodiscard]] QString historyHoveredRowRevision() const;
+  [[nodiscard]] QString historyHoveredCardAction() const;
   [[nodiscard]] QString historyCommand() const;
   [[nodiscard]] QVariantMap historyState() const;
   [[nodiscard]] QString historyOutput() const;
@@ -367,7 +374,7 @@ signals:
   void historyInspectionScrolled(int lines);
   void prefixChanged();
   void historyChanged();
-  void historyRowHoverEnabledChanged();
+  void historyHoverChanged();
   void paletteChanged();
   void pathPickerChanged();
   void pathPickerGeometryChanged();
@@ -494,6 +501,21 @@ private:
     bool enter_runs = false;
   };
 
+  struct HistoryHoverFrame {
+    std::array<HistoryHoverTarget, HistoryBrowser<ApplicationAllocator>::page_entries + HistoryActions::count> targets;
+    std::size_t count = 0;
+    std::uint64_t generation = 0;
+    double scale = 1;
+
+    void append(HistoryHoverTarget target) {
+      if (count < targets.size() && !target.bounds.empty()) {
+        targets[count++] = target;
+      }
+    }
+
+    [[nodiscard]] std::span<const HistoryHoverTarget> view() const noexcept { return std::span{targets}.first(count); }
+  };
+
   struct PresentedFrame {
     std::uint64_t machine_view = 0;
     std::array<PresentedPane, PaneLayout::maximum_panes> panes;
@@ -502,6 +524,7 @@ private:
     std::optional<PresentedHistory> history;
     HistoryScrollSurface history_surface;
     HistoryActionSurface history_actions;
+    std::optional<HistoryHoverFrame> history_hover;
   };
 
   void consume(MachineClient &client, QByteArrayView payload);
@@ -536,7 +559,7 @@ private:
   void synchronizeAttachments();
   void refreshPanes();
   [[nodiscard]] HistoryModalMetrics historyMetrics() const;
-  [[nodiscard]] HistoryScrollSurface historyScrollSurface(const HistoryModalMetrics &metrics) const;
+  [[nodiscard]] HistoryScrollSurface historyScrollSurface(const HistoryModalMetrics &metrics, HistoryHoverFrame &hover) const;
   [[nodiscard]] bool handleHistoryWheel(QWheelEvent &event);
   void moveHistoryRows(std::int32_t steps);
   [[nodiscard]] HistoryActionSurface historyActionSurface() const;
@@ -721,6 +744,7 @@ private:
   std::optional<PresentedHistory> presented_history_;
   HistoryScrollSurface presented_history_surface_;
   HistoryActionSurface presented_history_actions_;
+  std::optional<HistoryHoverFrame> presented_history_hover_;
   QPointer<QQuickItem> history_actions_;
   QHash<std::uint64_t, QPointer<TerminalItem>> terminals_;
   QByteArray hostname_;

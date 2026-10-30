@@ -1,6 +1,7 @@
 #include "window_animation_clock.hpp"
 #include "core/configuration.hpp"
 #include "history_loading_layout.hpp"
+#include "history_selection_layout.hpp"
 #include "native_agent_status.hpp"
 #include "native_pane_attention.hpp"
 #include "native_tab_activity.hpp"
@@ -9,7 +10,6 @@
 #include "presentation/attention_fades.hpp"
 #include "presentation/frame_pacer.hpp"
 #include <QEvent>
-#include <QMetaObject>
 #include <QObject>
 #include <QQuickWindow>
 #include <QScreen>
@@ -20,6 +20,7 @@
 #include <QtCore/qstringliteral.h>
 #include <algorithm>
 #include <cmath>
+#include <chrono>
 #include <cstdint>
 #include <limits>
 #include <memory>
@@ -105,13 +106,12 @@ void WindowAnimationClock::requestSynchronization() {
   }
 
   synchronization_pending_ = true;
-  QMetaObject::invokeMethod(this, [this] {
+  QTimer::singleShot(std::chrono::nanoseconds::zero(), this, [this] {
     synchronization_pending_ = false;
     if (sampleVisible(now())) {
       synchronize();
     }
-  },
-                            Qt::QueuedConnection);
+  });
 }
 
 bool WindowAnimationClock::eventFilter(QObject *watched, QEvent *event) {

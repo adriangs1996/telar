@@ -2244,3 +2244,14 @@ previous row-hover admission when the dialog opens. A stationary pointer no long
 highlights a newly created row; actual motion restores normal hover. The controlled
 previous binary exposes 137,809 differing result pixels. Other initial hover targets
 and complete modal input behavior remain open.
+
+[History semantic hover and selection motion](measurements/history-semantic-hover-motion.md)
+replaces row-only admission with presented row/card identities and the original
+140ms cubic transition. Guarded initial, retained and fresh-motion native captures
+match the declared History result regions. The zero-open frame retires action
+captures; a new click after the transition still works. Qt-free oracles compare
+552 hover sequences and530 motion sequences against unchanged original sources.
+Cocoa and Carbon clipboard isolation is now verified by a bare Qt preflight and
+a metadata guard; earlier Cocoa-only receipts did not qualify Qt Carbon writes.
+Whole-window/platform visuals, other modal targets, dependency/native leaks and
+full-client performance remain open.

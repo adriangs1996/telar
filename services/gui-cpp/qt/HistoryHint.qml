@@ -13,6 +13,8 @@ Item {
     required property var colors
     required property real pixelSize
     property bool actionable: true
+    property bool usePresentedHover: false
+    property bool presentedHover: false
     property string activationIdentity: ""
     readonly property real keyAdvance: keyText.implicitWidth
     readonly property real wordAdvance: wordText.implicitWidth
@@ -30,7 +32,7 @@ Item {
 
     NativeRoundedRectangle {
         anchors.fill: parent
-        color: root.enabled && root.actionable && pointer.containsMouse ? root.colors.surface1 : "transparent"
+        color: root.enabled && root.actionable && (root.usePresentedHover ? root.presentedHover : pointer.containsMouse) ? root.colors.surface1 : "transparent"
         radius: root.style.radius
     }
 

@@ -94,6 +94,8 @@ HistoryMetaLayout {
             required property int index
             geometry: root.regions.actions[index]
             label: root.actions[index]
+            usePresentedHover: root.actionController !== null
+            presentedHover: root.actionController ? root.actionController.historyHoveredCardAction === label.action : false
             style: root.regions
             x: geometry.bounds.x
             y: geometry.bounds.y

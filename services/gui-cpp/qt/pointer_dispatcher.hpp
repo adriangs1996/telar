@@ -2,8 +2,14 @@
 
 #include "input/child_mouse.hpp"
 #include "input/history_action_capture.hpp"
+#include "input/history_hover.hpp"
+#include <span>
 #include "native_pointer_events.hpp"
 #include <QMouseEvent>
+#include <QPointF>
+#include <QString>
+#include <optional>
+#include <cstdint>
 #include <QObject>
 #include <QPointer>
 #include <QQuickWindow>
@@ -24,7 +30,9 @@ public:
   void release(Qt::MouseButton button);
   void presentHistoryActions(const HistoryActionSurface &surface);
   void retireHistoryHover();
-  [[nodiscard]] bool historyRowHoverEnabled() const noexcept { return history_row_hover_enabled_; }
+  [[nodiscard]] const HistoryHover &historyHover() const noexcept { return history_hover_; }
+  void presentHistoryHover(std::span<const HistoryHoverTarget> targets);
+  [[nodiscard]] const QString &historyHoverRevision() const noexcept { return history_hover_revision_; }
   void abandon(TerminalItem &terminal);
   void ungrab(TerminalItem &terminal);
   bool eventFilter(QObject *watched, QEvent *event) override;
@@ -51,8 +59,8 @@ private:
   [[nodiscard]] ChildMouseView view(const Capture &lease) const;
   [[nodiscard]] static ChildMouseSample sample(const QMouseEvent &event, MousePhase phase, MouseButton button);
   [[nodiscard]] bool occupied() const noexcept;
-  [[nodiscard]] bool historyGestureHeld() const noexcept;
-  void allowHistoryRowHover(bool allowed);
+  void observeHistoryHover(QPointF position, HistoryHover::Observation observation);
+  void notifyHistoryHover();
   void report(std::uint64_t pane_id, const std::optional<ChildMouseReport> &report);
   void cancelPane(std::uint64_t pane_id);
   void cancel();
@@ -65,7 +73,9 @@ private:
   NativePointerEvents native_events_;
   QPointer<QQuickWindow> window_;
   std::array<Capture, static_cast<std::size_t>(MouseButton::none)> captures_;
-  bool history_row_hover_enabled_ = true;
+  HistoryHover history_hover_;
+  std::optional<std::uint64_t> history_hover_revision_value_;
+  QString history_hover_revision_;
   bool delivering_ = false;
   bool handing_off_ = false;
 };

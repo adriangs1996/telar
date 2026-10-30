@@ -1,4 +1,9 @@
 #include "input/history_action_capture.hpp"
+#include "input/history_hover.hpp"
+#include "history/choice.hpp"
+#include <span>
+#include <variant>
+#include <QString>
 #include "pointer_dispatcher.hpp"
 #include "application.hpp"
 #include "attachment_shelf.hpp"
@@ -65,18 +70,39 @@ bool PointerDispatcher::occupied() const noexcept {
   return std::ranges::any_of(captures_, &Capture::held);
 }
 
-bool PointerDispatcher::historyGestureHeld() const noexcept {
-  return std::ranges::any_of(captures_, [](const Capture &lease) { return lease.history.held(); });
+void PointerDispatcher::notifyHistoryHover() {
+  const auto &identity = history_hover_.hovered();
+  const auto *row = identity ? std::get_if<HistoryChoice>(&identity->action) : nullptr;
+  if (row != nullptr && history_hover_revision_value_ != row->revision) {
+    history_hover_revision_value_ = row->revision;
+    history_hover_revision_ = QString::number(row->revision);
+  }
+
+  emit application_.historyHoverChanged();
 }
 
 void PointerDispatcher::retireHistoryHover() {
-  allowHistoryRowHover(false);
+  if (history_hover_.cancel()) {
+    notifyHistoryHover();
+  }
 }
 
-void PointerDispatcher::allowHistoryRowHover(bool allowed) {
-  if (history_row_hover_enabled_ != allowed) {
-    history_row_hover_enabled_ = allowed;
-    emit application_.historyRowHoverEnabledChanged();
+void PointerDispatcher::presentHistoryHover(std::span<const HistoryHoverTarget> targets) {
+  if (history_hover_.present(targets)) {
+    notifyHistoryHover();
+  }
+}
+
+void PointerDispatcher::observeHistoryHover(QPointF position, HistoryHover::Observation observation) {
+  const auto &frame = application_.presented_history_hover_;
+  if (application_.dialog_ != QStringLiteral("history") || !frame || frame->generation != application_.dialog_generation_) {
+    retireHistoryHover();
+
+    return;
+  }
+
+  if (history_hover_.observe(frame->view(), {.x = position.x() * frame->scale, .y = position.y() * frame->scale}, observation)) {
+    notifyHistoryHover();
   }
 }
 
@@ -161,6 +187,7 @@ void PointerDispatcher::cancelPane(std::uint64_t pane_id) {
 }
 
 void PointerDispatcher::cancel() {
+  retireHistoryHover();
   const auto previous_recipients = recipients();
   for (auto &lease : captures_) {
     lease.history.cancel();
@@ -221,6 +248,7 @@ void PointerDispatcher::deliver(TerminalItem &terminal, const QMouseEvent &event
 }
 
 bool PointerDispatcher::press(QMouseEvent &event) {
+  observeHistoryHover(event.position(), HistoryHover::Observation::point);
   if (auto *lease = capture(event.button())) {
     if (lease->history.held()) {
       *lease = {};
@@ -230,15 +258,10 @@ bool PointerDispatcher::press(QMouseEvent &event) {
     HistoryActionCapture history;
     if (application_.dialog_ == QStringLiteral("history") && surface.generation == application_.dialog_generation_ && history.begin(surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale}, event.button() == Qt::LeftButton)) {
       *lease = {.terminal = {}, .history = history, .held = true};
-      // Removing the selected metadata can make Qt enter the row underneath.
-      // Its hover stays unadmitted until a fresh pointer observation.
-      allowHistoryRowHover(false);
 
       return true;
     }
   }
-
-  allowHistoryRowHover(true);
 
   if (!occupied() || qobject_cast<TerminalItem *>(event.exclusiveGrabber(event.point(0))) == nullptr) {
     return false;
@@ -255,9 +278,7 @@ bool PointerDispatcher::press(QMouseEvent &event) {
 bool PointerDispatcher::move(QMouseEvent &event) {
   if (native_events_.moving()) {
     application_.attachments_.observePointer(event.position());
-    if (!historyGestureHeld()) {
-      allowHistoryRowHover(true);
-    }
+    observeHistoryHover(event.position(), event.buttons() == Qt::NoButton ? HistoryHover::Observation::point : HistoryHover::Observation::retained);
   }
 
   application_.observeActivityPointer(true, event.position());
@@ -352,6 +373,7 @@ bool PointerDispatcher::eventFilter(QObject *watched, QEvent *event) {
     case QEvent::MouseMove:
       return move(dynamic_cast<QMouseEvent &>(*event));
     case QEvent::Leave:
+      retireHistoryHover();
       application_.attachments_.observePointer(std::nullopt);
       application_.observeActivityPointer(false);
       return false;

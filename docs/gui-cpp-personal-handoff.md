@@ -1,5 +1,323 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## Motion/semantic hover archive FINAL FROZEN; commit then CONTINUE (23:03 UTC)
+
+Newmeasurements/history-semantic-hover-motion archiveFROZEN1037artifacts2447sources
+13284471bytes. OFFLINEverifierPASS,current-sourceverifierPASS,exactsource/executable/
+authorityauditPASS. NEVERrerunnewarchive_motion.pyoroldarchivers fromnow. No more
+product/docsREADME/PARITY/report/verifierchangesuntilCOMMIT. Handoffnotinsourcefreeze.
+LocalgitcommitthenCONTINUEglobalgoal(no final/endatcheckpoint). Excludeunrelated
+personal-frame-delivery.md. Explicitstage20modifiedtrackedfiles(oldWIP+README/PARITY/
+CMake/tests)+8newcoreQttools+newreport/manifest/archivefolder. Sourcefingerprints
+25compiled/oracle +2doc snapshots. GlobalgatesOPEN; no publication/merge/worktrees.
+
+Finalsourcehandedoffabove55: coreHistoryHoverIdentityget_if no-throwcmp, QPointer
+isNull, Controllerqstringliteral, WindowClockQTimer::singleShot(0ns,context,lambda)
+sourceconfirmedQt6.8/6.12usesSAMEQueuedinvoke/noextraQTimer. MacReleaseBuild6+ASAN5
+all0, sharedclock6families72assertPASSRelease0, ASANall72passbut4LSANfailactual8;
+Macfinalnative5PASSRelease0, ASAN1/leaks549106/2805. Generalclipboardrealmetadata954
+beforeANDafterallFINALguardedcaptures/nativecases,base+findcleanup0. OriginalZigand
+finalQtconsistentidentitiesacross6pairs (Qtcf2299...,Zig4e021...); declaredresults
+567296or744576EXACT all. Originalmissingdrawableattemptcopy-rehover-final-1 retained,
+unchangedrepeatFINAL2validexact. NewguardCarbon+CocoaONLYfuturehelpers; oldisolation
+unqualified. No debugger traceinfinalsource/exe; isolateddiagignoredbinarynotretained.
+
+LinuxASANbuild5ACTUAL0, Releasebuild2ACTUAL0. FinalRelease5nativePASS0/privateSway
+removed/compositor0, components29PASS0. FinalLinuxnativeASAN5PASSbutactual1/Qtcompose
+147982/148(xkb_compose_state_new BuildId425ccf...). NOcleanrepeattoeraseit; inherited
+bareQtTextInputcontrol2sameBuildId/exactleak/noTelar/runtime retainedindependency-compose
+innewarchiveandrequiredverifier. Sharedclock6families72PASSASAN0. Strict11unitslint2
+actual0; sourceMacroincludeandQtinvokeanalyzerfixedwithoutprofileweakening. Real
+Neovimfirst17unitsdeliveredcleanineditor3, Quicktimesout60sunderload; finalONLYQuick
+idlerepeatDELIVEREDCLEAN recordedseparately. Canonicaldefaultout/compile_commands AND
+4headercontextscopiedfromactualASANbuild;.clangdunchanged. VMfinal195members817747B
+SHA7305daf1985a805638ff18aa68d5c910b79dccf2c8a6f0238cb241978593eafb downloadedvalidated,
+archiveralreadyconsumedit, frozen. No activebuilds/lints/GUIprocesses. Verifiedorphan
+runtime33034fromcrashkilledSIGTERM(sha+privateargsverified),removeditsown/tmp/gui-quick-
+test-uqPtSt directory; cleanupreceiptsretained. NEVERtouchuser35801/oldSway9469.
+
+NEXTFEATUREALREADYNEGATIVE: `local/history-footer-hover-negative-1` ACTUAL0 under
+FULLCarbon+Cocoaguard/count954same/sourceGUIcf2299(beforefooterfix). Separatehelper
+local/history_footer_hover_capture.py clonedMotionguard, addsinitial-footer/footer-
+rehover, pointerinitial[210,647]→[210,648]BEFOREkeyboardopen; noafterMotion. Final
+HistoryFooter details rectoriginalscene[173.5,635,76,26] physical[347,1270,499,1322],
+7904pixels7778different(Qtgeometryautohover,originalnone). Paste7020+run6240EXACT.
+`compare_history_footer_hover.py` declaresraworiginalAXrectsnomask/alignment; same
+comparatorappliedpointer-awayMotioninitial-copy-final-1: ALLTHREEhintsEXACT incldetails.
+NewnegativeNOTINSIDEfrozenMotionarchive(patternsdifferent), preservefornextcheckpoint.
+DoNOTeditfrozenMotionharness. AftercommitcopyfinalGUIcf2299tooutdeps/history-footer-
+hover-before-1+binary.json withNEWcommitidentity, thenextendhovermodel tofooter.
+
+Sourceoriginal `HistoryModal.zig footer839..hintAction922` namespacefooter5 vs
+card6 vsrows0. Footeractions submit/submit_alternate carryHistoryChoice(index,
+revision), toggle_inspection and visit_pane constsemantic; enter_runs labelchanges
+DO NOTchangeoriginalTarget.Action soidentityMUSTNOTincludeenter_runs! ExistingQML
+activationIdentitydoesincludeenterRuns forsubmit/alternate; thisisitsownlaterinput
+paritygap. Noactionscrollhint noTarget. Disabledhints registered/hoveridentitystill
+matchesbutpaintenabledgates. GlobalHistoryHintmodelmustdistinguishfooter/cardvisit
+namespaces. Reuseexisting HistoryFooterAction enum(presentation/history_footer.hpp):
+none,submit,alternate,inspect,visit. Hoveridentityvariantcouldaddtypedfooter{action,
+choiceonlyforsubmits}; safeexplicitget_ifcmp(noexcept/libstdc++). BoundedFramecapacity
+currently100+3; addHistoryFooter::capacity4. FooterLayoutalreadyhasrootgeometry+hints
+private, no registeredcontrollerpointeryet; currentHistoryFooter.qml rootcliptrue,
+HintusesQtMouseArea(noactionControllerhover). RegisterfooterthroughPanelcontroller
+withdirecttypedQPointer, samepreparepass/no treewalk or per-frame QVariant conversion.
+AddactionSurfacegetterfullgeometry/typedsemantic actionchoice; collect footerBEFORE
+rows/cards to preserveoriginaldraworder (header→footer→rows? inspectHistoryModal.draw
+beforeassumepriority). Extendoriginal-sourcehoveroracle mixedrows/cards/footer submit
+revision/selection/toggle/namespace collisions/disabled/disappeared/failed-delivery.
+Newnativefooternegative→fixed +actualfreshmotion controls andexistingrow/cardregressions.
+Nofooterproductchangesyet. Continueoriginalglobalobjectiveuntilfulfilled.
+
+Spanishupdates<=60sec(aim40); STRICTanalysis<100words/tool (longanalysisstillcauses
+silences,stopit). No agents, branches,publish/merge. OwnedVM7158/55984 retained.
+PersistentgoalAPIblockedoldsessionnoresumeAPI; continuemanually. Allpriorarchives
+26eb/1ce/77andTHISnewMotionarchiveimmutable. UserenvironmentdateOct31Madrid; UTCstill
+Oct3023:03. Worktreeonly: gui-cpp-parity-personal-20261029.
+
+## FINAL source synced55; matrix/captures STILL ACTIVE (22:50 UTC)
+
+Do not stop/checkpoint/final. HEAD77def7994 unchanged; allproductUNCOMMITTED. New
+measurementfolderhistory-semantic-hover-motion containsarchive_motion.py+verify_motion.py
+DRAFTONLY, NEVEREXECUTED: finalVMtar+6captures+runtimechecksnotready. Neverrerunoldarchives.
+Unrelatedpersonal-frame-delivery.mduntouched. Report+PARITYcurrentWIPonly,noacceptance.
+
+Finalportabilityfixes AFTERguardedcaptures: HistoryHoverIdentity customnothrowget_if
+comparison avoids libstdc++variant==possiblebad_variant_access analyzer(noexceptkept).
+HistorySelectionLayout usesclock_.isNull() explicit(Qt6.8QPointerboolwarnings). Controller
+removeunusedqnamespace/adddirectqstringliteral. SharedWindowAnimationClock zeroqueued
+call nowQTimer::singleShot(std::chrono::nanoseconds::zero(),this,lambda) instead of
+invokeMethodlambda: Qt6.8inlinehelperfalseleak diagnostic; fetchedUNCHANGEDofficial
+Qt6.8.2/6.12.0qtimer.cpp proveszero+contextusesSAMEinvokeMethodImplQueued anddoesNOT
+createQSingleShotTimer. Includeschrono/directQTimer,noQMetaObject. Macbuild4actual0,
+thenbuild5targetnameTYPOactual1(nosourcecompile). build6actual0; ASANbuild5actual0.
+TimelineextrabuildsRelease+ASANactual0. Final broadMac10unitlint3 actual0; Quicklint2
+actual0 (140s), actualNeovim4changedCpp/headerfinaleditor2actual0; earlier17clean+
+Quickeditor2clean. CorehoverfinalMacASAN4 actual0,552seq33926ops; motionunchanged1PASS.
+
+SharedclockexpandedregressionMacRelease6groups actual0,72assertionsALLPASS. ASAN6groups
+actual8,72assertionsALLPASS but4exeLSANleaks (tab214728/998,overlay275972/1016,
+agenttimeline206024/982,history239948/1069); framepacer+paneattentionclean. Rawlogs
+local/history-selection-motion-clock-controls[-asan]-final-1[-raw].log retained.
+NoaccessUB. No localLSANsuppressions. NeedLinuxfinal6groupsafterbuild5 andnativefinal.
+
+Guarded nativehelpersONLY (`history_motion_capture.py`,`history_motion_native_test.py`)
+useCarbon+Cocoa privateboards+bareQtpreflight+realgeneralCHANGECOUTmetadata954→954.
+FinalGUIproductnowfixedsourceClockabove. Sixfinalcapturelabelsrequired byverifier:
+release-final-1DONE744576EXACT+originalANDQtoldreleaseconsumed/freshclickcopys3lineTHREE;
+initial-copy-final-1DONE567296EXACT; copy-rehover-final-1 FAILEDoriginalnoPresentedDrawable
+(emptyframes; cleanup0/count954same), unchangedrepeatFINAL2DONE567296EXACT. Retainfailure,
+no rootcauserepeatedclaim. Bothsameoriginal/finalQtbinary; comparatorrun2DONE.
+held-final-1 ACTIVE48920 at22:50(logimportsQt), thencompare744576; row-initial-final-1
+ANDrow-rehover-final-1NOTSTARTED usegesturesinitial-row/initial-rehover. Needfinal
+nativeRelease+ASANQuick guardedwrappers labelsnative-final-1/native-asan-final-1NOTSTARTED
+sinceclockchange. PreviousguardedQuicksourcewithoutclockchange5PASSRelease0/
+ASAN1leaks492541/2649 allcleanedcount954same retained. ProductNoMOTIONtrace; isolated
+diagbinary/sourceoutdepsnotshipped. Oldrawnative/privateclipboardlimitationsabove.
+
+Linuxreleaseintermediatebuild1 intentionallySTOPPED afternewportabilityfindings: CMake
+SIGINT aloneleftownedNinja33403orphan; verifiedcwdout-llvm23+exactargsandsentSIGINT,
+loginterrupted. Driveractual255; stopreceiptpreserved. Nootherprocesskills. Synced4files
+DELTA55 --touchAFTERoldlint1actual1 (exception,QPointer,2controllerincludes,Qtinline
+invoke-leak); beforecode4filesretainedguestlocal/history-selection-motion-lint-before-1.
+GuestASANbuild5 ACTIVE40715 targetsGUI,Quick,controls,FramePacer,AgentTimeline,TabScene,
+PaneAttention,NotificationOverlay,hoverprobe -j1 now35/77 (22:50). DO NOTeditguestCpp
+or syncwhilebuildactive. NeedReleasebuild2afterASAN5actual0 (out-llvm23partiallybuilt).
+Guestfinalstrict11unitslint2 ACTIVE15245 (outputbuffered; sourcefinal55); guesthover
+ASAN4 driver25884(actualstatusneedpoll) outputPASS552/33926. FinalsourceMac18?noextras.
+
+GuestactualNeovim: initialeditor1failed5QPointerbool, editor2failedMOCpath. Refreshed
+canonicalout/compile_commands.json fromactualout-clipboard-asan(also4headercontexts),
+.clangdunchanged. editor3ACTUAL1: FIRST17UNITSDELIVEREDCLEAN butQuicktest last no
+publishDiagnosticswithin60sec underparallelbuild+lint. NeedAFTERguestcompile/lintidle
+rerunONLYQuick withsame60sec helper (don'ttreatempty/timeoutsasclean); preserve3failure.
+Verifiercurrentlyexpects18cleaneditor3: UPDATEtoaccept17clean3+separatefinalQuickreceipt
+(ornewcompleteeditor4ifdesired; no needrepeat17withoutreason). Hosteditor2fourclean,
+hostQuickeditor2clean. VM4GB noSwap, clang-tidyQuick1.27GB+compiler900MB; don'tadd
+heavyparallelcommands. DefaultcanonicalDBnowcorrectSDK+MOC paths, don'tweakenskill.
+
+GuestnativeASAN4 BEFOREfinal55 passed5 actual0 afterABIinvalidation; controls29ASAN
+pass0. OldernativeASAN2 crashedinit duepreserved-host-mtime staleobjectABI(recordretained,
+8headeros.utimefix→build3actual0). GuestruntimeORPHAN33034 fromcrashedQuick33027 verified
+exeSHA4b82f...+exactargsserver--no-config--fresh--socket/tmp/gui-quick-test-uqPtSt/runtime.sock.
+OwnedcleanupSIGTERM ACTIVEcurrenttool session(resultneedpoll), writesguestlocal/
+history-selection-motion-orphan-runtime-cleanup-1.json. DoNOTtouchglobaluser35801/old
+Sway9469. QEMU7158/55984 retained. Noagents/worktrees/publish/merge. Spanishupdates<=60sec
+(aim40),analysis<100words/concretetool. AllglobalgatesOPEN, persistentAPIblockedold
+sessionnoresumeAPI; continuemanually.
+
+## Guarded clipboard / animation qualification ACTIVE (22:35 UTC)
+
+READTHISFIRST. No finalcheckpoint orcommit; productWIPcontinues. SemanticMotioncore
+Mac+LinuxASAN oracle530seq32819samplesPASS; semanticHoverMacASAN3+LinuxASAN3
+552seq33926opsPASS. Maccomponent29PASSRelease0; NativeASANcomponent29assertionsPASS
+butactual8/leaks230440/1045. NativeMacASAN2 5casesPASS butactual1/leaks527471/2724,
+noaccessUB. NEWQuicktest firstrunfailedbecauseoriginalzero-open animationretires
+cardcapture. OriginalDispatcher ANDadditionalnativeZigcaseCONFIRMoldreleaseconsumed;
+newQtTest expectsunchangedclipboardthenfreshclickcopysuccess. HelperhistoryCardHint
+waitsfullcardopen1beforeclick. NewsourceQuicktestASTfunctionsizecomplaint from4added
+lines; extractedimportRetainedHistory fixturehelper, replacedfreshpress/release with
+mouseClick. FinalQuicklint/editorrequalificationpending. DoNOTsuppresschecks.
+
+CRITICAL fixturebugdiscovered: OLDlocalattachment_private_clipboard.dylib redirects
+NSPasteboard.generalPasteboardONLY; Qt6.12QCocoaClipboardusesQMacPasteboardwithCarbon
+PasteboardCreate(kPasteboardClipboard). NativeCocoaassertreadprivate whileQtwrite
+wenttorealglobal. EarlierQtTestsaved/restoredQClipboard butadditionaldirectcapture
+freshcopydidNOT. DO NOTclaimolderQtfixtureswerefullyprivate. Useralreadyinformed
+isolationincomplete; no guessedrestorationofunknownclipboardcontent. NOFURTHERnative
+QtcopytestswithOLDshim. Oldarchivesimmutable,qualificationlimitsneednewreport.
+
+NEWignoredlocalhistory_motion_private_clipboard.m/dylib extendsCocoaoverrideAND
+DYLD_INTERPOSEPasteboardCreate, mappingclipboard+find toownedUUIDboards. Within
+interpositionimageDIRECTcallPasteboardCreate accessesoriginal (dlsymRTLD_NEXTrecurses;
+failedpreflight1andASANstackoverflowretained). BareQt+AppKitpreflight2ACTUAL0:
+QClipboardtext==privateNSPasteboardtext==knownfixture; REALgeneralmetadatachangeCount
+954beforeANDafter. OldfailedLLDBnoninteractivedebugpermissionretained(noescalation).
+Newhelperhistory_motion_general_count(.m/exe) readsONLYmetadatacount,noactualusertext.
+Newlocalhistory_motion_capture.py clonesoldwrapper/allgesturemodes plusinitial-copy,
+copy-rehover,replace-release; beforeEACHGUIrunsQtpreflight, fullcasegeneralcountguard,
+cleanupbase+find0. Newhistory_motion_native_test.py guardedQtTestwrapper samepolicy.
+UseONLYNEWhelpers. `history-selection-motion-release-guarded-1` ACTUAL0 bothnativeGUIs:
+pressCopy,Up,releaseNEWcopy consumes/sentinelunchanged; freshpress/releasecopies3line
+THREE(originalqueryorder; firstproof1wrongexpectedTWO retained). ALL744576resultpixels
+EXACT, oldrow141824exact,newcopy5720exact; bothclientsrealcount954→954,privatecleanup0.
+Additionalbeforeproof2anddiagnostic3QtassertfailedONLYbecauseoldCarbonisolation;
+MOTIONtracingprovedpress+activation0alreadycalled, notproductcopybug. DiagnosticCpp
+restoredbyteexact fromout-deps/history-motion-release-diagnostic-1/pointer_dispatcher-
+before.cpp, thenutime+restorebuild2ACTUAL0(noMOTIONtracinginfinalbinary). Isolateddiag
+binary+code retainedIGNOREDonly, neverstageexecutables. Oldrestorebuild1missedbecause
+copy2restoredoldermtime; corrected+retained.
+
+ActiveMacReleaseQuickbuild3 session30787(CMakeQMLscannerregen~2min); ASANQuickbuild3
+38784includesrestoredpointerCpp+refactoredQuicktest. NOCPP/QMLeditsuntilactualexit.
+MacQuicklint1session59411OLDprefixture-refactorsource, >2min; quickeditor2sessionfrom
+lasttool mustcapture. Macbroad10unitslint2ACTUAL0,17NeovimdiagnosticscleanexceptNEW
+Quickunitnotin17; new2addedtestscomponentalready29PASS. GuardedinitialCOPYcapture1
+ACTIVE16180 (`initial-copy`), thencompareknownregions; needcopy-rehover,held,androw
+controlsundernewguard. Previousunguardedinitialcopy567296exact held744576exact valid
+visualsbutdoesnotproveclipboardisolation. NativeReleaseQuick+ASANrepeatmustNEWwrapper
+andfinalQuickbuild0. UserupdatesSpanish<=60sec (aim40),analysis<100words/tool.
+
+LinuxDELTA53 synced25sourcefiles but tarpreservedoldHOSTmtimeearlierthanguestoldobject
+compiledagainstOLDERheadercontents. NativeASAN2crashedinitQTimerbindingstorage BEFORE
+History (no tests); receipt preservedprivatecompositor0. ninja-tdeps+mtimeconfirmed
+staleABI(notification_controller.o olderApp+PointerDispatcherlayout). Invalidated8
+changedheaders/source withos.utime; dependentASANbuild3 ACTIVE61854 -j1 now38/51.
+DO NOTsyncCPPduringbuild. Sourcehashunchanged bymtimeinvalidations. Needafteractual0
+syncFINALQuicktestrefactorwithmtimeINVALIDATIONthenincrementalrebuildtests only, ASAN
+native3/4+components29, strict10+Quicklint andactualNeovim headers. Guestcanonical
+out/clangdcontextsneedcopyfromfreshout-clipboard-asan/clangd(without.changingclangd).
+NeedReleaseout-llvm23build(nativeheadersnowinvalidatedcorrectly), testsafterASAN.
+OriginalruntimeguestDebugcorrectpathout-dependencies/reference-runtime-debug/bin/telar.
+Nootherworktrees/agents/publish/merge. QEMU7158/55984 retained. Unrelatedpersonal-frame-
+delivery.md untouched. Newreporthistory-semantic-hover-motion.md DRAFTonly, noarchive.
+GlobalgoalOPEN, APIsgoalblockedoldsessioncannotresume,continue manually.
+
+## Selection motion integration WIP (22:20 UTC; continue, no checkpoint)
+
+User resumed; goal API still blocked from older session and cannot resume via API;
+continue manually, NEVER mark complete. Read current summary plus actual tools.
+Mac semantic-hover ASANbuild1459 and guest53636 both ACTUAL0. Lint63032 ACTUAL1
+(twohoverprobe directRectinclude/nestedternary findings nowfixed). Corehover final
+ASAN3 ACTUAL0,552seq33926ops. SelectionMotion original-source oracle ASAN1 ACTUAL0,
+530seq32819samples; original SelectionMotion/Position/Expansion/Transition/FrameClock
+unchanged in local/history-selection-motion-reference-asan-1. No completed newreport.
+
+Semantic hover initial COPY fixed+realrehover match567296resultsEXACT. Held-selection
+capture local/history-semantic-hover-held-1 REGRESSES5615pixels(newcopyhint) despite
+oldrowexact. Source cause original firstselectionframeopen0 skips ALL metadata action
+targets; previousselected leavingrow retainsfactsbutselected=false soNOactions.
+Qt instantexpansionmissedtargetgap. Now implementing REQUIREDreal140mscubiceaseout.
+
+New presentation/history_selection_motion.hpp, tools/history_selection_motion_probe.cpp
+and check_history_selection_motion.py, now CMake probe. New Qt HistorySelectionLayout
+hpp/cpp attachsharedWindowAnimationClock, sampleonlyrequestsframe, afterAnimating
+prepareFrame advancescore ONCEactualframe, so initialopen0 reachespolish+targetscan.
+No per-rowtimer. Queuedclockcallbacks neveradvancecore. Deadlineparkswhileframe
+requested, idleterminates. Addedconcept/tupleheader+cppinclude. historyState now
+stringgeneration/selectedId(avoidJSu64loss). Panel selection mapactivewhenvisible/
+notinspecting/count>0; selected+leavingopen/highlight, leaving requiresindexANDkey.
+Row open>0 activatesfullcard/meta, fallbackexpandedpreservesstandalonecontrols;
+alpha followsoriginalhighlight. RowLayout interpolatesintrinsicheight beforecap,
+physicalf32/stdround, -ffp-contractoff. ProductWIP NOTYETvalidated againstnativeframes.
+
+Mac Releasebuild1 ACTIVE87247 (-j4, telar-gui/quick/controls/2probes) loglocal/history-
+selection-motion-build-1.log; currentlyCMakeqmlinportscannerregen, noCppfailureyet.
+Linux synced23sourcefiles DELTA52 sourcehash/tar local/history-selection-motion-linux-
+delta-52.*; guest ASANbuild1 ACTIVE28366 -j1 loglocal/history-selection-motion-linux-
+asan-build-1-driver.log. DO NOTeditCPP/QMLwhiledependentbuildactive onhostORguest.
+Needactualexits thennativeheldpairedcapture +initialcopy/recovery; strictlint8units,
+actualNeovim; component/newQtclocktests, macnativeQuickASAN/rawleaks, LinuxASAN/native.
+
+PreparedNEW2meaningfulQtclocktests inignored local/history_selection_test_slots.txt
+(not applied while buildsactive): firstframeopen0, intermediateframes, settle1,
+u64exactleavingkey, soleclocktimerpark, hide/showreset, destructionretirement.
+Apply to tests/history_controls_test.cpp after buildsfinish, directincludeQtclass+
+QList, rebuild/syncguest. Existingtestcounts27 before2added. PotentialfirstQTRY
+samplingassert leavingintermediate timing inspect. Preserve old failures/evidence.
+OwnedVM7158/55984. Helper HOSTlocal/run_history_actions_linux.py (guest scriptcopied
+previously pathunknown); noactiveGUIcaptures. Noagents/publish/merge/worktrees.
+All old26eb/1ce/77 archivesimmutable, unrelatedpersonal-frame-delivery.md untouched.
+UpdatesSpanish<=60sec, analysis<100words/concrete tool mandatory.
+
+## Semantic row/card hover MODEL PASS, Qt integration BUILDING (22:05 UTC)
+
+HEAD77def7994 commitskeyboard-openrowcheckpoint FINAL162artifacts2436sources4692442B;
+old26eb0fb1a/1ce717deb archivesallIMMUTABLE. CurrentproductintegrationUNCOMMITTED,
+no finalcheckpoint. Useruntrackedpersonal-frame-delivery.mduntouched. Nextcaseinitial
+COPYhovernegativealreadymeasured5615diff/5720hintpixels understationarypreopenpointer
+[1027,551]→[1027,552] usingignoredlocal/history_initial_copy_capture.py. Outputlocal/
+history-initial-copy-negative-1 validframes/privatecleanup0. Beforebinaryout-deps/
+history-initial-copy-before-1/telar-gui +binary.json(base77def7994) preserved.
+
+NewQt-freeinput/history_hover.hpp: identityvariantHistoryChoice(index+revision) OR
+HistoryCardAction plusdialoggeneration; targetRect/f64position; spanviewnotowner;
+observe(point/retained/leave), present(retiremissingtarget), cancel. Disabledtargets
+remainhoverableidentity(matchesoriginal; QWidgetpaintgatescardenabled). Corepolicy
+Sourceoracle tools/check_history_hover.py +history_hover_probe.cpp compileUNCHANGED
+originalDispatcher/Registry/Targets viaoldcapture.prepare copiedfacades+appendedprivate
+pointerentryadapter. Mixed2rows3cards. 552seq/33926ops byteexact PASS ASAN/UBSAN onMac
+local/history-semantic-hover-reference-asan-2 actual0; includes17directed,20halfopen
+fractional+largeedges,3nonfinitepoints,512random*64. Scopehoveridentityonly; noQt/native
+acceptanceyet. First529/33857beforeedgetests alsoPASS preserved. NeedLinuxrerunfinal.
+
+Qtintegrationreplacespriorrowboolgates withsemanticvisuals, activationsKEEPexisting
+HistoryActionCapture3leases/QMLrowclick. HistoryRowLayout typedQ_PROPERTYhistoryIndex
+(Panelbindsresult.index),Index::missing int8enum. ExistinghistoryScrollSurface pass
+nowalsofillsboundedHistoryHoverFrame(array100+3rows/cards,optionalonlywhileHistory
+open; scale/gen/count); NOnewwidgetwalk, directphysicalFrame+typedindex, clipviewport.
+Apppreparehistoryframes collectsrows regardlessloadingthen3metadataactiontargets;
+oldscrollpublishedonlyready/versionmatching asbefore. Apppresent copiesoptionalhover
+ONLYmatchedmachineframe; PointerDispatcher.presentHistoryHover retiresmissing roles.
+ActualrawnativeMouseMove point onlyNoButtons, drag/release don'tretarget; allpress
+observepoint, focuscancel/leave/anymodalreplaceclear. CurrentUIrowIndex+revision and
+cardactionstring drivenbylastpresentedidentity; standalonewithoutcontrollerkeepsQt
+localhover. RemovedhistoryRowHoverEnabled APIs/booleans. Rowrevision QStringcached
+onlyifrevisionchangesinnotify, gettercheapcopy. Addedrevisionpaintcheck toavoidONE
+futureframe stalehighlight whilepagechangedbeforeframepresent. NOTYETnativequalified.
+Footer/filterhoverunmodeled/untouched, remainOPEN; don'tclaimfullhoverparity.
+
+MacReleasebuild1 actual0, thenlint1 failed onlydirectincludes, Indexenum size,signed
+comparison; kept. Fixedincludes/span/history browser/ApplicationAllocator/cstddef,
+std::cmp_less,Indexint8; alsoaddedrevisionpaintguard/cache. MacReleasebuild2 ACTIVE
+78874(last153/169at22:05), DO NOTeditCPP/QMLuntilactualexit. StrictMaclint2 ACTIVE
+351? actualexecsession fromtoolcall immediatelyafterthishandoff (captureactualID).
+OriginalMaclint1 matched4unitsbecauseoldcompileDBlackednewprobe; finalDBnowincludes5.
+LinuxASANbuild1 ACTIVE53636(-j1), sourceDELTA51 olderwithoutrevisionguard/cache/lint
+fixes/edgetoolchanges. Needwaitactual0, thensyncDELTA52finalchangedCpp/hpp+Python and
+rebuildLinuxASANsequential. NoCppeditswhilehostbuildactive. NeedMacASANbuildafterfinal
+Releasecompile; no productfreezeyet. Sourcecodefiles allstatusgitdiff+new3coretools.
+
+Next: inspectstrictlint2+build2actual, fixifneeded; qualifyactualpairedinitialCOPY
+negative→fixed +freshmotion, pluspreviousrowinitial/heldreplacement/recovery (same
+harnesscurrentorcopyharnesswithprivateboards). NeedsourceoracleonLinux, nativeQuick
+3slots/Historycontrols, ASANMac(rawleakslikely), LinuxRelease+ASAN(rawQtcomposeknown),
+finalbroadlint+actualNeovim allmodifiedunits. Neednewreport/PARITY/archive separately,
+NEVERregenerateolderarchives. Preserveallfirstfailures. No activehostGUIcaptures;
+onlyhostReleasebuild/lint andguestASANbuild. OwnedVM7158/55984 retained. Noagents,
+otherworktrees/publish/merge. UpdatesSpanish<=60sec. MOSTCRITICAL analysisUNDER100words
+perchunk+concretetool; repeatedlongreasoningcausesminutesofsilence,stopdoingthat.
+
 ## Keyboard-open row checkpoint FINAL frozen; COMMIT then CONTINUE (21:50 UTC)
 
 NEWhistory-initial-hover archiveFINAL162artifacts2436sources4692442bytes. Offline+
