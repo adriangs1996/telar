@@ -2,6 +2,53 @@
 
 ## Personal continuation checkpoint
 
+### Runtime handshake continuation
+
+The latest preceding local commits are `1978ec6be` (runtime link/offline input)
+and `e17e2b6df` (retained metrics/modal alpha). The next implementation adds
+bounded handshake/refusal parity; read
+`services/gui-cpp/measurements/runtime-handshake.md` and its verifier/manifest.
+Original-source Release/core sanitizer comparisons match 79,367 cases. Two
+policy and three prefix negatives fail before their respective fixes. The
+socket/parser enforce 18-byte receive capacity before allocation, then upgrade
+on acceptance; pipelined 20 KiB data passes. Six affected Release groups pass,
+two Qt-free sanitizer groups pass, and the Qt adapter passes 11 entries. Broad
+lint and actual Neovim diagnostics are clean. Current native Quick passes 88
+without QML warnings. Window sanitizer passes 28 assertions but exits with
+259,104 leaked bytes/1,004 allocations. It and the successful Qt adapter print
+the runtime's 3-allocation/120-byte `*_fetchInitializingClassList*` suppression
+table despite no LSAN_OPTIONS/local suppression; Qt-free stderr is empty.
+
+Accepted real owned SSH schema/capacity runs cover both GUIs. Discovery remains
+unaltered; only the GUI bridge receives controlled ServerReject bytes. Each
+schema run observes one refusal and no automatic retry for >=2.6 seconds after
+repair; Enter retries. Each capacity run observes five automatic refusals before
+repair and explicit immediate retry. Offline input is discarded, Local remains
+isolated, and original remote pane/generation and stable window identity return.
+All owned GUI/runtime/sshd exits and SSH master cleanup are normal. Each failure
+pair matches three full terminal regions, three footers and the full picker.
+Whole offline windows retain 15 status-glyph pixels; outage/recovery retain
+7,587/10,291 header/sidebar pixels. The first Qt schema fixture accidentally
+altered endpoint discovery, entered setup and timed out; it is rejected and
+retained. No assertion/profile/threshold is weakened. Global gates remain open.
+
+Next implement/qualify the intentional RuntimeStopping connection/status gap:
+original GuiAdapter.handle returns to Local but retains its last connected
+summary; current Qt later marks the hidden source lost and retries. Read the
+original runtime_messages/Client/runtime I/O lifecycle before choosing the
+transport/session transition. Keep network loss retryable and preserve explicit
+remote re-selection/recovery. Then continue other PARITY.md gates; checkpoints
+are not completion. Goal remains active and unbudgeted.
+
+An optional `--chrome-pointer` diagnostic is still unqualified. Its Qt-1 capture
+freshness fails; Qt-2 adds owned actor PTY output after movement but still sees a
+presented drawable older than pointer input. Both GUI fixture waits abort; owned
+cleanup succeeds. Preserve ignored `live-chrome-pointer-qt-{1,2}` and investigate
+frame/input ordering without relaxing freshness. No Zig pointer pair has run.
+A rejected straight-alpha icon experiment leaves the same exact 15 pixels;
+`chrome-icon-blend-*` source/metadata and live comparison retain it. The product
+icon implementation is restored. Serialize all native/offscreen UI runs.
+
 Personal now has its own pinned Ghostty, FreeType and HarfBuzz dependencies,
 LLVM 23/Qt 6.12 Release build in `services/gui-cpp/out`, core sanitizers in
 `out-core-sanitizers` and native sanitizers in `out-native-sanitizers`.

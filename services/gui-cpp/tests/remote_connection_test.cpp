@@ -4,7 +4,9 @@
 #include "remote_bridge.hpp"
 #include "runtime_connection.hpp"
 #include "telar_client/codecs/telar_codec.hpp"
+#include "telar_client/codecs/telar_handshake.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
+#include "telar_client/serializers/telar_handshake.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include "transport/runtime_link.hpp"
 #include <QByteArray>
@@ -24,10 +26,12 @@
 #include <QtCore/qtypes.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -41,6 +45,130 @@ class RemoteConnectionTest : public QObject {
   Q_OBJECT
 
 private:
+  Q_SLOT static void emptyHandshakePrefixKeepsOriginalError() {
+    verifyHandshakePrefix(0, QStringLiteral("InvalidLength"));
+  }
+
+  Q_SLOT static void oversizedHandshakePrefixFailsBeforeItsBody() {
+    verifyHandshakePrefix(static_cast<quint32>(HandshakeCodec::max_message_size + 1), QStringLiteral("BufferTooSmall"));
+  }
+
+  Q_SLOT static void oversizedTransportPrefixKeepsOriginalError() {
+    verifyHandshakePrefix(static_cast<quint32>(max_payload_size + 1), QStringLiteral("FrameTooLarge"));
+  }
+
+  static void verifyHandshakePrefix(quint32 length, const QString &detail) {
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QLocalServer listener;
+    QVERIFY(listener.listen(directory.filePath(QStringLiteral("prefix.sock"))));
+    ApplicationAllocator memory;
+    RuntimeConnection connection{memory};
+    connection.open(listener.fullServerName());
+    QTRY_VERIFY(listener.hasPendingConnections());
+    const std::unique_ptr<QLocalSocket> peer{listener.nextPendingConnection()};
+    QVERIFY(peer != nullptr);
+    std::array<Byte, frame_prefix_size> prefix{};
+    std::span<Byte> output{prefix};
+    u32::encode(length, output);
+    const auto bytes = textView(std::span<const Byte>{prefix});
+    QCOMPARE(peer->write(bytes.data(), static_cast<qint64>(bytes.size())), static_cast<qint64>(bytes.size()));
+    constexpr int before_retry_ms = RuntimeLink::first_retry_ms / 2;
+    QTRY_COMPARE_WITH_TIMEOUT(connection.error(), detail, before_retry_ms);
+    QCOMPARE(connection.link().phase, MachinePhase::lost);
+  }
+
+  Q_SLOT static void incompatibleRuntimeWaitsForExplicitRetry() {
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QLocalServer listener;
+    QVERIFY(listener.listen(directory.filePath(QStringLiteral("schema.sock"))));
+    ApplicationAllocator memory;
+    RuntimeConnection connection{memory};
+    connection.open(listener.fullServerName());
+    QTRY_VERIFY(listener.hasPendingConnections());
+    const std::unique_ptr<QLocalSocket> peer{listener.nextPendingConnection()};
+    QVERIFY(peer != nullptr);
+    constexpr SchemaId other_schema{'0', '0', '0', '0', '0', '0', '0', '0'};
+    QVERIFY(sendHandshake(*peer, ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = other_schema}));
+    QTRY_COMPARE(connection.link().phase, MachinePhase::failed);
+    QCOMPARE(connection.remoteError(), std::optional{MachineError::incompatible_schema});
+    QCOMPARE(connection.error(), QStringLiteral("the runtime speaks wire schema 00000000; this telar speaks 886b480d. Update telar on one side"));
+    constexpr int observe_retry_ms = RuntimeLink::first_retry_ms * 2;
+    QTest::qWait(observe_retry_ms);
+    QVERIFY(!listener.hasPendingConnections());
+    connection.retryNow();
+    QTRY_VERIFY(listener.hasPendingConnections());
+    const std::unique_ptr<QLocalSocket> replacement{listener.nextPendingConnection()};
+    QVERIFY(replacement != nullptr);
+    QVERIFY(sendHandshake(*replacement, ServerAccept{handshake::schema_id}));
+    QTRY_VERIFY(connection.ready());
+    QVERIFY(!connection.link().failure());
+  }
+
+  Q_SLOT static void acceptedRuntimeCanPipelineLargerFrames() {
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QLocalServer listener;
+    QVERIFY(listener.listen(directory.filePath(QStringLiteral("pipeline.sock"))));
+    ApplicationAllocator memory;
+    RuntimeConnection connection{memory};
+    QByteArray received;
+    QObject::connect(&connection, &RuntimeConnection::payloadReceived, &connection, [&](QByteArrayView payload) {
+      received = payload.toByteArray();
+    });
+    connection.open(listener.fullServerName());
+    QTRY_VERIFY(listener.hasPendingConnections());
+    const std::unique_ptr<QLocalSocket> peer{listener.nextPendingConnection()};
+    QVERIFY(peer != nullptr);
+    constexpr qsizetype payload_bytes = qsizetype{20} * 1024;
+    const QByteArray payload{payload_bytes, 'U'};
+    QVERIFY(sendHandshake(*peer, ServerAccept{handshake::schema_id}));
+    QVERIFY(sendPayload(*peer, payload));
+    QTRY_VERIFY(connection.ready());
+    QTRY_COMPARE(received, payload);
+  }
+
+  Q_SLOT static void clientCapacityRefusalKeepsAutomaticRetry() {
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QLocalServer listener;
+    QVERIFY(listener.listen(directory.filePath(QStringLiteral("capacity.sock"))));
+    ApplicationAllocator memory;
+    RuntimeConnection connection{memory};
+    connection.open(listener.fullServerName());
+    QTRY_VERIFY(listener.hasPendingConnections());
+    const std::unique_ptr<QLocalSocket> peer{listener.nextPendingConnection()};
+    QVERIFY(peer != nullptr);
+    QVERIFY(sendHandshake(*peer, ServerReject{.reason = HandshakeRejectReason::client_limit_reached, .expected_schema = handshake::schema_id}));
+    QTRY_COMPARE(connection.link().phase, MachinePhase::lost);
+    QCOMPARE(connection.error(), QStringLiteral("clients.max_clients: the runtime holds its limit of 32 clients (windows, CLI calls and agent hooks); close a window or retry once running commands finish"));
+    QTRY_VERIFY(listener.hasPendingConnections());
+    const std::unique_ptr<QLocalSocket> replacement{listener.nextPendingConnection()};
+    QVERIFY(replacement != nullptr);
+    QVERIFY(sendHandshake(*replacement, ServerAccept{handshake::schema_id}));
+    QTRY_VERIFY(connection.ready());
+    QCOMPARE(connection.link().attempt, 1);
+  }
+
+  template <typename Reply>
+  static bool sendHandshake(QLocalSocket &peer, const Reply &reply) {
+    const auto payload = HandshakeCodec::encode(reply);
+    const auto bytes = textView(std::span<const Byte>{payload});
+
+    return sendPayload(peer, QByteArrayView{bytes.data(), static_cast<qsizetype>(bytes.size())});
+  }
+
+  static bool sendPayload(QLocalSocket &peer, QByteArrayView payload) {
+    std::array<Byte, frame_prefix_size> prefix{};
+    std::span<Byte> output{prefix};
+    u32::encode(static_cast<std::uint32_t>(payload.size()), output);
+
+    const auto prefix_text = textView(std::span<const Byte>{prefix});
+
+    return peer.write(prefix_text.data(), static_cast<qint64>(prefix_text.size())) == static_cast<qint64>(prefix_text.size()) && peer.write(payload.data(), payload.size()) == payload.size();
+  }
+
   Q_SLOT static void retryBackoffKeepsAnInProgressHandshake() {
     const QTemporaryDir directory;
     QVERIFY(directory.isValid());

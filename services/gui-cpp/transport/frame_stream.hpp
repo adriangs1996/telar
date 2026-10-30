@@ -3,6 +3,8 @@
 #include "core/memory.hpp"
 #include "telar_client/codecs/telar_codec.hpp"
 #include <concepts>
+#include <cstddef>
+#include <stdexcept>
 
 namespace telar::gui {
 
@@ -25,6 +27,14 @@ public:
     expected_ = 0;
   }
 
+  void setMaximum(std::size_t maximum) {
+    if (maximum == 0 || maximum > max_payload_size) {
+      throw std::invalid_argument{"Invalid runtime receive capacity"};
+    }
+
+    maximum_ = maximum;
+  }
+
   template <typename Consumer>
     requires std::invocable<Consumer &, std::span<const Byte>>
   void feed(std::span<const Byte> input, Consumer &consume) {
@@ -41,8 +51,16 @@ public:
 
         std::span<const Byte> prefix{prefix_};
         expected_ = u32::decode(prefix);
-        if (expected_ == 0 || expected_ > max_payload_size) {
-          throw EncodingError{"Invalid runtime frame length"};
+        if (expected_ == 0) {
+          throw EncodingError{"InvalidLength"};
+        }
+
+        if (expected_ > max_payload_size) {
+          throw EncodingError{"FrameTooLarge"};
+        }
+
+        if (expected_ > maximum_) {
+          throw EncodingError{"BufferTooSmall"};
         }
 
         payload_.clear();
@@ -65,6 +83,7 @@ private:
   std::array<Byte, frame_prefix_size> prefix_{};
   std::size_t prefix_used_ = 0;
   std::size_t expected_ = 0;
+  std::size_t maximum_ = max_payload_size;
 };
 
 }

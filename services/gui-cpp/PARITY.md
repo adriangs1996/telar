@@ -4,6 +4,20 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [runtime handshake checkpoint](measurements/runtime-handshake.md) enforces
+original 18-byte negotiation storage before allocating, expands on acceptance
+and preserves schema/capacity error text and permanent/transient policy. Its
+79,367 original-source cases match in Release and clean core ASan/UBSan. Five
+socket negatives fail before the changes; all 11 final adapter entries pass.
+Both GUIs recover from controlled bridge refusals over real owned SSH, discard
+offline input and retain pane/identity isolation. Six full terminal regions and
+footers plus two complete pickers match native Zig; whole scenes retain known
+15/7,587/10,291 pixel differences. Native Quick passes 88 without warnings.
+Instrumented window assertions pass 28 but exit leaks remain (259,104 bytes in
+1,004 allocations); Qt runs also report a runtime 120-byte suppression table,
+with no LSAN_OPTIONS/local suppression. Intentional-stop status, remaining
+navigation/task/platform visuals, leaks and measured performance stay open.
+
 The [retained metrics checkpoint](measurements/retained-metrics.md) keeps the
 sample, CPU history and proxy status through outage, clears them at adoption and
 notifies machine-selection/reconnect bindings. Both pre-fix regressions fail;

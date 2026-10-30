@@ -11,6 +11,7 @@
 #include "telar_client/serializers/telar_handshake.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include "transport/frame_stream.hpp"
+#include "transport/runtime_handshake.hpp"
 #include <QElapsedTimer>
 #include <QScopedValueRollback>
 #include <QtCore/qnamespace.h>
@@ -27,7 +28,6 @@
 #include <span>
 #include <string_view>
 #include <utility>
-#include <variant>
 
 namespace telar::gui::qt {
 
@@ -216,6 +216,8 @@ void RuntimeConnection::connectSocket() {
 
   connecting_ = true;
   stream_.reset();
+  stream_.setMaximum(HandshakeCodec::max_message_size);
+  socket_.setReadBufferSize(HandshakeCodec::max_message_size + frame_prefix_size);
   pending_failure_.reset();
   remote_error_.reset();
   accepted_ = false;
@@ -286,8 +288,15 @@ void RuntimeConnection::read() {
   read_queued_ = false;
   try {
     drainInput();
+  } catch (const MachineFailure &error) {
+    if (!accepted_) {
+      const auto detail = link_.failure_storage;
+      fail(detail.view());
+    } else {
+      fail(std::string_view{error.what()});
+    }
   } catch (const std::exception &error) {
-    fail(QString::fromUtf8(error.what()));
+    fail(std::string_view{error.what()});
   }
 }
 
@@ -336,14 +345,16 @@ void RuntimeConnection::queueRead() {
 
 void RuntimeConnection::consume(std::span<const Byte> payload) {
   if (!accepted_) {
-    const auto response = HandshakeCodec::decodeResponse(payload);
-    const auto *accepted = std::get_if<ServerAccept>(&response);
-
-    if (accepted == nullptr || accepted->schema != handshake::schema_id) {
-      throw std::runtime_error{"Runtime rejected the wire schema or client capacity"};
+    const auto negotiation = RuntimeHandshake::inspect(payload);
+    if (negotiation.error) {
+      remote_error_ = negotiation.error;
+      link_.fail(negotiation.detail.view());
+      throw MachineFailure{*negotiation.error};
     }
 
     accepted_ = true;
+    stream_.setMaximum(max_payload_size);
+    socket_.setReadBufferSize(max_payload_size + frame_prefix_size);
     connecting_ = false;
     link_.adopt(platform::AwakeClock::nowNanoseconds());
     deadline_.stop();
