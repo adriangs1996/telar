@@ -5,6 +5,7 @@
 #include <source_location>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 
 using namespace telar;
 using namespace telar::runtime;
@@ -186,6 +187,90 @@ void borrowedRequestResume(Memory &memory) {
   }
   palette += "\x1b\\";
   check(std::move(palette), replies);
+}
+
+template <Allocator Memory>
+void sealedReplyOwnership(Memory &memory) {
+  using Response = control::Reply<Memory>;
+  static_assert(!std::is_copy_constructible_v<Response> && !std::is_move_constructible_v<Response>);
+  static_assert(!std::is_copy_assignable_v<Response> && !std::is_move_assignable_v<Response>);
+  const std::string payload(PtyResponseQueue::message_byte_capacity * 2, 'R');
+  Response reply{memory};
+  PtyResponseQueue queue;
+  reply.append(payload);
+  reply.seal();
+  reply.append({});
+  bool rejected = false;
+  try {
+    reply.append("late");
+  } catch (const std::logic_error &) {
+    rejected = true;
+  }
+  require(rejected && reply.size() == payload.size() && reply.publish(queue));
+
+  reply.clear();
+  reply.append("replacement");
+  require(reply.publish(queue));
+  reply.clear();
+  const auto owned = queue.peek();
+  require(owned && std::string_view{reinterpret_cast<const char *>(owned->data()), owned->size()} == payload);
+  queue.consume(owned->size());
+  const auto replacement = queue.peek();
+  require(replacement && std::string_view{reinterpret_cast<const char *>(replacement->data()), replacement->size()} == "replacement");
+  queue.consume(replacement->size());
+
+  for (std::size_t index = 0; index < PtyResponseQueue::message_capacity; ++index) {
+    require(queue.tryPush(bytes("N")));
+  }
+  reply.append(payload);
+  require(!reply.publish(queue));
+  rejected = false;
+  try {
+    reply.append("late");
+  } catch (const std::logic_error &) {
+    rejected = true;
+  }
+  require(rejected && reply.size() == payload.size());
+  const auto first = queue.peek();
+  require(first && first->size() == 1);
+  queue.consume(1);
+  require(reply.publish(queue));
+  reply.discard();
+  for (std::size_t index = 1; index < PtyResponseQueue::message_capacity; ++index) {
+    const auto prefix = queue.peek();
+    require(prefix && std::string_view{reinterpret_cast<const char *>(prefix->data()), prefix->size()} == "N");
+    queue.consume(1);
+  }
+  const auto resumed = queue.peek();
+  require(resumed && std::string_view{reinterpret_cast<const char *>(resumed->data()), resumed->size()} == payload);
+  queue.consume(resumed->size());
+  require(queue.empty());
+}
+
+void sealAllocationRecovery() {
+  control_test::OneShotAllocator upstream;
+  BudgetAllocator memory{upstream, 64 * 1024 * 1024};
+  {
+    const std::string payload(PtyResponseQueue::message_byte_capacity * 2, 'F');
+    control::Reply reply{memory};
+    PtyResponseQueue queue;
+    reply.append(payload);
+    upstream.failNext();
+    bool failed = false;
+    try {
+      reply.seal();
+    } catch (const std::bad_alloc &) {
+      failed = true;
+    }
+    require(failed && reply.size() == payload.size());
+    reply.append("tail");
+    require(reply.publish(queue));
+    reply.clear();
+    const auto message = queue.peek();
+    require(message && std::string_view{reinterpret_cast<const char *>(message->data()), message->size()} == payload + "tail");
+    queue.consume(message->size());
+  }
+  require(upstream.failures() == 1 && upstream.liveBytes() == 0 && memory.liveBytes() == 0);
 }
 
 template <Allocator Memory>
@@ -835,6 +920,8 @@ int main(int argc, char **argv) {
   cursorStateViews(memory);
   saturation(memory);
   borrowedRequestResume(memory);
+  sealedReplyOwnership(memory);
+  sealAllocationRecovery();
   statusWorkerPriority(memory);
   statusBytePressure(memory);
   longPaletteReply(memory);

@@ -22,9 +22,17 @@ public:
 
   explicit Reply(Memory &memory) : memory_(memory), overflow_(AllocatorRef<std::uint8_t, Memory>{memory}) {}
 
+  Reply(const Reply &) = delete;
+  Reply &operator=(const Reply &) = delete;
+  Reply(Reply &&) = delete;
+  Reply &operator=(Reply &&) = delete;
+
   void append(std::string_view text) {
     if (text.empty()) {
       return;
+    }
+    if (owned_) {
+      rejectSealedAppend();
     }
     if (text.size() > maximum_bytes - size_) {
       throw std::length_error{"Control reply exceeds its configured limit"};
@@ -104,6 +112,10 @@ public:
   }
 
 private:
+  [[noreturn, gnu::cold, gnu::noinline]] static void rejectSealedAppend() {
+    throw std::logic_error{"Cannot append to a sealed control reply"};
+  }
+
   Memory &memory_;
   std::array<std::uint8_t, PtyResponseQueue::message_byte_capacity> inline_;
   Vector<std::uint8_t, Memory> overflow_;
