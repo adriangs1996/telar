@@ -712,10 +712,7 @@ private:
       }
       return;
     }
-    if (graphicsQuery(sequence.body())) {
-      if (enabled_) {
-        graphics_queries_.respond(sequence.body(), reply_);
-      }
+    if (sequence.body().starts_with('G') && graphics_queries_.handle(sequence.body(), reply_, enabled_)) {
       return;
     }
     passthrough(sequence);

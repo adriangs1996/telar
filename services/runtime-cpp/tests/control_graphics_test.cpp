@@ -93,6 +93,28 @@ void configuredLimits(auto &memory) {
   check(query(disabled, "s=1,v=1", "AAAAAA==").empty());
 }
 
+void graphicsReplyEncodings(auto &memory) {
+  for (const std::uint32_t image : {1u, 9u, 10u, 100u, 1000000000u, UINT32_MAX}) {
+    for (const std::uint32_t number : {0u, 1u, UINT32_MAX}) {
+      for (const std::uint32_t placement : {0u, 1u, UINT32_MAX}) {
+        Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
+        const auto header = "i=" + std::to_string(image) + ",I=" + std::to_string(number) + ",p=" + std::to_string(placement) + ",s=1,v=1";
+        const auto actual = query(terminal, header, "AAAAAA==");
+        std::array<char, 160> expected;
+        const auto count = number != 0
+          ? placement != 0
+            ? std::snprintf(expected.data(), expected.size(), "\x1b_Gi=%u,I=%u,p=%u;EINVAL: image ID and number are mutually exclusive\x1b\\", image, number, placement)
+            : std::snprintf(expected.data(), expected.size(), "\x1b_Gi=%u,I=%u;EINVAL: image ID and number are mutually exclusive\x1b\\", image, number)
+          : placement != 0
+            ? std::snprintf(expected.data(), expected.size(), "\x1b_Gi=%u,p=%u;OK\x1b\\", image, placement)
+            : std::snprintf(expected.data(), expected.size(), "\x1b_Gi=%u;OK\x1b\\", image);
+        check(count > 0 && static_cast<std::size_t>(count) < expected.size());
+        check(actual == std::string_view{expected.data(), static_cast<std::size_t>(count)});
+      }
+    }
+  }
+}
+
 void graphicsHeaderParity(auto &memory) {
   const auto verify = [&](std::string_view header, bool accepted) {
     const auto request = "\x1b_G" + std::string{header} + ";AAAAAA==\x1b\\\x1b[6n";
@@ -746,6 +768,7 @@ int main() {
   BudgetAllocator memory{system, 64 * 1024 * 1024};
   localMedia(memory);
   configuredLimits(memory);
+  graphicsReplyEncodings(memory);
   graphicsHeaderParity(memory);
   sharedBudget(memory);
   sharedPaneBudget(memory);
