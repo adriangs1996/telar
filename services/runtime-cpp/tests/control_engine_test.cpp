@@ -245,6 +245,30 @@ void sealedReplyOwnership(Memory &memory) {
   require(resumed && std::string_view{reinterpret_cast<const char *>(resumed->data()), resumed->size()} == payload);
   queue.consume(resumed->size());
   require(queue.empty());
+
+  const std::string full_payload(Response::maximum_bytes, 'L');
+  reply.append(full_payload);
+  reply.seal();
+  rejected = false;
+  try {
+    reply.append("x");
+  } catch (const std::length_error &) {
+    require(false);
+  } catch (const std::logic_error &) {
+    rejected = true;
+  }
+  require(rejected && reply.size() == full_payload.size());
+
+  reply.clear();
+  reply.append(full_payload);
+  bool limited = false;
+  try {
+    reply.append("x");
+  } catch (const std::length_error &) {
+    limited = true;
+  }
+  require(limited && reply.size() == full_payload.size());
+
 }
 
 void sealAllocationRecovery() {
