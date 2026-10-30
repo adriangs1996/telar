@@ -689,6 +689,98 @@ void doubleQueuePressure(SystemAllocator &memory) {
   }
 }
 
+void revokedCapabilitiesAndReuse(SystemAllocator &memory) {
+  enum class Change { hidden, clipboard_disabled, control_only, pane_reused };
+  enum class Stage { requested, prepared, committed };
+  for (const auto change : {Change::hidden, Change::clipboard_disabled, Change::control_only, Change::pane_reused}) {
+    for (const auto stage : {Stage::requested, Stage::prepared, Stage::committed}) {
+      RuntimeModel model{memory};
+      Kqueue poller;
+      PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/clipboard-capability.sock"}};
+      WorkspaceService workspaces{memory, model, panes};
+      ClientPeer client{memory, model, ClientRole::interactive};
+      const std::array<std::string_view, 1> arguments{"/bin/cat"};
+      const Launch launch{.cwd = "/tmp", .arguments = arguments};
+      constexpr TerminalSize size{80, 24, 9, 18};
+      workspaces.open(client.session(), OpenPane{.request_id = 1, .size = size, .launch = launch});
+      auto *pane = &panes.require(client.receive<PaneOpened>().pane_id);
+      termios settings{};
+      check(::tcgetattr(pane->process->descriptor(), &settings) == 0);
+      ::cfmakeraw(&settings);
+      check(::tcsetattr(pane->process->descriptor(), TCSANOW, &settings) == 0);
+      ConfigurePaneDesktop desktop{.pane_id = pane->id, .pane_generation = pane->generation, .visible = true, .clipboard = true};
+      panes.configureDesktop(client.session(), desktop);
+      ClipboardService service{model};
+      pane->terminal.feed(bytes("\x1b]5522;type=write:id=old\x1b\\\x1b]5522;type=wdata\x1b\\"));
+      service.advance(*pane, std::chrono::steady_clock::now());
+      const OwnedClipboardTask old{client.receive<ClipboardDesktopRequest>()};
+      const CompleteClipboardDesktop prepared{.ticket = old.ticket, .status = ClipboardDesktopStatus::success, .prepared = true};
+      MemoryClipboard provider;
+      if (stage != Stage::requested) {
+        check(service.complete(client.session(), prepared) == pane);
+      }
+      if (stage == Stage::committed) {
+        service.advance(*pane, std::chrono::steady_clock::now());
+        check(client.receive<ClipboardDesktopExecute>().ticket == old.ticket);
+        check(executeClipboard(old, ClipboardConsent::once, provider).status == ClipboardDesktopStatus::success);
+      }
+      const auto previous_writes = provider.writes;
+      if (change == Change::pane_reused) {
+        const auto identity = pane->id;
+        const auto location = pane->location;
+        panes.remove(identity);
+        Command command{memory, launch};
+        pane = &panes.launch(command, location, size, identity);
+        check(pane->id == old.ticket.pane_id && pane->generation != old.ticket.pane_generation);
+        panes.attach(client.session(), *pane, size);
+        bool rejected = false;
+        try {
+          panes.configureDesktop(client.session(), desktop);
+        } catch (const RequestError &) {
+          rejected = true;
+        }
+        check(rejected);
+      } else if (change == Change::control_only) {
+        client.session().role = ClientRole::control;
+      } else {
+        desktop.visible = change != Change::hidden;
+        desktop.clipboard = change != Change::clipboard_disabled;
+        panes.configureDesktop(client.session(), desktop);
+      }
+      check(service.complete(client.session(), prepared) == nullptr);
+      check(service.complete(client.session(), CompleteClipboardDesktop{.ticket = old.ticket, .status = ClipboardDesktopStatus::success}) == nullptr);
+      service.advance(*pane, std::chrono::steady_clock::now());
+      service.advance(*pane, std::chrono::steady_clock::now());
+      if (change != Change::pane_reused) {
+        check(client.receive<CancelClipboardDesktop>().ticket == old.ticket);
+        panes.flushInput(*pane);
+        check(ptyUntil(pane->process->descriptor(), "status=EPERM:id=old\x1b\\") == "\x1b]5522;type=write:status=EPERM:id=old\x1b\\");
+      } else {
+        check(drain(pane->terminal).empty());
+      }
+      check(provider.writes == previous_writes && previous_writes == (stage == Stage::committed ? 1u : 0u));
+      client.session().role = ClientRole::interactive;
+      desktop.pane_generation = pane->generation;
+      desktop.visible = true;
+      desktop.clipboard = true;
+      panes.configureDesktop(client.session(), desktop);
+      service.configure(*pane);
+      pane->terminal.feed(bytes("\x1b]5522;type=write:id=fresh\x1b\\\x1b]5522;type=wdata\x1b\\"));
+      service.advance(*pane, std::chrono::steady_clock::now());
+      const OwnedClipboardTask fresh{client.receive<ClipboardDesktopRequest>()};
+      check(fresh.ticket.nonce != old.ticket.nonce);
+      check(service.complete(client.session(), prepared) == nullptr);
+      check(service.complete(client.session(), CompleteClipboardDesktop{.ticket = fresh.ticket, .status = ClipboardDesktopStatus::success, .prepared = true}) == pane);
+      service.advance(*pane, std::chrono::steady_clock::now());
+      check(client.receive<ClipboardDesktopExecute>().ticket == fresh.ticket);
+      finishDesktop(service, client, *pane, fresh, executeClipboard(fresh, ClipboardConsent::once, provider));
+      check(provider.writes == previous_writes + 1 && provider.reads == 0);
+      check(drain(pane->terminal) == "\x1b]5522;type=write:status=DONE:id=fresh\x1b\\");
+      panes.remove(pane->id);
+    }
+  }
+}
+
 void deferredAllocationFailure() {
   FailingAllocator upstream;
   BudgetAllocator memory{upstream, 64 * 1024 * 1024};
@@ -746,6 +838,7 @@ int main() {
   closeBeforeExecution(system);
   resetPendingOperations(system);
   doubleQueuePressure(system);
+  revokedCapabilitiesAndReuse(system);
   deferredAllocationFailure();
   std::puts("Native clipboard protocol, consent, routing and ownership tests passed");
 }
