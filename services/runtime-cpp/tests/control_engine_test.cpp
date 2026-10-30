@@ -174,11 +174,12 @@ void borrowedRequestResume(Memory &memory) {
 
   check("\x1b[2;3H\x1b[6nA\x1b[6n", "\x1b[2;3R\x1b[2;4R");
   check("\x1bP+q544E;544E\x1b\\", "\x1bP1+r544E=787465726D2D323536636F6C6F72\x1b\\\x1bP1+r544E=787465726D2D323536636F6C6F72\x1b\\");
+  check("\x1bP$qm\x1b\\", "\x1bP1$r0m\x1b\\");
   check("\x1b_Ga=q,f=24,s=1,v=1,i=7;/wAA\x1b\\", "\x1b_Gi=7;OK\x1b\\");
 
   std::string palette = "\x1b]4";
   std::string replies;
-  for (unsigned index = 0; index < 16; ++index) {
+  for (unsigned index = 0; index < 64; ++index) {
     const auto number = std::to_string(index);
     palette += ";" + number + ";#123456;" + number + ";?";
     replies += "\x1b]4;" + number + ";rgb:1212/3434/5656\x1b\\";
