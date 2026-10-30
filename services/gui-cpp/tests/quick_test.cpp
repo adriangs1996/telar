@@ -1244,18 +1244,26 @@ private:
     peer.open(socket_);
     QTRY_VERIFY_WITH_TIMEOUT(peer.ready(), runtime_wait_ms);
     peer.showNotification({.request_id = 1, .notification = {.level = telar::NotificationLevel::info, .duration_ms = telar::max_notification_duration_ms, .title = "Focused notice", .message = "Remove the focused widget"}});
-    const auto closes = [&] {
-      return test::visualItems(*window_->contentItem(), QStringLiteral("notificationClose"));
-    };
-    QTRY_COMPARE_WITH_TIMEOUT(closes().size(), 1, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->notifications().items().empty() && client_->notifications().items().front().title.view() == "Focused notice", runtime_wait_ms);
     const auto identity = client_->notifications().items().front().id;
     const auto key = client_->notificationIdentity(identity);
+    const auto closes = [&] {
+      auto items = test::visualItems(*window_->contentItem(), QStringLiteral("notificationClose"));
+      items.removeIf([&](const QQuickItem *item) {
+        return item->property("identity").toString() != key || !item->isEnabled();
+      });
+
+      return items;
+    };
+    QTRY_COMPARE_WITH_TIMEOUT(closes().size(), 1, runtime_wait_ms);
     const auto cleanup = qScopeGuard([this, key] {
       client_->dismissNotification(key);
     });
-    auto *close = closes().front();
+    const QPointer<QQuickItem> close{closes().front()};
+    QCOMPARE(close->property("identity").toString(), key);
+    QVERIFY(close->isEnabled());
     close->forceActiveFocus(Qt::TabFocusReason);
-    QTRY_COMPARE_WITH_TIMEOUT(window_->activeFocusItem(), close, runtime_wait_ms);
+    QTRY_VERIFY2_WITH_TIMEOUT(close != nullptr && window_->activeFocusItem() == close.data(), qPrintable(windowObservation(*window_)), runtime_wait_ms);
     peer.request(telar::ClientCommand{.request_id = 2, .action = telar::ClientAction::notification_dismiss, .target_id = identity.value});
     QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{2}, runtime_wait_ms);
     QCOMPARE(peer.result().status, telar::ClientCommandStatus::applied);

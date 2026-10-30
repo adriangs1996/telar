@@ -54,18 +54,22 @@ void TextScene::configure(const FontConfiguration &font, FontGrid grid, const st
   row_.resetFont();
 }
 
-void TextScene::begin(const QRectF &bounds, qreal scale, const QRectF &clip) {
+void TextScene::begin(const QRectF &bounds, qreal scale, const QRectF &clip, std::unique_ptr<QSGNode> previous) {
   batch_.reset();
   bounds_ = bounds;
   clip_ = clip;
   scale_ = scale;
+  next_chunk_ = nullptr;
   if (optical_) {
+    text_.reset();
     const auto overhang = bounds.height();
     const auto raster = bounds.adjusted(-overhang, -overhang, overhang, overhang);
     origin_ = raster.topLeft();
     optical_->begin(raster.size(), scale, strength_);
   } else {
-    text_ = std::make_unique<QSGNode>();
+    ++revision_;
+    text_ = previous ? std::move(previous) : std::make_unique<QSGNode>();
+    next_chunk_ = text_->firstChild();
   }
 }
 
@@ -101,6 +105,36 @@ void TextScene::addCell(std::size_t column, const QFont &font, Color foreground,
   batch_->span_count += range.span_count;
 }
 
+std::unique_ptr<QSGNode> TextScene::takeChunk() {
+  std::unique_ptr<QSGNode> node{next_chunk_};
+  if (node) {
+    next_chunk_ = node->nextSibling();
+    text_->removeChildNode(node.get());
+  }
+
+  return node;
+}
+
+void TextScene::appendChunk(std::unique_ptr<QSGNode> node) {
+  if (next_chunk_ != nullptr) {
+    text_->insertChildNodeBefore(node.release(), next_chunk_);
+  } else {
+    adoptSceneNode(*text_, std::move(node));
+  }
+}
+
+void TextScene::paintChunk(const ChromeTextPaint &paint) {
+  auto *previous = next_chunk_;
+  if (previous != nullptr) {
+    next_chunk_ = previous->nextSibling();
+  }
+
+  auto *painted = paintChromeText(previous, window_, paint, collection_);
+  if (painted != previous) {
+    appendChunk(std::unique_ptr<QSGNode>{painted});
+  }
+}
+
 void TextScene::flushCells() {
   if (!batch_) {
     return;
@@ -116,11 +150,11 @@ void TextScene::flushCells() {
   paint.color = toQColor(batch.foreground);
   paint.foreground = batch.foreground;
   paint.scale = scale_;
-  paint.revision = 1;
+  paint.revision = revision_;
   paint.style = batch.style;
   paint.placement = TextInkPlacement{.origin = bounds_.topLeft(), .baseline = grid_.baseline / scale_, .clip = clip_};
   try {
-    adoptSceneNode(*text_, std::unique_ptr<QSGNode>{paintChromeText(nullptr, window_, paint, collection_)});
+    paintChunk(paint);
   } catch (const std::runtime_error &) {
     addFallbackCells(batch);
   }
@@ -141,7 +175,8 @@ void TextScene::addFallbackCells(const Batch &batch) {
 
 void TextScene::appendInline(std::unique_ptr<QSGNode> node) {
   flushCells();
-  adoptSceneNode(*text_, std::move(node));
+  const auto previous = takeChunk();
+  appendChunk(std::move(node));
 }
 
 void TextScene::add(const QString &text, const QFont &font, const QTextCharFormat &format, TextPlacement placement) {
@@ -160,10 +195,10 @@ void TextScene::add(const QString &text, const QFont &font, const QTextCharForma
     paint.pixel_height = grid_.pixel_height;
     paint.color = format.foreground().color();
     paint.scale = scale_;
-    paint.revision = 1;
+    paint.revision = revision_;
     paint.style = placement.style;
     paint.placement = TextInkPlacement{.origin = placement.origin, .baseline = placement.baseline, .clip = clip_};
-    adoptSceneNode(*text_, std::unique_ptr<QSGNode>{paintChromeText(nullptr, window_, paint, collection_)});
+    paintChunk(paint);
   } catch (const std::runtime_error &) {
     addQtText(text, font, format, placement);
   }
@@ -185,23 +220,30 @@ void TextScene::addQtText(const QString &text, const QFont &font, const QTextCha
   if (optical_) {
     optical_->add(layout, placement.origin - origin_, format.foreground().color());
   } else {
+    const auto previous = takeChunk();
     std::unique_ptr<QSGTextNode> node{window_.createTextNode()};
     node->setRenderType(QSGTextNode::NativeRendering);
     node->addTextLayout(placement.origin, &layout);
-    adoptSceneNode(*text_, std::move(node));
+    appendChunk(std::move(node));
   }
 }
 
-void TextScene::append(QSGNode &parent) {
+QSGNode *TextScene::append(QSGNode &parent) {
   flushCells();
   if (optical_) {
     std::unique_ptr<QSGNode> node{optical_->node(window_, origin_)};
     if (node) {
       adoptSceneNode(parent, std::move(node));
     }
-  } else {
-    adoptSceneNode(parent, std::move(text_));
+
+    return nullptr;
   }
+
+  while (next_chunk_ != nullptr) {
+    const auto discarded = takeChunk();
+  }
+
+  return &adoptSceneNode(parent, std::move(text_));
 }
 
 }

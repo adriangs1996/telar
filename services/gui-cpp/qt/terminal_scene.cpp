@@ -258,11 +258,17 @@ void TerminalScene::synchronizeGrid(CellRectangle visible) {
 }
 
 void TerminalScene::paintRow(const TerminalPresentation &frame, Row &row, std::size_t row_index) {
+  std::unique_ptr<QSGNode> previous{row.text_content};
+  row.text_content = nullptr;
+  if (previous) {
+    row.text->removeChildNode(previous.get());
+  }
+
   clearSceneChildren(*row.text);
   clearSceneChildren(*row.background);
   auto &shapes = appendSceneNode<QSGNode>(*row.text);
   const QRectF row_bounds{0, static_cast<qreal>(row_index) * frame.font.cell.height(), columns_ * frame.font.cell.width(), frame.font.cell.height()};
-  text_.begin(row_bounds, frame.scale, frame.bounds);
+  text_.begin(row_bounds, frame.scale, frame.bounds, std::move(previous));
   const auto cursor_column = cursorColumn(frame, row_index, columns_);
 
   const auto grouped_text = text_.prepare(frame.screen.row(row_index).first(columns_), {.pixel_height = frame.grid.pixel_height, .cell_width = frame.grid.width, .cursor = cursor_column, .selection = frame.selection, .first_cell = row_index * frame.screen.columns()});
@@ -298,7 +304,7 @@ void TerminalScene::paintRow(const TerminalPresentation &frame, Row &row, std::s
     }
   }
 
-  text_.append(*row.text);
+  row.text_content = text_.append(*row.text);
   adoptSceneNode(*row.text, std::move(decorations));
   row.revision = frame.screen.rowRevision(row_index);
   row.appearance = frame.appearance;

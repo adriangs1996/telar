@@ -60,6 +60,7 @@ private:
   struct Row {
     QSGNode *text = nullptr;
     QSGNode *background = nullptr;
+    QSGNode *text_content = nullptr;
     std::uint64_t revision = 0;
     std::uint64_t appearance = 0;
     CellSelection selection{};

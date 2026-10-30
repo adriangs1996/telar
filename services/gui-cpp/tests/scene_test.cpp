@@ -441,6 +441,36 @@ class SceneTest final : public QObject {
   Q_OBJECT
 
 private:
+  Q_SLOT static void changingTextAndInlineDecorationsMatchesFreshRows() {
+    constexpr std::array<std::string_view, 5> contents{"ffi!=->M", "ABCDEFGH", "        ", "01234567", "ffi!=->M"};
+    constexpr std::size_t columns = 8;
+    constexpr unsigned underline_shift = 8;
+    SceneFixture fixture{CursorShape::block, false};
+    fixture.useWhiteTextOnBlack();
+    for (std::size_t variant = 0; variant < contents.size(); ++variant) {
+      std::array<Byte, columns> text{};
+      std::array<Cell, columns> cells;
+      for (std::size_t column = 0; column < columns; ++column) {
+        text[column] = static_cast<Byte>(contents[variant][column]);
+        CellStyle style;
+        if (variant % 2 != 0) {
+          style.flags = static_cast<std::uint16_t>(column % 2 == 0 ? CellAttribute::bold : CellAttribute::italic);
+          style.flags |= static_cast<std::uint16_t>(CellAttribute::strikethrough);
+          style.flags |= static_cast<std::uint16_t>(static_cast<unsigned>(UnderlineStyle::curly) << underline_shift);
+        }
+
+        cells[column] = {.style = style, .text = std::span{text}.subspan(column, 1)};
+      }
+
+      fixture.setCells(cells, {.visible = false, .shape = CursorShape::block});
+      const auto retained = fixture.capture();
+      SceneFixture reference{CursorShape::block, false};
+      reference.useWhiteTextOnBlack();
+      reference.setCells(cells, {.visible = false, .shape = CursorShape::block});
+      QCOMPARE(retained, reference.capture());
+    }
+  }
+
   Q_SLOT static void viewportResizeExcludesHiddenLigatureContextWithoutCellDamage() {
     SceneFixture fixture{CursorShape::block, false};
     std::array<Byte, 4> text{'=', '=', '=', '='};

@@ -372,21 +372,25 @@ private:
 
 namespace {
 
-QSGNode *paintText(QSGNode *previous, QQuickWindow &window, const ChromeTextPaint &paint, std::shared_ptr<ResidentFonts> fonts) {
-  std::unique_ptr<ChromeScene<ResidentFonts>> scene{dynamic_cast<ChromeScene<ResidentFonts> *>(previous)};
-  if (!scene || scene->fonts() != fonts.get()) {
-    scene = std::make_unique<ChromeScene<ResidentFonts>>(window, std::move(fonts));
+QSGNode *paintText(QSGNode *previous, QQuickWindow &window, const ChromeTextPaint &paint, const std::shared_ptr<const FontCollection> &collection) {
+  std::unique_ptr<QSGNode> owner{previous};
+  auto fonts = ResidentFonts::shared(collection);
+  auto *scene = dynamic_cast<ChromeScene<ResidentFonts> *>(owner.get());
+  if (scene == nullptr || scene->fonts() != fonts.get()) {
+    auto replacement = std::make_unique<ChromeScene<ResidentFonts>>(window, std::move(fonts));
+    scene = replacement.get();
+    owner = std::move(replacement);
   }
 
   scene->paint(paint);
 
-  return scene.release();
+  return owner.release();
 }
 
 }
 
 QSGNode *paintChromeText(QSGNode *previous, QQuickWindow &window, const ChromeTextPaint &paint, const std::shared_ptr<const FontCollection> &collection) {
-  return paintText(previous, window, paint, ResidentFonts::shared(collection));
+  return paintText(previous, window, paint, collection);
 }
 
 }

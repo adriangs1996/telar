@@ -4,6 +4,20 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [retained row text pass](measurements/row-text-retention.md) preserves ordinary
+row roots and updates compatible chunks in place while retiring surplus nodes.
+All 37 original component frames and synchronized node counts match; a stale
+revision negative changes 16 states. Seven alternated pairs per variant reject
+two earlier candidates. Final decorated rows improve 16.8–17.5% with seven wins
+at each of three widths and no consistently losing control. This is a component
+CPU result, not full-client or Zig performance acceptance. Release scene/text
+suites pass 37/14 entries; guarded original/private/production Quick each pass
+88 without warnings. The guard fixes a test's retired-pointer formatting crash
+and waits for the exact enabled notification identity. Native final ASan/UBSan
+assertions pass but exit leaks remain (1637390/730686 bytes); no local suppression
+is used. Full platform visuals, cache-pressure bounds, native leaks and comparative
+performance remain open.
+
 The [workspace navigation checkpoint](measurements/workspace-navigation.md) uses
 canonical OpenPane handoffs, bounded original history/saved-layout policies and
 root-before-tree restoration. Its 4,922 original-source operations match in

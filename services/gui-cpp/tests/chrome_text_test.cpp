@@ -8,6 +8,7 @@
 #include "fonts/shaped_run_view.hpp"
 #include "frame_fixture.hpp"
 #include "qt/chrome_fonts.hpp"
+#include "qt/chrome_text_scene.hpp"
 #include "qt/native_chrome_text.hpp"
 #include "qt/native_cell_text.hpp"
 #include "qt/font_source.hpp"
@@ -27,6 +28,7 @@
 #include <QPointer>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QSGNode>
 #include <QSignalSpy>
 #include <QSize>
 #include <QString>
@@ -44,6 +46,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <stdexcept>
 #include <string>
 
 namespace {
@@ -143,10 +146,43 @@ QImage grabFrame(QQuickWindow &window) {
   return frame.convertToFormat(QImage::Format_RGB32);
 }
 
+class ObservedSceneNode final : public QSGNode {
+public:
+  explicit ObservedSceneNode(unsigned &destroyed)
+      : destroyed_(destroyed) {}
+
+  ObservedSceneNode(const ObservedSceneNode &) = delete;
+  ObservedSceneNode &operator=(const ObservedSceneNode &) = delete;
+  ObservedSceneNode(ObservedSceneNode &&) = delete;
+  ObservedSceneNode &operator=(ObservedSceneNode &&) = delete;
+
+  ~ObservedSceneNode() override {
+    ++destroyed_;
+  }
+
+private:
+  unsigned &destroyed_;
+};
+
 class ChromeTextTest final : public QObject {
   Q_OBJECT
 
 private:
+  Q_SLOT static void failedFontCollectionReleasesPreviousScene() {
+    unsigned destroyed = 0;
+    QQuickWindow window;
+    QSGNode parent;
+    auto previous = std::make_unique<ObservedSceneNode>(destroyed);
+    auto child = std::make_unique<ObservedSceneNode>(destroyed);
+    previous->appendChildNode(child.release());
+    parent.appendChildNode(previous.release());
+    const ChromeTextPaint paint;
+    QVERIFY_THROWS_EXCEPTION(std::invalid_argument, static_cast<void>(paintChromeText(parent.firstChild(), window, paint, {})));
+    constexpr unsigned expected_destroyed = 2;
+    QCOMPARE(destroyed, expected_destroyed);
+    QVERIFY(parent.firstChild() == nullptr);
+  }
+
   Q_SLOT static void cellTextDiscoversTheContinuationGlyph() {
     QQuickWindow window;
     window.setColor(Qt::black);

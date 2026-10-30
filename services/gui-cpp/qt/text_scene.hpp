@@ -26,6 +26,8 @@ namespace telar::gui::qt {
 template <fonts::FontProvider FontSet>
 class ChromeGlyphImages;
 
+struct ChromeTextPaint;
+
 struct TextPlacement {
   QPointF origin;
   qreal baseline = 0;
@@ -37,12 +39,13 @@ public:
   explicit TextScene(QQuickWindow &window);
 
   void configure(const FontConfiguration &font, FontGrid grid, const std::shared_ptr<const FontCollection> &collection);
-  void begin(const QRectF &bounds, qreal scale, const QRectF &clip);
+  void begin(const QRectF &bounds, qreal scale, const QRectF &clip, std::unique_ptr<QSGNode> previous = {});
   bool prepare(std::span<const CellValue> cells, fonts::RowTextRequest request);
   void addCell(std::size_t column, const QFont &font, Color foreground, fonts::GlyphStyle style);
   void appendInline(std::unique_ptr<QSGNode> node);
   void add(const QString &text, const QFont &font, const QTextCharFormat &format, TextPlacement placement);
-  void append(QSGNode &parent);
+  // Detach the returned text root before passing it to begin; optical nodes return null.
+  QSGNode *append(QSGNode &parent);
 
 private:
   struct Batch {
@@ -55,6 +58,9 @@ private:
     QFont font;
   };
 
+  std::unique_ptr<QSGNode> takeChunk();
+  void appendChunk(std::unique_ptr<QSGNode> node);
+  void paintChunk(const ChromeTextPaint &paint);
   void flushCells();
   void addFallbackCells(const Batch &batch);
   void addQtText(const QString &text, const QFont &font, const QTextCharFormat &format, TextPlacement placement);
@@ -74,6 +80,8 @@ private:
   qreal scale_ = 1;
   std::unique_ptr<workbench::OpticalText> optical_;
   std::unique_ptr<QSGNode> text_;
+  QSGNode *next_chunk_ = nullptr;
+  std::uint64_t revision_ = 0;
   QPointF origin_;
   std::uint8_t strength_ = FontConfiguration::maximum_thicken_strength;
 };

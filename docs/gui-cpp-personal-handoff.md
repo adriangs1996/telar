@@ -2,6 +2,148 @@
 
 ## Personal continuation checkpoint
 
+### Retained row text is qualified; goal remains incomplete (06:33 UTC)
+
+This checkpoint is based on parent 0f82e901a; inspect git log for its local commit.
+No publishing, merging,
+delegation, or final response. Persistent goal ACTIVE/incomplete. All work stays
+in this Personal worktree; continue Spanish updates <=60 seconds. Long analysis
+still repeatedly exceeds that cadence: use actual clock before every batch.
+
+Production now contains final D retained row text plus permanent regressions.
+qt/{text_scene,terminal_scene}.{cpp,hpp}, chrome_text_scene.cpp: ordinary roots
+persist; compatible chunks update in place, inline/Qt fallback consume their
+old slots and surplus nodes retire. Optical append returns null. A monotonic
+TextScene revision prevents stale meshes. Existing glyph mesh renderer is
+unchanged; rejected mesh experiments remain rejected. paintChromeText owns
+previous before type/source checks, including failed font collection cleanup.
+
+D seven-pair matrix COMPLETE: local/row-text-simple-root-pairs-1, 21 cases,
+5000 measured/500 warmup, all alternating pairs without other build/test/profile.
+Decorated32/128/512 wins7/7, medians improve16.76/17.46/17.42%. No mode wins<=1;
+component rule passes. Some controls have worse medians (cursor32+3.05%,wins2/7),
+so do not claim every case or full client improves. B/C rejected as below.
+37 original raw frames match, including all37 synchronized node counts (13..90).
+Negative constant revision changes16states. Original28 oracle precedes B; its
+rejected accidental old-object v2 link is preserved. Corrected37 and node-count
+v3 sources/receipts are retained. Bounds are fixture/component scope, not universal.
+
+Release final SceneTest37 and ChromeTextTest14 PASS. New permanent failed-font
+ownership regression fails original0destroyed vs2expected, then passes final.
+New stable-width inline/content retained-vs-fresh test passes. First raw D Quick
+crashes in QObject::objectName/QTest::toString formatting retired expected control.
+Trace is local row-text-retention-D/quick-crash-1.ips; archived selected exception/
+frames omit device identifiers. Root Quick test now waits requested notification
+and exact enabled control identity, uses QPointer+bool focus check, preserves
+terminal focus and real typed-output checks. Original/privateD/production each
+PASS88,noQWARN with guarded tests. Exact original interleaving is not established;
+this repairs test synchronization/lifetime, not a demonstrated product focus bug.
+
+Final production Release build3 FINISHED0 after CMake regeneration. Renderer
+objects match measured D; all mapped Mach-O sections, VM addresses and sizes of
+GUI and Quick match qualified D even after strict style cleanup. Whole-file
+hashes differ (no false binary equality). Proof local/row-production-macho-
+comparison-2.json, compare_row_macho.py, archive member comparison. Final GUI
+c156df64849cd5c8c6d2b708853e939a740e745b086ddc2442489ca58c018f24;
+Quick dc2a5387f3382c84d677d6105f1b511b1db9be67bb94d9c641fa905a9ba47c30.
+All6 touched translation units pass unchanged500-check lint (final receipts
+merge production1/2/3); all8 changed code/header files have actual Neovim clangd
+delivered-empty diagnostics. Initial style warnings/errors are retained. A
+seemingly stylistic void-cast still failed bugprone-unused-return-value; final
+paintChunk directly leaves compatible returned nodes owned by their parent.
+This cleanup preserves ALL mapped final Release sections, proved after exit0.
+
+Final production native ASAN/UBSAN targets build/run FINISHED. Scene37 and
+ChromeText14 assertions pass; no access/UB diagnostic. BOTH EXIT1 leaks:
+1637390bytes9592alloc and730686bytes3840alloc. Different workloads from37-state
+oracle; never call this a before/after delta. detect_leaks1,UBSANhalt1,noLSAN or
+local suppression. Complete built-in ObjC tables retained. Native leaks remain
+FAILED. Private A/B/C/D37 pixel oracles likewise leak/exit1; data below/report.
+No active UI/build/lint/editor/profiling/test jobs remain. Exact owned reference
+runtime process query finds none; user runtime35801 has not been targeted.
+
+Report measurements/row-text-retention.md, manifest and compact archive contain
+528 artifacts (~3.6MB); final verifier --check-current-source PASSES. Final
+identities, selected crash evidence and report helpers are included; device
+identifiers from the raw private crash report are excluded. PARITY links the
+scoped gains and open global gates. This checkpoint belongs in a local commit.
+NEVER final at this checkpoint. Draft personal-frame-delivery.md is still untracked/unarchived:
+its Cocoa experiments must eventually receive their own archive/report commit.
+
+NEXT: continue remaining paired visual glyph errors (picker12,
+scenes23/35) and full-client performance. Sampling probes under local/chrome-
+sampling-* are independent unchanged original shader controls; source layouts
+are Qt-derived, so they only qualify backend math. A prospective hypothesis is
+float CPU endpoint rounding plus projection, not triangle order (both original
+quad.metal and Qt use TL,TR,BR/TL,BR,BL). No new rendering edit yet. Existing
+baseline phases and failed sampling variants remain recorded below. Also preserve
+full functional/platform/package/memory gates; no global parity acceptance.
+
+### Row root experiments in progress (06:05 UTC)
+
+Persistent goal remains ACTIVE and incomplete. HEAD is 0f82e901a. No renderer
+change has been adopted; all row variants below are private under
+services/gui-cpp/measurements/local. The root GUI remains 2c4a. No publishing,
+merging, delegation, or final checkpoint. Continue Spanish updates <=60 seconds.
+
+Original row pixel oracle was built and run BEFORE variant B: 28 states,
+repeated byte-exact (18 distinct frames), freeze.json in row-text-retention-A.
+Extended v2 adds stable-width content and optical/fallback transitions: 37
+states. Its initial links accidentally used the old 28-state object; those
+outputs are rejected, preserved separately. The corrected baseline is
+row-text-retention-A/native-pixels-v2-1.jsonl, with source row_pixel_oracle-v2.cpp.
+B/C/D each match all 37 raw component-rectangle pixel captures. This is NOT a
+full-window or original Zig comparison. No alignment, tolerance, or masking.
+A stale-revision negative differs in 16 states, proving detection of old ink.
+
+The row bench uses actual TerminalScene synchronization on the Metal render
+thread, with three widths 32/128/512 and seven modes: create, content,
+selection, cursor, appearance, idle, decorated. 21 cases. Content modes include
+common Screen.apply work; idle and creation are measured too. Initial unsigned
+JSON constructor compile errors and missing WindowImages initialization are
+preserved; neither failed harness is performance evidence. Final tools compile
+cleanly; 21 final geometry digests match baseline for each candidate.
+
+B retains typed text roots and removes/reinserts each old ChromeScene. Seven
+alternated pairs, 5000 measured/500 warmup per case: decorated improves
+18.15/18.91/19.59%, all 7/7. REJECTED: selection128 and appearance128 win1/7,
+content512 wins0/7 (+1.50%), selection512 wins1/7 (+1.46%). Matrix is local/
+row-text-pairs-1. C updates compatible ChromeScene children in place and takes
+ownership before resolving the font collection. Same seven-pair protocol:
+decorated improves18.79/18.99/18.89%, all7/7. REJECTED cursor128 wins1/7,
++1.50%. Matrix row-text-parented-pairs-1. Never explain away these losses as
+placement: no identical normalized assembly proof. ARM disassembly and focused
+function/call extracts are retained for A/B/C.
+
+Both B and C pass native SceneTest 36 entries, no warnings. Direct foreign-node
+ownership oracle: original fails ForeignNodeNotDestroyed; B releases foreign
+parent+child, but extended invalid-font test fails FailedSourceOwnershipNotReleased.
+C passes foreign destruction, parented compatible identity, changed font source,
+and parented failed-source cleanup. ASAN/UBSAN A/B/C: all37 identical pixels,
+no access/UB diagnostics; ALL exit1 leaks: A503286bytes2536alloc, B518749/2553,
+C518382/2573. Built-in ObjC tables respectively12/480,15/600,15/600, NO local
+suppression and LSAN_OPTIONS absent. Do not claim clean sanitizer acceptance.
+
+D is PRIVATE and not measured yet. It uses ordinary QSGNode roots and a
+monotonic TextScene-wide revision instead of a TextRoot subclass/dynamic_cast.
+Optical append returns null, ensuring optical nodes never enter ordinary reuse.
+It keeps C's parented update and source-failure ownership. Full dependent graph
+recompiled with VFS overlay (5 objects). All37 pixel states,21 geometry cases,
+36 native SceneTest entries and extended ownership oracle PASS. ASAN D build
+finished; native run active via exec session52851 at06:05UTC. Scripts:
+build_row_retention_d.py, build_row_tools.py, run_row_d_validation.py,
+build_row_asan_d.py, run_row_asan_d.py. Next poll actual exit, inspect ASAN
+37 states/logs; then run pair_row_text_simple_root_probe.py alone (no other
+build/test/profiling during timing). If any consistent loss, reject per skill.
+Only after evidence may a variant enter production. Compile/lifetime/pixel and
+full-GUI/performance/platform gates remain separate.
+
+Root git currently only untracked draft personal-frame-delivery.md, plus this
+handoff. Cocoa experiment archive/report still outstanding. B/C/D sources,
+negative source, build receipts/logs and pixels all local/row-text-retention-*.
+After experiment decision, archive compact evidence, update PARITY and commit
+locally; continue goal work, never final at a checkpoint.
+
 ### Current row-root follow-up after rejected mesh variants (05:35 UTC)
 
 HEAD7205bdf66 accepted probe repair, priora553fda4c fixtureSIGWINCHcorrection.
