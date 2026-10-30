@@ -29,6 +29,18 @@ void finishSnapshots(Client &client, Transport &transport, TabLocation location,
   deliver(client, WorkspaceSnapshot{.request_id = transport.last<RequestWorkspaceSnapshot>().request_id, .workspace = location.workspace, .name = "project", .tabs = tabs});
 }
 
+template <typename Client>
+void openWithPendingWorkspaceSnapshot(Client &client, Transport &transport) {
+  client.connected(1);
+  deliver(client, ClientLayoutSnapshot{});
+  const auto open = transport.last<OpenPane>();
+  const TabLocation location{.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
+  deliver(client, PaneOpened{.request_id = open.request_id, .pane_id = 1, .location = location, .pane_generation = 1});
+  const std::array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+  deliver(client, TabSnapshot{.request_id = transport.last<RequestTabSnapshot>().request_id, .location = location, .panes = panes});
+  require(client.requestsPending(), "The fixture must retain its real canonical workspace request");
+}
+
 void hiddenStartupKeepsMetadataWithoutOpeningAPane() {
   SystemAllocator memory;
   Transport transport;
@@ -62,6 +74,10 @@ void aHiddenRestoredLayoutOwnsItsDataUntilPresentation() {
   deliver(client, PaneTitle{.pane_id = first_pane, .title = "overwrite the decoder storage"});
   require(client.activeTab() == nullptr && client.panes().empty() && transport.count(ClientTag::open_pane) == 0, "a hidden restored layout must retain owned layout data without constructing pane screens");
   client.setPresented(true);
+  const auto opening = transport.last<OpenPane>();
+  require(opening.target.kind == PaneTarget::Kind::pane && opening.target.id == focused_pane && !opening.launch, "presentation must reopen the remembered root before asking for its canonical tabs");
+  deliver(client, PaneOpened{.request_id = opening.request_id, .pane_id = focused_pane, .location = location, .pane_generation = 1});
+  require(client.activeTab()->layout.nodes().size() == 1, "the restored split must remain staged until canonical membership arrives");
   const std::array panes{PaneDescriptor{.pane_id = first_pane, .lifecycle = PaneLifecycle::running, .pane_generation = 1}, PaneDescriptor{.pane_id = focused_pane, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
   finishSnapshots(client, transport, location, panes);
   require(client.activeTab() != nullptr && client.activeTab()->focused_pane == focused_pane, "deferred restoration must retain the original focused pane");
@@ -168,11 +184,9 @@ void hiddenCompletionRemainsUnacknowledgedUntilPresentation() {
   SystemAllocator memory;
   Transport transport;
   Session client{memory, transport};
-  openFirstPane(client, transport);
-  const auto location = client.activeTab()->location;
+  openWithPendingWorkspaceSnapshot(client, transport);
   std::array entries{agentSnapshotEntry()};
   deliver(client, AgentSnapshot{.revision = 1, .entries = entries});
-  client.selectWorkspace(location.workspace);
   client.setPresented(false);
   entries.front().status = AgentStatus::done;
   deliver(client, AgentSnapshot{.revision = 2, .entries = entries});
@@ -203,8 +217,7 @@ void disconnectionReleasesAHiddenWorkspaceWithoutSendingDetaches() {
   SystemAllocator memory;
   Transport transport;
   Session client{memory, transport};
-  openFirstPane(client, transport);
-  client.selectWorkspace(client.activeTab()->location.workspace);
+  openWithPendingWorkspaceSnapshot(client, transport);
   client.setPresented(false);
   client.disconnected();
   require(client.settlePresentation() && client.panes().empty() && client.activeTab() == nullptr, "a disconnected hidden machine must release its former screens after pending requests are cancelled");
@@ -215,9 +228,8 @@ void returningBeforeDepartureSettlesKeepsTheWorkspace() {
   SystemAllocator memory;
   Transport transport;
   Session client{memory, transport};
-  openFirstPane(client, transport);
+  openWithPendingWorkspaceSnapshot(client, transport);
   const auto location = client.activeTab()->location;
-  client.selectWorkspace(location.workspace);
   client.setPresented(false);
   client.setPresented(true);
   const std::array tabs{TabDescriptor{.tab_id = 1, .pane_count = 1}};

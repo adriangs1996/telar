@@ -13,12 +13,14 @@ Item {
     property var pulseAlpha: undefined
     property bool animate: true
     property bool heldHover: false
-    readonly property bool hovered: enabled && (pointer.containsMouse || heldHover)
+    property bool semanticHover: false
+    readonly property bool hovered: enabled && (heldHover || (!semanticHover && pointer.containsMouse))
     readonly property real outlinePhysicalWidth: 1
     readonly property real density: Screen.devicePixelRatio
     default property alias content: cardContent.data
     signal selected(string key)
     signal peekRequested(string key)
+    signal hoverRequested(string key)
 
     implicitWidth: geometry.width
     implicitHeight: record.compact ? geometry.compactHeight : geometry.height
@@ -60,13 +62,18 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.RightButton
+        onEntered: root.hoverRequested(root.record.key ?? "")
+        onPositionChanged: root.hoverRequested(root.record.key ?? "")
+        onExited: root.hoverRequested("")
         onPressed: event => {
+            root.hoverRequested(root.record.key ?? "");
             if (event.button === Qt.LeftButton) {
                 root.selected(root.record.key);
             } else if (!root.record.command) {
                 root.peekRequested(root.record.key);
             }
         }
+        onReleased: root.hoverRequested(root.record.key ?? "")
     }
 
     Accessible.role: Accessible.Button

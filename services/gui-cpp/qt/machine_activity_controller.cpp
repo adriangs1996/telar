@@ -16,6 +16,8 @@
 #include <QVariantMap>
 #include <QtCore/qchar.h>
 #include <QtCore/qcontainerfwd.h>
+#include <QtCore/qnamespace.h>
+#include <QtCore/qobjectdefs.h>
 #include <QtCore/qtypes.h>
 #include <QtCore/qtmetamacros.h>
 #include <algorithm>
@@ -179,6 +181,7 @@ void Application::selectActivity(const QString &identity, bool peek) {
 
   const auto target = row->target;
   selectMachine(target.source.machine);
+  hoverActivity(identity);
   pending_activity_ = PendingActivity{.target = target, .window = window_generation_, .peek = peek, .pointer_revision = pointer_revision_};
   settleActivity();
 }
@@ -215,6 +218,25 @@ QString Application::activityHover() const {
   return activity_hover_;
 }
 
+void Application::hoverActivity(const QString &identity) {
+  if (!activity_hover_pending_) {
+    return;
+  }
+
+  if (!identity.isEmpty()) {
+    const auto row = std::ranges::find(activity_targets_, identity, &ActivityRowTarget::identity);
+    if (row == activity_targets_.end() || !activityAvailable(row->target)) {
+      return;
+    }
+  }
+
+  activity_hover_seen_ = true;
+  if (activity_hover_ != identity) {
+    activity_hover_ = identity;
+    emit activityHoverChanged();
+  }
+}
+
 void Application::clearActivityHover() {
   if (activity_hover_.isEmpty()) {
     return;
@@ -224,9 +246,29 @@ void Application::clearActivityHover() {
   emit activityHoverChanged();
 }
 
-void Application::observeActivityPointer() {
+void Application::observeActivityPointer(bool hover_input) {
   ++pointer_revision_;
-  clearActivityHover();
+  activity_hover_pending_ = hover_input;
+  activity_hover_seen_ = false;
+  if (!hover_input) {
+    clearActivityHover();
+
+    return;
+  }
+
+  if (activity_hover_reset_queued_) {
+    return;
+  }
+
+  activity_hover_reset_queued_ = true;
+  QMetaObject::invokeMethod(this, [this] {
+    activity_hover_pending_ = false;
+    activity_hover_reset_queued_ = false;
+    if (!activity_hover_seen_) {
+      clearActivityHover();
+    }
+  },
+                            Qt::QueuedConnection);
 }
 
 }

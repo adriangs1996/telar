@@ -2,6 +2,76 @@
 
 ## Personal continuation checkpoint
 
+### Current navigation checkpoint after `5846d05a9`
+
+Navigation/history and semantic hover are implemented and qualified for the
+scope in services/gui-cpp/measurements/workspace-navigation.md. The checkpoint
+is being archived locally; inspect git log and its verifier before later edits.
+The persistent full-parity objective remains ACTIVE, incomplete and unbudgeted.
+Do not finish at checkpoints, publish/merge or delegate. Work only here, respond
+in Spanish and keep updates <=60 seconds apart. Earlier checkpoint source
+manifests are historical; do not rewrite them after later code changes.
+
+Session now performs guarded canonical OpenPane handoffs, detaches before open,
+retains original bounded NavigationHistory (64 slots) and SavedLayouts (256 rows,
+511 nodes), retires old screens after queueing, reopens remembered focus and falls
+back once to the exact workspace. PaneOpened stages ONE provisional root; exact
+arrived-tab saved layout restores only after canonical TabSnapshot. New connection
+clears navigation/saved trees/old presentation and gates on fresh metadata.
+Original client_layouts.buildUpdate exports only canonical current-workspace tabs.
+Saved pool handles aliasing before mutation and does not expose zero-node rows.
+
+Six original negatives and provisional-tree/card-hover negatives are retained.
+16 navigation cases now pass, including actual-tab saved tree and reconnect ID
+reuse. Five Release and five clean Qt-free ASAN/UBSAN groups pass. Whole unchanged
+original History/Bookmark/SavedLayouts/SavedLayout/WorkspaceLayout family oracle:
+4922 operations, ZERO differences, Release and ASAN, empty candidate stderr.
+Input SHA5354f493d83c6753c6f7a039a690cf97f283271f2ff2eff3430bc3be973dfca0;
+output SHA8c429347f9be18a4105749e15a597f6480038a3caa9ba2f150e7e869dbe3abc4.
+Original-1 build failure and original-2's 3179 empty-row mismatches are retained.
+Broad unchanged lint passes (nav3, hover1, extra2, format-final1); final format
+passes. Actual Neovim history/saved/session/controller/navigation-test clangd clean.
+
+Actual owned SSH native workspace-navigation harness creates NavOther/pane2,
+Go-to visits it and delivers OTHER_NAV_INPUT; return delivers RETURNED_NAV_INPUT
+to original remote pane1. Local isolated; GUI client ID/generation/attachment
+unchanged; all owned processes and managed SSH masters cleanly stopped. Zig-1,
+Qt-final-1 and Qt-hover-1 pass. Qt-before-1 delivers both inputs correctly but
+fails unchanged client identity/generation assertion after return (GUI cleanup
+-15, other cleanup normal). Preserve this failure without claiming misrouting.
+
+Activity hover now follows delivered semantic identity rather than geometry
+reflow under a stationary pointer. Application validates target identity only in
+a coalesced PointerDispatcher input batch; one queued callback settles it and
+window leave/deactivation clears immediately. Standalone cards keep geometric
+hover. New window input/reflow/invalid-target test passes. Window suite33, card9,
+five profile/chrome/task/card/scene component groups pass. Components first-run
+had two missing executables, now built; failed precondition log is retained.
+Current native Cocoa/Metal Quick88 passes without warnings. Other/Returned whole
+windows now only23 differing glyph pixels each (previous139523/69915); both
+2336768-pixel terminals and three122720-pixel footers exact. Picker12/whole35
+pixels remain open. No masking/alignment/image normalization is accepted.
+GUI SHA2c4a3bb38f3c5eb7a75b85ae3c1c1b6098e252e43fc864cde76d02fa8dd54d09;
+originalGUI SHA4e021bbda7586d16f887dd04a1ded3a806ba60940179129838165d75a0c23e11.
+Card/window sanitizer assertions9/33 pass, but exit leak gates FAIL:
+275036bytes1098alloc /224920bytes897alloc. Both show runtime120byte3allocation
+suppression table; no LSAN_OPTIONS/local suppression. Do not call Qt exit clean.
+
+NEXT: finish/check archive verifier and local checkpoint, then continue in-flight
+restored geometry and small glyph pixel differences. ChromeIcon currently uses
+stable_nearest biased sampling; earlier straight-alpha experiment did not fix
+15 historical pixels and was restored. Current23 differences include two small
+left text columns and question-mark edges. No current rendering-source edits.
+Full platform/theme/density/task states, Linux transfer, native exit leaks and
+measured equal/better latency/RSS remain OPEN. Apply perf-pass skill before its
+measurement/optimization phase. Never mark global goal complete at this scope.
+
+Use capture-python/bin/python for native harness (system Python lacks Pillow).
+Serialize ALL native/offscreen UI. Do not edit C++/headers during active builds;
+Neovim may trigger builds, inspect ps. Release out, core out-core-sanitizers,
+Qt out-native-sanitizers. Current native artifact/checkpoint details live in the
+report, manifest and tool history; older notes below are historical.
+
 ### Terminal-session continuation after `413b8cfef`
 
 The next checkpoint after handshake implements the terminal runtime receive-loop

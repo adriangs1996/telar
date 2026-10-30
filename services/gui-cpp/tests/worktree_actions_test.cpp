@@ -25,7 +25,7 @@ constexpr std::uint64_t second_checkout_id = 32;
 constexpr WorktreeListEntry gone_checkout{.worktree = checkout_id, .source = project_id, .state = WorktreeState::gone, .path = "/project/gone", .branch = "gone"};
 constexpr WorktreeListEntry second_gone_checkout{.worktree = second_checkout_id, .source = project_id, .state = WorktreeState::gone, .path = "/project/other", .branch = "other"};
 
-void leavingAWorktreeSelectsItsProjectWithoutCreatingAPane() {
+void leavingAWorktreeOpensItsProjectWithoutALaunchCommand() {
   SystemAllocator memory;
   Transport transport;
   Session client{memory, transport};
@@ -38,9 +38,9 @@ void leavingAWorktreeSelectsItsProjectWithoutCreatingAPane() {
   deliver(client, WorkspaceList{.revision = 1, .entries = entries, .worktrees = worktrees});
   const auto opening_count = transport.count(ClientTag::open_pane);
   require(client.leaveWorktree(), "a linked checkout must request its source project");
-  const auto request = transport.last<RequestWorkspaceSnapshot>();
-  require(request.workspace.kind == WorkspaceLocation::Kind::workspace && request.workspace.id == project_id, "leaving a worktree must use its source instead of its checkout identity");
-  require(transport.count(ClientTag::open_pane) == opening_count && client.focusedPane()->id == 1, "the handoff must await authoritative project metadata without creating a process");
+  const auto request = transport.last<OpenPane>();
+  require(request.target.kind == PaneTarget::Kind::workspace && request.target.id == project_id && !request.launch, "leaving a worktree must open its source workspace without sending a new launch command");
+  require(transport.count(ClientTag::open_pane) == opening_count + 1 && transport.count(ClientTag::detach_pane) == 1 && client.activeTab() == nullptr && client.panes().empty(), "the handoff must retire its checkout only after queuing the source project's canonical open");
   client.disconnected();
   require(!client.leaveWorktree(), "a disconnected client must not use retained worktree metadata");
 }
@@ -116,7 +116,7 @@ void cleanupStopsAtCapacityAndReleasesRejectedDelivery() {
 
 int main() {
   try {
-    leavingAWorktreeSelectsItsProjectWithoutCreatingAPane();
+    leavingAWorktreeOpensItsProjectWithoutALaunchCommand();
     forgettingOnlyTargetsGoneCheckoutsWithoutTabs();
     cleanupStopsAtCapacityAndReleasesRejectedDelivery();
     std::cout << "gui-worktree-actions: passed\n";

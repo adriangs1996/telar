@@ -89,8 +89,12 @@ void sessionLifecycle() {
     client.disconnected();
     require(!client.ready() && !client.findPane(1)->attached, "disconnect must invalidate attachment state");
     client.connected(1);
-    deliver(client, ClientLayoutSnapshot{});
-    require(transport.last<OpenPane>().target.id == 1, "reconnect must restore the current pane");
+    require(client.activeTab() == nullptr && client.panes().empty(), "a new runtime session must discard the former projection before receiving its bootstrap snapshot");
+    const TabLocation restored_location{.workspace = created.workspace, .tab_id = 1};
+    const std::array<ClientLayoutNode, 1> restored_nodes{ClientLayoutPane{1}};
+    const std::array restored_tabs{ClientTabLayout{.location = restored_location, .focused_pane = 1, .workspace_active = true, .nodes = restored_nodes}};
+    deliver(client, ClientLayoutSnapshot{.restored = true, .sidebar_width = decltype(client)::default_sidebar_columns, .active_tab = restored_location, .tabs = restored_tabs});
+    require(transport.last<OpenPane>().target.id == 1 && !transport.last<OpenPane>().launch, "reconnect must restore the current pane from the runtime's owned layout snapshot");
   }
 
   require(memory.liveBytes() == 0, "session must release injected allocations");
@@ -191,15 +195,20 @@ void restoredLayoutAndFailure() {
   const std::array<ClientLayoutNode, 1> nodes{ClientLayoutPane{pane_id}};
   const std::array<ClientTabLayout, 1> tabs{{{.location = location, .focused_pane = pane_id, .fullscreen = false, .workspace_active = true, .nodes = nodes}}};
   deliver(client, ClientLayoutSnapshot{.restored = true, .sidebar_visible = false, .sidebar_width = sidebar_columns, .workspace_list_collapsed = true, .active_tab = location, .tabs = tabs});
-  require(!client.configuration().sidebar_visible && client.activeTab()->focused_pane == pane_id, "saved focus and sidebar visibility must restore");
+  require(!client.configuration().sidebar_visible && client.activeTab() == nullptr, "saved sidebar preferences must restore before the canonical root is received");
   require(client.workspaceListCollapsed(), "saved workspace collapse preference must restore");
-  require(transport.count(ClientTag::open_pane) == 0, "restored panes must wait for canonical membership");
+  const auto opening = transport.last<OpenPane>();
+  require(transport.count(ClientTag::open_pane) == 1 && opening.target.id == pane_id && !opening.launch, "startup must reopen its remembered pane before requesting canonical membership");
+  deliver(client, PaneOpened{.request_id = opening.request_id, .pane_id = pane_id, .location = location, .pane_generation = 3});
+  require(client.activeTab()->focused_pane == pane_id, "the authoritative restored root must receive focus");
 
-  const std::array<PaneDescriptor, 1> panes{{{.pane_id = pane_id, .lifecycle = PaneLifecycle::running, .pane_generation = 3}}};
-  deliver(client, TabSnapshot{.request_id = 1, .location = location, .panes = panes});
+  constexpr std::uint64_t other_pane = pane_id + 1;
+  const std::array panes{PaneDescriptor{.pane_id = pane_id, .lifecycle = PaneLifecycle::running, .pane_generation = 3}, PaneDescriptor{.pane_id = other_pane, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+  deliver(client, TabSnapshot{.request_id = transport.last<RequestTabSnapshot>().request_id, .location = location, .panes = panes});
   const auto attach = transport.last<OpenPane>();
+  require(attach.target.id == other_pane, "canonical membership must request the second pane through the normal attachment lifecycle");
   deliver(client, RequestFailed{.request_id = attach.request_id, .code = FailureCode::pane_not_found, .message = "Pane disappeared"});
-  require(!client.findPane(pane_id)->attaching && client.error() == "Pane disappeared", "failed attachment must release its pending lease");
+  require(!client.findPane(other_pane)->attaching && client.error() == "Pane disappeared", "failed attachment must release its pending lease");
 }
 
 void pendingAttachmentKeepsTheLatestViewport() {

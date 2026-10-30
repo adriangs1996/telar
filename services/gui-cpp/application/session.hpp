@@ -34,6 +34,7 @@
 #include "links/path_expansion.hpp"
 #include "notification_center.hpp"
 #include "notification_item.hpp"
+#include "navigation_history.hpp"
 #include "paths/insertion.hpp"
 #include "paths/limits.hpp"
 #include "paths/page.hpp"
@@ -49,6 +50,7 @@
 #include "presentation/sidebar_columns.hpp"
 #include "presentation/window_title.hpp"
 #include "records.hpp"
+#include "saved_layouts.hpp"
 #include "sound_playback.hpp"
 #include "suggestions/limits.hpp"
 #include "suggestions/state.hpp"
@@ -161,6 +163,20 @@ public:
   }
 
   void connected(std::uint64_t identity) {
+    panes_.clear();
+    tabs_.clear();
+    active_tab_.reset();
+    left_machine_.reset();
+    deferred_tab_.reset();
+    pending_layout_restore_.reset();
+    navigation_history_.clear();
+    saved_layouts_.clear();
+    initial_open_pending_ = false;
+    workspaces_.resetSource();
+    ++view_version_.workspace;
+    ++view_version_.tabs;
+    ++view_version_.active_tab;
+    ++view_version_.panes;
     ready_ = true;
     metrics_ = {};
     proxy_ = {};
@@ -391,29 +407,22 @@ public:
     retainLayout();
   }
 
-  void selectWorkspace(WorkspaceLocation location) {
-    sendSnapshotRequest(RequestWorkspaceSnapshot{.workspace = location});
-    const auto found = std::find_if(tabs_.begin(), tabs_.end(), [&](const auto &tab) {
-      return sameWorkspace(tab->location.workspace, location) && tab->workspace_active;
-    });
-    if (found != tabs_.end()) {
-      selectTab((*found)->location);
-    } else {
-      requested_workspace_ = location;
+  bool selectWorkspace(WorkspaceLocation location) {
+    if (!ready_ || workspaces_.revision() == 0 || requestsPending() || location.kind != WorkspaceLocation::Kind::workspace || workspaces_.indexOf(location.id) == workspaces_.entries().size() || (active_tab_ && sameWorkspace(active_tab_->workspace, location))) {
+      return false;
     }
+
+    const auto *bookmark = navigation_history_.find(location);
+    const auto target = bookmark != nullptr ? PaneTarget{.kind = PaneTarget::Kind::pane, .id = bookmark->pane_id} : PaneTarget{.kind = PaneTarget::Kind::workspace, .id = location.id};
+    handoffWorkspace(target, location.id);
+
+    return true;
   }
 
   void selectWorkspaceIndex(std::size_t index) {
-    std::size_t position = 0;
-    for (const auto &workspace : workspaces_) {
-      if (workspace.location.kind != WorkspaceLocation::Kind::workspace) {
-        continue;
-      }
-
-      if (position++ == index) {
-        selectWorkspace(workspace.location);
-        return;
-      }
+    const auto projects = workspaces_.projects();
+    if (index < projects.size()) {
+      static_cast<void>(selectWorkspace(projects[index].location));
     }
   }
 
@@ -444,9 +453,7 @@ public:
       return false;
     }
 
-    selectWorkspace({.kind = WorkspaceLocation::Kind::workspace, .id = *row->workspace});
-
-    return true;
+    return selectWorkspace({.kind = WorkspaceLocation::Kind::workspace, .id = *row->workspace});
   }
 
   bool leaveWorktree() {
@@ -459,9 +466,7 @@ public:
       return false;
     }
 
-    selectWorkspace({.kind = WorkspaceLocation::Kind::workspace, .id = row->source});
-
-    return true;
+    return selectWorkspace({.kind = WorkspaceLocation::Kind::workspace, .id = row->source});
   }
 
   std::size_t forgetGoneWorktrees() {
@@ -1257,7 +1262,7 @@ public:
     std::size_t count = 0;
     std::size_t retained_nodes = 0;
     const auto append = [&](const Tab<Memory> &tab) {
-      if (tab.layout.nodes().empty() || tab.focused_pane == 0 || retained_nodes + tab.layout.nodes().size() > maximum_retained_layout_nodes) {
+      if (!tab.loaded || tab.layout.nodes().empty() || tab.focused_pane == 0 || retained_nodes + tab.layout.nodes().size() > maximum_retained_layout_nodes) {
         return;
       }
 
@@ -2086,7 +2091,7 @@ private:
 
     std::optional<std::uint64_t> fallback;
     if (tab->location.workspace.kind == WorkspaceLocation::Kind::workspace) {
-      fallback = workspaces_.projectOf(tab->location.workspace.id);
+      fallback = tab->location.workspace.id;
     } else if (const auto *row = workspaces_.worktree(tab->location.workspace.id)) {
       fallback = row->source;
     }
@@ -2099,13 +2104,18 @@ private:
       return false;
     }
 
+    navigation_history_.forget({.kind = WorkspaceLocation::Kind::workspace, .id = *request.fallback_workspace});
     sendOpeningRequest(RequestKind::open_default, OpenPane{.target = {.kind = PaneTarget::Kind::workspace, .id = *request.fallback_workspace}, .size = launchSize()});
 
     return true;
   }
 
   void handoffPane(std::uint64_t pane_id, std::optional<std::uint64_t> fallback_workspace) {
-    const OpenPane opening{.target = {.kind = PaneTarget::Kind::pane, .id = pane_id}, .size = launchSize()};
+    handoffWorkspace({.kind = PaneTarget::Kind::pane, .id = pane_id}, fallback_workspace);
+  }
+
+  void handoffWorkspace(PaneTarget target, std::optional<std::uint64_t> fallback_workspace) {
+    const OpenPane opening{.target = target, .size = launchSize()};
     try {
       retainLayout();
       for (auto &pane : panes_) {
@@ -2133,9 +2143,21 @@ private:
   }
 
   void releaseWorkspacePresentation() noexcept {
+    const auto *tab = activeTab();
+    if (tab != nullptr && findPane(tab->focused_pane) != nullptr) {
+      navigation_history_.remember({.location = tab->location, .pane_id = tab->focused_pane, .layout = NavigationHistory::Layout{tab->layout, tab->focused_pane}, .fullscreen = tab->fullscreen});
+    }
+
+    for (const auto &known : tabs_) {
+      if (known->loaded && known->focused_pane != 0) {
+        saved_layouts_.retain({.location = known->location, .pane_id = known->focused_pane, .focused_pane = known->focused_pane, .workspace_active = active_tab_ && sameTab(*active_tab_, known->location), .fullscreen = known->fullscreen, .nodes = known->layout.nodes()});
+      }
+    }
+
     panes_.clear();
+    tabs_.clear();
     active_tab_.reset();
-    requested_workspace_.reset();
+    pending_layout_restore_.reset();
     copy_mode_.reset();
     copy_search_request_ = 0;
     history_.suspend();
@@ -2143,12 +2165,8 @@ private:
     suggestion_.invalidate();
     graphics_pauses_.reset();
     editor_opening_.reset();
-    for (auto &tab : tabs_) {
-      tab->loaded = false;
-      tab->loading = false;
-    }
-
     ++view_version_.workspace;
+    ++view_version_.tabs;
     ++view_version_.active_tab;
     ++view_version_.panes;
     ++view_version_.host;
@@ -2170,8 +2188,7 @@ private:
     if (initial_open_pending_) {
       if (deferred_tab_) {
         const auto location = *deferred_tab_;
-        selectTab(location);
-        sendSnapshotRequest(RequestWorkspaceSnapshot{.workspace = location.workspace});
+        openRestoredWorkspace(location);
       } else {
         openDefault();
       }
@@ -2188,6 +2205,49 @@ private:
       const auto target = bookmark.pane_id != 0 ? PaneTarget{.kind = PaneTarget::Kind::pane, .id = bookmark.pane_id} : PaneTarget{.kind = PaneTarget::Kind::workspace, .id = bookmark.fallback_workspace.value_or(bookmark.location.workspace.id)};
       sendOpeningRequest(RequestKind::restore_machine, OpenPane{.target = target, .size = launchSize()}, bookmark.location, bookmark.fallback_workspace);
     }
+  }
+
+  void openRestoredWorkspace(TabLocation location) {
+    const auto saved = saved_layouts_.find(location);
+    if (!saved) {
+      throw EncodingError{"InvalidClientLayoutActiveTab"};
+    }
+
+    const auto fallback = location.workspace.kind == WorkspaceLocation::Kind::workspace ? std::optional{location.workspace.id} : std::nullopt;
+    sendOpeningRequest(RequestKind::restore_machine, OpenPane{.target = {.kind = PaneTarget::Kind::pane, .id = saved->pane_id}, .size = launchSize()}, location, fallback);
+  }
+
+  void stageWorkspaceLayout(Tab<Memory> &tab) {
+    pending_layout_restore_.reset();
+    if (const auto saved = saved_layouts_.find(tab.location)) {
+      pending_layout_restore_ = {.location = saved->location, .pane_id = saved->focused_pane, .layout = NavigationHistory::Layout{saved->nodes, saved->focused_pane}, .fullscreen = saved->fullscreen};
+    } else if (const auto *bookmark = navigation_history_.find(tab.location.workspace); bookmark != nullptr && sameTab(bookmark->location, tab.location)) {
+      pending_layout_restore_ = *bookmark;
+    }
+
+    tab.layout.restore({});
+    tab.focused_pane = 0;
+    tab.fullscreen = false;
+    tab.loaded = false;
+    tab.loading = false;
+  }
+
+  void restoreCanonicalLayout(Tab<Memory> &tab) {
+    if (pending_layout_restore_ && sameTab(pending_layout_restore_->location, tab.location)) {
+      if (pending_layout_restore_->layout) {
+        tab.layout.restore(pending_layout_restore_->layout->view());
+        tab.fullscreen = pending_layout_restore_->fullscreen;
+        setPaneFocus(tab, pending_layout_restore_->layout->focused_pane);
+      }
+
+      pending_layout_restore_.reset();
+    } else if (const auto saved = saved_layouts_.find(tab.location)) {
+      tab.layout.restore(saved->nodes);
+      tab.fullscreen = saved->fullscreen;
+      setPaneFocus(tab, saved->focused_pane);
+    }
+
+    saved_layouts_.forget(tab.location);
   }
 
   void createEditorTab(const EditorTarget &target) {
@@ -2624,6 +2684,10 @@ private:
     pane.attaching = false;
     pane.exited = false;
     auto &tab = ensureTab(message.location);
+    if (request->kind != RequestKind::attach) {
+      stageWorkspaceLayout(tab);
+    }
+
     const auto axis = request ? request->axis : ClientLayoutAxis::horizontal;
     const auto beside = request && request->kind == RequestKind::split ? request->pane_id : tab.focused_pane;
     tab.layout.add(pane.id, axis, beside);
@@ -2722,6 +2786,7 @@ private:
     }
 
     auto &tab = ensureTab(message.location);
+    restoreCanonicalLayout(tab);
     tab.loaded = true;
     tab.loading = false;
     std::array<std::uint64_t, PaneLayout::maximum_panes> removed{};
@@ -2766,6 +2831,7 @@ private:
   }
 
   Change apply(const WorkspaceSnapshot &message) {
+    const bool current_workspace = active_tab_ && sameWorkspace(active_tab_->workspace, message.workspace);
     completeRequest(RequestKind::workspace_snapshot, message.request_id);
     std::array<TabLocation, maximum_tabs> removed;
     std::size_t removed_count = 0;
@@ -2802,8 +2868,7 @@ private:
       tab.observeForegrounds(descriptor.foregrounds);
     }
 
-    if ((presented_ || leave_pending_) && (!active_tab_ || (requested_workspace_ && sameWorkspace(*requested_workspace_, message.workspace))) && !message.tabs.empty()) {
-      requested_workspace_.reset();
+    if (current_workspace && !active_tab_ && (presented_ || leave_pending_) && !message.tabs.empty()) {
       selectTab({message.workspace, message.tabs.front().tab_id});
     }
 
@@ -2835,16 +2900,23 @@ private:
     sidebar_columns_ = std::max(SidebarColumns::minimum_width, message.sidebar_width);
     workspace_list_collapsed_ = message.workspace_list_collapsed;
     for (const auto &saved : message.tabs) {
-      auto &tab = ensureTab(saved.location);
-      tab.layout.restore(saved.nodes);
-      tab.focused_pane = saved.focused_pane;
-      tab.fullscreen = saved.fullscreen;
-      tab.workspace_active = saved.workspace_active;
+      PaneLayout validated;
+      validated.restore(saved.nodes);
+      if (!validated.contains(saved.focused_pane)) {
+        throw EncodingError{"InvalidClientLayoutFocus"};
+      }
+
+      if (!saved_layouts_.remember({.location = saved.location, .pane_id = saved.focused_pane, .focused_pane = saved.focused_pane, .workspace_active = saved.workspace_active, .fullscreen = saved.fullscreen, .nodes = saved.nodes})) {
+        throw EncodingError{"TooManySavedLayouts"};
+      }
+
+      if (saved.workspace_active) {
+        navigation_history_.remember({.location = saved.location, .pane_id = saved.focused_pane, .layout = NavigationHistory::Layout{saved.nodes, saved.focused_pane}, .fullscreen = saved.fullscreen});
+      }
     }
 
     if (presented_) {
-      selectTab(*message.active_tab);
-      sendSnapshotRequest(RequestWorkspaceSnapshot{.workspace = message.active_tab->workspace});
+      openRestoredWorkspace(*message.active_tab);
     } else {
       initial_open_pending_ = true;
       deferred_tab_ = message.active_tab;
@@ -3789,7 +3861,9 @@ private:
   std::array<Pending, maximum_pending> pending_;
   std::size_t pending_count_ = 0;
   std::optional<TabLocation> active_tab_;
-  std::optional<WorkspaceLocation> requested_workspace_;
+  NavigationHistory navigation_history_;
+  SavedLayouts saved_layouts_;
+  std::optional<NavigationHistory::Bookmark> pending_layout_restore_;
   std::optional<TabLocation> deferred_tab_;
   std::optional<MachineBookmark> left_machine_;
   std::uint64_t request_id_ = 0;

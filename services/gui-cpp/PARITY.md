@@ -4,6 +4,19 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [workspace navigation checkpoint](measurements/workspace-navigation.md) uses
+canonical OpenPane handoffs, bounded original history/saved-layout policies and
+root-before-tree restoration. Its 4,922 original-source operations match in
+Release and clean core ASan/UBSan; 16 navigation cases, 33 window entries and
+88 warning-free native Quick entries pass. Real owned SSH round trips preserve
+client identity, pane routing and Local isolation. Delivered activity hover
+removes the large reflow differences; both terminals and three footers match
+Zig, while complete scenes retain 23/35 glyph pixels and the picker retains 12.
+Instrumented card/window assertions pass but exit leaks remain (275,036/224,920
+bytes), with the observed Qt runtime suppression table and no local suppression.
+In-flight geometry, remaining states/platform visuals, leaks and measured
+comparative performance stay open.
+
 The [terminal-session checkpoint](measurements/terminal-session.md) stops the
 receive loop at RuntimeStopping/terminal workspace status while retaining the
 last connected machine summary. Explicit selection resumes a fresh session;

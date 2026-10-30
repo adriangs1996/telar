@@ -94,12 +94,14 @@ Rectangle {
     }
 
     ActivityList {
+        id: activityList
         x: root.regions.activity.x
         y: root.regions.activity.y
         width: root.regions.activity.width
         height: root.regions.activity.height
         model: root.expanded ? root.agentModel : null
         hoverIdentity: root.controller?.activityHover ?? ""
+        semanticHover: typeof root.controller?.hoverActivity === "function"
         colors: root.colors
         typography: root.typography
         geometry: root.regions.cards
@@ -108,6 +110,11 @@ Rectangle {
         visible: root.expanded
         onSelected: key => root.agentSelected(key)
         onPeekRequested: key => root.agentPeekRequested(key)
+        onHovered: key => {
+            if (activityList.semanticHover) {
+                root.controller.hoverActivity(key);
+            }
+        }
     }
 
     WorkspaceRail {

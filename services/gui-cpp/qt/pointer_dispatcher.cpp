@@ -39,11 +39,11 @@ void PointerDispatcher::setWindow(QQuickWindow &window) {
   }
 
   window_ = &window;
-  application_.observeActivityPointer();
+  application_.observeActivityPointer(false);
   window.installEventFilter(this);
   connect(&window, &QWindow::activeChanged, this, [this] {
     if (window_ != nullptr && !window_->isActive()) {
-      application_.observeActivityPointer();
+      application_.observeActivityPointer(false);
       cancel();
     }
   });
@@ -282,7 +282,7 @@ bool PointerDispatcher::eventFilter(QObject *watched, QEvent *event) {
       application_.observeActivityPointer();
       return move(dynamic_cast<QMouseEvent &>(*event));
     case QEvent::Leave:
-      application_.observeActivityPointer();
+      application_.observeActivityPointer(false);
       return false;
     case QEvent::MouseButtonRelease:
       return release(dynamic_cast<QMouseEvent &>(*event));

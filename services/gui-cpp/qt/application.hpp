@@ -196,6 +196,7 @@ public:
   [[nodiscard]] QVariantMap peekState() const;
   [[nodiscard]] QVariantMap peekGeometry() const;
   [[nodiscard]] QString activityHover() const;
+  Q_INVOKABLE void hoverActivity(const QString &identity);
 
   enum class HistoryAction : quint8 {
     copy,
@@ -509,7 +510,7 @@ private:
   [[nodiscard]] bool peekOriginValid() const;
   void refreshPeek();
   void openActivityPeek(const MachineActivityTarget &target, const QString &identity, std::uint64_t pointer_revision);
-  void observeActivityPointer();
+  void observeActivityPointer(bool hover_input = true);
   void clearActivityHover();
   void presentChange(Change change);
   void refreshPanes();
@@ -611,6 +612,9 @@ private:
   std::optional<PeekOrigin> peek_origin_;
   QString peek_editor_;
   QString activity_hover_;
+  bool activity_hover_pending_ = false;
+  bool activity_hover_seen_ = false;
+  bool activity_hover_reset_queued_ = false;
   std::uint64_t pointer_revision_ = 0;
   std::optional<MachineClientKey> sound_owner_;
   ConfigurationSource configuration_source_;

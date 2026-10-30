@@ -11,8 +11,10 @@ ListView {
     property real ratio: 1
     property real textScale: 1
     property string hoverIdentity: ""
+    property bool semanticHover: false
     signal selected(string key)
     signal peekRequested(string key)
+    signal hovered(string key)
 
     clip: true
     cacheBuffer: 0
@@ -51,6 +53,8 @@ ListView {
                 ratio: root.ratio
                 animate: entry.animate
                 heldHover: entry.record.key === root.hoverIdentity
+                semanticHover: root.semanticHover
+                onHoverRequested: key => root.hovered(key)
                 onSelected: key => root.selected(key)
                 onPeekRequested: key => root.peekRequested(key)
             }
@@ -68,6 +72,8 @@ ListView {
                 ratio: root.ratio
                 animate: entry.animate
                 heldHover: entry.record.key === root.hoverIdentity
+                semanticHover: root.semanticHover
+                onHoverRequested: key => root.hovered(key)
                 onSelected: key => root.selected(key)
                 onPeekRequested: key => root.peekRequested(key)
             }
@@ -83,6 +89,9 @@ ListView {
                 colors: root.colors
                 typography: root.typography
                 ratio: root.ratio
+                heldHover: entry.record.key === root.hoverIdentity
+                semanticHover: root.semanticHover
+                onHoverRequested: key => root.hovered(key)
                 onSelected: key => root.selected(key)
             }
         }
