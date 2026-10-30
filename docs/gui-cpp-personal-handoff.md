@@ -2,6 +2,50 @@
 
 ## Personal continuation checkpoint
 
+### Latest: restored-geometry coverage after `6fc25abda`
+
+Navigation/history/semantic-hover checkpoint is accepted local commit `6fc25abda`.
+Its historical archive verifier passes; do not rewrite its manifest after later
+changes. Current follow-up changes ONLY tests/machine_window_test.cpp plus docs/
+evidence: two complete Main.qml tests for visible local and deferred hidden
+remote restoration while window/sidebar geometry changes with OpenPane in flight.
+Both assert final delivered controller extent, controller/Session area agreement,
+pane and wire PaneResize dimensions/cell sizes, no extra opens, no QML warnings
+or Application errors. Hidden remote opens only upon selection. Production GUI
+is UNCHANGED SHA2c4a3bb38f3c5eb7a75b85ae3c1c1b6098e252e43fc864cde76d02fa8dd54d09.
+
+Final Cocoa/Metal restored-geometry-native-final-5 passes4 entries ZERO QWARN;
+full Release release-final3 and ASAN asan-final2 each pass35 assertions. ASAN exit
+still FAILS:229504bytes1047alloc; runtime3/120byte suppression table observed,
+LSAN_OPTIONS absent, no local suppression. Unchanged broad lint-final5, final
+format2 and actual Neovim editor-final3 CLEAN. Basic style matches production.
+Two named slots/private helper avoid Qt _data's naming-rule conflict.
+
+Retain fixture failures as fixture failures, NOT product regressions: immediate
+read after resize; intermediate sidebar extent100cols before final67; native-1
+AeroSpace changed900width to890 after expectation captured; native-3 ran old
+binary before build done and rejected unknown new slot. External per-window ready
+file + synchronized-frame barrier (same as Quick) fixes native setup. First
+private Application.session compile error, _data editor naming error and stale
+moc/missing qtenvironmentvariables header lint are retained. All deadlines/profiles
+unchanged. No production code was needed for these geometry cases.
+
+Report restored-geometry.md and compact verifier/archive generator are written;
+NEXT finish archive, verify --check-current-source, local commit, then continue
+small glyph pixel investigation and other PARITY gates. Current PARITY remaining
+table now avoids listing already implemented history/remote adapters as absent.
+Navigation whole Other/Returned windows still23 glyph pixels each; picker12 /
+whole35. No render source edits yet. Original QuadList.fitFrom and quad.metal
+can help study sampling/clip precision; earlier straight-alpha experiment failed.
+Native exit leaks, platform/theme/density/task states and measured equal/better
+performance remain OPEN. Goal active/unbudgeted/incomplete; NEVER final-checkpoint.
+
+Last actual clock02:42:20UTC. Spanish updates<=60secs; serialize ALL UI, do not
+edit C++ during builds. No agents authorized, no publish/merge. Read build/test
+session results before starting dependent binaries (recent old-binary/moc mistake
+must not repeat). Capture Python has Pillow, system Python doesn't. perf-pass
+skill not applied yet; apply before dedicated measurement/optimization phase.
+
 ### Current navigation checkpoint after `5846d05a9`
 
 Navigation/history and semantic hover are implemented and qualified for the

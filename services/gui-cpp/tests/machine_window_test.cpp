@@ -2,9 +2,10 @@
 #include "application/dependencies.hpp"
 #include "application/notification_item.hpp"
 #include "core/view_version.hpp"
+#include "frame_fixture.hpp"
 #include "gui_wait.hpp"
-#include "machines/machine_token.hpp"
 #include "machines/machine_row.hpp"
+#include "machines/machine_token.hpp"
 #include "machines/machines.hpp"
 #include "metrics_fixture.hpp"
 #include "qml_fixture.hpp"
@@ -27,14 +28,19 @@
 #include <QAbstractItemModel>
 #include <QCoreApplication>
 #include <QEvent>
+#include <QFile>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QKeyEvent>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QObject>
 #include <QPoint>
+#include <QQmlApplicationEngine>
+#include <QQmlContext>
 #include <QQmlEngine>
 #include <QQuickItem>
+#include <QQuickStyle>
 #include <QQuickWindow>
 #include <QSize>
 #include <QString>
@@ -44,8 +50,9 @@
 #include <QtCore/qcontainerfwd.h>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qobjectdefs.h>
-#include <QtCore/qtmetamacros.h>
+#include <QtCore/qtenvironmentvariables.h>
 #include <QtCore/qtestsupport_core.h>
+#include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <QtTest/QSignalSpy>
 #include <QtTest/QTest>
@@ -814,6 +821,98 @@ class MachineWindowTest : public QObject {
     QVERIFY(application.activityHover().isEmpty());
   }
 
+  Q_SLOT static void restoredRootReceivesTheLatestWindowAndSidebarGeometry() {
+    verifyRestoredRootGeometry(false);
+  }
+
+  Q_SLOT static void hiddenRestoredRootReceivesTheLatestWindowAndSidebarGeometry() {
+    verifyRestoredRootGeometry(true);
+  }
+
+  static void verifyRestoredRootGeometry(bool hidden_remote) {
+    const auto external_window_ready = qEnvironmentVariable("TELAR_GUI_TEST_WINDOW_READY");
+    if (!external_window_ready.isEmpty()) {
+      static_cast<void>(QFile::remove(external_window_ready));
+    }
+
+    MachineFixture fixture;
+    auto &application = fixture.application;
+    QQmlApplicationEngine engine;
+    engine.rootContext()->setContextProperty(QStringLiteral("telar"), &application);
+    const QSignalSpy warnings{&engine, &QQmlEngine::warnings};
+    engine.loadFromModule(QStringLiteral("Telar.Gui"), QStringLiteral("Main"));
+    QCOMPARE(engine.rootObjects().size(), 1);
+    auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().front());
+    QVERIFY(window != nullptr);
+    constexpr QSize original_size{1200, 800};
+    constexpr QSize latest_size{900, 600};
+    window->resize(original_size);
+    application.setWindow(*window);
+    if (!external_window_ready.isEmpty()) {
+      QTRY_VERIFY2_WITH_TIMEOUT(QFileInfo::exists(external_window_ready), "External native window setup did not complete", wait_ms);
+      QVERIFY(waitForSynchronizedFrame(*window, wait_ms));
+      window->resize(original_size);
+    }
+
+    QVERIFY(fixture.start());
+    if (hidden_remote) {
+      fixture.local_runtime->send(ClientLayoutSnapshot{});
+      QVERIFY(finishOpening(*fixture.local_runtime));
+    } else {
+      fixture.remote_runtime->send(ClientLayoutSnapshot{});
+    }
+
+    auto &runtime = hidden_remote ? *fixture.remote_runtime : *fixture.local_runtime;
+    const auto slot = hidden_remote ? fixture.remote.machine.slot : Machines::local_slot;
+    auto &session = MachineWindow::client(application, slot).session;
+    const std::array<ClientLayoutNode, 1> nodes{ClientLayoutPane{pane_id}};
+    const std::array layouts{ClientTabLayout{.location = location, .focused_pane = pane_id, .workspace_active = true, .nodes = nodes}};
+    constexpr std::uint16_t restored_sidebar_columns = 32;
+    runtime.send(ClientLayoutSnapshot{.restored = true, .sidebar_visible = false, .sidebar_width = restored_sidebar_columns, .active_tab = location, .tabs = layouts});
+    if (hidden_remote) {
+      QTRY_VERIFY_WITH_TIMEOUT(!session.configuration().sidebar_visible, wait_ms);
+      QCOMPARE(runtime.count(ClientTag::open_pane), 0);
+      QVERIFY(application.pane(pane_id) != nullptr && application.pane(pane_id)->attached);
+      MachineWindow::select(application, fixture.remote.machine);
+    }
+
+    QTRY_COMPARE_WITH_TIMEOUT(runtime.count(ClientTag::open_pane), 1, wait_ms);
+    QVERIFY(!application.sidebarVisible());
+    const auto opening = runtime.last<OpenPane>();
+    QVERIFY(!opening.launch);
+    window->resize(latest_size);
+    application.execute(Application::Action::toggle_sidebar);
+    QTRY_COMPARE_WITH_TIMEOUT(application.windowGeometry().value(QStringLiteral("navigation")).toRectF().width(), latest_size.width(), wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(application.windowGeometry().value(QStringLiteral("status")).toRectF().bottom(), latest_size.height(), wait_ms);
+    const auto geometry_changed = [&] {
+      const auto size = session.workbenchGeometry().launchSize();
+
+      return size && (size->cols != opening.size.cols || size->rows != opening.size.rows);
+    };
+    QTRY_VERIFY2_WITH_TIMEOUT(geometry_changed(), qPrintable(QStringLiteral("window=%1x%2 open=%3x%4 area=%5x%6").arg(window->width()).arg(window->height()).arg(opening.size.cols).arg(opening.size.rows).arg(session.workbenchGeometry().area.width).arg(session.workbenchGeometry().area.height)), wait_ms);
+    QVERIFY(application.sidebarVisible());
+    const auto terminal = application.windowGeometry().value(QStringLiteral("terminal")).toRectF();
+    QCOMPARE(session.workbenchGeometry().area.width, terminal.width() * window->effectiveDevicePixelRatio());
+    QCOMPARE(session.workbenchGeometry().area.height, terminal.height() * window->effectiveDevicePixelRatio());
+    const auto expected = session.workbenchGeometry().launchSize();
+    QVERIFY(expected.has_value());
+    QVERIFY(expected->cols != opening.size.cols || expected->rows != opening.size.rows);
+    QVERIFY(finishOpening(runtime));
+    QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane_id) != nullptr && application.pane(pane_id)->attached, wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(application.pane(pane_id)->size.cols, expected->cols, wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(application.pane(pane_id)->size.rows, expected->rows, wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(runtime.count(ClientTag::pane_resize) != 0, wait_ms);
+    const auto resized = runtime.last<PaneResize>();
+    QCOMPARE(resized.size.cols, expected->cols);
+    QCOMPARE(resized.size.rows, expected->rows);
+    QCOMPARE(resized.size.cell_width_px, expected->cell_width_px);
+    QCOMPARE(resized.size.cell_height_px, expected->cell_height_px);
+    QCOMPARE(fixture.remote_runtime->count(ClientTag::open_pane), hidden_remote ? 1 : 0);
+    QCOMPARE(fixture.local_runtime->count(ClientTag::open_pane), 1);
+    QCOMPARE(warnings.count(), 0);
+    QCOMPARE(application.error(), QString{});
+  }
+
   Q_SLOT static void activityHoverChangesOnlyDuringDeliveredPointerInput() {
     MachineFixture fixture;
     QQuickWindow window;
@@ -1288,6 +1387,7 @@ class MachineWindowTest : public QObject {
 
 int main(int argc, char **argv) {
   const QGuiApplication application{argc, argv};
+  QQuickStyle::setStyle(QStringLiteral("Basic"));
   ui::bundledFonts();
   MachineWindowTest test;
 
