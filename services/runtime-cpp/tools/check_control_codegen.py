@@ -7,7 +7,14 @@ from pathlib import Path
 import re
 import sys
 import tempfile
-from compare_control_arm_codegen import generated_functions
+from unittest.mock import patch
+from compare_control_arm_codegen import generated_functions, linked_functions
+
+
+def linked_fixture(instructions):
+    assembly = '00000000 <_probe>:\n' + '\n'.join(f'{index * 4:x}: {line}' for index, line in enumerate(instructions))
+    with patch('compare_control_arm_codegen.subprocess.check_output', side_effect=['', assembly]):
+        return linked_functions(Path('unused'), 'unused')['_probe']
 
 
 def main():
@@ -53,6 +60,12 @@ def main():
         assert generated_functions(changed) != original_aggregate
         changed.write_text(aggregate.replace('\t.quad\t3', '\t.quad\t4'))
         assert generated_functions(changed) != original_aggregate
+    page = ['adrp x8, 0x1000', 'ldr q0, [x8, #0x10]', 'ret']
+    zero = ['adrp x8, 0x2000', 'ldr q0, [x8]', 'ret']
+    assert linked_fixture(page) == linked_fixture(zero)
+    for prefix in [[], ['adrp x8, 0x1000', 'mov x8, x0'], ['adrp x8, 0x1000', 'bl 0x4000 <_callee>']]:
+        assert linked_fixture(prefix + ['ldr q0, [x8, #0x10]', 'ret']) != linked_fixture(prefix + ['ldr q0, [x8]', 'ret'])
+    assert linked_fixture(['mov w0, #0x1', 'ret']) != linked_fixture(['mov w0, #0x2', 'ret'])
     report = {'command': sys.argv, 'scope': __doc__,
               'label_only_renumbering_preserves_all_functions': True,
               'switch_table_byte_change_detected': True,
@@ -60,10 +73,15 @@ def main():
               'aggregate_label_renumbering_preserves_function': True,
               'aggregate_referenced_string_change_detected': True,
               'aggregate_numeric_member_change_detected': True,
+              'linked_zero_page_offset_normalized': True,
+              'linked_nonpage_offset_preserved': True,
+              'linked_overwritten_page_register_not_normalized': True,
+              'linked_call_clobbered_page_register_not_normalized': True,
+              'linked_arithmetic_change_detected': True,
               'hashes': {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in
                          [Path(__file__), Path(__file__).with_name('compare_control_arm_codegen.py'), args.baseline, args.candidate]}}
     args.output.write_text(json.dumps(report, indent=2) + '\n')
-    print('Six codegen normalization controls passed')
+    print('Eleven codegen normalization controls passed')
 
 
 if __name__ == '__main__':

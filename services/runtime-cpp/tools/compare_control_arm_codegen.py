@@ -107,6 +107,7 @@ def linked_functions(path, objdump, generated=None):
                     instruction = re.sub(r'#0x[a-f0-9]+$', '@PAGEOFF', instruction)
             for register in pages:
                 instruction = re.sub(r'(\[' + register + r',\s*)#0x[a-f0-9]+(\])', r'\1@PAGEOFF\2', instruction)
+                instruction = re.sub(r'\[' + register + r'\]', '[' + register + ', @PAGEOFF]', instruction)
             instruction = re.sub(r'0x([a-f0-9]+) <([^>]+)>', lambda match: '<' + stubs.get(int(match[1], 16), match[2]) + '>', instruction)
             if operation not in non_writers and not operation.startswith('b.'):
                 destination = re.match(r'\w+(?:\.\w+)?\s+[xw](\d+)', instruction)
