@@ -77,21 +77,26 @@ public:
       }
 
       if (phase_ == Phase::ground && input[consumed] != escape && input[consumed] != enquiry) {
-        const auto remaining = input.subspan(consumed);
-        if (!escape_searched || consumed > next_escape) {
-          const auto *found = static_cast<const std::uint8_t *>(std::memchr(remaining.data(), escape, remaining.size()));
-          next_escape = found == nullptr ? input.size() : static_cast<std::size_t>(found - input.data());
-          escape_searched = true;
-        }
-        auto count = next_escape - consumed;
-        const auto *first_enquiry = static_cast<const std::uint8_t *>(std::memchr(remaining.data(), enquiry, count));
-        if (first_enquiry != nullptr) {
-          count = static_cast<std::size_t>(first_enquiry - remaining.data());
-        }
-        if (count != 0) {
-          consumer.ordinary(remaining.first(count));
-          consumed += count;
+        if constexpr (requires { consumer.ordinaryRun(input, consumed); }) {
+          consumed = consumer.ordinaryRun(input, consumed);
           continue;
+        } else {
+          const auto remaining = input.subspan(consumed);
+          if (!escape_searched || consumed > next_escape) {
+            const auto *found = static_cast<const std::uint8_t *>(std::memchr(remaining.data(), escape, remaining.size()));
+            next_escape = found == nullptr ? input.size() : static_cast<std::size_t>(found - input.data());
+            escape_searched = true;
+          }
+          auto count = next_escape - consumed;
+          const auto *first_enquiry = static_cast<const std::uint8_t *>(std::memchr(remaining.data(), enquiry, count));
+          if (first_enquiry != nullptr) {
+            count = static_cast<std::size_t>(first_enquiry - remaining.data());
+          }
+          if (count != 0) {
+            consumer.ordinary(remaining.first(count));
+            consumed += count;
+            continue;
+          }
         }
       }
 

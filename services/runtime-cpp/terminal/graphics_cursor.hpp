@@ -8,6 +8,8 @@ namespace telar::runtime {
 
 class GraphicsCursor {
 public:
+  bool ground() const noexcept { return scanner_.ground(); }
+
   [[gnu::noinline]] void feed(GhosttyTerminal terminal, std::span<const Byte> bytes, TerminalSize size) {
     if (scanner_.canSkip(bytes)) {
       ghostty_terminal_vt_write(terminal, bytes.data(), bytes.size());

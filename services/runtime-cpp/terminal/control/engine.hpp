@@ -15,6 +15,7 @@
 #include "policy.hpp"
 #include "reply.hpp"
 #include "vt_state.hpp"
+#include "styled_ordinary.hpp"
 
 namespace telar::runtime::control {
 
@@ -104,6 +105,13 @@ public:
   void ordinary(std::span<const std::uint8_t> input) {
     responses_.release();
     state_.write(input);
+  }
+
+  [[gnu::noinline]] std::size_t ordinaryRun(std::span<const std::uint8_t> input, std::size_t offset) {
+    const auto end = styledOrdinaryLength(input, offset);
+    responses_.release();
+    state_.writeNonGraphics(input.subspan(offset, end - offset));
+    return end;
   }
 
   void escapeBoundary() {

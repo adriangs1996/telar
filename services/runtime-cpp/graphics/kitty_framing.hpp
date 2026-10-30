@@ -15,6 +15,8 @@ public:
     ended
   };
 
+  bool ground() const noexcept { return state_ == State::ground; }
+
   bool canSkip(std::span<const std::uint8_t> bytes) const noexcept {
     return state_ == State::ground && (bytes.empty() || std::memchr(bytes.data(), escape_byte, bytes.size()) == nullptr);
   }

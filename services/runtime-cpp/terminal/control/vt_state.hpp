@@ -30,21 +30,11 @@ public:
     separate_media_ = separate_media;
   }
 
-  void write(std::span<const std::uint8_t> bytes) {
-    invalidate();
-    if (!bytes.empty()) {
-      const auto last = bytes.back();
-      possibly_pending_input_ = last >= 0x80 || last < 0x20;
-    }
-    if (separate_media_) {
-      graphics_cursor_.feed(terminal_, bytes, size_);
-    } else {
-      ghostty_terminal_vt_write(terminal_, bytes.data(), bytes.size());
-    }
-    if (write_failed_) {
-      throw TerminalError{GHOSTTY_OUT_OF_MEMORY};
-    }
-  }
+  void write(std::span<const std::uint8_t> bytes) { writeInput<true>(bytes); }
+
+  // The caller verifies that each ESC begins a complete numeric SGR.
+  // Partial graphics framing still observes every byte through the old path.
+  void writeNonGraphics(std::span<const std::uint8_t> bytes) { writeInput<false>(bytes); }
 
   void failWrite() noexcept { write_failed_ = true; }
 
@@ -191,6 +181,23 @@ public:
   static constexpr unsigned cursor_color = 258;
 
 private:
+  template <bool CheckGraphics>
+  void writeInput(std::span<const std::uint8_t> bytes) {
+    invalidate();
+    if (!bytes.empty()) {
+      const auto last = bytes.back();
+      possibly_pending_input_ = last >= 0x80 || last < 0x20;
+    }
+    if (separate_media_ && (CheckGraphics || !graphics_cursor_.ground())) {
+      graphics_cursor_.feed(terminal_, bytes, size_);
+    } else {
+      ghostty_terminal_vt_write(terminal_, bytes.data(), bytes.size());
+    }
+    if (write_failed_) {
+      throw TerminalError{GHOSTTY_OUT_OF_MEMORY};
+    }
+  }
+
   template <typename Value>
   struct Cached {
     std::uint64_t epoch = 0;

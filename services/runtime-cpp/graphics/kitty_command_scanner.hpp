@@ -15,6 +15,8 @@ struct KittyCommandView {
 
 class KittyCommandScanner {
 public:
+  bool ground() const noexcept { return framing_.ground(); }
+
   bool canSkip(std::span<const std::uint8_t> bytes) const noexcept {
     return framing_.canSkip(bytes);
   }
