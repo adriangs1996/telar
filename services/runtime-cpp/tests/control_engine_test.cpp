@@ -644,6 +644,27 @@ void reports(Memory &memory) {
 }
 
 template <Allocator Memory>
+void reportQueueResume(Memory &memory) {
+  Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
+  terminal.feed(bytes("\x1b[?2031h"));
+  require(drain(terminal).empty());
+
+  std::string expected;
+  for (std::size_t index = 0; index < PtyResponseQueue::message_capacity; ++index) {
+    terminal.feed(bytes("\x1b[5n"));
+    expected += "\x1b[0n";
+  }
+  terminal.configureClientFacts({.light = true});
+  require(terminal.hasPendingControl());
+
+  terminal.feed(bytes("X\x1b[6n"));
+  require(terminal.hasPendingControl());
+  expected += "\x1b[?997;2n\x1b[1;2R";
+  require(drain(terminal, 1) == expected);
+  require(!terminal.hasPendingControl() && terminal.responses().empty());
+}
+
+template <Allocator Memory>
 void reportLifecycle(Memory &memory) {
   Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
   constexpr std::string_view modes = "\x1b[?2031;2033;1004;2048;5522";
@@ -791,6 +812,7 @@ int main(int argc, char **argv) {
   sizeEncodings(memory);
   reports(memory);
   reportLifecycle(memory);
+  reportQueueResume(memory);
   testPtyResponseQueue();
   require(budget.liveBytes() == 0);
   std::puts("Native control engine and response ownership tests passed");
