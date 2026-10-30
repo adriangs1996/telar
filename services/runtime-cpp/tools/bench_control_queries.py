@@ -167,7 +167,12 @@ def main():
     args.add_argument('--reference-component', action='store_true')
     args.add_argument('--output', type=Path, required=True)
     args.add_argument('--case', action='append', choices=WORKLOADS)
+    args.add_argument('--sample-min-ms', type=float, default=40, help='Calibration target duration per timed invocation')
+    args.add_argument('--max-iterations', type=int, default=500000, help='Maximum iterations per timed invocation')
     args = args.parse_args()
+    if not math.isfinite(args.sample_min_ms) or not 0 < args.sample_min_ms <= 10000 or not 100 <= args.max_iterations <= 50000000:
+        raise ValueError('Invalid sample duration or iteration limit')
+    sample_target_ns = int(args.sample_min_ms * 1000000)
     results = {}
     before, compilers = process_snapshot()
     if compilers:
@@ -192,7 +197,7 @@ def main():
                 if not fn(data,len(data),warmup_iterations,fragment):
                     raise RuntimeError('Warmup failed: '+name)
         calibration = max(native(data,len(data),1000,fragment), reference(data,len(data),1000,fragment))
-        iterations = max(100, min(500000, int(1000*40_000_000/calibration)))
+        iterations = max(100, min(args.max_iterations, int(1000*sample_target_ns/calibration)))
         samples = []
         for pair in range(7):
             order = [('native',native),('reference',reference)] if pair%2==0 else [('reference',reference),('native',native)]
@@ -224,7 +229,7 @@ def main():
         native_library.close()
         reference_library.close()
     after, compilers_after = process_snapshot()
-    report = {'host_processes_before':before,'host_processes_after':after,'concurrent_builds_after':compilers_after,'no_build_processes_observed_at_snapshots':not compilers_after,'harness_sha256':harness_sha256,'libraries_in_separate_persistent_processes':not args.in_process,'rss_scope':'Whole child-process lifetime high-water mark, including its one library and fixture; not incremental per-query memory.','warmup_minimum_wall_ns_per_variant_per_case':150_000_000,'cpu_scope':'Process CPU and wall around each full FFI invocation include untimed fixture setup/destruction; sample ns/unit uses the internal timer around stream processing only.','started_at':started,'finished_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'scope':'Exploratory throughput. Coverage, desktop integration, allocation accounting and PTY latency are NOT certified.', 'command':sys.argv,'native_component_only':args.component,'reference_component_only':args.reference_component,'reference_kind':'native_previous_variant' if args.reference_component else 'ghostty_application_handler','comparison_margin':0.05,'pairs':7,'acceptance_rule':'Target wins at least 6/7; no untargeted workload loses consistently (0-1 wins) without verified identical normalized assembly.','architecture':'macOS ARM64 native','hashes':{str(path):hashlib.sha256(path.read_bytes()).hexdigest() for path in [args.native,args.reference]},'source_sha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'working_tree_dirty':bool(subprocess.check_output(['git','status','--porcelain'],cwd=ROOT)),'results':results}
+    report = {'host_processes_before':before,'host_processes_after':after,'concurrent_builds_after':compilers_after,'no_build_processes_observed_at_snapshots':not compilers_after,'harness_sha256':harness_sha256,'libraries_in_separate_persistent_processes':not args.in_process,'rss_scope':'Whole child-process lifetime high-water mark, including its one library and fixture; not incremental per-query memory.','warmup_minimum_wall_ns_per_variant_per_case':150_000_000,'cpu_scope':'Process CPU and wall around each full FFI invocation include untimed fixture setup/destruction; sample ns/unit uses the internal timer around stream processing only.','started_at':started,'finished_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'scope':'Exploratory throughput. Coverage, desktop integration, allocation accounting and PTY latency are NOT certified.', 'command':sys.argv,'native_component_only':args.component,'reference_component_only':args.reference_component,'reference_kind':'native_previous_variant' if args.reference_component else 'ghostty_application_handler','comparison_margin':0.05,'pairs':7,'sample_target_ns':sample_target_ns,'maximum_iterations':args.max_iterations,'acceptance_rule':'Target wins at least 6/7; no untargeted workload loses consistently (0-1 wins) without verified identical normalized assembly.','architecture':'macOS ARM64 native','hashes':{str(path):hashlib.sha256(path.read_bytes()).hexdigest() for path in [args.native,args.reference]},'source_sha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'working_tree_dirty':bool(subprocess.check_output(['git','status','--porcelain'],cwd=ROOT)),'results':results}
     args.output.write_text(json.dumps(report,indent=2)+'\n')
 
 if __name__=='__main__':

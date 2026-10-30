@@ -2,6 +2,7 @@
 #include "graphics/media_terminal.hpp"
 #include "one_shot_allocator.hpp"
 #include <cstdio>
+#include <cstring>
 #include <source_location>
 #include <stdexcept>
 #include <string>
@@ -977,6 +978,136 @@ void reportLifecycle(Memory &memory) {
 
 }
 
+template <Allocator Memory>
+void asciiBridgeContract(Memory &memory) {
+  GhosttyAllocatorBridge<Memory> allocator{memory};
+  TerminalHandle candidate;
+  TerminalHandle reference;
+  checkGhostty(ghostty_terminal_new(allocator.get(), candidate.output(), 80, 24));
+  checkGhostty(ghostty_terminal_new(allocator.get(), reference.output(), 80, 24));
+  const std::size_t continuation_limit = 64;
+  checkGhostty(ghostty_terminal_set(candidate.get(), GHOSTTY_TERMINAL_OPT_CONTINUATION_MAX_BYTES, &continuation_limit));
+  checkGhostty(ghostty_terminal_set(reference.get(), GHOSTTY_TERMINAL_OPT_CONTINUATION_MAX_BYTES, &continuation_limit));
+  const auto write = [](GhosttyTerminal terminal, std::string_view input) {
+    ghostty_terminal_vt_write(terminal, reinterpret_cast<const std::uint8_t *>(input.data()), input.size());
+  };
+  const auto compare = [&] {
+    GhosttyTerminalCursorState actual{}, expected{};
+    checkGhostty(ghostty_terminal_cursor_state(candidate.get(), &actual));
+    checkGhostty(ghostty_terminal_cursor_state(reference.get(), &expected));
+    require(actual.x == expected.x && actual.y == expected.y && actual.top == expected.top && actual.bottom == expected.bottom && actual.left == expected.left && actual.right == expected.right && actual.origin == expected.origin);
+    bool actual_ground = false, expected_ground = false;
+    checkGhostty(ghostty_terminal_get(candidate.get(), GHOSTTY_TERMINAL_DATA_VT_GROUND, &actual_ground));
+    checkGhostty(ghostty_terminal_get(reference.get(), GHOSTTY_TERMINAL_DATA_VT_GROUND, &expected_ground));
+    require(actual_ground == expected_ground);
+    std::array<std::uint8_t, 64> actual_continuation{}, expected_continuation{};
+    std::size_t actual_written = 0, expected_written = 0;
+    const auto actual_result = ghostty_terminal_continuation_buf(candidate.get(), actual_continuation.data(), actual_continuation.size(), &actual_written);
+    const auto expected_result = ghostty_terminal_continuation_buf(reference.get(), expected_continuation.data(), expected_continuation.size(), &expected_written);
+    require(actual_result == GHOSTTY_SUCCESS && actual_result == expected_result && actual_written == expected_written && actual_continuation == expected_continuation);
+    for (std::uint16_t row = 0; row < 24; ++row) {
+      auto actual_ref = ghosttySized<GhosttyGridRef>();
+      auto expected_ref = ghosttySized<GhosttyGridRef>();
+      const GhosttyPoint point{.tag = GHOSTTY_POINT_TAG_ACTIVE, .value = {.coordinate = {0, row}}};
+      checkGhostty(ghostty_terminal_grid_ref(candidate.get(), point, &actual_ref));
+      checkGhostty(ghostty_terminal_grid_ref(reference.get(), point, &expected_ref));
+      GhosttyCellsView actual_cells{}, expected_cells{};
+      checkGhostty(ghostty_grid_ref_cells(&actual_ref, &actual_cells));
+      checkGhostty(ghostty_grid_ref_cells(&expected_ref, &expected_cells));
+      require(actual_cells.len == expected_cells.len && std::memcmp(actual_cells.ptr, expected_cells.ptr, actual_cells.len) == 0);
+    }
+  };
+
+  std::array<std::uint32_t, 35> codepoints;
+  for (const auto prefix : {std::string_view{}, std::string_view{"\xe2\x82"}}) {
+    for (unsigned value = 0; value < 256; ++value) {
+      for (const std::size_t position : {0u, 16u, 34u}) {
+        write(candidate.get(), "\x1b" "c");
+        write(reference.get(), "\x1b" "c");
+        write(candidate.get(), prefix);
+        write(reference.get(), prefix);
+        compare();
+        codepoints.fill('A');
+        codepoints[position] = value;
+        const bool accepted = value < 0x80 && value != 0x05 && value != 0x1b;
+        const auto expected_consumed = accepted ? codepoints.size() : position;
+        std::size_t consumed = SIZE_MAX;
+        const auto result = ghostty_terminal_vt_write_ascii(candidate.get(), codepoints.data(), codepoints.size(), &consumed);
+        require(result == (accepted ? GHOSTTY_SUCCESS : GHOSTTY_INVALID_VALUE) && consumed == expected_consumed);
+        std::string raw(codepoints.size(), 'A');
+        raw[position] = static_cast<char>(value);
+        write(reference.get(), std::string_view{raw}.substr(0, expected_consumed));
+        compare();
+      }
+    }
+  }
+
+  for (const auto invalid : {UINT32_C(0x100), UINT32_C(0x10ffff), UINT32_C(0x110000), UINT32_MAX}) {
+    write(candidate.get(), "\x1b" "c");
+    write(reference.get(), "\x1b" "c");
+    codepoints.fill('A');
+    codepoints[16] = invalid;
+    std::size_t consumed = 0;
+    require(ghostty_terminal_vt_write_ascii(candidate.get(), codepoints.data(), codepoints.size(), &consumed) == GHOSTTY_INVALID_VALUE && consumed == 16);
+    write(reference.get(), std::string(16, 'A'));
+    compare();
+  }
+
+  std::array<std::uint32_t, GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT + 1> large;
+  large.fill('L');
+  for (const auto count : {GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT - 1, GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT}) {
+    write(candidate.get(), "\x1b" "c\xe2\x82");
+    write(reference.get(), "\x1b" "c\xe2\x82");
+    std::size_t consumed = 0;
+    checkGhostty(ghostty_terminal_vt_write_ascii(candidate.get(), large.data(), count, &consumed));
+    require(consumed == static_cast<std::size_t>(count));
+    write(reference.get(), std::string(count, 'L'));
+    compare();
+  }
+  std::size_t consumed = SIZE_MAX;
+  require(ghostty_terminal_vt_write_ascii(candidate.get(), large.data(), large.size(), &consumed) == GHOSTTY_INVALID_VALUE && consumed == 0);
+  compare();
+  require(ghostty_terminal_vt_write_ascii(nullptr, codepoints.data(), 1, &consumed) == GHOSTTY_INVALID_VALUE && consumed == 0);
+  require(ghostty_terminal_vt_write_ascii(candidate.get(), nullptr, 1, &consumed) == GHOSTTY_INVALID_VALUE && consumed == 0);
+  require(ghostty_terminal_vt_write_ascii(candidate.get(), nullptr, GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT + 1, &consumed) == GHOSTTY_INVALID_VALUE && consumed == 0);
+  require(ghostty_terminal_vt_write_ascii(candidate.get(), nullptr, 0, &consumed) == GHOSTTY_SUCCESS && consumed == 0);
+  require(ghostty_terminal_vt_write_ascii(candidate.get(), codepoints.data(), 1, nullptr) == GHOSTTY_INVALID_VALUE);
+  write(candidate.get(), "\x1b[31");
+  write(reference.get(), "\x1b[31");
+  require(ghostty_terminal_vt_write_ascii(candidate.get(), codepoints.data(), 1, &consumed) == GHOSTTY_INVALID_VALUE && consumed == 0);
+  compare();
+  write(candidate.get(), "m");
+  write(reference.get(), "m");
+  compare();
+}
+
+void semanticAsciiWriteFailure() {
+  control_test::OneShotAllocator upstream;
+  BudgetAllocator memory{upstream, 64 * 1024 * 1024};
+  {
+    auto queue = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, decltype(memory)>{memory});
+    Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, queue};
+    const std::string text(control::ascii_detail::codepoint_capacity * 2, 'x');
+    const auto input = text + "\x1b]2;unavailable\x1b\\" + text + "\x1b[5n";
+    upstream.failNext();
+    bool failed = false;
+    try {
+      terminal.feed(bytes(input));
+    } catch (const TerminalError &error) {
+      require(error.result() == GHOSTTY_OUT_OF_MEMORY);
+      failed = true;
+    }
+    bool processing_error = false;
+    checkGhostty(ghostty_terminal_get(terminal.handle(), GHOSTTY_TERMINAL_DATA_VT_PROCESSING_ERROR, &processing_error));
+    require(failed && processing_error && upstream.failures() == 1);
+    const auto queued = terminal.responses();
+    require(std::string_view{reinterpret_cast<const char *>(queued.data()), queued.size()} == "\x1b[0n");
+    terminal.abortControl();
+    require(queue->closed() && queue->empty() && !terminal.hasPendingControl());
+  }
+  require(memory.liveBytes() == 0 && upstream.liveBytes() == 0);
+}
+
 void semanticWriteFailure() {
   control_test::OneShotAllocator upstream;
   BudgetAllocator memory{upstream, 64 * 1024 * 1024};
@@ -1046,6 +1177,8 @@ int main(int argc, char **argv) {
   clipboardWrites(memory);
   abortedControl(memory);
   semanticWriteFailure();
+  asciiBridgeContract(memory);
+  semanticAsciiWriteFailure();
   rowStateViews(memory);
   normalizedGraphemeBatches(memory);
   graphemeChecksums(memory);

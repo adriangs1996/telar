@@ -36,6 +36,30 @@ public:
   // Partial graphics framing still observes every byte through the old path.
   void writeNonGraphics(std::span<const std::uint8_t> bytes) { writeInput<false>(bytes); }
 
+  bool canWriteAscii() const noexcept { return !separate_media_ || graphics_cursor_.ground(); }
+
+  // The owned caller buffer contains only ASCII, without ESC or ENQ. The
+  // bridge applies it synchronously and reports any partially applied error.
+  void writeAscii(std::span<const std::uint32_t> codepoints) {
+    if (codepoints.empty()) {
+      return;
+    }
+    if (!canWriteAscii()) {
+      throw TerminalError{GHOSTTY_INVALID_VALUE};
+    }
+
+    invalidate();
+    possibly_pending_input_ = codepoints.back() < 0x20;
+    std::size_t consumed = 0;
+    checkGhostty(ghostty_terminal_vt_write_ascii(terminal_, codepoints.data(), codepoints.size(), &consumed));
+    if (consumed != codepoints.size()) {
+      throw TerminalError{GHOSTTY_INVALID_VALUE};
+    }
+    if (write_failed_) {
+      throw TerminalError{GHOSTTY_OUT_OF_MEMORY};
+    }
+  }
+
   void failWrite() noexcept { write_failed_ = true; }
 
   // An intercepted ESC must still resolve a partial UTF-8 character in the

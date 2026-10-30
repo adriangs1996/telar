@@ -16,6 +16,7 @@
 #include "reply.hpp"
 #include "vt_state.hpp"
 #include "styled_ordinary.hpp"
+#include "ascii_ordinary.hpp"
 
 namespace telar::runtime::control {
 
@@ -108,6 +109,11 @@ public:
   }
 
   [[gnu::noinline]] std::size_t ordinaryRun(std::span<const std::uint8_t> input, std::size_t offset) {
+    const auto remaining = input.subspan(offset);
+    if (ascii_detail::eligible(remaining) && state_.canWriteAscii()) {
+      return offset + ordinaryAscii(remaining);
+    }
+
     const auto end = styledOrdinaryLength(input, offset);
     responses_.release();
     state_.writeNonGraphics(input.subspan(offset, end - offset));
@@ -256,6 +262,16 @@ public:
   Policy policy;
 
 private:
+  [[gnu::noinline]] std::size_t ordinaryAscii(std::span<const std::uint8_t> input) {
+    static_assert(ascii_detail::codepoint_capacity == GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT);
+    std::array<std::uint32_t, ascii_detail::codepoint_capacity> codepoints;
+    const auto count = ascii_detail::widen(input, codepoints);
+    assert(count >= ascii_detail::gate_bytes);
+    responses_.release();
+    state_.writeAscii(std::span{codepoints}.first(count));
+    return count;
+  }
+
   struct ReleaseProducer {
     PtyResponseQueue::Producer &producer;
 

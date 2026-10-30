@@ -1,7 +1,8 @@
 diff --git a/include/ghostty/vt/grid_ref.h b/include/ghostty/vt/grid_ref.h
+index c43791d..59cc1fe 100644
 --- a/include/ghostty/vt/grid_ref.h
 +++ b/include/ghostty/vt/grid_ref.h
-@@ -124,6 +124,30 @@
+@@ -124,6 +124,30 @@ typedef struct {
  GHOSTTY_API GhosttyResult ghostty_grid_ref_cell(const GhosttyGridRef *ref,
                                      GhosttyCell *out_cell);
  
@@ -32,7 +33,7 @@ diff --git a/include/ghostty/vt/grid_ref.h b/include/ghostty/vt/grid_ref.h
  /**
   * Get the row from a grid reference.
   *
-@@ -184,6 +208,12 @@
+@@ -184,6 +208,12 @@ GHOSTTY_API GhosttyResult ghostty_grid_ref_graphemes(const GhosttyGridRef *ref,
   *
   * @ingroup grid_ref
   */
@@ -46,9 +47,10 @@ diff --git a/include/ghostty/vt/grid_ref.h b/include/ghostty/vt/grid_ref.h
      const GhosttyGridRef *ref,
      uint8_t *buf,
 diff --git a/include/ghostty/vt/kitty_graphics.h b/include/ghostty/vt/kitty_graphics.h
+index 79aad55..c24a777 100644
 --- a/include/ghostty/vt/kitty_graphics.h
 +++ b/include/ghostty/vt/kitty_graphics.h
-@@ -267,6 +267,11 @@
+@@ -267,6 +267,11 @@ typedef enum GHOSTTY_ENUM_TYPED {
     * Output type: uint64_t *
     */
    GHOSTTY_KITTY_GRAPHICS_DATA_GENERATION = 2,
@@ -60,7 +62,7 @@ diff --git a/include/ghostty/vt/kitty_graphics.h b/include/ghostty/vt/kitty_grap
    GHOSTTY_KITTY_GRAPHICS_DATA_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
  } GhosttyKittyGraphicsData;
  
-@@ -369,6 +374,8 @@
+@@ -369,6 +374,8 @@ typedef enum GHOSTTY_ENUM_TYPED {
     * Output type: int32_t *
     */
    GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_Z = 12,
@@ -69,7 +71,7 @@ diff --git a/include/ghostty/vt/kitty_graphics.h b/include/ghostty/vt/kitty_grap
  
    GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
  } GhosttyKittyGraphicsPlacementData;
-@@ -563,6 +570,7 @@
+@@ -563,6 +570,7 @@ typedef enum GHOSTTY_ENUM_TYPED {
     * Output type: uint64_t *
     */
    GHOSTTY_KITTY_IMAGE_DATA_GENERATION = 9,
@@ -77,7 +79,7 @@ diff --git a/include/ghostty/vt/kitty_graphics.h b/include/ghostty/vt/kitty_grap
  
    GHOSTTY_KITTY_IMAGE_DATA_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
  } GhosttyKittyGraphicsImageData;
-@@ -981,6 +989,29 @@
+@@ -981,6 +989,29 @@ GHOSTTY_API GhosttyResult ghostty_kitty_graphics_placement_grid_size(
   *
   * @ingroup kitty_graphics
   */
@@ -108,9 +110,10 @@ diff --git a/include/ghostty/vt/kitty_graphics.h b/include/ghostty/vt/kitty_grap
      GhosttyKittyGraphicsPlacementIterator iterator,
      GhosttyKittyGraphicsImage image,
 diff --git a/include/ghostty/vt/render.h b/include/ghostty/vt/render.h
+index 87f6aa4..ca3a228 100644
 --- a/include/ghostty/vt/render.h
 +++ b/include/ghostty/vt/render.h
-@@ -971,6 +971,7 @@
+@@ -971,6 +971,7 @@ typedef enum GHOSTTY_ENUM_TYPED {
     *  works with or without overscan. See "Row Identity" in the render
     *  state overview. */
    GHOSTTY_RENDER_STATE_ROW_DATA_ID = 7,
@@ -118,11 +121,10 @@ diff --git a/include/ghostty/vt/render.h b/include/ghostty/vt/render.h
    GHOSTTY_RENDER_STATE_ROW_DATA_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
  } GhosttyRenderStateRowData;
  
-@@ -1433,6 +1434,15 @@
- GHOSTTY_API GhosttyResult ghostty_render_state_row_cells_new(
+@@ -1434,6 +1435,15 @@ GHOSTTY_API GhosttyResult ghostty_render_state_row_cells_new(
      const GhosttyAllocator* allocator,
      GhosttyRenderStateRowCells* out_cells);
-+
+ 
 +/** Caller-owned storage for a prefix of extra grapheme codepoints.
 + * Excludes the base codepoint. At most cap elements are copied and len is
 + * the number written. A null ptr writes no elements. */
@@ -131,10 +133,11 @@ diff --git a/include/ghostty/vt/render.h b/include/ghostty/vt/render.h
 +  size_t cap;
 +  size_t len;
 +} GhosttyCodepointsBuffer;
- 
++
  /**
   * Queryable data kinds for ghostty_render_state_row_cells_get().
-@@ -1503,6 +1513,8 @@
+  *
+@@ -1503,6 +1513,8 @@ typedef enum GHOSTTY_ENUM_TYPED {
     * buffer size in bytes.
     */
    GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_GRAPHEMES_UTF8 = 9,
@@ -144,18 +147,20 @@ diff --git a/include/ghostty/vt/render.h b/include/ghostty/vt/render.h
  } GhosttyRenderStateRowCellsData;
  
 diff --git a/include/ghostty/vt/terminal.h b/include/ghostty/vt/terminal.h
+index b586556..45dca72 100644
 --- a/include/ghostty/vt/terminal.h
 +++ b/include/ghostty/vt/terminal.h
-@@ -6,6 +6,8 @@
- 
+@@ -7,6 +7,9 @@
  #ifndef GHOSTTY_VT_TERMINAL_H
  #define GHOSTTY_VT_TERMINAL_H
-+
-+#define GHOSTTY_TELAR_STATE_VERSION 6
  
++#define GHOSTTY_TELAR_STATE_VERSION 6
++#define GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT 4096
++
  #include <stdbool.h>
  #include <stddef.h>
-@@ -2780,6 +2782,10 @@
+ #include <stdint.h>
+@@ -2780,6 +2783,10 @@ typedef enum GHOSTTY_ENUM_TYPED {
     * Input type: GhosttyTerminalResizeWindowFn
     */
    GHOSTTY_TERMINAL_OPT_RESIZE_WINDOW = 47,
@@ -166,7 +171,7 @@ diff --git a/include/ghostty/vt/terminal.h b/include/ghostty/vt/terminal.h
    GHOSTTY_TERMINAL_OPT_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
  } GhosttyTerminalOption;
  
-@@ -3210,6 +3216,16 @@
+@@ -3210,6 +3217,16 @@ typedef enum GHOSTTY_ENUM_TYPED {
     * Output type: GhosttyTerminalMemoryUsage *
     */
    GHOSTTY_TERMINAL_DATA_MEMORY_USAGE = 42,
@@ -183,7 +188,7 @@ diff --git a/include/ghostty/vt/terminal.h b/include/ghostty/vt/terminal.h
    GHOSTTY_TERMINAL_DATA_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
  } GhosttyTerminalData;
  
-@@ -3339,6 +3355,9 @@
+@@ -3339,10 +3356,24 @@ GHOSTTY_API GhosttyResult ghostty_terminal_set(GhosttyTerminal terminal,
   *
   * @ingroup terminal
   */
@@ -193,7 +198,22 @@ diff --git a/include/ghostty/vt/terminal.h b/include/ghostty/vt/terminal.h
  GHOSTTY_API void ghostty_terminal_vt_write(GhosttyTerminal terminal,
                                  const uint8_t* data,
                                  size_t len);
-@@ -3655,6 +3674,26 @@
+ 
++/** Apply predecoded ASCII at parser ground, allowing pending UTF-8.
++ * The bounded caller-owned array is consumed synchronously. ESC, ENQ and
++ * values above ASCII stop before dispatch and return INVALID_VALUE; consumed
++ * reports the already-applied prefix, which must never be replayed. Invalid
++ * entry state, pointers or lengths have no stream effects and consume zero.
++ * An empty valid input is a no-op. Semantic write failures use existing VT
++ * failure callbacks; consumers must preserve their sticky error handling.
++ */
++GHOSTTY_API GhosttyResult ghostty_terminal_vt_write_ascii(GhosttyTerminal terminal, const uint32_t* codepoints, size_t count, size_t* consumed);
++
++
+ /**
+  * Write VT-encoded data to the terminal, stopping right after the first
+  * byte that reaches one of the requested boundaries.
+@@ -3655,6 +3686,26 @@ GHOSTTY_API GhosttyResult ghostty_terminal_compress(
   *
   * @ingroup terminal
   */
@@ -221,15 +241,17 @@ diff --git a/include/ghostty/vt/terminal.h b/include/ghostty/vt/terminal.h
                                      GhosttyTerminalData data,
                                      void *out);
 diff --git a/src/lib_vt.zig b/src/lib_vt.zig
+index 0625208..c8f9af2 100644
 --- a/src/lib_vt.zig
 +++ b/src/lib_vt.zig
-@@ -328,12 +328,15 @@
+@@ -328,12 +328,16 @@ comptime {
          @export(&c.terminal_free, .{ .name = "ghostty_terminal_free" });
          @export(&c.terminal_reset, .{ .name = "ghostty_terminal_reset" });
          @export(&c.terminal_resize, .{ .name = "ghostty_terminal_resize" });
 +        @export(&c.terminal_index, .{ .name = "ghostty_terminal_index" });
          @export(&c.terminal_set, .{ .name = "ghostty_terminal_set" });
          @export(&c.terminal_vt_write, .{ .name = "ghostty_terminal_vt_write" });
++        @export(&c.terminal_vt_write_ascii, .{ .name = "ghostty_terminal_vt_write_ascii" });
          @export(&c.terminal_vt_write_until, .{ .name = "ghostty_terminal_vt_write_until" });
          @export(&c.terminal_scroll_viewport, .{ .name = "ghostty_terminal_scroll_viewport" });
          @export(&c.terminal_compression_activity, .{ .name = "ghostty_terminal_compression_activity" });
@@ -239,7 +261,7 @@ diff --git a/src/lib_vt.zig b/src/lib_vt.zig
          @export(&c.terminal_get, .{ .name = "ghostty_terminal_get" });
          @export(&c.terminal_get_multi, .{ .name = "ghostty_terminal_get_multi" });
          @export(&c.terminal_continuation_write, .{ .name = "ghostty_terminal_continuation_write" });
-@@ -394,6 +397,15 @@
+@@ -394,6 +398,15 @@ comptime {
              @export(&c.snapshot_decoder_decode, .{ .name = "ghostty_snapshot_decoder_decode" });
          }
          if (features.kitty_graphics) {
@@ -255,7 +277,7 @@ diff --git a/src/lib_vt.zig b/src/lib_vt.zig
              @export(&c.kitty_graphics_get, .{ .name = "ghostty_kitty_graphics_get" });
              @export(&c.kitty_graphics_animation_tick, .{ .name = "ghostty_kitty_graphics_animation_tick" });
              @export(&c.kitty_graphics_image, .{ .name = "ghostty_kitty_graphics_image" });
-@@ -414,8 +426,11 @@
+@@ -414,8 +427,11 @@ comptime {
          }
          if (features.grid_introspection) {
              @export(&c.grid_ref_cell, .{ .name = "ghostty_grid_ref_cell" });
@@ -268,9 +290,10 @@ diff --git a/src/lib_vt.zig b/src/lib_vt.zig
              @export(&c.grid_ref_style, .{ .name = "ghostty_grid_ref_style" });
              @export(&c.tracked_grid_ref_free, .{ .name = "ghostty_tracked_grid_ref_free" });
 diff --git a/src/terminal/c/grid_ref.zig b/src/terminal/c/grid_ref.zig
+index 20f49be..dbefa9b 100644
 --- a/src/terminal/c/grid_ref.zig
 +++ b/src/terminal/c/grid_ref.zig
-@@ -49,6 +49,83 @@
+@@ -49,6 +49,83 @@ pub fn grid_ref_cell(
      return .success;
  }
  
@@ -354,13 +377,10 @@ diff --git a/src/terminal/c/grid_ref.zig b/src/terminal/c/grid_ref.zig
  pub fn grid_ref_row(
      ref: *const CGridRef,
      out: ?*row_c.CRow,
-@@ -88,6 +165,30 @@
-     };
+@@ -91,6 +168,30 @@ pub fn grid_ref_graphemes(
+     return .success;
+ }
  
-     out_len.* = total;
-+    return .success;
-+}
-+
 +pub fn grid_ref_hyperlink(ref: *const CGridRef, uri: *lib.String, explicit_id: *lib.String, implicit_id: *u64) callconv(lib.calling_conv) Result {
 +    const pin = ref.toPin() orelse return .invalid_value;
 +    const terminal_page = pin.node.page();
@@ -382,13 +402,17 @@ diff --git a/src/terminal/c/grid_ref.zig b/src/terminal/c/grid_ref.zig
 +        },
 +    }
 +
-     return .success;
- }
- 
++    return .success;
++}
++
+ pub fn grid_ref_hyperlink_uri(
+     ref: *const CGridRef,
+     out_buf: ?[*]u8,
 diff --git a/src/terminal/c/kitty_graphics.zig b/src/terminal/c/kitty_graphics.zig
+index 27eb6fd..0c61ab9 100644
 --- a/src/terminal/c/kitty_graphics.zig
 +++ b/src/terminal/c/kitty_graphics.zig
-@@ -25,6 +25,13 @@
+@@ -25,6 +25,13 @@ pub const ImageHandle = if (build_options.kitty_graphics)
  else
      ?*const anyopaque;
  
@@ -402,7 +426,7 @@ diff --git a/src/terminal/c/kitty_graphics.zig b/src/terminal/c/kitty_graphics.z
  /// C: GhosttyKittyGraphicsPlacementIterator
  pub const PlacementIterator = if (build_options.kitty_graphics)
      ?*PlacementIteratorWrapper
-@@ -54,12 +61,20 @@
+@@ -54,12 +61,20 @@ pub const Data = enum(c_int) {
      invalid = 0,
      placement_iterator = 1,
      generation = 2,
@@ -423,7 +447,7 @@ diff --git a/src/terminal/c/kitty_graphics.zig b/src/terminal/c/kitty_graphics.z
          };
      }
  };
-@@ -79,12 +94,15 @@
+@@ -79,12 +94,15 @@ pub const PlacementData = enum(c_int) {
      columns = 10,
      rows = 11,
      z = 12,
@@ -440,7 +464,7 @@ diff --git a/src/terminal/c/kitty_graphics.zig b/src/terminal/c/kitty_graphics.z
              .x_offset,
              .y_offset,
              .source_x,
-@@ -133,6 +151,14 @@
+@@ -133,6 +151,14 @@ fn getTyped(
              };
          },
          .generation => out.* = storage.generation,
@@ -455,7 +479,7 @@ diff --git a/src/terminal/c/kitty_graphics.zig b/src/terminal/c/kitty_graphics.z
      }
      return .success;
  }
-@@ -183,6 +209,7 @@
+@@ -183,6 +209,7 @@ pub const ImageData = enum(c_int) {
      data_ptr = 7,
      data_len = 8,
      generation = 9,
@@ -463,7 +487,7 @@ diff --git a/src/terminal/c/kitty_graphics.zig b/src/terminal/c/kitty_graphics.z
  
      pub fn OutType(comptime self: ImageData) type {
          return switch (self) {
-@@ -191,7 +218,7 @@
+@@ -191,7 +218,7 @@ pub const ImageData = enum(c_int) {
              .format => ImageFormat,
              .compression => ImageCompression,
              .data_ptr => [*]const u8,
@@ -472,7 +496,7 @@ diff --git a/src/terminal/c/kitty_graphics.zig b/src/terminal/c/kitty_graphics.z
              .generation => u64,
          };
      }
-@@ -292,6 +319,7 @@
+@@ -292,6 +319,7 @@ fn imageGetTyped(
          .data_ptr => out.* = (image.renderData().bytes() orelse return .no_value).ptr,
          .data_len => out.* = image.renderData().len(),
          .generation => out.* = image.generation,
@@ -480,7 +504,7 @@ diff --git a/src/terminal/c/kitty_graphics.zig b/src/terminal/c/kitty_graphics.z
      }
  
      return .success;
-@@ -424,6 +452,15 @@
+@@ -424,6 +452,15 @@ fn placementGetTyped(
          .image_id => out.* = key.image_id,
          .placement_id => out.* = key.placement_id.id,
          .is_virtual => out.* = val.location == .virtual,
@@ -496,7 +520,7 @@ diff --git a/src/terminal/c/kitty_graphics.zig b/src/terminal/c/kitty_graphics.z
          .x_offset => out.* = val.x_offset,
          .y_offset => out.* = val.y_offset,
          .source_x => out.* = val.source_x,
-@@ -2284,3 +2321,120 @@
+@@ -2284,3 +2321,120 @@ test "animation_tick null out returns invalid_value" {
      try testing.expectEqual(Result.success, terminal_c.get(t, .kitty_graphics, @ptrCast(&graphics)));
      try testing.expectEqual(Result.invalid_value, animation_tick(graphics, 0, null));
  }
@@ -618,14 +642,16 @@ diff --git a/src/terminal/c/kitty_graphics.zig b/src/terminal/c/kitty_graphics.z
 +    return .success;
 +}
 diff --git a/src/terminal/c/main.zig b/src/terminal/c/main.zig
+index a0c0dc3..258e1a9 100644
 --- a/src/terminal/c/main.zig
 +++ b/src/terminal/c/main.zig
-@@ -192,12 +192,15 @@
+@@ -192,12 +192,16 @@ pub const terminal_free = terminal.free;
  pub const terminal_reset = terminal.reset;
  pub const terminal_resize = terminal.resize;
  pub const terminal_set = terminal.set;
 +pub const terminal_index = terminal.advance_index;
  pub const terminal_vt_write = terminal.vt_write;
++pub const terminal_vt_write_ascii = terminal.vt_write_ascii;
  pub const terminal_vt_write_until = terminal.vt_write_until;
  pub const terminal_scroll_viewport = terminal.scroll_viewport;
  pub const terminal_compression_activity = terminal.compression_activity;
@@ -636,7 +662,7 @@ diff --git a/src/terminal/c/main.zig b/src/terminal/c/main.zig
  pub const terminal_get_multi = terminal.get_multi;
  pub const terminal_continuation_write = terminal.continuation_write;
  pub const terminal_continuation_buf = terminal.continuation_buf;
-@@ -254,8 +257,11 @@
+@@ -254,8 +258,11 @@ pub const unicode_codepoint_width = unicode.codepoint_width;
  pub const unicode_grapheme_width = unicode.grapheme_width;
  
  pub const grid_ref_cell = grid_ref.grid_ref_cell;
@@ -648,7 +674,7 @@ diff --git a/src/terminal/c/main.zig b/src/terminal/c/main.zig
  pub const grid_ref_hyperlink_uri = grid_ref.grid_ref_hyperlink_uri;
  pub const grid_ref_style = grid_ref.grid_ref_style;
  pub const tracked_grid_ref_free = grid_ref_tracked.tracked_grid_ref_free;
-@@ -300,3 +306,13 @@
+@@ -300,3 +307,13 @@ test {
      // We want to make sure we run the tests for the C allocator interface.
      _ = @import("../../lib/allocator.zig");
  }
@@ -663,9 +689,10 @@ diff --git a/src/terminal/c/main.zig b/src/terminal/c/main.zig
 +pub const kitty_graphics_placement_remove = kitty_graphics.placement_remove;
 +pub const kitty_graphics_placement_anchor = kitty_graphics.placement_anchor;
 diff --git a/src/terminal/c/render.zig b/src/terminal/c/render.zig
+index 0261901..23c45f8 100644
 --- a/src/terminal/c/render.zig
 +++ b/src/terminal/c/render.zig
-@@ -14,6 +14,7 @@
+@@ -14,6 +14,7 @@ const renderpkg = @import("../render.zig");
  const Result = @import("result.zig").Result;
  const cell_c = @import("cell.zig");
  const row = @import("row.zig");
@@ -673,7 +700,7 @@ diff --git a/src/terminal/c/render.zig b/src/terminal/c/render.zig
  const style_c = @import("style.zig");
  const PageList = @import("../PageList.zig");
  
-@@ -758,6 +759,12 @@
+@@ -758,6 +759,12 @@ pub fn row_cells_free(cells_: RowCells) callconv(lib.calling_conv) void {
      alloc.destroy(cells);
  }
  
@@ -686,7 +713,7 @@ diff --git a/src/terminal/c/render.zig b/src/terminal/c/render.zig
  /// C: GhosttyRenderStateRowCellsData
  pub const RowCellsData = enum(c_int) {
      invalid = 0,
-@@ -770,6 +777,7 @@
+@@ -770,6 +777,7 @@ pub const RowCellsData = enum(c_int) {
      selected = 7,
      has_styling = 8,
      graphemes_utf8 = 9,
@@ -694,7 +721,7 @@ diff --git a/src/terminal/c/render.zig b/src/terminal/c/render.zig
  
      /// Output type expected for querying the data of the given kind.
      pub fn OutType(comptime self: RowCellsData) type {
-@@ -782,6 +790,7 @@
+@@ -782,6 +790,7 @@ pub const RowCellsData = enum(c_int) {
              .bg_color, .fg_color => colorpkg.RGB.C,
              .selected, .has_styling => bool,
              .graphemes_utf8 => lib.Buffer,
@@ -702,11 +729,10 @@ diff --git a/src/terminal/c/render.zig b/src/terminal/c/render.zig
          };
      }
  };
-@@ -870,6 +879,14 @@
-             style_c.Style.write(cells.styles[x], out);
+@@ -871,6 +880,14 @@ fn rowCellsGetTypedInner(
          } else {
              out.* = style_c.Style.default;
-+        },
+         },
 +        .graphemes_extra => {
 +            const extra = if (cell.hasGrapheme()) cells.graphemes[x] else &[_]u21{};
 +            const count = if (out.ptr == null) 0 else @min(extra.len, out.cap);
@@ -714,10 +740,11 @@ diff --git a/src/terminal/c/render.zig b/src/terminal/c/render.zig
 +                out.ptr.?[index] = codepoint;
 +            }
 +            out.len = count;
-         },
++        },
          .graphemes_len => {
              if (!cell.hasText()) {
-@@ -995,6 +1012,7 @@
+                 out.* = 0;
+@@ -995,6 +1012,7 @@ pub const RowData = enum(c_int) {
      cells_raw = 5,
      viewport_y = 6,
      id = 7,
@@ -725,7 +752,7 @@ diff --git a/src/terminal/c/render.zig b/src/terminal/c/render.zig
  
      /// Output type expected for querying the data of the given kind.
      pub fn OutType(comptime self: RowData) type {
-@@ -1005,6 +1023,7 @@
+@@ -1005,6 +1023,7 @@ pub const RowData = enum(c_int) {
              .cells => RowCells,
              .selection => RowSelection,
              .cells_raw => cell_c.CellsView,
@@ -733,7 +760,7 @@ diff --git a/src/terminal/c/render.zig b/src/terminal/c/render.zig
              .viewport_y => i32,
              .id => RowId,
          };
-@@ -1101,6 +1120,7 @@
+@@ -1101,6 +1120,7 @@ fn rowGetTyped(
      switch (data) {
          .invalid => return .invalid_value,
          .dirty => out.* = it.dirty[y],
@@ -742,9 +769,31 @@ diff --git a/src/terminal/c/render.zig b/src/terminal/c/render.zig
          .cells => {
              const cells = out.* orelse return .invalid_value;
 diff --git a/src/terminal/c/terminal.zig b/src/terminal/c/terminal.zig
+index 5f047f4..2bc7589 100644
 --- a/src/terminal/c/terminal.zig
 +++ b/src/terminal/c/terminal.zig
-@@ -1485,6 +1485,11 @@
+@@ -1063,6 +1063,20 @@ pub fn vt_write(
+     wrapper.stream.nextSlice(ptr[0..len]);
+ }
+ 
++/// Apply a bounded predecoded ASCII prefix without parsing query framing.
++pub fn vt_write_ascii(terminal_: Terminal, ptr: ?[*]const u32, len: usize, consumed_: ?*usize) callconv(lib.calling_conv) Result {
++    const consumed = consumed_ orelse return .invalid_value;
++    consumed.* = 0;
++    const wrapper = terminal_ orelse return .invalid_value;
++    const maximum_ascii_codepoints = 4096;
++    if (len > maximum_ascii_codepoints or wrapper.stream.parser.state != .ground) return .invalid_value;
++    if (len == 0) return .success;
++    const codepoints = ptr orelse return .invalid_value;
++
++    consumed.* = wrapper.stream.nextAsciiCodepoints(codepoints[0..len]);
++    return if (consumed.* == len) .success else .invalid_value;
++}
++
+ /// A boundary as a C bit flag. The C API takes and reports boundaries as a
+ /// bitmask, so each value is the bit for the stream boundary of the same
+ /// name.
+@@ -1485,6 +1499,10 @@ pub const Option = enum(c_int) {
      xt_checksum_extension = 45,
      program_status = 46,
      resize_window = 47,
@@ -752,11 +801,10 @@ diff --git a/src/terminal/c/terminal.zig b/src/terminal/c/terminal.zig
 +    cursor_pending_wrap = 49,
 +    cursor_x = 50,
 +    active_screen = 51,
-+
  
      /// Input type expected for setting the option.
      pub fn InType(comptime self: Option) type {
-@@ -1517,6 +1522,8 @@
+@@ -1517,6 +1535,8 @@ pub const Option = enum(c_int) {
              .kitty_image_medium_file,
              .kitty_image_medium_shared_mem,
              .glyph_protocol,
@@ -765,7 +813,7 @@ diff --git a/src/terminal/c/terminal.zig b/src/terminal/c/terminal.zig
              .title_report,
              .xt_checksum_report,
              .resize_pull_scrollback,
-@@ -1534,6 +1541,8 @@
+@@ -1534,6 +1554,8 @@ pub const Option = enum(c_int) {
              .default_cursor_style => ?*const TerminalCursorStyle,
              .default_cursor_blink => ?*const bool,
              .mode, .mode_default => ?*const ModeConfig,
@@ -774,7 +822,7 @@ diff --git a/src/terminal/c/terminal.zig b/src/terminal/c/terminal.zig
          };
      }
  };
-@@ -1723,6 +1732,21 @@
+@@ -1723,6 +1745,21 @@ fn setTyped(
                  wrapper.stream.handler.apc_handler.max_bytes.remove(.kitty);
              }
          },
@@ -796,7 +844,7 @@ diff --git a/src/terminal/c/terminal.zig b/src/terminal/c/terminal.zig
          .glyph_protocol => {
              const enabled = (value orelse return .success).*;
              wrapper.stream.handler.apc_handler.enable(.glyph, enabled);
-@@ -1966,12 +1990,24 @@
+@@ -1966,12 +2003,22 @@ pub const TerminalData = enum(c_int) {
      clipboard_write_max_bytes = 40,
      mouse_shape = 41,
      memory_usage = 42,
@@ -810,19 +858,17 @@ diff --git a/src/terminal/c/terminal.zig b/src/terminal/c/terminal.zig
 +    scrolling_region_bottom = 50,
 +    scrolling_region_left = 51,
 +    scrolling_region_right = 52,
-+
  
      /// Output type expected for querying the data of the given kind.
      pub fn OutType(comptime self: TerminalData) type {
          return switch (self) {
              .invalid => void,
 -            .cols, .rows, .cursor_x, .cursor_y => size.CellCountInt,
-+            .cols, .rows, .cursor_x, .cursor_y,
-+            .scrolling_region_top, .scrolling_region_bottom, .scrolling_region_left, .scrolling_region_right => size.CellCountInt,
++            .cols, .rows, .cursor_x, .cursor_y, .scrolling_region_top, .scrolling_region_bottom, .scrolling_region_left, .scrolling_region_right => size.CellCountInt,
              .cursor_pending_wrap,
              .cursor_visible,
              .mouse_tracking,
-@@ -1979,13 +2015,16 @@
+@@ -1979,13 +2026,16 @@ pub const TerminalData = enum(c_int) {
              .vt_processing_error,
              .vt_ground,
              .cursor_at_prompt,
@@ -840,7 +886,7 @@ diff --git a/src/terminal/c/terminal.zig b/src/terminal/c/terminal.zig
              .total_rows,
              .scrollback_rows,
              .scrollback_max_bytes,
-@@ -1997,6 +2036,8 @@
+@@ -1997,6 +2047,8 @@ pub const TerminalData = enum(c_int) {
              .color_foreground,
              .color_background,
              .color_cursor,
@@ -849,7 +895,7 @@ diff --git a/src/terminal/c/terminal.zig b/src/terminal/c/terminal.zig
              .color_foreground_default,
              .color_background_default,
              .color_cursor_default,
-@@ -2015,6 +2056,49 @@
+@@ -2015,6 +2067,49 @@ pub const TerminalData = enum(c_int) {
      }
  };
  
@@ -899,7 +945,7 @@ diff --git a/src/terminal/c/terminal.zig b/src/terminal/c/terminal.zig
  pub fn get(
      terminal_: Terminal,
      data: TerminalData,
-@@ -2069,6 +2153,23 @@
+@@ -2069,6 +2164,23 @@ fn getTyped(
      const t: *ZigTerminal = wrapper.terminal;
      switch (data) {
          .invalid => return .invalid_value,
@@ -923,7 +969,7 @@ diff --git a/src/terminal/c/terminal.zig b/src/terminal/c/terminal.zig
          .cols => out.* = t.cols,
          .rows => out.* = t.rows,
          .cursor_x => out.* = t.screens.active.cursor.x,
-@@ -7911,3 +8012,10 @@
+@@ -7911,3 +8023,10 @@ test "get mouse_shape" {
      try testing.expectEqual(Result.success, get(t, .mouse_shape, @ptrCast(&shape)));
      try testing.expectEqual(mouse.Shape.wait, shape);
  }
@@ -935,9 +981,10 @@ diff --git a/src/terminal/c/terminal.zig b/src/terminal/c/terminal.zig
 +    return .success;
 +}
 diff --git a/src/terminal/c/types.zig b/src/terminal/c/types.zig
+index db75bfd..209b912 100644
 --- a/src/terminal/c/types.zig
 +++ b/src/terminal/c/types.zig
-@@ -222,6 +222,7 @@
+@@ -222,6 +222,7 @@ const type_decls = [_]TypeDecl{
      .initStruct("GhosttySysImage", sys.Image),
      .initStruct("GhosttyTerminalDesktopNotification", terminal.DesktopNotification),
      .initStruct("GhosttyTerminalMemoryUsage", terminal.TerminalMemoryUsage),
@@ -945,10 +992,180 @@ diff --git a/src/terminal/c/types.zig b/src/terminal/c/types.zig
      .initStruct("GhosttyTerminalModeConfig", terminal.ModeConfig),
      .initStruct("GhosttyTerminalProgramStatus", terminal.ProgramStatus),
      .initStruct("GhosttyTerminalProgressReport", terminal.ProgressReport),
+diff --git a/src/terminal/stream.zig b/src/terminal/stream.zig
+index 281d012..713b0d6 100644
+--- a/src/terminal/stream.zig
++++ b/src/terminal/stream.zig
+@@ -847,63 +847,7 @@ pub fn Stream(comptime H: type) type {
+                 // Hand runs of printable codepoints to the handler as
+                 // print_slice actions so it can process them with
+                 // per-run rather than per-codepoint overhead.
+-                var i: usize = 0;
+-                while (i < cps.len) {
+-                    const cp = cps[i];
+-                    // C0 and UTF-8-decoded C1 controls never enter
+-                    // printable runs. A codepoint is one of those
+-                    // exactly when it has no bit set outside 0x9F:
+-                    // bits 0-4 and bit 7 cover 0x00-0x1F and
+-                    // 0x80-0x9F and nothing else, so a single
+-                    // AND-test classifies both ranges.
+-                    if ((cp & ~@as(u32, 0x9F)) == 0) {
+-                        @branchHint(.unlikely);
+-                        if (cp <= 0x1F) {
+-                            // C0 controls execute rather than print.
+-                            self.execute(@intCast(cp));
+-                        } else {
+-                            // C1 controls decoded from UTF-8 are ignored.
+-                            logUnsupportedOnce(
+-                                "ignoring UTF-8-decoded C1 controls, first: 0x{x}",
+-                                .{cp},
+-                                0x80,
+-                            );
+-                        }
+-                        i += 1;
+-                        continue;
+-                    }
+-
+-                    // Find the end of the printable run. This is an
+-                    // early-exit search loop that LLVM won't
+-                    // auto-vectorize, and printable runs dominate real
+-                    // input, so scan several codepoints at a time
+-                    // manually (same idiom as the printSliceFill run
+-                    // scan).
+-                    var end = i + 1;
+-                    scan: {
+-                        if (simd.lanes(u32)) |lanes| {
+-                            const V = @Vector(lanes, u32);
+-                            // Non-printable (C0 or decoded C1) is
+-                            // equivalent to "no bit outside 0x9F is
+-                            // set": one AND-test per lane.
+-                            const mask: V = @splat(~@as(u32, 0x9F));
+-                            const zero: V = @splat(0);
+-                            while (end + lanes <= cps.len) {
+-                                const v: V = cps[end..][0..lanes].*;
+-                                const stop = (v & mask) == zero;
+-                                if (@reduce(.Or, stop)) {
+-                                    const bits: @Int(.unsigned, lanes) = @bitCast(stop);
+-                                    end += @ctz(bits);
+-                                    break :scan;
+-                                }
+-                                end += lanes;
+-                            }
+-                        }
+-                        while (end < cps.len and (cps[end] & ~@as(u32, 0x9F)) != 0) end += 1;
+-                    }
+-                    self.handler.vt(.print_slice, .{ .cps = cps[i..end] });
+-                    i = end;
+-                }
++                _ = self.emitCodepoints(cps, false);
+                 // Consume the bytes we just processed.
+                 offset += res.consumed;
+ 
+@@ -924,6 +868,99 @@ pub fn Stream(comptime H: type) type {
+             }
+         }
+ 
++        inline fn emitCodepoints(self: *Self, cps: []const u32, comptime ascii_only: bool) usize {
++            var i: usize = 0;
++            while (i < cps.len) {
++                const cp = cps[i];
++                if (comptime ascii_only) {
++                    if (cp >= 0x80 or cp == 0x1B or cp == 0x05) return i;
++                }
++                // C0 and UTF-8-decoded C1 controls never enter
++                // printable runs. A codepoint is one of those
++                // exactly when it has no bit set outside 0x9F:
++                // bits 0-4 and bit 7 cover 0x00-0x1F and
++                // 0x80-0x9F and nothing else, so a single
++                // AND-test classifies both ranges.
++                if ((cp & ~@as(u32, 0x9F)) == 0) {
++                    @branchHint(.unlikely);
++                    if (cp <= 0x1F) {
++                        // C0 controls execute rather than print.
++                        self.execute(@intCast(cp));
++                    } else {
++                        // C1 controls decoded from UTF-8 are ignored.
++                        logUnsupportedOnce(
++                            "ignoring UTF-8-decoded C1 controls, first: 0x{x}",
++                            .{cp},
++                            0x80,
++                        );
++                    }
++                    i += 1;
++                    continue;
++                }
++
++                // Find the end of the printable run. This is an
++                // early-exit search loop that LLVM won't
++                // auto-vectorize, and printable runs dominate real
++                // input, so scan several codepoints at a time
++                // manually (same idiom as the printSliceFill run
++                // scan).
++                var end = i + 1;
++                scan: {
++                    if (simd.lanes(u32)) |lanes| {
++                        const V = @Vector(lanes, u32);
++                        // Non-printable (C0 or decoded C1) is
++                        // equivalent to "no bit outside 0x9F is
++                        // set": one AND-test per lane.
++                        const mask: V = @splat(~@as(u32, 0x9F));
++                        const zero: V = @splat(0);
++                        while (end + lanes <= cps.len) {
++                            const v: V = cps[end..][0..lanes].*;
++                            const stop = if (comptime ascii_only)
++                                (v -% @as(V, @splat(0x20))) >= @as(V, @splat(0x60))
++                            else
++                                (v & mask) == zero;
++                            if (@reduce(.Or, stop)) {
++                                const bits: @Int(.unsigned, lanes) = @bitCast(stop);
++                                end += @ctz(bits);
++                                break :scan;
++                            }
++                            end += lanes;
++                        }
++                    }
++                    while (end < cps.len) {
++                        const printable = if (comptime ascii_only)
++                            cps[end] -% 0x20 < 0x60
++                        else
++                            (cps[end] & ~@as(u32, 0x9F)) != 0;
++                        if (!printable) break;
++                        end += 1;
++                    }
++                }
++                self.handler.vt(.print_slice, .{ .cps = cps[i..end] });
++                i = end;
++            }
++            return cps.len;
++        }
++
++        /// Apply predecoded ASCII at parser ground, permitting pending UTF-8.
++        /// ESC, ENQ and non-ASCII stop before dispatch; the returned prefix may
++        /// already have effects, so callers must never replay rejected input.
++        pub fn nextAsciiCodepoints(self: *Self, cps: []const u32) usize {
++            assert(self.parser.state == .ground);
++            if (cps.len == 0) return 0;
++
++            var offset: usize = 0;
++            if (self.utf8decoder.state != 0) {
++                const first = cps[0];
++                if (first >= 0x80 or first == 0x1B or first == 0x05) return 0;
++                self.nextUtf8(@intCast(first));
++                offset = 1;
++            }
++            offset += self.emitCodepoints(cps[offset..], true);
++            if (self.continuation != null and offset > 0) self.trackContinuation("");
++            return offset;
++        }
++
+         /// Parses back-to-back escape sequences until none are left.
+         /// Returns the number of bytes consumed from the provided input.
+         ///
 diff --git a/src/terminal/stream_terminal.zig b/src/terminal/stream_terminal.zig
+index 15ea8ae..71a0c96 100644
 --- a/src/terminal/stream_terminal.zig
 +++ b/src/terminal/stream_terminal.zig
-@@ -612,9 +612,15 @@
+@@ -612,11 +612,17 @@ pub const Handler = struct {
          value: Action.Value(action),
      ) void {
          self.vtFallible(action, value) catch |err| {
@@ -957,11 +1174,13 @@ diff --git a/src/terminal/stream_terminal.zig b/src/terminal/stream_terminal.zig
 -            log.warn("error handling VT action action={} err={}", .{ action, err });
 +            logVtFailure(action, err);
          };
-+    }
-+
+     }
+ 
 +    noinline fn logVtFailure(comptime action: Action.Tag, err: anyerror) void {
 +        @branchHint(.cold);
 +        log.warn("error handling VT action action={} err={}", .{ action, err });
-     }
- 
++    }
++
      fn unknownSequence(self: *Handler, value: UnknownSequence) void {
+         const func = self.unknown_sequence orelse return;
+         func(self, value);
