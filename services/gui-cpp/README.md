@@ -2208,3 +2208,10 @@ The [bounded Wayland image transfer](measurements/clipboard-wayland.md) now keep
 external PNG reception on the joined worker with a single five-second deadline.
 Original-source pipe comparisons and private compositor cases pass; full native
 sanitizer, visual and comparative performance acceptance remains open.
+
+The [Wayland selection lifecycle](measurements/clipboard-wayland-lifecycle.md)
+now releases removed seat/manager state, restores new bindings and recovers from
+bounded offer overflow. The61-case raw protocol matrix passes functionally.
+Installed Wayland1.23.1 still leaks one96-byte proxy in the overflow case; isolated
+dependency controls retain that failure and identify the lost queued-event
+reference. No diagnostic library is shipped and sanitizer acceptance remains open.

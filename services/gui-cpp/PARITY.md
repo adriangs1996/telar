@@ -4,6 +4,15 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [Wayland selection lifecycle](measurements/clipboard-wayland-lifecycle.md)
+releases removed registry state, restores seat/manager bindings and matches the
+original16-offer bound and overflow recovery. All61 raw protocol observations
+pass. Stock Wayland1.23.1 sanitizer receivers still exit1 with96bytes leaked each;
+pristine/patched diagnostic dependency controls identify a lost queued-event
+reference with the same receiver binary. The diagnostic library is not shipped.
+Qt-self-owned clipboard seat retirement, stock sanitizer acceptance and all global
+parity gates remain open.
+
 The [single-paint icon pass](measurements/icon-single-paint.md) removes duplicate
 mesh preparation before the existing outer update. Final seven alternated pairs
 improve all six rebuild cases8.8–13.9% with seven wins each and no consistently

@@ -1,5 +1,73 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## Wayland lifecycle final checks verified; archive/commit NEXT (18:54 UTC)
+
+Final rebuilt Release61 PASS; stock ASan61 assertionsPASS but5 receivers actual1
+96-byte1-proxy leaks each. Pristine upstream1.23.1 library reproduces same failure;
+local diagnostic copy fixes ONLYmissing wl_proxy_unref before destroyedclosure
+argument reset; identicalASanreceiver then61PASSactual0/noleak/UB/access. No shipped
+library replacement/suppression. Diagnostic findings notstockacceptance. Final
+runs5Release/stock3/pristine3/refcountdiagnostic3 retained, binaryhashespinned.
+FinalLinuxGUI rebuild2 actual0, affected3ASANCTest actual0/window37PASS; native
+Waylandregression2 PASS6 underownedDBus/leakdetect. Macgui-platformbuild1+editor+
+windowbuild1 actual0, directednativewindow1 PASS4/privatecleanup0, actualclangd
+monitorhpp deliveredempty; Macconsumerbroadlint1actual0/Linux3unitslint4actual0.
+Wrongtargetbuild1 and wrongCLIflaglint3 retained failures; correctedcommandspass.
+Newreportclipboard-wayland-lifecycle.md/PARITY/README drafted. Newarchive/verifier
+writtenbutNOTfrozenyet; results1tar downloading now. Needfinisharchive verify
+current-source+offline, auditnosensitiveauthority, localcommitEXCLUDEunrelated
+personal-frame-delivery.md. Continueglobalgoal afterwards, no checkpointfinal.
+NextQtself-ownedclipboard staleafterseatretirementunqualified; stocklibgateOPEN.
+VM7158/55984 retained; noagents/publish/merge/otherworktrees; Spanishupdates<=60sec.
+
+## Wayland lifecycle fixes functional; sanitizer failure under investigation (18:48 UTC)
+
+Uncommitted component now owns/rebinds its seat and data-device manager, clears
+selection and all pending offers on removal, restores on announced replacement,
+uses the original16-offer capacity and drops overflow without permanent failure.
+Original baseline owned-protocol negative fails8/12. Final Release matrix3 passes
+61 cases across modern8/3, legacy1/1, mixed1/3+8/1 and late seat arrival. Existing
+real Wayland clipboard regression1 passes6 under ASan/UBSan. The raw protocol
+fixture has no compositor/window and uses4-byte generation payloads, NOT PNGs.
+Earlier fixture errors (retired-device NEW_ID and Unix socket path length) were
+corrected and retained. Final3 Linux units broad lint pass. Source deltas32–36.
+ASan lifecycle matrix1 and trace2/3 fail ACTUAL1 with96bytes/1 allocation despite
+12 functional cases passing. Symbolized slow unwind localizes allocation to
+Connection::command("flood20"). Matching libwayland-client1.23.1 upstream source
+validate_closure_objects clears destroyed argument pointers before the closure
+unrefs them: plausible dependency reference leak, NOT yet proven causally. No
+suppression or production workaround adopted. Installed llvm-23 symbolizer in
+owned VM; next pristine/patched diagnostic library control, retain stock failure.
+Mac gui-platform rebuild1 active. No lifecycle report/archive/commit yet. GUI
+Qt-self-owned clipboard after seat removal remains unqualified. Global gates open.
+
+## Wayland lifecycle extraction and baseline protocol fixture built (18:25 UTC)
+
+XCBcheckpoint bcc60bae2 localcommitted/verified; allhistoricalarchivesimmutable.
+New WIP moves oldNative unchanged to platform/linux/wayland_clipboard_image_monitor
+.hpp/.cpp, allocatorPIMPL ctor(memory,display,borrowedseat), available/captureFD.
+Linuxfactory owns thinwrapper, MacOwnedNative branch preserved viaifdef. No fixes
+YET. Extraction37400actual0, fixture47928buildloglinksserver+probeactual0.
+Source deltas32 extraction/33 fixture. Confirmed original Input.zig capacity16 vs
+ours4; selectOffer releasesALLunselected vsoursoldselectedonly; excessoffer drops
+withoutpermanentfailed_; globalremove seat/manager clearsdevice+selection vsours
+ignored. QtClipboard currentInputDevice=defaultfirstseat, NOTlast; do not switch
+last. Qt6.8 display list apparentlyretainsseat whenregistryglobalremoved.
+Newtools clipboard_wayland_lifecycle_server.c offers ONLYseat/dataDevice globals,
+no compositor/GUI; stdin duplexsocketcommands remove/restoremanager/seat, clear,
+select,flood8/flood20; payload4bytegeneration (protocolONLY, PNGdecodeearliercovered).
+Newtools clipboard_wayland_lifecycle_probe.cpp usesQCoreApplication+rawWayland,
+NOQGui/Window, initialrawseatborrowed,12caseJSON/errors incldetachedFDsurvives,
+removal/recovery andpooloverflowrecovery. Driver mustcreateownprivate runtime dir,
+serverstdin/probestdin asopposite socketpair ends; serverstdoutprintsWLsocket;
+passWAYLAND_DISPLAY+XDG_RUNTIME_DIR thenwaitactualprobe/server exits+cleanup.
+NEXT runnegative beforeproductfix; thenownseat binding (ctor memory,display),
+registryremoveIDs, manager/seat rebind,16offers/dropwithoutpoison, clearALLothers.
+Test12component +realWayland6 beforeclaims. Need first baseline receipt andnew
+report/archive later. No lifecycle report/manifest yet. PreserveXCBcheckpoint.
+CurrentGitWIP5extractionfiles+3fixturefiles, noothers. VM7158/55984ownedrunning.
+Spanishupdates<=60sec, SHORTanalysis, noagents/otherworktrees/publish/merge.
+
 ## XCB bounded transfer final verified; localcommitNEXT (18:10 UTC)
 
 AllXCBsource/headers/tools finalized. Finalcanonical-release-3 andcanonical-asan-1

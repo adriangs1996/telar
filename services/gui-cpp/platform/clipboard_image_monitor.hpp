@@ -5,6 +5,7 @@
 #include "platform/clipboard_image_source.hpp"
 #ifdef __linux__
 #include "platform/linux/xcb_clipboard_image_monitor.hpp"
+#include "platform/linux/wayland_clipboard_image_monitor.hpp"
 #include <optional>
 #endif
 
@@ -24,11 +25,13 @@ public:
   [[nodiscard]] ClipboardImageSource snapshot();
 
 private:
-  struct Native;
   ApplicationAllocator &memory_;
-  Owned<Native, ApplicationAllocator> native_;
 #ifdef __linux__
+  WaylandClipboardImageMonitor native_;
   std::optional<XcbClipboardImageMonitor> xcb_;
+#else
+  struct Native;
+  Owned<Native, ApplicationAllocator> native_;
 #endif
 };
 
