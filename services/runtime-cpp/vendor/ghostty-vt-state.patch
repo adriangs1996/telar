@@ -945,3 +945,23 @@ diff --git a/src/terminal/c/types.zig b/src/terminal/c/types.zig
      .initStruct("GhosttyTerminalModeConfig", terminal.ModeConfig),
      .initStruct("GhosttyTerminalProgramStatus", terminal.ProgramStatus),
      .initStruct("GhosttyTerminalProgressReport", terminal.ProgressReport),
+diff --git a/src/terminal/stream_terminal.zig b/src/terminal/stream_terminal.zig
+--- a/src/terminal/stream_terminal.zig
++++ b/src/terminal/stream_terminal.zig
+@@ -612,9 +612,15 @@
+         value: Action.Value(action),
+     ) void {
+         self.vtFallible(action, value) catch |err| {
++            @branchHint(.cold);
+             self.semantic_failure = true;
+-            log.warn("error handling VT action action={} err={}", .{ action, err });
++            logVtFailure(action, err);
+         };
++    }
++
++    noinline fn logVtFailure(comptime action: Action.Tag, err: anyerror) void {
++        @branchHint(.cold);
++        log.warn("error handling VT action action={} err={}", .{ action, err });
+     }
+ 
+     fn unknownSequence(self: *Handler, value: UnknownSequence) void {
