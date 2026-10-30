@@ -14,6 +14,8 @@ HistoryMetaLayout {
     property bool selected: true
     property bool paneOpen: false
     property bool interactive: true
+    property var actionController: null
+    enabled: root.interactive
     property bool commandLoaded: true
     property bool showDirectory: true
     property bool macStyle: false
@@ -108,5 +110,10 @@ HistoryMetaLayout {
         onItemRemoved: root.scheduleMeasurement()
     }
 
-    Component.onCompleted: root.scheduleMeasurement()
+    Component.onCompleted: {
+        root.scheduleMeasurement();
+        if (root.actionController) {
+            root.actionController.registerHistoryActions(root);
+        }
+    }
 }

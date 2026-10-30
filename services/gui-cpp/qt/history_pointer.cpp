@@ -1,3 +1,5 @@
+#include "input/history_action_capture.hpp"
+#include "presentation/history_actions.hpp"
 #include "application.hpp"
 #include "core/geometry.hpp"
 #include "history/entry.hpp"
@@ -5,15 +7,14 @@
 #include "presentation/history_modal_geometry.hpp"
 #include "projection.hpp"
 #include "qt/history_row_layout.hpp"
+#include "qt/history_meta_layout.hpp"
 #include "qt/scroll_event.hpp"
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QRectF>
+#include <QStringView>
 #include <QWheelEvent>
-#include <QtCore/qlatin1stringview.h>
 #include <QtCore/qobject.h>
-#include <QtCore/qstringfwd.h>
-#include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <algorithm>
 #include <cmath>
@@ -27,6 +28,27 @@ void Application::registerHistoryPanel(QQuickItem *panel) {
   history_search_host_ = panel == nullptr ? nullptr : panel->property("searchHost").value<QQuickItem *>();
   history_viewport_ = panel == nullptr ? nullptr : panel->property("rowsView").value<QQuickItem *>();
   history_content_ = history_viewport_ == nullptr ? nullptr : history_viewport_->property("contentItem").value<QQuickItem *>();
+}
+
+void Application::registerHistoryActions(QQuickItem *actions) {
+  history_actions_ = actions;
+}
+
+HistoryActionSurface Application::historyActionSurface() const {
+  const auto *actions = qobject_cast<const HistoryMetaLayout *>(history_actions_.data());
+  if (dialog_ != QStringView{u"history"} || actions == nullptr || actions->window() != window_) {
+    return {};
+  }
+
+  return actions->actionSurface(dialog_generation_);
+}
+
+void Application::activateHistoryCardAction(HistoryCardAction action) {
+  switch (action) {
+  case HistoryCardAction::copy: executeHistory(HistoryAction::copy); break;
+  case HistoryCardAction::erase: executeHistory(HistoryAction::erase); break;
+  case HistoryCardAction::visit: executeHistory(HistoryAction::visit); break;
+  }
 }
 
 HistoryScrollSurface Application::historyScrollSurface(const HistoryModalMetrics &metrics) const {
@@ -75,7 +97,7 @@ HistoryScrollSurface Application::historyScrollSurface(const HistoryModalMetrics
 }
 
 bool Application::handleHistoryWheel(QWheelEvent &event) {
-  if (dialog_ != QLatin1StringView("history")) {
+  if (dialog_ != QStringView{u"history"}) {
     return false;
   }
 

@@ -1,3 +1,4 @@
+#include "input/history_action_capture.hpp"
 #include "history_meta_layout.hpp"
 #include "core/geometry.hpp"
 #include "core/metrics.hpp"
@@ -146,6 +147,27 @@ QVariantMap HistoryMetaLayout::layout() const {
   result.insert(QStringLiteral("actions"), actions);
   result.insert(QStringLiteral("factCount"), static_cast<qulonglong>(geometry_.fact_count));
   result.insert(QStringLiteral("actionCount"), static_cast<qulonglong>(geometry_.action_count));
+
+  return result;
+}
+
+HistoryActionSurface HistoryMetaLayout::actionSurface(std::uint64_t generation) const {
+  HistoryActionSurface result{.generation = generation, .scale = density_};
+  if (!isVisible() || window() == nullptr) {
+    return result;
+  }
+
+  const auto labels = HistoryActions::labels(HistoryKeyStyle::pc);
+  for (std::size_t index = 0; index < geometry_.action_count; ++index) {
+    auto bounds = mapRectToScene(logical(geometry_.actions[index].bounds));
+    for (const auto *ancestor = parentItem(); ancestor != nullptr; ancestor = ancestor->parentItem()) {
+      if (ancestor->clip()) {
+        bounds = bounds.intersected(ancestor->mapRectToScene(ancestor->boundingRect()));
+      }
+    }
+
+    result.targets[index] = {.action = labels[index].action, .bounds = {.x = static_cast<float>(bounds.x() * density_), .y = static_cast<float>(bounds.y() * density_), .width = static_cast<float>(bounds.width() * density_), .height = static_cast<float>(bounds.height() * density_)}, .enabled = isEnabled()};
+  }
 
   return result;
 }

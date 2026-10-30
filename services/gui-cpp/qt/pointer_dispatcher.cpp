@@ -1,3 +1,4 @@
+#include "input/history_action_capture.hpp"
 #include "pointer_dispatcher.hpp"
 #include "application.hpp"
 #include "attachment_shelf.hpp"
@@ -17,6 +18,7 @@
 #include <QtCore/qnamespace.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qtypes.h>
+#include <QtCore/qstringliteral.h>
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -64,7 +66,7 @@ bool PointerDispatcher::occupied() const noexcept {
 
 void PointerDispatcher::acquire(TerminalItem &terminal, Qt::MouseButton button) {
   if (auto *lease = capture(button)) {
-    *lease = {.terminal = &terminal, .pane_id = terminal.paneIdentity(), .held = true};
+    *lease = {.terminal = &terminal, .history = {}, .pane_id = terminal.paneIdentity(), .held = true};
   }
 }
 
@@ -114,6 +116,14 @@ void PointerDispatcher::release(Qt::MouseButton button) {
   }
 }
 
+void PointerDispatcher::presentHistoryActions(const HistoryActionSurface &surface) {
+  for (auto &lease : captures_) {
+    if (lease.history.held()) {
+      lease.history.present(surface);
+    }
+  }
+}
+
 void PointerDispatcher::abandon(TerminalItem &terminal) {
   for (auto &lease : captures_) {
     if (lease.terminal == &terminal) {
@@ -137,6 +147,7 @@ void PointerDispatcher::cancelPane(std::uint64_t pane_id) {
 void PointerDispatcher::cancel() {
   const auto previous_recipients = recipients();
   for (auto &lease : captures_) {
+    lease.history.cancel();
     if (lease.child.owned()) {
       report(lease.pane_id, lease.child.cancel(view(lease)));
     }
@@ -194,6 +205,20 @@ void PointerDispatcher::deliver(TerminalItem &terminal, const QMouseEvent &event
 }
 
 bool PointerDispatcher::press(QMouseEvent &event) {
+  if (auto *lease = capture(event.button())) {
+    if (lease->history.held()) {
+      *lease = {};
+    }
+
+    const auto &surface = application_.presented_history_actions_;
+    HistoryActionCapture history;
+    if (application_.dialog_ == QStringLiteral("history") && surface.generation == application_.dialog_generation_ && history.begin(surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale}, event.button() == Qt::LeftButton)) {
+      *lease = {.terminal = {}, .history = history, .held = true};
+
+      return true;
+    }
+  }
+
   if (!occupied() || qobject_cast<TerminalItem *>(event.exclusiveGrabber(event.point(0))) == nullptr) {
     return false;
   }
@@ -253,6 +278,16 @@ bool PointerDispatcher::release(QMouseEvent &event) {
   }
 
   auto previous = std::exchange(*lease, Capture{});
+  if (previous.history.held()) {
+    const auto &surface = application_.presented_history_actions_;
+    const auto action = previous.history.release(surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale});
+    if (action && application_.dialog_ == QStringLiteral("history") && surface.generation == application_.dialog_generation_) {
+      application_.activateHistoryCardAction(*action);
+    }
+
+    return true;
+  }
+
   if (previous.child.owned()) {
     report(previous.pane_id, previous.child.deliver(view(previous), sample(event, MousePhase::release, mouseButton(event.button()))));
   } else if (previous.terminal != nullptr) {

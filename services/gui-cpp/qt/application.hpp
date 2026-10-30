@@ -11,6 +11,7 @@
 #include "font_resolver.hpp"
 #include "history/choice.hpp"
 #include "input/history_scroll.hpp"
+#include "input/history_action_capture.hpp"
 #include "key_bindings.hpp"
 #include "list_model.hpp"
 #include "machine_activity_target.hpp"
@@ -269,6 +270,7 @@ public:
   Q_INVOKABLE void selectHistoryRow(int row);
   Q_INVOKABLE void selectPresentedHistoryRow(int row, const QString &revision);
   Q_INVOKABLE void registerHistoryPanel(QQuickItem *panel);
+  Q_INVOKABLE void registerHistoryActions(QQuickItem *actions);
   Q_INVOKABLE void setHistoryFilters(const QVariantMap &filters);
   Q_INVOKABLE void setSidebarWidth(qreal width);
   Q_INVOKABLE void searchHistory(const QString &query);
@@ -496,6 +498,7 @@ private:
     std::uint64_t preparation_ns = 0;
     std::optional<PresentedHistory> history;
     HistoryScrollSurface history_surface;
+    HistoryActionSurface history_actions;
   };
 
   void consume(MachineClient &client, QByteArrayView payload);
@@ -533,6 +536,8 @@ private:
   [[nodiscard]] HistoryScrollSurface historyScrollSurface(const HistoryModalMetrics &metrics) const;
   [[nodiscard]] bool handleHistoryWheel(QWheelEvent &event);
   void moveHistoryRows(std::int32_t steps);
+  [[nodiscard]] HistoryActionSurface historyActionSurface() const;
+  void activateHistoryCardAction(HistoryCardAction action);
   [[nodiscard]] QVariantList fullscreenEntries(const Tab<ApplicationAllocator> &tab);
   void showDialog(const QString &kind, const QString &text = {});
   void fail(const std::exception &error);
@@ -712,6 +717,8 @@ private:
   TerminalGrid terminal_grid_;
   std::optional<PresentedHistory> presented_history_;
   HistoryScrollSurface presented_history_surface_;
+  HistoryActionSurface presented_history_actions_;
+  QPointer<QQuickItem> history_actions_;
   QHash<std::uint64_t, QPointer<TerminalItem>> terminals_;
   QByteArray hostname_;
   Qt::KeyboardModifiers pointer_modifiers_;

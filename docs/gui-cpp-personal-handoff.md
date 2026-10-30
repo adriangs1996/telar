@@ -1,5 +1,106 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## History card pointer checkpoint frozen; COMMIT then CONTINUE (20:56 UTC)
+
+Newmeasurements/history-retained-actions.md +validation.json +archivefolderFINAL:
+396artifacts2430sources5394669bytes. Offline+current-sourceverifiersPASS;
+exactmembership/executable/authorityauditPASS; unrelatedpersonal-frame-delivery.md
+NOTincluded. NEVERrerunarchive_actions.py now. Handoff NOTinsourcefreeze, canupdate.
+Allfinalsource changesincludingcrossQt6.8/6.12 directincludes/QPointerisNull are
+qualified. MacReleasebuild6 actual0/fixed5 5PASSactual0/privatecleanup0. MacASAN
+build3 actual0/nativeasan2 5PASSactual1/leaks564221/2976, noaccessUB/privatecleanup0.
+Maccomponent27PASS butCTest8/leaks221996/1033; rawLastTestretained. EarlierASAN1
+502138/2512 preserved, nodirectcomparison. Macstrictlint5 affected3clean actual0;
+unchangedmetaLayout/dispatcher/probe cleanlint2. MacactualNeovim4 deliveredempty
+includingfinalrepeatsadapter+Quicktest. LinuxASANbuild3actual0/nativeasan2 5PASS0,
+controlsasan2 PASS0. LinuxReleasebuild3actual0/nativeRelease2 5PASS0, private display
+removed/compositor0; ownkeyboardSIGTERM-15. Linuxstrictlint2 affected3actual0,
+unchanged3cleanlint1; initialfailures retained. Linux5actualNeovimdiagnostics over
+2rounds deliveredempty (modelhpp,dispatcherCpp,metaLayouthpp,adapterCpp,AppCpp).
+Finalcore535seq/33894ops Macasan5/Linuxasan3 byteexact, ASAN/UBSAN/leaks enabled,
+LSANunset. Sourceoracle/finalenv/compileargv/input+outputstreams archived. Runtime
+LinuxDebug builtunchanged asprior; ReleaseSafeglibcFORTIFYfailsandinitialOOMretained.
+
+Next stageEXPLICITchangedproductCMake/QML/Cpp/headers/input+tools+Quick/framefixture,
+README/PARITY/newreport+manifest+archivefolder+handoff. Excludeunrelateduntracked
+measurements/personal-frame-delivery.md. Localcommit only(no publish/merge), then
+CONTINUEglobalgoal(no final/checkpointstop). RetainedHistoryhover stillOPEN and
+modalkeyboard/IME/fullHistory/globalperformance/nativeleaks remainOPEN. Existing
+history-delegate-retirement report13c6f75ff alreadyclosedobservedwarning: offline
+verifierPASS, stalePARITYtodo removedbycurrentdocschange. Next investigateheld
+semantic hover acrossselectedcard destruction (originalDispatcher keepshoveredID
+acrossdeliveredreplacement, QtnewMouseAreahasfreshhover); obtaincontrollednegative
+beforeproductchange. Existingcapture_history.py script(settings)canbeextendedby
+nativeharness; capture_attachment_shelf.prepare_pointer_probe showsnativeCocoa
+pointeradmission includingQt NSApppostEvent andtrackingtargets. Do notassumevisual
+bugwithoutactualpaired/controlledcapture. Noactivebuilds/nativeprocesses; ownedVM
+7158/55984 kept, guestroot/home/parity/telar. OriginaluserRuntime35801 untouched.
+Spanishupdates<=60sec. Noagents/otherworktrees/publication/merge.
+
+## Cross-version lint correction active (20:51 UTC)
+
+History original-source535seq/33894ops finalMacasan5 +Linuxasan3 PASS, nowwith
+recordedsanitizer env andcandidatecompileargv. LinuxprivateSway finalbeforelint
+Release1+ASAN1 each5PASSactual0, private displayremoved/compositorexit0; keyboard
+ownedSIGTERM(-15). LinuxASANhistorycontrolsPASSactual0. MacReleasefixed4 5PASS0,
+MacASAN1 5PASSactual1/leaks502138/2512 (noaccessUB/privatecleanup0). ActualMac
+Neovim4(modelhpp/historyPointerCpp/dispatcherCpp/QuickCpp)andLinux3(modelhpp,
+dispatcherCpp/metaLayoutHpp)all deliveredempty. Olddelegatewarning alreadyclosed
+by13c6f75ff/report; offlineverifierPASS, stalePARITYtodo corrected.
+Linuxstrictlint1 new6units FAILED Qt6.8directheader differences andpriorimplicit
+QPointerbool; unchangedprobe/metaLayout/dispatcherpassed. Correctionsnowapplied:
+historyPointer usesQStringView{u"history"} withdirectpublicheader, removesunused
+QLatin1/qstringliteral/fwd; appdirectQStringLiteralheader+explicitQPointerisNull;
+QuickdirectQPoint/QByteArray/QStringLiteralheaders, removesunusedqhashfunctions,
+QByteArrayLiteral testprefix becomesQByteArray{"..."}; frame_fixture.hppisNull
+checks. Theseequivalentcross-versionfixes changefinalsource andrequire rebuild/
+retest. Delta48 syncedall4changedfiles toownedVM. MacReleasebuild6 ACTIVE98008,
+MacASANbuild3 ACTIVE32476, Maclint5 affected3units ACTIVE57533; LinuxASANbuild3
+ACTIVE42814(-j1), Linuxlint2 affected3units ACTIVE74103(-j1). NoCPPeditswhilebuilds
+active. Afteractual0 repeatnativeRelease+ASANQtQuick3slots andcontrolsasneeded;
+LinuxthenReleasebuild/retest sequential, finaleditor diagnosticsifchanged.
+Archive/report/verify_actions scripts DRAFT atmeasurements/history-retained-actions,
+NEVERrunyet; nofrozenmanifest yet. Archivercurrently expectsVMtarresults1, source
+deltas44..47(add48), hostfinalcoreasan5, actualnativeASAN1 oldfailure; updateverifier
+fornewfinalnative receipt/leakcount andLinuxnativefinalaftercorrections. Archive
+sourceinheritanceoldownedbaseline+newfiles+unchangedrun_widget/install.sh+oracle
+identities. Include hostlocalstderr andprivatefixture observers/preflightpng,
+excludeexecutables/authority. CollectallVMhistory-retained-actions* JSON/log/source/
+input-outputbin/ stderr only, plusruntime-build1..6/dependencylogs/helpers/envreceipt.
+Finalqualrecorddraftlocal currentlyPENDING states needsupdate. Needfinishreport,
+README/PARITY, manifestoffline/current-source, sourceaudit/localcommit thenCONTINUE
+nextHistoryhover/modalinputstates. Nofinal/checkpointstop. Spanishupdates<=60sec.
+
+## History semantic pointer captures IN PROGRESS (20:43 UTC)
+
+HEAD b92d44d07 remains frozen owned-Wayland checkpoint (committed locally). Current
+uncommitted History capture preserves generation+semantic role across destroyed
+selected card QObjects. Core original Dispatcher oracle Mac final-asan-5 and Linux
+asan-2 PASS535seq/33894ops; final Python now records sanitizer env/compile argv,
+needs Linux rerun with updated script (delta47). No new product changes pending.
+Mac Release build5 actual0, final native fixed4 5PASSactual0/privatecleanup0.
+Mac nativeASAN build2 actual0, native-asan-1 5PASS but actual1 LeakSanitizer
+502138bytes2512alloc, noaccess/UB, LSANunset/privatecleanup0; retain global leak gate.
+Strict full-profile6units: lint1 failed; lint2 product4+probe clean but bad test
+intermediate; lint3 const+102line test failures; lint4 finalQuick clean actual0.
+Application passedlint1. Neovim modelhpp/historyPointerCpp/dispatcherCpp delivered
+empty. New evidence scripts/report DRAFT, no archiver run/source freeze yet.
+Linux runtime prepared: install.sh/run_widget.zig initial snapshot missing copied
+unchanged from this worktree; atk/accessibility, glslc and protocol1.47 installed
+ownedVM. ReleaseSafe Zig0.16 fails glibcFORTIFY translation; unchanged Debug runtime
+build6 actual0 at out-dependencies/reference-runtime-debug/bin/telar. Runtime/GUI
+parallel builds OOM killedLinuxASAN build1, retainfailure; sequential -j1 build2
+ACTIVE session94198 (partial33/73 at20:42). Afteractual0 run ownedSway QtQuick
+using out-dependencies/run_history_actions_linux.py, DBus, ASAN/UBSAN, LSANunset.
+Then finalReleaseLinuxbuild -j1 and native qualification; broadLinuxlint/editor,
+collectnew receipts/tar, finishreport/PARITY+archive/verifier/localcommit, CONTINUE.
+Host helper ignoredlocal/run_history_actions_linux.py; no user display/clipboard.
+OwnedVM7158/55984. Source deltas44..47. Preserve unrelated untracked
+measurements/personal-frame-delivery.md. Noagents/publish/merge/otherworktrees.
+Spanish updates <=60sec; do not final at scopedcheckpoint. Hover/IME/fullHistory
+and all global gates remain open. get_goal statusstillblocked/APIcannotresume;
+explicituserresume is active authorization and work proceeds manually.
+
 ## Owned clipboard checkpoint frozen and verified; commit then CONTINUE (19:45 UTC)
 
 NEWclipboard-wayland-owned archive FINAL672artifacts2418sources6.2MiB, offlineAND

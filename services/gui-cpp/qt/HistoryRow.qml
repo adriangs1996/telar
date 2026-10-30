@@ -17,6 +17,7 @@ HistoryRowLayout {
     property bool grouped: true
     property bool showCwd: true
     property bool interactive: true
+    property var actionController: null
     property string revision: ""
     readonly property var regions: layout
     property string commandText: record.command
@@ -237,6 +238,7 @@ HistoryRowLayout {
                     selected: root.selected
                     paneOpen: root.paneOpen
                     interactive: root.interactive
+                    actionController: root.actionController
                     commandLoaded: root.commandLoaded
                     showDirectory: root.showCwd
                     macStyle: root.macStyle

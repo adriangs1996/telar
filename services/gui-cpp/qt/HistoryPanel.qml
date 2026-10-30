@@ -246,6 +246,7 @@ Item {
                     grouped: root.browserState.grouped
                     showCwd: root.browserState.effectiveScope === "global" || root.browserState.effectiveScope === "workspace"
                     interactive: root.actionable
+                    actionController: root.controller
                     revision: root.browserState.revision
                     onActivated: revision => root.controller.selectPresentedHistoryRow(result.index, revision)
                     onActionTriggered: action => {

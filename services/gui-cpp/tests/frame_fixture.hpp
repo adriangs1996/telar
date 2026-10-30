@@ -35,10 +35,10 @@ inline bool waitForSynchronizedFrame(QQuickWindow &window, int timeout_ms) {
   window.update();
 
   const auto completed = waitForGuiCondition([&] {
-    return !lifetime || delivered;
+    return lifetime.isNull() || delivered;
   },
                                              timeout_ms);
-  if (!lifetime) {
+  if (lifetime.isNull()) {
     return false;
   }
 

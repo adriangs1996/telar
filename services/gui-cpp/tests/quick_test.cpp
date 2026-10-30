@@ -45,6 +45,7 @@
 #include "terminal/screen.hpp"
 #include "text/json.hpp"
 #include "ui/bundled_fonts.hpp"
+#include <QByteArray>
 #include <QClipboard>
 #include <QCursor>
 #include <QDateTime>
@@ -55,6 +56,7 @@
 #include <QInputMethodEvent>
 #include <QList>
 #include <QMimeData>
+#include <QPoint>
 #include <QPointer>
 #include <QProcess>
 #include <QProcessEnvironment>
@@ -76,13 +78,13 @@
 #include <QtCore/qcontainerfwd.h>
 #include <QtCore/qcoreapplication.h>
 #include <QtCore/qcoreevent.h>
-#include <QtCore/qhashfunctions.h>
 #include <QtCore/qlist.h>
 #include <QtCore/qlogging.h>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qobjectdefs.h>
 #include <QtCore/qscopeguard.h>
+#include <QtCore/qstringliteral.h>
 #include <QtCore/qtenvironmentvariables.h>
 #include <QtCore/qtestsupport_core.h>
 #include <QtCore/qtmetamacros.h>
@@ -124,6 +126,22 @@ using telar::gui::test::ScreenTextLayout;
 
 using namespace telar::gui;
 using namespace telar::gui::qt;
+
+QQuickItem *historyCardHint(const QQuickWindow &window, int selected, const QString &action) {
+  for (auto *row : test::visualItems(*window.contentItem(), QStringLiteral("historyResult"))) {
+    if (row->property("index").toInt() != selected) {
+      continue;
+    }
+
+    for (auto *hint : test::visualItems(*row, QStringLiteral("historyHint"))) {
+      if (hint->isVisible() && hint->property("label").toMap().value(QStringLiteral("action")).toString() == action) {
+        return hint;
+      }
+    }
+  }
+
+  return nullptr;
+}
 
 constexpr int runtime_wait_ms = 10'000;
 constexpr int frame_settle_ms = 100;
@@ -2061,6 +2079,108 @@ return {api_version=2, client={keybindings={
     QCOMPARE(client_->dialog(), QStringLiteral("history"));
   }
 
+  Q_SLOT void historyCardActionsSurviveSelectionChanges() {
+    const std::array entries{
+        telar::ImportHistoryEntry{.started_at_ms = 200, .command = "echo GUI_HISTORY_RETAINED_ONE"},
+        telar::ImportHistoryEntry{.started_at_ms = 201, .command = "echo GUI_HISTORY_RETAINED_TWO"},
+    };
+    importHistory(entries, "gui-history-retained");
+    const auto restore = qScopeGuard([this] { client_->execute(Application::Action::cancel); });
+    client_->execute(Application::Action::history);
+    client_->searchHistory(QStringLiteral("GUI_HISTORY_RETAINED"));
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 2, runtime_wait_ms);
+    const auto selected_copy = [this] { return historyCardHint(*window_, client_->historyState().value(QStringLiteral("selection")).toInt(), QStringLiteral("copy")); };
+    test::activateWindow(*window_);
+
+    QTRY_VERIFY_WITH_TIMEOUT(selected_copy() != nullptr, runtime_wait_ms);
+    QPointer<QQuickItem> previous = selected_copy();
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    auto *clipboard = QGuiApplication::clipboard();
+    auto saved = test::copyClipboard();
+    const auto restore_clipboard = qScopeGuard([clipboard, saved = std::move(saved)] mutable { clipboard->setMimeData(saved.release()); });
+    const auto sentinel = QStringLiteral("GUI_HISTORY_RETAINED_UNCHANGED");
+    clipboard->setText(sentinel);
+    auto release_position = previous->mapToScene(QPointF{previous->width() / 2, previous->height() / 2}).toPoint();
+    bool held = true;
+    auto held_button = Qt::LeftButton;
+    const auto release = qScopeGuard([&] {
+      if (held) {
+        QTest::mouseRelease(window_, held_button, Qt::NoModifier, release_position);
+      }
+    });
+    QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, release_position);
+    client_->selectHistoryRow(1);
+    QTRY_COMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 1);
+    QTRY_VERIFY_WITH_TIMEOUT(previous.isNull(), runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(selected_copy() != nullptr, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+    const auto *current = selected_copy();
+    release_position = current->mapToScene(QPointF{current->width() / 2, current->height() / 2}).toPoint();
+    QTest::mouseMove(window_, release_position);
+    QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, release_position);
+    held = false;
+    QCOMPARE(clipboard->text(), QStringLiteral("echo GUI_HISTORY_RETAINED_ONE"));
+    QCOMPARE(client_->dialog(), QStringLiteral("history"));
+    previous = selected_copy();
+    clipboard->setText(sentinel);
+    release_position = previous->mapToScene(QPointF{previous->width() / 2, previous->height() / 2}).toPoint();
+    held = true;
+    QTest::mousePress(window_, held_button, Qt::NoModifier, release_position);
+    client_->execute(Application::Action::cancel);
+    client_->execute(Application::Action::history);
+    client_->searchHistory(QStringLiteral("GUI_HISTORY_RETAINED"));
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 2, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(previous.isNull(), runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(selected_copy() != nullptr, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    current = selected_copy();
+    release_position = current->mapToScene(QPointF{current->width() / 2, current->height() / 2}).toPoint();
+    QTest::mouseMove(window_, release_position);
+    QTest::mouseRelease(window_, held_button, Qt::NoModifier, release_position);
+    held = false;
+    QCOMPARE(clipboard->text(), sentinel);
+    QCOMPARE(client_->dialog(), QStringLiteral("history"));
+    for (const auto button : {Qt::MiddleButton, Qt::RightButton}) {
+      previous = selected_copy();
+      release_position = previous->mapToScene(QPointF{previous->width() / 2, previous->height() / 2}).toPoint();
+      held_button = button;
+      held = true;
+      QTest::mousePress(window_, held_button, Qt::NoModifier, release_position);
+      const auto next = 1 - client_->historyState().value(QStringLiteral("selection")).toInt();
+      client_->selectHistoryRow(next);
+      QTRY_COMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), next);
+      QTRY_VERIFY_WITH_TIMEOUT(previous.isNull(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(selected_copy() != nullptr, runtime_wait_ms);
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      current = selected_copy();
+      release_position = current->mapToScene(QPointF{current->width() / 2, current->height() / 2}).toPoint();
+      QTest::mouseMove(window_, release_position);
+      QTest::mouseRelease(window_, held_button, Qt::NoModifier, release_position);
+      held = false;
+      QCOMPARE(clipboard->text(), sentinel);
+      QCOMPARE(client_->dialog(), QStringLiteral("history"));
+    }
+
+    held_button = Qt::LeftButton;
+    previous = selected_copy();
+    release_position = previous->mapToScene(QPointF{previous->width() / 2, previous->height() / 2}).toPoint();
+    held = true;
+    QTest::mousePress(window_, held_button, Qt::NoModifier, release_position);
+    window_->hide();
+    QTRY_VERIFY_WITH_TIMEOUT(!window_->isActive(), runtime_wait_ms);
+    window_->show();
+    test::activateWindow(*window_);
+    QTRY_VERIFY_WITH_TIMEOUT(window_->isActive(), runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    current = selected_copy();
+    QVERIFY(current != nullptr);
+    release_position = current->mapToScene(QPointF{current->width() / 2, current->height() / 2}).toPoint();
+    QTest::mouseRelease(window_, held_button, Qt::NoModifier, release_position);
+    held = false;
+    QCOMPARE(clipboard->text(), sentinel);
+  }
+
   Q_SLOT void historyFooterHintsUseCurrentActions() {
     client_->execute(Application::Action::history);
     client_->searchHistory(QStringLiteral("GUI_HISTORY_FIXTURE"));
@@ -2381,7 +2501,7 @@ return {api_version=2, client={keybindings={
     const auto command = QStringLiteral("printf 'GUI_HISTORY_RENDER_%s_%1\\n' DONE").arg(tag);
     const auto encoded = command.toUtf8();
     const std::array entries{telar::ImportHistoryEntry{.started_at_ms = 100, .command = std::string_view{encoded.constData(), static_cast<std::size_t>(encoded.size())}}};
-    const auto source = QByteArrayLiteral("gui-history-render-") + tag.toUtf8();
+    const auto source = QByteArray{"gui-history-render-"} + tag.toUtf8();
     importHistory(entries, source.constData());
     client_->execute(Application::Action::history);
     client_->searchHistory(QStringLiteral("GUI_HISTORY_RENDER_%s_%1").arg(tag));

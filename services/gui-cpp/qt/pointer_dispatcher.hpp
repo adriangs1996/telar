@@ -1,6 +1,7 @@
 #pragma once
 
 #include "input/child_mouse.hpp"
+#include "input/history_action_capture.hpp"
 #include "native_pointer_events.hpp"
 #include <QMouseEvent>
 #include <QObject>
@@ -21,6 +22,7 @@ public:
   void acquire(TerminalItem &terminal, Qt::MouseButton button);
   void beginChild(const ChildMouseView &view, ChildMouseSample sample);
   void release(Qt::MouseButton button);
+  void presentHistoryActions(const HistoryActionSurface &surface);
   void abandon(TerminalItem &terminal);
   void ungrab(TerminalItem &terminal);
   bool eventFilter(QObject *watched, QEvent *event) override;
@@ -29,6 +31,7 @@ private:
   struct Capture {
     QPointer<TerminalItem> terminal;
     ChildMouseGesture child{};
+    HistoryActionCapture history;
     std::uint64_t pane_id = 0;
     bool held = false;
   };

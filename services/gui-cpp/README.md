@@ -2222,3 +2222,11 @@ retirement. Its isolated one-worker executor keeps native pipe reads independent
 of busy global Qt tasks. Functional, queued-worker, native window and XCB controls
 are retained with the rejected candidates. General native leaks and complete
 functional, visual and measured full-client performance acceptance remain open.
+
+[History card pointer capture](measurements/history-retained-actions.md) retains
+semantic actions across replacement of the selected Qt delegate. Delivered frames
+authorize the current bounds and selected command; retired gestures consume their
+release. Original dispatcher comparisons and private Cocoa/Sway Qt controls cover
+selection replacement, dialog replacement, non-left buttons and focus loss.
+Native Cocoa exit leaks, complete History input/visual behavior and measured
+full-client performance remain open.

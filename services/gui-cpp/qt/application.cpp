@@ -56,6 +56,7 @@
 #include <QtCore/qobject.h>
 #include <QtCore/qobjectdefs.h>
 #include <QtCore/qstring.h>
+#include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <algorithm>
@@ -322,6 +323,8 @@ void Application::setWindow(QQuickWindow &window) {
   frame_pacer_.emplace(window);
   presented_history_.reset();
   presented_history_surface_ = {};
+  presented_history_actions_ = {};
+  pointer_dispatcher_.presentHistoryActions({});
   key_bindings_.setWindow(window);
   pointer_dispatcher_.setWindow(window);
   window.installEventFilter(this);
@@ -461,6 +464,10 @@ void Application::prepareFrame(PresentedFrame &frame) {
   }
 
   const auto &history = session().historyBrowser();
+  if (dialog_ == QLatin1StringView("history")) {
+    frame.history_actions = historyActionSurface();
+  }
+
   if (dialog_ == QLatin1StringView("history") && !historyLoading() && history_view_version_ == history.viewVersion()) {
     frame.history_surface = historyScrollSurface(historyMetrics());
 
@@ -586,7 +593,7 @@ void Application::configureWindow() {
   const QPointer<Application> lifetime{this};
   const auto owner = window_;
   WindowFontCatalog::forWindow(*owner).configure(configuration.font);
-  if (!lifetime || !owner || window_ != owner) {
+  if (lifetime.isNull() || owner.isNull() || window_ != owner) {
     return;
   }
 
@@ -601,6 +608,8 @@ void Application::present(const PresentedFrame &frame) {
 
   presented_history_ = frame.history;
   presented_history_surface_ = frame.history_surface;
+  presented_history_actions_ = frame.history_actions;
+  pointer_dispatcher_.presentHistoryActions(presented_history_actions_);
 
   try {
     for (const auto &pane : std::span{frame.panes}.first(frame.pane_count)) {
@@ -1271,6 +1280,8 @@ void Application::showDialog(const QString &kind, const QString &text) {
   ++dialog_generation_;
   presented_history_.reset();
   presented_history_surface_ = {};
+  presented_history_actions_ = {};
+  pointer_dispatcher_.presentHistoryActions({});
   dialog_ = kind;
   dialog_text_ = text;
   emit dialogChanged();

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/geometry.hpp"
+#include "input/history_action_capture.hpp"
 #include "presentation/history_meta_geometry.hpp"
 #include <QQuickItem>
 #include <QRectF>
@@ -28,6 +29,7 @@ public:
   [[nodiscard]] QVariantList facts() const;
   [[nodiscard]] QVariantList actions() const;
   [[nodiscard]] QVariantMap layout() const;
+  [[nodiscard]] HistoryActionSurface actionSurface(std::uint64_t generation) const;
 
 signals:
   void inputChanged();
