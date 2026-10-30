@@ -19,6 +19,10 @@ public:
     return framing_.canSkip(bytes);
   }
 
+  bool canSkipCsi(std::span<const std::uint8_t> bytes) const noexcept {
+    return framing_.canSkipCsi(bytes);
+  }
+
   std::optional<KittyCommandView> next(std::span<const std::uint8_t> bytes) noexcept {
     std::size_t position = 0;
     for (;;) {

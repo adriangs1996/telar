@@ -19,6 +19,11 @@ public:
 
 private:
   [[gnu::noinline]] void feedCommands(GhosttyTerminal terminal, std::span<const Byte> bytes, TerminalSize size) {
+    if (scanner_.canSkipCsi(bytes)) {
+      ghostty_terminal_vt_write(terminal, bytes.data(), bytes.size());
+      return;
+    }
+
     auto remaining = bytes;
     while (const auto command = scanner_.next(remaining)) {
       ghostty_terminal_vt_write(terminal, remaining.data(), command->end);

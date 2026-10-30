@@ -19,6 +19,26 @@ public:
     return state_ == State::ground && (bytes.empty() || std::memchr(bytes.data(), escape_byte, bytes.size()) == nullptr);
   }
 
+  // One complete ASCII CSI leaves graphics framing unchanged at exact ground.
+  bool canSkipCsi(std::span<const std::uint8_t> bytes) const noexcept {
+    constexpr std::uint8_t parameter_first = 0x20;
+    constexpr std::uint8_t parameter_last = 0x3f;
+    constexpr std::uint8_t final_first = 0x40;
+    constexpr std::uint8_t final_last = 0x7e;
+    constexpr std::size_t minimum_csi_bytes = 3;
+    if (state_ != State::ground || bytes.size() < minimum_csi_bytes || bytes[0] != escape_byte || bytes[1] != '[' || bytes.back() < final_first || bytes.back() > final_last) {
+      return false;
+    }
+
+    for (const auto byte : bytes.subspan(2, bytes.size() - minimum_csi_bytes)) {
+      if (byte < parameter_first || byte > parameter_last) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   bool inside() const noexcept {
     return state_ == State::kitty;
   }

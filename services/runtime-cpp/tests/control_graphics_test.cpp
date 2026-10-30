@@ -47,7 +47,11 @@ void cursorChunkInterleaving(auto &memory) {
   constexpr std::string_view first = "\x1b_Ga=T,f=24,s=1,v=1,i=7,m=1;/w\x1b\\";
   constexpr std::string_view last = "\x1b_Gm=0;AA\x1b\\";
   constexpr TerminalSize size{80, 24, 9, 18};
-  for (const auto middle : {std::string_view{}, std::string_view{"x"}, std::string_view{"\x05"}, std::string_view{"\x18"}, std::string_view{"\x1a"}, std::string_view{"\x80"}}) {
+  constexpr std::string_view middle_inputs[]{
+    {}, "x", "\x05", "\x18", "\x1a", "\x80",
+    "\x1b[1;32m", "\x1b[0m", "\x1b[2;3H", "\x1b[?25l", "\x1b[2J",
+  };
+  for (const auto middle : middle_inputs) {
     for (std::size_t split = 0; split <= first.size(); ++split) {
       Terminal terminal{memory, size, TerminalPurpose::separate_media};
       GraphicsCursor cursor;
