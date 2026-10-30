@@ -125,6 +125,7 @@ private:
     agent.status = entry.status;
     agent.blocked_reason = entry.blocked_reason;
     agent.provider_kind = entry.provider;
+    agent.attachments = entry.attachments;
     agent.title_state = entry.title_state;
     agent.title = entry.session_title;
     agent.provider_name = entry.provider_name;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "application_effects.hpp"
+#include "attachment_shelf.hpp"
 #include "configuration_source.hpp"
 #include "core/calendar_sample.hpp"
 #include "core/metrics.hpp"
@@ -80,6 +81,9 @@ class Application final : public QObject {
   Q_OBJECT
   QML_NAMED_ELEMENT(GuiController)
   QML_UNCREATABLE("Use the running GUI controller")
+  Q_PROPERTY(AttachmentShelf *attachments READ attachments CONSTANT)
+  Q_PROPERTY(QVariantMap attachmentGeometry READ attachmentGeometry NOTIFY stateChanged)
+  Q_PROPERTY(QVariantMap attachmentModalGeometry READ attachmentModalGeometry NOTIFY stateChanged)
   Q_PROPERTY(QAbstractItemModel *workspaces READ workspaces CONSTANT)
   Q_PROPERTY(QAbstractItemModel *tabs READ tabs CONSTANT)
   Q_PROPERTY(QAbstractItemModel *panes READ panes CONSTANT)
@@ -216,6 +220,11 @@ public:
   Application(Application &&) = delete;
   Application &operator=(Application &&) = delete;
 
+  [[nodiscard]] AttachmentShelf *attachments() noexcept;
+  [[nodiscard]] QVariantMap attachmentGeometry() const;
+  [[nodiscard]] QVariantMap attachmentModalGeometry() const;
+  void attachmentKey(std::uint64_t pane_id, const TerminalKey &key);
+  bool interceptAttachmentKey(QKeyEvent &event);
   void open(const QString &endpoint);
   void openMachines(const QString &path);
   void loadConfiguration(const QString &path, const QString &profile, const QString &theme);
@@ -279,7 +288,7 @@ public:
   Q_INVOKABLE void submitSuggestion(const QString &revision);
   Q_INVOKABLE void resizeDivider(int index, qreal x, qreal y, bool commit);
 
-  void input(std::uint64_t pane_id, const QByteArray &bytes, PaneInputSource source = PaneInputSource::keyboard);
+  bool input(std::uint64_t pane_id, const QByteArray &bytes, PaneInputSource source = PaneInputSource::keyboard);
   void paste(std::uint64_t pane_id, const QString &text);
   void resize(std::uint64_t pane_id, TerminalSize size);
   void scroll(PaneScrollDelta delta);
@@ -514,6 +523,11 @@ private:
   void observeActivityPointer(bool hover_input = true, std::optional<QPointF> position = {});
   void clearActivityHover();
   void presentChange(Change change);
+  void initializeAttachments();
+  void attachmentShelfChanged();
+  void reconcileAttachmentFrame(std::uint64_t pane_id);
+  void dismissAttachment(std::uint64_t identity);
+  void synchronizeAttachments();
   void refreshPanes();
   [[nodiscard]] HistoryModalMetrics historyMetrics() const;
   [[nodiscard]] HistoryScrollSurface historyScrollSurface(const HistoryModalMetrics &metrics) const;
@@ -622,6 +636,8 @@ private:
   std::optional<MachineClientKey> sound_owner_;
   ConfigurationSource configuration_source_;
   MachineProfilesSource machine_profiles_;
+  AttachmentShelf attachments_;
+  bool attachment_modal_active_ = false;
   std::optional<MachinePrompt> machine_prompt_;
   std::optional<RemoteLaunch> remote_launch_;
   QTimer machine_retry_;

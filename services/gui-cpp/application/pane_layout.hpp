@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/cell_rectangle.hpp"
+#include "application/pane_bottom_reservation.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <algorithm>
 #include <array>
@@ -168,14 +169,25 @@ public:
     return false;
   }
 
+  void setBottomReservation(std::optional<PaneBottomReservation> reservation) noexcept {
+    reservation_ = reservation;
+  }
+
+  [[nodiscard]] CellRectangle reservedArea() const noexcept {
+    return reserved_;
+  }
+
   std::span<const Placement> arrange(CellRectangle bounds, Metrics metrics, std::optional<std::uint64_t> fullscreen = {}) noexcept {
     placement_count_ = 0;
     divider_count_ = 0;
+    reserved_ = {};
     if (fullscreen && contains(*fullscreen)) {
       placements_[placement_count_++] = {.pane_id = *fullscreen, .bounds = bounds, .display_index = displayIndex(*fullscreen), .content = bounds.inner(metrics.border), .framed = hasBorders(true, metrics)};
     } else if (count_ != 0) {
       arrangeNodes(bounds, metrics);
     }
+
+    reserveBelowPane(metrics);
 
     return {placements_.data(), placement_count_};
   }
@@ -318,6 +330,33 @@ public:
   }
 
 private:
+  void reserveBelowPane(Metrics metrics) noexcept {
+    if (!reservation_) {
+      return;
+    }
+
+    for (auto &placement : std::span{placements_}.first(placement_count_)) {
+      if (placement.pane_id != reservation_->pane_id) {
+        continue;
+      }
+
+      const auto available = placement.bounds.height > reservation_->minimum_pane_height ? static_cast<std::uint16_t>(placement.bounds.height - reservation_->minimum_pane_height) : std::uint16_t{};
+      const auto height = std::min(reservation_->preferred_height, available);
+      if (height < reservation_->minimum_height) {
+        return;
+      }
+
+      const bool borderless = placement.bounds == placement.content;
+      reserved_ = placement.bounds;
+      placement.bounds.height = static_cast<std::uint16_t>(placement.bounds.height - height);
+      reserved_.y = static_cast<std::uint16_t>(static_cast<std::uint32_t>(reserved_.y) + placement.bounds.height);
+      reserved_.height = height;
+      placement.content = borderless ? placement.bounds : placement.bounds.inner(metrics.border);
+
+      return;
+    }
+  }
+
   struct FocusOrigin {
     CellRectangle bounds;
     PaneDirection direction = PaneDirection::right;
@@ -502,6 +541,8 @@ private:
   std::array<ClientLayoutNode, maximum_nodes> nodes_;
   std::array<Placement, maximum_panes> placements_;
   std::array<Divider, maximum_panes - 1> dividers_;
+  std::optional<PaneBottomReservation> reservation_;
+  CellRectangle reserved_;
   std::size_t count_ = 0;
   std::size_t placement_count_ = 0;
   std::size_t divider_count_ = 0;

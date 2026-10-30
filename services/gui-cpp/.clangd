@@ -9,7 +9,7 @@ CompileFlags:
 
 ---
 If:
-  PathMatch: (application|core|fonts|graphics|history|input|links|machines|palette|paths|platform|presentation|suggestions|terminal|text|transport)/.*\.hpp
+  PathMatch: (application|attachments|core|fonts|graphics|history|input|links|machines|palette|paths|platform|presentation|suggestions|terminal|text|transport)/.*\.hpp
 CompileFlags:
   CompilationDatabase: out/clangd/domain
 

@@ -436,7 +436,7 @@ void TerminalItem::keyPressEvent(QKeyEvent *event) {
   } else if (clipboard_shortcut && event->key() == Qt::Key_V) {
     application_->paste(pane_id_, QGuiApplication::clipboard()->text());
   } else if (preedit_.isEmpty()) {
-    sendKeyPress(*event, current->screen.modes());
+    static_cast<void>(sendKeyPress(*event, current->screen.modes()));
   }
 
   cursor_on_ = true;
@@ -448,11 +448,11 @@ void TerminalItem::keyPressEvent(QKeyEvent *event) {
   event->accept();
 }
 
-void TerminalItem::sendKeyPress(const QKeyEvent &event, const InputModes &modes) {
+bool TerminalItem::sendKeyPress(const QKeyEvent &event, const InputModes &modes) {
   const auto semantic = NativeKeyAdapter::terminalKey(event);
   const auto bytes = semantic ? encodeKey(*semantic, modes) : encodeKey(event, modes);
   if (bytes.isEmpty()) {
-    return;
+    return false;
   }
 
   auto *entry = std::ranges::find_if(pressed_keys_, [&](const auto &key) {
@@ -465,7 +465,7 @@ void TerminalItem::sendKeyPress(const QKeyEvent &event, const InputModes &modes)
   }
 
   if (entry == pressed_keys_.end()) {
-    return;
+    return false;
   }
 
   *entry = {
@@ -477,7 +477,12 @@ void TerminalItem::sendKeyPress(const QKeyEvent &event, const InputModes &modes)
       .text = event.text(),
       .semantic = semantic,
   };
-  send(bytes);
+  const bool delivered = send(bytes);
+  if (delivered && semantic && application_ != nullptr) {
+    application_->attachmentKey(pane_id_, *semantic);
+  }
+
+  return delivered;
 }
 
 void TerminalItem::keyReleaseEvent(QKeyEvent *event) {
@@ -628,10 +633,8 @@ QByteArray TerminalItem::PressedKey::release(const InputModes &modes) const {
   return encodeKey(release, modes);
 }
 
-void TerminalItem::send(const QByteArray &bytes, PaneInputSource source) {
-  if (application_ != nullptr && !bytes.isEmpty()) {
-    application_->input(pane_id_, bytes, source);
-  }
+bool TerminalItem::send(const QByteArray &bytes, PaneInputSource source) {
+  return application_ != nullptr && !bytes.isEmpty() && application_->input(pane_id_, bytes, source);
 }
 
 }

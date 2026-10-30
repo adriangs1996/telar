@@ -10,6 +10,21 @@
 #include "metrics_fixture.hpp"
 #include "qml_fixture.hpp"
 #include "qt/application.hpp"
+#include "qt/attachment_shelf.hpp"
+#include "qt/key_adapter.hpp"
+#include "application/pane_bottom_reservation.hpp"
+#include "platform/private_clipboard.hpp"
+#include <QBuffer>
+#include <QByteArray>
+#include <QImage>
+#include <QDebug>
+#include <QtCore/qlogging.h>
+#include <QSGRendererInterface>
+#include <QFont>
+#include <QScopeGuard>
+#include <QtGui/qtestsupport_gui.h>
+#include <QIODevice>
+#include <span>
 #include "qt/external_link_opener.hpp"
 #include "qt/list_model.hpp"
 #include "qt/machine_chrome_layout.hpp"
@@ -200,6 +215,35 @@ void sendFrame(WireRuntime &runtime) {
   runtime.send(PaneFrame{FrameBody{.pane_id = pane_id, .frame_id = 1, .cols = 1, .rows = 1, .scroll = {.total_rows = 1}, .text_metadata = TextMetadata{.row_flags = flags}, .spans = spans}});
 }
 
+void sendAttachmentFrame(WireRuntime &runtime) {
+  constexpr std::string_view marker = "[Image #1]";
+  constexpr std::size_t columns = 12;
+  constexpr std::size_t encoded_capacity = 512;
+  std::array<Cell, columns> cells{};
+  cells.fill(Cell{.text = byteView(" ")});
+  for (std::size_t index = 0; index < marker.size(); ++index) {
+    cells[index].text = byteView(marker.substr(index, 1));
+  }
+
+  std::array<Byte, encoded_capacity> encoded{};
+  const std::array spans{FrameSpan{.start = 0, .count = cells.size(), .cells = CellRunCodec::encode(cells, encoded)}};
+  const std::array<Byte, 1> flags{};
+  runtime.send(PaneFrame{FrameBody{.pane_id = pane_id, .frame_id = 2, .cols = columns, .rows = 1, .cursor = {.visible = true, .x = marker.size()}, .scroll = {.total_rows = 1}, .text_metadata = TextMetadata{.row_flags = flags}, .spans = spans}});
+}
+
+bool captureAttachmentImage(const QImage &image, const char *setting) {
+  const auto path = qEnvironmentVariable(setting);
+
+  return path.isEmpty() || image.save(path);
+}
+
+bool attachmentRendererMatchesRequest(const QQuickWindow &window) {
+  const auto api = window.rendererInterface()->graphicsApi();
+  qInfo() << "Attachment graphics API" << api;
+
+  return qEnvironmentVariable("QSG_RHI_BACKEND") != QStringLiteral("metal") || api == QSGRendererInterface::Metal;
+}
+
 QVariantMap activityRow(Application &application, int row) {
   const auto *model = application.agents();
 
@@ -287,6 +331,166 @@ struct MachineFixture {
 
 class MachineWindowTest : public QObject {
   Q_OBJECT
+
+#ifdef __APPLE__
+  Q_SLOT static void clipboardCaptureFinishesWhileLocalClientIsHidden() {
+    PrivateClipboard board;
+    ApplicationAllocator memory;
+    AttachmentShelf shelf{memory};
+    const MachineClientKey key{.machine = {.generation = 1}, .generation = 1};
+    const AttachmentPrompt prompt{.source = key, .runtime_generation = 1, .target = {.pane_id = pane_id, .pane_generation = 1}, .attachment_generation = 1};
+    shelf.setSource({.source = key, .runtime_generation = 1});
+    shelf.setPrompt(prompt);
+    const QSignalSpy adopted{&shelf, &AttachmentShelf::adopted};
+    QImage image{2, 3, QImage::Format_RGBA8888};
+    image.fill(Qt::red);
+    QByteArray png;
+    QBuffer output{&png};
+    QVERIFY(output.open(QIODevice::WriteOnly) && image.save(&output, "PNG"));
+    board.setPng(std::as_bytes(std::span{png.constData(), static_cast<std::size_t>(png.size())}));
+    shelf.requestCapture();
+    shelf.setPrompt(prompt, false);
+    QVERIFY(!shelf.prompt() && shelf.items().isEmpty());
+    QTRY_COMPARE_WITH_TIMEOUT(adopted.count(), 1, wait_ms);
+    QVERIFY(shelf.items().isEmpty());
+    shelf.setPrompt(prompt);
+    QCOMPARE(shelf.items().size(), 1);
+
+    shelf.requestCapture();
+    auto replacement = prompt;
+    ++replacement.runtime_generation;
+    shelf.setSource({.source = key, .runtime_generation = replacement.runtime_generation});
+    shelf.setPrompt(replacement);
+    shelf.requestCapture();
+    QTRY_COMPARE_WITH_TIMEOUT(adopted.count(), 2, wait_ms);
+    QCOMPARE(shelf.items().size(), 1);
+    QCOMPARE(shelf.items().front().toMap().value(QStringLiteral("id")).toString(), QStringLiteral("3"));
+
+    const QSignalSpy failed{&shelf, &AttachmentShelf::failed};
+    constexpr std::string_view invalid = "invalid PNG";
+    board.setPng(std::as_bytes(std::span{invalid.data(), invalid.size()}));
+    shelf.requestCapture();
+    shelf.setPrompt(replacement, false);
+    QTRY_COMPARE_WITH_TIMEOUT(failed.count(), 1, wait_ms);
+    QCOMPARE(adopted.count(), 2);
+    shelf.setPrompt(replacement);
+    QCOMPARE(shelf.items().size(), 1);
+  }
+
+  Q_SLOT static void clipboardImagesReservePaneRowsAndOwnModalKeys() {
+    PrivateClipboard board;
+    MachineFixture fixture;
+    auto &application = fixture.application;
+    QQuickWindow window;
+    constexpr QSize size{800, 600};
+    window.resize(size);
+    application.setWindow(window);
+    QVERIFY(fixture.start());
+    fixture.local_runtime->send(ClientLayoutSnapshot{});
+    QVERIFY(finishOpening(*fixture.local_runtime));
+    sendFrame(*fixture.local_runtime);
+    auto agent = activityAgent("Clipboard");
+    agent.attachments = AgentAttachmentMarkers::ordered;
+    const std::array agents{agent};
+    fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
+    QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->prompt().has_value(), wait_ms);
+    const auto before = application.panes()->data(application.panes()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("height")).toReal();
+
+    QImage image{2, 3, QImage::Format_RGBA8888};
+    image.fill(Qt::red);
+    QByteArray png;
+    QBuffer output{&png};
+    QVERIFY(output.open(QIODevice::WriteOnly) && image.save(&output, "PNG"));
+    board.setPng(std::as_bytes(std::span{png.constData(), static_cast<std::size_t>(png.size())}));
+    TerminalItem terminal{window.contentItem()};
+    terminal.setApplication(&application);
+    terminal.setPaneId(QString::number(pane_id));
+    const auto previous_font = QGuiApplication::font();
+    const auto restore_font = qScopeGuard([&] { QGuiApplication::setFont(previous_font); });
+    QFont chrome_font{QStringLiteral("IBM Plex Sans")};
+    constexpr int chrome_pixels = 13;
+    chrome_font.setPixelSize(chrome_pixels);
+    QGuiApplication::setFont(chrome_font);
+    QQmlEngine engine;
+    const QVariantMap properties{{QStringLiteral("application"), QVariant::fromValue(&application)}};
+    const auto shelf_view = createChrome(engine, QStringLiteral("AttachmentShelf"), properties);
+    const auto modal_view = createChrome(engine, QStringLiteral("AttachmentModal"), properties);
+    shelf_view->setParentItem(window.contentItem());
+    modal_view->setParentItem(window.contentItem());
+    modal_view->setSize(size);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window, wait_ms));
+    const auto ready = qEnvironmentVariable("TELAR_GUI_TEST_WINDOW_READY");
+    if (!ready.isEmpty()) {
+      QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(ready), wait_ms);
+    }
+
+    QVERIFY(waitForSynchronizedFrame(window, wait_ms));
+    const auto previous_input = fixture.local_runtime->count(ClientTag::pane_input);
+    QKeyEvent paste{QEvent::KeyPress, Qt::Key_V, NativeKeyAdapter::control_modifier};
+    QCoreApplication::sendEvent(&terminal, &paste);
+    QTRY_COMPARE_WITH_TIMEOUT(application.attachments()->items().size(), 1, wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::pane_input), previous_input + 1, wait_ms);
+    const auto delivered = fixture.local_runtime->last<PaneInput>();
+    QCOMPARE(textView(delivered.bytes), std::string_view{"\x16"});
+    QTRY_VERIFY_WITH_TIMEOUT(application.attachmentGeometry().value(QStringLiteral("height")).toReal() > 0, wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(shelf_view->isVisible(), wait_ms);
+    QVERIFY(waitForSynchronizedFrame(window, wait_ms));
+    const auto shelf_pixels = window.grabWindow();
+    QVERIFY(!shelf_pixels.isNull());
+    QVERIFY(attachmentRendererMatchesRequest(window));
+    QVERIFY(captureAttachmentImage(shelf_pixels, "TELAR_GUI_TEST_ATTACHMENT_SHELF_CAPTURE"));
+    const auto after = application.panes()->data(application.panes()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("height")).toReal();
+    const auto rows = application.windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid")).toMap().value(QStringLiteral("cellHeight")).toReal();
+    QCOMPARE(before - after, PaneBottomReservation::shelf_rows * rows);
+
+    const auto identity = application.attachments()->items().front().toMap().value(QStringLiteral("id")).toString();
+    application.attachments()->open(identity);
+    QVERIFY(!application.attachments()->modal().isEmpty());
+    QTRY_VERIFY_WITH_TIMEOUT(modal_view->isVisible(), wait_ms);
+    QVERIFY(waitForSynchronizedFrame(window, wait_ms));
+    const auto modal_pixels = window.grabWindow();
+    QVERIFY(!modal_pixels.isNull() && modal_pixels != shelf_pixels);
+    QVERIFY(captureAttachmentImage(modal_pixels, "TELAR_GUI_TEST_ATTACHMENT_MODAL_CAPTURE"));
+    QKeyEvent blocked{QEvent::KeyPress, Qt::Key_X, Qt::NoModifier, QStringLiteral("x")};
+    QVERIFY(application.handleBindingKey(blocked, terminal));
+    QKeyEvent escape{QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier};
+    QVERIFY(application.handleBindingKey(escape, terminal));
+    QVERIFY(application.attachments()->modal().isEmpty());
+    QCOMPARE(fixture.local_runtime->count(ClientTag::pane_input), previous_input + 1);
+
+    sendAttachmentFrame(*fixture.local_runtime);
+    QTRY_COMPARE_WITH_TIMEOUT(application.pane(pane_id)->screen.cursor().x, 10, wait_ms);
+    application.attachments()->dismiss(identity);
+    QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::pane_input), previous_input + 2, wait_ms);
+    QCOMPARE(textView(fixture.local_runtime->last<PaneInput>().bytes), std::string_view{"\x7f"});
+    QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->items().isEmpty() && application.attachmentGeometry().isEmpty(), wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(application.panes()->data(application.panes()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("height")).toReal(), before, wait_ms);
+
+    QCoreApplication::sendEvent(&terminal, &paste);
+    QTRY_COMPARE_WITH_TIMEOUT(application.attachments()->items().size(), 1, wait_ms);
+    QKeyEvent submit{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier};
+    QCoreApplication::sendEvent(&terminal, &submit);
+    QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->items().isEmpty() && application.attachmentGeometry().isEmpty(), wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::pane_input), previous_input + 4, wait_ms);
+    QCOMPARE(textView(fixture.local_runtime->last<PaneInput>().bytes), std::string_view{"\r"});
+  }
+#endif
+
+  Q_SLOT static void attachmentShelfAndModalLoadFromTheRegisteredQmlModule() {
+    ApplicationAllocator memory;
+    Application application{memory};
+    QQuickWindow window;
+    constexpr QSize size{800, 600};
+    window.resize(size);
+    application.setWindow(window);
+    QQmlEngine engine;
+    const QVariantMap properties{{QStringLiteral("application"), QVariant::fromValue(&application)}};
+    const auto shelf = createChrome(engine, QStringLiteral("AttachmentShelf"), properties);
+    const auto modal = createChrome(engine, QStringLiteral("AttachmentModal"), properties);
+    QVERIFY(shelf != nullptr && modal != nullptr);
+    QVERIFY(!shelf->isVisible() && !modal->isVisible());
+  }
 
   enum class TerminalStatus : std::uint8_t {
     stopping,

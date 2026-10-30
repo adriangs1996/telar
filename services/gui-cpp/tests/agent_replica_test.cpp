@@ -88,6 +88,27 @@ void revisionsAndSourceReplacement() {
   require(replica.entries().front().status_clock.interval().seconds(replacement_now_ns) == initial_age, "replacement runtime must not inherit a retired clock");
 }
 
+void attachmentCapabilitiesFollowExactAgentIdentities() {
+  SystemAllocator memory;
+  AgentReplica replica{memory};
+  std::array entries{agentSnapshotEntry(), agentSnapshotEntry()};
+  entries[0].attachments = AgentAttachmentMarkers::stable_number;
+  entries[1].pane_id = 2;
+  entries[1].attachments = AgentAttachmentMarkers::pasted_path;
+  require(replica.apply({.revision = 1, .entries = entries}, second), "initial attachment capabilities must commit");
+  require(replica.entries()[0].attachments == AgentAttachmentMarkers::stable_number && replica.entries()[1].attachments == AgentAttachmentMarkers::pasted_path, "each identity must retain the marker policy its manifest reports");
+
+  std::swap(entries[0], entries[1]);
+  entries[1].attachments = AgentAttachmentMarkers::ordered;
+  require(replica.apply({.revision = 2, .entries = entries}, 2 * second), "reordering and a capability update must commit together");
+  require(replica.entries()[0].pane_id == 2 && replica.entries()[0].attachments == AgentAttachmentMarkers::pasted_path && replica.entries()[1].attachments == AgentAttachmentMarkers::ordered, "capabilities must follow snapshot identities through staging reuse");
+
+  ++entries[0].pane_generation;
+  entries[0].attachments = AgentAttachmentMarkers::none;
+  require(replica.apply({.revision = 3, .entries = entries}, 3 * second), "a replacement agent must commit");
+  require(replica.entries()[0].attachments == AgentAttachmentMarkers::none, "an incapable replacement must not inherit a previous agent's shelf");
+}
+
 void statusChangesFollowCommittedIdentities() {
   SystemAllocator memory;
   AgentReplica replica{memory};
@@ -252,6 +273,7 @@ void animationBoundaries() {
 int main() try {
   fractionsAndResets();
   revisionsAndSourceReplacement();
+  attachmentCapabilitiesFollowExactAgentIdentities();
   statusChangesFollowCommittedIdentities();
   allocationFailurePreservesTheReplica();
   warmedSnapshotsReuseStorage();

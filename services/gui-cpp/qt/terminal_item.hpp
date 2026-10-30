@@ -102,11 +102,11 @@ private:
   void releaseKeys();
   void invalidateMachine();
   void releaseMouse();
-  void send(const QByteArray &bytes, PaneInputSource source = PaneInputSource::keyboard);
+  bool send(const QByteArray &bytes, PaneInputSource source = PaneInputSource::keyboard);
   [[nodiscard]] ChildMouseView childMouseView() const;
   [[nodiscard]] ChildMouseSample childMouseSample(const QMouseEvent &event, MousePhase phase, MouseButton button) const;
   void mousePacket(unsigned button, QPointF position, bool released);
-  void sendKeyPress(const QKeyEvent &event, const InputModes &modes);
+  bool sendKeyPress(const QKeyEvent &event, const InputModes &modes);
   void sendCommittedText(const QString &text);
   void dispatchWheel(const QWheelEvent &event, std::int32_t lines);
   [[nodiscard]] int indexAt(QPointF position) const noexcept;

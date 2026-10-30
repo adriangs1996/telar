@@ -123,6 +123,7 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
       activity_targets_(AllocatorRef<ActivityRowTarget, ApplicationAllocator>{memory}),
       configuration_source_(memory),
       machine_profiles_(memory),
+      attachments_(memory),
       key_bindings_(*this),
       pointer_dispatcher_(*this),
       link_opener_(*this),
@@ -131,6 +132,7 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
       hostname_(platform::hostName()) {
   initializeMachines();
   initializeMachineProfiles();
+  initializeAttachments();
   key_bindings_.configure(configuration_source_.input(), configuration_source_.keymap());
 
   connect(this, &Application::configurationChanged, this, &Application::windowGeometryChanged);
@@ -689,6 +691,7 @@ void Application::presentChange(Change change) {
     refresh();
     break;
   case Change::terminal:
+    reconcileAttachmentFrame(session().changedPane());
     emit terminalChanged(session().changedPane());
     if (dialog_ == QLatin1StringView("paths")) {
       emit pathPickerGeometryChanged();
@@ -852,6 +855,7 @@ QVariantList Application::fullscreenEntries(const Tab<ApplicationAllocator> &tab
 }
 
 void Application::refreshPanes() {
+  synchronizeAttachments();
   auto *tab = session().activeTab();
   QList<QVariantMap> panes;
   QList<QVariantMap> dividers;
@@ -1195,11 +1199,18 @@ void Application::searchHistory(const QString &query) {
   }
 }
 
-void Application::input(std::uint64_t pane_id, const QByteArray &bytes, PaneInputSource source) {
+bool Application::input(std::uint64_t pane_id, const QByteArray &bytes, PaneInputSource source) {
+  const auto *const current = session().findPane(pane_id);
+  if (current == nullptr || !current->attached || current->exited || bytes.isEmpty()) {
+    return false;
+  }
+
   const auto &copy = session().copyMode().state();
   const auto previous = copy && copy->pointer ? copy->pane_id : 0;
+  bool delivered = false;
   try {
     session().input(pane_id, {bytes.constData(), static_cast<std::size_t>(bytes.size())}, source);
+    delivered = true;
   } catch (const std::exception &error) {
     fail(error);
   }
@@ -1207,6 +1218,8 @@ void Application::input(std::uint64_t pane_id, const QByteArray &bytes, PaneInpu
   if (previous != 0 && !session().copyMode().state()) {
     publishCopyChange(previous);
   }
+
+  return delivered;
 }
 
 void Application::paste(std::uint64_t pane_id, const QString &text) {

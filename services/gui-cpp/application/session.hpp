@@ -1,6 +1,7 @@
 #pragma once
 
 #include "agent_acknowledgement.hpp"
+#include "pane_bottom_reservation.hpp"
 #include "agent_alerts.hpp"
 #include "agent_replica.hpp"
 #include "agent_status_change.hpp"
@@ -565,6 +566,26 @@ public:
     if (workbench_geometry_ != geometry) {
       workbench_geometry_ = geometry;
       ++view_version_.viewport;
+    }
+  }
+
+  void setAttachmentReservation(std::optional<PaneBottomReservation> reservation) {
+    if (attachment_reservation_ != reservation) {
+      attachment_reservation_ = reservation;
+      attachment_resize_pending_ = true;
+      for (auto &tab : tabs_) {
+        tab->layout.setBottomReservation(reservation);
+      }
+
+      ++view_version_.viewport;
+    }
+
+    if (attachment_resize_pending_) {
+      if (auto *tab = activeTab()) {
+        resizeVisiblePanes(*tab);
+      }
+
+      attachment_resize_pending_ = false;
     }
   }
 
@@ -2039,6 +2060,7 @@ private:
     }
 
     tabs_.push_back(makeOwned<Tab<Memory>>(memory_, memory_, location));
+    tabs_.back()->layout.setBottomReservation(attachment_reservation_);
     ++view_version_.tabs;
 
     return *tabs_.back();
@@ -2766,6 +2788,7 @@ private:
         }
       }
 
+      tab->layout.setBottomReservation(attachment_reservation_);
       tabs_.push_back(std::move(tab));
     }
 
@@ -3870,6 +3893,8 @@ private:
   std::uint64_t attachment_generation_ = 0;
   std::uint64_t changed_pane_ = 0;
   WorkbenchGeometry workbench_geometry_;
+  std::optional<PaneBottomReservation> attachment_reservation_;
+  bool attachment_resize_pending_ = false;
   bool ready_ = false;
   bool presented_ = true;
   bool leave_pending_ = false;

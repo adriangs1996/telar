@@ -325,6 +325,12 @@ bool KeyBindings::eventFilter(QObject *watched, QEvent *event) {
     return false;
   }
 
+  if (auto *key = dynamic_cast<QKeyEvent *>(event); key != nullptr && application_.interceptAttachmentKey(*key)) {
+    event->accept();
+
+    return true;
+  }
+
   auto *recipient = window_->activeFocusItem();
   auto *key = dynamic_cast<QKeyEvent *>(event);
   if (recipient == nullptr || key == nullptr) {

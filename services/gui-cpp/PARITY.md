@@ -1587,6 +1587,17 @@ retained-node/staging bounds, native
 completion/failure, upload leases, shared-memory delivery and comparative
 performance.
 
+The [clipboard shelf implementation](measurements/clipboard-images.md) now has
+bounded native capture, allocator-aware retention, whole-row layout reservation,
+preview modal, numeric/path marker learning and bounded dismiss input. Original
+Zig comparisons include 16,384 catalog/marker lifecycle transitions with all
+three deletion limits; selected private-pasteboard Cocoa checks pass five entries
+and explicitly confirm Metal. Paired attachment pixels, Linux bounded provider
+transfer, native leak acceptance and comparative performance remain open. The
+expanded session run's notification fixture failure reproduces with HEAD; its
+canonical protocol preparation is corrected and passes Release/ASan/UBSan.
+This is not full attachment acceptance.
+
 ## Remaining functional work
 
 | Area | Missing or incomplete behavior |
@@ -1602,7 +1613,7 @@ performance.
 | Navigation | Affirmative GUI release installation, additional SSH hosts, additional runtime-stop/failure states beyond the verified lifecycle and negotiation cases, complete machine switcher/segment visual qualification, complete task/plan state and source-composition qualification and full source-composed activity qualification, native focus qualification, additional workspace/worktree interaction states, remaining worktree management and nested picks. `goto-picker` opens a fuzzy native palette for contexts, current-context tabs and agents, with complete identities and query-preserving prefixes. The generated catalogue exposes all 29 actions, including the four machine actions. Initial `--remote`/`--machine` selection and remote command/home adoption are wired and have real loopback SSH coverage. The runtime path picker browses directories and inserts quoted relative or absolute paths; file-icon sampling, complete native path interactions, failure scenes and other theme/density pixels remain open. Suggestions use the runtime engine, retain retryable failures, discard stale replies and paste without Enter; returning to actions restores the query, selected row and editor selection. Leaving a linked worktree selects its project; cleanup only forgets gone rows without tabs. Bounded navigation history and canonical saved-layout restoration have original-source and live SSH round-trip coverage; visible and hidden restored roots follow a delivered in-flight window/sidebar resize. Machine picker/form actions have controlled coverage; a real OpenSSH loopback run also covers remote/local/remote input isolation. Four earlier palette panels, one empty path panel and eight suggestion panels have scoped exact Cocoa pixels; complete visual and interaction coverage remains open. |
 | Extensibility | Plugins, custom bars, dynamic widgets, panels and picks; command-action integration with these surfaces |
 | Footer | Configured bar positions/content, full priority fitting and overflow; exact diagnostic fitting and complete battery/badge/mode-chip density/theme geometry; complete mode-label font fallback. Default metrics, CPU history, TLS, dismissible diagnostics and prefix/copy hint layout are implemented. |
-| Attachments and links | Clipboard image shelf, attachment lifecycle, diagrams and complete native link/preview interaction equivalence, including chrome interception and layout edge cases |
+| Attachments and links | Complete clipboard/preview interaction and physical ownership qualification, paired pixels, Linux bounded provider transfer, native leaks and measured performance; diagrams and complete native link/preview equivalence. The image shelf, capture/retention, marker lifecycle, dismiss input and row reservation now have scoped implementation and correctness coverage. |
 | Native behavior | Linux background blur, exact macOS blur strength and window behavior, desktop launch environment adoption, packaging and release integration |
 | Interaction and accessibility | Tab drag/reorder gestures, context menus, complete keyboard-only navigation, focus/selection/scroll affordances and accessibility validation; current native Mac failures in window activation and link copying at fractional/doubled scales |
 

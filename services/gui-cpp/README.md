@@ -56,11 +56,20 @@ GUI's backends. Explicit Qt backend environment settings take precedence.
 The tab atlas still exposes OpenGL edge differences; that override has no
 tab-pixel parity acceptance.
 
+The [clipboard image shelf](measurements/clipboard-images.md) now captures native
+images asynchronously, reserves whole pane rows, opens a preview modal and
+removes learned numeric/path markers through bounded terminal input. Core
+behavior matches unchanged Zig probes; private-pasteboard native integration
+and the complete 39-entry window/88-entry Quick suites pass. Linux bounded
+transfer, paired attachment pixels, native exit leaks and comparative performance
+remain open.
+
 ## Boundaries
 
 | Directory | Responsibility | Dependencies |
 | --- | --- | --- |
 | `application` | Runtime session, workspace/tab projection, layouts, attachment lifecycle | Protocol and allocator types |
+| `attachments` | Bounded capture identities, sensitive storage, retention, marker learning and removal plans | Allocator, protocol and terminal value types |
 | `terminal` | Owned cells, frame validation, damage revisions, text metadata | Protocol and allocator types |
 | `terminal/font_grid.hpp` | Physical cell geometry and baseline arithmetic | Core preferences and C++ standard library |
 | `fonts` | Borrowed font faces, variation coordinates, shaping, glyph masks and physical metrics | Pinned FreeType/HarfBuzz and native match records; no Qt |

@@ -1389,7 +1389,7 @@ private:
     client_->input(pane->id, "printf '");
     QTest::keyClick(window_, Qt::Key_K, Qt::AltModifier);
     client_->input(pane->id, "\\n'\r");
-    QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).contains(QLatin1StringView("GUI_BINDING_KEYS")), runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).contains(QLatin1StringView("\nGUI_BINDING_KEYS ")), runtime_wait_ms);
     QTest::qWait(frame_settle_ms);
     const auto before_consume = screenText(pane->screen);
     QTest::keyClick(window_, Qt::Key_V, Qt::AltModifier);

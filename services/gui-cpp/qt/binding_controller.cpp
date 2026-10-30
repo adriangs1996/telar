@@ -178,7 +178,7 @@ std::optional<BindingRepeat> Application::bindingRepeat(BindingAction action) co
 }
 
 bool Application::handleBindingKey(QKeyEvent &event, QQuickItem &recipient, bool captures) {
-  return key_bindings_.route(event, recipient, captures);
+  return interceptAttachmentKey(event) || key_bindings_.route(event, recipient, captures);
 }
 
 void Application::interruptBindings() {

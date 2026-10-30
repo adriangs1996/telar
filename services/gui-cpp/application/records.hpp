@@ -241,6 +241,7 @@ struct Agent {
   AgentStatus status{};
   AgentBlockedReason blocked_reason = AgentBlockedReason::none;
   AgentProvider provider_kind = AgentProvider::unknown;
+  AgentAttachmentMarkers attachments = AgentAttachmentMarkers::none;
   AgentTitleState title_state = AgentTitleState::placeholder;
   String<Memory> title;
   String<Memory> provider_name;

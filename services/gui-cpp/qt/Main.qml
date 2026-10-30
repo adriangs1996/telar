@@ -104,6 +104,11 @@ Window {
         colors: telar.colors
     }
 
+    AttachmentModal {
+        anchors.fill: parent
+        application: telar
+    }
+
     Shortcut {
         sequences: ["Ctrl+Shift+P", "Meta+Shift+P"]
         onActivated: telar.execute(GuiController.Action.palette)

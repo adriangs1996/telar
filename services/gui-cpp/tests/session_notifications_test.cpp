@@ -112,6 +112,8 @@ void activationNavigatesBySemanticTargetOnce() {
   Transport transport;
   Client client{memory, transport};
   openFirstPane(client, transport);
+  const std::array workspaces{WorkspaceListEntry{.workspace = 1, .name = "First", .path = "/first"}, WorkspaceListEntry{.workspace = 2, .name = "Second", .path = "/second"}};
+  deliver(client, WorkspaceList{.revision = 1, .entries = workspaces});
   std::array entries{agentSnapshotEntry()};
   entries.front().pane_id = 2;
   entries.front().location = {.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 2}, .tab_id = 2};
@@ -120,14 +122,30 @@ void activationNavigatesBySemanticTargetOnce() {
   client.publishNotification({.target = {.kind = NotificationTarget::Kind::pane, .id = 2}, .title = "Open pane", .message = {}, .link = {}});
   const auto pane_notice = client.notifications().items().front().id;
   require(client.activateNotification(pane_notice) && client.activeTab()->location.tab_id == 2 && client.activeTab()->focused_pane == 2, "an alert for an unseen agent must select its actual pane and workspace");
+  const auto destination = entries.front().location;
+  const std::array destination_panes{PaneDescriptor{.pane_id = 2, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+  deliver(client, TabSnapshot{.request_id = transport.last<RequestTabSnapshot>().request_id, .location = destination, .panes = destination_panes});
+  const auto arrival = transport.last<OpenPane>();
+  deliver(client, PaneOpened{.request_id = arrival.request_id, .pane_id = 2, .location = destination, .pane_generation = 1});
+  require(!client.requestsPending(), "the unseen-pane notification must finish its canonical attachment and tab snapshot");
   const auto acknowledgements = transport.count(ClientTag::acknowledge_agent);
   require(!client.activateNotification(pane_notice) && transport.count(ClientTag::acknowledge_agent) == acknowledgements, "repeated activation must not send duplicate acknowledgements");
 
   client.publishNotification({.target = {.kind = NotificationTarget::Kind::tab, .id = 1}, .title = "Open tab", .message = {}, .link = {}});
   require(client.activateNotification(client.notifications().items().front().id) && client.activeTab()->location.tab_id == 1, "a tab target must resolve its current workspace membership");
+  const auto returning = transport.last<OpenPane>();
+  deliver(client, PaneOpened{.request_id = returning.request_id, .pane_id = 1, .location = client.activeTab()->location, .pane_generation = 1});
+  require(!client.requestsPending(), "returning to an already loaded tab must complete its pane attachment");
   require(client.notificationTargetVisible({.kind = NotificationTarget::Kind::pane, .id = 1}), "a pane already present in the active layout must be suppressed in presentation");
   client.publishNotification({.target = {.kind = NotificationTarget::Kind::workspace, .id = 2}, .title = "Open workspace", .message = {}, .link = {}});
-  require(client.activateNotification(client.notifications().items().front().id) && client.activeTab()->location.workspace.id == 2, "a workspace target must reuse the normal workspace-selection flow");
+  require(client.activateNotification(client.notifications().items().front().id), "a workspace notification must be admitted once");
+  const auto opening = transport.last<OpenPane>();
+  require(opening.target.kind == PaneTarget::Kind::workspace && opening.target.id == destination.workspace.id, "workspace activation must request the canonical destination through the normal selection flow");
+  deliver(client, PaneOpened{.request_id = opening.request_id, .pane_id = 2, .location = destination, .pane_generation = 1});
+  deliver(client, TabSnapshot{.request_id = transport.last<RequestTabSnapshot>().request_id, .location = destination, .panes = destination_panes});
+  const std::array destination_tabs{TabDescriptor{.tab_id = destination.tab_id, .pane_count = 1}};
+  deliver(client, WorkspaceSnapshot{.request_id = transport.last<RequestWorkspaceSnapshot>().request_id, .workspace = destination.workspace, .name = "Second", .tabs = destination_tabs});
+  require(!client.requestsPending() && client.activeTab()->location.workspace.id == destination.workspace.id, "canonical workspace arrival must complete before presenting the notification's target");
 }
 
 }

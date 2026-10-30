@@ -19,8 +19,8 @@ struct RgbaImageView {
   std::size_t width = 0;
   std::size_t height = 0;
 
-  [[nodiscard]] bool valid() const noexcept {
-    if (width == 0 || height == 0 || stride == 0 || width > maximum_extent || height > maximum_extent) {
+  [[nodiscard]] bool valid(std::size_t extent_limit = maximum_extent) const noexcept {
+    if (width == 0 || height == 0 || stride == 0 || width > extent_limit || height > extent_limit) {
       return false;
     }
 
@@ -61,6 +61,28 @@ public:
         const auto output = destination.subspan(((row * side) + column) * RgbaImageView::channels).first<RgbaImageView::channels>();
         const auto sample = source.width >= side && source.height >= side ? areaSample(source, Span::of(column, horizontal), Span::of(row, vertical)) : linearSample(source, Tap::of(column, horizontal), Tap::of(row, vertical));
         sample.write(output);
+      }
+    }
+
+    return true;
+  }
+
+  [[nodiscard]] static bool rectangle(RgbaImageView source, std::span<std::uint8_t> destination, std::size_t width, std::size_t height) noexcept {
+    if (!source.valid(std::numeric_limits<std::uint32_t>::max()) || width == 0 || height == 0 || width > RgbaImageView::maximum_extent || height > RgbaImageView::maximum_extent) {
+      return false;
+    }
+
+    if (width > std::numeric_limits<std::size_t>::max() / RgbaImageView::channels / height || destination.size() != width * height * RgbaImageView::channels) {
+      return false;
+    }
+
+    const Axis horizontal{.extent = source.width, .scale = static_cast<float>(source.width) / static_cast<float>(width)};
+    const Axis vertical{.extent = source.height, .scale = static_cast<float>(source.height) / static_cast<float>(height)};
+    for (std::size_t row = 0; row < height; ++row) {
+      const auto rows = Span::of(row, vertical);
+      for (std::size_t column = 0; column < width; ++column) {
+        const auto output = destination.subspan(((row * width) + column) * RgbaImageView::channels).first<RgbaImageView::channels>();
+        areaSample(source, Span::of(column, horizontal), rows).write(output);
       }
     }
 

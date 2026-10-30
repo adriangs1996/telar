@@ -9,6 +9,11 @@ Item {
     required property GuiController application
     property real ratio: 1
 
+    AttachmentShelf {
+        application: root.application
+        ratio: root.ratio
+    }
+
     Repeater {
         model: root.application.panes
 

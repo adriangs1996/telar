@@ -1,5 +1,243 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## Clipboard checkpoint verified; continue with Wayland (14:05 UTC)
+
+All clipboard source changes below are now implemented and verified in the
+scoped macOS checkpoint. Keep working: complete parity is NOT achieved.
+Final original-source comparisons: capture6815744/catalog2097152/markers234792/
+lifecycle2443096/preview666592 bytes exact, all five final C++ ASAN probes exit0.
+Lifecycle includes17operations/all7outcomes, learned numeric/path identities,
+reachable removal and ALL3quotas. Final dirs attachment-final-*-differential-1.
+Selected core/session coverage: four attachment groups and eight other groups
+PASS ASAN; notification group initially failed, reproduces exact HEAD headers,
+now corrected canonical fixture PASS Release/ASAN. No product navigation weakened.
+Final native full machine-window39 and Quick88 PASS/noQWARN orQFATAL. Metal
+explicitly checked (API6), shelf/modal screenshots retained. First fullwindow
+38/1 failed external readiness; same-binary isolated case passes3. Final host
+follows AppKit activation journal, waits a different activation after ready is
+removed instead of refocusing a retired window; full39 passes. First Quick87/1
+failed while prior command was still echoing; wait now requires actual output
+row before exact consume-screen equality. Targeted3 and full88 pass. Failures
+retained, assertions/timeouts unchanged.
+
+NativeASAN source again FAIL56512bytes178allocations; previewPASS. Selected
+window assertions5PASS but ACTUALexit1 leaks578943bytes2932allocations. Full
+built-in ObjC table15/600 retained; leakdetect1/UBSANhalt1/noLSAN/no local
+suppressions. No access/UB seen, no leak attribution proved. Native leak gateOPEN.
+Final broad lint27 units qualified with one const fix plus two targeted reruns;
+Quick fixture lintPASS. Actual Neovim controller/catalog delivered clangd with
+empty diagnostics. Concurrent editor/CMake race and early archive verifier
+(missing manifest while archiver still ran) retained as preparation failures.
+
+measurements/clipboard-images.md, clipboard-images-validation.json and
+clipboard-images/verify_clipboard_images.py retain613artifacts/~15.4MB and942
+current-source hashes. Final verifier --check-current-source PASS. Full source
+epochs B/C/D in program-sources.tar.gz; nativeASAN used epochC (later D changes
+only fixture preparation/helpers and Quick barrier). Later source evolution must
+not rewrite this historical manifest. Original global visual/perf/Linux/leak
+gates remainOPEN. No paired shelf pixels or comparative clipboard timing yet.
+No Mac build/UI/benchmark active now. Unrelated personal-frame-delivery.md stays
+untracked/separate. HEAD before upcoming checkpoint commit is c49e0e510.
+
+NEXT: replace Linux QClipboard materialization with bounded Wayland pipe (5s)
+on worker, test provider stalls/overflow and real Qt Wayland negotiation. QEMU
+already installed. Owned Debian13 ARM64 VM is RUNNING: metadata in
+services/gui-cpp/out-dependencies/linux-clipboard-vm/launch*.json and qemu.pid;
+PID7158, SSH loopback55984, userparity. Use local/linux_clipboard_vm_exec.py;
+identity and known_hosts stay ignored in that VM directory; never archive keys.
+Official431882240byte cloud image SHA512verified, download.json records it.
+Qt6.8.2/Clang19/CMake3.31/Weston and dev deps installed, apt logs retained.
+All VM images/keys live ONLY here. Stop only ownedVM and remove its identity
+when qualification ends. Do not touch user runtime or other checkouts.
+
+Qt6.12 Wayland client moved into qtbase: pinned upstream private headers/source
+are in out-dependencies/qt-wayland-clipboard-reference with URLs/hashes;
+qtbase-sources.json is valid, earlier qtwayland URLs404 retained. Integration
+instance()->display()->currentInputDevice()->dataDevice()->selectionOffer()
+provides offer.receive(QString,intfd); use owned CLOEXEC pipe/nonblocking read,
+GUI-thread Wayland calls/flush only, worker poll+bounded zeroing. Data-control
+selection is present too; verify Qt6.8 headers/API before implementation. Qt
+private dependency must match installed version. No Linux source port yet.
+Continue native paired attachment pixels, input ownership and PARITY.md after
+this; checkpoint/commit is NOT finalization. Spanish updates<=60sec. No agents,
+other worktrees, publish or merge. Goal API remainsblocked/no resume method;
+explicit user continuation authorizes ongoing work.
+
+## Clipboard marker lifecycle and hidden-source correction (13:31 UTC)
+
+Supersedes old ACTIVE sessions below. Marker parsing/planning, stable-number/path
+learning, three-frame deletion reconciliation and actual dismiss-input wiring
+are implemented WIP. C++ core ASAN lifecycle vs unchanged Zig fixture2: 16384
+transitions, 2462960 bytes byte-exact, SHA419810c9d960508b818bffcc9dab44458664963ac8ae245e7990135fec0c2d2a.
+New reusable tools/check_attachment_lifecycle.py receipt at
+local/attachment-lifecycle-differential-2 confirms all17operations/all7outcomes,
+257numeric/191path observations/10reachable plans. NO quota-plan coverage yet.
+Ineffective fixture1 retained: its operation/flag correlation learned no markers;
+do not treat it as meaningful marker coverage. Marker reader differential:
+2138screens/234792bytes exact SHAe964520a9299e8549fe00a363ac2bb8208dd6e0eea30768fdd54b0d38b0b1ca6.
+Core capture/catalog/marker ASAN tests PASS before newest Qt ownership edits.
+
+Owned Cocoa window clipboard-native1 actually PASS4/noQWARN orQFATAL, binary
+SHA ccaf825a19f10ad0988b21183e31d4eed783e1e909f40eb614420286f735c570;
+private pasteboard + local wire runtime; no user clipboard/runtime changes.
+This precedes newest hidden-source/marker dismissal tests, not final acceptance.
+
+ACTIVE Release build82844 log attachment-background-release-build-1.log, started
+13:29:40. Do not edit C++ before ACTUAL exit. Targets telar-gui, machine-window,
+lifecycle-probe. Lint77677 log attachment-background-lint-1.log reported only
+marker_input bytes_ initializer, controller include hygiene, shelf string.contains,
+unused variant in catalogtest, const QSignalSpy in windowtest. Fix after build.
+CMake currently rerunning its ~90second Qt scanner. No native test/profile active.
+New window tests now exercise actual marker dismiss through PaneInput (DEL),
+physical Enter clears shelf, and standalone async capture adoption while local
+is hidden. NOT yet compiled/run. Original GuiAdapter.finish ALWAYS delivers to
+local client; clipboard_capture checks local focusedTarget. Source ownership
+must persist while hidden; success still needs valid local target/epoch. New
+setPrompt(prompt,presented) separates local capture target from visible prompt;
+synchronize uses local session even when remote active. Runtime replacement
+clears catalog/cancels reservation. AttachmentImage now drops node if new upload
+fails rather than displaying stale identity. NativeASAN56KiB leak stays open.
+No clipboard commit/report/archive/final PARITY acceptance yet. Keep working.
+
+## Clipboard shelf first GUI build and oracles (12:57 UTC)
+
+Supersedes ACTIVE build16393 below. Build1 failed QML because AttachmentImage
+was final (Qt derives QQmlElement); now non-final. Build2 ACTUALLY finished0,
+GUI SHA c2381f816321ee073a30c110024a021f55b695450e914b512ec32036b106fa3c.
+Six selected Release tests PASS: capture/catalog/layout/preview/native source/
+AgentReplica (clipboard-shelf-core-release-tests-1). Original preview oracle
+16,384 fit records+8rectangles/666592bytes EXACT SHA1316658ea4518669062d45d365d9e3411e5d3a30a5d532fc0eac963f7a1102d3;
+check_attachment_preview.py and build_attachment_preview_reference.py. Thin
+70000x1 and1x70000 included; all original fit/filter/premultiply code unchanged.
+First complete source epoch local/attachment-shelf-B holds925sourcefiles+binary
+identities (NO executables) frozen afterbuild2; no native GUI acceptance claimed.
+Broad unchanged lint11 PASS clipboard-shelf-lint-3. Two repeated focusedunits
+lint4 after extracting attachmentShelfChanged; poll session66646 ifneeded.
+
+ACTIVE build session1325 started12:57:27: gui-machine-window-test, log
+clipboard-window-release-build-1.log. No C++ edits untilACTUALexit. No UI/ASAN/
+benchmark active. Two NEW tests in machine_window_test.cpp:
+clipboardImagesReservePaneRowsAndOwnModalKeys (Apple only, actual wire fixture,
+physicalCtrl-V, async worker, reserve6rows, openmodal/eatX/Escape, clearprompt)
+and attachmentShelfAndModalLoadFromTheRegisteredQmlModule (bothplatforms).
+New test-only tests/platform/{private_clipboard.hpp,macos/private_clipboard.mm}
+redirects ONLY ownedprocess NSPasteboard.generalPasteboard IMP to an ARCblock
+capturing UNIQUE pasteboard, restorespreviousIMP/removesblock/releasesprivate
+board ondestruction. NEVER changes user clipboard/otherprocess. No globalmutable
+board needed. CMake adds .mm onlyApple withARC/stubflag/ASANwhenenabled. Needs
+compile/lint/functional tests; no test result yet. First run newtwo with offscreen
+software, retain failurestate; then nativecontrolledhost. Existing nativehelpers
+under local/validate_single_paint_retry.py and focused_retry_single_paint_*;
+use same ownedwindow/focus prep, no weakening assertions/timeouts.
+
+New model setter now retains attachment_resize_pending across partial failure,
+retries equal reservation. Modal events intercept KeyBindings.window BEFORE
+ShortcutOverride/nonterminal route aswellas Terminal; opensreleaseinputReleasing,
+QMLFocusScope takesfocus, closingrestores terminal. Held-key/nativeexact timing
+stillneeds original comparison; do NOT claim provenownership. Modal QML draws
+fullwindow8cols4rows margins/scrim.55/physical1pxedge. Shelf close ChromeText
+usespixelSize/emphasized (earlier wrongtypography/boldfixedbeforebuild2).
+AttachmentImage currently retains oldtexture if replacementupload fails; fix
+synchronize toreturnbool and dropnodeonfailure beforeacceptance, prevent wrong
+image under newidentity. Source/image lifetimes/final ASAN/native pixels/perf/
+Linux transfer remainopen. Marker dismissal still UNCONNECTED, learned numeric/
+path parsing/deletionreconcile notported; next requiredfeaturework. No source
+commit/report/archive/PARITYacceptance yet. Older nativeASAN56KiB failure remains.
+Keepworking; checkpoint is not completion.
+
+## Clipboard image shelf in progress (12:45 UTC)
+
+HEAD c49e0e510 committed the previous accepted single-paint pass. All new
+clipboard/attachment work is UNCOMMITTED WIP. Never end at this checkpoint.
+Goal API still reports blocked and has no resume method; the user's explicit
+resume authorizes continued work. No publish/merge/delegation/other worktrees.
+Spanish meaningful updates <=60sec; keep analysis under40sec between actions.
+
+ACTIVE Release build session16393, started12:45:10: telar-gui plus attachment
+layout/preview/capture/catalog, native source and agent replica tests. Log
+measurements/local/clipboard-shelf-release-build-1.log. NO C++ edits until its
+ACTUAL exit. No active UI/benchmark/ASAN job. It adds the first full Qt shelf/modal
+wiring; NOT yet compiled/qualified. Need inspect errors, finish marker lifecycle,
+native GUI regression/captures, broad lint/editor, sanitizers, Linux and measured
+performance. Do not mistake library/primitive tests for shelf completion.
+
+Core attachments/capture_state.hpp preserves original busy/validation/exhaustion
+order and exact capture-ID/pane-generation reserve/finish/cancel behavior.
+C++ vs unchanged original sources:65536 records/6815744bytes byte-exact, all9
+outcomes (local/attachment-capture-differential-{1,2}). Catalog/sensitive_bytes
+bounds4slots/32MiB retained/source/PNG/36M pixels, explicit allocator, volatile
+secure erasure, late render-lease retirement, sorted identities/modal/target.
+Original GenericCatalog probe16384 transitions/2097152bytes byte-exact/all7
+outcomes (attachment-catalog-differential-1). Original excludes UINT64_MAX from
+oldest candidate via strict less-than; port preserves that detail. Probe does
+NOT yet exercise byte quota, markers or full renderer. Build original oracles
+with tools/build_attachment_{capture,catalog}_reference.py and compare via
+check_attachment_capture.py --domain capture|catalog. Source copies unchanged,
+only thin module exports/deterministic delivery fixture. Keep failed first
+capture build's unreachable-else log; second reference builds.
+
+Native macOS source retains pasteboard revision on GUI, ImageIO materialization/
+normalization on worker. PNG/TIFF/JPEG and max16ownedregular fileURLs; NOFOLLOW/
+NONBLOCK/CLOEXEC/fstat owner validation, bounded read, metadata before decode,
+bounded PNG consumer. GUI source tested with UNIQUE pasteboard, never global
+user clipboard. First native Release source test passes allformats/revision,
+regular/symlink/FIFO/sparse32MiB+1. Native ASAN instrumented mm explicitly: core
+capture/catalog clean, native source actual FAILED leaks56512bytes178allocations;
+no access/UB, full ObjC table6/240 retained; detect_leaks1/UBSANhalt1/noLSAN/no
+local suppressions. Stacks include ImageIO/CoreGraphics and BOTH fixture encoder
+and source encoder; no causal attribution proved. Needs final source rerun.
+C helper clipboard_image_file.c isolates the POSIX open ABI without variadic
+C++ calls; same exact open flags. Broad native/core lint7 PASS at local/
+clipboard-native-lint-4 before subsequent header edits. Do not extrapolate final.
+
+Qt preview decoder keeps max256thumbnail/max2048side/max2Mipixels modal,
+reuses ArtworkResize area filter via new rectangle method; default square path
+unchanged. RgbaImageView.valid optional extent arg permits thin up to uint32
+sources; existing default remainsuint16. Secure externally-owned QImage buffers
+are released through explicit allocator, decoded Qt buffers erased. Five latest
+Release tests PASS (capture/catalog/native/preview/agent replica), including
+2x3 exact premultiplied pixels and70000x1 aspect. Library build clipboard-preview-
+release-build-2 actually finished0. First previewbuild1 failed a signed row-stride
+narrowing, retained. Previewlint2 only missing Result.error initializer, nowfixed;
+needs final rerun. Worker oneactive+onequeued, joined destructor and move-owned
+results. Immediate failure continuation now via queued Qt signal, not recursion.
+Linux source currently copies bounded encoded PNG through QClipboard on GUI,
+validates/decodes in worker: no Linux build/test yet, provider transfer can block/
+allocate before size known and lacks original5s Wayland pipe deadline. OPEN.
+
+Discovered AgentReplica dropped wire AgentSnapshotEntry.attachments. Added
+Agent.attachments + assign, regression identity/reorder/replacement/none; passes
+latest Release. IMPORTANT target.pane_generation comes from AGENT runtime
+snapshot, not local attachment_generation. New prompt/job carries independent
+attachment_generation plus MachineClientKey/runtime_generation to reject ABA.
+
+Current new WIP integration: PaneBottomReservation and PaneLayout reserve
+shorten OUTER pane then recalc inner, min shelf3/pane3/preferred6; central Session
+setter updates all layouts/newtabs and runtime resize. New layouttest pending.
+AttachmentShelf QObject owns capture state/catalog/worker, explicit prompt and
+source epochs, QML items/modal, limit/failure reporting, clear-on-submit (stable/
+path trailing backslash uses hardware or isolated inverse cursor). AttachmentImage
+QSG node retains texture and only uploads cache-key changes; thumbnailhalftexel
+inset vs fullmodalUV. QML shelf + whole-window modal (8cols/4rows, scrim.55,
+physical1px border). Application.input now returns delivery bool, TerminalItem
+requests optional capture only AFTER successful physical initial Ctrl-V delivery.
+All of this after12:38 is UNBUILT until session16393 finishes. Marker dismiss
+signal NOT yet connected to navigation/removal planning; learned/path marker
+identity and deletion reconciliation NOT yet ported. Modal global key/shortcut,
+held-pointer/input ownership needs fixing: Application.handleBindingKey guards
+terminal, but KeyBindings.eventFilter routes non-terminal directly; ShortcutOverride
+may still allow shortcuts. Opening modal must release old held input using existing
+inputReleasing and restore focus on close. Add focused regressions.
+
+Other known integration review: attachmentKey function try catches optional
+capture/reservation errors. Session.setAttachmentReservation commits state before
+resize and returns early on equal value; transport partial failure needs retry
+state (must fix). Confirm new tabs/restored layouts always inherit reservation.
+Native image allocation-failure/lifetime tests, shelf/bytequota oracles, source
+headers direct includes, new broad lint, actual delivered Neovim, native captures
+and paired performance all remain. Older personal-frame-delivery.md still separate
+untracked. No clipboard reports/manifests/archive/commit yet.
+
 ## Personal continuation checkpoint
 
 ### Final single-paint pass verified and archived (11:55 UTC)
