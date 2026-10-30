@@ -10,6 +10,9 @@
 #include "qt/history_loading_layout.hpp"
 #include "qt/history_selection_layout.hpp"
 #include "qt/history_empty_layout.hpp"
+#include "qt/history_footer_layout.hpp"
+#include "input/history_hover.hpp"
+#include "presentation/history_footer.hpp"
 #include "input/wheel_accumulator.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "ui/bundled_fonts.hpp"
@@ -51,8 +54,11 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstddef>
 #include <limits>
 #include <memory>
+#include <span>
+#include <variant>
 
 namespace {
 
@@ -866,6 +872,98 @@ class HistoryControlsTest final : public QObject {
     metadata->setProperty("record", historyRecord(entry, {}));
     QTRY_VERIFY_WITH_TIMEOUT(metadata->property("text").toString().startsWith(QStringLiteral("capture cut short, cannot paste")), wait_ms);
     QCOMPARE(metadata->property("facts").toList().front().toMap().value(QStringLiteral("color")).toString(), QStringLiteral("yellow"));
+  }
+
+  Q_SLOT static void footerHoverTargetsPreserveChoicePrecisionAndRenderedBounds() {
+    QQuickWindow window;
+    QQmlEngine engine;
+    auto state = historyFooterState();
+    constexpr auto revision = std::numeric_limits<std::uint64_t>::max();
+    constexpr std::uint64_t generation = 41;
+    state.insert(QStringLiteral("revision"), QString::number(revision));
+    state.insert(QStringLiteral("selection"), 2);
+    auto footer = createChrome(engine, QStringLiteral("HistoryFooter"), {
+        {QStringLiteral("state"), state},
+        {QStringLiteral("colors"), themeColors({})},
+        {QStringLiteral("pixelSize"), small_pixels},
+        {QStringLiteral("width"), wide_width},
+        {QStringLiteral("height"), footer_height},
+    });
+    footer->setParentItem(window.contentItem());
+    window.resize(wide_width, footer_height);
+    QVERIFY(showComponentWindow(window, wait_ms));
+    const auto *layout = qobject_cast<HistoryFooterLayout *>(footer.get());
+    QVERIFY(layout != nullptr);
+    std::array<HistoryHoverTarget, HistoryFooter::capacity> targets;
+    constexpr std::size_t browse_count = 3;
+    QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), browse_count, wait_ms);
+    const auto *submit = std::get_if<HistoryFooterIdentity>(&targets.front().identity.action);
+    QVERIFY(submit != nullptr);
+    QCOMPARE(submit->action, HistoryFooterAction::submit);
+    QCOMPARE(submit->choice.revision, revision);
+    QCOMPARE(submit->choice.index, std::size_t{2});
+    QCOMPARE(targets.front().identity.generation, generation);
+    const auto *hint = hintForAction(*footer, QStringLiteral("submit"));
+    QVERIFY(hint != nullptr);
+    const auto bounds = hint->mapRectToScene(hint->boundingRect());
+    const auto scale = window.effectiveDevicePixelRatio();
+    QCOMPARE(targets.front().bounds.x, static_cast<float>(bounds.x() * scale));
+    QCOMPARE(targets.front().bounds.y, static_cast<float>(bounds.y() * scale));
+    QCOMPARE(targets.front().bounds.width, static_cast<float>(bounds.width() * scale));
+    QCOMPARE(targets.front().bounds.height, static_cast<float>(bounds.height() * scale));
+    const auto identity = targets.front().identity;
+    state.insert(QStringLiteral("enterRuns"), true);
+    footer->setProperty("state", state);
+    QVERIFY(waitForSynchronizedFrame(window, wait_ms));
+    QCOMPARE(layout->hoverTargets(generation, targets), browse_count);
+    QCOMPARE(targets.front().identity, identity);
+    state.insert(QStringLiteral("selection"), 3);
+    state.insert(QStringLiteral("revision"), QString::number(revision - 1));
+    footer->setProperty("state", state);
+    QVERIFY(waitForSynchronizedFrame(window, wait_ms));
+    QCOMPARE(layout->hoverTargets(generation, targets), browse_count);
+    QVERIFY(targets.front().identity != identity);
+    submit = std::get_if<HistoryFooterIdentity>(&targets.front().identity.action);
+    QVERIFY(submit != nullptr);
+    QCOMPARE(submit->choice.revision, revision - 1);
+    QCOMPARE(submit->choice.index, std::size_t{3});
+  }
+
+  Q_SLOT static void footerHoverTargetsRespectAbsenceAndKeepDisabledIdentities() {
+    QQuickWindow window;
+    QQmlEngine engine;
+    auto state = historyFooterState();
+    auto footer = createChrome(engine, QStringLiteral("HistoryFooter"), {
+        {QStringLiteral("state"), state},
+        {QStringLiteral("colors"), themeColors({})},
+        {QStringLiteral("pixelSize"), small_pixels},
+        {QStringLiteral("width"), wide_width},
+        {QStringLiteral("height"), footer_height},
+    });
+    footer->setParentItem(window.contentItem());
+    window.resize(wide_width, footer_height);
+    QVERIFY(showComponentWindow(window, wait_ms));
+    const auto *layout = qobject_cast<HistoryFooterLayout *>(footer.get());
+    QVERIFY(layout != nullptr);
+    std::array<HistoryHoverTarget, HistoryFooter::capacity> targets;
+    constexpr std::size_t actions = 3;
+    constexpr std::uint64_t generation = 41;
+    QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), actions, wait_ms);
+    footer->setProperty("interactive", false);
+    QCOMPARE(layout->hoverTargets(generation, targets), actions);
+    QCOMPARE(layout->hoverTargets(generation, std::span{targets}.first(1)), std::size_t{1});
+    state.insert(QStringLiteral("inspecting"), true);
+    footer->setProperty("state", state);
+    QVERIFY(waitForSynchronizedFrame(window, wait_ms));
+    QCOMPARE(layout->hoverTargets(generation, targets), actions);
+    const auto *visit = std::get_if<HistoryFooterIdentity>(&targets[actions - 1].identity.action);
+    QVERIFY(visit != nullptr);
+    QCOMPARE(visit->action, HistoryFooterAction::visit);
+    state.insert(QStringLiteral("error"), QStringLiteral("fixture failure"));
+    footer->setProperty("state", state);
+    QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), std::size_t{0}, wait_ms);
+    footer->setVisible(false);
+    QCOMPARE(layout->hoverTargets(generation, targets), std::size_t{0});
   }
 
   Q_SLOT static void footerActionsNeedNoApplicationController() {

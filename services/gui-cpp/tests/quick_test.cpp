@@ -70,7 +70,9 @@
 #include <QSignalSpy>
 #include <QSizeF>
 #include <QTemporaryDir>
+#include <QTimer>
 #include <QUrl>
+#include <QVariant>
 #include <QWheelEvent>
 #include <QWindow>
 #include <QtCore/qbytearrayview.h>
@@ -147,6 +149,39 @@ QQuickItem *historyCardHint(const QQuickWindow &window, int selected, const QStr
 
   return nullptr;
 }
+
+class HistoryCardWaitTrace {
+public:
+  explicit HistoryCardWaitTrace(QQuickWindow &window) : window_(window) {
+    connection_ = QObject::connect(&window_, &QQuickWindow::afterAnimating, &window_, [this] { ++frames_; });
+  }
+
+  ~HistoryCardWaitTrace() {
+    QObject::disconnect(connection_);
+    if (!QTest::currentTestFailed()) {
+      return;
+    }
+
+    const auto *timer = window_.findChild<QTimer *>(QStringLiteral("agentStatusAnimation"));
+    const auto rows = test::visualItems(*window_.contentItem(), QStringLiteral("historyResult"));
+    qInfo() << "History card wait diagnostic: frames" << frames_ << "active" << window_.isActive() << "exposed" << window_.isExposed() << "rows" << rows.size() << "clock active" << (timer != nullptr && timer->isActive()) << "remaining ms" << (timer == nullptr ? 0 : timer->remainingTime());
+    for (auto *row : rows) {
+      for (const auto *card : test::visualItems(*row, QStringLiteral("historyRow"))) {
+        qInfo() << "History card state: index" << row->property("index") << "selected" << card->property("selected") << "open" << card->property("open") << "height" << card->height() << "visible" << card->isVisible();
+      }
+    }
+  }
+
+  HistoryCardWaitTrace(const HistoryCardWaitTrace &) = delete;
+  HistoryCardWaitTrace &operator=(const HistoryCardWaitTrace &) = delete;
+  HistoryCardWaitTrace(HistoryCardWaitTrace &&) = delete;
+  HistoryCardWaitTrace &operator=(HistoryCardWaitTrace &&) = delete;
+
+private:
+  QQuickWindow &window_;
+  QMetaObject::Connection connection_;
+  int frames_ = 0;
+};
 
 constexpr int runtime_wait_ms = 10'000;
 constexpr int frame_settle_ms = 100;
@@ -2109,6 +2144,7 @@ return {api_version=2, client={keybindings={
         QTest::mouseRelease(window_, held_button, Qt::NoModifier, release_position);
       }
     });
+    const HistoryCardWaitTrace trace{*window_};
     QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, release_position);
     client_->selectHistoryRow(1);
     QTRY_COMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 1);

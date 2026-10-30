@@ -6,6 +6,7 @@
 #include <utility>
 #include "history/choice.hpp"
 #include "presentation/history_actions.hpp"
+#include "presentation/history_footer.hpp"
 #include "application.hpp"
 #include "core/geometry.hpp"
 #include "history/entry.hpp"
@@ -69,6 +70,42 @@ QString Application::historyHoveredCardAction() const {
   }
 
   return {};
+}
+
+void Application::registerHistoryFooter(QQuickItem *footer) {
+  history_footer_ = footer;
+}
+
+QString Application::historyHoveredFooterAction() const {
+  const auto &identity = pointer_dispatcher_.historyHover().hovered();
+  const auto *footer = identity ? std::get_if<HistoryFooterIdentity>(&identity->action) : nullptr;
+  if (footer == nullptr) {
+    return {};
+  }
+
+  switch (footer->action) {
+  case HistoryFooterAction::submit: return QStringLiteral("submit");
+  case HistoryFooterAction::alternate: return QStringLiteral("alternate");
+  case HistoryFooterAction::inspect: return QStringLiteral("inspect");
+  case HistoryFooterAction::visit: return QStringLiteral("visit");
+  case HistoryFooterAction::none: return {};
+  }
+
+  return {};
+}
+
+int Application::historyHoveredFooterIndex() const {
+  const auto &identity = pointer_dispatcher_.historyHover().hovered();
+  const auto *footer = identity ? std::get_if<HistoryFooterIdentity>(&identity->action) : nullptr;
+
+  return footer != nullptr && footer->submission() ? static_cast<int>(footer->choice.index) : static_cast<int>(HistoryRowLayout::Index::missing);
+}
+
+QString Application::historyHoveredFooterRevision() const {
+  const auto &identity = pointer_dispatcher_.historyHover().hovered();
+  const auto *footer = identity ? std::get_if<HistoryFooterIdentity>(&identity->action) : nullptr;
+
+  return footer != nullptr && footer->submission() ? pointer_dispatcher_.historyHoverRevision() : QString{};
 }
 
 void Application::registerHistoryActions(QQuickItem *actions) {

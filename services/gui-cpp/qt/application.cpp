@@ -1,5 +1,6 @@
 #include "application.hpp"
 #include "input/history_hover.hpp"
+#include "history_footer_layout.hpp"
 #include "application/dependencies.hpp"
 #include "application/pane_layout.hpp"
 #include "application/records.hpp"
@@ -472,6 +473,11 @@ void Application::prepareFrame(PresentedFrame &frame) {
     const auto surface = historyScrollSurface(historyMetrics(), hover);
     for (const auto &target : frame.history_actions.targets) {
       hover.append({.identity = {.action = target.action, .generation = frame.history_actions.generation}, .bounds = target.bounds});
+    }
+
+    const auto *footer = qobject_cast<const HistoryFooterLayout *>(history_footer_.data());
+    if (footer != nullptr && footer->window() == window_) {
+      hover.count += footer->hoverTargets(dialog_generation_, std::span{hover.targets}.subspan(hover.count));
     }
 
     if (!historyLoading() && history_view_version_ == history.viewVersion()) {

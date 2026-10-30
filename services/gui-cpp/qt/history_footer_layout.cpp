@@ -1,5 +1,7 @@
 #include "history_footer_layout.hpp"
 #include "core/geometry.hpp"
+#include "history/choice.hpp"
+#include "input/history_hover.hpp"
 #include "core/metrics.hpp"
 #include "history_hint_projection.hpp"
 #include "presentation/history_actions.hpp"
@@ -20,6 +22,7 @@
 #include <cstdint>
 #include <limits>
 #include <string_view>
+#include <span>
 
 namespace telar::gui::qt {
 namespace {
@@ -96,12 +99,13 @@ void HistoryFooterLayout::prepareLabels() {
       .fuzzy = state.value(QStringLiteral("matchFuzzy")).toBool(),
       .has_query = !state.value(QStringLiteral("query")).toString().isEmpty(),
   };
-  const auto footer = HistoryFooter::resolve(options);
+  footer_ = HistoryFooter::resolve(options);
+  choice_ = {.index = static_cast<std::size_t>(std::max(0, state.value(QStringLiteral("selection")).toInt())), .revision = state.value(QStringLiteral("revision")).toString().toULongLong()};
 
   range_ = label(HistoryFooter::range(options).view());
   hints_.clear();
-  for (std::size_t index = 0; index < footer.count; ++index) {
-    const auto hint = footer.hints[index];
+  for (std::size_t index = 0; index < footer_.count; ++index) {
+    const auto hint = footer_.hints[index];
     hints_.append(QVariantMap{
         {QStringLiteral("key"), label(hint.key)},
         {QStringLiteral("word"), label(hint.word)},
@@ -130,6 +134,25 @@ QVariantMap HistoryFooterLayout::layout() const {
   result.insert(QStringLiteral("showError"), geometry_.error_visible);
 
   return result;
+}
+
+std::size_t HistoryFooterLayout::hoverTargets(std::uint64_t generation, std::span<HistoryHoverTarget> destination) const {
+  if (!isVisible() || window() == nullptr) {
+    return 0;
+  }
+
+  std::size_t count = 0;
+  for (std::size_t index = 0; index < geometry_.count && count < destination.size(); ++index) {
+    const auto action = footer_.hints[index].action;
+    if (action == HistoryFooterAction::none) {
+      continue;
+    }
+
+    const auto bounds = mapRectToScene(logical(geometry_.hints[index].bounds));
+    destination[count++] = {.identity = {.action = HistoryFooterIdentity{.action = action, .choice = choice_}, .generation = generation}, .bounds = {.x = static_cast<float>(bounds.x() * density_), .y = static_cast<float>(bounds.y() * density_), .width = static_cast<float>(bounds.width() * density_), .height = static_cast<float>(bounds.height() * density_)}};
+  }
+
+  return count;
 }
 
 void HistoryFooterLayout::updatePolish() {

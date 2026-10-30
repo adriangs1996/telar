@@ -73,6 +73,10 @@ bool PointerDispatcher::occupied() const noexcept {
 void PointerDispatcher::notifyHistoryHover() {
   const auto &identity = history_hover_.hovered();
   const auto *row = identity ? std::get_if<HistoryChoice>(&identity->action) : nullptr;
+  if (const auto *footer = identity ? std::get_if<HistoryFooterIdentity>(&identity->action) : nullptr; footer != nullptr && footer->submission()) {
+    row = &footer->choice;
+  }
+
   if (row != nullptr && history_hover_revision_value_ != row->revision) {
     history_hover_revision_value_ = row->revision;
     history_hover_revision_ = QString::number(row->revision);

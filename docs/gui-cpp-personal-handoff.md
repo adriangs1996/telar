@@ -1,5 +1,156 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## Footer hover archive FINAL FROZEN; commit then CONTINUE filters (23:38 UTC)
+
+Newhistory-footer-hover archiveFROZEN358artifacts2452sources6110257B. Offline/current-
+sourceverifiersPASS, exactsource/executable/authorityauditPASS. NEVERrerunarchive_footer
+orMotion/olderarchivers. LocalcommitthenCONTINUEglobalgoal(noFINALatcheckpoint).
+ExplicitstageownedmodifiedProduct/CMake/README/PARITY/tests/handoff,2newFooteroracle
+files,newreport/manifest/archivefolder; EXCLUDEpersonal-frame-delivery.md. Noactive
+builds/lints/GUIprocesses; ownedVM7158/55984 retained; globalgoalOPEN/APIblockedold.
+
+CurrentHEADcc8ea03d4 previousMotionFROZEN1037/2447/13284471B. Footerproductdescribedbelow
+completeinqualifiedscope. Qt hovermapsrows/cards/footer; Footer3props+typedprojection,
+noextra treewalk/perframeQVariant. Oracle659/34344 PASSMac+LinuxASAN1, legacy552/33926
+PASSboth. Negative7778of7904details; fixed+freshmotionALL21164FooterpixelsEXACT, full
+results567296EXACT, heldCard744576EXACT. Negative/fixed/rehovercurrentGUIidentities
+qualifiedsameHelper, baselinecc8eGUIcf2299retainedignoredoutdeps/history-footer-hover-
+before-1. Realgeneralmetadata954same/prefight/privatebase+findcleanup0allnativehosts.
+NativeMacinitialRelease1FAILmiddle/rightselectionwait10s(selected_copy availableat
+10050ms), NOTreopen. ActualcauseUNKNOWN, NOTfixed, modal_latency_gateOPEN. Unchanged
+repeat2sameQuickSHA5PASS0; trace3(withnewfailure-onlytestobserver)5PASS0, ASAN1 5PASS
+butactual1/leaks469617/2660,noaccessUB. Privatecleanup0,count954same. Observerclass
+HistoryCardWaitTrace testONLY,afterAnimatingframecount, onfailure printsrows/open/
+clock state; placedAFTERreleaseqScopeGuard so diagnosticsrunBEFOREcleanup, no timeout
+orassertionsrelaxed. Itneverfiredinpassingtrace3/ASAN1. MacComponent31PASSRelease0;
+ASAN31PASSbutactual8/leaks268052/1099. Missingdirectcstddeffromfirstlintfixedafter
+buildsidle; finalMac7unitlint3CLEANactual0, realNeovim10+Quickclean. LinuxASANbuild1
+and2/Releasebuild1actual0. NativeLinuxASAN1+Release1 each5PASSactual0, privateDisplay
+removed/compositor0. Component31both0. FinalLinux7unitlint1CLEAN,realNeovim10+Quick
+allDELIVEREDclean,idleQuickunchanged60s. SourceCLI/C++helperssnapshotDELTA56(12files),
+DELTA57(tests2files) alltar--touchrequiredavoidstaleABI. Componentprojection2newcases
+verifymaxu64choice/renderedbounds,enterRunsdoesNOTchangeHoverIdentity,none/disabled/
+error/hidden/span1bound. DO NOTchangeoldscopefrozenfiles now.
+
+LinuxfinalVMtar100members497043B SHA63d2bf3c3c5655be542cd342ded5f78b807b350dee9bdbb4802cafbd855d08db
+alreadyconsumedbyarchive/downloadvalidated. Allfooterevidencefrozen, no needrepeat.
+No localLSANsuppressions. Qt6.8compose147982/148olddependencygateOPEN(nottriggeredby
+thisnativeASAN1). MacASANexitgatesOPEN. FootersubmitactivationIdentitySTILLincludes
+enterRunswhereoriginalTarget.Actiondoesnot: separateinputparitygap, NOTchanged.
+
+NEXTFILTERNEGATIVE ALREADYVALID: local/history-filter-hover-negative-1 ACTUAL0,
+helperhistory_filter_hover_capture.py (owncloneFULLCarbon/Cocoaguard) modesinitial-
+filter/filter-rehover. Pointerbeforemodal[110,49]→[110,50], noafterMotion. Original
+Workspacebounds[81,39,74.5,24] physical[162,78,311,126],7152pixels6943diff; Agents5232
++Failed5600EXACT. `compare_history_filter_hover.py` declaresAXrects,nopadding/masks/
+alignment. Pointer-awaycontrol(history-footer-hover-fixed-1) ALL3EXACT. Negativeis
+OUTSIDEfooterfrozenarchive, retainedfornextcheckpoint. AftercommitcopyfinalGUI to
+outdeps/history-filter-hover-before-1/binary.json withNEWHEAD asbeforebaseline; no
+filterproductchangesyet. FooterGUIproducthasn'tchangedsincefixedcaptures,test-only
+observerdoesn'taffectGUIhash. SourceoriginalHistoryModal.chips572..665: select_scope
+payloadscope,select_authorpayloadauthor,toggle_failedconstant;namespace0default.
+Defaultheader8targets4scope,3author,failed. ExistingHistoryFiltersLayout cachesQML
+labels+geometry; HeaderQMLHistoryFilters passesstate.scope/effectiveScope andselected
+value,Author,Failed. HistoryFilterChip.qml currentlylocalActionPointerhover. Need
+extendboundedsemanticmaptofiltertypedidentity(group/payload;togglefailedNOselected
+boolinidentity), directlyregisteredHeaderLayoutprojection(noWidgetscan/alloc),
+insertFILTERSBEFORErows/cards/footer to matchoriginaldraworderchips→rows→inspect→
+search→footer. FooterremainsLAST. SourceQMLselectedORhoverpaintpreserved; selected
+chipscannotrevealhovernegative, unselectedWorkspaceworks. OriginalNamespace0rowselect
+vsfilteractionsdifferentuniontags; typeidentityseparates. Filteractionlabels All,
+Workspace,Directory,Pane; authorsYou,Agents,Both; Failed. Scope/authorlabelvalues
+canchangegeometrywithoutchangingtargetaction. Error/phase propertiesoriginalchips
+alwaysenabled; inspectsourcebeforegating. Extendoriginaloracle/probe, controlled
+negative→fixed+realmotion, existingrow/card/footerregressions, SDKmatrix/lint/editor.
+Noagents/otherworktrees/publish/merge. Don'ttouchuserRuntime35801/oldSway9469; owned
+orphan33034/private/tmpdircleanedverifiedandfrozeninMotion. Spanishupdates<=60sec
+(aim40),analysisUNDER100words/tool. UserdateOct31Madrid; UTCstillOct30 23:38.
+
+## Footer semantic hover IMPLEMENTED; native timeout audit ACTIVE (23:18 UTC)
+
+HEAD cc8ea03d4 commitsMotion/row/card checkpoint,1037artifacts2447sources13284471B,
+fullyFROZEN offline/current/auditsPASSbeforefooteredits. NEVERrerunMotionarchiveorold.
+UserglobalgoalcontinuesNOFINAL. Unrelatedpersonal-frame-delivery.mduntouched.
+
+CurrentFOOTERWIP10productfiles+CMake+testsmodified,2newtoolsuntracked. Coreinput/
+history_hover.hpp adds HistoryFooterIdentity{HistoryFooterAction,HistoryChoice};
+submissiononlysubmit/alternate; equalityignoreschoiceforinspect/visit. Variant3
+manualget_ifnothrowcmp(noSDKanalyzerthrows). SourceoriginalFooterNamespace5vsCard6,
+submitchoicesindex/revision; enter_runslabelsdoNOTchangeTarget.Actionidentity.
+Newprobe+oracle tools/history_footer_hover_probe.cpp/check_history_footer_hover.py:
+9targets2rows3cards4footer, selectedu64fieldprotocol397Bframe/output33B, original
+Dispatcher/Registryunchangedfacades. MacASAN1 PASS659sequences34344operationsactual0
+(local/history-footer-hover-reference-asan-1). Legacyrow/card552/33926ASANPASSactual0
+(local/history-footer-hover-legacy-reference-asan-1), scopeindependentCoreonly.
+
+QtFooterLayout cachesresolvedFooter+typedChoice duringprepareLabels; hoverTargets(gen,
+span) mapsfullphysicalhintboundsintoCALLERboundedstorage,skipnone/hidden/error,
+keepsdisabledidentities. AppregisterHistoryFooter(QQuickItem*) directQPointer, Frame
+capacity100+3+4, collectsFOOTERLASTafterrows/cards (matchesOriginaldraworder). Added
+App3hoverFooterprops(action/index/rev), existingcachedrevisionupdatedalsoforsubmits.
+HistoryFooter.qml optionalactionController, standalonefallbackMouseArea; modelpaint
+checksroleANDchoicefor2submits, stableinspect/visit. Panelpassescontroller. CMakeadds
+footerhoverprobe. Noactivationbehaviorchangesinthischeckpoint. Existingactivation-
+IdentityincludesenterRuns butoriginalTarget.Actiondoesnot: separatelaterinputgap.
+
+MacReleasebuild1 ACTUAL0 (38976), includesGUI/Quick/Historycontrols/newprobe. Source
+programfootercandidateGUIhashfromfixedcaptures; baselineMotionGUIcf2299frozenat
+out-dependencies/history-footer-hover-before-1/binary.json basecc8ea03d4. Causalnegative
+local/history-footer-hover-negative-1 originaldetailsRect[173.5,635,76,26],physical
+[347,1270,499,1322],7778/7904different;paste7020/run6240EXACT. Pointerbeforeopen[210,647]
+→[210,648], noafterMotion. Currentfixed1 ALL3EXACT, rehover1actualnative[211,648] also
+ALL3EXACT(21164pixels). Guardedhelpershistory_footer_hover_capture.py andcomparator
+compare_history_footer_hover.py localONLY; samefullCarbon+CocoaUUIDboards/count954
+unchanged. FooterhelperderivedfromMotionguard, modesinitial-footer/footer-rehover.
+DONOTeditfrozenMotionharness/archive. Needrow/card nativepairedregressionslater.
+
+Added2meaningfulQtprojectiontests inhistory_controls_test.cpp, verifyingmaxu64revision,
+selectionchanges,registeredbounds==renderedhintbounds,enterRunsidentitystable,
+none-scrollomitted,disabledkept,span1bounded,error/hiddenretire. Maccontrols31PASS0
+local/history-footer-hover-controls-1.log,rawLastTeststillreadable. Localpreparedslots
+history_footer_projection_test_slots.txt preserved. Lint1product5unitsCLEANactual0.
+Lint2same+test6unitsACTUAL1 ONLYmissingdirect<cstddef> forstd::size_t(newtests). Fixed
+sourceincludeAFTERbothdependentbuildsactual0 at23:18; NOBUILDAFTERINCLUDEFIXYET.
+NeedRelease+ASANcontrolsrebuild+freshlint(actualchecksnotweakened). Sourceonlyinclude
+fixdoesnotchangeproductGUIbinary; capturesremainqualifiedproductsourceotherwise.
+
+MacASANbuild1 ACTUAL0(5762) with31testsbutbeforecstddefinclude; LinuxASANbuild1 ACTUAL0
+(8642), synced12footerfilesDELTA56 --touch butguesttestsSTILLold29 (no97lines2tests).
+NeedDELTA57withFINALtests+include, --touch, ASANincrementalrebuildguest; thenRelease.
+Noactivebuilds/lintsnow. NOCPP/QMLeditswhiledependentbuildactive. Needstrict6unitsMac,
+Linuxincludes/transitiveheaderfloat; actualNeovimmodifiedunitsand3headers bothSDKs.
+NeedLinuxnewFooterOracle659/34344ASAN+Legacy552 core copies currentproductsynced56.
+
+CRITICAL NEWNATIVEFAILURE: firstMacRelease nativefixture viaNEWguardedwrapper label
+history-footer-hover-native-1 ACTUAL1,4PASS1FAIL,privatecleanup0/count954same. Failure
+QuickTest::historyCardActionsSurviveSelectionChanges atquick_test.cpp2158 inside
+MIDDLE/RIGHTBUTTON selectionloop, NOTmodalreopen! QTRYselected_copy()!=nullptr after
+previousisNull; QTest reports10000mstimeoutand10050mswouldhavesufficed. Keep10000
+unchanged; no diagnosisproven. ProductFootercodehasn'tchangedSelectionMotion/Clock.
+PreviouslyMotioncheckpointnative5PASS0 manyruns. Couldbeheldbutton/context-menu/
+framecadence/resourcecontention, DO NOTclaimcauseorfixwithoutproof. Testhelper
+historyCardHint nowrequiresHistoryRow.open==1 frompreviouscheckpoint.
+CurrentUNCHANGED-BINARYnativeREPEAT2 ACTIVE36950 at23:18, sameQuickSHA bb1cfe9c...,
+allbuildsandlintsSTOPPEDatstart. Useslocal/history_motion_native_test.py guarded,
+3slots5cases. Waitactual+logfailure. Ifrepeatfails, instrumentTESTONLYread-only
+snapshotsofHistoryResultindex,HistoryRowopen/selected,clockQTimeractive/deadline/frame
+count whilepredicatepending (no timeoutincrease, no productsemanticshortcut). If
+repeatpasses, preservefailureandcompare; don'terasefaileddeadlineascleanacceptance.
+NeedthenASANnativeandLinuxnative matrix plusFooterstates/captureproof.
+
+UseONLYguardedCocoa+Carbonhelperhistory_motion_native_test.py/ footer_capture.py;
+realgeneralmetadata954→954 guard + Qtpreflight everyGUI,base+findcleanup0. Old
+attachment_private_clipboard.dylibdoesNOTredirectQtCarbon,legacyisolationunqualified.
+StockQt6.8compose147982/148andMacgeneralexitLSANstillOPEN; no local suppression.
+VM QEMU7158/55984, userRuntime35801/oldSway9469untouched. Previousorphan33034+owned
+/tmp/gui-quick-test-uqPtSt cleanedverifiedSHA/privateargs receiptsinMotionarchive.
+No agents/otherworktrees/publish/merge. Spanishupdates<=60sec(aim40), ANALYSISstrict
+UNDER100words/tool; longanalysisagaincausesminutesofsilence,STOPIT. Persistentgoal
+APIblockedoldsessioncannotresume, continue manually. Footercheckpointnotfinal/global
+objectiveuntilfullparity; afterFooter filters/remaininginput/animationhitgeometry/
+inspector/nativeleaks/full-clientperf remainOPEN. UserenvironmentOct31Madrid; UTC
+Oct3023:18. Workspacegui-cpp-parity-personal-20261029ONLY.
+
 ## Motion/semantic hover archive FINAL FROZEN; commit then CONTINUE (23:03 UTC)
 
 Newmeasurements/history-semantic-hover-motion archiveFROZEN1037artifacts2447sources

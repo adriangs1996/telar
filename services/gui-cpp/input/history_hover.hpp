@@ -4,6 +4,7 @@
 #include "history/choice.hpp"
 #include "input/history_action_capture.hpp"
 #include "presentation/history_actions.hpp"
+#include "presentation/history_footer.hpp"
 #include <algorithm>
 #include <cstdint>
 #include <optional>
@@ -12,8 +13,21 @@
 
 namespace telar::gui {
 
+struct HistoryFooterIdentity {
+  HistoryFooterAction action = HistoryFooterAction::none;
+  HistoryChoice choice;
+
+  [[nodiscard]] bool submission() const noexcept {
+    return action == HistoryFooterAction::submit || action == HistoryFooterAction::alternate;
+  }
+
+  bool operator==(const HistoryFooterIdentity &other) const noexcept {
+    return action == other.action && (!submission() || choice == other.choice);
+  }
+};
+
 struct HistoryHoverIdentity {
-  std::variant<HistoryChoice, HistoryCardAction> action;
+  std::variant<HistoryChoice, HistoryCardAction, HistoryFooterIdentity> action;
   std::uint64_t generation = 0;
 
   bool operator==(const HistoryHoverIdentity &other) const noexcept {
@@ -30,7 +44,14 @@ struct HistoryHoverIdentity {
     const auto *card = std::get_if<HistoryCardAction>(&action);
     const auto *other_card = std::get_if<HistoryCardAction>(&other.action);
 
-    return card != nullptr && other_card != nullptr && *card == *other_card;
+    if (card != nullptr) {
+      return other_card != nullptr && *card == *other_card;
+    }
+
+    const auto *footer = std::get_if<HistoryFooterIdentity>(&action);
+    const auto *other_footer = std::get_if<HistoryFooterIdentity>(&other.action);
+
+    return footer != nullptr && other_footer != nullptr && *footer == *other_footer;
   }
 };
 

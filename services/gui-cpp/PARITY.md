@@ -4,6 +4,19 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [presented History footer hover evidence](measurements/history-footer-hover.md)
+adds namespace-correct footer identities, with selection/revision only on submits.
+A7778-pixel details-hint negative becomes exact in initial and actual-motion native
+controls; all21164 hint pixels and567296 result pixels match, and the held-card
+control retains744576 exact pixels. New original-source659/34344 and legacy552/33926
+oracles pass Mac/Linux sanitizers. Projection31 cases and final seven-unit lint
+plus real editors pass both SDKs. Native Linux Release/ASan pass five cases and exit0;
+Mac repeats pass five, but an initial10000ms middle/right-selection deadline failed
+and remains an open latency observation. Native Mac ASan exits1 with469617/2660
+leaks; component ASan exits8 with268052/1099 despite31 passing assertions. No timeout,
+assertion or leak check is relaxed. Header/filter hover, enter-runs activation
+identity, complete input/visual/performance and native latency/leaks remain open.
+
 The [History semantic hover and selection motion evidence](measurements/history-semantic-hover-motion.md)
 replaces scoped row-admission gates with presented row/card identities and the
 original140ms transition. Original-source hover552/33926 and motion530/32819

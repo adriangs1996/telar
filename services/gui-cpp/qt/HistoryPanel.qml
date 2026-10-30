@@ -337,6 +337,7 @@ Item {
     }
 
     HistoryFooter {
+        actionController: root.controller
         x: root.regions.footer.x
         y: root.regions.footer.y
         width: root.regions.footer.width

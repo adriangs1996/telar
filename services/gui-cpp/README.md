@@ -2255,3 +2255,10 @@ Cocoa and Carbon clipboard isolation is now verified by a bare Qt preflight and
 a metadata guard; earlier Cocoa-only receipts did not qualify Qt Carbon writes.
 Whole-window/platform visuals, other modal targets, dependency/native leaks and
 full-client performance remain open.
+
+[Presented History footer hover](measurements/history-footer-hover.md) extends the
+semantic map to footer actions. Native details hover now matches at keyboard
+opening and after actual motion, while projection tests retain large revisions,
+rendered bounds, disabled identities and static-hint omission. A missed native
+selection deadline remains recorded alongside successful repeats; complete modal
+latency, activation identity, header hover and full-client acceptance remain open.
