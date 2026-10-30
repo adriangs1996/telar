@@ -310,6 +310,7 @@ public:
       const auto *workspace = pane == nullptr ? nullptr : model_.workspaces.find(pane->location.workspace.id);
       if (workspace != nullptr && workspace->geometry_client == client.id && !pane->desktop_theme) {
         pane->terminal.configureColors(request);
+        flushInput(*pane);
       }
     }
   }

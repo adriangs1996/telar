@@ -549,6 +549,79 @@ void reports(Memory &memory) {
   require(drain(terminal).empty());
 }
 
+template <Allocator Memory>
+void reportLifecycle(Memory &memory) {
+  Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
+  constexpr std::string_view modes = "\x1b[?2031;2033;1004;2048;5522";
+  const auto command = [&](char final) {
+    terminal.feed(bytes(std::string{modes} + final));
+  };
+  const auto modesAre = [&](bool enabled) {
+    for (const unsigned mode : {2031, 2033, 1004, 2048, 5522}) {
+      terminal.feed(bytes("\x1b[?" + std::to_string(mode) + "$p"));
+      require(drain(terminal) == "\x1b[?" + std::to_string(mode) + (enabled ? ";1$y" : ";2$y"));
+    }
+    require(terminal.pasteEvents() == enabled);
+  };
+  terminal.configureClientFacts({.light = true, .visible = true, .focused = true});
+  command('h');
+  require(drain(terminal) == "\x1b[?999;1n\x1b[I\x1b[48;24;80;432;720t");
+  command('s');
+  command('l');
+  terminal.configureClientFacts({});
+  terminal.resize({90, 30, 8, 16});
+  require(drain(terminal).empty());
+  command('r');
+  constexpr std::string_view restored = "\x1b[?999;2n\x1b[O\x1b[48;30;90;480;720t";
+  require(drain(terminal) == restored);
+  modesAre(true);
+  command('r');
+  require(drain(terminal) == restored);
+  command('l');
+  command('s');
+  command('h');
+  require(drain(terminal) == restored);
+  command('r');
+  require(drain(terminal).empty());
+  modesAre(false);
+
+  command('h');
+  command('s');
+  require(drain(terminal) == restored);
+  terminal.feed(bytes("\x1b[!p"));
+  require(drain(terminal).empty());
+  modesAre(true);
+  command('l');
+  command('r');
+  require(drain(terminal) == restored);
+  modesAre(true);
+  terminal.feed(bytes("\x1b[?1049h"));
+  modesAre(true);
+  terminal.feed(bytes("\x1b[?1049l"));
+  modesAre(true);
+  terminal.configureClientFacts({.light = true, .visible = true, .focused = true});
+  require(drain(terminal) == "\x1b[?997;2n\x1b[?999;1n\x1b[I");
+  terminal.feed(bytes("\x1b" "c"));
+  require(drain(terminal).empty());
+  modesAre(false);
+  command('r');
+  require(drain(terminal).empty());
+  modesAre(false);
+  terminal.feed(bytes("\x1b[?996n\x1b[?998n"));
+  require(drain(terminal) == "\x1b[?997;2n\x1b[?999;1n");
+  command('h');
+  require(drain(terminal) == "\x1b[?999;1n\x1b[I\x1b[48;30;90;480;720t");
+
+  Terminal screens{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
+  screens.controlPolicy().checksum_report = true;
+  screens.feed(bytes("A\x1b[1#y\x1b[>1u\x1b[?u\x1b[?1049h\x1b[?u\x1b[>2u\x1b[?u\x1b[?1049l\x1b[?u\x1b[1;1;1;1;1;1*y"));
+  require(drain(screens) == "\x1b[?1u\x1b[?0u\x1b[?2u\x1b[?1u\x1bP1!~0041\x1b\\");
+  screens.feed(bytes("\x1b[!p\x1b[2;1;1;1;1;1*y"));
+  require(drain(screens) == "\x1bP2!~FFBF\x1b\\");
+  screens.feed(bytes("\x1b" "c\x1b[?u\x1b[3;1;1;1;1;1*y"));
+  require(drain(screens) == "\x1b[?0u\x1bP3!~0000\x1b\\");
+}
+
 
 }
 
@@ -582,6 +655,7 @@ int main(int argc, char **argv) {
   variedGraphemeRows(memory);
   sizeEncodings(memory);
   reports(memory);
+  reportLifecycle(memory);
   testPtyResponseQueue();
   require(budget.liveBytes() == 0);
   std::puts("Native control engine and response ownership tests passed");

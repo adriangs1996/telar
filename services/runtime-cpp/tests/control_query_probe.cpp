@@ -136,6 +136,17 @@ extern "C" bool query_probe_policy(void *context, std::uint32_t flags, const cha
   return true;
 }
 
+extern "C" bool query_probe_facts(void *context, bool light, bool visible, bool focused) noexcept {
+  auto &probe = *static_cast<Probe *>(context);
+  try {
+    const Probe::Active active{probe};
+    probe.terminal.configureClientFacts({.light = light, .visible = visible, .focused = focused});
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+
 extern "C" std::uint64_t query_probe_foreign_calls(void *context) noexcept {
   return static_cast<Probe *>(context)->foreign_calls;
 }

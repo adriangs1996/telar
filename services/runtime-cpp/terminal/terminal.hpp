@@ -192,7 +192,7 @@ public:
       }
     }
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_COLOR_PALETTE, palette.data()));
-    control_.invalidateColors();
+    control_.externalColorsChanged();
     dirty_ = true;
     force_ = true;
   }
@@ -200,7 +200,7 @@ public:
   void configureCursorColor(std::optional<std::array<Byte, 3>> color) {
     const GhosttyColorRgb rgb = color ? GhosttyColorRgb{(*color)[0], (*color)[1], (*color)[2]} : GhosttyColorRgb{};
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_COLOR_CURSOR, color ? &rgb : nullptr));
-    control_.invalidateColors();
+    control_.externalColorsChanged();
     dirty_ = true;
   }
 

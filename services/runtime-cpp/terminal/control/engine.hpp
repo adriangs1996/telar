@@ -230,8 +230,11 @@ public:
     }
   }
 
-  void invalidateColors() noexcept {
+  void externalColorsChanged() noexcept {
     state_.invalidateColors();
+    if (!closed_) {
+      reports_.changed(Report::scheme);
+    }
   }
 
   Clipboard<Memory> &clipboard() noexcept {
