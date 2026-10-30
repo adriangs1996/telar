@@ -109,6 +109,58 @@ void backpressure() {
   require(consumer.events.back() == "text:remaining");
 }
 
+void csiBurstBackpressure() {
+  struct PausingConsumer : Consumer {
+    bool pause = true;
+
+    bool complete(Sequence sequence) {
+      if (pause && events.size() == 2) {
+        accept = false;
+      }
+
+      return Consumer::complete(sequence);
+    }
+  };
+  SystemAllocator memory;
+  Parser parser{memory};
+  PausingConsumer consumer;
+  std::string input = "\x1b[5n\x1b[6n\x1b[?6nremaining";
+  require(parser.feed(bytes(input), consumer) == 13);
+  require(parser.blocked());
+  require(consumer.events == std::vector<std::string>{"1:5n:0", "1:6n:0"});
+  input.assign(input.size(), 'z');
+  consumer.pause = false;
+  consumer.accept = true;
+  require(parser.feed({}, consumer) == 0);
+  require(!parser.blocked() && parser.ground());
+  require(consumer.events.back() == "1:?6n:0");
+  require(parser.feed(bytes("remaining\x1b[12;"), consumer) == 14);
+  require(consumer.events.back() == "text:remaining");
+  require(parser.feed(bytes("34H"), consumer) == 3);
+  require(consumer.events.back() == "1:12;34H:0");
+
+  BudgetAllocator denied{memory, 0};
+  Parser retained{denied};
+  PausingConsumer blocked;
+  std::string long_query = "\x1b[5n\x1b[6n\x1b[";
+  long_query.append(254, '0');
+  long_query.append("5n");
+  bool failed = false;
+  try {
+    retained.feed(bytes(long_query), blocked);
+  } catch (const std::bad_alloc &) {
+    failed = true;
+  }
+  require(failed && denied.failures() == 1);
+  require(blocked.events == std::vector<std::string>{"1:5n:0", "1:6n:0"});
+  retained.discard();
+  require(retained.ground() && denied.liveBytes() == 0);
+  blocked.pause = false;
+  blocked.accept = true;
+  require(retained.feed(bytes("\x1b[5n"), blocked) == 4);
+  require(blocked.events.back() == "1:5n:0");
+}
+
 void stringHeaderClassificationOnce() {
   struct HeaderConsumer : Consumer {
     std::size_t classifications = 0;
@@ -337,6 +389,7 @@ int main() {
     partitions(input, {"4:Ga=q,i=9;AAAA:1", "0:\\:0"});
   }
 
+  partitions("\x1b[5n\x1b[6n\x1b[?6ntext\x1b[12;", {"1:5n:0", "1:6n:0", "1:?6n:0", "text:text"});
   partitions("A\x1b[6nB\x1b[?6n", {"text:A", "1:6n:0", "text:B", "1:?6n:0"});
   partitions("\x1bP$qm\x1b\\", {"2:$qm:1", "0:\\:0"});
   partitions("\x1b]4;1;?\a", {"3:4;1;?:2"});
@@ -355,6 +408,7 @@ int main() {
   apcLateStreaming();
   apcLimitAndAllocation();
   backpressure();
+  csiBurstBackpressure();
   stringHeaderClassificationOnce();
   boundedFuzz();
   oversizedRecovery();
