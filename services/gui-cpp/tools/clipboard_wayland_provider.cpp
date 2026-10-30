@@ -85,7 +85,7 @@ private:
 int main(int argc, char **argv) {
   const QGuiApplication application{argc, argv};
   const auto arguments = QCoreApplication::arguments();
-  if (arguments.size() != static_cast<int>(Argument::count) || !QGuiApplication::platformName().startsWith(QStringLiteral("wayland"))) {
+  if (arguments.size() != static_cast<int>(Argument::count) || (!QGuiApplication::platformName().startsWith(QStringLiteral("wayland")) && QGuiApplication::platformName() != QStringLiteral("xcb"))) {
     return 1;
   }
 
@@ -112,13 +112,17 @@ int main(int argc, char **argv) {
   constexpr int height = 300;
   window.resize(width, height);
   window.show();
+  if (QGuiApplication::platformName() == QStringLiteral("xcb")) {
+    window.requestActivate();
+  }
+
   QTimer readiness;
   QObject::connect(&readiness, &QTimer::timeout, &application, [&] {
     if (!window.isActive()) {
       return;
     }
 
-    if (!window.receivedInput()) {
+    if (!window.receivedInput() && QGuiApplication::platformName().startsWith(QStringLiteral("wayland"))) {
       QFile mapped{arguments.at(static_cast<int>(Argument::ready)) + QStringLiteral(".mapped")};
       if (!mapped.exists() && (!mapped.open(QIODevice::WriteOnly) || mapped.write(QByteArrayLiteral("mapped")) <= 0)) {
         QCoreApplication::exit(1);

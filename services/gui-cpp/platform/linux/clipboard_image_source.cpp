@@ -1,5 +1,6 @@
 #include "platform/clipboard_image_source.hpp"
 #include "platform/clipboard_image_pipe.hpp"
+#include "platform/clipboard_image_transfer.hpp"
 #include "platform/file_descriptor.hpp"
 #include "application/dependencies.hpp"
 #include "attachments/catalog.hpp"
@@ -22,6 +23,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <memory>
+#include <optional>
 #include <utility>
 
 namespace telar::gui::platform {
@@ -32,6 +35,7 @@ struct Transfer {
   ApplicationAllocator &memory;
   SensitiveBytes<ApplicationAllocator> png;
   runtime::FileDescriptor pipe;
+  std::shared_ptr<ClipboardImageTransfer> status;
 };
 
 void erase(QByteArray &bytes) noexcept {
@@ -51,7 +55,7 @@ ClipboardImageSource ClipboardImageSource::snapshot(ApplicationAllocator &memory
     throw ClipboardImageFailure{ClipboardImageError::no_image};
   }
 
-  auto transfer = makeOwned<Transfer>(memory, Transfer{.memory = memory, .png = SensitiveBytes{memory}, .pipe = runtime::FileDescriptor{}});
+  auto transfer = makeOwned<Transfer>(memory, Transfer{.memory = memory, .png = SensitiveBytes{memory}, .pipe = runtime::FileDescriptor{}, .status = {}});
 
   QByteArray encoded = mime->data(QStringLiteral("image/png"));
   try {
@@ -74,8 +78,8 @@ ClipboardImageSource ClipboardImageSource::snapshot(ApplicationAllocator &memory
   return ClipboardImageSource{transfer.release(), 0};
 }
 
-ClipboardImageSource ClipboardImageSource::fromPipe(ApplicationAllocator &memory, runtime::FileDescriptor descriptor) {
-  auto transfer = makeOwned<Transfer>(memory, Transfer{.memory = memory, .png = SensitiveBytes{memory}, .pipe = std::move(descriptor)});
+ClipboardImageSource ClipboardImageSource::fromPipe(ApplicationAllocator &memory, runtime::FileDescriptor descriptor, std::shared_ptr<ClipboardImageTransfer> status) {
+  auto transfer = makeOwned<Transfer>(memory, Transfer{.memory = memory, .png = SensitiveBytes{memory}, .pipe = std::move(descriptor), .status = std::move(status)});
 
   return ClipboardImageSource{transfer.release(), 0};
 }
@@ -114,7 +118,20 @@ AttachmentCapture<ApplicationAllocator> ClipboardImageSource::read(ApplicationAl
   const auto &transfer = *static_cast<const Transfer *>(native_);
   SensitiveBytes png{memory};
   if (transfer.pipe) {
-    png = ClipboardImagePipe::read(memory, transfer.pipe.get());
+    try {
+      png = ClipboardImagePipe::read(memory, transfer.pipe.get());
+    } catch (const ClipboardImageFailure &error) {
+      const auto failure = transfer.status ? transfer.status->failure() : std::nullopt;
+      if (failure && (error.code() == ClipboardImageError::read_failed || error.code() == ClipboardImageError::no_image)) {
+        throw ClipboardImageFailure{*failure};
+      }
+
+      throw;
+    }
+
+    if (const auto failure = transfer.status ? transfer.status->failure() : std::nullopt) {
+      throw ClipboardImageFailure{*failure};
+    }
   } else {
     png.append(transfer.png.view(), AttachmentLimits::maximum_png_bytes);
   }

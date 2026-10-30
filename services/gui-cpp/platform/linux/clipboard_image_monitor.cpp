@@ -239,6 +239,12 @@ private:
 ClipboardImageMonitor::ClipboardImageMonitor(ApplicationAllocator &memory)
     : memory_(memory),
       native_(nullptr, runtime::AllocationDeleter<Native, ApplicationAllocator>{memory}) {
+#if QT_CONFIG(xcb)
+  if (qGuiApp->nativeInterface<QNativeInterface::QX11Application>() != nullptr) {
+    xcb_.emplace(memory_);
+  }
+#endif
+
 #if QT_CONFIG(wayland)
   if (const auto *native = qGuiApp->nativeInterface<QNativeInterface::QWaylandApplication>(); native != nullptr && native->seat() != nullptr) {
     native_ = makeOwned<Native>(memory_, native->display(), native->seat());
@@ -248,8 +254,18 @@ ClipboardImageMonitor::ClipboardImageMonitor(ApplicationAllocator &memory)
 
 ClipboardImageMonitor::~ClipboardImageMonitor() = default;
 
+void ClipboardImageMonitor::cancel() noexcept {
+  if (xcb_) {
+    xcb_->cancel();
+  }
+}
+
 ClipboardImageSource ClipboardImageMonitor::snapshot() {
   const auto *const board = QGuiApplication::clipboard();
+  if (xcb_ && board != nullptr && !board->ownsClipboard()) {
+    return xcb_->capture();
+  }
+
   if (native_ && board != nullptr && !board->ownsClipboard()) {
     return ClipboardImageSource::fromPipe(memory_, native_->capture());
   }

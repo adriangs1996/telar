@@ -1,5 +1,115 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## XCB bounded transfer final verified; localcommitNEXT (18:10 UTC)
+
+AllXCBsource/headers/tools finalized. Finalcanonical-release-3 andcanonical-asan-1
+PASS16caseseach inclQt-cancel100ms scheduling+<500000usretirement; earlieraccepted
+close297us vsvalidnegative24905070us. Newcancelbeforefuturejoin API Mac/Wayland
+noop, Xcb closesstream/publisheserror/retireprotocol; noGUIjoinneedsGUIprogress.
+FinalWaylandregression2 PASS6ASAN/leakdetect. FinalLinux3ASANgroups PASSactual0
+Window37/rawpointer/pipe (allcurrentSource classlayoutsrecompiledGUI+window).
+All7Linuxunits broadlintpass (lint4other6 +finalprobe5 explicitoptionalguards);
+Mac2unitsfinalbroadlint actual0. ActualNeovimsharedSource.hpp initial2unusedinclude
+warnings correctedbyplatformguards; finaldeliveredemptyclangd. Bothlogsretained.
+MacnativeGUIselected3PASS actual1/leaks574102bytes2629allocations builtin15/600,
+privatecleanup0; Macdirectsourcetest actual1/56512bytes178alloc builtin6/240,
+firstCTest56704/181 retained. ASANdetectleaks1 UBSANhalt1 LSANunset noaccess/UB.
+Initialclosureinstrumentbuildfailedint64JSONambiguity; launchedoldbinarycontrol
+negative1 isINVALID, retained/rejected. Correctednegative2retirement4905070us
+actualprobe1 provesproblem; driverreturn0merelycollector, checksactualpercase.
+
+Newreportclipboard-xcb.md andREADME/PARITYdeps/scopeupdated. NEWarchive_xcb+
+verify_xcb finalized648artifacts2405sourceIDs, offline/current-source PASS32X11/
+6Wayland+2causalnegatives+Macfailuregates. Largeartificialsource.PNGcompressed
+byteexactbeforecommit (initialraw72MiBcopyreduced). ExcludesXauthority/privateSSH
+keys/disks/binaries. Authority/source-membershipauditPASS. Allhistoricalarchives
+unchanged. NeedlocalcommitEXCLUDEunrelatedpersonal-frame-delivery.md thenCONTINUE
+fullgoal. No checkpointfinalresponse/globalgateclosed.
+
+No builds/tests/nativeGUI/editoractive. VM7158/55984ownedretained. Next investigate
+remainingWayland seat/selectionlifecycle usingactualQtprivateheaders/officialsource
+(firstinspectbeforeassumingbug): currentNative holdsoneQtseatptr, registry global
+removeignored, active/seat changesunqualified. OtherremainingPARITYfunctional/
+visual/Linux/density/theme/generalnativeleaks/fullclientperformancegatesOPEN.
+Noagents/otherworktrees/publish/merge; Spanishupdates<=60sec; keepanalysisSHORT.
+
+## Final XCBRelease10 PASS; MacsharedLSAN failure retained (17:43 UTC)
+
+Finalcontrol6 ACTUAL0 all10NativeX11cases, binaryfrozenhashthroughrun. FinalASAN
+control7 ACTIVE70816 same10cases/globaldetectleaks1 UBSANhalt1 LSANunset ownedDBus.
+Macsharednative clipboard-image-source CTest3801 finished FAILED/LSAN56704bytes
+181allocations/builtin6/240ObjC, noaccess/UB observed. No Mac .mm implementation
+changed byXCB. Initialshellcat maskedCTestexit0! Testfailureexplicitinlog.
+NewdirectstandaloneMacsharedASANrun ACTIVE recentexec torecordactualbinaryexit/env/
+SHA inlocal/clipboard-xcb-shared-mac-asan-direct-2.json andfull.log. KeepBOTHruns,
+no blindretrytogreen/nosuppressions/noleakreductionclaim. Needreadactualexit.
+NoCPPbuildactive; finalNativecppdelta27 frozen/lint3pass. Nextfinish7, Wayland
+regression/fullLinuxGUI+window rebuild dueclasslayout +corepipe/native-eventtests,
+finalMaclint/editorheaders asneeded, newXCBreport/archive/sourcecheck/checkpointthen
+CONTINUEfullgoal. Allhistoricalmanifestsimmutable. Spanishupdates<=60sec.
+
+## XCB bounded transfer implemented WIP; final controls ACTIVE (17:41 UTC)
+
+Localcheckpoints ef565fcc6 nativevisuals and b02cfde05 pointerownership committed,
+no publish/merge. Their archivedmanifests immutable/offlinePASS, current-source
+rightlyfails afternewXCBwork. Excludeunrelatedpersonal-frame-delivery.md always.
+Newcanonicaltools clipboard_wayland_provider/probe acceptxcbtestbackend (Wayland
+inputserialgateunchanged). Newtools/clipboard_x11_provider.py ctypesXlib owner
+forcesINCR, chunks, errors, holds, declared/unannouncedcaps, ownerchangemidtransfer.
+OwnedguestXvfb only viaxvfb-run -a -f <owned>/Xauthority -nolisten tcp, inside
+dbus-run-session. xauth alreadyinstalled, no newpackageactuallyinstalled.
+Allservers/providers terminatedbyownedcontrollers; Xauthorityentry clearedtozero
+afterrun, NEVERarchivecookie/auth/keymaterials. VM7158 SSH55984 remainsownedrunning.
+
+Beforeproductfixcontrol2 XCBnormal81bytesPASS, stallGUIblocked5001288us/0heartbeats,
+exit1NoImage (expectedok). Firstattemptcontrol1 failedmissingguestout-dependencies
+parent, preservedtooltrace; control2 actual0driver butcaseexit1 intentionalnegative.
+NewXCBplatformmonitor concretePIMPL atplatform/linux/xcb_clipboard_image_monitor.*
+usesQtQX11nativeconn onlyonGUI, Qtmandatednativeeventfilter+1msactivepolltimer,
+5internedatoms, own1pxinputonlyrequestorwindow/transfer. RequestssmallGetProperty
+16KiBmax andmetadatarepliesnonblockingxcb_poll_for_reply. ServerPropertyNotifytime
+precedesGetSelectionOwner/ConvertSelection; checksnotifyrequestor/atom/time.
+Supportsnormal+INCR, boundslower/actualsource+PNG, sendschunksviaNONBLOCK+CLOEXEC
+socketpair MSG_NOSIGNAL toexistingjoinedworker. No unboundedGUIimageallocation.
+Source+monitor shareallocator-ownedClipboardImageTransfer atomicfailurestatus
+(singleGUIproducer, publishbeforeclosingFD) so validPNGprefix+protocolfailure
+cannotbeadopted. Source read mapsEOF/readfailure throughstatus whilequota errors
+retainprecedence. Qtself-ownedclipboard andWaylandexistingpaths retained.
+CMakeLinuxPkgConfigxcb REQUIRED/newCPP, headerLinuxonlyoptionalXcbwrapper.
+Native transferwindow/cookies/FD/reply erased/freedondrain/cancel/destruction.
+RAIIfreefunctionpointerdeleters ownlibxcb allocations; no lintweakening.
+
+Guestsource delta24tools,25implementation,26lint+timestamporder,27helperextract.
+Build68602/release1 and48866/release2 actual0. Firstlint1 rejectednativefreecall,
+includehygiene/paramnames/boolconversions/const; lint2 onlyinitializationnesting.
+Final6unitstrictlint3 actual0 afterinitializeAtom extraction (delta27), preserveall.
+Control3 normal/stallPASS: stallsnapshot104us/500heartbeats/readfailed5001ms.
+Control4 Release10casesPASS; control5 ASAN10casesPASS actual0/noleaks/UB/access,
+ASANdetect_leaks1 UBSANhalt1 LSANunset underownedDBus. Allacceptedpng/previewbytes
+exact. Casesvalid81+262225PNGbytes, prefixfailure, prefixstall5s/499callbacks, empty,
+malformedformat, declared33MiB, UNANNOUNCED33554433 actualbytes/340callbacks3.4s,
+ownerchangepreservesoldimage, refusal. Test5usespre-helper-extractbinary; semantics
+unchangedbutfinalbuild27042 actual0 bothRelease+ASAN. CurrentFINALReleasecontrol6
+ACTIVE69044, same10cases andbinarySHApinnedthroughrun, ownedXvfb/DBus; finalASAN
+control7driverpreparedBUTNOTSTARTED yet. Hostdriverhelperslocal/run_xcb_clipboard_
+control_{4,5,6,7}.py. Rawguestresults inside/home/parity/telar/services/gui-cpp/
+out-dependencies/clipboard-xcb-control-N; hostVMdirdriverslogs retained.
+
+MacsharednativeASANbuild27733 actual0 (Qtconfigure107.7s), clipboardImageSource
+CTest ACTIVE3801, loglocal/clipboard-xcb-shared-mac-asan-tests-1.log. Newshared
+headersMaccompilePASS, no QtGUIbehaviorchangeMac. NeedACTUALtestexit.
+OfficialQt6.8.2Xcbclipboard/nativeinterface source fetchedviaurllib into local/
+qt6.8.2-qxcb*.{cpp,h}; ownsMode Release onlycachedtimestamp, no blockingimage
+materializationinproduct beforeXcb snapshot. Sources primaryupstreamGitHub.
+
+NEXT: finishfinalcontrol6 thenASAN7 (do not editprovider/productduringcases),
+regressWayland6cases withnewSource/status/monitor, buildfullLinuxGUI+window37
+(classlayouts changed headers! oldgui-quick stale), corepipe/selectedASANtests,
+Macsharedtest/lint/editor header. Additionallifecycle/owner/abort cases asjustified.
+Freeze NEWclipboard-xcb report/archive/verifier/PARITY/README deps thenlocalcommit
+andCONTINUE fullgoal. No newXCBarchive/manifests yet; no globalgatesclosed.
+Spanishupdates<=60sec mandatory, avoidlonganalysiswithouttools/updates!
+
 ## Pointer ownership follow-up verified; local commit NEXT (17:21 UTC)
 
 TwoQMLfixes andheld3button regression qualified. Final6same-binary actualnative

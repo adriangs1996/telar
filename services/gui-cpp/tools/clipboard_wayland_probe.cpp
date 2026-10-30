@@ -67,8 +67,8 @@ public:
   ClipboardProbe(QString expected, QString output)
       : expected_(std::move(expected)),
         output_(std::move(output)),
-        worker_(memory_) {
-    connect(&worker_, &ClipboardImages::ready, this, &ClipboardProbe::completed);
+        worker_(std::in_place, memory_) {
+    connect(&*worker_, &ClipboardImages::ready, this, &ClipboardProbe::completed);
     connect(&ticker_, &QTimer::timeout, this, &ClipboardProbe::tick);
     connect(&watchdog_, &QTimer::timeout, this, [this] { write(QStringLiteral("ClipboardProbeDeadline")); });
   }
@@ -85,6 +85,10 @@ public:
     constexpr int height = 400;
     window_.resize(width, height);
     window_.show();
+    if (QGuiApplication::platformName() == QStringLiteral("xcb")) {
+      window_.requestActivate();
+    }
+
     constexpr std::chrono::milliseconds poll{10};
     constexpr std::chrono::seconds deadline{15};
     ticker_.start(poll);
@@ -97,7 +101,7 @@ public:
 private:
   void tick() {
     ++heartbeats_;
-    if (started_ || !window_.isActive()) {
+    if (started_ || !window_.isActive() || !worker_) {
       return;
     }
 
@@ -110,12 +114,30 @@ private:
     started_ = true;
     initial_heartbeat_ = heartbeats_;
     elapsed_.start();
-    worker_.capture({.source = {.machine = {.slot = 0, .generation = 0}, .generation = 1}, .runtime_generation = 1, .attachment_generation = 1, .request = {.capture = {.id = 1, .target = {.pane_id = 1, .pane_generation = 1}}}});
+    worker_->capture({.source = {.machine = {.slot = 0, .generation = 0}, .generation = 1}, .runtime_generation = 1, .attachment_generation = 1, .request = {.capture = {.id = 1, .target = {.pane_id = 1, .pane_generation = 1}}}});
     snapshot_us_ = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::nanoseconds{elapsed_.nsecsElapsed()}).count();
+    if (expected_ == QStringLiteral("cancelled")) {
+      constexpr std::chrono::milliseconds cancellation_delay{100};
+      QTimer::singleShot(cancellation_delay, this, [this] { retire(); });
+    }
+  }
+
+  void retire() {
+    QElapsedTimer retiring;
+    retiring.start();
+    worker_.reset();
+    retirement_us_ = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::nanoseconds{retiring.nsecsElapsed()}).count();
+    write(QStringLiteral("cancelled"));
   }
 
   void completed() {
-    result_ = worker_.takeResult();
+    if (!worker_) {
+      write(QStringLiteral("MissingClipboardWorker"));
+
+      return;
+    }
+
+    result_ = worker_->takeResult();
     QTimer::singleShot(std::chrono::milliseconds::zero(), this, &ClipboardProbe::finish);
   }
 
@@ -133,7 +155,7 @@ private:
   void write(const QString &outcome) {
     ticker_.stop();
     watchdog_.stop();
-    QJsonObject record{{QStringLiteral("outcome"), outcome}, {QStringLiteral("expected"), expected_}, {QStringLiteral("snapshot_us"), snapshot_us_}, {QStringLiteral("elapsed_ms"), started_ ? elapsed_.elapsed() : 0}, {QStringLiteral("heartbeats"), static_cast<qint64>(heartbeats_ - initial_heartbeat_)}, {QStringLiteral("platform"), QGuiApplication::platformName()}, {QStringLiteral("qt_version"), QStringLiteral(QT_VERSION_STR)}};
+    QJsonObject record{{QStringLiteral("retirement_us"), retirement_us_}, {QStringLiteral("outcome"), outcome}, {QStringLiteral("expected"), expected_}, {QStringLiteral("snapshot_us"), snapshot_us_}, {QStringLiteral("elapsed_ms"), started_ ? elapsed_.elapsed() : 0}, {QStringLiteral("heartbeats"), static_cast<qint64>(heartbeats_ - initial_heartbeat_)}, {QStringLiteral("platform"), QGuiApplication::platformName()}, {QStringLiteral("qt_version"), QStringLiteral(QT_VERSION_STR)}};
     if (result_ && result_->capture) {
       record.insert(QStringLiteral("png_sha256"), digest(QByteArrayView{result_->capture->png.unsignedBytes()}));
       record.insert(QStringLiteral("png_bytes"), static_cast<qint64>(result_->capture->png.size()));
@@ -149,7 +171,8 @@ private:
     const auto bytes = QJsonDocument{record}.toJson(QJsonDocument::Indented);
     QFile output{output_};
     constexpr qint64 maximum_snapshot_us = 500000;
-    const bool accepted = outcome == expected_ && snapshot_us_ < maximum_snapshot_us;
+    constexpr qint64 maximum_retirement_us = 500000;
+    const bool accepted = outcome == expected_ && snapshot_us_ < maximum_snapshot_us && (expected_ != QStringLiteral("cancelled") || retirement_us_ < maximum_retirement_us);
     const bool written = output.open(QIODevice::WriteOnly) && output.write(bytes) == bytes.size();
     QCoreApplication::exit(accepted && written ? 0 : 1);
   }
@@ -166,7 +189,8 @@ private:
   qint64 snapshot_us_ = 0;
   bool started_ = false;
   std::optional<ClipboardImageResult> result_;
-  ClipboardImages worker_;
+  std::optional<ClipboardImages> worker_;
+  qint64 retirement_us_ = 0;
 };
 
 }
@@ -174,7 +198,7 @@ private:
 int main(int argc, char **argv) {
   const QGuiApplication application{argc, argv};
   const auto arguments = QCoreApplication::arguments();
-  if (arguments.size() != static_cast<int>(Argument::count) || !QGuiApplication::platformName().startsWith(QStringLiteral("wayland"))) {
+  if (arguments.size() != static_cast<int>(Argument::count) || (!QGuiApplication::platformName().startsWith(QStringLiteral("wayland")) && QGuiApplication::platformName() != QStringLiteral("xcb"))) {
     return 1;
   }
 

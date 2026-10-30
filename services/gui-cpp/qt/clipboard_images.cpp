@@ -28,6 +28,7 @@ ClipboardImages::ClipboardImages(ApplicationAllocator &memory, QObject *parent)
 
 ClipboardImages::~ClipboardImages() {
   task_.disconnect(this);
+  clipboard_.cancel();
   auto future = task_.future();
   if (!future.isValid()) {
     return;

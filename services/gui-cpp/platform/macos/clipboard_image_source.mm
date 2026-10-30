@@ -328,6 +328,8 @@ ClipboardImageMonitor::ClipboardImageMonitor(ApplicationAllocator &memory)
 
 ClipboardImageMonitor::~ClipboardImageMonitor() = default;
 
+void ClipboardImageMonitor::cancel() noexcept {}
+
 ClipboardImageSource ClipboardImageMonitor::snapshot() {
   return ClipboardImageSource::snapshot(memory_);
 }

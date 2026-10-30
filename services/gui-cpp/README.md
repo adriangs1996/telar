@@ -78,6 +78,13 @@ priority. Two retained negatives fail before correction; six final native contro
 match the main-client region. Remaining states, whole windows, native leaks and
 comparative performance are still open.
 
+The [bounded XCB clipboard path](measurements/clipboard-xcb.md) receives normal
+and incremental selections without materializing external PNG data on the GUI
+thread. It enforces source/PNG limits and a total deadline, rejects partial
+transfers, and cancels before joining the worker on close. Owned X11 and Wayland
+fixtures qualify transfer behavior; full visuals, native leaks and comparative
+full-client performance remain open.
+
 ## Boundaries
 
 | Directory | Responsibility | Dependencies |
@@ -1499,7 +1506,12 @@ use the same Unicode grapheme-width rules. Once that library is installed,
 the CMake/C++ build does not require a Zig compiler. For offline builds, CMake's
 `FETCHCONTENT_SOURCE_DIR_TELAR_FREETYPE` can name an extracted copy of that
 archive. The installed executable includes the FreeType and Ghostty licenses.
-Linux also requires Fontconfig development headers and libraries. The native
+Linux also requires Fontconfig, Wayland-client and libxcb development headers
+and libraries, plus Qt WaylandClient/WaylandClientPrivate matching the installed
+Qt version. Pkg-config resolves the native protocol libraries. The optional X11
+clipboard fixture requires Xvfb, xauth and libX11; the Wayland fixture requires
+Sway and wtype. Both fixtures use owned display servers. D-Bus session tooling
+is required for the sanitizer fixture's normal desktop-service lifetime. The native
 font matchers are compiled directly from the existing Zig GUI's C/Objective-C
 sources; the application and font-grid model contain no OS-specific calls.
 QRhi texture uploads require the GuiPrivate development headers matching the

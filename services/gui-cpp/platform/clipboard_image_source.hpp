@@ -3,11 +3,17 @@
 #include "application/dependencies.hpp"
 #include "attachments/catalog.hpp"
 #include "attachments/types.hpp"
-#include "platform/file_descriptor.hpp"
 #include <cstdint>
 #include <exception>
+#ifndef __APPLE__
+#include "platform/file_descriptor.hpp"
+#include <memory>
+#endif
 
 namespace telar::gui::platform {
+
+class ClipboardImageTransfer;
+class XcbClipboardImageMonitor;
 
 enum class ClipboardImageError : std::uint8_t {
   no_image,
@@ -51,9 +57,10 @@ public:
 
 private:
   friend class ClipboardImageMonitor;
+  friend class XcbClipboardImageMonitor;
   [[nodiscard]] static ClipboardImageSource snapshot(ApplicationAllocator &memory);
 #ifndef __APPLE__
-  [[nodiscard]] static ClipboardImageSource fromPipe(ApplicationAllocator &memory, runtime::FileDescriptor descriptor);
+  [[nodiscard]] static ClipboardImageSource fromPipe(ApplicationAllocator &memory, runtime::FileDescriptor descriptor, std::shared_ptr<ClipboardImageTransfer> status = {});
 #endif
   explicit ClipboardImageSource(void *native, std::int64_t revision) noexcept;
   void clear() noexcept;

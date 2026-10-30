@@ -1637,6 +1637,17 @@ window37 pass, with clean broad lint and actual Neovim diagnostics. This scopes
 additional pointer states; full physical ownership, full-window/platform visuals,
 native leaks and measured comparative performance remain open.
 
+The [bounded XCB image transfer](measurements/clipboard-xcb.md) adds asynchronous
+normal/INCR selection reception through16KiB replies and a worker socket. Both
+announced and actual source sizes are bounded; a published failure status rejects
+valid PNG prefixes followed by protocol errors. The original synchronous XCB
+control blocks the GUI for5s; the new receiver retains timer activity. A separate
+retirement negative waits4.9s until cancellation before joining removes that wait.
+Final provider and lifecycle qualification is recorded in the report. No original
+Zig X11 backend exists, so this is scoped Qt XCB correctness and responsiveness.
+Complete provider lifecycle, native visuals/leaks and measured full-client
+performance remain open.
+
 ## Remaining functional work
 
 | Area | Missing or incomplete behavior |
