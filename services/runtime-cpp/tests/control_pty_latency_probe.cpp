@@ -255,6 +255,12 @@ static int child(const char *report_path) {
   for (std::size_t index = 0; index < 32; ++index) {
     burst += "\x1b[5n";
   }
+  std::string styled;
+  for (std::size_t index = 0; index < 96; ++index) {
+    styled += "\x1b[1;32mcompiled\x1b[0m object.o\r\n";
+  }
+  styled += "\x1b[5n";
+
   const std::array workloads{
       Workload{"operating-status", "\x1b[5n", 1, 'n'},
       Workload{"cursor", "\x1b[6n", 1, 'R'},
@@ -263,6 +269,7 @@ static int child(const char *report_path) {
       Workload{"mixed", std::string(128, 'x') + "\x1b[6n", 1, 'R'},
       Workload{"unknown-then-status", "\x1b[55555n\x1b[5n", 1, 'n'},
       Workload{"ordinary-then-status", std::string(3584, 'x') + "\x1b[5n", 1, 'n'},
+      Workload{"styled-then-status", std::move(styled), 1, 'n', false, status_reply},
       Workload{"graphics-png-1x1", std::string{control_test::png_1x1_query}, 1, '\\', false, "\x1b_Gi=9;OK\x1b\\"},
       Workload{"graphics-png-512x512", std::string{control_test::png_512_query}, 1, '\\', false, "\x1b_Gi=9;OK\x1b\\"},
   };
