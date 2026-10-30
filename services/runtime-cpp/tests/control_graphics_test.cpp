@@ -6,6 +6,7 @@
 #include "runtime/media_service.hpp"
 #include "runtime/limit_service.hpp"
 #include "check.hpp"
+#include "one_shot_allocator.hpp"
 #include <filesystem>
 #include <fstream>
 #include <thread>
@@ -547,6 +548,46 @@ void orderedResizeFailure() {
   }
 }
 
+void semanticFailureDuringResume() {
+  control_test::OneShotAllocator upstream;
+  BudgetAllocator budget{upstream, 64 * 1024 * 1024};
+  SynchronizedAllocator memory{budget};
+  {
+    RuntimeModel model{memory};
+    Kqueue poller;
+    PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/control-semantic-failure.sock"}};
+    const std::array<std::string_view, 1> arguments{"/bin/cat"};
+    const Launch launch{.cwd = "/tmp", .arguments = arguments};
+    const TabLocation location{.workspace = {.id = 7}, .tab_id = 1};
+    auto &failed = panes.launch(launch, location, {80, 24, 9, 18});
+    auto &healthy = panes.launch(launch, location, {80, 24, 9, 18});
+    for (std::size_t index = 0; index < PtyResponseQueue::message_capacity; ++index) {
+      failed.terminal.feed(bytes("\x1b[5n"));
+    }
+    failed.terminal.feed(bytes("\x1b[5n\x1b]2;unavailable\x1b\\\x1b[5n"));
+    check(failed.terminal.hasPendingControl() && !failed.pty_responses->hasCapacity());
+
+    upstream.failNext();
+    panes.flushInput(failed);
+    bool processing_error = false;
+    checkGhostty(ghostty_terminal_get(failed.terminal.handle(), GHOSTTY_TERMINAL_DATA_VT_PROCESSING_ERROR, &processing_error));
+    check(processing_error && upstream.failures() == 1);
+    check(failed.output_closed && failed.close_requested && !failed.terminal.hasPendingControl());
+    check(failed.pty_responses->closed() && failed.pty_responses->empty());
+    panes.flushInput(failed);
+    check(failed.pty_responses->empty() && !failed.terminal.hasPendingControl());
+
+    healthy.terminal.feed(bytes("\x1b[5n"));
+    const auto reply = healthy.terminal.responses();
+    check(!healthy.output_closed && std::string_view{reinterpret_cast<const char *>(reply.data()), reply.size()} == "\x1b[0n");
+    const auto failed_id = failed.id;
+    const auto healthy_id = healthy.id;
+    panes.remove(failed_id);
+    panes.remove(healthy_id);
+  }
+  check(budget.liveBytes() == 0 && upstream.liveBytes() == 0);
+}
+
 void retainedAtomicFrames() {
   std::array<char, 64> directory;
   std::strcpy(directory.data(), "/tmp/telar-control-atomic-boundary-XXXXXX");
@@ -798,6 +839,7 @@ int main() {
   cancelBusyMedia();
   orderedMediaBoundaries();
   orderedResizeFailure();
+  semanticFailureDuringResume();
   retainedAtomicFrames();
   checkedAtomicSharedMemory();
   pngFailureCleanup();

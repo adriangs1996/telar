@@ -1,5 +1,6 @@
 #include "terminal/terminal.hpp"
 #include "graphics/media_terminal.hpp"
+#include "one_shot_allocator.hpp"
 #include <cstdio>
 #include <source_location>
 #include <stdexcept>
@@ -718,6 +719,43 @@ void reportLifecycle(Memory &memory) {
 
 }
 
+void semanticWriteFailure() {
+  control_test::OneShotAllocator upstream;
+  BudgetAllocator memory{upstream, 64 * 1024 * 1024};
+  {
+    auto queue = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, decltype(memory)>{memory});
+    {
+      Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, queue};
+      upstream.failNext();
+      bool failed = false;
+      try {
+        terminal.feed(bytes("\x1b]2;unavailable\x1b\\\x1b[5n"));
+      } catch (const TerminalError &error) {
+        require(error.result() == GHOSTTY_OUT_OF_MEMORY);
+        failed = true;
+      }
+
+      bool processing_error = false;
+      checkGhostty(ghostty_terminal_get(terminal.handle(), GHOSTTY_TERMINAL_DATA_VT_PROCESSING_ERROR, &processing_error));
+      require(failed && processing_error && upstream.failures() == 1);
+      const auto queued = terminal.responses();
+      require(std::string_view{reinterpret_cast<const char *>(queued.data()), queued.size()} == "\x1b[0n");
+
+      terminal.abortControl();
+      require(queue->closed() && queue->empty() && !terminal.hasPendingControl());
+      terminal.configureClientFacts({.light = true, .visible = true, .focused = true});
+      terminal.resumeControl();
+      try {
+        terminal.feed(bytes("\x1b[5n\x1b]52;c;?\x1b\\"));
+      } catch (const TerminalError &error) {
+        require(error.result() == GHOSTTY_OUT_OF_MEMORY);
+      }
+      require(queue->closed() && queue->empty() && !terminal.hasPendingControl());
+    }
+  }
+  require(memory.liveBytes() == 0 && upstream.liveBytes() == 0);
+}
+
 int main(int argc, char **argv) {
   SystemAllocator system;
   BudgetAllocator budget{system, 64 * 1024 * 1024};
@@ -744,6 +782,7 @@ int main(int argc, char **argv) {
   uniqueReplies(memory);
   clipboardWrites(memory);
   abortedControl(memory);
+  semanticWriteFailure();
   rowStateViews(memory);
   normalizedGraphemeBatches(memory);
   graphemeChecksums(memory);

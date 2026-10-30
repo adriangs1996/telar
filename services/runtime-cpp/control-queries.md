@@ -397,3 +397,13 @@ measurements. Small PNG now meets the declared equivalence margin against the
 frozen application. The new PTY cases validate complete PNG ACKs. This does
 not close the ordinary/styled/mixed throughput gaps or the Qt provider resource
 bound, and no overall task completion is claimed.
+
+
+### Semantic VT allocation failure
+
+[Failure-containment evidence](measurements/control-queries/semantic-oom-review.md)
+now covers injected title-allocation failure in a direct native feed and
+resumption behind a full response queue through real PaneService and private
+PTYs. The runtime owner cancels the failed generation before flushing its new
+responses; allocator ownership balances and a healthy pane remains usable.
+The final sticky error check is not a per-operation rollback mechanism.
