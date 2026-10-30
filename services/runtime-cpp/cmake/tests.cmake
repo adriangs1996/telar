@@ -39,6 +39,8 @@ add_executable(control-clipboard-lifetime-probe tests/control_clipboard_lifetime
 target_link_libraries(control-clipboard-lifetime-probe PRIVATE runtime-core)
 add_library(control-query-probe SHARED tests/control_query_probe.cpp tests/control_component_probe.cpp)
 target_link_libraries(control-query-probe PRIVATE runtime-core)
+add_executable(control-query-accounting-probe tests/control_accounting_probe.cpp)
+target_link_libraries(control-query-accounting-probe PRIVATE runtime-core)
 add_executable(control-queue-tests tests/control_queue_test.cpp tests/pty_response_queue_test.cpp)
 target_include_directories(control-queue-tests PRIVATE .)
 target_compile_options(control-queue-tests PRIVATE -Wall -Wextra -Wpedantic)
