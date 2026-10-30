@@ -301,7 +301,13 @@ private:
   }
 
   void csi(Sequence sequence) {
-    const auto parsed = Parameters::parse(sequence.body());
+    const auto body = sequence.body();
+    if (body == "5n") {
+      operatingStatus();
+      return;
+    }
+
+    const auto parsed = Parameters::parse(body);
     if (!parsed) {
       return;
     }
@@ -443,6 +449,18 @@ private:
     }
   }
 
+  void operatingStatus() {
+    if (!enabled_) {
+      return;
+    }
+
+    static constexpr std::array<std::uint8_t, 4> response{0x1b, '[', '0', 'n'};
+    if (!clipboard_.hasReply() && responses_.tryPushFixed(response)) {
+      return;
+    }
+    reply_.append("\x1b[0n");
+  }
+
   void status(const Parameters &parameters) {
     if (!enabled_ || parameters.count != 1) {
       return;
@@ -451,11 +469,7 @@ private:
     const auto request = parameters.values[0];
     const bool private_request = parameters.modifiers() == "?";
     if (request == 5 && !private_request) {
-      static constexpr std::array<std::uint8_t, 4> response{0x1b, '[', '0', 'n'};
-      if (!clipboard_.hasReply() && responses_.tryPushFixed(response)) {
-        return;
-      }
-      reply_.append("\x1b[0n");
+      operatingStatus();
     } else if (request == 6) {
       auto position = state_.cursor();
       if (state_.mode(origin_mode)) {
