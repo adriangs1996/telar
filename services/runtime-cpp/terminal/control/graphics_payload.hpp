@@ -2,8 +2,18 @@
 
 #include "../../text/base64.hpp"
 #include "graphics_base64_block.hpp"
+#include "graphics_base64_wide.hpp"
 
 namespace telar::runtime::control {
+
+inline constexpr auto graphics_base64_digits = [] {
+  std::array<std::uint8_t, 256> digits;
+  digits.fill(UINT8_MAX);
+  for (std::size_t index = 0; index < base64::alphabet.size(); ++index) {
+    digits[static_cast<std::uint8_t>(base64::alphabet[index])] = static_cast<std::uint8_t>(index);
+  }
+  return digits;
+}();
 
 // Graphics uses the standard alphabet with optional padding and ASCII
 // whitespace. Clipboard decoding remains strict and uses base64::decode.
@@ -26,6 +36,10 @@ inline std::optional<std::size_t> decodeGraphicsPayload(std::string_view encoded
     return true;
   };
   std::size_t offset = 0;
+  while (encoded.size() - offset >= graphics_base64_wide_input && output.size() - written >= graphics_base64_wide_output && decodeGraphicsWideBlock(encoded.data() + offset, output.data() + written)) {
+    offset += graphics_base64_wide_input;
+    written += graphics_base64_wide_output;
+  }
   while (encoded.size() - offset >= graphics_base64_block_input && output.size() - written >= graphics_base64_block_output && decodeGraphicsBlock(encoded.data() + offset, output.data() + written)) {
     offset += graphics_base64_block_input;
     written += graphics_base64_block_output;
@@ -45,8 +59,8 @@ inline std::optional<std::size_t> decodeGraphicsPayload(std::string_view encoded
     if (padding != 0) {
       return std::nullopt;
     }
-    const auto digit = base64::alphabet.find(byte);
-    if (digit == std::string_view::npos) {
+    const auto digit = graphics_base64_digits[static_cast<std::uint8_t>(byte)];
+    if (digit == UINT8_MAX) {
       return std::nullopt;
     }
     group[count++] = static_cast<unsigned>(digit);

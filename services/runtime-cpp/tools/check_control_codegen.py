@@ -42,14 +42,28 @@ def main():
         assert instruction in body
         changed.write_text(candidate[:start] + body.replace(instruction, '\tadd\tw1, w8, #2', 1) + candidate[end:])
         assert generated_functions(changed)[cursor] != functions[cursor]
+        aggregate = ('_probe:\n\tadrp\tx0, l_constinit.1@PAGE\n\tret\n\t.cfi_endproc\n'
+                     'l_constinit.1:\n\t.quad\tl_.str.1\n\t.quad\t3\n'
+                     'l_.str.1:\n\t.asciz\t"git"\n')
+        changed.write_text(aggregate)
+        original_aggregate = generated_functions(changed)
+        changed.write_text(aggregate.replace('l_constinit.1', 'l_constinit.27').replace('l_.str.1', 'l_.str.28'))
+        assert generated_functions(changed) == original_aggregate
+        changed.write_text(aggregate.replace('"git"', '"got"'))
+        assert generated_functions(changed) != original_aggregate
+        changed.write_text(aggregate.replace('\t.quad\t3', '\t.quad\t4'))
+        assert generated_functions(changed) != original_aggregate
     report = {'command': sys.argv, 'scope': __doc__,
               'label_only_renumbering_preserves_all_functions': True,
               'switch_table_byte_change_detected': True,
               'cursor_arithmetic_immediate_change_detected': True,
+              'aggregate_label_renumbering_preserves_function': True,
+              'aggregate_referenced_string_change_detected': True,
+              'aggregate_numeric_member_change_detected': True,
               'hashes': {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in
                          [Path(__file__), Path(__file__).with_name('compare_control_arm_codegen.py'), args.baseline, args.candidate]}}
     args.output.write_text(json.dumps(report, indent=2) + '\n')
-    print('Three codegen normalization controls passed')
+    print('Six codegen normalization controls passed')
 
 
 if __name__ == '__main__':

@@ -18,7 +18,7 @@ import subprocess
 import sys
 
 
-LOCAL_DATA = re.compile(r'\b(?:l_\.(?:str|constant)(?:\.\d+)?|lCPI\d+_\d+|[lL]JTI\d+_\d+|l_switch\.table\.[\w.$]+)\b')
+LOCAL_DATA = re.compile(r'\b(?:l_\.(?:str|constant)(?:\.\d+)?|l_constinit(?:\.\d+)?|lCPI\d+_\d+|[lL]JTI\d+_\d+|l_switch\.table\.[\w.$]+)\b')
 
 
 def uncomment(line):
