@@ -152,6 +152,42 @@ void saturation(Memory &memory) {
 }
 
 template <Allocator Memory>
+void borrowedRequestResume(Memory &memory) {
+  const auto check = [&](std::string request, std::string_view expected_reply) {
+    auto responses = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory});
+    Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, responses};
+    std::string expected(PtyResponseQueue::message_capacity, 'N');
+    expected.append(expected_reply);
+    for (std::size_t index = 0; index < PtyResponseQueue::message_capacity; ++index) {
+      require(responses->tryPush(bytes("N")));
+    }
+
+    request.reserve(8192);
+    terminal.feed(bytes(request));
+    require(terminal.hasPendingControl());
+    std::fill(request.begin(), request.end(), 'X');
+    std::string{}.swap(request);
+
+    require(drain(terminal, 1) == expected);
+    require(!terminal.hasPendingControl() && responses->snapshot().dropped == 0);
+  };
+
+  check("\x1b[2;3H\x1b[6nA\x1b[6n", "\x1b[2;3R\x1b[2;4R");
+  check("\x1bP+q544E;544E\x1b\\", "\x1bP1+r544E=787465726D2D323536636F6C6F72\x1b\\\x1bP1+r544E=787465726D2D323536636F6C6F72\x1b\\");
+  check("\x1b_Ga=q,f=24,s=1,v=1,i=7;/wAA\x1b\\", "\x1b_Gi=7;OK\x1b\\");
+
+  std::string palette = "\x1b]4";
+  std::string replies;
+  for (unsigned index = 0; index < 16; ++index) {
+    const auto number = std::to_string(index);
+    palette += ";" + number + ";#123456;" + number + ";?";
+    replies += "\x1b]4;" + number + ";rgb:1212/3434/5656\x1b\\";
+  }
+  palette += "\x1b\\";
+  check(std::move(palette), replies);
+}
+
+template <Allocator Memory>
 void statusWorkerPriority(Memory &memory) {
   auto responses = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory});
   Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, responses};
@@ -797,6 +833,7 @@ int main(int argc, char **argv) {
   cursorEncodings(memory);
   cursorStateViews(memory);
   saturation(memory);
+  borrowedRequestResume(memory);
   statusWorkerPriority(memory);
   statusBytePressure(memory);
   longPaletteReply(memory);
