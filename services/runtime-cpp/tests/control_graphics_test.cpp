@@ -292,7 +292,7 @@ void mediaAllocationFailure() {
   process();
   check(memory.failures.load(std::memory_order_relaxed) != 0);
   check(media->failed() && media->terminal() == nullptr && queue->closed());
-  check(queue->snapshot().messages == borrowed.count && borrowed.messages[0].front() == 'N');
+  check(queue->snapshot().messages == borrowed.count && borrowed.message(0).front() == 'N');
   check(!media->seal() && media->idle());
   check(queue->empty() && queue->snapshot().dropped == 0 && budget.used() == 0);
 }
@@ -322,7 +322,7 @@ void interactiveAllocationFailure() {
       failed = true;
     }
     check(failed && upstream.failures.load(std::memory_order_relaxed) != 0);
-    check(queue->closed() && queue->snapshot().messages == borrowed.count && borrowed.messages[0].front() == 'N');
+    check(queue->closed() && queue->snapshot().messages == borrowed.count && borrowed.message(0).front() == 'N');
     terminal.abortControl();
     check(!terminal.hasPendingControl() && queue->empty() && queue->snapshot().dropped == 0);
     upstream.fail.store(false, std::memory_order_relaxed);

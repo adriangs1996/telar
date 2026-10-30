@@ -104,7 +104,7 @@ public:
       if (response) {
         std::array<iovec, PtyResponseQueue::message_capacity> vectors;
         for (std::size_t index = 0; index < batch.count; ++index) {
-          const auto message = batch.messages[index];
+          const auto message = batch.message(index);
           vectors[index] = {const_cast<Byte *>(message.data()), message.size()};
         }
         return ::writev(process->descriptor(), vectors.data(), static_cast<int>(batch.count));

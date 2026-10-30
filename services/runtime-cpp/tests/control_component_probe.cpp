@@ -70,7 +70,8 @@ static std::uint64_t benchmarkComponent(const Byte *bytes, std::size_t size, std
         offset += count;
         std::size_t written = 0;
         const auto batch = probe.responses->peekBatch();
-        for (const auto response : std::span{batch.messages}.first(batch.count)) {
+        for (std::size_t index = 0; index < batch.count; ++index) {
+          const auto response = batch.message(index);
           if (response.size() > output.size() - written) {
             return 0;
           }

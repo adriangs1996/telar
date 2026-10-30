@@ -109,11 +109,11 @@ static void testBatchedResponses() {
   }
   storage.reset();
   auto batch = queue.peekBatch();
-  check(batch.count == 4 && batch.bytes == 8197 && batch.messages[1][8191] == 42);
+  check(batch.count == 4 && batch.bytes == 8197 && batch.message(1)[8191] == 42);
   queue.consumeBytes(8191);
   check(!lifetime.expired());
   batch = queue.peekBatch();
-  check(batch.count == 3 && batch.bytes == 6 && batch.messages[0].size() == 1);
+  check(batch.count == 3 && batch.bytes == 6 && batch.message(0).size() == 1);
   queue.consumeBytes(4);
   check(lifetime.expired());
   batch = queue.peekBatch();
@@ -223,7 +223,7 @@ static void testWorkerPublicationFailure() {
   std::jthread worker{[&] { queue.stopProducing(); }};
   worker.join();
   check(queue.closed() && !lifetime.expired());
-  check(borrowed.count == 1 && borrowed.messages[0].front() == 42 && borrowed.messages[0].back() == 42);
+  check(borrowed.count == 1 && borrowed.message(0).front() == 42 && borrowed.message(0).back() == 42);
   check(!queue.tryPush({}));
   queue.close();
   check(lifetime.expired() && queue.empty());
@@ -287,11 +287,57 @@ static void testWorkerPriority() {
   check(received == 100 && queue.snapshot().dropped == 0);
 }
 
+static void testBorrowedBatchWrap() {
+  PtyResponseQueue queue;
+  const std::array<std::uint8_t, 4> prefix{1, 2, 3, 4};
+  for (std::size_t index = 0; index < PtyResponseQueue::message_capacity - 2; ++index) {
+    check(queue.tryPush(prefix));
+  }
+  queue.consumeBytes(prefix.size() * (PtyResponseQueue::message_capacity - 2));
+  check(queue.empty());
+  for (unsigned index = 0; index < 4; ++index) {
+    check(queue.tryPush(prefix));
+  }
+  queue.consumeBytes(1);
+  const auto batch = queue.peekBatch();
+  check(batch.first.size() == 2 && batch.second.size() == 2);
+  check(batch.count == 4 && batch.bytes == 15);
+  check(batch.message(0).size() == 3 && batch.message(0).front() == 2);
+
+  std::atomic<bool> done = false;
+  std::jthread producer{[&] {
+    for (std::size_t index = batch.count; index < PtyResponseQueue::message_capacity; ++index) {
+      const std::array<std::uint8_t, 1> suffix{9};
+      check(queue.tryPush(suffix));
+    }
+    done.store(true, std::memory_order_release);
+  }};
+  do {
+    check(batch.count == 4 && batch.bytes == 15);
+    for (std::size_t index = 0; index < batch.count; ++index) {
+      const auto value = batch.message(index);
+      check(value.back() == 4 && value.size() == (index == 0 ? 3u : 4u));
+      check(value.front() == (index == 0 ? 2u : 1u));
+    }
+    std::this_thread::yield();
+  } while (!done.load(std::memory_order_acquire));
+  producer.join();
+  queue.consumeBytes(batch.bytes);
+  const auto remaining = queue.peekBatch();
+  check(remaining.count == PtyResponseQueue::message_capacity - 4 && remaining.bytes == remaining.count);
+  for (std::size_t index = 0; index < remaining.count; ++index) {
+    check(remaining.message(index).size() == 1 && remaining.message(index).front() == 9);
+  }
+  queue.consumeBytes(remaining.bytes);
+  check(queue.empty());
+}
+
 void testPtyResponseQueue() {
   testQueueBoundaries();
   testConcurrentResponses();
   testOwnedResponseLifetime();
   testBatchedResponses();
+  testBorrowedBatchWrap();
   testClosedGeneration();
   testResponseOutbox();
   testWorkerPublicationFailure();

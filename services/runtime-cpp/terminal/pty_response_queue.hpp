@@ -69,9 +69,17 @@ public:
   };
 
   struct Batch {
-    std::array<std::span<const std::uint8_t>, message_capacity> messages;
+    std::span<const std::span<const std::uint8_t>> first;
+    std::span<const std::span<const std::uint8_t>> second;
+    std::size_t offset = 0;
     std::size_t count = 0;
     std::size_t bytes = 0;
+
+    std::span<const std::uint8_t> message(std::size_t index) const noexcept {
+      assert(index < count);
+      const auto value = index < first.size() ? first[index] : second[index - first.size()];
+      return value.subspan(index == 0 ? offset : 0);
+    }
   };
 
   bool push(std::span<const std::uint8_t> response) noexcept {
@@ -140,10 +148,10 @@ private:
     const auto index = (head_ + count_) % message_capacity;
     if (owner) {
       owned_[index] = std::move(owner);
-      views_[index] = response;
     } else if (!response.empty()) {
       std::memcpy(bytes_[index].data(), response.data(), response.size());
     }
+    views_[index] = owned_[index] ? response : std::span<const std::uint8_t>{bytes_[index]}.first(response.size());
     lengths_[index] = static_cast<std::uint32_t>(response.size());
     byte_count_ += response.size();
     ++count_;
@@ -164,18 +172,20 @@ public:
 
   Batch peekBatch() const noexcept {
     const std::lock_guard lock{mutex_};
-    Batch batch;
-    for (std::size_t position = 0; position < count_; ++position) {
-      const auto index = (head_ + position) % message_capacity;
-      const auto bytes = owned_[index] ? views_[index] : std::span<const std::uint8_t>{bytes_[index]}.first(lengths_[index]);
-      batch.messages[batch.count++] = bytes.subspan(position == 0 ? offset_ : 0);
-      batch.bytes += batch.messages[position].size();
-    }
-    return batch;
+    const auto first_count = std::min(count_, message_capacity - head_);
+    const auto entries = std::span{views_};
+    return Batch{
+        .first = entries.subspan(head_, first_count),
+        .second = entries.first(count_ - first_count),
+        .offset = offset_,
+        .count = count_,
+        .bytes = byte_count_,
+    };
   }
 
-  // Single-consumer ownership is identical to peek(): appenders cannot mutate
-  // borrowed slots, and only this consumer may consume or clear the queue.
+  // The batch borrows slot metadata and payload until the single consumer
+  // consumes or clears. Producers publish exclusively behind its fixed prefix;
+  // wrapping never overwrites an admitted slot before that consumer releases it.
   void consumeBytes(std::size_t bytes) noexcept {
     const std::lock_guard lock{mutex_};
     assert(bytes <= byte_count_);
