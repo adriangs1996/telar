@@ -8,6 +8,7 @@
 #include <QClipboard>
 #include <QLocalServer>
 #include <QTemporaryDir>
+#include <QThread>
 #include <cstdio>
 #include <cstdlib>
 #include <new>
@@ -87,6 +88,43 @@ enum class AllocationStage { preparation, denial, execution, reader };
 
 namespace workbench {
 struct ClipboardConnectionTest {
+  static void realDeadline() {
+    require(QGuiApplication::platformName() == "offscreen", "Deadline fixture requires a private offscreen clipboard");
+    QTemporaryDir directory{QStringLiteral("/tmp/telar-clipboard-deadline-XXXXXX")};
+    require(directory.isValid(), "Could not create deadline directory");
+    const auto path = directory.filePath(QStringLiteral("runtime.sock"));
+    QLocalServer server;
+    require(server.listen(path), "Could not listen on deadline socket");
+    RuntimeConnection connection{path, telar::WorkspaceLocation{.id = 1}};
+    connection.socket_.connectToServer(path);
+    pumpUntil([&] { return connection.socket_.state() == QLocalSocket::ConnectedState && server.hasPendingConnections(); });
+    std::unique_ptr<QLocalSocket> peer{server.nextPendingConnection()};
+    receiveFrame(*peer);
+    connection.handshake_ = true;
+    const telar::ClipboardTicket ticket{7, 11, 13, 17};
+    connection.attached_.insert(ticket.pane_id);
+    connection.generations_[ticket.pane_id] = ticket.pane_generation;
+    QElapsedTimer elapsed;
+    elapsed.start();
+    connection.clipboardRequest(telar::ClipboardDesktopRequest{.ticket = ticket, .prompt = true, .name = "Deadline fixture"});
+    pumpUntil([&] { return connection.clipboard_operations_.at(ticket.nonce)->prompt != nullptr; });
+    while (connection.clipboard_operations_.contains(ticket.nonce)) {
+      require(elapsed.elapsed() < 33000, "Real clipboard deadline did not expire");
+      QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+      QThread::msleep(1);
+    }
+    const auto duration = elapsed.elapsed();
+    require(duration >= 28000, "Clipboard request expired before its real timer");
+    const auto wire = receiveFrame(*peer);
+    std::array<telar::Byte, 4096> arena;
+    telar::DecodeStorage storage{arena};
+    const auto result = telar::Codec::decode<telar::CompleteClipboardDesktop>({reinterpret_cast<const telar::Byte *>(wire.constData()), static_cast<std::size_t>(wire.size())}, storage);
+    require(result.ticket == ticket && result.prepared && result.status == telar::ClipboardDesktopStatus::denied && result.contents.empty() && result.available.empty(), "Real timer did not send exactly the pending ticket's preparation denial");
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+    require(connection.clipboard_operations_.empty() && peer->bytesAvailable() == 0 && connection.socket_.bytesToWrite() == 0, "Real deadline retained an operation or duplicated its denial");
+    std::printf("{\"case\":\"real_qt_clipboard_deadline\",\"elapsed_ms\":%lld,\"matching_denials\":1,\"clipboard_read\":false}\n", static_cast<long long>(duration));
+  }
+
   static void deferredCompletion(Replacement replacement, DeferredEvent deferred) {
     QTemporaryDir directory{QStringLiteral("/tmp/telar-clipboard-connection-XXXXXX")};
     require(directory.isValid(), "Could not create private test directory");
@@ -327,7 +365,11 @@ struct ClipboardConnectionTest {
 int main(int argc, char **argv) {
   QGuiApplication application{argc, argv};
   try {
-    workbench::ClipboardConnectionTest::run();
+    if (argc == 2 && std::string_view{argv[1]} == "--deadline-only") {
+      workbench::ClipboardConnectionTest::realDeadline();
+    } else {
+      workbench::ClipboardConnectionTest::run();
+    }
     QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
     std::puts("Deferred clipboard completion identity tests passed; no desktop resource executed");
     return 0;
