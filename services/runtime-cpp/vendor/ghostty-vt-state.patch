@@ -1,7 +1,7 @@
 diff --git a/include/ghostty/vt/grid_ref.h b/include/ghostty/vt/grid_ref.h
 --- a/include/ghostty/vt/grid_ref.h
 +++ b/include/ghostty/vt/grid_ref.h
-@@ -124,6 +124,12 @@
+@@ -124,6 +124,30 @@
  GHOSTTY_API GhosttyResult ghostty_grid_ref_cell(const GhosttyGridRef *ref,
                                      GhosttyCell *out_cell);
  
@@ -11,10 +11,28 @@ diff --git a/include/ghostty/vt/grid_ref.h b/include/ghostty/vt/grid_ref.h
 +GHOSTTY_API GhosttyResult ghostty_grid_ref_cells(const GhosttyGridRef *ref,
 +    GhosttyCellsView *out_cells);
 +
++/** Caller-owned bounded extra-codepoint output. Partial success reports
++ * complete columns only; points[0..length] are initialized on SUCCESS or
++ * OUT_OF_SPACE. No base codepoints, allocation, or protocol operations. */
++typedef struct {
++  uint32_t *points;
++  size_t capacity;
++  size_t length;
++  size_t consumed_columns;
++} GhosttyGraphemeBatch;
++
++/** Copy extras from selected columns of the referenced row, in input order.
++ * columns, points and the output descriptor must be disjoint. OUT_OF_SPACE may report zero
++ * progress when the next complete chain exceeds capacity. Empty columns
++ * still count as consumed. Other errors invalidate all output. */
++GHOSTTY_API GhosttyResult ghostty_grid_ref_grapheme_batch(const GhosttyGridRef *ref, const uint16_t *columns, size_t count, GhosttyGraphemeBatch *out);
++
++
++
  /**
   * Get the row from a grid reference.
   *
-@@ -184,6 +190,12 @@
+@@ -184,6 +208,12 @@
   *
   * @ingroup grid_ref
   */
@@ -133,7 +151,7 @@ diff --git a/include/ghostty/vt/terminal.h b/include/ghostty/vt/terminal.h
  #ifndef GHOSTTY_VT_TERMINAL_H
  #define GHOSTTY_VT_TERMINAL_H
 +
-+#define GHOSTTY_TELAR_STATE_VERSION 3
++#define GHOSTTY_TELAR_STATE_VERSION 5
  
  #include <stdbool.h>
  #include <stddef.h>
@@ -220,11 +238,12 @@ diff --git a/src/lib_vt.zig b/src/lib_vt.zig
              @export(&c.kitty_graphics_get, .{ .name = "ghostty_kitty_graphics_get" });
              @export(&c.kitty_graphics_animation_tick, .{ .name = "ghostty_kitty_graphics_animation_tick" });
              @export(&c.kitty_graphics_image, .{ .name = "ghostty_kitty_graphics_image" });
-@@ -414,8 +425,10 @@
+@@ -414,8 +425,11 @@
          }
          if (features.grid_introspection) {
              @export(&c.grid_ref_cell, .{ .name = "ghostty_grid_ref_cell" });
 +            @export(&c.grid_ref_cells, .{ .name = "ghostty_grid_ref_cells" });
++            @export(&c.grid_ref_grapheme_batch, .{ .name = "ghostty_grid_ref_grapheme_batch" });
              @export(&c.grid_ref_row, .{ .name = "ghostty_grid_ref_row" });
              @export(&c.grid_ref_graphemes, .{ .name = "ghostty_grid_ref_graphemes" });
 +            @export(&c.grid_ref_hyperlink, .{ .name = "ghostty_grid_ref_hyperlink" });
@@ -234,7 +253,7 @@ diff --git a/src/lib_vt.zig b/src/lib_vt.zig
 diff --git a/src/terminal/c/grid_ref.zig b/src/terminal/c/grid_ref.zig
 --- a/src/terminal/c/grid_ref.zig
 +++ b/src/terminal/c/grid_ref.zig
-@@ -49,6 +49,21 @@
+@@ -49,6 +49,83 @@
      return .success;
  }
  
@@ -253,10 +272,72 @@ diff --git a/src/terminal/c/grid_ref.zig b/src/terminal/c/grid_ref.zig
 +    return .success;
 +}
 +
++const GraphemeBatch = extern struct {
++    points: ?[*]u32,
++    capacity: usize,
++    length: usize,
++    consumed_columns: usize,
++};
++
++pub fn grid_ref_grapheme_batch(ref: *const CGridRef, columns_: ?[*]const u16, count: usize, out: *GraphemeBatch) callconv(lib.calling_conv) Result {
++    out.length = 0;
++    out.consumed_columns = 0;
++    const pin = ref.toPin() orelse return .invalid_value;
++    const terminal_page = pin.node.page();
++    if (pin.y >= terminal_page.size.rows or pin.x >= terminal_page.size.cols) {
++        return .invalid_value;
++    }
++    if (count == 0) {
++        return .success;
++    }
++    if (out.capacity != 0 and out.points == null) {
++        return .invalid_value;
++    }
++
++    const columns = (columns_ orelse return .invalid_value)[0..count];
++    const points_ = out.points;
++    const capacity = out.capacity;
++    const cells = terminal_page.getCells(terminal_page.getRow(pin.y));
++    var length: usize = 0;
++    for (columns, 0..) |column, index| {
++        if (column >= cells.len) {
++            return .invalid_value;
++        }
++        const cell = &cells[column];
++        if (cell.hasGrapheme()) {
++            const extra = terminal_page.lookupGrapheme(cell) orelse return .invalid_value;
++            if (extra.len > capacity - length) {
++                out.length = length;
++                out.consumed_columns = index;
++                return .out_of_space;
++            }
++            if (extra.len != 0) {
++                const points = points_ orelse return .out_of_space;
++                const vector_lanes = 4;
++                var point_index: usize = 0;
++                while (extra.len - point_index >= vector_lanes) : (point_index += vector_lanes) {
++                    const values: @Vector(vector_lanes, u21) = extra[point_index..][0..vector_lanes].*;
++                    const normalized: @Vector(vector_lanes, u32) = values;
++                    points[length + point_index ..][0..vector_lanes].* = normalized;
++                }
++
++                for (extra[point_index..], point_index..) |codepoint, tail_index| {
++                    points[length + tail_index] = codepoint;
++                }
++                length += extra.len;
++            }
++        }
++    }
++
++    out.length = length;
++    out.consumed_columns = count;
++    return .success;
++}
++
  pub fn grid_ref_row(
      ref: *const CGridRef,
      out: ?*row_c.CRow,
-@@ -88,6 +103,30 @@
+@@ -88,6 +165,30 @@
      };
  
      out_len.* = total;
@@ -537,18 +618,19 @@ diff --git a/src/terminal/c/main.zig b/src/terminal/c/main.zig
  pub const terminal_get_multi = terminal.get_multi;
  pub const terminal_continuation_write = terminal.continuation_write;
  pub const terminal_continuation_buf = terminal.continuation_buf;
-@@ -254,8 +256,10 @@
+@@ -254,8 +256,11 @@
  pub const unicode_grapheme_width = unicode.grapheme_width;
  
  pub const grid_ref_cell = grid_ref.grid_ref_cell;
 +pub const grid_ref_cells = grid_ref.grid_ref_cells;
++pub const grid_ref_grapheme_batch = grid_ref.grid_ref_grapheme_batch;
  pub const grid_ref_row = grid_ref.grid_ref_row;
  pub const grid_ref_graphemes = grid_ref.grid_ref_graphemes;
 +pub const grid_ref_hyperlink = grid_ref.grid_ref_hyperlink;
  pub const grid_ref_hyperlink_uri = grid_ref.grid_ref_hyperlink_uri;
  pub const grid_ref_style = grid_ref.grid_ref_style;
  pub const tracked_grid_ref_free = grid_ref_tracked.tracked_grid_ref_free;
-@@ -300,3 +304,13 @@
+@@ -300,3 +305,13 @@
      // We want to make sure we run the tests for the C allocator interface.
      _ = @import("../../lib/allocator.zig");
  }

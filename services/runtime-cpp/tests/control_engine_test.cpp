@@ -1,6 +1,7 @@
 #include "terminal/terminal.hpp"
 #include "graphics/media_terminal.hpp"
 #include <cstdio>
+#include <source_location>
 #include <stdexcept>
 #include <string>
 
@@ -11,9 +12,12 @@ using namespace std::literals;
 void testPtyResponseQueue();
 
 namespace {
-void require(bool condition) {
+// The pinned VT Page.zig bounds retained suffix codepoints to this value.
+constexpr unsigned retained_grapheme_points = 64;
+
+void require(bool condition, std::source_location location = std::source_location::current()) {
   if (!condition) {
-    throw std::runtime_error{"Control engine assertion failed"};
+    throw std::runtime_error{std::string{"Control engine assertion failed at "} + location.file_name() + ":" + std::to_string(location.line())};
   }
 }
 
@@ -213,6 +217,170 @@ void rowStateViews(Memory &memory) {
 }
 
 template <Allocator Memory>
+void normalizedGraphemeBatches(Memory &memory) {
+  Terminal terminal{memory, TerminalSize{80, 2, 9, 18}, TerminalPurpose::separate_media};
+  std::string input;
+  std::array<std::vector<std::uint32_t>, 80> expected;
+  const std::array<std::string_view, 3> marks{"́", "̧", "\xf0\x9d\x86\x85"};
+  constexpr std::array<std::uint32_t, 3> codepoints{0x301, 0x327, 0x1d185};
+  for (unsigned column = 0; column < expected.size(); ++column) {
+    input.push_back('A');
+    for (unsigned point = 0; point < column % 6; ++point) {
+      input.append(marks[point % marks.size()]);
+      expected[column].push_back(codepoints[point % codepoints.size()]);
+    }
+  }
+  terminal.feed(bytes(input));
+  auto reference = ghosttySized<GhosttyGridRef>();
+  const GhosttyPoint origin{.tag = GHOSTTY_POINT_TAG_ACTIVE, .value = {.coordinate = {0, 0}}};
+  checkGhostty(ghostty_terminal_grid_ref(terminal.handle(), origin, &reference));
+  std::array<std::uint16_t, 80> ascending;
+  for (unsigned index = 0; index < ascending.size(); ++index) {
+    ascending[index] = static_cast<std::uint16_t>(index);
+  }
+  const std::array<std::uint16_t, 7> arbitrary{63, 1, 70, 8, 0, 1, 79};
+  constexpr std::uint32_t canary = 0xdeadbeef;
+  for (const auto columns : {std::span<const std::uint16_t>{ascending}, std::span<const std::uint16_t>{arbitrary}}) {
+    for (const auto capacity : {0u, 1u, 2u, 3u, 4u, 8u, 255u, 256u}) {
+      std::array<std::uint32_t, 258> storage;
+      storage.fill(canary);
+      GhosttyGraphemeBatch batch{
+          .points = storage.data() + 1,
+          .capacity = capacity,
+          .length = SIZE_MAX,
+          .consumed_columns = SIZE_MAX,
+      };
+      const auto result = ghostty_grid_ref_grapheme_batch(&reference, columns.data(), columns.size(), &batch);
+      std::vector<std::uint32_t> prefix;
+      std::size_t consumed = 0;
+      for (const auto column : columns) {
+        if (expected[column].size() > capacity - prefix.size()) {
+          break;
+        }
+        prefix.insert(prefix.end(), expected[column].begin(), expected[column].end());
+        ++consumed;
+      }
+      require(result == (consumed == columns.size() ? GHOSTTY_SUCCESS : GHOSTTY_OUT_OF_SPACE));
+      require(batch.length == prefix.size() && batch.consumed_columns == consumed);
+      require(std::equal(prefix.begin(), prefix.end(), storage.begin() + 1));
+      require(storage.front() == canary);
+      for (auto index = capacity + 1; index < storage.size(); ++index) {
+        require(storage[index] == canary);
+      }
+    }
+  }
+  std::array<std::uint32_t, 16> points;
+  GhosttyGraphemeBatch batch{.points = points.data(), .capacity = points.size(), .length = 0, .consumed_columns = 0};
+  const std::array<std::uint16_t, 1> invalid_column{80};
+  require(ghostty_grid_ref_grapheme_batch(&reference, invalid_column.data(), invalid_column.size(), &batch) == GHOSTTY_INVALID_VALUE);
+  require(ghostty_grid_ref_grapheme_batch(&reference, nullptr, 1, &batch) == GHOSTTY_INVALID_VALUE);
+  require(ghostty_grid_ref_grapheme_batch(&reference, nullptr, 0, &batch) == GHOSTTY_SUCCESS);
+  require(batch.length == 0 && batch.consumed_columns == 0);
+  auto invalid = ghosttySized<GhosttyGridRef>();
+  require(ghostty_grid_ref_grapheme_batch(&invalid, nullptr, 0, &batch) == GHOSTTY_INVALID_VALUE);
+  batch.points = nullptr;
+  require(ghostty_grid_ref_grapheme_batch(&reference, ascending.data(), ascending.size(), &batch) == GHOSTTY_INVALID_VALUE);
+}
+
+template <Allocator Memory>
+void graphemeChecksums(Memory &memory) {
+  for (const std::uint16_t columns : {16, 80, 256, 257}) {
+    for (const unsigned density : {1, 7, 8, 9, 16, 80, 256, 257}) {
+      if (density > columns) {
+        continue;
+      }
+      for (const unsigned length : {1, 4, 32, 512}) {
+        Terminal terminal{memory, TerminalSize{columns, 2, 9, 18}, TerminalPurpose::separate_media};
+        terminal.controlPolicy().checksum_report = true;
+        std::string input;
+        std::uint32_t expected = columns * static_cast<unsigned>('A');
+        for (unsigned column = 0; column < columns; ++column) {
+          input.push_back('A');
+          if (column < density) {
+            for (unsigned point = 0; point < length; ++point) {
+              input.append(point % 2 == 0 ? "́" : "̧");
+              if (point < retained_grapheme_points) {
+                expected += point % 2 == 0 ? 0x301 : 0x327;
+              }
+            }
+          }
+        }
+        std::array<char, 64> request;
+        const auto request_size = std::snprintf(request.data(), request.size(), "\x1b[7#y\x1b[9;1;1;1;1;%u*y", columns);
+        require(request_size > 0 && static_cast<std::size_t>(request_size) < request.size());
+        input.append(request.data(), static_cast<std::size_t>(request_size));
+        terminal.feed(bytes(input));
+        std::array<char, 32> reply;
+        const auto reply_size = std::snprintf(reply.data(), reply.size(), "\x1bP9!~%04X\x1b\\", expected & UINT16_MAX);
+        require(reply_size > 0);
+        const auto actual = drain(terminal, 3);
+        if (actual != std::string_view{reply.data(), static_cast<std::size_t>(reply_size)}) {
+          std::fprintf(stderr, "grapheme checksum columns=%u density=%u length=%u expected=%s actual=%s\n", columns, density, length, reply.data(), actual.c_str());
+        }
+        require(actual == std::string_view{reply.data(), static_cast<std::size_t>(reply_size)});
+      }
+    }
+  }
+}
+
+template <Allocator Memory>
+void asciiGraphemeChecksums(Memory &memory) {
+  for (const bool styled : {false, true}) {
+    Terminal terminal{memory, TerminalSize{100, 2, 9, 18}, TerminalPurpose::separate_media};
+    terminal.controlPolicy().checksum_report = true;
+    std::string input = styled ? "\x1b[1m\x1b[1\"q" : "";
+    for (unsigned value = ' '; value <= '~'; ++value) {
+      input.push_back(static_cast<char>(value));
+      if ((value - ' ') % 3 == 0) {
+        input.append("́");
+      }
+    }
+    input.append(5, 'A');
+    terminal.feed(bytes(input));
+    constexpr unsigned plain = (' ' + '~') * 95 / 2 + 5 * 'A' + 32 * 0x301;
+    for (const unsigned flags : {5, 7}) {
+      const auto expected = plain + (styled && flags == 5 ? 100 * (128 + 4) : 0);
+      terminal.feed(bytes(flags == 5 ? "\x1b[5#y\x1b[7;1;1;1;1;100*y" : "\x1b[7#y\x1b[7;1;1;1;1;100*y"));
+      std::array<char, 32> reply;
+      const auto size = std::snprintf(reply.data(), reply.size(), "\x1bP7!~%04X\x1b\\", expected & UINT16_MAX);
+      require(size > 0 && drain(terminal, 3) == std::string_view{reply.data(), static_cast<std::size_t>(size)});
+    }
+  }
+}
+
+template <Allocator Memory>
+void variedGraphemeRows(Memory &memory) {
+  Terminal terminal{memory, TerminalSize{256, 4, 9, 18}, TerminalPurpose::separate_media};
+  terminal.controlPolicy().checksum_report = true;
+  std::uint32_t expected = 0;
+  std::string input;
+  for (unsigned row = 0; row < 3; ++row) {
+    for (unsigned column = 0; column < 256; ++column) {
+      input.push_back('A');
+      expected += 'A';
+      if (row == 0 && column < 248) {
+        continue;
+      }
+      const auto count = row == 1 ? 512u : 1u;
+      for (unsigned point = 0; point < count; ++point) {
+        input.append(row == 2 ? "\xf0\x9d\x86\x85" : "́");
+        if (point < retained_grapheme_points) {
+          expected += row == 2 ? 0x1d185 : 0x301;
+        }
+      }
+    }
+    if (row != 2) {
+      input.append("\r\n");
+    }
+  }
+  input.append("\x1b[7#y\x1b[19;1;1;1;3;256*y");
+  terminal.feed(bytes(input));
+  std::array<char, 32> reply;
+  const auto size = std::snprintf(reply.data(), reply.size(), "\x1bP19!~%04X\x1b\\", expected & UINT16_MAX);
+  require(size > 0 && drain(terminal, 3) == std::string_view{reply.data(), static_cast<std::size_t>(size)});
+}
+
+template <Allocator Memory>
 void abortedControl(Memory &memory) {
   Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
   terminal.feed(bytes("\x1b[?2031;2033;1004;2048h"));
@@ -365,6 +533,10 @@ int main(int argc, char **argv) {
   clipboardWrites(memory);
   abortedControl(memory);
   rowStateViews(memory);
+  normalizedGraphemeBatches(memory);
+  graphemeChecksums(memory);
+  asciiGraphemeChecksums(memory);
+  variedGraphemeRows(memory);
   reports(memory);
   testPtyResponseQueue();
   require(budget.liveBytes() == 0);

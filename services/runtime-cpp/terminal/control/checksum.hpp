@@ -4,6 +4,7 @@
 #include "vt_state.hpp"
 #include "../../memory/allocator.hpp"
 #include "cell_layout.hpp"
+#include <limits>
 #include <utility>
 
 namespace telar::runtime::control {
@@ -54,6 +55,18 @@ public:
   unsigned flags = 0;
 
 private:
+  template <bool NoAttributes>
+  static consteval std::uint64_t plainCellMask() {
+    std::uint64_t mask = 0;
+    for (unsigned bit = 0; bit < std::numeric_limits<std::uint64_t>::digits; ++bit) {
+      const auto cell = std::uint64_t{1} << bit;
+      if (cell_layout::wide(cell) != 0 || (!NoAttributes && (cell_layout::style_id(cell) != 0 || cell_layout::protected_cell(cell) != 0))) {
+        mask |= cell;
+      }
+    }
+    return mask;
+  }
+
   struct Rectangle {
     std::uint16_t top;
     std::uint16_t left;
@@ -88,6 +101,8 @@ private:
       }
       const auto begin = std::min<std::size_t>(rectangle.left, cells.len);
       const auto end = std::min<std::size_t>(rectangle.right + 1, cells.len);
+      std::array<std::uint16_t, maximum_batch_columns> grapheme_columns;
+      std::size_t grapheme_count = 0;
       std::uint16_t previous_attributes = 0;
       bool previous_extended = false;
       GhosttyStyleId previous_style_id = 0;
@@ -102,6 +117,18 @@ private:
         const bool has_text = codepoint != 0;
         const bool protected_cell = cell_layout::protected_cell(cell) != 0;
         const auto wide = static_cast<GhosttyCellWide>(cell_layout::wide(cell));
+
+        if (no_trim && !full && has_text && content == GHOSTTY_CELL_CONTENT_CODEPOINT_GRAPHEME) {
+          grapheme_columns[grapheme_count++] = static_cast<std::uint16_t>(column);
+          if (grapheme_count == grapheme_columns.size()) {
+            sum = static_cast<std::uint16_t>(sum + combiningBatch(*reference, grapheme_columns));
+            grapheme_count = 0;
+          }
+        }
+        if (no_trim && !full && text_content && codepoint >= ' ' && codepoint <= '~' && (cell & plainCellMask<no_attributes>()) == 0) {
+          sum = static_cast<std::uint16_t>(sum + codepoint);
+          continue;
+        }
 
         std::uint16_t value = 0;
         if (wide == GHOSTTY_CELL_WIDE_SPACER_TAIL) {
@@ -140,14 +167,18 @@ private:
         const bool extended = style_id != 0 && previous_extended;
         if (no_trim) {
           sum = static_cast<std::uint16_t>(sum + value);
-          if (!full && has_text && content == GHOSTTY_CELL_CONTENT_CODEPOINT_GRAPHEME) {
-            reference->x = static_cast<std::uint16_t>(column);
-            sum = static_cast<std::uint16_t>(sum + combining(*reference));
-          }
         } else if (first || value != ' ' || extended) {
           sum = static_cast<std::uint16_t>(sum + value);
         }
         first = no_trim;
+      }
+      if (no_trim && !full && grapheme_count != 0) {
+        if (grapheme_count == 1) {
+          reference->x = grapheme_columns.front();
+          sum = static_cast<std::uint16_t>(sum + combining(*reference));
+        } else {
+          sum = static_cast<std::uint16_t>(sum + combiningBatch(*reference, std::span{grapheme_columns}.first(grapheme_count)));
+        }
       }
       if (!no_trim) {
         first = false;
@@ -160,6 +191,46 @@ private:
   inline static constexpr auto accumulators = []<std::size_t... Index>(std::index_sequence<Index...>) {
     return std::array<Accumulator, sizeof...(Index)>{&Checksum::template accumulate<static_cast<unsigned>(Index << 1)>...};
   }(std::make_index_sequence<16>{});
+
+  // Gather only selected grapheme columns. The state port normalizes a
+  // bounded prefix; C++ owns the checksum arithmetic and guarantees progress.
+  [[gnu::noinline]] std::uint16_t combiningBatch(GhosttyGridRef reference, std::span<const std::uint16_t> columns) {
+    std::array<std::uint32_t, batch_points> points;
+    std::uint16_t sum = 0;
+    while (!columns.empty()) {
+      if (columns.size() == 1) {
+        reference.x = columns.front();
+        return static_cast<std::uint16_t>(sum + combining(reference));
+      }
+
+      GhosttyGraphemeBatch batch{
+          .points = points.data(),
+          .capacity = points.size(),
+          .length = 0,
+          .consumed_columns = 0,
+      };
+      const auto status = ghostty_grid_ref_grapheme_batch(&reference, columns.data(), columns.size(), &batch);
+      if (status != GHOSTTY_OUT_OF_SPACE) {
+        checkGhostty(status);
+      }
+      if (batch.length > points.size() || batch.consumed_columns > columns.size() || (status == GHOSTTY_SUCCESS && batch.consumed_columns != columns.size()) || (batch.consumed_columns == 0 && batch.length != 0)) {
+        throw std::logic_error{"Grapheme batch has invalid progress"};
+      }
+
+      for (const auto codepoint : std::span{points}.first(batch.length)) {
+        sum = static_cast<std::uint16_t>(sum + codepoint);
+      }
+      if (batch.consumed_columns == 0) {
+        for (const auto column : columns) {
+          reference.x = column;
+          sum = static_cast<std::uint16_t>(sum + combining(reference));
+        }
+        return sum;
+      }
+      columns = columns.subspan(batch.consumed_columns);
+    }
+    return sum;
+  }
 
   std::uint16_t combining(const GhosttyGridRef &reference) {
     std::array<std::uint32_t, 16> inline_points;
@@ -186,6 +257,8 @@ private:
   static constexpr unsigned origin_mode = 6;
   static constexpr std::uint16_t escape_value = 0x1b;
   static constexpr std::size_t maximum_grapheme_points = UINT16_MAX;
+  static constexpr std::size_t maximum_batch_columns = 256;
+  static constexpr std::size_t batch_points = 256;
   Vector<std::uint32_t, Memory> graphemes_;
 };
 

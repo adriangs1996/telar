@@ -19,8 +19,9 @@ include(CheckCXXSourceCompiles)
 set(CMAKE_REQUIRED_INCLUDES "${GHOSTTY_VT_INCLUDE_DIR}")
 check_cxx_source_compiles("#include <ghostty/vt.h>
 int main() {
-  static_assert(GHOSTTY_TELAR_STATE_VERSION == 3);
+  static_assert(GHOSTTY_TELAR_STATE_VERSION == 5);
   static_assert(sizeof(&ghostty_grid_ref_cells) > 0);
+  static_assert(sizeof(&ghostty_grid_ref_grapheme_batch) > 0);
   static_assert(sizeof(&ghostty_terminal_page_bytes) > 0);
   GhosttyCodepointsBuffer buffer{};
   return buffer.len + sizeof(GhosttyKittyGraphicsImageInsert) + GHOSTTY_TERMINAL_DATA_CURSOR_IS_DEFAULT + GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_IS_INTERNAL + GHOSTTY_TERMINAL_OPT_KITTY_PROTOCOL + GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_BOTTOM + GHOSTTY_KITTY_GRAPHICS_DATA_LOADING_BYTES + GHOSTTY_TERMINAL_OPT_ACTIVE_SCREEN;
