@@ -4,6 +4,7 @@
 #include "../../telar_client/codecs/telar_codec.hpp"
 #include "../../telar_client/serializers/telar_protocol.hpp"
 #include <QLocalSocket>
+#include <QPointer>
 #include <QTimer>
 #include <QElapsedTimer>
 #include <functional>
@@ -33,7 +34,7 @@ namespace workbench {
     void resize(std::uint64_t pane, telar::TerminalSize size);
     void viewport(std::uint64_t pane, std::uint32_t offset);
     void desktop(std::uint64_t pane, telar::ConfigurePaneDesktop state);
-    void paste(std::uint64_t pane, const QString &text, const QStringList &available);
+    void paste(std::uint64_t pane, bool listing_only);
     void split(std::uint64_t source);
     // Opens a tab whose shell starts in the source pane's directory, or in $HOME without one.
     void createTab(std::uint64_t source);
@@ -96,6 +97,28 @@ namespace workbench {
     void executeClipboardTask(telar::ClipboardDesktopExecute execution, std::uint64_t epoch);
     void cancelClipboardTask(const telar::CancelClipboardDesktop &cancellation);
     void cancelClipboard(std::uint64_t pane);
+    void sendPaste(std::uint64_t pane, const QString &text, const QStringList &available, bool listing_only);
+
+    // Snapshot destination identity before any lazy desktop read can reenter.
+    template <typename Reader> void pasteFrom(std::uint64_t pane, bool listing_only, Reader &&read) {
+      const auto generation = generations_.find(pane);
+      if (!ready() || !attached_.contains(pane) || generation == generations_.end()) {
+        return;
+      }
+      const auto expected_generation = generation->second;
+      const auto epoch = clipboard_epoch_;
+      const QPointer<RuntimeConnection> connection{this};
+      const auto data = read(listing_only);
+      if (!data || !connection || epoch != connection->clipboard_epoch_) {
+        return;
+      }
+      const auto current = connection->generations_.find(pane);
+      if (current == connection->generations_.end() || current->second != expected_generation) {
+        return;
+      }
+      connection->sendPaste(pane, data->text, data->available, listing_only);
+    }
+
     void notify();
     std::uint64_t request(RequestKind kind, std::uint64_t target = 0);
     bool waiting(RequestKind kind, std::uint64_t target = 0) const;

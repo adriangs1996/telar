@@ -497,10 +497,10 @@ namespace workbench {
     if (event->matches(QKeySequence::Copy) && anchor_ >= 0) {
       QGuiApplication::clipboard()->setText(selectionText());
     } else if (event->matches(QKeySequence::Paste)) {
-      if (paste) {
-        const auto *clipboard = QGuiApplication::clipboard();
-        const auto *data = clipboard->mimeData();
-        paste(clipboard->text(), data != nullptr ? data->formats() : QStringList{});
+      const auto deliver = paste;
+      const bool listing_only = screen_->modes.paste_events;
+      if (deliver) {
+        deliver(listing_only);
       }
     } else if (preedit_.isEmpty()) {
       const auto bytes = terminalKey(*event, screen_->modes);

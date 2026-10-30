@@ -291,9 +291,25 @@ The six focused Release and ASan/UBSan targets and Qt offscreen test pass;
 `clipboard-surface-validation.json` retains logs and limits. This fixture
 settles one asynchronous operation before another starts. Real transport,
 generation cancellation and concurrency are separate native tests, not
-represented by these response comparisons. Actual Surface user-paste events,
-Qt materialization bounds, final PTY/allocation
+represented by these response comparisons. Qt materialization bounds, final PTY/allocation
 measurements and the remaining performance regressions are still open.
+
+The mode5522 user-paste completion now has a separate actual Surface oracle:
+9,920 cases with memory-only MIME listings, enabled/reset/RIS state, standard
+and primary locations, and all follow-up read split boundaries. Only random
+password fields are normalized. Password length/alphabet and one-use read
+behavior are checked independently. The complete results are in
+`differential-paste-splits-initial.json`.
+
+Native frames carry `InputModes.paste_events`, including mode-only deltas.
+The desktop snapshots its destination generation and connection epoch before
+lazy MIME reads. A listing gesture reads no representation; its wire request
+retains `listing_only`. The runtime preserves that gesture type: an intervening
+mode reset cancels a listing without pasting text; an ordinary paste remains
+text even if mode5522 becomes enabled. Empty ordinary pastes emit no bracket
+delimiters. These behaviors match Surface's separate list/paste completions.
+The C++ client and runtime use schema `cqp00001`; earlier layouts are rejected.
+This does not change the retired Zig runtime or make it wire-compatible.
 
 The bounded ACK outbox now retains non-query graphics responses without replay,
 with exact-capacity scheduling, producer priority, explicit failure, and busy

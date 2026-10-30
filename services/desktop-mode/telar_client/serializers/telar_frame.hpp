@@ -80,7 +80,7 @@ namespace telar {
   };
 
   struct InputModes {
-    bool cursor_keys = false, keypad_keys = false, bracketed_paste = false;
+    bool cursor_keys = false, keypad_keys = false, bracketed_paste = false, paste_events = false;
     bool focus_events = false, alternate_scroll = false, alternate_screen = false;
     Byte kitty_keyboard_flags = 0;
     bool modify_other_keys_2 = false;
@@ -392,6 +392,11 @@ namespace telar {
                  },
                        BoolByte,
                        "input_modes.bracketed_paste">,
+                 Field<[](auto &frame) -> auto & {
+                   return frame.input_modes.paste_events;
+                 },
+                       BoolByte,
+                       "input_modes.paste_events">,
                  Field<[](auto &frame) -> auto & {
                    return frame.input_modes.focus_events;
                  },

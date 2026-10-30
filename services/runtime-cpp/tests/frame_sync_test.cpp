@@ -47,4 +47,14 @@ void testFrameSync() {
   frame = Codec::decode<PaneFrame>(sync.prepare(screen), storage);
   check(frame.base_frame_id == 0);
   check(memory.allocations() == allocations);
+  check(sync.acknowledge(frame.frame_id));
+  for (const bool enabled : {true, false}) {
+    screen.input_modes.paste_events = enabled;
+    ++screen.revision;
+    storage = DecodeStorage{decoded};
+    frame = Codec::decode<PaneFrame>(sync.prepare(screen), storage);
+    check(frame.input_modes.paste_events == enabled && frame.spans.empty());
+    check(sync.acknowledge(frame.frame_id));
+    check(sync.prepare(screen).empty());
+  }
 }

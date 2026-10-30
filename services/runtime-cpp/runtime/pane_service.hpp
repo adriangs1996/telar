@@ -388,12 +388,15 @@ public:
     if (!ClipboardService<Memory>::eligible(client, pane) || pane.output_closed) {
       throw RequestError{FailureCode::invalid_request, "Clipboard paste requires a live visible attachment"};
     }
-    if (pane.terminal.pasteEvents()) {
-      if (!pane.terminal.clipboardControl().paste({client.id, client.generation}, request.primary, request.available)) {
-        throw RequestError{FailureCode::resource_limit, "Clipboard response is pending"};
+    if (request.listing_only) {
+      // A listing begun before a mode reset completes without reading text.
+      if (pane.terminal.pasteEvents()) {
+        if (!pane.terminal.clipboardControl().paste({client.id, client.generation}, request.primary, request.available)) {
+          throw RequestError{FailureCode::resource_limit, "Clipboard response is pending"};
+        }
+        pane.terminal.resumeControl();
       }
-      pane.terminal.resumeControl();
-    } else {
+    } else if (!request.text.empty()) {
       const bool bracketed = pane.terminal.mode(GHOSTTY_MODE_BRACKETED_PASTE);
       constexpr std::array<Byte, 6> start{0x1b, '[', '2', '0', '0', '~'};
       constexpr std::array<Byte, 6> end{0x1b, '[', '2', '0', '1', '~'};

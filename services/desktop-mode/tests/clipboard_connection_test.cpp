@@ -1,5 +1,7 @@
 #include "ui/workbench/runtime_connection.hpp"
 #include "ui/workbench/clipboard_consent.hpp"
+#include "ui/workbench/clipboard_paste.hpp"
+#include "telar_client/codecs/telar_handshake.hpp"
 #include <QGuiApplication>
 #include <QLocalServer>
 #include <QTemporaryDir>
@@ -22,6 +24,18 @@ void pumpUntil(auto predicate) {
     QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
   }
 }
+
+class ReentrantPasteData final : public QMimeData {
+public:
+  explicit ReentrantPasteData(std::function<void()> enter) : enter_(std::move(enter)) {}
+  QStringList formats() const override {
+    enter_();
+    return {QStringLiteral("text/plain")};
+  }
+
+private:
+  std::function<void()> enter_;
+};
 
 enum class Replacement { pane, pane_generation, client_generation, connection_epoch };
 enum class DeferredEvent { prompt, answer, execution };
@@ -98,7 +112,72 @@ struct ClipboardConnectionTest {
     require(!connection.clipboard_operations_.contains(current.nonce), "Matching completion did not finish the current operation");
   }
 
+  static QByteArray receiveFrame(QLocalSocket &peer) {
+    pumpUntil([&] { return peer.bytesAvailable() >= static_cast<qint64>(telar::frame_prefix_size); });
+    const auto prefix = peer.read(telar::frame_prefix_size);
+    auto encoded = std::span{reinterpret_cast<const telar::Byte *>(prefix.constData()), static_cast<std::size_t>(prefix.size())};
+    const auto length = telar::u32::decode(encoded);
+    require(length <= telar::max_payload_size, "Invalid private peer frame length");
+    pumpUntil([&] { return peer.bytesAvailable() >= length; });
+    return peer.read(length);
+  }
+
+  static void pasteWire() {
+    QTemporaryDir directory{QStringLiteral("/tmp/telar-clipboard-paste-XXXXXX")};
+    require(directory.isValid(), "Could not create private paste directory");
+    const auto path = directory.filePath(QStringLiteral("runtime.sock"));
+    QLocalServer server;
+    require(server.listen(path), "Could not listen on private paste socket");
+    RuntimeConnection connection{path, telar::WorkspaceLocation{.id = 1}};
+    connection.socket_.connectToServer(path);
+    pumpUntil([&] { return connection.socket_.state() == QLocalSocket::ConnectedState && server.hasPendingConnections(); });
+    std::unique_ptr<QLocalSocket> peer{server.nextPendingConnection()};
+    const auto hello = receiveFrame(*peer);
+    require(hello.size() == telar::HandshakeCodec::encode(telar::ClientHello{}).size(), "Missing private client hello");
+    connection.handshake_ = true;
+    connection.attached_.insert(7);
+    connection.generations_[7] = 11;
+    const QString oversized(telar::clipboard_content_limit + 1, QChar{'x'});
+    const QStringList formats{QStringLiteral("text/plain"), QStringLiteral("text/html")};
+    for (const bool listing_only : {true, false}) {
+      const auto text = listing_only ? oversized : QString::fromUtf8("hello 界");
+      connection.sendPaste(7, text, formats, listing_only);
+      const auto wire = receiveFrame(*peer);
+      std::array<telar::Byte, 4096> arena;
+      telar::DecodeStorage storage{arena};
+      const auto request = telar::Codec::decode<telar::PastePaneClipboard>({reinterpret_cast<const telar::Byte *>(wire.constData()), static_cast<std::size_t>(wire.size())}, storage);
+      require(request.pane_id == 7 && request.pane_generation == 11 && request.listing_only == listing_only, "Paste wire identity or kind changed");
+      require(request.available.size() == 2 && request.available[0] == "text/plain" && request.available[1] == "text/html", "Paste wire MIME listing changed");
+      const auto expected = listing_only ? QByteArray{} : text.toUtf8();
+      require(std::string_view{reinterpret_cast<const char *>(request.text.data()), request.text.size()} == std::string_view{expected.constData(), static_cast<std::size_t>(expected.size())}, "Paste wire text changed");
+    }
+    for (const bool reconnect : {false, true}) {
+      const auto request_before = connection.request_;
+      const auto generation_before = connection.generations_.at(7);
+      ReentrantPasteData source{[&] {
+        if (reconnect) {
+          connection.disconnected();
+          connection.retry_.stop();
+          connection.handshake_ = true;
+          connection.attached_.insert(7);
+          connection.generations_[7] = generation_before;
+        } else {
+          ++connection.generations_[7];
+        }
+      }};
+      connection.pasteFrom(7, true, [&](bool listing) { return readClipboardPaste(&source, listing); });
+      require(connection.request_ == request_before, "Reentrant read retargeted a paste to a replacement connection or pane generation");
+    }
+    connection.sendPaste(7, oversized, formats, false);
+    require(connection.error_ == "Paste exceeds the clipboard limit", "Oversized ordinary paste was not rejected");
+    bool delivered = false;
+    QTimer::singleShot(0, &connection, [&] { delivered = true; });
+    pumpUntil([&] { return delivered; });
+    require(peer->bytesAvailable() == 0 && connection.socket_.bytesToWrite() == 0, "Rejected paste was sent to the runtime");
+  }
+
   static void run() {
+    pasteWire();
     for (const auto deferred : {DeferredEvent::execution, DeferredEvent::prompt, DeferredEvent::answer}) {
       for (const auto replacement : {Replacement::pane, Replacement::pane_generation, Replacement::client_generation, Replacement::connection_epoch}) {
         deferredCompletion(replacement, deferred);

@@ -499,6 +499,7 @@ private:
     screen.input_modes.cursor_keys = mode(GHOSTTY_MODE_DECCKM);
     screen.input_modes.keypad_keys = mode(GHOSTTY_MODE_KEYPAD_KEYS);
     screen.input_modes.bracketed_paste = mode(GHOSTTY_MODE_BRACKETED_PASTE);
+    screen.input_modes.paste_events = control_.pasteEvents();
     screen.input_modes.focus_events = mode(GHOSTTY_MODE_FOCUS_EVENT);
     screen.input_modes.alternate_scroll = mode(GHOSTTY_MODE_ALT_SCROLL);
     GhosttyTerminalScreen active_screen{};

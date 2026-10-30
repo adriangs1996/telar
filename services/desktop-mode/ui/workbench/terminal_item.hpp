@@ -22,7 +22,7 @@ namespace workbench {
     std::function<void(telar::TerminalSize)> resized;
     std::function<void(std::uint32_t)> scrolled;
     std::function<void(telar::ConfigurePaneDesktop)> desktopChanged;
-    std::function<void(const QString &, const QStringList &)> paste;
+    std::function<void(bool)> paste;
     void configure(const QVariantMap &options);
     void refresh();
     void setPresented(bool presented);

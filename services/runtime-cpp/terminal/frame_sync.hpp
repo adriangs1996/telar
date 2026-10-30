@@ -159,7 +159,7 @@ private:
       return std::tie(frame.cursor.visible, frame.cursor.x, frame.cursor.y, frame.cursor.shape, frame.cursor.blink,
                       frame.mouse.tracking, frame.mouse.sgr, frame.mouse.pixels,
                       frame.input_modes.cursor_keys, frame.input_modes.keypad_keys, frame.input_modes.bracketed_paste,
-                      frame.input_modes.focus_events, frame.input_modes.alternate_scroll, frame.input_modes.alternate_screen,
+                      frame.input_modes.paste_events, frame.input_modes.focus_events, frame.input_modes.alternate_scroll, frame.input_modes.alternate_screen,
                       frame.input_modes.kitty_keyboard_flags, frame.input_modes.modify_other_keys_2,
                       frame.pointer_shape, frame.scroll.total_rows, frame.scroll.offset);
     };

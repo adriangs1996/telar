@@ -4,6 +4,8 @@
 #include "client_peer.hpp"
 #include "ui/workbench/clipboard_task.hpp"
 #include <cstdio>
+#include <poll.h>
+#include <termios.h>
 
 using namespace telar;
 using namespace telar::runtime;
@@ -352,6 +354,24 @@ void asynchronousOrder(auto &memory) {
   check(result.ends_with("\x1b]5522;type=read:status=DONE:id=order\x1b\\\x1b[I"));
 }
 
+std::string ptyUntil(int descriptor, std::string_view suffix, std::string_view marker = {}) {
+  std::string result;
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
+  while (!result.ends_with(suffix) || !result.contains(marker)) {
+    check(std::chrono::steady_clock::now() < deadline);
+    pollfd pending{.fd = descriptor, .events = POLLIN, .revents = 0};
+    if (::poll(&pending, 1, 10) <= 0) {
+      continue;
+    }
+    std::array<char, 4096> output;
+    const auto count = ::read(descriptor, output.data(), output.size());
+    check(count > 0);
+    result.append(output.data(), static_cast<std::size_t>(count));
+    check(result.size() <= 8192);
+  }
+  return result;
+}
+
 void actualRouting(SystemAllocator &memory) {
   RuntimeModel model{memory};
   Kqueue poller;
@@ -382,7 +402,42 @@ void actualRouting(SystemAllocator &memory) {
   check(service.complete(second.session(), completion) == &pane);
   check(drain(pane.terminal) == "\x1b]5522;type=read:status=EPERM:id=route\x1b\\");
   check(service.complete(second.session(), completion) == nullptr);
+
+  const auto descriptor = pane.process->descriptor();
+  termios attributes{};
+  check(::tcgetattr(descriptor, &attributes) == 0);
+  ::cfmakeraw(&attributes);
+  check(::tcsetattr(descriptor, TCSANOW, &attributes) == 0);
+  service.configure(pane);
+  const std::array<std::string_view, 2> available{"text/plain", "text/html"};
+  PastePaneClipboard paste{.request_id = 41, .pane_id = pane.id, .pane_generation = pane.generation, .listing_only = true, .text = bytes("must-not-be-pasted"), .available = available};
+  pane.terminal.feed(bytes("\x1b[?5522h"));
+  panes.pasteClipboard(second.session(), paste);
+  check(second.receive<RequestCompleted>().request_id == paste.request_id);
+  const auto event = ptyUntil(descriptor, "\x1b\\", "status=DONE:pw=");
+  check(event.starts_with("\x1b]5522;type=read:status=OK:pw="));
+  check(event.contains("status=DATA:mime=Lg==:pw="));
+  check(event.contains(";dGV4dC9wbGFpbiB0ZXh0L2h0bWwK\x1b\\"));
+  check(event.contains("status=DONE:pw=") && !event.contains("must-not-be-pasted"));
+
+  pane.terminal.feed(bytes("\x1b[?5522l"));
+  ++paste.request_id;
+  panes.pasteClipboard(second.session(), paste);
+  check(second.receive<RequestCompleted>().request_id == paste.request_id);
+  check(pane.input.empty() && pane.terminal.responses().empty());
+  pane.terminal.feed(bytes("\x1b[?5522h\x1b[?2004h"));
+  ++paste.request_id;
+  paste.listing_only = false;
+  paste.text = {};
+  panes.pasteClipboard(second.session(), paste);
+  check(second.receive<RequestCompleted>().request_id == paste.request_id);
+  ++paste.request_id;
+  paste.text = bytes("ordinary text");
+  panes.pasteClipboard(second.session(), paste);
+  check(second.receive<RequestCompleted>().request_id == paste.request_id);
+  check(ptyUntil(descriptor, "\x1b[201~") == "\x1b[200~ordinary text\x1b[201~");
   panes.remove(pane.id);
+
 }
 
 void deferredAllocationFailure() {

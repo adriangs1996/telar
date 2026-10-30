@@ -24,17 +24,9 @@ namespace telar {
         'C',
     };
 
-    // Matches the single current schema in src/core/schema/handshake.zig.
-    inline constexpr SchemaId schema_id{
-        '8',
-        '8',
-        '6',
-        'b',
-        '4',
-        '8',
-        '0',
-        'd',
-    };
+    // Native control-query schema. Reject clients with the earlier frame
+    // layout instead of interpreting their input-mode bytes at new offsets.
+    inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '0', '1'};
 
   } // namespace handshake
 

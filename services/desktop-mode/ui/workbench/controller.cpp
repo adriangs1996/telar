@@ -437,8 +437,10 @@ namespace workbench {
           runtime.input(pane, bytes);
         };
 
-        view.terminal->paste = [&runtime = *workspace.runtime, pane](const QString &text, const QStringList &available) {
-          runtime.paste(pane, text, available);
+        view.terminal->paste = [runtime = QPointer<RuntimeConnection>{workspace.runtime.get()}, pane](bool listing_only) {
+          if (runtime) {
+            runtime->paste(pane, listing_only);
+          }
         };
 
         view.terminal->desktopChanged = [&runtime = *workspace.runtime, pane](telar::ConfigurePaneDesktop state) {

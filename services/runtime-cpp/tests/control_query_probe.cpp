@@ -190,3 +190,30 @@ extern "C" std::uint64_t query_probe_clipboard_count(void *context, std::uint32_
   auto &fixture = *static_cast<Probe *>(context)->clipboard;
   return kind == 0 ? fixture.reads : kind == 1 ? fixture.writes : fixture.prompts;
 }
+
+extern "C" bool query_probe_clipboard_paste(void *context, bool primary) noexcept {
+  try {
+    auto &probe = *static_cast<Probe *>(context);
+    const Probe::Active active{probe};
+    if (!probe.clipboard) {
+      return false;
+    }
+    if (probe.terminal.pasteEvents()) {
+      std::array<std::string_view, 16> available;
+      std::size_t count = 0;
+      for (const auto &content : probe.clipboard->contents) {
+        if (count == available.size()) {
+          break;
+        }
+        available[count++] = content.mime;
+      }
+      if (!probe.terminal.clipboardControl().paste({1, 13}, primary, std::span{available}.first(count))) {
+        return false;
+      }
+      probe.terminal.resumeControl();
+    }
+    return true;
+  } catch (...) {
+    return false;
+  }
+}

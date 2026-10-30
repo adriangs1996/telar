@@ -58,6 +58,16 @@ static void testTerminalStorage() {
 
 void testTerminal() {
   testTerminalStorage();
+  {
+    SystemAllocator memory;
+    Terminal terminal{memory, TerminalSize{80, 24, 9, 18}};
+    for (const auto input : {"\x1b[?5522h", "\x1b[?5522l", "\x1b[?5522h", "\x1b" "c"}) {
+      terminal.feed(bytes(input));
+      terminal.refresh();
+      check(terminal.screen.input_modes.paste_events == terminal.pasteEvents());
+      check(terminal.pasteEvents() == std::string_view{input}.ends_with('h'));
+    }
+  }
   SystemAllocator system;
   BudgetAllocator memory{system, 64 * 1024 * 1024};
 

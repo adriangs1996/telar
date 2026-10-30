@@ -1,15 +1,28 @@
 #include "runtime_connection.hpp"
 #include "clipboard_consent.hpp"
 #include "clipboard_provider.hpp"
+#include "clipboard_paste.hpp"
 #include <QPointer>
 
 namespace workbench {
-  void RuntimeConnection::paste(std::uint64_t pane, const QString &text, const QStringList &available) {
+  void RuntimeConnection::paste(std::uint64_t pane, bool listing_only) {
+    pasteFrom(pane, listing_only, [](bool listing) {
+      const auto *clipboard = QGuiApplication::clipboard();
+      return readClipboardPaste(clipboard != nullptr ? clipboard->mimeData() : nullptr, listing);
+    });
+  }
+
+  void RuntimeConnection::sendPaste(std::uint64_t pane, const QString &text, const QStringList &available, bool listing_only) {
     const auto generation = generations_.find(pane);
     if (!ready() || !attached_.contains(pane) || generation == generations_.end()) {
       return;
     }
-    const auto encoded = text.toUtf8();
+    if (!listing_only && static_cast<std::size_t>(text.size()) > telar::clipboard_content_limit) {
+      error_ = "Paste exceeds the clipboard limit";
+      notify();
+      return;
+    }
+    const auto encoded = listing_only ? QByteArray{} : text.toUtf8();
     if (static_cast<std::size_t>(encoded.size()) > telar::clipboard_content_limit) {
       error_ = "Paste exceeds the clipboard limit";
       notify();
@@ -19,6 +32,9 @@ namespace workbench {
     std::array<std::string_view, 16> mimes;
     std::size_t count = 0;
     for (const auto &mime : available) {
+      if (mime.isEmpty() || mime.size() > 256) {
+        continue;
+      }
       const auto bytes = mime.toUtf8();
       if (bytes.isEmpty() || bytes.size() > 256) {
         continue;
@@ -29,7 +45,7 @@ namespace workbench {
         break;
       }
     }
-    send(telar::PastePaneClipboard{.request_id = request_++, .pane_id = pane, .pane_generation = generation->second, .text = {reinterpret_cast<const telar::Byte *>(encoded.constData()), static_cast<std::size_t>(encoded.size())}, .available = std::span{mimes}.first(count)});
+    send(telar::PastePaneClipboard{.request_id = request_++, .pane_id = pane, .pane_generation = generation->second, .listing_only = listing_only, .text = {reinterpret_cast<const telar::Byte *>(encoded.constData()), static_cast<std::size_t>(encoded.size())}, .available = std::span{mimes}.first(count)});
   }
 
   void RuntimeConnection::cancelClipboard(std::uint64_t pane) {

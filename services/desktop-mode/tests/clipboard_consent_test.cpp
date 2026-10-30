@@ -1,5 +1,6 @@
 #include "ui/workbench/clipboard_consent.hpp"
 #include "ui/workbench/clipboard_provider.hpp"
+#include "ui/workbench/clipboard_paste.hpp"
 #include <QGuiApplication>
 #include <cstdio>
 #include <cstdlib>
@@ -114,6 +115,55 @@ protected:
   }
 };
 
+class PasteMimeData final : public QMimeData {
+public:
+  mutable unsigned materialized = 0;
+  QString value = QString(telar::clipboard_content_limit + 1, QChar{'x'});
+  QStringList formats() const override { return {QStringLiteral("text/plain"), QStringLiteral("text/html")}; }
+
+protected:
+  QVariant retrieveData(const QString &, QMetaType) const override {
+    ++materialized;
+    return value;
+  }
+};
+
+class ChangingFormats final : public QMimeData {
+public:
+  explicit ChangingFormats(std::function<void()> change) : change_(std::move(change)) {}
+  QStringList formats() const override {
+    auto change = change_;
+    const QStringList result{QStringLiteral("text/plain")};
+    change();
+    return result;
+  }
+
+private:
+  std::function<void()> change_;
+};
+
+void pasteListing() {
+  const auto empty = readClipboardPaste(nullptr, true);
+  require(empty && empty->text.isEmpty() && empty->available.isEmpty());
+  PasteMimeData source;
+  const auto listed = readClipboardPaste(&source, true);
+  require(listed && listed->text.isEmpty() && listed->available == source.formats());
+  require(source.materialized == 0);
+  require(!readClipboardPaste(&source, false));
+  require(source.materialized != 0);
+  source.value = QString::fromUtf8("hello 界");
+  const auto ordinary = readClipboardPaste(&source, false);
+  require(ordinary && ordinary->text == source.value);
+
+  std::unique_ptr<QMimeData> changing;
+  changing = std::make_unique<ChangingMimeData>([&changing] { changing = std::make_unique<QMimeData>(); });
+  require(!readClipboardPaste(changing.get(), false));
+  for (const bool listing : {true, false}) {
+    changing = std::make_unique<ChangingFormats>([&changing] { changing = std::make_unique<QMimeData>(); });
+    require(!readClipboardPaste(changing.get(), listing));
+  }
+}
+
 void materializationLimitReproduction() {
   OversizedMimeData source;
   const std::array<std::string_view, 1> mimes{"application/oversized"};
@@ -129,6 +179,7 @@ int main(int argc, char **argv) {
   QGuiApplication application{argc, argv};
   decisions();
   inMemoryMimeReads();
+  pasteListing();
   invalidatedMimeView();
   materializationLimitReproduction();
   std::puts("Offscreen clipboard consent and in-memory MIME lifetime tests passed");

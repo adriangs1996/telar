@@ -136,6 +136,7 @@ struct PastePaneClipboard {
   std::uint64_t pane_id{};
   std::uint64_t pane_generation{};
   bool primary = false;
+  bool listing_only = false;
   std::span<const Byte> text;
   std::span<const std::string_view> available;
 };
@@ -148,6 +149,7 @@ struct MessageSchema<PastePaneClipboard>
              Field<&PastePaneClipboard::pane_id, NonzeroU64, "pane_id">,
              Field<&PastePaneClipboard::pane_generation, NonzeroU64, "pane_generation">,
              Field<&PastePaneClipboard::primary, BoolByte, "primary">,
+             Field<&PastePaneClipboard::listing_only, BoolByte, "listing_only">,
              Field<&PastePaneClipboard::text, SizedBytes<u32, clipboard_content_limit>, "text">,
              Field<&PastePaneClipboard::available, CountedSpan<u8, Utf8Text16<256>, 16>, "available">> {};
 
