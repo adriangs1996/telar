@@ -4,6 +4,19 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [activity hover correction](measurements/spatial-activity-hover.md) validates
+delivered card geometry and clipping, rejects unrelated exits and permits the
+accepted owner's late/detached exit. Four controlled negatives fail before their
+corrections; final directed4, native Window36, Quick88 and software Window36/Card9
+entries pass. Broad lint3 and delivered Neovim diagnostics4 pass. Corrected AppKit
+tracking-owner delivery exposes an earlier verifier limitation: the previous
+client and final candidate both have23/11/11 whole-window differences, with exact
+visited terminals/footers and12 picker glyph pixels. Earlier physical-cursor
+checks alone did not prove Qt received a move. No69608-pixel product improvement
+is claimed. Final native ASan/UBSan assertions pass36 but exit1 with1519013bytes
+in9279 leaked allocations; no local suppression is used. Full visuals, native
+focus/leaks and comparative full-client performance remain open.
+
 The [retained row text pass](measurements/row-text-retention.md) preserves ordinary
 row roots and updates compatible chunks in place while retiring surplus nodes.
 All 37 original component frames and synchronized node counts match; a stale
@@ -24,8 +37,9 @@ Transparent borders and standard sampling match all four scoped Metal probes,
 but specialized candidates consistently lose component CPU controls and remain
 rejected. Complete native pickers improve, while whole-window glyph differences
 persist. Identical-path and recorded physical-pointer controls also reproduce an
-activity hover error in the unchanged client; a separate correction is under
-validation. No renderer change or global acceptance gate is closed by this pass.
+activity hover error with an earlier native actor. The separate hover pass above
+corrects late owner retirement and verifies actual tracking delivery. No renderer
+change or global acceptance gate is closed by the margin investigation.
 
 The [workspace navigation checkpoint](measurements/workspace-navigation.md) uses
 canonical OpenPane handoffs, bounded original history/saved-layout policies and

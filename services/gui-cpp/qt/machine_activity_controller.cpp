@@ -12,6 +12,8 @@
 #include "presentation/activity_order.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <QByteArray>
+#include <QPointF>
+#include <QQuickItem>
 #include <QString>
 #include <QVariantMap>
 #include <QtCore/qchar.h>
@@ -35,6 +37,20 @@ namespace telar::gui::qt {
 namespace {
 
 using Order = ActivityOrder<ApplicationAllocator>;
+
+bool containsActivityPointer(const QQuickItem &card, QPointF position) {
+  if (!card.isVisible() || !card.isEnabled()) {
+    return false;
+  }
+
+  for (const auto *item = &card; item != nullptr; item = item->parentItem()) {
+    if ((item == &card || item->clip()) && !item->contains(item->mapFromScene(position))) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 MachineActivityTarget activityTarget(const MachineClient &source, const Order::Entry &entry) {
   if (entry.agent) {
@@ -218,15 +234,34 @@ QString Application::activityHover() const {
   return activity_hover_;
 }
 
-void Application::hoverActivity(const QString &identity) {
-  if (!activity_hover_pending_) {
+void Application::hoverActivity(const QString &identity, QQuickItem *card) {
+  const auto owned_exit = identity.isEmpty() && card != nullptr && activity_hover_card_ == card;
+  if (!activity_hover_pending_ && !owned_exit) {
     return;
   }
 
-  if (!identity.isEmpty()) {
+  if (identity.isEmpty()) {
+    if (card != nullptr && activity_hover_card_ != card) {
+      return;
+    }
+
+    activity_hover_card_.clear();
+  } else {
+    if (card != nullptr && (card->window() != window_ || !activity_pointer_position_ || !containsActivityPointer(*card, *activity_pointer_position_))) {
+      return;
+    }
+
     const auto row = std::ranges::find(activity_targets_, identity, &ActivityRowTarget::identity);
     if (row == activity_targets_.end() || !activityAvailable(row->target)) {
       return;
+    }
+
+    if (card != nullptr) {
+      if (activity_hover_card_ != card) {
+        activity_hover_card_ = card;
+      }
+    } else if (activity_hover_ != identity) {
+      activity_hover_card_.clear();
     }
   }
 
@@ -238,6 +273,8 @@ void Application::hoverActivity(const QString &identity) {
 }
 
 void Application::clearActivityHover() {
+  activity_hover_card_.clear();
+
   if (activity_hover_.isEmpty()) {
     return;
   }
@@ -246,8 +283,9 @@ void Application::clearActivityHover() {
   emit activityHoverChanged();
 }
 
-void Application::observeActivityPointer(bool hover_input) {
+void Application::observeActivityPointer(bool hover_input, std::optional<QPointF> position) {
   ++pointer_revision_;
+  activity_pointer_position_ = position;
   activity_hover_pending_ = hover_input;
   activity_hover_seen_ = false;
   if (!hover_input) {

@@ -101,6 +101,10 @@ struct MachineWindow {
     application.observeActivityPointer();
   }
 
+  static void pointerMoved(qt::Application &application, QPointF position) {
+    application.observeActivityPointer(true, position);
+  }
+
   static void rename(qt::Application &application, Machines::Slot slot, std::string_view label) {
     const auto &row = application.machines_.row(slot);
     application.machines_.update(slot, {.label = label, .destination = row.destination.view()});
@@ -952,6 +956,82 @@ class MachineWindowTest : public QObject {
     MachineWindow::pointerMoved(application);
     application.hoverActivity(local);
     application.hoverActivity(QString{});
+    QVERIFY(application.activityHover().isEmpty());
+  }
+
+  Q_SLOT static void activityHoverRejectsCardsOutsideDeliveredPointer() {
+    constexpr QSize window_size{800, 600};
+    constexpr QPointF card_origin{20, 40};
+    constexpr QSizeF clip_size{80, 80};
+    constexpr QSizeF card_size{120, 80};
+    constexpr QPointF clipped_pointer{130, 60};
+    constexpr QPointF visible_pointer{30, 60};
+    constexpr qreal moved_card_x = 200;
+    constexpr QPointF moved_pointer{210, 60};
+    constexpr QPointF terminal_pointer{600, 300};
+    MachineFixture fixture;
+    QQuickWindow window;
+    window.resize(window_size);
+    auto &application = fixture.application;
+    application.setWindow(window);
+    QVERIFY(fixture.start());
+    fixture.local_runtime->send(ClientLayoutSnapshot{});
+    fixture.remote_runtime->send(ClientLayoutSnapshot{});
+    QVERIFY(finishOpening(*fixture.local_runtime));
+    std::array agents{activityAgent("Pointer geometry")};
+    agents.front().session_id.front() = 1;
+    fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
+    QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
+    const auto identity = activityNamed(application, QStringLiteral("Pointer geometry")).value(QStringLiteral("key")).toString();
+
+    QQuickItem clipper{window.contentItem()};
+    clipper.setPosition(card_origin);
+    clipper.setSize(clip_size);
+    clipper.setClip(true);
+    QQuickItem card{&clipper};
+    card.setSize(card_size);
+    window.show();
+    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
+
+    MachineWindow::pointerMoved(application, clipped_pointer);
+    application.hoverActivity(identity, &card);
+    QTRY_VERIFY_WITH_TIMEOUT(application.activityHover().isEmpty(), wait_ms);
+    MachineWindow::pointerMoved(application, visible_pointer);
+    application.hoverActivity(identity, &card);
+    QCOMPARE(application.activityHover(), identity);
+    QCoreApplication::processEvents();
+
+    clipper.setX(moved_card_x);
+    MachineWindow::pointerMoved(application, visible_pointer);
+    application.hoverActivity(identity, &card);
+    QTRY_VERIFY_WITH_TIMEOUT(application.activityHover().isEmpty(), wait_ms);
+    MachineWindow::pointerMoved(application, moved_pointer);
+    application.hoverActivity(identity, &card);
+    QCOMPARE(application.activityHover(), identity);
+
+    const QQuickWindow foreign_window;
+    QQuickItem foreign_card{foreign_window.contentItem()};
+    application.hoverActivity(QString{}, &foreign_card);
+    QCOMPARE(application.activityHover(), identity);
+
+    QQuickItem peer_card{&clipper};
+    peer_card.setSize(card_size);
+    application.hoverActivity(identity, &peer_card);
+    application.hoverActivity(identity, &card);
+    QCoreApplication::processEvents();
+    application.hoverActivity(QString{}, &peer_card);
+    QCOMPARE(application.activityHover(), identity);
+
+    card.setParentItem(nullptr);
+    application.hoverActivity(QString{}, &card);
+    QVERIFY(application.activityHover().isEmpty());
+    card.setParentItem(&clipper);
+    QCoreApplication::processEvents();
+
+    MachineWindow::pointerMoved(application, terminal_pointer);
+    application.hoverActivity(identity, &card);
+    QTRY_VERIFY_WITH_TIMEOUT(application.activityHover().isEmpty(), wait_ms);
+    application.hoverActivity(identity, &card);
     QVERIFY(application.activityHover().isEmpty());
   }
 

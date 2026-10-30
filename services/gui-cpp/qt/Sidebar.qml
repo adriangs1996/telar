@@ -110,9 +110,9 @@ Rectangle {
         visible: root.expanded
         onSelected: key => root.agentSelected(key)
         onPeekRequested: key => root.agentPeekRequested(key)
-        onHovered: key => {
+        onHovered: (key, card) => {
             if (activityList.semanticHover) {
-                root.controller.hoverActivity(key);
+                root.controller.hoverActivity(key, card);
             }
         }
     }

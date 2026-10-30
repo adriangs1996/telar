@@ -275,12 +275,18 @@ bool PointerDispatcher::eventFilter(QObject *watched, QEvent *event) {
     case QEvent::Wheel:
       return application_.handleHistoryWheel(dynamic_cast<QWheelEvent &>(*event));
     case QEvent::MouseButtonPress:
-    case QEvent::MouseButtonDblClick:
-      application_.observeActivityPointer();
-      return press(dynamic_cast<QMouseEvent &>(*event));
-    case QEvent::MouseMove:
-      application_.observeActivityPointer();
-      return move(dynamic_cast<QMouseEvent &>(*event));
+    case QEvent::MouseButtonDblClick: {
+      auto &mouse = dynamic_cast<QMouseEvent &>(*event);
+      application_.observeActivityPointer(true, mouse.position());
+
+      return press(mouse);
+    }
+    case QEvent::MouseMove: {
+      auto &mouse = dynamic_cast<QMouseEvent &>(*event);
+      application_.observeActivityPointer(true, mouse.position());
+
+      return move(mouse);
+    }
     case QEvent::Leave:
       application_.observeActivityPointer(false);
       return false;

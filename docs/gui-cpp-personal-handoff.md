@@ -2,6 +2,228 @@
 
 ## Personal continuation checkpoint
 
+### Hover correction qualified in scope; continue remaining parity (10:44 UTC)
+
+Final hover candidate GUI875e05969ba6b3809be868edbbe7859b9ce94e14e46e195c53bb7e43d09e751f,
+controller0ab5946ae90c3479ceeffeb788523c2de9571ceacb09bed420b388acb9001b96.
+All6 source files match frozen local/hover-late-exit-final. Four negatives FAIL
+their intended checks, actualGUIexit1: clipping, foreign exit, detached exit,
+late owner exit. Positive focused4, nativeWindow36, Quick88(noQWARN), software
+Window36/Card9 PASS actualexit0. Card final is relinked offscreen label2;
+label1 had an earlier executable and remains retained. NativeASAN assertions36
+PASS but actualexit1 leaks1519013bytes9279alloc; observed ObjCtable8/288.
+detect_leaks1,UBSANhalt1,noLSAN/local suppression; noaccess/UB. Unchanged broad
+lint3 PASS; actual delivered empty Neovimclangd4 PASS. No active builds/UI/tests.
+
+Important native actor correction: previous actor calls inherited QNSView
+mouseMoved/Entered directly. Physical cursor600,300 was real, but Qt did NOT
+receive that move. Public NSTrackingArea.owner delivery reaches its actual
+QNSViewMouseMoveHelper; no hardcoded class/private Qt method. Memory-buffer
+diagnostic now records delivered600,300 and a reset that clearshover. Same actor
+on Zig and previous C++A BOTH gives23/11/11, picker12, visitedterminals/footers0.
+Final uninstrumented candidate SAME counts. Old actor final candidate repeated2
+also23/11/11. Do NOT claim69608-pixel product improvement; it was confounded by
+the actor. Functional correction is supported by controlled regressions and
+native preservation, not a new visual gain. Old48-record buffer reproduces
+late owner exit discarded afterbatch; that defect IS fixed. Scoped native test
+host still only qualifies its activation preparation, not global focus parity.
+
+Report measurements/spatial-activity-hover.md and PARITY reflect this scope.
+Archive collector local/archive_spatial_hover.py has now RUN:764artifacts17.4MB,
+source tar, complete failures/logs/nativeframes, no executables/privatekeys.
+Manifest spatial-activity-hover-validation.json; verifier
+spatial-activity-hover/verify_spatial_hover.py --check-current-source PASS.
+Next: review/stage/local commit this correction+archive+handoff (no publish/merge),
+then CONTINUE remaining parity; no final at checkpoint. Older untracked
+personal-frame-delivery.md remains separate and still needs its archive.
+
+Next renderer experiment remains bounded UV icon sampling, NOT implemented.
+Avoid padded glyph variants G/I/J: measured consistent CPU losses, all rejected.
+Renderer roots unchanged since accepted row87eb. Read chrome_icon_scene.cpp,
+alpha_mask_material.{hpp,cpp}, alpha_mask_vertex.hpp and shader packs. A new
+icon-only36-byte vertex (old20 plus sourceUVbounds16) could zero replicated atlas
+gutters without padding/cache changes; preserve ordinary text and geometry.
+Must adapt private sampling probe to read actual vertex stride (currently20)
+and freeze fresh A on current accepted source before paired measurements.
+Maintain batching/material type distinction and portable shader pack variants;
+no unmeasured adoption. All full-client perf/platform/functional/leak gates OPEN.
+Keep Spanish meaningful updates<=60sec; no delegation or other worktrees.
+
+### Late owner exit reproduced and corrected; native capture running (10:30 UTC)
+
+Supersedes the10:03 next steps. Both owner builds2 actually finished0. Owner
+focused4/native36 and unchanged broad lint3 pass, but real owner1 had23/69619/11
+pixels. IDENTICAL owner2 has23/11/11, so the issue was intermittent. Logging
+input/state builds also pass the affected scene but perturb timing. Private
+hover-buffer-trace stores48 compact records in memory, dumps only at exit and
+reproduces69619 whole-window differences. It shows accepted hover remaining
+nonempty: the accepted card's empty exit arrives after pending=false and is
+rejected. All later positive reflow callbacks are rejected correctly. Earlier
+inference that actual failed-run C++ hover was empty was wrong; that observation
+belonged only to the successful logging run.
+
+New regression adds processEvents after adopting current card and before peer
+exit / detached owner exit. Previous controller fails exactly owner empty at
+line1027: actual GUIexit1,2pass1fail. Source/header/test/binary frozen in
+local/hover-late-exit-A with identities.json. New controller permits an empty
+exit outside the batch ONLY from the currently accepted nonnull weak owner.
+Positive callbacks and trusted no-card callbacks retain batch gating; other
+card exits remain rejected. Focused new+old tests PASS4, actualexit0. Release
+build ACTUALLY completed0 before tests. Candidate frozen in
+local/hover-late-exit-final; run_hover_late_exit_case.py uses that binary.
+
+ACTIVE native SSH capture session4986, labelchrome-identical-hover-late-exit-1,
+started10:30:15. Poll actual exit and compare all3 native images to Zigwarp2.
+Need stable uninstrumented captures, full native36, Quick88, final ASAN (old
+owner ASAN not yet run), broad lint and actual delivered Neovim diagnostics.
+Current report now explicitly WIP/intermittent; PARITY notes unresolved late
+exit. No spatial source commit/archive yet. Do not finish at this checkpoint.
+Never publish/merge/delegate; Spanish updates<=60sec.
+
+### Weak ownership fixes detached exits; owner build running (10:03 UTC)
+
+HEAD8f726aa90; no spatial-hover source commit yet. Same six source files WIP,
+plus handoff and untracked spatial-activity-hover.md/verifier skeleton. Older
+personal-frame-delivery.md remains unarchived. No publish/merge/delegation/final.
+Goal incomplete. Keep working, Spanish updates<=60sec (still breached repeatedly).
+
+Important discovery after09:22: actual full native test-host preparation was
+missing. Early raw Cocoa failures varied; original source/library35 also failed
+notification focus. Selecting only newest owned window avoids focusing previous
+and current in one poll, but not enough. Profile of restored-root wait shows
+main thread overwhelmingly QtTest sleep, not a render/guard hot loop. Queries
+median17.6ms,max644ms; no CPU saturation evidence. --all instead of --monitor all
+doesn't solve it. Private activation-only test edits NOT ADOPTED.
+
+Private hover_native_activation.m reuses proven live-capture AppKit activation:
+timer in OWN GUI process activates NSApp and orders its newest visible titled
+NSWindow forward once per window change. No fake Qt state or changed assertion/
+timeout. focused_hover_admission_window.py injects it into owned GUI only; external
+driver filters own PID, selects one window and verifies floating. Common host
+passes ORIGINAL35 and initial CURRENT36, both exit0/noQWARN. Quick88 native also
+passes without that preload. Original/current standalone native card BOTH8pass/
+1fail offlineCardsRetire..., hence preexisting; offscreenCard9pass. Raw failures,
+profile, queries, source epochs all retained. Global native focus remains OPEN.
+
+Initial spatial guard P GUI341b native nav23/11/11 versusA23/69619/11, picker12,
+all terminal/footer rectangles exact. Then added foreign-empty-exit regression:
+window-only guard537f rejects foreign empty exits; its negative FAILS as intended.
+But its final actual capture chrome-identical-hover-final-1 REINTRODUCES other
+scene69619 (whole23/69619/11). Do NOT claim this variant visually accepted. A new
+detached-exit regression demonstrates why window-only ownership is insufficient:
+legitimate card.setParentItem(nullptr) loses window and cannot clear. New negative
+hover-detached-exit-A snapshot/library/test FAIL2pass1fail with actualexit1.
+Weak-owner candidate currently adds QPointer<QQuickItem> activity_hover_card_ to
+Application. Positive hover validates target/window/point/clipping and updates
+the weak owner even when identity string stays the same. Empty exits only clear
+their accepted owner; a detached legitimate owner may clear, unrelated/retired
+delegates may not. Trusted no-card calls preserve existing behavior. Explicit
+clear resets weak owner. New test also adopts peer then current card at same
+identity and rejects late peer exit. Qt weak-guard adoption can involve framework
+allocation; do not claim zero Qt allocations (no model copy remains).
+
+Owner build1 Release and ASAN FINISHED0. Added only required blank line in
+clearActivityHover after those exits. CURRENT builds2 ACTIVE: Release session14502
+(Window/Quick/GUI), ASAN session93250(Window), launched10:02:27. Poll ACTUAL EXIT0
+before any test or C++ edit. Earlier I incorrectly started final-native-1 before
+Release build exit; binary changed during run, driver SHA assertion failed, entire
+attempt REJECTED. Exact cleanup found no remaining owned child. Keep rejected
+receipt/log, never count its35/1 output as qualification.
+
+Most recent PRE-owner GUI537f645418f602133dfa6d7c4563b61de12ed005774d45d4939f3121a14013e2.
+Pre-owner native admission final2 PASS36; full native ASAN PASS36 but EXIT1 leaks
+1467769bytes8887alloc, built-in ObjC12/480. Earlier initial full native ASAN had
+1548859/9150, also12/480. OffscreenASAN36 leaks239584/1082,3/120; focused native
+ASAN4 leaks527998/2592,9/360. No access/UB; detect_leaks1,UBSANhalt1,noLSAN/local
+suppression. Different source/workloads, no asserted leak delta. const foreign
+window test cleanup: Release object and binary BYTE IDENTICAL; ASAN object/binary
+changed, receipt hover-spatial-const-comparison.json. Do not overclaim ASAN reuse.
+
+NEXT after builds2 actually finish: run focused owner regression with common
+admission host first, full native Window36, full native ASAN36; freeze OWNER GUI
+under NEW private directory and run same real SSH navigation using SAME fixed
+physical dir and point600,300. Compare to chrome-identical-zig-warp-2; ghost
+background must disappear before source adoption. Then final Quick88, offscreen
+Window36 if needed, unchanged broad lint on changed files and actual Neovim.
+All old pre-owner passes are scoped only. No active UI/test currently.
+
+Archive_spatial_hover.py PREPARED NOT RUN; verifier skeleton EXISTS but hardcodes
+old341b/old P paths, must update ONLY after final evidence. Report draft likewise
+contains old scoped numbers; needs weak-owner/failed537f/final results. Extend
+patterns for owner/detached builder, source snapshots, admission helper .m/build
+metadata, final live capture and all source epochs. Native helper dylib must NOT
+be committed, only source/hash. Existing margins archive already committed3678
+files35MB and verifierpasses. Archive hover, updatePARITY/handoff, local commit,
+then CONTINUE bounded-UV icon shader hypothesis (still NOT IMPLEMENTED), Cocoa
+frame-delivery archive and every remaining functional/platform/performance gate.
+
+### Native focus compatibility investigation; no hover commit yet (09:22 UTC)
+
+HEAD8f726aa90 commits the complete rejected-margin report/archive/manifest,
+PARITY paragraph and earlier handoff. Renderer unchanged. Six hover source files
+remain WIP: qt/{application.hpp,machine_activity_controller.cpp,pointer_dispatcher.cpp,
+ActivityList.qml,Sidebar.qml}, tests/machine_window_test.cpp. Untracked draft
+spatial-activity-hover.md and older personal-frame-delivery.md. No publish/merge/
+delegation/final. User goal incomplete; do not end at checkpoint. Persistent-goal
+API still says blocked and cannot resume; explicit user resume authorizes work.
+
+Hover WIP has strong scoped proof: controlled no-guard regression FAIL1; guarded
+focused native PASS4; real native SSH P whole23/11/11 vsbaseline23/69619/11,
+removes69608 pixels, picker12 remains, terminals/footers exact. GUI341b395dd79160348a62765065468a91e54d6c29a694530958b8b7a5b6e150e0
+is still exact frozen P GUI. Complete native Quick PASS88,noQWARN. Documented
+offscreen Window PASS36,CardPASS9, both with known Sans Serif alias QWARN.
+All3 touched cpp units pass unchanged broad lint; actual4 Neovim clangd reports
+delivered empty. ASAN offscreenWindow PASS36 but EXIT1 leaks239584bytes1082alloc,
+built-in ObjC table3/120. Native focused PASS4 but EXIT1 leaks527998/2592,
+table9/360. No access/UB diagnostics, detect_leaks1,UBSANhalt1,noLSAN/local suppression.
+Different workloads, no before/after leak delta. All global gates remain OPEN.
+
+DO NOT call native focus compatibility qualified yet. First two full Cocoa
+Window runs each31pass/5fail; isolated current32/4; byte-identical current binary
+copied privately33/3. Private original source tests at87eb351e0 (old App header,
+fresh matching MOC) linked against frozen A library give34pass/1fail: notification
+current.isActive. Thus cannot simply label all extra current failures preexisting.
+Original builders/receipts: build_hover_original_tests.py, hover-original-tests/.
+Negative bridge (new API but no spatial guard) full native32/4, including the
+intended new regression, visible restored root, resizingPeek and notification.
+Captured all exact logs; do not weaken assertions, extend timeouts or claim
+causes established. Current nativeCard8pass/1fail offlineCardsRetire...; standalone
+card does not instantiate new controller. Original card binary built, NOT RUN yet.
+
+Private test-only activation candidate adds requestActivate after showing the
+two Peek windows and setWindow for restored geometry; card candidate adds it to
+offline hover. Root test sources have NOT adopted these changes. Qt official
+QWindow docs confirm requestActivate explicitly requests keyboard focus, whereas
+show only requests visibility. build_hover_activation_tests.py creates matching
+MOC and links current lib, activation Window34pass/2fail (visible restored root
+readiness +notification). Card activation binary exists, NOT RUN yet. Directory
+hover-activation-tests/; full trace/logs retained. No new production edit since
+spatial guard; no builds/lint/editor jobs remain.
+
+New concrete driver issue: it iterates/focuses ALL windows of the PID, overriding
+current.requestActivate with previous during the two-window notification case.
+Current experimental focused_hover_single_window.py only selects highest observed
+owned window-id per query (fixture opens target last), confirms floating after
+focus and re-arms missing ready flags. It runs PRIVATE ACTIVATION binary, not root.
+ACTIVE UI session44744, label hover-spatial-single-window-native-1, started09:21:11.
+Poll actual exit and inspect actual GUI receipt/Totals. No other UI/test/timing
+job active. If this fixes native suite, compare same driver on original/current
+without activation before adopting any test changes. Keep target-selection scope
+explicit; do not infer global focus correctness. Old drivers/source epochs stay.
+
+Spatial report draft exists; private archive_spatial_hover.py PREPARED NOT RUN,
+no spatial verifier/manifest yet. Extend artifact patterns for activation builders/
+sources/current native trials before archiving. Need final focused/full/native/
+ASAN/source/lint/editor evidence and all failures, local reviewed commit only
+after compatibility is understood. The rejected-margin verifier passes. Its
+3678-file35MB archive is already in8f726aa90 (no executables/keys).
+
+After hover qualification, continue bounded-UV icon sampling hypothesis (NOT
+IMPLEMENTED), frame-delivery archive and all PARITY functional/platform/perf gates.
+No closing from scoped gains. Spanish substantive updates<=60sec REQUIRED: long
+analysis STILL repeatedly breaches by minutes. Stop speculating, keep thoughts
+short, clock each batch and perform controlled experiments.
+
 ### Spatial hover correction passes native pixels and Quick (08:51 UTC)
 
 Goal remains unfinished; continue, never final at this checkpoint. No publish,

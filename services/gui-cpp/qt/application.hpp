@@ -40,6 +40,7 @@
 #include <QColor>
 #include <QHash>
 #include <QObject>
+#include <QPointF>
 #include <QPointer>
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -196,7 +197,7 @@ public:
   [[nodiscard]] QVariantMap peekState() const;
   [[nodiscard]] QVariantMap peekGeometry() const;
   [[nodiscard]] QString activityHover() const;
-  Q_INVOKABLE void hoverActivity(const QString &identity);
+  Q_INVOKABLE void hoverActivity(const QString &identity, QQuickItem *card = nullptr);
 
   enum class HistoryAction : quint8 {
     copy,
@@ -510,7 +511,7 @@ private:
   [[nodiscard]] bool peekOriginValid() const;
   void refreshPeek();
   void openActivityPeek(const MachineActivityTarget &target, const QString &identity, std::uint64_t pointer_revision);
-  void observeActivityPointer(bool hover_input = true);
+  void observeActivityPointer(bool hover_input = true, std::optional<QPointF> position = {});
   void clearActivityHover();
   void presentChange(Change change);
   void refreshPanes();
@@ -612,6 +613,8 @@ private:
   std::optional<PeekOrigin> peek_origin_;
   QString peek_editor_;
   QString activity_hover_;
+  QPointer<QQuickItem> activity_hover_card_;
+  std::optional<QPointF> activity_pointer_position_;
   bool activity_hover_pending_ = false;
   bool activity_hover_seen_ = false;
   bool activity_hover_reset_queued_ = false;

@@ -14,7 +14,7 @@ ListView {
     property bool semanticHover: false
     signal selected(string key)
     signal peekRequested(string key)
-    signal hovered(string key)
+    signal hovered(string key, Item card)
 
     clip: true
     cacheBuffer: 0
@@ -45,6 +45,7 @@ ListView {
             id: agentCard
 
             AgentCard {
+                id: agent
                 objectName: "agentCard"
                 record: entry.record
                 geometry: root.geometry
@@ -54,7 +55,7 @@ ListView {
                 animate: entry.animate
                 heldHover: entry.record.key === root.hoverIdentity
                 semanticHover: root.semanticHover
-                onHoverRequested: key => root.hovered(key)
+                onHoverRequested: key => root.hovered(key, agent)
                 onSelected: key => root.selected(key)
                 onPeekRequested: key => root.peekRequested(key)
             }
@@ -64,6 +65,7 @@ ListView {
             id: taskCard
 
             TaskCard {
+                id: task
                 objectName: "taskCard"
                 record: entry.record
                 geometry: root.geometry
@@ -73,7 +75,7 @@ ListView {
                 animate: entry.animate
                 heldHover: entry.record.key === root.hoverIdentity
                 semanticHover: root.semanticHover
-                onHoverRequested: key => root.hovered(key)
+                onHoverRequested: key => root.hovered(key, task)
                 onSelected: key => root.selected(key)
                 onPeekRequested: key => root.peekRequested(key)
             }
@@ -83,6 +85,7 @@ ListView {
             id: commandCard
 
             CommandCard {
+                id: command
                 objectName: "commandCard"
                 record: entry.record
                 geometry: root.geometry
@@ -91,7 +94,7 @@ ListView {
                 ratio: root.ratio
                 heldHover: entry.record.key === root.hoverIdentity
                 semanticHover: root.semanticHover
-                onHoverRequested: key => root.hovered(key)
+                onHoverRequested: key => root.hovered(key, command)
                 onSelected: key => root.selected(key)
             }
         }
