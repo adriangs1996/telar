@@ -39,6 +39,15 @@ public:
       return queue_.append(response, {});
     }
 
+    template <std::size_t Length>
+    bool tryPushFixed(const std::array<std::uint8_t, Length> &response) noexcept {
+      static_assert(Length <= message_byte_capacity);
+      if (!acquire()) {
+        return false;
+      }
+      return queue_.append(response, {});
+    }
+
     bool tryPushOwned(std::span<const std::uint8_t> response, std::shared_ptr<const void> owner) noexcept {
       if (!acquire()) {
         return false;

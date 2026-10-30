@@ -443,6 +443,10 @@ private:
     const auto request = parameters.values[0];
     const bool private_request = parameters.modifiers() == "?";
     if (request == 5 && !private_request) {
+      static constexpr std::array<std::uint8_t, 4> response{0x1b, '[', '0', 'n'};
+      if (!clipboard_.hasReply() && responses_.tryPushFixed(response)) {
+        return;
+      }
       reply_.append("\x1b[0n");
     } else if (request == 6) {
       auto position = state_.cursor();

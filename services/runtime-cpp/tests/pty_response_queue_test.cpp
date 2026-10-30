@@ -229,9 +229,17 @@ static void testWorkerPublicationFailure() {
   check(lifetime.expired() && queue.empty());
 }
 
+template <bool Fixed = false>
 static void testWorkerPriority() {
   PtyResponseQueue queue;
-  const std::array<std::uint8_t, 1> native_bytes{'N'};
+  const std::array<std::uint8_t, Fixed ? 4 : 1> native_bytes{'N'};
+  const auto publish = [](PtyResponseQueue::Producer &producer, const auto &bytes) {
+    if constexpr (Fixed) {
+      return producer.tryPushFixed(bytes);
+    } else {
+      return producer.tryPush(bytes);
+    }
+  };
   const std::array<std::uint8_t, 3> ack{'A', 'C', 'K'};
   for (unsigned index = 0; index < PtyResponseQueue::message_capacity; ++index) {
     check(queue.tryPush(native_bytes));
@@ -256,12 +264,12 @@ static void testWorkerPriority() {
   }
   {
     PtyResponseQueue::Producer native{queue};
-    check(!native.tryPush(native_bytes));
+    check(!publish(native, native_bytes));
   }
   std::jthread native{[&] {
     while (!drained.load(std::memory_order_acquire)) {
       PtyResponseQueue::Producer producer{queue};
-      if (!producer.tryPush(native_bytes)) {
+      if (!publish(producer, native_bytes)) {
         yielded.fetch_add(1, std::memory_order_relaxed);
       }
       producer.release();
@@ -275,7 +283,7 @@ static void testWorkerPriority() {
         check(message->size() == ack.size() && std::equal(message->begin(), message->end(), ack.begin()));
         ++received;
       } else {
-        check(message->size() == native_bytes.size() && message->front() == native_bytes.front());
+        check(message->size() == native_bytes.size() && std::equal(message->begin(), message->end(), native_bytes.begin()));
       }
       queue.consume(message->size());
     } else {
@@ -342,4 +350,5 @@ void testPtyResponseQueue() {
   testResponseOutbox();
   testWorkerPublicationFailure();
   testWorkerPriority();
+  testWorkerPriority<true>();
 }

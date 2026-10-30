@@ -89,6 +89,37 @@ void saturation(Memory &memory) {
 }
 
 template <Allocator Memory>
+void statusWorkerPriority(Memory &memory) {
+  auto responses = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory});
+  Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, responses};
+  require(responses->retainWorkerPriority());
+  terminal.feed(bytes("\x1b[5nZ"));
+  require(terminal.hasPendingControl() && responses->empty());
+  require(responses->tryPush(bytes("worker-ack")));
+  responses->releaseWorkerPriority();
+  terminal.resumeControl();
+  terminal.feed(bytes("\x1b[6n"));
+  require(drain(terminal) == "worker-ack\x1b[0n\x1b[1;2R");
+  require(!terminal.hasPendingControl() && responses->snapshot().dropped == 0);
+}
+
+template <Allocator Memory>
+void statusBytePressure(Memory &memory) {
+  auto responses = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory});
+  Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, responses};
+  auto owner = std::make_shared<std::vector<Byte>>(PtyResponseQueue::total_byte_capacity, 'x');
+  const std::weak_ptr lifetime{owner};
+  require(responses->tryPushOwned(*owner, owner));
+  owner.reset();
+  terminal.feed(bytes("\x1b[5n"));
+  require(terminal.hasPendingControl() && responses->snapshot().messages == 1);
+  terminal.consumeResponses(PtyResponseQueue::total_byte_capacity - 1);
+  require(!lifetime.expired() && responses->snapshot().bytes == 5);
+  require(drain(terminal) == "x\x1b[0n");
+  require(lifetime.expired() && !terminal.hasPendingControl() && responses->snapshot().dropped == 0);
+}
+
+template <Allocator Memory>
 void cursorEncodings(Memory &memory) {
   control::Reply reply{memory};
   PtyResponseQueue queue;
@@ -644,6 +675,8 @@ int main(int argc, char **argv) {
   colorEncodings(memory);
   cursorEncodings(memory);
   saturation(memory);
+  statusWorkerPriority(memory);
+  statusBytePressure(memory);
   longPaletteReply(memory);
   uniqueReplies(memory);
   clipboardWrites(memory);
