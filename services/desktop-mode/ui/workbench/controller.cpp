@@ -7,6 +7,7 @@
 #include "../../session_log.hpp"
 #include "runtime_connection.hpp"
 #include "terminal_item.hpp"
+#include "terminal_clipboard.hpp"
 #include "../desktop_ui.hpp"
 #include "../lua_surface.hpp"
 #include "../services.hpp"
@@ -437,11 +438,7 @@ namespace workbench {
           runtime.input(pane, bytes);
         };
 
-        view.terminal->paste = [runtime = QPointer<RuntimeConnection>{workspace.runtime.get()}, pane](bool listing_only) {
-          if (runtime) {
-            runtime->paste(pane, listing_only);
-          }
-        };
+        bindClipboardPaste(*view.terminal, *workspace.runtime, pane);
 
         view.terminal->desktopChanged = [&runtime = *workspace.runtime, pane](telar::ConfigurePaneDesktop state) {
           runtime.desktop(pane, state);
