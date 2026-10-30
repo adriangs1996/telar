@@ -8,6 +8,7 @@
 #include "graphics_query.hpp"
 #include "reports.hpp"
 #include "color_queries.hpp"
+#include "cursor_report.hpp"
 #include "identity.hpp"
 #include "parser.hpp"
 #include "policy.hpp"
@@ -443,11 +444,7 @@ private:
         position.row -= std::min(position.row, margins.top);
       }
 
-      reply_.append(private_request ? "\x1b[?" : "\x1b[");
-      reply_.number(static_cast<unsigned>(position.row) + 1);
-      reply_.append(";");
-      reply_.number(static_cast<unsigned>(position.column) + 1);
-      reply_.append(private_request ? ";1R" : "R");
+      cursorReport(reply_, position, private_request);
     } else if (private_request && request == scheme_request) {
       reply_.append(facts_.light ? "\x1b[?997;2n" : "\x1b[?997;1n");
     } else if (private_request && request == visibility_request) {

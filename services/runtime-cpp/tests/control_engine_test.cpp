@@ -85,6 +85,27 @@ void saturation(Memory &memory) {
 }
 
 template <Allocator Memory>
+void cursorEncodings(Memory &memory) {
+  control::Reply reply{memory};
+  PtyResponseQueue queue;
+  constexpr auto maximum = std::numeric_limits<std::uint16_t>::max();
+  for (unsigned value = 0; value <= maximum; ++value) {
+    for (const bool extended : {false, true}) {
+      const control::Position position{static_cast<std::uint16_t>(maximum - value), static_cast<std::uint16_t>(value)};
+      control::cursorReport(reply, position, extended);
+      std::array<char, 64> expected;
+      const auto size = std::snprintf(expected.data(), expected.size(), extended ? "\x1b[?%u;%u;1R" : "\x1b[%u;%uR", value + 1, maximum - value + 1);
+      require(size > 0 && static_cast<std::size_t>(size) < expected.size());
+      require(reply.publish(queue));
+      const auto response = queue.readable();
+      require(std::string_view{reinterpret_cast<const char *>(response.data()), response.size()} == std::string_view{expected.data(), static_cast<std::size_t>(size)});
+      queue.consumeBytes(response.size());
+      reply.clear();
+    }
+  }
+}
+
+template <Allocator Memory>
 void colorEncodings(Memory &memory) {
   Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
   for (const auto format : {control::ColorFormat::eight_bit, control::ColorFormat::sixteen_bit, control::ColorFormat::none}) {
@@ -337,6 +358,7 @@ int main(int argc, char **argv) {
   deferredEffects(memory);
   streamOrder(memory);
   colorEncodings(memory);
+  cursorEncodings(memory);
   saturation(memory);
   longPaletteReply(memory);
   uniqueReplies(memory);

@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """Compare ARM64 generated constants and linked instructions separately.
 
-Linked PAGE/PAGEOFF relocations are normalized only after checking the generated
-instruction operands and recursively resolved constant data. Arithmetic
+Generated operands and recursively resolved constant data are compared separately
+from linked PAGE/PAGEOFF-normalized instructions. This does not hash linked
+constant sections or prove every relocated target. Arithmetic
 immediates, registers, internal branch offsets and imported call names remain.
+Trailing linker padding is removed only when the last nonpadding instruction
+matches the generated function end and is a return, external tail branch, or
+a known nonreturning call. Padding within a function remains significant.
 """
 import argparse
 import hashlib
@@ -14,7 +18,7 @@ import subprocess
 import sys
 
 
-LOCAL_DATA = re.compile(r'\b(?:l_\.(?:str|constant)(?:\.\d+)?|lCPI\d+_\d+|[lL]JTI\d+_\d+)\b')
+LOCAL_DATA = re.compile(r'\b(?:l_\.(?:str|constant)(?:\.\d+)?|lCPI\d+_\d+|[lL]JTI\d+_\d+|l_switch\.table\.[\w.$]+)\b')
 
 
 def uncomment(line):
@@ -64,7 +68,7 @@ def generated_functions(path):
         if re.match(r'^_[\w.$]+:', raw):
             name = raw.split(':', 1)[0]
             body = []
-        if name and re.match(r'^\t[a-z][a-z0-9.]*\s', raw):
+        if name and re.match(r'^\t[a-z][a-z0-9.]*(?:\s|$)', raw):
             line = re.sub(r'\bLBB\d+_(\d+)', r'LBB_\1', uncomment(raw).strip())
             body.append(LOCAL_DATA.sub(lambda match: resolve(match[0]), line))
         if name and '.cfi_endproc' in raw:
@@ -73,7 +77,7 @@ def generated_functions(path):
     return result
 
 
-def linked_functions(path, objdump):
+def linked_functions(path, objdump, generated=None):
     indirect = subprocess.check_output([objdump, '--macho', '--indirect-symbols', str(path)], text=True)
     stubs = {int(match[1], 16): match[2] for line in indirect.splitlines()
              if (match := re.match(r'0x([a-f0-9]+)\s+\d+\s+(\S+)', line))}
@@ -111,6 +115,18 @@ def linked_functions(path, objdump):
             if operation == 'bl':
                 pages.difference_update('x' + str(index) for index in range(19))
             body.append(instruction)
+        expected = generated.get(header[1], []) if generated else []
+        if expected:
+            tail = re.sub(r'\s+', ' ', expected[-1])
+            terminal = tail == 'ret' or tail.startswith(('br ', 'b _')) or (
+                tail.startswith('bl ') and any(token in tail for token in
+                    ['___cxa_throw', '___stack_chk_fail', '__throw_length_error']))
+            end = len(body)
+            while end and body[end - 1] in ('nop', 'udf\t#0x0'):
+                end -= 1
+            linked_tail = re.sub(r'\s+', ' ', re.sub(r'<([^>]+)>', r'\1', body[end - 1])) if end else ''
+            if terminal and tail == linked_tail:
+                body = body[:end]
         result[header[1]] = body
     return result
 
@@ -129,7 +145,8 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     generated = [generated_functions(path) for path in [args.baseline_assembly, args.candidate_assembly]]
-    linked = [linked_functions(path, args.objdump) for path in [args.baseline_binary, args.candidate_binary]]
+    linked = [linked_functions(path, args.objdump, source) for path, source in
+              zip([args.baseline_binary, args.candidate_binary], generated)]
     selected = [name for name in generated[0] if any(token in name for token in
                 ['6Parser', 'GraphicsQueries', 'decodeGraphicsPayload', 'GraphicsQuery5parse', 'benchmarkComponent'])
                 or ('6Engine' in name and ('4feed' in name or '8complete' in name))]
@@ -141,10 +158,18 @@ def main():
                         'linked_equal': linked[0].get(name) == linked[1].get(name) and name in linked[0],
                         'generated_sha256': [digest(side.get(name, [])) for side in generated],
                         'linked_sha256': [digest(side.get(name, [])) for side in linked]}
+    shared = {}
+    for name in generated[0].keys() & generated[1].keys():
+        shared[name] = {'generated_equal': generated[0][name] == generated[1][name],
+                        'linked_equal': name in linked[0] and name in linked[1] and linked[0][name] == linked[1][name],
+                        'generated_sha256': [digest(side[name]) for side in generated],
+                        'linked_sha256': [digest(side.get(name, [])) for side in linked]}
     report = {'command': sys.argv, 'selected_graphics_functions': checks,
               'all_selected_equal': all(row['generated_equal'] and row['linked_equal'] for row in checks.values()),
               'generated_function_count': [len(side) for side in generated],
               'changed_generated_functions': [name for name in generated[0] if generated[0][name] != generated[1].get(name)],
+              'added_generated_functions': sorted(generated[1].keys() - generated[0].keys()),
+              'all_shared_functions': dict(sorted(shared.items())),
               'normalization': __doc__, 'harness_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
               'inputs': {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in
                          [args.baseline_assembly, args.candidate_assembly, args.baseline_binary, args.candidate_binary]}}
