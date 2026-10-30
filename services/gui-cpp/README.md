@@ -2238,3 +2238,9 @@ Fresh pointer input admits hover again. The retained previous binary exposes
 match744,576 native Cocoa pixels. The complete window, other environments and
 native leaks remain open. A bare Qt6.8.2 input-method control retains a separate
 Linux composition-state leak; no dependency library or suppression is changed.
+
+[Keyboard-open History hover](measurements/history-initial-hover.md) retires the
+previous row-hover admission when the dialog opens. A stationary pointer no longer
+highlights a newly created row; actual motion restores normal hover. The controlled
+previous binary exposes 137,809 differing result pixels. Other initial hover targets
+and complete modal input behavior remain open.

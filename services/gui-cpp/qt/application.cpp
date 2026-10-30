@@ -1282,6 +1282,10 @@ void Application::showDialog(const QString &kind, const QString &text) {
   presented_history_surface_ = {};
   presented_history_actions_ = {};
   pointer_dispatcher_.presentHistoryActions({});
+  if (kind == QStringView{u"history"}) {
+    pointer_dispatcher_.retireHistoryHover();
+  }
+
   dialog_ = kind;
   dialog_text_ = text;
   emit dialogChanged();

@@ -23,6 +23,7 @@ public:
   void beginChild(const ChildMouseView &view, ChildMouseSample sample);
   void release(Qt::MouseButton button);
   void presentHistoryActions(const HistoryActionSurface &surface);
+  void retireHistoryHover();
   [[nodiscard]] bool historyRowHoverEnabled() const noexcept { return history_row_hover_enabled_; }
   void abandon(TerminalItem &terminal);
   void ungrab(TerminalItem &terminal);

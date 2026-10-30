@@ -69,6 +69,10 @@ bool PointerDispatcher::historyGestureHeld() const noexcept {
   return std::ranges::any_of(captures_, [](const Capture &lease) { return lease.history.held(); });
 }
 
+void PointerDispatcher::retireHistoryHover() {
+  allowHistoryRowHover(false);
+}
+
 void PointerDispatcher::allowHistoryRowHover(bool allowed) {
   if (history_row_hover_enabled_ != allowed) {
     history_row_hover_enabled_ = allowed;
