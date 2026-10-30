@@ -172,6 +172,24 @@ void sharedPaneBudget(auto &memory) {
   check(global.used() == 0);
 }
 
+void pngBudgetRecovery(auto &memory) {
+  constexpr std::string_view png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
+  for (const bool other_pane : {false, true}) {
+    MediaBudget budget{64 * 1024};
+    const GraphicsQueryResources resources{GraphicsLimits{.pane_bytes = 128 * 1024, .global_bytes = 64 * 1024}, budget};
+    Terminal first{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, {}, resources};
+    Terminal second{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, {}, resources};
+    check(query(first, "f=100", png) == "\x1b_Gi=9;OK\x1b\\");
+
+    // Decoder scratch must not starve a later request, including another pane.
+    const std::vector<Byte> pixels(128 * 100 * 4, 0);
+    check(query(other_pane ? second : first, "f=32,s=128,v=100", encoded(pixels)) == "\x1b_Gi=9;OK\x1b\\");
+    first.abortControl();
+    second.abortControl();
+    check(budget.used() == 0);
+  }
+}
+
 void sharedBudget(auto &memory) {
   MediaBudget global{4092};
   {
@@ -771,6 +789,7 @@ int main() {
   graphicsReplyEncodings(memory);
   graphicsHeaderParity(memory);
   sharedBudget(memory);
+  pngBudgetRecovery(memory);
   sharedPaneBudget(memory);
   interactiveAcknowledgements(memory);
   mediaAcknowledgements(system);
