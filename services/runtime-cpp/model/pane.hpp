@@ -21,6 +21,12 @@ namespace telar::runtime {
 
 template <Allocator Memory>
 class Pane {
+  struct ResponseWriter {
+    ssize_t operator()(int descriptor, std::span<const iovec> vectors) const {
+      return ::writev(descriptor, vectors.data(), static_cast<int>(vectors.size()));
+    }
+  };
+
 public:
   enum class ReadMode {
     once,
@@ -86,7 +92,10 @@ public:
     return true;
   }
 
-  void write() {
+  // The response writer borrows vectors only for this call. Only a positive
+  // syscall result consumes the admitted prefix; EINTR/EAGAIN retain it.
+  template <typename WriteResponses = ResponseWriter>
+  void write(WriteResponses write_responses = {}) {
     const auto batch = pty_responses->peekBatch();
     const bool response = batch.count != 0;
     const auto bytes = input.readable();
@@ -107,7 +116,7 @@ public:
           const auto message = batch.message(index);
           vectors[index] = {const_cast<Byte *>(message.data()), message.size()};
         }
-        return ::writev(process->descriptor(), vectors.data(), static_cast<int>(batch.count));
+        return write_responses(process->descriptor(), std::span<const iovec>{vectors}.first(batch.count));
       }
       return ::write(process->descriptor(), bytes.data(), bytes.size());
     }();

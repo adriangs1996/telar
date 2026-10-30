@@ -46,7 +46,7 @@ void ptyReports(auto &pane, auto &panes, std::string_view expected) {
   panes.flushInput(pane);
   std::string actual;
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
-  while (!actual.ends_with(marker)) {
+  while (actual.size() < expected.size() + marker.size() || !actual.ends_with(marker)) {
     check(std::chrono::steady_clock::now() < deadline);
     pollfd input{.fd = pane.process->descriptor(), .events = POLLIN, .revents = 0};
     const auto ready = ::poll(&input, 1, 10);
@@ -183,6 +183,92 @@ void notificationTransitions(SystemAllocator &memory) {
   panes.remove(pane.id);
 }
 
+void interruptedResponseWrites(SystemAllocator &memory) {
+  RuntimeModel model{memory};
+  Kqueue poller;
+  PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/control-interrupted-writes.sock"}};
+  WorkspaceService workspaces{memory, model, panes};
+  ClientPeer client{memory, model, ClientRole::interactive};
+  const std::array<std::string_view, 1> arguments{"/bin/cat"};
+  workspaces.open(client.session(), OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
+  auto &pane = panes.require(client.receive<PaneOpened>().pane_id);
+  termios settings{};
+  check(::tcgetattr(pane.process->descriptor(), &settings) == 0);
+  ::cfmakeraw(&settings);
+  check(::tcsetattr(pane.process->descriptor(), TCSANOW, &settings) == 0);
+  constexpr std::size_t owned_bytes = 2048;
+  auto owned = std::make_shared<std::vector<Byte>>(owned_bytes, 'x');
+  const std::weak_ptr lifetime{owned};
+  check(pane.pty_responses->tryPushOwned(*owned, owned));
+  std::string expected(owned_bytes, 'x');
+  owned.reset();
+  for (std::size_t index = 1; index < PtyResponseQueue::message_capacity; ++index) {
+    const auto response = "\x1b[" + std::to_string(index) + "n";
+    check(pane.pty_responses->tryPush({reinterpret_cast<const Byte *>(response.data()), response.size()}));
+    expected += response;
+  }
+  constexpr std::string_view status = "\x1b[5n";
+  pane.terminal.feed({reinterpret_cast<const Byte *>(status.data()), status.size()});
+  check(pane.terminal.hasPendingControl());
+  constexpr std::string_view user_input = "USER";
+  pane.input.append({reinterpret_cast<const Byte *>(user_input.data()), user_input.size()});
+  expected += "\x1b[0n";
+  expected += user_input;
+  enum class Result { interrupted, short_header, would_block, across_boundary, interrupted_again, drain };
+  constexpr std::array results{Result::interrupted, Result::short_header, Result::would_block, Result::across_boundary, Result::interrupted_again, Result::drain};
+  std::size_t calls = 0;
+  bool crossed_message = false;
+  const auto writer = [&](int descriptor, std::span<const iovec> vectors) -> ssize_t {
+    const auto result = calls < results.size() ? results[calls] : Result::drain;
+    ++calls;
+    if (result == Result::interrupted || result == Result::interrupted_again || result == Result::would_block) {
+      errno = result == Result::would_block ? EAGAIN : EINTR;
+      return -1;
+    }
+
+    auto remaining = result == Result::short_header ? 2 : result == Result::across_boundary ? owned_bytes + 7 : SIZE_MAX;
+    std::array<iovec, PtyResponseQueue::message_capacity> prefix;
+    std::size_t count = 0;
+    for (const auto vector : vectors) {
+      const auto length = std::min(remaining, vector.iov_len);
+      prefix[count++] = {vector.iov_base, length};
+      remaining -= length;
+      if (remaining == 0) {
+        break;
+      }
+    }
+    const auto written = ::writev(descriptor, prefix.data(), static_cast<int>(count));
+    check(written > 0 || (written < 0 && (errno == EAGAIN || errno == EINTR)));
+    if (written > 0 && static_cast<std::size_t>(written) > vectors.front().iov_len) {
+      crossed_message = true;
+    }
+    return written;
+  };
+
+  const auto original = pane.pty_responses->snapshot();
+  pane.write(writer);
+  check(calls == 1 && pane.pty_responses->snapshot().bytes == original.bytes && !lifetime.expired());
+  pane.write(writer);
+  check(calls == 2 && pane.pty_responses->snapshot().bytes == original.bytes - 2 && !lifetime.expired());
+  pane.write(writer);
+  check(calls == 3 && pane.pty_responses->snapshot().bytes == original.bytes - 2 && pane.terminal.hasPendingControl());
+  pane.write(writer);
+  check(calls == 4 && pane.pty_responses->snapshot().bytes < original.bytes - 2);
+  const auto retained = pane.pty_responses->snapshot();
+  pane.write(writer);
+  check(calls == 5 && pane.pty_responses->snapshot().bytes == retained.bytes);
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
+  while (!pane.pty_responses->empty()) {
+    check(std::chrono::steady_clock::now() < deadline);
+    pane.write(writer);
+  }
+  check(calls >= results.size() && crossed_message && lifetime.expired() && !pane.terminal.hasPendingControl() && !pane.input.empty());
+  pane.write();
+  check(!pane.hasInput() && pane.pty_responses->snapshot().dropped == 0);
+  ptyReports(pane, panes, expected);
+  panes.remove(pane.id);
+}
+
 void multipleClients(SystemAllocator &memory) {
   RuntimeModel model{memory};
   Kqueue poller;
@@ -255,5 +341,6 @@ int main() {
   multipleClients(memory);
   paletteNotification(memory);
   notificationTransitions(memory);
+  interruptedResponseWrites(memory);
   std::puts("Native control configuration and multi-client desktop tests passed");
 }

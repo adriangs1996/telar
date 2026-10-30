@@ -39,7 +39,7 @@ def stop_owned_process(process):
         time.sleep(0.005)
 
 
-def run(binary, probe):
+def run(binary, probe, allow_loss=False):
     with tempfile.TemporaryDirectory(prefix='telar-control-pty-', dir='/tmp') as directory:
         root = Path(directory)
         endpoint = root / 'runtime.sock'
@@ -62,8 +62,25 @@ def run(binary, probe):
                 result = subprocess.run([str(probe), str(endpoint), str(report)], env=environment,
                                         capture_output=True, text=True, timeout=40)
                 if result.returncode:
-                    raise RuntimeError(f'Probe failed: {result.returncode}: {result.stderr}; partial={report.read_text() if report.exists() else "missing"}')
+                    log.flush()
+                    log.seek(0)
+                    details = log.read()
+                    raise RuntimeError(f'Probe failed: {result.returncode}: {result.stderr}; partial={report.read_text() if report.exists() else "missing"}; runtime_log={details}')
                 measured = json.loads(report.read_text())
+                saturation = measured['saturation']
+                if saturation['queries'] != 5000 or saturation['expected_bytes'] != 20000:
+                    raise RuntimeError('Unexpected saturation workload')
+                if not saturation['byte_exact'] or saturation['received_bytes'] != saturation['received'] * 4:
+                    raise RuntimeError('Malformed or incomplete saturation response bytes')
+                if saturation['complete'] != (saturation['received'] == saturation['queries']):
+                    raise RuntimeError('Inconsistent saturation completion report')
+                if not allow_loss and not saturation['complete']:
+                    raise RuntimeError('Lost admitted saturation replies: ' + str(saturation))
+                if saturation['recovery_replies'] != 1:
+                    raise RuntimeError('PTY did not recover after saturation')
+                for case in measured['cases'].values():
+                    if case['warmup_ns'] < 150_000_000 or case['warmup_roundtrips'] < 1:
+                        raise RuntimeError('Insufficient PTY warmup')
             finally:
                 usage = stop_owned_process(server)
                 log.seek(0)
@@ -81,8 +98,10 @@ def main():
     parser.add_argument('--native', type=Path, required=True)
     parser.add_argument('--baseline', type=Path, required=True)
     parser.add_argument('--probe', type=Path, required=True)
+    parser.add_argument('--baseline-probe', type=Path, help='Same child workload built against the original baseline wire headers')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--pairs', type=int, default=7)
+    parser.add_argument('--allow-baseline-loss', action='store_true', help='Explicitly retain the defective original baseline; native still requires all5000 byte-exact replies')
     args = parser.parse_args()
     if args.pairs < 1:
         parser.error('--pairs must be positive')
@@ -93,7 +112,8 @@ def main():
         order = ['native', 'baseline'] if index % 2 == 0 else ['baseline', 'native']
         pair = {'order': order, 'load_before': os.getloadavg()}
         for name in order:
-            pair[name] = run(getattr(args, name).resolve(), args.probe.resolve())
+            probe = args.baseline_probe if name == 'baseline' and args.baseline_probe else args.probe
+            pair[name] = run(getattr(args, name).resolve(), probe.resolve(), allow_loss=name == 'baseline' and args.allow_baseline_loss)
         pairs.append(pair)
         print('pair', index + 1, {name: pair[name]['saturation'] for name in order}, flush=True)
     summary = {}
@@ -117,15 +137,16 @@ def main():
                                       'equivalent_within_5_percent' if interval[0] >= .95 and interval[1] <= 1.05 else
                                       'inconclusive')
     report = {'started_at': started, 'finished_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
-              'platform': platform.platform(), 'architecture': platform.machine(), 'pairs': pairs, 'summary': summary,
+              'platform': platform.platform(), 'baseline_loss_explicitly_allowed': args.allow_baseline_loss,
+              'native_saturation_requires_all_replies': True, 'warmup_minimum_ns_per_variant_per_case': 150_000_000, 'architecture': platform.machine(), 'pairs': pairs, 'summary': summary,
               'hashes': {str(path.resolve()): hashlib.sha256(path.read_bytes()).hexdigest()
-                         for path in [args.native, args.baseline, args.probe, Path(__file__)]},
+                         for path in [args.native, args.baseline, args.probe, *( [args.baseline_probe] if args.baseline_probe else []), Path(__file__)]},
               'processes_before': before, 'processes_after': process_snapshot(),
               'scope': 'Actual PTY child write through runtime to PTY child read. Baseline is original Telar C++ runtime, not Ghostty application. Burst latency is per 32-response round trip. Byte writes may coalesce in kernel.',
               'limits': ['No per-query allocations/copy counts; runtime maxrss covers its full lifetime including initialization.',
                          'Parent performs ReadPane every 2ms to drain/ack UI frames; this is part of both workloads.',
-                         'Saturation counts replies after a 100ms read pause; child_write_eagain counts child output writes, not runtime writev calls.',
-                         'Counter-based reply completion is a latency marker; byte-exact semantics are checked separately.',
+                         'Saturation validates every byte of complete CSI0n replies after a100ms read pause and requires5000 native replies; child_write_eagain counts child output writes, not runtime writev calls.',
+                         'Latency workloads use final-byte markers; saturation and recovery check complete response bytes. Other byte-exact semantics are checked separately.',
                          'CPU/RSS accounting from wait4 covers only the owned runtime process, excluding probe, pane child and other sessions.']}
     args.output.write_text(json.dumps(report, indent=2) + '\n')
 

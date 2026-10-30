@@ -10,7 +10,8 @@
 using namespace telar;
 using Clock = std::chrono::steady_clock;
 
-static constexpr std::size_t warmup_samples = 50;
+static constexpr auto minimum_warmup = std::chrono::milliseconds{150};
+static constexpr std::string_view status_reply = "\x1b[0n";
 static constexpr std::size_t measured_samples = 500;
 static constexpr auto response_timeout = std::chrono::seconds{5};
 
@@ -59,8 +60,7 @@ struct Workload {
 static void measure(std::ostream &output, const Workload &workload) {
   writeAll("\x1b" "c");
   std::this_thread::sleep_for(std::chrono::milliseconds{10});
-  std::array<std::uint64_t, measured_samples> samples;
-  for (std::size_t index = 0; index < warmup_samples + measured_samples; ++index) {
+  const auto roundtrip = [&] {
     const auto started = Clock::now();
     if (workload.fragment) {
       for (const char &byte : workload.input) {
@@ -70,12 +70,21 @@ static void measure(std::ostream &output, const Workload &workload) {
       writeAll(workload.input);
     }
     readReplies(workload.final, workload.replies);
-    const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - started).count();
-    if (index >= warmup_samples) {
-      samples[index - warmup_samples] = static_cast<std::uint64_t>(elapsed);
-    }
+    return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - started).count());
+  };
+  const auto warmup_started = Clock::now();
+  std::size_t warmup_count = 0;
+  do {
+    roundtrip();
+    ++warmup_count;
+  } while (Clock::now() - warmup_started < minimum_warmup);
+  const auto warmup_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - warmup_started).count();
+  std::array<std::uint64_t, measured_samples> samples;
+  for (auto &sample : samples) {
+    sample = roundtrip();
   }
   output << "\"" << workload.name << "\":{\"input_bytes\":" << workload.input.size()
+         << ",\"warmup_roundtrips\":" << warmup_count << ",\"warmup_ns\":" << warmup_ns
          << ",\"replies_per_roundtrip\":" << workload.replies << ",\"roundtrip_ns\":[";
   for (std::size_t index = 0; index < samples.size(); ++index) {
     output << (index ? "," : "") << samples[index];
@@ -143,7 +152,7 @@ static void saturate(std::ostream &output) {
   const auto started = Clock::now();
   auto last_activity = started;
   std::size_t sent = 0;
-  std::size_t replies = 0;
+  std::size_t received_bytes = 0;
   std::size_t child_write_eagain = 0;
   std::array<char, 4096> bytes;
   while (Clock::now() - started < response_timeout) {
@@ -161,7 +170,11 @@ static void saturate(std::ostream &output) {
     if (now - started >= std::chrono::milliseconds{100}) {
       const auto count = ::read(STDIN_FILENO, bytes.data(), bytes.size());
       if (count > 0) {
-        replies += std::count(bytes.begin(), bytes.begin() + count, 'n');
+        for (const char byte : std::span{bytes}.first(static_cast<std::size_t>(count))) {
+          check(received_bytes < queries * status_reply.size());
+          check(byte == status_reply[received_bytes % status_reply.size()]);
+          ++received_bytes;
+        }
         last_activity = now;
       } else {
         check(count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR));
@@ -175,9 +188,29 @@ static void saturate(std::ostream &output) {
   check(::fcntl(STDOUT_FILENO, F_SETFL, output_flags) == 0);
   check(::fcntl(STDIN_FILENO, F_SETFL, input_flags) == 0);
   check(sent == requests.size());
+  check(received_bytes % status_reply.size() == 0);
   writeAll("\x1b[5n");
-  readReplies('n', 1);
-  output << "\"saturation\":{\"queries\":" << queries << ",\"received\":" << replies
+  std::size_t recovery_bytes = 0;
+  const auto recovery_deadline = Clock::now() + response_timeout;
+  while (recovery_bytes < status_reply.size()) {
+    check(Clock::now() < recovery_deadline);
+    pollfd pending{STDIN_FILENO, POLLIN, 0};
+    const auto ready = ::poll(&pending, 1, 10);
+    check(ready >= 0 || errno == EINTR);
+    if (ready <= 0) {
+      continue;
+    }
+    const auto count = ::read(STDIN_FILENO, bytes.data(), bytes.size());
+    if (count < 0 && errno == EINTR) {
+      continue;
+    }
+    check(count > 0 && static_cast<std::size_t>(count) <= status_reply.size() - recovery_bytes);
+    check(std::string_view{bytes.data(), static_cast<std::size_t>(count)} == status_reply.substr(recovery_bytes, static_cast<std::size_t>(count)));
+    recovery_bytes += static_cast<std::size_t>(count);
+  }
+  output << "\"saturation\":{\"queries\":" << queries << ",\"received\":" << received_bytes / status_reply.size()
+         << ",\"received_bytes\":" << received_bytes << ",\"expected_bytes\":" << queries * status_reply.size()
+         << ",\"byte_exact\":true,\"complete\":" << (received_bytes == queries * status_reply.size() ? "true" : "false")
          << ",\"child_write_eagain\":" << child_write_eagain << ",\"recovery_replies\":1}";
 }
 
@@ -188,7 +221,7 @@ static int child(const char *report_path) {
   check(::tcsetattr(STDIN_FILENO, TCSANOW, &settings) == 0);
   std::ofstream output{report_path, std::ios::binary};
   check(output.good());
-  output << "{\"warmup\":" << warmup_samples << ",\"samples\":" << measured_samples << ",\"cases\":{";
+  output << "{\"warmup_minimum_ns\":" << std::chrono::duration_cast<std::chrono::nanoseconds>(minimum_warmup).count() << ",\"samples\":" << measured_samples << ",\"cases\":{";
   std::string burst;
   for (std::size_t index = 0; index < 32; ++index) {
     burst += "\x1b[5n";
@@ -205,6 +238,7 @@ static int child(const char *report_path) {
   for (std::size_t index = 0; index < workloads.size(); ++index) {
     output << (index ? "," : "");
     measure(output, workloads[index]);
+    output.flush();
   }
   output << "},";
   measureOrder(output);
@@ -213,7 +247,7 @@ static int child(const char *report_path) {
   output << "}\n";
   output.close();
   check(output.good());
-  writeAll("control-pty-measurement-complete");
+  writeAll("\r\ncontrol-pty-measurement-complete\r\n");
   for (;;) {
     char byte;
     if (::read(STDIN_FILENO, &byte, 1) <= 0) {
@@ -235,9 +269,14 @@ int main(int argc, char **argv) {
     const std::array<std::string_view, 3> arguments{argv[0], "--latency-child", argv[2]};
     const auto opened = peer.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
     const auto deadline = Clock::now() + std::chrono::seconds{30};
+    std::string last_screen;
     for (;;) {
-      check(Clock::now() < deadline);
+      if (Clock::now() >= deadline) {
+        std::fprintf(stderr, "PTY child did not finish; last screen: %s\n", last_screen.c_str());
+        return 1;
+      }
       const auto text = peer.exchange<PaneText>(ReadPane{.request_id = 2, .pane_id = opened.pane_id, .rows = 24});
+      last_screen = std::string{text.text};
       if (text.text.contains("control-pty-measurement-complete")) {
         break;
       }
