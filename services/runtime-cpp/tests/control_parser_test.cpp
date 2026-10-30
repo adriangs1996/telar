@@ -1,4 +1,5 @@
 #include "terminal/control/parser.hpp"
+#include "terminal/control/parameters.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <random>
@@ -89,6 +90,31 @@ void oversizedRecovery() {
     require(consumer.events == std::vector<std::string>{"1:6n:0"});
   }
   require(memory.liveBytes() == 0);
+}
+
+void parameterFallback() {
+  struct Case {
+    std::string_view body;
+    std::size_t count;
+    std::string_view modifiers;
+    bool colon;
+  };
+  constexpr Case cases[]{
+    {"?1234;5n", 2, "?", false},
+    {"?1234:5n", 2, "?", true},
+    {"?1234\x7f$n", 1, "?$", false},
+  };
+  for (const auto &item : cases) {
+    const auto parsed = Parameters::parse(item.body);
+    require(parsed.has_value());
+    require(parsed->count == item.count && parsed->modifiers() == item.modifiers);
+    require(parsed->colon == item.colon && parsed->final == 'n');
+    require(parsed->values[0] == 1234);
+    require(parsed->values[1] == (item.count == 2 ? 5 : 0));
+    for (std::size_t index = 2; index < parsed->values.size(); ++index) {
+      require(parsed->values[index] == 0);
+    }
+  }
 }
 
 void backpressure() {
@@ -412,5 +438,6 @@ int main() {
   stringHeaderClassificationOnce();
   boundedFuzz();
   oversizedRecovery();
+  parameterFallback();
   std::puts("Native control parser tests passed");
 }
