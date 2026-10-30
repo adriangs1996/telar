@@ -4,6 +4,20 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [terminal-session checkpoint](measurements/terminal-session.md) stops the
+receive loop at RuntimeStopping/terminal workspace status while retaining the
+last connected machine summary. Explicit selection resumes a fresh session;
+a read generation discards the previous callback's tail. Four window negatives,
+a parser negative and a reentrant socket negative fail before their fixes.
+Six Release groups and two Qt-free sanitizer groups pass; the adapter/window
+have 12/32 passing entries. Current native Quick passes 88 without warnings.
+Real SSH runtime restart keeps Local isolated and restores the remote identity
+and new pane generation. Its complete picker, two terminals and two footers match
+Zig, removing 1,779 status pixels; whole scenes retain header/sidebar differences.
+Native window exit leaks remain (224,996 bytes/912 allocations), with the observed
+Qt runtime suppression table and no local suppression. Navigation/history, full
+visuals, leaks and measured comparative performance stay open.
+
 The [runtime handshake checkpoint](measurements/runtime-handshake.md) enforces
 original 18-byte negotiation storage before allocating, expands on acceptance
 and preserves schema/capacity error text and permanent/transient policy. Its

@@ -2,6 +2,43 @@
 
 ## Personal continuation checkpoint
 
+### Terminal-session continuation after `413b8cfef`
+
+The next checkpoint after handshake implements the terminal runtime receive-loop
+boundary; see `services/gui-cpp/measurements/terminal-session.md` and its archived
+verifier/manifest. Four window negatives and a parser negative fail before the
+change. A separate reentrant negative proves that the old read tail can close a
+replacement handshake; connection generation now fences it. RuntimeConnection
+finishSession/resumeSession retain the last connected chrome without automatic
+retry, stop frame consumption immediately and resume on explicit selection.
+Application handles RuntimeStopping, last-tab and closed-workspace endings,
+including hidden sources; ordinary network loss remains retryable.
+
+Six affected Release groups pass, with 12 adapter and 32 window entries; two
+Qt-free sanitizer groups pass. Current native Quick passes 88 without warnings.
+Strict broad lint and actual editor checks pass. The first parser nesting/direct
+include lint failures are retained and fixed without profile changes. Adapter
+sanitizers pass/exit zero; window assertions pass 32 but exit leaks remain:
+224,996 bytes/912 allocations. Qt logs retain the runtime's three 120-byte
+`*_fetchInitializingClassList*` suppressed allocations, with no LSAN_OPTIONS or
+local suppression. Do not call the Qt exit wholly unsuppressed clean.
+
+Paired real owned SSH runtime stops/restarts retain Local isolation, destination
+identity and restore pane 1 generation 2. All owned exits/master cleanup are
+normal. Controlled metrics preserve repeatable CPU history; RuntimeStopping and
+restart are real. The pre-fix Qt outage picker differs by 1,779 pixels. The fixed
+full picker, two terminal regions and two footers now match original Zig exactly.
+Full windows retain 8,435/10,282 header/sidebar differences. Local data is
+`live-terminal-session-*` and `terminal-session-paired-*`; accepted Qt GUI SHA256
+is `33fdd6f392fc48fb20e9c09ca08d1e1fa912e5bee44d71680cbe47f56fe4f5ec`.
+
+Continue workspace/worktree navigation/history, including selectWorkspace and
+openWorktree cache-miss behavior against original handoff procedures, then the
+remaining PARITY.md gates. Optional pointer/15-pixel investigations below are
+still unqualified. Serialize all native/offscreen UI runs; do not edit C++ during
+active builds. Keep old manifests historical. The persistent goal stays active,
+unbudgeted and incomplete; a checkpoint is not finalization.
+
 ### Runtime handshake continuation
 
 The latest preceding local commits are `1978ec6be` (runtime link/offline input)

@@ -5,6 +5,7 @@
 #include <concepts>
 #include <cstddef>
 #include <stdexcept>
+#include <type_traits>
 
 namespace telar::gui {
 
@@ -72,13 +73,27 @@ public:
       input = input.subspan(count);
 
       if (payload_.size() == expected_) {
-        consume(std::span<const Byte>{payload_});
         prefix_used_ = 0;
+        if (!consumeFrame(consume)) {
+          return;
+        }
       }
     }
   }
 
 private:
+  template <typename Consumer>
+    requires std::invocable<Consumer &, std::span<const Byte>>
+  [[nodiscard]] bool consumeFrame(Consumer &consume) {
+    if constexpr (std::same_as<std::invoke_result_t<Consumer &, std::span<const Byte>>, bool>) {
+      return consume(std::span<const Byte>{payload_});
+    } else {
+      consume(std::span<const Byte>{payload_});
+
+      return true;
+    }
+  }
+
   Vector<Byte, Memory> payload_;
   std::array<Byte, frame_prefix_size> prefix_{};
   std::size_t prefix_used_ = 0;

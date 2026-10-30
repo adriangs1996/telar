@@ -207,6 +207,7 @@ void Application::selectMachine(MachineToken target) {
     return;
   }
 
+  connection().resumeSession();
   emit machineChanged();
   emit machinesChanged();
   synchronizeWorkbenchGeometry();

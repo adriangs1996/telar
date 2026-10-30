@@ -16,7 +16,6 @@
 #include "login_shell.hpp"
 #include "launch_arguments.hpp"
 #include "machine_client.hpp"
-#include "machines/machine_row.hpp"
 #include "machines/machines.hpp"
 #include "metrics_projection.hpp"
 #include "mode_projection.hpp"
@@ -641,11 +640,14 @@ void Application::consume(MachineClient &client, QByteArrayView payload) {
     const auto notification_revision = client.session.notificationRevision();
     const auto graphics_revision = client.session.graphicsRecoveryRevision();
     const auto change = client.session.consume(byteView({payload.data(), static_cast<std::size_t>(payload.size())}), handler);
-    static_cast<void>(client.session.settlePresentation());
-    if (change == Change::stopped) {
-      client.phase = MachinePhase::stopped;
+    if (change == Change::stopped || change == Change::closed) {
+      client.connection.finishSession();
+      if (change == Change::closed) {
+        client.session.disconnected();
+      }
     }
 
+    static_cast<void>(client.session.settlePresentation());
     summarizeMachine(client);
     if (active && client.key.machine.slot != Machines::local_slot && (change == Change::stopped || change == Change::closed)) {
       selectMachine(machines_.token(Machines::local_slot));

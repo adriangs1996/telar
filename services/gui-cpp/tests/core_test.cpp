@@ -290,6 +290,41 @@ void fragmentedTransport() {
   require(received == 1, "a reset must discard the failed connection's partial frame");
 }
 
+void terminalConsumerStopsBeforeTheNextFrame() {
+  using namespace telar;
+  using namespace telar::gui;
+
+  SystemAllocator upstream;
+  constexpr std::size_t payload_bytes = 1;
+  BudgetAllocator memory{upstream, payload_bytes};
+  {
+    FrameStream stream{memory};
+    std::array<Byte, (2 * frame_prefix_size) + payload_bytes> bytes{};
+    std::span<Byte> output{bytes};
+    u32::encode(payload_bytes, output);
+    output.front() = 'T';
+    std::size_t received = 0;
+    const auto terminal = [&](std::span<const Byte> payload) {
+      require(payload.size() == payload_bytes && payload.front() == 'T', "The terminal frame must arrive intact");
+      ++received;
+
+      return false;
+    };
+    try {
+      stream.feed(bytes, terminal);
+    } catch (const EncodingError &) {
+      require(false, "A terminal consumer must stop before decoding the next frame prefix");
+    }
+
+    require(received == 1 && memory.liveBytes() == payload_bytes, "A terminal consumer must deliver only its final frame");
+    stream.reset();
+    stream.feed(std::span{bytes}.first(frame_prefix_size + payload_bytes), terminal);
+    require(received == 2, "A new session must parse normally after resetting a finished stream");
+  }
+
+  require(memory.liveBytes() == 0, "Finished stream storage must retain its allocator ownership");
+}
+
 void mouseEncoding() {
   telar::gui::MouseEncoder encoder;
   constexpr unsigned column = 12;
@@ -360,6 +395,7 @@ int main() {
     splitLayout();
     layoutCapacity();
     fragmentedTransport();
+    terminalConsumerStopsBeforeTheNextFrame();
     mouseEncoding();
     copyRanges();
     windowGeometry();

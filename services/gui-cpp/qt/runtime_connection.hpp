@@ -40,6 +40,8 @@ public:
   [[nodiscard]] std::optional<MachineError> remoteError() const noexcept;
   void close();
   void retryNow();
+  void finishSession() noexcept;
+  void resumeSession();
   [[nodiscard]] bool ready() const noexcept;
   [[nodiscard]] const RuntimeLink &link() const noexcept;
   [[nodiscard]] QString error() const;
@@ -91,6 +93,7 @@ private:
   Vector<Byte, ApplicationAllocator> output_;
   std::array<char, read_chunk_size> read_buffer_{};
   RuntimeLink link_;
+  std::uint64_t read_generation_ = 0;
   QString path_;
   QString error_;
   std::optional<QString> pending_failure_;
@@ -99,6 +102,7 @@ private:
   bool connecting_ = false;
   bool handshake_sent_ = false;
   bool closed_ = true;
+  bool session_finished_ = false;
   bool read_queued_ = false;
   std::optional<RemoteTarget> remote_target_;
   std::optional<MachineError> remote_error_;

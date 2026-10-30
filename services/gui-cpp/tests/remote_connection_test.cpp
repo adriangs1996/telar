@@ -45,6 +45,42 @@ class RemoteConnectionTest : public QObject {
   Q_OBJECT
 
 private:
+  Q_SLOT static void resumedSessionDiscardsThePreviousReadTail() {
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QLocalServer listener;
+    QVERIFY(listener.listen(directory.filePath(QStringLiteral("resume.sock"))));
+    ApplicationAllocator memory;
+    RuntimeConnection connection{memory};
+    std::vector<QByteArray> delivered;
+    QObject::connect(&connection, &RuntimeConnection::payloadReceived, &connection, [&](QByteArrayView payload) {
+      delivered.push_back(payload.toByteArray());
+      if (delivered.size() == 1) {
+        connection.finishSession();
+        connection.resumeSession();
+      }
+    });
+    connection.open(listener.fullServerName());
+    QTRY_VERIFY(listener.hasPendingConnections());
+    const std::unique_ptr<QLocalSocket> peer{listener.nextPendingConnection()};
+    QVERIFY(peer != nullptr);
+    QVERIFY(sendHandshake(*peer, ServerAccept{handshake::schema_id}));
+    QVERIFY(sendPayload(*peer, QByteArrayLiteral("FINISHED")));
+    QVERIFY(sendPayload(*peer, QByteArrayLiteral("PREVIOUS_SESSION_TAIL")));
+    QTRY_VERIFY(listener.hasPendingConnections());
+    const std::unique_ptr<QLocalSocket> replacement{listener.nextPendingConnection()};
+    QVERIFY(replacement != nullptr);
+    QVERIFY(sendHandshake(*replacement, ServerAccept{handshake::schema_id}));
+    QVERIFY(sendPayload(*replacement, QByteArrayLiteral("REPLACEMENT_SESSION")));
+    constexpr int before_retry_ms = RuntimeLink::first_retry_ms / 2;
+    QTRY_VERIFY_WITH_TIMEOUT(connection.ready(), before_retry_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(delivered.size(), 2, before_retry_ms);
+    QCOMPARE(delivered.front(), QByteArrayLiteral("FINISHED"));
+    QCOMPARE(delivered.back(), QByteArrayLiteral("REPLACEMENT_SESSION"));
+    QVERIFY(connection.error().isEmpty());
+    QCOMPARE(connection.link().sessions, 2);
+  }
+
   Q_SLOT static void emptyHandshakePrefixKeepsOriginalError() {
     verifyHandshakePrefix(0, QStringLiteral("InvalidLength"));
   }

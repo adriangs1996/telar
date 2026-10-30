@@ -4,6 +4,7 @@
 #include "core/view_version.hpp"
 #include "gui_wait.hpp"
 #include "machines/machine_token.hpp"
+#include "machines/machine_row.hpp"
 #include "machines/machines.hpp"
 #include "metrics_fixture.hpp"
 #include "qml_fixture.hpp"
@@ -20,6 +21,7 @@
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
+#include "transport/runtime_link.hpp"
 #include "ui/bundled_fonts.hpp"
 #include "wire_runtime.hpp"
 #include <QAbstractItemModel>
@@ -43,6 +45,7 @@
 #include <QtCore/qnamespace.h>
 #include <QtCore/qobjectdefs.h>
 #include <QtCore/qtmetamacros.h>
+#include <QtCore/qtestsupport_core.h>
 #include <QtCore/qtypes.h>
 #include <QtTest/QSignalSpy>
 #include <QtTest/QTest>
@@ -273,6 +276,92 @@ struct MachineFixture {
 
 class MachineWindowTest : public QObject {
   Q_OBJECT
+
+  enum class TerminalStatus : std::uint8_t {
+    stopping,
+    last_tab,
+    closed_workspace,
+  };
+
+  Q_SLOT static void terminalRemoteKeepsItsSummaryUntilReselection() {
+    verifyTerminalSession(TerminalStatus::stopping, true);
+  }
+
+  Q_SLOT static void lastRemoteTabFinishesItsReceiveLoop() {
+    verifyTerminalSession(TerminalStatus::last_tab, true);
+  }
+
+  Q_SLOT static void closedRemoteWorkspaceFinishesItsReceiveLoop() {
+    verifyTerminalSession(TerminalStatus::closed_workspace, true);
+  }
+
+  Q_SLOT static void hiddenTerminalRemoteKeepsItsSummaryUntilSelection() {
+    verifyTerminalSession(TerminalStatus::stopping, false);
+  }
+
+  static void verifyTerminalSession(TerminalStatus status, bool presented) {
+    MachineFixture fixture;
+    QQuickWindow window;
+    constexpr QSize size{800, 600};
+    window.resize(size);
+    auto &application = fixture.application;
+    application.setWindow(window);
+    QVERIFY(fixture.start());
+    fixture.local_runtime->send(ClientLayoutSnapshot{});
+    fixture.remote_runtime->send(ClientLayoutSnapshot{});
+    QVERIFY(finishOpening(*fixture.local_runtime));
+    if (presented) {
+      MachineWindow::select(application, fixture.remote.machine);
+      QVERIFY(finishOpening(*fixture.remote_runtime));
+    }
+
+    window.show();
+    const auto &remote = MachineWindow::client(application, fixture.remote.machine.slot);
+    constexpr std::uint8_t retained_cpu = 92;
+    constexpr std::uint8_t trailing_cpu = 13;
+    fixture.remote_runtime->send(hostSample(1, retained_cpu));
+    QTRY_COMPARE_WITH_TIMEOUT(remote.session.metrics().cpu_percent, retained_cpu, wait_ms);
+    switch (status) {
+    case TerminalStatus::stopping:
+      fixture.remote_runtime->send(RuntimeStopping{});
+      break;
+    case TerminalStatus::last_tab:
+      fixture.remote_runtime->send(TabClosed{.location = location, .workspace_closed = true});
+      break;
+    case TerminalStatus::closed_workspace:
+      fixture.remote_runtime->send(ResyncRequired{.workspace = location.workspace, .workspace_closed = true});
+      break;
+    }
+
+    fixture.remote_runtime->send(hostSample(2, trailing_cpu));
+    QTRY_VERIFY_WITH_TIMEOUT(!remote.session.ready(), wait_ms);
+    QVERIFY(!remote.session.presented());
+    QVERIFY(MachineWindow::client(application, Machines::local_slot).session.presented());
+    QCOMPARE(remote.phase, MachinePhase::connected);
+    QCOMPARE(remote.session.metrics().cpu_percent, retained_cpu);
+    fixture.remote_runtime.reset();
+    fixture.remote_socket_->disconnectFromServer();
+    constexpr int observe_retry_ms = RuntimeLink::first_retry_ms * 2;
+    QTest::qWait(observe_retry_ms);
+    QCOMPARE(remote.phase, MachinePhase::connected);
+    QVERIFY(!fixture.remote_listener_.hasPendingConnections());
+    QVERIFY(window.isVisible());
+    const auto identity = remote.identity;
+    const auto generation = remote.runtime_generation;
+    MachineWindow::select(application, fixture.remote.machine);
+    QTRY_VERIFY_WITH_TIMEOUT(fixture.remote_listener_.hasPendingConnections(), wait_ms);
+    fixture.remote_socket_.reset(fixture.remote_listener_.nextPendingConnection());
+    fixture.remote_runtime = std::make_unique<WireRuntime>(*fixture.remote_socket_);
+    QTRY_VERIFY_WITH_TIMEOUT(remote.session.ready(), wait_ms);
+    QCOMPARE(remote.identity, identity);
+    QVERIFY(remote.runtime_generation > generation);
+    fixture.remote_runtime->send(ClientLayoutSnapshot{});
+    QVERIFY(finishOpening(*fixture.remote_runtime));
+    application.input(pane_id, QByteArrayLiteral("REMOTE_AFTER_TERMINAL_STATUS"));
+    QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::pane_input), 1, wait_ms);
+    QCOMPARE(textView(fixture.remote_runtime->last<PaneInput>().bytes), std::string_view{"REMOTE_AFTER_TERMINAL_STATUS"});
+    QCOMPARE(fixture.local_runtime->count(ClientTag::pane_input), 0);
+  }
 
   Q_SLOT static void remoteRuntimeStoppingReturnsToLocalWithoutClosingWindow() {
     MachineFixture fixture;

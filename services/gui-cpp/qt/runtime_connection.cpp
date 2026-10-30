@@ -108,7 +108,7 @@ void RuntimeConnection::remoteChannelReady(runtime::FileDescriptor channel) {
 }
 
 void RuntimeConnection::remoteFailed(MachineError error, std::string_view detail) {
-  if (closed_ || !remote_target_) {
+  if (closed_ || session_finished_ || !remote_target_) {
     return;
   }
 
@@ -130,6 +130,12 @@ std::optional<MachineError> RuntimeConnection::remoteError() const noexcept {
 }
 
 void RuntimeConnection::retryNow() {
+  if (session_finished_) {
+    resumeSession();
+
+    return;
+  }
+
   if (closed_ || connecting_ || socket_.state() != QLocalSocket::UnconnectedState || !link_.retryNow()) {
     return;
   }
@@ -138,11 +144,45 @@ void RuntimeConnection::retryNow() {
   connectSocket();
 }
 
+// A terminal message ends reception while machine chrome retains the last
+// connected summary. Selection starts another transport session.
+void RuntimeConnection::finishSession() noexcept {
+  session_finished_ = true;
+  accepted_ = false;
+  connecting_ = false;
+  retry_.stop();
+  deadline_.stop();
+  pending_failure_.reset();
+}
+
+void RuntimeConnection::resumeSession() {
+  if (closed_ || !session_finished_) {
+    return;
+  }
+
+  {
+    const QScopedValueRollback aborting{closed_, true};
+    if (remote_) {
+      remote_->close();
+    }
+
+    socket_.abort();
+  }
+
+  session_finished_ = false;
+  link_.phase = MachinePhase::connecting;
+  link_.attempt = 0;
+  link_.clearFailure();
+  connectSocket();
+}
+
 void RuntimeConnection::close() {
+  ++read_generation_;
   closed_ = true;
   accepted_ = false;
   connecting_ = false;
   handshake_sent_ = false;
+  session_finished_ = false;
   retry_.stop();
   deadline_.stop();
   if (remote_) {
@@ -196,7 +236,7 @@ bool RuntimeConnection::report(const ReportLimit &message) {
 }
 
 void RuntimeConnection::connectSocket() {
-  if (closed_ || connecting_) {
+  if (closed_ || connecting_ || session_finished_) {
     return;
   }
 
@@ -214,6 +254,7 @@ void RuntimeConnection::connectSocket() {
     return;
   }
 
+  ++read_generation_;
   connecting_ = true;
   stream_.reset();
   stream_.setMaximum(HandshakeCodec::max_message_size);
@@ -258,7 +299,7 @@ void RuntimeConnection::beginHandshake() {
 }
 
 void RuntimeConnection::socketDisconnected() {
-  if (closed_) {
+  if (closed_ || session_finished_) {
     return;
   }
 
@@ -273,7 +314,7 @@ void RuntimeConnection::socketDisconnected() {
 }
 
 void RuntimeConnection::socketFailed(QLocalSocket::LocalSocketError error) {
-  if (closed_) {
+  if (closed_ || session_finished_) {
     return;
   }
 
@@ -286,6 +327,10 @@ void RuntimeConnection::socketFailed(QLocalSocket::LocalSocketError error) {
 
 void RuntimeConnection::read() {
   read_queued_ = false;
+  if (closed_ || session_finished_) {
+    return;
+  }
+
   try {
     drainInput();
   } catch (const MachineFailure &error) {
@@ -323,8 +368,11 @@ bool RuntimeConnection::readChunk() {
     return false;
   }
 
-  const auto consume_payload = [this](std::span<const Byte> payload) {
+  const auto generation = read_generation_;
+  const auto consume_payload = [this, generation](std::span<const Byte> payload) {
     consume(payload);
+
+    return generation == read_generation_ && !closed_ && !session_finished_;
   };
 
   stream_.feed(byteView({
@@ -333,7 +381,7 @@ bool RuntimeConnection::readChunk() {
                }),
                consume_payload);
 
-  return true;
+  return generation == read_generation_ && !closed_ && !session_finished_;
 }
 
 void RuntimeConnection::queueRead() {
@@ -401,6 +449,10 @@ void RuntimeConnection::fail(const QString &message) {
 }
 
 void RuntimeConnection::fail(std::string_view message) {
+  if (session_finished_) {
+    return;
+  }
+
   if (link_.phase == MachinePhase::connected) {
     link_.lose(message, platform::AwakeClock::nowNanoseconds());
   } else {
