@@ -114,6 +114,7 @@ void notificationTransitions(SystemAllocator &memory) {
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
   workspaces.open(first.session(), OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
   auto &pane = panes.require(first.receive<PaneOpened>().pane_id);
+  check(!pane.terminal.hasPendingControl());
   termios settings{};
   check(::tcgetattr(pane.process->descriptor(), &settings) == 0);
   ::cfmakeraw(&settings);
@@ -158,8 +159,11 @@ void notificationTransitions(SystemAllocator &memory) {
   ptyReports(pane, panes, "\x1b[?997;1n\x1b[?999;2n\x1b[O");
   check(query(pane.terminal, "\x1b[18t") == "\x1b[8;40;100t");
   ClientPeer reconnected{memory, model, ClientRole::interactive};
-  panes.attach(reconnected.session(), pane, {120, 50, 8, 16});
-  ptyReports(pane, panes, "\x1b[?997;1n\x1b[48;50;120;800;960t");
+  panes.attach(reconnected.session(), pane, {100, 40, 8, 16});
+  check(!pane.terminal.hasPendingControl());
+  ptyReports(pane, panes, "\x1b[?997;1n");
+  panes.resize(reconnected.session(), PaneResize{.pane_id = pane.id, .size = {120, 50, 8, 16}});
+  ptyReports(pane, panes, "\x1b[48;50;120;800;960t");
   auto three = two;
   three.focused = false;
   panes.configureDesktop(reconnected.session(), three);

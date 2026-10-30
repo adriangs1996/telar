@@ -15,8 +15,9 @@ bool acquireGeometry(RuntimeModel<Memory> &model, const ClientSession<Memory> &c
   for (auto *pane : model.panes.items()) {
     if (pane != nullptr && pane->location.workspace.id == workspace.id) {
       if (!pane->desktop_theme) {
-      pane->terminal.configureColors(client.colors);
-    }
+        pane->terminal.configureColors(client.colors);
+        pane->terminal.resumeControl();
+      }
     }
   }
 

@@ -232,7 +232,7 @@ public:
 
   void externalColorsChanged() noexcept {
     state_.invalidateColors();
-    if (!closed_) {
+    if (!closed_ && state_.mode(scheme_events_mode)) {
       reports_.changed(Report::scheme);
     }
   }
@@ -713,6 +713,7 @@ private:
   static constexpr unsigned cursor_blink_mode = 12;
   static constexpr unsigned left_right_margin_mode = 69;
   static constexpr unsigned erase_color_mode = 117;
+  static constexpr unsigned scheme_events_mode = 2031;
   static constexpr unsigned scheme_request = 996;
   static constexpr unsigned visibility_request = 998;
   static constexpr unsigned pixels_request = 14;
