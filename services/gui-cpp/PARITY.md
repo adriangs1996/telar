@@ -4,6 +4,20 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [single-paint icon pass](measurements/icon-single-paint.md) removes duplicate
+mesh preparation before the existing outer update. Final seven alternated pairs
+improve all six rebuild cases8.8–13.9% with seven wins each and no consistently
+losing control. Three complete final native SSH windows preserve10,195,200pixels
+byte for byte against the previous Qt client; no original visual gain is claimed.
+Final native Icon7/Scene37, unchanged broad lint and delivered Neovim diagnostics
+pass. Sanitizer assertions pass but exit leaks remain651112/1668912bytes, with no
+local suppression. This is a component CPU result, not full-client performance.
+The separate [bounded UV investigation](measurements/glyph-uv-bounds.md) retains
+all rejected or unaccepted variants. Original Metal4 quads expose a common-atlas
+oracle limitation; native original-UV probes still differ. No shader, UV policy
+or packed vertex change is adopted. Full functional, visual, platform and
+equal-or-better full-client performance gates remain open.
+
 The [activity hover correction](measurements/spatial-activity-hover.md) validates
 delivered card geometry and clipping, rejects unrelated exits and permits the
 accepted owner's late/detached exit. Four controlled negatives fail before their

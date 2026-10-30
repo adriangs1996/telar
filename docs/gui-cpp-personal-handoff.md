@@ -2,6 +2,169 @@
 
 ## Personal continuation checkpoint
 
+### Final single-paint pass verified and archived (11:55 UTC)
+
+HEAD61cfd5c1f before pending local commit. Product delta still exactly one deleted
+mesh->paint call in qt/chrome_icon_scene.cpp. No UV/shader/packing changes adopted.
+Final Release AND nativeASAN builds ACTUALLY finished0. Release regenerated141
+targets/QML resources; mapped private/final code and all sections match except
+__TEXT,__const. Do NOT claim complete mapped identity. Independent FINAL ROOT
+native SSH capture chrome-tracking-single-paint-final-1 matches previous accepted
+Qt875e ALL3 full PNG files byte for byte:10195200pixels0diff. PrivateH earlier
+same. Actual final Icon7/Scene37 native PASS exit0/noQWARN. Broad unchanged lint
+PASS; actual Neovimclangd delivered empty. No active owned build/UI/test/benchmark.
+
+Final root CPU relink single-paint-final/chrome-single-paint-bench versus frozen
+strict-FP A7alternated pairs5000/500,24cases: six contentcases7wins each, gains
+8.79–13.87%; no othercase0–1wins. Cold13question+1.68% median3wins,30folder+0.03%
+4wins explicitly retained. Geometry hashes x/y/u/v/opacity exact. No allocation,
+drawn frame/upload/GPU/fullclient measurement. Actual renderer object assembly
+retained; final compiler inlines mesh.paint (A outlined); no placement exception.
+
+Final native ASAN Icon7 assertions PASS actualexit1 leaks651112bytes3083alloc;
+Scene37 PASS actualexit1 leaks1668912bytes9347alloc. Full logs/ObjCsuppression
+tables retained. detect_leaks1,UBSANhalt1,noLSAN/local suppression,noaccess/UB.
+First finalIconASAN1 INVALID: external AeroSpace layout timeout5s made olddriver
+terminate process before LSan exit. New private host retries/logs only tool
+TimeoutExpired within original180s deadline, preserves QtTest assertions/timeouts,
+PIDfilter/newestownedwindow/AppKit activation. Completed IconASAN2 is qualified.
+Do not reuse aborted1 as clean. ReleaseIcon1,SceneRelease1 andSceneASAN1 qualify.
+
+Reports icon-single-paint.md and glyph-uv-bounds.md; manifest
+icon-single-paint-validation.json; archive icon-single-paint/ now2305artifacts
+20.3MB. verify_icon_single_paint.py --check-current-source PASS (source/integrity,
+exactPNGnative preservation, all finalpaircriteria, suites/leaks, rejectedUVs).
+Archive sourcecollector local/archive_icon_single_paint.py includes borrowed
+native activation helper source/hash for self-contained host provenance. Collector
+and verifier rerun PASS. No executables/SSHkeys included. PARITY updated. Next review,
+stage and LOCAL commit this pass+reports+archive+handoff only. No publish/merge.
+Then CONTINUE clipboard image shelf/remaining PARITY; do NOT final at checkpoint.
+
+All bounded UVB/C/D rejected by paired CPU; Epasses componentCPU butnative31whole,
+F19whole, both picker0 but worse thanroot23/11/11; GstrictoriginalUV14vsA9. Strict
+probe requiredffp-contractoff to avoid changing inline/template glyph layout.
+Fontmatchingalone insufficient. NativeMetal4diagnostic real299quads, sevenfitted
+globalrects exactQt/Zig; independent originalUVoracle alpha stillQt-derived.
+No bounded shader accepted. Older personal-frame-delivery.md still needs its
+separate rejected frame-scheduling archive. Global allfunctional/nativeleak/
+nativefocus/fullvisual/crossplatform/fullclientperformance gates OPEN.
+
+### Adopted single-paint source; final builds active (11:41 UTC)
+
+HEAD61cfd5c1f unchanged. Root NOW differs by exactly one renderer line:
+qt/chrome_icon_scene.cpp removes mesh->paint from IconScene.appendMesh; outer
+IconScene.paint already updates every new mesh before returning the scene.
+All UV/shader/material/packed-vertex candidates remain PRIVATE and UNADOPTED.
+Docs handoff modified; personal-frame-delivery.md remains untracked.
+
+G strict native original-UV oracle14pixels (A9,E/F18), not accepted. No G full
+GUI or CPU timing. Equal native rects require the probe ALSO compile with
+ffp-contract=off; matching font alone did not solve the two extent differences.
+Strict oracle sources/results in native-icon-coordinate-strict-{A,E,F,G}.
+Do not reinterpret coarse0/0/0/0 as independent-original visual equivalence.
+
+H private = original root sampler/cache/20bytevertex minus ONLY duplicatepaint.
+Builder build_icon_single_paint.py freezes strict-FP A/H CPU probes, source
+chrome_single_paint_bench.cpp; pair_icon_single_paint.py. H7alternating pairs
+5000/500,24cases: all6contentcases7wins, improvements8.34–11.97%; NO consistent
+0–1win controls. All x/y/u/v/opacity digests exact. Seven strict native cases
+have byte-exact A/H Qt images (3398400pixels) and geometry/UV fields.
+Actual corrected-tracking SSH chrome-tracking-single-paint-H-1 matches accepted
+Qt875e chrome-tracking-hover-final-1 in ALL3 complete windows:10195200pixels0diff.
+No masks/tolerance/alignment. Actual native HIcon7 and Scene37 PASS exit0.
+Preservation receipts single-paint-native-oracle-1.json and
+single-paint-native-preservation-1.json. No original pixel improvement claimed.
+
+Root adopted the exact one-line H source ONLY after those passes. ACTIVE builds
+launched11:41:08: Release session7717 (GUI,Icon,Scene), nativeASAN session66414
+(Icon,Scene). MUST poll BOTH actual exits0 before tests, edits or timing. No
+active UI/benchmark. Next compare final mapped/object source with H, link final
+strict-FP benchmark to ROOT library and remeasure7pairs against frozen A; native
+targeted Icon7/Scene37, ASAN7/37 with leak checking/noLSAN/no suppressions;
+unchanged broad lint on chrome_icon_scene.cpp and actual delivered Neovim.
+Archive/report both single-paint pass and rejected bounded-UV investigation,
+PARITY/handoff, local commit only after final validation; then CONTINUE functional
+work. Do not final at checkpoint, publish/merge or delegate.
+
+Next functional candidate researched: clipboard image shelf entirely unported.
+Original flows src/gui/clipboard_image.zig, src/client/{input/clipboard_image.zig,
+attachments/clipboard_capture.zig,attachments/AttachmentShelf.zig}, model
+attachments/types.zig. Bound4previews,32MiBsource/PNG/retained,36Mipixels; one
+joined capture worker, exact generation+focused target adoption, marker policies
+and remote persistence. Qt currently terminal Cmd-V only reads clipboard.text().
+No attachment implementation started; must port generic bounded policy and
+real GUI/runtime routing, not a local-path shortcut. Other PARITY rows remain.
+
+### Bounded-UV experiments remain private; strict native oracle (11:34 UTC)
+
+HEAD61cfd5c1f commits the scoped hover fix/archive, verifier PASS. Root renderer
+UNCHANGED; only older personal-frame-delivery.md untracked before this handoff.
+No publish/merge/delegation/final. Continue goal and Spanish updates<=60sec.
+
+Private fresh baseline local/chrome-bounds-A freezes61cfd production library,
+GUI875e and a stride-aware sampling probe. Four48-case phase probes reproduce
+160/8/232/0. B bounded UV vertices36bytes gives0all but7pairs24CPUcases rejects
+four consistent losses. C initializes UV/bounds once, position-only paint, still
+36bytes:0all, repaint gains but32questioncold loses6/7 =>REJECTED. D packs image
+size/corner in former icon-only opacity float lane, keeps20bytes, shader sets
+effective icon opacity1 and keeps Qt overall opacity; shader uniform atlas
+inverse uses actual texture dimensions, nonatlas bounds0..1. Packed float
+codec16,777,216cases PASS arm64 and x86_64 Rosetta. D0all48 but32questioncontent
+loses6/7 =>REJECTED. All shader packs compile legacy GLSL100es/120/150, HLSL50,
+MSL12 with batchable variants. Nothing adopted.
+
+E = D minus duplicate appendMesh paint (outer IconScene.paint already paints
+every mesh). E7alternated pairs5000/500: all6 contentcases7wins,6repaintcases
+6–7wins; no other case0–1wins (32cold2wins,+0.27/+0.38% medians, retained).
+Component CPU criterion passes only; no drawn frame/uniform/GPU/fullclient cost.
+E48-case0all, BUT actual corrected-tracking native GUI has whole31/31/31 versus
+A23/11/11; picker/visitedterminals/footers all0. F = E plus original explicit
+model-view→physicalpixel→divide viewport projection for bounded icons only.
+F48-case0all, native19/19/19, picker0. Neither visually accepted; F CPU not timed.
+
+New direct Metal4 coordinate diagnostic: old C render callback in legacy actor
+was never installed, so firstdiagnostic quads0 (retained rejected). Actual Zig
+uses Metal4 argument tables. local/metal4_icon_coordinates.m observes shared
+buffer contents, table address/binding and actual instanced draw through public
+ObjC APIs, weak buffer registry and mutex. Prototype classes identified as
+AGXG13XFamily{Buffer,ArgumentTable_mtlnext,RenderContext_mtlnext}. Original native
+capture chrome-coordinates-metal4-zig-1 yields299 sidebar glyphquads; normal
+ownedcleanup/exit0. Qt private qInfo capture chrome-coordinates-E-1 yields fitted
+global and local rectangles; seven question/folder global rects EXACT native.
+All sources/builders/receipts in measurements/local. No user runtime targeted.
+
+Important oracle limit fixed: old48cases use Qt UVs on BOTH backend renderers,
+so they do not prove equivalence to independent native atlas placement. New
+seven-case oracle uses captured original rectangles AND original atlas UVs;
+mask alpha still comes from Qt, explicitly partial. First rebuilt probe default
+bundledfont differs in two glyph widths19 vs18.999998; matching installed
+JetBrains Mono alone did NOT fix it. Root icon sources compileffp-contract=off,
+probe did not. Applying same flag fixes exact rectangle assertions (inline/ODR
+template code can otherwise change the renderer inside a probe). Strict native
+oracle now A9different, E18, F18. Sources native_icon_sampling_probe.cpp,
+compare_native_icon_coordinates.py, build/run_native_strict_icon_oracle.py.
+Older failed epochs retained; no tolerance/assertion weakening. Earlier user
+update suggested font source as cause; exact follow-up disproved that alone.
+
+CURRENT G private candidate:36byte vertices carry original physical quad bounds.
+Vertex projects these directly as original shader (bypasses QSG baked positions);
+fragment computes texel from actual gl_FragCoord pixel center and physical bounds,
+then samples its center. No epsilon/bias. QRhi.isYUpInFramebuffer controls GL Y.
+Compile root already links Qt6::GuiPrivate, rhi/qrhi.h is supported. G packs compile
+and strict native probe linked. ACTIVE UI session58236: native-strict-icon-G-1,
+started11:34:28. Poll ACTUALexit, inspect actual GUI receipt, compare only after
+exit0 using compare_native_icon_coordinates.py frames1. If valid, coarse48phase
+probe, native whole GUI and timing still required. G not accepted/timed.
+
+Need final archive/report of all bounds candidates and failures; no public report
+yet. Need targeted Scene/ChromeIcon/ChromeText tests on any final candidate, final
+source styling (current private prototypes reuse AlphaMaskVertex.opacity for
+packing; a named packed vertex type is needed before adoption), final remeasure,
+sanitizers/editor/lint, extra atlas/nonatlas/opacity/clip/native/platform states.
+Do not reuse E component timings for later binaries or claim full parity. No
+active build/benchmark; only G probe. Older personal-frame-delivery archive and
+all PARITY functional/fullperformance/nativeleak/platform gates remain OPEN.
+
 ### Hover correction qualified in scope; continue remaining parity (10:44 UTC)
 
 Final hover candidate GUI875e05969ba6b3809be868edbbe7859b9ce94e14e46e195c53bb7e43d09e751f,

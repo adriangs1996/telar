@@ -156,7 +156,6 @@ public:
 private:
   void appendMesh(QList<IconQuad> group, const ChromeIconPaint &paint) {
     auto mesh = std::make_unique<IconMesh>(std::move(group), ink(paint.color));
-    mesh->paint(projection(paint), ink(paint.color));
     meshes_.append(&adoptSceneNode(*this, std::move(mesh)));
   }
 
