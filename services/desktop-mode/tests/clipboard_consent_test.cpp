@@ -27,6 +27,68 @@ OwnedClipboardTask task(bool rememberable) {
   }};
 }
 
+struct CopyingAnswer {
+  bool &reject;
+  unsigned &answers;
+  std::array<char, 128> storage{};
+
+  CopyingAnswer(bool &reject, unsigned &answers) : reject(reject), answers(answers) {}
+  CopyingAnswer(const CopyingAnswer &other) : reject(other.reject), answers(other.answers) {
+    if (reject) {
+      throw std::bad_alloc{};
+    }
+  }
+  CopyingAnswer(CopyingAnswer &&) noexcept = default;
+  void operator()(ClipboardConsent consent) const {
+    require(consent == ClipboardConsent::deny);
+    ++answers;
+  }
+};
+
+void noConsentTargetCopy() {
+  QObject context;
+  unsigned answers = 0;
+  bool reject = false;
+  const auto request = task(false);
+  ClipboardConsentWindow window{request, context, CopyingAnswer{reject, answers}};
+  reject = true;
+  press(window, {80, 176});
+  QCoreApplication::processEvents();
+  require(answers == 1);
+}
+
+struct AllocationFailureContext : QObject {
+  unsigned failures = 0;
+  static void failed(QObject *context, telar::ClipboardTicket ticket, std::uint64_t epoch) noexcept {
+    require(ticket == telar::ClipboardTicket{7, 11, 13, 17} && epoch == 42);
+    ++static_cast<AllocationFailureContext *>(context)->failures;
+  }
+};
+
+void failedConsentDelivery() {
+  AllocationFailureContext context;
+  unsigned answers = 0;
+  const auto request = task(false);
+  ClipboardConsentWindow window{request, context, [&](ClipboardConsent) {
+    ++answers;
+    throw std::bad_alloc{};
+  }, &AllocationFailureContext::failed, 42};
+  press(window, {80, 176});
+  QCoreApplication::processEvents();
+  require(answers == 1 && context.failures == 1);
+
+  auto destroyed = std::make_unique<QObject>();
+  unsigned unexpected = 0;
+  ClipboardConsentWindow late{request, *destroyed, [&](ClipboardConsent) {
+    ++unexpected;
+    destroyed.reset();
+    throw std::bad_alloc{};
+  }, [](QObject *, telar::ClipboardTicket, std::uint64_t) noexcept { std::abort(); }};
+  press(late, {80, 176});
+  QCoreApplication::processEvents();
+  require(unexpected == 1 && !destroyed);
+}
+
 void decisions() {
   QObject context;
   for (unsigned button = 0; button < 3; ++button) {
@@ -177,6 +239,8 @@ void materializationLimitReproduction() {
 
 int main(int argc, char **argv) {
   QGuiApplication application{argc, argv};
+  noConsentTargetCopy();
+  failedConsentDelivery();
   decisions();
   inMemoryMimeReads();
   pasteListing();

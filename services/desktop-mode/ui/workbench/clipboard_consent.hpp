@@ -12,6 +12,7 @@
 #include <functional>
 #include <array>
 #include <memory>
+#include <new>
 
 namespace workbench {
 
@@ -68,8 +69,10 @@ class ClipboardConsentWindow final : public QQuickWindow {
   };
 
 public:
-  ClipboardConsentWindow(const OwnedClipboardTask &task, QObject &context, std::function<void(ClipboardConsent)> answer)
-      : context_(&context), answer_(std::move(answer)) {
+  using AllocationFailure = void (*)(QObject *, telar::ClipboardTicket, std::uint64_t) noexcept;
+
+  ClipboardConsentWindow(const OwnedClipboardTask &task, QObject &context, std::function<void(ClipboardConsent)> answer, AllocationFailure allocation_failure = nullptr, std::uint64_t epoch = 0)
+      : context_(&context), answer_(std::move(answer)), allocation_failure_(allocation_failure), ticket_(task.ticket), epoch_(epoch) {
     setTitle(QStringLiteral("Telar clipboard permission"));
     setColor(QColor{"#20242b"});
     setMinimumSize({540, 220});
@@ -105,17 +108,37 @@ private:
     }
     finished_ = true;
     const auto context = context_;
-    auto answer = answer_;
-    hide();
-    // Defer delivery so the receiver can destroy this window after the input
-    // event returns. The connection owns the context and cancels it on teardown.
-    if (context) {
-      QTimer::singleShot(0, context.data(), [answer = std::move(answer), consent] { answer(consent); });
+    auto answer = std::move(answer_);
+    const auto allocation_failure = allocation_failure_;
+    const auto ticket = ticket_;
+    const auto epoch = epoch_;
+    try {
+      hide();
+      // Defer delivery so the receiver can destroy this window after the input
+      // event returns. The connection owns the context and cancels it on teardown.
+      if (context) {
+        QTimer::singleShot(0, context.data(), [context, answer = std::move(answer), consent, allocation_failure, ticket, epoch] {
+          try {
+            answer(consent);
+          } catch (const std::bad_alloc &) {
+            if (context && allocation_failure != nullptr) {
+              allocation_failure(context.data(), ticket, epoch);
+            }
+          }
+        });
+      }
+    } catch (const std::bad_alloc &) {
+      if (context && allocation_failure != nullptr) {
+        allocation_failure(context.data(), ticket, epoch);
+      }
     }
   }
 
   QPointer<QObject> context_;
   std::function<void(ClipboardConsent)> answer_;
+  AllocationFailure allocation_failure_;
+  telar::ClipboardTicket ticket_;
+  std::uint64_t epoch_;
   bool finished_ = false;
 };
 

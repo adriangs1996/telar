@@ -23,6 +23,14 @@ Acceptance remains open. This report separates tested invariants from code inspe
 
 The clipboard execution grant is the authorization commit point. The runtime rechecks route, liveness and deadline immediately before sending it. Reset, timeout and disconnect cancel work before that grant. A committed effect which has already started cannot be undone; stale results are discarded. Cancellation messages preserve their ticket by value after pending request storage is released.
 
+Desktop clipboard callbacks contain allocation failures across admission,
+completion, execution and paste reads. The failure path invalidates its epoch
+and shuts down its owned socket without allocating another response or retrying
+the effect. Deferred consent retains ticket/epoch and checks context lifetime;
+obsolete failures cannot close a replacement connection. Real event and frame
+allocation failures pass in Release and ASan/UBSan. Exact one-shot fault scope
+and library exclusions are in `measurements/control-queries/desktop-allocation-validation.json`.
+
 ## Bounds and failure behavior
 
 * Parser headers: 8 KiB; DCS: 1 MiB plus header; OSC: 8 MiB; APC: 65 MiB. Over-limit input enters a discard state and recovers at a terminator/cancellation. These buffers also consume the runtime allocator's 2 GiB budget; that process-wide number does not bound Qt allocations in the separate client.

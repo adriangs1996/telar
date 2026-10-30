@@ -9,6 +9,7 @@
 #include <QElapsedTimer>
 #include <functional>
 #include <map>
+#include <new>
 #include <set>
 #include "clipboard_task.hpp"
 
@@ -97,26 +98,48 @@ namespace workbench {
     void executeClipboardTask(telar::ClipboardDesktopExecute execution, std::uint64_t epoch);
     void cancelClipboardTask(const telar::CancelClipboardDesktop &cancellation);
     void cancelClipboard(std::uint64_t pane);
+    void failClipboardAllocation() noexcept;
+    static void clipboardAllocationFailed(QObject *context, telar::ClipboardTicket ticket, std::uint64_t epoch) noexcept;
+
+    template <typename Operation> void clipboardCallback(Operation &&operation) {
+      QPointer<RuntimeConnection> connection;
+      const auto epoch = clipboard_epoch_;
+      bool entered = false;
+      try {
+        connection = this;
+        entered = true;
+        operation();
+      } catch (const std::bad_alloc &) {
+        if (!entered) {
+          failClipboardAllocation();
+        } else if (connection && connection->clipboard_epoch_ == epoch) {
+          connection->failClipboardAllocation();
+        }
+      }
+    }
+
     void sendPaste(std::uint64_t pane, const QString &text, const QStringList &available, bool listing_only);
 
     // Snapshot destination identity before any lazy desktop read can reenter.
     template <typename Reader> void pasteFrom(std::uint64_t pane, bool listing_only, Reader &&read) {
-      const auto generation = generations_.find(pane);
-      if (!ready() || !attached_.contains(pane) || generation == generations_.end()) {
-        return;
-      }
-      const auto expected_generation = generation->second;
-      const auto epoch = clipboard_epoch_;
-      const QPointer<RuntimeConnection> connection{this};
-      const auto data = read(listing_only);
-      if (!data || !connection || epoch != connection->clipboard_epoch_) {
-        return;
-      }
-      const auto current = connection->generations_.find(pane);
-      if (current == connection->generations_.end() || current->second != expected_generation) {
-        return;
-      }
-      connection->sendPaste(pane, data->text, data->available, listing_only);
+      clipboardCallback([&] {
+        const auto generation = generations_.find(pane);
+        if (!ready() || !attached_.contains(pane) || generation == generations_.end()) {
+          return;
+        }
+        const auto expected_generation = generation->second;
+        const auto epoch = clipboard_epoch_;
+        const QPointer<RuntimeConnection> connection{this};
+        const auto data = read(listing_only);
+        if (!data || !connection || epoch != connection->clipboard_epoch_) {
+          return;
+        }
+        const auto current = connection->generations_.find(pane);
+        if (current == connection->generations_.end() || current->second != expected_generation) {
+          return;
+        }
+        connection->sendPaste(pane, data->text, data->available, listing_only);
+      });
     }
 
     void notify();

@@ -17,6 +17,7 @@
 #include <QTextLayout>
 #include <algorithm>
 #include <cmath>
+#include <new>
 
 namespace workbench {
   namespace {
@@ -497,7 +498,14 @@ namespace workbench {
     if (event->matches(QKeySequence::Copy) && anchor_ >= 0) {
       QGuiApplication::clipboard()->setText(selectionText());
     } else if (event->matches(QKeySequence::Paste)) {
-      const auto deliver = paste;
+      std::function<void(bool)> deliver;
+      try {
+        deliver = paste;
+      } catch (const std::bad_alloc &) {
+        event->accept();
+        return;
+      }
+
       const bool listing_only = screen_->modes.paste_events;
       if (deliver) {
         deliver(listing_only);

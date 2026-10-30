@@ -1,13 +1,41 @@
 #include "ui/workbench/runtime_connection.hpp"
 #include "ui/workbench/clipboard_consent.hpp"
 #include "ui/workbench/clipboard_paste.hpp"
+#include "ui/workbench/terminal_item.hpp"
+#include <QKeySequence>
 #include "telar_client/codecs/telar_handshake.hpp"
 #include <QGuiApplication>
+#include <QClipboard>
 #include <QLocalServer>
 #include <QTemporaryDir>
 #include <cstdio>
+#include <cstdlib>
+#include <new>
 #include <memory>
 #include <stdexcept>
+
+// One-shot, exact-size faults exercise the real frame allocations.
+// The test binary delegates all other new/delete calls to malloc/free.
+namespace allocation_fault {
+thread_local std::size_t rejected_size = 0;
+}
+
+void *operator new(std::size_t size) {
+  if (size != 0 && size == allocation_fault::rejected_size) {
+    allocation_fault::rejected_size = 0;
+    throw std::bad_alloc{};
+  }
+  if (auto *pointer = std::malloc(size == 0 ? 1 : size)) {
+    return pointer;
+  }
+  throw std::bad_alloc{};
+}
+
+void *operator new[](std::size_t size) { return ::operator new(size); }
+void operator delete(void *pointer) noexcept { std::free(pointer); }
+void operator delete[](void *pointer) noexcept { std::free(pointer); }
+void operator delete(void *pointer, std::size_t) noexcept { std::free(pointer); }
+void operator delete[](void *pointer, std::size_t) noexcept { std::free(pointer); }
 
 namespace {
 void require(bool condition, const char *message) {
@@ -25,6 +53,21 @@ void pumpUntil(auto predicate) {
   }
 }
 
+struct CopyingPaste {
+  bool &reject;
+  unsigned &calls;
+  std::array<char, 128> storage{};
+
+  CopyingPaste(bool &reject, unsigned &calls) : reject(reject), calls(calls) {}
+  CopyingPaste(const CopyingPaste &other) : reject(other.reject), calls(other.calls) {
+    if (reject) {
+      throw std::bad_alloc{};
+    }
+  }
+  CopyingPaste(CopyingPaste &&) noexcept = default;
+  void operator()(bool) const { ++calls; }
+};
+
 class ReentrantPasteData final : public QMimeData {
 public:
   explicit ReentrantPasteData(std::function<void()> enter) : enter_(std::move(enter)) {}
@@ -39,6 +82,7 @@ private:
 
 enum class Replacement { pane, pane_generation, client_generation, connection_epoch };
 enum class DeferredEvent { prompt, answer, execution };
+enum class AllocationStage { preparation, denial, execution, reader };
 }
 
 namespace workbench {
@@ -168,6 +212,25 @@ struct ClipboardConnectionTest {
       connection.pasteFrom(7, true, [&](bool listing) { return readClipboardPaste(&source, listing); });
       require(connection.request_ == request_before, "Reentrant read retargeted a paste to a replacement connection or pane generation");
     }
+    const auto original_epoch = connection.clipboard_epoch_;
+    connection.pasteFrom(7, true, [&](bool) -> std::optional<ClipboardPaste> {
+      const auto generation = connection.generations_.at(7);
+      connection.disconnected();
+      connection.retry_.stop();
+      connection.handshake_ = true;
+      connection.attached_.insert(7);
+      connection.generations_[7] = generation;
+      throw std::bad_alloc{};
+    });
+    require(connection.ready() && connection.clipboard_epoch_ != original_epoch, "Old reader allocation failure closed the replacement connection");
+    const telar::ClipboardTicket replacement{7, connection.generations_.at(7), 13, 17};
+    connection.clipboardRequest(telar::ClipboardDesktopRequest{.ticket = replacement});
+    receiveFrame(*peer);
+    connection.clipboardAllocationFailed(&connection, replacement, original_epoch);
+    auto stale = replacement;
+    ++stale.client_generation;
+    connection.clipboardAllocationFailed(&connection, stale, connection.clipboard_epoch_);
+    require(connection.ready() && connection.clipboard_operations_.contains(replacement.nonce), "Old window allocation failure closed the replacement operation");
     connection.sendPaste(7, oversized, formats, false);
     require(connection.error_ == "Paste exceeds the clipboard limit", "Oversized ordinary paste was not rejected");
     bool delivered = false;
@@ -176,7 +239,81 @@ struct ClipboardConnectionTest {
     require(peer->bytesAvailable() == 0 && connection.socket_.bytesToWrite() == 0, "Rejected paste was sent to the runtime");
   }
 
+  static void allocationFailure(AllocationStage stage) {
+    QTemporaryDir directory{QStringLiteral("/tmp/telar-clipboard-allocation-XXXXXX")};
+    require(directory.isValid(), "Could not create private allocation directory");
+    const auto path = directory.filePath(QStringLiteral("runtime.sock"));
+    QLocalServer server;
+    require(server.listen(path), "Could not listen on private allocation socket");
+    RuntimeConnection connection{path, telar::WorkspaceLocation{.id = 1}};
+    connection.socket_.connectToServer(path);
+    pumpUntil([&] { return connection.socket_.state() == QLocalSocket::ConnectedState && server.hasPendingConnections(); });
+    std::unique_ptr<QLocalSocket> peer{server.nextPendingConnection()};
+    receiveFrame(*peer);
+    connection.handshake_ = true;
+    const telar::ClipboardTicket ticket{7, 11, 13, 17};
+    connection.attached_.insert(ticket.pane_id);
+    connection.generations_[ticket.pane_id] = ticket.pane_generation;
+    const QPointer<RuntimeConnection> lifetime{&connection};
+    const auto epoch = connection.clipboard_epoch_;
+    const telar::CompleteClipboardDesktop completion{.ticket = ticket, .status = telar::ClipboardDesktopStatus::success, .prepared = true};
+    if (stage == AllocationStage::preparation) {
+      allocation_fault::rejected_size = telar::Codec::encodedSize(completion);
+      connection.clipboardRequest(telar::ClipboardDesktopRequest{.ticket = ticket});
+    } else if (stage == AllocationStage::reader) {
+      connection.pasteFrom(ticket.pane_id, true, [](bool) -> std::optional<ClipboardPaste> { throw std::bad_alloc{}; });
+    } else {
+      require(!QGuiApplication::clipboard()->supportsSelection(), "Offscreen fault fixture requires unavailable primary selection");
+      connection.clipboardRequest(telar::ClipboardDesktopRequest{.ticket = ticket, .primary = true});
+      receiveFrame(*peer);
+      if (stage == AllocationStage::denial) {
+        allocation_fault::rejected_size = telar::Codec::encodedSize(completion);
+        connection.completeClipboard(ticket, epoch, ClipboardConsent::deny);
+      } else {
+        connection.desktop_[ticket.pane_id] = telar::ConfigurePaneDesktop{.pane_id = ticket.pane_id, .pane_generation = ticket.pane_generation, .visible = true, .clipboard = true};
+        connection.consume(telar::Codec::encode(telar::ClipboardDesktopExecute{.ticket = ticket}));
+        allocation_fault::rejected_size = telar::Codec::encodedSize(completion);
+        pumpUntil([&] { return !connection.ready(); });
+      }
+    }
+    require(allocation_fault::rejected_size == 0, "Clipboard frame allocation fault was not reached");
+    require(!connection.ready() && connection.clipboard_epoch_ != epoch, "Allocation failure retained a live clipboard connection");
+    pumpUntil([&] { return peer->state() == QLocalSocket::UnconnectedState && connection.socket_.state() == QLocalSocket::UnconnectedState; });
+    require(connection.clipboard_operations_.empty(), "Disconnected allocation failure retained clipboard operations");
+    require(peer->bytesAvailable() == 0, "Failed completion published a partial response");
+  }
+
+  static void pasteCallbackCopy() {
+    auto screen = std::make_shared<TerminalScreen>();
+    TerminalItem item{screen, nullptr};
+    bool reject = false;
+    unsigned calls = 0;
+    item.paste = CopyingPaste{reject, calls};
+    const auto sequence = QKeySequence::keyBindings(QKeySequence::Paste).front()[0];
+    for (const bool failure : {true, false}) {
+      reject = failure;
+      QKeyEvent event{QEvent::KeyPress, sequence.key(), sequence.keyboardModifiers()};
+      require(event.matches(QKeySequence::Paste), "Private input fixture did not select Paste");
+      QCoreApplication::sendEvent(&item, &event);
+      require(calls == (failure ? 0u : 1u), "Paste callback copy failure admitted a gesture or uninstalled the handler");
+    }
+  }
+
+  static void destroyedFailureReceiver() {
+    auto connection = std::make_unique<RuntimeConnection>(QStringLiteral("/unused/clipboard-destroyed.sock"), telar::WorkspaceLocation{.id = 1});
+    connection->clipboardCallback([&] {
+      connection.reset();
+      throw std::bad_alloc{};
+    });
+    require(!connection, "Allocation failure resurrected its destroyed receiver");
+  }
+
   static void run() {
+    destroyedFailureReceiver();
+    pasteCallbackCopy();
+    for (const auto stage : {AllocationStage::preparation, AllocationStage::denial, AllocationStage::execution, AllocationStage::reader}) {
+      allocationFailure(stage);
+    }
     pasteWire();
     for (const auto deferred : {DeferredEvent::execution, DeferredEvent::prompt, DeferredEvent::answer}) {
       for (const auto replacement : {Replacement::pane, Replacement::pane_generation, Replacement::client_generation, Replacement::connection_epoch}) {
