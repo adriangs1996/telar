@@ -1,5 +1,274 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## Row-hover checkpoint FINAL frozen; COMMIT then CONTINUE (21:31 UTC)
+
+NEWhistory-action-hover archive FINAL405artifacts2433sourceidentities7018929bytes.
+OfflineANDcurrent-sourcePillowverifiersPASS; exactsourcemembership/executable/
+authorityauditPASS. Allproduct6files+README/PARITY/report+archiver/verifier FROZEN;
+NEVERrerunarchive_hover.py aftercommit. Handoffnotfrozen(canupdate). Previous26eb
+history-retained-actions archiveIMMUTABLE. BothglobalgoalsremainOPEN. NativeCocoa
+results744576exactbeforeheldgestureends+freshmotionrecovery; beforeoldbinary138481
+pixelnegativeinoldrow. Fullwindowdifferencesremain. CompleteHistoryhover/focus/
+keyboardIME/renderanimation/nativeleaks/fullclientperformanceOPEN.
+
+MacReleasebuild1 0+native1 5PASS0/privatecleanup0+component27PASS0; ASANbuild1 0,
+nativeasan1 5PASSactual1/leaks557601/2984 noaccessUB/privatecleanup0 LSANunset. Strict
+Mac2unitsfinalclean, actualNeovim2Cpp/Headerdeliveredempty. LinuxASANbuild1 0,
+nativeasan1 5PASSactual1/147982bytes148alloc composeState; repeat2SAMEbinary5PASS0;
+bothretained. ASANcomponent27PASS0. LinuxReleasebuild1 0/nativeRelease1 5PASSactual0
+privateDisplayRemoved/compositor0. Linuxstrict2unitlint1PASS; actualNeovim2empty.
+NativeQt6.8.2 composition leak isolatedwithoutTelarapp/runtimebybareTextInput: both
+control1andfinal2EXACT147982/148; final2 flushesJSONnativeF24,inputMethodEnabledtrue.
+OfficialQtcpp+header showslazyallocate/rawptr+dtorEMPTY, retainedURLs/hash. No Qt
+patch/suppressions; dependency gateOPEN, failurestillfailure. NewverifierREQUIRES
+bothfailureandcleanrepeat+barefailure; no greenwashing. SourceQtwordlimitshortpara
+withprimarylinksreport, fulloriginalsourcearchivedLGPLheadersunchanged.
+
+Next stageEXPLICIT9existingchangedfiles(handoff,README,PARITY,HistoryPanel/Row.qml,
+Apphpp,historyPointerCpp,pointerDispatcherCpp/hpp)+newreport,manifest,archivefolder.
+Excludeunrelateduntrackedmeasurements/personal-frame-delivery.md. Localcommit ONLY,
+no publication/merge, thenCONTINUEglobalgoal (NEVERfinalatcheckpoint). Nextremaining
+Historymodalinputlifecycles/initialkeyboard-openhover/rowhoverretention/animation
+andinspectorfacts areopen; qualifynewnegativebeforeediting. Currentgateonlycovers
+heldsemanticcardaction; defaulttrue meansinitialQtgeometry-hovermaystilldiffer
+(baseline3 hadextraoldrowhoverwithnokeygesture, fixednotqualifiedforinitialstate).
+Generalrowsemantichoverbeyondheldcardcouldneedsboundedpresentedtargets ratherthan
+blanketsuppression; chooseevidencebasedscope. Noactivejobs/GUIprocesses, VM7158/55984
+retained, noagents/otherworktrees/publish/merge. Spanishupdates<=60sec; analysis
+<=100wordsperchunk (longanalysisrepeatedlycausessilence; act, don'tspeculate).
+
+## History row hover fixed pixels; Linux compose dependency isolated (21:27 UTC)
+
+HEAD26eb0fb1a priorpointercheckpointimmutable; currentWIP6productfilesgate asbelow.
+MacReleasebuild1 actual0, strictMacadapterlint1/dispatcher2PASS, strictLinux2units
+lint1PASS; actualNeovim Mac+LinuxdispatcherCpp/AppHeader deliveredempty. Newreport
+measurements/history-action-hover.md DRAFT. Newarchive_hover.py/verify_hover.py at
+measurements/history-action-hover DRAFT, NEVERrun(no manifesto yet). DoNOTtouch old
+history-retained-actions archive. Unrelatedpersonal-frame-delivery.mduntouched.
+
+Finalharness local/history_action_hover_capture.py snapshotsSTARTUPsource, private
+/tmp/thh-*/r sockets; namedpasteboard'telar-attachment-fixture-' + privateDYLDlibrary
+perGUI,cleanup0. DerivedAXscene_bounds recordedviewconverted. Comparatorignoredlocal/
+compare_history_action_hover.py recomputesexactnativeZigrectanglespixelcoordinatesin
+bothrawframes(noalign/mask). CausalBEFOREbinarycopiedfrom26eb atout-dependencies/
+history-action-hover-before-1/telar-gui plusbinary.json. FinalnativeBEFOREcontrol
+local/history-action-hover-before-final-1 reproduces138481diff in744576results pixels,
+allinthe141824pixoldrow;newcopy5720pixexact. Fixed1 (sameharness/originalGUI unchanged)
+ALL744576pixel resultsmatch. Fixed-rehover1 (outside release+one actualmove into new
+copy) ALSO744576exact. ScenesourceRectresults[36,403,1108,168],physical[72,806,2288,
+1142];oldrow[36,539,1108,32],copy[994.5,507,65,22]. Fullwindowdiff1950/2224 inleft
+chrome/footer remainsOPEN. Png/Metal presentedmetadata/native-state/actions/ObjC
+sources/harnesshash/privatecleanupstoredlocal. Newreportrecordsfailedexplorations.
+
+MacQtQuicknative1 directed3slots5PASSactual0/privatecleanup0. MacASANbuild1 actual0,
+nativeasan1 5PASSactual1/leaks557601bytes2984alloc; noaccessUB/privatecleanup0,
+LSANunset. MacCTesthistorycontrols27PASS actual0. No comparativeleakclaim. Linux
+ASANbuild1 actual0; nativeasan1 5PASS BUTactual1/leaks147982/148directroot
+xkb_compose_state_new; nativeasan2 SAMEBINARY5PASSactual0. KeepBOTH. Actualfailure
+notnewrowownership: bareQt TextInput without ANYTelarapp/runtime reproducesEXACT
+147982bytes/148alloc. Qt6.8.2QWaylandInputContext destructorEMPTY whilelazycomposition
+allocatesrawtable/state; cpp+headerofficialGitHub URLs/SHA retainedlocal history-
+action-hover-qt6.8.2-*. Sourcewebverified, citeprimarylinksreport. No librarypatchor
+suppression introduced. Minimalprobeignoredlocal/history_action_hover_compose_probe.
+cpp copiedVMout-deps; firstbuildQtarm_aclewarning retained; build2 includesarm_acle,
+removesunnecessaryconst_cast, flushesactualF24/inputmethodEnabledJSON. Barecontrol1
+and2actual1 sameleak; final2 emits3nativeF24 records ALL input_method_enabled=true.
+Controlscriptignoredlocal/run_history_compose_control.py basedoldLinuxSway actor,
+waits markerready.input (actualfocusedTextInput) beforeF24, ownscompositor+keyboard,
+DBus/privateDisplaycleanup. NoTelarRuntime. Controls demonstrateDEPENDENCYfault,
+notpassingnativeleakacceptance. Newmanifeststock_qt_compose_leak_gateOPEN. Verifier
+currentlyexpects cleanLinuxnativeasan2 +failedasan1/barecontrol2; doesNOTerasefail.
+
+LinuxReleasebuild1 ACTIVE session83495(-j1), last138/168at21:27. Onceactual0 runowned
+nativeRelease1 viaVM out-dependencies/run_history_actions_linux.py, Debugreference
+runtimeunchangedprivate. ThenLinuxJSON/logcollecttarhistory-action-hover-results-1.
+LinuxASANcomponentCTesthistorycontrols1 PASSactual0. CaptureLinuxlint/editor/control
+cpp/helper+source+logs (includeunderscore filenamesexplicitly) intoVMtar. Archive
+scriptscurrentlyexpect thattar andsource-delta49.json,baselinebinary.json; hostraw
+capturesonly.json/.log/.png/.m/.py/.cpp/.h/.lua/.zsh_history, NOexecutables/dylibs/DB.
+Includehelpers/probe/Qt source files/PNGpreflight; privateauthoritiesexcluded.
+
+Next finishLinuxrelease, recordallactualstatuses, maybeaddscopeddeclarativeinput
+normalizationsources needed; updateREADME/PARITY(newrowhovercoverage),finishreport,
+newarchiveoffline+current-sourceverifiers usingPillow interpreter (verifyrecomputes
+rawpixels),source/authorityaudit,localcommitEXPLICITpaths excludingunrelatedfile;
+CONTINUEglobalgoal(no finalcheckpoint). Needverifyarchivewrappersource/membership,
+regionexpectedcounts, allprivatecleanup, rawfailuresincludingnewLinuxdependency.
+NoactivehostGUIs/captures/builds; guestReleasebuildactiveonly. OwnedVM7158/55984.
+Spanishupdates<=60sec; analysis<=100wordchunks (longanalysiscausessilence). Noagents,
+otherworktrees/publish/merge. GlobalgoalremainsOPEN, leakgatesOPEN.
+
+## Scoped old-row hover correction BUILDING (21:14 UTC)
+
+HEAD26eb0fb1a previouscheckpointimmutable. CurrentWIP6productfiles: HistoryPanel/Row
+qml, application.hpp, history_pointer.cpp, pointer_dispatcher.cpp/.hpp. Gatebool
+PointerDispatcher.history_row_hover_enabled_(defaulttrue) exposedApplicationQProperty
+historyRowHoverEnabled withownnotify. Capturingsemanticcardaction setsfalse BEFORE
+Qt canadmitunderlyingoldrowhover. Freshnon-actionpress sets true. ActualnativeMove
+(`native_events_.moving`)sets trueonlyifnoheldhistorygesture(includingretiredsink).
+Releaseleavesgatesuppresseduntilfreshpointerinput. No widgetscan/allocationstate;
+bounded3captures. QML rowbackgroundgatescontainsMouse; reusableHistoryRowdefaults
+rowHoverEnabledtrue, Panelbindscontroller.historyRowHoverEnabled??true(stubfallback).
+HistoryHinthover unchanged(actualnewcopyROI matchedoriginalalready). Needqualify
+focus/modal/multiplebuttons/regressionfullscope; nofullHistoryclaim. No newtests yet;
+meaningfulnativepairedneg+recovery controls below plusexistingQuicktargets planned.
+
+BaselinebinaryBEFOREproductbuild copied out-dependencies/history-action-hover-before-1/
+telar-gui withshaJSON(base26eb0fb1a); preserveforcausalalternation. Nativeharnesslocal/
+history_action_hover_capture.py stable CURRENTrevision: privatepasteboardhelpername
+MUSTprefix'telar-attachment-fixture-' (helperrejectsotherprefixbeforecreation).
+Injectslocalattachment_private_clipboard.dylib inbothGUIprocesses; perGUIboardsUUID
+andcleanupreceipt. Press3/replace2earlierhadnorelease(no clipboardaction); final
+replace4+rehover2 privateboardcleanupboth0. Replace3failedhelperprefix,notGUInegative.
+Replace4 newnegative142784fullpixels inclCPU/footerunrelated, bounds[0,12,2288,1426];
+oldQtunselectedrowgray27 vsZigbg16confirmedbypriorreplace2. Rehover1fixturefailedfresh
+frameafterduplicateenter+sameposmove (noopend). Rehover2 successfulPOSITIVE actual
+outside releaseatOLDcopypositionthenSINGLEactualmove(controlcurrentcopy,warppointer)
+restoresmatchingresults:4226diffonlyleftchrome/footerbounds[0,12,604,1426]. Both GUIs
+focusandfreshpresentedframes qualified; ownruntimeCLIstop+privateboardclean0. All
+nativecapturescomplete; DONOTeditstableharnesswhilefuturecapturesactive. Rawinputs,
+sourcebytes/hash/actions.m/Metalmetadata/native-state/png retainedunderlocal/
+history-action-hover-*; investigationJSONupdated. No masks/alignment. Needderive
+regionalrectanglesfromactualnativecontrol->scene bounds forfinalpixelclaims instead
+manualpriorROI; allhistory y200..1399 matchinpositivecasescanusefixedbroadband if
+geometricallydeclaredinreport. Sourceproof originalHistoryHint.draw hoverfalseunder
+retiredID; HistoryRow.draw hoverselection semanticindex/revision ratherthanQtgeometry.
+
+HostReleasebuild1 session61896 ACTIVE targettelar-gui+Quick+historycontrols. DO NOT
+editCPP/QMLwhilebuildactive. Source delta49 synced6productfiles VM. LinuxASANbuild1
+session11092 ACTIVE -j1. StrictMaclint1 failed onlymissingdirectemitheaderinpointer
+Cpp; addedQtCore/qtmetamacros.h, repeatlint2 session50238 ACTIVE(pointeronly). Adapter
+alreadycleanlint1. Needafteractualbuild0 capturefixedreplacementwithsameharness and
+sameoriginalbinary (reference-gui, neverheadless). Rehover2positivebaselineunchanged
+source; afterfixedverifynegativecorrected+normalrehoverstillworks; considerbarehover/
+helddrag/newpress/focus/modal controls andoriginal-source model ifneeded. Thennative
+Qt regression3slots, Historycontrols, MacASANbuild/tests+LinuxRelease/ASAN/lint/editor,
+report/PARITY andnewseparatefrozenarchive/localcommit. OldarchiveMUSTNOTregenerate.
+OwnedVM7158/55984, noagents/otherworktrees/publish/merge. Onlyunrelateduntracked
+personal-frame-delivery.mdmustremainuntouched. Spanishupdates<=60sec, chunksanalysis
+<=100words (longthinkinghascausedsilence). Continueuntilglobalgoal, nofinalcheckpoint.
+
+## Native History old-row hover NEGATIVE reproduced (21:09 UTC)
+
+HEAD26eb0fb1a remainsfrozenpointercheckpoint; NOproducteditsyet. Handoffmodified,
+unrelatedpersonal-frame-delivery.mduntouched. Newlocalharnesshistory_action_hover_
+capture.py(modename--gesture)capturesoriginalGUI(reference-gui/bin/telar)andQtout/
+telar-gui at1180x720pt(2360x1440), private short /tmp/thh-*/r runtimesockets, sources/
+evidenceinsideworktree. CapturesownSTARTUPsourcebytes atentry+hash; doNOTeditharness
+whileactive. Usesexistingcapture_history andcapture_attachment_shelf pointerprobe;
+QtaccessibilityLabelsempty, harnessfallsbackTitleforcontrolcopy. Neverdeliverscopy
+release(no clipboardaction). Actualheldpress→keyboardUp changesselectionONE→THREE
+andcopyglobalY558→592inboth. Allprocesses/capturesfinish, private runtimesstopped.
+
+Explorationfailuresnotproductnegatives: baseline1 UnixsocketNameTooLong; baseline2
+wrongheadlessreferencebinary; press1 helperAXLabelonly abortsQt-6; press2 findsboth
+butQtno newframeafterstaticpress =>existingfreshdrawablecapturebarrierrejects. No
+weakenedgates. Press3 adds +1pointviewportroundtripAFTERpress obtainsfreshframe:
+POSITIVE bothcopyhoverfill52/52/52(versusrow46/48/43), 1979wholeframediffonlyleft
+chrome/footer bounds[0,12,604,1423]. Replace1 sameextraresize causesBOTHlosehover;
+2088diffsameleftbounds, henceNONnegative. Sourceevent/windowresizecanalterhover.
+
+Replace2 removesartificialresize: realkeyboardselectionchangeitselfpaintsfreshframe.
+QUALIFIEDNATIVEVISUALNEGATIVE capturedbothfocusappactive/key, rawframes+Metal
+presentedmetadata+nativeactions+generatedObjC+harnesshash+binaryidentities. Fullframe
+140465diff; sourceofnewdiffisoldunselectedrowhoverinQt(RGBA27/27/27)whileZigbackground
+16/16/16. NEWcopyhintmatchesexact(0pix inmanualROI[1988,1012,2119,1056]); NOTcopyhint
+hoverbug! ResultsmanualROI[72,850,2288,1180]138481diff; oldrow[72,1080,2288,1140]
+129689diff. Needdeclarativeboundsderivationforfinalregionalclaims; doNOTmask/align.
+Native-statebothconfirmselectionchanged. Allcapturesunderlocal/history-action-hover-*
+withdriverlogs; investigation.jsonsummarizes. Sessionsallcompleted(noactiveGUIjobs).
+Nextqualifymovement/releaseadmissionusingownedclipboardifanyrelease(copywouldwrite!),
+thenfixHistoryROW hover acrosssemanticgesture viaactualnativepointeradmission. Qt
+HistoryRow backgroundusespointer.containsMouse anditsoldrowMouseArea auto-enters
+whenmetadataisremoved. OriginalDispatcher.hovered retainssemanticwidgetID(andretired
+IDdoesnotturnintoentryhover), captureddrag/release don'tupdatehover; cancelfocusclears
+hover. `native_events_.moving()` alreadydistinguishesactual fromQtpress-synthetic
+motion forattachment, useappropriatesameadmission. `PointerDispatcher::move` consumes
+heldhistorygesturebutQMLcontainsMouse stillchangesonlayout. Avoidspeculativecopy
+hoverrefactor. NeedindependentoriginalDispatchermodelcoverage+scopecorrectsolution,
+notjustblanketsuppressvisuals; recoverrowhoveronactualsubsequentmotionandproperpress,
+keepretiredrelease sinks/focus/modalgeneration. ProductCPPfrozenuntilsolution.
+Sourcefiles: qt/HistoryRow.qml(pointeratbottom,backgroundcolorline60), qt/HistoryPanel
+passesactionController, qt/pointer_dispatcher.cpp move239, historycapture3slots;
+ApplicationPresentedHistorycurrentlyrevision+choicecount, scrollsurfaceboundsbutno
+per-rowgeometry. Canregisterrowbounds boundedcurrentdelegatesifneeded(noallscan).
+Noagents/otherworktrees/publication/merge. OwnedVM7158/55984idlepreserved. Globalgoal
+stillOPEN, NEVERfinalatcheckpoint. Spanishupdates<=60sec,analysis<=100wordsperchunk.
+
+## Hover isolated from resize, investigation active (21:06 UTC)
+
+No newproductsourcechanges afterHEAD26eb0fb1a. Handoffonlymodified, plusunrelated
+untrackedpersonal-frame-delivery.md untouched. Newignoredharnesslocal/
+history_action_hover_capture.py now snapshotsownsourcebytes atstartup andmatches
+QtaccessibilityTitle ORLabel. Private /tmp/thh-*/r sockets only outsideworktree;
+ownedresourcescleaned. No clipboardreleaseeverdelivered (modesnone/hover/press/
+replace), so clipboardnotmodified. OriginalGUIreference-gui/bin/telar, notheadless.
+Press3 POSITIVE capturesbothnativewindowsproperfocus andfreshdrawables, size
+2360x1440, differences1979 onlybounds[0,12,604,1423], outsidecard/copy. Rawcolor
+inspection verifiesbothcopyhoverfillRGBA52/52/52 vsnonhover46/48/43. Press3 uses
++1point widthroundtrip AFTERheldpress toobtainfreshQtframe (staticheldpressdoesn't
+paint). Replace1 sameharnesswithkeyboardUpselectionchangealso capturesboth,
+2088diffsameleftbounds. SelectionactuallychangesONE→multilineTHREE;copyglobalY
+558→592inboth. ButBOTHcopyhintslosehighlight, so NOHOVERBUGproven. Extraresizecan
+triggerpointerupdates/retirehover, soDONOTclaimcapturesemanticbugornativeparity.
+Currentwrapperremovespostgestureviewportjiggle: replacement itselfshouldpaint.
+Replace2 ACTIVEsession86542, outputlocal/history-action-hover-replace-2. Needinspect
+images/fullresult/regions toseeifthisreproducesnegative. Preserveallfailedbaselines
+andpress1/2fixtures; investigationJSONsummarizesfailuresasfixtureissuesNOTproduct.
+Nextcontrolledhoveronlywithoutpress/resizecouldprovideproperpositive. Ifnoactual
+difference, archive scopedobservations withoutspeculativeproductfix thencontinue
+otherPARITYgaps. Needupdates<=60sec; avoidlonganalysis(monolithicthinkinghascaused
+silence), <=100wordanalysis+concretetool. Noagents/otherworktrees/publish/merge.
+OwnedVM7158/55984idlepreserved. Fullgoal OPEN, no finalatcheckpoint.
+
+## Hover native harness qualification active (21:03 UTC)
+
+HEAD26eb0fb1a finalHistorypointercheckpoint, frozen396/2430archiveIMMUTABLE. Continue
+withoutfinaluntilglobalgoal. Onlyhandoffmodified; unrelatedpersonal-frame-delivery.md
+untouched. No newproductCPP changes. Newignoredlocal/history_action_hover_capture.py
+wraps capture_history with private /tmp/thh-*/r runtime sockets, retainedstartupsource
+bytes, and capture_attachment_shelf.prepare_pointer_probe nativepoint/trackinginput.
+OriginalGUI binary out-dependencies/reference-gui/bin/telar; runtime-onlyreference
+cannotGUI. Baseline1 NameTooLong; baseline2 choseheadlessbinary(noGUIexit1); both
+harnessfailuresretained. Baseline3 capturesboth2360x1440, wholeframe139812diff/3398400
+(includesotherrowhover/chrome/content differences, NOThovernegative). NativeQt
+accessibilityLabel empty; copy/delete exposedthroughaccessibilityTitle. Press1
+harnesslabel-only lookupabortQt-6, notproductnegative. WrappernowmatchesLabelORTitle
+andrecordsTitlefallback. Press2 findsbothcopycontrolsbutQtsteadyheldpressdrawsno
+newframeafterinput, soexistingpresenteddrawablefreshnessbarrier rejects(noimage),
+NOTproductnegative. Press3 ACTIVEsession68313 adds +1point viewport roundtrip AFTER
+heldinput inBOTHGUIs, waitsforfreshframe; outputlocal/history-action-hover-press-3.
+DoNOTeditwrapperwhilecaptureactive (startupsourcebytes nowimmutableanyway). No
+clipboardreleaseeverdelivered; modesnone/hover/press/replace only. Originalcopy
+pressedsemanticID shouldretainhoveracrosskeyboardUp selectionchange; QtnewMouseArea
+hasfreshstate, needactualcomparison (unproven). Afterpositivepresscontrol, runmode
+replace samewrapper, inspectcompletecard/copyhintregions withoutmask/alignment.
+Wrapperwritesitsstartupsource+hash intoeachoutput, originaltoolwritesgenerated.m
+sources andactions/native/framecaptures. Negativecapturefailuresretainedlocal.
+OwnedVM7158/55984 idlepreserved; nootherworktrees/agents/publish/merge. Spanish
+updates<=60sec. Existingoldverifiercurrent-source validuntilnewproductsourceedits.
+
+## History retained hover investigation active (20:58 UTC)
+
+Localcommit26eb0fb1a containsfinalpointercapturecorrection+frozen396/2430evidence.
+No publish/merge. Continueglobalgoal; nofinal/checkpointstop. Onlyunrelateduntracked
+personal-frame-delivery.md outsidehandoffcurrentlymodified; doNOTtouch/stageit.
+Newignoredlocal/history_action_hover_capture.py wraps capture_history.capture with
+owned /tmp/thh-*/r short runtime sockets; source/evidence remainthisworktree. This
+avoidsmacUnixsocketNameTooLong fromfulloutputpath. Capturedwrapper/source receipts
+retainedperevidencefolder. Baseline1 failedNameTooLong beforeGUI; baseline2 picked
+headless reference-runtime, correctlyreportsnoGUI; bothfailuresretained, notproduct
+negatives. CorrectoriginalGUIis out-dependencies/reference-gui/bin/telar (20MB),
+NOTreference-runtime/bin/telar (headless9MB). Baseline3 ACTIVEsession6411 usesGUI
+reference+out/telar-gui, outputlocal/history-action-hover-baseline-3. Captureboth
+samequery/viewport beforeaddingpointergesture; inspectnative-state controls tolocate
+copyhint. Nextextendlocalharness using capture_attachment_shelf.prepare_pointer_probe
+fornativepoint/tracking/NSAppPostEvent support. Captureheldcopy+keyboardselection
+replacement; originalDispatcher retainssemantic hoveredID whileQt destroysMouseArea.
+Needactualcontrolled/pairednegative beforeproductchange; notprovenyet. NoCpp/product
+editsafter26commit. Finaloldarchiveverifiercurrent-source stillvalid (handoffexcluded).
+OwnedVM7158/55984alive; nootherbuilds/nativeGUItests. Spanishupdates<=60sec.
+
 ## History card pointer checkpoint frozen; COMMIT then CONTINUE (20:56 UTC)
 
 Newmeasurements/history-retained-actions.md +validation.json +archivefolderFINAL:

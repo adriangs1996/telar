@@ -23,6 +23,7 @@ public:
   void beginChild(const ChildMouseView &view, ChildMouseSample sample);
   void release(Qt::MouseButton button);
   void presentHistoryActions(const HistoryActionSurface &surface);
+  [[nodiscard]] bool historyRowHoverEnabled() const noexcept { return history_row_hover_enabled_; }
   void abandon(TerminalItem &terminal);
   void ungrab(TerminalItem &terminal);
   bool eventFilter(QObject *watched, QEvent *event) override;
@@ -49,6 +50,8 @@ private:
   [[nodiscard]] ChildMouseView view(const Capture &lease) const;
   [[nodiscard]] static ChildMouseSample sample(const QMouseEvent &event, MousePhase phase, MouseButton button);
   [[nodiscard]] bool occupied() const noexcept;
+  [[nodiscard]] bool historyGestureHeld() const noexcept;
+  void allowHistoryRowHover(bool allowed);
   void report(std::uint64_t pane_id, const std::optional<ChildMouseReport> &report);
   void cancelPane(std::uint64_t pane_id);
   void cancel();
@@ -61,6 +64,7 @@ private:
   NativePointerEvents native_events_;
   QPointer<QQuickWindow> window_;
   std::array<Capture, static_cast<std::size_t>(MouseButton::none)> captures_;
+  bool history_row_hover_enabled_ = true;
   bool delivering_ = false;
   bool handing_off_ = false;
 };

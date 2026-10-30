@@ -17,6 +17,7 @@ HistoryRowLayout {
     property bool grouped: true
     property bool showCwd: true
     property bool interactive: true
+    property bool rowHoverEnabled: true
     property var actionController: null
     property string revision: ""
     readonly property var regions: layout
@@ -62,7 +63,7 @@ HistoryRowLayout {
         width: root.regions.frame.width
         height: root.regions.frame.height
         radius: root.regions.radius
-        color: Qt.alpha(root.colors.surface0, root.selected ? 1 : (pointer.containsMouse ? root.regions.hoverAlpha : 0))
+        color: Qt.alpha(root.colors.surface0, root.selected ? 1 : (root.rowHoverEnabled && pointer.containsMouse ? root.regions.hoverAlpha : 0))
     }
 
     NativeRoundedRectangle {

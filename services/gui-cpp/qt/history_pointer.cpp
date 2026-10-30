@@ -30,6 +30,10 @@ void Application::registerHistoryPanel(QQuickItem *panel) {
   history_content_ = history_viewport_ == nullptr ? nullptr : history_viewport_->property("contentItem").value<QQuickItem *>();
 }
 
+bool Application::historyRowHoverEnabled() const {
+  return pointer_dispatcher_.historyRowHoverEnabled();
+}
+
 void Application::registerHistoryActions(QQuickItem *actions) {
   history_actions_ = actions;
 }

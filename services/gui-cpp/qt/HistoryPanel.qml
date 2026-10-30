@@ -247,6 +247,7 @@ Item {
                     showCwd: root.browserState.effectiveScope === "global" || root.browserState.effectiveScope === "workspace"
                     interactive: root.actionable
                     actionController: root.controller
+                    rowHoverEnabled: root.controller.historyRowHoverEnabled ?? true
                     revision: root.browserState.revision
                     onActivated: revision => root.controller.selectPresentedHistoryRow(result.index, revision)
                     onActionTriggered: action => {

@@ -2230,3 +2230,11 @@ release. Original dispatcher comparisons and private Cocoa/Sway Qt controls cove
 selection replacement, dialog replacement, non-left buttons and focus loss.
 Native Cocoa exit leaks, complete History input/visual behavior and measured
 full-client performance remain open.
+
+[History row-hover admission](measurements/history-action-hover.md) prevents the
+old row from becoming hovered just because a captured card's metadata disappears.
+Fresh pointer input admits hover again. The retained previous binary exposes
+138,481 differing result pixels; the correction and fresh-motion recovery each
+match744,576 native Cocoa pixels. The complete window, other environments and
+native leaks remain open. A bare Qt6.8.2 input-method control retains a separate
+Linux composition-state leak; no dependency library or suppression is changed.

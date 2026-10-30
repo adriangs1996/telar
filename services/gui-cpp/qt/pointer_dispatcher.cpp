@@ -16,6 +16,7 @@
 #include <QWindow>
 #include <QWheelEvent>
 #include <QtCore/qnamespace.h>
+#include <QtCore/qtmetamacros.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qtypes.h>
 #include <QtCore/qstringliteral.h>
@@ -62,6 +63,17 @@ PointerDispatcher::Capture *PointerDispatcher::capture(Qt::MouseButton button) n
 
 bool PointerDispatcher::occupied() const noexcept {
   return std::ranges::any_of(captures_, &Capture::held);
+}
+
+bool PointerDispatcher::historyGestureHeld() const noexcept {
+  return std::ranges::any_of(captures_, [](const Capture &lease) { return lease.history.held(); });
+}
+
+void PointerDispatcher::allowHistoryRowHover(bool allowed) {
+  if (history_row_hover_enabled_ != allowed) {
+    history_row_hover_enabled_ = allowed;
+    emit application_.historyRowHoverEnabledChanged();
+  }
 }
 
 void PointerDispatcher::acquire(TerminalItem &terminal, Qt::MouseButton button) {
@@ -214,10 +226,15 @@ bool PointerDispatcher::press(QMouseEvent &event) {
     HistoryActionCapture history;
     if (application_.dialog_ == QStringLiteral("history") && surface.generation == application_.dialog_generation_ && history.begin(surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale}, event.button() == Qt::LeftButton)) {
       *lease = {.terminal = {}, .history = history, .held = true};
+      // Removing the selected metadata can make Qt enter the row underneath.
+      // Its hover stays unadmitted until a fresh pointer observation.
+      allowHistoryRowHover(false);
 
       return true;
     }
   }
+
+  allowHistoryRowHover(true);
 
   if (!occupied() || qobject_cast<TerminalItem *>(event.exclusiveGrabber(event.point(0))) == nullptr) {
     return false;
@@ -234,6 +251,9 @@ bool PointerDispatcher::press(QMouseEvent &event) {
 bool PointerDispatcher::move(QMouseEvent &event) {
   if (native_events_.moving()) {
     application_.attachments_.observePointer(event.position());
+    if (!historyGestureHeld()) {
+      allowHistoryRowHover(true);
+    }
   }
 
   application_.observeActivityPointer(true, event.position());

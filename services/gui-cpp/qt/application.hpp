@@ -92,6 +92,7 @@ class Application final : public QObject {
   Q_PROPERTY(QAbstractItemModel *agents READ agents CONSTANT)
   Q_PROPERTY(QAbstractItemModel *history READ history CONSTANT)
   Q_PROPERTY(bool historyLoading READ historyLoading NOTIFY historyChanged)
+  Q_PROPERTY(bool historyRowHoverEnabled READ historyRowHoverEnabled NOTIFY historyRowHoverEnabledChanged)
   Q_PROPERTY(QVariantMap historyState READ historyState NOTIFY historyChanged)
   Q_PROPERTY(QVariantMap historyGeometry READ historyGeometry NOTIFY historyChanged)
   Q_PROPERTY(QString historyCommand READ historyCommand NOTIFY historyChanged)
@@ -260,6 +261,7 @@ public:
   Q_INVOKABLE void useHistoryRow(int row, bool alternate = false);
   Q_INVOKABLE void usePresentedHistory(const QString &revision, bool alternate = false);
   [[nodiscard]] bool historyLoading() const;
+  [[nodiscard]] bool historyRowHoverEnabled() const;
   [[nodiscard]] QString historyCommand() const;
   [[nodiscard]] QVariantMap historyState() const;
   [[nodiscard]] QString historyOutput() const;
@@ -365,6 +367,7 @@ signals:
   void historyInspectionScrolled(int lines);
   void prefixChanged();
   void historyChanged();
+  void historyRowHoverEnabledChanged();
   void paletteChanged();
   void pathPickerChanged();
   void pathPickerGeometryChanged();
