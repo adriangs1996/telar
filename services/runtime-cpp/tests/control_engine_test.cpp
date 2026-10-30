@@ -63,6 +63,52 @@ void streamOrder(Memory &memory) {
 }
 
 template <Allocator Memory>
+void ordinaryControlBoundaries(Memory &memory) {
+  Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
+  struct Prefix {
+    std::string_view input;
+    unsigned columns;
+  };
+  constexpr Prefix prefixes[]{
+      {"", 0},
+      {"\x1b]2;title\x1b\\", 0},
+      {"\x1b]2;title\a", 0},
+      {"\x1b]2;aborted\x18", 0},
+      {"\x1bPignored\x1b\\", 0},
+      {"\x1bPaborted\x18", 0},
+      {"\x1b_ignored\x1b\\", 0},
+      {"\x1b_aborted\x18", 0},
+      {"\x1b[1;32m", 0},
+      {"\xc2\x9b", 0},
+      {"\x9b", 1},
+      {"\x90", 1},
+  };
+  constexpr std::string_view incomplete[]{"\xc2", "\xe2", "\xe2\x82", "\xf0", "\xf0\x9f", "\xf0\x9f\x92"};
+  for (const auto prefix : prefixes) {
+    for (const auto pending : incomplete) {
+      for (const char control : {'\n', '\r', '\0'}) {
+        auto input = std::string{"\x1b" "c"};
+        input.append(prefix.input);
+        input.append(pending);
+        input.push_back(control);
+        input.append("\x1b[6n");
+        const auto expected = control == '\r' ? std::string{"\x1b[1;1R"} : std::string{control == '\n' ? "\x1b[2;" : "\x1b[1;"} + std::to_string(prefix.columns + 2) + "R";
+        for (std::size_t split = 0; split <= input.size(); ++split) {
+          terminal.feed(bytes(std::string_view{input}.substr(0, split)));
+          terminal.feed(bytes(std::string_view{input}.substr(split)));
+          require(drain(terminal) == expected);
+        }
+
+        for (const auto byte : input) {
+          terminal.feed(bytes(std::string_view{&byte, 1}));
+        }
+        require(drain(terminal) == expected);
+      }
+    }
+  }
+}
+
+template <Allocator Memory>
 void cursorStateViews(Memory &memory) {
   GhosttyAllocatorBridge<Memory> allocator{memory};
   TerminalHandle terminal;
@@ -984,6 +1030,7 @@ int main(int argc, char **argv) {
   noForeignQueries(memory);
   deferredEffects(memory);
   streamOrder(memory);
+  ordinaryControlBoundaries(memory);
   colorEncodings(memory);
   cursorEncodings(memory);
   cursorStateViews(memory);
