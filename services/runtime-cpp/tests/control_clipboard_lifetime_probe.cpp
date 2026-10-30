@@ -44,6 +44,25 @@ void expectInput(std::string_view expected) {
   check(received == expected);
 }
 
+std::string readListing() {
+  std::string result;
+  unsigned endings = 0;
+  const auto deadline = Clock::now() + std::chrono::seconds{5};
+  while (endings != 3) {
+    check(Clock::now() < deadline);
+    pollfd pending{STDIN_FILENO, POLLIN, 0};
+    if (::poll(&pending, 1, 50) <= 0) {
+      continue;
+    }
+    char byte;
+    check(::read(STDIN_FILENO, &byte, 1) == 1);
+    result += byte;
+    check(result.size() <= 1024);
+    endings += result.ends_with("\x1b\\");
+  }
+  return result;
+}
+
 int child(const char *report) {
   termios settings{};
   check(::tcgetattr(STDIN_FILENO, &settings) == 0);
@@ -51,14 +70,25 @@ int child(const char *report) {
   check(::tcsetattr(STDIN_FILENO, TCSANOW, &settings) == 0);
   writeAll("\r\nclipboard-child-ready\r\n");
   expectInput("S");
+  writeAll("\x1b[?5522h\r\npaste-grant-ready\r\n");
+  const auto listing = readListing();
+  constexpr std::string_view prefix = "\x1b]5522;type=read:status=OK:pw=";
+  check(listing.starts_with(prefix));
+  const auto end = listing.find("\x1b\\", prefix.size());
+  check(end != std::string::npos);
+  const auto password = listing.substr(prefix.size(), end - prefix.size());
+  check(password.size() == 32);
+  check(listing == std::string{prefix} + password + "\x1b\\\x1b]5522;type=read:status=DATA:mime=Lg==:pw=" + password + ";dGV4dC9wbGFpbgo=\x1b\\\x1b]5522;type=read:status=DONE:pw=" + password + "\x1b\\");
   writeAll("\x1b]5522;type=write:id=old\x1b\\\x1b]5522;type=wdata\x1b\\");
   expectInput("\x1b]5522;type=write:status=EPERM:id=old\x1b\\");
   writeAll("\r\nold-operation-denied\r\n");
   expectInput("N");
+  writeAll("\x1b]5522;type=read:id=grant:name=QXBw:pw=" + password + ";dGV4dC9wbGFpbg==\x1b\\");
+  expectInput("\x1b]5522;type=read:status=EPERM:id=grant\x1b\\");
   writeAll("\x1b]5522;type=write:id=fresh\x1b\\\x1b]5522;type=wdata\x1b\\");
   expectInput("\x1b]5522;type=write:status=DONE:id=fresh\x1b\\");
   std::ofstream output{report};
-  output << "{\"old_denial_byte_exact\":true,\"fresh_completion_byte_exact\":true}\n";
+  output << "{\"old_denial_byte_exact\":true,\"fresh_completion_byte_exact\":true,\"old_paste_grant_revoked\":true}\n";
   output.close();
   check(output.good());
   writeAll("\r\nclipboard-lifetime-complete\r\n");
@@ -102,6 +132,9 @@ int parent(char **argv) {
   awaitScreen(peer, opened.pane_id, "clipboard-child-ready");
   constexpr std::array<Byte, 1> start{'S'};
   peer.send(PaneInput{opened.pane_id, start});
+  awaitScreen(peer, opened.pane_id, "paste-grant-ready");
+  const std::array<std::string_view, 1> available{"text/plain"};
+  check(peer.exchange<RequestCompleted>(PastePaneClipboard{.request_id = 4, .pane_id = opened.pane_id, .pane_generation = opened.pane_generation, .listing_only = true, .text = {}, .available = available}).request_id == 4);
   const OwnedClipboardTask old{peer.receive<ClipboardDesktopRequest>()};
   check(old.write && old.ticket.pane_generation == opened.pane_generation);
   MemoryClipboard provider;
@@ -121,6 +154,9 @@ int parent(char **argv) {
   peer.send(CompleteClipboardDesktop{.ticket = old.ticket, .status = ClipboardDesktopStatus::success});
   constexpr std::array<Byte, 1> next{'N'};
   peer.send(PaneInput{opened.pane_id, next});
+  const OwnedClipboardTask revoked{peer.receive<ClipboardDesktopRequest>()};
+  check(!revoked.write && revoked.prompt && revoked.ticket.client_generation != old.ticket.client_generation);
+  peer.send(CompleteClipboardDesktop{.ticket = revoked.ticket, .status = ClipboardDesktopStatus::denied, .prepared = true});
   const OwnedClipboardTask fresh{peer.receive<ClipboardDesktopRequest>()};
   check(fresh.ticket.pane_id == old.ticket.pane_id && fresh.ticket.pane_generation == old.ticket.pane_generation);
   check(fresh.ticket.client_generation != old.ticket.client_generation && fresh.ticket.nonce != old.ticket.nonce);

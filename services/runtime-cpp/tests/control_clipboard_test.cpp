@@ -390,6 +390,23 @@ std::string ptyUntil(int descriptor, std::string_view suffix, std::string_view m
   return result;
 }
 
+std::string pasteGrant(auto &panes, auto &client, auto &pane) {
+  termios settings{};
+  check(::tcgetattr(pane.process->descriptor(), &settings) == 0);
+  ::cfmakeraw(&settings);
+  check(::tcsetattr(pane.process->descriptor(), TCSANOW, &settings) == 0);
+  pane.terminal.feed(bytes("\x1b[?5522h"));
+  const std::array<std::string_view, 1> available{"text/plain"};
+  panes.pasteClipboard(client.session(), PastePaneClipboard{.request_id = 4242, .pane_id = pane.id, .pane_generation = pane.generation, .listing_only = true, .text = {}, .available = available});
+  check(client.template receive<RequestCompleted>().request_id == 4242);
+  const auto listing = ptyUntil(pane.process->descriptor(), "\x1b\\", "status=DONE:pw=");
+  constexpr std::string_view prefix = "\x1b]5522;type=read:status=OK:pw=";
+  check(listing.starts_with(prefix));
+  const auto end = listing.find("\x1b\\", prefix.size());
+  check(end != std::string::npos && end - prefix.size() == 32);
+  return listing.substr(prefix.size(), end - prefix.size());
+}
+
 void actualRouting(SystemAllocator &memory) {
   RuntimeModel model{memory};
   Kqueue poller;
@@ -539,6 +556,7 @@ void resetPendingOperations(SystemAllocator &memory) {
       auto &pane = panes.require(client.receive<PaneOpened>().pane_id);
       panes.configureDesktop(client.session(), ConfigurePaneDesktop{.pane_id = pane.id, .pane_generation = pane.generation, .visible = true, .clipboard = true});
       ClipboardService service{model};
+      const auto password = pasteGrant(panes, client, pane);
       pane.terminal.feed(bytes("\x1b]5522;type=write:id=reset\x1b\\\x1b]5522;type=wdata\x1b\\"));
       service.advance(pane, std::chrono::steady_clock::now());
       const OwnedClipboardTask task{client.receive<ClipboardDesktopRequest>()};
@@ -579,6 +597,18 @@ void resetPendingOperations(SystemAllocator &memory) {
       const unsigned expected_writes = full_reset && stage != Stage::committed ? 0 : 1;
       check(provider.writes == expected_writes && provider.inspections == expected_writes && provider.reads == 0);
       check(!pane.terminal.hasPendingControl());
+      pane.terminal.feed(bytes("\x1b]5522;type=read:id=otp:name=QXBw:pw=" + password + ";dGV4dC9wbGFpbg==\x1b\\"));
+      service.advance(pane, std::chrono::steady_clock::now());
+      const OwnedClipboardTask otp{client.receive<ClipboardDesktopRequest>()};
+      check(otp.prompt == full_reset);
+      check(service.complete(client.session(), CompleteClipboardDesktop{.ticket = otp.ticket, .status = full_reset ? ClipboardDesktopStatus::denied : ClipboardDesktopStatus::success, .prepared = true}) == &pane);
+      if (!full_reset) {
+        service.advance(pane, std::chrono::steady_clock::now());
+        check(client.receive<ClipboardDesktopExecute>().ticket == otp.ticket);
+        finishDesktop(service, client, pane, otp, executeClipboard(otp, ClipboardConsent::once, provider));
+      }
+      check(drain(pane.terminal) == (full_reset ? "\x1b]5522;type=read:status=EPERM:id=otp\x1b\\" : "\x1b]5522;type=read:status=OK:id=otp\x1b\\\x1b]5522;type=read:status=DONE:id=otp\x1b\\"));
+      check(provider.reads == (full_reset ? 0u : 1u));
       if (stage == Stage::requested) {
         pane.terminal.controlPolicy().clipboard_write = control::Access::ask;
         constexpr std::string_view grant_request = "\x1b]5522;type=write:id=grant:name=QXBw:pw=cHc=\x1b\\\x1b]5522;type=wdata\x1b\\";
@@ -711,6 +741,7 @@ void revokedCapabilitiesAndReuse(SystemAllocator &memory) {
       ConfigurePaneDesktop desktop{.pane_id = pane->id, .pane_generation = pane->generation, .visible = true, .clipboard = true};
       panes.configureDesktop(client.session(), desktop);
       ClipboardService service{model};
+      const auto password = pasteGrant(panes, client, *pane);
       pane->terminal.feed(bytes("\x1b]5522;type=write:id=old\x1b\\\x1b]5522;type=wdata\x1b\\"));
       service.advance(*pane, std::chrono::steady_clock::now());
       const OwnedClipboardTask old{client.receive<ClipboardDesktopRequest>()};
@@ -765,6 +796,13 @@ void revokedCapabilitiesAndReuse(SystemAllocator &memory) {
       desktop.clipboard = true;
       panes.configureDesktop(client.session(), desktop);
       service.configure(*pane);
+      pane->terminal.feed(bytes("\x1b]5522;type=read:id=otp:name=QXBw:pw=" + password + ";dGV4dC9wbGFpbg==\x1b\\"));
+      service.advance(*pane, std::chrono::steady_clock::now());
+      const OwnedClipboardTask otp{client.receive<ClipboardDesktopRequest>()};
+      check(otp.prompt);
+      check(service.complete(client.session(), CompleteClipboardDesktop{.ticket = otp.ticket, .status = ClipboardDesktopStatus::denied, .prepared = true}) == pane);
+      check(drain(pane->terminal) == "\x1b]5522;type=read:status=EPERM:id=otp\x1b\\");
+      check(provider.writes == previous_writes && provider.reads == 0);
       pane->terminal.feed(bytes("\x1b]5522;type=write:id=fresh\x1b\\\x1b]5522;type=wdata\x1b\\"));
       service.advance(*pane, std::chrono::steady_clock::now());
       const OwnedClipboardTask fresh{client.receive<ClipboardDesktopRequest>()};

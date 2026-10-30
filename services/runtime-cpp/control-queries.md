@@ -371,3 +371,18 @@ normalized linked-code evidence for the sole unrelated consistent variation,
 6,144 independent format cases,48,107 differential cases and final Release/
 ASan/UBSan runtime and six-control-suite results. This accepts one optimization
 relative to25; multiple actual-application and integration gates remain open.
+
+### Subsequent lifecycle coverage
+
+[Lifecycle ledger](measurements/control-queries/lifecycle-coverage-gaps.json)
+now links real socket EOF/reconnect, actual pane ID restoration, capability
+revocation, one-use/session grant reset matrices, full double-queue pressure,
+injected PTY write failures and the real30-second Qt consent timer. The
+[offscreen gesture probe](measurements/control-queries/clipboard-gesture-final-sanitizers.json)
+executes the production paste binding shared with Controller, actual Qt
+handshake/attachment, native runtime and byte-exact PTY replies. Targets-only
+listing reads no text; its password authorizes one Qt representation read, and
+ordinary paste reaches the child with bracketed framing. It does not instantiate
+the entire Controller/native-window lifecycle. All clipboard contents are owned
+fixtures; no host clipboard is read. The provider intermediate-allocation bound
+and remaining performance gaps still prevent whole-task acceptance.
