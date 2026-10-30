@@ -12,6 +12,7 @@
 #include "machine_client_key.hpp"
 #include "platform/clipboard_image_source.hpp"
 #include <QImage>
+#include <QPointF>
 #include <QObject>
 #include <QString>
 #include <QVariantList>
@@ -45,6 +46,9 @@ class AttachmentShelf final : public QObject {
   Q_PROPERTY(QVariantList items READ items NOTIFY changed)
   Q_PROPERTY(QString paneId READ paneId NOTIFY changed)
   Q_PROPERTY(QVariantMap modal READ modal NOTIFY changed)
+  Q_PROPERTY(bool hoverReady READ hoverReady NOTIFY hoverReadyChanged)
+  Q_PROPERTY(bool hoverKnown READ hoverKnown NOTIFY hoverRecoveryChanged)
+  Q_PROPERTY(QPointF hoverPosition READ hoverPosition NOTIFY hoverRecoveryChanged)
 
 public:
   explicit AttachmentShelf(ApplicationAllocator &memory, QObject *parent = nullptr);
@@ -54,6 +58,10 @@ public:
   AttachmentShelf(AttachmentShelf &&) = delete;
   AttachmentShelf &operator=(AttachmentShelf &&) = delete;
 
+  [[nodiscard]] bool hoverReady() const noexcept;
+  [[nodiscard]] bool hoverKnown() const noexcept;
+  [[nodiscard]] QPointF hoverPosition() const noexcept;
+  void observePointer(std::optional<QPointF> position);
   void setSource(AttachmentSource source);
   void setPrompt(std::optional<AttachmentPrompt> prompt, bool presented = true);
   void requestCapture();
@@ -75,6 +83,8 @@ public:
 
 signals:
   void changed();
+  void hoverReadyChanged();
+  void hoverRecoveryChanged();
   void failed(const QString &message);
   void quotaReached(platform::ClipboardImageError error);
   void evicted(AttachmentEviction reason, qulonglong requested);
@@ -98,6 +108,9 @@ private:
   void adopt(ClipboardImageResult &result);
   [[nodiscard]] bool current(const ClipboardImageJob &job) const noexcept;
 
+  std::optional<QPointF> hover_pointer_;
+  std::optional<QPointF> hover_recovery_;
+  bool hover_ready_ = true;
   ClipboardCaptureState captures_;
   std::optional<AttachmentPrompt> prompt_;
   std::optional<AttachmentPrompt> capture_prompt_;

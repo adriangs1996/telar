@@ -1612,6 +1612,21 @@ waiting for the exact delivered notification widget in the fixture; the earlier
 86/2 failure is retained. Paired attachment visuals, seat/selection lifecycle,
 XCB provider bounds, general native leaks and comparative performance stay open.
 
+The [native attachment visuals](measurements/attachment-native-visuals.md) align
+preview geometry and dimming to the original terminal-cell host. A paired native
+negative exposes2,061,702 pixels before correction. Final five same-binary controls
+match1,601,600 main-client pixels, including bare clicks, movement-before-click,
+modal key consumption, restoration and subsequent motion. The complete modal
+matches1,062,000pixels. Qt's extra move before a changed-position press requires
+observing the raw window-system event while delegating delivery unchanged. The
+isolated observer passes Release and native ASan/UBSan including destruction during
+delivery. Native Window39/Quick88 and Linux ASan Window37 pass; final broad lint
+and delivered Neovim diagnostics are clean. Native GUI sanitizer assertions pass5
+but exit1 with593,028bytes in2,979 leaked allocations, without local suppression.
+Complete-window differences, other themes/densities/platforms, remaining physical
+ownership, provider lifecycle/bounds, native leaks and comparative performance
+remain open. Regional matching does not close a global gate.
+
 ## Remaining functional work
 
 | Area | Missing or incomplete behavior |

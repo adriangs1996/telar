@@ -1,5 +1,7 @@
 #include "pointer_dispatcher.hpp"
 #include "application.hpp"
+#include "attachment_shelf.hpp"
+#include "native_pointer_events.hpp"
 #include "application/records.hpp"
 #include "input/child_mouse.hpp"
 #include "input/mouse_encoder.hpp"
@@ -27,7 +29,8 @@ namespace telar::gui::qt {
 
 PointerDispatcher::PointerDispatcher(Application &application)
     : QObject(&application),
-      application_(application) {
+      application_(application),
+      native_events_(application.memory_) {
   connect(&application, &Application::inputReleasing, this, &PointerDispatcher::cancelPane);
 }
 
@@ -204,6 +207,12 @@ bool PointerDispatcher::press(QMouseEvent &event) {
 }
 
 bool PointerDispatcher::move(QMouseEvent &event) {
+  if (native_events_.moving()) {
+    application_.attachments_.observePointer(event.position());
+  }
+
+  application_.observeActivityPointer(true, event.position());
+
   if (!occupied()) {
     return false;
   }
@@ -281,13 +290,10 @@ bool PointerDispatcher::eventFilter(QObject *watched, QEvent *event) {
 
       return press(mouse);
     }
-    case QEvent::MouseMove: {
-      auto &mouse = dynamic_cast<QMouseEvent &>(*event);
-      application_.observeActivityPointer(true, mouse.position());
-
-      return move(mouse);
-    }
+    case QEvent::MouseMove:
+      return move(dynamic_cast<QMouseEvent &>(*event));
     case QEvent::Leave:
+      application_.attachments_.observePointer(std::nullopt);
       application_.observeActivityPointer(false);
       return false;
     case QEvent::MouseButtonRelease:

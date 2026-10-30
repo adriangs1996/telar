@@ -9,6 +9,8 @@ FocusScope {
     readonly property var shelf: application.attachments
     readonly property var state: shelf.modal
     readonly property var regions: application.attachmentModalGeometry
+    readonly property var host: regions.host
+    readonly property color background: application.colors.background
     readonly property var grid: application.windowGeometry.typography.grid
     readonly property real physicalPixel: 1 / Screen.devicePixelRatio
     visible: (state.id ?? "").length > 0
@@ -19,13 +21,26 @@ FocusScope {
     }
 
     Rectangle {
-        anchors.fill: parent
-        color: "black"
+        x: root.host?.x ?? 0
+        y: root.host?.y ?? 0
+        width: root.host?.width ?? 0
+        height: root.host?.height ?? 0
+        color: Qt.rgba(root.background.r, root.background.g, root.background.b, 1)
         opacity: 0.55
     }
 
     MouseArea {
         anchors.fill: parent
+        acceptedButtons: Qt.AllButtons
+        onPressed: mouse => mouse.accepted = true
+        onWheel: wheel => wheel.accepted = true
+    }
+
+    MouseArea {
+        x: root.host?.x ?? 0
+        y: root.host?.y ?? 0
+        width: root.host?.width ?? 0
+        height: root.host?.height ?? 0
         acceptedButtons: Qt.AllButtons
         onPressed: root.shelf.close()
         onWheel: wheel => wheel.accepted = true

@@ -1,5 +1,382 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## Attachment native visuals archived and verified (17:08 UTC)
+
+Final Mac Window39/Quick88 actual0/privatecleanup0, noQWARN/QFATAL. LinuxRelease
+build75153 actual0 and2CTestgroups actual0; LinuxASAN2groups actual0/window37.
+Raw observer standalone nativeASANactual0/noleaks. GUIselectednativeASAN5 assertions
+PASS but actual1:593028bytes2979allocations, builtin12/480ObjCtable, noUB/access or
+local suppression. Older661321bytes retained; no comparative reduction claim.
+ReportREADME/PARITY updated scoped acceptance only. Newarchive finalized before commit:
+692artifacts,2394sourceidentities,14MiB evidencefolder. Offline/current-source
+verifier PASS5 same-binary nativecontrols. Historicalclipboard manifests untouched.
+All5mainclientexact plusmodalexact; fullwindow sidebar/footer differences retained.
+Next localcommit this reviewed checkpoint EXCLUDING unrelatedpersonal-frame-delivery.md,
+then CONTINUE objective: additionalpointer/modal/close states, providerlifecycle/
+XCBbounds, remainingfunctional/platform/visual/performancegates. No global gate
+closed. VM7158/55984ownedandstillneeded; no GUI/test/build currentlyactive.
+No publish/merge/subagents/otherworktrees, Spanishupdates<=60sec.
+
+## Raw-motion final controls pass; broad final tests ACTIVE (17:05 UTC)
+
+Mac raw observer build3 actual0; final3unit lint3 actual0. New standalone normal
+and nativeASAN2 tests pass actual0, detect_leaks1 UBSANhalt1 LSANunset; noleaks.
+Native selectedwindow4 and final fullwindow39 pass/privatecleanup0. Quickfull
+current ACTIVE41211, loglocal/attachment-native-motion-quick-full-1.log.
+MacnativeASANwindow build79384 actual0, selected finalASANwindow still needed.
+Actual paired final controls all mainclient1,601,600pixels EXACT same Qt binary:
+shelf4/coldrestored6 hash038e..., modal8 hash1912...+modalcf85...,
+realrestored7/rehover2 hash46e1.... Rawfullwindowdifferences retained; no globalgate.
+Controls JSON newattachment-native-visuals/accepted-controls.json. Verifierwritten
+but archive NOTRUN, report stilldraft needsfinaltestcounts. Source/newobserver
+synced delta22 toownedLinuxVM7158/55984. LinuxASANbuild88992 actual0, new4unit
+lint84268 actual0, final2CTestgroups raw/window PASSactual0, window37 entries.
+Guest LastTest downloaded attachment-native-motion-linux-asan-test-results-1.tar.gz.
+LinuxReleasebuild ACTIVE75153, logVMdir/attachment-native-motion-linux-release-build-1.log.
+Neovimactual native_pointer_events.hpp deliveredemptyclangd; process46693 actual0.
+Keeporiginalnegatives restored5/3 andlint1/2; no weakening, no localLSAN.
+Next finish Quick/privateASAN/LinuxRelease, archiveverification/report/PARITY/local
+checkpoint then CONTINUE remainingpointerstates/fullplatform/performancegates.
+Spanishupdates<=60sec; no publish/merge/subagents/otherworktrees.
+
+## Native raw-motion observer qualification ACTIVE (16:58 UTC)
+
+Recovery restored4 with real motion matches main client exactly, but bare-click
+restored5 fails21,898 pixels: Qt splits a changed-position press into a move
+before press delivery. Ordinary QMouseEvent source cannot distinguish it.
+New WIP qt/native_pointer_events wraps Qt's matching-version WindowSystemEvent
+handler, delegates unchanged, exposes raw MouseEvent.buttonType during dispatch.
+PointerDispatcher observes shelf motion only inside a raw MouseMove scope.
+The handler restores predecessors and supports own observers retiring out of order.
+Stack dispatch scopes are invalidated on synchronous observer destruction, avoiding
+a dangling rollback write. New standalone QtGui test checks synthetic move/press/
+release, true motion, out-of-order retirement and destruction during delivery.
+Mac build1 actual0; build2 ACTIVE21140 includes standalone test and lifetime fix.
+Strict new3unit lint ACTIVE13764. Do not edit dependent C++ until build exits.
+Then normal+ASAN standalone test; both real-motion and bare-click native pairs,
+modal/rehover/shelf final epoch; full affected suites, Linux Qt6.8 and lint/editor.
+Visual archive/verifier/report not finalized, full parity gates remain OPEN.
+No publish/merge/delegation; continue beyond checkpoints, Spanish updates<=60sec.
+
+## Recovery build/native/lint pass; real-motion restored4 ACTIVE (16:40 UTC)
+
+Recoverybuild12088ACTUAL0. Newnativecase4PASS/privatecleanup0. New2unitstrictlint
+QtShelf+PointerDispatcherPASS. CurrentQtAPIhoverKnown/hoverPosition QMLfrozenpoint
+fallback usingmapFromItem(scene); livepointobserveronlyMouseMove, Leaveclears.
+Actualrestoredpair4 ACTIVE viarecentexec, driverlocal/attachment-restored-native-pair-4-driver.log.
+Nowtool --bare-click keepslastmotionawaybeforecardclick (newcoldcontrol), default
+realprehover. Need BOTHcompareagainstoriginal; always-retiredcandidate isrejected
+byrealrestoredpair3. Alloriginalnegativesretained.
+No currentbuildactive; sourcefrozenforcurrentnativecapture. Afterreal4, bareclick
+control, modalregressionandrehover; onlythen finalrebuildfullsuites/ASAN/Linux
+againbecauserecoverychangedclasslayout. Lastfull39/Quick88/Linux37cleanareprevious
+semanticrevision. Visualreportdraftupdatedrecoverybutnotaccepted/archivedyet.
+
+## Final physical restored control found missing cached hover; recovery build ACTIVE (16:38 UTC)
+
+IMPORTANTsupersedes earlierclaimallstatesfinal: finalrestoredpair3 withREALmotion
+beforecardclick fails24,245pixels inunderlyingcard: originalRGB52 hot, QtRGB35cold.
+Bothagentsinput0x16z, modal7mainclientexact, so keyboard/geometrycorrect. Previous
+cold-clicktrajectoryexpectedcold; originalpreserveslastobservedmotiontarget across
+modal, notalwaysawaitnextmotion. NeedqualifyBOTHtrajectories, don'tdiscardnegative.
+
+NewWIPrecovery: AttachmentShelf storeslastactualMouseMove optional<QPointF> and
+frozenhover_recovery_ publishedhoverKnown/hoverPosition. open/close snapshotmotion;
+modalstillblocksvisualhover. WhenhoverReadyfalseafterclose, QMLtests frozenposition
+againstcard/closearea mappedfromscene; actualnewmotionrestoresnormalcontainsMouse.
+PointerDispatcher nowobservesONLYMouseMove (notpress), Leaveclearscachedpoint.
+No per-motion signalswhilealreadyready; recovery/ready notifyonlyneededchanges.
+Thisdistinguishesbareclickfromrealpriorhover. Model cpp/hpp/QML/pointerdispatcher
+changed, no Source/Catalog/captureworkerchanges.
+
+BUILD ACTIVE12088 loglocal/attachment-hover-recovery-mac-build-1.log, targets
+GUI+machinewindow; doNOTeditC++untilACTUALexit. Needlintnew4units, nativecase4,
+finalrestored/rehover/modal/shelf REALtrajectory AND coldclicknegativecontrol.
+CurrentnativeASAN5 assertionsPASS butactualexit1 LEAK661321bytes3000allocations,
+builtinObjCtable12/480, noUB/access/localsuppression. MacASAN91118/98926done.
+LinuxfinalRelease52679ACTUAL0 (pre-recovery), LinuxASANfinal37clean pre-recovery.
+Allthose tests nowprevioussemanticepoch; afterrecoveryqualificationrebuildaffected.
+Visualreportdraftcurrentlystatesalwayswaitnextpointer; mustrewritearoundlast
+observedmotion recovery whenfinalbehaviorverified. NOnewvisualarchive/manifest.
+Lastcommit aaf8cb69a; visualWIPuncommitted, historicalverifiersimmutable.
+Needlessanalysis, actquicklyandSpanishupdates<=60sec. Keepworkingpastcheckpoint.
+
+## Final modal7 exact and Mac ASAN selected run ACTIVE (16:29 UTC)
+
+Finalphysicaltrajectorymodal7 PASS: mainclient1,601,600exacthash1912ed10..., modal
+1,062,000exacthashcf85cd2c..., wholewindow2590differences onlysidebar/footer.
+Actualsourceincludesfinalportableheaders; QtproductionbinaryfreshRelease2.
+Finalcontrolnowsetsphysicalpointerawaybeforeexec,deliversrealtrackingmotionto
+cardbeforeclick. No finalrestored/rehover/shelfBcontrols yetsincetrajectoryupdate;
+earliersemanticA controls exact withinputproof retained. Needfinish those3poses.
+
+MacASANbuild91118 ACTUAL0. Selectednative5 via privateboard currentlyACTIVE98926
+local/attachment-final-visual-window-native-asan-1{-driver.log,.log,.json,-private.json}.
+Env detect_leaks1 UBSANhalt1 LSANunset, no local suppressions. InspectassertionsAND
+actualexit/leaksummary/tables. LinuxfinalASANwindowtest2 PASS37 actual0/clean12.52s.
+LinuxReleaseGUI/windowbuildACTIVErecentexecVMlogattachment-final-visual-linux-release-build-1.log,
+-j3; sourceall21deltasync. No newC++edits afterportableheaderhygiene.
+Native39/Quick88passed semanticA; Bheader-only rebuilddone, selectedBchecksand
+pixelcontrol providefinalsourcequalification. Broadenonlyifnewfailureconcern.
+Currentnewvisualreportdraftmeasurements/attachment-native-visuals.md isWIP,
+noarchive/newmanifestyet. Historicalmanifestsimmutable. Continueglobalgates.
+
+## EpochB builds complete except Mac ASAN; final modal7 ACTIVE (16:26 UTC)
+
+BothportablefinalMac2units andLinux2unitslintPASS; onlydirectincludehygienechanges
+fromvisualsemantic epochA (QStringLiteral headers, unusedqtypes removed).
+FinalReleaseMacbuild32147ACTUAL0. LinuxASANrebuild86175ACTUAL0, finalwindowASANtest2
+ACTIVE45455 inVMdir/attachment-final-visual-linux-asan-tests-2.log.
+MacnativeASANfullwindowbuildACTIVE91118, loglocal/attachment-final-visual-mac-asan-build-1.log,
+stillQmlconfigure/privateSDKwarningslastcheck; waitactualbeforetests/sourceedits.
+
+Finalmodal7 ACTIVE98790 loglocal/attachment-modal-native-pair-7-driver.log.
+Finaldriver nowstartsphysicalpointerawayfromcard, thenrealtracking enter/move
+beforecardclick, so nativeeventtrajectoryisexplicit/reproducible. Finalhelper
+clipboard DLL returnsNO-OP whenboardenvmissing; GUIboardnamepresentstillprivate.
+OptionalAeroSpaceCLIpreflight recordsunavailabilityandusesnativeAppKitactivation
+withoutWMcommands; viewport/active/key assertsunchanged. CurrentWMserverunavailable,
+doNOTrestartuserapp. Allnewharnesssourcecopiedeachrunoutput/harness-source.
+Need restored/rehover/shelf epochB finalposes andMacnativeASANactualexit; then
+freezevisualartifacts/report/PARITY/localcheckpoint, continueglobalperformance
+andremainingstates. No newcommitafteraaf8cb69a; allvisualworkuncommitted.
+
+## Final native39/Quick88 and LinuxASAN37 pass; header hygiene WIP (16:22 UTC)
+
+NativeCocoa fullwindowprivate3 PASS39/noQWARN/QFATAL/actual0 andprivatecleanup0.
+First38/1hostreadyfailure retained; native2 abortedbecauseAeroSpace serverbecame
+unavailable (actualCLI Can'tconnect, not producttest). DoNOTrestart userWM.
+Ignoredlocalfocusedhost nowlogs/retriesexternalWMerrorswithinunchangeddeadline;
+ifWMunavailable, ownedAppKitactorvisible/active/keyreadback (loggedsamePIDwindow)
+canackownerwithoutWMlayoutcommands. Native3passesusingthatfallback. Qt geometry
+assertions/timeoutsunchanged. Quickprivate1 PASS88 actual0 beforeWMdisappearance.
+Linux fullwindowASAN37PASS/actual0 underownedDBus, noLSAN/no local suppressions.
+ArchivedLinuxLastTest in VMdir/attachment-final-linux-asan-window-results-1.tar.gz.
+Maceditorattachment_shelf.hpp deliveredemptyclangd (actualnvim37836exit0).
+
+PortableLinuxlint1 found onlyQt6.8 includehygiene incontroller/shelf; no behavior
+bug. AddedQtCore/qstringliteral.h both, removedunusedqtypes.h shelf.cpp.
+FinalMaclint2units ACTIVE95828 (localattachment-portable-final-mac-lint-1.log),
+Linuxlint2 ACTIVE97061 (VMattachment-final-visual-linux-lint-2.log); source delta21
+synced2files. No buildsactiveyet. All productsemanticchanges remainasvisualepochA;
+header-onlyepochB needsbuild/selectedchecks beforefreeze. DoNOTrewritethehistorical
+clipboard-wayland/clipboard-imagesmanifests: current-sourcecheckshouldnowfail,
+offlinehistoricalverifiersremainvalid. NativeASANcurrentepochnotrebuiltyet!
+Next finalRelease/ASAN builds, selectednativeASAN leak/access, finalpixelcontrol,
+newvisualreport/archive/PARITY/localcommit, CONTINUEglobalgates/performance.
+Spanishupdates<=60sec, no subagents/otherworktrees/publish/merge.
+
+## Full Quick88 + Linux ASAN37 clean; Cocoa host repeat active (16:19 UTC)
+
+FinalnativeQuick1 usingactualPRIVATEboard PASS88/noQWARN/QFATAL/actualexit0 and
+privatecleanup0. Linux fullmachinewindow underowneddbus-run-session PASS37/no
+skips ASANdetectleaks1/UBSANhalt1/noLSAN/actual0. Linuxbuild91942ACTUAL0. Selected
+Cocoa modelhover4PASS. Nativepair6 modalmainclientEXACT withfinalsource; seepixel
+hashesearlier. No productsourcechangesafterhoverrearmbuild1.
+
+Cocoa fullwindowprivate1 ACTUALexit1 38PASS/1FAIL: externalReady setup timedout
+hiddenRestoredRoot... samebinaryisolatedtarget2 PASS3/exit0. NewHOSTfixturefix
+ignoredlocalhover_native_activation.m now retriesonlyunacknowledgednewvisible
+window, stops after Pythonhost atomicallywrites<label>.ready.owner owningID.
+Onceacked, no renewedactivationwhenreadyfiledeleted; avoids retiredownerrefocus.
+No QtTest deadlines/assertions/product semanticschanged. Beforeactor retained
+local/attachment-activation-before.m. Nativehelper updateddylibactualbuilt.
+FullCocoa windowprivate2 ACTIVE viarecentexec; loglocal/attachment-final-visual-window-native-2-driver.log.
+NativeQuickalreadydone, no othernativeUI active. Linuxlint3productunitsACTIVE
+VM/attachment-final-visual-linux-lint-1.log; Mac Neovimattachment_shelf.hpp ACTIVE
+local/attachment-final-visual-editor-1.log. Neovimautorebuildeditoronly, no host
+productbuild active. Waitactualeditorfinish before newhostCMakebuild.
+Need currentnativeASANwindow leak/access check (out-native-sanitizers oldepoch),
+LinuxruntimeLint fixesifneeded, broaderchecks onlywherejustified, sourcefreeze,
+visualreport/archive/PARITY/localcheckpoint; continueglobalparity/perf/otherstates.
+No publish/merge/agents. VM7158/55984retainedforLinuxqualification.
+
+## Same-epoch modal exact; full suites/ASAN in progress (16:12 UTC)
+
+Modalpair6 SUCCESS finalhoverrearmQt binary, wholewindow278differences onlysidebar
+/footer; mainclientexact. Needwritepair6region-comparison.json andverifyhashcf85...
+Model source/C++unchanged afterhoverrearmbuild1. FourunitlintPASS. Rehoverpair1
+mainclientSHA46e1d17852f115ec4a367ab439028e637a442b5371db22e36e86db086699fc47.
+
+Privateboardtestscopeexpanded: attachment_private_clipboard.m ctor now NO-OP when
+boardenvmissing (necessary childheadlessruntime stripsTELAR_*). Withnamedenvstill
+swizzlesonlyGUIprocess; helperverify+finallyclearensuresactualprivateboard.
+Ignoredlocalfocused_attachment_window.py acceptsTELAR_GUI_TEST_ADDITIONAL_LIBRARIES;
+newlocalrun_private_native_test.py wrapsit, recordsactualtestexit+privatecleanup.
+Newwrapper doesnotclaim oldnativeQuick didn'ttemporarilywritegeneral; next full
+runs useprivateboardforcopy/paste too. No productclipboardsourcebehaviorchange.
+
+ACTIVE nativefullmachinewindow39 via privatewrapper, execsessionrecentlaunch,
+loglocal/attachment-final-visual-window-native-1-driver.log and .json/.log/-private.json.
+QuicktestbuildACTIVE46418 logattachment-final-visual-mac-quick-build-1.log;
+waitACTUALexit andnativewindowruncompletion before fullnativeQuick88 SERIAL.
+LinuxASANfullmachinewindowbuildACTIVErecentexecsession -j3 logVMdir/
+attachment-final-visual-linux-asan-build-1.log. Delta20 syncedall8UI/product/test
+files toownedVM. DoNOTeditC++whilebuildsactive. LinuxVMsame7158/55984.
+Afterbuildrununderowneddbus-run-session ASANdetectleaks1 UBSANhalt1 noLSAN,
+keepactualexit/suppressions/tables; no newleakacceptanceyet. GeneralgatesOPEN.
+Then native/editor/finalsourcearchive/report/PARITY/checkpoint, CONTINUEglobalparity.
+
+## Rehover exact; same-epoch modal regression ACTIVE (16:09 UTC)
+
+Rehoveractualpair1 SUCCESS: properNSTrackingArea.owner QNSViewMouseMoveHelper
+receivesenter8/move5; warpedonlyownedwindow positionverified. Bothagentbytes0x16z,
+wholewindow299differences onlysidebar/footer; mainclient1,601,600pixels exact,
+region-comparison.json retained. Modelhoverrearmboolfixactuallyworks onrealmotion.
+Newsameepochmodalpair6 ACTIVE freshlylaunched, local/attachment-modal-native-pair-6-driver.log.
+No buildsactive. Afteractualpair6: buildQuicktest/newmodelheader thennativefull
+machinewindow39 andQuick88 SERIAL, ASAN/Linux/editor/perf scope sourcefreeze.
+ConsiderprivateboardinjectionforwholeQuick too: currentlocal focused_attachment_window.py
+overridesDYLD_INSERT_LIBRARIES withhover_native_activation, andQuick runtime child
+stripsTELAR_* only. ToaddprivateboardDLL, makeitsconstructorNO-OPwhenboardenvmissing
+(insteadcurrentabort), otherwisechildheadlessruntimewithstrippedenvwouldabort.
+AllowlocalwrapperextraDLL envpath and useownedprivateboardhelper finallycleanup;
+GUI keepsnamedboardenv, childrenwithstrippedenvsafelystayuninstrumented. No product
+clipboardbehaviorchange. PreviouslyfullQuickwrites/restoresgeneralboard; next
+scope shouldusetestprivateboard. DoNOT editlibrary/harnesswhilenativepair6active
+ifwant exacttestsourceepoch; waitactualfinish (~35sec).
+
+## Restored mainclient exact and rehover pose ACTIVE (16:07 UTC)
+
+Hoverrearmbuild1 ACTUAL0; native4PASS verifieshoverfalseafterEscape andtrueafter
+realQtwindowMouseMove. Broad4unitlintPASS unchanged. Restorednativepair2 SUCCESS:
+bothactualagents0x16z, mainclient1,601,600pixels exact SHA038e3444e58b440a81f53ed7ba26949da68ce21ad503f933d79f42018d773572.
+Fullwindow2872differences onlysidebar/footer. No globalvisualacceptance.
+
+Rehovernativepair1 ACTIVE newlylaunchedexecsession: driverloglocal/attachment-rehover-native-pair-1-driver.log.
+Newcapture driverprepare_pointer_probe patches generatedactor: pointcoords,
+warpONLYtoownedwindow, routesenter/move/exitthroughNSTrackingArea.owner (matches
+previousacceptedtrackingharness), realtimeeventtimestamp. LogsNative tracking
+delivery+warpedposition. Rehover=modalXblocked,Escape,Zdelivered,thenactualpointer
+enter/moveovercard; expectedinput0x16z and matchinghovercardpixels. Actualpair
+notyetinspected. Newrunscopyallharnesssourcefourfilesintooutput/harness-source.
+No productC++changes afterhoverrearmbuild, no buildactive now. Need sameepochmodal
+regression (pair6), broadernativefull39/Quick88, ASAN/Linux, editor, originalpixel
+scopearchive/report/PARITY andlocalcheckpoint, thenCONTINUEglobalparity.
+
+## Modal mainclient exact; restored hover fix compiling (16:03 UTC)
+
+Native modalpair5 SUCCESS actualoriginal+Qt, bothagentbytesonly0x16(Xeaten).
+Mainclient[568,0,1800,1300]1,601,600pixels EXACT SHA1912ed10d07e939426eb2ad483e136d10cdf0acf57307fd43a7b79cf75a8d649.
+Modal[656,164,1718,1164]1,062,000pixels EXACT SHAcf85cd2c065272abfadc1438a5d53e61082bcb5f85b2f314c1aa2c52c3af26d5.
+Wholewindow2551differences onlysidebar/footer dynamicinputs. No globalpixelclaim.
+Controller/nativefixturelintfinalPASS both, no profilechanges. ExactnewQmlmodal
+host rectangle+terminal-background dim and !modalOpen hoverfix working.
+
+Restorednativepair1 BOTHactualinput0x16+'z': XandEscapeeaten, focusreturnsproperly.
+BUT24,096pixel differences mainlyshelfcardbg: originalsurface0RGB35 Qtretained
+surface1RGB52 afterEscape. Originalrequiresnextdeliveredmotionbeforehoverreturn;
+QtMouseArea synthhoverEnter sendspositionChanged evenwhenphysicalpositionunchanged
+(checkedofficial Qt6.12 qquickmousearea.cpp), so QMLcallbacks alone insufficient.
+
+WIP cleanmodel fix: AttachmentShelf boolhover_ready_ defaulttrue, Q_PROPERTY
+hoverReady withownhoverReadyChangedsignal. openModal setsfalse; close leavesfalse;
+observePointer() rearms ONLYwhenpending andcatalogsnapshot.modal empty (fixed4slots,
+noallocations; fastpathalreadytrue isonebranch). PointerDispatcher actualwindow
+press/dblclick/move callsobservePointer beforeexistingobserveActivityPointer.
+AttachmentShelf.qml gatesbothcardandclosehoverwithhoverReady&&!modalOpen.
+Existingnativefixture helperverifyAttachmentHoverReactivation checksfalseafter
+Escape, sendswindowMouseMove, checks true. Nativefixturefunctionstillunder100lines
+(afterextractedgeometryhelper); strictlintmustrepeatfinal4units.
+
+BUILD ACTIVE27743 loglocal/attachment-hover-rearm-mac-build-1.log, targettelar-gui
+andgui-machine-window-test; classheader/MOCmayrebuildmanyobjects. DoNOTeditC++until
+ACTUALexit. Afterbuild: targetednativeclipboard4, restorednativepair2, modalpose
+regression (binaryepochchanged), thenfullaffectedtests/ASAN/Linux/editor/source
+freeze/report/PARITY/localcheckpoint. Lastcommitstill aaf8cb69a, visualWIPuncommitted.
+No othernativeGUIcurrentlyactive. OwnedLinuxVM7158/55984stillrunningneeded.
+Spanishupdates<=60sec; nofinalatcheckpoint. Needfarlessanalysis, moretools.
+
+## Modal pixels fixed except underlying hover; follow-up build ACTIVE (15:54 UTC)
+
+Nativepair4 actualmodal +scrim-top nowEXACT versusoriginal; total16,358remaining
+pixels concentratedcardbackground outside modal, not image. Samplecardbg original
+(25,25,25)Qt(32,32,32) whileimagepixelsEXACT: Qtkeeps pointer.containsMouse
+surface1 behindmodal; originalmodallayer revokesunderlyinghover(surface0).
+WIP AttachmentShelf.qml nowgatescard/closehovercolors with !modalOpen.
+Nativebuild2 ACTIVE logattachment-modal-host-mac-build-2.log; inspectreturned
+execsessionbeforetests. DoNOT editC++ whilebuildactive.
+First geometrytargetednative4PASS; controllerlintPASS; testlintFAILED104lines
+threshold100. ExtractedverifyAttachmentModalHost helper (sameassertions) into
+fixtureclass; repeatlint afterbuild. No checks/deadlines/suppressionsweakened.
+NEXT pair5 afterbuild, thenrestoredposebyteproof0x16z, scopepixels/fullchecks.
+Need sourceepoch/archive/report/PARITY/localcommitonlyafterverification; aaf8cb69a
+lastcommit. Source nowvisualWIP affects QtAttachmentModal/Shelf andcontroller,
+plusnativefixture andnewownedcapturetools. Keepworkingpastcheckpoints.
+
+## Real modal visual gap found and WIP fix built (15:51 UTC)
+
+Native modalpair3 SUCCESSfullycaptured bothactualclients, worker/input correct,
+BUT2,061,702/2,340,000pixels differ. Originalmodalboundsphysical[656,164,1718,1164]
+centersonterminalgrid+Canvasorigin; Qtwasfullwindow anddimmedallchrome black.
+OriginalRendererorigin =sidebarreserved+topchrome; Canvas.dimAt uses theme terminal
+background atalpha.55. This is a PRODUCTgap, not a harnessacceptance.
+WIPfix Qtattachment_controller.cpp attachmentModalGeometry nowusesSession
+workbenchGeometry.cellArea and globaldisplay.terminalorigin; returns"host" rect.
+AttachmentModal.qml scrimusescell-alignedhost +terminalbackgroundRGB/alpha.55;
+fullwindowpointerblockerpreventsunderlyingchromeinput, closeonlyinsidehost.
+Existingnativeclipboardtestadds host-origin/containment checks.
+BuildACTUALstatus inspect70341/logattachment-modal-host-mac-build-1.log; doNOT
+edit C++untilactualexit. Lint ACTIVE viarecentexecsession logattachment-modal-host-lint-1.log.
+Next targetednativeclipboardtest, actualmodalpair4, inspectpixels, thenrestored
+modebyteproof0x16z andbroaderaffectedchecks/sourcefreeze/checkpoint. CurrentQt
+binarymayhavebeenrebuilt, previousshelfexactreportispre-fixepoch(df3040ba...).
+No newcommitafteraaf8cb69a. CurrentC++WIPuncommitted.
+
+## First shelf pixels exact; native modal preparation in progress (15:47 UTC)
+
+Actual native shelf pair3 SUCCESS: original4e021bbd... and currentQt df3040ba...
+1800x1300/2,340,000pixels,143differences onlyx63..265/sidebar+footer; mainclient
+x568..1800entireheight1,601,600pixels EXACT SHA038e3444e58b440a81f53ed7ba26949da68ce21ad503f933d79f42018d773572.
+Shelf[568,1004,1800,1240]290,752pixels exact SHAda627a55002ec39c6d5602c4f6f61d795b6e222ad0df6d6fb7dfe966723ffd74.
+Imagevisuallyinspectedboth. Bothactualagentinput exactly0x16; privateboardcleanup0.
+Rawdriverresults andregion-comparison.json local/attachment-shelf-native-pair-3.
+NOglobalpixelsaccepted. Differingmetrics/rootbranchiconnotattributedorfixedyet.
+
+Modalpair1 rejected correctly: normalizedclickbug sentXtoagent; sourcecorrected
+normalizedcoords+view.isFlipped+realCACurrentMediaTime inputevent timestamp.
+Modalpair2 originalshowsrealmodalandblocksX, QtstaticmodaldoesnotredrawforblockedX;
+captureguardrejectsstale presented_time(beforelastinput). DoNOTloosenguard.
+Newfinal1pxresize+restoreafterlastkey forcesfreshsame-sizepaintbothclients;
+modalpair3 ACTIVE sessionreturnedlaunch, driverloglocal/attachment-modal-native-pair-3-driver.log.
+PotentialPRODUCTgap: originalmodalobservedboundsphysical[656,164,1718,1164]
+centersworkbench/pane; currentQt attachmentModalGeometry usesviewport_/wholewindow.
+Investigate actualpair3pixelsbeforechanging. OriginalComposition useshost_size
+butCanvasorigin/viewportincludesworkbench; inspectfullcoordinateprojection.
+Afterfix nativeModal, runrestoredmodeexpectedagentbytes0x16+'z' (X/Escapeeaten).
+No newproductC++editsyet. No newcheckpointcommitafteraaf8cb69a. Keepworking.
+
+## Native pair preparation retries (15:42 UTC)
+
+Checkpoint remains aaf8cb69a. New visual harness WIP now pair3 ACTIVE viaexec
+session reported at launch; local/attachment-shelf-native-pair-3-driver.log.
+Pair1 fails ownedruntimeNameTooLong (longsocket), no pixelclaim; pair2 fails
+ZigGUI envSSH_CONNECTION inherited. Fixed by temporary .av-* directory INSIDE
+thisworktree for short94byte socket and stripping SSH_CONNECTION/TTY/CLIENT
+from ownedGUI/runtimeenvironment only. Common capture_history.py startup now
+inside try/finally so even startupfailuresstop onlytheir ownedendpoint.
+Privateboardcleanup passed both failures. No product changes or GUIacceptance.
+Currentnewtools: attachment_private_clipboard.m,attachment_clipboard_fixture.m,
+capture_attachment_shelf.py plus capture_history.py. No buildactive/user runtime
+changed. Continue diagnose actual pair3, images/agentbytecheck, thenmodal andkeys.
+
+## Native paired shelf capture started (15:40 UTC)
+
+Wayland checkpoint COMMITTED locally aaf8cb69a;473files,442artifacts,2366source
+identities,2.6MiBprogramsources. New/historical offline verifiersPASS. No publish.
+WIP aftercommit: tools/{attachment_private_clipboard.m,attachment_clipboard_fixture.m,
+capture_attachment_shelf.py}; capture_history.py now accepts explicit extraenv
+and injected libraries. No product C++ edits aftercheckpoint. Privateclipboard
+preflight actualwrite/getter-swizzle/cleanup PASS; own UUID board only.
+NewnativepairACTIVE inspect execsessionreturnedforattachment-shelf-native-pair-1
+in tools output; driverloglocal/attachment-shelf-native-pair-1-driver.log.
+Uses original reference-gui/bin/telar + out/telar-gui, real ownedruntime each,
+copied/codesignedPython namedclaude +SessionStart hook, rawTTY marker[Image#1],
+actualCtrl-V andretainedafterpresentationMetalreadbackviaexistingcapture_history.
+Pair NOTaccepted: firstlaunchstillneedsqualification/imageinspection. Native
+modal/physicalownershipnotyetimplementedinthisnewharness. Continue; no final.
+VM7158/55984stillneededforLinuxqualification, keepprivatekeysoutofarchives.
+
 ## Wayland checkpoint ready; continue paired visual work (15:36 UTC)
 
 Final archive+offline verifier --check-current-source PASS;442artifacts, program

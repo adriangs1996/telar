@@ -17,6 +17,7 @@
 #include "application/pane_bottom_reservation.hpp"
 #include "platform/private_clipboard.hpp"
 #include <QBuffer>
+#include <QRectF>
 #include <QImage>
 #include <QDebug>
 #include <QtCore/qlogging.h>
@@ -382,6 +383,22 @@ class MachineWindowTest : public QObject {
     QCOMPARE(shelf.items().size(), 1);
   }
 
+  static void verifyAttachmentHoverReactivation(Application &application, QQuickWindow &window) {
+    QVERIFY(!application.attachments()->hoverReady());
+    QTest::mouseMove(&window, window.contentItem()->boundingRect().topLeft().toPoint());
+    QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->hoverReady(), wait_ms);
+  }
+
+  static void verifyAttachmentModalHost(const Application &application) {
+    const auto modal_geometry = application.attachmentModalGeometry();
+    const auto modal_host = modal_geometry.value(QStringLiteral("host")).toRectF();
+    const auto terminal_region = application.windowGeometry().value(QStringLiteral("terminal")).toRectF();
+    QCOMPARE(modal_host.topLeft(), terminal_region.topLeft());
+    QVERIFY(terminal_region.contains(modal_host));
+    QVERIFY(modal_host.left() > 0 && modal_host.top() > 0);
+    QVERIFY(modal_host.contains(modal_geometry.value(QStringLiteral("bounds")).toRectF()));
+  }
+
   Q_SLOT static void clipboardImagesReservePaneRowsAndOwnModalKeys() {
     PrivateClipboard board;
     MachineFixture fixture;
@@ -453,6 +470,7 @@ class MachineWindowTest : public QObject {
     application.attachments()->open(identity);
     QVERIFY(!application.attachments()->modal().isEmpty());
     QTRY_VERIFY_WITH_TIMEOUT(modal_view->isVisible(), wait_ms);
+    verifyAttachmentModalHost(application);
     QVERIFY(waitForSynchronizedFrame(window, wait_ms));
     const auto modal_pixels = window.grabWindow();
     QVERIFY(!modal_pixels.isNull() && modal_pixels != shelf_pixels);
@@ -462,6 +480,7 @@ class MachineWindowTest : public QObject {
     QKeyEvent escape{QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier};
     QVERIFY(application.handleBindingKey(escape, terminal));
     QVERIFY(application.attachments()->modal().isEmpty());
+    verifyAttachmentHoverReactivation(application, window);
     QCOMPARE(fixture.local_runtime->count(ClientTag::pane_input), previous_input + 1);
 
     sendAttachmentFrame(*fixture.local_runtime);

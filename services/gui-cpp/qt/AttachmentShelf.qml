@@ -9,6 +9,7 @@ Rectangle {
     required property GuiController application
     property real ratio: application.chromeRatio
     readonly property var shelf: application.attachments
+    readonly property bool modalOpen: (shelf.modal.id ?? "").length > 0
     readonly property var region: application.attachmentGeometry
     readonly property real padding: 6 * ratio
     readonly property real gap: 6 * ratio
@@ -22,6 +23,17 @@ Rectangle {
     color: application.colors.panelBackground
     clip: true
 
+    function hovered(area): bool {
+        if (modalOpen)
+            return false;
+        if (shelf.hoverReady)
+            return area.containsMouse;
+        if (!shelf.hoverKnown)
+            return false;
+        const point = area.mapFromItem(null, shelf.hoverPosition);
+        return point.x >= 0 && point.y >= 0 && point.x < area.width && point.y < area.height;
+    }
+
     Repeater {
         model: root.shelf.items
         delegate: NativeRoundedRectangle {
@@ -34,7 +46,7 @@ Rectangle {
             width: root.cardWidth
             height: Math.max(0, root.height - root.padding * 2)
             radius: 8 * root.ratio
-            color: pointer.containsMouse ? root.application.colors.surface1 : root.application.colors.surface0
+            color: root.hovered(pointer) ? root.application.colors.surface1 : root.application.colors.surface0
 
             MouseArea {
                 id: pointer
@@ -65,7 +77,7 @@ Rectangle {
                 ChromeText {
                     anchors.fill: parent
                     text: "×"
-                    color: closePointer.containsMouse ? root.application.colors.red : root.application.colors.subtext0
+                    color: root.hovered(closePointer) ? root.application.colors.red : root.application.colors.subtext0
                     horizontalAlignment: Text.AlignHCenter
                     pixelSize: root.application.windowGeometry.typography.body
                     emphasized: true

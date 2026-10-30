@@ -64,6 +64,14 @@ and the complete 39-entry window/88-entry Quick suites pass. Linux bounded
 transfer, paired attachment pixels, native exit leaks and comparative performance
 remain open.
 
+The [native attachment follow-up](measurements/attachment-native-visuals.md)
+corrects the preview's terminal host and hover restoration. Five native paired
+controls match the complete main-client region and modal exactly, while full
+windows retain sidebar/footer differences. Release Window39/Quick88 and Linux
+ASan Window37 pass; isolated raw-event lifetime checks pass sanitizers. General
+native exit leaks, remaining states/platform scenes and measured full-client
+performance remain open.
+
 ## Boundaries
 
 | Directory | Responsibility | Dependencies |

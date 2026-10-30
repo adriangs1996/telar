@@ -13,13 +13,14 @@
 #include "clipboard_images.hpp"
 #include "platform/clipboard_image_source.hpp"
 #include <QImage>
+#include <QPointF>
 #include <QObject>
 #include <QString>
+#include <QtCore/qstringliteral.h>
 #include <QVariantList>
 #include <QVariantMap>
 #include <QtCore/qmetatype.h>
 #include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
 #include <exception>
 #include <cstddef>
 #include <cstdint>
@@ -304,16 +305,45 @@ QImage AttachmentShelf::image(const QString &identity, bool full) const {
   return full ? slot->delivery.preview.full : slot->delivery.preview.thumbnail;
 }
 
+bool AttachmentShelf::hoverReady() const noexcept {
+  return hover_ready_;
+}
+
+bool AttachmentShelf::hoverKnown() const noexcept {
+  return hover_recovery_.has_value();
+}
+
+QPointF AttachmentShelf::hoverPosition() const noexcept {
+  return hover_recovery_.value_or(QPointF{});
+}
+
+void AttachmentShelf::observePointer(std::optional<QPointF> position) {
+  hover_pointer_ = position;
+  if (!position) {
+    hover_recovery_.reset();
+    emit hoverRecoveryChanged();
+  } else if (!hover_ready_ && !catalog_.snapshot().modal) {
+    hover_ready_ = true;
+    emit hoverReadyChanged();
+  }
+}
+
 void AttachmentShelf::open(const QString &identity) {
   bool valid = false;
   const auto id = identity.toULongLong(&valid);
   if (valid && catalog_.openModal(id)) {
+    hover_recovery_ = hover_pointer_;
+    hover_ready_ = false;
+    emit hoverRecoveryChanged();
+    emit hoverReadyChanged();
     emit changed();
   }
 }
 
 void AttachmentShelf::close() {
   if (catalog_.closeModal()) {
+    hover_recovery_ = hover_pointer_;
+    emit hoverRecoveryChanged();
     emit changed();
   }
 }

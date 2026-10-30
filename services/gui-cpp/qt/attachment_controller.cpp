@@ -18,6 +18,7 @@
 #include "terminal/screen.hpp"
 #include "application/workbench_geometry.hpp"
 #include "presentation/attachment_modal_geometry.hpp"
+#include "presentation/display_metrics.hpp"
 #include "projection.hpp"
 #include <QVariantMap>
 #include <QtCore/qcontainerfwd.h>
@@ -28,6 +29,7 @@
 #include <QtCore/qtmetamacros.h>
 #include <QObject>
 #include <QString>
+#include <QtCore/qstringliteral.h>
 #include <QtCore/qtypes.h>
 #include <algorithm>
 #include <cstddef>
@@ -72,9 +74,14 @@ QVariantMap Application::attachmentGeometry() const {
 
 QVariantMap Application::attachmentModalGeometry() const {
   const auto density = terminal_grid_.scale;
-  auto grid = terminal_grid_;
-  grid.scale = 1;
-  const WorkbenchGeometry host{.area = {.width = static_cast<float>(viewport_.width * density), .height = static_cast<float>(viewport_.height * density)}, .grid = grid, .layout_metrics = {}};
+  const auto &host = session().workbenchGeometry();
+  const auto terminal = displayMetrics(density).geometry.terminal;
+  const auto global = [&](Rect area) {
+    area.x += terminal.x;
+    area.y += terminal.y;
+
+    return toQRectF(area, density);
+  };
   const auto geometry = AttachmentModalGeometry::measure(host.cellArea());
   const auto bounds = host.pixels(geometry.bounds);
   const auto local = [&](CellRectangle cells) {
@@ -85,7 +92,7 @@ QVariantMap Application::attachmentModalGeometry() const {
     return toQRectF(area, density);
   };
 
-  return {{QStringLiteral("bounds"), toQRectF(bounds, density)}, {QStringLiteral("title"), local(geometry.title)}, {QStringLiteral("close"), local(geometry.close)}, {QStringLiteral("image"), local(geometry.image)}, {QStringLiteral("footer"), local(geometry.footer)}};
+  return {{QStringLiteral("host"), global(host.pixels(host.cellArea()))}, {QStringLiteral("bounds"), global(bounds)}, {QStringLiteral("title"), local(geometry.title)}, {QStringLiteral("close"), local(geometry.close)}, {QStringLiteral("image"), local(geometry.image)}, {QStringLiteral("footer"), local(geometry.footer)}};
 }
 
 void Application::attachmentShelfChanged() {

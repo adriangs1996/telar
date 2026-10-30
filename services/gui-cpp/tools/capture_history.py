@@ -94,6 +94,11 @@ def prepare_probe(output):
     source = replace_once(source, '@"view_points": @[@(view.bounds.size.width), @(view.bounds.size.height)],',
                           '@"view_points": @[@(view.bounds.size.width), @(view.bounds.size.height)],\n'
                           '             @"view_pixels": @[@([view convertRectToBacking:view.bounds].size.width), @([view convertRectToBacking:view.bounds].size.height)],')
+    source = replace_once(source,
+                          'view.bounds.size.height * (1 - [point[1] doubleValue]));',
+                          'view.bounds.size.height * (view.isFlipped ? [point[1] doubleValue] : 1 - [point[1] doubleValue]));')
+    source = source.replace('modifierFlags:0 timestamp:0 windowNumber:window.windowNumber',
+                            'modifierFlags:0 timestamp:CACurrentMediaTime() windowNumber:window.windowNumber')
     start = source.index('static id initialize(')
     end = source.index('\nstatic NSString *native_cursor', start)
     source = source[:start] + source[end:]
@@ -179,23 +184,24 @@ def capture(kind, binary, cpp_gui, output, settings):
     (directory / 'frames').mkdir()
     script(directory, settings)
     environment = {key: value for key, value in os.environ.items()
-                   if not key.startswith(('TELAR_', 'BENCH_')) and key not in ['DYLD_INSERT_LIBRARIES', 'QT_QUICK_BACKEND']}
+                   if not key.startswith(('TELAR_', 'BENCH_')) and key not in ['DYLD_INSERT_LIBRARIES', 'QT_QUICK_BACKEND', 'SSH_CONNECTION', 'SSH_TTY', 'SSH_CLIENT']}
     environment.update(TELAR_SOCKET=str(directory / 'runtime.sock'), TELAR_HISTORY=str(directory / 'history.db'),
                        TELAR_SOCKET_PATH=str(directory / 'runtime.sock'), XDG_DATA_HOME=str(directory / 'data'),
                        XDG_CONFIG_HOME=str(directory / 'config'), QT_QPA_PLATFORM='cocoa', QSG_RHI_BACKEND='metal')
+    environment.update(getattr(settings, 'extra_environment', {}))
     config = output / 'gui.lua'
     shutdown_grace_seconds = 5
     smoke_milliseconds = int((settings.capture_timeout + shutdown_grace_seconds) * 1000)
     command = [str(binary), 'gui', '--config', str(config), '/bin/sh'] if kind == 'zig' else [str(cpp_gui), '--fresh', '--config', str(config), '--smoke-ms', str(smoke_milliseconds), '/bin/sh']
     runtime_configuration = ['--config', str(config)] if getattr(settings, 'runtime_configuration', False) else ['--no-config']
-    subprocess.run([str(binary), 'server', '--background', *runtime_configuration], env=environment, cwd=output / 'work', check=True)
     process = None
     proxy = None
     try:
+        subprocess.run([str(binary), 'server', '--background', *runtime_configuration], env=environment, cwd=output / 'work', check=True)
         if not settings.empty_history:
             subprocess.run([str(binary), 'history', 'import', 'zsh', '--file', str(output / 'fixture.zsh_history')],
                            env=environment, cwd=output / 'work', check=True)
-        injected = str(output / 'actions.dylib') + ':' + str(output / 'capture.dylib')
+        injected = ':'.join([*getattr(settings, 'injected_libraries', ()), str(output / 'actions.dylib'), str(output / 'capture.dylib')])
         launch = dict(environment, DYLD_INSERT_LIBRARIES=injected, TELAR_GUI_ACTIONS=str(directory / 'actions.json'),
                       TELAR_HISTORY_CAPTURE=str(directory / 'window.png'), TELAR_HISTORY_CAPTURE_TRIGGER=str(directory / 'settled.at'),
                       TELAR_HISTORY_CAPTURE_STATE=str(directory / 'native-state.json'))

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "input/child_mouse.hpp"
+#include "native_pointer_events.hpp"
 #include <QMouseEvent>
 #include <QObject>
 #include <QPointer>
@@ -54,6 +55,7 @@ private:
   static void deliver(TerminalItem &terminal, const QMouseEvent &event, Qt::MouseButtons buttons);
 
   Application &application_;
+  NativePointerEvents native_events_;
   QPointer<QQuickWindow> window_;
   std::array<Capture, static_cast<std::size_t>(MouseButton::none)> captures_;
   bool delivering_ = false;
