@@ -4,6 +4,16 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [self-owned Wayland clipboard correction](measurements/clipboard-wayland-owned.md)
+rejects Qt's stale local PNG after registry retirement, including fresh monitor
+construction against a surviving retired Qt seat. A dedicated single capture
+executor avoids a reproduced GUI stall behind the global pool. Three alternated
+pairs preserve bytes and outcomes while reducing the scoped heartbeat gaps from
+1506080–1522059µs to13450–14760µs. Final80 capture observations, XCB16 and external
+Wayland6 pass in their qualified scopes. Native macOS4 assertions pass but exit
+leaks remain537405bytes/2726allocations, without local suppression. The separate
+stock Wayland overflow leak and all global parity/performance gates stay open.
+
 The [Wayland selection lifecycle](measurements/clipboard-wayland-lifecycle.md)
 releases removed registry state, restores seat/manager bindings and matches the
 original16-offer bound and overflow recovery. All61 raw protocol observations

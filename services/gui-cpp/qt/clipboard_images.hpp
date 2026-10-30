@@ -10,6 +10,7 @@
 #include <QFutureWatcher>
 #include <QObject>
 #include <QString>
+#include <QThreadPool>
 #include <cstdint>
 #include <optional>
 
@@ -58,6 +59,7 @@ private:
 
   ApplicationAllocator &memory_;
   platform::ClipboardImageMonitor clipboard_;
+  QThreadPool worker_pool_;
   QFutureWatcher<ClipboardImageResult> task_;
   std::optional<ClipboardImageJob> running_;
   std::optional<ClipboardImageJob> queued_;

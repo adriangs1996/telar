@@ -3,6 +3,7 @@
 #include "application/dependencies.hpp"
 #include "core/memory.hpp"
 #include "platform/file_descriptor.hpp"
+#include <cstdint>
 
 struct wl_display;
 
@@ -19,6 +20,7 @@ public:
 
   [[nodiscard]] bool available() const noexcept;
   [[nodiscard]] runtime::FileDescriptor capture();
+  [[nodiscard]] bool acceptsLocalSelection(std::uint32_t seat_global) const noexcept;
 
 private:
   struct Native;

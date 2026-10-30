@@ -2215,3 +2215,10 @@ bounded offer overflow. The61-case raw protocol matrix passes functionally.
 Installed Wayland1.23.1 still leaks one96-byte proxy in the overflow case; isolated
 dependency controls retain that failure and identify the lost queued-event
 reference. No diagnostic library is shipped and sanitizer acceptance remains open.
+
+The [self-owned clipboard follow-up](measurements/clipboard-wayland-owned.md)
+validates the live Qt seat and invalidates cached local ownership on registry
+retirement. Its isolated one-worker executor keeps native pipe reads independent
+of busy global Qt tasks. Functional, queued-worker, native window and XCB controls
+are retained with the rejected candidates. General native leaks and complete
+functional, visual and measured full-client performance acceptance remain open.

@@ -1,5 +1,144 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## Owned clipboard checkpoint frozen and verified; commit then CONTINUE (19:45 UTC)
+
+NEWclipboard-wayland-owned archive FINAL672artifacts2418sources6.2MiB, offlineAND
+current-sourceverifiersPASS. Exactsource-membership+authority/binarypathauditPASS.
+Allsource43/publicreportsREADME/PARITY frozen. No morearchiverrunsaftercommit.
+Rawexpectedstock96byteleak+Macactual1/leaks537405/2726retainfailures;80finalcapturerows,
+3alternatedpairs, causalnegativefinal, XCB16/external6/raw61/core3+window37, final
+Linux3+Mac1actualNeovim deliveredempty, broadlintallchangedunitsverified. Seeprior
+section/details andpublicreport. NeedlocalcommitexplicitpathsEXCLUDEunrelated
+personal-frame-delivery.md, thenCONTINUEfullobjective (doNOTfinalatcheckpoint).
+Next remaininggaps PARITYfullplatformstates/visuals/generalnativeleaks/fullclient
+measuredperformance. StockWaylanddependencybugnotshippedfix. VM7158/55984retained.
+Noactivejobs; noagents/publish/merge/otherworktrees. Spanishupdates<=60sec.
+
+## Guarded ownership + isolated executor verified; new archive/commit NEXT (19:41 UTC)
+
+Finalproductsourcefreeze43: NativeacceptsLocalSelection requiresliveoriginalbinding,
+selectedPNG andactualQtseatglobalmatch; native.remove retireslocalpermission onseat
+or manager removal. Factory usescheckedQtABI dynamic_cast +id(). Freshmonitors
+rejectQtdefaultoldseat. SharedClipboardImages ownedQThreadPoolmax1 preventsreader
+starvationbehindglobaltasks, retainingbusyqueueandcancel-before-future-join.
+AllRelease/ASANMac+Linuxbuildsactual0, allCppfinalstrictlintPASS(guard3units2,
+pool2units1,Macworker1). NeovimMacworkerhppdeliveredempty. Linuxfinal1cppPASSthen
+headerFAILEDmissingcanonicalout/clangd/qt context(noQtcompileDB); retained. Copied
+matchinggeneratedout-llvm23/clangd/qt totheMISSINGcanonicalcontext only, .clangd
+UNCHANGED; final2ALL3(adapterCpp/workerHpp/probeCpp)deliveredempty. Contextreceipt.
+Finalcontrols1 PASSnormalRelease20+queuedRelease20+normalASAN20+queuedASAN20; stock
+libs,ASANdetectleaks1 UBSANhalt1 LSANunset noaccess/UB/leaks. final-wl-own-*roots.
+Threealternatedpairs on9protocolphases*2versions no builds/lint/tests/profiling:
+prepoolAguarded/globalreaderGUIgap1506080–1522059us, isolatedB13450–14760us. All
+functionalrows/PNGbytesexact. Sixcontrolreceiverspervariant. Prepool frozenbinary
+192560...guardedbutglobalworker, receiptinwl-own-prepool-baseline-1. Queue1500ms,
+gapthreshold500000 unchanged. No fullclient/Zigperformanceclaim. Bothrejected
+unconditional1.5secstall andinitialguardpostrebind1.51secstall retained.
+Finalsame9phaseprobe+newisolatedworker+HEADoldadapter(oldplatformarchivecopy)
+causal-negative-final-1 failsbothversionsmanagerremovedoldPNGadopted, native2PASS.
+Finalsharedpoolregressions: XCB16ASANPASS/privateauthorityremoved; externalWayland6
+ASANPASS/ownedDBus; final3ASANCtestPASS/window37. RawRelease61PASS; stockrawASAN61
+assertionsPASSbut5receiversactual1/96byteproxyoverflowleak retained, notfixed.
+MacReleaseprivatewindow4PASSactual0+cleanup0. MacASANsame4PASSbutACTUAL1 leak
+537405bytes2726alloc,builtin15/600ObjC/noLocalLSAN,noaccess/UB,cleanup0. No cross-
+workloadleakreductionclaim. AllhistoricalarchivesIMMUTABLEincl1369366e2lifecycle.
+NEWreportclipboard-wayland-owned.md/PARITY/READMEupdated, NEWarchive_owned.py+
+verify_owned.py drafted(notfrozen); results1tar downloadingnow. Needfinishverifier
+allnewgates/Macfailure/editor/XCB/wayland/raw/coretests, freeze363+newartifacts/source
+archive, offline/current-sourceverify+authorityaudit, localcommitEXCLUDEunrelated
+personal-frame-delivery.md. ThenCONTINUEfullgoal, nevercheckpointfinalresponse.
+NoactiveGUI/test/build/editor now; ownedVM7158/55984retained. Noagents/publish/merge/
+otherworktrees. Spanishupdates<=60sec; SHORTanalysis+tools, avoidlongspeculation.
+
+## Dedicated capture executor WIP; functional guard verified, queued-rebind negative (19:29 UTC)
+
+Currentguardedconsumer+native3units strictlint2PASS actual0 (dynamic_cast instead
+ofunsafeQtbasecast; no suppressions,QtmandatoryABItypenamecheck). Releaseguarded
+controls2 PASS18 (8protocolphases*2versions+2native), normalqueuednative2PASS.
+Freshmonitorafterclear initiallyfailedfixture forgotselectionstate. Fixedserver
+retainsclear/current_source+destroyobserver so latebounddevice getsactualselection.
+Fixturebuild3actual0. Priorfailureguardedrelease1 retained asfixturefailure.
+Extendedprobe9phases includesrepublishaftermanagerwithoutreplacingoldworker; with
+queuedglobalworker1500ms bothversionsFUNCTIONALLY9PASSbutactual1onGUIgap thresholds:
+1513893/1514861us. wl-own-rebind-queued-negative-1. OriginalworkerusesglobalQtpool.
+NOWsharedQtClipboardImages addsownedQThreadPoolmax1, QtConcurrent::run(&pool,...).
+Cancelbeforefuturejoin unchanged; pooldestructorjoinsafterwatcher. One lazy worker
+perClipboardImages; no extraqueuedcaptures or DI. Source delta43 includespool
+hpp/cpp+newprobe9phases+driverqueuedprotocol+latestfixture. NeedqualifyMac/XCBtoo.
+FrozenPREPOOL binarycopiedBEFOREbuild overwrite, hash192560a8d40616942fdf0b03325816805c5890126856e2172a7ec09001313439 matchesnegative1'sreceipt; inownedVM
+out-dependencies/wl-own-prepool-baseline-1/probe+identity.json. HostretainsHEADold
+workerCPP/HPP forsourceproof. Releasepoolbuild1actual0, poolnewtool2unitlint1PASS.
+ACTIVE: MacReleasebuild1 53957, MacASANbuild1 26256 (bothQtconfigure~105s thencompile);
+LinuxpoolASANbuild1recentexec (allaffectedGUI+window/probes). NOtimedpairsuntilALL
+builds/lintcomplete. Nextsequentialprepoolvsownedpoolprotocolqueuedcontrols (baseline
+failsgap,candidatepass), normal20obs +nativequeued2, ASANsame, XCB16ASAN, Wayland6ASAN,
+raw61Release/stockoverflowfailurekept, relevantwindow/native/privatepasteboard
+checks, Macworkerstrictlint/editor. Re-runactualLinuxNeovimfinalsource notold.
+Do NOTfreeze clipboard-wayland-owned.md/newarchiveyet, reportdraftstillpending
+poolresults/qualification. Existing363artifactlifecyclearchiveIMMUTABLE, commit
+1369366e2. GoalAPIsblocked cannotresume butmanualworkcontinues. No checkpointfinal.
+Noagents/otherworktrees/publish/merge; unrelatedpersonal-frame-delivery.md excluded.
+Spanishupdates<=60sec: keepanalysis<100words andtoolcode<80lines, longspeculation
+keepsbreakingupdaterequirement. Do immediateconcretework, no finaluntilfullgoal.
+
+## Unconditional Wayland route REJECTED for GUI stall; guarded candidate WIP (19:19 UTC)
+
+DO NOTfreezeownclipboardreport/archiveyet. Previouslifecycle1369366e2 immutable.
+Unconditionalnativeproductcondition (delta38/39) passedworker16observationsRelease2
+andASAN1 stock/leakdetect/ownedDBus, raw61regression1, external6ASANregression1.
+Samefinalprobe+HEADoldmonitorcausalnegative1 failsbothprotocolversionsafterseat
+retirement(oldPNGadopted); native81/1MiB controlsPASSbothold/new. NewactualVMNeovim
+0.10.4+clangd23 installed; unchangedrepo.clangd deliversnewprobeemptydiagnostics,
+wl-own-editor-1/result.json+state/nvim/lsp.log. FinalGUImainbuild1bothdirsactual0
+BUTthiswasREJECTEDunconditionalcandidate, notacceptedcurrentguardedcode.
+Queuedworkerexperiment delta40 holdssoleQtthread1500ms, requiresGUIgap<500000us.
+Sameprobe+oldadapterbaseline2: small/largePASSmax14683/14012us~152heartbeats.
+Unconditionalcandidate: smallPASS21536us, LARGEFAIL1512546us/3heartbeats. Drivers
+runsequentialwithoutbuilds; preserveALL. Qtdata_source_send usesblockingGUIwrite;
+with1MiBpipe it stallsuntilqueuedreaderstarts. Thisrejects unconditionalroute.
+Newguarddelta41: WaylandNative acceptsLocalSelection(qtseatglobal) requires!failed,
+!binding_retired, seatglobalsame andselectedPNG. removeboundseat/manager sets
+binding_retiredtrue. AdapterqtSeatGlobal queriesQt'sactualinputdeviceglobalid via
+existingQtWaylandPrivate wrapper+QWaylandInputDevice::id, notpointeridentity. Allows
+QtlocaldirectsnapshotonlyifboardownsANDguard; otherwiseprotocolpipe. Thiskeeps
+initialordinaryselfownedfastpath, invalidatesretiredcacheddata, rejectsQtoldseat
+forfreshmonitors. ConservativeAFTERrebindself-sourceGUIlatencystillOPEN(unqualified).
+Newprobe8protocolphases (managerremove/restore,republishlivewithfreshworker,
+seatremove/restore+freshworker, externalinvalidwhileQtowns, republishretired) +2
+native. Newqueuedmode inprobe/driver recordsheartbeatgap. CandidateguardNOTTESTED
+YET. Releaseguardbuild1ACTIVE32020 (headerchangefullQuickrebuild), strict3unitlint1
+ACTIVErecentexec. Do NOTeditCPPwhilebuildactive; no timedcontrolswhilebuild/lint.
+Needfinish, inspectlint, runtotal18normal+queued/native, baseline3samefinalprobe,
+ASAN/regressions/neweditorforfinalsource, newreport/archive/committhenCONTINUEgoal.
+Currentreportclipboard-wayland-owned.md stilldraftbeingrewritten; noownarchive.
+Noagent/publish/merge/otherworktrees; excludeunrelatedpersonal-frame-delivery.md.
+Spanishupdates<=60sec; stoplongspeculativeanalysis, immediateconcretecode/tools.
+
+## Qt self-owned Wayland clipboard stale selection reproduced; fix WIP (19:03 UTC)
+
+Previouslifecyclecheckpoint1369366e2 committedlocal; archive363artifacts2413sources
+4.8MiB offline/current-sourcePASSatcommit. NEVERrewriteitsarchive/manifests.
+NewminimalQtstartup1 failswithoutqshell; startup2addsnon-surfacewl_shell/compositor
+bindings succeeds. Initialnegative1 compile/linkadapterfailed ':' shellnoop; NOTa
+functionalnegative. Correctednegative2 usesactualClipboardImageMonitor+QGui+ownPNG:
+Qtowns/captured=1 initially, afterseatremove andrestored+clear ALSOowns/captured1,
+actualreceiver1. PayloadvalidPNG; scopeissnapshotONLY/notdecode. Bothlogsretained.
+ProductWIP platform/linux/clipboard_image_monitor.cpp now alwaysusesnativeWayland
+selectedoffer (removedQtownsClipboardbypass), XCB pathunchanged. OwnQtdata_source
+sendcanblockQtGUIwhileworkerdrains (upstreamsendusesblockingwrite); no fullperfclaim.
+Newtools clipboard_wayland_owned_probe.cpp fullClipboardImages/read+preview+PNGbyte
+check, nativewindow+deliveredF24 andprotocol lifecycle7phases. Newgenericdriver
+check_wayland_owned_clipboard.py modern/legacyprotocol +Swaynative81/1MiBPNG. Notrun
+yet. Existingserverextendedwithopt-inQtglobals andQtdataSourceforwarding, peroffer
+source-destroylisterners (nofreedborrow). Rawgenerationmodeunchanged. CMakeLinuxnew
+ownedprobe+lintdep. Source delta38uploaded. Releasebuild1 ACTIVE34357 (fullQuick
+rebuilddueearlierheaderlayout). Needfinishandruncontrols, meaningfulsamefixture
+baselineusingHEADoldmonitor compiled/archivecopy inoutdependencies(nootherworktree),
+strictlintnewtool,ASAN+realSwayPNGcontrols/regressions, docs/newarchive/localcommit.
+CurrentnewWIP5filesinclnewprobe/driver; noothers exceptunrelatedpersonalreport.
+Noagents/publish/merge/otherworktrees. Spanishupdates<=60secs! Keepcodecallschunks
+small (<80lines) becausewriting200linestoolcallstook90secwithoutupdate.
+
 ## Wayland lifecycle final checks verified; archive/commit NEXT (18:54 UTC)
 
 Final rebuilt Release61 PASS; stock ASan61 assertionsPASS but5 receivers actual1

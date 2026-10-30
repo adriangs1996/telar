@@ -14,6 +14,10 @@ struct Server {
   struct wl_global *manager;
   struct wl_list devices;
   uint32_t generation;
+  struct wl_resource *selection_source;
+  struct wl_listener selection_source_destroyed;
+  int selection_valid;
+  uint32_t seat_generation;
   unsigned seat_version;
   unsigned manager_version;
   int control;
@@ -26,9 +30,37 @@ struct Device {
   int active;
 };
 
-struct Offer {
+struct Seat {
   uint32_t generation;
 };
+
+struct Offer {
+  uint32_t generation;
+  struct wl_resource *source;
+  struct wl_listener source_destroyed;
+  int from_source;
+};
+
+static void selection_source_destroyed(struct wl_listener *listener, void *data) {
+  (void)data;
+  struct Server *server = wl_container_of(listener, server, selection_source_destroyed);
+  wl_list_remove(&server->selection_source_destroyed.link);
+  server->selection_source = NULL;
+  server->selection_valid = 0;
+}
+
+static void remember_selection(struct Server *server, struct wl_resource *source, int valid) {
+  if (server->selection_source != NULL) {
+    wl_list_remove(&server->selection_source_destroyed.link);
+  }
+
+  server->selection_source = source;
+  server->selection_valid = valid;
+  if (source != NULL) {
+    server->selection_source_destroyed.notify = selection_source_destroyed;
+    wl_resource_add_destroy_listener(source, &server->selection_source_destroyed);
+  }
+}
 
 static void destroy_resource(struct wl_client *client, struct wl_resource *resource) {
   (void)client;
@@ -36,7 +68,12 @@ static void destroy_resource(struct wl_client *client, struct wl_resource *resou
 }
 
 static void free_offer(struct wl_resource *resource) {
-  free(wl_resource_get_user_data(resource));
+  struct Offer *offer = wl_resource_get_user_data(resource);
+  if (offer->source != NULL) {
+    wl_list_remove(&offer->source_destroyed.link);
+  }
+
+  free(offer);
 }
 
 static void accept_offer(struct wl_client *client, struct wl_resource *resource, uint32_t serial, const char *mime) {
@@ -49,7 +86,9 @@ static void accept_offer(struct wl_client *client, struct wl_resource *resource,
 static void receive_offer(struct wl_client *client, struct wl_resource *resource, const char *mime, int32_t descriptor) {
   (void)client;
   const struct Offer *offer = wl_resource_get_user_data(resource);
-  if (strcmp(mime, "image/png") == 0) {
+  if (strcmp(mime, "image/png") == 0 && offer->source != NULL) {
+    wl_data_source_send_send(offer->source, mime, descriptor);
+  } else if (strcmp(mime, "image/png") == 0 && !offer->from_source) {
     ssize_t count;
     do {
       count = write(descriptor, &offer->generation, sizeof(offer->generation));
@@ -79,7 +118,14 @@ static const struct wl_data_offer_interface offer_implementation = {
     .set_actions = set_actions,
 };
 
-static struct wl_resource *announce(struct Device *device) {
+static void source_destroyed(struct wl_listener *listener, void *data) {
+  (void)data;
+  struct Offer *offer = wl_container_of(listener, offer, source_destroyed);
+  wl_list_remove(&offer->source_destroyed.link);
+  offer->source = NULL;
+}
+
+static struct wl_resource *announce(struct Device *device, struct wl_resource *source) {
   struct wl_client *client = wl_resource_get_client(device->resource);
   struct Offer *offer = calloc(1, sizeof(*offer));
   if (offer == NULL) {
@@ -88,8 +134,19 @@ static struct wl_resource *announce(struct Device *device) {
   }
 
   offer->generation = device->server->generation;
+  offer->source = source;
+  offer->from_source = source != NULL;
+  if (source != NULL) {
+    offer->source_destroyed.notify = source_destroyed;
+    wl_resource_add_destroy_listener(source, &offer->source_destroyed);
+  }
+
   struct wl_resource *resource = wl_resource_create(client, &wl_data_offer_interface, wl_resource_get_version(device->resource), 0);
   if (resource == NULL) {
+    if (offer->source != NULL) {
+      wl_list_remove(&offer->source_destroyed.link);
+    }
+
     free(offer);
     wl_client_post_no_memory(client);
     return NULL;
@@ -108,12 +165,61 @@ static void free_device(struct wl_resource *resource) {
   free(device);
 }
 
+static void source_offer(struct wl_client *client, struct wl_resource *resource, const char *mime) {
+  (void)client;
+  (void)resource;
+  (void)mime;
+}
+
+static void source_actions(struct wl_client *client, struct wl_resource *resource, uint32_t actions) {
+  (void)client;
+  (void)resource;
+  (void)actions;
+}
+
+static const struct wl_data_source_interface source_implementation = {
+    .offer = source_offer,
+    .destroy = destroy_resource,
+    .set_actions = source_actions,
+};
+
+static void create_source(struct wl_client *client, struct wl_resource *manager, uint32_t id) {
+  struct wl_resource *resource = wl_resource_create(client, &wl_data_source_interface, wl_resource_get_version(manager), id);
+  if (resource == NULL) {
+    wl_client_post_no_memory(client);
+    return;
+  }
+
+  wl_resource_set_implementation(resource, &source_implementation, NULL, NULL);
+}
+
+static void set_selection(struct wl_client *client, struct wl_resource *resource, struct wl_resource *source, uint32_t serial) {
+  (void)client;
+  (void)serial;
+  struct Device *owner = wl_resource_get_user_data(resource);
+  if (!owner->active) {
+    return;
+  }
+
+  remember_selection(owner->server, source, source != NULL);
+  struct Device *device;
+  wl_list_for_each(device, &owner->server->devices, link) {
+    if (!device->active) {
+      continue;
+    }
+
+    struct wl_resource *offer = source == NULL ? NULL : announce(device, source);
+    wl_data_device_send_selection(device->resource, offer);
+  }
+}
+
 static const struct wl_data_device_interface device_implementation = {
+    .set_selection = set_selection,
     .release = destroy_resource,
 };
 
 static void get_device(struct wl_client *client, struct wl_resource *manager, uint32_t id, struct wl_resource *seat) {
-  (void)seat;
+  const struct Seat *bound_seat = wl_resource_get_user_data(seat);
   struct Server *server = wl_resource_get_user_data(manager);
   struct Device *device = calloc(1, sizeof(*device));
   if (device == NULL) {
@@ -122,7 +228,7 @@ static void get_device(struct wl_client *client, struct wl_resource *manager, ui
   }
 
   device->server = server;
-  device->active = 1;
+  device->active = server->seat != NULL && bound_seat->generation == server->seat_generation;
   device->resource = wl_resource_create(client, &wl_data_device_interface, wl_resource_get_version(manager), id);
   if (device->resource == NULL) {
     free(device);
@@ -132,13 +238,12 @@ static void get_device(struct wl_client *client, struct wl_resource *manager, ui
 
   wl_list_insert(&server->devices, &device->link);
   wl_resource_set_implementation(device->resource, &device_implementation, device, free_device);
-  struct wl_resource *offer = announce(device);
-  if (offer != NULL) {
-    wl_data_device_send_selection(device->resource, offer);
-  }
+  struct wl_resource *offer = server->selection_valid ? announce(device, server->selection_source) : NULL;
+  wl_data_device_send_selection(device->resource, offer);
 }
 
 static const struct wl_data_device_manager_interface manager_implementation = {
+    .create_data_source = create_source,
     .get_data_device = get_device,
 };
 
@@ -149,6 +254,10 @@ static void bind_manager(struct wl_client *client, void *data, uint32_t version,
   } else {
     wl_client_post_no_memory(client);
   }
+}
+
+static void free_seat(struct wl_resource *resource) {
+  free(wl_resource_get_user_data(resource));
 }
 
 static const struct wl_seat_interface seat_implementation = {
@@ -162,7 +271,15 @@ static void bind_seat(struct wl_client *client, void *data, uint32_t version, ui
     return;
   }
 
-  wl_resource_set_implementation(resource, &seat_implementation, data, NULL);
+  struct Seat *seat = calloc(1, sizeof(*seat));
+  if (seat == NULL) {
+    wl_resource_destroy(resource);
+    wl_client_post_no_memory(client);
+    return;
+  }
+
+  seat->generation = ((struct Server *)data)->seat_generation;
+  wl_resource_set_implementation(resource, &seat_implementation, seat, free_seat);
   wl_seat_send_capabilities(resource, 0);
   if (version >= WL_SEAT_NAME_SINCE_VERSION) {
     wl_seat_send_name(resource, "owned-clipboard-seat");
@@ -193,6 +310,7 @@ static int control(int descriptor, uint32_t mask, void *data) {
     }
   } else if (strcmp(command, "restore-manager") == 0) {
     ++server->generation;
+    remember_selection(server, NULL, 1);
     server->manager = wl_global_create(server->display, &wl_data_device_manager_interface, (int)server->manager_version, server, bind_manager);
   } else if (strcmp(command, "remove-seat") == 0) {
     if (server->seat != NULL) {
@@ -201,8 +319,11 @@ static int control(int descriptor, uint32_t mask, void *data) {
     }
   } else if (strcmp(command, "restore-seat") == 0) {
     ++server->generation;
+    ++server->seat_generation;
+    remember_selection(server, NULL, 1);
     server->seat = wl_global_create(server->display, &wl_seat_interface, (int)server->seat_version, server, bind_seat);
   } else if (strcmp(command, "clear") == 0) {
+    remember_selection(server, NULL, 0);
     struct Device *device;
     wl_list_for_each(device, &server->devices, link) {
       if (!device->active) {
@@ -213,6 +334,7 @@ static int control(int descriptor, uint32_t mask, void *data) {
     }
   } else if (strcmp(command, "select") == 0 || strcmp(command, "flood8") == 0 || strcmp(command, "flood20") == 0) {
     ++server->generation;
+    remember_selection(server, NULL, 1);
     const unsigned offers = strcmp(command, "flood8") == 0 ? 8 : (strcmp(command, "flood20") == 0 ? 20 : 1);
     struct Device *device;
     wl_list_for_each(device, &server->devices, link) {
@@ -222,7 +344,7 @@ static int control(int descriptor, uint32_t mask, void *data) {
 
       struct wl_resource *last = NULL;
       for (unsigned index = 0; index < offers; ++index) {
-        last = announce(device);
+        last = announce(device, NULL);
       }
 
       wl_data_device_send_selection(device->resource, last);
@@ -238,6 +360,26 @@ static int control(int descriptor, uint32_t mask, void *data) {
   return 0;
 }
 
+static void bind_qt_shell(struct wl_client *client, void *data, uint32_t version, uint32_t id) {
+  (void)data;
+  struct wl_resource *resource = wl_resource_create(client, &wl_shell_interface, (int)version, id);
+  if (resource != NULL) {
+    wl_resource_set_implementation(resource, NULL, NULL, NULL);
+  } else {
+    wl_client_post_no_memory(client);
+  }
+}
+
+static void bind_qt_compositor(struct wl_client *client, void *data, uint32_t version, uint32_t id) {
+  (void)data;
+  struct wl_resource *resource = wl_resource_create(client, &wl_compositor_interface, (int)version, id);
+  if (resource != NULL) {
+    wl_resource_set_implementation(resource, NULL, NULL, NULL);
+  } else {
+    wl_client_post_no_memory(client);
+  }
+}
+
 int main(int argc, char **argv) {
   signal(SIGPIPE, SIG_IGN);
   const unsigned seat_version = argc > 1 ? (unsigned)strtoul(argv[1], NULL, 10) : 8;
@@ -246,7 +388,7 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  struct Server server = {.generation = 1, .seat_version = seat_version, .manager_version = manager_version, .control = STDIN_FILENO};
+  struct Server server = {.generation = 1, .selection_valid = 1, .seat_generation = 1, .seat_version = seat_version, .manager_version = manager_version, .control = STDIN_FILENO};
   wl_list_init(&server.devices);
   server.display = wl_display_create();
   if (server.display == NULL) {
@@ -257,6 +399,11 @@ int main(int argc, char **argv) {
     server.seat = wl_global_create(server.display, &wl_seat_interface, (int)seat_version, &server, bind_seat);
   }
   server.manager = wl_global_create(server.display, &wl_data_device_manager_interface, (int)manager_version, &server, bind_manager);
+  if (getenv("TELAR_WAYLAND_TEST_QT_CLIPBOARD") != NULL) {
+    wl_global_create(server.display, &wl_shell_interface, 1, &server, bind_qt_shell);
+    wl_global_create(server.display, &wl_compositor_interface, 4, &server, bind_qt_compositor);
+  }
+
   const char *socket = wl_display_add_socket_auto(server.display);
   struct wl_event_source *source = wl_event_loop_add_fd(wl_display_get_event_loop(server.display), server.control, WL_EVENT_READABLE, control, &server);
   if (socket == NULL || source == NULL || server.manager == NULL) {

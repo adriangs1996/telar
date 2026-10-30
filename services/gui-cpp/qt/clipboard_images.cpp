@@ -22,6 +22,8 @@ ClipboardImages::ClipboardImages(ApplicationAllocator &memory, QObject *parent)
     : QObject(parent),
       memory_(memory),
       clipboard_(memory) {
+  constexpr int maximum_workers = 1;
+  worker_pool_.setMaxThreadCount(maximum_workers);
   connect(this, &ClipboardImages::queued, this, &ClipboardImages::startQueued, Qt::QueuedConnection);
   connect(&task_, &QFutureWatcher<ClipboardImageResult>::finished, this, &ClipboardImages::complete);
 }
@@ -82,7 +84,7 @@ void ClipboardImages::start(ClipboardImageJob job) {
   running_ = job;
   try {
     auto source = clipboard_.snapshot();
-    task_.setFuture(QtConcurrent::run([memory = &memory_, job, source = std::move(source)] mutable {
+    task_.setFuture(QtConcurrent::run(&worker_pool_, [memory = &memory_, job, source = std::move(source)] mutable {
       return prepare(*memory, job, std::move(source));
     }));
   } catch (const platform::ClipboardImageFailure &error) {

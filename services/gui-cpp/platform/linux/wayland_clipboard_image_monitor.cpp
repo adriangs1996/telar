@@ -150,6 +150,10 @@ struct WaylandClipboardImageMonitor::Native final {
     return reading;
   }
 
+  [[nodiscard]] bool acceptsLocalSelection(std::uint32_t seat_global) const noexcept {
+    return !failed_ && !binding_retired_ && seat_global != 0 && seat_global_ == seat_global && selected_ != nullptr && selected_->png;
+  }
+
 private:
   void flush() noexcept {
     failed_ = failed_ || (wl_display_flush(display_) < 0 && errno != EAGAIN);
@@ -231,6 +235,7 @@ private:
       return;
     }
 
+    binding_retired_ = true;
     clearDevice();
     if (name == seat_global_) {
       clearSeat();
@@ -287,6 +292,7 @@ private:
   std::array<Offer, maximum_pending_offers> offers_;
   Offer *selected_ = nullptr;
   bool failed_ = false;
+  bool binding_retired_ = false;
 };
 
 WaylandClipboardImageMonitor::WaylandClipboardImageMonitor(ApplicationAllocator &memory, ::wl_display *display)
@@ -308,6 +314,10 @@ runtime::FileDescriptor WaylandClipboardImageMonitor::capture() {
   }
 
   return native_->capture();
+}
+
+bool WaylandClipboardImageMonitor::acceptsLocalSelection(std::uint32_t seat_global) const noexcept {
+  return native_ != nullptr && native_->acceptsLocalSelection(seat_global);
 }
 
 }
