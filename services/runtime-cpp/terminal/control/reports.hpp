@@ -2,6 +2,7 @@
 
 #include "reply.hpp"
 #include "vt_state.hpp"
+#include "size_report.hpp"
 
 namespace telar::runtime::control {
 
@@ -85,16 +86,7 @@ private:
       break;
     case Report::size:
       if (state.mode(size_mode)) {
-        const auto size = state.size();
-        reply_.append("\x1b[48;");
-        reply_.number(size.rows);
-        reply_.append(";");
-        reply_.number(size.cols);
-        reply_.append(";");
-        reply_.number(static_cast<std::uint64_t>(size.rows) * size.cell_height_px);
-        reply_.append(";");
-        reply_.number(static_cast<std::uint64_t>(size.cols) * size.cell_width_px);
-        reply_.append("t");
+        sizeReport<SizeReport::event>(reply_, state.size());
       }
       break;
     }

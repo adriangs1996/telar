@@ -485,6 +485,49 @@ void deferredEffects(Memory &memory) {
 }
 
 template <Allocator Memory>
+void sizeEncodings(Memory &memory) {
+  using control::SizeReport;
+  constexpr std::array<std::uint16_t, 7> dimensions{0, 1, 9, 10, 99, 100, UINT16_MAX};
+  PtyResponseQueue queue;
+  const auto verify = [&]<SizeReport Kind>(TerminalSize size) {
+    control::Reply reply{memory};
+    control::sizeReport<Kind>(reply, size);
+    require(reply.publish(queue));
+    std::array<char, 80> expected;
+    const auto rows = static_cast<unsigned>(size.rows);
+    const auto cols = static_cast<unsigned>(size.cols);
+    const auto height = static_cast<unsigned>(size.cell_height_px);
+    const auto width = static_cast<unsigned>(size.cell_width_px);
+    int count;
+    if constexpr (Kind == SizeReport::event) {
+      count = std::snprintf(expected.data(), expected.size(), "\x1b[48;%u;%u;%u;%ut", rows, cols, rows * height, cols * width);
+    } else {
+      count = std::snprintf(expected.data(), expected.size(), "\x1b[%u;%u;%ut", static_cast<unsigned>(Kind), Kind == SizeReport::pixels ? rows * height : Kind == SizeReport::cell ? height : rows, Kind == SizeReport::pixels ? cols * width : Kind == SizeReport::cell ? width : cols);
+    }
+    require(count > 0 && static_cast<std::size_t>(count) < expected.size());
+    const auto actual = queue.peek();
+    require(actual.has_value());
+    require(std::string_view{reinterpret_cast<const char *>(actual->data()), actual->size()} == std::string_view{expected.data(), static_cast<std::size_t>(count)});
+    queue.consumeBytes(actual->size());
+  };
+
+  for (const auto rows : dimensions) {
+    for (const auto cols : dimensions) {
+      for (const auto height : dimensions) {
+        for (const auto width : dimensions) {
+          const TerminalSize size{cols, rows, width, height};
+          verify.template operator()<SizeReport::pixels>(size);
+          verify.template operator()<SizeReport::cell>(size);
+          verify.template operator()<SizeReport::text>(size);
+          verify.template operator()<SizeReport::screen>(size);
+          verify.template operator()<SizeReport::event>(size);
+        }
+      }
+    }
+  }
+}
+
+template <Allocator Memory>
 void reports(Memory &memory) {
   Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
   terminal.feed(bytes("\x1b[?2031;2033;1004;2048h"));
@@ -537,6 +580,7 @@ int main(int argc, char **argv) {
   graphemeChecksums(memory);
   asciiGraphemeChecksums(memory);
   variedGraphemeRows(memory);
+  sizeEncodings(memory);
   reports(memory);
   testPtyResponseQueue();
   require(budget.liveBytes() == 0);

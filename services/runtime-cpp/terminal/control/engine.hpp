@@ -9,6 +9,7 @@
 #include "reports.hpp"
 #include "color_queries.hpp"
 #include "cursor_report.hpp"
+#include "size_report.hpp"
 #include "identity.hpp"
 #include "parser.hpp"
 #include "policy.hpp"
@@ -507,16 +508,7 @@ private:
     if (!enabled_) {
       return;
     }
-    const auto size = state_.size();
-    reply_.append("\x1b[48;");
-    reply_.number(size.rows);
-    reply_.append(";");
-    reply_.number(size.cols);
-    reply_.append(";");
-    reply_.number(static_cast<std::uint64_t>(size.rows) * size.cell_height_px);
-    reply_.append(";");
-    reply_.number(static_cast<std::uint64_t>(size.cols) * size.cell_width_px);
-    reply_.append("t");
+    control::sizeReport<SizeReport::event>(reply_, state_.size());
   }
 
   void sizeReport(unsigned request) {
@@ -553,28 +545,20 @@ private:
     const auto size = state_.size();
     switch (request) {
     case pixels_request:
-      reply_.append("\x1b[4;");
-      reply_.number(static_cast<std::uint64_t>(size.rows) * size.cell_height_px);
-      reply_.append(";");
-      reply_.number(static_cast<std::uint64_t>(size.cols) * size.cell_width_px);
+      control::sizeReport<SizeReport::pixels>(reply_, size);
       break;
     case cell_request:
-      reply_.append("\x1b[6;");
-      reply_.number(size.cell_height_px);
-      reply_.append(";");
-      reply_.number(size.cell_width_px);
+      control::sizeReport<SizeReport::cell>(reply_, size);
       break;
     case text_request:
+      control::sizeReport<SizeReport::text>(reply_, size);
+      break;
     case screen_request:
-      reply_.append(request == text_request ? "\x1b[8;" : "\x1b[9;");
-      reply_.number(size.rows);
-      reply_.append(";");
-      reply_.number(size.cols);
+      control::sizeReport<SizeReport::screen>(reply_, size);
       break;
     default:
-      return;
+      break;
     }
-    reply_.append("t");
   }
 
   // Only an offset survives retries; the parser owns the complete request
