@@ -18,6 +18,15 @@ assertions pass but exit leaks remain (1637390/730686 bytes); no local suppressi
 is used. Full platform visuals, cache-pressure bounds, native leaks and comparative
 performance remain open.
 
+The [glyph atlas margin investigation](measurements/glyph-atlas-margins.md)
+identifies replicated Qt gutters outside otherwise identical GPU glyph masks.
+Transparent borders and standard sampling match all four scoped Metal probes,
+but specialized candidates consistently lose component CPU controls and remain
+rejected. Complete native pickers improve, while whole-window glyph differences
+persist. Identical-path and recorded physical-pointer controls also reproduce an
+activity hover error in the unchanged client; a separate correction is under
+validation. No renderer change or global acceptance gate is closed by this pass.
+
 The [workspace navigation checkpoint](measurements/workspace-navigation.md) uses
 canonical OpenPane handoffs, bounded original history/saved-layout policies and
 root-before-tree restoration. Its 4,922 original-source operations match in

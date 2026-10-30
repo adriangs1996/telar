@@ -2,6 +2,207 @@
 
 ## Personal continuation checkpoint
 
+### Spatial hover correction passes native pixels and Quick (08:51 UTC)
+
+Goal remains unfinished; continue, never final at this checkpoint. No publish,
+merge or delegation. HEAD still87eb351e0. Renderer margin variants remain ALL
+unaccepted. Their report/manifest/3678-file35MB archive is STAGED, verifier
+--check-current-source and staged diff --check PASS. Commit that investigation
+separately from the current spatial-hover product fix; PARITY paragraph is not
+yet staged. Older personal-frame-delivery.md still untracked/unarchived.
+
+Real-pointer control: local/live_chrome_padding_warp.py and run_warp_chrome_case.py
+use SAME physical directory, physical+synthetic point600,300, recorded equality
+and1181→1180 frame cycle. Zig2/A1/F1 all3 readbacks pass, allownedexits0. A has
+whole23/69619/11 and picker12; F21/21/21,picker0. Thus ghost hover is reproduced
+in UNCHANGED A with physical pointer over the terminal. No sampling attribution.
+
+Current WIP modifies qt/{application.hpp,machine_activity_controller.cpp,
+pointer_dispatcher.cpp,ActivityList.qml,Sidebar.qml} and tests/machine_window_test.cpp.
+Application stores optional delivered scene point; QML passes the actual card.
+Nonempty hover checks owner window, visible/enabled card, card bounds and every
+clipping ancestor against that delivered point. No per-move model copy/allocation.
+Existing identity/generation and input-batch rules remain. Pointer filter passes
+event.position for move/press. New regression tests clipping, moved cards,
+terminal points and callbacks outside a batch. Negative (new API but guard
+deliberately absent) FAILS1 as intended; source+binary frozen local/hover-spatial-
+negative, raw unused-card compile warning retained. Positive focused2 slots PASS4.
+Coordinates renamed to constants after unchanged strict lint flagged magic
+numbers; release and ASAN test rebuilt. Current GUI SHA341b395dd79160348a62765065468a91e54d6c29a694530958b8b7a5b6e150e0
+is frozen in hover-spatial-positive. Native live control P uses run_hover_chrome_case.py:
+chrome-identical-hover-positive-1, actual point600,300, allownedexits0, no QML
+warning. Whole23/11/11, picker12; removes69608 pixels from the other scene.
+Terminals/footers remain exact. Remaining small glyph errors/global gates OPEN.
+
+Release full Window in documented OFFSCREEN/software environment PASS36,
+exit0; one known Sans Serif alias QWARN retained. Native Quick PASS88,exit0,
+NO QWARN. Both production cpp units pass unchanged broad clang-tidy; final test
+lint passes after named constants. Actual Neovim4 files delivered empty clangd
+diagnostics: local/hover-spatial-editor-1. No editor/lint/build remains active.
+
+IMPORTANT two attempted full Window COCOA runs FAIL31pass/5fail: remotePeek,
+both restored-root cases, resizingPeek and retired notification focus. Full
+historical Window35 qualification was OFFSCREEN, native coverage focused. Do
+not claim full native Window passes or blame source/driver without evidence.
+Initial driver did not re-arm readiness after test deletes it; revised private
+driver re-arms, focuses after successful layout request and confirms floating
+post-focus, but same5fail. Both attempts/source epoch retained. No timeout or
+test weakened. Native focus gate remains open; native focused spatial cases pass.
+
+CURRENT UI job session94929: offscreen ASAN full Window launched08:50:xx.
+Run another UI driver serially only
+after actual exit. Build out-native-sanitizers final style FINISHED0. ASAN run
+detect_leaks1, UBSANhalt1, noLSAN, no suppression. NEXT inspect assertions/leaks,
+then native focused ASAN via focused_hover_asan.py (actual GUI exit!), native
+card via focused_hover_card.py. Archive hover correction with report/manifest/
+verifier and all failures, source/binary identity, lint/editor and pixel controls;
+local commit only after checks, continue work afterward. Also optional baseline
+comparison for5full-Cocoa focus failures; cannot extrapolate from offscreen.
+
+Next rendering hypothesis: bounded glyph UV in the icon shader can zero samples
+outside glyph bounds while preserving original textures/atlas placement and
+avoiding padded-image allocations. NOT IMPLEMENTED. Freeze current accepted
+baseline before experimenting. Extra icon-only vertex bounds avoid changing
+ordinary text geometry; shader legacy portability, pixels and paired costs all
+must qualify. Earlier UV diagnostics/margin rejection details remain below.
+
+### Margin variants rejected; physical-pointer control running (08:22 UTC)
+
+Production renderer still UNCHANGED, HEAD87eb351e0. Only this handoff and the
+draft measurements/glyph-atlas-margins.md are new tracked edits, plus the older
+untracked personal-frame-delivery.md. No acceptance/final/merge/publish. J builds,
+matches all4 phases, but seven pairs5000/500 reject it: 30/32 folder cold wins0/7
+(+9.65/+5.08%),32 question cold wins1/7(+4.70%); multiple rebuilds wins0–1/7.
+Repaint improves medians2.1–7.2%, insufficient. G/I/J ALL REJECTED. AArch64
+IconMesh::paint has129/155/124/122 instructions A/G/I/J; G adds2fdiv+1indirectcall,
+I/J avoid UV queries. Full disassembly/focused extracts/summary are local. No
+normalized assembly equivalence, placement exception, cross-platform or ASAN
+qualification. Reproducible analyze_glyph_margins.py confirms all3 gutter samples
+and UV32bit output equality; glyph-margin-analysis-1.json retains source hashes.
+
+Whole-GUI fixture follow-up uses fixed physical directory live-chrome-identical-
+case, renamed ONLY after completed owned cleanup. First Zig attempt fails because
+point support was gated off (harness abort, not product); second times out waiting
+for a post-pointer drawable. Both retained under chrome-identical-zig-pointer-
+failure-1 and chrome-identical-zig-frame-timeout-1. live_chrome_padding_fixed.py
+now enables point support for workspace_navigation, enters/moves pointer and
+cycles1181→1180 before capture (capture's post-input drawable guard unchanged).
+Zig3/A1/F1 runs complete normally, allownedexit0; evidence renamed to chrome-
+identical-{zig-3,A-1,F-1}. Same-path A whole34/69630/22, F31/69630/31; picker A12,
+F0; footers/other-return terminals exact. Hover regression occurs in UNCHANGED A
+as well; do not attribute it to cache specialization. Synthetic pointer events
+do not guarantee physical global cursor position, which Qt may consult.
+
+live_chrome_padding_warp.py adds CGWarpMouseCursorPosition and records actual
+pointer in view. run_warp_chrome_case.py requires actual==target within1 point
+without relaxing capture/image checks. First warp captures3 scenes/ownedexits0,
+but post-check REJECTS actual889.984375,300 vsrequested900,300: OS clamped the
+offscreen point. Retained chrome-identical-zig-warp-clamped-1 plus rename receipt
+and source epochs; no lost credential/owned process. New target600,300 is visible
+in the terminal. CURRENT native run session30699: runner zig chrome-identical-
+zig-warp-2 started08:21:48 UTC. Poll actual exit, verify pointer600,300 and normal
+owned cleanup before next run A then F with this SAME runner/fixed directory.
+If it fails, retain entire attempt, diagnose, never mask/normalize images. No
+other UI/build/test/timing jobs active. User runtime35801 untouched/alive.
+
+Draft report glyph-atlas-margins.md exists, not yet updated for latest controls.
+Private archive_glyph_margins.py is PREPARED BUT NOT RUN; extend patterns for
+run_warp_chrome_case.py, source epochs and final warp-native dirs before running.
+Need add archive verifier, manifest, source hashes, actual final controls/report,
+PARITY link and local reviewed commit. No binary or key gets committed. Still
+archive personal-frame-delivery.md separately afterward. Continue substantive
+Spanish updates<=60sec (long code/document generation still breaches this; split
+large tool inputs). Never final at this checkpoint; all global gates remain open.
+
+### Private glyph-margin investigation continues (08:04 UTC)
+
+User explicitly resumed the same unfinished objective. Work continues exclusively
+here; no publishing, merging, delegation or renderer adoption. HEAD87eb351e0 is
+the accepted row pass below. Root GUI still c156df64849cd5c8c6d2b708853e939a740e745b086ddc2442489ca58c018f24.
+All new variants are PRIVATE/ignored under measurements/local. Persistent-goal
+readback currently says blocked; its API cannot resume a goal. This does not
+prevent continuing the explicitly resumed work. Never mark complete/final here.
+
+Strong new diagnostic: Qt GPU atlas glyph interiors match original masks, but
+its one-texel gutter replicates edges. Zig GlyphAtlas.clearPage zeros the page
+and shelf packing leaves transparent separation. At native phase0 pixel100,28,
+decoded U*4096=28.999998092651367; neighboring gutter alpha is228 on actual Qt
+GPU readback versus0 in the zero-filled original-shader reconstruction. Existing
+readback only checked interiors, so its old "atlas matches" scope was incomplete.
+Full BGRA readback is local/chrome-readback-phase0-1/atlas-actual.bin (4096x2048).
+Most unused atlas is opaque magenta; never equate the entire page with glyph ink.
+
+Frozen current sampling A: chrome-rounding-A/chrome-sampling-probe SHA6104f6d650ac375d1f8ea556f668390b857736c6f06393d1ebc522f42818a50f.
+Four Metal/DPR2 phases0/.25/.5/.75 retain errors160/8/232/0. B rounds physical
+endpoints, C also uses explicit physical projection; same errors. D additionally
+uses standard sampling:140/0/156/0 (same old standard control). No fix adopted.
+UV bit diagnostic preserves D's exact vertex QSB and unchanged original Metal
+vertex-function prefix; three diagnostic fragment passes encode ALL32 bits of
+both interpolated UV components, all exact at phase0. Fallback sampling branches
+are retained. Diagnostic shaders require GLSL300es/330 rather than legacy100es;
+initial legacy build failure is retained. Three private material builds each
+have one unused-parameter warning. Do not claim product portability or independent
+shaping from diagnostic shaders. All48 masks/layouts are Qt-derived; unchanged
+original quad.metal qualifies backend sampling only.
+
+E adds explicit transparent1px border to icon textures, uses standard sampler,
+B endpoints and C physical projection. F removes endpoint/projection edits;
+G specializes border policy at compile time (enum in private glyph_border.hpp,
+matching forward declaration in text_scene.hpp). ALL E/F/G four sampling phases
+match original shader with ZERO pixels. H retains existing stable sampler plus
+padding:114/8/220/0, rejected. I tries direct RGBA alpha-channel writes plus UV
+reuse from vertices; all4 phases exact, but performance rejected below. J pads
+Alpha8 before Qt conversion, counts padded alpha bytes in the existing bounded
+budget and stores UV rect in IconQuad; build session62073 active at08:04 UTC.
+All variants have dependency-selected VFS recompilation. G has5 library objects;
+explicit ninja-deps query proves no root GUI object depends on its mapped headers.
+No root C++/shader edit has occurred.
+
+Private driver focused_rounding_a.py now observes owned PID+floating layout
+before readiness; the legacy driver's repeated "layout floating" can fail even
+when already floating. Initial phase0 timeout and window diagnostics retained.
+run_chrome_rounding_{a,b,c,d,e,f,g,h,i}.py check actual GUI exit and dimensions.
+The source/receipt epoch suffix2 is intentional. All runs Cocoa/Metal2360x1440,
+DPR2,48 glyphs. Do not confuse wrapper exit with actual GUI exit.
+
+Fresh native whole GUI comparisons use local/live_chrome_padding.py (copy of
+archived machine-activity harness, only service/module locations and observed
+owned floating-window driver fixed). Initial system-Python PIL import failure
+retained; use out-dependencies/capture-python/bin/python. All A/F/E/G and fresh
+Zig runs exit0, including both owned runtimes/sshd/GUI. Keys removed, owned SSH
+masters stopped normally; user runtime35801 never targeted. Fresh Zig3 scenes
+are BYTE EXACT versus the older live-workspace-navigation-zig-1 reference.
+Current A baseline has picker12 and whole scenes23/11/11 (not historical35/23/23).
+F has picker0, whole18/18/18; E picker0, whole21/21/21. G picker0 but whole
+130/69732/130, including changed card hover and text. THIS IS NOT ACCEPTANCE;
+determine whether fixture input/path elision or capture/renderer causes it before
+attributing G's entire delta to sampling. Do not normalize/mask/align images.
+All measured terminal/footer rectangles except the obscured A picker terminal
+are exact. Comparisons chrome-padding-{baseline,candidate-*-pair}-1; actual
+unambiguous result paths appear in local directory. No full visual gate closed.
+
+CPU-only icon bench source chrome_icon_bench.cpp:24 cases (13/30/32px, ?/folder,
+cold_create/cached_create/content/repaint), actual Metal render thread. No drawn
+frames, GPU uploads or allocation counts measured. Geometry digest only x/y/
+opacity, intentionally excludes changed UV; separate pixel oracles are required.
+Pilot100/20 only tests harness. G seven alternated pairs5000/500 completed with
+no build/test/profile concurrency: cold slower8.1–12.6%, wins0–1/7; repaint mostly
+consistent losses. I seven pairs5000/500 complete: cold slower4.9–28.2%; cached
+creation/content also lose several cases0–1/7. BOTH REJECTED for performance.
+No assembly equivalence/placement exception established. Raw receipts and all
+results local/chrome-icon-{G,I}-pairs-1; helpers build_chrome_icon_bench.py,
+pair_chrome_icon_bench{,_i}.py. No timing job remains at08:04.
+
+NEXT poll J build actual exit, run its four-phase backend oracle before timings;
+if useful build/link private bench against the SAME frozen bench object and run
+seven alternating pairs alone. Preserve failures/rejections. Investigate full-GUI
+remaining pixels and G's different hover/text instead of accepting picker-only
+gains. Archive this investigation with report/manifest/verifier and update PARITY
+when evidence is concrete. Also still archive personal-frame-delivery.md Cocoa
+experiments. Native leaks, platform/theme/density, full performance and functional
+gates remain open. Do not finish at a checkpoint. Keep Spanish updates <=60sec:
+long analysis still exceeds this repeatedly; use clock each batch and act.
+
 ### Retained row text is qualified; goal remains incomplete (06:33 UTC)
 
 This checkpoint is based on parent 0f82e901a; inspect git log for its local commit.
