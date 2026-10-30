@@ -1,5 +1,85 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## Pointer ownership follow-up verified; local commit NEXT (17:21 UTC)
+
+TwoQMLfixes andheld3button regression qualified. Final6same-binary actualnative
+mainclient1,601,600pixels EXACT; held/interior modal1912..., restored/normalclose
+cdd029..., completedx/backdropclose46e.... Agentsinput16or167a asappropriate; all
+privatecleanup0. Retainednativeheldnegative1 Zig16/Qt167a andrestoredclose21602
+pixnegative1, pluswindownegative1 actual1; finalselectedwindow4actual0.
+CurrentnativeASANdirected3 assertionsPASS actual1/leak575665bytes2635allocations,
+builtin12/480ObjCtable/noUB/access/localLSAN, noleakreductionclaimdifferentworkload.
+LinuxRelease37+ASAN37actual0; testbroadlintactual0 andNeovimdeliveredemptyclangd.
+NEWreport/README/PARITY +attachment-pointer-ownership archive313artifacts2397sourceIDs
+7.3MiB. Offline/current-source verify_pointer PASS6controls+2negatives. Archive
+nowFINAL, do not rewriteit; older ef565nativevisualarchiveunchanged. Needlocalcommit
+allnewpointerworkEXCLUDEunrelatedpersonal-frame-delivery.md, thenCONTINUEglobalgoal.
+Next gaps include boundedXCBclipboard/providerselectionlifecycle, furtherphysical
+ownership, completeplatform/theme/density/fullwindowvisuals, generalnativeleaks and
+pairedmeasuredfullclientperformance. No globalgateclosed/no finalresponsecheckpoint.
+No activeGUI/build/test/editor now. VM7158/55984ownedretainedneeded. Spanishupdates
+<=60sec, noagents/merge/publish/otherworktrees.
+
+## Final pointer controls in progress; prior bug fixes confirmed (17:19 UTC)
+
+Newheldoutside2 mainclientEXACT hash1912... agentinput16 both; restoredclose2
+mainclientEXACT hashcdd029... normalclose1 beforefixalsoexactcdd... .
+Batch63987 current runsclosebutton2, outsideclose2, holdinside2, closehover2 SERIAL.
+First3finishedactual0/regionboundsoutside mainclientonly; finalclosehover2stillactive.
+Do not edit captureharness/productbinary or runothernativeUI untilbatchactualexit.
+Afterbatch runselectednativeASANtest currentout-native-sanitizers binary build
+40940 actual0, selectedclipboardcasecontainsnewheld3button regression. Inspect
+actualexit/leaksummary+table, noLSANlocalsuppressions. Neednewqualified-checks.json.
+LinuxASANbuild96843 actual0/window37PASSactual0, source delta23; LinuxRelease
+build15647 actual0/windowgroupPASSactual0. NewLinuxASANLastTest tar downloaded.
+Neovimactualmachine_window_test.cpp deliveredemptyclangd73264actual0; testlint51.6s
+actual0. TwoQMLfixes/test/harness remainuncommitted. Newreportdraftattachment-pointer-
+ownership.md +archive_pointer.py/verify_pointer.py WRITTENbutNOTRUN; needfinal
+accepted-controls.json/qualified-checks.json, report/PARITY/READMEupdates/sourcefreeze,
+archiveverify/localcommit thenCONTINUE fullgoal. Priorcheckpointef565archiveimmutable.
+No full39/88rerunplannedfor2QMLhandlers: previouscheckpointfull39/88, currentdirected
+4+actualnative6poses+Linux37/ASANmeaningfulscope. MacASANmaystillleak; keepopen.
+Spanishupdates<=60sec, noagents/merge/publish/otherworktrees; ownedVM7158/55984.
+
+## Held native negative confirmed; two QML fixes built (17:15 UTC)
+
+Heldoutsidepair1 actualexit1: Ziginput16, Qtinput167a, nativeGUI closedearly and
+leakedZ. Bothcaptures retained/privatecleanup0. Newdirectedwindownegative1 also
+failsheldassert plussecondarycursorreflow consequence (do not discard secondfail).
+QMLfixes: backdrop onClicked guardedLEFT (stillacceptallbuttons), cardhover
+requiresnotclosePointerhover (topmosttargetwinsfrozenfallback). Macbuild9363 actual0;
+finalselectedwindow4 actual0/privatecleanup0 includingLEFT/RIGHT/MIDDLE held/release
+policy, noQWARN/QFATAL. Testnewhelperlint88320 actual0, broadprofileunchanged.
+Currentfinalheldoutsidepair2 ACTIVE34573, waitactualbeforeothernativeUI.
+MacnativeASANselectedwindow build40940ACTIVE; LinuxASANbuild96843ACTIVE delta23.
+Current2QML+testsource frozen; no otherproductCPP changes. Next finalrestoredclose
+pair2 andnormalclose/closebutton/outsideclick/interiorhold controls, targetedASAN
+withactualleakexit, Linuxbuild/test, editor andNEWreport/archive; neverrewriteef565
+archive. All globalgatesOPEN, continueafterlocalcheckpoints.
+
+## Additional pointer controls expose restored-close bug; held control ACTIVE (17:13 UTC)
+
+Localcheckpoint ef565fcc6 committed, no publish/merge. Historical nativevisual
+archive now692artifacts2394sourceIDs, offline/current-source PASS before next edits.
+Do NOT rewrite it. Currentcaptureharness expanded additionalmodecontrols.
+Newnormalclose-hoverpair1 mainclientEXACT SHA cdd029... actualagent0x16.
+Newrestored-closepair1 FAIL21602mainclientpixels: originalonlycloseglyphhover,
+Qt frozenpositionfallbackalsohoversparentcard. NeedQMLcardhoverexcludeclosePointer.
+Newownednativeoutside-pressedpair1 ACTIVE21507, loglocal/attachment-pointer-held-outside-native-pair-1-driver.log.
+Qt backdrop currentlyonPressedclose+AllButtons; originalrouting.buttonActivated
+requiresLEFTrelease+targetcontains. Anticipatedheldpressclosespremature andleaksZ.
+Waitactualcapturefinish before touching productQML/rebuildingGUI or anothernativeUI.
+NewQtwindowtesthelper verifyAttachmentBackdropOwnership testsLEFT/RIGHT/MIDDLE
+heldstate+releaseclosepolicy, alwaysreleases beforeassert. Testbuild58510ACTIVE,
+targetonlymachinewindow; productionbinaryunchangedwhilepairedcaptureactive.
+Run directednativewindow AFTERcaptureends, retainnegative; thenfixQMLbackdrop
+onClicked LEFTonly andcardcolor !root.hovered(closePointer). Finalpairedregressions
+normalclose/restoredclose, held, outsideclose, xclose, interiorhold, previousmodal
+states; targetedlint/ASAN/editor/platform/sourcearchive NEWreport, continuegoal.
+Previousall5scopedcontrols/Window39/Quick88/Linux37 acceptedonlycheckpointscope.
+Fullparity/leaks/performance OPEN, VM7158/55984retained, nootherbuildactive.
+Spanishupdates<=60sec; noagents/otherworktrees/publish/merge.
+
 ## Attachment native visuals archived and verified (17:08 UTC)
 
 Final Mac Window39/Quick88 actual0/privatecleanup0, noQWARN/QFATAL. LinuxRelease

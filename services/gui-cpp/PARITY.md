@@ -1627,6 +1627,16 @@ Complete-window differences, other themes/densities/platforms, remaining physica
 ownership, provider lifecycle/bounds, native leaks and comparative performance
 remain open. Regional matching does not close a global gate.
 
+The [attachment pointer follow-up](measurements/attachment-pointer-ownership.md)
+retains held backdrop ownership and closes only on a completed left click. A native
+negative exposes Z leaking to the agent before release; a separate restored-close
+hover negative exposes21,602 main-client pixels. Final six same-binary controls
+match1,601,600pixels each, covering ×/backdrop close, interior hold, held input,
+normal close hover and its restoration. Directed window4 and Linux Release/ASan
+window37 pass, with clean broad lint and actual Neovim diagnostics. This scopes
+additional pointer states; full physical ownership, full-window/platform visuals,
+native leaks and measured comparative performance remain open.
+
 ## Remaining functional work
 
 | Area | Missing or incomplete behavior |

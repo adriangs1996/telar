@@ -42,7 +42,10 @@ FocusScope {
         width: root.host?.width ?? 0
         height: root.host?.height ?? 0
         acceptedButtons: Qt.AllButtons
-        onPressed: root.shelf.close()
+        onClicked: mouse => {
+            if (mouse.button === Qt.LeftButton)
+                root.shelf.close();
+        }
         onWheel: wheel => wheel.accepted = true
         Accessible.name: "Close image preview"
     }

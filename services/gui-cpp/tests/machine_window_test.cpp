@@ -399,6 +399,22 @@ class MachineWindowTest : public QObject {
     QVERIFY(modal_host.contains(modal_geometry.value(QStringLiteral("bounds")).toRectF()));
   }
 
+  static void verifyAttachmentBackdropOwnership(Application &application, QQuickWindow &window, const QString &identity) {
+    const auto host = application.attachmentModalGeometry().value(QStringLiteral("host")).toRectF();
+    const auto point = (host.topLeft() + QPointF{1, 1}).toPoint();
+    const std::array buttons{Qt::LeftButton, Qt::RightButton, Qt::MiddleButton};
+    for (const auto button : buttons) {
+      application.attachments()->open(identity);
+      QTest::mousePress(&window, button, Qt::NoModifier, point);
+      const bool held = !application.attachments()->modal().isEmpty();
+      QTest::mouseRelease(&window, button, Qt::NoModifier, point);
+      const bool closed = application.attachments()->modal().isEmpty();
+      application.attachments()->close();
+      QVERIFY2(held, "A held backdrop press must retain the preview's modal input ownership");
+      QCOMPARE(closed, button == Qt::LeftButton);
+    }
+  }
+
   Q_SLOT static void clipboardImagesReservePaneRowsAndOwnModalKeys() {
     PrivateClipboard board;
     MachineFixture fixture;
@@ -481,6 +497,7 @@ class MachineWindowTest : public QObject {
     QVERIFY(application.handleBindingKey(escape, terminal));
     QVERIFY(application.attachments()->modal().isEmpty());
     verifyAttachmentHoverReactivation(application, window);
+    verifyAttachmentBackdropOwnership(application, window, identity);
     QCOMPARE(fixture.local_runtime->count(ClientTag::pane_input), previous_input + 1);
 
     sendAttachmentFrame(*fixture.local_runtime);

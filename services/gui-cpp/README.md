@@ -72,6 +72,12 @@ ASan Window37 pass; isolated raw-event lifetime checks pass sanitizers. General
 native exit leaks, remaining states/platform scenes and measured full-client
 performance remain open.
 
+The [attachment pointer controls](measurements/attachment-pointer-ownership.md)
+add held-press ownership, left-release backdrop close and close-button hover
+priority. Two retained negatives fail before correction; six final native controls
+match the main-client region. Remaining states, whole windows, native leaks and
+comparative performance are still open.
+
 ## Boundaries
 
 | Directory | Responsibility | Dependencies |

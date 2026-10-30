@@ -54,12 +54,22 @@ finally:
 def actions(directory, settings):
     command = shlex.join([str(settings.agent), str(settings.output / 'agent.py'), str(directory)])
     values = [dict(activate=True, resize=settings.viewport), *([{}] * 10), dict(pointer='enter', point=[800, 300], warp_pointer=True), dict(pointer='move', point=[800, 301]), dict(text='exec ' + command + '\n'), dict(wait=str(directory / 'agent-ready.at'), wait_seconds=15), *([{}] * 15), dict(key='\x16', unmodified='v', code=9, ctrl=True), dict(wait=str(directory / 'agent-pasted.at'), wait_seconds=15), *([{}] * 20)]
-    if settings.mode != 'shelf':
+    if settings.mode not in ('shelf', 'close-hover'):
         if not settings.bare_click:
-            values += [dict(pointer='enter', point=[388, 562], warp_pointer=True), dict(pointer='move', point=[389, 562]), *([{}] * 5)]
+            point = [463, 523] if settings.mode == 'restored-close' else [388, 562]
+            values += [dict(pointer='enter', point=point, warp_pointer=True), dict(pointer='move', point=[point[0] + 1, point[1]]), *([{}] * 5)]
         values += [dict(click=[388 / settings.viewport[0], 562 / settings.viewport[1]]), *([{}] * 15), dict(key='x', code=7), *([{}] * 5)]
-        if settings.mode in ('restored', 'rehover'):
+        if settings.mode in ('restored', 'rehover', 'restored-close'):
             values += [dict(key='\x1b', code=53), *([{}] * 10), dict(key='z', code=6), *([{}] * 10)]
+        if settings.mode in ('close-button', 'close-outside'):
+            point = [841, 92] if settings.mode == 'close-button' else [310, 70]
+            values += [dict(click=[point[0] / settings.viewport[0], point[1] / settings.viewport[1]]), *([{}] * 10), dict(key='z', code=6), *([{}] * 10)]
+        if settings.mode == 'outside-pressed':
+            values += [dict(pointer='press', point=[310, 70]), *([{}] * 10), dict(key='z', code=6), *([{}] * 10)]
+        if settings.mode == 'hold':
+            values += [dict(click=[590 / settings.viewport[0], 330 / settings.viewport[1]]), *([{}] * 10), dict(key='z', code=6), *([{}] * 10)]
+    if settings.mode == 'close-hover':
+        values += [dict(pointer='enter', point=[463, 523], warp_pointer=True), dict(pointer='move', point=[464, 523]), *([{}] * 15)]
     if settings.mode == 'rehover':
         values += [dict(pointer='enter', point=[388, 562], warp_pointer=True), dict(pointer='move', point=[389, 562]), *([{}] * 15)]
     values += [dict(resize=[settings.viewport[0] + 1, settings.viewport[1]]), *([{}] * 5), dict(resize=settings.viewport), *([{}] * 15)]
@@ -112,7 +122,7 @@ def main():
     parser.add_argument('--reference', type=Path, required=True)
     parser.add_argument('--gui', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--mode', choices=('shelf', 'modal', 'restored', 'rehover'), default='shelf')
+    parser.add_argument('--mode', choices=('shelf', 'modal', 'restored', 'rehover', 'close-hover', 'restored-close', 'close-button', 'close-outside', 'hold', 'outside-pressed'), default='shelf')
     parser.add_argument('--bare-click', action='store_true', help='Keep the last observed motion away from the card before delivering its click')
     options = parser.parse_args()
     output = options.output.resolve()
@@ -164,7 +174,7 @@ def main():
                 settings.extra_environment.update(TELAR_SOCKET=endpoint, TELAR_SOCKET_PATH=endpoint)
                 record['clients'][kind] = capture.capture(kind, reference, gui, output, settings)
                 observed = (output / kind / 'input.bin').read_bytes()
-                assert observed == (b'\x16z' if options.mode in ('restored', 'rehover') else b'\x16'), (kind, observed)
+                assert observed == (b'\x16z' if options.mode in ('restored', 'rehover', 'restored-close', 'close-button', 'close-outside') else b'\x16'), (kind, observed)
                 print('Captured', kind, flush=True)
         assert all(sha(path) == record['binary_sha256'][str(path)] for path in (reference, gui))
         record['comparison'] = capture.compare(output)

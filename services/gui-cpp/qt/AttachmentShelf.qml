@@ -46,7 +46,7 @@ Rectangle {
             width: root.cardWidth
             height: Math.max(0, root.height - root.padding * 2)
             radius: 8 * root.ratio
-            color: root.hovered(pointer) ? root.application.colors.surface1 : root.application.colors.surface0
+            color: root.hovered(pointer) && !root.hovered(closePointer) ? root.application.colors.surface1 : root.application.colors.surface0
 
             MouseArea {
                 id: pointer
