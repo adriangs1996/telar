@@ -93,6 +93,41 @@ void configuredLimits(auto &memory) {
   check(query(disabled, "s=1,v=1", "AAAAAA==").empty());
 }
 
+void graphicsHeaderParity(auto &memory) {
+  const auto verify = [&](std::string_view header, bool accepted) {
+    const auto request = "\x1b_G" + std::string{header} + ";AAAAAA==\x1b\\\x1b[6n";
+    const std::string expected = accepted ? "\x1b_Gi=9;OK\x1b\\\x1b[1;1R" : "\x1b[1;1R";
+    for (std::size_t split = 0; split <= request.size(); ++split) {
+      Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
+      terminal.feed(bytes(std::string_view{request}.substr(0, split)));
+      terminal.feed(bytes(std::string_view{request}.substr(split)));
+      std::string actual;
+      while (!terminal.responses().empty()) {
+        const auto response = terminal.responses();
+        actual.append(reinterpret_cast<const char *>(response.data()), response.size());
+        terminal.consumeResponses(response.size());
+      }
+      check(actual == expected);
+    }
+  };
+  verify(",=0,a=q,i=9,s=1,v=1", true);
+  verify(",=4294967295,a=q,i=9,s=1,v=1", true);
+  for (const auto *key : {"z", "H", "V"}) {
+    for (const auto *value : {"2147483647", "+2147483647", "-2147483648", "-0"}) {
+      verify("a=q,i=9,s=1,v=1," + std::string{key} + '=' + value, true);
+    }
+    for (const auto *value : {"2147483648", "4294967295", "-2147483649", "+-1", "+-0"}) {
+      verify("a=q,i=9,s=1,v=1," + std::string{key} + '=' + value, false);
+    }
+  }
+  for (const auto *value : {"-0", "-00", "+0"}) {
+    verify("a=q,i=9,s=1,v=1,X=" + std::string{value}, true);
+  }
+  for (const auto *value : {"-1", "+-0", "-+1"}) {
+    verify("a=q,i=9,s=1,v=1,X=" + std::string{value}, false);
+  }
+}
+
 void sharedPaneBudget(auto &memory) {
   constexpr std::size_t pane_limit = 64 * 1024;
   constexpr std::size_t held_bytes = 48 * 1024;
@@ -711,6 +746,7 @@ int main() {
   BudgetAllocator memory{system, 64 * 1024 * 1024};
   localMedia(memory);
   configuredLimits(memory);
+  graphicsHeaderParity(memory);
   sharedBudget(memory);
   sharedPaneBudget(memory);
   interactiveAcknowledgements(memory);

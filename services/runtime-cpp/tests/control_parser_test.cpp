@@ -109,6 +109,35 @@ void backpressure() {
   require(consumer.events.back() == "text:remaining");
 }
 
+void stringHeaderClassificationOnce() {
+  struct HeaderConsumer : Consumer {
+    std::size_t classifications = 0;
+
+    bool streamable(Sequence) {
+      ++classifications;
+      return false;
+    }
+  };
+  SystemAllocator memory;
+  Parser parser{memory};
+  HeaderConsumer consumer;
+  for (const auto *prefix : {"\x1b_Ga=q,i=9,s=1,v=1,X=", "\x1b]5522;type=read;", "\x1bP+q"}) {
+    const auto request = std::string{prefix} + std::string(1024, 'x') + ';' + std::string(4096, ';') + "\x1b\\";
+    const auto before = consumer.classifications;
+    for (const auto &byte : request) {
+      require(parser.feed(bytes({&byte, 1}), consumer) == 1);
+    }
+    require(consumer.classifications == before + 1);
+    require(parser.ground());
+  }
+  parser.feed(bytes("\x1b_Ga=q;"), consumer);
+  const auto before = consumer.classifications;
+  parser.discard();
+  parser.feed(bytes("\x1b_Ga=q;;\x1b\\"), consumer);
+  require(consumer.classifications == before + 1);
+  require(parser.ground());
+}
+
 void apcOwnedRuns() {
   SystemAllocator memory;
   for (unsigned byte = 0; byte <= UINT8_MAX; ++byte) {
@@ -326,6 +355,7 @@ int main() {
   apcLateStreaming();
   apcLimitAndAllocation();
   backpressure();
+  stringHeaderClassificationOnce();
   boundedFuzz();
   oversizedRecovery();
   std::puts("Native control parser tests passed");

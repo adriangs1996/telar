@@ -2,6 +2,7 @@
 
 #include "parameters.hpp"
 #include "sequence.hpp"
+#include "graphics_header.hpp"
 #include "../../graphics/kitty_control.hpp"
 #include <charconv>
 
@@ -50,23 +51,14 @@ inline bool graphicsQuery(std::string_view body) noexcept {
     return false;
   }
   const auto separator = body.find(';');
-  auto remaining = body.substr(1, separator == std::string_view::npos ? separator : separator - 1);
+  const auto header = body.substr(1, separator == std::string_view::npos ? separator : separator - 1);
   bool query = false;
-  while (!remaining.empty()) {
-    const auto comma = remaining.find(',');
-    const auto field = remaining.substr(0, comma);
-    if (field.size() < 3 || field[1] != '=' || field.size() - 2 > 11) {
-      break;
+  GraphicsHeader::scan(header, separator != std::string_view::npos, [&](std::uint8_t key, std::string_view text) noexcept {
+    if (key == 'a') {
+      query = GraphicsHeader::value(key, text) == static_cast<std::uint32_t>('q');
     }
-    if (field.starts_with("a=")) {
-      auto value = field.substr(2);
-      if (value.starts_with('+')) {
-        value.remove_prefix(1);
-      }
-      query = value == "q" || kittyUnsigned<std::uint32_t>(value) == static_cast<std::uint32_t>('q');
-    }
-    remaining = comma == std::string_view::npos ? std::string_view{} : remaining.substr(comma + 1);
-  }
+    return true;
+  });
   return query;
 }
 

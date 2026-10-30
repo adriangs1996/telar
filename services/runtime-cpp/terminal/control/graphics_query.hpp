@@ -2,6 +2,7 @@
 
 #include "reply.hpp"
 #include "graphics_payload.hpp"
+#include "graphics_header.hpp"
 #include "../../graphics/child_file.hpp"
 #include "../../graphics/child_shared_memory.hpp"
 #include "../../graphics/temporary_path.hpp"
@@ -29,118 +30,69 @@ struct GraphicsQuery {
 
   static std::optional<GraphicsQuery> parse(std::string_view header, bool has_payload) noexcept {
     GraphicsQuery result;
-    std::array<std::optional<std::uint32_t>, 256> values;
-    enum class Phase { key, ignored_key, value, ignored_value, data };
-    Phase phase = Phase::key;
-    std::uint8_t key = 0;
-    std::array<char, 11> temporary;
-    std::size_t length = 0;
-    const auto finish = [&]() {
-      auto value = std::string_view{temporary.data(), length};
-      if (value.size() == 1 && (value.front() < '0' || value.front() > '9')) {
-        values[key] = static_cast<std::uint8_t>(value.front());
-      } else {
-        if (value.starts_with('+')) {
-          value.remove_prefix(1);
-        }
-        if ((key == 'z' || key == 'H' || key == 'V') && value.starts_with('-')) {
-          const auto number = kittyUnsigned<std::uint32_t>(value.substr(1));
-          if (!number || *number > std::uint32_t{INT32_MAX} + 1) {
-            return false;
-          }
-          values[key] = 0u - *number;
-        } else {
-          const auto number = kittyUnsigned<std::uint32_t>(value);
-          if (!number) {
-            return false;
-          }
-          values[key] = *number;
-        }
+    std::array<std::optional<std::uint32_t>, static_cast<std::size_t>(Field::ignored)> values;
+    const bool valid = GraphicsHeader::scan(header, has_payload, [&](std::uint8_t key, std::string_view text) noexcept {
+      const auto value = GraphicsHeader::value(key, text);
+      if (!value) {
+        return false;
       }
-      length = 0;
+      const auto field = parameterField(key);
+      if (field != Field::ignored) {
+        values[static_cast<std::size_t>(field)] = *value;
+      }
       return true;
-    };
-    const auto accumulate = [&](char byte, Phase overflow) {
-      if (length == temporary.size()) {
-        phase = overflow;
-        length = 0;
-      } else {
-        temporary[length++] = byte;
-      }
-    };
-    // Malformed keys suppress subsequent header fields until a payload
-    // delimiter; previously completed fields remain part of the command.
-    for (std::size_t offset = 0; offset < header.size() + (has_payload ? 1 : 0); ++offset) {
-      const char byte = offset == header.size() ? ';' : header[offset];
-      switch (phase) {
-      case Phase::key:
-        if (byte == '=') {
-          phase = length == 1 ? Phase::value : Phase::ignored_value;
-          if (length == 1) {
-            key = static_cast<std::uint8_t>(temporary[0]);
-          }
-          length = 0;
-        } else if (byte == ';') {
-          phase = Phase::data;
-        } else {
-          accumulate(byte, Phase::ignored_key);
-        }
-        break;
-      case Phase::ignored_key:
-        if (byte == '=') {
-          phase = Phase::ignored_value;
-        }
-        break;
-      case Phase::value:
-        if (byte == ',' || byte == ';') {
-          if (!finish()) {
-            return std::nullopt;
-          }
-          phase = byte == ',' ? Phase::key : Phase::data;
-        } else {
-          accumulate(byte, Phase::ignored_value);
-        }
-        break;
-      case Phase::ignored_value:
-        if (byte == ',') {
-          phase = Phase::ignored_key;
-        } else if (byte == ';') {
-          phase = Phase::data;
-        }
-        break;
-      case Phase::data:
-        break;
-      }
-    }
-    if (phase == Phase::key || phase == Phase::ignored_key || (phase == Phase::value && !finish())) {
+    });
+    if (!valid) {
       return std::nullopt;
     }
-    const auto number = [&](char key, std::uint32_t fallback = 0) { return values[static_cast<std::uint8_t>(key)].value_or(fallback); };
-    if (number('a') != 'q') {
+    const auto number = [&](Field field, std::uint32_t fallback = 0) { return values[static_cast<std::size_t>(field)].value_or(fallback); };
+    if (number(Field::action) != 'q') {
       return std::nullopt;
     }
-    result.image = number('i');
-    result.number = number('I');
-    result.placement = number('p');
-    result.width = number('s');
-    result.height = number('v');
-    result.format = number('f', 32);
+    result.image = number(Field::image);
+    result.number = number(Field::number);
+    result.placement = number(Field::placement);
+    result.width = number(Field::width);
+    result.height = number(Field::height);
+    result.format = number(Field::format, 32);
     if (result.format == 0) {
       result.format = 32;
     }
-    result.quiet = number('q');
-    result.offset = number('O');
-    result.length = number('S');
-    const auto medium = number('t', 'd');
+    result.quiet = number(Field::quiet);
+    result.offset = number(Field::offset);
+    result.length = number(Field::length);
+    const auto medium = number(Field::medium, 'd');
     if (medium > UINT8_MAX || std::string_view{"dfst"}.find(static_cast<char>(medium)) == std::string_view::npos) {
       return std::nullopt;
     }
     result.medium = static_cast<char>(medium);
-    if (values['o'] && *values['o'] != 'z') {
+    const auto compression = values[static_cast<std::size_t>(Field::compression)];
+    if (compression && *compression != 'z') {
       return std::nullopt;
     }
-    result.compressed = values['o'].has_value();
+    result.compressed = compression.has_value();
     return result;
+  }
+
+private:
+  enum class Field { action, image, number, placement, width, height, format, quiet, offset, length, medium, compression, ignored };
+
+  static constexpr Field parameterField(std::uint8_t key) noexcept {
+    switch (key) {
+    case 'a': return Field::action;
+    case 'i': return Field::image;
+    case 'I': return Field::number;
+    case 'p': return Field::placement;
+    case 's': return Field::width;
+    case 'v': return Field::height;
+    case 'f': return Field::format;
+    case 'q': return Field::quiet;
+    case 'O': return Field::offset;
+    case 'S': return Field::length;
+    case 't': return Field::medium;
+    case 'o': return Field::compression;
+    default: return Field::ignored;
+    }
   }
 };
 

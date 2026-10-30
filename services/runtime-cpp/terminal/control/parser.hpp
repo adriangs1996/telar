@@ -192,7 +192,7 @@ public:
     clear();
     phase_ = Phase::ground;
     after_ready_ = Phase::ground;
-    dcs_payload_ = false;
+    string_payload_ = false;
     following_c1_ = 0;
   }
 
@@ -337,7 +337,7 @@ private:
         continue;
       }
 
-      if ((kind_ == Kind::apc || (kind_ == Kind::dcs && !dcs_payload_)) && byte >= c1_first && byte <= c1_last) {
+      if ((kind_ == Kind::apc || (kind_ == Kind::dcs && !string_payload_)) && byte >= c1_first && byte <= c1_last) {
         // Same-kind string introducers have no exit/entry action in APC.
         if (kind_ == Kind::apc && (byte == c1_sos || byte == c1_pm || byte == c1_apc)) {
           ++consumed;
@@ -387,13 +387,13 @@ private:
       // OSC ignores C0 throughout its body; DCS ignores them only before
       // the final header byte. Normalize before classification so ignored
       // controls cannot disguise a native query as a backend operation.
-      if (byte < space && (kind_ == Kind::osc || (kind_ == Kind::dcs && !dcs_payload_))) {
+      if (byte < space && (kind_ == Kind::osc || (kind_ == Kind::dcs && !string_payload_))) {
         continue;
       }
       if (kind_ == Kind::dcs && byte == delete_byte) {
         continue;
       }
-      if (byte > c1_last && (kind_ == Kind::apc || (kind_ == Kind::dcs && !dcs_payload_))) {
+      if (byte > c1_last && (kind_ == Kind::apc || (kind_ == Kind::dcs && !string_payload_))) {
         continue;
       }
       const auto limit = kind_ == Kind::osc ? osc_limit : kind_ == Kind::dcs ? dcs_limit : apc_limit;
@@ -403,9 +403,9 @@ private:
         continue;
       }
 
-      const bool dcs_hook = kind_ == Kind::dcs && !dcs_payload_ && byte >= final_first && byte <= final_last;
-      dcs_payload_ |= dcs_hook;
-      if ((byte == ';' && kind_ != Kind::dcs) || dcs_hook) {
+      const bool header_complete = !string_payload_ && (kind_ == Kind::dcs ? byte >= final_first && byte <= final_last : byte == ';');
+      if (header_complete) {
+        string_payload_ = true;
         if (consumer.streamable(Sequence{kind_, bytes(), Ending::final_byte})) {
           consumer.ordinary(bytes());
           clear();
@@ -482,7 +482,7 @@ private:
       return false;
     }
 
-    dcs_payload_ = false;
+    string_payload_ = false;
     append(byte);
     return true;
   }
@@ -551,7 +551,7 @@ private:
   Phase after_ready_ = Phase::ground;
   Kind kind_ = Kind::escape;
   Ending ending_ = Ending::final_byte;
-  bool dcs_payload_ = false;
+  bool string_payload_ = false;
   std::uint8_t following_c1_ = 0;
   std::uint64_t cancelled_ = 0;
   std::uint64_t over_limit_ = 0;
