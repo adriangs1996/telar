@@ -2,6 +2,171 @@
 
 ## Personal continuation checkpoint
 
+### Current native candidate control and fixture correction (04:01 UTC)
+
+HEAD still923d4b8d8, global goal ACTIVE/incomplete/unbudgeted. No publishing,
+merge or delegation. Product C++ sources/baseline GUI remain unchanged2c4a.
+NEW TRACKED changes: tools/terminal_bench_fixture.py now blocks SIGWINCH across
+the complete refresh_size transaction; services/gui-cpp/tools/test_terminal_
+fixture.py has5 passing controls. Real injected SIGWINCH negative fails before
+fix with final file66x21 vs state/receipt56x21; afterfix all56x21. Full compact
+archive/report/verifier fixture-resize.md, fixture-resize-validation.json and
+fixture-resize/ verify --check-current-source PASS. No GUI parity gate closes.
+No complete native signal trace proves exact interleaving of the original6-Qt
+mismatch. Commit this concrete fixture correction with documentation/evidence.
+
+Private presented probe v3 BUILT and qualified. Generatorlocal/build_presented_
+probe.py, sourceA/harness/gui_presented_probe.m, libA/probe-presented-v3.dylib.
+Adds exact per-drawable record with actual VSync and presentedTime; supports
+multiple pending verified frames and accepts first presented matching record
+without one-frame-slot overwrite. Records acquire/commit/GPU/presentation clocks
+plus measured-phase CPU after20warmup (startup RSS stillincluded). Missingrecord,
+VSyncfalse and zero presentedTime native negatives fail19/20/21, allcleanupgood.
+Native IDs0 valid; clock andGPUendpoints separate, no physicalscanoutclaim.
+local/validate_presented_runs.py hasstrict endpoint/count/clock/foreground/CPU/
+geometry/cleanup checks; local/test_presented_validation.py passes7tests.
+
+perf_gui_run.py uses SAME frozenAbinaries andprobev3 plus frozenB/harness copy
+with ONLY fixture signal transaction correction. PrivateA/harness originals
+unchanged. Both100measured+20warmup,1600x1000/Retina2/marker934,383,variabletext.
+A baseline-single-1: round7Zig rejects dropped native presentation at0samples;
+round6Qt sizefile66 vs receipt56 rejectscomparison. Extra round8 exists. A
+classifier retains six valid pairs, no acceptance. B-single-1 all14nativejobs
+pass, but round2Qt overlapped a0.026s Pythonvalidator suite (mymistake); excluded
+explicitly in B/exclusions.json. Six comparable Bpairs, Qt p50wins0/6. More
+paired runs needed. Do not run ANY builds/tests/profiling during timing again.
+Do not combine epochs silently. Baseline candidate notoptimizedyet.
+
+Private perf-cocoa-candidate-1 adds CocoaFrameDelivery QObject/window resource,
+coalescedzeroQTimer, atomic lastpreparation, only overdue native update; checks
+Cocoa/Metal/exposed/pending and EMPTY Qtwindowtimer list before QPAdelivery.
+Doesnot changeproduction. Native independent control passes12 assertions: one
+advanced displaylinkdelivery, no laterduplicate, normal timerfallback untouched,
+hiddenwindowdeclines. Build1failedmissingprivateQPAinclude; build2clean using
+productioncompilationdeps. CandidateGUI SHA7c52260e1680b10f406375a8cef9b5c03ee0950732d99cbd59de1ae16d3ecf51;
+Quickcandidate SHAc84bd79ecf119f9053f69b6485a1177e6b5e398cb959b3e989944b4ce49edb59.
+Full native Quick candidate run1 SIGSEGV in routedDismissalOfFocusedNotification_
+ReturnsToTerminal after~42s; NO acceptedoracle. OwnDiagnosticReports/gui-quick-
+test-2026-10-30-045947.ips shows faultQObject::objectName ->QTest::toString ->
+failed QTRY_COMPARE(expected raw close widget pointer), likely retiredexpected
+pointer in failurediagnostic. DO NOT blame candidate without baselinecontrol.
+Current execsession27247 runs focusedbaseline thenfocusedcandidate for routed
+anddirectremoval focuscases. Inspect actualjsonexit/logTotals (driverexit0isnot
+success). local/focused_cocoa_candidate.py uses privateQuick, originaldriver
+usesout/gui-quick-test. Need retain failure, make lifetime-safe diagnostic if
+necessary without relaxingfocusassertion, get fullnativeoracle before timings.
+No timings/profiling/UIotherjobs active besides this focusedsequence.
+
+Spanish updates<=60seconds; lastlonganalysisstillbreaches—useactualclock and
+shortactionchunks. Do notfinalatcheckpoints. Rootfixture tests are the only
+new non-doc tracked code changes. Sampling negs below remain open12/23pixels.
+
+### Current performance instrumentation after sampling negatives
+
+Accepted HEAD923d4b8d8; production sources still unchanged since6fc25abda.
+Persistent goal active/unbudgeted/incomplete (get_goal confirmed03:42UTC).
+The sampling CURRENT paragraph below is historical: const-stable/standard first
+runs were INVALID Metal entrypoint-main compilation failures, not render data.
+Corrected const2 variants preserve main0 via private QShader patch and reproduce
+baseline160/8/232/0 (stable) and140/0/156/0 (standard); noperspective and centroid
+also make no change. GPU atlas48 masks exact. No sampling fix accepted.
+Runner now rejects Metal compilation/pipeline failures. Original QSB regenerated
+and byte-equal MSL; do not use qsb --replace on original packs. Glyph12/23 open.
+
+perf-pass skill IS now applied for a narrow GUI performance pass. Baseline frozen
+under ignored measurements/local/perf-personal-A: QtSHA2c4a3bb38f3c5eb7a75b85ae3c1c1b6098e252e43fc864cde76d02fa8dd54d09,
+originalSHA4e021bbda7586d16f887dd04a1ded3a806ba60940179129838165d75a0c23e11.
+Root tools/gui_tui_latency.py currently has gui/native/ghostty and GPU endpoint,
+NOT old report's --cpp-gui/--endpoint/--mode telar. Historical frame-presentation
+archive directory is absent; only report/validation remain. Do not reuse old
+numbers for current acceptance. Root tools and Zig product sources unchanged.
+Private smoke3 uses direct Qt Popen, original runtime for both, strips inherited
+SSH vars, same config, Cocoa/Metal/scale1/threaded, and probe-host-v2 recognizing
+process telar-gui (old constructor guard silently skipped it). Smoke1 and2 setup
+failures retained. Smoke3 both5 samples+20warmup, 1600x1000/56x21 marker934,383,
+Retina2 display120, owned cleanup complete. GPU p50 Zig5.740ms/Qt6.995ms is ONLY
+harness smoke, not accepted performance or presentation. CPU includes setup.
+
+Current local/build_presented_probe.py creates gui_presented_probe.m and
+probe-presented-v1.dylib without touching frozen binaries/root tools. Adds
+CAMetalDrawable presentedTime+drawableID+actual displaySyncEnabled, joins exact
+texture's marker-verified ProbeFrame to presentation record on main queue; waits
+both GPU verification and presentation, rejects missing record/VSyncoff/dropped
+or invalid time. Records separate GPU and presentation endpoints. No physical
+photon/scanout claim. Built clean03:43UTC. Smoke launched exec session19806:
+local/perf_gui_presented_smoke1.py, outputlocal/perf-personal-presented-smoke-1,
+log out-dependencies/perf-presented-smoke-1.log. Wait successful completion and
+inspect both results/probe presentation_samples plus cleanup before more UI.
+Next qualify timestamps/negative controls, profile own Qt PID in separate run,
+then paired7runs>=100samples, identical settings/workload geometry. No candidate
+optimization yet; no production edit accepted. SSH aliases owned only; user
+runtime untouched. Keep Spanish updates<=60seconds, never final at checkpoints.
+
+### Current sampling investigation after accepted `923d4b8d8`
+
+Geometry follow-up archive/verifier PASSED and was committed locally as
+923d4b8d8. Navigation commit is6fc25abda. Worktree product sources are unchanged;
+GUI SHA remains2c4a3bb38f3c5eb7a75b85ae3c1c1b6098e252e43fc864cde76d02fa8dd54d09.
+Global persistent goal remains active/incomplete, no publish/merge/delegates.
+Spanish updates<=60secs (watch clock; long analysis has repeatedly violated it).
+
+All NEW sampling probes/candidate builds are ignored measurements/local and
+out-dependencies, not product changes. Baseline ChromeIcon target built. Private
+chrome_sampling_probe.cpp derives NativeChromeIcon, exports actual geometry/UVs
+and GUI-thread raster masks for48 question/folder glyphs across sizes13/26/30/31/
+32/27 and positions in2360x1440 Retina Metal window. Shader reference helper
+local/glyph_sampling_reference.mm extends existing rounded_rectangle_reference.mm
+only to accept atlas bytes/UVs; it renders UNCHANGED lib/window/shaders/quad.metal.
+This is backend-only evidence: shaping/fitted geometry are C++ inputs, not an
+independent original layout oracle. compare_chrome_sampling.py reconstructs
+actual4096x2048 Qt atlas from UVs/masks, compares raw pixels without normalization.
+
+Direct Cocoa probe captures work in~0.3secs with empty external-ready env. Its
+fixed min/max window is already floating/nonresizable, so AeroSpace refuses the
+external driver's layout action: chrome-sampling-native-phase0-2 times out after
+274 refusals. This is rejected setup, not product failure. Initial phase0-1 also
+used stale binary after failed helper compile and aborts IconFontUnavailable for
+an unsupported extra symbol. Probe now restricts to known question/folder glyphs;
+build-chrome-sampling-probe-4 is clean. Do not run dependent binaries before a
+build returns exit0. Use capture-python/bin/python for Pillow; system Python
+lacks PIL (several failed diagnostic invocations retained).
+
+Baseline phases0/.25/.5/.75 have160/8/232/0 differing pixels against original
+shader. Standard sampling private variant gives140/0/156/0. NoBatching and
+zero-origin variants change NOTHING; pixel-space vertex projection variants also
+change NOTHING. Do not promote any of these partial results. run_chrome_variant_
+matrix.py records binary/build receipts; build_chrome_variant.py and
+build_chrome_pixel_projection.py create isolated replacement archive members,
+never edit live product libraries. Most differences are wrong texels, up to196
+channel levels, not one-level blending noise. All source/candidate files retained.
+
+Private readback variant (build_chrome_atlas_readback.py) uses QRhi to export
+actual GPU atlas (BGRA8,4096x2048,33554432bytes). chrome-readback-phase0-1 confirms
+ALL48 GPU alpha masks equal the expected masks byte-for-byte. R8 vs RGBA original
+shader references are exact to each other and still160different from Qt, so the
+format test did not fix it. Reconstructing reference rectangles from actual Qt
+vertices also keeps160differences. No root cause confirmed yet.
+
+CURRENT: testing constexpr sampler vs Qt runtime-bound sampler, private variants
+const-stable and const-standard. build_chrome_const_sampler.py is compiling
+(session67186 launched03:14:02UTC); wait for successful completion. Then run
+capture-python/bin/python local/run_chrome_variant_matrix.py const-stable
+const-standard (UI serial) and inspect all results/logs. QSB replacement mode
+IGNORES -o and mutates its INPUT, and defaults entry point to main. First attempt
+accidentally edited out/.qsb/nearest_alpha_mask.frag.qsb; it has been REGENERATED
+with the EXACT Ninja recipe from original source, entrypointmain0, extracted MSL
+byte-equal to saved nearest-mask-original.metal. Product executable unchanged.
+Builder is fixed to copy packs before replacement and rename private MSL main0
+entry to main. Never run qsb --replace on original/generated product packs again.
+QSBfilemtime changed: a later normal build may relink identical shader resources
+with different resource timestamps; record new binary identities if rebuilt.
+
+No accepted sampling fix/report/commit yet. Next use the sampler experiment to
+narrow interpolation/precision or runtime sampler settings. Keep12picker/23scene
+pixels OPEN, as well as native exit leaks, all platform/theme/task states and
+measured equal/better performance. perf-pass skill has NOT been applied yet.
+Last actual clock03:14:02UTC; continue working, never final at checkpoints.
+
 ### Latest: restored-geometry coverage after `6fc25abda`
 
 Navigation/history/semantic-hover checkpoint is accepted local commit `6fc25abda`.
