@@ -120,6 +120,10 @@ public:
     return stream;
   }
 
+  bool borrowableApc(Sequence header) const noexcept {
+    return graphicsQuery(header.body());
+  }
+
   bool streamComplete() noexcept {
     if (std::exchange(streamed_media_, false)) {
       awaiting_media_ = true;

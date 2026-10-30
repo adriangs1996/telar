@@ -2,6 +2,7 @@
 
 #include "../../memory/allocator.hpp"
 #include "sequence.hpp"
+#include "apc_borrow.hpp"
 #include <array>
 #include <cstring>
 #include <utility>
@@ -94,133 +95,15 @@ public:
         }
       }
 
-      const auto byte = input[consumed];
       const bool string = phase_ == Phase::string || phase_ == Phase::streaming || phase_ == Phase::discard_string;
       if (string) {
-        if (byte == escape || byte == cancel || byte == substitute || (kind_ == Kind::osc && byte == bell) || (kind_ == Kind::apc && byte == c1_st)) {
-          ++consumed;
-          if (byte == cancel || byte == substitute) {
-            if ((kind_ == Kind::dcs || kind_ == Kind::apc) && phase_ == Phase::string) {
-              ending_ = Ending::escape;
-              after_ready_ = Phase::ground;
-              phase_ = Phase::ready;
-              ++cancelled_;
-              continue;
-            }
-            if (phase_ == Phase::streaming) {
-              consumer.ordinary(input.subspan(consumed - 1, 1));
-            }
-            clear();
-            phase_ = Phase::ground;
-            ++cancelled_;
-            if (!finishStream(consumer)) {
-              return consumed;
-            }
-            continue;
-          }
-
-          ending_ = byte == bell ? Ending::bell : byte == c1_st ? Ending::c1 : Ending::escape;
-          after_ready_ = byte == escape ? Phase::escape : Phase::ground;
-          if (phase_ == Phase::streaming) {
-            const auto terminator = ending_ == Ending::bell ? std::string_view{"\a"} : std::string_view{"\x1b\\"};
-            consumer.ordinary(asBytes(terminator));
-            clear();
-            phase_ = after_ready_;
-            if (phase_ == Phase::escape) {
-              append(escape);
-            }
-            if (!finishStream(consumer)) {
-              return consumed;
-            }
-          } else if (phase_ == Phase::discard_string) {
-            clear();
-            phase_ = after_ready_;
-            if (phase_ == Phase::escape) {
-              append(escape);
-            }
-          } else {
-            phase_ = Phase::ready;
-          }
-          continue;
-        }
-
-        if ((kind_ == Kind::apc || (kind_ == Kind::dcs && !dcs_payload_)) && byte >= c1_first && byte <= c1_last) {
-          // Same-kind string introducers have no exit/entry action in APC.
-          if (kind_ == Kind::apc && (byte == c1_sos || byte == c1_pm || byte == c1_apc)) {
-            ++consumed;
-            continue;
-          }
-          if (kind_ == Kind::apc && phase_ == Phase::string) {
-            ending_ = Ending::escape;
-            after_ready_ = Phase::ground;
-            following_c1_ = byte;
-            phase_ = Phase::ready;
-            ++consumed;
-            continue;
-          }
-          const bool streamed = phase_ == Phase::streaming;
-          if (streamed) {
-            consumer.ordinary(asBytes("\x18"));
-          }
-          clear();
-          phase_ = Phase::escape;
-          ++cancelled_;
-          if (!startC1(byte)) {
-            executeC1(byte, consumer);
-            phase_ = Phase::ground;
-          }
-          ++consumed;
-          if (streamed && !finishStream(consumer)) {
-            return consumed;
-          }
-          continue;
-        }
-
-        if (phase_ == Phase::streaming) {
-          std::size_t end = consumed + 1;
-          while (end < input.size() && !stringControl(input[end])) {
-            ++end;
-          }
-          consumer.ordinary(input.subspan(consumed, end - consumed));
-          consumed = end;
-          continue;
-        }
-
-        ++consumed;
-        if (phase_ == Phase::discard_string) {
-          continue;
-        }
-
-        // OSC ignores C0 throughout its body; DCS ignores them only before
-        // the final header byte. Normalize before classification so ignored
-        // controls cannot disguise a native query as a backend operation.
-        if (byte < space && (kind_ == Kind::osc || (kind_ == Kind::dcs && !dcs_payload_))) {
-          continue;
-        }
-        if (kind_ == Kind::dcs && byte == delete_byte) {
-          continue;
-        }
-        if (byte > c1_last && (kind_ == Kind::apc || (kind_ == Kind::dcs && !dcs_payload_))) {
-          continue;
-        }
-        const auto limit = kind_ == Kind::osc ? osc_limit : kind_ == Kind::dcs ? dcs_limit : apc_limit;
-        if (size_ == limit || !append(byte)) {
-          phase_ = Phase::discard_string;
-          ++over_limit_;
-          continue;
-        }
-
-        const bool dcs_hook = kind_ == Kind::dcs && !dcs_payload_ && byte >= final_first && byte <= final_last;
-        dcs_payload_ |= dcs_hook;
-        if ((byte == ';' && kind_ != Kind::dcs) || dcs_hook) {
-          if (consumer.streamable(Sequence{kind_, bytes(), Ending::final_byte})) {
-            consumer.ordinary(bytes());
-            clear();
-            phase_ = Phase::streaming;
-          }
+        if (!feedString(input, consumed, consumer)) {
+          return consumed;
         }
         continue;
       }
+
+      const auto byte = input[consumed];
 
       if (byte == enquiry) {
         if (!consumer.enquire()) {
@@ -393,6 +276,182 @@ private:
 
   static std::span<const std::uint8_t> asBytes(std::string_view text) noexcept {
     return {reinterpret_cast<const std::uint8_t *>(text.data()), text.size()};
+  }
+
+  template <typename Consumer>
+  [[gnu::noinline]] bool feedString(std::span<const std::uint8_t> input, std::size_t &consumed, Consumer &consumer) {
+    if constexpr (requires { consumer.borrowableApc(Sequence{}); }) {
+      if (input.size() - consumed > inline_bytes && phase_ == Phase::string && kind_ == Kind::apc && size_ == 2 && consumed >= 2 && input[consumed - 2] == escape && input[consumed - 1] == inline_[1]) {
+        if (const auto handled = borrowApc(input, consumed, consumer)) {
+          return *handled;
+        }
+      }
+    }
+
+    while (consumed < input.size() && (phase_ == Phase::string || phase_ == Phase::streaming || phase_ == Phase::discard_string)) {
+      const auto byte = input[consumed];
+      if (byte == escape || byte == cancel || byte == substitute || (kind_ == Kind::osc && byte == bell) || (kind_ == Kind::apc && byte == c1_st)) {
+        ++consumed;
+        if (byte == cancel || byte == substitute) {
+          if ((kind_ == Kind::dcs || kind_ == Kind::apc) && phase_ == Phase::string) {
+            ending_ = Ending::escape;
+            after_ready_ = Phase::ground;
+            phase_ = Phase::ready;
+            ++cancelled_;
+            continue;
+          }
+          if (phase_ == Phase::streaming) {
+            consumer.ordinary(input.subspan(consumed - 1, 1));
+          }
+          clear();
+          phase_ = Phase::ground;
+          ++cancelled_;
+          if (!finishStream(consumer)) {
+            return false;
+          }
+          continue;
+        }
+
+        ending_ = byte == bell ? Ending::bell : byte == c1_st ? Ending::c1 : Ending::escape;
+        after_ready_ = byte == escape ? Phase::escape : Phase::ground;
+        if (phase_ == Phase::streaming) {
+          const auto terminator = ending_ == Ending::bell ? std::string_view{"\a"} : std::string_view{"\x1b\\"};
+          consumer.ordinary(asBytes(terminator));
+          clear();
+          phase_ = after_ready_;
+          if (phase_ == Phase::escape) {
+            append(escape);
+          }
+          if (!finishStream(consumer)) {
+            return false;
+          }
+        } else if (phase_ == Phase::discard_string) {
+          clear();
+          phase_ = after_ready_;
+          if (phase_ == Phase::escape) {
+            append(escape);
+          }
+        } else {
+          phase_ = Phase::ready;
+        }
+        continue;
+      }
+
+      if ((kind_ == Kind::apc || (kind_ == Kind::dcs && !dcs_payload_)) && byte >= c1_first && byte <= c1_last) {
+        // Same-kind string introducers have no exit/entry action in APC.
+        if (kind_ == Kind::apc && (byte == c1_sos || byte == c1_pm || byte == c1_apc)) {
+          ++consumed;
+          continue;
+        }
+        if (kind_ == Kind::apc && phase_ == Phase::string) {
+          ending_ = Ending::escape;
+          after_ready_ = Phase::ground;
+          following_c1_ = byte;
+          phase_ = Phase::ready;
+          ++consumed;
+          continue;
+        }
+        const bool streamed = phase_ == Phase::streaming;
+        if (streamed) {
+          consumer.ordinary(asBytes("\x18"));
+        }
+        clear();
+        phase_ = Phase::escape;
+        ++cancelled_;
+        if (!startC1(byte)) {
+          executeC1(byte, consumer);
+          phase_ = Phase::ground;
+        }
+        ++consumed;
+        if (streamed && !finishStream(consumer)) {
+          return false;
+        }
+        continue;
+      }
+
+      if (phase_ == Phase::streaming) {
+        std::size_t end = consumed + 1;
+        while (end < input.size() && !stringControl(input[end])) {
+          ++end;
+        }
+        consumer.ordinary(input.subspan(consumed, end - consumed));
+        consumed = end;
+        continue;
+      }
+
+      ++consumed;
+      if (phase_ == Phase::discard_string) {
+        continue;
+      }
+
+      // OSC ignores C0 throughout its body; DCS ignores them only before
+      // the final header byte. Normalize before classification so ignored
+      // controls cannot disguise a native query as a backend operation.
+      if (byte < space && (kind_ == Kind::osc || (kind_ == Kind::dcs && !dcs_payload_))) {
+        continue;
+      }
+      if (kind_ == Kind::dcs && byte == delete_byte) {
+        continue;
+      }
+      if (byte > c1_last && (kind_ == Kind::apc || (kind_ == Kind::dcs && !dcs_payload_))) {
+        continue;
+      }
+      const auto limit = kind_ == Kind::osc ? osc_limit : kind_ == Kind::dcs ? dcs_limit : apc_limit;
+      if (size_ == limit || !append(byte)) {
+        phase_ = Phase::discard_string;
+        ++over_limit_;
+        continue;
+      }
+
+      const bool dcs_hook = kind_ == Kind::dcs && !dcs_payload_ && byte >= final_first && byte <= final_last;
+      dcs_payload_ |= dcs_hook;
+      if ((byte == ';' && kind_ != Kind::dcs) || dcs_hook) {
+        if (consumer.streamable(Sequence{kind_, bytes(), Ending::final_byte})) {
+          consumer.ordinary(bytes());
+          clear();
+          phase_ = Phase::streaming;
+        }
+      }
+      continue;
+    }
+
+    return true;
+  }
+
+  // Successful delivery borrows the caller's input only during complete(). A
+  // blocked delivery retains a bounded copy before any input can be released.
+  template <typename Consumer>
+  std::optional<bool> borrowApc(std::span<const std::uint8_t> input, std::size_t &consumed, Consumer &consumer) {
+    const auto start = consumed - 2;
+    const auto remaining = input.subspan(start);
+    if (remaining[2] != 'G') {
+      return std::nullopt;
+    }
+    const auto length = completeAsciiApc(remaining, apc_limit);
+    if (length <= inline_bytes) {
+      return std::nullopt;
+    }
+
+    const auto sequence = remaining.first(length);
+    const auto *separator = static_cast<const std::uint8_t *>(std::memchr(sequence.data(), ';', sequence.size()));
+    if (separator == nullptr || !consumer.borrowableApc(Sequence{Kind::apc, sequence.first(separator + 1 - sequence.data()), Ending::final_byte})) {
+      return std::nullopt;
+    }
+
+    const bool delivered = consumer.complete(Sequence{Kind::apc, sequence, Ending::escape});
+    clear();
+    consumed = start + length + 1;
+    ending_ = Ending::escape;
+    after_ready_ = Phase::escape;
+    if (delivered) {
+      append(escape);
+      phase_ = Phase::escape;
+    } else {
+      overflow_.assign(sequence.begin(), sequence.end());
+      size_ = sequence.size();
+      phase_ = Phase::ready;
+    }
+    return delivered;
   }
 
   bool stringControl(std::uint8_t byte) const noexcept {

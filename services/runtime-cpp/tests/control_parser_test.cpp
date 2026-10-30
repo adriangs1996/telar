@@ -43,6 +43,10 @@ struct Consumer {
     return false;
   }
 
+  bool borrowableApc(Sequence header) const noexcept {
+    return header.body().starts_with("Ga=q");
+  }
+
   bool complete(Sequence sequence) {
     if (!accept) {
       return false;
@@ -221,6 +225,55 @@ void apcLimitAndAllocation() {
   require(parser.feed(bytes("\x1b[5n"), consumer) == 4 && parser.ground());
 }
 
+void borrowedApcMemory() {
+  SystemAllocator upstream;
+  BudgetAllocator memory{upstream, 0};
+  std::string input{"\x1b_Ga=q;"};
+  input.append(4096, 'A');
+  input.append("\x1b\\");
+  {
+    Parser parser{memory};
+    Consumer consumer;
+    require(parser.feed(bytes(input), consumer) == input.size());
+    require(consumer.events.size() == 2 && parser.ground());
+    require(memory.allocations() == 0 && memory.failures() == 0);
+  }
+  {
+    Parser parser{memory};
+    Consumer consumer;
+    consumer.accept = false;
+    bool failed = false;
+    try {
+      parser.feed(bytes(input), consumer);
+    } catch (const std::bad_alloc &) {
+      failed = true;
+    }
+    require(failed && memory.failures() == 1);
+    parser.discard();
+    require(memory.liveBytes() == 0 && parser.ground());
+  }
+
+  for (const bool oversized : {false, true}) {
+    constexpr auto limit = Parser<SystemAllocator>::apc_limit;
+    std::string full{"\x1b_Ga=q;"};
+    full.append(limit - full.size() + oversized, 'A');
+    full.append("\x1b\\");
+    BudgetAllocator bounded{upstream, limit * 2};
+    Parser parser{bounded};
+    Consumer consumer;
+    // Consumer's event strings use the system heap; the parser's budget is
+    // independent, allowing the zero-allocation borrowing path to be checked.
+    require(parser.feed(bytes(full), consumer) == full.size());
+    require(parser.ground() && parser.overLimit() == (oversized ? 1u : 0u));
+    if (!oversized) {
+      require(bounded.allocations() == 0 && consumer.events.size() == 2);
+      require(consumer.events.front().size() == limit + 2);
+    } else {
+      require(consumer.events == std::vector<std::string>{"0:\\:0"});
+    }
+  }
+}
+
 void boundedFuzz() {
   SystemAllocator system;
   BudgetAllocator memory{system, 8 * 1024 * 1024};
@@ -268,6 +321,7 @@ int main() {
   partitions("\x1bP+\x9b" "5n", {"1:5n:0"});
   partitions("\x1bP\x9d" "10;?\x1b\\", {"3:10;?:1", "0:\\:0"});
   partitions("\x1b_\x9a", {"4::1", "0:Z:0"});
+  borrowedApcMemory();
   apcOwnedRuns();
   apcLateStreaming();
   apcLimitAndAllocation();
