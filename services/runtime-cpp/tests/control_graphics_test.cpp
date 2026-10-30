@@ -43,6 +43,30 @@ std::string query(auto &terminal, std::string_view header, std::string_view payl
   return result;
 }
 
+void cursorChunkInterleaving(auto &memory) {
+  constexpr std::string_view first = "\x1b_Ga=T,f=24,s=1,v=1,i=7,m=1;/w\x1b\\";
+  constexpr std::string_view last = "\x1b_Gm=0;AA\x1b\\";
+  constexpr TerminalSize size{80, 24, 9, 18};
+  for (const auto middle : {std::string_view{}, std::string_view{"x"}, std::string_view{"\x05"}, std::string_view{"\x18"}, std::string_view{"\x1a"}, std::string_view{"\x80"}}) {
+    for (std::size_t split = 0; split <= first.size(); ++split) {
+      Terminal terminal{memory, size, TerminalPurpose::separate_media};
+      GraphicsCursor cursor;
+      cursor.feed(terminal.handle(), bytes(first.substr(0, split)), size);
+      cursor.feed(terminal.handle(), bytes(first.substr(split)), size);
+      cursor.feed(terminal.handle(), bytes(middle), size);
+
+      std::uint16_t before_x, before_y, after_x, after_y;
+      checkGhostty(ghostty_terminal_get(terminal.handle(), GHOSTTY_TERMINAL_DATA_CURSOR_X, &before_x));
+      checkGhostty(ghostty_terminal_get(terminal.handle(), GHOSTTY_TERMINAL_DATA_CURSOR_Y, &before_y));
+      cursor.feed(terminal.handle(), bytes(last.substr(0, last.size() - 1)), size);
+      cursor.feed(terminal.handle(), bytes(last.substr(last.size() - 1)), size);
+      checkGhostty(ghostty_terminal_get(terminal.handle(), GHOSTTY_TERMINAL_DATA_CURSOR_X, &after_x));
+      checkGhostty(ghostty_terminal_get(terminal.handle(), GHOSTTY_TERMINAL_DATA_CURSOR_Y, &after_y));
+      check(after_x == before_x + 1 && after_y == before_y);
+    }
+  }
+}
+
 void localMedia(auto &memory) {
   std::array<char, 64> directory;
   std::strcpy(directory.data(), "/tmp/telar-control-graphics-XXXXXX");
@@ -825,6 +849,7 @@ int main() {
   installPngDecoder();
   SystemAllocator system;
   BudgetAllocator memory{system, 64 * 1024 * 1024};
+  cursorChunkInterleaving(memory);
   localMedia(memory);
   configuredLimits(memory);
   graphicsReplyEncodings(memory);

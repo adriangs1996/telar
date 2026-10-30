@@ -2117,3 +2117,9 @@ or close the earlier graphics, proxy, Brotli, concurrency or provider gates.
 Evidence: `measurements/experiments/branch-integration-v2-*.json`, with the
 source manifest, binary fingerprints, raw pairs, functional reports and suite
 logs. The disassembly is `branch-integration-v2-hold-tab-0.asm`.
+
+Control-query optimization107 skips an unchanged graphics-scanner no-op.
+Paired styled/mixed component ratios against accepted91 are0.983646/0.974634
+with7/7wins each. The ten-case real PTY comparison has no consistent losses;
+no PTY speedup is claimed. Current evidence, safety limits and unresolved
+application gaps: [graphics-skip-107-review.md](measurements/control-queries/graphics-skip-107-review.md).

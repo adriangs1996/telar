@@ -8,7 +8,17 @@ namespace telar::runtime {
 
 class GraphicsCursor {
 public:
-  void feed(GhosttyTerminal terminal, std::span<const Byte> bytes, TerminalSize size) {
+  [[gnu::noinline]] void feed(GhosttyTerminal terminal, std::span<const Byte> bytes, TerminalSize size) {
+    if (scanner_.canSkip(bytes)) {
+      ghostty_terminal_vt_write(terminal, bytes.data(), bytes.size());
+      return;
+    }
+
+    feedCommands(terminal, bytes, size);
+  }
+
+private:
+  [[gnu::noinline]] void feedCommands(GhosttyTerminal terminal, std::span<const Byte> bytes, TerminalSize size) {
     auto remaining = bytes;
     while (const auto command = scanner_.next(remaining)) {
       ghostty_terminal_vt_write(terminal, remaining.data(), command->end);
@@ -20,7 +30,6 @@ public:
     ghostty_terminal_vt_write(terminal, remaining.data(), remaining.size());
   }
 
-private:
   static void advance(GhosttyTerminal terminal, DisplayCells cells, TerminalSize size) {
     std::uint16_t x, y, top, bottom, left, right;
     const GhosttyTerminalData keys[] = {GHOSTTY_TERMINAL_DATA_CURSOR_X, GHOSTTY_TERMINAL_DATA_CURSOR_Y, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_TOP, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_BOTTOM, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_LEFT, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_RIGHT};
