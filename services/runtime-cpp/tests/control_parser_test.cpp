@@ -105,6 +105,122 @@ void backpressure() {
   require(consumer.events.back() == "text:remaining");
 }
 
+void apcOwnedRuns() {
+  SystemAllocator memory;
+  for (unsigned byte = 0; byte <= UINT8_MAX; ++byte) {
+    std::string input{"\x1b_Ga=q,i=9;"};
+    input.append(260, 'A');
+    input.push_back(static_cast<char>(byte));
+    input.append(32, 'B');
+    input.append("\x1b\\\x1b[5n");
+    Parser scalar{memory};
+    Consumer expected;
+    for (const auto &character : input) {
+      require(scalar.feed(bytes({&character, 1}), expected) == 1);
+    }
+    partitions(input, expected.events);
+  }
+
+  for (const auto length : {255u, 256u, 257u, 511u, 512u, 513u}) {
+    std::string input{"\x1b_G"};
+    input.append(length - input.size(), 'A');
+    input.append("\x1b\\");
+    const auto body = input.substr(2, length - 2);
+    partitions(input, {"4:" + body + ":1", "0:\\:0"});
+  }
+
+  Parser parser{memory};
+  Consumer consumer;
+  consumer.accept = false;
+  std::string input{"\x1b_Ga=q;"};
+  input.append(4096, 'A');
+  const auto expected = "4:" + input.substr(2) + ":1";
+  input.append("\x1b\\unconsumed");
+  const auto consumed = parser.feed(bytes(input), consumer);
+  require(consumed == input.size() - 11 && parser.blocked());
+  input.assign(input.size(), 'z');
+  consumer.accept = true;
+  require(parser.feed({}, consumer) == 0);
+  require(consumer.events == std::vector<std::string>{expected});
+  require(!parser.blocked());
+}
+
+struct StreamingConsumer : Consumer {
+  unsigned hooks = 0;
+  bool streamable(Sequence sequence) {
+    ++hooks;
+    require(sequence.body().ends_with(';'));
+    return true;
+  }
+};
+
+void apcLateStreaming() {
+  SystemAllocator memory;
+  for (const auto length : {254u, 255u, 256u, 257u, 512u}) {
+    Parser parser{memory};
+    StreamingConsumer consumer;
+    std::string input{"\x1b_G"};
+    input.append(length - input.size(), 'A');
+    input.append(";payload;still-streaming\x1b\\");
+    require(parser.feed(bytes(input), consumer) == input.size());
+    require(consumer.hooks == 1);
+    require(consumer.events.size() == 2 && consumer.events.front() == "text:" + input);
+    require(consumer.events.back() == "0:\\:0");
+  }
+}
+
+struct SizeConsumer {
+  std::size_t body_size = 0;
+  unsigned completions = 0;
+  void ordinary(std::span<const std::uint8_t>) {}
+  bool enquire() { return true; }
+  bool streamable(Sequence) { return false; }
+  bool complete(Sequence sequence) {
+    if (sequence.kind == Kind::apc) {
+      ++completions;
+      body_size = sequence.body().size();
+      require(sequence.body().front() == 'G');
+      require(sequence.body().find_first_not_of('A', 1) == std::string_view::npos);
+    }
+    return true;
+  }
+};
+
+void apcLimitAndAllocation() {
+  SystemAllocator upstream;
+  BudgetAllocator memory{upstream, 2 * Parser<SystemAllocator>::apc_limit};
+  constexpr auto limit = Parser<SystemAllocator>::apc_limit;
+  std::string input{"\x1b_G"};
+  input.append(limit - input.size(), 'A');
+  for (const auto &extra : {std::string{}, std::string{"\x98\xa0\xff", 3}, std::string{"A"}}) {
+    Parser parser{memory};
+    SizeConsumer consumer;
+    require(parser.feed(bytes(input), consumer) == input.size());
+    require(parser.overLimit() == 0);
+    require(parser.feed(bytes(extra), consumer) == extra.size());
+    require(parser.feed(bytes("\x1b\\"), consumer) == 2);
+    const bool oversized = extra == "A";
+    require(parser.overLimit() == (oversized ? 1u : 0u));
+    require(consumer.completions == (oversized ? 0u : 1u));
+    require(oversized || consumer.body_size == limit - 2);
+  }
+  require(memory.liveBytes() == 0);
+
+  BudgetAllocator denied{upstream, 0};
+  Parser parser{denied};
+  SizeConsumer consumer;
+  bool failed = false;
+  try {
+    parser.feed(bytes(input).first(1024), consumer);
+  } catch (const std::bad_alloc &) {
+    failed = true;
+  }
+  require(failed && denied.failures() == 1);
+  parser.discard();
+  require(denied.liveBytes() == 0);
+  require(parser.feed(bytes("\x1b[5n"), consumer) == 4 && parser.ground());
+}
+
 void boundedFuzz() {
   SystemAllocator system;
   BudgetAllocator memory{system, 8 * 1024 * 1024};
@@ -152,6 +268,9 @@ int main() {
   partitions("\x1bP+\x9b" "5n", {"1:5n:0"});
   partitions("\x1bP\x9d" "10;?\x1b\\", {"3:10;?:1", "0:\\:0"});
   partitions("\x1b_\x9a", {"4::1", "0:Z:0"});
+  apcOwnedRuns();
+  apcLateStreaming();
+  apcLimitAndAllocation();
   backpressure();
   boundedFuzz();
   oversizedRecovery();
