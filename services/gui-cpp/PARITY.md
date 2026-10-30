@@ -1565,6 +1565,14 @@ hidden panes and bounds CPU image storage. Those are implementation choices,
 not measurements of superiority over Zig. Qt's text and texture allocations
 remain outside the injected allocator's counters.
 
+The [text scene control](measurements/text-scene-probe.md) now builds against
+the current font-collection API. Nine native cases have matching Release/ASan
+geometry, but sanitizer exit leaks remain. Four subsequent
+[mesh retention experiments](measurements/text-mesh-retention.md) preserve all
+30 intermediate geometry states and improve several rebuild cases, but each
+consistently regresses another measured operation. None is adopted; their
+complete paired results, storage negative and sanitizer failures are retained.
+
 Optical smoothing reuses row buffers but rasterizes changed text and uploads
 colored row textures. Its glyph clipping, rasterization and upload costs have
 not been compared with the original glyph atlas.
@@ -1584,29 +1592,26 @@ throughput, idle/loaded CPU and memory, and image/chrome stress cases. The
 correctness oracle must account for the requested functional equivalence;
 byte-identical render buffers are not applicable across these renderers.
 
-`tools/gui_tui_latency.py --mode telar --cpp-gui PATH` now runs both clients
-against separate instances of the same runtime binary and the same PTY fixture,
-alternating their launch order. It rejects different render-target sizes,
-display scales, primary and background PTY dimensions, or marker positions.
-CPU observations distinguish setup, an input-idle interval and post-warmup
-input samples. Peak RSS still includes startup, instrument storage and, when
-requested, capture storage. `--capture` saves a pre-warmup Metal frame after
-verified GPU completion; those images omit native window controls composited
-outside the Metal target. Capture runs and smoke samples are diagnostic evidence,
-not accepted paired performance results.
+The historical presentation experiments below used a runner with
+`--mode telar`, `--cpp-gui`, `--endpoint presented` and capture support. Those
+options are absent from the shared tools transferred to Personal; their current
+probe stops at verified GPU completion. The historical large raw archives also
+remain on the source machine, as recorded in the handoff. The old reproduction
+commands do not describe the current shared runner.
 
-The Mac probe also accepts `--endpoint presented` for Telar-only comparisons.
-It joins the verified marker readback with the same native drawable's
-`MTLDrawable.presentedTime`, records drawable identities and keeps GPU callback
-latencies separately. Statistics and reports select the requested endpoint;
-mixed GPU/presentation reports are rejected. Native layer observations must
-verify VSync enabled. Zig currently fixes that policy in its Metal surface,
-so the runner refuses `--vsync false` for either Telar client. Presentation
-measurements require their own paired results; earlier GPU callback timings
-do not establish when a frame appeared onscreen.
+The Personal continuation freezes a separate local harness and both current
+Release binaries. Its diagnostic presentation probe joins marker verification
+to the exact drawable's `MTLDrawable.presentedTime`, records native VSync and
+drawable identities, and keeps GPU callback timings separate. Missing records,
+disabled VSync, dropped presentation and mismatched geometry reject comparison.
+These observations have no physical photon/scanout endpoint. Current comparative
+acceptance remains open. A reproduced [fixture resize race](measurements/fixture-resize.md)
+is corrected with a complete SIGWINCH transaction and five focused controls;
+the corrected fixture epoch is recorded separately. Peak RSS still includes
+startup, instrumentation and viewport negotiation.
 
 The [native presentation experiment](measurements/frame-presentation.md)
-retains 84 planned jobs and all thirteen failed controls. Current Qt loses
+retains 84 planned jobs and all thirteen failed controls. That historical Qt build loses
 every valid unloaded p50 pair against Zig: six single, six split and seven tab
 pairs. A private eager-delivery prototype wins seven of seven p50 pairs against
 current Qt in each unloaded case, but still loses to Zig in single and tabs.

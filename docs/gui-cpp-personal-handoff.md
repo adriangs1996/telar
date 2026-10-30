@@ -2,6 +2,57 @@
 
 ## Personal continuation checkpoint
 
+### Current row-root follow-up after rejected mesh variants (05:35 UTC)
+
+HEAD7205bdf66 accepted probe repair, priora553fda4c fixtureSIGWINCHcorrection.
+GoalACTIVE/incomplete/no budget. NO renderer optimization adopted. No publish/
+merge/delegation, no finalcheckpoint. RootGUIstill2c4a, onlytoolsacceptedchanges.
+
+Meshretention experiments A/B/C/D/E areCOMPLETEANDREJECTED. Fullcompactarchive
+201artifacts +verifierpassed --check-current-source: measurements/text-mesh-
+retention.md, text-mesh-retention-validation.json, text-mesh-retention/. READY
+forlocalcommitwithPARITY(currentCLIprovenancecorrection+links) andhandoff. Draft
+personal-frame-delivery.md stilluntracked/unarchived; keepseparateuntilitsarchive.
+
+FrozenAoriginaltextprobe/library,transitionoracle BUILT BEFOREalgorithmchanges,
+30states24distinctgeometry6empty, expectedoutputSHA4089de09a8ef5f7aafb357eb1859c2c33
+bfaa90ab7e0e7d229aecb84f82a764d. AllB/C/D/E intermediateoutputsBYTEEXACT. Includes
+32/128/0/512lengths,recolor,straight/premul,splitspans,clip,scale,newFontCollection
+(primaryIBM Plex Sans vsbundledMono). InitialunboundedBfailsstorageoracleafter6
+states (128→32 keepsbigcapacity). BoundfinalBpasses30. NativeASANoriginal30:
+377684bytes2077alloc leaks; unboundedB366872/2097; boundedB390780/2117. All30exact,
+noaccess/UBreports,bothfailleakexit; runtimetablespreserved,noLSAN/localsuppression.
+
+Allpairedprobes7alternatedpairs,20000iterations1000warmup,9cases3lengths×create/
+rebuild/repaint. NO otherbuild/test/profileduringtiming. B rebuild7/7all3sizes,
+butcreate512wins1/7 +2.2%median=>REJECT. C freshpathseparate, rebuild7/7all3,
+create32wins1/7+0.9%=>REJECT. D lifecycletemplates,create32/128wins1/7each,
+repaint32wins1/7,+26–37%paint=>REJECT. ARMasm showsGlyphMesh::paint outlinedonly
+inD (notA/B/C). E forcesgnu::always_inline,restorespaintrelativebase, rebuild7/7all,
+create128wins1/7+1.4%=>REJECT. ARMcodegenrecorded,NO identicalnormalizedasm proof,
+NO placementexception,NO Intel/Linuxperformanceclaim. No Eattr entersproduct.
+
+NEXT RowTextScene retention usingUNCHANGED mesh renderer. CurrentTextScene.begin
+allocatesroot;flushCells/add callpaintChromeText(nullptr) eachchangedrow, soit
+recreatesfont/cache/root/wrapper everynode. TerminalScene.paintRow clearsrow.text,
+creates shapes,textroot,decorations. Plan preserveonlytextroot acrossrowupdates
+andusepreviousChromeScene viaexistingpaint API; keepinlineglyph/Qt fallback/
+optical transitions/order andboundedlifetime. Neverclaimmeshrebuildgainsapplyto
+newrowchange. NeedoracleFIRST andpairedmeasurements. ExistingSceneFixture in
+ tests/scene_test.cpp (prefixbeforeclassSceneTest) canbe re-used inprivatepixel
+oracle; publicsetCells/select/fontRendering/preedit/resize/capture. capture()is
+EXPLICITcomponentrectangle (maycropOSminimumwindowextra),notfullwindow/fullGUI.
+Needsrawpixel equalityacrossmanyintermediatestates, baselinebeforemodification.
+ExistingSceneTestfullsuitealsohasfallback,wide/fittedglyph/cursor/opticalcases.
+No rowretentionimplementationyet; no activejobs/GUI/build/benchmark now.
+
+AllCocoaexperimentsfromprevioussections remainPRIVATE, V2single21validall7pairs
+Qt/v2latency+CPUwins7/7butvsZigtail/CPU/RSSlosses,loadedratecontrolsfailvariably.
+Keepstrict5%rate. Profiling+writer-mmaptracesdiagnosticonlyexcluded. Sourceepochs
+ofediteddriversretainedbySHA. perf classifiertagsprofiled/diagnosticexcluded.
+MainrootCPPunchangedexceptacceptedtext_scene_probe.cpp tool. ContinueSpanish
+updates<=60s (largeanalysisstillviolates; keeptool/actionchunksshort).
+
 ### Current probe repair before retained text work (04:57 UTC)
 
 Goal ACTIVE/incomplete/unbudgeted; no final checkpoints, agents, publish or merge.
