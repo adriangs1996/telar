@@ -61,6 +61,68 @@ void streamOrder(Memory &memory) {
 }
 
 template <Allocator Memory>
+void cursorStateViews(Memory &memory) {
+  GhosttyAllocatorBridge<Memory> allocator{memory};
+  TerminalHandle terminal;
+  RenderStateHandle render;
+  checkGhostty(ghostty_terminal_new(allocator.get(), terminal.output(), 80, 24));
+  checkGhostty(ghostty_render_state_new(allocator.get(), render.output()));
+  control::VtState state;
+  state.bind(terminal.get(), render.get(), false);
+  state.configureSize({80, 24, 9, 18});
+
+  const auto compare = [&] {
+    const auto position = state.cursor();
+    const auto margins = state.margins();
+    const bool origin_mode = state.mode(6);
+    GhosttyTerminalCursorState snapshot{};
+    checkGhostty(ghostty_terminal_cursor_state(terminal.get(), &snapshot));
+    require(position.column == snapshot.x && position.row == snapshot.y);
+    require(margins.top == snapshot.top && margins.bottom == snapshot.bottom && margins.left == snapshot.left && margins.right == snapshot.right);
+    require(origin_mode == (snapshot.origin != 0));
+    const std::array<std::uint16_t, 6> fields{snapshot.x, snapshot.y, snapshot.top, snapshot.bottom, snapshot.left, snapshot.right};
+    constexpr std::array keys{GHOSTTY_TERMINAL_DATA_CURSOR_X, GHOSTTY_TERMINAL_DATA_CURSOR_Y, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_TOP, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_BOTTOM, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_LEFT, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_RIGHT};
+    for (std::size_t index = 0; index < keys.size(); ++index) {
+      std::uint16_t scalar = UINT16_MAX;
+      checkGhostty(ghostty_terminal_get(terminal.get(), keys[index], &scalar));
+      require(fields[index] == scalar);
+    }
+
+    GhosttyTerminalModeConfig origin{.mode = ghostty_mode_new(6, false), .value = false};
+    checkGhostty(ghostty_terminal_get(terminal.get(), GHOSTTY_TERMINAL_DATA_MODE, &origin));
+    require(snapshot.origin == origin.value && snapshot.reserved == 0);
+    const auto cached = state.cursor();
+    require(cached.column == snapshot.x && cached.row == snapshot.y);
+    state.mode(70);
+    require(state.mode(6) == origin.value);
+    state.mode(38, true);
+    require(state.mode(6) == origin.value);
+  };
+
+  compare();
+  for (const auto command : {"abc", "\x1b[5;9H", "\x1b[3;20r", "\x1b[?69h\x1b[5;70s", "\x1b[?6h", "\x1b[2;3H", "\x1b" "7", "\x1b[99;99H", "\x1b" "8", "\x1b[?1049h", "\x1b[4;5H", "\x1b[?1049l", "\x1b[!p", "\x1b" "c", "\x1b[24;80HAB"}) {
+    for (const auto byte : std::string_view{command}) {
+      const Byte value = static_cast<Byte>(byte);
+      state.write({&value, 1});
+      compare();
+    }
+  }
+
+  state.setMode(6, true);
+  compare();
+  state.setMode(6, false);
+  compare();
+  checkGhostty(ghostty_terminal_resize(terminal.get(), 43, 12, 9, 18));
+  state.configureSize({43, 12, 9, 18});
+  compare();
+
+  GhosttyTerminalCursorState untouched{};
+  require(ghostty_terminal_cursor_state(nullptr, &untouched) == GHOSTTY_INVALID_VALUE);
+  require(untouched.x == 0 && untouched.bottom == 0 && untouched.origin == 0);
+  require(ghostty_terminal_cursor_state(terminal.get(), nullptr) == GHOSTTY_INVALID_VALUE);
+}
+
+template <Allocator Memory>
 void saturation(Memory &memory) {
   Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
   std::string requests;
@@ -674,6 +736,7 @@ int main(int argc, char **argv) {
   streamOrder(memory);
   colorEncodings(memory);
   cursorEncodings(memory);
+  cursorStateViews(memory);
   saturation(memory);
   statusWorkerPriority(memory);
   statusBytePressure(memory);

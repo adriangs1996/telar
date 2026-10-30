@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(TELAR_GHOSTTY_STATE_VERSION 6)
 include(cmake/lua.cmake)
 
 include(cmake/dependencies.cmake)
@@ -17,14 +18,19 @@ set_target_properties(ghostty-vt PROPERTIES
 
 include(CheckCXXSourceCompiles)
 set(CMAKE_REQUIRED_INCLUDES "${GHOSTTY_VT_INCLUDE_DIR}")
+set(CMAKE_REQUIRED_LIBRARIES "${GHOSTTY_VT_LIBRARY}")
 check_cxx_source_compiles("#include <ghostty/vt.h>
+#include <cstddef>
 int main() {
-  static_assert(GHOSTTY_TELAR_STATE_VERSION == 5);
+  static_assert(GHOSTTY_TELAR_STATE_VERSION == ${TELAR_GHOSTTY_STATE_VERSION});
+  static_assert(sizeof(GhosttyTerminalCursorState) == 14);
+  static_assert(offsetof(GhosttyTerminalCursorState, origin) == 12);
   static_assert(sizeof(&ghostty_grid_ref_cells) > 0);
   static_assert(sizeof(&ghostty_grid_ref_grapheme_batch) > 0);
   static_assert(sizeof(&ghostty_terminal_page_bytes) > 0);
   GhosttyCodepointsBuffer buffer{};
-  return buffer.len + sizeof(GhosttyKittyGraphicsImageInsert) + GHOSTTY_TERMINAL_DATA_CURSOR_IS_DEFAULT + GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_IS_INTERNAL + GHOSTTY_TERMINAL_OPT_KITTY_PROTOCOL + GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_BOTTOM + GHOSTTY_KITTY_GRAPHICS_DATA_LOADING_BYTES + GHOSTTY_TERMINAL_OPT_ACTIVE_SCREEN;
+  GhosttyTerminalCursorState cursor{};
+  return ghostty_terminal_cursor_state(nullptr, &cursor) + buffer.len + sizeof(GhosttyKittyGraphicsImageInsert) + GHOSTTY_TERMINAL_DATA_CURSOR_IS_DEFAULT + GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_IS_INTERNAL + GHOSTTY_TERMINAL_OPT_KITTY_PROTOCOL + GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_BOTTOM + GHOSTTY_KITTY_GRAPHICS_DATA_LOADING_BYTES + GHOSTTY_TERMINAL_OPT_ACTIVE_SCREEN;
 }" GHOSTTY_VT_HAS_RUNTIME_STORAGE_STATE)
 if(NOT GHOSTTY_VT_HAS_RUNTIME_STORAGE_STATE)
   message(FATAL_ERROR "Build the pinned libghostty-vt with tools/build_ghostty.py first")

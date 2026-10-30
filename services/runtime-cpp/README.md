@@ -31,7 +31,7 @@ runtime_directory=$(mktemp -d)
 out/telar-runtime --socket "$runtime_directory/runtime.sock"
 ```
 
-The VT dependency requires Telar state ABI version 3. Use a new build directory
+The VT dependency requires Telar state ABI version 6. Use a new build directory
 when its revision or patch changes. `--source /path/to/ghostty-checkout` archives
 the pinned revision into its own local repository; the script checks both patch
 application and its reverse before compiling. This is an isolated dependency

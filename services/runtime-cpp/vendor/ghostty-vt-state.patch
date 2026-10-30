@@ -151,7 +151,7 @@ diff --git a/include/ghostty/vt/terminal.h b/include/ghostty/vt/terminal.h
  #ifndef GHOSTTY_VT_TERMINAL_H
  #define GHOSTTY_VT_TERMINAL_H
 +
-+#define GHOSTTY_TELAR_STATE_VERSION 5
++#define GHOSTTY_TELAR_STATE_VERSION 6
  
  #include <stdbool.h>
  #include <stddef.h>
@@ -193,12 +193,28 @@ diff --git a/include/ghostty/vt/terminal.h b/include/ghostty/vt/terminal.h
  GHOSTTY_API void ghostty_terminal_vt_write(GhosttyTerminal terminal,
                                  const uint8_t* data,
                                  size_t len);
-@@ -3655,6 +3674,10 @@
+@@ -3655,6 +3674,26 @@
   *
   * @ingroup terminal
   */
 +/** Page allocation bytes across both screens, including active cells and history.
 + * Excludes render snapshots, graphics and other terminal allocations. */
++/** Caller-owned scalar snapshot. Coordinates are zero-based and scrolling
++ * bounds are inclusive. Reads state without allocation or terminal operations.
++ * The caller serializes access with terminal mutations, as for terminal_get. */
++typedef struct {
++  uint16_t x;
++  uint16_t y;
++  uint16_t top;
++  uint16_t bottom;
++  uint16_t left;
++  uint16_t right;
++  uint8_t origin;
++  uint8_t reserved;
++} GhosttyTerminalCursorState;
++
++GHOSTTY_API GhosttyResult ghostty_terminal_cursor_state(GhosttyTerminal terminal, GhosttyTerminalCursorState *out_state);
++
 +GHOSTTY_API GhosttyResult ghostty_terminal_page_bytes(GhosttyTerminal terminal, size_t *out_bytes);
 +
  GHOSTTY_API GhosttyResult ghostty_terminal_get(GhosttyTerminal terminal,
@@ -207,7 +223,7 @@ diff --git a/include/ghostty/vt/terminal.h b/include/ghostty/vt/terminal.h
 diff --git a/src/lib_vt.zig b/src/lib_vt.zig
 --- a/src/lib_vt.zig
 +++ b/src/lib_vt.zig
-@@ -328,12 +328,14 @@
+@@ -328,12 +328,15 @@
          @export(&c.terminal_free, .{ .name = "ghostty_terminal_free" });
          @export(&c.terminal_reset, .{ .name = "ghostty_terminal_reset" });
          @export(&c.terminal_resize, .{ .name = "ghostty_terminal_resize" });
@@ -219,10 +235,11 @@ diff --git a/src/lib_vt.zig b/src/lib_vt.zig
          @export(&c.terminal_compression_activity, .{ .name = "ghostty_terminal_compression_activity" });
          @export(&c.terminal_compress, .{ .name = "ghostty_terminal_compress" });
 +        @export(&c.terminal_page_bytes, .{ .name = "ghostty_terminal_page_bytes" });
++        @export(&c.terminal_cursor_state, .{ .name = "ghostty_terminal_cursor_state" });
          @export(&c.terminal_get, .{ .name = "ghostty_terminal_get" });
          @export(&c.terminal_get_multi, .{ .name = "ghostty_terminal_get_multi" });
          @export(&c.terminal_continuation_write, .{ .name = "ghostty_terminal_continuation_write" });
-@@ -394,6 +396,15 @@
+@@ -394,6 +397,15 @@
              @export(&c.snapshot_decoder_decode, .{ .name = "ghostty_snapshot_decoder_decode" });
          }
          if (features.kitty_graphics) {
@@ -238,7 +255,7 @@ diff --git a/src/lib_vt.zig b/src/lib_vt.zig
              @export(&c.kitty_graphics_get, .{ .name = "ghostty_kitty_graphics_get" });
              @export(&c.kitty_graphics_animation_tick, .{ .name = "ghostty_kitty_graphics_animation_tick" });
              @export(&c.kitty_graphics_image, .{ .name = "ghostty_kitty_graphics_image" });
-@@ -414,8 +425,11 @@
+@@ -414,8 +426,11 @@
          }
          if (features.grid_introspection) {
              @export(&c.grid_ref_cell, .{ .name = "ghostty_grid_ref_cell" });
@@ -603,7 +620,7 @@ diff --git a/src/terminal/c/kitty_graphics.zig b/src/terminal/c/kitty_graphics.z
 diff --git a/src/terminal/c/main.zig b/src/terminal/c/main.zig
 --- a/src/terminal/c/main.zig
 +++ b/src/terminal/c/main.zig
-@@ -192,12 +192,14 @@
+@@ -192,12 +192,15 @@
  pub const terminal_reset = terminal.reset;
  pub const terminal_resize = terminal.resize;
  pub const terminal_set = terminal.set;
@@ -615,10 +632,11 @@ diff --git a/src/terminal/c/main.zig b/src/terminal/c/main.zig
  pub const terminal_compress = terminal.compress;
  pub const terminal_get = terminal.get;
 +pub const terminal_page_bytes = terminal.page_bytes;
++pub const terminal_cursor_state = terminal.cursor_state;
  pub const terminal_get_multi = terminal.get_multi;
  pub const terminal_continuation_write = terminal.continuation_write;
  pub const terminal_continuation_buf = terminal.continuation_buf;
-@@ -254,8 +256,11 @@
+@@ -254,8 +257,11 @@
  pub const unicode_grapheme_width = unicode.grapheme_width;
  
  pub const grid_ref_cell = grid_ref.grid_ref_cell;
@@ -630,7 +648,7 @@ diff --git a/src/terminal/c/main.zig b/src/terminal/c/main.zig
  pub const grid_ref_hyperlink_uri = grid_ref.grid_ref_hyperlink_uri;
  pub const grid_ref_style = grid_ref.grid_ref_style;
  pub const tracked_grid_ref_free = grid_ref_tracked.tracked_grid_ref_free;
-@@ -300,3 +305,13 @@
+@@ -300,3 +306,13 @@
      // We want to make sure we run the tests for the C allocator interface.
      _ = @import("../../lib/allocator.zig");
  }
@@ -831,10 +849,39 @@ diff --git a/src/terminal/c/terminal.zig b/src/terminal/c/terminal.zig
              .color_foreground_default,
              .color_background_default,
              .color_cursor_default,
-@@ -2015,6 +2056,20 @@
+@@ -2015,6 +2056,49 @@
      }
  };
  
++pub const CursorState = extern struct {
++    x: u16,
++    y: u16,
++    top: u16,
++    bottom: u16,
++    left: u16,
++    right: u16,
++    origin: u8,
++    reserved: u8,
++};
++
++pub fn cursor_state(terminal_: Terminal, out_state: ?*CursorState) callconv(lib.calling_conv) Result {
++    const wrapper = terminal_ orelse return .invalid_value;
++    const output = out_state orelse return .invalid_value;
++    const t = wrapper.terminal;
++    output.* = .{
++        .x = t.screens.active.cursor.x,
++        .y = t.screens.active.cursor.y,
++        .top = t.scrolling_region.top,
++        .bottom = t.scrolling_region.bottom,
++        .left = t.scrolling_region.left,
++        .right = t.scrolling_region.right,
++        .origin = @intFromBool(t.modes.get(.origin)),
++        .reserved = 0,
++    };
++
++    return .success;
++}
++
 +pub fn page_bytes(terminal_: Terminal, out_bytes: ?*usize) callconv(lib.calling_conv) Result {
 +    const wrapper = terminal_ orelse return .invalid_value;
 +    const output = out_bytes orelse return .invalid_value;
@@ -852,7 +899,7 @@ diff --git a/src/terminal/c/terminal.zig b/src/terminal/c/terminal.zig
  pub fn get(
      terminal_: Terminal,
      data: TerminalData,
-@@ -2069,6 +2124,23 @@
+@@ -2069,6 +2153,23 @@
      const t: *ZigTerminal = wrapper.terminal;
      switch (data) {
          .invalid => return .invalid_value,
@@ -876,7 +923,7 @@ diff --git a/src/terminal/c/terminal.zig b/src/terminal/c/terminal.zig
          .cols => out.* = t.cols,
          .rows => out.* = t.rows,
          .cursor_x => out.* = t.screens.active.cursor.x,
-@@ -7911,3 +7983,10 @@
+@@ -7911,3 +8012,10 @@
      try testing.expectEqual(Result.success, get(t, .mouse_shape, @ptrCast(&shape)));
      try testing.expectEqual(mouse.Shape.wait, shape);
  }
@@ -887,3 +934,14 @@ diff --git a/src/terminal/c/terminal.zig b/src/terminal/c/terminal.zig
 +    wrapper.terminal.index() catch return .out_of_memory;
 +    return .success;
 +}
+diff --git a/src/terminal/c/types.zig b/src/terminal/c/types.zig
+--- a/src/terminal/c/types.zig
++++ b/src/terminal/c/types.zig
+@@ -222,6 +222,7 @@
+     .initStruct("GhosttySysImage", sys.Image),
+     .initStruct("GhosttyTerminalDesktopNotification", terminal.DesktopNotification),
+     .initStruct("GhosttyTerminalMemoryUsage", terminal.TerminalMemoryUsage),
++    .initStruct("GhosttyTerminalCursorState", terminal.CursorState),
+     .initStruct("GhosttyTerminalModeConfig", terminal.ModeConfig),
+     .initStruct("GhosttyTerminalProgramStatus", terminal.ProgramStatus),
+     .initStruct("GhosttyTerminalProgressReport", terminal.ProgressReport),

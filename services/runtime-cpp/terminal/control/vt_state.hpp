@@ -105,11 +105,11 @@ public:
     invalidate();
   }
 
-  Position cursor() const {
-    return cached(cursor_cache_, [&] {
-      Position result{};
-      checkGhostty(ghostty_terminal_get(terminal_, GHOSTTY_TERMINAL_DATA_CURSOR_X, &result.column));
-      checkGhostty(ghostty_terminal_get(terminal_, GHOSTTY_TERMINAL_DATA_CURSOR_Y, &result.row));
+  [[gnu::always_inline]] Position cursor() const {
+    [[clang::noinline]] return cached(cursor_cache_, [&] {
+      const auto snapshot = readCursorState();
+      const Position result{snapshot.x, snapshot.y};
+
       return result;
     });
   }
@@ -226,6 +226,7 @@ private:
     invalidateColors();
   }
 
+  static constexpr std::uint16_t origin_mode = 6;
   static constexpr unsigned mode_ansi_hash = 32;
   std::uint64_t epoch_ = 1;
   mutable Cached<TerminalSize> size_cache_;
@@ -246,6 +247,15 @@ private:
   bool possibly_pending_input_ = false;
   bool separate_media_ = false;
   bool write_failed_ = false;
+
+  GhosttyTerminalCursorState readCursorState() const {
+    GhosttyTerminalCursorState result{};
+    checkGhostty(ghostty_terminal_cursor_state(terminal_, &result));
+    margin_cache_ = {epoch_, {result.top, result.bottom, result.left, result.right}};
+    auto &origin = modes_[origin_mode % modes_.size()];
+    origin = {epoch_, origin_mode, false, result.origin != 0};
+    return result;
+  }
 };
 
 }
