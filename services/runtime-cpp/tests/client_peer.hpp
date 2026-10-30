@@ -4,6 +4,8 @@
 #include "model/runtime_model.hpp"
 #include "runtime/response_projection.hpp"
 #include <sys/socket.h>
+#include <optional>
+#include <variant>
 
 class ClientPeer {
 public:
@@ -34,6 +36,11 @@ public:
 
   template <typename Message>
   Message receive() {
+    return std::get<Message>(receiveAny<Message>());
+  }
+
+  template <typename... Messages>
+  std::variant<Messages...> receiveAny() {
     session().connection.write(telar::runtime::ResponseProjection{memory_, model_});
     std::array<telar::Byte, telar::frame_prefix_size> prefix;
     readExact(prefix);
@@ -43,7 +50,14 @@ public:
     auto payload = std::span{payload_}.first(length);
     readExact(payload);
     telar::DecodeStorage storage{decode_};
-    return telar::Codec::decode<Message>(payload, storage);
+    std::optional<std::variant<Messages...>> result;
+    ([&] {
+      if (payload.front() == static_cast<telar::Byte>(telar::MessageSchema<Messages>::tag)) {
+        result.emplace(std::in_place_type<Messages>, telar::Codec::decode<Messages>(payload, storage));
+      }
+    }(), ...);
+    check(result.has_value());
+    return std::move(*result);
   }
 
 private:

@@ -440,6 +440,120 @@ void actualRouting(SystemAllocator &memory) {
 
 }
 
+void closeBeforeExecution(SystemAllocator &memory) {
+  RuntimeModel model{memory};
+  Kqueue poller;
+  PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/clipboard-close.sock"}};
+  WorkspaceService workspaces{memory, model, panes};
+  ClientPeer client{memory, model, ClientRole::interactive};
+  const std::array<std::string_view, 1> arguments{"/bin/cat"};
+  workspaces.open(client.session(), OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
+  auto &pane = panes.require(client.receive<PaneOpened>().pane_id);
+  ConfigurePaneDesktop desktop{.pane_id = pane.id, .pane_generation = pane.generation, .visible = true, .clipboard = true};
+  panes.configureDesktop(client.session(), desktop);
+  pane.terminal.feed(bytes("\x1b]5522;type=write:id=close\x1b\\\x1b]5522;type=wdata\x1b\\"));
+  ClipboardService service{model};
+  service.advance(pane, std::chrono::steady_clock::now());
+  const OwnedClipboardTask task{client.receive<ClipboardDesktopRequest>()};
+  const CompleteClipboardDesktop prepared{.ticket = task.ticket, .status = ClipboardDesktopStatus::success, .prepared = true};
+  check(service.complete(client.session(), prepared) == &pane);
+  workspaces.closePane(client.session(), ClosePane{.request_id = 2, .pane_id = pane.id});
+  check(pane.close_requested && !pane.output_closed);
+  service.advance(pane, std::chrono::steady_clock::now());
+  service.advance(pane, std::chrono::steady_clock::now());
+  const auto response = client.receiveAny<ClipboardDesktopExecute, CancelClipboardDesktop>();
+  MemoryClipboard provider;
+  if (const auto *execution = std::get_if<ClipboardDesktopExecute>(&response)) {
+    check(execution->ticket == task.ticket);
+    executeClipboard(task, ClipboardConsent::once, provider);
+    std::fprintf(stderr, "Clipboard provider effects after accepted close: reads=%u writes=%u\n", provider.reads, provider.writes);
+  }
+  check(provider.inspections == 0 && provider.reads == 0 && provider.writes == 0);
+  check(std::get<CancelClipboardDesktop>(response).ticket == task.ticket);
+  check(drain(pane.terminal) == "\x1b]5522;type=write:status=EPERM:id=close\x1b\\");
+  check(service.complete(client.session(), prepared) == nullptr);
+  panes.remove(pane.id);
+}
+
+void doubleQueuePressure(SystemAllocator &memory) {
+  enum class Cancellation { expired, closing, unannounced };
+  for (const auto cancellation : {Cancellation::expired, Cancellation::closing, Cancellation::unannounced}) {
+    RuntimeModel model{memory};
+    Kqueue poller;
+    PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/clipboard-pressure.sock"}};
+    WorkspaceService workspaces{memory, model, panes};
+    ClientPeer client{memory, model, ClientRole::interactive};
+    const std::array<std::string_view, 1> arguments{"/bin/cat"};
+    workspaces.open(client.session(), OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
+    auto &pane = panes.require(client.receive<PaneOpened>().pane_id);
+    panes.configureDesktop(client.session(), ConfigurePaneDesktop{.pane_id = pane.id, .pane_generation = pane.generation, .visible = true, .clipboard = true});
+    pane.terminal.feed(bytes("\x1b]5522;type=write:id=pressure\x1b\\\x1b]5522;type=wdata\x1b\\"));
+    ClipboardService service{model};
+    auto &clipboard = pane.terminal.clipboardControl();
+    std::optional<OwnedClipboardTask> task;
+    if (cancellation != Cancellation::unannounced) {
+      service.advance(pane, std::chrono::steady_clock::now());
+      task.emplace(client.receive<ClipboardDesktopRequest>());
+      check(service.complete(client.session(), CompleteClipboardDesktop{.ticket = task->ticket, .status = ClipboardDesktopStatus::success, .prepared = true}) == &pane);
+      check(clipboard.execution().has_value());
+    }
+    constexpr auto client_capacity = OutgoingFrames<SystemAllocator>::response_capacity;
+    for (std::size_t index = 0; index < client_capacity; ++index) {
+      client.session().connection.send(RequestCompleted{.request_id = 900 + index});
+    }
+    for (std::size_t index = 0; index < PtyResponseQueue::message_capacity; ++index) {
+      check(pane.pty_responses->tryPush(bytes("N")));
+    }
+    MemoryClipboard provider;
+    service.advance(pane, std::chrono::steady_clock::now());
+    if (task) {
+      check(clipboard.execution().has_value());
+    }
+    if (cancellation == Cancellation::closing) {
+      workspaces.closePane(client.session(), ClosePane{.request_id = 2, .pane_id = pane.id});
+      service.advance(pane, std::chrono::steady_clock::now());
+    } else {
+      service.advance(pane, std::chrono::steady_clock::now() + std::chrono::seconds{31});
+    }
+    service.advance(pane, std::chrono::steady_clock::now());
+    check(!clipboard.execution() && !clipboard.route() && clipboard.hasReply());
+    check(clipboard.cancellation().has_value() == task.has_value());
+    check(!client.session().connection.closing && client.session().connection.responseDepth() == client_capacity);
+    check(client.session().connection.droppedResponses() == 0);
+    check(pane.pty_responses->snapshot().messages == PtyResponseQueue::message_capacity && pane.pty_responses->snapshot().dropped == 0);
+    check(provider.inspections == 0 && provider.reads == 0 && provider.writes == 0);
+
+    for (std::size_t index = 0; index < client_capacity; ++index) {
+      check(client.receive<RequestCompleted>().request_id == 900 + index);
+    }
+    service.advance(pane, std::chrono::steady_clock::now());
+    service.advance(pane, std::chrono::steady_clock::now());
+    check(client.session().connection.responseDepth() == (task ? 1 : 0));
+    if (task) {
+      check(client.receive<CancelClipboardDesktop>().ticket == task->ticket);
+      check(service.complete(client.session(), CompleteClipboardDesktop{.ticket = task->ticket, .status = ClipboardDesktopStatus::success, .prepared = true}) == nullptr);
+      check(service.complete(client.session(), CompleteClipboardDesktop{.ticket = task->ticket, .status = ClipboardDesktopStatus::success}) == nullptr);
+    }
+    check(drain(pane.terminal) == std::string(PtyResponseQueue::message_capacity, 'N') + "\x1b]5522;type=write:status=EPERM:id=pressure\x1b\\");
+    check(!clipboard.hasReply() && !clipboard.cancellation());
+    if (cancellation != Cancellation::closing) {
+      pane.terminal.feed(bytes("\x1b]5522;type=write:id=again\x1b\\\x1b]5522;type=wdata\x1b\\"));
+      service.advance(pane, std::chrono::steady_clock::now());
+      const OwnedClipboardTask next{client.receive<ClipboardDesktopRequest>()};
+      check(service.complete(client.session(), CompleteClipboardDesktop{.ticket = next.ticket, .status = ClipboardDesktopStatus::success, .prepared = true}) == &pane);
+      service.advance(pane, std::chrono::steady_clock::now());
+      check(client.receive<ClipboardDesktopExecute>().ticket == next.ticket);
+      const auto result = executeClipboard(next, ClipboardConsent::once, provider);
+      check(provider.writes == 1);
+      const CompleteClipboardDesktop completed{.ticket = next.ticket, .status = result.status};
+      check(service.complete(client.session(), completed) == &pane);
+      check(drain(pane.terminal) == "\x1b]5522;type=write:status=DONE:id=again\x1b\\");
+      check(service.complete(client.session(), completed) == nullptr && provider.writes == 1);
+    }
+    panes.remove(pane.id);
+  }
+}
+
 void deferredAllocationFailure() {
   FailingAllocator upstream;
   BudgetAllocator memory{upstream, 64 * 1024 * 1024};
@@ -494,6 +608,8 @@ int main() {
   encodingFailure(false, true);
   encodingFailure(true, true);
   actualRouting(system);
+  closeBeforeExecution(system);
+  doubleQueuePressure(system);
   deferredAllocationFailure();
   std::puts("Native clipboard protocol, consent, routing and ownership tests passed");
 }

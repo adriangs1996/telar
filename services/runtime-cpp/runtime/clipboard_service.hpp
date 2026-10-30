@@ -11,7 +11,7 @@ public:
 
   static bool eligible(const ClientSession<Memory> &client, const Pane<Memory> &pane) noexcept {
     const auto *attachment = client.attachment(pane.id);
-    return !pane.output_closed && client.role == ClientRole::interactive && !client.connection.closing && attachment != nullptr && attachment->desktop && attachment->desktop->pane_generation == pane.generation && attachment->desktop->visible && attachment->desktop->clipboard;
+    return !pane.close_requested && !pane.output_closed && client.role == ClientRole::interactive && !client.connection.closing && attachment != nullptr && attachment->desktop && attachment->desktop->pane_generation == pane.generation && attachment->desktop->visible && attachment->desktop->clipboard;
   }
 
   void configure(Pane<Memory> &pane) {
