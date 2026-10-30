@@ -209,6 +209,7 @@ void sealedReplyOwnership(Memory &memory) {
   require(rejected && reply.size() == payload.size() && reply.publish(queue));
 
   reply.clear();
+  reply.clear();
   reply.append("replacement");
   require(reply.publish(queue));
   reply.clear();
@@ -269,6 +270,47 @@ void sealedReplyOwnership(Memory &memory) {
   }
   require(limited && reply.size() == full_payload.size());
 
+}
+
+void emptyReplyCleanup() {
+  control_test::OneShotAllocator upstream;
+  BudgetAllocator memory{upstream, 64 * 1024 * 1024};
+  {
+    const std::string payload(PtyResponseQueue::message_byte_capacity * 2, 'E');
+    control::Reply reply{memory};
+    PtyResponseQueue queue;
+    upstream.failNext();
+    bool failed = false;
+    try {
+      reply.append(payload);
+    } catch (const std::bad_alloc &) {
+      failed = true;
+    }
+    require(failed && reply.size() == 0 && memory.liveBytes() == 0);
+    reply.clear();
+    reply.clear();
+
+    reply.append(payload);
+    const auto reserved = memory.liveBytes();
+    const auto upstream_reserved = upstream.liveBytes();
+    require(reserved != 0 && upstream_reserved != 0);
+    reply.clear();
+    reply.clear();
+    require(reply.size() == 0 && memory.liveBytes() == reserved && upstream.liveBytes() == upstream_reserved);
+
+    reply.append("inline");
+    require(reply.publish(queue));
+    reply.clear();
+    reply.clear();
+    reply.discard();
+    require(memory.liveBytes() == 0 && upstream.liveBytes() == 0);
+    reply.append("overwritten");
+    reply.clear();
+    const auto copied = queue.peek();
+    require(copied && std::string_view{reinterpret_cast<const char *>(copied->data()), copied->size()} == "inline");
+    queue.consume(copied->size());
+  }
+  require(upstream.failures() == 1 && upstream.liveBytes() == 0 && memory.liveBytes() == 0);
 }
 
 void sealAllocationRecovery() {
@@ -945,6 +987,7 @@ int main(int argc, char **argv) {
   saturation(memory);
   borrowedRequestResume(memory);
   sealedReplyOwnership(memory);
+  emptyReplyCleanup();
   sealAllocationRecovery();
   statusWorkerPriority(memory);
   statusBytePressure(memory);
