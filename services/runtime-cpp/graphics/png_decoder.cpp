@@ -60,7 +60,7 @@ bool decodePngImage(const GhosttyAllocator *allocator, std::span<const std::uint
     return false;
   }
   auto *decoder = reinterpret_cast<wuffs_png__decoder *>(decoder_storage.data());
-  auto status = wuffs_png__decoder__initialize(decoder, decoder_storage.size(), WUFFS_VERSION, 0);
+  auto status = wuffs_png__decoder__initialize(decoder, decoder_storage.size(), WUFFS_VERSION, WUFFS_INITIALIZE__LEAVE_INTERNAL_BUFFERS_UNINITIALIZED);
   if (!wuffs_base__status__is_ok(&status)) {
     return false;
   }

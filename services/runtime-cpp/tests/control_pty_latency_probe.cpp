@@ -1,5 +1,6 @@
 #include "check.hpp"
 #include "protocol_peer.hpp"
+#include "control_png_pty_inputs.hpp"
 #include <algorithm>
 #include <chrono>
 #include <fcntl.h>
@@ -55,7 +56,30 @@ struct Workload {
   std::size_t replies;
   char final;
   bool fragment = false;
+  std::string_view expected_reply{};
 };
+
+static void readExactReply(std::string_view expected) {
+  const auto deadline = Clock::now() + response_timeout;
+  while (!expected.empty()) {
+    check(Clock::now() < deadline);
+    pollfd input{STDIN_FILENO, POLLIN, 0};
+    const auto ready = ::poll(&input, 1, 50);
+    check(ready >= 0 || errno == EINTR);
+    if (ready <= 0) {
+      continue;
+    }
+
+    std::array<char, 4096> bytes;
+    const auto count = ::read(STDIN_FILENO, bytes.data(), bytes.size());
+    if (count < 0 && errno == EINTR) {
+      continue;
+    }
+    check(count > 0 && static_cast<std::size_t>(count) <= expected.size());
+    check(std::string_view{bytes.data(), static_cast<std::size_t>(count)} == expected.substr(0, static_cast<std::size_t>(count)));
+    expected.remove_prefix(static_cast<std::size_t>(count));
+  }
+}
 
 static void measure(std::ostream &output, const Workload &workload) {
   writeAll("\x1b" "c");
@@ -69,7 +93,11 @@ static void measure(std::ostream &output, const Workload &workload) {
     } else {
       writeAll(workload.input);
     }
-    readReplies(workload.final, workload.replies);
+    if (workload.expected_reply.empty()) {
+      readReplies(workload.final, workload.replies);
+    } else {
+      readExactReply(workload.expected_reply);
+    }
     return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - started).count());
   };
   const auto warmup_started = Clock::now();
@@ -85,7 +113,8 @@ static void measure(std::ostream &output, const Workload &workload) {
   }
   output << "\"" << workload.name << "\":{\"input_bytes\":" << workload.input.size()
          << ",\"warmup_roundtrips\":" << warmup_count << ",\"warmup_ns\":" << warmup_ns
-         << ",\"replies_per_roundtrip\":" << workload.replies << ",\"roundtrip_ns\":[";
+         << ",\"replies_per_roundtrip\":" << workload.replies
+         << ",\"reply_byte_exact\":" << (workload.expected_reply.empty() ? "false" : "true") << ",\"roundtrip_ns\":[";
   for (std::size_t index = 0; index < samples.size(); ++index) {
     output << (index ? "," : "") << samples[index];
   }
@@ -234,6 +263,8 @@ static int child(const char *report_path) {
       Workload{"mixed", std::string(128, 'x') + "\x1b[6n", 1, 'R'},
       Workload{"unknown-then-status", "\x1b[55555n\x1b[5n", 1, 'n'},
       Workload{"ordinary-then-status", std::string(3584, 'x') + "\x1b[5n", 1, 'n'},
+      Workload{"graphics-png-1x1", std::string{control_test::png_1x1_query}, 1, '\\', false, "\x1b_Gi=9;OK\x1b\\"},
+      Workload{"graphics-png-512x512", std::string{control_test::png_512_query}, 1, '\\', false, "\x1b_Gi=9;OK\x1b\\"},
   };
   for (std::size_t index = 0; index < workloads.size(); ++index) {
     output << (index ? "," : "");

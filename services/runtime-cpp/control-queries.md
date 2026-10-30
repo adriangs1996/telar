@@ -386,3 +386,14 @@ ordinary paste reaches the child with bracketed framing. It does not instantiate
 the entire Controller/native-window lifecycle. All clipboard contents are owned
 fixtures; no host clipboard is read. The provider intermediate-allocation bound
 and remaining performance gaps still prevent whole-task acceptance.
+
+
+### PNG initialization measurements
+
+[Candidate70 review](measurements/control-queries/png-initialization-review.md)
+records poisoned-allocation differential coverage, freshly instrumented Wuffs,
+three architecture listings, allocation traces and seven-pair component/PTY
+measurements. Small PNG now meets the declared equivalence margin against the
+frozen application. The new PTY cases validate complete PNG ACKs. This does
+not close the ordinary/styled/mixed throughput gaps or the Qt provider resource
+bound, and no overall task completion is claimed.

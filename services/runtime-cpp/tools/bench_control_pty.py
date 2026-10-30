@@ -85,9 +85,11 @@ def run(binary, probe, allow_loss=False):
                     raise RuntimeError('Lost admitted saturation replies: ' + str(saturation))
                 if saturation['recovery_replies'] != 1:
                     raise RuntimeError('PTY did not recover after saturation')
-                for case in measured['cases'].values():
+                for name, case in measured['cases'].items():
                     if case['warmup_ns'] < 150_000_000 or case['warmup_roundtrips'] < 1:
                         raise RuntimeError('Insufficient PTY warmup')
+                    if name.startswith('graphics-png-') and not case.get('reply_byte_exact', False):
+                        raise RuntimeError('PNG PTY workload did not validate the complete reply')
             finally:
                 usage = stop_owned_process(server)
                 log.seek(0)
@@ -165,7 +167,7 @@ def main():
               'limits': ['No per-query allocations/copy counts; runtime maxrss covers its full lifetime including initialization.',
                          'Parent performs ReadPane every 2ms to drain/ack UI frames; this is part of both workloads.',
                          'Saturation validates every byte of complete CSI0n replies after a100ms read pause and requires5000 native replies; child_write_eagain counts child output writes, not runtime writev calls.',
-                         'Latency workloads use final-byte markers; saturation and recovery check complete response bytes. Other byte-exact semantics are checked separately.',
+                         'PNG latency workloads require complete byte-exact OK replies; other latency workloads use final-byte markers. Saturation and recovery check complete response bytes; other semantics are checked separately.',
                          'CPU/RSS accounting from wait4 covers only the owned runtime process, excluding probe, pane child and other sessions.']}
     args.output.write_text(json.dumps(report, indent=2) + '\n')
     if invalid:
