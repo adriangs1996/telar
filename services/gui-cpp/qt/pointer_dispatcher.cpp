@@ -6,6 +6,9 @@
 #include <QString>
 #include "pointer_dispatcher.hpp"
 #include "application.hpp"
+#include "platform/scroll_event.hpp"
+#include <string_view>
+#include <QCoreApplication>
 #include "attachment_shelf.hpp"
 #include "native_pointer_events.hpp"
 #include "application/records.hpp"
@@ -14,7 +17,6 @@
 #include "links/link_gesture.hpp"
 #include "mouse_buttons.hpp"
 #include "terminal_item.hpp"
-#include <QCoreApplication>
 #include <QMouseEvent>
 #include <QQuickWindow>
 #include <QScopedValueRollback>
@@ -38,7 +40,8 @@ namespace telar::gui::qt {
 PointerDispatcher::PointerDispatcher(Application &application)
     : QObject(&application),
       application_(application),
-      native_events_(application.memory_) {
+      native_events_(application.memory_),
+      history_scroll_events_(*this) {
   connect(&application, &Application::inputReleasing, this, &PointerDispatcher::cancelPane);
 }
 
@@ -50,6 +53,8 @@ void PointerDispatcher::setWindow(QQuickWindow &window) {
   }
 
   window_ = &window;
+  history_scroll_events_.setActive(true);
+
   application_.observeActivityPointer(false);
   window.installEventFilter(this);
   connect(&window, &QWindow::activeChanged, this, [this] {
@@ -58,6 +63,40 @@ void PointerDispatcher::setWindow(QQuickWindow &window) {
       cancel();
     }
   });
+}
+
+// Cocoa's native phase keeps fractional scroll across momentum and distinguishes
+// cancellation before Qt merges those phases into its wheel-event stream.
+bool PointerDispatcher::handleNativeScroll(std::string_view event_type, const void *message) {
+  if (window_.isNull() || application_.dialog_ != QStringView{u"history"}) {
+    return false;
+  }
+
+  const auto input = platform::nativeScrollInput(event_type, message, *window_);
+  if (!input) {
+    return false;
+  }
+
+  if (input->valid) {
+    application_.scrollHistory({.x = input->x, .y = input->y}, input->sample);
+  }
+
+  return true;
+}
+
+void PointerDispatcher::observeTerminalScroll(TerminalItem &terminal) {
+  if (terminal_scroll_owner_ != &terminal) {
+    retireTerminalScroll();
+    terminal_scroll_owner_ = &terminal;
+  }
+}
+
+void PointerDispatcher::retireTerminalScroll() {
+  if (!terminal_scroll_owner_.isNull() && terminal_scroll_owner_->application() == &application_ && terminal_scroll_owner_->window() == window_) {
+    terminal_scroll_owner_->wheel_.reset();
+  }
+
+  terminal_scroll_owner_.clear();
 }
 
 PointerDispatcher::Capture *PointerDispatcher::capture(Qt::MouseButton button) noexcept {

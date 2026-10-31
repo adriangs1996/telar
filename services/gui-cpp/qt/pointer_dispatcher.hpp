@@ -5,6 +5,7 @@
 #include "input/history_hover.hpp"
 #include <span>
 #include "native_pointer_events.hpp"
+#include "history_scroll_events.hpp"
 #include <QMouseEvent>
 #include <QPointF>
 #include <QString>
@@ -13,6 +14,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QQuickWindow>
+#include <string_view>
 #include <array>
 #include <cstddef>
 
@@ -24,6 +26,11 @@ class TerminalItem;
 class PointerDispatcher final : public QObject {
 public:
   explicit PointerDispatcher(Application &application);
+  ~PointerDispatcher() override = default;
+  PointerDispatcher(const PointerDispatcher &) = delete;
+  PointerDispatcher &operator=(const PointerDispatcher &) = delete;
+  PointerDispatcher(PointerDispatcher &&) = delete;
+  PointerDispatcher &operator=(PointerDispatcher &&) = delete;
   void setWindow(QQuickWindow &window);
   void acquire(TerminalItem &terminal, Qt::MouseButton button);
   void beginChild(const ChildMouseView &view, ChildMouseSample sample);
@@ -35,7 +42,10 @@ public:
   [[nodiscard]] const QString &historyHoverRevision() const noexcept { return history_hover_revision_; }
   void abandon(TerminalItem &terminal);
   void ungrab(TerminalItem &terminal);
+  void observeTerminalScroll(TerminalItem &terminal);
+  void retireTerminalScroll();
   bool eventFilter(QObject *watched, QEvent *event) override;
+  bool handleNativeScroll(std::string_view event_type, const void *message);
 
 private:
   struct Capture {
@@ -71,7 +81,9 @@ private:
 
   Application &application_;
   NativePointerEvents native_events_;
+  ActiveHistoryScrollEvents history_scroll_events_;
   QPointer<QQuickWindow> window_;
+  QPointer<TerminalItem> terminal_scroll_owner_;
   std::array<Capture, static_cast<std::size_t>(MouseButton::none)> captures_;
   HistoryHover history_hover_;
   std::optional<std::uint64_t> history_hover_revision_value_;

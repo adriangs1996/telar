@@ -4,6 +4,20 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [native History scroll evidence](measurements/history-native-scroll.md)
+keeps Cocoa finger phases and fractional deltas before Qt normalization, and
+retires the previous terminal wheel recipient when History consumes scroll.
+The126820-pixel momentum and4218-pixel discrete negatives become exact across
+1471968modal pixels. A causal terminal-handoff regression differs in7827pixels
+before the recipient correction and then matches all1519104workbench pixels.
+A scale2 catppuccin control matches2919488modal pixels. These controlled public
+Qt dispatcher/native-view inputs do not qualify WindowServer queued delivery.
+Both SDKs pass37components; Linux passes18native checks in both builds and Mac
+Release passes18. Mac ASAN passes17 and fails the unchanged10s selection deadline
+(11.45s), then exits1 with640162bytes/3264allocations. Final six/four-unit analysis
+and actual editors pass. Earlier failures, native leaks, full appearance/platform
+coverage, latency and comparative full-client performance remain open.
+
 The [History event-loop observation](measurements/history-event-loop-observation.md)
 adds a bounded two-thread test trace and a native-loop held-pointer regression.
 An identical manual/native control reproduces a13.35s manual timeout while native

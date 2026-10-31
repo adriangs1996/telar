@@ -1,5 +1,210 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## ACTIVE Native History scroll FROZEN; continue PARITY (03:07 UTC)
+
+New native-scroll archive FINAL/FROZEN990artifacts2479sources12866322B.
+Offline/current-source verification PASS; executable/credential/symlink exclusions
+and original geometry copies byte-exact PASS; whitespace clean. NEVER refresh
+archive/report/verifier. Prior all frozen archives also untouched. Local owned
+commit next, then CONTINUE original objective, NOcheckpointfinal.
+No active builds/lints/editors/actors. VM7158/55984 retained. User runtime35801,
+oldSway9469 untouched. Personal-frame-delivery.md useruntracked NEVERread/touch/stage.
+NativeMacASAN17PASS1FAIL11450ms deadline/leaks640162/3264 retained; all globalgates
+OPEN. Next consider remaining History fullinput/activation/inspection lifecycle or
+other PARITY functional gaps; machines29actions integration alreadyimplemented.
+
+## ACTIVE Native History scroll ready to freeze; CONTINUE full parity (03:06 UTC)
+
+HEAD71fdc57f1 frozen event-loop archive remains untouched. Native scroll product
+FINAL: Mac Release build5/ASANbuild5 and guest ASANbuild5/Releasebuild2 all0.
+Mac broad lint4 six units0; Linux lint2 four0. Actual editors host1 ten files+
+finalhost2 terminal, guest1 eight files DELIVERED empty. Includes unusedcstddef
+removal+explicit application-null guard in terminal hover after Linux warning.
+No builds/lints/editors/nativeGUIactors active now. VM7158/55984 stays owned.
+
+Final native suites: MacRelease2 18PASSexit0; MacASAN1 17PASS1FAIL unchanged10s
+selected_copy, Qt reports11450ms; exit1 leaks640162/3264. Keepfailure, NOretryto
+wash. LinuxRelease1/ASAN1 18PASSexit0. Components37PASS bothSDKs; MacASANexit8
+226508/1042, LinuxASAN0. Native decoderunitRelease2 pass0; ASAN2 pass1leaks
+212865/1650 (initial208419/1646 retained). No added suppression; raw Apple
+runtime built-in _fetchInitializingClassList suppression retained.
+
+Final replay momentum-fixed3 full1471968EXACT, handoff-complete-fixed3 entire
+OriginalBands/SidebarBand/Chrome workbench [104,84,1480,1188]1519104EXACT. Initial
+handoff-complete-fixed1 differs7827pixels inthatENTIREbody (oldexploratoryROI6927).
+Baselinehandoff-before1 exact. Finalcatppuccin200-fixed1 wider1200×720POINTwindow
+fullmodal2919488EXACT, distinctfromearlier1180pointbefore2868448. FinalGUIhashes
+match source/binaryreceipts. Baseline126820momentum/4218discrete negative andall
+fourfraction/cancel/end cases retained. ControlledpublicQt nativefilterbridge,
+NOTphysicalWindowServerqueue qualification; allfailedtransportattempts retained.
+
+New report measurements/history-native-scroll.md +archive_scroll.py/verify_scroll.py
+UNFROZEN. Draft1 archive988artifacts2479sources passed offline/current/source
+checks, then report refined (draft hashes naturally older). GuestFINAL75members
+62751B SHA9138e9ce534c2b15abd79b68e80213f61a386c98c6c08cf3b46b82ff12f85a86
+download verified. Need finalfreezeONCE +offline/current/exact-source/security/
+whitespace audit then local ownedcommit. Never refresh anyprevious archive.
+Useruntrackedpersonal-frame-delivery.md NEVERread/touch/stage. Workexclusivelyhere,
+noagents/worktrees/publish/merge. Spanishupdates<=60s. GoalAPIoldblocked manually
+continued, doNOTcheckpointfinal. Aftercommit CONTINUE PARITY remaining functional
+input/visual/platform/performance gates. Machine integration isALREADYimplemented
+(29actions, loopbackSSH/setup/sourcecompositioncoverage); bottomtransferbaseline
+saying25/29 isobsolete. CurrentPARITY remainingfunctional section authoritative.
+
+## ACTIVE Native History scroll FINAL PRODUCT VALIDATING (02:58 UTC)
+
+This section supersedes the old02:14 state below. CONTINUE no checkpoint final.
+Current source uses composition, NOT QObject multiple inheritance: new
+qt/history_scroll_events.{hpp,cpp} owns the QAbstractNativeEventFilter lifecycle;
+PointerDispatcher stays QObject-only. Mac-only ActiveHistoryScrollEvents; Linux
+empty inactive composition. Native scroll decode and unchanged domain consume
+remain as described below. Scaled physical fields reject nonfinite before mutation.
+
+A causal terminal-handoff regression WAS found: after consuming History events
+before Qt, QNSView's prior fractional terminal wheel survives. Baseline old GUI
+matches Original in exploratory terminal interior; initial native fix overscrolls
+3 rows (6927 differing pixels). FINAL fix tracks just one weak TerminalItem owner
+in PointerDispatcher, retires its wheel on accepted History scroll or recipient
+change, guarded by same Application/window. No pane scans, allocations, speculative
+focus/cancel reset. Final handoff-complete-fixed-2 restores exact exploratory
+1296864-pixel interior. Derive original terminal scope or label ROI honestly.
+
+FINAL host Release build4/ASANbuild4 actual0; unchanged broad lint3 all6units0.
+FINAL guest ASANbuild4 and Releasebuild1 actual0, sources synced idle tar--touch.
+Guest broad lint1 ACTIVE exec3782. No product edits while builds/analysis active.
+Native unit initial Release passes0; ASAN assertions pass but leaks208419/1646,
+actual1. Runtime built-in Mac _fetchInitializingClassList suppression9/360 is raw
+logged; no project suppression. Need final checks/editors/37components/native11
+both SDKs, affected terminal wheel groups. No pure-domain changes.
+
+Native case batch54353 actual0 all4. Full Original declared modal1471968 pixels
+EXACT each: discrete-fraction-fixed-1, cancel-begin-fixed-1, normal-end-fixed-1,
+cancel-update-fixed-1 (last noncanonical cancel→update, explicit limit). Baseline
+4 discrete quarter-lines differs4218 pixels; final exact. Stronger momentum
+negative2 differs126820; fixed1 initial product exact, FINAL same-byte helper
+fixed2 ACTIVE exec99525. All use private Cocoa+Carbon boards/metadata guard.
+Bridge calls public Qt eventDispatcher.filterNativeEvent then view only if
+unconsumed; models framework dispatch, NOT physical WindowServer queued delivery.
+Keep all failed transport attempts and initial handoff regression raw.
+
+HEAD71fdc57f1 frozen event-loop183/2470/6143316B; NEVER edit frozen evidence.
+New measurements/history-native-scroll.md is DRAFT and outdated: update before
+freeze. Need archive/report/verifier; exact-source/current/offline/security checks,
+local owned commit then CONTINUE PARITY. User personal-frame-delivery.md NEVER
+read/touch/stage. Work only here/no agents/worktrees/publish/merge. Spanish updates
+<=60s. Current goal API oldblocked manually continued. All general/native leaks,
+latency, physical delivery, platform/full-client performance gates remain OPEN.
+
+## SUPERSEDED Native History scroll initial implementation (02:14 UTC)
+
+CONTINUE autonomous; NO FINAL at checkpoints. HEAD71fdc57f1 commits event-loop
+observation FINAL/FROZEN183artifacts2470sources6143316B; offline/current/exact-source/
+security audits PASS atfreeze. NEVER refresh report/verifier/archive. Inspector
+f3e12ceb7 andolderalsoFROZEN. Preserveuseruntrackedpersonal-frame-delivery.md NEVER
+read/touch/stage. Workonlyhere/noagents/worktrees/publish/merge. Spanishupdates<=60s
+(analysis MUSTSHORT; repeatedly violating by2min reasoning—actualtools eachparagraph).
+
+Currentproduct UNCOMMITTED nativeHistoryscrollphasefix. Newplatform/scroll_event.hpp
+NativeScrollInput(sample,x,y,valid) +native_scroll_events boolMacOnly, Linuxinline
+none. Newplatform/macos/scroll_event.mm matchesNSEvent/mac_generic_NSEvent, scopes
+NSWindowtoQWindow nativeview, logicaltop-leftf64point+unroundedNegatedYdelta,
+precisebit, originalfingerphase begin/maybegin/update/stationary/end/cancel;
+momentumPhase NOTmappedtobegin (OriginaldecoderignoresmomentumPhase). Recognized
+nonfinitepacket validfalse consumedwithoutdomainmutation. PointerDispatcher now
+QObject+QAbstractNativeEventFilter, ctor/destructor lifecycleinstallonlyMac in
+setWindow, checksHistorymode/window thenplatformdecode; routesvalidsamplesinto
+Application.scrollHistory andreturnstrue (consumesbeforeQt); invalidownedwheel
+consumed;unrelatedpassfalse. Qt generichandleHistoryWheel remains path forLinux/
+syntheticQWheelEvent, compatibilityzeroBegin retained. Existingpolicyfactoredto
+scrollHistory(HistoryScrollPosition,ScrollSample), multipliesphysicalpresentedscale
+andusesUNCHANGEDHistoryScroll/WheelAccumulator/presentedbounds/revisionguards.
+Appheadernewprivatefn+directinclude. CMakegui-platform newMacsource; newMACONLY
+hidden-window testnative_scroll_input_test.mm phases8×2Qt source aliases,
+f64fraction/coords/precision, momentumdoesn'tinventbegin, NaNrejected, wrongsource/
+null/uncreated/otherWindowpassguards. Newtargetgui-native-scroll-input-test.
+No newdomainvirtualdispatch; nativefilter isexistingQtframeworkpattern.
+
+BUILD ACTIVE noCPP/header/QML editsuntilactualdependentexits:
+MacReleaseexec42137 history-native-scroll-build-1 -j4;
+MacASANexec38689 history-native-scroll-native-asan-build-1 -j2;
+LinuxASANexec27100 history-native-scroll-asan-build-1 -j1 (sourceDelta9files synced
+idle tar--touch). MacQtconfigure~2minnormal. Guest4GBavoidlint/editor/buildheavy
+concurrency. No GUIactor/nativecheckactive now. Newlocalhelper
+run_history_native_scroll_build.py buildsGUI/Quick37components/NativePointer and
+MacnewnativeScrollunit. Needactualexitsbeforeanyfix; anticipatedpotentialfollowups:
+(1) validate finitephysicalscaledcoordinates/delta beforeHistoryScrollmutation
+(nativeCGFloat maxDoublelogical canoverflow×surface.scale; don'tletbeginreseton
+invalidpacket); (2) modehandoffHistory→terminal regressionimportant becauseconsuming
+NSEventpreQt leavesQNSView m_scrolling untouched. Terminalwheelpriorfractionmay
+persist throughinputReleasing (releaseMouse currentlydoesNOTresetwheel). Don'tadd
+speculativehandofffixwithoutcausaltest. Considerresetoninputhandoffonlyifreference
+requires. Nativefilterreturnfalse+Qtduplicate-skippingwouldneedcomplexmetadata;
+currentpreQtconsumechosenstandardminimalnativefilter. No timestampqueues!
+
+CAUSAL NEGATIVES beforeproductbyteGUI8192d4ea553d6aa7a663e469277f5cc4524c5dbeb23abb996d5304ae2fdf0105,
+baselineownexeoutdeps/history-native-scroll-before-1/telar-gui +binary.json sourceHead
+71fdc57f1... retainedbeforeedits. NativeOriginalGUIunchanged4e... usedallpairs.
+Allcontrols fullCocoa+Carbonprivateboards/preflight/metadata954guard.
+local/history-inspector-wheel-momentum-negative-1 ACTUAL0, 126820pixelsdifferent
+insideOriginalmodal1471968pixels. Sequenceafter2PageDown onlongcommand: precise
+fingerBegin delta5, fingerEnddelta0, normalPhaseNone+momentumBegan delta35. Original
+retains .25line acrossmomentum (2lines), QtCore normalizesfirstMomentumBegan into
+QtScrollBegin anddropsfraction (1line). Qtprimarysourceqnsview_mouse.mm Qt6.12
+ignoredoutdeps/qt-wheel-phase-source-1. QtCocoaApplication nativefiltertwoaliases
+verifiedsourceqcocoaapplication.mm. Caller controlledNSEventnativeviewdirect.
+Stronger beforefilterintegration local/history-inspector-wheel-filter-momentum-
+negative-2 ACTUAL0, same126820difference; tinyinjectedhistory_native_filter_bridge.cpp/
+dylib callsPUBLICQCoreApplication.eventDispatcher.filterNativeEvent(mac_generic...)
+thenoldQNSView.scrollWheelifunconsumed. LogsQtthreefilter1 consumed0 inoldGUI. This
+modelsnativeframeworkdispatch BEFOREview, NOTphysicalWindowServer/AppKitqueued
+qualification. Exactsameactor/bridgeafterfix shouldshowconsumed1 andEXACTpixels.
+No code-privateappmethodcalledinbridge. Builddylibclang++23 QtCoreframeworkonly.
+Helperhistory_inspector_filter_momentum_capture.py andrunner
+run_inspector_wheel_filter_momentum.py (currentlylabelnegative2; makecopynewlabel
+fixed1afterReleaseactual0). Sourcebytecopyineachoutputwrapper-source.py preserved.
+Negative1failedcompilemissingdlfcn.h, fixedsamehelperbefore2; rawretained.
+
+Otherrawdiagnostics notshippinggateclaims: cancel-negative1ACTUAL0 same126820diff
+sequencebegin5,cancel200,update35 WITHOUTnewbegin; noncanonicalsequence limitexplicit.
+Nativequeuedmomentumnegative1 customNSEventaborttype0; CGeventnegative1 preparation
+replace_onceambiguous (keyeventalsoNSApppostEvent); negative2rejectwindowNumber0;
+negative3allowed0butnopresenteddrawable(viewneverreceived). Appmomentumnegative1
+NSAppsendEventcustomCGbackedalsonopresenteddrawable. AllRAWkeep; doNOTclaimtruequeued
+nativequalification. CurrentfixqualifiedbypublicQtfilterbridge +actualnativemainGUI
+pixels (samepatternasexistingCompositionAPIcontrollednativecalls).
+
+BEFOREPHASEDISCOVERY appearancepositives (allRAWacceptedfreshness focus/dims):
+local/history-inspector-appearance-catppuccin-125-before-1 and-200-before-1 fullmodal
+Originalbounds[56,56,2304,1332],2868448pixelsEACH EXACT. Local...pierre-unicode-scroll-
+before-1 narrow[56,56,1424,1132],1471968EXACT withlong40linecommand and2PageDown;
+queryUNIQUETELAR_HISTORY_PIXEL_ONE required. Earlierpierre-multiline-before-1 query
+notunique selectedTHREE; doesNOTqualifyUnicode/scroll (rawretained). Correctedview
+showslongcommandline7-12; CJK/emoji aremissing-glyphboxesINORIGINALtoo; exactness
+includesreferencebehavior, nofontcoverageclaim. pierre-wheel-return-before-1 starts
+same2pages thenprecise+200begin/+200update, full1471968EXACTandreturnsfirstcommand.
+Nativearrowactionsbuttons all4 EXACT intheseconfigs too.
+Comparatorlocal/compare_history_appearance.py buildsoriginalChromeMetrics.resolve+
+HistoryModalLayout.measure program inoutdeps/history-appearance-original-geometry-1
+usingexistingcheck_history_geometry.prepare+facades. Capturesviewport+font15+UIscale
++actualDPR2; returnsactualOriginalphysicalmodalbounds invariantwithterminalcellheights
+0/40/UINTMAX (modalboundsindependent). Noalignment/masks/resampling. Sources/inputs/
+outputs/sourceSHAs recordedappearance-modal-regions.json eachcase. Nativefreshness
+strictafterlastinput, noforcedviewportrefresh. Appearancehelpertakes--theme/--chrome-scale,
+fullprivateguard. Productuntoucheduntilcurrentphasefix. No appearancearchive/reportyet!
+
+NEXT: awaitthreebuildactualexits, fixcompile/profileissuesonlyafteridle. RunnewMac
+nativeScrollunitRelease/ASAN rawleaksnoLSANoptions. RuncausalPUBLICQtfilter bridge
+fixed1→compare126820negative→0, samebytes/inputs; verifyconsumed1. Addnativecancel
+bridgecontrolandvalidbegin-aftercancel,normalEnd-retainsfraction,momentumchange,
+precisedeltas/coords/sourcewindowguards fromunit. Mainnativevisualdefaultshade,
+catppuccin125/200,pierrescroll/return andexistingheldrelease/footer/filterregressions.
+CoreHistoryScrolloriginaloracleexistingtools/check_history_scroll.py? discovername;
+no domainchangesbutroutefactorqualifyrelevantgroups37components/native11 Mac/Linux.
+Needbroadlintactualeditorsfinalmodifiedunits+headers+newmm bothSDKs, preserveprofiles.
+VM7158/55984; userRuntime35801/oldSway9469 untouched. LinuxnativeASANlastcheckpoint
+leaks192/2wl_display_read_events; Mac538134/2772. Allgeneral/presentation/perf/latency
+acceptanceOPEN. No suppressions/timeoutraises/checkpointfinals.
+
 ## ACTIVE Event-loop observation ready to freeze; continue inspector visuals (01:38 UTC)
 
 CONTINUE no FINAL at checkpoints. HEADf3e12ceb7 frozenInspectorHover663/2466/10364934B.

@@ -23,7 +23,6 @@
 #include <QtCore/qtypes.h>
 #include <algorithm>
 #include <cmath>
-#include <cstddef>
 #include <cstdint>
 #include <utility>
 
@@ -242,6 +241,7 @@ void TerminalItem::wheelEvent(QWheelEvent *event) {
     return;
   }
 
+  application_->pointerDispatcher().observeTerminalScroll(*this);
   const auto lines = wheel_.consume(scrollSample(*event, font_.cell.height()));
   const auto rows = lines * WheelAccumulator::rows_per_line;
   if (lines != 0 && !application_->handleCopyPointer(pointerInput(event->position(), CopyPointerKind::wheel, true, rows))) {
@@ -281,7 +281,7 @@ void TerminalItem::hoverMoveEvent(QHoverEvent *event) {
     return;
   }
 
-  if (current != nullptr && current->screen.mouse().sgr && current->screen.mouse().tracking == MouseTracking::any && visibleCellAt(event->position()) && application_->dialog().isEmpty() && !link_hover_.covers({.x = static_cast<float>(event->position().x()), .y = static_cast<float>(event->position().y())})) {
+  if (application_ != nullptr && current != nullptr && current->screen.mouse().sgr && current->screen.mouse().tracking == MouseTracking::any && visibleCellAt(event->position()) && application_->dialog().isEmpty() && !link_hover_.covers({.x = static_cast<float>(event->position().x()), .y = static_cast<float>(event->position().y())})) {
     const auto no_button = static_cast<unsigned>(MouseButton::none);
     mousePacket(ChildMouseProjection::motion | no_button | mouseModifiers(event->modifiers()), event->position(), false);
   }

@@ -3,6 +3,7 @@
 #include "application/dependencies.hpp"
 #include "history/browser.hpp"
 #include <cstddef>
+#include <cmath>
 #include <utility>
 #include "history/choice.hpp"
 #include "presentation/history_actions.hpp"
@@ -11,6 +12,7 @@
 #include "core/geometry.hpp"
 #include "history/entry.hpp"
 #include "input/history_scroll.hpp"
+#include "input/wheel_accumulator.hpp"
 #include "presentation/history_modal_geometry.hpp"
 #include "projection.hpp"
 #include "qt/history_row_layout.hpp"
@@ -27,7 +29,6 @@
 #include <QtCore/qobject.h>
 #include <QtCore/qtmetamacros.h>
 #include <algorithm>
-#include <cmath>
 #include <cstdint>
 #include <optional>
 
@@ -253,16 +254,29 @@ bool Application::handleHistoryWheel(QWheelEvent &event) {
     return true;
   }
 
+  scrollHistory({.x = event.position().x(), .y = event.position().y()}, scrollSample(event, 1));
+  event.accept();
+
+  return true;
+}
+
+void Application::scrollHistory(HistoryScrollPosition pointer, ScrollSample sample) {
   const auto &browser = session().historyBrowser();
   const auto &view = browser.state();
   const HistoryScrollState state{.generation = dialog_generation_, .revision = browser.revision(), .ready = !historyLoading() && view.phase == HistoryPhase::ready, .inspecting = view.inspecting};
   const auto &surface = presented_history_surface_;
-  auto sample = scrollSample(event, 1);
+
   if (sample.precise) {
     sample.delta *= surface.scale;
   }
 
-  const auto steps = history_scroll_.consume(state, surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale}, sample);
+  const HistoryScrollPosition physical{.x = pointer.x * surface.scale, .y = pointer.y * surface.scale};
+  if (!std::isfinite(physical.x) || !std::isfinite(physical.y) || !std::isfinite(sample.delta)) {
+    return;
+  }
+
+  pointerDispatcher().retireTerminalScroll();
+  const auto steps = history_scroll_.consume(state, surface, physical, sample);
   if (steps != 0) {
     if (view.inspecting) {
       emit historyInspectionScrolled(steps);
@@ -272,10 +286,6 @@ bool Application::handleHistoryWheel(QWheelEvent &event) {
       });
     }
   }
-
-  event.accept();
-
-  return true;
 }
 
 void Application::moveHistoryRows(std::int32_t steps) {

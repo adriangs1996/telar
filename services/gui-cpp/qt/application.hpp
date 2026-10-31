@@ -15,6 +15,7 @@
 #include "font_resolver.hpp"
 #include "history/choice.hpp"
 #include "input/history_scroll.hpp"
+#include "input/wheel_accumulator.hpp"
 #include "input/history_action_capture.hpp"
 #include "key_bindings.hpp"
 #include "list_model.hpp"
@@ -579,6 +580,7 @@ private:
   [[nodiscard]] HistoryModalMetrics historyMetrics() const;
   [[nodiscard]] HistoryScrollSurface historyScrollSurface(const HistoryModalMetrics &metrics, HistoryHoverFrame &hover) const;
   [[nodiscard]] bool handleHistoryWheel(QWheelEvent &event);
+  void scrollHistory(HistoryScrollPosition pointer, ScrollSample sample);
   void moveHistoryRows(std::int32_t steps);
   [[nodiscard]] HistoryActionSurface historyActionSurface() const;
   void activateHistoryCardAction(HistoryCardAction action);
