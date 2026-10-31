@@ -4,13 +4,24 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [Wayland surface lifetime correction](measurements/window-lifetime.md)
+releases the Quick swapchain before hiding destroys its Vulkan surface. The
+pre-change close/reopen regression crashes; the corrected native case passes.
+Both final Linux builds pass 101 checks with no failures and one explicitly
+unqualified minimization transition. Three History fixtures now establish their
+required setup without weakening presentation/revision assertions. The final
+Cocoa Release audit retains one pointer-selection failure; Cocoa ASan passes
+102 assertions but exits with recorded shutdown leaks. Vulkan validation no
+longer reports destruction of an active surface; an independent semaphore
+warning remains. Complete native, visual and performance acceptance stays open.
+
 The [client plugin catalog](measurements/plugin-catalog.md) loads validated
 packages with candidate configurations and routes `plugin_list`/`plugin_get`
 through the adopted generation. Failed reloads retain the previous catalog.
 Both SDKs match 2940 original-source queries and 35 original CLI package cases
-per Release/ASan build. Software regression assertions pass; Mac sanitizer
-leaks and a Linux native ASan cleanup SEGV remain open. Independent Qt-only
-windows do not reproduce that crash; a private early-close control is rejected.
+per Release/ASan build. Software regression assertions pass. That checkpoint's
+Mac sanitizer leaks and Linux native cleanup failures remain in its immutable
+evidence; subsequent lifetime qualification is recorded above.
 Enable/disable overrides, isolated execution, capability grants, custom surfaces
 and comparative performance still require implementation and acceptance.
 

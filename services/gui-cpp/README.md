@@ -5,13 +5,20 @@ input delivery and scene graph; QML owns the application chrome. The Zig GUI
 remains the default. This port does **not** yet meet the requested functional,
 visual or performance parity gates. [PARITY.md](PARITY.md) records the remaining work.
 
+The [Wayland lifetime correction](measurements/window-lifetime.md) releases the
+Quick swapchain before hiding destroys its Vulkan surface. Native close/reopen
+now passes, and both final Linux builds pass 101 checks with one unqualified
+minimization transition. The full Cocoa audit retains a pointer-selection
+failure in Release and sanitizer shutdown leaks. An independent Vulkan semaphore
+warning and complete visual/performance acceptance remain open.
+
 The [client plugin catalog](measurements/plugin-catalog.md) loads validated
 packages with candidate configurations and routes `plugin_list`/`plugin_get`
 through the adopted generation. Failed reloads retain the previous catalog.
 Both SDKs match 2940 original-source queries and 35 original CLI package cases
-per Release/ASan build. Software regression assertions pass; Mac sanitizer
-leaks and a Linux native ASan cleanup SEGV remain open. Independent Qt-only
-windows do not reproduce that crash; a private early-close control is rejected.
+per Release/ASan build. Software regression assertions pass. That checkpoint's
+native failures remain in its immutable evidence; subsequent lifetime
+qualification is recorded above.
 Enable/disable overrides, isolated execution, capability grants, custom surfaces
 and comparative performance still require implementation and acceptance.
 

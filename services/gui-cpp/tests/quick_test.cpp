@@ -65,6 +65,7 @@
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QQmlApplicationEngine>
+#include <QQmlComponent>
 #include <QQmlContext>
 #include <QQmlExpression>
 #include <QQmlIncubationController>
@@ -489,6 +490,40 @@ private:
     QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 1, runtime_wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(firstPane() != nullptr && firstPane()->screen.frameId() > 0, runtime_wait_ms);
     seedHistory();
+  }
+
+  Q_SLOT void nativeWindowClosesAndReopens() {
+    QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+    const auto pane_id = firstPane()->id;
+    const auto quit_on_close = QGuiApplication::quitOnLastWindowClosed();
+    const QPointer<QQuickWindow> lifetime{window_};
+    QGuiApplication::setQuitOnLastWindowClosed(false);
+    const auto restore = qScopeGuard([&] {
+      if (!lifetime.isNull()) {
+        lifetime->show();
+        test::activateWindow(*lifetime);
+      }
+
+      QGuiApplication::setQuitOnLastWindowClosed(quit_on_close);
+    });
+    QQmlComponent cancellation{engine_.get()};
+    cancellation.setData("import QtQuick; Connections { function onClosing(close) { close.accepted = false } }", QUrl{});
+    auto gate = std::unique_ptr<QObject>{cancellation.createWithInitialProperties({{QStringLiteral("target"), QVariant::fromValue(window_)}})};
+    QVERIFY2(gate != nullptr, qPrintable(cancellation.errorString()));
+    QVERIFY(!window_->close());
+    QVERIFY(window_->isVisible());
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    gate.reset();
+    QVERIFY(window_->close());
+    QVERIFY(!lifetime.isNull());
+    QTRY_VERIFY_WITH_TIMEOUT(!window_->isVisible() && !window_->isExposed(), runtime_wait_ms);
+    window_->show();
+    test::activateWindow(*window_);
+    QTRY_VERIFY_WITH_TIMEOUT(window_->isVisible() && window_->isExposed(), runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+    QCOMPARE(firstPane()->id, pane_id);
+    QCOMPARE(errors_, QString{});
   }
 
   Q_SLOT void terminalInputAndRendering() {
@@ -2665,7 +2700,10 @@ return {api_version=2, client={keybindings={
     QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 0);
     QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading(), runtime_wait_ms);
     QCOMPARE(client_->history()->rowCount(), 2);
+    // Row retirement restores the QML model through a queued call.
+    QTRY_COMPARE(results->property("count").toInt(), 2);
     QVERIFY(QMetaObject::invokeMethod(results, "forceLayout"));
+    QTRY_COMPARE(test::visualItems(*window_->contentItem(), QStringLiteral("historyResult")).size(), 2);
     const auto current_revision = client_->historyState().value(QStringLiteral("revision")).toString();
     QVERIFY(current_revision != original_revision);
     QVERIFY(activate(1, original_revision));
@@ -2754,19 +2792,20 @@ return {api_version=2, client={keybindings={
   }
 
   Q_SLOT void historyFooterPastesInPasteMode() {
-    verifyPresentedHistorySubmitMode(false, false, QStringLiteral("paste-primary"));
+    // Disjoint digit suffixes keep fuzzy queries separate from earlier shell input.
+    verifyPresentedHistorySubmitMode(false, false, QStringLiteral("paste-primary-00000000"));
   }
 
   Q_SLOT void historyFooterRunsTheAlternateInPasteMode() {
-    verifyPresentedHistorySubmitMode(false, true, QStringLiteral("paste-alternate"));
+    verifyPresentedHistorySubmitMode(false, true, QStringLiteral("paste-alternate-11111111"));
   }
 
   Q_SLOT void historyFooterRunsInRunMode() {
-    verifyPresentedHistorySubmitMode(true, false, QStringLiteral("run-primary"));
+    verifyPresentedHistorySubmitMode(true, false, QStringLiteral("run-primary-22222222"));
   }
 
   Q_SLOT void historyFooterPastesTheAlternateInRunMode() {
-    verifyPresentedHistorySubmitMode(true, true, QStringLiteral("run-alternate"));
+    verifyPresentedHistorySubmitMode(true, true, QStringLiteral("run-alternate-33333333"));
   }
 
   Q_SLOT void historyFooterCaptureSurvivesPresentedEnterModeChanges() {
@@ -4597,8 +4636,14 @@ return {api_version=2, client={keybindings={
 
     QCOMPARE(qmlEngine(results), engine_.get());
     QCOMPARE(engine_->incubationController(), &deferred);
+    const auto cache_buffer = results->property("cacheBuffer");
+    const auto restore_cache = qScopeGuard([&] {
+      results->setProperty("cacheBuffer", cache_buffer);
+    });
+    QVERIFY(results->setProperty("cacheBuffer", 0));
     QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-    QVERIFY(QMetaObject::invokeMethod(results, "flick", Qt::DirectConnection, qreal{0}, results->height()));
+    // Cache delegates incubate asynchronously, independently of flick distance.
+    QVERIFY(results->setProperty("cacheBuffer", results->property("contentHeight")));
     QTRY_VERIFY_WITH_TIMEOUT(deferred.incubatingObjectCount() > 0, runtime_wait_ms);
     QTest::failOnWarning(QRegularExpression{QStringLiteral("DelegateModel::cancel:.*")});
     client_->searchHistory(query);
