@@ -1,6 +1,17 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
 
+## ACTIVE Projection research frozen and verified; continue extensibility after scoped commit (17:48 UTC)
+
+Goto local commit ac4a3f17a completed, no publish/merge. Full objective remains OPEN; no checkpoint final. Only this worktree; unrelated personal-frame-delivery.md NEVER read/touch/stage. Goal API blocked cannot resume through exposed tools, continue manually. All current builds/native/editor/timing actors exited; no heavy tasks active.
+
+NEW measurements/projection-investigation/ +projection-investigation-validation.json:3591 artifacts/2525 program sources/10958021 stored bytes. Offline AND --check-current-source verifier PASS. Contains raw variants3..16, actual SDK/header evidence, all paired CPU/frame epochs, old synthetic-getter limitations, both actual renderer byte oracles, full color/capture corpus, original private4 homogeneous negative, rejected product source and before-source/binary identities, retained failures and current restored tests. Earlier archives untouched. Final16 loses Linux steady-one6/7 (wins1), fragment white/mixed wins1/7; both REJECTED, source/shaders remain exact baselinec2d, knownshippingLinux8pixels remain. No placement exception/retry/tolerance change. Only permanent new homogeneous-parent test retained33lines.
+
+Restored native rounded6PASS bothSDK: MacRelease0 ASAN1 479250B2808; LinuxRelease0 ASAN1 288B3. Restoredsoftware6PASS MacRelease0 ASAN1 256B4; Linuxboth0. Broad analyses/editorchecks already on exact unchangednewtestbothSDK, verifier binds testhash. Native projective4 negative5PASS1FAIL onlynewslot. Preparing exact owned local commit only roundedtest/PARITY/report/manifest/archive/handoff; userfile remains excluded. No renderer implementation edit.
+
+NEXT actual functionality: extensibility/plugin commands29..33 still unported. Runtime-cpp PackageRegistry/PackageInspector/Specifications/JSON/platformsafehelpers exist; SnapshotReader already parses generation.runtimeValues().plugins, but client ConfigurationGeneration never loads client plugin packages. Original client source plugin_actions.zig, Registry.zig, ConfiguredPlugins.zig define list/get paging, generation checks, enabled subset, overrides and immutable worker/trust authorization. Read/reuse shared code before designing client adoption; do not execute plugins without authorization semantics. Do not fake empty catalog success for configured packages. Continue fullPARITY aftereachscopedvalidation. Waylandcleanupabort alsoopen: current Goto/Historynativepass assertions thenSIGABRT/Mesaqueue; baselineHistory-onlyalsoSIGABRTwithMesaqueuewarningbutdifferentglibcassert. Qt-onlyQQuickView/Textcontrolpasses0; rootcauseunknown, not blanketQt attribution. FrequentSpanishupdates<=60seconds.
+
+
 ## ACTIVE Routed Goto validated and evidence frozen; continue full parity (17:41 UTC)
 
 Full objective remains OPEN; never finalize at this checkpoint. Only this worktree, no agents/publish/merge. User personal-frame-delivery.md never read/touch/stage. Renderer source+shaders remain exact c2d baseline, all rejected projection captures are private research. Permanent homogeneous rounded regression remains uncommitted separately, valid on restored renderer.

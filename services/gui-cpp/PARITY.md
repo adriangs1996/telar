@@ -13,6 +13,13 @@ Wayland/Vulkan cleanup abort remain open. The pre-change executable reproduces
 the same Wayland abort after History alone. This command correction does not
 close native shutdown, complete visual or comparative performance acceptance.
 
+The [projection investigation](measurements/projection-investigation.md) rejects
+all new window-pixel projection and borderless fragment candidates. Exact
+controlled pixels and faster actual Qt uniform preparation do not outweigh
+adverse frame costs. The shipping renderer remains unchanged, including the
+eight known Linux navigation pixels. A homogeneous-parent rendering regression
+is retained and passes both installed SDKs; native sanitizer shutdown leaks remain.
+
 The [rounded-paint clipping correction](measurements/rounded-paint-clipping.md)
 preserves the original resolved radius when geometry is clipped. Native rail
 surfaces remove 146 Linux full-window differences: a controlled 960,000-pixel

@@ -10,6 +10,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMatrix4x4>
 #include <QMetaProperty>
 #include <QObject>
 #include <QPointF>
@@ -39,6 +40,15 @@
 namespace {
 
 using telar::gui::qt::NativeRoundedRectangle;
+
+class HomogeneousTransform final : public QQuickTransform {
+public:
+  void applyTo(QMatrix4x4 *matrix) const override {
+    QMatrix4x4 transform;
+    transform(3, 3) = 2;
+    *matrix *= transform;
+  }
+};
 
 constexpr int wait_ms = 5000;
 constexpr int fixture_width = 640;
@@ -150,6 +160,29 @@ private:
     }
 
     QCOMPARE(window.grabWindow(), actual);
+  }
+
+  Q_SLOT static void projectiveParentUsesHomogeneousOrigin() {
+    QQuickWindow window;
+    window.resize(fixture_width, fixture_height);
+    window.setColor(background());
+    QQuickItem group{window.contentItem()};
+    HomogeneousTransform transform;
+    transform.appendToItem(&group);
+    NativeRoundedRectangle shape{&group};
+    constexpr qreal side = 80;
+    shape.setPosition({2 * side, 2 * side});
+    shape.setSize({side, side});
+    shape.setColor(Qt::green);
+    window.show();
+    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
+    const auto actual = window.grabWindow();
+    QVERIFY(!actual.isNull());
+    const auto density = window.effectiveDevicePixelRatio();
+    const auto center = shape.mapToScene({side / 2, side / 2}) * density;
+    const auto outside = shape.mapToScene({2 * side, side / 2}) * density;
+    QCOMPARE(actual.pixelColor(qRound(center.x()), qRound(center.y())), QColor{Qt::green});
+    QCOMPARE(actual.pixelColor(qRound(outside.x()), qRound(outside.y())), background());
   }
 
   Q_SLOT static void mutationsAndEmptyGeometry() {
