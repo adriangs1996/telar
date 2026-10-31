@@ -45,6 +45,8 @@
 #include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
 #include "text/json.hpp"
+#include "text/utf16_prefix.hpp"
+#include "text/utf8.hpp"
 #include "ui/bundled_fonts.hpp"
 #include <QByteArray>
 #include <QClipboard>
@@ -2814,6 +2816,38 @@ return {api_version=2, client={keybindings={
     client_->searchHistory(retained + QStringLiteral("🧵"));
     QTRY_COMPARE_WITH_TIMEOUT(search->property("text").toString(), retained, runtime_wait_ms);
     QCOMPARE(client_->historyState().value(QStringLiteral("editorText")).toString(), retained);
+  }
+
+  Q_SLOT void historyMalformedUtf16UsesTheEncodedByteLimit() {
+    client_->execute(Application::Action::history);
+    const auto restore = qScopeGuard([this] {
+      const auto notices = client_->notifications().items();
+      const auto found = std::ranges::find_if(notices, [](const auto &notice) {
+        return notice.title.view() == "Limit reached" && notice.message.view().find("prompt.history_query_bytes") != std::string_view::npos;
+      });
+      if (found != notices.end()) {
+        const auto identity = found->id;
+        client_->dismissNotification(client_->notificationIdentity(identity));
+      }
+
+      client_->execute(Application::Action::cancel);
+    });
+    const auto maximum = client_->historyState().value(QStringLiteral("maximumQueryBytes")).toInt();
+    constexpr int reserved_bytes = 8;
+    constexpr int invalid_units = 12;
+    constexpr int tail_units = 20;
+    const QString prefix(maximum - reserved_bytes, QLatin1Char('a'));
+    const QString invalid(invalid_units, QChar{Utf16Prefix::first_low_surrogate});
+    const QString tail(tail_units, QLatin1Char('b'));
+    const auto query = prefix + invalid + QStringLiteral("🧵") + tail;
+    QVERIFY(!query.isValidUtf16());
+    const auto encoded = query.toUtf8();
+    const auto expected = telar::runtime::utf8Prefix({encoded.constData(), static_cast<std::size_t>(encoded.size())}, static_cast<std::size_t>(maximum));
+    client_->searchHistory(query);
+    const auto retained = client_->historyState().value(QStringLiteral("editorText")).toString();
+    QCOMPARE(retained.toUtf8(), QByteArray(expected.data(), static_cast<qsizetype>(expected.size())));
+    QVERIFY(retained.isValidUtf16());
+    QVERIFY(retained.toUtf8().size() <= maximum);
   }
 
   Q_SLOT void historyShiftTabCyclesAuthorsForBothQtKeyForms() {

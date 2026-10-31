@@ -1,5 +1,144 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## ACTIVE UTF16 FINAL/FROZEN; continue native History error/empty states (04:24 UTC)
+
+UTF16 evidence FINAL/FROZEN291artifacts2494sources8487367B. Offline/current-source/
+sourcebody-expectation/securityexclusions/whitespacePASS. NEVERrefresharchive/report/
+verifier. OlderMotione426735e2 677/2490/16823860B, NativeScroll78294c110 andallolder
+ALSOFROZEN. LocalownedcommitnextthenCONTINUEfullPARITY, NOcheckpointfinal.
+Allbuilds/lints/editors/nativeGUIactorsactualexited, VM7158/55984aliveidle. UserRuntime
+35801/oldSway9469untouched. Userpersonal-frame-delivery.md NEVERread/touch/stage.
+WorkONLYhere/noagents/worktrees/publish/merge. Spanishupdates<=60s aim40; analysis
+STRICT<100tokens toavoidsilentminutes. OldgoalAPIblockednoresume manuallycontinue.
+
+UTF16productcomplete: independentEncoding data policy+cachedactualQtadapter for6
+callers. ActualQt6.8invalidbytes1/Qt6.12zero, noOS/versionthreshold. NewAPIoldLinux
+140/128negative→newbothSDKpasses sameexpectedbody. Eight-unitunchangedbroadprofile
+bothSDK0, actualeditorsMac10+final4/Linux10DELIVEREDempty. Finalform2 bothSDK10PASS;
+MacRelease0/ASAN8leaks256024/838, Linuxboth0. FinalnativeorderedMacRelease2 elevenPASS0,
+MacASAN1 elevenPASSexit1leaks477585/2887; LinuxRelease1 elevenPASS0/ASAN1 elevenPASS1
+leaks147982/148. InitialcombinedMacRelease1 tenPASSoneFAILnotice remainedrequired:
+customrunnernewmalformedbeforeoldnoticepolluted60-secondper-nameLimitReports interval;
+normaltestdeclaration/orderedrunneroldnoticefirst/newtestlastpasses. No productnotice
+policy or assertion changed. SourceunchangedexpectationverifierchecksnewAPIwholebody
+againstbefore1 andoldformbodyexceptproductionpolicyarg. Allpriornativeleak/latency/
+physicaldelivery/intermediatepixel/fullperformancegatesOPEN. Guestbundle120members
+30457B SHAd8393b119f99322aad41e9d9c8e36e735b8ba5d3b1283776f888cb5b90db49be downloaded.
+
+NEXT usefulvisualgap: Historyerrorfooter/empty/errorcaptions additionaltheme/narrow
+scenes. Existingguarded helperlocal/history_inspector_appearance_capture.py supports
+nativefullCocoa+Carbonboards+focus/dims/Metalpostinputfreshness; tools/capture_history.py
+--history-response choices normal/initial-loading/replacement-loading/error. Proxy
+history_capture_proxy.py returnsrequestfailedfixturemessage onmatchingquery. Static
+error+empty controls avoidanimationphasealignment; loadingdynamicneedsactualphase
+qualification, don'tforceframes/relaxfreshnessgate. OriginalChromeMetrics+ModalLayout
+bound comparator local/compare_history_appearance.py available (Pillowcapturevenv).
+QtHistoryFooter.qml error ChromeText elideNone, geometrycaptionspacingmightstillgap;
+HistoryEmptyLayout sourcegeometryexistingoracles scoped. Readoriginalsource andretain
+causalnegativebeforechangingproduct. Considererror shade/default vsnarrowpierre and
+catppuccin2, actualdefaultempty/no-match/narrow. FullHistoryinput/dateplacement/row
+scrolldelivery/provider/lifecycle/intermediatepixels/Linuxpairedvisuals STILLopen.
+Machines29actions+SSH integrationalreadyimplemented; bottomtransfer25/29obsolete.
+Continue allPARITY afterscopedwork, neverstopbecausecheckpointgreen.
+
+## ACTIVE UTF16 final builds+Mac checks; Linux validation finishing (04:11 UTC)
+
+HEAD e426735e2 motion FINAL/FROZEN677/2490/16823860B. NativeScroll78294c110+allprior
+ALSOFROZEN. NEVEReditarchives/reports/verifiers. Userpersonal-frame-delivery.md
+NEVERread/touch/stage. Workonlyhere/noagents/worktrees/publish/merge. Spanishupdates
+<=60s (STRICTanalysis<100tokens; prolongedsilentthinkingrepeatedlyviolates). NOFINAL
+atcheckpoints; oldgoalAPIblockednoresume, manuallycontinueuntilfullPARITY.
+
+CurrentUTF16productimplementeduncommitted. HostReleasebuild2/ASANbuild2 actual0;
+guestASANbuild2/Releasebuild2 actual0. FixadaptsactualQtinvalidsurrogatewidthonce via
+cachedQtadapter utf16Encoding(), coreUtf16Encoding datapolicy thirdfitarg(default0),
+sixQtcallerspasspolicy. NewAPIQuickregressionactualoldLinux140vs128 negative preserved,
+fixedRelease/ASANLinux3PASS0 andMac3PASS0. Existingformall65536units×10caps expected
+actualQtbytesUNCHANGED, nowproductionpolicyarg; LinuxRelease/ASAN10PASS0. OldQt6.8
+188292vs190338failurefromMotionarchive remainsrequirednegative. Sources Qt6.8.2/
+6.12converter+SHA, Qt6.7QVariantinplacectorheader+SHA retainedoutdepsQt-policy-source1.
+
+Linuxlint1found3missingQStringLiteral includes(machine/peek/formtest),unusedqnamespace
+and ineffective implicitQVariantMap→QVariant std::move inpalette Qt6.8. Fixedincludes,
+removedunusedheader, explicitQVariant(std::in_place_type<QVariantMap>,std::move(map))
+portableQt6.7+ andpreservesmove. Beforeprofile4sources+binaryidentities snapshot in
+outdeps/utf16-policy-before-linux-profile1. No suppressions/profilechanges.
+Maclint2 EIGHTunitsALL0. Macactualeditors1ten+editors2four DELIVEREDempty. Guestpipeline
+exec33561: build2both0, lint2first7PASS, LASTQuicktestpending→10actualeditors1AUTOruns
+iflintpasses. Nootherguestheavyjobs. DoNOTsyncguestwhilepipelineactive. HostNOactive
+build/lint/editor/GUIactor now; allactualexitsknown.
+
+HostfinalformRelease2 10PASS0, ASAN2 10PASSexit8 rawleakssee-log (initial275668/913).
+HostregressionorderedRelease2 11PASS0; ASAN1 exit1 needinspecttotals/leakcount inraw
+beforeclaim. IncludesHistoryrawquery/overflow/composition, palette/path/machinebounds,
+newmalformedAPI. FIRSTcombinedRelease1 FAIL10PASS1FAILlimitnotice, becausehelperlisted
+newmalformedcaseBEFOREoldnoticecase, poisoningper-sessionlimitledger. Ledgeroriginal
+notice_interval_ms60000 anddismissdoesNOTclearshown_ms. Productnoticepolicyunchanged.
+ChangedONLYcustomrunner ordertonewcaselast (defaultQtTestdeclarationalreadyoldfirst).
+Finalorderedcontrolpasses; keepfirstrawfailure+sourcepolicyforcausalcontext.
+
+Needguestorderedregressionsbothbuilds after33561idle (helperalreadyguestupdated),
+finalformbothSDKreceiptidentities, optionalclose7clockgroups oldUTF16fail viarelink
+finalformtarget (couldusewhole7currenthashesbutQTlibraryallotherunitsunchangedexcept
+paletteCOWmove andcontroller; requirementtargetchangesnotfullsuite). Finalsource/
+binaryidentitymatch12? collectexplicitUTF16files+tests. Newreport measurements/
+utf16-codec-policy.md DRAFT saysorderedcontrolpending; updateallactualresults.
+Neednewarchive/verifier retainingnegative140/128, oldrangefailureparentMotion,
+firstNamespacebuildfailures, initialLinuxprofilefails, firstorderFAIL, coldpolicy
+andvalidfullUTF16caps. Snapshotbeforeproduct9files+Macbinaries inoutdeps/utf16-policy-
+before1. Neveroverwritepriorarchives. CommitusefulownedcheckpointthenCONTINUEPARITY.
+
+ExistingglobalnativeASANleaks/latency/manualwait/staledrawable/physicaldelivery/
+intermediateanimatedpixels/fullperformance gatesOPEN. VM7158/55984aliveownedidleexcept
+pipeline. UserRuntime35801/oldSway9469untouched. Machinesintegration29actions+SSHalready
+implemented; bottomhandofftransferbaseline25/29 obsolete. Continue fullobjective.
+
+## ACTIVE UTF16 codec compatibility IMPLEMENTED, VALIDATING (03:59 UTC)
+
+HEAD e426735e2 commitsHistoryMotion FINAL/FROZEN677artifacts2490sources16823860B.
+OlderNativeScroll78294c110 andallpreviousarchives/report/verifiers ALSO FROZEN.
+NEVERrefresh. Userpersonal-frame-delivery.md NEVERread/touch/stage. WorkONLYhere,
+noagents/worktrees/publish/merge; Spanishupdates<=60s ACTUALanalysisUNDER100tokens.
+GoalAPIoldblockedcannotresume; manualcontinue untilcomplete, NOcheckpointfinal.
+
+CurrentproductUNCOMMITTED UTF16 compatibility. NewpureUtf16Encoding{invalid_scalar_bytes}
+intext/utf16_prefix.hpp, fitthirdargdefaultomitted0 preservesindependentAPI; private
+encodedBytesacceptspolicy. Newqt/utf16_encoding.hpp cachesONEactualQt isolated-low
+QString.toUtf8().size, usesnoOS/versionbranch/noextravalid-textscan. Qt6.8bytes1, Qt6.12
+bytes0 asmeasured. SixQtcallers application.searchHistory/nativeForm/palette/path/
+peek/machineprompt nowpassutf16Encoding(). ExistingformunitusesSAMEproductionpolicy;
+all8samples×10caps/all65536codeunits/assertionsUNCHANGED expectedactualQtencoding.
+NoQtdeps/heap/newvirtual inCore; Qtclassifiercoldonly, noadditionalper-callallocation.
+
+NewQuickslot historyMalformedUtf16UsesTheEncodedByteLimit:120ascii+12isolatedlow+
+emoji+20ascii; expectedactualQt.toUtf8 runtimeutf8Prefix128. OldLinux6.8 NEGATIVE
+2PASS1FAILactual140bytesvsexpected128, rawhistory-utf16-policy-negative-linux1.
+SameoldMac6.12 POSITIVE3PASS0. Firstbothbuildsnamespace runtime unqualifiederror,
+fixedtelar::runtime, allrawretained. Beforeproductexact9files+Macbinaryidentities
+inoutdeps/utf16-policy-before1. Qt6.8.2/6.12.0converterprimarysources+SHAs inignored
+qt-utf16-policy-source1. Qt6.12defaultcallbacktakesdstbyvalue; doNOTpatchdependency;
+adaptactualcodecbehavior, don'thardcodeversionthreshold/assumeintent.
+
+BuildhostRelease1 andnativeASAN1 actual0. Guestpipelineexec4283 ASAN1actual0→Release1
+ACTIVE; no syncwhileguestbuildactive. HOST noactivebuild. HOSTbroadlint8units
+exec88243: first7unitsPASS, Quicktestlastpending. Macactualeditors10files juststarted
+(check_utf16_policy_editors.py, execIDpreviouscall). Noothereditor.
+HostformRelease1 10PASSexit0, ASAN1 10PASSexit8leaks275668/913; keepfailure.
+HostfixedAPIrelease1 3PASSexit0 unchangedexpectedbody. GuestfinalAPI/formNOTYETRUN.
+Needawaitguestactual0, transferhelpersrun_utf16_policy_lint.py/check_utf16_policy_
+linux_editors.py/run_utf16_policy_form_test.py, serial8-unitlint→10actualeditors→
+form+API Release/ASAN. Nativehelperrun_utf16_policy_linux_native.py alreadyguest.
+ThenrerunaffectedoldHistoryquery/limit/composition/pluspalette/path/peek/machine
+regressionsbothSDK; keepnewnativecaseexpectedbytesexact. MacASANAPIpending.
+No sourcechangeswhileHOSTdependentbuildactive. VM7158/55984 aliveowned, runtime
+35801/oldSway9469 untouched. Allnativeleak/latency/globalperformancegatesOPEN.
+
+Context: Motion7-suiteLinux85PASS1FAILUTF16oldsource188292vs190338 (bothSDKbuilds)
+wasfrozenrequirednegative, NOTMotionregression. Thiscompatfix mustcloseitwithsame
+assertions. Oldqueryreport docs scopeQt6.10/6.12 ONLY, NEVEReditfrozenreport. Need
+newscopedreport/archive/verifier+source/binary/rawfailureassociation andlocalowned
+commitwhenqualified, thenCONTINUEfullPARITY. Currentno newreportyet.
+
 ## ACTIVE History modal motion FINAL/FROZEN; continue UTF16 compatibility (03:50 UTC)
 
 Native motion evidence FINAL/FROZEN677artifacts2490sources16823860B. Offline/current/

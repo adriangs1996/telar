@@ -12,6 +12,7 @@
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include "text/utf16_prefix.hpp"
+#include "qt/utf16_encoding.hpp"
 #include <QByteArray>
 #include <QChar>
 #include <QLatin1StringView>
@@ -20,8 +21,8 @@
 #include <QStringView>
 #include <QVariantList>
 #include <QVariantMap>
+#include <QVariant>
 #include <QtCore/qcontainerfwd.h>
-#include <QtCore/qnamespace.h>
 #include <QtCore/qstringfwd.h>
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
@@ -135,7 +136,7 @@ void Application::searchPalette(const QString &text) {
 
   const auto before_bytes = palette_query_.toUtf8();
   const auto before = PaletteQuery::parse(bytes(before_bytes));
-  const auto measured = Utf16Prefix::fit(QStringView{text}, PaletteQuery::maximum_bytes);
+  const auto measured = Utf16Prefix::fit(QStringView{text}, PaletteQuery::maximum_bytes, utf16Encoding());
   palette_query_ = text.first(static_cast<qsizetype>(measured.units));
   if (!palette_query_.isValidUtf16()) {
     palette_query_ = QString::fromUtf8(palette_query_.toUtf8());
@@ -384,7 +385,7 @@ QVariantMap Application::paletteGeometry() const {
     record.insert(QStringLiteral("groupBounds"), local(placement.group));
     record.insert(QStringLiteral("groupLabel"), groupName(kinds[placement.index]));
     record.insert(QStringLiteral("selected"), placement.index == palette_selection_);
-    rows.append(std::move(record));
+    rows.append(QVariant{std::in_place_type<QVariantMap>, std::move(record)});
   }
 
   return {

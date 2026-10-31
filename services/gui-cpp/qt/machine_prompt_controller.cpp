@@ -7,6 +7,7 @@
 #include "presentation/name_prompt_geometry.hpp"
 #include "projection.hpp"
 #include "text/utf16_prefix.hpp"
+#include "qt/utf16_encoding.hpp"
 #include <QByteArray>
 #include <QLatin1StringView>
 #include <QQuickWindow>
@@ -15,6 +16,7 @@
 #include <QVariantMap>
 #include <QtCore/qcontainerfwd.h>
 #include <QtCore/qstringfwd.h>
+#include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <cstddef>
@@ -48,7 +50,7 @@ void Application::searchMachinePrompt(const QString &text) {
     return;
   }
 
-  const auto measured = Utf16Prefix::fit(QStringView{text}, machinePromptLimit());
+  const auto measured = Utf16Prefix::fit(QStringView{text}, machinePromptLimit(), utf16Encoding());
   machine_prompt_->text = text.first(static_cast<qsizetype>(measured.units));
   if (!machine_prompt_->text.isValidUtf16()) {
     machine_prompt_->text = QString::fromUtf8(machine_prompt_->text.toUtf8());

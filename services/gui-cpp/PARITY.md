@@ -4,6 +4,18 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [UTF-16 codec compatibility evidence](measurements/utf16-codec-policy.md)
+adopts the installed Qt encoder's invalid-surrogate byte count once, preserving
+a single allocation-free bounded scan in the independent component. An unchanged
+controller regression retains 140 bytes against the 128-byte limit on Qt6.8
+before the correction, then passes on both SDKs. All-code-unit field comparisons
+also close the earlier 188292/190338 mismatch. Both SDKs pass eight-unit broad
+analysis, actual editors, ten field entries and eleven affected native entries.
+Native ASAN exits remain 1 on Mac (477585/2887 leaked bytes/allocations) and Linux
+(147982/148); the Mac field suite exits8 with256024/838. A first reordered test
+list's notification-cooldown failure remains raw evidence. Other Qt versions,
+native leaks/latency, complete appearance and full-client performance remain open.
+
 The [History entrance motion evidence](measurements/history-modal-motion.md)
 adds the original 220 ms cubic modal/inspector reveal to the shared window clock.
 Both SDKs match 527 sequences/32,802 original samples and pass five lifecycle

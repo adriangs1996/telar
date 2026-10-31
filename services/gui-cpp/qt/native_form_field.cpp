@@ -7,6 +7,7 @@
 #include "text/bounded_editor.hpp"
 #include "text/cell_text_measure.hpp"
 #include "text/utf16_prefix.hpp"
+#include "qt/utf16_encoding.hpp"
 #include "text/utf8.hpp"
 #include <QClipboard>
 #include <QGuiApplication>
@@ -203,7 +204,7 @@ void NativeFormField::paste() {
 void NativeFormField::insertText(const QString &text) {
   const auto retained = editor_.text().size() - editor_.selected().size();
   const auto remaining = static_cast<std::size_t>(maximum_bytes_) - retained;
-  const auto measured = Utf16Prefix::fit(QStringView{text}, remaining);
+  const auto measured = Utf16Prefix::fit(QStringView{text}, remaining, utf16Encoding());
   const auto prefix = text.first(static_cast<qsizetype>(measured.units));
   const auto encoded = prefix.toUtf8();
   const std::string_view source{encoded.constData(), static_cast<std::size_t>(encoded.size())};

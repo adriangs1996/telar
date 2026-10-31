@@ -5,6 +5,7 @@
 #include "presentation/path_picker_placement.hpp"
 #include "projection.hpp"
 #include "text/utf16_prefix.hpp"
+#include "qt/utf16_encoding.hpp"
 #include <QByteArray>
 #include <QLatin1StringView>
 #include <QString>
@@ -45,7 +46,7 @@ void Application::searchPaths(const QString &text) {
     return;
   }
 
-  const auto measured = Utf16Prefix::fit(QStringView{text}, PathPickerLimits::query_bytes);
+  const auto measured = Utf16Prefix::fit(QStringView{text}, PathPickerLimits::query_bytes, utf16Encoding());
   path_query_ = text.first(static_cast<qsizetype>(measured.units));
   if (!path_query_.isValidUtf16()) {
     path_query_ = QString::fromUtf8(path_query_.toUtf8());

@@ -6,6 +6,8 @@
 #include "qt/form_input_context.hpp"
 #include "qt/projection.hpp"
 #include "text/utf16_prefix.hpp"
+#include "qt/utf16_encoding.hpp"
+#include <QtCore/qstringliteral.h>
 #include "text/utf8.hpp"
 #include "ui/bundled_fonts.hpp"
 #include <QClipboard>
@@ -274,7 +276,7 @@ class FormFieldTest final : public QObject {
       const auto encoded = sample.toUtf8();
       const std::string_view source{encoded.constData(), static_cast<std::size_t>(encoded.size())};
       for (const auto capacity : capacities) {
-        const auto fitted = telar::gui::Utf16Prefix::fit(QStringView{sample}, capacity);
+        const auto fitted = telar::gui::Utf16Prefix::fit(QStringView{sample}, capacity, utf16Encoding());
         const auto expected = telar::runtime::utf8Prefix(source, capacity);
         const auto prefix = sample.first(static_cast<qsizetype>(fitted.units)).toUtf8();
         QCOMPARE(fitted.requested_bytes, static_cast<std::size_t>(encoded.size()));

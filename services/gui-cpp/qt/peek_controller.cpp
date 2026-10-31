@@ -10,6 +10,8 @@
 #include "presentation/peek_labels.hpp"
 #include "projection.hpp"
 #include "text/utf16_prefix.hpp"
+#include "qt/utf16_encoding.hpp"
+#include <QtCore/qstringliteral.h>
 #include <QByteArray>
 #include <QLatin1StringView>
 #include <QQuickWindow>
@@ -81,7 +83,7 @@ void Application::searchPeek(const QString &text) {
     return;
   }
 
-  const auto measured = Utf16Prefix::fit(QStringView{text}, PeekLimits::message_bytes);
+  const auto measured = Utf16Prefix::fit(QStringView{text}, PeekLimits::message_bytes, utf16Encoding());
   peek_editor_ = text.first(static_cast<qsizetype>(measured.units));
   if (!peek_editor_.isValidUtf16()) {
     peek_editor_ = QString::fromUtf8(peek_editor_.toUtf8());

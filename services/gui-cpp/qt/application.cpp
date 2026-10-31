@@ -37,6 +37,7 @@
 #include "telar_client/serializers/telar_protocol.hpp"
 #include "terminal_item.hpp"
 #include "text/utf16_prefix.hpp"
+#include "qt/utf16_encoding.hpp"
 #include "ui/workbench/terminal_font.hpp"
 #include "window_animation_clock.hpp"
 #include "window_font_catalog.hpp"
@@ -1222,7 +1223,7 @@ void Application::synchronizeWindowSize() {
 }
 
 void Application::searchHistory(const QString &query) {
-  const auto measured = Utf16Prefix::fit(QStringView{query}, HistorySearch::maximum_query_bytes);
+  const auto measured = Utf16Prefix::fit(QStringView{query}, HistorySearch::maximum_query_bytes, utf16Encoding());
   history_query_ = query.first(static_cast<qsizetype>(measured.units));
   if (!history_query_.isValidUtf16()) {
     history_query_ = QString::fromUtf8(history_query_.toUtf8());
