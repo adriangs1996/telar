@@ -26,6 +26,7 @@
 #include "input/mouse_encoder.hpp"
 #include "input/paste_encoding.hpp"
 #include "input/terminal_key.hpp"
+#include "input/tab_drag.hpp"
 #include "input/wheel_accumulator.hpp"
 #include "layout_token.hpp"
 #include "limit_reports.hpp"
@@ -653,9 +654,25 @@ public:
   }
 
   void moveTab(TabMoveDirection direction, std::optional<std::uint64_t> relative_to = {}) {
-    if (const auto location = active_tab_; location && !hasTabOperation()) {
-      sendTabOperation(RequestKind::move_tab, MoveTab{.location = *location, .direction = direction, .relative_to = relative_to});
+    if (const auto location = active_tab_) {
+      static_cast<void>(requestTabMove({.location = *location, .direction = direction, .relative_to = relative_to}));
     }
+  }
+
+  [[nodiscard]] bool tabOperationPending() const noexcept { return hasTabOperation(); }
+
+  [[nodiscard]] bool requestTabMove(const TabDragMove &move) {
+    if (hasTabOperation() || !active_tab_ || !sameWorkspace(active_tab_->workspace, move.location.workspace) || findTab(move.location) == nullptr) {
+      return false;
+    }
+
+    if (move.relative_to && (*move.relative_to == move.location.tab_id || findTab({.workspace = move.location.workspace, .tab_id = *move.relative_to}) == nullptr)) {
+      return false;
+    }
+
+    sendTabOperation(RequestKind::move_tab, MoveTab{.location = move.location, .direction = move.direction, .relative_to = move.relative_to});
+
+    return true;
   }
 
   void focusDirection(PaneDirection direction) {

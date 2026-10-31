@@ -4,6 +4,7 @@
 #include "application/dependencies.hpp"
 #include "history/browser.hpp"
 #include "input/history_hover.hpp"
+#include "input/tab_drop_surface.hpp"
 #include "presentation/history_footer.hpp"
 #include "attachment_shelf.hpp"
 #include "configuration_source.hpp"
@@ -295,6 +296,8 @@ public:
   Q_INVOKABLE void selectHistoryRow(int row);
   Q_INVOKABLE void selectPresentedHistoryRow(int row, const QString &revision);
   Q_INVOKABLE void registerHistoryPanel(QQuickItem *panel);
+  Q_INVOKABLE void registerTabStrip(QQuickItem *strip);
+  Q_INVOKABLE void selectCapturedTab();
   Q_INVOKABLE void registerHistoryInspector(QQuickItem *inspector);
   Q_INVOKABLE void registerHistoryFilters(QQuickItem *filters);
   Q_INVOKABLE void registerHistoryFooter(QQuickItem *footer);
@@ -542,6 +545,7 @@ private:
     std::uint64_t preparation_ns = 0;
     std::optional<PresentedHistory> history;
     HistoryScrollSurface history_surface;
+    TabDropSurface tabs;
     HistoryActionSurface history_actions;
     std::optional<HistoryHoverFrame> history_hover;
   };
@@ -583,6 +587,8 @@ private:
   void scrollHistory(HistoryScrollPosition pointer, ScrollSample sample);
   void moveHistoryRows(std::int32_t steps);
   [[nodiscard]] HistoryActionSurface historyActionSurface() const;
+  [[nodiscard]] TabDropSurface tabDropSurface() const;
+  void synchronizeTabStrip();
   void activateHistoryCardAction(HistoryCardAction action);
   [[nodiscard]] QVariantList fullscreenEntries(const Tab<ApplicationAllocator> &tab);
   void showDialog(const QString &kind, const QString &text = {});
@@ -763,6 +769,8 @@ private:
   TerminalGrid terminal_grid_;
   std::optional<PresentedHistory> presented_history_;
   HistoryScrollSurface presented_history_surface_;
+  TabDropSurface presented_tabs_;
+  QPointer<QQuickItem> tab_strip_;
   HistoryActionSurface presented_history_actions_;
   std::optional<HistoryHoverFrame> presented_history_hover_;
   QPointer<QQuickItem> history_actions_;

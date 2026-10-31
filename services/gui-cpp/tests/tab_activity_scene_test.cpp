@@ -1,5 +1,7 @@
 #include "core/configuration.hpp"
 #include "core/metrics.hpp"
+#include "input/tab_drag.hpp"
+#include "input/tab_drop_slots.hpp"
 #include "presentation/progress_geometry.hpp"
 #include "presentation/progress_motion.hpp"
 #include "presentation/tab_activity.hpp"
@@ -46,6 +48,7 @@
 #include <QtCore/qtypes.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
+#include <array>
 #include <cstddef>
 #include <memory>
 #include <optional>
@@ -62,6 +65,7 @@ using namespace telar::gui::test;
 constexpr int wait_ms = 5000;
 constexpr qreal strip_height = 42;
 constexpr int window_width = 200;
+constexpr int motion_strip_width = 600;
 constexpr qreal agent_width = 100;
 constexpr Byte quarter_percent = 25;
 
@@ -256,6 +260,106 @@ private:
     QVERIFY(!window);
   }
 
+  Q_SLOT static void tabMotionSettlesAndParksTheSharedClock() {
+    QQuickWindow window;
+    ListModel model;
+    auto first = record(TabActivity::Kind::none);
+    auto second = first;
+    first.insert(QStringLiteral("key"), QStringLiteral("1"));
+    second.insert(QStringLiteral("key"), QStringLiteral("2"));
+    model.reconcile({first, second});
+    TabStripLayout layout{window.contentItem()};
+    layout.setSize({motion_strip_width, strip_height});
+    layout.setContext(1, WorkspaceLocation{});
+    layout.setModel(&model);
+    window.resize(motion_strip_width, static_cast<int>(strip_height));
+    window.show();
+    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(layout.items()->rowCount(), 2, wait_ms);
+    const auto original = layout.items()->data(layout.items()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("bounds")).toRectF();
+    model.reconcile({second, first});
+    QTRY_VERIFY_WITH_TIMEOUT(layout.transitioning(), wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(!layout.transitioning(), wait_ms);
+    const auto reordered = layout.items()->data(layout.items()->index(0, 0), ListModel::record_role).toMap();
+    QCOMPARE(reordered.value(QStringLiteral("tab")).toMap().value(QStringLiteral("key")).toString(), QStringLiteral("2"));
+    QCOMPARE(reordered.value(QStringLiteral("bounds")).toRectF(), original);
+    const auto timers = window.findChildren<QTimer *>(QStringLiteral("agentStatusAnimation"));
+    QCOMPARE(timers.size(), 1);
+    QTRY_VERIFY_WITH_TIMEOUT(!timers.front()->isActive(), wait_ms);
+    const QSignalSpy changes{&layout, &TabStripLayout::layoutChanged};
+    constexpr int parked_observation_ms = 300;
+    QTest::qWait(parked_observation_ms);
+    QCOMPARE(changes.count(), 0);
+    model.reconcile({first, second});
+    QTRY_VERIFY_WITH_TIMEOUT(layout.transitioning(), wait_ms);
+    layout.setVisible(false);
+    QTRY_VERIFY_WITH_TIMEOUT(!timers.front()->isActive(), wait_ms);
+    layout.setVisible(true);
+    QTRY_VERIFY_WITH_TIMEOUT(!layout.transitioning(), wait_ms);
+  }
+
+  Q_SLOT static void tabMotionObserverCanRetireDuringATransition() {
+    QQuickWindow window;
+    ListModel model;
+    auto first = record(TabActivity::Kind::none);
+    auto second = first;
+    first.insert(QStringLiteral("key"), QStringLiteral("1"));
+    second.insert(QStringLiteral("key"), QStringLiteral("2"));
+    model.reconcile({first, second});
+    auto layout = std::make_unique<TabStripLayout>(window.contentItem());
+    layout->setSize({motion_strip_width, strip_height});
+    layout->setContext(1, WorkspaceLocation{});
+    layout->setModel(&model);
+    window.resize(motion_strip_width, static_cast<int>(strip_height));
+    window.show();
+    QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 2, wait_ms);
+    model.reconcile({second, first});
+    QTRY_VERIFY_WITH_TIMEOUT(layout->transitioning(), wait_ms);
+    const QPointer<TabStripLayout> alive{layout.get()};
+    layout.reset();
+    QVERIFY(alive.isNull());
+    const auto timers = window.findChildren<QTimer *>(QStringLiteral("agentStatusAnimation"));
+    QCOMPARE(timers.size(), 1);
+    QTRY_VERIFY_WITH_TIMEOUT(!timers.front()->isActive(), wait_ms);
+  }
+
+  Q_SLOT static void machineContextReplacementRetiresCollidingTabVisuals() {
+    QQuickWindow window;
+    ListModel model;
+    auto first = record(TabActivity::Kind::none);
+    auto second = first;
+    first.insert(QStringLiteral("key"), QStringLiteral("1"));
+    second.insert(QStringLiteral("key"), QStringLiteral("2"));
+    model.reconcile({first, second});
+    TabStripLayout layout{window.contentItem()};
+    layout.setSize({motion_strip_width, strip_height});
+    const WorkspaceLocation workspace;
+    layout.setContext(1, workspace);
+    layout.setModel(&model);
+    window.resize(motion_strip_width, static_cast<int>(strip_height));
+    window.show();
+    QTRY_COMPARE_WITH_TIMEOUT(layout.items()->rowCount(), 2, wait_ms);
+    const TabDragMove move{.location = {.workspace = workspace, .tab_id = 1}, .direction = TabMoveDirection::next, .relative_to = 2};
+    layout.setDrag(move, 1, {static_cast<qreal>(motion_strip_width) / 2, strip_height / 2}, 0);
+    layout.setPointerHover(1);
+    QTRY_VERIFY_WITH_TIMEOUT(!layout.draggedBounds().isEmpty(), wait_ms);
+    QVERIFY(!layout.dropMarker().isEmpty());
+    layout.setContext(2, workspace);
+    QCOMPARE(layout.draggedBounds(), QRectF{});
+    QCOMPARE(layout.dropMarker(), QRectF{});
+    QCOMPARE(layout.hoveredTab(), QString{});
+    QTRY_VERIFY_WITH_TIMEOUT(!layout.transitioning(), wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(layout.items()->data(layout.items()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("tab")).toMap().value(QStringLiteral("key")).toString(), QStringLiteral("1"), wait_ms);
+    auto replacement = workspace;
+    ++replacement.id;
+    const QSignalSpy changes{&layout, &TabStripLayout::layoutChanged};
+    layout.setContext(2, replacement);
+    layout.setDrag(move, std::nullopt, {}, 0);
+    QTRY_VERIFY_WITH_TIMEOUT(!changes.isEmpty(), wait_ms);
+    QCOMPARE(layout.dropMarker(), QRectF{});
+    QCOMPARE(layout.items()->data(layout.items()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("tab")).toMap().value(QStringLiteral("key")).toString(), QStringLiteral("1"));
+  }
+
   Q_SLOT static void stripReservesStatusAndPropagatesHiddenAttention() {
     QQuickWindow window;
     QQmlEngine engine;
@@ -287,6 +391,12 @@ private:
     const auto activity_items = visualItems(*strip, QStringLiteral("tabActivity"));
     QCOMPARE(activity_items.size(), 1);
     QCOMPARE(activity_items.front()->width(), TabActivity::spinner_side);
+    std::array<TabDropSlot, TabDropSlots::capacity> targets{};
+    const auto target_count = layout->dropSlots(targets);
+    QCOMPARE(target_count, std::size_t{2});
+    QCOMPARE(targets[target_count - 1].id, layout->counter().value(QStringLiteral("key")).toString().toULongLong());
+    const auto counter_bounds = layout->counter().value(QStringLiteral("bounds")).toRectF();
+    QCOMPARE(targets[target_count - 1].bounds.width, static_cast<float>(counter_bounds.width() * window.effectiveDevicePixelRatio()));
     records.back().insert(QStringLiteral("attentionColor"), QString{});
     model.reconcile(records);
     QTRY_COMPARE_WITH_TIMEOUT(layout->counter().value(QStringLiteral("attentionColor")).toString(), QStringLiteral("red"), wait_ms);

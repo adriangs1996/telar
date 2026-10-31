@@ -18,6 +18,7 @@
 #include "mouse_buttons.hpp"
 #include "terminal_item.hpp"
 #include <QMouseEvent>
+#include <QKeyEvent>
 #include <QQuickWindow>
 #include <QScopedValueRollback>
 #include <QWindow>
@@ -234,6 +235,8 @@ void PointerDispatcher::cancelPane(std::uint64_t pane_id) {
 }
 
 void PointerDispatcher::cancel() {
+  observeTabHover(std::nullopt);
+  cancelTabDrag();
   retireHistoryHover();
   const auto previous_recipients = recipients();
   for (auto &lease : captures_) {
@@ -295,6 +298,10 @@ void PointerDispatcher::deliver(TerminalItem &terminal, const QMouseEvent &event
 }
 
 bool PointerDispatcher::press(QMouseEvent &event) {
+  if (pressTab(event)) {
+    return false;
+  }
+
   observeHistoryHover(event.position(), HistoryHover::Observation::point);
   if (auto *lease = capture(event.button())) {
     if (lease->history.held()) {
@@ -329,9 +336,10 @@ bool PointerDispatcher::move(QMouseEvent &event) {
   }
 
   application_.observeActivityPointer(true, event.position());
+  const auto tab_consumed = updateTabDrag(event, false);
 
   if (!occupied()) {
-    return false;
+    return tab_consumed;
   }
 
   const auto destinations = recipients();
@@ -360,10 +368,14 @@ bool PointerDispatcher::move(QMouseEvent &event) {
 
   const auto *grabber = event.exclusiveGrabber(event.point(0));
 
-  return grabber == nullptr || qobject_cast<const TerminalItem *>(grabber) != nullptr;
+  return tab_consumed || grabber == nullptr || qobject_cast<const TerminalItem *>(grabber) != nullptr;
 }
 
 bool PointerDispatcher::release(QMouseEvent &event) {
+  if (event.button() == Qt::LeftButton && updateTabDrag(event, true)) {
+    return true;
+  }
+
   auto *lease = capture(event.button());
   if (lease == nullptr || !lease->held) {
     return false;
@@ -414,18 +426,36 @@ bool PointerDispatcher::eventFilter(QObject *watched, QEvent *event) {
     case QEvent::MouseButtonDblClick: {
       auto &mouse = dynamic_cast<QMouseEvent &>(*event);
       application_.observeActivityPointer(true, mouse.position());
+      observeTabHover(mouse.position());
 
       return press(mouse);
     }
-    case QEvent::MouseMove:
-      return move(dynamic_cast<QMouseEvent &>(*event));
+    case QEvent::MouseMove: {
+      auto &mouse = dynamic_cast<QMouseEvent &>(*event);
+      observeTabHover(mouse.position());
+      return move(mouse);
+    }
+    case QEvent::ShortcutOverride:
+    case QEvent::KeyPress:
+    case QEvent::KeyRelease: {
+      return tabKey(dynamic_cast<QKeyEvent &>(*event));
+    }
     case QEvent::Leave:
+      observeTabHover(std::nullopt);
+      if (tab_drag_.captured()) {
+        const auto scale = tab_capture_surface_.scale / tab_capture_surface_.threshold;
+        tab_drag_.update({tab_pointer_.x() * scale, tab_pointer_.y() * scale}, std::nullopt);
+        updateTabDragVisual();
+      }
       retireHistoryHover();
       application_.attachments_.observePointer(std::nullopt);
       application_.observeActivityPointer(false);
       return false;
-    case QEvent::MouseButtonRelease:
-      return release(dynamic_cast<QMouseEvent &>(*event));
+    case QEvent::MouseButtonRelease: {
+      auto &mouse = dynamic_cast<QMouseEvent &>(*event);
+      observeTabHover(mouse.position());
+      return release(mouse);
+    }
     default:
       return false;
     }

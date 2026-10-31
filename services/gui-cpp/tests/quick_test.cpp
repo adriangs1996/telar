@@ -1816,6 +1816,197 @@ return {api_version=2, client={keybindings={
     QTRY_VERIFY_WITH_TIMEOUT(client_->notifications().find(identity) == nullptr, runtime_wait_ms);
   }
 
+  Q_SLOT void tabDragReordersOnlyAfterRelease() {
+    QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+    const auto original = QString::number(firstPane()->location.tab_id);
+    QStringList created;
+    const auto restore = qScopeGuard([&] {
+      cleanupGestureTabs(created, original);
+    });
+    QVERIFY(prepareGestureTabs(created));
+    const auto before = tabKeys();
+    const auto *source = tabPill(created.front());
+    const auto *destination = tabPill(created.back());
+    QVERIFY(source != nullptr && destination != nullptr);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    sendMouse(*window_, QEvent::MouseMove, Qt::NoButton, Qt::NoButton, source->mapToScene({source->width() / 2, source->height() / 2}).toPoint());
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto beginning = source->mapToScene({source->width() / 2, source->height() / 2}).toPoint();
+    constexpr qreal trailing_half = 0.75;
+    const auto ending = destination->mapToScene({destination->width() * trailing_half, destination->height() / 2}).toPoint();
+    sendMouse(*window_, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, beginning);
+    QCOMPARE(firstPane()->location.tab_id, created.front().toULongLong());
+    sendMouse(*window_, QEvent::MouseMove, Qt::NoButton, Qt::LeftButton, ending);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    QCOMPARE(tabKeys(), before);
+    const auto *layout = window_->findChild<QQuickItem *>(QStringLiteral("tabStripLayout"));
+    QVERIFY(layout != nullptr && layout->property("dropMarker").toRectF().width() > 0);
+    QCOMPARE(layout->property("hoveredTab").toString(), created.back());
+    sendMouse(*window_, QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, ending);
+    auto expected = before;
+    expected.removeOne(created.front());
+    expected.insert(expected.indexOf(created.back()) + 1, created.front());
+    QVERIFY(test::waitForGuiCondition([&] {
+      return tabKeys() == expected;
+    },
+                                      runtime_wait_ms));
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    QCOMPARE(layout->property("dropMarker").toRectF(), QRectF{});
+    QCOMPARE(client_->error(), QString{});
+  }
+
+  Q_SLOT void tabDragEscapeRetiresHeldRelease() {
+    QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+    const auto original = QString::number(firstPane()->location.tab_id);
+    QStringList created;
+    const auto restore = qScopeGuard([&] {
+      cleanupGestureTabs(created, original);
+    });
+    QVERIFY(prepareGestureTabs(created));
+    const auto before = tabKeys();
+    const auto *source = tabPill(created.front());
+    const auto *destination = tabPill(created.back());
+    QVERIFY(source != nullptr && destination != nullptr);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto beginning = source->mapToScene({source->width() / 2, source->height() / 2}).toPoint();
+    constexpr qreal trailing_half = 0.75;
+    const auto ending = destination->mapToScene({destination->width() * trailing_half, destination->height() / 2}).toPoint();
+    sendMouse(*window_, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, beginning);
+    sendMouse(*window_, QEvent::MouseMove, Qt::NoButton, Qt::LeftButton, ending);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto *layout = window_->findChild<QQuickItem *>(QStringLiteral("tabStripLayout"));
+    QVERIFY(layout != nullptr && layout->property("dropMarker").toRectF().width() > 0);
+    QTest::keyClick(window_, Qt::Key_Escape);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    QCOMPARE(layout->property("dropMarker").toRectF(), QRectF{});
+    sendMouse(*window_, QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, ending);
+    QCOMPARE(tabKeys(), before);
+    QCOMPARE(client_->dialog(), QString{});
+    const auto *animation = window_->findChild<QTimer *>(QStringLiteral("agentStatusAnimation"));
+    QVERIFY(animation != nullptr);
+    QVERIFY(test::waitForGuiCondition([&] { return !layout->property("transitioning").toBool(); }, runtime_wait_ms));
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    source = tabPill(created.front());
+    destination = tabPill(created.back());
+    QVERIFY(source != nullptr && destination != nullptr);
+    const auto restarted = source->mapToScene({source->width() / 2, source->height() / 2}).toPoint();
+    const auto restarted_ending = destination->mapToScene({destination->width() * trailing_half, destination->height() / 2}).toPoint();
+    sendMouse(*window_, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, restarted);
+    const auto captured = client_->pointerDispatcher().capturedTab();
+    if (captured) {
+      QCOMPARE(captured->tab_id, created.front().toULongLong());
+    } else {
+      QFAIL("The restarted gesture did not capture a tab");
+    }
+    sendMouse(*window_, QEvent::MouseMove, Qt::NoButton, Qt::LeftButton, restarted_ending);
+    sendMouse(*window_, QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, restarted_ending);
+    QVERIFY(test::waitForGuiCondition([&] {
+      return tabKeys() != before;
+    },
+                                      runtime_wait_ms));
+    QCOMPARE(client_->error(), QString{});
+  }
+
+  Q_SLOT void tabDragRetiresWhenTheCapturedSourceCloses() {
+    QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+    const auto original = QString::number(firstPane()->location.tab_id);
+    QStringList created;
+    const auto restore = qScopeGuard([&] {
+      cleanupGestureTabs(created, original);
+    });
+    QVERIFY(prepareGestureTabs(created));
+    auto expected = tabKeys();
+    const auto *source = tabPill(created.front());
+    const auto *destination = tabPill(created.back());
+    QVERIFY(source != nullptr && destination != nullptr);
+    const auto beginning = source->mapToScene({source->width() / 2, source->height() / 2}).toPoint();
+    const auto ending = destination->mapToScene({destination->width() / 2, destination->height() / 2}).toPoint();
+    sendMouse(*window_, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, beginning);
+    sendMouse(*window_, QEvent::MouseMove, Qt::NoButton, Qt::LeftButton, ending);
+    QVERIFY(client_->pointerDispatcher().capturedTab().has_value());
+    client_->execute(Application::Action::close_tab, created.front());
+    expected.removeOne(created.front());
+    QVERIFY(test::waitForGuiCondition([&] { return tabKeys() == expected; }, runtime_wait_ms));
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    QVERIFY(!client_->pointerDispatcher().capturedTab().has_value());
+    const auto *layout = window_->findChild<QQuickItem *>(QStringLiteral("tabStripLayout"));
+    QVERIFY(layout != nullptr);
+    QCOMPARE(layout->property("dropMarker").toRectF(), QRectF{});
+    sendMouse(*window_, QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, ending);
+    QCOMPARE(tabKeys(), expected);
+    QCOMPARE(client_->error(), QString{});
+  }
+
+  Q_SLOT void tabDragCancelsWhenViewportChanges() {
+    verifyTabDragCancellation(TabDragInterruption::viewport);
+  }
+
+  Q_SLOT void tabDragCancelsWhenModalOpens() {
+    verifyTabDragCancellation(TabDragInterruption::modal);
+  }
+
+  Q_SLOT void tabDragCancelsWhenTheWindowLosesFocus() {
+    verifyTabDragCancellation(TabDragInterruption::focus);
+  }
+
+  Q_SLOT void hiddenCounterPressRetainsItsSourceThroughRevealAndDrop() {
+    QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+    const auto original = QString::number(firstPane()->location.tab_id);
+    const auto size = window_->size();
+    QStringList created;
+    QPoint ending;
+    bool held = false;
+    const auto restore = qScopeGuard([&] {
+      if (held) {
+        sendMouse(*window_, QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, ending);
+      }
+      window_->resize(size);
+      cleanupGestureTabs(created, original);
+    });
+    constexpr int fixture_tab_groups = 4;
+    for (int group = 0; group < fixture_tab_groups; ++group) {
+      QVERIFY(prepareGestureTabs(created));
+    }
+    window_->resize(window_->minimumWidth(), size.height());
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto *counter = window_->findChild<QQuickItem *>(QStringLiteral("hiddenTabCounter"));
+    const auto *layout = window_->findChild<QQuickItem *>(QStringLiteral("tabStripLayout"));
+    QVERIFY(counter != nullptr && layout != nullptr);
+    QVERIFY(test::waitForGuiCondition([&] { return !layout->property("transitioning").toBool(); }, runtime_wait_ms));
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    QTRY_VERIFY_WITH_TIMEOUT(counter->isVisible() && counter->width() > 0, runtime_wait_ms);
+    sendMouse(*window_, QEvent::MouseMove, Qt::NoButton, Qt::NoButton, counter->mapToScene({counter->width() / 2, counter->height() / 2}).toPoint());
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto key = layout->property("counter").toMap().value(QStringLiteral("key")).toString();
+    const auto *destination = tabPill(created.back());
+    QVERIFY(destination != nullptr);
+    constexpr qreal trailing_half = 0.75;
+    ending = destination->mapToScene({destination->width() * trailing_half, destination->height() / 2}).toPoint();
+    const QRectF viewport{0, 0, static_cast<qreal>(window_->width()), static_cast<qreal>(window_->height())};
+    QVERIFY(viewport.contains(ending));
+    const auto beginning = counter->mapToScene({counter->width() / 2, counter->height() / 2}).toPoint();
+    const auto before = tabKeys();
+    sendMouse(*window_, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, beginning);
+    held = true;
+    const auto captured = client_->pointerDispatcher().capturedTab();
+    if (captured) {
+      QCOMPARE(captured->tab_id, key.toULongLong());
+    } else {
+      QFAIL("The delivered hidden counter did not capture its tab");
+    }
+    QCOMPARE(firstPane()->location.tab_id, key.toULongLong());
+    sendMouse(*window_, QEvent::MouseMove, Qt::NoButton, Qt::LeftButton, ending);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    QCOMPARE(tabKeys(), before);
+    sendMouse(*window_, QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, ending);
+    held = false;
+    auto expected = before;
+    expected.removeOne(key);
+    expected.insert(expected.indexOf(created.back()) + 1, key);
+    QVERIFY(test::waitForGuiCondition([&] { return tabKeys() == expected; }, runtime_wait_ms));
+    QCOMPARE(client_->error(), QString{});
+  }
+
   Q_SLOT void paletteActionsUseOriginalLabelsAndReorderExistingTabs() {
     const auto commands = client_->commands();
     QCOMPARE(commands.size(), qsizetype{29});
@@ -4074,6 +4265,98 @@ return {api_version=2, client={keybindings={
       runtime_.kill();
       runtime_.waitForFinished();
     }
+  }
+
+  enum class TabDragInterruption : std::uint8_t { viewport, modal, focus };
+
+  void verifyTabDragCancellation(TabDragInterruption interruption) {
+    QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+    const auto original = QString::number(firstPane()->location.tab_id);
+    const auto size = window_->size();
+    QStringList created;
+    const auto restore = qScopeGuard([&] {
+      window_->show();
+      test::activateWindow(*window_);
+      client_->execute(Application::Action::cancel);
+      window_->resize(size);
+      cleanupGestureTabs(created, original);
+    });
+    QVERIFY(prepareGestureTabs(created));
+    const auto before = tabKeys();
+    const auto *source = tabPill(created.front());
+    const auto *destination = tabPill(created.back());
+    QVERIFY(source != nullptr && destination != nullptr);
+    const auto beginning = source->mapToScene({source->width() / 2, source->height() / 2}).toPoint();
+    const auto ending = destination->mapToScene({destination->width() / 2, destination->height() / 2}).toPoint();
+    sendMouse(*window_, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, beginning);
+    sendMouse(*window_, QEvent::MouseMove, Qt::NoButton, Qt::LeftButton, ending);
+    QVERIFY(client_->pointerDispatcher().capturedTab().has_value());
+    switch (interruption) {
+    case TabDragInterruption::viewport:
+      window_->resize(size.width() + 1, size.height());
+      break;
+    case TabDragInterruption::modal:
+      client_->execute(Application::Action::palette);
+      break;
+    case TabDragInterruption::focus:
+      window_->hide();
+      QTRY_VERIFY_WITH_TIMEOUT(!window_->isActive(), runtime_wait_ms);
+      window_->show();
+      test::activateWindow(*window_);
+      QTRY_VERIFY_WITH_TIMEOUT(window_->isActive(), runtime_wait_ms);
+      break;
+    }
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    QVERIFY(!client_->pointerDispatcher().capturedTab().has_value());
+    sendMouse(*window_, QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, ending);
+    QCOMPARE(tabKeys(), before);
+    QCOMPARE(client_->error(), QString{});
+  }
+
+  [[nodiscard]] QStringList tabKeys() const {
+    QStringList result;
+    for (int index = 0; index < client_->tabs()->rowCount(); ++index) {
+      result.append(client_->tabs()->data(client_->tabs()->index(index, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString());
+    }
+    return result;
+  }
+
+  [[nodiscard]] QQuickItem *tabPill(const QString &key) const {
+    for (auto *item : test::visualItems(*window_->contentItem(), QStringLiteral("tabPill"))) {
+      if (item->property("tabKey").toString() == key) {
+        return item;
+      }
+    }
+    return nullptr;
+  }
+
+  bool prepareGestureTabs(QStringList &created) {
+    constexpr int added_tabs = 2;
+    for (int index = 0; index < added_tabs; ++index) {
+      const auto count = client_->tabs()->rowCount();
+      client_->execute(Application::Action::new_tab);
+      if (!test::waitForGuiCondition([&] {
+            return client_->tabs()->rowCount() == count + 1 && terminalReady();
+          },
+                                     runtime_wait_ms)) {
+        return false;
+      }
+      created.append(QString::number(firstPane()->location.tab_id));
+    }
+    return test::waitForSynchronizedFrame(*window_, runtime_wait_ms);
+  }
+
+  void cleanupGestureTabs(const QStringList &created, const QString &original) {
+    for (const auto &key : created) {
+      if (tabKeys().contains(key)) {
+        client_->execute(Application::Action::close_tab, key);
+        static_cast<void>(test::waitForGuiCondition([&] {
+          return !tabKeys().contains(key);
+        },
+                                                    runtime_wait_ms));
+      }
+    }
+    client_->execute(Application::Action::select_tab, original);
   }
 
   void openWindow() {

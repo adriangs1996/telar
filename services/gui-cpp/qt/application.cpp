@@ -455,6 +455,7 @@ void Application::prepareFrame(PresentedFrame &frame) {
   frame = {};
   frame.machine_view = machine_view_revision_;
   frame.preparation_ns = platform::AwakeClock::nowNanoseconds();
+  frame.tabs = tabDropSurface();
   if (window_ == nullptr) {
     return;
   }
@@ -633,6 +634,8 @@ void Application::present(const PresentedFrame &frame) {
     return;
   }
 
+  presented_tabs_ = frame.tabs;
+  pointer_dispatcher_.presentTabs(presented_tabs_);
   presented_history_ = frame.history;
   presented_history_surface_ = frame.history_surface;
   presented_history_actions_ = frame.history_actions;
@@ -815,6 +818,7 @@ void Application::executeHostCommand(const ClientCommand &message, CompleteClien
 }
 
 void Application::refresh() {
+  synchronizeTabStrip();
   QList<QVariantMap> workspaces;
   const auto *active = session().activeTab();
   QVariantMap workspace_context;

@@ -29,10 +29,11 @@ Rectangle {
     readonly property real contextMaximum: 160 * ratio
     readonly property real separatorGap: 10 * ratio
     readonly property real separatorHeight: 18 * ratio
+    readonly property real physicalPixel: 1 / Screen.devicePixelRatio
     readonly property real controlsRight: toggle.x + toggle.width + controlGap
     readonly property real machineRight: machine.shown ? machine.x + machine.width + controlGap : controlsRight
     readonly property real contextWidth: rail ? Math.max(0, Math.min(contextName.implicitWidth, contextMaximum, (width - padding - machineRight) / 3 - contextInset)) : 0
-    readonly property real contextRight: machineRight + contextInset + contextWidth + 2 * separatorGap + 1
+    readonly property real contextRight: machineRight + contextInset + contextWidth + 2 * separatorGap + physicalPixel
 
     color: colors.panelBackground
     clip: true
@@ -80,15 +81,16 @@ Rectangle {
     }
 
     Rectangle {
-        x: Math.floor(contextName.x + contextName.width + root.separatorGap)
-        y: Math.floor((parent.height - height) / 2)
-        width: 1
+        x: Math.floor((contextName.x + contextName.width + root.separatorGap) * Screen.devicePixelRatio) / Screen.devicePixelRatio
+        y: Math.floor((parent.height - height) * Screen.devicePixelRatio / 2) / Screen.devicePixelRatio
+        width: root.physicalPixel
         height: Math.min(parent.height, root.separatorHeight)
         color: root.colors.surface1
         visible: root.rail && root.contextWidth > 0
     }
 
     TerminalTabs {
+        controller: root.controller
         x: root.rail && root.contextWidth > 0 ? root.contextRight : Math.max(root.machineRight, root.workbenchLeft)
         width: Math.max(0, parent.width - root.padding - x)
         height: parent.height

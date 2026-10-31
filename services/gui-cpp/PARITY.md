@@ -703,8 +703,19 @@ checks both terminal corners in scene coordinates. See Qt's
   terminal progress and hidden-counter attention now have independent value,
   scheduling and component coverage. Two live determinate-progress captures
   match the complete selected pills and tab bands. Pane header progress,
-  hidden-counter native pixel comparisons, drag/motion, complete text behavior
-  remain open. Chrome bands and sidebar/card rows now resolve in physical
+  hidden-counter attention and complete text behavior remain open. The
+  [tab drag implementation](measurements/tab-drag.md) now captures the delivered
+  source and drop geometry, previews identity-keyed movement, and retires held
+  releases on cancellation. Original gesture and motion comparisons cover both
+  platforms, including sanitizer builds; native tests cover release, Escape,
+  source closure, focus, modal and viewport changes, counter reveal, context
+  replacement and shared-clock hide/show. The pure motion kernel wins all seven
+  paired comparisons in each of nine cases against Zig and the initial C++
+  implementation on both AArch64 machines. Qualified Cocoa navigation-band
+  captures match 201,600 pixels for held, dropped and cancelled gestures. Native
+  macOS leaks, other densities/themes, Linux pixels, physical-device ownership
+  and complete-client performance remain open. Chrome bands and sidebar/card
+  rows now resolve in physical
   pixels before Qt projection; full physical-density equivalence is unproven.
 - Tab application marks now use the original embedded provider atlas, theme
   tint selection and inactive alpha, with terminal/editor/git glyph fallbacks.
@@ -1845,7 +1856,7 @@ performance remain open.
 | Footer | Configured bar positions/content, full priority fitting and overflow; exact diagnostic fitting and complete battery/badge/mode-chip density/theme geometry; complete mode-label font fallback. Default metrics, CPU history, TLS, dismissible diagnostics and prefix/copy hint layout are implemented. |
 | Attachments and links | Complete clipboard/preview interaction and physical ownership qualification, paired pixels, Linux bounded provider transfer, native leaks and measured performance; diagrams and complete native link/preview equivalence. The image shelf, capture/retention, marker lifecycle, dismiss input and row reservation now have scoped implementation and correctness coverage. |
 | Native behavior | Linux background blur, exact macOS blur strength and window behavior, desktop launch environment adoption, packaging and release integration |
-| Interaction and accessibility | Tab drag/reorder gestures, context menus, complete keyboard-only navigation, focus/selection/scroll affordances and accessibility validation; current native Mac failures in window activation and link copying at fractional/doubled scales |
+| Interaction and accessibility | Remaining native-device tab drag ownership, context menus, complete keyboard-only navigation, focus/selection/scroll affordances and accessibility validation; current native Mac failures in window activation and link copying at fractional/doubled scales |
 
 Some accepted configuration fields belong to these unported subsystems. They
 are not evidence that the C++ client implements the subsystem.

@@ -8,6 +8,7 @@ AbstractButton {
     required property real pixelSize
     property real cornerRadius: 8
     property bool emphasized: false
+    property bool pointerHovered: hovered
 
     padding: 0
     hoverEnabled: true
@@ -17,12 +18,12 @@ AbstractButton {
         text: root.text
         pixelSize: root.pixelSize
         emphasized: root.emphasized
-        color: root.emphasized || root.hovered || root.visualFocus ? root.colors.text : root.colors.subtext0
+        color: root.emphasized || root.pointerHovered || root.visualFocus ? root.colors.text : root.colors.subtext0
         horizontalAlignment: Text.AlignHCenter
     }
 
     background: Rectangle {
-        color: root.hovered || root.visualFocus ? root.colors.surface0 : "transparent"
+        color: root.pointerHovered || root.visualFocus ? root.colors.surface0 : "transparent"
         radius: root.cornerRadius
     }
 }

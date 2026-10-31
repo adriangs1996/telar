@@ -1,5 +1,694 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## Tab drag frozen qualification (09:18 UTC)
+
+NEW measurements/tab-drag + tab-drag-validation.json FROZEN, DO NOTrefresh.
+7625artifacts /2512programsources /47989625B. FinalcopiedSELFverifierPASSoffline
+andcheck-current-source. Draft2PASSbeforecopy, draft1failurelogsretainedonlyignored
+exceptdraftlogsalsocaptured. Added2OriginalZigsourcestoparentsnapshot+10newCppfiles.
+Allhostandguestactors/compilers/lints/editorsIDLE. FullgoalOPEN, continuePARITY,
+nocheckpointfinal. Needguardedlocalcommitcurrentlystaged; verifytrackedartifactset
+EXACT7625 (force-addignorednestedlinux/out-dependenciespaths) andcacheddiffcheck.
+No personal-frame-delivery.md reads/touches/stage, noagents/publish/merge.
+Nextvaluablework: other-theme/densitytabdragpixels andnativeownership stillopen;
+otherfullGUI/extensibility/leak/performancegapsremain. Don'tmutatefrozenTabDragbytes.
+
+## ACTIVE Tab drag evidence preflight (09:18 UTC)
+
+Fullgoalcontinues, NEVERcheckpointfinal. Hostandguestbuild/lint/editor/nativeactors
+IDLE. No timingactive. Finalsourceall26hostguestMATCH. BothSDKpureoraclesfinal-1
+PASS1048frames/1307seq43708ops; MaccorecommandtabASANfinal1PASS. Linuxbroad9except
+unusedinclude initial1failure correctedcontrollerfinal0;scenefinal0;Macbroadscovered.
+ActualMaceditor7layout/8controllerbothEMPTY;Linuxeditor1FAILQuick OOMkilled59501.
+Kerneltraceproves; /tmp RAMfilesystemhad1.5GBabandonedpreambles. Relocationattempt
+moved34files1531457432B toguestoutdeps/tab-drag-editor-preambles-1,thenstoppedonzero
+bytepch;didNOTalterremainingempty+60MBfile. Allmovedhashesretainedreceipt. UseTMPDIR
+ondiskforEDITORONLY; Linuxeditor2ALL20EMPTYwithunchanged.clangd. Laternativeactor
+inheritedlongeditorTMPDIR=>SwayUNIXpath>108bytes failedBEFOREGUI. Rawkept; finalnative
+runner4unsetTMPDIR, bothRelease/ASANnativefinal-2 ALL10PASSactual0cleanup0. Components
+Linuxrelease2/asan2ALL6PASS. Hostfinal-2ALL10Quick/6componentPASS;ASANleaks760658B3775
+component,616994B3231Quick actual1; builtinQtruntime_fetchInitializingClassListtable.
+Noadded/projectSuppressions. MacReleaseactual0. AllGUIactorscurrentlydone.
+
+PairedCocoafinalshade3 ALLheld/drop/Escape exact201600Topbarpixels currentGUIstable,
+identicalALLdeliveredpointerpoints. Helperfinal_tab_drag_pixel_regions PASS; stdlib
+PNGdecoderindependentlymatches. Collector3EscapeDIRtypo failedBEFOREoverwrite; raw
+kept,separateEscape3actual0. FullwindowdifferencesONLYoutsidebandstillOPEN.
+KernelproductionassociationMac/Linux exactSAMEdisassembly asmeasuredcandidate13;
+Macbenchmarkbinaryevenidenticalhash. NativeARMsizes4128Motion/32Frame/96Drag/
+1544DropSlots/1616Surface; fixed64nohotallocation, wholeframeO(n²)bounded. NofullGUI
+perfclaim. All4matricesALL9cases7/7, priorvariantsfailureskept.
+
+Downloadedguest1744records7.56MB SHA9bfc680e420730fc0caeca615e7daa2fbb0e1eb166da98a49e4e9b72f93fb252
+intooutdeps/tab-drag-linux-export-1,validatedregularTAR, noexecutables/credentials.
+Reporttab-drag.md+PARITYupdatedforcurrentqualificationsandremaininggates. NoTabDrag
+archive/commitYET. PreflightDRAFT1outdeps/tab-drag-archive-draft-1,7622artifacts2510
+sources47.99MB, initialverifierfailsalreadycompressedhashencoding;fixedlocalverifier
+thenfailmissingnewOriginalZigsourcefromparentsourcegraph. RetainerNOWaddsbothfinal
+oraclesunchanged_original_sha256 sourcesto2500+10set. DRAFT2CURRENTexec64255: retainer
+thenverifiercheck-current-source;rawlogs local/tab-drag-archive-draft-2.log and
+ tab-drag-archive-draft-verify-3.log. Inspectactual, fixverifierONLYBEFOREFREEZE. Draft1
+andearlierarchivesunchanged. RetainerenvTAB_DRAG_EVIDENCE_ROOT overridesignoredroot.
+NeedfinalverifierPASS copiedSELF inDRAFT; copyvalidateddraftroot+manifesttoNEW
+measurements/tab-drag+tab-drag-validation.json thenoffline/currentcheckactual. Add
+ownedsource/report/manifest/handoffONLYandallmanifestartifacts. Nestedignored
+out-dependenciesfilesneedgitadd-fEXACTmissingpaths;asserttrackedset==manifestset.
+CommitguardPython subprocess.run(gitdiffcachedcheck,check=True), neverunconditional.
+No userpersonal-frame-delivery.md reads/touches/staging, noagents/publish/merge.
+AfterfeaturecommitCONTINUEotherPARITYgaps, noFINALcheckpoint. FullgoalstillOPEN.
+
+## ACTIVE Tab drag final source qualification (09:12 UTC)
+
+Continue goal, NOcheckpointfinal, Spanishupdates<=60s, ONLYthisworktree. Noagents/
+publish/merge. Userpersonal-frame-delivery.md NEVERread/touch/stage. HEADc95fedb81.
+Host final Release25/ASAN10 buildactual0. LatestONLYsourcechange removesunused
+QtCore/qtmetamacros.h from tab_drag_controller.cpp (Qt6.8include-cleanerfailed1unit;
+Macalsoacceptsremoval). Macfinalcontrollerlintactual0 andactualNeovim8empty.
+Linuxbuild7 bothactual0. FinalproductionkernelMac+Linux SAMEdisassembly asmeasured
+candidate13 (associationroots), sourcestyle/unusedincludesnoimpact. NOnewtiming.
+Finalhostpureoraclesmac-final-1 bothPASS1048frames /1307seq43708ops ASAN/UBSAN.
+CoreASANcommandtab final1actual0. Hostfinalnativebeforeunusedinclude ALL10Quick
+Release/ASAN andALL6component; ASANleaks594625/3031 Quick,725212/3628component.
+Finalsame-sourceASANbinarychanged(debugline) so current nativefinal-2 ACTIVEexec63493:
+componentASAN thenQuickRelease thenQuickASAN sequential; waitactualbeforeCocoaactors.
+
+ALLfinalcurrentGUI held/drop/Escape pairs shade-3 exact201600Topbarpixels! Sameactual
+loggedpointerpointsequence andstablecurrentGUIhash. stdlibPNGdecoderindependently
+confirmedheld. final_tab_drag_pixel_regions.py writesreceipts ALL3PASS. Original
+collector3misspelledEscape sameDIRasdrop andfailedFileExists BEFOREoverwrite; preserved
+failuretab-drag-final-pairs-3, separateEscape3actual0. Noimagealign/resampling/mask.
+Outsidebandfullwindow461etc differencesremain. NoGUIbuildnow; nocaptureactive.
+
+Linuxfinalfirst9broad:8passcontrollerFAILunusedheader, rawkept. Removedheaderthen
+build7. Finalpipeline2 ACTIVEexec76724: controllerlint0,scenelint0,actualNeovim20
+nowprocessingQuick; thenpureoraclesboth,corecommandtabs,andnativeQuickRelease/ASAN
+final-1. Remote local/tab-drag-final-checks-linux-remote-2.log; guest4GBserialize.
+Nootherguestheavyworkuntilactualexit. LinuxcomponentRelease2/ASAN2 ALL6PASSexit0.
+VM7158SSH55984 oldSway9469/runtime35801untouched. No timingactive.
+
+PREPARINGarchiveNOTCREATEDYET: helperslocal/retain_tab_drag.py,verify_tab_drag.py,
+collect_tab_drag_linux.py,tab_drag_final_linux_checks.py. Retaineracceptsenv
+TAB_DRAG_EVIDENCE_ROOT toignoredDRAFT forpreflight; noarchiveexistingrootrefresh.
+Noexecutables/fonts/keys; allrawnegativevariants preservedgzipincbinoutputs,
+sourceparent2500plus10new=2510. NeedremoteexportAFTERactualchecks+sourcehashbindings,
+extractvalidatedregularTAR tooutdeps/tab-drag-linux-export-1, thenDRAFTpreflight,
+fixverifierBEFOREfreeze, freezeNEWmeasurements/tab-drag root+validation, force-add
+nestedignoredoutdepsaccordingmanifestandasserttrackedsetexact. DoNOTtoucholdarchives.
+Reportdrafttab-drag.md andPARITY.md updated withscopedfeature+openlimitations, need
+finalresults/nativeleaknumbersandfreeze/verifiercommands. parentincludesPARITY =>freeze
+AFTERfinalPARITY edit. Handoffexcludedsoalwayssafetoappend. Finalproducthost26source
+identitiesboundinlocal/tab-drag-final-product.json, matchguestbeforearchive.
+NEXT waitpipeline2/native2, collectguestresults, preflightverifierchecks(perfcasewins,
+exactoracles,pixelsstdib,sourcebindings,lint/editor/native), thenarchive+commitguard
+Pythoncheck=True. ContinueALLremainingGUIparityafterfeature, NEVERfinalcheckpoint.
+
+## ACTIVE Final tab drag visibility checks (09:07 UTC)
+
+Continue full goal, no checkpoint final. Host final Release24/ASAN9 actual build0.
+Linux final native Quick Release/ASAN ALL10PASS actual0. Linux component first
+Release FAIL after hide/show (!transitioning). Production itemChange now handles
+ItemVisibleHasChanged: clears frame_requested_, synchronizes existing clock,
+polishes/updates when visible. Linux component Release2/ASAN2 ALL6PASS actual0;
+Mac component Release-final ALL6PASS actual0. Mac ASAN final still pending.
+Cocoa final held2/drop2/escape1 each 201600 topbar pixels EXACT, stable hash e37c...
+BEFORE latest visibility hook; redo current binary. No full-window pixel claim.
+Linux sequential final lint9+scene+Neovim20 ACTIVE via host PID58758, raw label
+ tab-drag-final-analysis-linux-remote-1.log. Do not duplicate or run guest heavy
+work until actual exit. Mac final layout lint/editor and native ASAN next.
+No source edits while builds active. All earlier archives frozen. Report draft
+updated08:52 but still needs latest results. No TabDrag archive/commit yet.
+Personal-frame-delivery.md unrelated NEVER read/touch/stage. No agents/publish/merge.
+
+## ACTIVE Tab drag context retirement fixed; counter fixture stabilized (08:49 UTC)
+
+CONTINUE fullgoal, NOcheckpointfinal. Onlythisworktree/noagents/publish/merge.
+Spanishupdates<=60s KEEPANALYSIS<50TOKENS (Ikeepviolatingthiswithlongthoughts;
+DOACTIONquickly). Userpersonal-frame-delivery.md NEVERread/touch/stage. HEADc95fedb81,
+ALLoldarchivesFROZEN. TabdragWIPuncommitted/noarchiveyet. GlobalgoalNOTcomplete.
+
+PERFKERNELcandidate13PROMOTED, see08:21notes: separateTabMotionFrame, inlineplace,
+knownsingleimmediate/singlefinish fastpaths + skipselfcopies. ALL9cases7/7 inall4
+Mac/Linux matrices vsOriginalANDCppA. ALL1048oraclesbothSDKs, ARM/x86baselineRosetta
+exact, x86v3compiled/disassembled. PureactualprodMac4oraclePASS afterpromotion.
+ONLYlaterpureheaderchange removesUNUSEDalgorithm/limits includes (Neovimrequired).
+Needfinalsource-binaryassociation/ASM/perf afterbuilds/lints/editorsidle. NoQt/fullGUI
+latencyclaimfromkernel. ProductionNEWFrameheader trackeduncommitted. NoQtnewtimer.
+
+FinalinitialRootRing buildsRelease18/ASAN4 actual0; thenQuicknew2slots require
+Release19/20 andASAN5. RELEASE10 actor ALL10PASSactual0 for8slots(primarydrag/escape/
+sourcegone/viewport/modal/focus/hiddenCounter/oldpalette). ASAN5 ALLother9PASS but
+COUNTERorderFAIL10s, LSAN533225B2758allocs; rawretained. Notashippedbehaviorconclusion.
+Privateoutdeps/tab-drag-counter-trace-1 (build_tab_drag_counter_trace.py, ASANclone
+controller+Quickobject, samepredicates/deadlines) reproducedSAME8slotorder: ALL10PASS
+butloggedcounterfixturetransitioningtrue, destinationx530.204width116.003, ending617
+OUTSIDEwindow320! Sourcecaptured20correct, frozen21box x1060.41physical..1292, move
+accepted20correct. TraceNOTperf/acceptance; parentfailureexactcausenotfullyestablished,
+clearlyinvalidunstablefixtureadmission. Traceleak489908B2619 andrawallretained.
+
+FIXFIXTUREONLY aftertrace: hiddenCounterPress... waits !layout.transitioning using
+SAME10sdeadline + freshframe BEFOREhover/coords; assertsending insideQRectFwindow.
+Canonicalorderpredicate/deadlineUNCHANGED. Release21/ASAN6testONLYbuildactual0.
+ASAN6actor `tab-drag-native-mac-asan-6` ALL10PASS, actual1LSAN497293B2681. Earlier
+Release19/20enumwidthunreflectedinoptimizedbinarySHA2bf7...cdee; rawsource19saved
+local/tab-drag-fixture-source-release-19. EnumprivateTabDragInterruptionuint8_t now
+viewport/modal/focus, helperhide/show+activateownedwindow realfocuscasePASS. Counter
+creates8additionaltabs via4groups thenresizesminimumWidth, readsdeliveredcounterkey,
+retainsitthroughreveal andmovesafteroldselectedlasttab. Noarbitrarysleep/assertrelax.
+
+OBSERVEDPRODUCTBUG+FIX (latestproduction): newsceneSlot
+`machineContextReplacementRetiresCollidingTabVisuals` setsdragpreview1->after2,
+setContextnewmachineSAMEworkspace/IDs. Negative`tab-drag-context-negative-native-mac-1`
+FAIL actualdraggedBoundsRect300,3,118.484,30 expectedempty (rawbuild/log/receiptkept).
+FIX qt/tab_strip_layout.cpp setContext resetdrag_preview_,dragged_,drop_marker_,
+dragged_bounds_ alongsideoldmotions/clock+hoverreset. setDrag rejectspreviewwhose
+locationworkspacekind/id differscurrentworkspace, matchingOriginalpreviewOrderguard.
+NewsceneSlot alsochangesworkspaceid andtriesoldpreview, verifiescanonicalvisualorder.
+No newFramekernel/transportAPIchange. Broaderpendingmachine/middlebutton/pluscontrol
+capture interactionsnotfullyqualified, fullwindowownershipstillopen; don'tclaimall.
+
+LatestHOSTRelease22 andASAN7actual0. NativecomponentRelease1 actorALL6PASSactual0:
+newcontextslot+motionparks/hide/show/observerretire/countergeometry. RootRingcurrent
+singleNativeRoundedRectangleAFTERRepeaterz1, counter/plusz2, Q_PROPERTYdraggedBounds
+setafterf32physicalmotion andresetperframe; oneextraQObjectnotonepertab.
+
+PIXELS: aftercandidate13+singleRootRing (BEFOREcontextbugfix), qualifiedfinal-held-
+shade-1 andfinal-drop-shade-1 BOTH201600TopbarpixelsEXACT, sameALLnativepointerpoints,
+stableCPPsha fbbf756c...5dd59. Fullwindow567/458diffONLYoutsidebar(y>=108). Receipts
+inlocal/tab-drag-appearance-final-{held,drop}-shade-1/tab-strip-region.json. Old4states
+static/held/drop/EscapealreadyexactbeforeRootRing; finalEscapeafterlatest22notrunyet.
+Noimagealignment/masking/resampling. CommonAXcontrolpointsflooredtocommonlogical
+integer, actualdeliveredwindowpointsloggedandassertidenticalbothactualGUIs.
+
+BROAD/EDITORS: full9unitlint8 eightPASS, layoutFAILmissingFrame.deadline_nsinitializer;
+fixedEXPLICIT.deadline_ns=std::nullopt atQtlocalaggregate, kernelunchanged. Layoutfinal
+lint1PASS. Quickfinal lint1FAILprivateenumsize, fixeduint8; Quickfinal lint2PASS for
+newfocus/counterBEFOREfixtureadmission2newasserts (needfinalQuickcheckifnotcovered).
+Maceditor2FAILunusedalgorithm/limits onMotionheader; removedONLYthose. Maceditor3
+first16sourcesclean butQuickFAILenumsize. Maceditor4remaining4sourcesALLclean.
+NewcontextCpp/scenetestmodifiedafterthose =>finalchecksactivebelow. Profilesunchanged.
+NoaddedLSANsuppression; knownbuiltinMacQt_fetchInitializingClassList rawstillpresent.
+
+ACTIVEJOBS:
+- NativecomponentASANctx1 exec28118 currentbinaryout-native/gui-tab-activity-scene-test,
+  newcontext+3oldslots. WaitactualexitBEFOREanotherGUIactor/rewritingthisbinary.
+- Contextfinalbroad2units exec22481 (layout.cpp+scene.cpp sequential), label
+  tab-drag-context-final-lint-mac-1; inspectactualresults mayneedstylefix.
+- ActualMacNeovimeditor5 exec6432, filesQuick/scene/layout. FirstQuickcleanalready;
+  inspectfinalactualreceipt. NewcontextfieldsCPPandscene onlysourcespending.
+- Linuxpipeline4 exec20290 ACTIVEASAN4thenRelease4j1, snapshot08:40(beforecounter
+  fixtureadmissionandcontextfix). IncludesRootRing/candidate13/unusedheadercleanup/
+  explicitdeadlineinitializer/newfocus+counter+uint8enum. NoSYNCuntilactualexit!
+  Guest4GBnoswap serializeheavybuild/lint/editor/native. VM7158/SSH55984owned; old
+  Sway9469/runtime35801untouched. New`tab_drag_frame_delivery_linux.py` clonesowned
+  compositorhelper butafterPIDmapped runs swaymsg '[pid=OWNED]' floating enable,
+  actualcommand/exitretained, soQuickresizehonored justlikeMacfixture. OnlyownedSway,
+  no globalwindowcalls. `run_tab_drag_linux_native.py` 8selectedslotsRelease/ASAN,
+  helper/caller alreadysyncedby4. Final5sourcesneededafter4exit (below).
+NoCPUTIMINGactive, NOotherGUIactor. Noagents. No otherhostbuildactive.
+
+NEXT: waitASANctxactual, runfinalEscapeCocoacapture22stable (keep1GUIactor); inspect
+broads/editorfinal andfixonlynewerrors. Linux4actualexit ->sync5narrowlatestlayout/
+Quick/scene fixes+bothbuildj1 ->native8Quickand4componentbothSDKRelease/ASAN, full
+9+scene broadunitsj1andactualNeovimeditorserialized. NeedoriginalpureMotion/Drag
+actualfinalsourceoraclesLinux+Mac afterprototypepromotion, finalperfsource/ASM/sizeof/
+no-hotalloc evidence whenBOTHmachinesidle, artifactfreezeallownedrawprototypes/
+negatives/qualifiedcaptures+sources/configprofiles, reporttab-drag.md+PARITY, offline
+verifiercurrent-source/executablecredentials. DoNOTrefreshpriorarchives. Thencontinue
+ALLotherPARITYgaps, NEVERfinalata partialcheckpoint. Overallleak/fullwindowpixels/
+IMEhardware/otherDPR/Linuxvisuals/fullperformance/extensibilityetcstillopen.
+
+## ACTIVE Tab drag promoted candidate13; final builds/tests (08:21 UTC)
+
+CONTINUEFULLGOAL autonomously, NOcheckpointfinal. Onlythisworktree/noagents/publish/
+merge. Spanishupdates<=60s. KEEPANALYSIS<50TOKENS; Irepeatedlyviolatedupdateswithlong
+thoughts, useACTIONquickly. Userpersonal-frame-delivery.md NEVERread/touch/stage.
+HEADc95fedb81, alloldarchivesFROZEN. NoTabdragcommit/archiveyet. GoaloldblockedAPI
+cannotresume, manuallycontinue. Globalparity/leaks/fullpixels/perfetcstillOPEN.
+
+NEWPERFCANDIDATE13 ACCEPTEDpurekernel4matrices andNOWPROMOTEDtoproduction:
+`presentation/tab_motion_frame.hpp` NEW (framebeginmonotonic; requeststarted/duration
+coalescessaturatingdeadline), `tab_motions.hpp` originalseenbool +forcedGNUinlineplace,
+fastknownsingleimmediate+fastsinglefinish+skipselfcopywhenkept==index; NO bitmap,
+NOhybridthreshold. APIbegin(ws),place(slot,TabMotionFrame&),finish(); nextdeadlinefrom
+frame.deadline_ns. QtTabStripLayout.rebuild constructslocalframe withONEnow/interval
+fromexistingWindowAnimationClock, placeTab(id,bounds,frame&), retainsframe.deadline_ns.
+Tooltab_motions_probe updatedsamewireprotocol+directframeinclude. Copiedcandidate13
+canonicaldedupedlintprobe, clangformattedproductionheaders/probe/layout. Source2headers
+inignoredcandidate13 areunformattedmeasuredversion; finaloracleMac4actual0afterpromote.
+Sourceformattingnotanoptimization; finalsourceassociation/perf/ASMstillneedfreeze.
+
+Candidate13roots `tab-motions-frame-compact-{mac,linux}-1` and
+`tab-motions-frame-compact-vs-cpp-{mac,linux}-1`, eachpaired-original-1orpaired-1.
+UNCHANGEDOriginalTabMotions/FrameClock vsactualC++O3ffpcontractoff. ALL9CASES×7pairs
+ALLSEVENWINS inALLFOURmatrices (252pairedcomparisons):
+MacvsOriginal ratios [.853,.781,.581; .877,.853,.597; .805,.857,.598].
+MacvsinitialCppA [.739,.862,.929; .777,.792,.893; .621,.817,.894].
+LinuxvsOriginal [.916,.823,.581; .876,.894,.581; .835,.927,.576].
+LinuxvsCppA [.735,.909,.907; .732,.806,.851; .617,.830,.859].
+Casesmodesidle/motion/liftedfirst×1/8/64; checksumRectbits+deadline exacteachpair.
+NoQt/GPU/fullclientperformanceclaim. No0–1control exceptions. CPUinsidekernelclock,
+7alternatedpairs, target.15s/casecap64M; ownhostANDguestallbuilds/editors/GUIstopped.
+Rawcommands/inputs/stdoutbins/clocks/calibration/binaryhashes/uptime inpairedroots.
+Candidate13 PASS1048ASAN/UBSAN frames bothMac+Linux. Crossroot
+`tab-motions-frame-compact-cross-1`: ALL1048exact nativeARM andx86baselineRosetta,
+x86v3compiled+disassembledONLY. NoRosettatimingclaim. Actualbroadovercleanlint-only
+probe copy(duplicateincludesremovedWITHOUTchangingmeasuredheaders/binaries) exits0
+underfullunchanged.clang-tidy. Earlierprototype1..12failuresallKEPT, seebelow.
+
+Lateexperimentsafterold08:08notes:
+10 frame-inline passedMacbutLinuxidle1LOST1/7ratio1.009,drag1LOST0/7ratio1.033 =>REJECT.
+11 frame-single (fastknownsingleimmediate) Linuxdrag1fixed7/7,butidle1LOST1/7ratio1.037.
+12 frame-single-finish addsfastsingletonfinish; Linuxmotion8/drag8ONLY5/7 despitebetter
+medians =>REJECT, noexc. InspectedrawCPU/wall nearlysame, notestablishedexternalwait.
+13 frame-compact alsoskipsallselfcopies; all4matricesPASSasabove. Candidate12/13rawprobe
+hasduplicateFrameinclude inheritedgenerator, harmlessbut13broadoverSEPARATEcanonical
+lint/probe.cpp; productionprobeCOPIEDcanonical. DoNOTmutatemeasuredprototypes/binaries.
+
+GUIcontext: RootRingONEobjectnewQ_PROPERTYdraggedBounds+field/getter; sourceborder
+nodeAFTERRepeaterz1,counter/plusz2, ghostbeforepills. BaselineRelease16 per-delegatering
+had4qualifiedEXACTCocoaTopbar201600pxstatesstatic/held/drop/Escape, fullwindowsstill
+outsidebardifferences. Candidate13+RootRingnewpixelsNOTYETRUN. RootRing3ASANnative
+functionalALL8PASSactualtests; compiledASAN3actual0, butLSANexit1530626B2832allocs.
+Rawlocal/tab-drag-native-mac-asan-3.{log,json,-private.json}, GUIquickSHA6689cc04...63bf.
+NoaddedLSANsuppression; builtinMacQt_fetchInitializingClassList stillraw. OldASAN1
+leaks542719/2926; componentASAN1 668285/3440. Keepall. NativeisQt-dispatchedwithin
+ownedactivewindow/privateboards, NOTphysicalWindowServerqualification.
+
+ACTIVEJOBS (NOCPP/header/QMLeditswhileHOSTRelease17ACTIVE):
+- Release17 exec99523 ACTIVEtargettelar-gui/gui-quick-test/gui-tab-activity-scene-test.
+  CMakeimports~2min then155units; nowqrc~100/155. ASAN3exec28787 actual0already.
+- Full9unitlint8 exec51690 ACTIVE(orcheckactual); ONLYknownerrorTabStripLayout445
+  missingdesignatedinitializer frame.deadline_ns. ACTUALBUILDnotWerrorpasses. FIX
+  NARROWLYafterRelease17actualexit: add `.deadline_ns = std::nullopt` tolocalframe
+  initializer. DO NOTchangeFrameheader(keepmeasuredkernelunchanged). Thisneedsfast
+  Release18+ASAN4rebuildonlylayout/link, finalassociatednative/pixels/lint/editor.
+- NativecomponentASAN3 exec5300 ACTIVE3slotssettle/retire/counter. Waitactualbefore
+  anotherGUIactor; sourcebinaryout-native remainsstablewhiletestsactive.
+- Linuxpipeline3 exec89637 ACTIVEASAN3thenRelease3j1, sync08:17FINALRootRing+candidate13
+  snapshot(alsoMISSINGexplicitframe.deadline_nsinitializer). NOremoteSYNCuntilactual
+  pipelineexit, thennarrowlayoutfix+rebuildbothforfinalnative/broad/editor. 4GBnoswap,
+  NEVERoverlapguestheavybuild/lint/editors. VM7158/SSH55984owned, oldSway9469/runtime
+  35801untouched. `run_tab_drag_linux_build_3.py` correctlyincludesNEWFrameheader and
+  distinctremote-3log (old2logcollisionretainedmetadata).
+Noactiveagents; noCPUtimingcurrently. Productionprofile.clang-tidy/.clangd unchanged.
+
+NEXT: hostRelease17actualexit ->explicitQtinitializerfix ->Release18/ASAN4 ->full
+10unitsbroadcleanup+actualMaceditors includingnewFrame, nativeQuick8+components, final
+stableRootRing/13held/drop/EscapeCocoapixels (ONEGUIactoratatime). Linux3actualexitthen
+narrowlayoutfix/rebuildboth+directednativeQuickandcomponents+fullbroad+actualeditors
+serialized; finalpureoraclesbothSDKs/prodsource, finalpairedsourceassociationandASM/
+nohotalloc/sizeofbounds, recordsfreeze+report/PARITY. Couldcheckknownnativeblur/machine/
+hiddencounterownershipgaps beforecallingfeaturecomplete. Noarchive/commitofunfinished
+feature; thencontinueALLotherPARITYrows. UsercheckpointNOTcompletion; nofinalturn.
+
+## ACTIVE Tab drag: exact four Cocoa bars, isolated perf candidate10 (08:08 UTC)
+
+CONTINUEuntilfullgoal, NOcheckpointfinal. ONLYthisworktree/noagents/publish/merge.
+Spanishupdates<=60s KEEPANALYSIS<50TOKENS! Iviolatedupdateswithlonganalysisseveral
+times; useactionortoolafterbriefthought. Userpersonal-frame-delivery.md NEVERread/
+touch/stage. HEADc95fedb81; ALLpreviousarchivesFROZEN. TabdragstillWIPUNCOMMITTED.
+GoalAPIoldblockedcannotresume; manuallycontinue, NEVERmarkgoalcompletefromcheckpoint.
+
+HOSTbaselineGUIRelease16 andASAN2 actual0. NativeRelease8 ALL8PASSactual0 includes
+reorder+deliveredhover/Escape+identityrestart/sourcegone/viewport/modal/oldpalette.
+ASAN2 finalnativeNOTRUNyet (performanceexperimentsneededidle; earlierASAN1 functional
+6/5PASSbutleakactual1 totalsbelow). Full9unitlint7 ALL9EXIT0; sceneunitlint2EXIT0;
+actualMacNeovimeditor1 ALL15sources DELIVEREDemptyclangd, actualexit0. TheseareBEFORE
+newSINGLEROOTRINGQteditbelow andanyfuturepureperf promotion; finalqualificationneeded.
+Linuxpipeline2actual0 BOTHASAN/Release, butSNAPSHOTbeforehover/layer/ringfixes. VM7158/
+SSH55984owned idleNOW; NOotherheavyguestjob untilcandidatecompile84955actualexits.
+DoFINALsync3bothSDKGUIj1+native/lints/editorsserialized4GBnoswap afterpureperfdecision.
+DoNOTtoucholdSway9469/runtime35801. Allprofilesunchanged, NOaddedLSANsuppression.
+
+FOURqualifiedCocoastates exactTopbar[0,0,2400,84]201600pixels EACH:
+1 physical-separator-shade-1 STATIC corrected3872->0 beforehoverchanges.
+2 separated-ring-shade-1 HELD0, sameALLdeliveredpoints+stableCPPsha d1159136...f4dd8a.
+3 drop-shade-1 DROP0, actualorderTwo/Three/One both (QtAXroundsfractionalrects only).
+4 escape-shade-1 ESCAPE0, canonicalbeforeorderpreservedboth.
+Last3rootslocal/tab-drag-appearance-{...}, tab-strip-region.json receiptsassert0,
+identicalnativepointereventwindowpoints+binaryhash. Fullwindows STILLdifferent
+3830/736/614px respectively OUTSIDEbarboundsstarty108. Noalignment/resample/masks.
+Commonpointerintegral_control_point floorsAXderivedcontrolpoints onbothSDKs so
+actualnativeeventsIDENTICAL (previousAXcentersdiffered.5logical, diagnosticrawkept).
+Oldcommon-pointer-shade-1 DIAGNOSTICONLYdueMYbuild14race, notqualified (see08:42notes).
+RingCAUSE110AApixelscombinedfill+border vsOriginalseparatefillthenring. Release16
+usesseparateringCHILDPERDELEGATE andALL3statesbarsexact. Nofullwindowvisualclaim.
+
+NEWUNBUILTQtedit AFTERRelease16/ASAN2: replaceper-delegateringwithONEroot
+NativeRoundedRectangle objectName draggedTabOutline,z1 AFTERRepeater, beforecounter/
+plusz2. TabStripLayout newQ_PROPERTY draggedBounds/dragged_bounds_+getter, setin
+placeTabafterphysicalmotionconversionwhenactuallydragging, resetbeforeloop/invalid.
+Avoid64ringQObjectsidle; 1reusedrootring. DuplicateclearintroducedbytextreplaceFIXED.
+NeedsBUILD/LINT/EDITORS/PIXELS final; noactualSDKbuildACTIVEthismoment.
+
+PERFORMANCEwork ALLisolatedignoredroots, PRODUCTIONpresentation/tab_motions.hpp
+andtools/tab_motions_probe.cpp STILLINITIALVERSION (`place(slot,now)`, deadline scan).
+NOexperimentalheaderpromoted yet! PureMac3 oldprodoracle1307/43708drag+1048motionsPASS.
+
+Ignoredhelperslocal/prepare_tab_motion_*.py +pair_tab_motions.py retainALLvariants:
+A `tab-motions-benchmark-mac-1`: unchangedOriginalTabMotions/FrameClock ReleaseFast
+againstactualC++headerO3ffp-contractoff. CPUclockticksinsidekernel, checksumsfromall
+Rectbits+deadline, cases1/8/64tabs×idle/motion/liftedfirst. Untimed9checksEXACTalsoMac
+x86-64RosettaandLinuxAArch64 (`tab-motions-benchmark-{mac-x86,linux}-1`). RosettaNOT
+fortiming! Allactualguibuilds/editors/nativeactorsstoppedfortiming. paired-1A small
+casesended<10msbecausecap2M; rawKEPT. Pairhelper nowcap64M targets.15sCPU/case,
+7alternatedpairs. Drivercopiedintoeachresultdir; calibration+rawstdoutbin+checksums+
+actualexit+bothbinaryhashes+uptime retained. Nonewacceptanceexception!
+A BEATOriginal64all7, butLOST0/7small1/8moving/dragging. Assembly A placeOUTOFLINE,
+Originalinlined. Preservedassembly-baseline/*.s ANDsource/{3headers}beforeexperiments.
+
+Allisolatedvariants below PASS1048ASANframes byteexact, butmostREJECTEDperf:
+1 inline: gnu always_inline place. Losesdrag1 0/7ratio1.077 =>REJECTED(decision.json).
+2 bitmap: mask64forseen, skipcompactionwhenalllive; allvsOriginal>=6/7 BUT64slower
+   thanA (inferredthenmeasuredalignedversion).
+3 bitmap-aligned: alignasmax_align_t ->ALLOriginal7/7. ExplicitvsCppA9cases
+   `tab-motions-bitmap-aligned-vs-cpp-mac-1` LOSES64ALL0/7, ratios1.40/1.33/1.34.
+   REJECTED2/3. FirstpreparealignedrunnerFileExistspatherrorabortedbeforemutation,
+   rawreceiptlocal/tab-motions-bitmap-aligned-prepare-failure-1.json.
+4 hybrid: bitmap+rangebasedlookup+inline<=8, outoflineMany>8. drag1LOSES1/7ratio1.015.
+5 immediate: hybridseparatesimmediateroute. drag1LOSES0/7ratio1.0072.
+6 single-retirement: fastfinishcount1. drag1LOSES1/7ratio1.0043.
+7 single-immediate: directexistingsolemotionimmediate. ALLvsOriginal7/7 BUTvsCppA64
+   LOSES0/7ratios1.13/1.06/1.0566. REJECTED, noexception.
+8 fused: ownsframe_now_/interval/deadlineinTabMotions, coalescesduringplace; small
+   LOSES0/7andidle1/7. REJECTED.
+9 frame: separateTabMotionFramehelper, retainseenbool, hybridinline/outofline. Oracle
+   ONLY, nevermeasured; supersededbysimpler10.
+10 `tab-motions-frame-inline-mac-1`: separateFrame, originalseenbool, NOhybridlimit,
+   no bitmap, GNUalways_inlineplace. APIbegin(ws),place(slot,TabMotionFrame&),finish,
+   `frame.deadline_ns`; frame.begin(now) clampsmonotonic+resetsdeadline; frame.request
+   coalescessaturatingdeadlinewithinterval justlikeOriginalFrameClock. Inprototype
+   newheaderpresentation/tab_motion_frame.hpp (notproduction), 2headers+probe.cpp+
+   benchmark.cppretained. ALL1048ASANoracleexact. PairedOriginalALL9>=6/7 (8cases7,
+   idle1six); ratios[.918,.760,.595; .904,.839,.622; .986,.834,.624].
+   Explicit `tab-motions-frame-inline-vs-cpp-mac-1` ALL9SEVENwins,
+   ratios[.782,.841,.958; .805,.779,.929; .757,.790,.930]. MacscopePASSES,
+   NOTYETPROMOTEDpendingLinux/broad/crossarch. SmallOriginaldragimprovement~1.4%,
+   don'tinventstrongerclaims/fullGUIperformance frompurekernel.
+
+ACTIVEJOBS:
+- guestcandidate10prepare/oracle hostexec84955, wrapperprepare_tab_motion_frame_linux.py.
+  Rootguestlocal/tab-motions-frame-inline-linux-1 shadows2headers+probe/benchmark,
+  originalbenchcopiedLinuxbaseline, oracleusesUNCHANGEDLinuxoracle1sourceoutput/input.
+  Actualguestcompiledheadersnotmodified, noQtbuild/lint/editorconcurrent4GBnoswap.
+- Macisolatedcandidate10broadlint exec21819, rawunderprototype/lint/ withfullproject
+  .clang-tidy, manualQt-freeCPP23includes; inspectactualresult (mayunusedincludes/
+  formatting/directinclude warnings). Don'teditmeasuredprototype: forfixcreateNEW
+  variant/snapshot+remeasureorequivalence asneeded; productionstillbaseline.
+- NOGUIactoractive, NOtimingactive, NOagent. Bothabovecompilesmayrunconcurrentlyon
+  differentmachines; BEFOREtimingwaitBOTHactualexit, hostotherbackgroundidle.
+
+NEXT: candidateLinuxoracle+7alternatedpairs vsOriginal ANDvsCppA serial(noMacCPUjobs
+atthesametime), disassemblyAArch64/x86baseline/v3+Rosettaexact10updatedAPI, fullbroad
+analysis. Ifcandidatepassesallgates,promote2headers+toolprobe+Qtintegration(usinglocal
+TabMotionFrame withoneWindowAnimationClock samplednow/interval; placeTab(id,bounds,
+frame&) insteadtimestamp; nextsample=frame.deadline_ns). ThenfinalGUIbuildsRelease17/
+ASAN3andLinuxsync3builds, finalnative8slots+componentsbothSDKs, broadallclean+actual
+editors, repeatstableheld/drop/EscapepixelsforRootRing+promotedperf, measurewhole
+integration/boundedmemory, archive/report/PARITY. DoNOTfreezeincompletefeature orend
+turnatcheckpoint. ContinueotherPARITYmissingrowsafterfeature accepted. Globalnative
+leak/fullwindowpixels/IMEhardware/fullperformance andextensibilityetc STILLopen.
+
+## ACTIVE Tab drag: final ring composition candidate builds (07:42 UTC)
+
+CONTINUE fullgoal, NOcheckpointfinal. ONLYthisworktree/noagents/publish/merge.
+Spanishupdates<=60s; keepanalysis<50tokens. Userpersonal-frame-delivery.md NEVER
+read/touch/stage. HEADc95fedb81; ALLpreviousarchivesFROZENunchanged. TabdragWIP
+uncommitted, notaccepted. GoalAPIoldblockedcannotresume, manuallycontinue.
+
+Newchanges since07:29: hovermustuseDELIVEREDsurfacepoints evenwhileMouseArea
+ownsgrab (OriginalChrome.widgetPointerbeforetab_drag). AddedTabStripLayout hoveredTab
+Q_PROPERTY+setPointerHover, PointerDispatcher.observeTabHover onpress/move/release/
+leave/focuscancel, namespacecontextresetclears. QMLtabsusecontrollerlayout.hoveredTab,
+standalonekeepsMouseArea.containsMouse. ChromeButton pointerHovered defaultshovered;
+hiddenCounter overridesdeliveredkey. Liftedsource physicaldrop_slot movedAFTERother
+pillsbeforecounter; TabDropSurface nowcreateRect+at(point), excludesplusbeforechecking
+reverseorderedtabslots. ApplicationtabDropSurface recordscreateplusphysicalbbox.
+Counter/plus z2 (Originaldrawsafterliftedsource). FixedoldheldQtmissingThreehover+plus.
+Noallocation/newtimer. BroadSurface/controllerlint5/6already0. SetContextresetskey.
+
+Pureoracles FINALheadersMac3actual0: drag1307/43708, motions1048 exactASAN/UBSAN.
+NativeQuick7sourceclosed PASS6. NativeQuick8 LATESTRelease15 PASS8actual0includes
+reorder+hoveridentity/Escape+samecapturedsource restart/sourceclosed/viewportchange/
+modalopen/oldpalette. Testnamespacefunctions tabDragCancelsWhenViewportChanges and
+WhenModalOpens callprivateverifyTabDragCancellation(bool). EarlierQt_data attempt
+REJECTEDbybroadnaming/incompleteQTestData; build14actual1 preserved. Noassert/deadline
+relaxed. Optionalcapturedtestguard nowexplicitif(captured)elseQFAIL; QVERIFYhas_value
+wasnotrecognizedbybroaduncheckedoptionalcheck, rawfull4/5failuresretained. Helpers
+[[nodiscard]]. QuicktestdiffonlyADDEDlines, nooldformattingdeletions.
+
+MacASAN1 buildactual0 BEFOREhover/ringfix. NativequickASAN1 ALL6asertionsPASSbutactual1
+LSAN542719B2926allocs. NativecomponentASAN1 ALL5PASSbutactual1 LSAN668285B3440allocs.
+NoaddedLSANsuppression; QtMacbuiltin_fetchInitializingClassList rawstillpresent.
+NativecomponentRelease2 ALL5PASS includesmotionidle/hide/show/observerdestruction/
+hiddencountergeometry. ExternalWMfocus errorsshort-livedwindows retained, don'tclaim
+physicalWindowServerqualification. Componentlint1failednamed600/directincludes; NOW
+fixedmotion_strip_width600 +array/tab_drop_slotsdirectincludes, componentlint2ACTIVE.
+TabStriprebuildfull5size101lines+constspan fixedextractraiseDraggedSlot(), notprofile.
+Full6stilloldQt_dataquicktesterrors; full7 latestsourcesACTIVE.
+
+STATICnativepair physical-separator-shade-1 Topbar201600px EXACT (before3872diff).
+Fullwindow819diffoutsideTopbar. CausalNavigationBarseparator1logical->1physical +
+physicalfloor. QtAXrounds99.5widthto100 and371.5xto372 evenwithEXACTpixels.
+
+HELDnativecapture chain:
+- tab-drag-appearance-held-shade-1 oldhover/layerpair full15013diff, missingThreehover
+  andplusQt. Rawunmodified.
+- delivered-hover-shade-1 fixeshover/layer, Topbar1650diff ONLYsourceborderbounds
+  [807,6,1006,66]. AX-derivednativepoints DIFFER0.5logicalx betweenSDKs!
+- common-pointer-shade-1 helperadds integral_control_point floor toALLAXcontrolpoints,
+  logsdeliveredwindowpositions; bothALL6eventsEXACTsamecoordinates (press218,779;
+  drag453,779). Topbar110diffONLYAAcorners[808,6,1006,66]; full1158diff. DiagnosticONLY
+  becauseMYmistake startedRelease14whilecapture13wasrunning. Ninja74596parkedwith
+  SIGSTOPbutGUIalreadylinkedbeforepark; Qtactorhadnotstarted. ResumedAFTERactual
+  captureexit; build14thenfailsQt_data. RecordedQtSHA3d4fb...bb4 differscurrent08ab...
+  DOREPEATstablefinalbin; noacceptancefromthispair. capture-park.json rawretained.
+- CAUSE110AApixels: parentNativeRoundedRectangle combinedfill+border onepass versus
+  OriginaldrawTabfill thenringAt separatequad. CURRENTTerminalTabs removesparent
+  border, addsseparateNativeRoundedRectangle ringchildAFTERcontent, visibilitydragging.
+  Needfinalstablecommon-pointerheldpair toproveexact. Noimagealignment/resample/mask.
+
+ACTIVEjobsNOW (NOCPP/header/QMLeditswhileHOSTbuildsactive; NOGUIcapturebeforebuildexit):
+- Release16 exec67952, ASAN2 exec30473 parallelindependenthostoutdirs; finalringQML.
+- Full9unitlint7 exec11270, sceneunitlint2 exec51699. Full6 exec99385 maybeDONE.
+- Linuxpipeline2 exec91516 ASAN2actual0, Release2stillactive. SNAPSHOTbeforehoverfix;
+  noSYNCuntilactualexit, thenFINALsync+bothj1+native/lints/editors serialized4GBnoswap.
+  New2helperaccidentallyreusedremote-1summarylog, renamedOPENfile toremote-2 while
+  running. First2-linesummarylost, recordedtab-drag-build-linux-remote-log-collision.json;
+  originalguestper-buildraw1logs+result.jsonUNTOUCHED. Neverreconstructlostrawstdout.
+NoGUIactorcurrentlyactive. Noactiveagents.
+
+Preparedignoredlocal/prepare_tab_motion_benchmark.py ->tab-motions-benchmark-mac-1,
+unchangedOriginalTabMotions/FrameClock sourcecopies+narrowfacades vsactualC++header,
+CLOCK_PROCESSviaCclockticks, binaryinput count/mode/iterations, outputchecksum/ticks/
+frequency. UntimedequivalenceALL9controlsPASS(1/8/64tabs×idle/motion/liftedfirst4096frames).
+NOpairedtimingyet (buildsactive!). Need7alternatedpairsafterhostANDownedVMidle,
+allcontrolregressions6/7rule/noinventedexceptions; Mac/Linux andactualeditors required.
+Preparebuild logsrawidentities. Newreporttab-drag.md DRAFT notaccepted. Needstableheld/
+drop/Escapepixels, nativefinalbothSDKASAN/Release, broadallclean+editors, measure/bound
+CPU/memory, freezeownedarchive/manifestwithALLignoredrawfiles, PARITY/report then
+continueotherfunctional+visual+perfopenrows. UsercheckpointsNOTcompletion.
+
+## ACTIVE Tab drag: native lifecycle and exact static TopBar (07:29 UTC)
+
+CONTINUE fullgoal autonomously, NOcheckpointfinal. Spanishupdates<=60s, ONLYthis
+worktree, noagents/publish/merge. Userpersonal-frame-delivery.md NEVERread/touch/stage.
+HEADc95fedb81; allpreviousarchivesFROZENunchanged. TabdragWIPstillUNCOMMITTED.
+
+Releasebuild10/11/12 actual0. build12 latestbin. NewhiddenCounter drop-slot added
+(max64safe sincehiddenmeansshown<64); QMLcounter nowselectCapturedTab onPressed,
+notonClicked, matchingOriginalselect_tab press. NativeQuick7 PASS6entriesexit0:
+reorder/Escape/restartidentity/sourcecloseduringcapture/oldpalette. Sourcegone
+retainsheldrelease sink andclearsghost. Nativecomponent6 PASS4entries settles/
+parksclock+hiddenCounteridentity/density. Componentmotion2 PASS5entries includes
+hide/show duringmotion + observerdestruction whiletransitioning, sharedtimerparks;
+externalAeroSpacefocus attemptonshort-livedwindow failedafterwindowalreadyclosed,
+rawreceiptretained; don'tclaimphysicalWindowServerfocusqualificationfromit.
+
+STATICnativepair originalbaseline3872diff inTopbar[0,0,2400,84]201600px. Proven
+causeNavigationBar used1LOGICALseparator vsOriginal1PHYSICAL. CurrentQML uses
+physicalPixel1/Screen.devicePixelRatio, physicalfloor forseparator x/y andcontextRight.
+Qualifiedcorrectedpair local/tab-drag-appearance-physical-separator-shade-1:
+EXACT201600Topbarpixels; fullwindow819diff ONLYoutside regionbounds[0,108,251,1582].
+Noalignment/resampling/masking. QtAX rounds fractionalbounds (Two100vsOriginal99.5,
+Three372vs371.5); thisisNOTink/geometrymismatch: wholeTopbarpixels nowexact.
+Baselineandafterlocal/tab-strip-region.json retaincomparison; scripts/rawcapture
+provenanceunchanged. Originalbaselinecapture wrapper oldversion preservedinside.
+
+ACTIVEjobs:
+- HostMacASANbuild1 exec63184 via run_tab_drag_build.py asan; noCPP/header/QMLedits
+  whileactive. LatestRelease12 actual0, nativeQuick7 SHA9d942a7a...e93.
+- Hostfull9unitlint4 exec88536 (toolsdrag,command,controller,layout,pointer,motions
+  already0; remainingapplication/windowclock/quick pending). NeedNEWcomponenttest
+  lint too (notin9unithelper), actualeditors bothSDK stillrequired.
+- Linuxpipeline2 exec91516 syncFINALsources07:27, buildsASANthenReleasej1; NOsync
+  whileactive, guest4GBnoswap serializeallheavyjobs/lints/editors. Pipeline1actual0.
+- NativeHELDcapture exec41452 ACTIVE originalthenQt 45s/client. helperlocal/
+  tab_drag_native_capture.py nowusesfraction.75 existinggenericAXfraction ANDrelease
+  reuse_pointer=True (avoidretargetmovingcontrol). Modeshold/drop/escape/none.
+  labeltab-drag-appearance-held-shade-1; ONLYoneGUIactoratatime.
+
+Needactualexits, held/drop/Escapepixels, morecancelmodal/viewport/blur/machine/native
+ownership, finalpureoracleassociations/ASANandLinuxnative, broadanalysis+actualeditors,
+pairedboundedCPU evidence, archive/report/PARITY, thencontinueothergaps. Fullparity
+NOTaccepted. NoaddedLSANsuppression; builtinMacQt_fetchInitializingClassList knownraw.
+Keepanalysis<50tokens; commentary~40s. Nootheractiveagent.
+
+## ACTIVE Tab drag native motion/fixture diagnosis; build9 active (07:19 UTC)
+
+CONTINUE untilfullgoal, NOcheckpointfinal. Onlythisworktree/noagents/publish/merge.
+Spanishupdates<=60s KEEPanalysisSHORT. Userpersonal-frame-delivery.md NEVERread/touch/
+stage. HEADc95fedb81; ALLearlierarchivesFROZENunchanged. NewTabdragWIPuncommitted,
+NOTaccepted/fullparity. Seeolder06:59notesbelowforsources/builds/domainchecks.
+
+PureDrag1307/43708 exactMac+LinuxASAN/UBSAN. PureTabMotions1048frames+deadlines
+EXACTMac1/Mac2/Linux1 (allactual0). NoQt/perfclaim. Newclockusesboundedphysicalf32
+positions andoneexistingWindowAnimationClock consumer8; context(machineView,workspace)
+reset,180mscubicfromsampledpositions, immediateonlyliftedsource. Pendingpreviewmatches
+originaltab_operationgroup. Capturedpresssource nowselectCapturedTab() withouttrusting
+QObjectreceiverkey (publicPointerDispatcher.capturedTabgetter). CoreSessionexplicitmove
+regressionPASSASAN. ExistingpalettewidgetreorderPASS. TypedtabKey +existingvisualItems
+findtrueQMLdelegates; earlierQObjectlookupfailurepreserved.
+
+BuildRelease6motion and7capturedsourcefixactual0. Rawbuildsunderlocal/tab-drag-build-
+mac-release-{2..9}. Build1partiallatechunkslocal/tab-drag-first-gui-build-observed.json
+(actualQtmacro.slotsfail); build2ownedVectorcopyfail fixedconst&; earlierfailuresretained.
+Full6unitlint2PASS BEFOREmotion. 9unitfull3FAILED: Motionexprneedsparentheses, direct
+WorkspaceLocationinclude, newQuicktest constpointees/duplicateqmlfixture include, plus
+UNRELATEDclangformat-expandedoldmethods sizechecks. FixesAPPLIEDafterfull3: parenthesize
+samef32order, directmessagesinclude; QuicktestheaderrestoredEXACTHEADprefix (qml_fixture
+ALREADYincluded), restoreallwhitespace-onlyoldmethoddiffs viaSequenceMatcher. Current
+QuicktestdiffhasNOolddeletedlines, onlynew2slots+4helpers. Newpointeesconst. Needfinal
+9unitfull4aftercurrentbuild; alsoactualeditorsbothSDKrequired. NEVERformatwholequickfile
+again, wouldreintroduceoldmethodsizefailures. ProgramformatprofileUNMODIFIED.
+
+Native2 BEFOREmotion5PASS0 for2newslots+oldpalette. Snapshotoutdeps/tab-drag-before-
+motion-2 associateshash876e3a061...; before-motion-1 earlierfailedhelper. Native3 AFTER
+motion4PASS1FAIL: restartafterEscape usesmoving/occludedsourcecenter; firstdropPASS,
+EscapeitselfPASS. Native4 waits!sharedTimer.isActive butSTILLcapturesneighborID5vs4
+(directnewidentityassert fails; NOTassertionrelaxed). Critical: timerinactive canmean
+waitingforframe, nottransitionfinished. Privateobserveroutdeps/tab-drag-call-trace-1/2
+rebuildsONLYcontroller(+currentQuicktestfor2); rawsource/commands/binariesSHAretained.
+Trace2native showsNOhiddenduplicate: bothvisible; source2QRect(636.98,4.63749,209,30)
+overlapsneighbor3QRect(689.89,6,205.856,30), sourcecenter741insideTOPneighbor3. Presented
+press correctlycaptures3 atsamebounds. Originalfirstpress captures2 fine. Therefore
+fixturemustwaitactualmotioncompletion orpickvisibleportion, notblindlypressitemcenter.
+
+CURRENTfix: TabStripLayout Q_PROPERTYbool transitioning (next_sample_ns_.has_value),
+NOTIFYexistinglayoutChanged. Newfixture waits!layout.transitioning (same10sdeadline),
+thenfreshframe, recomputesBOTHsource/destinationcoords, assertscapturedsourceID then
+samecanonicalreorderpredicate. Publictimerstillcheckedexists; unchangedassertions,
+noarbitrarysleep. HostReleasebuild9 ACTIVEexec7955 via run_tab_drag_build.py, NOCPP/
+header/QMLeditswhiledependentbuildactive. Waitactualexitthenrunnewnative5label using
+local/history_motion_native_test.py and2slots+palette. Iftransitionflagneverfinishes,
+diagnoseclockwakeup; don'trelax. Needcomponentclockidle/hidden/destructiontests too.
+
+OwnedLinux buildpipelineACTIVEhostexec40880; ASAN1 actual0, Release1 nowrunning in
+VM7158/SSH55984. SourceSNAPSHOTat07:04 beforestyle/fixture/getterfixes; noQtnewfinalsync
+untilpipelineACTUALLYexits. THENsyncfinalsource+buildbothagainj1. NEVERoverlapguest
+build/lint/editors4GBnoswap (priorOOMretained). OldSway9469/runtime35801untouched.
+
+NativePIXELShelperlocal/tab_drag_native_capture.py clonesqualifiedboundedHistory
+capture+ownedboards/focus/freshMetal+Originalread-onlyMetalquadobserver; onlyscript
+creates3tabswithdefaultprefixCtrlB c, renameCtrlBShiftT, namesDragOne/Two/Three. Modes
+none/hold/drop/escape; controlnamesmatchbothactualAX. NootherGUIcurrentlyactive except
+pipelineexec52542 maybeDONE(checkactual). Baselinequalifiedpair tab-drag-appearance-
+baseline-shade-1 actual0, full2400x1600diff6677mostlyoutsideTabs. Both3tabnamedcontrols
+present/fresh/focused. OriginalsceneRectsOne[169,6,99,30],Two[270,6,99.5,30],Three
+[371.5,6,109,30]; Qt[170,6,99,30],[271,6,100,30],[372,6,109,30]. Realstatic1logicalpx
+origin +.5width gapOPEN; don'talign/mask/resample. LikelyNavigationBar context/measure
+rounding butcausenotestablished. SourceTopBar.zig contextNameCanvas.measure vsQt
+ChromeText.implicitWidth; tabs sourcecaption widths too. NeedexactpairedTABregion and
+independentgeometry beforefixes. Modehold/dragcenterlandsBEFOREtargetmidpoint(source
+Originalpositions);chooseexplicittrailinghalf forafter-target test, derivefromactualAX
+bounds, notassumptions. Artifactscript uses45sperclient, nativefreshnessunaltered.
+
+Prepare currentreportmeasurements/tab-drag.md DRAFT. SourceheaderMotionstyleeditsafter
+lastoracles needfinalassoc/repeats. Neednativeownershipsourcegone/blur/workspace/viewport/
+modal/machine, fullMacASAN/Linuxboth+components, exactnativebaseline/held/drop/animation
+pixels, finalbroadanalysis/editors, boundedmemory/pairedCPU evidence (perfskillrules),
+freezeownednewarchiveonlythencommit. ContinueotherPARITYgapsafterfeature, NOgoalcomplete.
+GoalAPIoldblockednoresumeAPI; manuallycontinue. Allprofiles/noaddedLSANsuppression.
+
+## ACTIVE Tab drag WIP; motion integration build6 ACTIVE (06:59 UTC)
+
+CONTINUEautonomously, NOcheckpointfinal. Workonlyhere/noagents/worktrees/publish/
+merge. Spanishupdates<=60s; KEEPanalysisSHORT. Userpersonal-frame-delivery.md NEVER
+read/touch/stage. HEADc95fedb81. ALLpriorarchivesFINAL/FROZENunchanged:
+Iconb1e4344101718/2500/9617760B ALLpaddingvariantsREJECTED(noCPUtiming);
+Readinessae9360173+c95fedb81205/2500/7154558B fixture1linefix(all4native8PASS,
+MacASANleaks567164/2794 retained). c95forced56ignoredlinux/out-dependencies files;
+trackedsetEXACT205manifest. FullcurrentsourcebeforePARITYPASS; laterdoc-onlyfailure
+recordedwithoutrefresh. Offlinevalid. Allglobalgoal/nativeleak/visual/perfgatesOPEN.
+VM7158/SSH55984owned; olduserSway9469/runtime35801untouched. GuestheavyjobsSERIALIZE!
+
+NEWUNCOMMITTEDTabdragfeature (NOTcomplete/accepted). Domaininput/tab_drag.hpp ports
+OriginalTabDrag, input/tab_drop_slots.hpp fixed64slots, input/tab_drop_surface.hpp
+presentedtargets/workspace/machine_view/viewport/scale/threshold. Fieldtargets (NEVER
+slots: Qtmacrocollision!). tools/tab_drag_probe.cpp+check_tab_drag.py compareunchanged
+OriginalTabDrag/TabDropSlots/TabMoveIntent/TabSlot withnarrowfacades:1307sequences/
+43708operations EXACT underASAN/UBSAN Mac1/2 +Linux1. Finalheaderaddslogical_threshold4
+currentlynotretestedafterformat/constonlyedits. First7stylewarningsfixed, Macprobe
+lint2clean. Noallocator/Qt inthesecomponents. CoreSessionrequestTabMove(explicitsource)
+validatesactiveworkspace,sourceexists,notself/missinganchor,sharedtaboperationbusy.
+OldmoveTabdelegates. Newcommand_tab regression movesUNFOCUSEDsource, waitscanonical
+reply,no foco steal/rejectsinvalid; coreASANtestPASS(out-core-sanitizers). Noaddedtests
+suppression/profilechanges.
+
+Qtadapter qt/tab_drag_controller.cpp registersTabStripLayout, retainsphysical64slots
+fromApplicationPreparedFrame->presented frame, validatesmachine/workspace/viewport,
+sourceidentity; keepscancelledsinkuntilrelease. PointerDispatcher usesexistingwindow
+filter/QtMouseArea grab; leftselectsonPRESS throughselectPresentedTab(validatesdelivered
+source+currentworkspace). Middleclose/doubleRename/accessibilitykept. Escapeheldrelease
+sink,leaveclearsdestination,focuscancels. Lateworkspace/machine checksbeforemove.
+TabStripLayout previewOrderstablepressslots, ghostring+3logicalpxlift+accentring;
+pendingorderuntilcanonicaltaboperationcomplete. RootTerminalTabs passescontroller,
+registers layout; readonlytypedtabKey foridentity/test. CodeinApplication/Session/
+Pointer/TabStrip/sharedclockheadersplusCMake/QML modified; DONOTcommitunqualifiedWIP.
+
+GUIReleasebuild1 failedQtmacro.slots (toolchunksretainedlocal/tab-drag-first-gui-build-
+observed.json PARTIALlog), build2failedaccidentalownedVectorcopy (fullrawlogsretained),
+fixedconstauto&. build3/4/5actual0. Broad6unitMacfull1 failedstyle/includes/functionsize/
+narrowing; full2 ALL6PASS (beforeMotionintegration, NOTfinal). NewQuicktesttwo slots:
+tabDragReordersOnlyAfterRelease, tabDragEscapeRetiresHeldRelease; privatehelpers
+prepareGestureTabs/cleanup/tabKeys/tabPill. Firstnative1 failsBOTHbeforeinput because
+QObjectfindChildren missesvisualdelegates. FixedusingEXISTINGqml_fixture.visualItems
++typedtabKey. Native2 two slots+oldpaletteActionsUseOriginalLabelsAndReorderExistingTabs
+5PASSactual0, focus/privateboardsqualified. Ownedcurrentbinaryhash876e3a061...before
+motion; snapshotoutdeps/tab-drag-before-motion-2 (before-motion-1 hasearlierfailedhelper).
+NoWindowServerphysical/globalvisual/perfclaim. reportmeasurements/tab-drag.md DRAFT.
+
+NOWOriginalTabMotions needs180mscubicease/full4Rectcoordinates/identityretargetfrom
+currentposition. presentation/tab_motions.hpp newbounded64noalloccomponent+tools/
+tab_motions_probe.cpp+check_tab_motions.py. Macoracle1 EXACT1048frames+deadlines under
+ASAN/UBSAN. Headerthenstyleternaryexpanded. Macoracle2 ACTIVEexec98931, guestoracle1
+ACTIVEhostexec91714 via run_tab_motions_oracle_linux.py; waitactualexits. Guestonlythese
+newpureheaders/tools synced; NOQtadapter/Sessionupdates yetguest. DoNOTparallelguest
+compiler/lint/editors (4GBnoswap, earlierOOMalreadyretained).
+
+MOTIONINTEGRATIONINPROGRESS: TabStripLayout nowWindowAnimationClockconsumer8, bounded
+physicalf32TabMotions inrebuild; sourceimmediateonlywhilelifted, others180ms; deadlines
+parkclockafterfinish; noaddedtimer. setContext(machine_view,optionalworkspace) resets
+motiontocancelidreuse; Application.refresh+registercalls synchronizeTabStrip. Standalone
+fixturewithoutworkspace keepsoldstaticgeometry. Header/destructordetachesclock. Clock
+.hppconcept+tuple newTabStripLayout; .cppdirectinclude. Hidden/invalidwidthclear motion/
+deadlines. Needfinalreviewlifecycle. CMakeaddedgui-tab-motions-probe.
+
+ACTIVEbuild6 exec58046 via local/run_tab_drag_build.py release tab-drag-build-mac-release-6
+(raw/resultunderlocal). Builds telar-gui/gui-quick-test/gui-tab-activity-scene-test. CMake
+Qtimportscannerwholeprojecttakes~154s (manysnapshots), DON'Tduplicate. NoC++/header/QML
+editswhiledependentbuildACTIVE. Waitactualexit. Afterbuildnextlikelystylefix: motion
+addedlinesagainmakesTabStripLayout.rebuild tooBIG; extractprivate placeTab(id,bounds,now)
+(3params) owningdraglift+physicalmotionmapping, noghostownercontextstruct. Broadfull2was
+beforeMotion soNEEDnew6-7unitcheckincltools/tab_motions_probe.cpp/sharedclock cpp and
+newactualeditors bothSDK. NeedmotionLinuxoraclefirst; allQtLinuxRelease/ASANbuilds yet.
+NeedNativeMac2slotsAFTERmotionintegration plus retirement/sourcegone/workspace/blur/
+resize/held-release-to-terminal regressions, componentclockidle/motionidentity tests,
+actualpairedOriginalnativepixels/previews/heldpending/midtransition, boundedCPUcost/
+pairedperf (perfskill>=6/7wins,target/no0–1controlsunlessprovenassemblyplacement).
+DoNOTclaimfeaturecompletefrompureoracles. KeepworkingfullPARITYafterthisfeature too.
+GoalAPIoldblockednoresume API, manualcontinuation. Noactiveagents.
+
 ## ACTIVE Incubation readiness FINAL/FROZEN; continue functional parity (06:27 UTC)
 
 CONTINUEnocheckpointfinal. Workonlyhere/noagents/worktrees/publish/merge. Spanish

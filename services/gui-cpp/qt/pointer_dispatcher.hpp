@@ -3,10 +3,14 @@
 #include "input/child_mouse.hpp"
 #include "input/history_action_capture.hpp"
 #include "input/history_hover.hpp"
+#include "input/tab_drag.hpp"
+#include "input/tab_drop_slots.hpp"
+#include "input/tab_drop_surface.hpp"
 #include <span>
 #include "native_pointer_events.hpp"
 #include "history_scroll_events.hpp"
 #include <QMouseEvent>
+#include <QKeyEvent>
 #include <QPointF>
 #include <QString>
 #include <optional>
@@ -36,6 +40,8 @@ public:
   void beginChild(const ChildMouseView &view, ChildMouseSample sample);
   void release(Qt::MouseButton button);
   void presentHistoryActions(const HistoryActionSurface &surface);
+  void presentTabs(const TabDropSurface &surface);
+  [[nodiscard]] std::optional<TabLocation> capturedTab() const noexcept { return tab_drag_.source(); }
   void retireHistoryHover();
   [[nodiscard]] const HistoryHover &historyHover() const noexcept { return history_hover_; }
   void presentHistoryHover(std::span<const HistoryHoverTarget> targets);
@@ -74,6 +80,12 @@ private:
   void report(std::uint64_t pane_id, const std::optional<ChildMouseReport> &report);
   void cancelPane(std::uint64_t pane_id);
   void cancel();
+  void cancelTabDrag();
+  void observeTabHover(std::optional<QPointF> position);
+  [[nodiscard]] bool tabKey(QKeyEvent &event);
+  void updateTabDragVisual();
+  [[nodiscard]] bool pressTab(QMouseEvent &event);
+  [[nodiscard]] bool updateTabDrag(QMouseEvent &event, bool released);
   bool press(QMouseEvent &event);
   bool move(QMouseEvent &event);
   bool release(QMouseEvent &event);
@@ -88,6 +100,13 @@ private:
   HistoryHover history_hover_;
   std::optional<std::uint64_t> history_hover_revision_value_;
   QString history_hover_revision_;
+  TabDrag tab_drag_;
+  TabDropSlots tab_drop_slots_;
+  std::optional<TabDragMove> pending_tab_move_;
+  TabDropSurface tab_capture_surface_;
+  QPointF tab_pointer_;
+  qreal tab_grab_offset_ = 0;
+  bool tab_escape_held_ = false;
   bool delivering_ = false;
   bool handing_off_ = false;
 };

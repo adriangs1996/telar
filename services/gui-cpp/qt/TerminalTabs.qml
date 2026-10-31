@@ -6,6 +6,7 @@ import Telar.Gui
 Item {
     id: root
 
+    property var controller: null
     required property var model
     required property var colors
     required property var typography
@@ -34,6 +35,22 @@ Item {
         id: pointer
     }
 
+    Component.onCompleted: {
+        if (root.controller) root.controller.registerTabStrip(layout);
+    }
+
+    NativeRoundedRectangle {
+        x: layout.dropMarker.x
+        y: layout.dropMarker.y
+        width: layout.dropMarker.width
+        height: layout.dropMarker.height
+        radius: layout.style.pillRadius
+        color: "transparent"
+        borderColor: root.colors.surface1
+        borderWidth: root.ratio
+        visible: width > 0 && height > 0
+    }
+
     Repeater {
         model: layout.items
 
@@ -42,15 +59,18 @@ Item {
             objectName: "tabPill"
             required property var record
             readonly property var source: record.tab
-            readonly property bool lit: source.selected || mouse.containsMouse
+            readonly property string tabKey: source.key
+            readonly property bool pointed: root.controller ? layout.hoveredTab === tabKey : mouse.containsMouse
+            readonly property bool lit: source.selected || pointed
 
             x: record.bounds.x
             y: record.bounds.y
             width: record.bounds.width
             height: record.bounds.height
             radius: layout.style.pillRadius
-            color: source.selected ? root.colors.surface1 : mouse.containsMouse ? root.colors.surface0 : "transparent"
+            color: source.selected ? root.colors.surface1 : pointed ? root.colors.surface0 : "transparent"
             clip: true
+            z: record.dragging ? 1 : 0
 
             NativeRoundedRectangle {
                 x: tab.record.chip.x
@@ -120,11 +140,15 @@ Item {
                 anchors.fill: parent
                 hoverEnabled: true
                 acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+                onPressed: event => {
+                    if (event.button === Qt.LeftButton) {
+                        if (root.controller) root.controller.selectCapturedTab();
+                        else root.selected(tab.source.key);
+                    }
+                }
                 onClicked: event => {
                     if (event.button === Qt.MiddleButton) {
                         root.closed(tab.source.key);
-                    } else {
-                        root.selected(tab.source.key);
                     }
                 }
                 onDoubleClicked: root.renamed()
@@ -137,8 +161,24 @@ Item {
         }
     }
 
+    NativeRoundedRectangle {
+        objectName: "draggedTabOutline"
+        z: 1
+        x: layout.draggedBounds.x
+        y: layout.draggedBounds.y
+        width: layout.draggedBounds.width
+        height: layout.draggedBounds.height
+        radius: layout.style.pillRadius
+        color: "transparent"
+        borderColor: root.colors.accent
+        borderWidth: root.ratio
+        visible: width > 0 && height > 0
+    }
+
     ChromeButton {
         id: hiddenCounter
+        z: 2
+        pointerHovered: root.controller ? layout.hoveredTab === layout.counter.key : hovered
         objectName: "hiddenTabCounter"
         x: layout.counter.bounds?.x ?? 0
         y: layout.counter.bounds?.y ?? 0
@@ -163,7 +203,7 @@ Item {
                 height: parent.height
                 text: "+" + (layout.counter.count ?? 0)
                 pixelSize: root.typography.small
-                color: hiddenCounter.hovered || hiddenCounter.visualFocus ? root.colors.text : root.colors.subtext0
+                color: hiddenCounter.pointerHovered || hiddenCounter.visualFocus ? root.colors.text : root.colors.subtext0
                 elide: Text.ElideNone
             }
 
@@ -178,11 +218,15 @@ Item {
                 visible: parent.hasAttention
             }
         }
-        onClicked: root.selected(layout.counter.key)
+        onPressed: {
+            if (root.controller) root.controller.selectCapturedTab();
+            else root.selected(layout.counter.key);
+        }
     }
 
     ChromeButton {
         objectName: "createTabButton"
+        z: 2
         x: layout.plus.x
         y: layout.plus.y
         width: layout.plus.width

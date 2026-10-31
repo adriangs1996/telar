@@ -1,6 +1,7 @@
 #include "allocation_gate.hpp"
 #include "application/records.hpp"
 #include "application/session.hpp"
+#include "assertions.hpp"
 #include "config/callback.hpp"
 #include "config/command_tab_action.hpp"
 #include "config/command_tab_reference.hpp"
@@ -10,10 +11,12 @@
 #include "config/limit_notices.hpp"
 #include "core/memory.hpp"
 #include "input/action.hpp"
+#include "input/tab_drag.hpp"
 #include "session_fixture.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -347,6 +350,39 @@ void commandsShareOperationOwnershipWithRenameMoveAndClose() {
   require(client.createCommandTab(command) == TabCreationOutcome::requested, "a rejected operation must allow the next command tab");
 }
 
+void draggingRetainsTheExplicitSourceAndCanonicalOperationOwner() {
+  SystemAllocator memory;
+  Transport transport;
+  Session client{memory, transport};
+  openThreeTabs(client, transport);
+  const auto workspace = client.activeTab()->location.workspace;
+  const TabDragMove move{.location = {.workspace = workspace, .tab_id = 1}, .direction = TabMoveDirection::next, .relative_to = 3};
+  const auto source = std::ranges::find_if(client.tabs(), [](const auto &tab) {
+    return tab->location.tab_id == 1;
+  });
+  require(source != client.tabs().end(), "the captured source must be present");
+  require(client.requestTabMove(move), "a drag must move its captured source even when another tab has focus");
+  const auto request = transport.last<MoveTab>();
+  require(request.location.tab_id == 1 && request.relative_to == 3 && request.direction == TabMoveDirection::next, "the request must preserve the source and anchor identities");
+  require(client.activeTab()->location.tab_id == 3 && (*source)->position == 0, "a move request must preserve focus and wait for canonical order");
+  require(!client.requestTabMove(move), "a pending drag must retain the shared tab-operation owner");
+  deliver(client, TabMoved{.request_id = request.request_id, .location = request.location, .position = 2});
+  require((*source)->position == 2 && client.activeTab()->location.tab_id == 3, "confirmation must reorder the captured source without stealing focus");
+
+  auto invalid = move;
+  invalid.location.workspace.id += 1;
+  require(!client.requestTabMove(invalid), "a drag must never move a source from a replaced workspace");
+  invalid = move;
+  invalid.location.tab_id = 4;
+  require(!client.requestTabMove(invalid), "a retired source must not create a request");
+  invalid = move;
+  invalid.relative_to = move.location.tab_id;
+  require(!client.requestTabMove(invalid), "a source cannot anchor its own move");
+  invalid.relative_to = 4;
+  require(!client.requestTabMove(invalid), "a retired destination must not create a request");
+  require(client.requestTabMove(move), "rejected gestures must leave tab-operation admission available");
+}
+
 void closingACommandReturnsToTheAdjacentTab() {
   struct ClosureCase {
     std::uint64_t active;
@@ -385,6 +421,7 @@ int main() {
     commandRequestsPreserveLaunchAndRecoverFromDeliveryFailure();
     closingACommandReturnsToTheAdjacentTab();
     commandsShareOperationOwnershipWithRenameMoveAndClose();
+    draggingRetainsTheExplicitSourceAndCanonicalOperationOwner();
     discoveryBeforeConfirmationDoesNotDuplicateTheCreatedTab();
     confirmationCannotReplaceALiveTab();
     commandAdoptionIsAtomicAcrossAllocationFailures();
