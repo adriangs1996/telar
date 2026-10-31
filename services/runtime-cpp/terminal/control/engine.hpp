@@ -265,8 +265,19 @@ private:
   [[gnu::noinline]] std::size_t ordinaryAscii(std::span<const std::uint8_t> input) {
     static_assert(ascii_detail::codepoint_capacity == GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT);
     std::array<std::uint32_t, ascii_detail::codepoint_capacity> codepoints;
-    const auto count = ascii_detail::widen(input, codepoints);
-    assert(count >= ascii_detail::gate_bytes);
+    assert(input.size() >= ascii_detail::gate_bytes);
+
+    // ordinaryRun has already validated these bytes synchronously. Only the
+    // remaining input needs stop detection; the C bridge still validates all.
+#if (defined(__aarch64__) && defined(__AARCH64EL__)) || defined(__SSE2__)
+    for (std::size_t offset = 0; offset < ascii_detail::gate_bytes; offset += styled_detail::vector_bytes) {
+      ascii_detail::widenBlock(ascii_detail::load(input.data() + offset), codepoints.data() + offset);
+    }
+#else
+    std::copy_n(input.data(), ascii_detail::gate_bytes, codepoints.data());
+#endif
+
+    const auto count = ascii_detail::gate_bytes + ascii_detail::widen(input.subspan(ascii_detail::gate_bytes), std::span{codepoints}.subspan(ascii_detail::gate_bytes));
     responses_.release();
     state_.writeAscii(std::span{codepoints}.first(count));
     return count;
