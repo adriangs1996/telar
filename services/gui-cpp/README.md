@@ -2262,3 +2262,12 @@ opening and after actual motion, while projection tests retain large revisions,
 rendered bounds, disabled identities and static-hint omission. A missed native
 selection deadline remains recorded alongside successful repeats; complete modal
 latency, activation identity, header hover and full-client acceptance remain open.
+
+[Presented History filter hover](measurements/history-filter-hover.md) extends the
+same map to scope, author and Failed actions without using selected labels as
+identity. The causal native Workspace negative now matches, with exact declared
+chip rectangles also under actual-motion author and Failed controls. Qualified
+results/footer regions and retained-release behavior remain exact. macOS and
+Linux ASAN/Release component/native evidence is recorded, and both SDKs pass the
+unchanged broad analysis and actual editor checks. Whole-window visual, complete input, leak/latency
+and comparative performance gates remain open.

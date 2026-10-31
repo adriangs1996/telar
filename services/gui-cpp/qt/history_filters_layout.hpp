@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/geometry.hpp"
+#include "input/history_hover.hpp"
 #include "presentation/history_filter_geometry.hpp"
 #include <QQuickItem>
 #include <QRectF>
@@ -8,6 +9,9 @@
 #include <QVariantMap>
 #include <QtCore/qcontainerfwd.h>
 #include <QtQml/qqmlregistration.h>
+#include <cstddef>
+#include <cstdint>
+#include <span>
 
 namespace telar::gui::qt {
 
@@ -22,6 +26,8 @@ class HistoryFiltersLayout : public QQuickItem {
   Q_PROPERTY(QVariantMap layout READ layout NOTIFY layoutChanged)
 
 public:
+  static constexpr std::size_t target_count = history_filter_target_count;
+
   explicit HistoryFiltersLayout(QQuickItem *parent = nullptr);
   [[nodiscard]] QVariantMap input() const;
   void setInput(const QVariantMap &input);
@@ -31,6 +37,7 @@ public:
   [[nodiscard]] QVariantList authorChoices() const;
   [[nodiscard]] QStringList keyLabels() const;
   [[nodiscard]] QVariantMap layout() const;
+  [[nodiscard]] std::size_t hoverTargets(std::uint64_t generation, std::span<HistoryHoverTarget> destination) const;
 
 signals:
   void inputChanged();

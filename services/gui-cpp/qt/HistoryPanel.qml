@@ -169,6 +169,7 @@ Item {
     Keys.onDownPressed: root.moveSelection(-1)
 
     HistoryFilters {
+        actionController: root.controller
         x: root.regions.header.x
         y: root.regions.header.y
         width: root.regions.header.width

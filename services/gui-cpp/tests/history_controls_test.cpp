@@ -11,6 +11,7 @@
 #include "qt/history_selection_layout.hpp"
 #include "qt/history_empty_layout.hpp"
 #include "qt/history_footer_layout.hpp"
+#include "qt/history_filters_layout.hpp"
 #include "input/history_hover.hpp"
 #include "presentation/history_footer.hpp"
 #include "input/wheel_accumulator.hpp"
@@ -420,6 +421,65 @@ class HistoryControlsTest final : public QObject {
     constexpr qreal doubled_ratio = 2;
     ratio->setRatio(doubled_ratio);
     QVERIFY(ratio == nullptr);
+  }
+
+  Q_SLOT static void filterHoverTargetsTrackPresentedGeometryAndStableActions() {
+    QQuickWindow window;
+    QQmlEngine engine;
+    auto state = historyState();
+    auto filters = createChrome(engine, QStringLiteral("HistoryFilters"), {
+        {QStringLiteral("state"), state},
+        {QStringLiteral("colors"), themeColors({})},
+        {QStringLiteral("pixelSize"), small_pixels},
+        {QStringLiteral("grid"), historyTypography().value(QStringLiteral("grid"))},
+        {QStringLiteral("width"), wide_width},
+        {QStringLiteral("height"), header_height},
+    });
+    filters->setParentItem(window.contentItem());
+    window.resize(wide_width, header_height);
+    QVERIFY(showComponentWindow(window, wait_ms));
+    const auto *layout = qobject_cast<HistoryFiltersLayout *>(filters.get());
+    QVERIFY(layout != nullptr);
+    std::array<HistoryHoverTarget, HistoryFiltersLayout::target_count> targets;
+    constexpr auto generation = std::numeric_limits<std::uint64_t>::max();
+    QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), targets.size(), wait_ms);
+    const auto identity = targets[1].identity;
+    const auto *action = std::get_if<HistoryFilterAction>(&identity.action);
+    QVERIFY(action != nullptr);
+    QCOMPARE(*action, HistoryFilterAction::workspace);
+    QCOMPARE(identity.generation, generation);
+    const auto *workspace = chipFor(*filters, QStringLiteral("workspace"));
+    QVERIFY(workspace != nullptr);
+    const auto verify_bounds = [&] {
+      const auto bounds = workspace->mapRectToScene(workspace->boundingRect());
+      const auto scale = window.effectiveDevicePixelRatio();
+      QCOMPARE(targets[1].bounds.x, static_cast<float>(bounds.x() * scale));
+      QCOMPARE(targets[1].bounds.y, static_cast<float>(bounds.y() * scale));
+      QCOMPARE(targets[1].bounds.width, static_cast<float>(bounds.width() * scale));
+      QCOMPARE(targets[1].bounds.height, static_cast<float>(bounds.height() * scale));
+    };
+    verify_bounds();
+    const auto previous_width = targets[1].bounds.width;
+    const auto failed_identity = targets[4].identity;
+    state.insert(QStringLiteral("effectiveScope"), QStringLiteral("workspace"));
+    state.insert(QStringLiteral("scopeValue"), QStringLiteral("workspace detail"));
+    state.insert(QStringLiteral("author"), QStringLiteral("agent"));
+    state.insert(QStringLiteral("failedOnly"), true);
+    filters->setProperty("state", state);
+    QTRY_VERIFY_WITH_TIMEOUT((layout->hoverTargets(generation, targets) == targets.size() && targets[1].bounds.width > previous_width), wait_ms);
+    QVERIFY(waitForSynchronizedFrame(window, wait_ms));
+    QCOMPARE(targets[1].identity, identity);
+    QCOMPARE(targets[4].identity, failed_identity);
+    verify_bounds();
+    filters->setEnabled(false);
+    QCOMPARE(layout->hoverTargets(generation, targets), targets.size());
+    QCOMPARE(layout->hoverTargets(generation, std::span{targets}.first(1)), std::size_t{1});
+    QCOMPARE(layout->hoverTargets(generation, {}), std::size_t{0});
+    filters->setWidth(narrow_width);
+    constexpr std::size_t scope_count = 4;
+    QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), scope_count, wait_ms);
+    filters->setVisible(false);
+    QCOMPARE(layout->hoverTargets(generation, targets), std::size_t{0});
   }
 
   Q_SLOT static void filtersWorkWithoutAnApplicationController() {

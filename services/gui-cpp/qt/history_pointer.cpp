@@ -72,6 +72,31 @@ QString Application::historyHoveredCardAction() const {
   return {};
 }
 
+void Application::registerHistoryFilters(QQuickItem *filters) {
+  history_filter_layout_ = filters;
+}
+
+QString Application::historyHoveredFilterAction() const {
+  const auto &identity = pointer_dispatcher_.historyHover().hovered();
+  const auto *action = identity ? std::get_if<HistoryFilterAction>(&identity->action) : nullptr;
+  if (action == nullptr) {
+    return {};
+  }
+
+  switch (*action) {
+  case HistoryFilterAction::global: return QStringLiteral("global");
+  case HistoryFilterAction::workspace: return QStringLiteral("workspace");
+  case HistoryFilterAction::cwd: return QStringLiteral("cwd");
+  case HistoryFilterAction::pane: return QStringLiteral("pane");
+  case HistoryFilterAction::human: return QStringLiteral("human");
+  case HistoryFilterAction::agent: return QStringLiteral("agent");
+  case HistoryFilterAction::all: return QStringLiteral("all");
+  case HistoryFilterAction::failed: return QStringLiteral("failed");
+  }
+
+  return {};
+}
+
 void Application::registerHistoryFooter(QQuickItem *footer) {
   history_footer_ = footer;
 }

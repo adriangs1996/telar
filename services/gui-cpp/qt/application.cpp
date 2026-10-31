@@ -1,6 +1,7 @@
 #include "application.hpp"
 #include "input/history_hover.hpp"
 #include "history_footer_layout.hpp"
+#include "history_filters_layout.hpp"
 #include "application/dependencies.hpp"
 #include "application/pane_layout.hpp"
 #include "application/records.hpp"
@@ -470,6 +471,11 @@ void Application::prepareFrame(PresentedFrame &frame) {
   if (dialog_ == QLatin1StringView("history")) {
     frame.history_actions = historyActionSurface();
     auto &hover = frame.history_hover.emplace();
+    const auto *filters = qobject_cast<const HistoryFiltersLayout *>(history_filter_layout_.data());
+    if (filters != nullptr && filters->window() == window_) {
+      hover.count += filters->hoverTargets(dialog_generation_, std::span{hover.targets}.subspan(hover.count));
+    }
+
     const auto surface = historyScrollSurface(historyMetrics(), hover);
     for (const auto &target : frame.history_actions.targets) {
       hover.append({.identity = {.action = target.action, .generation = frame.history_actions.generation}, .bounds = target.bounds});

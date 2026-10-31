@@ -1,5 +1,124 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## Filter hover frozen; commit then CONTINUE activation identities (00:04 UTC)
+
+New history-filter-hover evidence is FINAL/FROZEN:659artifacts2457sourceidentities,
+9182981bytes; do not refresh. Offline,
+current-source and exact-source/authority/executable audits PASS. Never rerun its
+archiver or modify its report/verifier/archive after this point. All macOS and
+Linux builds,32componentcases,5nativecases,7unitlint,actualeditors are qualified in
+recorded scope; Mac native/component sanitizer leaks remainfailed exits. Earlier
+footer10050ms deadline remains required by verifier and global gatesOPEN.
+All actual build/test/lint/editor processes exited. VM7158/55984 remainsowned.
+Linuxfinalpipeline5steps actual0; bundle160members966987B SHA1d041d95b697ecd48951b41be7bbe81f79be2bc249d7c7a61062c122fa95f9a3 downloadedvalidated.
+
+Stage ownedtrackedchanges + newmixedfiltertools + newreport/manifest/archive only;
+EXCLUDEpersonal-frame-delivery.md and pycache. Localcommit authorized, then CONTINUE
+next identity work describedbelow; no FINAL. No publish/merge/otherworktrees/agents.
+Two next negatives alreadyretained ignored local/history-footer-activation-negative-1
+andhistory-inspection-activation-negative-1. Each2PASS1FAILactual1 atactivated.size0
+vs1. Firstsubmit whileenterRunschanges; secondCopy acrossselection/rev/mode. They
+use independent copied testsource and UNCHANGED product staticlibs, not product
+changes. Next: actualtests with source-correct expected behavior, Footer.qml remove
+enterRunsfromsubmitcaptureID; Inspector.qml choiceIDONLYsubmit/alternate, otheractions
+constant. Preserve revision/selection/disabled/disappearance cancellation. Readold
+assertions and originalHistoryModal hintAction900/inspectButtons1000. Headerhover
+archivefullsource shouldremain frozen before these edits. Handoffdetailsbelowretain
+session IDs although allfinished; pipeline/build statuses below nowhistorical.
+
+## Active filters: macOS complete in scope; Linux final pipeline (00:00 UTC)
+
+Continue autonomously; no final response at checkpoints. HEAD4947a6c63. Footer
+archive/report/verifier are FROZEN; never refresh them or Motion/older archives.
+Preserve untracked personal-frame-delivery.md. Work only here; no other agents,
+worktrees, publish or merge. Existing goal API remains blocked from the old run;
+continue manually. Spanish updates <=60s, aim40; keep analysis short and use clock.
+
+Final filter product: HistoryFilterAction8 typed identities; bounded direct
+HistoryFiltersLayout projection; Application history_filter_layout_ registration
+and filter-before-rows/cards/footer ordering. Footer remains last. QML chip paint
+uses semantic hover with standalone fallback. No activation behavior changes.
+CPP/header/QML product edits are DONE for this checkpoint. New tools mixed17target
+probe/oracle; new component slot checks rendered bounds, maximum u64 generation,
+selection/detail identity stability, disabled targets, spans and narrow/hidden UI.
+
+All final Mac builds actual0: Releasebuild3 exec33876, nativeASANbuild3 exec71600
+(finished). Direct include fixed lint; GUI hash unchanged from native captures:
+0f5962ad6d6486b5acf1e730d62a15197a9521f116438737fea81cbd7cb15d8a.
+MaccontrolsRelease2 32PASSexit0; ASAN2 32PASSexit8/leaks252992bytes1068allocations.
+EarlierASAN1 32PASSexit8/leaks231728/1034 retained. NativeRelease1 5PASSexit0;
+NativeASAN1 5PASSexit1/leaks514559/2791, no access/UB reports. Private boards all
+cleanup/preflight0, real general metadata954same. Never local LSAN suppression.
+Hostlint2 sevenunits allactual0, editor2 tenfiles allDELIVEREDclean; finaleditor1
+history_filters_layout.cpp+QuickTest alsoDELIVEREDclean. No host GUI/build/lint/
+editor active. No more Mac checks needed unless a real source change occurs.
+
+Native negative local/history-filter-hover-negative-1 uses retained baseline
+outdeps/history-filter-hover-before-1 (4947a6c63,9b51c2a...). Workspace6943/7152
+different; remaining sevenchips exact. Seven current positive native pairs:
+fixed1/rehover1/author1/failed1 all39584chipPixelsEXACT; fixed/rehover/held result
+567296EXACT; footer1 all21164hintsEXACT; replace-release1 result744576EXACT with
+sentinel preserved on old release and expected command copied on fresh click in
+bothGUIs. All seven QtGUIhashes equal current final GUI (final-product-identity.json
+includes source/binary identities). Whole window still differs; no global visual
+claim. Mixed777seq34794ops PASSMacASAN2/LinuxASAN1. MacASAN1 first harness had wrong
+directed boundary offsets after draw-order serialization change, but original/
+candidate bytes were already exact1148202B; retained failed expectations. Legacy
+Footer659/34344 and RowCard552/33926 PASSbothSDKsASAN0. Source unchanged oracles.
+
+LinuxfinalASANbuild3 actual0, sourceDELTA61 directinclude sync with tar--touch after
+ASAN2 actuallyexited. All32componentsASAN1PASSexit0. NativeASAN1 5PASSactual0, private
+Sway/DBus/runtime/display/clipboard cleanup0. RuntimeDebug4b82f209... unchanged.
+Releasebuild1 -j2 ACTIVE exec58253 (last182/183). Finalpipeline exec85068 waits its
+actual JSON0 then SEQUENTIALLY: Release32components1; nativeRelease1; lint2 -j1;
+editor2 tenfiles; finalQuickeditor1. Output hostdriver history-filter-hover-linux-
+final-pipeline-1-driver.log; guest step logs and final-pipeline-1.json. Do NOT start
+another guest build/lint/editor/GUI on top. VM7158 port55984 retained. Canonical
+out editorDB refreshed from ACTUAL out-clipboard-asan: mainDB+qt/tests JSON and
+config/domain compile_flags (5files), receipt editor-databases-1.json. .clangd
+unchanged. Do not sync CPP while guestbuild active; sourcefinal matcheshost.
+
+NEWarchive scripts PREPARED NOT RUN: measurements/history-filter-hover/archive_filter.py
+and verify_filter.py. Archiver refuses existing manifest (freezeonce). Need finish
+report/PARITY/README factual finalLinux results; collect VM archive (newname history-
+filter-hover-results-final.tar.gz, safe extensions/ownedprefix only), retain all
+Linux sequence outputs/lint/editor/native/build logs. Verify before freeze all
+required filenames/expectednumbers (draft may need correction). Verifier checks
+negative6943, positive8chip39584, row/card/footer, 3oracles both, Macleaks, Linux0,
+finaleditors/lints and previous footer10050ms failure preserved in prior-footer.
+No new manifest yet. Archive source map inherits frozen footer map plus newtools/
+report/scripts. Verify offline/current-source + no authorities/executables/personal
+file. Then localcommit ownedfilesONLY and CONTINUE next identity gap below.
+
+NEXT IDENTITY GAP ALREADY REPRODUCED while Linux build ran, NO PRODUCT EDITS:
+local/history-footer-activation-negative-1 has2PASS1FAILactual1, activated.size0
+vs1 when enterRuns changes during submit press. local/history-inspection-activation-
+negative-1 has2PASS1FAILactual1 for Copy while selection/revision/enterRuns change.
+Two ignored Python runners copy current component test source, replace existing
+footerActionsNeedNoApplicationController slot body ONLY in their own probe,
+compile/link against UNCHANGED current product static libs and generated moc via
+actual compileDB/ninja commands. No actual tests or QML modified. Source/binary
+hashes retained. This avoids changing filter-qualified source before freezing.
+Read next original HistoryModal.hintAction ~900 and inspectButtons1000..1030:
+submit/alternate identity is action+choice; enterRuns onlylabel, notidentity.
+Copy/erase/visit inspector actions are constants, nochoice payload. Qt currently
+wrongly includes enterRuns on Footer submit activationIdentity and includes both
+choice ANDenterRuns for ALLInspector FormButton identities.
+After filtercommit fix HistoryFooter.qml conditional removeenterRuns; Inspector.qml
+identity onlychoice forsubmit/alternate, otherwiseactionconstant. Preserve current
+revision/selection invalidation of submissions and disabled/disappeared targets.
+Old component tests currently encode wrongmode cancellation: footerCancelsPresses-
+WhenTheChoiceChanges finalexpected1 shouldallow2 aftertrue→false; inspectionActions-
+RetirePressedSelectionsAndModes expects0 aftermode change and latercounts1/2, must
+correct/rename tosource-required behavior, notweaken revision/retirement checks.
+Add matrix primary/alternate false→true andtrue→false, Footer+Inspector, semantic
+Copy/erase/visit acrossselection/rev, disappearance/disabled controls. Root inspector
+Repeater alreadymodel actions.length, retains delegates. Sourceinspect namespace0,
+Footer5, Card6. Also inspector button hover stilluses localFormButton MouseArea;
+separatefuture semantic hover gap after activation. Keep complete input/inspection/
+themes/densities/nativeleaks/latency/full-clientperf gatesOPEN. Sourceprofile broad
+clang-tidy unchanged; no suppressions/deadline relaxation.
+
 ## Footer hover archive FINAL FROZEN; commit then CONTINUE filters (23:38 UTC)
 
 Newhistory-footer-hover archiveFROZEN358artifacts2452sources6110257B. Offline/current-

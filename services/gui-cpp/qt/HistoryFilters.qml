@@ -11,6 +11,7 @@ HistoryFiltersLayout {
     required property var colors
     required property real pixelSize
     required property var grid
+    property var actionController: null
     property real ratio: 1
     property real density: 1
     readonly property var regions: layout
@@ -74,6 +75,8 @@ HistoryFiltersLayout {
             valueText: modelData.detail
             selected: modelData.selected
             activationIdentity: modelData.value
+            usePresentedHover: root.actionController !== null
+            presentedHover: root.actionController ? root.actionController.historyHoveredFilterAction === modelData.value : false
             colors: root.colors
             pixelSize: root.pixelSize
             visible: root.regions.visible
@@ -111,6 +114,8 @@ HistoryFiltersLayout {
             text: modelData.text
             selected: modelData.selected
             activationIdentity: modelData.value
+            usePresentedHover: root.actionController !== null
+            presentedHover: root.actionController ? root.actionController.historyHoveredFilterAction === modelData.value : false
             colors: root.colors
             pixelSize: root.pixelSize
             visible: root.regions.showRight
@@ -135,6 +140,8 @@ HistoryFiltersLayout {
         pixelSize: root.pixelSize
         selected: root.state.failedOnly
         danger: true
+        usePresentedHover: root.actionController !== null
+        presentedHover: root.actionController ? root.actionController.historyHoveredFilterAction === "failed" : false
         visible: root.regions.showRight
         onMeasurementsChanged: root.scheduleMeasurement()
         onActivated: root.failedToggled()
@@ -170,5 +177,10 @@ HistoryFiltersLayout {
         visible: root.regions.visible
     }
 
-    Component.onCompleted: root.scheduleMeasurement()
+    Component.onCompleted: {
+        root.scheduleMeasurement();
+        if (root.actionController) {
+            root.actionController.registerHistoryFilters(root);
+        }
+    }
 }

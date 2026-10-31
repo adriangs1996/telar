@@ -6,12 +6,26 @@
 #include "presentation/history_actions.hpp"
 #include "presentation/history_footer.hpp"
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <span>
 #include <variant>
 
 namespace telar::gui {
+
+enum class HistoryFilterAction : std::uint8_t {
+  global,
+  workspace,
+  cwd,
+  pane,
+  human,
+  agent,
+  all,
+  failed,
+};
+
+inline constexpr std::size_t history_filter_target_count = 8;
 
 struct HistoryFooterIdentity {
   HistoryFooterAction action = HistoryFooterAction::none;
@@ -27,7 +41,7 @@ struct HistoryFooterIdentity {
 };
 
 struct HistoryHoverIdentity {
-  std::variant<HistoryChoice, HistoryCardAction, HistoryFooterIdentity> action;
+  std::variant<HistoryChoice, HistoryCardAction, HistoryFooterIdentity, HistoryFilterAction> action;
   std::uint64_t generation = 0;
 
   bool operator==(const HistoryHoverIdentity &other) const noexcept {
@@ -51,7 +65,14 @@ struct HistoryHoverIdentity {
     const auto *footer = std::get_if<HistoryFooterIdentity>(&action);
     const auto *other_footer = std::get_if<HistoryFooterIdentity>(&other.action);
 
-    return footer != nullptr && other_footer != nullptr && *footer == *other_footer;
+    if (footer != nullptr) {
+      return other_footer != nullptr && *footer == *other_footer;
+    }
+
+    const auto *filter = std::get_if<HistoryFilterAction>(&action);
+    const auto *other_filter = std::get_if<HistoryFilterAction>(&other.action);
+
+    return filter != nullptr && other_filter != nullptr && *filter == *other_filter;
   }
 };
 

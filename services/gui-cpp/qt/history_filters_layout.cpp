@@ -1,4 +1,5 @@
 #include "history_filters_layout.hpp"
+#include "input/history_hover.hpp"
 #include "core/geometry.hpp"
 #include "core/metrics.hpp"
 #include "presentation/history_actions.hpp"
@@ -15,6 +16,9 @@
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
+#include <array>
+#include <cstdint>
+#include <span>
 #include <cmath>
 #include <cstddef>
 #include <string_view>
@@ -141,6 +145,36 @@ QVariantMap HistoryFiltersLayout::layout() const {
       {QStringLiteral("ringWidth"), HistoryFilterChipGeometry::ring_width * ratio_},
       {QStringLiteral("dangerRingAlpha"), HistoryFilterChipGeometry::danger_ring_alpha},
   };
+}
+
+std::size_t HistoryFiltersLayout::hoverTargets(std::uint64_t generation, std::span<HistoryHoverTarget> destination) const {
+  if (!isVisible() || window() == nullptr || !geometry_.visible) {
+    return 0;
+  }
+
+  std::size_t count = 0;
+  const auto append = [&](HistoryFilterAction action, Rect area) {
+    if (count == destination.size() || area.empty()) {
+      return;
+    }
+
+    const auto bounds = mapRectToScene(logical(area));
+    destination[count++] = {.identity = {.action = action, .generation = generation}, .bounds = {.x = static_cast<float>(bounds.x() * density_), .y = static_cast<float>(bounds.y() * density_), .width = static_cast<float>(bounds.width() * density_), .height = static_cast<float>(bounds.height() * density_)}};
+  };
+  constexpr std::array scopes{HistoryFilterAction::global, HistoryFilterAction::workspace, HistoryFilterAction::cwd, HistoryFilterAction::pane};
+  for (std::size_t index = 0; index < scopes.size(); ++index) {
+    append(scopes[index], geometry_.scopes[index].bounds);
+  }
+
+  if (geometry_.show_right) {
+    append(HistoryFilterAction::failed, geometry_.failed.bounds);
+    constexpr std::array authors{HistoryFilterAction::human, HistoryFilterAction::agent, HistoryFilterAction::all};
+    for (std::size_t index = 0; index < authors.size(); ++index) {
+      append(authors[index], geometry_.authors[index].bounds);
+    }
+  }
+
+  return count;
 }
 
 void HistoryFiltersLayout::updatePolish() {

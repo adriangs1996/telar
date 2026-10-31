@@ -13,6 +13,8 @@ Item {
     required property real pixelSize
     property string valueText: ""
     property string activationIdentity: text
+    property bool usePresentedHover: false
+    property bool presentedHover: false
     property bool selected: false
     property bool danger: false
     readonly property real labelAdvance: label.implicitWidth
@@ -30,7 +32,7 @@ Item {
 
     NativeRoundedRectangle {
         anchors.fill: parent
-        visible: root.selected || pointer.containsMouse
+        visible: root.selected || (root.usePresentedHover ? root.presentedHover : pointer.containsMouse)
         color: root.colors.surface1
         radius: root.style.chipRadius
     }

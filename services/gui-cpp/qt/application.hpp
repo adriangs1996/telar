@@ -99,6 +99,7 @@ class Application final : public QObject {
   Q_PROPERTY(int historyHoveredRow READ historyHoveredRow NOTIFY historyHoverChanged)
   Q_PROPERTY(QString historyHoveredRowRevision READ historyHoveredRowRevision NOTIFY historyHoverChanged)
   Q_PROPERTY(QString historyHoveredCardAction READ historyHoveredCardAction NOTIFY historyHoverChanged)
+  Q_PROPERTY(QString historyHoveredFilterAction READ historyHoveredFilterAction NOTIFY historyHoverChanged)
   Q_PROPERTY(QString historyHoveredFooterAction READ historyHoveredFooterAction NOTIFY historyHoverChanged)
   Q_PROPERTY(int historyHoveredFooterIndex READ historyHoveredFooterIndex NOTIFY historyHoverChanged)
   Q_PROPERTY(QString historyHoveredFooterRevision READ historyHoveredFooterRevision NOTIFY historyHoverChanged)
@@ -273,6 +274,7 @@ public:
   [[nodiscard]] int historyHoveredRow() const;
   [[nodiscard]] QString historyHoveredRowRevision() const;
   [[nodiscard]] QString historyHoveredCardAction() const;
+  [[nodiscard]] QString historyHoveredFilterAction() const;
   [[nodiscard]] QString historyHoveredFooterAction() const;
   [[nodiscard]] int historyHoveredFooterIndex() const;
   [[nodiscard]] QString historyHoveredFooterRevision() const;
@@ -286,6 +288,7 @@ public:
   Q_INVOKABLE void selectHistoryRow(int row);
   Q_INVOKABLE void selectPresentedHistoryRow(int row, const QString &revision);
   Q_INVOKABLE void registerHistoryPanel(QQuickItem *panel);
+  Q_INVOKABLE void registerHistoryFilters(QQuickItem *filters);
   Q_INVOKABLE void registerHistoryFooter(QQuickItem *footer);
   Q_INVOKABLE void registerHistoryActions(QQuickItem *actions);
   Q_INVOKABLE void setHistoryFilters(const QVariantMap &filters);
@@ -510,7 +513,7 @@ private:
   };
 
   struct HistoryHoverFrame {
-    std::array<HistoryHoverTarget, HistoryBrowser<ApplicationAllocator>::page_entries + HistoryActions::count + HistoryFooter::capacity> targets;
+    std::array<HistoryHoverTarget, HistoryBrowser<ApplicationAllocator>::page_entries + HistoryActions::count + HistoryFooter::capacity + history_filter_target_count> targets;
     std::size_t count = 0;
     std::uint64_t generation = 0;
     double scale = 1;
@@ -755,6 +758,7 @@ private:
   std::optional<HistoryHoverFrame> presented_history_hover_;
   QPointer<QQuickItem> history_actions_;
   QPointer<QQuickItem> history_footer_;
+  QPointer<QQuickItem> history_filter_layout_;
   QHash<std::uint64_t, QPointer<TerminalItem>> terminals_;
   QByteArray hostname_;
   Qt::KeyboardModifiers pointer_modifiers_;
