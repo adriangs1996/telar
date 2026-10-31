@@ -51,6 +51,23 @@ void NativeRoundedRectangle::setBorderColor(const QColor &color) {
   }
 }
 
+qreal NativeRoundedRectangle::borderAlpha() const noexcept {
+  return border_alpha_;
+}
+
+void NativeRoundedRectangle::setBorderAlpha(qreal alpha) {
+  if (!std::isfinite(alpha) || alpha < 0 || alpha > 1) {
+    return;
+  }
+
+  const auto scalar = static_cast<float>(alpha);
+  if (scalar != border_alpha_) {
+    border_alpha_ = scalar;
+    emit borderAlphaChanged();
+    update();
+  }
+}
+
 qreal NativeRoundedRectangle::radius() const noexcept {
   return radius_;
 }
@@ -79,14 +96,16 @@ QSGNode *NativeRoundedRectangle::updatePaintNode(QSGNode *previous, [[maybe_unus
   const auto density = window() == nullptr ? 0 : window()->effectiveDevicePixelRatio();
   const auto physical_width = static_cast<float>(width() * density);
   const auto physical_height = static_cast<float>(height() * density);
-  const auto transparent = color_.alphaF() <= 0 && (border_color_.alphaF() <= 0 || border_width_ <= 0);
+  const auto transparent = color_.alphaF() <= 0 && (border_color_.alphaF() <= 0 || border_alpha_ == 0 || border_width_ <= 0);
   if (transparent || !std::isfinite(physical_width) || !std::isfinite(physical_height) || physical_width <= 0 || physical_height <= 0) {
     const auto retired = std::unique_ptr<QSGNode>{previous};
 
     return nullptr;
   }
 
-  const auto shape = RoundedRectangle::resolve({.x = physical_width, .y = physical_height}, {.fill = shapeColor(color_), .border = shapeColor(border_color_), .radius = static_cast<float>(radius_ * density), .border_width = static_cast<float>(border_width_ * density)});
+  auto border = shapeColor(border_color_);
+  border.a *= border_alpha_;
+  const auto shape = RoundedRectangle::resolve({.x = physical_width, .y = physical_height}, {.fill = shapeColor(color_), .border = border, .radius = static_cast<float>(radius_ * density), .border_width = static_cast<float>(border_width_ * density)});
 
   return paintRoundedRectangle(*window(), previous, shape, density);
 }

@@ -15,6 +15,7 @@ class NativeRoundedRectangle : public QQuickItem {
   QML_ELEMENT
   Q_PROPERTY(QColor color READ color WRITE setColor NOTIFY colorChanged)
   Q_PROPERTY(QColor borderColor READ borderColor WRITE setBorderColor NOTIFY borderColorChanged)
+  Q_PROPERTY(qreal borderAlpha READ borderAlpha WRITE setBorderAlpha NOTIFY borderAlphaChanged)
   Q_PROPERTY(qreal radius READ radius WRITE setRadius NOTIFY radiusChanged)
   Q_PROPERTY(qreal borderWidth READ borderWidth WRITE setBorderWidth NOTIFY borderWidthChanged)
 
@@ -24,6 +25,8 @@ public:
   void setColor(const QColor &color);
   [[nodiscard]] QColor borderColor() const;
   void setBorderColor(const QColor &color);
+  [[nodiscard]] qreal borderAlpha() const noexcept;
+  void setBorderAlpha(qreal alpha);
   [[nodiscard]] qreal radius() const noexcept;
   void setRadius(qreal radius);
   [[nodiscard]] qreal borderWidth() const noexcept;
@@ -32,6 +35,7 @@ public:
 signals:
   void colorChanged();
   void borderColorChanged();
+  void borderAlphaChanged();
   void radiusChanged();
   void borderWidthChanged();
 
@@ -45,6 +49,7 @@ private:
   QColor border_color_ = Qt::transparent;
   qreal radius_ = 0;
   qreal border_width_ = 0;
+  float border_alpha_ = 1;
   AncestorGeometry ancestors_;
 };
 

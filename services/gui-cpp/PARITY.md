@@ -4,6 +4,17 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [modal outline alpha checkpoint](measurements/modal-alpha.md) corrects
+QColor quantization of the original float32 0.09 outline. Both Vesper scopes
+reproduce 32 corner-pixel differences; item-opacity controls and the final native
+border-alpha data match complete modal pixels. Shade and Catppuccin controls
+remain exact. The native multiplier leaves shader/material/vertex layout and
+item opacity unchanged; Mac ARM64 item size increases112→120 bytes. Both SDKs
+pass four broad analysis units, four actual editor sessions,41 component entries
+and8 selected native entries. Linux exits0 in Release/ASan. Mac ASan completes
+assertions but reports component/native leaks. Complete visuals, latency,
+physical delivery and full-client performance remain open.
+
 The [bounded History error-caption evidence](measurements/history-caption.md)
 reproduces and corrects long-message shaping boundaries: 6,730 and 14,393 differing
 modal pixels become exact matches against the unchanged original. Nineteen

@@ -1,5 +1,176 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## ACTIVE Alpha FINAL/FROZEN; continue search-icon mismatch (05:18 UTC)
+
+Continue autonomously, NOcheckpointfinal. Workonlyhere/noagents/worktrees/publish/merge.
+Spanishupdates<=60s; keepanalysisSHORT. Userpersonal-frame-delivery.md NEVERread/touch/
+stage. Runtime35801/oldSway9469untouched. OwnedVM7158/SSH55984 aliveIDLE, noactiveGUI/
+build/lint/editor. OldgoalAPIblockednoresume: manuallycontinuefullPARITY.
+
+NewAlpha evidence FINAL/FROZEN726artifacts2500sources10516638B. Offline/current-source/
+originalShaderMaterial/source/executablecredentials/exactpixels/stagedwhitespacePASS.
+NEVERrefreshroot/report/verifier. PreviousCaption61ef6f53b1133/2500/19155316ALSOFROZEN;
+its19rawheaders+1rawlog whitespacefail remainsrecorded, source/reportscopePASS. NewAlpha
+losslesslycompressesrawtextsoitsstagedglobalwhitespace0. AllolderarchivesALSOimmutable.
+
+FinalAlpha product: NativeRoundedRectangle borderAlpha f32data validated[0,1]beforecast,
+color.a*=alpha beforeexistingGPUvertex. DialogSurfaceborderColorunmodified+borderAlpha.09,
+itemopacity1, shadowmaterialunchanged. NativeobjectMac112→120B (+8paddingincluded).
+CausalVesper32greycornerpixels→0: globalandworkspace2258048pixelsfullmodalexact,
+Shade2868448/Catppuccin2919488exact. Combineditemopacityandoutline-onlycontrolsretained
+andexacttoo. Expandedhalo1175→1143 outside-modalunderlyingtab/sidebartextNOTqualified
+shadowdefect. QMllint2zero. Broad4unitlint2bothSDK0;actual4editorsMac2/Linux1empty.
+FinalhostRelease/ASANbuild4, guestRelease/ASANbuild2 actual0; finalsourceSHAsetsmatch.
+ComponentsMacRelease2 all41entriesexit0; ASAN2all41pass exits8leaks256/4 +248180/1035.
+Macnative8entriesbothpassRelease0/ASAN1leaks613229/3204. Linuxcomponents/nativebothSDK
+variantsall41/all8PASSactual0. Noaccess/UB; noaddedLSANsuppressions, builtinQtMac
+runtimefiltersrawretained. No pairedperformanceclaim, allglobal/fullvisual/latency/
+physicaldelivery/animatedpixel gatesOPEN. NewlocalcommitnextthenCONTINUE.
+
+NEXT reproduced5pixelTokyonarrow.75 searchicon mismatch: ignoredlocal/history-scope-
+empty-appearance-cwd-tokyo-narrow1 andglobalcontrolhistory-scope-control-appearance-
+global-tokyo-narrow1 both5. Coordinatesx102..106,y999: Originalbackgroundonly,
+Qtextraonebottomrowofmagnifier. Originalmodal[56,56,1424,1132]1471968. Capturesqualified
+focus/privateboards/freshMetal. NeedfreshbeforecaptureCURRENTfinalAlphabinary first
+(helperlocal/history_error_appearance_capture.py supports--theme tokyo-night --chrome-
+scale .75 --viewport740620 --queryTELAR_HISTORY_ABSENT_FIXTURE; nostateerror required).
+ThenreadNativeChromeIcon/IconLayout+OriginalCanvas.iconAt/HistoryModal searchgeometry.
+Retaincausalnegativebeforeproductedit, noframeforcing/relaxing/clippingguesses. New
+frozenAlphaarchiveonlyofflinechecksafternewsourcechanges, don'trewritecurrent-source
+expectations. CapturehelperoriginalLib4e021... unchanged. FullPARITY/machines29already
+integrated; keepworkinguntilglobalobjectivefulfilled.
+
+IncubationprefailureSTILLopen, no productionQuicktestchanged. Six isolateddiagnostic
+variantsinownedguestoutdeps/history-incubation-observation-* andlogs local/history-
+incubation-observation-*-filtered1, allsamepending>0/10s predicatesfail. Settlingselected
+open1/reversingvelocity/realQEventLoop/cacheBuffer0don'tfix. Baseline100rows,count100,
+height580,contentHeight3502,contentY-580,flicktrueimmediate→false/noMove. cache320→0
+createdRows26→17; noPendingstill. RealQEventLoopfails10.7svsmanual31.5s. DoNOTclaimcause.
+PrimaryQt6.8.2flickablesource+SHAoutdeps/qt-history-incubation-source1; isolatedcompile/
+linkhelpersignoredlocal/build_history_incubation_*diagnostic.py. Noactiveactor now.
+Needeventualcause/fixturecoveragewithoutrelaxingassertion/timeout. PreferactualQtstack
+orpublicmotionobservationsratherthanmoreblindinputvariants. Preservepreviousfails.
+
+
+## ACTIVE Native modal borderAlpha final checks; incarnation diagnostic (05:10 UTC)
+
+CONTINUE no checkpointfinal. HEAD61ef6f53b Caption FINAL/FROZEN1133artifacts2500sources
+19155316B, NEVERrefresh. Caption commit globalwhitespacecheckFAILED on19 originalraw
+headers+1compilerlog; scopedproduct/reportPASS. Preservebytes, don'tclaimglobalclean.
+AllolderarchivesalsoFROZEN. Workonlyhere/noagents/publish/merge/userfiletouch. Spanish
+updates<=60s, keepanalysis<100tokens. Userruntime35801/oldSway9469untouched; VM7158/55984.
+
+CurrentUNCOMMITTEDproduct5files: NativeRoundedRectangle.hpp/.cpp newfloat borderAlpha
+QMLproperty(default1; finite[0,1]guardBEFOREfloatcast), appliesborder.a*=border_alpha_
+inexistingvertexcolor. DialogSurface.qml borderColorunmodified+borderAlpha:.09,
+shadowmaterialUNCHANGED. No itemopacitynode/newshader/material/vertexlayout/timer.
+RoundedRectangleTest existingmutationcase nowchecksactualtranslucentdraw/invalidNaN,
+Inf,maxdouble,negative/restoration. RoundedRectangleScene.cpp+testdirectQStringLiteral
+includes addedafterLinuxprofile1 failed2include-cleanerchecks; no profilechanges.
+Source/provenancebeforeRootoutdeps/modal-alpha-before1; opacitycombinedsnapshot
+modal-alpha-combined-before-outline-only1; before-native-data1 Nativeheaderbefore.
+
+Causal nativeimages: Vesper1.5 1000x680globalandworkspace original32greycornerpixels.
+PublicQtQColorprobe .09→.0899977088 vsoriginalf32 .0900000036. Initialshadow+outline
+itemopacity experiment passeswhole2258048modal; outlineONLYopacityalso0. Then final
+native borderAlphadata (itemopacity1) global/workspace2258048 EXACT, Shade2868448exact,
+Catppuccin2919488exact. NarrowTokyo.75searchicon5pixels STILLopenseparateunchangedglobal
+control. HaloOriginalDialogSurface union[32,42,1968,1286]2408384pixels:1175→1143,
+remainingdifferences underlyingtab/sidebartext outsideModal NOTqualifiedshadowdefect.
+Macobjectsizeof baseline112→new120B (+8includingpadding), ignoredlayout-probe2 receipts;
+firstprobe1 pointedwrongbeforeheaderpath, failedpreserved. No timing/perfgainclaim.
+
+HostReleasebuild3/ASAN3 passed; native4unitlint1+3actualeditors1 clean. Components
+Release1 Rounded4PASS+History37PASSexit0; ASAN1 bothallassertionsPASS exits8/leaks
+256B4allocs +248260B1037allocs (noaccess/UB, noaddedLSANsuppression). Headercleanup
+finalhostASANbuild4 actual0, Releasebuild4 ACTIVEexec44973. Final4unitlint2exec93727,
+4actualeditors2exec83921 pending. DoNOTeditdependentC++/headers/QMLwhileReleaseactive.
+QMllint2final0 no diagnostics. Currentignoredhelpers run_modal_alpha_build.py/lint.py/
+components.py/check_modal_alpha_final_editors.py, collect_modal_alpha_identity.py.
+Finalidentitymustrefreshafterallfinalbuilds; repeatfinalVesperimage ifbinarySHAchanged.
+NewDRAFTreportmeasurements/modal-alpha.md, noarchive/verifieryet. NeedbothSDKchecks,
+components/nativeexistingregressions, ownedcommit, CONTINUEfullPARITY.
+
+Linuxalpha ASAN1/Release1 bothbuilt, lint1failsRoundedScene/test missingdirectQStringLiteral.
+Pipeline56768 actualexit1 soeditorsnotrun. Guestcurrentlyidlebuilds; host2includeupdates
+NOTYETsynced. FIRST finishcacheactor20048 thentransferupdated2Cpp+identityhelper/
+4fileLinuxeditorhelper, serializeASAN2→Release2→fourunitlint2→editors1→componentsboth.
+Allguestheavyjobsmustserialize. No newheavybuild/lintwhilecurrentGUItimingdiagnostic
+needed; functionaloverlapnotperfacce. Native6methodLinuxincubationfailurekeptOpen.
+
+Separateincubation diagnostics NEVERmodifyproductionQuicktest (samehashc3d4f78...):
+isolatedclones compiledfromoriginalCDB command/newsourceobject/linkexistinglibs in
+outdeps/history-incubation-observation-{1,settled-1,reverse-1,event-loop-1,cache-1}.
+Allvariants trace publicListView per100ms. Baseline has100rows/count100/height580/
+contentHeight3502/contentY-580/retiringfalse, flicktrueimmediate→falsewithoutmove.
+Settledselectedopen==1 stillfails. Reversevelocitystillfails. RealQEventLoop exact
+samepredicate/10stimeoutstillfails (10.7s vsmanual31.5s), NOTcauseclosed. Qt6.8.2
+primaryqquickflickable.cpp fetched+SHAoutdeps/qt-history-incubation-source1; linkrawGitHub.
+Newcachevariant setsONLYcacheBuffer0 andrecordsdefaultcacheBuffer/deceleration/
+createdRows plusoldfields; builtactual0. CURRENTnativecacheactor ACTIVEexec20048:
+local/history-incubation-observation-cache-filtered1. UsesownSway/Qtoldvariantbinary.
+Awaitactualexit/readtrace beforeanyfurtherexperiment. Do NOTrelaxexpectedpending>0
+or10stimeout. Ifnoevidence, keepfailureOpen andcontinueprimaryalpha insteadofblind
+reruns. Fourpreviousfailedvariantlogs+helpergeneratedsources needretentionlater.
+
+
+## ACTIVE Caption committed/frozen; investigating modal alpha (04:53 UTC)
+
+CONTINUE autonomously; no checkpoint final. Work only here/no agents/publish/merge.
+Spanish updates <=60s; keep analysis short to avoid silent minutes. User unrelated
+personal-frame-delivery.md must never be read/touched/staged. Runtime35801 and old
+Sway9469 untouched. VM7158/SSH55984 alive idle; snapshot, not another Git worktree.
+Goal API oldblocked has no resume; manual continuation. All older archives frozen.
+
+New local commit61ef6f53b implements bounded original Caption error-footer runs:
+text/caption_runs.hpp 64bytes/30codepoints+word/grapheme policy, fontTextLayout
+shapeCaption with retained storage, NativeChromeText.caption opt-in onlyerror.
+Qt6.8 QPointer explicit!=nullptr portablefix; two unused includes removed.
+Original Caption.draw/GraphemeIterator unchanged oracle2676 exact on bothSDKs under
+ASAN/UBSAN. New fontcascade test checks rounded origins/fullglyphs/warmzeroallocation.
+Final MacReleasebuild2/ASANbuild5, LinuxRelease/ASANbuild3 actual0; broad5unitprofile
+both0 (Mac3+final3unit4), six actualeditorsboth DELIVEREDempty. MaccomponentsRelease1
+all3groups0; ASAN3 textfit/fontcascadePASS,37HistorychecksPASS exit8 leaks248836/1040.
+Macnative6methods8entries bothPASS; Release0 ASAN1leaks524036/2778. Linuxcomponents
+Release/ASANall3groups0. Linuxnative both7PASS1FAIL filtereddelegate incubation
+prerequisite deferred.incubatingObjectCount()>0 line4136. SameReleasebinary isolated
+2PASS1FAIL; NOTsequence-only. Quicktest/HistoryPanel sources unchangedfromparent,
+no speculativefix/assertion relaxation. This native gate remains OPEN.
+
+Caption archive FINAL/FROZEN1133artifacts2500sources19155316B, verifier offline/current
+PASS, source/executable/credential exclusions checked. NEVERrefresh. Two original
+longerror negatives6730/14393→0;19comparisons17exact include3finalbinaryerrors,
+Unicode/bearing/empty/no-match variants. Fullglobalparity/leaks/latency/perf OPEN.
+Important new audit limitation: gitdiff--cached--check found19 rawgui_view.h final
+blanklines and1 rawLinuxlintcaret trailing spaces; shell continued commit. Product/
+report scoped whitespacecheckPASS. Preserve frozen rawbytes; do not falselyclaim
+wholecommit whitespaceclean. Ignored receiptlocal/history-caption-raw-whitespace.json.
+
+NEXT active product UNCOMMITTED: qt/DialogSurface.qml usescolorblack+opacity.07
+for3shadows and borderColorunmodified+opacity.09 foroutline, instead ofQt coloralpha.
+Hypothesis QColor16bitquantization creates32 one-gray-level cornerpixel differences.
+Read realOriginalDialogSurface/Canvas.ringAt: f32alpha.07/.09; isolatedQt6.12 public
+QColorprobe confirms.07→.06999313,.09→.08999771,.25→.25000381. Source/probe receipts
+local/history_modal_alpha_probe.cpp,history-modal-alpha-probe-*.json. Beforebinary+
+exact4source snapshotoutdeps/modal-alpha-before1. Current HOSTReleasebuild1 active
+exec2460 via run_history_caption_build.py out modal-alpha-build1; nootherbuilds.
+Do NOTeditdependentCpp/header/QMLwhilebuildactive. Afteractual0 execute ignored
+local/run_modal_alpha_appearance.py (prepared labelhistory-modal-alpha-appearance-
+global-vesper-fixed1) againstunchangedOriginal/currentQt; compare_originalgeometry
+withlocal/compare_history_appearance.py. No newafterimagesyet. Testhypothesisbefore
+claimingcause; doNOTtouchfrozenCaptionarchive/report/verifier.
+
+Unfrozen nextscenes retained ignoredlocal: history-scope-empty-appearance-workspace-
+vesper1(1000x680points/chrome1.5)32pixelscornerdiff; sameglobalcontrol32 → notscope.
+cwd-tokyo-narrow1(chrome.75,740x620)5pixelsmissingonebottomrowsearchicon x102..106,
+y999; sameglobalTokyocontrol5. pane-kanagawa-wide1 chrome1 baseline full2868448exact.
+Originalmodalbounds Vesper[56,56,1944,1252]2258048; narrow[56,56,1424,1132]1471968.
+AllfreshMetal/focus/privateboards qualified; noforcing/resampling/masks. .RGBAgetbbox
+ignoresRGBwhenalpha0; useRGB fordiffbounds; allpixelcountsuseanychannelcorrectly.
+Needclosealpha causally then separate5pixel searchicon and Linuxincubationprecondition.
+ContinuefullPARITY; machines29actions/SSHalreadyintegrated. No checkpoints asfinal.
+
+
 ## ACTIVE UTF16 FINAL/FROZEN; continue native History error/empty states (04:24 UTC)
 
 UTF16 evidence FINAL/FROZEN291artifacts2494sources8487367B. Offline/current-source/

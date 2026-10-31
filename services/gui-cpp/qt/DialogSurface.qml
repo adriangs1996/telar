@@ -40,6 +40,7 @@ Item {
         color: "transparent"
         radius: root.cornerRadius
         borderWidth: root.ratio
-        borderColor: Qt.alpha(root.colors.text, root.outlineAlpha)
+        borderColor: root.colors.text
+        borderAlpha: root.outlineAlpha
     }
 }

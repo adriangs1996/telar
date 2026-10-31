@@ -12,6 +12,7 @@
 #include <QSGRendererInterface>
 #include <QString>
 #include <QtCore/qlogging.h>
+#include <QtCore/qstringliteral.h>
 #include <QtCore/qtypes.h>
 #include <QtQuick/qsgmaterialtype.h>
 #include <array>

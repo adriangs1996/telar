@@ -22,6 +22,7 @@
 #include <QtCore/qlogging.h>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qnumeric.h>
+#include <QtCore/qstringliteral.h>
 #include <QtCore/qtenvironmentvariables.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
@@ -172,6 +173,18 @@ private:
     shape.setBorderWidth(-1);
     QCOMPARE(shape.radius(), radius);
     QCOMPARE(shape.borderWidth(), qreal{2});
+    QCOMPARE(window.grabWindow(), original);
+    constexpr qreal border_alpha = 0.09;
+    shape.setBorderAlpha(border_alpha);
+    const auto translucent = window.grabWindow();
+    QVERIFY(translucent != original);
+    for (const auto invalid : {std::numeric_limits<qreal>::quiet_NaN(), std::numeric_limits<qreal>::infinity(), std::numeric_limits<qreal>::max(), qreal{-1}}) {
+      shape.setBorderAlpha(invalid);
+      QCOMPARE(shape.borderAlpha(), qreal{static_cast<float>(border_alpha)});
+      QCOMPARE(window.grabWindow(), translucent);
+    }
+
+    shape.setBorderAlpha(1);
     QCOMPARE(window.grabWindow(), original);
     shape.setWidth(0);
     const auto empty = window.grabWindow();
