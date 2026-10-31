@@ -24,6 +24,7 @@
 #include "input/binding.hpp"
 #include "memory/allocator.hpp"
 #include "platform/window.hpp"
+#include "plugins/identity.hpp"
 #include "presentation/theme.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include <QByteArray>
@@ -171,6 +172,7 @@ void ConfigurationSource::open(const ConfigurationSelection &selection) {
   source_path_ = selection.path.toUtf8();
   profile_name_ = selection.profile.toUtf8();
   theme_ = selection.theme;
+  trust_path_ = selection.trust_path.isEmpty() ? QString{} : QFileInfo{selection.trust_path}.absoluteFilePath();
   const QPointer<ConfigurationSource> lifetime{this};
 
   try {
@@ -253,12 +255,34 @@ PluginPage ConfigurationSource::queryPlugins(const ClientCommand &request) {
     throw std::runtime_error{"PluginRegistryUnavailable"};
   }
 
-  const PluginCatalog catalog{generation_->number(), generation_->runtimeValues().plugins.configured(), plugins_->packages()};
+  const PluginCatalog catalog{generation_->number(), generation_->runtimeValues().plugins.configured(), plugins_->packages(), &plugin_overrides_};
   if (request.action == ClientAction::plugin_list) {
     return PluginQuery::list(catalog, request, query_buffer_);
   }
 
   return PluginQuery::get(catalog, request, query_buffer_);
+}
+
+void ConfigurationSource::setPluginEnabled(const ClientCommand &request, bool enabled) {
+  if (!generation_) {
+    throw std::runtime_error{"ConfigurationNotLoaded"};
+  }
+
+  if (!plugins_) {
+    throw std::runtime_error{"PluginRegistryUnavailable"};
+  }
+
+  if (!loaded_ || path_.isEmpty() || trust_path_.isEmpty()) {
+    throw std::runtime_error{"ConfigurationNotLoaded"};
+  }
+
+  const PluginCatalog catalog{generation_->number(), generation_->runtimeValues().plugins.configured(), plugins_->packages()};
+  const auto index = catalog.find(request.text);
+  auto specification = catalog.specification(index);
+  specification.enabled = enabled;
+  const auto *package = catalog.package(index);
+  plugin_overrides_.set(specification, package == nullptr ? std::nullopt : std::optional{runtime::plugins::stableId(package->manifest.id.view())});
+  requestReload();
 }
 
 void ConfigurationSource::poll() {
@@ -274,7 +298,7 @@ void ConfigurationSource::trackModules() {
 }
 
 ConfigurationReloadRequest ConfigurationSource::request(bool force) {
-  return {.selection = {.path = path_, .profile = profile_, .theme = theme_}, .watch = watch_, .revision = revision_, .generation = next_generation_, .force = force};
+  return {.selection = {.path = path_, .profile = profile_, .theme = theme_, .trust_path = trust_path_}, .watch = watch_, .plugin_overrides = plugin_overrides_, .revision = revision_, .generation = next_generation_, .force = force};
 }
 
 void ConfigurationSource::schedule(bool force) {
@@ -332,6 +356,7 @@ void ConfigurationSource::adopt(PreparedConfiguration result) {
   }
 
   watch_.root = result->observed.root;
+  watch_.trust = result->observed.trust;
   for (auto iterator = result->observed.modules.cbegin(); iterator != result->observed.modules.cend(); ++iterator) {
     const auto found = watch_.modules.find(iterator.key());
     if (found != watch_.modules.end() && found->path == iterator->path) {
@@ -358,6 +383,7 @@ void ConfigurationSource::adopt(PreparedConfiguration result) {
   configuration_.theme = projectTheme(configuration_.themes.resolve(appearance_, locked_theme_));
   generation_ = std::move(result->generation);
   plugins_ = std::move(result->plugins);
+  trust_ = result->trust;
   if (generation_) {
     next_generation_ = generation_->number() + 1;
   }

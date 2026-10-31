@@ -3,8 +3,11 @@
 #include "application/dependencies.hpp"
 #include "core/configuration.hpp"
 #include "core/memory.hpp"
+#include "config/plugin_overrides.hpp"
 #include "platform/file_stamp.hpp"
+#include "platform/private_file_stamp.hpp"
 #include "plugin_packages.hpp"
+#include "plugins/trust_store.hpp"
 #include <QMap>
 #include <QString>
 #include <cstdint>
@@ -23,6 +26,7 @@ struct ConfigurationSelection {
   QString path;
   QString profile;
   QString theme;
+  QString trust_path{};
 };
 
 struct ConfigurationDependency {
@@ -37,6 +41,7 @@ struct ConfigurationWatch {
 
   Modules modules;
   std::optional<platform::FileStamp> root;
+  std::optional<platform::PrivateFileStamp> trust;
 
   bool operator==(const ConfigurationWatch &) const = default;
 };
@@ -44,6 +49,7 @@ struct ConfigurationWatch {
 struct ConfigurationReloadRequest {
   ConfigurationSelection selection;
   ConfigurationWatch watch;
+  PluginOverrides plugin_overrides{};
   std::uint64_t revision = 0;
   std::uint64_t generation = 0;
   bool force = false;
@@ -69,6 +75,7 @@ struct ConfigurationPreparation {
   std::optional<ThemeValues> locked_theme;
   Owned<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator> generation;
   std::optional<PluginPackages> plugins;
+  runtime::plugins::TrustStore trust;
   QString directory;
   QString error;
   std::uint64_t revision = 0;

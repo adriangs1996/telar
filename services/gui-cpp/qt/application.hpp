@@ -244,7 +244,7 @@ public:
   bool interceptAttachmentKey(QKeyEvent &event);
   void open(const QString &endpoint);
   void openMachines(const QString &path);
-  void loadConfiguration(const QString &path, const QString &profile, const QString &theme);
+  void loadConfiguration(const QString &path, const QString &profile, const QString &theme, const QString &trust_path = {});
   void configureLaunch(const QString &directory, const QStringList &arguments, bool restore);
   void configureRemoteLaunch(const QString &destination, const QStringList &arguments);
   void setWindow(QQuickWindow &window);

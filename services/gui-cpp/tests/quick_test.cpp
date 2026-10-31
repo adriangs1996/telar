@@ -499,7 +499,7 @@ private:
     const QPointer<QQuickWindow> lifetime{window_};
     QGuiApplication::setQuitOnLastWindowClosed(false);
     const auto restore = qScopeGuard([&] {
-      if (!lifetime.isNull()) {
+      if (!lifetime.isNull() && (!lifetime->isVisible() || !lifetime->isActive())) {
         lifetime->show();
         test::activateWindow(*lifetime);
       }
@@ -520,6 +520,7 @@ private:
     window_->show();
     test::activateWindow(*window_);
     QTRY_VERIFY_WITH_TIMEOUT(window_->isVisible() && window_->isExposed(), runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(window_->isActive(), runtime_wait_ms);
     QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
     QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
     QCOMPARE(firstPane()->id, pane_id);
@@ -3961,6 +3962,85 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id == source_id, runtime_wait_ms);
     }
 
+    QCOMPARE(client_->error(), QString{});
+  }
+
+  Q_SLOT void routedPluginOverrides() {
+    const auto cleanup = qScopeGuard([this] {
+      client_->loadConfiguration({}, {}, {});
+    });
+    client_->loadConfiguration({}, {}, {});
+    CommandPeer peer{memory_};
+    peer.open(socket_);
+    QTRY_VERIFY2_WITH_TIMEOUT(peer.ready(), qPrintable(peer.error()), runtime_wait_ms);
+    std::uint64_t next_request = 2;
+    const auto request = [&](telar::ClientAction action, std::string_view text) {
+      const auto id = next_request++;
+      peer.request(action, id, text);
+
+      return id;
+    };
+    auto id = request(telar::ClientAction::plugin_disable, "example");
+    QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, id, runtime_wait_ms);
+    QCOMPARE(peer.result().status, telar::ClientCommandStatus::failed);
+    QCOMPARE(peer.result().text, QStringLiteral("ConfigurationNotLoaded"));
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QVERIFY(QDir{directory.path()}.mkdir(QStringLiteral("example")));
+    writeTestFile(directory.filePath(QStringLiteral("example/plugin.json")), R"({"api_version":1,"id":"sample","version":"1","entry":"main.lua","source":{"url":"fixture","revision":"1"},"actions":["run"],"capabilities":[]})");
+    writeTestFile(directory.filePath(QStringLiteral("example/main.lua")), "return {actions={run=function() return nil end}}");
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    constexpr auto configuration = "return {api_version=2,plugins={{path='example'}},client={keybindings={telar.bind({'x'},{kind='plugin',plugin='sample',action='run'}),telar.bind({'y'},'toggle-sidebar')}}}";
+    writeTestFile(path, configuration);
+    client_->loadConfiguration(path, {}, {}, directory.filePath(QStringLiteral("trust.json")));
+    QCOMPARE(client_->error(), QString{});
+    QString metadata;
+    const auto wait_enabled = [&](bool expected) {
+      std::optional<std::uint64_t> pending;
+
+      return QTest::qWaitFor([&] {
+        if (!pending) {
+          pending = request(telar::ClientAction::plugin_get, "example");
+
+          return false;
+        }
+
+        if (peer.result().request_id != *pending) {
+          return false;
+        }
+
+        pending.reset();
+        if (peer.result().status != telar::ClientCommandStatus::applied) {
+          return false;
+        }
+
+        metadata = peer.result().text;
+        const auto text = metadata.toUtf8();
+        const auto root = telar::runtime::JsonValue::parse({text.constData(), static_cast<std::size_t>(text.size())});
+        bool matched = false;
+        test::requiredJsonField(root, "entries").eachElement([&](const telar::runtime::JsonValue &entry) {
+          matched = test::requiredJsonField(entry, "enabled").boolean() == expected && test::requiredJsonField(entry, "requested_enabled").boolean() == expected;
+        });
+
+        return matched;
+      }, runtime_wait_ms);
+    };
+    QVERIFY2(wait_enabled(true), qPrintable(metadata));
+    id = request(telar::ClientAction::plugin_disable, "sample");
+    QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, id, runtime_wait_ms);
+    QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
+    QVERIFY2(wait_enabled(false), qPrintable(metadata));
+    id = request(telar::ClientAction::plugin_enable, "sample");
+    QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, id, runtime_wait_ms);
+    QCOMPARE(peer.result().status, telar::ClientCommandStatus::failed);
+    QCOMPARE(peer.result().text, QStringLiteral("PluginNotConfigured"));
+    id = request(telar::ClientAction::plugin_enable, "example");
+    QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, id, runtime_wait_ms);
+    QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
+    QVERIFY2(wait_enabled(true), qPrintable(metadata));
+    QFile retained{path};
+    QVERIFY(retained.open(QIODevice::ReadOnly));
+    QCOMPARE(retained.readAll(), QByteArray{configuration});
     QCOMPARE(client_->error(), QString{});
   }
 

@@ -11,11 +11,13 @@
 #include "input/configuration.hpp"
 #include "json_fixture.hpp"
 #include "qt/configuration_source.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
 #include "text/json.hpp"
 #include "ui/bundled_fonts.hpp"
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QFileDevice>
 #include <QGuiApplication>
 #include <QIODevice>
 #include <QObject>
@@ -26,6 +28,7 @@
 #include <QTimer>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qstring.h>
+#include <QtCore/qstringliteral.h>
 #include <QtCore/qtestsupport_core.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtTest/qtestcase.h>
@@ -106,10 +109,157 @@ struct ConfigurationOwner {
   ConfigurationSource source{memory};
 };
 
+struct PluginFixture {
+  static constexpr auto configuration = "return {api_version=2,plugins={{path='example'}},client={keybindings={telar.bind({'x'},{kind='plugin',plugin='sample',action='run'}),telar.bind({'y'},'toggle-sidebar')}}}";
+  static constexpr auto empty_trust = R"({"version":1,"grants":[]})";
+
+  QTemporaryDir directory;
+  QString path = directory.filePath(QStringLiteral("config.lua"));
+  QString trust = directory.filePath(QStringLiteral("trust.json"));
+
+  PluginFixture() {
+    if (!directory.isValid() || !QDir{directory.path()}.mkdir(QStringLiteral("example"))) {
+      throw std::runtime_error{"Cannot create owned plugin fixture"};
+    }
+
+    writeFile(path, configuration);
+    writeFile(directory.filePath(QStringLiteral("example/plugin.json")), R"({"api_version":1,"id":"sample","version":"1","entry":"main.lua","source":{"url":"fixture","revision":"1"},"actions":["run"],"capabilities":[]})");
+    writeFile(directory.filePath(QStringLiteral("example/main.lua")), "return {actions={run=function() return nil end}}");
+    writeFile(trust, empty_trust);
+    if (!QFile::setPermissions(trust, QFileDevice::ReadOwner | QFileDevice::WriteOwner)) {
+      throw std::runtime_error{"Cannot secure owned trust fixture"};
+    }
+  }
+
+  void open(ConfigurationSource &source) const {
+    source.open({.path = path, .profile = {}, .theme = {}, .trust_path = trust});
+  }
+};
+
+struct PluginState {
+  std::string generation;
+  bool requested = false;
+  bool enabled = false;
+};
+
+PluginState pluginState(ConfigurationSource &source) {
+  const auto page = source.queryPlugins({.action = telar::ClientAction::plugin_get, .text = "example"});
+  const auto root = telar::runtime::JsonValue::parse(page.text);
+  PluginState state{.generation = std::string{requiredJsonField(root, "generation").encoded()}};
+  bool found = false;
+  requiredJsonField(root, "entries").eachElement([&](const telar::runtime::JsonValue &entry) {
+    state.requested = requiredJsonField(entry, "requested_enabled").boolean();
+    state.enabled = requiredJsonField(entry, "enabled").boolean();
+    found = true;
+  });
+  if (!found) {
+    throw std::runtime_error{"Missing owned plugin metadata"};
+  }
+
+  return state;
+}
+
 class ConfigurationSourceTest final : public QObject {
   Q_OBJECT
 
 private:
+  Q_SLOT static void pluginOverridesRetainPendingPolicyAfterFailure() {
+    const PluginFixture fixture;
+    ApplicationAllocator memory;
+    ConfigurationSource source{memory};
+    fixture.open(source);
+    QCOMPARE(source.error(), QString{});
+    QCOMPARE(source.input().length, std::size_t{2});
+    const auto initial = pluginState(source);
+    QVERIFY(initial.enabled && initial.requested);
+    const QSignalSpy changes{&source, &ConfigurationSource::changed};
+    const QSignalSpy failures{&source, &ConfigurationSource::failed};
+    QVERIFY_THROWS_EXCEPTION(std::invalid_argument, source.setPluginEnabled({.text = "missing"}, false));
+    writeFile(fixture.path, "return {api_version=1}");
+    source.setPluginEnabled({.target_id = std::numeric_limits<std::uint64_t>::max(), .text = "sample"}, false);
+    QVERIFY(!pluginState(source).requested);
+    QVERIFY(pluginState(source).enabled);
+    QTRY_COMPARE(failures.count(), 1);
+    QCOMPARE(pluginState(source).generation, initial.generation);
+    QCOMPARE(source.input().length, std::size_t{2});
+    QVERIFY(!source.error().isEmpty());
+    writeFile(fixture.path, PluginFixture::configuration);
+    source.requestReload();
+    QTRY_COMPARE(changes.count(), 1);
+    QVERIFY(!pluginState(source).requested && !pluginState(source).enabled);
+    QCOMPARE(source.input().length, std::size_t{1});
+    QVERIFY(source.input().configured[0].prefixed);
+    source.setPluginEnabled({.text = "example"}, true);
+    QVERIFY(pluginState(source).requested && !pluginState(source).enabled);
+    QTRY_COMPARE(changes.count(), 2);
+    QVERIFY(pluginState(source).enabled);
+    QCOMPARE(source.input().length, std::size_t{2});
+    QCOMPARE(source.error(), QString{});
+  }
+
+  Q_SLOT static void pluginOverrideRequestsSupersedeCapturedWorkers() {
+    const PluginFixture fixture;
+    ApplicationAllocator memory;
+    ConfigurationSource source{memory};
+    fixture.open(source);
+    QCOMPARE(source.error(), QString{});
+    PausedThreadPool pool;
+    const QSignalSpy changes{&source, &ConfigurationSource::changed};
+    source.poll();
+    source.setPluginEnabled({.text = "sample"}, false);
+    source.setPluginEnabled({.text = "sample"}, true);
+    source.setPluginEnabled({.text = "sample"}, false);
+    constexpr int debounce_wait_ms = 150;
+    QTest::qWait(debounce_wait_ms);
+    QCOMPARE(changes.count(), 0);
+    QVERIFY(!pluginState(source).requested && pluginState(source).enabled);
+    pool.resume();
+    QTRY_COMPARE(changes.count(), 1);
+    QVERIFY(!pluginState(source).requested && !pluginState(source).enabled);
+    QCOMPARE(source.input().length, std::size_t{1});
+    QTest::qWait(debounce_wait_ms);
+    QCOMPARE(changes.count(), 1);
+  }
+
+  Q_SLOT static void pluginTrustAndActionFailuresRetainTheAdoptedGeneration() {
+    const PluginFixture fixture;
+    ApplicationAllocator memory;
+    ConfigurationSource source{memory};
+    fixture.open(source);
+    QCOMPARE(source.error(), QString{});
+    const auto initial = pluginState(source).generation;
+    const QSignalSpy changes{&source, &ConfigurationSource::changed};
+    const QSignalSpy failures{&source, &ConfigurationSource::failed};
+    writeFile(fixture.path, "return {api_version=2,plugins={{path='example'}},client={keybindings={telar.bind({'x'},{kind='plugin',plugin='sample',action='missing'})}}}");
+    source.requestReload();
+    QTRY_COMPARE(failures.count(), 1);
+    QCOMPARE(source.error(), QStringLiteral("UnknownPluginAction"));
+    QCOMPARE(pluginState(source).generation, initial);
+    writeFile(fixture.path, PluginFixture::configuration);
+    QVERIFY(QFile::setPermissions(fixture.trust, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ReadGroup));
+    source.poll();
+    QTRY_COMPARE(failures.count(), 2);
+    QCOMPARE(pluginState(source).generation, initial);
+    QVERIFY(QFile::setPermissions(fixture.trust, QFileDevice::ReadOwner | QFileDevice::WriteOwner));
+    source.poll();
+    QTRY_COMPARE(changes.count(), 1);
+    const auto adopted = pluginState(source).generation;
+    const auto alternate = fixture.directory.filePath(QStringLiteral("alternate-trust.json"));
+    writeFile(alternate, PluginFixture::empty_trust);
+    QVERIFY(QFile::setPermissions(alternate, QFileDevice::ReadOwner | QFileDevice::WriteOwner));
+    QVERIFY(QFile::remove(fixture.trust));
+    QVERIFY(QFile::link(alternate, fixture.trust));
+    source.poll();
+    QTRY_COMPARE(failures.count(), 3);
+    QCOMPARE(pluginState(source).generation, adopted);
+    QVERIFY(QFile::remove(fixture.trust));
+    writeFile(fixture.trust, PluginFixture::empty_trust);
+    QVERIFY(QFile::setPermissions(fixture.trust, QFileDevice::ReadOwner | QFileDevice::WriteOwner));
+    source.poll();
+    QTRY_COMPARE(changes.count(), 2);
+    QCOMPARE(source.error(), QString{});
+  }
+
   Q_SLOT static void clientQueriesTrackAdoptionAndLiveState() {
     const QTemporaryDir directory;
     const auto absolute_path = directory.filePath(QStringLiteral("config.lua"));

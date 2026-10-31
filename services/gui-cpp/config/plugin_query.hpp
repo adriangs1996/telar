@@ -83,7 +83,7 @@ private:
       object.member("path", specification.path.view());
       object.member("id", package == nullptr ? std::nullopt : std::optional{package->manifest.id.view()});
       object.member("version", package == nullptr ? std::nullopt : std::optional{package->manifest.version.view()});
-      object.member("requested_enabled", specification.enabled);
+      object.member("requested_enabled", catalog.requestedEnabled(index));
       object.member("enabled", specification.enabled);
     });
   }
@@ -93,7 +93,7 @@ private:
     const auto *package = catalog.package(index);
     writer.object([&](JsonWriter &object) {
       object.member("path", specification.path.view());
-      object.member("requested_enabled", specification.enabled);
+      object.member("requested_enabled", catalog.requestedEnabled(index));
       object.member("enabled", specification.enabled);
       if (package == nullptr) {
         object.member("id", nullptr);

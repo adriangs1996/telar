@@ -259,8 +259,8 @@ void Application::runtimeDisconnected(MachineClient &client) {
   refresh_timer_.start();
 }
 
-void Application::loadConfiguration(const QString &path, const QString &profile, const QString &theme) {
-  configuration_source_.open({.path = path, .profile = profile, .theme = theme});
+void Application::loadConfiguration(const QString &path, const QString &profile, const QString &theme, const QString &trust_path) {
+  configuration_source_.open({.path = path, .profile = profile, .theme = theme, .trust_path = trust_path});
 }
 
 void Application::configureLaunch(const QString &directory, const QStringList &arguments, bool restore) {
@@ -796,6 +796,11 @@ void Application::executeHostCommand(const ClientCommand &message, CompleteClien
     reply.value = page.next;
     break;
   }
+  case ClientAction::plugin_enable:
+  case ClientAction::plugin_disable:
+    configuration_source_.setPluginEnabled(message, message.action == ClientAction::plugin_enable);
+    reply.status = ClientCommandStatus::admitted;
+    break;
   case ClientAction::config_reload:
     configuration_source_.requestReload();
     reply.status = ClientCommandStatus::admitted;

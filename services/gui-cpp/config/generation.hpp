@@ -27,6 +27,7 @@
 #include "lua/value.hpp"
 #include "lua/vm.hpp"
 #include "memory/fixed_text.hpp"
+#include "plugin_overrides.hpp"
 #include "reader.hpp"
 #include "recording_action_reader.hpp"
 #include <algorithm>
@@ -50,6 +51,7 @@ struct ConfigurationSourceText {
   std::string_view directory;
   std::string_view profile;
   std::uint64_t generation = 1;
+  const PluginOverrides *plugin_overrides = nullptr;
 };
 
 template <Allocator Memory>
@@ -67,7 +69,7 @@ public:
     lua_pop(machine_.state(), 1);
     modules_.emplace(machine_.state(), source.directory);
     machine_.execute(source.source, "@config.lua");
-    readConfiguration(memory);
+    readConfiguration(memory, source.plugin_overrides);
     lua_settop(machine_.state(), 0);
   }
 
@@ -133,6 +135,17 @@ public:
     return input_;
   }
 
+  template <typename Visitor>
+  void visitPluginActions(const Visitor &visitor) const {
+    for (const auto &binding : std::span{input_.configured}.first(input_.length)) {
+      if (binding.action.kind == BindingActionKind::extended) {
+        if (const auto *plugin = std::get_if<PluginActionDescription>(&descriptions_.at(binding.action.parameter))) {
+          visitor(*plugin);
+        }
+      }
+    }
+  }
+
   [[nodiscard]] const BindingMap<BindingAction> &keymap() const noexcept {
     return keymap_;
   }
@@ -190,7 +203,7 @@ public:
 private:
   static constexpr std::size_t maximum_profile_bytes = 64;
 
-  void readConfiguration(Memory &memory) {
+  void readConfiguration(Memory &memory, const PluginOverrides *overrides) {
     const runtime::lua::Value root{machine_.state(), -1, "config"};
     runtime::config::SnapshotReader{memory, *runtime_}.read(root, profile_.view(), client_state_);
     validateUtf8(runtime_->history_path);
@@ -208,8 +221,30 @@ private:
       readClient(overlay, &client);
     }
 
+    if (overrides != nullptr) {
+      overrides->apply(runtime_->plugins);
+      removeDisabledPluginBindings(*overrides);
+    }
+
     keymap_ = input_.compile();
     client_state_.commands.seal();
+  }
+
+  void removeDisabledPluginBindings(const PluginOverrides &overrides) {
+    std::size_t retained = 0;
+    for (const auto &binding : std::span{input_.configured}.first(input_.length)) {
+      if (binding.action.kind == BindingActionKind::extended) {
+        const auto *plugin = std::get_if<PluginActionDescription>(&descriptions_.at(binding.action.parameter));
+        if (plugin != nullptr && overrides.disabled(plugin->plugin, runtime_->plugins.configured())) {
+          continue;
+        }
+      }
+
+      input_.configured[retained] = binding;
+      ++retained;
+    }
+
+    input_.length = retained;
   }
 
   void readClient(const runtime::lua::Value &client, const runtime::lua::Value *inherited = nullptr) {

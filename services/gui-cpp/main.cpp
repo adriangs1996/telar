@@ -23,6 +23,7 @@
 #include <QtCore/qcommandlineoption.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qstring.h>
+#include <QtCore/qstringliteral.h>
 #include <QtCore/qtenvironmentvariables.h>
 #include <QtCore/qtypes.h>
 #include <QtQuick/qquickwindow.h>
@@ -83,6 +84,17 @@ QString machineProfilesPath() {
   const auto home = qEnvironmentVariable("HOME");
 
   return home.isEmpty() ? QString{} : home + QStringLiteral("/.config/telar/machines.json");
+}
+
+QString trustStorePath() {
+  const auto base = qEnvironmentVariable("XDG_CONFIG_HOME");
+  if (!base.isEmpty()) {
+    return base + QStringLiteral("/telar/trust.json");
+  }
+
+  const auto home = qEnvironmentVariable("HOME");
+
+  return home.isEmpty() ? QString{} : home + QStringLiteral("/.config/telar/trust.json");
 }
 
 QString runtimeEndpoint(const QCommandLineParser &parser) {
@@ -191,7 +203,7 @@ int main(int argc, char **argv) {
     if (remote) {
       client.configureRemoteLaunch(*remote, parser.positionalArguments());
     }
-    client.loadConfiguration(configurationPath(parser), parser.value(QStringLiteral("profile")), parser.value(QStringLiteral("theme")));
+    client.loadConfiguration(configurationPath(parser), parser.value(QStringLiteral("profile")), parser.value(QStringLiteral("theme")), trustStorePath());
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("telar"), &client);
     engine.loadFromModule(QStringLiteral("Telar.Gui"), QStringLiteral("Main"));

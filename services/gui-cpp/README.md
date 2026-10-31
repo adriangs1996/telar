@@ -5,6 +5,12 @@ input delivery and scene graph; QML owns the application chrome. The Zig GUI
 remains the default. This port does **not** yet meet the requested functional,
 visual or performance parity gates. [PARITY.md](PARITY.md) records the remaining work.
 
+The first daily-adoption milestone is tracked in [DAILY_DRIVER.md](DAILY_DRIVER.md).
+It requires all daily features except command navigation and notifications, plus
+a separately packaged and verified Release app. [Plugin activation and secure
+trust loading](measurements/plugin-overrides.md) now work; isolated execution and
+custom surfaces remain required.
+
 The [Wayland lifetime correction](measurements/window-lifetime.md) releases the
 Quick swapchain before hiding destroys its Vulkan surface. Native close/reopen
 now passes, and both final Linux builds pass 101 checks with one unqualified
@@ -19,7 +25,7 @@ Both SDKs match 2940 original-source queries and 35 original CLI package cases
 per Release/ASan build. Software regression assertions pass. That checkpoint's
 native failures remain in its immutable evidence; subsequent lifetime
 qualification is recorded above.
-Enable/disable overrides, isolated execution, capability grants, custom surfaces
+Isolated execution, capability grants, custom surfaces
 and comparative performance still require implementation and acceptance.
 
 The [routed Goto command](measurements/routed-goto.md) now opens the existing

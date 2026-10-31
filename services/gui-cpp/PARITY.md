@@ -1,5 +1,14 @@
 # Port acceptance status
 
+The immediate milestone is a separate Release daily-use candidate, tracked in
+[DAILY_DRIVER.md](DAILY_DRIVER.md). Only command/quick navigation and notifications
+may be deferred. Plugin execution/custom surfaces, exact-bundle deployment and
+the remaining daily-flow qualification block adoption; full parity stays open.
+
+[Plugin activation and secure trust loading](measurements/plugin-overrides.md)
+now support captured overrides, transactional validation and real enable/disable
+commands on both SDKs. Isolated execution and custom surfaces remain required.
+
 The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
@@ -22,7 +31,7 @@ Both SDKs match 2940 original-source queries and 35 original CLI package cases
 per Release/ASan build. Software regression assertions pass. That checkpoint's
 Mac sanitizer leaks and Linux native cleanup failures remain in its immutable
 evidence; subsequent lifetime qualification is recorded above.
-Enable/disable overrides, isolated execution, capability grants, custom surfaces
+Isolated execution, capability grants, custom surfaces
 and comparative performance still require implementation and acceptance.
 
 The [routed Goto correction](measurements/routed-goto.md) handles

@@ -27,7 +27,8 @@ const Snapshot = struct { plugins: [32]Spec, plugin_count: usize };
 const Registry = struct { packages: [32]Package, count: usize };
 const Generation = struct { snapshot: Snapshot, number: u64 };
 const Overrides = struct {
-    pub fn requested(_: *const @This(), _: []const u8) ?bool { return null; }
+    value: ?bool = null,
+    pub fn requested(self: *const @This(), _: []const u8) ?bool { return self.value; }
 };
 const Client = struct {
     lua_generation: ?*const Generation,
@@ -91,6 +92,10 @@ fn run(source: []const u8) !void {
         for (&package.digest, 0..) |*byte, offset| { byte.* = @truncate(seed + index + offset); }
     }
     var client: Client = .{ .lua_generation = &generation, .plugin_registry = &registry };
+    if (request.object.get("requested")) |requested| {
+        client.reload.plugin_overrides.value = requested.bool;
+    }
+
     var reply: Command = .{ .target_id = try number(u64, request, "target"), .value = try number(i64, request, "page"), .name = request.object.get("name").?.string };
     const result = if (try number(u8, request, "mode") == 0) listPlugins(&client, &reply) else describePlugin(&client, &reply);
     if (result) |_| {

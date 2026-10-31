@@ -55,6 +55,7 @@ public:
   [[nodiscard]] std::optional<NotificationActionDescription> notificationAction(BindingAction action) const;
   [[nodiscard]] std::string_view query(ConfigurationQuery query, const ClientViewState &view = {});
   [[nodiscard]] PluginPage queryPlugins(const ClientCommand &request);
+  void setPluginEnabled(const ClientCommand &request, bool enabled);
 
 signals:
   void changed();
@@ -83,6 +84,8 @@ private:
   BindingMap<BindingAction> default_keymap_;
   Owned<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator> generation_;
   std::optional<PluginPackages> plugins_;
+  PluginOverrides plugin_overrides_;
+  runtime::plugins::TrustStore trust_;
   std::uint64_t next_generation_ = 1;
   std::uint64_t revision_ = 0;
   std::uint64_t active_revision_ = 0;
@@ -91,6 +94,7 @@ private:
   QByteArray source_path_;
   QByteArray profile_name_;
   QString theme_;
+  QString trust_path_;
   QString module_root_;
   QString error_;
   bool loaded_ = false;
