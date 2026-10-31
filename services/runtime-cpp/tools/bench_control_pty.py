@@ -18,13 +18,13 @@ import time
 def build_processes(snapshot):
     result = []
     for line in snapshot.splitlines()[1:]:
-        if Path(line.rsplit(None, 1)[0]).name in {'clang', 'clang++', 'zig', 'ninja', 'ld', 'cc1', 'cc1plus'}:
+        if Path(line.rsplit(None, 1)[0]).name in {'clang', 'clang++', 'clang-tidy', 'zig', 'cmake', 'ninja', 'make', 'ld', 'ld.lld', 'cc1', 'cc1plus', 'gcc', 'g++', 'cc', 'c++'}:
             result.append(line)
     return result
 
 
 def process_snapshot(reject_builds=True):
-    snapshot = subprocess.check_output(['ps', '-Ao', 'comm,%cpu'], text=True)
+    snapshot = subprocess.check_output(['ps', '-Ao', 'ucomm,%cpu'], text=True)
     if reject_builds and (compilers := build_processes(snapshot)):
         raise RuntimeError('Concurrent build invalidates measurement: ' + repr(compilers))
     return snapshot
