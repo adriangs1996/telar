@@ -1,5 +1,185 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## ACTIVE History modal motion FINAL/FROZEN; continue UTF16 compatibility (03:50 UTC)
+
+Native motion evidence FINAL/FROZEN677artifacts2490sources16823860B. Offline/current/
+Original-source-exact/securityexclusions/whitespace PASS. NEVEReditarchive/report/
+verifiers, alloldercheckpointsalsoFROZEN. Ownedlocalcommit next then CONTINUE.
+HostRelease/ASANbuild3 actual0; guestASAN/Releasebuild3 actual0. Maclint3+Linuxlint2
+fourunitsPASS, Maceditors1seven+editors2two andLinuxeditors1seven DELIVEREDempty.
+CoreMacASAN3/LinuxASAN1 527seq32802samples EXACT. ComponentMacrelease/ASAN3 5PASS0;
+Linuxgroupnewcomponent5PASS0. NativefinalMacRelease/ASAN1 +LinuxRelease/ASAN1 ALL22
+PASS; MacASANexit1leaks601242/3033, Linux0. SevenclockgroupsMacRelease2 ALL86PASS0,
+MacASAN2 ALL86PASSexit8 leaks254936/1063,272628/1004,241916/998,274252/921,205584/973.
+Linux7groups85PASS1FAILbothbuilds: pureUTF16 oldsource requested188292vsQt6.8toUtf8190338.
+Qt6.8uses1byteinvalidsurrogate vsQt6.10/6.12omit0, needdiagnosticpolicy(nohardcoded
+platform/versionassumptions). Utf16Prefix/form_field_test BYTESUNCHANGEDfrom78294
+parent, sourceproofretained. QMLlint0WARNINGScontext/import retained, NOTcleanclaim.
+
+NativeMotionfixed1 andsync1 entire1471968modalEXACT. BeforeSynchronizingDIRECTsafe
+GUIblockedpublicQtcallback firstvisible0/y40→1/y28; pre-polishafterAnimatingfirst1
+didNOTproveGPUflash, no speculativefix. Wideinspectorsync3 entire2919488EXACT,200
+syncedsamplescontent==button0→1, divider1. Sourcehelpers/provenance/allfailedprep
+attemptsretained. ImmutablearchiveincludesnewIME controls exactmarked/twoEscmodal,
+threeEscworkbench; singleEscfirststaledrawablefailureOPEN despiteexactdiagnosticreplay.
+Allpriorlatency/leaks/physicaldelivery/intermediatepixels/globalparitygatesOPEN.
+
+Allbuilds/lints/editors/nativeGUIactorsACTUALEXITED. VM7158/55984aliveidle; userRuntime
+35801/oldSway9469untouched. Userpersonal-frame-delivery.md NEVERread/touch/stage.
+Workonlyhere/noagents/worktrees/publish/merge. Spanishupdates<=60s aim40; keepanalysis
+UNDER100TOKENS (longanalysiscauses2minsilences). NOcheckpointfinal/goalcompletion.
+GoalAPIoldblockednoresume, manuallycontinueobjective.
+
+NEXT UTF16 actualbug: all6 Qtcallers useUtf16Prefix::fit defaultinvalidbytes0, then
+encodewithQString.toUtf8. Qt6.8replacesisolatedsurrogateswith'?'1byte, Qt6.10/6.12
+omit0. Existingformunitall65536units×10capacities failsQt6.8count by2046bytes; doNOT
+relaxexpectedactualencoderbytes. Application.searchHistory boundsrawUTF16BEFORE
+canonicalizing, soQt6.8 canexposeover128UTF8bytes. NativeFormField defensivelytrims
+UTF8again butoverflowrequestedcountwrong. Othercallerspalette/path/peek/machineprompt.
+Needcausalprogrammatic API testbeforefix (Quickslot) using120ascii+12isolatedlow+
+4byteemoji+20ascii againstactualQString.toUtf8 utf8Prefix128; Qt6.8oldcanretain140bytes,
+Qt6.12old128. Keepnegative+unchangedpositive afterfix. ThenintroduceQtadapter policy
+that adopts installedcodec actualinvalid-bytebehavior ONCE, independentcorepolicy
+(noQtincludes/noallocation/noextraUTF16scan onvalid hotpath). DoNOThardcodeQtversion
+orOS. Existingunitexpectedvaluesstayunchanged; exerciseproductionpolicyadapter.
+Considerpolicyenum/corefitthirdarg+cachedQtclassifier, notruntimevirtualdependency.
+Readrealcallers beforeedit: qt/application.cpp searchHistory1225, native_form_field.cpp
+insertText206, palette_controller138, machine_prompt_controller51,path_picker48,
+peek_controller84. Purecore text/utf16_prefix.hpp currentlyinvalid_scalar_bytes0.
+Frozenmeasurements/history-query.md documentsonlyQt6.10/6.12 scope; NEVERrewriteit.
+NeedprimaryQtconverter sources ifneeded and targetedbothSDKvalidation, lint/editors,
+source/binaryidentityevidence; continuefullPARITY aftercompatfix.
+
+## ACTIVE History entrance built; inspect FIRST SYNCHRONIZED FRAME (03:34 UTC)
+
+HEAD78294c110 frozen native-scroll990/2479/12866322B NEVERedit. NewmotionUNCOMMITTED.
+MacReleasebuild2/ASANbuild2 actual0; Maclint2 fourunits0, actualeditors1 sevenfiles
+DELIVEREDempty. FinalcoreASAN2 527/32802EXACT. NewcomponentRelease2/ASAN2 both5PASS
+exit0inclidleclock/reentrantdelete. Afterlint1 nestedternary/directinclude/owningdelete
+failures, fixedexplicitbranches+uniquePtr+includes, rawretainedbeforeprofile snapshot
+outdeps/history-modal-motion-before-profile1 exact12files+binaryidentities. Inspector
+motionmovedtoHistoryPanel tostartwhileempty/loading, propertypassedtoInspector.
+SourceQMLdivideunchangednoreveal; content/buttonsfadeonly, maindim+popupyoffset.
+
+HOST builds ACTIVE: exec15986 clockconsumersRelease2 build (slowCMakeconfig)→7suite
+CTestRelease1; exec60924 ASANclockbuild1 actual0 and7suiteASAN1 actual8 ALL86QtTest
+entriesPASS, leaks: tab229268/1046,notify254832/983,agent210940/940,form278036/920,
+history246164/1034. pane10PASS andmodal5PASS exit0. Preserveleaks no suppressions.
+Guestexec23629 ASANbuild2actual0→Releasebuild2~linking→lint1fourunits→editors1seven.
+DoNOTsyncguestwhileactive; sourcefinaldeltaalreadycopiedidle. Needs finalcoreASAN,
+newcomponent/clockregressionsbothbuilds/native18+IMEcases. Toolhelpersclockbuild/tests
+createdHOSTONLYnotyetguest; transferwhenpipelineidle. Noagents/otherworktrees.
+
+Nativefixed1 ACTUAL0 fullmodal1471968EXACT. PublicafterAnimatingtrace movesopacity
+0→1, sceneY40→28, BUT firstVISIBLEafterAnimating sampleis1/y28 at2383891.772284417,
+then0/y40 at.782393167. afterAnimating precedespolish, soNOTproofGPUflash! Need
+beforeSynchronizing observation; doNOTchangeproduct basedonpre-polishreadalone.
+New ignoredhistory_modal_sync_trace.cpp/dylib usesPUBLIC beforeSynchronizing DIRECT
+andreadsGUIproperties; Qt6.12qquickwindow.cpp2959documentsGUIblocked/safeGUIdataaccess.
+Newhelperhistory_modal_sync_capture.py +runner run_history_modal_motion_sync.py
+ACTIVEexecjustlaunched labelhistory-modal-motion-native-sync1. SAMEproductasfixed1,
+no changedproductionclock. NootherGUIactoractive. Observer2distinctfromfirstsource
+preserved; no frameforcing. Analyzephase3firstvisibleopacity/y vsphase2. Ifactual
+firstsync1 thennext0, fixfirstprepare orderingcausally (polish?) afterHOSTbuildidle.
+Ifsyncfirst0, initialpropertyobservationwaspreparationordering, nofixjustqualifiedlimit.
+
+Currentdraft measurements/history-modal-motion.md notfrozen, needsallfinalresults/
+rawIMEfailures+CGpermissionattempt retention+source/provenanceassociation. Reports
+andarchivesforpreviouscheckpointsMUSTremainfrozen. NativeIMEearlierstaledrawable
+failureOPEN; diagnosticunchangedreplayexactdoesnotclosecause. OriginalModalMotion
+source220ms exact purepolicy done; intermediateanimatedpixels/nativehitgeometry/
+platformandfullclientperf stillOPEN. Userpersonal-frame-delivery.md NEVERread/touch/
+stage; runtime35801/oldSway9469 untouched; VM7158/55984 alive. Spanishupdates<=60s
+(ACTUALLY keepanalysis<100tokens toavoid2minsilentthinking). No checkpointfinal.
+
+## ACTIVE History modal entrance IMPLEMENTED, BUILDING (03:24 UTC)
+
+CONTINUE no checkpointfinal. HEAD78294c110 native-scroll FROZEN990/2479/12866322B,
+NEVERedit archive/report/verifier. Userpersonal-frame-delivery.md NEVERread/touch/stage.
+Workonlyhere/noagents/worktrees/publish/merge; Spanishupdates<=60s, keepanalysisSHORT.
+
+IME diagnostic complete: marked-inspection-before1 andcancel-inspection-before1 full
+modal1471968EXACT; cancel-modal-before1 fullworkbench1519104EXACT. SingleEscape
+cancelcomposition-before1 FAILED Qtstaledrawable2382717.1565<lastinput2382719.5274,
+focusactive/queryrestored/markedfalse, retained45s failure. NewboundedpublicQttrace
+cancel-composition-trace1 PASSES unchangedGUI full1471968EXACT, synchronization5.5ms
+afterEscape; 4afterSync/4swapped afterEscape. NOTproofcause/closureofearlierfailure.
+No productchangeforcancellation. Keeprawanddiagnosticcode+initialmissingQtQmlIntegration
+compilefailure. SeparateCGPostToPidbefore1 failsnoOriginaldrawable; readonlydiagnostic
+post/accessibilitypermissionsfalse, notsolecauseproofingui. NopermissionrequestAPI.
+
+NewPRODUCT UNCOMMITTED: presentation/modal_motion.hpp exactOriginalModalMotion220ms
+cubic from0→1 per generation, static/hidden returns1, saturatingdeadlines. New
+QtModalRevealLayout typedsharedWindowAnimationClock item, framepreparationbeforepolish
+(matchesHistorySelectionpattern), noown timer. CommandDialog Historyopacity+dim fade
+and y-offsetmin12ratio/bottommargin. HistoryInspector content/actions fade independently;
+dividerdoesNOTfade followingOriginalquadfirstboundary. CMakeaddsQt sources/coreprobe/
+componenttest. Newtools/check_modal_motion.py +modal_motion_probe.cpp unchangedOriginal
+ModalMotion/FrameClock/Transition oracle 527seq32802samples MacASAN1 PASS beforeformat.
+Needfinalrun afterprofilefixes. Component3meaningfulmethods firstzero/settle, genreset,
+reentrantfirstframedeletion. Notyetcompiled/tested. Thinkaddidle-timercheckafterbuildidle.
+
+CONTROL beforeproduct GUI snapshot outdeps/history-modal-motion-before1/telar-gui+
+identity. Nativehistory-modal-motion-static-before1 actual0, publicQttrace276visible
+samples opacityALWAYS1,y28, confirmsmissingentrance. Sourcehelper/observer distinct
+fromIMEtrace preserved. NeedafterbuildnativeMotioncompare+inspectorfade/geometry.
+
+BUILDS ACTIVE noCpp/header/QMLedits untilall dependentactualexits:
+HostReleaseexec67434 history-modal-motion-build1; HostASANexec56881 native-asan-build1;
+Guestexec79636 ASANbuild1-j1→Releasebuild1-j2. Allnewfiles syncedidle tar--touch.
+MacCMakeconfig~2minnormal; guestheaderforces173units with4GB/noheavyparallel.
+Newrun_history_modal_motion_lint.py fourunits andcheck_history_modal_motion_editors.py
+7fileshost/linux READYNOTRUN. Helpersnotyetsyncedguest becausebuildactive; no transfer
+untilidle. NeedcoreoraclesbothSDKASAN, Qtcomponentnew+37controls+clock6affectedgroups,
+native18+IMEslots bothSDK, actualeditors/QMLlint/broadprofileunchanged. RawASANold
+leaks/deadlinesremainOPEN; noforcecaptureframes/timeoutrelaxation. VM7158/55984 alive,
+runtime35801/oldSway9469 untouched. Allglobalparity/perf/leaks/presentationgatesOPEN.
+
+## ACTIVE Native IME lifecycle + frame diagnostic (03:15 UTC)
+
+HEAD78294c110 commits native-scroll FINAL/FROZEN990/2479/12866322B. NEVERedit
+archive/report/verifier. User personal-frame-delivery.md NEVERread/touch/stage.
+Workonlyhere/noagents/worktrees/publish/merge. Spanishupdates<=60s. NOcheckpointfinal.
+
+New UNCOMMITTED work currently only ignored fixtures/evidence, no product edit.
+NativeCGEventPostToPid controlledmomentum before1 FAILED Originalnoqualifyingdrawable;
+no localNSEventmonitor delivered event. Readonlyprobe history-native-dispatch-access
+reports post_event_access=false, accessibility_trusted=false. No request APIs called.
+This is permission status of separate diagnostic executable, not proof of solecause
+insideGUI. Keeprawattempt, don'trequestpermissions asfullgoal canprogresselsewhere.
+
+Native IMElifecycle using existing guarded history_inspector_appearance_capture.py,
+longUnicodecommand+uniquequery, pierre1.25/740×620points, preedit café/CJK/emoji/combining:
+marked-inspection-before1 ACTUAL0 fullOriginalmodal1471968EXACT. Nativepreeditcontext
+selectedQt23 vsOriginal39 is knownframework insertion/provisional distinction from
+frozenform-composition.md, notnewbug. Cancel-composition-inspection-before1 ACTUAL1:
+Originalcaptured, Qt nativequeryrestored/markedfalse/focusactive butDrawabletimestamp
+2382717.156519209 < lastinput2382719.527430709; noafterinputpresentedimage in45s.
+Keepfailure, NEVERforceviewport/refresh orrelaxgate. Cancel-inspection-before1 ACTUAL0
+awaitcomparator; cancel-modal-before1 ACTIVE inbatch2 exec82489. Batch1exec56055
+ended1 aftercancelcompositionfailure. NootherGUIactoractive.
+
+Diagnostic local/history_form_frame_trace.cpp dylib attachesPUBLICQQuickWindow
+signalsandUpdate/Exposefilter, sharedbounded2048mutexsamples, actorpropertysnapshots
+layout.composing/textlength. Noapplicationprivatemethods/noframeforcing, dumpatfinal
+record only. InitialcompilemissingQtQmlIntegration include failed; build2 ACTIVE
+exec returned inpreviouscall, command adds-I/opt/homebrew/include. Source/rawreceipt
+retained. Newhelper history_ime_trace_capture.py appendsdylibonlyQt anddlsymcalls
+observeraftereachactoraction (1normal/10preedit/11Escape/12record). Runner
+run_history_ime_trace.py labelcancel-composition-trace1 READYNOTSTARTED. Waitbatch2
+actualexit beforetraceactor. Qt6.12qquickitem.cpp primary downloaded+SHA inignored
+qt-form-polish-source1; polish schedules maybeUpdate iffirstpendingitem. Needtrace
+distinguish missingframe vs captureobservation, don'tspeculateproductfix yet.
+
+Additionalidentifiedremaininggap: OriginalOverlays uses ModalMotion220ms cubic
+forHistoryentranceandinspector, originalmodal_widget shiftsboundsbymin(chrome12,
+bottommargin)*(1-reveal), fades allquads. QtCommandDialog currentlystaticbounds/
+Popup withnoexplicitmatchingentrance; inspectbeforechanging. Shared clock has6
+existingtypeditems and selectionmotion already140ms exact; reusewhenneeded.
+FinishIMEdiagnostic first. VM7158/55984 aliveidle; runtime35801/oldSway9469 untouched.
+Allglobal/leak/latency/performance gates OPEN. Continue originalpersistentgoal manually
+(oldgoalAPIblocked hasnoresume). Machines29actions+SSHintegrationalreadyimplemented.
+
 ## ACTIVE Native History scroll FROZEN; continue PARITY (03:07 UTC)
 
 New native-scroll archive FINAL/FROZEN990artifacts2479sources12866322B.

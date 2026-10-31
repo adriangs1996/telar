@@ -18,6 +18,14 @@ Popup {
     readonly property bool copySearchMode: telar.dialog === "copy-search"
     readonly property bool listing: historyMode || paletteMode
     readonly property real dimmingAlpha: 0.25
+    readonly property real historyEntranceOffset: Math.min(12 * root.ratio, Math.max(0, root.parent.height - historyBounds.y - historyBounds.height))
+
+    ModalRevealLayout {
+        id: historyMotion
+        objectName: "historyModalMotion"
+        active: root.historyMode
+        generation: telar.historyState.generation ?? ""
+    }
 
     function activateResult(alternate) {
         if (historyMode) {
@@ -56,7 +64,8 @@ Popup {
     readonly property rect machineBounds: machineMode ? telar.machinePromptGeometry.bounds : Qt.rect(0, 0, 0, 0)
     readonly property rect peekBounds: peekMode ? telar.peekGeometry.bounds : Qt.rect(0, 0, 0, 0)
     x: peekMode ? peekBounds.x : machineMode ? machineBounds.x : pathMode ? pathBounds.x : historyMode ? historyBounds.x : paletteMode ? paletteBounds.x : (parent.width - width) / 2
-    y: peekMode ? peekBounds.y : machineMode ? machineBounds.y : pathMode ? pathBounds.y : historyMode ? historyBounds.y : paletteMode ? paletteBounds.y : (parent.height - height) / 2
+    y: peekMode ? peekBounds.y : machineMode ? machineBounds.y : pathMode ? pathBounds.y : historyMode ? historyBounds.y + historyEntranceOffset * (1 - historyMotion.reveal) : paletteMode ? paletteBounds.y : (parent.height - height) / 2
+    opacity: historyMode ? historyMotion.reveal : 1
     width: peekMode ? peekBounds.width : machineMode ? machineBounds.width : pathMode ? pathBounds.width : historyMode ? historyBounds.width : paletteMode ? paletteBounds.width : Math.min(parent.width - 32, 640 * ratio)
     height: peekMode ? peekBounds.height : machineMode ? machineBounds.height : pathMode ? pathBounds.height : historyMode ? historyBounds.height : paletteMode ? paletteBounds.height : contentItem.implicitHeight + topPadding + bottomPadding
     modal: true
@@ -70,7 +79,7 @@ Popup {
 
     Overlay.modal: Rectangle {
         color: "black"
-        opacity: root.pathMode || root.machineMode || root.peekMode ? 0 : root.dimmingAlpha
+        opacity: root.pathMode || root.machineMode || root.peekMode ? 0 : root.dimmingAlpha * (root.historyMode ? historyMotion.reveal : 1)
     }
 
     background: Loader {

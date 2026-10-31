@@ -2,6 +2,7 @@
 #include "core/configuration.hpp"
 #include "history_loading_layout.hpp"
 #include "history_selection_layout.hpp"
+#include "modal_reveal_layout.hpp"
 #include "native_agent_status.hpp"
 #include "native_pane_attention.hpp"
 #include "native_tab_activity.hpp"

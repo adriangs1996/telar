@@ -20,9 +20,10 @@ class NotificationLayout;
 class NativePaneAttention;
 class HistoryLoadingLayout;
 class HistorySelectionLayout;
+class ModalRevealLayout;
 
 template <typename Item>
-concept WindowAnimationItem = std::same_as<Item, NativeAgentStatus> || std::same_as<Item, NativeTabActivity> || std::same_as<Item, NotificationLayout> || std::same_as<Item, NativePaneAttention> || std::same_as<Item, HistoryLoadingLayout> || std::same_as<Item, HistorySelectionLayout>;
+concept WindowAnimationItem = std::same_as<Item, NativeAgentStatus> || std::same_as<Item, NativeTabActivity> || std::same_as<Item, NotificationLayout> || std::same_as<Item, NativePaneAttention> || std::same_as<Item, HistoryLoadingLayout> || std::same_as<Item, HistorySelectionLayout> || std::same_as<Item, ModalRevealLayout>;
 
 class WindowAnimationClock final : public QObject {
 public:
@@ -90,7 +91,7 @@ private:
 
   QQuickWindow &window_;
   QTimer timer_;
-  std::tuple<QList<QPointer<NativeAgentStatus>>, QList<QPointer<NativeTabActivity>>, QList<QPointer<NotificationLayout>>, QList<QPointer<NativePaneAttention>>, QList<QPointer<HistoryLoadingLayout>>, QList<QPointer<HistorySelectionLayout>>> items_;
+  std::tuple<QList<QPointer<NativeAgentStatus>>, QList<QPointer<NativeTabActivity>>, QList<QPointer<NotificationLayout>>, QList<QPointer<NativePaneAttention>>, QList<QPointer<HistoryLoadingLayout>>, QList<QPointer<HistorySelectionLayout>>, QList<QPointer<ModalRevealLayout>>> items_;
   AttentionFades attention_;
   std::uint64_t now_ns_ = 0;
   std::optional<std::uint64_t> deadline_ns_;

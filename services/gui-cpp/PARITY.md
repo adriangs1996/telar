@@ -4,6 +4,19 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [History entrance motion evidence](measurements/history-modal-motion.md)
+adds the original 220 ms cubic modal/inspector reveal to the shared window clock.
+Both SDKs match 527 sequences/32,802 original samples and pass five lifecycle
+entries. Synchronized native observations start at opacity 0 and preserve the
+inspector divider; settled modal regions match 1,471,968 and 2,919,488 pixels.
+Both Linux builds and Mac Release pass 22 native entries. Mac ASAN passes 22 but
+exits 1 with 601,242 bytes/3,033 leaks. All four-unit broad checks and actual
+editors pass. Seven clock-consumer suites pass 86 assertions on Mac, retaining
+ASAN leak exits; Linux passes 85 and exposes an unchanged UTF-16 conversion
+mismatch with Qt6.8. The earlier canceled-composition stale drawable remains
+required despite an exact instrumented replay. Intermediate animated pixels,
+UTF-16 compatibility, native leaks/latency and full-client performance stay open.
+
 The [native History scroll evidence](measurements/history-native-scroll.md)
 keeps Cocoa finger phases and fractional deltas before Qt normalization, and
 retires the previous terminal wheel recipient when History consumes scroll.

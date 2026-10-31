@@ -18,6 +18,7 @@ HistoryInspectionLayout {
     property real density: 1
     property bool interactive: root.browserState.phase === "ready" && root.browserState.count > 0
     property bool split: false
+    property real reveal: 1
     readonly property int pageLines: 10
     readonly property var regions: layout
     readonly property var actions: {
@@ -81,6 +82,7 @@ HistoryInspectionLayout {
 
     Item {
         objectName: "historyCommand"
+        opacity: root.reveal
         readonly property string text: root.command
         anchors.fill: parent
         clip: true
@@ -153,6 +155,7 @@ HistoryInspectionLayout {
             readonly property var action: root.actions[index] ?? null
             readonly property rect bounds: root.regions.buttons?.[index] ?? Qt.rect(0, 0, 0, 0)
             objectName: "historyInspectionAction"
+            opacity: root.reveal
             x: bounds.x
             y: bounds.y
             width: bounds.width

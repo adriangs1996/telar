@@ -20,6 +20,13 @@ Item {
     property alias rowsView: results
     property bool retiringRows: false
 
+    ModalRevealLayout {
+        id: inspectorMotion
+        objectName: "historyInspectorMotion"
+        active: root.visible && root.browserState.inspecting
+        generation: root.browserState.generation ?? ""
+    }
+
     HistorySelectionLayout {
         id: selectionMotion
         selection: ({
@@ -285,6 +292,7 @@ Item {
             height: root.regions.inspection.height
             active: root.browserState.inspecting && root.browserState.count > 0
             sourceComponent: HistoryInspector {
+                reveal: inspectorMotion.reveal
                 actionController: root.controller
                 details: root.controller.historyInspection
                 browserState: root.browserState
