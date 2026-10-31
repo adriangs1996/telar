@@ -1,0 +1,49 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "ebnf: main",
+      "type": "codelldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/out/debug/ebnf",
+      "cwd": "${workspaceFolder}",
+      "preRunCommands": ["breakpoint set --name main --one-shot true"],
+      "windows": {
+        "program": "${workspaceFolder}/out/debug/ebnf.exe"
+      }
+    },
+    {
+      "name": "ebnf: filtered tests",
+      "type": "codelldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/out/debug/ebnf_tests",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "--gtest_filter=${input:gtestFilter}",
+        "--gtest_break_on_failure"
+      ],
+      "windows": {
+        "program": "${workspaceFolder}/out/debug/ebnf_tests.exe"
+      }
+    },
+    {
+      "name": "ebnf: all tests",
+      "type": "codelldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/out/debug/ebnf_tests",
+      "cwd": "${workspaceFolder}",
+      "args": ["--gtest_break_on_failure"],
+      "windows": {
+        "program": "${workspaceFolder}/out/debug/ebnf_tests.exe"
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "gtestFilter",
+      "type": "promptString",
+      "description": "GoogleTest filter",
+      "default": "Grammar.*"
+    }
+  ]
+}

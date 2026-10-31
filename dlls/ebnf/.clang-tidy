@@ -1,0 +1,14 @@
+InheritParentConfig: false
+Checks: >-
+  -*,
+  clang-analyzer-*,
+  bugprone-*,
+  performance-*,
+  portability-*,
+  modernize-*,
+  -modernize-use-trailing-return-type
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*'
+ExcludeHeaderFilterRegex: '(^|/)(out|build[^/]*|cmake-build[^/]*|vendor|third_party|generated)/'
+SystemHeaders: false
+FormatStyle: file
