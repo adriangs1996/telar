@@ -4132,6 +4132,7 @@ return {api_version=2, client={keybindings={
 
     QCOMPARE(qmlEngine(results), engine_.get());
     QCOMPARE(engine_->incubationController(), &deferred);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
     QVERIFY(QMetaObject::invokeMethod(results, "flick", Qt::DirectConnection, qreal{0}, results->height()));
     QTRY_VERIFY_WITH_TIMEOUT(deferred.incubatingObjectCount() > 0, runtime_wait_ms);
     QTest::failOnWarning(QRegularExpression{QStringLiteral("DelegateModel::cancel:.*")});

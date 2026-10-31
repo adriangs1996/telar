@@ -1,5 +1,49 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## ACTIVE Incubation readiness FINAL/FROZEN; continue functional parity (06:27 UTC)
+
+CONTINUEnocheckpointfinal. Workonlyhere/noagents/worktrees/publish/merge. Spanish
+updates<=60s. Userpersonal-frame-delivery.md NEVERread/touch/stage. HEADb1e434410
+Iconinvestigation FINAL/FROZEN1718/2500/9617760B, allvariantsREJECTED, noCPUtiming.
+AllolderarchivesALSOFROZEN. Newreadiness archive FINAL/FROZEN205/2500/7154558B;
+NEVERrefreshroot/manifest/verifier/report afterownedcommit(next). OfflinePASS. Full
+current-sourcePASS beforePARITYparagraphupdate; postdoccheckfailsONLYPARITY.md,
+all2500hashescomparedandcodeidentitiesmatch. Frozenmanifestleftunchanged. Scoped
+postdocreceiptignoredlocal/history-incubation-post-documentation-source-check.json.
+
+ONLYproductsourcechange tests/quick_test.cpp addswaitForSynchronizedFramebefore
+flick inverifyHistoryDelegateRetirement; bothpending>0 and==0assertions/deadlines
+unchanged. CausalownedLinuxLD_PRELOAD boundedstacks showflick→QMLpositionViewAtIndex
+→cancelFlick→flickEnded→setContentY(-580). Queuedinitialrevealhadnotcompleted.
+Isolatedframepreconditionbothslots traced/clean4PASS0. FinalbothSDKRelease/ASAN
+buildsactual0, sixselectednative8entriesALLPASSfourruns. Linuxbothactual0. Mac
+Release0/ASAN1leaks567164B2794; builtinQtMac_fetchInitializingClassList12/480raw,
+NOaddedsuppressions/access/UBerrors. BothSDKbroadquicktestlint0; actualeditors
+Mac1/Linux2deliveredempty. Linuxeditor1FAILED kernelOOMPID52766 dueMYoverlapping
+clangtidy+clangd; rawfailedreceipt(deliveredfalse)+kernelretained. Retryserialized
+alonePASS; NEVERoverlapguestheavycompile/lint/editors(4GBnoswap). GUIlibrarybyte-
+identicalparentdf9...; noGUIcode/performanceclaim. AllglobalgatesOPEN.
+
+AlljobsIDLE: hostnative/lint/editorfinished, guestVM7158/SSH55984idle(oldSway9469
+untouched). Guestcurrentquicktestsource matcheshostdf26ecdc2f953715332c675fbe7fc8172f25b5e5e4749c80fcd511fbd0e553de.
+Linuxexportoutdeps/history-incubation-linux-export-1 131members290033Bgzip contains
+sixearlierdiagnostics+calltrace+isolatedfix+finalbuild/native/lint/editor+kernel;
+noexecutables/privatekeys; frozenrootincludesit. Report+PARITYready; commitowned
+1line+report/manifest/root/docs withPythoncheck=Truegitdiffcached--check. New
+untrackedhistory-incubation-readiness.md owned; unrelateduserfileuntouched.
+
+NEXT readRemainingfunctionalPARITY1821: manyfeaturesgapsbeyondHistory. Readonly
+startedTabdragmissingfeature: Originalsrc/client/workspace/TabDrag.zig +tab_move.zig,
+src/gui/widgets/interaction/tab_drag.zig+TabDropSlots.zig, TabStrip.zigdrawTabs.
+QtTerminalTabs.qml onlyclick/middleclose/doubleRename; TabStripLayout staticbounds.
+Session::moveTab operatesactiveTabonly; dragmustretainexplicitoriginalsourceworkspace,
+sourceid,machinegeneration; stablepress-timeDELIVEREDslotgeometry,noorderchasing;
+thresholdchrome4pixels,retaincancelledsinkuntilrelease,leaveclearsdestination,
+Escape/focus/workspace/namePrompt/sourcegonecancel, exactoriginalpreview/marker/lift
+andpendingcanonicalposition. NeedoraclesBEFOREediting. NoTabdragproducteditsyet.
+CouldcontinueanotherPARITYgapifbetter; doNOTblindlyrelaxnativepixel/perf failures.
+GoalAPIoldblockednoresume; manuallycontinuefullobjective.
+
 ## ACTIVE Icon investigation FROZEN; Linux flick call trace running (06:16 UTC)
 
 CONTINUE autonomously untilfullgoal, NOcheckpointfinal. Workonlyhere/noagents/

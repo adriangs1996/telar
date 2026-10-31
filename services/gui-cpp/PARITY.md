@@ -4,6 +4,16 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [History delegate fixture readiness correction](measurements/history-incubation-readiness.md)
+waits for the queued initial reveal before starting its test flick. A bounded
+Linux call trace reproduces positioning→cancellation after the old premature
+flick; both original incubation assertions and deadlines remain unchanged.
+Both SDKs compile in Release/ASan, pass broad analysis and actual editor checks,
+and pass eight native entries per build. Linux exits0 in both; macOS ASan exits1
+with567164 bytes/2794 leaks. The failed overlapping Linux editor/OOM run is
+retained separately from its passing serialized retry. No client code changes;
+complete parity and native leak gates remain open.
+
 The [History search-icon investigation](measurements/history-search-icon.md)
 reproduces five upper-edge pixels and observes actual atlas margins and GPU
 UV interpolants. Transparent padding with stable sampling matches five History
