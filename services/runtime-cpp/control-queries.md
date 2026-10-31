@@ -428,3 +428,27 @@ and seven-pair35-flow measurements. Styled batching and joint control scanning
 improve their targets but consistently lose on other query flows. All are
 rejected; productive query code remains at accepted70. The application throughput
 gaps and Qt intermediate clipboard materialization remain acceptance blockers.
+
+## Experiments158–160: targeted color gains; paused after160
+
+On2026-10-31, owned OSC payload runs (158), complete checked response-item
+encoding (159) and short bounded nonquery setter packet writes (160) were
+implemented and frozen as experimental development code. Candidate160 has
+seven clean-at-snapshot alternating pairs versus159 and immutable App for five
+Kitty transactions. Its App ratios are .861single, .776double, .712owned100
+fields,1.328mixed setter/two-query and .643byte-fragmented. The four
+favorable targets win7/7; mixed loses7/7 and is not accepted. The direct160/159
+mixed ratio is .929 (7/7wins); other local intervals cross1. Historical App
+ratios for159 and160 are not themselves a direct paired comparison.
+
+The broad158/156 block was externally contaminated and is invalid as a whole;
+its following App block was refused before sampling. No broad160 or PTY
+acceptance is claimed. Tests/sanitizers and exact scopes are recorded in
+[the160 safety report](measurements/control-queries/osc-setter-160-safety-review.md)
+and [paired results](measurements/control-queries/osc-setter-160-review.md).
+Two newly reproduced pre-existing limits remain: OSC10 empty fields advance
+native selector unlike App, and nonquery VT Kitty setter OOM is swallowed.
+Explicit abort cleanup passes, but error propagation remains unproven/incorrect.
+All earlier memory/resource, desktop and platform limitations remain open.
+Adrian requested pause after160; no161 or whole-goal completion is authorized
+by this checkpoint. Resume only upon a subsequent user instruction.
