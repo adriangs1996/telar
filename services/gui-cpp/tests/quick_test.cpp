@@ -17,6 +17,7 @@
 #include "json_fixture.hpp"
 #include "links/link_grid.hpp"
 #include "list_model.hpp"
+#include "palette/query.hpp"
 #include "platform/awake_clock.hpp"
 #include "platform/window.hpp"
 #include "platform/window_activation.hpp"
@@ -3580,6 +3581,42 @@ return {api_version=2, client={keybindings={
     QCOMPARE(command_area->property("text").toString(), toQString(*expected));
     captureHistoryArtifact(QStringLiteral("history-long-command"));
     client_->execute(Application::Action::cancel);
+    QCOMPARE(client_->error(), QString{});
+  }
+
+  Q_SLOT void routedGoto() {
+    const auto cleanup = qScopeGuard([this] {
+      client_->execute(Application::Action::cancel);
+    });
+    QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+    client_->execute(Application::Action::palette);
+    client_->searchPalette(QStringLiteral("> stale query before routed goto"));
+    CommandPeer peer{memory_};
+    peer.open(socket_);
+    QTRY_VERIFY2_WITH_TIMEOUT(peer.ready(), qPrintable(peer.error()), runtime_wait_ms);
+    peer.request(telar::ClientAction::client_open_goto, 2);
+    QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{2}, runtime_wait_ms);
+    QCOMPARE(peer.result().status, telar::ClientCommandStatus::applied);
+    QCOMPARE(peer.result().text, QString{});
+    QCOMPARE(client_->dialog(), QStringLiteral("palette"));
+    QCOMPARE(client_->paletteState().value(QStringLiteral("mode")).toInt(), static_cast<int>(PaletteMode::navigate));
+    QCOMPARE(client_->paletteState().value(QStringLiteral("editorText")).toString(), QStringLiteral("@"));
+    QCOMPARE(client_->paletteState().value(QStringLiteral("query")).toString(), QString{});
+    QVERIFY(client_->paletteState().value(QStringLiteral("count")).toInt() > 0);
+    const auto *search = window_->findChild<NativeFormField *>(QStringLiteral("commandSearch"));
+    QVERIFY(search != nullptr);
+    QTRY_VERIFY_WITH_TIMEOUT(search->hasActiveFocus(), runtime_wait_ms);
+    QCOMPARE(search->text(), QStringLiteral("@"));
+    client_->execute(Application::Action::cancel);
+    client_->execute(Application::Action::copy_mode);
+    QVERIFY(client_->copyModeActive());
+    peer.request(telar::ClientAction::client_open_goto, 3);
+    QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{3}, runtime_wait_ms);
+    QCOMPARE(peer.result().status, telar::ClientCommandStatus::failed);
+    QCOMPARE(peer.result().text, QStringLiteral("ClientPromptUnavailable"));
+    QVERIFY(client_->copyModeActive());
+    QCOMPARE(client_->dialog(), QString{});
+    QCOMPARE(peer.error(), QString{});
     QCOMPARE(client_->error(), QString{});
   }
 

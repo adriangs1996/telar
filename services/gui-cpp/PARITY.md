@@ -4,6 +4,15 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [routed Goto correction](measurements/routed-goto.md) handles
+`client_open_goto` through the existing navigation palette, returns `applied`
+and preserves the original copy-mode rejection. Real protocol regressions fail
+before the change on both SDKs and pass afterward, including query reset and
+native editor focus. Cocoa Release exits cleanly; Mac sanitizer leaks and a
+Wayland/Vulkan cleanup abort remain open. The pre-change executable reproduces
+the same Wayland abort after History alone. This command correction does not
+close native shutdown, complete visual or comparative performance acceptance.
+
 The [rounded-paint clipping correction](measurements/rounded-paint-clipping.md)
 preserves the original resolved radius when geometry is clipped. Native rail
 surfaces remove 146 Linux full-window differences: a controlled 960,000-pixel

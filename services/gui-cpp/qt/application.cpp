@@ -793,6 +793,13 @@ void Application::executeHostCommand(const ClientCommand &message, CompleteClien
     configuration_source_.requestReload();
     reply.status = ClientCommandStatus::admitted;
     break;
+  case ClientAction::client_open_goto:
+    if (copyModeActive()) {
+      throw EncodingError{"ClientPromptUnavailable"};
+    }
+
+    executeWindowAction(Action::goto_picker);
+    break;
   case ClientAction::client_open_history:
     executeWindowAction(Action::history);
     reply.status = ClientCommandStatus::admitted;

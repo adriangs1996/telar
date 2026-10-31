@@ -5,6 +5,10 @@ input delivery and scene graph; QML owns the application chrome. The Zig GUI
 remains the default. This port does **not** yet meet the requested functional,
 visual or performance parity gates. [PARITY.md](PARITY.md) records the remaining work.
 
+The [routed Goto command](measurements/routed-goto.md) now opens the existing
+navigation palette and preserves copy-mode rejection, with real protocol
+regressions on both installed SDKs. Native shutdown failures remain recorded.
+
 Machines use separate runtime connections with shared window resources and
 source-owned activity/peek targets. Real OpenSSH fixtures validate [bridge loss
 and automatic recovery](measurements/machine-recovery.md), [managed installation
