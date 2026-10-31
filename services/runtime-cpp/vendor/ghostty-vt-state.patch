@@ -1025,10 +1025,9 @@ index db75bfd..88e7d5d 100644
      .initStruct("GhosttyTerminalProgramStatus", terminal.ProgramStatus),
      .initStruct("GhosttyTerminalProgressReport", terminal.ProgressReport),
 diff --git a/src/terminal/stream.zig b/src/terminal/stream.zig
-index 281d012..713b0d6 100644
 --- a/src/terminal/stream.zig
 +++ b/src/terminal/stream.zig
-@@ -847,63 +847,7 @@ pub fn Stream(comptime H: type) type {
+@@ -847,63 +847,7 @@
                  // Hand runs of printable codepoints to the handler as
                  // print_slice actions so it can process them with
                  // per-run rather than per-codepoint overhead.
@@ -1093,10 +1092,12 @@ index 281d012..713b0d6 100644
                  // Consume the bytes we just processed.
                  offset += res.consumed;
  
-@@ -924,6 +868,99 @@ pub fn Stream(comptime H: type) type {
+@@ -922,6 +866,103 @@
+                 offset += self.consumeAllEscapes(input[offset..], until, u);
+                 if (comptime until) if (self.untilReached(u, input.ptr + offset)) return;
              }
-         }
- 
++        }
++
 +        inline fn emitCodepoints(self: *Self, cps: []const u32, comptime ascii_only: bool) usize {
 +            var i: usize = 0;
 +            while (i < cps.len) {
@@ -1165,7 +1166,11 @@ index 281d012..713b0d6 100644
 +                        end += 1;
 +                    }
 +                }
-+                self.handler.vt(.print_slice, .{ .cps = cps[i..end] });
++                if (comptime ascii_only and @hasDecl(T, "printAsciiSlice")) {
++                    self.handler.printAsciiSlice(cps[i..end]);
++                } else {
++                    self.handler.vt(.print_slice, .{ .cps = cps[i..end] });
++                }
 +                i = end;
 +            }
 +            return cps.len;
@@ -1188,16 +1193,27 @@ index 281d012..713b0d6 100644
 +            offset += self.emitCodepoints(cps[offset..], true);
 +            if (self.continuation != null and offset > 0) self.trackContinuation("");
 +            return offset;
-+        }
-+
+         }
+ 
          /// Parses back-to-back escape sequences until none are left.
-         /// Returns the number of bytes consumed from the provided input.
-         ///
 diff --git a/src/terminal/stream_terminal.zig b/src/terminal/stream_terminal.zig
-index 15ea8ae..71a0c96 100644
 --- a/src/terminal/stream_terminal.zig
 +++ b/src/terminal/stream_terminal.zig
-@@ -612,11 +612,17 @@ pub const Handler = struct {
+@@ -606,15 +606,29 @@
+         };
+     }
+ 
++    pub fn printAsciiSlice(self: *Handler, cps: []const u32) void {
++        self.terminal.printAsciiSlice(cps) catch |err| {
++            @branchHint(.cold);
++            self.semantic_failure = true;
++            logVtFailure(.print_slice, err);
++        };
++    }
++
+     pub fn vt(
+         self: *Handler,
+         comptime action: Action.Tag,
          value: Action.Value(action),
      ) void {
          self.vtFallible(action, value) catch |err| {
@@ -1206,13 +1222,94 @@ index 15ea8ae..71a0c96 100644
 -            log.warn("error handling VT action action={} err={}", .{ action, err });
 +            logVtFailure(action, err);
          };
-     }
- 
++    }
++
 +    noinline fn logVtFailure(comptime action: Action.Tag, err: anyerror) void {
 +        @branchHint(.cold);
 +        log.warn("error handling VT action action={} err={}", .{ action, err });
-+    }
-+
+     }
+ 
      fn unknownSequence(self: *Handler, value: UnknownSequence) void {
-         const func = self.unknown_sequence orelse return;
-         func(self, value);
+diff --git a/src/terminal/Terminal.zig b/src/terminal/Terminal.zig
+--- a/src/terminal/Terminal.zig
++++ b/src/terminal/Terminal.zig
+@@ -606,6 +606,18 @@
+ /// slower per-codepoint path. They're less common and this is optimized
+ /// for the aforementioned cases.
+ pub fn printSlice(self: *Terminal, cps: []const u32) !void {
++    try self.printSliceImpl(cps, false);
++}
++
++/// The caller has already validated every codepoint as printable ASCII.
++/// The borrowed run is consumed synchronously, including slow-path cleanup.
++pub fn printAsciiSlice(self: *Terminal, cps: []const u32) !void {
++    for (cps) |cp| assert(cp >= 0x20 and cp <= 0x7F);
++
++    try self.printSliceImpl(cps, true);
++}
++
++inline fn printSliceImpl(self: *Terminal, cps: []const u32, comptime ascii_printable: bool) !void {
+     // Check if we can do the fast path up front. If we can't
+     // we need to go back to scalar `print`.
+     const fast = fast: {
+@@ -650,11 +662,10 @@
+     while (i < cps.len) {
+         // Try the fast-path print first. This will return the number of
+         // codepoints it consumed.
+-        const consumed = try self.printSliceFast(
+-            cps[i..],
+-            grapheme_cluster,
+-            allow_unicode,
+-        );
++        const consumed = if (comptime ascii_printable)
++            try self.printSliceFill(.ascii, cps[i..], grapheme_cluster, allow_unicode)
++        else
++            try self.printSliceFast(cps[i..], grapheme_cluster, allow_unicode);
+         if (consumed > 0) {
+             i += consumed;
+             continue;
+@@ -791,14 +802,15 @@
+ /// codepoints of a single width class because they fill cells
+ /// differently: wide codepoints occupy a (wide, spacer_tail) cell
+ /// pair while narrow codepoints occupy a single cell.
+-const PrintSliceWidth = enum(u1) {
++const PrintSliceWidth = enum(u2) {
+     narrow,
+     wide,
++    ascii,
+ 
+     /// The number of cells each codepoint of this width class occupies.
+     fn cellsPerCp(comptime self: PrintSliceWidth) usize {
+         return switch (self) {
+-            .narrow => 1,
++            .narrow, .ascii => 1,
+             .wide => 2,
+         };
+     }
+@@ -813,7 +825,7 @@
+     }
+ 
+     return unicode.table.get(@intCast(cp)).width == comptime @as(u2, switch (width) {
+-        .narrow => 1,
++        .narrow, .ascii => 1,
+         .wide => 2,
+     });
+ }
+@@ -933,7 +945,7 @@
+     // can batch. For codepoints after the first, the previous codepoint
+     // in the run is always written as a fresh, single-codepoint cell,
+     // so the grapheme break check against it is exact.
+-    const run_len: usize = run: {
++    const run_len: usize = if (comptime width == .ascii) cps.len else run: {
+         var idx: usize = 1;
+ 
+         // Vectorized scan for the narrow class: codepoints in
+@@ -1150,7 +1162,7 @@
+             // These runs are handled wholesale: one scan to find the
+             // run of identical old styles, two ref-count updates,
+             // and a branch-free fill.
+-            if (comptime width == .narrow) bulk: {
++            if (comptime width != .wide) bulk: {
+                 const first = SimpleMask.pattern(cells[k]);
+ 
+                 // The old cell must be a plain narrow codepoint cell
