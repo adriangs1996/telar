@@ -149,11 +149,12 @@ class RemoteLibrary:
 
 
 def process_snapshot():
-    snapshot = subprocess.check_output(['ps', '-Ao', 'comm,%cpu'], text=True)
+    # macOS comm truncates full paths before their executable basename.
+    snapshot = subprocess.check_output(['ps', '-Ao', 'ucomm,%cpu'], text=True)
     compilers = []
     for line in snapshot.splitlines()[1:]:
         fields = line.rsplit(None, 1)
-        if len(fields) == 2 and Path(fields[0]).name in {'clang', 'clang++', 'zig', 'ninja', 'ld', 'cc1', 'cc1plus'}:
+        if len(fields) == 2 and Path(fields[0]).name in {'clang', 'clang++', 'clang-tidy', 'zig', 'cmake', 'ninja', 'make', 'ld', 'ld.lld', 'cc1', 'cc1plus', 'gcc', 'g++', 'cc', 'c++'}:
             compilers.append(line.strip())
     return snapshot, compilers
 
@@ -178,12 +179,15 @@ def main():
     if compilers:
         raise RuntimeError('Concurrent build processes invalidate timing: '+repr(compilers))
     started = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    workload_snapshots = []
     harness_sha256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     native_library = None if args.in_process else RemoteLibrary(args.native, args.component)
     reference_library = None if args.in_process else RemoteLibrary(args.reference, args.reference_component)
     for name, (data, count, fragment) in WORKLOADS.items():
         if args.case and name not in args.case:
             continue
+        snapshot, observed_builds = process_snapshot()
+        workload_snapshots.append({'case':name, 'host_processes':snapshot, 'concurrent_builds':observed_builds})
         suffix = {'checksum-ascii-screen':'_checksum_ascii','checksum-styled-screen':'_checksum_styled','checksum-grapheme-screen':'_checksum_graphemes'}.get(name, '_checksum' if name.startswith('checksum-') else '')
         native = bind(args.native,args.component,suffix) if args.in_process else native_library.function(suffix)
         reference = bind(args.reference,args.reference_component,suffix) if args.in_process else reference_library.function(suffix)
@@ -229,7 +233,7 @@ def main():
         native_library.close()
         reference_library.close()
     after, compilers_after = process_snapshot()
-    report = {'host_processes_before':before,'host_processes_after':after,'concurrent_builds_after':compilers_after,'no_build_processes_observed_at_snapshots':not compilers_after,'harness_sha256':harness_sha256,'libraries_in_separate_persistent_processes':not args.in_process,'rss_scope':'Whole child-process lifetime high-water mark, including its one library and fixture; not incremental per-query memory.','warmup_minimum_wall_ns_per_variant_per_case':150_000_000,'cpu_scope':'Process CPU and wall around each full FFI invocation include untimed fixture setup/destruction; sample ns/unit uses the internal timer around stream processing only.','started_at':started,'finished_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'scope':'Exploratory throughput. Coverage, desktop integration, allocation accounting and PTY latency are NOT certified.', 'command':sys.argv,'native_component_only':args.component,'reference_component_only':args.reference_component,'reference_kind':'native_previous_variant' if args.reference_component else 'ghostty_application_handler','comparison_margin':0.05,'pairs':7,'sample_target_ns':sample_target_ns,'maximum_iterations':args.max_iterations,'acceptance_rule':'Target wins at least 6/7; no untargeted workload loses consistently (0-1 wins) without verified identical normalized assembly.','architecture':'macOS ARM64 native','hashes':{str(path):hashlib.sha256(path.read_bytes()).hexdigest() for path in [args.native,args.reference]},'source_sha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'working_tree_dirty':bool(subprocess.check_output(['git','status','--porcelain'],cwd=ROOT)),'results':results}
+    report = {'host_processes_before':before,'host_processes_after':after,'concurrent_builds_before':compilers,'workload_process_snapshots':workload_snapshots,'concurrent_builds_after':compilers_after,'no_build_processes_observed_at_snapshots':not (compilers or compilers_after or any(s['concurrent_builds'] for s in workload_snapshots)),'harness_sha256':harness_sha256,'libraries_in_separate_persistent_processes':not args.in_process,'rss_scope':'Whole child-process lifetime high-water mark, including its one library and fixture; not incremental per-query memory.','warmup_minimum_wall_ns_per_variant_per_case':150_000_000,'cpu_scope':'Process CPU and wall around each full FFI invocation include untimed fixture setup/destruction; sample ns/unit uses the internal timer around stream processing only.','started_at':started,'finished_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'scope':'Exploratory throughput. Coverage, desktop integration, allocation accounting and PTY latency are NOT certified.', 'command':sys.argv,'native_component_only':args.component,'reference_component_only':args.reference_component,'reference_kind':'native_previous_variant' if args.reference_component else 'ghostty_application_handler','comparison_margin':0.05,'pairs':7,'sample_target_ns':sample_target_ns,'maximum_iterations':args.max_iterations,'acceptance_rule':'Target wins at least 6/7; no untargeted workload loses consistently (0-1 wins) without verified identical normalized assembly.','architecture':'macOS ARM64 native','hashes':{str(path):hashlib.sha256(path.read_bytes()).hexdigest() for path in [args.native,args.reference]},'source_sha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'working_tree_dirty':bool(subprocess.check_output(['git','status','--porcelain'],cwd=ROOT)),'results':results}
     args.output.write_text(json.dumps(report,indent=2)+'\n')
 
 if __name__=='__main__':
