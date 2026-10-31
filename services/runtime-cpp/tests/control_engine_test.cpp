@@ -1129,6 +1129,43 @@ void asciiBridgeContract(Memory &memory) {
     compare();
   }
 
+  const std::string_view print_contexts[]{
+      "", "\x1b(0", "\x1b[4h", "\x1b[?7l", "\x1b[?1049h",
+      "\x1b[3;20r\x1b[?6h", "\x1b]8;;https://example.invalid\x1b\\",
+      "\x1b[38;2;12;34;56m", "\x1b[?2027h\x1b[?69h\x1b[3;40s"};
+  std::array<std::uint32_t, GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT> printable;
+  constexpr std::array<std::uint32_t, 4> pattern{'A', 'q', 0x7f, '~'};
+  for (std::size_t index = 0; index < printable.size(); ++index) {
+    printable[index] = pattern[index % pattern.size()];
+  }
+  for (const auto context : print_contexts) {
+    for (const auto pending : {std::string_view{}, std::string_view{"\xf0\x9f"}}) {
+      for (const std::size_t count : {1u, 15u, 16u, 17u, 79u, 80u, 81u, 4095u, 4096u}) {
+        for (const std::size_t fragment : {1u, 16u, 79u, 4096u}) {
+          for (const auto terminal : {candidate.get(), reference.get()}) {
+            write(terminal, "\x1b" "c");
+            write(terminal, "\xe7\x95\x8c" "e\xcc\x81\x1b[H");
+            write(terminal, context);
+            write(terminal, pending);
+          }
+          std::string raw(count, 'A');
+          for (std::size_t index = 0; index < count; ++index) {
+            raw[index] = static_cast<char>(printable[index]);
+          }
+          for (std::size_t offset = 0; offset < count;) {
+            const auto size = std::min(fragment, count - offset);
+            std::size_t applied = SIZE_MAX;
+            checkGhostty(ghostty_terminal_vt_write_ascii(candidate.get(), printable.data() + offset, size, &applied));
+            require(applied == size);
+            write(reference.get(), std::string_view{raw}.substr(offset, size));
+            offset += size;
+          }
+          compare();
+        }
+      }
+    }
+  }
+
   std::array<std::uint32_t, GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT + 1> large;
   large.fill('L');
   for (const auto count : {GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT - 1, GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT}) {
