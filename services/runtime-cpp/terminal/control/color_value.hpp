@@ -797,12 +797,6 @@ inline bool hexadecimalColorChannel(std::string_view value) noexcept {
   if (value.empty() || value.size() > 4) {
     return false;
   }
-  if (value.starts_with('+')) {
-    value.remove_prefix(1);
-  }
-  if (value.empty()) {
-    return false;
-  }
   return std::all_of(value.begin(), value.end(), [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); });
 }
 

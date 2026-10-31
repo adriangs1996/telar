@@ -543,6 +543,58 @@ void colorEncodings(Memory &memory) {
 }
 
 template <Allocator Memory>
+void kittyUnsignedColors(Memory &memory) {
+  Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
+  constexpr std::string_view prepare = "\x1b]21;0=#123456;1=#123456;255=#123456\x1b\\";
+  constexpr std::string_view reply = "\x1b]21;1=rgb:12/34/56\x1b\\";
+  constexpr std::array invalid_keys{"+0", "+1", "+001", "+255", "-0", "-1", "++1", "1_0", "+", "256", "65535", "999999999999999999999", "\xff"};
+  for (const std::string_view key : invalid_keys) {
+    const auto query = "\x1b]21;"s + std::string{key} + "=?;1=?\x1b\\";
+    for (std::size_t split = 0; split <= query.size(); ++split) {
+      terminal.feed(bytes(prepare));
+      require(drain(terminal).empty());
+      terminal.feed(bytes(std::string_view{query}.substr(0, split)));
+      auto actual = drain(terminal);
+      terminal.feed(bytes(std::string_view{query}.substr(split)));
+      actual.append(drain(terminal));
+      require(actual == reply);
+    }
+  }
+
+  constexpr unsigned maximum_kitty_entries = 526;
+  for (unsigned count = maximum_kitty_entries - 1; count <= maximum_kitty_entries + 3; ++count) {
+    std::string valid = "\x1b]21;";
+    std::string invalid = valid;
+    for (unsigned index = 0; index < count; ++index) {
+      invalid.append("+0;");
+      if (index + 1 < count) {
+        valid.append("0;");
+      }
+    }
+    valid.append("1=?\x1b\\");
+    invalid.append("1=?\x1b\\");
+    terminal.feed(bytes(prepare));
+    terminal.feed(bytes(valid));
+    require(drain(terminal) == (count <= maximum_kitty_entries ? reply : std::string_view{}));
+    terminal.feed(bytes(prepare));
+    terminal.feed(bytes(invalid));
+    require(drain(terminal) == reply);
+  }
+
+  constexpr std::array invalid_hex{"#+00000", "#00+000", "#0000+0", "rgb:+0/0/0", "rgb:0/+0/0", "rgb:0/0/+0"};
+  for (const std::string_view value : invalid_hex) {
+    std::string query = "\x1b]21;";
+    for (unsigned index = 0; index + 1 < maximum_kitty_entries; ++index) {
+      query.append("0;");
+    }
+    query.append("1=").append(value).append(";1=?\x1b\\");
+    terminal.feed(bytes(prepare));
+    terminal.feed(bytes(query));
+    require(drain(terminal) == reply);
+  }
+}
+
+template <Allocator Memory>
 void longPaletteReply(Memory &memory) {
   Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
   terminal.feed(bytes("\x1b]4;0;#000000\x1b\\"));
@@ -1277,6 +1329,7 @@ int main(int argc, char **argv) {
   cursorRequestVariants(memory);
   ordinaryControlBoundaries(memory);
   colorEncodings(memory);
+  kittyUnsignedColors(memory);
   cursorEncodings(memory);
   cursorStateViews(memory);
   saturation(memory);

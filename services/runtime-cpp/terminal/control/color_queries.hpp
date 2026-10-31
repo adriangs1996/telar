@@ -187,9 +187,6 @@ private:
       return VtState::cursor_color;
     }
 
-    if (key.starts_with('+')) {
-      key.remove_prefix(1);
-    }
     const auto index = decimal(key);
     return index && *index < 256 ? index : std::nullopt;
   }
