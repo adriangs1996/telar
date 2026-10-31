@@ -117,15 +117,36 @@ private:
     state_.write({reinterpret_cast<const std::uint8_t *>(terminator.data()), terminator.size()});
   }
 
-  void rgb(GhosttyColorRgb color, bool sixteen_bit) {
-    const unsigned factor = sixteen_bit ? 257 : 1;
-    const unsigned width = sixteen_bit ? 4 : 2;
-    reply_.append("rgb:");
-    reply_.hex(color.r * factor, width);
-    reply_.append("/");
-    reply_.hex(color.g * factor, width);
-    reply_.append("/");
-    reply_.hex(color.b * factor, width);
+  void kittyColorItem(unsigned selector, std::string_view key) {
+    // Supported keys are at most ten bytes (numeric selectors use <=3).
+    // The longest complete item is 24 bytes, including a present RGB value.
+    static_assert(std::string_view{";foreground=rgb:00/00/00"}.size() <= maximum_color_reply);
+    std::array<char, maximum_color_reply> encoded;
+    auto *position = encoded.data();
+    *position++ = ';';
+    if (selector < VtState::foreground) {
+      const auto number = std::to_chars(position, encoded.data() + encoded.size(), selector);
+      assert(number.ec == std::errc{});
+      position = number.ptr;
+    } else {
+      position = std::copy(key.begin(), key.end(), position);
+    }
+    *position++ = '=';
+
+    if (const auto color = state_.color(selector)) {
+      position = std::copy_n("rgb:", 4, position);
+      constexpr std::string_view digits = "0123456789abcdef";
+      const std::array components{color->r, color->g, color->b};
+      for (std::size_t index = 0; index < components.size(); ++index) {
+        if (index != 0) {
+          *position++ = '/';
+        }
+        *position++ = digits[components[index] >> 4];
+        *position++ = digits[components[index] & 0x0f];
+      }
+    }
+
+    reply_.append({encoded.data(), static_cast<std::size_t>(position - encoded.data())});
   }
 
   void traditionalColor(unsigned operation, std::optional<unsigned> index, std::string_view terminator) {
@@ -256,16 +277,7 @@ private:
       if (reply_.size() == 0) {
         reply_.append("\x1b]21");
       }
-      reply_.append(";");
-      if (*selector < 256) {
-        reply_.number(*selector);
-      } else {
-        reply_.append(key);
-      }
-      reply_.append("=");
-      if (const auto color = state_.color(*selector)) {
-        rgb(*color, false);
-      }
+      kittyColorItem(*selector, key);
     }
 
     if (reply_.size() != 0) {
