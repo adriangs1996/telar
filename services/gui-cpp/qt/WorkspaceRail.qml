@@ -35,23 +35,24 @@ Item {
             width: modelData.bounds.width
             height: modelData.bounds.height
 
-            Rectangle {
+            NativeRoundedRectangle {
                 anchors.fill: parent
                 radius: root.buttonRadius
                 color: mark.record.selected ? root.colors.surface1 : pointer.containsMouse ? root.colors.surface0 : "transparent"
             }
 
-            Rectangle {
+            NativeRoundedRectangle {
                 x: -mark.x - root.accentWidth
                 y: (parent.height - height) / 2
                 width: root.accentWidth * 2
                 height: Math.min(root.accentHeight, parent.height)
                 radius: root.accentWidth
+                paintClip: Qt.rect(root.accentWidth, 0, root.accentWidth, height)
                 color: root.colors.accent
                 visible: mark.record.selected
             }
 
-            Rectangle {
+            NativeRoundedRectangle {
                 anchors.centerIn: parent
                 width: Math.min(root.markSide, parent.width)
                 height: width

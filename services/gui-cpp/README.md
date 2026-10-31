@@ -678,6 +678,26 @@ for axis-aligned shapes it samples the two edge bands and one constant central
 span per row, without caching a full-area image. Selected cards retain the
 original separate fill/ring passes and one-physical-pixel ring.
 
+`RoundedRectanglePaint::clipped` intersects geometry while retaining its already
+resolved radius and colors, matching the original `QuadList.clipQuad` operation.
+`NativeRoundedRectangle.paintClip` accepts a local rectangle in device-independent
+coordinates; an empty rectangle paints nothing and resetting the property removes
+the clip. The collapsed workspace rail uses this path for its edge accent.
+The [clipping validation](measurements/rounded-paint-clipping.md) records the
+154-to-eight-pixel Linux full-window change, the causal radius regression and
+the remaining native leaks and performance gates. The optional clip adds 40 bytes
+to each native shape object on both measured SDKs.
+
+Run the independent original-source clipping oracle with LLVM 23 and Zig:
+
+```sh
+python3 services/gui-cpp/tools/check_rounded_rectangle_clip.py --output services/gui-cpp/measurements/local/rounded-clip-check --sanitize
+```
+
+Use `--compiler` and `--zig` to select their executable paths. The output directory
+must be new; the runner retains both programs, their inputs, outputs and source
+identities for 32,200 records.
+
 The [rounded-shape validation](measurements/rounded-rectangle-validation.json)
 records 17 original-shader cases at three scales, clipping/restoration checks,
 60 component invocations across Mac/Linux, scoped sanitizer checks and the live

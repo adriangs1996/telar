@@ -10,6 +10,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMetaProperty>
 #include <QObject>
 #include <QPointF>
 #include <QQuickItem>
@@ -27,6 +28,7 @@
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <QtTest/QTest>
+#include <QtTest/qsignalspy.h>
 #include <QtTest/qtestcase.h>
 #include <cstddef>
 #include <limits>
@@ -200,6 +202,72 @@ private:
     shape.setColor(Qt::green);
     shape.setBorderColor(Qt::white);
     QCOMPARE(window.grabWindow(), original);
+  }
+
+  Q_SLOT static void geometricClipAndReset() {
+    constexpr int left = 16;
+    constexpr int top = 16;
+    constexpr int shape_width = 6;
+    constexpr int shape_height = 20;
+    constexpr int clip_left = shape_width / 2;
+    QQuickWindow window;
+    const auto density = window.effectiveDevicePixelRatio();
+    window.resize(qRound(fixture_width / density), qRound(fixture_height / density));
+    window.setMinimumSize(window.size());
+    window.setMaximumSize(window.size());
+    window.setColor(background());
+    NativeRoundedRectangle shape{window.contentItem()};
+    shape.setPosition({left / density, top / density});
+    shape.setSize({shape_width / density, shape_height / density});
+    shape.setRadius(clip_left / density);
+    shape.setColor(Qt::white);
+    const auto changed = std::make_unique<QSignalSpy>(&shape, &NativeRoundedRectangle::paintClipChanged);
+    const auto property = shape.metaObject()->property(shape.metaObject()->indexOfProperty("paintClip"));
+    QVERIFY(property.isResettable());
+    window.show();
+    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
+    const auto original = window.grabWindow();
+    QVERIFY(!original.isNull());
+    const QRectF clip{clip_left / density, 0, clip_left / density, shape_height / density};
+    shape.setPaintClip(clip);
+    QCOMPARE(shape.paintClip(), clip);
+    QCOMPARE(changed->count(), 1);
+    const auto clipped = window.grabWindow();
+    QVERIFY(clipped != original);
+    QCOMPARE(clipped.pixelColor(left, top + (shape_height / 2)), background());
+    QCOMPARE(clipped.pixelColor(left + clip_left, top), background());
+    QCOMPARE(clipped.pixelColor(left + clip_left + (clip_left / 2), top + (shape_height / 2)), QColor{Qt::white});
+    shape.setPaintClip(clip);
+    QCOMPARE(changed->count(), 1);
+    QVERIFY(property.reset(&shape));
+    QCOMPARE(changed->count(), 2);
+    QCOMPARE(window.grabWindow(), original);
+
+    shape.setPaintClip({});
+    QCOMPARE(changed->count(), 3);
+    const auto empty = window.grabWindow();
+    QImage background_image{empty.size(), empty.format()};
+    background_image.setDevicePixelRatio(empty.devicePixelRatio());
+    background_image.fill(background());
+    QCOMPARE(empty, background_image);
+    QVERIFY(property.reset(&shape));
+    QCOMPARE(changed->count(), 4);
+    QCOMPARE(window.grabWindow(), original);
+
+    for (const auto invalid : {std::numeric_limits<qreal>::quiet_NaN(), std::numeric_limits<qreal>::infinity(), qreal{-1}}) {
+      shape.setPaintClip({0, 0, invalid, shape_height / density});
+      QCOMPARE(changed->count(), 4);
+      QCOMPARE(window.grabWindow(), original);
+    }
+
+    shape.setPaintClip({std::numeric_limits<qreal>::max(), 0, 1, 1});
+    QCOMPARE(changed->count(), 5);
+    QCOMPARE(window.grabWindow(), background_image);
+    QVERIFY(property.reset(&shape));
+    QCOMPARE(changed->count(), 6);
+    QCOMPARE(window.grabWindow(), original);
+    shape.resetPaintClip();
+    QCOMPARE(changed->count(), 6);
   }
 };
 

@@ -7,6 +7,7 @@
 #include <QSGNode>
 #include <QtCore/qtypes.h>
 #include <QtQml/qqmlregistration.h>
+#include <optional>
 
 namespace telar::gui::qt {
 
@@ -18,6 +19,7 @@ class NativeRoundedRectangle : public QQuickItem {
   Q_PROPERTY(qreal borderAlpha READ borderAlpha WRITE setBorderAlpha NOTIFY borderAlphaChanged)
   Q_PROPERTY(qreal radius READ radius WRITE setRadius NOTIFY radiusChanged)
   Q_PROPERTY(qreal borderWidth READ borderWidth WRITE setBorderWidth NOTIFY borderWidthChanged)
+  Q_PROPERTY(QRectF paintClip READ paintClip WRITE setPaintClip RESET resetPaintClip NOTIFY paintClipChanged)
 
 public:
   explicit NativeRoundedRectangle(QQuickItem *parent = nullptr);
@@ -31,6 +33,9 @@ public:
   void setRadius(qreal radius);
   [[nodiscard]] qreal borderWidth() const noexcept;
   void setBorderWidth(qreal width);
+  [[nodiscard]] QRectF paintClip() const;
+  void setPaintClip(const QRectF &bounds);
+  void resetPaintClip();
 
 signals:
   void colorChanged();
@@ -38,6 +43,7 @@ signals:
   void borderAlphaChanged();
   void radiusChanged();
   void borderWidthChanged();
+  void paintClipChanged();
 
 protected:
   QSGNode *updatePaintNode(QSGNode *previous, UpdatePaintNodeData *data) override;
@@ -51,6 +57,7 @@ private:
   qreal border_width_ = 0;
   float border_alpha_ = 1;
   AncestorGeometry ancestors_;
+  std::optional<QRectF> paint_clip_;
 };
 
 }

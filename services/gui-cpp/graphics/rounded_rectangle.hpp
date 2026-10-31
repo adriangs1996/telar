@@ -56,6 +56,23 @@ struct RoundedRectangle {
 struct RoundedRectanglePaint {
   Point origin{};
   RoundedRectangle shape;
+
+  [[nodiscard]] RoundedRectanglePaint clipped(Rect clip) const noexcept {
+    const auto size = shape.size;
+    if (origin.x >= clip.x && origin.y >= clip.y && origin.x + size.x <= clip.x + clip.width && origin.y + size.y <= clip.y + clip.height) {
+      return *this;
+    }
+
+    const auto left = std::fmax(origin.x, clip.x);
+    const auto top = std::fmax(origin.y, clip.y);
+    const auto right = std::fmax(left, std::fmin(origin.x + size.x, clip.x + clip.width));
+    const auto bottom = std::fmax(top, std::fmin(origin.y + size.y, clip.y + clip.height));
+    auto paint = *this;
+    paint.origin = {.x = left, .y = top};
+    paint.shape.size = {.x = right - left, .y = bottom - top};
+
+    return paint;
+  }
 };
 
 }

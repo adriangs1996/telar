@@ -4,6 +4,18 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [rounded-paint clipping correction](measurements/rounded-paint-clipping.md)
+preserves the original resolved radius when geometry is clipped. Native rail
+surfaces remove 146 Linux full-window differences: a controlled 960,000-pixel
+scene changes154→8, with the same complete original framebuffer. The remaining
+eight navigation pixels are a separate projection difference. A private projection
+prototype reaches zero in this scene, but remains unadopted; its paired CPU
+controls do not establish comparative client performance. Four original-source
+32,200-record controls match each target's float lowering. Both SDKs pass the
+affected functional controls, broad analysis and actual editor checks; native
+sanitizer shutdown leaks and the40-byte per-shape storage increase remain recorded.
+Complete appearance, physical input and measured parity with Zig remain open.
+
 The [native chrome alignment and sampling investigation](measurements/fitted-tab-sampling.md)
 observes the actual GPU interpolants behind three font15.5 navigation pixels.
 Removing the nearest-sampling bias regresses the independent seven-geometry
