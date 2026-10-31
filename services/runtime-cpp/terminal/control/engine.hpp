@@ -322,6 +322,10 @@ private:
       operatingStatus();
       return;
     }
+    if (body == "6n" || body == "?6n") {
+      reportCursor(body.size() == 3);
+      return;
+    }
 
     const auto parsed = Parameters::parse(body);
     if (!parsed) {
@@ -487,19 +491,27 @@ private:
     if (request == 5 && !private_request) {
       operatingStatus();
     } else if (request == 6) {
-      auto position = state_.cursor();
-      if (state_.mode(origin_mode)) {
-        const auto margins = state_.margins();
-        position.column -= std::min(position.column, margins.left);
-        position.row -= std::min(position.row, margins.top);
-      }
-
-      cursorReport(reply_, position, private_request);
+      reportCursor(private_request);
     } else if (private_request && request == scheme_request) {
       reply_.append(facts_.light ? "\x1b[?997;2n" : "\x1b[?997;1n");
     } else if (private_request && request == visibility_request) {
       reply_.append(facts_.visible ? "\x1b[?999;1n" : "\x1b[?999;2n");
     }
+  }
+
+  void reportCursor(bool extended) {
+    if (!enabled_) {
+      return;
+    }
+
+    auto position = state_.cursor();
+    if (state_.mode(origin_mode)) {
+      const auto margins = state_.margins();
+      position.column -= std::min(position.column, margins.left);
+      position.row -= std::min(position.row, margins.top);
+    }
+
+    cursorReport(reply_, position, extended);
   }
 
   static bool knownMode(std::uint16_t value, bool ansi) noexcept {

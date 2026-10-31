@@ -64,6 +64,50 @@ void streamOrder(Memory &memory) {
 }
 
 template <Allocator Memory>
+void cursorRequestVariants(Memory &memory) {
+  struct Query {
+    std::string_view body;
+    std::string_view reply;
+  };
+  constexpr Query queries[]{
+      {"6n", "\x1b[2;3R"},
+      {"06n", "\x1b[2;3R"},
+      {"6;n", "\x1b[2;3R"},
+      {"?6n", "\x1b[?2;3;1R"},
+      {"?06n", "\x1b[?2;3;1R"},
+      {"?6;n", "\x1b[?2;3;1R"},
+      {"6;0n", ""},
+      {"6;;n", ""},
+      {";6n", ""},
+      {"6:0n", ""},
+      {"?6;0n", ""},
+      {"?6;;n", ""},
+      {"?;6n", ""},
+      {"?6:0n", ""},
+      {">6n", ""},
+  };
+  Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
+  Terminal observer{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::observation};
+  for (const auto setup : {"", "\x1b[3;20r\x1b[?69h\x1b[5;60s\x1b[?6h", "\x1b[?1049h"}) {
+    for (const auto query : queries) {
+      const auto input = std::string{"\x1b" "c"} + setup + "\x1b[2;3H\x1b[" + std::string{query.body};
+      for (std::size_t split = 0; split <= input.size(); ++split) {
+        terminal.feed(bytes(std::string_view{input}.substr(0, split)));
+        terminal.feed(bytes(std::string_view{input}.substr(split)));
+        require(drain(terminal, 1) == query.reply);
+      }
+
+      for (const auto byte : input) {
+        terminal.feed(bytes(std::string_view{&byte, 1}));
+      }
+      require(drain(terminal, 1) == query.reply);
+      observer.feed(bytes(input));
+      require(drain(observer).empty());
+    }
+  }
+}
+
+template <Allocator Memory>
 void ordinaryControlBoundaries(Memory &memory) {
   Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
   struct Prefix {
@@ -221,6 +265,7 @@ void borrowedRequestResume(Memory &memory) {
   };
 
   check("\x1b[2;3H\x1b[6nA\x1b[6n", "\x1b[2;3R\x1b[2;4R");
+  check("\x1b[2;3H\x1b[?6nA\x1b[?6n", "\x1b[?2;3;1R\x1b[?2;4;1R");
   check("text\x1b[31mA\x1b[6nB\x1b[0mC\x1b[6n", "\x1b[1;6R\x1b[1;8R");
   check("\x1bP+q544E;544E\x1b\\", "\x1bP1+r544E=787465726D2D323536636F6C6F72\x1b\\\x1bP1+r544E=787465726D2D323536636F6C6F72\x1b\\");
   check("\x1bP$qm\x1b\\", "\x1bP1$r0m\x1b\\");
@@ -1161,6 +1206,7 @@ int main(int argc, char **argv) {
   noForeignQueries(memory);
   deferredEffects(memory);
   streamOrder(memory);
+  cursorRequestVariants(memory);
   ordinaryControlBoundaries(memory);
   colorEncodings(memory);
   cursorEncodings(memory);
