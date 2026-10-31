@@ -2,8 +2,13 @@
 
 The immediate milestone is a separate Release daily-use candidate, tracked in
 [DAILY_DRIVER.md](DAILY_DRIVER.md). Only command/quick navigation and notifications
-may be deferred. Plugin execution/custom surfaces, exact-bundle deployment and
-the remaining daily-flow qualification block adoption; full parity stays open.
+may be deferred. Plugin execution/custom surfaces and the remaining daily-flow
+qualification block adoption; full parity stays open.
+
+The [separate Release preview](measurements/daily-candidate.md) now deploys Qt/QML,
+passes dependency/signature checks and runs isolated relocated smoke flows through
+direct launch and LaunchServices, including default runtime discovery/config.
+Daily adoption remains open for the complete required checklist.
 
 [Plugin activation and secure trust loading](measurements/plugin-overrides.md)
 now support captured overrides, transactional validation and real enable/disable

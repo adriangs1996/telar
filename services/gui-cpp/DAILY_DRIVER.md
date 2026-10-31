@@ -7,7 +7,9 @@ deferred for daily adoption; existing implementations stay available.
 ## Candidate
 
 Local separate bundle: `out-adoption/Telar C++ Preview.app` (relative to
-`services/gui-cpp`). Packaging and exact-candidate smoke verification are pending.
+`services/gui-cpp`). This local ARM64/macOS 26+ Release preview is packaged,
+ad-hoc signed and verified after relocation. It is available for testing; the
+daily adoption milestone remains open.
 Its bundle identifier is `dev.telar.cpp.preview`. Nothing installs over Telar.app
 or changes CLI symlinks. Build from this worktree with:
 
@@ -24,13 +26,32 @@ socket, config/data/history and working directory. Returning to the current app
 means closing the preview window and opening the existing Telar.app; never stop
 the user's runtime or migrate its sessions. Copying the separately named preview
 to a user-owned Applications directory is optional; packaging does not do it.
+The packager refuses an existing output; select a new `--output` for later builds.
+
+Verified on the exact packaged GUI SHA-256
+`34d13a476a3d637c2deddf57c466a3471cdbc0adc6cff422f9b428cf618a35e6`:
+120 Mach-O objects have no unresolved/external dependencies; all leaf code,
+frameworks and the app pass signature verification. A clean packaging repetition
+produces the same GUI hash. Direct launch exits zero. LaunchServices reaches the
+final healthy Cocoa/Metal marker and screenshot; `open` does not expose the GUI's
+exit status. Two isolated successful runs cover Unicode output, tab rename/create/
+move, split/resize/fullscreen, sidebar, Lua reload and History opening. The second
+also verifies bundled CLI endpoint discovery and default XDG configuration with
+no explicit socket/config arguments. All test runtime/config/data/home state is
+disposable and removed. No user's runtime or configuration was used.
+
+Reproduce that isolated smoke from this worktree:
+
+```sh
+python3 services/gui-cpp/tools/smoke_macos_bundle.py \
+  "services/gui-cpp/out-adoption/Telar C++ Preview.app" --discover-runtime \
+  --evidence services/gui-cpp/out-dependencies/my-preview-smoke
+```
 
 ## Daily adoption blockers
 
 - Isolated plugin execution, capability enforcement and custom bars, widgets,
   panels and picks remain incomplete. Catalog and activation do not close this.
-- Deploy Qt/QML and verify the exact relocated Release bundle from Finder with
-  disposable state and a sparse desktop environment.
 - Resolve or qualify the retained macOS pointer-selection regression and verify
   window restoration/suspend-resume and all flows below on this candidate.
 
@@ -48,7 +69,7 @@ to a user-owned Applications directory is optional; packaging does not do it.
 - [ ] Appearance, fonts, blur and statusbar.
 - [ ] Plugins and custom bars/widgets/panels/picks.
 - [ ] Multiple windows, restoration and suspend/resume.
-- [ ] Exact Release bundle: deployed dependencies, login environment and isolated smoke.
+- [x] Exact Release bundle: deployed dependencies, login environment and isolated smoke.
 
 ## Final parity and Zig retirement
 
@@ -63,3 +84,6 @@ oracles are test dependencies, distinct from production code. Deleting own Zig
 requires a dependency audit and a clean build without those sources, followed by
 acceptance. Starting this GUI does not meet that gate. No broad runtime rewrite
 is part of the adoption milestone.
+
+The initial dependency inventory and clean-build gate are in
+[ZIG_RETIREMENT.md](ZIG_RETIREMENT.md).
