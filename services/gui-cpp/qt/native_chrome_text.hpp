@@ -34,6 +34,7 @@ class NativeChromeText : public QQuickItem {
   Q_PROPERTY(QColor color READ color WRITE setColor NOTIFY colorChanged)
   Q_PROPERTY(qreal fadeWidth READ fadeWidth WRITE setFadeWidth NOTIFY layoutChanged)
   Q_PROPERTY(bool emphasized READ emphasized WRITE setEmphasized NOTIFY emphasizedChanged)
+  Q_PROPERTY(bool caption READ caption WRITE setCaption NOTIFY layoutChanged)
   Q_PROPERTY(int elide READ elide WRITE setElide NOTIFY layoutChanged)
   Q_PROPERTY(int horizontalAlignment READ horizontalAlignment WRITE setHorizontalAlignment NOTIFY layoutChanged)
   Q_PROPERTY(bool supported READ supported NOTIFY supportChanged)
@@ -51,6 +52,8 @@ public:
   void setFadeWidth(qreal width);
   [[nodiscard]] bool emphasized() const noexcept;
   void setEmphasized(bool emphasized);
+  [[nodiscard]] bool caption() const noexcept;
+  void setCaption(bool caption);
   [[nodiscard]] int elide() const noexcept;
   void setElide(int elide);
   [[nodiscard]] int horizontalAlignment() const noexcept;
@@ -107,6 +110,7 @@ private:
   Qt::TextElideMode elide_ = Qt::ElideRight;
   Qt::Alignment alignment_ = Qt::AlignLeft;
   bool emphasized_ = false;
+  bool caption_ = false;
   bool supported_ = false;
   bool available_ = false;
   bool layout_dirty_ = true;

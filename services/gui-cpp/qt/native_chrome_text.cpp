@@ -59,6 +59,18 @@ bool NativeChromeText::emphasized() const noexcept {
   return emphasized_;
 }
 
+bool NativeChromeText::caption() const noexcept {
+  return caption_;
+}
+
+void NativeChromeText::setCaption(bool caption) {
+  if (caption_ != caption) {
+    caption_ = caption;
+    emit layoutChanged();
+    invalidateLayout();
+  }
+}
+
 int NativeChromeText::elide() const noexcept {
   return elide_;
 }
@@ -167,7 +179,11 @@ void NativeChromeText::refreshLayout() {
     const auto preferred = emphasized_ ? fonts::FontRole::emphasized : fonts::FontRole::regular;
     utf8_ = text_.toUtf8();
     const std::string_view text{utf8_.constData(), static_cast<std::size_t>(utf8_.size())};
-    glyphs_.shape(*fonts_, text, {.pixel_height = pixel_height_, .preferred = preferred});
+    if (caption_) {
+      glyphs_.shapeCaption(*fonts_, text, {.pixel_height = pixel_height_, .preferred = preferred});
+    } else {
+      glyphs_.shape(*fonts_, text, {.pixel_height = pixel_height_, .preferred = preferred});
+    }
     advance_ = glyphs_.advance();
     metrics_ = fonts_->face(preferred).metrics(pixel_height_);
     setSupported(true);
@@ -177,7 +193,7 @@ void NativeChromeText::refreshLayout() {
     ++revision_;
     fit_dirty_ = true;
     fit_shape_dirty_ = true;
-    if (catalog_) {
+    if (catalog_ != nullptr) {
       catalog_->request(text, preferred);
     }
   } catch (const std::exception &) {

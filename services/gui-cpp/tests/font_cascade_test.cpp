@@ -8,6 +8,7 @@
 #include "fonts/font_role.hpp"
 #include "fonts/shaped_run_view.hpp"
 #include "fonts/text_layout.hpp"
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -159,6 +160,50 @@ void layoutOwnershipAndWarmReuse(FontFixture<SystemAllocator> &fonts) {
   require(budget.liveBytes() == 0, "text layout destruction must release every injected allocation");
 }
 
+void captionsRetainRunOriginsAndWarmStorage(FontFixture<SystemAllocator> &fonts) {
+  SystemAllocator upstream;
+  BudgetAllocator budget{upstream, std::numeric_limits<std::size_t>::max()};
+  AllocationGate memory{budget};
+  {
+    TextLayout layout{memory};
+    constexpr std::array runs{std::string_view{"History AV kerning: "}, std::string_view{"AVATARVAAVATARVAAVATARVAAVATAR"}, std::string_view{"VAAVATARVA"}};
+    std::string label;
+    for (const auto run : runs) {
+      label += run;
+    }
+
+    layout.shapeCaption(fonts, label, request);
+    require(layout.spans().size() == runs.size(), "captions must preserve each original bounded shaping origin");
+    std::int32_t advance = 0;
+    std::size_t first = 0;
+    for (std::size_t index = 0; index < runs.size(); ++index) {
+      const auto shaped = fonts.face(FontRole::regular).shape(runs[index], text_height);
+      const auto span = layout.spans()[index];
+      require(span.offset == advance && span.first == first && span.count == shaped.size(), "caption spans must use independently rounded original advances");
+      for (std::size_t glyph = 0; glyph < shaped.size(); ++glyph) {
+        require(layout.glyphs()[first + glyph] == shaped.glyph(glyph), "caption glyphs must retain the full original shaped run");
+      }
+
+      first += shaped.size();
+      advance += shaped.advance();
+    }
+
+    require(layout.advance() == advance, "caption width must sum original rounded run widths");
+    const auto allocations = budget.allocations();
+    memory.permit(0);
+    constexpr std::size_t repetitions = 100;
+    for (std::size_t index = 0; index < repetitions; ++index) {
+      layout.shapeCaption(fonts, label, request);
+    }
+
+    require(budget.allocations() == allocations, "warm captions must reuse injected glyph and span storage");
+    layout.shape(fonts, "AVATAR", request);
+    require(layout.spans().size() == 1, "ordinary shaping must retire previous caption boundaries");
+  }
+
+  require(budget.liveBytes() == 0, "caption destruction must release all retained storage");
+}
+
 }
 
 int main(int argc, char **argv) {
@@ -176,6 +221,7 @@ int main(int argc, char **argv) {
     FontFixture fonts{memory, std::filesystem::path{arguments[1]}};
     naturalAndMixedRuns(fonts);
     layoutOwnershipAndWarmReuse(fonts);
+    captionsRetainRunOriginsAndWarmStorage(fonts);
     return 0;
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';

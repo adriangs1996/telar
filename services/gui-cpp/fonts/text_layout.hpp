@@ -1,12 +1,11 @@
 #pragma once
 
 #include "core/memory.hpp"
-#include "face.hpp"
 #include "font_coverage.hpp"
 #include "font_role.hpp"
 #include "font_runs.hpp"
 #include "shaped_run_view.hpp"
-#include "terminal/font_grid.hpp"
+#include "text/caption_runs.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -51,22 +50,21 @@ public:
 
   template <CascadingFontProvider Fonts>
   void shape(Fonts &fonts, std::string_view text, TextRequest request) {
-    glyphs_.clear();
-    spans_.clear();
-    single_span_.reset();
-    advance_ = 0;
-    visit(fonts, text, request, [&](FontSpan span) {
-      const auto role = span.role.value_or(FontRole::primary);
-      const auto run = fonts.face(role).shape(span.text, request.pixel_height);
-      const auto start = glyphs_.size();
-      appendSpan({.first = start, .count = run.size(), .role = role, .offset = advance_, .columns = span.columns});
-      glyphs_.resize(start + run.size());
-      for (std::size_t index = 0; index < run.size(); ++index) {
-        glyphs_[start + index] = run.glyph(index);
-      }
+    clear();
+    append(fonts, text, request);
+  }
 
-      advance_ = addAdvance(advance_, spanAdvance(fonts, span, request, run));
-    });
+  template <CascadingFontProvider Fonts>
+  void shapeCaption(Fonts &fonts, std::string_view text, TextRequest request) {
+    clear();
+    CaptionRuns runs{text};
+    while (const auto run = runs.next()) {
+      const auto before = advance_;
+      append(fonts, *run, request);
+      if (advance_ <= before) {
+        break;
+      }
+    }
   }
 
   template <CascadingFontProvider Fonts>
@@ -81,6 +79,29 @@ public:
   }
 
 private:
+  void clear() {
+    glyphs_.clear();
+    spans_.clear();
+    single_span_.reset();
+    advance_ = 0;
+  }
+
+  template <CascadingFontProvider Fonts>
+  void append(Fonts &fonts, std::string_view text, TextRequest request) {
+    visit(fonts, text, request, [&](FontSpan span) {
+      const auto role = span.role.value_or(FontRole::primary);
+      const auto run = fonts.face(role).shape(span.text, request.pixel_height);
+      const auto start = glyphs_.size();
+      appendSpan({.first = start, .count = run.size(), .role = role, .offset = advance_, .columns = span.columns});
+      glyphs_.resize(start + run.size());
+      for (std::size_t index = 0; index < run.size(); ++index) {
+        glyphs_[start + index] = run.glyph(index);
+      }
+
+      advance_ = addAdvance(advance_, spanAdvance(fonts, span, request, run));
+    });
+  }
+
   void appendSpan(TextSpan span) {
     if (spans_.empty() && !single_span_) {
       single_span_ = span;

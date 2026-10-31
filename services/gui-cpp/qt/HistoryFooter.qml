@@ -85,6 +85,7 @@ HistoryFooterLayout {
 
     ChromeText {
         objectName: "historyFooterError"
+        caption: true
         x: root.regions.error.x
         y: root.regions.error.y
         width: root.regions.error.width

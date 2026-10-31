@@ -8,6 +8,7 @@ Item {
 
     required property real pixelSize
     property bool emphasized: false
+    property bool caption: false
     property string text
     property color color: "black"
     property int elide: Text.ElideRight
@@ -33,6 +34,7 @@ Item {
         color: root.color
         fadeWidth: root.fadeWidth
         emphasized: root.emphasized
+        caption: root.caption
         elide: root.elide
         horizontalAlignment: root.horizontalAlignment
         visible: root.directRendering
