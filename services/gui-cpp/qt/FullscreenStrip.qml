@@ -139,6 +139,7 @@ FullscreenStripLayout {
             color: leavePointer.containsMouse ? root.colors.text : root.colors.subtext0
             elide: Text.ElideNone
             horizontalAlignment: Text.AlignHCenter
+            wholePixelCentering: true
         }
 
         MouseArea {

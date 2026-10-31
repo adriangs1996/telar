@@ -13,7 +13,7 @@ layout(std140, binding = 0) uniform MaskUniforms {
 
 void main() {
     const float binary32_mantissa_bits = 23.0;
-    const float interpolation_rounding_steps = 16.0;
+    const float interpolation_rounding_steps = 1.0;
     const float coordinate_tolerance = exp2(-binary32_mantissa_bits) * interpolation_rounding_steps;
     vec2 sample_coordinate = mask_coordinate - vec2(coordinate_tolerance);
     float coverage = texture(alpha_mask, sample_coordinate).a;

@@ -4,6 +4,20 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [native chrome alignment and sampling investigation](measurements/fitted-tab-sampling.md)
+observes the actual GPU interpolants behind three font15.5 navigation pixels.
+Removing the nearest-sampling bias regresses the independent seven-geometry
+control9→12 and is rejected. Reducing the normalized bias16→1 binary32 epsilon
+steps removes those three pixels, preserves all seven error positions and adds
+no new errors across four48-case phase controls. An additional History scene
+exposes a control-policy distinction: FormButton centers fractional free space,
+whereas PixelButton floors it. Explicit whole-pixel centering preserves the
+navigation correction and restores69 displaced "esc" pixels. Both SDKs pass
+three broad analysis units, three actual editor sessions and affected native
+controls; Mac shutdown leaks and Linux8/50400 navigation differences remain.
+Complete platform
+visuals, physical input, native leaks and comparative performance remain open.
+
 The [centered chrome correction](measurements/chrome-center.md) restores the
 original whole-pixel label inset. A covered-glyph native regression fails with
 the parent scene object and passes with the correction. Paired font15.5 Cocoa

@@ -79,6 +79,10 @@ int NativeChromeText::horizontalAlignment() const noexcept {
   return static_cast<int>(alignment_.toInt());
 }
 
+bool NativeChromeText::wholePixelCentering() const noexcept {
+  return whole_pixel_centering_;
+}
+
 bool NativeChromeText::supported() const noexcept {
   return supported_;
 }
@@ -158,6 +162,14 @@ void NativeChromeText::setHorizontalAlignment(int alignment) {
   const auto value = Qt::Alignment::fromInt(alignment);
   if (alignment_ != value) {
     alignment_ = value;
+    emit layoutChanged();
+    update();
+  }
+}
+
+void NativeChromeText::setWholePixelCentering(bool enabled) {
+  if (whole_pixel_centering_ != enabled) {
+    whole_pixel_centering_ = enabled;
     emit layoutChanged();
     update();
   }
@@ -304,7 +316,7 @@ QSGNode *NativeChromeText::updatePaintNode(QSGNode *previous, [[maybe_unused]] U
   try {
     const auto &layout = fitted_ ? fitted_glyphs_ : glyphs_;
 
-    return paintChromeText(previous, *window(), {.glyphs = layout.glyphs(), .spans = layout.spans(), .metrics = metrics_, .scene_origin = mapToScene({0, 0}), .bounds = size(), .color = color_, .scale = display_scale_, .fade_width = fade_width_, .revision = revision_, .pixel_height = pixel_height_, .advance = fitted_ ? fitted_advance_ : advance_, .horizontal_alignment = alignment_, .emphasized = emphasized_}, collection_);
+    return paintChromeText(previous, *window(), {.glyphs = layout.glyphs(), .spans = layout.spans(), .metrics = metrics_, .scene_origin = mapToScene({0, 0}), .bounds = size(), .color = color_, .scale = display_scale_, .fade_width = fade_width_, .revision = revision_, .pixel_height = pixel_height_, .advance = fitted_ ? fitted_advance_ : advance_, .horizontal_alignment = alignment_, .whole_pixel_centering = whole_pixel_centering_, .emphasized = emphasized_}, collection_);
   } catch (const std::exception &) {
     QMetaObject::invokeMethod(this, [this] {
       render_failed_ = true;

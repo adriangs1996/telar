@@ -37,6 +37,7 @@ class NativeChromeText : public QQuickItem {
   Q_PROPERTY(bool caption READ caption WRITE setCaption NOTIFY layoutChanged)
   Q_PROPERTY(int elide READ elide WRITE setElide NOTIFY layoutChanged)
   Q_PROPERTY(int horizontalAlignment READ horizontalAlignment WRITE setHorizontalAlignment NOTIFY layoutChanged)
+  Q_PROPERTY(bool wholePixelCentering READ wholePixelCentering WRITE setWholePixelCentering NOTIFY layoutChanged)
   Q_PROPERTY(bool supported READ supported NOTIFY supportChanged)
   Q_PROPERTY(bool available READ available NOTIFY availabilityChanged)
 
@@ -58,6 +59,8 @@ public:
   void setElide(int elide);
   [[nodiscard]] int horizontalAlignment() const noexcept;
   void setHorizontalAlignment(int alignment);
+  [[nodiscard]] bool wholePixelCentering() const noexcept;
+  void setWholePixelCentering(bool enabled);
   [[nodiscard]] bool supported() const noexcept;
   [[nodiscard]] bool available() const noexcept;
 
@@ -109,6 +112,7 @@ private:
   std::uint16_t pixel_height_ = 0;
   Qt::TextElideMode elide_ = Qt::ElideRight;
   Qt::Alignment alignment_ = Qt::AlignLeft;
+  bool whole_pixel_centering_ = false;
   bool emphasized_ = false;
   bool caption_ = false;
   bool supported_ = false;

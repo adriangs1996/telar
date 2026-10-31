@@ -20,6 +20,7 @@ AbstractButton {
         emphasized: root.emphasized
         color: root.emphasized || root.pointerHovered || root.visualFocus ? root.colors.text : root.colors.subtext0
         horizontalAlignment: Text.AlignHCenter
+        wholePixelCentering: true
     }
 
     background: Rectangle {

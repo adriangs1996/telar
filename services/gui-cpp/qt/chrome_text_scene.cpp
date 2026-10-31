@@ -157,7 +157,8 @@ TextProjection projection(const ChromeTextPaint &paint) {
 
   auto x = raw_x;
   if (paint.horizontal_alignment.testFlag(Qt::AlignHCenter)) {
-    x += std::floor(std::max(0.0F, width - static_cast<float>(paint.advance)) / 2);
+    const auto inset = std::max(0.0F, width - static_cast<float>(paint.advance)) / 2;
+    x += paint.whole_pixel_centering ? std::floor(inset) : inset;
   } else if (paint.horizontal_alignment.testFlag(Qt::AlignRight)) {
     x += std::max(0.0F, width - static_cast<float>(paint.advance));
   }

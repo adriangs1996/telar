@@ -336,6 +336,37 @@ private:
     label.setText(text);
     label.setElide(Qt::ElideNone);
     label.setHorizontalAlignment(Qt::AlignHCenter);
+    label.setWholePixelCentering(true);
+    QVERIFY(test::showComponentWindow(window, wait_ms));
+    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed() && label.available(), wait_ms);
+    label.setWidth(label.implicitWidth() + (physical_free_space / scale));
+    const ReferencePaint paint{.origin = label.mapToScene({original_inset / scale, 0}), .height = label.height(), .pixel_size = label.pixelSize(), .scale = scale};
+    const auto matches = [&] {
+      const auto actual = grabFrame(window);
+
+      return !actual.isNull() && actual == reference(actual.size(), text, paint);
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(matches(), wait_ms);
+  }
+
+  Q_SLOT static void centeredFormChromeKeepsOriginalFractionalInset() {
+    QQuickWindow window;
+    window.setColor(Qt::black);
+    window.resize(window_width, window_height);
+    const auto scale = window.effectiveDevicePixelRatio();
+    constexpr qreal physical_font_size = 27;
+    constexpr qreal physical_free_space = 5;
+    constexpr qreal original_inset = 2.5;
+    const auto text = QStringLiteral("H");
+    QVERIFY(ChromeFonts::shared()->covers(text.toStdString(), false));
+    NativeChromeText label{window.contentItem()};
+    label.setPosition({label_left, label_top});
+    label.setSize({label_width, label_height});
+    label.setPixelSize(physical_font_size / scale);
+    label.setColor(Qt::white);
+    label.setText(text);
+    label.setElide(Qt::ElideNone);
+    label.setHorizontalAlignment(Qt::AlignHCenter);
     QVERIFY(test::showComponentWindow(window, wait_ms));
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed() && label.available(), wait_ms);
     label.setWidth(label.implicitWidth() + (physical_free_space / scale));

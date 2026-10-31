@@ -13,6 +13,7 @@ Item {
     property color color: "black"
     property int elide: Text.ElideRight
     property int horizontalAlignment: Text.AlignLeft
+    property bool wholePixelCentering: false
     property int verticalAlignment: Text.AlignVCenter
     property real fadeWidth: 0
     readonly property bool directRendering: glyphs.available && verticalAlignment === Text.AlignVCenter
@@ -37,6 +38,7 @@ Item {
         caption: root.caption
         elide: root.elide
         horizontalAlignment: root.horizontalAlignment
+        wholePixelCentering: root.wholePixelCentering
         visible: root.directRendering
     }
 

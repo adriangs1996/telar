@@ -42,6 +42,7 @@ struct ChromeTextPaint {
   std::uint16_t pixel_height = 0;
   std::int32_t advance = 0;
   Qt::Alignment horizontal_alignment = Qt::AlignLeft;
+  bool whole_pixel_centering = false;
   bool emphasized = false;
   fonts::FontRole role = fonts::FontRole::regular;
   fonts::GlyphStyle style{};
