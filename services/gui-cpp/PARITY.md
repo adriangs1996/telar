@@ -4,6 +4,16 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [History event-loop observation](measurements/history-event-loop-observation.md)
+adds a bounded two-thread test trace and a native-loop held-pointer regression.
+An identical manual/native control reproduces a13.35s manual timeout while native
+readiness stays under200ms; reversing order passes both with slower manual waits.
+No product clock change follows. Final native suites pass11 assertions on each
+SDK/build, but ASAN exits1 on Mac(538134bytes/2772allocations) and Linux
+(192bytes/two wl_display_read_events allocations). Broad analysis and actual
+editors pass both SDKs. The old test body remains unchanged and all earlier
+presentation, latency, leak and full-parity failures remain required evidence.
+
 The [presented History inspector hover evidence](measurements/history-inspector-hover.md)
 adds namespace-correct inspector targets from cached physical button geometry.
 The 5,709-pixel Copy negative becomes exact across all 24,696 inspector-button

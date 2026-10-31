@@ -10,6 +10,7 @@
 #include "graphics/placement.hpp"
 #include "gui_wait.hpp"
 #include "history/browser.hpp"
+#include "history_card_wait_trace.hpp"
 #include "history/page_storage.hpp"
 #include "history_presentation_fixture.hpp"
 #include "input/click_tracker.hpp"
@@ -164,39 +165,6 @@ QQuickItem *historyFooterHint(const QQuickWindow &window, const QString &action)
 
   return nullptr;
 }
-
-class HistoryCardWaitTrace {
-public:
-  explicit HistoryCardWaitTrace(QQuickWindow &window) : window_(window) {
-    connection_ = QObject::connect(&window_, &QQuickWindow::afterAnimating, &window_, [this] { ++frames_; });
-  }
-
-  ~HistoryCardWaitTrace() {
-    QObject::disconnect(connection_);
-    if (!QTest::currentTestFailed()) {
-      return;
-    }
-
-    const auto *timer = window_.findChild<QTimer *>(QStringLiteral("agentStatusAnimation"));
-    const auto rows = test::visualItems(*window_.contentItem(), QStringLiteral("historyResult"));
-    qInfo() << "History card wait diagnostic: frames" << frames_ << "active" << window_.isActive() << "exposed" << window_.isExposed() << "rows" << rows.size() << "clock active" << (timer != nullptr && timer->isActive()) << "remaining ms" << (timer == nullptr ? 0 : timer->remainingTime());
-    for (auto *row : rows) {
-      for (const auto *card : test::visualItems(*row, QStringLiteral("historyRow"))) {
-        qInfo() << "History card state: index" << row->property("index") << "selected" << card->property("selected") << "open" << card->property("open") << "height" << card->height() << "visible" << card->isVisible();
-      }
-    }
-  }
-
-  HistoryCardWaitTrace(const HistoryCardWaitTrace &) = delete;
-  HistoryCardWaitTrace &operator=(const HistoryCardWaitTrace &) = delete;
-  HistoryCardWaitTrace(HistoryCardWaitTrace &&) = delete;
-  HistoryCardWaitTrace &operator=(HistoryCardWaitTrace &&) = delete;
-
-private:
-  QQuickWindow &window_;
-  QMetaObject::Connection connection_;
-  int frames_ = 0;
-};
 
 constexpr int runtime_wait_ms = 10'000;
 constexpr int frame_settle_ms = 100;
@@ -2159,7 +2127,7 @@ return {api_version=2, client={keybindings={
         QTest::mouseRelease(window_, held_button, Qt::NoModifier, release_position);
       }
     });
-    const HistoryCardWaitTrace trace{*window_};
+    const test::HistoryCardWaitTrace trace{*window_};
     QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, release_position);
     client_->selectHistoryRow(1);
     QTRY_COMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 1);
@@ -2234,6 +2202,58 @@ return {api_version=2, client={keybindings={
     QTest::mouseRelease(window_, held_button, Qt::NoModifier, release_position);
     held = false;
     QCOMPARE(clipboard->text(), sentinel);
+  }
+
+  Q_SLOT void historySelectionProgressesInEventLoops() {
+    const bool native_loop = !qEnvironmentVariableIsSet("TELAR_GUI_TEST_MANUAL_EVENT_LOOP_CONTROL");
+    importRetainedHistory();
+    const auto restore = qScopeGuard([this] { client_->execute(Application::Action::cancel); });
+    client_->execute(Application::Action::history);
+    client_->searchHistory(QStringLiteral("GUI_HISTORY_RETAINED"));
+    QVERIFY(test::waitForGuiCondition([this] { return !client_->historyLoading() && client_->history()->rowCount() == 2; }, runtime_wait_ms));
+    const auto selected_copy = [this] { return historyCardHint(*window_, client_->historyState().value(QStringLiteral("selection")).toInt(), QStringLiteral("copy")); };
+    test::activateWindow(*window_);
+    QVERIFY(test::waitForGuiCondition([&] { return selected_copy() != nullptr; }, runtime_wait_ms));
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    auto *clipboard = QGuiApplication::clipboard();
+    auto saved = test::copyClipboard();
+    const auto restore_clipboard = qScopeGuard([clipboard, saved = std::move(saved)] mutable { clipboard->setMimeData(saved.release()); });
+    const auto sentinel = QStringLiteral("GUI_HISTORY_NATIVE_LOOP_UNCHANGED");
+    clipboard->setText(sentinel);
+    const test::HistoryCardWaitTrace trace{*window_};
+    for (const auto button : {Qt::LeftButton, Qt::MiddleButton, Qt::RightButton}) {
+      const QPointer<QQuickItem> previous = selected_copy();
+      QVERIFY(!previous.isNull());
+      auto position = previous->mapToScene(QPointF{previous->width() / 2, previous->height() / 2}).toPoint();
+      bool held = true;
+      const auto release = qScopeGuard([&] {
+        if (held) {
+          QTest::mouseRelease(window_, button, Qt::NoModifier, position);
+        }
+      });
+      QTest::mousePress(window_, button, Qt::NoModifier, position);
+      const auto next = 1 - client_->historyState().value(QStringLiteral("selection")).toInt();
+      const auto started = platform::AwakeClock::nowNanoseconds();
+      client_->selectHistoryRow(next);
+      const auto ready = [&] { return previous.isNull() && selected_copy() != nullptr; };
+      if (native_loop) {
+        QVERIFY(test::waitForGuiCondition(ready, runtime_wait_ms));
+      } else {
+        QTRY_VERIFY_WITH_TIMEOUT(ready(), runtime_wait_ms);
+      }
+
+      qInfo() << "History selection progress: native loop" << native_loop << "button" << button << "elapsed ns" << platform::AwakeClock::nowNanoseconds() - started;
+      QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), next);
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      const auto *current = selected_copy();
+      QVERIFY(current != nullptr);
+      position = current->mapToScene(QPointF{current->width() / 2, current->height() / 2}).toPoint();
+      QTest::mouseMove(window_, position);
+      QTest::mouseRelease(window_, button, Qt::NoModifier, position);
+      held = false;
+      QCOMPARE(clipboard->text(), sentinel);
+      QCOMPARE(client_->dialog(), QStringLiteral("history"));
+    }
   }
 
   Q_SLOT void historyFooterHintsUseCurrentActions() {

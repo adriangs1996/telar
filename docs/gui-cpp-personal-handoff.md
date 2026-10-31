@@ -1,5 +1,110 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## ACTIVE Event-loop observation ready to freeze; continue inspector visuals (01:38 UTC)
+
+CONTINUE no FINAL at checkpoints. HEADf3e12ceb7 frozenInspectorHover663/2466/10364934B.
+Newtests final ONLY tests/quick_test.cpp + tests/history_card_wait_trace.hpp.
+No product source/GUImodification. Newtracebounded512samples withscopedmutexlocks,
+sharedrendercallbacklifetime, noGUIreadsrenderthread, noframeforcing/logginginwait.
+Finalnewslot historySelectionProgressesInEventLoops defaults nativeQEventLoop;
+TELAR_GUI_TEST_MANUAL_EVENT_LOOP_CONTROL chooses identicalmanualQTRYworkflow.
+NO _data method: unchangedbroadprofile rejectednaming+7traceissues, allfixed.
+OriginalhistoryCardActionsSurviveSelectionChanges body unchanged excepttracequalifier;
+verifiernormalizesandcompareswholebodyagainstfrozenInspector source. Noassert/timeouts
+relaxed. EarlierQtData/includeerrors andstalereleaseMOC linter/editorfailure retained.
+
+Finalallbuilds0 MacReleasebuild4/ASANbuild6 LinuxReleasebuild2/ASANbuild4.
+FinallintMac3(ASANcontext) andLinux2 both0; actualeditorsMac3/Linux1 both2filesDELIVERED
+clean. MacReleaseold8methods+newnative=11PASSexit0; ASAN11PASSexit1 leaks538134/2772.
+LinuxRelease11PASSexit0; ASAN11PASSexit1 leaks192bytes2alloc inwl_display_read_events,
+BuildIda8f52c1055d47babd29d5777c420fdaf50dc7294. InstalledlibSHA0c9584043ee044fbd6e23b00c3e04ec05c195a60fcec689a275065f15cb96670
+matchesoldWayland96bytecontrol. Commonallocator/library DOES NOT establishsamecause.
+No rerun/suppression togreenwash. Newnative-loop3readinesssamplesMacRelease154-156ms,
+ASAN175-180ms; LinuxRelease155-174ms ASAN166-175ms. Notfirstpresentedpixellatency.
+FinalsameASANbinarymanualcontrol3PASS12.313s, threewaits2.971/5.442/.843s,exit1
+leaks524734/2698. Earliermatchedpre-optinpair1manualFAIL10s/Qt13350ms; native177-198ms;
+reversepair2bothPASSnative169-186ms manual334-1390ms. RawfailureREQUIRED. Supports
+wait-mode-dependent fixturebehavior, underlyingQtmechanism/historicalcausesUNKNOWN.
+NOproductclockchangejustified. Priorinspector9/1/12700ms,footer10050ms,staledrawable
+capture45s remainREQUIREDOPEN alongside generalleaks/latency/parity/performance.
+
+Newreport measurements/history-event-loop-observation.md +archive_observation.py/
+verify_observation.py currentlyUNFROZEN. Ignoreddraft1PASS183artifacts2470sources.
+VMbundleFINAL37members34754B SHAfb3030bef1d3c0e16b3dde81ab2c2d910bb15009620c4bd1874da5631b407578
+collected/downloadverified. Alltests/builds/lints/editors actualexited. VM7158/55984
+retained, noactiveGUIchecks. UserRuntime35801/oldSway9469 untouched. Useruntracked
+personal-frame-delivery.md NEVER read/touch/stage. FreezeONCE nowafterhandoffupdate,
+offline/current/exact-source/security/whitespacechecks thenlocalcommitownedfilesONLY.
+Neverchange frozenInspector/previousarchives/report/verifiers. Noagents/worktrees/
+publish/merge. CurrentgoalAPIoldblockedmanualcontinue. Spanishupdates<=60saim40.
+
+NEXT afterlocalcommit CONTINUE actualinspector facts/content/scroll visuals: core
+inspection oracle already3008records matches bothSDKs fromearlier; nativefull
+inspector facts/content notyetqualified. ExistingfrozenInspectorHoverfixed1 full
+windowimagescanbeviewed/analyzedoffline tofindscope. capture_history.py+local
+history_inspector_hover_capture.py fullCocoa/Carbonprivateboardhelpers available.
+Needcausalnegativebeforechangingproduct, rawOriginaldeclaredgeometry, noalign/masks.
+Also fullinput, animationhitgeometry, configadoption, themes/densities/Linuxvisuals,
+remainingmachine/task/CLI/performance/leaks ALLstillopen. No checkpointfinalclaim.
+
+## ACTIVE Native event-loop control; continue full parity (01:25 UTC)
+
+HEADf3e12ceb7 commits Inspector hover. Its evidence is FINAL/FROZEN:663artifacts,
+2466sources,10364934B; offline/current-source/exact-source/security audits PASS at
+freeze. NEVER change its archive/report/verifier; prior checkpoints also frozen.
+After current test changes current-source check naturally fails; offline remains
+valid. Userpersonal-frame-delivery.md untracked NEVER read/touch/stage. Work only
+this worktree; no agents/otherworktrees/publish/merge. NOFINAL at checkpoints.
+
+Current changes ONLYtests: extracted existing HistoryCardWaitTrace to new
+ tests/history_card_wait_trace.hpp,512-entry fixed mutex-protected buffer, shared
+lifetime for render callbacks; stamps GUIupdate/expose/clocktimeout/afterAnimating
+and direct render afterSync/frameSwapped. No logging inwait/forcedframe/polltimer.
+Dump atfailure or TELAR_GUI_TEST_HISTORY_TRACE. New data-driven
+historySelectionProgressesInEventLoops performs same3heldLeft/Middle/Right
+selections. Native row uses existingwaitForGuiCondition(realQEventLoop), manualrow
+originalQTRY; both10s/predicatesidentical. Manualexperimentalrow opt-in via
+TELAR_GUI_TEST_MANUAL_EVENT_LOOP_CONTROL. OriginalhistoryCardActionsSurviveSelectionChanges
+UNCHANGED excepttraceclasstypeextraction; alloldQTRY/10s/inputguardskept.
+
+Before opt-in matchedpairASAN1: manualFAILfirstready10s,Qt13350mssufficient,
+frames3; native3selections196846958/198056250/176639459ns. Totals3PASS1FAIL exit1
+leaks491485bytes2663. SamebinaryreversepairASAN2 native186202667/171329666/169250125ns,
+manual334371875/1389788167/1201842375ns;4PASS0FAIL exit1 leaks487051/2795.
+No compilers/lints/editors duringpairs. This establisheswait-mode-dependent
+behavior infixture, NOTunderlyingQtmechanism or causeofhistoricalfailures.
+Oldworkflowinstrumentedtrace1 3PASS29.891s maxframegap6.365s; sampleatlaterheld
+selection mainthreadQTestqWaitmostlyasleep renderidle. Unchangedrepeatmanual-asan-2
+3PASS21.846s. Prototype nativeonly3PASS3.779s and173/182/168ms. Rawleaksretained.
+Sources/binaries forprototypesandpre-opt-inpairedsnapshot ignoredoutdeps/history-
+frame-delivery-{prototype-1,matched-before-opt-in-1}; initialmissingQTestDatainclude
+failure sourcepreserveddata-include-negative-1. SourceQt8primaryfiles+URLs+SHAs
+ignoredoutdeps/qt-frame-scheduling-source-1; supportsCocoamanualvsNSApprun/GCD
+controlmotivation. ClockselfparkingcauseUNCONFIRMED; NOproductclockchangejustified.
+
+Finalenvguard+QTestDatainclude builds actual0:
+MacReleasehistory-frame-delivery-build-3,MacASAN...native-asan-build-5;
+LinuxASAN...asan-build-3. ProductGUIandcomponentbinarySHAUNCHANGEDfromf3e.
+Current draftreportmeasurements/history-event-loop-observation.md (NOTfrozen).
+ACTIVE MacQuickbroadlint1 exec49220, actualtwofileeditor1exec63662.
+Linuxpipelineexec97050: Releasebuild1 thenQuickbroadlint1 (NOconcurrentheavies4GB).
+NOCPP/header/QMLedits whiledependentbuildACTIVE; guestsource syncedidletar--touch.
+Afterallactualexits, finishbroadlint/actualeditorsbothSDKs. Guestrefreshcanonical
+out/compileDB+4headercontextsfromASANbeforeeditor aspreviouspractice. Then final
+nativeRelease/ASAN eachSDK original8methods PLUS newnative-loop method =11entries
+(initcleanupincluded). Experimentalbothrows addsone=12 ifwholefixtureenabled.
+Needonefinalmatchedopt-inpair(or2reverse) fromfinalbinary withallbuild/lint/editor
+idle; keepfirst13.35sfailureREQUIRED, doNOTrelaxanydeadline/suppressleaks.
+PrivatehostCarbon/Cocoaboards allguarded metadata954same. Linuxrunnernewlocal
+history_frame_delivery_linux.py supports--slot repeat, privateSway/D-Bus/F24/runtime
+same90sdeadline; copiedtoguestlocal. No nativecheckactive now.
+
+Finalnewarchival must retainold9/1/12.7s inspector andfooter10050ms +staledrawable,
+newmatchedmanual13.35s,positive+reverse/rawleaks,sourceidentityandQtprimarysources;
+freezeONCEafterpreflightwhitespace/audits, localcommit thenCONTINUEinspectorcontent/
+fullinput/parity/performance. No completion claim. Nativepresentation/leaks/latency
+remainOPEN. VM7158/55984retained userRuntime35801 andoldSway9469untouched.
+
 ## ACTIVE Inspector hover qualified in scope; presentation failures still OPEN (01:13 UTC)
 
 CONTINUE autonomously; no FINAL at checkpoints. All inspector source changes now

@@ -2289,3 +2289,12 @@ passes nine with one unchanged10s card-selection deadline failure, then passes
 ten on an unchanged-binary repeat. Both results, raw Mac leak exits and the
 initial stale-drawable rejection remain required open evidence; complete visual/input,
 presentation, leak/latency and full-client performance gates remain open.
+
+[History event-loop observation](measurements/history-event-loop-observation.md)
+retains the manual13.35s deadline failure beside identical native-loop controls.
+A bounded trace observes GUI and render events without requesting frames. The
+new native held-pointer regression and eight existing methods pass11 entries in
+both SDKs; sanitizer exits remain1 with Mac538134bytes/2772allocations and
+Linux192bytes/two allocations. Final broad analysis and real editors pass.
+Product GUI binaries and the old test body remain unchanged; global acceptance
+and the historical presentation/leak/latency observations stay open.
