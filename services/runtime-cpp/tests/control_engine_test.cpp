@@ -1073,7 +1073,7 @@ void asciiBridgeContract(Memory &memory) {
       GhosttyCellsView actual_cells{}, expected_cells{};
       checkGhostty(ghostty_grid_ref_cells(&actual_ref, &actual_cells));
       checkGhostty(ghostty_grid_ref_cells(&expected_ref, &expected_cells));
-      require(actual_cells.len == expected_cells.len && std::memcmp(actual_cells.ptr, expected_cells.ptr, actual_cells.len) == 0);
+      require(actual_cells.len == expected_cells.len && std::equal(actual_cells.ptr, actual_cells.ptr + actual_cells.len, expected_cells.ptr));
     }
   };
 
@@ -1109,6 +1109,23 @@ void asciiBridgeContract(Memory &memory) {
     std::size_t consumed = 0;
     require(ghostty_terminal_vt_write_ascii(candidate.get(), codepoints.data(), codepoints.size(), &consumed) == GHOSTTY_INVALID_VALUE && consumed == 16);
     write(reference.get(), std::string(16, 'A'));
+    compare();
+  }
+
+  constexpr std::uint32_t repeated_controls[]{'A', '\r', '\n', 0, '\t', '\r', '\n', 0x0e, 'q', 0x0f, '\b', 0x0b, 0x0c, 0x18, 0x1a, 0x7f, 'B'};
+  for (const auto prefix : {std::string_view{}, std::string_view{"\xf0\x9f"}}) {
+    write(candidate.get(), "\x1b" "c");
+    write(reference.get(), "\x1b" "c");
+    write(candidate.get(), prefix);
+    write(reference.get(), prefix);
+    std::size_t consumed = 0;
+    checkGhostty(ghostty_terminal_vt_write_ascii(candidate.get(), repeated_controls, std::size(repeated_controls), &consumed));
+    require(consumed == std::size(repeated_controls));
+    std::string raw;
+    for (const auto codepoint : repeated_controls) {
+      raw.push_back(static_cast<char>(codepoint));
+    }
+    write(reference.get(), raw);
     compare();
   }
 
