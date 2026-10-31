@@ -60,7 +60,7 @@ HistoryFooterLayout {
             visible: index < root.regions.hintCount
             enabled: root.interactive && visible
             actionable: label.action !== "none"
-            activationIdentity: label.action === "submit" || label.action === "alternate" ? (root.state.revision ?? "") + ":" + root.state.selection + ":" + root.state.enterRuns + ":" + label.action : label.action
+            activationIdentity: label.action === "submit" || label.action === "alternate" ? (root.state.revision ?? "") + ":" + root.state.selection + ":" + label.action : label.action
             onMeasurementsChanged: root.scheduleMeasurement()
             onActivated: root.actionTriggered(label.action, root.state.revision ?? "")
         }

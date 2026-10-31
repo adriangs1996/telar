@@ -2271,3 +2271,11 @@ results/footer regions and retained-release behavior remain exact. macOS and
 Linux ASAN/Release component/native evidence is recorded, and both SDKs pass the
 unchanged broad analysis and actual editor checks. Whole-window visual, complete input, leak/latency
 and comparative performance gates remain open.
+
+[History footer and inspector identity](measurements/history-action-identity.md)
+retains submit presses across enter-label changes and constant inspector actions
+across choice changes. Three negative slots become passing cases within35
+components; four live held-pointer mode changes and four existing presentation
+guards run in the ten-case native fixtures. Source-correct revision/disappearance
+cancellation remains. Scoped browse/inspector pixels remain exact, broad lint and
+actual editors pass both SDKs, and raw native leak exits remain open.

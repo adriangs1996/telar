@@ -101,6 +101,10 @@ QVariantMap historyFooterState() {
   };
 }
 
+QPoint controlCenter(const QQuickItem &item) {
+  return item.mapToScene(QPointF{item.width() / 2, item.height() / 2}).toPoint();
+}
+
 QQuickItem *hintForAction(QQuickItem &root, const QString &action) {
   for (auto *hint : visualItems(root, QStringLiteral("historyHint"))) {
     if (hint->isVisible() && hint->property("label").toMap().value(QStringLiteral("action")).toString() == action) {
@@ -1073,6 +1077,92 @@ class HistoryControlsTest final : public QObject {
     QCOMPARE(activated.size(), inspect_actions);
   }
 
+  Q_SLOT static void footerSubmissionsKeepCaptureWhenEnterBehaviorChanges() {
+    const std::array actions{QStringLiteral("submit"), QStringLiteral("alternate")};
+    for (const auto &action : actions) {
+      for (const bool enter_runs : {false, true}) {
+        QQuickWindow window;
+        QQmlEngine engine;
+        auto state = historyFooterState();
+        state.insert(QStringLiteral("revision"), QStringLiteral("18446744073709551615"));
+        state.insert(QStringLiteral("enterRuns"), enter_runs);
+        auto footer = createChrome(engine, QStringLiteral("HistoryFooter"), {
+            {QStringLiteral("state"), state},
+            {QStringLiteral("colors"), themeColors({})},
+            {QStringLiteral("pixelSize"), small_pixels},
+            {QStringLiteral("width"), wide_width},
+            {QStringLiteral("height"), footer_height},
+        });
+        footer->setParentItem(window.contentItem());
+        window.resize(wide_width, footer_height);
+        QVERIFY(showComponentWindow(window, wait_ms));
+        QTRY_VERIFY_WITH_TIMEOUT(hintForAction(*footer, action) != nullptr, wait_ms);
+        const QSignalSpy activated{footer.get(), SIGNAL(actionTriggered(QString, QString))};
+        const auto *hint = hintForAction(*footer, action);
+        QTest::mousePress(&window, Qt::LeftButton, Qt::NoModifier, controlCenter(*hint));
+        state.insert(QStringLiteral("enterRuns"), !enter_runs);
+        footer->setProperty("state", state);
+        QVERIFY(waitForSynchronizedFrame(window, wait_ms));
+        const auto *updated = hintForAction(*footer, action);
+        QCOMPARE(updated, hint);
+        QTest::mouseRelease(&window, Qt::LeftButton, Qt::NoModifier, controlCenter(*updated));
+        QCOMPARE(activated.size(), 1);
+        QCOMPARE(activated.front().front().toString(), action);
+        QCOMPARE(activated.front().back().toString(), state.value(QStringLiteral("revision")).toString());
+      }
+    }
+  }
+
+  Q_SLOT static void inspectionSubmissionsKeepCaptureWhenEnterBehaviorChanges() {
+    const std::array actions{QStringLiteral("submit"), QStringLiteral("alternate")};
+    for (const auto &action : actions) {
+      for (const bool enter_runs : {false, true}) {
+        InspectionFixture fixture;
+        fixture.state.insert(QStringLiteral("enterRuns"), enter_runs);
+        fixture.item->setProperty("browserState", fixture.state);
+        QVERIFY(showComponentWindow(fixture.window, wait_ms));
+        QTRY_VERIFY_WITH_TIMEOUT(inspectionAction(*fixture.item, action) != nullptr, wait_ms);
+        const QSignalSpy activated{fixture.item.get(), SIGNAL(actionTriggered(QString, QString))};
+        const auto *button = inspectionAction(*fixture.item, action);
+        QTest::mousePress(&fixture.window, Qt::LeftButton, Qt::NoModifier, controlCenter(*button));
+        fixture.state.insert(QStringLiteral("enterRuns"), !enter_runs);
+        fixture.item->setProperty("browserState", fixture.state);
+        QVERIFY(waitForSynchronizedFrame(fixture.window, wait_ms));
+        const auto *updated = inspectionAction(*fixture.item, action);
+        QCOMPARE(updated, button);
+        QTest::mouseRelease(&fixture.window, Qt::LeftButton, Qt::NoModifier, controlCenter(*updated));
+        QCOMPARE(activated.size(), 1);
+        QCOMPARE(activated.front().front().toString(), action);
+        QCOMPARE(activated.front().back().toString(), fixture.state.value(QStringLiteral("revision")).toString());
+      }
+    }
+  }
+
+  Q_SLOT static void inspectionSemanticActionsKeepCaptureAcrossChoiceChanges() {
+    const std::array actions{QStringLiteral("copy"), QStringLiteral("erase"), QStringLiteral("visit")};
+    for (const auto &action : actions) {
+      InspectionFixture fixture;
+      fixture.state.insert(QStringLiteral("paneOpen"), true);
+      fixture.item->setProperty("browserState", fixture.state);
+      QVERIFY(showComponentWindow(fixture.window, wait_ms));
+      QTRY_VERIFY_WITH_TIMEOUT(inspectionAction(*fixture.item, action) != nullptr, wait_ms);
+      const QSignalSpy activated{fixture.item.get(), SIGNAL(actionTriggered(QString, QString))};
+      const auto *button = inspectionAction(*fixture.item, action);
+      QTest::mousePress(&fixture.window, Qt::LeftButton, Qt::NoModifier, controlCenter(*button));
+      fixture.state.insert(QStringLiteral("revision"), QStringLiteral("78"));
+      fixture.state.insert(QStringLiteral("selection"), 1);
+      fixture.state.insert(QStringLiteral("enterRuns"), true);
+      fixture.item->setProperty("browserState", fixture.state);
+      QVERIFY(waitForSynchronizedFrame(fixture.window, wait_ms));
+      const auto *updated = inspectionAction(*fixture.item, action);
+      QCOMPARE(updated, button);
+      QTest::mouseRelease(&fixture.window, Qt::LeftButton, Qt::NoModifier, controlCenter(*updated));
+      QCOMPARE(activated.size(), 1);
+      QCOMPARE(activated.front().front().toString(), action);
+      QCOMPARE(activated.front().back().toString(), fixture.state.value(QStringLiteral("revision")).toString());
+    }
+  }
+
   Q_SLOT static void footerCancelsPressesWhenTheChoiceChanges() {
     QQuickWindow window;
     QQmlEngine engine;
@@ -1107,7 +1197,7 @@ class HistoryControlsTest final : public QObject {
     state.insert(QStringLiteral("enterRuns"), false);
     footer->setProperty("state", state);
     QTest::mouseRelease(&window, Qt::LeftButton, Qt::NoModifier, center);
-    QCOMPARE(activated.size(), 1);
+    QCOMPARE(activated.size(), 2);
   }
 
   Q_SLOT static void footerKeepsSemanticActionsAcrossSelectionRevisions() {
@@ -1218,7 +1308,7 @@ class HistoryControlsTest final : public QObject {
     }
   }
 
-  Q_SLOT static void inspectionActionsRetirePressedSelectionsAndModes() {
+  Q_SLOT static void inspectionSubmissionsRetireChoicesAndKeepBehaviorChanges() {
     InspectionFixture fixture;
     QVERIFY(showComponentWindow(fixture.window, wait_ms));
     QTRY_VERIFY_WITH_TIMEOUT(inspectionAction(*fixture.item, QStringLiteral("submit")) != nullptr, wait_ms);
@@ -1237,9 +1327,9 @@ class HistoryControlsTest final : public QObject {
     fixture.state.insert(QStringLiteral("enterRuns"), true);
     fixture.item->setProperty("browserState", fixture.state);
     QTest::mouseRelease(&fixture.window, Qt::LeftButton, Qt::NoModifier, center());
-    QCOMPARE(activated.size(), 0);
-    QTest::mouseClick(&fixture.window, Qt::LeftButton, Qt::NoModifier, center());
     QCOMPARE(activated.size(), 1);
+    QTest::mouseClick(&fixture.window, Qt::LeftButton, Qt::NoModifier, center());
+    QCOMPARE(activated.size(), 2);
     QCOMPARE(activated.front().front().toString(), QStringLiteral("submit"));
     QCOMPARE(activated.front().back().toString(), QStringLiteral("78"));
     QVERIFY(inspectionAction(*fixture.item, QStringLiteral("visit")) == nullptr);
@@ -1253,11 +1343,11 @@ class HistoryControlsTest final : public QObject {
     fixture.item->setProperty("browserState", fixture.state);
     QTest::mouseRelease(&fixture.window, Qt::LeftButton, Qt::NoModifier, visit_center);
     QTRY_VERIFY_WITH_TIMEOUT(inspectionAction(*fixture.item, QStringLiteral("visit")) == nullptr, wait_ms);
-    QCOMPARE(activated.size(), 1);
+    QCOMPARE(activated.size(), 2);
     QTRY_VERIFY_WITH_TIMEOUT(inspectionAction(*fixture.item, QStringLiteral("submit")) != nullptr, wait_ms);
     submit = inspectionAction(*fixture.item, QStringLiteral("submit"));
     QTest::mouseClick(&fixture.window, Qt::LeftButton, Qt::NoModifier, center());
-    QCOMPARE(activated.size(), 2);
+    QCOMPARE(activated.size(), 3);
     QCOMPARE(activated.back().front().toString(), QStringLiteral("submit"));
   }
 

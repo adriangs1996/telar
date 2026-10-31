@@ -4,6 +4,20 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [History footer/inspector action identity evidence](measurements/history-action-identity.md)
+corrects retained captures when enter labels change and keeps inspector Copy,
+Delete and Visit identities independent of choice. Three source-correct negative
+slots become passing checks within 35 component cases on both SDKs. A new actual
+pointer path verifies four presented mode changes against runtime output alongside
+the four unchanged unpresented-mode guards. Initial native Cocoa/Sway Release
+runs pass 10 and exit 0; native sanitizer leak exits remain recorded. Four browse/
+inspect pairs retain 21,164 footer, 567,296 result and 24,696 inspector-button pixels.
+Final explicit test-tag conversions, broad analysis and actual editors pass both
+SDKs. Native Mac ASAN ten-case exit remains 1 with 601,910 bytes/3,034 allocations;
+Linux final ASAN exits 0 but its earlier 147,982/148 composition failure is retained.
+Full modal input, inspector hover/content, config adoption, leaks,
+latency and comparative performance remain open.
+
 The [presented History filter hover evidence](measurements/history-filter-hover.md)
 extends the semantic map to all eight header actions, with direct bounded geometry
 projection in the original draw order. The retained 6,943-pixel Workspace negative

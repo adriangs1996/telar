@@ -162,7 +162,7 @@ HistoryInspectionLayout {
             pressedAlpha: root.regions.pressedAlpha ?? 1
             labelColor: action?.action === "erase" ? root.colors.red : root.colors.text
             interactive: root.interactive && action !== null
-            identity: root.browserState.revision + ":" + root.browserState.selection + ":" + root.browserState.enterRuns + ":" + (action?.action ?? "")
+            identity: action?.action === "submit" || action?.action === "alternate" ? root.browserState.revision + ":" + root.browserState.selection + ":" + action.action : (action?.action ?? "")
             onTextAdvanceChanged: root.scheduleMeasurement()
             onActivated: {
                 if (action !== null) {

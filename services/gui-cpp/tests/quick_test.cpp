@@ -150,6 +150,21 @@ QQuickItem *historyCardHint(const QQuickWindow &window, int selected, const QStr
   return nullptr;
 }
 
+QQuickItem *historyFooterHint(const QQuickWindow &window, const QString &action) {
+  auto *footer = window.findChild<QQuickItem *>(QStringLiteral("historyFooter"));
+  if (footer == nullptr) {
+    return nullptr;
+  }
+
+  for (auto *hint : test::visualItems(*footer, QStringLiteral("historyHint"))) {
+    if (hint->isVisible() && hint->property("label").toMap().value(QStringLiteral("action")).toString() == action) {
+      return hint;
+    }
+  }
+
+  return nullptr;
+}
+
 class HistoryCardWaitTrace {
 public:
   explicit HistoryCardWaitTrace(QQuickWindow &window) : window_(window) {
@@ -2518,7 +2533,15 @@ return {api_version=2, client={keybindings={
     verifyPresentedHistorySubmitMode(true, true, QStringLiteral("run-alternate"));
   }
 
-  void verifyPresentedHistorySubmitMode(bool enter_runs, bool alternate, const QString &tag) {
+  Q_SLOT void historyFooterCaptureSurvivesPresentedEnterModeChanges() {
+    for (const bool enter_runs : {false, true}) {
+      for (const bool alternate : {false, true}) {
+        verifyPresentedHistorySubmitMode(enter_runs, alternate, QStringLiteral("held-%1-%2").arg(static_cast<int>(enter_runs)).arg(static_cast<int>(alternate)), true);
+      }
+    }
+  }
+
+  void verifyPresentedHistorySubmitMode(bool enter_runs, bool alternate, const QString &tag, bool retain_capture = false) {
     const QTemporaryDir directory;
     QVERIFY(directory.isValid());
     const auto initial_path = directory.filePath(QStringLiteral("initial.lua"));
@@ -2546,27 +2569,54 @@ return {api_version=2, client={keybindings={
     client_->execute(Application::Action::history);
     client_->searchHistory(QStringLiteral("GUI_HISTORY_RENDER_%s_%1").arg(tag));
     QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 1, runtime_wait_ms);
-    window_->hide();
-    QTRY_VERIFY_WITH_TIMEOUT(!window_->isExposed(), runtime_wait_ms);
-    QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
-    window_->beforeSynchronizing();
-    window_->frameSwapped();
-    QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+    const auto action = alternate ? QStringLiteral("alternate") : QStringLiteral("submit");
+    QPointer<QQuickItem> pressed;
+    bool held = false;
+    QPoint position;
+    const auto release = qScopeGuard([&] {
+      if (held) {
+        QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, position);
+      }
+    });
+    if (retain_capture) {
+      QVERIFY(waitForHistoryPresentation());
+      pressed = historyFooterHint(*window_, action);
+      QVERIFY(pressed != nullptr);
+      position = pressed->mapToScene(QPointF{pressed->width() / 2, pressed->height() / 2}).toPoint();
+      QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, position);
+      held = true;
+    } else {
+      window_->hide();
+      QTRY_VERIFY_WITH_TIMEOUT(!window_->isExposed(), runtime_wait_ms);
+      QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+      window_->beforeSynchronizing();
+      window_->frameSwapped();
+      QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+    }
     const auto previous_revision = client_->historyState().value(QStringLiteral("revision")).toString();
     client_->loadConfiguration(final_path, {}, {});
     QTRY_COMPARE_WITH_TIMEOUT(client_->configuration().history.enter_runs, enter_runs, runtime_wait_ms);
     QCOMPARE(client_->historyState().value(QStringLiteral("enterRuns")).toBool(), enter_runs);
     auto *footer = window_->findChild<QQuickItem *>(QStringLiteral("historyFooter"));
     QVERIFY(footer != nullptr);
-    const auto action = alternate ? QStringLiteral("alternate") : QStringLiteral("submit");
     const auto revision = client_->historyState().value(QStringLiteral("revision")).toString();
     QCOMPARE(revision, previous_revision);
-    QVERIFY(QMetaObject::invokeMethod(footer, "actionTriggered", Q_ARG(QString, action), Q_ARG(QString, revision)));
-    QCOMPARE(client_->dialog(), QStringLiteral("history"));
-    window_->beforeSynchronizing();
-    window_->frameSwapped();
-    QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
-    QVERIFY(QMetaObject::invokeMethod(footer, "actionTriggered", Q_ARG(QString, action), Q_ARG(QString, revision)));
+    if (retain_capture) {
+      QVERIFY(waitForHistoryPresentation());
+      auto *updated = historyFooterHint(*window_, action);
+      QVERIFY(pressed != nullptr);
+      QCOMPARE(updated, pressed.data());
+      position = updated->mapToScene(QPointF{updated->width() / 2, updated->height() / 2}).toPoint();
+      QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, position);
+      held = false;
+    } else {
+      QVERIFY(QMetaObject::invokeMethod(footer, "actionTriggered", Q_ARG(QString, action), Q_ARG(QString, revision)));
+      QCOMPARE(client_->dialog(), QStringLiteral("history"));
+      window_->beforeSynchronizing();
+      window_->frameSwapped();
+      QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+      QVERIFY(QMetaObject::invokeMethod(footer, "actionTriggered", Q_ARG(QString, action), Q_ARG(QString, revision)));
+    }
     QCOMPARE(client_->dialog(), QString{});
     QVERIFY(test::showWindow(*window_, runtime_wait_ms));
     const auto *pane = firstPane();

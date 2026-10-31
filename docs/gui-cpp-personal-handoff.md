@@ -1,5 +1,179 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## Final identity format revision preserved evidence; CONTINUE inspector hover (00:35 UTC)
+
+Precommitcaughtoneverifiertrailing-space. PreservedWHOLEfirstfrozenarchive+manifest
+byteexactignoredatoutdeps/history-action-identity-frozen-before-format-1. Newunpublished
+revisionremovesONLYthatonewhitespace fromverifier; all{} previous experimental retained
+sourcesbyteidentical, onlyprogramsourcechangedisverify_identity.py. Normalizedarchive
+passedcurrent-source/offline; authority/executable/symlinkauditPASS. Finalcounts
+297artifacts,2461sources,5410790B, metadataformat-revision-1.json+
+final-archive-audit-2.json. DoNOTrefreshagain. Earlier295/2461/5410024isfirstformat
+snapshot(retained); CURRENTcountsabove. Stageownedfilesagain, diff--checkthenlocal
+commit andCONTINUEInspectorHovernegative5709/5992alreadyvalid. Nofinalresponse.
+
+## Action identity archive FROZEN; commit then CONTINUE inspector hover (00:33 UTC)
+
+Identity checkpoint FINAL/FROZEN: 295artifacts,2461sourceidentities,
+5410024bytes. Offline/current-source/exact-source/authority/executable audits
+PASS. Never refresh archive_identity or edit its frozen report/verifier/archive.
+Earlier filter8b0e56f2e (659/2457/9182981B), footer4947a6c63 andMotionalsoFROZEN.
+HandoffcurrentHEAD8b beforelocalcommit; stageownedtracked+identityreport/manifest/
+archive ONLY, excludeuserpersonal-frame-delivery.md andpycache. Then CONTINUE,
+noFINAL/checkpointstop. Spanishupdates<=60sec; analysisSHORT. Nootherworktrees,
+agents,publish,merge. GoalAPIblockedold/manualcontinues. VM7158/55984ownedretained.
+
+Currentproduct2QMLidentitybindingsfixed andqualified. Finalallbuildsactual0 Mac
+Release4,ASAN4,LinuxASAN4,Release2. ExplicitboolcastsfinalQuicksource; bothSDKsfinal
+broadlint0, actualNvimclean(hosteditor1both+finalQuick1, guesteditor1both). Mac35
+components0Release/8ASAN(leaks216436/1025), Linux35both0. FinalnativeMac10Release2
+exit0/ASAN2exit1leaks601910/3034. EarlierMacASAN1leaks556421/2782 retained. FinalLinux
+10Release2andASAN2exit0, EARLIERASAN1exit1Qtcompose147982/148 remainsREQUIRED byverifier
+withbareQtcontrolsameXKBentry/BuildID. Repeat0doesNOTcloseleakgate. AllhostCarbon/
+Cocoaboards preflight/cleanup0,count954same. OldFooter10050ms deadline remainsOPEN.
+NoaccessUB/errors,suppressions,profilechanges,timeoutrelaxation. App.cppguardSHA
+unchangedfromfrozenFilter; 4unpresentedmodeguardcasespreserved. Newheld-pointermode
+path4combosactualruntimepaste/runpassonbothplatforms. No productCPPchanges.
+Source2bindings+2testCpp current. GUI/componentbinariesunchangedafterboolcasts,
+QuickbinarieschangedandRETESTEDnative2. Final-product.jsonhost+guestrecordexactfinal
+source/binaries; Before-arg-casts-product andinterimcomparisonretainedhistorically.
+
+FournativeCocoapairsbefore/fixed-browse all21164hints+567296resultsEXACT, before/
+fixed-inspect fourbuttons24696EXACT. Nofull-window/theme/platform/perfclaim. Linux
+bundle56members28376B SHA0683f05c504f2f27d0253632fd52164ee35f8d0907a1cb6cb36f4517b2471f24
+consumed/downloadverified. Newarchivepreflight1failedmissingOriginalname_prompt.zig
+sourceidentity; addeditbeforefreeze, preflight2passed2461. Finalarchivepassedboth
+verifiersandsecurity/sourceaudit. Noactivebuild/lint/editor/GUItestsnow.
+
+NEXT Inspector semanticHovernegative ALREADYVALID, outsideidentityfrozenarchive:
+local/history-inspector-hover-negative-1 ACTUAL0, Copy5709/5992different; Paste6496,
+Run5264,Delete6944EXACT. OriginalCopyrect[661.5,532,53.5,28]. Helper
+local/history_inspector_hover_capture.py clonesfullprivateCarbon/Cocoaguard, modes
+initial-inspector/inspector-rehover, pointerbeforemodal[685,544]→[685,545], optional
+fresh[686,545], --inspect. NoafterMotioninnegative. comparator
+compare_history_inspection_actions.py originalAXrawrects. Existingidentitybefore/
+fixed-inspect pointerAWAYall24696EXACT provesnegativepointercausal. Aftercommitcopy
+currentGUItooutdeps/history-inspector-hover-before-1 + binary.jsonnewHEAD (GUIhash
+sameasnegative), thenimplement. NOInspectorHover producteditsyet.
+
+NeedreadLayout/presentationbeforecoding. HistoryInspector.qml FormButton currently
+localpointerhover; root.actions.lengthRepeaterretains5actions. Directregistration
+newInspector QPointer/Layoutprojection, no extra treewalk/perframeQVariant. Original
+draworderchips→rows/cards→inspect→search→footer, appendInspectorBEFOREFooterAFTERcards.
+Namespace0forInspector distinctfromFooter5/Card6. NeedtypedInspectoridentity with
+submit/alternatechoice+revision, copy/erase/visitconstant (sameasnowcorrectactivation),
+differentvarianttypefromFooter/Card/row/filtertorespectnamespace. Originalinspect
+renderbuttons5; visitpresentONLYpaneopen; disabledremainhoverable iforiginalregisters.
+LayoutcurrentlycachesQVariantlayout only, prepareButtons rebuildsQVariantList from
+HistoryInspectionGeometry.buttons(spanadvances). CachephysicalRects whenpreparing,
+bounded5targets, typedchoicefrominputaddstatefields/guardinterop. InspectLayout.hpp
+hasNOstateactionenumyet. presentation/history_inspection_geometry.hpp hasstatic
+constantsFormButtonStyle andbuttons(spanwidths,chrome), widthfitbreaklikeOriginal.
+FormButton.qml isSHARED; addoptionalpresentedHover withlocalfallback, onlywireInspector.
+NeedOriginalsourceoracle mixed22targets/namespace0 collisions/submissionVsconstant,
+componentprojectionbounds/maxu64/hidden/disabled/span/narrow, causalnegative→fixed
++freshmotion, row/card/footer/filterregressions, SDKASAN/Release/lint/actualeditors.
+Keepallglobalparity/visual/input/inspectorconfig/leaks/latency/fullclientperfOPEN.
+
+
+## ACTIVE action identities; final bool-cast validation pending (00:23 UTC)
+
+Continue without FINAL/checkpoint stopping. HEAD8b0e56f2e commits FILTER checkpoint:
+659artifacts2457sources9182981bytes, offline/current/auditsPASSED before next edits.
+Filter archive/report/verifier nowFROZEN; never refresh; historicalofflinevalid,
+current-sourcecheckexpectedfail after current edits. Footer/MotionolderalsoFROZEN.
+Preserveuntrackedpersonal-frame-delivery.md. Spanishupdates<=60s(aim40), NOlengthy
+analysis. Workonlyhere, noagents/otherworktrees/publish/merge. GoalAPIblockedold,
+manualworkcontinues. VM7158/55984 retained. UserRuntime35801untouched.
+
+CURRENT PRODUCT CHANGES ONLY2QMLbindings: Footer.qml submit/alternate activationID
+removesenterRuns, keepschoice(revision+selection)+action. Inspector.qml identity
+haschoiceONLYfor2submits, otherCopy/erase/visitconstant. NoCPPproduct changes.
+OriginalHistoryModal.hintAction900 andinspectButtons1000 haveexacttheseActionpayloads.
+OriginalGuiAdapter1143 routeschoiceguardedsubmits; copy/erase/visitsemantic. No
+applicationguard changed: Application::usePresentedHistory stillrejectsnonpresented
+mode. App.cpphashmatchesfrozenFiltermap and isrecordedfinal-product.json. Original
+configadoption/fullinputremainopen; do NOTremoveguardwithoutseparatequalification.
+
+Tests/history_controls_test.cpp addscontrolCenter+3meaningfulslots (primary/alternate
+false→true andtrue→false forFooter+Inspector; Copy/erase/visit acrosschoice/rev/mode).
+Negativeactualproduct3slotsallFAIL0vs1, 2PASS3FAILexit3 atlocal/history-action-identity-
+negative-1. Twoearlierisolatednegativeprobes2PASS1FAIL1 retainedfooter-/inspection-
+activation-negative-1, copiedsourceandUNCHANGEDstaticlibs. No producteditsinthose.
+Oldtestexpectationscorrected: Footerchoice-rev0stillrequired, finalmodeflipnowevent2;
+inspectoroldSelectionsAndModes renamedinspectionSubmissionsRetireChoicesAndKeepBehaviorChanges,
+modeeventallowedandlatercounts+1, selection/revision0andvisitdisappearretirementkept.
+35componentsPASSMacReleaseexit0, MacASANexit8/leaks216436bytes1025alloc; LinuxASAN0
+andRelease0. Productonlybindingsunchangedsince35passes. NoaccessUB/suppressions.
+
+QuickTest addshelperhistoryFooterHint andoneQ_SLOT
+historyFooterCaptureSurvivesPresentedEnterModeChanges. Extends existing
+verifyPresentedHistorySubmitMode(optional4thboolretain_capture), retainsallfourold
+unseen-mode guards. NewpathholdsactualmousewhileloadConfiguration toggles, waitsreal
+HistoryPresentation, releasesonretaineditem, verifiesruntimepastevsrunin4combos.
+Nativefixture8slots+initcleanup=10PASS onMacRelease1exit0, MacASAN1exit1/leaks556421/
+2782, LinuxRelease1exit0, LinuxASAN1exit1/Qtcompose147982/148. Privatecleanup0/count954
+samehost; SwayDBus/runtime/displaycleanup0guest (probe_cleanup1consistentwithLSAN).
+CurrentXKBBuildID425ccf47e8f39e384a49b1ac7296cec485736185 andxkb_compose_state_new
+matchpreviousbareQtcontrols; continuity.jsonstorespaths/lines, noSDKchange. KeepgateOPEN.
+NewQuickhelperfirstcompilefailedconstfooterpointer vs mutablevisualItems; fixedall
+build3SDKsactual0. Builds/testrawfailuresretained; notpolicyweakened.
+
+NativeVisual4pairs BEFORE(oldGUI0f5962ad... base8b) vsFIXEDagainstactualZigGUI: before/
+fixed-browse1 each21164footerpixelsEXACT and567296resultsEXACT; before/fixed-inspect1
+fourOriginalbuttonsPaste/Run/Copy/Delete24696pixelsEXACT. NoGoPaneinthisfixture;
+componentscovervisit. HelpersguardCocoa+Carbonnamedboards/preflight/generalmetadata;
+sourceactorsallclosed. Comparatorcompare_history_inspection_actions.py originalAX
+bounds/rawpixels/noalign/mask. Reportsnewmeasurements/history-action-identity.md DRAFT.
+
+LASTISSUE: finalLinuxbroadlint Quick1 FAIL2implicitbool→int atQString.arg innewtest
+fixturetag. MacQuicklint1passed(Qt6.12genericAPI), Linux6.8strictcaughtcasts. Fixed
+source .arg(static_cast<int>(enter_runs)).arg(static_cast<int>(alternate)). Testdata
+stringsunchanged. Newbuild4ACTIVE: MacReleaseexec5179(regeneratingQt), MacASANexec67314
+(logfinishedlinkbutNEEDactualwait), LinuxASANexec4825. NOCPP/QMLeditswhilebuildactive.
+Afterbuild4actuals checknewQuickbinarySHAsagainstnative1receipts; ifidenticalno need
+rerunnative1; ifdifferent rerunfinal10nativecaseswithnewlabelnative2/ASAN2, update
+verifier/reporttoactualfinalnumbers/source. GUIbinarylikelyunchanged; verifycaptures
+stillmatch. MacQuicklint2ACTIVEexec57533, sourcefinalcasts. NootherhostGUI/editor.
+Hosteditor1bothmodifiedCppDELIVEREDclean beforecasts; recheckQuickaftercast(final
+label2orfinal1) withoutcollidingNvim. Hostcomponentlint1CLEAN0 (unchangedsource).
+
+Linuxpipeline1exec43832 FINISHEDFAIL (2Quickboolcasts), beforeeditorstep. Componentlint
+history-action-identity-history_controls_test-lint-1 CLEAN0, Quick_test-lint1FAIL2.
+AfterASANbuild4 finish, runReleasebuild2 -j2 (neededfinalQuickcast), nativefinalifhash
+changed, Quicklint2 -j1, actualNeovim2cpp withcorrectASANcanonicalDB. Helpersalready
+existguestlocal/check_action_identity_linux_editors.py (outputeditor1) andrunner
+outdeps/run_history_identity_linux.py (8slots;stock90sprocessdeadlineunchanged;3old
+regressions+newheld+4guard modes). run_history_actions_linux.pyold3slotsUNCHANGED.
+NewrunnerSHA24a76561c7fe5e3c1b62c3b04e045bdbcac06e6f1a8ccc072ce1f30c067f5cb0.
+GuestsourceDELTA62product+controls,63Quick,64constfix,65argcasts alltar--touch andonly
+idlebuildsync. Waitactualbeforefurthermutations. CanonicaloutdefaultDB+4contexts
+refreshedfromASAN3 infailedpipeline1; repeatafterASAN4forfinalMOCpaths.
+
+FINAL PRODUCT RECEIPT local/history-action-identity-final-product.json currently
+PRECASTQuick source/binary; copiedunchangedtohistory-action-identity-before-arg-casts-
+product.json. UpdateFINALafterbuild4 andpreserveoldcopy. RecordsOriginalsourcehashes,
+unchangedAppguardhashand6hostbinaries. New3slotbodiesunchangednegative→fixed stored
+history-action-identity-selected-slots.json. All35componentbinariesunchangedbyQuick
+casts. Source2bindingsstable. GUIbeforebaselineoutdeps/history-action-identity-before-1
+binary.jsonsourceHead8b. No fullwindow/performanceclaim.
+
+Newmeasurements/history-action-identity/{archive_identity.py,verify_identity.py}
+DRAFTS PREPARED NOT RUN, no manifestyet. ArchiverinheritsFILTERsources andaddsreport+
+2scripts (~2460sources); collectsactionprefix+twoisolatednegativeprefixes, helpers,
+priorFooter10050ms failure. NeedsVMfinaltarnewnamehistory-action-identity-results-
+final.tar.gz. Verifierdraftchecksfirstnative1andQuicklint1; MUSTadaptfinalcastreceipts
+(ifchangedbinaryreruns) andLinuxQuicklint2 path. Mac35leaks216436/1025; Macnative1
+556421/2782; guestnative1Qt147982/148. NeedcopyoldbareQtcontrol2log/sourceifclaim
+continuityoffline (currentlyonlyJSONpaths), preserveoldfootertimeout. FinalLinux
+pipeline collectsafeextensions/ownedprefixes/noELF/keys; downloadhash+tarverify.
+Thenfinalreport/PARITY/README; draftignoredarchivepreflightasbefore, thenFREEZEonce,
+verifyoffline/current+authority/sourceaudit, localcommitONLYowned. NoFINAL; CONTINUE
+inspectorsemanticHover (FormButton stilllocalMouseArea) next, originaldraworder
+chips→rows/cards→inspect→search→footer; inspectornamespace0 vsfooter5/card6 and
+constvschoiceidentities. OtherglobalgatesOPEN. Checkactualpendingcellsfirst.
+
+
 ## Filter hover frozen; commit then CONTINUE activation identities (00:04 UTC)
 
 New history-filter-hover evidence is FINAL/FROZEN:659artifacts2457sourceidentities,
