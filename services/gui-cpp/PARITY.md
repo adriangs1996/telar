@@ -4,6 +4,14 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [History search-icon investigation](measurements/history-search-icon.md)
+reproduces five upper-edge pixels and observes actual atlas margins and GPU
+UV interpolants. Transparent padding with stable sampling matches five History
+scenes but regresses the independent seven-geometry control9→15; adding original
+projection leaves15, and removing the bias gives18. All candidates are rejected.
+No production renderer change or timing claim follows. The native visual gate
+remains open.
+
 The [modal outline alpha checkpoint](measurements/modal-alpha.md) corrects
 QColor quantization of the original float32 0.09 outline. Both Vesper scopes
 reproduce 32 corner-pixel differences; item-opacity controls and the final native

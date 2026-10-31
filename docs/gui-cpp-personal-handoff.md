@@ -1,5 +1,145 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## ACTIVE Icon investigation FROZEN; Linux flick call trace running (06:16 UTC)
+
+CONTINUE autonomously untilfullgoal, NOcheckpointfinal. Workonlyhere/noagents/
+worktrees/publish/merge. Spanishupdates<=60s. Userpersonal-frame-delivery.md NEVER
+read/touch/stage. HEADf3b2f323c, productionUNCHANGED. ExistingAlpha/Caption/older
+archivesFROZENunchanged. Iconnewarchive measurements/history-search-icon FINAL/FROZEN
+1718artifacts2500sources9617760B, offline+current-source+pixels+source/executable
+exclusions PASS. NEVERrefreshroot/manifest/verifier/report afterownedcommit(next).
+No product changes accepted. Allnative/GPUdiag MacARM64Qt6.12MetalDPR2 ONLY.
+Variant3 paddedstablecorrects5Historyscenes butstrict7nativeUV9→15, variant4adds
+Originalprojectionalso15; variant5originalprojection+standard18andHistory5still.
+ALLREJECTED, noCPUtiming. CommonatlasA160/8/232/0 B3114/8/220/0 (tradeserrors).
+ActualGPUUVdiagnosticsOriginaltop v0-1ULP (relative -3.814697265625e-6texel) vsQt
+exactv0, confirmed5xpositions. Actualatlasinterior0/margins29diff. Diagnostics NOT
+productionappearanceacceptance. Crashes/externalWMtimeouts/legacyESSLfailure retained.
+Privatebench48casespreparedunrun. NewPARITYparagraphrecordsrejection/globalopen.
+
+NEXT Linux pendingdelegate prerequisite: existingunmodifiedfilteredtest callsflick
+thenrequiresdeferred.incubatingObjectCount()>0/10s, failsQt6.8.2. Earlier6diagnostics
+allfail (seeoldernotes), noproductionassertionrelaxed. Newownedguestcallstackobserver
+LD_PRELOADONLYtestprobe (clone driver), wrapsQtpublic/privateexportsflick,cancelFlick,
+flickEnded,setContentY,positionViewAtIndex. Bounded256callstacks24frames, nottiming.
+Ignoredlocal/history_incubation_call_trace.cpp transferredvia tar--touch, helper
+prepare_history_incubation_call_trace.py ACTIVEhostexec85425 (actualoutcomespending).
+Guestrootout-dependencies/history-incubation-call-trace-1; compile+invocation+driver
+log +filtered-1/probe.log/result.json retainedthere. Existing realQEventLoop diagnostic
+binary used ONLYforobservation withunchangedpendingpredicate/10s, runtimedebugsameSHA.
+NoVMotherheavyjobs, olduserSway9469untouched; ownVM7158/SSH55984. Needreadactualexit,
+checkHISTORY_FLICK_CALL hooksdidinterpose, correlateQtdebug/callstacksbeforefixguess.
+GoalAPIoldblockednoresumeAPI; manuallycontinue. Commitonlyownednewarchive/PARITY/
+report/handoff withPythoncheck=True gitdiffcached--check gate; neverstageuserfile.
+
+## ACTIVE Both padding candidates REJECTED; GPU UV diagnostic (06:10 UTC)
+
+ContinueNOcheckpointfinal. HEADf3b2f323c productionUNCHANGED. Workhere/noagents/
+worktrees/publish/merge. Userpersonal-frame-delivery.md NEVERread/touch/stage.
+Spanishupdates<=60s. Allfrozenarchivesunchanged. VM7158/55984IDLE.
+Candidate3stablepadding exactallHistorycontrols: globalTokyo1471968/cwd1471968/
+Vesper2258048/Shade2086368/Catppuccin2827968. Candidate4addsOriginalprojection
+Tokyo1471968exact. BUT strict7original-UVcurrentliboracle baseline9, BOTH3/4=15:
+questionindices3/5/6errors0/3/6→6/9/0. BothREJECTEDforproduction! NoCPUtimingrun.
+Common48phaseA160/8/232/0 B3=114/8/220/0, errorsmoveratherthancorrectall.
+Allbuilds/captures/probesactualexited0 exceptalreadyrecordedfailures. Prior6:07
+"use simpler3"isSUPERSEDED. NoactiveGUInow.
+
+NEXT diagnostic OBSERVESGPUinterpolatedUVlow24bitsviaRGB, NOvisualacceptanceclaim.
+Ignoredlocal/history_search_icon_uv_observer.m swizzlesMTL4LibraryDescriptor.setSource
+ONLYifquad_fragment+quad_vertex match, insertsencodingnearestbranch, vertexunchanged.
+helperhistory_search_icon_uv_capture.py clonesboundedownedcoordinatecapture andadds
+observerinstallationONLYOriginal; envTELAR_ICON_UV_CHANNEL{y/x} propagatedexplicitly.
+Qt isolatedfragmentpack+currentlibONLYalpha_mask_materialobjectreplaced, production
+cache/geometry/vertexunchanged. Buildfirstuv-x-1FAILEDlegacyESSLfloat→uint unsupported,
+rawbake.log retained. Revisedbuild_history_search_icon_uv_2.py usesGLSL300es/330
+HLSL50/MSL12 DIAGNOSTICONLY (notprodcompatibility), prefixesuv-{x,y}-2. ACTIVEexec39990.
+Waitactualbuildexit; thenTELAR_ICON_UV_CHANNEL=y python3 local/run_history_search_icon_uv_y_2.py.
+Runxseparatelynewlabelaftery. OriginalquadUVfromsamecaptureallowsrecoverfloat24bits
+highbytecandidate nearactualUV; recordactualnearbyvaluesbeforefixguesses. Native
+focus/freshness/dims/privateboardsremainrequired. Noaddedtimeout/frameforcing.
+Preparedbenches48casesNOTRUN; rejectold3/4no needtiming. FullPARITYcontinues.
+
+## ACTIVE Search-icon stable-padding native PASS, broader controls pending (06:07 UTC)
+
+Continue NOcheckpointfinal. HEADf3b2f323c. Production unchanged. NewtrackedhandOff
+modified +untrackedownedreporthistory-search-icon.md. Userpersonal-frame-delivery.md
+NEVERtouch/read/stage. Oldfrozenarchivesunchanged. Noagents/worktrees/publish/merge.
+Nativecandidatecorner-padding-2 fixedSIGSEGV(updateSampledImage uniformDataNULL;
+crash+assemblyretained); itsstandardnearest still5samepixel/colors. Candidate3 same
+paddingbutPRODUCTIONstable-nearestshader: COMPLETE1471968narrowTokyoGLOBAL0!
+Candidate4 same3+Originalprojection also0, so useSIMPLER3forfurtherqualification.
+Candidate3cwdscope1471968also0; Vesper1.5wide2258048also0. Shade/Catppuccincontrols
+ACTIVErun_history_icon_corner_padding_controls_3.py exec20276, waitactualexit.
+Noimage-masks/alignment/freshness/assertionrelaxation. BoundedexternalAeroSpacetimeout
+loggingonlyharnesschange. Candidate1/-2externaltimeouts andcandidate1SIGSEGVretained.
+No product adoption/performance claim. Next compareallcompletedcontrolmodalregions.
+
+Privatevariantroot out-dependencies/history-icon-corner-padding-3 (samestandard20B
+vertexlayout lastlane nowcorner tag; shaderUVinset1texel andexistingstable bias;
+onepaddedAlpha8 mask/cachemethodtemplatekeybit58 SAMEowner/classlayout). Uniform
+atlas_texelwritteninupdateUniformData now commits/checkstexturehandleandextent.
+20pxmagnifier+13/30/32question/folder/magnifier total48CPUcases prepared A/Bprobe
+out-dependencies/history-icon-padding-bench-3 (buildactual0). PositiondigestONLYx/y,
+intentionalUV/cornerexcluded. pair_history_icon_padding_3.py LABEL50005007 AFTERall
+nativecontrols/probes, noheavyworkwhiletiming. Target>=6/7wins,no0–1wincontrols.
+
+SevenstrictnativeoriginalUVprobe rebuiltCURRENTlibs A/B atoutdeps/history-icon-padding-
+native-3(actualbuild0), run helperrun_history_icon_padding_native_3.py AFTERcurrent
+nativecontrols (DON'Tfightfocus). argsdirectoryphase0(correctedBEFORErun). Wrapper
+focused_history_icon_padding_native_3.py clonedexistingqualifiedfocusedactor. Original
+UVoracleunchanged, -ffp-contract=off preserved, don'trelaxexactrectassertions. Common
+48case4phaseprobe buildACTIVEexec29097 inoutdeps/history-icon-padding-common-3.
+Comparehelpercompare_chrome_bounds.py usesproductionMetalunchanged+actualQtatlas;
+commonatlasoracleLIMITEDscope, independentlypackednativeobservationsrequired.
+AllCPUbenchNOTRUN. Mustrejectifpixels/perffail; don'tinventplacementexception.
+VM7158/SSH55984IDLE. GlobalgatesstillOPEN. GoalAPIoldblockednoresume, manuallycontinue.
+
+## ACTIVE Search-icon margin investigation (06:03 UTC)
+
+CONTINUE autonomously, no checkpoint final. HEAD f3b2f323c, prior Caption61ef6f53b
+and Alpha archives FINAL/FROZEN, never refresh. Production clean. Owned untracked
+report measurements/history-search-icon.md editable. Unrelated personal-frame-delivery.md
+NEVER read/touch/stage. Workonlyhere/noagents/worktrees/publish/merge. Spanish updates
+<=60s. VM7158/SSH55984 idle; existing native/ASAN/physical/performance gates OPEN.
+
+Fresh current Alpha baseline reproduces5 EXTRA UPPER-edge icon pixels x102..106,y999,
+Tokyo-night .75/740x620pt/DPR2, fullmodal1471968. Original+settled Qt glyph geometry
+EXACT [97.70732116699219,999.5,16.585365295410156,17]. Standard sampler and original
+projection diagnostic BOTH identical5, rejected. ObservedCPU 1ULP clip discrepancy
+NOT proven GPU cause. Strong atlas observation: actual Original R8 glyph+margin
+42x43 has zero topmargin; actual QtBGRA readback alpha interiorDIFF0/marginsDIFF29,
+Qt topmargin duplicates ink. Paired native observation still5. See ignoredlocal
+history-search-icon-coordinate-appearance-global-tokyo-narrow-both-atlas-1.
+
+PRIVATE candidate out-dependencies/history-icon-corner-padding-1 compiled exit0,
+NOproduct edits. Cache methodtemplate padding (same owner/layout, keybit58), one
+paddedAlpha8 image/accountrealbytes; icon20bytevertex lastlane corner tag, GPUUV
+inset1texel viauniform atlas_texel. Bothshaderblends/resourcescompiled. Prototype
+rhiTexture dereference unguarded, must review ifqualifies. Native attempts labels
+corner-padding-1 and-2 FAILED AeroSpace list-windows5s timeout before Qtimage; logs
+retained, boards cleanup0/generalcountunchanged. NOT image outcomes.
+NOW native actor run_history_icon_corner_padding_bounded.py ACTIVE exec74424;
+label corner-padding-bounded-1. Wrapper catches/logs ONLY externalWM TimeoutExpired
+inside SAME45s overallloop; freshness/focus/dims/boards unchanged. Do NOT duplicate.
+Waitactualexit then compare with local/compare_history_appearance.py usingPillowvenv.
+
+Prepared pairedbench binaries (NOT RUN) out-dependencies/history-icon-padding-bench-1
+A/bin/probe baseline vsB/bin/probe candidate, geometrydigest POSITIONS ONLY explicitly
+excludes intentionalUV/cornerchanges. 24cases old13/30/32px ×cold/cached/content/repaint.
+Need20pxmagnifier target added ifpixelsPASS. Independentnative+oldphase controls FIRST,
+then7alternatedpairs noheavywork. Perf skill target>=6/7wins, rejectconsistent0–1wins
+unlessprovennormalizedassemblyplacement, noexceptioninvention. Oldpadding variants
+already rejected fornativepixel/CPUregressions (glyph-atlas-margins/glyph-uv-bounds).
+Continue fullPARITY regardless checkpoint. No goalresumeAPI, manualcontinuation.
+
+UPDATE06:03: bounded1 actualexit1 QtSIGSEGV. Crashraw+assembly local/history-icon-
+corner-padding-crash-1.json /-assembly-1.txt showupdateSampledImage+204 nulluniformData()
+NOT nullrhiTexture (firstguess). New PRIVATEcorner-padding-2 movesatlasuniformwriteinto
+updateUniformData (validbuffer), commits/checkstexture+extentthere. Buildactual0.
+Native bounded2 NOWACTIVE (recoverps/session), unchanged45sactor/guards. Nootherjobs.
+Goalgetconfirmsoldblocked, noresumeAPI. Needwaitactualexitbeforepixelcomparison.
+
 ## ACTIVE Alpha FINAL/FROZEN; continue search-icon mismatch (05:18 UTC)
 
 Continue autonomously, NOcheckpointfinal. Workonlyhere/noagents/worktrees/publish/merge.
