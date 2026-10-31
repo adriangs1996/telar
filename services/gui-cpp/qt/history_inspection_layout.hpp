@@ -3,6 +3,8 @@
 #include "core/geometry.hpp"
 #include "core/metrics.hpp"
 #include "input/wheel_accumulator.hpp"
+#include "history/choice.hpp"
+#include "input/history_hover.hpp"
 #include "presentation/history_inspection.hpp"
 #include "presentation/history_inspection_geometry.hpp"
 #include <QQuickItem>
@@ -12,7 +14,10 @@
 #include <QVariantMap>
 #include <QtCore/qcontainerfwd.h>
 #include <QtQml/qqmlregistration.h>
+#include <array>
+#include <cstddef>
 #include <cstdint>
+#include <span>
 
 namespace telar::gui::qt {
 
@@ -33,6 +38,7 @@ public:
   [[nodiscard]] QVariantMap layout() const;
   [[nodiscard]] int scroll() const;
   void setScroll(int scroll);
+  [[nodiscard]] std::size_t hoverTargets(std::uint64_t generation, std::span<HistoryHoverTarget> destination) const;
 
 signals:
   void inputChanged();
@@ -53,11 +59,15 @@ private:
   [[nodiscard]] ChromeMetrics metrics(qreal ratio) const;
   [[nodiscard]] QVariantMap projectLine(const HistoryInspectionLine &line, const HistoryInspectionGeometry &geometry, std::uint16_t index) const;
   [[nodiscard]] QVariantMap prepareContent(const HistoryInspectionGeometry &geometry);
-  [[nodiscard]] QVariantList prepareButtons(const HistoryInspectionGeometry &geometry, ChromeMetrics chrome) const;
+  [[nodiscard]] QVariantList prepareButtons(const HistoryInspectionGeometry &geometry, ChromeMetrics chrome);
 
   QVariantMap input_;
   QVariantList advances_;
   QVariantMap layout_;
+  std::array<Rect, HistoryInspectionGeometry::maximum_actions> button_bounds_{};
+  HistoryChoice choice_;
+  bool pane_open_ = false;
+  bool ready_ = false;
   qreal density_ = 1;
   int scroll_ = 0;
   WheelAccumulator wheel_;

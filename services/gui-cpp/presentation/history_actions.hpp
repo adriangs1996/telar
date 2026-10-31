@@ -18,6 +18,16 @@ enum class HistoryCardAction : std::uint8_t {
   visit,
 };
 
+enum class HistoryInspectionAction : std::uint8_t {
+  submit,
+  alternate,
+  copy,
+  erase,
+  visit,
+};
+
+inline constexpr std::size_t history_inspection_action_count = 5;
+
 struct HistoryActionLabel {
   std::string_view key;
   std::string_view word;

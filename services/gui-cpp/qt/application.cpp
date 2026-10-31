@@ -2,6 +2,7 @@
 #include "input/history_hover.hpp"
 #include "history_footer_layout.hpp"
 #include "history_filters_layout.hpp"
+#include "history_inspection_layout.hpp"
 #include "application/dependencies.hpp"
 #include "application/pane_layout.hpp"
 #include "application/records.hpp"
@@ -453,18 +454,16 @@ void Application::prepareFrame(PresentedFrame &frame) {
   frame = {};
   frame.machine_view = machine_view_revision_;
   frame.preparation_ns = platform::AwakeClock::nowNanoseconds();
-  if (window_ != nullptr) {
-    auto *images = WindowImages::findWindow(*window_);
-    if (images != nullptr && !images->empty()) {
-      images->beginCatalogSnapshot();
-      for (const auto &pane : session().panes()) {
-        images->observeCatalog(pane->graphics);
-      }
-    }
-  }
-
   if (window_ == nullptr) {
     return;
+  }
+
+  auto *images = WindowImages::findWindow(*window_);
+  if (images != nullptr && !images->empty()) {
+    images->beginCatalogSnapshot();
+    for (const auto &pane : session().panes()) {
+      images->observeCatalog(pane->graphics);
+    }
   }
 
   const auto &history = session().historyBrowser();
@@ -479,6 +478,11 @@ void Application::prepareFrame(PresentedFrame &frame) {
     const auto surface = historyScrollSurface(historyMetrics(), hover);
     for (const auto &target : frame.history_actions.targets) {
       hover.append({.identity = {.action = target.action, .generation = frame.history_actions.generation}, .bounds = target.bounds});
+    }
+
+    const auto *inspector = qobject_cast<const HistoryInspectionLayout *>(history_inspector_.data());
+    if (inspector != nullptr && inspector->window() == window_) {
+      hover.count += inspector->hoverTargets(dialog_generation_, std::span{hover.targets}.subspan(hover.count));
     }
 
     const auto *footer = qobject_cast<const HistoryFooterLayout *>(history_footer_.data());

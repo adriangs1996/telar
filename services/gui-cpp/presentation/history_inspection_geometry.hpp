@@ -4,6 +4,7 @@
 #include "core/metrics.hpp"
 #include "presentation/form_button_style.hpp"
 #include "presentation/history_inspection.hpp"
+#include "presentation/history_actions.hpp"
 #include "presentation/history_modal_geometry.hpp"
 #include <algorithm>
 #include <array>
@@ -16,7 +17,7 @@
 namespace telar::gui {
 
 struct HistoryInspectionGeometry {
-  static constexpr std::size_t maximum_actions = 5;
+  static constexpr std::size_t maximum_actions = history_inspection_action_count;
   static constexpr float command_padding = 8;
   static constexpr float fact_label_width = 64;
   static constexpr float fact_label_divisor = 3;

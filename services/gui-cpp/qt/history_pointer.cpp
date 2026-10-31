@@ -72,6 +72,42 @@ QString Application::historyHoveredCardAction() const {
   return {};
 }
 
+void Application::registerHistoryInspector(QQuickItem *inspector) {
+  history_inspector_ = inspector;
+}
+
+QString Application::historyHoveredInspectionAction() const {
+  const auto &identity = pointer_dispatcher_.historyHover().hovered();
+  const auto *inspection = identity ? std::get_if<HistoryInspectionIdentity>(&identity->action) : nullptr;
+  if (inspection == nullptr) {
+    return {};
+  }
+
+  switch (inspection->action) {
+  case HistoryInspectionAction::submit: return QStringLiteral("submit");
+  case HistoryInspectionAction::alternate: return QStringLiteral("alternate");
+  case HistoryInspectionAction::copy: return QStringLiteral("copy");
+  case HistoryInspectionAction::erase: return QStringLiteral("erase");
+  case HistoryInspectionAction::visit: return QStringLiteral("visit");
+  }
+
+  return {};
+}
+
+int Application::historyHoveredInspectionIndex() const {
+  const auto &identity = pointer_dispatcher_.historyHover().hovered();
+  const auto *inspection = identity ? std::get_if<HistoryInspectionIdentity>(&identity->action) : nullptr;
+
+  return inspection != nullptr && inspection->submission() ? static_cast<int>(inspection->choice.index) : static_cast<int>(HistoryRowLayout::Index::missing);
+}
+
+QString Application::historyHoveredInspectionRevision() const {
+  const auto &identity = pointer_dispatcher_.historyHover().hovered();
+  const auto *inspection = identity ? std::get_if<HistoryInspectionIdentity>(&identity->action) : nullptr;
+
+  return inspection != nullptr && inspection->submission() ? pointer_dispatcher_.historyHoverRevision() : QString{};
+}
+
 void Application::registerHistoryFilters(QQuickItem *filters) {
   history_filter_layout_ = filters;
 }

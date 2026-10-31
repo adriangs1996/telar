@@ -13,6 +13,7 @@ HistoryInspectionLayout {
     required property var typography
     required property string command
     required property string output
+    property var actionController: null
     property real ratio: 1
     property real density: 1
     property bool interactive: root.browserState.phase === "ready" && root.browserState.count > 0
@@ -26,7 +27,7 @@ HistoryInspectionLayout {
             {text: "Copy", action: "copy", primary: false},
             {text: "Delete", action: "erase", primary: false}
         ];
-        if (root.browserState.paneOpen) {
+        if (root.browserState.paneOpen && root.browserState.phase === "ready") {
             result.push({text: "Go to pane", action: "visit", primary: false});
         }
 
@@ -37,6 +38,10 @@ HistoryInspectionLayout {
     clip: true
     input: ({
         identity: root.details.identity ?? "",
+        selection: root.browserState.selection,
+        revision: root.browserState.revision,
+        paneOpen: root.browserState.paneOpen ?? false,
+        ready: root.browserState.phase === "ready",
         facts: root.details.facts ?? [],
         heading: root.details.heading ?? "",
         command: root.command,
@@ -162,6 +167,8 @@ HistoryInspectionLayout {
             pressedAlpha: root.regions.pressedAlpha ?? 1
             labelColor: action?.action === "erase" ? root.colors.red : root.colors.text
             interactive: root.interactive && action !== null
+            usePresentedHover: root.actionController !== null
+            presentedHover: root.actionController ? root.actionController.historyHoveredInspectionAction === (action?.action ?? "") && ((action?.action !== "submit" && action?.action !== "alternate") || (root.actionController.historyHoveredInspectionIndex === root.browserState.selection && root.actionController.historyHoveredInspectionRevision === root.browserState.revision)) : false
             identity: action?.action === "submit" || action?.action === "alternate" ? root.browserState.revision + ":" + root.browserState.selection + ":" + action.action : (action?.action ?? "")
             onTextAdvanceChanged: root.scheduleMeasurement()
             onActivated: {
@@ -174,5 +181,10 @@ HistoryInspectionLayout {
         onItemRemoved: root.scheduleMeasurement()
     }
 
-    Component.onCompleted: root.scheduleMeasurement()
+    Component.onCompleted: {
+        root.scheduleMeasurement();
+        if (root.actionController) {
+            root.actionController.registerHistoryInspector(root);
+        }
+    }
 }

@@ -13,6 +13,9 @@ Item {
     required property real pressedAlpha
     required property string text
     property string identity: ""
+    property bool usePresentedHover: false
+    property bool presentedHover: false
+    readonly property bool hovered: root.usePresentedHover ? root.presentedHover : pointer.containsMouse
     property bool primary: false
     property bool quiet: false
     property string accessibleLabel: text
@@ -28,9 +31,9 @@ Item {
 
     NativeRoundedRectangle {
         anchors.fill: parent
-        color: root.primary ? root.colors.accent : (pointer.containsMouse || pointer.pressed ? root.colors.surface1 : root.colors.surface0)
+        color: root.primary ? root.colors.accent : (root.hovered || pointer.pressed ? root.colors.surface1 : root.colors.surface0)
         radius: root.radius
-        visible: !root.quiet || pointer.containsMouse || pointer.pressed
+        visible: !root.quiet || root.hovered || pointer.pressed
     }
 
     ChromeText {

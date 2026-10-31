@@ -77,6 +77,10 @@ void PointerDispatcher::notifyHistoryHover() {
     row = &footer->choice;
   }
 
+  if (const auto *inspection = identity ? std::get_if<HistoryInspectionIdentity>(&identity->action) : nullptr; inspection != nullptr && inspection->submission()) {
+    row = &inspection->choice;
+  }
+
   if (row != nullptr && history_hover_revision_value_ != row->revision) {
     history_hover_revision_value_ = row->revision;
     history_hover_revision_ = QString::number(row->revision);

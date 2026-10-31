@@ -12,8 +12,10 @@
 #include "qt/history_empty_layout.hpp"
 #include "qt/history_footer_layout.hpp"
 #include "qt/history_filters_layout.hpp"
+#include "qt/history_inspection_layout.hpp"
 #include "input/history_hover.hpp"
 #include "presentation/history_footer.hpp"
+#include "presentation/history_actions.hpp"
 #include "input/wheel_accumulator.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "ui/bundled_fonts.hpp"
@@ -1111,6 +1113,91 @@ class HistoryControlsTest final : public QObject {
         QCOMPARE(activated.front().back().toString(), state.value(QStringLiteral("revision")).toString());
       }
     }
+  }
+
+  Q_SLOT static void inspectionHoverTargetsMatchRenderedButtonsAndChoice() {
+    InspectionFixture fixture;
+    constexpr auto revision = std::numeric_limits<std::uint64_t>::max();
+    constexpr auto generation = std::numeric_limits<std::uint64_t>::max();
+    fixture.state.insert(QStringLiteral("revision"), QString::number(revision));
+    fixture.state.insert(QStringLiteral("selection"), 2);
+    fixture.state.insert(QStringLiteral("paneOpen"), true);
+    fixture.item->setProperty("browserState", fixture.state);
+    QVERIFY(showComponentWindow(fixture.window, wait_ms));
+    const auto *layout = qobject_cast<HistoryInspectionLayout *>(fixture.item.get());
+    QVERIFY(layout != nullptr);
+    std::array<HistoryHoverTarget, history_inspection_action_count> targets;
+    QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), targets.size(), wait_ms);
+    const std::array actions{QStringLiteral("submit"), QStringLiteral("alternate"), QStringLiteral("copy"), QStringLiteral("erase"), QStringLiteral("visit")};
+    for (std::size_t index = 0; index < actions.size(); ++index) {
+      const auto *identity = std::get_if<HistoryInspectionIdentity>(&targets[index].identity.action);
+      QVERIFY(identity != nullptr);
+      QCOMPARE(identity->action, static_cast<HistoryInspectionAction>(index));
+      QCOMPARE(targets[index].identity.generation, generation);
+      const auto *button = inspectionAction(*fixture.item, actions[index]);
+      QVERIFY(button != nullptr);
+      const auto bounds = button->mapRectToScene(button->boundingRect());
+      const auto scale = fixture.window.effectiveDevicePixelRatio();
+      QCOMPARE(targets[index].bounds.x, static_cast<float>(bounds.x() * scale));
+      QCOMPARE(targets[index].bounds.y, static_cast<float>(bounds.y() * scale));
+      QCOMPARE(targets[index].bounds.width, static_cast<float>(bounds.width() * scale));
+      QCOMPARE(targets[index].bounds.height, static_cast<float>(bounds.height() * scale));
+    }
+
+    const auto *submit = std::get_if<HistoryInspectionIdentity>(&targets.front().identity.action);
+    QVERIFY(submit != nullptr);
+    QCOMPARE(submit->choice.revision, revision);
+    QCOMPARE(submit->choice.index, std::size_t{2});
+    const auto previous = targets;
+    fixture.state.insert(QStringLiteral("enterRuns"), true);
+    fixture.item->setProperty("browserState", fixture.state);
+    QVERIFY(waitForSynchronizedFrame(fixture.window, wait_ms));
+    QCOMPARE(layout->hoverTargets(generation, targets), targets.size());
+    for (std::size_t index = 0; index < targets.size(); ++index) {
+      QCOMPARE(targets[index].identity, previous[index].identity);
+    }
+
+    fixture.state.insert(QStringLiteral("revision"), QString::number(revision - 1));
+    fixture.state.insert(QStringLiteral("selection"), 3);
+    fixture.item->setProperty("browserState", fixture.state);
+    QVERIFY(waitForSynchronizedFrame(fixture.window, wait_ms));
+    QCOMPARE(layout->hoverTargets(generation, targets), targets.size());
+    for (std::size_t index = 0; index < targets.size(); ++index) {
+      const auto *identity = std::get_if<HistoryInspectionIdentity>(&targets[index].identity.action);
+      QVERIFY(identity != nullptr);
+      QCOMPARE(targets[index].identity == previous[index].identity, !identity->submission());
+    }
+  }
+
+  Q_SLOT static void inspectionHoverTargetsRespectAvailabilityAndBoundedStorage() {
+    InspectionFixture fixture;
+    fixture.state.insert(QStringLiteral("paneOpen"), true);
+    fixture.item->setProperty("browserState", fixture.state);
+    QVERIFY(showComponentWindow(fixture.window, wait_ms));
+    const auto *layout = qobject_cast<HistoryInspectionLayout *>(fixture.item.get());
+    QVERIFY(layout != nullptr);
+    std::array<HistoryHoverTarget, history_inspection_action_count> targets;
+    constexpr std::uint64_t generation = 41;
+    QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), targets.size(), wait_ms);
+    QCOMPARE(layout->hoverTargets(generation, std::span{targets}.first(1)), std::size_t{1});
+    QCOMPARE(layout->hoverTargets(generation, {}), std::size_t{0});
+    fixture.state.insert(QStringLiteral("phase"), QStringLiteral("loading"));
+    fixture.item->setProperty("browserState", fixture.state);
+    constexpr std::size_t disabled_actions = 4;
+    QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), disabled_actions, wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(inspectionAction(*fixture.item, QStringLiteral("visit")) == nullptr, wait_ms);
+    const auto *copy = inspectionAction(*fixture.item, QStringLiteral("copy"));
+    QVERIFY(copy != nullptr);
+    QVERIFY(!copy->property("interactive").toBool());
+    fixture.state.insert(QStringLiteral("phase"), QStringLiteral("ready"));
+    fixture.item->setProperty("browserState", fixture.state);
+    QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), targets.size(), wait_ms);
+    fixture.item->setWidth(fact_limited_width);
+    QTRY_VERIFY_WITH_TIMEOUT((layout->hoverTargets(generation, targets) > 0 && layout->hoverTargets(generation, targets) < targets.size()), wait_ms);
+    fixture.item->setWidth(0);
+    QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), std::size_t{0}, wait_ms);
+    fixture.item->setVisible(false);
+    QCOMPARE(layout->hoverTargets(generation, targets), std::size_t{0});
   }
 
   Q_SLOT static void inspectionSubmissionsKeepCaptureWhenEnterBehaviorChanges() {

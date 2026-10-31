@@ -4,6 +4,20 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [presented History inspector hover evidence](measurements/history-inspector-hover.md)
+adds namespace-correct inspector targets from cached physical button geometry.
+The 5,709-pixel Copy negative becomes exact across all 24,696 inspector-button
+pixels, including a real away/return transition. An initial actual-motion capture
+rejected a stale drawable; its cause remains open alongside a successful unchanged
+repeat. Original-source 874/35157 and three regression oracles pass Mac/Linux
+sanitizers. Both SDKs pass 37 components. Linux and Mac Release pass ten native cases;
+Mac ASAN first passes nine and fails the unchanged10s card-selection deadline
+(12.7s reported), then an unchanged-binary repeat passes ten. Both raw results
+remain required; Linux exits0 and Mac component/native ASAN exits remain8/1. Final seven-unit broad
+analysis and 14 real editor checks pass both SDKs. Footer/filter and retained
+release regions remain exact. Full input, inspector content, additional visuals,
+native presentation/leaks/latency and full-client performance remain open.
+
 The [History footer/inspector action identity evidence](measurements/history-action-identity.md)
 corrects retained captures when enter labels change and keeps inspector Copy,
 Delete and Visit identities independent of choice. Three source-correct negative

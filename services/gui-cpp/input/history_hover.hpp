@@ -40,8 +40,21 @@ struct HistoryFooterIdentity {
   }
 };
 
+struct HistoryInspectionIdentity {
+  HistoryInspectionAction action = HistoryInspectionAction::submit;
+  HistoryChoice choice;
+
+  [[nodiscard]] bool submission() const noexcept {
+    return action == HistoryInspectionAction::submit || action == HistoryInspectionAction::alternate;
+  }
+
+  bool operator==(const HistoryInspectionIdentity &other) const noexcept {
+    return action == other.action && (!submission() || choice == other.choice);
+  }
+};
+
 struct HistoryHoverIdentity {
-  std::variant<HistoryChoice, HistoryCardAction, HistoryFooterIdentity, HistoryFilterAction> action;
+  std::variant<HistoryChoice, HistoryCardAction, HistoryFooterIdentity, HistoryFilterAction, HistoryInspectionIdentity> action;
   std::uint64_t generation = 0;
 
   bool operator==(const HistoryHoverIdentity &other) const noexcept {
@@ -72,7 +85,14 @@ struct HistoryHoverIdentity {
     const auto *filter = std::get_if<HistoryFilterAction>(&action);
     const auto *other_filter = std::get_if<HistoryFilterAction>(&other.action);
 
-    return filter != nullptr && other_filter != nullptr && *filter == *other_filter;
+    if (filter != nullptr) {
+      return other_filter != nullptr && *filter == *other_filter;
+    }
+
+    const auto *inspection = std::get_if<HistoryInspectionIdentity>(&action);
+    const auto *other_inspection = std::get_if<HistoryInspectionIdentity>(&other.action);
+
+    return inspection != nullptr && other_inspection != nullptr && *inspection == *other_inspection;
   }
 };
 

@@ -285,6 +285,7 @@ Item {
             height: root.regions.inspection.height
             active: root.browserState.inspecting && root.browserState.count > 0
             sourceComponent: HistoryInspector {
+                actionController: root.controller
                 details: root.controller.historyInspection
                 browserState: root.browserState
                 colors: root.controller.colors

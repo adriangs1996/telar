@@ -1,10 +1,134 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## ACTIVE Inspector hover qualified in scope; presentation failures still OPEN (01:13 UTC)
+
+CONTINUE autonomously; no FINAL at checkpoints. All inspector source changes now
+compile on Mac Qt6.12 and Linux Qt6.8. Release/ASAN final builds exited0, component
+37/37 each SDK; Mac ASAN component exit8 leaks259792bytes/1080alloc, Linux0.
+Seven-unit broad lint and14 actual editor checks clean both SDKs. Core new oracle
+874sequences/35157ops and Filter777/34794 Footer659/34344 RowCard552/33926 pass
+both SDK ASAN/UBSAN0, LSAN_OPTIONS unset. No more reruns without source change.
+Native MacRelease/LinuxRelease/LinuxASAN ten cases pass0. IMPORTANT first MacASAN
+native-asan-1 is9PASS1FAIL, unchanged10s selected_copy deadline atquick_test2167,
+Qt says12700ms sufficient; frames4 active/exposedtrue clockinactive after recovery.
+Its exit1 also retains581028bytes3017leaks. Samebinary repeatnative-asan-2 TENPASS
+but exit1 leaks624948bytes3027. Both records REQUIRED; repeat does NOT closegate.
+Earlier report's10PASS assertion was corrected. First rehover-1 rejects stale
+presentation after45s, focus/dimsvalid; rehover-2 unchangedbinary/helper PASS;
+controlled away-return transition-1 alsoPASS. Causes UNKNOWN; no forcedframes,
+timeout changes, suppression or diagnostic product changes. Qtprimarysources
+copied ignoredoutdeps/qt-frame-scheduling-source-1 for next clock investigation.
+
+Native negative Copy5709/5992different; fixed/rehover2/transition all24696EXACT;
+footer21164/filter39584/results744576EXACT, oldrelease+freshclick clipboard pass.
+All six valid pairs currentGUI8192d4ea553d6aa7a663e469277f5cc4524c5dbeb23abb996d5304ae2fdf0105.
+BeforeGUI dca902b847c058fc09b67ee1818c2403bcf291c037ca9cd0b6f4115c1a17acbb,
+sourceHeadf78fb0ac726c77382fe9ee797be6c21155e040b3. Mac+Linuxfinal-product receipts
+match current product/CMake/test/tools. Linuxfinalbundle193members1536087B SHA
+d10e1aabb228dd973edc4ca0cb77b277d13d3e3b1f73173babb64452deba9869 collectedvalidated.
+No active build/editor/nativecheck. VM7158/55984 remains owned; runtime35801 and
+oldSway9469 untouched. Userpersonal-frame-delivery.md NEVER read/touch/stage.
+
+New report/archive scripts inmeasurements/history-inspector-hover remain UNFROZEN
+until final archiver runs. Ignored draft2 passed663artifacts2466sourceidentities
+including firstMacASAN9/1, repeat10/leaks, stale drawable and priorFooter10050ms.
+Next: finalfreeze ONCE after handoff update, offline/current/exact-source/security
+checks; explicit localcommit owned files only. Never modify archive/report/verifier
+afterfreeze. CONTINUE clock/native presentation investigation afterwards, no final.
+Potential frame_requested clock parking is HYPOTHESIS only; Qt afterAnimating is
+before sync; update routes toQWindow::requestUpdate. Need platformsource/actualtrace
+before claiming root cause. Previous checkpoints frozen and immutable.
+
+## ACTIVE Inspector semantic hover implemented; Qt qualification running (00:43 UTC)
+
+Continue autonomously; NOFINAL at checkpoints. HEADf78fb0ac7 commitsidentity.
+IdentityFINAL297artifacts2461sources5410790B, verifiers/auditsPASS. Originalformat
+snapshot preservedbyteexactignoredoutdeps/history-action-identity-frozen-before-
+format-1; onlyverifier1trailing-spacechangedbetweenunpublishedrevisions, all292
+experimental retainedsourcesidentical. NewfreezeFINAL NEVERrefresh/editidentity
+report/verifier/archive. Filter8b/footer4947/MotionalsoFROZEN. Preserveuseruntracked
+personal-frame-delivery.md. Workonlyhere/noagents/otherworktrees/publish/merge.
+GoalAPIblockedold/manualcontinue. Spanishupdates<=60sec aim40, analysisSHORT.
+
+CURRENTInspectorHoverproduct IMPLEMENTED, not yetqualified. Newenum
+HistoryInspectionAction5 andcountconstant in presentation/history_actions.hpp;
+HistoryInspectionGeometry.maximum_actionsusesit. NewHistoryInspectionIdentity in
+input/history_hover.hpp: choiceonly2submits; constcopy/erase/visit; distinctvariant
+fromFooter/Card/row/filter tohonorInspectornamespace0 vsFooter5/Card6. Safeget_if
+noexceptmanualequalitypreserved. HistoryInspectionLayout nowcaches5physicalbutton
+RectsduringexistingprepareButtons (methodnonconst), typedchoice+ready/pane_open in
+setInput. hoverTargets projectsdirectlyfromcachedRectsto boundedspan; noQVariant
+oritemwalkperframe. Columns0/zeroRect/hidden/windowless skipped; disabledfirst4
+retained. Visitomittedwhen!pane_open or!ready, matchesOriginalFormButton/HistoryModal.
+HistoryInspector.actionsnowonlyaddsvisitifpaneOpenANDphaseReady (waspaneOpenonly);
+Originalactions skipsdisabledVisit. Newinput selection/revision/paneOpen/ready.
+AppdirectQPointerregisterHistoryInspector;3newhoverpropsaction/index/rev; Frame
+capacity+5; appendINSPECTORafterrows/cardsBEFOREfooter. Cachedrevisionnotifyalso
+acceptsInspector submits. QMLFormButtonoptionalpresentedHover/usePresentedHover,
+defaultlocalfallbackunchanged; onlyInspectorwirescontroller/role+choicepaintguard.
+HistoryPanelpasscontroller. Activationidentitiesf78unchanged. Noother productchanges.
+
+Causalnegativealreadyvalid: local/history-inspector-hover-negative-1 ACTUAL0,
+OriginalCopy5709of5992different, Paste6496/Run5264/Delete6944EXACT. Beforemodalpointer
+[685,544]→[685,545], noafterMotion. helperhistory_inspector_hover_capture.py modes
+initial-inspector/inspector-rehover (fresh[686,545]), --inspect, fullprivateCarbon/
+Cocoaguard. Comparatorcompare_history_inspection_actions.py raworiginalAXrects.
+Pointerawayidentitycheckpointcontrols all24696EXACT. BaselinecopiedAFTERcommitto
+outdeps/history-inspector-hover-before-1/binary.json, sourceHeadf78fb0ac726c77382fe9ee797be6c21155e040b3,
+GUI dca902b847c058fc09b67ee1818c2403bcf291c037ca9cd0b6f4115c1a17acbb equalsnegative.
+
+Newtools history_inspector_hover_probe.cpp/check_history_inspector_hover.py mixed22
+targets, namespace0Inspector all5payloads. Defaultsourceorderfilters→rows/cards→
+Inspector→footer. SourceDispatcherunchangedfacades. Directednamespacecopy/card,
+submit/row,submit/Footer,visit/card, retirethenfreshmove; revisionchoiceon17/18,
+f64edgecases inclnewtypes; random512. Passed874sequences35157ops MacASAN1 AND
+LinuxASAN1 actual0. LegacyFilter777/34794, Footer659/34344, RowCard552/33926 also
+PASSbothSDKsASAN0, noLSANoptions. Completedcells55554/57496; logsretained. No more
+coreoraclererunsneededunlesscore changes.
+
+Componenttests +2 => expected37cases: inspectionHoverTargetsMatchRenderedButtonsAndChoice
+checksall5bounds, maxu64revision+generation, selection2→3, modeidentitystable,
+submitidentitychangesvsconststable. inspectionHoverTargetsRespectAvailabilityAndBoundedStorage
+checks5ready/4loading(noVisit), disabledCopy retained, span1/emptyspan, narrowprefix,
+width0/hidden0. SourcecompilesNOTyetverified. Noactual37testorpositivecaptureyet.
+
+Builds ACTIVE noC++/header/QMLeditsuntildependentactualexits:
+MacRelease exec44387 labelhistory-inspector-hover-build-1 -j4 (last96/190);
+MacnativeASANexec40570 label...native-asan-build-1 -j2 (last84/190);
+LinuxASANexec19821 label...asan-build-1 -j1 (last89/192). GuestDELTA66all16new/changed
+ownedproduct/CMake/test/tools+run_inspector_hover_build.py syncedtar--touch whileidle.
+Macbroadlint7unitsexec93169 juststarted labelhistory-inspector-hover-lint-1, helper
+run_inspector_hover_lint.py: app/history_pointer/pointer_dispatcher/inspectionlayout/
+newprobe/oldinspectionprobe/controls. Mayneed directincludes; donotweakenprofile.
+Toolsheader/variantfieldchanges likelytriggermanyGUIrebuilds; Qtconfigure~2minnormal.
+No activeGUI/editor currently. VM7158/55984, userruntime35801andoldSway9469untouched.
+
+NEXT: awaitMacReleaseactual0, run37components; nativecausalFIXED+realmotionviahelper
+--inspect, compare4buttonsall24696 andnegative5709. SourceQMLFormButtonpressedstill
+localunchanged; no inputactivationchangeclaim. SDK0oraclesdone. Needrow/card/footer/
+filtercausalregressioncaptures, nativeQuick10slotsrunnerfromidentity (3old+held4combos+
+4unseenmodeguard tests=10withinitcleanup), Mac/LinASAN/Release. NewMapmayaffectnative
+selection zero-opening retirement (qualifiedold). PreserveinitialfirstFooter10s
+failureglobalgate. Nativeleak exitsmustremainrawnoLSANsuppression (Macalwaysvaries;
+LinuxQtcompose147982/148intermittent). GuestReleasebuildlater -j2, do NOTcouplebig
+compile+lints/editor in4GBVM. ActualguestcanonoutcompileDB+4headercontexts copied
+fromASANoutafterfinalbuild beforeNeovim; .clangdunchanged. Finalbroadlint/actualeditor
+modifiedunits+headers bothSDKs; Quicksourceunchanged sincef78, actualQuickeditorcheck
+sufficientunlessnewsourcechange, nofull4minQuicklintunneeded. Newreport
+measurements/history-inspector-hover.md isWIP, no newarchivepreparedyet. Eventually
+freezeownnewreport/manifest/archive withallnegative/fixed SDKoutputs, sourceidentities,
+noELF/authorities/symlinks/userPersonalfile. BEFOREfreeze run gitdiff--check INCLUDING
+newuntrackedverifier (previousmistakecaughttoolate). Draftignoredarchivepreflight;
+thenfreezeONCE, audits, localcommitandCONTINUEglobalgoal. Fullinput/inspectionfacts/
+content/daygroups/scroll/animation/clipping/themes/densities/platforms/leaks/latency/
+fullclientperfALLremainOPEN. No complete/checkpointfinalclaim.
+
+
 ## Final identity format revision preserved evidence; CONTINUE inspector hover (00:35 UTC)
 
 Precommitcaughtoneverifiertrailing-space. PreservedWHOLEfirstfrozenarchive+manifest
 byteexactignoredatoutdeps/history-action-identity-frozen-before-format-1. Newunpublished
-revisionremovesONLYthatonewhitespace fromverifier; all{} previous experimental retained
+revisionremovesONLYthatonewhitespace fromverifier; all292 previous experimental retained
 sourcesbyteidentical, onlyprogramsourcechangedisverify_identity.py. Normalizedarchive
 passedcurrent-source/offline; authority/executable/symlinkauditPASS. Finalcounts
 297artifacts,2461sources,5410790B, metadataformat-revision-1.json+

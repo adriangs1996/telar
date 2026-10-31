@@ -1,4 +1,7 @@
 #include "history_inspection_layout.hpp"
+#include "history/choice.hpp"
+#include "input/history_hover.hpp"
+#include "presentation/history_actions.hpp"
 #include "core/geometry.hpp"
 #include "core/metrics.hpp"
 #include "core/theme_values.hpp"
@@ -59,6 +62,9 @@ void HistoryInspectionLayout::setInput(const QVariantMap &input) {
 
   const auto identity_changed = input_.value(QStringLiteral("identity")) != input.value(QStringLiteral("identity"));
   input_ = input;
+  choice_ = {.index = static_cast<std::size_t>(input_.value(QStringLiteral("selection")).toULongLong()), .revision = input_.value(QStringLiteral("revision")).toULongLong()};
+  pane_open_ = input_.value(QStringLiteral("paneOpen")).toBool();
+  ready_ = input_.value(QStringLiteral("ready")).toBool();
   if (identity_changed) {
     setScroll(0);
   }
@@ -182,19 +188,40 @@ QVariantMap HistoryInspectionLayout::prepareContent(const HistoryInspectionGeome
   };
 }
 
-QVariantList HistoryInspectionLayout::prepareButtons(const HistoryInspectionGeometry &geometry, ChromeMetrics chrome) const {
+QVariantList HistoryInspectionLayout::prepareButtons(const HistoryInspectionGeometry &geometry, ChromeMetrics chrome) {
   std::array<float, HistoryInspectionGeometry::maximum_actions> measured{};
   const auto action_count = std::min(measured.size(), static_cast<std::size_t>(advances_.size()));
   for (std::size_t index = 0; index < action_count; ++index) {
     measured[index] = physical(advances_[static_cast<qsizetype>(index)]);
   }
 
+  button_bounds_ = geometry.columns == 0 ? decltype(button_bounds_){} : geometry.buttons(std::span{measured}.first(action_count), chrome);
   QVariantList buttons;
-  for (const auto button : geometry.buttons(std::span{measured}.first(action_count), chrome)) {
-    buttons.append(logical(geometry.columns == 0 ? Rect{} : button));
+  for (const auto button : button_bounds_) {
+    buttons.append(logical(button));
   }
 
   return buttons;
+}
+
+std::size_t HistoryInspectionLayout::hoverTargets(std::uint64_t generation, std::span<HistoryHoverTarget> destination) const {
+  if (!isVisible() || window() == nullptr) {
+    return 0;
+  }
+
+  constexpr std::array actions{HistoryInspectionAction::submit, HistoryInspectionAction::alternate, HistoryInspectionAction::copy, HistoryInspectionAction::erase, HistoryInspectionAction::visit};
+  std::size_t count = 0;
+  for (std::size_t index = 0; index < actions.size() && count < destination.size(); ++index) {
+    const auto action = actions[index];
+    if (button_bounds_[index].empty() || (action == HistoryInspectionAction::visit && (!pane_open_ || !ready_))) {
+      continue;
+    }
+
+    const auto bounds = mapRectToScene(logical(button_bounds_[index]));
+    destination[count++] = {.identity = {.action = HistoryInspectionIdentity{.action = action, .choice = choice_}, .generation = generation}, .bounds = {.x = static_cast<float>(bounds.x() * density_), .y = static_cast<float>(bounds.y() * density_), .width = static_cast<float>(bounds.width() * density_), .height = static_cast<float>(bounds.height() * density_)}};
+  }
+
+  return count;
 }
 
 void HistoryInspectionLayout::updatePolish() {

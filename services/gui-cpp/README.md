@@ -2279,3 +2279,13 @@ components; four live held-pointer mode changes and four existing presentation
 guards run in the ten-case native fixtures. Source-correct revision/disappearance
 cancellation remains. Scoped browse/inspector pixels remain exact, broad lint and
 actual editors pass both SDKs, and raw native leak exits remain open.
+
+[Presented History inspector hover](measurements/history-inspector-hover.md) projects
+bounded cached button targets in original draw order. The causal Copy negative,
+actual hover transition and row/card/footer/filter controls retain exact scoped
+pixels. Both SDKs pass original-source identities,37 component cases and final
+broad analysis/editor checks. Native Linux/Mac Release pass ten; Mac ASAN first
+passes nine with one unchanged10s card-selection deadline failure, then passes
+ten on an unchanged-binary repeat. Both results, raw Mac leak exits and the
+initial stale-drawable rejection remain required open evidence; complete visual/input,
+presentation, leak/latency and full-client performance gates remain open.
