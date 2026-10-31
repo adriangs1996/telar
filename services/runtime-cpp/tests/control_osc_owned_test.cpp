@@ -179,6 +179,35 @@ void ownershipAndRetainedCapacity() {
   }
 }
 
+void retainedCapacityFailureAndBellOwnership() {
+  Pair pair;
+  pair.accept(false);
+  std::string apc{"\x1b_Ga=q;"};
+  apc.append(513 - apc.size(), 'A');
+  apc.append("\x1b\\");
+  require(pair.feed(apc) == apc.size() - 1);
+  pair.accept(true);
+  pair.feed({});
+  pair.feed("\\");
+  pair.old_memory.fail_at = pair.old_memory.count + 1;
+  pair.new_memory.fail_at = pair.new_memory.count + 1;
+
+  const auto request = std::string{"\x1b]52;c;"} + std::string(600, 'B');
+  require(pair.feed(request) == std::string_view::npos);
+  pair.feed("\a");
+  pair.discard();
+
+  pair.accept(false);
+  auto blocked = request + "\atail";
+  require(pair.feed(blocked) == request.size() + 1);
+  blocked.assign(blocked.size(), 'z');
+  pair.feed({});
+  pair.accept(true);
+  pair.feed({});
+  require(pair.feed("tail") == 4);
+  pair.discard();
+}
+
 void exactLimit() {
   constexpr auto limit = Parser<SystemAllocator>::osc_limit;
   for (const auto length : {limit - 1, limit, limit + 1}) {
@@ -233,6 +262,7 @@ void boundedFuzz() {
 int main() {
   bytesAndBoundaries();
   ownershipAndRetainedCapacity();
+  retainedCapacityFailureAndBellOwnership();
   exactLimit();
   allocationFailures();
   boundedFuzz();

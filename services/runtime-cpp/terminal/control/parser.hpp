@@ -293,6 +293,10 @@ private:
       }
     }
 
+    if (phase_ == Phase::string && kind_ == Kind::osc && string_payload_) {
+      appendOscRun(input, consumed);
+    }
+
     while (consumed < input.size() && (phase_ == Phase::string || phase_ == Phase::streaming || phase_ == Phase::discard_string)) {
       const auto byte = input[consumed];
       if (byte == escape || byte == cancel || byte == substitute || (kind_ == Kind::osc && byte == bell) || (kind_ == Kind::apc && byte == c1_st)) {
@@ -415,6 +419,8 @@ private:
           consumer.ordinary(bytes());
           clear();
           phase_ = Phase::streaming;
+        } else if (kind_ == Kind::osc) {
+          appendOscRun(input, consumed);
         }
       }
       continue;
@@ -519,6 +525,50 @@ private:
 
   std::span<const std::uint8_t> bytes() const noexcept {
     return overflow_.empty() ? std::span<const std::uint8_t>{inline_}.first(size_) : std::span<const std::uint8_t>{overflow_};
+  }
+
+  // OSC retains every non-C0 byte, including DEL and raw C1. Classify the
+  // header first and leave controls and limit overflow to the scalar machine.
+  void appendOscRun(std::span<const std::uint8_t> input, std::size_t &consumed) {
+    constexpr std::size_t minimum_run_bytes = 8;
+    const auto available = std::min(input.size() - consumed, osc_limit - size_);
+    if (available < minimum_run_bytes) {
+      return;
+    }
+
+    std::size_t length = 0;
+    while (length < available && input[consumed + length] >= space) {
+      ++length;
+    }
+    appendRun(input.subspan(consumed, length));
+    consumed += length;
+  }
+
+  // Copy only up to the next existing capacity boundary. Keeping append's
+  // reserve schedule also preserves the retained prefix if allocation fails.
+  void appendRun(std::span<const std::uint8_t> input) {
+    while (!input.empty()) {
+      if (size_ < inline_.size()) {
+        const auto count = std::min(input.size(), inline_.size() - size_);
+        std::memcpy(inline_.data() + size_, input.data(), count);
+        size_ += count;
+        input = input.subspan(count);
+        continue;
+      }
+
+      if (overflow_.empty()) {
+        overflow_.reserve(inline_.size() * 2);
+        overflow_.insert(overflow_.end(), inline_.begin(), inline_.end());
+      }
+      if (overflow_.size() == overflow_.capacity()) {
+        overflow_.reserve(std::min(string_limit, overflow_.capacity() * 2));
+      }
+
+      const auto count = std::min(input.size(), overflow_.capacity() - overflow_.size());
+      overflow_.insert(overflow_.end(), input.begin(), input.begin() + count);
+      size_ += count;
+      input = input.subspan(count);
+    }
   }
 
   bool append(std::uint8_t byte) {
