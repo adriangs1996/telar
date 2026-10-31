@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../memory/allocator.hpp"
 #include "../graphics_cursor.hpp"
 #include "../ghostty_handle.hpp"
 #include <array>
@@ -38,27 +39,6 @@ public:
 
   bool canWriteAscii() const noexcept { return !separate_media_ || graphics_cursor_.ground(); }
 
-  // The owned caller buffer contains only ASCII, without ESC or ENQ. The
-  // bridge applies it synchronously and reports any partially applied error.
-  void writeAscii(std::span<const std::uint32_t> codepoints) {
-    if (codepoints.empty()) {
-      return;
-    }
-    if (!canWriteAscii()) {
-      throw TerminalError{GHOSTTY_INVALID_VALUE};
-    }
-
-    invalidate();
-    possibly_pending_input_ = codepoints.back() < 0x20;
-    std::size_t consumed = 0;
-    checkGhostty(ghostty_terminal_vt_write_ascii(terminal_, codepoints.data(), codepoints.size(), &consumed));
-    if (consumed != codepoints.size()) {
-      throw TerminalError{GHOSTTY_INVALID_VALUE};
-    }
-    if (write_failed_) {
-      throw TerminalError{GHOSTTY_OUT_OF_MEMORY};
-    }
-  }
 
   void failWrite() noexcept { write_failed_ = true; }
 
@@ -205,6 +185,30 @@ public:
   static constexpr unsigned cursor_color = 258;
 
 private:
+  template <Allocator Memory>
+  friend class Engine;
+
+  // Engine admits the graphics scanner once before entering its ASCII loop.
+  // Only synchronous widening and queue release intervene; no scanner mutation
+  // occurs. The C bridge still validates its input and partial application.
+  void writeAscii(std::span<const std::uint32_t> codepoints) {
+    if (codepoints.empty()) {
+      return;
+    }
+
+    invalidate();
+    possibly_pending_input_ = codepoints.back() < 0x20;
+    std::size_t consumed = 0;
+    checkGhostty(ghostty_terminal_vt_write_ascii(terminal_, codepoints.data(), codepoints.size(), &consumed));
+    if (consumed != codepoints.size()) {
+      throw TerminalError{GHOSTTY_INVALID_VALUE};
+    }
+    if (write_failed_) {
+      throw TerminalError{GHOSTTY_OUT_OF_MEMORY};
+    }
+  }
+
+
   template <bool CheckGraphics>
   void writeInput(std::span<const std::uint8_t> bytes) {
     invalidate();
