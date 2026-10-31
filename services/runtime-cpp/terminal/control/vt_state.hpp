@@ -252,13 +252,18 @@ private:
   // values are copied scalars/structs, never borrowed terminal storage.
   void invalidate() noexcept {
     if (++epoch_ == 0) {
-      epoch_ = 1;
-      size_cache_.epoch = cursor_cache_.epoch = margin_cache_.epoch = keyboard_cache_.epoch = style_cache_.epoch = visual_cursor_cache_.epoch = 0;
-      for (auto &entry : modes_) {
-        entry.epoch = 0;
-      }
+      resetEpoch();
     }
+
     invalidateColors();
+  }
+
+  [[gnu::cold, gnu::noinline]] void resetEpoch() noexcept {
+    epoch_ = 1;
+    size_cache_.epoch = cursor_cache_.epoch = margin_cache_.epoch = keyboard_cache_.epoch = style_cache_.epoch = visual_cursor_cache_.epoch = 0;
+    for (auto &entry : modes_) {
+      entry.epoch = 0;
+    }
   }
 
   static constexpr std::uint16_t origin_mode = 6;
