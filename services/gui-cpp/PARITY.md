@@ -4,6 +4,16 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [client plugin catalog](measurements/plugin-catalog.md) loads validated
+packages with candidate configurations and routes `plugin_list`/`plugin_get`
+through the adopted generation. Failed reloads retain the previous catalog.
+Both SDKs match 2940 original-source queries and 35 original CLI package cases
+per Release/ASan build. Software regression assertions pass; Mac sanitizer
+leaks and a Linux native ASan cleanup SEGV remain open. Independent Qt-only
+windows do not reproduce that crash; a private early-close control is rejected.
+Enable/disable overrides, isolated execution, capability grants, custom surfaces
+and comparative performance still require implementation and acceptance.
+
 The [routed Goto correction](measurements/routed-goto.md) handles
 `client_open_goto` through the existing navigation palette, returns `applied`
 and preserves the original copy-mode rejection. Real protocol regressions fail

@@ -10,6 +10,8 @@
 #include "config/generation.hpp"
 #include "config/gui_query.hpp"
 #include "config/input_query.hpp"
+#include "config/plugin_catalog.hpp"
+#include "config/plugin_query.hpp"
 #include "config/query.hpp"
 #include "config/runtime_query.hpp"
 #include "config/theme_query.hpp"
@@ -23,6 +25,7 @@
 #include "memory/allocator.hpp"
 #include "platform/window.hpp"
 #include "presentation/theme.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
 #include <QByteArray>
 #include <QFileInfo>
 #include <QFuture>
@@ -241,6 +244,23 @@ std::string_view ConfigurationSource::query(ConfigurationQuery query, const Clie
   }
 }
 
+PluginPage ConfigurationSource::queryPlugins(const ClientCommand &request) {
+  if (!generation_) {
+    throw std::runtime_error{"ConfigurationNotLoaded"};
+  }
+
+  if (!plugins_) {
+    throw std::runtime_error{"PluginRegistryUnavailable"};
+  }
+
+  const PluginCatalog catalog{generation_->number(), generation_->runtimeValues().plugins.configured(), plugins_->packages()};
+  if (request.action == ClientAction::plugin_list) {
+    return PluginQuery::list(catalog, request, query_buffer_);
+  }
+
+  return PluginQuery::get(catalog, request, query_buffer_);
+}
+
 void ConfigurationSource::poll() {
   if (!debounce_.isActive() && !path_.isEmpty()) {
     schedule(false);
@@ -337,6 +357,7 @@ void ConfigurationSource::adopt(PreparedConfiguration result) {
   locked_theme_ = result->locked_theme;
   configuration_.theme = projectTheme(configuration_.themes.resolve(appearance_, locked_theme_));
   generation_ = std::move(result->generation);
+  plugins_ = std::move(result->plugins);
   if (generation_) {
     next_generation_ = generation_->number() + 1;
   }

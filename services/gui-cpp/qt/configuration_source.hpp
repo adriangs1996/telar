@@ -12,6 +12,7 @@
 #include "core/configuration.hpp"
 #include "input/action.hpp"
 #include "input/configuration.hpp"
+#include "config/plugin_query.hpp"
 #include <QByteArray>
 #include <QFutureWatcher>
 #include <QString>
@@ -53,6 +54,7 @@ public:
   [[nodiscard]] std::optional<runtime::config::CommandTabView> commandTab(BindingAction action) const;
   [[nodiscard]] std::optional<NotificationActionDescription> notificationAction(BindingAction action) const;
   [[nodiscard]] std::string_view query(ConfigurationQuery query, const ClientViewState &view = {});
+  [[nodiscard]] PluginPage queryPlugins(const ClientCommand &request);
 
 signals:
   void changed();
@@ -80,6 +82,7 @@ private:
   InputConfiguration default_input_;
   BindingMap<BindingAction> default_keymap_;
   Owned<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator> generation_;
+  std::optional<PluginPackages> plugins_;
   std::uint64_t next_generation_ = 1;
   std::uint64_t revision_ = 0;
   std::uint64_t active_revision_ = 0;

@@ -4,6 +4,7 @@
 #include "core/configuration.hpp"
 #include "core/memory.hpp"
 #include "platform/file_stamp.hpp"
+#include "plugin_packages.hpp"
 #include <QMap>
 #include <QString>
 #include <cstdint>
@@ -67,6 +68,7 @@ struct ConfigurationPreparation {
   Configuration configuration;
   std::optional<ThemeValues> locked_theme;
   Owned<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator> generation;
+  std::optional<PluginPackages> plugins;
   QString directory;
   QString error;
   std::uint64_t revision = 0;

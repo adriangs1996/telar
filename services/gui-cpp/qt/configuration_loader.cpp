@@ -12,6 +12,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QIODevice>
+#include <QLatin1StringView>
 #include <QtCore/qchar.h>
 #include <QtCore/qstring.h>
 #include <QtCore/qtypes.h>
@@ -99,6 +100,7 @@ void ConfigurationLoader::load(ApplicationAllocator &memory, const Configuration
         .generation = request.generation,
     };
     result.generation = makeOwned<ConfigurationGeneration<ApplicationAllocator>>(memory, memory, generation_source);
+    result.plugins.emplace(memory, generation_source.directory, result.generation->runtimeValues().plugins.configured());
     result.configuration = result.generation->configuration();
     trackModules(*result.generation, result.directory, result.modules);
   }
@@ -119,7 +121,7 @@ void ConfigurationLoader::trackModules(const ConfigurationGeneration<Application
 
     auto relative = key;
     relative.replace(QLatin1Char('.'), QLatin1Char('/'));
-    const auto path = QFileInfo{QDir{root}.filePath(relative + QStringLiteral(".lua"))}.canonicalFilePath();
+    const auto path = QFileInfo{QDir{root}.filePath(relative + QLatin1StringView{".lua"})}.canonicalFilePath();
     modules.insert(key, {.path = path, .stamp = fileStamp(path)});
   });
 }

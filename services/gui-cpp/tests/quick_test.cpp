@@ -420,6 +420,28 @@ private:
   std::array<telar::Byte, response_capacity> storage_{};
 };
 
+enum class PluginCatalogRequest : std::uint8_t {
+  unconfigured = 2,
+  disabled_list,
+  enabled_list,
+  metadata,
+  first_action,
+  last_action,
+  stale_generation,
+  invalid_page,
+  missing,
+  failed_reload,
+  retained_catalog,
+  recover_reload,
+  old_generation,
+};
+
+[[nodiscard]] constexpr std::uint64_t pluginCatalogRequestId(PluginCatalogRequest request) noexcept {
+  return std::to_underlying(request);
+}
+
+constexpr auto plugin_catalog_configuration = "return {api_version=2,plugins={{path='missing-disabled',enabled=false},{path='example'}}}";
+
 class QuickTest final : public QObject {
   Q_OBJECT
 
@@ -3901,6 +3923,121 @@ return {api_version=2, client={keybindings={
     }
 
     QCOMPARE(client_->error(), QString{});
+  }
+
+  Q_SLOT void routedPluginCatalog() {
+    const auto cleanup = qScopeGuard([this] {
+      client_->loadConfiguration({}, {}, {});
+    });
+    client_->loadConfiguration({}, {}, {});
+    CommandPeer peer{memory_};
+    peer.open(socket_);
+    QTRY_VERIFY2_WITH_TIMEOUT(peer.ready(), qPrintable(peer.error()), runtime_wait_ms);
+    peer.request(telar::ClientAction::plugin_list, pluginCatalogRequestId(PluginCatalogRequest::unconfigured));
+    QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, pluginCatalogRequestId(PluginCatalogRequest::unconfigured), runtime_wait_ms);
+    QCOMPARE(peer.result().status, telar::ClientCommandStatus::failed);
+    QCOMPARE(peer.result().text, QStringLiteral("ConfigurationNotLoaded"));
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QVERIFY(QDir{directory.path()}.mkdir(QStringLiteral("example")));
+    const auto package = directory.filePath(QStringLiteral("example"));
+    writeTestFile(package + QStringLiteral("/plugin.json"), R"({"api_version":1,"id":"sample","version":"1","entry":"main.lua","source":{"url":"fixture","revision":"1"},"actions":["first","second"],"capabilities":["notifications","workspace.read"]})");
+    writeTestFile(package + QStringLiteral("/main.lua"), "return {first=function() return nil end}");
+    QProcess inspect;
+    inspect.start(qEnvironmentVariable("TELAR_GUI_TEST_RUNTIME"), {QStringLiteral("plugin"), QStringLiteral("inspect"), package});
+    QVERIFY(inspect.waitForFinished(runtime_wait_ms));
+    QCOMPARE(inspect.exitStatus(), QProcess::NormalExit);
+    QCOMPARE(inspect.exitCode(), 0);
+    QString expected_digest;
+    for (const auto &line : QString::fromUtf8(inspect.readAllStandardOutput()).split(QLatin1Char('\n'))) {
+      if (line.startsWith(QLatin1StringView("digest: "))) {
+        expected_digest = line.sliced(QStringLiteral("digest: ").size());
+      }
+    }
+    constexpr qsizetype digest_hex_bytes = 64;
+    QCOMPARE(expected_digest.size(), digest_hex_bytes);
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    writeTestFile(path, plugin_catalog_configuration);
+    client_->loadConfiguration(path, {}, {});
+    QCOMPARE(client_->error(), QString{});
+    peer.request(telar::ClientAction::plugin_list, pluginCatalogRequestId(PluginCatalogRequest::disabled_list));
+    QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, pluginCatalogRequestId(PluginCatalogRequest::disabled_list), runtime_wait_ms);
+    QCOMPARE(peer.result().status, telar::ClientCommandStatus::applied);
+    QCOMPARE(peer.result().value, std::int64_t{1});
+    auto text = peer.result().text.toUtf8();
+    auto parsed = telar::runtime::JsonValue::parse({text.constData(), static_cast<std::size_t>(text.size())});
+    const std::uint64_t generation = toQString(requiredJsonField(parsed, "generation").encoded()).toULongLong();
+    QVERIFY(generation != 0);
+    QVERIFY(peer.result().text.contains(QLatin1StringView("\"id\":null")));
+    QVERIFY(peer.result().text.contains(QLatin1StringView("\"requested_enabled\":false")));
+    peer.request(telar::ClientCommand{.request_id = pluginCatalogRequestId(PluginCatalogRequest::enabled_list), .action = telar::ClientAction::plugin_list, .target_id = generation, .value = 1});
+    QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, pluginCatalogRequestId(PluginCatalogRequest::enabled_list), runtime_wait_ms);
+    QCOMPARE(peer.result().status, telar::ClientCommandStatus::applied);
+    QCOMPARE(peer.result().value, std::int64_t{-1});
+    QVERIFY(peer.result().text.contains(QLatin1StringView("\"id\":\"sample\"")));
+    peer.request(telar::ClientCommand{.request_id = pluginCatalogRequestId(PluginCatalogRequest::metadata), .action = telar::ClientAction::plugin_get, .target_id = generation, .text = "sample"});
+    QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, pluginCatalogRequestId(PluginCatalogRequest::metadata), runtime_wait_ms);
+    QCOMPARE(peer.result().status, telar::ClientCommandStatus::applied);
+    QCOMPARE(peer.result().value, std::int64_t{1});
+    text = peer.result().text.toUtf8();
+    parsed = telar::runtime::JsonValue::parse({text.constData(), static_cast<std::size_t>(text.size())});
+    const auto entries = requiredJsonField(parsed, "entries");
+    std::size_t entry_count = 0;
+    entries.eachElement([&](const auto &entry) {
+      ++entry_count;
+      QVERIFY(requiredJsonField(entry, "digest").equals(expected_digest.toStdString()));
+      QVERIFY(requiredJsonField(entry, "path").equals("example"));
+      QVERIFY(requiredJsonField(entry, "capabilities").encoded() == R"(["workspace.read","notifications"])");
+    });
+    QCOMPARE(entry_count, std::size_t{1});
+    peer.request(telar::ClientCommand{.request_id = pluginCatalogRequestId(PluginCatalogRequest::first_action), .action = telar::ClientAction::plugin_get, .target_id = generation, .value = 1, .text = "example"});
+    QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, pluginCatalogRequestId(PluginCatalogRequest::first_action), runtime_wait_ms);
+    QCOMPARE(peer.result().status, telar::ClientCommandStatus::applied);
+    QCOMPARE(peer.result().value, std::int64_t{2});
+    QVERIFY(peer.result().text.contains(QLatin1StringView("\"entries\":[\"first\"]")));
+    peer.request(telar::ClientCommand{.request_id = pluginCatalogRequestId(PluginCatalogRequest::last_action), .action = telar::ClientAction::plugin_get, .target_id = generation, .value = 2, .text = "sample"});
+    QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, pluginCatalogRequestId(PluginCatalogRequest::last_action), runtime_wait_ms);
+    QCOMPARE(peer.result().status, telar::ClientCommandStatus::applied);
+    QCOMPARE(peer.result().value, std::int64_t{-1});
+    QVERIFY(peer.result().text.contains(QLatin1StringView("\"entries\":[\"second\"]")));
+    peer.request(telar::ClientCommand{.request_id = pluginCatalogRequestId(PluginCatalogRequest::stale_generation), .action = telar::ClientAction::plugin_list, .target_id = generation + 1, .value = -1});
+    QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, pluginCatalogRequestId(PluginCatalogRequest::stale_generation), runtime_wait_ms);
+    QCOMPARE(peer.result().status, telar::ClientCommandStatus::failed);
+    QCOMPARE(peer.result().text, QStringLiteral("StaleConfiguration"));
+    peer.request(telar::ClientAction::plugin_get, pluginCatalogRequestId(PluginCatalogRequest::invalid_page), "sample", 3);
+    QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, pluginCatalogRequestId(PluginCatalogRequest::invalid_page), runtime_wait_ms);
+    QCOMPARE(peer.result().status, telar::ClientCommandStatus::failed);
+    QCOMPARE(peer.result().text, QStringLiteral("InvalidPage"));
+    peer.request(telar::ClientAction::plugin_get, pluginCatalogRequestId(PluginCatalogRequest::missing), "missing", -1);
+    QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, pluginCatalogRequestId(PluginCatalogRequest::missing), runtime_wait_ms);
+    QCOMPARE(peer.result().status, telar::ClientCommandStatus::failed);
+    QCOMPARE(peer.result().text, QStringLiteral("PluginNotConfigured"));
+    verifyPluginCatalogReload(peer, path, generation, expected_digest);
+    QCOMPARE(peer.error(), QString{});
+    QCOMPARE(client_->error(), QString{});
+  }
+
+  void verifyPluginCatalogReload(CommandPeer &peer, const QString &path, std::uint64_t generation, const QString &expected_digest) {
+    writeTestFile(path, "return {api_version=2,plugins={{path='missing-enabled'}}}");
+    peer.request(telar::ClientAction::config_reload, pluginCatalogRequestId(PluginCatalogRequest::failed_reload));
+    QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, pluginCatalogRequestId(PluginCatalogRequest::failed_reload), runtime_wait_ms);
+    QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->error().isEmpty(), runtime_wait_ms);
+    peer.request(telar::ClientCommand{.request_id = pluginCatalogRequestId(PluginCatalogRequest::retained_catalog), .action = telar::ClientAction::plugin_get, .target_id = generation, .text = "sample"});
+    QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, pluginCatalogRequestId(PluginCatalogRequest::retained_catalog), runtime_wait_ms);
+    QCOMPARE(peer.result().status, telar::ClientCommandStatus::applied);
+    QVERIFY(peer.result().text.contains(expected_digest));
+    writeTestFile(path, plugin_catalog_configuration);
+    const QSignalSpy adopted{client_.get(), &Application::configurationChanged};
+    QVERIFY(adopted.isValid());
+    peer.request(telar::ClientAction::config_reload, pluginCatalogRequestId(PluginCatalogRequest::recover_reload));
+    QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, pluginCatalogRequestId(PluginCatalogRequest::recover_reload), runtime_wait_ms);
+    QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
+    QTRY_VERIFY_WITH_TIMEOUT(adopted.count() > 0 && client_->error().isEmpty(), runtime_wait_ms);
+    peer.request(telar::ClientCommand{.request_id = pluginCatalogRequestId(PluginCatalogRequest::old_generation), .action = telar::ClientAction::plugin_list, .target_id = generation});
+    QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, pluginCatalogRequestId(PluginCatalogRequest::old_generation), runtime_wait_ms);
+    QCOMPARE(peer.result().status, telar::ClientCommandStatus::failed);
+    QCOMPARE(peer.result().text, QStringLiteral("StaleConfiguration"));
   }
 
   Q_SLOT void routedClientConfigurationQuery() {

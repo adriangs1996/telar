@@ -789,6 +789,13 @@ void Application::executeHostCommand(const ClientCommand &message, CompleteClien
   case ClientAction::config_show:
     reply.text = configuration_source_.query(ConfigurationQuery::parse(message.text, message.value), session().clientViewState());
     break;
+  case ClientAction::plugin_list:
+  case ClientAction::plugin_get: {
+    const auto page = configuration_source_.queryPlugins(message);
+    reply.text = page.text;
+    reply.value = page.next;
+    break;
+  }
   case ClientAction::config_reload:
     configuration_source_.requestReload();
     reply.status = ClientCommandStatus::admitted;
