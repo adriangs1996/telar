@@ -9,6 +9,7 @@
 #include <array>
 #include <cassert>
 #include <charconv>
+#include <limits>
 
 namespace telar::runtime::control {
 
@@ -105,15 +106,32 @@ public:
 
 private:
   static constexpr std::size_t maximum_color_reply = 64;
+  static constexpr std::size_t inline_osc_bytes = 64;
 
   void forwardOsc(unsigned operation, std::string_view payload) {
-    std::array<char, 16> header;
-    const auto start = std::copy_n("\x1b]", 2, header.data());
-    const auto number = std::to_chars(start, header.data() + header.size() - 1, operation);
-    *number.ptr = ';';
-    state_.write({reinterpret_cast<const std::uint8_t *>(header.data()), static_cast<std::size_t>(number.ptr + 1 - header.data())});
-    state_.write({reinterpret_cast<const std::uint8_t *>(payload.data()), payload.size()});
+    constexpr std::string_view introducer = "\x1b]";
     constexpr std::string_view terminator = "\x1b\\";
+    static_assert(introducer.size() + std::numeric_limits<unsigned>::digits10 + 2 + terminator.size() <= inline_osc_bytes);
+    std::array<char, inline_osc_bytes> packet;
+    auto *position = std::copy(introducer.begin(), introducer.end(), packet.data());
+    const auto number = std::to_chars(position, packet.data() + packet.size() - 1, operation);
+    assert(number.ec == std::errc{});
+    *number.ptr = ';';
+    position = number.ptr + 1;
+    const auto header_size = static_cast<std::size_t>(position - packet.data());
+
+    if (payload.size() <= packet.size() - header_size - terminator.size()) {
+      if (!payload.empty()) {
+        std::memcpy(position, payload.data(), payload.size());
+        position += payload.size();
+      }
+      position = std::copy(terminator.begin(), terminator.end(), position);
+      state_.write({reinterpret_cast<const std::uint8_t *>(packet.data()), static_cast<std::size_t>(position - packet.data())});
+      return;
+    }
+
+    state_.write({reinterpret_cast<const std::uint8_t *>(packet.data()), header_size});
+    state_.write({reinterpret_cast<const std::uint8_t *>(payload.data()), payload.size()});
     state_.write({reinterpret_cast<const std::uint8_t *>(terminator.data()), terminator.size()});
   }
 
