@@ -1,5 +1,117 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## ACTIVE Center inset verified and freezing (10:50 UTC)
+
+Centered correction all native actors DONE. Final include QtCore/qstringliteral.h fixes actual Linux full-profile missing-direct-header error (raw failure preserved). Final build3 bothSDKs actual0. Mac full2unit broad2 PASS, actualeditor2 two EMPTY. Linux full2unit broad2/editor2 PASS; native final center3PASS bothSDKs (MacRelease0/ASAN1 LSAN301712B1900, Linuxboth0). GUIhash unchanged291e22...557d; new final source/binary identities bound in chrome-center-final-product-mac-1 and guestlinux1. Selected prior text/icon controls unchanged as report. LatestLinux matchedsizeVulkanpair actual0 privatecleanup; Topbar8/50400 STILL, completeclient649/960000 (dynamicterminalnotappearanceoracle). No actor/build/lint/editor currentlyactive. No timing.
+
+NEW OWN chrome-center archive frozen from DRAFT2: 501 artifacts/2518sources/6174244B; draft2 stdlibPNG verifier PASS includes RGB Linux/RGBA Mac, validHnegative/initialinvalid≡reference, sourcegraphchangedONLY PARITY+sceneCPP+testCPP vsf686. Includes6additionalOriginalLayout sourcehashes. Frozen current check50129 inspectactual then guardedexplicit localcommit; doNOTrefresh root/manifest/report/verifier. Neverstage/readuserpersonalmeasurement. Next fitted3Mac/8Linux UV diagnostic with current genericChromeScene (notHistoryicon-specific): observe exact quads+atlas+GPU UV before candidate. ActualOriginal fittedquad current [573.842468,31.5,22.581818,23], color.627451, currentUV .5634765625,0,.6162109375,.0537109375 (atlas originchangesacrossruns; useactual!). PreviousoriginalUV.469726 is oldcontrolONLY, notuniversal. History5 remainsOPEN and7geometryoldcandidatesrejected. FullgoalCONTINUE NOcheckpointFINAL/noagents/publish/merge.
+
+## ACTIVE Centered-inset valid negative + causal36 fixed (10:43 UTC)
+
+CoveredHvalidOLDnegative7447ACTUAL1matchesFAIL2PASS1FAIL, baselinea50dd85c374ecbce6be608e6553d88a7c1034322d10404f7a479e4ed0f3d612d fromprivateoldsceneobjectgitf686. CandidateHsameobjecttest3PASS0FAIL bothMacRelease/ASAN2; fulltext15PASS,icons7PASS bothbuilds. MacASANleakscenter304391B1951/text746014B3907/icons598992B2839, no project suppressions. LinuxnativeDPR2VulkancoveredH3PASS,existing3textimagecontrols5PASS,icons7PASS bothRelease/ASAN allactual0. Initial≡referenceINVALID(CoversFalse,actualadvance16vsref13)fails before/after retainedONLYdiagnosticnotcandidatefailure. Readonlyobserveractual/expectedPNGs retained.
+
+CausalCocoa3pairpipeline35451ACTUAL0DONE. CandidateGUI291e22d679204a0bc50326b6b09c6cfbc3cfd74bf38b98734483da662349557d. Font15.5samefixed220,22/470,22: FULL208800bandpx39=>3(diffonlyx593y33/48/52), CompleteSidebarButtonAXunionbox156,14,214,73old36=>new0. OriginalZigbandREPEATexact0diff (provesunchangedcontrol). Newreceiptchrome-center-font155-causal-regions-1.json +root/tab-strip-region.json. Font18.75heldFULL252000pxEXACT0, font15heldFULL201600pxEXACT0, identicalALLnativepoints/stableGUIhash. Fitted3pixelSampler/UVcauseUNPROVENstillOPEN, priorLinux8OPEN; no exception/mask/resampling. NoGUIactorscurrentlyhost.
+
+Macfull2unitbroad91861PASS0both, actualeditor50191twofilesEMPTY0. GuestONLYheavyfinalanalysis22568ACTIVE two-unitbroadj1 thenactualNeovim2 TMPDIRondiskONLY. Rawchrome-center-final-analysis-linux-remote-1.log; nootherguestnative/build/editsuntilactualexit (VM4GBserialize). Afteractualexit needLinuxmatchedsizeVulkanstaticpair3 withUNCHANGEDlatesttab_drag_linux_native_pair.py (ownSway/RT/keyboard/DBus,stablegeometryadmission), currentCppGUInewcenter; recordremaining8controlwithoutacceptingvisualgate. Original6-fileLayoutprobeLinux5cases shouldrun ifneeded (Macalreadyactual0).
+
+NeednewOWNchrome-centerreport/PARITY+archive/verifier, notyetcreated. IncludevalidbaselineHnegative/candidatepositive, INVALID≡rawandreferenceobserver, originalLayout6sources (parent2512maymissingaddhashinputs), pairedCocoa36=>0/39=>3andindependentrowcontrols, SDKbroads/editors/native/leaks, LinuxactualVulkanpixels. Preservef686/9d7allfrozenbytes/reports/manifests. FullgoalCONTINUINGNOcheckpointFINAL; aftercentercommitinvestigatefitted3/8/historyicon5rootcausewithallold7-geometrycontrols(no0-1controlregressionexceptions). UserpersonalmeasurementNEVERread/touch/stage, noagents/publish/merge.
+
+## ACTIVE Covered H candidate native + isolated baseline (10:30 UTC)
+
+HostRelease2/ASAN2currentHtestbuildactual0. TestASSERTSPlexcoversH beforeNative rendering; implicitadvance+5free,expectedinset2,CPUoriginalfaceimage/nonNullonegrab. NativeCANDIDATEcoveredHpipelineexec18628 via run_chrome_center_covered_mac.py ACTIVEcenter/text/icons Release/ASAN labels chrome-center-native-mac-KIND-SUITE-2. SINGLECocoaactor; nootherGUIactors/binaryrewritesuntilactualend. GuestONLYheavybuild10230 run_chrome_center_linux_build_2 syncingHtestONLY thenASAN/Releasej1; newlabelchrome-center-build-linux-KIND-2. NOsync/newguestheavyworkuntilactualexit.
+
+Privateoldbaselinebuildexec84560 scriptbuild_chrome_center_old_baseline.py ACTIVEorinspectactual: copieslibgui-quick.a, replacesONLYsceneobjectcompiledUNCHANGEDgitf686oldsource, linkscurrentcovered-Htestobject toout-dependencies/chrome-center-old-baseline-1/gui-chrome-text-test. WorktreeprodcenterfloorUNCHANGED. BaselineMUSTrunafterCocoa18628actualend toprovevalidold-negative withsameHreference. Librarysource1lineonlydifference; identitiesrecordsource/binary. Initial≡negativeinvalidreference0coverageprovenobservermuststayunqualifieddiagnostic raw. NoCPUtiming; oldarchivesFROZEN; fullgoalcontinuesNOFINAL/noagents/publish/merge/personalmeasurementtouch.
+
+## ACTIVE Center test reference invalid PROVEN; covered H test builds (10:28 UTC)
+
+Readonlyreferenceobserverbuild67573actual0, nativeobserver99725nowactualdone expectedFAIL. ActualCENTER_REFERENCE primaryCoversFALSE, implicitPhysical16, actualWidth21, referenceAdvance13, scene12,10,10.5x40. Savedactual.png/expected.png underoutdeps/chrome-center-reference-trace-1. Thusold≡referenceCPUhasmissingglyph, NOTvalidcenternegativeeitherbefore/aftercandidate. Rawfailuresretained; doNOTclaimthoseproveproductcandidatefailure.
+
+Afterobserveractualdone changedONLYnewcenterTEST texttoASCII H andADDED QVERIFYChromeFonts.shared.covers(text,false). Same5pxfree/2expected, samepredicate/deadline. ProductiongenericfloorcandidateUNCHANGED. HostRelease2/ASAN2buildsCURRENT via run_chrome_center_build.py labels chrome-center-build-mac-{release,asan}-2, targetsGUI/text/icon. NOCPPeditsuntilBOTHactual. NoGUIactor, guestIDLE. NeedVALIDnegativewithcoveredH BEFOREoldcenter: buildISOLATEDold qt/chrome_text_scene.cpp object FROMgitHEADf686 source, copylibgui-quick.a+replaceoneobject/linktestHprivatebinary(usingcompileDB/ninjacommands), runownednative. DoNOTrevertworktreeprod/capturewrongsource. ThencandidateHsingle/fulltext positive +native15.5samepoints controls. NeednewLinuxHtestsync+bothbuildnativeVulkanDPR2 then2unitbroad/editor. Existingtext/iconcontrolsPASSbothSDKbuilds (MacASANleakexits), remaining3/8fittedUVpixelsOPEN. OriginalLayoutprobe5casesverifiedinset2; no sampler/shader/atlaschanges. Allold9d7/f686archivesFROZEN; userfullgoalCONTINUES/noFINAL/noagents/publish/merge/personalmeasurementtouch.
+
+## ACTIVE Center candidate still fails new image test; observing reference (10:27 UTC)
+
+BothSDKbuildscenterflooractual0. NativeMacReleasecenterFAILmatches(), fulltext14PASS1FAILnewslot, icons7PASS. ASANcenter/fulltextsamefunctionalFAIL plusLSAN349414B2112/665111B3717; ASANiconsall7PASSbutLSAN586220B2818. LinuxVulkanDPR2centerFAILbothRelease/ASAN; threeexistingtextslotsALLPASS andiconssuiteALLPASS actual0bothSDKbuilds. No weakening/acceptance yet! ProductionfloorcandidateUNQUALIFIED untilcauseidentified. OriginalLayoutinset2independentlyverified. SuspectCPUexpectedregularPlexmaskfor≡ maynotmatchactualfallback, butNOTproven.
+
+Allnativeactors99725/74890ACTUALDONE, host/guestidleexceptNEWreadonlytracebuildcurrent local/build_chrome_center_reference_trace.py (out-dependencies/chrome-center-reference-trace-1), ONLYclonesnewtestobject+linksprivatebinarywithcandidatecurrentlibrary. Logs primaryCovers/implicitPhysical/width/refAdvance/scene and savesactual/expectedPNGs eachsample; predicate/image/deadlineunchanged. NeedwaitbuildactualthenrunownednativehelperONLYnewslotunderchrome-center-reference-trace-native-mac-1. Sourceprod/testUNCHANGEDwhileobserving. No timing. IfPlexdoesnotcover≡, referenceinvalid: fixnewtestASCIIknowncoveredH withsame5pxfreespace/2expected, proveBEFOREprodoldcenternegativeviaisolatedoldsceneobject, thencandidatepositive; doNOTsimplychangeuntilgreen. ActualCocoaFont15.5candidatepairstillNOTRUN, canprovideseparatecausal36resultafterreferenceobserver. Rowf686/9d7archivesFROZEN, userfullgoalCONTINUE/noFINAL/noagents/publish/merge/personalmeasurementtouch.
+
+## ACTIVE Generic centered-inset fix builds (10:22 UTC)
+
+Negativecenteractor58817ACTUALDONE1: matches()FAIL atchrome_text_test346,2pass1fail,
+notexposurefailure. Singlegrab+nonNullguardtest29lines. Negativeexactsource+binary
+identitysnapshotlocal/chrome-center-negative-source-1 (binary452361...def9f).
+Original6-fileLayoutprobeactual0fivesamples, free5requiresinset2.
+
+Productionone-linefixAPPLIEDqt/chrome_text_scene.cpp centerx+=floor(max(free,0)/2).
+NOTchangingglyphUV/shaders/atlas/fittedplacement. HostReleasebuild85126/ASAN62245
+ACTIVE labelschrome-center-build-mac-{release,asan}-1 targetsGUI/text/icon. NOCPP/
+header/QMLeditsuntilactualBOTHends. NeedpositiveCENTERnewslot +existingfulltext/
+iconcontrols +Font15.5samecommonpointsCocoapair(39=>3expected, no3exception) +newrow
+font18.75/static andfont15baselinecontrols. Old7-geometryrenderercontrols included
+scopeactualtext/iconcomponenttests; finalbroad/editorbothSDK2affectedunits.
+NohostGUIactor, noCPUtiming. Existingoldf686/9d7archivesFROZEN.
+
+GuestnewONLYheavybuildCURRENT run_chrome_center_linux_build.py syncingONLYnewtext
+sceneCPP/testCPP thenASAN/Release -j1 targetsGUI/text/icon; inspectnewlabelrootnames
+actualscriptbecauseclonereplacement mayretainoldtab-drag-build prefix! Rawhost
+chrome-center-build-linux-remote-1.log. Preparedchrome_center_frame_delivery_linux.py
+cloneDPR2fixture nowUNSETSsoftware andforcesVulkan/lavapipe actualtext/iconpixels,
+privateSwaypixman+keyboard/DBus/ownedPIDfocus. Needupload/runnativeAFTERbuildactual0,
+serialize4GB; no otherguestheavyactors. OriginalGUIVulkanreferencecfb6...9023fready.
+NoCGPostpermission noevents/OSrequests. PersonalmeasurementNEVERread/touch/stage,
+noagents/publish/merge/finalcheckpoint; fullgoalcontinues.
+
+## ACTIVE Center negative native actor (10:19 UTC)
+
+OriginalLayoutprobeactual0: free5/5.5=>inset2,6/6.75=>3,27=>13. Exactoriginal6sources copied/hash-bound. CorrectZig/opt/homebrew/bin/zig0.16.0. Initialbadcompilerpath neverexecuted. Negativebuild1actual0, thenfixedtestONEgrab+nonNullguardlambda, negativebuild2actual0. NativeactorCURRENTexec58817 labelchrome-center-negative-native-mac-1, out/gui-chrome-text-test newslotcenteredChromeUsesOriginalWholePixelInset. WaitACTUALexit beforeanotherGUIactor/build/sourceassociation. ProductionUNMODIFIED. NoASAN/guestbuilds/actors/timing. Afternegative snapshotthen genericcenterfloor+bothSDKchecks+causal15.5samepoints. Oldf686/9d7archivesFROZEN. FullgoalcontinuesNOcheckpointFINAL/noagents/publish/merge, personalmeasurementNEVERread/touch/stage.
+
+## ACTIVE Original layout centered offset independently verified (10:17 UTC)
+
+Centernewtest-onlybuild16831 STILLACTIVE Qtimportscannerper-targetautoreconfigure.
+NoGUIactor/ASANbuild, guestVMIDLE, noCPUTiming. NOCPP/header/QMLeditsuntilbuildactual.
+NeedFIXTESTDOUBLEGRABtoonegrab+!actual.isNull lambda AFTERactualbuildBEFOREnegative
+actor, thenrebuildtest-only2andrunnewslotnegative. Currentoldtestcouldfalsepositive
+ifbothgrabframesnullthoughwindowexposed; don'trelyonthat. ProductionstillUNMODIFIED.
+
+IndependentOriginalLayoutprobe preparedlocal/chrome-center-original-layout-1 copies
+UNCHANGED6files Layout/Item/Rect/Insets/length/alignment, small5-caseoverlaycentering
+probe. Initialattemptcompilerbadexplicit~/.local/bin/zignotexists (nevercompiled),
+actualdiscovery/opt/homebrew/bin/zig0.16.0. Correctedprobeexec18071 nowinspectactual
+result/output. Forarea.x24,childwidth12,free5 MUSTx26=>inset2 peroriginal, 5.5/6/6.75/
+27additionalcases. Exactsourcehashes+binaryhash inresult.json oncepassed. Pureexample
+notrenderer/perfclaim. NeedallfuturearchivesonlyNEWchrome-centerprefix andhelpers,
+oldTabDrag/fractionalrowsfrozenNOrefresh. FullgoalcontinuingNOcheckpointfinal;
+noagents/publish/merge/userpersonalmeasurementread/touch/stage.
+
+## ACTIVE Centered chrome regression build (10:13 UTC)
+
+HEADf6863f3a0ea311dcf0ad651e3c1e4e0cb38b546a committedROWfix,675artifacts2512sources
+7550073B immutableNEWfractional-tab-rows root+validation. FrozenSELFoffline/current
+PASS beforecommit. Force-added9nestedignoredtraceartifacts, exacttrackedset675,
+cachedwhitespacecheckPASS. NOpublish/merge. AlloldarchivesNEVERrefresh. Userunrelated
+personal-frame-delivery.md ONLYuntracked andnevertouch/read/stage.
+
+CONTINUINGuserfullgoal NOFINALcheckpoint. Newworkcenter36/39 residual. AddedONLYTEST
+Q_SLOTcenteredChromeUsesOriginalWholePixelInset in tests/chrome_text_test.cpp before
+regularMasks...: physicalfont27, glyph≡, physicalfreespace5, expectedORIGINALinset2
+fromUNCHANGEDlib/gfx/Layout.offset.center=floor(free/2). UsesexistingCPUoriginal-face
+referenceimage +NativeChromeText AlignHCenter, notmirrorchangedimpl. Existingregular/
+emphasized/face/fontcatalogtestsforlatercontrols. TestcurrentlyusesgrabFrameTWICEin
+comparisonexpression; afterbuildactualconsiderlambdaonegrabforcleanframecomparison
+BEFOREprodedit andrerunnegative. No tests/predicatesweakening. ProductionUNMODIFIED
+qt/chrome_text_scene.cpp centercurrently x+=max(0,width-advance)/2; candidatefloorfree
+beforeaddmatchingOriginalPixelButtonLayout. Needactualnegativebeforechangingprod.
+HostReleaseTESTONLYbuildexec16831 gui-chrome-text-test ACTIVE, label local/chrome-
+center-negative-build-mac-1. NOCPP/header/QMLeditsuntilactualexit. NoGUIactor, noASAN
+build, guestVMIDLE (allpreviousbuild/lint/editor/nativeactorsdone). NoCPUtiming.
+Afterbuild runownedhistory_motion_native_test.py labelchrome-center-negative-native-
+mac1 binaryout/gui-chrome-text-test slotnew; negativeexpectedhorizontal1pxshift. Need
+recordraw/exactsourcehash/binaryidentity beforeprodgenericfloor. Thenfixcenterfloor,
+bothSDKbuilds/sourceanalysis/editors, nativecomponenttests+Font15.5controlledsameinput
+Cocoa pair expects36->0 leaving3fittedglyphOPEN; priorrowfont18.75+font15 and7old
+renderergeometrycontrols MUSTremainvalid (no exceptions). LinuxactualVulkanstatic
+pair2topbar8glyphpixelsalsoOPEN; causeUVnotestablished. No changeforfitted3/8yet.
+Fullkernelperformance/priorglobalgatesstayOPEN; oldMotionkernelunchanged.
+
 ## ACTIVE Fractional row evidence FROZEN; commit then center36 next (10:12 UTC)
 
 NEWmeasurements/fractional-tab-rows +fractional-tab-rows-validation.json FROZENfrom

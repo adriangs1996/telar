@@ -4,6 +4,15 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [centered chrome correction](measurements/chrome-center.md) restores the
+original whole-pixel label inset. A covered-glyph native regression fails with
+the parent scene object and passes with the correction. Paired font15.5 Cocoa
+navigation differences fall39→3; the complete sidebar button falls36→0, while
+font18.75 and font15 controls remain exact. Both SDKs pass affected native
+controls, retaining Mac sanitizer shutdown leaks. A new matched-size Linux
+Vulkan pair still has8/50400 navigation pixels different. Those fitted glyph
+pixels, complete visual/input/performance parity and native leaks remain open.
+
 The [fractional tab-row correction](measurements/fractional-tab-rows.md) centers
 pills in physical pixels, fixing a 14→15-pixel row error at font18.75/DPR2. Held
 and static navigation bands change7441/5022 differing pixels to exact252000-pixel
