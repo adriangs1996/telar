@@ -284,8 +284,12 @@ private:
   bool write_failed_ = false;
 
   GhosttyTerminalCursorState readCursorState() const {
-    GhosttyTerminalCursorState result{};
-    checkGhostty(ghostty_terminal_cursor_state(terminal_, &result));
+    const auto snapshot = ghostty_terminal_cursor_snapshot(terminal_);
+    if (!snapshot.valid) {
+      throw TerminalError{GHOSTTY_INVALID_VALUE};
+    }
+
+    const auto &result = snapshot.state;
     margin_cache_ = {epoch_, {result.top, result.bottom, result.left, result.right}};
     auto &origin = modes_[origin_mode % modes_.size()];
     origin = {epoch_, origin_mode, false, result.origin != 0};

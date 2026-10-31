@@ -25,13 +25,18 @@ int main() {
   static_assert(GHOSTTY_TELAR_STATE_VERSION == ${TELAR_GHOSTTY_STATE_VERSION});
   static_assert(sizeof(GhosttyTerminalCursorState) == 14);
   static_assert(offsetof(GhosttyTerminalCursorState, origin) == 12);
+  static_assert(sizeof(GhosttyTerminalCursorSnapshot) == 16);
+  static_assert(offsetof(GhosttyTerminalCursorSnapshot, valid) == 14);
+  static_assert(offsetof(GhosttyTerminalCursorSnapshot, reserved) == 15);
+  static_assert(alignof(GhosttyTerminalCursorSnapshot) == alignof(GhosttyTerminalCursorState));
   static_assert(sizeof(&ghostty_grid_ref_cells) > 0);
   static_assert(GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT == 4096);
   static_assert(sizeof(&ghostty_grid_ref_grapheme_batch) > 0);
   static_assert(sizeof(&ghostty_terminal_page_bytes) > 0);
   GhosttyCodepointsBuffer buffer{};
   GhosttyTerminalCursorState cursor{};
-  return ghostty_terminal_vt_write_ascii(nullptr, nullptr, 0, nullptr) + ghostty_terminal_cursor_state(nullptr, &cursor) + buffer.len + sizeof(GhosttyKittyGraphicsImageInsert) + GHOSTTY_TERMINAL_DATA_CURSOR_IS_DEFAULT + GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_IS_INTERNAL + GHOSTTY_TERMINAL_OPT_KITTY_PROTOCOL + GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_BOTTOM + GHOSTTY_KITTY_GRAPHICS_DATA_LOADING_BYTES + GHOSTTY_TERMINAL_OPT_ACTIVE_SCREEN;
+  const auto snapshot = ghostty_terminal_cursor_snapshot(nullptr);
+  return static_cast<int>(snapshot.valid) + ghostty_terminal_vt_write_ascii(nullptr, nullptr, 0, nullptr) + ghostty_terminal_cursor_state(nullptr, &cursor) + buffer.len + sizeof(GhosttyKittyGraphicsImageInsert) + GHOSTTY_TERMINAL_DATA_CURSOR_IS_DEFAULT + GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_IS_INTERNAL + GHOSTTY_TERMINAL_OPT_KITTY_PROTOCOL + GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_BOTTOM + GHOSTTY_KITTY_GRAPHICS_DATA_LOADING_BYTES + GHOSTTY_TERMINAL_OPT_ACTIVE_SCREEN;
 }" GHOSTTY_VT_HAS_RUNTIME_STORAGE_STATE)
 if(NOT GHOSTTY_VT_HAS_RUNTIME_STORAGE_STATE)
   message(FATAL_ERROR "Build the pinned libghostty-vt with tools/build_ghostty.py first")

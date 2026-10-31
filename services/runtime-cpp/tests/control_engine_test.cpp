@@ -174,6 +174,14 @@ void cursorStateViews(Memory &memory) {
     require(margins.top == snapshot.top && margins.bottom == snapshot.bottom && margins.left == snapshot.left && margins.right == snapshot.right);
     require(origin_mode == (snapshot.origin != 0));
     const std::array<std::uint16_t, 6> fields{snapshot.x, snapshot.y, snapshot.top, snapshot.bottom, snapshot.left, snapshot.right};
+    const auto by_value = ghostty_terminal_cursor_snapshot(terminal.get());
+    static_assert(sizeof(GhosttyTerminalCursorSnapshot) == 16);
+    static_assert(offsetof(GhosttyTerminalCursorSnapshot, valid) == 14);
+    static_assert(offsetof(GhosttyTerminalCursorSnapshot, reserved) == 15);
+    require(by_value.valid && by_value.reserved == 0);
+    require(by_value.state.origin == snapshot.origin && by_value.state.reserved == 0);
+    const std::array<std::uint16_t, 6> returned_fields{by_value.state.x, by_value.state.y, by_value.state.top, by_value.state.bottom, by_value.state.left, by_value.state.right};
+    require(returned_fields == fields);
     constexpr std::array keys{GHOSTTY_TERMINAL_DATA_CURSOR_X, GHOSTTY_TERMINAL_DATA_CURSOR_Y, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_TOP, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_BOTTOM, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_LEFT, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_RIGHT};
     for (std::size_t index = 0; index < keys.size(); ++index) {
       std::uint16_t scalar = UINT16_MAX;
@@ -213,6 +221,12 @@ void cursorStateViews(Memory &memory) {
   require(ghostty_terminal_cursor_state(nullptr, &untouched) == GHOSTTY_INVALID_VALUE);
   require(untouched.x == 0 && untouched.bottom == 0 && untouched.origin == 0);
   require(ghostty_terminal_cursor_state(terminal.get(), nullptr) == GHOSTTY_INVALID_VALUE);
+
+  const auto invalid = ghostty_terminal_cursor_snapshot(nullptr);
+  require(!invalid.valid && invalid.reserved == 0);
+  require(invalid.state.origin == 0 && invalid.state.reserved == 0);
+  const std::array<std::uint16_t, 6> invalid_fields{invalid.state.x, invalid.state.y, invalid.state.top, invalid.state.bottom, invalid.state.left, invalid.state.right};
+  require(invalid_fields == std::array<std::uint16_t, 6>{});
 }
 
 template <Allocator Memory>

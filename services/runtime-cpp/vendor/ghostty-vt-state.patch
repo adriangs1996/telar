@@ -147,7 +147,7 @@ index 87f6aa4..ca3a228 100644
  } GhosttyRenderStateRowCellsData;
  
 diff --git a/include/ghostty/vt/terminal.h b/include/ghostty/vt/terminal.h
-index b586556..45dca72 100644
+index b586556..4b53f05 100644
 --- a/include/ghostty/vt/terminal.h
 +++ b/include/ghostty/vt/terminal.h
 @@ -7,6 +7,9 @@
@@ -213,7 +213,7 @@ index b586556..45dca72 100644
  /**
   * Write VT-encoded data to the terminal, stopping right after the first
   * byte that reaches one of the requested boundaries.
-@@ -3655,6 +3686,26 @@ GHOSTTY_API GhosttyResult ghostty_terminal_compress(
+@@ -3655,6 +3686,38 @@ GHOSTTY_API GhosttyResult ghostty_terminal_compress(
   *
   * @ingroup terminal
   */
@@ -235,16 +235,28 @@ index b586556..45dca72 100644
 +
 +GHOSTTY_API GhosttyResult ghostty_terminal_cursor_state(GhosttyTerminal terminal, GhosttyTerminalCursorState *out_state);
 +
++/** Owned by-value cursor snapshot. valid is false only for a null terminal;
++ * every field is initialized, including both reserved bytes. The caller uses
++ * the same serialization and lifetime rules as ghostty_terminal_cursor_state.
++ * The existing out-parameter API and its layout remain unchanged. */
++typedef struct {
++  GhosttyTerminalCursorState state;
++  bool valid;
++  uint8_t reserved;
++} GhosttyTerminalCursorSnapshot;
++
++GHOSTTY_API GhosttyTerminalCursorSnapshot ghostty_terminal_cursor_snapshot(GhosttyTerminal terminal);
++
 +GHOSTTY_API GhosttyResult ghostty_terminal_page_bytes(GhosttyTerminal terminal, size_t *out_bytes);
 +
  GHOSTTY_API GhosttyResult ghostty_terminal_get(GhosttyTerminal terminal,
                                      GhosttyTerminalData data,
                                      void *out);
 diff --git a/src/lib_vt.zig b/src/lib_vt.zig
-index 0625208..c8f9af2 100644
+index 0625208..7db76f5 100644
 --- a/src/lib_vt.zig
 +++ b/src/lib_vt.zig
-@@ -328,12 +328,16 @@ comptime {
+@@ -328,12 +328,17 @@ comptime {
          @export(&c.terminal_free, .{ .name = "ghostty_terminal_free" });
          @export(&c.terminal_reset, .{ .name = "ghostty_terminal_reset" });
          @export(&c.terminal_resize, .{ .name = "ghostty_terminal_resize" });
@@ -258,10 +270,11 @@ index 0625208..c8f9af2 100644
          @export(&c.terminal_compress, .{ .name = "ghostty_terminal_compress" });
 +        @export(&c.terminal_page_bytes, .{ .name = "ghostty_terminal_page_bytes" });
 +        @export(&c.terminal_cursor_state, .{ .name = "ghostty_terminal_cursor_state" });
++        @export(&c.terminal_cursor_snapshot, .{ .name = "ghostty_terminal_cursor_snapshot" });
          @export(&c.terminal_get, .{ .name = "ghostty_terminal_get" });
          @export(&c.terminal_get_multi, .{ .name = "ghostty_terminal_get_multi" });
          @export(&c.terminal_continuation_write, .{ .name = "ghostty_terminal_continuation_write" });
-@@ -394,6 +398,15 @@ comptime {
+@@ -394,6 +399,15 @@ comptime {
              @export(&c.snapshot_decoder_decode, .{ .name = "ghostty_snapshot_decoder_decode" });
          }
          if (features.kitty_graphics) {
@@ -277,7 +290,7 @@ index 0625208..c8f9af2 100644
              @export(&c.kitty_graphics_get, .{ .name = "ghostty_kitty_graphics_get" });
              @export(&c.kitty_graphics_animation_tick, .{ .name = "ghostty_kitty_graphics_animation_tick" });
              @export(&c.kitty_graphics_image, .{ .name = "ghostty_kitty_graphics_image" });
-@@ -414,8 +427,11 @@ comptime {
+@@ -414,8 +428,11 @@ comptime {
          }
          if (features.grid_introspection) {
              @export(&c.grid_ref_cell, .{ .name = "ghostty_grid_ref_cell" });
@@ -642,10 +655,10 @@ index 27eb6fd..0c61ab9 100644
 +    return .success;
 +}
 diff --git a/src/terminal/c/main.zig b/src/terminal/c/main.zig
-index a0c0dc3..258e1a9 100644
+index a0c0dc3..0a4890a 100644
 --- a/src/terminal/c/main.zig
 +++ b/src/terminal/c/main.zig
-@@ -192,12 +192,16 @@ pub const terminal_free = terminal.free;
+@@ -192,12 +192,17 @@ pub const terminal_free = terminal.free;
  pub const terminal_reset = terminal.reset;
  pub const terminal_resize = terminal.resize;
  pub const terminal_set = terminal.set;
@@ -659,10 +672,11 @@ index a0c0dc3..258e1a9 100644
  pub const terminal_get = terminal.get;
 +pub const terminal_page_bytes = terminal.page_bytes;
 +pub const terminal_cursor_state = terminal.cursor_state;
++pub const terminal_cursor_snapshot = terminal.cursor_snapshot;
  pub const terminal_get_multi = terminal.get_multi;
  pub const terminal_continuation_write = terminal.continuation_write;
  pub const terminal_continuation_buf = terminal.continuation_buf;
-@@ -254,8 +258,11 @@ pub const unicode_codepoint_width = unicode.codepoint_width;
+@@ -254,8 +259,11 @@ pub const unicode_codepoint_width = unicode.codepoint_width;
  pub const unicode_grapheme_width = unicode.grapheme_width;
  
  pub const grid_ref_cell = grid_ref.grid_ref_cell;
@@ -674,7 +688,7 @@ index a0c0dc3..258e1a9 100644
  pub const grid_ref_hyperlink_uri = grid_ref.grid_ref_hyperlink_uri;
  pub const grid_ref_style = grid_ref.grid_ref_style;
  pub const tracked_grid_ref_free = grid_ref_tracked.tracked_grid_ref_free;
-@@ -300,3 +307,13 @@ test {
+@@ -300,3 +308,13 @@ test {
      // We want to make sure we run the tests for the C allocator interface.
      _ = @import("../../lib/allocator.zig");
  }
@@ -769,7 +783,7 @@ index 0261901..23c45f8 100644
          .cells => {
              const cells = out.* orelse return .invalid_value;
 diff --git a/src/terminal/c/terminal.zig b/src/terminal/c/terminal.zig
-index 5f047f4..2bc7589 100644
+index 5f047f4..d19c80d 100644
 --- a/src/terminal/c/terminal.zig
 +++ b/src/terminal/c/terminal.zig
 @@ -1063,6 +1063,20 @@ pub fn vt_write(
@@ -895,7 +909,7 @@ index 5f047f4..2bc7589 100644
              .color_foreground_default,
              .color_background_default,
              .color_cursor_default,
-@@ -2015,6 +2067,49 @@ pub const TerminalData = enum(c_int) {
+@@ -2015,6 +2067,66 @@ pub const TerminalData = enum(c_int) {
      }
  };
  
@@ -928,6 +942,23 @@ index 5f047f4..2bc7589 100644
 +    return .success;
 +}
 +
++pub const CursorSnapshot = extern struct {
++    state: CursorState,
++    valid: bool,
++    reserved: u8,
++};
++
++pub fn cursor_snapshot(terminal_: Terminal) callconv(lib.calling_conv) CursorSnapshot {
++    var snapshot: CursorSnapshot = .{
++        .state = std.mem.zeroes(CursorState),
++        .valid = false,
++        .reserved = 0,
++    };
++    snapshot.valid = cursor_state(terminal_, &snapshot.state) == .success;
++
++    return snapshot;
++}
++
 +pub fn page_bytes(terminal_: Terminal, out_bytes: ?*usize) callconv(lib.calling_conv) Result {
 +    const wrapper = terminal_ orelse return .invalid_value;
 +    const output = out_bytes orelse return .invalid_value;
@@ -945,7 +976,7 @@ index 5f047f4..2bc7589 100644
  pub fn get(
      terminal_: Terminal,
      data: TerminalData,
-@@ -2069,6 +2164,23 @@ fn getTyped(
+@@ -2069,6 +2181,23 @@ fn getTyped(
      const t: *ZigTerminal = wrapper.terminal;
      switch (data) {
          .invalid => return .invalid_value,
@@ -969,7 +1000,7 @@ index 5f047f4..2bc7589 100644
          .cols => out.* = t.cols,
          .rows => out.* = t.rows,
          .cursor_x => out.* = t.screens.active.cursor.x,
-@@ -7911,3 +8023,10 @@ test "get mouse_shape" {
+@@ -7911,3 +8040,10 @@ test "get mouse_shape" {
      try testing.expectEqual(Result.success, get(t, .mouse_shape, @ptrCast(&shape)));
      try testing.expectEqual(mouse.Shape.wait, shape);
  }
@@ -981,14 +1012,15 @@ index 5f047f4..2bc7589 100644
 +    return .success;
 +}
 diff --git a/src/terminal/c/types.zig b/src/terminal/c/types.zig
-index db75bfd..209b912 100644
+index db75bfd..88e7d5d 100644
 --- a/src/terminal/c/types.zig
 +++ b/src/terminal/c/types.zig
-@@ -222,6 +222,7 @@ const type_decls = [_]TypeDecl{
+@@ -222,6 +222,8 @@ const type_decls = [_]TypeDecl{
      .initStruct("GhosttySysImage", sys.Image),
      .initStruct("GhosttyTerminalDesktopNotification", terminal.DesktopNotification),
      .initStruct("GhosttyTerminalMemoryUsage", terminal.TerminalMemoryUsage),
 +    .initStruct("GhosttyTerminalCursorState", terminal.CursorState),
++    .initStruct("GhosttyTerminalCursorSnapshot", terminal.CursorSnapshot),
      .initStruct("GhosttyTerminalModeConfig", terminal.ModeConfig),
      .initStruct("GhosttyTerminalProgramStatus", terminal.ProgramStatus),
      .initStruct("GhosttyTerminalProgressReport", terminal.ProgressReport),
