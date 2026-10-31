@@ -1,5 +1,476 @@
 # Continue Telar C++ Qt Quick GUI parity on Personal
 
+## ACTIVE Fractional row evidence FROZEN; commit then center36 next (10:12 UTC)
+
+NEWmeasurements/fractional-tab-rows +fractional-tab-rows-validation.json FROZENfrom
+validatedDRAFT2:675artifacts/2512programsources/7550073bytes. Draft1PASS673thenadded
+verificationcommandsreport->Draft2PASS675. FrozenSELFverifiercheck-current-source
+CURRENTexec(firstfreeze), inspectlocal/tab-drag-fractional-row-frozen-verification-1
+receiptactual0 beforestage/commit. DO NOTrefreshanyfrozenrootsincludingold9d7TabDrag.
+Allhost/guestactors/builds/lints/editorsIDLE. NOtimingactive. FullgoalNOTcomplete,
+NOcheckpointfinal. NeedguardedlocalcommitexplicitOWNpaths, cachedcheck=True, assert
+artifacttrackedsetexact675 andforceaddignorednestedlinux/out-dependencies/trace paths.
+Neverstage/read/touchuserpersonal-frame-delivery.md. Noagents,publish,merge.
+
+Scopefinishedrowphysicalfloor:Macheld7441->0/static5022->0 at252000px each, baseline
+font15held0at201600px, allpointerpointsidentical; component7/Quick10bothSDKbuilds
+passfunctional. LinuxDPR2ASANcomponent+Quickactual0/cleanup0. MacASANleaksremain
+component762333/3896 andFINALQuick600898/3337. Broad3unitsandactualeditor3bothSDKs
+PASS. FirstLinuxDPR2Quickfailed2 reproducedtraceexact2; fixturewaitscreationmotion
+settledwithsame10s beforecoordinateadmission, nocanonicalpredicate/deadlinerelax.
+ActualLinuxGUIVulkanpair2confirmed1200x800both,QSGVklog; topbar8diff50400px, fullclient
+578/960000diff remainOPEN. Pair1mismatchedviewportdiagnosticpreserved. CGPostpreflight
+false,nopermissionrequest/events. Font15.5Mac39pxOPEN:36≡centerfloorcandidate and3
+fittedglyphrightedge (actualOriginalMetalquadrect573.842468,31.5,22.581818,23), no
+provenUVcause. Originallib/gfx/Layout.offset.center=floor(free/2); QtChromeTextScene
+x +=free/2 nofloor. NEXTaftercommit: addmeaningfulcenteredNativeChromeTextregression
+inexistingtests/chrome_text_test.cpp referenceimagepipeline, proveNEGATIVE, generic
+floorcenterfixqt/chrome_text_scene.cpp, causalFont15.5samepoints repeat/control+
+otheroriginalgeometryregions; doNOTaccept3/8exceptions. Seeearliernotesforrawpaths.
+Newreportfractional-tab-rows.md+PARITYtopupdatedandfrozenprogramsnapshot4changedfiles
+PARITY/qtTabStripLayout/Quick/TabActivityScene; handoffexcludedcansafelyappend.
+
+## ACTIVE Row checks passed; actual Linux paired pixels now measured (10:06 UTC)
+
+RowfixturecorrectedbothSDKs/native: Linuxpipeline70658ACTUAL0, ReleaseQuick10PASS,
+ASANcomponent7PASS/Quick10PASS ALLactual0; Quickfullbroad0 andactualNeovim1EMPTY0.
+OriginalfirstLinuxpipelineFAIL8pass2fail+trace8pass2fail retained. HostQuickfixture
+Release3/ASAN3build0, finalQuickmacrelease2ALL10PASSactual0,ASAN2ALL10PASSactual1
+LSAN600898B3337allocs. HostQuickbroad78938actual0;actualeditorMac2QuickEMPTY0.
+Previouscomponent7/broadlayout+scene/editor2 allpass, componentASAN762333B3896OPEN.
+ALLhost/guestbuild/lint/editor/nativeactorsIDLEnow. PureMotionkernelunchanged.
+Hostfinal3source+6binaryidentitieslocal/tab-drag-fractional-row-final-product-mac-2.json,
+GUIhashstill0db02fb8...686f6. NoGUIcapture/buildactive, noCPUtiming.
+
+ACTUALLINUXVULKANCAPTURES: firstactor18578actual0 butviewportMISMATCH original1200x800,
+Qt1280x900; Swaylog initialtilingtransactionAppliedAFTERfloating/resize2mslater. Pair1
+NOTqualifiedvisualcomparison. FixedfixtureONLY waits300msobservedstableownedgeometry
+before/betweenfloating/resizecommands, finalassert1200x800rect+window_rect. Latest
+pair2 actor31889ACTUAL0, BOTHactual1200x800@0,0, fulloutput1280x900; QSG_INFOQtlog
+confirmsVulkanandfinalswapchain1200x800 (observed1280->1200transition). Nativeoriginal
+Debugunmodified, QtRelease; visualONLYnooptimizedperfclaim. EachprivateRT/socket/
+compositor/keyboard/DBus, no userdisplay/clipboard. GUI/RT/keyboard deliberatelySIGTERM
+cleanup-15, compositor0, privateDisplayremovedtrue. 5ssettleafteradmission.
+Hostdownloaded6files/pairforpreview tooutdeps/fractional-tab-rows-linux-visual-preview-1.
+Fullclientrectangle960000pxhas578differences; FULLTopbar50400pxhas8differentbbox
+(123,17,124,25), soLinuxvisualgateOPEN, noexception/mask. Snapshot/provenancehost
+helpertab_drag_linux_native_pair.py currentlyexactrecipe2; oldrecipe1wasoverwritten
+BEFOREfreeze(oldrootresult+compositorlogprovesprepdiagnostic, no exactrecipe1claim).
+Needretainactualguestfullrawnotjustpreview viaNEWcollector.
+
+39Font15.5Mac control:36sidebar≡1pxshiftcandidateoriginalLayout.offset.center=floor
+whereQtChromeTextScene.centerdoesn'tfloor (NOFIXyet). Remaining3atx593 observed
+OriginalMetalquad [573.8424683,31.5,22.5818176,23],UV[.4697265625,0,.5224609375,.0537109375]
+color.627451. It'sFITTEDglyphNONintegerwidth, NOTregularcaption(aspreviousguess).
+Savedlocal/...155-control-1/remaining-glyph-quad-observations.json. CauseUV/shadernot
+established. Linux8alsoatglyphrightedgeprobablyrelated, hypothesisONLY. AfterROW
+commit, investigatecenter36andfittedmask3/8 andotherfullparitygaps, NOFINALcheckpoint.
+
+NEXTNOW: allcheckscompletedbutNEWrowarchiveNOTCREATED. Needuploadcollectorlatest
+local/collect_fractional_tab_rows_linux.py afterASAN/Release+allactorsdone, collect
+newguestownedfractional+buildlogs+Linuxstaticpair1/2+privateinputtraceRAW excluding
+executables (ELF/ar/o/dylib/pch). Currentcollectoraddsout-dependencies/trace toexport
+=>nestedgitignore force-addmanifestexactmissingpaths later. Addhelperlastversions
+collectsfinal-product-linux-2source3 inclQuick matchingHOST2source3; assertmatching.
+ExportNEWoutdeps/fractional-tab-rows-linux-export-1 validatedregularTAR/no credentials.
+Needcopyhostpreviewpixel-comparison/diagnosticPANELSintoownedfrozeninputsorretainer
+explicitselectedpreviewroot(otherwisehostLinux8 countsnoartifact), notolderarchives.
+UpdatePARITYwithscopedrow+fixture/native/platformcomparison thenfreeze sourceparent
+TabDrag2512(paths) NEWrootmeasurements/fractional-tab-rows+validationmanifest.
+Preparedretainer/verify_fractional_tab_rows.py pathsENV FRACTIONAL_TAB_EVIDENCE_ROOT
+forignoredDRAFTpreflight, neverrefreshfrozenroot. VerifierUPDATEDafterfixture to
+changed4filesincludingPARITY/qtLayout/Quick/scene. ItsLinuxfirstchecks5entriesexpects
+lastactual2 andcorrectedchecks2fiveall0. ComponentReleaseuseslabel1, ASANlabel2,
+Quickbothlabel2. Currenthostproductmac2+guestlinux2 expected. Needpreflightactual
+andfixverifiererrorsBEFOREfreeze, includeMacbroad/actualeditors/positive/negative
+PNGcounts andretained39OPEN. Reportnewfractional-tab-rows.md draftedupdatedhonest
+Mac+Linuxresults/leaks/platform8. Prior9d7TabDragarchive/report/manifestFROZENforever.
+Guardcachedcheck=True/exactartifacttrackedset beforelocalcommit, noagents/publish/
+merge/userpersonalmeasurementreads/touches/staging. FullgoalcontinuesNOFINAL.
+
+## ACTIVE DPR2 trace reproduces failures; fixture admission fixed (09:54 UTC)
+
+TRACEactor47671ACTUALDONE2 (notjustdiagnosticpass): same8slots8PASS2FAIL identical
+originalpredicates/deadlines. Rawguesttab-drag-fractional-row-quick-linux-traced-1.
+First ROW_FIXTURE source2Rect379.645..517.977logical, dest3Rect430..599.4 overlapping;
+press449logical hits3TOPMOSTpresentedslot (physical2[759.291..1035.955],3[860..1198.8]),
+traceROW_CAPTURE3 exactlymatchesfailedexpected2. transitioningTRUE window640x450DPR2.
+Second source4Rect430..599.4, dest5Rect569.4..599.4, drop592insideBOTH; captured4,
+originaldropSlotsfirst-tie=source4=>no destination/preview, matchesEscape failure.
+Bothfixedtestspreconditionswrongwhilecreationmotionoverlaps. CorrectPRODUCTfrozen
+presentedtargets/renderz andoriginalties, NOTfixingcaptureroutingforfixture.
+
+AfterallactorsDONE addedTESTONLYprepareGestureTabs precondition: firstsyncedframe,
+findstrip, wait !transitioning withSAMEruntime_wait_ms, thenfreshsyncedframe. No
+canonicalpredicate/deadline/assertrelax. NegativeoldQuicksource+hashsnapshotlocal/
+tab-drag-fractional-row-quick-negative-source-1. Production2-linefloorUNMODIFIED.
+ACTIVEbuildsHOSTRelease3exec10638 /ASAN3exec66888 (Quickonlyeffect; targets3) labels
+ tab-drag-fractional-row-build-mac-{release,asan}-3. NOCPP/header/QMLedituntilactual
+bothends. GuestONLYheavybuild24792 run_tab_fractional_fixture_linux_build.py synced
+QuickONLYthenASAN+Releasej1;labels tab-drag-build-linux-{asan,release}-fractional-2.
+NOsync/newguestheavyworkuntilactualexit. Thesebuildsshouldreuseallother97units.
+
+NeedpostfixturefullbroadQuick+actualeditorsbothSDKs, runQuick8/10bothSDKbuildsDPR2
+Linuxretainingfirstfailedrunandtrace; componentASANLinuxstillNOTRUN, componentRelease
+7PASSalready. Hostcomponent7bothfunctionalpass/leaksremain. CaptureGUIhashunchanged
+Quicktest-onlyrebuild; mathematicalfloorcausalPNGqualificationstableoriginalcurrent
+0db02...686f6. Updatefinal-productsourceidentities toINCLUDEQuicknewtestsource after
+builds (newlabel2notoverwritepriorreceipt). Reportfractional-tab-rows draftupdated
+honestlytrace+fixturecorrection. VerifierpreparedcurrentlyexpectsoldLinuxall7PASS,
+needadaptnewpipelinefailures/correctedqualifiedruns+sourcechanges now4inclPARITY.
+
+Old9d7archives/reportFROZEN, NEWarchiveNOTCREATEDyet. PrivateLinuxactualGUIpairdriver
+latesthostcopyaddsprivatepersistentwtype+DBusassert; transferafterbuilds/qualifications
+serializeandlaunchdbus-run-session. NoCGPostpermissionavailable noOSrequests/events.
+39pxfont15.5independentOPEN(36centerfloorcandidate,3captionedgeunproven), nextwork
+AFTERrowqualification. FullgoalcontinuesNOFINAL/noagents/publish/merge; unrelated
+personal-frame-delivery.md NEVERread/touch/stage.
+
+## ACTIVE Linux DPR2 Quick failures require diagnosis (09:50 UTC)
+
+GuestQtbuildpipeline34104ACTUAL0 bothASAN/Release, source2filesunchanged. Finalchecks
+pipeline98329 endedACTUAL1: BOTHbroadunitsPASS0, actualNeovim2EMPTY0, LinuxDPR2
+componentALL7PASSactual0. LinuxDPR2 QUICKReleaseFAIL2: firsttabDragReordersOnlyAfter-
+Release afterpress firstPane tab_id3 vscreatedfront2 atquick1838; Escape first
+previewdropMarkerwidth0 at1878. Other6slots+init/cleanupPASS ->Totals8passed2failed,
+actual2cleanup2. PrivateownedSway/keyboardcleanupgood. Rawguestlocal/tab-drag-fractional-
+row-quick-linux-release-1/probe.log/result.json; noASANcomponent/Quickrunyetbecause
+pipelineassertstoppedbeforethose. DoNOTretreatDPR/relaxpredicates/retryuntilgreen;
+tracegeometry/capture/stablefixture first. Couldbeoldfixturetransitionissue (counter
+initialsnapshotalreadyfixed) butNOTestablished. prepareGestureTabs atquick4333,
+presssource/destafterwaitForSynchronizedFrame butmotionsmaynotsettled. Needtrace
+actualcurrentdeliveredslots/source/viewport+fixturebegin/end/transition/size before
+press. GenericprodrowfixLinuxcomponent7passes; don'tassumecontrollerbugorfixtureyet.
+
+GuestnowIDLEnoheavyactors. HostIDLEnoGUIactor. Oldnativechecksfrozen9d7unchanged.
+PreparedLinuxstaticactualGUIpairmayrunindependentlyAFTERdiagnosticbuild/nativeactors
+serialize4GB. NeeduploadNEWmodifiedtab_drag_linux_native_pair.py (addedpersistent
+privatewtypekeyboard+privateDBusassert afterlasttransfer; currentguestoldcopynotthese
+last2edits) whenlaunching. Noeventsuserdisplay. OriginalDebugrefnativebuild3PASS.
+Preparedretainer/verifierfractional-tab-rows localwrittenNOTRUN; currentverifier
+wronglyexpectsall7LinuxchecksPASS, MUSTadaptHONESTLYtonewfailedrunandqualifiedfix
+whenactualsource/rerunsdone, preservefailureevidence. ReportdraftneedsLinuxfailures.
+Noarchivecreatedfornewrowyet; noPARITYeditsyet. 39pxindependentgapOPEN, centering
+floorcandidate36identifiedsee09:47notes; no sourcechangefor39. Fullgoalcontinuing,
+noagents/publish/merge/FINALcheckpoints; personalmeasurementnevertouch.
+
+## ACTIVE Candidate cause for36/39 control pixels identified (09:47 UTC)
+
+No productionchangefor39yet. ReadUNCHANGEDOriginallib/gfx/Layout.zig offset(.center)
+returnsfloor(free/2). PixelButton.draw resolvescenteredlabelthroughthatLayout, then
+Canvas.textAt preservesbounds.x. CurrentQt chrome_text_scene.cpp resolvePaint origin
+centering x += max(0,width-advance)/2 WITHOUTfloor. Thatmatches36shifted≡pixels at
+font15.5. THREEcaptionedgepixelsatx593 remainUNEXPLAINED, likelyshaderUVonlyhypothesis.
+NEXTafterrowqualificationcommit: causalindependentnegativebuttonalignmenttest+generic
+floorcenterchange, fulloriginalgeometrycontrols andnativeFont15.5pair shouldremove
+36; retainremaining3andnegativeascontrol, noexception/threshold. DoNOTmixunqualified
+newchangeinto currentrowarchivebeforeSDKgates. Currenttrackedprodonlyrow2lines+scene.
+
+Guestbuild34104 nearFINALRelease80/90thenhugeQuickscene/main objectslinks; ASANactual0
+already. NOsync/newguestheavyworkUNTILbothactualexits. Preparedscript
+run_tab_fractional_linux_checks.py willassertbothresult.json0 beforetransferfour
+helpers+run2broad+2editor+4DPR2native; noGUIactoronhost, allMacdone.
+NewrowreportdraftandretainerPREPARED(verify_fractional_tab_rows.py NOTWRITTENyet).
+retain_fractional_tab_rows.py newrootfractional-tab-rows, sourceparenttab-drag2512,
+ownedprefixesdensity/font/fractional/native-reference/deps/preflight only, nooldarchive
+refresh. NeedguestcollectorNEWexportoutdeps/fractional-tab-rows-linux-export-1 after
+checks. PrivateLinuxnativeGUIpairdriver assertsdbus_session_present; launchvia
+`dbus-run-session -- python3 .../tab_drag_linux_native_pair.py LABEL` afterbuild/checks
+serialize. OriginalDebugGUIprefixready, Vulkan/lvp+grim depsready, optionalnewfirstLinux
+visuals mayfailrecordactualwithout weakening. Allnonrow/nativeperf/leakgatesOPEN.
+
+## ACTIVE Font15.5 control exposes independent39px gap (09:43 UTC)
+
+OneextraFont15.5Shadeheldcontrol1 ACTUAL0DONE76308, noGUIactorcurrently. Allinput
+pointsIDENTICAL andcommonfixed220,22source/470,22dest strictlyINSIDEbothBEFOREgesture
+AXrectangles(recorded). Full87pxTopbar208800px leaves39diff bbox178,33,594,53.
+36pixelsatcolumns178-179and189-190 correspondsidebar≡horizontal1pxshift; THREE
+captionedgepixelsatx593 rows33,48,52. ExactRGBArecordsretainedtooloutputcanregenerate
+fromPNGs, recordlocal/tab-drag-font-held-shade-155-control-1/tab-strip-region.json.
+Diagnosticstackedbandsstoredsame/diagnostic-bands.png. Wholewindow2171differences
+mostlyoutsidebar, Topbar39OPEN. Newrowtopoldfloorandnewbothlogical6atthisfont, so
+rowfixdoesnotexplainindependent39gap. NOexception/mask accepted; reportdraftupdated
+explicitlyOPEN. LaterinspectChromeButton/ChromeText centeringphysicalfloor for36,
+remaining3likelyglyphUVprecision(originalsearchiconissuealreadyhasrejectedvariants)
+butCAUSE3NOTestablished. Preserve39ascontrolforanysubsequentcorrection; don'tblind
+retryuntilgreen. No productioneditsfor39yet.
+
+AllnewrowMacqualificationsremainexact: held18.75negative7441->0,static5022->0,
+font15heldbaseline0, samefinalGUI0db02...686f6. Newrowtestold14vs15FAILthenpositive,
+Release7/ASAN7functional; Quick10bothfunctional; leaksremain585419/3273Quick and
+762333/3896component. Broads/editor2PASS. Hostfinalsourcebinaryidentitiesbound.
+DraftOWNreportuntrackedfractional-tab-rows.md, noarchivecreatedyet; needLinuxgates
+thenPARITY updateNEWarchive/verifier/guardedcommit, continue39px+otherglobalgaps.
+Old9d7TabDragarchive/report/manifestFROZEN neverrefresh. Personalmeasurementunrelated
+neverread/touch/stage; noagents/publish/merge/finalcheckpoint.
+
+GuestONLYheavyactor34104 Qtbuildpipeline ASANactual0done, RELEASE35/97j1ACTIVE at
+09:43. NeedwaitbothACTUALsuccessBEFOREsyncnewhelpers orrunningguestlint/editor/native.
+Preparedrun_tab_fractional_linux_checks.py assertsbothresult.jsonactual0 BEFOREany
+transfer, thenuploads4helpers/runs2broad+2editor+4DPR2native(component7/Quick10 both).
+InvocationNOTRUNyet. OriginalDebugLinuxGUIbuild3actual0sourceunmodifiedall2650synced+
+packaging copied, RustCargo1.96.1+griminstalled. PreparedLinuxprivateVulkan/grim pair
+nowassertsPRIVATEdbus: launchwithdbus-run-session, original/QtwindowmapownedPIDresize,
+privateRTsocket/config/data, oneclientatatime. NOTRUNuntilguestbuild+checksserialize.
+EditorTMPDIRdiskONLYforoomavoidance, keepnativeTEMPshort. Guest4GBnoswap, noCpuTiming.
+
+## ACTIVE Non-dyadic font15.5 control (09:40 UTC)
+
+HostidleexceptONEnewCocoaactorexec76308 run_tab_fractional_font155_control.py,
+labeltab-drag-font-held-shade-155-control-1. Font15.5->physicalratio~2.0666666, bar
+round86.8=87physicalpx (not105/84). Fixedcommonpoints source220,22/dest470,22 from
+knownthree-captionfixture, verifyBEFOREgestureAXrectanglescontainthem onBOTHGUIs;
+helperrecordssnapshot. Noimage-derivedinputs. WaitACTUALexitbeforeanyotherCocoa
+actor/GUIbinarybuild. CurrentGUIunchanged0db02fb8...686f6. AllpreviousMacnative/
+components/lints/editor/cause252000+252000+201600pixelsPASSexceptgeneralASANleaks.
+
+Guestpipeline34104 ASAN~80/90link+tests thenRelease stillACTIVE, NOsync/heavyother
+untilactualexit. OriginalLinuxDebugGUIactualbuild3PASS. PreparedLinuxDPR2checks and
+privateVulkanstaticpairNOTTRANSFERRED/RUNuntilbothQtbuildactual0. Preparednewreport
+measurements/fractional-tab-rows.md DRAFTEnglish trackscausalbug/test/failures/open
+SDK/Linuxgates; doNOTfreezeuntilfinalchecks. Onlytracked3modifiedhandoff/layout/
+scene plusuntrackednewOWNreportanduserUNRELATEDpersonalmeasurementnevertouch.
+FullgoalmustcontinueNOcheckpointfinal. OldTabDrag9d7archiveFROZEN, noagents/publish/
+merge, noCPUtimingactive. Hostfractionalrowfinalsource+6binary+motionidentities
+local/tab-drag-fractional-row-final-product-mac-1.json alreadybound. Nativequick
+ASAN585419/3273 componentASAN762333/3896 leakswithoutprojectsuppression remainopen.
+
+## ACTIVE Fractional row Mac qualified; Linux build still active (09:36 UTC)
+
+Cocoa causalpipeline84831 ACTUAL0DONE. FinalGUIsha0db02fb875c82b4a310940b7bd4ab20afc0ef0699ed41577ab91ef4467a686f6
+HELDfont18.75fixed1 EXACT252000px (negative7441), STATICfixed1 EXACT252000px
+(negative5022), baselinefont15heldcontrol1 EXACT201600px; ALLnativepointerpoints
+identical, receiptswritten root/tab-strip-region.json. Noimagealignment/resampling/
+difference-derivedmask. EarlierVespercommon2/Catppuccindrop1alsoEXACT201600beforefix;
+oldVesper1nonidenticalpointskeptnotqualified. MacnativeQuickafterfixexec13163 BOTH
+ALL10PASS; Releaseactual0, ASANactual1LSAN585419B3273allocs. ComponentsALL7PASS,
+ASANLSAN762333B3896allocs. Maclayout/scene broadFULLPASS, actualNeovim2EMPTY.
+Allhostbuilds/lints/editors/GUIactorsNOWDONE/noCPUtiming. Neednewarchive/report,
+NOTOLDTabDragarchive. ProductionONLY2-linephysicalfloor+scene29linesnewregression.
+
+GuestQtbuildpipeline34104 STILLASAN47/97 -j1; AFTERASANRelease. Monitorlocal/
+tab-drag-build-linux-remote-fractional-1.log andguesttab-drag-build-linux-asan-fractional-1.
+Nootherguestheavyactors/no source syncuntilactualexit! Original2650trackedsource
+syncmtimecausedCPPdepsrebuild97units butunchangedhashes. VM4GB/noSwap. Linuxoriginal
+nativeDebugGUIBUILD3actual0 (build2failedpackagingonly, syncpackagingandcachedretry3).
+Referenceprefixout-dependencies/reference-gui-linux-debug/bin/telar, DebugVISUALONLY.
+Nativepairdriverlocal/tab_drag_linux_native_pair.py READYNOTRUN. See09:34notes.
+
+NEWpreparedlocal/tab_fractional_linux_final_checks.py,check_tab_fractional_editor_linux.py,
+ tab_drag_fractional_frame_delivery_linux.py: afterQtbuildactualexitTRANSFERhelpers
+thenrunserialized2broadunits+actualeditor2+Release/ASANcomponent7/Quick10 ALLFORCED
+QT_SCALE_FACTOR2 inPRIVATEownSway. EditorTMPDIRdiskONLY(notactors; longsocketsfail).
+NativehelpercloneDPR1->2. Needfullrawandactualexit source/binaryidentitycaptures.
+ThenprivateLinuxoriginal/Qt nativeVulkan/grim staticpair; userglobalSway9469/runtime
+35801untouched; stopONLYownedPIDs/socket. Drivercapturesoneatime withownRTforeground.
+Currentoldsourceverifierexpectedfailslayout/sceneafternewchange, offlinepasses; DO
+NOTrefresholdfrozen9d7artifacts/report/manifest. FullgoalcontinuesNOFINALcheckpoint.
+Noagents/publish/merge/userpersonal-frame-deliveryreads/touches/staging. Newworkonly
+handoff/layout/scene trackedmodifiedsince9d7. Allothernewrawhelpersignored.
+
+## ACTIVE Fractional-row causal positive exact (09:34 UTC)
+
+NEWfix2ready: qrealdeviceDPR physicalfloor castFLOATtop preservesaggregatefieldtype.
+Firstfixbuild1bothFAILimplicitdouble->floatcounterinitializer, rawKEPT; bothactual
+exit1 thenexplicitfloatcast. Build2MacRelease/ASAN actual0. Productiononly2lines
+qt/tab_strip_layout.cpp; testslotnewscene previousnegative14vs15 retained. Mac
+component7entriesReleasePASSactual0, ASANALL7PASSactual1LSAN762333B3896allocs/runtime
+builtin_fetchInitializingClassList table. No project suppressions.
+Maclayoutfullbroad1PASS0; newscenefullbroad1PASS0. ActualNeovimfractional-row-editor-
+mac1 layout+scene BOTHdeliveredEMPTYactual0. No source edits sincecurrentbuilds.
+
+ACTIVEGUIactorpipelineexec84831 run_tab_fractional_causal_pairs.py: firstHELDfixed1
+FONT18.75 complete252000pxTopbarEXACT0diff, allactualpointsIDENTICAL (negative7441).
+Receiptlocal/tab-drag-font-held-shade-1875-fixed-1/tab-strip-region.json. CurrentGUI
+hashrecordinreceipt. SecondSTATICfixed1ACTIVE, thirdShadefont15heldbaselinecontrol1
+pending. WaitACTUALpipelineexitBEFOREanotherCocoaactor orGUIbuild. AlloldTabDrag
+archivesfrozenunchanged. Needfinalsourceassociationnewreport/archiveaftercontrols.
+
+LinuxoriginalDebugGUIBUILDSUCCESS3actual0 aftersyncTRACKEDpackagingonly (build2had
+74/77success butdesktop/pngfilesmissing, logsretained). Newprefixreference-gui-linux-
+debug/bin/telar hasnativeGUI. DebugvisualONLYnooptimizedperfclaim. Cargo/Rust1.96.1,
+griminstalledownedVM;noolduserRuntime35801/Sway9469 touched. Nootherworktrees.
+NewPRIVATELinuxdriverlocal/tab_drag_linux_native_pair.py PREPAREDNOTRUN: ownsSway,
+foregroundprivateRT+socket/config/data,capturesOriginalDebug+QtRelease via grim with
+Vulkan/lavapipeclients andpixmancompositor, ownedPIDtree+resizecommon1200x800. Need
+review/runAFTERcurrentguestQtbuildactualexit; actualfailurelogsretainedifWSInotwork.
+DO NOTUSEheadlessreference-runtime-debugforvisualGUI. NativeSwaystillolduseruntouched.
+
+ACTIVEguestheavyBUILDexec34104 run_tab_fractional_linux_build.py, latestlayout+scene
+syncedbeforebuild. SequentialASANthenReleasej1, rawtab-drag-build-linux-remote-fractional-1.
+ASANcurrently30/97cpp (2650originalsrcsyncchangedmtimestriggeredexistingdepsrebuild,
+HASHsemanticsunchanged). NOsyncguestorheavytests/lints/editors/nativeuntilACTUALexit.
+Afterbuild runnewslot+4previouscomponent onbothbuildsFORCEDQT_SCALE_FACTOR2 using
+PREPAREDlocal/tab_drag_fractional_frame_delivery_linux.py (clonefixtureDPR1->2).
+Needtransferhelperandrunartifactlabelsnew. Guest4GBnoswap; editorTMPDIRondiskONLY,
+notnativeactors (longUNIXsockfailureoldkept). Macqueuedpostpreflightfalse noTCCrequest.
+No CPU timingactive; pureMotionkernelUNMODIFIED/sourceidentitiespreviousvalidnarrow.
+
+NEXT finishCocoafontstatic+baseline, Linuxbothbuildactual, LinuxDPR2native/lint/editor,
+privateLinuxactualGUIpair, baselineCocoaQuick8regressionsifsourcechangejust2linestill
+checkdragorders aftercausals. Newreportfractional-tab-rows scope+qualifiedthemes,
+archiveonlyNEWownedrawpaths (doNOTrefresh9d7frozenTabDrag/report/manifest). PARITY
+updateAFTERqualification thenfreezeprogramsourcesparentlast2512; currentoldverifier
+sourcecheckproperlyfailslayout+sceneafternewfix, offlinealwayspasses. Commitguard
+cachedcheck=True andexactartifacttrackedset. ContinueglobalgoalNOcheckpointFINAL.
+Userpersonal-frame-delivery.md NEVERread/touch/stage; noagents,publish,merge.
+
+## ACTIVE Physical-row fix builds (09:31 UTC)
+
+NegativeMacReleaseactorDONE actual1: fractionalTabRowsAlignInPhysicalPixels FAIL
+14physicalvs15expected (2pass1fail), rawlocal/tab-drag-fractional-row-negative-native-
+mac-1. Negativecomponenttest-onlybuildactual0; source+binaryidentitysnapshotslocal/
+tab-drag-fractional-row-negative-source-1. Broadsnewscenetestlintmac1actual0.
+
+ProductionfixAPPLIEDqt/tab_strip_layout.cpp rebuildtopfloorsPHYSICAL coordsusing
+actualeffectivedevicePixelRatio, then dividesback. NEWhostReleasebuildexec20339 and
+ASANexec85984 ACTIVE labels tab-drag-fractional-row-build-mac-{release,asan}-1.
+NOCPP/header/QMLeditsuntilBOTHactualexits. CHECKpotentialnarrowing: topnowqreal/double
+butcounterdrop_slots_.bounds.yfloataggregate; mayneedexplicitfloatcastontopvar after
+bothbuildexit. Oldtopwasfloatfromfloor(float); preservefloattype. Actualbuildoutput
+willconfirm. Afterbuildspositive7componententries, exactcausalfont18.75commonheld/
+staticandbaselinecontrols usingcurrentGUIhash; finalsource/lint/editor/sanitizers.
+NoGUIactorcurrently, nopairtimming. Neverrefresholdfrozen9d7TabDragarchive.
+
+LinuxoriginalGUIbuild2STILLACTIVEexec67127, Rusthelper LTO~37sRSS770MB. Already
+loggedmissingpackaging/linux/telar.desktop earlyinstallfailurebutkeepscompilingGUI;
+DO NOTsyncsourceswhileactive. AfterACTUALexit syncTRACKEDpackaging rootONLY from
+thisworktree thenrerunnewbuild3, preserveallfailedlogs. Originalsource2650already
+syncednoC++overwrite. aptcargo/rustc1.96.1+griminstalled, VM4GBnoswap/serialize.
+DoNOTtoucholdruntime35801/Sway9469/globalprocesses. NativeGUIprefixnewreference-gui-
+linux-debug vsoldreference-runtime-debugheadlessunchanged. NooptimperfclaimDebug.
+Userpersonal-frame-delivery.md NEVERTREAD/touch/stage. Noagents,publish,merge,final.
+
+## ACTIVE Fractional row negative test build + Linux original GUI prep (09:29 UTC)
+
+NEWVISUALcausalnegativescompletewithSAMEpointerpoints: font18.75heldcommon2 has
+7441different252000bandpx bbox396,6,1225,90; STATICfont18.75pair1has5022different
+sameband bbox396,14,1220,90. Bothallpointsidentical; earlierfirstheldpointYdiffkept.
+Vespertext1.25COMMONpair2 andCatppuccindropbaselinebothEXACT201600pxallpointsmatch.
+AllCocoaactorsDONE(noGUIactoractive). NewtestQ_SLOTfractionalTabRowsAlignInPhysicalPixels
+INSERTEDtests/tab_activity_scene_test.cpp, productionUNCHANGED. FIXNOTAPPLIEDyet.
+HostReleaseTESTONLYnegativebuildexec55755 PID82194/82195/82196 ACTIVE ~3minQtqmlimport-
+scannerper-testautoreconfigure, CPUactivechildrennotstuck. Rawlabeltab-drag-fractional-
+row-negative-build-mac-1. NOCPP/header/QMLeditsuntilactualbuildexit. ThenrunOWNEDnative
+history_motion_native_test.py labeltab-drag-fractional-row-negative-native-mac-1
+binaryout/gui-tab-activity-scene-test slotfractionalTabRowsAlignInPhysicalPixels;
+expectedFAILoldtop14vs15. OnlyTHENfixproductiontopphysicalfloor(oldtoplineinrebuild).
+Newtestexpectedfixedphysical105/106height75pill=>top15, usesactualDPRtopbounds+plus.
+NeedpositivebothSDKsbuild/lint/editor/native andcausalpairedfont captures+baseline
+controls; archiveNEWprefixnotoldTabDragfrozen. No hostASANbuildactive.
+
+LinuxnativevisualprepOWNEDVM: discoveredexistingreference-runtime-debug HEADLESS
+(gui--no-configwithoutdisplayprintsno-window); cannotuseforvisuals. ReadOriginal
+buildGUIenabledrequiresRustdiagramhelper. InstalledownedVMviaaptbackportscargo/rustc
+1.96.1 andgrim with--no-install-recommends; rawplan/installlogs local/tab-drag-linux-
+gui-dependencies*. NoQt/compiler23changes, runtime35801/Sway9469untouched.
+InitialOriginalGUIdebugbuild1FAILmissingtools/diagram-renderer sources(snapshotwas
+headless); rawkept. Synced2650UNMODIFIEDTRACKEDoriginalfiles fromthisworktree paths
+src/lib/build/tools/diagram-renderer ONLY toEXISTINGguestsourcecopy, hashreceiptlocal/
+tab-drag-linux-original-gui-source-sync-1.json. NoC++overwrite/nootherworktree.
+NowLinuxGUIbuild2 ACTIVEexec67127 --Doptimize=Debug -Dgui=true --prefix out-dependencies/
+reference-gui-linux-debug -j1,CARGO_BUILD_JOBS1. Remote rawlocal/tab-drag-linux-reference-
+gui-debug-remote-2.log. Onlyguestheavyactor; nootherguestcompiles/lints/editors/native
+untilactualexit. ReferenceDebugvisualONLY,noperformanceclaim. PriorReleaseSafeglibc
+FORTIFYcimportfailurestillretained; notpatched. NeedactualbuildthenprivateSway/grim/
+Vulkanvisualreadback/probe, noWindowsdesktoppermission. No pairedCPUtimingactive.
+
+HEAD9d7c99429/oldarchiveFROZEN, trackedmodificationsONLYhandoff+newscene test. User
+personal-frame-delivery.md NEVERread/touch/stage. Noagents/publish/merge, NOcheckpoint
+final; fullgoalCONTINUES. Toolsgoaloldblockedcan'tresumeAPI; manuallycontinue.
+
+## ACTIVE Fractional physical tab-row bug reproduced (09:25 UTC)
+
+FullgoalCONTINUES; nofinalcheckpoint. EarlierTabDragarchiveFROZEN9d7c99429.
+NewVesperCOMMONtext1.25pair2 EXACT201600bandpx andALLnativepointsIDENTICAL; new
+Catppuccindrop1alsoEXACTsamefullbandandallpoints. PriorVesper1rawpixelsmatchbutAX
+pointdiff1 staysNOTqualified. PostEventpreflightfalse noOSpermissionrequest.
+
+NewFont18.75Shadeheld1: 7441 differing105pxTopbar pixels bbox(396,6,1225,90), and
+AXderivedpointerYoriginal773vsQt774 =>controlcommon2 started. Pipelineexec67907
+run_tab_drag_font_controls_3.py ACTIVE: commonheld2 nowdoneimages826? full826?actual
+fullwindow8236diffbbox0,6,1225,1578; needbandcompare. SecondSTATICfont18.75pair1ACTIVE,
+waitACTUALexitBEFOREsource/testchanges/builds. NootherGUIactor/nohostguestbuild/lint/
+editor/timing. CurrentGUI25unchangedhash3d040239...f5f. Needretainanewarchiveforwork,
+neverrefreshTabDragoldbytes. Onlytrackedhandoffmodifiedsincecommit.
+
+DIAGNOSIS readOriginalTabStrip.draw row.y=area.y+floor((area.height-height)/2) where
+coordsPHYSICAL. QtTabStripLayout.rebuild top=floor((logicalHeight-logicalPill)/2)
+BEFOREdeviceconversion. Font18.75/DPR2=>ratio1.25 logical52.5height,pill37.5 =>Qt
+floor7.5=7logical=14physical vsoriginalfloor15=15physical. Diagnosticstackedbands
+visuallyshow1pxshiftinactivepill andchip. Candidatefix generic top=floor((height-
+pill)*deviceDensity/2)/deviceDensity, densitywindoweffectiveDevicePixelRatio or1.
+NeedregressionNEGATIVE BEFOREproductionedit. Ignoredlocal/tab-drag-fractional-row-
+slot-1.txt preparedQ_SLOTfractionalTabRowsAlignInPhysicalPixels: fixedORIGINAL
+physicalheight105,106,pill75,top15 atphysicalratio2.5; dividesdensityforQQuickstrip,
+assertbounds+plusy*DPR=15. MacDPR2 oldshouldFAIL14vs15; LinuxDPR1beforepassesbut run
+ownedLinuxQT_SCALE_FACTOR2helper fornewcaseifneeded. No skip/deadlinerelax/oracle
+mirroring; originalphysicalconstantsderivedreference. TestNOTinsertedyet: waitall
+CocoaactorsactualexittheninsertbeforetabMotionSettles... sourcecontainsarrayinclude
+already. BuildTESTONLYRelease witholdproduction, runnegativeownednativecomponent;
+thenfixgenericfloorandbuildbothSDKs, capturecausalpositivefontcommon/static plus
+baselineShade/Vesper/Catppuccincontrols, lint+editorscurrentaffectedonly, scoped
+ASAN/native/CPUifnewhotpathconcern. Framekernelunchanged, noQtnewtimer. Needalso
+checkscreenDPRitemChangealreadypolishes. AllotherglobalparitygatesstillOPEN.
+
+## ACTIVE Extra theme and fractional-font pairs (09:22 UTC)
+
+CommittedTabDrag9d7c99429 archive remainsFROZEN. NEWCocoaactorpipelineexec44244 via
+run_tab_drag_font_controls_2.py ACTIVE: firstVespertext1.25heldCOMMONPOINTS, next
+Shadefont18.75held (actualgeometryratio1.25/topbar105physicalpx). NootherGUIactor,
+nohost/guestbuild/lint/editor/timing. UsergoalCONTINUES, NOcheckpointfinal.
+
+EarlierextraVespertext1.25heldpixelsEXACT201600butinputpointsDIFFER1logicalpx =>
+NOTqualifiedcommoninputpair. Unchangedrawreceiptidentical_delivered_pointer_points
+FALSE. Iinitiallysaidexactbandbeforecheckingpoints, thenexplicitlycorrecteduser.
+Sourcepointsoriginal233vsQt234/dest503vs504 areAXrounding. NEWhelper
+local/tab_drag_font_capture.py supports--font-size and--fixed-points JSON. Common
+233,21/source503,21destination derivedFLOORmeanrecordedAX-basedinputpoints (NOimage
+use), bothwellinsidecaptioncontrols; derivationhashes retainedlocal/tab-drag-density-
+vesper-common-points-1.json. Newbefore-gesture-state.json logsAXgeometrybeforemove.
+Thisiscontrolledcommoninputnotpixelalignment. Waitfinalactualforpixel/pointchecks.
+ExtraCatppuccindropbaseline pairactual0: FULL84pxbar201600pixelsEXACT, ALLlogged
+pointerpointsidentical, receiptinlocal/tab-drag-density-drop-catppuccin-1-1.
+VesperoriginalpairandCatppuccinrun1actorpipeline27745actual0done. Newfontactor44244
+stillactive; noGUIbuilduntilactualexit. CurrentGUISHA3d0402398e676aff8b27111ad88c9553c8b595a2c257ec8aa22c7838ae6c5b5f.
+MacCGPreflightPostEventAccessONLYresultfalse. NoCGEventpostingorpermissionrequest;
+physical/queuednativeownershipstillOPEN. NewrawandhelpersneedOWNfuturearchive/report,
+NEVERrefreshTabDragfrozenroot/manifests. Noagents/publish/merge; unrelatedpersonal
+measurementneverread/touch/stage. Handoffonlytrackedfilemodifiedsincefeaturecommit.
+
+## ACTIVE After local TabDrag commit: visual controls (09:21 UTC)
+
+HEAD9d7c99429459fee008869d2e243af11748f0c293, TabDrag scopedfeaturecommittedlocally.
+7625artifacts2512sources47989625B frozen measurements/tab-drag+manifest verified
+offline/current-source; ALLtrackedsetexact, gitcachedcheckPASS, noforceaddneeded0.
+GlobalgoalOPENandworkCONTINUES, noFINALcheckpoint/noagents/publish/merge.
+Personal-frame-delivery.md ONLYuntracked unrelated NEVERread/touch/stage.
+
+NEWignoredcontrolsACTIVEexec27745 via run_tab_drag_density_controls_1.py, oneCocoa
+actor: firstVespergui.chrome.scale1.25heldfinishedactual0, complete84physicalpxbar
+201600pxEXACT BUT actualpointerpointsdiffer1logicalpx originalsource233/dest503 vs
+Qt234/504! Receiptwrittenfalse; initialcommoninputassertFAIL, NOTQUALIFIEDPAIR. IMPORTANTOriginal
+ChromeMetricsgui.chrome.scale scalesTEXTONLY, NOTgeometry/density; terminalfont15
+DPR2unchanged. SecondCatppuccindrop1active, waitACTUALexitbeforeanyCocoaactor/build.
+Readlocal/tab-drag-density-drop-catppuccin-1-1-driver.log. No host/guest builds/lints/
+editors/timingcurrentlyactive;guestownedVM7158SSH55984stillrunningidle.
+
+PlanNEXT actualfont18.75 givesphysical105pxTopbar (OriginalChromeMetrics ratiofont15)
+usingNEWlocal/tab_drag_font_capture.py clonedhelperaccepts--font-size; NOTRUNYET.
+OriginalfrozenwrapperUNMODIFIED. Vesperheldtext1.25pixelsmatchbutinputdoesNOT; repeatwithCOMMONcontrolintersections
+derivedfromAXrectanglesNOTpixels. Nextpaired
+geometryfractional18.75shouldtestpositions/ink; logallactualnativepointsandstable
+binaryhash, noalignment/resampling/mask. LatercontrolsneedNEWarchive, neverrefresh
+frozenTabDrag. CurrentGUI25unchangedstablehash. Scoped source currentverifierwill
+failonlyafterlaterproduction/PARITYeditsasexpected; don'trefreshhistoricalbytes.
+
+Exploredqueuednativepointertesting viaCGEventPostToPid. READinstalledAppleCGEvent.h:
+APIpostsjustbeforeprocesseventtaps. Standaloneactualpreflightlocal/tab-drag-queued-
+post-preflight-1/result.json reports post_access=false. NOpermissionrequest orTCC
+change, NOeventpostingattempted. Gatequeued/physicalnativeownershipremainsOPEN;
+continueotherauthorizedworkwithoutaskinguser. Sources/preflightbinaryprivateignored,
+futurearchiveexcludeexecutablekeeprawidentity. Needhandofftimestampactualclockmatch.
+
 ## Tab drag frozen qualification (09:18 UTC)
 
 NEW measurements/tab-drag + tab-drag-validation.json FROZEN, DO NOTrefresh.

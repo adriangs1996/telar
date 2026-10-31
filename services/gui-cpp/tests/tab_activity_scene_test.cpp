@@ -260,6 +260,35 @@ private:
     QVERIFY(!window);
   }
 
+  Q_SLOT static void fractionalTabRowsAlignInPhysicalPixels() {
+    QQuickWindow window;
+    ListModel model;
+    auto first = record(TabActivity::Kind::none);
+    first.insert(QStringLiteral("key"), QStringLiteral("1"));
+    model.reconcile({first});
+    TabStripLayout layout{window.contentItem()};
+    const auto density = window.effectiveDevicePixelRatio();
+    constexpr qreal physical_ratio = 2.5;
+    constexpr qreal physical_top = 15;
+    constexpr std::array<qreal, 2> physical_heights{105, 106};
+    layout.setRatio(physical_ratio / density);
+    layout.setContext(1, WorkspaceLocation{});
+    layout.setModel(&model);
+    window.resize(motion_strip_width, window_width);
+    window.show();
+    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
+
+    for (const auto physical_height : physical_heights) {
+      const QSignalSpy changed{&layout, &TabStripLayout::layoutChanged};
+      layout.setSize({motion_strip_width, physical_height / density});
+      QTRY_VERIFY_WITH_TIMEOUT(!changed.isEmpty(), wait_ms);
+      QCOMPARE(layout.items()->rowCount(), 1);
+      const auto entry = layout.items()->data(layout.items()->index(0, 0), ListModel::record_role).toMap();
+      QCOMPARE(entry.value(QStringLiteral("bounds")).toRectF().y() * density, physical_top);
+      QCOMPARE(layout.plus().y() * density, physical_top);
+    }
+  }
+
   Q_SLOT static void tabMotionSettlesAndParksTheSharedClock() {
     QQuickWindow window;
     ListModel model;

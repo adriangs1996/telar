@@ -468,7 +468,8 @@ void TabStripLayout::rebuild() {
   const auto metrics = Geometry::Metrics::scaled(ratio);
   const auto available = static_cast<float>(width());
   const auto height = std::min(static_cast<float>(this->height()), Geometry::pill_height * ratio);
-  const auto top = std::floor((static_cast<float>(this->height()) - height) / 2);
+  const auto density = window() == nullptr ? qreal{1} : window()->effectiveDevicePixelRatio();
+  const auto top = static_cast<float>(std::floor((this->height() - height) * density / 2) / density);
   const auto plus_side = std::min(Geometry::plus_side * ratio, available);
   QList<QVariantMap> records;
   std::array<Geometry::Measure, Geometry::maximum_tabs> sizes;

@@ -4343,6 +4343,14 @@ return {api_version=2, client={keybindings={
       }
       created.append(QString::number(firstPane()->location.tab_id));
     }
+    if (!test::waitForSynchronizedFrame(*window_, runtime_wait_ms)) {
+      return false;
+    }
+    const auto *layout = window_->findChild<QQuickItem *>(QStringLiteral("tabStripLayout"));
+    if (layout == nullptr || !test::waitForGuiCondition([&] { return !layout->property("transitioning").toBool(); }, runtime_wait_ms)) {
+      return false;
+    }
+
     return test::waitForSynchronizedFrame(*window_, runtime_wait_ms);
   }
 

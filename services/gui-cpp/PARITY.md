@@ -4,6 +4,18 @@ The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
 equal-or-better performance remain acceptance requirements.
 
+The [fractional tab-row correction](measurements/fractional-tab-rows.md) centers
+pills in physical pixels, fixing a 14→15-pixel row error at font18.75/DPR2. Held
+and static navigation bands change7441/5022 differing pixels to exact252000-pixel
+matches, and a201600-pixel base-font control remains exact. Both SDKs pass broad
+analysis, actual editors and7 component/10 interaction results. The Linux DPR2
+interaction fixture initially clicks overlapping tabs during creation motion;
+a read-only trace reproduces both failures, and synchronized transition admission
+preserves the original predicates/deadlines before all10 pass. Linux sanitizer
+processes exit0; Mac native shutdown leaks remain. A matched-size native Vulkan
+pair leaves8/50400 navigation pixels different, and a Mac font15.5 control leaves
+39/208800. These independent visual gaps, complete input and performance remain open.
+
 The [History delegate fixture readiness correction](measurements/history-incubation-readiness.md)
 waits for the queued initial reveal before starting its test flick. A bounded
 Linux call trace reproduces positioning→cancellation after the old premature
