@@ -65,9 +65,28 @@ static void grammarBoundaries() {
   }
 }
 
+static void repeatedSgrBoundaries() {
+  const std::array styles{"\x1b[m", "\x1b[0m", "\x1b[1;32m", "\x1b[12345m", "\x1b[123456m"};
+  for (const auto first : styles) {
+    for (const auto second : styles) {
+      const std::string prefix = std::string{"ab"} + first + "A" + second + "B\x1b[4mC" + first + "D" + second + "E";
+      for (const auto boundary : {"\x05", "\x1b[5n", "\x1b[?6n", "\x1b[1;32n", "\x1b]52;c;?\a", "\x1b[31:2m", "\x1b[1;"}) {
+        const std::string input = prefix + boundary;
+        require(styledOrdinaryLength(bytes(input), 0) == prefix.size());
+        require(styledOrdinaryLength(bytes(input), 2) == prefix.size());
+      }
+      for (const auto suffix : {"", "x", "TAIL", "\r\n", "\x80", "\xf0\x9f"}) {
+        const std::string input = prefix + first + suffix;
+        require(styledOrdinaryLength(bytes(input), 0) == input.size());
+      }
+    }
+  }
+}
+
 int main() {
   retainedControlBoundaries();
   repeatedOffsets();
   grammarBoundaries();
+  repeatedSgrBoundaries();
   std::puts("Control scanner retained-window tests passed");
 }

@@ -1,7 +1,10 @@
 #pragma once
 
 #include "parameters.hpp"
+#include <array>
 #include <bit>
+#include <climits>
+#include <cstring>
 #include <span>
 
 #if defined(__aarch64__) && defined(__AARCH64EL__)
@@ -21,6 +24,42 @@ inline constexpr bool numericSgrByte(std::uint8_t byte) noexcept {
   const auto relative = static_cast<unsigned>(byte) - static_cast<unsigned>('0');
   return relative <= static_cast<unsigned>(';' - '0') && byte != ':';
 }
+
+// Entries copy complete, already validated sequences including ESC[ and m.
+// Only little-endian callers use the masked prefix representation.
+class ShortSgrCache {
+public:
+  static constexpr std::size_t capacity = sizeof(std::uint64_t);
+
+  std::size_t match(std::uint64_t word) const noexcept {
+    for (const auto &entry : entries_) {
+      if ((word & entry.mask) == entry.pattern) {
+        return entry.length;
+      }
+    }
+    return 0;
+  }
+
+  void remember(std::uint64_t word, std::size_t length) noexcept {
+    if (length < 3 || length > capacity) {
+      return;
+    }
+
+    const auto mask = UINT64_MAX >> ((capacity - length) * CHAR_BIT);
+    entries_[next_entry_] = {.pattern = word & mask, .mask = mask, .length = length};
+    next_entry_ = (next_entry_ + 1) % entries_.size();
+  }
+
+private:
+  struct Entry {
+    std::uint64_t pattern = UINT64_MAX;
+    std::uint64_t mask = 0;
+    std::size_t length = 0;
+  };
+
+  std::array<Entry, 2> entries_{};
+  std::size_t next_entry_ = 0;
+};
 
 class ControlScanner {
 public:
@@ -78,8 +117,23 @@ private:
 // Every other ESC and every ENQ remains a native controller boundary.
 inline std::size_t styledOrdinaryLength(std::span<const std::uint8_t> input, std::size_t prefix) noexcept {
   styled_detail::ControlScanner scanner{input};
+  styled_detail::ShortSgrCache cache;
   auto length = scanner.next(prefix);
-  while (input.size() - length >= 3 && input[length] == styled_detail::escape && input[length + 1] == '[') {
+  while (input.size() - length >= 3) {
+    std::uint64_t word = 0;
+    if constexpr (std::endian::native == std::endian::little) {
+      if (input.size() - length >= styled_detail::ShortSgrCache::capacity) {
+        std::memcpy(&word, input.data() + length, sizeof(word));
+        if (const auto cached_length = cache.match(word); cached_length != 0) {
+          length = scanner.next(length + cached_length);
+          continue;
+        }
+      }
+    }
+    if (input[length] != styled_detail::escape || input[length + 1] != '[') {
+      break;
+    }
+
     auto end = length + 2;
     const auto limit = end + std::min(input.size() - end, Parameters::capacity + 1);
     while (end < limit && styled_detail::numericSgrByte(input[end])) {
@@ -89,6 +143,12 @@ inline std::size_t styledOrdinaryLength(std::span<const std::uint8_t> input, std
       break;
     }
 
+    if constexpr (std::endian::native == std::endian::little) {
+      const auto sequence_length = end + 1 - length;
+      if (sequence_length <= styled_detail::ShortSgrCache::capacity && input.size() - length >= styled_detail::ShortSgrCache::capacity) {
+        cache.remember(word, sequence_length);
+      }
+    }
     length = end + 1;
     length = scanner.next(length);
   }
