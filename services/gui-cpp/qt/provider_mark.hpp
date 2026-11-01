@@ -15,6 +15,7 @@ class ProviderMark : public QQuickItem {
   QML_ELEMENT
   Q_PROPERTY(qreal dimmedAlpha READ dimmedAlpha CONSTANT)
   Q_PROPERTY(int provider READ provider WRITE setProvider NOTIFY providerChanged)
+  Q_PROPERTY(bool telarMark READ telarMark WRITE setTelarMark NOTIFY telarMarkChanged)
   Q_PROPERTY(QColor color READ color WRITE setColor NOTIFY colorChanged)
   Q_PROPERTY(qreal ratio READ ratio WRITE setRatio NOTIFY ratioChanged)
 
@@ -28,6 +29,8 @@ public:
   [[nodiscard]] static qreal dimmedAlpha() noexcept;
   [[nodiscard]] int provider() const noexcept;
   void setProvider(int provider);
+  [[nodiscard]] bool telarMark() const noexcept;
+  void setTelarMark(bool enabled);
   [[nodiscard]] QColor color() const;
   void setColor(const QColor &color);
   [[nodiscard]] qreal ratio() const noexcept;
@@ -35,6 +38,7 @@ public:
 
 signals:
   void providerChanged();
+  void telarMarkChanged();
   void colorChanged();
   void ratioChanged();
 
@@ -46,6 +50,7 @@ protected:
 private:
   AncestorGeometry ancestors_;
   AgentProvider provider_ = AgentProvider::unknown;
+  bool telar_mark_ = false;
   QColor color_;
   qreal ratio_ = 1;
   bool dirty_ = true;

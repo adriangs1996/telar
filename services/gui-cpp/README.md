@@ -11,7 +11,11 @@ a separately packaged and verified Release app. [Plugin activation and secure
 trust loading](measurements/plugin-overrides.md) now work.
 [Isolated plugin execution](measurements/plugin-worker.md) now has capability and
 stale-completion coverage on both SDKs and a second Finder-verified Release
-preview. Custom bars/widgets/panels/picks remain required.
+preview. The current [Preview 9](DAILY_DRIVER.md) uses a fresh frontend build and
+[canonical component artwork](measurements/component-artwork.md), with exact
+Finder, plugin, bar, window, SSH, Vim and task-plan validation. The required
+custom surfaces stay available; native shutdown leaks and physical sleep remain
+open for daily acceptance.
 
 The [Wayland lifetime correction](measurements/window-lifetime.md) releases the
 Quick swapchain before hiding destroys its Vulkan surface. Native close/reopen
@@ -1545,8 +1549,9 @@ actions remain open.
 ## Build and run
 
 Dependencies are CMake 3.24+, Ninja, Python 3, a C++23 compiler and Qt 6.7+
-with Gui, GuiPrivate, Qml, Quick, QuickControls2, Network, Concurrent and ShaderTools. ShaderTools
-compiles the portable curve shaders during the build. Qt Test is required when
+with Gui, GuiPrivate, Qml, Quick, QuickControls2, Network, Concurrent, ShaderTools and Svg. ShaderTools
+compiles the portable curve shaders during the build. Svg renders the bundled
+monochrome application artwork; Debian provides `qt6-svg-dev`. Qt Test is required when
 `BUILD_TESTING=ON`. Lua and the fonts come from the repository. CMake downloads
 the same pinned FreeType 2.13.2 archive as the Zig build, verifies its SHA-256
 and compiles the source list from `build/freetype.zig`. Configuration parsing also
@@ -1599,6 +1604,18 @@ cmake -S services/gui-cpp -B services/gui-cpp/out -G Ninja \
   -DQt6_DIR="$(brew --prefix)/lib/cmake/Qt6" \
   -DQT_ADDITIONAL_PACKAGES_PREFIX_PATH="$(brew --prefix qtdeclarative)"
 ```
+
+### Release candidate builds
+
+Create each adoption candidate in a new build directory, then pass that directory
+as `--build` to `tools/package_macos.py`. Preserve the previous app while qualifying
+the exact relocated bundle. Restoring source files with preserved timestamps can
+leave Ninja's generated QML or QSB artifacts stale. A successful incremental link
+and equal uniform-buffer sizes do not establish that shaders match the current
+C++ layout. The native component capture and rounded-rectangle test must also
+pass from the candidate's build. A fresh frontend build still depends on the
+Zig-derived inputs and Ghostty prefix listed above; it does not qualify removal
+of Zig sources.
 
 ### Neovim and clangd
 

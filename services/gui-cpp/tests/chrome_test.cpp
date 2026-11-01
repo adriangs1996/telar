@@ -255,6 +255,14 @@ private:
     QVERIFY(glyph->isVisible());
     QVERIFY(ProviderArtwork::image(telar::AgentProvider::unknown, mark_side).isNull());
     QVERIFY(ProviderArtwork::image(telar::AgentProvider::claude, ApplicationMark::maximum_cell + 1).isNull());
+    QVERIFY(ProviderArtwork::telar(ApplicationMark::minimum_cell - 1).isNull());
+    QVERIFY(ProviderArtwork::telar(ApplicationMark::maximum_cell + 1).isNull());
+    const auto application_artwork = ProviderArtwork::telar(mark_side);
+    QCOMPARE(application_artwork.size(), QSize(mark_side, mark_side));
+    QCOMPARE(application_artwork.pixelColor(0, 0).alpha(), 0);
+    QImage transparent{application_artwork.size(), application_artwork.format()};
+    transparent.fill(Qt::transparent);
+    QVERIFY(application_artwork != transparent);
   }
 
   Q_SLOT static void ancestorMotionKeepsProviderInkOnPhysicalPixels() {

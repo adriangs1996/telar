@@ -4,7 +4,48 @@ The complete functional, visual and equal-or-better performance objective remain
 open. Only the command/quick-navigation palette and notifications/sounds may be
 deferred for daily adoption; existing implementations stay available.
 
-## Current candidate: Preview 8; normal launch confirmed
+## Current candidate: Preview 9; clean build and component artwork
+
+`out-adoption/Telar C++ Preview 9.app` is a separate Release app built from a
+fresh frontend directory. It preserves Preview 8's blur fix and adds canonical
+Telar marks to custom bars and panel callouts. Open from the repository root:
+
+```sh
+open -n "services/gui-cpp/out-adoption/Telar C++ Preview 9.app"
+```
+
+Bundled GUI SHA-256:
+`94e6679270df9250da7ec0ac4eea92ed258d0fb194390fc5afde5d92454b963d`.
+All 1,739 manifest files, 121 Mach-O checks and deep/strict signatures pass.
+Both exact relocated schema-87/88 smokes pass with native opacity 0.98/blur 20,
+Finder/login-shell/default endpoint discovery, plugins, bar commands, distinct
+windows and owned-client pause/resume. Configurations are unchanged, QML warnings
+are empty and disposable states are removed. The exact bundle also passes real
+SSH, a Vim write with exact UTF-8 bytes and an owned custom-panel invocation.
+Their complete captured content was inspected. The exact bundle also passes
+controlled task/worktree plan navigation and task survival after window close.
+That fixture uses a protocol reporter, with no AI agent or new Git checkout. The panel actor invokes its own
+registered callback with a controlled anchor; it does not establish ordinary
+pointer positioning or native compositor parity.
+
+Native custom-surface/pick checks pass four assertions on each platform. Linux
+Release and leak-enabled ASan/UBSan exit zero. macOS assertions pass, but its
+instrumented process exits one for 632,337 leaked bytes in 3,622 allocations.
+The artwork unit's three assertions pass and retain a separate 226,544-byte /
+1,008-allocation shutdown report. No sanitizer suppression or test deadline has
+changed. Current broad analysis and delivered editor diagnostics pass on both
+SDKs; the Linux checks were completed sequentially after confirmed memory
+exhaustion during parallel qualification.
+
+See [component-artwork.md](measurements/component-artwork.md) for the stale
+incremental-build diagnosis, preserved failures, source-bound evidence and
+remaining callout visual gap. Neither daily adoption nor full parity is complete.
+Physical system sleep, native shutdown-leak triage and normal-use feedback remain
+open. Preview 8 stays frozen and available. Close the preview and open
+`~/Applications/Telar.app` to return to the installed app without stopping runtime
+processes. No installation or session has been migrated.
+
+## Preserved candidate: Preview 8; normal launch confirmed
 
 Adrian confirms: **"Sí, ya aparece la interfaz"** after opening Preview 8 with
 his usual configuration. This closes the reported blank-window launch blocker;

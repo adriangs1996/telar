@@ -4153,18 +4153,20 @@ return {api_version=2, client={keybindings={
       return {api_version=2,client={
         keybindings={t.bind_global({'alt+u'},t.action.open_panel('usage'))},
         bars={bottom={
-          left=t.bar.static(ui.group({on_click=t.action.open_panel('usage'),tooltip=ui.text('Details'),ui.label('Daily λ'),ui.badge({text='C++'})})),
+          left=t.bar.static(ui.group({on_click=t.action.open_panel('usage'),tooltip=ui.text('Details'),ui.label('Daily λ'),ui.badge({text='C++'}),ui.mark('telar')})),
           center=t.bar.tabs(),
           right=t.bar.command({command={'/usr/bin/printf','%s','á λ'},every_ms=60000}),
         },top={right=t.bar.dynamic({every_ms=60000,render=function(ctx) return ui.clock('%H:%M') end})}},
         panels={usage=t.panel({title='Usage',render=function(ctx) return {
           ui.heading('Usage λ'),ui.meter_row({label='Session',value=0.5}),
+          ui.callout({text='Status λ',detail='Ready',icon='telar_mark'}),
           ui.actions({ui.button({text='Close',action=t.action.close_panel()})}),
         } end})},
       }}
     )";
     writeTestFile(path, configuration);
     client_->loadConfiguration(path, {}, {});
+    QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
     const auto slot = [&](const char *name) {
       return client_->componentBars().value(QString::fromLatin1(name)).toMap();
     };
@@ -4174,7 +4176,7 @@ return {api_version=2, client={keybindings={
     QCOMPARE(slot("right").value(QStringLiteral("error")).toString(), QString{});
     QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
     QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-    QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("nodes")).toList().size(), 4, runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("nodes")).toList().size(), 5, runtime_wait_ms);
     const auto *popup = window_->findChild<QObject *>(QStringLiteral("configuredPanel"));
     QVERIFY(popup != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(popup->property("visible").toBool(), runtime_wait_ms);

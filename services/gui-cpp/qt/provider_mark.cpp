@@ -16,7 +16,6 @@
 #include <QSGSimpleTextureNode>
 #include <QSGTexture>
 #include <QSGTransformNode>
-#include <QtCore/qnamespace.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <algorithm>
@@ -38,9 +37,9 @@ public:
   int side = 0;
 };
 
-QImage coloredMark(AgentProvider provider, int side, const QColor &color) {
-  auto image = ProviderArtwork::image(provider, side);
-  if (!image.isNull() && ApplicationMark{.provider = provider}.followsTheme()) {
+QImage coloredMark(AgentProvider provider, int side, const QColor &color, bool telar_mark) {
+  auto image = telar_mark ? ProviderArtwork::telar(side) : ProviderArtwork::image(provider, side);
+  if (!image.isNull() && (telar_mark || ApplicationMark{.provider = provider}.followsTheme())) {
     QPainter painter{&image};
     painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
     painter.fillRect(image.rect(), color);
@@ -85,6 +84,19 @@ void ProviderMark::setProvider(int provider) {
   }
 }
 
+bool ProviderMark::telarMark() const noexcept {
+  return telar_mark_;
+}
+
+void ProviderMark::setTelarMark(bool enabled) {
+  if (telar_mark_ != enabled) {
+    telar_mark_ = enabled;
+    dirty_ = true;
+    emit telarMarkChanged();
+    update();
+  }
+}
+
 void ProviderMark::setColor(const QColor &color) {
   if (color_ != color) {
     color_ = color;
@@ -105,7 +117,7 @@ void ProviderMark::setRatio(qreal ratio) {
 
 QSGNode *ProviderMark::updatePaintNode(QSGNode *previous, [[maybe_unused]] UpdatePaintNodeData *data) {
   std::unique_ptr<ProviderNode> node{dynamic_cast<ProviderNode *>(previous)};
-  if (window() == nullptr || width() <= 0 || height() <= 0 || provider_ == AgentProvider::unknown) {
+  if (window() == nullptr || width() <= 0 || height() <= 0 || (provider_ == AgentProvider::unknown && !telar_mark_)) {
     return nullptr;
   }
 
@@ -118,7 +130,7 @@ QSGNode *ProviderMark::updatePaintNode(QSGNode *previous, [[maybe_unused]] Updat
   }
 
   if (dirty_ || !node->texture || node->side != side) {
-    const auto pixels = coloredMark(provider_, side, color_);
+    const auto pixels = coloredMark(provider_, side, color_, telar_mark_);
     if (pixels.isNull()) {
       return nullptr;
     }

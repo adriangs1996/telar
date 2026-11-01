@@ -6,6 +6,9 @@
 #include <QFile>
 #include <QIODevice>
 #include <QImage>
+#include <QPainter>
+#include <QSvgRenderer>
+#include <QtCore/qnamespace.h>
 #include <QtCore/qstring.h>
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtypes.h>
@@ -64,6 +67,31 @@ QImage ProviderArtwork::image(AgentProvider provider, int side) {
   }
 
   ArtworkResize::premultiply(destination);
+
+  return output;
+}
+
+QImage ProviderArtwork::telar(int side) {
+  if (side < ApplicationMark::minimum_cell || side > ApplicationMark::maximum_cell) {
+    return {};
+  }
+
+  QSvgRenderer renderer{QStringLiteral(":/telar/fonts/telar-mark-mono.svg")};
+  if (!renderer.isValid()) {
+    return {};
+  }
+
+  QImage output{side, side, QImage::Format_ARGB32_Premultiplied};
+  if (output.isNull()) {
+    return {};
+  }
+
+  output.fill(Qt::transparent);
+  {
+    QPainter painter{&output};
+    painter.setRenderHint(QPainter::Antialiasing);
+    renderer.render(&painter);
+  }
 
   return output;
 }

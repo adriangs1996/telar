@@ -95,11 +95,14 @@ Item {
             implicitWidth: root.iconSide
             implicitHeight: root.rowHeight
             ProviderMark {
-                anchors.fill: parent
+                anchors.centerIn: parent
+                width: root.iconSide
+                height: root.iconSide
                 provider: root.node.providerMark
+                telarMark: root.node.telarMark ?? false
                 color: root.node.ink
                 ratio: root.ratio
-                visible: provider !== 0
+                visible: provider !== 0 || telarMark
             }
             ChromeIcon {
                 anchors.fill: parent
@@ -108,7 +111,7 @@ Item {
                 pixelSize: root.typography.body
                 primaryFamily: root.typography.primaryFamily ?? ""
                 primaryStyle: root.typography.primaryStyle ?? ""
-                visible: root.node.providerMark === 0
+                visible: root.node.providerMark === 0 && !root.node.telarMark
             }
         }
     }
@@ -379,17 +382,30 @@ Item {
         id: callout
         Column {
             spacing: root.gap
-            Text {
-                id: calloutText
+            Item {
                 width: parent.width
-                text: root.node.text + (root.node.detail.length > 0 ? "\n" + root.node.detail : "")
-                color: root.node.ink
-                font.family: "IBM Plex Sans"
-                font.pixelSize: root.typography.small
-                textFormat: Text.PlainText
-                renderType: Text.NativeRendering
-                wrapMode: Text.Wrap
-                maximumLineCount: 3
+                height: Math.max(root.hasIcon ? root.rowHeight : 0, calloutText.implicitHeight)
+                Loader {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: root.iconSide
+                    height: root.rowHeight
+                    active: root.hasIcon
+                    sourceComponent: icon
+                }
+                Text {
+                    id: calloutText
+                    anchors.verticalCenter: parent.verticalCenter
+                    x: root.hasIcon ? root.iconSide + root.gap : 0
+                    width: Math.max(0, parent.width - x)
+                    text: root.node.text + (root.node.detail.length > 0 ? "\n" + root.node.detail : "")
+                    color: root.node.ink
+                    font.family: "IBM Plex Sans"
+                    font.pixelSize: root.typography.small
+                    textFormat: Text.PlainText
+                    renderType: Text.NativeRendering
+                    wrapMode: Text.Wrap
+                    maximumLineCount: 3
+                }
             }
             ComponentBranch {
                 id: calloutButton

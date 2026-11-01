@@ -1,4 +1,82 @@
-## CURRENT Preview8 normal launch confirmed; daily/final goals OPEN (2026-11-01)
+## CURRENT: Preview 9 qualified; daily/full parity remain OPEN (2026-11-01)
+
+Adrian confirmed Preview 8 normal launch: "Sí, ya aparece la interfaz". That
+bundle stays frozen and active (PID 52865, Nov 1 09:45:51 local). The reported
+blank/blur blocker is resolved. User feedback on subsequent daily flows is
+optional and pending; continue useful work. No user session was migrated.
+
+Preview 9 is separately packaged at
+`services/gui-cpp/out-adoption/Telar C++ Preview 9.app`.
+Bundled GUI SHA256:
+`94e6679270df9250da7ec0ac4eea92ed258d0fb194390fc5afde5d92454b963d`.
+Fresh raw GUI SHA256:
+`0793c933644d6f06896f0b0ad9c6ba3296dda8676f21dc4bef271d10821554f9`.
+All 1739 file hashes, 121 Mach-O checks and strict/deep signature verification
+pass. Exact relocated schema87 AND schema88 smokes pass with explicitly adopted
+opacity .98/blur20, Finder/login shell/default runtime/config discovery, actual
+plugin execution, command bars, two identities and owned-client pause/resume.
+Both remove disposable state and retain configuration, with zero QML warnings.
+Exact real SSH, Vim UTF-8 write and guarded local custom-panel activation also
+pass; all four owned captures were inspected. Panel actor uses its own controller
+callback and controlled anchor, not OS pointer input. Preview9 has been offered
+to Adrian; don't replace 8 or the installed Zig app.
+
+The current change uses Qt Svg and the canonical existing telar-mark-mono.svg
+for custom bar marks and callout icons. It keeps a square icon and configured
+tint/cache. Both SDKs qualify the sources. Native custom/pick cases: four pass
+each macOS/Linux. Linux Release and ASan/UBSan exit0 with explicit leak detection.
+Mac four assertions pass but exit1/632337B/3622 allocations. Artwork unit three
+assertions pass but exit1/226544B/1008 allocations. A first selector was mistyped
+and ran zero assertions; preserve it as a failed attempt, not leak evidence for
+artwork. No address/UB reports, suppression, reduced profile or changed deadline.
+
+Broad analysis and actual Neovim delivered empty diagnostics pass on all four
+changed C++ sources and both headers on Mac and Linux. Guest final Quick checks
+run sequentially: earlier parallel checks were killed by confirmed kernel OOM
+while the sanitizer build consumed the 4GB VM. Their failures stay in evidence.
+No guest configuration/toolchain/profile was weakened; all eight portable source
+and fixture hashes match. Guest Sway9469, QEMU7158 and runtime35801 stay unchanged.
+Verify these plus active Preview8 before source edits. Do not signal them.
+Old Zig PID87625 was already absent; do not restore it or imply we stopped it.
+
+CRITICAL build finding: old out/.qsb contained axis/origin/viewport shader layouts
+while current C++/GLSL uses matrix+opacity; both are 68B, so size isn't ABI proof.
+All eight old QSBs and dumps/hashes are retained. Removing only generated shaders
+and rebuilding makes native rounded rectangles six-pass/zero atlas differences.
+Old incremental Quick captures still omit parts of the panel despite passing
+functional assertions; retain them as visual failures. Diagnostic renderer changes
+stay ONLY in out-dependencies; no production renderer/shader source changed.
+Use the FRESH `out-adoption-build-9` for candidate9. It builds all production and
+affected tests and keeps the product hash after enabling tests. Fresh Quick/main
+captures have the complete panel. Clean ASan build is `out-adoption-sanitizers-9`.
+This remains a frontend build reading Zig inputs and using existing Ghostty;
+it is NOT the clean own-Zig retirement gate.
+
+Private plugin `open_panel` worker diagnostic fails: original protocol.zig and
+Registry.zig explicitly reject those effects too. Shared capability limitation,
+not a C++ parity bug. Keep bounded worker protocol and batch authorization.
+Registered local bar callbacks do open panels. Original callout rounded card /
+right-action styling remains a final visual gap; don't expand scope blindly.
+
+Raw current evidence: out-dependencies/component-icons-1; see
+measurements/component-artwork.md, DAILY_DRIVER.md and PARITY.md. Exact candidate9
+activity/task/plan fixture passes both windows with zero QML warnings, retained
+plan after close and complete private cleanup; output preview9-activity-1.
+Its reporter is a tiny controlled protocol fixture, not an AI agent or checkout.
+The icons checkpoint has 351 frozen entries and its verifier passes against
+current sources. Commit the reviewed checkpoint locally, then continue
+actual daily blockers (physical sleep not automatically authorized, Mac leak
+triage) and full PARITY. No agents/publish/merge. User's unrelated untracked
+personal-frame-delivery.md must NEVER be read, touched or staged.
+
+Persistent Goal API still reports blocked. get_goal has no resume operation;
+update only offers complete/blocked/paused and create refuses an unfinished goal.
+Continue manually; do not mark complete or re-block while making progress.
+Only palette and notifications may defer for daily use; all other requirements
+remain. Physical Mac sleep, full native shutdown leaks, full visual/comparative
+performance and audited Zig retirement remain open. Don't stop at this checkpoint.
+
+## Previous completed native-readiness work
 
 Latest local commit fa65e06a9 fixes native blur and archives 105 entries under
 measurements/native-blur; verify.py defaultPASS. Preview8 exactGUI e97bba076a...

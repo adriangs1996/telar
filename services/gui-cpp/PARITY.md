@@ -1,5 +1,20 @@
 # Port acceptance status
 
+**Current daily candidate: Preview 9 (2026-11-01).** A fresh Release frontend
+build preserves the verified native blur correction and renders canonical Telar
+marks in custom bars and callouts. The exact separately signed bundle passes
+relocated Finder/config/runtime/plugin/bar/multiple-window/pause smokes with both
+runtime schemas, real SSH, a Unicode Vim write and a controlled custom panel.
+Native component checks pass on both SDKs, with clean Linux sanitizers. Current
+broad analysis and editor diagnostics pass. macOS assertions pass but shutdown
+leaks remain: 632,337 bytes / 3,622 allocations for the native component case.
+The old incremental build contained stale generated shaders; the failed captures
+and their original QSBs remain evidence. See
+[component-artwork.md](measurements/component-artwork.md) and
+[DAILY_DRIVER.md](DAILY_DRIVER.md). The original callout's card/action layout,
+physical system sleep, leak triage, full visual/performance acceptance and audited
+Zig retirement remain open. Preview 8 is preserved and user-confirmed below.
+
 **Resolved daily launch blocker (2026-11-01):** Adrian reported Preview 7 opened to a
 blurred blank window with his normal configuration. Its native effect is a
 child of the Qt content view, compositing above the Metal layer. A native

@@ -750,7 +750,7 @@ if(TELAR_GUI_NATIVE)
     add_dependencies(gui-lint gui-caption-runs-probe)
   endif()
 
-  find_package(Qt6 6.7 REQUIRED COMPONENTS Gui Qml Quick QuickControls2 Network Concurrent ShaderTools)
+  find_package(Qt6 6.7 REQUIRED COMPONENTS Gui Qml Quick QuickControls2 Network Concurrent ShaderTools Svg)
   if(NOT TARGET Qt6::GuiPrivate)
     find_package(Qt6GuiPrivate ${Qt6Gui_VERSION} EXACT REQUIRED CONFIG)
   endif()
@@ -915,7 +915,7 @@ if(TELAR_GUI_NATIVE)
 
   target_sources(gui-quick PRIVATE qt/attachment_controller.cpp qt/plugin_controller.cpp)
   target_sources(gui-quick PRIVATE qt/component_controller.cpp qt/pick_controller.cpp)
-  target_link_libraries(gui-quick PRIVATE gui-surface-command)
+  target_link_libraries(gui-quick PRIVATE gui-surface-command Qt6::Svg)
   target_sources(gui-quick PRIVATE qt/history_controller.cpp qt/history_pointer.cpp qt/tab_drag_controller.cpp qt/binding_controller.cpp qt/key_bindings.cpp qt/copy_controller.cpp qt/link_controller.cpp)
   target_sources(gui-quick PRIVATE qt/palette_controller.cpp qt/path_picker_controller.cpp qt/path_picker_projection.cpp qt/suggestion_controller.cpp)
   target_sources(gui-quick PRIVATE qt/machine_controller.cpp qt/machine_profile_controller.cpp qt/machine_picker_controller.cpp qt/machine_prompt_controller.cpp qt/machine_launch_controller.cpp qt/machine_activity_controller.cpp)
@@ -999,7 +999,7 @@ if(TELAR_GUI_NATIVE)
   qt_add_resources(gui-quick gui-fonts
     PREFIX "/telar/fonts"
     BASE "${gui_font_directory}"
-    FILES "${gui_font_directory}/JetBrainsMono-Regular.ttf" "${gui_font_directory}/SymbolsNerdFontMono-Regular.ttf" "${gui_font_directory}/IBMPlexSans-Regular.ttf" "${gui_font_directory}/IBMPlexSans-SemiBold.ttf" "${gui_font_directory}/provider-symbols-320x64.rgba")
+    FILES "${gui_font_directory}/JetBrainsMono-Regular.ttf" "${gui_font_directory}/SymbolsNerdFontMono-Regular.ttf" "${gui_font_directory}/IBMPlexSans-Regular.ttf" "${gui_font_directory}/IBMPlexSans-SemiBold.ttf" "${gui_font_directory}/provider-symbols-320x64.rgba" "${gui_font_directory}/telar-mark-mono.svg")
 
   add_dependencies(gui-editor gui-quick)
 
