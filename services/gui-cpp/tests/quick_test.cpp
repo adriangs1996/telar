@@ -4228,6 +4228,55 @@ return {api_version=2, client={keybindings={
     QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), QString{}, runtime_wait_ms);
   }
 
+  Q_SLOT void configuredGroupPriority() {
+    const auto cleanup = qScopeGuard([this] {
+      client_->closeComponentPanel();
+      client_->loadConfiguration({}, {}, {});
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    constexpr auto configuration = R"(
+      local t = require('telar')
+      local ui = t.ui
+      return {api_version=2,client={
+        bars={bottom={
+          left=t.bar.static(ui.group({on_click=t.action.open_panel('kept'),
+            ui.label({text='Keep λ',priority=100}),
+            ui.label({text=string.rep('Low priority ',80),priority=1}),
+          })),center=t.bar.tabs(),right=t.bar.static(ui.label('Right')),
+        }},
+        panels={kept=t.panel({title='Kept action',render=function(ctx) return ui.text('Priority action available') end})},
+      }}
+    )";
+    writeTestFile(path, configuration);
+    client_->loadConfiguration(path, {}, {});
+    QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+    QTRY_COMPARE_WITH_TIMEOUT(client_->componentBars().value(QStringLiteral("left")).toMap().value(QStringLiteral("nodes")).toList().size(), 3, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto *kept = componentItem(QStringLiteral("label"), QStringLiteral("Keep λ"));
+    QVERIFY2(kept != nullptr, "A group must retain its high-priority child when a lower-priority child does not fit");
+    QVERIFY(componentItem(QStringLiteral("label"), QStringLiteral("Low priority ").repeated(80)) == nullptr);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto bounds = kept->mapRectToScene(kept->boundingRect());
+    const QRectF viewport{QPointF{}, QSizeF{window_->size()}};
+    QVERIFY(viewport.contains(bounds));
+    const auto *group = componentItem(QStringLiteral("group"));
+    QVERIFY(group != nullptr);
+    const auto group_bounds = group->mapRectToScene(group->boundingRect());
+    QVERIFY2(group_bounds.contains(bounds), qPrintable(QStringLiteral("Group %1 x %2 must contain child %3 x %4").arg(group->width()).arg(group->height()).arg(kept->width()).arg(kept->height())));
+    QCOMPARE(group->width(), kept->width());
+    const auto screenshot = qEnvironmentVariable("TELAR_GUI_TEST_GROUP_FIT_SCREENSHOT");
+    if (!screenshot.isEmpty()) {
+      QVERIFY(window_->grabWindow().save(screenshot, "PNG"));
+    }
+    QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, bounds.center().toPoint());
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    QCOMPARE(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Kept action"));
+    QTest::keyClick(window_, Qt::Key_Escape);
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+  }
+
   Q_SLOT void configuredPicks() {
     const auto cleanup = qScopeGuard([this] {
       client_->closeComponentPick();

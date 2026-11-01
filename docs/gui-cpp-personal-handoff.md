@@ -1,3 +1,38 @@
+## CURRENT source: group fitting qualified; global slot allocation next
+
+Preview10 stays frozen/offered; user8 PID52865/runtime35801/QEMU7158/Sway9469
+unchanged. Sourcegroup fix considers children, groupafterchildren, metercompact,
+laterpriority ties; per-slot only.6portable files hashes match Mac/Linux.
+Final native4slots6PASS0 each MacRelease/LinuxRelease/LinuxASAN. MacASAN6pass/
+exit1/624149B3741alloc, no addressUB. BothSDK broad/editor empty0 andformat0.
+Allfour finalgroup/panel captures VIEWED. Raw component-group-fit-1; report/
+frozen archive component-group-fit. SourcefixturefinalAPPLIEDhost+guest; no
+pending build/test/editor sessions (10491/88513/52435/43552/40841 COMPLETE).
+Host product builtprivateJS epochout-adoption-build-9; new source notpackaged10.
+
+Preserve original baseline highKeepchild disappears; initial macro/config fixture
+errors; publicJS ambiguousmodule Qt6.8; privateJSskipqmlDir restoresload; old
+Linuxclick failures; diagnostic frames4889.5->33.5 andsameclickopenspanel.
+Finaltest waits extra synchronized frame AFTER low child hides, checks actual
+fitted bounds/width andsameclick/open/Escape. No deadline/assertweakening or
+Loaderproductionchange. Zero-width hypothesis rejected. FiveNodecontrols are
+functional-only, notQt/oracle/perf acceptance. Rawdiagnosticcopies onlyout-deps;
+finalrepo test has NO logs/spies. PreserveMac leak failure.
+
+Next actual functional defect visible in BOTHfinalgroup captures: StatusBar
+allocates slots proportionally by full intrinsic widths. Left group still
+reserves mostroom after lowchild hides, starving short rightlabel Right and
+unnecessarily truncatingtabs. Need native regression ensuringRightfits within
+window/its slot then improveallocation acrossconfiguredslots; globalpriority/
+overflow/fullvisual parity stillOPEN. Do this before next Preview11 packaging,
+then exactcandidatequalification. No fewpixel matrixcriticalpath.
+
+Local commits71f3a70d5 Preview10/text141entries, b46a934d0 productionZig inputs,
+136bcb3b4 meter119entries complete. Groupcheckpoint now readyforlocalcommit;
+full/daily goals OPEN, GoalAPIblocked/noresume. No agents/publish/merge/other
+checkout; never read/touch/stage personal-frame-delivery.md. Source retirement
+requiresauditedcleanbuildwithoutownZig, notGUIstartup. Continueworking.
+
 ## Latest source continuation: meter-row content qualified; Preview10 preserved
 
 The custom-panel meter detail/title overlapped on one line; original places

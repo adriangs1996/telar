@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
+import "ComponentFit.js" as ComponentFit
 
 Item {
     id: root
@@ -19,42 +20,24 @@ Item {
     property real rowHeight: 28 * ratio
     readonly property real gap: 8 * ratio
     readonly property var entries: (surface.nodes ?? []).filter(node => node.parent === parentIndex && node.tooltip === tooltip && (roots.length === 0 || roots.indexOf(node.index) >= 0))
-    property var reductions: []
+    property var fittedLevels: null
+    property var reductions: ({})
+    readonly property var levels: fittedLevels ?? reductions
+    property var fitNodes: []
     property real fullWidth: 0
-    readonly property var hiddenRoots: entries.filter((node, index) => (reductions[index] ?? 0) === 2).map(node => node.index)
+    readonly property var hiddenRoots: entries.filter((node, index) => (levels[node.index] ?? 0) === 2).map(node => node.index)
 
     implicitWidth: horizontal ? row.implicitWidth : column.implicitWidth
     implicitHeight: horizontal ? rowHeight : column.implicitHeight
 
     function refit() {
-        const reduced = entries.map(() => 0);
-        const widths = entries.map((node, index) => rowRepeater.itemAt(index)?.unreducedWidth ?? 0);
-        const compactWidths = entries.map((node, index) => rowRepeater.itemAt(index)?.compactWidthDelta ?? 0);
-        fullWidth = widths.reduce((sum, value) => sum + value, 0) + Math.max(0, entries.length - 1) * gap;
-        if (!fit || width <= 0) {
-            reductions = reduced;
-            return;
+        let nodes = [];
+        for (let index = 0; index < rowRepeater.count; ++index) {
+            nodes = nodes.concat(rowRepeater.itemAt(index)?.fitNodes ?? []);
         }
-        let total = fullWidth;
-        let hidden = 0;
-        for (let step = 0; step < 2 * entries.length && total + (hidden > 0 ? overflow.implicitWidth + gap : 0) > width; ++step) {
-            let chosen = -1;
-            for (let index = 0; index < entries.length; ++index) {
-                if (reduced[index] === 2) continue;
-                if (chosen < 0 || entries[index].priority <= entries[chosen].priority) chosen = index;
-            }
-            if (chosen < 0) break;
-            if (entries[chosen].kind === "meter" && reduced[chosen] === 0) {
-                reduced[chosen] = 1;
-                total -= compactWidths[chosen];
-            } else {
-                const previous = reduced[chosen];
-                reduced[chosen] = 2;
-                total -= widths[chosen] - (previous === 1 ? compactWidths[chosen] : 0) + (entries.length - hidden > 1 ? gap : 0);
-                ++hidden;
-            }
-        }
-        reductions = reduced;
+        fitNodes = nodes;
+        fullWidth = ComponentFit.measure(fitNodes, {}, gap).width;
+        reductions = !fit || width <= 0 || fittedLevels !== null ? {} : ComponentFit.fit(fitNodes, width, gap, overflow.implicitWidth);
     }
 
     onWidthChanged: Qt.callLater(refit)
@@ -69,6 +52,8 @@ Item {
         Repeater {
             id: rowRepeater
             model: root.horizontal ? root.entries : []
+            onItemAdded: Qt.callLater(root.refit)
+            onItemRemoved: Qt.callLater(root.refit)
 
             delegate: ComponentNode {
                 required property var modelData
@@ -82,9 +67,10 @@ Item {
                 rowHeight: root.rowHeight
                 width: implicitWidth
                 height: root.rowHeight
-                compact: (root.reductions[index] ?? 0) === 1
-                visible: (root.reductions[index] ?? 0) !== 2
-                onImplicitWidthChanged: Qt.callLater(root.refit)
+                fittedLevels: root.levels
+                compact: (root.levels[node.index] ?? 0) === 1
+                visible: (root.levels[node.index] ?? 0) !== 2
+                onFitNodesChanged: Qt.callLater(root.refit)
             }
         }
 

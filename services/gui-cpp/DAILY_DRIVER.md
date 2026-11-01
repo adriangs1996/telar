@@ -52,6 +52,12 @@ The [meter-row correction](measurements/panel-meter-layout.md) fixes overlapping
 custom-panel titles/details and restores the original label/track/percentage
 columns. Native interaction checks pass both SDKs; Mac shutdown leaks remain.
 This later change is not in the frozen Preview10 bundle.
+The later [group-priority correction](measurements/component-group-fit.md)
+keeps useful group children and their actual click actions when a low-priority
+child does not fit. Six native checks pass on each SDK, with clean Linux
+sanitizers and unchanged Mac leak failure. It is also outside Preview10.
+Proportional allocation across slots can still starve a short right slot and
+remains an active functional gap before the next package.
 
 ## Preserved candidate: Preview 8; normal launch confirmed
 

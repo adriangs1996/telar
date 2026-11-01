@@ -15,6 +15,7 @@ Loader {
     property bool horizontal: true
     property bool fit: horizontal && parentIndex < 0
     property var roots: []
+    property var fittedLevels: null
     property bool initialized: false
 
     function loadBranch() {
@@ -31,6 +32,7 @@ Loader {
             horizontal: Qt.binding(() => root.horizontal),
             fit: Qt.binding(() => root.fit),
             roots: Qt.binding(() => root.roots),
+            fittedLevels: Qt.binding(() => root.fittedLevels),
         });
     }
 

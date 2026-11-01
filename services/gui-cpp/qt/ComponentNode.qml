@@ -15,6 +15,7 @@ Item {
     property real ratio: 1
     property real rowHeight: 28 * ratio
     property bool compact: false
+    property var fittedLevels: ({})
     readonly property real gap: 6 * ratio
     readonly property int maximumBlockLines: 8
     readonly property real iconSide: (node.kind === "callout" ? 18 : 16) * ratio
@@ -23,7 +24,13 @@ Item {
     readonly property bool hasIcon: node.glyph.length > 0 || node.providerMark !== 0 || node.telarMark
     readonly property bool hasTooltip: (surface.nodes ?? []).some(child => child.parent === node.index && child.tooltip)
     readonly property real compactWidthDelta: node.kind === "meter" ? trackWidth + gap : 0
-    readonly property real unreducedWidth: implicitWidth + (compact ? compactWidthDelta : 0)
+    readonly property real unreducedWidth: node.kind === "group" ? (visual.item?.unreducedWidth ?? 0) : implicitWidth + (compact ? compactWidthDelta : 0)
+    readonly property var fitNodes: [{
+        index: node.index, parent: node.parent, priority: node.priority,
+        group: node.kind === "group", meter: node.kind === "meter",
+        width: node.kind === "group" ? (visual.item?.chromeWidth ?? 0) : unreducedWidth,
+        compactDelta: compactWidthDelta,
+    }].concat(node.kind === "group" ? (visual.item?.fitNodes ?? []) : [])
 
     implicitWidth: visual.item?.implicitWidth ?? 0
     implicitHeight: visual.item?.implicitHeight ?? rowHeight
@@ -177,6 +184,9 @@ Item {
         id: group
         Item {
             readonly property real markWidth: root.hasIcon ? root.iconSide + root.gap : 0
+            readonly property real chromeWidth: markWidth
+            readonly property real unreducedWidth: markWidth + (childrenTree.item?.fullWidth ?? 0)
+            readonly property var fitNodes: childrenTree.item?.fitNodes ?? []
             implicitWidth: markWidth + childrenTree.implicitWidth
             implicitHeight: root.rowHeight
             Loader {
@@ -199,6 +209,7 @@ Item {
                 parentIndex: root.node.index
                 horizontal: true
                 fit: false
+                fittedLevels: root.fittedLevels
             }
         }
     }
