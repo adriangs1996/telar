@@ -16,12 +16,16 @@ Its exact relocated schema-87/88 Finder/plugin/custom-bar/two-window smokes pass
 with opacity 0.98 and blur 20, explicitly queried from the adopted configuration.
 Native frame and geometry assertions pass, including instrumented execution.
 All 1,739 file hashes and 121 Mach-O checks pass. The fresh complete native run
-retains one selection/clipboard failure
-and 105 passes; this is an open qualification issue. The layout subset's old
+initially retained one selection/clipboard failure and 105 passes. The test-only
+native admission correction subsequently passes **106 with schema 87 and 106
+with schema 88**, keeping pointer assertions and deadlines. It waits for the
+runner's acknowledgement of the recreated native window; production input and
+Preview8 stay unchanged. See [native-readiness.md](measurements/native-readiness.md).
+The layout subset's old
 cleanup assumption was independently reproduced with the frozen earlier binary
 and corrected without changing production tab selection or final assertions.
-The corrected subset passes six checks; Linux Release and ASan/UBSan pass ten
-each. A corrected, explicitly leak-enabled native Mac run retains 335,945 leaked
+The corrected subset passes six checks; the final Linux Release and ASan/UBSan
+subsets pass eight each. A corrected, explicitly leak-enabled native Mac run retains 335,945 leaked
 bytes in 1,939 allocations and exits one. Daily acceptance, physical sleep and
 complete parity remain open. See [DAILY_DRIVER.md](DAILY_DRIVER.md).
 

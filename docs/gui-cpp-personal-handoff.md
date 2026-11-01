@@ -1,5 +1,40 @@
 ## CURRENT Preview8 normal launch confirmed; daily/final goals OPEN (2026-11-01)
 
+Latest local commit fa65e06a9 fixes native blur and archives 105 entries under
+measurements/native-blur; verify.py defaultPASS. Preview8 exactGUI e97bba076a...
+is FROZEN and active userPID52865 sinceNov1 09:45:51; preserve it. Userconfirmed
+"Sí, ya aparece la interfaz". Runtime35801/QEMU7158/Sway9469 unchanged. Old7PID
+24527 no longerobserved afteruser switched; agent sentNOsignal. Do not repackage8.
+
+NEW uncommitted test-only native-readiness fix: initialready owner maynameOLD
+AppKitwindow after Qtclose/show recreatesidentity. New tests/platform helper
+windowManagerReady compares ownrunner .owner againstCURRENTwindowNumber, ordinary
+or nonCocoa tests unchanged. Added preconditioninitialsetup+afterclose/show;
+alloriginalpointerassertions+deadlinesretained. Mac prefix9PASS, fullschema87
+106PASS0, fullschema88 106PASS0. Earlier105PASS1FAIL retained. No prodbinarychange.
+FinalLinux8PASS0 eachRelease+ASAN/privatecleanup0; all4sourceshashmatchhost.
+Mac2broad0 +actualeditor3deliveredempty; Linux2broad0/editor3empty. Original
+Linuxunnamedparam thenconst-correctnessfailures retained; fixedunusedparamannotation,
+noNOLINT/profilechanges. Source/evidence85entries (~200KB compressed) under
+measurements/native-readiness, verify.py --check-currentPASS. Needs localcommit.
+
+Preview8stillGUIe97b... actualhashchecked. Native-readiness pendingfiles4testonly,
+plusDAILY/PARITY/handoff/docs/evidence. NEVER touch/stage personal-frame-delivery.md.
+Allnewcheckscomplete; do not repeatwithoutreason. Aftercommitresumequeuedicons
+out-dependencies/preview7-blank-1/icons-in-progress.patch (gitapply--checkPASS).
+Patchalsoarchived native-blur/archive/queued-unqualified/...gz. Only8sourcefiles,
+noexistingnativehelperhunkconflict. QtSvgdevdependenciesMac/Linux alreadyprepared;
+patchisUNQUALIFIED; Preview8staysfrozenuntilnewcandidateexactqualification.
+Need extend existingnativecustomfixture/visualchecks forTelarmark/callouticons,
+bothSDKquality/nativechecks. Stillonlypalette+notificationsdeferrablefordaily.
+Optionalasyncquestionpending: user'snextdailyflowblockerin8; don'twait orendturn.
+
+Mac explicit native leakprobeactual1/335945B1939alloc remainsOPEN, originaldefault
+ASAN0notvalidforleakgate. Physicalsystemsleepunverified. FullparityandownZigremoval
+OPEN, GoalAPIblocked/noresumeoperation. Noagents/publish/merge/otherworktrees.
+
+## Historical immediate Preview8 diagnosis and qualification
+
 USER CONFIRMED Preview8 normal launch: "Sí, ya aparece la interfaz". Blank-window
 blocker CLOSED; keep Preview8 frozen for actual use. Daily/final goals OPEN.
 Exactschema88 blur smoke ALSO passed0/noQML/private state removed. Linux8slots

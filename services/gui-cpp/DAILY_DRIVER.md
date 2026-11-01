@@ -48,9 +48,14 @@ now explicitly selects its retained source after verifying closure, retaining
 the original final assertions and deadlines; all six checks pass. The complete
 new native suite reports **105 passed, one pointer-selection/clipboard failure**
 while Cocoa geometry changes are queued. That failure remains open, with the
-raw log retained; the suite is not reported as passing. Daily user-flow
-confirmation, physical system sleep, remaining qualification and final parity
-remain open. The Linux subset passes ten checks each in Release and ASan/UBSan.
+raw log retained. The follow-up test-only native admission correction now waits
+for the runner's acknowledgement of the recreated AppKit window, before frame
+and pointer checks. The complete suites then pass **106 checks with schema 87
+and 106 with schema 88**, with all original selection assertions and deadlines.
+The matching final Linux subset passes eight checks each in Release/ASan/UBSan.
+See [native-readiness.md](measurements/native-readiness.md). Daily user-flow
+confirmation, physical system sleep, Mac leaks, remaining qualification and
+final parity remain open. The preceding Linux subset passes ten checks each.
 The changed portable fixture also passes broad analysis and actual editor
 diagnostics against Linux Qt 6.8; source-bound receipts are exported locally.
 

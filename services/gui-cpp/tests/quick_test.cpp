@@ -487,6 +487,7 @@ private:
     const auto external_window_ready = qEnvironmentVariable("TELAR_GUI_TEST_WINDOW_READY");
     if (!external_window_ready.isEmpty()) {
       QTRY_VERIFY2_WITH_TIMEOUT(QFileInfo::exists(external_window_ready), "External native window setup did not complete", runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(test::windowManagerReady(*window_), runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
     }
 
@@ -524,6 +525,7 @@ private:
     test::activateWindow(*window_);
     QTRY_VERIFY_WITH_TIMEOUT(window_->isVisible() && window_->isExposed(), runtime_wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(window_->isActive(), runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(test::windowManagerReady(*window_), runtime_wait_ms);
     QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
     QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
     QCOMPARE(firstPane()->id, pane_id);
