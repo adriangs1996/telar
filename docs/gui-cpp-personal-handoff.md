@@ -59,26 +59,26 @@ executable/start instead of restoring the old process. Old Zig GUI87625 was alre
 absent before this work; do not restart it or claim we stopped it. Private test
 children are separate and must be cleaned up by their owning helpers only.
 
-## Available candidate: Preview15 (2026-11-01)
+## Available candidate: Preview16 (2026-11-01)
 
-`services/gui-cpp/out-adoption/Telar C++ Preview 15.app` is frozen, qualified and
-already offered to Adrian. GUI SHA256
-`2e55047d76ab005463ece74db5104c77e3166a39ed0fcbf0d5b9fa05158b81da`;
-raw `a14a4ea70fbf0b6f0c8fa9153424b6f68f9a8f79af5e3be24e5334684d296e6b`.
+`services/gui-cpp/out-adoption/Telar C++ Preview 16.app` is frozen/qualified and
+already offered for normal-use assessment. GUI SHA256
+`76ca4aa6fcc7ed5b1bc50402cca3e6137f3d6fd55a38a5ee31b835cf8f44232d`;
+raw `81dca3f3d24dd9398fdce3f34c4217c437a640f85b310f0fdb50d1a7dba8993a`.
 All1739 hashes/121 Mach-O/deep-strict signatures pass. Exact relocated schemas87/88
-native blur/login/Finder/config/runtime/plugins/bars/two windows/client pause,
-realSSH WITH machine bar AND green=default, VimUTF8, custom panel/bars and task/
-worktree/plan survival pass; zero QML warnings/private cleanup. Five daily captures
-plus schema87 direct and native Mac/Linux default ink were inspected. Panel actor
-is an owned callback/controlled anchor; activity uses protocol fixtures, not AI/Git.
-Fresh9 plus increments, not a new clean/no-own-Zig build. Launch from repo root:
-`open -n "services/gui-cpp/out-adoption/Telar C++ Preview 15.app"`. Finder can open
-it after another preview closes; copy under a separate name if desired. Rollback:
-close preview/open `~/Applications/Telar.app`. No installs/replacements/migrations.
-Preview8/13/14 and installed app/config/runtime are intact. All previews share bundle
-identifier; use open-n for the exact one while8 runs. Adrian confirmed Preview8
-normal/no daily blocker so far. Physical sleep: "Aún no lo he probado"; no question
-is pending. Don't ask again or suspend the host. Daily/full goals stay OPEN.
+Finder/login/default-runtime/plugins/bars/two windows/client pause, realSSH with
+machine bar+default ink, VimUTF8, custom panel and task/worktree/plan survival pass;
+zero QML warnings/config unchanged/private cleanup. Six direct/daily captures plus
+native Mac/Linux group captures inspected. Panel actor is owned callback/anchor;
+activity uses protocol fixtures, not AI/Git checkout. Fresh9 plus increments, not
+clean/no-own-Zig build. From worktree root:
+`open -n "services/gui-cpp/out-adoption/Telar C++ Preview 16.app"`. Finder opens it
+after another preview closes; copy under its separate name if desired. Rollback:
+close preview/open `~/Applications/Telar.app`. No install/replacement/migration.
+Preview8/15/installed app/config/runtime remain intact. All previews share bundle
+identifier; use open-n for this exact one while8 runs. Adrian confirmed8 normal/no
+daily blocker so far. Physical sleep: "Aún no lo he probado"; don't ask again or
+suspend host. Daily/full goals stay OPEN.
 
 ## Latest implementation and evidence
 
@@ -116,70 +116,71 @@ packaging/smoke jobs remain active. Raw `out-dependencies/component-shared-overf
 The shared-overflow report/archive/verifier and local commit are complete. CONTINUE
 actual PARITY; do not repeat completed Preview12 qualification without new changes.
 
-## Latest qualified source: default machine text ink; continue API validation
+## Latest qualified source: configured-group geometry and footer audit
 
-HEAD7dfeb17c6 commits inline facts/Preview14 and275 frozen entries. The later scoped
-ink correction is qualified; finish its review/local commit then continue PARITY.
-Raw out-dependencies/component-machine-default-ink-1; report/archive/verifier under
-measurements/component-machine-default-ink. Production delta is factRecord text ink
-using toQColor(theme.chromeColor(role)), preserving fill semantics for no-color
-profile dots. Old source negative has#00000000 vs expected#ffffffff on both machines.
-Same fixture retains lost-link/no-CPU/activation/hidden-width assertions. Four native
-checks pass per variant/SDK; LinuxASAN0, Mac4assertionspass/exit1 for986300B3607alloc,
-no address/UB or suppression. Broad/editor/format pass both SDKs; two sources match.
-Linux editors use OWN on-disk TMPDIRs, removed AFTER clangd exits; no tmpfs PCH buildup.
-Preview15 exact qualification is complete/offered; no heavy jobs remain. Earlier14
-broader14+6 and whole machine/geometry CTests remain preserved, not claimed rerun.
+Default ink/Preview15 is locally committed in d24e5e020 (175 frozen entries).
+Current group-spacing source/report and exact Preview16 qualification are complete;
+finish local evidence/review/commit, then continue actual PARITY. Raw evidence under
+out-dependencies/component-group-spacing-1; report/archive/verifier under
+measurements/component-group-spacing. Three QML files +two tests. Original group
+chrome6/26, mark14, childgap6 and leadinggap6 now agree in measurement and placement;
+nonempty bar groups retain6px edges, empty6/26. Panel groups add no extra bar padding.
+Native negative reproduces missing12px. Both SDKs pass broader15 cases; later test-
+only parentheses/default-init fixes leave production QML unchanged. Final4 native
+checks+three config CTests pass per variant/SDK; LinuxASAN0, Mac assertionspass/exit1
+for487550B2840alloc (broader645182B3749alloc), no address/UB/suppression. Broad/editor/
+format pass both SDKs, five hashes match. QML lint targets0 retain existing dynamic-
+property/qualification warnings; policy/profile unchanged. Linux own disk editor
+TMPDIRs removed after compiler exit; /tmp free1.9G. Native/daily captures inspected.
 
-Footer audit: both GUI renderers omit sidebar_footer (original BarRow.positions4;
-Sidebar.draw no footer draw site), while configuration/state exposes those slots.
-Do not add a phantom row as GUI parity. Next concrete API gap: original
-Generation.zig:1200 rejects footer count>3 and any tabs; C++ Definitions currently
-truncates/accepts them. Verify/fix diagnostic and validation parity, then group/menu/
-fitting behavior. No validation source edits yet. Don't redo passing15 checks without
-new changes/failures. Previous verifiers default to archives after source changes.
+Footer audit correction: neither GUI renders sidebar_footer. Shared runtime-cpp
+BarsValidator ALREADY rejects >3 sources/tabs before Definitions.apply. Earlier
+truncation claim examined Definitions alone and is withdrawn; diagnostic wording
+still differs. New end-to-end base/profile rejection, valid inheritance/list
+replacement/static content and allocator cleanup checks pass. No duplicate
+production validator/runtime refactor. Failed old exact-diagnostic expectation
+and corrected coverage retained in component-footer-validation-1.
 
-## Latest qualified source: inline machine facts; continue footer composition
+Separate source-unmodified native audit in daily-native-links-1:7 checks pass0 at
+factors1.25/2 (link hover/copy, selection, wheel/copy, keyboard copy-mode, close/
+reopen same pane). Private boards cleared/general count954 unchanged. Initial
+attempt selected3 optional custom-link-host methods absent from this build; retain
+selection errors, don't call them product failures. External link-opening/device/
+whole-client ownership gates remain open. No heavy jobs remain after exact16.
 
-Local checkpoint c4a7f490f already commits builtin fitting/Preview13 and557 frozen
-entries. New inline-facts sources/report are qualified; finish their local review/
-commit, then continue actual PARITY. Raw out-dependencies/component-machine-facts-1.
-Original BarRow skips facts for<=1 machine, then shown slots in slot order. Pure
-presentation/machine_facts.hpp follows inline_nodes glyph/ink/attention, active bold,
-connected-only optional CPU and12px machine/5px part gaps. MachineChromeLayout has
-an exclusive inlineFacts mode; existing controls remain. Mode changes retire rows,
-facts activation is inert, hidden measurement creates no visual QVariant rows.
-Phase/CPU use MachineRow summaries/events for hidden clients; runtime is unchanged.
+NEXT concrete functional finding: original src/client/input/bar_components.zig
+prefers action over a coexisting URL; Qt activateComponent currently prefers URL.
+Reproduce safely with an action and URL that LinkTarget rejects (https:// with
+empty host, assert rejection before test to avoid external app launch), then fix
+bar+panel dispatch and preserve generation/revision guards. Existing configured
+GroupPriority/panel button tests can cover both; don't alter production until
+protected processes are rechecked and group-spacing evidence is frozen/committed.
+A checkpoint is not completion. Don't redo passing16 scopes without new changes.
+Previous immutable verifiers default to archived sources after future edits.
 
-Both SDKs pass14 native Quick+6 machine checks in Release, both full machine-window/
-geometry CTests, broad/all3TUs, actual editor and changed-range format. Linux ASAN
-also exits0/cleanup0 with leak detection. Mac14+6 assertions pass but exits1 for
-638351B3956alloc and1073208B4036alloc; no address/UB error or suppression. Seven
-portable sources match. Linux editors retain one worker/no background index/disk
-PCH and original60s delivery deadline/profile/project .clangd.
+## Preserved machine checkpoints
 
-Failures retained: old-source missing inlineFacts; BoundedText.empty compile mistake;
-include/designated-init/trailing-comma diagnostics; first Cocoa transient connecting
-phase due to an open fake listener plus white fixture background. Fixture now closes
-its OWN listener and adopts panelBackground; same glyph/CPU assertions and5000ms.
-First exact SSH fails BEFORE Popen because VM/tmp tmpfs is full.43 inactive generated
-clangd PCH files total2033341664B; verified no live compiler/editor, open FD or mapped
-preamble, recorded UID/inode/hash/size/time, removed only those caches. /tmp free1.9G,
-Sway unchanged; empty failed setup removed with no-runtime/socket/history guards.
-SSH retry in NEW output2 passes. Keep failure1 and cache receipt. Future editor
-probes need an OWNED on-disk TMPDIR and own-PCH cleanup AFTER server exit; don't
-recreate the tmpfs pressure or change project diagnostics. No heavy checks remain.
+Local c4a7f490f commits original-priority builtin fitting/Preview13 (557 entries);
+7dfeb17c6 commits inline phase/attention/CPU facts/Preview14 (275 entries);
+d24e5e020 commits default text ink/Preview15 (175 entries). Their reports/verifiers
+remain under component-builtin-fit, component-machine-facts and
+component-machine-default-ink. Original control modes remain separate from static
+facts; hidden client summaries update on events and no visual maps are built for
+hidden measurement. Text default resolves foreground through chromeColor, while
+no-color profile dots keep fill semantics. Full styling/performance remain open.
 
-Next functional review: sidebar footer composition/fitting across its configured
-sources, then remaining group/menu behavior. Do not redo passing Preview14 tests
-without new changes/failures. Previous immutable verifiers default to archives;
---check-current is only for that checkpoint's source. A checkpoint is not full
-completion. Preserve the unrelated user measurement file.
+Original14 SSH attempt failed before Popen because43 inactive generated clangd PCH
+files filled VM/tmp. UID/inode/hash/open-FD/maps guards proved caches unused before
+removing2033341664B. Sway/protected processes stayed intact. Retry in NEW output2
+passed. Preserve that failure/cache receipt and use owned on-disk editor TMPDIRs;
+never recreate tmpfs pressure or change diagnostics. Prior failed native fixture
+connecting-phase/readability controls remain in their immutable evidence. No need
+to repeat completed candidate qualifications without new source changes/failures.
 
 ## Remaining gates: keep these separate
 
 Daily acceptance: physical system sleep remains unverified; Mac shutdown-leak
-attribution/stability remains open. Release Preview15 is available for daily
+attribution/stability remains open. Release Preview16 is available for daily
 assessment. Do not equate private SIGSTOP/SIGCONT with physical system sleep.
 
 Final parity: remaining fitting/styling and combined

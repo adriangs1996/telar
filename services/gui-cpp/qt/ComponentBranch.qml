@@ -10,6 +10,7 @@ Loader {
     required property var typography
     property real ratio: 1
     property real rowHeight: 28 * ratio
+    property real gap: 8 * ratio
     property int parentIndex: -1
     property bool tooltip: false
     property bool horizontal: true
@@ -27,6 +28,7 @@ Loader {
             typography: Qt.binding(() => root.typography),
             ratio: Qt.binding(() => root.ratio),
             rowHeight: Qt.binding(() => root.rowHeight),
+            gap: Qt.binding(() => root.gap),
             parentIndex: Qt.binding(() => root.parentIndex),
             tooltip: Qt.binding(() => root.tooltip),
             horizontal: Qt.binding(() => root.horizontal),

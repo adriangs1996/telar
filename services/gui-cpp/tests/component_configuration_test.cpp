@@ -153,6 +153,67 @@ void profilesAndDefinitions(Memory &memory) {
   require(inherited_binding && inherited_binding->index == 0 && reindexed.components().definitions().panels().size() == 1, "inherited bindings must resolve panel names against the selected profile rather than reuse base indices");
 }
 
+template <typename Memory>
+void footerValidation(Memory &memory) {
+  struct InvalidFooter {
+    std::string_view source;
+    std::string_view diagnostic;
+    std::string_view profile;
+  };
+
+  constexpr std::array invalid{
+      InvalidFooter{R"(local t=require('telar'); return {api_version=2,client={bars={sidebar_footer={t.bar.metrics(),t.bar.machines(),t.bar.static('third'),t.bar.static('fourth')}}}})", "sidebar_footer accepts at most three slots", {}},
+      InvalidFooter{R"(local t=require('telar'); return {api_version=2,client={bars={sidebar_footer={t.bar.tabs()}}}})", "sidebar_footer cannot contain tabs", {}},
+      InvalidFooter{R"(local t=require('telar'); return {api_version=2,client={bars={sidebar_footer={t.bar.static('first'),t.bar.metrics(),t.bar.tabs()}}}})", "sidebar_footer cannot contain tabs", {}},
+      InvalidFooter{R"(local t=require('telar'); return {api_version=2,profiles={bad={client={bars={sidebar_footer={t.bar.tabs()}}}}}})", "sidebar_footer cannot contain tabs", "bad"},
+  };
+  for (const auto &example : invalid) {
+    bool rejected = false;
+    try {
+      const ConfigurationGeneration generation{memory, ConfigurationSourceText{.source = example.source, .directory = {}, .profile = example.profile}};
+    } catch (const std::exception &error) {
+      if (error.what() != example.diagnostic) {
+        std::cerr << "Unexpected footer diagnostic: " << error.what() << '\n';
+      }
+
+      require(error.what() == example.diagnostic, "invalid footer must retain its original contextual diagnostic");
+      rejected = true;
+    }
+
+    require(rejected, "sidebar footer must reject excess slots and tabs in base or selected profile");
+    require(memory.liveBytes() == 0, "failed footer configuration must release every injected allocation");
+  }
+
+  constexpr std::string_view valid = R"(
+    local t=require('telar')
+    return {api_version=2,client={bars={sidebar_footer={t.bar.metrics(),t.bar.machines(),t.bar.static('third')}}},profiles={
+      inherited={client={pane_gaps=false}},
+      empty={client={bars={sidebar_footer={}}}},
+      shorter={client={bars={sidebar_footer={t.bar.static('only')}}}},
+    }}
+  )";
+  constexpr std::array positions{components::Position::footer_left, components::Position::footer_center, components::Position::footer_right};
+  {
+    const ConfigurationGeneration generation{memory, ConfigurationSourceText{.source = valid, .directory = {}, .profile = "inherited"}};
+    constexpr std::array kinds{components::SourceKind::metrics, components::SourceKind::machines, components::SourceKind::fixed};
+    for (std::size_t index = 0; index < positions.size(); ++index) {
+      require(generation.components().definitions().source(positions[index]).kind == kinds[index], "valid footer must retain all three ordered sources through inheritance");
+    }
+
+    const auto &bar = generation.components().bar(components::Position::footer_right);
+    require(bar.nodes().size() == 1 && bar.text(bar.nodes().front().text) == "third", "valid footer must retain owned static content");
+  }
+
+  for (const auto *const profile : {"empty", "shorter"}) {
+    const ConfigurationGeneration generation{memory, ConfigurationSourceText{.source = valid, .directory = {}, .profile = profile}};
+    const bool empty = std::string_view{profile} == "empty";
+    for (std::size_t index = 0; index < positions.size(); ++index) {
+      const auto expected = !empty && index == 0 ? components::SourceKind::fixed : components::SourceKind::empty;
+      require(generation.components().definitions().source(positions[index]).kind == expected, "declared footer list must replace inherited omitted slots");
+    }
+  }
+}
+
 template <typename Generation>
 bool rejectedAction(const Generation &generation, BindingAction action) {
   try {
@@ -256,6 +317,7 @@ int main() {
     BudgetAllocator memory{system, allocation_budget};
     builtinContent();
     profilesAndDefinitions(memory);
+    footerValidation(memory);
     renderLifetime(memory);
     pickRendering(memory);
     require(memory.liveBytes() == 0, "component configuration teardown must release every injected allocation");

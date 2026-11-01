@@ -4,7 +4,35 @@ The complete functional, visual and equal-or-better performance objective remain
 open. Only the command/quick-navigation palette and notifications/sounds may be
 deferred for daily adoption; existing implementations stay available.
 
-## Current candidate: Preview15; default theme ink
+## Current candidate: Preview16; configured groups
+
+`out-adoption/Telar C++ Preview 16.app` adds original group padding/child gaps and
+mark widths, including fitted and empty groups. Existing panel actions, metrics,
+overflow, tabs and splits remain qualified. From the worktree root:
+
+```sh
+open -n "services/gui-cpp/out-adoption/Telar C++ Preview 16.app"
+```
+
+Finder can open it after another preview closes. Copy under its separate name if
+desired. Close it/open `~/Applications/Telar.app` to return. No install/replacement/
+session migration. GUI SHA256:
+`76ca4aa6fcc7ed5b1bc50402cca3e6137f3d6fd55a38a5ee31b835cf8f44232d`.
+All1739 hashes/121 Mach-O/signatures and exact relocated schema87/88 Finder/login/
+config/runtime/plugins/bars/windows/pause, realSSH, VimUTF8, panel and task/plan flows
+pass. All six direct/daily captures inspected. Native15 broader plus final4 checks
+and three configuration CTests pass both SDKs; LinuxASAN0, Mac assertions pass but
+shutdown exits1 (final487550B2840alloc), no address/UB or suppression. Broad/actual
+editor/format pass both SDKs; five sources match. Separate7 native copy/selection/
+close-reopen checks pass each at factors1.25/2 with private clipboard unchanged.
+Footer validation already exists in shared runtime-cpp; earlier truncation claim
+is withdrawn. Next action+URL precedence finding awaits a directed regression.
+Daily/full goals, physical sleep, Mac leak/stability, full fitting/styling/ownership/
+paired pixels/performance and audited Zig retirement remain OPEN. Preview8/15/user
+config/runtime are intact. Fresh9 plus increments, not a clean/no-own-Zig build.
+See [configured-group evidence](measurements/component-group-spacing.md).
+
+## Preserved candidate: Preview15; default theme ink
 
 `out-adoption/Telar C++ Preview 15.app` is separately packaged/qualified and already
 offered for normal-use assessment. It adds a text-color correction to Preview14:

@@ -18,7 +18,7 @@ Item {
     property bool fit: horizontal && parentIndex < 0
     property var roots: []
     property real rowHeight: 28 * ratio
-    readonly property real gap: 8 * ratio
+    property real gap: 8 * ratio
     readonly property var entries: (surface.nodes ?? []).filter(node => node.parent === parentIndex && node.tooltip === tooltip && (roots.length === 0 || roots.indexOf(node.index) >= 0))
     property var fittedLevels: null
     property var reductions: ({})
@@ -44,6 +44,7 @@ Item {
     onWidthChanged: Qt.callLater(refit)
     onEntriesChanged: Qt.callLater(refit)
     onFitChanged: Qt.callLater(refit)
+    onGapChanged: Qt.callLater(refit)
 
     Row {
         id: row
@@ -69,6 +70,7 @@ Item {
                 width: implicitWidth
                 height: root.rowHeight
                 fittedLevels: root.levels
+                barGroup: root.parentIndex < 0
                 compact: (root.levels[node.index] ?? ComponentFit.Level.full) === ComponentFit.Level.compact
                 visible: (root.levels[node.index] ?? ComponentFit.Level.full) !== ComponentFit.Level.hidden
                 onFitNodesChanged: Qt.callLater(root.refit)

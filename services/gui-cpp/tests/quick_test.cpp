@@ -4347,7 +4347,11 @@ return {api_version=2, client={keybindings={
     QVERIFY(group != nullptr);
     const auto group_bounds = group->mapRectToScene(group->boundingRect());
     QVERIFY2(group_bounds.contains(bounds), qPrintable(QStringLiteral("Group %1 x %2 must contain child %3 x %4").arg(group->width()).arg(group->height()).arg(kept->width()).arg(kept->height())));
-    QCOMPARE(group->width(), kept->width());
+    constexpr qreal group_padding = 6;
+    const auto padding = group_padding * group->property("ratio").toReal();
+    QCOMPARE(group->width(), kept->width() + (2 * padding));
+    QCOMPARE(bounds.left() - group_bounds.left(), padding);
+    QCOMPARE(group_bounds.right() - bounds.right(), padding);
     const auto *right = componentItem(QStringLiteral("label"), QStringLiteral("Right"));
     QVERIFY2(right != nullptr, "A short right slot must remain visible after the long low-priority child hides");
     QVERIFY(viewport.contains(right->mapRectToScene(right->boundingRect())));
@@ -4360,6 +4364,60 @@ return {api_version=2, client={keybindings={
     QCOMPARE(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Kept action"));
     QTest::keyClick(window_, Qt::Key_Escape);
     QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+  }
+
+  Q_SLOT void configuredGroupChromeAndGaps() {
+    const auto cleanup = qScopeGuard([this] {
+      client_->loadConfiguration({}, {}, {});
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    constexpr std::array configurations{
+        R"(local t=require('telar'); return {api_version=2,client={bars={bottom={left=t.bar.static(t.ui.group({t.ui.label('First λ'),t.ui.label('Second')})),right=t.bar.tabs()}}}})",
+        R"(local t=require('telar'); return {api_version=2,client={bars={bottom={left=t.bar.static(t.ui.group({mark='telar',t.ui.label('First λ'),t.ui.label('Second')})),right=t.bar.tabs()}}}})",
+        R"(local t=require('telar'); return {api_version=2,client={bars={bottom={left=t.bar.static(t.ui.group({})),right=t.bar.tabs()}}}})",
+        R"(local t=require('telar'); return {api_version=2,client={bars={bottom={left=t.bar.static(t.ui.group({mark='telar'})),right=t.bar.tabs()}}}})",
+    };
+    for (std::size_t index = 0; index < configurations.size(); ++index) {
+      writeTestFile(path, configurations[index]);
+      client_->loadConfiguration(path, {}, {});
+      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      const auto *group = componentItem(QStringLiteral("group"));
+      QVERIFY(group != nullptr);
+      const bool marked = index % 2 != 0;
+      const bool empty = index >= configurations.size() / 2;
+      constexpr qreal padding_pixels = 6;
+      constexpr qreal mark_pixels = 14;
+      const auto ratio = group->property("ratio").toReal();
+      const auto padding = padding_pixels * ratio;
+      const auto mark_width = marked ? mark_pixels * ratio : 0;
+      const auto fit_nodes = group->property("fitNodes").toList();
+      QVERIFY(!fit_nodes.isEmpty());
+      const auto descriptor = fit_nodes.front().toMap();
+      QCOMPARE(descriptor.value(QStringLiteral("width")).toReal(), (2 * padding) + (marked ? mark_width : -padding));
+      QCOMPARE(descriptor.value(QStringLiteral("childGap")).toReal(), padding);
+      QCOMPARE(descriptor.value(QStringLiteral("leadingGap")).toReal(), padding);
+      if (empty) {
+        QCOMPARE(group->width(), descriptor.value(QStringLiteral("width")).toReal());
+        continue;
+      }
+
+      const auto *first = componentItem(QStringLiteral("label"), QStringLiteral("First λ"));
+      const auto *second = componentItem(QStringLiteral("label"), QStringLiteral("Second"));
+      QVERIFY(first != nullptr && second != nullptr);
+      const auto group_bounds = group->mapRectToScene(group->boundingRect());
+      const auto first_bounds = first->mapRectToScene(first->boundingRect());
+      const auto second_bounds = second->mapRectToScene(second->boundingRect());
+      QCOMPARE(first_bounds.left() - group_bounds.left(), padding + (marked ? mark_width + padding : 0));
+      QCOMPARE(second_bounds.left() - first_bounds.right(), padding);
+      QCOMPARE(group_bounds.right() - second_bounds.right(), padding);
+      const auto screenshot = qEnvironmentVariable("TELAR_GUI_TEST_GROUP_SPACING_SCREENSHOT");
+      if (marked && !screenshot.isEmpty()) {
+        QVERIFY(window_->grabWindow().save(screenshot, "PNG"));
+      }
+    }
   }
 
   Q_SLOT void configuredOverflowCombinesSources() {

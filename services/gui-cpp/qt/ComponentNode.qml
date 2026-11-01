@@ -15,10 +15,11 @@ Item {
     property real ratio: 1
     property real rowHeight: 28 * ratio
     property bool compact: false
+    property bool barGroup: false
     property var fittedLevels: ({})
     readonly property real gap: 6 * ratio
     readonly property int maximumBlockLines: 8
-    readonly property real iconSide: (node.kind === "callout" ? 18 : 16) * ratio
+    readonly property real iconSide: (node.kind === "callout" ? 18 : node.kind === "group" ? 14 : 16) * ratio
     readonly property real trackWidth: 48 * ratio
     readonly property bool block: ["heading", "text", "meter_row", "kv", "callout", "actions", "button", "divider"].indexOf(node.kind) >= 0
     readonly property bool hasIcon: node.glyph.length > 0 || node.providerMark !== 0 || node.telarMark
@@ -197,13 +198,19 @@ Item {
     Component {
         id: group
         Item {
-            readonly property real markWidth: root.hasIcon ? root.iconSide + root.gap : 0
-            readonly property real chromeWidth: markWidth
-            readonly property real unreducedWidth: markWidth + (childrenTree.item?.fullWidth ?? 0)
+            readonly property real padding: root.barGroup ? root.gap : 0
+            readonly property real childGap: root.gap
+            readonly property real leadingGap: root.barGroup ? childGap : 0
+            readonly property real markWidth: root.hasIcon ? root.iconSide + childGap : 0
+            readonly property real chromeWidth: root.barGroup ? 2 * padding + (root.hasIcon ? root.iconSide : -childGap) : markWidth
+            readonly property real childWidth: childrenTree.implicitWidth
+            readonly property real fullChildWidth: childrenTree.item?.fullWidth ?? 0
+            readonly property real unreducedWidth: chromeWidth + fullChildWidth + (fullChildWidth > 0 ? leadingGap : 0)
             readonly property var fitNodes: childrenTree.item?.fitNodes ?? []
-            implicitWidth: markWidth + childrenTree.implicitWidth
+            implicitWidth: chromeWidth + childWidth + (childWidth > 0 ? leadingGap : 0)
             implicitHeight: root.rowHeight
             Loader {
+                x: parent.padding
                 width: root.iconSide
                 height: parent.height
                 active: root.hasIcon
@@ -211,7 +218,7 @@ Item {
             }
             ComponentBranch {
                 id: childrenTree
-                x: parent.markWidth
+                x: parent.padding + parent.markWidth
                 width: implicitWidth
                 height: parent.height
                 controller: root.controller
@@ -220,6 +227,7 @@ Item {
                 typography: root.typography
                 ratio: root.ratio
                 rowHeight: root.rowHeight
+                gap: root.gap
                 parentIndex: root.node.index
                 horizontal: true
                 fit: false
