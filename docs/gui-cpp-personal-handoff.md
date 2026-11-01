@@ -119,7 +119,7 @@ actual PARITY; do not repeat completed Preview12 qualification without new chang
 
 ## Latest qualified work: stale tab capture and valid URL dispatch
 
-Preview18/source/evidence is ready for reviewed local commit. Three portable files:
+Preview18/source/evidence is locally committed in2d212b791 (363 frozen entries). Three portable files:
 qt/tab_drag_controller.cpp, tests/quick_test.cpp, tests/frame_pacing_fixture.hpp.
 Report/archive/verifier measurements/component-tab-capture; raw
 out-dependencies/component-tab-capture-1 plus component-recorded-links-1.
@@ -145,10 +145,20 @@ First exact18 panel run had old evidence directory label17, correct GUI18hash;
 correctly labelled secondrun passes too. Seven inspected captures across6scopes.
 All4protected process identities unchanged; no jobs remain after final verification.
 
-NEXT: complete archive verification/review/local commit, then CONTINUE actual
-PARITY. Daily physical sleep and Mac shutdown-leak attribution remain open. For
-stability, attribute the residual nonfont direct-leak stacks from current ASAN
-before proposing another lifetime change. The four standalone font controls are
+Archive verification passes current-source mode at2d212b791; CONTINUE actual
+PARITY. Next work is residual shutdown-leak attribution, source unchanged. Daily physical sleep and Mac shutdown-leak attribution remain open. The current shutdown-retention-attribution-1 controls are now complete:
+plain Qt Quick window/no QML/Telar/runtime370591B2078alloc; same binary with native
+fixture injections331606B1902alloc; window+styled-font metrics487923B2465alloc.
+All present7/8/7frames, expectedRGB and destruction; exit1/LSAN without address/UB
+or suppression. Combined20-frame stack-prefix overlap covers419101 GUI reported
+bytes (not ownership, subtraction or complete attribution). Initial injection
+aborted due invalid private board prefix before Qt startup; corrected run and
+UUID-guarded earlier board cleanup preserve954. Protected identities unchanged.
+Raw out-dependencies/shutdown-retention-attribution-1; report/archive/verifier
+measurements/native-window-exit-retention. Complete reviewed local evidence commit,
+then return to functional configured-surface ownership/interaction gaps. No new
+preview/source build is needed for this diagnostic-only change. Do not repeat
+font/window/pool controls without a NEW hypothesis. The four standalone font controls are
 already done; do not repeat them without a new hypothesis. Never suppress LSAN
 or rewrite runtime. Remaining configured-surface ownership/accessibility and full
 styling/paired visuals/performance remain separate final gates. No Preview19 unless

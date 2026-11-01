@@ -52,6 +52,11 @@ The apparent stall was slow symbolization; it finished within the original
 runner deadline. See [surface-stability.md](measurements/surface-stability.md).
 This short observation does not establish leak freedom or long-run RSS stability.
 
+A standalone Qt Quick window also reproduces shutdown retention without Telar,
+QML engine or runtime; a combined window/font control reports487923B2465alloc.
+This extends partial attribution and does not clear the sanitizer gate. See
+[native-window-exit-retention.md](measurements/native-window-exit-retention.md).
+
 ## Required adoption checklist
 
 Checked rows record implemented behavior and scoped automated evidence. They do

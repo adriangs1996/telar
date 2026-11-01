@@ -13,8 +13,7 @@ attribution, complete fitting/styling, native ownership/accessibility, paired pi
 and comparative performance remain OPEN. See
 [stale tab capture evidence](measurements/component-tab-capture.md) and DAILY_DRIVER.
 
-
-**Current daily candidate: Preview17 (2026-11-01).** Configured bar/panel actions
+**Preserved daily candidate: Preview17 (2026-11-01).** Configured bar/panel actions
 now take precedence over coexisting URLs, matching original bar_components. Both
 native causal regressions fail on old source and pass after correction; stale
 source-generation/revision guards stay intact. Both SDKs pass15 native checks,
