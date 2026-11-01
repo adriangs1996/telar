@@ -4266,6 +4266,9 @@ return {api_version=2, client={keybindings={
     const auto group_bounds = group->mapRectToScene(group->boundingRect());
     QVERIFY2(group_bounds.contains(bounds), qPrintable(QStringLiteral("Group %1 x %2 must contain child %3 x %4").arg(group->width()).arg(group->height()).arg(kept->width()).arg(kept->height())));
     QCOMPARE(group->width(), kept->width());
+    const auto *right = componentItem(QStringLiteral("label"), QStringLiteral("Right"));
+    QVERIFY2(right != nullptr, "A short right slot must remain visible after the long low-priority child hides");
+    QVERIFY(viewport.contains(right->mapRectToScene(right->boundingRect())));
     const auto screenshot = qEnvironmentVariable("TELAR_GUI_TEST_GROUP_FIT_SCREENSHOT");
     if (!screenshot.isEmpty()) {
       QVERIFY(window_->grabWindow().save(screenshot, "PNG"));

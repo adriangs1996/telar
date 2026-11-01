@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import "ComponentFit.js" as ComponentFit
 
 Rectangle {
     id: root
@@ -48,14 +49,14 @@ Rectangle {
             visible: root.mode.kind === 0 && root.controller !== null
             readonly property var slots: root.controller?.componentBars ?? ({})
             readonly property real gap: 8 * root.ratio
-            readonly property real available: Math.max(0, width - 2 * gap)
-            readonly property real leftDesired: leftSlot.tabs ? 0 : leftSlot.implicitWidth
-            readonly property real centerDesired: centerSlot.tabs ? 0 : centerSlot.implicitWidth
-            readonly property real rightDesired: rightSlot.tabs ? 0 : rightSlot.implicitWidth
-            readonly property real fixedDesired: leftDesired + centerDesired + rightDesired
-            readonly property real minimumTabsWidth: Math.min(available, 120 * root.ratio)
-            readonly property real reduction: fixedDesired > 0 ? Math.min(1, Math.max(0, available - minimumTabsWidth) / fixedDesired) : 1
-            readonly property real tabsWidth: Math.max(0, available - fixedDesired * reduction)
+            readonly property real minimumTabsWidth: 120 * root.ratio
+            readonly property var fitted: ComponentFit.allocate([
+                {nodes: leftSlot.fitNodes, width: leftSlot.implicitWidth, tabs: leftSlot.tabs, overflowWidth: leftSlot.overflowWidth},
+                {nodes: centerSlot.fitNodes, width: centerSlot.implicitWidth, tabs: centerSlot.tabs, overflowWidth: centerSlot.overflowWidth},
+                {nodes: rightSlot.fitNodes, width: rightSlot.implicitWidth, tabs: rightSlot.tabs, overflowWidth: rightSlot.overflowWidth},
+            ], width, gap, minimumTabsWidth)
+            readonly property real leftEnd: leftSlot.width + (leftSlot.width > 0 ? gap : 0)
+            readonly property real rightStart: rightSlot.x - (rightSlot.width > 0 ? gap : 0)
 
             ComponentSlot {
                 id: leftSlot
@@ -65,33 +66,36 @@ Rectangle {
                 typography: root.typography
                 ratio: root.ratio
                 textScale: root.controller?.chromeTextScale ?? 1
-                width: tabs ? components.tabsWidth : implicitWidth * components.reduction
+                width: components.fitted.widths[0]
+                fittedLevels: components.fitted.levels[0]
                 height: parent.height
             }
 
             ComponentSlot {
                 id: centerSlot
-                x: leftSlot.width + components.gap
+                x: Math.max(components.leftEnd, Math.min((components.width - width) / 2, components.rightStart - width))
                 controller: root.controller
                 surface: components.slots.center ?? ({kind: "empty"})
                 colors: root.colors
                 typography: root.typography
                 ratio: root.ratio
                 textScale: root.controller?.chromeTextScale ?? 1
-                width: tabs ? components.tabsWidth : implicitWidth * components.reduction
+                width: components.fitted.widths[1]
+                fittedLevels: components.fitted.levels[1]
                 height: parent.height
             }
 
             ComponentSlot {
                 id: rightSlot
-                x: centerSlot.x + centerSlot.width + components.gap
+                x: components.width - width
                 controller: root.controller
                 surface: components.slots.right ?? ({kind: "empty"})
                 colors: root.colors
                 typography: root.typography
                 ratio: root.ratio
                 textScale: root.controller?.chromeTextScale ?? 1
-                width: tabs ? components.tabsWidth : implicitWidth * components.reduction
+                width: components.fitted.widths[2]
+                fittedLevels: components.fitted.levels[2]
                 height: parent.height
             }
         }

@@ -13,6 +13,9 @@ Item {
     required property var typography
     property real ratio: 1
     property real textScale: 1
+    property var fittedLevels: null
+    readonly property var fitNodes: visual.item?.fitNodes ?? []
+    readonly property real overflowWidth: visual.item?.overflowWidth ?? 0
     readonly property bool tabs: surface.kind === "tabs"
     implicitWidth: tabs ? 200 * ratio : visual.item?.implicitWidth ?? 0
     clip: true
@@ -89,6 +92,8 @@ Item {
     Component {
         id: content
         Item {
+            readonly property var fitNodes: tree.fitNodes
+            readonly property real overflowWidth: tree.overflowWidth
             implicitWidth: tree.fullWidth
             ComponentTree {
                 id: tree
@@ -99,6 +104,7 @@ Item {
                 typography: root.typography
                 ratio: root.ratio
                 rowHeight: root.height
+                fittedLevels: root.fittedLevels
             }
         }
     }

@@ -11,9 +11,10 @@ a separately packaged and verified Release app. [Plugin activation and secure
 trust loading](measurements/plugin-overrides.md) now work.
 [Isolated plugin execution](measurements/plugin-worker.md) now has capability and
 stale-completion coverage on both SDKs and a second Finder-verified Release
-preview. The current [Preview10](DAILY_DRIVER.md) includes
+preview. The current [Preview11](DAILY_DRIVER.md) includes
 [canonical component artwork](measurements/component-artwork.md), the callout
-card/action and complete bounded panel paragraphs, with exact Finder, plugin,
+card/action, complete bounded paragraphs, separate meter details and priority
+fitting across configured bar slots, with exact Finder, plugin,
 bar, window, SSH, Vim and task-plan validation. The required
 custom surfaces stay available; native shutdown leaks and physical sleep remain
 open for daily acceptance.

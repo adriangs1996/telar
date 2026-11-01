@@ -25,7 +25,8 @@ Item {
     readonly property var levels: fittedLevels ?? reductions
     property var fitNodes: []
     property real fullWidth: 0
-    readonly property var hiddenRoots: entries.filter((node, index) => (levels[node.index] ?? 0) === 2).map(node => node.index)
+    readonly property real overflowWidth: overflowMeasure.implicitWidth + 12 * ratio
+    readonly property var hiddenRoots: entries.filter((node, index) => (levels[node.index] ?? ComponentFit.Level.full) === ComponentFit.Level.hidden).map(node => node.index)
 
     implicitWidth: horizontal ? row.implicitWidth : column.implicitWidth
     implicitHeight: horizontal ? rowHeight : column.implicitHeight
@@ -68,8 +69,8 @@ Item {
                 width: implicitWidth
                 height: root.rowHeight
                 fittedLevels: root.levels
-                compact: (root.levels[node.index] ?? 0) === 1
-                visible: (root.levels[node.index] ?? 0) !== 2
+                compact: (root.levels[node.index] ?? ComponentFit.Level.full) === ComponentFit.Level.compact
+                visible: (root.levels[node.index] ?? ComponentFit.Level.full) !== ComponentFit.Level.hidden
                 onFitNodesChanged: Qt.callLater(root.refit)
             }
         }
@@ -78,7 +79,7 @@ Item {
             id: overflow
             objectName: "componentOverflow"
             visible: root.fit && root.hiddenRoots.length > 0
-            implicitWidth: overflowLabel.implicitWidth + 12 * root.ratio
+            implicitWidth: root.overflowWidth
             height: root.rowHeight
             hoverEnabled: true
             Accessible.name: "Show " + root.hiddenRoots.length + " hidden components"
@@ -123,6 +124,16 @@ Item {
                 height: implicitHeight
             }
         }
+    }
+
+    Text {
+        id: overflowMeasure
+        visible: false
+        text: "+" + "9".repeat(Math.max(1, root.entries.length).toString().length)
+        font.family: "IBM Plex Sans"
+        font.pixelSize: root.typography.small
+        textFormat: Text.PlainText
+        renderType: Text.NativeRendering
     }
 
     Popup {

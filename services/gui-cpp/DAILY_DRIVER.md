@@ -4,60 +4,66 @@ The complete functional, visual and equal-or-better performance objective remain
 open. Only the command/quick-navigation palette and notifications/sounds may be
 deferred for daily adoption; existing implementations stay available.
 
-## Current candidate: Preview 10; complete custom-panel paragraphs
+## Current candidate: Preview 11; usable custom bars and panels
 
-`out-adoption/Telar C++ Preview 10.app` is a separate Release app. It preserves
-the verified blur/artwork fixes, restores the original callout card with its
-inline action and permits eight wrapped paragraph/heading lines instead of
-silently clipping after three. Open from the repository root:
+`out-adoption/Telar C++ Preview 11.app` is a separate Release app with deployed
+Qt/QML. It includes the verified blur/artwork corrections, the original callout
+card and inline action, eight-line panel paragraphs, separate meter details and
+priority fitting across configured bottom-bar content. Long low-priority
+children no longer hide useful actions or starve a short right slot; tabs use
+the remaining space. Open from Finder after closing another preview, or force
+this exact app from the repository root:
 
 ```sh
-open -n "services/gui-cpp/out-adoption/Telar C++ Preview 10.app"
+open -n "services/gui-cpp/out-adoption/Telar C++ Preview 11.app"
 ```
 
+The bundle can be copied under its separate name to an Applications directory.
+No installation is replaced automatically. To return, close the preview and
+open `~/Applications/Telar.app`; runtime processes keep running. Preview8/10,
+configuration and existing sessions are preserved.
+
 Bundled GUI SHA-256:
+`e86de8539934de232eec20ece2eb9033eb432e9391c1e5aae811953e883c3300`.
+All 1,739 file hashes, 121 Mach-O dependency checks and deep/strict signatures
+pass. The build uses the fresh Preview9 baseline plus recorded incremental
+corrections; it is not another full clean build or a Zig-retirement qualification.
+
+Both exact relocated schema-87/88 smokes pass with adopted opacity 0.98/blur20,
+Finder/login-shell/config/default-runtime discovery, actual plugins, command
+bars, two distinct windows and owned-client pause/resume. Configurations remain
+unchanged, QML warnings are empty and disposable states are removed. The exact
+bundle also passes real SSH, Vim saving exact UTF-8 bytes, full custom-panel and
+left/right-bar composition, and task/worktree/plan navigation with task survival
+after closing its window. All five daily captures plus the schema87 direct
+capture were inspected. Finder application exit is unavailable through `open`;
+the healthy final marker is checked. The panel actor calls an owned callback at
+a controlled anchor; task reports are controlled protocol fixtures.
+
+Nine native checks pass in macOS Release and Linux Release/ASan/UBSan. They
+retain actual component clicks/picks and verify split/tab operations, tab drag
+release and fullscreen-strip restoration. Linux sanitizers exit zero with leak
+detection. Mac sanitizer assertions pass nine, but the process exits one for
+661,696 leaked bytes in 3,887 allocations, with no address/UB diagnostic. Broad
+analysis, actual delivered editor diagnostics and changed-range formatting pass
+on both SDKs. No suppression, profile, assertion or deadline is weakened.
+
+Adrian found no daily blocker so far in Preview8 and has not yet tried physical
+sleep with Preview9. Physical sleep and Mac native-leak triage stay open. Builtin
+metric/machine priority, the original combined overflow presentation, complete
+visual/performance parity and audited own-Zig retirement remain open. Only
+palette and notifications may defer for daily adoption. See
+[component-slot-fit.md](measurements/component-slot-fit.md),
+[group fitting](measurements/component-group-fit.md),
+[meter composition](measurements/panel-meter-layout.md) and
+[panel text](measurements/panel-text-lines.md).
+
+## Preserved candidate: Preview 10
+
+Preview10 remains frozen at `out-adoption/Telar C++ Preview 10.app`, GUI SHA256
 `18fc75b32bdacabca3ef6a07defbd7946431896a1174dee1b6bf24043fbe58f8`.
-All 1,739 file hashes, 121 Mach-O checks and deep/strict signatures pass. The
-frontend uses the fresh Preview9 baseline plus recorded incremental QML updates;
-this is not a new full clean build or a Zig-retirement qualification.
-
-Both exact relocated schema-87/88 smokes pass with native opacity 0.98/blur 20,
-Finder/login-shell/default endpoint discovery, actual plugins, custom bars,
-distinct windows and owned-client pause/resume. Configurations are unchanged,
-QML warnings are empty and disposable states are removed. The exact bundle also
-passes real SSH, Vim writing exact UTF-8 bytes, the complete custom paragraph
-and card, task/worktree plan navigation and task survival after window close.
-All five daily captures were inspected. The panel actor invokes an owned
-callback at a controlled anchor; the task fixture uses protocol reports, with
-no AI agent or new Git checkout. These are scoped checks, not full acceptance.
-
-Native custom-surface/pick checks pass five assertions on each SDK. Linux
-Release and leak-enabled ASan/UBSan exit zero. macOS passes its assertions but
-exits one for 720,180 leaked bytes in 3,776 allocations; no address/UB diagnostic.
-Broad analysis, actual delivered editor diagnostics and changed-range formatting
-pass. See [panel-text-lines.md](measurements/panel-text-lines.md), the retained
-[callout regression](measurements/callout-layout.md) and
-[artwork/build diagnosis](measurements/component-artwork.md).
-
-Adrian found no daily blocker so far in Preview8. He has not yet tried physical
-sleep with Preview9. Natural sleep, Mac shutdown-leak triage, final visual/
-performance parity and audited Zig retirement remain open. Preview8/9 stay
-frozen. Close the preview and open `~/Applications/Telar.app` to return to the
-installed app, keeping runtime processes alive. No installation, configuration
-or session is migrated. Only palette and notifications may defer for daily use.
-
-## Source continuation after Preview10
-
-The [meter-row correction](measurements/panel-meter-layout.md) fixes overlapping
-custom-panel titles/details and restores the original label/track/percentage
-columns. Native interaction checks pass both SDKs; Mac shutdown leaks remain.
-This later change is not in the frozen Preview10 bundle.
-The later [group-priority correction](measurements/component-group-fit.md)
-keeps useful group children and their actual click actions when a low-priority
-child does not fit. Six native checks pass on each SDK, with clean Linux
-sanitizers and unchanged Mac leak failure. It is also outside Preview10.
-Proportional allocation across slots can still starve a short right slot and
-remains an active functional gap before the next package.
+Its separate exact-bundle qualification is preserved in the panel-text archive.
+It predates the later meter, group and global-slot corrections now in Preview11.
 
 ## Preserved candidate: Preview 8; normal launch confirmed
 

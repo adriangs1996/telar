@@ -1,3 +1,56 @@
+## CURRENT: Preview11 qualified/offered; full/daily goals OPEN
+
+Continue working, no checkpointfinal. No agents/publish/merge/othercheckout.
+Never read/touch/stage personal-frame-delivery.md. Protected runtime35801,
+userPreview8 PID52865, QEMU7158, guestSway9469 unchanged at latestcheck. User
+may choose11 now; identify any voluntary switch rather than restoring/signaling
+old UI. User8 no blockerssofar, naturalSleep9untried; don'taskagain/autosuspend.
+GoalAPI stillblocked/noresumeoperation; continue manually withoutcompleting.
+
+Preview11 frozen/exactqualified/offered:
+services/gui-cpp/out-adoption/Telar C++ Preview 11.app
+GUIe86de8539934de232eec20ece2eb9033eb432e9391c1e5aae811953e883c3300
+rawe12dbdd728189f3d2ee317d33c3628e561417dbb9d66263eb21aa4b72cd8c81f
+1739filehashes/121MachO/deepstrictsignatures0. Exactschema87AND88 relocated
+Finder/login/config/default-runtime/plugins/bars/twowindows/pause smokes0.
+Exact realSSH/VimexactUTF8/custompanel+longleft/shortRightkeptλ/taskworktreeplan
+flows0, zeroQML/configunchanged/privatecleanup/protectedunchanged. ALL5daily
+captures +schema87direct VIEWED. Actorcallbackcontrolledanchor, notOSpointer;
+planreporter syntheticprotocol, noAIagent/noGitcheckout. Native9 linkedfixture
+providesactualpointerclick validation. No testnativeUI sessionsremainactive:
+11321/76207/15133/85264 allDONE. Preserve11/10/8/installedZig. Findercloseold
+previewthenopen11, oropen-n exactpath. Returnclosepreview/open~/Applications/
+Telar.app. No install/config/session migration. Qt/QMLfullydeployed.
+
+Current five uncommitted sourcefilesJS/Slot/Tree/StatusBar/QuickTest correct
+proportional slot starvation. ValidoldbaselineRight!=nullfails. Globalconfigured
+contentpriority/later ties/metercompact/groupchildren; actualtabs onlyreserve/
+share spare, empty slotsnogaps/rightanchor/centerclamp. Stableoverflowmaxdigits,
+immutable namedLevel/bracedconditions. Builtinmetric/machine priority and
+combinedoriginaloverflow/completevisualperf remainOPEN. NoCMake/runtimechanges.
+FinalMacRelease9PASS0 andLinuxRelease+ASAN9PASS0 each, allfivehashesmatch.
+MacASAN9assertionspass/exit1/661696B3887alloc, noaddressUB/LSAN_OPTIONSabsent.
+BothSDKbroad/actualeditor empty0/Cppformat0. LastJS/QMLcleanup requalified native9;
+Cppsourceunchanged throughcleanup soanalysisreceiptapplies. 12Nodecontrols0,
+functionalonly notQt/oracle/perf gate. FinalMacgroup/panel +LinuxASANgroupVIEWED.
+Nativecases4components +splitCloseAndTabs/tabDragReordersOnlyAfterRelease/
+fullscreenStripSwitchesHiddenPanesAndRestoresTiling. Sameasserts/deadlines.
+
+Raw out-dependencies/component-slot-fit-1 includesquality/nativeMac/finalhashes/
+packageverifier/sixexactresultdirs; reportcomponent-slot-fit.md complete. Need
+freeze appropriate source/evidence archive with verifier linkedgroupmanifest,
+explicitlocalcommitownfiles (no userfile), then CONTINUE actualPARITY. Group
+commit1fbbc46c6/191entries done; meter136bcb3b4/119, text71f3a70d5/141, Ziginput
+b46a934d0 done. No sourcechecks needrepeatwithoutnewchange/failure.
+
+Potentialnextfunctionalextensibility work: overflowactualpointer/ownership/
+combinedpresentation; startup bar command error withzero nodes mayhavezero
+implicitWidth/invisibleindicator. Investigate/reproduce before claiming/fixing.
+Avoidmicrokernels/fewpixelmatrices criticalpath. Physicalsleep/Mac leaks andfull
+visual/perf remainOPEN. OwnZigretirement stillrequires9generatorinputs+2font
+metadata/runtimeCLIworker/sharednonZig audit andcleanbuildwithoutown sources;
+no source removal. Do notrefactorwhole runtime foradoption.
+
 ## CURRENT source: group fitting qualified; global slot allocation next
 
 Preview10 stays frozen/offered; user8 PID52865/runtime35801/QEMU7158/Sway9469
