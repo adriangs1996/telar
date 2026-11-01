@@ -2,19 +2,24 @@
 #include "application.hpp"
 #include "component_surface_state.hpp"
 #include "components/invocation.hpp"
+#include "configuration_source.hpp"
 #include "machine_client.hpp"
+#include <QQuickItem>
+#include <QQuickWindow>
 #include <QString>
 #include <QVariantMap>
 #include <QtCore/qcontainerfwd.h>
+#include <QtCore/qnamespace.h>
 #include <QtCore/qtmetamacros.h>
 #include <chrono>
 #include <cstddef>
 #include <exception>
+#include <utility>
 
 namespace telar::gui::qt {
 
 void Application::initializePicks() {
-  connect(this, &Application::configurationChanged, this, &Application::closeComponentPick);
+  connect(&configuration_source_, &ConfigurationSource::changed, this, &Application::closeComponentPick);
   connect(this, &Application::machineChanged, this, &Application::closeComponentPick);
   connect(this, &Application::dialogChanged, this, [this] {
     if (!dialog_.isEmpty()) {
@@ -64,6 +69,10 @@ void Application::openComponentPick(std::size_t index) {
     execute(Action::cancel);
   }
 
+  if (!pick_controller_.isOpen()) {
+    component_pick_return_focus_ = window_ != nullptr ? window_->activeFocusItem() : nullptr;
+  }
+
   interruptBindings();
   pick_controller_.open(index);
 }
@@ -76,8 +85,23 @@ void Application::closeComponentPick() {
   const bool open = pick_controller_.isOpen();
   pick_controller_.close();
   if (open) {
-    restoreTerminalFocus();
+    restoreComponentPickFocus();
+  } else {
+    component_pick_return_focus_.clear();
   }
+}
+
+void Application::restoreComponentPickFocus() {
+  const auto target = std::exchange(component_pick_return_focus_, {});
+  if (component_surfaces_.open_panel && component_surfaces_.generation == configuration_source_.configurationGeneration()) {
+    if (target != nullptr && target->window() == window_ && target->isVisible() && target->isEnabled()) {
+      target->forceActiveFocus(Qt::OtherFocusReason);
+    }
+
+    return;
+  }
+
+  restoreTerminalFocus();
 }
 
 void Application::filterComponentPick(const QString &query) {
@@ -88,7 +112,7 @@ void Application::chooseComponentPick(int row, const QString &identity) {
   try {
     pick_controller_.choose(row, identity);
     if (!pick_controller_.isOpen()) {
-      restoreTerminalFocus();
+      restoreComponentPickFocus();
     }
   } catch (const std::exception &error) {
     pickFailed(QString::fromUtf8(error.what()));

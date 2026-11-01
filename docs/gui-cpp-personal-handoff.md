@@ -1,5 +1,23 @@
 # Personal: C++ daily adoption and complete parity — OPEN
 
+
+Newest usable candidate: **Preview19**, already offered. GUI SHA256
+`7dbd630dcdff3b0ef9dca2303588d01625b3a587c3bc4ac42dd2845a94ea4249`;
+raw `be95e9bf79deed0a5af86c3e0e4a400a2cc54632a599f76a87e6c301bf4c9ced`.
+`open -n "services/gui-cpp/out-adoption/Telar C++ Preview 19.app"`.
+All1739 hashes/121 Mach-O/signatures and seven exact scopes pass: schema87/88,
+SSH, Vim, clean-actor panel19-3, activity, actual keyboard19-4. Eight captures
+inspected. Private keyboard actor failures1/2/3 retained (duplicate Qt, injection
+into non-Qt runtime, missing Alt+U character text); final4 uses bundled Qt through
+rpaths, GUI-only injection and normal character text. Old panel actor's Homebrew
+rpath removed ONLY in a private copy; final panel3 passes without duplicate Qt.
+Package unchanged throughout; no install/replacement/migration. Linux Release/
+ASAN29 and recorded10 cases pass/exit0; both SDKs pass4 broad TUs/editor5/format5/
+module lint, all8 hashes match. Mac Release29/recorded10 pass; MacASAN29 assertions
+pass but exit1/744541B3862alloc, domain8/
+192B4alloc native retention, gates OPEN. Candidate19 remains a preview, daily/full
+objectives OPEN. Physical sleep remains untried, do not ask again.
+
 Continue working after checkpoints. This document replaces the accumulated status
 log; its complete previous text is retained in the shared-overflow evidence archive
 and Git history. Read `AGENTS.md`, `services/gui-cpp/DAILY_DRIVER.md`, the current
@@ -59,7 +77,7 @@ executable/start instead of restoring the old process. Old Zig GUI87625 was alre
 absent before this work; do not restart it or claim we stopped it. Private test
 children are separate and must be cleaned up by their owning helpers only.
 
-## Available candidate: Preview18 (2026-11-01)
+## Preserved candidate: Preview18 (2026-11-01)
 
 `services/gui-cpp/out-adoption/Telar C++ Preview 18.app` is frozen/qualified and
 already offered. GUI SHA256
@@ -116,6 +134,74 @@ packaging/smoke jobs remain active. Raw `out-dependencies/component-shared-overf
 
 The shared-overflow report/archive/verifier and local commit are complete. CONTINUE
 actual PARITY; do not repeat completed Preview12 qualification without new changes.
+
+## Completed scoped checkpoint: panel keyboard/lifetime and Preview19
+
+Source work is ready for final review/local commit with its report/archive/verifier
+measurements/component-panel-keyboard. The GUI is separately packaged and offered;
+no Preview18/8 bundle changes. Raw out-dependencies/component-panel-keyboard-1.
+
+Eight portable files: application.hpp/cpp, component_controller.cpp,
+pick_controller.cpp, FormButton.qml, Main.qml, PaneArea.qml, tests/quick_test.cpp.
+- FormButton admits Tab/Space/Return/keypadEnter/repeat/modifier/disabled behavior
+  and paints focus. Qt AllControls policy is public, process-local, no OS change.
+- Layout/sidebar configurationChanged no longer retires Lua surfaces. Components
+  reset for changed Lua generation or machine; picks observe ConfigurationSource.
+- Visible custom popups cover the terminal focus binding/dialog-close callback.
+- A weak pick return item restores its invoking button when parent/current Lua/
+  window/visibility/enabled checks pass. Actual reload still closes old surfaces.
+No runtime state/refactor/virtual dispatch. Negative2 initialTab, nested-negative2
+return-focus and weak-owner positive are retained, including invalid setup controls.
+
+Broad qualification found raw ESC from the shared-overflow test's unconditional
+cleanup. Private App-input trace and exclusive Linux two-slot negative prove it.
+Both overflow cleanups now Escape only for their actual visible weak menu; all
+interaction/terminal assertions/deadlines remain unchanged. Earlier key-lease
+hypothesis was rejected by Enter forwarding/0d delivery; no KeyBindings changes.
+The Mac diagnostic/negative windows briefly overlapped; subsequent full trace
+hit its driver bound. Two orphan private runtimes61501/66527 were terminated after
+exact executable/private socket/history/data/orphan checks, excluding protected4.
+
+Final builds normal9/ASAN9/dedicated-recorded17. Both SDK Release29, recorded10,
+LinuxASAN29 pass0. MacASAN29 assertions pass but exit1 for744541B3862alloc, no
+address/UB/suppression. Mac domains Release4 pass; ASAN CTest8 preserves native
+192B4alloc retention in pick-controller while functional/injected allocations
+pass and other3 domains pass. These remain FAILED/open sanitizer gates.
+Final4 broad TUs/5 delivered empty actual-editor files/5 format scopes/full module
+QML lint pass both SDKs; original warnings/profiles/thresholds unchanged. Linux
+Qt6.8 required explicit weak-pointer comparison. Final Release/recorded binaries
+are byte identical on BOTH SDKs and Mac GUI matches packaged raw bytes, so those
+native receipts are reused by hash; changed ASAN binaries received final29 runs.
+All8 source hashes match (source-hashes-final-3.json / Linux source-hashes-3.json).
+Failed Linux quality1, honest not-run QML status and failed collection1 are retained;
+quality2/collection2 finish0. Helpers/provenance and disk-PCH cleanup retained.
+
+Exact Preview19:1739 hashes/121 Mach-O/deep strict signatures0. Seven scopes:
+schema87/88 Finder/login/default runtime/config/plugins/bars/two windows/client
+pause, realSSH/default machine ink, VimUTF8, clean actor panel19-3, synthetic
+project/worktree/task/plan reporter, actual keyboard19-4. Eight exact captures and
+final native Mac/Linux keyboard captures inspected. No QML warnings; configuration unchanged;
+private cleanup succeeds. Keyboard/panel actors use bundled Qt only and inject into
+GUI only, not runtime/CLI. Preparation failures (duplicate Qt, missing runtime rpath,
+missing synthetic Alt+U text, old actor Homebrew rpath) are retained. No package
+bytes changed during actor corrections. Actors are test-only, never packaged.
+
+NEXT, CONTINUE: out-dependencies/component-group-keyboard-1 contains a directed
+private copied-test negative: mouse action succeeds, then Tab between two configured
+groups fails (2pass1fail,34380ms). It replaces an existing registered slot ONLY in
+copied test source to reuse moc; displayed donor name configuredPanelKeyboardActions
+is NOT the actual panel regression. Prepared proper case is prepared_case.cpp.txt.
+No production sources changed for this next scope. Implement reusable keyboard
+activation/focus for actionable groups/overflow, preserving mouse dispatch, identity,
+URL precedence and fitting. Native original State.chrome marks bar hits focusable;
+Dispatcher/routing traverses/activates them. Consider a reusable QML action base
+rather than duplicated handlers; adding QML requires CMake module registration.
+Finish local panel checkpoint commit first. Do not redo completed Preview19 exact
+smokes unless product/package changes. Daily/full goals remain OPEN.
+
+Physical sleep untried (do not ask/suspend), Mac leak/stability attribution, complete
+fitting/styling/native ownership/accessibility/paired pixels/performance and audited
+Zig retirement remain OPEN. No own Zig removed/no clean-without-own-Zig build.
 
 ## Latest qualified work: stale tab capture and valid URL dispatch
 

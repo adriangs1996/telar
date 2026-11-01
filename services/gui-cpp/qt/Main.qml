@@ -65,6 +65,7 @@ Window {
 
     PaneArea {
         application: telar
+        keyboardCovered: componentPanelPopup.visible || componentPickPopup.visible
         x: root.geometry.terminal.x
         y: root.geometry.terminal.y
         width: root.geometry.terminal.width
@@ -100,6 +101,7 @@ Window {
     }
 
     ComponentPanel {
+        id: componentPanelPopup
         parent: root.contentItem
         controller: telar
         colors: telar.colors
@@ -108,6 +110,7 @@ Window {
     }
 
     ComponentPick {
+        id: componentPickPopup
         parent: root.contentItem
         controller: telar
         colors: telar.colors

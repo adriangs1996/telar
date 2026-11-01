@@ -469,6 +469,7 @@ private:
   [[nodiscard]] bool componentCommandCurrent(std::uint64_t generation, MachineClientKey source, std::uint64_t runtime) const;
   void initializePicks();
   void openComponentPick(std::size_t index);
+  void restoreComponentPickFocus();
   [[nodiscard]] PickOwner pickOwner() const;
   [[nodiscard]] bool pickOwnerCurrent(const PickOwner &owner) const;
   [[nodiscard]] components::Context pickContext() const;
@@ -736,6 +737,7 @@ private:
   std::optional<MachineClientKey> sound_owner_;
   ConfigurationSource configuration_source_;
   PickController<Application, ApplicationAllocator, ConfigurationSource> pick_controller_;
+  QPointer<QQuickItem> component_pick_return_focus_;
   ComponentSurfaceState component_surfaces_;
   QTimer component_timer_;
   SurfaceCommand component_command_;

@@ -24,16 +24,36 @@ Item {
     readonly property real textAdvance: label.implicitWidth
     signal activated()
 
+    activeFocusOnTab: interactive
     opacity: interactive ? 1 : disabledAlpha
+    Keys.onPressed: event => {
+        if (event.key !== Qt.Key_Space && event.key !== Qt.Key_Return && event.key !== Qt.Key_Enter) {
+            return;
+        }
+
+        if ((event.modifiers & ~Qt.KeypadModifier) !== Qt.NoModifier) {
+            return;
+        }
+
+        event.accepted = true;
+        if (interactive && !event.isAutoRepeat) {
+            root.activated();
+        }
+    }
+    Keys.onReleased: event => {
+        if (event.key === Qt.Key_Space || event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+            event.accepted = true;
+        }
+    }
     Accessible.role: Accessible.Button
     Accessible.name: accessibleLabel
     Accessible.onPressAction: if (interactive) root.activated()
 
     NativeRoundedRectangle {
         anchors.fill: parent
-        color: root.primary ? root.colors.accent : (root.hovered || pointer.pressed ? root.colors.surface1 : root.colors.surface0)
+        color: root.primary ? root.colors.accent : (root.hovered || pointer.pressed || root.activeFocus ? root.colors.surface1 : root.colors.surface0)
         radius: root.radius
-        visible: !root.quiet || root.hovered || pointer.pressed
+        visible: !root.quiet || root.hovered || pointer.pressed || root.activeFocus
     }
 
     ChromeText {

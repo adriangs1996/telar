@@ -4,7 +4,42 @@ The complete functional, visual and equal-or-better performance objective remain
 open. Only the command/quick-navigation palette and notifications/sounds may be
 deferred for daily adoption; existing implementations stay available.
 
-## Current candidate: Preview18; widgets retain their clicks
+## Current candidate: Preview19; keyboard actions and retained panels
+
+`out-adoption/Telar C++ Preview 19.app` adds Tab/Space/Return actions for custom
+panel buttons, keeps panels/picks through sidebar/layout changes, and restores
+an invoking panel button after closing/selecting a nested pick. Lua reload and
+machine changes still retire old surfaces. From the worktree root:
+
+```sh
+open -n "services/gui-cpp/out-adoption/Telar C++ Preview 19.app"
+```
+
+Finder opens it after another preview closes; use its separate name if copied.
+Return by closing it and opening `~/Applications/Telar.app`. No installation,
+replacement or session migration. GUI SHA256:
+`7dbd630dcdff3b0ef9dca2303588d01625b3a587c3bc4ac42dd2845a94ea4249`.
+All1739 hashes/121 Mach-O/deep strict signatures and seven exact relocated schema87/
+88 Finder/login/runtime/plugin/bar/window/client-pause, SSH, Vim, custom panel,
+project/task/plan and actual keyboard flows pass. Eight captures inspected, private
+cleanup/configuration unchanged. Private keyboard/panel actors finally use only
+bundled Qt and are injected only into the GUI; setup failures are retained.
+The activity scope uses controlled protocol fixtures, not AI agents or Git.
+Mac Release29 and dedicated recorded-link10 cases pass. Mac ASAN29 assertions pass
+but exits1 for744541B3862alloc; ASAN domain CTest also fails for native192B4alloc.
+No address/UB error or suppression; both sanitizer gates remain OPEN. Linux Release/
+ASAN29 and recorded-link10 pass/exit0. Broad4 TUs/editor5 files/format5/module lint
+pass on both SDKs; all8 portable hashes match. The final explicit weak-pointer
+comparison fixes a Qt6.8-only linter rejection without suppressions. Rebuilt Release/
+recorded test binaries on both SDKs and the Mac GUI are byte identical; final ASAN
+29-case runs are repeated. Existing lint warnings are retained.
+See [panel keyboard evidence](measurements/component-panel-keyboard.md).
+Preview18/8, installed app/configuration/runtime remain preserved. Daily adoption,
+physical system sleep, native leak/stability acceptance, full parity and Zig
+retirement remain OPEN. This is fresh build9 plus increments, not a no-own-Zig
+clean build. Only palette/notifications may be deferred for daily adoption.
+
+## Preserved candidate: Preview18; widgets retain their clicks
 
 `out-adoption/Telar C++ Preview 18.app` fixes a tab capture that could swallow custom
 widget clicks after reloading/moving configured bars. Capture now requires the same
@@ -34,6 +69,11 @@ unchanged. See [stale tab input evidence](measurements/component-tab-capture.md)
 Physical sleep and shutdown-leak attribution below remain open.
 
 ## Daily adoption blockers
+
+- Complete keyboard traversal/action for configured groups and overflow entries.
+  A new directed native negative verifies their mouse action, then fails Tab
+  between two groups. Preview19 fixes panel buttons and nested picks; this next
+  scope remains active.
 
 - Triage recorded macOS sanitizer exit leaks without suppressing the failures.
   A standalone CoreText reproducer explains part of the retention, not the entire

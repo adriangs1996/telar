@@ -4364,6 +4364,84 @@ return {api_version=2, client={keybindings={
     QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), QString{}, runtime_wait_ms);
   }
 
+  Q_SLOT void configuredPanelKeyboardActions() {
+    const auto sidebar = client_->sidebarVisible();
+    const auto cleanup = qScopeGuard([this, sidebar] {
+      client_->closeComponentPanel();
+      client_->loadConfiguration({}, {}, {});
+      if (client_->sidebarVisible() != sidebar) {
+        client_->execute(Application::Action::toggle_sidebar);
+      }
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    constexpr auto configuration = R"(
+      local t=require('telar')
+      local ui=t.ui
+      return {api_version=2,client={
+        keybindings={t.bind_global({'alt+u'},t.action.open_panel('usage'))},
+        panels={usage=t.panel({title='Keyboard actions',render=function() return ui.actions({
+          ui.button({text='Toggle sidebar',action=t.action.toggle_sidebar()}),
+          ui.button({text='Close with keyboard',action=t.action.close_panel()}),
+          ui.button({text='Choose mode',action=t.action.pick('mode')}),
+        }) end})},
+        picks={mode=t.pick({items={'first'},on_select={'/usr/bin/true','{}'}})},
+      }}
+    )";
+    writeTestFile(path, configuration);
+    client_->loadConfiguration(path, {}, {});
+    QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+    QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("error")).toString().isEmpty() || componentItem(QStringLiteral("button"), QStringLiteral("Toggle sidebar")) != nullptr, runtime_wait_ms);
+    QCOMPARE(client_->componentPanel().value(QStringLiteral("error")).toString(), QString{});
+    QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("nodes")).toList().size(), 4, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    auto *close = componentPanelCloseButton();
+    QVERIFY(close != nullptr);
+    close->forceActiveFocus(Qt::TabFocusReason);
+    QTRY_VERIFY_WITH_TIMEOUT(close->hasActiveFocus(), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Tab);
+    QTRY_VERIFY_WITH_TIMEOUT(componentButtonFocused(QStringLiteral("Toggle sidebar")), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Space, Qt::ShiftModifier);
+    QCOMPARE(client_->sidebarVisible(), sidebar);
+    auto *action = window_->activeFocusItem();
+    QVERIFY(action != nullptr && action->property("interactive").isValid());
+    QVERIFY(action->setProperty("interactive", false));
+    QTest::keyClick(window_, Qt::Key_Space);
+    QCOMPARE(client_->sidebarVisible(), sidebar);
+    QVERIFY(action->setProperty("interactive", true));
+    const auto screenshot = qEnvironmentVariable("TELAR_GUI_TEST_PANEL_KEYBOARD_SCREENSHOT");
+    if (!screenshot.isEmpty()) {
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      QVERIFY(window_->grabWindow().save(screenshot, "PNG"));
+    }
+
+    QTest::keyPress(window_, Qt::Key_Space);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), !sidebar, runtime_wait_ms);
+    QKeyEvent repeated{QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier, QStringLiteral(" "), true};
+    QCoreApplication::sendEvent(window_, &repeated);
+    QCOMPARE(client_->sidebarVisible(), !sidebar);
+    QTest::keyRelease(window_, Qt::Key_Space);
+    QCOMPARE(client_->sidebarVisible(), !sidebar);
+    QVERIFY(client_->componentPanel().value(QStringLiteral("open")).toBool());
+    QTest::keyClick(window_, Qt::Key_Tab, Qt::ShiftModifier);
+    QTRY_VERIFY_WITH_TIMEOUT(close->hasActiveFocus(), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Tab);
+    QTRY_VERIFY_WITH_TIMEOUT(componentButtonFocused(QStringLiteral("Toggle sidebar")), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Backtab);
+    QTRY_VERIFY_WITH_TIMEOUT(close->hasActiveFocus(), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Tab);
+    QTRY_VERIFY_WITH_TIMEOUT(componentButtonFocused(QStringLiteral("Toggle sidebar")), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Tab);
+    QTRY_VERIFY_WITH_TIMEOUT(componentButtonFocused(QStringLiteral("Close with keyboard")), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Return);
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    verifyConfiguredPickReturnsKeyboardFocus();
+    QCOMPARE(client_->error(), QString{});
+  }
+
   Q_SLOT void configuredBuiltinPriority() {
     const auto original_size = window_->size();
     const auto cleanup = qScopeGuard([this, original_size] {
@@ -4548,8 +4626,11 @@ return {api_version=2, client={keybindings={
   }
 
   Q_SLOT void configuredOverflowCombinesSources() {
-    const auto cleanup = qScopeGuard([this] {
-      QTest::keyClick(window_, Qt::Key_Escape);
+    QPointer<QObject> popup;
+    const auto cleanup = qScopeGuard([this, &popup] {
+      if (popup && popup->property("visible").toBool()) {
+        QTest::keyClick(window_, Qt::Key_Escape);
+      }
       client_->closeComponentPanel();
       client_->loadConfiguration({}, {}, {});
     });
@@ -4592,7 +4673,7 @@ return {api_version=2, client={keybindings={
     QCOMPARE(legacy->mapRectToScene(legacy->boundingRect()).center().y(), right->mapRectToScene(right->boundingRect()).center().y());
     auto *control = overflow_controls().front();
     QQmlExpression popup_expression{QQmlEngine::contextForObject(control), control, QStringLiteral("overflowPopup")};
-    const QPointer<QObject> popup = popup_expression.evaluate().value<QObject *>();
+    popup = popup_expression.evaluate().value<QObject *>();
     QVERIFY2(!popup_expression.hasError(), qPrintable(popup_expression.error().toString()));
     QVERIFY(popup != nullptr);
     const auto screenshot = qEnvironmentVariable("TELAR_GUI_TEST_SHARED_OVERFLOW_SCREENSHOT");
@@ -4622,8 +4703,11 @@ return {api_version=2, client={keybindings={
   }
 
   Q_SLOT void configuredOverflowActionReplacesItsMenu() {
-    const auto cleanup = qScopeGuard([this] {
-      QTest::keyClick(window_, Qt::Key_Escape);
+    QPointer<QObject> popup;
+    const auto cleanup = qScopeGuard([this, &popup] {
+      if (popup && popup->property("visible").toBool()) {
+        QTest::keyClick(window_, Qt::Key_Escape);
+      }
       client_->closeComponentPanel();
       client_->loadConfiguration({}, {}, {});
     });
@@ -4652,7 +4736,7 @@ return {api_version=2, client={keybindings={
     QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
     auto *control = overflow_controls().front();
     QQmlExpression popup_expression{QQmlEngine::contextForObject(control), control, QStringLiteral("overflowPopup")};
-    const QPointer<QObject> popup = popup_expression.evaluate().value<QObject *>();
+    popup = popup_expression.evaluate().value<QObject *>();
     QVERIFY2(!popup_expression.hasError(), qPrintable(popup_expression.error().toString()));
     QVERIFY(popup != nullptr);
     const auto bounds = control->mapRectToScene(control->boundingRect());
@@ -4796,10 +4880,14 @@ return {api_version=2, client={keybindings={
   }
 
   Q_SLOT void configuredPicks() {
-    const auto cleanup = qScopeGuard([this] {
+    const auto sidebar = client_->sidebarVisible();
+    const auto cleanup = qScopeGuard([this, sidebar] {
       client_->closeComponentPick();
       client_->closeComponentPanel();
       client_->loadConfiguration({}, {}, {});
+      if (client_->sidebarVisible() != sidebar) {
+        client_->execute(Application::Action::toggle_sidebar);
+      }
     });
     const QTemporaryDir directory;
     QVERIFY(directory.isValid());
@@ -4829,6 +4917,14 @@ return {api_version=2, client={keybindings={
     auto *query = window_->findChild<QQuickItem *>(QStringLiteral("configuredPickQuery"));
     QVERIFY(query != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(query->hasActiveFocus(), runtime_wait_ms);
+    for (const auto visible : {!sidebar, sidebar}) {
+      client_->execute(Application::Action::toggle_sidebar);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), visible, runtime_wait_ms);
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      QVERIFY(client_->componentPanel().value(QStringLiteral("open")).toBool());
+      QVERIFY(client_->componentPick().value(QStringLiteral("open")).toBool());
+      QVERIFY(query->hasActiveFocus());
+    }
     for (const auto key : {Qt::Key_D, Qt::Key_E, Qt::Key_T, Qt::Key_A, Qt::Key_I, Qt::Key_L, Qt::Key_S}) {
       QTest::keyClick(window_, key);
     }
@@ -4862,11 +4958,24 @@ return {api_version=2, client={keybindings={
                              runtime_wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPick().value(QStringLiteral("selecting")).toBool(), runtime_wait_ms);
     QVERIFY(client_->componentPanel().value(QStringLiteral("open")).toBool());
+    const auto panel_focused = [this] {
+      const auto *popup = window_->findChild<QObject *>(QStringLiteral("configuredPanel"));
+      const auto *content = popup != nullptr ? popup->property("contentItem").value<QQuickItem *>() : nullptr;
+      const auto *scope = content != nullptr ? content->parentItem() : nullptr;
+      const auto *focus = window_->activeFocusItem();
+      return scope != nullptr && focus != nullptr && (scope == focus || scope->isAncestorOf(focus));
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(panel_focused(), runtime_wait_ms);
     QTest::keyClick(window_, Qt::Key_O, Qt::AltModifier);
     QTRY_VERIFY_WITH_TIMEOUT(client_->componentPick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
     QTest::keyClick(window_, Qt::Key_Escape);
     QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
     QVERIFY(client_->componentPanel().value(QStringLiteral("open")).toBool());
+    QTest::keyClick(window_, Qt::Key_O, Qt::AltModifier);
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    client_->loadConfiguration(path, {}, {});
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
     client_->closeComponentPanel();
   }
 
@@ -5888,6 +5997,58 @@ return {api_version=2, client={keybindings={
     const auto *simple_meter = componentItem(QStringLiteral("meter_row"), QStringLiteral("Session"));
     QVERIFY(simple_meter != nullptr);
     QCOMPARE(simple_meter->height(), simple_meter_height * ratio);
+  }
+
+  [[nodiscard]] QQuickItem *componentPanelCloseButton() const {
+    const auto *popup = window_->findChild<QObject *>(QStringLiteral("configuredPanel"));
+    if (popup == nullptr) {
+      return nullptr;
+    }
+
+    for (auto *item : popup->findChildren<QQuickItem *>()) {
+      if (item->inherits("QQuickAbstractButton") && item->property("text").toString() == QStringLiteral("×")) {
+        return item;
+      }
+    }
+
+    return nullptr;
+  }
+
+  [[nodiscard]] bool componentButtonFocused(const QString &caption) const {
+    const auto *node = componentItem(QStringLiteral("button"), caption);
+    const auto *focus = window_->activeFocusItem();
+    return node != nullptr && focus != nullptr && (node == focus || node->isAncestorOf(focus));
+  }
+
+  void verifyConfiguredPickReturnsKeyboardFocus() {
+    auto *close = componentPanelCloseButton();
+    QVERIFY(close != nullptr);
+    QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
+    QTRY_VERIFY_WITH_TIMEOUT(componentItem(QStringLiteral("button"), QStringLiteral("Close with keyboard")) != nullptr, runtime_wait_ms);
+    close->forceActiveFocus(Qt::TabFocusReason);
+    QTest::keyClick(window_, Qt::Key_Tab);
+    QTRY_VERIFY_WITH_TIMEOUT(componentButtonFocused(QStringLiteral("Toggle sidebar")), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Tab);
+    QTRY_VERIFY_WITH_TIMEOUT(componentButtonFocused(QStringLiteral("Close with keyboard")), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Tab);
+    QTRY_VERIFY_WITH_TIMEOUT(componentButtonFocused(QStringLiteral("Choose mode")), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Return);
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    const auto *query = window_->findChild<QQuickItem *>(QStringLiteral("configuredPickQuery"));
+    QVERIFY(query != nullptr);
+    QTRY_VERIFY_WITH_TIMEOUT(query->hasActiveFocus(), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Escape);
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    const auto *pick = window_->findChild<QObject *>(QStringLiteral("configuredPick"));
+    QVERIFY(pick != nullptr);
+    QTRY_VERIFY_WITH_TIMEOUT(!pick->property("visible").toBool(), runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    QVERIFY(client_->componentPanel().value(QStringLiteral("open")).toBool());
+    QTRY_VERIFY_WITH_TIMEOUT(componentButtonFocused(QStringLiteral("Choose mode")), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Tab, Qt::ShiftModifier);
+    QTRY_VERIFY_WITH_TIMEOUT(componentButtonFocused(QStringLiteral("Close with keyboard")), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Enter, Qt::KeypadModifier);
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
   }
 
   [[nodiscard]] QQuickItem *componentItem(const QString &kind, const QString &text = {}) const {

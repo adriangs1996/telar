@@ -126,7 +126,14 @@ void Application::initializeComponents() {
   registerComponentFonts();
   component_timer_.setSingleShot(true);
   connect(&component_timer_, &QTimer::timeout, this, &Application::tickComponents);
-  connect(this, &Application::configurationChanged, this, &Application::resetComponents);
+  // Layout changes share this signal; only a new Lua generation retires its surfaces.
+  connect(this, &Application::configurationChanged, this, [this] {
+    if (component_surfaces_.generation != configuration_source_.configurationGeneration()) {
+      resetComponents();
+    } else {
+      emit componentsChanged();
+    }
+  });
   connect(this, &Application::machineChanged, this, &Application::resetComponents);
   connect(this, &Application::dialogChanged, this, [this] {
     if (!dialog_.isEmpty() && component_surfaces_.open_panel) {

@@ -8,6 +8,7 @@ Item {
 
     required property GuiController application
     property real ratio: 1
+    property bool keyboardCovered: false
 
     AttachmentShelf {
         application: root.application
@@ -85,7 +86,7 @@ Item {
                 height: pane.record.content.height
                 application: root.application
                 paneId: pane.record.key
-                focus: pane.record.focused && root.application.dialog.length === 0
+                focus: pane.record.focused && root.application.dialog.length === 0 && !root.keyboardCovered
 
                 Rectangle {
                     anchors.fill: parent
@@ -112,7 +113,7 @@ Item {
                 Connections {
                     target: root.application
                     function onDialogChanged() {
-                        if (root.application.dialog.length === 0 && pane.record.focused)
+                        if (root.application.dialog.length === 0 && pane.record.focused && !root.keyboardCovered)
                             terminal.forceActiveFocus();
                     }
                 }

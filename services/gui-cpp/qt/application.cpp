@@ -1,8 +1,4 @@
 #include "application.hpp"
-#include "input/history_hover.hpp"
-#include "history_footer_layout.hpp"
-#include "history_filters_layout.hpp"
-#include "history_inspection_layout.hpp"
 #include "application/dependencies.hpp"
 #include "application/pane_layout.hpp"
 #include "application/records.hpp"
@@ -16,9 +12,13 @@
 #include "core/metrics.hpp"
 #include "core/terminal_size.hpp"
 #include "history/search.hpp"
+#include "history_filters_layout.hpp"
+#include "history_footer_layout.hpp"
+#include "history_inspection_layout.hpp"
+#include "input/history_hover.hpp"
+#include "launch_arguments.hpp"
 #include "links/link_target.hpp"
 #include "login_shell.hpp"
-#include "launch_arguments.hpp"
 #include "machine_client.hpp"
 #include "machines/machines.hpp"
 #include "metrics_projection.hpp"
@@ -32,12 +32,12 @@
 #include "presentation/mode_hints.hpp"
 #include "project_projection.hpp"
 #include "projection.hpp"
+#include "qt/utf16_encoding.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include "terminal_item.hpp"
 #include "text/utf16_prefix.hpp"
-#include "qt/utf16_encoding.hpp"
 #include "ui/workbench/terminal_font.hpp"
 #include "window_animation_clock.hpp"
 #include "window_font_catalog.hpp"
@@ -52,6 +52,7 @@
 #include <QQuickItem>
 #include <QScreen>
 #include <QStringView>
+#include <QStyleHints>
 #include <QVariant>
 #include <QtCore/qbytearrayview.h>
 #include <QtCore/qchar.h>
@@ -325,6 +326,9 @@ void Application::setWindow(QQuickWindow &window) {
     window_->removeEventFilter(this);
     window_->disconnect(this);
   }
+
+  // Keep every chrome action reachable, independent of the desktop's text-only Tab policy.
+  QGuiApplication::styleHints()->setTabFocusBehavior(Qt::TabFocusAllControls);
 
   window_ = &window;
   ++window_generation_;
