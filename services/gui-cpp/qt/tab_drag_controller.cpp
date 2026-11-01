@@ -170,6 +170,13 @@ bool PointerDispatcher::pressTab(QMouseEvent &event) {
   const auto x = event.position().x() * surface.scale;
   const auto y = event.position().y() * surface.scale;
   if (const auto *slot = surface.at({x, y})) {
+    // A queued tab snapshot can overlap another widget after the bar moves.
+    const auto current = application_.tabDropSurface();
+    const auto *target = current.at({event.position().x() * current.scale, event.position().y() * current.scale});
+    if (target == nullptr || target->id != slot->id || current.workspace.kind != surface.workspace.kind || current.workspace.id != surface.workspace.id || current.viewport != surface.viewport || current.scale != surface.scale || current.threshold != surface.threshold) {
+      return false;
+    }
+
     tab_drag_.begin({.workspace = surface.workspace, .tab_id = slot->id}, {x / surface.threshold, y / surface.threshold});
     tab_drop_slots_.capture(surface.view());
     tab_capture_surface_ = surface;

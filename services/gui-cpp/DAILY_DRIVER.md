@@ -4,29 +4,34 @@ The complete functional, visual and equal-or-better performance objective remain
 open. Only the command/quick-navigation palette and notifications/sounds may be
 deferred for daily adoption; existing implementations stay available.
 
-## Current candidate: Preview17; configured action dispatch
+## Current candidate: Preview18; widgets retain their clicks
 
-`out-adoption/Telar C++ Preview 17.app` fixes widgets that define an action and a
-URL together: the action takes precedence as in Zig. Both bar/panel regressions
-fail on old source and pass after correction; stale generation/revision guards
-remain inert. From the worktree root:
+`out-adoption/Telar C++ Preview 18.app` fixes a tab capture that could swallow custom
+widget clicks after reloading/moving configured bars. Capture now requires the same
+live tab at the window point; existing tab reorder/cancel/selection behavior remains
+covered. It preserves Preview17's action-before-URL behavior. From the worktree root:
 
 ```sh
-open -n "services/gui-cpp/out-adoption/Telar C++ Preview 17.app"
+open -n "services/gui-cpp/out-adoption/Telar C++ Preview 18.app"
 ```
 
-Finder opens it after another preview closes; copy under its separate name if
-desired. Close it/open `~/Applications/Telar.app` to return. No install/replacement/
-session migration. GUI SHA256:
-`69648dc941e7e4a9c28a949063f539fe69ec6181dca2f8b8dfabc9c06018a45b`.
-All1739 hashes/121 Mach-O/signatures and six exact schema87/88 Finder/login/runtime/
-plugin/bar/window/pause, SSH, Vim, action+URL panel and task/plan scopes pass. Six
-captures inspected; private cleanup/config unchanged/no QML warnings. Native15
-and three configuration CTests pass per variant/SDK; LinuxASAN0, Mac assertions
-pass/exit1 for678400B3701alloc without address/UB or suppression. Broad/editor/
-format pass three TUs on both SDKs; hashes match. Preview8/16/user config/runtime
-remain intact. Fresh9 plus increments, not a clean/no-own-Zig build. See
-[action dispatch evidence](measurements/component-action-precedence.md).
+Finder opens it after another preview closes. Copy under its separate name if
+desired; no installation/replacement/migration was performed. Return by closing
+the preview and opening `~/Applications/Telar.app`. GUI SHA256:
+`e8cc5c4480bdf38f817e351dc9acbc82a2fe62216f43d1df106787812abac031`.
+All1739 hashes/121 Mach-O/strict signatures pass. Six exact relocated schema87/88
+Finder/login/runtime/plugins/bars/windows/client-pause, SSH, Vim, configured panel
+and task/plan scopes pass; captures inspected, config unchanged and private state
+removed, no QML warnings. Panel actor invokes real activateComponent with full
+identity/anchor; native tests use actual press/release. Activity uses controlled
+protocol fixtures, not another AI agent or Git checkout. Mac/Linux Release21 cases
+pass; dedicated recorded-URL builds26 pass each and are never packaged. LinuxASAN
+21 pass/exit0; Mac21 assertions pass/exit1 for713702B3910alloc, no address/UB or LSAN
+suppression. Broad analysis, actual editor and changed-range format pass both SDKs;
+three portable hashes match. Fresh9 plus increments, not a no-own-Zig clean build.
+Preview8/17/installed app/config/runtime remain intact; four protected identities
+unchanged. See [stale tab input evidence](measurements/component-tab-capture.md).
+Physical sleep and shutdown-leak attribution below remain open.
 
 ## Daily adoption blockers
 
@@ -88,6 +93,30 @@ is part of the adoption milestone.
 
 The initial dependency inventory and clean-build gate are in
 [ZIG_RETIREMENT.md](ZIG_RETIREMENT.md).
+
+## Preserved candidate: Preview17; configured action dispatch
+
+`out-adoption/Telar C++ Preview 17.app` fixes widgets that define an action and a
+URL together: the action takes precedence as in Zig. Both bar/panel regressions
+fail on old source and pass after correction; stale generation/revision guards
+remain inert. From the worktree root:
+
+```sh
+open -n "services/gui-cpp/out-adoption/Telar C++ Preview 17.app"
+```
+
+Finder opens it after another preview closes; copy under its separate name if
+desired. Close it/open `~/Applications/Telar.app` to return. No install/replacement/
+session migration. GUI SHA256:
+`69648dc941e7e4a9c28a949063f539fe69ec6181dca2f8b8dfabc9c06018a45b`.
+All1739 hashes/121 Mach-O/signatures and six exact schema87/88 Finder/login/runtime/
+plugin/bar/window/pause, SSH, Vim, action+URL panel and task/plan scopes pass. Six
+captures inspected; private cleanup/config unchanged/no QML warnings. Native15
+and three configuration CTests pass per variant/SDK; LinuxASAN0, Mac assertions
+pass/exit1 for678400B3701alloc without address/UB or suppression. Broad/editor/
+format pass three TUs on both SDKs; hashes match. Preview8/16/user config/runtime
+remain intact. Fresh9 plus increments, not a clean/no-own-Zig build. See
+[action dispatch evidence](measurements/component-action-precedence.md).
 
 ## Preserved candidate: Preview16; configured groups
 

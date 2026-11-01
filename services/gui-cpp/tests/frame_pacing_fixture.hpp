@@ -1,9 +1,11 @@
 #pragma once
 
 #include "application/pane_layout.hpp"
+#include "input/tab_drop_surface.hpp"
 #include "platform/awake_clock.hpp"
 #include "presentation/frame_pacer.hpp"
 #include "qt/application.hpp"
+#include "qt/pointer_dispatcher.hpp"
 #include <array>
 #include <cstdint>
 #include <span>
@@ -12,6 +14,15 @@
 namespace telar::gui::test {
 
 struct FramePacing {
+  [[nodiscard]] static TabDropSurface tabs(const qt::Application &application) {
+    return application.tabDropSurface();
+  }
+
+  static void presentTabs(qt::Application &application, const TabDropSurface &surface) {
+    application.presented_tabs_ = surface;
+    application.pointer_dispatcher_.presentTabs(surface);
+  }
+
   static void anchor(qt::Application &application, std::uint64_t now_ns) {
     if (!application.frame_pacer_) {
       throw std::logic_error{"The application has no window frame pacer"};

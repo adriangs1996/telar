@@ -1060,6 +1060,9 @@ private:
     auto *terminal = terminalIn(window_->contentItem());
     const auto *pane = firstPane();
     QVERIFY(terminal != nullptr && pane != nullptr);
+    const auto link_presented = [terminal, pane] {
+      return pane->acknowledged_frame == pane->screen.frameId() && !terminal->prepareLinkPresentation();
+    };
     client_->input(pane->id, "printf '\\033[2J\\033[Hhttps://pointer.test/x\\nPOINTER_LINK_READY\\n'\r");
     QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).startsWith(QLatin1StringView("https://pointer.test/x")) && screenText(pane->screen).contains(QLatin1StringView("POINTER_LINK_READY")), runtime_wait_ms);
     terminal->forceActiveFocus();
@@ -1067,6 +1070,7 @@ private:
     QTest::mouseMove(window_, position);
     QTRY_COMPARE(terminal->hoveredLink(), QStringLiteral("https://pointer.test/x"));
     QTest::qWait(frame_settle_ms);
+    QVERIFY(test::waitForGuiCondition(link_presented, runtime_wait_ms));
     QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, position);
     QTRY_COMPARE_WITH_TIMEOUT(recorder.targets(), (QStringList{QStringLiteral("https://pointer.test/x")}), runtime_wait_ms);
     QTest::mousePress(window_, Qt::LeftButton, NativeKeyAdapter::link_modifier, position);
@@ -1094,6 +1098,7 @@ private:
     QTest::qWait(frame_settle_ms);
     QCOMPARE(recorder.targets().size(), 1);
     client_->input(pane->id, "\x15");
+    QVERIFY(test::waitForGuiCondition(link_presented, runtime_wait_ms));
     QTest::mouseClick(window_, Qt::LeftButton, NativeKeyAdapter::link_modifier | Qt::ShiftModifier, position);
     QTRY_COMPARE_WITH_TIMEOUT(recorder.targets(), (QStringList{QStringLiteral("https://pointer.test/x"), QStringLiteral("https://pointer.test/x")}), runtime_wait_ms);
     QCOMPARE(client_->error(), QString{});
@@ -1105,6 +1110,9 @@ private:
     auto *terminal = terminalIn(window_->contentItem());
     const auto *pane = firstPane();
     QVERIFY(terminal != nullptr && pane != nullptr);
+    const auto link_presented = [terminal, pane] {
+      return pane->acknowledged_frame == pane->screen.frameId() && !terminal->prepareLinkPresentation();
+    };
     constexpr auto first_output = "printf '\\033[2J\\033[Hhttps://original.test\\nORIGINAL_READY\\n'\r";
     client_->input(pane->id, first_output);
     QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).startsWith(QLatin1StringView("https://original.test")) && screenText(pane->screen).contains(QLatin1StringView("ORIGINAL_READY")), runtime_wait_ms);
@@ -1113,6 +1121,7 @@ private:
     QTest::mouseMove(window_, position);
     QTRY_COMPARE(terminal->hoveredLink(), QStringLiteral("https://original.test"));
     QTest::qWait(frame_settle_ms);
+    QVERIFY(test::waitForGuiCondition(link_presented, runtime_wait_ms));
     QTest::mousePress(window_, Qt::LeftButton, NativeKeyAdapter::link_modifier, position);
     client_->input(pane->id, "printf '\\033[2J\\033[Hhttps://replaced.test\\nREPLACED_READY\\n'\r");
     QTRY_COMPARE(terminal->hoveredLink(), QStringLiteral("https://replaced.test"));
@@ -1123,6 +1132,7 @@ private:
     QTest::qWait(frame_settle_ms);
     QVERIFY(recorder.targets().isEmpty());
 
+    QVERIFY(test::waitForGuiCondition(link_presented, runtime_wait_ms));
     QTest::mousePress(window_, Qt::LeftButton, NativeKeyAdapter::link_modifier, position);
     client_->execute(Application::Action::toggle_sidebar);
     client_->execute(Application::Action::toggle_sidebar);
@@ -1130,6 +1140,7 @@ private:
     QTest::mouseRelease(window_, Qt::LeftButton, NativeKeyAdapter::link_modifier, position);
     QTest::qWait(frame_settle_ms);
     QVERIFY(recorder.targets().isEmpty());
+    QVERIFY(test::waitForGuiCondition(link_presented, runtime_wait_ms));
     QTest::mouseClick(window_, Qt::LeftButton, NativeKeyAdapter::link_modifier, position);
     QTRY_COMPARE_WITH_TIMEOUT(recorder.targets(), (QStringList{QStringLiteral("https://original.test")}), runtime_wait_ms);
     QCOMPARE(client_->error(), QString{});
@@ -1176,6 +1187,65 @@ private:
     QTRY_COMPARE_WITH_TIMEOUT(recorder.targets(), (QStringList{toQString(copy_uri), toQString(routed_uri), QStringLiteral("https://osc8.test")}), runtime_wait_ms);
     QCOMPARE(client_->error(), QString{});
   }
+
+  Q_SLOT void configuredComponentUrlsAndActions() {
+    const RecordedLinks recorder{directory_.filePath(QStringLiteral("configured links λ.txt"))};
+    const auto cleanup = qScopeGuard([this] {
+      client_->closeComponentPanel();
+      client_->loadConfiguration({}, {}, {});
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    constexpr auto configuration = R"(
+      local t=require('telar')
+      local ui=t.ui
+      return {api_version=2,client={
+        keybindings={t.bind_global({'alt+u'},t.action.open_panel('usage'))},
+        bars={bottom={
+          left=t.bar.static(ui.group({on_click=t.action.open_panel('usage'),url='https://bar-action.test',ui.label('Action λ')})),
+          center=t.bar.tabs(),
+          right=t.bar.static(ui.group({url='https://bar-only.test',ui.label('Bar URL')})),
+        }},
+        panels={usage=t.panel({title='Configured links',render=function() return ui.actions({
+          ui.button({text='Close action',action=t.action.close_panel(),url='https://panel-action.test'}),
+          ui.button({text='Panel URL',url='https://panel-only.test'}),
+        }) end})},
+      }}
+    )";
+    writeTestFile(path, configuration);
+    client_->loadConfiguration(path, {}, {});
+    QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+    const auto click = [this](const QString &kind, const QString &caption) {
+      if (!test::waitForSynchronizedFrame(*window_, runtime_wait_ms)) {
+        return false;
+      }
+
+      const auto *item = componentItem(kind, caption);
+      if (item == nullptr) {
+        return false;
+      }
+
+      QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, item->mapRectToScene(item->boundingRect()).center().toPoint());
+      return true;
+    };
+    QVERIFY(click(QStringLiteral("label"), QStringLiteral("Action λ")));
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    QCOMPARE(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Configured links"));
+    QVERIFY(click(QStringLiteral("button"), QStringLiteral("Close action")));
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    QVERIFY(click(QStringLiteral("label"), QStringLiteral("Bar URL")));
+    const QStringList bar_targets{QStringLiteral("https://bar-only.test")};
+    QTRY_COMPARE_WITH_TIMEOUT(recorder.targets(), bar_targets, runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    QVERIFY(click(QStringLiteral("button"), QStringLiteral("Panel URL")));
+    const QStringList all_targets{QStringLiteral("https://bar-only.test"), QStringLiteral("https://panel-only.test")};
+    QTRY_COMPARE_WITH_TIMEOUT(recorder.targets(), all_targets, runtime_wait_ms);
+    QVERIFY(client_->componentPanel().value(QStringLiteral("open")).toBool());
+    QCOMPARE(client_->error(), QString{});
+  }
+
 #endif
 
   Q_SLOT void configuredFileEditor() {
@@ -1893,6 +1963,52 @@ return {api_version=2, client={keybindings={
     const auto identity = notices()->id;
     client_->dismissNotification(client_->notificationIdentity(identity));
     QTRY_VERIFY_WITH_TIMEOUT(client_->notifications().find(identity) == nullptr, runtime_wait_ms);
+  }
+
+  Q_SLOT void staleTabHitsDoNotCaptureConfiguredWidgets() {
+    std::optional<QPoint> held;
+    const auto cleanup = qScopeGuard([this, &held] {
+      if (held) {
+        sendMouse(*window_, QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, *held);
+      }
+
+      client_->closeComponentPanel();
+      client_->loadConfiguration({}, {}, {});
+      test::waitForSynchronizedFrame(*window_, runtime_wait_ms);
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    constexpr auto configuration = R"(
+      local t=require('telar')
+      return {api_version=2,client={
+        bars={bottom={left=t.bar.static(t.ui.group({on_click=t.action.open_panel('usage'),t.ui.label('Configured action')})),right=t.bar.tabs()}},
+        panels={usage=t.panel({title='Tab-safe action',render=function() return t.ui.text('Widget retains its click') end})},
+      }}
+    )";
+    writeTestFile(path, configuration);
+    client_->loadConfiguration(path, {}, {});
+    QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+    QTRY_VERIFY_WITH_TIMEOUT(test::FramePacing::tabs(*client_).count > 0, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto *label = componentItem(QStringLiteral("label"), QStringLiteral("Configured action"));
+    QVERIFY(label != nullptr);
+    const auto bounds = label->mapRectToScene(label->boundingRect());
+    const auto point = bounds.center().toPoint();
+    const auto live = test::FramePacing::tabs(*client_);
+    QVERIFY(live.at({point.x() * live.scale, point.y() * live.scale}) == nullptr);
+    auto stale = live;
+    stale.count = 1;
+    stale.create = {};
+    stale.targets.front().bounds = {.x = static_cast<float>(bounds.x() * live.scale), .y = static_cast<float>(bounds.y() * live.scale), .width = static_cast<float>(bounds.width() * live.scale), .height = static_cast<float>(bounds.height() * live.scale)};
+    test::FramePacing::presentTabs(*client_, stale);
+    held = point;
+    sendMouse(*window_, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, point);
+    QVERIFY2(!client_->pointerDispatcher().capturedTab().has_value(), "A stale tab hit must not capture a different configured widget");
+    sendMouse(*window_, QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, point);
+    held.reset();
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    QCOMPARE(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Tab-safe action"));
   }
 
   Q_SLOT void tabDragReordersOnlyAfterRelease() {

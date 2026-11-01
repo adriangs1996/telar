@@ -59,27 +59,27 @@ executable/start instead of restoring the old process. Old Zig GUI87625 was alre
 absent before this work; do not restart it or claim we stopped it. Private test
 children are separate and must be cleaned up by their owning helpers only.
 
-## Available candidate: Preview17 (2026-11-01)
+## Available candidate: Preview18 (2026-11-01)
 
-`services/gui-cpp/out-adoption/Telar C++ Preview 17.app` is frozen/qualified and
-already offered for normal-use assessment. GUI SHA256
-`69648dc941e7e4a9c28a949063f539fe69ec6181dca2f8b8dfabc9c06018a45b`;
-raw `e05b91f66fa65556aaf6cae03509cf1927ab65c415e95f31d2f5e70af09534d7`.
+`services/gui-cpp/out-adoption/Telar C++ Preview 18.app` is frozen/qualified and
+already offered. GUI SHA256
+`e8cc5c4480bdf38f817e351dc9acbc82a2fe62216f43d1df106787812abac031`;
+raw `c91e91279aa803cad882e868e7fe2d24e67e9d34678fb6201e200ad2dff8d201`.
 All1739 hashes/121 Mach-O/deep-strict signatures pass. Six exact relocated schema87/
-88 Finder/login/default-runtime/plugins/bars/two windows/client pause, realSSH with
-machine bar+default ink, VimUTF8, action+URL panel and project/task/worktree/plan
-survival pass. Zero QML warnings/config unchanged/private cleanup; six direct/daily
-captures inspected. Panel actor invokes activateComponent with full identities/
-anchor (native tests click); activity uses protocol fixtures, not AI/Git checkout.
-Fresh9 plus increments, not a clean/no-own-Zig build. From worktree root:
-`open -n "services/gui-cpp/out-adoption/Telar C++ Preview 17.app"`. Finder opens it
+88 Finder/login/default-runtime/plugins/bars/two windows/client pause, realSSH,
+VimUTF8, action+URL panel and project/task/worktree/plan survival pass. No QML
+warnings/config unchanged/private cleanup; direct/daily captures inspected. Panel
+actor invokes activateComponent with full identities/anchor; native tests click.
+Activity uses controlled protocol fixtures, not AI/Git. Fresh9 plus increments,
+not a clean/no-own-Zig build. From worktree root:
+`open -n "services/gui-cpp/out-adoption/Telar C++ Preview 18.app"`. Finder opens it
 after another preview closes; copy under its separate name if desired. Rollback:
 close preview/open `~/Applications/Telar.app`. No install/replacement/migration.
-Preview8/16/installed app/config/runtime remain intact. All previews share bundle
+Preview8/17/installed app/config/runtime remain intact. All previews share bundle
 identifier; use open-n for this exact one while8 runs. Adrian confirmed8 normal/no
 daily blocker so far. Physical sleep: "Aún no lo he probado"; don't ask again or
 suspend host. Daily/full goals stay OPEN. DAILY_DRIVER puts the required checklist
-and the separate daily/full/retirement gates before historical candidates.
+and separate daily/full/retirement gates before historical candidates.
 
 ## Latest implementation and evidence
 
@@ -117,11 +117,48 @@ packaging/smoke jobs remain active. Raw `out-dependencies/component-shared-overf
 The shared-overflow report/archive/verifier and local commit are complete. CONTINUE
 actual PARITY; do not repeat completed Preview12 qualification without new changes.
 
+## Latest qualified work: stale tab capture and valid URL dispatch
+
+Preview18/source/evidence is ready for reviewed local commit. Three portable files:
+qt/tab_drag_controller.cpp, tests/quick_test.cpp, tests/frame_pacing_fixture.hpp.
+Report/archive/verifier measurements/component-tab-capture; raw
+out-dependencies/component-tab-capture-1 plus component-recorded-links-1.
+The dispatcher revalidates a presented tab hit against live identity/workspace/
+viewport/scale/threshold before capture. Linux private trace proves old x16 versus
+current x136/DPR2; widget received press but capture consumed its release. Existing
+friend fixture injects the stale rectangle deterministically; Mac negative2 fails
+capturedTab (2pass/1fail), fixed1 passes12/0. Do not count failed private-access
+setup1 or injected QML activation as causal/native qualification.
+
+Both SDKs pass26 native cases in separately built RecordingLinkHost verifiers and
+21 in normal Release/ASAN. Optional validURL bar/panel case opens/closes by action
+and records ONLY the URL-only nodes. Dedicated out-adoption-recorded-links-17 uses
+compile-time fake host; NEVER package it. Normal9/ASAN9 keep real host. Readiness
+waits retain10s bounds/qWait cadence/assertions; initial stale-link fixture failures
+and private traces retained. MacASAN21assertionspass/exit1 for713702B3910alloc,
+no address/UB or LSAN suppression; LinuxASAN0. Config CTests pass3 perLinux variant,
+Mac4 includes core. Broad2 TUs(enabled tests)/actual-editor3 files/changed-range
+format pass both SDKs; all3portable hashes match. Linux owned disk PCH TMPDIRs
+removed after compiler exit. Initial Linux nonexistent-target build selection and
+system Python tar-filter setup error retained; corrected gated retry/extraction.
+First exact18 panel run had old evidence directory label17, correct GUI18hash;
+correctly labelled secondrun passes too. Seven inspected captures across6scopes.
+All4protected process identities unchanged; no jobs remain after final verification.
+
+NEXT: complete archive verification/review/local commit, then CONTINUE actual
+PARITY. Daily physical sleep and Mac shutdown-leak attribution remain open. For
+stability, attribute the residual nonfont direct-leak stacks from current ASAN
+before proposing another lifetime change. The four standalone font controls are
+already done; do not repeat them without a new hypothesis. Never suppress LSAN
+or rewrite runtime. Remaining configured-surface ownership/accessibility and full
+styling/paired visuals/performance remain separate final gates. No Preview19 unless
+new production source actually changes; do not requalify18 without new cause.
+
 ## Latest qualified source: action before coexisting URL; continue link dispatch
 
 Group-spacing/Preview16 is locally committed in a99af22c0 (277 frozen entries).
-Current action-precedence three-file change and exact Preview17 qualification are
-complete; finish freeze/review/local commit then CONTINUE actual PARITY. Raw
+Action-precedence/Preview17 is locally committed in3495be774 (192 frozen entries);
+continue actual PARITY. Raw
 out-dependencies/component-action-precedence-1; report/archive/verifier under
 measurements/component-action-precedence. Original bar_components prefers action
 before URL for bar/panel; Qt had reversed it. Native negative fails both open and
@@ -210,7 +247,7 @@ to repeat completed candidate qualifications without new source changes/failures
 ## Remaining gates: keep these separate
 
 Daily acceptance: physical system sleep remains unverified; Mac shutdown-leak
-attribution/stability remains open. Release Preview17 is available for daily
+attribution/stability remains open. Release Preview18 is available for daily
 assessment. Do not equate private SIGSTOP/SIGCONT with physical system sleep.
 
 Final parity: remaining fitting/styling and combined
