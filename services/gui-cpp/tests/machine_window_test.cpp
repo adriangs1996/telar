@@ -28,7 +28,6 @@
 #include <QFont>
 #include <QScopeGuard>
 #include <QtGui/qtestsupport_gui.h>
-#include <QIODevice>
 #include <span>
 #endif
 #include "qt/external_link_opener.hpp"
@@ -52,6 +51,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QIODevice>
 #include <QKeyEvent>
 #include <QLocalServer>
 #include <QLocalSocket>
@@ -940,6 +940,26 @@ class MachineWindowTest : public QObject {
 
       QVERIFY(waitForSynchronizedFrame(window, wait_ms));
       QVERIFY(window.grabWindow().save(screenshot, "PNG"));
+    }
+
+    const QTemporaryDir theme_directory;
+    QVERIFY(theme_directory.isValid());
+    const auto theme_path = theme_directory.filePath(QStringLiteral("config.lua"));
+    QFile theme_file{theme_path};
+    QVERIFY(theme_file.open(QIODevice::WriteOnly));
+    const QByteArray theme_source{"return {api_version=2,theme={colors={green='default'}}}"};
+    QCOMPARE(theme_file.write(theme_source), theme_source.size());
+    theme_file.close();
+    application.loadConfiguration(theme_path, {}, {});
+    QVERIFY2(application.error().isEmpty(), qPrintable(application.error()));
+    const auto default_ink = application.colors().value(QStringLiteral("green")).value<QColor>();
+    QVERIFY(default_ink.alpha() > 0);
+    QTRY_COMPARE_WITH_TIMEOUT(row(0).value(QStringLiteral("ink")).value<QColor>(), default_ink, wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(row(1).value(QStringLiteral("ink")).value<QColor>(), default_ink, wait_ms);
+    const auto default_screenshot = qEnvironmentVariable("TELAR_GUI_TEST_MACHINE_DEFAULT_INK_SCREENSHOT");
+    if (!default_screenshot.isEmpty()) {
+      QVERIFY(waitForSynchronizedFrame(window, wait_ms));
+      QVERIFY(window.grabWindow().save(default_screenshot, "PNG"));
     }
 
     fixture.remote_listener_.close();

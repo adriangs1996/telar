@@ -4,7 +4,38 @@ The complete functional, visual and equal-or-better performance objective remain
 open. Only the command/quick-navigation palette and notifications/sounds may be
 deferred for daily adoption; existing implementations stay available.
 
-## Current candidate: Preview14; live machine facts
+## Current candidate: Preview15; default theme ink
+
+`out-adoption/Telar C++ Preview 15.app` is separately packaged/qualified and already
+offered for normal-use assessment. It adds a text-color correction to Preview14:
+machine phase glyphs remain visible when green=default resolves to foreground.
+Explicit no-color profile dots keep their original transparent behavior.
+
+From the worktree root:
+
+```sh
+open -n "services/gui-cpp/out-adoption/Telar C++ Preview 15.app"
+```
+
+Finder opens it after another preview closes. Copy under its separate name if
+desired. Close it/open `~/Applications/Telar.app` to return. No installs, replacements
+or session migration; Preview8/14/config/runtime remain intact. GUI SHA256:
+`2e55047d76ab005463ece74db5104c77e3166a39ed0fcbf0d5b9fa05158b81da`.
+
+All1739 hashes/121 Mach-O/deep-strict signatures pass. Exact relocated schema87/88
+Finder/login/config/runtime/plugin/bar/two-window/client-pause, realSSH with machine
+bar AND green=default, VimUTF8, panel/bars and task/worktree/plan survival pass with
+zero QML warnings and disposable cleanup. All daily/direct/native captures were
+inspected. Four targeted native checks pass per SDK; LinuxASAN exits0, Mac assertions
+pass/exit1 for986300B3607alloc, no address/UB or suppression. Broad/actual editor/format
+pass both SDKs; two sources match. Linux editor-owned on-disk TMPDIRs are removed
+after clangd exits. Preview14's broader14+6 qualification stays preserved. Physical
+sleep, Mac shutdown leak/stability, full fitting/styling/ownership/paired visuals/
+performance, daily acceptance and audited own-Zig retirement remain OPEN. Fresh9
+plus increments, not a new clean/no-own-Zig build. See
+[default machine ink evidence](measurements/component-machine-default-ink.md).
+
+## Preserved candidate: Preview14; live machine facts
 
 `out-adoption/Telar C++ Preview 14.app` is separately packaged and qualified for
 normal-use assessment. Machine components show original phase/attention glyphs,

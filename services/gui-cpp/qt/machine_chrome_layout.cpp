@@ -355,7 +355,7 @@ QVariantMap MachineChromeLayout::factRecord(const Source &source, const MachineF
       {QStringLiteral("glyph"), toQString(glyph)},
       {QStringLiteral("cpu"), toQString(cpu.view())},
       {QStringLiteral("bold"), source.active},
-      {QStringLiteral("ink"), fill(controller_->configuration().theme.chrome[static_cast<std::size_t>(role)])},
+      {QStringLiteral("ink"), toQColor(controller_->configuration().theme.chromeColor(role))},
       {QStringLiteral("accessible"), toQString(source.label.view()) + QStringLiteral(" ") + toQString(MachineFacts::phaseName(source.phase)) + (source.attention ? QStringLiteral(" attention") : QString{}) + (cpu.view().empty() ? QString{} : QStringLiteral(" ") + toQString(cpu.view()))},
   };
 }

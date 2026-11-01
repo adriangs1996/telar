@@ -59,29 +59,26 @@ executable/start instead of restoring the old process. Old Zig GUI87625 was alre
 absent before this work; do not restart it or claim we stopped it. Private test
 children are separate and must be cleaned up by their owning helpers only.
 
-## Available candidate: Preview14 (2026-11-01)
+## Available candidate: Preview15 (2026-11-01)
 
-`services/gui-cpp/out-adoption/Telar C++ Preview 14.app` is frozen, qualified and
+`services/gui-cpp/out-adoption/Telar C++ Preview 15.app` is frozen, qualified and
 already offered to Adrian. GUI SHA256
-`071087e9069edeed91b847c8fd16a8da85fe0bfa50d30f06cb25df32d4b6127d`;
-raw `b04c455102de6111ee147e1bbb1c7b93ffa22fecbbd3be8a4e42ef7ffb131cb5`.
+`2e55047d76ab005463ece74db5104c77e3166a39ed0fcbf0d5b9fa05158b81da`;
+raw `a14a4ea70fbf0b6f0c8fa9153424b6f68f9a8f79af5e3be24e5334684d296e6b`.
 All1739 hashes/121 Mach-O/deep-strict signatures pass. Exact relocated schemas87/88
 native blur/login/Finder/config/runtime/plugins/bars/two windows/client pause,
-realSSH WITH machine bar enabled, VimUTF8, custom panel/bars and task/worktree/plan
-survival pass; zero QML warnings/private cleanup. Five daily captures plus schema87
-direct and native Mac/Linux machine facts were inspected. Panel actor is an owned
-callback/controlled anchor; activity uses protocol fixtures, not AI/Git checkout.
-This is fresh9 plus increments, not a new clean/no-own-Zig build. Package/launch:
-`open -n "services/gui-cpp/out-adoption/Telar C++ Preview 14.app"`. Finder can open
+realSSH WITH machine bar AND green=default, VimUTF8, custom panel/bars and task/
+worktree/plan survival pass; zero QML warnings/private cleanup. Five daily captures
+plus schema87 direct and native Mac/Linux default ink were inspected. Panel actor
+is an owned callback/controlled anchor; activity uses protocol fixtures, not AI/Git.
+Fresh9 plus increments, not a new clean/no-own-Zig build. Launch from repo root:
+`open -n "services/gui-cpp/out-adoption/Telar C++ Preview 15.app"`. Finder can open
 it after another preview closes; copy under a separate name if desired. Rollback:
 close preview/open `~/Applications/Telar.app`. No installs/replacements/migrations.
-Preview8/12/13 and installed app/config/runtime are preserved. All previews share
-bundle identifier; use open-n for this exact app while8 is running.
-
-Preview13 remains frozen, GUIcb3c71e61984fb05efc463ee8e59c7be9f3b00336cc7a2a520f3ffca00673bf6.
-Adrian confirms Preview8 normal interface/no daily blocker so far. Physical sleep:
-"Aún no lo he probado". No question is pending; don't ask again or suspend the host.
-Daily/full goals stay OPEN. See DAILY_DRIVER.md and the machine-facts report.
+Preview8/13/14 and installed app/config/runtime are intact. All previews share bundle
+identifier; use open-n for the exact one while8 runs. Adrian confirmed Preview8
+normal/no daily blocker so far. Physical sleep: "Aún no lo he probado"; no question
+is pending. Don't ask again or suspend the host. Daily/full goals stay OPEN.
 
 ## Latest implementation and evidence
 
@@ -118,6 +115,29 @@ packaging/smoke jobs remain active. Raw `out-dependencies/component-shared-overf
 
 The shared-overflow report/archive/verifier and local commit are complete. CONTINUE
 actual PARITY; do not repeat completed Preview12 qualification without new changes.
+
+## Latest qualified source: default machine text ink; continue API validation
+
+HEAD7dfeb17c6 commits inline facts/Preview14 and275 frozen entries. The later scoped
+ink correction is qualified; finish its review/local commit then continue PARITY.
+Raw out-dependencies/component-machine-default-ink-1; report/archive/verifier under
+measurements/component-machine-default-ink. Production delta is factRecord text ink
+using toQColor(theme.chromeColor(role)), preserving fill semantics for no-color
+profile dots. Old source negative has#00000000 vs expected#ffffffff on both machines.
+Same fixture retains lost-link/no-CPU/activation/hidden-width assertions. Four native
+checks pass per variant/SDK; LinuxASAN0, Mac4assertionspass/exit1 for986300B3607alloc,
+no address/UB or suppression. Broad/editor/format pass both SDKs; two sources match.
+Linux editors use OWN on-disk TMPDIRs, removed AFTER clangd exits; no tmpfs PCH buildup.
+Preview15 exact qualification is complete/offered; no heavy jobs remain. Earlier14
+broader14+6 and whole machine/geometry CTests remain preserved, not claimed rerun.
+
+Footer audit: both GUI renderers omit sidebar_footer (original BarRow.positions4;
+Sidebar.draw no footer draw site), while configuration/state exposes those slots.
+Do not add a phantom row as GUI parity. Next concrete API gap: original
+Generation.zig:1200 rejects footer count>3 and any tabs; C++ Definitions currently
+truncates/accepts them. Verify/fix diagnostic and validation parity, then group/menu/
+fitting behavior. No validation source edits yet. Don't redo passing15 checks without
+new changes/failures. Previous verifiers default to archives after source changes.
 
 ## Latest qualified source: inline machine facts; continue footer composition
 
@@ -159,7 +179,7 @@ completion. Preserve the unrelated user measurement file.
 ## Remaining gates: keep these separate
 
 Daily acceptance: physical system sleep remains unverified; Mac shutdown-leak
-attribution/stability remains open. Release Preview14 is available for daily
+attribution/stability remains open. Release Preview15 is available for daily
 assessment. Do not equate private SIGSTOP/SIGCONT with physical system sleep.
 
 Final parity: remaining fitting/styling and combined
