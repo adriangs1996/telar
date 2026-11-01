@@ -2,6 +2,8 @@
 #include "application/dependencies.hpp"
 #include "application/notification_item.hpp"
 #include "core/view_version.hpp"
+#include "config/plugin_invocation.hpp"
+#include "qt/plugin_worker.hpp"
 #include "frame_fixture.hpp"
 #include "gui_wait.hpp"
 #include "machines/machine_row.hpp"
@@ -62,6 +64,7 @@
 #include <QQuickWindow>
 #include <QSize>
 #include <QString>
+#include <QStringLiteral>
 #include <QStringList>
 #include <QTemporaryDir>
 #include <QVariantMap>
@@ -86,6 +89,22 @@
 namespace telar::gui::test {
 
 struct MachineWindow {
+  static void armPlugin(qt::Application &application, qt::MachineClientKey source, std::uint64_t execution, std::uint64_t runtime_generation) {
+    application.plugin_owner_ = qt::Application::PluginOwner{.source = source, .runtime_generation = runtime_generation, .execution = execution};
+  }
+
+  static bool pendingPlugin(const qt::Application &application) {
+    return application.plugin_owner_.has_value();
+  }
+
+  static void completePluginFailure(qt::Application &application, std::uint64_t execution) {
+    PluginInvocation invocation;
+    invocation.configuration_generation = application.configuration_source_.configurationGeneration();
+    qt::PluginWorkerResult result;
+    result.error = QStringLiteral("OwnedPluginFailure");
+    application.pluginWorkerFinished(execution, invocation, result);
+  }
+
   static qt::MachineClientKey add(qt::Application &application, const QString &endpoint) {
     const auto slot = application.machines_.add({.label = "Build", .destination = "dev@build"});
     auto &client = application.createClient(slot);
@@ -337,6 +356,42 @@ struct MachineFixture {
 
 class MachineWindowTest : public QObject {
   Q_OBJECT
+
+  Q_SLOT static void pluginCompletionStaysWithItsExecutionMachineAndRuntime() {
+    MachineFixture fixture;
+    QVERIFY(fixture.start());
+    auto &application = fixture.application;
+    const auto &local = MachineWindow::client(application, Machines::local_slot);
+    constexpr std::uint64_t execution = 1;
+    MachineWindow::armPlugin(application, local.key, execution, local.runtime_generation);
+    MachineWindow::completePluginFailure(application, execution + 1);
+    QVERIFY(MachineWindow::pendingPlugin(application));
+    QCOMPARE(application.error(), QString{});
+
+    MachineWindow::select(application, fixture.remote.machine);
+    MachineWindow::completePluginFailure(application, execution);
+    QVERIFY(!MachineWindow::pendingPlugin(application));
+    QCOMPARE(application.error(), QString{});
+    MachineWindow::select(application, local.key.machine);
+
+    MachineWindow::armPlugin(application, local.key, execution, local.runtime_generation + 1);
+    MachineWindow::completePluginFailure(application, execution);
+    QVERIFY(!MachineWindow::pendingPlugin(application));
+    QCOMPARE(application.error(), QString{});
+
+    const auto &remote = MachineWindow::client(application, fixture.remote.machine.slot);
+    MachineWindow::armPlugin(application, remote.key, execution, remote.runtime_generation);
+    const auto replacement = MachineWindow::replace(application, fixture.remote.machine.slot);
+    MachineWindow::completePluginFailure(application, execution);
+    QVERIFY(!MachineWindow::pendingPlugin(application));
+    QCOMPARE(application.error(), QString{});
+    QVERIFY(replacement != fixture.remote);
+
+    MachineWindow::armPlugin(application, local.key, execution, local.runtime_generation);
+    MachineWindow::completePluginFailure(application, execution);
+    QVERIFY(!MachineWindow::pendingPlugin(application));
+    QCOMPARE(application.error(), QStringLiteral("OwnedPluginFailure"));
+  }
 
 #ifdef __APPLE__
   Q_SLOT static void clipboardCaptureFinishesWhileLocalClientIsHidden() {

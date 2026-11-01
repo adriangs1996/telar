@@ -1,11 +1,16 @@
 #include "core/memory.hpp"
+#include "platform/temporary_directory.hpp"
 #include "plugin_catalog_cases.hpp"
+#include "plugin_effect_cases.hpp"
+#include "plugins/package.hpp"
+#include "plugins/package_copy_storage.hpp"
 #include "plugins/package_inspection.hpp"
 #include "plugins/package_registry_storage.hpp"
 #include "plugins/specifications.hpp"
 #include "qt/plugin_packages.hpp"
 #include "text/hexadecimal.hpp"
 #ifdef __APPLE__
+#include "plugins/package_copy.hpp"
 #include "plugins/package_inspector.hpp"
 #include "plugins/package_registry.hpp"
 #endif
@@ -18,6 +23,7 @@
 #include <array>
 #include <cstddef>
 #include <exception>
+#include <fcntl.h>
 #include <filesystem>
 #include <iostream>
 #include <span>
@@ -58,6 +64,51 @@ void rejects(Operation &&operation) {
   require(rejected, "invalid package must be rejected");
 }
 
+void snapshotCopies(BudgetAllocator<SystemAllocator> &memory, const plugins::Package &package) {
+  const telar::runtime::TemporaryDirectory snapshot{"/tmp/telar-gui-plugin-copy-XXXXXX"};
+  plugins::PackageCopyStorage<BudgetAllocator<SystemAllocator>, Inspector> copier{memory};
+  const auto copied = copier.copy(package, snapshot.descriptor(), snapshot.path());
+  require(copied.digest == package.digest && copied.root.view() != package.root.view(), "snapshot must retain package bytes in a separate root");
+  require(Inspector::inspect(memory, snapshot.path()).digest == package.digest, "copied hidden files, empty directories and entry bytes must retain the independent digest");
+  struct stat metadata{};
+  constexpr mode_t permission_mask = 0777;
+  constexpr mode_t private_file = S_IRUSR | S_IWUSR;
+  constexpr mode_t private_directory = private_file | S_IXUSR;
+  require(::fstat(snapshot.descriptor(), &metadata) == 0 && (metadata.st_mode & permission_mask) == private_directory, "snapshot root must remain private");
+  require(::fstatat(snapshot.descriptor(), "main.lua", &metadata, AT_SYMLINK_NOFOLLOW) == 0 && (metadata.st_mode & permission_mask) == private_file, "snapshot files must remain private");
+  require(::fstatat(snapshot.descriptor(), "lib/empty", &metadata, AT_SYMLINK_NOFOLLOW) == 0 && S_ISDIR(metadata.st_mode) && (metadata.st_mode & permission_mask) == private_directory, "empty directories must remain private");
+  rejects([&] {
+    copier.copy(package, snapshot.descriptor(), snapshot.path());
+  });
+  require(Inspector::inspect(memory, snapshot.path()).digest == package.digest, "rejected overwrite must preserve the first snapshot");
+
+  auto stale = package;
+  stale.digest.front() ^= 1U;
+  const telar::runtime::TemporaryDirectory changed{"/tmp/telar-gui-plugin-stale-XXXXXX"};
+  rejects([&] {
+    copier.copy(stale, changed.descriptor(), changed.path());
+  });
+
+  const auto forbidden = std::filesystem::path{package.root.view()} / "forbidden-copy";
+  std::filesystem::create_symlink("main.lua", forbidden);
+  const telar::runtime::TemporaryDirectory symlink{"/tmp/telar-gui-plugin-link-XXXXXX"};
+  rejects([&] {
+    copier.copy(package, symlink.descriptor(), symlink.path());
+  });
+  std::filesystem::remove(forbidden);
+  require(::mkfifo(forbidden.c_str(), S_IRUSR | S_IWUSR) == 0, "copy FIFO fixture must exist");
+  const telar::runtime::TemporaryDirectory fifo{"/tmp/telar-gui-plugin-fifo-XXXXXX"};
+  rejects([&] {
+    copier.copy(package, fifo.descriptor(), fifo.path());
+  });
+  std::filesystem::remove(forbidden);
+#ifdef __APPLE__
+  const telar::runtime::TemporaryDirectory native{"/tmp/telar-gui-plugin-native-XXXXXX"};
+  const auto native_copy = plugins::PackageCopy{memory}.copy(package, native.descriptor(), native.path());
+  require(native_copy.digest == copied.digest, "default runtime copy API and Qt provider must preserve identical bytes");
+#endif
+}
+
 void packages(BudgetAllocator<SystemAllocator> &memory) {
   const QTemporaryDir temporary;
   require(temporary.isValid(), "owned package directory must exist");
@@ -74,6 +125,7 @@ void packages(BudgetAllocator<SystemAllocator> &memory) {
   String<BudgetAllocator<SystemAllocator>> digest{AllocatorRef<char, BudgetAllocator<SystemAllocator>>{memory}};
   telar::runtime::appendLowerHex(digest, inspected.digest);
   require(digest == "38c0b5755058a4a00997332cc04a7678549e25854bcd8acf9e7080f81a9622b7", "package digest must match the independent SHA-256 framing control");
+  snapshotCopies(memory, inspected);
 #ifdef __APPLE__
   require(plugins::PackageInspector::inspect(memory, path).digest == inspected.digest, "native and Qt SHA providers must inspect identical package bytes");
 #endif
@@ -123,6 +175,7 @@ int main() {
     BudgetAllocator memory{system, budget};
     packages(memory);
     test::pluginCatalogCases();
+    test::pluginEffectCases();
     require(memory.liveBytes() == 0, "package inspection must release every injected allocation");
     std::cout << "Plugin package providers, digest, registry and file admission passed\n";
   } catch (const std::exception &error) {

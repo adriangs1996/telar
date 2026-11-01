@@ -4,7 +4,41 @@ The complete functional, visual and equal-or-better performance objective remain
 open. Only the command/quick-navigation palette and notifications/sounds may be
 deferred for daily adoption; existing implementations stay available.
 
-## Candidate
+## Current preview with plugin execution
+
+`out-adoption/Telar C++ Preview 2.app` is the newer separate Release preview.
+The first preview below remains preserved. This second bundle deploys Qt/QML,
+passes all signatures and an audit of 120 Mach-O objects with zero unresolved or
+external dependencies. Its GUI SHA-256 is
+`447bc66e98d8aec06e5aead3bf98e1e2c05fc9a5b452e8d9e5d13b0ab366deae`.
+
+An exact relocated Cocoa/Metal smoke passes default configuration/runtime
+discovery, Unicode, tabs, split/resize/fullscreen, sidebar, Lua reload, History,
+and a private plugin executed by both ID and configured path through the bundled
+CLI. Direct GUI and LaunchServices return zero; the GUI exit behind `open` remains
+unobservable, so the final healthy marker and inspected PNG are required. Private
+state is removed and no existing runtime/configuration/app is replaced.
+
+Launch with Finder or:
+
+```sh
+open -n "services/gui-cpp/out-adoption/Telar C++ Preview 2.app"
+```
+
+Return by closing Preview and opening the existing Telar.app, without stopping
+the runtime. This is available for testing; custom bars/widgets/panels/picks and
+the remaining daily checklist still block declaring it a daily driver. Plugin
+execution borrows the bundled original Zig `plugin-worker`; its retirement is a
+separate dependency gate. The final shared-copy editor/portability correction is verified in the newer
+source revision; this bundle stays unchanged.
+
+Reproduce the exact bundle smoke with:
+
+```sh
+python3 services/gui-cpp/tools/smoke_macos_bundle.py   "services/gui-cpp/out-adoption/Telar C++ Preview 2.app"   --discover-runtime --plugins   --evidence services/gui-cpp/out-dependencies/my-plugin-preview-smoke
+```
+
+## First preserved candidate
 
 Local separate bundle: `out-adoption/Telar C++ Preview.app` (relative to
 `services/gui-cpp`). This local ARM64/macOS 26+ Release preview is packaged,
@@ -50,8 +84,10 @@ python3 services/gui-cpp/tools/smoke_macos_bundle.py \
 
 ## Daily adoption blockers
 
-- Isolated plugin execution, capability enforcement and custom bars, widgets,
-  panels and picks remain incomplete. Catalog and activation do not close this.
+- Isolated plugin execution and capability enforcement have functional coverage
+  in preview 2; the final shared-copy quality correction is verified in the
+  newer source revision.
+  Custom bars, widgets, panels and picks remain incomplete.
 - Resolve or qualify the retained macOS pointer-selection regression and verify
   window restoration/suspend-resume and all flows below on this candidate.
 

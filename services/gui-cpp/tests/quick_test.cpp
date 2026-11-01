@@ -26,6 +26,9 @@
 #include "presentation/history_card.hpp"
 #include "presentation/history_path.hpp"
 #include "projection.hpp"
+#include "plugins/identity.hpp"
+#include "runtime_endpoint.hpp"
+#include <QStandardPaths>
 #include "qml_fixture.hpp"
 #include "qt/application.hpp"
 #include "qt/key_adapter.hpp"
@@ -72,6 +75,8 @@
 #include <QQuickStyle>
 #include <QRegularExpression>
 #include <QScreen>
+#include <QSemaphore>
+#include <QThreadPool>
 #include <QSignalSpy>
 #include <QSizeF>
 #include <QTemporaryDir>
@@ -4042,6 +4047,100 @@ return {api_version=2, client={keybindings={
     QVERIFY(retained.open(QIODevice::ReadOnly));
     QCOMPARE(retained.readAll(), QByteArray{configuration});
     QCOMPARE(client_->error(), QString{});
+  }
+
+  Q_SLOT void routedPluginWorker() {
+    const auto program = QStandardPaths::findExecutable(QString::fromStdString(runtime_endpoint::program()));
+    QVERIFY(!program.isEmpty());
+    QCOMPARE(QFileInfo{program}.canonicalFilePath(), QFileInfo{qEnvironmentVariable("TELAR_GUI_TEST_RUNTIME")}.canonicalFilePath());
+    const auto cleanup = qScopeGuard([this] {
+      client_->loadConfiguration({}, {}, {});
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QVERIFY(QDir{directory.path()}.mkdir(QStringLiteral("example")));
+    const auto package = directory.filePath(QStringLiteral("example"));
+    writeTestFile(package + QStringLiteral("/plugin.json"), R"({"api_version":1,"id":"sample","version":"1","entry":"main.lua","source":{"url":"fixture","revision":"1"},"actions":["toggle","denied"],"capabilities":["runtime.control"]})");
+    writeTestFile(package + QStringLiteral("/main.lua"), "local t=require('telar');return {actions={toggle=function()return t.action.toggle_sidebar()end,denied=function()return {t.action.toggle_sidebar(),t.action.new_tab()}end}}");
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    constexpr auto configuration = "return {api_version=2,plugins={{path='example'}},client={keybindings={telar.bind_global({'alt+s'},telar.action.plugin{plugin='sample',action='toggle'}),telar.bind_global({'alt+c'},function() return telar.action.plugin{plugin='sample',action='toggle'} end)}}}";
+    writeTestFile(path, configuration);
+    client_->loadConfiguration(path, {}, {}, directory.filePath(QStringLiteral("trust.json")));
+    QCOMPARE(client_->error(), QString{});
+    QTRY_VERIFY_WITH_TIMEOUT(client_->sidebarVisible(), runtime_wait_ms);
+    CommandPeer peer{memory_};
+    peer.open(socket_);
+    QTRY_VERIFY2_WITH_TIMEOUT(peer.ready(), qPrintable(peer.error()), runtime_wait_ms);
+    enum class Request : std::uint16_t {
+      toggle = 20'000,
+      denied,
+    };
+    const auto toggle_request = static_cast<std::uint64_t>(Request::toggle);
+    peer.request(telar::ClientCommand{.request_id = toggle_request, .action = telar::ClientAction::plugin_run, .target_id = telar::runtime::plugins::stableId("toggle"), .text = "sample"});
+    QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, toggle_request, runtime_wait_ms);
+    QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
+    QTRY_VERIFY2_WITH_TIMEOUT(!client_->sidebarVisible(), qPrintable(client_->error()), runtime_wait_ms);
+    QCOMPARE(client_->error(), QString{});
+
+    const auto tabs = client_->tabs()->rowCount();
+    const auto denied_request = static_cast<std::uint64_t>(Request::denied);
+    peer.request(telar::ClientCommand{.request_id = denied_request, .action = telar::ClientAction::plugin_run, .target_id = telar::runtime::plugins::stableId("denied"), .text = "example"});
+    QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, denied_request, runtime_wait_ms);
+    QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->error(), QStringLiteral("CapabilityNotGranted"), runtime_wait_ms);
+    QVERIFY(!client_->sidebarVisible());
+    QCOMPARE(client_->tabs()->rowCount(), tabs);
+
+    QTest::keyClick(window_, Qt::Key_S, Qt::AltModifier);
+    QTRY_VERIFY2_WITH_TIMEOUT(client_->sidebarVisible(), qPrintable(client_->error()), runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->error(), QString{}, runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_C, Qt::AltModifier);
+    QTRY_VERIFY2_WITH_TIMEOUT(!client_->sidebarVisible(), qPrintable(client_->error()), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_S, Qt::AltModifier);
+    QTRY_VERIFY2_WITH_TIMEOUT(client_->sidebarVisible(), qPrintable(client_->error()), runtime_wait_ms);
+    {
+      auto &pool = *QThreadPool::globalInstance();
+      const int previous_threads = pool.maxThreadCount();
+      pool.setMaxThreadCount(1);
+      QSemaphore started;
+      QSemaphore resume;
+      const auto restore_pool = qScopeGuard([&] {
+        resume.release();
+        pool.waitForDone();
+        pool.setMaxThreadCount(previous_threads);
+      });
+      pool.start([&] {
+        started.release();
+        resume.acquire();
+      });
+      started.acquire();
+      const auto stale_request = denied_request + 1;
+      peer.request(telar::ClientCommand{.request_id = stale_request, .action = telar::ClientAction::plugin_run, .target_id = telar::runtime::plugins::stableId("toggle"), .text = "sample"});
+      QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, stale_request, runtime_wait_ms);
+      QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
+      client_->loadConfiguration(path, {}, {}, directory.filePath(QStringLiteral("trust.json")));
+      QCOMPARE(client_->error(), QString{});
+      QVERIFY(client_->sidebarVisible());
+    }
+
+    auto barrier_request = denied_request + 1;
+    QTRY_VERIFY_WITH_TIMEOUT(([&] {
+                               if (peer.result().request_id != barrier_request) {
+                                 return false;
+                               }
+                               if (peer.result().status == telar::ClientCommandStatus::admitted && barrier_request > denied_request + 1) {
+                                 return true;
+                               }
+                               peer.request(telar::ClientCommand{.request_id = ++barrier_request, .action = telar::ClientAction::plugin_run, .target_id = telar::runtime::plugins::stableId("denied"), .text = "sample"});
+                               return false;
+                             })(),
+                             runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->error(), QStringLiteral("CapabilityNotGranted"), runtime_wait_ms);
+    QVERIFY(client_->sidebarVisible());
+    QCOMPARE(client_->tabs()->rowCount(), tabs);
+    QFile retained{path};
+    QVERIFY(retained.open(QIODevice::ReadOnly));
+    QCOMPARE(retained.readAll(), QByteArray{configuration});
   }
 
   Q_SLOT void routedPluginCatalog() {

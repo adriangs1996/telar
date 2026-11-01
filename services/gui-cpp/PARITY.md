@@ -2,8 +2,8 @@
 
 The immediate milestone is a separate Release daily-use candidate, tracked in
 [DAILY_DRIVER.md](DAILY_DRIVER.md). Only command/quick navigation and notifications
-may be deferred. Plugin execution/custom surfaces and the remaining daily-flow
-qualification block adoption; full parity stays open.
+may be deferred. Custom surfaces and the remaining daily-flow qualification block adoption;
+full parity stays open.
 
 The [separate Release preview](measurements/daily-candidate.md) now deploys Qt/QML,
 passes dependency/signature checks and runs isolated relocated smoke flows through
@@ -12,7 +12,14 @@ Daily adoption remains open for the complete required checklist.
 
 [Plugin activation and secure trust loading](measurements/plugin-overrides.md)
 now support captured overrides, transactional validation and real enable/disable
-commands on both SDKs. Isolated execution and custom surfaces remain required.
+commands on both SDKs. Custom surfaces remain required.
+
+[Isolated plugin execution](measurements/plugin-worker.md) now routes CLI and
+Lua actions through private rehashed snapshots, whole-batch capability checks and
+exact completion identity. The second Release preview passes relocated Finder
+runtime/config discovery and real plugin execution. Worker/core checks pass with
+sanitizers on both SDKs; recorded Mac GUI shutdown leaks remain open. Custom
+bars/widgets/panels/picks and the rest of the daily checklist still block adoption.
 
 The C++ Qt Quick client is an experimental implementation, not a completed
 replacement for the Zig GUI. Functional parity, visual parity and
@@ -36,8 +43,8 @@ Both SDKs match 2940 original-source queries and 35 original CLI package cases
 per Release/ASan build. Software regression assertions pass. That checkpoint's
 Mac sanitizer leaks and Linux native cleanup failures remain in its immutable
 evidence; subsequent lifetime qualification is recorded above.
-Isolated execution, capability grants, custom surfaces
-and comparative performance still require implementation and acceptance.
+Custom surfaces and comparative performance remain unqualified; isolated
+execution and capability enforcement are recorded in the newer worker scope.
 
 The [routed Goto correction](measurements/routed-goto.md) handles
 `client_open_goto` through the existing navigation palette, returns `applied`

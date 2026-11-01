@@ -12,6 +12,8 @@
 #include "config/input_query.hpp"
 #include "config/plugin_catalog.hpp"
 #include "config/plugin_query.hpp"
+#include "config/plugin_effects.hpp"
+#include "config/plugin_invocation.hpp"
 #include "config/query.hpp"
 #include "config/runtime_query.hpp"
 #include "config/theme_query.hpp"
@@ -42,9 +44,11 @@
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <optional>
 #include <stdexcept>
+#include <span>
 #include <string_view>
 #include <utility>
 
@@ -105,6 +109,70 @@ ConfigurationSource::~ConfigurationSource() {
 
 const InputConfiguration &ConfigurationSource::input() const noexcept {
   return generation_ ? generation_->input() : default_input_;
+}
+
+std::uint64_t ConfigurationSource::configurationGeneration() const noexcept {
+  return generation_ ? generation_->number() : 0;
+}
+
+std::optional<PluginActionDescription> ConfigurationSource::pluginAction(BindingAction action) const {
+  return generation_ ? generation_->pluginAction(action) : std::nullopt;
+}
+
+PluginInvocation ConfigurationSource::pluginInvocation(const ClientCommand &request, BindingContext context) const {
+  if (!generation_) {
+    throw std::runtime_error{"ConfigurationNotLoaded"};
+  }
+
+  if (!plugins_) {
+    throw std::runtime_error{"PluginRegistryUnavailable"};
+  }
+
+  const PluginCatalog catalog{generation_->number(), generation_->runtimeValues().plugins.configured(), plugins_->packages()};
+  const auto *package = catalog.package(catalog.find(request.text));
+  if (package == nullptr) {
+    throw std::runtime_error{"PluginDisabled"};
+  }
+
+  return pluginInvocation(PluginActionDescription{.plugin = runtime::plugins::stableId(package->manifest.id.view()), .action = request.target_id}, context);
+}
+
+PluginInvocation ConfigurationSource::pluginInvocation(PluginActionDescription action, BindingContext context) const {
+  if (!generation_) {
+    throw std::runtime_error{"ConfigurationNotLoaded"};
+  }
+
+  if (!plugins_) {
+    throw std::runtime_error{"PluginRegistryUnavailable"};
+  }
+
+  const auto packages = plugins_->packages();
+  const PluginCatalog catalog{generation_->number(), generation_->runtimeValues().plugins.configured(), packages};
+  const auto &package = catalog.resolve(action);
+  for (const auto &name : std::span{package.manifest.actions}.first(package.manifest.action_count)) {
+    if (runtime::plugins::stableId(name.view()) == action.action) {
+      return {.package = package, .action = name, .context = context, .configuration_generation = generation_->number(), .package_index = static_cast<std::size_t>(&package - packages.data())};
+    }
+  }
+
+  throw std::invalid_argument{"UnknownPluginAction"};
+}
+
+void ConfigurationSource::authorizePlugin(const PluginInvocation &invocation, const PluginEffects &effects) const {
+  if (!generation_ || generation_->number() != invocation.configuration_generation) {
+    throw std::runtime_error{"StalePluginWorker"};
+  }
+
+  if (!plugins_ || invocation.package_index >= plugins_->packages().size()) {
+    throw std::runtime_error{"PluginNotConfigured"};
+  }
+
+  const auto &package = plugins_->packages()[invocation.package_index];
+  if (package.manifest.id.view() != invocation.package.manifest.id.view() || package.digest != invocation.package.digest) {
+    throw std::runtime_error{"StalePluginWorker"};
+  }
+
+  effects.authorize(package, trust_);
 }
 
 const BindingMap<BindingAction> &ConfigurationSource::keymap() const noexcept {

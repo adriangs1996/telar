@@ -28,12 +28,13 @@ def main():
     parser.add_argument('bundle', type=Path)
     parser.add_argument('--evidence', type=Path, required=True)
     parser.add_argument('--discover-runtime', action='store_true', help='Exercise bundled CLI endpoint discovery and default XDG config')
+    parser.add_argument('--plugins', action='store_true', help='Execute a private plugin through the exact bundled GUI and CLI')
     args = parser.parse_args()
     original = args.bundle.resolve()
     evidence = args.evidence.resolve()
     evidence.mkdir(parents=True, exist_ok=False)
     record = dict(scope='Relocated Release bundle, Cocoa/Metal, private runtime; protocol smoke, not full daily acceptance',
-                  runtime_discovery=args.discover_runtime, commands=[], processes=[])
+                  runtime_discovery=args.discover_runtime, plugin_execution=args.plugins, commands=[], processes=[])
     server = direct = finder = None
     with tempfile.TemporaryDirectory(prefix='cpp-daily-', dir='/tmp') as temporary:
         state = Path(temporary)
@@ -48,7 +49,17 @@ def main():
         socket = runtime_directory / 'telar/runtime.sock' if args.discover_runtime else state / 'runtime.sock'
         configuration = state / 'config/telar/config.lua'
         configuration.parent.mkdir(parents=True, mode=0o700)
-        configuration.write_text('return {api_version=2}\n')
+        if args.plugins:
+            package = configuration.parent / 'example'
+            package.mkdir(mode=0o700)
+            (package / 'plugin.json').write_text(json.dumps(dict(
+                api_version=1, id='bundle-smoke', version='1', entry='main.lua',
+                source=dict(url='fixture', revision='1'), actions=['toggle'], capabilities=[])))
+            (package / 'main.lua').write_text(
+                'local t=require("telar");return {actions={toggle=function()return t.action.toggle_sidebar()end}}')
+            configuration.write_text("return {api_version=2,plugins={{path='example'}}}\n")
+        else:
+            configuration.write_text('return {api_version=2}\n')
         initial_configuration = configuration.read_bytes()
         home = state / 'home'
         home.mkdir()
@@ -120,6 +131,13 @@ def main():
             assert cli('pane', 'fullscreen', pane_id, '--client', client_id, '--json')['value'] == 0
             cli('sidebar', 'hide', '--client', client_id, '--json')
             cli('sidebar', 'show', '--client', client_id, '--json')
+            if args.plugins:
+                cli('plugin', 'list', '--client', client_id, '--json')
+                cli('plugin', 'get', 'bundle-smoke', '--client', client_id, '--json')
+                for target, expected in [('bundle-smoke', False), ('example', True)]:
+                    cli('plugin', 'run', target, 'toggle', '--client', client_id, '--json')
+                    wait_for(lambda: cli('config', 'show', '--client', client_id, '--section', 'client', '--json'),
+                             lambda value: value['sidebar_visible'] is expected)
             before_tabs = cli('tab', 'list', '--workspace', workspace, '--json')
             cli('tab', 'create', '--client', client_id, '--label', 'Second daily tab', '--json')
             wait_for(lambda: cli('tab', 'list', '--workspace', workspace, '--json'), lambda value: len(value) > len(before_tabs))

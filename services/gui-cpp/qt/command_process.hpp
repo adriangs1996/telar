@@ -6,6 +6,7 @@
 #include <QTimer>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtypes.h>
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <concepts>
@@ -13,6 +14,7 @@
 #include <cstdint>
 #include <exception>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <utility>
 
@@ -134,6 +136,14 @@ public:
   }
 
 private:
+  static constexpr std::size_t stdoutLimit() noexcept {
+    if constexpr (requires { Host::stdout_limit; }) {
+      return Host::stdout_limit;
+    }
+
+    return output_limit;
+  }
+
   void launch(const Request &request) {
     running_ = true;
     output_bytes_.fill(0);
@@ -158,7 +168,9 @@ private:
 
     auto &total = output_bytes_[channel == QProcess::StandardOutput ? 0 : 1];
     process_.setReadChannel(channel);
-    std::array<char, output_limit + 1> buffer{};
+    constexpr auto buffer_limit = std::max(output_limit, stdoutLimit());
+    const auto limit = channel == QProcess::StandardOutput ? stdoutLimit() : output_limit;
+    std::array<char, buffer_limit + 1> buffer{};
     while (process_.bytesAvailable() > 0) {
       const auto count = process_.read(buffer.data(), static_cast<qint64>(buffer.size()));
       if (count <= 0) {
@@ -166,11 +178,19 @@ private:
       }
 
       total += static_cast<std::size_t>(count);
-      if (total > output_limit) {
+      if (total > limit) {
         failure_ = CommandFailure::output_limit;
         process_.kill();
 
         return;
+      }
+
+      if constexpr (requires(Observer &observer, std::span<const char> bytes) {
+                      { observer.commandOutput(bytes) } noexcept -> std::same_as<void>;
+                    }) {
+        if (channel == QProcess::StandardOutput) {
+          observer_.commandOutput({buffer.data(), static_cast<std::size_t>(count)});
+        }
       }
     }
   }

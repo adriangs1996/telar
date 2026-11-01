@@ -14,11 +14,11 @@
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <QString>
+#include <QStringLiteral>
 #include <QVariantList>
 #include <QVariantMap>
 #include <QtCore/qchar.h>
 #include <QtCore/qcontainerfwd.h>
-#include <QtCore/qnamespace.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
@@ -104,7 +104,7 @@ bool supported(BindingActionKind kind) noexcept {
 
 bool supported(const ConfigurationSource &configuration, BindingAction action) {
   if (action.kind == BindingActionKind::extended) {
-    return configuration.notificationAction(action).has_value();
+    return configuration.notificationAction(action).has_value() || configuration.pluginAction(action).has_value();
   }
 
   return supported(action.kind);
@@ -258,7 +258,11 @@ void Application::executeBinding(BindingAction action) {
     executeCommandTab(action);
     break;
   case BindingActionKind::extended:
-    executeNotificationBinding(action);
+    if (const auto plugin = configuration_source_.pluginAction(action)) {
+      startPlugin(configuration_source_.pluginInvocation(*plugin, bindingContext()));
+    } else {
+      executeNotificationBinding(action);
+    }
     break;
   default:
     throw std::runtime_error{"Binding action is not yet available in the C++ GUI"};

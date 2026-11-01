@@ -128,6 +128,7 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
       memory_(memory),
       activity_targets_(AllocatorRef<ActivityRowTarget, ApplicationAllocator>{memory}),
       configuration_source_(memory),
+      plugin_worker_(memory, *this),
       machine_profiles_(memory),
       attachments_(memory),
       key_bindings_(*this),
@@ -799,6 +800,10 @@ void Application::executeHostCommand(const ClientCommand &message, CompleteClien
   case ClientAction::plugin_enable:
   case ClientAction::plugin_disable:
     configuration_source_.setPluginEnabled(message, message.action == ClientAction::plugin_enable);
+    reply.status = ClientCommandStatus::admitted;
+    break;
+  case ClientAction::plugin_run:
+    startPlugin(configuration_source_.pluginInvocation(message, bindingContext()));
     reply.status = ClientCommandStatus::admitted;
     break;
   case ClientAction::config_reload:

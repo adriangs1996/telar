@@ -11,6 +11,7 @@
 #include <QObject>
 #include <QProcess>
 #include <QString>
+#include <QStringLiteral>
 #include <QStringList>
 #include <QtCore/qtmetamacros.h>
 #include <QtTest/QTest>

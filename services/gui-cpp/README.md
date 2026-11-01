@@ -8,8 +8,10 @@ visual or performance parity gates. [PARITY.md](PARITY.md) records the remaining
 The first daily-adoption milestone is tracked in [DAILY_DRIVER.md](DAILY_DRIVER.md).
 It requires all daily features except command navigation and notifications, plus
 a separately packaged and verified Release app. [Plugin activation and secure
-trust loading](measurements/plugin-overrides.md) now work; isolated execution and
-custom surfaces remain required.
+trust loading](measurements/plugin-overrides.md) now work.
+[Isolated plugin execution](measurements/plugin-worker.md) now has capability and
+stale-completion coverage on both SDKs and a second Finder-verified Release
+preview. Custom bars/widgets/panels/picks remain required.
 
 The [Wayland lifetime correction](measurements/window-lifetime.md) releases the
 Quick swapchain before hiding destroys its Vulkan surface. Native close/reopen
@@ -25,8 +27,8 @@ Both SDKs match 2940 original-source queries and 35 original CLI package cases
 per Release/ASan build. Software regression assertions pass. That checkpoint's
 native failures remain in its immutable evidence; subsequent lifetime
 qualification is recorded above.
-Isolated execution, capability grants, custom surfaces
-and comparative performance still require implementation and acceptance.
+Custom surfaces and comparative performance remain unqualified; isolated
+execution and capability enforcement are recorded in the newer worker scope.
 
 The [routed Goto command](measurements/routed-goto.md) now opens the existing
 navigation palette and preserves copy-mode rejection, with real protocol

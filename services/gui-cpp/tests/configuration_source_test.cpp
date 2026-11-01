@@ -3,6 +3,11 @@
 #include "application/dependencies.hpp"
 #include "config/callback.hpp"
 #include "config/query.hpp"
+#include "config/plugin_effects.hpp"
+#include "config/plugin_invocation.hpp"
+#include "plugins/identity.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include <array>
 #include "config/themes.hpp"
 #include "core/color.hpp"
 #include "core/configuration.hpp"
@@ -163,6 +168,42 @@ class ConfigurationSourceTest final : public QObject {
   Q_OBJECT
 
 private:
+  Q_SLOT static void pluginCompletionRejectsObsoleteIdentityAndGeneration() {
+    const PluginFixture fixture;
+    ApplicationAllocator memory;
+    ConfigurationSource source{memory};
+    const telar::ClientCommand request{.action = telar::ClientAction::plugin_run, .target_id = telar::runtime::plugins::stableId("run"), .text = "sample"};
+    QVERIFY_THROWS_EXCEPTION(std::runtime_error, static_cast<void>(source.pluginInvocation(request, {})));
+    fixture.open(source);
+    QCOMPARE(source.error(), QString{});
+    const auto invocation = source.pluginInvocation(request, {});
+    QCOMPARE(invocation.action.view(), std::string_view{"run"});
+    QCOMPARE(invocation.configuration_generation, source.configurationGeneration());
+    constexpr telar::Byte toggle_sidebar_tag = 3;
+    constexpr std::array<telar::Byte, 2> encoded{1, toggle_sidebar_tag};
+    const auto effects = PluginEffects::decode(encoded);
+    source.authorizePlugin(invocation, effects);
+
+    auto stale = invocation;
+    ++stale.configuration_generation;
+    QVERIFY_THROWS_EXCEPTION(std::runtime_error, source.authorizePlugin(stale, effects));
+    stale = invocation;
+    stale.package.manifest.id.assign("replacement");
+    QVERIFY_THROWS_EXCEPTION(std::runtime_error, source.authorizePlugin(stale, effects));
+    stale = invocation;
+    ++stale.package.digest.front();
+    QVERIFY_THROWS_EXCEPTION(std::runtime_error, source.authorizePlugin(stale, effects));
+    stale = invocation;
+    stale.package_index = std::numeric_limits<std::size_t>::max();
+    QVERIFY_THROWS_EXCEPTION(std::runtime_error, source.authorizePlugin(stale, effects));
+
+    fixture.open(source);
+    QVERIFY(source.configurationGeneration() > invocation.configuration_generation);
+    QVERIFY_THROWS_EXCEPTION(std::runtime_error, source.authorizePlugin(invocation, effects));
+    const auto replacement = source.pluginInvocation(request, {});
+    source.authorizePlugin(replacement, effects);
+  }
+
   Q_SLOT static void pluginOverridesRetainPendingPolicyAfterFailure() {
     const PluginFixture fixture;
     ApplicationAllocator memory;

@@ -22,3 +22,9 @@ flows and the remaining parity gates. Record which original oracles are optional
 test inputs, which shared C/Objective-C/Lua/assets remain, and any third-party Zig
 toolchain still required. Only then can own Zig sources be removed. Never infer
 this result from a successful GUI startup.
+
+The second preview executes plugins using the bundled original CLI's
+`plugin-worker` oneShot mode. The C++ broker owns copying, process limits,
+completion identity and capability checks, but the Lua worker remains own Zig
+production code. It must be replaced and independently qualified before removing
+that dependency; packaged startup and successful plugin execution do not retire it.

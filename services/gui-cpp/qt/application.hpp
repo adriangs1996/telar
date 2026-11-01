@@ -13,6 +13,7 @@
 #include "core/terminal_size.hpp"
 #include "core/view_version.hpp"
 #include "external_link_opener.hpp"
+#include "plugin_worker.hpp"
 #include "font_resolver.hpp"
 #include "history/choice.hpp"
 #include "input/history_scroll.hpp"
@@ -335,6 +336,7 @@ public:
   void copySelection(std::uint64_t pane_id);
   bool openLink(const LinkTarget &target, std::optional<std::uint64_t> source_id = {});
   void linkOpeningFinished(MachineClientKey source, std::optional<LinkOpeningFailure> failure);
+  void pluginWorkerFinished(std::uint64_t execution, const PluginInvocation &invocation, const PluginWorkerResult &result);
 
   QAbstractItemModel *workspaces() noexcept {
     return &workspaces_;
@@ -433,6 +435,8 @@ private:
   void executeBinding(BindingAction action);
   void executeCommandTab(BindingAction action);
   void executeNotificationBinding(BindingAction action);
+  void startPlugin(const PluginInvocation &invocation);
+  void applyPluginEffects(const PluginEffects &effects);
   void applyExpression(const InputExpression &expression);
   void scrollBinding(ScrollDirection direction);
   [[nodiscard]] QString bindingShortcut(BindingActionKind action) const;
@@ -692,6 +696,14 @@ private:
   std::uint64_t pointer_revision_ = 0;
   std::optional<MachineClientKey> sound_owner_;
   ConfigurationSource configuration_source_;
+  PluginWorker<Application> plugin_worker_;
+  struct PluginOwner {
+    MachineClientKey source;
+    std::uint64_t runtime_generation = 0;
+    std::uint64_t execution = 0;
+  };
+  std::optional<PluginOwner> plugin_owner_;
+  std::uint64_t next_plugin_execution_ = 1;
   MachineProfilesSource machine_profiles_;
   AttachmentShelf attachments_;
   bool attachment_modal_active_ = false;

@@ -13,6 +13,8 @@
 #include "input/action.hpp"
 #include "input/configuration.hpp"
 #include "config/plugin_query.hpp"
+#include "config/plugin_effects.hpp"
+#include "config/plugin_invocation.hpp"
 #include <QByteArray>
 #include <QFutureWatcher>
 #include <QString>
@@ -56,6 +58,11 @@ public:
   [[nodiscard]] std::string_view query(ConfigurationQuery query, const ClientViewState &view = {});
   [[nodiscard]] PluginPage queryPlugins(const ClientCommand &request);
   void setPluginEnabled(const ClientCommand &request, bool enabled);
+  [[nodiscard]] std::uint64_t configurationGeneration() const noexcept;
+  [[nodiscard]] std::optional<PluginActionDescription> pluginAction(BindingAction action) const;
+  [[nodiscard]] PluginInvocation pluginInvocation(const ClientCommand &request, BindingContext context) const;
+  [[nodiscard]] PluginInvocation pluginInvocation(PluginActionDescription action, BindingContext context) const;
+  void authorizePlugin(const PluginInvocation &invocation, const PluginEffects &effects) const;
 
 signals:
   void changed();

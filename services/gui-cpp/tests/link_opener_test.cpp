@@ -7,6 +7,7 @@
 #include <QCoreApplication>
 #include <QProcess>
 #include <QString>
+#include <QStringLiteral>
 #include <QStringList>
 #include <QtCore/qcontainerfwd.h>
 #include <QtCore/qnamespace.h>
@@ -24,7 +25,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string_view>
-#include <sys/types.h>
+#include <unistd.h>
 #include <sys/wait.h>
 #include <utility>
 #include <variant>
@@ -217,7 +218,7 @@ private:
 
     QVERIFY(observer.results.empty());
     QVERIFY(!TestHost::started.contains(QStringLiteral("https://must-not-open.test")));
-    QCOMPARE(::waitpid(static_cast<pid_t>(TestHost::process_id), nullptr, WNOHANG), -1);
+    QCOMPARE(::waitpid(static_cast<decltype(::getpid())>(TestHost::process_id), nullptr, WNOHANG), -1);
     QCOMPARE(errno, ECHILD);
   }
 

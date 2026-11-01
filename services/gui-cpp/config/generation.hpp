@@ -28,6 +28,7 @@
 #include "lua/vm.hpp"
 #include "memory/fixed_text.hpp"
 #include "plugin_overrides.hpp"
+#include "plugins/identity.hpp"
 #include "reader.hpp"
 #include "recording_action_reader.hpp"
 #include <algorithm>
@@ -133,6 +134,36 @@ public:
 
   [[nodiscard]] const InputConfiguration &input() const noexcept {
     return input_;
+  }
+
+  [[nodiscard]] std::optional<PluginActionDescription> pluginAction(BindingAction action) const {
+    if (action.kind != BindingActionKind::extended) {
+      return std::nullopt;
+    }
+
+    if (action.generation != number_) {
+      throw std::invalid_argument{"Plugin action belongs to an obsolete configuration"};
+    }
+
+    const auto configured = std::span{input_.configured}.first(input_.length);
+    if (std::ranges::find(configured, action, &KeyBinding<BindingAction>::action) != configured.end()) {
+      const auto *plugin = std::get_if<PluginActionDescription>(&descriptions_.at(action.parameter));
+
+      return plugin == nullptr ? std::nullopt : std::optional{*plugin};
+    }
+
+    const auto transient = std::span{transient_references_}.first(transient_count_);
+    if (std::ranges::find(transient, action.reference) == transient.end()) {
+      throw std::invalid_argument{"Plugin action is no longer retained"};
+    }
+
+    const runtime::lua::Value registry{machine_.state(), LUA_REGISTRYINDEX, "action registry"};
+    const auto value = registry.element(action.reference);
+    if (value.field("kind").string() != "plugin") {
+      return std::nullopt;
+    }
+
+    return PluginActionDescription{.plugin = runtime::plugins::stableId(value.field("plugin").string()), .action = runtime::plugins::stableId(value.field("action").string())};
   }
 
   template <typename Visitor>
