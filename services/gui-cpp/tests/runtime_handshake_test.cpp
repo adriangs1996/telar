@@ -7,6 +7,8 @@
 #include "telar_client/serializers/telar_handshake.hpp"
 #include "transport/frame_stream.hpp"
 #include "transport/runtime_handshake.hpp"
+#include "transport/runtime_protocol.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
 #include "transport/runtime_link.hpp"
 #include <algorithm>
 #include <array>
@@ -37,6 +39,28 @@ void exactSchemaAndRefusalPolicies() {
   require(full.error && !MachineConnectionPolicy::permanent(*full.error), "Runtime client capacity must remain retryable");
   require(full.detail.view() == "clients.max_clients: the runtime holds its limit of 32 clients (windows, CLI calls and agent hooks); close a window or retry once running commands finish", "A client-capacity refusal must retain its original explanation");
   static_assert(std::is_trivially_destructible_v<RuntimeHandshake::Result>);
+}
+
+void auditedSchema87Negotiation() {
+  const auto legacy_accept = HandshakeCodec::encode(ServerAccept{RuntimeProtocol::schema87});
+  require(RuntimeHandshake::inspect(legacy_accept).error.has_value(), "An unsolicited legacy selection must not adopt an unrequested schema");
+  require(!RuntimeHandshake::inspect(legacy_accept, RuntimeProtocol::schema87).error, "An explicitly requested audited schema may be accepted");
+  const auto legacy_refusal = HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = RuntimeProtocol::schema87});
+  require(RuntimeProtocol::retry(legacy_refusal, handshake::schema_id) == RuntimeProtocol::schema87, "A supported explicit refusal may request one new connection with that schema");
+  require(!RuntimeProtocol::retry(legacy_refusal, RuntimeProtocol::schema87), "A repeated refusal must not loop on the same schema");
+  const auto current_refusal = HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = handshake::schema_id});
+  require(RuntimeProtocol::retry(current_refusal, RuntimeProtocol::schema87) == handshake::schema_id, "An upgraded runtime may select the current audited dialect on reconnect");
+  constexpr SchemaId unknown{'8', '6', '6', 'b', '4', '8', '0', 'd'};
+  const auto unknown_refusal = HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = unknown});
+  require(!RuntimeProtocol::retry(unknown_refusal, handshake::schema_id) && RuntimeHandshake::inspect(HandshakeCodec::encode(ServerAccept{unknown}), unknown).error.has_value(), "A matching suffix alone must not enable an unknown protocol generation");
+  const auto full = HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::client_limit_reached, .expected_schema = RuntimeProtocol::schema87});
+  require(!RuntimeProtocol::retry(full, handshake::schema_id) && !RuntimeProtocol::retry(legacy_accept, handshake::schema_id), "Capacity and unsolicited acceptance must never trigger a fallback");
+  for (std::size_t size = 0; size < legacy_refusal.size(); ++size) {
+    require(!RuntimeProtocol::retry(std::span<const Byte>{legacy_refusal}.first(size), handshake::schema_id), "A truncated refusal must not trigger a fallback");
+  }
+
+  require(RuntimeProtocol::supports(handshake::schema_id, ClientTag::hold_tab) && !RuntimeProtocol::supports(RuntimeProtocol::schema87, ClientTag::hold_tab), "The new hold_tab request must stay blocked on schema 87");
+  require(RuntimeProtocol::supports(RuntimeProtocol::schema87, ClientTag::pane_input) && !RuntimeProtocol::supports(unknown), "Common terminal traffic may use the audited legacy dialect exclusively");
 }
 
 void malformedResponsesKeepOriginalDecoderErrors() {
@@ -144,6 +168,7 @@ void framingRejectsBeforeAllocationAndCanUpgradeInsideTheConsumer() {
 int main() {
   try {
     exactSchemaAndRefusalPolicies();
+    auditedSchema87Negotiation();
     malformedResponsesKeepOriginalDecoderErrors();
     schemaBytesReachTheOriginalFailureSanitizer();
     framingRejectsBeforeAllocationAndCanUpgradeInsideTheConsumer();

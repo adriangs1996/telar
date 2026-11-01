@@ -100,6 +100,8 @@ void Application::attachmentShelfChanged() {
   if (active != attachment_modal_active_) {
     attachment_modal_active_ = active;
     if (active) {
+      closeComponentPick();
+      closeComponentPanel();
       interruptBindings();
       for (const auto &pane : session().panes()) {
         emit inputReleasing(pane->id);

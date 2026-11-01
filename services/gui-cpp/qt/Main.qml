@@ -73,6 +73,7 @@ Window {
     }
 
     StatusBar {
+        controller: telar
         x: root.geometry.status.x
         y: root.geometry.status.y
         width: root.geometry.status.width
@@ -95,6 +96,22 @@ Window {
     CommandDialog {
         id: commandDialog
 
+        ratio: root.ratio
+    }
+
+    ComponentPanel {
+        parent: root.contentItem
+        controller: telar
+        colors: telar.colors
+        typography: root.geometry.typography
+        ratio: root.ratio
+    }
+
+    ComponentPick {
+        parent: root.contentItem
+        controller: telar
+        colors: telar.colors
+        typography: root.geometry.typography
         ratio: root.ratio
     }
 

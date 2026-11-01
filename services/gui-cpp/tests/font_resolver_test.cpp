@@ -1,6 +1,8 @@
 #include "core/configuration.hpp"
 #include "core/memory.hpp"
 #include "fonts/face.hpp"
+#include "fonts/font_coverage.hpp"
+#include "fonts/font_query.hpp"
 #include "fonts/glyph_bitmap_view.hpp"
 #include "fonts/native_match.hpp"
 #include "fonts/shaped_run_view.hpp"
@@ -8,6 +10,7 @@
 #include "qt/font_resolver.hpp"
 #include "qt/font_source.hpp"
 #include "terminal/font_grid.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
 #include "ui/bundled_fonts.hpp"
 #include "ui/workbench/terminal_font.hpp"
 #include <QByteArray>
@@ -18,6 +21,7 @@
 #include <QObject>
 #include <QRawFont>
 #include <QString>
+#include <QStringLiteral>
 #include <QtCore/qiodevicebase.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
@@ -28,6 +32,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <native/font.h>
 #include <new>
 #include <stdexcept>
 #include <vector>
@@ -41,6 +46,50 @@ class FontResolverTest final : public QObject {
   Q_OBJECT
 
 private:
+  Q_SLOT static void fallbackFacesCanBeRasterized() {
+    std::size_t checked = 0;
+    for (const auto *text : {"λ", "á", "漢", "字", "中"}) {
+      const auto query = fonts::FontQuery::create(text);
+      if (!query) {
+        QFAIL("Fallback fixture must contain a valid grapheme");
+      }
+
+      fonts::FontMatch native{};
+      if (telar_gui_find_fallback_font(query->codepoints(), &native) != TELAR_FONT_FOUND) {
+        continue;
+      }
+
+      const auto data = loadFallbackFontData(*query);
+      if (!data) {
+        QFAIL("An installed native fallback could not be replaced with a rasterizable face");
+      }
+
+      const fonts::Face face{telar::byteView({data->bytes.constData(), static_cast<std::size_t>(data->bytes.size())}), data->match};
+      QVERIFY(face.monochrome());
+      QVERIFY(fonts::FontCoverage::covers(face, text));
+      ++checked;
+    }
+
+    QVERIFY(checked > 0);
+  }
+
+  Q_SLOT static void nativeFallbackHonorsClientValidation() {
+    fonts::FontMatch expected{};
+    QVERIFY(telar_gui_find_fallback_font("λ", &expected) == TELAR_FONT_FOUND);
+    fonts::FontMatch accepted{};
+    const auto allow = [](const telar_font_match *, void *) -> int { return TELAR_FONT_FOUND; };
+    QCOMPARE(telar_gui_find_validated_fallback_font("λ", &accepted, allow, nullptr), TELAR_FONT_FOUND);
+    QVERIFY(fonts::sameFontMatch(expected, accepted));
+    std::size_t rejected = 0;
+    const auto reject = [](const telar_font_match *, void *context) -> int {
+      ++*static_cast<std::size_t *>(context);
+
+      return TELAR_FONT_FAMILY_NOT_FOUND;
+    };
+    QCOMPARE(telar_gui_find_validated_fallback_font("λ", &accepted, reject, &rejected), TELAR_FONT_FAMILY_NOT_FOUND);
+    QVERIFY(rejected > 0);
+  }
+
   Q_SLOT static void preservesPhysicalBaseline() {
     SystemAllocator memory;
     const FontConfiguration configuration;

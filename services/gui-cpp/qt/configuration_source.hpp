@@ -1,5 +1,8 @@
 #pragma once
 
+#include "components/invocation.hpp"
+#include "components/pick_items.hpp"
+#include "components/source.hpp"
 #include "font_cache.hpp"
 
 #include "application/client_view_state.hpp"
@@ -7,24 +10,30 @@
 #include "config/action_descriptions.hpp"
 #include "config/callback.hpp"
 #include "config/command_tab_view.hpp"
+#include "config/plugin_effects.hpp"
+#include "config/plugin_invocation.hpp"
+#include "config/plugin_query.hpp"
 #include "config/query.hpp"
 #include "configuration_loader.hpp"
 #include "core/configuration.hpp"
 #include "input/action.hpp"
 #include "input/configuration.hpp"
-#include "config/plugin_query.hpp"
-#include "config/plugin_effects.hpp"
-#include "config/plugin_invocation.hpp"
 #include <QByteArray>
 #include <QFutureWatcher>
+#include <QList>
 #include <QString>
 #include <QTimer>
 #include <array>
+#include <cstddef>
 #include <exception>
 #include <optional>
 #include <string_view>
 
 namespace telar::gui {
+
+namespace components {
+class Configuration;
+}
 
 template <Allocator Memory>
 class ConfigurationGeneration;
@@ -55,6 +64,13 @@ public:
   InputExpression expression(BindingAction action, BindingContext context);
   [[nodiscard]] std::optional<runtime::config::CommandTabView> commandTab(BindingAction action) const;
   [[nodiscard]] std::optional<NotificationActionDescription> notificationAction(BindingAction action) const;
+  [[nodiscard]] std::optional<DefinitionActionDescription> definitionAction(BindingAction action) const;
+  [[nodiscard]] const components::Configuration *components() const noexcept;
+  void renderBar(components::Position position, const components::Context &context);
+  void renderPanel(std::size_t index, const components::Context &context);
+  void renderPick(std::size_t index, const components::Context &context, components::PickItems &items);
+  void closePanel() noexcept;
+  [[nodiscard]] QList<QByteArray> commandArguments(int reference, const char *field) const;
   [[nodiscard]] std::string_view query(ConfigurationQuery query, const ClientViewState &view = {});
   [[nodiscard]] PluginPage queryPlugins(const ClientCommand &request);
   void setPluginEnabled(const ClientCommand &request, bool enabled);

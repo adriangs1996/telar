@@ -7,6 +7,11 @@
 #include "callback.hpp"
 #include "callback_invocation.hpp"
 #include "command_tab_action.hpp"
+#include "components/configuration.hpp"
+#include "components/invocation.hpp"
+#include "components/pick_items.hpp"
+#include "components/pick_items_reader.hpp"
+#include "components/source.hpp"
 #include "config/action_validator.hpp"
 #include "config/client_definitions.hpp"
 #include "config/client_validation_state.hpp"
@@ -28,7 +33,6 @@
 #include "lua/vm.hpp"
 #include "memory/fixed_text.hpp"
 #include "plugin_overrides.hpp"
-#include "plugins/identity.hpp"
 #include "reader.hpp"
 #include "recording_action_reader.hpp"
 #include <algorithm>
@@ -61,6 +65,7 @@ public:
   explicit ConfigurationGeneration(Memory &memory, ConfigurationSourceText source)
       : machine_(memory),
         runtime_(makeOwned<runtime::config::RuntimeValues<Memory>>(memory, memory)),
+        components_(makeOwned<components::Configuration>(memory, *machine_.state())),
         descriptions_(memory),
         number_(source.generation) {
     profile_.assign(source.profile);
@@ -80,6 +85,79 @@ public:
 
   [[nodiscard]] std::uint64_t number() const noexcept {
     return number_;
+  }
+
+  [[nodiscard]] const components::Configuration &components() const noexcept {
+    return *components_;
+  }
+
+  void renderBar(components::Position position, const components::Context &context) {
+    const auto &source = components_->definitions().source(position);
+    renderComponents(source, context, [&](const auto &value, const auto &actions) {
+      components_->readBar(position, value, actions, notices_);
+    });
+  }
+
+  void renderPanel(std::size_t index, const components::Context &context) {
+    const auto panels = components_->definitions().panels();
+    if (index >= panels.size()) {
+      throw std::invalid_argument{"Panel is no longer configured"};
+    }
+
+    renderComponents(panels[index].source, context, [&](const auto &value, const auto &actions) {
+      components_->readPanel(value, actions, notices_);
+    });
+  }
+
+  void closePanel() noexcept {
+    components_->closePanel();
+  }
+
+  void renderPick(std::size_t index, const components::Context &context, components::PickItems &items) {
+    const auto picks = components_->definitions().picks();
+    if (index >= picks.size()) {
+      throw std::invalid_argument{"Pick is no longer configured"};
+    }
+
+    const auto &pick = picks[index];
+    if (pick.command && !pick.render) {
+      components::PickItemsReader::lines(context.output.value_or(std::string_view{}), items, notices_);
+
+      return;
+    }
+
+    lua_settop(machine_.state(), 0);
+    try {
+      if (pick.render) {
+        constexpr std::uint64_t pick_instructions = 1'000'000;
+        constexpr std::chrono::milliseconds pick_deadline{100};
+        machine_.resetBudget(pick_instructions, pick_deadline);
+        components::Invocation invocation{pick.reference, context, "items"};
+        machine_.invoke(&components::Invocation::invoke, &invocation, 1);
+        const runtime::lua::Value result{machine_.state(), -1, "pick items"};
+        components::PickItemsReader::read(result, items, notices_);
+      } else {
+        const runtime::lua::Value registry{machine_.state(), LUA_REGISTRYINDEX, "pick registry"};
+        components::PickItemsReader::read(registry.element(pick.reference).field("items"), items, notices_);
+      }
+    } catch (...) {
+      lua_settop(machine_.state(), 0);
+
+      throw;
+    }
+
+    lua_settop(machine_.state(), 0);
+  }
+
+  template <typename Visitor>
+  void visitArguments(int reference, const char *field, const Visitor &visit) const {
+    const runtime::lua::Value registry{machine_.state(), LUA_REGISTRYINDEX, "source registry"};
+    const auto source = registry.element(reference);
+    const auto command = source.field(field);
+    const auto count = command.listLength();
+    for (std::size_t index = 0; index < count; ++index) {
+      visit(command.element(static_cast<lua_Integer>(index) + 1).string());
+    }
   }
 
   [[nodiscard]] const runtime::config::RuntimeValues<Memory> &runtimeValues() const noexcept {
@@ -105,31 +183,10 @@ public:
   }
 
   [[nodiscard]] std::optional<NotificationActionDescription> notificationAction(BindingAction action) const {
-    if (action.kind != BindingActionKind::extended) {
-      return std::nullopt;
-    }
+    const auto description = extendedAction(action);
+    const auto *notification = description ? std::get_if<NotificationActionDescription>(&*description) : nullptr;
 
-    if (action.generation != number_) {
-      throw std::invalid_argument{"Notification action belongs to an obsolete configuration"};
-    }
-
-    const auto configured = std::span{input_.configured}.first(input_.length);
-    if (std::ranges::find(configured, action, &KeyBinding<BindingAction>::action) != configured.end()) {
-      const auto *notification = std::get_if<NotificationActionDescription>(&descriptions_.at(action.parameter));
-
-      return notification == nullptr ? std::nullopt : std::optional{*notification};
-    }
-
-    const auto transient = std::span{transient_references_}.first(transient_count_);
-    if (std::ranges::find(transient, action.reference) == transient.end()) {
-      throw std::invalid_argument{"Notification action is no longer retained"};
-    }
-
-    const runtime::lua::Value registry{machine_.state(), LUA_REGISTRYINDEX, "action registry"};
-    const auto value = registry.element(action.reference);
-    const auto kind = value.field("kind");
-
-    return kind.string() == "notification" ? std::optional{ActionDescriptionReader::notification(value)} : std::nullopt;
+    return notification == nullptr ? std::nullopt : std::optional{*notification};
   }
 
   [[nodiscard]] const InputConfiguration &input() const noexcept {
@@ -137,44 +194,31 @@ public:
   }
 
   [[nodiscard]] std::optional<PluginActionDescription> pluginAction(BindingAction action) const {
-    if (action.kind != BindingActionKind::extended) {
-      return std::nullopt;
-    }
+    const auto description = extendedAction(action);
+    const auto *plugin = description ? std::get_if<PluginActionDescription>(&*description) : nullptr;
 
-    if (action.generation != number_) {
-      throw std::invalid_argument{"Plugin action belongs to an obsolete configuration"};
-    }
+    return plugin == nullptr ? std::nullopt : std::optional{*plugin};
+  }
 
-    const auto configured = std::span{input_.configured}.first(input_.length);
-    if (std::ranges::find(configured, action, &KeyBinding<BindingAction>::action) != configured.end()) {
-      const auto *plugin = std::get_if<PluginActionDescription>(&descriptions_.at(action.parameter));
+  [[nodiscard]] std::optional<DefinitionActionDescription> definitionAction(BindingAction action) const {
+    const auto description = extendedAction(action);
+    const auto *definition = description ? std::get_if<DefinitionActionDescription>(&*description) : nullptr;
 
-      return plugin == nullptr ? std::nullopt : std::optional{*plugin};
-    }
-
-    const auto transient = std::span{transient_references_}.first(transient_count_);
-    if (std::ranges::find(transient, action.reference) == transient.end()) {
-      throw std::invalid_argument{"Plugin action is no longer retained"};
-    }
-
-    const runtime::lua::Value registry{machine_.state(), LUA_REGISTRYINDEX, "action registry"};
-    const auto value = registry.element(action.reference);
-    if (value.field("kind").string() != "plugin") {
-      return std::nullopt;
-    }
-
-    return PluginActionDescription{.plugin = runtime::plugins::stableId(value.field("plugin").string()), .action = runtime::plugins::stableId(value.field("action").string())};
+    return definition == nullptr ? std::nullopt : std::optional{*definition};
   }
 
   template <typename Visitor>
   void visitPluginActions(const Visitor &visitor) const {
-    for (const auto &binding : std::span{input_.configured}.first(input_.length)) {
-      if (binding.action.kind == BindingActionKind::extended) {
-        if (const auto *plugin = std::get_if<PluginActionDescription>(&descriptions_.at(binding.action.parameter))) {
-          visitor(*plugin);
-        }
+    const auto visit = [&](BindingAction action) {
+      if (const auto plugin = pluginAction(action)) {
+        visitor(*plugin);
       }
+    };
+    for (const auto &binding : std::span{input_.configured}.first(input_.length)) {
+      visit(binding.action);
     }
+
+    components_->visitActions(visit);
   }
 
   [[nodiscard]] const BindingMap<BindingAction> &keymap() const noexcept {
@@ -234,6 +278,89 @@ public:
 private:
   static constexpr std::size_t maximum_profile_bytes = 64;
 
+  template <typename Consumer>
+  void renderComponents(const components::Source &source, const components::Context &context, const Consumer &consume) {
+    if (source.kind != components::SourceKind::dynamic && source.kind != components::SourceKind::command) {
+      throw std::invalid_argument{"Source has no render callback or command"};
+    }
+
+    client_state_.commands.beginRender();
+    const auto checkpoint = client_state_.commands.checkpoint();
+    try {
+      lua_settop(machine_.state(), 0);
+      if (source.has_render) {
+        constexpr std::uint64_t render_instructions = 100'000;
+        constexpr std::chrono::milliseconds render_deadline{100};
+        machine_.resetBudget(render_instructions, render_deadline);
+        components::Invocation invocation{source.reference, context};
+        machine_.invoke(&components::Invocation::invoke, &invocation, 1);
+      } else {
+        const auto output = context.output.value_or(std::string_view{});
+        lua_pushlstring(machine_.state(), output.data(), output.size());
+      }
+
+      const runtime::lua::Value result{machine_.state(), -1, "component render result"};
+      withActions([&](const auto &actions) {
+        consume(result, actions);
+      });
+    } catch (...) {
+      client_state_.commands.restore(checkpoint);
+      client_state_.commands.endRender();
+      lua_settop(machine_.state(), 0);
+
+      throw;
+    }
+
+    client_state_.commands.endRender();
+    lua_settop(machine_.state(), 0);
+  }
+
+  [[nodiscard]] std::optional<ExtendedActionDescription> extendedAction(BindingAction action) const {
+    if (action.kind != BindingActionKind::extended) {
+      return std::nullopt;
+    }
+
+    if (action.generation != number_) {
+      throw std::invalid_argument{"Action belongs to an obsolete configuration"};
+    }
+
+    const auto configured = std::span{input_.configured}.first(input_.length);
+    if (std::ranges::find(configured, action, &KeyBinding<BindingAction>::action) != configured.end()) {
+      return descriptions_.at(action.parameter);
+    }
+
+    const auto transient = std::span{transient_references_}.first(transient_count_);
+    if (!components_->contains(action) && (action.parameter != 0 || !std::ranges::contains(transient, action.reference))) {
+      throw std::invalid_argument{"Action is no longer retained"};
+    }
+
+    const runtime::lua::Value registry{machine_.state(), LUA_REGISTRYINDEX, "action registry"};
+    const auto value = registry.element(action.reference);
+
+    return withDefinitions([&](const auto &definitions) {
+      return ActionDescriptionReader::read(value, definitions);
+    });
+  }
+
+  template <typename Consumer>
+  auto withDefinitions(Consumer &&consume) const {
+    const runtime::lua::Value registry{machine_.state(), LUA_REGISTRYINDEX, "configuration registry"};
+    const auto root = registry.element(root_reference_);
+    const auto client = root.field("client");
+    if (profile_.view().empty()) {
+      const runtime::config::ClientDefinitions definitions{client};
+
+      return std::forward<Consumer>(consume)(definitions);
+    }
+
+    const auto profiles = root.field("profiles");
+    const auto selected = profiles.entry(profile_.view());
+    const auto overlay = selected.field("client");
+    const runtime::config::ClientDefinitions definitions{overlay, &client};
+
+    return std::forward<Consumer>(consume)(definitions);
+  }
+
   void readConfiguration(Memory &memory, const PluginOverrides *overrides) {
     const runtime::lua::Value root{machine_.state(), -1, "config"};
     runtime::config::SnapshotReader{memory, *runtime_}.read(root, profile_.view(), client_state_);
@@ -257,7 +384,11 @@ private:
       removeDisabledPluginBindings(*overrides);
     }
 
+    rebindDefinitions();
     keymap_ = input_.compile();
+    withActions([&](const auto &reader) {
+      components_->readFixed(reader, notices_);
+    });
     client_state_.commands.seal();
   }
 
@@ -278,7 +409,25 @@ private:
     input_.length = retained;
   }
 
+  // A profile can replace named definitions while inheriting its keybindings.
+  void rebindDefinitions() {
+    const runtime::lua::Value registry{machine_.state(), LUA_REGISTRYINDEX, "binding registry"};
+    for (const auto &binding : std::span{input_.configured}.first(input_.length)) {
+      const auto action = binding.action;
+      if (action.kind != BindingActionKind::extended || !std::holds_alternative<DefinitionActionDescription>(descriptions_.at(action.parameter))) {
+        continue;
+      }
+
+      const auto value = registry.element(action.reference);
+      const auto description = withDefinitions([&](const auto &definitions) {
+        return ActionDescriptionReader::read(value, definitions);
+      });
+      descriptions_.replaceDefinition(action.parameter, std::get<DefinitionActionDescription>(description));
+    }
+  }
+
   void readClient(const runtime::lua::Value &client, const runtime::lua::Value *inherited = nullptr) {
+    components_->definitions().apply(*machine_.state(), client);
     const runtime::config::ClientDefinitions definitions{client, inherited};
     const runtime::config::RetainedActionValidator validator{definitions, notices_, client_state_.commands};
     const BindingActionReader reader{*machine_.state(), validator, client_state_.commands, number_};
@@ -394,6 +543,7 @@ private:
 
   runtime::lua::Vm<Memory> machine_;
   Owned<runtime::config::RuntimeValues<Memory>, Memory> runtime_;
+  Owned<components::Configuration, Memory> components_;
   std::optional<runtime::config::LocalModules> modules_;
   runtime::config::LimitNotices notices_;
   runtime::config::RetainedClientValidationState client_state_;

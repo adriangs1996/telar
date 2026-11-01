@@ -7,8 +7,10 @@
 #include "telar_client/codecs/telar_handshake.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_handshake.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include "transport/runtime_link.hpp"
+#include "transport/runtime_protocol.hpp"
 #include <QByteArray>
 #include <QByteArrayView>
 #include <QCoreApplication>
@@ -16,6 +18,7 @@
 #include <QFile>
 #include <QLocalServer>
 #include <QString>
+#include <QStringLiteral>
 #include <QTemporaryDir>
 #include <QtCore/qcontainerfwd.h>
 #include <QtCore/qscopeguard.h>
@@ -32,6 +35,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <string_view>
 #include <vector>
 
@@ -140,6 +144,91 @@ private:
     QVERIFY(sendHandshake(*replacement, ServerAccept{handshake::schema_id}));
     QTRY_VERIFY(connection.ready());
     QVERIFY(!connection.link().failure());
+  }
+
+  Q_SLOT static void auditedLegacyRefusalRetriesOnANewConnection() {
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QLocalServer listener;
+    QVERIFY(listener.listen(directory.filePath(QStringLiteral("legacy.sock"))));
+    ApplicationAllocator memory;
+    RuntimeConnection connection{memory};
+    std::vector<QByteArray> delivered;
+    QObject::connect(&connection, &RuntimeConnection::payloadReceived, &connection, [&](QByteArrayView payload) {
+      delivered.push_back(payload.toByteArray());
+    });
+    connection.open(listener.fullServerName());
+    QTRY_VERIFY(listener.hasPendingConnections());
+    const std::unique_ptr<QLocalSocket> first{listener.nextPendingConnection()};
+    QVERIFY(first != nullptr);
+    const auto current_hello = framedHello(handshake::schema_id);
+    QTRY_COMPARE(first->bytesAvailable(), current_hello.size());
+    QCOMPARE(first->readAll(), current_hello);
+    QVERIFY(sendHandshake(*first, ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = RuntimeProtocol::schema87}));
+    QVERIFY(sendPayload(*first, QByteArrayLiteral("OLD_CONNECTION_TAIL")));
+    QTRY_VERIFY(listener.hasPendingConnections());
+    const std::unique_ptr<QLocalSocket> legacy{listener.nextPendingConnection()};
+    QVERIFY(legacy != nullptr);
+    const auto legacy_hello = framedHello(RuntimeProtocol::schema87);
+    QTRY_COMPARE(legacy->bytesAvailable(), legacy_hello.size());
+    QCOMPARE(legacy->readAll(), legacy_hello);
+    QVERIFY(sendHandshake(*legacy, ServerAccept{RuntimeProtocol::schema87}));
+    QVERIFY(sendPayload(*legacy, QByteArrayLiteral("CURRENT_LEGACY_DATA")));
+    QTRY_VERIFY(connection.ready());
+    QTRY_COMPARE(delivered.size(), std::size_t{1});
+    QCOMPARE(delivered.front(), QByteArrayLiteral("CURRENT_LEGACY_DATA"));
+    QVERIFY(connection.error().isEmpty());
+    QCOMPARE(connection.link().sessions, 1);
+    const HoldTab hold{.request_id = 1, .location = {.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1}, .held = true};
+    std::vector<Byte> storage(Codec::encodedSize(hold));
+    QVERIFY(!Codec::encode(hold, storage).empty());
+    QVERIFY_THROWS_EXCEPTION(std::runtime_error, connection.send(hold));
+    QVERIFY(connection.ready());
+    const ReportLimit report{.reach = {.name = "legacy.limit", .noun = "cells", .value = 1, .requested = 2, .route = "gui"}, .hits = 1};
+    connection.send(report);
+    QTRY_VERIFY(legacy->bytesAvailable() > 0);
+    const auto traffic = legacy->readAll();
+    storage.resize(Codec::encodedSize(report));
+    const auto encoded = textView(Codec::encode(report, storage));
+    QCOMPARE(traffic.sliced(static_cast<qsizetype>(frame_prefix_size)), QByteArray(encoded.data(), static_cast<qsizetype>(encoded.size())));
+  }
+
+  Q_SLOT static void auditedFallbackCannotAlternateSchemasForever() {
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QLocalServer listener;
+    QVERIFY(listener.listen(directory.filePath(QStringLiteral("alternating.sock"))));
+    ApplicationAllocator memory;
+    RuntimeConnection connection{memory};
+    connection.open(listener.fullServerName());
+    QTRY_VERIFY(listener.hasPendingConnections());
+    const std::unique_ptr<QLocalSocket> first{listener.nextPendingConnection()};
+    QVERIFY(first != nullptr);
+    QVERIFY(sendHandshake(*first, ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = RuntimeProtocol::schema87}));
+    QTRY_VERIFY(listener.hasPendingConnections());
+    const std::unique_ptr<QLocalSocket> second{listener.nextPendingConnection()};
+    QVERIFY(second != nullptr);
+    QTRY_VERIFY(second->bytesAvailable() > 0);
+    QVERIFY(sendHandshake(*second, ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = handshake::schema_id}));
+    QTRY_COMPARE(connection.link().phase, MachinePhase::failed);
+    QCOMPARE(connection.remoteError(), std::optional{MachineError::incompatible_schema});
+    constexpr int observe_retry_ms = RuntimeLink::first_retry_ms * 2;
+    QTest::qWait(observe_retry_ms);
+    QVERIFY(!listener.hasPendingConnections());
+    QVERIFY(!connection.ready());
+  }
+
+  static QByteArray framedHello(const SchemaId &schema) {
+    const auto payload = HandshakeCodec::encode(ClientHello{.schema = schema});
+    std::array<Byte, frame_prefix_size> prefix{};
+    std::span<Byte> output{prefix};
+    u32::encode(static_cast<std::uint32_t>(payload.size()), output);
+    const auto prefix_text = textView(std::span<const Byte>{prefix});
+    const auto body = textView(std::span<const Byte>{payload});
+    QByteArray result{prefix_text.data(), static_cast<qsizetype>(prefix_text.size())};
+    result.append(body.data(), static_cast<qsizetype>(body.size()));
+
+    return result;
   }
 
   Q_SLOT static void acceptedRuntimeCanPipelineLargerFrames() {
@@ -278,6 +367,30 @@ private:
     QCOMPARE(connection.link().attempt, 0);
     QCOMPARE(connection.link().failure(), std::optional<std::string_view>{"fixture failure"});
     QVERIFY(!listener.hasPendingConnections());
+  }
+
+  Q_SLOT static void framedSshTransportUsesTheAuditedDiscoverySchema() {
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QVERIFY(QFile::link(QCoreApplication::applicationDirPath() + QStringLiteral("/gui-ssh-runtime-fixture"), directory.filePath(QStringLiteral("ssh"))));
+    const auto previous_path = qgetenv("PATH");
+    const auto restore_path = qScopeGuard([&] { qputenv("PATH", previous_path); });
+    qputenv("PATH", directory.path().toUtf8() + ":" + previous_path);
+    ApplicationAllocator memory;
+    RuntimeConnection connection{memory};
+    QByteArray received;
+    QObject::connect(&connection, &RuntimeConnection::payloadReceived, &connection, [&](QByteArrayView payload) { received = payload.toByteArray(); });
+    connection.openRemote({.destination = QStringLiteral("legacy"), .program = {}, .local_endpoint = directory.filePath(QStringLiteral("runtime.sock"))});
+    QTRY_VERIFY2(connection.ready(), qPrintable(connection.error()));
+    QCOMPARE(connection.schema(), RuntimeProtocol::schema87);
+    const ReportLimit report{.reach = {.name = "legacy.ssh", .noun = "cells", .value = 1, .requested = 2, .route = "gui"}, .hits = 1};
+    connection.send(report);
+    QTRY_VERIFY(!received.isEmpty());
+    std::vector<Byte> storage(Codec::encodedSize(report));
+    const auto expected = textView(Codec::encode(report, storage));
+    QCOMPARE(received, QByteArray(expected.data(), static_cast<qsizetype>(expected.size())));
+    QVERIFY(connection.error().isEmpty());
+    connection.close();
   }
 
   Q_SLOT static void framedSshTransportAndPermanentFailure() {

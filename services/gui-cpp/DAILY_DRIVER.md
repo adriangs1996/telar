@@ -4,7 +4,161 @@ The complete functional, visual and equal-or-better performance objective remain
 open. Only the command/quick-navigation palette and notifications/sounds may be
 deferred for daily adoption; existing implementations stay available.
 
-## Current preview with plugin execution
+## Current candidate: Preview 7; daily qualification remains open
+
+`out-adoption/Telar C++ Preview 7.app` is the current separately named Release
+bundle, available in Finder. It includes the Qt 6.8/6.12 transport scheduling and
+native command-helper portability corrections. Open from the repository root:
+
+```sh
+open -n "services/gui-cpp/out-adoption/Telar C++ Preview 7.app"
+```
+
+GUI SHA-256:
+`ed71b3323f406eff139c6d189c7f903455f2cb250542d261ec0ca0bb4c938264`.
+The package linkage audit has no failures. Both strict relocated schema-87/88
+smokes pass with zero QML warnings, direct and concurrent GUI exits zero,
+configuration unchanged and disposable state removed. They cover login-shell
+and default endpoint discovery, Finder launch, actual plugins, the bundled custom
+bar helper, two distinct window identities and owned-client pause/resume while
+its private runtime remains responsive. LaunchServices does not expose the GUI
+exit status; the final healthy marker and screenshot are also checked.
+The exact package additionally passes genuine SSH to an isolated runtime in the
+owned Linux VM and a real Vim edit saving exact UTF-8 bytes. Existing runtime,
+Zig GUI, VM and guest Sway remain unchanged. The schema-87 direct screenshot was
+visually inspected with correct Latin, Greek and CJK glyphs. Evidence:
+`out-dependencies/component-content-3/preview-7-schema{87,88}-smoke-1/result.json`,
+`preview-7-real-ssh-smoke-1/result.json` and `preview-7-vim-smoke-1/result.json`.
+
+Normal launch reads the usual configuration and discovers the existing runtime;
+validation used disposable state and did not attach to user sessions. Close
+Preview and open `~/Applications/Telar.app` to return, keeping the runtime alive.
+No installation is replaced; the separate bundle may be copied under its own
+name. Previews 1–6 remain frozen.
+
+Current-source native Cocoa/Metal regression passes 106 checks with schema 87
+and another 106 with schema 88, with no failures or omissions. The machine/peek
+suite passes 40. Private clipboard cleanup succeeds and the general pasteboard
+change count stays 954. A preceding workspace test had restored a stale window
+size even when it had not resized it, leaking Cocoa geometry transitions into
+selection; it now only waits for the expanded layout it actually exercises.
+All pointer and clipboard assertions and deadlines remain unchanged. Earlier
+intermittent failures and the unsuccessful native-size helper experiment remain
+in the evidence; that helper was removed. No production selection code changed.
+
+Both Linux native variants pass 12 selected checks, including workspace followed
+by selection, custom surfaces, tab drag, fullscreen and restoration. Broad
+analysis and actual editor checks pass for the changed sources on both SDKs.
+The current native Mac sanitizer surface run passes all six assertions but exits
+one for 676,587 leaked bytes in 3,729 allocations. No suppression or analysis
+profile is relaxed. A standalone Foundation/CoreText-only reproducer also exits
+one for about 58 KB with balanced Core Foundation releases; this explains part
+of the report, not the entire GUI shutdown failure. Full leak triage and physical
+system sleep remain open, separately from the successful private-client pause.
+Daily acceptance and the complete parity objective remain open.
+
+## Preserved candidate: Preview 6
+
+`out-adoption/Telar C++ Preview 6.app` is the latest separately named, signed
+Release bundle. Open it in Finder or from the repository root:
+
+```sh
+open -n "services/gui-cpp/out-adoption/Telar C++ Preview 6.app"
+```
+
+GUI SHA-256:
+`a304bd528c9acfaecc924b82b6a618692dcef3c3d1b04bf2a2e626cca3d314f7`.
+All 121 Mach-O dependency/signature checks pass. The exact relocated bundle
+passes strict isolated smokes against both schema 87 and 88: default endpoint
+and configuration discovery, deployed Qt/QML, real plugin execution, custom
+bar command, two distinct window identities, and pause/resume of an owned GUI
+while its private runtime remains responsive. Both runs have zero QML warnings
+and remove their private state. Evidence is under
+`out-dependencies/component-content-3/preview-6-schema{87,88}-smoke-1/result.json`.
+The schema-87 direct PNG was visually inspected: `á λ 漢字 ✓` renders correctly.
+
+Preview 6 fixes first-Escape handling during pick IME composition and validates
+native font candidates with the client's rasterizer before accepting them.
+Unreadable system font candidates no longer hide a usable later fallback. The
+previous native API remains available to the original GUI. Twelve public font
+checks pass in Release; all twelve assertions also pass with sanitizers, whose
+process still exits with a recorded macOS/CoreText leak report (1,529,695 bytes /
+6,964 allocations). No new suppression is used. A frozen native Cocoa suite
+passes 106 checks with schema 87 before the font correction and another 106
+with schema 88 afterward, including the new pick IME regression. Their private
+pasteboards are cleared and the general pasteboard change count stays unchanged.
+The native machine/peek suite passes 40 checks. The exact packaged GUI also
+passes a real SSH connection to a private runtime in the owned Linux VM; its
+screenshot shows the remote Unicode marker. A real Vim run saves exact UTF-8
+text and renders it after tab selection. Both disposable runtimes/files are
+removed, and existing host processes and guest Sway remain unchanged. Read-only
+preparation also accepts the real user configuration without connecting to a
+runtime or changing the configuration/trust files. Current Linux source quality
+and native qualification and the known Mac shutdown-leak triage remain open. This is a usable, separately launchable candidate; the daily
+milestone and final parity acceptance are not marked complete.
+
+The audited client policy accepts only schemas `876b480d` and `886b480d`;
+schema 87 differs by the absent `hold_tab` message, which this GUI does not use.
+Unknown schemas still fail closed, and `hold_tab` cannot be sent to schema 87.
+A handshake-only production-transport probe also succeeds against the existing
+user runtime without subscriptions or session changes. The bundled CLI remains
+schema 88: GUI compatibility does not imply every CLI command supports schema 87.
+
+Normal launch uses the usual configuration and existing runtime. No GUI test
+has attached to the user's active runtime. Preserve the current Zig app and
+runtime. Return by closing Preview and opening `~/Applications/Telar.app`,
+without stopping or migrating the runtime. Packaging does not install or replace
+either app; the separate bundle can be copied under its own name. Previews 1–5
+remain frozen diagnostic artifacts.
+
+Preview 5 passes both isolated schema smokes but predates the IME/font fixes.
+Preview 4's isolated schema-88 smoke passed, but it cannot connect to schema 87.
+Physical system sleep, full visual coverage and comparative performance remain
+open independently of the private client-pause smoke.
+
+## Preserved Preview 4 with custom surfaces
+
+`out-adoption/Telar C++ Preview 4.app` is a preserved schema-88 diagnostic
+candidate. Its launch below is historical; it cannot attach to schema 87.
+
+```sh
+open -n "services/gui-cpp/out-adoption/Telar C++ Preview 4.app"
+```
+
+The exact relocated bundle passes deployed Qt/QML dependencies, signatures and a
+121-object Mach-O audit with no missing/external dependencies. GUI SHA-256:
+`f94721de92e29c5859edbcfc6a1084b05ee48b2489f77c2da2bedb2d14123dbf`.
+Its strict smoke passes default runtime/configuration discovery, Unicode, tabs,
+split/resize/fullscreen, sidebar, Lua reload, History, real plugin execution,
+custom widgets/bar command via the bundled native helper, and two simultaneous
+clients with distinct window identities. It reports zero QML warnings. An exact
+owned GUI child is paused/resumed while its private runtime executes a command;
+the resumed GUI exits healthy and its PNG was inspected. Physical system sleep
+is outside that scoped test. Direct and concurrent GUI exits are zero;
+LaunchServices exits zero but does not expose its GUI exit status. Private test
+state is removed. No existing app/runtime/configuration is replaced or migrated.
+
+Close Preview and open the existing Telar.app to return; keep the runtime
+running. The bundle can be copied to a user-owned Applications directory under
+its separate name; packaging does not install it. Current-source adoption and
+final parity validation remain open, including Linux qualification and the
+known macOS exit-leak gate.
+
+Preview 3 remains preserved as diagnostic evidence: its protocol flows pass,
+but its overflow indicator produces QML binding-loop warnings. It does not pass
+the candidate quality gate. The correction is in Preview 4. Previews 1 and 2
+below also stay untouched.
+
+Reproduce the exact current bundle smoke:
+
+```sh
+python3 services/gui-cpp/tools/smoke_macos_bundle.py \
+  "services/gui-cpp/out-adoption/Telar C++ Preview 4.app" \
+  --discover-runtime --plugins --components --windows \
+  --evidence services/gui-cpp/out-dependencies/my-preview-4-smoke
+```
+
+## Preserved preview with plugin execution
 
 `out-adoption/Telar C++ Preview 2.app` is the newer separate Release preview.
 The first preview below remains preserved. This second bundle deploys Qt/QML,
@@ -82,14 +236,36 @@ python3 services/gui-cpp/tools/smoke_macos_bundle.py \
   --evidence services/gui-cpp/out-dependencies/my-preview-smoke
 ```
 
+## Current development qualification
+
+Configured bars/widgets/panels/picks are implemented and included in Preview 4.
+The complete Cocoa/Metal regression before the final overflow fix passes 106
+checks without failure, omission or QML warnings. The final overflow fixture and
+both custom-surface cases pass afterward. The exact Preview 4 bundle also passes
+its strict smoke without QML warnings.
+
+The independent controller covers filtering, selected/swatch metadata, literal
+Unicode selection, cancellation, failures, refresh policy and obsolete runtime
+completion. Four affected core/command CTests pass with ASan/UBSan. The new static
+bar plugin regression proves disable/re-enable can reload while execution stays
+blocked when disabled. Native Cocoa sanitizer assertions pass but exit leak
+detection remains open: the latest two-surface run reports 544,451 bytes / 2,756
+allocations; the selected configuration-source run reports 228,316 / 826. No new
+suppression or weakened analysis profile was added. Final source quality and Linux
+qualification continue independently of the preserved bundle.
+
 ## Daily adoption blockers
 
-- Isolated plugin execution and capability enforcement have functional coverage
-  in preview 2; the final shared-copy quality correction is verified in the
-  newer source revision.
-  Custom bars, widgets, panels and picks remain incomplete.
-- Resolve or qualify the retained macOS pointer-selection regression and verify
-  window restoration/suspend-resume and all flows below on this candidate.
+- Reconcile the complete daily checklist with its scoped evidence and normal-use
+  acceptance. The exact Preview 7 package implements plugins and custom surfaces;
+  these areas are not deferred. Current native regression, Linux source quality
+  and selected Linux sanitizer flows pass.
+- Triage recorded macOS sanitizer exit leaks without suppressing the failures.
+  Physical system sleep remains outside the private process-pause smoke.
+
+Full visual and comparative performance acceptance and audited removal of own
+Zig remain separate final gates. Palette and notifications are the only daily
+areas allowed to be deferred.
 
 ## Required adoption checklist
 

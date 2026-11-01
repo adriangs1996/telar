@@ -7,7 +7,7 @@
 #include "platform/profile_file.hpp"
 #include "platform/window.hpp"
 #include "qt/application.hpp"
-#include "runtime_endpoint.hpp"
+#include "qt/local_runtime_endpoint.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "ui/bundled_fonts.hpp"
 #include <QCommandLineParser>
@@ -97,14 +97,14 @@ QString trustStorePath() {
   return home.isEmpty() ? QString{} : home + QStringLiteral("/.config/telar/trust.json");
 }
 
-QString runtimeEndpoint(const QCommandLineParser &parser) {
+QString runtimeEndpoint(const QCommandLineParser &parser, telar::gui::ApplicationAllocator &memory) {
   auto endpoint = parser.value(QStringLiteral("socket"));
   if (endpoint.isEmpty()) {
     endpoint = qEnvironmentVariable("TELAR_SOCKET");
   }
 
   if (endpoint.isEmpty()) {
-    endpoint = QString::fromStdString(runtime_endpoint::resolve());
+    endpoint = telar::gui::qt::LocalRuntimeEndpoint<>::resolve(memory);
   }
 
   return endpoint;
@@ -218,7 +218,7 @@ int main(int argc, char **argv) {
     }
 
     client.setWindow(*window);
-    client.open(runtimeEndpoint(parser));
+    client.open(runtimeEndpoint(parser, memory));
     client.openMachines(machineProfilesPath());
     scheduleSmokeTest(parser, client, *window);
 

@@ -128,6 +128,7 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
       memory_(memory),
       activity_targets_(AllocatorRef<ActivityRowTarget, ApplicationAllocator>{memory}),
       configuration_source_(memory),
+      pick_controller_(*this, memory, configuration_source_),
       plugin_worker_(memory, *this),
       machine_profiles_(memory),
       attachments_(memory),
@@ -140,6 +141,8 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
   initializeMachines();
   initializeMachineProfiles();
   initializeAttachments();
+  initializeComponents();
+  initializePicks();
   key_bindings_.configure(configuration_source_.input(), configuration_source_.keymap());
 
   connect(this, &Application::configurationChanged, this, &Application::windowGeometryChanged);

@@ -4,8 +4,8 @@
 #include "machines/failure.hpp"
 #include "platform/file_descriptor.hpp"
 #include "remote_bridge.hpp"
-#include "telar_client/codecs/telar_handshake.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_client/serializers/telar_handshake.hpp"
 #include "transport/frame_stream.hpp"
 #include "transport/runtime_link.hpp"
 #include <QByteArrayView>
@@ -43,6 +43,9 @@ public:
   void finishSession() noexcept;
   void resumeSession();
   [[nodiscard]] bool ready() const noexcept;
+  [[nodiscard]] const SchemaId &schema() const noexcept {
+    return schema_;
+  }
   [[nodiscard]] const RuntimeLink &link() const noexcept;
   [[nodiscard]] QString error() const;
   void dismissError();
@@ -75,6 +78,7 @@ signals:
 private:
   void connectSocket();
   void beginHandshake();
+  void retrySchema(const SchemaId &schema);
   void socketDisconnected();
   void socketFailed(QLocalSocket::LocalSocketError error);
   void read();
@@ -104,6 +108,9 @@ private:
   bool closed_ = true;
   bool session_finished_ = false;
   bool read_queued_ = false;
+  SchemaId schema_ = handshake::schema_id;
+  bool schema_retried_ = false;
+  bool schema_retry_pending_ = false;
   std::optional<RemoteTarget> remote_target_;
   std::optional<MachineError> remote_error_;
   std::optional<RemoteBridge<NativeSshHost, RuntimeConnection>> remote_;

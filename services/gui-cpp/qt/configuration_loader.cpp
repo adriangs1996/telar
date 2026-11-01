@@ -114,7 +114,9 @@ void ConfigurationLoader::load(ApplicationAllocator &memory, const Configuration
     result.plugins.emplace(memory, generation_source.directory, result.generation->runtimeValues().plugins.configured());
     const PluginCatalog catalog{result.generation->number(), result.generation->runtimeValues().plugins.configured(), result.plugins->packages()};
     result.generation->visitPluginActions([&](const PluginActionDescription &action) {
-      static_cast<void>(catalog.resolve(action));
+      if (!request.plugin_overrides.disabled(action.plugin, result.generation->runtimeValues().plugins.configured())) {
+        static_cast<void>(catalog.resolve(action));
+      }
     });
     result.configuration = result.generation->configuration();
     trackModules(*result.generation, result.directory, result.modules);

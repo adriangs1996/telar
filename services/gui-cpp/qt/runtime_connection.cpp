@@ -9,18 +9,21 @@
 #include "telar_client/codecs/telar_handshake.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_handshake.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include "transport/frame_stream.hpp"
 #include "transport/runtime_handshake.hpp"
+#include "transport/runtime_protocol.hpp"
 #include <QElapsedTimer>
 #include <QScopedValueRollback>
-#include <QtCore/qnamespace.h>
+#include <QStringLiteral>
+#include <QTimer>
 #include <QtCore/qobject.h>
-#include <QtCore/qobjectdefs.h>
 #include <QtCore/qstring.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -88,6 +91,7 @@ void RuntimeConnection::remoteDiscovered(const RemoteDiscovery &discovery) {
     return;
   }
 
+  schema_ = discovery.schema();
   emit discovered(discovery);
 }
 
@@ -183,6 +187,9 @@ void RuntimeConnection::close() {
   connecting_ = false;
   handshake_sent_ = false;
   session_finished_ = false;
+  schema_ = handshake::schema_id;
+  schema_retried_ = false;
+  schema_retry_pending_ = false;
   retry_.stop();
   deadline_.stop();
   if (remote_) {
@@ -292,14 +299,30 @@ void RuntimeConnection::beginHandshake() {
 
   handshake_sent_ = true;
   try {
-    write(HandshakeCodec::encode(ClientHello{}));
+    write(HandshakeCodec::encode(ClientHello{.schema = schema_}));
   } catch (const std::exception &error) {
     fail(QString::fromUtf8(error.what()));
   }
 }
 
+void RuntimeConnection::retrySchema(const SchemaId &schema) {
+  schema_ = schema;
+  schema_retried_ = true;
+  schema_retry_pending_ = true;
+  connecting_ = false;
+  const auto generation = ++read_generation_;
+  deadline_.stop();
+  socket_.abort();
+  QTimer::singleShot(std::chrono::milliseconds::zero(), this, [this, generation] {
+    if (!closed_ && generation == read_generation_ && schema_retry_pending_) {
+      schema_retry_pending_ = false;
+      connectSocket();
+    }
+  });
+}
+
 void RuntimeConnection::socketDisconnected() {
-  if (closed_ || session_finished_) {
+  if (closed_ || session_finished_ || schema_retry_pending_) {
     return;
   }
 
@@ -314,7 +337,7 @@ void RuntimeConnection::socketDisconnected() {
 }
 
 void RuntimeConnection::socketFailed(QLocalSocket::LocalSocketError error) {
-  if (closed_ || session_finished_) {
+  if (closed_ || session_finished_ || schema_retry_pending_) {
     return;
   }
 
@@ -387,13 +410,21 @@ bool RuntimeConnection::readChunk() {
 void RuntimeConnection::queueRead() {
   if (socket_.bytesAvailable() > 0 && !read_queued_) {
     read_queued_ = true;
-    QMetaObject::invokeMethod(this, &RuntimeConnection::read, Qt::QueuedConnection);
+    QTimer::singleShot(std::chrono::milliseconds::zero(), this, &RuntimeConnection::read);
   }
 }
 
 void RuntimeConnection::consume(std::span<const Byte> payload) {
   if (!accepted_) {
-    const auto negotiation = RuntimeHandshake::inspect(payload);
+    if (!remote_target_ && !schema_retried_) {
+      if (const auto retry = RuntimeProtocol::retry(payload, schema_)) {
+        retrySchema(*retry);
+
+        return;
+      }
+    }
+
+    const auto negotiation = RuntimeHandshake::inspect(payload, schema_);
     if (negotiation.error) {
       remote_error_ = negotiation.error;
       link_.fail(negotiation.detail.view());
@@ -401,6 +432,7 @@ void RuntimeConnection::consume(std::span<const Byte> payload) {
     }
 
     accepted_ = true;
+    schema_retried_ = false;
     stream_.setMaximum(max_payload_size);
     socket_.setReadBufferSize(max_payload_size + frame_prefix_size);
     connecting_ = false;
@@ -425,6 +457,10 @@ void RuntimeConnection::consume(std::span<const Byte> payload) {
 }
 
 void RuntimeConnection::write(std::span<const Byte> payload) {
+  if (accepted_ && !payload.empty() && !RuntimeProtocol::supports(schema_, static_cast<ClientTag>(payload.front()))) {
+    throw std::runtime_error{"The runtime schema does not support this request"};
+  }
+
   const auto total_size = payload.size() + frame_prefix_size;
 
   if (socket_.bytesToWrite() + static_cast<qint64>(total_size) > output_limit) {

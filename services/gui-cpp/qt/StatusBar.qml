@@ -8,6 +8,7 @@ Rectangle {
     required property var metrics
     required property var colors
     required property var typography
+    property var controller: null
     property string diagnostic
     property var mode: ({kind: 0, hints: []})
     property string tlsColor
@@ -38,7 +39,61 @@ Rectangle {
             colors: root.colors
             typography: root.typography
             ratio: root.ratio
-            visible: root.mode.kind === 0
+            visible: root.mode.kind === 0 && root.controller === null
+        }
+
+        Item {
+            id: components
+            anchors.fill: parent
+            visible: root.mode.kind === 0 && root.controller !== null
+            readonly property var slots: root.controller?.componentBars ?? ({})
+            readonly property real gap: 8 * root.ratio
+            readonly property real available: Math.max(0, width - 2 * gap)
+            readonly property real leftDesired: leftSlot.tabs ? 0 : leftSlot.implicitWidth
+            readonly property real centerDesired: centerSlot.tabs ? 0 : centerSlot.implicitWidth
+            readonly property real rightDesired: rightSlot.tabs ? 0 : rightSlot.implicitWidth
+            readonly property real fixedDesired: leftDesired + centerDesired + rightDesired
+            readonly property real minimumTabsWidth: Math.min(available, 120 * root.ratio)
+            readonly property real reduction: fixedDesired > 0 ? Math.min(1, Math.max(0, available - minimumTabsWidth) / fixedDesired) : 1
+            readonly property real tabsWidth: Math.max(0, available - fixedDesired * reduction)
+
+            ComponentSlot {
+                id: leftSlot
+                controller: root.controller
+                surface: components.slots.left ?? ({kind: "empty"})
+                colors: root.colors
+                typography: root.typography
+                ratio: root.ratio
+                textScale: root.controller?.chromeTextScale ?? 1
+                width: tabs ? components.tabsWidth : implicitWidth * components.reduction
+                height: parent.height
+            }
+
+            ComponentSlot {
+                id: centerSlot
+                x: leftSlot.width + components.gap
+                controller: root.controller
+                surface: components.slots.center ?? ({kind: "empty"})
+                colors: root.colors
+                typography: root.typography
+                ratio: root.ratio
+                textScale: root.controller?.chromeTextScale ?? 1
+                width: tabs ? components.tabsWidth : implicitWidth * components.reduction
+                height: parent.height
+            }
+
+            ComponentSlot {
+                id: rightSlot
+                x: centerSlot.x + centerSlot.width + components.gap
+                controller: root.controller
+                surface: components.slots.right ?? ({kind: "empty"})
+                colors: root.colors
+                typography: root.typography
+                ratio: root.ratio
+                textScale: root.controller?.chromeTextScale ?? 1
+                width: tabs ? components.tabsWidth : implicitWidth * components.reduction
+                height: parent.height
+            }
         }
 
         ModeBar {

@@ -10,6 +10,7 @@
 #include "platform/path_limits.hpp"
 #include "platform/stdio_socket.hpp"
 #include "ssh_options.hpp"
+#include "transport/runtime_protocol.hpp"
 #include <QByteArray>
 #include <QFutureWatcher>
 #include <QIODevice>
@@ -295,7 +296,7 @@ private:
 
     try {
       discovery_ = RemoteDiscovery::parse(view(output_));
-      if (!discovery_->compatible()) {
+      if (!RuntimeProtocol::supports(discovery_->schema())) {
         fail(MachineError::remote_program_incompatible);
 
         return;

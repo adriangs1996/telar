@@ -8,6 +8,10 @@
 #include "presentation/history_footer.hpp"
 #include "attachment_shelf.hpp"
 #include "configuration_source.hpp"
+#include "component_surface_state.hpp"
+#include "pick_controller.hpp"
+#include "components/invocation.hpp"
+#include "surface_command.hpp"
 #include "core/calendar_sample.hpp"
 #include "core/metrics.hpp"
 #include "core/terminal_size.hpp"
@@ -132,6 +136,9 @@ class Application final : public QObject {
   Q_PROPERTY(QString title READ title NOTIFY stateChanged)
   Q_PROPERTY(QVariantMap statusMode READ statusMode NOTIFY statusModeChanged)
   Q_PROPERTY(QVariantMap hostMetrics READ hostMetrics NOTIFY hostMetricsChanged)
+  Q_PROPERTY(QVariantMap componentBars READ componentBars NOTIFY componentsChanged)
+  Q_PROPERTY(QVariantMap componentPanel READ componentPanel NOTIFY componentsChanged)
+  Q_PROPERTY(QVariantMap componentPick READ componentPick NOTIFY pickChanged)
   Q_PROPERTY(QString error READ error NOTIFY stateChanged)
   Q_PROPERTY(QString tlsBadgeColor READ tlsBadgeColor NOTIFY stateChanged)
   Q_PROPERTY(bool connected READ connected NOTIFY stateChanged)
@@ -386,6 +393,15 @@ public:
   [[nodiscard]] QString title() const;
   [[nodiscard]] QVariantMap statusMode() const;
   [[nodiscard]] QVariantMap hostMetrics() const;
+  [[nodiscard]] QVariantMap componentBars() const;
+  [[nodiscard]] QVariantMap componentPanel() const;
+  Q_INVOKABLE void activateComponent(int source, int node, const QString &generation, const QString &revision, const QPointF &anchor);
+  Q_INVOKABLE void closeComponentPanel();
+  Q_INVOKABLE void refreshComponentPanel();
+  [[nodiscard]] QVariantMap componentPick() const;
+  Q_INVOKABLE void closeComponentPick();
+  Q_INVOKABLE void filterComponentPick(const QString &query);
+  Q_INVOKABLE void chooseComponentPick(int row, const QString &identity);
   [[nodiscard]] bool prefixPending() const noexcept;
   [[nodiscard]] QString error() const;
   [[nodiscard]] QString tlsBadgeColor() const;
@@ -405,6 +421,8 @@ signals:
   void stateChanged();
   void statusModeChanged();
   void hostMetricsChanged();
+  void componentsChanged();
+  void pickChanged();
   void configurationChanged();
   void windowGeometryChanged();
   void runtimeLinkChanged();
@@ -428,6 +446,8 @@ private:
   friend class KeyBindings;
   friend class PointerDispatcher;
   friend class TerminalItem;
+  template <typename Host, Allocator Memory, typename Source>
+  friend class PickController;
 
   [[nodiscard]] BindingContext bindingContext() const;
   [[nodiscard]] std::optional<BindingRepeat> bindingRepeat(BindingAction action) const;
@@ -435,6 +455,25 @@ private:
   void executeBinding(BindingAction action);
   void executeCommandTab(BindingAction action);
   void executeNotificationBinding(BindingAction action);
+  void initializeComponents();
+  void resetComponents();
+  void tickComponents();
+  void projectComponents();
+  void projectComponentSource(std::size_t index, bool panel);
+  void armComponents();
+  void renderComponentSource(std::size_t index, bool panel);
+  void applyComponentRender(std::size_t index, bool panel, const components::Context &context);
+  void componentCommandFinished(const ComponentCommandOwner &owner, SurfaceCommandResult result);
+  void toggleComponentPanel(std::size_t index);
+  [[nodiscard]] components::Context componentContext() const;
+  [[nodiscard]] bool componentCommandCurrent(std::uint64_t generation, MachineClientKey source, std::uint64_t runtime) const;
+  void initializePicks();
+  void openComponentPick(std::size_t index);
+  [[nodiscard]] PickOwner pickOwner() const;
+  [[nodiscard]] bool pickOwnerCurrent(const PickOwner &owner) const;
+  [[nodiscard]] components::Context pickContext() const;
+  void pickCommitted();
+  void pickFailed(const QString &message);
   void startPlugin(const PluginInvocation &invocation);
   void applyPluginEffects(const PluginEffects &effects);
   void applyExpression(const InputExpression &expression);
@@ -696,6 +735,13 @@ private:
   std::uint64_t pointer_revision_ = 0;
   std::optional<MachineClientKey> sound_owner_;
   ConfigurationSource configuration_source_;
+  PickController<Application, ApplicationAllocator, ConfigurationSource> pick_controller_;
+  ComponentSurfaceState component_surfaces_;
+  QTimer component_timer_;
+  SurfaceCommand component_command_;
+  std::optional<ComponentCommandOwner> component_command_owner_;
+  std::uint64_t next_component_revision_ = 0;
+  std::optional<QPointF> component_action_anchor_;
   PluginWorker<Application> plugin_worker_;
   struct PluginOwner {
     MachineClientKey source;

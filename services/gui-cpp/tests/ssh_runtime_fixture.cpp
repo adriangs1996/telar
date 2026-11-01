@@ -112,9 +112,11 @@ int sshFixture(std::span<char *> arguments) {
     return ssh_failed;
   }
 
+  constexpr SchemaId legacy_schema{'8', '7', '6', 'b', '4', '8', '0', 'd'};
+  const auto &selected_schema = destination == "legacy" ? legacy_schema : handshake::schema_id;
   const std::string_view command{arguments.back()};
   if (!command.starts_with("exec ")) {
-    const auto schema = textView(std::span{handshake::schema_id});
+    const auto schema = textView(std::span{selected_schema});
     static_cast<void>(std::fputs("/home/remote\n/bin/sh\n/run/remote/runtime.sock\n", stdout));
     static_cast<void>(std::fwrite(schema.data(), 1, schema.size(), stdout));
     static_cast<void>(std::fputc('\n', stdout));
@@ -123,8 +125,11 @@ int sshFixture(std::span<char *> arguments) {
   }
 
   const auto hello = readFrame();
-  static_cast<void>(HandshakeCodec::decode<ClientHello>(hello));
-  writeFrame(HandshakeCodec::encode(ServerAccept{handshake::schema_id}));
+  if (HandshakeCodec::decode<ClientHello>(hello).schema != selected_schema) {
+    throw std::runtime_error{"SSH client requested the wrong discovered schema"};
+  }
+
+  writeFrame(HandshakeCodec::encode(ServerAccept{selected_schema}));
   for (;;) {
     const auto payload = readFrame();
     if (payload.empty()) {

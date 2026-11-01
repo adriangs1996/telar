@@ -89,20 +89,15 @@ Rectangle {
         visible: root.rail && root.contextWidth > 0
     }
 
-    TerminalTabs {
+    ComponentSlot {
         controller: root.controller
-        x: root.rail && root.contextWidth > 0 ? root.contextRight : Math.max(root.machineRight, root.workbenchLeft)
-        width: Math.max(0, parent.width - root.padding - x)
+        surface: root.controller?.componentBars.top ?? ({kind: "empty"})
+        x: Math.max(root.contextRight, root.width - root.padding - width)
+        width: Math.max(0, Math.min(implicitWidth, root.width - root.padding - root.contextRight))
         height: parent.height
-        model: root.tabModel
-        prefixPending: root.prefixPending
         colors: root.colors
         typography: root.typography
         ratio: root.ratio
         textScale: root.textScale
-        onSelected: key => root.tabSelected(key)
-        onClosed: key => root.tabClosed(key)
-        onRenamed: root.tabRenamed()
-        onCreated: root.tabCreated()
     }
 }

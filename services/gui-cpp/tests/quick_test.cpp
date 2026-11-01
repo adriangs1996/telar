@@ -45,7 +45,6 @@
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
-#include "telar_client/telar_client.hpp"
 #include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
 #include "text/json.hpp"
@@ -127,7 +126,6 @@
 #include <string>
 #include <string_view>
 #include <utility>
-#include <vector>
 
 namespace {
 
@@ -646,14 +644,7 @@ private:
   }
 
   Q_SLOT void workspaceListVisibility() {
-    const auto previous_state = window_->windowState();
-    const auto restore_window = qScopeGuard([this, previous_state] {
-      window_->setWindowState(previous_state);
-    });
-    if (client_->windowGeometry().value(QStringLiteral("rail")).toBool()) {
-      window_->showFullScreen();
-    }
-
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
     QTRY_VERIFY(!client_->windowGeometry().value(QStringLiteral("rail")).toBool());
     const auto *workspace_list = window_->findChild<QQuickItem *>(QStringLiteral("workspaceList"));
     auto *terminal = terminalIn(window_->contentItem());
@@ -691,6 +682,7 @@ private:
     client_->input(pane->id, "printf '\\033[2J\\033[H/tmp/telar/file.cpp\\n'\r");
     QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).startsWith(path), runtime_wait_ms);
     terminal->forceActiveFocus();
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
     const auto cell = terminal->cellSize();
     const auto clicked = terminal->mapToScene({cell.width() * 2, cell.height() / 2}).toPoint();
     clipboard->setText(QStringLiteral("unchanged clipboard"));
@@ -706,6 +698,7 @@ private:
     client_->input(pane->id, "\x15");
     const auto click_wait_ms = static_cast<int>(ClickTracker::interval.count()) + 1;
     QTest::qWait(click_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
     const auto beginning = terminal->mapToScene({cell.width() / 2, cell.height() / 2}).toPoint();
     const auto end = terminal->mapToScene({(cell.width() * 3) + (cell.width() / 2), cell.height() / 2}).toPoint();
     QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, beginning);
@@ -713,6 +706,7 @@ private:
     QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, end);
     QTRY_COMPARE_WITH_TIMEOUT(clipboard->text(), QStringLiteral("/tmp"), runtime_wait_ms);
     QTest::qWait(click_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
     clipboard->setText(QStringLiteral("pending recovery"));
     QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, beginning);
     QTest::mouseMove(window_, end);
@@ -4143,6 +4137,142 @@ return {api_version=2, client={keybindings={
     QCOMPARE(retained.readAll(), QByteArray{configuration});
   }
 
+  Q_SLOT void configuredBarsAndPanels() {
+    const auto cleanup = qScopeGuard([this] {
+      client_->closeComponentPanel();
+      client_->loadConfiguration({}, {}, {});
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    constexpr auto configuration = R"(
+      local t = require('telar')
+      local ui = t.ui
+      return {api_version=2,client={
+        keybindings={t.bind_global({'alt+u'},t.action.open_panel('usage'))},
+        bars={bottom={
+          left=t.bar.static(ui.group({on_click=t.action.open_panel('usage'),tooltip=ui.text('Details'),ui.label('Daily λ'),ui.badge({text='C++'})})),
+          center=t.bar.tabs(),
+          right=t.bar.command({command={'/usr/bin/printf','%s','á λ'},every_ms=60000}),
+        },top={right=t.bar.dynamic({every_ms=60000,render=function(ctx) return ui.clock('%H:%M') end})}},
+        panels={usage=t.panel({title='Usage',render=function(ctx) return {
+          ui.heading('Usage λ'),ui.meter_row({label='Session',value=0.5}),
+          ui.actions({ui.button({text='Close',action=t.action.close_panel()})}),
+        } end})},
+      }}
+    )";
+    writeTestFile(path, configuration);
+    client_->loadConfiguration(path, {}, {});
+    const auto slot = [&](const char *name) {
+      return client_->componentBars().value(QString::fromLatin1(name)).toMap();
+    };
+    QTRY_COMPARE_WITH_TIMEOUT(slot("center").value(QStringLiteral("kind")).toString(), QStringLiteral("tabs"), runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(slot("right").value(QStringLiteral("nodes")).toList().size(), 1, runtime_wait_ms);
+    QCOMPARE(slot("right").value(QStringLiteral("nodes")).toList().first().toMap().value(QStringLiteral("text")).toString().toUtf8(), QByteArray::fromHex("c3a120cebb"));
+    QCOMPARE(slot("right").value(QStringLiteral("error")).toString(), QString{});
+    QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("nodes")).toList().size(), 4, runtime_wait_ms);
+    const auto *popup = window_->findChild<QObject *>(QStringLiteral("configuredPanel"));
+    QVERIFY(popup != nullptr);
+    QTRY_VERIFY_WITH_TIMEOUT(popup->property("visible").toBool(), runtime_wait_ms);
+    QCOMPARE(client_->componentPanel().value(QStringLiteral("error")).toString(), QString{});
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto frame = window_->grabWindow();
+    QVERIFY(!frame.isNull());
+    const auto screenshot = qEnvironmentVariable("TELAR_GUI_TEST_COMPONENT_SCREENSHOT");
+    if (!screenshot.isEmpty()) {
+      QVERIFY(frame.save(screenshot, "PNG"));
+    }
+
+    QTest::keyClick(window_, Qt::Key_Escape);
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    const auto left = slot("left");
+    client_->activateComponent(left.value(QStringLiteral("source")).toInt(), 0, left.value(QStringLiteral("generation")).toString(), left.value(QStringLiteral("revision")).toString(), QPointF{});
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    client_->activateComponent(left.value(QStringLiteral("source")).toInt(), 0, left.value(QStringLiteral("generation")).toString(), left.value(QStringLiteral("revision")).toString(), QPointF{});
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    client_->execute(Application::Action::history);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), QStringLiteral("history"), runtime_wait_ms);
+    client_->execute(Application::Action::cancel);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), QString{}, runtime_wait_ms);
+  }
+
+  Q_SLOT void configuredPicks() {
+    const auto cleanup = qScopeGuard([this] {
+      client_->closeComponentPick();
+      client_->closeComponentPanel();
+      client_->loadConfiguration({}, {}, {});
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    const auto marker = directory.filePath(QStringLiteral("choice"));
+    const QByteArray marker_hex = marker.toUtf8().toHex();
+    QByteArray configuration = R"(
+      local t = require('telar')
+      local ui = t.ui
+      local marker = ('MARKER_HEX'):gsub('..', function(h) return string.char(tonumber(h,16)) end)
+      local save = {'/bin/sh','-c','printf %s "$1" > "$2"','pick-test','{}',marker}
+      return {api_version=2,client={
+        keybindings={t.bind_global({'alt+u'},t.action.open_panel('usage')),t.bind_global({'alt+o'},t.action.pick('mode'))},
+        panels={usage=t.panel({render=function(ctx) return ui.text('Retained panel') end})},
+        picks={mode=t.pick({title='Daily choices',items={'first',{label='Unicode λ',value='á λ;$(literal)',detail='details',selected=true,swatch={'#000000','#abcdef','#ffffff'}}},on_select=save})},
+      }}
+    )";
+    configuration.replace("MARKER_HEX", marker_hex);
+    writeTestFile(path, configuration.constData());
+    client_->loadConfiguration(path, {}, {});
+    QCOMPARE(client_->error(), QString{});
+    QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_O, Qt::AltModifier);
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->componentPick().value(QStringLiteral("rows")).toList().size(), 2, runtime_wait_ms);
+    auto *query = window_->findChild<QQuickItem *>(QStringLiteral("configuredPickQuery"));
+    QVERIFY(query != nullptr);
+    QTRY_VERIFY_WITH_TIMEOUT(query->hasActiveFocus(), runtime_wait_ms);
+    for (const auto key : {Qt::Key_D, Qt::Key_E, Qt::Key_T, Qt::Key_A, Qt::Key_I, Qt::Key_L, Qt::Key_S}) {
+      QTest::keyClick(window_, key);
+    }
+    QTRY_COMPARE_WITH_TIMEOUT(client_->componentPick().value(QStringLiteral("rows")).toList().size(), 1, runtime_wait_ms);
+    QCOMPARE(client_->componentPick().value(QStringLiteral("rows")).toList().first().toMap().value(QStringLiteral("label")).toString(), QStringLiteral("Unicode λ"));
+    QVERIFY(QMetaObject::invokeMethod(query, "select", Q_ARG(int, 0), Q_ARG(int, 3)));
+    QInputMethodEvent preedit{QStringLiteral("中"), {{QInputMethodEvent::Cursor, 1, 1, {}}}};
+    QCoreApplication::sendEvent(query, &preedit);
+    QTRY_VERIFY_WITH_TIMEOUT(query->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Escape);
+    QVERIFY(client_->componentPick().value(QStringLiteral("open")).toBool());
+    QTRY_VERIFY_WITH_TIMEOUT(!query->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
+    QCOMPARE(query->property("text").toString(), QStringLiteral("details"));
+    QCOMPARE(query->property("selectedText").toString(), QStringLiteral("det"));
+    QCOMPARE(client_->componentPick().value(QStringLiteral("rows")).toList().size(), 1);
+    QVERIFY(client_->componentPanel().value(QStringLiteral("open")).toBool());
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto frame = window_->grabWindow();
+    QVERIFY(!frame.isNull());
+    const auto screenshot = qEnvironmentVariable("TELAR_GUI_TEST_PICK_SCREENSHOT");
+    if (!screenshot.isEmpty()) {
+      QVERIFY(frame.save(screenshot, "PNG"));
+    }
+
+    QTest::keyClick(window_, Qt::Key_Return);
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(([&] {
+                               QFile file{marker};
+                               return file.open(QIODevice::ReadOnly) && file.readAll() == QByteArray::fromHex("c3a120cebb3b24286c69746572616c29");
+                             })(),
+                             runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPick().value(QStringLiteral("selecting")).toBool(), runtime_wait_ms);
+    QVERIFY(client_->componentPanel().value(QStringLiteral("open")).toBool());
+    QTest::keyClick(window_, Qt::Key_O, Qt::AltModifier);
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Escape);
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    QVERIFY(client_->componentPanel().value(QStringLiteral("open")).toBool());
+    client_->closeComponentPanel();
+  }
+
   Q_SLOT void routedPluginCatalog() {
     const auto cleanup = qScopeGuard([this] {
       client_->loadConfiguration({}, {}, {});
@@ -4964,27 +5094,33 @@ return {api_version=2, client={keybindings={
   }
 
   void importHistory(std::span<const telar::ImportHistoryEntry> entries, std::string_view source) {
-    const auto path = socket_.toUtf8();
-    auto peer = telar::Client::init(path.constData());
-    try {
-      peer.handshake();
-      std::array<telar::Byte, response_capacity> bytes{};
-      constexpr std::size_t maximum_import_entries = 64;
-      std::size_t offset = 0;
-      std::uint64_t request_id = 0;
-      while (offset < entries.size()) {
-        const auto count = std::min(entries.size() - offset, maximum_import_entries);
-        const telar::ImportHistory request{.request_id = ++request_id, .source = source, .base_sequence = offset, .entries = entries.subspan(offset, count)};
-        std::vector<telar::Byte> encoded(telar::frame_prefix_size + telar::Codec::encodedSize(request));
-        peer.send(request, encoded);
-        const auto reply = peer.receiveFrame(bytes);
-        QCOMPARE(telar::Codec::decode<telar::RequestCompleted>(reply).request_id, request_id);
-        offset += count;
+    std::uint64_t completed_request = 0;
+    QString decode_error;
+    RuntimeConnection peer{memory_};
+    const QSignalSpy connected{&peer, &RuntimeConnection::connected};
+    connect(&peer, &RuntimeConnection::payloadReceived, &peer, [&](QByteArrayView payload) {
+      try {
+        const auto bytes = telar::byteView({payload.data(), static_cast<std::size_t>(payload.size())});
+        completed_request = telar::Codec::decode<telar::RequestCompleted>(bytes).request_id;
+      } catch (const std::exception &error) {
+        decode_error = QString::fromUtf8(error.what());
       }
-      peer.deinit();
-    } catch (...) {
-      peer.deinit();
-      throw;
+    });
+    peer.open(socket_);
+    QTRY_VERIFY_WITH_TIMEOUT(!connected.isEmpty() || !peer.error().isEmpty(), runtime_wait_ms);
+    QCOMPARE(peer.error(), QString{});
+    QVERIFY(!connected.isEmpty());
+    constexpr std::size_t maximum_import_entries = 64;
+    std::size_t offset = 0;
+    std::uint64_t request_id = 0;
+    while (offset < entries.size()) {
+      const auto count = std::min(entries.size() - offset, maximum_import_entries);
+      peer.send(telar::ImportHistory{.request_id = ++request_id, .source = source, .base_sequence = offset, .entries = entries.subspan(offset, count)});
+      QTRY_VERIFY_WITH_TIMEOUT(completed_request == request_id || !decode_error.isEmpty() || !peer.error().isEmpty(), runtime_wait_ms);
+      QCOMPARE(decode_error, QString{});
+      QCOMPARE(peer.error(), QString{});
+      QCOMPARE(completed_request, request_id);
+      offset += count;
     }
   }
 

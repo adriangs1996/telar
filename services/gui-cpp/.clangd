@@ -3,7 +3,7 @@ CompileFlags:
 
 ---
 If:
-  PathMatch: config/.*\.hpp
+  PathMatch: (config|components)/.*\.hpp
 CompileFlags:
   CompilationDatabase: out/clangd/config
 

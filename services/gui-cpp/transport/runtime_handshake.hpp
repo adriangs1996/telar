@@ -1,6 +1,7 @@
 #pragma once
 
 #include "machines/failure.hpp"
+#include "runtime_protocol.hpp"
 #include "telar_client/codecs/telar_handshake.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_handshake.hpp"
@@ -24,7 +25,11 @@ struct RuntimeHandshake {
     Detail detail{};
   };
 
-  [[nodiscard]] static Result inspect(std::span<const Byte> payload) {
+  [[nodiscard]] static Result inspect(std::span<const Byte> payload, const SchemaId &requested = handshake::schema_id) {
+    if (!RuntimeProtocol::supports(requested)) {
+      return failure(MachineError::endpoint_unavailable, "InvalidServerSelection");
+    }
+
     if (payload.size() > HandshakeCodec::max_message_size) {
       return failure(MachineError::endpoint_unavailable, "BufferTooSmall");
     }
@@ -32,7 +37,7 @@ struct RuntimeHandshake {
     try {
       const auto response = HandshakeCodec::decodeResponse(payload);
       if (const auto *accepted = std::get_if<ServerAccept>(&response)) {
-        return accepted->schema == handshake::schema_id ? Result{} : failure(MachineError::endpoint_unavailable, "InvalidServerSelection");
+        return accepted->schema == requested ? Result{} : failure(MachineError::endpoint_unavailable, "InvalidServerSelection");
       }
 
       return rejected(std::get<ServerReject>(response));

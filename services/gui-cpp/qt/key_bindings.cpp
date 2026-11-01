@@ -15,14 +15,12 @@
 #include <QtCore/qchar.h>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qobject.h>
-#include <QtCore/qtypes.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtGui/qevent.h>
 #include <QtQuick/qquickitem.h>
 #include <QtQuick/qquickwindow.h>
 #include <algorithm>
 #include <array>
-#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <exception>
@@ -146,7 +144,7 @@ bool KeyBindings::route(QKeyEvent &event, QQuickItem &recipient, bool captures) 
   try {
     const auto repeating = router_.repeatAction();
     const auto policy = repeating ? application_.bindingRepeat(*repeating) : std::nullopt;
-    const auto decision = router_.route(input, nowNanoseconds(), {.captures_keys = captures || application_.copyModeActive() || !application_.dialog().isEmpty(), .repeat = policy});
+    const auto decision = router_.route(input, nowNanoseconds(), {.captures_keys = captures || application_.copyModeActive() || !application_.dialog().isEmpty() || application_.pick_controller_.isOpen(), .repeat = policy});
     const auto consumed = apply(decision);
     if (input.phase == KeyPhase::release) {
       auto *const lease = std::ranges::find(recipients_, input.physical, &Recipient::physical);

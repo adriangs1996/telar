@@ -8,6 +8,7 @@
 #include "input/key_event.hpp"
 #include "input/key_label.hpp"
 #include "key_bindings.hpp"
+#include "native_form_field.hpp"
 #include "palette_actions.hpp"
 #include "platform/window.hpp"
 #include "projection.hpp"
@@ -19,6 +20,8 @@
 #include <QVariantMap>
 #include <QtCore/qchar.h>
 #include <QtCore/qcontainerfwd.h>
+#include <QtCore/qcoreevent.h>
+#include <QtCore/qnamespace.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
@@ -99,12 +102,14 @@ std::optional<PaneDirection> navigationDirection(BindingActionKind kind) noexcep
 }
 
 bool supported(BindingActionKind kind) noexcept {
-  return nativeAction(kind).has_value() || navigationDirection(kind).has_value() || kind == BindingActionKind::select_tab || kind == BindingActionKind::select_workspace || kind == BindingActionKind::select_tab_offset || kind == BindingActionKind::scroll_pane_up || kind == BindingActionKind::scroll_pane_down || kind == BindingActionKind::resize_sidebar_left || kind == BindingActionKind::resize_sidebar_right || kind == BindingActionKind::command_tab;
+  return nativeAction(kind).has_value() || navigationDirection(kind).has_value() || kind == BindingActionKind::select_tab || kind == BindingActionKind::select_workspace || kind == BindingActionKind::select_tab_offset || kind == BindingActionKind::scroll_pane_up || kind == BindingActionKind::scroll_pane_down || kind == BindingActionKind::resize_sidebar_left || kind == BindingActionKind::resize_sidebar_right || kind == BindingActionKind::command_tab || kind == BindingActionKind::close_panel || kind == BindingActionKind::refresh_panel;
 }
 
 bool supported(const ConfigurationSource &configuration, BindingAction action) {
   if (action.kind == BindingActionKind::extended) {
-    return configuration.notificationAction(action).has_value() || configuration.pluginAction(action).has_value();
+    const auto definition = configuration.definitionAction(action);
+
+    return configuration.notificationAction(action).has_value() || configuration.pluginAction(action).has_value() || definition.has_value();
   }
 
   return supported(action.kind);
@@ -163,7 +168,7 @@ BindingContext Application::bindingContext() const {
 }
 
 std::optional<BindingRepeat> Application::bindingRepeat(BindingAction action) const {
-  if (!dialog_.isEmpty() || (action.kind != BindingActionKind::scroll_pane_up && action.kind != BindingActionKind::scroll_pane_down)) {
+  if (!dialog_.isEmpty() || pick_controller_.isOpen() || (action.kind != BindingActionKind::scroll_pane_up && action.kind != BindingActionKind::scroll_pane_down)) {
     return {};
   }
 
@@ -178,7 +183,33 @@ std::optional<BindingRepeat> Application::bindingRepeat(BindingAction action) co
 }
 
 bool Application::handleBindingKey(QKeyEvent &event, QQuickItem &recipient, bool captures) {
-  return interceptAttachmentKey(event) || key_bindings_.route(event, recipient, captures);
+  if (interceptAttachmentKey(event)) {
+    return true;
+  }
+
+  const bool dismiss = event.type() == QEvent::KeyPress && !event.isAutoRepeat() && event.key() == Qt::Key_Escape && event.modifiers() == Qt::NoModifier;
+  if (pick_controller_.isOpen()) {
+    if (dismiss) {
+      auto *field = qobject_cast<NativeFormField *>(&recipient);
+      if (field != nullptr && field->cancelComposition()) {
+        return true;
+      }
+
+      closeComponentPick();
+
+      return true;
+    }
+
+    return false;
+  }
+
+  if (component_surfaces_.open_panel && dismiss) {
+    closeComponentPanel();
+
+    return true;
+  }
+
+  return key_bindings_.route(event, recipient, captures);
 }
 
 void Application::interruptBindings() {
@@ -257,9 +288,21 @@ void Application::executeBinding(BindingAction action) {
   case BindingActionKind::command_tab:
     executeCommandTab(action);
     break;
+  case BindingActionKind::close_panel:
+    closeComponentPanel();
+    break;
+  case BindingActionKind::refresh_panel:
+    refreshComponentPanel();
+    break;
   case BindingActionKind::extended:
     if (const auto plugin = configuration_source_.pluginAction(action)) {
       startPlugin(configuration_source_.pluginInvocation(*plugin, bindingContext()));
+    } else if (const auto definition = configuration_source_.definitionAction(action)) {
+      if (definition->kind == DefinitionActionDescription::Kind::panel) {
+        toggleComponentPanel(definition->index);
+      } else {
+        openComponentPick(definition->index);
+      }
     } else {
       executeNotificationBinding(action);
     }

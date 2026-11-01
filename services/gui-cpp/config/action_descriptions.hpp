@@ -53,6 +53,14 @@ public:
     return extended_[static_cast<std::size_t>(index)];
   }
 
+  void replaceDefinition(std::int32_t index, DefinitionActionDescription definition) {
+    if (!std::holds_alternative<DefinitionActionDescription>(at(index))) {
+      throw std::invalid_argument{"Action does not name a panel or pick"};
+    }
+
+    extended_[static_cast<std::size_t>(index)] = definition;
+  }
+
   std::int32_t retain(const ExtendedActionDescription &description) {
     if (extended_.size() == BindingLimits::bindings) {
       throw std::length_error{"Too many configured actions"};

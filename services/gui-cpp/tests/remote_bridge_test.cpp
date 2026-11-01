@@ -1,6 +1,7 @@
 #include "machines/failure.hpp"
 #include "platform/file_descriptor.hpp"
 #include "remote_bridge.hpp"
+#include "transport/runtime_protocol.hpp"
 #include "ssh_options.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_handshake.hpp"
@@ -10,6 +11,7 @@
 #include <QLocalSocket>
 #include <QProcess>
 #include <QString>
+#include <QStringLiteral>
 #include <QTemporaryDir>
 #include <QtCore/qchar.h>
 #include <QtCore/qcontainerfwd.h>
@@ -68,6 +70,7 @@ esac
 case "$1" in
   oversized) exec dd if=/dev/zero bs=32768 count=1 2>/dev/null ;;
   invalid) printf 'unreadable\n'; exit ;;
+  legacy) printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$5"; exit ;;
   incompatible) printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$4"; exit ;;
   raw-path) printf '/home/\377\n/bin/sh\n/run/test/socket\n%s\n' "$3"; exit ;;
 esac
@@ -77,7 +80,9 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
     const auto schema_text = telar::textView(std::span{schema});
     const auto expected = QString::fromLatin1(schema_text.data(), static_cast<qsizetype>(schema_text.size()));
     const auto mismatch = QString{expected.size(), QLatin1Char('Z')};
-    process.start(QStringLiteral("/bin/sh"), {QStringLiteral("-c"), QString::fromLatin1(script), QStringLiteral("telar-ssh-fixture"), arguments.at(arguments.size() - 2), arguments.back(), expected, mismatch}, QIODevice::ReadWrite);
+    const auto legacy_text = telar::textView(std::span{RuntimeProtocol::schema87});
+    const auto legacy = QString::fromLatin1(legacy_text.data(), static_cast<qsizetype>(legacy_text.size()));
+    process.start(QStringLiteral("/bin/sh"), {QStringLiteral("-c"), QString::fromLatin1(script), QStringLiteral("telar-ssh-fixture"), arguments.at(arguments.size() - 2), arguments.back(), expected, mismatch, legacy}, QIODevice::ReadWrite);
   }
 };
 
@@ -155,6 +160,22 @@ private:
     bridge.close();
     QTRY_COMPARE(observer.channel.state(), QLocalSocket::UnconnectedState);
     QCOMPARE(observer.failures, std::size_t{0});
+  }
+
+  Q_SLOT static void auditedLegacyDiscoveryStartsItsBridge() {
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    Observer observer;
+    RemoteBridge<TestSshHost, Observer> bridge{observer};
+    bridge.open(target(directory, QStringLiteral("legacy")));
+    QTRY_COMPARE(observer.channels, std::size_t{1});
+    if (!observer.discovery) {
+      QFAIL("Legacy discovery did not publish its schema");
+    }
+
+    QCOMPARE(observer.discovery->schema(), RuntimeProtocol::schema87);
+    QVERIFY(!observer.failure);
+    bridge.close();
   }
 
   Q_SLOT static void errors() {

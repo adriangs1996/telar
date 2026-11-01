@@ -1,19 +1,55 @@
 #include "font_source.hpp"
 #include "core/configuration.hpp"
+#include "fonts/face.hpp"
+#include "fonts/font_coverage.hpp"
 #include "fonts/font_query.hpp"
 #include "fonts/native_match.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
 #include <QByteArray>
 #include <QFile>
 #include <QFileDevice>
 #include <QFileInfo>
 #include <QString>
+#include <QStringLiteral>
 #include <QtCore/qiodevicebase.h>
 #include <QtCore/qnamespace.h>
+#include <cstddef>
+#include <exception>
 #include <native/font.h>
 #include <optional>
 #include <stdexcept>
+#include <utility>
 
 namespace telar::gui::qt {
+
+namespace {
+
+struct FallbackRequest {
+  const fonts::FontQuery &query;
+  std::optional<FontData> candidate;
+};
+
+int acceptFallbackFont(const fonts::FontMatch *match, void *context) noexcept {
+  auto &request = *static_cast<FallbackRequest *>(context);
+  try {
+    FontData data;
+    data.match = *match;
+    data.bytes = loadFontBytes(QString::fromUtf8(match->path));
+    const auto bytes = telar::byteView({data.bytes.constData(), static_cast<std::size_t>(data.bytes.size())});
+    const fonts::Face face{bytes, *match};
+    if (!face.monochrome() || !fonts::FontCoverage::covers(face, request.query.text())) {
+      return TELAR_FONT_FAMILY_NOT_FOUND;
+    }
+
+    request.candidate = std::move(data);
+
+    return TELAR_FONT_FOUND;
+  } catch (const std::exception &) {
+    return TELAR_FONT_FAMILY_NOT_FOUND;
+  }
+}
+
+}
 
 FontData loadFontData(const FontConfiguration &font) {
   const auto family = font.family.view().empty() ? QStringLiteral("JetBrains Mono") : QString::fromUtf8(font.family.view());
@@ -39,14 +75,13 @@ FontData loadFontData(const FontConfiguration &font) {
 }
 
 std::optional<FontData> loadFallbackFontData(const fonts::FontQuery &query) {
-  FontData data;
-  if (telar_gui_find_fallback_font(query.codepoints(), &data.match) != TELAR_FONT_FOUND) {
+  FallbackRequest request{.query = query, .candidate = {}};
+  fonts::FontMatch match{};
+  if (telar_gui_find_validated_fallback_font(query.codepoints(), &match, acceptFallbackFont, &request) != TELAR_FONT_FOUND) {
     return std::nullopt;
   }
 
-  data.bytes = loadFontBytes(QString::fromUtf8(data.match.path));
-
-  return data;
+  return std::move(request.candidate);
 }
 
 QByteArray loadFontBytes(const QString &path) {

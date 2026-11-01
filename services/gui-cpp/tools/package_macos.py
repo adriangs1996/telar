@@ -108,9 +108,10 @@ def main():
     if output.exists() or output.is_symlink():
         parser.error('output already exists; choose a new candidate path')
     binary = build / 'telar-gui'
+    command_helper = build / 'telar-gui-command'
     runtime = prefix / 'bin' / 'telar'
     helper = prefix / 'bin' / 'telar-diagram-renderer'
-    for required in (binary, runtime, helper):
+    for required in (binary, command_helper, runtime, helper):
         if not required.is_file():
             parser.error(f'missing executable: {required}')
     compiler = re.search(r'^CMAKE_CXX_COMPILER:FILEPATH=(.+)$', cache, re.M)
@@ -125,6 +126,7 @@ def main():
     macos.mkdir(parents=True)
     (resources / 'bin').mkdir(parents=True)
     shutil.copy2(binary, macos / 'telar-gui')
+    shutil.copy2(command_helper, macos / 'telar-gui-command')
     for executable in (runtime, helper):
         shutil.copy2(executable, resources / 'bin' / executable.name)
     shutil.copy2(root / 'packaging/macos/telar.icns', resources / 'telar.icns')

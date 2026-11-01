@@ -1,5 +1,9 @@
 #include "configuration_source.hpp"
 #include "appearance.hpp"
+#include "components/configuration.hpp"
+#include "components/invocation.hpp"
+#include "components/pick_items.hpp"
+#include "components/source.hpp"
 #include "application/client_view_state.hpp"
 #include "application/dependencies.hpp"
 #include "config/action_descriptions.hpp"
@@ -34,6 +38,7 @@
 #include <QFuture>
 #include <QGuiApplication>
 #include <QPointer>
+#include <QList>
 #include <QStyleHints>
 #include <QtConcurrentRun>
 #include <QtCore/qlogging.h>
@@ -109,6 +114,57 @@ ConfigurationSource::~ConfigurationSource() {
 
 const InputConfiguration &ConfigurationSource::input() const noexcept {
   return generation_ ? generation_->input() : default_input_;
+}
+
+const components::Configuration *ConfigurationSource::components() const noexcept {
+  return generation_ ? &generation_->components() : nullptr;
+}
+
+void ConfigurationSource::renderBar(components::Position position, const components::Context &context) {
+  if (!generation_) {
+    throw std::runtime_error{"ConfigurationNotLoaded"};
+  }
+
+  generation_->renderBar(position, context);
+}
+
+void ConfigurationSource::renderPanel(std::size_t index, const components::Context &context) {
+  if (!generation_) {
+    throw std::runtime_error{"ConfigurationNotLoaded"};
+  }
+
+  generation_->renderPanel(index, context);
+}
+
+void ConfigurationSource::closePanel() noexcept {
+  if (generation_) {
+    generation_->closePanel();
+  }
+}
+
+void ConfigurationSource::renderPick(std::size_t index, const components::Context &context, components::PickItems &items) {
+  if (!generation_) {
+    throw std::runtime_error{"ConfigurationNotLoaded"};
+  }
+
+  generation_->renderPick(index, context, items);
+}
+
+QList<QByteArray> ConfigurationSource::commandArguments(int reference, const char *field) const {
+  if (!generation_) {
+    throw std::runtime_error{"ConfigurationNotLoaded"};
+  }
+
+  QList<QByteArray> result;
+  generation_->visitArguments(reference, field, [&](std::string_view argument) {
+    result.append(QByteArray{argument.data(), static_cast<qsizetype>(argument.size())});
+  });
+
+  return result;
+}
+
+std::optional<DefinitionActionDescription> ConfigurationSource::definitionAction(BindingAction action) const {
+  return generation_ ? generation_->definitionAction(action) : std::nullopt;
 }
 
 std::uint64_t ConfigurationSource::configurationGeneration() const noexcept {

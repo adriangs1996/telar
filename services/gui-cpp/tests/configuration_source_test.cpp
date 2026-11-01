@@ -1,13 +1,12 @@
 #include "appearance_fixture.hpp"
 #include "application/client_view_state.hpp"
 #include "application/dependencies.hpp"
+#include "components/configuration.hpp"
+#include "components/source.hpp"
 #include "config/callback.hpp"
-#include "config/query.hpp"
 #include "config/plugin_effects.hpp"
 #include "config/plugin_invocation.hpp"
-#include "plugins/identity.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include <array>
+#include "config/query.hpp"
 #include "config/themes.hpp"
 #include "core/color.hpp"
 #include "core/configuration.hpp"
@@ -15,7 +14,9 @@
 #include "input/action.hpp"
 #include "input/configuration.hpp"
 #include "json_fixture.hpp"
+#include "plugins/identity.hpp"
 #include "qt/configuration_source.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "text/json.hpp"
 #include "ui/bundled_fonts.hpp"
@@ -37,6 +38,7 @@
 #include <QtCore/qtestsupport_core.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtTest/qtestcase.h>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -235,6 +237,53 @@ private:
     QTRY_COMPARE(changes.count(), 2);
     QVERIFY(pluginState(source).enabled);
     QCOMPARE(source.input().length, std::size_t{2});
+    QCOMPARE(source.error(), QString{});
+  }
+
+  Q_SLOT static void disabledPluginReferencedByStaticBarCanReload() {
+    const PluginFixture fixture;
+    writeFile(fixture.path, R"(
+      local t=require('telar')
+      return {api_version=2,plugins={{path='example'}},client={bars={bottom={
+        left=t.bar.static(t.ui.group({on_click={kind='plugin',plugin='sample',action='run'},t.ui.label('Run')})),center=t.bar.tabs()
+      }}}}
+    )");
+    ApplicationAllocator memory;
+    ConfigurationSource source{memory};
+    fixture.open(source);
+    QCOMPARE(source.error(), QString{});
+    const auto action = [&] {
+      const auto &bar = source.components()->bar(components::Position::bottom_left);
+      const auto retained = bar.action(bar.nodes().front());
+      if (!retained) {
+        throw std::runtime_error{"Static bar did not retain its action"};
+      }
+
+      return *retained;
+    };
+    const auto plugin_action = [&] {
+      const auto retained = source.pluginAction(action());
+      if (!retained) {
+        throw std::runtime_error{"Static bar action is not a plugin action"};
+      }
+
+      return *retained;
+    };
+    const auto initial = plugin_action();
+    QVERIFY(source.pluginInvocation(initial, {}).configuration_generation > 0);
+    const QSignalSpy changes{&source, &ConfigurationSource::changed};
+    const QSignalSpy failures{&source, &ConfigurationSource::failed};
+    source.setPluginEnabled({.text = "sample"}, false);
+    QTRY_COMPARE(changes.count(), 1);
+    QCOMPARE(failures.count(), 0);
+    QVERIFY(!pluginState(source).enabled);
+    const auto disabled = plugin_action();
+    QVERIFY_THROWS_EXCEPTION(std::invalid_argument, static_cast<void>(source.pluginInvocation(disabled, {})));
+    source.setPluginEnabled({.text = "example"}, true);
+    QTRY_COMPARE(changes.count(), 2);
+    QVERIFY(pluginState(source).enabled);
+    const auto enabled = plugin_action();
+    QCOMPARE(source.pluginInvocation(enabled, {}).configuration_generation, source.configurationGeneration());
     QCOMPARE(source.error(), QString{});
   }
 
