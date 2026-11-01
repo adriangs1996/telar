@@ -61,7 +61,7 @@ struct MachineChromeGeometry {
     const auto more_reserve = more_advance + chrome.px(2 * switcher_padding);
     auto left = area.x;
     for (const auto advance : advances) {
-      const auto width = std::min(advance + chrome.px((2 * switcher_padding) + switcher_disc + switcher_gap), chrome.px(maximum_control));
+      const auto width = switcherControlWidth(chrome, advance);
       if (row.hidden != 0 || left + width > area.right() - more_reserve) {
         ++row.hidden;
         continue;
@@ -76,6 +76,27 @@ struct MachineChromeGeometry {
     }
 
     return row;
+  }
+
+  [[nodiscard]] static float switcherControlWidth(const ChromeMetrics &chrome, float advance) noexcept {
+    return std::min(advance + chrome.px((2 * switcher_padding) + switcher_disc + switcher_gap), chrome.px(maximum_control));
+  }
+
+  [[nodiscard]] static float preferredSwitcher(const ChromeMetrics &chrome, std::span<const float> advances, float more_advance) {
+    if (advances.size() > MachineLimits::window_slots) {
+      throw std::length_error{"TooManyMachineControls"};
+    }
+
+    if (advances.size() <= 1) {
+      return 0;
+    }
+
+    float width = more_advance + chrome.px(2 * switcher_padding);
+    for (const auto advance : advances) {
+      width += switcherControlWidth(chrome, advance) + chrome.px(switcher_gap);
+    }
+
+    return width - chrome.px(switcher_gap);
   }
 
   [[nodiscard]] static float preferredSegment(const ChromeMetrics &chrome, float advance) noexcept {

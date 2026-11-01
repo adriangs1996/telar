@@ -10,8 +10,8 @@
 #include "graphics/placement.hpp"
 #include "gui_wait.hpp"
 #include "history/browser.hpp"
-#include "history_card_wait_trace.hpp"
 #include "history/page_storage.hpp"
+#include "history_card_wait_trace.hpp"
 #include "history_presentation_fixture.hpp"
 #include "input/click_tracker.hpp"
 #include "json_fixture.hpp"
@@ -21,14 +21,12 @@
 #include "platform/awake_clock.hpp"
 #include "platform/window.hpp"
 #include "platform/window_activation.hpp"
+#include "plugins/identity.hpp"
 #include "presentation/attention_fades.hpp"
 #include "presentation/frame_pacer.hpp"
 #include "presentation/history_card.hpp"
 #include "presentation/history_path.hpp"
 #include "projection.hpp"
-#include "plugins/identity.hpp"
-#include "runtime_endpoint.hpp"
-#include <QStandardPaths>
 #include "qml_fixture.hpp"
 #include "qt/application.hpp"
 #include "qt/key_adapter.hpp"
@@ -39,6 +37,7 @@
 #include "qt/runtime_connection.hpp"
 #include "qt/terminal_item.hpp"
 #include "qt/window_animation_clock.hpp"
+#include "runtime_endpoint.hpp"
 #include "screen_fixture.hpp"
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
@@ -75,10 +74,11 @@
 #include <QRegularExpression>
 #include <QScreen>
 #include <QSemaphore>
-#include <QThreadPool>
 #include <QSignalSpy>
 #include <QSizeF>
+#include <QStandardPaths>
 #include <QTemporaryDir>
+#include <QThreadPool>
 #include <QTimer>
 #include <QUrl>
 #include <QVariant>
@@ -91,6 +91,7 @@
 #include <QtCore/qcoreevent.h>
 #include <QtCore/qlist.h>
 #include <QtCore/qlogging.h>
+#include <QtCore/qmath.h>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qobjectdefs.h>
@@ -4243,6 +4244,70 @@ return {api_version=2, client={keybindings={
     QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), QStringLiteral("history"), runtime_wait_ms);
     client_->execute(Application::Action::cancel);
     QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), QString{}, runtime_wait_ms);
+  }
+
+  Q_SLOT void configuredBuiltinPriority() {
+    const auto original_size = window_->size();
+    const auto cleanup = qScopeGuard([this, original_size] {
+      client_->closeComponentPanel();
+      window_->resize(original_size);
+      client_->loadConfiguration({}, {}, {});
+      test::waitForSynchronizedFrame(*window_, runtime_wait_ms);
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    constexpr auto configuration = R"(
+      local t = require('telar')
+      return {api_version=2,client={bars={bottom={
+        left=t.bar.metrics(),center=t.bar.tabs(),right=t.bar.machines(),
+      },top={right=t.bar.static(t.ui.label({text=string.rep('Priority λ ',5),priority=100}))}}}}
+    )";
+    writeTestFile(path, configuration);
+    client_->loadConfiguration(path, {}, {});
+    QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+    const auto nodes = [this](const char *name) {
+      return client_->componentBars().value(QString::fromLatin1(name)).toMap().value(QStringLiteral("nodes")).toList();
+    };
+    QTRY_COMPARE_WITH_TIMEOUT(nodes("left").size(), 4, runtime_wait_ms);
+    QCOMPARE(nodes("right").size(), 1);
+    for (const auto &node : nodes("left")) {
+      QCOMPARE(node.toMap().value(QStringLiteral("priority")).toInt(), 40);
+    }
+    QCOMPARE(nodes("right").first().toMap().value(QStringLiteral("priority")).toInt(), 40);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto caption = QStringLiteral("Priority λ ").repeated(5);
+    const auto *label = componentItem(QStringLiteral("label"), caption);
+    QVERIFY(label != nullptr);
+    const auto cpu_items = [this] {
+      auto items = test::visualItems(*window_->contentItem(), QStringLiteral("cpuMetric"));
+      items.removeIf([](const QQuickItem *item) {
+        return !item->isVisible();
+      });
+      return items;
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(!cpu_items().isEmpty(), runtime_wait_ms);
+    const auto *cpu = cpu_items().front();
+    const auto *metrics = cpu->parentItem()->parentItem();
+    const auto ratio = metrics->property("ratio").toReal();
+    const auto full_width = metrics->implicitWidth();
+    constexpr qreal tabs_and_spacing = 160;
+    const auto narrow_width = qCeil(label->implicitWidth() + (tabs_and_spacing * ratio) + (full_width / 2));
+    QVERIFY(narrow_width >= window_->minimumWidth());
+    window_->resize(narrow_width, original_size.height());
+    QTRY_VERIFY_WITH_TIMEOUT(metrics->width() < full_width, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(componentItem(QStringLiteral("label"), caption) != nullptr, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto *retained = componentItem(QStringLiteral("label"), caption);
+    const QRectF viewport{QPointF{}, QSizeF{window_->size()}};
+    QVERIFY(viewport.contains(retained->mapRectToScene(retained->boundingRect())));
+    auto memory_items = test::visualItems(*window_->contentItem(), QStringLiteral("memoryMetric"));
+    QVERIFY(!memory_items.isEmpty());
+    QVERIFY(!memory_items.front()->isVisible());
+    const auto screenshot = qEnvironmentVariable("TELAR_GUI_TEST_BUILTIN_FIT_SCREENSHOT");
+    if (!screenshot.isEmpty()) {
+      QVERIFY(window_->grabWindow().save(screenshot, "PNG"));
+    }
   }
 
   Q_SLOT void configuredGroupPriority() {

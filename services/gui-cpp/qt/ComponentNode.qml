@@ -30,6 +30,7 @@ Item {
         group: node.kind === "group", meter: node.kind === "meter",
         width: node.kind === "group" ? (visual.item?.chromeWidth ?? 0) : unreducedWidth,
         compactDelta: compactWidthDelta,
+        childGap: visual.item?.childGap, leadingGap: visual.item?.leadingGap,
     }].concat(node.kind === "group" ? (visual.item?.fitNodes ?? []) : [])
 
     implicitWidth: visual.item?.implicitWidth ?? 0
@@ -50,7 +51,7 @@ Item {
         height: root.height
         sourceComponent: {
             switch (root.node.kind) {
-            case "group": return group;
+            case "group": return root.surface.kind === "metrics" ? builtinMetrics : group;
             case "icon": case "mark": return icon;
             case "meter": case "meter_row": return meter;
             case "sparkline": return sparkline;
@@ -177,6 +178,19 @@ Item {
                 elide: Text.ElideRight
                 visible: parent.styled
             }
+        }
+    }
+
+    Component {
+        id: builtinMetrics
+        MetricsGroup {
+            metrics: root.controller.hostMetrics
+            nodes: root.surface.nodes ?? []
+            fittedLevels: root.fittedLevels
+            colors: root.colors
+            typography: root.typography
+            ratio: root.ratio
+            implicitHeight: root.rowHeight
         }
     }
 

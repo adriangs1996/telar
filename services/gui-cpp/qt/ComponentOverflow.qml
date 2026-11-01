@@ -95,7 +95,7 @@ Item {
                 height: root.headerHeight
                 text: "More"
                 color: root.colors.text
-                pixelSize: root.typography.body
+                pixelSize: root.typography.body ?? root.typography.small
                 emphasized: true
             }
             ChromeButton {
@@ -105,7 +105,7 @@ Item {
                 height: width
                 colors: root.colors
                 text: "×"
-                pixelSize: root.typography.body
+                pixelSize: root.typography.body ?? root.typography.small
                 cornerRadius: 5 * root.ratio
                 Accessible.name: "Close hidden components"
                 onClicked: overflowPopup.close()

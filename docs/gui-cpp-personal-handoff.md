@@ -59,7 +59,23 @@ executable/start instead of restoring the old process. Old Zig GUI87625 was alre
 absent before this work; do not restart it or claim we stopped it. Private test
 children are separate and must be cleaned up by their owning helpers only.
 
-## Available candidate: Preview12 (2026-11-01)
+## Available candidate: Preview13 (2026-11-01)
+
+`services/gui-cpp/out-adoption/Telar C++ Preview 13.app` is frozen, qualified and
+already offered to Adrian. GUI SHA256
+`cb3c71e61984fb05efc463ee8e59c7be9f3b00336cc7a2a520f3ffca00673bf6`;
+raw `0ed3c6acbb7ea1458ced8f13517cd6595a8b7ac60998b2f115b6b2c28052e2d8`.
+All1739 hashes/121 Mach-O/deep-strict signatures pass. Exact relocated schemas87/88
+with native blur/login/Finder/config/runtime/plugins/bars/two windows/client pause,
+realSSH, VimUTF8, full custom panel/bars and task/worktree/plan survival all pass.
+Five daily captures plus schema87 direct were inspected; zero QML warnings/private
+cleanup. Callback/controlled-anchor panel actor and protocol-fixture activity have
+the same limits as12 below. Raw GUI remains byte-identical after portable null
+checks; no repackaging/new clean build is claimed. Open-n/rollback as below with13.
+Preview8/12 and installed app/config/runtime are preserved. Daily and final goals
+stay OPEN; physical sleep is still untried. See DAILY_DRIVER.md and builtin report.
+
+## Preserved candidate: Preview12 (2026-11-01)
 
 `services/gui-cpp/out-adoption/Telar C++ Preview 12.app`
 
@@ -95,7 +111,7 @@ Local commits `03cfd7f62` (first-command diagnostic,243 entries) and `15e383dc2`
 verifiers pass without current-source checking after later edits. Previous scoped
 checkpoints/artwork/panel/group/global-fitting evidence remain in measurements.
 
-NEW shared-overflow source work is qualified but not committed at this handoff:
+Shared-overflow source work and Preview12 are committed locally in `c91aca988`:
 CMakeLists, ComponentFit.js, ComponentSlot.qml, StatusBar.qml, NavigationBar.qml,
 QuickTest, plus new ComponentOverflow.qml. Original BarRow positions include legacy
 `top.right` as the fourth bottom-row source: it now appears there once, with one
@@ -121,9 +137,38 @@ Old12 +new7 directed Node controls pass (functional, not Qt/oracle/performance g
 Final Mac/Linux menu+cached-error captures were inspected. No build/native/quality/
 packaging/smoke jobs remain active. Raw `out-dependencies/component-shared-overflow-1`.
 
-Need finish the source-bound report/archive/verifier, review and local commit of
-shared overflow/Preview12; then CONTINUE actual PARITY. Do not redo passing checks
-without a new change/failure. Preserve all negative/reversion/diagnostic failures.
+The shared-overflow report/archive/verifier and local commit are complete. CONTINUE
+actual PARITY; do not repeat completed Preview12 qualification without new changes.
+
+## Latest qualified source: builtin fitting; continue machine facts next
+
+Raw `services/gui-cpp/out-dependencies/component-builtin-fit-1`; frozen report/archive/
+verifier `measurements/component-builtin-fit`. Original priority40 group/CPU/memory/
+battery and machine nodes now use the common tree. Metrics retain existing renderers,
+6px group/leading-child/child spacing and controller-free behavior. Machine switcher
+width0 is corrected; hidden lists/segments retain measurement without click records.
+Shared-menu body typography falls back to small for standalone StatusBar. Portable
+explicit QPointer comparisons satisfy Qt6.8/6.12 with identical Mac raw GUI bytes.
+
+Five new/19 prior directed controls pass. Mac Release14native0, Linux Release+ASAN
+14native0 each; four affected CTest suites pass. Final portable-null machine-window
+suites pass MacRelease and LinuxRelease+ASAN. Mac ASAN14assertionspass/exit1 for623226B
+3639alloc, no address/UB or suppression. Broad/actual-editor/format pass BOTH SDKs;
+all14 portable hashes match. Linux actual editor OOM is retained; two retries use
+-j=1/no background index/disk PCH and deliver empty diagnostics within the same60s
+limit. Broad/profile/project .clangd/assertions/deadlines unchanged. Negative metric-
+projection, machine-width/hidden-width, first-sample admission and initial quality/
+formatter failures are retained. No heavy checks or private smokes remain running.
+
+Next functional work: original builtin machines show phase glyphs plus connected
+CPU values rather than the existing switcher adapter's visuals. Original reference
+src/gui/widgets/BarRow.zig:112 suppresses facts for <=1 machine, then shown slots in
+slot order. inline_nodes.zig:529-600 uses machine gap12/part gap5, phase/attention
+palette, active bold label, CPU only when connected+present. MachineRow already owns
+phase/cpu_percent and machine_controller.cpp summarize emits machinesChanged for
+hidden clients too; no runtime rewrite is needed. Research only so far, no facts
+source changes. Finish local review/commit of this qualified checkpoint, then
+CONTINUE actual implementation; a checkpoint is not full completion.
 
 ## Remaining gates: keep these separate
 
@@ -131,7 +176,7 @@ Daily acceptance: physical system sleep remains unverified; Mac shutdown-leak
 attribution/stability remains open. Release Preview12 is available for daily
 assessment. Do not equate private SIGSTOP/SIGCONT with physical system sleep.
 
-Final parity: builtin metric/machine priority, full fitting/styling and combined
+Final parity: complete builtin-machine facts, full fitting/styling and combined
 menu's wider interactions, native ownership/accessibility, complete paired visuals
 and measured comparative performance. PARITY.md retains detailed known failures,
 including other densities/platforms and existing comparative losses. Do not infer

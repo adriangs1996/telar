@@ -3,6 +3,7 @@
 #include "application/records.hpp"
 #include "component_projection.hpp"
 #include "component_surface_state.hpp"
+#include "components/builtin_content.hpp"
 #include "components/clock.hpp"
 #include "components/configuration.hpp"
 #include "components/content.hpp"
@@ -179,7 +180,8 @@ void Application::resetComponents() {
     for (std::size_t index = 0; index < component_surfaces_.bars.size(); ++index) {
       auto &state = component_surfaces_.bars[index];
       state.revision = ++next_component_revision_;
-      if (configuration->definitions().source(static_cast<components::Position>(index)).kind == components::SourceKind::fixed) {
+      const auto kind = configuration->definitions().source(static_cast<components::Position>(index)).kind;
+      if (kind == components::SourceKind::fixed || components::builtinSource(kind)) {
         projectComponentSource(index, false);
       }
     }
@@ -200,6 +202,10 @@ void Application::projectComponentSource(std::size_t index, bool panel) {
   if (panel) {
     state.nodes = componentRecords(configuration->panel(), configuration_source_.configuration().theme, time);
     state.clock_next = nextClock(configuration->panel());
+  } else if (const auto kind = configuration->definitions().source(static_cast<components::Position>(index)).kind; components::builtinSource(kind)) {
+    const auto content = components::builtinContent(kind);
+    state.nodes = componentRecords(content, configuration_source_.configuration().theme, time);
+    state.clock_next = Clock::time_point::max();
   } else {
     const auto &content = configuration->bar(static_cast<components::Position>(index));
     state.nodes = componentRecords(content, configuration_source_.configuration().theme, time);

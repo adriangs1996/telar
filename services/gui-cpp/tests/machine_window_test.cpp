@@ -862,6 +862,13 @@ class MachineWindowTest : public QObject {
     auto *layout = qobject_cast<MachineChromeLayout *>(chrome.get());
     QVERIFY(layout != nullptr);
     QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 2, wait_ms);
+    const auto preferred = layout->preferredWidth();
+    QVERIFY(preferred > 0);
+    chrome->setVisible(false);
+    QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 0, wait_ms);
+    QCOMPARE(layout->preferredWidth(), preferred);
+    chrome->setVisible(true);
+    QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 2, wait_ms);
     const auto remote = layout->items()->data(layout->items()->index(1, 0), ListModel::record_role).toMap();
     const auto bounds = remote.value(QStringLiteral("bounds")).toRectF();
     QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, bounds.center().toPoint());
@@ -911,8 +918,10 @@ class MachineWindowTest : public QObject {
     QTRY_COMPARE_WITH_TIMEOUT(row().value(QStringLiteral("ink")).value<QColor>().alpha(), 0, wait_ms);
     MachineWindow::recolor(fixture.application, Machines::local_slot, "red");
     QTRY_COMPARE_WITH_TIMEOUT(row().value(QStringLiteral("ink")).value<QColor>(), fixture.application.colors().value(QStringLiteral("red")).value<QColor>(), wait_ms);
+    const auto preferred = layout->preferredWidth();
     chrome->setVisible(false);
     QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 0, wait_ms);
+    QCOMPARE(layout->preferredWidth(), preferred);
     chrome->setVisible(true);
     QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 1, wait_ms);
   }

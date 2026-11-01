@@ -4,6 +4,10 @@ var Level = Object.freeze({full: 0, compact: 1, hidden: 2});
 function measure(nodes, levels, gap) {
     const widths = {};
     const children = {};
+    const gaps = {};
+    for (const node of nodes) {
+        gaps[node.index] = {child: node.childGap ?? gap, leading: node.leadingGap ?? 0};
+    }
     let width = 0;
     let roots = 0;
     let hidden = 0;
@@ -18,7 +22,7 @@ function measure(nodes, levels, gap) {
             continue;
         }
         const siblings = children[node.parent] ?? 0;
-        widths[node.parent] += size + (siblings > 0 ? gap : 0);
+        widths[node.parent] += size + (siblings > 0 ? gaps[node.parent].child : gaps[node.parent].leading);
         children[node.parent] = siblings + 1;
     }
     for (const node of nodes) {
@@ -153,7 +157,8 @@ function allocate(slots, available, gap, minimumTabsWidth, overflowWidth) {
     const sources = slots.map(function(slot, index) {
         return {tabs: slot.tabs, width: slot.width, minimumWidth: slot.minimumWidth ?? 0, overflowWidth: slot.overflowWidth, nodes: slot.nodes.map(function(node) {
             return {index: index * stride + node.index, parent: node.parent < 0 ? -1 : index * stride + node.parent,
-                    group: node.group, meter: node.meter, width: node.width, priority: node.priority, compactDelta: node.compactDelta};
+                    group: node.group, meter: node.meter, width: node.width, priority: node.priority, compactDelta: node.compactDelta,
+                    childGap: node.childGap, leadingGap: node.leadingGap};
         })};
     });
     let nodes = [];

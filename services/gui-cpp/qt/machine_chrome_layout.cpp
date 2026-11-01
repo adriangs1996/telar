@@ -84,12 +84,12 @@ void MachineChromeLayout::setController(Application *controller) {
     return;
   }
 
-  if (controller_) {
+  if (controller_ != nullptr) {
     disconnect(controller_, nullptr, this, nullptr);
   }
 
   controller_ = controller;
-  if (controller_) {
+  if (controller_ != nullptr) {
     connect(controller_, &Application::machinesChanged, this, &MachineChromeLayout::observeSources);
     connect(controller_, &Application::configurationChanged, this, &MachineChromeLayout::invalidate);
     connect(controller_, &Application::windowGeometryChanged, this, &MachineChromeLayout::invalidate);
@@ -116,9 +116,9 @@ void MachineChromeLayout::setSegment(bool segment) {
 
 void MachineChromeLayout::observeSources() {
   std::array<std::optional<Source>, MachineLimits::window_slots> incoming;
-  const bool shown = controller_ && controller_->machines_.count() > 1;
-  const bool attention = controller_ && controller_->machines_.attentionElsewhere();
-  if (controller_) {
+  const bool shown = controller_ != nullptr && controller_->machines_.count() > 1;
+  const bool attention = controller_ != nullptr && controller_->machines_.attentionElsewhere();
+  if (controller_ != nullptr) {
     for (std::size_t index = 0; index < incoming.size(); ++index) {
       const auto slot = static_cast<Machines::Slot>(index);
       if (controller_->machines_.shown(slot)) {
@@ -224,7 +224,7 @@ QVariantMap MachineChromeLayout::foldRecord(Rect bounds, std::size_t count) {
 }
 
 void MachineChromeLayout::rebuild() {
-  if (!controller_ || window() == nullptr || !shown_ || !isVisible() || height() <= 0 || (mode_ == Mode::switcher && width() <= 0)) {
+  if (controller_ == nullptr || window() == nullptr || !shown_ || height() <= 0) {
     items_.reconcile({});
     if (preferred_width_ != 0) {
       preferred_width_ = 0;
@@ -234,7 +234,7 @@ void MachineChromeLayout::rebuild() {
     return;
   }
 
-  if (!catalog_) {
+  if (catalog_ == nullptr) {
     bindWindow();
   }
 
@@ -250,11 +250,8 @@ void MachineChromeLayout::rebuild() {
       {QStringLiteral("pixelSize"), (mode_ == Mode::segment ? chrome_.body : chrome_.small) / density_},
   };
   QList<QVariantMap> records;
-  const Rect area{.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)};
-  const auto preferred = mode_ == Mode::segment ? segmentRecords(area, records) : qreal{0};
-  if (mode_ == Mode::switcher) {
-    switcherRecords(area, records);
-  }
+  const Rect area = isVisible() ? Rect{.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)} : Rect{};
+  const auto preferred = mode_ == Mode::segment ? segmentRecords(area, records) : switcherRecords(area, records);
 
   if (style != style_ || preferred != preferred_width_) {
     style_ = std::move(style);
@@ -285,7 +282,7 @@ qreal MachineChromeLayout::segmentRecords(Rect area, QList<QVariantMap> &records
   return 0;
 }
 
-void MachineChromeLayout::switcherRecords(Rect area, QList<QVariantMap> &records) {
+qreal MachineChromeLayout::switcherRecords(Rect area, QList<QVariantMap> &records) {
   std::array<float, MachineLimits::window_slots> advances{};
   std::array<const Source *, MachineLimits::window_slots> ordered{};
   std::size_t count = 0;
@@ -304,10 +301,12 @@ void MachineChromeLayout::switcherRecords(Rect area, QList<QVariantMap> &records
   if (row.hidden != 0 && !row.fold.empty()) {
     records.append(foldRecord(row.fold, row.hidden));
   }
+
+  return MachineChromeGeometry::preferredSwitcher(chrome_, std::span{advances}.first(count), measure("+99", false)) / density_;
 }
 
 void MachineChromeLayout::activate(const QString &identity) {
-  if (!controller_ || window() == nullptr || window() != controller_->window_) {
+  if (controller_ == nullptr || window() == nullptr || window() != controller_->window_) {
     return;
   }
 

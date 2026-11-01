@@ -87,7 +87,7 @@ private:
   void bindWindow();
   void rebuild();
   [[nodiscard]] qreal segmentRecords(Rect area, QList<QVariantMap> &records);
-  void switcherRecords(Rect area, QList<QVariantMap> &records);
+  qreal switcherRecords(Rect area, QList<QVariantMap> &records);
   [[nodiscard]] float measure(std::string_view text, bool emphasized);
   [[nodiscard]] QVariantMap controlRecord(const Source &source, Rect bounds, float advance) const;
   [[nodiscard]] QVariantMap foldRecord(Rect bounds, std::size_t count);

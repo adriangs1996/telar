@@ -4,7 +4,44 @@ The complete functional, visual and equal-or-better performance objective remain
 open. Only the command/quick-navigation palette and notifications/sounds may be
 deferred for daily adoption; existing implementations stay available.
 
-## Current candidate: Preview12; shared custom-bar overflow
+## Current candidate: Preview13; builtin bar priorities
+
+`out-adoption/Telar C++ Preview 13.app` is separately packaged and available for
+normal Finder launch. It adds original-priority fitting for the builtin metric
+and machine sources; CPU/memory/battery yield before a configured high-priority
+widget. Machine controls have a measurable width and retain it while hidden,
+without hidden click records. Existing metrics, controllers and custom menus
+are reused. Full machine-fact glyph/CPU presentation and final styling remain open.
+
+From the worktree root:
+
+```sh
+open -n "services/gui-cpp/out-adoption/Telar C++ Preview 13.app"
+```
+
+Finder can open it after another preview closes. It can be copied under its separate
+name to Applications. Close it and open `~/Applications/Telar.app` to return. No
+installation/configuration/session is replaced or migrated; Preview8/12 are intact.
+GUI SHA256: `cb3c71e61984fb05efc463ee8e59c7be9f3b00336cc7a2a520f3ffca00673bf6`.
+
+All1739 hashes/121 Mach-O checks/deep-strict signatures pass. Both exact relocated
+schema87/88 Finder/login/config/runtime/plugin/bar/two-window/client-pause smokes,
+realSSH, Vim exactUTF8, custom-panel/bar composition and task/worktree/plan survival
+flows pass with zero QML warnings and disposable cleanup. Five daily captures plus
+schema87 direct were inspected. Panel actions use an owned callback/controlled
+anchor; activity is an official-protocol fixture, not an AI agent/Git checkout.
+
+Native fitting qualification passes14 checks per SDK, including Linux sanitizers;
+Mac sanitizer assertions pass but shutdown leak acceptance remains open. Four
+affected CTest suites also pass. Final broad/actual-editor/format checks pass both SDKs; all14 portable sources
+match. Two private Linux editor probes limit clangd concurrency/background indexing
+after a kernel-confirmed OOM, without changing diagnostics/profile/deadline. The
+final Mac raw GUI remains byte-identical to this package's recorded input. Physical system sleep remains untried. Daily adoption,
+complete paired visuals/performance and audited own-Zig retirement remain OPEN.
+This uses the fresh Preview9 baseline plus increments, not a new clean/no-Zig build.
+See [builtin fitting evidence](measurements/component-builtin-fit.md).
+
+## Preserved candidate: Preview12; shared custom-bar overflow
 
 `out-adoption/Telar C++ Preview 12.app` is separately packaged with deployed Qt/QML.
 It includes Preview11's corrections plus one shared overflow menu for the configured

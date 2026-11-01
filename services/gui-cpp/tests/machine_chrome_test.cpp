@@ -78,6 +78,23 @@ void machineRowsReserveTheirFoldAndKeepSlotOrder() {
   require(rejected, "machine chrome cannot exceed the shared bounded machine capacity");
 }
 
+void switcherPreferredWidthFitsEveryControl() {
+  using Geometry = MachineChromeGeometry;
+  const ChromeMetrics chrome;
+  constexpr std::array<float, 2> advances{30, 300};
+  constexpr float more_advance = 20;
+  constexpr float expected_width = 217;
+  const auto width = Geometry::preferredSwitcher(chrome, advances, more_advance);
+  require(width == expected_width, "switcher intrinsic width must reserve the original control caps, gaps and fold budget");
+  const Rect bounds{.width = width, .height = 26};
+  const auto complete = Geometry::switcher(bounds, chrome, advances, more_advance);
+  require(complete.count == advances.size() && complete.hidden == 0, "the preferred width must show every machine");
+  auto narrow = bounds;
+  --narrow.width;
+  require(Geometry::switcher(narrow, chrome, advances, more_advance).hidden == 1, "the preferred width must use the existing switcher fitting boundary");
+  require(Geometry::preferredSwitcher(chrome, {}, more_advance) == 0 && Geometry::preferredSwitcher(chrome, std::span{advances}.first(1), more_advance) == 0, "a switcher with at most one machine must remain absent");
+}
+
 void machineControlInkAreasKeepOriginalInsets() {
   using Geometry = MachineChromeGeometry;
   const ChromeMetrics chrome;
@@ -110,6 +127,7 @@ int main() {
     colorNamesKeepWrittenSemantics();
     machineRowsReserveTheirFoldAndKeepSlotOrder();
     machineControlInkAreasKeepOriginalInsets();
+    switcherPreferredWidthFitsEveryControl();
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
 

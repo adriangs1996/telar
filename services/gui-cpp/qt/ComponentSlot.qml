@@ -31,8 +31,6 @@ Item {
         sourceComponent: {
             switch (root.surface.kind) {
             case "tabs": return tabStrip;
-            case "metrics": return metrics;
-            case "machines": return machines;
             default: return content;
             }
         }
@@ -71,25 +69,6 @@ Item {
             onClosed: key => root.controller.execute(GuiController.Action.close_tab, key)
             onRenamed: root.controller.execute(GuiController.Action.rename_tab)
             onCreated: root.controller.execute(GuiController.Action.new_tab)
-        }
-    }
-
-    Component {
-        id: metrics
-        MetricsGroup {
-            metrics: root.controller.hostMetrics
-            colors: root.colors
-            typography: root.typography
-            ratio: root.ratio
-        }
-    }
-
-    Component {
-        id: machines
-        MachineChrome {
-            controller: root.controller
-            colors: root.colors
-            implicitWidth: preferredWidth
         }
     }
 

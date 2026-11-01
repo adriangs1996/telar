@@ -1,3 +1,4 @@
+#include "components/builtin_content.hpp"
 #include "components/invocation.hpp"
 #include "components/node.hpp"
 #include "components/pick_items.hpp"
@@ -7,6 +8,7 @@
 #include "config/generation.hpp"
 #include "core/memory.hpp"
 #include "input/action.hpp"
+#include "presentation/bar_metrics.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include <array>
 #include <chrono>
@@ -37,6 +39,28 @@ struct Fixture {
 void require(bool condition, const char *message) {
   if (!condition) {
     throw std::runtime_error{message};
+  }
+}
+
+void builtinContent() {
+  const auto metrics = components::builtinContent(components::SourceKind::metrics);
+  const auto nodes = metrics.nodes();
+  require(nodes.size() == 4 && nodes.front().kind == components::Kind::group && nodes.front().parent == components::Node::no_parent, "builtin metrics must retain the original root group");
+  constexpr std::array names{BarMetric::cpu, BarMetric::memory, BarMetric::battery};
+  for (std::size_t index = 0; index < names.size(); ++index) {
+    const auto &node = nodes[index + 1];
+    require(node.kind == components::Kind::metric && node.parent == 0 && node.metric == names[index], "builtin metrics must retain original child order and ownership");
+  }
+
+  for (const auto &node : nodes) {
+    require(node.priority == components::builtin_priority && !metrics.action(node), "builtin metrics must yield at original priority without configured callbacks");
+  }
+
+  const auto machines = components::builtinContent(components::SourceKind::machines);
+  require(machines.nodes().size() == 1 && machines.nodes().front().kind == components::Kind::machines && machines.nodes().front().parent == components::Node::no_parent && machines.nodes().front().priority == components::builtin_priority, "builtin machines must be one original-priority root");
+  require(!machines.action(machines.nodes().front()), "builtin machine controls must retain their dedicated routing");
+  for (const auto kind : {components::SourceKind::empty, components::SourceKind::tabs, components::SourceKind::fixed, components::SourceKind::dynamic, components::SourceKind::command}) {
+    require(!components::builtinSource(kind) && components::builtinContent(kind).empty(), "other source kinds must not acquire builtin nodes");
   }
 }
 
@@ -230,6 +254,7 @@ int main() {
     SystemAllocator system;
     constexpr std::size_t allocation_budget = std::size_t{8} * 1024 * 1024;
     BudgetAllocator memory{system, allocation_budget};
+    builtinContent();
     profilesAndDefinitions(memory);
     renderLifetime(memory);
     pickRendering(memory);
