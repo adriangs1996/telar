@@ -1,3 +1,50 @@
+## CURRENT bounded stability triage finished; next custom-component omissions (2026-11-01)
+
+Local commits: a03baa8af surfaces+compat+font+IME+Preview7; a57322636 exact
+project/task/plan evidence. Preview7 remains current frozen usable candidate,
+GUI ed71b332...; full/daily acceptance OPEN. No product changes aftera03 yet.
+Do not end at checkpoint. User feedback async question remains optional/pending.
+Only personal-frame-delivery.md was untracked before stability docs; NEVER touch.
+
+New measurements/surface-stability.md +validation.json+surface-stability/:
+24 raw artifacts (~2.6MB compressed), verify.py PASS. Native same frozenASAN
+workspace-readiness-asan-frozen-2 binary964d810... repeated configuredBarsAndPanels
++configuredPicks1cycle:4assertPASS, actual1LSAN729800B3985;5cycles:12assertPASS,
+actual1LSAN710485B3847. No growth in this short comparison, NOT leak-free/RSS proof.
+Rootchecks/suppressions unchanged. Bounded diagnostic driver exec1385 completed.
+
+Private recoverable-1 probe in out-dependencies/surface-stability-1 injects ONLY
+__lsan_do_recoverable_leak_check beforeUI teardown/afterengine+clientreset/after
+QtDeferredDelete drain, plus ORIGINALfinalLSAN. No root registration/ignore/flags.
+ProbeSHA65c5d20... native label surface-live-leaks-asan-mac-1:4assertPASS actual1.
+Phases live1426647B18043, destroyed541144B2683, drained548888B2679, final633856B3427.
+~91s because AtosSymbolizer; sample15952 proved symbolization, not timeout/deadlock.
+I initially described it as stuck; corrected user after it completed WITHIN180s.
+Tool exec83228 DONE1. Sampling2443 DONE0. Attempted process-tree snapshot AFTER
+exit gotKeyError15952, sentNOsignals. No reference88runtime remained, allboards
+cleanup0/general954unchanged. No userRT/app/VM/Sway change. Full raw178kline report
+stored compressed. Official LLVMAPI docs confirm recoverable checks retainfinal
+check. Upstreamknown120Bobjc bug is NOT an explanation of allours; no suppression.
+
+Next worthwhile scope (not microkernel/pixelmatrix): registered omissions in
+custom ComponentNode: Telar mark usesfallbacksquare, callout ignoresitsicon.
+Already examined code, NOT edited. Existing src/assets/telar-mark-64.png and
+monoSVG available. ProviderMark/ProviderArtwork paint providerraw64 images with
+existing ArtworkResize and optional tint; could reuse for Telar without newSVG
+framework or platform-specific code. CurrentProviderMark API hasprovider/color/
+ratio, noTelarflag. ComponentNode centralicon reusedby label/group/mark; callout
+Column Text+children currentlydoesn'treserveorpainticon. SourceCMake resource
+block993 includesfonts/providerrawsheet only; anynewTelarasset needsresourceadd.
+Original Mark.zig maps.telarto.telarmarkglyph; atlasusesartwork (icons.zig153).
+CoreContentReadercalloutstoresicon; panelplaceonly (verticalfixedwidth), so do NOT
+assert a QML bindingloop without reproducing. Need extend existingnativecustom
+fixture to rendercallout+Telarmark, observeoldwarning/visual omission, implement
+bothplatforms and focusedquality/nativechecks; Preview7staysfrozenuntilnewcandidate
+exactverification. Avoid speculativegrowthofscopecalls; readeruntrackeduserfile
+forbidden. Reverify protected hostPIDs35801/87625/7158 +guest9469 BEFOREsourceedits.
+Stabilitydocs/evidence ready tocommit locally; no publish/merge. Physical system
+sleep remainsmanual/unverified; don't suspend user's machine/processes.
+
 ## CURRENT additional daily project/task/plan evidence closed (2026-11-01)
 
 Production surfaces/compat/font/IME and frozen qualification committed locally as

@@ -266,6 +266,13 @@ Full visual and comparative performance acceptance and audited removal of own
 Zig remain separate final gates. Palette and notifications are the only daily
 areas allowed to be deferred.
 
+One/five surface-replacement cycles pass their four/twelve assertions; both still
+exit one for LSAN, with about 730/710 KB reported. A private recoverable-check
+probe also reports retention before and after UI destruction and at final exit.
+The apparent stall was slow symbolization; it finished within the original
+runner deadline. See [surface-stability.md](measurements/surface-stability.md).
+This short observation does not establish leak freedom or long-run RSS stability.
+
 ## Required adoption checklist
 
 Checked rows record implemented behavior and scoped automated evidence. They do
