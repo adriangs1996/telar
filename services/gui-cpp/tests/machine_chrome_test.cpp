@@ -4,11 +4,14 @@
 #include "core/metrics.hpp"
 #include "core/theme_values.hpp"
 #include "machines/limits.hpp"
+#include "machines/machine_row.hpp"
 #include "presentation/machine_chrome_geometry.hpp"
+#include "presentation/machine_facts.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <iostream>
 #include <optional>
@@ -95,6 +98,44 @@ void switcherPreferredWidthFitsEveryControl() {
   require(Geometry::preferredSwitcher(chrome, {}, more_advance) == 0 && Geometry::preferredSwitcher(chrome, std::span{advances}.first(1), more_advance) == 0, "a switcher with at most one machine must remain absent");
 }
 
+void inlineMachineFactsKeepOriginalStateAndGeometry() {
+  struct Case {
+    MachinePhase phase;
+    std::string_view glyph;
+    PaletteRole ink;
+  };
+
+  constexpr std::array cases{
+      Case{.phase = MachinePhase::connected, .glyph = "●", .ink = PaletteRole::green},
+      Case{.phase = MachinePhase::connecting, .glyph = "◌", .ink = PaletteRole::overlay1},
+      Case{.phase = MachinePhase::lost, .glyph = "✕", .ink = PaletteRole::peach},
+      Case{.phase = MachinePhase::failed, .glyph = "✕", .ink = PaletteRole::red},
+      Case{.phase = MachinePhase::stopped, .glyph = "○", .ink = PaletteRole::overlay0},
+  };
+  constexpr std::uint8_t cpu = 92;
+  for (const auto &item : cases) {
+    require(MachineFacts::glyph(item.phase, false) == item.glyph && MachineFacts::glyphInk(item.phase, false) == item.ink, "machine facts must retain original phase glyph and palette");
+    require(MachineFacts::glyph(item.phase, true) == "●" && MachineFacts::glyphInk(item.phase, true) == PaletteRole::yellow, "attention must take precedence over every link phase");
+    const auto expected_cpu = item.phase == MachinePhase::connected ? std::string_view{"92%"} : std::string_view{};
+    require(MachineFacts::cpu(item.phase, cpu).view() == expected_cpu, "retained CPU must only paint for a connected machine");
+  }
+
+  require(MachineFacts::cpu(MachinePhase::connected, std::nullopt).view().empty(), "missing CPU must remain absent");
+  require(MachineFacts::cpu(MachinePhase::connected, 0).view() == "0%", "a valid zero CPU sample must be visible");
+  const ChromeMetrics chrome;
+  constexpr MachineFacts::Widths parts{.glyph = 8, .label = 30, .cpu = 20};
+  constexpr Rect area{.x = 10, .y = 20, .width = 200, .height = 26};
+  constexpr Rect bounds{.x = 10, .y = 20, .width = 68, .height = 26};
+  constexpr Rect label{.x = 23, .y = 20, .width = 30, .height = 26};
+  constexpr Rect cpu_bounds{.x = 58, .y = 20, .width = 20, .height = 26};
+  const auto geometry = MachineFacts::geometry(area, chrome, parts);
+  require(geometry.bounds == bounds && geometry.label == label && geometry.cpu == cpu_bounds, "inline facts must use original unpadded label geometry and5px part gaps");
+  auto missing = parts;
+  missing.cpu = 0;
+  constexpr float without_cpu = 43;
+  require(MachineFacts::width(chrome, missing) == without_cpu && MachineFacts::geometry(area, chrome, missing).cpu.empty(), "absent CPU must reserve neither text nor trailing gap");
+}
+
 void machineControlInkAreasKeepOriginalInsets() {
   using Geometry = MachineChromeGeometry;
   const ChromeMetrics chrome;
@@ -128,6 +169,7 @@ int main() {
     machineRowsReserveTheirFoldAndKeepSlotOrder();
     machineControlInkAreasKeepOriginalInsets();
     switcherPreferredWidthFitsEveryControl();
+    inlineMachineFactsKeepOriginalStateAndGeometry();
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
 

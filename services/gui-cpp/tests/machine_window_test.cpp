@@ -1,9 +1,8 @@
 #include "activity_fixture.hpp"
 #include "application/dependencies.hpp"
 #include "application/notification_item.hpp"
-#include "core/view_version.hpp"
 #include "config/plugin_invocation.hpp"
-#include "qt/plugin_worker.hpp"
+#include "core/view_version.hpp"
 #include "frame_fixture.hpp"
 #include "gui_wait.hpp"
 #include "machines/machine_row.hpp"
@@ -12,7 +11,9 @@
 #include "metrics_fixture.hpp"
 #include "qml_fixture.hpp"
 #include "qt/application.hpp"
+#include "qt/plugin_worker.hpp"
 #include <QByteArray>
+#include <QColor>
 #ifdef __APPLE__
 #include "qt/attachment_shelf.hpp"
 #include "qt/key_adapter.hpp"
@@ -62,10 +63,11 @@
 #include <QQuickItem>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QRegularExpression>
 #include <QSize>
 #include <QString>
-#include <QStringLiteral>
 #include <QStringList>
+#include <QStringLiteral>
 #include <QTemporaryDir>
 #include <QVariantMap>
 #include <QtCore/qcontainerfwd.h>
@@ -884,6 +886,75 @@ class MachineWindowTest : public QObject {
     layout->activate(folded.value(QStringLiteral("key")).toString());
     QCOMPARE(fixture.application.dialog(), QStringLiteral("palette"));
     fixture.application.execute(Application::Action::cancel);
+  }
+
+  Q_SLOT static void machineInlineFactsTrackHiddenSources() {
+    QTest::failOnWarning(QRegularExpression{QStringLiteral("^qrc:.*")});
+    MachineFixture fixture;
+    QQuickWindow window;
+    QQmlEngine engine;
+    constexpr QSize size{640, 240};
+    window.resize(size);
+    auto &application = fixture.application;
+    window.setColor(application.colors().value(QStringLiteral("panelBackground")).value<QColor>());
+    application.setWindow(window);
+    QVERIFY(fixture.start());
+    fixture.local_runtime->send(ClientLayoutSnapshot{});
+    fixture.remote_runtime->send(ClientLayoutSnapshot{});
+    QVERIFY(finishOpening(*fixture.local_runtime));
+    constexpr qreal row_width = 600;
+    constexpr qreal row_height = 26;
+    auto chrome = createChrome(engine, QStringLiteral("MachineChrome"), {{QStringLiteral("controller"), QVariant::fromValue(&application)}, {QStringLiteral("colors"), application.colors()}, {QStringLiteral("width"), row_width}, {QStringLiteral("height"), row_height}});
+    chrome->setParentItem(window.contentItem());
+    auto *layout = qobject_cast<MachineChromeLayout *>(chrome.get());
+    QVERIFY(layout != nullptr);
+    QVERIFY(layout->setProperty("inlineFacts", true));
+    window.show();
+    QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 2, wait_ms);
+    const auto row = [&](int index) {
+      return layout->items()->data(layout->items()->index(index, 0), ListModel::record_role).toMap();
+    };
+    constexpr std::uint8_t local_cpu = 11;
+    constexpr std::uint8_t remote_cpu = 92;
+    fixture.local_runtime->send(hostSample(1, local_cpu));
+    fixture.remote_runtime->send(hostSample(1, remote_cpu));
+    QTRY_COMPARE_WITH_TIMEOUT(row(0).value(QStringLiteral("cpu")).toString(), QStringLiteral("11%"), wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(row(1).value(QStringLiteral("cpu")).toString(), QStringLiteral("92%"), wait_ms);
+    QCOMPARE(row(0).value(QStringLiteral("glyph")).toString(), QStringLiteral("●"));
+    QCOMPARE(row(1).value(QStringLiteral("text")).toString(), QStringLiteral("Build"));
+    QVERIFY(row(0).value(QStringLiteral("bold")).toBool());
+    QVERIFY(!row(1).value(QStringLiteral("bold")).toBool());
+    QVERIFY(!MachineWindow::client(application, fixture.remote.machine.slot).session.presented());
+    layout->activate(row(1).value(QStringLiteral("key")).toString());
+    QVERIFY(!MachineWindow::client(application, fixture.remote.machine.slot).session.presented());
+    QVERIFY(layout->setProperty("inlineFacts", false));
+    QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 2, wait_ms);
+    QVERIFY(layout->setProperty("inlineFacts", true));
+    QTRY_COMPARE_WITH_TIMEOUT(row(1).value(QStringLiteral("cpu")).toString(), QStringLiteral("92%"), wait_ms);
+    const auto screenshot = qEnvironmentVariable("TELAR_GUI_TEST_MACHINE_FACTS_SCREENSHOT");
+    if (!screenshot.isEmpty()) {
+      const auto ready = qEnvironmentVariable("TELAR_GUI_TEST_WINDOW_READY");
+      if (!ready.isEmpty()) {
+        QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(ready), wait_ms);
+      }
+
+      QVERIFY(waitForSynchronizedFrame(window, wait_ms));
+      QVERIFY(window.grabWindow().save(screenshot, "PNG"));
+    }
+
+    fixture.remote_listener_.close();
+    fixture.remote_socket_->disconnectFromServer();
+    QTRY_VERIFY_WITH_TIMEOUT(!MachineWindow::client(application, fixture.remote.machine.slot).session.ready(), wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(row(1).value(QStringLiteral("glyph")).toString(), QStringLiteral("✕"), wait_ms);
+    QCOMPARE(row(1).value(QStringLiteral("cpu")).toString(), QString{});
+    const auto preferred = layout->preferredWidth();
+    QVERIFY(preferred > 0);
+    chrome->setVisible(false);
+    QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 0, wait_ms);
+    QCOMPARE(layout->preferredWidth(), preferred);
+    chrome->setVisible(true);
+    QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 2, wait_ms);
+    QCOMPARE(row(1).value(QStringLiteral("cpu")).toString(), QString{});
   }
 
   Q_SLOT static void machineSegmentCarriesAttentionAndProfileInk() {

@@ -4,7 +4,45 @@ The complete functional, visual and equal-or-better performance objective remain
 open. Only the command/quick-navigation palette and notifications/sounds may be
 deferred for daily adoption; existing implementations stay available.
 
-## Current candidate: Preview13; builtin bar priorities
+## Current candidate: Preview14; live machine facts
+
+`out-adoption/Telar C++ Preview 14.app` is separately packaged and qualified for
+normal-use assessment. Machine components show original phase/attention glyphs,
+active bold labels and connected-only CPU, including hidden local/remote samples.
+Existing selector/segment controls remain available. The view participates in the
+shared priority fit and retains width while hidden without visual-row allocation.
+
+From the worktree root:
+
+```sh
+open -n "services/gui-cpp/out-adoption/Telar C++ Preview 14.app"
+```
+
+Finder can open it after another preview closes. Copy under its separate name to
+Applications if desired. Close it and open `~/Applications/Telar.app` to return.
+Nothing is installed/replaced/migrated; Preview8/13, config/runtime and all four
+protected identities remain intact. GUI SHA256:
+`071087e9069edeed91b847c8fd16a8da85fe0bfa50d30f06cb25df32d4b6127d`.
+
+All1739 hashes/121 Mach-O/deep-strict signatures pass. Exact relocated schema87/88
+Finder/login/config/runtime/plugin/bar/two-window/client-pause smokes, genuine SSH
+with the machine bar enabled, VimUTF8, custom panel/bars and task/worktree/plan
+survival pass with zero QML warnings and private cleanup. Five daily captures plus
+schema87 direct and native Mac/Linux machine facts were inspected. Panel actions
+use the controlled actor and activity uses official-protocol fixtures, as before.
+
+Both SDKs pass14 native Quick+6 machine checks in Release and the two affected full
+CTest targets. Linux ASan/UBSan also exits0. Mac assertions pass14+6; shutdown exits1
+for638351B3956alloc and1073208B4036alloc, no address/UB error or suppression. Broad,
+actual-editor and changed-range format pass both SDKs; seven portable sources match.
+An initial SSH setup hit a full VM tmpfs due to43 inactive clangd PCH caches; verified
+cache cleanup and a new SSH attempt pass, with the failure retained. Physical sleep,
+Mac shutdown-leak/stability, remaining fitting/native ownership/paired visuals and
+comparative performance, daily acceptance and audited own-Zig retirement stay OPEN.
+This is the fresh Preview9 baseline plus increments, not a new clean/no-Zig build.
+See [machine-facts evidence](measurements/component-machine-facts.md).
+
+## Preserved candidate: Preview13; builtin bar priorities
 
 `out-adoption/Telar C++ Preview 13.app` is separately packaged and available for
 normal Finder launch. It adds original-priority fitting for the builtin metric

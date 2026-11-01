@@ -13,7 +13,7 @@ MachineChromeLayout {
     clip: true
 
     Repeater {
-        model: root.items
+        model: root.inlineFacts ? [] : root.items
 
         delegate: AbstractButton {
             id: control
@@ -76,4 +76,52 @@ MachineChromeLayout {
             Accessible.role: Accessible.Button
         }
     }
+
+    Repeater {
+        model: root.inlineFacts ? root.items : []
+        delegate: Item {
+            id: fact
+            objectName: "machineInlineFact"
+            required property var record
+            x: record.bounds.x
+            y: record.bounds.y
+            width: record.bounds.width
+            height: record.bounds.height
+            Accessible.role: Accessible.StaticText
+            Accessible.name: record.accessible
+
+            ChromeText {
+                x: fact.record.glyphBounds.x - fact.record.bounds.x
+                width: fact.record.glyphBounds.width
+                height: parent.height
+                text: fact.record.glyph
+                color: fact.record.ink
+                pixelSize: root.style.pixelSize
+                elide: Text.ElideNone
+                Accessible.ignored: true
+            }
+            ChromeText {
+                x: fact.record.labelBounds.x - fact.record.bounds.x
+                width: fact.record.labelBounds.width
+                height: parent.height
+                text: fact.record.text
+                color: root.colors.text
+                emphasized: fact.record.bold
+                pixelSize: root.style.pixelSize
+                elide: Text.ElideNone
+                Accessible.ignored: true
+            }
+            ChromeText {
+                x: fact.record.cpuBounds.x - fact.record.bounds.x
+                width: fact.record.cpuBounds.width
+                height: parent.height
+                text: fact.record.cpu
+                color: root.colors.text
+                pixelSize: root.style.pixelSize
+                elide: Text.ElideNone
+                Accessible.ignored: true
+            }
+        }
+    }
+
 }

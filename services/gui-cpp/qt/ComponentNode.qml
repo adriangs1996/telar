@@ -352,6 +352,7 @@ Item {
     Component {
         id: machines
         MachineChrome {
+            inlineFacts: true
             controller: root.controller
             colors: root.colors
             implicitWidth: preferredWidth

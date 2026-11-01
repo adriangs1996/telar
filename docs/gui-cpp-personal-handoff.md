@@ -59,50 +59,29 @@ executable/start instead of restoring the old process. Old Zig GUI87625 was alre
 absent before this work; do not restart it or claim we stopped it. Private test
 children are separate and must be cleaned up by their owning helpers only.
 
-## Available candidate: Preview13 (2026-11-01)
+## Available candidate: Preview14 (2026-11-01)
 
-`services/gui-cpp/out-adoption/Telar C++ Preview 13.app` is frozen, qualified and
+`services/gui-cpp/out-adoption/Telar C++ Preview 14.app` is frozen, qualified and
 already offered to Adrian. GUI SHA256
-`cb3c71e61984fb05efc463ee8e59c7be9f3b00336cc7a2a520f3ffca00673bf6`;
-raw `0ed3c6acbb7ea1458ced8f13517cd6595a8b7ac60998b2f115b6b2c28052e2d8`.
+`071087e9069edeed91b847c8fd16a8da85fe0bfa50d30f06cb25df32d4b6127d`;
+raw `b04c455102de6111ee147e1bbb1c7b93ffa22fecbbd3be8a4e42ef7ffb131cb5`.
 All1739 hashes/121 Mach-O/deep-strict signatures pass. Exact relocated schemas87/88
-with native blur/login/Finder/config/runtime/plugins/bars/two windows/client pause,
-realSSH, VimUTF8, full custom panel/bars and task/worktree/plan survival all pass.
-Five daily captures plus schema87 direct were inspected; zero QML warnings/private
-cleanup. Callback/controlled-anchor panel actor and protocol-fixture activity have
-the same limits as12 below. Raw GUI remains byte-identical after portable null
-checks; no repackaging/new clean build is claimed. Open-n/rollback as below with13.
-Preview8/12 and installed app/config/runtime are preserved. Daily and final goals
-stay OPEN; physical sleep is still untried. See DAILY_DRIVER.md and builtin report.
+native blur/login/Finder/config/runtime/plugins/bars/two windows/client pause,
+realSSH WITH machine bar enabled, VimUTF8, custom panel/bars and task/worktree/plan
+survival pass; zero QML warnings/private cleanup. Five daily captures plus schema87
+direct and native Mac/Linux machine facts were inspected. Panel actor is an owned
+callback/controlled anchor; activity uses protocol fixtures, not AI/Git checkout.
+This is fresh9 plus increments, not a new clean/no-own-Zig build. Package/launch:
+`open -n "services/gui-cpp/out-adoption/Telar C++ Preview 14.app"`. Finder can open
+it after another preview closes; copy under a separate name if desired. Rollback:
+close preview/open `~/Applications/Telar.app`. No installs/replacements/migrations.
+Preview8/12/13 and installed app/config/runtime are preserved. All previews share
+bundle identifier; use open-n for this exact app while8 is running.
 
-## Preserved candidate: Preview12 (2026-11-01)
-
-`services/gui-cpp/out-adoption/Telar C++ Preview 12.app`
-
-GUI SHA256 `14ccb0a854bbbb9258a885811168be4650ae2e4973137c7436c116f19b172c27`.
-Raw GUI SHA256 `d0c0e8e29d94d38ece98ba3d0bbdcc082e341e36d085c1e8364ffba01fdf1bf5`.
-It is frozen, separately packaged, qualified and offered to Adrian. It uses the
-fresh Preview9 build baseline plus recorded increments, not a new full clean
-build or an own-Zig-retirement gate. Never overwrite/repackage an existing bundle.
-
-All1739 hashes/121 Mach-O objects/deep-strict signatures pass. Exact relocated
-schema87 AND88 Finder/LaunchServices/login/config/default-runtime/plugin/bar/
-two-window/owned-client-pause smokes pass with adopted opacity.98/blur20. Exact
-realSSH, Vim exactUTF8, full custom panel/bars and task/worktree/plan/survival flows
-pass; zero QML warnings, configuration unchanged and disposable states removed.
-All five daily captures plus schema87 direct capture were inspected. Panel actor
-uses an owned callback/controlled anchor rather than OS pointer; activity reports
-are controlled protocol fixtures, not another AI agent or Git checkout. Finder's
-GUI exit is unavailable through `open`; the healthy final marker is checked.
-
-From the worktree root: `open -n "services/gui-cpp/out-adoption/Telar C++ Preview 12.app"`.
-Finder can open it after another preview is closed. Copy under its separate name
-to Applications if desired; nothing is installed/replaced automatically. Return by
-closing the preview and opening `~/Applications/Telar.app`. Preview8/11 remain intact.
-
-Adrian confirmed Preview8 normal interface and found no daily blocker so far.
-Physical sleep with Preview9: "Aún no lo he probado". No unanswered question remains;
-do not ask again, wait on this answer, or suspend the host automatically.
+Preview13 remains frozen, GUIcb3c71e61984fb05efc463ee8e59c7be9f3b00336cc7a2a520f3ffca00673bf6.
+Adrian confirms Preview8 normal interface/no daily blocker so far. Physical sleep:
+"Aún no lo he probado". No question is pending; don't ask again or suspend the host.
+Daily/full goals stay OPEN. See DAILY_DRIVER.md and the machine-facts report.
 
 ## Latest implementation and evidence
 
@@ -140,43 +119,50 @@ packaging/smoke jobs remain active. Raw `out-dependencies/component-shared-overf
 The shared-overflow report/archive/verifier and local commit are complete. CONTINUE
 actual PARITY; do not repeat completed Preview12 qualification without new changes.
 
-## Latest qualified source: builtin fitting; continue machine facts next
+## Latest qualified source: inline machine facts; continue footer composition
 
-Raw `services/gui-cpp/out-dependencies/component-builtin-fit-1`; frozen report/archive/
-verifier `measurements/component-builtin-fit`. Original priority40 group/CPU/memory/
-battery and machine nodes now use the common tree. Metrics retain existing renderers,
-6px group/leading-child/child spacing and controller-free behavior. Machine switcher
-width0 is corrected; hidden lists/segments retain measurement without click records.
-Shared-menu body typography falls back to small for standalone StatusBar. Portable
-explicit QPointer comparisons satisfy Qt6.8/6.12 with identical Mac raw GUI bytes.
+Local checkpoint c4a7f490f already commits builtin fitting/Preview13 and557 frozen
+entries. New inline-facts sources/report are qualified; finish their local review/
+commit, then continue actual PARITY. Raw out-dependencies/component-machine-facts-1.
+Original BarRow skips facts for<=1 machine, then shown slots in slot order. Pure
+presentation/machine_facts.hpp follows inline_nodes glyph/ink/attention, active bold,
+connected-only optional CPU and12px machine/5px part gaps. MachineChromeLayout has
+an exclusive inlineFacts mode; existing controls remain. Mode changes retire rows,
+facts activation is inert, hidden measurement creates no visual QVariant rows.
+Phase/CPU use MachineRow summaries/events for hidden clients; runtime is unchanged.
 
-Five new/19 prior directed controls pass. Mac Release14native0, Linux Release+ASAN
-14native0 each; four affected CTest suites pass. Final portable-null machine-window
-suites pass MacRelease and LinuxRelease+ASAN. Mac ASAN14assertionspass/exit1 for623226B
-3639alloc, no address/UB or suppression. Broad/actual-editor/format pass BOTH SDKs;
-all14 portable hashes match. Linux actual editor OOM is retained; two retries use
--j=1/no background index/disk PCH and deliver empty diagnostics within the same60s
-limit. Broad/profile/project .clangd/assertions/deadlines unchanged. Negative metric-
-projection, machine-width/hidden-width, first-sample admission and initial quality/
-formatter failures are retained. No heavy checks or private smokes remain running.
+Both SDKs pass14 native Quick+6 machine checks in Release, both full machine-window/
+geometry CTests, broad/all3TUs, actual editor and changed-range format. Linux ASAN
+also exits0/cleanup0 with leak detection. Mac14+6 assertions pass but exits1 for
+638351B3956alloc and1073208B4036alloc; no address/UB error or suppression. Seven
+portable sources match. Linux editors retain one worker/no background index/disk
+PCH and original60s delivery deadline/profile/project .clangd.
 
-Next functional work: original builtin machines show phase glyphs plus connected
-CPU values rather than the existing switcher adapter's visuals. Original reference
-src/gui/widgets/BarRow.zig:112 suppresses facts for <=1 machine, then shown slots in
-slot order. inline_nodes.zig:529-600 uses machine gap12/part gap5, phase/attention
-palette, active bold label, CPU only when connected+present. MachineRow already owns
-phase/cpu_percent and machine_controller.cpp summarize emits machinesChanged for
-hidden clients too; no runtime rewrite is needed. Research only so far, no facts
-source changes. Finish local review/commit of this qualified checkpoint, then
-CONTINUE actual implementation; a checkpoint is not full completion.
+Failures retained: old-source missing inlineFacts; BoundedText.empty compile mistake;
+include/designated-init/trailing-comma diagnostics; first Cocoa transient connecting
+phase due to an open fake listener plus white fixture background. Fixture now closes
+its OWN listener and adopts panelBackground; same glyph/CPU assertions and5000ms.
+First exact SSH fails BEFORE Popen because VM/tmp tmpfs is full.43 inactive generated
+clangd PCH files total2033341664B; verified no live compiler/editor, open FD or mapped
+preamble, recorded UID/inode/hash/size/time, removed only those caches. /tmp free1.9G,
+Sway unchanged; empty failed setup removed with no-runtime/socket/history guards.
+SSH retry in NEW output2 passes. Keep failure1 and cache receipt. Future editor
+probes need an OWNED on-disk TMPDIR and own-PCH cleanup AFTER server exit; don't
+recreate the tmpfs pressure or change project diagnostics. No heavy checks remain.
+
+Next functional review: sidebar footer composition/fitting across its configured
+sources, then remaining group/menu behavior. Do not redo passing Preview14 tests
+without new changes/failures. Previous immutable verifiers default to archives;
+--check-current is only for that checkpoint's source. A checkpoint is not full
+completion. Preserve the unrelated user measurement file.
 
 ## Remaining gates: keep these separate
 
 Daily acceptance: physical system sleep remains unverified; Mac shutdown-leak
-attribution/stability remains open. Release Preview12 is available for daily
+attribution/stability remains open. Release Preview14 is available for daily
 assessment. Do not equate private SIGSTOP/SIGCONT with physical system sleep.
 
-Final parity: complete builtin-machine facts, full fitting/styling and combined
+Final parity: remaining fitting/styling and combined
 menu's wider interactions, native ownership/accessibility, complete paired visuals
 and measured comparative performance. PARITY.md retains detailed known failures,
 including other densities/platforms and existing comparative losses. Do not infer

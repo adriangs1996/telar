@@ -7,10 +7,12 @@
 #include "fonts/font_role.hpp"
 #include "fonts/text_layout.hpp"
 #include "machines/limits.hpp"
+#include "machines/machine_row.hpp"
 #include "machines/machine_token.hpp"
 #include "machines/machines.hpp"
 #include "presentation/display_metrics.hpp"
 #include "presentation/machine_chrome_geometry.hpp"
+#include "presentation/machine_facts.hpp"
 #include "projection.hpp"
 #include "resident_fonts.hpp"
 #include "text/bounded_text.hpp"
@@ -106,11 +108,33 @@ void MachineChromeLayout::setController(Application *controller) {
 }
 
 void MachineChromeLayout::setSegment(bool segment) {
-  const auto mode = segment ? Mode::segment : Mode::switcher;
-  if (mode_ != mode) {
-    mode_ = mode;
-    invalidate();
+  setMode(segment ? Mode::segment : Mode::switcher);
+}
+
+bool MachineChromeLayout::inlineFacts() const noexcept {
+  return mode_ == Mode::facts;
+}
+
+void MachineChromeLayout::setInlineFacts(bool enabled) {
+  setMode(enabled ? Mode::facts : Mode::switcher);
+}
+
+void MachineChromeLayout::setMode(Mode mode) {
+  if (mode_ == mode) {
+    return;
+  }
+
+  const auto previous = mode_;
+  mode_ = mode;
+  items_.reconcile({});
+  observeSources();
+  invalidate();
+  if ((previous == Mode::segment) != (mode_ == Mode::segment)) {
     emit segmentChanged();
+  }
+
+  if ((previous == Mode::facts) != (mode_ == Mode::facts)) {
+    emit inlineFactsChanged();
   }
 }
 
@@ -123,7 +147,7 @@ void MachineChromeLayout::observeSources() {
       const auto slot = static_cast<Machines::Slot>(index);
       if (controller_->machines_.shown(slot)) {
         const auto &row = controller_->machines_.row(slot);
-        incoming[index] = Source{.token = controller_->machines_.token(slot), .label = row.label, .color = row.color, .active = slot == controller_->machines_.active(), .attention = row.attention, .live = row.live};
+        incoming[index] = Source{.token = controller_->machines_.token(slot), .label = row.label, .color = row.color, .active = slot == controller_->machines_.active(), .attention = row.attention, .live = row.live, .phase = inlineFacts() ? row.phase : MachinePhase::connecting, .cpu_percent = inlineFacts() ? row.cpu_percent : std::nullopt};
       }
     }
   }
@@ -251,7 +275,18 @@ void MachineChromeLayout::rebuild() {
   };
   QList<QVariantMap> records;
   const Rect area = isVisible() ? Rect{.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)} : Rect{};
-  const auto preferred = mode_ == Mode::segment ? segmentRecords(area, records) : switcherRecords(area, records);
+  qreal preferred = 0;
+  switch (mode_) {
+  case Mode::facts:
+    preferred = factsRecords(area, records);
+    break;
+  case Mode::segment:
+    preferred = segmentRecords(area, records);
+    break;
+  case Mode::switcher:
+    preferred = switcherRecords(area, records);
+    break;
+  }
 
   if (style != style_ || preferred != preferred_width_) {
     style_ = std::move(style);
@@ -305,8 +340,54 @@ qreal MachineChromeLayout::switcherRecords(Rect area, QList<QVariantMap> &record
   return MachineChromeGeometry::preferredSwitcher(chrome_, std::span{advances}.first(count), measure("+99", false)) / density_;
 }
 
+QVariantMap MachineChromeLayout::factRecord(const Source &source, const MachineFacts::Geometry &geometry) const {
+  const auto glyph = MachineFacts::glyph(source.phase, source.attention);
+  const auto cpu = MachineFacts::cpu(source.phase, source.cpu_percent);
+  const auto role = MachineFacts::glyphInk(source.phase, source.attention);
+
+  return {
+      {QStringLiteral("key"), machineKey(source.token)},
+      {QStringLiteral("bounds"), toQRectF(geometry.bounds, density_)},
+      {QStringLiteral("glyphBounds"), toQRectF(geometry.glyph, density_)},
+      {QStringLiteral("labelBounds"), toQRectF(geometry.label, density_)},
+      {QStringLiteral("cpuBounds"), toQRectF(geometry.cpu, density_)},
+      {QStringLiteral("text"), toQString(source.label.view())},
+      {QStringLiteral("glyph"), toQString(glyph)},
+      {QStringLiteral("cpu"), toQString(cpu.view())},
+      {QStringLiteral("bold"), source.active},
+      {QStringLiteral("ink"), fill(controller_->configuration().theme.chrome[static_cast<std::size_t>(role)])},
+      {QStringLiteral("accessible"), toQString(source.label.view()) + QStringLiteral(" ") + toQString(MachineFacts::phaseName(source.phase)) + (source.attention ? QStringLiteral(" attention") : QString{}) + (cpu.view().empty() ? QString{} : QStringLiteral(" ") + toQString(cpu.view()))},
+  };
+}
+
+qreal MachineChromeLayout::factsRecords(Rect area, QList<QVariantMap> &records) {
+  auto left = area.x;
+  bool any = false;
+  for (const auto &source : sources_) {
+    if (!source) {
+      continue;
+    }
+
+    if (any) {
+      left += chrome_.px(MachineFacts::machine_gap);
+    }
+
+    const auto cpu = MachineFacts::cpu(source->phase, source->cpu_percent);
+    const MachineFacts::Widths parts{.glyph = measure(MachineFacts::glyph(source->phase, source->attention), false), .label = measure(source->label.view(), source->active), .cpu = cpu.view().empty() ? 0 : measure(cpu.view(), false)};
+    const auto geometry = MachineFacts::geometry({.x = left, .y = area.y, .height = area.height}, chrome_, parts);
+    left = geometry.bounds.right();
+    if (!area.empty()) {
+      records.append(factRecord(*source, geometry));
+    }
+
+    any = true;
+  }
+
+  return (left - area.x) / density_;
+}
+
 void MachineChromeLayout::activate(const QString &identity) {
-  if (controller_ == nullptr || window() == nullptr || window() != controller_->window_) {
+  if (inlineFacts() || controller_ == nullptr || window() == nullptr || window() != controller_->window_) {
     return;
   }
 
