@@ -207,31 +207,55 @@ Item {
         id: meter
         Item {
             readonly property bool panel: root.node.kind === "meter_row"
+            readonly property real lineHeight: 18 * root.ratio
+            readonly property real detailHeight: 16 * root.ratio
+            readonly property real detailedHeight: 36 * root.ratio
+            readonly property real columnGap: 14 * root.ratio
+            readonly property real numberWidth: 40 * root.ratio
+            readonly property real labelShare: 0.38
+            readonly property real labelWidth: Math.round(width * labelShare)
             readonly property real track: !panel && !root.compact ? root.trackWidth : 0
             implicitWidth: meterLabel.implicitWidth + (track > 0 ? root.gap + track : 0)
-            implicitHeight: panel ? 44 * root.ratio : root.rowHeight
+            implicitHeight: panel ? (root.node.detail.length > 0 ? detailedHeight : lineHeight) : root.rowHeight
             ChromeText {
                 id: meterLabel
-                width: parent.panel ? parent.width : implicitWidth
-                height: parent.panel ? root.rowHeight : parent.height
-                text: root.node.text + (root.node.text.length > 0 ? " " : "") + (!parent.panel && root.node.detail.length > 0 ? root.node.detail : Math.round(root.node.value * 100) + "%")
-                color: root.node.ink
+                objectName: "componentMeterLabel"
+                width: parent.panel ? parent.labelWidth : implicitWidth
+                height: parent.panel ? parent.lineHeight : parent.height
+                text: parent.panel ? root.node.text : root.node.text + (root.node.text.length > 0 ? " " : "") + (root.node.detail.length > 0 ? root.node.detail : Math.round(root.node.value * 100) + "%")
+                color: parent.panel ? root.colors.text : root.node.ink
+                pixelSize: parent.panel ? root.typography.body : root.typography.small
+                elide: Text.ElideNone
+            }
+            ChromeText {
+                objectName: "componentMeterDetail"
+                y: parent.lineHeight
+                width: parent.labelWidth
+                height: parent.detailHeight
+                text: root.node.detail
+                visible: parent.panel && text.length > 0
+                color: root.colors.subtext0
                 pixelSize: root.typography.small
                 elide: Text.ElideNone
             }
             ChromeText {
-                x: Math.max(0, parent.width - implicitWidth)
-                width: implicitWidth
-                height: root.rowHeight
-                text: parent.panel ? root.node.detail : ""
-                color: root.colors.subtext0
-                pixelSize: root.typography.small
+                objectName: "componentMeterValue"
+                x: parent.width - width
+                width: Math.min(parent.width, parent.numberWidth)
+                height: parent.height
+                text: Math.round(root.node.value * 100) + "%"
+                visible: parent.panel
+                color: root.node.ink
+                pixelSize: root.typography.body
+                horizontalAlignment: Text.AlignRight
+                elide: Text.ElideNone
             }
             Item {
                 id: track
-                x: parent.panel ? 0 : meterLabel.width + root.gap
-                y: parent.panel ? root.rowHeight + 3 * root.ratio : (parent.height - height) / 2
-                width: parent.panel ? parent.width : parent.track
+                objectName: "componentMeterTrack"
+                x: parent.panel ? parent.labelWidth + parent.columnGap : meterLabel.width + root.gap
+                y: Math.round((parent.height - height) / 2)
+                width: parent.panel ? Math.max(0, parent.width - parent.numberWidth - parent.columnGap - x) : parent.track
                 height: 4 * root.ratio
                 visible: parent.panel || parent.track > 0
                 NativeRoundedRectangle {

@@ -4159,6 +4159,7 @@ return {api_version=2, client={keybindings={
         },top={right=t.bar.dynamic({every_ms=60000,render=function(ctx) return ui.clock('%H:%M') end})}},
         panels={usage=t.panel({title='Usage',render=function(ctx) return {
           ui.heading('Usage λ'),ui.meter_row({label='Session',value=0.5}),
+          ui.meter_row({label='Daily quota λ',detail='Resets tomorrow',value=0.75,marker=0.9}),
           ui.text(string.rep('Daily task details remain available. ',8)),
           ui.callout({text='Status λ',detail='Ready',icon='telar_mark',button=ui.button({text='Dismiss',action=t.action.close_panel()})}),
           ui.actions({ui.button({text='Close',action=t.action.close_panel()})}),
@@ -4177,12 +4178,13 @@ return {api_version=2, client={keybindings={
     QCOMPARE(slot("right").value(QStringLiteral("error")).toString(), QString{});
     QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
     QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-    QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("nodes")).toList().size(), 7, runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("nodes")).toList().size(), 8, runtime_wait_ms);
     const auto *popup = window_->findChild<QObject *>(QStringLiteral("configuredPanel"));
     QVERIFY(popup != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(popup->property("visible").toBool(), runtime_wait_ms);
     QCOMPARE(client_->componentPanel().value(QStringLiteral("error")).toString(), QString{});
     QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    verifyComponentMeters();
     const auto *paragraph = componentItem(QStringLiteral("text"));
     QVERIFY(paragraph != nullptr);
     const auto *paragraph_text = paragraph->findChild<QQuickItem *>(QStringLiteral("componentStyledText"));
@@ -5291,6 +5293,34 @@ return {api_version=2, client={keybindings={
       QCoreApplication::sendEvent(window_, &press);
       QCoreApplication::sendEvent(window_, &release);
     }
+  }
+
+  void verifyComponentMeters() const {
+    const auto *detailed_meter = componentItem(QStringLiteral("meter_row"), QStringLiteral("Daily quota λ"));
+    QVERIFY(detailed_meter != nullptr);
+    const auto *meter_label = detailed_meter->findChild<QQuickItem *>(QStringLiteral("componentMeterLabel"));
+    const auto *meter_detail = detailed_meter->findChild<QQuickItem *>(QStringLiteral("componentMeterDetail"));
+    QVERIFY(meter_label != nullptr && meter_detail != nullptr);
+    const auto label_bounds = meter_label->mapRectToScene(meter_label->boundingRect());
+    const auto detail_bounds = meter_detail->mapRectToScene(meter_detail->boundingRect());
+    QVERIFY(!label_bounds.intersects(detail_bounds));
+    QVERIFY(detail_bounds.top() >= label_bounds.bottom());
+    const auto *meter_track = detailed_meter->findChild<QQuickItem *>(QStringLiteral("componentMeterTrack"));
+    const auto *meter_value = detailed_meter->findChild<QQuickItem *>(QStringLiteral("componentMeterValue"));
+    QVERIFY(meter_track != nullptr && meter_value != nullptr);
+    const auto track_bounds = meter_track->mapRectToScene(meter_track->boundingRect());
+    const auto value_bounds = meter_value->mapRectToScene(meter_value->boundingRect());
+    QVERIFY(track_bounds.left() > label_bounds.right());
+    QVERIFY(track_bounds.right() < value_bounds.left());
+    QCOMPARE(meter_value->property("text").toString(), QStringLiteral("75%"));
+    QCOMPARE(meter_label->property("text").toString(), QStringLiteral("Daily quota λ"));
+    constexpr qreal detailed_meter_height = 36;
+    constexpr qreal simple_meter_height = 18;
+    const auto ratio = detailed_meter->property("ratio").toReal();
+    QCOMPARE(detailed_meter->height(), detailed_meter_height * ratio);
+    const auto *simple_meter = componentItem(QStringLiteral("meter_row"), QStringLiteral("Session"));
+    QVERIFY(simple_meter != nullptr);
+    QCOMPARE(simple_meter->height(), simple_meter_height * ratio);
   }
 
   [[nodiscard]] QQuickItem *componentItem(const QString &kind, const QString &text = {}) const {

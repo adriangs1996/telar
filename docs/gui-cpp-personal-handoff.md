@@ -1,3 +1,31 @@
+## Latest source continuation: meter-row content qualified; Preview10 preserved
+
+The custom-panel meter detail/title overlapped on one line; original places
+label/detail left, track middle and percentage right. Native baseline fails
+rectangle nonintersection. Source now restores18/36 row heights,38%label/14gap/
+40value columns; inline bar meters unchanged. All previous paragraph/card/click/
+Escape/toggle/ownership/picks assertions retained. Native MacRelease5pass0,
+LinuxRelease+ASAN5pass0 each, private displays removed. Both captures VIEWED.
+FinalMacASAN5assertionspass/exit1/673442B3738alloc, no address/UB. Initial expanded
+fixture111lines failed unchanged100line linter/editor gate; move same assertions
+to verifyComponentMeters. Final broad/editor both SDKs pass, changed-format0,
+portable hashes match; preserve initial sources/failures/leaks. Raw:
+out-dependencies/panel-meter-layout-1; frozen report/archive panel-meter-layout.
+The meter correction is NOT in frozen Preview10. Do not repackage or replace10.
+
+Local text/Preview10 checkpoint71f3a70d5 complete with141 frozen entries. Explicit
+production-input audit b46a934d0 records same9 ownZig generator inputs bothSDKs,
+plus2 direct font-metadata inputs, shared nonZig and bundled originalCLI/worker.
+No own sources removed/no noZig clean-build claimed. Final/daily goals OPEN.
+
+Next meaningful extensibility gap: ComponentTree currently fits only roots and
+can hide a whole group before reducing lower-priority children, unlike original
+bar_fitting.zig. Reproduce natively, then qualify any scoped correction. Global
+slot priority/complete fitting and visuals still OPEN; avoid pixel microbench
+critical path. Preview10 remains offered; user8 PID52865, runtime35801, QEMU7158,
+guestSway9469 unchanged. No agents/publish/merge/other checkout. Never read/touch/
+stage personal-frame-delivery.md. GoalAPI blocked/no resume op; continue manually.
+
 ## CURRENT: Preview 10 qualified; daily/full parity remain OPEN (2026-11-01)
 
 Adrian reports no daily blocker found so far in Preview8: "No ahe encontrado

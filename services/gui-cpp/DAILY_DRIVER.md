@@ -46,6 +46,13 @@ frozen. Close the preview and open `~/Applications/Telar.app` to return to the
 installed app, keeping runtime processes alive. No installation, configuration
 or session is migrated. Only palette and notifications may defer for daily use.
 
+## Source continuation after Preview10
+
+The [meter-row correction](measurements/panel-meter-layout.md) fixes overlapping
+custom-panel titles/details and restores the original label/track/percentage
+columns. Native interaction checks pass both SDKs; Mac shutdown leaks remain.
+This later change is not in the frozen Preview10 bundle.
+
 ## Preserved candidate: Preview 8; normal launch confirmed
 
 Adrian confirms: **"Sí, ya aparece la interfaz"** after opening Preview 8 with
