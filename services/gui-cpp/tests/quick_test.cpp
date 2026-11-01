@@ -4297,6 +4297,70 @@ return {api_version=2, client={keybindings={
     QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
   }
 
+  Q_SLOT void configuredOverflowActionReplacesItsMenu() {
+    const auto cleanup = qScopeGuard([this] {
+      QTest::keyClick(window_, Qt::Key_Escape);
+      client_->closeComponentPanel();
+      client_->loadConfiguration({}, {}, {});
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    constexpr auto configuration = R"(
+      local t = require('telar')
+      local ui = t.ui
+      return {api_version=2,client={
+        bars={bottom={left=t.bar.static({ui.group({mark='telar',priority=1,on_click=t.action.open_panel('hidden'),ui.label(string.rep('Hidden action λ ',80))}),ui.label({text=string.rep('Force overflow ',80),priority=90})}),center=t.bar.tabs(),right=t.bar.static(ui.label({text='Ready',priority=100}))}},
+        panels={hidden=t.panel({title='Hidden action panel',render=function(ctx) return ui.text('Hidden action retained its source') end})},
+      }}
+    )";
+    writeTestFile(path, configuration);
+    client_->loadConfiguration(path, {}, {});
+    QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+    const auto overflow_controls = [this] {
+      auto items = test::visualItems(*window_->contentItem(), QStringLiteral("componentOverflow"));
+      items.removeIf([](const QQuickItem *item) {
+        return !item->isVisible();
+      });
+      return items;
+    };
+    QTRY_COMPARE_WITH_TIMEOUT(overflow_controls().size(), 1, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    auto *control = overflow_controls().front();
+    QQmlExpression popup_expression{QQmlEngine::contextForObject(control), control, QStringLiteral("overflowPopup")};
+    const QPointer<QObject> popup = popup_expression.evaluate().value<QObject *>();
+    QVERIFY2(!popup_expression.hasError(), qPrintable(popup_expression.error().toString()));
+    QVERIFY(popup != nullptr);
+    const auto bounds = control->mapRectToScene(control->boundingRect());
+    QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, bounds.center().toPoint());
+    QTRY_VERIFY_WITH_TIMEOUT(popup->property("visible").toBool(), runtime_wait_ms);
+    const auto caption = QStringLiteral("Hidden action λ ").repeated(80);
+    QTRY_VERIFY_WITH_TIMEOUT(componentItem(QStringLiteral("label"), caption) != nullptr, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto *hidden = componentItem(QStringLiteral("label"), caption);
+    const auto action_bounds = hidden->mapRectToScene(hidden->boundingRect());
+    constexpr qreal action_inset = 12;
+    const QPointF action_point{action_bounds.left() + action_inset, action_bounds.center().y()};
+    const QRectF viewport{QPointF{}, QSizeF{window_->size()}};
+    QVERIFY(viewport.contains(action_point));
+    QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, action_point.toPoint());
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    QCOMPARE(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Hidden action panel"));
+    QTRY_VERIFY_WITH_TIMEOUT(componentItem(QStringLiteral("text"), QStringLiteral("Hidden action retained its source")) != nullptr, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(!popup->property("visible").toBool(), runtime_wait_ms);
+    const auto screenshot = qEnvironmentVariable("TELAR_GUI_TEST_OVERFLOW_ACTION_SCREENSHOT");
+    if (!screenshot.isEmpty()) {
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      QVERIFY(window_->grabWindow().save(screenshot, "PNG"));
+    }
+    QTest::keyClick(window_, Qt::Key_Escape);
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, bounds.center().toPoint());
+    QTRY_VERIFY_WITH_TIMEOUT(popup->property("visible").toBool(), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Escape);
+    QTRY_VERIFY_WITH_TIMEOUT(!popup->property("visible").toBool(), runtime_wait_ms);
+  }
+
   Q_SLOT void configuredBarReportsFirstCommandFailure() {
     const auto cleanup = qScopeGuard([this] {
       client_->loadConfiguration({}, {}, {});

@@ -64,6 +64,11 @@ SDKs and Linux ASan exits zero; Mac shutdown leak acceptance stays open. The
 [frozen diagnostic evidence](measurements/component-command-error.md) retains
 initial fixture/drag failures. This correction is not in the frozen bundle11.
 
+A second source correction makes a configured panel opened from a hidden bar
+action replace its overflow menu. Native clicks and menu reuse pass both SDKs;
+see [the source-bound qualification](measurements/component-overflow-action.md).
+It also follows frozen Preview11 and does not replace that bundle.
+
 ## Preserved candidate: Preview 10
 
 Preview10 remains frozen at `out-adoption/Telar C++ Preview 10.app`, GUI SHA256

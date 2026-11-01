@@ -1,3 +1,36 @@
+## CURRENT: overflow action handoff fully qualified; checkpoint ready
+
+Continue full/daily goal after local commit. No agents/publish/merge/othercheckout.
+Never read/touch/stage personal-frame-delivery.md. Runtime35801/userPreview8-52865/
+QEMU7158/guestSway9469 unchanged. Natural sleep9 untried; do not ask/autosuspend.
+GoalAPI blocked/no resume; continue manually. Preview11 frozen/offered, no12yet.
+Raw build9 is post11; preserve bundles/config/runtime. Final/daily goals OPEN.
+
+Local03cfd7f62 first-command diagnostic+243 frozen entries complete. NEW source
+ComponentTree.qml +QuickTest: actual hidden bar action opens exact configured
+panel title/body and closes previous overflow; Escape, reopen/close verified.
+Valid Mac negative reaches panel but !popup.visible fails. Initial macro/invalid
+label-action fixture failures retained. First QML superseded visibility-binding
+causes binding-loop warnings BOTH SDKs, rejected unchanged cleanupgate. Final
+Connections target only while popupvisible/existing componentsChanged; no new
+runtime/publicAPI/closed-menu map polling. Final MacRelease11pass0, LinuxRelease+
+ASAN11pass0 each/private displays removed. MacASAN11assertionspass/exit1/644258B
+3913alloc, no address/UB/LSAN_OPTIONSabsent. Final MacRelease/LinuxASAN panel
+captures VIEWED. Final broad/actualeditor empty0 BOTH SDKs/changedformat0. Two
+portable source hashes match. No active build/native/quality jobs remain.
+
+Raw component-overflow-action-1; report/archive component-overflow-action links
+previouscommanderror manifest, negative/warning failures/fullleak receipts. Freeze
+and verifier, review/localcommit then CONTINUE. Do not repeat completed checks
+withoutchangedsource/newfailure. Original combined overflow, builtinpriority,
+full styling/nativeownership/performance remainOPEN; this scoped handoff does
+NOT unify slots. Next actualwork could unify original sharedoverflow using
+src/gui/widgets/BarRow.zig, BarOverlay.zig, src/model/bars/bar_fitting.zig and
+existing ComponentFit/Tree/Slot/StatusBar, or remaining Mac leak attribution.
+Originalpositions includes legacytop.right asfourth bottom row source; inspect
+before changing composition. No fewpixel/microkernel criticalpath. Own-Zig
+retirement requires audit+cleanbuildwithoutown sources, notGUIstartup.
+
 ## CURRENT: first-command bar error qualified; Preview11 preserved
 
 Continue actual daily/PARITY work after the local checkpoint. No agents/publish/

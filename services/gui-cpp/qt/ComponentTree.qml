@@ -138,6 +138,14 @@ Item {
 
     Popup {
         id: overflowPopup
+        Connections {
+            target: overflowPopup.visible ? root.controller : null
+            function onComponentsChanged() {
+                if (root.controller.componentPanel.open ?? false) {
+                    overflowPopup.close();
+                }
+            }
+        }
         parent: root
         y: -height - root.gap
         width: Math.min(420 * root.ratio, root.Window.window?.width ?? 420 * root.ratio)
