@@ -1,0 +1,25 @@
+InheritParentConfig: false
+Checks: >-
+  -*,
+  clang-analyzer-*,
+  bugprone-*,
+  performance-*,
+  portability-*,
+  modernize-*,
+  -modernize-use-trailing-return-type,
+  readability-identifier-naming
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*'
+ExcludeHeaderFilterRegex: '(^|/)(out|build[^/]*|cmake-build[^/]*|vendor|third_party|generated)/'
+SystemHeaders: false
+FormatStyle: file
+CheckOptions:
+  readability-identifier-naming.ClassCase: lower_case
+  readability-identifier-naming.StructCase: lower_case
+  readability-identifier-naming.EnumCase: lower_case
+  readability-identifier-naming.TypeAliasCase: lower_case
+  readability-identifier-naming.TypedefCase: lower_case
+  readability-identifier-naming.TypeTemplateParameterCase: lower_case
+  readability-identifier-naming.ConceptCase: lower_case
+  readability-identifier-naming.FunctionCase: camelBack
+  readability-identifier-naming.MethodCase: camelBack

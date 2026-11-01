@@ -1,0 +1,5 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/tbcTargets.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/tbcLifetimeCheck.cmake")
+check_required_components(tbc)

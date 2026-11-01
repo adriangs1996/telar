@@ -1,0 +1,72 @@
+name: tbc
+
+on:
+  push:
+    paths: ["dlls/tbc/**", ".github/workflows/tbc.yml"]
+  pull_request:
+    paths: ["dlls/tbc/**", ".github/workflows/tbc.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tbc-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-26]
+        preset: [debug, sanitize]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: dlls/tbc
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install LLVM on Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build clang-18 llvm-18-dev libclang-18-dev libclang-cpp18-dev clang-tools-18 clang-format-18 clang-tidy-18 python3
+          echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"
+          echo CMAKE_PREFIX_PATH=/usr/lib/llvm-18 >> "$GITHUB_ENV"
+
+      - name: Install LLVM on macOS
+        if: runner.os == 'macOS'
+        run: |
+          brew install cmake ninja llvm
+          echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+          echo "CMAKE_PREFIX_PATH=$(brew --prefix llvm)" >> "$GITHUB_ENV"
+
+      - name: Configure
+        env:
+          CC: clang
+          CXX: clang++
+        run: cmake --preset ${{ matrix.preset }} -DTBC_WARNINGS_AS_ERRORS=ON
+
+      - name: Build and test
+        run: |
+          cmake --build --preset ${{ matrix.preset }}
+          ctest --preset ${{ matrix.preset }}
+          cmake --build --preset ${{ matrix.preset }} --target lifetime-check
+
+      - name: Check formatting and generic diagnostics
+        if: matrix.preset == 'debug'
+        run: |
+          cmake --build --preset debug --target format-check
+          cmake --build --preset debug --target lint
+
+      - name: Check dependency-free library package
+        if: matrix.preset == 'debug'
+        run: |
+          cmake --preset library
+          cmake --build --preset library
+          cmake --install out/library --prefix "$RUNNER_TEMP/tbc-stage"
