@@ -30,3 +30,23 @@ The second preview executes plugins using the bundled original CLI's
 completion identity and capability checks, but the Lua worker remains own Zig
 production code. It must be replaced and independently qualified before removing
 that dependency; packaged startup and successful plugin execution do not retire it.
+
+## Observed production graph (2026-11-01)
+
+The [source-bound inventory](measurements/zig-production-inputs.json) records
+`ninja -t inputs telar-gui` on both current macOS/Linux builds. Both graphs name
+the same nine own Zig generator inputs with identical hashes. macOS additionally
+compiles shared `src/gui/macos/font.m`; Linux compiles `src/gui/linux/font.c`.
+Both consume the six recorded font/artwork assets. A direct configure-source
+audit adds `build.zig.zon`, `build/freetype.zig` and shared `bootstrap.lua`;
+these configure reads are not established by Ninja's production-target list.
+The package script requires the original runtime/CLI and diagram helper, and
+the plugin adapter invokes that CLI's `plugin-worker` mode. The inventory binds
+those adapter/build sources and the Preview10 CLI identity.
+
+This is an explicit-input observation, not an exhaustive compiler-header or
+transitive runtime audit. Test/oracle sources are not made production
+requirements by their presence elsewhere in the repository. Existing imported
+Ghostty archives also do not establish a reproducible toolchain-independent
+build. No sources were removed and no clean build without own Zig was attempted.
+The retirement gate remains open.
