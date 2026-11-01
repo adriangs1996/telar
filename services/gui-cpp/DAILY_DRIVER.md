@@ -4,7 +4,92 @@ The complete functional, visual and equal-or-better performance objective remain
 open. Only the command/quick-navigation palette and notifications/sounds may be
 deferred for daily adoption; existing implementations stay available.
 
-## Current candidate: Preview16; configured groups
+## Current candidate: Preview17; configured action dispatch
+
+`out-adoption/Telar C++ Preview 17.app` fixes widgets that define an action and a
+URL together: the action takes precedence as in Zig. Both bar/panel regressions
+fail on old source and pass after correction; stale generation/revision guards
+remain inert. From the worktree root:
+
+```sh
+open -n "services/gui-cpp/out-adoption/Telar C++ Preview 17.app"
+```
+
+Finder opens it after another preview closes; copy under its separate name if
+desired. Close it/open `~/Applications/Telar.app` to return. No install/replacement/
+session migration. GUI SHA256:
+`69648dc941e7e4a9c28a949063f539fe69ec6181dca2f8b8dfabc9c06018a45b`.
+All1739 hashes/121 Mach-O/signatures and six exact schema87/88 Finder/login/runtime/
+plugin/bar/window/pause, SSH, Vim, action+URL panel and task/plan scopes pass. Six
+captures inspected; private cleanup/config unchanged/no QML warnings. Native15
+and three configuration CTests pass per variant/SDK; LinuxASAN0, Mac assertions
+pass/exit1 for678400B3701alloc without address/UB or suppression. Broad/editor/
+format pass three TUs on both SDKs; hashes match. Preview8/16/user config/runtime
+remain intact. Fresh9 plus increments, not a clean/no-own-Zig build. See
+[action dispatch evidence](measurements/component-action-precedence.md).
+
+## Daily adoption blockers
+
+- Triage recorded macOS sanitizer exit leaks without suppressing the failures.
+  A standalone CoreText reproducer explains part of the retention, not the entire
+  GUI report.
+- Validate physical system sleep with the candidate. This remains outside the
+  successful private process-pause and window-close survival checks.
+
+Full visual and comparative performance acceptance and audited removal of own
+Zig remain separate final gates. Palette and notifications are the only daily
+areas allowed to be deferred.
+
+One/five surface-replacement cycles pass their four/twelve assertions; both still
+exit one for LSAN, with about 730/710 KB reported. A private recoverable-check
+probe also reports retention before and after UI destruction and at final exit.
+The apparent stall was slow symbolization; it finished within the original
+runner deadline. See [surface-stability.md](measurements/surface-stability.md).
+This short observation does not establish leak freedom or long-run RSS stability.
+
+## Required adoption checklist
+
+Checked rows record implemented behavior and scoped automated evidence. They do
+not certify complete visual parity or every native device/provider state. The
+complete Cocoa regression covers both protocols; the exact package adds Finder,
+plugins/surfaces, SSH, Vim and project/task/plan navigation. The latter uses a
+controlled reporter, without another AI agent or Git checkout; see
+[its evidence and inspected captures](measurements/daily-activity.md).
+
+- [x] Terminal Unicode, styled output, interactive apps and input/IME.
+- [x] Tabs: rename, move, drag; splits, resize and fullscreen.
+- [x] Projects, workspaces, sidebar and worktree navigation/actions.
+- [x] Agents, tasks, plans and peek.
+- [x] SSH selection, switching and reconnection.
+- [x] Complete History, suggestions and path insertion.
+- [x] Selection, clipboard/copy mode, links and previews.
+- [x] Images and attachments.
+- [x] Lua, shortcuts and reload, retaining the last valid configuration.
+- [x] macOS appearance, fonts, blur and statusbar; final visual/platform gaps remain in PARITY.md.
+- [x] Plugins and custom bars/widgets/panels/picks.
+- [x] Multiple windows, restoration, owned-client pause/resume and task survival after window close.
+- [x] Exact Release bundle: deployed dependencies, login environment and isolated smoke.
+- [ ] Physical system suspend/resume.
+- [ ] Close macOS sanitizer shutdown-leak triage.
+
+## Final parity and Zig retirement
+
+`PARITY.md` retains full visual, native-input, sanitizer and comparative performance
+gates, including existing failed evidence. Pixel microbenchmarks are not the
+adoption critical path unless they expose a daily-use defect.
+
+The preview still bundles the original Zig runtime/CLI. CMake also reads own Zig
+sources for themes, bindings, actions and tables; it compiles shared non-Zig
+C/Objective-C from `src/gui`. Ghostty has its own toolchain. Original-source
+oracles are test dependencies, distinct from production code. Deleting own Zig
+requires a dependency audit and a clean build without those sources, followed by
+acceptance. Starting this GUI does not meet that gate. No broad runtime rewrite
+is part of the adoption milestone.
+
+The initial dependency inventory and clean-build gate are in
+[ZIG_RETIREMENT.md](ZIG_RETIREMENT.md).
+
+## Preserved candidate: Preview16; configured groups
 
 `out-adoption/Telar C++ Preview 16.app` adds original group padding/child gaps and
 mark widths, including fitted and empty groups. Existing panel actions, metrics,
@@ -544,7 +629,7 @@ python3 services/gui-cpp/tools/smoke_macos_bundle.py \
   --evidence services/gui-cpp/out-dependencies/my-preview-smoke
 ```
 
-## Current development qualification
+## Preserved Preview4 development qualification
 
 Configured bars/widgets/panels/picks are implemented and included in Preview 4.
 The complete Cocoa/Metal regression before the final overflow fix passes 106
@@ -561,64 +646,3 @@ detection remains open: the latest two-surface run reports 544,451 bytes / 2,756
 allocations; the selected configuration-source run reports 228,316 / 826. No new
 suppression or weakened analysis profile was added. Final source quality and Linux
 qualification continue independently of the preserved bundle.
-
-## Daily adoption blockers
-
-- Triage recorded macOS sanitizer exit leaks without suppressing the failures.
-  A standalone CoreText reproducer explains part of the retention, not the entire
-  GUI report.
-- Validate physical system sleep with the candidate. This remains outside the
-  successful private process-pause and window-close survival checks.
-
-Full visual and comparative performance acceptance and audited removal of own
-Zig remain separate final gates. Palette and notifications are the only daily
-areas allowed to be deferred.
-
-One/five surface-replacement cycles pass their four/twelve assertions; both still
-exit one for LSAN, with about 730/710 KB reported. A private recoverable-check
-probe also reports retention before and after UI destruction and at final exit.
-The apparent stall was slow symbolization; it finished within the original
-runner deadline. See [surface-stability.md](measurements/surface-stability.md).
-This short observation does not establish leak freedom or long-run RSS stability.
-
-## Required adoption checklist
-
-Checked rows record implemented behavior and scoped automated evidence. They do
-not certify complete visual parity or every native device/provider state. The
-complete Cocoa regression covers both protocols; the exact package adds Finder,
-plugins/surfaces, SSH, Vim and project/task/plan navigation. The latter uses a
-controlled reporter, without another AI agent or Git checkout; see
-[its evidence and inspected captures](measurements/daily-activity.md).
-
-- [x] Terminal Unicode, styled output, interactive apps and input/IME.
-- [x] Tabs: rename, move, drag; splits, resize and fullscreen.
-- [x] Projects, workspaces, sidebar and worktree navigation/actions.
-- [x] Agents, tasks, plans and peek.
-- [x] SSH selection, switching and reconnection.
-- [x] Complete History, suggestions and path insertion.
-- [x] Selection, clipboard/copy mode, links and previews.
-- [x] Images and attachments.
-- [x] Lua, shortcuts and reload, retaining the last valid configuration.
-- [x] macOS appearance, fonts, blur and statusbar; final visual/platform gaps remain in PARITY.md.
-- [x] Plugins and custom bars/widgets/panels/picks.
-- [x] Multiple windows, restoration, owned-client pause/resume and task survival after window close.
-- [x] Exact Release bundle: deployed dependencies, login environment and isolated smoke.
-- [ ] Physical system suspend/resume.
-- [ ] Close macOS sanitizer shutdown-leak triage.
-
-## Final parity and Zig retirement
-
-`PARITY.md` retains full visual, native-input, sanitizer and comparative performance
-gates, including existing failed evidence. Pixel microbenchmarks are not the
-adoption critical path unless they expose a daily-use defect.
-
-The preview still bundles the original Zig runtime/CLI. CMake also reads own Zig
-sources for themes, bindings, actions and tables; it compiles shared non-Zig
-C/Objective-C from `src/gui`. Ghostty has its own toolchain. Original-source
-oracles are test dependencies, distinct from production code. Deleting own Zig
-requires a dependency audit and a clean build without those sources, followed by
-acceptance. Starting this GUI does not meet that gate. No broad runtime rewrite
-is part of the adoption milestone.
-
-The initial dependency inventory and clean-build gate are in
-[ZIG_RETIREMENT.md](ZIG_RETIREMENT.md).

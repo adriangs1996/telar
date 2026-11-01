@@ -1,6 +1,20 @@
 # Port acceptance status
 
-**Current daily candidate: Preview16 (2026-11-01).** Configured groups now retain
+**Current daily candidate: Preview17 (2026-11-01).** Configured bar/panel actions
+now take precedence over coexisting URLs, matching original bar_components. Both
+native causal regressions fail on old source and pass after correction; stale
+source-generation/revision guards stay intact. Both SDKs pass15 native checks,
+three affected config CTests and broad/editor/format on three TUs; hashes match.
+LinuxASAN0; Mac assertions pass/exit1 for678400B3701alloc without address/UB. Exact
+1739 hashes/121 Mach-O/signatures and all six schema87/88 Finder/login/runtime/
+plugin/bar/window/pause/SSH/Vim/action+URL panel/task scopes pass; captures inspected.
+See [component-action-precedence.md](measurements/component-action-precedence.md).
+Daily/full goals, physical sleep, Mac shutdown leakage, remaining native ownership/
+accessibility/styling/paired pixels/performance and own-Zig retirement remain OPEN.
+Next scoped functional qualification uses a separate existing RecordingLinkHost
+build for URL-only and action+valid-URL widgets, without external app launches.
+
+**Preserved daily candidate: Preview16 (2026-11-01).** Configured groups now retain
 original padding/mark/child spacing in both placement and fitting, including empty
 and reduced groups. Exact schema87/88 Finder/login/config/plugin/bar/window/pause,
 realSSH/default ink, VimUTF8, panel and task/plan flows pass;1739 hashes/121 Mach-O/

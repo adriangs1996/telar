@@ -86,7 +86,7 @@ return {api_version = 2, client = {
   },
   picks = {mode = t.pick({items = {'low', 'high'}, on_select = {'helper', '{}'}})},
   bars = {bottom = {
-    left = t.bar.static(ui.group({on_click=t.action.open_panel('zebra'), ui.label('á λ')})),
+    left = t.bar.static(ui.group({on_click=t.action.open_panel('zebra'), url='https://action-fallback.test', ui.label('á λ')})),
     center = t.bar.tabs(),
     right = t.bar.dynamic({every_ms=250, render = function(ctx)
       assert(ctx.time.year == 2026 and ctx.time.weekday == 6)
@@ -136,6 +136,7 @@ void profilesAndDefinitions(Memory &memory) {
   const auto action = bar.action(bar.nodes()[0]);
   const auto definition = action ? base.definitionAction(*action) : std::nullopt;
   require(definition && definition->kind == DefinitionActionDescription::Kind::panel && definition->index == 1, "static component actions must resolve sorted panel indices");
+  require(bar.text(bar.nodes().front().url) == "https://action-fallback.test", "components with an action must also retain their configured URL");
   std::size_t argument = 0;
   constexpr auto expected = std::to_array<std::string_view>({"helper", "a b", "$(literal)"});
   base.visitArguments(definitions.source(components::Position::top_right).reference, "command", [&](std::string_view value) {

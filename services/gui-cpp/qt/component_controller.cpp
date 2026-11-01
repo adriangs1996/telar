@@ -488,16 +488,16 @@ void Application::activateComponent(int source, int node, const QString &generat
 
     const auto &item = content.nodes()[static_cast<std::size_t>(node)];
     const auto url = content.text(item.url);
-    if (!url.empty()) {
-      if (const auto target = LinkTarget::fromUri(url)) {
-        static_cast<void>(openLink(*target));
-      }
-    } else if (const auto action = content.action(item)) {
+    if (const auto action = content.action(item)) {
       const auto previous = std::exchange(component_action_anchor_, anchor);
       const auto restore = qScopeGuard([&] {
         component_action_anchor_ = previous;
       });
       static_cast<void>(runBinding(*action));
+    } else if (!url.empty()) {
+      if (const auto target = LinkTarget::fromUri(url)) {
+        static_cast<void>(openLink(*target));
+      }
     }
   };
   if (panel) {

@@ -59,26 +59,27 @@ executable/start instead of restoring the old process. Old Zig GUI87625 was alre
 absent before this work; do not restart it or claim we stopped it. Private test
 children are separate and must be cleaned up by their owning helpers only.
 
-## Available candidate: Preview16 (2026-11-01)
+## Available candidate: Preview17 (2026-11-01)
 
-`services/gui-cpp/out-adoption/Telar C++ Preview 16.app` is frozen/qualified and
+`services/gui-cpp/out-adoption/Telar C++ Preview 17.app` is frozen/qualified and
 already offered for normal-use assessment. GUI SHA256
-`76ca4aa6fcc7ed5b1bc50402cca3e6137f3d6fd55a38a5ee31b835cf8f44232d`;
-raw `81dca3f3d24dd9398fdce3f34c4217c437a640f85b310f0fdb50d1a7dba8993a`.
-All1739 hashes/121 Mach-O/deep-strict signatures pass. Exact relocated schemas87/88
-Finder/login/default-runtime/plugins/bars/two windows/client pause, realSSH with
-machine bar+default ink, VimUTF8, custom panel and task/worktree/plan survival pass;
-zero QML warnings/config unchanged/private cleanup. Six direct/daily captures plus
-native Mac/Linux group captures inspected. Panel actor is owned callback/anchor;
-activity uses protocol fixtures, not AI/Git checkout. Fresh9 plus increments, not
-clean/no-own-Zig build. From worktree root:
-`open -n "services/gui-cpp/out-adoption/Telar C++ Preview 16.app"`. Finder opens it
+`69648dc941e7e4a9c28a949063f539fe69ec6181dca2f8b8dfabc9c06018a45b`;
+raw `e05b91f66fa65556aaf6cae03509cf1927ab65c415e95f31d2f5e70af09534d7`.
+All1739 hashes/121 Mach-O/deep-strict signatures pass. Six exact relocated schema87/
+88 Finder/login/default-runtime/plugins/bars/two windows/client pause, realSSH with
+machine bar+default ink, VimUTF8, action+URL panel and project/task/worktree/plan
+survival pass. Zero QML warnings/config unchanged/private cleanup; six direct/daily
+captures inspected. Panel actor invokes activateComponent with full identities/
+anchor (native tests click); activity uses protocol fixtures, not AI/Git checkout.
+Fresh9 plus increments, not a clean/no-own-Zig build. From worktree root:
+`open -n "services/gui-cpp/out-adoption/Telar C++ Preview 17.app"`. Finder opens it
 after another preview closes; copy under its separate name if desired. Rollback:
 close preview/open `~/Applications/Telar.app`. No install/replacement/migration.
-Preview8/15/installed app/config/runtime remain intact. All previews share bundle
+Preview8/16/installed app/config/runtime remain intact. All previews share bundle
 identifier; use open-n for this exact one while8 runs. Adrian confirmed8 normal/no
 daily blocker so far. Physical sleep: "Aún no lo he probado"; don't ask again or
-suspend host. Daily/full goals stay OPEN.
+suspend host. Daily/full goals stay OPEN. DAILY_DRIVER puts the required checklist
+and the separate daily/full/retirement gates before historical candidates.
 
 ## Latest implementation and evidence
 
@@ -116,11 +117,46 @@ packaging/smoke jobs remain active. Raw `out-dependencies/component-shared-overf
 The shared-overflow report/archive/verifier and local commit are complete. CONTINUE
 actual PARITY; do not repeat completed Preview12 qualification without new changes.
 
+## Latest qualified source: action before coexisting URL; continue link dispatch
+
+Group-spacing/Preview16 is locally committed in a99af22c0 (277 frozen entries).
+Current action-precedence three-file change and exact Preview17 qualification are
+complete; finish freeze/review/local commit then CONTINUE actual PARITY. Raw
+out-dependencies/component-action-precedence-1; report/archive/verifier under
+measurements/component-action-precedence. Original bar_components prefers action
+before URL for bar/panel; Qt had reversed it. Native negative fails both open and
+close (2pass/2fail,65965ms). Tests assert LinkTarget rejects https:// before click,
+so negative/final do not open external apps. Valid URL+action retained in pure
+configuration fixture; stale gen/rev attempts inert. Single if/else reorder leaves
+guards, anchor scope and URL-only handling intact. Both SDKs pass15 native and
+three config CTests per Release/ASAN; LinuxASAN0, Mac assertionspass/exit1 for
+678400B3701alloc, no address/UB or LSAN suppression. Broad/editor/changed-range format
+pass three TUs on both SDKs; three hashes match. Linux editor-owned disk TMPDIRs
+removed after compiler exit. Exact17 panel fixture ALSO includes action+URL and
+owned actor invokes real packaged activateComponent; all six exact scopes pass.
+Daily/direct captures inspected, all four protected identities unchanged. No heavy
+jobs remain. QML unchanged, prior16 native/interaction/lint evidence preserved.
+
+NEXT: qualify actual URL-only versus action+VALID-URL dispatch with the existing
+compile-time RecordingLinkHost in a SEPARATE fresh verification build. Default9
+has TELAR_GUI_LINK_HOST_HEADER empty and omits3 optional test slots; do not select
+them there or claim their earlier Function-not-found errors are product failures.
+Existing tests/recording_link_host.hpp safely records URIs through owned /bin/sh;
+CMake TELAR_GUI_LINK_HOST_HEADER selects it with compile-time types (no virtual).
+Prepare same SDK/Release/Ghostty prefix in NEW build, never reconfigure9 or deploy
+this fake host. Add guarded native coverage for configured URL-only and action+
+valid-URL bar/panel alongside optional pointerLinkOpening, pointerLinkRevalidation,
+textualAndRoutedLinks. Check Mac/Linux and broad lint of the enabled branch;
+retain normal actual-editor diagnostics policy unchanged. Keep production17
+unchanged if expansion only changes tests. Recheck protected processes before
+source changes. Final styling/fit/ownership/accessibility/performance still open.
+A checkpoint is not completion. Older verifiers default to frozen archives.
+
 ## Latest qualified source: configured-group geometry and footer audit
 
 Default ink/Preview15 is locally committed in d24e5e020 (175 frozen entries).
-Current group-spacing source/report and exact Preview16 qualification are complete;
-finish local evidence/review/commit, then continue actual PARITY. Raw evidence under
+Group-spacing/Preview16 source,277-entry evidence and review are locally committed
+in a99af22c0; continue actual PARITY. Raw evidence under
 out-dependencies/component-group-spacing-1; report/archive/verifier under
 measurements/component-group-spacing. Three QML files +two tests. Original group
 chrome6/26, mark14, childgap6 and leadinggap6 now agree in measurement and placement;
@@ -148,15 +184,9 @@ attempt selected3 optional custom-link-host methods absent from this build; reta
 selection errors, don't call them product failures. External link-opening/device/
 whole-client ownership gates remain open. No heavy jobs remain after exact16.
 
-NEXT concrete functional finding: original src/client/input/bar_components.zig
-prefers action over a coexisting URL; Qt activateComponent currently prefers URL.
-Reproduce safely with an action and URL that LinkTarget rejects (https:// with
-empty host, assert rejection before test to avoid external app launch), then fix
-bar+panel dispatch and preserve generation/revision guards. Existing configured
-GroupPriority/panel button tests can cover both; don't alter production until
-protected processes are rechecked and group-spacing evidence is frozen/committed.
-A checkpoint is not completion. Don't redo passing16 scopes without new changes.
-Previous immutable verifiers default to archived sources after future edits.
+The subsequent action+URL dispatch correction/Preview17 is recorded above.
+Keep older immutable group evidence unchanged. Continue the next concrete step
+from the current section, preserving protected processes and the final open goal.
 
 ## Preserved machine checkpoints
 
@@ -180,7 +210,7 @@ to repeat completed candidate qualifications without new source changes/failures
 ## Remaining gates: keep these separate
 
 Daily acceptance: physical system sleep remains unverified; Mac shutdown-leak
-attribution/stability remains open. Release Preview16 is available for daily
+attribution/stability remains open. Release Preview17 is available for daily
 assessment. Do not equate private SIGSTOP/SIGCONT with physical system sleep.
 
 Final parity: remaining fitting/styling and combined

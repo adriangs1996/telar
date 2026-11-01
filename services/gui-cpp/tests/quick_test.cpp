@@ -16,6 +16,7 @@
 #include "input/click_tracker.hpp"
 #include "json_fixture.hpp"
 #include "links/link_grid.hpp"
+#include "links/link_target.hpp"
 #include "list_model.hpp"
 #include "palette/query.hpp"
 #include "platform/awake_clock.hpp"
@@ -4162,6 +4163,7 @@ return {api_version=2, client={keybindings={
       client_->closeComponentPanel();
       client_->loadConfiguration({}, {}, {});
     });
+    QVERIFY(!LinkTarget::fromUri("https://").has_value());
     const QTemporaryDir directory;
     QVERIFY(directory.isValid());
     const auto path = directory.filePath(QStringLiteral("config.lua"));
@@ -4179,7 +4181,7 @@ return {api_version=2, client={keybindings={
           ui.heading('Usage λ'),ui.meter_row({label='Session',value=0.5}),
           ui.meter_row({label='Daily quota λ',detail='Resets tomorrow',value=0.75,marker=0.9}),
           ui.text(string.rep('Daily task details remain available. ',8)),
-          ui.callout({text='Status λ',detail='Ready',icon='telar_mark',button=ui.button({text='Dismiss',action=t.action.close_panel()})}),
+          ui.callout({text='Status λ',detail='Ready',icon='telar_mark',button=ui.button({text='Dismiss',action=t.action.close_panel(),url='https://'})}),
           ui.actions({ui.button({text='Close',action=t.action.close_panel()})}),
         } end})},
       }}
@@ -4315,6 +4317,7 @@ return {api_version=2, client={keybindings={
       client_->closeComponentPanel();
       client_->loadConfiguration({}, {}, {});
     });
+    QVERIFY(!LinkTarget::fromUri("https://").has_value());
     const QTemporaryDir directory;
     QVERIFY(directory.isValid());
     const auto path = directory.filePath(QStringLiteral("config.lua"));
@@ -4323,7 +4326,7 @@ return {api_version=2, client={keybindings={
       local ui = t.ui
       return {api_version=2,client={
         bars={bottom={
-          left=t.bar.static(ui.group({on_click=t.action.open_panel('kept'),
+          left=t.bar.static(ui.group({on_click=t.action.open_panel('kept'),url='https://',
             ui.label({text='Keep λ',priority=100}),
             ui.label({text=string.rep('Low priority ',80),priority=1}),
           })),center=t.bar.tabs(),right=t.bar.static(ui.label('Right')),
@@ -4359,6 +4362,14 @@ return {api_version=2, client={keybindings={
     if (!screenshot.isEmpty()) {
       QVERIFY(window_->grabWindow().save(screenshot, "PNG"));
     }
+    const auto surface = client_->componentBars().value(QStringLiteral("left")).toMap();
+    const auto source = surface.value(QStringLiteral("source")).toInt();
+    const auto generation = surface.value(QStringLiteral("generation")).toString();
+    const auto revision = surface.value(QStringLiteral("revision")).toString();
+    client_->activateComponent(source, 0, generation + QStringLiteral("stale"), revision, bounds.center());
+    QVERIFY(!client_->componentPanel().value(QStringLiteral("open")).toBool());
+    client_->activateComponent(source, 0, generation, revision + QStringLiteral("stale"), bounds.center());
+    QVERIFY(!client_->componentPanel().value(QStringLiteral("open")).toBool());
     QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, bounds.center().toPoint());
     QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
     QCOMPARE(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Kept action"));
