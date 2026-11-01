@@ -42,6 +42,9 @@ namespace ebnf {
 
   using parsing_ring_buffer = std::array<token, max_tokens_in_ring_buffer>;
 
+  template <typename T>
+  using bounded = tbc::view<T, tbc::lt::a>;
+
   // Implementations must put source and buffer in one tbc region, like Lexer, so a call replaces the buffer's views.
   template <typename tokenizer>
   concept i_tokenizer = requires(tokenizer &tkzer, std::string_view source, parsing_ring_buffer &buffer, std::size_t max_tokens) {
@@ -51,7 +54,7 @@ namespace ebnf {
   class Lexer {
   public:
     // The returned count includes End; token text borrows the source storage.
-    auto tokenizeSourceIntoBuffer(tbc::view<std::string_view, tbc::lt::a> source, tbc::view<parsing_ring_buffer &, tbc::lt::a> buffer, std::size_t max_tokens) const -> std::size_t {
+    auto tokenizeSourceIntoBuffer(bounded<std::string_view> source, bounded<parsing_ring_buffer &> buffer, std::size_t max_tokens) const -> std::size_t {
       const auto limit = std::min(max_tokens, buffer.size());
 
       if (limit == 0) {
