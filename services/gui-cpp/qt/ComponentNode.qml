@@ -16,6 +16,7 @@ Item {
     property real rowHeight: 28 * ratio
     property bool compact: false
     readonly property real gap: 6 * ratio
+    readonly property int maximumBlockLines: 8
     readonly property real iconSide: (node.kind === "callout" ? 18 : 16) * ratio
     readonly property real trackWidth: 48 * ratio
     readonly property bool block: ["heading", "text", "meter_row", "kv", "callout", "actions", "button", "divider"].indexOf(node.kind) >= 0
@@ -151,6 +152,7 @@ Item {
             }
             Text {
                 id: styledText
+                objectName: "componentStyledText"
                 x: parent.markWidth + parent.padding
                 width: Math.max(0, parent.width - x - parent.padding)
                 text: parent.styled ? root.node.text : ""
@@ -164,7 +166,7 @@ Item {
                 textFormat: Text.PlainText
                 renderType: Text.NativeRendering
                 wrapMode: root.block ? Text.Wrap : Text.NoWrap
-                maximumLineCount: root.block ? 3 : 1
+                maximumLineCount: root.block ? root.maximumBlockLines : 1
                 elide: Text.ElideRight
                 visible: parent.styled
             }

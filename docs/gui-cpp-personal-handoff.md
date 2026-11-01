@@ -1,3 +1,50 @@
+## CURRENT: Preview 10 qualified; daily/full parity remain OPEN (2026-11-01)
+
+Adrian reports no daily blocker found so far in Preview8: "No ahe encontrado
+ninguno p[or ahora". Natural suspend/resume with Preview9: "Aún no lo he probado".
+Both optional questions are answered; do not ask again or suspend the machine.
+Preview8 remains active PID52865 and frozen; runtime35801, QEMU7158 and guest
+Sway9469 have unchanged start identities. Preserve all four before source edits.
+No agents, publish/merge, other implementation checkout or user-file access.
+
+Preview10 is separately packaged, qualified and offered at
+`services/gui-cpp/out-adoption/Telar C++ Preview 10.app`.
+Bundled GUI SHA256:
+`18fc75b32bdacabca3ef6a07defbd7946431896a1174dee1b6bf24043fbe58f8`.
+Raw GUI SHA256:
+`a2bf7e0cc5eecf56c13caa949ca18f2cd60cc6d4772b8ffecce893673926a0c2`.
+The build uses the clean Preview9 baseline plus recorded incremental callout/
+text updates; it is NOT another fresh full build or the own-Zig retirement gate.
+All1739 file hashes,121 Mach-O checks and strict/deep signatures pass. Exact
+relocated schema87 AND88 Finder/login/config/runtime-discovery/plugin/bar/
+two-window smokes pass, explicitly adopting opacity.98/blur20. Owned-client
+pause/resume passes; physical system sleep remains unverified. Exact own-panel
+(full paragraph+Dismiss), realSSH, Vim exactUTF8 and task/worktree/plan flows
+all pass, zero QML warnings, disposable states removed, protected processes and
+configuration unchanged. All five daily captures and schema87 direct VIEWED.
+Panel actor invokes its owned callback at a controlled anchor, not OS pointer.
+Return by closing preview and opening ~/Applications/Telar.app; no install,
+configuration, session or runtime is migrated. Preview8/9 bundles stay intact.
+
+Current text correction restores original panel_blocks.zig bound8 vs Qt3.
+Native baseline fails >3 visible lines; fixed paragraph has truncated=false.
+Mac Release5pass0; Linux Release+ASAN5pass0 each with explicit leak detection,
+private displays removed. Mac sanitizer5assertionspass/exit1/720180B3776alloc;
+no address/UB diagnostic. Broad and actual editor diagnostics pass both SDKs,
+changed-range format0; portable source hashes match. Retain baseline failure
+and full Mac leak report. Raw: out-dependencies/panel-text-lines-1; report and
+frozen source-bound evidence: measurements/panel-text-lines.md and panel-text-lines/.
+Do not repeat completed checks without a new failure or source change.
+
+Local callout commit e3780de90/65-entry archive, artwork90834f728/351 entries,
+font negative controls e2d230cd2 and catalogue559792e47 are complete. Only palette
+and notifications may defer for daily use. Physical sleep, Mac leak triage,
+full visual/comparative performance and audited own-Zig retirement stay OPEN.
+Goal API remains blocked with no resume operation; continue manually rather
+than completing/reblocking. Never read/touch/stage personal-frame-delivery.md.
+
+## Historical continuation notes (superseded status; retain evidence)
+
 ## Latest source continuation: callout card/action qualified (after Preview 9)
 
 Preview 9 remains frozen and available; its bundled GUI is still 94e66792... .

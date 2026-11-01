@@ -4159,6 +4159,7 @@ return {api_version=2, client={keybindings={
         },top={right=t.bar.dynamic({every_ms=60000,render=function(ctx) return ui.clock('%H:%M') end})}},
         panels={usage=t.panel({title='Usage',render=function(ctx) return {
           ui.heading('Usage λ'),ui.meter_row({label='Session',value=0.5}),
+          ui.text(string.rep('Daily task details remain available. ',8)),
           ui.callout({text='Status λ',detail='Ready',icon='telar_mark',button=ui.button({text='Dismiss',action=t.action.close_panel()})}),
           ui.actions({ui.button({text='Close',action=t.action.close_panel()})}),
         } end})},
@@ -4176,12 +4177,18 @@ return {api_version=2, client={keybindings={
     QCOMPARE(slot("right").value(QStringLiteral("error")).toString(), QString{});
     QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
     QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-    QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("nodes")).toList().size(), 6, runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("nodes")).toList().size(), 7, runtime_wait_ms);
     const auto *popup = window_->findChild<QObject *>(QStringLiteral("configuredPanel"));
     QVERIFY(popup != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(popup->property("visible").toBool(), runtime_wait_ms);
     QCOMPARE(client_->componentPanel().value(QStringLiteral("error")).toString(), QString{});
     QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto *paragraph = componentItem(QStringLiteral("text"));
+    QVERIFY(paragraph != nullptr);
+    const auto *paragraph_text = paragraph->findChild<QQuickItem *>(QStringLiteral("componentStyledText"));
+    QVERIFY(paragraph_text != nullptr);
+    QVERIFY(paragraph_text->property("lineCount").toInt() > 3);
+    QVERIFY(!paragraph_text->property("truncated").toBool());
     const auto *callout = componentItem(QStringLiteral("callout"));
     const auto *dismiss = componentItem(QStringLiteral("button"), QStringLiteral("Dismiss"));
     QVERIFY(callout != nullptr && dismiss != nullptr);

@@ -4,46 +4,47 @@ The complete functional, visual and equal-or-better performance objective remain
 open. Only the command/quick-navigation palette and notifications/sounds may be
 deferred for daily adoption; existing implementations stay available.
 
-## Current candidate: Preview 9; clean build and component artwork
+## Current candidate: Preview 10; complete custom-panel paragraphs
 
-`out-adoption/Telar C++ Preview 9.app` is a separate Release app built from a
-fresh frontend directory. It preserves Preview 8's blur fix and adds canonical
-Telar marks to custom bars and panel callouts. Open from the repository root:
+`out-adoption/Telar C++ Preview 10.app` is a separate Release app. It preserves
+the verified blur/artwork fixes, restores the original callout card with its
+inline action and permits eight wrapped paragraph/heading lines instead of
+silently clipping after three. Open from the repository root:
 
 ```sh
-open -n "services/gui-cpp/out-adoption/Telar C++ Preview 9.app"
+open -n "services/gui-cpp/out-adoption/Telar C++ Preview 10.app"
 ```
 
 Bundled GUI SHA-256:
-`94e6679270df9250da7ec0ac4eea92ed258d0fb194390fc5afde5d92454b963d`.
-All 1,739 manifest files, 121 Mach-O checks and deep/strict signatures pass.
+`18fc75b32bdacabca3ef6a07defbd7946431896a1174dee1b6bf24043fbe58f8`.
+All 1,739 file hashes, 121 Mach-O checks and deep/strict signatures pass. The
+frontend uses the fresh Preview9 baseline plus recorded incremental QML updates;
+this is not a new full clean build or a Zig-retirement qualification.
+
 Both exact relocated schema-87/88 smokes pass with native opacity 0.98/blur 20,
-Finder/login-shell/default endpoint discovery, plugins, bar commands, distinct
-windows and owned-client pause/resume. Configurations are unchanged, QML warnings
-are empty and disposable states are removed. The exact bundle also passes real
-SSH, a Vim write with exact UTF-8 bytes and an owned custom-panel invocation.
-Their complete captured content was inspected. The exact bundle also passes
-controlled task/worktree plan navigation and task survival after window close.
-That fixture uses a protocol reporter, with no AI agent or new Git checkout. The panel actor invokes its own
-registered callback with a controlled anchor; it does not establish ordinary
-pointer positioning or native compositor parity.
+Finder/login-shell/default endpoint discovery, actual plugins, custom bars,
+distinct windows and owned-client pause/resume. Configurations are unchanged,
+QML warnings are empty and disposable states are removed. The exact bundle also
+passes real SSH, Vim writing exact UTF-8 bytes, the complete custom paragraph
+and card, task/worktree plan navigation and task survival after window close.
+All five daily captures were inspected. The panel actor invokes an owned
+callback at a controlled anchor; the task fixture uses protocol reports, with
+no AI agent or new Git checkout. These are scoped checks, not full acceptance.
 
-Native custom-surface/pick checks pass four assertions on each platform. Linux
-Release and leak-enabled ASan/UBSan exit zero. macOS assertions pass, but its
-instrumented process exits one for 632,337 leaked bytes in 3,622 allocations.
-The artwork unit's three assertions pass and retain a separate 226,544-byte /
-1,008-allocation shutdown report. No sanitizer suppression or test deadline has
-changed. Current broad analysis and delivered editor diagnostics pass on both
-SDKs; the Linux checks were completed sequentially after confirmed memory
-exhaustion during parallel qualification.
+Native custom-surface/pick checks pass five assertions on each SDK. Linux
+Release and leak-enabled ASan/UBSan exit zero. macOS passes its assertions but
+exits one for 720,180 leaked bytes in 3,776 allocations; no address/UB diagnostic.
+Broad analysis, actual delivered editor diagnostics and changed-range formatting
+pass. See [panel-text-lines.md](measurements/panel-text-lines.md), the retained
+[callout regression](measurements/callout-layout.md) and
+[artwork/build diagnosis](measurements/component-artwork.md).
 
-See [component-artwork.md](measurements/component-artwork.md) for the stale
-incremental-build diagnosis, preserved failures, source-bound evidence and
-remaining callout visual gap. Neither daily adoption nor full parity is complete.
-Physical system sleep, native shutdown-leak triage and normal-use feedback remain
-open. Preview 8 stays frozen and available. Close the preview and open
-`~/Applications/Telar.app` to return to the installed app without stopping runtime
-processes. No installation or session has been migrated.
+Adrian found no daily blocker so far in Preview8. He has not yet tried physical
+sleep with Preview9. Natural sleep, Mac shutdown-leak triage, final visual/
+performance parity and audited Zig retirement remain open. Preview8/9 stay
+frozen. Close the preview and open `~/Applications/Telar.app` to return to the
+installed app, keeping runtime processes alive. No installation, configuration
+or session is migrated. Only palette and notifications may defer for daily use.
 
 ## Preserved candidate: Preview 8; normal launch confirmed
 

@@ -1,20 +1,19 @@
 # Port acceptance status
 
-**Current daily candidate: Preview 9 (2026-11-01).** A fresh Release frontend
-build preserves the verified native blur correction and renders canonical Telar
-marks in custom bars and callouts. The exact separately signed bundle passes
-relocated Finder/config/runtime/plugin/bar/multiple-window/pause smokes with both
-runtime schemas, real SSH, a Unicode Vim write and a controlled custom panel.
-Native component checks pass on both SDKs, with clean Linux sanitizers. Current
-broad analysis and editor diagnostics pass. macOS assertions pass but shutdown
-leaks remain: 632,337 bytes / 3,622 allocations for the native component case.
-The old incremental build contained stale generated shaders; the failed captures
-and their original QSBs remain evidence. See
-[component-artwork.md](measurements/component-artwork.md) and
-[DAILY_DRIVER.md](DAILY_DRIVER.md). The subsequent [callout card/action correction](measurements/callout-layout.md)
-passes native interaction and geometry checks on both SDKs; it is not in Preview 9.
-Complete button styling/pixels, physical system sleep, leak triage, full
-visual/performance acceptance and audited Zig retirement remain open. Preview 8 is preserved and user-confirmed below.
+**Current daily candidate: Preview 10 (2026-11-01).** The separate Release
+bundle preserves the native blur/artwork corrections and restores the original
+callout card/inline action and eight-line panel text bound. All1,739 manifest
+hashes,121 Mach-O checks and signatures pass. Exact relocated schema87/88
+Finder/config/runtime/plugin/bar/two-window/pause smokes, realSSH, UTF8 Vim,
+custom panel and task/worktree/plan flows pass with zero QML warnings and private
+cleanup. Captures were inspected. Native custom-surface checks pass five on
+both SDKs; Linux sanitizers exit0. Mac assertions pass but shutdown exits1 for
+720,180 leaked bytes/3,776 allocations. Broad analysis/editor checks pass.
+See [panel-text-lines.md](measurements/panel-text-lines.md) and
+[DAILY_DRIVER.md](DAILY_DRIVER.md). This uses the fresh Preview9 baseline plus
+incremental QML changes, not another fresh build or own-Zig retirement gate.
+Adrian reports no daily blocker so far in Preview8; physical sleep is untried.
+Complete visuals/performance, Mac leaks and audited Zig retirement remain OPEN.
 
 **Resolved daily launch blocker (2026-11-01):** Adrian reported Preview 7 opened to a
 blurred blank window with his normal configuration. Its native effect is a
@@ -2048,10 +2047,10 @@ performance remain open.
 | History browser | Complete modal input lifecycle, additional hover lifecycles and remaining physical scheduling after selected-card replacement, inspector facts/content, exact day-group placement/scroll admission and older-row placement, expansion/leaving animation, remaining filter theme/density/hover and Linux paired pixels, remaining query notification/synchronization, additional loading themes/densities and physical scheduling, footer error-caption shaping, entrance animation and complete paired pixels; remaining focus, gesture and status behavior; comparative cache-pressure profiling. [Card action pointer capture](measurements/history-retained-actions.md) has original-source dispatcher and Cocoa/Sway Qt coverage; [retained row-hover admission](measurements/history-action-hover.md) corrects the observed geometry-driven hover after selected-card replacement, with a causal negative and two exact744,576-pixel Cocoa result regions; [keyboard-open row-hover admission](measurements/history-initial-hover.md) additionally matches two 567,296-pixel result regions under stationary and freshly moved pointers; the observed [asynchronous delegate retirement warning](measurements/history-delegate-retirement.md) is already closed. Physical panel/search/inspection geometry, compact paths, metadata/action and footer fitting, calendar/status labels, word wrapping, bounded card height/remainder, visible fuzzy matching, selection containment, row/footer revisions, capture retirement and reusable components have scoped coverage. One complete selected card, browse/inspect footers, six filter-header scenes and seven search bands match paired Cocoa pixels; other states/themes/densities and the complete window remain open. |
 | Activity | Additional remote-source/task composition states; favicons and complete task/plan/native peek qualification; remaining density/icon pixels; complete scrolling, selection and task interactions; complete paired task/working frames on both platforms; physical suspend/resume validation. The generic bounded forest, coordinator ancestry, full/compact tasks, tracked commands, project progress/attention, plan cells and status clocks have original-source/component coverage. Scoped macOS live pairs verify worktree/hook projection and listed exact regions, including mixed-font task facts and project rows. |
 | Navigation | Affirmative GUI release installation, additional SSH hosts, additional runtime-stop/failure states beyond the verified lifecycle and negotiation cases, complete machine switcher/segment visual qualification, complete task/plan state and source-composition qualification and full source-composed activity qualification, native focus qualification, additional workspace/worktree interaction states, remaining worktree management and nested picks. `goto-picker` opens a fuzzy native palette for contexts, current-context tabs and agents, with complete identities and query-preserving prefixes. The generated catalogue exposes all 29 actions, including the four machine actions. Initial `--remote`/`--machine` selection and remote command/home adoption are wired and have real loopback SSH coverage. The runtime path picker browses directories and inserts quoted relative or absolute paths; file-icon sampling, complete native path interactions, failure scenes and other theme/density pixels remain open. Suggestions use the runtime engine, retain retryable failures, discard stale replies and paste without Enter; returning to actions restores the query, selected row and editor selection. Leaving a linked worktree selects its project; cleanup only forgets gone rows without tabs. Bounded navigation history and canonical saved-layout restoration have original-source and live SSH round-trip coverage; visible and hidden restored roots follow a delivered in-flight window/sidebar resize. Machine picker/form actions have controlled coverage; a real OpenSSH loopback run also covers remote/local/remote input isolation. Four earlier palette panels, one empty path panel and eight suggestion panels have scoped exact Cocoa pixels; complete visual and interaction coverage remains open. |
-| Extensibility | Complete visual fitting/priority and overflow parity, additional custom-surface compositions and final source-bound qualification. Plugins, custom bars/widgets/panels/picks and command actions are implemented; Preview 9 adds canonical artwork and exact-bundle validation. The source callout card/right-action correction passes native geometry/click checks; complete styling/pixels remain open and the correction is not in Preview 9. |
+| Extensibility | Complete visual fitting/priority and overflow parity, additional custom-surface compositions and final source-bound qualification. Plugins, custom bars/widgets/panels/picks and command actions are implemented. Preview10 includes canonical artwork, the original callout card/right action and eight-line text bound; exact-bundle and native interaction checks pass. Complete styling/pixels remain open. |
 | Footer | Complete priority fitting and overflow across the implemented configured bar positions/content; exact diagnostic fitting and complete battery/badge/mode-chip density/theme geometry; complete mode-label font fallback. Default metrics, CPU history, TLS, dismissible diagnostics and prefix/copy hint layout are implemented. |
 | Attachments and links | Complete clipboard/preview interaction and physical ownership qualification, paired pixels, Linux bounded provider transfer, native leaks and measured performance; diagrams and complete native link/preview equivalence. The image shelf, capture/retention, marker lifecycle, dismiss input and row reservation now have scoped implementation and correctness coverage. |
-| Native behavior | Linux background blur, exact macOS blur strength and window behavior, physical system sleep and wider platform coverage. Preview 9 provides separately named macOS Release packaging, deployed Qt/QML and verified Finder/login environment adoption. Preview 8 normal launch was confirmed by Adrian. |
+| Native behavior | Linux background blur, exact macOS blur strength and window behavior, physical system sleep and wider platform coverage. Preview10 provides separately named macOS Release packaging, deployed Qt/QML and verified Finder/login environment adoption. Preview 8 normal launch was confirmed by Adrian. |
 | Interaction and accessibility | Remaining native-device tab drag ownership, context menus, complete keyboard-only navigation, focus/selection/scroll affordances and accessibility validation; current native Mac failures in window activation and link copying at fractional/doubled scales |
 
 Some accepted configuration fields belong to these unported subsystems. They
