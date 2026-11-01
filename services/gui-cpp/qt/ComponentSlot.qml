@@ -13,12 +13,15 @@ Item {
     required property var typography
     property real ratio: 1
     property real textScale: 1
+    property bool sharedOverflow: false
     property var fittedLevels: null
+    readonly property var hiddenRoots: visual.item?.hiddenRoots ?? []
     readonly property var fitNodes: visual.item?.fitNodes ?? []
     readonly property real overflowWidth: visual.item?.overflowWidth ?? 0
     readonly property bool tabs: surface.kind === "tabs"
     readonly property real diagnosticWidth: 8 * ratio
-    implicitWidth: Math.max(tabs ? 200 * ratio : visual.item?.implicitWidth ?? 0, (surface.error ?? "").length > 0 ? diagnosticWidth : 0)
+    readonly property real errorWidth: (surface.error ?? "").length > 0 ? diagnosticWidth : 0
+    implicitWidth: Math.max(tabs ? 200 * ratio : visual.item?.implicitWidth ?? 0, errorWidth)
     clip: true
 
     Loader {
@@ -35,7 +38,7 @@ Item {
         }
     }
 
-    ToolTip.visible: pointer.hovered && (surface.error ?? "").length > 0
+    ToolTip.visible: pointer.hovered && root.errorWidth > 0
     ToolTip.text: surface.error ?? ""
     HoverHandler { id: pointer }
     Text {
@@ -93,6 +96,7 @@ Item {
     Component {
         id: content
         Item {
+            readonly property var hiddenRoots: tree.hiddenRoots
             readonly property var fitNodes: tree.fitNodes
             readonly property real overflowWidth: tree.overflowWidth
             implicitWidth: tree.fullWidth
@@ -105,6 +109,7 @@ Item {
                 typography: root.typography
                 ratio: root.ratio
                 rowHeight: root.height
+                fit: !root.sharedOverflow
                 fittedLevels: root.fittedLevels
             }
         }

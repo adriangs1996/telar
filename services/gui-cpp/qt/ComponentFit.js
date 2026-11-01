@@ -104,11 +104,31 @@ function slotWidths(slots, levels, layout) {
             return slot.width * layout.fixedScale;
         }
         const size = measure(slot.nodes, levels, layout.gap);
-        return size.width + (size.hidden > 0 ? slot.overflowWidth + (size.width > 0 ? layout.gap : 0) : 0);
+        const retained = Math.max(size.width, slot.minimumWidth ?? 0);
+        return retained + (!layout.sharedOverflow && size.hidden > 0 ? slot.overflowWidth + (retained > 0 ? layout.gap : 0) : 0);
     });
 }
 
-function allocate(slots, available, gap, minimumTabsWidth) {
+function sharedOverflowWidth(slots, levels, layout) {
+    if (!layout.sharedOverflow) {
+        return 0;
+    }
+    for (const slot of slots) {
+        for (const node of slot.nodes) {
+            if (node.parent < 0 && (levels[node.index] ?? Level.full) === Level.hidden) {
+                return layout.overflowWidth;
+            }
+        }
+    }
+    return 0;
+}
+
+function totalWidth(widths, slots, gap, overflowWidth) {
+    const content = rowWidth(widths, slots, gap);
+    return content + (overflowWidth > 0 ? overflowWidth + (content > 0 ? gap : 0) : 0);
+}
+
+function allocate(slots, available, gap, minimumTabsWidth, overflowWidth) {
     let stride = 1;
     let tabs = 0;
     let fixedWidth = 0;
@@ -128,9 +148,10 @@ function allocate(slots, available, gap, minimumTabsWidth) {
     const gaps = Math.max(0, active - 1) * gap;
     const tabMinimum = tabs > 0 ? Math.min(minimumTabsWidth, Math.max(0, available - gaps) / tabs) : 0;
     const fixedBudget = Math.max(0, available - gaps - tabMinimum * tabs);
-    const layout = {gap: gap, tabMinimum: tabMinimum, fixedScale: fixedWidth > 0 ? Math.min(1, fixedBudget / fixedWidth) : 1};
+    const layout = {gap: gap, tabMinimum: tabMinimum, fixedScale: fixedWidth > 0 ? Math.min(1, fixedBudget / fixedWidth) : 1,
+                    sharedOverflow: overflowWidth !== undefined, overflowWidth: Math.max(0, Math.min(overflowWidth ?? 0, available))};
     const sources = slots.map(function(slot, index) {
-        return {tabs: slot.tabs, width: slot.width, overflowWidth: slot.overflowWidth, nodes: slot.nodes.map(function(node) {
+        return {tabs: slot.tabs, width: slot.width, minimumWidth: slot.minimumWidth ?? 0, overflowWidth: slot.overflowWidth, nodes: slot.nodes.map(function(node) {
             return {index: index * stride + node.index, parent: node.parent < 0 ? -1 : index * stride + node.parent,
                     group: node.group, meter: node.meter, width: node.width, priority: node.priority, compactDelta: node.compactDelta};
         })};
@@ -138,10 +159,11 @@ function allocate(slots, available, gap, minimumTabsWidth) {
     let nodes = [];
     for (const source of sources) nodes = nodes.concat(source.nodes);
     const levels = reduce(nodes, available, function(reduced) {
-        return rowWidth(slotWidths(sources, reduced, layout), sources, gap);
+        return totalWidth(slotWidths(sources, reduced, layout), sources, gap, sharedOverflowWidth(sources, reduced, layout));
     });
     const widths = slotWidths(sources, levels, layout);
-    const used = rowWidth(widths, sources, gap);
+    const sharedWidth = sharedOverflowWidth(sources, levels, layout);
+    const used = totalWidth(widths, sources, gap, sharedWidth);
     if (used > available) {
         let flexible = 0;
         for (let index = 0; index < sources.length; ++index) {
@@ -157,7 +179,7 @@ function allocate(slots, available, gap, minimumTabsWidth) {
             }
         }
     }
-    const spare = tabs > 0 ? Math.max(0, available - rowWidth(widths, sources, gap)) / tabs : 0;
+    const spare = tabs > 0 ? Math.max(0, available - totalWidth(widths, sources, gap, sharedWidth)) / tabs : 0;
     for (let index = 0; index < sources.length; ++index) {
         if (sources[index].tabs) {
             widths[index] += spare;
@@ -173,5 +195,5 @@ function allocate(slots, available, gap, minimumTabsWidth) {
         }
         return local;
     });
-    return {widths: widths, levels: localLevels};
+    return {widths: widths, levels: localLevels, overflowWidth: sharedWidth};
 }

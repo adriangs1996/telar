@@ -4,7 +4,42 @@ The complete functional, visual and equal-or-better performance objective remain
 open. Only the command/quick-navigation palette and notifications/sounds may be
 deferred for daily adoption; existing implementations stay available.
 
-## Current candidate: Preview 11; usable custom bars and panels
+## Current candidate: Preview12; shared custom-bar overflow
+
+`out-adoption/Telar C++ Preview 12.app` is separately packaged with deployed Qt/QML.
+It includes Preview11's corrections plus one shared overflow menu for the configured
+bottom sources and legacy `top.right`, whose widgets now follow the original bottom
+row. Hidden actions retain their source and replace the menu with the correct panel.
+Failed commands keep visible diagnostics even when cached content is hidden; a700ms
+macOS tooltip delay now completes under100ms failed refresh without reducing either.
+
+From the worktree root:
+
+```sh
+open -n "services/gui-cpp/out-adoption/Telar C++ Preview 12.app"
+```
+
+Finder can open it after another preview closes. It can be copied under its separate
+name to Applications. Close it and open `~/Applications/Telar.app` to return. No
+installation, configuration or session is replaced/migrated; Preview8/11 remain intact.
+Bundled GUI SHA256: `14ccb0a854bbbb9258a885811168be4650ae2e4973137c7436c116f19b172c27`.
+
+All1739 hashes,121 Mach-O checks and deep/strict signatures pass. Exact relocated
+schema87/88 Finder/login/config/runtime/plugin/bar/two-window/client-pause smokes,
+realSSH, Vim exactUTF8, full custom panel/bars and task/worktree/plan survival flows
+pass with zero QML warnings and disposable cleanup. Five daily captures plus schema87
+direct were inspected. The panel actor uses an owned callback/controlled anchor;
+activity is a protocol fixture, not another AI agent or Git checkout.
+
+Thirteen native checks pass per SDK; Linux ASan/UBSan exits zero. Mac assertions pass13
+but shutdown exits1 for681802B/4055alloc, no address/UB and no suppression. Final broad/
+actual editor diagnostics/format pass both SDKs; seven portable hashes match. Physical
+system sleep remains untried; owned-client pause is a distinct check. Those acceptance
+gates, builtin priority and complete visuals/performance/own-Zig retirement remain open.
+This uses the fresh Preview9 baseline plus increments, not another full clean build.
+See [shared overflow and exact candidate evidence](measurements/component-shared-overflow.md).
+
+## Preserved candidate: Preview 11; usable custom bars and panels
 
 `out-adoption/Telar C++ Preview 11.app` is a separate Release app with deployed
 Qt/QML. It includes the verified blur/artwork corrections, the original callout

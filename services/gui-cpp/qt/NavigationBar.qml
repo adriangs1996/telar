@@ -89,15 +89,5 @@ Rectangle {
         visible: root.rail && root.contextWidth > 0
     }
 
-    ComponentSlot {
-        controller: root.controller
-        surface: root.controller?.componentBars.top ?? ({kind: "empty"})
-        x: Math.max(root.contextRight, root.width - root.padding - width)
-        width: Math.max(0, Math.min(implicitWidth, root.width - root.padding - root.contextRight))
-        height: parent.height
-        colors: root.colors
-        typography: root.typography
-        ratio: root.ratio
-        textScale: root.textScale
-    }
+
 }

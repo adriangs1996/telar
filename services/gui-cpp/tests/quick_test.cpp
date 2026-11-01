@@ -4297,6 +4297,80 @@ return {api_version=2, client={keybindings={
     QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
   }
 
+  Q_SLOT void configuredOverflowCombinesSources() {
+    const auto cleanup = qScopeGuard([this] {
+      QTest::keyClick(window_, Qt::Key_Escape);
+      client_->closeComponentPanel();
+      client_->loadConfiguration({}, {}, {});
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    constexpr auto configuration = R"(
+      local t = require('telar')
+      local ui = t.ui
+      local function contents(name,caption)
+        return t.bar.static({
+          ui.group({mark='telar',priority=1,on_click=t.action.open_panel(name),ui.label(string.rep(name..' hidden λ ',80))}),
+          ui.label({text=string.rep(name..' pressure ',80),priority=90}),
+          ui.label({text=caption,priority=100}),
+        })
+      end
+      local function panel(name)
+        return t.panel({title=name..' action',render=function(ctx) return ui.text(name..' source') end})
+      end
+      return {api_version=2,client={
+        bars={bottom={left=contents('left','Left kept'),center=t.bar.tabs(),right=contents('right','Right kept')},top={right=contents('legacy','Legacy tail')}},
+        panels={left=panel('left'),right=panel('right'),legacy=panel('legacy')},
+      }}
+    )";
+    writeTestFile(path, configuration);
+    client_->loadConfiguration(path, {}, {});
+    QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+    const auto overflow_controls = [this] {
+      auto items = test::visualItems(*window_->contentItem(), QStringLiteral("componentOverflow"));
+      items.removeIf([](const QQuickItem *item) {
+        return !item->isVisible();
+      });
+      return items;
+    };
+    QTRY_COMPARE_WITH_TIMEOUT(overflow_controls().size(), 1, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto *legacy = componentItem(QStringLiteral("label"), QStringLiteral("Legacy tail"));
+    const auto *right = componentItem(QStringLiteral("label"), QStringLiteral("Right kept"));
+    QVERIFY(legacy != nullptr && right != nullptr);
+    QCOMPARE(legacy->mapRectToScene(legacy->boundingRect()).center().y(), right->mapRectToScene(right->boundingRect()).center().y());
+    auto *control = overflow_controls().front();
+    QQmlExpression popup_expression{QQmlEngine::contextForObject(control), control, QStringLiteral("overflowPopup")};
+    const QPointer<QObject> popup = popup_expression.evaluate().value<QObject *>();
+    QVERIFY2(!popup_expression.hasError(), qPrintable(popup_expression.error().toString()));
+    QVERIFY(popup != nullptr);
+    const auto screenshot = qEnvironmentVariable("TELAR_GUI_TEST_SHARED_OVERFLOW_SCREENSHOT");
+    for (const auto &source : {QStringLiteral("left"), QStringLiteral("right"), QStringLiteral("legacy")}) {
+      const auto bounds = control->mapRectToScene(control->boundingRect());
+      QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, bounds.center().toPoint());
+      QTRY_VERIFY_WITH_TIMEOUT(popup->property("visible").toBool(), runtime_wait_ms);
+      const auto caption = (source + QStringLiteral(" hidden λ ")).repeated(80);
+      QTRY_VERIFY_WITH_TIMEOUT(componentItem(QStringLiteral("label"), caption) != nullptr, runtime_wait_ms);
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      if (source == QStringLiteral("left") && !screenshot.isEmpty()) {
+        QVERIFY(window_->grabWindow().save(screenshot, "PNG"));
+      }
+      const auto *hidden = componentItem(QStringLiteral("label"), caption);
+      const auto action_bounds = hidden->mapRectToScene(hidden->boundingRect());
+      constexpr qreal action_inset = 12;
+      const QPointF action_point{action_bounds.left() + action_inset, action_bounds.center().y()};
+      const QRectF viewport{QPointF{}, QSizeF{window_->size()}};
+      QVERIFY(viewport.contains(action_point));
+      QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, action_point.toPoint());
+      QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("title")).toString(), source + QStringLiteral(" action"), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(componentItem(QStringLiteral("text"), source + QStringLiteral(" source")) != nullptr, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!popup->property("visible").toBool(), runtime_wait_ms);
+      QTest::keyClick(window_, Qt::Key_Escape);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    }
+  }
+
   Q_SLOT void configuredOverflowActionReplacesItsMenu() {
     const auto cleanup = qScopeGuard([this] {
       QTest::keyClick(window_, Qt::Key_Escape);
@@ -4359,6 +4433,62 @@ return {api_version=2, client={keybindings={
     QTRY_VERIFY_WITH_TIMEOUT(popup->property("visible").toBool(), runtime_wait_ms);
     QTest::keyClick(window_, Qt::Key_Escape);
     QTRY_VERIFY_WITH_TIMEOUT(!popup->property("visible").toBool(), runtime_wait_ms);
+  }
+
+  Q_SLOT void configuredBarRetainsFailedHiddenOutput() {
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto cleanup = qScopeGuard([this] {
+      client_->loadConfiguration({}, {}, {});
+    });
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    const auto marker_hex = directory.filePath(QStringLiteral("first-success")).toUtf8().toHex();
+    QByteArray configuration = R"(
+      local t = require('telar')
+      local ui = t.ui
+      local marker = ('CACHE_MARKER_HEX'):gsub('..',function(h) return string.char(tonumber(h,16)) end)
+      return {api_version=2,client={bars={bottom={
+        left=t.bar.static(ui.label({text='Ready',priority=100})),center=t.bar.tabs(),
+        right=t.bar.command({
+          command={'/bin/sh','-c','if [ -e "$1" ]; then exit 1; fi; : > "$1"; printf cached','bar-cache',marker},
+          every_ms=100,render=function(ctx) return ui.label({text=string.rep('Cached value λ ',80),priority=1}) end,
+        }),
+      }}}}
+    )";
+    configuration.replace("CACHE_MARKER_HEX", marker_hex);
+    writeTestFile(path, configuration.constData());
+    client_->loadConfiguration(path, {}, {});
+    QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+    const auto right = [this] {
+      return client_->componentBars().value(QStringLiteral("right")).toMap();
+    };
+    QTRY_COMPARE_WITH_TIMEOUT(right().value(QStringLiteral("nodes")).toList().size(), 1, runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(right().value(QStringLiteral("error")).toString(), QStringLiteral("Command failed"), runtime_wait_ms);
+    QVERIFY(componentItem(QStringLiteral("label"), QStringLiteral("Cached value λ ").repeated(80)) == nullptr);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const QQuickItem *indicator = nullptr;
+    for (const auto *item : test::visualItems(*window_->contentItem(), QString{})) {
+      const auto *parent = item->parentItem();
+      if (item->isVisible() && parent != nullptr && item->property("text").toString() == QStringLiteral("!") && parent->property("surface").toMap().value(QStringLiteral("source")) == right().value(QStringLiteral("source"))) {
+        indicator = item;
+        break;
+      }
+    }
+    QVERIFY(indicator != nullptr);
+    const auto *slot = indicator->parentItem();
+    QVERIFY2(slot->width() >= indicator->width(), "Fitting retained failed output into the shared menu must preserve its diagnostic target");
+    const auto bounds = indicator->mapRectToScene(indicator->boundingRect());
+    QVERIFY(slot->mapRectToScene(slot->boundingRect()).contains(bounds));
+    QTest::mouseMove(window_, bounds.center().toPoint());
+    QTRY_VERIFY_WITH_TIMEOUT(visibleWindowText(QStringLiteral("Command failed")), runtime_wait_ms);
+    const auto screenshot = qEnvironmentVariable("TELAR_GUI_TEST_FAILED_CACHED_BAR_SCREENSHOT");
+    if (!screenshot.isEmpty()) {
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      QVERIFY(window_->grabWindow().save(screenshot, "PNG"));
+    }
+    QTest::mouseMove(window_, QPoint{window_->width() / 2, window_->height() / 2});
+    QTRY_VERIFY_WITH_TIMEOUT(!visibleWindowText(QStringLiteral("Command failed")), runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
   }
 
   Q_SLOT void configuredBarReportsFirstCommandFailure() {
