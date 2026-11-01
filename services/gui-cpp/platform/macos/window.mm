@@ -85,8 +85,9 @@ void configureWindow(QWindow &window, WindowAppearance appearance) {
   }
 
   NSView *const content = native_window.contentView;
+  NSView *const backdrop = content.superview;
   NSVisualEffectView *effect = nil;
-  for (NSView *child in content.subviews) {
+  for (NSView *child in backdrop.subviews) {
     if ([child.identifier isEqualToString:@"telar.background.blur"]) {
       effect = (NSVisualEffectView *)child;
 
@@ -98,14 +99,17 @@ void configureWindow(QWindow &window, WindowAppearance appearance) {
     [effect removeFromSuperview];
   } else {
     if (effect == nil) {
-      effect = [[NSVisualEffectView alloc] initWithFrame:content.bounds];
+      effect = [[NSVisualEffectView alloc] initWithFrame:content.frame];
       effect.identifier = @"telar.background.blur";
       effect.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
       effect.material = NSVisualEffectMaterialUnderWindowBackground;
       effect.blendingMode = NSVisualEffectBlendingModeBehindWindow;
       effect.state = NSVisualEffectStateFollowsWindowActiveState;
-      [content addSubview:effect positioned:NSWindowBelow relativeTo:nil];
+      // A child of Qt's layer-hosting view composites above its Metal content.
+      [backdrop addSubview:effect positioned:NSWindowBelow relativeTo:content];
     }
+
+    effect.frame = content.frame;
   }
 
   if (!appearance.titlebar && (native_window.styleMask & NSWindowStyleMaskFullScreen) == 0) {

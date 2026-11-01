@@ -1,4 +1,67 @@
-## CURRENT bounded stability triage finished; next custom-component omissions (2026-11-01)
+## CURRENT Preview8 normal launch confirmed; daily/final goals OPEN (2026-11-01)
+
+USER CONFIRMED Preview8 normal launch: "Sí, ya aparece la interfaz". Blank-window
+blocker CLOSED; keep Preview8 frozen for actual use. Daily/final goals OPEN.
+Exactschema88 blur smoke ALSO passed0/noQML/private state removed. Linux8slots
+10assertPASS0 eachRelease+ASAN, privateSwaycleanup0/displaysremoved. Linuxsource
+broad/editor stillrunning exec50677, results notyetexported. DO NOT stop atthis
+checkpoint; prioritize remainingdaily issues before queuedicons/finalparity.
+
+Correction to ASAN claim below: first smallnative0 had default Mac environment,
+notexplicitdetect_leaks=1 and is INVALID for leakgate. Samebinary corrected run
+ASAN_OPTIONS=detect_leaks=1,UBSAN_OPTIONS=halt_on_error=1,LSAN_OPTIONSabsent exits1:
+335945B/1939alloc, nativeassertpass/noaddressorUB. No suppression. Rawreceipt
+asan-native-leaks-enabled.log/json retained, useit notdefault0 forleakconclusions.
+
+NEW Preview8 built/separately packaged/signature+1739hash+121MachO audit0.
+Path out-adoption/Telar C++ Preview 8.app; GUIe97bba076a5f50715663b7ac56251aaa49
+bac2cc2b0785ccb991221d4ef17ac5. Actual-source GUI3832bd7d... CMake native target
+gui-native-window-appearance-test passes0; old source standalonebaseline1 for
+effect child aboveQtMetal, fixsibling behindcontent passes actualframe/resize/
+titlebar/reload/disable/re-enable. Standalone changednative+newtest ASAN/UBSAN0,
+no suppression; does NOT qualify wholeGUI leak shutdown. Existingwindowctest0.
+Exact schema87 relocated smoke with NEW --native-blur0: Finder/login/config/
+plugins/barhelper/twoWindows/pausehistory etc, adopted .98/20 queried, noQML,
+private state removed. schema88 smoke running exec83288. Candidate link and
+optional async feedback already sent to Adrian; don't wait instead of working.
+
+Source QtQuick helper cleanup corrected: old tab close chooses adjacent in BOTH
+Zig andCpp, so a subset starting from a non-last tab wrongly expects its source
+back. Old frozen8 and new GUI both5PASS1cleanupFAIL; fullscreen alone3PASS.
+closeTemporaryTab now verifies close then explicitly selects retainedsource and
+retains original finalassert+deadline. Corrected same subset6PASS0. New native
+fullschema87 currently105PASS1FAIL pointerSelection atclipboardcopyline692 while
+Cocoa queued1730x1083->1200x800 geometry; DO NOT callfullpass/cherrypick. Focused
+earlier terminal/workspace/pointer/custom suite7PASS0. Logs allprefixpreview8,
+and pairedold failurepreview7-layout-baseline-mac-1. No prodpointer/tab change.
+All3C++/mm broad0 and actualeditor deliveredempty. Actual clangd --check had
+3TWEAK failures, notsource diagnostics; retained, actual editor validates source.
+
+Linux pre-sync Quick SHA matched hostbeforecleanup exactly. Synced only CMake,
+Quick/nativefixture/window.mm into privateexistingVMsource; ReleaseQuickbuild0.
+Running8native slots Release thenASAN sameprivateSwayrunner exec96961; preserves
+guestSway9469. Still need exportresults/sourcequality forchangedcleanup. Fresh
+source/bin snapshots frozen-8 under preview7-blank-1; allnative and package data
+there. Need archive/document/commit own fix/evidence, resume userdaily blockers.
+
+Adrian opened Preview7 normally: blurry blank window. He explicitly authorizes
+capturing its window and inspecting logs. Existing PID24527, responds normally,
+Metal render thread active. stdout/stderr both /dev/null. screencapture window
+22120 AND its exact rectangle both denied; lldb attach permission denied. Do not
+claim an image was obtained or bypass macOS permissions. sample and unified logs
+retained in out-dependencies/preview7-blank-1. Read-only real configuration probe
+accepted, opacity0.98/blur20/titlebarfalse; no runtime connection/persistence.
+Suspect native effect inserted inside Qt contentView covers the Metal layer;
+Qt grabWindow screenshots miss native subview composition. New regression first.
+Old isolated passes remain valid only for their scope; Preview7 NOT daily usable.
+Saved all own unqualified icon changes in preview7-blank-1/icons-in-progress.patch
+and reversed them before this fix; restore later, not lost or included in fix.
+Protected runtime35801/QEMU7158/Sway9469 verified unchanged. Old ZigPID87625
+already absent on initial read; no signal/restart sent. UserPreview24527 preserved.
+Goal API still blocked; no resume operation available, keep final objective open.
+Only this worktree, no agents/publish/merge; NEVER touch personal-frame-delivery.md.
+
+## Historical bounded stability triage; custom-component omissions (2026-11-01)
 
 Local commits: a03baa8af surfaces+compat+font+IME+Preview7; a57322636 exact
 project/task/plan evidence. Preview7 remains current frozen usable candidate,

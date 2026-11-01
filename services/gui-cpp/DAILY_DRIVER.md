@@ -4,7 +4,69 @@ The complete functional, visual and equal-or-better performance objective remain
 open. Only the command/quick-navigation palette and notifications/sounds may be
 deferred for daily adoption; existing implementations stay available.
 
-## Current candidate: Preview 7; daily qualification remains open
+## Current candidate: Preview 8; normal launch confirmed
+
+Adrian confirms: **"Sí, ya aparece la interfaz"** after opening Preview 8 with
+his usual configuration. This closes the reported blank-window launch blocker;
+it does not close daily-flow acceptance or the complete parity objective.
+
+`out-adoption/Telar C++ Preview 8.app` fixes the native blur covering the Qt
+Metal content. The visual effect now sits behind the Qt content view, preserving
+that view and its input/rendering ownership. Open from the repository root:
+
+```sh
+open -n "services/gui-cpp/out-adoption/Telar C++ Preview 8.app"
+```
+
+Bundled GUI SHA-256:
+`e97bba076a5f50715663b7ac56251aaa49bac2cc2b0785ccb991221d4ef17ac5`.
+All 1,739 manifest files and 121 Mach-O dependency checks pass; the separate
+bundle passes deep/strict signature verification. The exact relocated schema-87
+smoke passes with opacity 0.98 and blur 20 explicitly adopted: Finder, login
+shell, configuration/runtime discovery, plugins, command bars, tabs, splits,
+history, two windows and owned-client pause/resume. No QML warnings, configuration
+unchanged, disposable state removed. The matching schema-88 smoke also passes
+with the same blur settings and zero QML warnings. Evidence:
+`out-dependencies/preview7-blank-1/preview8-schema87-smoke-1/result.json`.
+
+The native regression fails against Preview 7's source and passes after the
+fix, including actual Qt frame presentation, resize, titlebar changes, reload
+and blur disable/re-enable. The changed native code and regression pass their
+functional assertions under ASan/UBSan. A first default-environment probe exited
+zero but did not explicitly enable macOS leak detection; it does not qualify
+that gate. The corrected run explicitly enables the leak check and exits one:
+335,945 leaked bytes in 1,939 allocations, without address/undefined-behavior
+diagnostics. No suppression is used. Full-GUI Mac exit leaks remain open.
+Broad analysis and actual editor diagnostics pass for all three changed native
+or C++ files. The existing window suite passes.
+
+The focused terminal/workspace/selection/custom-surface suite passes seven
+checks. A four-case layout sequence exposed a cleanup expectation also failing
+in the old frozen binary: closing selects the adjacent tab in both Zig and C++,
+whereas fixture cleanup assumed the tab that was active before creation. Cleanup
+now explicitly selects its retained source after verifying closure, retaining
+the original final assertions and deadlines; all six checks pass. The complete
+new native suite reports **105 passed, one pointer-selection/clipboard failure**
+while Cocoa geometry changes are queued. That failure remains open, with the
+raw log retained; the suite is not reported as passing. Daily user-flow
+confirmation, physical system sleep, remaining qualification and final parity
+remain open. The Linux subset passes ten checks each in Release and ASan/UBSan.
+The changed portable fixture also passes broad analysis and actual editor
+diagnostics against Linux Qt 6.8; source-bound receipts are exported locally.
+
+Preview 7 remains preserved as a historical artifact. Close the preview and
+open `~/Applications/Telar.app` to return to the installed app, keeping runtime
+processes alive. App packaging does not retire Zig or its build dependencies.
+
+## Historical candidate: Preview 7; normal-launch failure
+
+**DAILY BLOCKER (2026-11-01):** Adrian opened Preview 7 with his normal
+configuration and reported an entirely blurred blank window. The application
+remains responsive. Its configuration enables opacity 0.98 and native blur 20.
+The preceding disposable-state smokes do not establish normal-config usability;
+their internal Qt screenshots cannot validate native compositor overlays.
+Preview 7 is not accepted for daily use. Preview 8 fixes this composition defect;
+the original bundle remains preserved with its failure evidence.
 
 `out-adoption/Telar C++ Preview 7.app` is the current separately named Release
 bundle, available in Finder. It includes the Qt 6.8/6.12 transport scheduling and

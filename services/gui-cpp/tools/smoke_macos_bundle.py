@@ -32,6 +32,7 @@ def main():
     parser.add_argument('--plugins', action='store_true', help='Execute a private plugin through the exact bundled GUI and CLI')
     parser.add_argument('--components', action='store_true', help='Render custom widgets and execute a bar command through the bundled native helper')
     parser.add_argument('--windows', action='store_true', help='Verify two simultaneous GUI instances on the private runtime')
+    parser.add_argument('--native-blur', action='store_true', help='Use translucent window and native blur, including Finder launch')
     parser.add_argument('--reference-runtime', type=Path, help='Use this reference runtime/CLI only in disposable test state; the GUI and plugin worker stay bundled')
     args = parser.parse_args()
     original = args.bundle.resolve()
@@ -40,6 +41,7 @@ def main():
     record = dict(scope='Relocated Release bundle, Cocoa/Metal, private runtime; protocol smoke, not full daily acceptance',
                   runtime_discovery=args.discover_runtime, plugin_execution=args.plugins,
                   custom_components=args.components, concurrent_windows=args.windows, commands=[], processes=[])
+    record['native_blur'] = args.native_blur
     server = direct = finder = concurrent = None
     with tempfile.TemporaryDirectory(prefix='cpp-daily-', dir='/tmp') as temporary:
         state = Path(temporary)
@@ -80,6 +82,9 @@ def main():
                 "panels={usage=t.panel({render=function(ctx)return {ui.heading('Usage λ'),ui.meter_row({label='Session',value=.5}),ui.actions({ui.button({text='Close',action=t.action.close_panel()})})}end})}," +
                 "picks={mode=t.pick({items={'low',{label='High λ',value='high',detail='Daily choice',selected=true}},on_select={'/usr/bin/printf','%s','{}'}})}," +
                 "}}\n")
+        if args.native_blur:
+            source = configuration.read_text()
+            configuration.write_text(source.replace('api_version=2,', 'api_version=2,gui={window={background_opacity=0.98,background_blur=20}},', 1))
         initial_configuration = configuration.read_bytes()
         home = state / 'home'
         home.mkdir()
@@ -182,6 +187,10 @@ def main():
             cli('config', 'show', '--client', client_id, '--section', 'input', '--json')
             adopted = cli('config', 'show', '--client', client_id, '--section', 'client', '--json')
             assert adopted['source'] == str(configuration) and adopted['generation'] > 0, adopted
+            if args.native_blur:
+                appearance = cli('config', 'show', '--client', client_id, '--section', 'gui', '--json')['window']
+                assert abs(appearance['background_opacity'] - .98) < .0001 and appearance['background_blur'] == 20, appearance
+                record['adopted_window_appearance'] = appearance
             if args.windows:
                 with (evidence / 'concurrent.log').open('w') as log:
                     concurrent = subprocess.Popen([str(launcher), *common, '--smoke-ms', '8000',

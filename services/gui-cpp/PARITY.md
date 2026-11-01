@@ -1,5 +1,32 @@
 # Port acceptance status
 
+**Resolved daily launch blocker (2026-11-01):** Adrian reported Preview 7 opened to a
+blurred blank window with his normal configuration. Its native effect is a
+child of the Qt content view, compositing above the Metal layer. A native
+regression fails on Preview 7's source; moving the effect behind the content
+view passes, including actual frame presentation, resize, titlebar changes,
+disable/re-enable and reload. Preview 8 is packaged and Adrian confirms normal
+launch: **"Sí, ya aparece la interfaz"**. Earlier isolated Qt screenshots do not
+prove native composition or normal-config daily usability. Final parity and Zig
+retirement remain open.
+
+Preview 8 is now separately packaged at `out-adoption/Telar C++ Preview 8.app`,
+GUI `e97bba076a5f50715663b7ac56251aaa49bac2cc2b0785ccb991221d4ef17ac5`.
+Its exact relocated schema-87/88 Finder/plugin/custom-bar/two-window smokes pass
+with opacity 0.98 and blur 20, explicitly queried from the adopted configuration.
+Native frame and geometry assertions pass, including instrumented execution.
+All 1,739 file hashes and 121 Mach-O checks pass. The fresh complete native run
+retains one selection/clipboard failure
+and 105 passes; this is an open qualification issue. The layout subset's old
+cleanup assumption was independently reproduced with the frozen earlier binary
+and corrected without changing production tab selection or final assertions.
+The corrected subset passes six checks; Linux Release and ASan/UBSan pass ten
+each. A corrected, explicitly leak-enabled native Mac run retains 335,945 leaked
+bytes in 1,939 allocations and exits one. Daily acceptance, physical sleep and
+complete parity remain open. See [DAILY_DRIVER.md](DAILY_DRIVER.md).
+
+## Historical qualification receipts
+
 Preview 7 is the current separate Release candidate. Both exact relocated
 schema-87/88 smokes, genuine isolated SSH and a real Vim UTF-8 write pass with
 zero QML warnings. Login/Finder, actual plugins, custom bar helper and distinct

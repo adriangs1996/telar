@@ -5237,7 +5237,17 @@ return {api_version=2, client={keybindings={
   }
 
   void closeTemporaryTab(TabRestorePoint destination) {
+    const auto *source = client_->pane(destination.pane_id);
+    QVERIFY2(source != nullptr, "Temporary tab cleanup must retain its source pane");
+    const auto source_tab = source->location.tab_id;
     client_->execute(Application::Action::close_tab);
+    const auto closed = QTest::qWaitFor([this, destination] {
+      return client_->tabs()->rowCount() == destination.count;
+    },
+                                      runtime_wait_ms);
+    QVERIFY2(closed, "The temporary tab must close before restoring its source");
+    // Closing selects an adjacent tab; this fixture may have started elsewhere.
+    client_->execute(Application::Action::select_tab, QString::number(source_tab));
     const auto restored = QTest::qWaitFor([this, destination] {
       return client_->tabs()->rowCount() == destination.count && terminalReady() && firstPane()->id == destination.pane_id;
     },
