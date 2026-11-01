@@ -15,6 +15,11 @@ without explaining the entire GUI report. Mac exit leaks, physical system sleep,
 full visual/performance acceptance and audited Zig removal remain open. Preview 6
 evidence below remains preserved historical evidence.
 
+The exact Preview 7 package also renders a controlled task/worktree plan, navigates
+back to its project and preserves the task across window close. Both instances
+exit zero with no QML warning; inspected captures and the distinction from real
+provider/Git integration are in [daily-activity.md](measurements/daily-activity.md).
+
 Preview 6 includes audited schema-87/88 client compatibility, custom surfaces,
 pick IME cancellation and rasterizable native font fallback. Its exact relocated
 Release bundle passes both strict isolated smokes, including Finder, plugins,

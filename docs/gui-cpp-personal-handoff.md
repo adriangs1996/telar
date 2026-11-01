@@ -1,3 +1,42 @@
+## CURRENT additional daily project/task/plan evidence closed (2026-11-01)
+
+Production surfaces/compat/font/IME and frozen qualification committed locally as
+**a03baa8af**. No publish/merge. 77 source +1904 artifact archive verified both
+against current worktree and committed Git objects; all1982 archive paths tracked.
+Only personal-frame-delivery.md remained untracked; NEVER read/touch/stage it.
+User optional async feedback pending: daily failures/normal config/system resume;
+do not wait for it before independent work. Daily/full goals remain OPEN;
+Goal API still blocked, no resume operation exposed. No other agents/worktrees.
+
+NEW exact Preview7 workflow under out-dependencies/daily-flow-1, successful
+candidate-5/result.json: registered synthetic worktree row, ordinary private dirs,
+no extra Git checkout; tiny compiled Qt protocol reporter (not AI) verifies pane
+descent then sends lifecycle/title/progress. A private binary copy named claude
+allows process observation to recognize its declared provider; no real provider
+CLI/model/network started. Plan1/3 Revisar cambio λ appears in real GUI; CLI worktree
+open selects its workspace, closing window preserves task/plan, second window
+returns to parent project with compact activity card. Both GUI actual0/noQMLwarning,
+private state removed, userRT35801/GUI87625/QEMU7158 PID/start/command unchanged.
+GuestSway9469 separately rechecked sameOct30 start. Both Qt-native PNGs inspected.
+
+Failures1/2: reporter executable not recognized, accepted reports alone did not
+retain an agent. Failure3: /tmp vs /private/tmp duplicate registered path caused
+ambiguous branch; fixed fixture with canonical state Path.resolve(). Failure4:
+OS screencapture could not create image; final5 uses EXISTING --smoke-ms/--screenshot
+Qt capture (main.cpp smoke schedules ONLY capture/healthy exit, no auto actions).
+Earlier GUI SIGTERM exits stay negative, not graceful success. All5 states
+independently confirmed absent. No production source changed aftera03baa8af.
+
+New reviewable evidence measurements/daily-activity.md, daily-activity-validation.json
+and daily-activity/ (34 artifacts ~110KB +two raw PNGs +verify.py). Verifier checks
+only5passes, exactGUIsha, plan/worktree identities, survival, zeroGUIexits/warnings,
+safety and screenshot hashes. DAILY_DRIVER checklist now marks implemented/scoped
+functional rows, explicitly not full visual/device/provider acceptance. Real daily
+stability gates: Mac exitLSAN triage and physical system sleep. Still only palette
+and notifications deferrable. Do not end at a checkpoint. Continue stability and
+full PARITY, preserving Zig and dependencies. New documentation/evidence can be
+committed locally after verification; no build/test repeat needed for docs-only.
+
 ## CURRENT Preview 7 verified; custom surfaces ready for local review; daily/full goals OPEN (2026-11-01 07:16 UTC)
 
 CONTINUE WORK, no checkpoint final. Spanish updates <=60 seconds. Only this worktree;

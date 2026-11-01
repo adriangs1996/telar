@@ -256,12 +256,11 @@ qualification continue independently of the preserved bundle.
 
 ## Daily adoption blockers
 
-- Reconcile the complete daily checklist with its scoped evidence and normal-use
-  acceptance. The exact Preview 7 package implements plugins and custom surfaces;
-  these areas are not deferred. Current native regression, Linux source quality
-  and selected Linux sanitizer flows pass.
 - Triage recorded macOS sanitizer exit leaks without suppressing the failures.
-  Physical system sleep remains outside the private process-pause smoke.
+  A standalone CoreText reproducer explains part of the retention, not the entire
+  GUI report.
+- Validate physical system sleep with the candidate. This remains outside the
+  successful private process-pause and window-close survival checks.
 
 Full visual and comparative performance acceptance and audited removal of own
 Zig remain separate final gates. Palette and notifications are the only daily
@@ -269,19 +268,28 @@ areas allowed to be deferred.
 
 ## Required adoption checklist
 
-- [ ] Terminal Unicode, styled output, interactive apps and input/IME.
-- [ ] Tabs: rename, move, drag; splits, resize and fullscreen.
-- [ ] Projects, workspaces, sidebar and worktree operations.
-- [ ] Agents, tasks, plans and peek.
-- [ ] SSH selection, switching and reconnection.
-- [ ] Complete History, suggestions and path insertion.
-- [ ] Selection, clipboard/copy mode, links and previews.
-- [ ] Images and attachments.
-- [ ] Lua, shortcuts and reload, retaining the last valid configuration.
-- [ ] Appearance, fonts, blur and statusbar.
-- [ ] Plugins and custom bars/widgets/panels/picks.
-- [ ] Multiple windows, restoration and suspend/resume.
+Checked rows record implemented behavior and scoped automated evidence. They do
+not certify complete visual parity or every native device/provider state. The
+complete Cocoa regression covers both protocols; the exact package adds Finder,
+plugins/surfaces, SSH, Vim and project/task/plan navigation. The latter uses a
+controlled reporter, without another AI agent or Git checkout; see
+[its evidence and inspected captures](measurements/daily-activity.md).
+
+- [x] Terminal Unicode, styled output, interactive apps and input/IME.
+- [x] Tabs: rename, move, drag; splits, resize and fullscreen.
+- [x] Projects, workspaces, sidebar and worktree navigation/actions.
+- [x] Agents, tasks, plans and peek.
+- [x] SSH selection, switching and reconnection.
+- [x] Complete History, suggestions and path insertion.
+- [x] Selection, clipboard/copy mode, links and previews.
+- [x] Images and attachments.
+- [x] Lua, shortcuts and reload, retaining the last valid configuration.
+- [x] macOS appearance, fonts, blur and statusbar; final visual/platform gaps remain in PARITY.md.
+- [x] Plugins and custom bars/widgets/panels/picks.
+- [x] Multiple windows, restoration, owned-client pause/resume and task survival after window close.
 - [x] Exact Release bundle: deployed dependencies, login environment and isolated smoke.
+- [ ] Physical system suspend/resume.
+- [ ] Close macOS sanitizer shutdown-leak triage.
 
 ## Final parity and Zig retirement
 
