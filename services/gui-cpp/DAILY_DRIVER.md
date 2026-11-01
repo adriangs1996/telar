@@ -58,6 +58,12 @@ palette and notifications may defer for daily adoption. See
 [meter composition](measurements/panel-meter-layout.md) and
 [panel text](measurements/panel-text-lines.md).
 
+Source work after Preview11 also preserves the error target when a command bar
+fails before producing its first nodes. Final native Release checks pass both
+SDKs and Linux ASan exits zero; Mac shutdown leak acceptance stays open. The
+[frozen diagnostic evidence](measurements/component-command-error.md) retains
+initial fixture/drag failures. This correction is not in the frozen bundle11.
+
 ## Preserved candidate: Preview 10
 
 Preview10 remains frozen at `out-adoption/Telar C++ Preview 10.app`, GUI SHA256

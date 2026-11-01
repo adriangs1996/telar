@@ -17,6 +17,16 @@ Adrian reports no daily blocker so far in Preview8; physical sleep is untried.
 Builtin priority, combined overflow, complete visuals/performance, native Mac
 leaks and audited Zig retirement remain OPEN. Preview8/10 stay preserved.
 
+**Source work after Preview11:** a command bar that fails before returning
+any UI nodes now retains a visible diagnostic/hover target. Native negative
+control fails on the preceding source; final Mac Release and Linux Release/ASan
+pass ten checks each. Mac sanitizer assertions pass but shutdown still exits1
+for654,881 bytes/3,626 allocations. The new fixture explicitly closes its tooltip
+before restoring configuration; previous Linux drag failures and timing controls
+are retained. Original drag assertions and production controller are unchanged.
+Broad analysis/editor diagnostics pass both SDKs. This is not repackaged into11;
+see [component-command-error.md](measurements/component-command-error.md).
+
 **Resolved daily launch blocker (2026-11-01):** Adrian reported Preview 7 opened to a
 blurred blank window with his normal configuration. Its native effect is a
 child of the Qt content view, compositing above the Metal layer. A native

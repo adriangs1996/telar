@@ -137,6 +137,23 @@ using telar::gui::test::ScreenTextLayout;
 using namespace telar::gui;
 using namespace telar::gui::qt;
 
+bool visibleWindowText(const QString &text) {
+  for (const auto *candidate : QGuiApplication::allWindows()) {
+    const auto *window = qobject_cast<const QQuickWindow *>(candidate);
+    if (window == nullptr || !window->isVisible()) {
+      continue;
+    }
+
+    for (const auto *item : test::visualItems(*window->contentItem(), QString{})) {
+      if (item->isVisible() && item->property("text").toString() == text) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 QQuickItem *historyCardHint(const QQuickWindow &window, int selected, const QString &action) {
   for (auto *row : test::visualItems(*window.contentItem(), QStringLiteral("historyResult"))) {
     if (row->property("index").toInt() != selected) {
@@ -4278,6 +4295,60 @@ return {api_version=2, client={keybindings={
     QCOMPARE(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Kept action"));
     QTest::keyClick(window_, Qt::Key_Escape);
     QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+  }
+
+  Q_SLOT void configuredBarReportsFirstCommandFailure() {
+    const auto cleanup = qScopeGuard([this] {
+      client_->loadConfiguration({}, {}, {});
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    constexpr auto configuration = R"(
+      local t = require('telar')
+      local ui = t.ui
+      return {api_version=2,client={bars={bottom={
+        left=t.bar.static(ui.label('Ready')),center=t.bar.tabs(),
+        right=t.bar.command({command={'/usr/bin/false'},every_ms=60000}),
+      }}}}
+    )";
+    writeTestFile(path, configuration);
+    client_->loadConfiguration(path, {}, {});
+    QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+    const auto right = [this] {
+      return client_->componentBars().value(QStringLiteral("right")).toMap();
+    };
+    QTRY_COMPARE_WITH_TIMEOUT(right().value(QStringLiteral("error")).toString(), QStringLiteral("Command failed"), runtime_wait_ms);
+    QVERIFY(right().value(QStringLiteral("nodes")).toList().isEmpty());
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const QQuickItem *indicator = nullptr;
+    for (const auto *item : test::visualItems(*window_->contentItem(), QString{})) {
+      const auto *parent = item->parentItem();
+      if (!item->isVisible() || parent == nullptr || item->property("text").toString() != QStringLiteral("!")) {
+        continue;
+      }
+      const auto surface = parent->property("surface").toMap();
+      if (surface.value(QStringLiteral("source")) == right().value(QStringLiteral("source")) && surface.value(QStringLiteral("error")) == right().value(QStringLiteral("error"))) {
+        indicator = item;
+        break;
+      }
+    }
+    QVERIFY(indicator != nullptr);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto *slot = indicator->parentItem();
+    QVERIFY2(slot->width() >= indicator->width(), "A first failing command must retain a visible diagnostic target before producing output");
+    const auto bounds = indicator->mapRectToScene(indicator->boundingRect());
+    QVERIFY(slot->mapRectToScene(slot->boundingRect()).contains(bounds));
+    QTest::mouseMove(window_, bounds.center().toPoint());
+    QTRY_VERIFY_WITH_TIMEOUT(visibleWindowText(right().value(QStringLiteral("error")).toString()), runtime_wait_ms);
+    const auto screenshot = qEnvironmentVariable("TELAR_GUI_TEST_COMPONENT_ERROR_SCREENSHOT");
+    if (!screenshot.isEmpty()) {
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      QVERIFY(window_->grabWindow().save(screenshot, "PNG"));
+    }
+    QTest::mouseMove(window_, QPoint{window_->width() / 2, window_->height() / 2});
+    QTRY_VERIFY_WITH_TIMEOUT(!visibleWindowText(right().value(QStringLiteral("error")).toString()), runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
   }
 
   Q_SLOT void configuredPicks() {

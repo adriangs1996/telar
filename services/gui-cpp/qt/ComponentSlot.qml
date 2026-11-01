@@ -17,7 +17,8 @@ Item {
     readonly property var fitNodes: visual.item?.fitNodes ?? []
     readonly property real overflowWidth: visual.item?.overflowWidth ?? 0
     readonly property bool tabs: surface.kind === "tabs"
-    implicitWidth: tabs ? 200 * ratio : visual.item?.implicitWidth ?? 0
+    readonly property real diagnosticWidth: 8 * ratio
+    implicitWidth: Math.max(tabs ? 200 * ratio : visual.item?.implicitWidth ?? 0, (surface.error ?? "").length > 0 ? diagnosticWidth : 0)
     clip: true
 
     Loader {
@@ -39,7 +40,7 @@ Item {
     HoverHandler { id: pointer }
     Text {
         anchors.right: parent.right
-        width: 8 * root.ratio
+        width: root.diagnosticWidth
         height: parent.height
         visible: (root.surface.error ?? "").length > 0
         text: "!"

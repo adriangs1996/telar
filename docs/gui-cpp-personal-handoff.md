@@ -1,3 +1,36 @@
+## CURRENT: first-command bar error qualified; Preview11 preserved
+
+Continue actual daily/PARITY work after the local checkpoint. No agents/publish/
+merge/other checkout. Never read/touch/stage personal-frame-delivery.md. Protected
+runtime35801/userPreview8-52865/QEMU7158/guestSway9469 unchanged. Sleep9 untried;
+do not ask again or suspend host. GoalAPI blocked/no resume; continue manually.
+
+Preview11 remains frozen/offered/exact qualified. HEAD before this checkpoint
+64df9ce56. Prior slot archive/commit DONE (supersede pending-archive note below).
+Raw build9 is now post11; never overwrite frozen bundle. Daily/full goals OPEN.
+
+Source correction ComponentSlot.qml reserves existing ! marker width on first
+command failure with no output/nodes. Native negative baseline fails containment;
+fixed actual marker/Command failed hover and final captures Mac/Linux VIEWED.
+New test closes own tooltip with actual pointer move+invisibility assertion+frame
+before config restoration. Existing drag assertions/production controller unchanged.
+Final MacRelease10pass0, LinuxRelease+ASAN10pass0 each/private displays removed;
+MacASAN10assertionspass/exit1/654881B3626alloc, no address/UB, LSAN_OPTIONSabsent.
+Final broad/actualeditor empty0 BOTH SDKs, changedformat0, 3 source hashes match.
+All temporary guest production traces restored and binaries rebuilt untraced.
+
+Preserve initial absent-QMLimport fixture failure, nesting/const linter/editor
+failures, LinuxASAN full-sequence9pass1fail twice: initial selection tab4!=3,
+then hover empty!=4. Same earlier binary drag-alone/error->drag/splits->drag
+controls pass; temporary I/O trace full sequence passes (timing perturbed). Final
+fixture explicitly retires observable popup state; do NOT claim tooltip alone
+proved both earlier failures or complete native-device acceptance. Raw/evidence
+component-error-indicator-1; report/archive component-command-error includes all.
+No Preview12 packaged for this scoped fix. Preview11 remains candidate.
+Next real work: Mac remaining leak attribution/native stability; builtin priority/
+combined overflow interactions; full visual/performance; audited own-Zig retirement.
+Do not stop after this checkpoint or turn tiny pixel matrices into criticalpath.
+
 ## CURRENT: Preview11 qualified/offered; full/daily goals OPEN
 
 Continue working, no checkpointfinal. No agents/publish/merge/othercheckout.
