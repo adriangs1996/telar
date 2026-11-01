@@ -4159,7 +4159,7 @@ return {api_version=2, client={keybindings={
         },top={right=t.bar.dynamic({every_ms=60000,render=function(ctx) return ui.clock('%H:%M') end})}},
         panels={usage=t.panel({title='Usage',render=function(ctx) return {
           ui.heading('Usage λ'),ui.meter_row({label='Session',value=0.5}),
-          ui.callout({text='Status λ',detail='Ready',icon='telar_mark'}),
+          ui.callout({text='Status λ',detail='Ready',icon='telar_mark',button=ui.button({text='Dismiss',action=t.action.close_panel()})}),
           ui.actions({ui.button({text='Close',action=t.action.close_panel()})}),
         } end})},
       }}
@@ -4176,12 +4176,21 @@ return {api_version=2, client={keybindings={
     QCOMPARE(slot("right").value(QStringLiteral("error")).toString(), QString{});
     QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
     QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-    QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("nodes")).toList().size(), 5, runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("nodes")).toList().size(), 6, runtime_wait_ms);
     const auto *popup = window_->findChild<QObject *>(QStringLiteral("configuredPanel"));
     QVERIFY(popup != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(popup->property("visible").toBool(), runtime_wait_ms);
     QCOMPARE(client_->componentPanel().value(QStringLiteral("error")).toString(), QString{});
     QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto *callout = componentItem(QStringLiteral("callout"));
+    const auto *dismiss = componentItem(QStringLiteral("button"), QStringLiteral("Dismiss"));
+    QVERIFY(callout != nullptr && dismiss != nullptr);
+    const auto card_bounds = callout->mapRectToScene(callout->boundingRect());
+    const auto action_bounds = dismiss->mapRectToScene(dismiss->boundingRect());
+    constexpr qreal callout_height = 52;
+    QCOMPARE(callout->height(), callout_height * callout->property("ratio").toReal());
+    QVERIFY(card_bounds.contains(action_bounds));
+    QCOMPARE(action_bounds.center().y(), card_bounds.center().y());
     const auto frame = window_->grabWindow();
     QVERIFY(!frame.isNull());
     const auto screenshot = qEnvironmentVariable("TELAR_GUI_TEST_COMPONENT_SCREENSHOT");
@@ -4195,6 +4204,14 @@ return {api_version=2, client={keybindings={
     client_->activateComponent(left.value(QStringLiteral("source")).toInt(), 0, left.value(QStringLiteral("generation")).toString(), left.value(QStringLiteral("revision")).toString(), QPointF{});
     QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
     client_->activateComponent(left.value(QStringLiteral("source")).toInt(), 0, left.value(QStringLiteral("generation")).toString(), left.value(QStringLiteral("revision")).toString(), QPointF{});
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    const auto *dismiss_action = componentItem(QStringLiteral("button"), QStringLiteral("Dismiss"));
+    QVERIFY(dismiss_action != nullptr);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto action_center = dismiss_action->mapToScene(dismiss_action->boundingRect().center()).toPoint();
+    QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, action_center);
     QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
     client_->execute(Application::Action::history);
     QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), QStringLiteral("history"), runtime_wait_ms);
@@ -5267,6 +5284,17 @@ return {api_version=2, client={keybindings={
       QCoreApplication::sendEvent(window_, &press);
       QCoreApplication::sendEvent(window_, &release);
     }
+  }
+
+  [[nodiscard]] QQuickItem *componentItem(const QString &kind, const QString &text = {}) const {
+    for (auto *item : test::visualItems(*window_->contentItem(), QString{})) {
+      const auto node = item->property("node").toMap();
+      if (item->isVisible() && node.value(QStringLiteral("kind")).toString() == kind && (text.isEmpty() || node.value(QStringLiteral("text")).toString() == text)) {
+        return item;
+      }
+    }
+
+    return nullptr;
   }
 
   [[nodiscard]] Pane<ApplicationAllocator> *firstPane() const {

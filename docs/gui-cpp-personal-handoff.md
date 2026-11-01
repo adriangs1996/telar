@@ -1,3 +1,39 @@
+## Latest source continuation: callout card/action qualified (after Preview 9)
+
+Preview 9 remains frozen and available; its bundled GUI is still 94e66792... .
+Do not repackage or replace it. Its raw build directory out-adoption-build-9 has
+now been incrementally rebuilt for the later callout source change, so its raw
+GUI no longer represents the frozen Preview9 source snapshot. The immutable
+Preview9 manifest/archive records the previous raw0793... identity correctly.
+
+Current three source edits: ComponentNode.qml restores the original 52-unit
+callout card, title/detail lines, 18-unit optional mark and first action at right;
+ComponentTree.qml applies explicit roots filtering in nested branches; QuickTest
+adds a real inline-action fixture, original-height/containment/centring assertions
+and pointer close, retaining previous Escape/toggle checks. Native baseline fails
+64 vs52; corrected Mac Release5pass0, Mac ASAN5assertionspass/exit1/715250B3836alloc,
+Linux Release+ASAN5pass0 each with leak check and removed private displays. Mac,
+Linux captures VIEWED. Broad and actual-editor source checks pass on both SDKs;
+changed ranges format clean. Component config CTest passes after building target;
+retain first not-run/missing-executable receipt. Raw out-dependencies/callout-layout-1;
+report measurements/callout-layout.md. The 65-entry source/evidence archive and
+current-source verifier pass. Commit the reviewed checkpoint locally, then
+continue remaining PARITY work without repeating these completed checks.
+No full paired pixels or complete primary-button styling acceptance is claimed.
+
+Local commits since Preview9: 90834f728 artwork and 351 frozen entries;
+e2d230cd2 negative font lifetime controls; 559792e47 reconciled catalogue status.
+The standalone Qt control leaks in all four outer-pool/font-deregistration modes
+(~302-315KB), so neither proposed production fix is applied. Font report/index
+has its own verifier. Catalogue matches all34 original client actions and all45
+named builtin bindings have handler references; this is admission coverage only,
+not full semantic/native equivalence. Corrected obsolete PARITY pending rows.
+
+Optional async question about natural suspend/resume with Preview9 is pending;
+no need to wait or ask again. Do not suspend the machine automatically. User
+Preview8 PID52865, runtime35801, QEMU7158, guestSway9469 still unchanged. No agents,
+publish/merge or unrelated user-file access. Continue full goal after checkpoint.
+
 ## CURRENT: Preview 9 qualified; daily/full parity remain OPEN (2026-11-01)
 
 Adrian confirmed Preview 8 normal launch: "Sí, ya aparece la interfaz". That

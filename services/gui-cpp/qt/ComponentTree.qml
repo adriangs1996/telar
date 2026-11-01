@@ -18,7 +18,7 @@ Item {
     property var roots: []
     property real rowHeight: 28 * ratio
     readonly property real gap: 8 * ratio
-    readonly property var entries: (surface.nodes ?? []).filter(node => node.parent === parentIndex && node.tooltip === tooltip && (parentIndex >= 0 || roots.length === 0 || roots.indexOf(node.index) >= 0))
+    readonly property var entries: (surface.nodes ?? []).filter(node => node.parent === parentIndex && node.tooltip === tooltip && (roots.length === 0 || roots.indexOf(node.index) >= 0))
     property var reductions: []
     property real fullWidth: 0
     readonly property var hiddenRoots: entries.filter((node, index) => (reductions[index] ?? 0) === 2).map(node => node.index)

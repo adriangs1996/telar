@@ -16,7 +16,7 @@ Item {
     property real rowHeight: 28 * ratio
     property bool compact: false
     readonly property real gap: 6 * ratio
-    readonly property real iconSide: 16 * ratio
+    readonly property real iconSide: (node.kind === "callout" ? 18 : 16) * ratio
     readonly property real trackWidth: 48 * ratio
     readonly property bool block: ["heading", "text", "meter_row", "kv", "callout", "actions", "button", "divider"].indexOf(node.kind) >= 0
     readonly property bool hasIcon: node.glyph.length > 0 || node.providerMark !== 0 || node.telarMark
@@ -380,44 +380,70 @@ Item {
 
     Component {
         id: callout
-        Column {
-            spacing: root.gap
-            Item {
-                width: parent.width
-                height: Math.max(root.hasIcon ? root.rowHeight : 0, calloutText.implicitHeight)
-                Loader {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: root.iconSide
-                    height: root.rowHeight
-                    active: root.hasIcon
-                    sourceComponent: icon
+        Item {
+            id: card
+            readonly property real padding: 12 * root.ratio
+            readonly property real titleHeight: 18 * root.ratio
+            readonly property real detailHeight: 16 * root.ratio
+            readonly property real markWidth: root.hasIcon ? root.iconSide + padding : 0
+            readonly property var actionNode: (root.surface.nodes ?? []).find(child => child.parent === root.node.index && child.kind === "button" && !child.tooltip) ?? null
+            readonly property real actionWidth: actionNode !== null ? calloutButton.width + padding : 0
+            implicitHeight: 52 * root.ratio
+
+            NativeRoundedRectangle {
+                anchors.fill: parent
+                color: root.colors.panel_bg
+                borderColor: root.colors.surface1
+                borderWidth: root.ratio
+                radius: 8 * root.ratio
+            }
+            Loader {
+                x: card.padding
+                anchors.verticalCenter: parent.verticalCenter
+                width: root.iconSide
+                height: root.rowHeight
+                active: root.hasIcon
+                sourceComponent: icon
+            }
+            Column {
+                x: card.padding + card.markWidth
+                anchors.verticalCenter: parent.verticalCenter
+                width: Math.max(0, parent.width - 2 * card.padding - card.markWidth - card.actionWidth)
+                ChromeText {
+                    width: parent.width
+                    height: card.titleHeight
+                    text: root.node.text
+                    color: root.colors.text
+                    pixelSize: root.typography.body
+                    elide: Text.ElideNone
                 }
-                Text {
-                    id: calloutText
-                    anchors.verticalCenter: parent.verticalCenter
-                    x: root.hasIcon ? root.iconSide + root.gap : 0
-                    width: Math.max(0, parent.width - x)
-                    text: root.node.text + (root.node.detail.length > 0 ? "\n" + root.node.detail : "")
-                    color: root.node.ink
-                    font.family: "IBM Plex Sans"
-                    font.pixelSize: root.typography.small
-                    textFormat: Text.PlainText
-                    renderType: Text.NativeRendering
-                    wrapMode: Text.Wrap
-                    maximumLineCount: 3
+                ChromeText {
+                    width: parent.width
+                    height: visible ? card.detailHeight : 0
+                    visible: root.node.detail.length > 0
+                    text: root.node.detail
+                    color: root.colors.subtext0
+                    pixelSize: root.typography.small
+                    elide: Text.ElideNone
                 }
             }
             ComponentBranch {
                 id: calloutButton
-                width: parent.width
-                height: implicitHeight
+                anchors.right: parent.right
+                anchors.rightMargin: card.padding
+                anchors.verticalCenter: parent.verticalCenter
+                width: implicitWidth
+                height: root.rowHeight
+                active: card.actionNode !== null
                 controller: root.controller
                 surface: root.surface
                 colors: root.colors
                 typography: root.typography
                 ratio: root.ratio
+                rowHeight: root.rowHeight
                 parentIndex: root.node.index
-                horizontal: false
+                roots: card.actionNode !== null ? [card.actionNode.index] : []
+                fit: false
             }
         }
     }
