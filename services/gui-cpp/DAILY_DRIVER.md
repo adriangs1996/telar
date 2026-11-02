@@ -24,19 +24,24 @@ No Zig/runtime/CLI/plugin-worker rewrite or removal, no publication/merge, no ne
 agents, and no other worktree. Keep allocators/DI/static-analysis quality intact.
 
 The complete functional, visual and equal-or-better performance objective remains
-open. Only the command/quick-navigation palette and notifications/sounds may be
-deferred for daily adoption; existing implementations stay available.
+open. The earlier broad daily-adoption contract deferred only command/navigation and
+notifications/sounds. The explicit four-step phase above supersedes its ordering
+and gates; existing implementations stay available.
 
-## Phase progress — Preview26 and graphics/attachments complete; blur next
+## Phase progress — Preview27 and blur verified; benchmark next
 
-Preview26 stays frozen. The scoped graphics/attachment increment fixes Linux
-surface-event visibility ordering so hiding releases images and showing restores
-them. Both SDKs pass applicable core/native image/Kitty/attachment controls,
-broad profiles, actual editors and formatting; Linux ASan exits0. Mac native
-assertions pass with retained shutdown-leak failures, deferred general triage.
-See `services/gui-cpp/measurements/graphics-adoption.md` and its frozen verifier.
-These changes enter the final candidate after blur; the installed app is untouched.
-Next only: blur, then frozen full-client benchmark. Do not restart the old backlog.
+Preview26 stays frozen; steps1/2 are committed. Native blur now matches the
+reference's Linux optional protocol and macOS numeric-radius/fallback policy.
+Release protocol/configuration/native controls, broad/editor/format pass on both
+SDKs. Real Sway image ASan22 exits0. Retained Qt-only/control shutdown findings
+remain actual sanitizer failures; no profile or leak suppression is added.
+Preview27 is separately deployed with Qt/QML/runtime/login-shell helpers:
+`services/gui-cpp/out-adoption/Telar C++ Preview 27.app`, GUI SHA256
+`eeb50140eb6387a1d211ffa8f1dd7c6d25ad8d4540e480c7513d0f7034ad1617`.
+All1739 hashes/121 Mach-O/signatures and schema87/88 LaunchServices/plugin/bar/
+window smokes pass; exact normal20 cycles exit0/noQML/private cleanup passes.
+Next only: frozen full-client benchmark. No installed app/config/session changes.
+See `services/gui-cpp/measurements/blur-adoption.md`; no old backlog after delivery.
 
 ## Verified Preview26 — step1 complete; graphics/attachments next
 
@@ -53,7 +58,7 @@ three source hashes match. See component-accessible-groups evidence. Open with
 `~/Applications/Telar.app` to return. No install/config/session migration. Preserve
 all candidates and the four protected processes. No more accessibility expansion.
 
-## Remaining daily clearance and final acceptance
+## Broader acceptance — deferred outside the active phase
 
 - Daily: Preview25 corrects the confirmed plugin-focus failure. Native macOS
   shutdown retention remains a failed/open gate; physical suspend/resume is untried.
@@ -64,7 +69,7 @@ all candidates and the four protected processes. No more accessibility expansion
   shared non-Zig sources, third-party Ghostty toolchain and test oracles remain
   separate dependencies. Removal requires an audited clean build; see ZIG_RETIREMENT.
 
-## Current candidate: Preview25; stable plugin actions through Lua renders
+## Preserved candidate: Preview25; stable plugin actions through Lua renders
 
 `out-adoption/Telar C++ Preview 25.app` preserves widget focus and held clicks for
 fresh references to the same plugin action. Current targets are validated once;

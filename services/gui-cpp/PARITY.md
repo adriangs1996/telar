@@ -23,6 +23,14 @@ Complete parity and audited removal of own Zig are later, still-open stages.
 No Zig/runtime/CLI/plugin-worker rewrite or removal, no publication/merge, no new
 agents, and no other worktree. Keep allocators/DI/static-analysis quality intact.
 
+**Current scoped progress:** Preview26 and graphics/attachments are verified.
+Preview27 includes native Linux protocol blur and macOS numeric radius/fallback;
+1739 hashes/121 Mach-O/signatures and schema87/88 private package smokes pass.
+Exact normal20 cycles exit0/noQML/private cleanup passes; the comparative
+benchmark is next. See [native blur evidence](measurements/blur-adoption.md). Complete parity
+and audited own-Zig retirement remain OPEN; later entries are historical evidence,
+not restored acceptance gates for the active phase.
+
 **Unchanged Preview25 continuous refresh:**300 real1000ms Lua plugin renders and
 ten actual worker activations preserve delegate/focus/source/action identity and
 372 visual descendants. Normal350s app exit0/noQML/private cleanup passes. The

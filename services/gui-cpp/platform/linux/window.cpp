@@ -1,4 +1,5 @@
 #include "platform/window.hpp"
+#include "background_effect.hpp"
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QLatin1StringView>
@@ -77,6 +78,9 @@ void configureWindow(QWindow &window, WindowAppearance appearance) {
   }
 
   window.setFlag(Qt::FramelessWindowHint, !appearance.titlebar);
+  if (QGuiApplication::platformName().startsWith(QLatin1StringView{"wayland"})) {
+    configureBackgroundEffect(window, appearance);
+  }
 }
 
 }

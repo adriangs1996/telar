@@ -23,16 +23,50 @@ Complete parity and audited removal of own Zig are later, still-open stages.
 No Zig/runtime/CLI/plugin-worker rewrite or removal, no publication/merge, no new
 agents, and no other worktree. Keep allocators/DI/static-analysis quality intact.
 
-## Phase progress — Preview26 and graphics/attachments complete; blur next
+## Phase progress — Preview27 and blur verified; benchmark next
 
-Preview26 stays frozen. The scoped graphics/attachment increment fixes Linux
-surface-event visibility ordering so hiding releases images and showing restores
-them. Both SDKs pass applicable core/native image/Kitty/attachment controls,
-broad profiles, actual editors and formatting; Linux ASan exits0. Mac native
-assertions pass with retained shutdown-leak failures, deferred general triage.
-See `services/gui-cpp/measurements/graphics-adoption.md` and its frozen verifier.
-These changes enter the final candidate after blur; the installed app is untouched.
-Next only: blur, then frozen full-client benchmark. Do not restart the old backlog.
+Preview26 stays frozen; steps1/2 are committed. Native blur now matches the
+reference's Linux optional protocol and macOS numeric-radius/fallback policy.
+Release protocol/configuration/native controls, broad/editor/format pass on both
+SDKs. Real Sway image ASan22 exits0. Retained Qt-only/control shutdown findings
+remain actual sanitizer failures; no profile or leak suppression is added.
+Preview27 is separately deployed with Qt/QML/runtime/login-shell helpers:
+`services/gui-cpp/out-adoption/Telar C++ Preview 27.app`, GUI SHA256
+`eeb50140eb6387a1d211ffa8f1dd7c6d25ad8d4540e480c7513d0f7034ad1617`.
+All1739 hashes/121 Mach-O/signatures and schema87/88 LaunchServices/plugin/bar/
+window smokes pass; exact normal20 cycles exit0/noQML/private cleanup passes.
+Next only: frozen full-client benchmark. No installed app/config/session changes.
+See `services/gui-cpp/measurements/blur-adoption.md`; no old backlog after delivery.
+
+## Current WIP — benchmark, 10:43UTC
+
+Steps1/2 committed f094f847d/d55c479e0. Step3 blur is complete:336 frozen entries
+verify with measurements/blur-adoption/verify.py --check-current. Preview27 exact
+GUI eeb50140...4ad1617, rawRelease c6796ee9...fc1cf0;1739 hashes/121objects/
+signatures, two schema87/88 exact LaunchServices/daily smokes and normal20 exit0/
+noQML/privatecleanup. Preserved Preview26 and four processes unchanged; no user
+config/runtime/session/install touched. Report measurements/blur-adoption.md.
+Mac final Release policy/native2 pass; ASAN CTest8 actual345961B1985alloc, assertions
+pass/noaddrUB. LinuxReleaseprotocol present/absentboth0; ASAN protocol client96B1/
+server136407B1750 exit1 inbothcases. Exactsame findings reproduce in Qt-only
+QWindow control without appadapter; realSwayimageASAN22 pass0. Failures retained,
+general native-retention triage deferred. Broad/editor/format allpassed,no settings
+changed; stale editor db backups kept. No generalaudit/backlog expansion.
+
+ONLY step4 remains. Prepared out-dependencies/adoption-benchmark-1 with immutable
+original4e021bbd (CLI0.0.0, MachO SDK15.4), exact deployed Preview27 copy, same
+bundled JetBrains15 config,1600x1000/DPR2 and strict pair-grid checking. Existing
+presented-v3 marker/presentation oracle (notv2) source hash/provenance retained;
+separate10s idle extension and image-only Kitty marker fixture reuse existing
+producer. SDK/compiler/power metadata recorded. No headline timed runs yet; all
+build/lint/native package jobs done. Run short smoke then alternating pairs with
+no concurrentbuild/lint. Existing negative missing/dropped/vsync libs retained.
+Need CPUidle/load,RSS,graphics/attachments appropriate, honest rejectedresults;
+profile/correct reproducible regressions ifneeded, no unrelatedmicrokernels.
+Do not read/touch/stage unrelated measurements/personal-frame-delivery.md.
+GoalAPI remains historical blocked; tools lackresume, manualwork continues. Do
+not create duplicate/markfullobjectivecomplete. After scoped delivery stop; full
+parity/retirementOPEN and oldbacklogdeferred, never resume itautomatically.
 
 ## Verified Preview26 — step1 complete; graphics/attachments next
 
