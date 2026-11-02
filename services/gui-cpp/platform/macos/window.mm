@@ -1,12 +1,18 @@
 #include "platform/window.hpp"
+#include "blur_radius.hpp"
+#include "blur_symbols.h"
 #include <AppKit/AppKit.h>
 #include <QGuiApplication>
+#include <QObject>
 #include <QQuickWindow>
 #include <QSGRendererInterface>
 #include <QWindow>
 #include <QtCore/qtenvironmentvariables.h>
 #include <bit>
 #include <cmath>
+#include <cstdint>
+#include <memory>
+#include <tuple>
 
 namespace telar::gui::platform {
 
@@ -27,6 +33,87 @@ NSWindow *nativeWindow(const QWindow &window) {
   return view.window;
 }
 
+NativeBlurFunctions blurFunctions() noexcept {
+  const auto symbols = telarGuiBlurSymbols();
+  return {.connection = symbols.connection, .set_radius = symbols.set_radius};
+}
+
+class WindowBlur final : public QObject {
+public:
+  explicit WindowBlur(QWindow &window)
+      : QObject(&window),
+        window_(window),
+        radius_(blurFunctions()) {
+    connect(&window_, &QWindow::visibleChanged, this, [this](bool visible) {
+      if (visible) {
+        apply();
+      }
+    });
+    connect(&window_, &QWindow::windowStateChanged, this, [this] {
+      apply();
+    });
+    connect(&window_, &QWindow::widthChanged, this, [this] {
+      apply();
+    });
+    connect(&window_, &QWindow::heightChanged, this, [this] {
+      apply();
+    });
+  }
+
+  void set(WindowAppearance appearance) {
+    appearance_ = appearance;
+    apply();
+  }
+
+private:
+  void apply() {
+    NSWindow *const window = nativeWindow(window_);
+    if (window == nil) {
+      return;
+    }
+    const bool numeric = radius_.apply({.number = static_cast<std::int64_t>(window.windowNumber), .style = static_cast<std::uint64_t>(window.styleMask)}, appearance_);
+    NSView *const content = window.contentView;
+    NSView *const backdrop = content.superview;
+    NSVisualEffectView *effect = nil;
+    for (NSView *child in backdrop.subviews) {
+      if ([child.identifier isEqualToString:@"telar.background.blur"]) {
+        effect = (NSVisualEffectView *)child;
+        break;
+      }
+    }
+    if (appearance_.background_opacity >= 1 || appearance_.background_blur == 0) {
+      [effect removeFromSuperview];
+      return;
+    }
+    if (effect == nil) {
+      effect = [[NSVisualEffectView alloc] initWithFrame:content.frame];
+      effect.identifier = @"telar.background.blur";
+      effect.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+      effect.material = NSVisualEffectMaterialUnderWindowBackground;
+      effect.blendingMode = NSVisualEffectBlendingModeBehindWindow;
+      effect.state = NSVisualEffectStateActive;
+      [backdrop addSubview:effect positioned:NSWindowBelow relativeTo:content];
+    }
+    effect.frame = content.frame;
+    effect.hidden = numeric;
+  }
+
+  QWindow &window_;
+  WindowAppearance appearance_;
+  BlurRadius radius_;
+};
+
+void configureBlur(QWindow &window, WindowAppearance appearance) {
+  for (auto *child : window.children()) {
+    if (auto *blur = dynamic_cast<WindowBlur *>(child)) {
+      blur->set(appearance);
+      return;
+    }
+  }
+  auto blur = std::make_unique<WindowBlur>(window);
+  blur->set(appearance);
+  std::ignore = blur.release();
+}
 }
 
 void configureGraphics() {
@@ -84,33 +171,7 @@ void configureWindow(QWindow &window, WindowAppearance appearance) {
     native_window.backgroundColor = NSColor.clearColor;
   }
 
-  NSView *const content = native_window.contentView;
-  NSView *const backdrop = content.superview;
-  NSVisualEffectView *effect = nil;
-  for (NSView *child in backdrop.subviews) {
-    if ([child.identifier isEqualToString:@"telar.background.blur"]) {
-      effect = (NSVisualEffectView *)child;
-
-      break;
-    }
-  }
-
-  if (appearance.background_blur == 0) {
-    [effect removeFromSuperview];
-  } else {
-    if (effect == nil) {
-      effect = [[NSVisualEffectView alloc] initWithFrame:content.frame];
-      effect.identifier = @"telar.background.blur";
-      effect.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-      effect.material = NSVisualEffectMaterialUnderWindowBackground;
-      effect.blendingMode = NSVisualEffectBlendingModeBehindWindow;
-      effect.state = NSVisualEffectStateFollowsWindowActiveState;
-      // A child of Qt's layer-hosting view composites above its Metal content.
-      [backdrop addSubview:effect positioned:NSWindowBelow relativeTo:content];
-    }
-
-    effect.frame = content.frame;
-  }
+  configureBlur(window, appearance);
 
   if (!appearance.titlebar && (native_window.styleMask & NSWindowStyleMaskFullScreen) == 0) {
     auto *const container = [native_window standardWindowButton:NSWindowCloseButton].superview.superview;
