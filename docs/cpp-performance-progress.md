@@ -651,6 +651,37 @@ F03/F07/F08: they do not provide a fresh Zig comparison, Unicode/TUI coverage or
 sustained native cadence. Resource calculations are recorded in
 `out-perf/optical-integration/client-text-resources-01.json`.
 
+### Shared-image candidate rebuilt on the optical base
+
+`out-perf/shared-image-optical` restores the seven-file local transport candidate
+on the merged source, without the diagnostic toggle. The frozen GUI SHA-256 is
+`c695b51d7d611b57452fd64b845e02ae24b32dd1cbbc5928d1ab8862fea2eba6`;
+its C++ runtime is unchanged. The build receipt records all candidate source
+hashes, and copies are retained under `source/`. Six focused CTest entries pass,
+including remote connection and shared/inline pixel, generation, quota, cleanup
+and recovery oracles. Native Metal runtime-backed Kitty/input tests pass, as do
+seven image-scene cases for RGB, straight alpha, clipping, incomplete replacement,
+retained geometry, shared views and texture reuse.
+
+Initial 1K and 4K end-to-end qualification pairs pass their native pixel and
+presentation checks. Six complete alternating 4K pairs, 100 measured image
+replacements after 20 warmups, are recorded in
+`/tmp/telar-perf-shared-image-optical-4k-pairs-01`. Both variants explicitly use
+`font.thicken=true`. Against the merged optical build, the candidate produces:
+
+| 4K metric | Optical inline | Optical shared | Shared wins |
+| --- | ---: | ---: | ---: |
+| p50 | 137.421 ms | 48.582 ms | 6/6 |
+| p95 | 146.965 ms | 58.695 ms | 6/6 |
+| p99 | 152.967 ms | 62.681 ms | 6/6 |
+| GUI CPU/measured input | 89.366 ms | 31.054 ms | 6/6 |
+| GUI peak RSS | 367.77 MiB | 366.88 MiB | 4/6 |
+
+The 1K series and fresh no-image controls are still pending, so this candidate is
+**not yet accepted**. A fresh comparison against the independent Zig stack also
+remains open. The earlier rejection is not erased: this is a newly built and
+separately measured candidate on the optical base.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
