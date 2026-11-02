@@ -41,8 +41,6 @@ public:
   [[nodiscard]] const LigatureCoverage &ligatures();
 
 private:
-  struct ShapingCache;
-
   struct LibraryDeleter {
     void operator()(FT_Library library) const noexcept;
   };
@@ -84,8 +82,6 @@ private:
   std::array<SizeEntry, maximum_sizes> sizes_{};
   std::size_t next_size_slot_ = 0;
   std::uint16_t active_height_ = 0;
-  bool shaping_cache_attempted_ = false;
-  std::unique_ptr<ShapingCache> shaping_cache_;
 };
 
 }

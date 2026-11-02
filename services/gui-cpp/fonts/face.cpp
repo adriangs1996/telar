@@ -20,10 +20,8 @@
 #include <freetype/fttypes.h>
 #include <hb-ft.h>
 #include <hb.h>
-#include <functional>
 #include <limits>
 #include <memory>
-#include <new>
 #include <span>
 #include <stdexcept>
 #include <string_view>
@@ -58,115 +56,6 @@ std::unique_ptr<FT_MM_Var, VariationDeleter> variationMaster(FT_Library library,
 }
 
 }
-
-struct Face::ShapingCache {
-  static constexpr std::size_t maximum_bytes = 64;
-  static constexpr std::size_t maximum_glyphs = 64;
-  static constexpr std::size_t ways = 4;
-  static constexpr std::size_t sets = 64;
-  static constexpr std::size_t capacity = ways * sets;
-  static constexpr std::uint8_t consecutive_miss_limit = 64;
-  static constexpr std::uint8_t sample_interval = 32;
-
-  struct Entry {
-    std::array<char, maximum_bytes> text;
-    std::uint16_t pixel_height;
-    std::uint8_t length;
-    std::uint8_t count;
-    bool right_to_left;
-    std::array<hb_glyph_info_t, maximum_glyphs> glyphs;
-    std::array<hb_glyph_position_t, maximum_glyphs> positions;
-  };
-
-  // Keys publish initialized payload prefixes; cold allocation only clears metadata.
-  ShapingCache() noexcept {} // NOLINT(cppcoreguidelines-pro-type-member-init,modernize-use-equals-default)
-
-  [[nodiscard]] bool admitLookup() noexcept {
-    if (skipped_ != 0) {
-      --skipped_;
-      return false;
-    }
-
-    return true;
-  }
-
-  void recordHit() noexcept {
-    misses_ = 0;
-    skipped_ = 0;
-    sampling_ = false;
-  }
-
-  void recordMiss() noexcept {
-    if (!sampling_ && ++misses_ < consecutive_miss_limit) {
-      return;
-    }
-
-    sampling_ = true;
-    skipped_ = sample_interval - 1;
-  }
-
-  [[nodiscard]] static std::size_t key(std::string_view text, std::uint16_t pixel_height) noexcept {
-    constexpr std::size_t height_multiplier = 0x9e3779b1;
-    const auto hash = std::hash<std::string_view>{}(text) ^ (static_cast<std::size_t>(pixel_height) * height_multiplier);
-    return hash == 0 ? 1 : hash;
-  }
-
-  [[nodiscard]] const Entry *find(std::size_t key, std::string_view text, std::uint16_t pixel_height) const noexcept {
-    const auto first = (key % sets) * ways;
-    for (std::size_t offset = 0; offset < ways; ++offset) {
-      const auto index = first + offset;
-      if (keys_[index] != key) {
-        continue;
-      }
-
-      const auto &entry = entries_[index];
-      if (entry.pixel_height == pixel_height && entry.length == text.size() && std::equal(text.begin(), text.end(), entry.text.begin())) {
-        return &entry;
-      }
-    }
-
-    return nullptr;
-  }
-
-  void remember(std::string_view text, std::uint16_t pixel_height, ShapedRunView run, std::size_t key) noexcept {
-    if (text.empty() || text.size() > maximum_bytes || run.size() > maximum_glyphs) {
-      return;
-    }
-
-    const auto bucket = key % sets;
-    const auto first = bucket * ways;
-    auto index = first + ways;
-    for (std::size_t offset = 0; offset < ways; ++offset) {
-      if (keys_[first + offset] == 0) {
-        index = first + offset;
-        break;
-      }
-    }
-
-    if (index == first + ways) {
-      index = first + victims_[bucket];
-      victims_[bucket] = static_cast<std::uint8_t>((victims_[bucket] + 1) % ways);
-    }
-
-    auto &entry = entries_[index];
-    std::ranges::copy(text, entry.text.begin());
-    std::ranges::copy(run.glyphs_, entry.glyphs.begin());
-    std::ranges::copy(run.positions_, entry.positions.begin());
-    entry.pixel_height = pixel_height;
-    entry.length = static_cast<std::uint8_t>(text.size());
-    entry.count = static_cast<std::uint8_t>(run.size());
-    entry.right_to_left = run.rightToLeft();
-    keys_[index] = key;
-  }
-
-private:
-  std::array<Entry, capacity> entries_;
-  std::array<std::size_t, capacity> keys_{};
-  std::array<std::uint8_t, sets> victims_{};
-  std::uint8_t misses_ = 0;
-  std::uint8_t skipped_ = 0;
-  bool sampling_ = false;
-};
 
 Face::Face(std::span<const std::uint8_t> bytes, const FontMatch &match) {
   if (bytes.empty() || bytes.size() > telar_font_max_bytes || bytes.size() > static_cast<std::size_t>(std::numeric_limits<FT_Long>::max())) {
@@ -406,17 +295,6 @@ ShapedRunView Face::shape(std::string_view text, std::uint16_t pixel_height) {
     throw std::length_error{"ShapingTextTooLarge"};
   }
 
-  const auto cacheable = !text.empty() && text.size() <= ShapingCache::maximum_bytes;
-  const auto probe_cache = cacheable && (!shaping_cache_ || shaping_cache_->admitLookup());
-  std::size_t cache_key = 0;
-  if (probe_cache && shaping_cache_) {
-    cache_key = ShapingCache::key(text, pixel_height);
-    if (const auto *entry = shaping_cache_->find(cache_key, text, pixel_height)) {
-      shaping_cache_->recordHit();
-      return {{entry->glyphs.data(), entry->count}, {entry->positions.data(), entry->count}, entry->right_to_left};
-    }
-  }
-
   validateUtf8(text);
   selectSize(pixel_height);
   initializeShaping();
@@ -437,20 +315,7 @@ ShapedRunView Face::shape(std::string_view text, std::uint16_t pixel_height) {
     throw std::runtime_error{"ShapingFailed"};
   }
 
-  const ShapedRunView result{{glyphs, glyph_count}, {positions, position_count}, hb_buffer_get_direction(buffer) == HB_DIRECTION_RTL};
-  if (probe_cache && result.size() <= ShapingCache::maximum_glyphs) {
-    if (!shaping_cache_attempted_) {
-      shaping_cache_attempted_ = true;
-      shaping_cache_ = std::unique_ptr<ShapingCache>{new (std::nothrow) ShapingCache};
-    }
-
-    if (shaping_cache_) {
-      shaping_cache_->remember(text, pixel_height, result, cache_key != 0 ? cache_key : ShapingCache::key(text, pixel_height));
-      shaping_cache_->recordMiss();
-    }
-  }
-
-  return result;
+  return {{glyphs, glyph_count}, {positions, position_count}, hb_buffer_get_direction(buffer) == HB_DIRECTION_RTL};
 }
 
 GlyphBitmapView Face::rasterize(GlyphRasterRequest request) {

@@ -1196,6 +1196,86 @@ Six alternating native text pairs against the preceding coverage candidate are
 running under `/tmp/telar-perf-shared-image-optical-adaptive-coverage-text-pairs-01`.
 No F01–F16 flow is closed by these component or correctness results.
 
+The six-pair native adaptive series subsequently completes and **rejects the
+integrated shaping-cache candidate**. Against the preceding coverage build,
+median p50 is 24.871 → 25.063 ms for one panel (1/6 wins), 25.981 → 25.475 ms
+for splits (4/6), and 25.407 → 25.798 ms for tabs (2/6). The corresponding
+p95 win counts are 3/6, 2/6 and 4/6; p99 wins 4/6 in all three. GUI CPU/input
+changes from 3.789 → 4.005 ms for one panel (1/6), 4.395 → 4.007 ms for splits
+(4/6), and 3.983 → 4.119 ms for tabs (1/6). Peak GUI RSS medians are
+205.563 → 206.773, 204.398 → 213.172 and 203.836 → 206.641 MiB respectively.
+Memory is reported as an allowed tradeoff, not the rejection reason. The latency
+and CPU controls fail the unchanged rule; their cause is not established.
+The general Face cache and its registered test are withdrawn from active source,
+while the independently validated ASCII coverage fast path remains. Commit
+`e2a9dbc02d13b97e79d98537b7e270c6fb0812f5` and all frozen variants preserve the
+experiment. Future cache work should avoid duplicating the existing single-ASCII
+glyph cache and measure native shaping workloads before reconsideration.
+
+### Image conversion profile and BGRA candidate
+
+`out-perf/image-upload-profile` freezes matched, independent C++ and Zig stacks
+for 200 measured 4K image replacements plus 20 warmups. The image supplies the
+verified marker, with positive native presentation timestamps. Five-second,
+1 ms sampling profiles attach only after verifying each owned process identity.
+Both diagnostic runs and all four samplers finish successfully. Their latency
+numbers are profiling diagnostics, not paired acceptance evidence.
+
+In the C++ GUI sample, 154 render-thread observations reach
+`ImageResource::upload → QImage::convertToFormat_helper → convert_generic` and
+wait for Qt's conversion workers. Across five pooled workers, 488 leaf samples
+are in `fetchRGBA8888ToARGB32PM_neon` and 272 in
+`storeRGBA8888PMFromARGB32PM`; another observation is worker setup. An additional
+125 render-thread samples reach a memory copy inside
+`QRhiMetal::enqueueSubresUpload`. These counts identify conversion and staging
+work, not allocation counts or percentages of frame latency. The C++ runtime
+media worker has 54 observations in its checked shared-image kernel copy; its
+main thread spends 3,730/3,734 observations in `kevent`. The independent Zig GUI
+has 190 upload-worker observations under native Metal texture replacement.
+
+The next candidate converts directly to Qt's native ARGB32 premultiplied image
+and uses a BGRA8 texture on little-endian targets only when the backend reports
+support. Other targets retain the RGBA8 path; the software fallback remains
+unchanged. Texture reuse checks size and format. This removes an avoidable
+channel reordering while retaining Qt's alpha conversion and owned pixel lifetime.
+`out-perf/image-bgra-conversion` first verifies all 65,536 alpha/channel
+combinations plus twelve odd-stride RGB/RGBA images, with exact channel equality
+and unchanged input. Seven alternating pairs then produce these per-conversion
+medians (1K uses 128 iterations and 4K uses 32; eight warmups excluded):
+
+| Input / size | Wall ms A → B | CPU ms A → B | Wall / CPU wins |
+| --- | ---: | ---: | ---: |
+| opaque/1024x1024 | 0.270 → 0.094 | 1.061 → 0.317 | 7/7 / 7/7 |
+| opaque/3840x2160 | 1.691 → 0.680 | 8.181 → 3.200 | 7/7 / 7/7 |
+| alpha/1024x1024 | 0.291 → 0.115 | 1.144 → 0.398 | 7/7 / 7/7 |
+| alpha/3840x2160 | 1.832 → 0.732 | 8.868 → 3.454 | 7/7 / 7/7 |
+| rgb/1024x1024 | 0.253 → 0.075 | 0.253 → 0.075 | 7/7 / 7/7 |
+| rgb/3840x2160 | 1.974 → 0.952 | 1.974 → 0.952 | 7/7 / 7/7 |
+
+The fresh integrated BGRA candidate is frozen under
+`out-perf/shared-image-optical-bgra` from the preceding coverage objects, with
+only `image_resource.cpp.o` replaced in a copied archive and dependent binaries
+relinked. Its recipe records every reused link input and command. The GUI SHA-256
+is `07acd71ebd4b469b4564496fcf4f54d7a4ecb2782ad7c18c814cc405ecdd47d6`;
+runtime and helper hashes are unchanged. Targeted clang-tidy and x86-64/v3 object
+compilation pass; native Linux and Rosetta execution remain unqualified.
+
+All twelve focused CTest cases pass. The initial isolated prefix omitted the
+unchanged SSH fixture executable, causing the remote-connection test to time out;
+that first failure is retained, the dependency is staged and only the failed test
+is rerun. Four native Metal Quick cases pass, and the row probe still matches all
+7,494 original-Zig cases. Eleven additional native image cases pass on both the
+coverage and BGRA binaries, with every distinct captured RGBA image identical.
+They cover RGB, straight alpha, incomplete/replaced generations, retained geometry,
+placeholders, catalog lifetimes, shared textures, spare reuse and clipping. Logs
+confirm the actual Metal backend on Apple M1 Pro. Static captures do not prove
+presentation latency or cadence.
+
+Six alternating 4K full-client pairs are running under
+`/tmp/telar-perf-shared-image-optical-bgra-coverage-4k-pairs-01`. Further 1K,
+non-image controls, independent Zig comparison, fixed-load and cadence evidence
+remain open; no F01–F16 flow is closed by this candidate yet.
+
 The legacy `gui_frame_rate` tool's documentation now explicitly identifies its
 historically named presentation counters as frame-completion callbacks. Those
 counters cannot qualify visible 120 Hz; native positive presentation timestamps
