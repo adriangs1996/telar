@@ -1276,6 +1276,61 @@ Six alternating 4K full-client pairs are running under
 non-image controls, independent Zig comparison, fixed-load and cadence evidence
 remain open; no F01–F16 flow is closed by this candidate yet.
 
+The BGRA native series completes and **rejects this variant**. Median 4K p50
+changes 48.298 → 47.187 ms (4/6 wins), but p95 worsens 59.028 → 62.093 ms
+(1/6) and p99 62.553 → 69.218 ms (0/6); the maximum also loses all six pairs.
+GUI CPU/input improves 31.323 → 28.202 ms (6/6), while median peak GUI RSS is
+366.758 → 367.195 MiB. The rejection is the consistent visible-tail regression,
+not the allowed memory tradeoff. Source is withdrawn and frozen evidence remains.
+
+`coverage-4k-decomposition-01.json` separates the endpoints. Median per-run p99
+GPU execution is almost equal (9.121 → 9.126 ms), while p99 from input to the
+verified GPU completion callback worsens 38.766 → 45.612 ms. The median per-run
+p99 of presentedTime minus callback time is 28.126 → 27.079 ms. The tail is
+already present before that callback; these observations do not establish whether
+conversion scheduling, CPU work or another wait caused it, and do not prove a
+BGRA GPU execution problem.
+
+### Native premultiplication with RGBA textures retained
+
+The successor `out-perf/image-native-premultiply` keeps the original RGBA8 GPU
+texture format. On little-endian targets RGBA8888 and native ARGB32 place alpha in
+the same byte, and channelwise premultiplication commutes with swapping red/blue.
+A temporary read-only ARGB-labelled view selects Qt's native premultiplication
+path; only the newly owned result is relabelled RGBA8888 premultiplied. No input
+bytes are changed and no channel-reordering pass is required. Other input formats
+and big-endian targets keep the original conversion path.
+
+The component matches all 65,536 alpha/channel combinations and twelve odd-stride
+RGB/RGBA images. A separate ownership oracle verifies twenty-four format/alpha
+cases: output never aliases the input allocation and survives direct overwriting
+of the original buffer. Seven alternating pairs give these per-conversion medians:
+
+| Input / size | Wall ms A → B | CPU ms A → B | Wall / CPU wins |
+| --- | ---: | ---: | ---: |
+| opaque/1024x1024 | 0.271 → 0.080 | 1.060 → 0.249 | 7/7 / 7/7 |
+| opaque/3840x2160 | 1.699 → 0.643 | 8.191 → 3.004 | 7/7 / 7/7 |
+| alpha/1024x1024 | 0.291 → 0.108 | 1.141 → 0.381 | 7/7 / 7/7 |
+| alpha/3840x2160 | 1.829 → 0.735 | 8.866 → 3.471 | 7/7 / 7/7 |
+| rgb/1024x1024 | 0.253 → 0.253 | 0.253 → 0.253 | 4/7 / 4/7 |
+| rgb/3840x2160 | 1.980 → 1.975 | 1.979 → 1.975 | 4/7 / 4/7 |
+
+The integrated candidate `out-perf/shared-image-optical-native-premultiply`
+replaces only the image-resource object in a copied coverage archive and relinks
+its dependent executables. GUI SHA-256 is
+`26767f531b227ed8e5110731b399a3cc9e178e75ad0df3d87ef5a69124474536`;
+runtime and helper hashes are unchanged. Twelve focused tests pass in 25.25 s,
+four native Quick cases in 1.595 s, all 7,494 original-Zig row cases match and the
+eleven native image cases again produce exactly matching distinct captured RGBA
+images. Targeted clang-tidy and x86-64/v3 object compilation pass. Rosetta and
+Linux native execution remain unqualified.
+
+Six fresh native 4K pairs now run in `/tmp/telar-perf-native-pm-4k-pairs-01`.
+The first attempted directory name exceeded the UNIX socket path limit and was
+rejected before runtime launch; that failure is retained separately. The new
+short directory changes no workload or gate. Full native timing, non-image
+controls, independent Zig, fixed-load and sustained 120 Hz remain open.
+
 The legacy `gui_frame_rate` tool's documentation now explicitly identifies its
 historically named presentation counters as frame-completion callbacks. Those
 counters cannot qualify visible 120 Hz; native positive presentation timestamps
