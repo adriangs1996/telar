@@ -198,7 +198,7 @@ under `f03-cursor-invalidation-pairs-01`:
 Median paired ratios are 0.9518 / 0.9057 / 0.8491 for p50/p95/p99 and 0.9520
 for GUI CPU. This clears the targeted warm single-pane timing gate, without a
 consistent resource regression. The clean four-split/four-tab comparison follows
-below; the independent Zig-stack comparison remains open. These
+below; the independent Zig-stack comparison is recorded next. These
 layout cases measure typing with other panes present, not actual tab switching
 or sustained 120 Hz motion. No whole F03/F07/F08 flow is closed by this result.
 
@@ -240,6 +240,106 @@ The attempted C++ GUI + Zig runtime diagnostic cannot connect: current C++
 uses schema `cqp00001`, while Zig uses `886b480d`. Shared component probes also
 need schema-appropriate drivers before cross-runtime timing. Do not bypass
 the handshake or decode the new input-mode fields with the old frame layout.
+
+## Fresh Zig comparison and allocation hypothesis
+
+`cursor-zig-layout-pairs-01` completes six alternating pairs per layout, with
+100 measured inputs after 20 warmups, independent matching runtimes, equal
+viewport/grid and positive native presentation. All 36 runs are retained and
+valid. Medians of run quantiles show that the accepted C++ improvement still
+loses to Zig:
+
+| Layout / metric | Zig stack | Accepted C++ stack | C++ wins |
+| --- | ---: | ---: | ---: |
+| Single p50 | 25.76 ms | 29.37 ms | 0/6 |
+| Single p95 | 33.11 ms | 37.67 ms | 0/6 |
+| Single p99 | 37.12 ms | 40.17 ms | 1/6 |
+| Four splits p50 | 26.30 ms | 31.21 ms | 0/6 |
+| Four splits p95 | 33.11 ms | 38.29 ms | 0/6 |
+| Four splits p99 | 35.05 ms | 41.52 ms | 0/6 |
+| Four tabs p50 | 26.14 ms | 29.65 ms | 0/6 |
+| Four tabs p95 | 33.18 ms | 38.11 ms | 0/6 |
+| Four tabs p99 | 38.78 ms | 42.18 ms | 1/6 |
+
+GUI CPU medians are Zig/C++ 4.54/5.42%, 4.69/6.10% and 4.43/5.90%
+for single/splits/tabs. GUI peak RSS medians are 124.33/199.80 MiB,
+129.82/200.55 MiB and 130.19/199.76 MiB. These are GUI resources, not
+whole-stack totals. The Zig tab outlier remains in the raw results.
+
+The standalone `tools/display_link_probe.m` records Core Video callback and
+scheduled output ticks for an explicit display. Its six-second idle diagnostic
+on display 1 observes callback gaps near 8.33 ms (p50), with a nominal period
+of 199999/24000000 seconds. This rules out a fixed 60 Hz callback cadence in
+that observer; it does not measure Qt's delivery or actual drawable presentation.
+Raw samples, identity, timebase and duration are retained under
+`out-perf/cursor-invalidation/display-link-idle-01.json`. Compilation and argument,
+identity, completeness and callback-monotonicity checks pass. The legacy API
+is deliberately the one used by the Qt Cocoa path under investigation.
+
+The coordinator's allocation/copy/Qt-conversion hypothesis was read and verified
+against this branch. It is additional investigation, not a demonstrated cause.
+RAII does not imply allocation. `TextScene` reuses its previous node and
+`FrameStream` retains vector capacity, although payload insertion still copies.
+`GraphicsStore::Image` owns a new pixel allocation per image/generation;
+that must not be counted as a fresh allocation on every rendered frame.
+
+For Kitty uploads, `WindowImages::upload` wraps borrowed RGB888/RGBA8888 bytes.
+`ImageResource::upload` converts them to RGBA8888 premultiplied before its
+same-size GPU-texture reuse branch and detaches existing draw nodes. The
+`pixels.copy()` fallback is a separate no-RHI path, not the measured Metal path.
+Qt/framework allocation, conversion and buffer lifetime therefore need separate
+measurement from the project's allocator counters. The Zig image path borrows
+through bounded leases, but `PremultipliedImage` allocates, initializes and
+securely erases memory; the full Zig application is not allocation-free.
+
+`alloc-cpp-typing-01` attempted an Allocations attachment after warmup. The native
+probe lost its active/key window after 56 responses; the recorder remained
+waiting after the target exited and was stopped. Export failed with a missing
+template error. The receipt marks this diagnostic invalid; it supplies no
+allocation counts or acceptance timing. No cause for focus loss is established.
+Follow-up diagnostics must count Qt work as well as application work, distinguish
+logical allocator operations from system allocations, and preserve alpha,
+source ownership, generation/cancellation, secure erasure and recovery rules.
+
+The isolated Qt conversion census under `out-perf/allocations/qt-conversion/`
+wraps `malloc`, `calloc` and `free` in an owned diagnostic process, including
+calls inside Qt. It does not cover every allocation API, VM operation or the
+whole application. After a warm conversion, eight conversions give:
+
+| Source | Dimensions | Observed allocations / image | Requested bytes / image |
+| --- | --- | ---: | ---: |
+| RGB888 | 1024×1024 | 2 | 4,194,464 |
+| RGBA8888 | 1024×1024 | 35 | 4,197,424 |
+| RGB888 | 3840×2160 | 2 | 33,177,760 |
+| RGBA8888 | 3840×2160 | 255 | 33,186,880 |
+
+Observed free counts match allocations. A separate backtrace-enabled census
+reproduces these totals: small RGBA allocations originate in `convert_generic`,
+which [partitions conversion into thread-pool segments](https://github.com/qt/qtbase/blob/v6.12.0/src/gui/image/qimage_conversions.cpp#L198).
+Every conversion also owns a new output pixel buffer. The test verifies source
+immutability, independent destination storage and the generated pattern's pixels.
+These are component allocation counts, not steady-state whole-GUI counts or
+native frame timing. Peak live bytes and complete upload lifetime remain open.
+
+An exhaustive channel/alpha oracle rejects substituting the existing
+`ArtworkResize::premultiply`: its rounding differs from Qt, for example 229
+with alpha 152 produces 137 versus Qt's 136. That existing helper is unchanged.
+The first timing collection was mistakenly started before checking this failed
+oracle; `candidate-pairs-01-invalid.json` excludes it from acceptance.
+
+Revised scratch candidates reproduce Qt's arithmetic. Their oracle covers all
+65,536 channel/alpha combinations, odd widths, padded rows and source ownership.
+Seven alternating component pairs in `candidate-pairs-exact-01.jsonl` compare
+Qt with a single-pass byte conversion and a packed-word alternative. The byte
+conversion wins 7/7 at both sizes: median per-image time 0.292 -> 0.204 ms at
+1024×1024 and 1.833 -> 1.629 ms at 3840×2160. Packed conversion loses 0/7
+at both sizes and is rejected. ARM64 disassembly shows automatic NEON
+`ld4`/`umull`/`usra`/`raddhn`/`st4` conversion with a scalar remainder.
+No handwritten architecture-specific intrinsics are needed. The byte candidate
+is not integrated or accepted for production: other architectures, native F10
+image presentation, source lifetimes and complete-stack regressions still need
+validation. Scratch source, oracle, binaries, allocation logs and disassembly
+are retained together; instrumentation is excluded from these timing pairs.
 
 ## Coverage and next experiments
 
