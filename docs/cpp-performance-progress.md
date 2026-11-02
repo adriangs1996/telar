@@ -693,10 +693,36 @@ not an automatic rejection. Existing quotas and owned-buffer lifetimes remain
 intact. Resource summaries are `4k-resources-01.json` and `1k-resources-01.json`
 under the experiment prefix.
 
-Fresh no-image controls for single/splits/tabs are running, so this candidate is
-**not yet accepted**. A fresh comparison against the independent Zig stack also
-remains open. The earlier rejection is not erased: this is a newly built and
-separately measured candidate on the optical base.
+The six fresh no-image pairs per layout completed in
+`/tmp/telar-perf-shared-image-optical-text-pairs-01`:
+
+| Layout / metric | Optical inline | Optical shared | Shared wins |
+| --- | ---: | ---: | ---: |
+| Single p50 | 29.267 ms | 29.270 ms | 4/6 |
+| Single p95 | 37.345 ms | 37.271 ms | 4/6 |
+| Single p99 | 39.278 ms | 39.934 ms | 4/6 |
+| Splits p50 | 30.302 ms | 30.611 ms | 2/6 |
+| Splits p95 | 37.439 ms | 38.160 ms | 1/6 |
+| Splits p99 | 39.574 ms | 42.800 ms | 0/6 |
+| Tabs p50 | 29.577 ms | 30.326 ms | 1/6 |
+| Tabs p95 | 37.751 ms | 37.784 ms | 2/6 |
+| Tabs p99 | 41.740 ms | 40.360 ms | 5/6 |
+
+GUI CPU/input is 4.310 -> 4.250 ms in single (4/6), 4.610 -> 4.486 ms in
+splits (2/6) and 4.426 -> 4.490 ms in tabs (3/6). No-image peak RSS remains
+around 205–206 MiB. `text-resources-01.json` records the complete resources.
+The isolated candidate is **rejected for consistent interaction regressions**,
+particularly splits p99 and tabs p50, not for the allowed image-memory tradeoff.
+The cause is not established. The frozen candidate, source and raw data remain
+available; no fresh Zig comparison is claimed for it.
+
+The next experiment combines this saved transport candidate with native pending
+update delivery on the current cursor/optical base. The earlier `early-platform`
+variant was tested before conditional cursor invalidation, so the combination
+tests a different amount of unnecessary rendering. It must pass the native
+pending-update, cadence, visibility and input oracles, then fresh control/image
+pairs against the accepted optical build. Neither earlier latency win excuses
+the current tails, and the combination is not an accepted production change.
 
 ## Coverage and next experiments
 
