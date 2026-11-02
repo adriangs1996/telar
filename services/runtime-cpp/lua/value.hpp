@@ -46,6 +46,10 @@ public:
     return lua_type(state_, index_) == type;
   }
 
+  void pushCopy() const {
+    lua_pushvalue(state_, index_);
+  }
+
   std::string_view string() const {
     require(LUA_TSTRING, "must be a string");
     std::size_t size = 0;

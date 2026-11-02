@@ -1,0 +1,44 @@
+#include "presentation/history_selection_motion.hpp"
+#include "probe_io.hpp"
+#include <algorithm>
+#include <cstdint>
+#include <cstdio>
+#include <exception>
+#include <iostream>
+#include <optional>
+
+int main() try {
+  using namespace telar::gui;
+  HistorySelectionMotion motion;
+  std::uint64_t now = 0;
+  for (auto incoming = std::getc(stdin); incoming != EOF; incoming = std::getc(stdin)) {
+    if (incoming == 0) {
+      motion = {};
+      now = 0;
+      continue;
+    }
+
+    const bool has_generation = probe::read<std::uint8_t>() != 0;
+    const auto generation = probe::read<std::uint64_t>();
+    const bool has_selection = probe::read<std::uint8_t>() != 0;
+    const HistoryPosition selected{.index = probe::read<std::uint16_t>(), .id = probe::read<std::uint64_t>()};
+    const bool animated = probe::read<std::uint8_t>() != 0;
+    now = std::max(now, probe::read<std::uint64_t>());
+    const auto interval = probe::read<std::uint64_t>();
+    const auto expansion = motion.sample(has_generation ? std::optional{generation} : std::nullopt, has_selection ? std::optional{selected} : std::nullopt, animated ? std::optional{now} : std::nullopt);
+    const auto deadline = animated ? motion.deadline(now, interval) : std::nullopt;
+    probe::write(expansion.open);
+    probe::write(static_cast<std::uint8_t>(expansion.leaving.has_value()));
+    probe::write(static_cast<std::uint16_t>(expansion.leaving ? expansion.leaving->index : 0));
+    probe::write(expansion.leaving ? expansion.leaving->id : 0);
+    probe::write(expansion.leaving_open);
+    probe::write(static_cast<std::uint8_t>(deadline.has_value()));
+    probe::write(deadline.value_or(0));
+  }
+
+  return 0;
+} catch (const std::exception &error) {
+  std::cerr << error.what() << '\n';
+
+  return 1;
+}

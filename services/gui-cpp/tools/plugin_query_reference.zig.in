@@ -1,0 +1,122 @@
+const std = @import("std");
+const plugin = @import("plugin");
+extern "c" fn getchar() c_int;
+extern "c" fn putchar(c_int) c_int;
+const Spec = struct {
+    value: []const u8,
+    enabled: bool,
+    pub fn path(self: *const @This()) []const u8 { return self.value; }
+};
+const Name = struct {
+    value: []const u8,
+    pub fn slice(self: *const @This()) []const u8 { return self.value; }
+};
+const Manifest = struct {
+    identifier: []const u8,
+    actions: [64]Name,
+    action_count: usize,
+    capabilities: plugin.CapabilitySet,
+    pub fn id(self: *const @This()) []const u8 { return self.identifier; }
+    pub fn version(_: *const @This()) []const u8 { return "1.2"; }
+    pub fn entry(_: *const @This()) []const u8 { return "main.lua"; }
+    pub fn source(_: *const @This()) []const u8 { return "fixture \"中\"\n"; }
+    pub fn revision(_: *const @This()) []const u8 { return "rev\\x"; }
+};
+const Package = struct { manifest: Manifest, digest: [32]u8 };
+const Snapshot = struct { plugins: [32]Spec, plugin_count: usize };
+const Registry = struct { packages: [32]Package, count: usize };
+const Generation = struct { snapshot: Snapshot, number: u64 };
+const Overrides = struct {
+    value: ?bool = null,
+    pub fn requested(self: *const @This(), _: []const u8) ?bool { return self.value; }
+};
+const Client = struct {
+    lua_generation: ?*const Generation,
+    plugin_registry: ?*const Registry,
+    reload: struct { plugin_overrides: Overrides = .{} } = .{},
+};
+const Command = struct {
+    target_id: u64,
+    value: i64,
+    name: []const u8,
+    length: u16 = 0,
+    bytes: [4096]u8 = @splat(0),
+    status: enum { request, applied } = .request,
+    pub fn text(self: *const @This()) []const u8 { return self.name; }
+};
+const core = struct {
+    const Capability = plugin.Capability;
+    const ClientCommand = Command;
+};
+const ConfiguredPlugins = struct {
+    const Catalog = @This();
+__CATALOG__
+};
+__QUERIES__
+
+fn number(comptime T: type, value: std.json.Value, name: []const u8) !T {
+    return std.fmt.parseInt(T, value.object.get(name).?.number_string, 10);
+}
+fn print(value: anytype) !void {
+    var buffer: [32768]u8 = undefined;
+    var writer: std.Io.Writer = .fixed(&buffer);
+    try std.json.Stringify.value(value, .{}, &writer);
+    for (writer.buffered()) |byte| { _ = putchar(byte); }
+    _ = putchar('\n');
+}
+fn run(source: []const u8) !void {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const memory = arena.allocator();
+    const parsed = try std.json.parseFromSlice(std.json.Value, memory, source, .{ .parse_numbers = false });
+    const request = parsed.value;
+    var generation: Generation = .{ .number = try number(u64, request, "generation"), .snapshot = .{ .plugin_count = try number(usize, request, "count"), .plugins = undefined } };
+    var registry: Registry = .{ .count = 0, .packages = undefined };
+    const mask = try number(u64, request, "disabled_mask");
+    const prefix = request.object.get("prefix").?.string;
+    for (0..generation.snapshot.plugin_count) |index| {
+        const enabled = (mask & (@as(u64, 1) << @intCast(index))) == 0;
+        generation.snapshot.plugins[index] = .{ .value = try std.fmt.allocPrint(memory, "{s}{d}", .{ prefix, index }), .enabled = enabled };
+        if (!enabled) { continue; }
+        const package = &registry.packages[registry.count];
+        registry.count += 1;
+        package.manifest = .{ .identifier = try std.fmt.allocPrint(memory, "id-{d}", .{index}), .actions = undefined, .action_count = try number(usize, request, "actions"), .capabilities = .initEmpty() };
+        for (0..package.manifest.action_count) |action| {
+            package.manifest.actions[action] = .{ .value = try std.fmt.allocPrint(memory, "action-{d}", .{action}) };
+        }
+        const capabilities = try number(u16, request, "capabilities");
+        inline for (std.meta.fields(plugin.Capability)) |field| {
+            if ((capabilities & (@as(u16, 1) << field.value)) != 0) { package.manifest.capabilities.insert(@enumFromInt(field.value)); }
+        }
+        const seed = try number(usize, request, "digest_seed");
+        for (&package.digest, 0..) |*byte, offset| { byte.* = @truncate(seed + index + offset); }
+    }
+    var client: Client = .{ .lua_generation = &generation, .plugin_registry = &registry };
+    if (request.object.get("requested")) |requested| {
+        client.reload.plugin_overrides.value = requested.bool;
+    }
+
+    var reply: Command = .{ .target_id = try number(u64, request, "target"), .value = try number(i64, request, "page"), .name = request.object.get("name").?.string };
+    const result = if (try number(u8, request, "mode") == 0) listPlugins(&client, &reply) else describePlugin(&client, &reply);
+    if (result) |_| {
+        try print(.{ .value = reply.value, .text = reply.bytes[0..reply.length] });
+    } else |err| {
+        try print(.{ .@"error" = @errorName(err) });
+    }
+}
+
+pub fn main() !void {
+    var source: [65536]u8 = undefined;
+    var length: usize = 0;
+    while (true) {
+        const byte = getchar();
+        if (byte < 0) { break; }
+        if (byte == '\n') {
+            try run(source[0..length]);
+            length = 0;
+        } else {
+            source[length] = @intCast(byte);
+            length += 1;
+        }
+    }
+}

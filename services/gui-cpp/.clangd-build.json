@@ -1,0 +1,7 @@
+{
+  "build_directory": "out",
+  "commands": [
+    ["cmake", "-S", ".", "-B", "out"],
+    ["cmake", "--build", "out", "--target", "gui-editor", "--parallel", "2"]
+  ]
+}

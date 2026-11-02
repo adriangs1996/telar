@@ -6,9 +6,10 @@
 
 namespace telar::runtime::config {
 
+template <CommandTabStore Commands>
 class ComponentValidator {
 public:
-  explicit ComponentValidator(const ActionValidator &actions, LimitNotices &limits)
+  explicit ComponentValidator(const BasicActionValidator<Commands> &actions, LimitNotices &limits)
       : actions_(actions),
         limits_(limits) {}
 
@@ -145,7 +146,7 @@ private:
   static constexpr unsigned maximum_list_depth = 4;
   static constexpr unsigned default_priority = 50;
   static constexpr std::size_t maximum_url_bytes = 1024;
-  const ActionValidator &actions_;
+  const BasicActionValidator<Commands> &actions_;
   LimitNotices &limits_;
   ComponentBudget budget_;
   bool counting_ = true;

@@ -20,15 +20,20 @@ public:
         values_(values) {}
 
   void read(const lua::Value &root, std::string_view selected_profile) {
+    auto state = makeOwned<ClientValidationState>(memory_);
+    read(root, selected_profile, *state);
+  }
+
+  template <CommandTabStore Commands>
+  void read(const lua::Value &root, std::string_view selected_profile, BasicClientValidationState<Commands> &client_state) {
     root.onlyFields({"api_version", "theme", "client", "gui", "runtime", "plugins", "profiles"});
     if (root.field("api_version").integer() != 2) {
       root.fail("requires api_version = 2");
     }
 
     const auto base_client = root.field("client");
-    auto client_state = makeOwned<ClientValidationState>(memory_);
     ThemeValidator::selection(root);
-    ClientValidator::validate(base_client, values_.limits, *client_state);
+    ClientValidator::validate(base_client, values_.limits, client_state);
     GuiValidator::validate(root.field("gui"));
     RuntimeReader{values_}.read(root.field("runtime"));
     PluginReader::read(root.field("plugins"), values_.plugins, values_.limits);
@@ -37,7 +42,7 @@ public:
       if (!selected_profile.empty()) {
         profiles.fail("does not define the selected profile");
       }
-      client_state->keymap.report(values_.limits);
+      client_state.keymap.report(values_.limits);
       return;
     }
 
@@ -47,15 +52,15 @@ public:
       }
       if (name != selected_profile) {
         auto checked = makeOwned<RuntimeValues<Memory>>(memory_, values_);
-        const auto saved_commands = client_state->commands.checkpoint();
-        const auto saved_keymap = client_state->keymap;
-        readProfile(profile, *checked, base_client, *client_state);
-        client_state->commands.restore(saved_commands);
-        client_state->keymap = saved_keymap;
+        const auto saved_commands = client_state.commands.checkpoint();
+        const auto saved_keymap = client_state.keymap;
+        readProfile(profile, *checked, base_client, client_state);
+        client_state.commands.restore(saved_commands);
+        client_state.keymap = saved_keymap;
       }
     });
     if (selected_profile.empty()) {
-      client_state->keymap.report(values_.limits);
+      client_state.keymap.report(values_.limits);
       return;
     }
 
@@ -68,12 +73,13 @@ public:
     if (!selected.present()) {
       selected.fail("is not defined");
     }
-    readProfile(selected, values_, base_client, *client_state);
-    client_state->keymap.report(values_.limits);
+    readProfile(selected, values_, base_client, client_state);
+    client_state.keymap.report(values_.limits);
   }
 
 private:
-  static void readProfile(const lua::Value &profile, RuntimeValues<Memory> &values, const lua::Value &base_client, ClientValidationState &client_state) {
+  template <CommandTabStore Commands>
+  static void readProfile(const lua::Value &profile, RuntimeValues<Memory> &values, const lua::Value &base_client, BasicClientValidationState<Commands> &client_state) {
     profile.onlyFields({"theme", "client", "gui", "runtime", "plugins"});
     ThemeValidator::selection(profile);
     ClientValidator::validate(profile.field("client"), values.limits, client_state, &base_client);

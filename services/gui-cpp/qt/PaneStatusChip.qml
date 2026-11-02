@@ -1,0 +1,42 @@
+pragma ComponentBehavior: Bound
+
+import QtQuick
+import Telar.Gui
+
+NativeAgentStatus {
+    id: root
+
+    required property var colors
+    required property var typography
+    required property var geometry
+    displayMode: NativeAgentStatus.DisplayMode.pane_chip
+    implicitWidth: statusText.length > 0 ? Math.ceil((measure.implicitWidth + 2 * geometry.chipInset) * geometry.density) / geometry.density : 0
+
+    NativeChromeText {
+        id: measure
+        text: root.statusText
+        pixelSize: root.typography.body
+        visible: false
+    }
+
+    NativeRoundedRectangle {
+        objectName: "paneStatusBackground"
+        readonly property real chipHeight: Math.min(root.height, root.geometry.chipHeight)
+        y: Math.floor((root.height - chipHeight) * root.geometry.density / 2) / root.geometry.density
+        width: root.width
+        height: chipHeight
+        radius: root.geometry.chipRadius
+        color: root.colors[root.record.statusColor ?? "overlay1"]
+    }
+
+    ChromeText {
+        objectName: "paneStatusLabel"
+        x: root.geometry.chipInset
+        width: Math.max(0, root.width - 2 * root.geometry.chipInset)
+        height: root.height
+        text: root.statusText
+        pixelSize: root.typography.body
+        color: root.colors.surface_dim
+        elide: Text.ElideNone
+    }
+}

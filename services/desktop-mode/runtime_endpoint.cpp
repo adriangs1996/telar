@@ -297,6 +297,10 @@ namespace {
 } // namespace
 
 namespace runtime_endpoint {
+  std::string program() {
+    return telarProgram();
+  }
+
   std::string resolve() {
     const auto shell = login_shell::path();
     const auto program = telarProgram();

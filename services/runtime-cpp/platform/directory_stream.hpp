@@ -4,7 +4,6 @@
 #include "file_descriptor.hpp"
 #include <dirent.h>
 #include <fcntl.h>
-#include <string_view>
 
 namespace telar::runtime {
 
@@ -43,8 +42,10 @@ public:
         return nullptr;
       }
 
-      const std::string_view name{entry->d_name, entry->d_namlen};
-      if (name != "." && name != "..") {
+      const auto *name = entry->d_name;
+      const bool current_directory = name[0] == '.' && name[1] == '\0';
+      const bool parent_directory = name[0] == '.' && name[1] == '.' && name[2] == '\0';
+      if (!current_directory && !parent_directory) {
         return entry;
       }
     }

@@ -1,0 +1,146 @@
+#include "configuration_loader.hpp"
+#include "application/dependencies.hpp"
+#include "config/action_descriptions.hpp"
+#include "config/generation.hpp"
+#include "config/plugin_catalog.hpp"
+#include "config/themes.hpp"
+#include "core/configuration.hpp"
+#include "core/memory.hpp"
+#include "memory/allocator.hpp"
+#include "platform/file_stamp.hpp"
+#include "platform/private_file_stamp.hpp"
+#include "presentation/theme.hpp"
+#include "projection.hpp"
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QIODevice>
+#include <QLatin1StringView>
+#include <QtCore/qchar.h>
+#include <QtCore/qstring.h>
+#include <QtCore/qtypes.h>
+#include <cstddef>
+#include <exception>
+#include <optional>
+#include <stdexcept>
+#include <string_view>
+#include <utility>
+
+namespace telar::gui::qt {
+
+namespace {
+
+std::optional<platform::FileStamp> fileStamp(const QString &path) {
+  const auto encoded = QFile::encodeName(path);
+
+  return platform::FileStamp::read(encoded.constData());
+}
+
+}
+
+ConfigurationPreparation::ConfigurationPreparation(ApplicationAllocator &memory)
+    : generation(nullptr, runtime::AllocationDeleter<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator>{memory}) {
+}
+
+ConfigurationPreparation::~ConfigurationPreparation() = default;
+
+PreparedConfiguration ConfigurationLoader::prepare(ApplicationAllocator &memory, const ConfigurationReloadRequest &request) {
+  auto observed = request.watch;
+  observed.root = request.selection.path.isEmpty() ? std::nullopt : fileStamp(request.selection.path);
+  const auto trust_path = QFile::encodeName(request.selection.trust_path);
+  observed.trust = trust_path.isEmpty() ? std::nullopt : platform::PrivateFileStamp::read(trust_path.constData());
+  for (auto iterator = request.watch.modules.cbegin(); iterator != request.watch.modules.cend(); ++iterator) {
+    const auto stamp = fileStamp(iterator->path);
+    if (stamp != iterator->stamp) {
+      observed.modules[iterator.key()].stamp = stamp;
+    }
+  }
+
+  if (!request.force && observed == request.watch) {
+    return PreparedConfiguration{nullptr, runtime::AllocationDeleter<ConfigurationPreparation, ApplicationAllocator>{memory}};
+  }
+
+  auto result = makeOwned<ConfigurationPreparation>(memory, memory);
+  result->revision = request.revision;
+  result->observed = std::move(observed);
+
+  try {
+    load(memory, request, *result);
+    result->state = ConfigurationPreparation::State::ready;
+  } catch (const std::exception &error) {
+    result->state = ConfigurationPreparation::State::failed;
+    result->error = QString::fromUtf8(error.what());
+  }
+
+  return result;
+}
+
+void ConfigurationLoader::load(ApplicationAllocator &memory, const ConfigurationReloadRequest &request, ConfigurationPreparation &result) {
+  result.configuration.themes.base = themeValuesByName("shade");
+  result.configuration.theme = projectTheme(result.configuration.themes.base);
+  if (!request.selection.trust_path.isEmpty()) {
+    const auto path = QFile::encodeName(request.selection.trust_path);
+    result.trust = runtime::plugins::TrustStore::load(memory, {path.constData(), static_cast<std::size_t>(path.size())});
+  }
+
+  if (!request.selection.path.isEmpty()) {
+    const QFileInfo information{request.selection.path};
+    constexpr qint64 maximum_source_bytes = qint64{1024} * 1024;
+    if (!information.isFile() || information.size() > maximum_source_bytes) {
+      throw std::runtime_error{"Configuration must be a regular file of at most 1 MiB"};
+    }
+
+    QFile file{information.canonicalFilePath()};
+    if (!file.open(QIODevice::ReadOnly)) {
+      throw std::runtime_error{"Cannot open GUI configuration"};
+    }
+
+    const auto source = file.read(maximum_source_bytes + 1);
+    if (source.size() > maximum_source_bytes || !file.atEnd()) {
+      throw std::runtime_error{"GUI configuration exceeds its byte capacity"};
+    }
+
+    result.directory = information.canonicalPath();
+    const auto directory = result.directory.toUtf8();
+    const auto profile = request.selection.profile.toUtf8();
+    const ConfigurationSourceText generation_source{
+        .source = {source.constData(), static_cast<std::size_t>(source.size())},
+        .directory = {directory.constData(), static_cast<std::size_t>(directory.size())},
+        .profile = {profile.constData(), static_cast<std::size_t>(profile.size())},
+        .generation = request.generation,
+        .plugin_overrides = &request.plugin_overrides,
+    };
+    result.generation = makeOwned<ConfigurationGeneration<ApplicationAllocator>>(memory, memory, generation_source);
+    result.plugins.emplace(memory, generation_source.directory, result.generation->runtimeValues().plugins.configured());
+    const PluginCatalog catalog{result.generation->number(), result.generation->runtimeValues().plugins.configured(), result.plugins->packages()};
+    result.generation->visitPluginActions([&](const PluginActionDescription &action) {
+      if (!request.plugin_overrides.disabled(action.plugin, result.generation->runtimeValues().plugins.configured())) {
+        static_cast<void>(catalog.resolve(action));
+      }
+    });
+    result.configuration = result.generation->configuration();
+    trackModules(*result.generation, result.directory, result.modules);
+  }
+
+  if (!request.selection.theme.isEmpty()) {
+    const auto name = request.selection.theme.toLower().toUtf8();
+    result.locked_theme = themeValuesByName({name.constData(), static_cast<std::size_t>(name.size())});
+    result.configuration.theme = projectTheme(*result.locked_theme);
+  }
+}
+
+void ConfigurationLoader::trackModules(const ConfigurationGeneration<ApplicationAllocator> &generation, const QString &root, ConfigurationWatch::Modules &modules) {
+  generation.visitLocalModules([&](std::string_view name) {
+    const auto key = toQString(name);
+    if (modules.contains(key)) {
+      return;
+    }
+
+    auto relative = key;
+    relative.replace(QLatin1Char('.'), QLatin1Char('/'));
+    const auto path = QFileInfo{QDir{root}.filePath(relative + QLatin1StringView{".lua"})}.canonicalFilePath();
+    modules.insert(key, {.path = path, .stamp = fileStamp(path)});
+  });
+}
+
+}

@@ -8,9 +8,10 @@
 
 namespace telar::runtime::config {
 
-class ActionValidator {
+template <CommandTabStore Commands>
+class BasicActionValidator {
 public:
-  explicit ActionValidator(const ClientDefinitions &definitions, LimitNotices &limits, CommandTabRegistry &commands)
+  explicit BasicActionValidator(const ClientDefinitions &definitions, LimitNotices &limits, Commands &commands)
       : definitions_(definitions),
         limits_(limits),
         commands_(commands) {}
@@ -179,11 +180,11 @@ private:
   void notification(const lua::Value &action) const {
     action.onlyFields({"kind", "title", "body", "level", "duration_ms", "pane_id", "tab_id", "workspace_id"});
     optionalChoice(action.field("level"), {"info", "success", "warning", "failure"});
-    NotificationBody body{.duration_ms = static_cast<std::uint32_t>(action.field("duration_ms").boundedInteger(4000, 500, 60000))};
+    NotificationBody body{.duration_ms = static_cast<std::uint32_t>(action.field("duration_ms").boundedInteger(default_notification_duration_ms, min_notification_duration_ms, max_notification_duration_ms))};
     const auto title = action.field("title");
     const auto message = action.field("body");
-    body.title = fitted(title.string(), {"notifications.max_title_bytes", "bytes", 96, {}, {}});
-    body.message = message.present() ? fitted(message.string(), {"notifications.max_message_bytes", "bytes", 512, {}, {}}) : std::string_view{};
+    body.title = fitted(title.string(), {"notifications.max_title_bytes", "bytes", max_notification_title_bytes, {}, {}});
+    body.message = message.present() ? fitted(message.string(), {"notifications.max_message_bytes", "bytes", max_notification_message_bytes, {}, {}}) : std::string_view{};
     unsigned target_count = 0;
     for (const auto *name : {"pane_id", "tab_id", "workspace_id"}) {
       const auto target = action.field(name);
@@ -209,7 +210,10 @@ private:
 
   const ClientDefinitions &definitions_;
   LimitNotices &limits_;
-  CommandTabRegistry &commands_;
+  Commands &commands_;
 };
+
+using ActionValidator = BasicActionValidator<CommandTabRegistry>;
+using RetainedActionValidator = BasicActionValidator<RetainedCommandTabRegistry>;
 
 }

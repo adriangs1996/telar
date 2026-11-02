@@ -3,6 +3,7 @@
 #include "../memory/allocator.hpp"
 #include "../platform/directory_stream.hpp"
 #include "package_limits.hpp"
+#include <algorithm>
 #include <limits.h>
 #include <span>
 #include <sys/stat.h>
@@ -30,6 +31,10 @@ public:
 private:
   void scan(DirectoryStream &iterator, String<Memory> &prefix) {
     const auto directory = iterator.descriptor();
+    if (directory < 0) {
+      throw SystemError{"Read plugin package directory descriptor"};
+    }
+
     while (const auto *entry = iterator.next()) {
       if (entries_.size() == PackageLimits::files) {
         throw std::invalid_argument{"Too many plugin package entries"};
@@ -44,7 +49,11 @@ private:
       }
 
       const auto parent_length = prefix.size();
+#if defined(__APPLE__)
       prefix.append(entry->d_name, entry->d_namlen);
+#else
+      prefix.append(entry->d_name);
+#endif
       if (prefix.size() >= PATH_MAX) {
         throw std::invalid_argument{"Plugin package path exceeds its limit"};
       }

@@ -68,6 +68,12 @@ public:
     deadline_ = Clock::now() + limits_.deadline;
   }
 
+  void resetBudget(std::uint64_t instructions, std::chrono::nanoseconds deadline) noexcept {
+    limits_.instructions = instructions;
+    limits_.deadline = deadline;
+    resetBudget();
+  }
+
   void execute(std::string_view source, const char *name, int results = 1) {
     check(luaL_loadbufferx(state_, source.data(), source.size(), name, "t"));
     check(lua_pcall(state_, 0, results, 0));

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0" CACHE STRING "Minimum supported macOS version")
-project(telar_runtime LANGUAGES CXX)
+project(telar_runtime LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -83,6 +83,7 @@ add_library(runtime-core STATIC
   graphics/png_decoder.cpp
   diagnostics/trace.cpp
   platform/file_descriptor.cpp
+  platform/open_directory.c
   platform/pty_process.cpp
   platform/pipe_process.cpp
   platform/process_inspector.cpp

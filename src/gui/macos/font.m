@@ -167,7 +167,7 @@ static bool monochrome(CTFontRef font) {
 
 // A candidate is usable when it covers the text, is monochrome, and lives in a
 // regular file the Zig side may read within its bound.
-static int accept(CTFontRef font, NSString *text, telar_font_match *match) {
+static int accept(CTFontRef font, NSString *text, telar_font_match *match, telar_font_validator validator, void *context) {
     if (!covers(font, text) || !monochrome(font) || fill(font, match) != 0) {
         return -1;
     }
@@ -175,10 +175,10 @@ static int accept(CTFontRef font, NSString *text, telar_font_match *match) {
     if (stat(match->path, &info) != 0 || !S_ISREG(info.st_mode) || info.st_size > TELAR_FONT_MAX_BYTES) {
         return -1;
     }
-    return 0;
+    return validator == NULL ? 0 : validator(match, context);
 }
 
-int telar_gui_find_fallback_font(const char *text, telar_font_match *match) {
+int telar_gui_find_validated_fallback_font(const char *text, telar_font_match *match, telar_font_validator validator, void *context) {
     @autoreleasepool {
         NSString *requested = [NSString stringWithUTF8String:text];
         if (requested == nil || requested.length == 0 || requested.length > (NSUInteger)max_query_units) {
@@ -190,7 +190,7 @@ int telar_gui_find_fallback_font(const char *text, telar_font_match *match) {
             CTFontRef direct = CTFontCreateForString(base, (__bridge CFStringRef)requested, CFRangeMake(0, (CFIndex)requested.length));
             CFRelease(base);
             if (direct != NULL) {
-                int status = accept(direct, requested, match);
+                int status = accept(direct, requested, match, validator, context);
                 CFRelease(direct);
                 if (status == 0) {
                     return 0;
@@ -222,7 +222,7 @@ int telar_gui_find_fallback_font(const char *text, telar_font_match *match) {
                 }
                 bool mono = (CTFontGetSymbolicTraits(font) & kCTFontTraitMonoSpace) != 0;
                 if (mono == (pass == 0)) {
-                    status = accept(font, requested, match);
+                    status = accept(font, requested, match, validator, context);
                 }
                 CFRelease(font);
             }
@@ -230,4 +230,8 @@ int telar_gui_find_fallback_font(const char *text, telar_font_match *match) {
         CFRelease(candidates);
         return status;
     }
+}
+
+int telar_gui_find_fallback_font(const char *text, telar_font_match *match) {
+    return telar_gui_find_validated_fallback_font(text, match, NULL, NULL);
 }

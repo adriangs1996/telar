@@ -56,6 +56,16 @@ namespace telar {
 
   using Byte = std::uint8_t;
 
+  static_assert(std::same_as<Byte, unsigned char>);
+
+  [[nodiscard]] inline std::span<const Byte> byteView(std::string_view text) noexcept {
+    return {reinterpret_cast<const Byte *>(text.data()), text.size()};
+  }
+
+  [[nodiscard]] inline std::string_view textView(std::span<const Byte> bytes) noexcept {
+    return {reinterpret_cast<const char *>(bytes.data()), bytes.size()};
+  }
+
   inline constexpr std::size_t max_payload_size = MEGA_BYTES(4);
   inline constexpr std::size_t frame_prefix_size = sizeof(std::uint32_t);
 

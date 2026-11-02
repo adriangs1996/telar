@@ -12,11 +12,14 @@ inline AgentManifests makeBuiltinManifests() {
     manifest.display_name.assign(description.display_name);
     manifest.attachments = description.attachments;
     manifest.interrupt = AgentInterruptKey::escape;
-    manifest.process_names.append(provider == AgentProvider::cursor ? "cursor-agent" : description.name);
+    for (const auto process : description.process_names) {
+      if (!process.empty()) {
+        manifest.process_names.append(process);
+      }
+    }
   }
 
   auto &claude = table.add("claude");
-  claude.process_names.append("claude-code");
   claude.process_paths.append("/@anthropic-ai/claude-code/");
   claude.process_paths.append("\\@anthropic-ai\\claude-code\\");
   claude.brand.append("claude");

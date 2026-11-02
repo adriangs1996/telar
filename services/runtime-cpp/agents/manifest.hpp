@@ -2,6 +2,7 @@
 
 #include "../memory/fixed_text.hpp"
 #include "../text/ascii.hpp"
+#include "../text/executable_name.hpp"
 #include "evidence.hpp"
 #include "provider.hpp"
 #include <cstring>
@@ -142,7 +143,7 @@ public:
       }
     }
 
-    if (count_ == entries_.size() || (builtin == AgentProvider::unknown && custom_count_ == 27)) {
+    if (count_ >= entries_.size() || (builtin == AgentProvider::unknown && custom_count_ >= maximum_custom_agents)) {
       return nullptr;
     }
 
@@ -173,17 +174,10 @@ public:
   }
 
   AgentProvider fromExecutable(std::string_view name) const noexcept {
-    for (const auto suffix : {".exe", ".cmd", ".bat", ".js"}) {
-      const auto length = std::strlen(suffix);
-      if (name.size() >= length && containsInsensitive(name.substr(name.size() - length), suffix)) {
-        name.remove_suffix(length);
-        break;
-      }
-    }
-
+    const auto stem = withoutExecutableSuffix(name);
     for (const auto &entry : entries()) {
       for (const auto &candidate : entry.process_names.entries()) {
-        if (name.size() == candidate.view().size() && containsInsensitive(name, candidate.view())) {
+        if (asciiEqualIgnoreCase(stem, candidate.view())) {
           return entry.provider;
         }
       }
@@ -245,7 +239,8 @@ private:
     return AgentProvider::unknown;
   }
 
-  static constexpr Byte first_custom_provider = 6;
+  static constexpr Byte first_custom_provider = first_custom_agent_provider;
+  static constexpr Byte maximum_custom_agents = max_agent_provider_index - first_custom_provider + 1;
   std::array<AgentManifest, 32> entries_;
   std::size_t count_ = 0;
   Byte custom_count_ = 0;

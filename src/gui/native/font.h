@@ -2,7 +2,7 @@
 #include <stdint.h>
 
 // The largest font file either port reports; the Zig side reads with the same bound.
-#define TELAR_FONT_MAX_BYTES (64u << 20)
+#define TELAR_FONT_MAX_BYTES (64u << 20u)
 
 // Variation axes one match carries; a face with more is refused, never truncated.
 #define TELAR_FONT_MAX_AXES 16
@@ -37,3 +37,9 @@ int telar_gui_find_font(const char *family, const char *style, telar_font_match 
 // Color (sbix/CBDT/COLR), bitmap-only, oversized and last-resort faces are
 // skipped; -1 means no usable face covers the text.
 int telar_gui_find_fallback_font(const char *text, telar_font_match *match);
+
+typedef int (*telar_font_validator)(const telar_font_match *match, void *context);
+
+// Continue the platform cascade when the client cannot rasterize a candidate.
+// The validator returns zero to accept and must not retain match or throw.
+int telar_gui_find_validated_fallback_font(const char *text, telar_font_match *match, telar_font_validator validator, void *context);

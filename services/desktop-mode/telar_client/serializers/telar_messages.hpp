@@ -273,10 +273,11 @@ namespace telar {
     pi = 3,
     cursor = 4,
     opencode = 5,
+    last_custom = 32,
   };
 
   inline constexpr Byte first_custom_agent_provider = 6;
-  inline constexpr Byte max_agent_provider_index = 32;
+  inline constexpr Byte max_agent_provider_index = static_cast<Byte>(AgentProvider::last_custom);
 
   enum class AgentAttachmentMarkers : Byte {
     none = 0,
@@ -365,6 +366,21 @@ namespace telar {
     horizontal = 0,
     vertical = 1,
   };
+
+  inline constexpr std::size_t max_notification_title_bytes = 96;
+  inline constexpr std::size_t max_notification_message_bytes = 512;
+  inline constexpr std::size_t max_notification_link_bytes = 1024;
+  inline constexpr std::string_view notification_link_scheme = "https://";
+
+  inline std::string_view notificationLinkHost(std::string_view link) noexcept {
+    if (!link.starts_with(notification_link_scheme)) {
+      return {};
+    }
+
+    const auto rest = link.substr(notification_link_scheme.size());
+
+    return rest.substr(0, rest.find_first_of("/?#"));
+  }
 
   enum class NotificationLevel : Byte {
     info = 0,
@@ -598,6 +614,8 @@ namespace telar {
   };
 
   inline constexpr std::uint32_t default_notification_duration_ms = 4000;
+  inline constexpr std::uint32_t min_notification_duration_ms = 500;
+  inline constexpr std::uint32_t max_notification_duration_ms = 60000;
 
   struct NotificationBody {
     NotificationLevel level = NotificationLevel::info;
@@ -1121,17 +1139,17 @@ namespace telar {
   struct BodySchema<NotificationBody>
       : Serializer<
             Field<&NotificationBody::level, EnumByte<NotificationLevel, 3>, "level">,
-            Field<&NotificationBody::duration_ms, BoundedInteger<u32, 500, 60000>, "duration_ms">,
+            Field<&NotificationBody::duration_ms, BoundedInteger<u32, min_notification_duration_ms, max_notification_duration_ms>, "duration_ms">,
             Field<&NotificationBody::target, ValueCodec<NotificationTarget>, "target">,
-            Field<&NotificationBody::title, DisplayText16<96, false>, "title">,
-            Field<&NotificationBody::message, DisplayText16<512>, "message">,
-            Field<&NotificationBody::link, Text16<1024>, "link">> {
+            Field<&NotificationBody::title, DisplayText16<max_notification_title_bytes, false>, "title">,
+            Field<&NotificationBody::message, DisplayText16<max_notification_message_bytes>, "message">,
+            Field<&NotificationBody::link, Text16<max_notification_link_bytes>, "link">> {
     static void validate(const NotificationBody &value) {
       const auto link = value.link;
       if (link.empty()) {
         return;
       }
-      if (!link.starts_with("https://")) {
+      if (!link.starts_with(notification_link_scheme)) {
         throw EncodingError{"Notification link must use HTTPS"};
       }
       for (const auto character : link) {
@@ -1141,8 +1159,7 @@ namespace telar {
         }
       }
 
-      const auto rest = link.substr(8);
-      const auto host = rest.substr(0, rest.find_first_of("/?#"));
+      const auto host = notificationLinkHost(link);
       if (host.empty() || host.front() == '.' || host.front() == '-' || host.back() == '.') {
         throw EncodingError{"Invalid notification host"};
       }

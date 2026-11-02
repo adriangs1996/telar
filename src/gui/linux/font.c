@@ -84,7 +84,15 @@ static bool usable(FcPattern *font, const FcCharSet *wanted) {
     return true;
 }
 
-int telar_gui_find_fallback_font(const char *text, telar_font_match *match) {
+static int accept(FcPattern *font, telar_font_match *match, telar_font_validator validator, void *context) {
+    const int status = fill(font, match);
+    if (status != 0 || validator == NULL) {
+        return status;
+    }
+    return validator(match, context);
+}
+
+int telar_gui_find_validated_fallback_font(const char *text, telar_font_match *match, telar_font_validator validator, void *context) {
     // An empty set is a subset of every face; refuse it before matching.
     if (text[0] == '\0') {
         return -1;
@@ -119,17 +127,23 @@ int telar_gui_find_fallback_font(const char *text, telar_font_match *match) {
     FcConfigSubstitute(NULL, pattern, FcMatchPattern);
     FcDefaultSubstitute(pattern);
     FcResult result;
-    FcFontSet *sorted = FcFontSort(NULL, pattern, FcTrue, NULL, &result);
+    FcFontSet *sorted = FcFontSort(NULL, pattern, validator == NULL ? FcTrue : FcFalse, NULL, &result);
     FcPatternDestroy(pattern);
     int status = -1;
     if (sorted != NULL) {
-        for (int i = 0; i < sorted->nfont && status != 0; i++) {
+        enum { max_validated_candidates = 512 };
+        const int count = validator != NULL && sorted->nfont > max_validated_candidates ? max_validated_candidates : sorted->nfont;
+        for (int i = 0; i < count && status != 0; i++) {
             if (usable(sorted->fonts[i], wanted)) {
-                status = fill(sorted->fonts[i], match);
+                status = accept(sorted->fonts[i], match, validator, context);
             }
         }
         FcFontSetDestroy(sorted);
     }
     FcCharSetDestroy(wanted);
     return status;
+}
+
+int telar_gui_find_fallback_font(const char *text, telar_font_match *match) {
+    return telar_gui_find_validated_fallback_font(text, match, NULL, NULL);
 }

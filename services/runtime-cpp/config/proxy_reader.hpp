@@ -13,10 +13,18 @@ public:
       return;
     }
 
-    table.onlyFields({"enabled", "anonymous_tunnels", "ca_dir", "intercept_hosts", "capture", "network_capture"});
+    table.onlyFields({"enabled", "anonymous_tunnels", "ca_dir", "intercept_hosts", "capture", "network_capture", "transparent_redirect", "transparent_tls", "stream_interception"});
     values.enabled = table.field("enabled").boolean(values.enabled);
     values.anonymous_tunnels = table.field("anonymous_tunnels").boolean(values.anonymous_tunnels);
     values.network_capture = table.field("network_capture").boolean(values.network_capture);
+    values.transparent_redirect = table.field("transparent_redirect").boolean(values.transparent_redirect);
+    values.transparent_tls = table.field("transparent_tls").boolean(values.transparent_tls);
+    values.stream_interception = table.field("stream_interception").boolean(values.stream_interception);
+    if (values.transparent_tls && !values.transparent_redirect) { table.fail("transparent_tls requires transparent_redirect"); }
+    if (values.stream_interception && (!values.enabled || !values.network_capture)) { table.fail("stream_interception requires enabled and network_capture"); }
+    if (values.transparent_redirect && !values.enabled) {
+      table.fail("transparent_redirect requires the proxy to be enabled");
+    }
     capture(table.field("capture"), values.capture);
     const auto directory = table.field("ca_dir");
     if (directory.present()) {

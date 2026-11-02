@@ -54,5 +54,6 @@ private:
 
 void setNonblocking(int descriptor);
 void setCloseOnExec(int descriptor);
+[[nodiscard]] FileDescriptor duplicateCloseOnExec(int descriptor, int minimum);
 
 }

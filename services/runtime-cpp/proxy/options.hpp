@@ -17,6 +17,9 @@ struct ProxyOptions {
   bool enabled = false;
   bool anonymous_tunnels = false;
   bool network_capture = false;
+  bool transparent_redirect = false;
+  bool transparent_tls = false;
+  bool stream_interception = false;
 };
 
 }

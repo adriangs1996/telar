@@ -107,7 +107,9 @@ namespace telar {
     opaque
   };
 
-  inline void validateUtf8(std::string_view value) {
+  enum class Utf8Validation : Byte { valid, invalid_leading, invalid_continuation, invalid_scalar };
+
+  inline Utf8Validation inspectUtf8(std::string_view value) noexcept {
     std::size_t index = 0;
     while (index < value.size()) {
       const auto lead = static_cast<Byte>(value[index]);
@@ -121,21 +123,36 @@ namespace telar {
                                  : lead >= 0xf0 && lead <= 0xf4 ? 4
                                                                 : 0;
       if (length == 0 || length > value.size() - index) {
-        throw EncodingError{"Invalid UTF-8"};
+        return Utf8Validation::invalid_leading;
       }
 
       for (std::size_t i = 1; i < length; ++i) {
         const auto byte = static_cast<Byte>(value[index + i]);
         if (byte < 0x80 || byte > 0xbf) {
-          throw EncodingError{"Invalid UTF-8 continuation"};
+          return Utf8Validation::invalid_continuation;
         }
       }
       const auto second = static_cast<Byte>(value[index + 1]);
       if ((lead == 0xe0 && second < 0xa0) || (lead == 0xed && second >= 0xa0) ||
           (lead == 0xf0 && second < 0x90) || (lead == 0xf4 && second > 0x8f)) {
-        throw EncodingError{"Invalid UTF-8 scalar"};
+        return Utf8Validation::invalid_scalar;
       }
       index += length;
+    }
+
+    return Utf8Validation::valid;
+  }
+
+  inline void validateUtf8(std::string_view value) {
+    switch (inspectUtf8(value)) {
+    case Utf8Validation::valid:
+      return;
+    case Utf8Validation::invalid_leading:
+      throw EncodingError{"Invalid UTF-8"};
+    case Utf8Validation::invalid_continuation:
+      throw EncodingError{"Invalid UTF-8 continuation"};
+    case Utf8Validation::invalid_scalar:
+      throw EncodingError{"Invalid UTF-8 scalar"};
     }
   }
 
@@ -196,7 +213,7 @@ namespace telar {
         throw EncodingError{"Invalid sized text length"};
       }
 
-      const std::string_view value{reinterpret_cast<const char *>(input.data()), length};
+      const auto value = textView(input.first(length));
       validate(value);
       input = input.subspan(length);
 
@@ -295,13 +312,12 @@ namespace telar {
 
     static void encode(value_type value, std::span<Byte> &output) {
       (void)encodedSize(value);
-      TailBytes<Maximum>::encode({reinterpret_cast<const Byte *>(value.data()), value.size()},
-                                 output);
+      TailBytes<Maximum>::encode(byteView(value), output);
     }
 
     static value_type decode(std::span<const Byte> &input) {
       const auto bytes = TailBytes<Maximum>::decode(input);
-      const value_type value{reinterpret_cast<const char *>(bytes.data()), bytes.size()};
+      const auto value = textView(bytes);
       (void)encodedSize(value);
       return value;
     }

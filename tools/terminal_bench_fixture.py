@@ -178,17 +178,22 @@ class Fixture:
                     emitted_bytes=self.emitted_bytes, error=self.error))
 
     def refresh_size(self, *signal_args):
-        current = os.get_terminal_size(0)
-        if current == self.size and not signal_args:
-            return
-        self.size = current
-        self.geometry_generation += 1
-        if self.primary:
-            atomic_json(self.directory / 'size.json', [current.columns, current.lines])
-            if self.phase in ('ready', 'awaiting_viewport'):
-                write_all(b'\x1b[2J')
-                self.draw_marker()
-        self.record()
+        # Keep the in-memory size, marker and both files in one resize transaction.
+        previous = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGWINCH})
+        try:
+            current = os.get_terminal_size(0)
+            if current == self.size and not signal_args:
+                return
+            self.size = current
+            self.geometry_generation += 1
+            if self.primary:
+                atomic_json(self.directory / 'size.json', [current.columns, current.lines])
+                if self.phase in ('ready', 'awaiting_viewport'):
+                    write_all(b'\x1b[2J')
+                    self.draw_marker()
+            self.record()
+        finally:
+            signal.pthread_sigmask(signal.SIG_SETMASK, previous)
 
     def draw_marker(self):
         rgb = '230;20;60' if self.color == 0 else '20;220;200'
