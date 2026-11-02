@@ -481,8 +481,12 @@ build; B is this experiment. Medians of run quantiles/resources:
 | 4K GUI CPU / measured input | 89.33 ms | 31.47 ms | 6/6 |
 | 4K GUI peak RSS | 331.35 MiB | 362.10 MiB | 3/6 |
 
-This variant is **rejected and restored out of production source**: the 1K
-peak-RSS regression is consistent and its cause is not established. Fresh paired
+This variant was **rejected and restored out of production source** under the
+original resource gate: the 1K peak-RSS regression was consistent and its cause
+was not established. Adrian subsequently authorized bounded memory increases
+when measured work and latency savings justify them; memory growth alone is no
+longer a rejection criterion. The separate typing regression below still requires
+qualification of a fresh production candidate. Fresh paired
 Zig comparisons have not been run for this rejected build. A separate seven-pair
 component diagnostic compares a full
 kernel copy with 1 MiB mapping windows and verifies every output byte. Both have
@@ -509,11 +513,109 @@ the uninstrumented lifetime-RSS regression nor prove a settled-memory reduction.
 The first diagnostic tried 520 total inputs, exceeded the native probe's 512
 capacity and aborted before measurement; it is retained as invalid.
 
-Next work is to compare common dispatch/render code and isolate transport
-capability within the same diagnostic binary, then identify live/peak buffer
-lifetimes. Retain the transport latency improvement only after resolving resource
-and control-flow gates. Frozen experiment sources and the oracle remain available
-under `out-perf/shared-image/source`; accepted cursor production behavior is intact.
+Frozen experiment sources and the oracle remain available under
+`out-perf/shared-image/source`; accepted cursor production behavior is intact.
+
+### Same-binary transport diagnostic and memory tradeoff
+
+`out-perf/shared-image-toggle` isolates the shared-image capability using a flag
+read once at construction in one diagnostic binary. Its SHA-256 is
+`bc5877b5ae229d75f837bd6e217562daecd92adfc4c80e44edf1c587dc2aa90e`.
+The flag is explicitly passed by a scratch harness and its selected value is
+checked in each process receipt. It is not a production environment option.
+Native input/rendering oracles pass with either value. Each row below summarizes
+six complete alternating pairs of 100 measured inputs after 20 warmups:
+
+| Workload / metric | Inline | Shared | Shared wins |
+| --- | ---: | ---: | ---: |
+| Text p50 | 29.614 ms | 29.419 ms | 5/6 |
+| Text p95 | 37.687 ms | 37.593 ms | 4/6 |
+| Text p99 | 42.106 ms | 41.237 ms | 5/6 |
+| Text GUI CPU/input | 4.377 ms | 4.366 ms | 3/6 |
+| Text GUI peak RSS | 199.50 MiB | 201.33 MiB | 1/6 |
+| 1K p50 | 43.489 ms | 37.227 ms | 6/6 |
+| 1K p95 | 58.129 ms | 45.070 ms | 6/6 |
+| 1K p99 | 63.032 ms | 50.128 ms | 6/6 |
+| 1K GUI CPU/input | 17.521 ms | 9.567 ms | 6/6 |
+| 1K GUI peak RSS | 210.22 MiB | 213.34 MiB | 2/6 |
+| 4K p50 | 137.493 ms | 48.079 ms | 6/6 |
+| 4K p95 | 148.554 ms | 59.698 ms | 6/6 |
+| 4K p99 | 153.222 ms | 66.220 ms | 6/6 |
+| 4K GUI CPU/input | 89.453 ms | 31.578 ms | 6/6 |
+| 4K GUI peak RSS | 362.73 MiB | 362.04 MiB | 4/6 |
+
+Raw receipts are `/tmp/telar-perf-shared-image-toggle-text-pairs-03`,
+`...-1k-pairs-01`, `...-4k-pairs-01` and `...-4k-supplement-01`;
+`out-perf/shared-image-toggle/summary-01.json` combines only complete pairs.
+The first text attempt did not forward the flag and is invalid; the second
+stopped on the new receipt assertion. In the first 4K series one shared run
+failed initial readiness with zero inputs and no initial presentation. Its
+unmatched inline run is excluded; two fresh complete pairs supplement the four
+completed pairs. The readiness failure's cause is not established.
+
+This diagnostic does not reproduce the earlier no-image latency/CPU regression
+when changing only the capability. It does not prove code placement caused the
+earlier result or qualify a new production build. Common input and normal-frame
+dispatch instructions match after normalizing relocations, but the complete
+dispatch function differs. A fresh production candidate still needs its controls
+and independent Zig comparison on the merged renderer base.
+
+### Qt conversion CPU diagnostic
+
+The allocation/copy hypothesis remains scoped to measured paths. Seven alternating
+component pairs in `out-perf/allocations/qt-conversion/` compare Qt's RGBA conversion
+with a single-pass exact premultiplication loop. The oracle covers every channel
+and alpha combination, odd widths, padded rows and unchanged source bytes. On
+opaque fixtures, median Qt wall/aggregate CPU time per image is 0.271/1.067 ms at
+1K and 1.693/8.184 ms at 4K; the fused loop is 0.204/0.204 ms and 1.633/1.633 ms,
+winning all seven pairs for both metrics. Qt parallelizes the conversion, so
+wall time alone hides most of the CPU difference. Results and raw samples are
+`candidate-cpu-summary-opaque-01.json` and `candidate-cpu-pairs-opaque-01.jsonl`.
+The loop is not yet a production optimization or a full-client result. Prioritize
+eliminating repeated work and conversion passes, then measure bounded reuse or
+precomputation against its memory cost.
+
+## Integrated optical glyph cache on Personal
+
+Merge `2beb08bf0e2048e70334fe3a066189de4980d61d` includes coordinator commit
+`62a45e2405462e6868341b5f1806436924f2b764` and retains the accepted cursor change
+and all earlier work. The persistent F01–F16 goal remains active. The new
+`out-perf/optical-integration` Release build uses LLVM 23.1.4 and Qt 6.12 on this
+M1 Pro. Frozen GUI SHA-256:
+`19f2916e762f0a7e2ce441f6a8ae00ca502fe585afff24c66dfec03b88320881`.
+The frozen runtime remains
+`64222e2f2e07c12a4de9f380c60e8db57266f29f8beb43c9118e50602ae44d91`.
+
+Four focused CTest entries pass, including 432 optical cases. The independent
+original-Zig row oracle passes all 7,494 cases. Its first build failed due to SDK
+selection; the successful second run records explicit macOS 26 libc/target flags.
+Native Cocoa/Metal text mask/position tests and runtime-backed terminal input,
+frame synchronization and cursor phase tests also pass. Logs and build identities
+are retained in the same experiment directory.
+
+An independent scene oracle uses the unmodified original Zig `RowRuns`,
+`GlyphAtlas`, `TextRun` and original macOS C rasterizer. It exports the alpha atlas
+and positioned quads for CPU composition in draw order. Bundled JetBrains Mono,
+19 pixels at scale 2, line height 1.3, letter spacing -0.5 and optical strength
+250 produce a 5,632 × 3,380 image. A native Metal item capture of the **entire**
+new C++ scene matches exactly: zero differing pixels/channels. The initial native
+window capture was clipped to 3,600 × 2,198; that cropped region also matches the
+original Zig exactly, while the old C++ scene differs in 651,294 pixels. Neither
+comparison silently accepts an old C++ rendering defect as the oracle.
+
+Oracle source, build command, atlas, quads and images are under
+`zig-visual-reference`; the full Metal capture and exact comparison are under
+`full-capture` (`comparison-02.json`). The first item-capture attempt doubled DPR
+and is retained as invalid. Capturing the full item separately avoids mistaking
+the window manager's size limit for whole-scene coverage.
+
+Seven alternating component pairs in `scene-pairs-01` measure production scene
+synchronization for 256 × 52 changing ASCII cells with warm optical caches:
+**108.965 -> 6.975 ms/repaint, 7/7 wins**. The final native-window capture matches
+the independent reference crop exactly; the separate full-item capture above
+verifies the rest. These are CPU synchronization results with identical current
+dependencies and historical scene implementations. They do not establish
+full-stack latency against Zig, sustained FPS, or native 120 Hz cadence.
 
 ## Coverage and next experiments
 
