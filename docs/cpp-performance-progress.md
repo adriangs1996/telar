@@ -1325,11 +1325,106 @@ eleven native image cases again produce exactly matching distinct captured RGBA
 images. Targeted clang-tidy and x86-64/v3 object compilation pass. Rosetta and
 Linux native execution remain unqualified.
 
-Six fresh native 4K pairs now run in `/tmp/telar-perf-native-pm-4k-pairs-01`.
+Six fresh native 4K pairs complete in `/tmp/telar-perf-native-pm-4k-pairs-01`
+and **reject this variant**. Median p50 changes 47.798 → 47.967 ms (3/6 wins),
+p95 59.639 → 62.369 ms (0/6), p99 64.834 → 71.266 ms (0/6), and maximum
+68.314 → 78.212 ms (1/6). GUI CPU/input improves 31.963 → 28.247 ms (6/6).
+Median peak GUI RSS is 367.070 → 367.203 MiB (3/6); memory is not the rejection
+criterion. The helper is withdrawn from the working tree, with source, binaries
+and receipts retained in the frozen prefix. Keeping RGBA8 textures did not remove
+the visible-tail regression, so changing to BGRA was not a necessary condition.
+
 The first attempted directory name exceeded the UNIX socket path limit and was
 rejected before runtime launch; that failure is retained separately. The new
-short directory changes no workload or gate. Full native timing, non-image
-controls, independent Zig, fixed-load and sustained 120 Hz remain open.
+short directory changes no workload or gate. Non-image controls, independent Zig,
+fixed-load and sustained 120 Hz remain open.
+
+Follow-up diagnostic profiles in `out-perf/image-native-premultiply-profile`
+compare this candidate with the frozen coverage baseline on the same native 4K
+workload. Both runners and all four owned-process samples complete successfully.
+Both GUI profiles contain five Qt conversion workers, so they do not support the
+hypothesis that the new path introduces more conversion threads. The baseline has
+517 leaf samples in RGBA fetch/premultiplication and 242 in the channel store pass;
+the candidate has 689 in native fetch/premultiplication and no channel store pass.
+Render-thread observations in upload conversion change 155 → 138, and Metal
+staging memmove observations 124 → 117. The profiles contain 3,744 and 3,752 samples
+per persistent thread respectively. These are sampled stacks, not an allocation
+census, exact durations, or paired latency acceptance. The tail's cause remains
+unestablished. The next isolated diagnostic records input, image arrival,
+conversion and frame preparation to test the graphics-only input-grace lead.
+
+### Graphics-only input-grace diagnostic
+
+`out-perf/image-pacing-trace` builds two isolated diagnostic GUIs from the frozen
+coverage archive, replacing only three translation units and adding a bounded
+event logger. It records input, requests, graphics revisions, preparation,
+conversion, and deferral to 65,536 pre-faulted 64-byte slots in a private mapping.
+Logging performs no per-event allocation or explicit file syscall. The original
+build failure from a Qt `emit` macro/name collision is retained; the corrected
+logger uses `logEvent`. No diagnostic code is added to the product sources.
+
+Both native 4K runs complete 100 measured inputs after warmup with the original
+pixel/presentation endpoint. The baseline and native-premultiply traces contain
+1,704 and 1,729 complete events, without capacity exhaustion. Each of the last
+100 input intervals contains exactly one upload and one conversion. Screen frame
+ID stays at 7 while graphics revisions advance. In each variant, 99/100 inputs
+have a changed graphics revision within the 30 ms input grace, at least two
+display intervals since preparation, and no pending delivery, yet no new text
+frame to satisfy `InputGrace::includes`. This identifies a missed eligibility
+case; it does not establish the cause of the rejected conversion's tail.
+
+| Diagnostic interval | Coverage p50 / p95 ms | Native premultiply p50 / p95 ms |
+| --- | ---: | ---: |
+| Input → first changed graphics request | 14.115 / 19.903 | 13.753 / 21.219 |
+| First changed graphics request → upload | 4.848 / 8.271 | 4.140 / 7.711 |
+| Upload entry → conversion return | 4.629 / 6.282 | 3.742 / 5.997 |
+
+There are zero and one held UpdateRequest events in those input intervals;
+ordinary platform delivery, rather than repeated explicit pacer deferral, is the
+remaining scheduling lead. These are single diagnostic runs, not paired
+acceptance or trace-overhead qualification, and the analysis joins no timestamps
+across different clocks.
+
+The next candidate `out-perf/shared-image-optical-graphics-grace` starts from
+coverage, keeping the original Qt conversion. It extends the existing input
+identity with the graphics revision, propagates it through input and prepared
+frames, and requires a new non-regressing text/graphics state from the same
+attachment. Idle, expiry, budget and native pending-event delivery limits remain
+in place. Focused tests cover graphics-only wakeup, stale/detached output, expiry,
+and budget exhaustion. A fresh complete GUI build passes; the changed public pane
+layout is not linked with old objects. GUI SHA-256 is
+`83d3898cf73bea55e9dc66be7a4329e5e4da0915cc89523848f96d7ee3258a12`, with
+runtime and helper unchanged. Thirteen focused tests pass in 25.76 s, four native
+Quick cases in 1.510 s, all 7,494 original-Zig row cases match, and eleven native
+image cases produce matching distinct RGBA captures. ARM64, x86-64 and x86-64-v3
+code generation compiles; inspected `canAdvance` is a leaf without stack storage
+on all three. Native x86/Linux execution remains unqualified.
+
+Touched-translation-unit clang-tidy is **not green**. The unchecked optional access
+in `Application::requestTerminalFrame` and missing arithmetic parentheses in the
+existing idle-test constant reproduce against baseline source with baseline Qt
+generated files. The other diagnostics concern special members/nodiscard in
+`login_shell.hpp`, special members in `shared_image_source.hpp`, and nesting in
+`window_frame_pacer.hpp`; all three headers are byte-identical to the baseline.
+The new session input-observation test passes lint. Counterfactual setup failures
+(mixed include trees, a relocated vendor include, and mismatched generated test
+slots) are retained separately; only corrected, parse-clean reproductions support
+this classification. These existing diagnostics remain cleanup work, not a green
+lint claim.
+
+Six uninstrumented native 4K pairs complete in
+`/tmp/telar-perf-graphics-grace-4k-01`, with no concurrent builds, tests or
+profilers. The graphics-grace candidate wins all six pairs in p50, p95, p99 and
+maximum: median per-run values change 48.672 → 45.749, 59.153 → 53.646,
+62.848 → 57.527, and 65.292 → 61.761 ms respectively. GUI CPU/input changes
+31.462 → 31.050 ms (4/6 wins); median peak GUI RSS is 367.086 → 367.133 MiB
+(2/6). This is a successful 4K target measurement against coverage, with the
+original Qt conversion retained, not full-flow or independent-Zig acceptance.
+
+Six alternating pairs for each of single-pane text, four splits and four tabs
+are next in `/tmp/telar-perf-graphics-grace-text-01`. Those controls, 1K image
+timing, independent Zig, fixed-load, lint cleanup and native 120 Hz acceptance
+remain pending. No F01–F16 flow is closed by this result.
 
 The legacy `gui_frame_rate` tool's documentation now explicitly identifies its
 historically named presentation counters as frame-completion callbacks. Those
