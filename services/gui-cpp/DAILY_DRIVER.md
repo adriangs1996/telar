@@ -4,7 +4,35 @@ The complete functional, visual and equal-or-better performance objective remain
 open. Only the command/quick-navigation palette and notifications/sounds may be
 deferred for daily adoption; existing implementations stay available.
 
-## Current candidate: Preview19; keyboard actions and retained panels
+## Current candidate: Preview21; groups, More and predictable terminal focus
+
+`out-adoption/Telar C++ Preview 21.app` adds keyboard actions/focus for custom
+groups and More, preserves chrome focus through sidebar changes, and restores
+terminal input after current-tab clicks, tab/split changes, Lua reload and Escape.
+Preview20 is preserved but was not offered: its stronger standalone Escape actor
+failed; the same actor passes21. From the worktree root:
+
+```sh
+open -n "services/gui-cpp/out-adoption/Telar C++ Preview 21.app"
+```
+
+Finder opens the separately named app after another preview closes. Return by
+closing it/opening `~/Applications/Telar.app`. No install/replacement/migration.
+GUI SHA256 `ba035451933ac0a078c24a912f365d3247616d65900636d91761114898bfc93a`.
+All1739 hashes/121 Mach-O/signatures and eight exact schema87/88 Finder/login/
+runtime/plugins/bars/windows/client-pause, SSH, Vim, panel, activity and keyboard
+scopes pass. Eleven packaged/four native captures inspected. Both SDKs pass
+Release38/recorded12 and broad2/editor2/format2/module lint; nine hashes match.
+LinuxASAN38 exits0. MacASAN38 assertions pass, exit1 for846129B4486alloc, no address/
+UB or suppression. Four rebuilt domain CTests pass in Release/ASAN on both SDKs;
+the prior intermittent native192B4alloc failure is preserved and not proved resolved.
+A stale external window acknowledgement is corrected only in a private test-helper
+copy, with an identical-binary negative/positive pair and unchanged assertions/
+deadlines. See [group keyboard evidence](measurements/component-group-keyboard.md).
+Preview19/8, installed Zig, configuration/runtime remain preserved. Physical sleep,
+native leaks/stability, final parity and own-Zig retirement remain OPEN.
+
+## Preserved candidate: Preview19; keyboard actions and retained panels
 
 `out-adoption/Telar C++ Preview 19.app` adds Tab/Space/Return actions for custom
 panel buttons, keeps panels/picks through sidebar/layout changes, and restores
@@ -70,10 +98,9 @@ Physical sleep and shutdown-leak attribution below remain open.
 
 ## Daily adoption blockers
 
-- Complete keyboard traversal/action for configured groups and overflow entries.
-  A new directed native negative verifies their mouse action, then fails Tab
-  between two groups. Preview19 fixes panel buttons and nested picks; this next
-  scope remains active.
+The reported custom-group/More keyboard blocker is closed in scoped Preview21
+checks, including Escape back to the terminal. Remaining full fitting/styling and
+accessibility/physical ownership cases stay in PARITY.md.
 
 - Triage recorded macOS sanitizer exit leaks without suppressing the failures.
   A standalone CoreText reproducer explains part of the retention, not the entire

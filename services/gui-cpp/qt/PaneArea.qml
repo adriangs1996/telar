@@ -40,7 +40,10 @@ Item {
 
                     MouseArea {
                         anchors.fill: parent
-                        onPressed: root.application.execute(GuiController.Action.focus_pane, pane.record.key)
+                        onPressed: {
+                            root.application.execute(GuiController.Action.focus_pane, pane.record.key);
+                            terminal.forceActiveFocus(Qt.MouseFocusReason);
+                        }
                     }
                 }
             }
@@ -73,7 +76,10 @@ Item {
 
                 MouseArea {
                     anchors.fill: parent
-                    onPressed: root.application.execute(GuiController.Action.focus_pane, pane.record.key)
+                    onPressed: {
+                        root.application.execute(GuiController.Action.focus_pane, pane.record.key);
+                        terminal.forceActiveFocus(Qt.MouseFocusReason);
+                    }
                 }
             }
 
@@ -86,7 +92,42 @@ Item {
                 height: pane.record.content.height
                 application: root.application
                 paneId: pane.record.key
-                focus: pane.record.focused && root.application.dialog.length === 0 && !root.keyboardCovered
+                property bool focusReady: false
+                readonly property bool modelFocused: pane.record.focused
+
+                function focusSelectedPane() {
+                    if (terminal.modelFocused && root.application.dialog.length === 0 && !root.keyboardCovered) {
+                        terminal.forceActiveFocus();
+                    }
+                }
+
+                function restoreFocusIfVacant() {
+                    const window = terminal.Window.window;
+                    if (!window) {
+                        return;
+                    }
+
+                    const owner = window.activeFocusItem;
+                    // Visual loaders can inherit focus after their input control is retired.
+                    if (owner && owner !== window.contentItem && !(owner instanceof Loader) && owner.visible && owner.enabled) {
+                        return;
+                    }
+
+                    terminal.focusSelectedPane();
+                }
+
+                // Geometry refreshes keep the same selection and must preserve chrome focus.
+                onModelFocusedChanged: {
+                    if (!terminal.modelFocused) {
+                        terminal.focus = false;
+                    } else if (terminal.focusReady) {
+                        terminal.focusSelectedPane();
+                    }
+                }
+                Component.onCompleted: {
+                    terminal.focusReady = true;
+                    terminal.focusSelectedPane();
+                }
 
                 Rectangle {
                     anchors.fill: parent
@@ -113,8 +154,25 @@ Item {
                 Connections {
                     target: root.application
                     function onDialogChanged() {
-                        if (root.application.dialog.length === 0 && pane.record.focused && !root.keyboardCovered)
-                            terminal.forceActiveFocus();
+                        terminal.focusSelectedPane();
+                    }
+                }
+
+                Connections {
+                    target: terminal.Window.window
+                    function onActiveFocusItemChanged() {
+                        if (terminal.modelFocused) {
+                            Qt.callLater(terminal.restoreFocusIfVacant);
+                        }
+                    }
+                }
+
+                Connections {
+                    target: root
+                    function onKeyboardCoveredChanged() {
+                        if (!root.keyboardCovered && terminal.modelFocused) {
+                            Qt.callLater(terminal.restoreFocusIfVacant);
+                        }
                     }
                 }
             }

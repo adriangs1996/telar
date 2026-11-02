@@ -492,6 +492,7 @@ private:
     environment.remove(QStringLiteral("ENV"));
     environment.remove(QStringLiteral("BASH_ENV"));
     environment.insert(QStringLiteral("TELAR_HISTORY"), directory_.filePath(QStringLiteral("history.db")));
+    environment.insert(QStringLiteral("HISTFILE"), directory_.filePath(QStringLiteral("shell-history")));
     environment.insert(QStringLiteral("XDG_DATA_HOME"), directory_.filePath(QStringLiteral("data")));
     runtime_.setProcessEnvironment(environment);
     runtime_.start();
@@ -617,6 +618,10 @@ private:
   }
 
   Q_SLOT void qmlActionBindings() {
+    const auto original_tabs = client_->tabs()->rowCount();
+    const auto cleanup = qScopeGuard([this, original_tabs] {
+      closeExtraTabs(original_tabs);
+    });
     auto *context = qmlContext(window_);
     if (context == nullptr) {
       QFAIL("The GUI window must have its QML context");
@@ -658,9 +663,9 @@ private:
     QKeyEvent activate{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier};
     QCoreApplication::sendEvent(search, &activate);
     QTRY_COMPARE(client_->dialog(), QString{});
-    QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), 2, runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), original_tabs + 1, runtime_wait_ms);
     client_->execute(Application::Action::close_tab);
-    QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), 1, runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), original_tabs, runtime_wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(firstPane() != nullptr && firstPane()->screen.frameId() > 0, runtime_wait_ms);
   }
 
@@ -2954,6 +2959,16 @@ return {api_version=2, client={keybindings={
   }
 
   void verifyPresentedHistorySubmitMode(bool enter_runs, bool alternate, const QString &tag, bool retain_capture = false) {
+    const auto original_tabs = client_->tabs()->rowCount();
+    const auto *original = firstPane();
+    QVERIFY(original != nullptr);
+    const auto original_pane = original->id;
+    client_->execute(Application::Action::new_tab);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), original_tabs + 1, runtime_wait_ms);
+    const auto restore_tab = qScopeGuard([this, original_tabs, original_pane] {
+      closeTemporaryTab({.count = original_tabs, .pane_id = original_pane});
+    });
+    QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != original_pane, runtime_wait_ms);
     const QTemporaryDir directory;
     QVERIFY(directory.isValid());
     const auto initial_path = directory.filePath(QStringLiteral("initial.lua"));
@@ -4442,6 +4457,154 @@ return {api_version=2, client={keybindings={
     QCOMPARE(client_->error(), QString{});
   }
 
+  Q_SLOT void configuredGroupKeyboardActions() {
+    const auto sidebar = client_->sidebarVisible();
+    const auto cleanup = qScopeGuard([this, sidebar] {
+      client_->closeComponentPanel();
+      client_->loadConfiguration({}, {}, {});
+      if (client_->sidebarVisible() != sidebar) {
+        client_->execute(Application::Action::toggle_sidebar);
+      }
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    writeTestFile(path, R"(
+      local t=require('telar');local ui=t.ui
+      return {api_version=2,client={bars={bottom={left=t.bar.static({
+        ui.group({on_click=t.action.toggle_sidebar(),ui.label('First keyboard group')}),
+        ui.group({on_click=t.action.open_panel('target'),ui.label('Second keyboard group')}),
+      }),center=t.bar.tabs()}},panels={target=t.panel({title='Group keyboard target',render=function()return ui.text('Keyboard group activated')end})}}}
+    )");
+    client_->loadConfiguration(path, {}, {});
+    QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+    QTRY_COMPARE_WITH_TIMEOUT(client_->componentBars().value(QStringLiteral("left")).toMap().value(QStringLiteral("nodes")).toList().size(), 4, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const QPointer<QQuickItem> first{componentGroup(QStringLiteral("First keyboard group"))};
+    const QPointer<QQuickItem> second{componentGroup(QStringLiteral("Second keyboard group"))};
+    QVERIFY(!first.isNull() && !second.isNull());
+    QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, first->mapToScene(first->boundingRect().center()).toPoint());
+    QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), !sidebar, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(first->hasActiveFocus(), runtime_wait_ms);
+    client_->execute(Application::Action::toggle_sidebar);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), sidebar, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    QVERIFY(!first.isNull() && !second.isNull());
+    first->forceActiveFocus(Qt::TabFocusReason);
+    QTRY_VERIFY_WITH_TIMEOUT(first->hasActiveFocus(), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Tab);
+    QTRY_VERIFY_WITH_TIMEOUT(second->hasActiveFocus(), runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(second->findChild<QQuickItem *>(QStringLiteral("componentKeyboardFocus")) != nullptr, runtime_wait_ms);
+    const auto screenshot = qEnvironmentVariable("TELAR_GUI_TEST_GROUP_KEYBOARD_SCREENSHOT");
+    if (!screenshot.isEmpty()) {
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      QVERIFY(window_->grabWindow().save(screenshot, "PNG"));
+    }
+
+    QTest::keyClick(window_, Qt::Key_Return);
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    QCOMPARE(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Group keyboard target"));
+    QTest::keyClick(window_, Qt::Key_Escape);
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    first->forceActiveFocus(Qt::TabFocusReason);
+    QTest::keyClick(window_, Qt::Key_Space, Qt::ShiftModifier);
+    QCOMPARE(client_->sidebarVisible(), sidebar);
+    QTest::keyPress(window_, Qt::Key_Space);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), !sidebar, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(first->hasActiveFocus(), runtime_wait_ms);
+    QKeyEvent repeat{QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier, QStringLiteral(" "), true};
+    QCoreApplication::sendEvent(window_, &repeat);
+    QCOMPARE(client_->sidebarVisible(), !sidebar);
+    QTest::keyRelease(window_, Qt::Key_Space);
+    QCOMPARE(client_->sidebarVisible(), !sidebar);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto *terminal = terminalIn(window_->contentItem());
+    QVERIFY(terminal != nullptr);
+    QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, terminal->mapToScene(terminal->boundingRect().center()).toPoint());
+    QTRY_VERIFY_WITH_TIMEOUT(terminal->hasActiveFocus(), runtime_wait_ms);
+    first->forceActiveFocus(Qt::TabFocusReason);
+    verifyGroupTabFocusTransitions();
+    verifyGroupPaneHeaderFocus();
+    auto *escaping = componentGroup(QStringLiteral("First keyboard group"));
+    QVERIFY(escaping != nullptr);
+    escaping->forceActiveFocus(Qt::TabFocusReason);
+    QTest::keyClick(window_, Qt::Key_Escape);
+    QTRY_VERIFY_WITH_TIMEOUT(terminalIn(window_->contentItem()) != nullptr && terminalIn(window_->contentItem())->hasActiveFocus(), runtime_wait_ms);
+    auto *retiring = componentGroup(QStringLiteral("First keyboard group"));
+    QVERIFY(retiring != nullptr);
+    retiring->forceActiveFocus(Qt::TabFocusReason);
+    client_->loadConfiguration({}, {}, {});
+    QTRY_VERIFY_WITH_TIMEOUT(componentGroup(QStringLiteral("First keyboard group")) == nullptr, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(terminalIn(window_->contentItem()) != nullptr && terminalIn(window_->contentItem())->hasActiveFocus(), runtime_wait_ms);
+    QCOMPARE(client_->error(), QString{});
+  }
+
+  Q_SLOT void configuredOverflowKeyboardActions() {
+    QPointer<QObject> popup;
+    const auto cleanup = qScopeGuard([this, &popup] {
+      if (popup != nullptr && popup->property("visible").toBool()) {
+        QTest::keyClick(window_, Qt::Key_Escape);
+      }
+
+      client_->closeComponentPanel();
+      client_->loadConfiguration({}, {}, {});
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    writeTestFile(path, R"(
+      local t=require('telar');local ui=t.ui
+      return {api_version=2,client={bars={bottom={left=t.bar.static({
+        ui.group({on_click=t.action.open_panel('target'),priority=1,ui.label(string.rep('Hidden keyboard action ',80))}),
+        ui.label({text=string.rep('Overflow pressure ',80),priority=90}),
+      }),center=t.bar.tabs(),right=t.bar.static(ui.label('Right'))}},
+        panels={target=t.panel({title='Overflow keyboard target',render=function()return ui.text('Hidden keyboard action activated')end})},
+      }}
+    )");
+    client_->loadConfiguration(path, {}, {});
+    QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+    const auto controls = [this] {
+      auto items = test::visualItems(*window_->contentItem(), QStringLiteral("componentOverflow"));
+      items.removeIf([](const QQuickItem *item) {
+        return !item->isVisible();
+      });
+
+      return items;
+    };
+    QTRY_COMPARE_WITH_TIMEOUT(controls().size(), 1, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    auto *chip = controls().front();
+    QQmlExpression expression{QQmlEngine::contextForObject(chip), chip, QStringLiteral("overflowPopup")};
+    popup = expression.evaluate().value<QObject *>();
+    QVERIFY2(!expression.hasError(), qPrintable(expression.error().toString()));
+    QVERIFY(popup != nullptr);
+    chip->forceActiveFocus(Qt::TabFocusReason);
+    QTest::keyClick(window_, Qt::Key_Space);
+    QTRY_VERIFY_WITH_TIMEOUT(popup->property("visible").toBool(), runtime_wait_ms);
+    const auto caption = QStringLiteral("Hidden keyboard action ").repeated(80);
+    QTRY_VERIFY_WITH_TIMEOUT(componentGroup(caption) != nullptr, runtime_wait_ms);
+    auto *close = popupCloseButton(*popup);
+    QVERIFY(close != nullptr);
+    close->forceActiveFocus(Qt::TabFocusReason);
+    QTest::keyClick(window_, Qt::Key_Tab);
+    QTRY_VERIFY_WITH_TIMEOUT(componentGroup(caption)->hasActiveFocus(), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Return);
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    QCOMPARE(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Overflow keyboard target"));
+    QTRY_VERIFY_WITH_TIMEOUT(!popup->property("visible").toBool(), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Escape);
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+    chip->forceActiveFocus(Qt::TabFocusReason);
+    QTest::keyClick(window_, Qt::Key_Space);
+    QTRY_VERIFY_WITH_TIMEOUT(popup->property("visible").toBool(), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Escape);
+    QTRY_VERIFY_WITH_TIMEOUT(!popup->property("visible").toBool(), runtime_wait_ms);
+    chip->forceActiveFocus(Qt::TabFocusReason);
+    QTest::keyClick(window_, Qt::Key_Escape);
+    QTRY_VERIFY_WITH_TIMEOUT(terminalIn(window_->contentItem()) != nullptr && terminalIn(window_->contentItem())->hasActiveFocus(), runtime_wait_ms);
+    QCOMPARE(client_->error(), QString{});
+  }
+
   Q_SLOT void configuredBuiltinPriority() {
     const auto original_size = window_->size();
     const auto cleanup = qScopeGuard([this, original_size] {
@@ -4631,6 +4794,7 @@ return {api_version=2, client={keybindings={
       if (popup && popup->property("visible").toBool()) {
         QTest::keyClick(window_, Qt::Key_Escape);
       }
+
       client_->closeComponentPanel();
       client_->loadConfiguration({}, {}, {});
     });
@@ -4708,6 +4872,7 @@ return {api_version=2, client={keybindings={
       if (popup && popup->property("visible").toBool()) {
         QTest::keyClick(window_, Qt::Key_Escape);
       }
+
       client_->closeComponentPanel();
       client_->loadConfiguration({}, {}, {});
     });
@@ -5999,13 +6164,83 @@ return {api_version=2, client={keybindings={
     QCOMPARE(simple_meter->height(), simple_meter_height * ratio);
   }
 
-  [[nodiscard]] QQuickItem *componentPanelCloseButton() const {
-    const auto *popup = window_->findChild<QObject *>(QStringLiteral("configuredPanel"));
-    if (popup == nullptr) {
-      return nullptr;
+  void verifyGroupTabFocusTransitions() {
+    const auto tabs = client_->tabs()->rowCount();
+    const auto pane = firstPane()->id;
+    const auto cleanup = qScopeGuard([this, tabs] {
+      closeExtraTabs(tabs);
+    });
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto *tab = tabPill(QString::number(firstPane()->location.tab_id));
+    QVERIFY(tab != nullptr);
+    QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, tab->mapToScene(tab->boundingRect().center()).toPoint());
+    QTRY_VERIFY_WITH_TIMEOUT(terminalIn(window_->contentItem()) != nullptr && terminalIn(window_->contentItem())->hasActiveFocus(), runtime_wait_ms);
+    auto *group = componentGroup(QStringLiteral("First keyboard group"));
+    QVERIFY(group != nullptr);
+    group->forceActiveFocus(Qt::TabFocusReason);
+    const auto control = platform::usesCommandKey() ? Qt::MetaModifier : Qt::ControlModifier;
+    QTest::keyClick(window_, Qt::Key_B, control);
+    QVERIFY(client_->prefixPending());
+    QTest::keyClick(window_, Qt::Key_C);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), tabs + 1, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != pane, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(terminalIn(window_->contentItem()) != nullptr && terminalIn(window_->contentItem())->hasActiveFocus(), runtime_wait_ms);
+    client_->execute(Application::Action::close_tab);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rowCount(), tabs, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id == pane, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(terminalIn(window_->contentItem()) != nullptr && terminalIn(window_->contentItem())->hasActiveFocus(), runtime_wait_ms);
+  }
+
+  void verifyGroupPaneHeaderFocus() {
+    QCOMPARE(client_->panes()->rowCount(), 1);
+    std::optional<std::uint64_t> created;
+    const auto cleanup = qScopeGuard([this, &created] {
+      if (created.has_value() && client_->panes()->rowCount() > 1) {
+        client_->execute(Application::Action::close_pane, QString::number(*created));
+        static_cast<void>(test::waitForGuiCondition([this] {
+          return client_->panes()->rowCount() == 1;
+        },
+                                                    runtime_wait_ms));
+      }
+    });
+    client_->execute(Application::Action::split_horizontal);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
+    created = client_->panes()->data(client_->panes()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString().toULongLong();
+    const auto focused = [this, &created] {
+      const auto *item = qobject_cast<TerminalItem *>(window_->activeFocusItem());
+
+      return item != nullptr && item->paneIdentity() == *created;
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(focused(), runtime_wait_ms);
+    const QPointer<TerminalItem> target{qobject_cast<TerminalItem *>(window_->activeFocusItem())};
+    auto *group = componentGroup(QStringLiteral("First keyboard group"));
+    QVERIFY(group != nullptr);
+    group->forceActiveFocus(Qt::TabFocusReason);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto labels = test::visualItems(*target->parentItem(), QStringLiteral("paneProgram"));
+    QCOMPARE(labels.size(), 1);
+    const auto *label = labels.front();
+    QVERIFY(label->isVisible() && label->width() > 0);
+    QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, label->mapToScene(label->boundingRect().center()).toPoint());
+    QTRY_VERIFY_WITH_TIMEOUT(target != nullptr && target->hasActiveFocus(), runtime_wait_ms);
+    client_->execute(Application::Action::close_pane, QString::number(*created));
+    QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 1, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(terminalIn(window_->contentItem()) != nullptr && terminalIn(window_->contentItem())->hasActiveFocus(), runtime_wait_ms);
+  }
+
+  [[nodiscard]] QQuickItem *componentGroup(const QString &caption) const {
+    auto *label = componentItem(QStringLiteral("label"), caption);
+    for (auto *item = label; item != nullptr; item = item->parentItem()) {
+      if (item->property("node").toMap().value(QStringLiteral("kind")).toString() == QStringLiteral("group")) {
+        return item;
+      }
     }
 
-    for (auto *item : popup->findChildren<QQuickItem *>()) {
+    return nullptr;
+  }
+
+  [[nodiscard]] static QQuickItem *popupCloseButton(const QObject &popup) {
+    for (auto *item : popup.findChildren<QQuickItem *>()) {
       if (item->inherits("QQuickAbstractButton") && item->property("text").toString() == QStringLiteral("×")) {
         return item;
       }
@@ -6014,9 +6249,16 @@ return {api_version=2, client={keybindings={
     return nullptr;
   }
 
+  [[nodiscard]] QQuickItem *componentPanelCloseButton() const {
+    const auto *popup = window_->findChild<QObject *>(QStringLiteral("configuredPanel"));
+
+    return popup != nullptr ? popupCloseButton(*popup) : nullptr;
+  }
+
   [[nodiscard]] bool componentButtonFocused(const QString &caption) const {
     const auto *node = componentItem(QStringLiteral("button"), caption);
     const auto *focus = window_->activeFocusItem();
+
     return node != nullptr && focus != nullptr && (node == focus || node->isAncestorOf(focus));
   }
 

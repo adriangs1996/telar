@@ -1,7 +1,34 @@
 # Personal: C++ daily adoption and complete parity — OPEN
 
 
-Newest usable candidate: **Preview19**, already offered. GUI SHA256
+Newest offered candidate: **Preview21** (2026-11-02),
+`services/gui-cpp/out-adoption/Telar C++ Preview 21.app`.
+`open -n "services/gui-cpp/out-adoption/Telar C++ Preview 21.app"`.
+Bundled SHA `ba035451933ac0a078c24a912f365d3247616d65900636d91761114898bfc93a`;
+raw `c7276be0a8c3aa72670469229640e63a2a39a6a4510d0799802a074359157063`.
+All1739 hashes/121 Mach-O/signatures and eight exact schema87/88/daily scopes pass,
+including group/More keyboard and standalone Escape. Eleven packaged/four native
+captures inspected. Both SDKs Release38/recorded12, broad2/editor2/format2/module
+lint pass; all9 hashes match. LinuxASAN38 exit0; MacASAN38 assertions pass/exit1
+for846129B4486alloc, no address/UB or suppression; gate FAILED/open. Current rebuilt
+domain4 Release/ASAN pass per SDK, prior native192B4alloc failure not proved resolved.
+Preview20 preserved/not offered: stronger exact Escape actor fails there, passes21.
+Groups/More now share keyboard actions and terminal focus follows lifecycle rather
+than geometry updates. History footer tests own private tabs; palette checks exact
+relative counts; no search/assertion/deadline weakening. HISTFILE is private.
+A private copied Mac helper fixes stale native-window acknowledgement when AeroSpace
+is unavailable; same binary fails old helper and passes copied helper. All original
+helpers/failures retained. Linux export1 selected old directories accidentally;
+export2 is the actual final current native/quality evidence. Raw scope:
+`out-dependencies/component-group-keyboard-1`; final current hashes4, nativeMac5,
+Linux native3/quality2, Mac broad4/editor4/QML4/domain2, exact_candidate_21.
+Next: continue PARITY functional/native ownership and native leak/stability work;
+full fitting/accessibility, paired visuals/performance and Zig retirement remain
+OPEN. Do not end at the local checkpoint. Physical sleep still untried; don't ask
+again or suspend host. Preview8/user runtime/config/install remain preserved.
+
+
+Preserved candidate: **Preview19**, already offered. GUI SHA256
 `7dbd630dcdff3b0ef9dca2303588d01625b3a587c3bc4ac42dd2845a94ea4249`;
 raw `be95e9bf79deed0a5af86c3e0e4a400a2cc54632a599f76a87e6c301bf4c9ced`.
 `open -n "services/gui-cpp/out-adoption/Telar C++ Preview 19.app"`.
@@ -135,9 +162,84 @@ packaging/smoke jobs remain active. Raw `out-dependencies/component-shared-overf
 The shared-overflow report/archive/verifier and local commit are complete. CONTINUE
 actual PARITY; do not repeat completed Preview12 qualification without new changes.
 
+## Current WIP after local checkpoint4b8031aa4 — configured-group keyboard
+
+Checkpoint4b8031aa4 commits Preview19/panel keyboard source and669 frozen entries.
+Its verifier passes; use default historical verification after these WIP edits.
+No Preview20 yet. Continue this active daily keyboard scope, not final-goal completion.
+
+Raw out-dependencies/component-group-keyboard-1. Nine portable WIP files:
+CMakeLists.txt; NEW qt/KeyboardAction.qml; ComponentNode.qml; ComponentOverflow.qml;
+ComponentTree.qml; FormButton.qml; PaneArea.qml; tab_drag_controller.cpp; tests/
+quick_test.cpp. Main.qml is restored EXACTLY to committed4b source. No runtime or
+own-Zig changes. FormButton reuses KeyboardAction instead of duplicate handlers;
+nonbutton clickable nodes get Tab/key actions plus focus outline. Mouse action
+stays on release; mouse press now focuses the actionable group, matching original
+Dispatcher.pointer/State.chrome. Both More controls paint keyboard focus.
+
+Directed copied donor-slot negative proves missing Tab (2pass1fail,34380ms).
+Initial shared-base Linux1 reaches Tab/actions but sidebar steals group focus
+(5pass1fail). Generic Main.activeFocusItem-derived cover then passes actions but
+BOTH SDKs reject its binding loop (6pass1fail). Keep failed evidence/warning gates.
+That approach is REMOVED. PaneArea now observes a scalar modelFocused edge and
+component completion instead of rebinding focus on every geometry record. It
+clears deselected terminal focus; model selection/completion explicitly restores
+selected terminal, with dialog/custom-popup guards. Popup closure queues vacant
+recovery after Qt's restoration. Explicit pane-header/padding press restores its
+terminal; explicit captured-tab selection restores terminal even for current tab.
+
+New tests: configuredGroupKeyboardActions, configuredOverflowKeyboardActions;
+helpers verifyGroupTabFocusTransitions and verifyGroupPaneHeaderFocus, plus shared
+componentGroup/popupCloseButton. Preserve original panel/ownership/URL tests.
+They cover actual mouse, Tab, Enter/Space, modifiers/repeat, sidebar-retained focus,
+More->hidden group->panel->Escape/reuse, terminal click, current-tab click, prefix
+new-tab/close returning input, split/current-header/close returning input. Pointer
+checks wait actual synchronized frame after geometry changes (initial phase3
+click was unpresented; do not weaken hit guards). Phase4 then really fails current
+Tab focus; one restoreTerminalFocus call in selectCapturedTab fixes it.
+Mac5 and Linux5 pass7/0. Mac6 adds header/split and owned HISTFILE for native PTY
+fixtures, passes7/0. Native shell history now stays in directory_/shell-history.
+
+CURRENT BLOCKER phase7: added selected-terminal vacant recovery on Window's
+activeFocusItemChanged (queued), and real Lua reload while a group is focused.
+After reload group label is gone, but terminal fails to regain focus at4519
+(Mac6pass1fail,35875ms, no QML warnings). All other actions/header/tab tests pass.
+Likely retained/reused noninteractive node; VERIFY before assuming. Copied private
+retirement_trace_mac_1.py session42700 runs only the group case, logging live
+owner/class/visibility/enabled/interactive/node-kind/Lua-generation/parent/window
+at GROUP_RETIRED_OWNER, no production instrumentation. Check its result and fix
+source ownership retirement without breaking disabled FormButton focus behavior.
+
+Latest normal host build9 succeeds, raw GUI changed for WIP; packaged19 untouched.
+Mac native labels component-group-keyboard-fixed-mac-1 through7 (no1 host run),
+raw logs under measurements/local. Root private boards count954 unchanged.
+Mac broad/editor/QML lint and ASAN/recorded builds still TODO after functional fix.
+New QML module registration made Mac CMake configure ~8min and171 tasks; current
+normal9 is cached again. ASAN9/recorded17 still need that reconfigure. Independent
+Mac builds may run concurrently after source stable; guest4GB heavy jobs SERIAL.
+No lint settings/suppressions/deadlines/assertions changed. QMLformat applied to
+new KeyboardAction, PaneArea, FormButton (old Accessible handler now braced) and
+changed C++ ranges. Artifacts qml-format-applied-1/cpp-format-applied-1.
+
+Linux mirror CURRENT phase5: focused7/0, but BEFORE host phase6/7 header/HISTFILE/
+reload/final-format edits. Merge new hashes in linux-source-transfer-1..4.json
+(each stdout is JSON rows) to guard its current files, then write ONLY changed
+bytes to avoid reconfiguring CMake unnecessarily. New base exists already. Main
+matches committed4b. CMake matches current (one registered KeyboardAction file).
+VM normal out-llvm23 ready; ASAN out-clipboard-asan/recorded17 still old sources.
+No active group native/build jobs other than noted diagnostic; protected4 unchanged.
+
+NEXT finish group reload ownership, sync/qualify both SDKs (broader previous29+
+new2 =31; recorded previous10+new2 =12 if using same prior8 slots). Include focus/
+terminal/tabs/splits/history/clipboard/lifecycle affected by PaneArea. Broad2 C++
+TUs/actual editor3 files plus QML module/range formatting BOTH SDKs. Do not stop
+at another checkpoint. Then separately package20 from normal9, exact fresh-state
+flows with corrected GUI-only actors/bundled Qt rpaths, freeze/report/review/local
+commit; keep19/8/user config/runtime and all final gates open.
+
 ## Completed scoped checkpoint: panel keyboard/lifetime and Preview19
 
-Source work is ready for final review/local commit with its report/archive/verifier
+Local commit4b8031aa4 contains source and its report/archive/verifier
 measurements/component-panel-keyboard. The GUI is separately packaged and offered;
 no Preview18/8 bundle changes. Raw out-dependencies/component-panel-keyboard-1.
 

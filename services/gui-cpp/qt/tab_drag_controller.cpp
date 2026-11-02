@@ -52,6 +52,7 @@ void Application::selectCapturedTab() {
         return tab->location.tab_id == id && tab->location.workspace.kind == surface.workspace.kind && tab->location.workspace.id == surface.workspace.id;
       })) {
     execute(Action::select_tab, QString::number(id));
+    restoreTerminalFocus();
   }
 }
 

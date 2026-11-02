@@ -42,7 +42,7 @@ Item {
         Accessible.name: "Show " + root.entries.length + " hidden components"
         contentItem: Text {
             text: "+" + root.entries.length
-            color: chip.hovered || overflowPopup.visible ? root.colors.text : root.colors.subtext0
+            color: chip.hovered || chip.activeFocus || overflowPopup.visible ? root.colors.text : root.colors.subtext0
             font.family: "IBM Plex Sans"
             font.pixelSize: root.typography.small
             textFormat: Text.PlainText
@@ -51,8 +51,12 @@ Item {
             verticalAlignment: Text.AlignVCenter
         }
         background: NativeRoundedRectangle {
-            color: chip.hovered || overflowPopup.visible ? root.colors.surface1 : root.colors.surface0
+            color: chip.hovered || chip.activeFocus || overflowPopup.visible ? root.colors.surface1 : root.colors.surface0
             radius: 4 * root.ratio
+        }
+        Keys.onEscapePressed: event => {
+            chip.focus = false;
+            event.accepted = false;
         }
         onClicked: overflowPopup.open()
     }

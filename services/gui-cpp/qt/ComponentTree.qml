@@ -97,8 +97,12 @@ Item {
                 verticalAlignment: Text.AlignVCenter
             }
             background: Rectangle {
-                color: overflow.hovered ? root.colors.surface1 : "transparent"
+                color: overflow.hovered || overflow.activeFocus ? root.colors.surface1 : "transparent"
                 radius: 4 * root.ratio
+            }
+            Keys.onEscapePressed: event => {
+                overflow.focus = false;
+                event.accepted = false;
             }
             onClicked: overflowPopup.open()
         }

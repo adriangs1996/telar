@@ -4,7 +4,7 @@ import QtQuick
 import QtQuick.Controls
 import Telar.Gui
 
-Item {
+KeyboardAction {
     id: root
 
     required property var controller
@@ -25,6 +25,7 @@ Item {
     readonly property bool hasIcon: node.glyph.length > 0 || node.providerMark !== 0 || node.telarMark
     readonly property bool hasTooltip: (surface.nodes ?? []).some(child => child.parent === node.index && child.tooltip)
     readonly property real compactWidthDelta: node.kind === "meter" ? trackWidth + gap : 0
+    readonly property real focusRadius: 4 * ratio
     readonly property real unreducedWidth: node.kind === "group" ? (visual.item?.unreducedWidth ?? 0) : implicitWidth + (compact ? compactWidthDelta : 0)
     readonly property var fitNodes: [{
         index: node.index, parent: node.parent, priority: node.priority,
@@ -37,6 +38,8 @@ Item {
     implicitWidth: visual.item?.implicitWidth ?? 0
     implicitHeight: visual.item?.implicitHeight ?? rowHeight
     opacity: node.faint ? 0.6 : 1
+    interactive: node.clickable && node.kind !== "button"
+    onActivated: root.activate()
 
     function activate() {
         controller.activateComponent(surface.source, node.index, surface.generation, surface.revision, mapToItem(null, width / 2, 0));
@@ -68,10 +71,23 @@ Item {
         }
     }
 
+    Loader {
+        anchors.fill: parent
+        active: root.interactive && root.activeFocus
+        sourceComponent: NativeRoundedRectangle {
+            objectName: "componentKeyboardFocus"
+            color: "transparent"
+            borderColor: root.colors.accent
+            borderWidth: 1 / Screen.devicePixelRatio
+            radius: root.focusRadius
+        }
+    }
+
     MouseArea {
         anchors.fill: parent
         enabled: root.node.clickable && root.node.kind !== "button"
         cursorShape: Qt.PointingHandCursor
+        onPressed: root.forceActiveFocus(Qt.MouseFocusReason)
         onClicked: root.activate()
     }
 
