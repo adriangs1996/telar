@@ -4,7 +4,10 @@ const std = @import("std");
 const objc = @import("objc");
 const Limits = @import("../ClipboardLimits.zig");
 const c = @cImport({
-    @cInclude("CoreFoundation/CoreFoundation.h");
+    @cInclude("CoreFoundation/CFData.h");
+    @cInclude("CoreFoundation/CFDictionary.h");
+    @cInclude("CoreFoundation/CFNumber.h");
+    @cInclude("CoreFoundation/CFString.h");
     @cInclude("sys/stat.h");
     @cInclude("fcntl.h");
     @cInclude("unistd.h");
