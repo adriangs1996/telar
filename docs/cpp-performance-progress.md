@@ -1643,9 +1643,29 @@ The explicit GUI CPU interval lasts 6.156 s, with 0.746 s user plus 0.598 s syst
 CPU. It contains 688 successful probe readback-buffer creations requesting
 176,128 bytes. Its actual boundaries differ from the six-second content window;
 these counts are not an application/framework allocation census. Probe overhead
-still needs qualification. A separate diagnostic sequence now runs coverage,
-the rejected final-source candidate and independent original Zig with this same
-probe (`/tmp/telar-perf-phase-stacks-01`); it cannot grant performance acceptance.
+still needs qualification. The separate diagnostic sequence for coverage, the
+rejected final-source candidate and independent original Zig has completed with
+this same probe (`/tmp/telar-perf-phase-stacks-01`). Coverage/final content qualifies
+at 111.912/112.156 changes/s, but both references change phase; neither qualifies
+active refresh. Zig's producer receipt ends 0.994 ms before the native window and
+fails the unchanged coverage gate, so this sequence cannot compare all three.
+
+The controller shut down the owned runtime immediately after GUI exit. Producer
+receipts are published every half second, so a fast GUI exit could leave the last
+published checkpoint just short of the observation boundary. The isolated
+`out-perf/native-cadence-phase-complete` controller waits up to three seconds for
+a checkpoint covering the native window before runtime cleanup. It does not
+change the producer, offered-rate tolerances, native probe binary or presentation
+criteria. A delayed-checkpoint test proves the wait occurs; a timeout test proves
+an incomplete receipt still fails. All twelve completion/clock/model tests pass.
+
+The separate corrected Zig diagnostic in `/tmp/telar-perf-phase-complete-zig-01`
+qualifies its producer, pixels and fixed 120.0006 Hz reference. It observes 694
+content changes, 115.661 changes/s by first/last timestamps, and 26 intervals that
+span two refresh opportunities; maximum gap is 16.667 ms. This does not meet a
+sustained 120-content-FPS objective. It is a single diagnostic run with probe
+overhead still open, not a paired C++/Zig acceptance result. The original failed
+run is retained and is not relabeled successful.
 
 The legacy `gui_frame_rate` tool's documentation now explicitly identifies its
 historically named presentation counters as frame-completion callbacks. Those
