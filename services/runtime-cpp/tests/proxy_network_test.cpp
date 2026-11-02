@@ -3,6 +3,7 @@
 #include "proxy/port_memory.hpp"
 #include <filesystem>
 #include <fstream>
+#include <cstring>
 
 using namespace telar::runtime;
 

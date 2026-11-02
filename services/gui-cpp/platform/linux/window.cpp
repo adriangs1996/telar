@@ -52,6 +52,8 @@ WaylandSurfaceLifetime &surfaceLifetime(QWindow &window) {
 
 }
 
+void configureKeyRepeat() {}
+
 void configureGraphics() {
   if (!qEnvironmentVariableIsSet("QSG_RHI_BACKEND") && !qEnvironmentVariableIsSet("QT_QUICK_BACKEND")) {
     QQuickWindow::setGraphicsApi(QSGRendererInterface::Vulkan);

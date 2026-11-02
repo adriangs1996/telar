@@ -15,7 +15,13 @@ struct BlockingNameResolver {
   static ResolutionSummary resolve(const char *, std::span<NetworkAddress> addresses) noexcept {
     calls.fetch_add(1);
     permits.acquire();
-    sockaddr_in address{.sin_len = sizeof(sockaddr_in), .sin_family = AF_INET, .sin_port = htons(443), .sin_addr = {htonl(INADDR_LOOPBACK)}, .sin_zero = {}};
+    sockaddr_in address{};
+#if defined(__APPLE__)
+    address.sin_len = sizeof(address);
+#endif
+    address.sin_family = AF_INET;
+    address.sin_port = htons(443);
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     for (auto &destination : addresses) {
       destination = *NetworkAddress::copy(reinterpret_cast<const sockaddr *>(&address), sizeof(address));
     }

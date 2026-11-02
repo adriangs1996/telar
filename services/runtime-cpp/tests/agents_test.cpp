@@ -76,7 +76,7 @@ static void testScreenEvidence(SystemAllocator &memory) {
 
 static void testReportsAndIdentity(SystemAllocator &memory) {
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/tmp/unused-agent-test.sock"}};
   WorkspaceService workspaces{memory, model, panes};
   ClientLayouts layouts{memory, model};
@@ -212,7 +212,7 @@ static void testProgressAndPromptBudget() {
 
 static void testReporterCredentials(SystemAllocator &memory) {
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/tmp/unused-credentials-test.sock"}};
   WorkspaceService workspaces{memory, model, panes};
   ClientLayouts layouts{memory, model};
@@ -331,7 +331,7 @@ static void testEvidencePrecedence() {
 
 static void testDescriptionQueue(SystemAllocator &memory) {
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/tmp/unused-description-test.sock"}};
   WorkspaceService workspaces{memory, model, panes};
   ClientLayouts layouts{memory, model};

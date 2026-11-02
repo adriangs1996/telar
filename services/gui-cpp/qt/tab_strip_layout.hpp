@@ -101,6 +101,7 @@ private:
   [[nodiscard]] TabStripGeometry::Plan measureTabs(QList<QVariantMap> &records, std::span<TabStripGeometry::Measure> sizes, const TabStripGeometry::Room &room);
 
   QPointer<WindowAnimationClock> clock_;
+  QMetaObject::Connection frame_connection_;
   TabMotions motions_;
   std::optional<WorkspaceLocation> workspace_;
   std::uint64_t machine_view_ = 0;

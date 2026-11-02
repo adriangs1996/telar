@@ -239,6 +239,48 @@ private:
     QVERIFY_THROWS_EXCEPTION(std::runtime_error, static_cast<void>(FontResolver::resolve(memory, configuration, 1)));
   }
 
+  Q_SLOT static void loadsBundledFormaFromResources() {
+    const auto expected = loadFontBytes(QStringLiteral(":/telar/fonts/TelarForma-Regular.ttf"));
+    QVERIFY(QFontDatabase::hasFamily(QStringLiteral("Telar Forma")));
+
+    for (const auto *family : {"Telar Forma", "tElAr FoRmA"}) {
+      FontConfiguration configuration;
+      configuration.family.assign(family);
+
+      for (const auto *style : {"", "Regular", "rEgUlAr"}) {
+        configuration.style.assign(style);
+        const auto data = loadFontData(configuration);
+        QCOMPARE(data.bytes, expected);
+
+        fonts::Face face{telar::byteView({data.bytes.constData(), static_cast<std::size_t>(data.bytes.size())}), data.match};
+        QCOMPARE(face.family(), std::string_view{"Telar Forma"});
+        QCOMPARE(face.style(), std::string_view{"Regular"});
+        QVERIFY(face.fixedPitch());
+        QVERIFY(fonts::FontCoverage::covers(face, "JSON July IJj J1l @J áéíóú ñ"));
+
+        const auto resolved = FontResolver::resolve(face, configuration, 1);
+        const auto raw = QRawFont::fromFont(resolved.font.faces.front());
+        QCOMPARE(raw.familyName(), QStringLiteral("Telar Forma"));
+        QVERIFY(resolved.font.fixed_pitch);
+        QVERIFY(resolved.font.cell.width() > 0);
+        QVERIFY(resolved.font.cell.height() > 0);
+      }
+    }
+  }
+
+  Q_SLOT static void rejectsUnavailableBundledFormaStyles() {
+    FontConfiguration configuration;
+    configuration.family.assign("Telar Forma");
+    configuration.style.assign("SemiBold");
+
+    try {
+      static_cast<void>(loadFontData(configuration));
+      QFAIL("A missing bundled style must not depend on installed fonts");
+    } catch (const std::runtime_error &error) {
+      QCOMPARE(QString::fromUtf8(error.what()), QStringLiteral("FontStyleNotFound"));
+    }
+  }
+
   Q_SLOT static void appliesVariableMetricsAndNamedInstances() {
     const FontConfiguration configuration;
     QFile file{QStringLiteral(":/telar/test-fonts/metrics-variable.ttf")};

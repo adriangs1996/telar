@@ -542,7 +542,7 @@ void orderedResizeFailure() {
   for (bool start_worker : {false, true}) {
     SystemAllocator memory;
     RuntimeModel model{memory};
-    Kqueue poller;
+    NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
     PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/control-resize-failure.sock"}};
     LimitService limits{model};
     MediaService service{model, panes, poller, limits};
@@ -582,7 +582,7 @@ void semanticFailureDuringResume() {
   SynchronizedAllocator memory{budget};
   {
     RuntimeModel model{memory};
-    Kqueue poller;
+    NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
     PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/control-semantic-failure.sock"}};
     const std::array<std::string_view, 1> arguments{"/bin/cat"};
     const Launch launch{.cwd = "/tmp", .arguments = arguments};

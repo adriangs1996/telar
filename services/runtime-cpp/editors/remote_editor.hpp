@@ -9,7 +9,6 @@
 #include <charconv>
 #include <dirent.h>
 #include <fcntl.h>
-#include <libproc.h>
 #include <sys/stat.h>
 
 namespace telar::runtime {
@@ -325,12 +324,8 @@ private:
       if (inspector_.identity(target.process.pid) != target.process) {
         continue;
       }
-      proc_bsdinfo process{};
-      if (::proc_pidinfo(target.process.pid, PROC_PIDTBSDINFO, 0, &process, sizeof(process)) != sizeof(process)) {
-        continue;
-      }
-      std::array<char, 128> terminal{};
-      if (::devname_r(process.e_tdev, S_IFCHR, terminal.data(), terminal.size()) == nullptr) {
+      const auto terminal = inspector_.terminal(target.process.pid);
+      if (terminal.view().empty()) {
         continue;
       }
       expression_ = "(if (and (= (emacs-pid) ";
@@ -338,7 +333,7 @@ private:
       expression_ += ") (equal (system-name) ";
       quote(host.data(), true);
       expression_ += ")) (let ((f (catch 'found (dolist (f (frame-list)) (when (and (not (display-graphic-p f)) (equal (terminal-name (frame-terminal f)) (concat \"/dev/\" ";
-      quote(terminal.data(), true);
+      quote(terminal.view().substr(sizeof("/dev/") - 1), true);
       expression_ += "))) (throw 'found f)))))) (if f (with-selected-frame f (find-file (concat \"/:\" ";
       quote(request_->path, true);
       expression_ += "))";

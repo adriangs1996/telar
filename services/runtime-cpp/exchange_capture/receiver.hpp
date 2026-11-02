@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../platform/thread_name.hpp"
+
 #include "producer.hpp"
 #include <pthread.h>
 
@@ -18,7 +20,7 @@ public:
 
   Result observe(const Request &request) noexcept {
     if (!named_) {
-      ::pthread_setname_np("telar.capture");
+      setThreadName("telar.capture");
       named_ = true;
     }
 

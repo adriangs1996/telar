@@ -2,11 +2,16 @@
 
 #include "../memory/allocation_statistics.hpp"
 #include "line.hpp"
+#if defined(__APPLE__)
 #include <mach/mach.h>
+#else
+#include "../platform/linux/proc_file.hpp"
+#endif
 
 namespace telar::runtime::diagnostics {
 
 inline std::uint64_t residentBytes() noexcept {
+#if defined(__APPLE__)
   task_vm_info_data_t information{};
   mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
   if (::task_info(::mach_task_self(), TASK_VM_INFO, reinterpret_cast<task_info_t>(&information), &count) != KERN_SUCCESS) {
@@ -14,6 +19,23 @@ inline std::uint64_t residentBytes() noexcept {
   }
 
   return information.resident_size;
+#else
+  std::array<char, 256> buffer;
+  const auto bytes = ProcDirectory{::getpid()}.read("statm", buffer);
+  if (!bytes) {
+    return 0;
+  }
+  const auto separator = bytes->find(' ');
+  if (separator == std::string_view::npos) {
+    return 0;
+  }
+
+  std::uint64_t pages = 0;
+  const auto resident = bytes->substr(separator + 1);
+  const auto parsed = std::from_chars(resident.data(), resident.data() + resident.size(), pages);
+  const auto page_size = ::sysconf(_SC_PAGESIZE);
+  return parsed.ec == std::errc{} && page_size > 0 ? pages * static_cast<std::uint64_t>(page_size) : 0;
+#endif
 }
 
 inline void writeMemorySample(Line &line, const AllocationStatistics &statistics) {

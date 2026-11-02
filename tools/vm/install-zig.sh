@@ -1,23 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-version=0.16.0
-case $(uname -m) in
-    aarch64) checksum=ea4b09bfb22ec6f6c6ceac57ab63efb6b46e17ab08d21f69f3a48b38e1534f17 ;;
-    x86_64) checksum=70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00 ;;
-    *) echo 'Unsupported CPU architecture.' >&2; exit 1 ;;
-esac
+version=${1:-0.16.0}
 
 package="zig-$(uname -m)-linux-$version"
 prefix="$HOME/.local/opt/$package"
 mkdir -p "$HOME/.local/opt" "$HOME/.local/bin"
 if [[ ! -x "$prefix/zig" ]] || [[ $("$prefix/zig" version) != "$version" ]]; then
-    temporary=$(mktemp -d)
-    trap 'rm -rf "$temporary"' EXIT
-    curl --fail --location --retry 3 --output "$temporary/zig.tar.xz" \
-        "https://ziglang.org/download/$version/$package.tar.xz"
-    echo "$checksum  $temporary/zig.tar.xz" | sha256sum --check
-    tar -xJf "$temporary/zig.tar.xz" -C "$HOME/.local/opt"
+    installer="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/packaging/release/install-zig.sh"
+    "$installer" "$prefix" "$version"
 fi
 
 ln -sfn "$prefix/zig" "$HOME/.local/bin/zig"

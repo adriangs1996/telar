@@ -1,4 +1,6 @@
 dev_dir := justfile_directory() / ".dev"
+release_dev_dir := dev_dir / "release"
+release_build_dir := "out-dev-release"
 runtime_dir := justfile_directory() / "services/runtime-cpp"
 gui_dir := justfile_directory() / "services/gui-cpp"
 renderer_dir := justfile_directory() / "tools/diagram-renderer"
@@ -23,37 +25,38 @@ vt zig="zig":
 # Build the runtime and the GUI.
 build: runtime-build gui-build
 
-# Build the runtime at services/runtime-cpp/out/telar-runtime.
+# Build the runtime, using out/Debug by default.
 [working-directory: "services/runtime-cpp"]
-runtime-build: (runtime-configure "out" "Debug")
-    cmake --build out --target telar-runtime
+runtime-build directory="out" build_type="Debug": (runtime-configure directory build_type)
+    cmake --build "{{ directory }}" --target telar-runtime
 
-# Build the GUI at services/gui-cpp/out/telar-gui.
+# Build the GUI, using out/Debug by default.
 [working-directory: "services/gui-cpp"]
-gui-build: (gui-configure "out" "Debug")
-    cmake --build out --target telar-gui telar-gui-command
+gui-build directory="out" build_type="Debug": (gui-configure directory build_type)
+    cmake --build "{{ directory }}" --target telar-gui telar-gui-command
 
 # Build the diagram renderer that the macOS bundle ships beside the runtime. It needs Cargo.
 renderer:
     cargo build --release --locked --manifest-path "{{ renderer_dir }}/Cargo.toml" --target-dir "{{ renderer_dir }}/target"
 
 # Build everything, start an isolated development runtime and open the GUI on it.
-app: dev-bin gui-build
-    #!/usr/bin/env bash
-    set -euo pipefail
-    export PATH="{{ dev_dir }}/bin:$PATH" TELAR_SOCKET="{{ dev_dir }}/runtime.sock" TELAR_HISTORY="{{ dev_dir }}/history.db"
-    export TELAR_DEVELOPMENT_CONFIG="{{ justfile_directory() }}/dev/config.lua"
-    telar server endpoint > /dev/null
-    exec "{{ gui }}"
+app: dev-bin gui-build (dev-app gui dev_dir)
+
+# Run optimized GUI/runtime builds with development config and their own socket/history.
+app-release: (dev-bin release_build_dir "Release" release_dev_dir) (gui-build release_build_dir "Release") (dev-app (gui_dir / release_build_dir / "telar-gui") release_dev_dir)
 
 # Build and run the runtime on the development socket. Extra arguments are passed to it.
 run *args: runtime-build
     mkdir -p -m 700 "{{ dev_dir }}"
     TELAR_DEVELOPMENT_CONFIG="{{ justfile_directory() }}/dev/config.lua" TELAR_SOCKET="{{ dev_dir }}/runtime.sock" TELAR_HISTORY="{{ dev_dir }}/history.db" "{{ runtime }}" {{ args }}
 
-# Stop only the development runtime.
+# Stop only the Debug development runtime.
 stop:
     TELAR_SOCKET="{{ dev_dir }}/runtime.sock" "{{ runtime }}" server stop
+
+# Stop only the Release development runtime, including its panes.
+stop-release:
+    TELAR_SOCKET="{{ release_dev_dir }}/runtime.sock" "{{ runtime_dir }}/{{ release_build_dir }}/telar-runtime" server stop
 
 # Build and run the runtime and GUI tests.
 test: runtime-test gui-test
@@ -126,9 +129,19 @@ ebnf-test *args:
     GTEST_COLOR=yes ctest --preset debug -V "$@"
 
 [private]
-dev-bin: runtime-build
-    mkdir -p -m 700 "{{ dev_dir }}" "{{ dev_dir }}/bin"
-    ln -sf "{{ runtime }}" "{{ dev_telar }}"
+dev-bin directory="out" build_type="Debug" state_dir=dev_dir: (runtime-build directory build_type)
+    mkdir -p -m 700 "{{ state_dir }}" "{{ state_dir }}/bin"
+    ln -sf "{{ runtime_dir }}/{{ directory }}/telar-runtime" "{{ state_dir }}/bin/telar"
+
+[private]
+dev-app binary state_dir:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="{{ state_dir }}/bin:$PATH" TELAR_SOCKET="{{ state_dir }}/runtime.sock" TELAR_HISTORY="{{ state_dir }}/history.db"
+    export TELAR_BIN_PATH="{{ state_dir }}/bin/telar" TELAR_SOCKET_PATH="$TELAR_SOCKET"
+    export TELAR_DEVELOPMENT_CONFIG="{{ justfile_directory() }}/dev/config.lua"
+    "{{ state_dir }}/bin/telar" server endpoint > /dev/null
+    exec "{{ binary }}"
 
 # The runtime targets macOS; Homebrew supplies its compiler and libraries.
 [private]
@@ -139,7 +152,7 @@ runtime-configure directory build_type *options:
 [private]
 [working-directory: "services/gui-cpp"]
 gui-configure directory build_type *options:
-    cmake -S . -B {{ directory }} -G Ninja -DCMAKE_BUILD_TYPE={{ build_type }} {{ gui_compilers }} -DGHOSTTY_VT_ROOT="{{ vt_prefix }}" {{ options }}
+    cmake -S . -B {{ directory }} -G Ninja -DCMAKE_BUILD_TYPE={{ build_type }} {{ gui_compilers }} -DGHOSTTY_VT_ROOT="{{ vt_prefix }}" -DTELAR_GUI_QT_BUILD_DIR="{{ justfile_directory() }}/.qt-cache" {{ options }}
 
 alias b := build
 alias r := run

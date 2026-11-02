@@ -20,6 +20,17 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def qt_installation(cache):
+    match = re.search(r'^TELAR_GUI_QT_PREFIX:INTERNAL=(.+)$', cache, re.M)
+    core = re.search(r'^Qt6Core_DIR:PATH=(.+)$', cache, re.M)
+    if match is None or core is None:
+        raise ValueError('configure the GUI with its managed Qt dependency before packaging')
+    prefix = Path(match.group(1)).resolve()
+    if not Path(core.group(1)).resolve().is_relative_to(prefix):
+        raise ValueError('the GUI Qt libraries do not belong to the managed Qt installation')
+    return prefix
+
+
 def add_search_path(binary, library):
     commands = subprocess.check_output(['/usr/bin/otool', '-l', str(binary)], text=True)
     paths = re.findall(r'\bpath (.+) \(offset \d+\)', commands)
@@ -80,8 +91,8 @@ def deploy_qml(base, build, resources, plugins, library, qtpaths):
     executables = []
     for directory in (resources / 'qml', plugins):
         for binary in directory.rglob('*.dylib'):
-            # Only staged copies change. Homebrew splits Qt into multiple prefixes;
-            # give macdeployqt one declared root for resolving their dependencies.
+            # Only staged copies change; resolve plugins against the same private
+            # Qt build as the GUI, never whichever Qt tools happen to be on PATH.
             add_search_path(binary, library)
             executables.append(f'-executable={binary}')
     return executables
@@ -94,8 +105,8 @@ def main():
     parser.add_argument('--build', type=Path, default=base / 'out')
     parser.add_argument('--runtime-prefix', type=Path, required=True)
     parser.add_argument('--output', type=Path, default=base / 'out-adoption' / 'Telar C++ Preview.app')
-    parser.add_argument('--macdeployqt', default='macdeployqt')
-    parser.add_argument('--qtpaths', default='qtpaths')
+    parser.add_argument('--macdeployqt', type=Path, help='Explicit deployment tool override')
+    parser.add_argument('--qtpaths', type=Path, help='Explicit Qt paths tool override')
     args = parser.parse_args()
     if sys.platform != 'darwin':
         parser.error('macOS packaging must run on macOS')
@@ -107,6 +118,18 @@ def main():
         parser.error('the GUI build must be Release')
     if output.exists() or output.is_symlink():
         parser.error('output already exists; choose a new candidate path')
+    try:
+        qt_prefix = qt_installation(cache)
+    except ValueError as error:
+        parser.error(str(error))
+    qtpaths = args.qtpaths or qt_prefix / 'bin/qtpaths'
+    macdeployqt = args.macdeployqt or qt_prefix / 'bin/macdeployqt'
+    for tool in (qtpaths, macdeployqt):
+        if not tool.is_file():
+            parser.error(f'missing managed Qt tool: {tool}')
+    qt_licenses = qt_prefix / 'share/licenses/qt'
+    if not qt_licenses.is_dir():
+        parser.error(f'missing managed Qt licenses: {qt_licenses}')
     binary = build / 'telar-gui'
     command_helper = build / 'telar-gui-command'
     runtime = prefix / 'bin' / 'telar'
@@ -135,7 +158,9 @@ def main():
                          (base / 'licenses', 'gui')):
         if source.is_dir():
             shutil.copytree(source, resources / 'licenses' / name)
+    shutil.copytree(qt_licenses, resources / 'licenses/qt')
     shutil.copy2(base / 'terminal/glyphs/LICENSE', resources / 'licenses/cell-glyphs.txt')
+    shutil.copy2(root / 'src/assets/JetBrainsMono-OFL.txt', resources / 'licenses/JetBrainsMono-OFL.txt')
     template = (root / 'packaging/macos/Info.plist.in').read_bytes().replace(b'@VERSION@', version.encode())
     info = plistlib.loads(template)
     info.update(CFBundleDisplayName='Telar C++ Preview', CFBundleName='Telar C++ Preview',
@@ -146,18 +171,15 @@ def main():
                '-I', base, base / 'tools/macos_launcher.cpp',
                base / 'platform/login_shell.cpp', '-o', macos / 'TelarPreview']
     run(command)
-    qt_core = re.search(r'^Qt6Core_DIR:PATH=(.+)$', cache, re.M)
-    if qt_core is None:
-        parser.error('cannot identify the Qt library prefix')
-    library = Path(qt_core.group(1)).parents[1]
-    executables = deploy_qml(base, build, resources, contents / 'PlugIns', library, args.qtpaths)
+    library = qt_prefix / 'lib'
+    executables = deploy_qml(base, build, resources, contents / 'PlugIns', library, qtpaths)
     add_search_path(macos / 'telar-gui', library)
     add_search_path(macos / 'TelarPreview', library)
     (resources / 'qt.conf').write_text('[Paths]\nPlugins = PlugIns\nQmlImports = Resources/qml\n')
     deployment_log = output.parent / (output.stem + '.deployment.log')
     with deployment_log.open('w') as stream:
         deployment = subprocess.run(
-            [str(part) for part in [args.macdeployqt, output, f'-libpath={library}', '-no-plugins', '-no-codesign',
+            [str(part) for part in [macdeployqt, output, f'-libpath={library}', '-no-plugins', '-no-codesign',
                                    f'-executable={macos / "telar-gui"}', *executables, '-verbose=1']],
             stdout=stream, stderr=subprocess.STDOUT)
     deployment.check_returncode()

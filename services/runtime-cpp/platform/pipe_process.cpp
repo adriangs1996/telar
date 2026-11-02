@@ -1,6 +1,7 @@
 #include "pipe_process.hpp"
 #include "error.hpp"
 #include "spawn_options.hpp"
+#include "socket_signals.hpp"
 #include <csignal>
 #include <fcntl.h>
 #include <spawn.h>
@@ -47,17 +48,22 @@ PipeProcess::PipeProcess(const SpawnSpec &specification, ProcessInput input_kind
   auto output = makePipe();
   auto error = makePipe();
   setNonblocking(input[1].get());
+#if defined(F_SETNOSIGPIPE)
   if (::fcntl(input[1].get(), F_SETNOSIGPIPE, 1) < 0) {
     throw SystemError{"Suppress pipe signals"};
   }
+#else
+  suppressSocketSignals(input[1].get());
+#endif
   setNonblocking(output[0].get());
   setNonblocking(error[0].get());
 
   SpawnOptions options{POSIX_SPAWN_SETPGROUP};
-  checkSpawn(posix_spawn_file_actions_addchdir(&options.actions, specification.cwd));
+  options.changeDirectory(specification.cwd);
   options.redirect(input[0].get(), STDIN_FILENO);
   options.redirect(output[1].get(), STDOUT_FILENO);
   options.redirect(error[1].get(), STDERR_FILENO);
+  options.closeOthers();
   checkSpawn(posix_spawn(&process_id_, specification.executable, &options.actions, &options.attributes, specification.arguments, specification.environment));
 
   input_ = std::move(input[1]);

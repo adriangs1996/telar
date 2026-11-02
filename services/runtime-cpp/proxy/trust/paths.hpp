@@ -4,6 +4,7 @@
 #include "../../platform/process_environment.hpp"
 #include "../../tls/authority.hpp"
 #include "record.hpp"
+#include "destination.hpp"
 
 namespace telar::runtime::proxy_trust {
 
@@ -71,6 +72,31 @@ public:
     }
 
     return result;
+  }
+
+  template <EnvironmentLookup Environment>
+  Destination nativeDestination(Memory &memory, const Environment &environment, std::optional<Backend> selected = std::nullopt) const {
+#if defined(__APPLE__)
+    if (selected && *selected != Backend::macos) {
+      throw std::invalid_argument{"Linux trust backend is not supported on macOS"};
+    }
+    return Destination{keychain(memory, environment)};
+#else
+    (void)environment;
+    auto backend = selected.value_or(Backend::trust);
+    if (!selected) {
+      const auto directory = open();
+      if (directory) {
+        if (const auto record = Record::read(memory, directory.get())) {
+          backend = record->backend;
+        }
+      }
+    }
+    if (backend == Backend::macos) {
+      throw std::invalid_argument{"macOS trust backend is not supported on Linux"};
+    }
+    return Destination{backend, backend == Backend::trust ? std::string_view{file(AuthorityFiles::forKind(AuthorityKind::system_trust).certificate)} : linux_certificate_path};
+#endif
   }
 
 private:

@@ -63,7 +63,7 @@ void clipboardOwnership() {
 void currentState() {
   SystemAllocator memory;
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/client-delivery.sock"}};
   WorkspaceService workspaces{memory, model, panes};
   ClientLayouts layouts{memory, model};
@@ -140,7 +140,7 @@ void drainSocket(int descriptor, std::size_t bytes) {
 void attachmentRotation() {
   SystemAllocator memory;
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/attachment-delivery.sock"}};
   WorkspaceService workspaces{memory, model, panes};
   ClientPeer peer{memory, model, ClientRole::interactive};

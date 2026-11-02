@@ -5,9 +5,11 @@
 #include "tls/trust_store.hpp"
 #include "tls_fixture.hpp"
 #include <type_traits>
+#include <arpa/inet.h>
 
 using namespace telar::runtime;
 
+#if defined(__APPLE__)
 template <typename Reference>
 using NativeResource = TlsHandle<std::remove_pointer_t<Reference>, CFRelease>;
 
@@ -47,6 +49,24 @@ static bool nativeTrusted(const CertificatePair &issuer, const CertificatePair &
 
   return SecTrustEvaluateWithError(evaluation.get(), nullptr);
 }
+#else
+static bool nativeTrusted(const CertificatePair &issuer, const CertificatePair &leaf, const char *hostname, bool anchored = true) {
+  TlsHandle<X509_STORE, X509_STORE_free> store{X509_STORE_new()};
+  check(store != nullptr);
+  if (anchored) {
+    check(X509_STORE_add_cert(store.get(), issuer.certificate.get()) == 1);
+  }
+
+  TlsHandle<X509_STORE_CTX, X509_STORE_CTX_free> verification{X509_STORE_CTX_new()};
+  check(verification != nullptr && X509_STORE_CTX_init(verification.get(), store.get(), leaf.certificate.get(), nullptr) == 1);
+  check(X509_STORE_CTX_set_purpose(verification.get(), X509_PURPOSE_SSL_SERVER) == 1);
+  auto *parameters = X509_STORE_CTX_get0_param(verification.get());
+  std::array<unsigned char, sizeof(in6_addr)> address{};
+  const bool numeric = ::inet_pton(AF_INET, hostname, address.data()) == 1 || ::inet_pton(AF_INET6, hostname, address.data()) == 1;
+  check((numeric ? X509_VERIFY_PARAM_set1_ip_asc(parameters, hostname) : X509_VERIFY_PARAM_set1_host(parameters, hostname, 0)) == 1);
+  return X509_verify_cert(verification.get()) == 1;
+}
+#endif
 
 static void nativeTrustChains() {
   auto issuer = CertificatePair::authority("Native fixture", CertificatePair::private_lifetime);

@@ -67,9 +67,9 @@ static int run() {
     const std::string_view action{command.data()};
     if (action == "open\n" && !tunnel) {
       tunnel.emplace();
-      std::printf("{\"interface\":\"%.*s\",\"index\":%u}\n", static_cast<int>(tunnel->name().size()), tunnel->name().data(), ::if_nametoindex(tunnel->name().data()));
+      std::printf("{\"interface\":\"%.*s\",\"index\":%u}\n", static_cast<int>(tunnel->name().size()), tunnel->name().data(), tunnel->index());
     } else if (action == "packet\n" && tunnel) {
-      const auto written = ::write(tunnel->descriptor(), frame.data(), frame.size());
+      const auto written = tunnel->write(frame);
       if (written != static_cast<ssize_t>(frame.size())) { throw SystemError{"Inject private-interface fixture"}; }
       std::puts("{\"sent\":true}");
     } else if (action == "close\n" && tunnel) {

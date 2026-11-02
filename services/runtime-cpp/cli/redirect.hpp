@@ -1,5 +1,6 @@
 #pragma once
 
+#if defined(__APPLE__)
 #include "../redirect/helper.hpp"
 
 namespace telar::runtime::cli {
@@ -86,3 +87,18 @@ void runRedirect(Memory &memory, std::span<char *const> arguments, bool cleanup)
 }
 
 }
+
+#else
+#include "../memory/allocator.hpp"
+#include "../platform/error.hpp"
+#include <span>
+
+namespace telar::runtime::cli {
+
+template <Allocator Memory>
+void runRedirect(Memory &, std::span<char *const>, bool) {
+  throw SystemError{"Transparent redirect requires a native Linux firewall adapter", ENOTSUP};
+}
+
+}
+#endif

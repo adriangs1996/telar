@@ -15,10 +15,19 @@ int runProxyTrust(Memory &memory, const ProxyTrustOptions &options, const Enviro
   }
 
   const proxy_trust::Paths paths{memory, directory};
-  const auto keychain = paths.keychain(memory, environment);
+  std::optional<proxy_trust::Backend> selected;
+  if (!options.linux_backend.empty()) {
+    selected = options.linux_backend == "trust" ? proxy_trust::Backend::trust : proxy_trust::Backend::update_ca_certificates;
+  }
+#if defined(__linux__)
+  if (options.action == ProxyTrustAction::install && !selected) {
+    throw std::invalid_argument{"Linux trust installation requires --linux trust or --linux update-ca-certificates"};
+  }
+#endif
+  const auto destination = paths.nativeDestination(memory, environment, selected);
   const TlsLibrary library{memory};
   proxy_trust::SystemCommand command{memory, stdout};
-  proxy_trust::Service service{memory, library, paths, command, keychain};
+  proxy_trust::Service service{memory, library, paths, command, destination};
   const auto current = service.inspect();
   const auto certificate = paths.file(AuthorityFiles::forKind(AuthorityKind::system_trust).certificate);
   const auto print_notice = [&] {
@@ -42,9 +51,6 @@ int runProxyTrust(Memory &memory, const ProxyTrustOptions &options, const Enviro
   }
 
   if (options.action == ProxyTrustAction::install) {
-    if (!options.linux_backend.empty()) {
-      throw std::invalid_argument{"Linux trust backend is not supported on macOS"};
-    }
     if (current.status == proxy_trust::Status::installed) {
       std::printf("telar proxy trust: already installed (%s)\n", directory.c_str());
     } else {

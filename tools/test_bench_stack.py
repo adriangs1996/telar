@@ -5,7 +5,7 @@ import sys
 import tempfile
 import unittest
 
-from bench_stack import runtime_identity, staged_runtime
+from bench_stack import process_identity, runtime_identity, staged_runtime
 
 
 class StackIdentityTest(unittest.TestCase):
@@ -40,8 +40,9 @@ class StackIdentityTest(unittest.TestCase):
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
                 server.bind(str(path))
                 server.listen(4)
-                identity = runtime_identity(path, sys.executable)
-                self.assertEqual(identity['pid'], os.getpid())
+                expected = process_identity(os.getpid())
+                identity = runtime_identity(path, expected['path'])
+                self.assertEqual(identity, {'socket': str(path), **expected})
                 with self.assertRaisesRegex(ValueError, 'unexpected executable'):
                     runtime_identity(path, '/bin/sh')
 

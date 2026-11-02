@@ -79,7 +79,7 @@ void ptyReports(auto &pane, auto &panes, std::string_view expected) {
 
 void paletteNotification(SystemAllocator &memory) {
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/control-notifications.sock"}};
   WorkspaceService workspaces{memory, model, panes};
   ClientPeer client{memory, model, ClientRole::interactive};
@@ -106,7 +106,7 @@ void paletteNotification(SystemAllocator &memory) {
 
 void notificationTransitions(SystemAllocator &memory) {
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/control-notification-transitions.sock"}};
   WorkspaceService workspaces{memory, model, panes};
   ClientPeer first{memory, model, ClientRole::interactive};
@@ -185,7 +185,7 @@ void notificationTransitions(SystemAllocator &memory) {
 
 void interruptedResponseWrites(SystemAllocator &memory) {
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/control-interrupted-writes.sock"}};
   WorkspaceService workspaces{memory, model, panes};
   ClientPeer client{memory, model, ClientRole::interactive};
@@ -271,7 +271,7 @@ void interruptedResponseWrites(SystemAllocator &memory) {
 
 void multipleClients(SystemAllocator &memory) {
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/control-desktop.sock"}};
   WorkspaceService workspaces{memory, model, panes};
   ClientPeer first{memory, model, ClientRole::interactive};

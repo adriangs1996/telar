@@ -3,7 +3,7 @@
 #include "../platform/private_file.hpp"
 #include "../platform/write_private_file.hpp"
 #include "port_range.hpp"
-#include <CommonCrypto/CommonDigest.h>
+#include "../platform/sha256.hpp"
 #include <charconv>
 #include <dirent.h>
 #include <optional>
@@ -97,8 +97,9 @@ private:
   };
 
   void identify(std::string_view endpoint) noexcept {
-    std::array<unsigned char, CC_SHA256_DIGEST_LENGTH> digest;
-    CC_SHA256(endpoint.data(), static_cast<CC_LONG>(endpoint.size()), digest.data());
+    Sha256 hash;
+    hash.update(endpoint);
+    const auto digest = hash.finish();
     auto *end = std::copy(file_prefix.begin(), file_prefix.end(), name_.begin());
     for (std::size_t index = 0; index < digest_bytes; ++index) {
       *end++ = hexadecimal[digest[index] >> 4];

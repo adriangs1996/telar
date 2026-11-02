@@ -1,6 +1,6 @@
 # C++ runtime
 
-An independent C++23 runtime for macOS ARM64. It handles client requests.
+An independent C++23 runtime for macOS and Linux. It handles client requests.
 Native control-query acceptance is tracked in
 [control-queries.md](control-queries.md), using the frozen Ghostty application
 as its reference. This executable is opt-in. An installation option
@@ -8,21 +8,27 @@ provides the `telar` command the GUI's runtime discovery runs.
 
 ## Build and run
 
-The initial target requires macOS 26 and its SDK, CMake, Ninja, a C++23
-compiler, Python 3, OpenSSL 3, nghttp2, Brotli and Zstd headers/libraries,
-and Zig 0.17.0. SQLite and zlib come from the macOS SDK. Zig builds only
+Both platforms require CMake, Ninja, a C++23 compiler, Python 3, OpenSSL 3,
+nghttp2, Brotli, Zstd, SQLite, zlib and libpcap headers/libraries,
+and Zig 0.17.0. macOS requires version 26 and its SDK, which provides SQLite,
+zlib and libpcap. Linux uses its distribution's development packages and
+GNU process-spawn extensions, `epoll_pwait2`, `renameat2` and `arc4random_buf`.
+Zig builds only
 libghostty-vt for production; the executable links no
 Telar Zig runtime code.
 
-The optional interface capture helper uses the macOS SDK's libpcap. The
+The optional interface capture helper uses libpcap on both platforms. The
 [traffic subscription guide](../../docs/traffic-capture.md) describes its
 activation, Lua API, HTTP exchange delivery and focused checks.
-The [transparent TCP adapter](../../docs/transparent-redirect.md)
+The macOS [transparent TCP adapter](../../docs/transparent-redirect.md)
 uses a private utun for connection discovery and exact PF flow rules to pass
 sockets from a root helper to the unprivileged proxy worker. On 2026-10-27,
 the user reported passing native IPv4/IPv6 loopback and IPv4 LAN forwarding,
 destination exclusion, concurrent helpers, crash recovery and cleanup. Native
 loopback capture through Desktop Lua also passed; VPN remains unverified.
+Linux rejects the PF helper commands explicitly. A native Linux firewall
+adapter is not implemented; explicit HTTP/HTTPS proxying and packet capture
+do not depend on PF.
 [Transparent TLS and asynchronous stream hooks](../../docs/traffic-flows.md)
 are implemented, including HTTP/1 and HTTP/2 message editing and automatic
 framing/compression repair. [Runtime administration](../../docs/traffic-control.md)
@@ -45,6 +51,25 @@ ctest --test-dir out --output-on-failure
 runtime_directory=$(mktemp -d)
 out/telar-runtime --socket "$runtime_directory/runtime.sock"
 ```
+
+`packaging/release/install-zig.sh PREFIX 0.17.0`, from the repository root,
+installs the pinned compiler after verifying the platform archive's SHA-256.
+On Arch/Omarchy, the runtime build dependencies are `base-devel`, `clang`,
+`cmake`, `ninja`, `python`, `pkgconf`, `openssl`, `libnghttp2`, `brotli`,
+`zstd`, `sqlite`, `zlib` and `libpcap`.
+
+Platform implementations live in `platform/macos` and `platform/linux`.
+`NativeEventLoop<Memory>` chooses kqueue or epoll at compile time. Linux
+descriptor registrations use the supplied allocator; polling uses fixed event
+batches without allocations. Process identification, terminal ownership,
+peer credentials, host metrics, executable paths, descriptor cleanup and
+atomic file publication retain the same application interfaces.
+
+Linux reads the OpenSSL system certificate bundle. Explicit system trust
+installation uses `proxy trust install --linux trust` for p11-kit or
+`--linux update-ca-certificates` for Debian-style stores. Linux system-trust
+renewal requires an explicit operation because changing its store needs sudo.
+Runtime startup does not prompt for that authorization.
 
 The VT dependency requires Telar state ABI version 6. Use a new build directory
 when its revision or patch changes. `--source /path/to/ghostty-checkout` archives
@@ -124,8 +149,11 @@ the login shell's PATH. Choose a private staging directory when testing a
 replacement. Signed archives and bundled dependency notices remain pending.
 
 The manually dispatched [C++ runtime workflow](../../.github/workflows/runtime-cpp.yml) builds
-Release and Debug with ASan/UBSan on macOS ARM64 and runs runtime/TLS/hook
-tests. It does not run on pushes or pull requests. Hosted CI acceptance remains pending;
+Release and Debug with ASan/UBSan on macOS ARM64, plus Release on Linux ARM64
+and x86-64. It exercises runtime/TLS/hooks, native event handling and server
+startup, bridging, persistence and shutdown. Linux additionally checks process
+identity, IPv4/IPv6 socket ownership and system certificates. It does not run
+on pushes or pull requests. Hosted CI acceptance remains pending;
 shared CI runners are not used for performance acceptance. Sanitizer builds
 need the compiler's runtime library and cannot enable the distribution check.
 

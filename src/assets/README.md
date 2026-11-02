@@ -6,6 +6,16 @@ is `a0bf60ef0f83c5ed4d7a75d45838548b1f6873372dfac88f71804491898d138f`.
 The font is distributed under the SIL Open Font License 1.1; the complete
 license is in `JetBrainsMono-OFL.txt`.
 
+`TelarForma-Regular.ttf` is the C++ GUI's bundled Telar Forma Regular face,
+version 0.104. Its SHA-256 is
+`e5b684760f500b2642dbe8216f68db9b4bcde4bb5ff3309dfc0608638459c2d0`.
+Selecting `client.gui.font.family = "Telar Forma"` loads the embedded file,
+without requiring a system installation. Only `Regular` is available;
+bold and italic terminal attributes use the existing synthesized styles.
+It retains the SIL Open Font License 1.1 and copyright notice; the license
+text is in `JetBrainsMono-OFL.txt`. Rebuild it from the pinned bundled face
+and the authored drawings with `uv run tools/build_forma.py`.
+
 Text rasterization links FreeType 2.13.2 from the source archive pinned in
 `build.zig.zon`. Portions of this software are copyright © 2023 The FreeType
 Project (<https://www.freetype.org>). All rights reserved. The upstream archive

@@ -28,7 +28,7 @@ static void testHeldTabCapacity() {
 static void testHeldTabLifecycle() {
   SystemAllocator memory;
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/tab-holds.sock"}};
   WorkspaceService workspaces{memory, model, panes};
   ClientPeer owner{memory, model, ClientRole::interactive};
@@ -80,7 +80,7 @@ static void testHeldTabLifecycle() {
 static void testHeldTabRelease() {
   SystemAllocator memory;
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/tab-holds.sock"}};
   WorkspaceService workspaces{memory, model, panes};
   ClientPeer owner{memory, model, ClientRole::control};

@@ -17,6 +17,7 @@ struct WindowAppearance {
 
 bool defaultTitlebar() noexcept;
 bool usesCommandKey() noexcept;
+void configureKeyRepeat();
 void configureGraphics();
 float windowControls(const QWindow &window) noexcept;
 void configureWindow(QWindow &window, WindowAppearance appearance);

@@ -1,3 +1,4 @@
+#include "../platform/descriptor_path.hpp"
 #include "database.hpp"
 #include "../platform/error.hpp"
 #include "../platform/file_descriptor.hpp"
@@ -42,9 +43,7 @@ static std::array<char, PATH_MAX> prepareDatabaseFile(const char *path) {
     throw SystemError{"restrict history database permissions"};
   }
 
-  if (::fcntl(parent.get(), F_GETPATH, canonical.data()) != 0) {
-    throw SystemError{"resolve history database directory"};
-  }
+  canonical = descriptorPath(parent.get());
 
   const auto parent_length = std::strlen(canonical.data());
   const std::string_view input{path};

@@ -127,13 +127,17 @@ class LoopbackResolver {
 public:
   static ResolutionSummary resolve(const char *, std::span<NetworkAddress> addresses) noexcept {
     sockaddr_in6 unavailable{};
+#if defined(__APPLE__)
     unavailable.sin6_len = sizeof(unavailable);
+#endif
     unavailable.sin6_family = AF_INET6;
     unavailable.sin6_addr = in6addr_loopback;
     addresses[0] = *NetworkAddress::copy(reinterpret_cast<const sockaddr *>(&unavailable), sizeof(unavailable));
 
     sockaddr_in loopback{};
+#if defined(__APPLE__)
     loopback.sin_len = sizeof(loopback);
+#endif
     loopback.sin_family = AF_INET;
     loopback.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addresses[1] = *NetworkAddress::copy(reinterpret_cast<const sockaddr *>(&loopback), sizeof(loopback));
@@ -282,7 +286,8 @@ static void testConnectionPolicy() {
 }
 
 static void testSocketWatch() {
-  Kqueue poller;
+  SystemAllocator memory;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   SocketPair sockets;
   SocketWatch watch;
   watch.update(poller, sockets.local.get(), 512, {.readable = true});

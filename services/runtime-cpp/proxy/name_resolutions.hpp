@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../platform/thread_name.hpp"
+
 #include "../diagnostics/trace.hpp"
 #include "../platform/completion_signal.hpp"
 #include "hostname.hpp"
@@ -207,7 +209,7 @@ private:
   }
 
   static void *resolve(void *context) noexcept {
-    ::pthread_setname_np("telar.proxy.dns");
+    setThreadName("telar.proxy.dns");
     auto &row = *static_cast<Row *>(context);
 #if TELAR_DEBUG
     const auto started = trace::now();

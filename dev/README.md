@@ -1,10 +1,25 @@
 # Development configuration
 
-`just app` and `just run` select `dev/config.lua` through
-`TELAR_DEVELOPMENT_CONFIG`. The runtime socket and history stay under `.dev/`.
+`just app`, `just app-release` and `just run` select `dev/config.lua` through
+`TELAR_DEVELOPMENT_CONFIG`.
+
+| Command | GUI/runtime build | Socket and history |
+| --- | --- | --- |
+| `just app` | Debug, `services/*/out/` | `.dev/runtime.sock`, `.dev/history.db` |
+| `just app-release` | Release, `services/*/out-dev-release/` | `.dev/release/runtime.sock`, `.dev/release/history.db` |
+
+Release uses the same CMake build type as production packaging, without installing
+or replacing an app. Its CLI helpers live in `.dev/release/bin/`, separate from
+Debug's `.dev/bin/`. Both modes reuse the managed Qt cache. Debug, Release and
+production runtimes can run concurrently.
+
+`just stop` stops only the Debug development runtime. `just stop-release` stops
+only the Release development runtime, including its panes. Neither stops production.
+
 An already-running development runtime keeps its original configuration selection;
-stop it with `just stop` before testing a different configuration. This stops its
-panes too. Production uses a different socket and is not stopped.
+stop it with the corresponding command before testing a different configuration.
+This stops its panes too. Rebuilding a binary does not replace a running runtime;
+restart only that development runtime when testing runtime code changes.
 
 The configuration includes terminal appearance, keybindings, clock, host metrics,
 GPU history, provider usage panels and read-only Pi defaults. `bar.py` uses only

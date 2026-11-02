@@ -54,10 +54,17 @@ int acceptFallbackFont(const fonts::FontMatch *match, void *context) noexcept {
 FontData loadFontData(const FontConfiguration &font) {
   const auto family = font.family.view().empty() ? QStringLiteral("JetBrains Mono") : QString::fromUtf8(font.family.view());
   const auto style = QString::fromUtf8(font.style.view());
+  const auto regular_style = style.isEmpty() || style.compare(QStringLiteral("Regular"), Qt::CaseInsensitive) == 0;
   FontData data;
   QString path;
-  if (family.compare(QStringLiteral("JetBrains Mono"), Qt::CaseInsensitive) == 0 && (style.isEmpty() || style.compare(QStringLiteral("Regular"), Qt::CaseInsensitive) == 0)) {
+  if (family.compare(QStringLiteral("JetBrains Mono"), Qt::CaseInsensitive) == 0 && regular_style) {
     path = QStringLiteral(":/telar/fonts/JetBrainsMono-Regular.ttf");
+  } else if (family.compare(QStringLiteral("Telar Forma"), Qt::CaseInsensitive) == 0) {
+    if (!regular_style) {
+      throw std::runtime_error{"FontStyleNotFound"};
+    }
+
+    path = QStringLiteral(":/telar/fonts/TelarForma-Regular.ttf");
   } else {
     const auto family_bytes = family.toUtf8();
     const auto style_bytes = style.toUtf8();

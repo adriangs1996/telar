@@ -17,8 +17,8 @@
 #include "terminal/copy_grid.hpp"
 #include "terminal/screen.hpp"
 #include "terminal/selection.hpp"
-#include "terminal_scene.hpp"
 #include "terminal_font.hpp"
+#include "terminal_scene.hpp"
 #include "window_font_catalog.hpp"
 #include "window_images.hpp"
 #include <QClipboard>
@@ -208,7 +208,6 @@ void TerminalItem::setPaneId(const QString &identity) {
 
   ++appearance_;
   refresh();
-  resizeTerminal();
   emit paneIdChanged();
 }
 
@@ -231,7 +230,6 @@ void TerminalItem::measure() {
     font_scale_ = scale;
     ++appearance_;
     polish();
-    resizeTerminal();
     update();
     refreshLinkHover();
   } catch (const std::exception &error) {
@@ -256,7 +254,7 @@ void TerminalItem::invalidateMachine() {
 }
 
 void TerminalItem::resizeTerminal() {
-  if (application_ == nullptr || font_.cell.width() <= 0 || font_.cell.height() <= 0) {
+  if (application_ == nullptr || window() == nullptr || font_.cell.width() <= 0 || font_.cell.height() <= 0) {
     return;
   }
 
@@ -304,6 +302,9 @@ void TerminalItem::refreshFonts() {
 }
 
 void TerminalItem::updatePolish() {
+  // QML delegates receive geometry and window density separately. Commit only
+  // their settled viewport before rendering, never the windowless default grid.
+  resizeTerminal();
   refreshFonts();
   const auto *current = pane();
   if (current == nullptr || !font_catalog_) {
@@ -356,7 +357,7 @@ void TerminalItem::geometryChange(const QRectF &current, const QRectF &previous)
 
   wheel_.reset();
   QQuickItem::geometryChange(current, previous);
-  resizeTerminal();
+  polish();
   refreshLinkHover();
 }
 

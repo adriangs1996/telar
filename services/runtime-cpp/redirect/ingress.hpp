@@ -1,3 +1,4 @@
+#include "../platform/peer_credentials.hpp"
 #pragma once
 
 #include "../platform/completion_signal.hpp"
@@ -147,9 +148,8 @@ private:
     if (!socket) {
       return;
     }
-    uid_t uid;
-    gid_t gid;
-    if (::getpeereid(socket.get(), &uid, &gid) != 0 || !PeerPolicy::allows(uid)) {
+    const auto credentials = peerCredentials(socket.get());
+    if (!credentials || !PeerPolicy::allows(credentials->user)) {
       return;
     }
     for (auto &peer : peers_) {

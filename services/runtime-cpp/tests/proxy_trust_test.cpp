@@ -1,4 +1,5 @@
 #include "check.hpp"
+#include "platform/descriptor_path.hpp"
 #include "cli/proxy_options.hpp"
 #include "proxy/authority_directory.hpp"
 #include "proxy/trust/service.hpp"
@@ -45,8 +46,7 @@ void rejects(Operation &&operation) {
 }
 
 std::string directoryPath(const AuthorityDirectory &directory) {
-  std::array<char, PATH_MAX> path;
-  check(::fcntl(directory.descriptor.get(), F_GETPATH, path.data()) == 0);
+  const auto path = descriptorPath(directory.descriptor.get());
   return path.data();
 }
 
@@ -190,12 +190,51 @@ void testTrustRecords(TlsTestMemory &memory) {
   check(proxyAuthorityDirectory(memory, Environment{"/data"}) == "/data/telar/proxy");
 }
 
+void testLinuxTrustStores(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library) {
+  for (const auto backend : {proxy_trust::Backend::trust, proxy_trust::Backend::update_ca_certificates}) {
+    AuthorityDirectory directory;
+    const auto path = directoryPath(directory);
+    const proxy_trust::Paths paths{memory, path};
+    const auto certificate = path + "/ca-system-cert.pem";
+    const proxy_trust::Destination destination{backend, backend == proxy_trust::Backend::trust ? std::string_view{certificate} : proxy_trust::linux_certificate_path};
+    TrustCommands commands;
+    proxy_trust::Service service{memory, library, paths, commands, destination};
+    const auto installed = service.install(std::nullopt);
+    check(installed.backend == backend && installed.store.view() == destination.store.view());
+    check(service.inspect().status == proxy_trust::Status::installed);
+    check(commands.commands.front().front() == "/usr/bin/sudo");
+    if (backend == proxy_trust::Backend::trust) {
+      check(commands.commands.size() == 1 && commands.commands[0][2] == "/usr/bin/trust");
+    } else {
+      check(commands.commands.size() == 2 && commands.commands[0][2] == "/usr/bin/install" && commands.commands[1][2] == "/usr/sbin/update-ca-certificates");
+    }
+
+    writeAuthority(directory.descriptor.get(), std::chrono::hours{12});
+    auto expiring = CertificateAuthority<TlsTestMemory>::loadExisting(memory, library, directory.descriptor.get(), AuthorityKind::system_trust);
+    auto previous = installed;
+    previous.fingerprint = expiring->fingerprint();
+    previous.write(memory, directory.descriptor.get());
+    const auto before = commands.commands.size();
+    check(!service.rotateIfNeeded() && commands.commands.size() == before);
+    const auto renewed = service.install(previous);
+    check(renewed.fingerprint != previous.fingerprint && service.inspect().status == proxy_trust::Status::installed);
+    service.uninstall(renewed);
+    check(service.inspect().status == proxy_trust::Status::absent);
+    const auto &removal = commands.commands[commands.commands.size() - (backend == proxy_trust::Backend::trust ? 1 : 2)];
+    check(removal[2] == (backend == proxy_trust::Backend::trust ? "/usr/bin/trust" : "/usr/bin/rm"));
+    auto forged = renewed;
+    forged.store.assign("/etc/passwd");
+    rejects([&] { service.uninstall(forged); });
+  }
+}
+
 }
 
 void testProxyTrust(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library) {
   testTrustRecords(memory);
   testTrustLifecycle(memory, library);
   testTrustFailures(memory, library);
+  testLinuxTrustStores(memory, library);
 }
 
 void createProxyTrustFixture(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library, std::string_view directory) {

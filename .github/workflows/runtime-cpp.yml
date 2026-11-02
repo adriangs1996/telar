@@ -37,7 +37,7 @@ jobs:
         run: |
           test "$(uname -m)" = arm64
           brew install cmake ninja llvm openssl@3 libpng libnghttp2 brotli zstd
-          ../../packaging/release/install-zig.sh "$RUNNER_TEMP/zig"
+          ../../packaging/release/install-zig.sh "$RUNNER_TEMP/zig" 0.17.0
           echo "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
 
       - name: Build libghostty-vt
@@ -59,8 +59,8 @@ jobs:
 
       - name: Build and test
         run: |
-          cmake --build out --target telar-runtime runtime-tests tls-tests hook-tests --parallel 3
-          ctest --test-dir out --output-on-failure -R '^(runtime-tests|tls-tests|hook-tests)$'
+          cmake --build out --target telar-runtime runtime-tests tls-tests hook-tests event-loop-tests checkpoint-probe --parallel 3
+          ctest --test-dir out --output-on-failure -R '^(runtime-tests|tls-tests|hook-tests|event-loop-tests|server-cli-tests)$'
 
       - name: Retain validation reports
         if: always()
@@ -70,3 +70,44 @@ jobs:
           path: |
             services/runtime-cpp/out/CMakeCache.txt
             services/runtime-cpp/out/Testing/Temporary/LastTest.log
+
+  linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    name: Linux (${{ matrix.os }})
+    defaults:
+      run:
+        working-directory: services/runtime-cpp
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y clang-18 g++-14 cmake ninja-build pkg-config \
+            libssl-dev libsqlite3-dev libnghttp2-dev libbrotli-dev libzstd-dev \
+            zlib1g-dev libpcap-dev
+          ../../packaging/release/install-zig.sh "$RUNNER_TEMP/zig" 0.17.0
+          echo "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
+
+      - name: Build libghostty-vt
+        run: python3 tools/build_ghostty.py --build-dir "$RUNNER_TEMP/ghostty-build" --prefix "$RUNNER_TEMP/ghostty"
+
+      - name: Configure
+        run: |
+          cmake -S . -B out -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DGHOSTTY_VT_ROOT="$RUNNER_TEMP/ghostty"
+
+      - name: Build and test
+        run: |
+          cmake --build out --parallel 3 --target telar-runtime runtime-tests tls-tests \
+            hook-tests event-loop-tests linux-platform-tests checkpoint-probe diagnostics-tests
+          ctest --test-dir out --output-on-failure \
+            -R '^(runtime-tests|tls-tests|hook-tests|event-loop-tests|linux-platform-tests|server-cli-tests|diagnostics-tests)$'

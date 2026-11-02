@@ -2,6 +2,7 @@
 
 #include "../platform/private_directory.hpp"
 #include "../platform/temporary_directory.hpp"
+#include "../platform/rename.hpp"
 #include "package_copy.hpp"
 
 namespace telar::runtime::plugins {
@@ -33,7 +34,7 @@ public:
     staged_path += staged_package;
     PackageCopy{memory_}.copy(package, copied.get(), staged_path);
 
-    if (::renameatx_np(staging.descriptor(), staged_package, directory.get(), path.c_str() + separator + 1, RENAME_EXCL) != 0) {
+    if (renameAt(staging.descriptor(), staged_package, directory.get(), path.c_str() + separator + 1, RenameMode::create_only) != 0) {
       if (errno == EEXIST && existing(package, path.c_str())) {
         return;
       }

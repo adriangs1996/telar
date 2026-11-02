@@ -140,7 +140,7 @@ static void testRestore(SystemAllocator &memory) {
   std::array<Byte, 4096> buffer;
   const auto fixture = checkpointFixture(buffer);
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/tmp/unused-checkpoint-test.sock"}};
   ClientLayouts layouts{memory, model};
   checkpoint::Restore restore{memory, model, panes, layouts, false};
@@ -208,7 +208,7 @@ static void testLargePaneIdentity(SystemAllocator &memory) {
   constexpr char arguments[] = "/bin/sh\0-c\0printf 'restored'; read value\0";
   writer.append(checkpoint::PaneRecord{identity, 1, 1, "/tmp", 80, 24, 3, {arguments, sizeof(arguments) - 1}});
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/tmp/unused-checkpoint-test.sock"}};
   ClientLayouts layouts{memory, model};
   checkpoint::Restore restore{memory, model, panes, layouts, false};

@@ -5,7 +5,7 @@
 #include "../../platform/process_environment.hpp"
 #include "../../text/decimal.hpp"
 #include "payload.hpp"
-#include <CommonCrypto/CommonDigest.h>
+#include <openssl/md5.h>
 
 namespace telar::runtime::cli::hooks {
 
@@ -23,7 +23,7 @@ public:
       DirectoryStream directory{FileDescriptor{::open(home->data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)}};
       std::optional<std::uint32_t> best;
       while (const auto *entry = directory.next()) {
-        const std::string_view name{entry->d_name, entry->d_namlen};
+        const std::string_view name{entry->d_name, std::strlen(entry->d_name)};
         if (entry->d_type != DT_REG || !name.starts_with("state_") || !name.ends_with(".sqlite")) {
           continue;
         }
@@ -64,8 +64,8 @@ public:
       }
 
       if (!input.workspace().empty()) {
-        std::array<unsigned char, CC_MD5_DIGEST_LENGTH> digest;
-        CC_MD5(input.workspace().data(), static_cast<CC_LONG>(input.workspace().size()), digest.data());
+        std::array<unsigned char, MD5_DIGEST_LENGTH> digest;
+        MD5(reinterpret_cast<const unsigned char *>(input.workspace().data()), input.workspace().size(), digest.data());
         constexpr std::string_view digits = "0123456789abcdef";
         std::array<char, 32> encoded;
         for (std::size_t index = 0; index < digest.size(); ++index) {
@@ -89,8 +89,8 @@ public:
         if (entry == nullptr) {
           break;
         }
-        if (entry->d_type == DT_DIR && entry->d_namlen == 32) {
-          if (const auto path = cursorPath(*root, {entry->d_name, entry->d_namlen}, chat)) {
+        if (entry->d_type == DT_DIR && std::strlen(entry->d_name) == 32) {
+          if (const auto path = cursorPath(*root, {entry->d_name, std::strlen(entry->d_name)}, chat)) {
             return *path;
           }
         }

@@ -20,14 +20,18 @@ struct SelectionResolver {
     const std::size_t found = name == "overflow.test" ? 17 : name == "mixed.test" ? 3 : 1;
     for (std::size_t index = 0; index < found; ++index) {
       sockaddr_in address{};
+#if defined(__APPLE__)
       address.sin_len = sizeof(address);
+#endif
       address.sin_family = AF_INET;
       address.sin_addr.s_addr = htonl(name == "multicast.test" ? 0xe0000001u : 0x7f000001u + (name == "overflow.test" ? static_cast<unsigned>(index) : 0));
       output[index] = *NetworkAddress::copy(reinterpret_cast<const sockaddr *>(&address), sizeof(address));
     }
     if (name == "mixed.test" || name == "scoped.test") {
       sockaddr_in6 address{};
+#if defined(__APPLE__)
       address.sin6_len = sizeof(address);
+#endif
       address.sin6_family = AF_INET6;
       address.sin6_addr = in6addr_loopback;
       address.sin6_scope_id = name == "scoped.test" ? 1 : 0;

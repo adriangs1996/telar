@@ -145,6 +145,16 @@ void configureBlur(QWindow &window, WindowAppearance appearance) {
 }
 }
 
+// Press-and-hold accents swallow the repeats of a held letter. Disable them in
+// this process's volatile argument domain, before Qt creates NSApplication, so
+// held keys repeat at the system rate without writing the user's preferences.
+void configureKeyRepeat() {
+  NSUserDefaults *preferences = NSUserDefaults.standardUserDefaults;
+  NSMutableDictionary *arguments = [[preferences volatileDomainForName:NSArgumentDomain] mutableCopy];
+  arguments[@"ApplePressAndHoldEnabled"] = @NO;
+  [preferences setVolatileDomain:arguments forName:NSArgumentDomain];
+}
+
 void configureGraphics() {
   if (!qEnvironmentVariableIsSet("QSG_RHI_BACKEND") && !qEnvironmentVariableIsSet("QT_QUICK_BACKEND")) {
     QQuickWindow::setGraphicsApi(QSGRendererInterface::Metal);

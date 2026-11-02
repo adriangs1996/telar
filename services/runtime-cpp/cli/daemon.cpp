@@ -26,7 +26,8 @@ pid_t spawnDaemon(const char *executable, char *const *arguments, const char *lo
   spawn.redirect(ignored.get(), STDIN_FILENO);
   spawn.redirect(ignored.get(), STDOUT_FILENO);
   spawn.redirect(log ? log.get() : ignored.get(), STDERR_FILENO);
-  checkSpawn(::posix_spawn_file_actions_addchdir_np(&spawn.actions, "/"));
+  spawn.changeDirectory("/");
+  spawn.closeOthers();
   pid_t child = -1;
   checkSpawn(::posix_spawn(&child, executable, &spawn.actions, &spawn.attributes, arguments, environ));
   return child;

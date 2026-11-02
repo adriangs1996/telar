@@ -5,6 +5,7 @@
 #include "core/metrics.hpp"
 #include "core/theme_values.hpp"
 #include "graphics/store.hpp"
+#include "frame_fixture.hpp"
 #include "presentation/application_mark.hpp"
 #include "presentation/display_metrics.hpp"
 #include "presentation/tab_strip_geometry.hpp"
@@ -18,9 +19,12 @@
 #include "qt/sidebar_projection.hpp"
 #include "qt/tab_strip_layout.hpp"
 #include "qt/typography_projection.hpp"
+#include "qt/window_animation_clock.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "qt/bundled_fonts.hpp"
 #include <QAbstractItemModel>
+#include <QCoreApplication>
+#include <QEvent>
 #include <QColor>
 #include <QGuiApplication>
 #include <QImage>
@@ -35,6 +39,8 @@
 #include <QSignalSpy>
 #include <QString>
 #include <QTest>
+#include <QTimer>
+#include <algorithm>
 #include <QVariantMap>
 #include <QtCore/qcontainerfwd.h>
 #include <QtCore/qnamespace.h>
@@ -361,6 +367,48 @@ private:
     tab.label = "Review";
     tab.fullscreen = true;
     QCOMPARE(tabRecord(tab, &pane, std::span<const Agent<SystemAllocator>>{agents}, true).value(QStringLiteral("label")).toString(), QStringLiteral("Review ⛶"));
+  }
+
+  Q_SLOT static void transitioningTabsUseAnAlreadyScheduledFrame() {
+    QQuickWindow window;
+    ListModel tabs;
+    QList<QVariantMap> rows;
+    constexpr int tab_count = 4;
+    for (int id = 1; id <= tab_count; ++id) {
+      rows.append({{QStringLiteral("key"), QString::number(id)}, {QStringLiteral("label"), QStringLiteral("Terminal")}});
+    }
+    tabs.reconcile(rows);
+    TabStripLayout layout{window.contentItem()};
+    layout.setSize(QSizeF{800, 42});
+    layout.setContext(1, telar::WorkspaceLocation{.id = 1});
+    QFont font{QStringLiteral("IBM Plex Sans")};
+    font.setPixelSize(13);
+    layout.setFont(font);
+    layout.setPixelSize(13);
+    layout.setModel(&tabs);
+    window.resize(800, 42);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window, fixture_wait_ms));
+    QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
+    std::reverse(rows.begin(), rows.end());
+    tabs.reconcile(rows);
+    QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
+    QVERIFY(layout.transitioning());
+    auto &clock = WindowAnimationClock::forWindow(window);
+    auto *timer = clock.findChild<QTimer *>(QStringLiteral("agentStatusAnimation"));
+    QVERIFY(timer != nullptr);
+    // Isolate frame preparation from the deadline path, even on a slow host.
+    QObject::disconnect(&window, &QQuickWindow::afterAnimating, &clock, nullptr);
+    QCoreApplication::removePostedEvents(&clock, QEvent::MetaCall);
+    timer->stop();
+    QSignalSpy samples{&layout, &TabStripLayout::layoutChanged};
+    QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
+    QVERIFY(!samples.isEmpty());
+    layout.setVisible(false);
+    QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
+    samples.clear();
+    QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
+    QCOMPARE(samples.size(), 0);
   }
 
   Q_SLOT static void tabsPackAndKeepTheirWidthsWhileHovered() {

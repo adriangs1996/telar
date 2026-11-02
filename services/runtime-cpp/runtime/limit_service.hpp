@@ -57,15 +57,15 @@ private:
     const char *separator = reach.noun.empty() ? "" : " ";
     int length = 0;
     if (reach.requested) {
-      length = std::snprintf(text.data(), text.size(), "%.*s: %llu%s%.*s; limit %llu", static_cast<int>(reach.name.size()), reach.name.data(), *reach.requested, separator, static_cast<int>(reach.noun.size()), reach.noun.data(), reach.value);
+      length = std::snprintf(text.data(), text.size(), "%.*s: %llu%s%.*s; limit %llu", static_cast<int>(reach.name.size()), reach.name.data(), static_cast<unsigned long long>(*reach.requested), separator, static_cast<int>(reach.noun.size()), reach.noun.data(), static_cast<unsigned long long>(reach.value));
     } else if (reach.value == 0) {
       length = std::snprintf(text.data(), text.size(), "%.*s: limit reached", static_cast<int>(reach.name.size()), reach.name.data());
     } else {
-      length = std::snprintf(text.data(), text.size(), "%.*s: limit %llu%s%.*s reached", static_cast<int>(reach.name.size()), reach.name.data(), reach.value, separator, static_cast<int>(reach.noun.size()), reach.noun.data());
+      length = std::snprintf(text.data(), text.size(), "%.*s: limit %llu%s%.*s reached", static_cast<int>(reach.name.size()), reach.name.data(), static_cast<unsigned long long>(reach.value), separator, static_cast<int>(reach.noun.size()), reach.noun.data());
     }
 
     if (row.hits > 1) {
-      length += std::snprintf(text.data() + length, text.size() - length, " (%llu times)", row.hits);
+      length += std::snprintf(text.data() + length, text.size() - length, " (%llu times)", static_cast<unsigned long long>(row.hits));
     }
 
     const Notification notification{NotificationBody{.level = NotificationLevel::warning,

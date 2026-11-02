@@ -34,14 +34,36 @@ adapters no longer include or compile files from the Zig GUI.
 
 ## Build
 
-Dependencies are CMake 3.24+, Ninja, Python 3, a C++23 compiler and Qt 6.7+ with
-Gui, Qml, Quick, QuickControls2, Network, Concurrent, ShaderTools and Svg. Qt Test
-is needed with `BUILD_TESTING=ON`. Private Qt headers must match the installed Qt
-version. The static-analysis profile requires LLVM 23 or newer.
+Dependencies are CMake 3.24+, Ninja, Python 3, `patch`, a C++23 compiler and the
+platform SDK/development libraries below. Installing Qt is not required. The
+static-analysis profile requires LLVM 23 or newer.
 
-Linux also needs Fontconfig, Wayland-client, wayland-scanner, libxcb and Qt WaylandClient development
-packages, including private headers. Native test fixtures use Wayland-server, Sway,
-wtype, Qt WaylandCompositor with matching private headers, and a private D-Bus session.
+Native configuration bootstraps Qt 6.12.0 from official source archives through
+a separate CMake `ExternalProject` build. Versions, SHA256 hashes and the upstream
+CVE-2026-105924 fix are pinned in `cmake/qt/manifest.cmake`. The build includes
+qtbase, qtshadertools, qtdeclarative and qtsvg, plus qtwayland on Linux. Qt is shared
+and built in Release; Telar's Debug, Release and sanitizer builds reuse it.
+
+The first `cmake` configuration builds and installs Qt before resolving its
+packages. Later configurations reuse the cached build. Compiler identity,
+explicit architecture/SDK/toolchain options and the dependency recipe select the
+cache entry. `TELAR_GUI_QT_BUILD_DIR` changes the cache root, which defaults to
+`.qt-cache/` at the repository root, outside the GUI's QML source tree;
+`TELAR_GUI_QT_JOBS` limits Qt compiler jobs, defaulting to 2.
+Concurrent configurations serialize access to this cache. Native builds are
+supported; cross-compiling Qt is not implemented.
+
+Qt libraries, private headers, QML modules and build/deployment tools come from
+that same private installation. Existing system Qt package cache entries are
+removed during configuration; there is no automatic system-Qt fallback. Private
+API compatibility still requires updating and rebuilding the complete pinned set.
+
+Linux also needs Fontconfig, Wayland-client/server, wayland-scanner, XCB/X11,
+xkbcommon, OpenGL/EGL and OpenSSL development packages. Qt's
+[Linux build requirements](https://doc.qt.io/qt-6/linux-requirements.html) list the
+XCB development packages. The managed build supplies Qt WaylandClient and
+WaylandCompositor, including private headers. Native test fixtures additionally
+use Sway, wtype and a private D-Bus session.
 Optional X11 clipboard tests use Xvfb, xauth and
 libX11. macOS native adapters use AppKit, CoreText and CoreGraphics.
 
@@ -62,13 +84,14 @@ cmake -S services/gui-cpp -B services/gui-cpp/out -G Ninja \
   -DCMAKE_C_COMPILER=clang \
   -DCMAKE_CXX_COMPILER=clang++ \
   -DGHOSTTY_VT_ROOT="$PWD/services/gui-cpp/out-dependencies/ghostty" \
-  -DCMAKE_PREFIX_PATH=/path/to/qt
+  -DTELAR_GUI_QT_JOBS=2
 cmake --build services/gui-cpp/out --parallel 2
 ```
 
-On Homebrew, use LLVM's compiler paths and, when Qt modules have separate prefixes,
-set `Qt6_DIR` to Homebrew's `lib/cmake/Qt6` and
-`QT_ADDITIONAL_PACKAGES_PREFIX_PATH` to the qtdeclarative prefix.
+On macOS, use the Xcode SDK and a C++23 compiler. `just app`, `just gui-test` and
+`just install-gui` use the same managed Qt bootstrap through the GUI CMake project;
+they do not need Homebrew's Qt packages. They still use Homebrew's LLVM and the
+runtime's separately documented dependencies.
 
 The GUI still generates some data from Telar Zig sources. Building Ghostty also
 uses Zig; removing those dependencies is a separate migration.
@@ -127,7 +150,8 @@ ctest --test-dir services/gui-cpp/out --output-on-failure -R '^gui-(core|config)
 
 Native integration tests use owned temporary runtimes and private clipboard/display
 fixtures. Run native window cases serially to avoid focus interference. Core
-components can be tested without Qt by configuring `-DTELAR_GUI_NATIVE=OFF`.
+components can be tested without downloading or building Qt by configuring
+`-DTELAR_GUI_NATIVE=OFF`.
 Sanitizer builds use `-DTELAR_GUI_SANITIZERS=ON` in a separate build directory.
 
 ```sh
@@ -138,10 +162,16 @@ Keep the existing clang-tidy profile, thresholds and diagnostics enabled. Genera
 build files, captures, logs and benchmark output belong in ignored `out*/`
 directories or temporary directories outside the source tree.
 
+Native animation cadence can be checked with `gui-animation-probe` and
+`tools/check_animation_cadence.py`. See [ANIMATION_CADENCE.md](ANIMATION_CADENCE.md)
+for the measurement endpoint, paired results, reproduction and limitations.
+
 ## macOS packaging
 
 `tools/package_macos.py` creates a separately named app, deploys Qt/QML and includes
-runtime helpers. Use a fresh Release build for a distributable candidate and keep
+runtime helpers. It selects `qtpaths` and `macdeployqt` from the managed Qt prefix
+recorded in the GUI build cache, not from PATH, and includes Qt license texts and
+the pinned source manifest in the bundle. Use a fresh Release build for a distributable candidate and keep
 the current installed app available while testing it:
 
 ```sh

@@ -1,3 +1,4 @@
+#include "../platform/thread_name.hpp"
 #include "trace.hpp"
 
 #if TELAR_DEBUG
@@ -69,7 +70,7 @@ void format(std::span<const Record> records) noexcept {
 }
 
 void *run(void *) noexcept {
-  pthread_setname_np("telar.trace");
+  setThreadName("telar.trace");
   std::unique_lock lock{sink.mutex};
   while (true) {
     sink.wake.wait_for(lock, std::chrono::seconds{1}, [] { return sink.stopping || sink.count == sink.pending.size(); });

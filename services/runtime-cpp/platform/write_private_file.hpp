@@ -2,6 +2,7 @@
 
 #include "file_descriptor.hpp"
 #include "write_descriptor.hpp"
+#include "rename.hpp"
 #include <algorithm>
 #include <array>
 #include <cstdio>
@@ -12,10 +13,7 @@
 
 namespace telar::runtime {
 
-enum class PrivateFileMode {
-  create_only,
-  replace
-};
+using PrivateFileMode = RenameMode;
 
 inline int writePrivateFile(int directory, std::string_view name, std::span<const std::uint8_t> bytes, PrivateFileMode mode) noexcept {
   if (name.empty() || name.size() > NAME_MAX || name.contains('\0') || name.contains('/') || name == "." || name == "..") {
@@ -48,8 +46,7 @@ inline int writePrivateFile(int directory, std::string_view name, std::span<cons
     }
     file.reset();
 
-    const auto flags = mode == PrivateFileMode::create_only ? RENAME_EXCL : 0;
-    if (::renameatx_np(directory, temporary.data(), directory, destination.data(), flags) != 0) {
+    if (renameAt(directory, temporary.data(), directory, destination.data(), mode) != 0) {
       const int failure = errno;
       ::unlinkat(directory, temporary.data(), 0);
       return failure;

@@ -1,3 +1,5 @@
+#include "../platform/peer_credentials.hpp"
+#include "../platform/socket_signals.hpp"
 #pragma once
 
 #include "../platform/error.hpp"
@@ -29,15 +31,14 @@ inline FileDescriptor connect(std::string_view path) {
     throw SystemError{"Create traffic connection"};
   }
   setCloseOnExec(socket.get());
-  const int enabled = 1;
-  if (::setsockopt(socket.get(), SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof(enabled)) != 0 || ::connect(socket.get(), reinterpret_cast<const sockaddr *>(&address), sizeof(address)) != 0) {
+  suppressSocketSignals(socket.get());
+  if (::connect(socket.get(), reinterpret_cast<const sockaddr *>(&address), sizeof(address)) != 0) {
     throw SystemError{"Connect traffic endpoint"};
   }
 
-  uid_t uid;
-  gid_t gid;
   struct stat after{};
-  if (::getpeereid(socket.get(), &uid, &gid) != 0 || uid != before.st_uid || (::geteuid() != 0 && uid != ::geteuid()) || ::lstat(address.sun_path, &after) != 0 || before.st_dev != after.st_dev || before.st_ino != after.st_ino) {
+  const auto credentials = peerCredentials(socket.get());
+  if (!credentials || credentials->user != before.st_uid || (::geteuid() != 0 && credentials->user != ::geteuid()) || ::lstat(address.sun_path, &after) != 0 || before.st_dev != after.st_dev || before.st_ino != after.st_ino) {
     throw SystemError{"Traffic endpoint identity changed", EACCES};
   }
   return socket;

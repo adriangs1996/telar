@@ -1,3 +1,4 @@
+#include "../platform/peer_credentials.hpp"
 #pragma once
 
 #include "../memory/allocator.hpp"
@@ -360,14 +361,13 @@ private:
       return;
     }
 
-    uid_t uid;
-    gid_t gid;
-    if (::getpeereid(socket.get(), &uid, &gid) != 0) {
+    const auto credentials = peerCredentials(socket.get());
+    if (!credentials) {
       return;
     }
     for (auto &slot : peers_) {
       if (!slot) {
-        slot.emplace(memory_, std::move(socket), uid);
+        slot.emplace(memory_, std::move(socket), credentials->user);
         return;
       }
     }

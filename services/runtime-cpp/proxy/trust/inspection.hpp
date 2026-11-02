@@ -28,14 +28,14 @@ struct Inspection {
 
 inline constexpr auto rotation_window = std::chrono::hours{24};
 
-inline void validateTarget(const Record &record, std::string_view keychain) {
-  if (record.backend != Backend::macos || record.store.view() != keychain) {
+inline void validateTarget(const Record &record, const Destination &destination) {
+  if (record.backend != destination.backend || record.store.view() != destination.store.view()) {
     throw std::invalid_argument{"Invalid proxy trust record target"};
   }
 }
 
 template <ConcurrentAllocator Memory>
-Inspection inspect(Memory &memory, const TlsLibrary<Memory> &library, const Paths<Memory> &paths, std::string_view keychain) noexcept {
+Inspection inspect(Memory &memory, const TlsLibrary<Memory> &library, const Paths<Memory> &paths, const Destination &destination) noexcept {
   Inspection result;
   try {
     const auto directory = paths.open();
@@ -48,7 +48,7 @@ Inspection inspect(Memory &memory, const TlsLibrary<Memory> &library, const Path
       return result;
     }
 
-    validateTarget(*result.record, keychain);
+    validateTarget(*result.record, destination);
     Paths<Memory>::validateDirectory(directory.get());
     const auto authority = CertificateAuthority<Memory>::loadExisting(memory, library, directory.get(), AuthorityKind::system_trust);
     result.status = authority && authority->fingerprint() == result.record->fingerprint && !authority->expiresWithin(rotation_window) ? Status::installed : Status::stale;

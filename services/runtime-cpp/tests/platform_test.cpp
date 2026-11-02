@@ -218,10 +218,11 @@ static void testSocketOwnership() {
 }
 
 static void testChildExitNotification() {
+  SystemAllocator memory;
   struct sigaction previous{};
   check(::sigaction(SIGCHLD, nullptr, &previous) == 0);
   {
-    Kqueue poller;
+    NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
     poller.watchSignal(SIGCHLD);
     const auto child = ::fork();
     check(child >= 0);

@@ -90,7 +90,7 @@ void runRuntime(Memory &memory, const ServerOptions &options, const RuntimePaths
   if (!tap_configuration.specifications().empty()) { plugin_service.watchTrust(plugins::Paths::trust(memory, ProcessEnvironment{})); }
 
   traffic::Tap<Memory, plugins::Service<Memory>> tap{plugin_service, traffic_service ? &*traffic_service : nullptr};
-  ProxyRuntime<Memory, Kqueue, SystemNameResolver, decltype(tap)> proxy{memory, configuration.proxy, paths.socket, configuration.proxy.enabled && paths.isDefaultSocket(ProcessEnvironment{}), tap};
+  ProxyRuntime<Memory, NativeEventLoop<Memory>, SystemNameResolver, decltype(tap)> proxy{memory, configuration.proxy, paths.socket, configuration.proxy.enabled && paths.isDefaultSocket(ProcessEnvironment{}), tap};
   traffic::control::Backend network_backend{memory, proxy, traffic_service ? &*traffic_service : nullptr, traffic::control::Configuration{
       .endpoint = paths.socket,
       .executable = executable.view(),
@@ -119,7 +119,7 @@ void runRuntime(Memory &memory, const ServerOptions &options, const RuntimePaths
   std::array<std::string_view, 32> description_arguments;
   std::transform(configuration.descriptions.arguments.begin(), configuration.descriptions.arguments.end(), description_arguments.begin(), [](const auto &argument) { return std::string_view{argument}; });
   BackgroundPool background{memory, background_service, path_service, editor_service, suggestion_service};
-  Kqueue poller;
+  NativeEventLoop<Memory> poller{memory};
   poller.watchSignal(SIGTERM);
   poller.watchSignal(SIGINT);
   poller.watchSignal(SIGCHLD);

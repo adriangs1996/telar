@@ -409,7 +409,7 @@ std::string pasteGrant(auto &panes, auto &client, auto &pane) {
 
 void actualRouting(SystemAllocator &memory) {
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/clipboard.sock"}};
   WorkspaceService workspaces{memory, model, panes};
   ClientPeer first{memory, model, ClientRole::interactive};
@@ -508,7 +508,7 @@ void actualRouting(SystemAllocator &memory) {
 
 void closeBeforeExecution(SystemAllocator &memory) {
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/clipboard-close.sock"}};
   WorkspaceService workspaces{memory, model, panes};
   ClientPeer client{memory, model, ClientRole::interactive};
@@ -547,7 +547,7 @@ void resetPendingOperations(SystemAllocator &memory) {
   for (const auto transition : transitions) {
     for (const auto stage : {Stage::requested, Stage::prepared, Stage::committed}) {
       RuntimeModel model{memory};
-      Kqueue poller;
+      NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
       PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/clipboard-reset.sock"}};
       WorkspaceService workspaces{memory, model, panes};
       ClientPeer client{memory, model, ClientRole::interactive};
@@ -644,7 +644,7 @@ void doubleQueuePressure(SystemAllocator &memory) {
   enum class Cancellation { expired, closing, unannounced };
   for (const auto cancellation : {Cancellation::expired, Cancellation::closing, Cancellation::unannounced}) {
     RuntimeModel model{memory};
-    Kqueue poller;
+    NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
     PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/clipboard-pressure.sock"}};
     WorkspaceService workspaces{memory, model, panes};
     ClientPeer client{memory, model, ClientRole::interactive};
@@ -725,7 +725,7 @@ void revokedCapabilitiesAndReuse(SystemAllocator &memory) {
   for (const auto change : {Change::hidden, Change::clipboard_disabled, Change::control_only, Change::pane_reused}) {
     for (const auto stage : {Stage::requested, Stage::prepared, Stage::committed}) {
       RuntimeModel model{memory};
-      Kqueue poller;
+      NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
       PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/clipboard-capability.sock"}};
       WorkspaceService workspaces{memory, model, panes};
       ClientPeer client{memory, model, ClientRole::interactive};
@@ -824,7 +824,7 @@ void deferredAllocationFailure() {
   BudgetAllocator memory{upstream, 64 * 1024 * 1024};
   {
     RuntimeModel model{memory};
-    Kqueue poller;
+    NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
     PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/control-failure.sock"}};
     const std::array<std::string_view, 1> arguments{"/bin/cat"};
     const Launch launch{.cwd = "/tmp", .arguments = arguments};

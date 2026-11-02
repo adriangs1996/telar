@@ -21,7 +21,9 @@ public:
       }
     }
     sockaddr_in loopback{};
+#if defined(__APPLE__)
     loopback.sin_len = sizeof(loopback);
+#endif
     loopback.sin_family = AF_INET;
     loopback.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addresses[0] = *NetworkAddress::copy(reinterpret_cast<const sockaddr *>(&loopback), sizeof(loopback));
@@ -45,7 +47,9 @@ static FileDescriptor connectLocal(std::uint16_t port) {
   FileDescriptor socket{::socket(AF_INET, SOCK_STREAM, 0)};
   check(static_cast<bool>(socket));
   sockaddr_in address{};
+#if defined(__APPLE__)
   address.sin_len = sizeof(address);
+#endif
   address.sin_family = AF_INET;
   address.sin_port = htons(port);
   address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
@@ -293,7 +297,7 @@ static void checkAdmissionAndStop(TlsTestMemory &memory, const TlsLibrary<TlsTes
   TlsInterception interception{contexts, authority};
   ProxyOptions options{memory};
   const auto secret = ProxySecret::generate();
-  std::optional<ProxyService<TlsTestMemory, Kqueue, ServiceResolver>> service;
+  std::optional<ProxyService<TlsTestMemory, NativeEventLoop<TlsTestMemory>, ServiceResolver>> service;
   service.emplace(memory, options, secret, interception, ProxyListener::bind(std::nullopt, {}));
   std::array<FileDescriptor, ProxyConnectionPolicy::maximum_unauthenticated> silent;
   for (auto &socket : silent) {
@@ -322,7 +326,7 @@ static void checkAdmissionAndStop(TlsTestMemory &memory, const TlsLibrary<TlsTes
 void testProxyService(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library) {
   for (const auto scenario : {ProxyServiceScenario::opaque, ProxyServiceScenario::http1, ProxyServiceScenario::http2, ProxyServiceScenario::http2_decode_failure}) {
     for (const bool capture : {false, true}) {
-      checkService<Kqueue>(memory, library, scenario, capture);
+      checkService<NativeEventLoop<TlsTestMemory>>(memory, library, scenario, capture);
     }
   }
   checkAdmissionAndStop(memory, library);

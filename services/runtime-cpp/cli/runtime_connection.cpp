@@ -1,3 +1,4 @@
+#include "../platform/peer_credentials.hpp"
 #include "runtime_connection.hpp"
 #include "../platform/file_descriptor.hpp"
 #include <csignal>
@@ -16,9 +17,8 @@ Client RuntimeConnection::connect(const char *path) {
 RuntimeConnection::RuntimeConnection(const char *path, bool negotiate)
     : client_(connect(path)) {
   try {
-    uid_t user = 0;
-    gid_t group = 0;
-    if (::getpeereid(client_.descriptor(), &user, &group) != 0 || user != ::geteuid()) {
+    const auto peer = peerCredentials(client_.descriptor());
+    if (!peer || peer->user != ::geteuid()) {
       throw SystemError{"Runtime socket belongs to another user", EACCES};
     }
 

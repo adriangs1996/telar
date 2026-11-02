@@ -31,7 +31,10 @@ public:
     posix_spawnattr_setsigmask(&attributes, &empty);
     posix_spawnattr_setsigdefault(&attributes, &defaults);
     posix_spawnattr_setpgroup(&attributes, 0);
-    posix_spawnattr_setflags(&attributes, flags | POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK);
+#if defined(POSIX_SPAWN_CLOEXEC_DEFAULT)
+    flags |= POSIX_SPAWN_CLOEXEC_DEFAULT;
+#endif
+    checkSpawn(posix_spawnattr_setflags(&attributes, flags | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK));
   }
 
   ~SpawnOptions() {
@@ -44,6 +47,20 @@ public:
 
   void redirect(int source, int destination) {
     checkSpawn(posix_spawn_file_actions_adddup2(&actions, source, destination));
+  }
+
+  void changeDirectory(const char *path) {
+#if defined(__APPLE__)
+    checkSpawn(::posix_spawn_file_actions_addchdir(&actions, path));
+#else
+    checkSpawn(::posix_spawn_file_actions_addchdir_np(&actions, path));
+#endif
+  }
+
+  void closeOthers() {
+#if defined(__linux__)
+    checkSpawn(::posix_spawn_file_actions_addclosefrom_np(&actions, STDERR_FILENO + 1));
+#endif
   }
 
   posix_spawnattr_t attributes{};

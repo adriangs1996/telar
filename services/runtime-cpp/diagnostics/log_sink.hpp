@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstring>
+
 #include "../platform/directory_stream.hpp"
 #include "log_name.hpp"
 #include <algorithm>
@@ -93,7 +95,7 @@ public:
           break;
         }
 
-        const auto name = LogName::parse({entry->d_name, entry->d_namlen});
+        const auto name = LogName::parse({entry->d_name, std::strlen(entry->d_name)});
         if (!name || (name->endpoint != endpoint.substr(slash + 1) && !name->endpoint.ends_with(".sock"))) {
           continue;
         }

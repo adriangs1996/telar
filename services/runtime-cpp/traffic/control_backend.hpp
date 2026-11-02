@@ -18,7 +18,12 @@ public:
   explicit TrustCommand(Memory &memory, const std::atomic<bool> &cancelled) noexcept : memory_(memory), cancelled_(cancelled) {}
 
   void run(std::span<const std::string_view> arguments) {
-    if (arguments.empty() || arguments.front() != "/usr/bin/security") { throw std::invalid_argument{"Invalid trust operation"}; }
+    bool allowed = !arguments.empty() && arguments.front() == "/usr/bin/security";
+#if defined(__linux__)
+    constexpr std::array executables{"/usr/bin/trust", "/usr/bin/install", "/usr/bin/rm", "/usr/sbin/update-ca-certificates"};
+    allowed = arguments.size() >= 3 && arguments[0] == "/usr/bin/sudo" && arguments[1] == "--" && std::ranges::find(executables, arguments[2]) != executables.end();
+#endif
+    if (!allowed) { throw std::invalid_argument{"Invalid trust operation"}; }
     Command command{memory_, Launch{.arguments = arguments}, CommandPurpose::administration};
     CommandOutput output{memory_, Limits::reply_bytes, &cancelled_};
     if (output.run(command, std::chrono::steady_clock::now() + std::chrono::seconds{10}, true) != 0) { throw SystemError{"Certificate store operation failed", EACCES}; }
@@ -247,6 +252,7 @@ private:
     spawn.redirect(input.get(), STDIN_FILENO);
     spawn.redirect(STDOUT_FILENO, STDOUT_FILENO);
     spawn.redirect(STDERR_FILENO, STDERR_FILENO);
+    spawn.closeOthers();
     pid_t started;
     checkSpawn(::posix_spawn(&started, specification.executable, &spawn.actions, &spawn.attributes, specification.arguments, specification.environment));
     child = started;

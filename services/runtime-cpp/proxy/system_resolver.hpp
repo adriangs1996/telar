@@ -15,7 +15,10 @@ struct ResolutionSummary {
 class SystemNameResolver {
 public:
   static ResolutionSummary resolve(const char *hostname, std::span<NetworkAddress> addresses) noexcept {
-    const addrinfo hints{.ai_flags = 0, .ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM, .ai_protocol = IPPROTO_TCP, .ai_addrlen = 0, .ai_canonname = nullptr, .ai_addr = nullptr, .ai_next = nullptr};
+    addrinfo hints{};
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
     addrinfo *entries = nullptr;
     int error;
     do {

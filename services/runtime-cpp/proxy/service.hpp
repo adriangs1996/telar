@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../platform/thread_name.hpp"
+
 #include "../memory/slot_indexes.hpp"
 #include "../memory/drop_channel.hpp"
 #include "connection.hpp"
@@ -14,7 +16,7 @@ template <ConcurrentAllocator Memory, EventLoop Poller, HostnameResolver Resolve
 class ProxyService {
 public:
   explicit ProxyService(Memory &memory, const ProxyOptions<Memory> &options, const ProxySecret &secret, const TlsInterception<Memory> &interception, ProxyListener listener, traffic::FlowControl *flows = nullptr)
-      : memory_(memory), options_(options), secret_(secret), interception_(interception), listener_(std::move(listener)), observations_(memory, options.capture, flows), resolutions_(resolution_signal_), flows_(flows) {
+      : memory_(memory), options_(options), secret_(secret), interception_(interception), listener_(std::move(listener)), observations_(memory, options.capture, flows), poller_(memory), resolutions_(resolution_signal_), flows_(flows) {
     poller_.watch(listener_.descriptor(), listener_token);
     poller_.watch(stop_signal_.descriptor(), stop_token);
     poller_.watch(resolution_signal_.descriptor(), resolution_token);
@@ -90,7 +92,7 @@ private:
   };
 
   void run() noexcept {
-    ::pthread_setname_np("telar.proxy");
+    setThreadName("telar.proxy");
     try {
       auto reap_at = Policy::Clock::now() + reap_interval;
       while (!stopping_.load(std::memory_order_acquire)) {

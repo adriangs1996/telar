@@ -490,7 +490,7 @@ static void relay(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &librar
   check(options.intercept_hosts.append("*"));
   options.intercept_hosts.finish();
   const auto secret = ProxySecret::generate();
-  ProxyService<TlsTestMemory, Kqueue, SystemNameResolver> service{memory, options, secret, interception, ProxyListener::bind(std::nullopt, {})};
+  ProxyService<TlsTestMemory, NativeEventLoop<TlsTestMemory>, SystemNameResolver> service{memory, options, secret, interception, ProxyListener::bind(std::nullopt, {})};
   {
     redir::Ingress<decltype(service), SameUser> ingress{path, service};
     auto monitor = traffic::connect(path);
@@ -561,7 +561,7 @@ static void opaqueTls(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &li
   check(options.intercept_hosts.append("*"));
   options.intercept_hosts.finish();
   const auto secret = ProxySecret::generate();
-  ProxyService<TlsTestMemory, Kqueue, SystemNameResolver> service{memory, options, secret, interception, ProxyListener::bind(std::nullopt, {})};
+  ProxyService<TlsTestMemory, NativeEventLoop<TlsTestMemory>, SystemNameResolver> service{memory, options, secret, interception, ProxyListener::bind(std::nullopt, {})};
   TcpPair downstream;
   TcpPair upstream;
   check(service.adopt({.child = std::move(downstream.server), .origin = std::move(upstream.client), .target = upstream.target}));
@@ -731,7 +731,7 @@ static void transparentTls(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory
   TlsFlowObserver observer;
   if (edit) { owner.emplace(memory); }
   auto &flows = owner ? static_cast<TlsFlowObserver &>(*owner) : observer;
-  ProxyService<TlsTestMemory, Kqueue, SystemNameResolver> service{memory, options, secret, interception, ProxyListener::bind(std::nullopt, {}), &flows};
+  ProxyService<TlsTestMemory, NativeEventLoop<TlsTestMemory>, SystemNameResolver> service{memory, options, secret, interception, ProxyListener::bind(std::nullopt, {}), &flows};
   TcpPair downstream{numeric_ipv6};
   TcpPair upstream{numeric_ipv6};
   check(service.adopt({.child = std::move(downstream.server), .origin = std::move(upstream.client), .target = upstream.target}));

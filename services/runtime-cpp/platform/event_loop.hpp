@@ -6,7 +6,10 @@
 #include <concepts>
 #include <cstdint>
 #include <span>
+#include "../memory/allocator.hpp"
+#if defined(__APPLE__)
 #include <sys/event.h>
+#endif
 
 namespace telar::runtime {
 
@@ -23,9 +26,13 @@ struct Event {
   bool closed;
 };
 
+#if defined(__APPLE__)
 class Kqueue {
 public:
   Kqueue();
+
+  template <Allocator Memory>
+  explicit Kqueue(Memory &) : Kqueue() {}
   void watch(int descriptor, std::uint64_t token);
   void readInterest(int descriptor, std::uint64_t token, bool enabled);
   void writeInterest(int descriptor, std::uint64_t token, bool enabled);
@@ -42,6 +49,8 @@ private:
   std::array<Event, batch_capacity> events_{};
 };
 
+#endif
+
 template <typename Poller>
 concept EventLoop = requires(Poller &poller, int descriptor, std::uint64_t token, std::chrono::nanoseconds timeout) {
   { poller.watch(descriptor, token) } -> std::same_as<void>;
@@ -51,6 +60,19 @@ concept EventLoop = requires(Poller &poller, int descriptor, std::uint64_t token
   { poller.wait(timeout) } -> std::same_as<std::span<const Event>>;
 };
 
+#if defined(__APPLE__)
+template <Allocator Memory>
+using NativeEventLoop = Kqueue;
+
 static_assert(EventLoop<Kqueue>);
+#endif
 
 }
+
+#if defined(__linux__)
+#include "linux/event_loop.hpp"
+namespace telar::runtime {
+template <Allocator Memory>
+using NativeEventLoop = Epoll<Memory>;
+}
+#endif

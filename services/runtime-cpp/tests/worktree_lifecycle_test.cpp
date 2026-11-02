@@ -26,7 +26,7 @@ static void testProgramLabels() {
 static void testDeferredClosure(bool worktree) {
   SystemAllocator memory;
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/tmp/closure-fixture.sock"}};
   WorkspaceService workspaces{memory, model, panes};
   ClientPeer owner{memory, model, ClientRole::interactive};

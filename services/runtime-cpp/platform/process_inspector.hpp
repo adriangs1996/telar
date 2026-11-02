@@ -4,6 +4,7 @@
 #include "../agents/session_host.hpp"
 #include "../memory/fixed_text.hpp"
 #include "process_lineage.hpp"
+#include "process_arguments.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <optional>
 #include <sys/types.h>
@@ -47,9 +48,13 @@ public:
   AgentProvider ancestorProvider(const ProcessIdentity &process, pid_t root) const noexcept;
   FixedText<48> name(pid_t process) const noexcept;
   FixedText<4096> directory(pid_t process) const noexcept;
+  FixedText<4096> terminal(pid_t process) const noexcept;
   IdentifiedProcess identifyGroup(pid_t group, AgentProvider preferred) const noexcept;
 
 private:
+  static ProcessArguments readArguments(pid_t process, std::span<char> buffer) noexcept;
+  static FixedText<4096> executable(pid_t process) noexcept;
+  static std::size_t groupMembers(pid_t group, std::span<pid_t> members) noexcept;
   IdentifiedProcess identifyProcess(pid_t process) const noexcept;
   const AgentManifests &manifests_;
   uid_t uid_;

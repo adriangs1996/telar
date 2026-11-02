@@ -101,13 +101,13 @@ private:
   }
 
   void rename(const char *source, const char *destination) {
-    if (::renameatx_np(directory_, source, directory_, destination, RENAME_EXCL) != 0) {
+    if (renameAt(directory_, source, directory_, destination, RenameMode::create_only) != 0) {
       throw SystemError{"Activate proxy authority"};
     }
   }
 
   bool savePrevious(const char *source, const Filename &destination) {
-    if (::renameatx_np(directory_, source, directory_, destination.data(), RENAME_EXCL) == 0) {
+    if (renameAt(directory_, source, directory_, destination.data(), RenameMode::create_only) == 0) {
       return true;
     }
     if (errno == ENOENT) {

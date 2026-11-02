@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 
+import Telar.Gui
 import QtQuick
 import QtQuick.Controls
 
@@ -16,6 +17,15 @@ Popup {
     readonly property real headerHeight: 32 * ratio
     readonly property real timestampHeight: 14 * ratio
     readonly property real maximumHeight: Math.max(headerHeight, (parent?.height ?? 640) - 2 * margin)
+    readonly property real settledY: Math.max(margin, Math.min((parent?.height ?? height) - height - margin, anchor.y >= 0 ? (anchor.y > height + margin ? anchor.y - height - margin : anchor.y + headerHeight) : (parent?.height ?? height) - height - 36 * ratio))
+    readonly property real entranceOffset: Math.min(12 * ratio, Math.max(0, (parent?.height ?? height) - settledY - height - margin))
+
+    ModalRevealLayout {
+        id: motion
+        objectName: "componentPanelMotion"
+        active: root.visible
+        generation: root.state.identity ?? ""
+    }
     visible: state.open ?? false
     focus: !(controller.componentPick.open ?? false)
     modal: false
@@ -23,7 +33,8 @@ Popup {
     width: Math.max(0, Math.min((state.width ?? 420) * ratio, (parent?.width ?? 720) - 2 * margin))
     height: Math.min(maximumHeight, headerHeight + margin + body.implicitHeight + (errorText.visible ? errorText.implicitHeight + margin : 0) + 2 * padding)
     x: Math.max(margin, Math.min((parent?.width ?? width) - width - margin, (anchor.x >= 0 ? anchor.x : (parent?.width ?? width) / 2) - width / 2))
-    y: Math.max(margin, Math.min((parent?.height ?? height) - height - margin, anchor.y >= 0 ? (anchor.y > height + margin ? anchor.y - height - margin : anchor.y + headerHeight) : (parent?.height ?? height) - height - 36 * ratio))
+    y: settledY + entranceOffset * (1 - motion.reveal)
+    opacity: motion.reveal
     objectName: "configuredPanel"
     closePolicy: (controller.componentPick.open ?? false) ? Popup.NoAutoClose : Popup.CloseOnEscape | Popup.CloseOnPressOutside
     background: DialogSurface { colors: root.colors; ratio: root.ratio }

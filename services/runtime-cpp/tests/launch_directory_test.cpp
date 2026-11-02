@@ -21,7 +21,7 @@ static void expectFailure(Operation operation, FailureCode code, std::string_vie
 
 static void testLaunchScopes(SystemAllocator &memory) {
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/tmp/launch-fixture.sock"}};
   WorkspaceService workspaces{memory, model, panes};
   ClientPeer owner{memory, model, ClientRole::interactive};
@@ -62,7 +62,7 @@ static void testLaunchScopes(SystemAllocator &memory) {
 
 static void testEmptyDefaultTab(SystemAllocator &memory) {
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/tmp/launch-fixture.sock"}};
   WorkspaceService workspaces{memory, model, panes};
   ClientPeer owner{memory, model, ClientRole::interactive};
@@ -98,7 +98,7 @@ static void testEmptyDefaultTab(SystemAllocator &memory) {
 
 static void testFailedLaunchLease(SystemAllocator &memory) {
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/tmp/launch-fixture.sock"}};
   WorkspaceService workspaces{memory, model, panes};
   ClientPeer owner{memory, model, ClientRole::interactive};
@@ -117,7 +117,7 @@ static void testFailedLaunchLease(SystemAllocator &memory) {
 
 static void testPaneReuseAndBackgroundColors(SystemAllocator &memory) {
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/tmp/launch-fixture.sock"}};
   WorkspaceService workspaces{memory, model, panes};
   ClientPeer owner{memory, model, ClientRole::interactive};
@@ -145,7 +145,7 @@ static void testPaneReuseAndBackgroundColors(SystemAllocator &memory) {
 
 static void testExhaustedTabIdentities(SystemAllocator &memory) {
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/tmp/launch-fixture.sock"}};
   WorkspaceService workspaces{memory, model, panes};
   ClientPeer owner{memory, model, ClientRole::interactive};

@@ -74,7 +74,7 @@ static void testSaturatedCommandTarget(SystemAllocator &memory) {
 
 static void testClosureResync(SystemAllocator &memory) {
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/response-capacity.sock"}};
   WorkspaceService workspaces{memory, model, panes};
   ClientPeer owner{memory, model, ClientRole::interactive};

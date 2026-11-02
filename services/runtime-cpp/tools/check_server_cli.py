@@ -13,6 +13,12 @@ import tempfile
 import time
 
 
+FRAME_PREFIX = struct.Struct("<I")
+HANDSHAKE_MAGIC = b"TELARIPC"
+CLIENT_HELLO = 1
+SERVER_ACCEPT = 2
+
+
 def wait_socket(path, present):
     deadline = time.monotonic() + 12
     while path.exists() != present:
@@ -21,24 +27,26 @@ def wait_socket(path, present):
         time.sleep(0.01)
 
 
-def bridge_handshake(binary, socket, environment):
+def bridge_handshake(binary, socket, environment, schema):
     bridge = subprocess.Popen([str(binary), "server", "bridge", "--socket", str(socket)], env=environment,
                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
-        hello = b"TELARIPC\x01876b480d"
-        bridge.stdin.write(struct.pack("<I", len(hello)) + hello)
+        hello = HANDSHAKE_MAGIC + bytes([CLIENT_HELLO]) + schema
+        bridge.stdin.write(FRAME_PREFIX.pack(len(hello)) + hello)
         bridge.stdin.flush()
         response = b""
         deadline = time.monotonic() + 10
-        while len(response) < 21:
+        expected_payload = HANDSHAKE_MAGIC + bytes([SERVER_ACCEPT]) + schema
+        expected = FRAME_PREFIX.pack(len(expected_payload)) + expected_payload
+        while len(response) < len(expected):
             ready, _, _ = select.select([bridge.stdout], [], [], max(0, deadline - time.monotonic()))
             if not ready:
                 raise RuntimeError("Bridge handshake timed out")
-            chunk = os.read(bridge.stdout.fileno(), 21 - len(response))
+            chunk = os.read(bridge.stdout.fileno(), len(expected) - len(response))
             if not chunk:
                 raise RuntimeError("Bridge ended before its handshake")
             response += chunk
-        assert response == struct.pack("<I", 17) + b"TELARIPC\x02876b480d"
+        assert response == expected
         bridge.stdin.close()
         assert bridge.wait(timeout=5) == 0
     finally:
@@ -73,14 +81,17 @@ def check_runtime(binary, checkpoint_probe):
         try:
             assert stop(socket) == "telar runtime is not running\n"
             endpoint = invoke("endpoint", "--socket", socket).stdout
-            assert endpoint == f"{socket}\n876b480d\n"
+            lines = endpoint.splitlines()
+            assert len(lines) == 2 and lines[0] == str(socket)
+            schema = lines[1].encode("ascii")
+            assert len(schema) == 8
             inode = socket.stat().st_ino
             assert invoke("endpoint", "--socket", socket).stdout == endpoint
             assert socket.stat().st_ino == inode
             assert stat.S_IMODE(socket.stat().st_mode) == 0o600
             history = root / "data/telar/history.db"
             assert history.exists() and stat.S_IMODE(history.stat().st_mode) == 0o600
-            bridge_handshake(binary, socket, environment)
+            bridge_handshake(binary, socket, environment, schema)
 
             subprocess.run([str(checkpoint_probe), str(socket), "seed", str(root / "expected")],
                            env=environment, check=True, capture_output=True, timeout=30)
@@ -104,7 +115,7 @@ def check_runtime(binary, checkpoint_probe):
                     environment.pop(name, None)
                 environment.update(settings)
                 try:
-                    assert invoke("endpoint").stdout == f"{expected}\n876b480d\n"
+                    assert invoke("endpoint").stdout == f"{expected}\n{schema.decode('ascii')}\n"
                     stop(expected)
                 finally:
                     if expected.exists():

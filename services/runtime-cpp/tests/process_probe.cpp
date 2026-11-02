@@ -2,7 +2,7 @@
 #include <chrono>
 #include <filesystem>
 #include <iostream>
-#include <libproc.h>
+#include "platform/process_inspector.hpp"
 #include <thread>
 
 using namespace telar;
@@ -10,11 +10,8 @@ using namespace telar;
 static constexpr std::string_view missing_hooks_event = "no hooks from this pane: if it runs on a shared server, start it with --no-daemon";
 
 static int checkProcessName(ProtocolPeer &peer, char **arguments) {
-  proc_bsdinfo information{};
-  if (::proc_pidinfo(::getpid(), PROC_PIDTBSDINFO, 0, &information, sizeof(information)) != sizeof(information)) {
-    throw std::runtime_error{"Cannot inspect fixture process name"};
-  }
-  const std::string_view expected{information.pbi_comm, ::strnlen(information.pbi_comm, sizeof(information.pbi_comm))};
+  const auto process_name = telar::runtime::ProcessInspector{}.name(::getpid());
+  const auto expected = process_name.view();
   const auto started = std::chrono::steady_clock::now();
   peer.send(RequestRuntimeState{.client_identity = 1, .interactive = false});
   for (;;) {

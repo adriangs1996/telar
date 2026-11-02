@@ -9,7 +9,7 @@
 
 using namespace telar::runtime;
 using telar::Byte;
-namespace control = telar::runtime::traffic::control;
+namespace traffic_control = telar::runtime::traffic::control;
 
 template <typename Predicate>
 static void await(Predicate predicate) {
@@ -37,63 +37,63 @@ static void receiveAll(int socket, std::span<Byte> bytes) {
   }
 }
 
-static std::vector<Byte> request(int socket, control::Request request) {
-  std::array<Byte, control::Limits::request_bytes> output;
-  const auto body = control::Protocol::encode(output, request);
-  const auto prefix = control::Protocol::prefix(body.size());
+static std::vector<Byte> request(int socket, traffic_control::Request request) {
+  std::array<Byte, traffic_control::Limits::request_bytes> output;
+  const auto body = traffic_control::Protocol::encode(output, request);
+  const auto prefix = traffic_control::Protocol::prefix(body.size());
   for (const auto byte : prefix) { traffic::sendAll(socket, {&byte, 1}); }
   for (const auto byte : body) { traffic::sendAll(socket, {&byte, 1}); }
-  std::array<Byte, control::Protocol::prefix_bytes> header;
+  std::array<Byte, traffic_control::Protocol::prefix_bytes> header;
   receiveAll(socket, header);
   plugins::FrameReader reader{header};
   const auto size = reader.integer<std::uint32_t>();
-  check(size <= control::Limits::reply_bytes);
+  check(size <= traffic_control::Limits::reply_bytes);
   std::vector<Byte> reply(size);
   receiveAll(socket, reply);
   return reply;
 }
 
-static std::vector<Byte> request(const std::string &path, control::Request message) {
+static std::vector<Byte> request(const std::string &path, traffic_control::Request message) {
   const auto socket = traffic::connect(path);
   return request(socket.get(), message);
 }
 
 static void codec() {
-  std::array<Byte, control::Limits::reply_bytes> output;
-  control::Request redirect{.operation = control::Operation::redirect_start, .targets = {"127.0.0.1:443", "[::1]:80"}, .target_count = 2};
-  const auto encoded = control::Protocol::encode(output, redirect);
+  std::array<Byte, traffic_control::Limits::reply_bytes> output;
+  traffic_control::Request redirect{.operation = traffic_control::Operation::redirect_start, .targets = {"127.0.0.1:443", "[::1]:80"}, .target_count = 2};
+  const auto encoded = traffic_control::Protocol::encode(output, redirect);
   const std::vector<Byte> bytes{encoded.begin(), encoded.end()};
-  const auto decoded = control::Protocol::request(bytes);
+  const auto decoded = traffic_control::Protocol::request(bytes);
   check(decoded.operation == redirect.operation && decoded.target_count == 2 && decoded.targets[1] == "[::1]:80");
   redirect.processes[0] = static_cast<std::uint32_t>(::getpid());
   redirect.process_count = 1;
-  const auto process_selection = control::Protocol::request(control::Protocol::encode(output, redirect));
+  const auto process_selection = traffic_control::Protocol::request(traffic_control::Protocol::encode(output, redirect));
   check(process_selection.process_count == 1 && process_selection.processes[0] == static_cast<std::uint32_t>(::getpid()));
   redirect.processes[1] = redirect.processes[0];
   redirect.process_count = 2;
-  rejects([&] { control::Protocol::encode(output, redirect); });
+  rejects([&] { traffic_control::Protocol::encode(output, redirect); });
   redirect.process_count = 0;
   redirect.direction = telar::runtime::redirect::Direction::inbound;
-  check(control::Protocol::request(control::Protocol::encode(output, redirect)).direction == telar::runtime::redirect::Direction::inbound);
+  check(traffic_control::Protocol::request(traffic_control::Protocol::encode(output, redirect)).direction == telar::runtime::redirect::Direction::inbound);
   redirect.direction = telar::runtime::redirect::Direction::both;
-  check(control::Protocol::request(control::Protocol::encode(output, redirect)).direction == telar::runtime::redirect::Direction::both);
+  check(traffic_control::Protocol::request(traffic_control::Protocol::encode(output, redirect)).direction == telar::runtime::redirect::Direction::both);
   redirect.process_count = 1;
-  rejects([&] { control::Protocol::encode(output, redirect); });
+  rejects([&] { traffic_control::Protocol::encode(output, redirect); });
   redirect.process_count = 0;
   redirect.direction = telar::runtime::redirect::Direction::outbound;
   auto invalid = std::vector<Byte>{bytes.begin(), bytes.end()};
   invalid.push_back(0);
-  rejects([&] { control::Protocol::request(invalid); });
+  rejects([&] { traffic_control::Protocol::request(invalid); });
   invalid.assign(bytes.begin(), bytes.end());
-  invalid[sizeof(control::Protocol::magic)] = UINT8_MAX;
-  rejects([&] { control::Protocol::request(invalid); });
-  rejects([&] { control::Protocol::encode(output, control::Request{.operation = control::Operation::redirect_start}); });
-  rejects([&] { control::Protocol::encode(output, control::Request{.targets = {"127.0.0.1:80"}, .target_count = 1}); });
+  invalid[sizeof(traffic_control::Protocol::magic)] = UINT8_MAX;
+  rejects([&] { traffic_control::Protocol::request(invalid); });
+  rejects([&] { traffic_control::Protocol::encode(output, traffic_control::Request{.operation = traffic_control::Operation::redirect_start}); });
+  rejects([&] { traffic_control::Protocol::encode(output, traffic_control::Request{.targets = {"127.0.0.1:80"}, .target_count = 1}); });
   redirect.targets[0] = std::string_view{"127.0.0.1:8\0bad", 14};
-  rejects([&] { control::Protocol::encode(output, redirect); });
+  rejects([&] { traffic_control::Protocol::encode(output, redirect); });
 
-  control::Reply response{.result = control::Result::authorization_required, .status = {.capture = control::CaptureState::live, .redirect = control::RedirectState::active, .interfaces = 2}, .message = "fixture", .authorization = {"/usr/bin/sudo", "--", "/fixture/runtime"}, .argument_count = 3};
-  const auto reply = control::Protocol::reply(control::Protocol::encode(output, response));
+  traffic_control::Reply response{.result = traffic_control::Result::authorization_required, .status = {.capture = traffic_control::CaptureState::live, .redirect = traffic_control::RedirectState::active, .interfaces = 2}, .message = "fixture", .authorization = {"/usr/bin/sudo", "--", "/fixture/runtime"}, .argument_count = 3};
+  const auto reply = traffic_control::Protocol::reply(traffic_control::Protocol::encode(output, response));
   check(reply.result == response.result && reply.status.interfaces == 2 && reply.authorization[2] == "/fixture/runtime");
 }
 
@@ -102,38 +102,38 @@ static void captureControl(TlsTestMemory &memory) {
   const auto base = std::string{directory.path()} + "/runtime.sock";
   traffic::Service capture{memory, base + ".traffic"};
   ProxyOptions options{memory};
-  ProxyRuntime<TlsTestMemory, Kqueue, SystemNameResolver> proxy{memory, options, base, false};
-  control::Backend backend{memory, proxy, &capture, control::Configuration{.endpoint = base, .executable = "/fixture/runtime", .administration = true}};
-  control::Service service{memory, base + ".network", backend};
+  ProxyRuntime<TlsTestMemory, NativeEventLoop<TlsTestMemory>, SystemNameResolver> proxy{memory, options, base, false};
+  traffic_control::Backend backend{memory, proxy, &capture, traffic_control::Configuration{.endpoint = base, .executable = "/fixture/runtime", .administration = true}};
+  traffic_control::Service service{memory, base + ".network", backend};
   auto status = request(base + ".network", {});
-  check(control::Protocol::reply(status).status.capture == control::CaptureState::idle);
-  auto disabled = request(base + ".network", {.operation = control::Operation::redirect_start, .targets = {"127.0.0.1:80"}, .target_count = 1});
-  check(control::Protocol::reply(disabled).result == control::Result::disabled);
+  check(traffic_control::Protocol::reply(status).status.capture == traffic_control::CaptureState::idle);
+  auto disabled = request(base + ".network", {.operation = traffic_control::Operation::redirect_start, .targets = {"127.0.0.1:80"}, .target_count = 1});
+  check(traffic_control::Protocol::reply(disabled).result == traffic_control::Result::disabled);
 
   auto producer = traffic::connect(base + ".traffic");
   std::array<Byte, traffic::Protocol::greeting_bytes> greeting;
   traffic::sendAll(producer.get(), traffic::Protocol::greeting(greeting, traffic::Role::offline_capture));
   await([&] { return capture.captureStatus().state == decltype(capture)::CaptureState::offline; });
   auto active = request(base + ".network", {});
-  check(control::Protocol::reply(active).status.capture == control::CaptureState::offline);
-  control::Backend read_only{memory, proxy, &capture, control::Configuration{.endpoint = base, .executable = "/fixture/runtime"}};
-  std::array<Byte, control::Limits::reply_bytes> denied;
+  check(traffic_control::Protocol::reply(active).status.capture == traffic_control::CaptureState::offline);
+  traffic_control::Backend read_only{memory, proxy, &capture, traffic_control::Configuration{.endpoint = base, .executable = "/fixture/runtime"}};
+  std::array<Byte, traffic_control::Limits::reply_bytes> denied;
   const std::atomic<bool> cancelled{false};
-  const auto forbidden = control::Protocol::reply(read_only.handle({.operation = control::Operation::capture_stop}, denied, cancelled));
-  check(forbidden.result == control::Result::disabled && !forbidden.status.administration);
+  const auto forbidden = traffic_control::Protocol::reply(read_only.handle({.operation = traffic_control::Operation::capture_stop}, denied, cancelled));
+  check(forbidden.result == traffic_control::Result::disabled && !forbidden.status.administration);
   check(capture.captureStatus().state == decltype(capture)::CaptureState::offline);
-  auto stopped = request(base + ".network", {.operation = control::Operation::capture_stop});
-  check(control::Protocol::reply(stopped).result == control::Result::ok);
-  check(control::Protocol::reply(stopped).status.capture == control::CaptureState::idle);
+  auto stopped = request(base + ".network", {.operation = traffic_control::Operation::capture_stop});
+  check(traffic_control::Protocol::reply(stopped).result == traffic_control::Result::ok);
+  check(traffic_control::Protocol::reply(stopped).status.capture == traffic_control::CaptureState::idle);
   std::array<Byte, 1024> incoming;
   await([&] { return ::recv(producer.get(), incoming.data(), incoming.size(), MSG_DONTWAIT) == 0; });
 
   auto malformed = traffic::connect(base + ".network");
-  std::array<Byte, control::Protocol::prefix_bytes> excessive{0xff, 0xff, 0xff, 0x7f};
+  std::array<Byte, traffic_control::Protocol::prefix_bytes> excessive{0xff, 0xff, 0xff, 0x7f};
   traffic::sendAll(malformed.get(), excessive);
   await([&] { Byte byte; return ::recv(malformed.get(), &byte, 1, MSG_DONTWAIT) == 0; });
   status = request(base + ".network", {});
-  check(control::Protocol::reply(status).result == control::Result::ok);
+  check(traffic_control::Protocol::reply(status).result == traffic_control::Result::ok);
 }
 
 static void destinationAuthorization(TlsTestMemory &memory) {
@@ -141,13 +141,13 @@ static void destinationAuthorization(TlsTestMemory &memory) {
   const auto base = std::string{directory.path()} + "/runtime.sock";
   const auto missing_executable = std::string{directory.path()} + "/missing-runtime";
   ProxyOptions options{memory};
-  ProxyRuntime<TlsTestMemory, Kqueue, SystemNameResolver> proxy{memory, options, base, false};
+  ProxyRuntime<TlsTestMemory, NativeEventLoop<TlsTestMemory>, SystemNameResolver> proxy{memory, options, base, false};
   traffic::Service capture{memory, base + ".traffic"};
-  control::Backend backend{memory, proxy, &capture, control::Configuration{.endpoint = base, .executable = missing_executable, .redirect = true, .administration = true}};
-  control::Service service{memory, base + ".network", backend};
-  const auto bytes = request(base + ".network", {.operation = control::Operation::redirect_start, .targets = {"localhost:443"}, .target_count = 1, .processes = {static_cast<std::uint32_t>(::getpid())}, .process_count = 1});
-  const auto reply = control::Protocol::reply(bytes);
-  check(reply.result == control::Result::authorization_required || reply.result == control::Result::failed);
+  traffic_control::Backend backend{memory, proxy, &capture, traffic_control::Configuration{.endpoint = base, .executable = missing_executable, .redirect = true, .administration = true}};
+  traffic_control::Service service{memory, base + ".network", backend};
+  const auto bytes = request(base + ".network", {.operation = traffic_control::Operation::redirect_start, .targets = {"localhost:443"}, .target_count = 1, .processes = {static_cast<std::uint32_t>(::getpid())}, .process_count = 1});
+  const auto reply = traffic_control::Protocol::reply(bytes);
+  check(reply.result == traffic_control::Result::authorization_required || reply.result == traffic_control::Result::failed);
   check(reply.argument_count >= 11 && reply.authorization[2] == missing_executable);
   std::size_t targets = 0;
   for (std::size_t index = 7; index < reply.argument_count; index += 2) {
@@ -161,7 +161,7 @@ static void destinationAuthorization(TlsTestMemory &memory) {
       check(process.pid == ::getpid() && process.started_seconds != 0);
     }
   }
-  check(targets != 0 && reply.status.redirect == control::RedirectState::idle);
+  check(targets != 0 && reply.status.redirect == traffic_control::RedirectState::idle);
 }
 
 static void packageControl(TlsTestMemory &memory) {
@@ -171,9 +171,9 @@ static void packageControl(TlsTestMemory &memory) {
   const auto base = std::string{directory.path()} + "/runtime.sock";
   traffic::Service capture{memory, base + ".traffic"};
   ProxyOptions options{memory};
-  ProxyRuntime<TlsTestMemory, Kqueue, SystemNameResolver> proxy{memory, options, base, false};
-  control::Backend backend{memory, proxy, &capture, control::Configuration{.endpoint = base, .executable = "/fixture/runtime", .administration = true}};
-  control::Service service{memory, base + ".network", backend};
+  ProxyRuntime<TlsTestMemory, NativeEventLoop<TlsTestMemory>, SystemNameResolver> proxy{memory, options, base, false};
+  traffic_control::Backend backend{memory, proxy, &capture, traffic_control::Configuration{.endpoint = base, .executable = "/fixture/runtime", .administration = true}};
+  traffic_control::Service service{memory, base + ".network", backend};
   const auto package = [](app::Capability capability, Byte digest) {
     app::ServiceSpec specification;
     specification.plugin_id = 11;
@@ -187,37 +187,37 @@ static void packageControl(TlsTestMemory &memory) {
   const auto observer = package(app::Capability::traffic_observe, 0x5a);
   const auto recorder = package(app::Capability::traffic_record, 0x5b);
   const auto other = package(app::Capability::traffic_record, 0x5c);
-  const auto send = [&](const app::ServiceSpec &specification, const control::Request &message) {
+  const auto send = [&](const app::ServiceSpec &specification, const traffic_control::Request &message) {
     const auto channel = service.openPackage(specification);
     return request(channel.get(), message);
   };
-  auto denied = send(observer, {.operation = control::Operation::capture_stop});
-  check(control::Protocol::reply(denied).result == control::Result::disabled);
-  denied = send(observer, {.operation = control::Operation::recording, .recording = recording::Request{.operation = recording::Operation::list}});
-  check(control::Protocol::reply(denied).result == control::Result::disabled);
+  auto denied = send(observer, {.operation = traffic_control::Operation::capture_stop});
+  check(traffic_control::Protocol::reply(denied).result == traffic_control::Result::disabled);
+  denied = send(observer, {.operation = traffic_control::Operation::recording, .recording = recording::Request{.operation = recording::Operation::list}});
+  check(traffic_control::Protocol::reply(denied).result == traffic_control::Result::disabled);
   auto status = send(recorder, {});
-  check(control::Protocol::reply(status).result == control::Result::ok && !control::Protocol::reply(status).status.administration);
-  const control::Request start{.operation = control::Operation::recording, .recording = recording::Request{.operation = recording::Operation::start, .max_bytes = 4096, .max_events = 2}};
+  check(traffic_control::Protocol::reply(status).result == traffic_control::Result::ok && !traffic_control::Protocol::reply(status).status.administration);
+  const traffic_control::Request start{.operation = traffic_control::Operation::recording, .recording = recording::Request{.operation = recording::Operation::start, .max_bytes = 4096, .max_events = 2}};
   auto first = send(recorder, start);
   auto second = send(other, start);
-  const auto id = recording::Protocol::page(control::Protocol::reply(first).recording).id;
-  const auto other_id = recording::Protocol::page(control::Protocol::reply(second).recording).id;
+  const auto id = recording::Protocol::page(traffic_control::Protocol::reply(first).recording).id;
+  const auto other_id = recording::Protocol::page(traffic_control::Protocol::reply(second).recording).id;
   for (const auto operation : {recording::Operation::query, recording::Operation::stop, recording::Operation::erase, recording::Operation::pcapng}) {
-    const auto forbidden = send(other, {.operation = control::Operation::recording, .recording = recording::Request{.operation = operation, .id = id}});
-    check(control::Protocol::reply(forbidden).result == control::Result::failed);
+    const auto forbidden = send(other, {.operation = traffic_control::Operation::recording, .recording = recording::Request{.operation = operation, .id = id}});
+    check(traffic_control::Protocol::reply(forbidden).result == traffic_control::Result::failed);
   }
-  const auto listing = send(other, {.operation = control::Operation::recording, .recording = recording::Request{.operation = recording::Operation::list}});
-  const auto page = recording::Protocol::page(control::Protocol::reply(listing).recording);
+  const auto listing = send(other, {.operation = traffic_control::Operation::recording, .recording = recording::Request{.operation = recording::Operation::list}});
+  const auto page = recording::Protocol::page(traffic_control::Protocol::reply(listing).recording);
   plugins::FrameReader rows{page.rows};
   check(page.count == 1 && recording::Protocol::page(rows.bytes()).id == other_id);
   const auto revoked_channel = service.openPackage(recorder);
   recorder.permission->store(false, std::memory_order_release);
   capture.revokePackage(recorder);
   const auto revoked = request(revoked_channel.get(), {});
-  check(control::Protocol::reply(revoked).result == control::Result::disabled);
+  check(traffic_control::Protocol::reply(revoked).result == traffic_control::Result::disabled);
   rejects([&] { service.openPackage(recorder); });
-  const auto visible = request(base + ".network", {.operation = control::Operation::recording, .recording = recording::Request{.id = id}});
-  check(!recording::Protocol::page(control::Protocol::reply(visible).recording).active);
+  const auto visible = request(base + ".network", {.operation = traffic_control::Operation::recording, .recording = recording::Request{.id = id}});
+  check(!recording::Protocol::page(traffic_control::Protocol::reply(visible).recording).active);
 }
 
 struct SameUser {
@@ -284,7 +284,7 @@ static void authorityControl(TlsTestMemory &memory) {
   options.enabled = true;
   options.authority_directory = directory.path();
   options.capture.enabled = false;
-  ProxyRuntime<TlsTestMemory, Kqueue, SystemNameResolver> proxy{memory, options, std::string{directory.path()} + "/runtime.sock", false};
+  ProxyRuntime<TlsTestMemory, NativeEventLoop<TlsTestMemory>, SystemNameResolver> proxy{memory, options, std::string{directory.path()} + "/runtime.sock", false};
   const auto original = proxy.authorityStatus(true);
   check(original.active && original.accepting && original.trust == proxy_trust::Status::absent);
   const std::string certificate{reinterpret_cast<const char *>(original.certificate.data()), original.certificate_bytes};
@@ -297,7 +297,12 @@ static void authorityControl(TlsTestMemory &memory) {
   proxy.manageAuthority(proxy_trust::Action::install, commands);
   const auto installed = proxy.authorityStatus();
   check(installed.accepting && installed.trust == proxy_trust::Status::installed && installed.fingerprint_sha256 != rotated.fingerprint_sha256);
-  check(commands.calls.size() == 1 && commands.calls[0][1] == "add-trusted-cert");
+  check(commands.calls.size() == 1);
+#if defined(__APPLE__)
+  check(commands.calls[0][1] == "add-trusted-cert");
+#else
+  check(commands.calls[0][2] == "/usr/bin/trust" && commands.calls[0][3] == "anchor");
+#endif
   proxy.manageAuthority(proxy_trust::Action::rotate, commands);
   const auto replaced = proxy.authorityStatus();
   check(replaced.accepting && replaced.trust == proxy_trust::Status::installed && replaced.fingerprint_sha256 != installed.fingerprint_sha256);

@@ -62,7 +62,7 @@ static void testWorktreeOwnership(SystemAllocator &memory) {
 
 static void testExecutions(SystemAllocator &memory) {
   RuntimeModel model{memory};
-  Kqueue poller;
+  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
   ExecutionService executions{memory, model, poller};
   ClientPeer owner{memory, model, ClientRole::control};
   ClientPeer outsider{memory, model, ClientRole::control};

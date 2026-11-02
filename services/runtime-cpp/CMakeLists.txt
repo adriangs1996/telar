@@ -76,8 +76,12 @@ add_custom_command(
   VERBATIM)
 add_custom_target(cell-layout DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/cell_layout.hpp")
 
-if(NOT APPLE OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
-  message(FATAL_ERROR "The initial runtime target is macOS ARM64")
+if(APPLE)
+  set(TELAR_PLATFORM macos)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(TELAR_PLATFORM linux)
+else()
+  message(FATAL_ERROR "The runtime supports macOS and Linux")
 endif()
 
 add_library(runtime-core STATIC
@@ -91,18 +95,26 @@ add_library(runtime-core STATIC
   platform/pty_process.cpp
   platform/pipe_process.cpp
   platform/process_inspector.cpp
-  platform/host_metrics.cpp
+  platform/${TELAR_PLATFORM}/process_inspector.cpp
+  platform/${TELAR_PLATFORM}/host_metrics.cpp
   platform/local_listener.cpp
-  platform/event_loop.cpp
   history/database.cpp
   terminal/cell_projection.cpp)
+set_target_properties(runtime-core runtime-lua PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(runtime-core PUBLIC . "${CMAKE_CURRENT_BINARY_DIR}/generated" "${NGHTTP2_INCLUDE_DIR}")
 target_link_libraries(runtime-core PUBLIC telar::client)
 target_link_libraries(runtime-core PUBLIC "${NGHTTP2_LIBRARY}")
 target_link_libraries(runtime-core PUBLIC "${PCAP_LIBRARY}")
 target_include_directories(runtime-core PUBLIC "${BROTLI_INCLUDE_DIR}" "${ZSTD_INCLUDE_DIR}")
 target_link_libraries(runtime-core PUBLIC "${ZLIB_LIBRARY}" "${BROTLI_DECODER_LIBRARY}" "${BROTLI_ENCODER_LIBRARY}" "${BROTLI_COMMON_LIBRARY}" "${ZSTD_LIBRARY}")
-target_link_libraries(runtime-core PUBLIC ghostty-vt runtime-lua "${SQLITE3_LIBRARY}" Threads::Threads OpenSSL::SSL OpenSSL::Crypto "-framework IOKit" "-framework CoreFoundation" "-framework Security")
+target_link_libraries(runtime-core PUBLIC ghostty-vt runtime-lua "${SQLITE3_LIBRARY}" Threads::Threads OpenSSL::SSL OpenSSL::Crypto)
+if(APPLE)
+  target_sources(runtime-core PRIVATE platform/macos/event_loop.cpp)
+  target_link_libraries(runtime-core PUBLIC "-framework IOKit" "-framework CoreFoundation" "-framework Security")
+else()
+  target_compile_definitions(runtime-core PUBLIC _GNU_SOURCE)
+  target_link_libraries(runtime-core PUBLIC util)
+endif()
 option(TELAR_RUNTIME_DIAGNOSTICS "Enable runtime telemetry outside Debug builds" OFF)
 target_compile_definitions(runtime-core PUBLIC TELAR_DEBUG=$<CONFIG:Debug> TELAR_DIAGNOSTICS=$<OR:$<CONFIG:Debug>,$<BOOL:${TELAR_RUNTIME_DIAGNOSTICS}>>)
 target_compile_options(runtime-core PUBLIC -Wall -Wextra -Wpedantic)

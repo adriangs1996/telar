@@ -109,6 +109,7 @@ TabStripLayout::TabStripLayout(QQuickItem *parent)
 }
 
 TabStripLayout::~TabStripLayout() {
+  QObject::disconnect(frame_connection_);
   if (!clock_.isNull()) {
     clock_->detach(*this);
   }
@@ -161,12 +162,21 @@ void TabStripLayout::sample(std::uint64_t now_ns) {
 }
 
 void TabStripLayout::bindClock() {
+  QObject::disconnect(frame_connection_);
   if (!clock_.isNull()) {
     clock_->detach(*this);
   }
   clock_ = window() == nullptr ? nullptr : &WindowAnimationClock::forWindow(*window());
   if (!clock_.isNull()) {
     clock_->attach(*this);
+    frame_connection_ = connect(window(), &QQuickWindow::afterAnimating, this, [this] {
+      // Queue the sample before this frame's polish pass. A deadline timer
+      // waking after polish can skip the next display refresh.
+      if (eligible() && next_sample_ns_) {
+        frame_requested_ = true;
+        polish();
+      }
+    });
   }
 }
 
@@ -541,6 +551,9 @@ void TabStripLayout::rebuild() {
   frame_requested_ = false;
   if (!clock_.isNull()) {
     clock_->requestSynchronization();
+    if (next_sample_ns_) {
+      window()->update();
+    }
   }
   items_.reconcile(std::move(positioned));
   emit layoutChanged();

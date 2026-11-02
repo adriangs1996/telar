@@ -1,3 +1,4 @@
+#include "../platform/socket_signals.hpp"
 #pragma once
 
 #include "../platform/error.hpp"
@@ -15,10 +16,7 @@ inline bool socketWouldBlock(int error) noexcept {
 inline void configureProxySocket(int socket) {
   setCloseOnExec(socket);
   setNonblocking(socket);
-  const int enabled = 1;
-  if (::setsockopt(socket, SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof(enabled)) != 0) {
-    throw SystemError{"Disable proxy socket SIGPIPE"};
-  }
+  suppressSocketSignals(socket);
 }
 
 inline FileDescriptor openOriginSocket(int family) {
@@ -37,7 +35,12 @@ inline FileDescriptor openOriginSocket(int family) {
   constexpr int idle_seconds = 60;
   constexpr int interval_seconds = 10;
   constexpr int probe_count = 6;
-  constexpr Option options[] = {{SOL_SOCKET, SO_KEEPALIVE, enabled}, {IPPROTO_TCP, TCP_KEEPALIVE, idle_seconds}, {IPPROTO_TCP, TCP_KEEPINTVL, interval_seconds}, {IPPROTO_TCP, TCP_KEEPCNT, probe_count}};
+#if defined(__APPLE__)
+  constexpr int idle_option = TCP_KEEPALIVE;
+#else
+  constexpr int idle_option = TCP_KEEPIDLE;
+#endif
+  constexpr Option options[] = {{SOL_SOCKET, SO_KEEPALIVE, enabled}, {IPPROTO_TCP, idle_option, idle_seconds}, {IPPROTO_TCP, TCP_KEEPINTVL, interval_seconds}, {IPPROTO_TCP, TCP_KEEPCNT, probe_count}};
   for (const auto &option : options) {
     if (::setsockopt(socket.get(), option.level, option.name, &option.value, sizeof(option.value)) != 0) {
       throw SystemError{"Configure proxy origin keepalive"};

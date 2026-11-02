@@ -32,11 +32,11 @@ struct QueuedHistory {
 };
 
 template <Allocator Memory>
-struct FailingPoller : Kqueue {
-  explicit FailingPoller(RuntimeModel<Memory> &model) : model(model) {}
+struct FailingPoller : NativeEventLoop<Memory> {
+  explicit FailingPoller(Memory &memory, RuntimeModel<Memory> &model) : NativeEventLoop<Memory>(memory), model(model) {}
 
   void watch(int descriptor, std::uint64_t token) {
-    Kqueue::watch(descriptor, token);
+    NativeEventLoop<Memory>::watch(descriptor, token);
     for (const auto *pane : model.panes.items()) {
       if (pane != nullptr && pane->process->descriptor() == descriptor) {
         process = pane->process->processId();
@@ -52,7 +52,7 @@ struct FailingPoller : Kqueue {
 
   void remove(int descriptor) noexcept {
     ++removals;
-    Kqueue::remove(descriptor);
+    NativeEventLoop<Memory>::remove(descriptor);
   }
 
   RuntimeModel<Memory> &model;
@@ -65,7 +65,7 @@ struct FailingPoller : Kqueue {
 template <ConcurrentAllocator Memory>
 void checkLaunchRollback(Memory &memory, BackgroundService<Memory> &service) {
   RuntimeModel model{memory};
-  FailingPoller poller{model};
+  FailingPoller poller{memory, model};
   RequestWorker worker{memory, service};
   QueuedHistory history{worker};
   PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/unused/launch-failure.sock"}, history};

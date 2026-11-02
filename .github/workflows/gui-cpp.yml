@@ -1,0 +1,98 @@
+name: C++ GUI managed Qt
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/gui-cpp.yml'
+      - 'services/gui-cpp/**'
+      - 'dlls/telar-client/**'
+      - 'justfile'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/gui-cpp.yml'
+      - 'services/gui-cpp/**'
+      - 'dlls/telar-client/**'
+      - 'justfile'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gui-cpp-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  managed-qt:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-26, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install macOS build dependencies without Qt
+        if: runner.os == 'macOS'
+        run: |
+          brew install cmake ninja llvm
+          echo "CC=$(brew --prefix llvm)/bin/clang" >> "$GITHUB_ENV"
+          echo "CXX=$(brew --prefix llvm)/bin/clang++" >> "$GITHUB_ENV"
+
+      - name: Install Linux build dependencies without Qt
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cmake ninja-build g++-14 pkg-config patch \
+            libfontconfig1-dev libx11-dev libx11-xcb-dev libxext-dev libxfixes-dev \
+            libxi-dev libxrender-dev libxcb1-dev libxcb-cursor-dev libxcb-glx0-dev \
+            libxcb-keysyms1-dev libxcb-image0-dev libxcb-render0-dev libxcb-render-util0-dev \
+            libxcb-randr0-dev libxcb-icccm4-dev libxcb-shape0-dev libxcb-shm0-dev \
+            libxcb-sync-dev libxcb-util-dev libxcb-xfixes0-dev libxcb-xkb-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev wayland-protocols \
+            libegl1-mesa-dev libgl1-mesa-dev libssl-dev libdbus-1-dev
+          echo 'CC=gcc-14' >> "$GITHUB_ENV"
+          echo 'CXX=g++-14' >> "$GITHUB_ENV"
+
+      - name: Identify the Qt build toolchain
+        id: toolchain
+        shell: bash
+        run: |
+          { "$CXX" --version; cmake --version; uname -m; if [[ "$RUNNER_OS" == macOS ]]; then xcrun --show-sdk-path; fi; } > "$RUNNER_TEMP/qt-toolchain"
+          echo "key=$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$RUNNER_TEMP/qt-toolchain")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: .qt-cache
+          key: qt-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.key }}-${{ hashFiles('services/gui-cpp/cmake/qt.cmake', 'services/gui-cpp/cmake/qt/**') }}
+
+      - name: Test dependency integrity and package isolation
+        run: python3 -m unittest discover -s services/gui-cpp/tools -p test_qt_dependency.py -v
+
+      - name: Install Zig and build libghostty-vt
+        run: |
+          packaging/release/install-zig.sh "$RUNNER_TEMP/zig"
+          python3 services/runtime-cpp/tools/build_ghostty.py --zig "$RUNNER_TEMP/zig/zig" --build-dir "$RUNNER_TEMP/ghostty-build" --prefix "$RUNNER_TEMP/ghostty"
+
+      - name: Configure with managed Qt
+        run: |
+          cmake -S services/gui-cpp -B services/gui-cpp/out -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER="$CC" -DCMAKE_CXX_COMPILER="$CXX" \
+            -DGHOSTTY_VT_ROOT="$RUNNER_TEMP/ghostty" -DTELAR_GUI_QT_JOBS=3
+
+      - name: Build GUI and focused regression tests
+        run: |
+          cmake --build services/gui-cpp/out --parallel 3 \
+            --target telar-gui gui-status-bar-test gui-native-pointer-events-test
+          ctest --test-dir services/gui-cpp/out --output-on-failure -R '^gui-(qt-dependency|status-bar|native-pointer-events)$'
+
+      - name: Test native macOS navigation
+        if: runner.os == 'macOS'
+        run: |
+          cmake --build services/gui-cpp/out --parallel 3 --target gui-native-window-appearance-test
+          QT_QUICK_BACKEND=software ctest --test-dir services/gui-cpp/out --output-on-failure -R '^gui-native-window-appearance$'

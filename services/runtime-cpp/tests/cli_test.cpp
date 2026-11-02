@@ -2,6 +2,7 @@
 #include "cli/runtime_paths.hpp"
 #include "cli/server_options.hpp"
 #include <filesystem>
+#include <cstring>
 
 using namespace telar::runtime;
 using namespace telar::runtime::cli;

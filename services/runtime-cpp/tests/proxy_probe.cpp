@@ -1,3 +1,4 @@
+#include "platform/socket_signals.hpp"
 #include "protocol_peer.hpp"
 #include "proxy/secret_file.hpp"
 #include "text/base64.hpp"
@@ -37,7 +38,9 @@ public:
   EchoOrigin() : listener_(::socket(AF_INET, SOCK_STREAM, 0)) {
     require(static_cast<bool>(listener_));
     sockaddr_in address{};
+#if defined(__APPLE__)
     address.sin_len = sizeof(address);
+#endif
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     require(::bind(listener_.get(), reinterpret_cast<const sockaddr *>(&address), sizeof(address)) == 0);
@@ -70,7 +73,7 @@ private:
           client = FileDescriptor{::accept(listener_.get(), nullptr, nullptr)};
           require(static_cast<bool>(client));
           const int enabled = 1;
-          require(::setsockopt(client.get(), SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof(enabled)) == 0);
+          suppressSocketSignals(client.get());
           const timeval timeout{.tv_sec = 5, .tv_usec = 0};
           require(::setsockopt(client.get(), SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) == 0);
           continue;
@@ -98,11 +101,13 @@ static FileDescriptor connectProxy(std::uint16_t port) {
   require(static_cast<bool>(socket));
   const int enabled = 1;
   const timeval timeout{.tv_sec = 5, .tv_usec = 0};
-  require(::setsockopt(socket.get(), SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof(enabled)) == 0);
+  suppressSocketSignals(socket.get());
   require(::setsockopt(socket.get(), SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == 0);
   require(::setsockopt(socket.get(), SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) == 0);
   sockaddr_in address{};
+#if defined(__APPLE__)
   address.sin_len = sizeof(address);
+#endif
   address.sin_family = AF_INET;
   address.sin_port = htons(port);
   address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);

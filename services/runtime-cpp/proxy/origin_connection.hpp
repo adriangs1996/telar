@@ -27,7 +27,9 @@ public:
     std::array<char, ProxyHostname::maximum_bytes + 1> terminated{};
     std::copy(hostname.begin(), hostname.end(), terminated.begin());
     sockaddr_in numeric{};
+#if defined(__APPLE__)
     numeric.sin_len = sizeof(numeric);
+#endif
     numeric.sin_family = AF_INET;
     if (::inet_pton(AF_INET, terminated.data(), &numeric.sin_addr) == 1) {
       resolved_.addresses.front() = *NetworkAddress::copy(reinterpret_cast<const sockaddr *>(&numeric), sizeof(numeric));

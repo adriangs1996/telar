@@ -39,9 +39,9 @@ public:
     }
 
     library_.emplace(memory);
-    const auto keychain = trust_paths.keychain(memory, ProcessEnvironment{});
+    const auto destination = trust_paths.nativeDestination(memory, ProcessEnvironment{});
     proxy_trust::SystemCommand trust_command{memory, stderr};
-    proxy_trust::Service system_trust{memory, *library_, trust_paths, trust_command, keychain};
+    proxy_trust::Service system_trust{memory, *library_, trust_paths, trust_command, destination};
     if (const auto rotated = system_trust.rotateIfNeeded()) {
       std::fprintf(stderr, "telar proxy trust: installed %.*s\n", static_cast<int>(rotated->fingerprint.size()), rotated->fingerprint.data());
     }
@@ -127,8 +127,8 @@ public:
     AuthorityStatus result;
     if (!interception_) { return result; }
     const proxy_trust::Paths paths{memory_, authority_directory_};
-    const auto keychain = paths.keychain(memory_, ProcessEnvironment{});
-    const auto inspection = proxy_trust::inspect(memory_, *library_, paths, keychain);
+    const auto destination = paths.nativeDestination(memory_, ProcessEnvironment{});
+    const auto inspection = proxy_trust::inspect(memory_, *library_, paths, destination);
     const auto current = interception_->snapshot();
     requireTls(current != nullptr, "TLS authority is unavailable");
     const auto &authority = *current;
@@ -153,8 +153,8 @@ public:
   void manageAuthority(proxy_trust::Action action, Executor &executor) {
     if (!interception_) { throw std::invalid_argument{"Proxy TLS is disabled"}; }
     const proxy_trust::Paths paths{memory_, authority_directory_};
-    const auto keychain = paths.keychain(memory_, ProcessEnvironment{});
-    proxy_trust::Service trust{memory_, *library_, paths, executor, keychain};
+    const auto destination = paths.nativeDestination(memory_, ProcessEnvironment{});
+    proxy_trust::Service trust{memory_, *library_, paths, executor, destination};
     const auto previous = trust.inspect();
     if (previous.status == proxy_trust::Status::stale && !previous.record) { throw std::invalid_argument{"Proxy trust record is invalid"}; }
     interception_->suspend(true);

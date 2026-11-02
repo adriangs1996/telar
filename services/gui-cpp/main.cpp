@@ -177,6 +177,7 @@ void scheduleSmokeTest(const QCommandLineParser &parser, telar::gui::qt::Applica
 int main(int argc, char **argv) {
   QGuiApplication::setApplicationName(QStringLiteral("telar-gui"));
   QGuiApplication::setOrganizationName(QStringLiteral("Telar"));
+  telar::gui::platform::configureKeyRepeat();
   const QGuiApplication application{argc, argv};
   telar::gui::platform::configureGraphics();
   QQuickStyle::setStyle(QStringLiteral("Basic"));

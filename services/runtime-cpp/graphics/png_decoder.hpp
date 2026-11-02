@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #include "../terminal/ghostty_handle.hpp"
 #include <span>
 

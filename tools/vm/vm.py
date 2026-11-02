@@ -218,13 +218,19 @@ def running_pid():
     except (OSError, ValueError):
         return None
     try:
+        reaped, _ = os.waitpid(pid, os.WNOHANG)
+        if reaped == pid:
+            return None
+    except ChildProcessError:
+        pass
+    try:
         os.kill(pid, 0)
     except OSError:
         return None
     return pid
 
 
-def launch(display, seed_port=None):
+def launch(display, seed_port=None, extra_arguments=()):
     pid = running_pid()
     if pid:
         print(f"{NAME} is already running (pid {pid}); stop it first to change the display")
@@ -250,6 +256,7 @@ def launch(display, seed_port=None):
     ]
     if seed_port is not None:
         command += ["-smbios", f"type=1,serial=ds=nocloud;s=http://10.0.2.2:{seed_port}/"]
+    command.extend(extra_arguments)
     log = (STATE / "qemu.log").open("ab")
     process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
     pid_path().write_text(str(process.pid))
@@ -300,6 +307,10 @@ def guest(script, *args, tty=False, stdin=None):
 
 def sync():
     require_running()
+    sync_sources(ssh_command, GUEST_SRC)
+
+
+def sync_sources(ssh, destination):
     # Copy the working tree, including uncommitted changes, but no ignored files.
     # A staging directory lets rsync remove stale sources without deleting caches.
     names = subprocess.check_output(
@@ -309,11 +320,15 @@ def sync():
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 tar -xf - -C "$stage"
-mkdir -p "$HOME/{GUEST_SRC}"
+mkdir -p "$HOME/{destination}"
 rsync -a --delete --exclude=/.zig-cache/ --exclude=/zig-out/ --exclude=/.zig-out/ --exclude=/zig-pkg/ \\
-    "$stage/" "$HOME/{GUEST_SRC}/"
+    --exclude=/.qt-cache/ --exclude=/.dev/ \\
+    --exclude=/services/runtime-cpp/dependencies/ \\
+    --exclude=/services/runtime-cpp/out-vm/ --exclude=/services/runtime-cpp/out/ \\
+    --exclude=/services/gui-cpp/out-vm/ --exclude=/services/gui-cpp/out/ \\
+    "$stage/" "$HOME/{destination}/"
 '''
-    with subprocess.Popen(ssh_command("bash", "-c", script), stdin=subprocess.PIPE) as process:
+    with subprocess.Popen(ssh("bash", "-c", script), stdin=subprocess.PIPE) as process:
         try:
             with tarfile.open(fileobj=process.stdin, mode="w|", dereference=False) as archive:
                 for raw in sorted(set(names)):
@@ -370,18 +385,19 @@ TELAR_SOCKET="$PWD/.zig-out/dev/runtime.sock" ./zig-out/bin/telar server stop > 
 
 def qmp(command, **arguments):
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+        connection.settimeout(30)
         connection.connect(str(STATE / "qmp.sock"))
-        stream = connection.makefile("rw", encoding="utf-8")
-        stream.readline()
-        for message in ({"execute": "qmp_capabilities"}, {"execute": command, "arguments": arguments}):
-            stream.write(json.dumps(message) + "\n")
-            stream.flush()
-            while True:
-                reply = json.loads(stream.readline())
-                if "return" in reply:
-                    break
-                if "error" in reply:
-                    raise RuntimeError(reply["error"]["desc"])
+        with connection.makefile("rw", encoding="utf-8") as stream:
+            stream.readline()
+            for message in ({"execute": "qmp_capabilities"}, {"execute": command, "arguments": arguments}):
+                stream.write(json.dumps(message) + "\n")
+                stream.flush()
+                while True:
+                    reply = json.loads(stream.readline())
+                    if "return" in reply:
+                        break
+                    if "error" in reply:
+                        raise RuntimeError(reply["error"]["desc"])
         return reply["return"]
 
 

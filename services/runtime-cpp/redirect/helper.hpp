@@ -1,3 +1,4 @@
+#include "../platform/peer_credentials.hpp"
 #pragma once
 
 #include "../traffic/connection.hpp"
@@ -150,8 +151,8 @@ public:
     ShutdownSignals signals;
     auto monitor = traffic::connect(endpoint_);
     uid_t uid;
-    gid_t group;
-    if (::getpeereid(monitor.get(), &uid, &group) != 0 || uid == 0) { throw SystemError{"Redirect runtime must belong to an unprivileged account", EACCES}; }
+    const auto credentials = peerCredentials(monitor.get());
+    if (!credentials || (uid = credentials->user) == 0) { throw SystemError{"Redirect runtime must belong to an unprivileged account", EACCES}; }
     if (process_count_ != 0) { owners_.emplace(uid, std::span{selected_processes_}.first(process_count_)); }
     if (allowsIncoming(direction_)) { accounts_.emplace(memory_); accounts_->validate(); }
     std::array<Byte, Protocol::frame_bytes> hello;

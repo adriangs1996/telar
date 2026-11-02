@@ -73,7 +73,14 @@ private:
   }
 
   static sockaddr_in address(std::uint16_t port) noexcept {
-    return {.sin_len = sizeof(sockaddr_in), .sin_family = AF_INET, .sin_port = htons(port), .sin_addr = {htonl(INADDR_LOOPBACK)}, .sin_zero = {}};
+    sockaddr_in address{};
+#if defined(__APPLE__)
+    address.sin_len = sizeof(address);
+#endif
+    address.sin_family = AF_INET;
+    address.sin_port = htons(port);
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    return address;
   }
 
   static std::optional<ProxyListener> tryPort(std::uint16_t port, bool reclaim) {

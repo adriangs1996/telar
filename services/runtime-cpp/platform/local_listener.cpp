@@ -1,3 +1,5 @@
+#include "peer_credentials.hpp"
+#include "socket_signals.hpp"
 #include "local_listener.hpp"
 #include "error.hpp"
 #include "private_directory.hpp"
@@ -128,18 +130,14 @@ FileDescriptor LocalListener::accept(LocalPeerPolicy policy) {
     throw SystemError{"accept runtime client"};
   }
 
-  uid_t peer_user = 0;
-  gid_t peer_group = 0;
-  if (::getpeereid(connection.get(), &peer_user, &peer_group) != 0 || (peer_user != ::geteuid() && !(policy == LocalPeerPolicy::same_user_or_root && peer_user == 0))) {
+  const auto peer = peerCredentials(connection.get());
+  if (!peer || (peer->user != ::geteuid() && !(policy == LocalPeerPolicy::same_user_or_root && peer->user == 0))) {
     return FileDescriptor{};
   }
 
   setCloseOnExec(connection.get());
   setNonblocking(connection.get());
-  const int enabled = 1;
-  if (::setsockopt(connection.get(), SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof(enabled)) != 0) {
-    throw SystemError{"disable socket SIGPIPE"};
-  }
+  suppressSocketSignals(connection.get());
 
   return connection;
 }

@@ -34,6 +34,7 @@
 #include "qml_fixture.hpp"
 #include "qt/application.hpp"
 #include "qt/key_adapter.hpp"
+#include "qt/modal_reveal_layout.hpp"
 #include "qt/native_form_field.hpp"
 #include "qt/native_mode_layout.hpp"
 #include "qt/notification_layout.hpp"
@@ -683,6 +684,48 @@ private:
       return pane != nullptr && pane->screen.columns() == columns && pane->screen.rows() == rows;
     };
     QVERIFY2(telar::gui::test::waitForGuiCondition(fits_current_workbench, runtime_wait_ms), qPrintable(QStringLiteral("window=%1x%2 terminal=%3x%4").arg(window_->width()).arg(window_->height()).arg(terminal->width()).arg(terminal->height())));
+  }
+
+  Q_SLOT void tabSwitchKeepsTerminalViewport() {
+    QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto original_id = firstPane()->id;
+    const auto original_tab = QString::number(firstPane()->location.tab_id);
+    const auto original_size = firstPane()->size;
+    const auto tab_count = client_->tabs()->rowCount();
+    QString temporary_tab;
+    const auto restore = qScopeGuard([&] {
+      if (!temporary_tab.isEmpty()) {
+        client_->execute(Application::Action::select_tab, temporary_tab);
+        closeTemporaryTab({.count = tab_count, .pane_id = original_id});
+      }
+    });
+    client_->execute(Application::Action::new_tab);
+    QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != original_id, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    temporary_tab = QString::number(firstPane()->location.tab_id);
+    const auto viewport = client_->viewVersion().viewport;
+
+    constexpr int repetitions = 7;
+    for (int index = 0; index < repetitions; ++index) {
+      client_->execute(Application::Action::select_tab, original_tab);
+      QCOMPARE(client_->viewVersion().viewport, viewport);
+      const auto *pane = client_->pane(original_id);
+      QVERIFY(pane != nullptr);
+      QCOMPARE(pane->size.cols, original_size.cols);
+      QCOMPARE(pane->size.rows, original_size.rows);
+      QCOMPARE(pane->size.cell_width_px, original_size.cell_width_px);
+      QCOMPARE(pane->size.cell_height_px, original_size.cell_height_px);
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id == original_id, runtime_wait_ms);
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      QCOMPARE(client_->viewVersion().viewport, viewport);
+
+      client_->execute(Application::Action::select_tab, temporary_tab);
+      QCOMPARE(client_->viewVersion().viewport, viewport);
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != original_id, runtime_wait_ms);
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      QCOMPARE(client_->viewVersion().viewport, viewport);
+    }
   }
 
   Q_SLOT void componentOwnership() {
@@ -4406,6 +4449,13 @@ return {api_version=2, client={keybindings={
     QTRY_COMPARE_WITH_TIMEOUT(slot("right").value(QStringLiteral("nodes")).toList().size(), 1, runtime_wait_ms);
     QCOMPARE(slot("right").value(QStringLiteral("nodes")).toList().first().toMap().value(QStringLiteral("text")).toString().toUtf8(), QByteArray::fromHex("c3a120cebb"));
     QCOMPARE(slot("right").value(QStringLiteral("error")).toString(), QString{});
+    auto *motion = window_->findChild<ModalRevealLayout *>(QStringLiteral("componentPanelMotion"));
+    QVERIFY(motion != nullptr);
+    QList<qreal> entrance_samples;
+    const QObject entrance_observer;
+    QObject::connect(motion, &ModalRevealLayout::frameChanged, &entrance_observer, [&] {
+      entrance_samples.append(motion->reveal());
+    });
     QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
     QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
     QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("nodes")).toList().size(), 8, runtime_wait_ms);
@@ -4413,6 +4463,10 @@ return {api_version=2, client={keybindings={
     QVERIFY(popup != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(popup->property("visible").toBool(), runtime_wait_ms);
     QCOMPARE(client_->componentPanel().value(QStringLiteral("error")).toString(), QString{});
+    QTRY_VERIFY_WITH_TIMEOUT(entrance_samples.size() > 1 && motion->reveal() == 1, runtime_wait_ms);
+    QCOMPARE(entrance_samples.front(), qreal{0});
+    QCOMPARE(entrance_samples.back(), qreal{1});
+    QVERIFY(std::ranges::is_sorted(entrance_samples));
     QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
     verifyComponentMeters();
     const auto *paragraph = componentItem(QStringLiteral("text"));

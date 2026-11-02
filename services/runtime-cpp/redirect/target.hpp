@@ -43,10 +43,14 @@ struct Target {
     std::ranges::copy(host, terminated.begin());
     Target result;
     sockaddr_in v4{};
+#if defined(__APPLE__)
     v4.sin_len = sizeof(v4);
+#endif
     v4.sin_family = AF_INET;
     sockaddr_in6 v6{};
+#if defined(__APPLE__)
     v6.sin6_len = sizeof(v6);
+#endif
     v6.sin6_family = AF_INET6;
     if (::inet_pton(AF_INET, terminated.data(), &v4.sin_addr) == 1) {
       const auto address = ntohl(v4.sin_addr.s_addr);

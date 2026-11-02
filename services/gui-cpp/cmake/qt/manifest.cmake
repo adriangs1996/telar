@@ -1,0 +1,10 @@
+# Official source archives and security fixes. Update the complete set together.
+set(TELAR_QT_VERSION 6.12.0)
+set(TELAR_QT_SOURCE_URL "https://download.qt.io/official_releases/qt/6.12/${TELAR_QT_VERSION}/submodules")
+set(TELAR_QT_SHA256_qtbase a951bd163c7b80fc6b8c88d7668fb56abf91c152373e13c10666763238131307)
+set(TELAR_QT_SHA256_qtshadertools c7d84f436e1aaef39fdcadebf2bd71bdf24dc69497e13f2e0198873cbbfea2ab)
+set(TELAR_QT_SHA256_qtdeclarative 311f3a2603e1973bb59baef9dfa740a376de713157d4782ee043681e889c9260)
+set(TELAR_QT_SHA256_qtsvg e4ab39534ec97987b1b9b60ef7f4d3253d5912a69f8c713a01753174a4029331)
+set(TELAR_QT_SHA256_qtwayland ae14d9bcf1bb3c300a3ab2e6a53f50284e5c6c966a4ac4cc5aedcb1bc74e4d02)
+set(TELAR_QT_PATCH_URL "https://download.qt.io/official_releases/qt/6.12/CVE-2026-105924-qtbase-6.12.diff")
+set(TELAR_QT_PATCH_SHA256 c27d27b86aaf2cdab0c18d513fbb94a432e98782eddfc5f856387e4be68be50b)
