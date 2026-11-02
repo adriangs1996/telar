@@ -24,6 +24,12 @@ Raw results and frozen applications survive in ignored
 All measurement archives were removed from the source tree, preserving Git history,
 real tests, fixtures and tools. Keep future generated output in ignored `out*/`.
 
+Personal cleanup on 2026-11-02 removed 33 GUI build directories, 25 obsolete
+preview bundles, temporary outputs and task-local Zig caches. Recorded free space
+increased by 24.6 GB. Preview8 in use, Preview27, all 1,797 frozen benchmark inputs,
+the Ghostty install and Linux VM/access helper were retained. Source HEAD and
+worktree cleanliness were unchanged. Finished execution records were also cleared.
+
 The Linux correctness mirror is `/home/parity/telar`. Its retained access helper
 is `services/gui-cpp/out-dependencies/linux_vm_exec.py` on Personal; invoke it
 from the task root with one shell-command argument. It is an owned VM with

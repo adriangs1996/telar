@@ -4,7 +4,8 @@ Current separate macOS Release on Personal: `out-adoption/Telar C++ Preview 27.a
 relative to the task worktree named in [the handoff](../../docs/gui-cpp-personal-handoff.md).
 Its deployed GUI SHA256 is
 `eeb50140eb6387a1d211ffa8f1dd7c6d25ad8d4540e480c7513d0f7034ad1617`.
-Preview26 and earlier bundles remain available; nothing replaces the installed app.
+After cleanup on 2026-11-02, Preview8 remains because it is in use; obsolete
+previews, including Preview26, were removed. Preview27 and the installed app remain.
 
 From that worktree's root on Personal:
 

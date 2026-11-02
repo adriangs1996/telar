@@ -141,6 +141,9 @@ shasum -a 256 "$benchmark_dir/bin/original-telar" \
 
 These inputs exist on Personal, not in a fresh clone. `frozen-inputs.json` lists
 their hashes; `candidate-freeze.json` records the deployed copy and SDK.
+Cleanup on 2026-11-02 preserved all 1,797 listed files and rechecked the frozen
+GUI hashes. Old build directories and obsolete previews were removed; rebuild
+from source for a new variant. Preview8 in use and Preview27 remain available.
 `valid-pair-summary.json` and `summarize_valid_pairs.py` describe the final aggregation.
 Use `headline-final-1` for terminal/splits/tabs/1K and **`graphics-four-k-final-2`**
 for actual3840×2160. Resource correction, idle and attachment results are adjacent.
