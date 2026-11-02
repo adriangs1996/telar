@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../memory/slot_indexes.hpp"
+#include "../memory/drop_channel.hpp"
 #include "connection.hpp"
 #include "listener.hpp"
 #include "refusal.hpp"
@@ -12,11 +13,13 @@ namespace telar::runtime {
 template <ConcurrentAllocator Memory, EventLoop Poller, HostnameResolver Resolver>
 class ProxyService {
 public:
-  explicit ProxyService(Memory &memory, const ProxyOptions<Memory> &options, const ProxySecret &secret, const TlsInterception<Memory> &interception, ProxyListener listener)
-      : memory_(memory), options_(options), secret_(secret), interception_(interception), listener_(std::move(listener)), observations_(memory, options.capture), resolutions_(resolution_signal_) {
+  explicit ProxyService(Memory &memory, const ProxyOptions<Memory> &options, const ProxySecret &secret, const TlsInterception<Memory> &interception, ProxyListener listener, traffic::FlowControl *flows = nullptr)
+      : memory_(memory), options_(options), secret_(secret), interception_(interception), listener_(std::move(listener)), observations_(memory, options.capture, flows), resolutions_(resolution_signal_), flows_(flows) {
     poller_.watch(listener_.descriptor(), listener_token);
     poller_.watch(stop_signal_.descriptor(), stop_token);
     poller_.watch(resolution_signal_.descriptor(), resolution_token);
+    poller_.watch(adoption_signal_.descriptor(), adoption_token);
+    if (flows_) { poller_.watch(flows_->descriptor(), flow_token); }
     worker_ = std::thread{[this] { run(); }};
   }
 
@@ -55,6 +58,18 @@ public:
 
   bool failed() const noexcept {
     return failed_.load(std::memory_order_acquire);
+  }
+
+  bool adopt(redirect::Connection connection) noexcept {
+    if (stopping_.load(std::memory_order_acquire) || failed()) {
+      return false;
+    }
+    const bool accepted = adoptions_.publish(std::move(connection));
+    if (!accepted) {
+      limit_drops_.fetch_add(1, std::memory_order_relaxed);
+    }
+    adoption_signal_.notify();
+    return accepted;
   }
 
 private:
@@ -99,7 +114,7 @@ private:
             slot->connection->expire(now);
             advance(index, {}, now);
           } else if (slot->connection->buffered() || (slot->connection->deadline() && now >= *slot->connection->deadline())) {
-            advance(index, {}, now);
+            advance(index, TunnelReadiness::available(), now);
           }
           if (slot) {
             if (const auto deadline = slot->connection->deadline()) {
@@ -122,6 +137,9 @@ private:
           dispatch(event, Policy::Clock::now());
         }
       }
+    } catch (const std::exception &error) {
+      std::fprintf(stderr, "telar proxy service: %s\n", error.what());
+      failed_.store(true, std::memory_order_release);
     } catch (...) {
       failed_.store(true, std::memory_order_release);
     }
@@ -129,6 +147,7 @@ private:
     refusal_watch_.remove(poller_);
     refusal_.reset();
     occupied_.forEach([this](std::size_t index) { release(index); });
+    adoptions_.close();
     poller_.remove(listener_.descriptor());
     listener_.close();
   }
@@ -147,6 +166,22 @@ private:
           advance(index, {}, now);
         }
       });
+    } else if (event.token == flow_token) {
+      flows_->drain();
+      occupied_.forEach([&](std::size_t index) { advance(index, TunnelReadiness::available(), now); });
+    } else if (event.token == adoption_token) {
+      adoption_signal_.drain();
+      while (auto connection = adoptions_.tryReceive()) {
+        const auto index = admit(now, true);
+        if (!index) {
+          continue;
+        }
+        try {
+          keep(makeOwned<Connection>(memory_, memory_, std::move(*connection), options_, secret_, observations_.counters), *index, now);
+        } catch (...) {
+          release(*index);
+        }
+      }
     } else if (event.token == refusal_token) {
       if (refusal_watch_.matches(event)) {
         advanceRefusal(now);
@@ -189,20 +224,24 @@ private:
       }
       try {
         auto connection = makeOwned<Connection>(memory_, memory_, std::move(child), options_, secret_, observations_.counters);
-        slots_[*index].emplace(std::move(connection), nextGeneration());
-        occupied_.insert(*index);
-        active_.fetch_add(1, std::memory_order_relaxed);
-        advance(*index, {}, now);
+        keep(std::move(connection), *index, now);
       } catch (...) {
         release(*index);
       }
     }
   }
 
-  std::optional<std::size_t> admit(Time now) noexcept {
+  void keep(Owned<Connection, Memory> connection, std::size_t index, Time now) {
+    slots_[index].emplace(std::move(connection), nextGeneration());
+    occupied_.insert(index);
+    active_.fetch_add(1, std::memory_order_relaxed);
+    advance(index, {}, now);
+  }
+
+  std::optional<std::size_t> admit(Time now, bool authenticated = false) noexcept {
     std::size_t unauthenticated = 0;
     occupied_.forEach([&](std::size_t index) { unauthenticated += slots_[index]->connection->policy().phase() == Policy::Phase::connect_head; });
-    if (unauthenticated >= Policy::maximum_unauthenticated) {
+    if (!authenticated && unauthenticated >= Policy::maximum_unauthenticated) {
       if (const auto evicted = oldest(Policy::Closure::evict_head, now)) {
         release(*evicted);
         observations_.counters.record(ProxyCounter::unauthenticated_eviction);
@@ -255,6 +294,9 @@ private:
       }
       slot.child.update(poller_, slot.connection->descriptor(TlsSide::child), token(index, slot.child_generation, TlsSide::child), slot.connection->interest(TlsSide::child));
       slot.origin.update(poller_, slot.connection->descriptor(TlsSide::origin), token(index, slot.origin_generation, TlsSide::origin), slot.connection->interest(TlsSide::origin));
+    } catch (const std::exception &error) {
+      std::fprintf(stderr, "telar proxy watch: %s\n", error.what());
+      release(index);
     } catch (...) {
       release(index);
     }
@@ -299,6 +341,8 @@ private:
   static constexpr std::uint64_t stop_token = 2;
   static constexpr std::uint64_t resolution_token = 3;
   static constexpr std::uint64_t refusal_token = 4;
+  static constexpr std::uint64_t adoption_token = 5;
+  static constexpr std::uint64_t flow_token = 6;
   static constexpr unsigned side_bits = 1;
   static constexpr unsigned slot_bits = 8;
   static constexpr unsigned generation_shift = slot_bits + side_bits;
@@ -317,7 +361,10 @@ private:
   Poller poller_;
   CompletionSignal stop_signal_;
   CompletionSignal resolution_signal_;
+  CompletionSignal adoption_signal_;
+  DropChannel<redirect::Connection, 32> adoptions_;
   typename NameResolutions<Resolver>::Notifications resolutions_;
+  traffic::FlowControl *flows_;
   std::array<std::optional<Slot>, Policy::capacity> slots_;
   SlotIndexes<Policy::capacity> occupied_;
   std::optional<ProxyRefusal> refusal_;

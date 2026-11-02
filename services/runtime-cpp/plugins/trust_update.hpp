@@ -9,9 +9,7 @@
 namespace telar::runtime::plugins {
 
 template <Allocator Memory>
-void updateTrust(Memory &memory, const Package &package, Capabilities capabilities, String<Memory> path) {
-  auto store = TrustStore::load(memory, path);
-  store.upsert(package.manifest, package.digest, capabilities);
+void saveTrust(Memory &memory, const TrustStore &store, String<Memory> path) {
   const auto contents = store.json(memory);
 
   resolveAbsolutePath(path);
@@ -22,6 +20,20 @@ void updateTrust(Memory &memory, const Package &package, Capabilities capabiliti
   if (written != 0) {
     throw SystemError{"Replace plugin trust store", written};
   }
+}
+
+template <Allocator Memory>
+void updateTrust(Memory &memory, const Package &package, Capabilities capabilities, String<Memory> path) {
+  auto store = TrustStore::load(memory, path);
+  store.upsert(package.manifest, package.digest, capabilities);
+  saveTrust(memory, store, std::move(path));
+}
+
+template <Allocator Memory>
+void revokeTrust(Memory &memory, std::string_view id, String<Memory> path) {
+  auto store = TrustStore::load(memory, path);
+  store.revoke(id);
+  saveTrust(memory, store, std::move(path));
 }
 
 }

@@ -40,7 +40,7 @@ public:
         continue;
       }
       const auto *existing = X509_OBJECT_get0_X509(object);
-      if (X509_NAME_cmp(X509_get_subject_name(existing), X509_get_subject_name(certificate)) == 0) {
+      if (X509_cmp(existing, certificate) == 0) {
         return;
       }
     }

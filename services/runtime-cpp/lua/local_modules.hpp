@@ -81,6 +81,12 @@ private:
       lua_getglobal(state, "telar");
       return 1;
     }
+    if (domain == ModuleDomain::package && name == "telar.traffic") {
+      lua_getglobal(state, "telar");
+      lua_getfield(state, -1, "traffic");
+      if (lua_isnil(state, -1)) { return luaL_error(state, "Traffic API is unavailable"); }
+      return 1;
+    }
     if (!validIdentifier(name)) {
       return raise(state, "Invalid local module name", "invalid local module name");
     }

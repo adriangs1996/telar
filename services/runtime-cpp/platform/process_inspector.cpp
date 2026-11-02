@@ -36,7 +36,7 @@ std::optional<ProcessSnapshot> ProcessInspector::snapshot(pid_t process) const n
   }
 
   proc_bsdinfo information{};
-  if (::proc_pidinfo(process, PROC_PIDTBSDINFO, 0, &information, sizeof(information)) != sizeof(information) || information.pbi_uid != ::geteuid()) {
+  if (::proc_pidinfo(process, PROC_PIDTBSDINFO, 0, &information, sizeof(information)) != sizeof(information) || information.pbi_uid != uid_) {
     return std::nullopt;
   }
 

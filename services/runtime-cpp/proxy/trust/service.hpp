@@ -5,6 +5,8 @@
 
 namespace telar::runtime::proxy_trust {
 
+enum class Action { install, uninstall, rotate };
+
 template <ConcurrentAllocator Memory, TrustCommandExecutor Executor>
 class Service {
 public:
@@ -15,7 +17,7 @@ public:
     return proxy_trust::inspect(memory_, library_, paths_, keychain_);
   }
 
-  Record install(const std::optional<Record> &previous) {
+  Record install(const std::optional<Record> &previous, bool force_rotation = false) {
     TELAR_TRACE("proxy.installSystemTrust");
     if (keychain_.empty()) {
       throw std::invalid_argument{"Home directory unavailable for proxy trust"};
@@ -25,7 +27,7 @@ public:
     }
 
     const auto directory = paths_.prepare();
-    PreparedAuthority prepared{memory_, library_, directory.get()};
+    PreparedAuthority prepared{memory_, library_, directory.get(), AuthorityPreparation{.force_rotation = force_rotation}};
     const auto certificate = paths_.file(prepared.certificateName());
     Record replacement;
     replacement.fingerprint = prepared.authority().fingerprint();
@@ -78,7 +80,7 @@ public:
 
 private:
   void remove(const Record &record) {
-    executor_.run(std::to_array<std::string_view>({"/usr/bin/security", "delete-certificate", "-Z", {record.fingerprint.data(), record.fingerprint.size()}, record.store.view()}));
+    executor_.run(std::to_array<std::string_view>({"/usr/bin/security", "delete-certificate", "-t", "-Z", {record.fingerprint.data(), record.fingerprint.size()}, record.store.view()}));
   }
 
   Memory &memory_;

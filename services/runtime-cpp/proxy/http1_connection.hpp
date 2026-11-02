@@ -7,10 +7,15 @@
 
 namespace telar::runtime {
 
-template <Http1CapturePolicy Capture = IgnoreHttp1Capture>
+template <Http1CapturePolicy Capture = IgnoreHttp1Capture, typename Relay = Http1MessageRelay>
 class Http1Connection {
 public:
   explicit Http1Connection(ProxyCounters &counters, Capture capture = {}) noexcept : counters_(counters), capture_(std::move(capture)) {
+    capture_.begin();
+  }
+
+  template <Allocator Memory, typename Context>
+  Http1Connection(Memory &memory, ProxyCounters &counters, Capture capture, Context context) : counters_(counters), capture_(std::move(capture)), request_(memory, context, false), response_(memory, context, true) {
     capture_.begin();
   }
 
@@ -23,8 +28,12 @@ public:
 
     bool active = false;
     for (std::size_t round = 0; round < maximum_rounds && !finished_ && !upgraded_; ++round) {
-      const bool request_progress = advanceMessage(request_, child, origin, readiness);
+      bool request_progress = advanceMessage(request_, child, origin, readiness);
       active = active || request_progress;
+      if (sendContinue(child)) {
+        active = true;
+        request_progress = advanceMessage(request_, child, origin, TunnelReadiness::available()) || request_progress;
+      }
       if (request_.state() == State::head_too_large) {
         reject(request_head_too_large);
         return sendRejection(child) || active;
@@ -43,6 +52,7 @@ public:
 
       if (!response_started_ && request_.head()) {
         response_.reset(true, request_.head()->head_request);
+        if constexpr (requires { response_.destinationHead(request_.originalHead()); }) { response_.destinationHead(request_.originalHead()); }
         response_started_ = true;
       }
       if (!response_started_) {
@@ -80,6 +90,9 @@ public:
     }
     SocketInterest interest;
     interest.include(request_.sourceInterest());
+    if constexpr (requires { request_.continueBytes(); }) {
+      if (!request_.continueBytes().empty()) { interest.include(continue_waiting_); }
+    }
     if (response_started_) {
       interest.include(response_.destinationInterest());
     }
@@ -121,16 +134,46 @@ public:
     return !finished_ && !upgraded_ && request_.started() ? 1 : 0;
   }
 
+  auto deadline() const noexcept -> std::optional<std::chrono::steady_clock::time_point> {
+    if constexpr (requires { request_.deadline(); }) {
+      const auto request = request_.deadline();
+      const auto response = response_.deadline();
+      return request && response ? std::min(*request, *response) : request ? request : response;
+    }
+    return std::nullopt;
+  }
+
 private:
   using State = Http1MessageRelay::State;
 
   template <PeekableByteStream Source, ByteStream Destination>
-  bool advanceMessage(Http1MessageRelay &message, Source &source, Destination &destination, TunnelReadiness readiness) noexcept {
-    if (!readiness.child.satisfies(message.sourceInterest()) && !readiness.origin.satisfies(message.destinationInterest())) {
+  bool advanceMessage(Relay &message, Source &source, Destination &destination, TunnelReadiness readiness) noexcept {
+    bool expired = false;
+    if constexpr (requires { message.deadline(); }) {
+      const auto deadline = message.deadline();
+      expired = deadline && std::chrono::steady_clock::now() >= *deadline;
+    }
+    if (!expired && !readiness.child.satisfies(message.sourceInterest()) && !readiness.origin.satisfies(message.destinationInterest())) {
       return false;
     }
     Http1TransportObserver observer{counters_, capture_, &message == &request_ ? CaptureSide::request : CaptureSide::response};
     return message.advance(source, destination, observer);
+  }
+
+  template <ByteStream Child>
+  bool sendContinue(Child &child) noexcept {
+    if (request_.state() == State::failed) { return false; }
+    if constexpr (requires { request_.continueBytes(); }) {
+      const auto bytes = request_.continueBytes();
+      if (bytes.empty()) { return false; }
+      const auto result = child.write({reinterpret_cast<const std::uint8_t *>(bytes.data()), bytes.size()});
+      if (result.state == StreamResult::State::blocked) { continue_waiting_ = result.waiting; return false; }
+      if (result.state != StreamResult::State::data || result.bytes == 0) { finished_ = true; return false; }
+      request_.continueWritten(result.bytes);
+      continue_waiting_ = StreamReadiness::writable;
+      return true;
+    }
+    return false;
   }
 
   void finishResponse() noexcept {
@@ -141,7 +184,9 @@ private:
       return;
     }
 
-    capture_.finishResponse(head.status);
+    if constexpr (requires { response_.captureIncomplete(); capture_.finishResponse(head.status, false); }) {
+      capture_.finishResponse(head.status, !response_.captureIncomplete());
+    } else { capture_.finishResponse(head.status); }
     if (request_.state() != State::complete) {
       finished_ = true;
     } else if (head.upgrade) {
@@ -182,8 +227,9 @@ private:
   static constexpr std::string_view response_head_too_large = "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
   ProxyCounters &counters_;
   [[no_unique_address]] Capture capture_;
-  Http1MessageRelay request_;
-  Http1MessageRelay response_;
+  Relay request_;
+  Relay response_;
+  StreamReadiness continue_waiting_ = StreamReadiness::writable;
   std::string_view rejection_;
   std::size_t rejection_offset_ = 0;
   StreamReadiness rejection_waiting_ = StreamReadiness::writable;

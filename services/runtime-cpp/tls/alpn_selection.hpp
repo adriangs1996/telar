@@ -48,7 +48,7 @@ public:
   }
 
 private:
-  std::array<unsigned char, 8> name_;
+  std::array<unsigned char, 255> name_;
   unsigned char length_ = 0;
 };
 

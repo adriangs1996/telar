@@ -7,6 +7,8 @@
 #include "counters.hpp"
 #include "options.hpp"
 #include "origin_connection.hpp"
+#include "../redirect/connection.hpp"
+#include "../tls/alpn_offer.hpp"
 
 namespace telar::runtime {
 
@@ -17,6 +19,7 @@ public:
 
   enum class State {
     reading,
+    probing,
     establishing,
     replying,
     draining,
@@ -30,8 +33,15 @@ public:
         secret_(secret),
         counters_(counters) {}
 
+  explicit ConnectHandshake(redirect::Connection connection, const ProxyOptions<Memory> &options, const ProxySecret &secret, ProxyCounters &counters) noexcept
+      : child_(std::move(connection.child)), options_(options), secret_(secret), counters_(counters), adopted_origin_(std::move(connection.origin)), state_(State::established), transparent_(true) {
+    hostname_.assign(connection.target.host.view());
+    if (options_.transparent_tls) { state_ = State::probing; }
+  }
+
   void advance(bool origin_writable, Time now) noexcept {
     TELAR_TRACE("proxy.connectHandshake");
+    if (state_ == State::probing) { probe(now); }
     if (state_ == State::reading) {
       readHead(now);
     }
@@ -62,6 +72,7 @@ public:
   }
 
   std::optional<Time> deadline() const noexcept {
+    if (state_ == State::probing && probe_until_ != Time{}) { return std::min(probe_until_, probe_after_); }
     return state_ == State::draining ? std::optional{drain_until_} : std::nullopt;
   }
 
@@ -70,20 +81,30 @@ public:
   }
 
   int originDescriptor() const noexcept {
+    if (transparent_) {
+      return adopted_origin_.get();
+    }
     return origin_ ? origin_->descriptor() : -1;
   }
 
   std::size_t originAttempt() const noexcept {
+    if (transparent_) {
+      return 1;
+    }
     return origin_ ? origin_->attempt() : 0;
   }
 
   bool wantsChildRead() const noexcept {
-    return state_ == State::reading || state_ == State::draining;
+    return state_ == State::reading || state_ == State::draining || (state_ == State::probing && probe_after_ == Time{});
   }
 
   bool wantsChildWrite() const noexcept {
     return state_ == State::replying;
   }
+
+  bool wantsOriginRead() const noexcept { return state_ == State::probing && !hello_.tls(); }
+
+  std::string_view failure() const noexcept { return failure_; }
 
   bool wantsOriginWrite() const noexcept {
     return state_ == State::establishing && origin_ && origin_->state() == Origin::State::connecting;
@@ -94,11 +115,43 @@ public:
   }
 
   bool intercept() const noexcept {
-    return options_.intercept_hosts.contains(hostname_.view());
+    return transparent_ ? inspected_ : options_.intercept_hosts.contains(hostname_.view());
   }
 
 private:
   using Origin = OriginConnection<Resolver>;
+
+  void probe(Time now) noexcept {
+    if (!hello_.tls()) {
+      std::uint8_t byte;
+      const auto count = ::recv(adopted_origin_.get(), &byte, 1, MSG_PEEK);
+      if (count > 0) { state_ = State::established; return; }
+      if (count == 0 || (count < 0 && !socketWouldBlock(errno))) { state_ = State::closed; failure_ = "origin_closed_before_client_hello"; return; }
+    }
+    if (probe_until_ == Time{}) { probe_until_ = now + std::chrono::seconds{3}; }
+    if (now < probe_after_) { return; }
+    const auto read = hello_.peek(child_.get());
+    if (read == AlpnOffer::Read::pending) {
+      if (now >= probe_until_) {
+        state_ = hello_.tls() ? State::closed : State::established;
+        failure_ = "tls_client_hello_timeout";
+      }
+      probe_after_ = now + std::chrono::milliseconds{2};
+      return;
+    }
+    if (read == AlpnOffer::Read::ended) { state_ = State::closed; return; }
+    if (!hello_.tls()) { state_ = State::established; return; }
+    const auto name = hello_.serverName();
+    const auto host = name.empty() ? hostname_.view() : name;
+    inspected_ = options_.intercept_hosts.contains(host);
+    if (inspected_ && (!hello_.valid() || hello_.encrypted())) {
+      failure_ = hello_.encrypted() ? "tls_ech_not_supported" : "tls_client_hello_invalid";
+      state_ = State::closed;
+      return;
+    }
+    if (inspected_ && !name.empty()) { hostname_.assign(name); }
+    state_ = State::established;
+  }
 
   void readHead(Time now) noexcept {
     switch (head_.receive(child_.get())) {
@@ -202,13 +255,20 @@ private:
   const ProxyOptions<Memory> &options_;
   const ProxySecret &secret_;
   ProxyCounters &counters_;
+  FileDescriptor adopted_origin_;
   ConnectHead head_;
+  AlpnOffer hello_;
+  Time probe_until_{};
+  Time probe_after_{};
+  std::string_view failure_ = "connection_failed";
+  bool inspected_ = false;
   FixedText<ProxyHostname::maximum_bytes> hostname_;
   std::optional<Origin> origin_;
   std::string_view response_;
   Time drain_until_{};
   State state_ = State::reading;
   bool successful_ = false;
+  bool transparent_ = false;
 };
 
 }

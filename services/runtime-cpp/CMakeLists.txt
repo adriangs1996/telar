@@ -64,6 +64,9 @@ configure_file(config/bootstrap.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/co
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../../src/backend/plugins/bootstrap.lua" TELAR_PLUGIN_BOOTSTRAP)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../../src/backend/plugins/bootstrap.lua")
 configure_file(plugins/bootstrap.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/plugin_bootstrap.hpp" @ONLY)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../desktop-mode/ui/traffic_api.lua" TELAR_TRAFFIC_API)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../desktop-mode/ui/traffic_api.lua")
+configure_file(plugins/traffic_api.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/traffic_api.hpp" @ONLY)
 add_custom_command(
   OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/cell_layout.hpp"
   COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_cell_layout.py"
@@ -96,7 +99,7 @@ target_include_directories(runtime-core PUBLIC . ../desktop-mode "${CMAKE_CURREN
 target_link_libraries(runtime-core PUBLIC "${NGHTTP2_LIBRARY}")
 target_link_libraries(runtime-core PUBLIC "${PCAP_LIBRARY}")
 target_include_directories(runtime-core PUBLIC "${BROTLI_INCLUDE_DIR}" "${ZSTD_INCLUDE_DIR}")
-target_link_libraries(runtime-core PUBLIC "${ZLIB_LIBRARY}" "${BROTLI_DECODER_LIBRARY}" "${BROTLI_COMMON_LIBRARY}" "${ZSTD_LIBRARY}")
+target_link_libraries(runtime-core PUBLIC "${ZLIB_LIBRARY}" "${BROTLI_DECODER_LIBRARY}" "${BROTLI_ENCODER_LIBRARY}" "${BROTLI_COMMON_LIBRARY}" "${ZSTD_LIBRARY}")
 target_link_libraries(runtime-core PUBLIC ghostty-vt runtime-lua "${SQLITE3_LIBRARY}" Threads::Threads OpenSSL::SSL OpenSSL::Crypto "-framework IOKit" "-framework CoreFoundation" "-framework Security")
 option(TELAR_RUNTIME_DIAGNOSTICS "Enable runtime telemetry outside Debug builds" OFF)
 target_compile_definitions(runtime-core PUBLIC TELAR_DEBUG=$<CONFIG:Debug> TELAR_DIAGNOSTICS=$<OR:$<CONFIG:Debug>,$<BOOL:${TELAR_RUNTIME_DIAGNOSTICS}>>)

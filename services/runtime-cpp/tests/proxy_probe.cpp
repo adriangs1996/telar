@@ -167,7 +167,11 @@ test "$HTTPS_PROXY" = "$https_proxy" || exit 11
 case "$HTTPS_PROXY" in http://telar:*@127.0.0.1:*) ;; *) exit 12;; esac
 test "$NODE_USE_ENV_PROXY" = 1 && test "$TELAR_PROXY_TLS" = 1 || exit 13
 test -s "$NODE_EXTRA_CA_CERTS" && test -s "$SSL_CERT_FILE" || exit 14
-test "${NODE_EXTRA_CA_CERTS##*/}" = "$1" || exit 16
+case "${NODE_EXTRA_CA_CERTS##*/}" in
+  "$1") ;;
+  ca-active-cert.pem) /usr/bin/cmp -s "$NODE_EXTRA_CA_CERTS" "${NODE_EXTRA_CA_CERTS%/*}/$1" || exit 16 ;;
+  *) exit 16 ;;
+esac
 for bundle in "$CURL_CA_BUNDLE" "$REQUESTS_CA_BUNDLE" "$AWS_CA_BUNDLE" "$GIT_SSL_CAINFO" "$CLOUDSDK_CORE_CUSTOM_CA_CERTS_FILE"; do
   test "$bundle" = "$SSL_CERT_FILE" || exit 15
 done

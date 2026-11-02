@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../diagnostics/trace.hpp"
-#include "../proxy/hostname.hpp"
+#include "hostname.hpp"
 #include "handle.hpp"
 #include "pem_document.hpp"
 #include <array>
@@ -28,21 +28,25 @@ struct CertificatePair {
     requireTls(X509_set_issuer_name(pair.certificate.get(), X509_get_subject_name(pair.certificate.get())) == 1, "Set authority issuer");
     extension(pair.certificate.get(), NID_basic_constraints, "critical,CA:TRUE");
     extension(pair.certificate.get(), NID_key_usage, "critical,keyCertSign,cRLSign");
+    extension(pair.certificate.get(), NID_subject_key_identifier, "hash");
     pair.sign(pair.key.get());
     return pair;
   }
 
   CertificatePair mint(std::string_view hostname) const {
     TELAR_TRACE("tls.mintCertificate");
-    requireTls(ProxyHostname::validTarget(hostname), "Invalid TLS certificate hostname");
+    requireTls(TlsHostname::valid(hostname), "Invalid TLS certificate hostname");
     auto leaf = create(hostname, leaf_lifetime);
     requireTls(X509_set_issuer_name(leaf.certificate.get(), X509_get_subject_name(certificate.get())) == 1, "Set leaf issuer");
     extension(leaf.certificate.get(), NID_basic_constraints, "critical,CA:FALSE");
     extension(leaf.certificate.get(), NID_key_usage, "critical,digitalSignature");
     extension(leaf.certificate.get(), NID_ext_key_usage, "serverAuth");
+    // Older persisted authorities may lack a subject key identifier. In that
+    // case the issuer name and serial still identify the correct signing CA.
+    extension(leaf.certificate.get(), NID_authority_key_identifier, "keyid,issuer", certificate.get());
 
-    constexpr std::string_view prefix = "DNS:";
-    std::array<char, prefix.size() + ProxyHostname::maximum_bytes + 1> alternative{};
+    const std::string_view prefix = TlsHostname::numeric(hostname) ? "IP:" : "DNS:";
+    std::array<char, 4 + ProxyHostname::maximum_bytes + 1> alternative{};
     std::copy(prefix.begin(), prefix.end(), alternative.begin());
     std::copy(hostname.begin(), hostname.end(), alternative.begin() + prefix.size());
     extension(leaf.certificate.get(), NID_subject_alt_name, alternative.data());
@@ -121,8 +125,10 @@ private:
     requireTls(X509_NAME_add_entry_by_NID(destination, NID_commonName, V_ASN1_UTF8STRING, reinterpret_cast<const unsigned char *>(name.data()), static_cast<int>(name.size()), -1, 0) == 1, "Set TLS certificate name");
   }
 
-  static void extension(X509 *certificate, int identifier, const char *value) {
-    TlsHandle<X509_EXTENSION, X509_EXTENSION_free> extension{X509V3_EXT_conf_nid(nullptr, nullptr, identifier, value)};
+  static void extension(X509 *certificate, int identifier, const char *value, X509 *issuer = nullptr) {
+    X509V3_CTX context{};
+    X509V3_set_ctx(&context, issuer, certificate, nullptr, nullptr, 0);
+    TlsHandle<X509_EXTENSION, X509_EXTENSION_free> extension{X509V3_EXT_conf_nid(nullptr, &context, identifier, value)};
     requireTls(extension != nullptr && X509_add_ext(certificate, extension.get(), -1) == 1, "Set TLS certificate extension");
   }
 

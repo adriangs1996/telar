@@ -4,8 +4,8 @@
 #include <array>
 #include <cassert>
 #include <cstring>
-#include <mutex>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <span>
 
@@ -24,19 +24,21 @@ public:
   };
 
   // Response bytes are initialized when a slot is published, without clearing the entire queue at construction.
-  PtyResponseQueue() noexcept {}
+  PtyResponseQueue() noexcept {} // NOLINT(cppcoreguidelines-pro-type-member-init)
 
   // A controller batches consecutive native replies under one lock. It must
   // release this lease before any backend write or callback can produce data.
   class Producer {
   public:
-    explicit Producer(PtyResponseQueue &queue) : queue_(queue), lock_(queue.mutex_, std::defer_lock) {}
+    explicit Producer(PtyResponseQueue &queue)
+        : queue_(queue),
+          lock_(queue.mutex_, std::defer_lock) {}
 
     bool tryPush(std::span<const std::uint8_t> response) noexcept {
       if (!acquire()) {
         return false;
       }
-      return queue_.append(response, {});
+      return queue_.append(response);
     }
 
     template <std::size_t Length>
@@ -45,7 +47,7 @@ public:
       if (!acquire()) {
         return false;
       }
-      return queue_.append(response, {});
+      return queue_.append(response);
     }
 
     bool tryPushOwned(std::span<const std::uint8_t> response, std::shared_ptr<const void> owner) noexcept {
@@ -84,7 +86,7 @@ public:
     std::size_t count = 0;
     std::size_t bytes = 0;
 
-    std::span<const std::uint8_t> message(std::size_t index) const noexcept {
+    [[nodiscard]] std::span<const std::uint8_t> message(std::size_t index) const noexcept {
       assert(index < count);
       const auto value = index < first.size() ? first[index] : second[index - first.size()];
       return value.subspan(index == 0 ? offset : 0);
@@ -96,7 +98,7 @@ public:
     if (closed_) {
       return false;
     }
-    if (!append(response, {})) {
+    if (!append(response)) {
       diagnostics::accumulate(dropped_);
       return false;
     }
@@ -106,7 +108,7 @@ public:
 
   bool tryPush(std::span<const std::uint8_t> response) noexcept {
     const std::lock_guard lock{mutex_};
-    return append(response, {});
+    return append(response);
   }
 
   // Large replies retain immutable allocator-owned storage as one message, so
@@ -149,22 +151,46 @@ public:
   }
 
 private:
-  bool append(std::span<const std::uint8_t> response, std::shared_ptr<const void> owner) noexcept {
-    if (closed_ || count_ == message_capacity || response.size() > total_byte_capacity - byte_count_ || (response.size() > message_byte_capacity && !owner)) {
+  // A reply without an owner is copied into its slot.
+  bool append(std::span<const std::uint8_t> response) noexcept {
+    if (!admits(response.size()) || response.size() > message_byte_capacity) {
       return false;
     }
 
     const auto index = (head_ + count_) % message_capacity;
-    if (owner) {
-      owned_[index] = std::move(owner);
-    } else if (!response.empty()) {
+    if (!response.empty()) {
       std::memcpy(bytes_[index].data(), response.data(), response.size());
     }
-    views_[index] = owned_[index] ? response : std::span<const std::uint8_t>{bytes_[index]}.first(response.size());
-    lengths_[index] = static_cast<std::uint32_t>(response.size());
-    byte_count_ += response.size();
-    ++count_;
+
+    commit(index, std::span<const std::uint8_t>{bytes_[index]}.first(response.size()));
     return true;
+  }
+
+  // An owned reply keeps its view, and its owner keeps the bytes behind that view alive.
+  bool append(std::span<const std::uint8_t> response, std::shared_ptr<const void> owner) noexcept {
+    if (!owner) {
+      return append(response);
+    }
+
+    if (!admits(response.size())) {
+      return false;
+    }
+
+    const auto index = (head_ + count_) % message_capacity;
+    owned_[index] = std::move(owner);
+    commit(index, response);
+    return true;
+  }
+
+  void commit(const std::size_t index, std::span<const std::uint8_t> view) noexcept {
+    views_[index] = view;
+    lengths_[index] = static_cast<std::uint32_t>(view.size());
+    byte_count_ += view.size();
+    ++count_;
+  }
+
+  bool admits(std::size_t bytes) const noexcept {
+    return !closed_ && count_ != message_capacity && bytes <= total_byte_capacity - byte_count_;
   }
 
 public:

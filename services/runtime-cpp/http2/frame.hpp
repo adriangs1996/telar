@@ -27,6 +27,7 @@ enum class Http2Flag : std::uint8_t {
 
 struct Http2Frame {
   static constexpr std::size_t header_bytes = 9;
+  static constexpr std::size_t settings_entry_bytes = sizeof(std::uint16_t) + sizeof(std::uint32_t);
   std::size_t length = 0;
   std::uint32_t stream = 0;
   Http2FrameKind kind = Http2FrameKind::data;

@@ -39,6 +39,12 @@ public:
     bytes({reinterpret_cast<const Byte *>(value.data()), value.size()});
   }
 
+  void append(std::span<const Byte> value) {
+    if (value.size() > remaining_.size()) { throw EncodingError{"Tap data exceeds its frame buffer"}; }
+    if (!value.empty()) { std::memcpy(remaining_.data(), value.data(), value.size()); }
+    remaining_ = remaining_.subspan(value.size());
+  }
+
   std::span<const Byte> finish() const noexcept { return output_.first(output_.size() - remaining_.size()); }
 
 private:

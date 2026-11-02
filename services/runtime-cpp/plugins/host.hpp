@@ -10,13 +10,14 @@
 #include "lua_exchange.hpp"
 #include "plugin_bootstrap.hpp"
 #include "protocol.hpp"
+#include "lua_traffic.hpp"
 
 namespace telar::runtime::plugins {
 
 template <Allocator Memory>
 class Host {
 public:
-  explicit Host(Memory &memory, const char *entry_path)
+  explicit Host(Memory &memory, const char *entry_path, const ServiceSpec *traffic = nullptr)
       : memory_(memory), vm_(memory_, {Limits::lua_bytes, Limits::lua_instructions, Limits::callback_deadline}) {
     std::array<char, PATH_MAX> resolved;
     if (::realpath(entry_path, resolved.data()) == nullptr) {
@@ -29,6 +30,7 @@ public:
     const auto source = readFile(memory_, resolved.data(), Limits::entry_bytes);
     vm_.execute(bootstrap, "@telar-tap-bootstrap.lua");
     lua_setglobal(vm_.state(), "telar");
+    if (traffic) { traffic_.emplace(memory_, *traffic); }
     vm_.invoke(&install, this, 0);
     vm_.resetBudget();
     Entrypoint entry{*this, source};
@@ -38,6 +40,25 @@ public:
 
   Host(const Host &) = delete;
   Host &operator=(const Host &) = delete;
+
+  std::span<const Byte> trafficSetup(std::span<Byte> output) {
+    if (!traffic_) { throw EncodingError{"Traffic worker is not configured"}; }
+    return traffic_->finish(0, output);
+  }
+
+  std::span<const Byte> invokeTraffic(const TrafficEvent &event, std::span<Byte> output) {
+    if (!traffic_) { throw EncodingError{"Traffic worker is not configured"}; }
+    lua_settop(vm_.state(), 0);
+    vm_.resetBudget();
+    traffic_->begin();
+    TrafficInvocation invocation{*this, event};
+    try { vm_.invoke(&invokeTrafficCallback, &invocation, 0); }
+    catch (const std::exception &) {
+      lua_settop(vm_.state(), 0);
+      return Protocol::encodeError(output, event.event_id, "unknown Lua error");
+    }
+    return traffic_->finish(event.event_id, output);
+  }
 
   std::span<const Byte> invoke(const ExchangeView &exchange, std::span<Byte> output) {
     TELAR_TRACE("plugins.invokeExchange");
@@ -64,6 +85,19 @@ private:
     Host &host;
     std::string_view source;
   };
+
+  struct TrafficInvocation {
+    Host &host;
+    const TrafficEvent &event;
+  };
+
+  static int invokeTrafficCallback(lua_State *state) {
+    auto &invocation = *static_cast<TrafficInvocation *>(lua_touserdata(state, 1));
+    std::array<char, 1024> error{};
+    try { invocation.host.traffic_->invoke(state, invocation.event); return 0; }
+    catch (const std::exception &failure) { std::snprintf(error.data(), error.size(), "%s", failure.what()); }
+    return luaL_error(state, "%s", error.data());
+  }
 
   struct Invocation {
     Host &host;
@@ -93,6 +127,7 @@ private:
       lua_pop(state, 1);
       lua::JsonDecoder<SensitiveMemory>::install(state, host.memory_);
       host.modules_.emplace(state, host.package_root_.view());
+      if (host.traffic_) { host.traffic_->install(state); }
       return 0;
     } catch (const std::exception &error) {
       return luaL_error(state, "%s", error.what());
@@ -111,6 +146,7 @@ private:
 
     lua_getfield(state, -1, "on_exchange");
     if (!lua_isfunction(state, -1)) {
+      if (lua_isnil(state, -1) && entry.host.traffic_ && entry.host.traffic_->listening()) { lua_pop(state, 1); return 0; }
       return luaL_error(state, "Missing exchange handler");
     }
     entry.host.callback_reference_ = luaL_ref(state, LUA_REGISTRYINDEX);
@@ -157,6 +193,7 @@ private:
   FixedText<PATH_MAX> package_root_;
   std::optional<lua::LocalModules<lua::ModuleDomain::package>> modules_;
   int callback_reference_ = LUA_NOREF;
+  std::optional<LuaTraffic<SensitiveMemory>> traffic_;
 };
 
 template <Allocator Memory>

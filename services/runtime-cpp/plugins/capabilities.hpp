@@ -16,13 +16,26 @@ enum class Capability : std::uint8_t {
   history_read,
   history_write,
   proxy_tap,
-  runtime_control
+  runtime_control,
+  traffic_observe,
+  traffic_intercept,
+  traffic_control,
+  traffic_record,
+  count
 };
 
 class Capabilities {
 public:
   bool contains(Capability capability) const noexcept {
     return (bits_ & bit(capability)) != 0;
+  }
+
+  bool containsAll(Capabilities other) const noexcept { return (bits_ & other.bits_) == other.bits_; }
+
+  Capabilities intersection(Capabilities other) const noexcept {
+    Capabilities result;
+    result.bits_ = bits_ & other.bits_;
+    return result;
   }
 
   void insert(Capability capability) {
@@ -72,7 +85,13 @@ private:
       "history.write",
       "proxy.tap",
       "runtime.control",
+      "traffic.observe",
+      "traffic.intercept",
+      "traffic.control",
+      "traffic.record",
   });
+  static_assert(names_.size() == static_cast<std::size_t>(Capability::count));
+  static_assert(names_.size() <= 16);
   std::uint16_t bits_ = 0;
 };
 

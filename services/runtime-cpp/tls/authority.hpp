@@ -84,18 +84,29 @@ public:
   }
 
   std::array<char, 40> fingerprint() const {
+    return fingerprint<20>(EVP_sha1());
+  }
+
+  std::array<char, 64> fingerprintSha256() const {
+    return fingerprint<32>(EVP_sha256());
+  }
+
+private:
+  template <std::size_t digest_bytes>
+  std::array<char, digest_bytes * 2> fingerprint(const EVP_MD *algorithm) const {
     std::array<unsigned char, EVP_MAX_MD_SIZE> digest;
     unsigned length = 0;
-    requireTls(X509_digest(certificate(), EVP_sha1(), digest.data(), &length) == 1 && length == fingerprint_bytes, "Compute TLS authority fingerprint");
+    requireTls(X509_digest(certificate(), algorithm, digest.data(), &length) == 1 && length == digest_bytes, "Compute TLS authority fingerprint");
     constexpr std::string_view hexadecimal = "0123456789ABCDEF";
-    std::array<char, fingerprint_bytes * 2> result;
-    for (std::size_t index = 0; index < fingerprint_bytes; ++index) {
+    std::array<char, digest_bytes * 2> result;
+    for (std::size_t index = 0; index < digest_bytes; ++index) {
       result[index * 2] = hexadecimal[digest[index] >> 4];
       result[index * 2 + 1] = hexadecimal[digest[index] & 15];
     }
     return result;
   }
 
+public:
   bool expiresWithin(std::chrono::seconds duration) const {
     TlsHandle<ASN1_TIME, ASN1_TIME_free> deadline{ASN1_TIME_adj(nullptr, std::time(nullptr), 0, duration.count())};
     requireTls(deadline != nullptr, "Compute TLS authority expiration deadline");
@@ -122,7 +133,6 @@ private:
       : memory_(memory),
         pair_(std::move(pair)) {}
 
-  static constexpr std::size_t fingerprint_bytes = 20;
   Memory &memory_;
   CertificatePair pair_;
 };

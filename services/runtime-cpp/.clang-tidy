@@ -10,6 +10,8 @@ Checks: >-
   -linuxkernel-*,
   -llvm-*,
   -llvmlibc-*,
+  -modernize-use-equals-default,
+  -modernize-use-trailing-return-type,
   -mpi-*,
   -objc-*,
   -openmp-*,

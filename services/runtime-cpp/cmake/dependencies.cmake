@@ -41,6 +41,7 @@ find_library(PCAP_LIBRARY NAMES pcap PATHS "${CMAKE_OSX_SYSROOT}/usr/lib" REQUIR
 set(BROTLI_ROOT "" CACHE PATH "Installed Brotli prefix")
 find_path(BROTLI_INCLUDE_DIR brotli/decode.h HINTS "${BROTLI_ROOT}/include" REQUIRED)
 find_library(BROTLI_DECODER_LIBRARY NAMES libbrotlidec.a brotlidec HINTS "${BROTLI_ROOT}/lib" REQUIRED)
+find_library(BROTLI_ENCODER_LIBRARY NAMES libbrotlienc.a brotlienc HINTS "${BROTLI_ROOT}/lib" REQUIRED)
 find_library(BROTLI_COMMON_LIBRARY NAMES libbrotlicommon.a brotlicommon HINTS "${BROTLI_ROOT}/lib" REQUIRED)
 
 set(ZSTD_ROOT "" CACHE PATH "Installed Zstd prefix")
@@ -48,7 +49,7 @@ find_path(ZSTD_INCLUDE_DIR zstd.h HINTS "${ZSTD_ROOT}/include" REQUIRED)
 find_library(ZSTD_LIBRARY NAMES libzstd.a HINTS "${ZSTD_ROOT}/lib" REQUIRED)
 
 if(TELAR_RUNTIME_DISTRIBUTABLE)
-  foreach(dependency IN ITEMS GHOSTTY_VT_LIBRARY NGHTTP2_LIBRARY BROTLI_DECODER_LIBRARY BROTLI_COMMON_LIBRARY ZSTD_LIBRARY OPENSSL_SSL_LIBRARY OPENSSL_CRYPTO_LIBRARY)
+  foreach(dependency IN ITEMS GHOSTTY_VT_LIBRARY NGHTTP2_LIBRARY BROTLI_DECODER_LIBRARY BROTLI_ENCODER_LIBRARY BROTLI_COMMON_LIBRARY ZSTD_LIBRARY OPENSSL_SSL_LIBRARY OPENSSL_CRYPTO_LIBRARY)
     if(NOT "${${dependency}}" MATCHES "\\.a$")
       message(FATAL_ERROR "${dependency} must be static for distribution; configure a fresh build directory with a static library prefix")
     endif()

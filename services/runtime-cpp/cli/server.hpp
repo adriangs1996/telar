@@ -7,6 +7,8 @@
 #include "../plugins/tap_configuration.hpp"
 #include "../proxy/runtime.hpp"
 #include "../traffic/tap.hpp"
+#include "../traffic/control_backend.hpp"
+#include "../traffic/control_service.hpp"
 #include "../runtime/background_pool.hpp"
 #include "../runtime/background_service.hpp"
 #include "../runtime/editor_service.hpp"
@@ -76,18 +78,35 @@ void runRuntime(Memory &memory, const ServerOptions &options, const RuntimePaths
 #endif
   ExecutablePath executable;
   plugins::TapConfiguration tap_configuration{memory, configuration.configuration_directory.view(), configuration.plugins.configured(), ProcessEnvironment{}};
-  plugins::Service plugin_service{memory, tap_configuration.specifications(), executable.c_str(), options.trace};
   installPngDecoder();
   SqliteAllocator sqlite_memory{memory};
   std::optional<traffic::Service<Memory>> traffic_service;
   if (configuration.proxy.network_capture) {
     String<Memory> endpoint{paths.socket, AllocatorRef<char, Memory>{memory}};
     endpoint += traffic::socket_suffix;
-    traffic_service.emplace(memory, endpoint);
+    traffic_service.emplace(memory, endpoint, configuration.proxy.stream_interception);
   }
+  plugins::Service plugin_service{memory, tap_configuration.specifications(), executable.c_str(), options.trace, traffic_service ? &*traffic_service : nullptr};
+  if (!tap_configuration.specifications().empty()) { plugin_service.watchTrust(plugins::Paths::trust(memory, ProcessEnvironment{})); }
 
   traffic::Tap<Memory, plugins::Service<Memory>> tap{plugin_service, traffic_service ? &*traffic_service : nullptr};
   ProxyRuntime<Memory, Kqueue, SystemNameResolver, decltype(tap)> proxy{memory, configuration.proxy, paths.socket, configuration.proxy.enabled && paths.isDefaultSocket(ProcessEnvironment{}), tap};
+  traffic::control::Backend network_backend{memory, proxy, traffic_service ? &*traffic_service : nullptr, traffic::control::Configuration{
+      .endpoint = paths.socket,
+      .executable = executable.view(),
+      .proxy = configuration.proxy.enabled,
+      .redirect = configuration.proxy.transparent_redirect,
+      .transparent_tls = configuration.proxy.transparent_tls,
+      .interception = configuration.proxy.stream_interception,
+      .administration = configuration.proxy.network_control,
+  }};
+  std::optional<traffic::control::Service<Memory, decltype(network_backend)>> network_control;
+  if (traffic_service) {
+    String<Memory> endpoint{paths.socket, AllocatorRef<char, Memory>{memory}};
+    endpoint += traffic::control::socket_suffix;
+    network_control.emplace(memory, endpoint, network_backend);
+    traffic_service->packageControl(&*network_control);
+  }
   // Queued halves borrow the proxy's capture quota, so workers must release them before the proxy is destroyed.
   plugins::ShutdownGuard stop_plugins{plugin_service};
   BackgroundService background_service{memory, paths.history.c_str(), configuration.history_filters};

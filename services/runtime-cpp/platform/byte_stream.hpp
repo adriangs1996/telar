@@ -9,7 +9,8 @@ namespace telar::runtime {
 enum class StreamReadiness {
   none,
   readable,
-  writable
+  writable,
+  completion
 };
 
 struct StreamResult {

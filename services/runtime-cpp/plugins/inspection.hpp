@@ -24,7 +24,7 @@ void appendInspection(String<Memory> &output, const Package &package) {
     output += action.view();
   }
   output += "\ncapabilities:";
-  for (unsigned index = 0; index <= static_cast<unsigned>(Capability::runtime_control); ++index) {
+  for (unsigned index = 0; index < static_cast<unsigned>(Capability::count); ++index) {
     const auto capability = static_cast<Capability>(index);
     if (manifest.capabilities.contains(capability)) {
       output += ' ';

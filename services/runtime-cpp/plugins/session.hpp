@@ -17,6 +17,7 @@ struct SessionOptions {
   const CancellationSignal &cancellation;
   std::chrono::milliseconds timeout = Limits::reply_deadline;
   const char *trace_path = nullptr;
+  bool traffic = false;
 };
 
 template <Allocator Memory>
@@ -46,15 +47,9 @@ public:
 
   OwnedResult<Memory> exchange(const ServiceSpec &specification, std::uint64_t event_id, std::span<const Byte> frame) {
     TELAR_TRACE("plugins.workerExchange");
-    stream_.wait().deadline(timeout_);
-    channel_.send(frame);
-    stream_.wait().deadline(timeout_);
-    auto received = channel_.receive(memory_, Limits::effect_bytes);
-    if (!received) {
-      throw SystemError{"Tap worker closed", EPIPE};
-    }
+    auto received = request(frame, Limits::effect_bytes);
 
-    const auto bytes = received->bytes();
+    const auto bytes = received.bytes();
     if (bytes.front() == static_cast<Byte>(FrameKind::error)) {
       const auto failure = Protocol::decodeError(bytes);
       requireEvent(event_id, failure.event_id);
@@ -62,19 +57,32 @@ public:
     }
     const auto reply = Protocol::decodeEffects(bytes);
     requireEvent(event_id, reply.event_id);
-    return makeOwned<Result<Memory>>(memory_, specification, std::move(*received), reply);
+    return makeOwned<Result<Memory>>(memory_, specification, std::move(received), reply);
+  }
+
+  SensitiveAllocation<Memory> request(std::span<const Byte> frame, std::size_t maximum_bytes) {
+    stream_.wait().deadline(timeout_);
+    channel_.send(frame);
+    stream_.wait().deadline(timeout_);
+    auto received = channel_.receive(memory_, maximum_bytes);
+    if (!received) { throw SystemError{"Tap worker closed", EPIPE}; }
+    if (!stream_.wait().active()) { throw SystemError{"Tap worker request cancelled or expired"}; }
+    return std::move(*received);
   }
 
   std::string_view retainedError() const noexcept { return stream_.wait().retainedError(); }
   pid_t processId() const noexcept { return process_.processId(); }
+  int outputDescriptor() const noexcept { return process_.output(); }
 
 private:
   static PipeProcess spawn(const SessionOptions &options) {
-    std::array<char *, 6> arguments{const_cast<char *>(options.executable), const_cast<char *>("tap-worker"), const_cast<char *>(options.entry), nullptr};
+    std::array<char *, 8> arguments{const_cast<char *>(options.executable), const_cast<char *>("tap-worker"), const_cast<char *>(options.entry), nullptr};
+    std::size_t count = 3;
+    if (options.traffic) { arguments[count++] = const_cast<char *>("--traffic"); }
 #if TELAR_DEBUG
     if (options.trace_path != nullptr) {
-      arguments[3] = const_cast<char *>("--trace");
-      arguments[4] = const_cast<char *>(options.trace_path);
+      arguments[count++] = const_cast<char *>("--trace");
+      arguments[count++] = const_cast<char *>(options.trace_path);
     }
 #endif
     std::array<char *, 1> environment{nullptr};

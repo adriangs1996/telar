@@ -7,10 +7,10 @@ namespace telar::runtime {
 template <ConcurrentAllocator Memory>
 class ProxyObservations {
 public:
-  explicit ProxyObservations(Memory &memory, ProxyCaptureLimits limits) : captures(memory, limits), capture_enabled_(limits.enabled) {}
+  explicit ProxyObservations(Memory &memory, ProxyCaptureLimits limits, traffic::FlowControl *flows = nullptr) : captures(memory, limits), capture_enabled_(limits.enabled), flows_(flows) {}
 
   ConnectionObservation<Memory> connection() noexcept {
-    return {counters, capture_enabled_ ? &captures : nullptr, next_connection_++};
+    return {counters, capture_enabled_ ? &captures : nullptr, next_connection_++, flows_};
   }
 
   ProxyCounters counters;
@@ -18,6 +18,7 @@ public:
 
 private:
   bool capture_enabled_;
+  traffic::FlowControl *flows_;
   std::uint64_t next_connection_ = 1;
 };
 

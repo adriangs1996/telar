@@ -7,14 +7,13 @@
 #include "alpn_offer.hpp"
 #include "authority.hpp"
 #include "contexts.hpp"
+#include "side.hpp"
 #include <arpa/inet.h>
+#include <chrono>
+#include <optional>
+#include <memory>
 
 namespace telar::runtime {
-
-enum class TlsSide {
-  child,
-  origin
-};
 
 template <ConcurrentAllocator Memory>
 class TlsSession {
@@ -31,16 +30,18 @@ public:
   enum class Failure {
     none,
     context,
+    client_hello,
     origin_handshake,
     child_handshake,
     mint
   };
 
-  explicit TlsSession(const TlsContexts<Memory> &contexts, const CertificateAuthority<Memory> &authority, TunnelSockets sockets, std::string_view hostname)
+  explicit TlsSession(const TlsContexts<Memory> &contexts, const CertificateAuthority<Memory> &authority, TunnelSockets sockets, std::string_view hostname, std::shared_ptr<const CertificateAuthority<Memory>> owner = {})
       : contexts_(contexts),
+        authority_owner_(std::move(owner)),
         authority_(authority),
         sockets_(sockets) {
-    requireTls(ProxyHostname::validTarget(hostname), "Invalid TLS session hostname");
+    requireTls(TlsHostname::valid(hostname), "Invalid TLS session hostname");
     hostname_.assign(hostname);
   }
 
@@ -63,13 +64,17 @@ public:
         initialize();
       }
       if (state_ == State::offer) {
+        const auto now = std::chrono::steady_clock::now();
+        if (now < offer_after_) { return state_; }
         const auto read = offer_.peek(sockets_.child);
         if (read == AlpnOffer::Read::pending) {
+          offer_after_ = now + std::chrono::milliseconds{2};
           return state_;
         }
-        failure_ = Failure::origin_handshake;
+        failure_ = Failure::client_hello;
         requireTls(read == AlpnOffer::Read::complete, "Read TLS ClientHello");
         const auto names = offer_.encoded();
+        failure_ = Failure::origin_handshake;
         requireTls(SSL_set_alpn_protos(origin_.get(), names.data(), static_cast<unsigned>(names.size())) == 0, "Set TLS origin ALPN offer");
         state_ = State::origin;
       }
@@ -98,16 +103,24 @@ public:
 
   StreamReadiness waiting(TlsSide side) const noexcept {
     if (side == TlsSide::child) {
-      return state_ == State::offer ? StreamReadiness::readable : state_ == State::child ? child_waiting_
+      return state_ == State::offer ? (offer_after_ == std::chrono::steady_clock::time_point{} ? StreamReadiness::readable : StreamReadiness::none) : state_ == State::child ? child_waiting_
                                                                                          : StreamReadiness::none;
     }
     return state_ == State::origin ? origin_waiting_ : StreamReadiness::none;
   }
 
+  std::optional<std::chrono::steady_clock::time_point> deadline() const noexcept {
+    return state_ == State::offer && offer_after_ != std::chrono::steady_clock::time_point{} ? std::optional{offer_after_} : std::nullopt;
+  }
+
   HttpProtocol protocol() const noexcept {
     const auto selected = selection_.protocol();
-    return selected.size() == 2 && selected[0] == 'h' && selected[1] == '2' ? HttpProtocol::http2 : HttpProtocol::http11;
+    if (selected.size() == 2 && selected[0] == 'h' && selected[1] == '2') { return HttpProtocol::http2; }
+    constexpr std::string_view http11 = "http/1.1";
+    return std::ranges::equal(selected, http11) ? HttpProtocol::http11 : HttpProtocol::other;
   }
+
+  bool unnegotiated() const noexcept { return selection_.protocol().empty(); }
 
   StreamResult read(TlsSide side, std::span<std::uint8_t> destination) noexcept {
     auto &buffer = input(side);
@@ -181,8 +194,8 @@ private:
 
     std::array<char, ProxyHostname::maximum_bytes + 1> terminated{};
     std::copy(hostname_.view().begin(), hostname_.view().end(), terminated.begin());
-    in_addr numeric;
-    if (::inet_pton(AF_INET, terminated.data(), &numeric) == 1) {
+    in6_addr numeric;
+    if (::inet_pton(AF_INET, terminated.data(), &numeric) == 1 || ::inet_pton(AF_INET6, terminated.data(), &numeric) == 1) {
       requireTls(X509_VERIFY_PARAM_set1_ip_asc(SSL_get0_param(origin_.get()), terminated.data()) == 1, "Set TLS origin IP verification");
     } else {
       requireTls(SSL_set1_host(origin_.get(), terminated.data()) == 1, "Set TLS origin hostname verification");
@@ -232,11 +245,13 @@ private:
     return side == TlsSide::child ? child_.get() : origin_.get();
   }
 
+  std::chrono::steady_clock::time_point offer_after_{};
   static constexpr std::size_t read_capacity = 16 * 1024;
   StreamReadBuffer<read_capacity> child_input_;
   StreamReadBuffer<read_capacity> origin_input_;
 
   const TlsContexts<Memory> &contexts_;
+  std::shared_ptr<const CertificateAuthority<Memory>> authority_owner_;
   const CertificateAuthority<Memory> &authority_;
   TunnelSockets sockets_;
   FixedText<ProxyHostname::maximum_bytes> hostname_;

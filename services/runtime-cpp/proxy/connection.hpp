@@ -13,6 +13,9 @@ public:
   explicit ProxyConnection(Memory &memory, FileDescriptor child, const ProxyOptions<Memory> &options, const ProxySecret &secret, ProxyCounters &counters)
       : counters_(counters), handshake_(std::move(child), options, secret, counters), transport_(memory), policy_(ProxyConnectionPolicy::Clock::now()) {}
 
+  explicit ProxyConnection(Memory &memory, redirect::Connection connection, const ProxyOptions<Memory> &options, const ProxySecret &secret, ProxyCounters &counters)
+      : counters_(counters), redirect_lifetime_(std::move(connection.lifetime)), handshake_(std::move(connection), options, secret, counters), transport_(memory), policy_(ProxyConnectionPolicy::Clock::now()) {}
+
   void advance(const TlsInterception<Memory> &interception, ProxyObservations<Memory> &observations, TunnelReadiness readiness, Time now) noexcept {
     if (closed_) {
       return;
@@ -23,6 +26,9 @@ public:
         observation_.emplace(observations.connection());
       }
       if (handshake_.state() == Handshake::State::closed) {
+        if (observation_ && observation_->flows) {
+          observation_->flows->observeFlow(traffic::Kind::flow_error, {.id = observation_->identity, .host = handshake_.hostname(), .reason = handshake_.failure()});
+        }
         closed_ = true;
         return;
       }
@@ -39,6 +45,7 @@ public:
         if (handshake_.intercept()) {
           counters_.record(ProxyCounter::tls_context_failure);
         }
+        transport_.error(handshake_.intercept() ? "tls_context_failed" : "transport_setup_failed");
         closed_ = true;
         return;
       }
@@ -59,7 +66,9 @@ public:
 
   void expire(Time now) noexcept {
     using Closure = ProxyConnectionPolicy::Closure;
-    switch (policy_.expired(now)) {
+    const auto closure = policy_.expired(now);
+    if (closure != Closure::none) { transport_.reason("timeout"); }
+    switch (closure) {
     case Closure::head_timeout:
       handshake_.expire();
       closed_ = true;
@@ -88,7 +97,7 @@ public:
     if (side == TlsSide::child) {
       return {.readable = handshake_.wantsChildRead(), .writable = handshake_.wantsChildWrite()};
     }
-    return {.writable = handshake_.wantsOriginWrite()};
+    return {.readable = handshake_.wantsOriginRead(), .writable = handshake_.wantsOriginWrite()};
   }
 
   int descriptor(TlsSide side) const noexcept {
@@ -108,7 +117,9 @@ public:
   }
 
   std::optional<Time> deadline() const noexcept {
-    return handshake_.deadline();
+    const auto handshake = handshake_.deadline();
+    const auto transport = transport_.deadline();
+    return handshake && transport ? std::min(*handshake, *transport) : handshake ? handshake : transport;
   }
 
   const ProxyConnectionPolicy &policy() const noexcept {
@@ -127,6 +138,7 @@ private:
   }
 
   ProxyCounters &counters_;
+  FileDescriptor redirect_lifetime_;
   Handshake handshake_;
   ConnectionTransport<Memory> transport_;
   ProxyConnectionPolicy policy_;

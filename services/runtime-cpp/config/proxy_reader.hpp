@@ -13,10 +13,12 @@ public:
       return;
     }
 
-    table.onlyFields({"enabled", "anonymous_tunnels", "ca_dir", "intercept_hosts", "capture", "network_capture", "transparent_redirect", "transparent_tls", "stream_interception"});
+    table.onlyFields({"enabled", "anonymous_tunnels", "ca_dir", "intercept_hosts", "capture", "network_capture", "network_control", "transparent_redirect", "transparent_tls", "stream_interception"});
     values.enabled = table.field("enabled").boolean(values.enabled);
     values.anonymous_tunnels = table.field("anonymous_tunnels").boolean(values.anonymous_tunnels);
     values.network_capture = table.field("network_capture").boolean(values.network_capture);
+    values.network_control = table.field("network_control").boolean(values.network_control);
+    if (values.network_control && !values.network_capture) { table.fail("network_control requires network_capture"); }
     values.transparent_redirect = table.field("transparent_redirect").boolean(values.transparent_redirect);
     values.transparent_tls = table.field("transparent_tls").boolean(values.transparent_tls);
     values.stream_interception = table.field("stream_interception").boolean(values.stream_interception);

@@ -221,11 +221,22 @@ private:
       finishHead();
       break;
     case State::writing_body:
+      if constexpr (requires { { observer.chunkSeparator(std::span<const std::uint8_t>{}) } noexcept -> std::same_as<void>; }) {
+        if (body_stage_ == BodyStage::chunk_separator) { observer.chunkSeparator({write_data_, write_length_}); }
+      }
       observer.payload(body_stage_ == BodyStage::chunk_separator ? std::span<const std::uint8_t>{} : std::span{write_data_, write_length_});
       finishBodyBuffer();
       break;
     case State::writing_line:
       recordLineLimit(observer);
+      if constexpr (requires { { observer.chunkLine(std::string_view{}) } noexcept -> std::same_as<void>; }) {
+        if (body_stage_ == BodyStage::chunk_size && line_result_ == DelimitedRead::Result::complete) { observer.chunkLine(text(write_length_)); }
+      }
+      if constexpr (requires { { observer.trailer(std::string_view{}) } noexcept -> std::same_as<void>; }) {
+        if (body_stage_ == BodyStage::trailer && line_result_ == DelimitedRead::Result::complete && write_length_ > chunk_separator_bytes) {
+          observer.trailer(text(write_length_).substr(0, write_length_ - chunk_separator_bytes));
+        }
+      }
       finishLine();
       break;
     default:

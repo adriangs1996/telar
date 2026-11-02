@@ -8,25 +8,28 @@
 #include <cstdio>
 #include <cstring>
 
-int main(int argc, char **argv) {
+auto main(int argc, char **argv) -> int {
   using namespace telar::runtime;
+
+  std::span<char *> args(argv, argc);
+
   try {
     SystemAllocator system;
     constexpr std::size_t memory_budget = std::size_t{2} * 1024 * 1024 * 1024;
     BudgetAllocator budget{system, memory_budget};
 
-    if (argc >= 2 && std::string_view{argv[1]} == "traffic") {
-      cli::runTraffic(budget, {argv + 2, static_cast<std::size_t>(argc - 2)});
+    if (argc >= 2 && std::string_view{args.subspan<1>().front()} == "traffic") {
+      cli::runTraffic(budget, args.subspan<2>());
       return 0;
     }
 
-    if (argc >= 2 && std::string_view{argv[1]} == "integration") {
-      const auto options = cli::IntegrationOptions::parse({argv + 2, static_cast<std::size_t>(argc - 2)});
+    if (argc >= 2 && std::string_view{args.subspan(1).front()} == "integration") {
+      const auto options = cli::IntegrationOptions::parse(args.subspan<2>());
       return cli::runIntegration(budget, options);
     }
 
-    if (argc >= 2 && std::string_view{argv[1]} == "hook") {
-      const auto options = cli::HookOptions::parse({argv + 2, static_cast<std::size_t>(argc - 2)});
+    if (argc >= 2 && std::string_view{args.subspan<1>().front()} == "hook") {
+      const auto options = cli::HookOptions::parse(args.subspan<2>());
       return cli::runHook(budget, options, ProcessEnvironment{});
     }
 
@@ -37,18 +40,23 @@ int main(int argc, char **argv) {
     }
 
     if (argc >= 3 && std::string_view{argv[1]} == "tap-worker") {
-      if (argc != 3 && (argc != 5 || std::string_view{argv[3]} != "--trace")) {
-        throw std::invalid_argument{"Expected tap-worker ENTRY [--trace PATH]"};
+      bool traffic = false;
+      const char *trace_path = nullptr;
+      for (int index = 3; index < argc; ++index) {
+        const std::string_view option{argv[index]};
+        if (option == "--traffic" && !traffic) { traffic = true; }
+        else if (option == "--trace" && trace_path == nullptr && index + 1 < argc) { trace_path = argv[++index]; }
+        else { throw std::invalid_argument{"Expected tap-worker ENTRY [--traffic] [--trace PATH]"}; }
       }
 
 #if TELAR_DEBUG
-      trace::Session tracing{budget, argc == 5 ? argv[4] : nullptr};
+      trace::Session tracing{budget, trace_path};
 #else
-      if (argc == 5) {
+      if (trace_path != nullptr) {
         throw std::invalid_argument{"Tracing is available in Debug builds only"};
       }
 #endif
-      plugins::runWorker(budget, argv[2]);
+      plugins::runWorker(budget, argv[2], traffic);
       return 0;
     }
 

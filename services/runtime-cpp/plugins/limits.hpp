@@ -21,6 +21,7 @@ struct Limits {
   static constexpr auto restart_window = std::chrono::minutes{10};
   static constexpr auto callback_deadline = std::chrono::seconds{2};
   static constexpr auto reply_deadline = std::chrono::seconds{3};
+  static constexpr auto trust_check_interval = std::chrono::milliseconds{250};
   static constexpr std::size_t lua_bytes = 64 * 1024 * 1024;
   static constexpr std::uint64_t lua_instructions = 5'000'000;
 };

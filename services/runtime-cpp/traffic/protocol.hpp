@@ -2,6 +2,7 @@
 
 #include "../plugins/frame_reader.hpp"
 #include "../plugins/frame_writer.hpp"
+#include "../http/message_codec.hpp"
 #include <array>
 #include <cstddef>
 
@@ -13,6 +14,7 @@ struct Limits {
   static constexpr std::size_t packet_bytes = 262144;
   static constexpr std::size_t metadata_bytes = 1024;
   static constexpr std::size_t frame_bytes = packet_bytes + metadata_bytes;
+  static constexpr std::size_t http_frame_bytes = HttpMessageLimits::message_bytes + 2 * metadata_bytes;
   static constexpr std::size_t filter_bytes = 4096;
   static constexpr std::size_t interface_bytes = 64;
   static constexpr std::size_t interfaces = 128;
@@ -26,6 +28,7 @@ enum class Role : Byte {
   subscribe = 1,
   live_capture = 2,
   offline_capture = 3,
+  intercept = 4,
 };
 
 enum class Kind : Byte {
@@ -39,12 +42,23 @@ enum class Kind : Byte {
   capture_stopped,
   error,
   exchange,
+  flow_open,
+  stream_data,
+  flow_close,
+  flow_error,
+  flow_gap,
+  intercept_request,
+  http_intercept_request,
+  datagram,
 };
 
 enum class Selection : Byte {
   packets = 1,
   exchanges = 2,
   both = 3,
+  flows = 4,
+  datagrams = 8,
+  all = 15,
 };
 
 struct Event {
@@ -83,6 +97,12 @@ public:
     return writer.finish();
   }
 
+  static std::size_t encodedSize(const Event &event) {
+    validate(event);
+    constexpr auto fixed_bytes = 2 * sizeof(Byte) + 6 * sizeof(std::uint64_t) + 5 * sizeof(std::uint32_t);
+    return fixed_bytes + event.interface.size() + event.bytes.size();
+  }
+
   static auto encode(std::span<Byte> output, const Event &event) -> std::span<const Byte> {
     validate(event);
     plugins::FrameWriter writer{output};
@@ -102,14 +122,14 @@ public:
     return writer.finish();
   }
 
-  static Event decode(std::span<const Byte> input) {
-    if (input.size() > Limits::frame_bytes) {
+  static auto decode(std::span<const Byte> input) -> Event {
+    if (input.size() > Limits::http_frame_bytes) {
       throw EncodingError{"Traffic frame exceeds its limit"};
     }
 
     plugins::FrameReader reader{input};
     Event event;
-    event.kind = reader.tag(Kind::exchange);
+    event.kind = reader.tag(Kind::datagram);
     event.session = reader.integer<std::uint64_t>();
     event.sequence = reader.integer<std::uint64_t>();
     event.timestamp_us = reader.integer<std::uint64_t>();
@@ -128,7 +148,7 @@ public:
   }
 
   static auto prefix(std::size_t bytes, std::uint64_t dropped = 0) -> std::array<Byte, prefix_bytes> {
-    if (bytes > Limits::frame_bytes) {
+    if (bytes > Limits::http_frame_bytes) {
       throw EncodingError{"Traffic frame exceeds its limit"};
     }
 
@@ -140,13 +160,14 @@ public:
   }
 
   static auto name(Kind kind) noexcept -> std::string_view {
-    constexpr std::array names{"ready", "packet", "interface.open", "interface.closed", "interface.error", "statistics", "capture.started", "capture.stopped", "error", "exchange"};
+    constexpr std::array names{"ready", "packet", "interface.open", "interface.closed", "interface.error", "statistics", "capture.started", "capture.stopped", "error", "exchange", "flow.open", "stream.data", "flow.close", "flow.error", "flow.gap", "intercept.request", "http.intercept.request", "datagram"};
     return names.at(static_cast<std::size_t>(kind));
   }
 
 private:
   static void validate(const Event &event) {
-    if (event.interface.size() > Limits::interface_bytes || event.interface.contains('\0') || event.bytes.size() > Limits::packet_bytes || (event.kind == Kind::packet && event.bytes.size() > event.original_bytes)) {
+    const auto maximum = event.kind == Kind::http_intercept_request ? HttpMessageLimits::message_bytes + Limits::metadata_bytes : Limits::packet_bytes;
+    if (event.interface.size() > Limits::interface_bytes || event.interface.contains('\0') || event.bytes.size() > maximum || (event.kind == Kind::packet && event.bytes.size() > event.original_bytes)) {
       throw EncodingError{"Invalid traffic event"};
     }
   }

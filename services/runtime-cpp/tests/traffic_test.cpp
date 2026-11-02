@@ -86,12 +86,13 @@ static std::vector<Byte> packet(Byte protocol, std::string_view body) {
 static void codecAndFilters() {
   const auto udp = packet(17, std::string_view{"a\0b", 3});
   const auto tcp = packet(6, "ignored");
-  Event original{.session = UINT64_MAX, .sequence = UINT64_MAX, .timestamp_us = 1234567, .interface_index = 7, .link_type = DLT_EN10MB, .original_bytes = static_cast<std::uint32_t>(udp.size() + 1), .interface = "en0", .bytes = udp};
+  Event original{.session = UINT64_MAX, .sequence = UINT64_MAX, .timestamp_us = 1234567, .interface_index = 7, .link_type = DLT_EN10MB, .original_bytes = static_cast<std::uint32_t>(udp.size() + 1), .kernel_drops = UINT64_MAX - 1, .capture_drops = 12, .runtime_drops = 34, .interface = "en0", .bytes = udp};
   std::array<Byte, Limits::frame_bytes> output;
   const auto encoded = Protocol::encode(output, original);
   const auto decoded = Protocol::decode(encoded);
   check(decoded.session == UINT64_MAX && decoded.sequence == UINT64_MAX);
   check(decoded.timestamp_us == 1234567 && decoded.interface_index == 7 && decoded.interface == "en0");
+  check(decoded.kernel_drops == UINT64_MAX - 1 && decoded.capture_drops == 12 && decoded.runtime_drops == 34);
   check(std::ranges::equal(decoded.bytes, udp) && decoded.original_bytes > decoded.bytes.size());
   for (std::size_t length = 0; length < encoded.size(); ++length) {
     bool rejected = false;
@@ -120,6 +121,33 @@ static void codecAndFilters() {
     rejected = true;
   }
   check(rejected);
+}
+
+static void kernelLossAccounting() {
+  KernelDrops drops;
+  KernelDrops::Sample first, second;
+  drops.observe(first, 7, 2);
+  drops.observe(second, 3, 1);
+  check(drops.count() == 13);
+  drops.observe(first, 7, 2);
+  check(drops.count() == 13);
+  drops.observe(first, 9, 4);
+  check(drops.count() == 17);
+
+  // Retiring first must not subtract its counts; a new handle starts at zero.
+  first = {};
+  drops.observe(first, 1, 0);
+  drops.observe(second, 4, 1);
+  check(drops.count() == 19);
+
+  KernelDrops wrapping;
+  KernelDrops::Sample previous;
+  wrapping.observe(previous, UINT32_MAX - 1, UINT32_MAX);
+  const auto before = wrapping.count();
+  wrapping.observe(previous, 2, 0);
+  check(wrapping.count() == before + 5);
+  wrapping.observe(previous, 2, 0);
+  check(wrapping.count() == before + 5);
 }
 
 static void offlineDelivery(SystemAllocator &memory, const std::string &path, const std::string &directory) {
@@ -244,8 +272,93 @@ static void exchangeDelivery(Service<Memory> &service, Memory &memory, const std
   }
 }
 
+template <ConcurrentAllocator Memory>
+static void interceptionDelivery(Service<Memory> &service, const std::string &path) {
+  auto owner = traffic::connect(path);
+  std::array<Byte, Limits::frame_bytes> output;
+  sendAll(owner.get(), Protocol::greeting(output, Role::intercept));
+  check(receive(owner.get()).event().kind == Kind::ready);
+  auto send = [&](std::span<const Byte> bytes) { sendAll(owner.get(), Protocol::prefix(bytes.size())); sendAll(owner.get(), bytes); };
+  send(InterceptionCodec::rule(output, {.host = "fixture.test", .visibility = 3, .timeout_ms = 5000}));
+  check(receive(owner.get()).event().kind == Kind::ready);
+  const std::array<Byte, 3> original{'a', 0, 'b'};
+  struct Request { Service<Memory> &service; std::span<const Byte> bytes; std::uint64_t ticket = 0; } request{service, original};
+  pthread_attr_t attributes;
+  check(::pthread_attr_init(&attributes) == 0);
+  check(::pthread_attr_setstacksize(&attributes, 192 * 1024) == 0);
+  pthread_t thread;
+  check(::pthread_create(&thread, &attributes, [](void *context) -> void * {
+    auto &request = *static_cast<Request *>(context);
+    request.ticket = request.service.intercept({.id = 17, .host = "fixture.test", .bytes = request.bytes});
+    return nullptr;
+  }, &request) == 0);
+  check(::pthread_join(thread, nullptr) == 0);
+  check(::pthread_attr_destroy(&attributes) == 0);
+  const auto ticket = request.ticket;
+  check(ticket != 0);
+  for (;;) {
+    const auto frame = receive(owner.get());
+    const auto event = frame.event();
+    if (event.kind != Kind::intercept_request) { continue; }
+    const auto flow = FlowCodec::decode(event.bytes);
+    check(flow.id == 17 && flow.ticket == ticket && std::ranges::equal(flow.bytes, original));
+    break;
+  }
+  const std::array<Byte, 5> replacement{'c', 0, 'd', 'e', 'f'};
+  send(InterceptionCodec::decision(output, ticket, Verdict::replace, replacement));
+  FlowControl::Decision decision{Verdict::pending};
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
+  while ((decision = service.poll(ticket, output)).verdict == Verdict::pending) {
+    check(std::chrono::steady_clock::now() < deadline);
+    std::this_thread::sleep_for(std::chrono::milliseconds{1});
+  }
+  check(decision.verdict == Verdict::replace && decision.bytes == replacement.size());
+  check(std::ranges::equal(std::span{output}.first(decision.bytes), replacement));
+  auto second = traffic::connect(path);
+  sendAll(second.get(), Protocol::greeting(output, Role::intercept));
+  check(receive(second.get()).event().kind == Kind::ready);
+  auto send_second = [&](std::span<const Byte> bytes) { sendAll(second.get(), Protocol::prefix(bytes.size())); sendAll(second.get(), bytes); };
+  send_second(InterceptionCodec::rule(output, {.host = "fixture.test", .visibility = 3, .timeout_ms = 5000}));
+  check(receive(second.get()).event().kind == Kind::ready);
+  const auto pending = service.intercept({.id = 18, .host = "fixture.test", .bytes = original});
+  check(pending != 0);
+  send_second(InterceptionCodec::decision(output, pending, Verdict::reject));
+  for (;;) {
+    const auto frame = receive(owner.get());
+    if (frame.event().kind == Kind::intercept_request) { break; }
+  }
+  check(service.poll(pending, output).verdict == Verdict::pending);
+  send(InterceptionCodec::decision(output, pending, Verdict::replace, replacement));
+  std::uint64_t second_ticket = 0;
+  for (;;) {
+    const auto frame = receive(second.get());
+    if (frame.event().kind != Kind::intercept_request) { continue; }
+    const auto flow = FlowCodec::decode(frame.event().bytes);
+    check(flow.id == 18 && flow.ticket != pending && std::ranges::equal(flow.bytes, replacement));
+    second_ticket = flow.ticket;
+    break;
+  }
+  send(InterceptionCodec::decision(output, second_ticket, Verdict::reject));
+  send_second(InterceptionCodec::decision(output, second_ticket, Verdict::allow));
+  const auto composed_deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
+  while ((decision = service.poll(pending, output)).verdict == Verdict::pending) {
+    check(std::chrono::steady_clock::now() < composed_deadline);
+    std::this_thread::sleep_for(std::chrono::milliseconds{1});
+  }
+  check(decision.verdict == Verdict::replace && std::ranges::equal(std::span{output}.first(decision.bytes), replacement));
+  second.reset();
+  const auto abandoned = service.intercept({.id = 19, .host = "fixture.test", .bytes = original});
+  owner.reset();
+  while ((decision = service.poll(abandoned, output)).verdict == Verdict::pending) {
+    check(std::chrono::steady_clock::now() < composed_deadline);
+    std::this_thread::sleep_for(std::chrono::milliseconds{1});
+  }
+  check(decision.verdict == Verdict::allow);
+}
+
 int main() {
   codecAndFilters();
+  kernelLossAccounting();
   SystemAllocator system;
   BudgetAllocator budget{system, 64 * 1024 * 1024};
   SynchronizedAllocator memory{budget};
@@ -255,10 +368,11 @@ int main() {
   const auto directory = std::filesystem::canonical(temporary.data()).string();
   const auto path = directory + "/traffic.sock";
   {
-    Service service{memory, path};
+    Service service{memory, path, true};
     offlineDelivery(system, path, directory);
     backpressureAndIsolation(path);
     exchangeDelivery(service, memory, path);
+    interceptionDelivery(service, path);
   }
   check(budget.liveBytes() == 0);
   check(!std::filesystem::exists(path));

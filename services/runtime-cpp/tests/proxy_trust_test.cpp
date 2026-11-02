@@ -99,8 +99,8 @@ void testTrustLifecycle(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &
   check(replacement && replacement->fingerprint != old_record.fingerprint);
   check(commands.commands.size() == 3 && service.inspect().status == proxy_trust::Status::installed && fileCount(path) == 3);
   const auto &removal = commands.commands[2];
-  check(removal.size() == 5 && removal[1] == "delete-certificate" && removal[2] == "-Z");
-  check(removal[3] == std::string_view{old_record.fingerprint.data(), old_record.fingerprint.size()} && removal[4] == keychain);
+  check(removal.size() == 6 && removal[1] == "delete-certificate" && removal[2] == "-t" && removal[3] == "-Z");
+  check(removal[4] == std::string_view{old_record.fingerprint.data(), old_record.fingerprint.size()} && removal[5] == keychain);
 
   service.uninstall(*replacement);
   check(service.inspect().status == proxy_trust::Status::absent && fileCount(path) == 2);

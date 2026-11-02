@@ -4,6 +4,7 @@
 #include "../memory/erasing_allocator.hpp"
 #include "../memory/fixed_text.hpp"
 #include "connection.hpp"
+#include "kernel_drops.hpp"
 #include <chrono>
 #include <csignal>
 #include <optional>
@@ -25,6 +26,7 @@ class Capture {
     std::unique_ptr<pcap_t, decltype(&pcap_close)> handle;
     FixedText<Limits::interface_bytes + 1> name;
     std::uint32_t index = 0;
+    KernelDrops::Sample drops;
     bool seen = false;
   };
 
@@ -64,8 +66,8 @@ public:
       }
       drainControl();
       for (auto &device : devices_) {
-        if (device) {
-          drain(*device);
+        if (device && !drain(*device)) {
+          close(device);
         }
       }
     }
@@ -140,6 +142,7 @@ private:
     event.sequence = ++sequence_;
     event.offline = offline_;
     event.capture_drops = dropped_;
+    event.kernel_drops = kernel_drops_.count();
     const auto payload = Protocol::encode(std::span{output_}.subspan(Protocol::prefix_bytes), event);
     const auto prefix = Protocol::prefix(payload.size());
     std::ranges::copy(prefix, output_.begin());
@@ -177,8 +180,8 @@ private:
     }
   }
 
-  void notice(Kind kind, std::string_view interface, std::string_view message = {}) {
-    emit(Event{.kind = kind, .interface = interface, .bytes = {reinterpret_cast<const Byte *>(message.data()), message.size()}});
+  void notice(Kind kind, std::string_view interface, std::string_view message = {}, std::uint32_t index = 0) {
+    emit(Event{.kind = kind, .interface_index = index, .interface = interface, .bytes = {reinterpret_cast<const Byte *>(message.data()), message.size()}});
   }
 
   void discover() {
@@ -196,61 +199,73 @@ private:
 
     for (auto *interface = raw; interface != nullptr; interface = interface->next) {
       const std::string_view name{interface->name};
-      if ((interface->flags & PCAP_IF_UP) == 0 || name.size() > Limits::interface_bytes || ::if_nametoindex(interface->name) == 0) {
+      const auto index = ::if_nametoindex(interface->name);
+      if ((interface->flags & PCAP_IF_UP) == 0 || name.size() > Limits::interface_bytes || index == 0) {
         continue;
       }
       auto existing = std::ranges::find_if(devices_, [&](auto &device) { return device && device->name.view() == name; });
       if (existing != devices_.end()) {
-        (*existing)->seen = true;
-        continue;
+        if ((*existing)->index == index) {
+          (*existing)->seen = true;
+          continue;
+        }
+
+        close(*existing);
       }
 
       auto slot = std::ranges::find_if(devices_, [](auto &device) { return !device; });
       if (slot == devices_.end()) {
-        notice(Kind::interface_error, name, "Capture interface limit reached");
+        notice(Kind::interface_error, name, "Capture interface limit reached", index);
         continue;
       }
       pcap_t *handle = pcap_create(interface->name, error.data());
       if (!handle) {
-        notice(Kind::interface_error, name, error.data());
+        notice(Kind::interface_error, name, error.data(), index);
         continue;
       }
-      slot->emplace(handle, name, ::if_nametoindex(interface->name));
+      slot->emplace(handle, name, index);
       auto &capture = slot->value();
       constexpr int read_timeout_ms = 50;
       constexpr int kernel_buffer_bytes = 1024 * 1024;
       if (pcap_set_snaplen(handle, Limits::packet_bytes) != 0 || pcap_set_promisc(handle, 0) != 0 || pcap_set_timeout(handle, read_timeout_ms) != 0 || pcap_set_buffer_size(handle, kernel_buffer_bytes) != 0 || pcap_set_immediate_mode(handle, 1) != 0 || pcap_activate(handle) < 0 || pcap_setnonblock(handle, 1, error.data()) != 0) {
-        notice(Kind::interface_error, name, pcap_geterr(handle));
+        notice(Kind::interface_error, name, pcap_geterr(handle), index);
         slot->reset();
         continue;
       }
+      if (::if_nametoindex(interface->name) != index) {
+        notice(Kind::interface_error, name, "Interface changed during capture activation", index);
+        slot->reset();
+        continue;
+      }
+
       capture.seen = true;
-      notice(Kind::interface_open, name);
+      notice(Kind::interface_open, name, {}, index);
     }
 
     for (auto &device : devices_) {
       if (device && !device->seen) {
-        notice(Kind::interface_closed, device->name.view());
-        device.reset();
+        close(device);
       }
     }
   }
 
-  void drain(Device &device) {
+  bool drain(Device &device) {
     constexpr std::size_t batch_packets = 64;
     for (std::size_t round = 0; round < batch_packets; ++round) {
       pcap_pkthdr *header;
       const u_char *bytes;
       const auto result = pcap_next_ex(device.handle.get(), &header, &bytes);
       if (result == 0) {
-        return;
+        return true;
       }
       if (result < 0) {
-        notice(Kind::interface_error, device.name.view(), pcap_geterr(device.handle.get()));
-        return;
+        notice(Kind::interface_error, device.name.view(), pcap_geterr(device.handle.get()), device.index);
+        return false;
       }
       packet(device.handle.get(), *header, bytes, device.name.view(), device.index);
     }
+
+    return true;
   }
 
   void packet(pcap_t *handle, const pcap_pkthdr &header, const u_char *bytes, std::string_view interface, std::uint32_t index) {
@@ -268,14 +283,23 @@ private:
   }
 
   void statistics() {
-    std::uint64_t drops = 0;
-    for (const auto &device : devices_) {
-      pcap_stat value{};
-      if (device && pcap_stats(device->handle.get(), &value) == 0) {
-        drops += value.ps_drop + static_cast<std::uint64_t>(value.ps_ifdrop);
-      }
+    for (auto &device : devices_) {
+      if (device) { sample(*device); }
     }
-    emit(Event{.kind = Kind::statistics, .kernel_drops = drops});
+    emit(Event{.kind = Kind::statistics});
+  }
+
+  void sample(Device &device) noexcept {
+    pcap_stat value{};
+    if (pcap_stats(device.handle.get(), &value) == 0) {
+      kernel_drops_.observe(device.drops, value.ps_drop, value.ps_ifdrop);
+    }
+  }
+
+  void close(std::optional<Device> &device) {
+    sample(*device);
+    notice(Kind::interface_closed, device->name.view(), {}, device->index);
+    device.reset();
   }
 
   ErasingAllocator<Memory> memory_;
@@ -285,6 +309,7 @@ private:
   std::uint64_t session_ = 0;
   std::uint64_t sequence_ = 0;
   std::uint64_t dropped_ = 0;
+  KernelDrops kernel_drops_;
   bool offline_ = false;
 };
 

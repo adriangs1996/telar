@@ -85,6 +85,17 @@ public:
     entry.capabilities = capabilities;
   }
 
+  bool revoke(std::string_view id) {
+    if (!validIdentifier(id)) { throw std::invalid_argument{"Invalid plugin ID"}; }
+    for (std::size_t index = 0; index < count_; ++index) {
+      if (grants_[index].plugin.view() != id) { continue; }
+      for (std::size_t next = index + 1; next < count_; ++next) { grants_[next - 1] = grants_[next]; }
+      --count_;
+      return true;
+    }
+    return false;
+  }
+
   template <Allocator Memory>
   String<Memory> json(Memory &memory) const {
     String<Memory> output{"{\"version\":1,\"grants\":[", AllocatorRef<char, Memory>{memory}};
@@ -99,7 +110,7 @@ public:
       appendLowerHex(output, entry.digest);
       output += "\",\"capabilities\":[";
       bool first = true;
-      for (unsigned value = 0; value <= static_cast<unsigned>(Capability::runtime_control); ++value) {
+      for (unsigned value = 0; value < static_cast<unsigned>(Capability::count); ++value) {
         const auto capability = static_cast<Capability>(value);
         if (entry.capabilities.contains(capability)) {
           if (!first) {

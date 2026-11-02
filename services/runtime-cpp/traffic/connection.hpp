@@ -3,6 +3,7 @@
 #include "../platform/error.hpp"
 #include "../platform/file_descriptor.hpp"
 #include "protocol.hpp"
+#include <algorithm>
 #include <poll.h>
 #include <sys/socket.h>
 #include <sys/stat.h>

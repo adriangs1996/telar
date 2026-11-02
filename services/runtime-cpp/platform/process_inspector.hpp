@@ -7,6 +7,7 @@
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <optional>
 #include <sys/types.h>
+#include <unistd.h>
 
 namespace telar::runtime {
 
@@ -17,6 +18,7 @@ struct ProcessIdentity {
   std::uint64_t started_microseconds = 0;
   pid_t process_group = 0;
   bool operator==(const ProcessIdentity &) const = default;
+  bool sameInstance(const ProcessIdentity &other) const noexcept { return pid == other.pid && started_seconds == other.started_seconds && started_microseconds == other.started_microseconds; }
 };
 
 struct IdentifiedProcess {
@@ -33,8 +35,8 @@ struct ProcessSnapshot {
 
 class ProcessInspector {
 public:
-  explicit ProcessInspector(const AgentManifests &manifests = builtin_manifests) noexcept
-      : manifests_(manifests) {}
+  explicit ProcessInspector(const AgentManifests &manifests = builtin_manifests, uid_t uid = ::geteuid()) noexcept
+      : manifests_(manifests), uid_(uid) {}
 
   std::optional<ProcessIdentity> identity(pid_t process) const noexcept;
   std::optional<ProcessSnapshot> snapshot(pid_t process) const noexcept;
@@ -50,6 +52,7 @@ public:
 private:
   IdentifiedProcess identifyProcess(pid_t process) const noexcept;
   const AgentManifests &manifests_;
+  uid_t uid_;
 };
 
 }

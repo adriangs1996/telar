@@ -1,6 +1,7 @@
 #include "check.hpp"
 #include "diagnostics/trace.hpp"
 #include "platform/private_directory.hpp"
+#include "proxy/trust/inspection.hpp"
 #include "tls/authority.hpp"
 #include "tls_fixture.hpp"
 #include <filesystem>
@@ -135,6 +136,15 @@ static void testAuthorityValidation() {
   rejected([&] { pair.validateAuthority("telar local CA", false); });
 }
 
+static void numericCertificates() {
+  const auto issuer = CertificatePair::authority("Numeric test", CertificatePair::private_lifetime);
+  for (const auto host : {"127.0.0.1", "::1", "2001:db8::1234"}) {
+    const auto leaf = issuer.mint(host);
+    check(X509_check_ip_asc(leaf.certificate.get(), host, 0) == 1);
+    check(X509_check_ip_asc(leaf.certificate.get(), "192.0.2.1", 0) == 0);
+  }
+}
+
 int main(int argc, char **argv) {
   try {
     SystemAllocator system;
@@ -150,6 +160,15 @@ int main(int argc, char **argv) {
       const TlsLibrary library{memory};
       if (argc == 3 && std::string_view{argv[1]} == "--system-authority") {
         createProxyTrustFixture(memory, library, argv[2]);
+      } else if (argc == 3 && std::string_view{argv[1]} == "--system-leaf") {
+        FileDescriptor directory{::open(argv[2], O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
+        check(static_cast<bool>(directory));
+        auto authority = CertificateAuthority<decltype(memory)>::loadExisting(memory, library, directory.get(), AuthorityKind::system_trust);
+        check(authority.has_value());
+        check(!authority->expiresWithin(proxy_trust::rotation_window + std::chrono::hours{24}));
+        const auto leaf = authority->mint("validation.invalid");
+        const PemDocument certificate{leaf.certificate.get()};
+        check(writePrivateFile(directory.get(), "fixture-system-leaf.pem", certificate.bytes(), PrivateFileMode::replace) == 0);
       } else if (argc == 3 && std::string_view{argv[1]} == "--authority") {
         createPrivateDirectory(argv[2]);
         FileDescriptor directory{::open(argv[2], O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
@@ -170,6 +189,7 @@ int main(int argc, char **argv) {
         testProxyTrust(memory, library);
         testAuthorities(memory, library);
         testAuthorityValidation();
+        numericCertificates();
       }
     }
     if (budget.liveBytes() != 0) {

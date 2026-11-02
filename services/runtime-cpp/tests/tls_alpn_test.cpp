@@ -16,6 +16,7 @@ static std::vector<std::uint8_t> clientHello(std::span<const std::uint8_t> proto
   check(input != nullptr && output != nullptr);
   SSL_set_bio(client.get(), input.release(), output.release());
   SSL_set_connect_state(client.get());
+  check(SSL_set_tlsext_host_name(client.get(), "origin.test") == 1);
   if (!protocols.empty()) {
     check(SSL_set_alpn_protos(client.get(), protocols.data(), static_cast<unsigned>(protocols.size())) == 0);
   }
@@ -33,6 +34,7 @@ static void checkOffer(std::span<const std::uint8_t> names, std::span<const std:
   const auto hello = clientHello(names);
   AlpnOffer offer;
   offer.parse(std::span{hello}.subspan(5));
+  check(offer.valid() && offer.serverName() == "origin.test");
   check(std::ranges::equal(offer.encoded(), expected));
   for (std::size_t prefix = 0; prefix < hello.size() - 5; ++prefix) {
     AlpnOffer truncated;
@@ -68,6 +70,30 @@ static void checkPeek(std::span<const std::uint8_t> names) {
   }
 }
 
+static void checkFragments() {
+  const auto record = clientHello({});
+  const auto hello = std::span{record}.subspan(5);
+  for (const auto split : {std::size_t{1}, std::size_t{3}, std::size_t{40}, hello.size() - 1}) {
+    std::vector<std::uint8_t> records;
+    auto append = [&](std::span<const std::uint8_t> part) {
+      records.insert(records.end(), {22, 3, 1, static_cast<std::uint8_t>(part.size() >> 8), static_cast<std::uint8_t>(part.size())});
+      records.insert(records.end(), part.begin(), part.end());
+    };
+    append(hello.first(split));
+    append(hello.subspan(split));
+    int sockets[2];
+    check(::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
+    FileDescriptor writer{sockets[0]}, reader{sockets[1]};
+    configureProxySocket(reader.get());
+    check(::send(writer.get(), records.data(), records.size(), 0) == static_cast<ssize_t>(records.size()));
+    AlpnOffer offer;
+    check(offer.peek(reader.get()) == AlpnOffer::Read::complete && offer.valid() && offer.serverName() == "origin.test");
+    std::vector<std::uint8_t> unchanged(records.size());
+    check(::recv(reader.get(), unchanged.data(), unchanged.size(), 0) == static_cast<ssize_t>(unchanged.size()));
+    check(unchanged == records);
+  }
+}
+
 void testTlsAlpn() {
   constexpr std::array<std::uint8_t, 3> http2{2, 'h', '2'};
   constexpr std::array<std::uint8_t, 9> http11{8, 'h', 't', 't', 'p', '/', '1', '.', '1'};
@@ -77,8 +103,9 @@ void testTlsAlpn() {
   checkOffer(http2, http2);
   checkOffer(http11, http11);
   checkOffer(both, both);
-  checkOffer(reversed, both);
-  checkOffer(unknown, {});
+  checkOffer(reversed, reversed);
+  checkOffer(unknown, unknown);
   checkOffer({}, {});
   checkPeek(both);
+  checkFragments();
 }

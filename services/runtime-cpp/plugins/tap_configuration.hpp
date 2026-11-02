@@ -22,11 +22,9 @@ public:
     const auto trust = loadTrust(memory, environment);
     const PackageRegistry registry{memory, directory, configured};
     for (const auto &package : registry.packages()) {
-      if (!package.manifest.capabilities.contains(Capability::proxy_tap)) {
-        continue;
-      }
       const auto granted = trust.granted(package.manifest.id.view(), package.digest);
-      if (!granted.contains(Capability::proxy_tap)) {
+      const auto allowed = [&](Capability capability) { return package.manifest.capabilities.contains(capability) && granted.contains(capability); };
+      if (!allowed(Capability::proxy_tap) && !allowed(Capability::traffic_observe) && !allowed(Capability::traffic_intercept) && !allowed(Capability::traffic_control) && !allowed(Capability::traffic_record)) {
         continue;
       }
       if (count_ == specifications_.size()) {
@@ -39,6 +37,7 @@ public:
       specification.plugin_id = stableId(copied.manifest.id.view());
       specification.digest = copied.digest;
       specification.generation = initial_generation;
+      specification.name = copied.manifest.id;
       specification.declared = copied.manifest.capabilities;
       specification.granted = granted;
       String<Memory> entry{copied.root.view(), AllocatorRef<char, Memory>{memory}};

@@ -12,7 +12,7 @@ inline plugins::Capabilities grantedCapabilities(const plugins::Manifest &manife
   if (!options.explicit_capabilities) {
     return manifest.capabilities;
   }
-  for (unsigned value = 0; value <= static_cast<unsigned>(plugins::Capability::runtime_control); ++value) {
+  for (unsigned value = 0; value < static_cast<unsigned>(plugins::Capability::count); ++value) {
     const auto capability = static_cast<plugins::Capability>(value);
     if (options.capabilities.contains(capability) && !manifest.capabilities.contains(capability)) {
       throw std::invalid_argument{"Plugin capability is not declared"};
@@ -23,6 +23,13 @@ inline plugins::Capabilities grantedCapabilities(const plugins::Manifest &manife
 
 template <Allocator Memory, EnvironmentLookup Environment>
 void runPlugin(Memory &memory, const PluginOptions &options, const Environment &environment) {
+  if (options.action == PluginAction::untrust) {
+    plugins::revokeTrust(memory, options.path, plugins::Paths::trust(memory, environment));
+    constexpr std::string_view message = "telar plugin trust revoked\n";
+    const auto written = writeDescriptor(STDOUT_FILENO, {reinterpret_cast<const std::uint8_t *>(message.data()), message.size()});
+    if (written != 0) { throw SystemError{"Write plugin command output", written}; }
+    return;
+  }
   const auto package = plugins::PackageInspector::inspect(memory, options.path);
   String<Memory> output{AllocatorRef<char, Memory>{memory}};
   switch (options.action) {
@@ -40,6 +47,8 @@ void runPlugin(Memory &memory, const PluginOptions &options, const Environment &
   case PluginAction::trust:
     plugins::updateTrust(memory, package, grantedCapabilities(package.manifest, options), plugins::Paths::trust(memory, environment));
     output = "telar plugin trust updated\n";
+    break;
+  case PluginAction::untrust:
     break;
   }
 

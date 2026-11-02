@@ -42,11 +42,11 @@ public:
     finish(CaptureSide::request, CaptureOutcome::finished);
   }
 
-  void finishResponse(std::uint16_t status) noexcept {
+  void finishResponse(std::uint16_t status, bool complete = true) noexcept {
     if (exchange_.response) {
       exchange_.response->status_code = status;
     }
-    finish(CaptureSide::response, status >= 400 ? CaptureOutcome::failed : CaptureOutcome::finished);
+    finish(CaptureSide::response, !complete || status >= 400 ? CaptureOutcome::failed : CaptureOutcome::finished);
   }
 
   void discardInformational() noexcept {

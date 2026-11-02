@@ -17,8 +17,23 @@ Telar Zig runtime code.
 The optional interface capture helper uses the macOS SDK's libpcap. The
 [traffic subscription guide](../../docs/traffic-capture.md) describes its
 activation, Desktop Lua API, HTTP exchange delivery and focused checks.
-Transparent interception and rewriting remain pending. Repeater workflows
-belong to client applications.
+The [transparent TCP adapter](../../docs/transparent-redirect.md)
+uses a private utun for connection discovery and exact PF flow rules to pass
+sockets from a root helper to the unprivileged proxy worker. On 2026-10-27,
+the user reported passing native IPv4/IPv6 loopback and IPv4 LAN forwarding,
+destination exclusion, concurrent helpers, crash recovery and cleanup. Native
+loopback capture through Desktop Lua also passed; VPN remains unverified.
+[Transparent TLS and asynchronous stream hooks](../../docs/traffic-flows.md)
+are implemented, including HTTP/1 and HTTP/2 message editing and automatic
+framing/compression repair. [Runtime administration](../../docs/traffic-control.md)
+adds Lua status, capture/redirect start/stop and public CA management, guarded by
+`network_control`. The user reported the native Lua-driven lifecycle check
+passing on 2026-10-29. [Persistent workers](../../docs/traffic-workers.md) support
+digest-bound traffic permissions, ordered hooks and isolated crash recovery.
+Live grant revocation and package-bound administration/recording are supported.
+[Runtime recordings](../../docs/traffic-recordings.md) retain bounded packet,
+flow and HTTP data across Desktop reconnects, with cursor queries and PCAPNG
+export. Repeater workflows belong to clients.
 
 From this directory:
 
@@ -424,3 +439,7 @@ Queries retain only the published prefix; refresh, root replacement and disconne
 cancel a build before its storage is reused. Small completed indexes retain the
 bounded inline query path. `PathSearchIndex` allows compile-time injection for
 controlled scheduling tests.
+
+Flow subscriptions, transparent TLS and asynchronous Lua stream hooks are
+described in [traffic-flows.md](../../docs/traffic-flows.md), including the
+`traffic_inspector` Desktop example and the combined native network checker.

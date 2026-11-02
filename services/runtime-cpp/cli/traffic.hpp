@@ -1,13 +1,14 @@
 #pragma once
 
 #include "../traffic/capture.hpp"
+#include "redirect.hpp"
 
 namespace telar::runtime::cli {
 
 template <Allocator Memory>
 void runTraffic(Memory &memory, std::span<char *const> arguments) {
   if (arguments.size() == 1 && std::string_view{arguments[0]} == "--help") {
-    std::puts("Usage: telar-runtime traffic capture --socket RUNTIME_SOCKET\n       telar-runtime traffic import --socket RUNTIME_SOCKET --file CAPTURE.pcap\n\nEnable runtime.proxy.network_capture in the C++ runtime configuration.\nThe capture command needs root and observes active physical, loopback and virtual interfaces.\nImport is unprivileged and labels every event as offline. Neither command changes routes or trust.");
+    std::puts("Usage: telar-runtime traffic capture --socket RUNTIME_SOCKET\n       telar-runtime traffic import --socket RUNTIME_SOCKET --file CAPTURE.pcap\n       telar-runtime traffic redirect --socket RUNTIME_SOCKET --target IP:PORT [--target [IPv6]:PORT] [--direction outbound|inbound|both] [--process PID] [--dry-run]\n       telar-runtime traffic redirect-cleanup --socket RUNTIME_SOCKET\n\nCapture/import require runtime.proxy.network_capture. Capture needs root; import is unprivileged.\nRedirect requires runtime.proxy.enabled and transparent_redirect. It selects local TCP connections\nfrom the runtime's user to numeric destinations, using a private PF anchor. Repeat --process to\nselect explicit account-owned PIDs; descendants are not implicit. --dry-run validates rules\nwithout applying them. Only capture/redirect/redirect-cleanup need root. TLS inspection is opt-in.");
     return;
   }
   if (arguments.empty()) {
@@ -15,6 +16,10 @@ void runTraffic(Memory &memory, std::span<char *const> arguments) {
   }
 
   const std::string_view action{arguments.front()};
+  if (action == "redirect" || action == "redirect-cleanup") {
+    runRedirect(memory, arguments.subspan(1), action == "redirect-cleanup");
+    return;
+  }
   const char *socket = nullptr;
   const char *file = nullptr;
   for (std::size_t index = 1; index < arguments.size(); index += 2) {

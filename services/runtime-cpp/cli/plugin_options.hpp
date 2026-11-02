@@ -6,7 +6,8 @@ namespace telar::runtime::cli {
 
 enum class PluginAction { inspect,
                           install,
-                          trust };
+                          trust,
+                          untrust };
 
 struct PluginOptions {
   PluginAction action;
@@ -16,7 +17,7 @@ struct PluginOptions {
 
   static PluginOptions parse(std::span<char *const> arguments) {
     if (arguments.size() < 2) {
-      throw std::invalid_argument{"Expected plugin inspect|install|trust PATH [--capability NAME]"};
+      throw std::invalid_argument{"Expected plugin inspect|install|trust PATH [--capability NAME], or plugin untrust ID"};
     }
     PluginOptions options{.action = parseAction(arguments[0]), .path = arguments[1], .capabilities = {}};
     for (std::size_t index = 2; index < arguments.size(); index += 2) {
@@ -39,6 +40,9 @@ private:
     }
     if (action == "trust") {
       return PluginAction::trust;
+    }
+    if (action == "untrust") {
+      return PluginAction::untrust;
     }
     throw std::invalid_argument{"Unknown plugin action"};
   }

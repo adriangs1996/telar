@@ -4,14 +4,19 @@
 
 namespace telar::runtime::proxy_trust {
 
+struct AuthorityPreparation {
+  AuthorityKind kind = AuthorityKind::system_trust;
+  bool force_rotation = false;
+};
+
 template <ConcurrentAllocator Memory>
 class PreparedAuthority {
 public:
-  explicit PreparedAuthority(Memory &memory, const TlsLibrary<Memory> &library, int directory)
-      : directory_(directory) {
+  explicit PreparedAuthority(Memory &memory, const TlsLibrary<Memory> &library, int directory, AuthorityPreparation options = {})
+      : directory_(directory), canonical_(AuthorityFiles::forKind(options.kind)) {
     try {
-      auto existing = CertificateAuthority<Memory>::loadExisting(memory, library, directory, AuthorityKind::system_trust);
-      if (existing && !existing->expiresWithin(rotation_window)) {
+      auto existing = CertificateAuthority<Memory>::loadExisting(memory, library, directory, options.kind);
+      if (existing && !options.force_rotation && !existing->expiresWithin(rotation_window)) {
         authority_.emplace(std::move(*existing));
         return;
       }
@@ -21,25 +26,24 @@ public:
 
     std::uint64_t nonce;
     ::arc4random_buf(&nonce, sizeof(nonce));
-    const auto canonical = AuthorityFiles::forKind(AuthorityKind::system_trust);
-    makeName(key_, canonical.key, "rotate", nonce);
-    makeName(certificate_, canonical.certificate, "rotate", nonce);
-    makeName(previous_key_, canonical.key, "previous", nonce);
-    makeName(previous_certificate_, canonical.certificate, "previous", nonce);
-    authority_.emplace(CertificateAuthority<Memory>::create(memory, library, directory, {key_.data(), certificate_.data()}, AuthorityKind::system_trust));
+    makeName(key_, canonical_.key, "rotate", nonce);
+    makeName(certificate_, canonical_.certificate, "rotate", nonce);
+    makeName(previous_key_, canonical_.key, "previous", nonce);
+    makeName(previous_certificate_, canonical_.certificate, "previous", nonce);
+    authority_.emplace(CertificateAuthority<Memory>::create(memory, library, directory, {key_.data(), certificate_.data()}, options.kind));
     temporary_ = true;
   }
 
   ~PreparedAuthority() {
     if (activated_ && !committed_) {
-      restore(certificate_, canonical_certificate);
-      restore(key_, canonical_key);
+      restore(certificate_, canonical_.certificate.data());
+      restore(key_, canonical_.key.data());
     }
     if (saved_certificate_) {
-      restorePrevious(previous_certificate_, canonical_certificate);
+      restorePrevious(previous_certificate_, canonical_.certificate.data());
     }
     if (saved_key_) {
-      restorePrevious(previous_key_, canonical_key);
+      restorePrevious(previous_key_, canonical_.key.data());
     }
     if (temporary_) {
       ::unlinkat(directory_, key_.data(), 0);
@@ -51,7 +55,7 @@ public:
   PreparedAuthority &operator=(const PreparedAuthority &) = delete;
 
   std::string_view certificateName() const noexcept {
-    return temporary_ && !activated_ ? std::string_view{certificate_.data()} : canonical_certificate;
+    return temporary_ && !activated_ ? std::string_view{certificate_.data()} : canonical_.certificate;
   }
 
   const CertificateAuthority<Memory> &authority() const noexcept { return *authority_; }
@@ -61,13 +65,13 @@ public:
       return;
     }
 
-    saved_key_ = savePrevious(canonical_key, previous_key_);
-    saved_certificate_ = savePrevious(canonical_certificate, previous_certificate_);
-    rename(key_.data(), canonical_key);
+    saved_key_ = savePrevious(canonical_.key.data(), previous_key_);
+    saved_certificate_ = savePrevious(canonical_.certificate.data(), previous_certificate_);
+    rename(key_.data(), canonical_.key.data());
     try {
-      rename(certificate_.data(), canonical_certificate);
+      rename(certificate_.data(), canonical_.certificate.data());
     } catch (...) {
-      restore(key_, canonical_key);
+      restore(key_, canonical_.key.data());
       throw;
     }
 
@@ -88,8 +92,6 @@ public:
 
 private:
   using Filename = std::array<char, NAME_MAX + 1>;
-  static constexpr const char *canonical_key = "ca-system-key.pem";
-  static constexpr const char *canonical_certificate = "ca-system-cert.pem";
 
   static void makeName(Filename &output, std::string_view base, const char *operation, std::uint64_t nonce) {
     const int size = std::snprintf(output.data(), output.size(), "%.*s.%s-%016llx", static_cast<int>(base.size()), base.data(), operation, static_cast<unsigned long long>(nonce));
@@ -128,6 +130,7 @@ private:
   }
 
   int directory_;
+  AuthorityFiles canonical_;
   std::optional<CertificateAuthority<Memory>> authority_;
   Filename key_;
   Filename certificate_;

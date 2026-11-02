@@ -1,6 +1,8 @@
 #pragma once
 
 #include "../proxy/socket.hpp"
+#include "../proxy/hostname.hpp"
+#include "../memory/fixed_text.hpp"
 #include <array>
 #include <cstdint>
 #include <span>
@@ -10,7 +12,8 @@ namespace telar::runtime {
 
 enum class HttpProtocol {
   http11,
-  http2
+  http2,
+  other
 };
 
 class AlpnOffer {
@@ -26,63 +29,78 @@ public:
     if (count <= 0) {
       return count < 0 && socketWouldBlock(errno) ? Read::pending : Read::ended;
     }
-    if (static_cast<std::size_t>(count) < record_header_bytes) {
-      return Read::pending;
-    }
+    tls_ = bytes_[0] == handshake_record;
+    if (!tls_) { return Read::complete; }
 
-    const std::size_t record_bytes = (std::size_t{bytes_[3]} << 8) | bytes_[4];
-    if (bytes_[0] != handshake_record || record_bytes > maximum_record_bytes) {
-      return Read::complete;
+    const auto available = static_cast<std::size_t>(count);
+    std::size_t cursor = 0, collected = 0;
+    while (cursor < available) {
+      if (available - cursor < record_header_bytes) { return incomplete(available); }
+      const auto *header = bytes_.data() + cursor;
+      const std::size_t length = (std::size_t{header[3]} << 8) | header[4];
+      if (header[0] != handshake_record || header[1] != 3 || length == 0 || length > maximum_record_bytes) { return Read::complete; }
+      if (available - cursor - record_header_bytes < length) { return incomplete(available); }
+      std::memmove(bytes_.data() + collected, header + record_header_bytes, length);
+      collected += length;
+      cursor += record_header_bytes + length;
+      if (collected >= 4) {
+        const auto expected = (std::size_t{bytes_[1]} << 16) | (std::size_t{bytes_[2]} << 8) | bytes_[3];
+        if (expected > maximum_hello_bytes - 4 || bytes_[0] != client_hello) { return Read::complete; }
+        if (collected >= expected + 4) {
+          parse(std::span{bytes_}.first(expected + 4));
+          return Read::complete;
+        }
+      }
     }
-    if (static_cast<std::size_t>(count) < record_header_bytes + record_bytes) {
-      return Read::pending;
-    }
-    parse(std::span{bytes_}.subspan(record_header_bytes, record_bytes));
-    return Read::complete;
+    return incomplete(available);
   }
 
   void parse(std::span<const std::uint8_t> handshake) noexcept {
-    offered_ = both;
+    protocols_ = {};
+    valid_ = false;
+    encrypted_ = false;
+    server_name_.assign({});
     Cursor record{handshake};
-    if (record.byte() != client_hello) {
-      return;
-    }
-    record.take(handshake_length_bytes + version_bytes + random_bytes);
+    if (record.byte() != client_hello) { return; }
+    const auto declared = record.take(handshake_length_bytes);
+    if (declared.size() != 3 || ((std::size_t{declared[0]} << 16) | (std::size_t{declared[1]} << 8) | declared[2]) != record.remaining()) { return; }
+    record.take(version_bytes + random_bytes);
     record.take(record.byte());
-    record.take(record.word());
+    const auto ciphers = record.word();
+    if (ciphers == 0 || ciphers % 2 != 0) { return; }
+    record.take(ciphers);
     record.take(record.byte());
+    if (record.failed()) { return; }
+    if (record.empty()) { valid_ = true; return; }
     const auto extension_bytes = record.take(record.word());
-    if (record.failed()) {
-      return;
-    }
+    if (record.failed() || !record.empty()) { return; }
 
+    bool seen_alpn = false, seen_name = false;
     Cursor extensions{extension_bytes};
     while (!extensions.empty()) {
       const auto kind = extensions.word();
       const auto body = extensions.take(extensions.word());
-      if (extensions.failed()) {
-        return;
-      }
+      if (extensions.failed()) { return; }
       if (kind == alpn_extension) {
-        protocols(body);
-        return;
+        if (seen_alpn) { return; }
+        seen_alpn = true;
+        if (!protocols(body)) { return; }
+      } else if (kind == 0) {
+        if (seen_name || !serverName(body)) { return; }
+        seen_name = true;
+      } else if (kind == 0xfe0d) {
+        encrypted_ = true;
       }
     }
-    offered_ = none;
+    valid_ = true;
   }
 
-  std::span<const std::uint8_t> encoded() const noexcept {
-    switch (offered_) {
-    case http2:
-      return std::span{protocol_names}.first(http2_bytes);
-    case http11:
-      return std::span{protocol_names}.subspan(http2_bytes);
-    case both:
-      return protocol_names;
-    default:
-      return {};
-    }
-  }
+  bool tls() const noexcept { return tls_; }
+  bool valid() const noexcept { return valid_; }
+  bool encrypted() const noexcept { return encrypted_; }
+  std::string_view serverName() const noexcept { return server_name_.view(); }
+
+  std::span<const std::uint8_t> encoded() const noexcept { return protocols_; }
 
 private:
   class Cursor {
@@ -128,36 +146,37 @@ private:
     bool failed_ = false;
   };
 
-  void protocols(std::span<const std::uint8_t> extension) noexcept {
-    Cursor names{extension};
-    const auto declared = names.word();
-    if (names.failed() || declared != names.remaining()) {
-      return;
-    }
+  Read incomplete(std::size_t count) const noexcept { return count == bytes_.size() ? Read::complete : Read::pending; }
 
-    unsigned selected = none;
+  bool serverName(std::span<const std::uint8_t> extension) noexcept {
+    Cursor names{extension};
+    const auto length = names.word();
+    if (names.failed() || length != names.remaining()) { return false; }
     while (!names.empty()) {
-      const auto length = names.byte();
-      const auto bytes = names.take(length);
-      if (names.failed()) {
-        return;
-      }
-      const std::string_view name{reinterpret_cast<const char *>(bytes.data()), bytes.size()};
-      if (name == "h2") {
-        selected |= http2;
-      } else if (name == "http/1.1") {
-        selected |= http11;
+      const auto type = names.byte();
+      const auto value = names.take(names.word());
+      if (names.failed()) { return false; }
+      if (type == 0) {
+        const std::string_view host{reinterpret_cast<const char *>(value.data()), value.size()};
+        if (!server_name_.view().empty() || !ProxyHostname::validTarget(host)) { return false; }
+        server_name_.assign(host);
       }
     }
-    offered_ = selected;
+    return true;
   }
 
-  enum Protocols : unsigned {
-    none = 0,
-    http2 = 1,
-    http11 = 2,
-    both = http2 | http11
-  };
+  bool protocols(std::span<const std::uint8_t> extension) noexcept {
+    Cursor names{extension};
+    const auto declared = names.word();
+    if (names.failed() || declared == 0 || declared != names.remaining()) { return false; }
+    while (!names.empty()) {
+      const auto length = names.byte();
+      names.take(length);
+      if (names.failed() || length == 0) { return false; }
+    }
+    protocols_ = extension.subspan(2);
+    return true;
+  }
 
   static constexpr std::uint8_t handshake_record = 22;
   static constexpr std::uint8_t client_hello = 1;
@@ -167,10 +186,13 @@ private:
   static constexpr std::size_t handshake_length_bytes = 3;
   static constexpr std::size_t version_bytes = 2;
   static constexpr std::size_t random_bytes = 32;
-  static constexpr std::size_t http2_bytes = 3;
-  static constexpr std::array<std::uint8_t, 12> protocol_names{2, 'h', '2', 8, 'h', 't', 't', 'p', '/', '1', '.', '1'};
-  std::array<std::uint8_t, record_header_bytes + maximum_record_bytes> bytes_;
-  unsigned offered_ = both;
+  static constexpr std::size_t maximum_hello_bytes = 64 * 1024;
+  std::array<std::uint8_t, maximum_hello_bytes> bytes_;
+  FixedText<ProxyHostname::maximum_bytes> server_name_;
+  bool tls_ = false;
+  bool valid_ = false;
+  bool encrypted_ = false;
+  std::span<const std::uint8_t> protocols_;
 };
 
 }

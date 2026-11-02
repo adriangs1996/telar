@@ -9,6 +9,8 @@ class Tap {
 public:
   explicit Tap(Plugins &plugins, Service<Memory> *traffic) noexcept : plugins_(plugins), traffic_(traffic) {}
 
+  FlowControl *flowControl() noexcept { return traffic_; }
+
   bool listening() const noexcept { return plugins_.listening() || (traffic_ && traffic_->listening()); }
 
   void submit(CapturedExchange<Memory> &exchange) noexcept {

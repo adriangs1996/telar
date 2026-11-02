@@ -12,7 +12,11 @@ namespace telar::runtime::plugins {
 enum class FrameKind : Byte {
   exchange = 1,
   effects = 2,
-  error = 3
+  error = 3,
+  traffic_setup = 4,
+  traffic_event = 5,
+  traffic_reply = 6,
+  traffic_control_event = 7
 };
 
 enum class EffectKind : Byte {
