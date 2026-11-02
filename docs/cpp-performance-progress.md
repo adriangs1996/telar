@@ -741,8 +741,58 @@ after 20 warmups, counts 166 rendered frames for the accepted optical baseline
 and 162 for the combination, including startup. This does not reproduce the
 duplicate-render explosion of the old direct-event variant. These instrumented
 durations are not timing acceptance; the counts do not measure native cadence.
-The uninstrumented six-pair single/splits/tabs control series is running in
-`/tmp/telar-perf-shared-image-optical-early-text-pairs-01`.
+The uninstrumented six-pair single/splits/tabs control series in
+`/tmp/telar-perf-shared-image-optical-early-text-pairs-01` has completed,
+with 100 measured inputs after 20 warmups in each
+run. Against the accepted optical baseline, the combined candidate wins all six
+pairs for p50, p95 and p99 in each layout:
+
+| Layout | Median p50 A → B (ms) | Median p95 A → B (ms) | Median p99 A → B (ms) | GUI CPU/input A → B (ms), wins |
+| --- | --- | --- | --- | --- |
+| Single | 29.022 → 25.324 | 37.988 → 32.172 | 41.093 → 35.124 | 4.122 → 4.107, 4/6 |
+| Splits | 30.299 → 25.407 | 37.640 → 32.708 | 41.350 → 34.498 | 4.718 → 4.357, 6/6 |
+| Tabs | 30.167 → 25.263 | 37.744 → 31.553 | 41.325 → 34.164 | 4.727 → 4.130, 5/6 |
+
+GUI peak RSS medians are respectively 204.211 → 204.438, 205.313 → 204.555
+and 210.758 → 205.758 MiB; pair wins are mixed. The resource calculation uses
+the 100 measured inputs, excluding warmup CPU. Raw runs and `summary.json` are
+in the directory above; resource results are frozen in
+`out-perf/shared-image-optical-early/text-resources-01.json`.
+This qualifies the isolated-input controls only. The candidate remains
+uncommitted pending fixed-rate background-load controls, new 1K/4K image pairs
+and a fresh independent Zig-stack comparison. The load fixture checks every
+periodic producer checkpoint against the requested rate with 5% tolerance;
+those checkpoints are not synchronized to individual input samples. These
+latencies do not establish sustained native 120 Hz.
+
+The first 1 MiB/s-per-producer load qualification stopped in the accepted optical
+baseline, before a candidate run: one periodic checkpoint delivered
+0.948003493 MiB/s, below the unchanged 0.95 minimum. All six requested native
+input samples completed, but the workload gate failed, so this is not a valid
+latency pair. All receipts remain in
+`/tmp/telar-perf-shared-image-optical-early-load-qualification-01`. The cause of
+the rate miss is not established. New single-pair, six-sample native image
+qualifications for both 1024×1024 and 3840×2160 passed. No old shared-only image
+timing is reused to qualify this binary.
+
+The new six-pair 1K series completed in
+`/tmp/telar-perf-shared-image-optical-early-1k-pairs-01`. With the same
+100 measured inputs, 20 warmups, native presentation endpoint and optical text
+configuration, A → B medians are p50 45.589 → 29.579 ms, p95
+59.108 → 38.202 ms, p99 62.839 → 42.048 ms and maximum 70.027 → 45.910 ms.
+Every latency metric wins 6/6. GUI CPU per measured input falls from 17.873
+to 9.242 ms, also 6/6. GUI peak RSS rises from 204.039 to 228.328 MiB,
+with no memory wins. This is an allowed memory-for-performance tradeoff,
+not a reason to reject the candidate. These are whole-run peak RSS values,
+not settled-memory or allocation-lifetime attribution. Resource results are in
+`out-perf/shared-image-optical-early/1k-resources-01.json`.
+The six-pair 4K series is now running in
+`/tmp/telar-perf-shared-image-optical-early-4k-pairs-01`.
+
+A separate `load-diagnostic.py` controller is prepared to retain both variants'
+observations even if a producer misses its offered rate. It preserves the same
+5% gate and emits no paired timing summary for a case containing an invalid run.
+It has not run yet; the failed qualification above remains part of the record.
 
 ARM64 disassembly verifies the pending-state predicate followed by virtual
 platform delivery. It also exposes a repeated 2 KiB default initialization of
