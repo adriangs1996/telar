@@ -38,6 +38,7 @@ static NSString *capture_path;
 static BOOL capture_complete;
 static BOOL capture_witness_verified;
 static BOOL observe_presentation;
+static BOOL readback_diagnostics;
 static atomic_ulong marker_x, marker_y, pixel_width, pixel_height;
 static BOOL pending, finished, text_input;
 static int count, limit;
@@ -292,6 +293,7 @@ static void finish(int failed) {
         @"native_tab_count": @(primary_window.tabbedWindows.count ?: (primary_window ? 1 : 0)),
         @"marker": @[@(marker_x), @(marker_y)], @"gpu_ms": gpu, @"gpu_work_ms": work,
         @"endpoint": observe_presentation ? @"presented" : @"gpu",
+        @"readback_diagnostics": @(readback_diagnostics),
         @"app_active_start": active_start, @"app_active_end": active_end,
         @"window_key_start": key_start, @"window_key_end": key_end,
         @"foreground_required": @YES, @"focus_failure_point": focus_failure_point ?: @"",
@@ -302,8 +304,12 @@ static void finish(int failed) {
         @"balanced_splits": @(panes == 8 && [display_mode isEqualToString:@"gui"] && [display_layout isEqualToString:@"splits"]), @"panes_created": @(created_panes),
         @"setup_complete": @(setup_complete),
         @"window_id": @(primary_window.windowNumber), @"window_floated": @(window_floated),
+        @"window_frame": @[@(primary_window.frame.origin.x), @(primary_window.frame.origin.y),
+                            @(primary_window.frame.size.width), @(primary_window.frame.size.height)],
+        @"window_occlusion_visible": @((primary_window.occlusionState & NSWindowOcclusionStateVisible) != 0),
         @"floated_window_ids": floated_window_ids ?: @[],
         @"display_max_fps": @(primary_window.screen.maximumFramesPerSecond),
+        @"display_id": primary_window.screen.deviceDescription[@"NSScreenNumber"] ?: @0,
         @"backing_scale": @(primary_window.backingScaleFactor),
         @"host_user_cpu_seconds": @(usage.ru_utime.tv_sec + usage.ru_utime.tv_usec / 1e6),
         @"host_system_cpu_seconds": @(usage.ru_stime.tv_sec + usage.ru_stime.tv_usec / 1e6),
@@ -1035,6 +1041,10 @@ static void verify_readback(ProbeReadback *r, double done) {
         });
     } else {
         int value = color(p);
+        if (readback_diagnostics) {
+            fprintf(probe_log, "readback sequence=%u geometry=%u pixel=%u,%u,%u,%u color=%d gpu=%.9f\n",
+                r->frame->sequence, r->geometry, p[0], p[1], p[2], p[3], value, done);
+        }
         dispatch_async(dispatch_get_main_queue(), ^{
             if (r->geometry != atomic_load(&geometry_epoch)) return;
             r->frame->gpu = done;
@@ -1150,6 +1160,7 @@ static id next_drawable(CAMetalLayer *self,SEL selector){
         draw_context.drawable_end = CACurrentMediaTime();
     }
     if (observe_presentation && drawable) {
+        BOOL transaction = self.presentsWithTransaction;
         ProbeFrame *frame = draw_samples ? [ProbeDrawFrame new] : [ProbeFrame new];
         frame->drawable_id = [(id<MTLDrawable>)drawable drawableID];
         objc_setAssociatedObject([(id<CAMetalDrawable>)drawable texture], &presentation_key, frame, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -1157,6 +1168,11 @@ static id next_drawable(CAMetalLayer *self,SEL selector){
             double timestamp = presented.presentedTime;
             dispatch_async(dispatch_get_main_queue(), ^{
                 frame->presented = timestamp;
+                if (readback_diagnostics) {
+                    fprintf(probe_log, "presentation sequence=%u drawable=%lu presented=%.9f gpu=%.9f verified=%d geometry=%u transaction=%d visible=%d\n",
+                        frame->sequence, frame->drawable_id, timestamp, frame->gpu, frame->verified, frame->geometry,
+                        transaction, (primary_window.occlusionState & NSWindowOcclusionStateVisible) != 0);
+                }
                 accept_frame(frame);
             });
         }];
@@ -1406,6 +1422,7 @@ static BOOL is_probe_host(void) {
 __attribute__((constructor)) static void install(void){
     if(!getenv("TELAR_DISPLAY_RESULT") || !is_probe_host())return;
     const char *input_method=getenv("TELAR_DISPLAY_INPUT_METHOD");
+    readback_diagnostics = getenv("TGB_READBACK_DIAGNOSTICS") != NULL;
     text_input=input_method && !strcmp(input_method,"text");
     if(text_input && ![NSProcessInfo.processInfo.arguments containsObject:@"gui"])abort();
     probe_log=fopen([[NSString stringWithUTF8String:getenv("TELAR_DISPLAY_RESULT")] stringByAppendingString:@".log"].UTF8String,"w");

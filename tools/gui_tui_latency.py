@@ -26,11 +26,20 @@ from echo_latency import percentile
 from terminal_bench_report import latency_samples, validate_telar_display_sync
 from perf_e2e import stop_runtime
 from terminal_bench_fixture import background_rate
+from bench_stack import executable_identity, process_identity, runtime_identity, staged_runtime
 
 WARMUP = 20
 BACKGROUND_RATE_TOLERANCE = .05
 MODE_GROUPS = dict(native=['ghostty', 'gui'], telar=['gui', 'gui-cpp'])
 TELAR_MODES = ('gui', 'gui-cpp')
+
+
+def runtime_program(mode, binary, cpp_runtime):
+    if mode == 'gui-cpp':
+        if cpp_runtime is None:
+            raise ValueError('C++ GUI measurements require an explicit runtime')
+        return cpp_runtime
+    return binary
 
 
 def client_command(mode, binary, cpp_gui, config, fixture):
@@ -74,9 +83,12 @@ def aggregate_runs(results, cases, modes):
     aggregate = {}
     for case in cases:
         for mode in modes:
-            samples = [value for result in results if result['mode'] == mode and result['case'] == case
-                       for value in latency_samples(result)[WARMUP:]]
-            aggregate[f'{case}/{mode}'] = summarize(samples)
+            summaries = [summarize(latency_samples(result)[WARMUP:]) for result in results
+                         if result['mode'] == mode and result['case'] == case]
+            aggregate[f'{case}/{mode}'] = dict(
+                runs=len(summaries), n=sum(row['n'] for row in summaries),
+                **{key: statistics.median(row[key] for row in summaries)
+                   for key in ('p50_ms', 'p95_ms', 'p99_ms', 'max_ms')})
 
     return aggregate
 
@@ -123,6 +135,7 @@ def cleanup_host(app):
 def measure(mode, directory, setup):
     directory.mkdir(mode=0o700)
     binary, app, library, config, options = setup
+    runtime = runtime_program(mode, binary, getattr(options, 'cpp_runtime', None))
     env = {k: v for k, v in os.environ.items()
            if not k.startswith(('TELAR_', 'BENCH_')) and k != 'DYLD_INSERT_LIBRARIES'}
     env.update(TELAR_SOCKET=str(directory / 'runtime.sock'),
@@ -131,6 +144,8 @@ def measure(mode, directory, setup):
                TELAR_PROFILE_DIR=str(directory),
                XDG_DATA_HOME=str(directory / 'data'),
                XDG_CONFIG_HOME=str(directory / 'config'))
+    if mode in TELAR_MODES:
+        env['PATH'] = str(runtime.parent) + os.pathsep + env.get('PATH', '')
     case = getattr(options, 'case', None)
     if case:
         env.update(BENCH_BACKGROUND='flood' if case.endswith('-load') else 'idle',
@@ -145,7 +160,7 @@ def measure(mode, directory, setup):
         fixture = [shutil.which('python3'),
                    str(Path(__file__).with_name('gui_tui_marker.py').resolve()), str(directory / 'size.json')]
     if mode != 'ghostty':
-        subprocess.run([str(binary), 'server', '--background', '--no-config'],
+        subprocess.run([str(runtime), 'server', '--background', '--no-config'],
                        env=env, cwd=directory, check=True)
     args = client_command(mode, binary, getattr(options, 'cpp_gui', None), config, fixture)
     probe_env = dict(DYLD_INSERT_LIBRARIES=str(library),
@@ -193,11 +208,19 @@ def measure(mode, directory, setup):
 
     launch_env['TELAR_DISPLAY_EXECUTABLE'] = command[0]
     try:
+        if mode in TELAR_MODES:
+            identity = runtime_identity(directory / 'runtime.sock', runtime)
+            (directory / 'runtime-identity.json').write_text(json.dumps(identity, indent=2) + '\n')
         with (directory / 'launch.log').open('w') as log:
             process = subprocess.Popen(command, env=launch_env, cwd=getattr(options, 'cwd', None) or directory, stdout=log, stderr=log)
             try:
+                if mode in TELAR_MODES:
+                    gui_identity = process_identity(process.pid)
+                    if gui_identity['path'] != str(Path(command[0]).resolve()):
+                        raise ValueError(f'Unexpected GUI executable: {gui_identity}')
+                    (directory / 'gui-identity.json').write_text(json.dumps(gui_identity, indent=2) + '\n')
                 process.wait(timeout=105)
-            except subprocess.TimeoutExpired:
+            except BaseException:
                 process.kill()
                 process.wait()
                 raise
@@ -207,12 +230,15 @@ def measure(mode, directory, setup):
         if mode == 'ghostty':
             cleanup_host(app)
         if mode != 'ghostty':
-            shutdown = stop_runtime(str(binary), env)
+            shutdown = stop_runtime(str(runtime), env)
             (directory / 'shutdown.json').write_text(json.dumps(shutdown, indent=2) + '\n')
     result_path = directory / 'result.json'
     if not result_path.is_file():
         raise RuntimeError(f'{mode} exited without a probe result; inspect logs and receipts in {directory}')
     result = json.loads(result_path.read_text())
+    if mode in TELAR_MODES:
+        result['runtime_identity'] = identity
+        result['gui_identity'] = gui_identity
     if result['failed'] or len(result['gpu_ms']) != options.samples + WARMUP:
         raise ProbeFailure(mode, result)
     endpoint = getattr(options, 'endpoint', 'gpu')
@@ -274,6 +300,7 @@ def main():
     parser.add_argument('--endpoint', choices=['gpu', 'presented'], default='gpu', help='Measure verified GPU completion or the native drawable presentation timestamp')
     parser.add_argument('--mode', choices=['native', 'telar', 'gui', 'gui-cpp', 'ghostty'], default='native')
     parser.add_argument('--cpp-gui', type=Path, help='Qt Quick executable for --mode telar or gui-cpp')
+    parser.add_argument('--cpp-runtime', type=Path, help='explicit runtime for gui-cpp; stage the same binary as its telar helper')
     parser.add_argument('--config', type=Path, help='same GUI configuration for both Telar clients')
     parser.add_argument('--cwd', type=Path, help='same initial working directory for --mode telar, gui or gui-cpp')
     parser.add_argument('--capture', action='store_true', help='save a Metal frame before warmup; peak RSS includes capture overhead')
@@ -309,6 +336,13 @@ def main():
         if options.cpp_gui is None or not options.cpp_gui.is_file() or not os.access(options.cpp_gui, os.X_OK):
             parser.error('--mode telar and gui-cpp require an executable --cpp-gui')
         options.cpp_gui = options.cpp_gui.resolve()
+        if options.cpp_runtime is None or not options.cpp_runtime.is_file() or not os.access(options.cpp_runtime, os.X_OK):
+            parser.error('--mode telar and gui-cpp require an executable --cpp-runtime')
+        options.cpp_runtime = options.cpp_runtime.resolve()
+        try:
+            staged_runtime(options.cpp_gui, options.cpp_runtime)
+        except ValueError as error:
+            parser.error(str(error))
     if options.vsync != 'true' and any(mode in TELAR_MODES for mode in modes):
         parser.error('Telar comparisons require --vsync true')
     if options.input_method == 'text' and options.mode != 'gui':
@@ -355,6 +389,7 @@ def main():
     manifest = dict(binary=str(binary), sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
                     vsync=options.vsync, endpoint=options.endpoint, warmup=WARMUP, rounds=options.rounds,
                     idle_seconds=options.idle_seconds,
+                    readback_diagnostics='TGB_READBACK_DIAGNOSTICS' in os.environ,
                     capture=options.capture,
                     working_directory=str(options.cwd) if options.cwd else None,
                     input_method=options.input_method, cases=options.cases, panes=options.panes,
@@ -378,6 +413,10 @@ def main():
     if 'gui-cpp' in modes:
         manifest['cpp_gui'] = str(options.cpp_gui)
         manifest['cpp_gui_sha256'] = hashlib.sha256(options.cpp_gui.read_bytes()).hexdigest()
+        manifest['cpp_runtime'] = executable_identity(options.cpp_runtime)
+        manifest['cpp_runtime_helper'] = staged_runtime(options.cpp_gui, options.cpp_runtime)
+        manifest['runtime_pairing'] = ('same-runtime-diagnostic' if manifest['cpp_runtime']['sha256'] == manifest['sha256']
+                                       else 'distinct-runtime-executables')
         changed = subprocess.check_output(['git', 'ls-files', '-m', '-o', '--exclude-standard', '-z', '--', 'services'], cwd=source)
         manifest['cpp_changed_source_sha256'] = {
             name: hashlib.sha256((source / name).read_bytes()).hexdigest()
@@ -386,7 +425,7 @@ def main():
     manifest['config_path'] = str(config)
     shutil.copy2(config, directory / 'used-config.lua')
     manifest['probe_sha256'] = {name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
-                                for name in ('gui_tui_latency.py', 'gui_tui_latency.m', 'gui_view.h', 'terminal_bench_fixture.py', 'terminal_bench_report.py')}
+                                for name in ('gui_tui_latency.py', 'gui_tui_latency.m', 'gui_view.h', 'terminal_bench_fixture.py', 'terminal_bench_report.py', 'bench_stack.py')}
     probe_source = directory / 'probe-source'
     probe_source.mkdir()
     for name in manifest['probe_sha256']:

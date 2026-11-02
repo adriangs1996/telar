@@ -3,6 +3,7 @@ zig-out/
 .zig-out/
 .DS_Store
 zig-pkg/
+/out-perf/
 # Development runtime state and install staging written by the justfile.
 /.dev/
 

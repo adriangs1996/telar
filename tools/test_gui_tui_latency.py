@@ -6,7 +6,7 @@ import sys
 import tempfile
 import unittest
 
-from gui_tui_latency import WARMUP, aggregate_runs, client_command, validate_telar_grids
+from gui_tui_latency import WARMUP, aggregate_runs, client_command, runtime_program, validate_telar_grids
 from terminal_bench_report import latency_samples, load_runs, markdown_report, summarize_runs, validate_telar_display_sync
 
 
@@ -22,6 +22,13 @@ def presented_run(mode, values):
 
 
 class GuiComparisonTest(unittest.TestCase):
+    def test_cpp_gui_cannot_silently_measure_the_reference_runtime(self):
+        reference, candidate = Path('/reference/telar'), Path('/candidate/telar')
+        self.assertEqual(runtime_program('gui', reference, candidate), reference)
+        self.assertEqual(runtime_program('gui-cpp', reference, candidate), candidate)
+        with self.assertRaisesRegex(ValueError, 'explicit runtime'):
+            runtime_program('gui-cpp', reference, None)
+
     def test_clients_share_the_exact_fixture_arguments(self):
         fixture = ['/usr/bin/python3', '/tmp/a path/workload.py', 'literal $(argument)']
         config = Path('/tmp/a path/config.lua')
@@ -118,6 +125,14 @@ class GuiComparisonTest(unittest.TestCase):
         run = presented_run('gui-cpp', [1000] * WARMUP + [2, 4])
         aggregate = aggregate_runs([run], ['single'], ['gui-cpp'])
         self.assertEqual(aggregate['single/gui-cpp']['p50_ms'], 3)
+
+    def test_cli_aggregate_uses_run_quantiles_instead_of_pooled_samples(self):
+        runs = [presented_run('gui-cpp', [1000] * WARMUP + values)
+                for values in ([1, 2, 3], [4, 5, 100])]
+        aggregate = aggregate_runs(runs, ['single'], ['gui-cpp'])['single/gui-cpp']
+        self.assertEqual(aggregate['runs'], 2)
+        self.assertEqual(aggregate['p50_ms'], 3.5)
+        self.assertEqual(aggregate['max_ms'], 51.5)
 
     def test_gpu_and_presentation_endpoints_cannot_be_paired(self):
         runs = [dict(case='single', mode='gui', round=0, warmup=0, gpu_ms=[4]),

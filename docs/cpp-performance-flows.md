@@ -106,6 +106,9 @@ validate native resource counters.
 
 ## Deliverables and later optimization
 
+Fresh setup, coverage gaps and current experiments are tracked in
+[cpp-performance-progress.md](cpp-performance-progress.md).
+
 Maintain a per-flow map of reusable source tools, missing harness/oracles, qualified
 build identities/display mode, current baseline and accepted/rejected optimizations.
 Reusable measurement support belongs in source; raw results and captures stay in
