@@ -3,7 +3,8 @@
 For the 2026-11-02 complete-stack task, start with
 [cpp-performance-flows.md](cpp-performance-flows.md). Its current scope compares
 C++ runtime + GUI against Zig runtime + GUI, including the 120 Hz smoothness goal.
-The first phase establishes flows and baselines before per-flow optimization.
+Measure and optimize every flow continuously; Adrian removed the initial-phase stop
+and per-flow approval gate. All flows must beat the corresponding complete Zig stack.
 
 The previous parity agent finished at `089a07dcd6cd719f80c56625652afacb87060635`;
 its result was integrated by `36adb7d4f7be59c79323396db4fd8ac54142f48d`.

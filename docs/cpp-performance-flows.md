@@ -1,6 +1,6 @@
 # C++ runtime and GUI performance flows
 
-## Objective and current phase
+## Objective and continuous execution
 
 Compare the complete C++ stack, GUI plus runtime, with the complete Zig stack.
 Adrian requested this on 2026-11-02, with particular emphasis on smooth interaction
@@ -8,10 +8,13 @@ at 120 fps when the active display supports and delivers 120 Hz. Preserve functi
 and visual behavior, explicit allocator ownership, compile-time dependency selection
 and the application/native-platform boundary.
 
-The first phase defines and qualifies these flows, provisions a fresh Personal
-checkout, and establishes current baselines. Production optimization starts after
-Adrian selects a flow. Infrastructure needed to measure a flow belongs to this
-phase; speculative production tuning does not.
+Measurement and optimization are one continuous task. Define and qualify the flows,
+provision a fresh Personal checkout, establish current baselines, then optimize every
+flow as far as evidence supports. Adrian explicitly removed the initial-phase stop
+and per-flow approval gate: proceed autonomously through the whole matrix. The goal
+is a complete C++ stack faster than the complete Zig stack in every flow, with smooth
+native 120 Hz interaction where supported. A baseline report or a subset of wins is
+progress, not completion. Preserve the measurement contract throughout iteration.
 
 Historical lessons are in [GUI optimization](../services/gui-cpp/OPTIMIZATION.md)
 and [runtime performance](../services/runtime-cpp/performance.md). They identify
@@ -103,12 +106,12 @@ validate native resource counters.
 
 ## Deliverables and later optimization
 
-Phase one produces a per-flow map of reusable source tools, missing harness/oracles,
-qualified build identities/display mode and measured baseline status. Reusable
-measurement support belongs in source; raw results and captures stay in ignored
-outputs. Keep a concise table of valid cases, failures and unsupported cases.
+Maintain a per-flow map of reusable source tools, missing harness/oracles, qualified
+build identities/display mode, current baseline and accepted/rejected optimizations.
+Reusable measurement support belongs in source; raw results and captures stay in
+ignored outputs. Keep a concise table of valid cases, failures and unsupported cases.
 
-For each subsequently selected flow, profile first, prove functional/visual
+For each flow, profile first, prove functional/visual
 equivalence, then compare the variant against both the preceding accepted C++ build
 and Zig. Follow [perf-pass](../.agents/skills/perf-pass/SKILL.md) pair-win rules.
 Faster median performance alone does not close the objective while tail latency,
@@ -117,5 +120,7 @@ performance acceptance only for the whole measured matrix, naming limitations.
 
 The initial measurement order is F03/F06/F08/F09 for interaction and smoothness,
 then F04/F07/F10/F11 for load and images, F01/F02 for lifecycle and idle,
-and F05/F12–F16 for the remaining daily/runtime flows. This is a measurement order,
-not authorization to start optimizing any flow without Adrian's next instruction.
+and F05/F12–F16 for the remaining daily/runtime flows. Iterate across all flows,
+rechecking the complete matrix after accepted changes. Continue past measurement
+and partial improvements until every flow satisfies the objective; actual unresolved
+regressions or unavailable native validation remain open findings.
