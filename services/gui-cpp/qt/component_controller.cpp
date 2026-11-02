@@ -187,6 +187,7 @@ void Application::resetComponents() {
     for (std::size_t index = 0; index < component_surfaces_.bars.size(); ++index) {
       auto &state = component_surfaces_.bars[index];
       state.revision = ++next_component_revision_;
+      state.identity = state.revision;
       const auto kind = configuration->definitions().source(static_cast<components::Position>(index)).kind;
       if (kind == components::SourceKind::fixed || components::builtinSource(kind)) {
         projectComponentSource(index, false);
@@ -402,6 +403,7 @@ QVariantMap Application::componentBars() const {
                                                          {QStringLiteral("error"), state.error},
                                                          {QStringLiteral("generation"), QString::number(component_surfaces_.generation)},
                                                          {QStringLiteral("revision"), QString::number(state.revision)},
+                                                         {QStringLiteral("identity"), QString::number(state.identity)},
                                                      });
   }
 
@@ -426,6 +428,7 @@ QVariantMap Application::componentPanel() const {
       {QStringLiteral("lastRender"), component_surfaces_.last_render},
       {QStringLiteral("generation"), QString::number(component_surfaces_.generation)},
       {QStringLiteral("revision"), QString::number(state.revision)},
+      {QStringLiteral("identity"), QString::number(state.identity)},
       {QStringLiteral("source"), static_cast<int>(ComponentSurfaceState::bar_slots)},
       {QStringLiteral("anchor"), component_surfaces_.panel_anchor},
   };
@@ -447,6 +450,7 @@ void Application::toggleComponentPanel(std::size_t index) {
   component_surfaces_.panel_anchor = component_action_anchor_.value_or(QPointF{-1, -1});
   component_surfaces_.panel_identity = ++next_component_revision_;
   component_surfaces_.panel.revision = component_surfaces_.panel_identity;
+  component_surfaces_.panel.identity = component_surfaces_.panel_identity;
   component_timer_.start(std::chrono::milliseconds{0});
   emit componentsChanged();
 }

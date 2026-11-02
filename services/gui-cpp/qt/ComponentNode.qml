@@ -26,6 +26,7 @@ KeyboardAction {
     readonly property bool hasTooltip: (surface.nodes ?? []).some(child => child.parent === node.index && child.tooltip)
     readonly property real compactWidthDelta: node.kind === "meter" ? trackWidth + gap : 0
     readonly property real focusRadius: 4 * ratio
+    readonly property string activationIdentity: surface.identity + ":" + surface.generation + ":" + surface.source + ":" + node.index + ":" + node.actionIdentity
     readonly property real unreducedWidth: node.kind === "group" ? (visual.item?.unreducedWidth ?? 0) : implicitWidth + (compact ? compactWidthDelta : 0)
     readonly property var fitNodes: [{
         index: node.index, parent: node.parent, priority: node.priority,
@@ -83,12 +84,14 @@ KeyboardAction {
         }
     }
 
-    MouseArea {
+    ActionPointer {
         anchors.fill: parent
         enabled: root.node.clickable && root.node.kind !== "button"
+        identity: root.activationIdentity
+        hoverEnabled: false
         cursorShape: Qt.PointingHandCursor
-        onPressed: root.forceActiveFocus(Qt.MouseFocusReason)
-        onClicked: root.activate()
+        onCaptureStarted: root.forceActiveFocus(Qt.MouseFocusReason)
+        onActivated: root.activate()
     }
 
     HoverHandler { id: hover }
@@ -439,6 +442,7 @@ KeyboardAction {
             implicitHeight: root.rowHeight
             FormButton {
                 id: control
+                identity: root.activationIdentity
                 width: Math.min(parent.width, parent.implicitWidth)
                 height: parent.height
                 colors: root.colors

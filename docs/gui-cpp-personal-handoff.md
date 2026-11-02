@@ -1,5 +1,64 @@
 # Personal: C++ daily adoption and complete parity — OPEN
 
+After834ab1899, exact unchanged Preview21 NORMAL event-loop observation completes:
+raw out-dependencies/component-event-loop-stability-1. Twenty cycles of new tab,
+horizontal split/pane/tab closure, group Space/Escape and automatic same-file Lua
+reload pass; GUI0, no QML warnings, owned private runtime/state cleaned. Capture
+inspected. Cycles6..20 live malloc366700752..366943328B, reservation426672128B,
+visual370; idle5s live366810720B. Scoped short observation, NOT leak/sleep/long-run
+clearance. Initial actor typed/legacy meta-argument compile error retained; actor2
+uses bundle Qt through rpaths, GUI-only injection, no package changes. Preview21
+still offered, no need repackage. Four protected identities unchanged.
+ACTIVE component-action-lease-1: genuine negative2 catches old release running
+NEW toggle-workspace-list action after same-label panel refresh; target remains
+alive. Negative1 was a fixture miss outside narrow FormButton, NOT app evidence.
+Six implementation/test files changed: ActionPointer.qml, ComponentNode.qml,
+component_controller.cpp, component_projection.hpp, component_surface_state.hpp,
+tests/quick_test.cpp. Full semantic BindingAction/URL identity plus per-surface
+lifetime; generic captured pointer invalidates action changes, retains same action
+redraw; source identity retires configuration/machine/panel replacement. New test
+buttons/groups, fresh click, unchanged redraw, away/back, held Lua reload. No
+runtime/own-Zig changes. Mac final2 Release40/recorded13 pass; ASAN40 assertions
+pass/exit1 for842155B4785alloc, no address/UB/suppression. Broad controller1/test4
+pass; editor controller+headers1/test4 delivered empty. Earlier test size/adjacent
+QString/const failures retained; helper uses components::Kind, no weakened profile.
+QML changed-range format2 files passes, full module lint passes. Final six hashes
+source-hashes-final-1.json. Test refactor leaves rawGUI6cda... unchanged.
+Preview22 packaged/frozen/offered, GUI8558110df3cf43d02593e4300a8d96082ef45b1441adec84f5b72e40995469b0.
+All1739 hashes/121objects/signatures and eight exact schemas87/88/daily scopes pass;
+13 raw captures inspected. Activity22 wrote NEW output child under prior raw
+component-group-keyboard scope; copied byte-for-byte into current raw scope. Prior
+frozen archive unchanged. Native/package actors not shipped. Original user8/runtime
+and owned VM/Sway preserved. Open-n22, rollback close/open~/Applications/Telar.app.
+Linux final pipeline60821 completed: Release40/ASAN40/recorded13 exit0, broad2/
+actual editor4/format4/module lint pass, six actual exported source hashes match.
+Collected safely via python3.14 filter=data into current raw/linux-final-1; native
+warnings absent, private compositor/display cleanup passes. Mac final2 native
+pipeline73022 finished. Private identical negative2 source with own regenerated
+MOC passes3 checks against corrected GUI; source SHA37e86498... exact same. Earlier
+failed linter/source-overlap analyses2/3 are NOT acceptance, only final4 is stable.
+Normal-loop22 additionally20 cycles pass/GUI0/no QML/private cleanup; live malloc
+cycles6..20 366738656..366949040B, reserved422477824B, visual370; scoped short,
+not native leak/long-run/sleep clearance. Capture inspected plus2 native focus:
+13 daily +1 normal-loop +2 native images inspected. Normal-loop21 frozen19 entries
+and verifier --check-current passes. Source GUI6cda... unchanged by test refactor.
+ACTIVE NEXT CONFIRMED private scope component-refresh-focus-1: refreshed
+label with same action loses keyboard focus. Probe uses exact normal
+GUI library, replaces donor slot only, source/build_probe_mac_1.py; build15659 done,
+run_probe_mac_1.py probe .../probe-mac-1 finished49189:2pass1fail,32699ms. Button
+kind16 old-retired true/new-focused false, active QQuickPopupItem ComponentPanel.
+Output local/
+component-refresh-focus-probe-mac-1.log and raw/native-probe-mac-final-1.json.
+No production changes for this next scope yet; the unchanged-action caption
+refresh is now a confirmed daily blocker in DAILY_DRIVER/PARITY. Investigate
+retaining delegates through record refresh (existing ListModel may help) or
+semantic keyboard-focus restoration; preserve action-change pointer retirement.
+Finish current action-capture consolidation/verifier/freeze/review/local commit,
+then continue next scope. Protected four final identities unchanged.
+Never finish at checkpoint. Physical sleep remains untried; do not ask/suspend.
+Persistent goal API still blocked and has no resume operation; continue manually,
+never mark complete or create a duplicate unfinished goal. No agents/publish/merge.
+
 
 Latest scope after d63928088: **component-focus-stability**, raw
 `services/gui-cpp/out-dependencies/component-focus-stability-1`. Only tests/

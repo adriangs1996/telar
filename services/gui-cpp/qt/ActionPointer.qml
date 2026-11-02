@@ -5,13 +5,17 @@ MouseArea {
 
     property string identity: ""
     property bool captureValid: false
-    signal activated()
+    signal activated
+    signal captureStarted
 
     hoverEnabled: true
     onIdentityChanged: captureValid = false
     onEnabledChanged: captureValid = false
     onVisibleChanged: captureValid = false
-    onPressed: captureValid = true
+    onPressed: {
+        captureValid = true;
+        root.captureStarted();
+    }
     onCanceled: captureValid = false
     onClicked: {
         const accepted = captureValid;

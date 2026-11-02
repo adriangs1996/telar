@@ -4,7 +4,28 @@ The complete functional, visual and equal-or-better performance objective remain
 open. Only the command/quick-navigation palette and notifications/sounds may be
 deferred for daily adoption; existing implementations stay available.
 
-## Current candidate: Preview21; groups, More and predictable terminal focus
+## Current candidate: Preview22; custom-action capture survives refresh safely
+
+`out-adoption/Telar C++ Preview 22.app` retires a held mouse gesture if Lua changes
+its action, while retaining an unchanged action through redraw. Buttons/groups,
+changed-away-and-back actions and reload while pressed have native coverage.
+
+```sh
+open -n "services/gui-cpp/out-adoption/Telar C++ Preview 22.app"
+```
+
+Close it/open `~/Applications/Telar.app` to return. No installation/replacement/
+migration. Exact GUI SHA256
+`8558110df3cf43d02593e4300a8d96082ef45b1441adec84f5b72e40995469b0`.
+All1739 hashes/121 Mach-O/signatures and eight exact daily scopes pass; thirteen
+captures inspected. Mac Release40/recorded13 pass; ASAN40 assertions pass/exit1
+for842155B4785alloc. Broad2 TUs/editor4 files pass unchanged profiles. Linux Release40/ASAN40/recorded13 and broad2/editor4/format/module lint pass; all
+six portable source hashes match. See
+[action capture evidence](measurements/component-action-lease.md). Physical sleep,
+native retention and full parity/retirement remain OPEN. Preview21/8 and installed
+Zig/configuration/runtime remain preserved.
+
+## Preserved candidate: Preview21; groups, More and predictable terminal focus
 
 `out-adoption/Telar C++ Preview 21.app` adds keyboard actions/focus for custom
 groups and More, preserves chrome focus through sidebar changes, and restores
@@ -43,6 +64,13 @@ retention remain open. Visual descendant counts stay constant; malloc reservatio
 plateaus during a short diagnostic, but long-run RSS/leak freedom is NOT proved.
 In-flight component geometry/pointer equivalence stays in PARITY.md. No production
 input-polish prototype was shipped. Preview21 remains the same offered candidate.
+
+The unchanged Preview21 also passes twenty private-state tab/split/group-keyboard/
+automatic Lua-reload cycles under its normal Qt event loop, exits0 without QML
+warnings and retains370 visual descendants. Reserved malloc bytes plateau during
+this short observation. This does not clear native sanitizer failures, long-run
+stability or physical sleep. See [normal-loop evidence](measurements/component-event-loop-stability.md).
+
 
 ## Preserved candidate: Preview19; keyboard actions and retained panels
 
@@ -114,6 +142,10 @@ The reported custom-group/More keyboard blocker is closed in scoped Preview21
 checks, including Escape back to the terminal. Remaining full fitting/styling and
 accessibility/physical ownership cases stay in PARITY.md.
 
+- Retain configured keyboard focus when an unchanged action refreshes its caption.
+  A directed native probe confirms that the current panel recreates the button
+  and drops focus to its popup. This is the next implementation scope; Preview22
+  fixes held-action retargeting but does not close this separate daily blocker.
 - Triage recorded macOS sanitizer exit leaks without suppressing the failures.
   A standalone CoreText reproducer explains part of the retention, not the entire
   GUI report.

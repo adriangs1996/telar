@@ -20,6 +20,7 @@ struct ComponentSlotState {
   Clock::time_point next;
   Clock::time_point clock_next = Clock::time_point::max();
   std::uint64_t revision = 0;
+  std::uint64_t identity = 0;
 };
 
 struct ComponentSurfaceState {
