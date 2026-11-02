@@ -4,7 +4,29 @@ The complete functional, visual and equal-or-better performance objective remain
 open. Only the command/quick-navigation palette and notifications/sounds may be
 deferred for daily adoption; existing implementations stay available.
 
-## Current candidate: Preview22; custom-action capture survives refresh safely
+## Current candidate: Preview23; retained widgets through caption changes
+
+`out-adoption/Telar C++ Preview 23.app` retains keyboard focus and in-flight clicks
+when widget captions change with the same action identity, including periodic Lua
+bars. Actions/source replacement still retires the control. From the worktree root:
+
+```sh
+open -n "services/gui-cpp/out-adoption/Telar C++ Preview 23.app"
+```
+
+Return by closing it/opening `~/Applications/Telar.app`. No installation/replacement/
+migration. Exact GUI SHA256
+`ec27242ae7b63716d9ad172badbc0f7c6a6d57493cb09726b0700db19c2dfff0`.
+Both SDKs pass Release42/recorded15 and broad/editor/format/module lint; two portable
+hashes match. LinuxASAN42 exits0; Mac42 assertions pass/exit1 for769347B4467alloc,
+no address/UB or suppression. Exact1739 hashes/121 Mach-O/signatures, eight daily
+scopes and twenty normal-loop cycles pass; sixteen captures inspected. A fresh
+Lua open-panel reference for an unchanged destination remains a confirmed separate
+focus blocker under investigation. See [retained widget evidence](measurements/component-refresh-focus.md).
+Physical sleep/native retention/full parity/retirement remain OPEN. Preview22/8,
+installed Zig/configuration/runtime remain preserved.
+
+## Preserved candidate: Preview22; custom-action capture survives refresh safely
 
 `out-adoption/Telar C++ Preview 22.app` retires a held mouse gesture if Lua changes
 its action, while retaining an unchanged action through redraw. Buttons/groups,
@@ -142,10 +164,9 @@ The reported custom-group/More keyboard blocker is closed in scoped Preview21
 checks, including Escape back to the terminal. Remaining full fitting/styling and
 accessibility/physical ownership cases stay in PARITY.md.
 
-- Retain configured keyboard focus when an unchanged action refreshes its caption.
-  A directed native probe confirms that the current panel recreates the button
-  and drops focus to its popup. This is the next implementation scope; Preview22
-  fixes held-action retargeting but does not close this separate daily blocker.
+- Retain focus for freshly regenerated Lua open-panel/pick actions naming an
+  unchanged destination. Preview23 fixes caption updates with stable action
+  identities; a directed probe confirms fresh reference IDs still retire focus.
 - Triage recorded macOS sanitizer exit leaks without suppressing the failures.
   A standalone CoreText reproducer explains part of the retention, not the entire
   GUI report.

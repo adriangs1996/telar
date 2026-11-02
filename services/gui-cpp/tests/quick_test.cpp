@@ -4458,6 +4458,97 @@ return {api_version=2, client={keybindings={
     QCOMPARE(client_->error(), QString{});
   }
 
+  Q_SLOT void configuredActionCaptionRefresh() {
+    const auto sidebar = client_->sidebarVisible();
+    const auto cleanup = qScopeGuard([this, sidebar] {
+      client_->closeComponentPanel();
+      client_->loadConfiguration({}, {}, {});
+      if (client_->sidebarVisible() != sidebar) {
+        client_->execute(Application::Action::toggle_sidebar);
+      }
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    for (const auto kind : {components::Kind::button, components::Kind::group}) {
+      client_->closeComponentPanel();
+      const auto element = kind == components::Kind::button ? QStringLiteral("ui.button({text=caption,action=t.action.toggle_sidebar()})") : QStringLiteral("ui.group({on_click=t.action.toggle_sidebar(),ui.label(caption)})");
+      const auto config = QStringLiteral(R"(
+        local t=require('telar');local ui=t.ui;local renders=0
+        return {api_version=2,client={keybindings={t.bind_global({'alt+u'},t.action.open_panel('target'))},panels={target=t.panel({title='Refreshed focus',render=function()
+          renders=renders+1;local caption='Stable target '..renders;return %1
+        end})}}}
+      )")
+                              .arg(element)
+                              .toUtf8();
+      writeTestFile(path, config.constData());
+      client_->loadConfiguration(path, {}, {});
+      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
+      QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(kind, QStringLiteral("Stable target 1")) != nullptr, runtime_wait_ms);
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      const QPointer<QQuickItem> before{componentActionItem(kind, QStringLiteral("Stable target 1"))};
+      before->forceActiveFocus(Qt::TabFocusReason);
+      QTRY_VERIFY_WITH_TIMEOUT(before->hasActiveFocus(), runtime_wait_ms);
+      const auto revision = client_->componentPanel().value(QStringLiteral("revision")).toString();
+      client_->refreshComponentPanel();
+      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(kind, QStringLiteral("Stable target 2")) != nullptr, runtime_wait_ms);
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      const QPointer<QQuickItem> after{componentActionItem(kind, QStringLiteral("Stable target 2"))};
+      QCOMPARE(after.data(), before.data());
+      QTRY_VERIFY_WITH_TIMEOUT(after->hasActiveFocus(), runtime_wait_ms);
+      QTest::keyClick(window_, Qt::Key_Space);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), !sidebar, runtime_wait_ms);
+      client_->execute(Application::Action::toggle_sidebar);
+      QCOMPARE(client_->sidebarVisible(), sidebar);
+      verifyComponentCaptionMouseRefresh(kind, sidebar);
+      QVERIFY(!QTest::currentTestFailed());
+    }
+  }
+
+  Q_SLOT void configuredBarCaptionRefresh() {
+    const auto sidebar = client_->sidebarVisible();
+    const auto cleanup = qScopeGuard([this, sidebar] {
+      client_->loadConfiguration({}, {}, {});
+      if (client_->sidebarVisible() != sidebar) {
+        client_->execute(Application::Action::toggle_sidebar);
+      }
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    writeTestFile(path, R"(
+      local t=require('telar');local ui=t.ui;local renders=0
+      return {api_version=2,client={bars={bottom={
+        left=t.bar.dynamic({every_ms=1000,render=function()
+          renders=renders+1;return ui.group({on_click=t.action.toggle_sidebar(),ui.label('Live bar '..renders)})
+        end}),center=t.bar.tabs(),
+      }}}}
+    )");
+    client_->loadConfiguration(path, {}, {});
+    QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+    const auto slot = [this] {
+      return client_->componentBars().value(QStringLiteral("left")).toMap();
+    };
+    QTRY_COMPARE_WITH_TIMEOUT(slot().value(QStringLiteral("nodes")).toList().size(), 2, runtime_wait_ms);
+    const auto caption = slot().value(QStringLiteral("nodes")).toList().last().toMap().value(QStringLiteral("text")).toString();
+    QTRY_VERIFY_WITH_TIMEOUT(componentGroup(caption) != nullptr, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const QPointer<QQuickItem> before{componentGroup(caption)};
+    before->forceActiveFocus(Qt::TabFocusReason);
+    QTRY_VERIFY_WITH_TIMEOUT(before->hasActiveFocus(), runtime_wait_ms);
+    const auto revision = slot().value(QStringLiteral("revision")).toString();
+    QTRY_VERIFY_WITH_TIMEOUT(slot().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
+    const auto updated = slot().value(QStringLiteral("nodes")).toList().last().toMap().value(QStringLiteral("text")).toString();
+    QVERIFY(updated != caption);
+    QTRY_VERIFY_WITH_TIMEOUT(componentGroup(updated) != nullptr, runtime_wait_ms);
+    QCOMPARE(componentGroup(updated), before.data());
+    QTRY_VERIFY_WITH_TIMEOUT(before->hasActiveFocus(), runtime_wait_ms);
+    QTest::keyClick(window_, Qt::Key_Space);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), !sidebar, runtime_wait_ms);
+  }
+
   Q_SLOT void configuredActionCaptureRefresh() {
     const auto sidebar = client_->sidebarVisible();
     const auto collapsed = client_->workspaceListCollapsed();
@@ -6288,6 +6379,31 @@ return {api_version=2, client={keybindings={
     client_->execute(Application::Action::close_pane, QString::number(*created));
     QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 1, runtime_wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(terminalIn(window_->contentItem()) != nullptr && terminalIn(window_->contentItem())->hasActiveFocus(), runtime_wait_ms);
+  }
+
+  void verifyComponentCaptionMouseRefresh(components::Kind kind, bool sidebar) {
+    const QPointer<QQuickItem> before{componentActionItem(kind, QStringLiteral("Stable target 2"))};
+    QVERIFY(!before.isNull());
+    const auto center = before->mapToScene(before->boundingRect().center()).toPoint();
+    QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, center);
+    bool pressed = true;
+    const auto release = qScopeGuard([&] {
+      if (pressed) {
+        QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, center);
+      }
+    });
+    const auto revision = client_->componentPanel().value(QStringLiteral("revision")).toString();
+    client_->refreshComponentPanel();
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(kind, QStringLiteral("Stable target 3")) != nullptr, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    QCOMPARE(componentActionItem(kind, QStringLiteral("Stable target 3")), before.data());
+    QVERIFY(before->mapRectToScene(before->boundingRect()).contains(center));
+    QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, center);
+    pressed = false;
+    QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), !sidebar, runtime_wait_ms);
+    client_->execute(Application::Action::toggle_sidebar);
+    QCOMPARE(client_->sidebarVisible(), sidebar);
   }
 
   void verifyConfiguredActionCapture(components::Kind kind, const QString &path, bool sidebar, bool collapsed) {

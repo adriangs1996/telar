@@ -1,5 +1,50 @@
 # Personal: C++ daily adoption and complete parity — OPEN
 
+LATEST qualified/offered scope after2550785b7: component-refresh-focus-1.
+Only qt/ComponentTree.qml and tests/quick_test.cpp change. Retained builtin QtQuick
+ListModel reconciles source lifetime/node-index/kind/actionIdentity; same record
+updates preserve delegate, source/action replacement retires it. Guard modelReady
+until children constructed. Both row/column use record role. No C++ model/virtual/
+runtime/own-Zig change. Native negative probe1 loses focus on caption change;
+SAME compiled object positive2 passes3, buttons/groups retained+focused. New test
+configuredActionCaptionRefresh adds held click through text refresh; actual1000ms
+Lua bar case configuredBarCaptionRefresh. No old assertions/deadlines weakened.
+Both SDKs Release42/recorded15 pass; LinuxASAN42 exit0. MacASAN42 assertions pass/
+exit1 for769347B4467alloc, no address/UB/LSAN suppression: FAILED/open. Broad/editor
+1 TU each and C++/QML changed-range format/module lint pass. Preexisting unrelated
+QML warnings/formatter delta retained. Two actual source hashes match, current
+source-hashes-final-1. Linux pipeline87732 finished; exported safely with3.14 data
+filter to raw/linux-final-1. All Mac/guest jobs finished.
+Preview23 FROZEN/OFFERED: services/gui-cpp/out-adoption/Telar C++ Preview 23.app.
+GUIec27242ae7b63716d9ad172badbc0f7c6a6d57493cb09726b0700db19c2dfff0;
+raw04d5b81ffd5cfd27566cbcf9f8a88dd6a546db3c2e3ed32f07f78a178b66ba1b.
+All1739 hashes/121Mach-O/signatures/eight EXACT daily scopes pass;13 daily+2native+
+1normal-loop captures inspected. Exact normal-loop23 twenty tab/split/group/Lua
+reload cycles pass/GUI0/no QML/private cleanup; live cycles6..20 366534640..366772464B,
+reservation426672128B, visual372 constant. Scoped short observation; not long-run/
+leak/physical sleep clearance. Activity helper now writes in correct new scope.
+Open-n23, rollback close/open~/Applications/Telar.app; Preview22/8/installed app/
+configuration/runtime preserved. Four final protected identities unchanged.
+Finish current scope report/verifier/freeze/review/local checkpoint, THEN CONTINUE.
+ACTIVE NEXT CONFIRMED component-semantic-action-focus-1: action.open_panel with
+unchanged destination regenerates Lua registry reference, old button retires and
+loses focus. Native probe1 (32836 finished)2pass1fail/32735ms, no QML warnings.
+Log action:52:-1:9:1 -> action:52:-2:10:1, old-retired true/new-focused false; fixture
+has target/destination panels, same caption refresh model. Only PRIVATE donor-slot
+source/binary, no production changes for this next scope. Build/script/logs in new
+raw; old private compiled object can be relinked after fix. This is disclosed in
+current report/DAILY_DRIVER/PARITY as next daily blocker; do not claim full Lua
+identity equivalence. Existing ConfigurationSource::definitionAction/Generation::
+extendedAction validates generation + retained ref then resolves closed panel/pick
+kind/index. Investigate stable canonical closed destinations while retaining strict
+opaque/plugin/callback identity and changed-target retirement. Avoid a runtime
+rewrite. Definition parsing can be repeated at click; audit TOCTOU/mutable Lua tables
+before finalizing. Reuse existing validated APIs and keep source/application split.
+Daily/full/retirement/native retention/sleep remain OPEN. Physical sleep untried;
+do not ask again/suspend host. Goal API blocked/no resume; continue manually. No
+agents/publish/merge/other worktrees; never touch personal-frame-delivery.md.
+
+
 After834ab1899, exact unchanged Preview21 NORMAL event-loop observation completes:
 raw out-dependencies/component-event-loop-stability-1. Twenty cycles of new tab,
 horizontal split/pane/tab closure, group Space/Escape and automatic same-file Lua

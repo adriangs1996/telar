@@ -25,11 +25,45 @@ Item {
     readonly property var levels: fittedLevels ?? reductions
     property var fitNodes: []
     property real fullWidth: 0
+    property bool modelReady: false
+    readonly property string sourceIdentity: surface.identity + ":" + surface.generation + ":" + surface.source
     readonly property real overflowWidth: overflowMeasure.implicitWidth + 12 * ratio
     readonly property var hiddenRoots: entries.filter((node, index) => (levels[node.index] ?? ComponentFit.Level.full) === ComponentFit.Level.hidden).map(node => node.index)
 
     implicitWidth: horizontal ? row.implicitWidth : column.implicitWidth
     implicitHeight: horizontal ? rowHeight : column.implicitHeight
+
+    function reconcileEntries() {
+        if (!modelReady) {
+            return;
+        }
+
+        for (let index = 0; index < entries.length; ++index) {
+            const record = entries[index];
+            const key = sourceIdentity + ":" + record.index + ":" + record.kind + ":" + (record.actionIdentity ?? "");
+            let found = index;
+            while (found < retained.count && retained.get(found).key !== key) {
+                ++found;
+            }
+
+            if (found === retained.count) {
+                retained.insert(index, {
+                    key,
+                    record
+                });
+            } else {
+                if (found !== index) {
+                    retained.move(found, index, 1);
+                }
+
+                retained.setProperty(index, "record", record);
+            }
+        }
+
+        if (retained.count > entries.length) {
+            retained.remove(entries.length, retained.count - entries.length);
+        }
+    }
 
     function refit() {
         let nodes = [];
@@ -42,9 +76,23 @@ Item {
     }
 
     onWidthChanged: Qt.callLater(refit)
-    onEntriesChanged: Qt.callLater(refit)
+    onEntriesChanged: {
+        reconcileEntries();
+        Qt.callLater(refit);
+    }
+    onSourceIdentityChanged: reconcileEntries()
     onFitChanged: Qt.callLater(refit)
     onGapChanged: Qt.callLater(refit)
+
+    Component.onCompleted: {
+        modelReady = true;
+        reconcileEntries();
+    }
+
+    ListModel {
+        id: retained
+        dynamicRoles: true
+    }
 
     Row {
         id: row
@@ -53,16 +101,16 @@ Item {
 
         Repeater {
             id: rowRepeater
-            model: root.horizontal ? root.entries : []
+            model: root.horizontal ? retained : null
             onItemAdded: Qt.callLater(root.refit)
             onItemRemoved: Qt.callLater(root.refit)
 
             delegate: ComponentNode {
-                required property var modelData
+                required property var record
                 required property int index
                 controller: root.controller
                 surface: root.surface
-                node: modelData
+                node: record
                 colors: root.colors
                 typography: root.typography
                 ratio: root.ratio
@@ -115,13 +163,13 @@ Item {
         visible: !root.horizontal
 
         Repeater {
-            model: root.horizontal ? [] : root.entries
+            model: root.horizontal ? null : retained
 
             delegate: ComponentNode {
-                required property var modelData
+                required property var record
                 controller: root.controller
                 surface: root.surface
-                node: modelData
+                node: record
                 colors: root.colors
                 typography: root.typography
                 ratio: root.ratio
