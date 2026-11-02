@@ -786,13 +786,93 @@ with no memory wins. This is an allowed memory-for-performance tradeoff,
 not a reason to reject the candidate. These are whole-run peak RSS values,
 not settled-memory or allocation-lifetime attribution. Resource results are in
 `out-perf/shared-image-optical-early/1k-resources-01.json`.
-The six-pair 4K series is now running in
-`/tmp/telar-perf-shared-image-optical-early-4k-pairs-01`.
+The six-pair 4K series also completed in
+`/tmp/telar-perf-shared-image-optical-early-4k-pairs-01`. Its A → B medians are
+p50 137.404 → 45.746 ms, p95 147.469 → 53.782 ms, p99 153.881 → 56.494 ms
+and maximum 156.804 → 58.256 ms, all winning 6/6. GUI CPU per measured input
+falls from 89.165 to 31.110 ms, also 6/6. GUI peak RSS medians are
+351.805 → 366.969 MiB, with 3/6 pair wins; the raw resource summary is
+`out-perf/shared-image-optical-early/4k-resources-01.json`.
 
 A separate `load-diagnostic.py` controller is prepared to retain both variants'
 observations even if a producer misses its offered rate. It preserves the same
 5% gate and emits no paired timing summary for a case containing an invalid run.
-It has not run yet; the failed qualification above remains part of the record.
+The one-pair-per-layout load diagnostic with 100 measured inputs completed; the
+failed qualification above remains part of the record. The tabs pair satisfies every periodic producer
+rate check and has p50 30.404 → 25.013 ms and p99 38.301 → 35.772 ms. It is
+one pair, not acceptance. In splits, A misses the rate gate again (minimum
+0.939829 MiB/s), while B meets it (minimum 0.953377 MiB/s). Their observed p50
+values are 31.864 and 45.743 ms respectively, but unequal qualified work prevents
+a valid latency comparison. This is a warning to investigate, not proof of the
+regression's cause. A separate `QSG_RENDER_TIMING=1` split-load diagnostic in
+`/tmp/telar-perf-shared-image-optical-early-load-render-01` also misses rate gates.
+It counts 1535 → 1787 frames including startup, with different measurement
+durations (8.238 → 9.500 seconds); those totals alone do not prove excess frame
+rate. Both diagnostics show larger input-to-GPU and GPU-to-presentation intervals
+for B. Raw work/phase summaries are in
+`out-perf/shared-image-optical-early/load-work-counts-01.json`. The candidate is
+not accepted.
+
+`out-perf/shared-image-optical-input` starts a separate experiment that requests
+early native delivery only for a newer frame from the visible pane/attachment
+with active input grace. Other output retains the original platform scheduling;
+an already deferred frame still considers the full visible set. This removes the
+new all-pane snapshot from the ordinary nonpending output path. Tests cover old
+frames, another pane, attachment generations, detachment, expiration, visibility,
+coalescence and native requests made during delivery. Its fresh build completed;
+all nine focused CTest entries pass, as do native Metal Kitty, input,
+synchronization and cursor-phase checks. An initial compile failure caught stale
+test calls to the superseded adapter method; the native oracle now supplies a
+matching newer input frame and still checks pending-request consumption,
+coalescence and reentrant platform requests. The earlier binaries and source
+snapshots remain frozen.
+
+The new GUI SHA-256 is
+`3cf83d33cf2643e8d3826963197fb17df16c25de223fabed5687f24a3b9cb2b6`;
+runtime/helper identities are unchanged. ARM64 `requestTerminalFrame` now uses
+a 64-byte stack frame instead of the previous 2 KiB pane snapshot. Its
+nonpending path checks the changed pane and input-grace eligibility; this is
+work avoidance, not evidence about heap allocations.
+
+The first new load diagnostic in
+`/tmp/telar-perf-shared-image-optical-input-load-diagnostic-01` passes the offered
+rate gate for all four runs. Splits p50 is 32.699 → 32.757 ms, p95
+37.380 → 44.004 ms, p99 40.892 → 45.736 ms and GUI CPU/input
+16.652 → 18.379 ms. Tabs p50 is 29.068 → 24.827 ms, p99
+41.560 → 35.127 ms and CPU/input 4.538 → 3.729 ms. These are one-pair
+observations; they do not establish consistent gains or losses. A six-pair
+alternating load series is running in
+`/tmp/telar-perf-shared-image-optical-input-load-pairs-01` to resolve the split
+tail warning. Invalid rate runs remain visible and cannot qualify timing.
+
+### First continuous native cadence diagnostic
+
+`out-perf/native-cadence-prototype` reuses a frozen copy of the existing native
+setup, queue filtering, Metal/Metal 4 pixel readback and presentation observation.
+After 20 qualified input warmups, a separate fixture emits a 12-bit sequence in
+one cell's exact truecolor background at 240 updates/s. A one-second stream
+warmup precedes a six-second observation window. Only exact decoded sequence
+pixels on drawables with positive `MTLDrawable.presentedTime` contribute. This
+tests a minimal continuous terminal update, not scroll, resize or a full TUI.
+
+The first diagnostic (`/tmp/telar-perf-native-cadence-prototype-01`) observes
+671 changed frames for accepted optical C++, 691 for the combined candidate and
+658 for the independent original Zig stack. Rates between the first and last
+changed frames are 111.823, 115.161 and 109.806 changes/s. Each has an 8.333 ms
+median native interval; p99 intervals are approximately 16.667 ms. Longest gaps
+are 16.667, 25.000 and 16.668 ms. There is one repeated-content drawable in the
+candidate. These are single diagnostic runs, not paired timing acceptance or
+proof of sustained 120 Hz across the requested flows.
+
+Offline analysis verifies producer receipts cover each observation window and
+every half-second contains 119–121 accepted updates (120 expected), within the
+unchanged 5% tolerance. Presented sequence writes precede their native timestamps.
+Eleven offline negative controls reject zero/stale presentation, invalid pixels,
+unknown sequences, duplicate drawables/producer entries, incomplete receipts,
+wrong offered rate, overflow, disabled VSync and missing initial presentation.
+Their receipt is `out-perf/native-cadence-prototype/negative-controls-01.json`.
+Live fault injection, contemporaneous display-reference qualification, frozen
+missed-refresh classification, overhead and representative motion remain open.
 
 ARM64 disassembly verifies the pending-state predicate followed by virtual
 platform delivery. It also exposes a repeated 2 KiB default initialization of
