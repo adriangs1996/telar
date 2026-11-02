@@ -3,6 +3,7 @@
 #include "../platform/file_descriptor.hpp"
 #include "child_name.hpp"
 #include <array>
+#include <cerrno>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/mman.h>

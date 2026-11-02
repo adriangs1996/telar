@@ -133,7 +133,8 @@ private:
     QVERIFY(sendHandshake(*peer, ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = other_schema}));
     QTRY_COMPARE(connection.link().phase, MachinePhase::failed);
     QCOMPARE(connection.remoteError(), std::optional{MachineError::incompatible_schema});
-    QCOMPARE(connection.error(), QStringLiteral("the runtime speaks wire schema 00000000; this telar speaks 886b480d. Update telar on one side"));
+    const auto schema = QString::fromLatin1(textView(handshake::schema_id).data(), static_cast<qsizetype>(handshake::schema_id.size()));
+    QCOMPARE(connection.error(), QStringLiteral("the runtime speaks wire schema 00000000; this telar speaks %1. Update telar on one side").arg(schema));
     constexpr int observe_retry_ms = RuntimeLink::first_retry_ms * 2;
     QTest::qWait(observe_retry_ms);
     QVERIFY(!listener.hasPendingConnections());
