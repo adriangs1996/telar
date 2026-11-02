@@ -50,12 +50,22 @@ void TextScene::configure([[maybe_unused]] const FontConfiguration &font, FontGr
     optical_ = OpticalText::create();
   }
 
-  strength_ = font.thicken_strength;
+  rasterization_ = font.thicken ? fonts::GlyphRasterization{.optical = true, .strength = font.thicken_strength} : fonts::GlyphRasterization{};
 #endif
   grid_ = grid;
   collection_ = collection;
   fonts_ = ResidentFonts::shared(collection_);
+#ifdef Q_OS_MACOS
+  if (rasterization_.optical) {
+    optical_glyphs_ = ChromeGlyphImages<ResidentFonts, true>::shared(window_, fonts_, rasterization_);
+    resident_glyphs_.reset();
+  } else {
+    optical_glyphs_.reset();
+    resident_glyphs_ = ChromeGlyphImages<ResidentFonts>::shared(window_, fonts_);
+  }
+#else
   resident_glyphs_ = ChromeGlyphImages<ResidentFonts>::shared(window_, fonts_);
+#endif
   row_.resetFont();
 }
 
@@ -64,30 +74,12 @@ void TextScene::begin(const QRectF &bounds, qreal scale, const QRectF &clip, std
   bounds_ = bounds;
   clip_ = clip;
   scale_ = scale;
-  next_chunk_ = nullptr;
-#ifdef Q_OS_MACOS
-  if (optical_) {
-    text_.reset();
-    const auto overhang = bounds.height();
-    const auto raster = bounds.adjusted(-overhang, -overhang, overhang, overhang);
-    origin_ = raster.topLeft();
-    optical_->begin(raster.size(), scale, strength_);
-  } else
-#endif
-  {
-    ++revision_;
-    text_ = previous ? std::move(previous) : std::make_unique<QSGNode>();
-    next_chunk_ = text_->firstChild();
-  }
+  ++revision_;
+  text_ = previous ? std::move(previous) : std::make_unique<QSGNode>();
+  next_chunk_ = text_->firstChild();
 }
 
 bool TextScene::prepare(std::span<const CellValue> cells, fonts::RowTextRequest request) {
-#ifdef Q_OS_MACOS
-  if (optical_) {
-    return false;
-  }
-#endif
-
   try {
     row_.shape(*fonts_, cells, request);
     row_source_ = cells;
@@ -139,7 +131,7 @@ void TextScene::paintChunk(const ChromeTextPaint &paint) {
     next_chunk_ = previous->nextSibling();
   }
 
-  auto *painted = paintChromeText(previous, window_, paint, collection_);
+  auto *painted = paintTerminalText(previous, window_, paint, collection_, rasterization_);
   if (painted != previous) {
     appendChunk(std::unique_ptr<QSGNode>{painted});
   }
@@ -190,13 +182,6 @@ void TextScene::appendInline(std::unique_ptr<QSGNode> node) {
 }
 
 void TextScene::add(const QString &text, const QFont &font, const QTextCharFormat &format, TextPlacement placement) {
-#ifdef Q_OS_MACOS
-  if (optical_) {
-    addQtText(text, font, format, placement);
-    return;
-  }
-#endif
-
   try {
     const auto bytes = text.toUtf8();
     layout_.shape(*fonts_, {bytes.constData(), static_cast<std::size_t>(bytes.size())}, {.pixel_height = grid_.pixel_height, .preferred = fonts::FontRole::primary});
@@ -231,7 +216,14 @@ void TextScene::addQtText(const QString &text, const QFont &font, const QTextCha
 
 #ifdef Q_OS_MACOS
   if (optical_) {
-    optical_->add(layout, placement.origin - origin_, format.foreground().color());
+    const auto previous = takeChunk();
+    const auto overhang = bounds_.height();
+    const auto raster = bounds_.adjusted(-overhang, -overhang, overhang, overhang);
+    optical_->begin(raster.size(), scale_, rasterization_.strength);
+    optical_->add(layout, placement.origin - raster.topLeft(), format.foreground().color());
+    if (std::unique_ptr<QSGNode> node{optical_->node(window_, raster.topLeft())}) {
+      appendChunk(std::move(node));
+    }
   } else
 #endif
   {
@@ -245,16 +237,6 @@ void TextScene::addQtText(const QString &text, const QFont &font, const QTextCha
 
 QSGNode *TextScene::append(QSGNode &parent) {
   flushCells();
-#ifdef Q_OS_MACOS
-  if (optical_) {
-    std::unique_ptr<QSGNode> node{optical_->node(window_, origin_)};
-    if (node) {
-      adoptSceneNode(parent, std::move(node));
-    }
-
-    return nullptr;
-  }
-#endif
 
   while (next_chunk_ != nullptr) {
     const auto discarded = takeChunk();

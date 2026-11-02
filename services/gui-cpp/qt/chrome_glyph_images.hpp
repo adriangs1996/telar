@@ -3,6 +3,7 @@
 #include "alpha_mask.hpp"
 #include "fonts/font_role.hpp"
 #include "fonts/glyph_bitmap_view.hpp"
+#include "fonts/glyph_rasterization.hpp"
 #include <QColor>
 #include <QHash>
 #include <QImage>
@@ -14,12 +15,18 @@
 #include <QtCore/qcontainerfwd.h>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtypes.h>
+#ifdef Q_OS_MACOS
+#include "core/memory.hpp"
+#include "platform/macos/glyph_rasterizer.hpp"
+#endif
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 
 namespace telar::gui::qt {
@@ -37,13 +44,29 @@ struct CachedGlyph {
   std::size_t next_color = 0;
 };
 
-template <fonts::FontProvider FontSet>
+struct OpticalGlyphRasterizers {
+  std::uint8_t strength = std::numeric_limits<std::uint8_t>::max();
+#ifdef Q_OS_MACOS
+  static constexpr auto font_roles = static_cast<std::size_t>(fonts::FontRole::fallback_7) + 1;
+  SystemAllocator memory;
+  Vector<std::uint8_t, SystemAllocator> pixels{AllocatorRef<std::uint8_t, SystemAllocator>{memory}};
+  std::array<std::unique_ptr<platform::GlyphRasterizer>, font_roles> fonts{};
+#endif
+};
+
+struct StandardGlyphRasterizers {};
+
+template <fonts::FontProvider FontSet, bool optical = false>
 class ChromeGlyphImages {
 public:
-  ChromeGlyphImages(QQuickWindow &window, std::shared_ptr<FontSet> fonts)
+  ChromeGlyphImages(QQuickWindow &window, std::shared_ptr<FontSet> fonts, [[maybe_unused]] fonts::GlyphRasterization rasterization = {})
       : window_(window),
         fonts_(std::move(fonts)),
-        software_(window.rendererInterface()->graphicsApi() == QSGRendererInterface::Software) {}
+        software_(window.rendererInterface()->graphicsApi() == QSGRendererInterface::Software) {
+    if constexpr (optical) {
+      rasterization_.strength = rasterization.strength;
+    }
+  }
 
   [[nodiscard]] bool software() const noexcept {
     return software_;
@@ -64,7 +87,7 @@ public:
       throw std::runtime_error{"ChromeGlyphCacheFull"};
     }
 
-    const auto bitmap = fonts_->face(role).rasterize({.index = index, .pixel_height = pixel_height, .style = style});
+    const auto bitmap = rasterize({.index = index, .pixel_height = pixel_height, .style = style}, role);
     if (bitmap.width > maximum_side || bitmap.height > maximum_side) {
       throw std::runtime_error{"ChromeGlyphTooLarge"};
     }
@@ -127,8 +150,10 @@ public:
     return mask;
   }
 
-  [[nodiscard]] static std::shared_ptr<ChromeGlyphImages> shared(QQuickWindow &window, const std::shared_ptr<FontSet> &fonts) {
-    thread_local QHash<QPair<QQuickWindow *, const FontSet *>, std::weak_ptr<ChromeGlyphImages>> caches;
+  [[nodiscard]] static std::shared_ptr<ChromeGlyphImages> shared(QQuickWindow &window, const std::shared_ptr<FontSet> &fonts, fonts::GlyphRasterization rasterization = {}) {
+    using Source = QPair<QQuickWindow *, const FontSet *>;
+    using Key = std::conditional_t<optical, std::pair<Source, std::uint16_t>, Source>;
+    thread_local QHash<Key, std::weak_ptr<ChromeGlyphImages>> caches;
     for (auto entry = caches.begin(); entry != caches.end();) {
       if (entry.value().expired()) {
         entry = caches.erase(entry);
@@ -137,10 +162,16 @@ public:
       }
     }
 
-    const QPair<QQuickWindow *, const FontSet *> key{&window, fonts.get()};
+    const Key key = [&] -> Key {
+      if constexpr (optical) {
+        return {{&window, fonts.get()}, rasterization.key()};
+      } else {
+        return {&window, fonts.get()};
+      }
+    }();
     auto cached = caches.value(key).lock();
     if (!cached) {
-      cached = std::make_shared<ChromeGlyphImages>(window, fonts);
+      cached = std::make_shared<ChromeGlyphImages>(window, fonts, rasterization);
       caches.insert(key, cached);
     }
 
@@ -148,6 +179,36 @@ public:
   }
 
 private:
+  [[nodiscard]] fonts::GlyphBitmapView rasterize(fonts::GlyphRasterRequest request, fonts::FontRole role) {
+#ifdef Q_OS_MACOS
+    if constexpr (optical) {
+      if constexpr (requires { fonts_->asset(role); }) {
+        return rasterizeOptical(request, role);
+      } else {
+        throw std::invalid_argument{"OpticalFontAssetsUnavailable"};
+      }
+    }
+#endif
+
+    return fonts_->face(role).rasterize(request);
+  }
+
+#ifdef Q_OS_MACOS
+  [[nodiscard]] fonts::GlyphBitmapView rasterizeOptical(fonts::GlyphRasterRequest request, fonts::FontRole role) {
+    auto &rasterizer = rasterization_.fonts.at(static_cast<std::size_t>(role));
+    if (!rasterizer) {
+      if (rasterization_.pixels.empty()) {
+        rasterization_.pixels.resize(platform::GlyphRasterizer::requiredBytes());
+      }
+
+      const auto &asset = fonts_->asset(role);
+      rasterizer = std::make_unique<platform::GlyphRasterizer>(rasterization_.pixels, asset.bytes(), asset.match(), rasterization_.strength);
+    }
+
+    return rasterizer->rasterize(request);
+  }
+#endif
+
   [[nodiscard]] std::unique_ptr<QSGTexture> createTexture(const QImage &image) {
     std::unique_ptr<QSGTexture> texture{window_.createTextureFromImage(image, QQuickWindow::TextureCanUseAtlas)};
     if (!texture) {
@@ -168,6 +229,7 @@ private:
   QHash<quint64, CachedGlyph> images_;
   std::size_t mask_bytes_ = 0;
   bool software_ = false;
+  [[no_unique_address]] std::conditional_t<optical, OpticalGlyphRasterizers, StandardGlyphRasterizers> rasterization_;
 };
 
 }

@@ -256,7 +256,7 @@ void OpticalText::begin(QSizeF size, qreal scale, std::uint8_t strength) {
       throw std::runtime_error("Unable to allocate optical terminal mask");
     }
 
-    telar_font_smoothing(self.context, true, strength);
+    telarFontSmoothing(self.context, true, strength);
   }
 
   self.scale = scale;

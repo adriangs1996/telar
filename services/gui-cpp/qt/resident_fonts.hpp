@@ -20,6 +20,7 @@ public:
   explicit ResidentFonts(std::shared_ptr<const FontAsset> source);
   explicit ResidentFonts(std::shared_ptr<const FontCollection> collection);
   [[nodiscard]] fonts::Face &face(fonts::FontRole role);
+  [[nodiscard]] const FontAsset &asset(fonts::FontRole role) const;
   [[nodiscard]] std::optional<fonts::FontRole> source(std::string_view text, fonts::FontRole preferred);
   [[nodiscard]] std::size_t fallbackCount() const noexcept;
   [[nodiscard]] static std::shared_ptr<const FontAsset> resolveSource(const QString &family, const QString &style);

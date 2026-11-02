@@ -4,6 +4,7 @@
 #include "font_collection.hpp"
 #include "fonts/font_role.hpp"
 #include "fonts/glyph_bitmap_view.hpp"
+#include "fonts/glyph_rasterization.hpp"
 #include "fonts/shaped_run_view.hpp"
 #include "fonts/text_layout.hpp"
 #include "terminal/font_grid.hpp"
@@ -51,5 +52,6 @@ struct ChromeTextPaint {
 };
 
 QSGNode *paintChromeText(QSGNode *previous, QQuickWindow &window, const ChromeTextPaint &paint, const std::shared_ptr<const FontCollection> &collection);
+QSGNode *paintTerminalText(QSGNode *previous, QQuickWindow &window, const ChromeTextPaint &paint, const std::shared_ptr<const FontCollection> &collection, fonts::GlyphRasterization rasterization);
 
 }

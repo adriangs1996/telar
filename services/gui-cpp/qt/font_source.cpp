@@ -4,6 +4,7 @@
 #include "fonts/font_coverage.hpp"
 #include "fonts/font_query.hpp"
 #include "fonts/native_match.hpp"
+#include "platform/font.h"
 #include "telar_client/codecs/telar_wire.hpp"
 #include <QByteArray>
 #include <QFile>
@@ -15,7 +16,6 @@
 #include <QtCore/qnamespace.h>
 #include <cstddef>
 #include <exception>
-#include <native/font.h>
 #include <optional>
 #include <stdexcept>
 #include <utility>
@@ -38,14 +38,14 @@ int acceptFallbackFont(const fonts::FontMatch *match, void *context) noexcept {
     const auto bytes = telar::byteView({data.bytes.constData(), static_cast<std::size_t>(data.bytes.size())});
     const fonts::Face face{bytes, *match};
     if (!face.monochrome() || !fonts::FontCoverage::covers(face, request.query.text())) {
-      return TELAR_FONT_FAMILY_NOT_FOUND;
+      return telar_font_family_not_found;
     }
 
     request.candidate = std::move(data);
 
-    return TELAR_FONT_FOUND;
+    return telar_font_found;
   } catch (const std::exception &) {
-    return TELAR_FONT_FAMILY_NOT_FOUND;
+    return telar_font_family_not_found;
   }
 }
 
@@ -61,9 +61,9 @@ FontData loadFontData(const FontConfiguration &font) {
   } else {
     const auto family_bytes = family.toUtf8();
     const auto style_bytes = style.toUtf8();
-    const auto status = telar_gui_find_font(family_bytes.constData(), style_bytes.constData(), &data.match);
-    if (status != TELAR_FONT_FOUND) {
-      throw std::runtime_error{status == TELAR_FONT_STYLE_NOT_FOUND ? "FontStyleNotFound" : "FontFamilyNotFound"};
+    const auto status = telarGuiFindFont(family_bytes.constData(), style_bytes.constData(), &data.match);
+    if (status != telar_font_found) {
+      throw std::runtime_error{status == telar_font_style_not_found ? "FontStyleNotFound" : "FontFamilyNotFound"};
     }
 
     path = QString::fromUtf8(data.match.path);
@@ -77,7 +77,7 @@ FontData loadFontData(const FontConfiguration &font) {
 std::optional<FontData> loadFallbackFontData(const fonts::FontQuery &query) {
   FallbackRequest request{.query = query, .candidate = {}};
   fonts::FontMatch match{};
-  if (telar_gui_find_validated_fallback_font(query.codepoints(), &match, acceptFallbackFont, &request) != TELAR_FONT_FOUND) {
+  if (telarGuiFindValidatedFallbackFont(query.codepoints(), &match, acceptFallbackFont, &request) != telar_font_found) {
     return std::nullopt;
   }
 
@@ -86,7 +86,7 @@ std::optional<FontData> loadFallbackFontData(const fonts::FontQuery &query) {
 
 QByteArray loadFontBytes(const QString &path) {
   const QFileInfo info{path};
-  if (!info.isFile() || info.size() > TELAR_FONT_MAX_BYTES) {
+  if (!info.isFile() || info.size() > telar_font_max_bytes) {
     throw std::runtime_error{"FontFileUnavailable"};
   }
 
@@ -95,8 +95,8 @@ QByteArray loadFontBytes(const QString &path) {
     throw std::runtime_error{"FontFileUnavailable"};
   }
 
-  auto bytes = file.read(TELAR_FONT_MAX_BYTES + 1);
-  if (bytes.isEmpty() || bytes.size() > TELAR_FONT_MAX_BYTES || file.error() != QFileDevice::NoError) {
+  auto bytes = file.read(telar_font_max_bytes + 1);
+  if (bytes.isEmpty() || bytes.size() > telar_font_max_bytes || file.error() != QFileDevice::NoError) {
     throw std::runtime_error{"InvalidFontData"};
   }
 

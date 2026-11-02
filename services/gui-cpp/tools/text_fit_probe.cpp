@@ -1,6 +1,7 @@
 #include "core/memory.hpp"
 #include "fonts/face.hpp"
 #include "fonts/shaped_run_view.hpp"
+#include "platform/font.h"
 #include "platform/read_file.hpp"
 #include "presentation/notification_text.hpp"
 #include "text/grapheme_cursor.hpp"
@@ -12,7 +13,6 @@
 #include <cstdio>
 #include <exception>
 #include <memory>
-#include <native/font.h>
 #include <span>
 #include <stdexcept>
 #include <string_view>
@@ -110,7 +110,7 @@ int main(int argc, char **argv) {
 
   try {
     SystemAllocator memory;
-    const auto source = telar::runtime::readFile(memory, arguments[1], TELAR_FONT_MAX_BYTES);
+    const auto source = telar::runtime::readFile(memory, arguments[1], telar_font_max_bytes);
     const Vector<std::uint8_t, SystemAllocator> bytes{source.cbegin(), source.cend(), AllocatorRef<std::uint8_t, SystemAllocator>{memory}};
     fonts::Face face{bytes};
     String<SystemAllocator> text{AllocatorRef<char, SystemAllocator>{memory}};
