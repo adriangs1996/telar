@@ -946,14 +946,102 @@ frame. The ordinary pacing anchor and input-grace behavior are unchanged;
 a separate optional preparation timestamp prevents the ideal cadence anchor
 from masquerading as idle time. Tests add a busy-window case that must still
 receive the original platform event and an exact idle-threshold boundary.
-The fresh build is running; no new functional or timing acceptance is claimed.
+The fresh Release build completed. All nine focused CTest entries passed in
+23.97 seconds, including the idle threshold and continuous-rendering cases.
+The four native Quick cases for images, input, scene synchronization and cursor
+restoration also passed. Staged GUI SHA-256 is
+`995aae4b038695f98d7b96612b1e358da59ee3f823f7079e1bb49707ead5c34c`;
+runtime and command helper remain identical to the accepted optical build.
+The source, binary and validation receipts are frozen in that prefix.
 
-ARM64 disassembly verifies the pending-state predicate followed by virtual
-platform delivery. It also exposes a repeated 2 KiB default initialization of
-64 pane records in `requestTerminalFrame`, before collecting the visible panes.
-That is bounded stack work, not a demonstrated heap allocation. It is retained
-unchanged in this frozen experiment; `assembly-review.md` records a possible
-follow-up that separates visible-pane eligibility from pending-deadline snapshots.
+The first diagnostic invocation completed single-A natively, then its
+load-only reporting code raised `KeyError: background_load` on that non-load
+row. Its controller, manifest, native result and failure log are retained in
+`/tmp/telar-perf-shared-image-optical-idle-load-diagnostic-01`; it is not a pair.
+The subsequent load-only invocation completed all four planned runs in
+`/tmp/telar-perf-shared-image-optical-idle-load-diagnostic-02`. Split-load A
+missed the unchanged rate gate (minimum 0.949573 MiB/s), while B passed
+(0.956081). Tab-load A and B both missed it (0.931434 and 0.947318).
+Neither load comparison qualifies for timing acceptance. Six alternating
+no-load text pairs per case completed separately with the normal controller in
+`/tmp/telar-perf-shared-image-optical-idle-text-pairs-01`:
+
+| No-load case | p50 A → B, ms | p95 A → B, ms | p99 A → B, ms | B wins, p50/p95/p99 |
+| --- | ---: | ---: | ---: | ---: |
+| Single | 29.276 → 25.036 | 38.166 → 33.102 | 41.282 → 36.639 | 6/6, 6/6, 5/6 |
+| Splits | 31.610 → 26.315 | 39.024 → 32.342 | 41.485 → 36.382 | 6/6, 6/6, 6/6 |
+| Tabs | 30.352 → 25.404 | 38.922 → 33.032 | 42.708 → 36.178 | 6/6, 6/6, 6/6 |
+
+GUI CPU per measured input falls from 4.545 to 3.966 ms in single (6/6),
+4.766 to 4.567 ms in splits (5/6), and 4.593 to 4.174 ms in tabs (5/6).
+Median peak GUI RSS is 205.766 → 204.664 MiB, 204.156 → 206.258 MiB,
+and 204.977 → 204.820 MiB respectively; pairwise RSS wins are mixed.
+The 100-input CPU denominator excludes the 20 warmup inputs. These results
+support the no-load text controls but do not accept the full candidate:
+fixed-load controls, fresh image pairs, independent Zig-stack comparisons and
+the full native cadence contract remain open. Memory growth alone is not a veto.
+
+The earlier unscoped build's ARM64 disassembly verifies the pending-state
+predicate followed by virtual platform delivery. It also exposes a repeated
+2 KiB default initialization of 64 pane records in `requestTerminalFrame`.
+That is bounded stack work, not a demonstrated heap allocation. The later
+input-scoped and idle-gated variants separate changed-pane eligibility from
+pending-deadline snapshots; both retain a 64-byte stack frame in that path.
+The frozen assemblies identify each version separately.
+
+### Repeated font coverage and shaping work
+
+Source inspection confirms that `RowTextLayout::appendAlone` asks
+`FontCoverage::covers` before checking its existing ASCII glyph cache.
+That check reaches `FT_Get_Char_Index` even for a glyph already proven present
+in the same face and pixel height. `out-perf/ascii-coverage-cache` prepares a
+separate component candidate that checks the existing glyph first. It adds no
+storage and retains the existing face, height and explicit reset invalidation.
+After the full-client series finished, both component variants built and passed
+the focused row tests. The 256-row warm-output oracle matches glyphs, spans and
+cell ranges exactly through font, size, cursor and selection changes. The new
+probe also matches all 7,494 frozen original-Zig cases across three bundled
+faces byte for byte. The initial scratch benchmark compile failure was limited
+to missing namespace qualification; its source and log are retained separately.
+
+Seven alternating component pairs use 256 warmup rows followed by 20,000
+measured rows of 256 cells. Full source, binary identities and results are in
+`out-perf/ascii-coverage-cache`; no full-client timing ran concurrently:
+
+| Row workload | Wall A → B, ms | CPU A → B, ms | B wins, wall/CPU |
+| --- | ---: | ---: | ---: |
+| ASCII | 225.886 → 84.411 | 225.844 → 84.369 | 7/7, 7/7 |
+| Ligatures | 3964.280 → 3965.610 | 3960.080 → 3958.640 | 4/7, 4/7 |
+| Mixed ASCII and combining marks | 756.974 → 716.196 | 756.593 → 715.982 | 7/7, 7/7 |
+| Font and height changes | 271.460 → 198.959 | 271.384 → 198.902 | 7/7, 7/7 |
+
+The target component wins without a consistent loss in the ligature control.
+ARM64 disassembly shows the cached-presence load and branch before the coverage
+call; a hit appends the stored glyph directly. The A/B x86-64 and x86-64-v3
+objects also compile and their lowering is retained. Those objects do not prove
+Rosetta or Linux execution. The existing cache stores the proof of coverage;
+this is removed repeated work, not fewer allocations or a new cache budget.
+
+The small source change is now included in the separate integrated candidate
+`out-perf/shared-image-optical-coverage`, on top of shared images and idle-gated
+native delivery. Seventeen source files and the component receipts are frozen.
+Its fresh GUI build completed with SHA-256
+`6ce2ae46f435ef93ecfc72f7ef65a126b6ff37a426e5bc445f34317deaecb8f8`;
+runtime and helper hashes remain unchanged. All twelve focused CTest entries
+passed in 25.24 seconds, the four native Quick cases passed, and the new
+integrated row probe matches all 7,494 original-Zig cases. Fresh independent
+Zig-stack comparisons are next. The component result is not yet an integrated
+latency, cadence or full-flow acceptance result.
+
+A larger algorithmic lead is shaping-result reuse. Original Zig's
+`ShapingCache` owns bounded short-run results keyed by text, face and height;
+C++ `Face::shape` currently validates UTF-8, resets the HarfBuzz buffer and
+calls `hb_shape` on every call. The row layer already caches individual ASCII
+glyphs, so that existing reuse must not be counted as repeated shaping work.
+Short ligature runs, fallback text and chrome are candidates for a separate
+work census and bounded cache experiment. Additional memory is allowed when
+it saves measured work; the oracle must retain clusters, direction, positions,
+face/height identity and borrowed-result lifetime.
 
 The legacy `gui_frame_rate` tool's documentation now explicitly identifies its
 historically named presentation counters as frame-completion callbacks. Those
