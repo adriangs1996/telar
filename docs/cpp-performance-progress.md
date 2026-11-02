@@ -677,7 +677,23 @@ replacements after 20 warmups, are recorded in
 | GUI CPU/measured input | 89.366 ms | 31.054 ms | 6/6 |
 | GUI peak RSS | 367.77 MiB | 366.88 MiB | 4/6 |
 
-The 1K series and fresh no-image controls are still pending, so this candidate is
+Six complete 1K pairs under the same contract are recorded in
+`/tmp/telar-perf-shared-image-optical-1k-pairs-01`:
+
+| 1K metric | Optical inline | Optical shared | Shared wins |
+| --- | ---: | ---: | ---: |
+| p50 | 44.534 ms | 37.178 ms | 6/6 |
+| p95 | 58.267 ms | 45.540 ms | 6/6 |
+| p99 | 63.607 ms | 51.024 ms | 6/6 |
+| GUI CPU/measured input | 17.483 ms | 9.240 ms | 6/6 |
+| GUI peak RSS | 206.26 MiB | 216.33 MiB | 1/6 |
+
+The roughly 10 MiB 1K peak increase is recorded as a memory/performance tradeoff,
+not an automatic rejection. Existing quotas and owned-buffer lifetimes remain
+intact. Resource summaries are `4k-resources-01.json` and `1k-resources-01.json`
+under the experiment prefix.
+
+Fresh no-image controls for single/splits/tabs are running, so this candidate is
 **not yet accepted**. A fresh comparison against the independent Zig stack also
 remains open. The earlier rejection is not erased: this is a newly built and
 separately measured candidate on the optical base.
