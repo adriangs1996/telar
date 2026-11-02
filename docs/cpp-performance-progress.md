@@ -841,9 +841,35 @@ rate gate for all four runs. Splits p50 is 32.699 → 32.757 ms, p95
 16.652 → 18.379 ms. Tabs p50 is 29.068 → 24.827 ms, p99
 41.560 → 35.127 ms and CPU/input 4.538 → 3.729 ms. These are one-pair
 observations; they do not establish consistent gains or losses. A six-pair
-alternating load series is running in
+alternating load series completed in
 `/tmp/telar-perf-shared-image-optical-input-load-pairs-01` to resolve the split
-tail warning. Invalid rate runs remain visible and cannot qualify timing.
+tail warning. Only round 0 in splits and rounds 1–4 in tabs satisfy the offered
+rate gate for both variants. The split pair loses p50/p95/p99 (30.608 → 32.700,
+35.656 → 38.589 and 38.329 → 41.097 ms). Among the four valid tabs pairs,
+p50 and p95 win 4/4, but p99 wins only 2/4. GUI CPU/input wins 1/1 in splits
+and 4/4 in tabs; these insufficient subsets do not qualify acceptance. Exact
+valid rounds, excluded rows and resources are retained in
+`load-qualified-subset-01.json` and `load-qualified-resources-01.json` under the
+experiment prefix. Invalid rate runs remain visible and cannot qualify timing.
+
+`out-perf/background-rate-diagnostic` instruments the producer's existing
+dropped-slot policy without changing deadlines or rates. Twenty-one exact
+old/new policy checks pass. The one-pair splits/tabs diagnostic records both
+pre-write scheduling lateness and elapsed PTY-write durations that consume a
+slot. Across its four runs it records 57, 88, 51 and 34 missed slots; most need
+the combined pre-write and write time to exceed the slot. Maximum elapsed writes
+range from 6.878 to 10.664 ms. These are instrumented observations, and elapsed
+time inside `write` cannot distinguish kernel blocking from descheduling.
+
+A separate five-second GUI/runtime sample during 200-input split load completed
+with both process identities checked. The runtime main thread appears in
+`kevent` in 3415 of 3731 samples; this does not support CPU saturation as the
+explanation for the rate failures. It also does not exclude intermittent stalls.
+The profiles and receipt are in `out-perf/background-rate-diagnostic`. A direct
+PTY-sink control using the same three producers, matched grids and unchanged
+1 MiB/s rate passes all periodic gates over twelve seconds, with per-producer
+minimum rates 0.976, 0.971 and 0.969 MiB/s. This single control localizes further
+investigation but does not establish a production bottleneck or performance win.
 
 ### First continuous native cadence diagnostic
 
@@ -873,6 +899,54 @@ wrong offered rate, overflow, disabled VSync and missing initial presentation.
 Their receipt is `out-perf/native-cadence-prototype/negative-controls-01.json`.
 Live fault injection, contemporaneous display-reference qualification, frozen
 missed-refresh classification, overhead and representative motion remain open.
+
+`out-perf/native-cadence-display` adds a simultaneous Core Video reference for
+the window's actual display. Four classifier checks cover 120 Hz, 60 Hz on a
+120 Hz reference, multi-period stalls and invalid/unaligned intervals. The
+0.25 ms interval residual tolerance was fixed before its first native run.
+All four runs in `/tmp/telar-perf-native-cadence-display-01` have verified native
+sequence pixels, valid producer rates and a same-display reference containing
+720 opportunities in six seconds at approximately 120 Hz. Changed-frame rates
+over the full window are 112.667/s for accepted optical C++, 115.333/s for the
+unscoped early-delivery candidate, 111.333/s for input-scoped delivery and
+111.500/s for Zig. Each has roughly 16.667 ms p99 intervals.
+
+The unscoped candidate and Zig classify 28 and 51 missing refresh opportunities
+between content changes respectively. Accepted optical C++ and the input-scoped
+candidate include an interval that does not align with whole reference periods;
+one is 20.833 ms. Their missed-opportunity classification remains unresolved,
+with the original tolerance intact. `reanalysis-02.json` separates valid native
+content/reference observations from that classification failure; the initial
+summary had combined the two statuses. No row establishes overall 120 Hz
+acceptance. Live negative controls, instrument overhead, repeated pairs and
+representative motion still need qualification.
+
+### Drawable-depth diagnostic
+
+The split-load phase observations motivate checking queued drawable depth.
+`out-perf/drawable-depth` freezes a separate probe comparing the same accepted
+optical C++ GUI/runtime binary with its existing layer policy versus a two-drawable
+pool. The short native qualification observes three drawables in the default
+policy and exactly two after the requested override; both complete their
+initial-content and presented-pixel checks. This is an instrumented policy
+experiment, not a production change. A 100-input diagnostic pair for single,
+split-load and tab-load cases completed in
+`/tmp/telar-perf-drawable-depth-load-diagnostic-01`. Single p50/p99 worsen from
+29.085/39.564 to 30.215/41.347 ms and CPU/input from 4.431 to 4.741 ms. The
+valid split-load pair improves p50/p99 from 30.529/42.247 to 29.050/37.378 ms,
+but CPU/input rises from 16.258 to 18.291 ms. The tab-load pair is invalid
+because the two-drawable run misses the rate gate. One mixed diagnostic pair
+does not justify a production drawable-depth change; the hypothesis is left
+unaccepted and the default policy is preserved in all production candidates.
+
+The next isolated source experiment is `out-perf/shared-image-optical-idle`.
+It retains the shared-image path and input/attachment eligibility, but allows
+early native delivery only after two frame intervals without an actual prepared
+frame. The ordinary pacing anchor and input-grace behavior are unchanged;
+a separate optional preparation timestamp prevents the ideal cadence anchor
+from masquerading as idle time. Tests add a busy-window case that must still
+receive the original platform event and an exact idle-threshold boundary.
+The fresh build is running; no new functional or timing acceptance is claimed.
 
 ARM64 disassembly verifies the pending-state predicate followed by virtual
 platform delivery. It also exposes a repeated 2 KiB default initialization of
