@@ -617,6 +617,40 @@ verifies the rest. These are CPU synchronization results with identical current
 dependencies and historical scene implementations. They do not establish
 full-stack latency against Zig, sustained FPS, or native 120 Hz cadence.
 
+Six complete alternating full-client pairs per layout in
+`/tmp/telar-perf-optical-integration-text-pairs-01` compare the accepted cursor
+build with the merged optical build, explicitly setting `font.thicken=true`.
+Each run has 100 measured inputs after 20 warmups, matching grids and positive
+native presentation timestamps with verified marker pixels. Medians of run
+quantiles/resources follow; win counts compare paired runs, not the medians:
+
+| Layout / metric | Previous C++ | Merged optical C++ | Optical wins |
+| --- | ---: | ---: | ---: |
+| Single p50 | 31.258 ms | 30.363 ms | 3/6 |
+| Single p95 | 38.604 ms | 38.400 ms | 3/6 |
+| Single p99 | 41.617 ms | 42.015 ms | 2/6 |
+| Single GUI CPU/input | 4.902 ms | 4.451 ms | 4/6 |
+| Single GUI peak RSS | 203.48 MiB | 206.00 MiB | 1/6 |
+| Splits p50 | 33.141 ms | 30.474 ms | 6/6 |
+| Splits p95 | 39.119 ms | 38.417 ms | 5/6 |
+| Splits p99 | 41.817 ms | 41.008 ms | 4/6 |
+| Splits GUI CPU/input | 5.747 ms | 4.517 ms | 6/6 |
+| Splits GUI peak RSS | 203.49 MiB | 204.92 MiB | 2/6 |
+| Tabs p50 | 32.241 ms | 30.309 ms | 5/6 |
+| Tabs p95 | 39.292 ms | 39.071 ms | 3/6 |
+| Tabs p99 | 42.915 ms | 43.327 ms | 3/6 |
+| Tabs GUI CPU/input | 5.293 ms | 4.514 ms | 6/6 |
+| Tabs GUI peak RSS | 203.46 MiB | 204.92 MiB | 1/6 |
+
+Single-pane latency is inconclusive; its median paired p50 ratio is 1.0068
+despite the lower median of quantiles. Splits and tabs meet the p50 win-count
+gate, and no layout has a consistent latency/CPU regression by the paired rule.
+The small RSS increase is retained under Adrian's explicit memory/performance
+tradeoff policy. These controls support keeping the requested merge, not closing
+F03/F07/F08: they do not provide a fresh Zig comparison, Unicode/TUI coverage or
+sustained native cadence. Resource calculations are recorded in
+`out-perf/optical-integration/client-text-resources-01.json`.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
