@@ -1,7 +1,0 @@
-[Desktop Entry]
-Name=Telar Desktop
-Comment=Telar Wayland compositor
-Exec=telar-desktop
-Type=Application
-NoDisplay=true
-Categories=System;

@@ -1,7 +1,0 @@
-{
-  "build_directory": "out/debug",
-  "commands": [
-    ["cmake", "--preset", "debug"],
-    ["cmake", "--build", "--preset", "debug", "--target", "desktop-editor"]
-  ]
-}
