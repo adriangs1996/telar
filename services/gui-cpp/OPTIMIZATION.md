@@ -1,5 +1,10 @@
 # C++ GUI optimization handoff
 
+The new complete-stack performance task is defined in
+[cpp-performance-flows.md](../../docs/cpp-performance-flows.md). It covers both
+runtimes and GUIs, with native 120 Hz smoothness where supported. The historical
+GUI-only findings below are inputs to that task, not acceptance of the new matrix.
+
 The remaining scoped task is the measured performance regression against the Zig
 GUI. Graphics/attachments and native blur have shipped in Preview27. Preserve
 functional and visual behavior, explicit allocators, compile-time dependency
