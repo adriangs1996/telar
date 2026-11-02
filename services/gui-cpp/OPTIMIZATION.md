@@ -6,6 +6,12 @@ functional and visual behavior, explicit allocators, compile-time dependency
 selection and the application/platform boundary. The wider feature backlog and
 runtime/CLI/plugin-worker migration are separate work.
 
+Start from a new checkout of the current committed source and configure its own
+dependencies, builds and measurement tools. Adrian explicitly requested this on
+2026-11-02. The previous Personal checkout, previews, frozen binaries, raw results,
+local runner adaptations and Linux VM were deleted. This document preserves findings
+and rejected approaches; it is not a prepared environment to resume.
+
 ## Source and measured candidate
 
 | Checkpoint | Identity and state |
@@ -13,20 +19,18 @@ runtime/CLI/plugin-worker migration are separate work.
 | Last production change measured | `a1ea73a89465d1144921e6a924436085601c5537`, native blur and Preview27 |
 | Final Personal branch | `089a07dcd6cd719f80c56625652afacb87060635`, benchmark report after artifact cleanup |
 | Integration into this branch | `36adb7d4f7be59c79323396db4fd8ac54142f48d` |
-| C++ baseline | Exact deployed Preview27, SHA256 `eeb50140eb6387a1d211ffa8f1dd7c6d25ad8d4540e480c7513d0f7034ad1617` |
-| Zig reference | Frozen `bin/original-telar`, SHA256 `4e021bbda7586d16f887dd04a1ded3a806ba60940179129838165d75a0c23e11` |
+| Historical C++ measurement | Preview27, SHA256 `eeb50140eb6387a1d211ffa8f1dd7c6d25ad8d4540e480c7513d0f7034ad1617`; executable deleted |
+| Historical Zig reference | SHA256 `4e021bbda7586d16f887dd04a1ded3a806ba60940179129838165d75a0c23e11`; executable deleted |
 
 The original reference is identified by its executable hash; its `telar 0.0.0`
-version string does not identify a source revision. The C++ baseline's bundled
-runtime/helpers are preserved alongside it. The latency runner starts isolated
-runtimes from `bin/original-telar` for both clients; the reference and C++ request
-different production image transports.
+version string does not identify a source revision. The historical latency runner
+started isolated runtimes from the same original executable for both clients;
+the reference and C++ requested different production image transports.
 
-Integration preserved 127 modified tracked files and 43 untracked files. These
-include moving shared desktop utilities into `dlls/telar-client`, `qt` and
-`platform`, plus font/text/input and benchmark-tool changes. They are outside the
-frozen measurement. Record the current commit, diff, build options and binary hashes,
-then measure a fresh baseline before attributing a change to optimization.
+Subsequent changes include relocating shared utilities and changing font/text/input
+and benchmark tools. The old figures do not measure the current checkout. Record
+the new commit, build options and executable hashes, then establish a fresh baseline
+before attributing a difference to optimization.
 
 The accepted measurements and their limits are in [PARITY.md](PARITY.md).
 Terminal p50 regresses 26.6%, four splits 21.5%, four tabs 27.5%, image1K 42.3%
@@ -37,7 +41,7 @@ RSS regress too; 4K GUI CPU is 45.90% versus 11.20%, where 100% means one core.
 
 | Area | Result at the Personal checkpoint | Limit |
 | --- | --- | --- |
-| Packaged Preview27 | Agent reports signature/linkage checks across 1,739 files / 121 Mach-O files, schema87/88 daily launches, plugins/bars/panels and 20 normal-loop cycles passed | The frozen package was qualified; this branch's later work is a different build |
+| Packaged Preview27 | Agent reported signature/linkage checks across 1,739 files / 121 Mach-O files, schema87/88 daily launches, plugins/bars/panels and 20 normal-loop cycles passed | Historical package qualification; a new build requires its own checks |
 | Graphics and attachments | Hidden Wayland resource correction, real Sway image ASan 22 checks and native/runtime regressions passed; three paired attachment paste/modal captures passed | Comparative attachment CPU includes script waits, not first-image latency |
 | Blur | macOS numeric radius/cache/reset/fallback and Linux optional-protocol controls passed on both SDKs | Linux VM is correctness coverage |
 | Full-client latency | Six valid alternating pairs for each of five flows, 100 inputs after 20 warmups | Fails equal-or-better performance |
@@ -51,7 +55,7 @@ are deferred. Keep direct memory/security/data-loss regressions actionable.
 
 During integration, the frozen executable hashes, all 30 latency pairs' geometry,
 readiness, marker/presentation controls and recorded image dimensions were checked
-again from the retained raw results. Recomputing the five p50 values reproduced
+again from raw results before their removal. Recomputing the five p50 values reproduced
 the report. The host is **Apple M1 Pro / 32 GiB**, confirmed by both the original
 conditions receipt and `sysctl`. The report's earlier M3 label was incorrect.
 
@@ -103,9 +107,9 @@ An outer driver can exit0 while retaining rejected rows. Inspect each row's
 `error`, native failure code and pair compatibility. Use medians of per-run quantiles,
 not pooled samples. GUI CPU uses native getrusage after warmup; peak RSS includes
 startup, viewport negotiation and probe buffers. The separate 100ms resource sampler
-mislabelled Mach ticks as nanoseconds. Apply `resource-counter-unit-correction.json`
-with timebase125/3 for those counters; raw samples were retained unchanged. Its
-200ms getrusage control agrees within 0.01%. GUI native counters are independent.
+mislabelled Mach ticks as nanoseconds. Its corrected analysis used timebase125/3,
+with a 200ms getrusage control agreeing within 0.01%. For new measurements, obtain
+the host's actual timebase and validate units again. GUI native counters were independent.
 Keep GUI/runtime measurements separate and avoid summing shared RSS.
 
 ## Experiments already tried
@@ -120,61 +124,46 @@ No production optimization was accepted. The two environment experiments are
 small preliminary observations, insufficient to prove a general configuration rule.
 Their earlier GPU-only quantiles are not comparable to the final presented endpoint.
 
-The 4K profiles are in `profiles-actual-four-k-1`, with separate GUI/runtime reports
-for each implementation. Relevant source paths are `application/session.hpp`
+The former 4K profiles sampled GUI and runtime separately for each implementation.
+The reports were deleted; the observed paths above remain leads to profile again.
+Relevant source paths are `application/session.hpp`
 for `ConfigureGraphics{false}`, `qt/runtime_connection.cpp`, `transport/frame_stream.hpp`,
 `graphics/store.hpp`, `qt/window_images.cpp` and `qt/image_resource.cpp`.
 The C++ upload path converts to premultiplied RGBA and copies into texture staging;
 inline versus shared-memory transport is another measured-path difference.
 Whether these explain most of the latency or extra memory remains a hypothesis.
 
-## Reproduce from the retained Personal inputs
+## Prepare a new measurement
 
-Use the task worktree and machine in [the Personal handoff](../../docs/gui-cpp-personal-handoff.md).
-Set `benchmark_dir` there, relative to that worktree:
+Dispatch from the current source revision, using a new branch and checkout on
+Personal. Only commits travel between machines: include the intended local work
+before dispatch and record the exact source SHA. The old task branch and Personal's
+existing main checkout are historical state, not the new task's starting revision.
+See [the Personal handoff](../../docs/gui-cpp-personal-handoff.md).
 
-```sh
-benchmark_dir="$PWD/services/gui-cpp/out-dependencies/adoption-benchmark-1"
-shasum -a 256 "$benchmark_dir/bin/original-telar" \
-  "$benchmark_dir/candidate/Telar C++ Preview 27.app/Contents/MacOS/telar-gui"
-```
+Configure compiler/SDK, Qt, Ghostty and other pinned dependencies from declared
+inputs using [README.md](README.md). Use new build/output directories. Build and
+identify both the current C++ Release and a compatible Zig reference; record their
+source revisions, hashes, SDKs and runtime choice. Preserve the installed app and
+user runtime; measurements use isolated runtimes and owned temporary sessions.
 
-These inputs exist on Personal, not in a fresh clone. `frozen-inputs.json` lists
-their hashes; `candidate-freeze.json` records the deployed copy and SDK.
-Cleanup on 2026-11-02 preserved all 1,797 listed files and rechecked the frozen
-GUI hashes. Old build directories and obsolete previews were removed; rebuild
-from source for a new variant. Preview8 in use and Preview27 remain available.
-`valid-pair-summary.json` and `summarize_valid_pairs.py` describe the final aggregation.
-Use `headline-final-1` for terminal/splits/tabs/1K and **`graphics-four-k-final-2`**
-for actual3840×2160. Resource correction, idle and attachment results are adjacent.
-
-The retained local runners preserve the final oracle and adaptations. From a native
-graphical login, without concurrent builds, tests, profilers or lints, use fresh names:
-
-```sh
-python3 "$benchmark_dir/run_comparison_ready.py" \
-  --name optimization-reference-text-1 --rounds 6 --samples 100 \
-  --cases single splits tabs graphics-1k
-python3 "$benchmark_dir/run_comparison_graphics_argv.py" \
-  --name optimization-reference-4k-1 --rounds 6 --samples 100 --cases graphics-4k
-```
-
-These commands compare the old frozen binaries. A new C++ build requires a separate
-runner/input manifest selecting that build; keep the reference and Preview27 intact.
-The retained drivers select their candidate path internally. Preserve their readiness,
-geometry, dimension, negative and rate checks when adapting them. Use new output names
-and validate each pair before aggregation. `run_comparison_ready_idle.py --idle`
-provides idle collection; its other arguments follow the same pattern.
-
-Current source tools include `tools/gui_tui_latency.py` with `--mode telar`,
+The source tools include `tools/gui_tui_latency.py` with `--mode telar`,
 `--cpp-gui`, `--config`, `--endpoint presented` and `--viewport` options, plus the
-fixture/oracle tests beside it. They have local changes since the frozen harness.
-Qualify their controls before using them as a replacement for the retained drivers.
-Linux mirrors and offscreen/software tests do not establish native frame latency.
+fixture/oracle tests beside it. Read their current help and implementation before
+use. Qualify readiness and negative controls against the measurement contract above.
+Implement missing reusable workload/runner support in source, rather than depending
+on deleted ignored scripts. In particular, pass graphics dimensions through argv
+and verify receipts; retain marker-only image presentation and offered-rate checks.
+
+Run from a native graphical login with matched configuration/fonts/geometry. Keep
+builds, tests, lints and profilers separate from timing. Use fresh output names,
+alternate clients and validate each pair before aggregation. Create a new Linux
+environment if needed; the previous VM and SSH helper are gone. Offscreen/software
+tests and VM results do not establish native frame latency.
 
 ## Continue in this order
 
-1. Freeze the integrated build and reproduce its gap against both Preview27 and Zig.
+1. Freeze the current build and compare it with the freshly identified Zig reference.
    Finish with matching hashes/options, qualified controls and six valid pairs per
    target flow. Record failures and missing prerequisites as such.
 2. Profile the largest confirmed regression separately from timing. Isolate transport

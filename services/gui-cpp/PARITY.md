@@ -1,8 +1,10 @@
 # GUI parity — OPEN
 
 The final Personal result is integrated by `36adb7d4f`. The measurements below
-describe the frozen Preview27, built from `a1ea73a89`, rather than this checkout's
-subsequent changes. For optimization, reproduction and rejected experiments, read
+describe historical Preview27, built from `a1ea73a89`, rather than this checkout's
+subsequent changes. That Personal environment was deleted at Adrian's request;
+the next agent starts from a fresh checkout of current source. For optimization,
+measurement setup and rejected experiments, read
 [OPTIMIZATION.md](OPTIMIZATION.md) before changing the client.
 
 ## Authorized phase
@@ -15,10 +17,10 @@ visual and equal-or-better performance parity remains open; so does Zig retireme
 
 | Step | Verified state | Remaining in this phase |
 | --- | --- | --- |
-| Preview26 | Separate deployed Release; exact-bundle daily smokes, plugins/bars/panels, schema87/88 and 20 normal-loop cycles passed | None; preserve the bundle |
+| Preview26 | Historical packaged Release passed daily smokes, plugins/bars/panels, schema87/88 and 20 normal-loop cycles | Qualification recorded; old bundle removed |
 | Graphics/attachments | Existing image/attachment flow retained; hidden Wayland resource release corrected; native paste/modal and runtime Kitty regressions passed | Comparative observations completed; no new graphics functional failure found |
 | Blur | Linux optional compositor protocol reused; macOS numeric radius/cache/reset/fallback aligned; native policy/protocol controls passed on both SDKs | None; shipped in Preview27 |
-| Performance | Exact Preview27 and original Zig frozen; alternating native presentation runs, CPU/RSS collection and negative controls | Benchmark executed; measured regressions keep the equal-or-better gate OPEN |
+| Performance | Historical frozen Preview27/Zig comparison used alternating native presentation runs, CPU/RSS collection and negative controls | Measured regressions keep the equal-or-better gate OPEN; current source needs a fresh baseline |
 
 ## Existing functionality and evidence limits
 
@@ -112,7 +114,9 @@ in texture upload as active work; they do not isolate each contribution to the t
 regression. Earlier basic-loop/update-idle experiments showed no accepted gain.
 No production optimization was accepted. Performance parity remains unfulfilled;
 do not declare full parity or Zig retirement complete, or resume the old backlog.
-All raw outputs/helpers remain ignored local files, never versioned evidence.
+The old raw outputs, helpers, frozen applications, checkout and VM were deleted
+from Personal on 2026-11-02. Only the documented findings remain; future runs
+must configure their own environment from current source.
 
 ## Deferred and later gates
 

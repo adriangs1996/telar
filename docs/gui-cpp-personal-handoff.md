@@ -1,48 +1,35 @@
-# Personal GUI C++ handoff
+# Next GUI performance task on Personal
 
-The Personal agent finished at `089a07dcd6cd719f80c56625652afacb87060635`.
-Merge `36adb7d4f7be59c79323396db4fd8ac54142f48d` brings that result into
-`feat/desktop-lua-ui`, preserving the local source relocation and other unfinished work.
-Preview26, scoped graphics/attachments and native blur are delivered. The Release
-benchmark failed performance acceptance. Full parity and Zig retirement remain open.
+The previous parity agent finished at `089a07dcd6cd719f80c56625652afacb87060635`;
+its result was integrated by `36adb7d4f7be59c79323396db4fd8ac54142f48d`.
+The benchmark failed equal-or-better performance. The measured regressions,
+invalid runs and rejected approaches are preserved in
+[OPTIMIZATION.md](../services/gui-cpp/OPTIMIZATION.md) and
+[PARITY.md](../services/gui-cpp/PARITY.md).
 
-For optimization or another performance comparison, start with
-[OPTIMIZATION.md](../services/gui-cpp/OPTIMIZATION.md). It identifies the measured
-candidate, surviving local runners, rejected experiments and the next checks.
-[PARITY.md](../services/gui-cpp/PARITY.md) owns the final metric table and limits;
-[DAILY_DRIVER.md](../services/gui-cpp/DAILY_DRIVER.md) describes launching Preview27.
+## Start from current source
 
-## Personal access
+Adrian requested complete removal of the previous Personal environment on
+2026-11-02. Its task/session, linked checkout, previews, build outputs, frozen
+executables, raw measurements, private runner adaptations and Linux VM were removed.
+The old task was `gui-cpp-parity-personal-20261029`. Its historical Git commits
+remain available; they are not the next task's starting revision.
 
-Machine label: `Personal`. Task branch: `gui-cpp-parity-personal-20261029`.
-Task worktree:
-`/Users/adriangonzalez/sandbox/telar-worktrees/gui-cpp-parity-personal-20261029`.
-The separate main checkout on Personal is not this task's source tree.
+For the next dispatch to machine `Personal`:
 
-Raw results and frozen applications survive in ignored
-`services/gui-cpp/out-dependencies/adoption-benchmark-1` within the task.
-All measurement archives were removed from the source tree, preserving Git history,
-real tests, fixtures and tools. Keep future generated output in ignored `out*/`.
+1. Include the intended current local changes in the source revision before dispatch.
+   Only commits travel between machines. Record the exact SHA.
+2. Create a new task branch and clean checkout explicitly from that revision.
+   Personal's pre-existing main checkout is not the source of truth for this work.
+3. Provision the compiler/SDK, Qt, Ghostty and required tools from declared inputs;
+   use [README.md](../services/gui-cpp/README.md), then qualify the measurement
+   controls in [OPTIMIZATION.md](../services/gui-cpp/OPTIMIZATION.md).
+4. Establish a fresh C++/Zig comparison before changing performance behavior.
+   Build any required Linux test environment as new task-owned infrastructure.
 
-Personal cleanup on 2026-11-02 removed 33 GUI build directories, 25 obsolete
-preview bundles, temporary outputs and task-local Zig caches. Recorded free space
-increased by 24.6 GB. Preview8 in use, Preview27, all 1,797 frozen benchmark inputs,
-the Ghostty install and Linux VM/access helper were retained. Source HEAD and
-worktree cleanliness were unchanged. Finished execution records were also cleared.
+Use the recorded findings to avoid repeating rejected experiments. All executable
+inputs and generated output for a new run must belong to that run, with identified
+source versions and build options. Preserve the installed app, user configuration
+and long-lived runtime/PTYs; run measurements with isolated owned sessions.
 
-The Linux correctness mirror is `/home/parity/telar`. Its retained access helper
-is `services/gui-cpp/out-dependencies/linux_vm_exec.py` on Personal; invoke it
-from the task root with one shell-command argument. It is an owned VM with
-4 GiB RAM and no swap, unsuitable for claims about native Linux performance.
-
-## Existing user state
-
-Preserve the installed app, configuration, previews, clipboard and runtime/PTYs.
-At handoff, protected processes were host runtime35801, user Preview8 GUI52865,
-QEMU7158 and guest Sway9469. Recheck executable paths and start times before any
-process operation; these numbers are historical identities, not ownership proof.
-The original agent has finished; its historical goal state is not a new task.
-
-An unrelated private note was moved without reading to
-`~/.local/share/telar-private-notes/gui-cpp-personal-20261029/personal-frame-delivery.md`.
-Keep it private and outside the benchmark inputs.
+This document prepares a future dispatch; it does not request starting another agent.
