@@ -1,5 +1,10 @@
 # GUI parity — OPEN
 
+The final Personal result is integrated by `36adb7d4f`. The measurements below
+describe the frozen Preview27, built from `a1ea73a89`, rather than this checkout's
+subsequent changes. For optimization, reproduction and rejected experiments, read
+[OPTIMIZATION.md](OPTIMIZATION.md) before changing the client.
+
 ## Authorized phase
 
 Adrian's 2026-11-02 instruction replaces older ordering and gates for this phase:
@@ -54,14 +59,18 @@ attention. Retention totals alone do not establish ongoing growth.
 
 ## Release benchmark — measured regressions, gate OPEN
 
-Native macOS Apple M3 / 32 GiB / AC, macOS26.6.2. Frozen original Zig SHA256
+Native macOS Apple M1 Pro / 32 GiB / AC, macOS26.6.2. Frozen original Zig SHA256
 `4e021bbda7586d16f887dd04a1ded3a806ba60940179129838165d75a0c23e11`
 (Mach-O SDK15.4) versus exact deployed Preview27 GUI SHA256
 `eeb50140eb6387a1d211ffa8f1dd7c6d25ad8d4540e480c7513d0f7034ad1617`
-(Qt6.12 / LLVM23.1.2). Same bundled JetBrains Mono15, configuration/theme,
+(Qt6.12 / LLVM23.1.2, Mach-O SDK26.5). Same bundled JetBrains Mono15, configuration/theme,
 1600×1000 physical viewport / DPR2, terminal grid, marker and pane geometries.
 Six alternating pairs per row; 100 inputs/run after20 warmups. Values are medians
 of run quantiles/counters. C++ wins0/6 p50 pairs in every row.
+
+The host identity was corrected during integration: `conditions-preparation.json`
+records M1 Pro, also confirmed by `sysctl`; the agent's earlier M3 label was wrong.
+The available SDK reported by `xcrun` is not the SDK recorded in either binary.
 
 | Flow | p50 Zig / C++ ms | p95 Zig / C++ ms | GUI CPU Zig / C++ % | GUI peak RSS Zig / C++ MiB |
 | --- | --- | --- | --- | --- |

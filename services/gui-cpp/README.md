@@ -4,6 +4,8 @@ The C++23 client uses Qt Quick for the window, models and rendering. The runtime
 owns processes, PTYs and durable state; closing this client leaves them running.
 Current delivery scope and remaining work are in [DAILY_DRIVER.md](DAILY_DRIVER.md),
 [PARITY.md](PARITY.md) and [ZIG_RETIREMENT.md](ZIG_RETIREMENT.md).
+Before profiling or optimizing the client, read [OPTIMIZATION.md](OPTIMIZATION.md)
+for the frozen benchmark, rejected experiments and reproduction procedure.
 
 ## Source layout
 
@@ -30,9 +32,10 @@ Gui, Qml, Quick, QuickControls2, Network, Concurrent, ShaderTools and Svg. Qt Te
 is needed with `BUILD_TESTING=ON`. Private Qt headers must match the installed Qt
 version. The static-analysis profile requires LLVM 23 or newer.
 
-Linux also needs Fontconfig, Wayland-client, libxcb and Qt WaylandClient development
+Linux also needs Fontconfig, Wayland-client, wayland-scanner, libxcb and Qt WaylandClient development
 packages, including private headers. Native test fixtures use Wayland-server, Sway,
-wtype and a private D-Bus session. Optional X11 clipboard tests use Xvfb, xauth and
+wtype, Qt WaylandCompositor with matching private headers, and a private D-Bus session.
+Optional X11 clipboard tests use Xvfb, xauth and
 libX11. macOS native adapters use AppKit, CoreText and CoreGraphics.
 
 CMake fetches and verifies the pinned font dependencies. Use an existing

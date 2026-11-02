@@ -1,11 +1,12 @@
 # Daily candidate
 
-Current separate macOS Release: `out-adoption/Telar C++ Preview 27.app`.
+Current separate macOS Release on Personal: `out-adoption/Telar C++ Preview 27.app`,
+relative to the task worktree named in [the handoff](../../docs/gui-cpp-personal-handoff.md).
 Its deployed GUI SHA256 is
 `eeb50140eb6387a1d211ffa8f1dd7c6d25ad8d4540e480c7513d0f7034ad1617`.
 Preview26 and earlier bundles remain available; nothing replaces the installed app.
 
-From the repository root:
+From that worktree's root on Personal:
 
 ```sh
 open -n "services/gui-cpp/out-adoption/Telar C++ Preview 27.app"
@@ -33,6 +34,7 @@ The comparative benchmark ran on the exact frozen candidates. Equal-or-better
 performance remains unfulfilled: terminal p50 is30.75ms C++ /24.29ms Zig, image1K
 54.06 /37.98ms and actual4K124.86 /53.97ms, with six comparable pairs per flow.
 C++ also uses more GUI CPU/RSS; see [PARITY.md](PARITY.md) for figures and limits.
+The optimization continuation is documented in [OPTIMIZATION.md](OPTIMIZATION.md).
 Wrong-size4K, missed fixed-load-rate and invalid presentation runs are excluded.
 Raw outputs/helpers stay in ignored `out-dependencies/adoption-benchmark-1`.
 No production optimization was accepted; the installed app remains the rollback.
