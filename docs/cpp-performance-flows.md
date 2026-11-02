@@ -114,6 +114,18 @@ build identities/display mode, current baseline and accepted/rejected optimizati
 Reusable measurement support belongs in source; raw results and captures stay in
 ignored outputs. Keep a concise table of valid cases, failures and unsupported cases.
 
+For native cadence receipts, [native_cadence_report.py](../tools/native_cadence_report.py)
+validates content/producer coverage before applying the fixed-clock checks in
+[native_display_reference.py](../tools/native_display_reference.py). Run it with
+the native result and producer JSON paths; `--output` writes the report. A qualified
+clock and interval classification do not imply sustained 120 content FPS: inspect
+the content rate and missing refresh opportunities as well. The matching
+[producer completion helper](../tools/native_cadence_completion.py) waits for a
+checkpoint covering the native observation before an owned runtime is stopped.
+It does not relax producer-rate or presentation criteria. Unit tests are
+`test_native_cadence_report`, `test_native_display_reference` and
+`test_native_cadence_completion` in `tools`.
+
 For each flow, profile first, prove functional/visual
 equivalence, then compare the variant against both the preceding accepted C++ build
 and Zig. Follow [perf-pass](../.agents/skills/perf-pass/SKILL.md) pair-win rules.

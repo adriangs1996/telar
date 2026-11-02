@@ -1555,8 +1555,30 @@ not explain the millisecond native presentation-tail regression. ARM64 assembly
 shows an identity-validation loop that bypasses sorting when unchanged and a
 halving binary-search loop for matches. ARM64, x86-64 and x86-64-v3 compilation
 passes; native x86/Linux execution remains unqualified. This is a component
-candidate only: **none of these four pacer experiments is integrated into the
-application tree or accepted as a complete-client optimization**.
+candidate only; none is accepted as a complete-client optimization. After these
+component checks and the cadence diagnostics, the ordered header is now staged
+in the worktree for a fresh integrated build under
+`out-perf/shared-image-optical-ordered`. The preceding header and measured final
+binary are preserved. Focused tests, pixel/row oracles, lint and native paired
+controls remain pending; the tabs regression must be tested first after build
+qualification. The original Qt image conversion remains unchanged.
+
+That first integrated build completes all 477 steps, thirteen focused tests in
+25.49 s, the four native Quick cases, 7,494 original-Zig rows and eleven native
+image-capture comparisons. Clang-tidy then requires `std::ranges` versions of the
+two new algorithms, so no headline timing starts. Its source, binary and failed
+lint output remain frozen. The corrected source uses a pane-id projection with
+`std::ranges::lower_bound` and `std::ranges::sort`.
+
+`out-perf/frame-pacer-ordered-ranges` rechecks that final component source: all
+three 1,920,000-decision corpora pass, including the oversized-span ASan/UBSan
+corpus. All six ordinary/churn cases and the separate collision control win 7/7
+for wall and CPU. Representative wall totals are one entry 56.164 → 17.488 ms,
+full 224.245 → 127.469 ms, full churn 225.496 → 162.537 ms, and collision
+227.471 → 127.106 ms, with the same iteration counts as above. Three-target
+code generation compiles again. A fresh full application build is now running in
+`out-perf/shared-image-optical-ordered-final`; integrated qualification and paired
+tabs controls remain pending.
 
 ### Retained destination conversion component
 
@@ -1666,6 +1688,16 @@ span two refresh opportunities; maximum gap is 16.667 ms. This does not meet a
 sustained 120-content-FPS objective. It is a single diagnostic run with probe
 overhead still open, not a paired C++/Zig acceptance result. The original failed
 run is retained and is not relabeled successful.
+
+The reusable analyzer, clock classifier and owned-producer completion helper now
+live in `tools/native_cadence_report.py`, `tools/native_display_reference.py` and
+`tools/native_cadence_completion.py`. Eighteen unit tests pass, covering native
+faults, 60-on-120 cadence, producer coverage/rate failures, delayed checkpoints,
+timeouts, phase changes and invalid numerical/clock metadata. Replaying seven
+native receipts preserves all expected content classifications, including the
+failed original Zig receipt and all four live injected faults. Five reference-only
+replays also preserve their exact clock classification. Reference qualification
+alone deliberately does not override a failed producer/content gate.
 
 The legacy `gui_frame_rate` tool's documentation now explicitly identifies its
 historically named presentation counters as frame-completion callbacks. Those
