@@ -341,6 +341,44 @@ image presentation, source lifetimes and complete-stack regressions still need
 validation. Scratch source, oracle, binaries, allocation logs and disassembly
 are retained together; instrumentation is excluded from these timing pairs.
 
+## Native image qualification
+
+The marker fixture now supports explicit `--image-size WIDTH HEIGHT` for a
+single Telar pane. Each input replaces a Kitty RGBA image through shared memory;
+its pixels supply the marker, so text output cannot satisfy the image endpoint.
+The fixture records dimensions, actual payload byte counts and hashes, publication
+sequence and source timestamps. It precomputes source pixels, retains bounded
+publication records in memory and writes the final receipt after measurement.
+The runner then finishes only the verified child of its owned runtime and checks
+shared-memory cleanup before stopping that runtime. This is a closed-loop image
+replacement test, not a fixed-rate stream or a 120 Hz smoothness qualification.
+
+`image-1k-qualification-01` is invalid: native Zig presentation completed, but
+runtime shutdown killed the fixture before its final receipt. The revised owned
+fixture shutdown completes both stacks in `image-1k-qualification-02` and
+`image-4k-qualification-01`, with 20 warmups and six measured inputs each.
+Both stack pairs match the 1600×1000 viewport, DPR 2, 82×21 grid, image marker
+location, source payloads and positive presentation gate. The image receipts
+verify 1024×1024 / 4,194,304 bytes and 3840×2160 / 33,177,600 bytes respectively.
+Focused checks cover shared-memory pixel contents, publication independence,
+cleanup, corrupted/missing receipts, source bounds and refusal to signal an
+unrelated child. Existing fixture and GUI comparison tests pass.
+
+These short qualifications are not acceptance pairs. Their Zig/C++ p50 values
+are 42.62/46.42 ms for 1K and 45.70/139.45 ms for 4K. The 4K gap is much larger
+than isolated Qt conversion cost. The separate `image-4k-profile-01` completes
+200 measured inputs and captures five-second GUI/runtime samples after warmup;
+both sampled process identities match the frozen accepted stack. Instrumented
+results are excluded from timing acceptance. Runtime samples include socket
+writes and image chunk serialization; GUI samples include input draining, copies
+and Qt's conversion workers. Most sampled thread time is waiting. Further
+transport/queue phase measurement is needed before attributing the large gap.
+
+The single-pass conversion also wins all seven component pairs on an opaque
+input pattern: Qt/fused medians 0.273/0.203 ms at 1K and 1.693/1.633 ms at 4K.
+The packed alternative loses all seven at both sizes. These additional component
+results do not close native-image or cross-architecture acceptance.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove

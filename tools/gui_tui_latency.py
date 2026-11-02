@@ -24,7 +24,7 @@ import time
 
 from echo_latency import percentile
 from terminal_bench_report import latency_samples, validate_telar_display_sync
-from perf_e2e import stop_runtime
+from perf_e2e import descendants, stop_runtime
 from terminal_bench_fixture import background_rate
 from bench_stack import executable_identity, process_identity, runtime_identity, staged_runtime
 
@@ -63,6 +63,64 @@ def validate_telar_grids(reference, candidate):
     before, after = geometry(reference), geometry(candidate)
     if before != after:
         raise ValueError(f'Telar GUI grids differ: Zig={before}, C++={after}')
+
+    if reference.get('image_size') != candidate.get('image_size'):
+        raise ValueError('Telar image workloads differ')
+    if reference.get('image_size') and reference['fixtures'][0]['image']['payload_sha256'] != candidate['fixtures'][0]['image']['payload_sha256']:
+        raise ValueError('Telar image payloads differ')
+
+
+def validate_image_receipt(result, size):
+    fixtures = result['fixtures']
+    if len(fixtures) != 1 or fixtures[0]['role'] != 'primary':
+        raise ValueError('image measurement requires exactly one primary fixture')
+    image = fixtures[0].get('image', {})
+    if ([image.get('width'), image.get('height')] != list(size)
+            or image.get('bytes_per_image') != size[0] * size[1] * 4
+            or image.get('format') != 'RGBA8888'
+            or image.get('transport') != 'kitty-shared-memory'):
+        raise ValueError('image receipt does not match the requested dimensions and format')
+    publications = image.get('publications', [])
+    count = len(latency_samples(result))
+    if (not publications or fixtures[0].get('marker_inputs') != count
+            or {row['input_sequence'] for row in publications} != set(range(count + 1))
+            or any(row['generation'] != index + 1 or row['written_ns'] < row['started_ns']
+                   or (row['input_sequence'] > 0 and row['color'] != row['input_sequence'] % 2)
+                   for index, row in enumerate(publications))
+            or any(right['started_ns'] <= left['written_ns'] for left, right in zip(publications, publications[1:]))):
+        raise ValueError('image publications do not cover the native input sequence')
+    digests = image.get('payload_sha256', [])
+    if len(digests) != 3 or len(set(digests)) != 3 or any(
+            len(digest) != 64 or any(letter not in '0123456789abcdef' for letter in digest) for digest in digests):
+        raise ValueError('image payload digests are incomplete')
+
+
+def finish_image_fixture(directory, runtime_pid):
+    owned = descendants([runtime_pid])
+    receipts = list((directory / 'receipts').glob('*.json'))
+    if not receipts:
+        return
+    if len(receipts) != 1:
+        raise ValueError('image cleanup requires exactly one fixture')
+    fixture_pid = json.loads(receipts[0].read_text())['pid']
+    if fixture_pid in owned:
+        arguments = shlex.split(owned[fixture_pid][2])
+        expected = str(Path(__file__).with_name('image_bench_fixture.py').resolve())
+        if expected not in arguments or str(directory) not in arguments or fixture_pid == runtime_pid:
+            raise ValueError('image fixture is not the expected owned process')
+        try:
+            os.kill(fixture_pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    deadline = time.monotonic() + 2
+    receipt = directory / 'image-cleanup.json'
+    while not receipt.is_file() and time.monotonic() < deadline:
+        time.sleep(.01)
+    if not receipt.is_file():
+        raise RuntimeError('image fixture did not finish its receipt and shared-memory cleanup')
+    cleanup = json.loads(receipt.read_text())
+    if cleanup.get('pid') != fixture_pid or cleanup.get('complete') is not True:
+        raise ValueError('image cleanup receipt does not identify the fixture')
 
 
 class ProbeFailure(RuntimeError):
@@ -156,6 +214,9 @@ def measure(mode, directory, setup):
             env['BENCH_BACKGROUND_MIB_PER_SECOND'] = str(rate)
         fixture = [shutil.which('python3'),
                    str(Path(__file__).with_name('terminal_bench_fixture.py').resolve()), str(directory)]
+        if getattr(options, 'image_size', None):
+            fixture[1] = str(Path(__file__).with_name('image_bench_fixture.py').resolve())
+            fixture += ['--width', str(options.image_size[0]), '--height', str(options.image_size[1])]
     else:
         fixture = [shutil.which('python3'),
                    str(Path(__file__).with_name('gui_tui_marker.py').resolve()), str(directory / 'size.json')]
@@ -207,6 +268,7 @@ def measure(mode, directory, setup):
         launch_env = dict(env, **probe_env)
 
     launch_env['TELAR_DISPLAY_EXECUTABLE'] = command[0]
+    identity = None
     try:
         if mode in TELAR_MODES:
             identity = runtime_identity(directory / 'runtime.sock', runtime)
@@ -230,8 +292,12 @@ def measure(mode, directory, setup):
         if mode == 'ghostty':
             cleanup_host(app)
         if mode != 'ghostty':
-            shutdown = stop_runtime(str(runtime), env)
-            (directory / 'shutdown.json').write_text(json.dumps(shutdown, indent=2) + '\n')
+            try:
+                if getattr(options, 'image_size', None) and identity is not None:
+                    finish_image_fixture(directory, identity['pid'])
+            finally:
+                shutdown = stop_runtime(str(runtime), env)
+                (directory / 'shutdown.json').write_text(json.dumps(shutdown, indent=2) + '\n')
     result_path = directory / 'result.json'
     if not result_path.is_file():
         raise RuntimeError(f'{mode} exited without a probe result; inspect logs and receipts in {directory}')
@@ -278,6 +344,9 @@ def measure(mode, directory, setup):
                 raise RuntimeError(f'invalid throughput result: {result["throughput"]}')
         if rate is not None:
             result['background_load'] = background_load(result['fixtures'], rate)
+        if getattr(options, 'image_size', None):
+            result['image_size'] = list(options.image_size)
+            validate_image_receipt(result, options.image_size)
     (directory / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
     if mode in TELAR_MODES:
         validate_telar_display_sync(result)
@@ -308,6 +377,8 @@ def main():
                         default=['single'])
     parser.add_argument('--panes', type=int, choices=[2, 4], default=4)
     parser.add_argument('--throughput', action='store_true', help='run 8 MiB ASCII/ANSI DSR probes before latency')
+    parser.add_argument('--image-size', type=int, nargs=2, metavar=('WIDTH', 'HEIGHT'),
+                        help='replace a Kitty RGBA image on each input; requires single-pane Telar modes')
     parser.add_argument('--text-pattern', choices=['repeat', 'variable'], default='repeat',
                         help='repeat the original 64-byte line or vary every line deterministically')
     parser.add_argument('--background-mib-per-second', type=background_rate,
@@ -326,6 +397,14 @@ def main():
     if options.config is not None and not options.config.is_file():
         parser.error('--config must name an existing Lua file')
     modes = MODE_GROUPS.get(options.mode, [options.mode])
+    if options.image_size:
+        from image_bench_fixture import image_extent
+        try:
+            image_extent(*options.image_size)
+        except ValueError as error:
+            parser.error(str(error))
+        if options.cases != ['single'] or options.throughput or any(mode not in TELAR_MODES for mode in modes):
+            parser.error('--image-size requires --cases single, Telar-only modes and no --throughput')
     if options.endpoint == 'presented' and any(mode not in TELAR_MODES for mode in modes):
         parser.error('--endpoint presented requires Telar-only modes')
     if options.cwd is not None:
@@ -393,6 +472,7 @@ def main():
                     capture=options.capture,
                     working_directory=str(options.cwd) if options.cwd else None,
                     input_method=options.input_method, cases=options.cases, panes=options.panes,
+                    image_size=options.image_size,
                     text_pattern=options.text_pattern, background_mib_per_second=options.background_mib_per_second,
                     background_rate_tolerance=BACKGROUND_RATE_TOLERANCE,
                     viewport=options.viewport, command_line=os.sys.argv,
@@ -425,7 +505,7 @@ def main():
     manifest['config_path'] = str(config)
     shutil.copy2(config, directory / 'used-config.lua')
     manifest['probe_sha256'] = {name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
-                                for name in ('gui_tui_latency.py', 'gui_tui_latency.m', 'gui_view.h', 'terminal_bench_fixture.py', 'terminal_bench_report.py', 'bench_stack.py')}
+                                for name in ('gui_tui_latency.py', 'gui_tui_latency.m', 'gui_view.h', 'terminal_bench_fixture.py', 'image_bench_fixture.py', 'kitty_stream.py', 'terminal_bench_report.py', 'bench_stack.py')}
     probe_source = directory / 'probe-source'
     probe_source.mkdir()
     for name in manifest['probe_sha256']:
