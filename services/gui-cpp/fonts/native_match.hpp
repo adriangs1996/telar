@@ -1,7 +1,7 @@
 #pragma once
 
 extern "C" {
-#include <native/font.h>
+#include "platform/font.h"
 }
 
 #include <algorithm>

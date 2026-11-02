@@ -4,10 +4,10 @@
 #include "fonts/face.hpp"
 #include "fonts/font_cascade.hpp"
 #include "fonts/font_role.hpp"
+#include "platform/font.h"
 #include "platform/read_file.hpp"
 #include <cstdint>
 #include <filesystem>
-#include <native/font.h>
 #include <optional>
 #include <stdexcept>
 #include <string_view>
@@ -52,7 +52,7 @@ public:
 
 private:
   static Vector<std::uint8_t, Memory> read(Memory &memory, const std::filesystem::path &path) {
-    const auto data = runtime::readFile(memory, path.c_str(), TELAR_FONT_MAX_BYTES);
+    const auto data = runtime::readFile(memory, path.c_str(), telar_font_max_bytes);
 
     return {data.cbegin(), data.cend(), AllocatorRef<std::uint8_t, Memory>{memory}};
   }

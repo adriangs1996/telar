@@ -104,6 +104,23 @@ std::size_t ResidentFonts::fallbackCount() const noexcept {
   return collection_ ? collection_->count : 0;
 }
 
+const FontAsset &ResidentFonts::asset(fonts::FontRole role) const {
+  switch (role) {
+  case fonts::FontRole::primary:
+    return *primary_source_;
+  case fonts::FontRole::text:
+    return *text_source_;
+  case fonts::FontRole::symbols:
+    return *symbols_source_;
+  default:
+    if (const auto index = fonts::fallbackIndex(role); index && *index < fallbackCount()) {
+      return *collection_->fallback[*index];
+    }
+  }
+
+  throw std::invalid_argument{"MissingNativeFontAsset"};
+}
+
 std::optional<fonts::FontRole> ResidentFonts::source(std::string_view text, fonts::FontRole preferred) {
   return fonts::FontCascade::source(*this, text, preferred);
 }

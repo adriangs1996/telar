@@ -5,6 +5,7 @@
 #include "font_collection.hpp"
 #include "fonts/font_role.hpp"
 #include "fonts/glyph_bitmap_view.hpp"
+#include "fonts/glyph_rasterization.hpp"
 #include "fonts/row_text_layout.hpp"
 #include "fonts/text_layout.hpp"
 #include "resident_fonts.hpp"
@@ -26,7 +27,7 @@
 
 namespace telar::gui::qt {
 
-template <fonts::FontProvider FontSet>
+template <fonts::FontProvider FontSet, bool optical>
 class ChromeGlyphImages;
 
 struct ChromeTextPaint;
@@ -47,7 +48,6 @@ public:
   void addCell(std::size_t column, const QFont &font, Color foreground, fonts::GlyphStyle style);
   void appendInline(std::unique_ptr<QSGNode> node);
   void add(const QString &text, const QFont &font, const QTextCharFormat &format, TextPlacement placement);
-  // Detach the returned text root before passing it to begin; optical nodes return null.
   QSGNode *append(QSGNode &parent);
 
 private:
@@ -76,8 +76,12 @@ private:
   std::optional<Batch> batch_;
   std::shared_ptr<const FontCollection> collection_;
   std::shared_ptr<ResidentFonts> fonts_;
-  std::shared_ptr<ChromeGlyphImages<ResidentFonts>> resident_glyphs_;
+  std::shared_ptr<ChromeGlyphImages<ResidentFonts, false>> resident_glyphs_;
+#ifdef Q_OS_MACOS
+  std::shared_ptr<ChromeGlyphImages<ResidentFonts, true>> optical_glyphs_;
+#endif
   FontGrid grid_;
+  fonts::GlyphRasterization rasterization_;
   QRectF bounds_;
   QRectF clip_;
   qreal scale_ = 1;
@@ -87,10 +91,6 @@ private:
   std::unique_ptr<QSGNode> text_;
   QSGNode *next_chunk_ = nullptr;
   std::uint64_t revision_ = 0;
-#ifdef Q_OS_MACOS
-  QPointF origin_;
-  std::uint8_t strength_ = FontConfiguration::maximum_thicken_strength;
-#endif
 };
 
 }

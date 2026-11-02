@@ -165,7 +165,7 @@ def encode(cells, height=15, width=9, cursor=None, selection=None):
 def corpus():
     plain = lambda text: [(character, 0, 0, 0, 0, 1) for character in text]
     cases = [encode(plain(text), cursor=cursor, selection=selection)
-             for text in ['', 'A -> B', '== === != !== -> --> => <=>', 'fi fl st office', 'i' * 129, '=' * 127, '=' * 128, '=' * 129, '=' * 256, ' ' * 130]
+             for text in ['', 'A -> B', '== === != !== -> --> => <=>', 'fi fl st office', 'S`m ~-`', ''.join(chr(value) for value in range(33, 127)), 'i' * 129, '=' * 127, '=' * 128, '=' * 129, '=' * 256, ' ' * 130]
              for cursor in [None, 0, 2, 6] for selection in [None, (1, 4)]]
     generator = random.Random(0xC311)
     alphabet = ['a', 'A', 'V', 'W', 'f', 'i', 'l', 's', 't', ' ', '=', '-', '>', '<', '!', ':', '.', 'é', 'e\u0301', 'λ', 'Ж', '中', '\uf07b', '\u2500', '\u2588', '\u28ff', 'س', 'ש']

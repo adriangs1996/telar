@@ -25,6 +25,13 @@ Application policies use explicit allocators and compile-time dependency selecti
 Domain components can be used without constructing a window. Native APIs stay in
 platform adapters; reusable font and layout code does not depend on QML.
 
+Native font discovery is owned by `platform/font.h`, `platform/macos/font.m` and
+`platform/linux/font.c`. macOS optical terminal text uses the CoreText glyph
+rasterizer under `platform/macos`, borrowed font bytes and caller-owned scratch
+storage. Qt caches the resulting masks and retains glyph meshes between damaged
+frames. Font shaping and cell placement remain in `fonts` and `qt`; these font
+adapters no longer include or compile files from the Zig GUI.
+
 ## Build
 
 Dependencies are CMake 3.24+, Ninja, Python 3, a C++23 compiler and Qt 6.7+ with

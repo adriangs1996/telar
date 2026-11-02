@@ -1,3 +1,6 @@
+#include "core/memory.hpp"
+#include "fonts/native_match.hpp"
+#include "platform/macos/glyph_rasterizer.hpp"
 #include "qt/bundled_fonts.hpp"
 #include "qt/optical_text.hpp"
 #include <QByteArray>
@@ -18,6 +21,7 @@
 #include <QtGui/qglyphrun.h>
 #include <QtGui/qrawfont.h>
 #include <QtGui/qrgb.h>
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -30,8 +34,8 @@
 #include <vector>
 
 extern "C" {
-#include "font.h"
 #include "glyph_rasterizer.h"
+#include "platform/font.h"
 }
 
 namespace {
@@ -57,7 +61,10 @@ void require(bool condition, const char *message) {
 class OriginalRasterizer {
 public:
   explicit OriginalRasterizer(const QByteArray &font, std::uint8_t strength)
-      : font_(font.cbegin(), font.cend()) {
+      : font_(font.cbegin(), font.cend()),
+        native_pixels_(telar::gui::platform::GlyphRasterizer::requiredBytes(), std::uint8_t{}, telar::gui::AllocatorRef<std::uint8_t, telar::gui::SystemAllocator>{memory_}),
+        native_(native_pixels_, font_, native_match_, strength),
+        native_reference_(native_pixels_.size(), 0) {
     const telar_glyph_rasterizer_options options{
         .font = font_.data(),
         .font_len = font_.size(),
@@ -69,20 +76,38 @@ public:
         .strength = strength,
         .variation = &variation_,
     };
-    handle_.reset(telar_glyph_rasterizer_create(&options));
+    handle_.reset(telarGlyphRasterizerCreate(&options));
     require(handle_ != nullptr, "Original CoreText rasterizer initialization failed");
+    auto native_options = options;
+    native_options.pixels = native_reference_.data();
+    native_options.side = telar_glyph_atlas_max_side;
+    native_handle_.reset(telarGlyphRasterizerCreate(&native_options));
+    require(native_handle_ != nullptr, "Native atlas reference initialization failed");
   }
 
   void select(std::uint32_t pixel_height) {
-    require(telar_glyph_rasterizer_select(handle_.get(), pixel_height) == 0, "Original CoreText font selection failed");
+    require(telarGlyphRasterizerSelect(handle_.get(), pixel_height) == 0, "Original CoreText font selection failed");
+    pixel_height_ = static_cast<std::uint16_t>(pixel_height);
+    require(telarGlyphRasterizerSelect(native_handle_.get(), pixel_height) == 0, "Native atlas reference font selection failed");
   }
 
   void paint(std::uint32_t index, GlyphStyle style, QPoint origin, QImage &image) {
     telar_glyph_raster glyph{.index = index, .style = static_cast<std::uint32_t>(style), .x = 0, .y = 0, .width = 0, .height = 0, .left = 0, .top = 0};
-    require(telar_glyph_rasterizer_measure(handle_.get(), &glyph) == 0, "Original CoreText glyph measurement failed");
+    require(telarGlyphRasterizerMeasure(handle_.get(), &glyph) == 0, "Original CoreText glyph measurement failed");
     glyph.x = static_cast<std::uint32_t>(origin.x() + glyph.left);
     glyph.y = static_cast<std::uint32_t>(origin.y() - glyph.top);
-    telar_glyph_rasterizer_draw(handle_.get(), &glyph);
+    telarGlyphRasterizerDraw(handle_.get(), &glyph);
+    const auto cached = native_.rasterize({.index = index, .pixel_height = pixel_height_, .style = {.bold = style == GlyphStyle::bold || style == GlyphStyle::bold_italic, .italic = style == GlyphStyle::italic || style == GlyphStyle::bold_italic}});
+    require(cached.width == glyph.width && cached.height == glyph.height && cached.left == glyph.left && cached.top == glyph.top, "Cached native glyph metrics differ from the optical oracle");
+    auto native_glyph = glyph;
+    native_glyph.x = 0;
+    native_glyph.y = 0;
+    telarGlyphRasterizerDraw(native_handle_.get(), &native_glyph);
+    for (std::size_t row = 0; row < cached.height; ++row) {
+      const auto expected = std::span{native_reference_}.subspan(row * telar_glyph_atlas_max_side, glyph.width);
+      require(std::ranges::equal(cached.row(row), expected), "Cached native glyph pixels differ from the canonical atlas reference");
+    }
+
     for (std::uint32_t row = 0; row < glyph.height; ++row) {
       for (std::uint32_t column = 0; column < glyph.width; ++column) {
         const auto alpha = pixels_[((glyph.y + row) * atlas_side) + glyph.x + column];
@@ -96,9 +121,16 @@ public:
 
 private:
   std::vector<std::uint8_t> font_;
+  telar::gui::SystemAllocator memory_;
+  telar::gui::Vector<std::uint8_t, telar::gui::SystemAllocator> native_pixels_;
+  telar::gui::fonts::FontMatch native_match_{};
+  telar::gui::platform::GlyphRasterizer native_;
+  std::vector<std::uint8_t> native_reference_;
+  std::unique_ptr<telar_glyph_rasterizer, decltype(&telarGlyphRasterizerDestroy)> native_handle_{nullptr, telarGlyphRasterizerDestroy};
+  std::uint16_t pixel_height_ = 0;
   std::array<std::uint8_t, static_cast<std::size_t>(atlas_side) * atlas_side> pixels_{};
   telar_font_variation variation_{};
-  std::unique_ptr<telar_glyph_rasterizer, decltype(&telar_glyph_rasterizer_destroy)> handle_{nullptr, telar_glyph_rasterizer_destroy};
+  std::unique_ptr<telar_glyph_rasterizer, decltype(&telarGlyphRasterizerDestroy)> handle_{nullptr, telarGlyphRasterizerDestroy};
 };
 
 void shapeGlyph(QTextLayout &layout, const QString &text, int pixel_height, GlyphStyle style) {

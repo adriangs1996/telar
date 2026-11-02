@@ -7,6 +7,7 @@
 #include "core/geometry.hpp"
 #include "font_collection.hpp"
 #include "fonts/font_role.hpp"
+#include "fonts/glyph_rasterization.hpp"
 #include "fonts/glyph_transform.hpp"
 #include "fonts/ink_bounds.hpp"
 #include "fonts/shaped_run_view.hpp"
@@ -30,6 +31,8 @@
 #include <QSGTransformNode>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtypes.h>
+#include <QtCore/qtversion.h>
+#include <QtCore/qtversionchecks.h>
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -39,6 +42,7 @@
 #include <memory>
 #include <span>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 
 namespace telar::gui::qt {
@@ -120,7 +124,21 @@ struct TextProjection {
       clipped.height = std::max(0.0F, bottom - clipped.y);
     }
 
-    return {.bounds = {(clipped.x - anchor.x()) / scale, (clipped.y - anchor.y()) / scale, clipped.width / scale, clipped.height / scale}, .source = {(clipped.x - full.x) / full.width, (clipped.y - full.y) / full.height, clipped.width / full.width, clipped.height / full.height}, .opacity = opacity};
+    return {
+        .bounds = {
+            (clipped.x - anchor.x()) / scale,
+            (clipped.y - anchor.y()) / scale,
+            clipped.width / scale,
+            clipped.height / scale,
+        },
+        .source = {
+            (clipped.x - full.x) / full.width,
+            (clipped.y - full.y) / full.height,
+            clipped.width / full.width,
+            clipped.height / full.height,
+        },
+        .opacity = opacity,
+    };
   }
 };
 
@@ -187,10 +205,38 @@ public:
       : glyphs_(std::move(glyphs)),
         geometry_(alphaMaskAttributes(), static_cast<int>(static_cast<std::size_t>(glyphs_.size()) * alpha_mask_triangle_vertices)),
         material_(*glyphs_.front().mask->texture, foreground, sampling, blend),
-        placement_(placement) {
+        sampling_(sampling),
+        blend_(blend),
+        placement_(placement),
+        capacity_(geometry_.vertexCount()) {
     geometry_.setDrawingMode(QSGGeometry::DrawTriangles);
     setGeometry(&geometry_);
     setMaterial(&material_);
+  }
+
+  [[nodiscard]] bool accepts(const QList<GlyphPlacement> &glyphs, AlphaMaskSampling sampling, AlphaMaskBlend blend, MaskSampling placement) const noexcept {
+    return sampling_ == sampling && blend_ == blend && placement_ == placement && material_.texture().comparisonKey() == glyphs.front().mask->texture->comparisonKey();
+  }
+
+  void replace(QList<GlyphPlacement> &glyphs) {
+    constexpr auto maximum_glyphs = std::numeric_limits<int>::max() / alpha_mask_triangle_vertices;
+    if (std::cmp_greater(glyphs.size(), maximum_glyphs)) {
+      throw std::length_error{"GlyphMeshTooLarge"};
+    }
+
+    glyphs_.swap(glyphs);
+    const auto vertices = static_cast<int>(static_cast<std::size_t>(glyphs_.size()) * alpha_mask_triangle_vertices);
+    if (vertices > capacity_) {
+      geometry_.allocate(vertices);
+      capacity_ = vertices;
+    } else {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
+      geometry_.setVertexCount(vertices);
+#else
+      geometry_.allocate(vertices);
+      capacity_ = vertices;
+#endif
+    }
   }
 
   void paint(const TextProjection &position, Color foreground) {
@@ -212,10 +258,13 @@ private:
   QList<GlyphPlacement> glyphs_;
   QSGGeometry geometry_;
   AlphaMaskMaterial material_;
+  AlphaMaskSampling sampling_ = AlphaMaskSampling::standard;
+  AlphaMaskBlend blend_ = AlphaMaskBlend::premultiplied;
   MaskSampling placement_ = MaskSampling::continuous;
+  int capacity_ = 0;
 };
 
-template <fonts::FontProvider FontSet>
+template <fonts::FontProvider FontSet, bool optical>
 class SoftwareGlyph final : public QSGOpacityNode {
 public:
   SoftwareGlyph(QQuickWindow &window, GlyphPlacement placed)
@@ -233,7 +282,7 @@ public:
   SoftwareGlyph(SoftwareGlyph &&) = delete;
   SoftwareGlyph &operator=(SoftwareGlyph &&) = delete;
 
-  void paint(ChromeGlyphImages<FontSet> &images, const ChromeTextPaint &paint, const TextProjection &position) {
+  void paint(ChromeGlyphImages<FontSet, optical> &images, const ChromeTextPaint &paint, const TextProjection &position) {
     auto &glyph = images.glyph(placed_.glyph.index, paint.pixel_height, placed_.role, paint.style);
     auto colored = images.colored(glyph, paint.color);
     const auto quad = position.quad(placed_, MaskSampling::pixel_centers);
@@ -250,13 +299,33 @@ private:
   AlphaMaskRef colored_;
 };
 
-template <fonts::FontProvider FontSet>
+struct RetainedGlyphMeshes {
+  fonts::GlyphRasterization rasterization;
+  QList<GlyphPlacement> group;
+  qsizetype next_mesh = 0;
+};
+
+struct TransientGlyphMeshes {};
+
+template <fonts::FontProvider FontSet, bool retain_meshes>
 class ChromeScene final : public QSGTransformNode {
 public:
-  ChromeScene(QQuickWindow &window, std::shared_ptr<FontSet> fonts)
+  ChromeScene(QQuickWindow &window, std::shared_ptr<FontSet> fonts, fonts::GlyphRasterization rasterization)
       : window_(window),
         fonts_(std::move(fonts)),
-        images_(ChromeGlyphImages<FontSet>::shared(window, fonts_)) {}
+        images_(ChromeGlyphImages<FontSet, retain_meshes>::shared(window, fonts_, rasterization)) {
+    if constexpr (retain_meshes) {
+      retained_.rasterization = rasterization;
+    }
+  }
+
+  [[nodiscard]] fonts::GlyphRasterization rasterization() const noexcept {
+    if constexpr (retain_meshes) {
+      return retained_.rasterization;
+    } else {
+      return {};
+    }
+  }
 
   [[nodiscard]] const FontSet *fonts() const noexcept {
     return fonts_.get();
@@ -282,22 +351,58 @@ public:
   }
 
 private:
-  void appendMesh(QList<GlyphPlacement> glyphs, const ChromeTextPaint &paint) {
+  void appendMesh(QList<GlyphPlacement> &glyphs, const ChromeTextPaint &paint) {
     const auto fitted = std::ranges::any_of(glyphs, [](const auto &glyph) {
       return fonts::fittedFont(glyph.role);
     });
     const auto sampling = AlphaMaskSampling::standard;
     const auto blend = paint.foreground ? AlphaMaskBlend::straight : AlphaMaskBlend::premultiplied;
     const auto placement = fitted ? MaskSampling::pixel_centers : MaskSampling::continuous;
-    auto mesh = std::make_unique<GlyphMesh>(std::move(glyphs), ink(paint), sampling, blend, placement);
-    meshes_.append(&adoptSceneNode(*this, std::move(mesh)));
+    if constexpr (retain_meshes) {
+      const auto index = retained_.next_mesh++;
+      if (index < meshes_.size() && meshes_[index]->accepts(glyphs, sampling, blend, placement)) {
+        meshes_[index]->replace(glyphs);
+      } else {
+        auto mesh = std::make_unique<GlyphMesh>(std::move(glyphs), ink(paint), sampling, blend, placement);
+        if (index < meshes_.size()) {
+          const std::unique_ptr<GlyphMesh> previous{meshes_[index]};
+          insertChildNodeBefore(mesh.get(), previous.get());
+          meshes_[index] = mesh.release();
+        } else {
+          meshes_.append(&adoptSceneNode(*this, std::move(mesh)));
+        }
+      }
+    } else {
+      auto mesh = std::make_unique<GlyphMesh>(std::move(glyphs), ink(paint), sampling, blend, placement);
+      meshes_.append(&adoptSceneNode(*this, std::move(mesh)));
+    }
   }
 
   void rebuild(const ChromeTextPaint &paint) {
-    clearSceneChildren(*this);
-    meshes_.clear();
-    software_glyphs_.clear();
-    QList<GlyphPlacement> group;
+    if (!retain_meshes || images_->software()) {
+      clearSceneChildren(*this);
+      meshes_.clear();
+      software_glyphs_.clear();
+    }
+
+    if constexpr (retain_meshes) {
+      retained_.next_mesh = 0;
+      retained_.group.clear();
+      rebuildGroups(paint, retained_.group);
+      while (meshes_.size() > retained_.next_mesh) {
+        const std::unique_ptr<GlyphMesh> discarded{meshes_.takeLast()};
+      }
+    } else {
+      QList<GlyphPlacement> group;
+      rebuildGroups(paint, group);
+    }
+  }
+
+  void rebuildGroups(const ChromeTextPaint &paint, QList<GlyphPlacement> &group) {
+    if (!images_->software()) {
+      group.reserve(static_cast<qsizetype>(paint.glyphs.size()));
+    }
+
     if (paint.spans.empty()) {
       appendSpan({.count = paint.glyphs.size(), .role = paint.emphasized ? fonts::FontRole::emphasized : paint.role}, paint, group);
     } else {
@@ -307,7 +412,7 @@ private:
     }
 
     if (!group.empty()) {
-      appendMesh(std::move(group), paint);
+      appendMesh(group, paint);
     }
   }
 
@@ -340,45 +445,47 @@ private:
     std::int64_t advance = 0;
     for (const auto &glyph : paint.glyphs.subspan(span.first, span.count)) {
       const auto &image = images_->glyph(glyph.index, paint.pixel_height, span.role, paint.style);
-      const GlyphPlacement placed{.glyph = glyph, .mask = image.mask, .advance_before = advance, .transform = transform, .role = span.role, .run_offset = span.offset, .left = image.left, .top = image.top};
+      GlyphPlacement placed{.glyph = glyph, .mask = image.mask, .advance_before = advance, .transform = transform, .role = span.role, .run_offset = span.offset, .left = image.left, .top = image.top};
       advance += glyph.x_advance;
       if (image.mask->alpha.isNull()) {
         continue;
       }
 
       if (images_->software()) {
-        auto node = std::make_unique<SoftwareGlyph<FontSet>>(window_, placed);
+        auto node = std::make_unique<SoftwareGlyph<FontSet, retain_meshes>>(window_, std::move(placed));
         node->paint(*images_, paint, projection(paint));
         software_glyphs_.append(&adoptSceneNode(*this, std::move(node)));
       } else {
         if (!group.empty() && group.front().mask->texture->comparisonKey() != image.mask->texture->comparisonKey()) {
-          appendMesh(std::move(group), paint);
-          group = {};
+          appendMesh(group, paint);
+          group.clear();
         }
 
-        group.append(placed);
+        group.append(std::move(placed));
       }
     }
   }
 
   QQuickWindow &window_;
   std::shared_ptr<FontSet> fonts_;
-  std::shared_ptr<ChromeGlyphImages<FontSet>> images_;
+  std::shared_ptr<ChromeGlyphImages<FontSet, retain_meshes>> images_;
   QList<GlyphMesh *> meshes_;
-  QList<SoftwareGlyph<FontSet> *> software_glyphs_;
+  QList<SoftwareGlyph<FontSet, retain_meshes> *> software_glyphs_;
   std::uint64_t revision_ = 0;
+  [[no_unique_address]] std::conditional_t<retain_meshes, RetainedGlyphMeshes, TransientGlyphMeshes> retained_;
 };
 
 }
 
 namespace {
 
-QSGNode *paintText(QSGNode *previous, QQuickWindow &window, const ChromeTextPaint &paint, const std::shared_ptr<const FontCollection> &collection) {
+template <bool retain_meshes>
+QSGNode *paintText(QSGNode *previous, QQuickWindow &window, const ChromeTextPaint &paint, const std::shared_ptr<const FontCollection> &collection, fonts::GlyphRasterization rasterization) {
   std::unique_ptr<QSGNode> owner{previous};
   auto fonts = ResidentFonts::shared(collection);
-  auto *scene = dynamic_cast<ChromeScene<ResidentFonts> *>(owner.get());
-  if (scene == nullptr || scene->fonts() != fonts.get()) {
-    auto replacement = std::make_unique<ChromeScene<ResidentFonts>>(window, std::move(fonts));
+  auto *scene = dynamic_cast<ChromeScene<ResidentFonts, retain_meshes> *>(owner.get());
+  if (scene == nullptr || scene->fonts() != fonts.get() || (retain_meshes && scene->rasterization() != rasterization)) {
+    auto replacement = std::make_unique<ChromeScene<ResidentFonts, retain_meshes>>(window, std::move(fonts), rasterization);
     scene = replacement.get();
     owner = std::move(replacement);
   }
@@ -391,7 +498,17 @@ QSGNode *paintText(QSGNode *previous, QQuickWindow &window, const ChromeTextPain
 }
 
 QSGNode *paintChromeText(QSGNode *previous, QQuickWindow &window, const ChromeTextPaint &paint, const std::shared_ptr<const FontCollection> &collection) {
-  return paintText(previous, window, paint, collection);
+  return paintText<false>(previous, window, paint, collection, fonts::GlyphRasterization{});
+}
+
+QSGNode *paintTerminalText(QSGNode *previous, QQuickWindow &window, const ChromeTextPaint &paint, const std::shared_ptr<const FontCollection> &collection, [[maybe_unused]] fonts::GlyphRasterization rasterization) {
+#ifdef Q_OS_MACOS
+  if (rasterization.optical) {
+    return paintText<true>(previous, window, paint, collection, rasterization);
+  }
+#endif
+
+  return paintText<false>(previous, window, paint, collection, fonts::GlyphRasterization{});
 }
 
 }

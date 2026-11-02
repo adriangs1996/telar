@@ -2,6 +2,7 @@
 #include "glyph_bitmap_view.hpp"
 #include "ligature_coverage.hpp"
 #include "native_match.hpp"
+#include "platform/font.h"
 #include "shaped_run_view.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "terminal/font_grid.hpp"
@@ -21,7 +22,6 @@
 #include <hb.h>
 #include <limits>
 #include <memory>
-#include <native/font.h>
 #include <span>
 #include <stdexcept>
 #include <string_view>
@@ -48,7 +48,7 @@ std::unique_ptr<FT_MM_Var, VariationDeleter> variationMaster(FT_Library library,
   }
 
   std::unique_ptr<FT_MM_Var, VariationDeleter> result{master, {.library = library}};
-  if (master->num_axis > TELAR_FONT_MAX_AXES) {
+  if (master->num_axis > telar_font_max_axes) {
     throw std::runtime_error{"FontVariationTooLarge"};
   }
 
@@ -58,7 +58,7 @@ std::unique_ptr<FT_MM_Var, VariationDeleter> variationMaster(FT_Library library,
 }
 
 Face::Face(std::span<const std::uint8_t> bytes, const FontMatch &match) {
-  if (bytes.empty() || bytes.size() > TELAR_FONT_MAX_BYTES || bytes.size() > static_cast<std::size_t>(std::numeric_limits<FT_Long>::max())) {
+  if (bytes.empty() || bytes.size() > telar_font_max_bytes || bytes.size() > static_cast<std::size_t>(std::numeric_limits<FT_Long>::max())) {
     throw std::invalid_argument{"InvalidFontData"};
   }
 
@@ -169,13 +169,13 @@ void Face::applyVariation(const FontVariation &variation) {
     return;
   }
 
-  if (variation.count > TELAR_FONT_MAX_AXES) {
+  if (variation.count > telar_font_max_axes) {
     throw std::invalid_argument{"FontVariationTooLarge"};
   }
 
   const auto master = variationMaster(library_.get(), face_.get());
   const auto axes = std::span{master->axis, master->num_axis};
-  std::array<FT_Fixed, TELAR_FONT_MAX_AXES> coordinates{};
+  std::array<FT_Fixed, telar_font_max_axes> coordinates{};
   for (std::size_t index = 0; index < axes.size(); ++index) {
     coordinates[index] = axes[index].def;
   }
@@ -207,7 +207,7 @@ FontVariation Face::variation() const {
   }
 
   const auto master = variationMaster(library_.get(), face_.get());
-  std::array<FT_Fixed, TELAR_FONT_MAX_AXES> coordinates{};
+  std::array<FT_Fixed, telar_font_max_axes> coordinates{};
   if (FT_Get_Var_Design_Coordinates(face_.get(), master->num_axis, coordinates.data()) != 0) {
     throw std::runtime_error{"FontVariationFailed"};
   }

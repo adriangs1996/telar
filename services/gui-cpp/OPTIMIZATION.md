@@ -5,6 +5,11 @@ The new complete-stack performance task is defined in
 runtimes and GUIs, with native 120 Hz smoothness where supported. The historical
 GUI-only findings below are inputs to that task, not acceptance of the new matrix.
 
+The [local optical-text optimization](#local-optical-text-optimization-2026-11-02)
+below removes a confirmed C++ terminal-rendering bottleneck. It is measured against
+the preceding C++ renderer and checked against original Zig pixels; complete-stack
+performance against Zig and sustained 120 Hz presentation remain unqualified.
+
 The remaining scoped task is the measured performance regression against the Zig
 GUI. Graphics/attachments and native blur have shipped in Preview27. Preserve
 functional and visual behavior, explicit allocators, compile-time dependency
@@ -82,6 +87,143 @@ contexts. This verifies compilation and selected regressions, not native renderi
 new package deployment, Linux build or performance of the integrated checkout.
 No new benchmark or sanitizer run was performed during integration.
 
+## Local optical-text optimization, 2026-11-02
+
+With `font.thicken=true`, C++ bypassed its grouped/cached glyph path and rasterized
+changed rows through Qt/CoreText into CPU images, then created replacement textures.
+Two local profiles attributed about 82–83% of sampled render-thread stacks to
+`TerminalItem::updatePaintNode` and 74–75% to `TextScene::addQtText`. These are
+sampled stack proportions, not a distribution of elapsed frame latency.
+
+The accepted path shapes cell runs through the existing `RowTextLayout`, caches
+native optical glyph masks by face/size/style/strength, and reuses compatible
+meshes and their vertex capacity. Color and projection changes reuse masks.
+Vertex-capacity reuse uses Qt6.10+; older supported Qt versions retain the nodes
+and masks but reallocate geometry when their glyph count changes.
+Qt Quick still owns texture atlasing and submission. `OpticalText` remains the
+exceptional fallback. The standard rasterizer/cache/scene policies are selected
+with templates; their instances do not contain native rasterizer state. Moving
+glyph placements avoids redundant mask-reference copies, and reserving the known
+glyph count avoids repeated list growth. Mesh replacement swaps placement buffers
+instead of copying their entries; this last change won 6/7 pairs against the
+preceding cached-glyph build (4.371 to 4.173ms, identical native pixels).
+
+CoreText rasterization, smoothing and native font discovery were brought into
+`platform/macos`; Fontconfig discovery and the shared C ABI now live under
+`platform/linux` and `platform/font.h`. These files no longer include or compile
+the corresponding files in the Zig GUI. The C++ rasterizer borrows immutable font
+bytes and caller-owned scratch pixels; its cache shares one scratch buffer across
+font roles. Existing unrelated generated-data/Ghostty Zig dependencies remain.
+
+### Paired CPU measurements
+
+Host: Apple M3, 16 GiB, macOS26.6.2 (25G83), LLVM23.1.2, Release `-O3 -DNDEBUG`,
+managed Qt6.12.0, native Cocoa/Metal. No build, lint, test suite or profiler ran
+during timing. Seven alternating pairs each replayed 12 fully damaged 256×52
+ASCII frames after three warmups. Telar Forma19, line height1.3, letter spacing−0.5,
+optical strength250 and raster scale2 yielded a 5376×3172 capture.
+
+Production `TerminalScene` synchronization decreased from **73.211 to 4.344ms per
+repaint**, winning **7/7 pairs**; the median paired ratio was **0.0593232**.
+Frame preparation and decoding are outside this interval. It includes CPU scene
+work but does not measure asynchronous GPU completion, native drawable cadence,
+input latency, runtime throughput, process memory or sustained application FPS.
+The reference uses the unchanged historical `TextScene` and `TerminalScene` bodies
+at `6152393b18f8b3e7ae1a1322eca6c8f1eb718bbd` with the same current probe/dependencies;
+only the glyph-cache forward declaration/member type is adapted and recorded.
+It is not an independent historical build of every GUI component.
+
+The standard text probe uses its frozen pre-change executable, 1,000 measured
+operations and 100 warmups per case. Ordered geometry/material digests matched in
+every run; no other mode consistently regressed:
+
+| Operation / glyphs | Before ns/op | After ns/op | Wins / pairs |
+| --- | ---: | ---: | ---: |
+| create / 32 | 1,051.4 | 912.3 | 7/7 |
+| create / 128 | 3,095.4 | 2,794.1 | 7/7 |
+| create / 512 | 11,353.8 | 10,426.4 | 7/7 |
+| rebuild / 32 | 933.4 | 786.1 | 7/7 |
+| rebuild / 128 | 3,038.0 | 2,697.5 | 7/7 |
+| rebuild / 512 | 11,042.1 | 10,128.5 | 7/7 |
+| repaint / 32 | 306.6 | 298.9 | 5/7 |
+| repaint / 128 | 971.7 | 962.0 | 3/7 |
+| repaint / 512 | 3,611.8 | 3,504.3 | 4/7 |
+
+ARM64 disassembly confirms a warm optical glyph lookup returns after the hash
+lookup without calling CoreText, copying masks or creating textures. Mesh capacity
+growth is conditional. An intermediate variant outlined additional list/mesh work
+and consistently regressed standard construction/rebuild by several percent;
+it was rejected. Earlier unconditional mesh retention and copy-based construction
+also regressed standard text. The final policy separation, moves and reservation
+above passed the paired checks; no code-placement exception was used.
+
+### Visual and functional verification
+
+The independent visual reference executed original Zig `RowRuns`, `ShapedRun`,
+`GlyphAtlas` and its CoreText adapter on the same cells and font. Its 13,209 ordered
+quads were composited with nearest alpha sampling over black. Default1024 and
+maximum2048 atlas sizes produced identical RGB output. The final native Qt capture
+differs by **zero pixels / zero channel values** from that reference. Its RGB SHA256
+is `b23e05bac53b1c1f95040f023741bab59b4eff5f454983b389f10caae81b4fce`;
+font SHA256 is `f482d6bf04e135c8a0695f48f93a7b05862666862a4a1bdc5bc7f5bb48cc1271`.
+The preceding C++ renderer differed at 7,600 grave-accent pixels. Therefore this
+case uses the independent Zig reference instead of accepting that existing defect.
+It does not establish pixel parity for every font or terminal configuration.
+
+All four focused CTest entries passed: `gui-optical-text`, `gui-row-text`,
+`gui-chrome-text`, `gui-font-resolver`. The optical test covers 432 size/strength/style
+cases and checks native wrapper masks byte-for-byte at identical atlas coordinates.
+The row-text oracle matched 7,494 original-Zig cases across three bundled faces,
+including all printable ASCII and grave accents. Native Metal regular/emphasized
+mask/placement tests passed, as did `terminalInputAndRendering` and
+`terminalFramesWaitForSceneSynchronization` against the C++ runtime. Clang-tidy
+passed all nine touched translation units checked in this pass. The native C and
+C++ rasterizer adapters also compiled for x86-64; the Fontconfig adapter passed
+C17 syntax/warning checks against Fontconfig headers on this host. No Linux runtime,
+Rosetta execution or new sanitizer qualification was performed.
+
+An initial text-only surrogate did not reproduce production `TerminalScene`
+grouping and was discarded as a visual/performance qualification. Attempts to use
+the historical full-client latency harness failed viewport/marker readiness; those
+runs do not support an application-latency or FPS claim. Use the complete-stack
+flow contract for that next measurement.
+
+### Reproduction and identities
+
+Build `gui-terminal-scene-probe` and `gui-text-scene-probe` in the configured Release
+directory. `tools/build_terminal_scene_reference.py --build-dir BUILD --revision REV
+--output-dir BASELINE` builds historical scene bodies with the current workload and
+records original/adapted source hashes and commands. Then run:
+
+```sh
+python3 services/gui-cpp/tools/compare_terminal_scene.py \
+  BASELINE/gui-terminal-scene-probe-reference BUILD/gui-terminal-scene-probe \
+  RESULTS --font 'Telar Forma' --scale 2 --iterations 12 --warmup 3 --pairs 7 \
+  --reference-image INDEPENDENT_REFERENCE.png
+python3 services/gui-cpp/tools/compare_text_scene.py \
+  FROZEN/gui-text-scene-probe BUILD/gui-text-scene-probe \
+  --output-dir STANDARD_RESULTS --pairs 7 --iterations 1000 --warmup 100
+```
+
+Use fresh output directories outside the repository. Without `--reference-image`,
+the terminal comparison requires exact baseline/candidate pixels. The supplied
+reference must match the workload/font/viewport; another font is a different case.
+The Zig reference above is a historical validation, not a new production dependency.
+
+Measured executable SHA256 values:
+
+| Executable | SHA256 |
+| --- | --- |
+| Historical terminal scene probe | `0aac5f88c239196695325fd5ff214b1d4386932029f21bbb13afea733dc3cbda` |
+| Final terminal scene probe | `2e20dbd52c29cde78b7239a3e7ba7e426c297845d03c2f7ab6db931710490d78` |
+| Frozen standard text probe | `3a3d0192de4f18de71ab88aabaaacb33ffff8af362518440f75763619b1a40eb` |
+| Final standard text probe | `b3ff061b4a55396e468c567d5f9cc87882e3ab3b4ddafaf7ea9bb7142b5ca301` |
+| Final GUI | `cb77d9c79b65cedf60e41ca01cb26e6e904183daee5772e0e5bdd74191e9179d` |
+
+Raw captures, manifests, assembly and pair logs stayed in a private temporary
+directory, outside version control. The measurements describe the working-tree
+build with the hashes above, not the unchanged HEAD executable or Preview27.
+
 ## Measurement contract and invalid runs
 
 The endpoint starts at native `NSView.keyDown` invocation and ends at positive
@@ -125,7 +267,7 @@ Keep GUI/runtime measurements separate and avoid summing shared RSS.
 | `QT_QPA_UPDATE_IDLE_TIME=0` versus default | 29.51 versus 28.96ms, one pair ×30 inputs | No accepted gain; split-load rows invalid on offered rate |
 | Read-only 4K profiles | Socket/chunk copies, `GraphicsStore::Image::append`, RGBA conversion/premultiplication and Metal upload copies appear in sampled stacks | Leads for isolation, not attribution of the entire regression |
 
-No production optimization was accepted. The two environment experiments are
+At the Preview27 checkpoint, no production optimization was accepted. The two environment experiments are
 small preliminary observations, insufficient to prove a general configuration rule.
 Their earlier GPU-only quantiles are not comparable to the final presented endpoint.
 

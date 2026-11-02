@@ -6,13 +6,14 @@
 #include "fonts/glyph_bitmap_view.hpp"
 #include "fonts/native_match.hpp"
 #include "fonts/shaped_run_view.hpp"
+#include "platform/font.h"
+#include "qt/bundled_fonts.hpp"
 #include "qt/font_cache.hpp"
 #include "qt/font_resolver.hpp"
 #include "qt/font_source.hpp"
-#include "terminal/font_grid.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include "qt/bundled_fonts.hpp"
 #include "qt/terminal_font.hpp"
+#include "telar_client/codecs/telar_wire.hpp"
+#include "terminal/font_grid.hpp"
 #include <QByteArray>
 #include <QFile>
 #include <QFont>
@@ -32,7 +33,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
-#include <native/font.h>
 #include <new>
 #include <stdexcept>
 #include <vector>
@@ -55,7 +55,7 @@ private:
       }
 
       fonts::FontMatch native{};
-      if (telar_gui_find_fallback_font(query->codepoints(), &native) != TELAR_FONT_FOUND) {
+      if (telarGuiFindFallbackFont(query->codepoints(), &native) != telar_font_found) {
         continue;
       }
 
@@ -75,18 +75,20 @@ private:
 
   Q_SLOT static void nativeFallbackHonorsClientValidation() {
     fonts::FontMatch expected{};
-    QVERIFY(telar_gui_find_fallback_font("λ", &expected) == TELAR_FONT_FOUND);
+    QVERIFY(telarGuiFindFallbackFont("λ", &expected) == telar_font_found);
     fonts::FontMatch accepted{};
-    const auto allow = [](const telar_font_match *, void *) -> int { return TELAR_FONT_FOUND; };
-    QCOMPARE(telar_gui_find_validated_fallback_font("λ", &accepted, allow, nullptr), TELAR_FONT_FOUND);
+    const auto allow = [](const telar_font_match *, void *) -> int {
+      return telar_font_found;
+    };
+    QCOMPARE(telarGuiFindValidatedFallbackFont("λ", &accepted, allow, nullptr), telar_font_found);
     QVERIFY(fonts::sameFontMatch(expected, accepted));
     std::size_t rejected = 0;
     const auto reject = [](const telar_font_match *, void *context) -> int {
       ++*static_cast<std::size_t *>(context);
 
-      return TELAR_FONT_FAMILY_NOT_FOUND;
+      return telar_font_family_not_found;
     };
-    QCOMPARE(telar_gui_find_validated_fallback_font("λ", &accepted, reject, &rejected), TELAR_FONT_FAMILY_NOT_FOUND);
+    QCOMPARE(telarGuiFindValidatedFallbackFont("λ", &accepted, reject, &rejected), telar_font_family_not_found);
     QVERIFY(rejected > 0);
   }
 
