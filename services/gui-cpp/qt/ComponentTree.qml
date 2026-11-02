@@ -18,7 +18,8 @@ Item {
     property bool fit: horizontal && parentIndex < 0
     property var roots: []
     property real rowHeight: 28 * ratio
-    property real gap: 8 * ratio
+    readonly property bool barRow: horizontal && parentIndex < 0 && !tooltip
+    property real gap: (barRow ? 16 : 8) * ratio
     readonly property var entries: (surface.nodes ?? []).filter(node => node.parent === parentIndex && node.tooltip === tooltip && (roots.length === 0 || roots.indexOf(node.index) >= 0))
     property var fittedLevels: null
     property var reductions: ({})
@@ -122,6 +123,23 @@ Item {
                 compact: (root.levels[node.index] ?? ComponentFit.Level.full) === ComponentFit.Level.compact
                 visible: (root.levels[node.index] ?? ComponentFit.Level.full) !== ComponentFit.Level.hidden
                 onFitNodesChanged: Qt.callLater(root.refit)
+
+                Rectangle {
+                    objectName: "componentGroupSeparator"
+                    readonly property var previous: {
+                        for (let sibling = index - 1; sibling >= 0; --sibling) {
+                            const item = rowRepeater.itemAt(sibling);
+                            if (item && item.visible && item.width > 0) return item.node;
+                        }
+                        return null;
+                    }
+                    x: -root.gap / 2
+                    y: (root.rowHeight - height) / 2
+                    width: 1 / Screen.devicePixelRatio
+                    height: Math.min(root.rowHeight, 12 * root.ratio)
+                    color: root.colors.surface1
+                    visible: root.barRow && previous !== null && (record.kind === "group" || previous.kind === "group")
+                }
             }
         }
 

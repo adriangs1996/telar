@@ -163,7 +163,7 @@ extern "C" bool query_probe_clipboard_config(void *context, std::uint32_t flags)
     auto &policy = probe.terminal.controlPolicy();
     policy.clipboard_read = access(flags & 3);
     policy.clipboard_write = access((flags >> 2) & 3);
-    probe.clipboard->consent = (flags >> 4 & 3) == 0 ? workbench::ClipboardConsent::deny : (flags >> 4 & 3) == 1 ? workbench::ClipboardConsent::once : workbench::ClipboardConsent::session;
+    probe.clipboard->consent = (flags >> 4 & 3) == 0 ? control_test::ClipboardConsent::deny : (flags >> 4 & 3) == 1 ? control_test::ClipboardConsent::once : control_test::ClipboardConsent::session;
     return true;
   } catch (...) {
     return false;

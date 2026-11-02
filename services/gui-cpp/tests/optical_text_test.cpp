@@ -1,5 +1,5 @@
-#include "ui/bundled_fonts.hpp"
-#include "ui/workbench/optical_text.hpp"
+#include "qt/bundled_fonts.hpp"
+#include "qt/optical_text.hpp"
 #include <QByteArray>
 #include <QColor>
 #include <QFile>
@@ -116,7 +116,7 @@ void shapeGlyph(QTextLayout &layout, const QString &text, int pixel_height, Glyp
   layout.endLayout();
 }
 
-void compareGlyph(workbench::OpticalText &optical, OriginalRasterizer &original, const QTextLayout &layout, int scale, GlyphStyle style) {
+void compareGlyph(telar::gui::qt::OpticalText &optical, OriginalRasterizer &original, const QTextLayout &layout, int scale, GlyphStyle style) {
   const auto runs = layout.glyphRuns();
   require(runs.size() == 1 && runs.front().glyphIndexes().size() == 1, "The optical oracle requires a single glyph");
   const auto &run = runs.front();
@@ -148,7 +148,7 @@ QImage coloredMask(QImage image, QColor color) {
 }
 
 void verifySnapshotAndCompositing() {
-  const auto optical = workbench::OpticalText::create();
+  const auto optical = telar::gui::qt::OpticalText::create();
   constexpr int pixel_height = 32;
   constexpr std::uint8_t strength = 128;
   constexpr QPoint origin{glyph_margin, glyph_margin + pixel_height};
@@ -183,7 +183,7 @@ void verifySnapshotAndCompositing() {
 }
 
 void verifyInvalidDimensions() {
-  const auto optical = workbench::OpticalText::create();
+  const auto optical = telar::gui::qt::OpticalText::create();
   constexpr std::array invalid_extents{0.0, -1.0, std::numeric_limits<qreal>::infinity(), std::numeric_limits<qreal>::quiet_NaN()};
   for (const auto extent : invalid_extents) {
     bool rejected = false;
@@ -197,7 +197,7 @@ void verifyInvalidDimensions() {
   }
 }
 
-std::size_t compareSize(workbench::OpticalText &optical, OriginalRasterizer &original, std::uint8_t strength, int scale, int pixel_height) {
+std::size_t compareSize(telar::gui::qt::OpticalText &optical, OriginalRasterizer &original, std::uint8_t strength, int scale, int pixel_height) {
   constexpr std::array texts{"M", "g", "@"};
   constexpr std::array styles{GlyphStyle::regular, GlyphStyle::bold, GlyphStyle::italic, GlyphStyle::bold_italic};
   std::size_t comparisons = 0;
@@ -216,11 +216,11 @@ std::size_t compareSize(workbench::OpticalText &optical, OriginalRasterizer &ori
 }
 
 void verifyRasters() {
-  ui::bundledFonts();
+  telar::gui::qt::bundledFonts();
   QFile font{QStringLiteral(":/telar/fonts/JetBrainsMono-Regular.ttf")};
   require(font.open(QIODeviceBase::ReadOnly), "Bundled optical oracle font is missing");
   const auto bytes = font.readAll();
-  const auto optical = workbench::OpticalText::create();
+  const auto optical = telar::gui::qt::OpticalText::create();
   require(optical != nullptr, "macOS optical text is unavailable");
   constexpr std::array<std::uint8_t, 3> strengths{0, 128, opaque_channel};
   constexpr std::array pixel_heights{8, 12, 15, 32, 60, 96};

@@ -1,6 +1,6 @@
 #include "qt/native_rounded_rectangle.hpp"
 #include "shape_atlas.hpp"
-#include "ui/bundled_fonts.hpp"
+#include "qt/bundled_fonts.hpp"
 #include <QColor>
 #include <QDebug>
 #include <QFile>
@@ -103,7 +103,7 @@ class RoundedRectangleTest final : public QObject {
 
 private:
   Q_SLOT static void initTestCase() {
-    ui::bundledFonts();
+    telar::gui::qt::bundledFonts();
     QGuiApplication::setFont(QFont{QStringLiteral("IBM Plex Sans")});
   }
 

@@ -244,7 +244,7 @@ def main():
         cpp_binary, zig_binary = temporary / "cpp_probe", temporary / "zig_probe"
         cpp_source.write_text(cpp_probe)
         zig_source.write_text(zig_probe)
-        subprocess.run([arguments.compiler, "-std=c++23", "-O2", f"-I{service}", f"-I{repository / 'services/runtime-cpp'}", f"-I{repository / 'services/desktop-mode'}", str(cpp_source), "-o", str(cpp_binary)], check=True)
+        subprocess.run([arguments.compiler, "-std=c++23", "-O2", f"-I{service}", f"-I{repository / 'services/runtime-cpp'}", f"-I{repository / 'dlls/telar-client/include'}", str(cpp_source), "-o", str(cpp_binary)], check=True)
         subprocess.run([arguments.zig, "build-exe", "-O", "ReleaseFast", "-lc", "--dep", "model", "--dep", "cellgrid", "--dep", "telar-core", "--dep", "keyinput", f"-Mroot={zig_source}", "--dep", "telar-core", "--dep", "cellgrid", "--dep", "keyinput", f"-Mmodel={repository / 'src/model/model.zig'}", "--dep", "cellgrid", "--dep", "keyinput", f"-Mtelar-core={repository / 'src/core/core.zig'}", f"-Mkeyinput={repository / 'lib/keyinput/root.zig'}", f"-Mcellgrid={repository / 'lib/cellgrid/root.zig'}", f"-femit-bin={zig_binary}"], check=True)
         reference = subprocess.run([str(zig_binary)], input=request, stdout=subprocess.PIPE, check=True).stdout
         candidate = subprocess.run([str(cpp_binary)], input=request, stdout=subprocess.PIPE, check=True).stdout

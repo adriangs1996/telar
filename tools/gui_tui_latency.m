@@ -1,7 +1,7 @@
 #include "gui_view.h"
 // Test-only common probe: one IOSurface pixel copied in the rendering command
 // buffer, then verified at GPU completion. Works with CAMetalLayer and Ghostty
-// 1.3 IOSurface targets. No presentation/scanout timestamps are inferred.
+// 1.3 IOSurface targets.
 #import <AppKit/AppKit.h>
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
@@ -14,21 +14,41 @@
 #include <math.h>
 #include <signal.h>
 #include <unistd.h>
+#include <limits.h>
+#include <mach-o/dyld.h>
+
+enum { ProbeSampleCapacity = 512 };
+static const double ProbeSetupSettleSeconds = .25;
+static const double ProbeMarkerSettleSeconds = .35;
+static const double ProbeSetupMinimumSeconds = 4;
+static const double ProbeSetupTimeoutSeconds = 35;
 
 static IMP original_next, original_encoder, original_commit;
-static char texture_key, readback_key;
+static char texture_key, readback_key, presentation_key;
 static IMP original_encoder4, original_end4, original_commit4, original_layer;
 static FILE *probe_log;
 static id<MTLCommandQueue> probe_queue;
 static atomic_uint epoch;
 static atomic_uint geometry_epoch;
+static atomic_uint display_sync_observations;
 static atomic_uintptr_t target_queue_identity;
 static atomic_bool located;
+static atomic_bool capture_requested;
+static NSString *capture_path;
+static BOOL capture_complete;
+static BOOL capture_witness_verified;
+static BOOL observe_presentation;
 static atomic_ulong marker_x, marker_y, pixel_width, pixel_height;
 static BOOL pending, finished, text_input;
 static int count, limit;
-static double began, gpu_samples[512], gpu_work_samples[512];
-static BOOL app_active_start[512], app_active_end[512], window_key_start[512], window_key_end[512];
+static int warmup;
+static double idle_seconds, idle_wall_seconds, idle_user_cpu_seconds, idle_system_cpu_seconds;
+static double measurement_began;
+static struct rusage measurement_start_usage;
+static double began, gpu_samples[ProbeSampleCapacity], gpu_work_samples[ProbeSampleCapacity];
+static double presentation_samples[ProbeSampleCapacity];
+static NSUInteger presentation_drawables[ProbeSampleCapacity];
+static BOOL app_active_start[ProbeSampleCapacity], app_active_end[ProbeSampleCapacity], window_key_start[ProbeSampleCapacity], window_key_end[ProbeSampleCapacity];
 static NSString *input_class;
 static NSString *display_mode, *display_layout, *display_directory;
 static NSView *primary_view;
@@ -42,6 +62,7 @@ typedef enum {
     ProbeSetupLocateMarker,
     ProbeSetupResizeTabs,
     ProbeSetupForeground,
+    ProbeSetupRefreshMarker,
 } ProbeSetupStage;
 
 typedef enum {
@@ -52,10 +73,21 @@ typedef enum {
 } ProbeFixtureState;
 
 typedef enum {
+    ProbeFailureMarkerMissing = 4,
+    ProbeFailureInputTarget = 8,
+    ProbeFailureSetupTimeout = 10,
     ProbeFailureInputTimeout = 16,
     ProbeFailureForegroundLost = 17,
     ProbeFailureDrawDiagnostics = 18,
+    ProbeFailureCapture = 19,
+    ProbeFailureInitialPresentation = 20,
 } ProbeFailureCode;
+
+typedef enum {
+    ProbeDisplaySyncUnknown = 0,
+    ProbeDisplaySyncEnabled = 1 << 0,
+    ProbeDisplaySyncDisabled = 1 << 1,
+} ProbeDisplaySyncObservation;
 
 static ProbeSetupStage setup_stage = ProbeSetupWaitFixture;
 static NSUInteger primary_geometry_generation, resize_fixture_generation;
@@ -68,6 +100,15 @@ static unsigned panes, created_panes, focus_steps, viewport_attempts;
 static unsigned requested_width, requested_height;
 static double setup_began, setup_changed, marker_located;
 static BOOL setup_complete;
+static double geometry_changed_at, setup_completed_at, first_input_at;
+
+typedef struct {
+    double gpu, presented;
+    NSUInteger drawable_id, width, height, marker_x, marker_y;
+    unsigned geometry;
+} ProbeInitialPresentation;
+
+static ProbeInitialPresentation initial_presentation;
 static BOOL awaiting_view_logged;
 static BOOL activation_attempted;
 static NSString *window_manager;
@@ -79,7 +120,7 @@ static unsigned window_cycle_successes;
 static double window_task_began, window_retry_after;
 static BOOL window_floated;
 
-enum { ProbeDrawSampleCapacity = 512, ProbeDrawEventCapacity = 32 };
+enum { ProbeDrawSampleCapacity = ProbeSampleCapacity, ProbeDrawEventCapacity = 32 };
 typedef enum {
     ProbeDrawRequest,
     ProbeDrawAttempt,
@@ -124,7 +165,7 @@ static NSDictionary *draw_diagnostic_result(void);
 static BOOL install_draw_diagnostics(void);
 
 @interface ProbeFrame : NSObject {
-@public unsigned sequence; double gpu, work; BOOL verified;
+@public unsigned sequence, geometry; NSUInteger drawable_id; double gpu, work, presented; BOOL verified;
 }
 @end
 @implementation ProbeFrame
@@ -157,21 +198,23 @@ static NSString *failure_message(int failed) {
         case 0: return @"";
         case 2: return @"Primary native input view disappeared";
         case 3: return @"GPU completion preceded injected input";
-        case 4: return @"Marker was not located after layout setup";
+        case ProbeFailureMarkerMissing: return @"Marker was not located after layout setup";
         case 5: return @"Benchmark timed out";
         case 6: return @"Render target geometry changed during measurement";
         case 7: return @"Input view does not support committed text";
-        case 8: return @"Primary input view could not become first responder";
+        case ProbeFailureInputTarget: return @"Primary input view could not become first responder";
         case 9: return @"Invalid benchmark environment";
-        case 10: return @"Layout setup or fixture readiness timed out";
+        case ProbeFailureSetupTimeout: return @"Layout setup or fixture readiness timed out";
         case 11: return @"Requested viewport could not be applied";
         case 12: return @"Fixture failed or unexpected fixture count";
         case 13: return @"GPU readback failed";
         case 14: return @"Primary tab is not visible after focus restoration";
+        case ProbeFailureCapture: return @"The requested Metal frame could not be captured";
         case 15: return @"Window manager command timed out";
         case ProbeFailureInputTimeout: return @"Input did not produce its expected marker within two seconds";
         case ProbeFailureForegroundLost: return @"Benchmark host was not active with its primary window key";
         case ProbeFailureDrawDiagnostics: return @"Requested native draw diagnostics are unsupported";
+        case ProbeFailureInitialPresentation: return @"Initial marker has no verified native presentation";
         default: return @"Unknown probe failure";
     }
 }
@@ -209,11 +252,17 @@ static void finish(int failed) {
     finished=YES;
     if (window_task.isRunning) kill(window_task.processIdentifier, SIGKILL);
     NSMutableArray *gpu = [NSMutableArray array], *work = [NSMutableArray array];
+    NSMutableArray *presentation = [NSMutableArray array];
+    NSMutableArray *drawables = [NSMutableArray array];
     NSMutableArray *active_start = [NSMutableArray array], *active_end = [NSMutableArray array];
     NSMutableArray *key_start = [NSMutableArray array], *key_end = [NSMutableArray array];
     for (int i = 0; i < count; i++) {
         [gpu addObject:@(gpu_samples[i])];
         [work addObject:@(gpu_work_samples[i])];
+        if (observe_presentation) {
+            [presentation addObject:@(presentation_samples[i])];
+            [drawables addObject:@(presentation_drawables[i])];
+        }
         [active_start addObject:@(app_active_start[i])];
         [active_end addObject:@(app_active_end[i])];
         [key_start addObject:@(window_key_start[i])];
@@ -227,6 +276,11 @@ static void finish(int failed) {
     NSSize scene = scene_size();
     struct rusage usage = {0};
     getrusage(RUSAGE_SELF, &usage);
+    double measurement_user_cpu = usage.ru_utime.tv_sec + usage.ru_utime.tv_usec / 1e6 -
+        measurement_start_usage.ru_utime.tv_sec - measurement_start_usage.ru_utime.tv_usec / 1e6;
+    double measurement_system_cpu = usage.ru_stime.tv_sec + usage.ru_stime.tv_usec / 1e6 -
+        measurement_start_usage.ru_stime.tv_sec - measurement_start_usage.ru_stime.tv_usec / 1e6;
+    unsigned display_sync = atomic_load(&display_sync_observations);
     NSMutableDictionary *result = [@{
         @"failed": @(failed), @"error": failure_message(failed),
         @"viewport": @[@(pixel_width), @(pixel_height)],
@@ -237,6 +291,7 @@ static void finish(int failed) {
         @"native_view_pixels": view_sizes,
         @"native_tab_count": @(primary_window.tabbedWindows.count ?: (primary_window ? 1 : 0)),
         @"marker": @[@(marker_x), @(marker_y)], @"gpu_ms": gpu, @"gpu_work_ms": work,
+        @"endpoint": observe_presentation ? @"presented" : @"gpu",
         @"app_active_start": active_start, @"app_active_end": active_end,
         @"window_key_start": key_start, @"window_key_end": key_end,
         @"foreground_required": @YES, @"focus_failure_point": focus_failure_point ?: @"",
@@ -253,8 +308,38 @@ static void finish(int failed) {
         @"host_user_cpu_seconds": @(usage.ru_utime.tv_sec + usage.ru_utime.tv_usec / 1e6),
         @"host_system_cpu_seconds": @(usage.ru_stime.tv_sec + usage.ru_stime.tv_usec / 1e6),
         @"host_max_rss_bytes": @(usage.ru_maxrss),
+        @"idle_wall_seconds": @(idle_wall_seconds),
+        @"idle_user_cpu_seconds": @(idle_user_cpu_seconds),
+        @"idle_system_cpu_seconds": @(idle_system_cpu_seconds),
+        @"measurement_wall_seconds": @(measurement_began ? CACurrentMediaTime() - measurement_began : 0),
+        @"measurement_user_cpu_seconds": @(measurement_began ? measurement_user_cpu : 0),
+        @"measurement_system_cpu_seconds": @(measurement_began ? measurement_system_cpu : 0),
         @"target_filter": @"marker-qualified Metal command queue",
+        @"capture_witness_verified": @(capture_witness_verified),
+        @"display_sync": @{
+            @"observed": @((BOOL)(display_sync != ProbeDisplaySyncUnknown)),
+            @"enabled": @((BOOL)((display_sync & ProbeDisplaySyncEnabled) != 0)),
+            @"disabled": @((BOOL)((display_sync & ProbeDisplaySyncDisabled) != 0)),
+        },
     } mutableCopy];
+    if (observe_presentation) {
+        result[@"presentation_ms"] = presentation;
+        result[@"presentation_drawable_ids"] = drawables;
+        result[@"presentation_clock"] = @"MTLDrawable.presentedTime";
+        result[@"geometry_epoch"] = @(atomic_load(&geometry_epoch));
+        result[@"initial_presentation"] = @{
+            @"clock": @"MTLDrawable.presentedTime",
+            @"drawable_id": @(initial_presentation.drawable_id),
+            @"geometry_epoch": @(initial_presentation.geometry),
+            @"viewport": @[@(initial_presentation.width), @(initial_presentation.height)],
+            @"marker": @[@(initial_presentation.marker_x), @(initial_presentation.marker_y)],
+            @"geometry_requested_at": @(geometry_changed_at),
+            @"gpu_completed_at": @(initial_presentation.gpu),
+            @"presented_at": @(initial_presentation.presented),
+            @"setup_completed_at": @(setup_completed_at),
+            @"first_input_at": @(first_input_at),
+        };
+    }
     if (draw_diagnostics) {
         result[@"draw_diagnostics"] = draw_diagnostic_result();
     }
@@ -311,6 +396,11 @@ static void send_key(void) {
     NSSize scene = scene_size();
     if (requested_width && (llround(scene.width) != requested_width || llround(scene.height) != requested_height)) { finish(11); return; }
     if(count==limit){finish(0);return;}
+    if (observe_presentation && (!setup_complete || !initial_presentation.presented ||
+        initial_presentation.geometry != atomic_load(&geometry_epoch))) {
+        finish(ProbeFailureInitialPresentation);
+        return;
+    }
     if (!require_foreground(@"before_input")) return;
     NSView *view=test_view();
     NSWindow *w=view.window;
@@ -321,11 +411,18 @@ static void send_key(void) {
     NSResponder *target=text_input ? view : w.firstResponder;
     if(text_input && ![target respondsToSelector:@selector(insertText:replacementRange:)]){finish(7);return;}
     if(!count)input_class=NSStringFromClass(target.class);
+    if (count == warmup) {
+        getrusage(RUSAGE_SELF, &measurement_start_usage);
+        measurement_began = CACurrentMediaTime();
+    }
     app_active_start[count] = NSApp.isActive;
     window_key_start[count] = w.isKeyWindow;
     pending=YES;
     atomic_store(&epoch,(unsigned)count+1);
     began=CACurrentMediaTime();
+    if (!count) {
+        first_input_at = began;
+    }
     if (draw_samples) {
         draw_samples[count].input = began;
     }
@@ -371,6 +468,8 @@ static void reset_locator(void) {
     atomic_store_explicit(&located, false, memory_order_release);
     atomic_fetch_add(&geometry_epoch, 1);
     marker_located = 0;
+    geometry_changed_at = CACurrentMediaTime();
+    initial_presentation = (ProbeInitialPresentation){0};
 }
 
 // Eight leaves need balanced splits; repeatedly splitting the new leaf runs
@@ -538,12 +637,44 @@ static BOOL resize_viewport(ProbeFixtureState fixtures) {
     return NO;
 }
 
+static void observe_idle_cpu(void) {
+    struct rusage start_usage = {0};
+    getrusage(RUSAGE_SELF, &start_usage);
+    double started = CACurrentMediaTime();
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(idle_seconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (finished) {
+            return;
+        }
+        if (capture_path && !capture_complete) {
+            finish(ProbeFailureCapture);
+            return;
+        }
+
+        struct rusage end_usage = {0};
+        getrusage(RUSAGE_SELF, &end_usage);
+        idle_wall_seconds = CACurrentMediaTime() - started;
+        idle_user_cpu_seconds = end_usage.ru_utime.tv_sec + end_usage.ru_utime.tv_usec / 1e6 -
+            start_usage.ru_utime.tv_sec - start_usage.ru_utime.tv_usec / 1e6;
+        idle_system_cpu_seconds = end_usage.ru_stime.tv_sec + end_usage.ru_stime.tv_usec / 1e6 -
+            start_usage.ru_stime.tv_sec - start_usage.ru_stime.tv_usec / 1e6;
+        send_key();
+    });
+}
+
 // Setup sends real native bindings, then waits for fixture receipts and a new
 // marker readback. No setup key can become an input-latency sample.
 static void setup_tick(void) {
     if (finished || setup_complete) return;
     double now = CACurrentMediaTime();
-    if (now - setup_began > 35) { finish(setup_stage == ProbeSetupLocateMarker ? 4 : 10); return; }
+    if (now - setup_began > ProbeSetupTimeoutSeconds) {
+        int failure = setup_stage == ProbeSetupLocateMarker ? ProbeFailureMarkerMissing : ProbeFailureSetupTimeout;
+        if (setup_stage == ProbeSetupLocateMarker && observe_presentation && atomic_load(&located)) {
+            failure = ProbeFailureInitialPresentation;
+        }
+
+        finish(failure);
+        return;
+    }
 
     if (!primary_view) {
         primary_view = test_view();
@@ -563,7 +694,7 @@ static void setup_tick(void) {
         }
     }
 
-    if (primary_view && now - setup_changed > .25 && control_window()) {
+    if (primary_view && now - setup_changed > ProbeSetupSettleSeconds && control_window()) {
         ProbeFixtureState ready = fixtures_ready(created_panes);
         if (ready == ProbeFixturesFailed) { finish(12); return; }
         if (throughput_started) {
@@ -642,16 +773,45 @@ static void setup_tick(void) {
         }
 
         if (setup_stage == ProbeSetupForeground && prepare_foreground()) {
-            if (display_directory) reset_locator();
-            setup_stage = ProbeSetupLocateMarker;
             setup_changed = now;
-            if (display_directory && !inject_key(primary_view, (ProbeKey){ @"r", @"r", 0, 15 })) { finish(8); return; }
+            setup_stage = display_directory ? ProbeSetupRefreshMarker : ProbeSetupLocateMarker;
+            if (display_directory) {
+                reset_locator();
+
+                if (!inject_key(primary_view, (ProbeKey){ @"c", @"c", 0, 8 })) {
+                    finish(ProbeFailureInputTarget);
+                    return;
+                }
+            }
         }
 
-        if (setup_stage == ProbeSetupLocateMarker && ready == ProbeFixturesReady && atomic_load_explicit(&located, memory_order_acquire) && now - marker_located > .35 && now - setup_began > 4) {
+        if (setup_stage == ProbeSetupRefreshMarker && now - setup_changed > ProbeSetupSettleSeconds) {
+            reset_locator();
+            setup_stage = ProbeSetupLocateMarker;
+            setup_changed = now;
+
+            if (!inject_key(primary_view, (ProbeKey){ @"r", @"r", 0, 15 })) {
+                finish(ProbeFailureInputTarget);
+                return;
+            }
+        }
+
+        BOOL marker_ready = setup_stage == ProbeSetupLocateMarker && ready == ProbeFixturesReady &&
+            atomic_load_explicit(&located, memory_order_acquire) && now - marker_located > ProbeMarkerSettleSeconds;
+        BOOL presentation_ready = !observe_presentation || initial_presentation.presented > 0;
+
+        if (marker_ready && presentation_ready && now - setup_began > ProbeSetupMinimumSeconds) {
             setup_complete = YES;
+            setup_completed_at = CACurrentMediaTime();
             fprintf(probe_log, "probe setup complete: %s/%s, %u panes\n", display_mode.UTF8String, display_layout.UTF8String, panes);
-            send_key();
+            if (capture_path) {
+                atomic_store(&capture_requested, true);
+                if (!inject_key(primary_view, (ProbeKey){ @"c", @"c", 0, 8 })) {
+                    finish(8);
+                    return;
+                }
+            }
+            observe_idle_cpu();
             return;
         }
     }
@@ -659,12 +819,44 @@ static void setup_tick(void) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{ setup_tick(); });
 }
 
+static void record_initial_presentation(ProbeFrame *frame) {
+    if (!observe_presentation || setup_complete || frame->sequence || !frame->verified ||
+        !atomic_load_explicit(&located, memory_order_acquire) ||
+        frame->geometry != atomic_load(&geometry_epoch) ||
+        !isfinite(frame->gpu) || !isfinite(frame->presented) ||
+        frame->gpu <= 0 || frame->presented <= 0 ||
+        frame->gpu < geometry_changed_at || frame->presented < geometry_changed_at) {
+        return;
+    }
+
+    initial_presentation = (ProbeInitialPresentation){
+        .gpu = frame->gpu, .presented = frame->presented, .drawable_id = frame->drawable_id,
+        .width = pixel_width, .height = pixel_height, .marker_x = marker_x, .marker_y = marker_y,
+        .geometry = frame->geometry,
+    };
+}
+
 static void accept_frame(ProbeFrame *frame) {
+    if (!frame->sequence) {
+        record_initial_presentation(frame);
+        return;
+    }
     if(!pending || frame->sequence!=(unsigned)count+1 || !frame->verified || !frame->gpu)return;
+    if (frame->geometry != atomic_load(&geometry_epoch) || (observe_presentation && frame->presented <= 0)) {
+        return;
+    }
     if (!require_foreground(@"verified_frame")) return;
     gpu_samples[count]=(frame->gpu-began)*1000;
     if(gpu_samples[count]<0){finish(3);return;}
     gpu_work_samples[count] = frame->work;
+    if (observe_presentation) {
+        presentation_samples[count] = (frame->presented - began) * 1000;
+        presentation_drawables[count] = frame->drawable_id;
+        if (presentation_samples[count] < 0) {
+            finish(3);
+            return;
+        }
+    }
     app_active_end[count] = NSApp.isActive;
     window_key_end[count] = primary_window.isKeyWindow;
     if (draw_samples) {
@@ -701,7 +893,7 @@ static id encoder(id self,SEL selector,MTLRenderPassDescriptor *pass){
     id<MTLBuffer> bytes;
     id<MTLResidencySet> residency;
     id<MTLCommandQueue> queue;
-    BOOL known;
+    BOOL known, capture;
     unsigned geometry;
     NSUInteger x, y, width, height, pitch;
 }
@@ -720,18 +912,24 @@ static ProbeReadback *prepare_readback(id<MTLTexture> texture, id<MTLCommandQueu
     ProbeReadback *r = [ProbeReadback new];
     r->texture = texture;
     r->queue = queue;
-    r->frame = draw_samples ? [ProbeDrawFrame new] : [ProbeFrame new];
+    r->frame = observe_presentation ? objc_getAssociatedObject(texture, &presentation_key) : nil;
+    if (!r->frame) {
+        r->frame = draw_samples ? [ProbeDrawFrame new] : [ProbeFrame new];
+    }
     r->frame->sequence = atomic_load(&epoch);
     if (draw_samples && NSThread.isMainThread && draw_context.sequence == r->frame->sequence) {
         *frame_submission(r->frame) = draw_context;
     }
     r->geometry = atomic_load(&geometry_epoch);
+    r->frame->geometry = r->geometry;
     r->known = atomic_load_explicit(&located, memory_order_acquire) &&
         pixel_width == texture.width && pixel_height == texture.height;
-    r->x = r->known ? marker_x : 0;
-    r->y = r->known ? marker_y : 0;
-    r->width = r->known ? 1 : texture.width;
-    r->height = r->known ? 1 : texture.height;
+    r->capture = r->known && atomic_load(&capture_requested);
+    BOOL pixel_only = r->known && !r->capture;
+    r->x = pixel_only ? marker_x : 0;
+    r->y = pixel_only ? marker_y : 0;
+    r->width = pixel_only ? 1 : texture.width;
+    r->height = pixel_only ? 1 : texture.height;
     if (r->geometry != atomic_load(&geometry_epoch)) return nil;
     r->pitch = (r->width * 4 + 255) & ~255ul;
     r->bytes = [texture.device newBufferWithLength:r->pitch * r->height options:MTLResourceStorageModeShared];
@@ -742,8 +940,61 @@ static ProbeReadback *prepare_readback(id<MTLTexture> texture, id<MTLCommandQueu
     return r;
 }
 
+static BOOL write_capture(ProbeReadback *readback) {
+    CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    CGContextRef context = CGBitmapContextCreate(readback->bytes.contents, readback->width, readback->height,
+        8, readback->pitch, space, kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little);
+    CGColorSpaceRelease(space);
+    if (!context) {
+        return NO;
+    }
+
+    CGImageRef image = CGBitmapContextCreateImage(context);
+    CGContextRelease(context);
+    if (!image) {
+        return NO;
+    }
+
+    NSBitmapImageRep *bitmap = [[NSBitmapImageRep alloc] initWithCGImage:image];
+    CGImageRelease(image);
+    NSData *png = [bitmap representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+
+    return png && [png writeToFile:capture_path atomically:YES];
+}
+
+static BOOL has_capture_witness(ProbeReadback *readback) {
+    const NSUInteger pixel_bytes = 4;
+    const uint8_t witness_channel = 180;
+    NSUInteger x = atomic_load(&marker_x), y = atomic_load(&marker_y);
+    if (x >= readback->width || y >= readback->height) {
+        return NO;
+    }
+
+    const uint8_t *pixel = (const uint8_t *)readback->bytes.contents + y * readback->pitch + x * pixel_bytes;
+    return pixel[0] == witness_channel && pixel[1] == witness_channel && pixel[2] == witness_channel;
+}
+
 static void verify_readback(ProbeReadback *r, double done) {
     if (r->geometry != atomic_load(&geometry_epoch)) return;
+    if (r->capture) {
+        if (!has_capture_witness(r)) {
+            return;
+        }
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (finished || capture_complete || r->geometry != atomic_load(&geometry_epoch)) {
+                return;
+            }
+
+            atomic_store(&capture_requested, false);
+            capture_witness_verified = YES;
+            capture_complete = write_capture(r);
+            if (!capture_complete) {
+                finish(ProbeFailureCapture);
+            }
+        });
+        return;
+    }
     if (r->frame->sequence && !r->known) {
         dispatch_async(dispatch_get_main_queue(), ^{ finish(6); });
         return;
@@ -777,6 +1028,9 @@ static void verify_readback(ProbeReadback *r, double done) {
             pixel_width = r->texture.width; pixel_height = r->texture.height;
             marker_located = CACurrentMediaTime();
             atomic_store_explicit(&located, true, memory_order_release);
+            r->frame->gpu = done;
+            r->frame->verified = YES;
+            accept_frame(r->frame);
             fprintf(probe_log, "probe located %lu,%lu in %lux%lu\n", marker_x, marker_y, pixel_width, pixel_height);
         });
     } else {
@@ -885,6 +1139,8 @@ static id backing_layer(id self, SEL selector) {
 
 static id next_drawable(CAMetalLayer *self,SEL selector){
     self.framebufferOnly=NO;
+    ProbeDisplaySyncObservation synchronization = self.displaySyncEnabled ? ProbeDisplaySyncEnabled : ProbeDisplaySyncDisabled;
+    atomic_fetch_or_explicit(&display_sync_observations, synchronization, memory_order_relaxed);
     BOOL observe = draw_samples && NSThread.isMainThread && draw_context.sequence && self == primary_view.layer;
     if (observe) {
         draw_context.drawable_begin = CACurrentMediaTime();
@@ -892,6 +1148,18 @@ static id next_drawable(CAMetalLayer *self,SEL selector){
     id drawable = ((id(*)(id,SEL))original_next)(self,selector);
     if (observe) {
         draw_context.drawable_end = CACurrentMediaTime();
+    }
+    if (observe_presentation && drawable) {
+        ProbeFrame *frame = draw_samples ? [ProbeDrawFrame new] : [ProbeFrame new];
+        frame->drawable_id = [(id<MTLDrawable>)drawable drawableID];
+        objc_setAssociatedObject([(id<CAMetalDrawable>)drawable texture], &presentation_key, frame, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [(id<MTLDrawable>)drawable addPresentedHandler:^(id<MTLDrawable> presented) {
+            double timestamp = presented.presentedTime;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                frame->presented = timestamp;
+                accept_frame(frame);
+            });
+        }];
     }
     return drawable;
 }
@@ -1119,17 +1387,38 @@ static NSDictionary *draw_diagnostic_result(void) {
         @"overhead": @"Opt-in method hooks, ivar reads and timestamps; compare diagnostic runs separately from headline latency runs." };
 }
 
+static BOOL is_probe_host(void) {
+    const char *executable = getenv("TELAR_DISPLAY_EXECUTABLE");
+    if (executable) {
+        char actual[PATH_MAX];
+        uint32_t capacity = sizeof(actual);
+        if (_NSGetExecutablePath(actual, &capacity) != 0) {
+            return NO;
+        }
+
+        return [[@(actual) stringByResolvingSymlinksInPath] isEqualToString:[@(executable) stringByResolvingSymlinksInPath]];
+    }
+
+    return [NSProcessInfo.processInfo.processName isEqualToString:@"ghostty"] ||
+        [NSProcessInfo.processInfo.arguments containsObject:@"gui"];
+}
+
 __attribute__((constructor)) static void install(void){
-    if(!getenv("TELAR_DISPLAY_RESULT"))return;
-    // Runtime and fixture subprocesses inherit the environment; only GUI hosts instrument Metal.
-    NSString *name=NSProcessInfo.processInfo.processName;
-    if(![name isEqualToString:@"ghostty"] && ![NSProcessInfo.processInfo.arguments containsObject:@"gui"])return;
+    if(!getenv("TELAR_DISPLAY_RESULT") || !is_probe_host())return;
     const char *input_method=getenv("TELAR_DISPLAY_INPUT_METHOD");
     text_input=input_method && !strcmp(input_method,"text");
     if(text_input && ![NSProcessInfo.processInfo.arguments containsObject:@"gui"])abort();
     probe_log=fopen([[NSString stringWithUTF8String:getenv("TELAR_DISPLAY_RESULT")] stringByAppendingString:@".log"].UTF8String,"w");
     setbuf(probe_log,NULL);
-    limit=atoi(getenv("TELAR_DISPLAY_SAMPLES"));if(limit<1 || limit>512)abort();
+    limit=atoi(getenv("TELAR_DISPLAY_SAMPLES"));if(limit<1 || limit>ProbeSampleCapacity)abort();
+    const char *warmup_value = getenv("TELAR_DISPLAY_WARMUP");
+    warmup = warmup_value ? atoi(warmup_value) : 0;
+    const char *idle_value = getenv("TELAR_DISPLAY_IDLE_SECONDS");
+    idle_seconds = idle_value ? strtod(idle_value, NULL) : 0;
+    const char *capture_value = getenv("TELAR_DISPLAY_CAPTURE");
+    capture_path = capture_value ? @(capture_value) : nil;
+    const char *endpoint = getenv("TELAR_DISPLAY_ENDPOINT");
+    observe_presentation = endpoint && !strcmp(endpoint, "presented");
     const char *mode = getenv("TELAR_DISPLAY_MODE"), *layout = getenv("TELAR_DISPLAY_LAYOUT");
     display_mode = mode ? @(mode) : ([NSProcessInfo.processInfo.arguments containsObject:@"gui"] ? @"gui" : @"ghostty");
     display_layout = layout ? @(layout) : @"single";
@@ -1141,9 +1430,11 @@ __attribute__((constructor)) static void install(void){
     window_manager = manager ? @(manager) : nil;
     const char *pane_count = getenv("TELAR_DISPLAY_PANES");
     panes = [display_layout isEqualToString:@"single"] ? 1 : (pane_count ? (unsigned)atoi(pane_count) : 4);
-    BOOL valid = [@[@"gui", @"ghostty"] containsObject:display_mode] &&
+    BOOL valid = [@[@"gui", @"gui-cpp", @"ghostty"] containsObject:display_mode] &&
         [@[@"single", @"splits", @"tabs"] containsObject:display_layout] && panes >= 1 && panes <= 8;
     valid = valid && (!diagnostics || !strcmp(diagnostics, "0") || draw_diagnostics);
+    valid = valid && warmup >= 0 && warmup < limit && isfinite(idle_seconds) && idle_seconds >= 0 && idle_seconds <= 10;
+    valid = valid && (!endpoint || !strcmp(endpoint, "gpu") || observe_presentation);
     const char *viewport = getenv("TELAR_DISPLAY_VIEWPORT");
     if (viewport) {
         char trailing;
@@ -1175,6 +1466,7 @@ __attribute__((constructor)) static void install(void){
     }
     original_next=method_setImplementation(class_getInstanceMethod(CAMetalLayer.class,@selector(nextDrawable)),(IMP)next_drawable);
     setup_began = CACurrentMediaTime();
+    geometry_changed_at = setup_began;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{ setup_tick(); });
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW,90*NSEC_PER_SEC),dispatch_get_main_queue(),^{finish(5);});
 }

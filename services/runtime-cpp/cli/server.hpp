@@ -123,7 +123,6 @@ void runRuntime(Memory &memory, const ServerOptions &options, const RuntimePaths
   poller.watchSignal(SIGTERM);
   poller.watchSignal(SIGINT);
   poller.watchSignal(SIGCHLD);
-  const auto shell = ProcessEnvironment{}.lookup("SHELL");
   Runtime runtime{memory, poller, background, RuntimeOptions{
                                                   .socket = paths.socket,
                                                   .executable = executable.view(),
@@ -132,7 +131,6 @@ void runRuntime(Memory &memory, const ServerOptions &options, const RuntimePaths
                                                   .capture_output = configuration.capture_output,
                                                   .manifests = &configuration.manifests,
                                                   .descriptions = {.arguments = std::span{description_arguments}.first(configuration.descriptions.arguments.size()), .timeout = configuration.descriptions.timeout},
-                                                  .clone = {.source_checkpoint = options.clone_session, .source_socket = options.clone_from, .shell = shell.empty() ? "/bin/sh" : shell},
                                                   .graphics = configuration.graphics,
                                                   .control_policy = configuration.control_policy,
                                               },

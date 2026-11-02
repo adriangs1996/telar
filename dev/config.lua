@@ -12,32 +12,18 @@ end
 local ui = telar.ui
 local usage = require("usage")
 
--- status.py returns the cached status line at once and refreshes the caches
--- in the background; the Claude and Codex caches are passed through as JSON.
+-- Read optional local usage caches without refreshing credentials or changing
+-- personal settings. The development launcher supplies the configuration path.
 local bar_command = {
 	"/bin/sh",
 	"-c",
 	[[
-cache="${XDG_CACHE_HOME:-$HOME/.cache}/telar/bar"
-status=$(python3 "${XDG_CONFIG_HOME:-$HOME/.config}/telar/bar/status.py")
-printf '{"status":"%s","claude":' "$status"
-if [ -s "$cache/claude.json" ]; then cat "$cache/claude.json"; else printf null; fi
-printf ',"codex":'
-if [ -s "$cache/codex.json" ]; then cat "$cache/codex.json"; else printf null; fi
-printf '}'
+exec python3 "${TELAR_DEVELOPMENT_CONFIG%/*}/bar.py"
 ]],
 }
 
 local hour = 3600
 local week = 7 * 24 * hour
-
-local function status_fields(line)
-	local fields = {}
-	for key, value in string.gmatch(line or "", "([%w_]+)=([^|]*)") do
-		fields[key] = value
-	end
-	return fields
-end
 
 -- Claude's usage endpoint reports one limit per window.
 local function claude_provider(raw)
@@ -111,28 +97,35 @@ local function bar_data(ctx)
 	end
 	local raw = telar.json.decode(ctx.output)
 	return {
-		status = status_fields(raw.status),
 		claude = claude_provider(raw.claude),
 		codex = codex_provider(raw.codex),
+		pi = type(raw.pi) == "table" and raw.pi or nil,
 	}
 end
 
 local function render_right(ctx)
 	local data = bar_data(ctx)
 	local components = {}
-	local dirty = tonumber(data.status and data.status.gw)
-	if dirty and dirty > 0 then
-		components[#components + 1] = ui.group({
-			tooltip = string.format("%d gwagent submodules with changes", dirty),
-			priority = 30,
-			ui.badge({ text = "gw " .. dirty, tone = "warning" }),
-		})
-	end
 	if data.codex then
 		components[#components + 1] = usage.group(data.codex, { mark = "codex", panel = "codex", priority = 60 })
 	end
 	if data.claude then
 		components[#components + 1] = usage.group(data.claude, { mark = "claude", panel = "claude", priority = 90 })
+	end
+	if data.pi then
+		components[#components + 1] = ui.group({
+			mark = "pi",
+			priority = 40,
+			tooltip = {
+				ui.heading("Pi defaults"),
+				ui.kv({ key = "Provider", value = data.pi.defaultProvider or "default" }),
+			},
+			ui.label(data.pi.defaultModel or "default model"),
+		})
+		components[#components + 1] = ui.group({
+			priority = 40,
+			ui.label({ text = data.pi.defaultThinkingLevel or "medium", tone = "muted" }),
+		})
 	end
 	return components
 end
@@ -158,24 +151,22 @@ end
 return telar.config({
 	api_version = 2,
 
-	-- theme = require("osaka-jade"),
-	-- theme = "pierre-dark-soft",
-	theme = "kanagawa-wave",
+	theme = require("cybervenom"),
 
 	gui = {
 		window = {
-			background_opacity = 0.90,
+			background_opacity = 0.98,
 			background_blur = 20,
 			titlebar = false,
 			padding = { x = 2, y = 0 },
 		},
 		font = {
-			family = "DejaVu Sans Mono",
-			size = 18,
-			line_height = 1.4, -- Ghostty: adjust-cell-height = 40%.
-			letter_spacing = 0,
+			family = "Telar Forma",
+			size = 19,
+			line_height = 1.3,
+			letter_spacing = -0.5,
 			thicken = true,
-			thicken_strength = 255,
+			thicken_strength = 250,
 		},
 		cursor = {
 			style = "block",
@@ -195,7 +186,7 @@ return telar.config({
 				"--no-skills",
 				"--no-context-files",
 				"--model",
-				"gpt-6-astra",
+				"gpt-6.1-sol",
 				"--provider",
 				"openai-codex",
 				"--thinking",
@@ -206,7 +197,7 @@ return telar.config({
 		},
 
 		proxy = {
-			enabled = true,
+			enabled = false,
 			ca_dir = "state/proxy",
 		},
 
@@ -231,7 +222,7 @@ return telar.config({
 		window_title = "{pane_title}",
 		editor = "nvim",
 		prefix = "ctrl+s",
-		pane_gaps = false,
+		pane_gaps = true,
 
 		sidebar = {
 			visible = true,
@@ -244,14 +235,7 @@ return telar.config({
 
 		bars = {
 			bottom = {
-				left = telar.bar.static({
-					ui.group({
-						tooltip = { ui.clock("%A, %e %B %Y") },
-						ui.clock("%H:%M"),
-						ui.clock({ format = "%d/%m", tone = "muted", priority = 30 }),
-					}),
-					ui.metrics({ "battery", "cpu", "memory" }),
-				}),
+				left = require("system-status").bar,
 				center = telar.bar.tabs(),
 				right = telar.bar.command({
 					command = bar_command,
@@ -268,14 +252,10 @@ return telar.config({
 
 			-- Workspaces.
 			telar.bind({ "N" }, action.new_workspace()),
+			telar.bind_global({ "cmd+p" }, "goto-picker"),
 			telar.bind({ "R" }, action.rename_workspace()),
 
 			-- Pane focus.
-
-			-- telar.bind_global({ "ctrl+h" }, action.focus_pane({ direction = "left" })),
-			-- telar.bind_global({ "ctrl+j" }, action.focus_pane({ direction = "down" })),
-			-- telar.bind_global({ "ctrl+k" }, action.focus_pane({ direction = "up" })),
-			-- telar.bind_global({ "ctrl+l" }, action.focus_pane({ direction = "right" })),
 
 			telar.bind_global({ "ctrl+p" }, telar.action.path_picker()),
 

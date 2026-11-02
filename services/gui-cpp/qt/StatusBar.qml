@@ -48,14 +48,13 @@ Rectangle {
             anchors.fill: parent
             visible: root.mode.kind === 0 && root.controller !== null
             readonly property var slots: root.controller?.componentBars ?? ({})
-            readonly property real gap: 8 * root.ratio
-            readonly property real minimumTabsWidth: 120 * root.ratio
+            readonly property real gap: 24 * root.ratio
             readonly property var fitted: ComponentFit.allocate([
-                {nodes: leftSlot.fitNodes, width: leftSlot.implicitWidth, minimumWidth: leftSlot.errorWidth, tabs: leftSlot.tabs, overflowWidth: leftSlot.overflowWidth},
-                {nodes: centerSlot.fitNodes, width: centerSlot.implicitWidth, minimumWidth: centerSlot.errorWidth, tabs: centerSlot.tabs, overflowWidth: centerSlot.overflowWidth},
-                {nodes: rightSlot.fitNodes, width: rightSlot.implicitWidth, minimumWidth: rightSlot.errorWidth, tabs: rightSlot.tabs, overflowWidth: rightSlot.overflowWidth},
-                {nodes: legacySlot.fitNodes, width: legacySlot.implicitWidth, minimumWidth: legacySlot.errorWidth, tabs: legacySlot.tabs, overflowWidth: legacySlot.overflowWidth},
-            ], width, gap, minimumTabsWidth, overflow.implicitWidth)
+                {nodes: leftSlot.fitNodes, gap: leftSlot.gap, width: leftSlot.implicitWidth, minimumWidth: leftSlot.errorWidth, tabs: false, overflowWidth: leftSlot.overflowWidth},
+                {nodes: centerSlot.fitNodes, gap: centerSlot.gap, width: centerSlot.implicitWidth, minimumWidth: centerSlot.errorWidth, tabs: false, overflowWidth: centerSlot.overflowWidth},
+                {nodes: rightSlot.fitNodes, gap: rightSlot.gap, width: rightSlot.implicitWidth, minimumWidth: rightSlot.errorWidth, tabs: false, overflowWidth: rightSlot.overflowWidth},
+                {nodes: legacySlot.fitNodes, gap: legacySlot.gap, width: legacySlot.implicitWidth, minimumWidth: legacySlot.errorWidth, tabs: false, overflowWidth: legacySlot.overflowWidth},
+            ], width, gap, 0, overflow.implicitWidth)
             readonly property real leftEnd: leftSlot.width + (leftSlot.width > 0 ? gap : 0)
             readonly property real contentEnd: width - (fitted.overflowWidth > 0 ? fitted.overflowWidth + gap : 0)
             readonly property real rightStart: (rightSlot.width > 0 ? rightSlot.x : legacySlot.width > 0 ? legacySlot.x : contentEnd) - (rightSlot.width > 0 || legacySlot.width > 0 ? gap : 0)
@@ -83,7 +82,6 @@ Rectangle {
                 colors: root.colors
                 typography: root.typography
                 ratio: root.ratio
-                textScale: root.controller?.chromeTextScale ?? 1
                 width: components.fitted.widths[0]
                 sharedOverflow: true
                 fittedLevels: components.fitted.levels[0]
@@ -98,7 +96,6 @@ Rectangle {
                 colors: root.colors
                 typography: root.typography
                 ratio: root.ratio
-                textScale: root.controller?.chromeTextScale ?? 1
                 width: components.fitted.widths[1]
                 sharedOverflow: true
                 fittedLevels: components.fitted.levels[1]
@@ -113,7 +110,6 @@ Rectangle {
                 colors: root.colors
                 typography: root.typography
                 ratio: root.ratio
-                textScale: root.controller?.chromeTextScale ?? 1
                 width: components.fitted.widths[2]
                 sharedOverflow: true
                 fittedLevels: components.fitted.levels[2]
@@ -128,7 +124,6 @@ Rectangle {
                 colors: root.colors
                 typography: root.typography
                 ratio: root.ratio
-                textScale: root.controller?.chromeTextScale ?? 1
                 width: components.fitted.widths[3]
                 sharedOverflow: true
                 fittedLevels: components.fitted.levels[3]

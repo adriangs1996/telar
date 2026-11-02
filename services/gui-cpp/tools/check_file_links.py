@@ -229,7 +229,7 @@ def main():
         zig = temporary / "probe.zig"
         cpp.write_text(cpp_probe)
         zig.write_text(zig_probe)
-        subprocess.run([arguments.compiler, "-std=c++23", "-O2", "-I", str(root / "services/gui-cpp"), "-I", str(root / "services/runtime-cpp"), "-I", str(root / "services/desktop-mode"), str(cpp), "-o", str(temporary / "cpp")], check=True)
+        subprocess.run([arguments.compiler, "-std=c++23", "-O2", "-I", str(root / "services/gui-cpp"), "-I", str(root / "services/runtime-cpp"), "-I", str(root / "dlls/telar-client/include"), str(cpp), "-o", str(temporary / "cpp")], check=True)
         modules = ["--dep", "model", "--dep", "editorremote", "--dep", "path_expansion", f"-Mroot={zig}"]
         modules += ["--dep", "telar-core", "--dep", "cellgrid", "--dep", "keyinput", "--dep", "urlscan", f"-Mmodel={root / 'src/model/model.zig'}"]
         modules += ["--dep", "cellgrid", "--dep", "keyinput", f"-Mtelar-core={root / 'src/core/core.zig'}"]

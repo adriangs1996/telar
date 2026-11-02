@@ -393,7 +393,7 @@ def main():
         cpp_binary, zig_binary = temporary / "cpp_probe", temporary / "zig_probe"
         cpp_source.write_text(cpp)
         zig_source.write_text(zig)
-        subprocess.run([arguments.compiler, "-std=c++23", "-O2", f"-I{service}", f"-I{repository / 'services/runtime-cpp'}", f"-I{repository / 'services/desktop-mode'}", str(cpp_source), "-o", str(cpp_binary)], check=True)
+        subprocess.run([arguments.compiler, "-std=c++23", "-O2", f"-I{service}", f"-I{repository / 'services/runtime-cpp'}", f"-I{repository / 'dlls/telar-client/include'}", str(cpp_source), "-o", str(cpp_binary)], check=True)
         subprocess.run([arguments.zig, "build-exe", "-O", "ReleaseFast", "-lc", "--dep", "keyinput", f"-Mroot={zig_source}", f"-Mkeyinput={repository / 'lib/keyinput/root.zig'}", f"-femit-bin={zig_binary}"], check=True)
         reference = subprocess.run([str(zig_binary)], input=request, stdout=subprocess.PIPE, check=True).stdout
         candidate = subprocess.run([str(cpp_binary)], input=request, stdout=subprocess.PIPE, check=True).stdout

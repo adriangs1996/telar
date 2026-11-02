@@ -6,7 +6,7 @@
 #include "input/action.hpp"
 #include "machine_client.hpp"
 #include "plugin_worker.hpp"
-#include "runtime_endpoint.hpp"
+#include "platform/runtime_endpoint.hpp"
 #include <QString>
 #include <QtCore/qtmetamacros.h>
 #include <cstdint>
@@ -30,7 +30,7 @@ void Application::startPlugin(const PluginInvocation &invocation) {
   const auto execution = next_plugin_execution_++;
   plugin_owner_ = PluginOwner{.source = client.key, .runtime_generation = client.runtime_generation, .execution = execution};
   try {
-    plugin_worker_.start(invocation, execution, QString::fromStdString(runtime_endpoint::program()));
+    plugin_worker_.start(invocation, execution, QString::fromStdString(platform::runtime_endpoint::program()));
   } catch (...) {
     plugin_owner_.reset();
     throw;

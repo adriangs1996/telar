@@ -529,7 +529,7 @@ def main():
                 "-I",
                 str(root / "services/runtime-cpp"),
                 "-I",
-                str(root / "services/desktop-mode"),
+                str(root / "dlls/telar-client/include"),
                 str(work / "probe.cpp"),
                 "-o",
                 str(work / "cpp"),

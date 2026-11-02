@@ -29,8 +29,6 @@ struct ServerOptions {
   std::string_view trace;
   std::string_view config;
   std::string_view profile;
-  std::string_view clone_session;
-  std::string_view clone_from;
   std::array<std::string_view, 64> engine_arguments;
   std::size_t engine_argument_count = 0;
   bool fresh = false;
@@ -70,10 +68,6 @@ struct ServerOptions {
         setOnce(options.history, value());
       } else if (argument == "--session") {
         setOnce(options.session, value());
-      } else if (argument == "--clone-session") {
-        setOnce(options.clone_session, value());
-      } else if (argument == "--clone-from") {
-        setOnce(options.clone_from, value());
       } else if (argument == "--trace") {
         setOnce(options.trace, value());
       } else if (argument == "--config") {
@@ -119,12 +113,6 @@ struct ServerOptions {
     }
     if (options.no_config && !options.profile.empty()) {
       throw std::invalid_argument{"A profile requires configuration"};
-    }
-    if (options.clone_session.empty() != options.clone_from.empty()) {
-      throw std::invalid_argument{"Cloning requires both --clone-session and --clone-from"};
-    }
-    if (!options.clone_session.empty() && (options.fresh || options.action != ServerAction::run || !options.no_config || !options.persist_session)) {
-      throw std::invalid_argument{"Cloning requires a persistent run with --no-config and without --fresh"};
     }
 
     return options;

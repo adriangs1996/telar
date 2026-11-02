@@ -32,12 +32,6 @@ pid_t launchDaemon(Memory &memory, const ServerOptions &options, const RuntimePa
     append("--session");
     append(options.session);
   }
-  if (!options.clone_session.empty()) {
-    append("--clone-session");
-    append(options.clone_session);
-    append("--clone-from");
-    append(options.clone_from);
-  }
   if (!options.trace.empty()) {
     append("--trace");
     append(options.trace);

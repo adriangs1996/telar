@@ -4,7 +4,7 @@
 #include "input/action.hpp"
 #include "input/configuration.hpp"
 #include "qt/configuration_source.hpp"
-#include "ui/bundled_fonts.hpp"
+#include "qt/bundled_fonts.hpp"
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QEventLoop>
@@ -110,7 +110,7 @@ void measure() {
 
 int main(int argc, char **argv) {
   const QGuiApplication application{argc, argv};
-  ui::bundledFonts();
+  bundledFonts();
 
   try {
     measure();

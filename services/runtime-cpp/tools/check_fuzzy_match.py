@@ -55,7 +55,7 @@ def main():
     shutil.copy2(source / 'tests/fuzzy_reference.zig', artifacts / 'reference.zig')
     commands = [
         ['/opt/homebrew/bin/zig', 'build-lib', '-dynamic', '-O', 'ReleaseFast', '-lc', str(artifacts / 'reference.zig'), '-femit-bin=' + str(artifacts / 'zig.dylib')],
-        ['/opt/homebrew/opt/llvm/bin/clang++', '-std=c++23', '-O3', '-dynamiclib', '-DTELAR_DEBUG=0', '-I' + str(source), '-I' + str(source.parent / 'desktop-mode'), str(source / 'tests/fuzzy_oracle.cpp'), '-o', str(artifacts / 'cpp.dylib')],
+        ['/opt/homebrew/opt/llvm/bin/clang++', '-std=c++23', '-O3', '-dynamiclib', '-DTELAR_DEBUG=0', '-I' + str(source), '-I' + str(source.parents[1] / 'dlls/telar-client/include'), str(source / 'tests/fuzzy_oracle.cpp'), '-o', str(artifacts / 'cpp.dylib')],
     ]
     for index, command in enumerate(commands):
         with (artifacts / f'build-{index}.log').open('w') as log:

@@ -7,7 +7,6 @@
 #include "../exchange_capture/joiner.hpp"
 #include "../exchange_capture/source.hpp"
 #include "../model/client_layouts.hpp"
-#include "../persistence/clone_session.hpp"
 #include "../persistence/session_store.hpp"
 #include "../platform/host_metrics.hpp"
 #include "../platform/local_listener.hpp"
@@ -80,12 +79,6 @@ public:
     if (options.fresh && !options.session.path.empty()) {
       checkpoint::FileStore<Memory>::setAside(memory, options.session.path);
     }
-    if (options.fresh) {
-      String<Memory> origin{options.socket, AllocatorRef<char, Memory>{memory}};
-      origin += ".desktop-clone.json";
-      checkpoint::FileStore<Memory>::setAside(memory, origin);
-    }
-    checkpoint::prepareClone(memory, options.clone, options.session.path, options.socket);
     session_.configure(options.session);
     poller_.watch(listener_.descriptor(), eventToken(EventSource::listener, 0));
     for (const int descriptor : background_.descriptors()) {

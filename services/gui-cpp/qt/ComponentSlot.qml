@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
-import Telar.Gui
 
 Item {
     id: root
@@ -12,28 +11,23 @@ Item {
     required property var colors
     required property var typography
     property real ratio: 1
-    property real textScale: 1
     property bool sharedOverflow: false
     property var fittedLevels: null
     readonly property var hiddenRoots: visual.item?.hiddenRoots ?? []
     readonly property var fitNodes: visual.item?.fitNodes ?? []
     readonly property real overflowWidth: visual.item?.overflowWidth ?? 0
-    readonly property bool tabs: surface.kind === "tabs"
+    readonly property real gap: 16 * ratio
     readonly property real diagnosticWidth: 8 * ratio
     readonly property real errorWidth: (surface.error ?? "").length > 0 ? diagnosticWidth : 0
-    implicitWidth: Math.max(tabs ? 200 * ratio : visual.item?.implicitWidth ?? 0, errorWidth)
+    implicitWidth: Math.max(visual.item?.implicitWidth ?? 0, errorWidth)
     clip: true
 
     Loader {
         id: visual
         anchors.fill: parent
-        active: root.surface.kind !== "empty"
-        sourceComponent: {
-            switch (root.surface.kind) {
-            case "tabs": return tabStrip;
-            default: return content;
-            }
-        }
+        // Legacy tabs slots are ignored here; navigation owns the tab strip.
+        active: root.surface.kind !== "empty" && root.surface.kind !== "tabs"
+        sourceComponent: content
     }
 
     ToolTip.visible: pointer.hovered && root.errorWidth > 0
@@ -56,23 +50,6 @@ Item {
     }
 
     Component {
-        id: tabStrip
-        TerminalTabs {
-            controller: root.controller
-            model: root.controller.tabs
-            prefixPending: root.controller.prefixPending
-            colors: root.colors
-            typography: root.typography
-            ratio: root.ratio
-            textScale: root.textScale
-            onSelected: key => root.controller.execute(GuiController.Action.select_tab, key)
-            onClosed: key => root.controller.execute(GuiController.Action.close_tab, key)
-            onRenamed: root.controller.execute(GuiController.Action.rename_tab)
-            onCreated: root.controller.execute(GuiController.Action.new_tab)
-        }
-    }
-
-    Component {
         id: content
         Item {
             readonly property var hiddenRoots: tree.hiddenRoots
@@ -88,6 +65,7 @@ Item {
                 typography: root.typography
                 ratio: root.ratio
                 rowHeight: root.height
+                gap: root.gap
                 fit: !root.sharedOverflow
                 fittedLevels: root.fittedLevels
             }

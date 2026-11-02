@@ -9,7 +9,7 @@
 #include "qt/application.hpp"
 #include "qt/local_runtime_endpoint.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "ui/bundled_fonts.hpp"
+#include "qt/bundled_fonts.hpp"
 #include <QCommandLineParser>
 #include <QDir>
 #include <QFileInfo>
@@ -187,7 +187,7 @@ int main(int argc, char **argv) {
   parser.process(application);
 
   try {
-    ui::bundledFonts();
+    telar::gui::qt::bundledFonts();
     QFont chrome_font{QStringLiteral("IBM Plex Sans")};
     constexpr int chrome_font_pixels = 13;
     chrome_font.setPixelSize(chrome_font_pixels);

@@ -143,8 +143,8 @@ def main():
     with (contents / 'Info.plist').open('wb') as stream:
         plistlib.dump(info, stream)
     command = [compiler.group(1), '-std=c++23', '-O2', '-Wall', '-Wextra', '-Werror',
-               '-I', root / 'services/desktop-mode', base / 'tools/macos_launcher.cpp',
-               root / 'services/desktop-mode/login_shell.cpp', '-o', macos / 'TelarPreview']
+               '-I', base, base / 'tools/macos_launcher.cpp',
+               base / 'platform/login_shell.cpp', '-o', macos / 'TelarPreview']
     run(command)
     qt_core = re.search(r'^Qt6Core_DIR:PATH=(.+)$', cache, re.M)
     if qt_core is None:

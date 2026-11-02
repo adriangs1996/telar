@@ -182,6 +182,12 @@ runtime's machine. Observation does not imply control over delivery or access
 to plaintext.
 _Avoid_: Interception, Decrypted traffic
 
+**Transparent redirection**:
+The user's choice to route selected application connections through Telar
+without configuring those applications to use an explicit proxy. Redirection
+does not by itself imply TLS decryption or traffic modification.
+_Avoid_: Packet capture, System trust
+
 **Traffic interception**:
 The user's choice to put selected connections through Telar before their bytes
 reach the peer. It allows inspection and authorized modification within the
@@ -192,6 +198,23 @@ _Avoid_: Packet capture, Traffic observation
 A user application that subscribes to Telar's traffic observations. Its
 subscriptions and presentation do not own the intercepted connections.
 _Avoid_: Agent tracker, Proxy owner
+
+**Traffic flow**:
+A bidirectional connection identified within one runtime or capture session.
+Its observations distinguish the source, the two delivery directions, stream
+offsets and any known gaps. Observing a flow does not grant control over it.
+_Avoid_: Packet, HTTP exchange
+
+**Stream hook**:
+A user's scoped callback that decides whether an unsent part of an intercepted
+connection is forwarded, replaced or rejected. It has one owner, a bounded
+input and a deadline; its chunks are not application-message boundaries.
+_Avoid_: Capture callback, HTTP rule
+
+**Interception ticket**:
+The runtime identity of one pending stream-hook decision. It expires with that
+pending delivery and cannot authorize a decision for another stream portion.
+_Avoid_: Proxy secret, Flow identity
 
 **Proxy secret**:
 The capability that authorizes an explicit client to use Telar's CONNECT

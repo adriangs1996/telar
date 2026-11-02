@@ -55,7 +55,6 @@ void testDescriptions();
 void testProcessIdentification();
 void testDeferredReports();
 void testDescent();
-void testClone();
 
 void testWorkspaceGit();
 

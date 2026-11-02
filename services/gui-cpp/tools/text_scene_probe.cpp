@@ -10,7 +10,7 @@
 #include "qt/font_collection.hpp"
 #include "qt/resident_fonts.hpp"
 #include "terminal/font_grid.hpp"
-#include "ui/bundled_fonts.hpp"
+#include "qt/bundled_fonts.hpp"
 #include <QByteArray>
 #include <QByteArrayView>
 #include <QColor>
@@ -261,7 +261,7 @@ int main(int argc, char **argv) {
   QGuiApplication application{argc, argv};
   try {
     const auto options = parseOptions(application);
-    static_cast<void>(ui::bundledFonts());
+    static_cast<void>(bundledFonts());
     const auto collection = std::make_shared<const FontCollection>(FontCollection{
         .primary = ResidentFonts::resolveSource({}, {}),
     });

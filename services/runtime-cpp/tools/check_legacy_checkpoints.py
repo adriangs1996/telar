@@ -3,11 +3,50 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import struct
+import subprocess
 import tempfile
+import time
 
-from check_clone_parity import run_runtime
+
+def environment_for(root):
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("TELAR_")}
+    environment.update({key: str(root / key.lower()) for key in
+                        ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME")})
+    environment.update({"TELAR_HISTORY": str(root / "history.db"), "SHELL": "/bin/sh"})
+    return environment
+
+
+def run_runtime(binary, probe, root, options, action):
+    socket = root / "runtime.sock"
+    command = [str(binary), "server", "--socket", str(socket), "--no-config", *options]
+    environment = environment_for(root)
+    with (root / "server.log").open("w+") as log:
+        server = subprocess.Popen(command, env=environment, stdout=log, stderr=log)
+        try:
+            deadline = time.monotonic() + 15
+            while not socket.exists():
+                if server.poll() is not None or time.monotonic() >= deadline:
+                    raise RuntimeError("Runtime did not start")
+                time.sleep(0.01)
+            subprocess.run([str(probe), str(socket), action, str(root / "expected")], env=environment,
+                           check=True, capture_output=True, text=True, timeout=30)
+            server.wait(timeout=10)
+            assert server.returncode == 0
+        except Exception as error:
+            log.flush()
+            log.seek(0)
+            raise RuntimeError(f"{error}\n{log.read()}") from error
+        finally:
+            if server.poll() is None:
+                server.terminate()
+                try:
+                    server.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    server.kill()
+                    server.wait()
 
 
 def text16(value):

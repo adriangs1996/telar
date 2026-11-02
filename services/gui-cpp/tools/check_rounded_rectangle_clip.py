@@ -61,7 +61,7 @@ pub fn main() !void {
 run([options.zig,'build-exe','-O','ReleaseSafe','-lc',str(original/'probe.zig'),'-femit-bin='+str(out/'reference')],'reference-build')
 shutil.copy2(local/'rounded_rectangle_clip_probe.cpp',out/'rounded_rectangle_clip_probe.cpp')
 (out/'graphics').mkdir();shutil.copy2(base/'graphics/rounded_rectangle.hpp',out/'graphics/rounded_rectangle.hpp')
-command=[options.compiler,'-std=c++23','-O3','-ffp-contract=off','-Wall','-Wextra','-Werror','-I'+str(base),'-I'+str(base/'tools'),'-I'+str(repo/'services/runtime-cpp'),'-I'+str(repo/'services/desktop-mode'),str(out/'rounded_rectangle_clip_probe.cpp'),'-o',str(out/'candidate')]
+command=[options.compiler,'-std=c++23','-O3','-ffp-contract=off','-Wall','-Wextra','-Werror','-I'+str(base),'-I'+str(base/'tools'),'-I'+str(repo/'services/runtime-cpp'),'-I'+str(repo/'dlls/telar-client/include'),str(out/'rounded_rectangle_clip_probe.cpp'),'-o',str(out/'candidate')]
 if options.sanitize:command[1:1]=['-g','-fno-omit-frame-pointer','-fsanitize=address,undefined']
 run(command,'candidate-build')
 rng=random.Random(0x5241494c);cases=[]

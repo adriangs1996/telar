@@ -16,7 +16,6 @@ struct RuntimeOptions {
   bool capture_output = false;
   const AgentManifests *manifests = &builtin_manifests;
   DescriptionOptions descriptions;
-  checkpoint::CloneOptions clone{};
   GraphicsLimits graphics;
   control::Policy control_policy{};
 };

@@ -224,7 +224,7 @@ def main():
         (work / "probe.zig").write_text(zig_probe)
         (work / "core.zig").write_text(core)
         (work / "atlas.rgba").write_bytes(atlas.read_bytes())
-        includes = ["-I" + str(root / "services" / name) for name in ("gui-cpp", "runtime-cpp", "desktop-mode")]
+        includes = ["-I" + str(root / "services" / name) for name in ("gui-cpp", "runtime-cpp")] + ["-I" + str(root / "dlls/telar-client/include")]
         sanitizers = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"] if options.sanitizers else []
         subprocess.run([options.compiler, "-std=c++23", "-O2", "-ffp-contract=off", *sanitizers, *includes, str(work / "probe.cpp"), "-o", str(work / "cpp")], check=True)
         subprocess.run(["zig", "build-exe", "-O", "ReleaseSafe", "-lc", "--dep", "icons", "--dep", "telar-core", "--dep", "resize", "--dep", "premultiply", f"-Mroot={work / 'probe.zig'}", "--dep", "telar-core", f"-Micons={root / 'src/model/layout/icons.zig'}", f"-Mtelar-core={work / 'core.zig'}", f"-Mresize={root / 'lib/imaging/resize.zig'}", f"-Mpremultiply={root / 'lib/imaging/premultiply.zig'}", f"-femit-bin={work / 'zig'}"], check=True)

@@ -18,12 +18,70 @@ from echo_latency import percentile
 
 BOOTSTRAP_SAMPLES = 10000
 BOOTSTRAP_SEED = 20260918
-MODE_ORDER = ('ghostty', 'gui', 'tui')
-MODE_LABELS = {'ghostty': 'Ghostty', 'gui': 'Telar GUI', 'tui': 'Telar TUI + Ghostty'}
+MODE_ORDER = ('ghostty', 'gui', 'gui-cpp', 'tui')
+MODE_LABELS = {'ghostty': 'Ghostty', 'gui': 'Telar GUI Zig', 'gui-cpp': 'Telar GUI C++ / Qt Quick', 'tui': 'Telar TUI + Ghostty'}
+LATENCY_FIELDS = dict(gpu='gpu_ms', presented='presentation_ms')
+ENDPOINT_NAMES = dict(gpu='native_input_to_verified_gpu_completion_callback', presented='native_input_to_verified_drawable_presentation')
 
 
 def finite_number(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def validate_telar_display_sync(run):
+    synchronization = run.get('display_sync')
+    if (not isinstance(synchronization, dict) or synchronization.get('observed') is not True
+            or synchronization.get('enabled') is not True or synchronization.get('disabled') is not False):
+        raise ValueError('Telar display synchronization was not verified as enabled')
+
+
+def validate_initial_presentation(run):
+    initial = run.get('initial_presentation')
+    if not isinstance(initial, dict):
+        raise ValueError('The initial presentation was not verified before input')
+
+    times = [initial.get(name) for name in ('geometry_requested_at', 'gpu_completed_at', 'presented_at',
+                                          'setup_completed_at', 'first_input_at')]
+    if any(not finite_number(value) or value <= 0 for value in times):
+        raise ValueError('The initial presentation has missing or invalid native timestamps')
+
+    requested, gpu, presented, setup, first_input = times
+    if min(gpu, presented) < requested or setup < max(gpu, presented) or first_input <= setup:
+        raise ValueError('The initial presentation did not precede setup and the first input')
+
+    geometry = initial.get('geometry_epoch')
+    viewport, marker = initial.get('viewport'), initial.get('marker')
+    if (not isinstance(viewport, list) or len(viewport) != 2
+            or any(type(value) is not int or value <= 0 for value in viewport)
+            or not isinstance(marker, list) or len(marker) != 2
+            or any(type(value) is not int or not 0 <= value < extent for value, extent in zip(marker, viewport))):
+        raise ValueError('The initial presentation has invalid marker geometry')
+
+    if (run.get('setup_complete') is not True or initial.get('clock') != 'MTLDrawable.presentedTime'
+            or type(initial.get('drawable_id')) is not int or initial['drawable_id'] < 0
+            or type(geometry) is not int or geometry < 0 or type(run.get('geometry_epoch')) is not int
+            or geometry != run['geometry_epoch'] or initial.get('viewport') != run.get('viewport')
+            or initial.get('marker') != run.get('marker')):
+        raise ValueError('The initial presentation does not identify the final marker and geometry')
+
+
+def latency_samples(run):
+    endpoint = run.get('endpoint', 'gpu')
+    if not isinstance(endpoint, str) or endpoint not in LATENCY_FIELDS:
+        raise ValueError(f'unknown frame endpoint: {endpoint}')
+
+    samples = run.get(LATENCY_FIELDS[endpoint])
+    if not isinstance(samples, list) or not samples or any(not finite_number(value) or value < 0 for value in samples):
+        raise ValueError(f'missing or invalid {endpoint} latency samples')
+
+    if endpoint == 'presented':
+        drawables = run.get('presentation_drawable_ids')
+        if (run.get('presentation_clock') != 'MTLDrawable.presentedTime' or not isinstance(drawables, list)
+                or len(drawables) != len(samples) or any(type(value) is not int or value < 0 for value in drawables)):
+            raise ValueError('The presentation endpoint has no complete native drawable identities')
+        validate_initial_presentation(run)
+
+    return samples
 
 
 def quantiles(values):
@@ -44,13 +102,20 @@ def load_runs(paths):
                 raise ValueError(f'invalid case or mode: {identity}')
             if not isinstance(round_index, int) or isinstance(round_index, bool) or round_index < 0:
                 raise ValueError(f'invalid round: {identity}')
+            if run.get('endpoint') == 'presented':
+                if mode not in ('gui', 'gui-cpp'):
+                    raise ValueError('The presentation endpoint requires a Telar mode')
+                validate_telar_display_sync(run)
             if identity in seen:
                 raise ValueError(f'duplicate case/mode/round: {identity}')
             seen.add(identity)
-            warmup, samples = run['warmup'], run['gpu_ms']
+            warmup, samples = run['warmup'], latency_samples(run)
             if (not isinstance(warmup, int) or isinstance(warmup, bool) or
                     not isinstance(samples, list) or not 0 <= warmup < len(samples)):
                 raise ValueError(f'invalid warmup or empty samples: {identity}')
+            control = run.get('background_load')
+            if run.get('background_mib_per_second') is not None and (not isinstance(control, dict) or control.get('rate_met') is not True):
+                raise ValueError(f'background workload missed its requested rate: {identity}')
             if run.get('failed', 0) or any(not finite_number(value) or value < 0 for value in samples):
                 raise ValueError(f'failed or invalid measurement: {identity}')
             values = samples[warmup:]
@@ -122,7 +187,12 @@ def throughput_statistics(runs):
 
 
 def summarize_runs(runs, sources):
-    result = dict(endpoint='native_input_to_verified_gpu_completion_callback',
+    endpoints = {run['raw'].get('endpoint', 'gpu') for run in runs}
+    if len(endpoints) != 1:
+        raise ValueError('mixed frame endpoints cannot be compared')
+
+    endpoint = next(iter(endpoints))
+    result = dict(endpoint=ENDPOINT_NAMES[endpoint],
                   bootstrap=dict(samples=BOOTSTRAP_SAMPLES, seed=BOOTSTRAP_SEED,
                                  resampling_unit='paired_round', confidence=.95,
                                  interval='percentile', delta_estimator='mean_of_paired_run_quantile_differences',
@@ -149,10 +219,12 @@ def summarize_runs(runs, sources):
                                             run_p50_range_ms=[min(medians), max(medians)], geometry=geometry,
                                             runs=[dict(round=run['round'], **run['summary']) for run in measurements],
                                             throughput=throughput_statistics(measurements))
-        if 'ghostty' in variants:
-            for mode in ('gui', 'tui'):
-                if mode in variants:
-                    case_result['paired'][mode] = paired_statistics(variants['ghostty'], variants[mode])
+        reference = 'ghostty' if 'ghostty' in variants else 'gui'
+        case_result['reference'] = reference if reference in variants else None
+        if reference in variants:
+            for mode in variants:
+                if mode != reference:
+                    case_result['paired'][mode] = paired_statistics(variants[reference], variants[mode])
         result['cases'][case] = case_result
     return result
 
@@ -164,9 +236,15 @@ def interval_text(values, digits=3):
 
 
 def markdown_report(report):
-    lines = ['# Ghostty y Telar', '',
-             'Latencia desde la inyección de entrada nativa hasta el callback que confirma una operación de GPU '
-             'con el píxel esperado. No mide presentación física ni permite atribuir las diferencias al socket Unix.', '',
+    description = (
+        'Latencia desde la inyección de entrada nativa hasta MTLDrawable.presentedTime del drawable '
+        'cuyo píxel esperado se verificó al completar la GPU. El instante de presentación lo declara Metal.'
+        if report['endpoint'] == ENDPOINT_NAMES['presented'] else
+        'Latencia desde la inyección de entrada nativa hasta el callback que confirma una operación de GPU '
+        'con el píxel esperado. No mide presentación física ni permite atribuir las diferencias al socket Unix.'
+    )
+    lines = ['# Comparación de terminales', '',
+             description, '',
              'Cada fila agrupa las muestras posteriores al calentamiento. El rango de p50 corresponde '
              'a las medianas de las rondas independientes.', '',
              '| Caso | Aplicación | Rondas | Muestras | p50 ms | p95 ms | p99 ms | Máximo ms | Rango p50 por ronda ms |',
@@ -178,10 +256,10 @@ def markdown_report(report):
                          f'{stats["p50_ms"]:.3f} | {stats["p95_ms"]:.3f} | {stats["p99_ms"]:.3f} | '
                          f'{stats["max_ms"]:.3f} | {interval_text(variant["run_p50_range_ms"])} |')
     lines.extend(['', 'Las diferencias siguientes emparejan las mismas rondas. Un delta positivo indica '
-                  'mayor latencia de Telar; un cociente mayor que 1 tiene el mismo sentido. El delta es '
+                  'mayor latencia del candidato; un cociente mayor que 1 tiene el mismo sentido. El delta es '
                   'la media de las diferencias entre percentiles por ronda y el cociente es la media '
                   'geométrica de sus cocientes. No son diferencias entre los percentiles agrupados de la tabla anterior.', '',
-                  '| Caso | Comparación con Ghostty | Percentil | Rondas emparejadas | Delta medio ms | IC 95% delta ms | Cociente | IC 95% cociente |',
+                  '| Caso | Candidato / referencia | Percentil | Rondas emparejadas | Delta medio ms | IC 95% delta ms | Cociente | IC 95% cociente |',
                   '| --- | --- | --- | ---: | ---: | --- | ---: | --- |'])
     warnings = []
     for case, case_result in report['cases'].items():
@@ -194,7 +272,8 @@ def markdown_report(report):
             for quantile, stats in paired['quantiles'].items():
                 ratio = stats['geometric_mean_ratio']
                 ratio_text = f'{ratio:.3f}' if ratio is not None else 'No calculable'
-                lines.append(f'| {case} | {MODE_LABELS[mode]} | {quantile} | {paired["n_rounds"]} | '
+                comparison = f'{MODE_LABELS[mode]} / {MODE_LABELS[case_result["reference"]]}'
+                lines.append(f'| {case} | {comparison} | {quantile} | {paired["n_rounds"]} | '
                              f'{stats["mean_delta_ms"]:+.3f} | {interval_text(stats["mean_delta_ci95_ms"])} | '
                              f'{ratio_text} | {interval_text(stats["geometric_mean_ratio_ci95"])} |')
     lines.extend(['', f'IC mediante {BOOTSTRAP_SAMPLES:,} remuestreos de rondas emparejadas, semilla '

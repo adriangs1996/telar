@@ -12,7 +12,7 @@
 #include "qt/machine_profiles_source.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
-#include "ui/bundled_fonts.hpp"
+#include "qt/bundled_fonts.hpp"
 #include "wire_runtime.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
@@ -529,7 +529,7 @@ private:
 
 int main(int argc, char **argv) {
   const QGuiApplication application{argc, argv};
-  ui::bundledFonts();
+  bundledFonts();
   MachineProfileWindowTest test;
 
   return QTest::qExec(&test, argc, argv);

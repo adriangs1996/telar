@@ -1,10 +1,10 @@
 # C++ runtime
 
-An independent C++23 runtime for macOS ARM64. It handles client requests,
-including Desktop's `HoldTab`. Native control-query acceptance is tracked in
+An independent C++23 runtime for macOS ARM64. It handles client requests.
+Native control-query acceptance is tracked in
 [control-queries.md](control-queries.md), using the frozen Ghostty application
 as its reference. This executable is opt-in. An installation option
-provides the `telar` command used by Desktop's existing discovery.
+provides the `telar` command the GUI's runtime discovery runs.
 
 ## Build and run
 
@@ -16,7 +16,7 @@ Telar Zig runtime code.
 
 The optional interface capture helper uses the macOS SDK's libpcap. The
 [traffic subscription guide](../../docs/traffic-capture.md) describes its
-activation, Desktop Lua API, HTTP exchange delivery and focused checks.
+activation, Lua API, HTTP exchange delivery and focused checks.
 The [transparent TCP adapter](../../docs/transparent-redirect.md)
 uses a private utun for connection discovery and exact PF flow rules to pass
 sockets from a root helper to the unprivileged proxy worker. On 2026-10-27,
@@ -32,7 +32,7 @@ passing on 2026-10-29. [Persistent workers](../../docs/traffic-workers.md) suppo
 digest-bound traffic permissions, ordered hooks and isolated crash recovery.
 Live grant revocation and package-bound administration/recording are supported.
 [Runtime recordings](../../docs/traffic-recordings.md) retain bounded packet,
-flow and HTTP data across Desktop reconnects, with cursor queries and PCAPNG
+flow and HTTP data across client reconnects, with cursor queries and PCAPNG
 export. Repeater workflows belong to clients.
 
 From this directory:
@@ -66,7 +66,7 @@ row and decode fields using the generated cell-layout manifest. Protocol
 recognition, checksum arithmetic, policy and response encoding remain native.
 
 Pass `-DCMAKE_CXX_COMPILER=/path/to/clang++` if the default compiler lacks the
-C++23 features used by Desktop's shared protocol serializers. The measured
+C++23 features used by the protocol serializers in `dlls/telar-client`. The measured
 build uses LLVM 23.1.2; see [performance.md](performance.md) for the host,
 binary hashes, comparisons and limitations.
 
@@ -117,17 +117,15 @@ dependency causes a configuration error instead of silently being retained.
 The minimum deployment target defaults to macOS 26.0.
 
 `cmake --install out-distribution --prefix /path/to/staging` installs
-`bin/telar-runtime`. Add `-DTELAR_RUNTIME_INSTALL_DESKTOP_COMMAND=ON` when
-configuring to install it as `bin/telar` instead. Desktop already looks for
+`bin/telar-runtime`. Add `-DTELAR_RUNTIME_INSTALL_AS_TELAR=ON` when
+configuring to install it as `bin/telar` instead. The GUI looks for
 that command beside its executable, in `Contents/Resources/bin`, then through
 the login shell's PATH. Choose a private staging directory when testing a
-replacement. Signed archives, bundled dependency notices and a complete
-Desktop application package remain pending.
+replacement. Signed archives and bundled dependency notices remain pending.
 
 The manually dispatched [C++ runtime workflow](../../.github/workflows/runtime-cpp.yml) builds
-Release and Debug with ASan/UBSan on macOS ARM64, runs runtime/TLS/hook tests
-and exercises the installed command through Desktop's discovery code. It
-does not run on pushes or pull requests. Hosted CI acceptance remains pending;
+Release and Debug with ASan/UBSan on macOS ARM64 and runs runtime/TLS/hook
+tests. It does not run on pushes or pull requests. Hosted CI acceptance remains pending;
 shared CI runners are not used for performance acceptance. Sanitizer builds
 need the compiler's runtime library and cannot enable the distribution check.
 
@@ -159,7 +157,7 @@ This builds the existing `cell-layout` target to generate `cell_layout.hpp`;
 the other generated headers are refreshed during CMake configuration.
 
 `.clangd-build.json` declares the same commands for Neovim configurations that
-support Desktop's build-on-save integration. They run asynchronously on save
+support build-on-save. They run asynchronously on save
 and use `out/` as the build directory. Other editors can invoke
 `just runtime-editor` on save.
 
@@ -201,7 +199,7 @@ configuration and compilation errors fail the command. No fixes are applied.
 | `metrics/` | Host counter projection and change revisions. |
 | `memory/` | Allocator concepts, budgets, synchronization, owned objects and bounded containers. |
 | `platform/` | Descriptors, PTYs, pipe processes, process identities, kqueue and workers. |
-| `transport/` | Shared Desktop protocol framing, decoding and partial writes. |
+| `transport/` | Client protocol framing, decoding and partial writes. |
 | `terminal/` | Ghostty state, cell projection, acknowledged damage frames, text and search. |
 | `model/` | Generational stores, panes, workspaces, attachments and retained client layouts. |
 | `runtime/` | Service composition, request dispatch and event handling. |
@@ -238,8 +236,8 @@ History, paths, editors and suggestions run on separate workers; Git observation
 has its own single-job worker. Their queues and replies have explicit limits.
 
 Each client can hold 64 tabs using inline storage. A held tab survives its last
-terminal so Desktop can keep other applications' windows there, request an empty
-snapshot and open another terminal. The last release or client disconnect removes
+terminal, so the client can request an empty snapshot and open another
+terminal. The last release or client disconnect removes
 an empty tab; an explicit `CloseTab` still closes it. Holds are not restored from
 a session checkpoint.
 
@@ -321,8 +319,8 @@ commands, prompts or terminal content. Function tracing is independent.
 
 ## Debug tracing
 
-`TELAR_TRACE("component.function")` follows Desktop's scope-tracing interface
-and Chrome trace format. This implementation supplies allocator-owned bounded
+`TELAR_TRACE("component.function")` times a scope and writes it in the Chrome
+trace format. This implementation supplies allocator-owned bounded
 buffers and a writer thread without a Qt dependency. Trace records contain
 literal scope names, timestamps and thread identities, not terminal content,
 commands or prompts.
@@ -378,12 +376,6 @@ For ASan and UBSan, configure a separate Debug build with
 `-DTELAR_RUNTIME_SANITIZERS=ON`. This instruments C++ code; the independently
 built Ghostty and system libraries are not instrumented by that option.
 Run performance comparisons without concurrent builds or sanitizer binaries.
-
-`tools/check_desktop_launch.py` uses `desktop-launch-probe`, compiled from
-Desktop's actual endpoint and login-shell sources. It checks adjacent, bundle
-and PATH layouts, paths containing spaces, automatic startup, reuse, socket
-permissions, wire handshake and shutdown. An invalid PATH fallback ensures
-the adjacent and bundle cases really use their installed command.
 
 ## Compatibility limits
 
@@ -442,4 +434,4 @@ controlled scheduling tests.
 
 Flow subscriptions, transparent TLS and asynchronous Lua stream hooks are
 described in [traffic-flows.md](../../docs/traffic-flows.md), including the
-`traffic_inspector` Desktop example and the combined native network checker.
+combined native network checker.

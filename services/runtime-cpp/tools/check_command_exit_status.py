@@ -45,7 +45,7 @@ def main():
     (artifacts / 'reference.zig').write_text('const std = @import("std");\nconst osc = @import("osc.zig");\npub export fn command_exit_status(input: [*]const u8, length: usize) i64 {\n    return if (osc.parseExitCode(input[0..length])) |value| value else std.math.minInt(i64);\n}\n')
     commands = [
         ['/opt/homebrew/bin/zig', 'build-lib', '-dynamic', '-O', 'ReleaseFast', '-lc', str(artifacts / 'reference.zig'), '-femit-bin=' + str(artifacts / 'zig.dylib')],
-        ['/opt/homebrew/opt/llvm/bin/clang++', '-std=c++23', '-O3', '-dynamiclib', '-I' + str(root), '-I' + str(root.parent / 'desktop-mode'), str(root / 'tests/command_exit_status.cpp'), '-o', str(artifacts / 'cpp.dylib')],
+        ['/opt/homebrew/opt/llvm/bin/clang++', '-std=c++23', '-O3', '-dynamiclib', '-I' + str(root), '-I' + str(root.parents[1] / 'dlls/telar-client/include'), str(root / 'tests/command_exit_status.cpp'), '-o', str(artifacts / 'cpp.dylib')],
     ]
     for index, command in enumerate(commands):
         with (artifacts / f'build-{index}.log').open('w') as log:

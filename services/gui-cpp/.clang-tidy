@@ -20,7 +20,7 @@ Checks: >-
   -cppcoreguidelines-pro-bounds-pointer-arithmetic,
   -cppcoreguidelines-pro-bounds-avoid-unchecked-container-access
 WarningsAsErrors: '*'
-HeaderFilterRegex: '(^|/)services/(gui-cpp/|runtime-cpp/(config/command_tab_(registry|reference|view)|agents/provider|text/executable_name)[.]hpp$|desktop-mode/ui/workbench/(optical_text|terminal_font)[.]hpp$)'
+HeaderFilterRegex: '(^|/)services/(gui-cpp/|runtime-cpp/(config/command_tab_(registry|reference|view)|agents/provider|text/executable_name)[.]hpp$)'
 ExcludeHeaderFilterRegex: '(^|/)(generated|out[^/]*|third_party|vendor)/'
 SystemHeaders: false
 FormatStyle: file

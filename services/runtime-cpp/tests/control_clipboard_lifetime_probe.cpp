@@ -1,13 +1,13 @@
 #include "check.hpp"
 #include "protocol_peer.hpp"
-#include "ui/workbench/clipboard_task.hpp"
+#include "clipboard_task.hpp"
 #include <chrono>
 #include <poll.h>
 #include <termios.h>
 #include <thread>
 
 using namespace telar;
-using namespace workbench;
+using namespace telar::runtime::control_test;
 using Clock = std::chrono::steady_clock;
 
 namespace {

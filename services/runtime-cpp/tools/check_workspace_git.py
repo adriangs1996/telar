@@ -9,7 +9,7 @@ import subprocess
 import tempfile
 import time
 
-from check_clone_parity import environment_for
+from check_legacy_checkpoints import environment_for
 
 
 def prepare(root, worktree=False):

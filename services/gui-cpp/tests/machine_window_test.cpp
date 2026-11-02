@@ -43,7 +43,7 @@
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include "transport/runtime_link.hpp"
-#include "ui/bundled_fonts.hpp"
+#include "qt/bundled_fonts.hpp"
 #include "wire_runtime.hpp"
 #include <QAbstractItemModel>
 #include <QCoreApplication>
@@ -1868,7 +1868,7 @@ class MachineWindowTest : public QObject {
 int main(int argc, char **argv) {
   const QGuiApplication application{argc, argv};
   QQuickStyle::setStyle(QStringLiteral("Basic"));
-  ui::bundledFonts();
+  bundledFonts();
   MachineWindowTest test;
 
   return QTest::qExec(&test, argc, argv);

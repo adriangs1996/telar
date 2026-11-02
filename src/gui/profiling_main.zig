@@ -18,9 +18,35 @@ const BandHitMap = @import("widgets/BandHitMap.zig");
 const ShapingEntry = @import("text/ShapingEntry.zig");
 const ShapingCache = @import("text/ShapingCache.zig");
 const ImagePlacement = @import("image/ImagePlacement.zig");
+const GpuImages = @import("image/GpuImages.zig");
 const PaneImages = @import("image/PaneImages.zig");
 const ImageView = @import("image/ImageView.zig");
 const pane_images = @import("image/pane_images.zig");
+
+fn completeImageUploads(images: *PaneImages, stores: []client.retained_graphics.Store) !void {
+    for (images.uploads[0..images.upload_count]) |upload| {
+        const row = GpuImages.rowOf(upload.handle) orelse return error.InvalidImageUpload;
+        if (images.gpu.residency[row] != .uploading) {
+            return error.InvalidImageUpload;
+        }
+
+        const store = &stores[images.gpu.machine[row]];
+        const lease = images.gpu.lease[row];
+        const image = store.images.getPtr(lease.identity) orelse return error.MissingImageLease;
+        if (image.delivery.leases == 0) {
+            return error.MissingImageLease;
+        }
+
+        image.delivery.leases -= 1;
+        store.collectRetired(lease.identity.pane_id, lease.identity.image_id);
+        images.gpu.uploading -= 1;
+        images.gpu.residency[row] = .ready;
+        images.gpu.used_ns[row] = images.now_ns;
+        images.revision +%= 1;
+    }
+
+    images.upload_count = 0;
+}
 
 pub const telar_profile_counts = options.profile_counts;
 pub const telar_profile_timing = options.profile_timing;
@@ -305,6 +331,7 @@ const Probe = struct {
         const images = try self.gpa.create(PaneImages);
         defer self.gpa.destroy(images);
         images.* = .{};
+        defer pane_images.abandon(images, &stores);
         const view: ImageView = .{ .machine = 0, .cell_width = 16, .cell_height = 32 };
         // Upload every image, four at a time, as the window would.
         while (true) {
@@ -314,11 +341,7 @@ const Probe = struct {
                 break;
             }
 
-            for (images.uploads[0..images.upload_count]) |upload| {
-                _ = pane_images.finish(images, &stores, upload.handle, true, 0);
-            }
-
-            images.upload_count = 0;
+            try completeImageUploads(images, &stores);
         }
 
         for (images.resolved()) |placement| {

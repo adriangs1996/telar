@@ -107,7 +107,7 @@ function slotWidths(slots, levels, layout) {
         if (slot.nodes.length === 0) {
             return slot.width * layout.fixedScale;
         }
-        const size = measure(slot.nodes, levels, layout.gap);
+        const size = measure(slot.nodes, levels, slot.gap ?? layout.gap);
         const retained = Math.max(size.width, slot.minimumWidth ?? 0);
         return retained + (!layout.sharedOverflow && size.hidden > 0 ? slot.overflowWidth + (retained > 0 ? layout.gap : 0) : 0);
     });
@@ -155,7 +155,7 @@ function allocate(slots, available, gap, minimumTabsWidth, overflowWidth) {
     const layout = {gap: gap, tabMinimum: tabMinimum, fixedScale: fixedWidth > 0 ? Math.min(1, fixedBudget / fixedWidth) : 1,
                     sharedOverflow: overflowWidth !== undefined, overflowWidth: Math.max(0, Math.min(overflowWidth ?? 0, available))};
     const sources = slots.map(function(slot, index) {
-        return {tabs: slot.tabs, width: slot.width, minimumWidth: slot.minimumWidth ?? 0, overflowWidth: slot.overflowWidth, nodes: slot.nodes.map(function(node) {
+        return {tabs: slot.tabs, gap: slot.gap, width: slot.width, minimumWidth: slot.minimumWidth ?? 0, overflowWidth: slot.overflowWidth, nodes: slot.nodes.map(function(node) {
             return {index: index * stride + node.index, parent: node.parent < 0 ? -1 : index * stride + node.parent,
                     group: node.group, meter: node.meter, width: node.width, priority: node.priority, compactDelta: node.compactDelta,
                     childGap: node.childGap, leadingGap: node.leadingGap};

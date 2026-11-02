@@ -67,7 +67,7 @@ namespace contracts {
 
 // CASE: contract.elided_method_receiver
 // PAIR: contract.elided_method
-// SOURCE: services/desktop-mode/desktop_session.hpp :: DesktopSession::state
+// SOURCE: services/gui-cpp/qt/configuration_source.cpp :: ConfigurationSource::input
 // STATUS: implemented
 // CONTRACT: A method's elided result follows its receiver, which callers in other translation units rely on.
 // SCENARIO: The out-of-line definition returns the receiver's own field; accept.
@@ -79,7 +79,7 @@ tbc::view<const std::string &> contracts::session::title() const {
 
 // CASE: contract.elided_method_parameter
 // PAIR: contract.elided_method
-// SOURCE: services/desktop-mode/desktop_session.hpp :: DesktopSession::state
+// SOURCE: services/gui-cpp/qt/configuration_source.cpp :: ConfigurationSource::input
 // STATUS: implemented
 // CONTRACT: A method's elided result follows its receiver, which callers in other translation units rely on.
 // SCENARIO: The out-of-line definition returns its parameter instead, which those callers would not track.

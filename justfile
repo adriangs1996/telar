@@ -1,165 +1,107 @@
-dev_runtime_dir := justfile_directory() / ".zig-out/dev"
-desktop_runtime_dir := justfile_directory() / ".zig-out/desktop-dev"
-desktop_fresh_dir := justfile_directory() / ".zig-out/desktop"
-native_desktop_fresh_dir := justfile_directory() / ".zig-out/native-desktop"
+dev_dir := justfile_directory() / ".dev"
+runtime_dir := justfile_directory() / "services/runtime-cpp"
+gui_dir := justfile_directory() / "services/gui-cpp"
+renderer_dir := justfile_directory() / "tools/diagram-renderer"
+vt_prefix := runtime_dir / "dependencies/install"
+runtime := runtime_dir / "out/telar-runtime"
+# The runtime linked as `telar`, which the GUI's plugin workers and integration tests find on PATH.
+dev_telar := dev_dir / "bin/telar"
+gui := gui_dir / "out/telar-gui"
+renderer := renderer_dir / "target/release/telar-diagram-renderer"
+# On macOS the GUI builds with Homebrew's LLVM, like the runtime; elsewhere with the default compilers.
+gui_compilers := if os() == "macos" { '-DCMAKE_C_COMPILER="$(brew --prefix llvm)/bin/clang" -DCMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++"' } else { "" }
 
 # Show the available commands.
 default:
     @just --list
 
-# Build Telar. Extra arguments are forwarded to `zig build`.
-build *args:
-    zig build {{ args }}
+# Build the pinned libghostty-vt that the runtime and the GUI link. Run it once; it needs Zig 0.17.
+[working-directory: "services/runtime-cpp"]
+vt zig="zig":
+    python3 tools/build_ghostty.py --build-dir dependencies/ghostty --prefix dependencies/install --zig "{{ zig }}"
 
-# Build an optimized Telar binary at `.zig-out/prod/bin/telar`.
-release:
-    zig build --prefix .zig-out/prod -Doptimize=ReleaseFast
+# Build the runtime and the GUI.
+build: runtime-build gui-build
 
-# Build the GUI in ReleaseFast and install it for this user: Telar.app under
-# ~/Applications and `telar` symlinked into ~/.local/bin, so Finder, shells and
-# the agent hooks all find the same executable.
-[macos]
-install-gui apps=(home_directory() / "Applications") bin=(home_directory() / ".local/bin"):
-    zig build bundle -Doptimize=ReleaseFast
-    mkdir -p "{{ apps }}" "{{ bin }}"
-    rm -rf "{{ apps }}/Telar.app"
-    cp -R zig-out/Telar.app "{{ apps }}/Telar.app"
-    "{{ apps }}/Telar.app/Contents/Resources/bin/telar" cli install --dir "{{ bin }}"
+# Build the runtime at services/runtime-cpp/out/telar-runtime.
+[working-directory: "services/runtime-cpp"]
+runtime-build: (runtime-configure "out" "Debug")
+    cmake --build out --target telar-runtime
 
-# Build the GUI in ReleaseFast and install it for this user: `bin/telar`, the
-# desktop entry and the icon under the prefix.
-[linux]
-install-gui prefix=(home_directory() / ".local"):
-    zig build --prefix "{{ prefix }}" -Doptimize=ReleaseFast
+# Build the GUI at services/gui-cpp/out/telar-gui.
+[working-directory: "services/gui-cpp"]
+gui-build: (gui-configure "out" "Debug")
+    cmake --build out --target telar-gui telar-gui-command
+
+# Build the diagram renderer that the macOS bundle ships beside the runtime. It needs Cargo.
+renderer:
+    cargo build --release --locked --manifest-path "{{ renderer_dir }}/Cargo.toml" --target-dir "{{ renderer_dir }}/target"
+
+# Build everything, start an isolated development runtime and open the GUI on it.
+app: dev-bin gui-build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="{{ dev_dir }}/bin:$PATH" TELAR_SOCKET="{{ dev_dir }}/runtime.sock" TELAR_HISTORY="{{ dev_dir }}/history.db"
+    export TELAR_DEVELOPMENT_CONFIG="{{ justfile_directory() }}/dev/config.lua"
+    telar server endpoint > /dev/null
+    exec "{{ gui }}"
+
+# Build and run the runtime on the development socket. Extra arguments are passed to it.
+run *args: runtime-build
+    mkdir -p -m 700 "{{ dev_dir }}"
+    TELAR_DEVELOPMENT_CONFIG="{{ justfile_directory() }}/dev/config.lua" TELAR_SOCKET="{{ dev_dir }}/runtime.sock" TELAR_HISTORY="{{ dev_dir }}/history.db" "{{ runtime }}" {{ args }}
 
 # Stop only the development runtime.
 stop:
-    TELAR_SOCKET="{{ dev_runtime_dir }}/runtime.sock" zig build run -- server stop
+    TELAR_SOCKET="{{ dev_dir }}/runtime.sock" "{{ runtime }}" server stop
 
-app:
-    mkdir -p -m 700 "{{ dev_runtime_dir }}"
-    TELAR_SOCKET="{{ dev_runtime_dir }}/runtime.sock" TELAR_HISTORY="{{ dev_runtime_dir }}/history.db" zig build run -- gui
+# Build and run the runtime and GUI tests.
+test: runtime-test gui-test
 
-# Build and run Desktop with dev/desktop.lua and a fresh Zig runtime, or on SOCKET.
-desktop socket="": (_desktop socket "zig")
-
-# Build and run Desktop with dev/desktop.lua and a fresh C++ runtime, or on SOCKET.
-native-desktop socket="": (_desktop socket "cpp")
-
-# Without a socket, reset the runtime and its saved layout, then stop it on exit.
-[private]
-[working-directory: "services/desktop-mode"]
-_desktop socket implementation:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cmake --preset debug
-    cmake --build --preset debug --target telar-desktop
-    export TELAR_DESKTOP_CONFIG="{{ justfile_directory() }}/dev/desktop.lua"
-    export TELAR_DESKTOP_UI_DIR="${TELAR_DESKTOP_UI_DIR:-$PWD/ui}"
-    export TELAR_DESKTOP_ASSETS_DIR="${TELAR_DESKTOP_ASSETS_DIR:-$PWD/assets}"
-    socket="{{ socket }}"
-    if [[ -n "$socket" ]]; then
-        exec ./out/debug/telar-desktop "$socket"
-    fi
-
-    runtime="{{ desktop_fresh_dir }}"
-    if [[ "{{ implementation }}" == cpp ]]; then
-        cmake -S ../runtime-cpp -B ../runtime-cpp/out
-        cmake --build ../runtime-cpp/out --target telar-runtime
-        telar="{{ justfile_directory() }}/services/runtime-cpp/out/telar-runtime"
-        runtime="{{ native_desktop_fresh_dir }}"
-    else
-        (cd "{{ justfile_directory() }}" && zig build)
-        telar="{{ justfile_directory() }}/zig-out/bin/telar"
-    fi
-
-    export TELAR_SOCKET="$runtime/runtime.sock"
-    export TELAR_HISTORY="$runtime/history.db"
-    # A run that was killed leaves its runtime behind; it must stop before its files go.
-    "$telar" server stop >/dev/null
-    for _ in {1..50}; do
-        [[ -S "$TELAR_SOCKET" ]] || break
-        sleep 0.1
-    done
-    if [[ -S "$TELAR_SOCKET" ]]; then
-        echo "The previous desktop runtime did not stop: $TELAR_SOCKET" >&2
-        exit 1
-    fi
-
-    rm -rf "$runtime"
-    mkdir -p -m 700 "$runtime"
-    # The desktop saves the workbench layout per runtime socket, named by its SHA-256.
-    state="${TELAR_DESKTOP_STATE_DIR:-$HOME/Library/Application Support/telar/desktop}"
-    layout="workbench-$(printf '%s' "$TELAR_SOCKET" | shasum -a 256 | cut -d ' ' -f 1).json"
-    rm -f "$state/$layout"
-    trap '"$telar" server stop >/dev/null' EXIT
-    "$telar" server endpoint >/dev/null
-    ./out/debug/telar-desktop "$TELAR_SOCKET"
-
-# Seed a separate desktop runtime once, using a checkpoint and the socket of its source runtime.
-desktop-runtime $source="" $session="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    mkdir -p -m 700 "{{ desktop_runtime_dir }}"
-    set --
-    if [[ -n "$source" || -n "$session" ]]; then
-        set -- --clone-from "$source" --clone-session "$session"
-    elif [[ ! -f "{{ desktop_runtime_dir }}/runtime.sock.desktop-clone.json" || ! -f "{{ desktop_runtime_dir }}/session.ckpt" ]]; then
-        echo 'First use: just desktop-runtime SOURCE_SOCKET SOURCE_CHECKPOINT' >&2
-        exit 1
-    fi
-    export TELAR_SOCKET="{{ desktop_runtime_dir }}/runtime.sock"
-    export TELAR_HISTORY="{{ desktop_runtime_dir }}/history.db"
-    exec zig build run -- server --no-config "$@"
-
-# Run Desktop against the cloned runtime started by desktop-runtime.
-desktop-dev:
-    just desktop "{{ desktop_runtime_dir }}/runtime.sock"
-
-# Check the desktop modules and development programs and generate the clangd compilation database.
-[working-directory: "services/desktop-mode"]
-desktop-check:
-    cmake --preset debug
-    cmake --build --preset debug --target desktop-editor
-
-# Refresh desktop modules and development programs for clangd without building main.cpp.
-[working-directory: "services/desktop-mode"]
-desktop-editor:
-    cmake --preset debug
-    cmake --build --preset debug --target desktop-editor
-
-# Refresh the C++ runtime compilation database and generated headers for clangd.
+# Build and run the runtime tests. Extra arguments are passed to CTest.
 [working-directory: "services/runtime-cpp"]
-runtime-editor:
-    cmake -S . -B out
+runtime-test *args: (runtime-configure "out" "Debug")
+    cmake --build out
+    ctest --test-dir out --output-on-failure {{ args }}
+
+# Build and run the GUI tests, the integration ones against the runtime. Extra arguments are passed to CTest.
+[working-directory: "services/gui-cpp"]
+gui-test *args: dev-bin (gui-configure "out" "Debug" "-DTELAR_GUI_TEST_RUNTIME=" + dev_telar)
+    cmake --build out
+    ctest --test-dir out --output-on-failure {{ args }}
+
+# Refresh the runtime compilation database and generated headers for clangd.
+[working-directory: "services/runtime-cpp"]
+runtime-editor: (runtime-configure "out" "Debug")
     cmake --build out --target cell-layout
 
-# Analyze the production C++ runtime sources without applying fixes.
+# Analyze the production runtime sources without applying fixes.
 [working-directory: "services/runtime-cpp"]
 runtime-lint jobs="2": runtime-editor
     cmake "-DJOBS={{ jobs }}" -P cmake/lint.cmake
 
-# Format the desktop C++, Objective-C++ and Lua sources with their project rules.
-[working-directory: "services/desktop-mode"]
-desktop-fmt:
-    cmake -P cmake/format.cmake
+# Analyze the GUI sources with its clang-tidy profile.
+[working-directory: "services/gui-cpp"]
+gui-lint: (gui-configure "out" "Debug")
+    cmake --build out --target gui-lint
 
-# Check desktop formatting without changing files.
-[working-directory: "services/desktop-mode"]
-desktop-fmt-check:
-    cmake -DCHECK=ON -P cmake/format.cmake
-
-# Build and run a program from services/desktop-mode/debug by its filename stem.
-[working-directory: "services/desktop-mode"]
-desktop-debug program *args:
-    cmake --preset debug
-    cmake --build --preset debug --target "{{ program }}"
-    "./out/debug/{{ program }}" {{ args }}
-
-# Build and run an isolated development runtime. Extra arguments are passed to Telar.
-run *args:
-    mkdir -p -m 700 "{{ dev_runtime_dir }}"
-    TELAR_SOCKET="{{ dev_runtime_dir }}/runtime.sock" TELAR_HISTORY="{{ dev_runtime_dir }}/history.db" zig build run -- {{ args }}
+# Package a Release Telar C++ Preview.app, install it under APPS and link its `telar` into BIN.
+[macos]
+install-gui apps=(home_directory() / "Applications") bin=(home_directory() / ".local/bin"): renderer (runtime-configure "out-release" "Release" "-DTELAR_RUNTIME_INSTALL_AS_TELAR=ON") (gui-configure "out-release" "Release")
+    #!/usr/bin/env bash
+    set -euo pipefail
+    stage="{{ dev_dir }}/stage"
+    app="Telar C++ Preview.app"
+    rm -rf "$stage"
+    cmake --build "{{ runtime_dir }}/out-release" --target telar-runtime
+    cmake --install "{{ runtime_dir }}/out-release" --prefix "$stage"
+    install -m 755 "{{ renderer }}" "$stage/bin/telar-diagram-renderer"
+    cmake --build "{{ gui_dir }}/out-release" --target telar-gui telar-gui-command
+    python3 "{{ gui_dir }}/tools/package_macos.py" --build "{{ gui_dir }}/out-release" --runtime-prefix "$stage" --output "$stage/$app"
+    mkdir -p "{{ apps }}" "{{ bin }}"
+    rm -rf "{{ apps }}/$app"
+    cp -R "$stage/$app" "{{ apps }}/$app"
+    ln -sf "{{ apps }}/$app/Contents/Resources/bin/telar" "{{ bin }}/telar"
 
 # Run the Go proxy service. Extra arguments are passed to the service.
 [working-directory: "services/proxy"]
@@ -171,6 +113,10 @@ proxy *args:
 proxy-test *args:
     go test {{ args }} ./...
 
+# Validate Linux TUN forwarding and NAT in an isolated Docker network.
+proxy-test-linux:
+    python3 services/proxy/tests/linux/run.py
+
 # Build EBNF and run tests with color. Extra arguments are forwarded to CTest.
 [positional-arguments]
 [working-directory: "dlls/ebnf"]
@@ -179,47 +125,21 @@ ebnf-test *args:
     cmake --build --preset debug
     GTEST_COLOR=yes ctest --preset debug -V "$@"
 
-# Validate Linux TUN forwarding and NAT in an isolated Docker network.
-proxy-test-linux:
-    python3 services/proxy/tests/linux/run.py
+[private]
+dev-bin: runtime-build
+    mkdir -p -m 700 "{{ dev_dir }}" "{{ dev_dir }}/bin"
+    ln -sf "{{ runtime }}" "{{ dev_telar }}"
 
-# Format the project Zig sources.
-fmt:
-    zig fmt build.zig build.zig.zon src examples benchmarks linters
+# The runtime targets macOS; Homebrew supplies its compiler and libraries.
+[private]
+[working-directory: "services/runtime-cpp"]
+runtime-configure directory build_type *options:
+    cmake -S . -B {{ directory }} -G Ninja -DCMAKE_BUILD_TYPE={{ build_type }} -DCMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++" -DGHOSTTY_VT_ROOT="{{ vt_prefix }}" -DOPENSSL_ROOT_DIR="$(brew --prefix openssl@3)" -DNGHTTP2_ROOT="$(brew --prefix libnghttp2)" -DBROTLI_ROOT="$(brew --prefix brotli)" -DZSTD_ROOT="$(brew --prefix zstd)" -DPNG_ROOT="$(brew --prefix libpng)" {{ options }}
 
-# Check formatting without changing files.
-fmt-check:
-    zig fmt --check build.zig build.zig.zon src examples benchmarks linters
-
-# Check code style. Extra arguments are passed to codestyle.
-codestyle *args:
-    zig build codestyle -- {{ args }}
-
-# Apply safe code style fixes. Extra arguments are passed to codestyle.
-codestyle-fix *args:
-    zig build codestyle -- --fix {{ args }}
-
-# Apply safe fixes, then run formatting and source checks.
-check:
-    just codestyle-fix
-    just fmt-check
-    zig build check
-
-# Run benchmarks. Extra arguments are passed to the benchmark executable.
-bench *args:
-    zig build bench -- {{ args }}
-
-# List benchmark names.
-bench-list:
-    zig build bench -- --list
-
-# Type-check platform-specific code for supported cross targets.
-cross:
-    zig build cross
-
-# Run portability and performance release gates.
-verify-release:
-    zig build verify-release
+[private]
+[working-directory: "services/gui-cpp"]
+gui-configure directory build_type *options:
+    cmake -S . -B {{ directory }} -G Ninja -DCMAKE_BUILD_TYPE={{ build_type }} {{ gui_compilers }} -DGHOSTTY_VT_ROOT="{{ vt_prefix }}" {{ options }}
 
 alias b := build
 alias r := run

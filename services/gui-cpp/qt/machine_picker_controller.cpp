@@ -12,7 +12,7 @@
 #include "presentation/palette_row_window.hpp"
 #include "projection.hpp"
 #include "runtime_connection.hpp"
-#include "runtime_endpoint.hpp"
+#include "platform/runtime_endpoint.hpp"
 #include "text/bounded_text.hpp"
 #include <QLatin1StringView>
 #include <QString>
@@ -229,7 +229,7 @@ void Application::setupMachine(MachineToken target) {
   }
 
   const auto &row = machines_.row(target.slot);
-  const auto program = runtime_endpoint::program();
+  const auto program = platform::runtime_endpoint::program();
   constexpr std::string_view title_prefix = "Set up ";
   BoundedText<title_prefix.size() + MachineLimits::label_bytes> title;
   title.append(title_prefix);

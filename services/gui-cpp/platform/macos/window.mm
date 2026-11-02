@@ -2,6 +2,7 @@
 #include "blur_radius.hpp"
 #include "blur_symbols.h"
 #include <AppKit/AppKit.h>
+#include <objc/runtime.h>
 #include <QGuiApplication>
 #include <QObject>
 #include <QQuickWindow>
@@ -31,6 +32,34 @@ NSWindow *nativeWindow(const QWindow &window) {
   auto *const view = (__bridge NSView *)handle;
 
   return view.window;
+}
+
+char content_layout_key;
+
+// Opt in individual windows without changing their class: Qt/AppKit can already
+// be observing them through KVO. Other Qt windows retain their original layout.
+void configureContentLayout(NSWindow *window) {
+  objc_setAssociatedObject(window, &content_layout_key, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  Class base = window.class;
+  if (objc_getAssociatedObject(base, &content_layout_key) != nil) {
+    return;
+  }
+
+  const SEL selector = @selector(contentLayoutRect);
+  const Method method = class_getInstanceMethod(base, selector);
+  const auto original = std::bit_cast<NSRect (*)(NSWindow *, SEL)>(method_getImplementation(method));
+  const IMP replacement = imp_implementationWithBlock(^NSRect(NSWindow *native) {
+    auto rect = original(native, selector);
+    const auto style = native.styleMask;
+    if (objc_getAssociatedObject(native, &content_layout_key) != nil && (style & NSWindowStyleMaskFullSizeContentView) != 0 && (style & NSWindowStyleMaskFullScreen) == 0) {
+      rect.origin.y = 0;
+      rect.size.height = native.frame.size.height;
+    }
+
+    return rect;
+  });
+  class_replaceMethod(base, selector, replacement, method_getTypeEncoding(method));
+  objc_setAssociatedObject(base, &content_layout_key, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 NativeBlurFunctions blurFunctions() noexcept {
@@ -157,6 +186,7 @@ void configureWindow(QWindow &window, WindowAppearance appearance) {
     return;
   }
 
+  configureContentLayout(native_window);
   native_window.titleVisibility = appearance.titlebar ? NSWindowTitleVisible : NSWindowTitleHidden;
   native_window.titlebarAppearsTransparent = !appearance.titlebar;
   if (appearance.titlebar) {

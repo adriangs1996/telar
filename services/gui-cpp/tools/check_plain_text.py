@@ -183,7 +183,7 @@ def main():
         zig_source.write_text(zig_probe)
         subprocess.run([
             arguments.compiler, "-std=c++23", "-O2",
-            f"-I{service}", f"-I{repository / 'services/desktop-mode'}",
+            f"-I{service}", f"-I{repository / 'dlls/telar-client/include'}",
             str(cpp_source), "-o", str(cpp_binary),
         ], check=True)
         subprocess.run([

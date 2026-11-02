@@ -11,7 +11,7 @@
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
-#include "ui/bundled_fonts.hpp"
+#include "qt/bundled_fonts.hpp"
 #include "wire_runtime.hpp"
 #include <QAbstractItemModel>
 #include <QFont>
@@ -149,7 +149,7 @@ class GraphicsRecoverySceneTest : public QObject {
 
 int main(int argc, char **argv) {
   const QGuiApplication application{argc, argv};
-  ui::bundledFonts();
+  bundledFonts();
   QGuiApplication::setFont(QFont{QStringLiteral("IBM Plex Sans")});
   GraphicsRecoverySceneTest test;
 

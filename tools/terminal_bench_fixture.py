@@ -10,6 +10,7 @@ They wait for the native probe to confirm geometry through viewport.ready.
 """
 
 import argparse
+from contextlib import contextmanager
 import errno
 import hashlib
 import json
@@ -44,15 +45,20 @@ def write_all(data):
         pending = pending[sent:]
 
 
-def atomic_json(path, value):
-    # SIGWINCH records geometry too; defer it until this replacement is done.
+@contextmanager
+def defer_resize():
     previous = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGWINCH})
     try:
+        yield
+    finally:
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous)
+
+
+def atomic_json(path, value):
+    with defer_resize():
         temporary = path.with_name(path.name + f'.{os.getpid()}.tmp')
         temporary.write_text(json.dumps(value) + '\n')
         temporary.replace(path)
-    finally:
-        signal.pthread_sigmask(signal.SIG_SETMASK, previous)
 
 
 def payload_chunk(name):
@@ -137,6 +143,7 @@ class Fixture:
             raise ValueError('BENCH_THROUGHPUT must be 0 or 1')
         self.throughput = throughput == '1'
         self.color = 0
+        self.capture_marker = False
         self.size = None
         self.geometry_generation = 0
         self.phase = 'starting'
@@ -160,27 +167,26 @@ class Fixture:
                 file.write(str(self.pid) + '\n')
 
     def record(self):
-        elapsed = ((self.background_last_write_ns - self.background_started_ns) / 1e9
-                   if self.background_last_write_ns is not None else 0)
-        atomic_json(self.receipt, dict(pid=self.pid, ppid=os.getppid(),
-                    role='primary' if self.primary else 'background',
-                    background=self.background, cols=self.size.columns,
-                    rows=self.size.lines, phase=self.phase,
-                    text_pattern=self.text_pattern, background_mib_per_second=self.background_mib_per_second,
-                    background_started_ns=self.background_started_ns,
-                    background_last_write_ns=self.background_last_write_ns,
-                    background_max_write_ms=self.background_max_write_ns / 1e6,
-                    background_elapsed_seconds=elapsed,
-                    background_actual_mib_per_second=self.emitted_bytes / (1024 * 1024) / elapsed if elapsed else None,
-                    background_progress=self.background_progress,
-                    geometry_generation=self.geometry_generation, marker_inputs=self.marker_inputs,
-                    last_input=self.last_input,
-                    emitted_bytes=self.emitted_bytes, error=self.error))
+        with defer_resize():
+            elapsed = ((self.background_last_write_ns - self.background_started_ns) / 1e9
+                       if self.background_last_write_ns is not None else 0)
+            atomic_json(self.receipt, dict(pid=self.pid, ppid=os.getppid(),
+                        role='primary' if self.primary else 'background',
+                        background=self.background, cols=self.size.columns,
+                        rows=self.size.lines, phase=self.phase,
+                        text_pattern=self.text_pattern, background_mib_per_second=self.background_mib_per_second,
+                        background_started_ns=self.background_started_ns,
+                        background_last_write_ns=self.background_last_write_ns,
+                        background_max_write_ms=self.background_max_write_ns / 1e6,
+                        background_elapsed_seconds=elapsed,
+                        background_actual_mib_per_second=self.emitted_bytes / (1024 * 1024) / elapsed if elapsed else None,
+                        background_progress=self.background_progress,
+                        geometry_generation=self.geometry_generation, marker_inputs=self.marker_inputs,
+                        last_input=self.last_input,
+                        emitted_bytes=self.emitted_bytes, error=self.error))
 
     def refresh_size(self, *signal_args):
-        # Keep the in-memory size, marker and both files in one resize transaction.
-        previous = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGWINCH})
-        try:
+        with defer_resize():
             current = os.get_terminal_size(0)
             if current == self.size and not signal_args:
                 return
@@ -192,14 +198,30 @@ class Fixture:
                     write_all(b'\x1b[2J')
                     self.draw_marker()
             self.record()
-        finally:
-            signal.pthread_sigmask(signal.SIG_SETMASK, previous)
 
     def draw_marker(self):
         rgb = '230;20;60' if self.color == 0 else '20;220;200'
+        if self.capture_marker:
+            rgb = '180;180;180'
+
         write_all((f'\x1b[?25l\x1b[{min(8, self.size.lines)};'
                    f'{min(20, self.size.columns)}H\x1b[48;2;{rgb}m '
                    '\x1b[0m\x1b[H').encode())
+
+    def handle_marker_input(self, key):
+        if not self.primary or key not in (b'x', b'r', b'c'):
+            return False
+
+        self.last_input = key.hex()
+        self.capture_marker = key == b'c'
+        if key == b'x':
+            self.marker_inputs += 1
+            self.color ^= 1
+        elif key == b'c':
+            write_all(b'\x1b[H\x1b[38;2;180;180;180mc\x1b[0m')
+
+        self.draw_marker()
+        return True
 
     def draw_background(self):
         width = max(1, self.size.columns - 1)
@@ -338,12 +360,7 @@ class Fixture:
                 key = os.read(0, 1)
                 if not key:
                     break
-                if self.primary and key in (b'x', b'r'):
-                    self.last_input = key.hex()
-                    if key == b'x':
-                        self.marker_inputs += 1
-                        self.color ^= 1
-                    self.draw_marker()
+                self.handle_marker_input(key)
         except Exception as error:
             if isinstance(error, OSError) and error.errno in (errno.EIO, errno.EPIPE):
                 try:

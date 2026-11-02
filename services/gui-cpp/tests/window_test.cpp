@@ -2,7 +2,7 @@
 #include "platform/window.hpp"
 #include "qt/application.hpp"
 #include "qt/terminal_item.hpp"
-#include "ui/bundled_fonts.hpp"
+#include "qt/bundled_fonts.hpp"
 #include <QCoreApplication>
 #include <QEvent>
 #include <QGuiApplication>
@@ -224,7 +224,7 @@ private:
 
 int main(int argc, char **argv) {
   const QGuiApplication application{argc, argv};
-  ui::bundledFonts();
+  bundledFonts();
   WindowTest test;
 
   return QTest::qExec(&test, argc, argv);

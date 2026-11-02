@@ -18,7 +18,7 @@
 #include "presentation/history_actions.hpp"
 #include "input/wheel_accumulator.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/bundled_fonts.hpp"
+#include "qt/bundled_fonts.hpp"
 #include <QColor>
 #include <QList>
 #include <QCoreApplication>
@@ -218,7 +218,7 @@ class HistoryControlsTest final : public QObject {
   Q_OBJECT
 
   Q_SLOT static void initTestCase() {
-    ui::bundledFonts();
+    bundledFonts();
     QGuiApplication::setFont(QFont{QStringLiteral("IBM Plex Sans")});
   }
 

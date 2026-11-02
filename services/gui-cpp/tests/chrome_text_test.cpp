@@ -16,7 +16,7 @@
 #include "qt/resident_fonts.hpp"
 #include "qt/window_font_catalog.hpp"
 #include "terminal/font_grid.hpp"
-#include "ui/bundled_fonts.hpp"
+#include "qt/bundled_fonts.hpp"
 #include <QByteArray>
 #include <QColor>
 #include <QDebug>
@@ -612,7 +612,7 @@ private:
 
 int main(int argc, char **argv) {
   const QGuiApplication application{argc, argv};
-  ui::bundledFonts();
+  bundledFonts();
   ChromeTextTest test;
 
   return QTest::qExec(&test, argc, argv);

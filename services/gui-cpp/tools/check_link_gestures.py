@@ -239,7 +239,7 @@ def main():
         zig = temporary / "probe.zig"
         cpp.write_text(cpp_probe.replace("VERSION_COUNT", str(len(version_fields))).replace("VERSION_ASSIGNMENTS", assignments))
         zig.write_text(zig_probe.replace("VERSION_COUNT", str(len(version_fields))) + gesture)
-        includes = [root / "services/gui-cpp", root / "services/runtime-cpp", root / "services/desktop-mode"]
+        includes = [root / "services/gui-cpp", root / "services/runtime-cpp", root / "dlls/telar-client/include"]
         subprocess.run([arguments.compiler, "-std=c++23", "-O2", *[flag for directory in includes for flag in ("-I", str(directory))], str(cpp), "-o", str(temporary / "cpp")], check=True)
         modules = ["--dep", "model", "--dep", "hit", f"-Mroot={zig}"]
         modules += ["--dep", "telar-core", "--dep", "cellgrid", "--dep", "keyinput", "--dep", "urlscan", f"-Mmodel={root / 'src/model/model.zig'}"]

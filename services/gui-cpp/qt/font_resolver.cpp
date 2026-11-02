@@ -3,8 +3,8 @@
 #include "fonts/face.hpp"
 #include "projection.hpp"
 #include "terminal/font_grid.hpp"
-#include "ui/bundled_fonts.hpp"
-#include "ui/workbench/terminal_font.hpp"
+#include "bundled_fonts.hpp"
+#include "terminal_font.hpp"
 #include <QFont>
 #include <QGuiApplication>
 #include <QScreen>
@@ -26,7 +26,7 @@ ResolvedFont FontResolver::resolve(fonts::Face &face, const FontConfiguration &c
 }
 
 ResolvedFont FontResolver::compose(const fonts::Face &face, FontGrid grid, qreal scale) {
-  auto families = ui::bundledFonts();
+  auto families = bundledFonts();
   families.prepend(toQString(face.family()));
   QFont base;
   base.setFamilies(families);
@@ -45,7 +45,7 @@ ResolvedFont FontResolver::compose(const fonts::Face &face, FontGrid grid, qreal
     base.setVariableAxis(*tag, variation.values[index]);
   }
 
-  auto font = workbench::TerminalFont::fromFont(std::move(base), {grid.width / scale, grid.height / scale}, grid.baseline / scale);
+  auto font = TerminalFont::fromFont(std::move(base), {grid.width / scale, grid.height / scale}, grid.baseline / scale);
   font.fixed_pitch = face.fixedPitch();
 
   return {.font = std::move(font), .grid = grid};

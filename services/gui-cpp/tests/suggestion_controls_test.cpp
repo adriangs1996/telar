@@ -7,7 +7,7 @@
 #include "qt/native_form_field.hpp"
 #include "qt/terminal_item.hpp"
 #include "screen_fixture.hpp"
-#include "ui/bundled_fonts.hpp"
+#include "qt/bundled_fonts.hpp"
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -94,7 +94,7 @@ private:
     runtime_.start();
     QVERIFY(runtime_.waitForStarted());
     QTRY_VERIFY2_WITH_TIMEOUT(QFileInfo::exists(socket_), runtime_.readAllStandardError().constData(), wait_ms);
-    ui::bundledFonts();
+    bundledFonts();
     client_ = std::make_unique<Application>(memory_);
     client_->configureLaunch(directory_.path(), {QStringLiteral("/bin/sh")}, false);
     client_->loadConfiguration(configuration, {}, {});

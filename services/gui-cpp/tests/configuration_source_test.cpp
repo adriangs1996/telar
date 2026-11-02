@@ -19,7 +19,7 @@
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "text/json.hpp"
-#include "ui/bundled_fonts.hpp"
+#include "qt/bundled_fonts.hpp"
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -883,7 +883,7 @@ private:
 
 int main(int argc, char **argv) {
   const QGuiApplication application{argc, argv};
-  ui::bundledFonts();
+  bundledFonts();
   ConfigurationSourceTest test;
 
   return QTest::qExec(&test, argc, argv);

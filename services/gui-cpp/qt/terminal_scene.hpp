@@ -10,7 +10,7 @@
 #include "terminal/screen.hpp"
 #include "terminal/selection.hpp"
 #include "text_scene.hpp"
-#include "ui/workbench/terminal_font.hpp"
+#include "terminal_font.hpp"
 #include <QList>
 #include <QQuickWindow>
 #include <QRectF>
@@ -27,7 +27,7 @@ struct TerminalPresentation {
   const Screen<ApplicationAllocator> &screen;
   const GraphicsStore<ApplicationAllocator> &graphics;
   const Configuration &configuration;
-  const workbench::TerminalFont &font;
+  const TerminalFont &font;
   const QString &preedit;
   std::shared_ptr<const FontCollection> fonts;
   FontGrid grid;

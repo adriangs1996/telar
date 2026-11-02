@@ -20,11 +20,12 @@ KeyboardAction {
     readonly property real gap: 6 * ratio
     readonly property int maximumBlockLines: 8
     readonly property real iconSide: (node.kind === "callout" ? 18 : node.kind === "group" ? 14 : 16) * ratio
-    readonly property real trackWidth: 48 * ratio
+    readonly property real trackWidth: 24 * ratio
+    readonly property real meterGap: 5 * ratio
     readonly property bool block: ["heading", "text", "meter_row", "kv", "callout", "actions", "button", "divider"].indexOf(node.kind) >= 0
     readonly property bool hasIcon: node.glyph.length > 0 || node.providerMark !== 0 || node.telarMark
     readonly property bool hasTooltip: (surface.nodes ?? []).some(child => child.parent === node.index && child.tooltip)
-    readonly property real compactWidthDelta: node.kind === "meter" ? trackWidth + gap : 0
+    readonly property real compactWidthDelta: node.kind === "meter" ? trackWidth + meterGap : 0
     readonly property real focusRadius: 4 * ratio
     readonly property string activationIdentity: surface.identity + ":" + surface.generation + ":" + surface.source + ":" + node.index + ":" + node.actionIdentity
     readonly property real unreducedWidth: node.kind === "group" ? (visual.item?.unreducedWidth ?? 0) : implicitWidth + (compact ? compactWidthDelta : 0)
@@ -267,16 +268,18 @@ KeyboardAction {
             readonly property real labelShare: 0.38
             readonly property real labelWidth: Math.round(width * labelShare)
             readonly property real track: !panel && !root.compact ? root.trackWidth : 0
-            implicitWidth: meterLabel.implicitWidth + (track > 0 ? root.gap + track : 0)
+            readonly property real labelGap: !panel && root.node.text.length > 0 ? root.meterGap : 0
+            implicitWidth: meterLabel.implicitWidth + (panel ? 0 : labelGap + meterValue.implicitWidth + (track > 0 ? root.meterGap + track : 0))
             implicitHeight: panel ? (root.node.detail.length > 0 ? detailedHeight : lineHeight) : root.rowHeight
             ChromeText {
                 id: meterLabel
                 objectName: "componentMeterLabel"
                 width: parent.panel ? parent.labelWidth : implicitWidth
                 height: parent.panel ? parent.lineHeight : parent.height
-                text: parent.panel ? root.node.text : root.node.text + (root.node.text.length > 0 ? " " : "") + (root.node.detail.length > 0 ? root.node.detail : Math.round(root.node.value * 100) + "%")
-                color: parent.panel ? root.colors.text : root.node.ink
+                text: root.node.text
+                color: parent.panel ? root.colors.text : root.colors.subtext0
                 pixelSize: parent.panel ? root.typography.body : root.typography.small
+                emphasized: !parent.panel
                 elide: Text.ElideNone
             }
             ChromeText {
@@ -291,35 +294,36 @@ KeyboardAction {
                 elide: Text.ElideNone
             }
             ChromeText {
+                id: meterValue
                 objectName: "componentMeterValue"
-                x: parent.width - width
-                width: Math.min(parent.width, parent.numberWidth)
+                x: parent.panel ? parent.width - width : meterTrack.x + meterTrack.width + (parent.track > 0 ? root.meterGap : 0)
+                width: parent.panel ? Math.min(parent.width, parent.numberWidth) : implicitWidth
                 height: parent.height
-                text: Math.round(root.node.value * 100) + "%"
-                visible: parent.panel
+                text: !parent.panel && root.node.detail.length > 0 ? root.node.detail : Math.round(root.node.value * 100) + "%"
                 color: root.node.ink
-                pixelSize: root.typography.body
+                pixelSize: parent.panel ? root.typography.body : root.typography.small
                 horizontalAlignment: Text.AlignRight
                 elide: Text.ElideNone
             }
             Item {
-                id: track
+                // An id named "track" shadows the numeric property used to measure the meter.
+                id: meterTrack
                 objectName: "componentMeterTrack"
-                x: parent.panel ? parent.labelWidth + parent.columnGap : meterLabel.width + root.gap
+                x: parent.panel ? parent.labelWidth + parent.columnGap : meterLabel.width + parent.labelGap
                 y: Math.round((parent.height - height) / 2)
                 width: parent.panel ? Math.max(0, parent.width - parent.numberWidth - parent.columnGap - x) : parent.track
-                height: 4 * root.ratio
+                height: (parent.panel ? 4 : 3) * root.ratio
                 visible: parent.panel || parent.track > 0
                 NativeRoundedRectangle {
                     anchors.fill: parent
                     color: root.colors.surface1
-                    radius: 2 * root.ratio
+                    radius: parent.height / 2
                 }
                 NativeRoundedRectangle {
                     width: parent.width * root.node.value
                     height: parent.height
                     color: root.node.ink
-                    radius: 2 * root.ratio
+                    radius: parent.height / 2
                 }
                 Rectangle {
                     x: Math.max(0, Math.min(parent.width - width, parent.width * (root.node.marker ?? 0)))
@@ -336,10 +340,14 @@ KeyboardAction {
     Component {
         id: sparkline
         Row {
+            id: history
+            readonly property int maximumSamples: 9
+            readonly property var shownSamples: root.node.samples.slice(-maximumSamples)
             spacing: root.ratio
             Repeater {
-                model: root.node.samples
+                model: history.shownSamples
                 delegate: Item {
+                    objectName: "componentSparklineSample"
                     required property var modelData
                     width: 2 * root.ratio
                     height: root.rowHeight

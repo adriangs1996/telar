@@ -8,7 +8,7 @@
 #include "qt/notification_layout.hpp"
 #include "qt/projection.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/bundled_fonts.hpp"
+#include "qt/bundled_fonts.hpp"
 #include <QAbstractItemModel>
 #include <QByteArray>
 #include <QColor>
@@ -67,7 +67,7 @@ class NotificationOverlayTest final : public QObject {
 
 private:
   Q_SLOT static void initTestCase() {
-    ui::bundledFonts();
+    bundledFonts();
   }
 
   Q_SLOT static void cardsKeepOriginalPlacementAndOutsideClicksDoNotDismiss() {

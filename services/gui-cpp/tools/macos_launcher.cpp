@@ -1,4 +1,4 @@
-#include "login_shell.hpp"
+#include "platform/login_shell.hpp"
 #include <array>
 #include <cstdio>
 #include <cstddef>
@@ -41,7 +41,7 @@ int launch(std::span<char *> input, const char *const *environment) {
   }
 
   const auto program = (std::filesystem::path{path.data()}.parent_path() / "telar-gui").lexically_normal().string();
-  auto shell = login_shell::path();
+  auto shell = telar::gui::platform::login_shell::path();
   if (shell.empty() || shell.front() != '/') {
     shell = "/bin/sh";
   }
@@ -52,7 +52,7 @@ int launch(std::span<char *> input, const char *const *environment) {
     return EXIT_FAILURE;
   }
 
-  const auto *script = login_shell::script(shell);
+  const auto *script = telar::gui::platform::login_shell::script(shell);
   std::vector<std::string> arguments;
   if (script != nullptr) {
     arguments = {shell, "-l", "-c", script, program};

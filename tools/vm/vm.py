@@ -20,10 +20,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
-DISTRO = os.environ.get("TELAR_VM_DISTRO", "fedora")
-if DISTRO not in ("fedora", "arch"):
-    raise SystemExit("TELAR_VM_DISTRO must be fedora or arch")
-NAME = os.environ.get("TELAR_VM_NAME", "telar-arch" if DISTRO == "arch" else "telar-vm")
+NAME = os.environ.get("TELAR_VM_NAME", "telar-vm")
 STATE = Path(os.environ.get("TELAR_VM_STATE", Path.home() / ".cache/telar-vm")) / NAME
 FEDORA = "43"
 FEDORA_BUILD = "1.6"
@@ -37,16 +34,11 @@ GUEST_SRC = "src/telar"
 
 
 def guest_arch():
-    if DISTRO == "arch":
-        return "x86_64"
     machine = platform.machine().lower()
     return "aarch64" if machine in ("arm64", "aarch64") else "x86_64"
 
 
 def accelerator():
-    host = "aarch64" if platform.machine().lower() in ("arm64", "aarch64") else "x86_64"
-    if guest_arch() != host:
-        return "tcg"
     if sys.platform == "darwin":
         return "hvf"
     if Path("/dev/kvm").exists():
@@ -72,14 +64,10 @@ def firmware_dir():
 
 
 def image_name():
-    if DISTRO == "arch":
-        return "Arch-Linux-x86_64-cloudimg.qcow2"
     return f"Fedora-Cloud-Base-Generic-{FEDORA}-{FEDORA_BUILD}.{guest_arch()}.qcow2"
 
 
 def image_url(name):
-    if DISTRO == "arch":
-        return f"https://geo.mirror.pkgbuild.com/images/latest/{name}"
     return f"{MIRROR}/{FEDORA}/Cloud/{guest_arch()}/images/{name}"
 
 
@@ -97,15 +85,10 @@ def fetch_base_image():
         return base
     STATE.mkdir(parents=True, exist_ok=True)
     checksum_file = STATE / "CHECKSUM"
-    checksum_name = (image_name() + ".SHA256" if DISTRO == "arch"
-                     else f"Fedora-Cloud-{FEDORA}-{FEDORA_BUILD}-{guest_arch()}-CHECKSUM")
-    download(image_url(checksum_name), checksum_file)
+    download(image_url(f"Fedora-Cloud-{FEDORA}-{FEDORA_BUILD}-{guest_arch()}-CHECKSUM"), checksum_file)
     checksums = checksum_file.read_text()
     expected = None
     for line in checksums.splitlines():
-        fields = line.split()
-        if DISTRO == "arch" and len(fields) == 2 and fields[1].lstrip("*") == image_name():
-            expected = fields[0]
         if line.startswith(f"SHA256 ({image_name()}) = "):
             expected = line.rsplit(" ", 1)[1]
     if expected is None:
@@ -327,7 +310,7 @@ stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 tar -xf - -C "$stage"
 mkdir -p "$HOME/{GUEST_SRC}"
-rsync -a --delete --exclude=/.zig-cache/ --exclude=/zig-out/ --exclude=/.zig-out/ --exclude=/zig-pkg/ --exclude=/services/desktop-mode/out/ \\
+rsync -a --delete --exclude=/.zig-cache/ --exclude=/zig-out/ --exclude=/.zig-out/ --exclude=/zig-pkg/ \\
     "$stage/" "$HOME/{GUEST_SRC}/"
 '''
     with subprocess.Popen(ssh_command("bash", "-c", script), stdin=subprocess.PIPE) as process:
@@ -434,14 +417,13 @@ def up(display, compile_project=True):
         # cloud-init keeps reading the seed until it finishes the first boot.
         guest("cloud-init status --wait > /dev/null || true")
         seed.shutdown()
-    provision = "provision-arch.sh" if DISTRO == "arch" else "provision.sh"
-    with (HERE / provision).open("rb") as script:
+    with (HERE / "provision.sh").open("rb") as script:
         guest("bash -s", stdin=script)
     with (HERE / "install-zig.sh").open("rb") as script:
         guest("bash -s", stdin=script)
     sync()
     if compile_project:
-        build(*(["-Dgui=false"] if DISTRO == "arch" else []))
+        build()
 
 
 def main():

@@ -6,7 +6,7 @@ from pathlib import Path
 import struct
 import tempfile
 
-from check_clone_parity import run_runtime
+from check_legacy_checkpoints import run_runtime
 
 
 def main():

@@ -18,7 +18,7 @@
 #include "input/history_hover.hpp"
 #include "launch_arguments.hpp"
 #include "links/link_target.hpp"
-#include "login_shell.hpp"
+#include "platform/login_shell.hpp"
 #include "machine_client.hpp"
 #include "machines/machines.hpp"
 #include "metrics_projection.hpp"
@@ -38,7 +38,7 @@
 #include "telar_client/serializers/telar_protocol.hpp"
 #include "terminal_item.hpp"
 #include "text/utf16_prefix.hpp"
-#include "ui/workbench/terminal_font.hpp"
+#include "terminal_font.hpp"
 #include "window_animation_clock.hpp"
 #include "window_font_catalog.hpp"
 #include "window_images.hpp"
@@ -165,7 +165,7 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
   connect(&workspaces_, &QAbstractItemModel::rowsMoved, this, &Application::sidebarGeometryChanged);
   connect(&workspaces_, &QAbstractItemModel::dataChanged, this, &Application::sidebarGeometryChanged);
 
-  const login_shell::Command shell;
+  const platform::login_shell::Command shell;
   const auto directory = QDir::currentPath().toUtf8();
 
   session().setLaunch(Launch{
@@ -270,7 +270,7 @@ void Application::loadConfiguration(const QString &path, const QString &profile,
 
 void Application::configureLaunch(const QString &directory, const QStringList &arguments, bool restore) {
   const auto cwd = QDir{directory.isEmpty() ? QDir::currentPath() : directory}.absolutePath().toUtf8();
-  const login_shell::Command shell;
+  const platform::login_shell::Command shell;
   const LaunchArguments prepared{arguments};
   const auto command = arguments.isEmpty() ? shell.arguments() : prepared.argv();
   session().setLaunch(Launch{.cwd = {cwd.constData(), static_cast<std::size_t>(cwd.size())}, .arguments = command});

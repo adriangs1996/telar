@@ -11,7 +11,7 @@
 #include "qt/mode_projection.hpp"
 #include "qt/native_cell_text.hpp"
 #include "qt/projection.hpp"
-#include "ui/bundled_fonts.hpp"
+#include "qt/bundled_fonts.hpp"
 #include <QCoreApplication>
 #include <QDebug>
 #include <QFont>
@@ -65,7 +65,7 @@ class ModeBarTest final : public QObject {
 
 private:
   Q_SLOT static void initTestCase() {
-    ui::bundledFonts();
+    bundledFonts();
     QGuiApplication::setFont(QFont{QStringLiteral("IBM Plex Sans")});
   }
 

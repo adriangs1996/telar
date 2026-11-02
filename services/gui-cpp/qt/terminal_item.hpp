@@ -16,7 +16,7 @@
 #include "resident_fonts.hpp"
 #include "terminal/font_grid.hpp"
 #include "terminal_preparation.hpp"
-#include "ui/workbench/terminal_font.hpp"
+#include "terminal_font.hpp"
 #include "window_font_catalog.hpp"
 #include <QKeyEvent>
 #include <QList>
@@ -144,7 +144,7 @@ private:
 
   Application *application_ = nullptr;
   std::uint64_t pane_id_ = 0;
-  workbench::TerminalFont font_;
+  TerminalFont font_;
   FontGrid font_grid_;
   std::shared_ptr<const FontCollection> font_collection_;
   std::shared_ptr<ResidentFonts> fonts_;

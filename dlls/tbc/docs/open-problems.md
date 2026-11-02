@@ -1,7 +1,7 @@
 # Open problems
 
-Findings from running the checker over `runtime-cpp`, `gui-cpp`, and
-`desktop-mode` that are not solved yet. Each entry names the sites that show it,
+Findings from running the checker over `runtime-cpp` and `gui-cpp` that are
+not solved yet. Each entry names the sites that show it,
 whether they were verified, and what would resolve it. Sites are
 `services/`-relative.
 
@@ -113,12 +113,11 @@ its memory diagnostics, the ones not listed in this file are not triaged.
 
 ## Functions defined in another translation unit
 
-`desktop-mode`: 33 `tbc-missing-contract` sites for `DesktopSession::state` and
-`RuntimeSession::state`, and `gui-cpp`: 27 for `ConfigurationSource::input`,
+`gui-cpp`: 27 `tbc-missing-contract` sites for `ConfigurationSource::input`,
 `ConfigurationSource::configuration`, and `Application::configuration`. Each is
 declared in a header and defined in another source file, and its result is used,
 for instance by calling a member function on the returned reference. Declaring
-them as `tbc::view<const DesktopState &> state() const noexcept;` and so on
+them as `tbc::view<const InputConfiguration &> input() const noexcept;` and so on
 resolves the calls, and the checker verifies that contract when it checks the
 defining source file. That needs the services to include `tbc/view.hpp`, which
 none does yet. Cross-translation-unit summaries would infer these instead.

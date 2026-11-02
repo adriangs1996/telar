@@ -11,7 +11,7 @@
 #include "terminal/font_grid.hpp"
 #include <QtCore/qsystemdetection.h>
 #ifdef Q_OS_MACOS
-#include "ui/workbench/optical_text.hpp"
+#include "optical_text.hpp"
 #endif
 #include <QFont>
 #include <QPointF>
@@ -82,7 +82,7 @@ private:
   QRectF clip_;
   qreal scale_ = 1;
 #ifdef Q_OS_MACOS
-  std::unique_ptr<workbench::OpticalText> optical_;
+  std::unique_ptr<OpticalText> optical_;
 #endif
   std::unique_ptr<QSGNode> text_;
   QSGNode *next_chunk_ = nullptr;

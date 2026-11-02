@@ -19,7 +19,7 @@
 #include "qt/tab_strip_layout.hpp"
 #include "qt/typography_projection.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/bundled_fonts.hpp"
+#include "qt/bundled_fonts.hpp"
 #include <QAbstractItemModel>
 #include <QColor>
 #include <QGuiApplication>
@@ -142,7 +142,41 @@ class ChromeTest final : public QObject {
 
 private:
   Q_SLOT static void initTestCase() {
-    ui::bundledFonts();
+    bundledFonts();
+  }
+
+  Q_SLOT static void tabsLiveInNavigationRatherThanConfiguredBottomSlots() {
+    QQuickWindow window;
+    QQmlEngine engine;
+    ListModel tabs;
+    tabs.reconcile(tabRecords({.count = 2, .active = 0}));
+    auto properties = tabProperties(tabs, 1000);
+    properties.insert(QStringLiteral("tabModel"), properties.take(QStringLiteral("model")));
+    properties.insert(QStringLiteral("workspace"), QVariantMap{});
+    properties.insert(QStringLiteral("controlsInset"), 0);
+    properties.insert(QStringLiteral("workbenchLeft"), fixture_sidebar_width);
+    const auto navigation = createChrome(engine, QStringLiteral("NavigationBar"), properties);
+    navigation->setParentItem(window.contentItem());
+    window.resize(1000, ChromeMetrics{}.top_bar);
+    window.show();
+    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), fixture_wait_ms);
+    const auto *strip = navigation->findChild<TabStripLayout *>(QStringLiteral("tabStripLayout"));
+    QVERIFY(strip != nullptr);
+    QTRY_COMPARE_WITH_TIMEOUT(visualItems(*navigation, QStringLiteral("tabPill")).size(), 2, fixture_wait_ms);
+    QVERIFY(strip->mapToItem(navigation.get(), QPointF{}).x() >= fixture_sidebar_width);
+    QVERIFY(navigation->setProperty("rail", true));
+    QTRY_VERIFY_WITH_TIMEOUT(strip->width() > 0, fixture_wait_ms);
+    QVERIFY(strip->mapToItem(navigation.get(), QPointF{}).x() < fixture_sidebar_width);
+
+    const QVariantMap bottom_properties{
+        {QStringLiteral("controller"), QVariant::fromValue(static_cast<QObject *>(nullptr))},
+        {QStringLiteral("surface"), QVariantMap{{QStringLiteral("kind"), QStringLiteral("tabs")}}},
+        {QStringLiteral("colors"), themeColors(Configuration{})},
+        {QStringLiteral("typography"), properties.value(QStringLiteral("typography"))},
+    };
+    const auto bottom = createChrome(engine, QStringLiteral("ComponentSlot"), bottom_properties);
+    QCOMPARE(bottom->implicitWidth(), qreal{0});
+    QVERIFY(bottom->findChild<TabStripLayout *>() == nullptr);
   }
 
   Q_SLOT static void uncoveredLabelsKeepDimensions() {

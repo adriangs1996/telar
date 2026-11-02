@@ -55,21 +55,12 @@ jobs:
             -DZSTD_ROOT="$(brew --prefix zstd)" \
             -DPNG_ROOT="$(brew --prefix libpng)" \
             -DTELAR_RUNTIME_DISTRIBUTABLE=${{ matrix.distributable }} \
-            -DTELAR_RUNTIME_INSTALL_DESKTOP_COMMAND=ON \
             -DTELAR_RUNTIME_SANITIZERS=${{ matrix.sanitizers }}
 
       - name: Build and test
         run: |
-          cmake --build out --target telar-runtime runtime-tests tls-tests hook-tests desktop-launch-probe --parallel 3
+          cmake --build out --target telar-runtime runtime-tests tls-tests hook-tests --parallel 3
           ctest --test-dir out --output-on-failure -R '^(runtime-tests|tls-tests|hook-tests)$'
-
-      - name: Install and exercise Desktop discovery
-        run: |
-          cmake --install out --prefix "$RUNNER_TEMP/stage"
-          python3 tools/check_desktop_launch.py \
-            --cpp "$RUNNER_TEMP/stage/bin/telar" \
-            --probe out/desktop-launch-probe \
-            --output out/desktop-launch.json
 
       - name: Retain validation reports
         if: always()
@@ -79,4 +70,3 @@ jobs:
           path: |
             services/runtime-cpp/out/CMakeCache.txt
             services/runtime-cpp/out/Testing/Temporary/LastTest.log
-            services/runtime-cpp/out/desktop-launch.json

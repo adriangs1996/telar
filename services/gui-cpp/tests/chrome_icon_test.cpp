@@ -4,7 +4,7 @@
 #include "qt/alpha_mask_material.hpp"
 #include "qt/native_chrome_icon.hpp"
 #include "qt/resident_fonts.hpp"
-#include "ui/bundled_fonts.hpp"
+#include "qt/bundled_fonts.hpp"
 #include <QColor>
 #include <QDebug>
 #include <QGuiApplication>
@@ -108,7 +108,7 @@ class ChromeIconTest final : public QObject {
 
 private:
   Q_SLOT static void initTestCase() {
-    ui::bundledFonts();
+    bundledFonts();
   }
 
   Q_SLOT static void symbolsFallbackKeepsOriginalCoverage() {

@@ -335,7 +335,7 @@ void placeDetachedElementGrowth(std::vector<std::unique_ptr<std::string>> &names
 
 // CASE: place.moved_owner_cleared
 // PAIR: place.moved_owner
-// SOURCE: services/desktop-mode/ui/workbench/controller.cpp :: Controller
+// SOURCE: services/gui-cpp/application/session.hpp :: Session::apply(TabCreated)
 // STATUS: implemented
 // CONTRACT: An object moved into a container's element is destroyed when the container is cleared.
 // SCENARIO: A pointer to the moved object is read after the vector is cleared.
@@ -351,7 +351,7 @@ void placeMovedOwnerCleared(std::vector<std::unique_ptr<places::pane>> &panes) {
 
 // CASE: place.moved_owner_survives_growth
 // PAIR: place.moved_owner
-// SOURCE: services/desktop-mode/ui/workbench/controller.cpp :: Controller
+// SOURCE: services/gui-cpp/application/session.hpp :: Session::apply(TabCreated)
 // STATUS: implemented
 // CONTRACT: An object moved into a container's element survives the container's reallocation.
 // SCENARIO: A pointer to the moved object is read after another element is appended; accept.

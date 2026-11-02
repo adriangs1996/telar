@@ -26,8 +26,8 @@
 #include "terminal/font_grid.hpp"
 #include "terminal/screen.hpp"
 #include "terminal/selection.hpp"
-#include "ui/bundled_fonts.hpp"
-#include "ui/workbench/terminal_font.hpp"
+#include "qt/bundled_fonts.hpp"
+#include "qt/terminal_font.hpp"
 #include <QColor>
 #include <QGuiApplication>
 #include <QImage>
@@ -432,7 +432,7 @@ private:
   QString preedit_;
   QQuickWindow window_;
   ResolvedFont resolved_;
-  workbench::TerminalFont font_;
+  TerminalFont font_;
   SceneItem item_;
   std::uint64_t frame_id_ = 0;
 };
@@ -628,7 +628,7 @@ private:
   }
 
   Q_SLOT static void boxStrokeUsesDesignMetricsAtDisplayScale() {
-    const auto font = workbench::TerminalFont::resolve(QVariantMap{}, 1);
+    const auto font = TerminalFont::resolve(QVariantMap{}, 1);
     constexpr qreal quadrupled_scale = 4;
     constexpr float expected_thickness = 3;
     constexpr float doubled_thickness = 2;
@@ -905,7 +905,7 @@ private:
     const auto target = requireLinkTarget("https://preview.test/" + std::string(long_path_size, 'x'));
     const LinkHit hit{.location = no_location, .content = {.width = pane_width, .height = pane_height}, .area = {.width = cell_width, .height = cell_height}, .match = {.target = target, .start = origin, .end = origin}};
     const TerminalSurface surface{.content = hit.content, .cell = {.x = cell_width, .y = cell_height}};
-    const workbench::TerminalFont font = workbench::TerminalFont::resolve(QVariantMap{}, 1);
+    const TerminalFont font = TerminalFont::resolve(QVariantMap{}, 1);
     const auto preview = LinkPreview::layout(hit, surface, font.faces.front(), 1);
     if (!preview) {
       QFAIL("The valid scene fixture must produce a link preview");
@@ -1015,7 +1015,7 @@ private:
 
 int main(int argc, char **argv) {
   const QGuiApplication application{argc, argv};
-  ui::bundledFonts();
+  bundledFonts();
   SceneTest test;
 
   return QTest::qExec(&test, argc, argv);

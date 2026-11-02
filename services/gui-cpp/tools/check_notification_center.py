@@ -291,7 +291,7 @@ def main():
         root / 'services/gui-cpp/application/notification_item.hpp',
         root / 'services/gui-cpp/core/smoothstep.hpp',
         root / 'services/gui-cpp/tools/notification_center_probe.cpp',
-        root / 'services/desktop-mode/telar_client/serializers/telar_messages.hpp',
+        root / 'dlls/telar-client/include/telar_client/serializers/telar_messages.hpp',
     ]
     sources += sorted((root / 'src/model/notifications').glob('*.zig'))
     sources += sorted((root / 'lib/animate').rglob('*.zig'))

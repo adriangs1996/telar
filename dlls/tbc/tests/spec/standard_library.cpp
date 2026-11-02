@@ -421,7 +421,7 @@ standard::node *movedIntoCallerOwner(std::unique_ptr<standard::node> &owner) {
 
 // CASE: std.moved_into_container
 // PAIR: std.moved_owner
-// SOURCE: services/desktop-mode/ui/workbench/controller.cpp :: Controller
+// SOURCE: services/gui-cpp/application/session.hpp :: Session::apply(TabCreated)
 // STATUS: implemented
 // CONTRACT: A unique_ptr moved into a container keeps its object alive for as long as the container.
 // SCENARIO: A reference to the created object outlives the moved-from local; accept.
@@ -481,7 +481,7 @@ std::vector<std::string_view> emplacedViewParameter(const std::string &text) {
 
 // CASE: std.pointer_element_escape
 // PAIR: std.pointer_element
-// SOURCE: services/desktop-mode/runtime_session.cpp :: agents
+// SOURCE: services/gui-cpp/platform/runtime_endpoint.cpp :: spawn
 // STATUS: implemented
 // CONTRACT: A pointer element, pushed or emplaced, designates the object it points to.
 // SCENARIO: The stored pointers designate a local that dies before the returned vector.
@@ -497,7 +497,7 @@ std::vector<const int *> pointerElementEscape() {
 
 // CASE: std.pointer_element_position
 // PAIR: std.pointer_element
-// SOURCE: services/desktop-mode/runtime_session.cpp :: agents
+// SOURCE: services/gui-cpp/platform/runtime_endpoint.cpp :: spawn
 // STATUS: implemented
 // CONTRACT: The position an insertion or an emplacement takes is not stored as an element.
 // SCENARIO: The stored pointers designate the caller's object, inserted at a position of the local vector; accept.
@@ -512,7 +512,7 @@ std::vector<const int *> pointerElementPosition(const int &value) {
 
 // CASE: std.inserted_range_escape
 // PAIR: std.inserted_range
-// SOURCE: services/desktop-mode/shortcuts.cpp :: Shortcuts::compile
+// SOURCE: services/gui-cpp/fonts/row_text_layout.hpp :: RowTextLayout::appendPrimary
 // STATUS: implemented
 // CONTRACT: An inserted iterator range copies the elements it designates, with their dependencies.
 // SCENARIO: The copied views point into a local string that dies before the returned vector.
@@ -528,7 +528,7 @@ std::vector<std::string_view> insertedRangeEscape() {
 
 // CASE: std.inserted_range_parameter
 // PAIR: std.inserted_range
-// SOURCE: services/desktop-mode/shortcuts.cpp :: Shortcuts::compile
+// SOURCE: services/gui-cpp/fonts/row_text_layout.hpp :: RowTextLayout::appendPrimary
 // STATUS: implemented
 // CONTRACT: An inserted iterator range copies the elements it designates, not the source container's storage.
 // SCENARIO: The copied views point into the caller's string, while the local source vector dies; accept.

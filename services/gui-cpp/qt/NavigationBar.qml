@@ -89,5 +89,20 @@ Rectangle {
         visible: root.rail && root.contextWidth > 0
     }
 
-
+    TerminalTabs {
+        controller: root.controller
+        model: root.tabModel
+        x: root.rail ? root.contextRight : Math.max(root.machineRight, root.workbenchLeft)
+        width: Math.max(0, root.width - root.padding - x)
+        height: root.height
+        colors: root.colors
+        typography: root.typography
+        ratio: root.ratio
+        textScale: root.textScale
+        prefixPending: root.prefixPending
+        onSelected: key => root.tabSelected(key)
+        onClosed: key => root.tabClosed(key)
+        onRenamed: root.tabRenamed()
+        onCreated: root.tabCreated()
+    }
 }

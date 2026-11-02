@@ -13,7 +13,7 @@
 #include "terminal/font_grid.hpp"
 #include "terminal/screen.hpp"
 #ifdef Q_OS_MACOS
-#include "ui/workbench/optical_text.hpp"
+#include "optical_text.hpp"
 #endif
 #include <QBrush>
 #include <QFont>
@@ -47,7 +47,7 @@ void TextScene::configure([[maybe_unused]] const FontConfiguration &font, FontGr
   if (!font.thicken) {
     optical_.reset();
   } else if (!optical_) {
-    optical_ = workbench::OpticalText::create();
+    optical_ = OpticalText::create();
   }
 
   strength_ = font.thicken_strength;

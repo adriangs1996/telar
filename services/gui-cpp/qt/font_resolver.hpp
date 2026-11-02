@@ -5,13 +5,13 @@
 #include "font_source.hpp"
 #include "fonts/face.hpp"
 #include "terminal/font_grid.hpp"
-#include "ui/workbench/terminal_font.hpp"
+#include "terminal_font.hpp"
 #include <QtCore/qtypes.h>
 
 namespace telar::gui::qt {
 
 struct ResolvedFont {
-  workbench::TerminalFont font;
+  TerminalFont font;
   FontGrid grid;
 };
 

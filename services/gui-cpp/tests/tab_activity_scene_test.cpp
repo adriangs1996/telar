@@ -17,7 +17,7 @@
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
-#include "ui/bundled_fonts.hpp"
+#include "qt/bundled_fonts.hpp"
 #include <QAbstractItemModel>
 #include <QColor>
 #include <QDebug>
@@ -150,7 +150,7 @@ class TabActivitySceneTest final : public QObject {
 
 private:
   Q_SLOT static void initTestCase() {
-    ui::bundledFonts();
+    bundledFonts();
   }
 
   Q_SLOT static void originalRingAndCapsuleAtlas() {

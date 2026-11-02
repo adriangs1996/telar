@@ -9,7 +9,7 @@
 #include "qt/utf16_encoding.hpp"
 #include <QtCore/qstringliteral.h>
 #include "text/utf8.hpp"
-#include "ui/bundled_fonts.hpp"
+#include "qt/bundled_fonts.hpp"
 #include <QClipboard>
 #include <QFont>
 #include <QGuiApplication>
@@ -79,7 +79,7 @@ class FormFieldTest final : public QObject {
   Q_OBJECT
 
   Q_SLOT static void initTestCase() {
-    ui::bundledFonts();
+    bundledFonts();
     QGuiApplication::setFont(QFont{QStringLiteral("IBM Plex Sans")});
   }
 

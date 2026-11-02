@@ -59,7 +59,6 @@ int main(int argc, char **argv) {
     testProcessIdentification();
     testDeferredReports();
     testDescent();
-    testClone();
     testLaunchDirectory();
     testLaunchFailures();
     testWorktreeLifecycle();

@@ -15,7 +15,7 @@
 #include "qt/projection.hpp"
 #include "qt/sidebar_projection.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/bundled_fonts.hpp"
+#include "qt/bundled_fonts.hpp"
 #include <QAbstractItemModel>
 #include <QCoreApplication>
 #include <QDebug>
@@ -85,7 +85,7 @@ class AgentTimelineTest final : public QObject {
 
 private:
   Q_SLOT static void initTestCase() {
-    ui::bundledFonts();
+    bundledFonts();
     QGuiApplication::setFont(QFont{QStringLiteral("IBM Plex Sans")});
   }
 

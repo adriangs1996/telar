@@ -4,7 +4,7 @@
 #include "cli/server_options.hpp"
 #include "core/memory.hpp"
 #include "platform/process_environment.hpp"
-#include "runtime_endpoint.hpp"
+#include "platform/runtime_endpoint.hpp"
 #include <QLocalSocket>
 #include <QString>
 #include <QtCore/qtypes.h>
@@ -13,7 +13,7 @@ namespace telar::gui::qt {
 
 struct NativeRuntimeStartup {
   [[nodiscard]] static QString resolve() {
-    return QString::fromStdString(runtime_endpoint::resolve());
+    return QString::fromStdString(platform::runtime_endpoint::resolve());
   }
 };
 

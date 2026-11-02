@@ -165,7 +165,7 @@ def main():
         cpp, zig = temporary / "probe.cpp", temporary / "probe.zig"
         cpp.write_text(cpp_probe)
         zig.write_text(zig_probe.replace("RETAINED_PROJECTION", projection) + encoder)
-        includes = [root / "services/gui-cpp", root / "services/runtime-cpp", root / "services/desktop-mode"]
+        includes = [root / "services/gui-cpp", root / "services/runtime-cpp", root / "dlls/telar-client/include"]
         subprocess.run([arguments.compiler, "-std=c++23", "-O2", *[flag for path in includes for flag in ("-I", str(path))], str(cpp), "-o", str(temporary / "cpp")], check=True)
         modules = ["--dep", "model", "--dep", "telar-core", "--dep", "cellgrid", "--dep", "keyinput", f"-Mroot={zig}"]
         modules += ["--dep", "telar-core", "--dep", "cellgrid", "--dep", "keyinput", "--dep", "urlscan", f"-Mmodel={root / 'src/model/model.zig'}"]

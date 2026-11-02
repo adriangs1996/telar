@@ -41,7 +41,7 @@
 #include "qt/runtime_connection.hpp"
 #include "qt/terminal_item.hpp"
 #include "qt/window_animation_clock.hpp"
-#include "runtime_endpoint.hpp"
+#include "platform/runtime_endpoint.hpp"
 #include "screen_fixture.hpp"
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
@@ -53,7 +53,7 @@
 #include "text/json.hpp"
 #include "text/utf16_prefix.hpp"
 #include "text/utf8.hpp"
-#include "ui/bundled_fonts.hpp"
+#include "qt/bundled_fonts.hpp"
 #include <QAccessible>
 #include <QByteArray>
 #include <QClipboard>
@@ -540,7 +540,7 @@ private:
     runtime_.start();
     QVERIFY(runtime_.waitForStarted());
     QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(socket_), runtime_wait_ms);
-    ui::bundledFonts();
+    bundledFonts();
     QFont chrome_font{QStringLiteral("IBM Plex Sans")};
     chrome_font.setPixelSize(chrome_font_pixels);
     QGuiApplication::setFont(chrome_font);
@@ -4238,7 +4238,7 @@ return {api_version=2, client={keybindings={
   }
 
   Q_SLOT void routedPluginWorker() {
-    const auto program = QStandardPaths::findExecutable(QString::fromStdString(runtime_endpoint::program()));
+    const auto program = QStandardPaths::findExecutable(QString::fromStdString(platform::runtime_endpoint::program()));
     QVERIFY(!program.isEmpty());
     QCOMPARE(QFileInfo{program}.canonicalFilePath(), QFileInfo{qEnvironmentVariable("TELAR_GUI_TEST_RUNTIME")}.canonicalFilePath());
     const auto cleanup = qScopeGuard([this] {
@@ -5063,7 +5063,7 @@ return {api_version=2, client={keybindings={
       local t = require('telar')
       return {api_version=2,client={bars={bottom={
         left=t.bar.metrics(),center=t.bar.tabs(),right=t.bar.machines(),
-      },top={right=t.bar.static(t.ui.label({text=string.rep('Priority λ ',5),priority=100}))}}}}
+      },top={right=t.bar.static(t.ui.label({text=string.rep('Priority λ ',8),priority=100}))}}}}
     )";
     writeTestFile(path, configuration);
     client_->loadConfiguration(path, {}, {});
@@ -5078,7 +5078,7 @@ return {api_version=2, client={keybindings={
     }
     QCOMPARE(nodes("right").first().toMap().value(QStringLiteral("priority")).toInt(), 40);
     QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-    const auto caption = QStringLiteral("Priority λ ").repeated(5);
+    const auto caption = QStringLiteral("Priority λ ").repeated(8);
     const auto *label = componentItem(QStringLiteral("label"), caption);
     QVERIFY(label != nullptr);
     const auto cpu_items = [this] {
@@ -5093,8 +5093,8 @@ return {api_version=2, client={keybindings={
     const auto *metrics = cpu->parentItem()->parentItem();
     const auto ratio = metrics->property("ratio").toReal();
     const auto full_width = metrics->implicitWidth();
-    constexpr qreal tabs_and_spacing = 160;
-    const auto narrow_width = qCeil(label->implicitWidth() + (tabs_and_spacing * ratio) + (full_width / 2));
+    constexpr qreal bar_spacing = 40;
+    const auto narrow_width = qCeil(label->implicitWidth() + (bar_spacing * ratio) + (full_width / 2));
     QVERIFY(narrow_width >= window_->minimumWidth());
     window_->resize(narrow_width, original_size.height());
     QTRY_VERIFY_WITH_TIMEOUT(metrics->width() < full_width, runtime_wait_ms);

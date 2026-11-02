@@ -11,8 +11,8 @@
 #include "qt/font_source.hpp"
 #include "terminal/font_grid.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "ui/bundled_fonts.hpp"
-#include "ui/workbench/terminal_font.hpp"
+#include "qt/bundled_fonts.hpp"
+#include "qt/terminal_font.hpp"
 #include <QByteArray>
 #include <QFile>
 #include <QFont>
@@ -308,7 +308,7 @@ private:
 
 int main(int argc, char **argv) {
   const QGuiApplication application{argc, argv};
-  ui::bundledFonts();
+  bundledFonts();
   FontResolverTest test;
 
   return QTest::qExec(&test, argc, argv);

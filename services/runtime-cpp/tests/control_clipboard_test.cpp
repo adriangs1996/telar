@@ -2,14 +2,14 @@
 #include "runtime/clipboard_service.hpp"
 #include "runtime/workspace_service.hpp"
 #include "client_peer.hpp"
-#include "ui/workbench/clipboard_task.hpp"
+#include "clipboard_task.hpp"
 #include <cstdio>
 #include <poll.h>
 #include <termios.h>
 
 using namespace telar;
 using namespace telar::runtime;
-using namespace workbench;
+using namespace telar::runtime::control_test;
 
 namespace {
 std::span<const Byte> bytes(std::string_view text) {

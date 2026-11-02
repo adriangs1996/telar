@@ -16,12 +16,6 @@ pub const family: FamilyHelp = .{
         \\Arguments:
         \\  --fresh          Set the previous session checkpoint aside (`session.ckpt.previous`)
         \\                   instead of restoring it. Refused while a runtime is already running.
-        \\  --clone-session FILE --clone-from SOCKET
-        \\                   Seed an unused runtime from a source runtime's atomic session checkpoint.
-        \\                   Requires --no-config, absolute paths and separate socket/history paths.
-        \\                   Copies workspaces, tabs and layouts with fresh shells, without resuming
-        \\                   agents or acquiring ownership of the source's worktrees. Later starts
-        \\                   preserve the clone. Desktop reuses the original workspaces' Spaces.
         \\  --socket PATH    Listen at PATH instead of $XDG_RUNTIME_DIR/telar/runtime.sock.
         \\  --graphics-pane-mib N, --graphics-global-mib N
         \\                   Decoded image memory per pane and for the runtime (defaults {d} and

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare Ghostty and the Telar GUI at verified GPU completion.
+"""Compare terminal GUIs at verified GPU completion or Metal drawable presentation.
 
 The name is historical: the Telar TUI mode left with the TUI, and published
 performance records still name this file.
@@ -23,11 +23,37 @@ import subprocess
 import time
 
 from echo_latency import percentile
+from terminal_bench_report import latency_samples, validate_telar_display_sync
 from perf_e2e import stop_runtime
 from terminal_bench_fixture import background_rate
 
 WARMUP = 20
 BACKGROUND_RATE_TOLERANCE = .05
+MODE_GROUPS = dict(native=['ghostty', 'gui'], telar=['gui', 'gui-cpp'])
+TELAR_MODES = ('gui', 'gui-cpp')
+
+
+def client_command(mode, binary, cpp_gui, config, fixture):
+    if mode == 'ghostty':
+        return fixture
+    if mode == 'gui':
+        return [str(binary), 'gui', '--config', str(config)] + fixture
+    if mode == 'gui-cpp':
+        return [str(cpp_gui), '--fresh', '--config', str(config)] + fixture
+
+    raise ValueError(f'unknown GUI mode: {mode}')
+
+
+def validate_telar_grids(reference, candidate):
+    def geometry(result):
+        fixtures = sorted((fixture['role'], fixture['cols'], fixture['rows']) for fixture in result['fixtures'])
+
+        return dict(viewport=result['viewport'], scale=result['backing_scale'],
+                    primary_cells=result['pty_cells'], marker=result['marker'], fixture_cells=fixtures)
+
+    before, after = geometry(reference), geometry(candidate)
+    if before != after:
+        raise ValueError(f'Telar GUI grids differ: Zig={before}, C++={after}')
 
 
 class ProbeFailure(RuntimeError):
@@ -42,6 +68,17 @@ def summarize(values):
     return dict(n=len(values), p50_ms=statistics.median(values),
                 p95_ms=percentile(values, .95), p99_ms=percentile(values, .99),
                 max_ms=max(values))
+
+
+def aggregate_runs(results, cases, modes):
+    aggregate = {}
+    for case in cases:
+        for mode in modes:
+            samples = [value for result in results if result['mode'] == mode and result['case'] == case
+                       for value in latency_samples(result)[WARMUP:]]
+            aggregate[f'{case}/{mode}'] = summarize(samples)
+
+    return aggregate
 
 
 def background_load(fixtures, requested_rate):
@@ -110,21 +147,26 @@ def measure(mode, directory, setup):
     if mode != 'ghostty':
         subprocess.run([str(binary), 'server', '--background', '--no-config'],
                        env=env, cwd=directory, check=True)
-    args = [str(binary), 'gui', '--config', str(config)] + fixture if mode == 'gui' else fixture
+    args = client_command(mode, binary, getattr(options, 'cpp_gui', None), config, fixture)
     probe_env = dict(DYLD_INSERT_LIBRARIES=str(library),
                      TELAR_DISPLAY_RESULT=str(directory / 'result.json'),
                      TELAR_DISPLAY_SAMPLES=str(options.samples + WARMUP),
+                     TELAR_DISPLAY_WARMUP=str(WARMUP),
+                     TELAR_DISPLAY_IDLE_SECONDS=str(getattr(options, 'idle_seconds', 2)),
                      TELAR_DISPLAY_INPUT_METHOD=options.input_method,
+                     TELAR_DISPLAY_ENDPOINT=getattr(options, 'endpoint', 'gpu'),
                      TELAR_DISPLAY_MODE=mode)
     if case:
         probe_env.update(TELAR_DISPLAY_DIRECTORY=str(directory),
                          TELAR_DISPLAY_LAYOUT=case.removesuffix('-load'),
                          TELAR_DISPLAY_PANES=str(1 if case == 'single' else options.panes))
-    if options.viewport and (mode == 'gui' or case):
+    if options.viewport and (mode in TELAR_MODES or case):
         probe_env['TELAR_DISPLAY_VIEWPORT'] = ','.join(map(str, options.viewport))
     if getattr(options, 'float_windows', False):
         probe_env['TELAR_DISPLAY_AEROSPACE'] = shutil.which('aerospace')
-    if mode == 'gui':
+    if getattr(options, 'capture', False):
+        probe_env['TELAR_DISPLAY_CAPTURE'] = str(directory / 'window.png')
+    if mode in TELAR_MODES:
         command = args
         launch_env = dict(env, **probe_env)
     else:
@@ -148,9 +190,11 @@ def measure(mode, directory, setup):
                     '--keybind=ctrl+shift+o=goto_tab:1',
                     '--command=' + str(wrapper)]
         launch_env = dict(env, **probe_env)
+
+    launch_env['TELAR_DISPLAY_EXECUTABLE'] = command[0]
     try:
         with (directory / 'launch.log').open('w') as log:
-            process = subprocess.Popen(command, env=launch_env, cwd=directory, stdout=log, stderr=log)
+            process = subprocess.Popen(command, env=launch_env, cwd=getattr(options, 'cwd', None) or directory, stdout=log, stderr=log)
             try:
                 process.wait(timeout=105)
             except subprocess.TimeoutExpired:
@@ -160,7 +204,7 @@ def measure(mode, directory, setup):
             if process.returncode:
                 raise RuntimeError(f'{mode} exited with {process.returncode}: {directory}')
     finally:
-        if mode != 'gui':
+        if mode == 'ghostty':
             cleanup_host(app)
         if mode != 'ghostty':
             shutdown = stop_runtime(str(binary), env)
@@ -171,8 +215,17 @@ def measure(mode, directory, setup):
     result = json.loads(result_path.read_text())
     if result['failed'] or len(result['gpu_ms']) != options.samples + WARMUP:
         raise ProbeFailure(mode, result)
+    endpoint = getattr(options, 'endpoint', 'gpu')
+    if result.get('endpoint', 'gpu') != endpoint:
+        raise ValueError('The native probe used a different frame endpoint')
+    samples = latency_samples(result)
+    if len(samples) != options.samples + WARMUP:
+        raise ValueError('The native probe did not complete every requested frame endpoint')
     result.update(mode=mode, pty_cells=json.loads((directory / 'size.json').read_text()),
-                  warmup=WARMUP, summary=summarize(result['gpu_ms'][WARMUP:]))
+                  warmup=WARMUP, summary=summarize(samples[WARMUP:]))
+    if getattr(options, 'capture', False):
+        capture = directory / 'window.png'
+        result['capture'] = dict(path=str(capture), sha256=hashlib.sha256(capture.read_bytes()).hexdigest())
     if case:
         result['case'] = case
         result['text_pattern'] = env['BENCH_TEXT_PATTERN']
@@ -200,6 +253,8 @@ def measure(mode, directory, setup):
         if rate is not None:
             result['background_load'] = background_load(result['fixtures'], rate)
     (directory / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
+    if mode in TELAR_MODES:
+        validate_telar_display_sync(result)
     if case and rate is not None and not result['background_load']['rate_met']:
         raise RuntimeError(f'background output missed its requested rate; raw observations retained in {result_path}')
     print(json.dumps(dict(mode=mode, round=directory.name, viewport=result['viewport'],
@@ -214,8 +269,14 @@ def main():
     parser.add_argument('--ghostty-app', type=Path, default=Path('/Applications/Ghostty.app'))
     parser.add_argument('--samples', type=int, default=100)
     parser.add_argument('--rounds', type=int, default=3)
-    parser.add_argument('--vsync', choices=['true', 'false'], default='true')
-    parser.add_argument('--mode', choices=['native', 'gui', 'ghostty'], default='native')
+    parser.add_argument('--idle-seconds', type=float, default=2, help='idle CPU observation before input samples, from 0 to 10 seconds')
+    parser.add_argument('--vsync', choices=['true', 'false'], default='true', help='Ghostty presentation policy; Telar requires true')
+    parser.add_argument('--endpoint', choices=['gpu', 'presented'], default='gpu', help='Measure verified GPU completion or the native drawable presentation timestamp')
+    parser.add_argument('--mode', choices=['native', 'telar', 'gui', 'gui-cpp', 'ghostty'], default='native')
+    parser.add_argument('--cpp-gui', type=Path, help='Qt Quick executable for --mode telar or gui-cpp')
+    parser.add_argument('--config', type=Path, help='same GUI configuration for both Telar clients')
+    parser.add_argument('--cwd', type=Path, help='same initial working directory for --mode telar, gui or gui-cpp')
+    parser.add_argument('--capture', action='store_true', help='save a Metal frame before warmup; peak RSS includes capture overhead')
     parser.add_argument('--cases', nargs='+', choices=['single', 'splits', 'tabs', 'splits-load', 'tabs-load'],
                         default=['single'])
     parser.add_argument('--panes', type=int, choices=[2, 4], default=4)
@@ -231,6 +292,25 @@ def main():
     parser.add_argument('--viewport', type=int, nargs=2, metavar=('WIDTH', 'HEIGHT'),
                         help='fix render-target pixels independently of the window manager')
     options = parser.parse_args()
+    if not 0 <= options.idle_seconds <= 10:
+        parser.error('--idle-seconds must be finite and between 0 and 10')
+    if options.capture and options.idle_seconds == 0:
+        parser.error('--capture requires a positive --idle-seconds interval')
+    if options.config is not None and not options.config.is_file():
+        parser.error('--config must name an existing Lua file')
+    modes = MODE_GROUPS.get(options.mode, [options.mode])
+    if options.endpoint == 'presented' and any(mode not in TELAR_MODES for mode in modes):
+        parser.error('--endpoint presented requires Telar-only modes')
+    if options.cwd is not None:
+        if 'ghostty' in modes or not options.cwd.is_dir():
+            parser.error('--cwd requires Telar-only modes and an existing directory')
+        options.cwd = options.cwd.resolve()
+    if 'gui-cpp' in modes:
+        if options.cpp_gui is None or not options.cpp_gui.is_file() or not os.access(options.cpp_gui, os.X_OK):
+            parser.error('--mode telar and gui-cpp require an executable --cpp-gui')
+        options.cpp_gui = options.cpp_gui.resolve()
+    if options.vsync != 'true' and any(mode in TELAR_MODES for mode in modes):
+        parser.error('Telar comparisons require --vsync true')
     if options.input_method == 'text' and options.mode != 'gui':
         parser.error('--input-method text requires --mode gui')
     if options.throughput and options.cases != ['single']:
@@ -247,31 +327,36 @@ def main():
     directory.mkdir(mode=0o700, parents=True, exist_ok=False)
     binary = options.binary.resolve()
     app = directory / 'GhosttyProbe.app'
-    shutil.copytree(options.ghostty_app, app, symlinks=True)
-    info_path = app / 'Contents/Info.plist'
-    with info_path.open('rb') as file:
-        info = plistlib.load(file)
-    info['CFBundleIdentifier'] = 'dev.telar.latency-probe.' + hashlib.sha256(str(directory).encode()).hexdigest()[:12]
-    info['SUEnableAutomaticChecks'] = False
-    with info_path.open('wb') as file:
-        plistlib.dump(info, file)
-    subprocess.run(['codesign', '--force', '--deep', '--sign', '-', str(app)], check=True,
-                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    if 'ghostty' in modes:
+        shutil.copytree(options.ghostty_app, app, symlinks=True)
+        info_path = app / 'Contents/Info.plist'
+        with info_path.open('rb') as file:
+            info = plistlib.load(file)
+        info['CFBundleIdentifier'] = 'dev.telar.latency-probe.' + hashlib.sha256(str(directory).encode()).hexdigest()[:12]
+        info['SUEnableAutomaticChecks'] = False
+        with info_path.open('wb') as file:
+            plistlib.dump(info, file)
+        subprocess.run(['codesign', '--force', '--deep', '--sign', '-', str(app)], check=True,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     library = directory / 'probe.dylib'
     subprocess.run(['clang', '-dynamiclib', '-O2', '-fobjc-arc', '-framework', 'AppKit',
                     '-framework', 'QuartzCore', '-framework', 'Metal',
                     str(Path(__file__).with_suffix('.m')), '-o', str(library)], check=True)
-    config = directory / 'config.lua'
-    config.write_text("local t = require('telar')\nreturn { api_version = 2, client = { "
-                      "sidebar = { visible = false }, pane_gaps = false, "
-                      "bars = { bottom = { left = t.bar.static(' '), center = t.bar.static(' '), "
-                      "right = t.bar.tabs() } } }, gui = { font = { family = 'JetBrains Mono', size = 15 }, "
-                      "window = { padding = { x = 0, y = 0 }, background_opacity = 1 }, "
-                      "cursor = { blink = false } } }\n")
+    if options.config is not None:
+        config = options.config.resolve()
+    else:
+        config = directory / 'config.lua'
+        config.write_text("local t = require('telar')\nreturn { api_version = 2, client = { "
+                          "sidebar = { visible = false }, pane_gaps = false, "
+                          "bars = { bottom = { left = t.bar.static(' '), center = t.bar.static(' '), "
+                          "right = t.bar.tabs() } } }, gui = { font = { family = 'JetBrains Mono', size = 15 }, "
+                          "window = { padding = { x = 0, y = 0 }, background_opacity = 1 }, "
+                          "cursor = { blink = false } } }\n")
     manifest = dict(binary=str(binary), sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
-                    ghostty_version=subprocess.check_output(
-                        [str(options.ghostty_app / 'Contents/MacOS/ghostty'), '+version'], text=True),
-                    vsync=options.vsync, warmup=WARMUP, rounds=options.rounds,
+                    vsync=options.vsync, endpoint=options.endpoint, warmup=WARMUP, rounds=options.rounds,
+                    idle_seconds=options.idle_seconds,
+                    capture=options.capture,
+                    working_directory=str(options.cwd) if options.cwd else None,
                     input_method=options.input_method, cases=options.cases, panes=options.panes,
                     text_pattern=options.text_pattern, background_mib_per_second=options.background_mib_per_second,
                     background_rate_tolerance=BACKGROUND_RATE_TOLERANCE,
@@ -286,16 +371,31 @@ def main():
     patch = subprocess.check_output(['git', 'diff', '--', 'src', 'build', 'build.zig', 'build.zig.zon'], cwd=source)
     (directory / 'source.patch').write_bytes(patch)
     manifest['source_patch_sha256'] = hashlib.sha256(patch).hexdigest()
-    manifest['ghostty_sha256'] = hashlib.sha256((options.ghostty_app / 'Contents/MacOS/ghostty').read_bytes()).hexdigest()
+    if 'ghostty' in modes:
+        ghostty = options.ghostty_app / 'Contents/MacOS/ghostty'
+        manifest['ghostty_version'] = subprocess.check_output([str(ghostty), '+version'], text=True)
+        manifest['ghostty_sha256'] = hashlib.sha256(ghostty.read_bytes()).hexdigest()
+    if 'gui-cpp' in modes:
+        manifest['cpp_gui'] = str(options.cpp_gui)
+        manifest['cpp_gui_sha256'] = hashlib.sha256(options.cpp_gui.read_bytes()).hexdigest()
+        changed = subprocess.check_output(['git', 'ls-files', '-m', '-o', '--exclude-standard', '-z', '--', 'services'], cwd=source)
+        manifest['cpp_changed_source_sha256'] = {
+            name: hashlib.sha256((source / name).read_bytes()).hexdigest()
+            for name in changed.decode().split('\0') if name and (source / name).is_file()}
     manifest['config_sha256'] = hashlib.sha256(config.read_bytes()).hexdigest()
+    manifest['config_path'] = str(config)
+    shutil.copy2(config, directory / 'used-config.lua')
     manifest['probe_sha256'] = {name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
-                                for name in ('gui_tui_latency.py', 'gui_tui_latency.m', 'terminal_bench_fixture.py')}
+                                for name in ('gui_tui_latency.py', 'gui_tui_latency.m', 'gui_view.h', 'terminal_bench_fixture.py', 'terminal_bench_report.py')}
+    probe_source = directory / 'probe-source'
+    probe_source.mkdir()
+    for name in manifest['probe_sha256']:
+        shutil.copy2(Path(__file__).parent / name, probe_source / name)
     (directory / 'processes-before.txt').write_text(subprocess.check_output(['ps', '-axo', 'pid,ppid,%cpu,rss,comm'], text=True))
     (directory / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     results = []
     rejected = []
     setup = binary, app, library, config, options
-    modes = dict(native=['ghostty', 'gui']).get(options.mode, [options.mode])
     for round_index in range(options.rounds):
         # Reversed cyclic permutations balance three variants over six rounds.
         offset = (round_index // 2) % len(modes)
@@ -321,10 +421,12 @@ def main():
                 result['round'] = round_index
                 results.append(result)
                 (directory / 'runs.json').write_text(json.dumps(results, indent=2) + '\n')
-    report = dict(manifest=manifest, runs=results, rejected_startups=rejected, aggregate={
-        f'{case}/{mode}': summarize([value for result in results if result['mode'] == mode and result['case'] == case
-                         for value in result['gpu_ms'][WARMUP:]])
-        for case in options.cases for mode in modes})
+                if options.mode == 'telar':
+                    paired = {row['mode']: row for row in results if row['round'] == round_index and row['case'] == case}
+                    if len(paired) == len(TELAR_MODES):
+                        validate_telar_grids(paired['gui'], paired['gui-cpp'])
+    report = dict(manifest=manifest, runs=results, rejected_startups=rejected,
+                  aggregate=aggregate_runs(results, options.cases, modes))
     (directory / 'comparison.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report['aggregate'], indent=2), flush=True)
 

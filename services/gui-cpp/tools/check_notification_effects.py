@@ -190,7 +190,7 @@ def main():
         "services/gui-cpp/text/bounded_text.hpp",
         "services/gui-cpp/core/configuration.hpp",
         "services/runtime-cpp/memory/fixed_text.hpp",
-        "services/desktop-mode/telar_client/serializers/telar_protocol.hpp",
+        "dlls/telar-client/include/telar_client/serializers/telar_protocol.hpp",
     ]
     result = {
         "recorded_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),

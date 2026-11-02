@@ -10,6 +10,7 @@ set(TELAR_GHOSTTY_STATE_VERSION 6)
 include(cmake/lua.cmake)
 
 include(cmake/dependencies.cmake)
+add_subdirectory(../../dlls/telar-client "${CMAKE_CURRENT_BINARY_DIR}/telar-client")
 
 add_library(ghostty-vt UNKNOWN IMPORTED)
 set_target_properties(ghostty-vt PROPERTIES
@@ -64,8 +65,8 @@ configure_file(config/bootstrap.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/co
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../../src/backend/plugins/bootstrap.lua" TELAR_PLUGIN_BOOTSTRAP)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../../src/backend/plugins/bootstrap.lua")
 configure_file(plugins/bootstrap.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/plugin_bootstrap.hpp" @ONLY)
-file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../desktop-mode/ui/traffic_api.lua" TELAR_TRAFFIC_API)
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../desktop-mode/ui/traffic_api.lua")
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/plugins/traffic_api.lua" TELAR_TRAFFIC_API)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/plugins/traffic_api.lua")
 configure_file(plugins/traffic_api.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/traffic_api.hpp" @ONLY)
 add_custom_command(
   OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/cell_layout.hpp"
@@ -95,7 +96,8 @@ add_library(runtime-core STATIC
   platform/event_loop.cpp
   history/database.cpp
   terminal/cell_projection.cpp)
-target_include_directories(runtime-core PUBLIC . ../desktop-mode "${CMAKE_CURRENT_BINARY_DIR}/generated" "${NGHTTP2_INCLUDE_DIR}")
+target_include_directories(runtime-core PUBLIC . "${CMAKE_CURRENT_BINARY_DIR}/generated" "${NGHTTP2_INCLUDE_DIR}")
+target_link_libraries(runtime-core PUBLIC telar::client)
 target_link_libraries(runtime-core PUBLIC "${NGHTTP2_LIBRARY}")
 target_link_libraries(runtime-core PUBLIC "${PCAP_LIBRARY}")
 target_include_directories(runtime-core PUBLIC "${BROTLI_INCLUDE_DIR}" "${ZSTD_INCLUDE_DIR}")
@@ -119,8 +121,8 @@ endif()
 include(CTest)
 add_executable(telar-runtime main.cpp)
 target_link_libraries(telar-runtime PRIVATE runtime-core)
-option(TELAR_RUNTIME_INSTALL_DESKTOP_COMMAND "Install as telar for Desktop's existing discovery" OFF)
-if(TELAR_RUNTIME_INSTALL_DESKTOP_COMMAND)
+option(TELAR_RUNTIME_INSTALL_AS_TELAR "Install as telar, the command the GUI's runtime discovery runs" OFF)
+if(TELAR_RUNTIME_INSTALL_AS_TELAR)
   install(PROGRAMS "$<TARGET_FILE:telar-runtime>" DESTINATION bin RENAME telar)
 else()
   install(TARGETS telar-runtime RUNTIME DESTINATION bin)

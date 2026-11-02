@@ -45,7 +45,7 @@ def main():
     shutil.copyfile(root / 'tests/response_queue_reference.zig', reference / 'oracle.zig')
     command = [arguments.zig, 'build-lib', '-dynamic', '-O', 'ReleaseFast', '-lc', '--dep', 'telar-core', '--dep', 'fuzzymatch', '-Mroot=oracle.zig', '--dep', 'keyinput', '-Mtelar-core=src/core/core.zig', '-Mfuzzymatch=lib/fuzzymatch/root.zig', '-Mkeyinput=lib/keyinput/root.zig', '-femit-bin=' + str(artifacts / 'zig.dylib')]
     subprocess.run(command, cwd=reference, check=True)
-    subprocess.run([arguments.compiler, '-std=c++23', '-O3', '-DTELAR_DEBUG=0', '-DTELAR_DIAGNOSTICS=0', '-dynamiclib', '-I', str(root), '-I', str(root.parent / 'desktop-mode'), str(root / 'tests/response_queue_oracle.cpp'), '-o', str(artifacts / 'cpp.dylib')], check=True)
+    subprocess.run([arguments.compiler, '-std=c++23', '-O3', '-DTELAR_DEBUG=0', '-DTELAR_DIAGNOSTICS=0', '-dynamiclib', '-I', str(root), '-I', str(root.parents[1] / 'dlls/telar-client/include'), str(root / 'tests/response_queue_oracle.cpp'), '-o', str(artifacts / 'cpp.dylib')], check=True)
     libraries = []
     for name in ['zig', 'cpp']:
         library = ctypes.CDLL(str(artifacts / (name + '.dylib')))

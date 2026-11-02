@@ -1,5 +1,5 @@
 #include "application.hpp"
-#include "login_shell.hpp"
+#include "platform/login_shell.hpp"
 #include "machine_client.hpp"
 #include "machine_profiles_source.hpp"
 #include "machines/failure.hpp"
@@ -216,7 +216,7 @@ void Application::discoveredMachine(MachineClient &client, const RemoteDiscovery
 
   const auto path = discovery.shell();
   const std::array arguments{path, std::string_view{"-l"}, std::string_view{"-i"}};
-  client.session.setLaunch({.cwd = discovery.home(), .arguments = std::span{arguments}.first(login_shell::script(path) != nullptr ? arguments.size() : 1)});
+  client.session.setLaunch({.cwd = discovery.home(), .arguments = std::span{arguments}.first(platform::login_shell::script(path) != nullptr ? arguments.size() : 1)});
 }
 
 }

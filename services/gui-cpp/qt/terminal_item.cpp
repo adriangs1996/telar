@@ -18,7 +18,7 @@
 #include "terminal/screen.hpp"
 #include "terminal/selection.hpp"
 #include "terminal_scene.hpp"
-#include "ui/workbench/terminal_font.hpp"
+#include "terminal_font.hpp"
 #include "window_font_catalog.hpp"
 #include "window_images.hpp"
 #include <QClipboard>

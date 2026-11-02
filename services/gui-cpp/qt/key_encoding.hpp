@@ -4,7 +4,7 @@
 #include "input/terminal_key.hpp"
 #include "key_adapter.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "ui/workbench/terminal_input.hpp"
+#include "terminal_input.hpp"
 #include <QByteArray>
 #include <QKeyEvent>
 
@@ -26,7 +26,7 @@ inline QByteArray encodeKey(const QKeyEvent &event, const InputModes &modes) {
     return {};
   }
 
-  return workbench::terminalKey(event, modes);
+  return terminalKey(event, modes);
 }
 
 }

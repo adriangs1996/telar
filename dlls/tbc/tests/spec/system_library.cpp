@@ -66,7 +66,7 @@ int *libraryElementCopy() {
 
 // CASE: library.container_storage_escape
 // PAIR: library.owner_pointer
-// SOURCE: services/desktop-mode/debug/input_router_dbg.cpp :: Router
+// SOURCE: services/gui-cpp/qt/configuration_source.cpp :: optionalText
 // STATUS: implemented
 // CONTRACT: A pointer returned by a library container designates its storage.
 // SCENARIO: The data of a local library container is returned.
@@ -79,7 +79,7 @@ const int *libraryContainerStorageEscape() {
 
 // CASE: library.non_container_pointer
 // PAIR: library.owner_pointer
-// SOURCE: services/desktop-mode/debug/input_router_dbg.cpp :: Router
+// SOURCE: services/gui-cpp/qt/curve_scene.cpp :: QQuickWindow::createTextureFromImage
 // STATUS: implemented
 // CONTRACT: A pointer from a library owner that is not a container has no inferable relation to it and is not reported.
 // SCENARIO: A created object outlives the local component that created it; accept.
@@ -148,7 +148,7 @@ const char *libraryInlineFunction() {
 
 // CASE: library.constant_expression
 // PAIR: library.constant
-// SOURCE: services/desktop-mode/ui/lua_io.cpp :: scriptView
+// SOURCE: services/runtime-cpp/diagnostics/trace.hpp :: trace::literal
 // STATUS: implemented
 // CONTRACT: A constant-evaluated result borrows exactly what its expression borrows.
 // SCENARIO: An immediate function returns a literal-backed view; accept.
@@ -160,7 +160,7 @@ std::string_view libraryConstantExpression() {
 
 // CASE: library.constant_alongside_local
 // PAIR: library.constant
-// SOURCE: services/desktop-mode/ui/lua_io.cpp :: scriptView
+// SOURCE: services/runtime-cpp/diagnostics/trace.hpp :: trace::literal
 // STATUS: implemented
 // CONTRACT: Unwrapping constant evaluation does not hide a borrow of local storage.
 // SCENARIO: A view of a local string is returned next to a constant one.

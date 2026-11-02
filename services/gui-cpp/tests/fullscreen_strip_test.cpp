@@ -9,7 +9,7 @@
 #include "qt/pane_projection.hpp"
 #include "qt/projection.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "ui/bundled_fonts.hpp"
+#include "qt/bundled_fonts.hpp"
 #include <QFont>
 #include <QGuiApplication>
 #include <QObject>
@@ -87,7 +87,7 @@ class FullscreenStripTest final : public QObject {
   Q_OBJECT
 
   Q_SLOT static void initTestCase() {
-    ui::bundledFonts();
+    bundledFonts();
     QGuiApplication::setFont(QFont{QStringLiteral("IBM Plex Sans")});
   }
 
