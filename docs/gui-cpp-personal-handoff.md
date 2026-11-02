@@ -1,56 +1,53 @@
 # Personal: C++ daily adoption and complete parity — OPEN
 
-CURRENT WIP AFTER149dbbd83: component-plugin-focus-1; state06:09UTC.
-Nine source/test files final, source-hashes-final-2.json/cpp-format-final-2.json.
-NamedActionDescription Definition+Plugin sum, single currentresolution, canonical
-plugin/action IDs, projectedtarget compare and consume once. Generation/ref,
-enabledcatalog, worker digest/trust/source/runtime/completebatchchecks remain.
-No runtime/ownZig edit. Four newslots forbutton/group keyboard/heldclick, mutable
-rawtargetrejection/freshactivation, validatedvalue+expiry. Testfrienddataonly+
-workerIdle barrier. Private negative1 buttonfocus2pass1fail/32923ms; identical donor
-SOURCE recompiled privatepositive2 3pass/973ms includesgroup. Rawnegativegroupnotrun.
-Mac finalRelease53/recorded23 pass, domainRelease5 pass. ASAN53 assertionspass/
-exit1 796584B4584alloc. DomainASAN exits8: packages/worker192B4alloc each, config
-source199616B787alloc. ALLfailedsanitizergates retained/open, noaddrUB/suppression.
-Broad4/editor9/format9/fullmodulelint pass. First unused<variant> testwarning retained;
-meaningful holds_alternative targetkindassertions fix editor+tidy, no suppression.
-Accepted quality-mac-final-1.json usesbroad1 firstthree+test2, editor1 firsteight+
-test2, formatfinal2/module1/nativefinal1. ALLMacbuild/native/lint/editor jobs done.
-Preview25 FROZEN/OFFERED separate out-adoption/Telar C++ Preview 25.app:
+CURRENT after8f26d3d91: component-plugin-focus-1 fully qualified on BOTH SDKs,
+freeze/review/evidence commit NEXT, then CONTINUE fullPARITY. Product9files committed,
+hashes-final-2/format-final-2, accepted-source pinned. Narrow NamedActionDescription
+Definition+Plugin single-resolution/stableIDs/compare/consume; currentenabledcatalog
+and worker source/runtime/config/digest/wholebatchtrust checks remain. No ownZig/
+runtime edits. Negativeprivate1 buttonfocus2pass1fail/32923ms; identical donorSOURCE
+recompiled positive2 passes3/973ms buttons+groups. Four permanent newplugin slots.
+Mac Release53/recorded23/domainRelease5 pass. ASAN53 assertionspass/exit1,
+796584B4584alloc; domainASAN8 with packages+worker192B4alloc each and configsource
+199616B787alloc. FAILED/open, noaddrUB/suppression. BothSDKs broad4/editor9/format9/
+fullmodulelint pass, nineportablehashesmatch. Linux final37620 FINISHED: Release53/
+ASAN53/recorded23/domain5×2 all0. Exported safely3.14filter=data to raw/linux-final-1.
+First unusedvariant testwarning retained; holds_alternative typeassertions fix it.
+Preview25 FROZEN/OFFERED out-adoption/Telar C++ Preview 25.app:
 GUI89c374eb1ea732b101756dd36af40ed1953849a417f2a9480a448bf962dc9efc;
 raw326e90619c0709c5d193e3a1b0e2fd9e138776185c1c83270f203b36afc6b35f.
-All1739hashes/121Mach-O/deep signatures/eight EXACT daily scopes+normal20pass,
-GUI0/noQML/privatecleanup. Sixteen captures inspected+hashed. Normal livecycles6..20
-366845104..367049904B, reservation418283520B, visual372. Short observation only.
+All1739hashes/121objects/deep signatures/eight EXACT daily scopes+normal20pass,
+GUI0/noQML/privatecleanup;16captures inspected. Normal livecycles6..20
+366845104..367049904B/reserved418283520B/visual372, shortobservationonly.
 Open-n25 afterotherpreviewcloses; rollback close/open~/Applications/Telar.app.
-Preview24/23/8/install/config/runtime preserved. READMEreport/DAILY/PARITY updated,
-no goalcompletion. Need finishLinuxqualification/evidencefreeze/review/localcommit,
-thenCONTINUE. Do not stop atcheckpoint. Nine productsources pinned under raw/accepted-source, then committed locally.
-Linux initialnormalGUIonly15196 FINISHED. Final pipeline37620 RUNNING serial4GB:
-Release53/ASAN53 anddomain5 each ALLexit0. Recordedbuild+23 then broad4/editor9/
-format9/modulelint next. Guestnormalized source-hashes-final-1 is HOSTfinal2;
-guarded transfer1+final1 covernine+testfinalassertions/qualityranges/hash. Noother
-Linuxheavyjob. Collectafterhashesmatch withprepared collect_linux_final_1.py using
-python3.14filter=data. Existing qualityhelperserialdiskTMP removes owncache perfile.
-NEW PRIVATE observation component-plugin-live-refresh-1: compiled/relocated
-live_refresh_1.mm GUI-onlyactor links deployedQt viaapp rpaths, never shipped.
-Exactwrapper exact_live_refresh_25_1.py JUSTLAUNCHED, session from tool output;
-target300 real1000ms freshpluginbar renders, tenSpace→realworker sidebar flips,
-retainedpointer/focus/action/source identity and visualcount per sidebarstate,
-regularmallocsamples. New330s overall/10s progress bounds, exits91onfailure,
-privateconfig/home/runtime/endpoint, GUIonlyDYLD. Wrapper350s fallback/360wait,
-ownedruntime child sleep400, cleanupownprocesses only. Not yetpassed; failures
-must be diagnosed (may include actor preparation/settledgeometry). This is scoped
-normal-event-loop stability, not microkerneloptimization or leakfreedom/sleep proof.
-OnlynativeMacGUIjob now; don'toverlapother nativeGUItests. No newproduct edits.
-Remainingactionidentity sourceaudit inraw confirmscallbacks explicitlyrejected by
-ContentReader, commandtabscompare encodedargv/label and reuse retainedreference;
-notifications remainopaque and are alloweddeferred. No newunsupportedcallback
-feature/bug inferred. Sleepuntried: don'taskagain/suspendhost. GoalAPIblocked/noresume,
-continuemanually, nevercomplete/duplicate. Fourprotectedlast06:00UTCunchanged:
-runtime35801/Preview8 52865/QEMU7158/guestSway9469; clipboard954. Reverify before
-moreproductedits. Noagents/otherworktrees/publish/merge/install/migration/Zigdeletion;
-never touch personal-frame-delivery.md. Daily/full/retirement remainOPEN.
+24/23/8/install/config/runtime preserved. Report/DAILY/PARITY Linuxfinal updated.
+Prepared freeze_1.py/verify_1.py, NOTYETRUN. They include nextA11Ynegativeasfinalparity,
+notdailyblocker. Needfinalhandoff+freeze/verify--check-current/review/localcommit.
+LIVE PRIVATE component-plugin-live-refresh-1: originalactor300updates/10workers
+completed, but wrapper1 EXIT1 because actorquit309s before required350s appsummary.
+Preparation failure preserved (GUI0/noQML/privatecleanup), notappfailure/pass.
+Actor2 removes ONLY earlyquit; exactwrapper2 originalassertions/bounds unchanged.
+RUNNING32279 exact_live_refresh_25_2.py, output exact-live-refresh-25-2. Actor
+300 real1000ms freshpluginrenders, tenSpace→worker sidebarflips, retainedpointer/
+focus/action/source identity, visualcounts per sidebarstate, regularmallocsamples.
+330s workload/10s progress; app350snormal smoke timer/360wait. Runtimechildsleep400,
+privatehome/config/runtime/endpoint, GUIonlyDYLD/deployedQt rpaths; no actorsshipped.
+At06:19 ~190updates/6actions, nofail; don'tclaim wrapper2pass untilactualexit0.
+OnlyMac nativeGUIjob now; don'toverlapotherGUItests. Nextcandidateunchanged.
+NEXT CONFIRMED final-accessibility scope component-accessible-groups-1: private1
+(native46400 DONE)2pass1fail/997ms, QAccessibleButton normalname='Named button',
+groupname='' despitevisible 'Named group'. Source/build/run artifacts isolated.
+Qtaccessibility activation onlyprivateprocess, cleanuprestores. NOTclassifieddaily
+blocker forAdrian. No productfixyet. Suggested O(N) accumulation of alreadydecoded
+childtext for groupaccessibleName incomponent_projection.hpp, bindComponentNode
+Accessible.name to projectedname witholdtextfallback; testnamedbutton/group+
+dynamicrefresh. Preserve inputidentity/behavior, don'tclaimcompleteA11Y/icononly.
+Beforeanynewproductedits finish25freeze (pins context), reverifyprotected4. Current
+checksums verified06:00UTC and ownednativeprivate clipboard954 unchanged. Runtime
+35801/Preview8 52865/QEMU7158/Sway9469. Never touch personal-frame-delivery.md.
+Sleepuntried don'taskagain/suspendhost. GoalAPIblocked/noresume; continuemanually,
+nevercomplete/duplicate. Noagents/otherworktrees/publish/merge/install/migration/
+Zigdeletion. Daily/full/retirement OPEN; neverstop atcheckpoint.
 
 
 LATEST qualified/offered scope after7f6b78e75: component-semantic-action-focus-1,

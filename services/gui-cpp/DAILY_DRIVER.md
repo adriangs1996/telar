@@ -8,7 +8,7 @@ deferred for daily adoption; existing implementations stay available.
 
 - Daily: Preview25 corrects the confirmed plugin-focus failure. Native macOS
   shutdown retention remains a failed/open gate; physical suspend/resume is untried.
-  Linux final sanitizer/static/editor qualification of this increment is running.
+  Both SDKs pass final static/editor qualification of this increment.
 - Final parity: complete styling/fitting/accessibility/native ownership, remaining
   interaction states and paired visual/comparative performance acceptance.
 - Zig retirement: own-Zig generators/font metadata and bundled runtime/CLI,
@@ -33,8 +33,8 @@ All1739 hashes/121 Mach-O/signatures, eight exact daily scopes and twenty normal
 loop cycles pass; sixteen captures inspected. Mac Release53/recorded23, domain
 Release5, broad4/editor9/format9/module lint pass. MacASAN53 assertions pass/exit1
 for796584B4584alloc; domainASAN exits8 with three retention failures, without
-address/UB errors or suppression. Linux Release53/domain5 pass; remaining final
-Linux qualification is running. See [plugin focus evidence](measurements/component-plugin-focus.md).
+address/UB errors or suppression. Linux Release53/ASAN53/recorded23/domain5×2 all pass, together with broad4/editor9/
+format9/module lint; all nine portable source hashes match. See [plugin focus evidence](measurements/component-plugin-focus.md).
 Native retention, physical sleep, daily/full acceptance and audited retirement
 remain OPEN. Preview24/23/8, installed Zig/configuration/runtime remain preserved.
 

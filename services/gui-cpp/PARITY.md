@@ -5,8 +5,8 @@ group focus and held clicks, consume one validated target and reject mutated or
 expired sources. Current enabled catalogue and complete worker authorization stay.
 Mac Release53/recorded23, domainRelease5 and broad4/editor9/format9/module lint pass.
 MacASAN53 assertions pass/exit1 for796584B4584alloc; domainASAN exits8 with three
-retention failures, all gates FAILED/open. Linux Release53/domain5 pass; remaining
-final qualification is running. Exact1739 hashes/121 objects/signatures/eight daily
+retention failures, all gates FAILED/open. Linux Release53/ASAN53/recorded23/domain5×2 and broad4/editor9/format9/module lint
+all pass; nine portable source hashes match. Exact1739 hashes/121 objects/signatures/eight daily
 scopes and twenty normal-loop cycles pass; sixteen captures inspected. Physical
 sleep/native retention/full visual/performance and own-Zig retirement remain OPEN.
 See [plugin focus evidence](measurements/component-plugin-focus.md).
