@@ -207,6 +207,23 @@ public:
     return definition == nullptr ? std::nullopt : std::optional{*definition};
   }
 
+  [[nodiscard]] std::optional<NamedActionDescription> namedAction(BindingAction action) const {
+    const auto description = extendedAction(action);
+    if (!description) {
+      return std::nullopt;
+    }
+
+    if (const auto *definition = std::get_if<DefinitionActionDescription>(&*description)) {
+      return *definition;
+    }
+
+    if (const auto *plugin = std::get_if<PluginActionDescription>(&*description)) {
+      return *plugin;
+    }
+
+    return std::nullopt;
+  }
+
   template <typename Visitor>
   void visitPluginActions(const Visitor &visitor) const {
     const auto visit = [&](BindingAction action) {

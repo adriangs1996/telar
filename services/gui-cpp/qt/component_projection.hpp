@@ -56,10 +56,16 @@ inline components::Icon componentIcon(const components::Node &node) {
   return components::Icon::find(node.icon ? node.icon->view() : std::string_view{});
 }
 
-inline QString componentActionIdentity(const std::optional<BindingAction> &action, std::string_view url, std::optional<DefinitionActionDescription> definition = std::nullopt) {
+inline QString componentActionIdentity(const std::optional<BindingAction> &action, std::string_view url, std::optional<NamedActionDescription> named = std::nullopt) {
   if (action) {
-    if (definition) {
-      return QStringLiteral("definition:%1:%2").arg(static_cast<unsigned>(definition->kind)).arg(definition->index);
+    if (named) {
+      if (const auto *definition = std::get_if<DefinitionActionDescription>(&*named)) {
+        return QStringLiteral("definition:%1:%2").arg(static_cast<unsigned>(definition->kind)).arg(definition->index);
+      }
+
+      const auto &plugin = std::get<PluginActionDescription>(*named);
+
+      return QStringLiteral("plugin:%1:%2").arg(plugin.plugin).arg(plugin.action);
     }
 
     return QStringLiteral("action:%1:%2:%3:%4").arg(static_cast<unsigned>(action->kind)).arg(action->parameter).arg(action->reference).arg(action->generation);
@@ -87,7 +93,7 @@ QVariantList componentRecords(const components::Content<Bounds> &content, const 
 
     const auto glyph = !icon.glyph.empty() ? componentText(icon.glyph) : QString{};
     const auto action = content.action(node);
-    const auto definition = action && action->kind == BindingActionKind::extended ? resolve(*action) : std::nullopt;
+    const auto named = action && action->kind == BindingActionKind::extended ? resolve(*action) : std::nullopt;
     const QVariantMap record{
         {QStringLiteral("index"), static_cast<int>(index)},
         {QStringLiteral("parent"), node.parent == components::Node::no_parent ? -1 : static_cast<int>(node.parent)},
@@ -96,7 +102,7 @@ QVariantList componentRecords(const components::Content<Bounds> &content, const 
         {QStringLiteral("text"), text},
         {QStringLiteral("detail"), componentText(content.text(node.detail))},
         {QStringLiteral("clickable"), action.has_value() || node.url.length != 0},
-        {QStringLiteral("actionIdentity"), componentActionIdentity(action, content.text(node.url), definition)},
+        {QStringLiteral("actionIdentity"), componentActionIdentity(action, content.text(node.url), named)},
         {QStringLiteral("ink"), componentColor(node.style.foreground, theme, ink)},
         {QStringLiteral("background"), componentColor(node.style.background, theme, Color{.a = 0})},
         {QStringLiteral("bold"), node.style.bold},

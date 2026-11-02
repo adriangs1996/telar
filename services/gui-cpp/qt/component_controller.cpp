@@ -209,9 +209,9 @@ void Application::projectComponentSource(std::size_t index, bool panel) {
 
   auto &state = surfaceState(component_surfaces_, index, panel);
   const auto time = componentContext().time;
-  const auto resolve = [this](BindingAction action) -> std::optional<DefinitionActionDescription> {
+  const auto resolve = [this](BindingAction action) -> std::optional<NamedActionDescription> {
     try {
-      return configuration_source_.definitionAction(action);
+      return configuration_source_.namedAction(action);
     } catch (const std::exception &) {
       // Mutated or invalid action tables retain their opaque lease and fail on activation.
       return std::nullopt;
@@ -519,8 +519,8 @@ void Application::activateComponent(int source, int node, const QString &generat
 
 void Application::activateComponentAction(std::optional<BindingAction> action, std::string_view url, const QString &identity, const QPointF &anchor) {
   try {
-    const auto definition = action && action->kind == BindingActionKind::extended ? configuration_source_.definitionAction(*action) : std::nullopt;
-    if (identity != componentActionIdentity(action, url, definition)) {
+    const auto named = action && action->kind == BindingActionKind::extended ? configuration_source_.namedAction(*action) : std::nullopt;
+    if (identity != componentActionIdentity(action, url, named)) {
       return;
     }
 
@@ -529,7 +529,7 @@ void Application::activateComponentAction(std::optional<BindingAction> action, s
       const auto restore = qScopeGuard([&] {
         component_action_anchor_ = previous;
       });
-      static_cast<void>(runBinding(*action, definition));
+      static_cast<void>(runBinding(*action, named));
     } else if (!url.empty()) {
       if (const auto target = LinkTarget::fromUri(url)) {
         static_cast<void>(openLink(*target));

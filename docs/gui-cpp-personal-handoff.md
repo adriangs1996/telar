@@ -1,5 +1,58 @@
 # Personal: C++ daily adoption and complete parity — OPEN
 
+CURRENT WIP AFTER149dbbd83: component-plugin-focus-1; state06:09UTC.
+Nine source/test files final, source-hashes-final-2.json/cpp-format-final-2.json.
+NamedActionDescription Definition+Plugin sum, single currentresolution, canonical
+plugin/action IDs, projectedtarget compare and consume once. Generation/ref,
+enabledcatalog, worker digest/trust/source/runtime/completebatchchecks remain.
+No runtime/ownZig edit. Four newslots forbutton/group keyboard/heldclick, mutable
+rawtargetrejection/freshactivation, validatedvalue+expiry. Testfrienddataonly+
+workerIdle barrier. Private negative1 buttonfocus2pass1fail/32923ms; identical donor
+SOURCE recompiled privatepositive2 3pass/973ms includesgroup. Rawnegativegroupnotrun.
+Mac finalRelease53/recorded23 pass, domainRelease5 pass. ASAN53 assertionspass/
+exit1 796584B4584alloc. DomainASAN exits8: packages/worker192B4alloc each, config
+source199616B787alloc. ALLfailedsanitizergates retained/open, noaddrUB/suppression.
+Broad4/editor9/format9/fullmodulelint pass. First unused<variant> testwarning retained;
+meaningful holds_alternative targetkindassertions fix editor+tidy, no suppression.
+Accepted quality-mac-final-1.json usesbroad1 firstthree+test2, editor1 firsteight+
+test2, formatfinal2/module1/nativefinal1. ALLMacbuild/native/lint/editor jobs done.
+Preview25 FROZEN/OFFERED separate out-adoption/Telar C++ Preview 25.app:
+GUI89c374eb1ea732b101756dd36af40ed1953849a417f2a9480a448bf962dc9efc;
+raw326e90619c0709c5d193e3a1b0e2fd9e138776185c1c83270f203b36afc6b35f.
+All1739hashes/121Mach-O/deep signatures/eight EXACT daily scopes+normal20pass,
+GUI0/noQML/privatecleanup. Sixteen captures inspected+hashed. Normal livecycles6..20
+366845104..367049904B, reservation418283520B, visual372. Short observation only.
+Open-n25 afterotherpreviewcloses; rollback close/open~/Applications/Telar.app.
+Preview24/23/8/install/config/runtime preserved. READMEreport/DAILY/PARITY updated,
+no goalcompletion. Need finishLinuxqualification/evidencefreeze/review/localcommit,
+thenCONTINUE. Do not stop atcheckpoint. Nine productsources pinned under raw/accepted-source, then committed locally.
+Linux initialnormalGUIonly15196 FINISHED. Final pipeline37620 RUNNING serial4GB:
+Release53/ASAN53 anddomain5 each ALLexit0. Recordedbuild+23 then broad4/editor9/
+format9/modulelint next. Guestnormalized source-hashes-final-1 is HOSTfinal2;
+guarded transfer1+final1 covernine+testfinalassertions/qualityranges/hash. Noother
+Linuxheavyjob. Collectafterhashesmatch withprepared collect_linux_final_1.py using
+python3.14filter=data. Existing qualityhelperserialdiskTMP removes owncache perfile.
+NEW PRIVATE observation component-plugin-live-refresh-1: compiled/relocated
+live_refresh_1.mm GUI-onlyactor links deployedQt viaapp rpaths, never shipped.
+Exactwrapper exact_live_refresh_25_1.py JUSTLAUNCHED, session from tool output;
+target300 real1000ms freshpluginbar renders, tenSpace→realworker sidebar flips,
+retainedpointer/focus/action/source identity and visualcount per sidebarstate,
+regularmallocsamples. New330s overall/10s progress bounds, exits91onfailure,
+privateconfig/home/runtime/endpoint, GUIonlyDYLD. Wrapper350s fallback/360wait,
+ownedruntime child sleep400, cleanupownprocesses only. Not yetpassed; failures
+must be diagnosed (may include actor preparation/settledgeometry). This is scoped
+normal-event-loop stability, not microkerneloptimization or leakfreedom/sleep proof.
+OnlynativeMacGUIjob now; don'toverlapother nativeGUItests. No newproduct edits.
+Remainingactionidentity sourceaudit inraw confirmscallbacks explicitlyrejected by
+ContentReader, commandtabscompare encodedargv/label and reuse retainedreference;
+notifications remainopaque and are alloweddeferred. No newunsupportedcallback
+feature/bug inferred. Sleepuntried: don'taskagain/suspendhost. GoalAPIblocked/noresume,
+continuemanually, nevercomplete/duplicate. Fourprotectedlast06:00UTCunchanged:
+runtime35801/Preview8 52865/QEMU7158/guestSway9469; clipboard954. Reverify before
+moreproductedits. Noagents/otherworktrees/publish/merge/install/migration/Zigdeletion;
+never touch personal-frame-delivery.md. Daily/full/retirement remainOPEN.
+
+
 LATEST qualified/offered scope after7f6b78e75: component-semantic-action-focus-1,
 product commit4a3b5b293. Preview24 FROZEN/OFFERED separate
 out-adoption/Telar C++ Preview 24.app; GUI200c986cb3467aa926fcb64255d967c1683036e4f6aef921242e68f25d7382c6;

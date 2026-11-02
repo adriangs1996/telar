@@ -167,6 +167,10 @@ std::optional<DefinitionActionDescription> ConfigurationSource::definitionAction
   return generation_ ? generation_->definitionAction(action) : std::nullopt;
 }
 
+std::optional<NamedActionDescription> ConfigurationSource::namedAction(BindingAction action) const {
+  return generation_ ? generation_->namedAction(action) : std::nullopt;
+}
+
 std::uint64_t ConfigurationSource::configurationGeneration() const noexcept {
   return generation_ ? generation_->number() : 0;
 }

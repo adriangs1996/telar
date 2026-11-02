@@ -65,6 +65,7 @@ public:
   [[nodiscard]] std::optional<runtime::config::CommandTabView> commandTab(BindingAction action) const;
   [[nodiscard]] std::optional<NotificationActionDescription> notificationAction(BindingAction action) const;
   [[nodiscard]] std::optional<DefinitionActionDescription> definitionAction(BindingAction action) const;
+  [[nodiscard]] std::optional<NamedActionDescription> namedAction(BindingAction action) const;
   [[nodiscard]] const components::Configuration *components() const noexcept;
   void renderBar(components::Position position, const components::Context &context);
   void renderPanel(std::size_t index, const components::Context &context);

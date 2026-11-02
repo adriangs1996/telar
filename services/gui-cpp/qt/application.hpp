@@ -454,8 +454,9 @@ private:
 
   [[nodiscard]] BindingContext bindingContext() const;
   [[nodiscard]] std::optional<BindingRepeat> bindingRepeat(BindingAction action) const;
-  bool runBinding(BindingAction action, std::optional<DefinitionActionDescription> definition = std::nullopt);
-  void executeBinding(BindingAction action, std::optional<DefinitionActionDescription> definition = std::nullopt);
+  bool runBinding(BindingAction action, std::optional<NamedActionDescription> named = std::nullopt);
+  void executeBinding(BindingAction action, std::optional<NamedActionDescription> named = std::nullopt);
+  void executeNamedAction(const NamedActionDescription &named);
   void executeCommandTab(BindingAction action);
   void executeNotificationBinding(BindingAction action);
   void initializeComponents();

@@ -131,16 +131,17 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 
 namespace telar::gui::test {
 
 struct ComponentActions {
-  struct Definition {
+  struct Action {
     BindingAction action;
-    DefinitionActionDescription destination;
+    NamedActionDescription destination;
   };
 
-  [[nodiscard]] static std::optional<Definition> retain(const qt::Application &application) {
+  [[nodiscard]] static std::optional<Action> retain(const qt::Application &application) {
     const auto *configuration = application.configuration_source_.components();
     if (configuration == nullptr || configuration->panel().nodes().empty()) {
       return std::nullopt;
@@ -152,13 +153,17 @@ struct ComponentActions {
       return std::nullopt;
     }
 
-    const auto destination = application.configuration_source_.definitionAction(*action);
+    const auto destination = application.configuration_source_.namedAction(*action);
 
-    return destination ? std::optional{Definition{.action = *action, .destination = *destination}} : std::nullopt;
+    return destination ? std::optional{Action{.action = *action, .destination = *destination}} : std::nullopt;
   }
 
-  static bool run(qt::Application &application, const Definition &definition) {
-    return application.runBinding(definition.action, definition.destination);
+  static bool run(qt::Application &application, const Action &action) {
+    return application.runBinding(action.action, action.destination);
+  }
+
+  [[nodiscard]] static bool pluginIdle(const qt::Application &application) {
+    return !application.plugin_worker_.active() && !application.plugin_owner_;
   }
 };
 
@@ -4492,6 +4497,119 @@ return {api_version=2, client={keybindings={
     QCOMPARE(client_->error(), QString{});
   }
 
+  Q_SLOT void configuredPluginCaptionRefresh() {
+    for (const auto kind : {components::Kind::button, components::Kind::group}) {
+      verifyPluginCaptionRefresh(kind, false);
+      QVERIFY(!QTest::currentTestFailed());
+    }
+  }
+
+  Q_SLOT void configuredPluginCaptureRefresh() {
+    for (const auto kind : {components::Kind::button, components::Kind::group}) {
+      verifyPluginCaptionRefresh(kind, true);
+      QVERIFY(!QTest::currentTestFailed());
+    }
+  }
+
+  Q_SLOT void configuredPluginRejectsMutatedTarget() {
+    const auto sidebar = client_->sidebarVisible();
+    const auto collapsed = client_->workspaceListCollapsed();
+    const auto cleanup = qScopeGuard([this, sidebar, collapsed] {
+      client_->closeComponentPanel();
+      client_->loadConfiguration({}, {}, {});
+      if (client_->sidebarVisible() != sidebar) {
+        client_->execute(Application::Action::toggle_sidebar);
+      }
+      if (client_->workspaceListCollapsed() != collapsed) {
+        client_->execute(Application::Action::toggle_workspace_list);
+      }
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    writeComponentPlugin(directory);
+    QVERIFY(!QTest::currentTestFailed());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    writeTestFile(path, R"(
+      local t=require('telar');local ui=t.ui
+      local target={kind='plugin',plugin='sample',action='sidebar'}
+      return {api_version=2,plugins={{path='example'}},client={
+        keybindings={t.bind_global({'alt+u'},t.action.open_panel('source')),t.bind_global({'alt+m'},function()target.action='workspaces';return {} end)},
+        panels={source=t.panel({title='Plugin source',render=function()return ui.button({text='Mutable plugin',action=target})end})},
+      }}
+    )");
+    for (const bool pointer : {false, true}) {
+      client_->closeComponentPanel();
+      client_->loadConfiguration(path, {}, {}, directory.filePath(QStringLiteral("trust.json")));
+      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      verifyPluginTargetMutation(pointer);
+      QVERIFY(!QTest::currentTestFailed());
+      client_->execute(Application::Action::toggle_workspace_list);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->workspaceListCollapsed(), collapsed, runtime_wait_ms);
+    }
+  }
+
+  Q_SLOT void configuredPluginUsesValidatedTarget() {
+    const auto sidebar = client_->sidebarVisible();
+    const auto collapsed = client_->workspaceListCollapsed();
+    const auto cleanup = qScopeGuard([this, sidebar, collapsed] {
+      client_->closeComponentPanel();
+      client_->loadConfiguration({}, {}, {});
+      if (client_->sidebarVisible() != sidebar) {
+        client_->execute(Application::Action::toggle_sidebar);
+      }
+      if (client_->workspaceListCollapsed() != collapsed) {
+        client_->execute(Application::Action::toggle_workspace_list);
+      }
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    writeComponentPlugin(directory);
+    QVERIFY(!QTest::currentTestFailed());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    writeTestFile(path, R"(
+      local t=require('telar');local ui=t.ui
+      local target={kind='plugin',plugin='sample',action='sidebar'}
+      return {api_version=2,plugins={{path='example'}},client={
+        keybindings={t.bind_global({'alt+u'},t.action.open_panel('source')),t.bind_global({'alt+m'},function()target.action='workspaces';return {} end)},
+        panels={source=t.panel({title='Plugin source',render=function()return ui.button({text='Validated plugin',action=target})end})},
+      }}
+    )");
+    client_->loadConfiguration(path, {}, {}, directory.filePath(QStringLiteral("trust.json")));
+    QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+    QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
+    QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(components::Kind::button, QStringLiteral("Validated plugin")) != nullptr, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto retained = test::ComponentActions::retain(*client_);
+    if (!retained) {
+      QFAIL("The component has no validated plugin action");
+    }
+
+    const auto saved = retained.value();
+    const auto revision = client_->componentPanel().value(QStringLiteral("revision")).toString();
+    QTest::keyClick(window_, Qt::Key_M, Qt::AltModifier);
+    QCOMPARE(client_->componentPanel().value(QStringLiteral("revision")).toString(), revision);
+    const auto current = test::ComponentActions::retain(*client_);
+    if (!current) {
+      QFAIL("The mutated component has no named action");
+    }
+
+    const auto mutated = current.value();
+    QVERIFY(saved.action == mutated.action);
+    QVERIFY(std::holds_alternative<PluginActionDescription>(saved.destination));
+    QVERIFY(std::holds_alternative<PluginActionDescription>(mutated.destination));
+    QVERIFY(std::get<PluginActionDescription>(saved.destination).action != std::get<PluginActionDescription>(mutated.destination).action);
+    QVERIFY(test::ComponentActions::run(*client_, saved));
+    QTRY_VERIFY_WITH_TIMEOUT(test::ComponentActions::pluginIdle(*client_), runtime_wait_ms);
+    QCOMPARE(client_->sidebarVisible(), !sidebar);
+    QCOMPARE(client_->workspaceListCollapsed(), collapsed);
+    QCOMPARE(client_->error(), QString{});
+    client_->closeComponentPanel();
+    QVERIFY(!test::ComponentActions::run(*client_, saved));
+    QVERIFY(client_->error().contains(QStringLiteral("expired")));
+    client_->dismissDiagnostic();
+    QCOMPARE(client_->error(), QString{});
+  }
+
   Q_SLOT void configuredDefinitionCaptionRefresh() {
     for (const auto kind : {components::Kind::button, components::Kind::group}) {
       for (const bool picker : {false, true}) {
@@ -4577,7 +4695,9 @@ return {api_version=2, client={keybindings={
 
     const auto current_definition = current.value();
     QVERIFY(validated_definition.action == current_definition.action);
-    QVERIFY(validated_definition.destination.index != current_definition.destination.index);
+    QVERIFY(std::holds_alternative<DefinitionActionDescription>(validated_definition.destination));
+    QVERIFY(std::holds_alternative<DefinitionActionDescription>(current_definition.destination));
+    QVERIFY(std::get<DefinitionActionDescription>(validated_definition.destination).index != std::get<DefinitionActionDescription>(current_definition.destination).index);
     QVERIFY(test::ComponentActions::run(*client_, validated_definition));
     QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("First destination"), runtime_wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(componentItem(QStringLiteral("text"), QStringLiteral("Validated target")) != nullptr, runtime_wait_ms);
@@ -6510,6 +6630,122 @@ return {api_version=2, client={keybindings={
     client_->execute(Application::Action::close_pane, QString::number(*created));
     QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 1, runtime_wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(terminalIn(window_->contentItem()) != nullptr && terminalIn(window_->contentItem())->hasActiveFocus(), runtime_wait_ms);
+  }
+
+  static void writeComponentPlugin(const QTemporaryDir &directory) {
+    QVERIFY(QDir{directory.path()}.mkdir(QStringLiteral("example")));
+    writeTestFile(directory.filePath(QStringLiteral("example/plugin.json")), R"({"api_version":1,"id":"sample","version":"1","entry":"main.lua","source":{"url":"fixture","revision":"1"},"actions":["sidebar","workspaces"],"capabilities":[]})");
+    writeTestFile(directory.filePath(QStringLiteral("example/main.lua")), "local t=require('telar');return {actions={sidebar=function()return t.action.toggle_sidebar()end,workspaces=function()return t.action.toggle_workspace_list()end}}");
+  }
+
+  void verifyPluginCaptionRefresh(components::Kind kind, bool pointer) {
+    const auto sidebar = client_->sidebarVisible();
+    const auto cleanup = qScopeGuard([this, sidebar] {
+      client_->closeComponentPanel();
+      client_->loadConfiguration({}, {}, {});
+      if (client_->sidebarVisible() != sidebar) {
+        client_->execute(Application::Action::toggle_sidebar);
+      }
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    writeComponentPlugin(directory);
+    QVERIFY(!QTest::currentTestFailed());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    const auto element = kind == components::Kind::button ? QStringLiteral("ui.button({text=caption,action=action})") : QStringLiteral("ui.group({on_click=action,ui.label(caption)})");
+    const auto config = QStringLiteral(R"(
+      local t=require('telar');local ui=t.ui;local renders=0
+      return {api_version=2,plugins={{path='example'}},client={keybindings={t.bind_global({'alt+u'},t.action.open_panel('source'))},
+        panels={source=t.panel({title='Plugin source',render=function()
+          renders=renders+1;local caption='Stable plugin '..renders;local action=t.action.plugin{plugin='sample',action='sidebar'};return %1
+        end})},
+      }}
+    )")
+                            .arg(element)
+                            .toUtf8();
+    writeTestFile(path, config.constData());
+    client_->loadConfiguration(path, {}, {}, directory.filePath(QStringLiteral("trust.json")));
+    QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+    QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
+    QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(kind, QStringLiteral("Stable plugin 1")) != nullptr, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const QPointer<QQuickItem> before{componentActionItem(kind, QStringLiteral("Stable plugin 1"))};
+    before->forceActiveFocus(Qt::TabFocusReason);
+    QTRY_VERIFY_WITH_TIMEOUT(before->hasActiveFocus(), runtime_wait_ms);
+    const auto center = before->mapToScene(before->boundingRect().center()).toPoint();
+    bool pressed = pointer;
+    const auto release = qScopeGuard([&] {
+      if (pressed) {
+        QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, center);
+      }
+    });
+    if (pointer) {
+      QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, center);
+    }
+
+    const auto revision = client_->componentPanel().value(QStringLiteral("revision")).toString();
+    client_->refreshComponentPanel();
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(kind, QStringLiteral("Stable plugin 2")) != nullptr, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    QCOMPARE(componentActionItem(kind, QStringLiteral("Stable plugin 2")), before.data());
+    QVERIFY(before->hasActiveFocus());
+    if (pointer) {
+      QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, center);
+      pressed = false;
+    } else {
+      QTest::keyClick(window_, Qt::Key_Space);
+    }
+
+    QTRY_VERIFY_WITH_TIMEOUT(test::ComponentActions::pluginIdle(*client_), runtime_wait_ms);
+    QCOMPARE(client_->sidebarVisible(), !sidebar);
+    QCOMPARE(client_->error(), QString{});
+  }
+
+  void verifyPluginTargetMutation(bool pointer) {
+    const auto sidebar = client_->sidebarVisible();
+    const auto collapsed = client_->workspaceListCollapsed();
+    QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
+    QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(components::Kind::button, QStringLiteral("Mutable plugin")) != nullptr, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    auto *button = componentActionItem(components::Kind::button, QStringLiteral("Mutable plugin"));
+    button->forceActiveFocus(Qt::TabFocusReason);
+    const auto center = button->mapToScene(button->boundingRect().center()).toPoint();
+    bool pressed = pointer;
+    const auto release = qScopeGuard([&] {
+      if (pressed) {
+        QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, center);
+      }
+    });
+    if (pointer) {
+      QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, center);
+    }
+
+    const auto revision = client_->componentPanel().value(QStringLiteral("revision")).toString();
+    QTest::keyClick(window_, Qt::Key_M, Qt::AltModifier);
+    QCOMPARE(client_->componentPanel().value(QStringLiteral("revision")).toString(), revision);
+    QCOMPARE(client_->error(), QString{});
+    if (pointer) {
+      QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, center);
+      pressed = false;
+    } else {
+      QTest::keyClick(window_, Qt::Key_Space);
+    }
+
+    QTRY_VERIFY_WITH_TIMEOUT(test::ComponentActions::pluginIdle(*client_), runtime_wait_ms);
+    QCOMPARE(client_->sidebarVisible(), sidebar);
+    QCOMPARE(client_->workspaceListCollapsed(), collapsed);
+    QCOMPARE(client_->error(), QString{});
+    client_->refreshComponentPanel();
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(components::Kind::button, QStringLiteral("Mutable plugin")) != nullptr, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto *fresh = componentActionItem(components::Kind::button, QStringLiteral("Mutable plugin"));
+    QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, fresh->mapToScene(fresh->boundingRect().center()).toPoint());
+    QTRY_COMPARE_WITH_TIMEOUT(client_->workspaceListCollapsed(), !collapsed, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(test::ComponentActions::pluginIdle(*client_), runtime_wait_ms);
+    QCOMPARE(client_->sidebarVisible(), sidebar);
+    QCOMPARE(client_->error(), QString{});
   }
 
   void verifyDefinitionCaptionRefresh(components::Kind kind, bool picker, bool pointer) {

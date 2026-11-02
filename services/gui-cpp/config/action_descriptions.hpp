@@ -33,6 +33,7 @@ struct PluginActionDescription {
   std::uint64_t action = 0;
 };
 
+using NamedActionDescription = std::variant<DefinitionActionDescription, PluginActionDescription>;
 using ExtendedActionDescription = std::variant<NotificationActionDescription, DefinitionActionDescription, PluginActionDescription>;
 
 template <Allocator Memory>

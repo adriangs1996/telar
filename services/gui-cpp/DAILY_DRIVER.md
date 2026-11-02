@@ -6,16 +6,39 @@ deferred for daily adoption; existing implementations stay available.
 
 ## Remaining daily clearance and final acceptance
 
-- Daily: confirmed fresh plugin-reference keyboard-focus failure; macOS native
-  shutdown retention (sanitizer gate failed/open); physical suspend/resume untried.
-  Both SDKs pass final static/editor qualification.
+- Daily: Preview25 corrects the confirmed plugin-focus failure. Native macOS
+  shutdown retention remains a failed/open gate; physical suspend/resume is untried.
+  Linux final sanitizer/static/editor qualification of this increment is running.
 - Final parity: complete styling/fitting/accessibility/native ownership, remaining
   interaction states and paired visual/comparative performance acceptance.
 - Zig retirement: own-Zig generators/font metadata and bundled runtime/CLI,
   shared non-Zig sources, third-party Ghostty toolchain and test oracles remain
   separate dependencies. Removal requires an audited clean build; see ZIG_RETIREMENT.
 
-## Current candidate: Preview24; stable panel/pick actions through Lua renders
+## Current candidate: Preview25; stable plugin actions through Lua renders
+
+`out-adoption/Telar C++ Preview 25.app` preserves widget focus and held clicks for
+fresh references to the same plugin action. Current targets are validated once;
+mutated/expired sources are rejected. Enabled-package lookup and complete worker
+permission checks remain. From the worktree root:
+
+```sh
+open -n "services/gui-cpp/out-adoption/Telar C++ Preview 25.app"
+```
+
+Finder opens the separate app after another preview closes. Return by closing it
+and opening `~/Applications/Telar.app`. No installation/replacement/migration.
+GUI SHA256 `89c374eb1ea732b101756dd36af40ed1953849a417f2a9480a448bf962dc9efc`.
+All1739 hashes/121 Mach-O/signatures, eight exact daily scopes and twenty normal-
+loop cycles pass; sixteen captures inspected. Mac Release53/recorded23, domain
+Release5, broad4/editor9/format9/module lint pass. MacASAN53 assertions pass/exit1
+for796584B4584alloc; domainASAN exits8 with three retention failures, without
+address/UB errors or suppression. Linux Release53/domain5 pass; remaining final
+Linux qualification is running. See [plugin focus evidence](measurements/component-plugin-focus.md).
+Native retention, physical sleep, daily/full acceptance and audited retirement
+remain OPEN. Preview24/23/8, installed Zig/configuration/runtime remain preserved.
+
+## Preserved candidate: Preview24; stable panel/pick actions through Lua renders
 
 `out-adoption/Telar C++ Preview 24.app` preserves widget focus and held clicks when
 Lua re-declares the same panel/pick destination. A mutated action cannot redirect

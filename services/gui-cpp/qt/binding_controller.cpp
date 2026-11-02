@@ -218,9 +218,9 @@ void Application::interruptBindings() {
   key_bindings_.interrupt();
 }
 
-bool Application::runBinding(BindingAction action, std::optional<DefinitionActionDescription> definition) {
+bool Application::runBinding(BindingAction action, std::optional<NamedActionDescription> named) {
   try {
-    if (definition) {
+    if (named) {
       const auto *components = configuration_source_.components();
       if (action.kind != BindingActionKind::extended || action.generation != configuration_source_.configurationGeneration() || components == nullptr || !components->contains(action)) {
         throw std::invalid_argument{"Validated component action expired"};
@@ -242,7 +242,7 @@ bool Application::runBinding(BindingAction action, std::optional<DefinitionActio
         executeBinding(effect);
       }
     } else {
-      executeBinding(action, definition);
+      executeBinding(action, named);
     }
 
     refresh();
@@ -255,7 +255,7 @@ bool Application::runBinding(BindingAction action, std::optional<DefinitionActio
   }
 }
 
-void Application::executeBinding(BindingAction action, std::optional<DefinitionActionDescription> definition) {
+void Application::executeBinding(BindingAction action, std::optional<NamedActionDescription> named) {
   pending_activity_.reset();
   if (action.kind != BindingActionKind::copy_mode) {
     leaveKeyboardCopyMode();
@@ -304,20 +304,26 @@ void Application::executeBinding(BindingAction action, std::optional<DefinitionA
     refreshComponentPanel();
     break;
   case BindingActionKind::extended:
-    if (const auto resolved = definition ? definition : configuration_source_.definitionAction(action)) {
-      if (resolved->kind == DefinitionActionDescription::Kind::panel) {
-        toggleComponentPanel(resolved->index);
-      } else {
-        openComponentPick(resolved->index);
-      }
-    } else if (const auto plugin = configuration_source_.pluginAction(action)) {
-      startPlugin(configuration_source_.pluginInvocation(*plugin, bindingContext()));
+    if (const auto resolved = named ? named : configuration_source_.namedAction(action)) {
+      executeNamedAction(*resolved);
     } else {
       executeNotificationBinding(action);
     }
     break;
   default:
     throw std::runtime_error{"Binding action is not yet available in the C++ GUI"};
+  }
+}
+
+void Application::executeNamedAction(const NamedActionDescription &named) {
+  if (const auto *definition = std::get_if<DefinitionActionDescription>(&named)) {
+    if (definition->kind == DefinitionActionDescription::Kind::panel) {
+      toggleComponentPanel(definition->index);
+    } else {
+      openComponentPick(definition->index);
+    }
+  } else {
+    startPlugin(configuration_source_.pluginInvocation(std::get<PluginActionDescription>(named), bindingContext()));
   }
 }
 
