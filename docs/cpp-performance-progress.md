@@ -405,17 +405,20 @@ and qualified native endpoint. Medians of run quantiles:
 | 3840×2160 p95 | 66.59 ms | 147.82 ms | 0/6 |
 | 3840×2160 p99 | 74.84 ms | 152.25 ms | 0/6 |
 
-GUI resources are sampled over the input phase including warmup; CPU 100%
-means one core. CPU per input divides user+system time by all 120 inputs.
-RSS is the process peak, not a whole-stack sum.
+GUI CPU counters start at input 20 and cover the 100 measured inputs, excluding
+warmup; CPU 100% means one core. CPU per input divides that user+system time by
+100. The earlier report incorrectly divided by 120; corrected derived values
+are in `out-perf/allocations/image-baseline-summary-02.json`, with the original
+raw runs and erroneous summary retained. Presentation timings and CPU percentages
+are unchanged. RSS is the lifetime process peak, not a whole-stack sum.
 
 | Image / GUI resource | Zig | C++ |
 | --- | ---: | ---: |
 | 1K CPU | 7.48% | 18.27% |
-| 1K CPU per input | 5.84 ms | 14.70 ms |
+| 1K CPU per input | 7.01 ms | 17.64 ms |
 | 1K peak RSS | 141.75 MiB | 203.19 MiB |
 | 4K CPU | 9.71% | 47.09% |
-| 4K CPU per input | 8.36 ms | 74.48 ms |
+| 4K CPU per input | 10.03 ms | 89.37 ms |
 | 4K peak RSS | 251.98 MiB | 331.44 MiB |
 
 Source review confirms the transport difference already noted in `PARITY.md`:
@@ -435,6 +438,82 @@ rendered output. Merely flipping the capability without receiving the message
 is invalid. Qt conversion remains a separate candidate after transport; neither
 candidate is integrated or accepted by this baseline. Full F10 alpha, continuous
 streaming and presentation cadence acceptance remain open.
+
+## Local shared-image experiment: latency win, memory unresolved
+
+The frozen experiment in `out-perf/shared-image` implements local shared-image
+negotiation and dispatch, retaining bounded owned pixels and inline remote
+delivery. It validates names, private permissions, owner, storage type and extent,
+unlinks accepted objects, and uses kernel-mediated reads to avoid dereferencing
+peer-controlled mappings. Missing storage requests a graphics snapshot; quotas,
+generation retirement and credits retain the existing store behavior. Qt's
+conversion remains unchanged. Its GUI SHA-256 is
+`d4526b445e33f360a09fd725cca7b6a28128eb28402e38f3c176928668a848ee`;
+the runtime is the same frozen C++ runtime as the accepted cursor variant.
+Sources, binaries and build hashes are retained in that experiment directory.
+
+The shared/inline oracle compares RGB/RGBA bytes, partial alpha, generations,
+credits, quotas, missing/truncated storage, permission/name rejection, ignored-pane
+cleanup and remote rejection. It passes natively and under x86-64 Rosetta.
+Native Metal image rendering and keyboard controls pass, as do graphics retention,
+recovery and their scene tests. The remote connection test passes after replacing
+its obsolete hardcoded schema expectation with the compiled schema. The new reader
+compiles to Linux AArch64 and x86-64 objects; Linux execution remains unavailable.
+An initial Linux syntax attempt exposed a missing `cerrno` include in the reused
+reader and the existing test fixture's musl `arc4random_buf` limitation. Neither
+failed attempt counts as Linux execution or a passing full Linux test suite.
+
+`/tmp/telar-perf-shared-image-{1k,4k}-pairs-01` each contains six complete
+alternating pairs, 100 measured inputs after 20 warmups, positive native
+presentation timestamps and verified image pixels. A is the accepted cursor
+build; B is this experiment. Medians of run quantiles/resources:
+
+| Size / metric | A | B | B wins |
+| --- | ---: | ---: | ---: |
+| 1K p50 | 43.94 ms | 37.26 ms | 6/6 |
+| 1K p95 | 58.60 ms | 45.22 ms | 6/6 |
+| 1K p99 | 63.81 ms | 48.52 ms | 6/6 |
+| 1K GUI CPU / measured input | 17.35 ms | 9.33 ms | 6/6 |
+| 1K GUI peak RSS | 206.20 MiB | 215.88 MiB | 1/6 |
+| 4K p50 | 137.40 ms | 48.49 ms | 6/6 |
+| 4K p95 | 145.77 ms | 58.60 ms | 6/6 |
+| 4K p99 | 152.90 ms | 62.50 ms | 6/6 |
+| 4K GUI CPU / measured input | 89.33 ms | 31.47 ms | 6/6 |
+| 4K GUI peak RSS | 331.35 MiB | 362.10 MiB | 3/6 |
+
+This variant is **rejected and restored out of production source**: the 1K
+peak-RSS regression is consistent and its cause is not established. Fresh paired
+Zig comparisons have not been run for this rejected build. A separate seven-pair
+component diagnostic compares a full
+kernel copy with 1 MiB mapping windows and verifies every output byte. Both have
+the same median process peak (5.36 MiB at 1K and 33.00 MiB at 4K); windowing does
+not demonstrate a memory reduction and has not been integrated. The diagnostic
+is under `out-perf/shared-image/memory-probe`, separate from headline timings.
+The corrected candidate summary is `out-perf/shared-image/summary-02.json`.
+
+The six complete no-image typing pairs in
+`/tmp/telar-perf-shared-image-text-pairs-01` also reject the variant:
+p50 29.37 -> 30.73 ms (1/6 wins), p95 37.75 -> 37.73 ms (4/6),
+p99 39.39 -> 42.17 ms (2/6), GUI CPU per measured input 4.49 -> 4.83 ms
+(1/6). Peak RSS improves slightly, 201.63 -> 199.74 MiB (6/6).
+The object disassembly, including relocation targets, of `keyPressEvent` is
+identical in A and B. This alone does not establish that the entire typing
+regression is code placement: dispatch/render paths still need comparison.
+
+The separate `out-perf/shared-image/memory-profile-02` diagnostic captures
+`vmmap -summary` for each identified GUI/runtime during 200-input runs. Both GUI
+snapshots show 150.1 MiB physical footprint and 14.2 MiB resident `MALLOC_LARGE`;
+their footprint peaks are 222.5/213.1 MiB. Runtime snapshots are 31.1/22.0 MiB,
+with peaks 31.1/26.0 MiB. These single asynchronous snapshots neither explain
+the uninstrumented lifetime-RSS regression nor prove a settled-memory reduction.
+The first diagnostic tried 520 total inputs, exceeded the native probe's 512
+capacity and aborted before measurement; it is retained as invalid.
+
+Next work is to compare common dispatch/render code and isolate transport
+capability within the same diagnostic binary, then identify live/peak buffer
+lifetimes. Retain the transport latency improvement only after resolving resource
+and control-flow gates. Frozen experiment sources and the oracle remain available
+under `out-perf/shared-image/source`; accepted cursor production behavior is intact.
 
 ## Coverage and next experiments
 
