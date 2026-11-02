@@ -1,9 +1,11 @@
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace places {
@@ -106,6 +108,62 @@ namespace places {
   struct arguments {
     std::vector<std::string_view> names;
     std::vector<std::string_view> defaults;
+  };
+
+  using scope_value = std::variant<std::monostate, std::string_view, std::uint64_t>;
+
+  struct scoped_query {
+    std::string_view text;
+    scope_value scope;
+  };
+
+  void observeQuery(const scoped_query &query) {
+    observeText(query.text);
+    if (const auto *text = std::get_if<std::string_view>(&query.scope)) {
+      observeText(*text);
+    }
+  }
+
+  struct scoped_browser {
+    std::string scope_path_;
+    scoped_query criteria_;
+
+    scoped_query prepare(scoped_query request) {
+      if (const auto *path = std::get_if<std::string_view>(&request.scope)) {
+        scope_path_ = *path;
+      }
+      criteria_ = request;
+      if (std::holds_alternative<std::string_view>(criteria_.scope)) {
+        criteria_.scope = std::string_view{scope_path_};
+      }
+      return criteria_;
+    }
+
+    scoped_query bind(scoped_query request) {
+      criteria_ = request;
+      if (const auto *path = std::get_if<std::string_view>(&criteria_.scope)) {
+        scope_path_ = *path;
+        criteria_.scope = std::string_view{scope_path_};
+      }
+      return criteria_;
+    }
+
+    scoped_query keep(scoped_query request) {
+      criteria_ = request;
+      if (std::holds_alternative<std::uint64_t>(criteria_.scope)) {
+        criteria_.scope = std::monostate{};
+      }
+      return criteria_;
+    }
+
+    scoped_query clear(scoped_query request) {
+      criteria_ = request;
+      if (!std::holds_alternative<std::string_view>(criteria_.scope)) {
+        return criteria_;
+      }
+      criteria_.scope = std::monostate{};
+      return criteria_;
+    }
   };
 
   struct frame_sync {
@@ -712,6 +770,84 @@ void placeReadStaleViews(std::vector<std::string> &names) {
   std::vector<std::string_view> views{names.front()};
   names.emplace_back("next"); // expected-error [tbc-invalidated-borrow]
   places::observeText(views.front());
+}
+
+// END CASE
+
+// CASE: place.variant_rebound
+// PAIR: place.variant_alternative
+// SOURCE: services/gui-cpp/history/browser.hpp :: HistoryBrowser::prepareQuery
+// STATUS: implemented
+// CONTRACT: A variant whose other alternatives cannot borrow holds nothing borrowed once a test rules out the one that can.
+// SCENARIO: The scope view is rebound to the browser's copy when it holds a view and otherwise holds no view; accept.
+void placeVariantRebound() {
+  places::scoped_browser browser;
+  std::string directory = "/work/project";
+  const auto started = browser.prepare({.text = "query", .scope = std::string_view{directory}});
+  directory.assign("/reused/directory");
+  places::observeQuery(started);
+}
+
+// END CASE
+
+// CASE: place.variant_kept
+// PAIR: place.variant_alternative
+// SOURCE: services/gui-cpp/history/browser.hpp :: HistoryBrowser::prepareQuery
+// STATUS: implemented
+// CONTRACT: Ruling out an alternative that cannot borrow says nothing about the one that can.
+// SCENARIO: Only an integer scope is cleared, so a scope view of the caller's string is returned.
+void placeVariantKept() {
+  places::scoped_browser browser;
+  std::string directory = "/work/project";
+  const auto started = browser.keep({.text = "query", .scope = std::string_view{directory}});
+  directory.assign("/reused/directory"); // expected-error [tbc-invalidated-borrow]
+  places::observeQuery(started);
+}
+
+// END CASE
+
+// CASE: place.variant_negated
+// PAIR: place.variant_alternative
+// SOURCE: services/gui-cpp/history/browser.hpp :: HistoryBrowser::prepareQuery
+// STATUS: implemented
+// CONTRACT: A negated alternative test tells each branch which alternatives remain.
+// SCENARIO: The query is returned early only when its scope holds no view, and is cleared otherwise; accept.
+void placeVariantNegated() {
+  places::scoped_browser browser;
+  std::string directory = "/work/project";
+  const auto started = browser.clear({.text = "query", .scope = std::string_view{directory}});
+  directory.assign("/reused/directory");
+  places::observeQuery(started);
+}
+
+// END CASE
+
+// CASE: place.variant_bound_view
+// PAIR: place.variant_alternative
+// SOURCE: services/gui-cpp/history/browser.hpp :: HistoryBrowser::prepareQuery
+// STATUS: implemented
+// CONTRACT: A condition that declares `std::get_if` of an alternative tests that alternative.
+// SCENARIO: A scope view is copied and rebound inside the branch, and the other branch holds no view; accept.
+void placeVariantBoundView() {
+  places::scoped_browser browser;
+  std::string directory = "/work/project";
+  const auto started = browser.bind({.text = "query", .scope = std::string_view{directory}});
+  directory.assign("/reused/directory");
+  places::observeQuery(started);
+}
+
+// END CASE
+
+// CASE: place.variant_other_condition
+// PAIR: place.variant_alternative
+// SOURCE: services/gui-cpp/history/browser.hpp :: HistoryBrowser::prepareQuery
+// STATUS: implemented
+// CONTRACT: A branch on any other standard call, such as an operator, is not an alternative test.
+// SCENARIO: The query is read when an optional flag it comes with is set; accept.
+void placeVariantOtherCondition(const places::scoped_query &query, const std::optional<bool> &enabled) {
+  if (*enabled) {
+    places::observeQuery(query);
+  }
 }
 
 // END CASE

@@ -325,3 +325,224 @@ void pointerReferenceParameterEscape(pointers::frame &frame) {
 }
 
 // END CASE
+
+namespace pointers {
+  class view_reader {
+  public:
+    explicit view_reader(std::string_view &view)
+        : view_(view) {}
+
+    [[nodiscard]] std::string_view read() const {
+      return view_;
+    }
+
+  private:
+    std::string_view &view_;
+  };
+
+  struct buffer {
+    std::array<char, 16> bytes{};
+
+    std::span<const char> peek() const {
+      return bytes;
+    }
+  };
+
+  class buffer_stream {
+  public:
+    explicit buffer_stream(buffer &source)
+        : source_(source) {}
+
+    std::span<const char> peek() const {
+      return source_.peek();
+    }
+
+  private:
+    buffer &source_;
+  };
+
+  template <typename Stream>
+  class gated_stream {
+  public:
+    explicit gated_stream(Stream &stream)
+        : stream_(stream) {}
+
+    std::span<const char> peek() const {
+      return stream_.peek();
+    }
+
+  private:
+    Stream &stream_;
+  };
+
+  struct relay {
+    const char *pending = nullptr;
+
+    template <typename Source>
+    void advance(Source &source) {
+      pending = source.peek().data();
+    }
+  };
+
+  struct sink {
+    std::string &target;
+  };
+
+  void attach(record *target, std::string_view text) {
+    target->text = text;
+  }
+
+  void show(const record *target) {
+    observe(target->text);
+  }
+}
+
+// CASE: pointer.reference_field_read
+// PAIR: pointer.reference_field
+// SOURCE: services/runtime-cpp/tls/stream.hpp :: TlsStream::peekView
+// STATUS: implemented
+// CONTRACT: Reading a reference field yields what its referent holds, not the referent itself.
+// SCENARIO: The local view refers to the caller's string, so the view read back may be returned; accept.
+std::string_view pointerReferenceFieldRead(const std::string &text) {
+  std::string_view local = text;
+  const pointers::view_reader reader{local};
+  return reader.read();
+}
+
+// END CASE
+
+// CASE: pointer.reference_field_dead
+// PAIR: pointer.reference_field
+// SOURCE: services/runtime-cpp/tls/stream.hpp :: TlsStream::peekView
+// STATUS: implemented
+// CONTRACT: Reading a reference field yields what its referent holds, not the referent itself.
+// SCENARIO: The view read back refers to a local string that dies on return.
+std::string_view pointerReferenceFieldDead() {
+  const std::string text = "temporary";
+  std::string_view local = text;
+  const pointers::view_reader reader{local};
+  return reader.read(); // expected-error [tbc-dangling-borrow]
+}
+
+// END CASE
+
+// CASE: pointer.nested_reference_wrapper
+// PAIR: pointer.nested_reference
+// SOURCE: services/runtime-cpp/proxy/application_relay.hpp :: ApplicationRelay::advance
+// STATUS: implemented
+// CONTRACT: Wrappers that hold references to streams reach the buffer the innermost one designates.
+// SCENARIO: The relay keeps a pointer into the caller's buffer through two local wrappers; accept.
+void pointerNestedReferenceWrapper(pointers::buffer &source, pointers::relay &out) {
+  pointers::buffer_stream stream{source};
+  pointers::gated_stream gated{stream};
+  out.advance(gated);
+}
+
+// END CASE
+
+// CASE: pointer.nested_reference_dead
+// PAIR: pointer.nested_reference
+// SOURCE: services/runtime-cpp/proxy/application_relay.hpp :: ApplicationRelay::advance
+// STATUS: implemented
+// CONTRACT: Wrappers that hold references to streams reach the buffer the innermost one designates.
+// SCENARIO: The relay keeps a pointer into a local buffer past its lifetime.
+void pointerNestedReferenceDead(pointers::relay &out) {
+  pointers::buffer source;
+  pointers::buffer_stream stream{source};
+  pointers::gated_stream gated{stream};
+  out.advance(gated);
+} // expected-error [tbc-dangling-borrow]
+
+// END CASE
+
+// CASE: pointer.aggregate_reference_member
+// PAIR: pointer.aggregate_reference
+// SOURCE: services/runtime-cpp/http1/intercepted_relay.hpp :: Http1InterceptedRelay::Sink
+// STATUS: implemented
+// CONTRACT: An aggregate's reference member is bound to its initializer, so operations through it reach the referent.
+// SCENARIO: Clearing the string through the member invalidates an earlier view of it.
+void pointerAggregateReferenceMember(std::string &text) {
+  const std::string_view view = text;
+  pointers::sink target{text};
+  target.target.clear(); // expected-error [tbc-invalidated-borrow]
+  pointers::observe(view);
+}
+
+// END CASE
+
+// CASE: pointer.aggregate_reference_read
+// PAIR: pointer.aggregate_reference
+// SOURCE: services/runtime-cpp/http1/intercepted_relay.hpp :: Http1InterceptedRelay::Sink
+// STATUS: implemented
+// CONTRACT: An aggregate's reference member is bound to its initializer, so operations through it reach the referent.
+// SCENARIO: The view is read before the string is cleared through the member; accept.
+void pointerAggregateReferenceRead(std::string &text) {
+  const std::string_view view = text;
+  pointers::sink target{text};
+  pointers::observe(view);
+  target.target.clear();
+}
+
+// END CASE
+
+// CASE: pointer.parameter_write_dead
+// PAIR: pointer.parameter_write_through
+// SOURCE: services/runtime-cpp/proxy/flow_state.hpp :: FlowGate::write
+// STATUS: implemented
+// CONTRACT: A write through a pointer parameter lands in the object the argument designates.
+// SCENARIO: The record behind the pointer keeps a view of a string that dies before it is read.
+void pointerParameterWriteDead() {
+  pointers::record local;
+  pointers::record *target = &local;
+  {
+    const std::string text = "temporary";
+    pointers::attach(target, text);
+  } // expected-error [tbc-invalidated-borrow]
+  pointers::observe(local.text);
+}
+
+// END CASE
+
+// CASE: pointer.parameter_write_live
+// PAIR: pointer.parameter_write_through
+// SOURCE: services/runtime-cpp/proxy/flow_state.hpp :: FlowGate::write
+// STATUS: implemented
+// CONTRACT: A write through a pointer parameter lands in the object the argument designates.
+// SCENARIO: The record behind the pointer is read while the string lives; accept.
+void pointerParameterWriteLive() {
+  pointers::record local;
+  pointers::record *target = &local;
+  const std::string text = "temporary";
+  pointers::attach(target, text);
+  pointers::observe(local.text);
+}
+
+// END CASE
+
+// CASE: pointer.parameter_read_invalidated
+// PAIR: pointer.parameter_read_through
+// SOURCE: services/runtime-cpp/proxy/flow_state.hpp :: FlowStream::write
+// STATUS: implemented
+// CONTRACT: A callee that reads through a pointer parameter uses what the argument's pointee holds.
+// SCENARIO: The record's view is invalidated before the callee reads it through the pointer.
+void pointerParameterReadInvalidated(std::string &text) {
+  const pointers::record local{text};
+  text.clear(); // expected-error [tbc-invalidated-borrow]
+  pointers::show(&local);
+}
+
+// END CASE
+
+// CASE: pointer.parameter_read_live
+// PAIR: pointer.parameter_read_through
+// SOURCE: services/runtime-cpp/proxy/flow_state.hpp :: FlowStream::write
+// STATUS: implemented
+// CONTRACT: A callee that reads through a pointer parameter uses what the argument's pointee holds.
+// SCENARIO: The callee reads the record before the string is cleared; accept.
+void pointerParameterReadLive(std::string &text) {
+  const pointers::record local{text};
+  pointers::show(&local);
+  text.clear();
+}
+
+// END CASE

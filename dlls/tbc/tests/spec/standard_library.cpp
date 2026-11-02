@@ -449,3 +449,94 @@ standard::node *movedIntoLocalOwner() {
 }
 
 // END CASE
+
+// CASE: std.emplaced_view_escape
+// PAIR: std.emplaced_view
+// SOURCE: services/runtime-cpp/terminal/frame_sync.hpp :: FrameSync::encode
+// STATUS: implemented
+// CONTRACT: A view element emplaced from a pointer and a size designates what the pointer designates.
+// SCENARIO: The emplaced view points into a local string that dies before the returned vector.
+std::vector<std::string_view> emplacedViewEscape() {
+  const std::string text = "temporary";
+  std::vector<std::string_view> views;
+  views.emplace_back(text.data(), text.size());
+  return views; // expected-error [tbc-dangling-borrow]
+}
+
+// END CASE
+
+// CASE: std.emplaced_view_parameter
+// PAIR: std.emplaced_view
+// SOURCE: services/runtime-cpp/terminal/frame_sync.hpp :: FrameSync::encode
+// STATUS: implemented
+// CONTRACT: A view element emplaced from a pointer and a size designates what the pointer designates.
+// SCENARIO: The emplaced view points into the caller's string; accept.
+std::vector<std::string_view> emplacedViewParameter(const std::string &text) {
+  std::vector<std::string_view> views;
+  views.emplace_back(text.data(), text.size());
+  return views;
+}
+
+// END CASE
+
+// CASE: std.pointer_element_escape
+// PAIR: std.pointer_element
+// SOURCE: services/desktop-mode/runtime_session.cpp :: agents
+// STATUS: implemented
+// CONTRACT: A pointer element, pushed or emplaced, designates the object it points to.
+// SCENARIO: The stored pointers designate a local that dies before the returned vector.
+std::vector<const int *> pointerElementEscape() {
+  const int value = 1;
+  std::vector<const int *> pointers;
+  pointers.push_back(&value);
+  pointers.emplace_back(&value);
+  return pointers; // expected-error [tbc-dangling-borrow]
+}
+
+// END CASE
+
+// CASE: std.pointer_element_position
+// PAIR: std.pointer_element
+// SOURCE: services/desktop-mode/runtime_session.cpp :: agents
+// STATUS: implemented
+// CONTRACT: The position an insertion or an emplacement takes is not stored as an element.
+// SCENARIO: The stored pointers designate the caller's object, inserted at a position of the local vector; accept.
+std::vector<const int *> pointerElementPosition(const int &value) {
+  std::vector<const int *> pointers;
+  pointers.insert(pointers.begin(), &value);
+  pointers.emplace(pointers.begin(), &value);
+  return pointers;
+}
+
+// END CASE
+
+// CASE: std.inserted_range_escape
+// PAIR: std.inserted_range
+// SOURCE: services/desktop-mode/shortcuts.cpp :: Shortcuts::compile
+// STATUS: implemented
+// CONTRACT: An inserted iterator range copies the elements it designates, with their dependencies.
+// SCENARIO: The copied views point into a local string that dies before the returned vector.
+std::vector<std::string_view> insertedRangeEscape() {
+  const std::string text = "temporary";
+  const std::vector<std::string_view> source{text};
+  std::vector<std::string_view> views;
+  views.insert(views.end(), source.begin(), source.end());
+  return views; // expected-error [tbc-dangling-borrow]
+}
+
+// END CASE
+
+// CASE: std.inserted_range_parameter
+// PAIR: std.inserted_range
+// SOURCE: services/desktop-mode/shortcuts.cpp :: Shortcuts::compile
+// STATUS: implemented
+// CONTRACT: An inserted iterator range copies the elements it designates, not the source container's storage.
+// SCENARIO: The copied views point into the caller's string, while the local source vector dies; accept.
+std::vector<std::string_view> insertedRangeParameter(const std::string &text) {
+  const std::vector<std::string_view> source{text};
+  std::vector<std::string_view> views;
+  views.insert(views.end(), source.begin(), source.end());
+  return views;
+}
+
+// END CASE

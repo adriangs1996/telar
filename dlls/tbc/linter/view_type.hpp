@@ -132,27 +132,37 @@ namespace tbc_lint {
     return left.getNonReferenceType().getCanonicalType().getUnqualifiedType() == right.getNonReferenceType().getCanonicalType().getUnqualifiedType();
   }
 
-  // Whether a range's iterators or pointers have a given type, using the standard container typedefs.
-  inline bool yields(const clang::Expr &argument, clang::QualType result) {
-    const auto range = argument.getType().getNonReferenceType();
-    if (const auto *array = range->getAsArrayTypeUnsafe()) {
-      return result->isPointerType() && sameType(result->getPointeeType(), array->getElementType());
-    }
-    const auto *record = recordOf(range);
+  // Whether one of a record's member typedefs names a type.
+  inline bool namesMemberType(clang::QualType owner, std::initializer_list<const char *> names, clang::QualType type) {
+    const auto *record = recordOf(owner);
     if (record == nullptr || record->getDefinition() == nullptr) {
       return false;
     }
     auto &identifiers = record->getASTContext().Idents;
-    for (const char *name : {"iterator", "const_iterator", "reverse_iterator", "const_reverse_iterator", "pointer", "const_pointer"}) {
+    for (const char *name : names) {
       for (const auto *declaration : record->getDefinition()->lookup(&identifiers.get(name))) {
         const auto *alias = llvm::dyn_cast<clang::TypedefNameDecl>(declaration);
-        if (alias != nullptr && sameType(alias->getUnderlyingType(), result)) {
+        if (alias != nullptr && sameType(alias->getUnderlyingType(), type)) {
           return true;
         }
       }
     }
 
     return false;
+  }
+
+  // Whether a range's iterators or pointers have a given type, using the standard container typedefs.
+  inline bool yields(const clang::Expr &argument, clang::QualType result) {
+    const auto range = argument.getType().getNonReferenceType();
+    if (const auto *array = range->getAsArrayTypeUnsafe()) {
+      return result->isPointerType() && sameType(result->getPointeeType(), array->getElementType());
+    }
+    return namesMemberType(range, {"iterator", "const_iterator", "reverse_iterator", "const_reverse_iterator", "pointer", "const_pointer"}, result);
+  }
+
+  // Whether a type is one of a container's own iterators, as the position an insertion takes.
+  inline bool positionIn(clang::QualType container, clang::QualType type) {
+    return namesMemberType(container, {"iterator", "const_iterator"}, type);
   }
 
   inline bool declaresMember(clang::QualType type, llvm::StringRef name) {
@@ -188,19 +198,24 @@ namespace tbc_lint {
     return smartPointer(type) || (standardRecord(type) && !standardType(type, "basic_string") && declaresMember(type, "allocator_type"));
   }
 
-  // A container's element type, from its value_type typedef.
-  inline clang::QualType elementType(clang::QualType container) {
-    const auto *record = recordOf(container);
+  // A record's member typedef.
+  inline clang::QualType memberType(clang::QualType owner, llvm::StringRef name) {
+    const auto *record = recordOf(owner);
     if (record == nullptr || record->getDefinition() == nullptr) {
       return {};
     }
-    for (const auto *declaration : record->getDefinition()->lookup(&record->getASTContext().Idents.get("value_type"))) {
+    for (const auto *declaration : record->getDefinition()->lookup(&record->getASTContext().Idents.get(name))) {
       if (const auto *alias = llvm::dyn_cast<clang::TypedefNameDecl>(declaration)) {
         return alias->getUnderlyingType();
       }
     }
 
     return {};
+  }
+
+  // A container's element type, from its value_type typedef.
+  inline clang::QualType elementType(clang::QualType container) {
+    return memberType(container, "value_type");
   }
 
   // A standard iterator designates elements it does not own, like a pointer.
@@ -354,6 +369,26 @@ namespace tbc_lint {
   inline bool containsViews(clang::QualType type) {
     llvm::SmallPtrSet<const clang::Type *, 16> seen;
     return containsViews(type, seen);
+  }
+
+  // The type of what a value designates: a pointer's or a reference's pointee, a smart pointer's
+  // element, a view's or an iterator's elements, or what a container's elements designate. Null where
+  // the type designates nothing known.
+  inline clang::QualType designatedType(clang::QualType type) {
+    if (type->isReferenceType() || type->isPointerType()) {
+      return type->getPointeeType();
+    }
+    if (smartPointer(type)) {
+      return memberType(type, "element_type");
+    }
+    if (standardType(type, "reference_wrapper")) {
+      return memberType(type, "type");
+    }
+    if (nativeView(type) || iteratorRecord(type)) {
+      return elementType(type);
+    }
+    const auto element = elementType(type);
+    return element.isNull() ? clang::QualType{} : designatedType(element);
   }
 
   // Moving an object of this type leaves everything it owns where it is. A string does not qualify:

@@ -55,13 +55,36 @@ The checker builds a Clang CFG for each available project function definition.
 It propagates dependencies through local aliases, assignments, calls, copies,
 moves, direct fields, aggregate initialization, direct constructor member
 initializers, and modeled standard-library operations. It joins reachable branch
-origins and iterates loop states to a fixed point.
+origins and iterates loop states to a fixed point. An aggregate's reference
+member is bound to its initializer, as a constructor's member initializer binds
+it.
 
 Reading through a pointer (`*pointer`, `pointer->field`, `pointer[index]`, or
 `pointer->method()`) requires a live pointee and yields the pointee's contents.
-Writing through it updates the variable it designates. For a pointer parameter,
-"where it points" and "what the pointee holds" are separate inputs, so a field
-read through it does not borrow the pointee object itself.
+Reading a reference field does the same for its referent. Writing through either
+updates the object it designates. For an input, such as a parameter or a field
+of the receiver, "where it points" and "what that object holds" are separate
+parts: a borrow can stand for a part reached through references, as a stream
+wrapper reaches the buffer of the stream it wraps:
+
+```cpp
+class gated_stream {
+public:
+  std::span<const char> peek() const { return stream_.peek(); }
+
+private:
+  buffer_stream &stream_;
+};
+```
+
+What `peek` returns stands for what `stream_`'s referent designates, so a caller
+that wraps a local `buffer_stream` around its own buffer gets a view of that
+buffer, not of the local wrapper. What a callee writes through an input lands in
+the object the caller's argument designates. The input itself, and past it each
+reference field, is followed this way, at most three times; what a pointer held
+in a field designates stays merged with the object that holds the pointer. The
+parts an input reaches are typed: a field the reached type does not have stops
+the part there.
 
 Standard-library calls are modeled by the kind of receiver. A view
 (`std::string_view`, `std::span`) lends its referent. An iterator, recognized
@@ -81,10 +104,13 @@ callback does to that object's fields lands in that object, also when a
 template helper invokes it. A `std::function` keeps the borrows of the callable it wraps.
 
 Function summaries describe returned dependencies, borrowed receiver/output
-writes, modeled invalidations, and the parameters and receiver fields whose
-incoming contents the function uses. A call uses only those, so an object whose
+writes, writes into what inputs designate, modeled invalidations, and the parts
+of parameters and receiver fields whose incoming contents the function uses,
+through the references it follows. A call uses only those, so an object whose
 views a method rebuilds before reading them is not reported for holding them
-stale; a call to a function without a summary may use everything it is given.
+stale; a call to a function without a summary may use everything it is given,
+and a project function without a body may also read what a pointer argument
+designates. Calling a member function needs a live object either way.
 Counting, clearing, or growing a sequence container does not read what its
 elements borrow; an associative container compares its keys, so it does. A
 dependency worklist solves those summaries across call chains and mutually
@@ -156,7 +182,12 @@ cannot release memory, so it views whatever it points to, as `QStringView` does.
 A library type that releases memory in its destructor owns it and holds borrows
 only through its type arguments, as `QList<QStringView>` does. A library
 container lends its storage through references, pointers, and iterators, and
-copies its elements by value. A pointer returned by any other library owner has
+copies its elements by value. What it stores keeps the dependencies of what it
+was given: an element, a pointer element, or the arguments an emplaced view or
+pointer is constructed from, as `views.emplace_back(text.data(), text.size())`
+designates `text`. An iterator range stores copies of the elements it
+designates, and the position an insertion takes is not stored. A pointer
+returned by any other library owner has
 no inferable relation to it and is not tracked. A library function with a visible
 body follows the same argument-shape model as an opaque standard function. A
 compiled library function, without a body, is outside the analysis.
@@ -217,6 +248,20 @@ loses those views when that vector grows. Assigning an object overwrites what it
 held without reading it. A path keeps a bounded number of fields, and the members
 of a union share one place.
 
+A branch on `std::holds_alternative<T>(v)` or `std::get_if<T>(&v)`, negated or
+through the variable a condition declares, tells each side which alternatives
+`v` can hold. Where none of them can borrow, `v` holds nothing borrowed:
+
+```cpp
+if (std::holds_alternative<std::string_view>(criteria.scope)) {
+  criteria.scope = std::string_view{owned_scope};
+}
+// either the owned copy, or an alternative that borrows nothing
+```
+
+Which alternative borrows what is not tracked, so a test leaves a variant with
+several borrowing alternatives unchanged.
+
 ## Receiver fields
 
 A region label on a field is shared by every method of that class whose
@@ -254,12 +299,27 @@ For an annotated declaration without a body, the existing signature rules are:
    otherwise.
 4. Multiple incompatible input regions produce `tbc-ambiguous-lifetime`.
 
-These are declared promises. They do not verify an unavailable implementation.
+Callers that cannot see the body rely on these promises, so the checker verifies
+each one against the definition when it checks the translation unit that defines
+the function. A method declared in a header with an elided result and defined in
+its own source file is checked there: returning a parameter instead of the
+receiver's storage is a `tbc-contract-violation`.
+
+```cpp
+class session {
+public:
+  tbc::view<const state &> current() const noexcept;
+
+private:
+  state state_;
+};
+```
+
 An unannotated borrowed return from an opaque call produces
 `tbc-missing-contract` when used. Unsupported borrowed expressions also retain
 an unknown dependency rather than becoming an assumed static result.
 
-Prefer explicit labels for separately compiled or audited boundaries. For
+Explicit labels state which input supplies a result when elision cannot. For
 example, a stream can return a view of a caller-supplied destination rather than
 its own storage:
 
@@ -297,9 +357,10 @@ has deliberate limits:
 - The elements of one container are merged. Index-sensitive ownership is not
   implemented, so erasing at a position is not modeled. Fields past a path's
   bound, and what a library object holds inside its own layout, are not told
-  apart. Ownership protocols that depend on a runtime value, such as a
-  queue that keeps a caller's view only when a shared owner is supplied, need a
-  declared contract.
+  apart. A function that retains an argument on one path retains it for every
+  call, whatever value selects that path: a queue that copies a reply unless a
+  shared owner is supplied must copy and retain in separate functions. A shared
+  owner retained beside a view does not keep the view's referent alive.
 - Deferred captures, general callable type erasure, custom allocator/destructor
   dependencies, ownership transfer through opaque project swaps, and foreign invalidation
   protocols still require further analysis or audited models. Borrowed base

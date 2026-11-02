@@ -53,3 +53,38 @@ void explicitNoescape(spec::bytes input) {
 }
 
 // END CASE
+
+namespace contracts {
+  class session {
+  public:
+    tbc::view<const std::string &> title() const;
+    tbc::view<const std::string &> pick(const std::string &other) const;
+
+  private:
+    std::string title_;
+  };
+}
+
+// CASE: contract.elided_method_receiver
+// PAIR: contract.elided_method
+// SOURCE: services/desktop-mode/desktop_session.hpp :: DesktopSession::state
+// STATUS: implemented
+// CONTRACT: A method's elided result follows its receiver, which callers in other translation units rely on.
+// SCENARIO: The out-of-line definition returns the receiver's own field; accept.
+tbc::view<const std::string &> contracts::session::title() const {
+  return title_;
+}
+
+// END CASE
+
+// CASE: contract.elided_method_parameter
+// PAIR: contract.elided_method
+// SOURCE: services/desktop-mode/desktop_session.hpp :: DesktopSession::state
+// STATUS: implemented
+// CONTRACT: A method's elided result follows its receiver, which callers in other translation units rely on.
+// SCENARIO: The out-of-line definition returns its parameter instead, which those callers would not track.
+tbc::view<const std::string &> contracts::session::pick(const std::string &other) const {
+  return other; // expected-error [tbc-contract-violation]
+}
+
+// END CASE

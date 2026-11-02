@@ -178,10 +178,18 @@ checked. Annotations are only requested for project code that cannot be inferred
   modeled. Moving a smart pointer or an allocator-aware container hands its
   object to the destination; `unique_ptr::release` and swaps through opaque
   project functions are not followed.
+- Reads and writes through an input follow what it designates, and past it each
+  reference field, at most three times. What a pointer held in a field
+  designates stays merged with the object that holds the pointer. Distinct
+  inputs, and the objects reached through different dereferences of one input,
+  are assumed not to alias.
 - Emplacement forwards its arguments to an element constructor; only standard
-  elements are assumed to keep them, so `map.emplace(key, std::string)` into a
-  view element is not tracked. Constructors and functions defined in another
-  translation unit, virtual dispatch, and allocators remain contract boundaries.
+  elements and pointers are assumed to keep them, so
+  `map.emplace(key, std::string)` into a view element is not tracked.
+  Constructors and functions defined in another translation unit, virtual
+  dispatch, and allocators remain contract boundaries. An annotated
+  declaration's contract, elided or labeled, is checked against its definition
+  in the translation unit that defines it.
 - Deferred captures, allocator/destructor dependencies, foreign invalidation,
   exception unwinding, mutable globals, and indirect dispatch remain incomplete.
 - Bounds, nullability, initialization, concurrency, and explicit outlives bounds
@@ -190,7 +198,8 @@ checked. Annotations are only requested for project code that cannot be inferred
 
 A clean run is not proof of arbitrary C++ memory safety. See
 [`docs/contracts.md`](docs/contracts.md) for supported inference, boundary rules,
-and limitations. The paired inference corpus checks both acceptance and exact
+and limitations, and [`docs/open-problems.md`](docs/open-problems.md) for what
+real code still shows. The paired inference corpus checks both acceptance and exact
 rejection diagnostics; it never executes the negative examples.
 
 ## Neovim
@@ -238,7 +247,7 @@ cmake --build --preset debug --target spec-check
 
 The first command validates fixture syntax/metadata, the runner, and implemented
 regressions. `spec-check` deliberately fails on unmet pending specifications.
-The corpus has 216 cases: 170 implemented regressions and 46 explicitly pending
+The corpus has 243 cases: 196 implemented regressions and 47 explicitly pending
 requirements. Fixtures are never linked or executed. Provenance validation requires the surrounding Telar checkout.
 
 ## Format and static analysis

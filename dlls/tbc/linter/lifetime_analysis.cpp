@@ -24,7 +24,6 @@ namespace tbc_lint {
     enum class origin_kind : std::uint8_t {
       parameter,
       parameter_storage,
-      parameter_pointee,
       captured_storage,
       captured_contents,
       static_storage,
@@ -94,31 +93,51 @@ namespace tbc_lint {
 
     // A field on the way to a place, and the level of the object that holds it. A step without a field
     // cuts the path at its level: which fields lie below it there is not known, as inside a union.
+    // A dereference step moves on to the objects that what the path reached so far designates; only
+    // the part of an input a borrow stands for, and positions inside what an input designates, take it.
     struct projection {
       const clang::FieldDecl *field = nullptr;
       storage_kind level = storage_kind::object;
+      bool dereference = false;
 
       bool operator==(const projection &) const = default;
     };
 
     // The most steps a path records. The steps past it are not known, which keeps the places finite
     // while loops walk through nested and recursive structures. Where an object holds a borrow is
-    // recorded more coarsely than where a borrow points.
+    // recorded more coarsely than where a borrow points. Fields count against these bounds;
+    // dereferences have their own, which leaves room for wrappers that reach a stream through
+    // references.
     enum class path_bound : std::uint8_t {
       held = 2,
       steps = 4,
+      dereferences = 3,
     };
 
     // The fields leading from a variable to a place inside it, outermost first.
     using field_path = llvm::SmallVector<projection, 2>;
 
+    // A step that stands for any field of its object.
+    bool cut(const projection &step) {
+      return step.field == nullptr && !step.dereference;
+    }
+
     // Appends a step unless the path is full or already cut at the step's level. The deepest level
-    // merges every level below it, so its fields are not recorded.
+    // merges every level below it, so its fields are not recorded. A dereference starts a new object; it
+    // does not follow a cut, since what an unknown field designates is not known.
     void appendStep(field_path &path, projection step, path_bound bound = path_bound::steps) {
-      if (step.level == storage_kind::deepest || path.size() >= std::to_underlying(bound)) {
+      const auto fields = static_cast<std::size_t>(std::ranges::count_if(path, [](const projection &earlier) { return !earlier.dereference; }));
+      const auto dereferences = path.size() - fields;
+      if (step.dereference) {
+        if (dereferences <= std::to_underlying(path_bound::dereferences) && (path.empty() || !cut(path.back()))) {
+          path.push_back({.dereference = true});
+        }
         return;
       }
-      if (!path.empty() && (path.back().level > step.level || (path.back().level == step.level && path.back().field == nullptr))) {
+      if (step.level == storage_kind::deepest || fields >= std::to_underlying(bound)) {
+        return;
+      }
+      if (!path.empty() && !path.back().dereference && (path.back().level > step.level || (path.back().level == step.level && path.back().field == nullptr))) {
         return;
       }
 
@@ -146,11 +165,14 @@ namespace tbc_lint {
       return depth(symbolic) == 0 ? actual : below(actual, depth(symbolic));
     }
 
-    // A place inside a variable: the level of the object there, and the fields that lead to it.
+    // A place inside a variable: the level of the object there, and the fields that lead to it. A
+    // place inside what an input designates names that input and the part of it that designates.
     struct object_place {
       const clang::ValueDecl *variable = nullptr;
       storage_kind level = storage_kind::object;
       field_path path{};
+      bool designated = false;
+      field_path select{};
 
       bool operator==(const object_place &) const = default;
     };
@@ -160,6 +182,32 @@ namespace tbc_lint {
       appendMoved(actual.path, symbolic.path, storage_kind::object, actual.level);
       actual.level = relocate(actual.level, symbolic.level);
       return actual;
+    }
+
+    // Whether two parts of one input can designate the same objects: as many dereferences, and on the
+    // way to each, fields that agree as far as both are known. Inputs are assumed not to alias one
+    // another, and neither do the objects reached through different dereferences of one input.
+    bool sameDesignation(const field_path &left, const field_path &right) {
+      std::size_t first = 0;
+      std::size_t second = 0;
+      while (true) {
+        bool known = true;
+        for (; first < left.size() && second < right.size() && !left[first].dereference && !right[second].dereference; ++first, ++second) {
+          if (known && !cut(left[first]) && !cut(right[second]) && left[first].field != right[second].field) {
+            return false;
+          }
+          known = known && !cut(left[first]) && !cut(right[second]);
+        }
+        for (; first < left.size() && !left[first].dereference; ++first) {
+        }
+        for (; second < right.size() && !right[second].dereference; ++second) {
+        }
+        if (first == left.size() || second == right.size()) {
+          return first == left.size() && second == right.size();
+        }
+        ++first;
+        ++second;
+      }
     }
 
     // Whether a borrow's place can lie inside the object at a place: on every level down to that
@@ -215,7 +263,7 @@ namespace tbc_lint {
         path = llvm::hash_combine(path, step.field, std::to_underlying(step.level));
       }
       for (const auto &step : value.select) {
-        path = llvm::hash_combine(path, step.field);
+        path = llvm::hash_combine(path, step.field, step.dereference);
       }
       return llvm::hash_combine(std::to_underlying(value.kind), std::to_underlying(value.storage), path, value.variable, value.expression, value.region, value.invalidated, value.full_expression, value.borrow_site.getRawEncoding());
     }
@@ -224,15 +272,34 @@ namespace tbc_lint {
     // lies inside the first, or the first is cut before they differ.
     bool covers(const field_path &outer, const field_path &inner) {
       for (std::size_t index = 0; index < outer.size(); ++index) {
-        if (outer[index].field == nullptr) {
+        if (cut(outer[index])) {
           return true;
         }
-        if (index == inner.size() || inner[index].field != outer[index].field) {
+        if (index == inner.size() || inner[index].field != outer[index].field || inner[index].dereference != outer[index].dereference) {
           return false;
         }
       }
 
       return true;
+    }
+
+    // Whether one part of an input contains another: the second selects further fields of the same
+    // object, or fields the first's cut already selects. A further dereference reaches other objects.
+    bool coversSelect(const field_path &outer, const field_path &inner) {
+      const auto fields = [&](std::size_t from) { return std::ranges::none_of(llvm::drop_begin(inner, static_cast<unsigned>(from)), [](const projection &step) { return step.dereference; }); };
+      for (std::size_t index = 0; index < outer.size(); ++index) {
+        if (index == inner.size()) {
+          return false;
+        }
+        if (cut(outer[index])) {
+          return fields(index);
+        }
+        if (outer[index] != inner[index]) {
+          return false;
+        }
+      }
+
+      return fields(outer.size());
     }
 
     // A set of borrows. A borrow held at a position another one of it covers adds nothing, so the
@@ -305,6 +372,18 @@ namespace tbc_lint {
       }
     };
 
+    // The parts of inputs a function uses. Using a part uses every part inside it, so a part another
+    // one contains adds nothing.
+    bool addUse(loans &uses, const origin &use) {
+      const auto same = [&](const origin &other) { return other.kind == use.kind && other.variable == use.variable; };
+      if (std::ranges::any_of(uses.values, [&](const origin &other) { return same(other) && coversSelect(other.select, use.select); })) {
+        return false;
+      }
+      llvm::erase_if(uses.values, [&](const origin &other) { return same(other) && coversSelect(use.select, other.select); });
+      uses.values.push_back(use);
+      return true;
+    }
+
     enum class containment : std::uint8_t {
       inside,
       covering,
@@ -315,10 +394,10 @@ namespace tbc_lint {
     // an unknown position that covers it, or apart from it.
     containment contain(const field_path &position, const field_path &fields) {
       for (std::size_t index = 0; index < fields.size(); ++index) {
-        if (index == position.size() || position[index].field == nullptr || fields[index].field == nullptr) {
+        if (index == position.size() || cut(position[index]) || cut(fields[index])) {
           return containment::covering;
         }
-        if (position[index].field != fields[index].field) {
+        if (position[index].field != fields[index].field || position[index].dereference != fields[index].dereference) {
           return containment::apart;
         }
       }
@@ -328,22 +407,178 @@ namespace tbc_lint {
 
     // A borrow that stands for what an input held at its position, whatever input part that was.
     bool standsForInput(const origin &source) {
-      return source.kind == origin_kind::parameter || source.kind == origin_kind::parameter_pointee || source.kind == origin_kind::receiver_region || source.kind == origin_kind::captured_contents;
+      return source.kind == origin_kind::parameter || source.kind == origin_kind::receiver_region || source.kind == origin_kind::captured_contents;
+    }
+
+    // What an object of a type owns one level below it: a smart pointer's object or a container's
+    // elements. Null where that is not known.
+    clang::QualType ownedType(clang::QualType type) {
+      return smartPointer(type) ? memberType(type, "element_type") : elementType(type);
+    }
+
+    // Whether an object of one type can be the object another type designates: the same type, a base
+    // or a derived class of it, raw bytes, or a type that is not known.
+    bool compatible(clang::QualType expected, clang::QualType actual) {
+      if (expected.isNull() || actual.isNull()) {
+        return true;
+      }
+      expected = expected.getCanonicalType().getUnqualifiedType();
+      actual = actual.getCanonicalType().getUnqualifiedType();
+      if (expected == actual || expected->isVoidType() || expected->isCharType() || expected->isStdByteType() || standardType(expected, "byte")) {
+        return true;
+      }
+      const auto *wanted = expected->getAsCXXRecordDecl();
+      const auto *found = actual->getAsCXXRecordDecl();
+      if (wanted == nullptr || found == nullptr) {
+        return false;
+      }
+      if (!wanted->hasDefinition() || !found->hasDefinition()) {
+        return true;
+      }
+      return wanted->getCanonicalDecl() == found->getCanonicalDecl() || wanted->isDerivedFrom(found) || found->isDerivedFrom(wanted);
+    }
+
+    // Whether a field belongs to a record type or one of its bases. A reference binding has no fields.
+    bool memberOf(clang::QualType type, const clang::FieldDecl &field) {
+      if (type->isReferenceType()) {
+        return false;
+      }
+      const auto *record = type->getAsCXXRecordDecl();
+      if (record == nullptr || !record->hasDefinition()) {
+        return false;
+      }
+      record = record->getDefinition();
+      if (field.getParent()->getCanonicalDecl() == record->getCanonicalDecl()) {
+        return true;
+      }
+      return std::ranges::any_of(record->bases(), [&](const clang::CXXBaseSpecifier &base) { return memberOf(base.getType(), field); });
+    }
+
+    // The type of the part of an input a borrow stands for, or null where a step on the way is not known.
+    // A receiver field holds its own type, which for a reference is the binding to its referent.
+    clang::QualType partType(const origin &source) {
+      if (source.variable == nullptr) {
+        return {};
+      }
+      auto type = source.kind == origin_kind::receiver_region ? source.variable->getType() : source.variable->getType().getNonReferenceType();
+      for (const auto &step : source.select) {
+        if (type.isNull() || cut(step)) {
+          return {};
+        }
+        if (step.dereference) {
+          type = designatedType(type);
+        } else if (memberOf(type, *step.field)) {
+          type = step.field->getType();
+        } else {
+          return {};
+        }
+      }
+      return type;
+    }
+
+    // The type of the object a borrow's place lies in, or null where a step on the way is not known. A
+    // borrow standing for an input lies in what that part designates; any other lies in its variable,
+    // or in its temporary.
+    clang::QualType placeType(const origin &source) {
+      clang::QualType type;
+      if (standsForInput(source)) {
+        const auto part = partType(source);
+        type = part.isNull() ? clang::QualType{} : designatedType(part);
+      } else if (llvm::isa_and_nonnull<clang::MaterializeTemporaryExpr>(source.expression)) {
+        type = source.expression->getType().getNonReferenceType();
+      } else if (source.variable != nullptr && source.kind != origin_kind::unknown) {
+        type = source.variable->getType().getNonReferenceType();
+      }
+      auto level = storage_kind::object;
+      const auto descend = [&](storage_kind to) {
+        for (; !type.isNull() && level < to && level != storage_kind::deepest; level = deepen(level)) {
+          type = ownedType(type);
+        }
+      };
+      for (const auto &step : source.path) {
+        descend(step.level);
+        if (type.isNull() || step.field == nullptr || !memberOf(type, *step.field)) {
+          return {};
+        }
+        type = step.field->getType().getNonReferenceType();
+      }
+      descend(source.storage);
+      return type;
+    }
+
+    // The type of what a part of a callee's input designates, where it is known.
+    clang::QualType designatedTypeOf(const clang::ValueDecl &input, field_path select) {
+      auto kind = origin_kind::captured_contents;
+      if (llvm::isa<clang::ParmVarDecl>(input)) {
+        kind = origin_kind::parameter;
+      } else if (llvm::isa<clang::FieldDecl>(input)) {
+        kind = origin_kind::receiver_region;
+      }
+      const auto part = partType({.kind = kind, .select = std::move(select), .variable = &input});
+      return part.isNull() ? clang::QualType{} : designatedType(part);
+    }
+
+    // The borrows among designations whose place can be an object of a type.
+    loans ofType(const loans &designations, clang::QualType type) {
+      loans result;
+      for (const auto &designation : designations.values) {
+        if (compatible(type, placeType(designation))) {
+          result.add(designation);
+        }
+      }
+      return result;
     }
 
     // Such a borrow, moved from its position to one inside it, stands for the same part of the input.
-    // Where its position is cut, which part is not known, so it never narrows again.
+    // Where its position is cut, which part is not known, so it never narrows again. A field the part's
+    // type does not have means the borrow came from elsewhere in its holder, which is not known either.
     void narrow(origin &source, const field_path &position) {
       if (!standsForInput(source)) {
         return;
       }
-      if (std::ranges::any_of(source.held, [](const projection &step) { return step.field == nullptr; })) {
+      if (std::ranges::any_of(source.held, cut)) {
         appendStep(source.select, {.field = nullptr}, path_bound::held);
         return;
       }
       for (std::size_t index = source.held.size(); index < position.size(); ++index) {
-        appendStep(source.select, position[index], path_bound::held);
+        const auto &step = position[index];
+        const auto type = partType(source);
+        if (!step.dereference && !cut(step) && !type.isNull() && !memberOf(type, *step.field)) {
+          appendStep(source.select, {.field = nullptr}, path_bound::held);
+          return;
+        }
+        appendStep(source.select, step, path_bound::held);
       }
+    }
+
+    // Where in what an input holds a borrow's place lies: past the part it stands for, a dereference,
+    // then the fields inside the designated object. Storage that object owns is not laid out in fields.
+    // The input itself is followed when it designates anything, and past a field only a reference is:
+    // what a pointer held in a field designates stays merged with the object that holds the pointer.
+    // There is no position either where the path cannot record the dereference.
+    std::optional<field_path> designatedPosition(const origin &source) {
+      const auto type = partType(source);
+      const bool follows = type.isNull() || (source.select.empty() ? !designatedType(type).isNull() : type->isReferenceType());
+      if (!follows) {
+        return std::nullopt;
+      }
+      auto position = source.select;
+      appendStep(position, {.dereference = true});
+      if (position.size() == source.select.size()) {
+        return std::nullopt;
+      }
+      bool owned = depth(source.storage) != 0;
+      for (const auto &step : source.path) {
+        if (depth(step.level) != 0) {
+          owned = true;
+          break;
+        }
+        appendStep(position, step, path_bound::held);
+      }
+      if (owned) {
+        appendStep(position, {.field = nullptr}, path_bound::held);
+      }
+      return position;
     }
 
     // What a subobject at some fields holds: the borrows held inside it, and those held at a position
@@ -499,11 +734,20 @@ namespace tbc_lint {
     struct state {
       llvm::DenseMap<const clang::ValueDecl *, loans> values;
       llvm::DenseMap<const clang::ValueDecl *, loans> references;
+      // What was written into the objects an input designates, held at positions inside what the
+      // input holds, past a dereference.
+      llvm::DenseMap<const clang::ValueDecl *, loans> designated;
       llvm::SmallPtrSet<const clang::ValueDecl *, 8> written;
 
       loans get(const clang::ValueDecl *key) const {
+        return held(key);
+      }
+
+      // What a variable holds, without a copy.
+      const loans &held(const clang::ValueDecl *key) const {
+        static const loans nothing;
         const auto found = values.find(key);
-        return found == values.end() ? loans{} : found->second;
+        return found == values.end() ? nothing : found->second;
       }
 
       loans getReference(const clang::ValueDecl *key) const {
@@ -518,6 +762,9 @@ namespace tbc_lint {
         }
         for (const auto &entry : other.references) {
           changed = references[entry.first].merge(entry.second) || changed;
+        }
+        for (const auto &entry : other.designated) {
+          changed = designated[entry.first].merge(entry.second) || changed;
         }
         for (const auto *key : other.written) {
           changed = written.insert(key).second || changed;
@@ -536,10 +783,12 @@ namespace tbc_lint {
     struct function_summary {
       loans returned;
       llvm::DenseMap<const clang::ValueDecl *, loans> writes;
+      // What the function writes into the objects its inputs designate, as the state keeps it.
+      llvm::DenseMap<const clang::ValueDecl *, loans> designated;
       bool invalidates_environment = false;
       llvm::SmallVector<invalidation, 2> invalidates;
-      // The parameters and receiver fields whose incoming contents the function uses.
-      llvm::SmallSetVector<const clang::ValueDecl *, 4> uses;
+      // The parts of its parameters and receiver fields whose incoming contents the function uses.
+      loans uses;
 
       bool invalidate(const object_place &target, storage_range range) {
         const auto found = std::ranges::find_if(invalidates, [&](const invalidation &entry) { return entry.target == target; });
@@ -554,6 +803,16 @@ namespace tbc_lint {
         return changed;
       }
 
+      static bool mergeWrites(llvm::DenseMap<const clang::ValueDecl *, loans> &into, const llvm::DenseMap<const clang::ValueDecl *, loans> &from) {
+        bool changed = false;
+        for (const auto &entry : from) {
+          const auto inserted = into.try_emplace(entry.first);
+          changed = inserted.second || changed;
+          changed = inserted.first->second.merge(entry.second) || changed;
+        }
+        return changed;
+      }
+
       bool merge(const function_summary &other) {
         bool changed = returned.merge(other.returned);
         if (other.invalidates_environment && !invalidates_environment) {
@@ -563,14 +822,11 @@ namespace tbc_lint {
         for (const auto &[target, range] : other.invalidates) {
           changed = invalidate(target, range) || changed;
         }
-        for (const auto *input : other.uses) {
-          changed = uses.insert(input) || changed;
+        for (const auto &use : other.uses.values) {
+          changed = addUse(uses, use) || changed;
         }
-        for (const auto &entry : other.writes) {
-          const auto inserted = writes.try_emplace(entry.first);
-          changed = inserted.second || changed;
-          changed = inserted.first->second.merge(entry.second) || changed;
-        }
+        changed = mergeWrites(writes, other.writes) || changed;
+        changed = mergeWrites(designated, other.designated) || changed;
 
         return changed;
       }
@@ -725,14 +981,25 @@ namespace tbc_lint {
           queued.reset(block->getBlockID());
           auto output = inputs[block->getBlockID()];
           transfer(*block, output);
+          // A branch on which alternative a variant holds tells each successor what it can hold there.
+          const auto test = block->succ_size() == 2 ? alternativeTest(block->getLastCondition(), conditionVariable(*block)) : std::nullopt;
+          bool taken = true;
           for (const auto &successor : block->succs()) {
             const auto *next = successor.getReachableBlock();
+            const bool branch = std::exchange(taken, false);
             if (next == nullptr) {
               continue;
             }
 
             const auto id = next->getBlockID();
-            const bool changed = inputs[id].merge(output);
+            bool changed = false;
+            if (test) {
+              auto refined = output;
+              refine(*test, branch, refined);
+              changed = inputs[id].merge(refined);
+            } else {
+              changed = inputs[id].merge(output);
+            }
             if ((!reached[id] || changed) && !queued[id]) {
               queued.set(id);
               work.push_back(next);
@@ -751,15 +1018,29 @@ namespace tbc_lint {
           }
         }
         const auto &exit = inputs[graph->getExit().getBlockID()];
+        const auto escape = [&](const loans &written) {
+          for (const auto &source : written.values) {
+            if (source.kind == origin_kind::local || source.kind == origin_kind::temporary) {
+              report(issue::dangling, source.borrow_site.isValid() ? source.borrow_site : function_.getEndLoc(), &source);
+            }
+          }
+        };
         for (const auto *key : exit.written) {
           if (llvm::isa<clang::FieldDecl>(key) || callerVisible(key) || by_reference_.contains(key)) {
             summary_.writes[key] = exit.get(key);
-            for (const auto &source : summary_.writes[key].values) {
-              if (source.kind == origin_kind::local || source.kind == origin_kind::temporary) {
-                report(issue::dangling, source.borrow_site.isValid() ? source.borrow_site : function_.getEndLoc(), &source);
-              }
+            escape(summary_.writes[key]);
+          }
+        }
+        // Objects an input designates belong to the caller. Writes into them never replace, so what an
+        // object held on entry, held back where it was, tells the caller nothing.
+        for (const auto &[input, written] : exit.designated) {
+          auto &kept = summary_.designated[input];
+          for (const auto &source : written.values) {
+            if (!standsForInput(source) || source.variable != input || source.select != source.held) {
+              kept.add(source);
             }
           }
+          escape(kept);
         }
 
         return std::move(summary_);
@@ -883,6 +1164,118 @@ namespace tbc_lint {
         }
       }
 
+      // A test of which alternative a variant holds, as `std::holds_alternative<T>(v)` or
+      // `std::get_if<T>(&v)` performs it.
+      struct alternative_test {
+        const clang::Expr *variant = nullptr;
+        // Whether the expression points to the variant rather than designating it.
+        bool through_pointer = false;
+        clang::QualType alternative{};
+        // Whether the variant holds the alternative when the test is true.
+        bool holds = true;
+      };
+
+      static const clang::VarDecl *conditionVariable(const clang::CFGBlock &block) {
+        const auto *terminator = block.getTerminatorStmt();
+        if (const auto *branch = llvm::dyn_cast_or_null<clang::IfStmt>(terminator)) {
+          return branch->getConditionVariable();
+        }
+        if (const auto *loop = llvm::dyn_cast_or_null<clang::WhileStmt>(terminator)) {
+          return loop->getConditionVariable();
+        }
+        if (const auto *loop = llvm::dyn_cast_or_null<clang::ForStmt>(terminator)) {
+          return loop->getConditionVariable();
+        }
+        return nullptr;
+      }
+
+      // The alternatives of a std::variant, in order.
+      static llvm::SmallVector<clang::QualType, 4> alternatives(clang::QualType type) {
+        llvm::SmallVector<clang::QualType, 4> result;
+        const auto *record = llvm::dyn_cast_or_null<clang::ClassTemplateSpecializationDecl>(recordOf(type));
+        if (record == nullptr || !standardType(type, "variant")) {
+          return result;
+        }
+        const auto &arguments = record->getTemplateArgs();
+        if (arguments.size() != 1 || arguments[0].getKind() != clang::TemplateArgument::Pack) {
+          return result;
+        }
+        for (const auto &argument : arguments[0].pack_elements()) {
+          result.push_back(argument.getAsType());
+        }
+        return result;
+      }
+
+      // Also negated, or through the variable a condition declares and tests.
+      static std::optional<alternative_test> alternativeTest(const clang::Expr *condition, const clang::VarDecl *declared) {
+        condition = clean(condition);
+        if (condition == nullptr) {
+          return std::nullopt;
+        }
+        if (const auto *negation = llvm::dyn_cast<clang::UnaryOperator>(condition); negation != nullptr && negation->getOpcode() == clang::UO_LNot) {
+          auto test = alternativeTest(negation->getSubExpr(), declared);
+          if (test) {
+            test->holds = !test->holds;
+          }
+          return test;
+        }
+        if (const auto *reference = llvm::dyn_cast<clang::DeclRefExpr>(condition)) {
+          return declared != nullptr && reference->getDecl() == declared && declared->hasInit() ? alternativeTest(declared->getInit(), nullptr) : std::nullopt;
+        }
+        const auto *call = llvm::dyn_cast<clang::CallExpr>(condition);
+        const auto *callee = call == nullptr ? nullptr : call->getDirectCallee();
+        const auto *name = callee == nullptr ? nullptr : callee->getIdentifier();
+        if (name == nullptr || call->getNumArgs() != 1 || !standardDeclaration(*callee) || (name->getName() != "holds_alternative" && name->getName() != "get_if")) {
+          return std::nullopt;
+        }
+        const auto *arguments = callee->getTemplateSpecializationArgs();
+        if (arguments == nullptr || arguments->size() == 0) {
+          return std::nullopt;
+        }
+        alternative_test test{.variant = clean(call->getArg(0))};
+        if (name->getName() == "get_if") {
+          const auto *address = llvm::dyn_cast<clang::UnaryOperator>(test.variant);
+          test.through_pointer = address == nullptr || address->getOpcode() != clang::UO_AddrOf;
+          test.variant = test.through_pointer ? test.variant : clean(address->getSubExpr());
+        }
+        const auto type = test.through_pointer ? test.variant->getType()->getPointeeType() : test.variant->getType();
+        const auto &chosen = arguments->get(0);
+        if (chosen.getKind() == clang::TemplateArgument::Type) {
+          test.alternative = chosen.getAsType();
+        } else if (chosen.getKind() == clang::TemplateArgument::Integral) {
+          const auto choices = alternatives(type);
+          const auto index = chosen.getAsIntegral().getZExtValue();
+          if (index < choices.size()) {
+            test.alternative = choices[index];
+          }
+        }
+        if (test.alternative.isNull()) {
+          return std::nullopt;
+        }
+        return test;
+      }
+
+      // On a branch where every alternative the variant can hold cannot borrow, it holds nothing borrowed.
+      void refine(const alternative_test &test, bool taken, state &branch) {
+        const auto choices = alternatives(test.through_pointer ? test.variant->getType()->getPointeeType() : test.variant->getType());
+        if (choices.empty()) {
+          return;
+        }
+        const bool holds = taken == test.holds;
+        for (const auto &choice : choices) {
+          if (holds == sameType(choice, test.alternative) && containsViews(choice)) {
+            return;
+          }
+        }
+        const auto where = writeTargets(test.through_pointer ? value(test.variant, branch) : reference(test.variant, branch), {});
+        if (!where.replaces) {
+          return;
+        }
+        for (const auto &target : where.places) {
+          replaceHeld(branch.values[target.variable], target.variable->getType(), target.fields, {});
+        }
+      }
+
       [[nodiscard]] state initialState() const {
         state initial;
         for (const auto *parameter : function_.parameters()) {
@@ -952,7 +1345,7 @@ namespace tbc_lint {
         if (owners.values.empty()) {
           return;
         }
-        for (auto *map : {&current.values, &current.references}) {
+        for (auto *map : {&current.values, &current.references, &current.designated}) {
           for (auto &entry : *map) {
             loans kept;
             bool moved = false;
@@ -984,7 +1377,7 @@ namespace tbc_lint {
         }
         const auto left_owner = capturedStorage(*left, current);
         const auto right_owner = capturedStorage(*right, current);
-        for (auto *map : {&current.values, &current.references}) {
+        for (auto *map : {&current.values, &current.references, &current.designated}) {
           for (auto &entry : *map) {
             loans exchanged;
             for (const auto &source : entry.second.values) {
@@ -1011,10 +1404,11 @@ namespace tbc_lint {
         }
       }
 
-      // A by-value parameter is the callee's own copy; only writes through references, pointers, and iterators reach the caller.
+      // A by-value parameter is the callee's own copy; writes through a reference reach the caller, and
+      // writes through a pointer or iterator land in what it designates.
       static bool callerVisible(const clang::ValueDecl *variable) {
         const auto *parameter = llvm::dyn_cast<clang::ParmVarDecl>(variable);
-        return parameter != nullptr && (parameter->getType()->isReferenceType() || pointerLike(parameter->getType()));
+        return parameter != nullptr && parameter->getType()->isReferenceType();
       }
 
       // A by-reference capture is the caller's own variable when the enclosing function calls the lambda.
@@ -1029,7 +1423,29 @@ namespace tbc_lint {
         }
         loans result;
         for (const auto &binding : current.getReference(key).values) {
-          result.merge(binding.variable == nullptr ? current.get(key) : selected(current.get(binding.variable), inlineFields(binding.path)));
+          if (binding.variable == nullptr) {
+            result.merge(current.get(key));
+          } else if (standsForInput(binding)) {
+            result.merge(designatedContents(binding, current));
+          } else {
+            result.merge(selected(current.get(binding.variable), inlineFields(binding.path)));
+          }
+        }
+        return result;
+      }
+
+      // What the objects an input designates hold: a further part of that input, what they held on
+      // entry, and what was written into them since. What a part not known to designate anything
+      // designates stays merged with the input's own contents.
+      static loans designatedContents(const origin &designation, const state &current) {
+        const auto position = designatedPosition(designation);
+        if (!position) {
+          return selected(current.held(designation.variable), inlineFields(designation.path));
+        }
+        loans result;
+        result.add({.kind = designation.kind, .select = *position, .variable = designation.variable});
+        if (const auto found = current.designated.find(designation.variable); found != current.designated.end()) {
+          result.merge(selected(found->second, *position));
         }
         return result;
       }
@@ -1062,7 +1478,7 @@ namespace tbc_lint {
             result.clear();
             break;
           }
-          result.push_back({.variable = source.variable, .level = source.storage, .path = source.path});
+          result.push_back({.variable = source.variable, .level = source.storage, .path = source.path, .designated = standsForInput(source), .select = source.select});
         }
         if (!result.empty()) {
           return result;
@@ -1077,6 +1493,8 @@ namespace tbc_lint {
       struct write_target {
         const clang::ValueDecl *variable = nullptr;
         field_path fields{};
+        // Whether the write lands in what the variable, an input, designates.
+        bool designated = false;
       };
 
       struct write_targets {
@@ -1101,11 +1519,21 @@ namespace tbc_lint {
             result.places.clear();
             break;
           }
+          // An object an input designates lies outside the function, past a dereference of that input.
+          if (const auto position = standsForInput(source) ? designatedPosition(source) : std::nullopt) {
+            exact = false;
+            write_target target{.variable = source.variable, .fields = *position, .designated = true};
+            const auto same = [&](const write_target &other) { return other.variable == target.variable && other.fields == target.fields && other.designated; };
+            if (std::ranges::none_of(result.places, same)) {
+              result.places.push_back(std::move(target));
+            }
+            continue;
+          }
           auto fields = exactPlace(source) || source.storage > storage_kind::object ? inlineFields(source.path) : field_path{};
           exact = exact && exactPlace(source) && fields.size() <= std::to_underlying(path_bound::held);
           fields.truncate(std::min<std::size_t>(fields.size(), std::to_underlying(path_bound::held)));
           write_target target{.variable = source.variable, .fields = std::move(fields)};
-          const auto same = [&](const write_target &other) { return other.variable == target.variable && other.fields == target.fields; };
+          const auto same = [&](const write_target &other) { return other.variable == target.variable && other.fields == target.fields && !other.designated; };
           if (std::ranges::none_of(result.places, same)) {
             result.places.push_back(std::move(target));
           }
@@ -1123,6 +1551,10 @@ namespace tbc_lint {
 
       void store(const write_targets &where, const loans &incoming, state &current) {
         for (const auto &target : where.places) {
+          if (target.designated) {
+            current.designated[target.variable].merge(heldAt(incoming, target.fields));
+            continue;
+          }
           auto &contents = current.values[target.variable];
           if (where.replaces) {
             replaceHeld(contents, target.variable->getType(), target.fields, incoming);
@@ -1222,7 +1654,7 @@ namespace tbc_lint {
         }
         if (const auto *member = llvm::dyn_cast<clang::MemberExpr>(expression)) {
           if (const auto *field = llvm::dyn_cast<clang::FieldDecl>(member->getMemberDecl())) {
-            return field->getType()->isReferenceType() ? value(member, current) : fieldPlace(*member, *field, current);
+            return field->getType()->isReferenceType() ? fieldContents(*member, *field, current) : fieldPlace(*member, *field, current);
           }
           if (const auto *pointer = dereferencedPointer(member)) {
             return value(pointer, current);
@@ -1303,13 +1735,22 @@ namespace tbc_lint {
         if (actual.variable == nullptr) {
           return std::nullopt;
         }
-        return rebased({.variable = actual.variable, .level = actual.storage, .path = actual.path}, {.level = symbolic.level, .path = steps});
+        return rebased({.variable = actual.variable, .level = actual.storage, .path = actual.path, .designated = standsForInput(actual), .select = actual.select}, {.level = symbolic.level, .path = steps});
       }
 
       // Inside a lambda, `this` is the object the closure captured. A field of the closure is its own.
       static bool capturedReceiver(const clang::FunctionDecl &callee, const clang::ValueDecl *field) {
         const auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(&callee);
         return method != nullptr && method->getParent()->isLambda() && (field == nullptr || llvm::cast<clang::FieldDecl>(field)->getParent() != method->getParent());
+      }
+
+      // What a receiver holds at one of a callee's fields. Inside a lambda, a field of the enclosing
+      // class belongs to the object the closure captured.
+      loans receiverField(const clang::FunctionDecl &callee, const clang::Expr &object, const clang::FieldDecl &field, const state &current) {
+        if (capturedReceiver(callee, &field)) {
+          return selected(referencedContents(capturedThis(callee, object, current), current), field);
+        }
+        return llvm::isa<clang::CXXThisExpr>(clean(&object)) ? current.get(&field) : selected(receiverContents(object, current), field);
       }
 
       // What a closure's captured `this` designates: the captured pointer's object, or the copy of `*this`
@@ -1367,7 +1808,9 @@ namespace tbc_lint {
         const bool positioned = fields.size() == initializer->getNumInits();
         loans result;
         for (unsigned index = 0; index < initializer->getNumInits(); ++index) {
-          auto contents = value(initializer->getInit(index), current);
+          // A reference member holds where its referent lies, as a constructor's initializer gives it.
+          const bool binds = positioned && fields[index]->getType()->isReferenceType();
+          auto contents = binds ? reference(initializer->getInit(index), current) : value(initializer->getInit(index), current);
           if (positioned) {
             field_path at;
             appendField(at, *fields[index], storage_kind::object);
@@ -1536,18 +1979,26 @@ namespace tbc_lint {
       }
 
       static bool parameterOrigin(const origin &source) {
-        return source.kind == origin_kind::parameter || source.kind == origin_kind::parameter_storage || source.kind == origin_kind::parameter_pointee;
+        return source.kind == origin_kind::parameter || source.kind == origin_kind::parameter_storage;
       }
 
       // Substitutes one argument for a summary's symbolic parameter origin.
       loans argumentLoans(const origin &source, const clang::Expr &argument, const state &current) {
-        if (source.kind == origin_kind::parameter) {
-          return value(&argument, current);
+        return source.kind == origin_kind::parameter ? value(&argument, current) : reference(&argument, current);
+      }
+
+      // The part of an actual input that a summary's borrow stands for, through the objects it designates.
+      loans selectedAlong(loans actual, const field_path &select, const state &current) {
+        field_path fields;
+        for (const auto &step : select) {
+          if (!step.dereference) {
+            fields.push_back(step);
+            continue;
+          }
+          actual = referencedContents(selected(actual, fields), current);
+          fields.clear();
         }
-        if (source.kind == origin_kind::parameter_storage) {
-          return reference(&argument, current);
-        }
-        return referencedContents(value(&argument, current), current);
+        return selected(actual, fields);
       }
 
       loans constructionResult(const clang::CXXConstructExpr &construction, const state &current) {
@@ -1566,10 +2017,12 @@ namespace tbc_lint {
         }
         for (const auto &write : known->summary.writes) {
           // What a constructor writes to one of its fields is held at that field of the new object.
-          field_path at;
-          if (const auto *field = llvm::dyn_cast<clang::FieldDecl>(write.first)) {
-            appendField(at, *field, storage_kind::object);
+          const auto *field = llvm::dyn_cast<clang::FieldDecl>(write.first);
+          if (field == nullptr) {
+            continue;
           }
+          field_path at;
+          appendField(at, *field, storage_kind::object);
           loans written;
           for (const auto &source : write.second.values) {
             loans actual;
@@ -1585,7 +2038,7 @@ namespace tbc_lint {
               actual.add({.kind = origin_kind::unknown, .expression = &construction});
             }
             if (!source.select.empty()) {
-              actual = selected(actual, source.select);
+              actual = selectedAlong(actual, source.select, current);
             }
             for (auto &borrow : actual.values) {
               locate(borrow, source);
@@ -1597,44 +2050,60 @@ namespace tbc_lint {
         return result;
       }
 
+      // What a summary's symbolic input stands for at a call, through the part of it the borrow selects,
+      // before the borrow's place inside it is located. Nothing for an argument the call does not pass.
+      std::optional<loans> actualFor(const origin &source, const clang::CallExpr &call, const state &current) {
+        loans actual;
+        if (parameterOrigin(source)) {
+          const auto index = llvm::cast<clang::ParmVarDecl>(source.variable)->getFunctionScopeIndex() + argumentOffset(call);
+          if (index >= call.getNumArgs()) {
+            return std::nullopt;
+          }
+          actual = argumentLoans(source, *call.getArg(index), current);
+        } else if (source.kind == origin_kind::receiver_region) {
+          if (const auto *object = receiver(call)) {
+            actual = receiverField(*call.getDirectCallee(), *object, *llvm::cast<clang::FieldDecl>(source.variable), current);
+          }
+        } else if (source.kind == origin_kind::receiver) {
+          if (const auto *object = receiver(call)) {
+            actual = capturedReceiver(*call.getDirectCallee(), source.variable) ? capturedThis(*call.getDirectCallee(), *object, current) : objectReference(*object, current);
+          }
+        } else if (source.kind == origin_kind::captured_storage || source.kind == origin_kind::captured_contents) {
+          const auto *object = receiver(call);
+          if (visibleVariable(source.variable)) {
+            actual = source.kind == origin_kind::captured_contents ? readPlace(source.variable, current) : capturedStorage(*source.variable, current);
+          } else if (object != nullptr) {
+            actual = receiverContents(*object, current);
+          }
+        } else {
+          actual.add({.kind = origin_kind::unknown, .expression = &call});
+        }
+        if (!source.select.empty()) {
+          actual = selectedAlong(actual, source.select, current);
+        }
+        return actual;
+      }
+
       loans instantiate(const loans &symbolic, const clang::CallExpr &call, const state &current) {
         loans result;
-        const auto offset = argumentOffset(call);
+        // Borrows of one part of one input share what that part stands for at this call.
+        llvm::SmallVector<std::pair<const origin *, std::optional<loans>>, 8> resolved;
         for (const auto &source : symbolic.values) {
-          loans actual;
-          if (parameterOrigin(source)) {
-            const auto *parameter = llvm::cast<clang::ParmVarDecl>(source.variable);
-            const auto index = parameter->getFunctionScopeIndex() + offset;
-            if (index >= call.getNumArgs()) {
-              continue;
-            }
-            actual = argumentLoans(source, *call.getArg(index), current);
-          } else if (source.kind == origin_kind::receiver_region) {
-            const auto *object = receiver(call);
-            if (object != nullptr) {
-              actual = llvm::isa<clang::CXXThisExpr>(clean(object)) ? current.get(source.variable) : selected(receiverContents(*object, current), *llvm::cast<clang::FieldDecl>(source.variable));
-            }
-          } else if (source.kind == origin_kind::receiver) {
-            if (const auto *object = receiver(call)) {
-              actual = capturedReceiver(*call.getDirectCallee(), source.variable) ? capturedThis(*call.getDirectCallee(), *object, current) : objectReference(*object, current);
-            }
-          } else if (source.kind == origin_kind::captured_storage || source.kind == origin_kind::captured_contents) {
-            const auto *object = receiver(call);
-            if (visibleVariable(source.variable)) {
-              actual = source.kind == origin_kind::captured_contents ? readPlace(source.variable, current) : capturedStorage(*source.variable, current);
-            } else if (object != nullptr) {
-              actual = receiverContents(*object, current);
-            }
-          } else if (source.kind == origin_kind::local || source.kind == origin_kind::temporary) {
-            actual.add({.kind = origin_kind::unknown, .expression = &call});
-          } else {
-            // Static storage and the environment are the same places at every call.
+          // Static storage and the environment are the same places at every call.
+          if (source.kind == origin_kind::static_storage || source.kind == origin_kind::environment || source.kind == origin_kind::unknown) {
             result.add(source);
             continue;
           }
-          if (!source.select.empty()) {
-            actual = selected(actual, source.select);
+          const auto same = [&](const auto &entry) { return entry.first->kind == source.kind && entry.first->variable == source.variable && entry.first->select == source.select; };
+          auto found = std::ranges::find_if(resolved, same);
+          if (found == resolved.end()) {
+            resolved.emplace_back(&source, actualFor(source, call, current));
+            found = std::prev(resolved.end());
           }
+          if (!found->second) {
+            continue;
+          }
+          auto actual = *found->second;
           for (auto &borrow : actual.values) {
             locate(borrow, source);
             if (source.invalidated != nullptr) {
@@ -1649,16 +2118,29 @@ namespace tbc_lint {
 
       loans referencedContents(const loans &binding, const state &current) {
         loans result;
+        // Borrows of one place, which differ only in where they are held, share what it holds.
+        llvm::SmallVector<std::tuple<const origin *, field_path>, 4> visited;
+        const auto first = [&](const origin &source, field_path at) {
+          const auto same = [&](const auto &entry) { return std::get<0>(entry)->kind == source.kind && std::get<0>(entry)->variable == source.variable && std::get<0>(entry)->select == source.select && std::get<0>(entry)->storage == source.storage && std::get<1>(entry) == at; };
+          if (std::ranges::any_of(visited, same)) {
+            return false;
+          }
+          visited.emplace_back(&source, std::move(at));
+          return true;
+        };
         for (const auto &source : binding.values) {
           // An extended temporary is identified by its expression; its variable only bounds its lifetime.
           const bool extended_temporary = source.kind == origin_kind::local && llvm::isa_and_nonnull<clang::MaterializeTemporaryExpr>(source.expression);
           if (source.kind == origin_kind::unknown) {
             result.add(source);
-          } else if (source.kind == origin_kind::parameter && pointerLike(source.variable->getType())) {
-            // A pointer parameter's value is its pointee's storage; the pointee's contents are a separate input.
-            result.add({.kind = origin_kind::parameter_pointee, .variable = source.variable});
+          } else if (standsForInput(source)) {
+            if (first(source, source.path)) {
+              result.merge(designatedContents(source, current));
+            }
           } else if (source.variable != nullptr && !extended_temporary) {
-            result.merge(selected(readPlace(source.variable, current), inlineFields(source.path)));
+            if (first(source, inlineFields(source.path))) {
+              result.merge(selected(readPlace(source.variable, current), inlineFields(source.path)));
+            }
           } else if (source.expression != nullptr) {
             result.merge(value(source.expression, current));
           } else if (source.kind == origin_kind::receiver) {
@@ -1903,7 +2385,7 @@ namespace tbc_lint {
 
       loans receiverContents(const clang::Expr &object, const state &current) {
         if (throughPointer(object)) {
-          return referencedContents(value(&object, current), current);
+          return containsViews(objectType(object)) ? referencedContents(value(&object, current), current) : loans{};
         }
         if (!llvm::isa<clang::CXXThisExpr>(clean(&object))) {
           return value(&object, current);
@@ -1962,6 +2444,13 @@ namespace tbc_lint {
         if (const auto *member = llvm::dyn_cast<clang::MemberExpr>(expression)) {
           const auto *field = llvm::dyn_cast<clang::FieldDecl>(member->getMemberDecl());
           const bool borrowed = containsViews(member->getType()) || (field != nullptr && field->getType()->isReferenceType());
+          // A reference field holds where its referent lies; reading it needs a live referent and yields
+          // what the referent holds.
+          if (field != nullptr && field->getType()->isReferenceType()) {
+            const auto binding = fieldContents(*member, *field, current);
+            checkUse(binding, *member);
+            return containsViews(member->getType()) ? referencedContents(binding, current) : loans{};
+          }
           if (field != nullptr && borrowed) {
             return fieldContents(*member, *field, current);
           }
@@ -2085,10 +2574,10 @@ namespace tbc_lint {
 
       void checkUse(const loans &borrow, const clang::Stmt &use) {
         for (const auto &source : borrow.values) {
-          // What a caller passed in is used here, so a call to this function uses it. Handing on where a
-          // parameter lies lets the receiver read all of it.
+          // What a caller passed in is used here, so a call to this function uses that part of it. Handing
+          // on where a parameter lies lets the receiver read all of it.
           if (source.variable != nullptr && (parameterOrigin(source) || source.kind == origin_kind::receiver_region)) {
-            summary_.uses.insert(source.variable);
+            addUse(summary_.uses, {.kind = source.kind, .select = source.select, .variable = source.variable});
           }
           if (source.invalidated != nullptr) {
             report(issue::invalidated, source.invalidated->getEndLoc(), &source, &use);
@@ -2154,9 +2643,10 @@ namespace tbc_lint {
           if (source.invalidated != nullptr || (source.kind == origin_kind::temporary && source.full_expression != fullExpression(&statement))) {
             continue;
           }
+          // A declared contract, elided or labeled, is what callers without the body rely on.
           if (source.kind == origin_kind::local || source.kind == origin_kind::temporary) {
             report(issue::dangling, statement.getReturnLoc(), &source);
-          } else if (output.region != nullptr && source.kind != origin_kind::unknown && source.invalidated == nullptr && !allowed(source, output)) {
+          } else if (output.present && source.kind != origin_kind::unknown && !allowed(source, output)) {
             report(issue::contract, statement.getReturnLoc(), &source);
           }
         }
@@ -2172,17 +2662,22 @@ namespace tbc_lint {
           summary_.invalidate(target, range);
         }
         const auto levels = range.inside(target.level);
-        const auto invalidate_map = [&](auto &map) {
-          for (auto &entry : map) {
+        // A place an input designates is reached only through the same part of that input.
+        const auto reaches = [&](const origin &source) {
+          if (standsForInput(source) != target.designated || (target.designated && !sameDesignation(source.select, target.select))) {
+            return false;
+          }
+          return levels.contains(source.storage) && within(source.path, target);
+        };
+        for (auto *map : {&current.values, &current.references, &current.designated}) {
+          for (auto &entry : *map) {
             for (auto &source : entry.second.values) {
-              if (source.variable == owner && source.invalidated == nullptr && (destroyed || (levels.contains(source.storage) && within(source.path, target)))) {
+              if (source.variable == owner && source.invalidated == nullptr && (destroyed || reaches(source))) {
                 source.invalidated = trigger;
               }
             }
           }
-        };
-        invalidate_map(current.values);
-        invalidate_map(current.references);
+        }
       }
 
       void invalidateEnvironment(const clang::CallExpr &call, state &current) {
@@ -2218,24 +2713,6 @@ namespace tbc_lint {
         return false;
       }
 
-      // What a receiver holds in the fields a callee uses.
-      loans usedReceiverContents(const function_entry &callee, const clang::Expr &object, const state &current) {
-        const bool own = llvm::isa<clang::CXXThisExpr>(clean(&object));
-        const auto contents = own ? loans{} : receiverContents(object, current);
-        loans result;
-        for (const auto *input : callee.summary.uses) {
-          const auto *field = llvm::dyn_cast<clang::FieldDecl>(input);
-          if (field != nullptr) {
-            result.merge(own ? current.get(field) : selected(contents, *field));
-          }
-        }
-        return result;
-      }
-
-      static bool usesArgument(const function_entry &callee, unsigned index) {
-        return index >= callee.definition->getNumParams() || callee.summary.uses.contains(callee.definition->getParamDecl(index));
-      }
-
       void applyCall(const clang::CallExpr &call, state &current) {
         const auto *callee = call.getDirectCallee();
         if (callee == nullptr) {
@@ -2256,14 +2733,12 @@ namespace tbc_lint {
         if (method != nullptr && method->getParent()->isLambda()) {
           summarized = nullptr;
         }
+        // Calling a member function needs a live object. What it reads of the object's contents depends on
+        // the function.
         if (object != nullptr) {
-          if (throughPointer(*object)) {
-            checkUse(value(object, current), call);
-          }
-          if (overwritten || structural(*callee, objectType(*object))) {
-            checkUse(reference(object, current), call);
-          } else {
-            checkUse(summarized == nullptr ? receiverContents(*object, current) : usedReceiverContents(*summarized, *object, current), call);
+          checkUse(objectReference(*object, current), call);
+          if (summarized == nullptr && !overwritten && !structural(*callee, objectType(*object))) {
+            checkUse(receiverContents(*object, current), call);
           }
         }
         const auto offset = argumentOffset(call);
@@ -2273,10 +2748,18 @@ namespace tbc_lint {
             continue;
           }
           // Reading an argument checks the places it reads through, whether or not its contents are used.
+          // A variadic argument reaches no parameter a summary describes.
           const auto contents = value(argument, current);
-          if (summarized == nullptr || (index >= offset && usesArgument(*summarized, index - offset))) {
+          if (summarized == nullptr || (index >= offset && index - offset >= summarized->definition->getNumParams())) {
             checkUse(contents, call);
           }
+          // A project function the checker cannot see may also read what a pointer argument designates.
+          if (summarized == nullptr && !libraryFunction(*callee) && pointerLike(argument->getType())) {
+            checkUse(referencedContents(contents, current), call);
+          }
+        }
+        if (summarized != nullptr) {
+          checkUse(instantiate(summarized->summary.uses, call, current), call);
         }
 
         const auto name = callee->getNameAsString();
@@ -2331,13 +2814,23 @@ namespace tbc_lint {
               exchangeOwnership(mine.front(), theirs.front(), current);
             }
           }
-          // Emplacement forwards to the element's constructor, which only a standard element is known to keep.
+          // Emplacement forwards to the element's constructor, which only a standard element or a pointer is
+          // known to keep.
           const bool forwarded = name.starts_with("emplace") || name == "try_emplace";
-          if (insertion && !element.isNull() && containsViews(element) && (!forwarded || libraryRecord(element) || viewType(element))) {
+          if (insertion && !element.isNull() && containsViews(element) && (!forwarded || libraryRecord(element) || viewType(element) || element->isPointerType())) {
             loans incoming;
             for (unsigned index = offset; index < call.getNumArgs(); ++index) {
-              if (!pointerLike(call.getArg(index)->getType())) {
-                incoming.merge(copiedValue(call.getArg(index), current));
+              const auto *argument = call.getArg(index);
+              // Where to insert is a position in the container itself.
+              if (index == offset && positionIn(type, argument->getType())) {
+                continue;
+              }
+              // An iterator range inserts copies of the elements it designates. Any other argument is the
+              // element itself or what the element's constructor receives, a pointer included.
+              if (pointerLike(argument->getType()) && !forwarded && !sameType(argument->getType(), element)) {
+                incoming.merge(referencedContents(value(argument, current), current));
+              } else {
+                incoming.merge(copiedValue(argument, current));
               }
             }
             auto where = writeTargets(objectReference(*object, current), objectTargets(*object, current));
@@ -2404,20 +2897,32 @@ namespace tbc_lint {
         if (known == nullptr) {
           return;
         }
+        // Many places lie in the same part of one input, which the call resolves once.
+        llvm::SmallVector<std::tuple<const clang::ValueDecl *, field_path, loans>, 4> designations;
+        const auto designated = [&](const object_place &target) -> const loans & {
+          const auto found = std::ranges::find_if(designations, [&](const auto &entry) { return std::get<0>(entry) == target.variable && std::get<1>(entry) == target.select; });
+          if (found != designations.end()) {
+            return std::get<2>(*found);
+          }
+          // Only an object of the type the callee's part designates can be what it invalidated.
+          const auto actual = actualInput(*target.variable, call, *known, current);
+          const auto type = designatedTypeOf(*target.variable, target.select);
+          return std::get<2>(designations.emplace_back(target.variable, target.select, actual ? ofType(selectedAlong(*actual, target.select, current), type) : loans{}));
+        };
         for (const auto &[target, range] : known->summary.invalidates) {
+          // A place the callee's input designates lies where the same part of the actual input designates.
+          if (target.designated) {
+            for (const auto &designation : designated(target).values) {
+              if (const auto place = placeWithin(designation, target)) {
+                invalidate(*place, &call, current, false, range);
+              }
+            }
+            continue;
+          }
           const auto *parameter = llvm::dyn_cast<clang::ParmVarDecl>(target.variable);
           if (parameter != nullptr && calleeParameter(*parameter, *known)) {
             const auto index = parameter->getFunctionScopeIndex() + argumentOffset(call);
             if (index >= call.getNumArgs()) {
-              continue;
-            }
-            // A place below what a parameter holds, like its pointee, lies below what the argument holds.
-            if (target.level == storage_kind::inherited) {
-              for (const auto &actual : value(call.getArg(index), current).values) {
-                if (const auto place = placeWithin(actual, target)) {
-                  invalidate(*place, &call, current, false, range);
-                }
-              }
               continue;
             }
             for (const auto &actual : invalidationTargets(*call.getArg(index), current)) {
@@ -2436,10 +2941,6 @@ namespace tbc_lint {
               }
             } else if (llvm::isa<clang::CXXThisExpr>(clean(object))) {
               invalidate(target, &call, current, false, range);
-            } else if (field->getType()->isReferenceType()) {
-              for (const auto &binding : receiverContents(*object, current).values) {
-                invalidate(rebased({.variable = binding.variable, .level = binding.storage, .path = binding.path}, target), &call, current, false, range);
-              }
             } else {
               for (const auto &actual : invalidationTargets(*object, current)) {
                 invalidate(rebased(actual, receiverPlace(target)), &call, current, false, range);
@@ -2448,6 +2949,79 @@ namespace tbc_lint {
           } else {
             invalidate(target, &call, current, false, range);
           }
+        }
+      }
+
+      // What a callee's input holds at a call: the argument for a parameter, or what the receiver holds at
+      // a field. A variable the caller shares, like a by-reference capture, is the caller's own.
+      std::optional<loans> actualInput(const clang::ValueDecl &input, const clang::CallExpr &call, const function_entry &callee, const state &current) {
+        if (const auto *parameter = llvm::dyn_cast<clang::ParmVarDecl>(&input); parameter != nullptr && calleeParameter(*parameter, callee)) {
+          const auto index = parameter->getFunctionScopeIndex() + argumentOffset(call);
+          if (index >= call.getNumArgs()) {
+            return std::nullopt;
+          }
+          return value(call.getArg(index), current);
+        }
+        if (const auto *field = llvm::dyn_cast<clang::FieldDecl>(&input)) {
+          const auto *object = receiver(call);
+          if (object == nullptr) {
+            return std::nullopt;
+          }
+          return receiverField(*call.getDirectCallee(), *object, *field, current);
+        }
+        if (visibleVariable(&input)) {
+          return readPlace(&input, current);
+        }
+        return std::nullopt;
+      }
+
+      // The objects a position inside what an input holds designates, through each of its dereferences.
+      loans designatedBy(const loans &actual, const field_path &position, const state &current) {
+        loans designations;
+        auto contents = actual;
+        field_path fields;
+        bool designates = false;
+        for (const auto &step : position) {
+          if (!step.dereference) {
+            fields.push_back(step);
+            continue;
+          }
+          if (designates) {
+            contents = referencedContents(designations, current);
+          }
+          designations = selected(contents, fields);
+          fields.clear();
+          designates = true;
+        }
+        return designations;
+      }
+
+      // Stores borrows held at positions inside what a callee's input holds, past at least one
+      // dereference, into the objects those positions designate, which must have the type the callee's
+      // part designates. Borrows that share the way there are stored together.
+      void storeThrough(const loans &actual, const clang::ValueDecl &input, llvm::ArrayRef<origin> incoming, state &current) {
+        llvm::SmallVector<std::pair<field_path, loans>, 4> groups;
+        for (auto borrow : incoming) {
+          std::size_t split = 0;
+          for (std::size_t index = 0; index < borrow.held.size(); ++index) {
+            split = borrow.held[index].dereference ? index + 1 : split;
+          }
+          if (split == 0) {
+            continue;
+          }
+          field_path way(borrow.held.begin(), borrow.held.begin() + static_cast<std::ptrdiff_t>(split));
+          borrow.held.erase(borrow.held.begin(), borrow.held.begin() + static_cast<std::ptrdiff_t>(split));
+          auto found = std::ranges::find_if(groups, [&](const auto &group) { return group.first == way; });
+          if (found == groups.end()) {
+            found = groups.insert(groups.end(), {std::move(way), loans{}});
+          }
+          found->second.add(borrow);
+        }
+        for (const auto &[way, group] : groups) {
+          const auto type = designatedTypeOf(input, field_path(way.begin(), std::prev(way.end())));
+          auto where = writeTargets(ofType(designatedBy(actual, way, current), type), {});
+          where.replaces = false;
+          store(where, group, current);
         }
       }
 
@@ -2510,6 +3084,16 @@ namespace tbc_lint {
         for (auto &[where, incoming] : updates) {
           stampTemporary(incoming, call.getExprLoc());
           store(where, incoming, current);
+        }
+        // What the callee wrote into objects its inputs designate lands in what the actual inputs designate.
+        for (const auto &[input, written] : known->summary.designated) {
+          const auto actual = actualInput(*input, call, *known, current);
+          if (!actual) {
+            continue;
+          }
+          auto incoming = instantiate(written, call, current);
+          stampTemporary(incoming, call.getExprLoc());
+          storeThrough(*actual, *input, incoming.values, current);
         }
       }
 
