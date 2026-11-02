@@ -4,7 +4,7 @@
 
 Adrian's latest phase order is authoritative: finish Preview26, close concrete
 graphics/attachments, match blur, then comparative full-client Release performance.
-Steps 1–3 are complete; step 4 is active. No new accessibility/general inventory,
+Steps1–3 are complete and step4 has been measured; performance acceptance fails. No new accessibility/general inventory,
 terminal/IME/history/activity expansion, exhaustive pixel matrix, physical sleep or
 general native-retention triage. Palette/notices remain deferred. Direct scoped
 memory/security/data-loss/functional errors still require attention. Do not weaken
@@ -35,38 +35,44 @@ shutdown retention remains an actual failed sanitizer result; Linux Qt-only
 controls reproduce fixture shutdown retention. See concise findings in
 [PARITY](../services/gui-cpp/PARITY.md); do not suppress or call retention growth.
 
-## Benchmark continuation
+## Benchmark delivered; performance gate OPEN
 
-All current raw outputs, frozen copies and helper adaptations are ignored under
-`services/gui-cpp/out-dependencies/adoption-benchmark-1` (never commit them).
-Frozen original SHA256: `4e021bbda7586d16f887dd04a1ded3a806ba60940179129838165d75a0c23e11`.
-Exact Preview27 copy, bundled JetBrains Mono 15, shade theme, cursor blink off,
-1600×1000 physical viewport / DPR2, actual grid/marker/native-view equality required.
-Mac native conditions: Apple M3, 32 GiB, AC, macOS26.6.2, Qt6.12 / LLVM23.1.2;
-original Mach-O SDK15.4. Linux Debian13 ARM VM Qt6.8.2 / LLVM23.1.5 is correctness
-coverage only. No builds/lints/profiles or massive cleanup during timed jobs.
+See the brief tables/limits in [PARITY](../services/gui-cpp/PARITY.md).
+Frozen original SHA256: `4e021bbda7586d16f887dd04a1ded3a806ba60940179129838165d75a0c23e11`;
+exact deployed Preview27 copy; source unchanged since `a1ea73a89`. Native macOS
+AppleM3/32GiB/AC/macOS26.6.2; Qt6.12/LLVM23.1.2, original Mach-O SDK15.4.
+Same bundled JetBrains15/theme/config,1600×1000 physical/DPR2/grid/marker and all
+pane geometries checked per pair. No concurrent builds/lints/profilers during timing.
+Six alternating pairs×100 inputs per terminal/splits/tabs/1K/actual4K flow pass
+pixel+same-drawable positive presentation, initial readiness/focus/VSync controls.
+C++ wins0/6 p50 pairs in every flow. Terminal p5024.29/30.75ms and actual4K
+53.97/124.86ms (Zig/C++). GUI CPU/RSS also regress. Do not claim equal-or-better.
 
-Main fixed collection finished: headline60 includes 12 wrong-size 4K rows (reject);
-48 terminal/split/tab/1K native observations remain subject to paired validation.
-All12 fixed text-load rows missed the unchanged rate bound (reject). Idle12 has
-11 native-valid rows; compare only matching valid pairs. Readiness must include
-verified initial pixel + same drawable's positive presentation, before first input.
-Missing/VSync/dropped/zero-initial controls and per-row failures remain in local
-outputs. No ack-as-presentation claims. Three native attachment pairs passed;
-clipboard count unchanged. Their resource totals include script waits and are not
-first-image latency.
+Actual4K is `graphics-four-k-final-2`; explicit fixture argv fixes runtime environment
+inheritance, and receipts confirm3840×2160. All24 wrong-size rows from earlier
+collections remain rejected, as do12 fixed text-load rows outside5% rate tolerance.
+Idle has two terminal pairs and three image pairs; one Zig presentation failure
+rejects that row and leaves its C++ partner unpaired. Three attachment paste/modal
+pairs pass, clipboard unchanged; whole-process CPU/RSS include scripted waits and
+are not first-image latency. Native initial-negative controls fail4 before input;
+missing/VSync/dropped controls fail19/20/21. All owned jobs/observers now exited.
 
-The purported corrected 4K collection finished; all12 receipts still show1024²:
-runtime starts before env dimension forwarding. All are rejected for4K. Repair
-the harness with explicit fixture argv or dimensions before runtime startup, then
-verify the receipt before collecting proper4K. Both driver/observer exited0, which
-does not override rejected per-row results.
-No production change since blur commit. Preliminary C++ latency/CPU/RSS regressions
-mean the performance gate is not met. Read-only profiles and two Qt loop/timer
-experiments did not justify an accepted optimization. Summarize valid/rejected data
-honestly and profile only reproducible relevant regressions, without microkernel
-work. Resource sampler is100ms; separate GUI/runtime CPU and settled/peak RSS,
-never sum shared RSS. Keep native/VM scope explicit.
+Raw outputs/frozen copies/helper adaptations are ignored under
+`services/gui-cpp/out-dependencies/adoption-benchmark-1`; never commit them.
+`valid-pair-summary.json` contains corrected summaries. External proc_pid_rusage
+CPU samples were incorrectly labelled ns; they are Mach ticks,125/3ns here.
+`resource-counter-unit-correction.json` documents correction and a200ms getrusage
+control with <0.01% error. Raw samples unchanged; GUI native getrusage CPU and
+RSS are independent.100ms sampler windows are clipped; idle bounds estimated.
+GUI/runtime CPU and RSS remain separate; never sum shared RSS. Linux VM gives
+correctness only, no native Linux speed claim.
+
+Read-only `profiles-actual-four-k-1` sampled each owned GUI/runtime successfully;
+inline socket/chunk copies and RGBA premultiply/upload are active work, without
+causal isolation of the total regression. Earlier basic-loop/update-timer variants
+were rejected. No production optimization accepted. Only profile-driven fixes for measured client regressions belong in scope; do not
+rewrite the runtime/CLI/plugin-worker or restart the old backlog. Keep the full
+objective open; the remaining scoped blocker is measured performance.
 
 ## Cleanup instruction and private note
 
@@ -83,8 +89,9 @@ Private note location only (moved without reading):
 
 Known Personal GUI checkout: this worktree only; `/Users/adriangonzalez/sandbox/telar`
 is main and has no GUI service. Owned Linux source mirror: `/home/parity/telar`.
-Both GUI artifact directories are now absent; all421 test/tool files were preserved
-byte-for-byte during removal. No timing ran during deletion. The main checkout
+Both GUI artifact directories are now absent; all421 host test/tool files were preserved
+byte-for-byte during removal. Local cleanup commit is
+`f9ab388ec1c168205c71abe33c0e3ccc51586773` (history preserved, unpublished). No timing ran during deletion. The main checkout
 has no GUI service. Do not touch runtime-cpp artifacts or unrelated WIP, publish
 or rewrite history. Any future cleanup must wait for timed jobs to finish.
 

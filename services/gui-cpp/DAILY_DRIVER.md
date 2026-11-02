@@ -29,11 +29,13 @@ full parity, long-running stability and physical sleep are not declared verified
 
 ## Current blockers and limits
 
-The remaining authorized step is comparative full-client performance. Preliminary
-native macOS observations show C++ latency/CPU/RSS regressions, so equal-or-better
-performance cannot be claimed. Final figures require valid geometry/workload pairs;
-wrong-size 4K and missed fixed-load-rate runs are excluded. Benchmark outputs and
-helpers stay in ignored `out-dependencies/adoption-benchmark-1`, not in Git.
+The comparative benchmark ran on the exact frozen candidates. Equal-or-better
+performance remains unfulfilled: terminal p50 is30.75ms C++ /24.29ms Zig, image1K
+54.06 /37.98ms and actual4K124.86 /53.97ms, with six comparable pairs per flow.
+C++ also uses more GUI CPU/RSS; see [PARITY.md](PARITY.md) for figures and limits.
+Wrong-size4K, missed fixed-load-rate and invalid presentation runs are excluded.
+Raw outputs/helpers stay in ignored `out-dependencies/adoption-benchmark-1`.
+No production optimization was accepted; the installed app remains the rollback.
 
 Native shutdown sanitizer failures remain open and unsuppressed; passing assertions
 do not erase their exit codes. Qt-only controls reproduce Linux fixture exit
