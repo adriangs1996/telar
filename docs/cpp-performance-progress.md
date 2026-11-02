@@ -1421,10 +1421,94 @@ maximum: median per-run values change 48.672 → 45.749, 59.153 → 53.646,
 (2/6). This is a successful 4K target measurement against coverage, with the
 original Qt conversion retained, not full-flow or independent-Zig acceptance.
 
-Six alternating pairs for each of single-pane text, four splits and four tabs
-are next in `/tmp/telar-perf-graphics-grace-text-01`. Those controls, 1K image
-timing, independent Zig, fixed-load, lint cleanup and native 120 Hz acceptance
-remain pending. No F01–F16 flow is closed by this result.
+Six alternating pairs for each of single-pane input, four splits and four tabs
+complete in `/tmp/telar-perf-graphics-grace-text-01`. These are the existing native
+marker controls, not complete ASCII/Unicode/combining typing coverage for F03.
+
+| Control | p50 ms A → B / wins | p95 ms A → B / wins | p99 ms A → B / wins | GUI CPU/input ms A → B / wins |
+| --- | ---: | ---: | ---: | ---: |
+| Single | 24.986 → 25.197 / 3/6 | 32.651 → 32.050 / 5/6 | 36.553 → 33.880 / 5/6 | 4.009 → 4.100 / 2/6 |
+| Splits | 25.818 → 25.763 / 2/6 | 33.040 → 32.734 / 4/6 | 36.005 → 36.701 / 2/6 | 4.254 → 4.205 / 3/6 |
+| Tabs | 25.587 → 25.997 / 3/6 | 32.678 → 32.989 / 2/6 | 36.788 → 35.975 / 4/6 | 4.363 → 4.288 / 5/6 |
+
+No timing or CPU control has the 0–1 wins that rejects a candidate. Maximum-latency
+wins are 5/6, 2/6 and 4/6 respectively. Median peak GUI RSS is 203.531 → 205.430,
+206.727 → 204.711 and 205.063 → 205.367 MiB; the single-pane memory metric loses
+all six pairs. That approximately 1.9 MiB increase is an allowed memory tradeoff,
+not a timing acceptance waiver.
+
+`out-perf/shared-image-optical-graphics-final` now rebuilds the final source after
+lint cleanup. `login_shell::Command` explicitly remains noncopyable/nonmovable;
+the shared image source retains its move-only descriptor ownership. The timeout
+handler is flattened and the optional pacer is checked again at its use after
+visibility queries. Existing arithmetic grouping is made explicit. The original
+Qt image conversion remains unchanged. The final GUI SHA-256 is
+`eb900cdecaabdde19110639367599449f5243caeb9f48cf26311030943c53c55`.
+Thirteen focused tests pass in 25.37 s, four native Quick cases in 1.546 s, all
+7,494 original-Zig row cases match, all eleven native image cases have identical
+distinct RGBA captures, and all four touched translation units pass clang-tidy.
+ARM64/x86-64/v3 code-generation checks also pass; native x86/Linux qualification
+remains open.
+
+`measure-final.py` now runs fresh 4K, 1K and three marker-layout controls against
+coverage, then the same cases against the independent original Zig stack. Each
+case requires six alternating pairs. The sequence stops for review on a consistent
+timing/CPU regression against C++ coverage or an image target with fewer than 5/6
+p50 wins; memory is reported separately. Earlier binary timings are not transferred
+to this final binary. The paths start `/tmp/telar-perf-gfinal-`, and state/results
+remain under the final prefix. Independent Zig, fixed-load and native 120 Hz gates
+remain open. No F01–F16 flow is closed by this result.
+
+### Retained destination conversion component
+
+The separate `out-perf/image-retained-premultiply` prototype uses only public
+QImage APIs. On little-endian RGBA input it copies rows into a retained native
+ARGB-labelled destination, calls in-place premultiplication and relabels the
+result as RGBA premultiplied. A destination still shared with an earlier output
+is replaced before writing. Other input formats retain the original conversion.
+The exact oracle covers all 65,536 alpha/channel combinations, twelve odd-stride
+RGB/RGBA images, source overwrite, retained old outputs, and unshared buffer reuse.
+
+Seven alternating pairs pass for opaque, alpha, near-opaque, queued-opaque and
+queued-alpha input at both 1K and 4K: every RGBA wall/CPU case wins 7/7. RGB controls
+win 3/7 at both sizes, without a consistent loss. Representative per-conversion
+results are:
+
+| Input | Wall ms A → B | CPU ms A → B |
+| --- | ---: | ---: |
+| 1K opaque | 0.271 → 0.175 | 1.061 → 0.350 |
+| 4K opaque | 1.697 → 1.279 | 8.184 → 2.730 |
+| 1K alpha | 0.292 → 0.271 | 1.146 → 0.617 |
+| 4K alpha | 1.838 → 1.528 | 8.896 → 3.920 |
+| 4K queued opaque | 1.701 → 1.195 | 8.200 → 2.644 |
+| 4K queued alpha | 1.839 → 1.459 | 8.881 → 3.826 |
+
+After warmup the unshared RGBA path has zero explicit destination creations and
+zero pointer changes during conversion. Keeping the previous output alive forces
+one fresh destination per call, preserving its contents. These counters describe
+destination creation/address reuse; they are **not** a census of allocations
+inside Qt or proof of zero framework allocations. Native integration, RSS impact,
+tail latency and all-flow controls remain unqualified. The two earlier conversion
+variants passed component timing but failed native tails, so this component win
+does not authorize retaining the change in production.
+
+### Display-reference phase audit
+
+Read-only reanalysis of the original cadence runs finds a phase discontinuity in
+both traces that had a 20.833 ms native interval. Around those events, Core Video
+output-host timestamp intervals include approximately 6.239, 7.281 and 7.806 ms,
+while the reported video period remains 8.333 ms. The existing reference check
+examines median host spacing and the longest gap; it does not reject these shorter
+phase-adjustment intervals. A fixed median is insufficient evidence of a fixed
+phase reference. See `phase-diagnostic-03.json` and `reference-phase-04.json` under
+`out-perf/native-cadence-display`.
+
+This does not establish a renderer or hardware cause. The original 0.25 ms
+classification tolerance remains unchanged, and the affected runs remain
+unqualified. The next reference diagnostic must retain callback input timestamps
+as well as output timestamps and distinguish reference phase changes from actual
+drawable intervals before counting missed opportunities. No 120 Hz acceptance is
+inferred from these records.
 
 The legacy `gui_frame_rate` tool's documentation now explicitly identifies its
 historically named presentation counters as frame-completion callbacks. Those
