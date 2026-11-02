@@ -439,12 +439,15 @@ void TerminalItem::keyPressEvent(QKeyEvent *event) {
     static_cast<void>(sendKeyPress(*event, current->screen.modes()));
   }
 
-  cursor_on_ = true;
+  const bool cursor_changed = !std::exchange(cursor_on_, true);
   if (blink_.isActive()) {
     blink_.start();
   }
 
-  update();
+  if (cursor_changed) {
+    update();
+  }
+
   event->accept();
 }
 

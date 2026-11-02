@@ -3,7 +3,9 @@
 This is the current work log for [F01–F16](cpp-performance-flows.md), starting
 from `6152393b18f8b3e7ae1a1322eca6c8f1eb718bbd` on 2026-11-02. The persistent
 objective is active and unbounded. No flow has complete-stack performance
-acceptance yet; no production performance optimization has been accepted.
+acceptance yet. Conditional cursor invalidation is accepted for the measured
+warm-typing layouts against the frozen C++ baseline; complete-flow and Zig-stack
+acceptance remain open.
 
 ## Fresh environment
 
@@ -112,7 +114,7 @@ update requests. Input-to-GPU time is roughly 8–10 ms in C++ versus 3 ms in Zi
 in the first baseline runs, while GPU work is roughly 0.5–1.1 ms. This motivates
 an earlier content-triggered frame request, retaining VSync and existing pacing.
 
-The unaccepted `early-frame` experiment coalesces visible terminal changes
+The rejected `early-frame` experiment coalesces visible terminal changes
 through the existing single-shot deadline timer. It preserves cadence/input
 grace checks and cancels delivery if the window becomes hidden. Focused core
 and window-pacer tests pass, including coalescence, cadence and cancellation.
@@ -141,13 +143,89 @@ clears its pending request before sending the event; B's direct event did not.
 The [Cocoa display link](https://github.com/qt/qtbase/blob/v6.12.0/src/plugins/platforms/cocoa/qcocoascreen.mm#L405)
 checks that pending state before delivering again.
 
-The next unaccepted `early-platform` experiment consumes the pending Cocoa
+The follow-up `early-platform` experiment consumes the pending Cocoa
 update through Qt's virtual platform delivery, preserving its resize lock and
 DPR handling. An already delivered request is not repeated; a held pacing event
 retains its existing delivery. Non-Cocoa platforms retain the original schedule.
 A dedicated native test checks consumption, coalescence and requests made during
 delivery. This is a separate variant with fresh build/stage paths; B remains
 frozen with its source patch and rejected results.
+
+The core, window-pacer and native Cocoa update suites pass. A separate
+120-input instrumented run counts 189 rendered frames, close to A's 183 rather
+than B's 301. The six uninstrumented pairs in `f03-early-platform-pairs-01`
+nevertheless reject this revision too:
+
+| Metric | Frozen C++ A | Early-platform revision | Revision wins |
+| --- | ---: | ---: | ---: |
+| p50 | 29.03 ms | 25.29 ms | 6/6 |
+| p95 | 40.21 ms | 41.88 ms | 2/6 |
+| p99 | 45.82 ms | 46.31 ms | 0/6 |
+| GUI CPU | 5.36% | 5.43% | 3/6 |
+
+The median paired CPU ratio is 0.9920, but the p95 ratio is 1.0839 and p99 loses
+all six pairs. Earlier rendering alone is not a sufficient whole-flow win.
+The rejected source and native oracle are preserved under
+`out-perf/early-platform/source/`; production pacing is restored before the next
+experiment. Its target is the unconditional terminal `update()` after a key,
+even when the local cursor is already visible and no PTY output has arrived.
+
+The `cursor-invalidation` candidate starts from original production pacing.
+Its oracle captures the cursor cell with the local blink phase visible/hidden,
+then checks that a key restores the visible pixels from either phase without
+moving the terminal cursor. This runs against the original handler before
+conditional invalidation is introduced. Existing input-to-cell integration and
+the native presented-marker gate remain required.
+
+The cursor oracle and input-to-cell integration pass before the change, then
+pass after it with the software renderer and native Cocoa/Metal. Targeted copy,
+link-hover and Kitty key press/release checks also pass after the change. ARM64
+output adds a byte load and conditional branch around `QQuickItem::update()`;
+the visible-cursor path avoids scene-graph invalidation. The separate native
+render-timing diagnostic counts 159 frames including startup for 120 inputs,
+versus 183 in A's diagnostic. Six uninstrumented pairs against frozen A complete
+under `f03-cursor-invalidation-pairs-01`:
+
+| Metric | Frozen C++ A | Conditional cursor invalidation | Candidate wins |
+| --- | ---: | ---: | ---: |
+| p50 | 31.15 ms | 29.55 ms | 5/6 |
+| p95 | 41.48 ms | 37.65 ms | 6/6 |
+| p99 | 45.97 ms | 39.79 ms | 6/6 |
+| Maximum | 49.70 ms | 43.29 ms | 6/6 |
+| GUI CPU | 5.76% | 5.49% | 4/6 |
+| GUI peak RSS | 201.11 MiB | 198.93 MiB | — |
+
+Median paired ratios are 0.9518 / 0.9057 / 0.8491 for p50/p95/p99 and 0.9520
+for GUI CPU. This clears the targeted warm single-pane timing gate, without a
+consistent resource regression. The clean four-split/four-tab comparison follows
+below; the independent Zig-stack comparison remains open. These
+layout cases measure typing with other panes present, not actual tab switching
+or sustained 120 Hz motion. No whole F03/F07/F08 flow is closed by this result.
+
+`cursor-layout-pairs-01` is excluded from acceptance: a source-format comparison
+ran during collection, violating the separation from checks. Its full rows and
+an explicit invalid-collection receipt are retained. `cursor-layout-pairs-02`
+repeats the entire six-pair split/tab collection without concurrent checks.
+
+The clean repeat completes with no rejected rows:
+
+| Layout / metric | Frozen C++ A | Conditional cursor invalidation | Candidate wins |
+| --- | ---: | ---: | ---: |
+| Four splits p50 | 31.06 ms | 30.31 ms | 5/6 |
+| Four splits p95 | 45.26 ms | 37.83 ms | 5/6 |
+| Four splits p99 | 48.07 ms | 40.79 ms | 6/6 |
+| Four tabs p50 | 30.51 ms | 29.57 ms | 5/6 |
+| Four tabs p95 | 43.42 ms | 37.43 ms | 6/6 |
+| Four tabs p99 | 46.83 ms | 41.28 ms | 6/6 |
+
+GUI CPU medians are 6.24% -> 5.67% for splits (6/6 wins), and 5.82% -> 5.70%
+for tabs (4/6). GUI peak RSS medians are 206.95 -> 199.20 MiB for splits and
+199.39 -> 199.70 MiB for tabs. The change is accepted against frozen C++ A for
+these measured warm-input workloads, with no consistently regressing layout.
+The frozen GUI SHA-256 is
+`7f59fab433392828a94e5acbbce2766e4af1b1706bf84ce5c6761cb6ea5a4aaa`;
+the runtime remains the baseline C++ executable. These results are not a win
+over Zig, a whole-flow acceptance, or a 120 Hz cadence measurement.
 
 The attempted C++ GUI + Zig runtime diagnostic cannot connect: current C++
 uses schema `cqp00001`, while Zig uses `886b480d`. Shared component probes also

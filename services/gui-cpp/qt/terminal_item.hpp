@@ -28,6 +28,10 @@
 #include <memory>
 #include <span>
 
+namespace telar::gui::test {
+class TerminalCursor;
+}
+
 namespace telar::gui::qt {
 
 class TerminalItem : public QQuickItem {
@@ -86,6 +90,7 @@ protected:
 private:
   friend class Application;
   friend class PointerDispatcher;
+  friend class test::TerminalCursor;
 
   static constexpr std::size_t physical_key_capacity = 128;
   static constexpr unsigned mouse_shift = 4;

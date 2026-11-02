@@ -50,6 +50,7 @@
 #include "telar_client/serializers/telar_protocol.hpp"
 #include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
+#include "terminal_cursor_fixture.hpp"
 #include "text/json.hpp"
 #include "text/utf16_prefix.hpp"
 #include "text/utf8.hpp"
@@ -623,6 +624,42 @@ private:
     const auto image = window_->grabWindow();
     QVERIFY(!image.isNull());
     QCOMPARE(client_->error(), QString{});
+  }
+
+  Q_SLOT void keyRestoresCursorBlinkPhase() {
+    QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+    auto *terminal = terminalIn(window_->contentItem());
+    QVERIFY(terminal != nullptr);
+    terminal->forceActiveFocus();
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto *pane = firstPane();
+    QVERIFY(pane != nullptr && pane->screen.cursor().visible);
+    const auto position = pane->screen.cursor();
+    const auto cell = terminal->cellSize();
+    const auto origin = terminal->mapToScene(QPointF{position.x * cell.width(), position.y * cell.height()});
+    const auto scale = window_->effectiveDevicePixelRatio();
+    const auto rectangle = QRectF{origin * scale, cell * scale}.toAlignedRect();
+    test::TerminalCursor cursor{*terminal};
+    cursor.setVisible(true);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto visible = window_->grabWindow().copy(rectangle);
+    QVERIFY(!visible.isNull());
+    cursor.setVisible(false);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto hidden = window_->grabWindow().copy(rectangle);
+    QVERIFY(visible != hidden);
+
+    for (const bool starts_visible : {false, true}) {
+      cursor.setVisible(starts_visible);
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      QKeyEvent event{QEvent::KeyPress, Qt::Key_Shift, Qt::ShiftModifier};
+      QCoreApplication::sendEvent(terminal, &event);
+      QVERIFY(event.isAccepted());
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      QCOMPARE(window_->grabWindow().copy(rectangle), visible);
+      QCOMPARE(pane->screen.cursor().x, position.x);
+      QCOMPARE(pane->screen.cursor().y, position.y);
+    }
   }
 
   Q_SLOT void singlePaneUsesAllCompleteWorkbenchCells() {
