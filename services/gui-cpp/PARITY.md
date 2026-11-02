@@ -5,8 +5,8 @@ and held clicks across fresh Lua references for the same destination. Current
 closed targets are checked against projection and consumed once; changed targets
 and expired sources are rejected. Both SDKs pass Release49/recorded19; LinuxASAN49
 exits0. Mac49 assertions pass/exit1 for850052B4746alloc; gate FAILED/open, no address/
-UB or suppression. Mac broad3/editor5/format5/module lint pass; Linux final quality
-is running. Exact1739 hashes/121 objects/signatures/eight daily scopes and twenty
+UB or suppression. Both SDKs pass broad3/editor5/format5/module lint; five portable source hashes
+match. Exact1739 hashes/121 objects/signatures/eight daily scopes and twenty
 normal-loop cycles pass; sixteen captures inspected. Fresh plugin refs are a
 confirmed separate focus failure under investigation. Sleep/native retention/full visual/performance and
 own-Zig retirement remain OPEN. See

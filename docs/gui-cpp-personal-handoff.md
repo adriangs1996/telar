@@ -1,49 +1,48 @@
 # Personal: C++ daily adoption and complete parity — OPEN
 
-CURRENT WIP AFTER7f6b78e75: component-semantic-action-focus-1; state05:35UTC.
-Five product/test files FINAL; authoritative source-hashes-final-3.json. Negative
-PRIVATE1 open_panel regenerated same destination losesfocus2pass1fail; same fixture
-SOURCE recompiled against changed headers positive2 passes3 for buttons/groups.
-Stable identities ONLY closed panel/pick kind/index, validate at activation against
-projection, consume resolved value once, reject expiredgen/ref. Opaque/plugin/
-callback leases strict. No runtime/ownZig changes. Four new native slots cover
-button/group ×panel/pick caption+held click, mutable Lua target rejection without
-snapshotrefresh, validated-value use then expiry. ComponentActions testfriend data
-only. Preparation sandbox/callback/complexity/optional/format failures preserved.
-Mac final2 Release49/recorded19 pass; ASAN49 assertionspass/exit1,
-850052B4746alloc, noaddrUB/suppression. Broad controller/binding broad-mac-2 firsttwo
-+test broad-mac-4; editor-mac-2 firstfour+testeditor-mac-4; format5 final1 and full
-modulelint0. quality-mac-final-1.json consolidated. buildfinal2 all3exit0.
-Linux13020 final serial4GB pipeline: Release49/ASAN49/recorded19 allpass/exit0;
-broad firsttwo0, test then editor5/format5/modulelint pending. Guestnormalized
-source-hashes-final-1 is hostfinal3; allfivebytesguarded. Guest1.8GB free, ONEheavy
-compiler. Collect after finalhashes via prepared collect_linux_final_1.py using
-python3.14 extractall(filter=data). Keep original failures/artifacts.
-Preview24 FROZEN/OFFERED separate out-adoption/Telar C++ Preview 24.app:
-GUI200c986cb3467aa926fcb64255d967c1683036e4f6aef921242e68f25d7382c6;
+LATEST qualified/offered scope after7f6b78e75: component-semantic-action-focus-1,
+product commit4a3b5b293. Preview24 FROZEN/OFFERED separate
+out-adoption/Telar C++ Preview 24.app; GUI200c986cb3467aa926fcb64255d967c1683036e4f6aef921242e68f25d7382c6;
 raw5250306aff5dbc86c4740f5f1c044edc29c18d34984d29a39ea2bf69e5805155.
 All1739hashes/121Mach-O/deep signatures/eight EXACT daily scopes+normal20pass,
-GUI0/noQML/privatecleanup. Sixteen captures inspected and hashesrecorded. Normal
-livecycles6..20 366807296..367101776B; reserved422477824/426672128; visual372constant.
-Short observation, NOT leak/sleep/long-run clearance. All Mac GUI jobs finished.
-Open-n24 after anotherpreviewcloses, rollback close/open~/Applications/Telar.app;
-23/22/8/runtime/config/install preserved. Currentreport/DAILY/PARITY say Linuxquality
-pending. Preparedfreeze_1/verify_1 (notrun), must finishreport+handoff afterLinux,
-thenfreeze/review/localcommit THENCONTINUE. Do not stop atcheckpoint.
-NEXT CONFIRMED component-plugin-focus-1: fresh same plugin/action reference during
-captionrefresh retiresbutton/focus. Private1 native2pass1fail/32923ms, noQML;
-oldaction52:-1:9:1→-2:10:1, Popupactive. Onlyprivatefixture, no productfixyet. Probe
-build/run done67160; raw/native-probe-mac-final-1.json. Negative copiedinto current
-scope plugin-focus-next-scope-probe-1.{json,log}. Plugin dispatch/overrides/catalog
-alreadypass native49; focus and stableidentity need separatefix without weakening
-trust/disabled/capabilities/generation/workerchecks. Suggested narrow sum of closed
-Definition+Plugin descriptions, single resolution and currentcatalog/authorization
-still live; audit beforeimplementing. Opaque callbacks remain strict.
-Lastprotected4 identitiesverified05:33UTC: runtime35801/Preview8 52865/QEMU7158/
-guestSway9469; clipboard954. Before newsourcechanges verifyagain. Physicalsleep
-untried, do not askagain/suspendhost. GoalAPI blocked/noresume, continuemanually;
-nevermarkcomplete/create duplicate. Noagents/otherworktrees/publish/merge/install/
-migration/Zigdeletion; never touch personal-frame-delivery.md.
+GUI0/noQML/privatecleanup, sixteen captures inspected+hashed. Normal livecycles6..20
+366807296..367101776B; reserved422477824/426672128; visual372constant. Short
+observation, NOT leak/sleep/long-run clearance. Open-n24 after otherpreviewcloses;
+rollback close/open~/Applications/Telar.app. Preview23/22/8/install/config/runtime
+preserved. Product only fivefiles: application.hpp,binding_controller.cpp,
+component_controller.cpp,component_projection.hpp,quick_test.cpp; closed panel/pick
+kind/index identities; validate current projected target, consume once, reject
+expiredgen/ref. Opaque/plugin/callback leases strict. No runtime/own-Zig edits.
+Private negative1 same open_panel destination/newref losesfocus2pass1fail; identical
+fixture SOURCE recompiled against changedheaders positive2 passes3 bothkinds. New
+four native slots cover button/group ×panel/pick caption+heldmouse, mutableLua
+rejection withoutrefresh, validatedvalue thenexpiry. ComponentActions friend dataonly.
+Both SDKs final Release49/recorded19 pass. LinuxASAN49 exit0. MacASAN49 assertions
+pass/exit1 for850052B4746alloc, noaddrUB/suppression; gateFAILED/open. Both SDKs
+broad3/editor5/format5/fullmodulelint pass; five portablehashesmatch hostfinal3.
+Mac quality-mac-final-1.json consolidates acceptedbroad2 firsttwo+test4, editor2
+firstfour+test4, fmtfinal1/modulefinal1/nativefinal2. Earlier invalidsandbox fixture,
+callbacknil, formatdeletion, complexity/optionalguard failures preserved; no
+assertion/deadline/profile weakening. Five accepted-source snapshots are hashguarded
+in raw so nextscope cannot contaminate asynchronous evidence. Linux13020 FINISHED,
+safelyexported withpython3.14 filter=data to raw/linux-final-1; no jobs left. Five
+finalhashes verified. Commit4a3 recordedLinuxqualitypending, subsequent evidence
+closes that pendingcheck, notdaily/fullgoal. Finishfreeze/review/evidencecommit then
+CONTINUE. Never stop atcheckpoint.
+NEXT CONFIRMED component-plugin-focus-1: fresh same plugin/actionreference during
+captionrefresh retiresbutton/focus. Private1 native2pass1fail/32923ms/noQML;
+action52:-1:9:1→-2:10:1,Popupactive. Group loopnotrun after firstassertion, don't
+claimnegativegroup. Onlyprivatefixture, NOproductfixyet. Build/run67160done; raw
+native-probe-mac-final-1.json. Negativecopiedin24scope plugin-focus-next-scope-probe.
+Scoped implementation-plan-1.md: narrow NamedActionDescription sum Definition+Plugin,
+singlevalidatedresolution, stableIDs, currentenabledcatalog and worker trust/
+digest/generation/whole-batchpermissions remainlive. Addfocus/heldclick/changedtarget/
+validated-value+expiry cases, retain worker/overrides/catalog. Opaquecallbacksstrict.
+Before newproductsourcechanges reverify fouridentities (last05:38UTCunchanged):
+runtime35801/Preview8 52865/QEMU7158/guestSway9469, clipboard954. Physicalsleep
+untried; don'taskagain/suspendhost. GoalAPIblocked/noresume, continuemanually, never
+markcomplete/duplicate. Noagents/otherworktrees/publish/merge/install/migration/
+Zigdeletion; never touch personal-frame-delivery.md. Daily/full/retirement OPEN.
 
 
 LATEST qualified/offered scope after2550785b7: component-refresh-focus-1.
