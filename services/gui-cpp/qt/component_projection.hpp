@@ -24,6 +24,7 @@
 #include <cstddef>
 #include <optional>
 #include <string_view>
+#include <utility>
 #include <variant>
 
 namespace telar::gui::qt {
@@ -74,11 +75,20 @@ inline QString componentActionIdentity(const std::optional<BindingAction> &actio
   return url.empty() ? QString{} : QStringLiteral("url:") + componentText(url);
 }
 
+inline void appendComponentAccessibleName(QString &name, const QString &text) {
+  if (!name.isEmpty()) {
+    name += QLatin1Char{' '};
+  }
+
+  name += text;
+}
+
 template <components::Capacity Bounds, typename Resolve>
   requires std::invocable<const Resolve &, BindingAction>
 QVariantList componentRecords(const components::Content<Bounds> &content, const Theme &theme, const components::Time &time, const Resolve &resolve) {
   constexpr std::array names{"label", "icon", "mark", "meter", "sparkline", "badge", "clock", "metric", "machines", "group", "heading", "text", "meter_row", "kv", "callout", "actions", "button", "divider"};
   constexpr std::array tones{PaletteRole::text, PaletteRole::subtext0, PaletteRole::accent, PaletteRole::green, PaletteRole::yellow, PaletteRole::red};
+  std::array<QString, Bounds.nodes> group_names;
   QVariantList result;
   result.reserve(static_cast<qsizetype>(content.nodes().size()));
   for (std::size_t index = 0; index < content.nodes().size(); ++index) {
@@ -86,6 +96,10 @@ QVariantList componentRecords(const components::Content<Bounds> &content, const 
     const auto icon = componentIcon(node);
     const auto ink = theme.chromeColor(tones[static_cast<std::size_t>(node.tone)]);
     const auto text = node.kind == components::Kind::clock ? componentText(components::Clock::format(content.text(node.text), time).view()) : componentText(content.text(node.text));
+    if (!node.tooltip && node.parent < index && content.nodes()[node.parent].kind == components::Kind::group && !text.isEmpty()) {
+      appendComponentAccessibleName(group_names.at(node.parent), text);
+    }
+
     QVariantList samples;
     for (const auto sample : content.samples(node)) {
       samples.append(sample);
@@ -100,6 +114,7 @@ QVariantList componentRecords(const components::Content<Bounds> &content, const 
         {QStringLiteral("kind"), QString::fromLatin1(names[static_cast<std::size_t>(node.kind)])},
         {QStringLiteral("tooltip"), node.tooltip},
         {QStringLiteral("text"), text},
+        {QStringLiteral("accessibleName"), text},
         {QStringLiteral("detail"), componentText(content.text(node.detail))},
         {QStringLiteral("clickable"), action.has_value() || node.url.length != 0},
         {QStringLiteral("actionIdentity"), componentActionIdentity(action, content.text(node.url), named)},
@@ -121,6 +136,14 @@ QVariantList componentRecords(const components::Content<Bounds> &content, const 
         {QStringLiteral("metric"), static_cast<int>(node.metric)},
     };
     result.append(record);
+  }
+
+  for (std::size_t index = 0; index < content.nodes().size(); ++index) {
+    if (content.nodes()[index].kind == components::Kind::group) {
+      auto record = result.at(static_cast<qsizetype>(index)).toMap();
+      record.insert(QStringLiteral("accessibleName"), std::move(group_names.at(index)));
+      result[static_cast<qsizetype>(index)] = record;
+    }
   }
 
   return result;

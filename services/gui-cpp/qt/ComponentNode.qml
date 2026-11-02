@@ -47,7 +47,7 @@ KeyboardAction {
     }
 
     Accessible.role: node.clickable ? Accessible.Button : Accessible.StaticText
-    Accessible.name: node.text
+    Accessible.name: node.accessibleName ?? node.text
     Accessible.onPressAction: if (node.clickable) activate()
 
     Loader {

@@ -1,5 +1,45 @@
 # Personal: C++ daily adoption and complete parity — OPEN
 
+## Active phase — explicit Adrian scope, 2026-11-02
+
+This instruction supersedes earlier ordering and acceptance gates **for this
+phase**. Finish in order: (1) qualify and deliver Preview26, with no further
+accessibility expansion or general audit; (2) close concrete graphics/attachment
+issues using existing implementation/evidence; (3) match reference Linux protocol
+blur and macOS numeric blur/fallback; (4) freeze Release candidates and run the
+full-client comparative benchmark. Preserve installed app/configuration/sessions.
+Do not resume the older backlog automatically after delivery of these four steps.
+
+Deferred outside this phase: additional terminal/IME/History/activity improvements,
+limit-title naming, more accessibility, palette/notifications, exhaustive visual
+matrices, physical suspend/resume and general native-retention triage. Their
+absence of clearance does not block this scoped phase. Keep actual sanitizer
+failures visible; direct memory/security/data-loss or graphics/attachment/benchmark
+functional failures still need attention. Distinguish framework exit retention
+from real growth during the measured flow. Equal-or-better performance remains a
+measurement requirement, with rejected runs and endpoint limits reported honestly.
+
+Complete parity and audited removal of own Zig are later, still-open stages.
+No Zig/runtime/CLI/plugin-worker rewrite or removal, no publication/merge, no new
+agents, and no other worktree. Keep allocators/DI/static-analysis quality intact.
+
+## Verified Preview26 — step1 complete; graphics/attachments next
+
+Separate Release app: `services/gui-cpp/out-adoption/Telar C++ Preview 26.app`
+(from this worktree root). GUI SHA256
+`5353a918027623846d4fbe03aca228f4584e24ecde89269f8d89c7bfe23bf17d`.
+The existing packager deploys Qt/QML/runtime/helpers and login-shell launch.
+All1739 hashes/121 Mach-O/signatures, eight exact daily scopes and20 normal-loop
+cycles pass;17 captures inspected. Both SDKs Release54/recorded24; LinuxASan54
+exits0. MacASan54 assertions pass/exit1,815594B5025alloc; failed exit retained,
+general triage deferred for this phase. Broad/editor/format/module lint pass;
+three source hashes match. See component-accessible-groups evidence. Open with
+`open -n "services/gui-cpp/out-adoption/Telar C++ Preview 26.app"`; close/open
+`~/Applications/Telar.app` to return. No install/config/session migration. Preserve
+all candidates and the four protected processes. No more accessibility expansion.
+
+## Historical checkpoint log — superseded by the active phase above
+
 CURRENT WIP aftere24acc405: component-accessible-groups-1, state06:54UTC.
 Preview25 below FROZEN/qualified/offered; neveroverwrite. Three modified files:
 qt/component_projection.hpp,qt/ComponentNode.qml,tests/quick_test.cpp. Projection

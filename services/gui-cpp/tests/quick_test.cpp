@@ -54,6 +54,7 @@
 #include "text/utf16_prefix.hpp"
 #include "text/utf8.hpp"
 #include "ui/bundled_fonts.hpp"
+#include <QAccessible>
 #include <QByteArray>
 #include <QClipboard>
 #include <QCursor>
@@ -105,6 +106,7 @@
 #include <QtCore/qtestsupport_core.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
+#include <QtGui/qaccessible_base.h>
 #include <QtGui/qevent.h>
 #include <QtGui/qfont.h>
 #include <QtGui/qguiapplication.h>
@@ -4497,6 +4499,59 @@ return {api_version=2, client={keybindings={
     QCOMPARE(client_->error(), QString{});
   }
 
+  Q_SLOT void configuredAccessibleGroups() {
+    const bool accessibility = QAccessible::isActive();
+    const auto sidebar = client_->sidebarVisible();
+    const auto cleanup = qScopeGuard([this, accessibility, sidebar] {
+      client_->closeComponentPanel();
+      client_->loadConfiguration({}, {}, {});
+      if (client_->sidebarVisible() != sidebar) {
+        client_->execute(Application::Action::toggle_sidebar);
+      }
+      QAccessible::setActive(accessibility);
+    });
+    QAccessible::setActive(true);
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    writeTestFile(path, R"(
+      local t=require('telar');local ui=t.ui;local renders=0
+      return {api_version=2,client={keybindings={t.bind_global({'alt+u'},t.action.open_panel('source'))},
+        panels={source=t.panel({title='Accessible controls',render=function()
+          renders=renders+1;return {
+            ui.button({text='Named button',action=t.action.toggle_sidebar()}),
+            ui.group({on_click=t.action.toggle_sidebar(),tooltip=ui.text('Separate tooltip'),
+              ui.label('Named group '..renders),ui.badge({text='Ready'})}),
+          }
+        end})},
+      }}
+    )");
+    client_->loadConfiguration(path, {}, {});
+    QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+    QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
+    verifyAccessibleComponentName(components::Kind::button, QStringLiteral("Named button"), "Named button");
+    QVERIFY(!QTest::currentTestFailed());
+    verifyAccessibleComponentName(components::Kind::group, QStringLiteral("Named group 1"), "Named group 1 Ready");
+    QVERIFY(!QTest::currentTestFailed());
+    const QPointer<QQuickItem> before{componentActionItem(components::Kind::group, QStringLiteral("Named group 1"))};
+    const auto revision = client_->componentPanel().value(QStringLiteral("revision")).toString();
+    client_->refreshComponentPanel();
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
+    verifyAccessibleComponentName(components::Kind::group, QStringLiteral("Named group 2"), "Named group 2 Ready");
+    QVERIFY(!QTest::currentTestFailed());
+    QCOMPARE(componentActionItem(components::Kind::group, QStringLiteral("Named group 2")), before.data());
+    auto *interface = QAccessible::queryAccessibleInterface(before.data());
+    if (interface == nullptr || interface->actionInterface() == nullptr) {
+      QFAIL("The retained group has no accessible action interface");
+    }
+
+    auto *actions = interface->actionInterface();
+    QVERIFY(actions->actionNames().contains(QAccessibleActionInterface::pressAction()));
+    actions->doAction(QAccessibleActionInterface::pressAction());
+    QTRY_COMPARE_WITH_TIMEOUT(client_->sidebarVisible(), !sidebar, runtime_wait_ms);
+    QCOMPARE(client_->error(), QString{});
+  }
+
   Q_SLOT void configuredPluginCaptionRefresh() {
     for (const auto kind : {components::Kind::button, components::Kind::group}) {
       verifyPluginCaptionRefresh(kind, false);
@@ -6630,6 +6685,18 @@ return {api_version=2, client={keybindings={
     client_->execute(Application::Action::close_pane, QString::number(*created));
     QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 1, runtime_wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(terminalIn(window_->contentItem()) != nullptr && terminalIn(window_->contentItem())->hasActiveFocus(), runtime_wait_ms);
+  }
+
+  void verifyAccessibleComponentName(components::Kind kind, const QString &caption, std::string_view name) {
+    QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(kind, caption) != nullptr, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto *interface = QAccessible::queryAccessibleInterface(componentActionItem(kind, caption));
+    if (interface == nullptr) {
+      QFAIL("The configured control has no accessible interface");
+    }
+
+    QCOMPARE(interface->role(), QAccessible::Button);
+    QCOMPARE(interface->text(QAccessible::Name), QString::fromUtf8(name.data(), static_cast<qsizetype>(name.size())));
   }
 
   static void writeComponentPlugin(const QTemporaryDir &directory) {
