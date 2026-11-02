@@ -1,28 +1,25 @@
 #pragma once
 
-#include "application_effects.hpp"
 #include "application/dependencies.hpp"
-#include "history/browser.hpp"
-#include "input/history_hover.hpp"
-#include "input/tab_drop_surface.hpp"
-#include "presentation/history_footer.hpp"
+#include "application_effects.hpp"
 #include "attachment_shelf.hpp"
-#include "configuration_source.hpp"
 #include "component_surface_state.hpp"
-#include "pick_controller.hpp"
 #include "components/invocation.hpp"
-#include "surface_command.hpp"
+#include "config/action_descriptions.hpp"
+#include "configuration_source.hpp"
 #include "core/calendar_sample.hpp"
 #include "core/metrics.hpp"
 #include "core/terminal_size.hpp"
 #include "core/view_version.hpp"
 #include "external_link_opener.hpp"
-#include "plugin_worker.hpp"
 #include "font_resolver.hpp"
+#include "history/browser.hpp"
 #include "history/choice.hpp"
-#include "input/history_scroll.hpp"
-#include "input/wheel_accumulator.hpp"
 #include "input/history_action_capture.hpp"
+#include "input/history_hover.hpp"
+#include "input/history_scroll.hpp"
+#include "input/tab_drop_surface.hpp"
+#include "input/wheel_accumulator.hpp"
 #include "key_bindings.hpp"
 #include "list_model.hpp"
 #include "machine_activity_target.hpp"
@@ -35,9 +32,12 @@
 #include "palette/navigation_target.hpp"
 #include "palette/query.hpp"
 #include "palette/ranked_matches.hpp"
+#include "pick_controller.hpp"
+#include "plugin_worker.hpp"
 #include "pointer_dispatcher.hpp"
 #include "presentation/display_metrics.hpp"
 #include "presentation/frame_pacer.hpp"
+#include "presentation/history_footer.hpp"
 #include "presentation/history_modal_geometry.hpp"
 #include "presentation/palette_row_window.hpp"
 #include "presentation/path_picker_placement.hpp"
@@ -45,6 +45,7 @@
 #include "runtime_connection.hpp"
 #include "scroll_event.hpp"
 #include "sound_player.hpp"
+#include "surface_command.hpp"
 #include "system_notifier.hpp"
 #include "terminal_preparation.hpp"
 #include "text/bounded_text.hpp"
@@ -75,6 +76,7 @@
 namespace telar::gui::test {
 struct HistoryPresentation;
 struct FramePacing;
+struct ComponentActions;
 struct MachineWindow;
 struct MachineProfileWindow;
 }
@@ -443,6 +445,7 @@ signals:
 private:
   friend struct test::HistoryPresentation;
   friend struct test::FramePacing;
+  friend struct test::ComponentActions;
   friend class KeyBindings;
   friend class PointerDispatcher;
   friend class TerminalItem;
@@ -451,8 +454,8 @@ private:
 
   [[nodiscard]] BindingContext bindingContext() const;
   [[nodiscard]] std::optional<BindingRepeat> bindingRepeat(BindingAction action) const;
-  bool runBinding(BindingAction action);
-  void executeBinding(BindingAction action);
+  bool runBinding(BindingAction action, std::optional<DefinitionActionDescription> definition = std::nullopt);
+  void executeBinding(BindingAction action, std::optional<DefinitionActionDescription> definition = std::nullopt);
   void executeCommandTab(BindingAction action);
   void executeNotificationBinding(BindingAction action);
   void initializeComponents();
@@ -464,6 +467,7 @@ private:
   void renderComponentSource(std::size_t index, bool panel);
   void applyComponentRender(std::size_t index, bool panel, const components::Context &context);
   void componentCommandFinished(const ComponentCommandOwner &owner, SurfaceCommandResult result);
+  void activateComponentAction(std::optional<BindingAction> action, std::string_view url, const QString &identity, const QPointF &anchor);
   void toggleComponentPanel(std::size_t index);
   [[nodiscard]] components::Context componentContext() const;
   [[nodiscard]] bool componentCommandCurrent(std::uint64_t generation, MachineClientKey source, std::uint64_t runtime) const;

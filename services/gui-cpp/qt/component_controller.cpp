@@ -10,7 +10,9 @@
 #include "components/invocation.hpp"
 #include "components/node.hpp"
 #include "components/source.hpp"
+#include "config/action_descriptions.hpp"
 #include "configuration_source.hpp"
+#include "input/action.hpp"
 #include "links/link_target.hpp"
 #include "machine_client.hpp"
 #include "machine_client_key.hpp"
@@ -207,16 +209,24 @@ void Application::projectComponentSource(std::size_t index, bool panel) {
 
   auto &state = surfaceState(component_surfaces_, index, panel);
   const auto time = componentContext().time;
+  const auto resolve = [this](BindingAction action) -> std::optional<DefinitionActionDescription> {
+    try {
+      return configuration_source_.definitionAction(action);
+    } catch (const std::exception &) {
+      // Mutated or invalid action tables retain their opaque lease and fail on activation.
+      return std::nullopt;
+    }
+  };
   if (panel) {
-    state.nodes = componentRecords(configuration->panel(), configuration_source_.configuration().theme, time);
+    state.nodes = componentRecords(configuration->panel(), configuration_source_.configuration().theme, time, resolve);
     state.clock_next = nextClock(configuration->panel());
   } else if (const auto kind = configuration->definitions().source(static_cast<components::Position>(index)).kind; components::builtinSource(kind)) {
     const auto content = components::builtinContent(kind);
-    state.nodes = componentRecords(content, configuration_source_.configuration().theme, time);
+    state.nodes = componentRecords(content, configuration_source_.configuration().theme, time, resolve);
     state.clock_next = Clock::time_point::max();
   } else {
     const auto &content = configuration->bar(static_cast<components::Position>(index));
-    state.nodes = componentRecords(content, configuration_source_.configuration().theme, time);
+    state.nodes = componentRecords(content, configuration_source_.configuration().theme, time, resolve);
     state.clock_next = nextClock(content);
   }
 
@@ -493,23 +503,12 @@ void Application::activateComponent(int source, int node, const QString &generat
   }
 
   const auto activate = [&](const auto &content) {
-    if (static_cast<std::size_t>(node) >= content.nodes().size()) {
+    if (static_cast<std::size_t>(node) >= content.nodes().size() || node >= state.nodes.size()) {
       return;
     }
 
     const auto &item = content.nodes()[static_cast<std::size_t>(node)];
-    const auto url = content.text(item.url);
-    if (const auto action = content.action(item)) {
-      const auto previous = std::exchange(component_action_anchor_, anchor);
-      const auto restore = qScopeGuard([&] {
-        component_action_anchor_ = previous;
-      });
-      static_cast<void>(runBinding(*action));
-    } else if (!url.empty()) {
-      if (const auto target = LinkTarget::fromUri(url)) {
-        static_cast<void>(openLink(*target));
-      }
-    }
+    activateComponentAction(content.action(item), content.text(item.url), state.nodes.at(node).toMap().value(QStringLiteral("actionIdentity")).toString(), anchor);
   };
   if (panel) {
     activate(configuration->panel());
@@ -518,4 +517,26 @@ void Application::activateComponent(int source, int node, const QString &generat
   }
 }
 
+void Application::activateComponentAction(std::optional<BindingAction> action, std::string_view url, const QString &identity, const QPointF &anchor) {
+  try {
+    const auto definition = action && action->kind == BindingActionKind::extended ? configuration_source_.definitionAction(*action) : std::nullopt;
+    if (identity != componentActionIdentity(action, url, definition)) {
+      return;
+    }
+
+    if (action) {
+      const auto previous = std::exchange(component_action_anchor_, anchor);
+      const auto restore = qScopeGuard([&] {
+        component_action_anchor_ = previous;
+      });
+      static_cast<void>(runBinding(*action, definition));
+    } else if (!url.empty()) {
+      if (const auto target = LinkTarget::fromUri(url)) {
+        static_cast<void>(openLink(*target));
+      }
+    }
+  } catch (const std::exception &error) {
+    fail(error);
+  }
+}
 }

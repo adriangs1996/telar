@@ -4,7 +4,43 @@ The complete functional, visual and equal-or-better performance objective remain
 open. Only the command/quick-navigation palette and notifications/sounds may be
 deferred for daily adoption; existing implementations stay available.
 
-## Current candidate: Preview23; retained widgets through caption changes
+## Remaining daily clearance and final acceptance
+
+- Daily: confirmed fresh plugin-reference keyboard-focus failure; macOS native
+  shutdown retention (sanitizer gate failed/open); physical suspend/resume untried.
+  Linux final static/editor qualification of Preview24 is running.
+- Final parity: complete styling/fitting/accessibility/native ownership, remaining
+  interaction states and paired visual/comparative performance acceptance.
+- Zig retirement: own-Zig generators/font metadata and bundled runtime/CLI,
+  shared non-Zig sources, third-party Ghostty toolchain and test oracles remain
+  separate dependencies. Removal requires an audited clean build; see ZIG_RETIREMENT.
+
+## Current candidate: Preview24; stable panel/pick actions through Lua renders
+
+`out-adoption/Telar C++ Preview 24.app` preserves widget focus and held clicks when
+Lua re-declares the same panel/pick destination. A mutated action cannot redirect
+an old gesture; activation consumes its validated destination once and rejects
+expired sources. From the worktree root:
+
+```sh
+open -n "services/gui-cpp/out-adoption/Telar C++ Preview 24.app"
+```
+
+Finder opens the separate app after another preview closes. Return by closing it
+and opening `~/Applications/Telar.app`. No installation/replacement/migration.
+GUI SHA256 `200c986cb3467aa926fcb64255d967c1683036e4f6aef921242e68f25d7382c6`.
+All1739 hashes/121 Mach-O/deep signatures, eight exact daily scopes and twenty
+normal-loop tab/split/group/Lua-reload cycles pass; sixteen captures inspected.
+Both SDKs pass Release49/recorded19. LinuxASAN49 exits0; Mac49 assertions pass but
+exit1 reports850052B4746alloc, without address/UB errors or suppression. Mac broad3/
+editor5/format5/module lint pass; final Linux quality analysis is still running.
+See [closed destination evidence](measurements/component-semantic-action-focus.md).
+A fresh plugin-action reference still loses focus in a directed native probe;
+that separate daily scope is now confirmed/open.
+Physical sleep/native retention/full parity/retirement remain OPEN. Preview23/22/8,
+installed Zig/configuration/runtime remain preserved.
+
+## Preserved candidate: Preview23; retained widgets through caption changes
 
 `out-adoption/Telar C++ Preview 23.app` retains keyboard focus and in-flight clicks
 when widget captions change with the same action identity, including periodic Lua

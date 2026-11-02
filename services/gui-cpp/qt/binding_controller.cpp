@@ -1,6 +1,8 @@
 #include "application.hpp"
 #include "application/notification_item.hpp"
 #include "application/records.hpp"
+#include "components/configuration.hpp"
+#include "config/action_descriptions.hpp"
 #include "config/callback.hpp"
 #include "configuration_source.hpp"
 #include "input/action.hpp"
@@ -216,8 +218,15 @@ void Application::interruptBindings() {
   key_bindings_.interrupt();
 }
 
-bool Application::runBinding(BindingAction action) {
+bool Application::runBinding(BindingAction action, std::optional<DefinitionActionDescription> definition) {
   try {
+    if (definition) {
+      const auto *components = configuration_source_.components();
+      if (action.kind != BindingActionKind::extended || action.generation != configuration_source_.configurationGeneration() || components == nullptr || !components->contains(action)) {
+        throw std::invalid_argument{"Validated component action expired"};
+      }
+    }
+
     if (action.kind == BindingActionKind::expression) {
       applyExpression(configuration_source_.expression(action, bindingContext()));
     } else if (action.kind == BindingActionKind::callback) {
@@ -233,7 +242,7 @@ bool Application::runBinding(BindingAction action) {
         executeBinding(effect);
       }
     } else {
-      executeBinding(action);
+      executeBinding(action, definition);
     }
 
     refresh();
@@ -246,7 +255,7 @@ bool Application::runBinding(BindingAction action) {
   }
 }
 
-void Application::executeBinding(BindingAction action) {
+void Application::executeBinding(BindingAction action, std::optional<DefinitionActionDescription> definition) {
   pending_activity_.reset();
   if (action.kind != BindingActionKind::copy_mode) {
     leaveKeyboardCopyMode();
@@ -295,14 +304,14 @@ void Application::executeBinding(BindingAction action) {
     refreshComponentPanel();
     break;
   case BindingActionKind::extended:
-    if (const auto plugin = configuration_source_.pluginAction(action)) {
-      startPlugin(configuration_source_.pluginInvocation(*plugin, bindingContext()));
-    } else if (const auto definition = configuration_source_.definitionAction(action)) {
-      if (definition->kind == DefinitionActionDescription::Kind::panel) {
-        toggleComponentPanel(definition->index);
+    if (const auto resolved = definition ? definition : configuration_source_.definitionAction(action)) {
+      if (resolved->kind == DefinitionActionDescription::Kind::panel) {
+        toggleComponentPanel(resolved->index);
       } else {
-        openComponentPick(definition->index);
+        openComponentPick(resolved->index);
       }
+    } else if (const auto plugin = configuration_source_.pluginAction(action)) {
+      startPlugin(configuration_source_.pluginInvocation(*plugin, bindingContext()));
     } else {
       executeNotificationBinding(action);
     }

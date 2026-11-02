@@ -5,6 +5,7 @@
 #include "application/records.hpp"
 #include "clipboard_fixture.hpp"
 #include "components/node.hpp"
+#include "config/action_descriptions.hpp"
 #include "core/terminal_size.hpp"
 #include "frame_fixture.hpp"
 #include "frame_pacing_fixture.hpp"
@@ -14,6 +15,7 @@
 #include "history/page_storage.hpp"
 #include "history_card_wait_trace.hpp"
 #include "history_presentation_fixture.hpp"
+#include "input/action.hpp"
 #include "input/click_tracker.hpp"
 #include "json_fixture.hpp"
 #include "links/link_grid.hpp"
@@ -129,6 +131,38 @@
 #include <string>
 #include <string_view>
 #include <utility>
+
+namespace telar::gui::test {
+
+struct ComponentActions {
+  struct Definition {
+    BindingAction action;
+    DefinitionActionDescription destination;
+  };
+
+  [[nodiscard]] static std::optional<Definition> retain(const qt::Application &application) {
+    const auto *configuration = application.configuration_source_.components();
+    if (configuration == nullptr || configuration->panel().nodes().empty()) {
+      return std::nullopt;
+    }
+
+    const auto &content = configuration->panel();
+    const auto action = content.action(content.nodes().front());
+    if (!action) {
+      return std::nullopt;
+    }
+
+    const auto destination = application.configuration_source_.definitionAction(*action);
+
+    return destination ? std::optional{Definition{.action = *action, .destination = *destination}} : std::nullopt;
+  }
+
+  static bool run(qt::Application &application, const Definition &definition) {
+    return application.runBinding(definition.action, definition.destination);
+  }
+};
+
+}
 
 namespace {
 
@@ -4458,6 +4492,103 @@ return {api_version=2, client={keybindings={
     QCOMPARE(client_->error(), QString{});
   }
 
+  Q_SLOT void configuredDefinitionCaptionRefresh() {
+    for (const auto kind : {components::Kind::button, components::Kind::group}) {
+      for (const bool picker : {false, true}) {
+        verifyDefinitionCaptionRefresh(kind, picker, false);
+        QVERIFY(!QTest::currentTestFailed());
+      }
+    }
+  }
+
+  Q_SLOT void configuredDefinitionCaptureRefresh() {
+    for (const auto kind : {components::Kind::button, components::Kind::group}) {
+      for (const bool picker : {false, true}) {
+        verifyDefinitionCaptionRefresh(kind, picker, true);
+        QVERIFY(!QTest::currentTestFailed());
+      }
+    }
+  }
+
+  Q_SLOT void configuredDefinitionRejectsMutatedTarget() {
+    const auto cleanup = qScopeGuard([this] {
+      client_->closeComponentPanel();
+      client_->loadConfiguration({}, {}, {});
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    writeTestFile(path, R"(
+      local t=require('telar');local ui=t.ui
+      local target={kind='open-panel',panel='first'}
+      return {api_version=2,client={
+        keybindings={t.bind_global({'alt+u'},t.action.open_panel('source')),t.bind_global({'alt+m'},function()target.panel='second';return {} end)},
+        panels={source=t.panel({title='Definition source',render=function()return ui.button({text='Mutable target',action=target})end}),
+          first=t.panel({title='First destination',render=function()return ui.text('First')end}),
+          second=t.panel({title='Second destination',render=function()return ui.text('Second')end})},
+      }}
+    )");
+    for (const bool pointer : {false, true}) {
+      client_->closeComponentPanel();
+      client_->loadConfiguration(path, {}, {});
+      QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+      verifyDefinitionTargetMutation(pointer);
+      QVERIFY(!QTest::currentTestFailed());
+    }
+  }
+
+  Q_SLOT void configuredDefinitionUsesValidatedTarget() {
+    const auto cleanup = qScopeGuard([this] {
+      client_->closeComponentPanel();
+      client_->loadConfiguration({}, {}, {});
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    writeTestFile(path, R"(
+      local t=require('telar');local ui=t.ui
+      local target={kind='open-panel',panel='first'}
+      return {api_version=2,client={
+        keybindings={t.bind_global({'alt+u'},t.action.open_panel('source')),t.bind_global({'alt+m'},function()target.panel='second';return {} end)},
+        panels={source=t.panel({title='Definition source',render=function()return ui.button({text='Single resolution',action=target})end}),
+          first=t.panel({title='First destination',render=function()return ui.text('Validated target')end}),
+          second=t.panel({title='Second destination',render=function()return ui.text('Unexpected target')end})},
+      }}
+    )");
+    client_->loadConfiguration(path, {}, {});
+    QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+    QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
+    QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(components::Kind::button, QStringLiteral("Single resolution")) != nullptr, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto validated = test::ComponentActions::retain(*client_);
+    if (!validated) {
+      QFAIL("The component has no validated definition action");
+    }
+
+    const auto validated_definition = validated.value();
+    const auto revision = client_->componentPanel().value(QStringLiteral("revision")).toString();
+    QTest::keyClick(window_, Qt::Key_M, Qt::AltModifier);
+    QCOMPARE(client_->componentPanel().value(QStringLiteral("revision")).toString(), revision);
+    QCOMPARE(client_->error(), QString{});
+    const auto current = test::ComponentActions::retain(*client_);
+    if (!current) {
+      QFAIL("The mutated component has no current definition action");
+    }
+
+    const auto current_definition = current.value();
+    QVERIFY(validated_definition.action == current_definition.action);
+    QVERIFY(validated_definition.destination.index != current_definition.destination.index);
+    QVERIFY(test::ComponentActions::run(*client_, validated_definition));
+    QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("First destination"), runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(componentItem(QStringLiteral("text"), QStringLiteral("Validated target")) != nullptr, runtime_wait_ms);
+    QCOMPARE(client_->error(), QString{});
+    QVERIFY(!test::ComponentActions::run(*client_, validated_definition));
+    QCOMPARE(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("First destination"));
+    QVERIFY(client_->error().contains(QStringLiteral("expired")));
+    client_->dismissDiagnostic();
+    QCOMPARE(client_->error(), QString{});
+  }
+
   Q_SLOT void configuredActionCaptionRefresh() {
     const auto sidebar = client_->sidebarVisible();
     const auto cleanup = qScopeGuard([this, sidebar] {
@@ -6379,6 +6510,112 @@ return {api_version=2, client={keybindings={
     client_->execute(Application::Action::close_pane, QString::number(*created));
     QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 1, runtime_wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(terminalIn(window_->contentItem()) != nullptr && terminalIn(window_->contentItem())->hasActiveFocus(), runtime_wait_ms);
+  }
+
+  void verifyDefinitionCaptionRefresh(components::Kind kind, bool picker, bool pointer) {
+    const auto cleanup = qScopeGuard([this] {
+      client_->closeComponentPick();
+      client_->closeComponentPanel();
+      client_->loadConfiguration({}, {}, {});
+    });
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = directory.filePath(QStringLiteral("config.lua"));
+    const auto action = picker ? QStringLiteral("t.action.pick('destination')") : QStringLiteral("t.action.open_panel('destination')");
+    const auto element = kind == components::Kind::button ? QStringLiteral("ui.button({text=caption,action=action})") : QStringLiteral("ui.group({on_click=action,ui.label(caption)})");
+    const auto config = QStringLiteral(R"(
+      local t=require('telar');local ui=t.ui;local renders=0
+      return {api_version=2,client={keybindings={t.bind_global({'alt+u'},t.action.open_panel('source'))},
+        panels={source=t.panel({title='Definition source',render=function()
+          renders=renders+1;local caption='Stable target '..renders;local action=%1;return %2
+        end}),destination=t.panel({title='Destination',render=function()return ui.text('Opened')end})},
+        picks={destination=t.pick({title='Destination',items={'One'},on_select={'/usr/bin/true','{}'}})},
+      }}
+    )")
+                            .arg(action, element)
+                            .toUtf8();
+    writeTestFile(path, config.constData());
+    client_->loadConfiguration(path, {}, {});
+    QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
+    QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
+    QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(kind, QStringLiteral("Stable target 1")) != nullptr, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const QPointer<QQuickItem> before{componentActionItem(kind, QStringLiteral("Stable target 1"))};
+    before->forceActiveFocus(Qt::TabFocusReason);
+    QTRY_VERIFY_WITH_TIMEOUT(before->hasActiveFocus(), runtime_wait_ms);
+    const auto center = before->mapToScene(before->boundingRect().center()).toPoint();
+    bool pressed = pointer;
+    const auto release = qScopeGuard([&] {
+      if (pressed) {
+        QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, center);
+      }
+    });
+    if (pointer) {
+      QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, center);
+    }
+
+    const auto revision = client_->componentPanel().value(QStringLiteral("revision")).toString();
+    client_->refreshComponentPanel();
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(kind, QStringLiteral("Stable target 2")) != nullptr, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    QCOMPARE(componentActionItem(kind, QStringLiteral("Stable target 2")), before.data());
+    QTRY_VERIFY_WITH_TIMEOUT(before->hasActiveFocus(), runtime_wait_ms);
+    if (pointer) {
+      QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, center);
+      pressed = false;
+    } else {
+      QTest::keyClick(window_, Qt::Key_Space);
+    }
+
+    if (picker) {
+      QTRY_VERIFY_WITH_TIMEOUT(client_->componentPick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QCOMPARE(client_->componentPick().value(QStringLiteral("title")).toString(), QStringLiteral("Destination"));
+    } else {
+      QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Destination"), runtime_wait_ms);
+    }
+
+    QCOMPARE(client_->error(), QString{});
+  }
+
+  void verifyDefinitionTargetMutation(bool pointer) {
+    QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
+    QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(components::Kind::button, QStringLiteral("Mutable target")) != nullptr, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    auto *button = componentActionItem(components::Kind::button, QStringLiteral("Mutable target"));
+    button->forceActiveFocus(Qt::TabFocusReason);
+    const auto center = button->mapToScene(button->boundingRect().center()).toPoint();
+    bool pressed = pointer;
+    const auto release = qScopeGuard([&] {
+      if (pressed) {
+        QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, center);
+      }
+    });
+    if (pointer) {
+      QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, center);
+    }
+
+    const auto revision = client_->componentPanel().value(QStringLiteral("revision")).toString();
+    QTest::keyClick(window_, Qt::Key_M, Qt::AltModifier);
+    QCOMPARE(client_->componentPanel().value(QStringLiteral("revision")).toString(), revision);
+    QCOMPARE(client_->error(), QString{});
+    if (pointer) {
+      QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, center);
+      pressed = false;
+    } else {
+      QTest::keyClick(window_, Qt::Key_Space);
+    }
+
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    QCOMPARE(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Definition source"));
+    QCOMPARE(client_->error(), QString{});
+    client_->refreshComponentPanel();
+    QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("revision")).toString() != revision, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(componentActionItem(components::Kind::button, QStringLiteral("Mutable target")) != nullptr, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto *fresh = componentActionItem(components::Kind::button, QStringLiteral("Mutable target"));
+    QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, fresh->mapToScene(fresh->boundingRect().center()).toPoint());
+    QTRY_COMPARE_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("title")).toString(), QStringLiteral("Second destination"), runtime_wait_ms);
   }
 
   void verifyComponentCaptionMouseRefresh(components::Kind kind, bool sidebar) {
