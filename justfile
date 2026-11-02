@@ -171,6 +171,14 @@ proxy *args:
 proxy-test *args:
     go test {{ args }} ./...
 
+# Build EBNF and run tests with color. Extra arguments are forwarded to CTest.
+[positional-arguments]
+[working-directory: "dlls/ebnf"]
+ebnf-test *args:
+    cmake --preset debug
+    cmake --build --preset debug
+    GTEST_COLOR=yes ctest --preset debug -V "$@"
+
 # Validate Linux TUN forwarding and NAT in an isolated Docker network.
 proxy-test-linux:
     python3 services/proxy/tests/linux/run.py
