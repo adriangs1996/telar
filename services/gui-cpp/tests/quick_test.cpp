@@ -4479,6 +4479,7 @@ return {api_version=2, client={keybindings={
     client_->loadConfiguration(path, {}, {});
     QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
     QTRY_COMPARE_WITH_TIMEOUT(client_->componentBars().value(QStringLiteral("left")).toMap().value(QStringLiteral("nodes")).toList().size(), 4, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(configuredKeyboardGroupsReady(), runtime_wait_ms);
     QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
     const QPointer<QQuickItem> first{componentGroup(QStringLiteral("First keyboard group"))};
     const QPointer<QQuickItem> second{componentGroup(QStringLiteral("Second keyboard group"))};
@@ -6162,6 +6163,22 @@ return {api_version=2, client={keybindings={
     const auto *simple_meter = componentItem(QStringLiteral("meter_row"), QStringLiteral("Session"));
     QVERIFY(simple_meter != nullptr);
     QCOMPARE(simple_meter->height(), simple_meter_height * ratio);
+  }
+
+  [[nodiscard]] bool configuredKeyboardGroupsReady() const {
+    const auto generation = client_->componentBars().value(QStringLiteral("left")).toMap().value(QStringLiteral("generation")).toString();
+    const auto *first = componentGroup(QStringLiteral("First keyboard group"));
+    const auto *second = componentGroup(QStringLiteral("Second keyboard group"));
+    const auto *first_label = componentItem(QStringLiteral("label"), QStringLiteral("First keyboard group"));
+    const auto *second_label = componentItem(QStringLiteral("label"), QStringLiteral("Second keyboard group"));
+    if (first == nullptr || second == nullptr || first_label == nullptr || second_label == nullptr) {
+      return false;
+    }
+
+    const QRectF first_rect{first->mapToScene(QPointF{}), first->size()};
+    const QRectF second_rect{second->mapToScene(QPointF{}), second->size()};
+
+    return first->property("surface").toMap().value(QStringLiteral("generation")).toString() == generation && second->property("surface").toMap().value(QStringLiteral("generation")).toString() == generation && first_rect.width() >= first_label->implicitWidth() && second_rect.width() >= second_label->implicitWidth() && second_rect.left() >= first_rect.right();
   }
 
   void verifyGroupTabFocusTransitions() {

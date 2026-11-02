@@ -1,5 +1,19 @@
 # Port acceptance status
 
+**Preview21 extended component qualification (2026-11-02):**100-cycle workloads
+pass202 checks per SDK, plus38 general and12 recorded-link cases. Native group
+mouse setup now requires current, complete, separated geometry before a presented
+frame; all prior action assertions/deadlines remain. A post-hit trace and same-
+binary private polish off/on pair explain the earlier wrong-group synthetic click.
+The polish filter is not shipped. Production GUI/bundle bytes remain unchanged;
+all1739 package hashes/121 objects/signatures are reverified. Broad/editor/format
+pass the one changed test TU per SDK; nine source hashes match, Linux module lint0.
+Mac38/202-case ASAN assertions pass/exit1 for786079B4395alloc/591683B3604alloc; Linux0.
+Constant visual counts and short malloc reservation observations do not certify
+long-run stability. Physical sleep, native leaks, in-flight geometry/pointer
+ownership, full paired visuals/performance and audited Zig retirement remain OPEN.
+See [component-focus-stability.md](measurements/component-focus-stability.md).
+
 **Daily candidate Preview21 (2026-11-02):** configured groups/More admit keyboard
 activation/focus; actual pane selection, explicit chrome clicks and uncovered/vacant
 transitions restore terminal input without stealing retained chrome focus. Escape

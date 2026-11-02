@@ -32,6 +32,18 @@ deadlines. See [group keyboard evidence](measurements/component-group-keyboard.m
 Preview19/8, installed Zig, configuration/runtime remain preserved. Physical sleep,
 native leaks/stability, final parity and own-Zig retirement remain OPEN.
 
+The [extended component stability scope](measurements/component-focus-stability.md)
+now passes100 cycles/202 checks plus38 general/12 recorded-link cases on both SDKs
+with a stronger settled-geometry precondition before mouse input. The original
+assertions/deadlines remain. Broad/editor/format pass the one changed test TU per
+SDK; Linux module lint also passes. The GUI/package bytes are unchanged; all1739
+hashes/121 objects/signatures are reverified. Mac38/202-case ASAN exits remain1
+(786079B4395alloc and591683B3604alloc); Linux exits0. Earlier failed runs and native
+retention remain open. Visual descendant counts stay constant; malloc reservation
+plateaus during a short diagnostic, but long-run RSS/leak freedom is NOT proved.
+In-flight component geometry/pointer equivalence stays in PARITY.md. No production
+input-polish prototype was shipped. Preview21 remains the same offered candidate.
+
 ## Preserved candidate: Preview19; keyboard actions and retained panels
 
 `out-adoption/Telar C++ Preview 19.app` adds Tab/Space/Return actions for custom

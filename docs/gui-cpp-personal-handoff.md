@@ -1,6 +1,38 @@
 # Personal: C++ daily adoption and complete parity — OPEN
 
 
+Latest scope after d63928088: **component-focus-stability**, raw
+`services/gui-cpp/out-dependencies/component-focus-stability-1`. Only tests/
+quick_test.cpp changes: new configuredKeyboardGroupsReady precondition waits for
+current source generations, full caption widths and nonoverlap BEFORE the existing
+presented-frame wait/click. All original action-case lines/assertions/deadlines are
+preserved. Post-hit Linux trace4 identifies second node2 at first origin with
+localx3; both pointers stay alive. Same PRIVATE polish-control binary off101/1,
+on102/0 supports provisional geometry; it is NOT production code. Readiness-only
+private100-cycle control202 pass; final rebuilt native100-cycle202, general38,
+recorded12 pass both SDKs. Linux ASAN0; Mac general38 ASAN1/786079B4395alloc and
+stress202 ASAN1/591683B3604alloc, without address/UB/suppression; gate FAILED/open.
+Broad/editor/format1 TU pass both SDKs, Linux QML lint0, all9 hashes match. App GUI
+rawc727.../bundledba035... unchanged, all1739 hashes/121 Mach-O/signatures reverified;
+reuse exact eight package scopes/captures by identity. Preview21 still offered.
+All earlier faults/preparation errors preserved: initial sampler zombie rejection;
+Linux100 timeout plus mouse failure, later GC-off mouse failures; initial final
+Linux driver missing slot file. Private orphan runtime152515 identity checked and
+SIGTERM via pidfd, exit observed/non-child status unavailable; possible zombie/
+private state retained. Four protected identities unchanged. Mac GC off/on private
+controls202 pass each,370 descendants constant; Linux332 in its failed off control.
+No proof of long-run bound. Malloc diagnostic202 passes; reserved median392691712B
+plateaus, live medians321.7→324.5MB. Intended after-UI sample matched an unrun fixture
+and did not run, limitation retained. Source/hashes-final1, quality-final1, native
+Mac full-final1/stress-mac4 and Linux final2 driver (five rows), editor/broad-final1,
+linux export final1 collected223 artifacts. Mac/VM heavy jobs finished.
+Next: save this reviewed test/evidence checkpoint locally, then continue daily
+stability with the exact app under its normal Qt event loop, followed by remaining
+PARITY. Physical sleep remains untried; do not ask again/suspend host. Full/daily/
+retirement goals OPEN. Existing d639 archive immutable; default verifiers historical,
+--check-current differs when this live handoff advances. Never stop at checkpoints.
+
+
 Newest offered candidate: **Preview21** (2026-11-02),
 `services/gui-cpp/out-adoption/Telar C++ Preview 21.app`.
 `open -n "services/gui-cpp/out-adoption/Telar C++ Preview 21.app"`.
