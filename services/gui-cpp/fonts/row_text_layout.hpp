@@ -170,18 +170,20 @@ private:
 
     const auto text = cell.utf8();
     auto &face = fonts.face(FontRole::primary);
-    if (text.size() == 1 && static_cast<unsigned char>(text.front()) < ascii_.size() && FontCoverage::covers(face, text)) {
+    if (text.size() == 1 && static_cast<unsigned char>(text.front()) < ascii_.size()) {
       auto &cached = ascii_[static_cast<unsigned char>(text.front())];
       if (cached) {
         appendPrimary(std::span{&*cached, std::size_t{1}}, column, request);
         return;
       }
 
-      const auto shaped = face.shape(text, request.pixel_height);
-      if (shaped.size() == 1) {
-        cached = shaped.glyph(0);
-        appendPrimary(std::span{&*cached, std::size_t{1}}, column, request);
-        return;
+      if (FontCoverage::covers(face, text)) {
+        const auto shaped = face.shape(text, request.pixel_height);
+        if (shaped.size() == 1) {
+          cached = shaped.glyph(0);
+          appendPrimary(std::span{&*cached, std::size_t{1}}, column, request);
+          return;
+        }
       }
     }
 

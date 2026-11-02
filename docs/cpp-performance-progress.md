@@ -1035,13 +1035,166 @@ latency, cadence or full-flow acceptance result.
 
 A larger algorithmic lead is shaping-result reuse. Original Zig's
 `ShapingCache` owns bounded short-run results keyed by text, face and height;
-C++ `Face::shape` currently validates UTF-8, resets the HarfBuzz buffer and
+the uncached C++ `Face::shape` validates UTF-8, resets the HarfBuzz buffer and
 calls `hb_shape` on every call. The row layer already caches individual ASCII
 glyphs, so that existing reuse must not be counted as repeated shaping work.
 Short ligature runs, fallback text and chrome are candidates for a separate
 work census and bounded cache experiment. Additional memory is allowed when
 it saves measured work; the oracle must retain clusters, direction, positions,
 face/height identity and borrowed-result lifetime.
+
+### Fresh coverage candidate versus original Zig
+
+Six alternating pairs per no-load text case completed in
+`/tmp/telar-perf-shared-image-optical-coverage-zig-text-pairs-01`. A is original
+Zig GUI plus its own Zig runtime; B is the integrated coverage candidate GUI
+`6ce2ae46f435ef93ecfc72f7ef65a126b6ff37a426e5bc445f34317deaecb8f8`
+plus the unchanged accepted C++ runtime. Both have matched grids, thicken=true,
+100 measured inputs after 20 warmups and verified positive native presentations.
+
+| Case | p50 Zig → C++, ms | p95 Zig → C++, ms | p99 Zig → C++, ms | C++ wins, p50/p95/p99 |
+| --- | ---: | ---: | ---: | ---: |
+| Single | 25.990 → 25.030 | 33.613 → 32.336 | 39.087 → 34.606 | 5/6, 6/6, 5/6 |
+| Splits | 26.065 → 25.822 | 33.398 → 32.304 | 37.318 → 34.650 | 3/6, 4/6, 6/6 |
+| Tabs | 26.304 → 26.175 | 33.328 → 32.376 | 36.816 → 34.673 | 3/6, 5/6, 4/6 |
+
+Single-window latency meets the paired win rule, but splits/tabs do not win
+their medians consistently. GUI CPU/input is higher in all six pairs of each
+case: 3.582 → 4.079 ms in single, 3.712 → 4.403 ms in splits and
+3.616 → 4.172 ms in tabs. Median peak GUI RSS is 124.367 → 204.953 MiB,
+124.367 → 205.406 MiB and 131.188 → 204.109 MiB respectively. These are
+separate GUI process measurements; they do not establish runtime CPU parity.
+Memory growth is recorded as an allowed tradeoff, not a standalone rejection.
+F03/F07/F08 and the full matrix remain open, including their other variants and
+cadence requirements. The full raw series and resource summary are retained.
+
+### Bounded shaping-result reuse
+
+`out-perf/shaping-result-cache` freezes an initial optional per-face cache for
+short shaping results. It preserves exact UTF-8 bytes, pixel height, glyph
+clusters/positions and direction, uses four-way bounded replacement, and falls
+back to ordinary shaping if its optional allocation fails. Long text and
+oversized results bypass insertion. The first new oracle attempt incorrectly
+expected `std::invalid_argument` for invalid UTF-8; the unchanged baseline
+instead throws `EncodingError`. That harness error and its partial output are
+preserved; the corrected oracle passes for A and B.
+
+This first cache wins all seven target component pairs but loses six of seven
+in the nonrepeating short-label control (402.106 → 405.525 ms for 50,000
+requests). It is rejected for that consistent timing loss. The source adds
+lookup and insertion work on misses; its exact contribution versus code/layout
+effects is not established. The rejection is not because of additional memory.
+
+`out-perf/shaping-result-cache-tags` keeps full fingerprints in compact metadata
+and reuses the computed key, reading large entry payloads only after a key
+match. A full text/height comparison still decides a hit. A forced-collision
+build maps every key to one fingerprint and one four-way set; its 5,366,254-byte
+output remains identical to the uncached reference. Warm/cold outputs, eviction,
+font/height changes, RTL direction, long-input bypass, invalid requests and
+optional-allocation failure all pass, as do the existing 7,494 original-Zig
+row cases. The reusable `gui-shaping-cache-test` independently compares results
+against newly constructed faces across three bundled fonts and verifies that
+a failed optional allocation is not retried on every request.
+
+Seven uninstrumented alternating pairs compare this revised cache with the
+uncached coverage candidate. Row cases measure 20,000 256-cell rows after 256
+warmups; direct shaping cases measure 50,000 calls after 1,024 warmups:
+
+| Component | Wall A → B, ms | CPU A → B, ms | B wins, wall/CPU |
+| --- | ---: | ---: | ---: |
+| ASCII rows | 84.190 → 84.244 | 84.163 → 84.223 | 2/7, 2/7 |
+| Ligature rows | 3960.390 → 583.448 | 3954.520 → 583.218 | 7/7, 7/7 |
+| Mixed ASCII/combining rows | 715.227 → 145.315 | 714.935 → 145.293 | 7/7, 7/7 |
+| Font/height-changing rows | 200.102 → 92.768 | 200.011 → 92.760 | 7/7, 7/7 |
+| Repeated short labels | 368.910 → 0.836 | 368.837 → 0.840 | 7/7, 7/7 |
+| Labels at four heights | 370.730 → 0.938 | 370.594 → 0.943 | 7/7, 7/7 |
+| Nonrepeating short labels | 401.683 → 402.655 | 401.545 → 402.499 | 3/7, 3/7 |
+| Long text bypass | 243.562 → 243.430 | 243.451 → 243.323 | 4/7, 4/7 |
+
+The target cases pass the component rule, with no 0–1/7 timing control loss.
+The first variant's nonrepeating-control warning is retained rather than hidden
+by the revised measurements. In a separate instrumented census, including
+warmup and 2,000 measured requests/rows, repeated labels reduce Face-owned
+`hb_shape` calls from 3,024 to 8, four-height labels to 32, ligature rows from
+19,960 to 3,480, combining rows from 144,385 to 2, and font-changing rows from
+36,096 to 96. ASCII rows retain 63 calls; nonrepeating and long-label cases
+retain 3,024. These counts establish work removal, not native frame latency.
+
+ARM64 lowering allocates 675,904 bytes lazily per participating face, initializes
+only 2,112 metadata bytes and publishes entry keys after copying valid payload
+prefixes. Peak process RSS increases by 112 KiB for repeated labels, 400 KiB for
+four-height labels and 624 KiB for the churn control. Those standalone process
+differences are not an estimate of aggregate GUI memory. A/B x86-64 and x86-64-v3
+objects compile; Rosetta and Linux native execution remain unqualified.
+
+The revised cache is now part of the separate integrated candidate
+`out-perf/shared-image-optical-shaping`, preserving shared images, idle-gated
+native delivery and the ASCII coverage fast path. Twenty source files are
+frozen. The fresh GUI has SHA-256
+`d7f7086b0846601c6dcb2f5a078ab81797970335cffccc1bb898b0b4ee4b3aca`;
+runtime and helper hashes are unchanged. All thirteen focused CTest entries
+pass in 26.08 seconds, the four native Quick cases pass, and the integrated row
+probe matches all 7,494 original-Zig cases. Fresh native latency, resources and
+cadence still require evidence; no flow is closed by the component result.
+
+A fresh final-source repeat after lint cleanup is retained separately at
+`out-perf/shaping-result-cache-clean`. Its exact-output, forced-collision and
+allocation-failure checks pass, as do targeted clang-tidy and x86-64/v3 object
+compilation. However, the churn control loses all seven wall and CPU pairs:
+401.538 → 403.272 ms wall and 401.353 → 403.102 ms CPU. This variant is rejected
+under the existing rule; the earlier tag-cache series does not override that
+result. The integrated `d7f7086…` binary contains the earlier source and has not
+been measured as if it contained the lint-clean revision.
+
+The successor experiment, `out-perf/shaping-result-cache-adaptive`, suppresses
+lookup and insertion after 64 consecutive misses and probes every 32nd eligible
+request until a hit restores normal caching. It adds distinct-text and
+unique-to-repeated phase controls, so a cyclic working set larger than capacity
+is no longer described as fully nonrepeating. Before timing, all existing
+oracles and 7,494 original-Zig cases pass, including forced hash collisions and
+optional allocation failure. A separate census preserves all 3,024 HarfBuzz
+calls for genuinely unique input and reduces 1,000 recovery-phase requests to
+62 HarfBuzz calls. These are work counts, not native presentation measurements.
+
+The adaptive component completes seven alternating pairs with no consistent
+wall or CPU control regression. Medians below exclude setup and warmup; row
+cases use 20,000 iterations and direct cases use 50,000 requests.
+
+| Case | Wall ms A → B | CPU ms A → B | Wall / CPU wins |
+| --- | ---: | ---: | ---: |
+| row-bench/ascii | 84.266 → 84.340 | 84.262 → 84.323 | 4/7 / 2/7 |
+| row-bench/ligatures | 3958.160 → 586.398 | 3954.560 → 586.050 | 7/7 / 7/7 |
+| row-bench/unicode | 715.864 → 145.870 | 715.528 → 145.828 | 7/7 / 7/7 |
+| row-bench/font-change | 199.333 → 92.839 | 199.253 → 92.813 | 7/7 / 7/7 |
+| shape-bench/repeated | 368.201 → 0.844 | 368.081 → 0.851 | 7/7 / 7/7 |
+| shape-bench/heights | 370.877 → 0.970 | 370.701 → 0.976 | 7/7 / 7/7 |
+| shape-bench/churn | 402.151 → 385.472 | 401.964 → 385.091 | 6/7 / 6/7 |
+| shape-bench/long | 242.394 → 241.953 | 242.316 → 241.886 | 5/7 / 5/7 |
+| shape-bench/unique | 423.903 → 423.477 | 423.786 → 423.207 | 3/7 / 4/7 |
+| shape-bench/phase-switch | 444.335 → 212.309 | 444.142 → 212.236 | 7/7 / 7/7 |
+
+Median standalone peak RSS increases by 144 KiB for repeated labels, 432 KiB
+for four-height labels, 672 KiB for genuinely unique text and 688 KiB for the
+phase switch. Long-input bypass has equal median RSS. These bounded memory
+costs are accepted for the work saved; native GUI/runtime resources remain a
+separate measurement. ARM64 disassembly shows a 675,912-byte optional allocation,
+2,115 metadata bytes cleared, a 144-byte shape stack frame and a skip-byte
+load/decrement/store that bypasses hashing and cache copies in the sampled mode.
+A cache hit returns borrowed glyph/position prefixes without payload copies or
+HarfBuzz. Both x86-64 baseline and v3 objects compile; those objects are not a
+Rosetta or Linux runtime qualification. The source passes targeted clang-tidy.
+The successor
+integrated build is frozen under `out-perf/shared-image-optical-adaptive`; it
+adds a reusable phase-transition equivalence test. Its GUI SHA-256 is
+`cff34db828bb3cca2627e4b8785ba5262563adeb74a9c2f69497ce404bda290e`;
+the runtime and helper hashes remain unchanged. Thirteen focused CTest entries
+pass in 26.43 seconds, all four native Metal Quick cases pass in 1.568 seconds,
+and the fresh integrated probe matches all 7,494 original-Zig cases. The Face
+object is byte-identical to the measured adaptive component object (SHA-256
+`5971e6ffae7b64306b527d0890759133a33804ba3bc011cd07c5156ee243fdc6`).
+Six alternating native text pairs against the preceding coverage candidate are
+running under `/tmp/telar-perf-shared-image-optical-adaptive-coverage-text-pairs-01`.
+No F01–F16 flow is closed by these component or correctness results.
 
 The legacy `gui_frame_rate` tool's documentation now explicitly identifies its
 historically named presentation counters as frame-completion callbacks. Those
