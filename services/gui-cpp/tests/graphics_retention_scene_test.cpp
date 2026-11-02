@@ -3,6 +3,7 @@
 #include "graphics/image_residency.hpp"
 #include "graphics/placement_selection.hpp"
 #include "graphics/store.hpp"
+#include "platform/window.hpp"
 #include "qt/graphics_scene.hpp"
 #include "qt/scene_nodes.hpp"
 #include "qt/window_images.hpp"
@@ -17,7 +18,6 @@
 #include <QDir>
 #include <QGuiApplication>
 #include <QImage>
-#include <QMetaObject>
 #include <QObject>
 #include <QPoint>
 #include <QQuickItem>
@@ -27,7 +27,9 @@
 #include <QSGTransformNode>
 #include <QSizeF>
 #include <QString>
+#include <QTimer>
 #include <QtCore/qnamespace.h>
+#include <QtCore/qstringliteral.h>
 #include <QtCore/qtenvironmentvariables.h>
 #include <QtCore/qtestsupport_core.h>
 #include <QtCore/qtmetamacros.h>
@@ -167,14 +169,14 @@ public:
                      Qt::DirectConnection);
     QObject::connect(&window_, &QQuickWindow::sceneGraphAboutToStop, &window_, [this, &images] {
       const auto sample = images.statistics();
-      QMetaObject::invokeMethod(&window_, [this, sample] {
+      QTimer::singleShot(0, &window_, [this, sample] {
         if (sample.frame >= statistics_.frame) {
           statistics_ = sample;
         }
-      },
-                                Qt::QueuedConnection);
+      });
     },
                      Qt::DirectConnection);
+    platform::configureWindow(window_, {});
     window_.setColor(Qt::black);
     window_.resize(window_side, window_side);
     window_.show();

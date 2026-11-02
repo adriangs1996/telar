@@ -334,6 +334,17 @@ The immediate milestone is a separate Release daily-use candidate, tracked in
 may be deferred. Custom surfaces and the remaining daily-flow qualification block adoption;
 full parity stays open.
 
+## Phase progress — Preview26 and graphics/attachments complete; blur next
+
+Preview26 stays frozen. The scoped graphics/attachment increment fixes Linux
+surface-event visibility ordering so hiding releases images and showing restores
+them. Both SDKs pass applicable core/native image/Kitty/attachment controls,
+broad profiles, actual editors and formatting; Linux ASan exits0. Mac native
+assertions pass with retained shutdown-leak failures, deferred general triage.
+See `services/gui-cpp/measurements/graphics-adoption.md` and its frozen verifier.
+These changes enter the final candidate after blur; the installed app is untouched.
+Next only: blur, then frozen full-client benchmark. Do not restart the old backlog.
+
 ## Verified Preview26 — step1 complete; graphics/attachments next
 
 Separate Release app: `services/gui-cpp/out-adoption/Telar C++ Preview 26.app`

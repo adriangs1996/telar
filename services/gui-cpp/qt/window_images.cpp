@@ -17,7 +17,6 @@
 #include "telar_client/serializers/telar_messages.hpp"
 #include <QEvent>
 #include <QImage>
-#include <QMetaObject>
 #include <QObject>
 #include <QPointer>
 #include <QQuickItem>
@@ -26,6 +25,7 @@
 #include <QTimer>
 #include <QWindow>
 #include <QtCore/qnamespace.h>
+#include <QtCore/qstringliteral.h>
 #include <QtCore/qtypes.h>
 #include <algorithm>
 #include <array>
@@ -67,7 +67,7 @@ WindowImages::WindowImages(QQuickWindow &window)
 }
 
 bool WindowImages::eventFilter(QObject *watched, QEvent *event) {
-  if (watched == &window_ && (event->type() == QEvent::Expose || event->type() == QEvent::Show || event->type() == QEvent::Hide || event->type() == QEvent::WindowStateChange)) {
+  if (watched == &window_ && (event->type() == QEvent::Expose || event->type() == QEvent::Show || event->type() == QEvent::Hide || event->type() == QEvent::WindowStateChange || event->type() == QEvent::PlatformSurface)) {
     requested_visible_.store(window_.isVisible() && window_.visibility() != QWindow::Minimized, std::memory_order_relaxed);
   }
 
@@ -281,7 +281,7 @@ void WindowImages::prepare() {
 template <typename Use>
 void WindowImages::visitVisibleTextures(const Use &use) const noexcept {
   for (const auto *scene = first_scene_; scene != nullptr; scene = scene->next_) {
-    if (!scene->owner_ || !scene->owner_->isVisible()) {
+    if (scene->owner_ == nullptr || !scene->owner_->isVisible()) {
       continue;
     }
 
@@ -344,7 +344,7 @@ void WindowImages::finish() {
 
   const auto delay = residency_.wakeupAfter(now_ns_);
   for (const auto *scene = first_scene_; scene != nullptr; scene = scene->next_) {
-    if (scene->invalidated_ && scene->owner_ && scene->owner_->isVisible()) {
+    if (scene->invalidated_ && scene->owner_ != nullptr && scene->owner_->isVisible()) {
       requestUpdate(*scene);
     }
   }
@@ -381,7 +381,7 @@ void WindowImages::orderScenes() {
 void WindowImages::admitDraws() {
   std::size_t candidates = 0;
   for (const auto *scene = first_scene_; scene != nullptr; scene = scene->next_) {
-    if (scene->owner_ && scene->owner_->isVisible()) {
+    if (scene->owner_ != nullptr && scene->owner_->isVisible()) {
       candidates += scene->draw_count_;
     }
   }
@@ -392,7 +392,7 @@ void WindowImages::admitDraws() {
 
   ImageDrawBudget budget;
   for (const auto *scene = first_scene_; scene != nullptr; scene = scene->next_) {
-    if (!scene->owner_ || !scene->owner_->isVisible()) {
+    if (scene->owner_ == nullptr || !scene->owner_->isVisible()) {
       continue;
     }
 
@@ -430,13 +430,12 @@ void WindowImages::scheduleTimer(std::uint32_t delay_ms) {
   }
 
   timer_deadline_ns_.store(deadline, std::memory_order_relaxed);
-  QMetaObject::invokeMethod(this, [this, deadline] {
+  QTimer::singleShot(0, this, [this, deadline] {
     if (timer_deadline_ns_.load(std::memory_order_relaxed) == deadline) {
       active_timer_deadline_ns_ = deadline;
       scheduleDeadline(timer_, deadline, platform::AwakeClock::nowNanoseconds());
     }
-  },
-                            Qt::QueuedConnection);
+  });
 }
 
 void WindowImages::cancelTimer() {
@@ -444,13 +443,12 @@ void WindowImages::cancelTimer() {
     return;
   }
 
-  QMetaObject::invokeMethod(this, [this] {
+  QTimer::singleShot(0, this, [this] {
     if (timer_deadline_ns_.load(std::memory_order_relaxed) == 0) {
       timer_.stop();
       active_timer_deadline_ns_ = 0;
     }
-  },
-                            Qt::QueuedConnection);
+  });
 }
 
 void WindowImages::clear() {
@@ -473,12 +471,11 @@ void WindowImages::stopRendering() {
 
 void WindowImages::requestUpdate(const GraphicsScene &scene) {
   const auto owner = scene.owner_;
-  QMetaObject::invokeMethod(this, [owner] {
-    if (owner) {
+  QTimer::singleShot(0, this, [owner] {
+    if (owner != nullptr) {
       owner->update();
     }
-  },
-                            Qt::QueuedConnection);
+  });
 }
 
 void WindowImages::wakeWaitingScenes() noexcept {
