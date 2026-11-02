@@ -227,6 +227,15 @@ The frozen GUI SHA-256 is
 the runtime remains the baseline C++ executable. These results are not a win
 over Zig, a whole-flow acceptance, or a 120 Hz cadence measurement.
 
+`idle-recheck-zig-01` and `idle-recheck-cpp-01` separately repeat the two-second
+idle setup with labelled readback diagnostics. Both complete 26 inputs including
+warmup. A delayed read of the same zero-timestamp drawable still returns zero
+100 ms later; these are not timestamps that simply become positive shortly
+after the native callback. This does not resolve the intermittent idle failure.
+The delayed reread is diagnostic-only and never admits an otherwise invalid
+frame. The uninstrumented path does not retain the drawable for this check;
+native readiness negative controls still pass.
+
 The attempted C++ GUI + Zig runtime diagnostic cannot connect: current C++
 uses schema `cqp00001`, while Zig uses `886b480d`. Shared component probes also
 need schema-appropriate drivers before cross-runtime timing. Do not bypass

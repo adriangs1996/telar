@@ -1166,6 +1166,15 @@ static id next_drawable(CAMetalLayer *self,SEL selector){
         objc_setAssociatedObject([(id<CAMetalDrawable>)drawable texture], &presentation_key, frame, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         [(id<MTLDrawable>)drawable addPresentedHandler:^(id<MTLDrawable> presented) {
             double timestamp = presented.presentedTime;
+            if (readback_diagnostics && timestamp <= 0) {
+                static const int64_t ProbePresentationRecheckDelay = NSEC_PER_SEC / 10;
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, ProbePresentationRecheckDelay), dispatch_get_main_queue(), ^{
+                    if (!finished) {
+                        fprintf(probe_log, "presentation recheck drawable=%lu original=%.9f later=%.9f verified=%d\n",
+                            frame->drawable_id, timestamp, presented.presentedTime, frame->verified);
+                    }
+                });
+            }
             dispatch_async(dispatch_get_main_queue(), ^{
                 frame->presented = timestamp;
                 if (readback_diagnostics) {
