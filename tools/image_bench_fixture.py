@@ -69,13 +69,16 @@ class ImageFixture(Fixture):
 
     def close(self):
         names = len(self.shared_names)
+        unadopted = []
         for name in self.shared_names:
             try:
                 _posixshmem.shm_unlink(name)
+                unadopted.append(name)
             except FileNotFoundError:
                 pass
         self.shared_names.clear()
-        atomic_json(self.directory / 'image-cleanup.json', dict(pid=os.getpid(), names=names, complete=True))
+        atomic_json(self.directory / 'image-cleanup.json', dict(pid=os.getpid(), names=names,
+                                                               unadopted_names=unadopted, complete=True))
 
     def run(self):
         try:

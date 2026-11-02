@@ -56,6 +56,8 @@ class ImageFixtureTest(unittest.TestCase):
             finally:
                 names = list(fixture.shared_names)
                 fixture.close()
+            cleanup = json.loads((Path(directory) / 'image-cleanup.json').read_text())
+            self.assertEqual(cleanup['unadopted_names'], names)
             for name in names:
                 with self.assertRaises(FileNotFoundError):
                     _posixshmem.shm_open(name, os.O_RDONLY, 0o600)

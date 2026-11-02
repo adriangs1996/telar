@@ -379,6 +379,63 @@ input pattern: Qt/fused medians 0.273/0.203 ms at 1K and 1.693/1.633 ms at 4K.
 The packed alternative loses all seven at both sizes. These additional component
 results do not close native-image or cross-architecture acceptance.
 
+## Native image baseline pairs and transport candidate
+
+`image-1k-baseline-pairs-01` completes five pairs, then its last Zig run fails
+on input 11 during warmup: the image was published, the window remained active
+and key, but no qualifying presentation arrived within two seconds. The cause
+is not established. All raw observations and the unmatched C++ run remain.
+`image-1k-baseline-supplement-01` adds two fresh alternating complete pairs.
+The seven complete 1K pairs below exclude the unmatched pair, not any sample
+within a valid run; all maxima and outliers are retained. The series does not
+resolve the invalid launch. A later cleanup diagnostic records which shared
+objects the fixture itself must unlink, to distinguish unadopted input from
+presentation failure on future attempts; that field was added after timing.
+
+`image-4k-baseline-pairs-01` completes all six pairs without rejected rows.
+Both sizes use 100 measured inputs after 20 warmups with the same frozen stacks
+and qualified native endpoint. Medians of run quantiles:
+
+| Image / metric | Zig stack | Accepted C++ stack | C++ wins |
+| --- | ---: | ---: | ---: |
+| 1024×1024 p50 | 41.38 ms | 45.38 ms | 0/7 |
+| 1024×1024 p95 | 52.74 ms | 58.61 ms | 0/7 |
+| 1024×1024 p99 | 56.61 ms | 61.69 ms | 0/7 |
+| 3840×2160 p50 | 52.60 ms | 137.42 ms | 0/6 |
+| 3840×2160 p95 | 66.59 ms | 147.82 ms | 0/6 |
+| 3840×2160 p99 | 74.84 ms | 152.25 ms | 0/6 |
+
+GUI resources are sampled over the input phase including warmup; CPU 100%
+means one core. CPU per input divides user+system time by all 120 inputs.
+RSS is the process peak, not a whole-stack sum.
+
+| Image / GUI resource | Zig | C++ |
+| --- | ---: | ---: |
+| 1K CPU | 7.48% | 18.27% |
+| 1K CPU per input | 5.84 ms | 14.70 ms |
+| 1K peak RSS | 141.75 MiB | 203.19 MiB |
+| 4K CPU | 9.71% | 47.09% |
+| 4K CPU per input | 8.36 ms | 74.48 ms |
+| 4K peak RSS | 251.98 MiB | 331.44 MiB |
+
+Source review confirms the transport difference already noted in `PARITY.md`:
+C++ `Session::connected` always sends `ConfigureGraphics{false}` and has no
+`GraphicsSharedImage` dispatch. Zig enables shared transport when available.
+The C++ runtime already supports either route. Its inline route serializes up
+to 1 MiB image chunks and writes batches up to 256 KiB; the GUI assembles and
+copies those pixels before Qt conversion. The profile contains that inline
+serialization/write path. This is a concrete optimization target, not proof
+that it explains every millisecond of the measured gap.
+
+The next isolated candidate is local shared-image delivery with owned client
+pixels, using bounded validated reads and retaining inline delivery for remote
+connections. It must preserve names/descriptor cleanup, permissions, byte and
+image quotas, generations, source immutability, credits, failure recovery and
+rendered output. Merely flipping the capability without receiving the message
+is invalid. Qt conversion remains a separate candidate after transport; neither
+candidate is integrated or accepted by this baseline. Full F10 alpha, continuous
+streaming and presentation cadence acceptance remain open.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
