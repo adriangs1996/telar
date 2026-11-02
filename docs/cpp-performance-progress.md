@@ -1459,6 +1459,20 @@ to this final binary. The paths start `/tmp/telar-perf-gfinal-`, and state/resul
 remain under the final prefix. Independent Zig, fixed-load and native 120 Hz gates
 remain open. No F01–F16 flow is closed by this result.
 
+The final binary completes its coverage image targets successfully:
+
+| Image target | p50 ms A → B / wins | p95 ms A → B / wins | p99 ms A → B / wins | GUI CPU/input ms A → B / wins |
+| --- | ---: | ---: | ---: | ---: |
+| 4K | 47.622 → 45.740 / 6/6 | 58.811 → 53.008 / 6/6 | 62.637 → 57.268 / 6/6 | 31.405 → 30.911 / 5/6 |
+| 1K | 37.223 → 29.973 / 6/6 | 45.887 → 40.380 / 6/6 | 49.757 → 43.604 / 6/6 | 9.548 → 9.457 / 6/6 |
+
+Maximum latency also wins all six pairs at both sizes: 66.374 → 58.088 ms at 4K
+and 54.378 → 46.797 ms at 1K. Median peak GUI RSS is 367.109 → 367.156 MiB and
+218.891 → 222.203 MiB respectively; the approximately 3.3 MiB 1K increase is an
+allowed memory tradeoff. These are complete C++ stacks against the coverage C++
+stack. Final-source marker controls are now running before the independent Zig
+comparisons. The retained-conversion prototype is absent from this binary.
+
 ### Retained destination conversion component
 
 The separate `out-perf/image-retained-premultiply` prototype uses only public
@@ -1509,6 +1523,21 @@ unqualified. The next reference diagnostic must retain callback input timestamps
 as well as output timestamps and distinguish reference phase changes from actual
 drawable intervals before counting missed opportunities. No 120 Hz acceptance is
 inferred from these records.
+
+`out-perf/native-cadence-phase` prepares a separate diagnostic probe for that
+follow-up. It retains Core Video callback input and output timestamps, rejects
+every output-host interval outside the existing 5% reference tolerance instead of
+checking only its median, and leaves the native residual tolerance at 0.25 ms.
+It adds an explicit timed GUI CPU observation interval and a census of successful
+probe readback-buffer requests/bytes. Those buffer counters do not describe Qt,
+driver-internal or application allocation totals.
+
+Prepared fault controls alter cadence records only after real native readiness:
+zero/missing presentation, regressing sequence and failed pixel verification.
+Pre-fault native timestamps and sequences are retained. Setup failures cannot
+count as successful negative controls. The probe, model tests and live controls
+are not yet built/run; they wait for the active final-source timing sequence so
+that compilation, tests and diagnostics do not contaminate those measurements.
 
 The legacy `gui_frame_rate` tool's documentation now explicitly identifies its
 historically named presentation counters as frame-completion callbacks. Those
