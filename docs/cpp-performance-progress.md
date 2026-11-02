@@ -1470,8 +1470,93 @@ Maximum latency also wins all six pairs at both sizes: 66.374 → 58.088 ms at 4
 and 54.378 → 46.797 ms at 1K. Median peak GUI RSS is 367.109 → 367.156 MiB and
 218.891 → 222.203 MiB respectively; the approximately 3.3 MiB 1K increase is an
 allowed memory tradeoff. These are complete C++ stacks against the coverage C++
-stack. Final-source marker controls are now running before the independent Zig
-comparisons. The retained-conversion prototype is absent from this binary.
+stack. The retained-conversion prototype is absent from this binary.
+
+The final-source marker controls have now completed and **reject this binary**:
+the tabs control loses all six p99 pairs, five maximum-latency pairs and five GUI
+CPU pairs. The sequence stopped with exit 2 before starting the independent Zig
+comparisons. Raw evidence remains in `/tmp/telar-perf-gfinal-coverage-text-01` and
+the final prefix's `measurement-state.json`; no earlier favorable run overrides
+this final-build failure.
+
+| Marker layout | p50 ms A → B / wins | p95 ms A → B / wins | p99 ms A → B / wins | GUI CPU/input ms A → B / wins |
+| --- | ---: | ---: | ---: | ---: |
+| Single | 25.366 → 25.590 / 3/6 | 32.906 → 32.658 / 3/6 | 36.451 → 36.619 / 3/6 | 4.146 → 3.890 / 4/6 |
+| Splits | 25.678 → 26.098 / 2/6 | 33.163 → 33.068 / 3/6 | 37.040 → 37.223 / 2/6 | 4.286 → 4.331 / 4/6 |
+| Tabs | 25.392 → 25.935 / 2/6 | 32.678 → 33.052 / 2/6 | 33.829 → 36.721 / 0/6 | 4.050 → 4.183 / 1/6 |
+
+Tabs maximum latency is 35.316 → 37.869 ms, 1/6 wins. Peak RSS improves from
+211.820 to 205.969 MiB, 5/6 wins; memory is not the rejection reason. The latency
+decomposition gives tabs p99 input-to-GPU-completion callback 7.566 → 7.695 ms and
+GPU work 2.916 → 3.059 ms, both 4/6 wins. These do not establish the cause of the
+presentation-tail loss or justify a code-placement exception.
+
+`out-perf/graphics-tabs-profile` retains two separate diagnostic executions and
+four successful process samples, with exact GUI/runtime identities. Sampling
+starts seven seconds after process availability, rather than a verified postwarmup
+signal; the baseline sample includes QML object construction. Treat these as
+mixed-phase leads, not a steady-state cost comparison or an allocation census.
+Both show native input delivery, Qt update scheduling and rendering; the candidate
+also samples ICC profile conversion below `QCocoaWindow::requestUpdate`. None of
+this establishes that allocations or the pacer cause the regression.
+
+### Bounded input-grace scan experiments
+
+The pacer scans 64 optional entries even when only one has received input.
+`out-perf/frame-pacer-active-prefix` limits scans to the initialized prefix while
+preserving capacity, first-vacancy insertion and oldest-entry eviction. A frozen
+reference comparison checks 1,920,000 decisions, including graphics/text revisions,
+attachment generations, detached panes, capacity overflow, changing caps, clock
+regression and unsigned timestamp boundaries: all outputs match exactly. Storage
+changes from 4,136 to 4,144 bytes per pacer.
+
+Seven alternating component pairs show wall ms 56.312 → 17.674 with one entry and
+98.791 → 56.730 with four, both 7/7 wins. Empty controls win 3/7 and churn 7/7.
+However, the full 64-entry case regresses 208.731 → 224.715 ms, 0/7 wall/CPU wins:
+**this variant is rejected**, despite its smaller-case gains. One/four/empty/churn
+use two million iterations; full uses 100,000, so these are not cross-case totals.
+The next isolated `out-perf/frame-pacer-dense` variant removes optional-entry tests
+inside the proven initialized prefix as well. It also passes the same oracle but
+loses full-capacity wall/CPU timing 0/7, 207.464 → 224.557 ms: rejected.
+
+`out-perf/frame-pacer-indexed` adds a bounded pane-id bucket index to the dense
+prefix for large visible sets. This cuts the large `record` search from repeated
+full scans to short bucket chains. All initial cases win 7/7, including full
+209.461 → 100.139 ms. A deliberately colliding identity control then regresses
+225.344 → 359.276 ms, 0/7 wall/CPU wins: this variant is also rejected. Its extra
+collision oracle still matches; the problem is cost, not functional output.
+
+`out-perf/frame-pacer-ordered` instead retains ordered indices and identity keys.
+It verifies keys/order on each indexed record and sorts only when they change.
+Binary search finds each input's candidates; an original-index tie-break preserves
+the first qualifying duplicate. Frame, generation and graphics revision values
+are read fresh. Small visible sets and spans larger than capacity use the linear
+path. Fixed storage grows from 4,136 to 4,216 bytes per pacer (+80 bytes), without
+heap allocation. The added sorting state is an explicit memory-for-work tradeoff.
+
+Three separate reference corpora each check 1,920,000 exact decisions: ordinary
+identities, deliberately colliding identities, and spans up to 72 entries (over
+the 64-entry index bound). The last runs under AddressSanitizer and UBSan without
+diagnostics. Seven alternating component pairs give:
+
+| Case | Wall ms A → B | Wall/CPU wins |
+| --- | ---: | ---: |
+| Empty | 8.865 → 8.474 | 7/7, 7/7 |
+| One initialized entry | 56.158 → 17.555 | 7/7, 7/7 |
+| Four initialized entries | 98.807 → 56.743 | 7/7, 7/7 |
+| Full | 223.037 → 127.533 | 7/7, 7/7 |
+| Full with changing identities | 224.985 → 162.460 | 7/7, 7/7 |
+| One visible, evicting old identities | 325.485 → 286.201 | 7/7, 7/7 |
+| Full, colliding identities | 227.752 → 127.350 | 7/7, 7/7 |
+
+Full and full-churn cases use 100,000 iterations; the small cases use two million.
+The one-entry saving is approximately 19 ns per benchmark iteration. This does
+not explain the millisecond native presentation-tail regression. ARM64 assembly
+shows an identity-validation loop that bypasses sorting when unchanged and a
+halving binary-search loop for matches. ARM64, x86-64 and x86-64-v3 compilation
+passes; native x86/Linux execution remains unqualified. This is a component
+candidate only: **none of these four pacer experiments is integrated into the
+application tree or accepted as a complete-client optimization**.
 
 ### Retained destination conversion component
 
@@ -1535,9 +1620,32 @@ driver-internal or application allocation totals.
 Prepared fault controls alter cadence records only after real native readiness:
 zero/missing presentation, regressing sequence and failed pixel verification.
 Pre-fault native timestamps and sequences are retained. Setup failures cannot
-count as successful negative controls. The probe, model tests and live controls
-are not yet built/run; they wait for the active final-source timing sequence so
-that compilation, tests and diagnostics do not contaminate those measurements.
+count as successful negative controls. After the final-source sequence stopped,
+the probe compiled and all ten model/clock-validity tests passed. Invalid clock
+data now produces a diagnostic error rather than a division exception aborting
+the content analysis. All five owned live positive/fault controls now behave as
+expected: native content passes with no fault; zero timestamps, absent records,
+regressing sequences and failed pixel checks are rejected after successful native
+setup and twenty qualified warmup inputs. Receipts are under the phase prefix and
+`/tmp/telar-perf-phase-fault-{0..4}-01`. The missing-record runner exits nonzero;
+its raw result still proves successful setup and actual rendering, rather than
+counting a setup failure as a passing fault control.
+
+The positive control contains 671 distinct visible content frames over six
+seconds (111.823 changes/s by the first/last changed timestamps). Its longest gap
+is 29.166 ms. The reference has phase changes, so active-refresh and missed-refresh
+classification remain unqualified. In that run, 719 valid Core Video input
+timestamps have median spacing 8.332 ms; output-minus-input median is 10.912 ms,
+and callback-minus-input median 0.00225 ms. These are timestamp relationships,
+not a physical display latency measurement.
+
+The explicit GUI CPU interval lasts 6.156 s, with 0.746 s user plus 0.598 s system
+CPU. It contains 688 successful probe readback-buffer creations requesting
+176,128 bytes. Its actual boundaries differ from the six-second content window;
+these counts are not an application/framework allocation census. Probe overhead
+still needs qualification. A separate diagnostic sequence now runs coverage,
+the rejected final-source candidate and independent original Zig with this same
+probe (`/tmp/telar-perf-phase-stacks-01`); it cannot grant performance acceptance.
 
 The legacy `gui_frame_rate` tool's documentation now explicitly identifies its
 historically named presentation counters as frame-completion callbacks. Those
