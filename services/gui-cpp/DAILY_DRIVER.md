@@ -38,6 +38,14 @@ format9/module lint; all nine portable source hashes match. See [plugin focus ev
 Native retention, physical sleep, daily/full acceptance and audited retirement
 remain OPEN. Preview24/23/8, installed Zig/configuration/runtime remain preserved.
 
+The unchanged Preview25 additionally passes300 real one-second Lua plugin-bar
+refreshes and ten real worker actions, retaining delegate/focus/identity and372
+visual descendants. The app exits0 through its normal350s timer, without QML
+warnings, and removes owned state. This five-minute observation does not clear
+native retention, long-run stability or physical sleep. The initial early-quit
+observer failure is preserved; only its private early quit was removed. See
+[continuous plugin observation](measurements/component-plugin-live-refresh.md).
+
 ## Preserved candidate: Preview24; stable panel/pick actions through Lua renders
 
 `out-adoption/Telar C++ Preview 24.app` preserves widget focus and held clicks when

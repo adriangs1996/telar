@@ -1,5 +1,13 @@
 # Port acceptance status
 
+**Unchanged Preview25 continuous refresh:**300 real1000ms Lua plugin renders and
+ten actual worker activations preserve delegate/focus/source/action identity and
+372 visual descendants. Normal350s app exit0/noQML/private cleanup passes. The
+first observer exited before the required app summary; its failure is retained
+and only that private early quit changes for the successful repeat. Five minutes
+are scoped observation, not leak freedom/physical sleep/performance acceptance.
+See [continuous plugin observation](measurements/component-plugin-live-refresh.md).
+
 **Preview25 plugin action identity:** refreshed Lua plugin actions retain button/
 group focus and held clicks, consume one validated target and reject mutated or
 expired sources. Current enabled catalogue and complete worker authorization stay.

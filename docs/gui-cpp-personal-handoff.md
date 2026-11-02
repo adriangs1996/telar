@@ -1,53 +1,64 @@
 # Personal: C++ daily adoption and complete parity — OPEN
 
-CURRENT after8f26d3d91: component-plugin-focus-1 fully qualified on BOTH SDKs,
-freeze/review/evidence commit NEXT, then CONTINUE fullPARITY. Product9files committed,
-hashes-final-2/format-final-2, accepted-source pinned. Narrow NamedActionDescription
-Definition+Plugin single-resolution/stableIDs/compare/consume; currentenabledcatalog
-and worker source/runtime/config/digest/wholebatchtrust checks remain. No ownZig/
-runtime edits. Negativeprivate1 buttonfocus2pass1fail/32923ms; identical donorSOURCE
-recompiled positive2 passes3/973ms buttons+groups. Four permanent newplugin slots.
-Mac Release53/recorded23/domainRelease5 pass. ASAN53 assertionspass/exit1,
-796584B4584alloc; domainASAN8 with packages+worker192B4alloc each and configsource
-199616B787alloc. FAILED/open, noaddrUB/suppression. BothSDKs broad4/editor9/format9/
-fullmodulelint pass, nineportablehashesmatch. Linux final37620 FINISHED: Release53/
-ASAN53/recorded23/domain5×2 all0. Exported safely3.14filter=data to raw/linux-final-1.
-First unusedvariant testwarning retained; holds_alternative typeassertions fix it.
-Preview25 FROZEN/OFFERED out-adoption/Telar C++ Preview 25.app:
-GUI89c374eb1ea732b101756dd36af40ed1953849a417f2a9480a448bf962dc9efc;
-raw326e90619c0709c5d193e3a1b0e2fd9e138776185c1c83270f203b36afc6b35f.
-All1739hashes/121objects/deep signatures/eight EXACT daily scopes+normal20pass,
-GUI0/noQML/privatecleanup;16captures inspected. Normal livecycles6..20
-366845104..367049904B/reserved418283520B/visual372, shortobservationonly.
-Open-n25 afterotherpreviewcloses; rollback close/open~/Applications/Telar.app.
-24/23/8/install/config/runtime preserved. Report/DAILY/PARITY Linuxfinal updated.
-Prepared freeze_1.py/verify_1.py, NOTYETRUN. They include nextA11Ynegativeasfinalparity,
-notdailyblocker. Needfinalhandoff+freeze/verify--check-current/review/localcommit.
-LIVE PRIVATE component-plugin-live-refresh-1: originalactor300updates/10workers
-completed, but wrapper1 EXIT1 because actorquit309s before required350s appsummary.
-Preparation failure preserved (GUI0/noQML/privatecleanup), notappfailure/pass.
-Actor2 removes ONLY earlyquit; exactwrapper2 originalassertions/bounds unchanged.
-RUNNING32279 exact_live_refresh_25_2.py, output exact-live-refresh-25-2. Actor
-300 real1000ms freshpluginrenders, tenSpace→worker sidebarflips, retainedpointer/
-focus/action/source identity, visualcounts per sidebarstate, regularmallocsamples.
-330s workload/10s progress; app350snormal smoke timer/360wait. Runtimechildsleep400,
-privatehome/config/runtime/endpoint, GUIonlyDYLD/deployedQt rpaths; no actorsshipped.
-At06:19 ~190updates/6actions, nofail; don'tclaim wrapper2pass untilactualexit0.
-OnlyMac nativeGUIjob now; don'toverlapotherGUItests. Nextcandidateunchanged.
-NEXT CONFIRMED final-accessibility scope component-accessible-groups-1: private1
-(native46400 DONE)2pass1fail/997ms, QAccessibleButton normalname='Named button',
-groupname='' despitevisible 'Named group'. Source/build/run artifacts isolated.
-Qtaccessibility activation onlyprivateprocess, cleanuprestores. NOTclassifieddaily
-blocker forAdrian. No productfixyet. Suggested O(N) accumulation of alreadydecoded
-childtext for groupaccessibleName incomponent_projection.hpp, bindComponentNode
-Accessible.name to projectedname witholdtextfallback; testnamedbutton/group+
-dynamicrefresh. Preserve inputidentity/behavior, don'tclaimcompleteA11Y/icononly.
-Beforeanynewproductedits finish25freeze (pins context), reverifyprotected4. Current
-checksums verified06:00UTC and ownednativeprivate clipboard954 unchanged. Runtime
-35801/Preview8 52865/QEMU7158/Sway9469. Never touch personal-frame-delivery.md.
-Sleepuntried don'taskagain/suspendhost. GoalAPIblocked/noresume; continuemanually,
-nevercomplete/duplicate. Noagents/otherworktrees/publish/merge/install/migration/
-Zigdeletion. Daily/full/retirement OPEN; neverstop atcheckpoint.
+CURRENT WIP aftere24acc405: component-accessible-groups-1, state06:54UTC.
+Preview25 below FROZEN/qualified/offered; neveroverwrite. Three modified files:
+qt/component_projection.hpp,qt/ComponentNode.qml,tests/quick_test.cpp. Projection
+collects group names from alreadydecoded direct non-tooltip childtext in O(nodes+
+text), bounded std::array<QString,Bounds.nodes>; one postpass setsaccessibleName.
+QMLAccessible.name usesnewfieldwitholdtextfallback. appendComponentAccessibleName
+helper2args keepsseparatorformattingcohesive/complexity24<=25. No actionidentity/
+runtime/own-Zig changes; icononly/fullA11Y remainsopen. NewconfiguredAccessibleGroups
+verifies ordinarybutton+group label/badge name, excludes tooltip, updates name on
+same retaineddelegate, invokesactual accessiblepress→sidebar. PrivateQtaccessibility
+activation onlytestprocess/restored. Negativeprobe1 2pass1fail/997ms normalname
+'Named button',group''; SAMEcompiledfixtureobject relinkedpositive2 3pass/877ms.
+Sourcefinal4 authoritative (source-hashes-final-4.json, cpp-format-final-4.json);
+QMLchanged-range formatmacfinal2 nooverlap, originalunrelateddeltas retained.
+Earlier checks FAILED/preserved: helperinlinecomplexity27>25 (movedseparatorhelper);
+QString/QString swappabletesthelperargs (thirdnowstd::string_view); hosttype-edit
+introduced3extra')', build4/editor3/tidy3 reject. Badtestsource saved test-preparation-
+failure-3.cpp. Native3 ranolderbinary thenASANbuildfailed, NOTfinalqualification.
+Native4 now hasMANDATORYnormalGUI+testsuccessfulbuildprecondition beforeGUIrun.
+No tests/assertions/deadlines/lintprofiles weakened. Allfinal4 macros/names preserved.
+Mac final4 Release54/recorded24 pass, ASAN54 assertionspass/exit1,
+803307B4671alloc; failed/open noaddrUB/suppression. Pipeline74903 DONE. Actualeditor
+header fromeditor-mac-2 firstrow0, finaltest editor-mac-4 empty. Broad controller
+broad-mac-2 firstrow0; finaltest tidy4 RUNNING35097, do not edituntilfinish.
+Fullmodulelint stillneedreceipt forcurrentscope. NormalGUIraw reflectsfinalproduction
+sincehelperfix; onlytestbyteschangedafter. Candidate26 packaging43692 FINISHED:
+GUI5d87297826d22881e57d5a089b9c13cb01082d769efa18ad3c0aedb03296bd29;
+rawd039b049675dbcff568ea45f120c8fa5620367fc1961e812e87b79cc8a9e95f1.
+All1739hashes/121objects/deepsignatures pass. Exact26 eightdaily pipeline65159
+RUNNING, thennormal20. Notyetoffered; preserve25/24/23/8/install/config/runtime.
+No otherMac nativeGUIjobs now. Do NOToverlapnativeGUItests.
+Linux initial81128 sourcefinal2preparation FINISHED/exit1 atknownswappablehelper
+qualitygate; native54/54/24pass before that. Originalsources/logs retained. Guarded
+final-transfer-2 updates ONLYtest andnewhelpers/meta; productionhpp/QML unchanged
+verifiedagainst initialtransfer. Current32940 final2 pipelineRUNNING: Release54pass,
+ASAN/recorded then quality. Guestsource-hashes-final-2 ==HOSTfinal4; nativeSlotsfinal4.
+Newqualityscope component-accessible-groups-quality-final-2. It reusesonly oldpassed
+controllerTidy row after byteguard (header/QML alsohashguarded), runsfinaltestTidy,
+actualeditor2/files, C++format2/QMLformat1/fullmodulelint. Expectedallunchangedprofiles.
+ONEguestheavycompiler4GB; free1.8GB. Afterfinalhashesmatch collectusing3.14datafilter.
+Changedhashmap has3files; broadcontroller.cpp isunchanged compilationcontext, NOT
+mapmember: final verifier compare frozencontextbytes orseparate contextsha instead.
+LIVE plugin observation COMPLETE in separate scope component-plugin-live-refresh-1:
+actor2/wrapper2 300renders/10workers+350snormalexit0/noQML/privatecleanup. Stable372
+visuals, mallocupdates50..300 364885072..365381472B/reserved418283520/422477824,
+idle365371440. Notlongrun/leak/sleep clearance. Firstactorcompletedbutearlyquit309s
+made originalwrapper1 EXIT1 missing350ssummary; correctedONLYprivateearlyquit.
+Frozen26entries+verifier pass; report component-plugin-live-refresh.md andDAILY/
+PARITY links updatedbutNOTyetcommitted. Do docs-onlycheckpoint independently of
+current3sourcechanges. Both capturesinspected. Noactor shipped. Alllivejobsfinished.
+Source/qualification commits8f26d3d91/e24acc405. Preview25GUI89c374eb...f962dc9efc;
+allSDK Release53/ASANLinux53/recorded23/domain5×2,broad4/editor9/format9/lint pass,
+MacASAN53/domain3retentionfail gatesopen. Exacteight+normal20/16captures sealed347
+entries; verify default (check-currentwillfailafternewsource/docs as expected).
+Fourprotectedlast06:35UTC verifiedbeforehelperedit: runtime35801/Preview8 52865/
+QEMU7158/guestSway9469, clipboard954. Reverifybeforenewsourceedits. Never touch
+personal-frame-delivery.md. Sleepuntried don'taskagain/suspendhost. GoalAPIblocked/
+noresume, continue manually nevercomplete/duplicate. Noagents/otherworktrees/publish/
+merge/install/migration/Zigdeletion. Daily/full/retirement OPEN. Neverstopatcheckpoint.
 
 
 LATEST qualified/offered scope after7f6b78e75: component-semantic-action-focus-1,
