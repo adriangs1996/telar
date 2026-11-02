@@ -1,8 +1,9 @@
 // Test-only AppKit injector for gui_frame_rate.py. Wraps the frame contract,
-// never production pacing: counts delivered presentations while a pane floods,
+// never production pacing: counts successful completion callbacks while a pane floods,
 // with the interval the window reported and paced at. Older builds without
 // the display interval callbacks build with TELAR_GUI_RATE_LEGACY against
-// their own telar_gui.h.
+// their own telar_gui.h. Historical "presented" JSON fields are completion counts,
+// not MTLDrawable.presentedTime observations or proof of visible frame cadence.
 #import <AppKit/AppKit.h>
 #import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>

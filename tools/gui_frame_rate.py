@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""macOS: presented frames a second while one pane floods, in an isolated runtime.
+"""macOS: legacy frame-completion callbacks while one isolated pane floods.
 
 Opens `telar gui` running `yes` in its only pane, waits for the window to
-settle, then counts delivered presentations for --seconds. Reports the
+settle, then counts successful frame-completion callbacks for --seconds. Reports the
 display's refresh rate, the interval the window reported and paced at, the
-presented rate, the cell frames a second the runtime sent (client telemetry,
+completion rate, the cell frames a second the runtime sent (client telemetry,
 so build with `-Doptimize=ReleaseFast -Ddiagnostics=true`) and how long a
-frame took from preparation to GPU completion. A window presents at most at
-its display's rate, or at `gui.max_fps` below it.
+frame took from preparation to its completion callback. The historical JSON names
+`presented` and `presented_per_second` refer to that callback count. This probe
+does not observe MTLDrawable.presentedTime, verify displayed pixels or establish
+visible frame cadence, and cannot qualify the native 120 Hz performance goal.
+Use a probe with native presentation timestamps and a content oracle for that.
 
 The window opens where the window manager puts it. With AeroSpace,
 --aerospace-monitor moves only the test window to that monitor first.
