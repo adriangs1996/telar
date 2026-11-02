@@ -87,6 +87,68 @@ The first warm qualification passes in both complete stacks, with equal grid,
 viewport and marker coordinates. A six-pair, 100-input warm baseline follows
 under `f03-warm-baseline-01`; full F03 acceptance remains open.
 
+The six warm pairs completed without rejected rows. Medians of run quantiles:
+
+| Metric | Zig stack | C++ stack | C++ wins |
+| --- | ---: | ---: | ---: |
+| Input to presentation p50 | 24.30 ms | 27.04 ms | 0/6 |
+| p95 | 29.02 ms | 37.28 ms | 0/6 |
+| p99 | 30.34 ms | 40.53 ms | 0/6 |
+| GUI CPU (100% = one core) | 3.30% | 3.95% | — |
+| GUI process peak RSS | 124.63 MiB | 199.45 MiB | — |
+
+Median paired p50 ratio is 1.1211, p95 1.2846 and p99 1.3326. Runtime resources
+are not yet sampled, so GUI RSS is not a whole-stack total. No input-latency
+number here establishes continuous frame cadence. The first separate profile
+attempt finished before sampling attached; it provides no CPU profile. The
+integrated `cpp-typing-profile-02` collected five-second GUI/runtime `sample`
+outputs and Qt scene-graph timing under `out-perf/profiles/`.
+
+Both processes spend most sparse-typing samples waiting for events. The GUI
+profile includes `keyPressEvent -> dirty -> maybeUpdate -> requestUpdate` and
+`deliverUpdateRequests -> polishAndSync`. Installed Qt Cocoa disassembly
+confirms that nonzero swap interval selects native display-link delivery of
+update requests. Input-to-GPU time is roughly 8–10 ms in C++ versus 3 ms in Zig
+in the first baseline runs, while GPU work is roughly 0.5–1.1 ms. This motivates
+an earlier content-triggered frame request, retaining VSync and existing pacing.
+
+The unaccepted `early-frame` experiment coalesces visible terminal changes
+through the existing single-shot deadline timer. It preserves cadence/input
+grace checks and cancels delivery if the window becomes hidden. Focused core
+and window-pacer tests pass, including coalescence, cadence and cancellation.
+The native 30-input qualification passes at the same geometry with positive
+drawable presentation and VSync. Its 29.09 ms p95 is preliminary, not acceptance.
+Six alternating pairs against frozen C++ A follow. Source patch, executable
+hashes and ARM64 disassembly are under `out-perf/early-frame/`; no baseline
+executable is replaced. Disassembly shows a bounded 2 KiB pane scratch array
+and an existing timer dispatch, without a new per-change heap event allocation.
+
+`f03-early-frame-pairs-01` completed all six pairs without rejected rows:
+
+| Metric | Frozen C++ A | Early-frame B | B wins |
+| --- | ---: | ---: | ---: |
+| p50 | 25.69 ms | 24.36 ms | 6/6 |
+| p95 | 37.29 ms | 32.79 ms | 5/6 |
+| p99 | 37.38 ms | 37.42 ms | 3/6 |
+| GUI CPU | 4.06% | 5.84% | 0/6 |
+| GUI peak RSS | 201.45 MiB | 200.90 MiB | — |
+
+B is rejected for its consistent CPU regression. Separate Qt render-timing
+diagnostics with 120 inputs including warmup count 183 rendered frames in A
+versus 301 in B, including startup. These instrumented counts are not timing
+acceptance. Qt's [platform update delivery](https://github.com/qt/qtbase/blob/v6.12.0/src/gui/kernel/qplatformwindow.cpp#L777)
+clears its pending request before sending the event; B's direct event did not.
+The [Cocoa display link](https://github.com/qt/qtbase/blob/v6.12.0/src/plugins/platforms/cocoa/qcocoascreen.mm#L405)
+checks that pending state before delivering again.
+
+The next unaccepted `early-platform` experiment consumes the pending Cocoa
+update through Qt's virtual platform delivery, preserving its resize lock and
+DPR handling. An already delivered request is not repeated; a held pacing event
+retains its existing delivery. Non-Cocoa platforms retain the original schedule.
+A dedicated native test checks consumption, coalescence and requests made during
+delivery. This is a separate variant with fresh build/stage paths; B remains
+frozen with its source patch and rejected results.
+
 The attempted C++ GUI + Zig runtime diagnostic cannot connect: current C++
 uses schema `cqp00001`, while Zig uses `886b480d`. Shared component probes also
 need schema-appropriate drivers before cross-runtime timing. Do not bypass
