@@ -724,6 +724,38 @@ pending-update, cadence, visibility and input oracles, then fresh control/image
 pairs against the accepted optical build. Neither earlier latency win excuses
 the current tails, and the combination is not an accepted production change.
 
+### Combined pending-update experiment
+
+`out-perf/shared-image-optical-early` freezes that combined candidate separately.
+GUI SHA-256:
+`c2c737ab39caae68e7dc0c4fdee0b3037afc43e2e0dacd1725ee5ae34361e319`.
+The runtime remains the same C++ binary; the previous shared-only stage is intact.
+Nine focused CTest entries pass, including native Cocoa pending-update consumption,
+coalescence and requests made during delivery, frame pacing/cancellation, shared
+images, remote connections and graphics retention/recovery. Native Metal Kitty,
+terminal input, synchronization and cursor-phase checks also pass.
+
+A separate `QSG_RENDER_TIMING=1` diagnostic in
+`/tmp/telar-perf-shared-image-optical-early-render-01`, with 100 measured inputs
+after 20 warmups, counts 166 rendered frames for the accepted optical baseline
+and 162 for the combination, including startup. This does not reproduce the
+duplicate-render explosion of the old direct-event variant. These instrumented
+durations are not timing acceptance; the counts do not measure native cadence.
+The uninstrumented six-pair single/splits/tabs control series is running in
+`/tmp/telar-perf-shared-image-optical-early-text-pairs-01`.
+
+ARM64 disassembly verifies the pending-state predicate followed by virtual
+platform delivery. It also exposes a repeated 2 KiB default initialization of
+64 pane records in `requestTerminalFrame`, before collecting the visible panes.
+That is bounded stack work, not a demonstrated heap allocation. It is retained
+unchanged in this frozen experiment; `assembly-review.md` records a possible
+follow-up that separates visible-pane eligibility from pending-deadline snapshots.
+
+The legacy `gui_frame_rate` tool's documentation now explicitly identifies its
+historically named presentation counters as frame-completion callbacks. Those
+counters cannot qualify visible 120 Hz; native positive presentation timestamps
+and a content oracle remain required.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
