@@ -38,6 +38,4 @@ Metal comparisons require exact pixels. Software and OpenGL allow one channel
 level per composited quad covering a pixel, including a maximum of two only
 where the two translucent quads overlap. Pixels outside all quads must remain
 exact. This records backend rounding; it does not establish full cross-platform
-visual equivalence. See
-[validation](../../../measurements/rounded-rectangle-validation.json) for source
-hashes, measurements and the remaining acceptance scope.
+visual equivalence. Keep the fixture and its generator as regression inputs.
