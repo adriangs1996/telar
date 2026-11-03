@@ -1,7 +1,9 @@
+#include "agent.hpp"
 #include "help.hpp"
 #include "hook.hpp"
 #include "integration.hpp"
 #include "integration_assets.hpp"
+#include "pane.hpp"
 #include "plugin.hpp"
 #include "proxy_trust.hpp"
 #include "server.hpp"
@@ -36,6 +38,10 @@ int printSkill(std::span<char *const> words) {
 int runFamily(BudgetAllocator<SystemAllocator> &memory, Family family, std::span<char *const> words) {
   const auto options = words.subspan(1);
   switch (family) {
+  case Family::pane:
+    return runPane(memory, pane_agents::parsePane(options));
+  case Family::agent:
+    return runAgent(memory, pane_agents::parseAgent(options));
   case Family::hook:
     return runHook(memory, HookOptions::parse(options), ProcessEnvironment{});
   case Family::integration:
