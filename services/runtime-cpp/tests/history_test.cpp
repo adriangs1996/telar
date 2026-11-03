@@ -8,6 +8,7 @@
 #include <latch>
 #include <poll.h>
 #include <sys/stat.h>
+#include <vector>
 
 using namespace telar;
 using namespace telar::runtime;
@@ -104,6 +105,62 @@ static void testHistoryQueries(Memory &memory) {
   check(decodeReply<HistoryPruned>(reply, storage).removed == 3);
   store.stats(HistoryStatsQuery{.request_id = 9}, reply);
   check(decodeReply<HistoryStatsResult>(reply, storage).total == 3);
+}
+
+template <ConcurrentAllocator Memory>
+static void testFuzzyRecencyBoundary(Memory &memory) {
+  constexpr std::size_t candidate_limit = 10000;
+  constexpr std::size_t entry_count = candidate_limit + 1;
+  constexpr std::size_t timestamp_period = 61;
+
+  for (const bool shuffled : {false, true}) {
+    HistoryStore store{memory, ":memory:"};
+    EncodedReply reply{memory};
+    std::vector<ImportHistoryEntry> entries(entry_count);
+
+    for (std::size_t index = 0; index < entries.size(); ++index) {
+      entries[index] = {shuffled ? static_cast<std::int64_t>(index % timestamp_period) : 100, "echo unrelated"};
+    }
+
+    constexpr std::size_t zero_score_padding = 1024;
+    const auto zero_score_command = std::string(zero_score_padding, 'x') + "gb";
+    entries[2].command = zero_score_command;
+    entries.front().command = "gb";
+    entries[1].command = entries.back().command = "git build";
+    store.importEntries(ImportHistory{.request_id = 1, .source = "fuzzy-recency-boundary", .entries = entries}, reply);
+    std::array<Byte, 4096> storage;
+    QueryHistory query{.request_id = 2, .query = "gb", .match = HistoryMatch::fuzzy, .limit = 10};
+    store.query(query, reply);
+    auto result = decodeReply<HistoryResults>(reply, storage);
+    check(result.snapshot_id == entry_count && !result.has_more && result.entries.size() == 3);
+    check(result.entries[0].id == entry_count && result.entries[1].id == 2 && result.entries[2].id == 3);
+
+    query.distinct = true;
+    store.query(query, reply);
+    result = decodeReply<HistoryResults>(reply, storage);
+    check(result.entries.size() == 2 && result.entries[0].id == entry_count && result.entries[1].id == 3 && !result.has_more);
+
+    query.snapshot_id = candidate_limit;
+    store.query(query, reply);
+    result = decodeReply<HistoryResults>(reply, storage);
+    check(result.snapshot_id == candidate_limit && result.entries.size() == 3 && !result.has_more);
+    check(result.entries[0].id == 1 && result.entries[1].id == 2 && result.entries[2].id == 3);
+
+    query.limit = 1;
+    store.query(query, reply);
+    result = decodeReply<HistoryResults>(reply, storage);
+    check(result.entries.size() == 1 && result.entries[0].id == 1 && result.has_more);
+
+    query.offset = 1;
+    store.query(query, reply);
+    result = decodeReply<HistoryResults>(reply, storage);
+    check(result.entries.size() == 1 && result.entries[0].id == 2 && result.has_more);
+
+    query.offset = 2;
+    store.query(query, reply);
+    result = decodeReply<HistoryResults>(reply, storage);
+    check(result.entries.size() == 1 && result.entries[0].id == 3 && !result.has_more);
+  }
 }
 
 template <ConcurrentAllocator Memory>
@@ -486,6 +543,7 @@ void testHistory() {
   {
     SqliteAllocator sqlite_memory{memory};
     testHistoryQueries(memory);
+    testFuzzyRecencyBoundary(memory);
     testAgentCommands(memory);
     testHistoryPersistence(memory);
     check(sqlite3_malloc64(128 * 1024 * 1024) == nullptr);

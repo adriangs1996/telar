@@ -5348,3 +5348,111 @@ fresh profile, equivalence oracle, disassembly and paired acceptance before it
 can be retained as an optimization. Historical rejected batching, relay-buffer,
 prefault, render-loop and update-idle variants remain documented in the existing
 GUI/runtime performance reports.
+
+## Follow-up: fused history ranking adopted on retained GUI, 2026-11-03
+
+The fused-query candidate is now adopted for the measured C++ history workload.
+This supersedes its earlier pending status; independent Zig parity, instrument
+perturbation, native120 and every global F01–F16 gate remain open. The accepted
+retained-row GUI is identical in both variants. Only history/store.hpp changes:
+score/hash computation consumes the borrowed SQLite command, a bounded heap keeps
+at most 10,000 scalar candidates, and the final recency ordering precedes the
+existing duplicate-hash and score/page rules. Command strings are not retained.
+The earlier allocation/failure, full-wire/filter, first-request, unchanged FTS/
+write, ARM64 and Rosetta baseline/v3 evidence still applies to this exact source.
+The extra candidate vector is 320,000 bytes; this is an explicit bounded memory
+tradeoff, not a claim of universal allocation or memory reduction.
+
+Before adoption, a scaling audit found a limitation in the algorithm. For
+chronological insertion, ascending-id traversal can score every provisional
+candidate even though only the newest 10,000 survive. An instrumented component
+census in `out-perf/dlls-history-large-scan-01` confirms 1,000,000 score calls in
+the million-row fixture, versus 10,000 in the accepted SQL path. In the 100,000-row
+long-duplicate fixture, the counts are 100,000 versus five. Census `scanned`
+counts rows returned to C++, not SQLite's internal scan work; score-input bytes
+are command lengths offered to the scorer, not measured bytes actually read.
+These instrumented executions are excluded from timing.
+
+A fixed descending-id alternative reduces chronological score calls to 10,000
+but reverses the problem for reverse-chronological imports. It is rejected:
+`/tmp/telar-perf-history-large-scan-C-reverse-long-01` gives 151.814 → 246.126 ms
+CPU/query, 0/7 wins, with all host boundaries valid. No descending-id change is
+included in production. All three variants pass 324 independent ranking/recency/
+dedup/snapshot/page cases across nine datasets, with byte-exact encoded replies.
+The original qualification console mistakenly prints 72 per dataset; the stored
+results and final counts correctly contain 36 per dataset.
+
+The original fused candidate survives the larger controls. The following are
+seven alternating pairs against the previously accepted store, O3 ARM64 direct
+HistoryStore queries, distinct no-hit search, with one warmup per process. They
+include response encoding/equality checking and clock overhead, but no IPC/GUI
+or cold-disk claim. Commands use ordinary text or 2,048 padding bytes; the million
+fixture contains 1,000,000 rows and all others contain 100,000. Every series uses
+its own predeclared host gate. All 126 child exits and 270 host boundaries pass,
+maximum load1 2.350. Results are in `B-expanded-results.json`; raw runs are
+`/tmp/telar-perf-history-large-scan-B-<case>-01`.
+
+| Case | A CPU ms/query | B CPU ms/query | B wins |
+|---|---:|---:|---:|
+| monotonic | 50.537 | 13.338 | 7/7 |
+| reverse | 7.689 | 7.676 | 4/7 |
+| shuffled | 25.485 | 10.512 | 7/7 |
+| tied | 54.272 | 13.344 | 7/7 |
+| long | 504.137 | 239.328 | 7/7 |
+| duplicates | 485.633 | 238.984 | 7/7 |
+| million | 535.742 | 146.225 | 7/7 |
+| reverse-long | 152.487 | 105.977 | 7/7 |
+| reverse-duplicates | 136.210 | 105.916 | 7/7 |
+
+Reverse-short is neutral, not an improvement. Fewer score calls alone were not
+an adequate optimization criterion: measured total work matters, including the
+removed SQLite temporary sorting/copying. The enlarged work census is retained
+as a lead for further algorithmic improvements, not hidden by the wins.
+
+`out-perf/dlls-history-integrated-01` freezes accepted runtime `ffea7fb2…` and
+candidate `1f1849d1…`, both with accepted GUI `aef2c9b0…` and helper `87beebb0…`.
+Four complete native gb/GST captures match byte-for-byte, including the same
+PNG hashes as the retained-row validation. The six alternating fixed-cadence
+pairs in `/tmp/telar-perf-history-integrated-fixed-pairs-01` then complete 720
+queries, all cleanup, 62 valid host boundaries (maximum load1 3.939), zero missing
+pending callbacks, target-zero presentations or dropped observations. Mean input
+intervals span 309.534–310.273 ms. The observer and GPU readback remain present;
+these are instrumented C++ comparisons, not independent Zig/native120 acceptance.
+
+| Native metric | A | B | B wins |
+|---|---:|---:|---:|
+| Input to verified presented result, mean (ms) | 110.093 | 105.635 | 6/6 |
+| Input to result, p95 (ms) | 118.690 | 116.030 | 6/6 |
+| Input to result, p99 (ms) | 123.075 | 120.306 | 5/6 |
+| Runtime CPU (ms/query) | 6.887 | 2.389 | 6/6 |
+| GUI CPU (ms/query) | 39.531 | 40.254 | 2/6 |
+| Combined CPU (ms/query) | 46.491 | 42.643 | 6/6 |
+| Combined instructions (millions/query) | 239.973 | 187.191 | 6/6 |
+| Combined cycles (millions/query) | 106.171 | 93.626 | 6/6 |
+
+Runtime instructions fall 71.633 → 21.485 million/query and cycles 17.176 →
+5.682 million/query, both 6/6. GUI instructions fall 168.343 → 165.705 million,
+6/6, and cycles 89.001 → 87.858 million, 5/6, although GUI CPU time rises in four
+pairs. Its cause is not established; no clock/cache/QoS explanation is asserted.
+Runtime interrupt wakeups rise 4.217 → 4.558/query, 0/6 wins; idle wakeups are
+0.033 → 0.058, 2/6. GUI interrupt wakeups fall 92.958 → 92.017, 6/6. These active,
+5 ms-polled instrumented runs do not qualify production idle behavior. Runtime
+end footprint is 11,329,992 → 11,338,184 bytes, 3/6; GUI end footprint is
+254,166,396 → 254,018,928 bytes, 3/6. Neither is a measured interval peak.
+Combined CPU, instructions, cycles and mean latency win 6/6, supporting adoption
+while preserving these adverse and mixed counters. Per-query gb mean/p95/p99
+wins are 6/6, 6/6, 5/6; GST is 6/6, 5/6, 4/6. No universal p99 win is claimed.
+
+The permanent testFuzzyRecencyBoundary regression covers an excluded older
+high-score command at the 10,000-row cutoff, all-tied and shuffled dates, distinct
+winner identity, an older insertion snapshot, pagination and a valid zero score.
+The standalone form passes accepted/candidate ARM64, ASan/UBSan and Rosetta
+baseline/v3; inverted-id and discarded-zero-score mutations both fail. Sanitizers
+cover the probe, inline store and database.cpp, not system SQLite, with leak
+sanitization disabled. The integrated production testHistory group also passes.
+Pending attachment cadence edits remain separate and uncommitted.
+The final runtime rebuild from the integrated production source is byte-for-byte
+identical to measured B, including its UUID and signature: SHA-256
+`1f1849d1881fe60af13d46531c6f722fb5105f32fc8beaaadf7276ad50f55031`.
+The full comparison is `final-build-equivalence.json`; no ignored byte differences
+are needed. GUI debounce and optical rendering remain unchanged in this pass.

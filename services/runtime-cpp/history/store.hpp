@@ -252,10 +252,21 @@ private:
     std::uint32_t order;
   };
 
+  struct FuzzyCandidate {
+    std::int64_t id;
+    std::int64_t timestamp;
+    std::uint64_t command_hash = 0;
+    std::optional<std::uint32_t> score;
+  };
+
+  static bool newerCandidate(const FuzzyCandidate &left, const FuzzyCandidate &right) noexcept {
+    return left.timestamp == right.timestamp ? left.id > right.id : left.timestamp > right.timestamp;
+  }
+
   void queryFuzzy(const QueryHistory &request, EncodedReply<Memory> &reply) {
-    auto sql = string("SELECT id, command FROM command WHERE id <= ?1");
+    auto sql = string("SELECT id, started_at_ms, command FROM command WHERE id <= ?1");
     appendFilters(sql, request);
-    sql += " ORDER BY started_at_ms DESC, id DESC LIMIT 10000";
+
     Statement statement{database_, sql};
     statement.bind(1, integer(request.snapshot_id));
     bindFilters(statement, request);
@@ -263,15 +274,46 @@ private:
     ranked.reserve(maximum_fuzzy_candidates);
     HashSet seen{0, std::hash<std::uint64_t>{}, std::equal_to<std::uint64_t>{}, AllocatorRef<std::uint64_t, Memory>{memory_}};
 
-    std::uint32_t order = 0;
+    Vector<FuzzyCandidate, Memory> candidates{AllocatorRef<FuzzyCandidate, Memory>{memory_}};
+    candidates.reserve(maximum_fuzzy_candidates);
+    bool heap = false;
     while (statement.next()) {
-      const auto command = statement.text(1);
-      if (request.distinct && !seen.insert(ImportIdentity::hash(command_hash_seed, command)).second) {
+      FuzzyCandidate candidate{.id = statement.integer(0), .timestamp = statement.integer(1)};
+      if (candidates.size() == maximum_fuzzy_candidates) {
+        if (!heap) {
+          std::make_heap(candidates.begin(), candidates.end(), newerCandidate);
+          heap = true;
+        }
+
+        if (!newerCandidate(candidate, candidates.front())) {
+          continue;
+        }
+      }
+
+      const auto command = statement.text(2);
+      if (request.distinct) {
+        candidate.command_hash = ImportIdentity::hash(command_hash_seed, command);
+      }
+
+      candidate.score = historyScore(command, request.query);
+      if (heap) {
+        std::pop_heap(candidates.begin(), candidates.end(), newerCandidate);
+        candidates.back() = candidate;
+        std::push_heap(candidates.begin(), candidates.end(), newerCandidate);
+      } else {
+        candidates.push_back(candidate);
+      }
+    }
+
+    std::sort(candidates.begin(), candidates.end(), newerCandidate);
+    std::uint32_t order = 0;
+    for (const auto &candidate : candidates) {
+      if (request.distinct && !seen.insert(candidate.command_hash).second) {
         continue;
       }
 
-      if (const auto score = historyScore(command, request.query)) {
-        ranked.push_back(RankedEntry{statement.integer(0), *score, order++});
+      if (candidate.score) {
+        ranked.push_back(RankedEntry{candidate.id, *candidate.score, order++});
       }
     }
 
