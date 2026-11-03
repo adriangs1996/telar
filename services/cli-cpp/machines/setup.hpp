@@ -221,7 +221,7 @@ std::optional<bool> installRuntime(Memory &memory, SetupReport &report, const Ta
   }
 
   bool changed = false;
-  for (const auto *tool : {"telar-runtime", "telar-launch.so"}) {
+  for (const auto *tool : {"telar-runtime", "telar-config-check"}) {
     const auto sibling = std::filesystem::path{*build.binary}.parent_path() / tool;
     if (::access(sibling.c_str(), R_OK) != 0) {
       continue;
@@ -450,7 +450,7 @@ int setup(Memory &memory, const MachineOptions &options) {
       build.binary = *options.binary;
       build.digest = fileDigest(*build.binary);
       build.directory += "-" + build.digest->substr(0, MachineId::hex_digits);
-      for (const auto *tool : {"telar-runtime", "telar-launch.so"}) {
+      for (const auto *tool : {"telar-runtime", "telar-config-check"}) {
         const auto companion = std::filesystem::path{*build.binary}.parent_path() / tool;
         if (::access(companion.c_str(), R_OK) != 0) {
           throw CommandError{"SetupBinaryCompanionsMissing"};

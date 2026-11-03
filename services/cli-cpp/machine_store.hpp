@@ -134,7 +134,7 @@ void update(Memory &memory, const std::string &path, Edit edit) {
 
 inline const char *describe(std::string_view error) {
   if (error == "SetupBinaryCompanionsMissing") {
-    return "a C++ --binary needs telar-runtime and telar-launch.so beside it";
+    return "a C++ --binary needs telar-runtime and telar-config-check beside it";
   }
 
   if (error == "InsecureFile") {

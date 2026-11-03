@@ -63,11 +63,7 @@ words over managed SSH; `dispatch-argv` restores argv and preserves standard
 streams and exit status. No command requires a Zig binary or source directory.
 
 Machine installers, configuration filters, login orchestration and window startup
-live in the sibling `telar-launch.so` module. The CLI loads it only for these
-commands; hooks, help and runtime bootstrap do not load it. CMake installs the
-module beside `telar`; copying a distribution must keep `telar`, `telar-launch.so`
-and `telar-runtime` together. The `.so` filename is the same on macOS and Linux.
-The loader checks its entry-point ABI before calling it.
+build as the static `cli-launch` library, linked into `telar`.
 
 For a window, the CLI resolves its real executable through symlinks, then looks
 for executable `telar-gui` beside it, then `../../MacOS/telar-gui` (the inverse
@@ -77,7 +73,7 @@ It starts the sibling runtime with configuration/profile/fresh options when
 needed; `--fresh` refuses an existing runtime. `gui --login-shell` adopts the
 login shell environment once before this startup.
 
-`machine setup --binary PATH` needs `telar-runtime` and `telar-launch.so` beside
+`machine setup --binary PATH` needs `telar-runtime` and `telar-config-check` beside
 that CLI, built for the target machine. Its version directory includes hash
 prefixes of all three artifacts, so changing a companion identifies a different
 build. Companion transfers verify SHA-256 before replacement, and setup repairs

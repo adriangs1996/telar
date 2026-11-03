@@ -283,7 +283,7 @@ refuse() {
 # from there; sets staged and installed. A failed copy or check changes
 # nothing installed, and a running telar keeps its file.
 stage() {
-    for tool in telar telar-runtime telar-launch.so telar-diagram-renderer; do
+    for tool in telar telar-runtime telar-config-check telar-diagram-renderer; do
         if [ -f "$source_dir/$tool" ]; then
             staged="$staged $tool"
             run cp "$source_dir/$tool" "$bin_dir/.$tool.new"
@@ -311,7 +311,6 @@ unpack() {
     source_dir=$work/$1/$asset/bin
     # -f, not -x: a noexec mount makes every file there fail -x.
     [ -f "$source_dir/telar" ] || fail "$file has no bin/telar"
-    [ -f "$source_dir/telar-launch.so" ] || fail "$file has no bin/telar-launch.so; the C++ CLI requires its command module"
     [ -f "$source_dir/telar-runtime" ] || fail "$file has no bin/telar-runtime; the C++ CLI requires its sibling runtime"
 }
 

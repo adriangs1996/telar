@@ -98,7 +98,7 @@ LogLevel ERROR
             report['checks'].append('remote stderr and failure status propagate')
             if args.runtime:
                 bundle = root/'upload';bundle.mkdir()
-                shutil.copy2(binary,bundle/'telar');shutil.copy2(binary.parent/'telar-launch.so',bundle/'telar-launch.so');(bundle/'telar-runtime').symlink_to(args.runtime.resolve())
+                shutil.copy2(binary,bundle/'telar');shutil.copy2(binary.parent/'telar-config-check',bundle/'telar-config-check');(bundle/'telar-runtime').symlink_to(args.runtime.resolve())
                 for iteration in range(2):
                     setup=subprocess.run([str(binary),'machine','setup','there','--binary',str(bundle/'telar'),'--skip','agents,config,login','--json'],env=env,cwd=root,capture_output=True,text=True,timeout=90)
                     parsed=json.loads(setup.stdout)
@@ -106,10 +106,10 @@ LogLevel ERROR
                     report['setup_steps']=parsed['steps']
                 installed_profiles=json.loads(profiles.read_text())
                 target=Path(installed_profiles['machines'][0]['telar_path'])
-                (target.parent/'telar-launch.so').unlink()
+                (target.parent/'telar-config-check').unlink()
                 repaired=subprocess.run([str(binary),'machine','setup','there','--binary',str(bundle/'telar'),'--skip','agents,config,login','--json'],env=env,cwd=root,capture_output=True,text=True,timeout=90)
-                assert repaired.returncode==0 and (target.parent/'telar-launch.so').is_file(),(repaired.stdout,repaired.stderr)
-                report['checks'].append('real SSH setup deploys all companions, is idempotent and repairs a missing module')
+                assert repaired.returncode==0 and (target.parent/'telar-config-check').is_file(),(repaired.stdout,repaired.stderr)
+                report['checks'].append('real SSH setup deploys all companions, is idempotent and repairs a missing companion')
                 result=run(['--version'])
                 assert result.returncode==0 and result.stdout.startswith(b'telar '),result
                 report['checks'].append('dispatch uses setup-installed executable path')

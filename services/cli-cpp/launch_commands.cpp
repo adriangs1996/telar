@@ -9,19 +9,15 @@ namespace {
 constexpr std::size_t memory_budget = std::size_t{2} * 1024 * 1024 * 1024;
 }
 
-extern "C" unsigned telarLaunchAbi() {
-  return 1;
-}
-
-extern "C" int telarLaunchMachine(BudgetAllocator<SystemAllocator> &memory, std::span<char *const> words) {
+int runMachineCommand(BudgetAllocator<SystemAllocator> &memory, std::span<char *const> words) {
   return runMachine(memory, MachineOptions::parse(words));
 }
 
-extern "C" int telarLaunchCli(std::span<char *const> words) {
+int runCliCommand(std::span<char *const> words) {
   return runCliInstall(words);
 }
 
-extern "C" int telarLaunchWindow(BudgetAllocator<SystemAllocator> &memory, std::span<char *const> words, bool gui) {
+int runWindowCommand(BudgetAllocator<SystemAllocator> &memory, std::span<char *const> words, bool gui) {
   const auto options = WindowOptions::parse(words, gui);
   if (options.login_shell) {
     relaunchLogin(words);
@@ -30,7 +26,7 @@ extern "C" int telarLaunchWindow(BudgetAllocator<SystemAllocator> &memory, std::
   return openWindow(memory, options);
 }
 
-extern "C" int telarLaunchMachineDispatch(std::span<char *const> words, Dispatch dispatch) {
+int dispatchMachine(std::span<char *const> words, Dispatch dispatch) {
   const std::string_view flag = words.front();
   const bool separate = flag == "--machine";
   if (separate && words.size() < 2) {
@@ -103,7 +99,7 @@ extern "C" int telarLaunchMachineDispatch(std::span<char *const> words, Dispatch
   return target ? machine::forward(memory, *target, command) : dispatch(command);
 }
 
-extern "C" int telarLaunchArguments(std::span<char *const> words, Dispatch dispatch) {
+int dispatchArguments(std::span<char *const> words, Dispatch dispatch) {
   std::vector<std::string> decoded;
   for (const std::string_view word : words) {
     decoded.push_back(machine::decode(word));

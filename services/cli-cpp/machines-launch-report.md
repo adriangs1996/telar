@@ -29,7 +29,7 @@ Quedan estas fronteras de verificación/integración:
   rama. No hay fallback a Zig.
 - La descarga de releases implementa pinning de SHA-256 y exige los acompañantes
   C++. No se ha probado un archivo publicado de release C++; el empaquetado
-  existente debe incluir `telar-runtime` y `telar-launch.so` junto a `telar`.
+  existente debe incluir `telar-runtime` y `telar-config-check` junto a `telar`.
   Se rechaza un archivo que no los incluya. La instalación verificada usa
   `--binary` y los tres artefactos construidos aquí.
 
@@ -68,15 +68,11 @@ el toolchain del agente de rendimiento ni una fuente Zig del repositorio.
 
 ## Decisiones de distribución y rendimiento
 
-`telar-launch.so` contiene el código de máquinas/instaladores/configuración y
-arranque de ventana. Se carga mediante `dlopen` únicamente para esas entradas y
-valida un identificador de ABI. Se instala junto al ejecutable real; un enlace
-creado con `cli install` sigue funcionando porque se resuelve primero ese
-ejecutable. `hook`, ayuda y bootstrap del runtime no necesitan el módulo;
-`launch-loader-tests` lo comprueba con una copia sin módulo. El ejecutable
-mantiene las mismas cuatro bibliotecas dinámicas que la base y crece de 992 a
-994 KiB. La primera variante enlazada directamente medía entre un 4 y un 7%
-más de latencia; separar la carga devuelve la medida prácticamente a la base.
+El código de máquinas/instaladores/configuración y arranque de ventana se
+compila como la librería estática `cli-launch`, enlazada en `telar`. Se probó
+cargarlo con `dlopen` desde un `telar-launch.so` hermano: `hook` arrancaba un 6%
+más rápido (p50 3,48 frente a 3,71 ms en pares alternos), pero se descartó para
+no distribuir ni versionar un módulo aparte.
 
 Para encontrar la GUI: `telar-gui` hermano, después
 `../../MacOS/telar-gui`, después PATH. Esto invierte la búsqueda de CLI de
@@ -99,8 +95,7 @@ Zig, documentada también en README y parity.
   identidad, codec JSON y sonda/comandos remotos, bajo `runtime::machines`.
   Son una adaptación sin Qt de los helpers ya presentes en la GUI. La GUI
   sigue con sus originales; el coordinador puede unificar sus imports después.
-- `launch_commands.hpp/.cpp`, `launch_commands_loader.cpp`: entradas y carga
-  diferida; `CommandError` preserva el prefijo `error:` de errores de ejecución.
+- `launch_commands.hpp/.cpp`: entradas de máquinas, `cli` y ventanas; `CommandError` preserva el prefijo `error:` de errores de ejecución.
 - `launch_process.hpp`: spawn, exec, captura limitada con timeout y entrada en
   un fichero privado desenlazado; streams SSH heredados explícitamente en macOS.
 - `machine_store.hpp`, `machine_ssh.hpp`, `config_receive.hpp` y `machines/`:

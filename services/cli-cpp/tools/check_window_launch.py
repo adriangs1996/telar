@@ -22,7 +22,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='telar-window-',dir='/tmp') as temporary:
         root=Path(temporary).resolve();env=environment(root)
         bundle=root/'Telar.app/Contents';bindir=bundle/'Resources/bin';bindir.mkdir(parents=True)
-        shutil.copy2(args.telar,bindir/'telar');shutil.copy2(args.telar.resolve().parent/'telar-launch.so',bindir/'telar-launch.so');(bindir/'telar-runtime').symlink_to(args.runtime.resolve())
+        shutil.copy2(args.telar,bindir/'telar');(bindir/'telar-runtime').symlink_to(args.runtime.resolve())
         macos=bundle/'MacOS';macos.mkdir();gui=macos/'telar-gui'
         gui.write_text('#!/usr/bin/env python3\nimport json,sys\nprint(json.dumps(sys.argv[1:]))\n');gui.chmod(0o755)
         telar=bindir/'telar';socket=root/'runtime.sock'

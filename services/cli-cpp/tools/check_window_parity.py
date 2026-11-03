@@ -19,7 +19,7 @@ def run(binary, gui, runtime, scenario):
         bindir=root/'bin';bindir.mkdir()
         telar=binary
         if runtime:
-            shutil.copy2(binary,bindir/'telar');shutil.copy2(binary.parent/'telar-launch.so',bindir/'telar-launch.so');telar=bindir/'telar'
+            shutil.copy2(binary,bindir/'telar');telar=bindir/'telar'
             (bindir/'telar-runtime').symlink_to(runtime)
             (bindir/'telar-gui').symlink_to(gui)
         marker=root/'child';pidfile=root/'child.pid'
