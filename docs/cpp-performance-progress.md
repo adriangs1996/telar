@@ -1843,6 +1843,53 @@ with peak RSS 218.383→226.125 MiB (+7.742 MiB). The sequence now checks
 single/split text controls before independent Zig. Native cadence remains open.
 Raw data: `/tmp/telar-perf-fused-coverage-{4k,1k}-01`.
 
+The single/split text controls also finish without consistent losses. Single
+p50/p95/p99/max wins are 2/3/5/6 out of six; split wins are 3/2/4/4. GUI CPU/input
+is 4.134→4.155 ms (2/6) single and 4.511→4.403 ms (5/6) split. These controls do
+not establish F06/F08/F09 continuous interaction. Raw data:
+`/tmp/telar-perf-fused-coverage-text-01`.
+
+Independent Zig GUI + runtime versus candidate C++ GUI + runtime now yields:
+
+| Native image input | Zig → C++ median ms | p50 / p95 / p99 / max C++ wins | GUI CPU/input ms, wins | GUI peak RSS MiB |
+| --- | --- | --- | --- | --- |
+| 4K opaque replacement | 52.573 → 47.178 | 6/6 / 6/6 / 6/6 / 6/6 | 10.497 → 15.960, 0/6 | 252.055 → 398.977 |
+| 1K opaque replacement | 41.405 → 35.427 | 6/6 / 6/6 / 6/6 / 6/6 | 6.957 → 6.444, 6/6 | 140.492 → 225.180 |
+
+Raw data: `/tmp/telar-perf-fused-zig-{4k,1k}-01`. The 4K GUI CPU deficit remains
+real even though every latency percentile wins; more retained memory is allowed,
+not evidence that the CPU gap is solved. Both rows are uniform opaque image
+replacement, not arbitrary-alpha images or continuous 120 Hz. Independent Zig
+text controls are still running. Runtime CPU was not captured in these intervals;
+these GUI CPU figures must not be presented as whole-stack CPU.
+
+`out-perf/native-runtime-resources` prepares an SDK-based `proc_pid_rusage`
+collector for explicit GUI/runtime intervals, with PID/start-time/UUID and
+counter monotonicity checks. Its owned-child test will compare counter deltas
+against `getrusage`, verify the time units and confirm child CPU is excluded from
+the parent. This is prepared source, not yet compiled or qualified; it will run
+after headline timings. Memory snapshots and lifetime physical-footprint peaks
+are explicitly separate from interval RSS peaks, and shared RSS is never summed.
+
+A further source review finds an important original-Zig parity question. The
+original Metal image backend uploads RGBA bytes unchanged in
+`lib/window/metal/Images.zig`; `lib/window/shaders/quad.metal` samples them linearly
+and uses straight-alpha blending configured in `lib/window/metal/Scene.zig`.
+C++ premultiplies before QSGImageNode linear sampling. Those operations need not
+commute across neighboring pixels with different alpha. The existing
+`straightAlphaIsBlendedOnce` test is uniform translucent red, and the eleven
+native captures compare C++ variants; neither proves that boundary against Zig.
+
+`out-perf/image-alpha-edge-oracle` prepares native captures from all three frozen
+stacks using a 16×16 image magnified to eight columns by four rows. It has an
+opaque border, an independently changing center marker, and a boundary between
+opaque reddish and transparent bluish pixels. Payload identity, native readiness,
+capture witness, geometry and independent runtimes remain checked. This probe
+has not run yet. If it confirms a mismatch, aligning filtering/blending with Zig
+may eliminate CPU premultiplication work entirely; no shader or production
+conversion change is made on that unverified inference. Current image timings
+and the fused candidate remain preserved.
+
 The next F08 investigation is prepared under `out-perf/tab-layout-work-census`.
 It instruments actual native tab reorder/cancel/reveal/viewport gestures to count
 layout rebuilds, caption measurements, native shaping and fallback work. It also
