@@ -4859,8 +4859,8 @@ raw connect/get-peer-pid/close connection. A separate local UNIX-socket diagnost
 reproduces `SO_NOSIGPIPE` failure in 1,000/1,000 accepted connections whose client
 has already closed, versus zero failures in 1,000 retained connections. In
 `LocalListener::accept`, signal configuration can throw outside the runtime's
-admission exception handler. This is an open runtime robustness defect, not a
-proven consequence of the history candidate.
+admission exception handler. This exposed a runtime robustness defect, not a proven consequence of the
+history candidate. The listener correction is recorded below.
 
 The revised private harness obtains `LOCAL_PEERPID` from the measured probe's
 already-handshaken connection and verifies its executable identity before release.
@@ -4869,8 +4869,8 @@ intermediate qualification exposed the missing startup wait and is also excluded
 All four series were then repeated with the same final harness; no partial pairs
 were reused. Receipts are in `socket-close-diagnostic.json`,
 `socket-close-followup.json` and the excluded runs' `disposition.json` files under
-the private prefix/output directories. The runtime defect still needs its own
-regression and fix; the history timing binaries were not altered to mask it.
+the private prefix/output directories. The listener regression and correction are recorded below; the history timing
+binaries were not altered to mask the defect.
 
 The unchanged FTS/substring/empty-query control is
 `/tmp/telar-perf-history-fused-rank-fts-01`: seven pairs, 600 queries per execution,
@@ -4900,6 +4900,50 @@ qualification and independent Zig F12 comparison; Linux execution is also open.
 The C++ GUI currently has a 60 ms history debounce (`qt/application.cpp`), which
 must remain inside input-to-presentation measurements. None of F01–F16 or native120
 is closed by the protocol measurements.
+
+### Disconnected-client admission: runtime robustness correction
+
+The first-query harness exposed a real macOS runtime failure: an accepted local
+client can close before `SO_NOSIGPIPE` is configured, causing `EINVAL` to escape
+`LocalListener::accept` and terminate the runtime. The production listener now
+closes/rejects that connection when signal setup throws `SystemError(EINVAL)`.
+Other errors propagate. Existing peer ownership, close-on-exec, nonblocking and
+signal-suppression checks remain in place for admitted clients. No measured
+history implementation or installed runtime was changed as part of this fix.
+
+`tests/platform_test.cpp` adds 100 alternating abandoned/healthy connections. It
+checks EOF or rejection for each abandoned client and a bidirectional byte exchange
+for each healthy client, including nonblocking, close-on-exec and macOS SIGPIPE
+flags. The original listener fails the new regression; the correction passes the
+complete platform test group. That group includes a descriptor-at-4096 check;
+the inherited soft limit was 2560, so only the test-launch process raises it to
+8192. The initial limit-related failure and the successful rerun are retained.
+
+The platform group also passes ASan/UBSan; instrumentation covers the platform test,
+listener and test entry translation units, while configured dependency archives
+remain uninstrumented and LeakSanitizer is disabled. The identical new regression
+body passes x86-64 under Rosetta. Linux execution remains unverified. These are
+correctness checks, not performance acceptance.
+
+The reusable `tools/check_disconnected_clients.py` and
+`tools/disconnected_clients_probe.cpp` under `services/runtime-cpp` verify the
+complete runtime. They start owned processes, identify them through a live protocol
+connection, pause only those processes, queue eight clients which disconnect, and
+resume before issuing two healthy requests. In
+`/tmp/telar-perf-local-accept-close-tool-01`, the original runtime exits on the first
+batch with the expected `EINVAL` diagnostic; the corrected runtime survives ten
+batches (80 abandoned connections), answers all 20 health requests and emits no
+runtime error. Both variants and probes are cleaned up completely. A separate
+private run obtains the same result. Build/source receipts and isolated binaries
+are under `out-perf/dlls-local-accept-close-01`.
+
+ARM64 disassembly preserves the healthy-path syscall sequence, but the new catch
+adds a saved register pair and increases the stack frame from 64 to 80 bytes. No
+speedup or unchanged instruction count is claimed. This is a correctness fix for
+a measurement-discovered failure. Subsequent history A/B stages must contain this
+listener correction in both variants; old frozen measurements remain evidence of
+the earlier binaries, not measurements of the newly corrected stack. All F01–F16
+and native120 acceptance remain open.
 
 ## Coverage and next experiments
 

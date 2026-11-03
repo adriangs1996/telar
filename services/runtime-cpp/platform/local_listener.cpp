@@ -137,7 +137,16 @@ FileDescriptor LocalListener::accept(LocalPeerPolicy policy) {
 
   setCloseOnExec(connection.get());
   setNonblocking(connection.get());
-  suppressSocketSignals(connection.get());
+  try {
+    suppressSocketSignals(connection.get());
+  } catch (const SystemError &error) {
+    // A peer closing during admission can invalidate its socket options on macOS.
+    if (error.code() != EINVAL) {
+      throw;
+    }
+
+    return FileDescriptor{};
+  }
 
   return connection;
 }
