@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../diagnostics/trace.hpp"
 #include "../transport/encoded_reply.hpp"
 #include "fuzzy_match.hpp"
 #include "index_builder.hpp"
+#include "telar_platform/trace.hpp"
 
 namespace telar::runtime {
 

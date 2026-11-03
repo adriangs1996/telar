@@ -1,6 +1,5 @@
 #pragma once
 
-#include "../diagnostics/trace.hpp"
 #include "lua_effects.hpp"
 #include "lua_exchange.hpp"
 #include "lua_traffic.hpp"
@@ -11,6 +10,7 @@
 #include "telar_lua/json.hpp"
 #include "telar_lua/local_modules.hpp"
 #include "telar_platform/read_file.hpp"
+#include "telar_platform/trace.hpp"
 
 namespace telar::runtime::plugins {
 

@@ -1,14 +1,14 @@
 #pragma once
 
-#include "control_protocol.hpp"
-#include "service.hpp"
-#include "../platform/command_output.hpp"
-#include "../platform/spawn_options.hpp"
 #include "../proxy/runtime.hpp"
-#include "../redirect/socket_owners.hpp"
+#include "../redirect/local_addresses.hpp"
 #include "../redirect/process_token.hpp"
 #include "../redirect/selection.hpp"
-#include "../redirect/local_addresses.hpp"
+#include "../redirect/socket_owners.hpp"
+#include "control_protocol.hpp"
+#include "service.hpp"
+#include "telar_platform/command_output.hpp"
+#include "telar_platform/spawn_options.hpp"
 
 namespace telar::runtime::traffic::control {
 

@@ -6,14 +6,14 @@
 #include "../platform/system_certificates.hpp"
 #include "../redirect/ingress.hpp"
 #include "../tls/system_root_bundle.hpp"
-#include "authority_directory.hpp"
 #include "client_configuration.hpp"
 #include "port_memory.hpp"
 #include "secret_file.hpp"
 #include "service.hpp"
 #include "telar_platform/private_directory.hpp"
 #include "telar_platform/process_environment.hpp"
-#include "trust/service.hpp"
+#include "telar_tls/authority_directory.hpp"
+#include "telar_tls/trust/service.hpp"
 #include <sys/resource.h>
 
 namespace telar::runtime {

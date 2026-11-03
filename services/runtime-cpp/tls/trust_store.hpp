@@ -1,7 +1,7 @@
 #pragma once
 
-#include "handle.hpp"
-#include "library.hpp"
+#include "telar_tls/handle.hpp"
+#include "telar_tls/library.hpp"
 #include <ctime>
 #include <span>
 

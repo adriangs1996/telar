@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../diagnostics/terminal_storage.hpp"
-#include "../diagnostics/trace.hpp"
+#include "telar_platform/trace.hpp"
 
 #include "../graphics/pane_media.hpp"
 #include "../graphics/storage.hpp"

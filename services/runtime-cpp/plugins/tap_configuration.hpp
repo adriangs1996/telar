@@ -1,10 +1,10 @@
 #pragma once
 
 #include "package_snapshots.hpp"
-#include "paths.hpp"
 #include "service_spec.hpp"
 #include "telar_platform/process_environment.hpp"
 #include "telar_plugins/package_registry.hpp"
+#include "telar_plugins/paths.hpp"
 #include "telar_plugins/trust_store.hpp"
 
 namespace telar::runtime::plugins {

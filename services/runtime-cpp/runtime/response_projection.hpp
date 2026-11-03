@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../diagnostics/trace.hpp"
 #include "../model/runtime_model.hpp"
 #include "../terminal/text_reader.hpp"
+#include "telar_platform/trace.hpp"
 
 namespace telar::runtime {
 

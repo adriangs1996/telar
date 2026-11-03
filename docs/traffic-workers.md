@@ -40,13 +40,13 @@ certificate. No capability exposes the CA private key. Neither control permissio
 implicitly grants interception, nor recording permission administration.
 
 ```sh
-telar-runtime plugin inspect /absolute/path/my-traffic-app
-telar-runtime plugin trust /absolute/path/my-traffic-app --capability traffic.observe
+telar plugin inspect /absolute/path/my-traffic-app
+telar plugin trust /absolute/path/my-traffic-app --capability traffic.observe
 # Explicitly grant interception when wanted:
-telar-runtime plugin trust /absolute/path/my-traffic-app \
+telar plugin trust /absolute/path/my-traffic-app \
   --capability traffic.observe --capability traffic.intercept
 # Revoke by ID, even if the original directory has changed or disappeared:
-telar-runtime plugin untrust my-traffic-app
+telar plugin untrust my-traffic-app
 ```
 
 Configure the package and the global traffic capabilities:

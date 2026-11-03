@@ -1,5 +1,5 @@
 #include "../host_metrics.hpp"
-#include "../../diagnostics/trace.hpp"
+#include "telar_platform/trace.hpp"
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/ps/IOPSKeys.h>
 #include <IOKit/ps/IOPowerSources.h>

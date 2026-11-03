@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../diagnostics/trace.hpp"
+#include "telar_platform/trace.hpp"
 
-#include "../platform/command_output.hpp"
 #include "../transport/encoded_reply.hpp"
 #include "telar_base/text/json.hpp"
+#include "telar_platform/command_output.hpp"
 #include <atomic>
 
 namespace telar::runtime {

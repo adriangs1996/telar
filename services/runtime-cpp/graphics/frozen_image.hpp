@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../diagnostics/trace.hpp"
 #include "media_budget.hpp"
 #include "telar_platform/file_descriptor.hpp"
 #include "telar_platform/graphics/shared_image_storage.hpp"
+#include "telar_platform/trace.hpp"
 #include <array>
 #include <cstdio>
 #include <cstring>

@@ -9,7 +9,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(TELAR_GHOSTTY_STATE_VERSION 6)
 
 include(cmake/dependencies.cmake)
-add_subdirectory(../../dlls/telar-config "${CMAKE_CURRENT_BINARY_DIR}/telar-config")
+add_subdirectory(../../dlls/telar-tls "${CMAKE_CURRENT_BINARY_DIR}/telar-tls")
 
 add_library(ghostty-vt UNKNOWN IMPORTED)
 set_target_properties(ghostty-vt PROPERTIES
@@ -57,7 +57,6 @@ add_executable(ghostty-manifest tools/ghostty_manifest.cpp)
 target_link_libraries(ghostty-manifest PRIVATE ghostty-vt)
 
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
-include(cmake/integration.cmake)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../../src/client/config/bootstrap.lua" TELAR_CONFIG_BOOTSTRAP)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../../src/client/config/bootstrap.lua")
 configure_file(config/bootstrap.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/config_bootstrap.hpp" @ONLY)
@@ -84,13 +83,7 @@ else()
 endif()
 
 add_library(runtime-core STATIC
-  cli/integration.cpp
-  cli/runtime_connection.cpp
-  cli/daemon.cpp
   graphics/png_decoder.cpp
-  diagnostics/trace.cpp
-  platform/pty_process.cpp
-  platform/pipe_process.cpp
   platform/process_inspector.cpp
   platform/${TELAR_PLATFORM}/process_inspector.cpp
   platform/${TELAR_PLATFORM}/host_metrics.cpp
@@ -99,7 +92,7 @@ add_library(runtime-core STATIC
   terminal/cell_projection.cpp)
 set_target_properties(runtime-core telar-lua-vm telar-platform PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(runtime-core PUBLIC . "${CMAKE_CURRENT_BINARY_DIR}/generated" "${NGHTTP2_INCLUDE_DIR}")
-target_link_libraries(runtime-core PUBLIC telar::config)
+target_link_libraries(runtime-core PUBLIC telar::tls)
 target_link_libraries(runtime-core PUBLIC "${NGHTTP2_LIBRARY}")
 target_link_libraries(runtime-core PUBLIC "${PCAP_LIBRARY}")
 target_include_directories(runtime-core PUBLIC "${BROTLI_INCLUDE_DIR}" "${ZSTD_INCLUDE_DIR}")
@@ -117,6 +110,16 @@ target_compile_definitions(runtime-core PUBLIC TELAR_DEBUG=$<CONFIG:Debug> TELAR
 target_compile_options(runtime-core PUBLIC -Wall -Wextra -Wpedantic)
 add_dependencies(runtime-core cell-layout)
 
+include(CTest)
+add_executable(telar-runtime main.cpp)
+target_link_libraries(telar-runtime PRIVATE runtime-core)
+install(TARGETS telar-runtime RUNTIME DESTINATION bin)
+
+# `telar server` and the endpoint discovery start the runtime installed beside the CLI,
+# and panes get the CLI beside the runtime, so both build into the same directory.
+add_subdirectory(../cli-cpp "${CMAKE_CURRENT_BINARY_DIR}/cli")
+set_target_properties(telar PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+
 option(TELAR_RUNTIME_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
 if(TELAR_RUNTIME_SANITIZERS)
   if(TELAR_RUNTIME_DISTRIBUTABLE)
@@ -126,23 +129,17 @@ if(TELAR_RUNTIME_SANITIZERS)
   target_compile_options(telar-platform PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
   target_compile_options(runtime-core PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
   target_link_options(runtime-core PUBLIC -fsanitize=address,undefined)
-endif()
-
-include(CTest)
-add_executable(telar-runtime main.cpp)
-target_link_libraries(telar-runtime PRIVATE runtime-core)
-option(TELAR_RUNTIME_INSTALL_AS_TELAR "Install as telar, the command the GUI's runtime discovery runs" OFF)
-if(TELAR_RUNTIME_INSTALL_AS_TELAR)
-  install(PROGRAMS "$<TARGET_FILE:telar-runtime>" DESTINATION bin RENAME telar)
-else()
-  install(TARGETS telar-runtime RUNTIME DESTINATION bin)
+  target_compile_options(cli-core PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
+  target_link_options(cli-core PUBLIC -fsanitize=address,undefined)
 endif()
 
 if(TELAR_RUNTIME_DISTRIBUTABLE AND APPLE)
-  add_custom_command(TARGET telar-runtime POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E env "TELAR_MACOS_MIN=${CMAKE_OSX_DEPLOYMENT_TARGET}"
-            "${CMAKE_CURRENT_SOURCE_DIR}/../../packaging/release/check-linkage.sh" macos "$<TARGET_FILE:telar-runtime>"
-    VERBATIM)
+  foreach(program telar-runtime telar)
+    add_custom_command(TARGET ${program} POST_BUILD
+      COMMAND "${CMAKE_COMMAND}" -E env "TELAR_MACOS_MIN=${CMAKE_OSX_DEPLOYMENT_TARGET}"
+              "${CMAKE_CURRENT_SOURCE_DIR}/../../packaging/release/check-linkage.sh" macos "$<TARGET_FILE:${program}>"
+      VERBATIM)
+  endforeach()
 endif()
 
 if(BUILD_TESTING)

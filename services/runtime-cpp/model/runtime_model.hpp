@@ -42,7 +42,7 @@ struct RuntimeModel {
   [[no_unique_address]] diagnostics::RuntimeCounters metrics;
   MediaBudget media_budget;
   AgentManifests manifests = builtin_manifests;
-  std::string_view executable_path;
+  std::string_view cli_executable;
   bool capture_output = false;
   SlotStore<Pane<Memory>, 256, Memory> panes;
   SlotStore<ClientSession<Memory>, 32, Memory> clients;

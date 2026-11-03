@@ -1,6 +1,6 @@
 #include "../host_metrics.hpp"
-#include "../../diagnostics/trace.hpp"
 #include "telar_platform/directory_stream.hpp"
+#include "telar_platform/trace.hpp"
 #include <algorithm>
 #include <array>
 #include <charconv>

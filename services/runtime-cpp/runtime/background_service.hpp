@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../diagnostics/trace.hpp"
+#include "telar_platform/trace.hpp"
 
 #include "../history/failure_reply.hpp"
 #include "../history/metrics.hpp"

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../platform/command.hpp"
-#include "../platform/pipe_process.hpp"
 #include "telar_base/memory/byte_queue.hpp"
 #include "telar_base/memory/retained_stream.hpp"
+#include "telar_platform/command.hpp"
+#include "telar_platform/pipe_process.hpp"
 
 namespace telar::runtime {
 

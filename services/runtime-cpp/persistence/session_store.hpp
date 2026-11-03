@@ -1,11 +1,11 @@
 #pragma once
 
-#include "../diagnostics/trace.hpp"
 #include "../platform/observation_worker.hpp"
 #include "file_store.hpp"
 #include "options.hpp"
 #include "restore.hpp"
 #include "snapshot.hpp"
+#include "telar_platform/trace.hpp"
 
 namespace telar::runtime::checkpoint {
 

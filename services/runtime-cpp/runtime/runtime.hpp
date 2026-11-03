@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../diagnostics/runtime_telemetry.hpp"
-#include "../diagnostics/trace.hpp"
+#include "telar_platform/trace.hpp"
 
 #include "../exchange_capture/joiner.hpp"
 #include "../exchange_capture/source.hpp"
@@ -73,7 +73,7 @@ public:
         agent_files_(memory, agents_),
         descriptions_(memory, agents_, background_, options.descriptions),
         telemetry_(options.socket, proxy.status()) {
-    model_.executable_path = options.executable;
+    model_.cli_executable = options.cli_executable;
     model_.capture_output = options.capture_output;
     model_.manifests = *options.manifests;
     if (options.fresh && !options.session.path.empty()) {

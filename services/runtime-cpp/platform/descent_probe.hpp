@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../diagnostics/trace.hpp"
 #include "process_inspector.hpp"
+#include "telar_platform/trace.hpp"
 #include <concepts>
 
 namespace telar::runtime {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../platform/thread_name.hpp"
+#include "telar_platform/thread_name.hpp"
 
 #include "connection.hpp"
 #include "listener.hpp"

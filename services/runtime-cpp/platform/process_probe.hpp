@@ -1,10 +1,10 @@
 #pragma once
 
 #include "../agents/hook_settings.hpp"
-#include "../diagnostics/trace.hpp"
 #include "process_cache.hpp"
 #include "process_inspector.hpp"
 #include "telar_config/agents/provider.hpp"
+#include "telar_platform/trace.hpp"
 
 namespace telar::runtime {
 

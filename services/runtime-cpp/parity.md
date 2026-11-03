@@ -1195,7 +1195,7 @@ is claimed.
 
 The C++ executable accepts `hook claude|codex|pi|cursor|opencode`. Parsing,
 provider mappings, session-file lookup, worktree operations and typed runtime
-exchange are separate modules under `cli/hooks/`. Owned containers receive the
+exchange are separate modules under `services/cli-cpp/hooks/`. Owned containers receive the
 allocator through template dependencies. The hook connects to an existing
 runtime, verifies pane ancestry, then sends progress, lifecycle, title and
 command observations in reference order. Ordinary report failures are best

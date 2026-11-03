@@ -50,12 +50,12 @@ def sign_bundle(output, linkage):
     run(['/usr/bin/codesign', '--verify', '--deep', '--strict', output])
 
 
-def write_manifest(output, binary, runtime):
+def write_manifest(output, binary, cli, runtime):
     base = Path(__file__).resolve().parents[1]
     info = plistlib.loads((output / 'Contents/Info.plist').read_bytes())
     manifest = dict(status='packaged; daily adoption acceptance still open',
                     bundle=str(output), identifier=info['CFBundleIdentifier'],
-                    source_gui_sha256=digest(binary), runtime_sha256=digest(runtime),
+                    source_gui_sha256=digest(binary), cli_sha256=digest(cli), runtime_sha256=digest(runtime),
                     launcher_source_sha256=digest(base / 'tools/macos_launcher.cpp'),
                     packager_source_sha256=digest(Path(__file__)),
                     bundled_gui_sha256=digest(output / 'Contents/MacOS/telar-gui'),
@@ -132,9 +132,10 @@ def main():
         parser.error(f'missing managed Qt licenses: {qt_licenses}')
     binary = build / 'telar-gui'
     command_helper = build / 'telar-gui-command'
-    runtime = prefix / 'bin' / 'telar'
+    cli = prefix / 'bin' / 'telar'
+    runtime = prefix / 'bin' / 'telar-runtime'
     helper = prefix / 'bin' / 'telar-diagram-renderer'
-    for required in (binary, command_helper, runtime, helper):
+    for required in (binary, command_helper, cli, runtime, helper):
         if not required.is_file():
             parser.error(f'missing executable: {required}')
     compiler = re.search(r'^CMAKE_CXX_COMPILER:FILEPATH=(.+)$', cache, re.M)
@@ -150,7 +151,7 @@ def main():
     (resources / 'bin').mkdir(parents=True)
     shutil.copy2(binary, macos / 'telar-gui')
     shutil.copy2(command_helper, macos / 'telar-gui-command')
-    for executable in (runtime, helper):
+    for executable in (cli, runtime, helper):
         shutil.copy2(executable, resources / 'bin' / executable.name)
     shutil.copy2(root / 'packaging/macos/telar.icns', resources / 'telar.icns')
     for source, name in ((prefix / 'share/telar/licenses', 'runtime'),
@@ -191,7 +192,7 @@ def main():
     # Deployment changes Mach-O load commands; sign the complete staged tree afterward.
     sign_bundle(output, linkage)
     run(['/usr/bin/plutil', '-lint', contents / 'Info.plist'])
-    write_manifest(output, binary, runtime)
+    write_manifest(output, binary, cli, runtime)
     print(output)
 
 

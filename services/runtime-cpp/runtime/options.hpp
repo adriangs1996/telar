@@ -10,7 +10,7 @@ namespace telar::runtime {
 
 struct RuntimeOptions {
   std::string_view socket;
-  std::string_view executable;
+  std::string_view cli_executable;
   checkpoint::Options session;
   bool fresh = false;
   bool capture_output = false;

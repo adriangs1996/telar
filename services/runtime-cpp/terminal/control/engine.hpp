@@ -9,12 +9,12 @@
 #include "cursor_report.hpp"
 #include "glyph.hpp"
 #include "graphics_query.hpp"
-#include "identity.hpp"
 #include "parser.hpp"
 #include "reply.hpp"
 #include "reports.hpp"
 #include "size_report.hpp"
 #include "styled_ordinary.hpp"
+#include "telar_base/program_identity.hpp"
 #include "telar_config/terminal/control/policy.hpp"
 #include "vt_state.hpp"
 

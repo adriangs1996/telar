@@ -1,11 +1,11 @@
 #pragma once
 
-#include "../diagnostics/trace.hpp"
 #include "../http2/direction_observer.hpp"
 #include "counters.hpp"
 #include "http2_capture_policy.hpp"
 #include "relay_direction.hpp"
 #include "socket_interest.hpp"
+#include "telar_platform/trace.hpp"
 
 namespace telar::runtime {
 

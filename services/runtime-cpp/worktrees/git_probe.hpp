@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../diagnostics/trace.hpp"
 #include "../platform/git_status.hpp"
 #include "base_distance.hpp"
-#include "linked_worktree.hpp"
 #include "telar_base/memory/fixed_text.hpp"
+#include "telar_platform/linked_worktree.hpp"
+#include "telar_platform/trace.hpp"
 #include <fcntl.h>
 #include <sys/stat.h>
 

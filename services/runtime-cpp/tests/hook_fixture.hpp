@@ -1,8 +1,8 @@
 #pragma once
 
-#include "platform/command_output.hpp"
 #include "protocol_peer.hpp"
 #include "telar_config/agents/provider.hpp"
+#include "telar_platform/command_output.hpp"
 #include <thread>
 
 namespace hook_fixture {

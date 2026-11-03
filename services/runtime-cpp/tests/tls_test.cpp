@@ -1,8 +1,8 @@
 #include "check.hpp"
-#include "diagnostics/trace.hpp"
-#include "proxy/trust/inspection.hpp"
 #include "telar_platform/private_directory.hpp"
-#include "tls/authority.hpp"
+#include "telar_platform/trace.hpp"
+#include "telar_tls/authority.hpp"
+#include "telar_tls/trust/inspection.hpp"
 #include "tls_fixture.hpp"
 #include <filesystem>
 #include <fstream>

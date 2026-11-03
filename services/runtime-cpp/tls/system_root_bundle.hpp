@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../platform/read_regular_file.hpp"
 #include "telar_base/memory/byte_queue.hpp"
 #include "telar_platform/error.hpp"
+#include "telar_platform/read_regular_file.hpp"
 
 namespace telar::runtime {
 

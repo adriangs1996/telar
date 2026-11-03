@@ -52,6 +52,12 @@ runtime_directory=$(mktemp -d)
 out/telar-runtime --socket "$runtime_directory/runtime.sock"
 ```
 
+The build also produces `out/telar`, the command-line interface in
+[`services/cli-cpp`](../cli-cpp/README.md), beside `out/telar-runtime`. `telar`
+starts the runtime installed next to it, and panes receive that `telar` as
+`TELAR_BIN_PATH`. `telar-runtime` keeps only the runtime itself, its workers and
+the privileged `traffic` helpers.
+
 `packaging/release/install-zig.sh PREFIX 0.17.0`, from the repository root,
 installs the pinned compiler after verifying the platform archive's SHA-256.
 On Arch/Omarchy, the runtime build dependencies are `base-devel`, `clang`,
@@ -66,7 +72,7 @@ peer credentials, host metrics, executable paths, descriptor cleanup and
 atomic file publication retain the same application interfaces.
 
 Linux reads the OpenSSL system certificate bundle. Explicit system trust
-installation uses `proxy trust install --linux trust` for p11-kit or
+installation uses `telar proxy trust install --linux trust` for p11-kit or
 `--linux update-ca-certificates` for Debian-style stores. Linux system-trust
 renewal requires an explicit operation because changing its store needs sudo.
 Runtime startup does not prompt for that authorization.
@@ -145,10 +151,9 @@ Linux installations normally use the distribution's shared libraries and
 only runs on macOS.
 
 `cmake --install out-distribution --prefix /path/to/staging` installs
-`bin/telar-runtime`. Add `-DTELAR_RUNTIME_INSTALL_AS_TELAR=ON` when
-configuring to install it as `bin/telar` instead. The GUI looks for
-that command beside its executable, in `Contents/Resources/bin`, then through
-the login shell's PATH. Choose a private staging directory when testing a
+`bin/telar` and `bin/telar-runtime`, which must stay in the same directory. The
+GUI looks for `telar` beside its executable, in `Contents/Resources/bin`, then
+through the login shell's PATH. Choose a private staging directory when testing a
 replacement. Signed archives and bundled dependency notices remain pending.
 
 The manually dispatched [C++ runtime workflow](../../.github/workflows/runtime-cpp.yml) builds
@@ -342,16 +347,6 @@ Suggestions are unavailable until an engine command is supplied. Each
 out/telar-runtime --socket "$runtime_directory/runtime.sock" --engine-arg pi --engine-arg --mode --engine-arg rpc
 ```
 
-## Agent hooks
-
-`hook claude|codex|pi|cursor|opencode [--socket PATH]` consumes the provider's
-JSON from standard input. It connects to an existing runtime and verifies the
-reporter's pane ancestry before sending progress, lifecycle, title and command
-observations. Lifecycle failures leave the agent running and exit successfully.
-Claude's worktree hooks also work outside a pane: creation returns the checkout
-path, while removal retains a checkout with local changes. Their failures are
-reported explicitly. This does not install provider integration files.
-
 ## Runtime telemetry
 
 Debug builds emit one JSON sample per second to `<socket>.runtime-<pid>.log`.
@@ -399,10 +394,6 @@ Restart attempts use separate files. Debug shutdown gives the child up to
 100 ms to finish its trace before terminating it; a stuck worker can leave an
 incomplete trace. `tap-worker ENTRY --trace PATH` also supports direct host
 diagnostics in Debug builds.
-
-Set `TELAR_HOOK_TRACE` to a new output path for one Debug hook invocation to
-trace input reading, report mapping, sending and worktree operations. The same
-private-file and bounded-buffer rules apply. Release hooks ignore this variable.
 
 ## Validation
 

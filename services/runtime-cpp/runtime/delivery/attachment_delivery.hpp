@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../../diagnostics/trace.hpp"
 #include "../../model/runtime_model.hpp"
+#include "telar_platform/trace.hpp"
 #include <bit>
 #include <sys/wait.h>
 

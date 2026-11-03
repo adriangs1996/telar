@@ -1,7 +1,7 @@
 #pragma once
 
-#include "command_output.hpp"
 #include "git_observation_policy.hpp"
+#include "telar_platform/command_output.hpp"
 #include <charconv>
 
 namespace telar::runtime {

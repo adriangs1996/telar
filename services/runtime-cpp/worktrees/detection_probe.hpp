@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../diagnostics/trace.hpp"
-#include "linked_worktree.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_platform/linked_worktree.hpp"
+#include "telar_platform/trace.hpp"
 
 namespace telar::runtime {
 

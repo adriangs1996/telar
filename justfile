@@ -6,7 +6,8 @@ gui_dir := justfile_directory() / "services/gui-cpp"
 renderer_dir := justfile_directory() / "tools/diagram-renderer"
 vt_prefix := runtime_dir / "dependencies/install"
 runtime := runtime_dir / "out/telar-runtime"
-# The runtime linked as `telar`, which the GUI's plugin workers and integration tests find on PATH.
+cli := runtime_dir / "out/telar"
+# The CLI built beside the runtime it starts, which the GUI and its integration tests find on PATH.
 dev_telar := dev_dir / "bin/telar"
 gui := gui_dir / "out/telar-gui"
 renderer := renderer_dir / "target/release/telar-diagram-renderer"
@@ -28,7 +29,7 @@ build: runtime-build gui-build
 # Build the runtime, using out/Debug by default.
 [working-directory: "services/runtime-cpp"]
 runtime-build directory="out" build_type="Debug": (runtime-configure directory build_type)
-    cmake --build "{{ directory }}" --target telar-runtime
+    cmake --build "{{ directory }}" --target telar-runtime telar
 
 # Build the GUI, using out/Debug by default.
 [working-directory: "services/gui-cpp"]
@@ -52,11 +53,11 @@ run *args: runtime-build
 
 # Stop only the Debug development runtime.
 stop:
-    TELAR_SOCKET="{{ dev_dir }}/runtime.sock" "{{ runtime }}" server stop
+    TELAR_SOCKET="{{ dev_dir }}/runtime.sock" "{{ cli }}" server stop
 
 # Stop only the Release development runtime, including its panes.
 stop-release:
-    TELAR_SOCKET="{{ release_dev_dir }}/runtime.sock" "{{ runtime_dir }}/{{ release_build_dir }}/telar-runtime" server stop
+    TELAR_SOCKET="{{ release_dev_dir }}/runtime.sock" "{{ runtime_dir }}/{{ release_build_dir }}/telar" server stop
 
 # Build and run the runtime and GUI tests.
 test: runtime-test gui-test
@@ -90,13 +91,13 @@ gui-lint: (gui-configure "out" "Debug")
 
 # Package a Release Telar C++ Preview.app, install it under APPS and link its `telar` into BIN.
 [macos]
-install-gui apps=(home_directory() / "Applications") bin=(home_directory() / ".local/bin"): renderer (runtime-configure "out-release" "Release" "-DTELAR_RUNTIME_INSTALL_AS_TELAR=ON") (gui-configure "out-release" "Release")
+install-gui apps=(home_directory() / "Applications") bin=(home_directory() / ".local/bin"): renderer (runtime-configure "out-release" "Release") (gui-configure "out-release" "Release")
     #!/usr/bin/env bash
     set -euo pipefail
     stage="{{ dev_dir }}/stage"
     app="Telar C++ Preview.app"
     rm -rf "$stage"
-    cmake --build "{{ runtime_dir }}/out-release" --target telar-runtime
+    cmake --build "{{ runtime_dir }}/out-release" --target telar-runtime telar
     cmake --install "{{ runtime_dir }}/out-release" --prefix "$stage"
     install -m 755 "{{ renderer }}" "$stage/bin/telar-diagram-renderer"
     cmake --build "{{ gui_dir }}/out-release" --target telar-gui telar-gui-command
@@ -131,7 +132,7 @@ ebnf-test *args:
 [private]
 dev-bin directory="out" build_type="Debug" state_dir=dev_dir: (runtime-build directory build_type)
     mkdir -p -m 700 "{{ state_dir }}" "{{ state_dir }}/bin"
-    ln -sf "{{ runtime_dir }}/{{ directory }}/telar-runtime" "{{ state_dir }}/bin/telar"
+    ln -sf "{{ runtime_dir }}/{{ directory }}/telar" "{{ state_dir }}/bin/telar"
 
 [private]
 dev-app binary state_dir:

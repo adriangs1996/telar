@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../diagnostics/runtime_counters.hpp"
-#include "../diagnostics/trace.hpp"
+#include "telar_platform/trace.hpp"
 
 #include "screen.hpp"
 #include <tuple>

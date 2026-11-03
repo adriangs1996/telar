@@ -117,6 +117,7 @@ def main():
     parser.add_argument("--lua-probe", type=pathlib.Path, required=True)
     options=parser.parse_args()
     binary,probe=options.runtime.resolve(),options.lua_probe.resolve()
+    cli=binary.with_name("telar")
     api=pathlib.Path(__file__).resolve().parents[2]/"desktop-mode/ui/api.lua"
     with diagnostics_directory() as root, contextlib.ExitStack() as resources:
         environment={key:value for key,value in os.environ.items() if not key.startswith("TELAR_")}
@@ -126,7 +127,7 @@ def main():
         for name,source,capabilities in (("alpha","local label='alpha'\n"+RECORDER,["traffic.record","traffic.intercept"]),("beta","local label='beta'\n"+RECORDER,["traffic.record","traffic.intercept"]),("admin",ADMIN,["traffic.control","traffic.intercept"])):
             directory=package(root,name,capabilities=capabilities)
             (directory/"main.lua").write_text(source)
-            subprocess.run([str(binary),"plugin","trust",str(directory)],env=environment,capture_output=True,check=True,timeout=5)
+            subprocess.run([str(cli),"plugin","trust",str(directory)],env=environment,capture_output=True,check=True,timeout=5)
             configured.append("{path="+json.dumps(str(directory))+"}")
         config=root/"config.lua"
         config.write_text("return {api_version=2,runtime={proxy={enabled=true,network_capture=true,network_control=true,stream_interception=true,anonymous_tunnels=true,intercept_hosts={},capture={enabled=false},ca_dir='ca'}},plugins={"+",".join(configured)+"}}")
@@ -205,7 +206,7 @@ def main():
                 child,_=worker_process(runtime,0)
                 os.kill(child,signal.SIGKILL)
                 await_body("/alpha/info",lambda body:body==alpha+":3")
-                subprocess.run([str(binary),"plugin","untrust","alpha"],env=environment,capture_output=True,check=True,timeout=5)
+                subprocess.run([str(cli),"plugin","untrust","alpha"],env=environment,capture_output=True,check=True,timeout=5)
                 await_body("/alpha/info",lambda body:body=="probe")
                 await_body("/beta/info",lambda body:body==beta+":3")
                 script=root/"desktop.lua"

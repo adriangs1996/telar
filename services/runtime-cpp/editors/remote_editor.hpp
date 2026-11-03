@@ -1,11 +1,11 @@
 #pragma once
 
-#include "../diagnostics/trace.hpp"
+#include "telar_platform/trace.hpp"
 
-#include "../platform/command_output.hpp"
 #include "../runtime/request_context.hpp"
 #include "../transport/encoded_reply.hpp"
 #include "telar_base/editors/kind.hpp"
+#include "telar_platform/command_output.hpp"
 #include <charconv>
 #include <dirent.h>
 #include <fcntl.h>

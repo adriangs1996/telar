@@ -1,6 +1,6 @@
 #include "check.hpp"
-#include "platform/executable_path.hpp"
 #include "plugins/service.hpp"
+#include "telar_platform/executable_path.hpp"
 
 using namespace telar;
 using namespace telar::runtime;

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "../diagnostics/trace.hpp"
 #include "../terminal/control/classification.hpp"
 #include "../terminal/control/parser.hpp"
 #include "../terminal/pty_response_queue.hpp"
@@ -9,6 +8,7 @@
 #include "file_input.hpp"
 #include "storage.hpp"
 #include "telar_config/graphics/limits.hpp"
+#include "telar_platform/trace.hpp"
 #include "upload_limits.hpp"
 #include <charconv>
 

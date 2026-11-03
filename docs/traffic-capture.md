@@ -166,7 +166,7 @@ proxy = {
 
 This table belongs under `runtime` in the configuration. Applications must use
 the authenticated explicit proxy and trust its selected CA. The existing
-`telar-runtime proxy trust install|status|uninstall` commands manage system
+`telar proxy trust install|status|uninstall` commands manage system
 trust; `--ca-dir` selects the authority directory. The existing pane environment
 injection supplies proxy credentials and certificate paths to supported child
 applications. Arbitrary applications outside Telar need their own proxy/trust

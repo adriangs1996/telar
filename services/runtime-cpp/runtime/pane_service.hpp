@@ -497,8 +497,8 @@ private:
     setIdentity("TELAR_WORKSPACE_ID", location.workspace.id);
     setIdentity("TELAR_TAB_ID", location.tab_id);
     command.setEnvironment("TELAR_SOCKET_PATH", socket_path_);
-    if (!model_.executable_path.empty()) {
-      command.setEnvironment("TELAR_BIN_PATH", model_.executable_path);
+    if (!model_.cli_executable.empty()) {
+      command.setEnvironment("TELAR_BIN_PATH", model_.cli_executable);
     }
     proxy_.apply(command);
     auto pane = makeOwned<Pane<Memory>>(memory_, memory_, identity.id, location, command, PaneLaunch{size, model_.media_budget, model_.graphics_limits});

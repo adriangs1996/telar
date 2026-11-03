@@ -6,77 +6,27 @@
 #include "../plugins/service.hpp"
 #include "../plugins/tap_configuration.hpp"
 #include "../proxy/runtime.hpp"
-#include "../traffic/tap.hpp"
-#include "../traffic/control_backend.hpp"
-#include "../traffic/control_service.hpp"
 #include "../runtime/background_pool.hpp"
 #include "../runtime/background_service.hpp"
 #include "../runtime/editor_service.hpp"
 #include "../runtime/path_service.hpp"
 #include "../runtime/runtime.hpp"
 #include "../runtime/suggestion_service.hpp"
-#include "daemon.hpp"
-#include "runtime_connection.hpp"
+#include "../traffic/control_backend.hpp"
+#include "../traffic/control_service.hpp"
+#include "../traffic/tap.hpp"
+#include "telar_platform/daemon.hpp"
 #include <cstdio>
-#include <thread>
 
 namespace telar::runtime::cli {
-
-inline bool connectExisting(std::optional<RuntimeConnection> &connection, const char *path) {
-  try {
-    connection.emplace(path);
-    return true;
-  } catch (const SystemError &error) {
-    if (error.code() != ENOENT && error.code() != ECONNREFUSED) {
-      throw;
-    }
-
-    return false;
-  }
-}
-
-template <Allocator Memory>
-void printEndpoint(Memory &memory, const ServerOptions &options, const RuntimePaths<Memory> &paths) {
-  std::optional<RuntimeConnection> connection;
-  if (!connectExisting(connection, paths.socket.c_str())) {
-    paths.prepareSocket();
-    const auto child = launchDaemon(memory, options, paths);
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
-    while (!connectExisting(connection, paths.socket.c_str())) {
-      int status = 0;
-      if (::waitpid(child, &status, WNOHANG) == child) {
-        throw SystemError{"Runtime failed to start; inspect its .runtime.start.log", ECHILD};
-      }
-      if (std::chrono::steady_clock::now() >= deadline) {
-        throw SystemError{"Runtime did not start within ten seconds", ETIMEDOUT};
-      }
-
-      std::this_thread::sleep_for(std::chrono::milliseconds{10});
-    }
-  }
-
-  std::printf("%s\n", paths.socket.c_str());
-  std::fwrite(handshake::schema_id.data(), 1, handshake::schema_id.size(), stdout);
-  std::fputc('\n', stdout);
-}
-
-inline void stopRuntime(const char *socket) {
-  std::optional<RuntimeConnection> connection;
-  if (!connectExisting(connection, socket)) {
-    std::puts("telar runtime is not running");
-    return;
-  }
-
-  connection->requestStop();
-  std::puts("telar runtime is stopping");
-}
 
 template <ConcurrentAllocator Memory>
 void runRuntime(Memory &memory, const ServerOptions &options, const RuntimePaths<Memory> &paths, const config::RuntimeValues<Memory> &configuration) {
 #if TELAR_DEBUG
   trace::Session tracing{memory, options.trace.empty() ? nullptr : options.trace.data()};
 #endif
-  ExecutablePath executable;
+  const ExecutablePath executable;
+  const ExecutablePath cli{"telar"};
   plugins::TapConfiguration tap_configuration{memory, configuration.configuration_directory.view(), configuration.plugins.configured(), ProcessEnvironment{}};
   installPngDecoder();
   SqliteAllocator sqlite_memory{memory};
@@ -125,7 +75,7 @@ void runRuntime(Memory &memory, const ServerOptions &options, const RuntimePaths
   poller.watchSignal(SIGCHLD);
   Runtime runtime{memory, poller, background, RuntimeOptions{
                                                   .socket = paths.socket,
-                                                  .executable = executable.view(),
+                                                  .cli_executable = cli.view(),
                                                   .session = {.path = paths.session, .resume_agents = options.resume_agents},
                                                   .fresh = options.fresh,
                                                   .capture_output = configuration.capture_output,
@@ -141,7 +91,7 @@ void runRuntime(Memory &memory, const ServerOptions &options, const RuntimePaths
 template <ConcurrentAllocator Memory>
 void runServer(Memory &memory, const ServerOptions &options) {
   if (options.action == ServerAction::help) {
-    std::puts("Usage: telar-runtime server [stop|endpoint|bridge] [--socket PATH] [--no-config] [--fresh]\n       telar-runtime --socket PATH [--history PATH] [--session PATH | --no-session] [--no-resume]");
+    std::puts("Usage: telar-runtime server [--socket PATH] [--no-config] [--fresh]\n       telar-runtime --socket PATH [--history PATH] [--session PATH | --no-session] [--no-resume]\n\n`telar server stop|endpoint|bridge` talks to a running runtime.");
     return;
   }
 #if !TELAR_DEBUG
@@ -150,22 +100,12 @@ void runServer(Memory &memory, const ServerOptions &options) {
   }
 #endif
 
+  if (options.action != ServerAction::run) {
+    throw std::invalid_argument{"telar-runtime only runs the runtime; use `telar server stop|endpoint|bridge`"};
+  }
+
   const ProcessEnvironment environment;
   RuntimePaths paths{memory, options, environment};
-  switch (options.action) {
-  case ServerAction::stop:
-    stopRuntime(paths.socket.c_str());
-    return;
-  case ServerAction::endpoint:
-    printEndpoint(memory, options, paths);
-    return;
-  case ServerAction::bridge:
-    RuntimeConnection{paths.socket.c_str(), false}.bridge();
-  case ServerAction::run:
-    break;
-  case ServerAction::help:
-    return;
-  }
 
   config::RuntimeValues configuration{memory};
   config::Loader{memory, configuration}.load(options, environment);
@@ -182,7 +122,7 @@ void runServer(Memory &memory, const ServerOptions &options) {
 
   paths.prepareSocket();
   if (options.mode == ServerMode::background) {
-    launchDaemon(memory, options, paths);
+    launchDaemon(memory, options, paths, ExecutablePath{});
     return;
   }
 

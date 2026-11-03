@@ -4,10 +4,10 @@
 #include "../platform/stream_read_buffer.hpp"
 #include "../platform/tunnel_sockets.hpp"
 #include "alpn_offer.hpp"
-#include "authority.hpp"
 #include "contexts.hpp"
 #include "side.hpp"
 #include "telar_base/memory/fixed_text.hpp"
+#include "telar_tls/authority.hpp"
 #include <arpa/inet.h>
 #include <chrono>
 #include <memory>

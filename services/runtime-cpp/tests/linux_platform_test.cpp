@@ -4,7 +4,7 @@
 #include "platform/system_certificates.hpp"
 #include "redirect/socket_owners.hpp"
 #include "telar_platform/temporary_directory.hpp"
-#include "tls/certificate_pair.hpp"
+#include "telar_tls/certificate_pair.hpp"
 #include <algorithm>
 #include <string>
 #include <sys/prctl.h>

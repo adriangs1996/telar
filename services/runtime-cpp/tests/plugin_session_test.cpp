@@ -1,9 +1,9 @@
 #include "check.hpp"
 #include "platform/completion_signal.hpp"
-#include "platform/executable_path.hpp"
 #include "plugins/restart_window.hpp"
 #include "plugins/run_worker.hpp"
 #include "plugins/session.hpp"
+#include "telar_platform/executable_path.hpp"
 #include "telar_platform/write_descriptor.hpp"
 #include <thread>
 

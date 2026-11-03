@@ -145,6 +145,7 @@ def main():
     parser.add_argument("--lua-probe", type=pathlib.Path, required=True)
     options = parser.parse_args()
     binary = options.runtime.resolve()
+    cli = binary.with_name("telar")
     probe = options.lua_probe.resolve()
     desktop = pathlib.Path(__file__).resolve().parents[2] / "desktop-mode"
     with diagnostics_directory() as root, contextlib.ExitStack() as resources:
@@ -158,11 +159,11 @@ def main():
             packages[name] = directory
             (directory / "main.lua").write_text(source)
             if name == "observer":
-                denied = subprocess.run([str(binary), "plugin", "trust", str(directory), "--capability", "traffic.intercept"], env=environment, capture_output=True, text=True, timeout=5)
+                denied = subprocess.run([str(cli), "plugin", "trust", str(directory), "--capability", "traffic.intercept"], env=environment, capture_output=True, text=True, timeout=5)
                 if denied.returncode == 0:
                     raise RuntimeError("CLI granted an undeclared interception capability")
-            subprocess.run([str(binary), "plugin", "trust", str(directory)], env=environment, capture_output=True, check=True, timeout=5)
-            inspection = subprocess.run([str(binary), "plugin", "inspect", str(directory)], env=environment, capture_output=True, check=True, text=True, timeout=5)
+            subprocess.run([str(cli), "plugin", "trust", str(directory)], env=environment, capture_output=True, check=True, timeout=5)
+            inspection = subprocess.run([str(cli), "plugin", "inspect", str(directory)], env=environment, capture_output=True, check=True, text=True, timeout=5)
             digests[name] = next(line.removeprefix("digest: ") for line in inspection.stdout.splitlines() if line.startswith("digest: "))
             configured.append("{path=" + json.dumps(str(directory)) + "}")
         configuration = root / "config.lua"
@@ -315,13 +316,13 @@ def main():
                         if time.monotonic() >= deadline: raise RuntimeError(f"Live permission change was not applied: {target!r}")
                         time.sleep(.02)
 
-                subprocess.run([str(binary), "plugin", "untrust", "rewriter-second"], env=environment, check=True, capture_output=True, timeout=5)
+                subprocess.run([str(cli), "plugin", "untrust", "rewriter-second"], env=environment, check=True, capture_output=True, timeout=5)
                 await_rewrites(b"/revoked-disabled", ((b"/revoked-disabled/a", b"revocation\0a"), 201, response_body + b"\0a"))
-                subprocess.run([str(binary), "plugin", "trust", str(packages["packet-bridge"]), "--capability", "traffic.observe"], env=environment, check=True, capture_output=True, timeout=5)
+                subprocess.run([str(cli), "plugin", "trust", str(packages["packet-bridge"]), "--capability", "traffic.observe"], env=environment, check=True, capture_output=True, timeout=5)
                 await_rewrites(b"/packet-check", ((b"/packet-check/a", b"revocation\0a"), 201, response_body + b"\0a"))
-                subprocess.run([str(binary), "plugin", "trust", str(packages["packet-bridge"])], env=environment, check=True, capture_output=True, timeout=5)
+                subprocess.run([str(cli), "plugin", "trust", str(packages["packet-bridge"])], env=environment, check=True, capture_output=True, timeout=5)
                 await_rewrites(b"/packet-check", ((b"/packet-check/a", b"revocation\0a"), 201, response_body + b"\0a"))
-                subprocess.run([str(binary), "plugin", "untrust", "rewriter-first"], env=environment, check=True, capture_output=True, timeout=5)
+                subprocess.run([str(cli), "plugin", "untrust", "rewriter-first"], env=environment, check=True, capture_output=True, timeout=5)
                 await_rewrites(b"/revoked-source-changed", ((b"/revoked-source-changed", b"revocation"), 200, response_body))
 
                 observer_pid, _ = worker_process(runtime, 3)

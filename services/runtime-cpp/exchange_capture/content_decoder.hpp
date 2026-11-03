@@ -1,12 +1,12 @@
 #pragma once
 
-#include "../diagnostics/trace.hpp"
 #include "brotli_decoder.hpp"
 #include "decoded_body.hpp"
 #include "flate_decoder.hpp"
 #include "telar_base/memory/sensitive_buffer.hpp"
 #include "telar_base/text/ascii.hpp"
 #include "telar_base/text/fields.hpp"
+#include "telar_platform/trace.hpp"
 #include "zstd_decoder.hpp"
 #include <array>
 #include <stdexcept>

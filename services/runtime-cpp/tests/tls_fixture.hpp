@@ -2,7 +2,7 @@
 
 #include "check.hpp"
 #include "telar_platform/private_directory.hpp"
-#include "tls/authority.hpp"
+#include "telar_tls/authority.hpp"
 #include <cstring>
 #include <filesystem>
 

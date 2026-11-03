@@ -1,4 +1,4 @@
-#include "../platform/socket_signals.hpp"
+#include "telar_platform/socket_signals.hpp"
 #pragma once
 
 #include "telar_platform/error.hpp"

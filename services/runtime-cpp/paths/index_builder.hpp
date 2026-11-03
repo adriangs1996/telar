@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../diagnostics/trace.hpp"
 #include "../platform/git_repository.hpp"
 #include "index_storage.hpp"
+#include "telar_platform/trace.hpp"
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>

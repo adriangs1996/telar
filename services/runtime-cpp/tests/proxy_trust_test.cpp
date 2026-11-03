@@ -1,8 +1,7 @@
 #include "check.hpp"
 #include "platform/descriptor_path.hpp"
-#include "cli/proxy_options.hpp"
-#include "proxy/authority_directory.hpp"
-#include "proxy/trust/service.hpp"
+#include "telar_tls/authority_directory.hpp"
+#include "telar_tls/trust/service.hpp"
 #include "tls_fixture.hpp"
 #include <functional>
 #include <vector>

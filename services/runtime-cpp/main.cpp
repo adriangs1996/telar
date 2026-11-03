@@ -1,7 +1,3 @@
-#include "cli/hook.hpp"
-#include "cli/integration.hpp"
-#include "cli/plugin.hpp"
-#include "cli/proxy_trust.hpp"
 #include "cli/server.hpp"
 #include "cli/traffic.hpp"
 #include "plugins/run_worker.hpp"
@@ -20,22 +16,6 @@ auto main(int argc, char **argv) -> int {
 
     if (argc >= 2 && std::string_view{args.subspan<1>().front()} == "traffic") {
       cli::runTraffic(budget, args.subspan<2>());
-      return 0;
-    }
-
-    if (argc >= 2 && std::string_view{args.subspan(1).front()} == "integration") {
-      const auto options = cli::IntegrationOptions::parse(args.subspan<2>());
-      return cli::runIntegration(budget, options);
-    }
-
-    if (argc >= 2 && std::string_view{args.subspan<1>().front()} == "hook") {
-      const auto options = cli::HookOptions::parse(args.subspan<2>());
-      return cli::runHook(budget, options, ProcessEnvironment{});
-    }
-
-    if (argc >= 2 && std::string_view{argv[1]} == "plugin") {
-      const auto options = cli::PluginOptions::parse({argv + 2, static_cast<std::size_t>(argc - 2)});
-      cli::runPlugin(budget, options, ProcessEnvironment{});
       return 0;
     }
 
@@ -61,11 +41,6 @@ auto main(int argc, char **argv) -> int {
     }
 
     SynchronizedAllocator memory{budget};
-    if (argc >= 2 && std::string_view{argv[1]} == "proxy") {
-      const auto options = cli::ProxyTrustOptions::parse({argv + 2, static_cast<std::size_t>(argc - 2)});
-      return cli::runProxyTrust(memory, options, ProcessEnvironment{});
-    }
-
     const auto options = cli::ServerOptions::parse({argv + 1, static_cast<std::size_t>(argc - 1)});
     cli::runServer(memory, options);
     return 0;

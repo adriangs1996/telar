@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../diagnostics/trace.hpp"
 #include "frame_channel.hpp"
 #include "pipe_stream.hpp"
 #include "result.hpp"
 #include "session_io.hpp"
+#include "telar_platform/trace.hpp"
 #include <csignal>
 #include <cstdio>
 #include <thread>

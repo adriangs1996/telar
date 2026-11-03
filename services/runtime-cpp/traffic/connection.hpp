@@ -1,5 +1,5 @@
-#include "../platform/socket_signals.hpp"
 #include "telar_platform/peer_credentials.hpp"
+#include "telar_platform/socket_signals.hpp"
 #pragma once
 
 #include "protocol.hpp"

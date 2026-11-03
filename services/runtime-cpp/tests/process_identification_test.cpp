@@ -1,12 +1,12 @@
 #include "agents/agent.hpp"
 #include "agents/hook_settings.hpp"
 #include "check.hpp"
-#include "platform/command.hpp"
-#include "platform/executable_path.hpp"
-#include "platform/pipe_process.hpp"
 #include "platform/process_arguments.hpp"
 #include "platform/process_probe.hpp"
-#include "platform/pty_process.hpp"
+#include "telar_platform/command.hpp"
+#include "telar_platform/executable_path.hpp"
+#include "telar_platform/pipe_process.hpp"
+#include "telar_platform/pty_process.hpp"
 #include <csignal>
 #include <filesystem>
 #include <fstream>

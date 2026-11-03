@@ -1,9 +1,9 @@
 #include "check.hpp"
-#include "platform/child_descriptors.hpp"
-#include "platform/command.hpp"
 #include "platform/event_loop.hpp"
 #include "platform/local_listener.hpp"
 #include "platform/process_probe.hpp"
+#include "telar_platform/child_descriptors.hpp"
+#include "telar_platform/command.hpp"
 #include "transport/connection.hpp"
 #include <chrono>
 #include <csignal>

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../platform/command.hpp"
-#include "../platform/pipe_process.hpp"
 #include "../proxy/socket.hpp"
+#include "telar_platform/command.hpp"
+#include "telar_platform/pipe_process.hpp"
 #include <chrono>
 #include <poll.h>
 
