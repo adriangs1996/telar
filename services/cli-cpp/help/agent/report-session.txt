@@ -1,0 +1,20 @@
+telar agent report-session: Record an agent's own session id with its pane, so a runtime restart can resume it
+
+Usage: telar agent report-session TARGET SESSION_ID [--json] [--socket PATH]
+
+TARGET is a pane id, `--current` (this pane, from TELAR_PANE_ID), `worktree:BRANCH`
+or `worktree:TITLE` (the agent working in that tracked worktree), or the agent's
+session title (case-insensitive; refused when two agents share it).
+
+Arguments:
+  SESSION_ID       1 to 64 bytes of letters, digits, `.`, `_`, `-` and `:`, not
+                   starting with `-`.
+
+Effects: the runtime stores the typed reference. After a restart it relaunches the
+pane's shell and types the agent's own resume command (`claude --resume`, `codex
+resume`, `pi --session`, `cursor-agent --resume`, `opencode --session`). The
+installed hooks report the session they receive the same way, so an agent with
+`telar integration install` needs no call. The target must already be observed as
+an agent. Starts the local runtime when none runs.
+
+Results: nothing; exit 0, 2 when the agent is unknown.

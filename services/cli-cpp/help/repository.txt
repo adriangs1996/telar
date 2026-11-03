@@ -1,0 +1,8 @@
+telar repository: Prepare a clone of this repository on another machine from committed history alone
+
+Usage: telar repository prepare --machine LABEL [--from REF] [--workspace PATH|ID] [--json]
+
+Commands:
+  prepare         Send committed history to a machine and publish or update its clone
+
+`telar repository COMMAND --help` explains a command's arguments, effects and results.

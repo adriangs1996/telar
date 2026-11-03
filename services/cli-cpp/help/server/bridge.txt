@@ -1,0 +1,5 @@
+telar server bridge: Relay standard input and output to the runtime's socket, for SSH
+
+Usage: telar server bridge [--socket PATH]
+
+Run over SSH by a window attaching with `--remote`; not meant to be typed.

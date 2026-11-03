@@ -1,0 +1,10 @@
+telar client list: List the attached windows with id, generation, identity and last input pane
+
+Usage: telar client list [--json] [--socket PATH]
+
+Effects: read-only; needs a running runtime, never starts one.
+
+Results: text columns CLIENT, GENERATION, IDENTITY, ATTACHMENTS, LAST INPUT PANE;
+JSON an array of `id`, `generation`, `identity`, `attachments`, `last_input_pane`,
+`last_input_sequence`. The highest `last_input_sequence` is the window a person
+used last. Exit 0.

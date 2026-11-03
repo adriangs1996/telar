@@ -1,0 +1,11 @@
+telar exec forget: Release a finished execution's id and retained output
+
+Usage: telar exec forget ID [--json] [--socket PATH]
+
+Effects: frees the slot; refused while the execution runs. Results are never
+evicted on their own, so forget what you have read. Starts the local runtime when
+none runs.
+
+Results: JSON `execution_id`, `workspace_id`, `state` (starting|running|exited|failed),
+`exit_code` (null until exited), `stdout_offset`, `stderr_offset`, `stdout_bytes`,
+`stderr_bytes`, `stdin_bytes`, `stdin_open`, `failure`. Exit 0; 125 when unknown or still running.

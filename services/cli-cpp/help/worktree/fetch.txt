@@ -1,0 +1,14 @@
+telar worktree fetch: Bring a branch back from another machine into refs/remotes/LABEL/BRANCH
+
+Usage: telar worktree fetch BRANCH --machine LABEL [--json]
+
+Arguments:
+  BRANCH           The branch on that machine.
+  --machine LABEL  Required: a saved machine other than this one.
+
+Effects: asks the machine where this repository's clone is (`worktree resolve` there),
+then `git fetch` over SSH into `refs/remotes/LABEL/BRANCH`. Touches no local runtime
+and no local branch; review or merge the ref yourself afterwards.
+
+Results: `fetched BRANCH from LABEL into REF at COMMIT`; JSON `machine`, `branch`,
+`ref`, `commit`. Exit 0; 1 on failure (Git's words on stderr).

@@ -1,0 +1,8 @@
+telar history search: Search commands by text
+
+Usage: telar history search QUERY [filters] [--socket PATH]
+
+Arguments:
+  QUERY            The text to find; at most 1024 bytes.
+
+Results: as `history list`. Exit 0.

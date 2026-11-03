@@ -1,7 +1,6 @@
 #pragma once
 
-#include "../control_failure.hpp"
-#include "../runtime_connection.hpp"
+#include "../control_session.hpp"
 #include "telar_platform/trace.hpp"
 
 namespace telar::runtime::cli::hooks {
@@ -12,33 +11,36 @@ struct PaneTarget {
   AgentProvider provider;
 };
 
+// The hook's conversation with the runtime: every report carries the pane and
+// provider the hook runs for, and the runtime first verifies the reporter's ancestry.
+template <Allocator Memory>
 class Session {
 public:
-  explicit Session(const char *socket, PaneTarget target)
-      : connection_(socket), target_(target) {
-    connection_.receiveTimeout(30);
-    exchange<RequestCompleted>(VerifyPaneDescent{});
+  Session(Memory &memory, const char *socket, PaneTarget target)
+      : control_(memory, socket, reply_bytes),
+        target_(target) {
+    control_.receiveTimeout(30);
+    exchange(VerifyPaneDescent{});
   }
 
   template <typename Report>
   void report(Report value) noexcept {
     try {
       TELAR_TRACE("hooks.sendReport");
-      exchange<RequestCompleted>(value);
+      exchange(value);
     } catch (const std::exception &) {
     }
   }
 
   void reportLimit(std::uint64_t received, std::size_t capacity) noexcept {
     try {
-      connection_.send(ReportLimit{.reach = {.name = "hooks.max_input_bytes", .noun = "bytes", .value = capacity, .requested = received}, .hits = 1}, outgoing_);
+      control_.send(ReportLimit{.reach = {.name = "hooks.max_input_bytes", .noun = "bytes", .value = capacity, .requested = received}, .hits = 1});
     } catch (const std::exception &) {
     }
   }
 
-  template <typename Reply, typename Report>
+  template <typename Reply = RequestCompleted, typename Report>
   Reply exchange(Report value) {
-    value.request_id = next_request_++;
     if constexpr (requires { value.pane_id; value.pane_generation; }) {
       value.pane_id = target_.pane_id;
       value.pane_generation = target_.generation;
@@ -47,32 +49,13 @@ public:
       value.provider = target_.provider;
     }
 
-    connection_.send(value, outgoing_);
-    for (;;) {
-      const auto frame = connection_.receive(response_);
-      if (frame.front() == static_cast<Byte>(MessageSchema<Reply>::tag)) {
-        const auto reply = Codec::decode<Reply>(frame);
-        if (reply.request_id == value.request_id) {
-          return reply;
-        }
-      } else if (frame.front() == static_cast<Byte>(ServerTag::request_failed)) {
-        const auto failure = Codec::decode<RequestFailed>(frame);
-        if (failure.request_id == value.request_id) {
-          throw EncodingError{controlFailureDescription(failure.code)};
-        }
-      } else {
-        throw EncodingError{"Unexpected hook reply"};
-      }
-    }
+    return control_.template exchange<Reply>(value);
   }
 
 private:
-  RuntimeConnection connection_;
-  PaneTarget target_;
-  std::uint64_t next_request_ = 1;
-  static constexpr std::size_t maximum_command_frame_bytes = 65536 + 4096 + 1024;
-  std::array<Byte, maximum_command_frame_bytes> outgoing_;
-  std::array<Byte, 2048> response_;
-};
+  static constexpr std::size_t reply_bytes = 2048;
 
+  ControlSession<Memory> control_;
+  PaneTarget target_;
+};
 }

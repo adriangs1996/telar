@@ -1,0 +1,36 @@
+telar pane: Read, type into and watch any pane; list panes; and, through a window, split, close, focus, resize and scroll them
+
+Usage: telar pane COMMAND [ID|--current] [options]
+
+Commands:
+  read            Print recent text from any pane
+  send-keys       Send raw text, or --stdin, (and --enter) to a pane no person has focused
+  search          Find text in a pane's retained history, without attaching
+  watch           Emit a pane's text as JSON lines whenever it changes, by polling
+  list            List every pane with its workspace, tab, generation and lifecycle
+  get             Show one pane, agent or not, from the same topology
+  focus           Focus a pane in a window; or, from Neovim, move focus out of this pane by direction
+  create          Create a terminal pane in a window by splitting its focused pane
+  split           Focus a pane in a window and split it horizontally (left/right) or vertically (top/bottom)
+  close           Focus a pane in a window and request its closure
+  resize          Focus a pane and move its nearest split edge one step in a direction
+  fullscreen      Focus a pane and toggle it fullscreen in its window
+  scroll          Scroll a pane's viewport in a window by a signed number of rows
+  copy            Copy a range of a pane's text to a window's clipboard
+
+A pane is one terminal the runtime owns; a pane id names it for its whole life, and
+its generation changes when its command is relaunched. `--current` is this pane,
+from TELAR_PANE_ID. Titles are not accepted here: use `telar agent` for agents.
+
+`read`, `send-keys`, `search`, `watch`, `list` and `get` work on the runtime alone
+without selecting a window; input can change the pane's visible output.
+`create`, `split`, `close`, `focus ID`, `resize`,
+`fullscreen`, `scroll` and `copy` act through one attached window (`--client ID`),
+whose layout and focus belong to that window. Exit codes: 0; 2 the pane is gone;
+1 anything else, with the reason on stderr. A pane a person has focused in an
+attached window refuses text (`pane_focused`): open your own tab with `telar tab
+create --background` instead of typing where they may be typing.
+
+Limits: text read 2000 rows / 256 KiB, text sent 64 KiB.
+
+`telar pane COMMAND --help` explains a command's arguments, effects and results.

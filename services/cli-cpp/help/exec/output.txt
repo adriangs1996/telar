@@ -1,0 +1,14 @@
+telar exec output: Print retained stdout and stderr bytes from given offsets
+
+Usage: telar exec output ID [--stdout-offset N] [--stderr-offset N] [--socket PATH]
+
+Arguments:
+  --stdout-offset N, --stderr-offset N  Byte cursors to read from (default 0).
+
+Effects: writes a snapshot of the retained bytes, stdout to stdout and stderr to
+stderr, up to the totals at the time of the request. Moves no one else's cursor.
+Starts the local runtime when none runs.
+
+Results: the bytes; exit 0. Only the newest 1 MiB per stream is kept: a cursor
+that fell behind gets the retained start and total counters and exit 125, never a
+silently incomplete artifact. For a file, use `telar file get` through exec.

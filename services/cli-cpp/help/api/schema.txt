@@ -1,0 +1,12 @@
+telar api schema: Print the runtime protocol's version, fingerprint, message tags and bounds
+
+Usage: telar api schema [--json]
+
+Effects: none; offline. This describes the IPC between runtime and clients (request
+and message tags, agent statuses, bounds such as the most rows a read returns), not
+the command line: for that, `telar FAMILY COMMAND --help`. Two telar binaries talk
+only when their fingerprints match, which `telar machine check` compares.
+
+Results: text sections `client requests`, `server messages`, `agent statuses`,
+`bounds`; JSON `schema_version`, `fingerprint`, `client_requests`,
+`server_messages`, `agent_statuses`, `bounds`. Exit 0.

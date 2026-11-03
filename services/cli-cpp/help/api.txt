@@ -1,0 +1,8 @@
+telar api: Print the wire contract this binary speaks, for compatibility checks
+
+Usage: telar api schema [--json]
+
+Commands:
+  schema          Print the runtime protocol's version, fingerprint, message tags and bounds
+
+`telar api COMMAND --help` explains a command's arguments, effects and results.

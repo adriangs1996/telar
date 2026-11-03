@@ -1,0 +1,38 @@
+telar worktree create: Add a git worktree for a task; with a command (needs --title), run an agent there
+
+Usage: telar worktree create BRANCH [--title TITLE] [--from BASE] [--directory ABS] [--label TEXT] [--workspace ID|DIR] [--machine LABEL] [--setup] [--json] [--socket PATH] [-- COMMAND...]
+
+Arguments:
+  BRANCH           The branch Git creates (or checks out, when it exists); at most 200 bytes,
+                   no leading `-` or `.`, no `..`, spaces or control bytes.
+  --title TITLE    The task's name, how the user and `worktree list` refer to it; at most
+                   96 bytes. Required when a command follows `--`.
+  --from BASE      Branch or ref the new branch starts from (default: the main checkout's
+                   current branch). Ignored when BRANCH already exists.
+  --directory ABS  Checkout directory (default: <repo parent>/<repo>-worktrees/<branch>,
+                   with `/` in the branch replaced by `-`). Not with --machine.
+  --label TEXT     Label of the tab the command runs in; at most 128 bytes.
+  --workspace X    The repository: a workspace id or a directory inside it (default: the
+                   pane's TELAR_WORKSPACE_ID, else the current directory).
+  --machine LABEL  Create the worktree on that saved machine (see below).
+  --setup          Authorize the repository's `.telar/setup.json` recipe to run first.
+  -- COMMAND...    What to run in the worktree, usually an agent and its brief; at most
+                   32 words, taken literally. The agent sees nothing else.
+
+Effects: runs Git in the repository (`git worktree add`), registers the worktree with
+the runtime, creates the repository's workspace when none exists, runs project setup
+when a recipe is declared and --setup was given, then launches COMMAND (or a login
+shell) in a new 160x48 pane of the worktree's own workspace. Nothing attaches a
+window to that pane and no focus changes. Starts the local runtime when none runs.
+A declared recipe without --setup refuses the launch; the checkout and its row stay.
+At most 64 worktrees are tracked. Needs Git on PATH.
+
+With --machine LABEL: the branch's commits (BRANCH if it exists locally, else BASE,
+else HEAD) are prepared on that machine (`telar repository prepare`), pushed into its
+clone, and `worktree create` runs there. Only commits travel; uncommitted files stay
+here and are counted on stderr. The ids in the reply are that machine's.
+
+Results: text `worktree BRANCH at PATH: pane N in workspace N`; JSON `worktree_id`,
+`setup_execution_id`, `environment` (`ready`|`not_declared`), `branch`, `base`,
+`path`, `workspace_id`, `tab_id`, `pane_id`, `pane_generation`. Exit 0; 1 on a Git,
+setup or runtime refusal (the reason on stderr).

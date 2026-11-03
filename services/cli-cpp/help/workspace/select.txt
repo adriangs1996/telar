@@ -1,0 +1,12 @@
+telar workspace select: Show a workspace in a window
+
+Usage: telar workspace select ID --client ID [--json] [--socket PATH]
+
+Effects: forwarded to the window `--client ID` names (see `telar client list`),
+which switches to that workspace. The runtime keeps no window state. Needs a running
+runtime; never starts one.
+
+Results: text `workspace_select: STATUS` or JSON `client_id`, `client_generation`,
+`action`, `status`, `target_id`, `value`, `text`. `applied` when it already showed
+it; `admitted` while the handoff proceeds. Exit 0; 1 when the window refused
+(unknown workspace, busy); 2 unknown client; 3 no answer in time.

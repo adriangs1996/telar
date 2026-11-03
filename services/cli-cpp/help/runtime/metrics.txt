@@ -1,0 +1,10 @@
+telar runtime metrics: Print the runtime's latest sample of CPU, memory and battery
+
+Usage: telar runtime metrics [--json] [--socket PATH]
+
+Effects: waits for the runtime's next sampled metrics; read-only. Compare machines
+with `telar --machine LABEL runtime metrics --json` before choosing one.
+
+Results: text CPU percent, memory in GiB and battery; JSON `revision`,
+`cpu_percent`, `cpu_count`, `memory_used_decigib`, `memory_total_decigib` (tenths
+of a GiB), `battery_percent` (null without a battery). Exit 0.

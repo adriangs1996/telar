@@ -1,0 +1,17 @@
+telar machine add: Save a machine: a label and an SSH destination
+
+Usage: telar machine add LABEL DESTINATION [--color COLOR] [--disabled] [--check] [--setup [--binary PATH] [--skip agents,config,login]] [--json]
+
+Arguments:
+  DESTINATION      An SSH destination (`user@host`, a `~/.ssh/config` host...); unique.
+  --color COLOR    `#RRGGBB` or a lowercase name, for the window's chrome.
+  --disabled       Save it without windows connecting to it; dispatch still works.
+  --check          Reach the machine first (as `machine check`) and refuse an
+                   unreachable one.
+  --setup          Set it up right after saving (as `machine setup`), with its options.
+
+Effects: writes machines.json atomically. Without --check or --setup nothing is
+contacted; with them the machine's runtime is started as `check` does.
+
+Results: nothing, or the check/setup report (JSON with --json). Exit 0; 1 with the
+reason on stderr (taken label or destination, invalid label, unreachable).

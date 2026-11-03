@@ -1,0 +1,6 @@
+telar machine remove: Forget a saved machine
+
+Usage: telar machine remove LABEL
+
+Effects: removes the profile from machines.json; nothing on the machine changes.
+Results: nothing; exit 0, 1 when the label is unknown or local.

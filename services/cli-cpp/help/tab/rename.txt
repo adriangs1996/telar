@@ -1,0 +1,11 @@
+telar tab rename: Rename a tab
+
+Usage: telar tab rename ID|--current LABEL [--workspace ID|--current] [--json] [--socket PATH]
+
+Arguments:
+  LABEL            1 to 128 bytes of UTF-8.
+
+Effects: the runtime renames the tab and every window follows. Never starts one.
+
+Results: `tab N renamed to LABEL`, the label as the runtime kept it; JSON
+`workspace_id`, `tab_id`, `label`. Exit 0; 1 when refused.

@@ -1,0 +1,6 @@
+telar machine enable: Let windows connect to a machine again
+
+Usage: telar machine enable LABEL
+
+Effects: edits machines.json. `enabled` only decides whether windows connect;
+`--machine LABEL` dispatch works either way. Results: nothing; exit 0 or 1.

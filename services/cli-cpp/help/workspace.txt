@@ -1,0 +1,18 @@
+telar workspace: Create, list, rename and show workspaces: a directory and its ordered tabs
+
+Usage: telar workspace COMMAND [ID|--current] [options]
+
+Commands:
+  create          Open a workspace on a directory, with a shell or a command in its first pane; or on a new worktree
+  list            List workspaces with id, name, directory, tab count, branch and dirty flag
+  get             Show one workspace
+  rename          Rename a workspace
+  select          Show a workspace in a window
+
+A workspace is a directory the runtime holds tabs for. Its id is stable; `--current`
+is TELAR_WORKSPACE_ID. `create`, `list`, `get` and `rename` act on the runtime;
+windows reflect workspace additions and renames. `select` switches one window's
+active workspace. At most 64 workspaces.
+Exit codes: 0, or 1 with the reason on stderr.
+
+`telar workspace COMMAND --help` explains a command's arguments, effects and results.

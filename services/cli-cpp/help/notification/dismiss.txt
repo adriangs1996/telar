@@ -1,0 +1,9 @@
+telar notification dismiss: Dismiss one notification shown in a window
+
+Usage: telar notification dismiss ID --client ID [--json] [--socket PATH]
+
+Effects: forwarded to the window `--client ID` names, which dismisses the
+notification with that id and rearms its timer. Needs a running runtime; never
+starts one. Results: text `notification_dismiss: applied` or the JSON of every
+routed command. Exit 0; 1 when the id is unknown there; 2 unknown client; 3 no
+answer in time.

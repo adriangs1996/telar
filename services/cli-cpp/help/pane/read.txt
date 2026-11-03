@@ -1,0 +1,17 @@
+telar pane read: Print recent text from any pane
+
+Usage: telar pane read ID|--current [--lines N] [--source recent|screen] [--json] [--socket PATH]
+
+Arguments:
+  --lines N        Rows to return, counted up from the last row with text (default
+                   40, up to 2000).
+  --source KIND    `recent` (scrollback and screen, default) or `screen` (visible).
+
+Effects: read-only snapshot; no input, no attachment. Starts the local runtime when
+none runs.
+
+Results: the text; JSON `pane_id`, `truncated`, `exit_code` (null while running),
+`text`. Up to 256 KiB, newest rows kept; `truncated` means older rows were dropped
+(stderr says so in text mode, as it names the exit code of a finished pane). A
+finished pane keeps 200 rows within 16 KiB while it is among the last 16 that
+exited; then exit 2.

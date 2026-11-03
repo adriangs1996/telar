@@ -1,0 +1,15 @@
+telar runtime: Ask a running runtime whether it runs, how the host is doing, and watch its events
+
+Usage: telar runtime status|metrics|watch [--json] [--count N] [--socket PATH]
+
+Commands:
+  status          Report that the runtime runs, its wire schema and its proxy status
+  metrics         Print the runtime's latest sample of CPU, memory and battery
+  watch           Stream the runtime's global events as JSON lines
+
+These never start a runtime: `status` is the way to learn whether one runs. The
+runtime answers through `--socket PATH`, else $TELAR_SOCKET, else TELAR_SOCKET_PATH of
+this pane, else $XDG_RUNTIME_DIR/telar/runtime.sock. Exit codes: 0; 1 when none runs
+or it refused; 3 when it did not answer within 30 s.
+
+`telar runtime COMMAND --help` explains a command's arguments, effects and results.

@@ -1,0 +1,12 @@
+telar workspace rename: Rename a workspace
+
+Usage: telar workspace rename ID|--current NAME [--json] [--socket PATH]
+
+Arguments:
+  NAME             1 to 256 bytes of UTF-8.
+
+Effects: the runtime renames the workspace and every window follows. Never starts
+one.
+
+Results: `workspace N renamed to NAME`, as the runtime kept it; JSON
+`workspace_id`, `name`. Exit 0; 1 when refused.

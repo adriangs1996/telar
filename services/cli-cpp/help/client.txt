@@ -1,0 +1,21 @@
+telar client: List and detach attached windows; open their pickers, copy mode, links and clipboard
+
+Usage: telar client COMMAND [ID] [options]
+
+Commands:
+  list            List the attached windows with id, generation, identity and last input pane
+  get             Show one attached window
+  detach          Disconnect a window from the runtime; its panes keep running
+  open            Open the goto picker or the history palette in a window
+  copy-mode       Enter copy mode in a window's focused terminal pane
+  open-link       Open a URI through a window: files in an editor tab, web links in the host's browser
+  clipboard       Put text on the clipboard of a window's host
+
+A client is one attached window (or headless client) of the runtime: it owns its
+layout, focus, selection and scroll, all disposable; the runtime owns everything
+else. `client list` gives the ids that `--client ID` takes everywhere. A client id is
+paired with a generation so a reconnected window is never mistaken for the old one.
+At most 32 clients are listed. Exit codes: 0; 2 unknown client; 3 no answer in
+time; 1 anything else.
+
+`telar client COMMAND --help` explains a command's arguments, effects and results.

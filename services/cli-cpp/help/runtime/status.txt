@@ -1,0 +1,9 @@
+telar runtime status: Report that the runtime runs, its wire schema and its proxy status
+
+Usage: telar runtime status [--json] [--socket PATH]
+
+Effects: a handshake and one query; read-only.
+
+Results: `Runtime: running`, `Schema: N`, `Proxy: active|disabled` with its port,
+scope and system trust when active; JSON `running`, `schema_version`, `proxy`.
+Exit 0; 1 when no runtime answers at the socket.

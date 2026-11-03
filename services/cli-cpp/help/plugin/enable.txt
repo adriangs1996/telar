@@ -1,0 +1,10 @@
+telar plugin enable: Enable a configured plugin for this window's lifetime and reload
+
+Usage: telar plugin enable ID|PATH --client ID [--json] [--socket PATH]
+
+Effects: forwarded to the window `--client ID` names. Needs a running runtime; never
+starts one. Exit 0; 1 when the window refused; 2 unknown client; 3 no answer in time.
+
+A window-lifetime override: no Lua source changes and no capability is granted.
+`admitted`: the reload runs its validation and trust checks; `plugin list` tells
+requested from adopted enablement.

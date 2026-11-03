@@ -1,0 +1,12 @@
+telar worktree open: Show a worktree's workspace in a window: the one used last, or --client
+
+Usage: telar worktree open BRANCH|TITLE [--client ID] [--json] [--socket PATH]
+
+Arguments:
+  --client ID      The window to switch (default: the one a person typed in last).
+
+Effects: changes which workspace that window shows by sending `workspace select`. The
+worktree must be tracked and have a workspace. Starts the local runtime when none runs.
+
+Results: `opened BRANCH in client N`; JSON `worktree_id`, `workspace_id`, `client_id`.
+Exit 0; 2 when the worktree or its workspace is unknown; 1 when no window is attached.

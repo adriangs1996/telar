@@ -1,0 +1,14 @@
+telar diagnostics: Read the runtime's logs beside its socket, and the limits it reached
+
+Usage: telar diagnostics logs|limits [options] [--socket PATH]
+
+Commands:
+  logs            Print the tail of the runtime's log and the telemetry logs beside the socket
+  limits          List every limit the runtime and its windows reached, with counts and times
+
+Neither command starts a runtime. A limit is a fixed bound telar enforces to keep its
+memory fixed; reaching one keeps what fits, drops the excess and counts the reach,
+never stops telar. A CLI command that reaches one prints the notice on stderr and
+exits nonzero.
+
+`telar diagnostics COMMAND --help` explains a command's arguments, effects and results.

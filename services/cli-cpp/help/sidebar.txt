@@ -1,0 +1,17 @@
+telar sidebar: Show, hide, resize and read a window's sidebar
+
+Usage: telar sidebar get|show|hide|resize [COLUMNS] --client ID [--json] [--socket PATH]
+
+Commands:
+  get             Report whether the sidebar is visible and its width
+  show            Show the sidebar (idempotent)
+  hide            Hide the sidebar (idempotent)
+  resize          Set the shared client's sidebar column preference; native pixel width is separate
+
+Visibility and the column width below belong to the shared client model. The native
+window uses a separate pixel width from `gui.sidebar.width`, its resize keys and
+edge dragging. `resize` changes the shared column preference, not that native
+width; `get` reports the column preference. Hiding the native sidebar leaves a
+narrow workspace rail when space permits.
+
+`telar sidebar COMMAND --help` explains a command's arguments, effects and results.

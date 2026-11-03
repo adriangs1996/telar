@@ -1,0 +1,8 @@
+telar tab list: List a workspace's tabs with id, position, pane count and label
+
+Usage: telar tab list [--workspace ID|--current] [--json] [--socket PATH]
+
+Effects: reads the workspace snapshot; attaches nothing, starts no runtime.
+
+Results: text columns ID, POSITION, PANES, LABEL in runtime order; JSON an array of
+`workspace_id`, `tab_id`, `position`, `pane_count`, `label`. Exit 0.

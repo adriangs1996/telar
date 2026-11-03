@@ -1,0 +1,11 @@
+telar workspace-list: Set a client's legacy workspace-list preference; native windows ignore it
+
+Usage: telar workspace-list expand|collapse --client ID [--json] [--socket PATH]
+
+Commands:
+  expand          Expand the workspace list
+  collapse        Collapse the workspace list
+
+The workspace list is part of one window's chrome; the runtime keeps no such state.
+
+`telar workspace-list COMMAND --help` explains a command's arguments, effects and results.

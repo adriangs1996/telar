@@ -1,0 +1,10 @@
+telar plugin run: Run one action of a loaded plugin in its isolated worker
+
+Usage: telar plugin run ID|PATH ACTION --client ID [--json] [--socket PATH]
+
+Effects: forwarded to the window `--client ID` names. Needs a running runtime; never
+starts one. Exit 0; 1 when the window refused; 2 unknown client; 3 no answer in time.
+
+`admitted` is not completion: the worker's result still passes the digest-bound
+capability checks and reaches the window's notifications. A busy or unavailable
+worker refuses.

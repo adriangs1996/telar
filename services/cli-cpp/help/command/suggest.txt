@@ -1,0 +1,14 @@
+telar command suggest: Suggest one command line for a pane from words; prints it, never runs it
+
+Usage: telar command suggest PANE|--current TEXT [--json] [--socket PATH]
+
+Arguments:
+  PANE|--current   The pane whose working directory and screen give the context.
+  TEXT             What the command should do; 1 to 512 bytes of UTF-8.
+
+Effects: the runtime's engine (a headless agent of its own) answers one command
+line. Nothing is typed anywhere. Needs a running runtime with an engine configured;
+never starts one.
+
+Results: the suggestion on stdout; JSON `status` (ready|unavailable|timeout|failed)
+and `command`. Exit 0 when ready, 3 on timeout, 1 when unavailable or failed.

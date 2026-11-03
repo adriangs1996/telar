@@ -1,0 +1,10 @@
+telar machine check: Reach a machine's runtime over SSH and compare wire schemas
+
+Usage: telar machine check LABEL [--json]
+
+Effects: runs `telar server endpoint` on the machine, which starts its runtime when
+none runs.
+
+Results: JSON `label`, `reachable`, and when reachable `schema`, `local_schema`,
+`compatible`, `home`, `shell`, `socket`, else `error`, `detail`. Exit 0; 1 when
+unreachable or the schemas differ (run `machine setup` to install this build there).

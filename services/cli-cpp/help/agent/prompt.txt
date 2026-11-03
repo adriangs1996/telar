@@ -1,0 +1,28 @@
+telar agent prompt: Type a prompt into an agent's pane and press Enter; --wait blocks for its answer
+
+Usage: telar agent prompt TARGET TEXT [--interrupt] [--wait] [--timeout SECONDS] [--json] [--socket PATH]
+
+TARGET is a pane id, `--current` (this pane, from TELAR_PANE_ID), `worktree:BRANCH`
+or `worktree:TITLE` (the agent working in that tracked worktree), or the agent's
+session title (case-insensitive; refused when two agents share it).
+
+Arguments:
+  TEXT             The prompt, 1 to 65536 bytes, sent as one paste followed by Enter,
+                   encoded the way the agent's keyboard mode reads it.
+  --interrupt      Stop the agent's current turn first (as `agent interrupt`) and
+                   wait up to 15 s for it to stop; fail if it does not.
+  --wait           Block until the agent finishes the turn, blocks or fails.
+  --timeout S      With --wait: give up after S seconds (default 30, up to 86400).
+
+Effects: the runtime types the text into the pane, pinned to the pane generation
+seen, so a restarted pane is refused rather than prompted twice. Refused while the
+agent is `blocked` (answer its prompt first, with `pane send-keys`), while a person
+has the pane focused, and past the budget of 8 prompts per 60 s from one pane to
+another (replies travel through `agent wait`, which spends nothing). When this
+process runs in a pane, the agent sees `[telar: from NAME, pane N]` before the text.
+Starts the local runtime when none runs.
+
+Results: nothing without --wait, exit 0. With --wait: the agent's row or JSON when
+it leaves `working` (or is `blocked`/`failed`); exit 0, or 1 when it failed. Exit 3
+when it does not start working within 5 s or is still working at the timeout
+(the turn goes on), 2 when its pane generation changed.

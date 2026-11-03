@@ -1,0 +1,16 @@
+telar agent report-command: Report a shell command an agent started or finished, for the history
+
+Usage: telar agent report-command TARGET started|finished COMMAND --provider NAME [--tool-call ID] [--cwd PATH] [--session ID] [--exit-code N] [--json] [--socket PATH]
+
+Arguments:
+  TARGET           A pane id or `--current`.
+  started|finished The phase; `started` cannot carry --exit-code.
+  COMMAND          The command line, recorded, never run.
+  --provider NAME  Required: the agent that ran it. A name of a known agent manifest is
+                   accepted only from a process inside that pane (`foreign_process`).
+  --tool-call ID, --cwd PATH, --session ID, --exit-code N  Correlation and outcome.
+
+Effects: the runtime records the observation in the searchable history as an agent
+command. Needs a running runtime; never starts one.
+
+Results: nothing; with --json `pane_id`, `pane_generation`, `accepted`. Exit 0.

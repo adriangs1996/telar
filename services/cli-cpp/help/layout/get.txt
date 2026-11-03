@@ -1,0 +1,6 @@
+telar layout get: Print the active tab's layout token
+
+Usage: telar layout get --client ID [--json] [--socket PATH]
+
+Effects: read-only on the window. Results: the token; JSON `encoding`
+(`telar-layout-hex`) and `data`. Refused without an active tab or focused pane.

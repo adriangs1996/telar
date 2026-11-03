@@ -1,0 +1,5 @@
+telar machine receive-config: The machine's side of `setup`: receives the allowlisted configuration on stdin
+
+Usage: telar machine receive-config
+
+Run by `telar machine setup` on the machine being set up; not meant to be typed.

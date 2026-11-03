@@ -1,0 +1,6 @@
+telar machine disable: Keep windows from connecting to a machine
+
+Usage: telar machine disable LABEL
+
+Effects: edits machines.json. Dispatch with `--machine LABEL` still works.
+Results: nothing; exit 0 or 1.

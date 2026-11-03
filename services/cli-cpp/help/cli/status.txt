@@ -1,0 +1,5 @@
+telar cli status: Say where the `telar` symlink points
+
+Usage: telar cli status [--dir DIR]
+
+Results: `telar cli: LINK -> TARGET` or `telar cli: LINK is not installed`. Exit 0.

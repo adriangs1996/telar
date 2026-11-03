@@ -1,0 +1,9 @@
+telar plugin inspect: Validate a package and print its immutable identity
+
+Usage: telar plugin inspect PATH
+
+Effects: loads and validates `PATH/plugin.json` and the package; runs no plugin
+code, contacts no runtime.
+
+Results: `id`, `version`, `source`, `revision`, `digest`, `actions` and
+`capabilities` lines. Exit 0; 1 with the diagnostic on stderr.

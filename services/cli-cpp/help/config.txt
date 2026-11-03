@@ -1,0 +1,15 @@
+telar config: Validate the Lua configuration, and reload or read the one a window adopted
+
+Usage: telar config check [PATH] [--profile NAME] | telar config reload|show --client ID [options]
+
+Commands:
+  check           Compile and validate a configuration, its plugins and keybindings, then exit
+  reload          Make a window reload its configuration now
+  show            Print a section of the configuration a window adopted
+
+The configuration is Lua, loaded by each window: $TELAR_DEVELOPMENT_CONFIG, else
+$XDG_CONFIG_HOME/telar/config.lua, else ~/.config/telar/config.lua. A window
+validates a complete replacement before adopting it and keeps the previous one on
+failure. The runtime takes its own values from the window that launched it.
+
+`telar config COMMAND --help` explains a command's arguments, effects and results.

@@ -1,0 +1,7 @@
+telar history list: Show recent commands
+
+Usage: telar history list [--cwd | --workspace PATH | --pane ID] [--failed] [--author all|human|agent] [--limit N] [--socket PATH]
+
+Results: one line per entry: `#ID  DATE TIMEZ  STATUS  DURATIONms  CWD  [provider]
+COMMAND`, newest first; STATUS is `RUN`, `INT`, the exit code or `?`; `[provider]`
+marks an agent's command. Exit 0.

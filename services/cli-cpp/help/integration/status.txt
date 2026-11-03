@@ -1,0 +1,9 @@
+telar integration status: Report which hooks, files and skills are installed for an agent
+
+Usage: telar integration status claude|codex|pi|cursor|opencode [--settings PATH]
+
+Effects: reads the files; changes nothing.
+
+Results: for hook agents one `EVENT: installed|absent` line per event, then one per
+skill; for pi and opencode `telar extension|plugin: absent|installed|foreign at
+PATH` and the skills. A note names hooks left in a legacy file. Exit 0.

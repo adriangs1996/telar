@@ -1,0 +1,6 @@
+telar sidebar get: Report whether the sidebar is visible and its width
+
+Usage: telar sidebar get --client ID [--json] [--socket PATH]
+
+Effects: read-only on the window. Results: `visible|hidden N columns`; JSON
+`visible`, `width`. Exit 0; 2 unknown client; 3 no answer in time.

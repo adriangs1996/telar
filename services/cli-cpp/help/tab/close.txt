@@ -1,0 +1,9 @@
+telar tab close: Close a tab and the panes in it; the last tab closes its workspace
+
+Usage: telar tab close ID|--current [--workspace ID|--current] [--json] [--socket PATH]
+
+Effects: the runtime closes the tab's panes and removes the tab; a workspace left
+without tabs disappears too. Never starts a runtime.
+
+Results: `tab N closed`; JSON `workspace_id`, `tab_id`, `closed`, `workspace_closed`.
+Exit 0; 1 when the tab is unknown.

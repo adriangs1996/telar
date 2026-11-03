@@ -1,0 +1,13 @@
+telar tab move: Move a tab one position, or before/after another tab
+
+Usage: telar tab move ID|--current previous|next [--relative-to ID] [--workspace ID|--current] [--json] [--socket PATH]
+
+Arguments:
+  previous|next    Without --relative-to: one position left or right (an edge is a
+                   successful no-op). With it: before or after that tab.
+  --relative-to ID A tab id of the same workspace (not --current).
+
+Effects: reorders the workspace's tabs in the runtime. Never starts one.
+
+Results: `tab N moved to position P` (zero-based); JSON `workspace_id`, `tab_id`,
+`position`. Exit 0; 1 when refused.

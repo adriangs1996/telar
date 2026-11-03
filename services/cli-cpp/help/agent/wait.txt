@@ -1,0 +1,19 @@
+telar agent wait: Block until an agent reaches a status (default: done; finished = done or ready)
+
+Usage: telar agent wait TARGET [--until done|finished|ready|blocked|working|failed] [--timeout SECONDS] [--json] [--socket PATH]
+
+TARGET is a pane id, `--current` (this pane, from TELAR_PANE_ID), `worktree:BRANCH`
+or `worktree:TITLE` (the agent working in that tracked worktree), or the agent's
+session title (case-insensitive; refused when two agents share it).
+
+Arguments:
+  --until STATUS   What to wait for (default `done`). `finished` accepts `done` or
+                   `ready`, whether or not a person saw the turn end; `idle` is `ready`.
+  --timeout S      Give up after S seconds (default 30, up to 86400: one wait covers a
+                   long build); an `s` suffix is accepted.
+
+Effects: polls the runtime every 250 ms, resolving TARGET each time; the runtime
+keeps no waiter. Read-only; starts the local runtime when none runs.
+
+Results: the agent's row or JSON once the status matches, exit 0. Exit 3 on timeout
+(stderr names the current status), 2 when the agent disappears meanwhile.

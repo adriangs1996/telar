@@ -1,0 +1,12 @@
+telar client open-link: Open a URI through a window: files in an editor tab, web links in the host's browser
+
+Usage: telar client open-link URI --client ID [--json] [--socket PATH]
+
+Effects: forwarded to the window `--client ID` names. Needs a running runtime; never
+starts one. Results: text `ACTION: STATUS` or JSON `client_id`, `client_generation`,
+`action`, `status`, `target_id`, `value`, `text`; `applied` means done, `admitted`
+means queued and completed asynchronously. Exit 0; 1 when the window refused; 2
+unknown client; 3 no answer in time.
+
+The URI is validated and routed by the window's link policy relative to its
+focused pane; `admitted` means the opening job was queued.

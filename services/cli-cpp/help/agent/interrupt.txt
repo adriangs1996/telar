@@ -1,0 +1,18 @@
+telar agent interrupt: Stop an agent's turn with its provider's interrupt key
+
+Usage: telar agent interrupt TARGET [--json] [--socket PATH]
+
+TARGET is a pane id, `--current` (this pane, from TELAR_PANE_ID), `worktree:BRANCH`
+or `worktree:TITLE` (the agent working in that tracked worktree), or the agent's
+session title (case-insensitive; refused when two agents share it).
+
+Effects: the runtime presses the interrupt key the agent's manifest declares (for
+instance Ctrl+C for Claude Code, Escape for others), pinned to the pane generation.
+The agent stays `working` until its screen shows the idle prompt or its integration
+reports; a press within 2 s of the last one is not repeated. When Claude Code puts
+the unanswered prompt back in its composer, telar clears it. Refused when the agent
+is not working, declares no interrupt key, or a person has the pane focused. Starts
+the local runtime when none runs.
+
+Results: the agent's row or JSON as it was before the press, exit 0; 1 when refused;
+2 when unknown. Follow with `agent wait --until ready` or `agent prompt --interrupt`.

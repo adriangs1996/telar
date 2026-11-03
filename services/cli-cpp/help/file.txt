@@ -1,0 +1,14 @@
+telar file: Publish a file from standard input, or write one to standard output, byte-exact
+
+Usage: telar file put ABS_PATH --bytes N | telar file get ABS_PATH
+
+Commands:
+  put             Read exactly N bytes from stdin and publish them at a new path
+  get             Write a regular file's bytes to stdout
+
+The transport for artifacts between machines, run under `telar --machine LABEL exec`
+so the bytes travel as raw streams and never as terminal screen text. Touches no
+runtime. Paths are absolute; every directory on the way must belong to the user and
+be writable by no one else. At most 128 MiB. Exit 0, or 1 with the reason on stderr.
+
+`telar file COMMAND --help` explains a command's arguments, effects and results.

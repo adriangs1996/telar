@@ -1,0 +1,32 @@
+telar exec start: Start a command (the word `start` may be left out); the default when `--` follows
+
+Usage: telar exec start [--id N] [--workspace ID] [--cwd ABS] [--detach --json] [--no-stdin] [--timeout SECONDS] [--socket PATH] -- PROGRAM ARGS...
+       telar exec [options] -- PROGRAM ARGS...
+
+Arguments:
+  -- PROGRAM ARGS  Literal argv, 1 to 64 words; a shell is explicit
+                   (`-- /bin/sh -c 'printf hello'`). PROGRAM resolves on the
+                   runtime's PATH.
+  --id N           A nonzero id of your choice (default: random). Starting again
+                   with the same id and arguments finds the same execution; with
+                   other arguments it is refused.
+  --workspace ID   Run in that workspace's directory (the destination runtime's id).
+                   Default: the runtime's own Administration workspace at its HOME,
+                   created and removed as needed, independent of any window.
+  --cwd ABS        An explicit absolute working directory on the destination.
+  --detach --json  Return at once with the execution's JSON instead of its bytes.
+  --no-stdin       Close the child's input at once.
+  --timeout S      Stop waiting after S seconds (default: wait until exit); the
+                   execution keeps running, stdin closes.
+
+Effects: the runtime spawns PROGRAM in its own process group with the runtime's
+environment (minus the pane variables and SSH_AUTH_SOCK), and keeps its result.
+Starts the local runtime when none runs. In the foreground this process copies
+stdin to the child and the child's stdout and stderr to its own, byte for byte, with
+no metadata; stdin closes at EOF, on timeout or on disconnect, never cancelling.
+
+Results: foreground, exit with the child's status (signals as 128+n), 124 on
+timeout, 125 on a runtime or transport failure; when the start is uncertain, stderr
+names the id to query before retrying. Detached: Results: JSON `execution_id`, `workspace_id`, `state` (starting|running|exited|failed),
+`exit_code` (null until exited), `stdout_offset`, `stderr_offset`, `stdout_bytes`,
+`stderr_bytes`, `stdin_bytes`, `stdin_open`, `failure`.

@@ -1,0 +1,13 @@
+telar agent report-title: Report the title an agent gave its own session (an empty title clears it)
+
+Usage: telar agent report-title TARGET TITLE [--json] [--socket PATH]
+
+Arguments:
+  TARGET           A pane id or `--current`, which uses TELAR_PANE_ID and
+                   TELAR_PANE_GENERATION directly, before the agent is observed.
+  TITLE            At most 96 bytes of printable UTF-8; empty clears the report.
+
+Effects: the sidebar and `agent list` show this title above a generated one. Needs a
+running runtime; never starts one.
+
+Results: nothing; with --json `pane_id`, `pane_generation`, `accepted`. Exit 0.

@@ -1,0 +1,28 @@
+telar integration: Register telar's lifecycle hooks and skills with an agent CLI, or remove and inspect them
+
+Usage: telar integration install|uninstall|status claude|codex|pi|cursor|opencode [--settings PATH] [--legacy]
+
+Commands:
+  install         Add telar's hooks (or extension/plugin) and skills for an agent
+  uninstall       Remove telar's hooks (or extension/plugin) and skills for an agent
+  status          Report which hooks, files and skills are installed for an agent
+
+Files per agent, under the agent's own directory ($CLAUDE_CONFIG_DIR, $CODEX_HOME,
+$PI_CODING_AGENT_DIR, $XDG_CONFIG_HOME/opencode; Cursor always under ~):
+  claude    ~/.claude/settings.json hooks (SessionStart, UserPromptSubmit, PreToolUse,
+            PostToolUse, Stop, Notification, SessionEnd, CwdChanged, WorktreeCreate,
+            WorktreeRemove)
+  codex     ~/.codex/hooks.json hooks; Codex must run with --no-daemon to be in a pane
+  cursor    ~/.cursor/hooks.json hooks
+  pi        ~/.pi/agent/extensions/telar.ts, an extension
+  opencode  ~/.config/opencode/plugins/telar.ts, a plugin
+and beside them `skills/telar/SKILL.md` (how to discover and drive telar) and
+`skills/telar-coordinator/SKILL.md` (delegating tasks to worktree agents), each
+marked as telar's so only telar's copies are ever replaced or removed.
+
+The hooks run `telar hook AGENT` with the pane's TELAR_BIN_PATH, falling back to
+the executable that installed them, and run only inside a pane. The runtime learns an agent's
+official state, its session for restore and the commands it runs. Nothing here
+contacts a runtime.
+
+`telar integration COMMAND --help` explains a command's arguments, effects and results.

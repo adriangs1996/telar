@@ -1,0 +1,14 @@
+telar client open: Open the goto picker or the history palette in a window
+
+Usage: telar client open goto|history --client ID [--json] [--socket PATH]
+
+Arguments:
+  goto             The pane/tab/workspace picker (`applied`).
+  history          The command history palette with its initial query queued
+                   (`admitted`; results arrive asynchronously).
+
+Effects: forwarded to the window `--client ID` names. Needs a running runtime; never
+starts one. Results: text `ACTION: STATUS` or JSON `client_id`, `client_generation`,
+`action`, `status`, `target_id`, `value`, `text`; `applied` means done, `admitted`
+means queued and completed asynchronously. Exit 0; 1 when the window refused; 2
+unknown client; 3 no answer in time.

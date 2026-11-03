@@ -1,0 +1,16 @@
+telar worktree resolve: Find the clone of a repository among this machine's workspaces
+
+Usage: telar worktree resolve --repository IDENTITY [--workspace PATH|ID] [--json] [--socket PATH]
+
+Arguments:
+  --repository X   The repository identity: its origin URL as host/path, without
+                   userinfo or default port; at most 512 bytes.
+  --workspace X    Choose among several clones by path or workspace id.
+
+Effects: searches the runtime's workspaces and worktrees, then the history database,
+then the managed clones under $XDG_DATA_HOME/telar/repositories. Read-only; starts
+the local runtime when none runs. `worktree fetch` and remote `worktree create` run
+it on the other machine for you.
+
+Results: the clone's path; JSON `repository`, `path`. Exit 0; 1 when none or several
+match (name one with --workspace).

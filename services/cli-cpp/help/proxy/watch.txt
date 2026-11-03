@@ -1,0 +1,11 @@
+telar proxy watch: Stream the proxy's status events as JSON lines
+
+Usage: telar proxy watch [--count N] [--jsonl] [--socket PATH]
+
+Effects: `telar runtime watch` filtered to `proxy_status`, `runtime_stopping` and
+`resync_required`; observes status, not captured traffic. The proxy configuration
+is fixed at runtime start, so after the initial status the stream may stay idle.
+Never starts a runtime.
+
+Results: one JSON object per line. Exit 0 after --count events or when the runtime
+stops; 1 after a resync notice.

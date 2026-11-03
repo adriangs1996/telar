@@ -1,0 +1,16 @@
+telar proxy: Install or remove the proxy's short-lived system CA, and watch the proxy's status
+
+Usage: telar proxy trust install|uninstall|status [--ca-dir PATH] [--linux BACKEND]
+       telar proxy watch [--count N] [--jsonl] [--socket PATH]
+
+Commands:
+  trust           Install, remove or inspect the system trust of telar's proxy CA
+  watch           Stream the proxy's status events as JSON lines
+
+The optional CONNECT proxy relays pane applications' traffic and can intercept TLS
+for configured hosts. Capture is separately enabled; exchange-listener plugins can
+process captured requests and responses. It does not determine agent status or
+create a persistent request archive by itself. Interception is visible while active;
+trusting its CA on the system is a separate, explicit, reversible step.
+
+`telar proxy COMMAND --help` explains a command's arguments, effects and results.

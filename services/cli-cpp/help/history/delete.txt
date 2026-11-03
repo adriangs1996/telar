@@ -1,0 +1,5 @@
+telar history delete: Remove one entry, without asking
+
+Usage: telar history delete ID [--socket PATH]
+
+Results: `removed N entries`. Exit 0.

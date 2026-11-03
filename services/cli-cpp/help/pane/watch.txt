@@ -1,0 +1,16 @@
+telar pane watch: Emit a pane's text as JSON lines whenever it changes, by polling
+
+Usage: telar pane watch ID|--current [--count N] [--interval-ms N] [--lines N] [--source recent|screen] [--workspace ID [--tab ID]] [--jsonl] [--socket PATH]
+
+Arguments:
+  --count N        Stop after N changes (default: until killed).
+  --interval-ms N  Poll every N ms (default 250, 10 to 60000).
+  --lines N, --source KIND  As `pane read`.
+  --workspace, --tab  Scope the lookup of the pane's generation.
+
+Effects: reads the topology once to pin the pane's generation, then polls `read`
+and prints a line only when the text changed. Not a byte stream: changes between
+two polls are coalesced. Needs a running runtime; never starts one.
+
+Results: always JSON lines `pane_id`, `pane_generation`, `truncated`, `text`.
+Exit 0 after --count changes; 2 when the pane is gone.

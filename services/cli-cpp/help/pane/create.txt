@@ -1,0 +1,16 @@
+telar pane create: Create a terminal pane in a window by splitting its focused pane
+
+Usage: telar pane create --client ID [--json] [--socket PATH]
+
+Effects: the runtime forwards the request to the window `--client ID` names (see
+`telar client list`); the pane must be in that window's active tab. Needs a running
+runtime; never starts one. Results: text `ACTION: STATUS` or JSON `client_id`,
+`client_generation`, `action`, `status`, `target_id`, `value`, `text`. `applied`
+means done; `admitted` means the window queued it and the runtime confirms the
+change later (check with `pane list` or `tab get`). Exit 0; 1 when the window
+refused (its reason on stderr); 2 unknown client; 3 the window did not answer in time.
+
+The window splits its focused pane left/right with its launch settings. The new
+pane is confirmed asynchronously (`admitted`) and takes the focus, so text to it
+is refused while a person looks; for a pane of your own use `tab create
+--background`.

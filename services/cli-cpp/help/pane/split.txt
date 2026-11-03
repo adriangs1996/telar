@@ -1,0 +1,14 @@
+telar pane split: Focus a pane in a window and split it horizontally (left/right) or vertically (top/bottom)
+
+Usage: telar pane split ID horizontal|vertical --client ID [--json] [--socket PATH]
+
+Effects: the runtime forwards the request to the window `--client ID` names (see
+`telar client list`); the pane must be in that window's active tab. Needs a running
+runtime; never starts one. Results: text `ACTION: STATUS` or JSON `client_id`,
+`client_generation`, `action`, `status`, `target_id`, `value`, `text`. `applied`
+means done; `admitted` means the window queued it and the runtime confirms the
+change later (check with `pane list` or `tab get`). Exit 0; 1 when the window
+refused (its reason on stderr); 2 unknown client; 3 the window did not answer in time.
+
+The focus moves to ID first and stays there even when the split is then refused
+for lack of room. The new pane is confirmed asynchronously (`admitted`).

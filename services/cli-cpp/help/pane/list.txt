@@ -1,0 +1,15 @@
+telar pane list: List every pane with its workspace, tab, generation and lifecycle
+
+Usage: telar pane list [--workspace ID|--current [--tab ID|--current]] [--json] [--socket PATH]
+
+Arguments:
+  --workspace, --tab  Restrict to one workspace or one tab of it (`--current` reads
+                   TELAR_WORKSPACE_ID / TELAR_TAB_ID); --tab needs --workspace.
+
+Effects: walks the runtime's workspace and tab snapshots; attaches to nothing and
+starts no runtime. Not one atomic snapshot: a pane removed meanwhile fails the
+listing rather than hiding. At most 256 panes.
+
+Results: text columns WORKSPACE, TAB, PANE, GENERATION, LIFECYCLE; JSON an array of
+`workspace_id`, `tab_id`, `position` (zero-based in the tab), `pane_id`,
+`pane_generation`, `lifecycle` (running|exited). Exit 0.

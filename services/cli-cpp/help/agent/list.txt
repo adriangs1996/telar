@@ -1,0 +1,9 @@
+telar agent list: List the agents the runtime knows about
+
+Usage: telar agent list [--json] [--socket PATH]
+
+Effects: reads the runtime's agent snapshot. Read-only; starts the local runtime
+when none runs.
+
+Results: text columns PANE, GEN, STATUS, PROV, WORKSPACE, TAB, TITLE; JSON
+`revision` and `agents` (an array of agent objects). At most 64 agents. Exit 0.

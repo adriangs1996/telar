@@ -1,8 +1,8 @@
 # telar CLI
 
-`telar`, the command line people and agents type: agent hooks, agent CLI
-integration, plugin packages, proxy CA trust, and `server` to start, find, bridge
-and stop the runtime. It talks to the runtime over its socket with `telar-client`
+`telar`, the command line people and agents type. It implements help, agent
+hooks, agent CLI integration, plugin packages, proxy CA trust, and `server` to
+start, find, bridge and stop the runtime; the rest of the Zig CLI is being ported. It talks to the runtime over its socket with `telar-client`
 and shares code with the runtime and the GUI through `dlls/`; it never includes
 `services/runtime-cpp`.
 
@@ -20,8 +20,10 @@ cmake --build out
 ctest --test-dir out --output-on-failure
 ```
 
-`tools/` holds the parity and latency checks that compare these commands with
-another `telar` executable.
+The C++ `telar` is replacing the Zig CLI command by command;
+[parity.md](parity.md) records what each command does today and how it is
+compared with Zig. `help/` holds every help text `telar` prints, and `tools/`
+the parity and latency checks.
 
 ## Agent hooks
 

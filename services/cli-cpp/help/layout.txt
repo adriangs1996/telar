@@ -1,0 +1,16 @@
+telar layout: Export a window's active tab layout as a token and apply it back
+
+Usage: telar layout get|apply [TOKEN] --client ID [--json] [--socket PATH]
+
+Commands:
+  get             Print the active tab's layout token
+  apply           Restore a layout token on the active tab
+
+The layout is the window's: the split tree, pane surfaces, focused pane and fullscreen
+state of its active tab, plus the sidebar and workspace list preferences. The token is
+hexadecimal in telar's validated layout schema with stable runtime ids, meant for
+`layout apply` on the same live tab with the same panes. Needs a running runtime;
+never starts one. Exit codes: 0; 1 when the window refused; 2 unknown client; 3 no
+answer in time.
+
+`telar layout COMMAND --help` explains a command's arguments, effects and results.

@@ -1,0 +1,11 @@
+telar client copy-mode: Enter copy mode in a window's focused terminal pane
+
+Usage: telar client copy-mode --client ID [--json] [--socket PATH]
+
+Effects: forwarded to the window `--client ID` names. Needs a running runtime; never
+starts one. Results: text `ACTION: STATUS` or JSON `client_id`, `client_generation`,
+`action`, `status`, `target_id`, `value`, `text`; `applied` means done, `admitted`
+means queued and completed asynchronously. Exit 0; 1 when the window refused; 2
+unknown client; 3 no answer in time.
+
+Already in copy mode is a successful no-op; a pane that cannot enter it refuses.

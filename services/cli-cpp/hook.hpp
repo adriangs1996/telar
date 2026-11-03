@@ -43,7 +43,7 @@ int runHook(Memory &memory, const HookOptions &options, const Environment &envir
         ServerOptions server;
         server.socket = options.socket;
         const RuntimePaths paths{memory, server, environment};
-        hooks::Session session{paths.socket.c_str(), *target};
+        hooks::Session session{memory, paths.socket.c_str(), *target};
         if (reports.progress) {
           session.report(*reports.progress);
         }

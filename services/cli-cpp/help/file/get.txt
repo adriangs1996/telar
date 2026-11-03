@@ -1,0 +1,8 @@
+telar file get: Write a regular file's bytes to stdout
+
+Usage: telar file get ABS_PATH
+
+Effects: reads one regular, user-owned file. Nothing else changes.
+
+Results: the raw bytes on stdout; exit 0. Through `exec`, falling behind the
+retained output is an explicit failure, not a short artifact: check the exit status.

@@ -1,0 +1,9 @@
+telar plugin disable: Disable a configured plugin for this window's lifetime and reload
+
+Usage: telar plugin disable ID|PATH --client ID [--json] [--socket PATH]
+
+Effects: forwarded to the window `--client ID` names. Needs a running runtime; never
+starts one. Exit 0; 1 when the window refused; 2 unknown client; 3 no answer in time.
+
+The next configuration drops the plugin's bindings; enabling it again restores
+them from the unchanged source. `admitted`.

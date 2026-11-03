@@ -1,0 +1,18 @@
+telar notification show: Show a toast in every attached window, optionally clickable
+
+Usage: telar notification show TITLE [--body TEXT] [--level info|success|warning|failure] [--duration MS] [--pane ID | --tab ID | --workspace ID] [--link URL] [--socket PATH]
+
+Arguments:
+  TITLE            At most 96 bytes, no control characters.
+  --body TEXT      Detail below the title; at most 512 bytes.
+  --level LEVEL    `info` (default), `success`, `warning` or `failure`.
+  --duration MS    Visible for 500 to 60000 ms (default 4000).
+  --pane, --tab, --workspace ID  One click target: focus that pane, select that
+                   tab or workspace.
+  --link URL       An https URL a click opens in the browser; at most 1024 bytes.
+
+Effects: the runtime delivers the toast to every attached window. Needs a running
+runtime; never starts one.
+
+Results: nothing; exit 0. Exit 1 when the runtime is not running, no window is
+attached, or the text is too long or invalid.

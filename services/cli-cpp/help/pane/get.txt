@@ -1,0 +1,11 @@
+telar pane get: Show one pane, agent or not, from the same topology
+
+Usage: telar pane get ID|--current [--workspace ID [--tab ID]] [--json] [--socket PATH]
+
+Arguments as `pane list`; an explicit --workspace and --tab avoid enumerating the
+whole runtime.
+
+Effects: read-only; needs a running runtime, never starts one.
+
+Results: one row without header, or one JSON object as `pane list` prints. Exit 0;
+2 with empty output when the pane does not exist.

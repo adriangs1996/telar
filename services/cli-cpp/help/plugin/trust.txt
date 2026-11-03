@@ -1,0 +1,14 @@
+telar plugin trust: Grant declared capabilities to one exact package digest
+
+Usage: telar plugin trust PATH [--capability NAME]...
+
+Arguments:
+  --capability NAME  A capability the package declares; repeatable. Without any,
+                   every declared capability is granted.
+
+Effects: adds the digest and capabilities to trust.json under $XDG_CONFIG_HOME/telar
+(else ~/.config/telar). A plugin with filesystem, process or network access is
+full-trust code: grant what the user decided.
+
+Results: `telar plugin trust updated`. Exit 0; 1 for an undeclared or repeated
+capability or an insecure store.

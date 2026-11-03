@@ -1,0 +1,29 @@
+telar server: Run the local runtime in the foreground, stop it, or print its endpoint
+
+Usage: telar server [--fresh] [--socket PATH] [--graphics-pane-mib N] [--graphics-global-mib N] [--config PATH | --no-config] [--profile NAME]
+       telar server stop|endpoint [--socket PATH]
+
+Commands:
+  stop            Ask the local runtime to stop
+  endpoint        Make sure a runtime runs and print its socket path and wire schema
+
+The runtime is one long-lived process per account that owns the panes, their
+children, the agents and the history, so a window may come and go. Commands that
+need it start it in the background on their own; `telar server` runs it in this
+process instead, until stopped.
+
+Arguments:
+  --fresh          Set the previous session checkpoint aside (`session.ckpt.previous`)
+                   instead of restoring it. Refused while a runtime is already running.
+  --socket PATH    Listen at PATH instead of $XDG_RUNTIME_DIR/telar/runtime.sock.
+  --graphics-pane-mib N, --graphics-global-mib N
+                   Decoded image memory per pane and for the runtime (defaults 256 and
+                   512 MiB).
+  --config, --no-config, --profile  The Lua configuration the runtime takes its
+                   values from, as a window would.
+  --background, --daemonized  How telar starts a runtime for itself; not for typing.
+
+Results: `telar server` runs until stopped and exits 0, or 1 after a proxy tunnel kept
+the shutdown waiting. A second runtime on the same socket fails to bind.
+
+`telar server COMMAND --help` explains a command's arguments, effects and results.

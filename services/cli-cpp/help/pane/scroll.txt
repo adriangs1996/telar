@@ -1,0 +1,15 @@
+telar pane scroll: Scroll a pane's viewport in a window by a signed number of rows
+
+Usage: telar pane scroll ID DELTA --client ID [--json] [--socket PATH]
+
+Effects: the runtime forwards the request to the window `--client ID` names (see
+`telar client list`); the pane must be in that window's active tab. Needs a running
+runtime; never starts one. Results: text `ACTION: STATUS` or JSON `client_id`,
+`client_generation`, `action`, `status`, `target_id`, `value`, `text`. `applied`
+means done; `admitted` means the window queued it and the runtime confirms the
+change later (check with `pane list` or `tab get`). Exit 0; 1 when the window
+refused (its reason on stderr); 2 unknown client; 3 the window did not answer in time.
+
+DELTA is a signed row count. Changes only that window's scroll offset: no focus
+change, no keystrokes. Hitting the end is a successful no-op; a pane in copy
+mode or not attached is refused.

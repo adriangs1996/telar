@@ -1,0 +1,17 @@
+telar agent report-state: Report an agent's official lifecycle state, as its hooks do
+
+Usage: telar agent report-state TARGET working|blocked|ready|exited|settling|continuing|waiting|idle|released [--blocked-reason none|permission|question|plan|other] [--event TEXT] [--session ID] [--session-file PATH] [--session-file-kind claude_transcript|codex_state|cursor_meta] [--json] [--socket PATH]
+
+Arguments:
+  TARGET           A pane id or `--current` (TELAR_PANE_ID and TELAR_PANE_GENERATION).
+  STATE            The lifecycle state the agent is in now.
+  --blocked-reason What a blocked agent asks for; only valid combinations are accepted.
+  --event TEXT     The event behind the report, shown as `last_event`.
+  --session ID     The agent's session id, stored as `report-session` does.
+  --session-file   The transcript or state file, with its kind.
+
+Effects: an official report outranks what the runtime infers from the process and
+the screen; this is how `telar hook` reports for Claude Code, Codex, Pi, Cursor and
+OpenCode. Needs a running runtime; never starts one.
+
+Results: nothing; with --json `pane_id`, `pane_generation`, `accepted`. Exit 0.

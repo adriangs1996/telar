@@ -1,0 +1,24 @@
+telar workspace create: Open a workspace on a directory, with a shell or a command in its first pane; or on a new worktree
+
+Usage: telar workspace create --directory DIR [--name NAME] [--columns N] [--json] [--socket PATH] [-- COMMAND...]
+       telar workspace create --worktree BRANCH [--name NAME] [--directory DIR]
+
+Arguments:
+  --directory DIR  An existing directory, resolved before anything connects.
+  --name NAME      The workspace's name (default: the directory's basename; at most
+                   256 bytes).
+  --columns N      Width of the first pane until a window sizes it (20 to 1024,
+                   default 80); rows start at 24. Wide enough, a login URL stays on
+                   one line for `pane read`.
+  -- COMMAND...    What the first pane runs instead of the login shell; at most 64
+                   words, literal.
+  --worktree BRANCH  Instead: `telar worktree create BRANCH`, with --name as its
+                   title; no command or width here.
+
+Effects: the runtime creates the workspace, one tab and one pane running COMMAND
+or $SHELL. No window attaches and no focus changes. Starts the local runtime when
+none runs. Runs no Git without --worktree.
+
+Results: `workspace N created at DIR`; JSON `workspace_id`, `tab_id`, `pane_id`,
+`directory`, so you can close what you opened with `tab close`. Exit 0; 1 when
+refused (missing directory, full runtime).

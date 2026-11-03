@@ -1,0 +1,20 @@
+telar agent read: Print recent text from an agent's pane
+
+Usage: telar agent read TARGET [--lines N] [--source recent|screen] [--json] [--socket PATH]
+
+TARGET is a pane id, `--current` (this pane, from TELAR_PANE_ID), `worktree:BRANCH`
+or `worktree:TITLE` (the agent working in that tracked worktree), or the agent's
+session title (case-insensitive; refused when two agents share it).
+
+Arguments:
+  --lines N        Rows to return, counted up from the last row with text so blank
+                   rows never hide a short output (default 40, up to 2000).
+  --source KIND    `recent` (scrollback and screen, default) or `screen` (visible).
+
+Effects: read-only snapshot of the terminal; no input, no attachment. Starts the
+local runtime when none runs.
+
+Results: the text; JSON `pane_id`, `truncated`, `exit_code` (null while running),
+`text`. A read carries up to 256 KiB, newest rows kept: `truncated` (and a stderr
+note) means older rows were dropped. An exited pane answers from its last 200 rows
+within 16 KiB while it is among the last 16 exited panes; then exit 2.

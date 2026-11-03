@@ -1,0 +1,10 @@
+telar client detach: Disconnect a window from the runtime; its panes keep running
+
+Usage: telar client detach ID [--json] [--socket PATH]
+
+Effects: the runtime drops that window's connection at its exact generation,
+releasing its attachments and geometry; every pane, agent and command stays alive
+and a window can reconnect. Never starts a runtime.
+
+Results: `client N detached`; JSON `id`, `generation`, `detached`. Exit 0; 2 when
+unknown; 1 when refused (a stale generation, a non-window client).

@@ -1,0 +1,9 @@
+telar machine list: List the saved machines, and this one
+
+Usage: telar machine list [--json]
+
+Effects: reads machines.json. Contacts nothing.
+
+Results: `LOCAL\tlocal` first, then `label\tdestination\tenabled|disabled[\tcolor]
+[\tlogins: ...]` per machine; JSON `local` and `machines` (id, label, destination,
+color, enabled, telar_path, logins). Exit 0.

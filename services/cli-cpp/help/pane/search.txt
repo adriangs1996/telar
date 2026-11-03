@@ -1,0 +1,14 @@
+telar pane search: Find text in a pane's retained history, without attaching
+
+Usage: telar pane search ID|--current TEXT [--json] [--socket PATH]
+
+Arguments:
+  TEXT             1 to 128 bytes of UTF-8.
+
+Effects: the runtime searches the pane's scrollback and screen within a bounded
+time. Read-only; needs a running runtime, never starts one.
+
+Results: one `ROW:COLUMN length=N` per match in absolute history coordinates; JSON
+`pane_id`, `truncated`, `matches` (x, y, len). At most 256 matches, the newest
+kept; `truncated` means the search ran out of rows or time. Exit 0; 2 when the pane
+is gone; 1 when it changed during the search (retry).

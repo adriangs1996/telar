@@ -1,0 +1,8 @@
+telar project: Run a repository's declared setup recipe in a checkout, explicitly authorized
+
+Usage: telar project setup --cwd ABS [--detach] [--json]
+
+Commands:
+  setup           Run `.telar/setup.json` of a checkout as a runtime execution and wait for it
+
+`telar project COMMAND --help` explains a command's arguments, effects and results.

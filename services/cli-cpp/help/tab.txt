@@ -1,0 +1,24 @@
+telar tab: List, open, rename, move and close the tabs of a workspace; select them in a window
+
+Usage: telar tab COMMAND [ID|--current] [--workspace ID|--current] [options]
+
+Commands:
+  list            List a workspace's tabs with id, position, pane count and label
+  get             Show a tab's panes with their generations and lifecycle
+  create          Open a tab: --background runs a shell no window shows; --client adds one to a window
+  rename          Rename a tab
+  close           Close a tab and the panes in it; the last tab closes its workspace
+  move            Move a tab one position, or before/after another tab
+  select          Select a tab in a window's current workspace
+  next            Select the next tab in a window, cyclically
+  previous        Select the previous tab in a window, cyclically
+
+A tab belongs to one workspace and holds one or more panes. Ids are stable; a tab's
+position is zero-based and changes when tabs move. `--workspace` defaults to
+`--current` (TELAR_WORKSPACE_ID); a tab `--current` is TELAR_TAB_ID. `list`, `get`,
+`rename`, `close`, `move` and `create --background` act on the runtime; attached
+windows reflect those changes. `create --client`, `select`, `next` and `previous` act on one window's
+selection. Exit codes: 0; 1 when refused (the runtime's reason on stderr, such as
+`tab not found`); 3 when the runtime did not answer in time.
+
+`telar tab COMMAND --help` explains a command's arguments, effects and results.

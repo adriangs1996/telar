@@ -1,0 +1,6 @@
+telar machine rename: Change a machine's label; its id stays
+
+Usage: telar machine rename LABEL NEW_LABEL
+
+Effects: edits machines.json. Commands and windows use the new label from then on.
+Results: nothing; exit 0, 1 when refused (unknown, taken or local label).

@@ -1,0 +1,21 @@
+telar proxy trust: Install, remove or inspect the system trust of telar's proxy CA
+
+Usage: telar proxy trust install|uninstall|status [--ca-dir PATH] [--linux update-ca-certificates|trust]
+
+Arguments:
+  --ca-dir PATH    The CA directory (default $XDG_DATA_HOME/telar/proxy, else
+                   ~/.local/share/telar/proxy), owner-only.
+  --linux BACKEND  Required by `install` on Linux: `update-ca-certificates` or
+                   `trust`; refused on macOS.
+
+Effects: `install` creates a system CA valid 30 days, separate from the proxy's
+own, prints and runs the platform's trust command (`security add-trusted-cert` on
+macOS, `sudo install` and `update-ca-certificates`, or `sudo trust anchor`, on
+Linux) and records the fingerprint. `uninstall` runs the reverse and deletes the
+record. `status` reads the record. Never contacts the runtime, which rotates the
+CA within a day of its expiry. Firefox keeps its own store.
+
+Results: `telar proxy trust: installed FINGERPRINT`, `already installed`, `removed
+FINGERPRINT`, `not installed`, or `absent|installed|stale (DIR)` with the
+fingerprint and store. Exit 0; 1 when stale, when a record is invalid or a
+command failed.

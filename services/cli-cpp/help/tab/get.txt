@@ -1,0 +1,10 @@
+telar tab get: Show a tab's panes with their generations and lifecycle
+
+Usage: telar tab get ID|--current [--workspace ID|--current] [--json] [--socket PATH]
+
+Effects: reads the tab snapshot; takes no geometry lease, attaches nothing, starts
+no runtime.
+
+Results: text columns PANE, GENERATION, LIFECYCLE; JSON `workspace_id`, `tab_id`,
+`panes` (pane_id, pane_generation, lifecycle running|exited). Exit 0; 1 when the tab
+or workspace is unknown.

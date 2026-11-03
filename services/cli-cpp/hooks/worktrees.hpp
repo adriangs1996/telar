@@ -178,7 +178,7 @@ private:
     }
 
     const auto resolved = paths();
-    Session session{resolved.socket.c_str(), *target};
+    Session session{memory_, resolved.socket.c_str(), *target};
     session.template exchange<WorktreeRegistered>(RegisterWorktree{.source = *workspace, .created_by = target->pane_id, .path = path_, .branch = branch_, .base = base_});
   }
 

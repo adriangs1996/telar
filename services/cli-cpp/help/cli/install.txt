@@ -1,0 +1,7 @@
+telar cli install: Create or replace the `telar` symlink
+
+Usage: telar cli install [--dir DIR]
+
+Effects: replaces an existing symlink, never a regular file. Results: `telar cli:
+installed LINK -> TARGET`; on permission denied, a hint to rerun with sudo or pass
+`--dir ~/.local/bin`. Exit 0 or 1.

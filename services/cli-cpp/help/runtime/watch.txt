@@ -1,0 +1,13 @@
+telar runtime watch: Stream the runtime's global events as JSON lines
+
+Usage: telar runtime watch [--jsonl] [--count N] [--socket PATH]
+
+Arguments:
+  --count N        Exit after N events (default: until the runtime stops).
+
+Effects: subscribes as an observer; keeps no history, polls nothing.
+
+Results: one JSON object per line with `type` `proxy_status`, `system_metrics`,
+`runtime_stopping`, `resync_required`, `workspace_list` or `agent_snapshot` (the
+last two with `revision` and `data`). Exit 0 after --count events or when the
+runtime stops; 1 after a resync notice (reconnect for a fresh snapshot).

@@ -1,0 +1,8 @@
+telar workspace get: Show one workspace
+
+Usage: telar workspace get ID|--current [--json] [--socket PATH]
+
+Effects: as `workspace list`, selecting one entry. Never starts a runtime.
+
+Results: one row, or one JSON object as `workspace list` prints. Exit 0; 1 with no
+output when the workspace does not exist.

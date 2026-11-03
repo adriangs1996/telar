@@ -1,0 +1,10 @@
+telar workspace-list collapse: Collapse the workspace list
+
+Usage: telar workspace-list collapse --client ID [--json] [--socket PATH]
+
+Effects: forwarded to the client `--client ID` names, which commits the collapsed
+preference in its model. The native window does not use that preference: its
+workspace navigation adapts to available space. Idempotent; no visible change in
+the native window. Needs a running runtime; never starts one. Results:
+text `ACTION: applied` or JSON `client_id`, `client_generation`, `action`, `status`,
+`target_id`, `value`, `text`. Exit 0; 2 unknown client; 3 no answer in time.

@@ -1,0 +1,15 @@
+telar history prune: Remove every entry matching the filters, after a preview and a confirmation
+
+Usage: telar history prune [filters] [--match TEXT] [--before DATE] [--dry-run] [--yes] [--socket PATH]
+
+Arguments:
+  --match TEXT     Only commands containing TEXT.
+  --before DATE    Only entries before `YYYY-MM-DD` (UTC) or a Unix time in seconds.
+  --dry-run        Preview only, even with --yes.
+  --yes            Skip the confirmation.
+
+Effects: previews `would remove N entries` (counting the newest 1000; --before is
+applied on top and not previewed), asks `prune permanently? type yes to
+continue:` and removes on `yes`. --author is not applied to prune.
+
+Results: `removed N entries`, or `aborted`. Exit 0.

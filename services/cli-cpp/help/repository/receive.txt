@@ -1,0 +1,6 @@
+telar repository receive: The destination side of `prepare`: telar runs it there over exec
+
+Usage: telar repository receive --identity ID --transport URL --commit SHA --ref REF --bytes N [--workspace PATH|ID]
+
+Reads a Git bundle of N bytes from stdin and publishes or updates the clone. Run by
+`telar repository prepare` on the other machine; not meant to be typed.

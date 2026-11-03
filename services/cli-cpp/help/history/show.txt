@@ -1,0 +1,6 @@
+telar history show: Print the output captured for one entry
+
+Usage: telar history show ID [--socket PATH]
+
+Results: the raw output on stdout; a note on stderr when nothing was captured
+(`runtime.history.output = "bounded"` enables capture) or it was cut. Exit 0.

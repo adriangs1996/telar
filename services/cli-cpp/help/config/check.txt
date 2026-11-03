@@ -1,0 +1,14 @@
+telar config check: Compile and validate a configuration, its plugins and keybindings, then exit
+
+Usage: telar config check [PATH] [--profile NAME]
+
+Arguments:
+  PATH             The Lua file (default: the configuration a window would load).
+  --profile NAME   Overlay that named profile first.
+
+Effects: loads the file, its plugin registry and keybindings in this process. Starts
+nothing, writes nothing.
+
+Results: `telar config: OK` on stdout, exit 0. Diagnostics on stderr and exit 1 on
+a load error, keybindings that do not compile, or a limit reached; retired keys
+only warn.

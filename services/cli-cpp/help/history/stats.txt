@@ -1,0 +1,10 @@
+telar history stats: Count commands and show the most frequent ones over a period
+
+Usage: telar history stats [--period today|week|month|year|all] [--cwd | --workspace PATH | --pane ID] [--socket PATH]
+
+Arguments:
+  --period P       `today`, `week`, `month`, `year` or `all` (default).
+
+Results: `commands: N`, `unique: N` and the top 10 commands with their counts.
+Only the scope and the period filter; --failed, --author and --limit are
+ignored here. Exit 0.

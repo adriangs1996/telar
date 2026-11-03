@@ -1,0 +1,27 @@
+telar worktree exec: Run a command in a new tab of a worktree; --wait prints output and returns its exit status
+
+Usage: telar worktree exec BRANCH|TITLE [--label TEXT] [--wait [--timeout SECONDS]] [--json] [--socket PATH] -- COMMAND...
+
+Arguments:
+  BRANCH|TITLE     A tracked worktree, or an untracked linked worktree of the current
+                   directory's repository, which gets registered first.
+  --label TEXT     Tab label; at most 128 bytes.
+  --wait           Block until COMMAND exits, then print what its terminal showed.
+  --timeout S      With --wait: give up after S seconds (default 600, up to 86400); `s`
+                   suffix accepted. The command keeps running after a timeout.
+  -- COMMAND...    Required; at most 32 words, run through the login shell
+                   (`$SHELL -l -i -c 'exec "$0" "$@"' COMMAND...`).
+
+Effects: opens a new tab or pane in the worktree's workspace and runs COMMAND there,
+in a terminal. No window attaches and no focus changes. Starts the local runtime
+when none runs. This is a terminal: stdout and stderr are merged into screen text,
+and the shell's rc files may print first. For raw byte streams and a literal argv
+without a shell, use `telar exec`.
+
+Results without --wait: the launch line or JSON of `worktree create`, exit 0.
+With --wait: the pane's text is printed once the command has exited, trailing blank
+rows trimmed, and the exit status is the command's own (signals as 128+n). JSON:
+`pane_id`, `exit_code`, `truncated`, `output`. A finished pane keeps its last 200
+rows within 16 KiB; `truncated` (and a stderr note) means it printed more. Only
+the last 16 finished panes are kept, so read promptly. Timeout: stderr names the
+pane still running, exit 3.

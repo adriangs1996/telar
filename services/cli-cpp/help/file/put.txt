@@ -1,0 +1,12 @@
+telar file put: Read exactly N bytes from stdin and publish them at a new path
+
+Usage: telar file put ABS_PATH --bytes N
+
+Arguments:
+  ABS_PATH         Where the file appears; it must not exist.
+  --bytes N        The exact size; fewer or more bytes fail the transfer.
+
+Effects: streams stdin into an owner-only temporary file beside the path, checks
+the length, syncs it and renames it into place without ever replacing a file.
+
+Results: `{"bytes":N,"published":true}`; exit 1 and no file otherwise.

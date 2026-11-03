@@ -1,0 +1,9 @@
+telar layout apply: Restore a layout token on the active tab
+
+Usage: telar layout apply TOKEN --client ID [--json] [--socket PATH]
+
+Effects: the window checks the token names its active tab and exactly its panes,
+then restores the split tree, surfaces, focus and fullscreen state and resizes
+the runtime's panes. Refused for another tab, a changed pane set, an invalid tree
+or while another request is in flight. Results: text `layout_apply: applied` or
+the JSON of every routed command.

@@ -1,0 +1,14 @@
+telar history import: Import an existing shell histfile once; running it again adds only new lines
+
+Usage: telar history import [auto|zsh|bash|fish] [--file PATH] [--socket PATH]
+
+Arguments:
+  KIND             The histfile format (default `auto`: by the file's name, else
+                   ~/.zsh_history, ~/.bash_history, then fish's).
+  --file PATH      The file to read instead of the shell's default.
+
+Effects: the entries join the history under a source pinned to the file, so an
+import is safe to repeat. A file past 32 MiB keeps its newest lines; a command
+past 63 KiB is skipped; either reports the limit and exits 1.
+
+Results: `imported N commands from PATH`. Exit 0; 1 when no histfile was found.

@@ -1,0 +1,28 @@
+telar history: Search, show, import, prune and summarize the command history the runtime records
+
+Usage: telar history COMMAND [ARG] [filters] [--socket PATH]
+
+Commands:
+  list            Show recent commands
+  search          Search commands by text
+  show            Print the output captured for one entry
+  import          Import an existing shell histfile once; running it again adds only new lines
+  delete          Remove one entry, without asking
+  prune           Remove every entry matching the filters, after a preview and a confirmation
+  stats           Count commands and show the most frequent ones over a period
+
+The runtime records commands detected through shell integration and agent hooks, with their
+directory, exit status, duration and, when `runtime.history.output` is enabled, their
+output; the database lives under $XDG_DATA_HOME/telar. These commands query the
+runtime and start it when none runs. This is not a complete audit log.
+Text output only. One scope filter at a time.
+
+Filters:
+  --cwd            Only the current directory.
+  --workspace PATH Only that workspace directory.
+  --pane ID        Only that pane.
+  --failed         Only commands that exited nonzero.
+  --author all|human|agent  Who typed it (default all).
+  --limit N        At most N entries (default 20, up to 1000).
+
+`telar history COMMAND --help` explains a command's arguments, effects and results.

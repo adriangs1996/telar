@@ -1,0 +1,9 @@
+telar notification: Show a toast in every attached window, or dismiss one in a window
+
+Usage: telar notification show TITLE [options] | telar notification dismiss ID --client ID
+
+Commands:
+  show            Show a toast in every attached window, optionally clickable
+  dismiss         Dismiss one notification shown in a window
+
+`telar notification COMMAND --help` explains a command's arguments, effects and results.

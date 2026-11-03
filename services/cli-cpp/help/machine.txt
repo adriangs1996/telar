@@ -1,0 +1,36 @@
+telar machine: Save, check and set up other machines; `telar --machine LABEL COMMAND...` runs a command there
+
+Usage: telar machine COMMAND [LABEL] [options]
+       telar --machine LABEL FAMILY COMMAND [ARGS...]
+
+Commands:
+  add             Save a machine: a label and an SSH destination
+  setup           Make a machine ready: this telar build, the agents, their integration, configuration and logins
+  list            List the saved machines, and this one
+  check           Reach a machine's runtime over SSH and compare wire schemas
+  remove          Forget a saved machine
+  rename          Change a machine's label; its id stays
+  enable          Let windows connect to a machine again
+  disable         Keep windows from connecting to a machine
+
+A machine is a computer whose runtime telar reaches over SSH; it runs one runtime per
+account and knows nothing of the others. Profiles live in machines.json under
+$XDG_CONFIG_HOME/telar (else ~/.config/telar): id, label, SSH destination, color,
+whether windows connect to it and, after setup, where its telar is. Never a credential.
+This machine needs no profile: it answers to the label the file gives it or its host
+name. At most 16 profiles; a label is 1 to 32 characters of letters, digits, `.`,
+`_` and `-`. `add`, `remove`, `rename`, `enable`, `disable` and `list` edit the file
+only; `check` and `setup` reach the machine.
+
+`telar --machine LABEL COMMAND...`, with `--machine` as the first word, runs one telar
+command on that machine's runtime: the command's stdin, stdout, stderr and exit
+status pass through, and every id it prints or takes belongs to that machine. A
+failure there is a failure: nothing falls back to this machine; an SSH failure exits
+255. The local label runs the command here. `--machine` is never inherited by a pane,
+so pass it on every command meant for another machine. `telar --machine LABEL` alone,
+or with window options, opens a window showing that machine. The command line sent
+is at most 64 KiB. `worktree create --machine` and `worktree fetch --machine` are
+not forwarded whole: their Git transfer starts here.
+With --help, this binary prints its help locally before resolving the machine.
+
+`telar machine COMMAND --help` explains a command's arguments, effects and results.

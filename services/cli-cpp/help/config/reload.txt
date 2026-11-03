@@ -1,0 +1,12 @@
+telar config reload: Make a window reload its configuration now
+
+Usage: telar config reload --client ID [--json] [--socket PATH]
+
+Effects: forwarded to the window `--client ID` names, which schedules a reload even
+when no watched file changed. Validation, atomic adoption and trust checks are the
+window's; `admitted` reports the request, not adoption. Needs a running runtime;
+never starts one.
+
+Results: text `config_reload: admitted` or the JSON of every routed command. Exit
+0; 1 when refused; 2 unknown client; 3 no answer in time. Read the outcome with
+`config show`.

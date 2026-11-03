@@ -1,0 +1,10 @@
+telar exec cancel: Kill an execution's process group
+
+Usage: telar exec cancel ID [--json] [--socket PATH]
+
+Effects: SIGKILL to the execution's own process group; descendants that left the
+group are outside its ownership. Starts the local runtime when none runs.
+
+Results: JSON `execution_id`, `workspace_id`, `state` (starting|running|exited|failed),
+`exit_code` (null until exited), `stdout_offset`, `stderr_offset`, `stdout_bytes`,
+`stderr_bytes`, `stdin_bytes`, `stdin_open`, `failure`. Query `status` for the final state. Exit 0; 125 when unknown.

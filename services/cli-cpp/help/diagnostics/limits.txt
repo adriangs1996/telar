@@ -1,0 +1,10 @@
+telar diagnostics limits: List every limit the runtime and its windows reached, with counts and times
+
+Usage: telar diagnostics limits [--json] [--socket PATH]
+
+Effects: one query to a running runtime.
+
+Results: one line per limit with its value, what was asked, where and when, or
+`no limit reached`; JSON `runtime_evicted`, `client_evicted`, `refused_reports`
+and `limits` (name, noun, value, requested, route, origin, hits, last_ms). Exit 0;
+1 when no runtime answers.

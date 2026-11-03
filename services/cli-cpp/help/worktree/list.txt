@@ -1,0 +1,18 @@
+telar worktree list: List worktrees with their task, state, agent, diffstat and last command
+
+Usage: telar worktree list [--workspace ID|DIR] [--json] [--socket PATH]
+
+Arguments:
+  --workspace X    Only the worktrees of that repository (a workspace id or directory).
+
+Effects: reads the runtime's worktree catalog and agents, then `git worktree list` in
+the current directory's repository, so linked worktrees telar does not track appear
+as `untracked`. Read-only; starts the local runtime when none runs.
+
+Results: text columns BRANCH, TITLE, STATE (active|integrated|gone), AGENT (the first
+agent's status), DIFF (+added -removed N files), COMMAND (label and none|running|
+exited), PATH. JSON: an array of `worktree_id`, `branch`, `title`, `brief`, `base`,
+`dispatched_from`, `coordinator`, `path`, `origin` (telar|external), `state`,
+`source_workspace_id`, `workspace_id`, `diff` {added, removed, files, commits_ahead},
+`command` {label, state, exit_code} and `agents` (as `telar agent list --json`).
+Match the user's words against `title`, `brief` and `branch`. Exit 0.

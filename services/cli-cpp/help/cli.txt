@@ -1,0 +1,16 @@
+telar cli: Link this executable as `telar` into a bin directory, for shells and agents
+
+Usage: telar cli install|uninstall|status [--dir DIR]
+
+Commands:
+  install         Create or replace the `telar` symlink
+  uninstall       Remove the `telar` symlink
+  status          Say where the `telar` symlink points
+
+An application bundle exposes its command line this way. Inside a pane the running
+telar is always TELAR_BIN_PATH, whatever PATH says. Contacts no runtime.
+
+Arguments:
+  --dir DIR        The directory of the link (default /usr/local/bin).
+
+`telar cli COMMAND --help` explains a command's arguments, effects and results.

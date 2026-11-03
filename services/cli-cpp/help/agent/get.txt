@@ -1,0 +1,12 @@
+telar agent get: Show one agent by pane id, title, worktree or --current
+
+Usage: telar agent get TARGET [--json] [--socket PATH]
+
+TARGET is a pane id, `--current` (this pane, from TELAR_PANE_ID), `worktree:BRANCH`
+or `worktree:TITLE` (the agent working in that tracked worktree), or the agent's
+session title (case-insensitive; refused when two agents share it).
+
+Effects: read-only; starts the local runtime when none runs.
+
+Results: the agent's row under the header, or its JSON object. Exit 0; 2 when no
+agent matches.

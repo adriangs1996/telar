@@ -1,0 +1,12 @@
+telar tab previous: Select the previous tab in a window, cyclically
+
+Usage: telar tab previous --client ID [--json] [--socket PATH]
+
+Effects: forwarded to the window `--client ID` names (see `telar client list`), in
+its current workspace. Needs a running runtime; never starts one. Results: text
+`ACTION: STATUS` or JSON `client_id`, `client_generation`, `action`, `status`,
+`target_id`, `value`, `text`. `applied` means done; `admitted` means the window
+queued it and the runtime confirms later. Exit 0; 1 when the window refused; 2
+unknown client; 3 no answer in time.
+
+A single tab is a successful no-op (`applied`).

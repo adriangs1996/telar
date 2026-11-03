@@ -12,9 +12,11 @@ if(NOT TARGET telar-tls)
 endif()
 
 find_package(Threads REQUIRED)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
 include(cmake/integration.cmake)
+include(cmake/help.cmake)
 
 # `hook` runs on every agent event, so the CLI links only libcrypto beside the system
 # libraries: no libssl, frameworks, SQLite, pcap or the runtime's terminal engine.
@@ -39,6 +41,7 @@ if(BUILD_TESTING)
   add_executable(integration-tests tests/integration_test.cpp)
   target_link_libraries(integration-tests PRIVATE cli-core)
   add_test(NAME integration-tests COMMAND integration-tests)
+  add_test(NAME cli-help-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/help_test.py" --telar "$<TARGET_FILE:telar>" --help-directory "${CMAKE_CURRENT_SOURCE_DIR}/help" --version "${TELAR_VERSION}")
   add_executable(hook-mapping-probe tests/hook_mapping_probe.cpp)
   target_link_libraries(hook-mapping-probe PRIVATE cli-core)
 endif()

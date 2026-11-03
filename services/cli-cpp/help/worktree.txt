@@ -1,0 +1,27 @@
+telar worktree: Git worktrees as tasks: create one for an agent, run commands in it, inspect and remove it
+
+Usage: telar worktree COMMAND [BRANCH|TITLE] [options] [-- COMMAND...]
+
+Commands:
+  create          Add a git worktree for a task; with a command (needs --title), run an agent there
+  exec            Run a command in a new tab of a worktree; --wait prints output and returns its exit status
+  list            List worktrees with their task, state, agent, diffstat and last command
+  open            Show a worktree's workspace in a window: the one used last, or --client
+  diff            Print the worktree's diff against its base, or its uncommitted changes
+  remove          Close a worktree's tabs and remove its checkout; refused with uncommitted changes
+  fetch           Bring a branch back from another machine into refs/remotes/LABEL/BRANCH
+  resolve         Find the clone of a repository among this machine's workspaces
+
+A worktree is a Git linked worktree the runtime tracks as the place a task
+happens. It belongs to one repository, hangs from that repository's
+workspace, and gets a child workspace of its own for its tabs. Every
+worktree the runtime tracks has a branch and may have a title (the task's
+name); commands on an existing worktree take either. A branch resolves
+exactly, a title case-insensitively, and a reference that fits two
+worktrees is refused (name it by the other one). `--json` and `--socket
+PATH` are accepted by every command.
+
+Pane, tab and workspace ids in replies belong to the runtime that answered.
+With `telar --machine LABEL worktree ...` they belong to that machine.
+
+`telar worktree COMMAND --help` explains a command's arguments, effects and results.

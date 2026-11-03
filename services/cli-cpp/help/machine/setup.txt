@@ -1,0 +1,24 @@
+telar machine setup: Make a machine ready: this telar build, the agents, their integration, configuration and logins
+
+Usage: telar machine setup LABEL|DESTINATION [--label LABEL] [--binary PATH] [--skip agents,config,login] [--confirm] [--json]
+
+Arguments:
+  LABEL|DESTINATION  A saved machine, or a new SSH destination that gets saved
+                   under --label (default: derived from its host name).
+  --binary PATH    A telar executable built for the machine; development builds
+                   need one.
+  --skip STEPS     Leave out `agents`, `config` and/or `login`.
+  --confirm        Ask on the terminal before changing anything (refused without
+                   a terminal or with --json).
+
+Effects, in order, each idempotent: ssh, platform, telar (this exact build
+installed under ~/.local/share/telar/versions on the machine, no sudo), runtime
+(a runtime of another build is stopped only after a `y` on the terminal, then
+~/.local/bin/telar is linked), profile (saved and enabled), agents (installed),
+integrations, configuration (allowlisted sync, no secrets), logins (each agent's
+own login there; `telar workspace create -- codex login` opens them wide enough to
+read the URL with `pane read`), check. Probes wait 60 s, installs 900 s.
+
+Results: numbered step lines with ok|changed|skipped|failed|pending and a verdict;
+JSON `label`, `destination`, `ready`, `pending`, `changed`, `steps` (step, status,
+detail, notes). Exit 0, also with a login still pending; 1 when a step failed.

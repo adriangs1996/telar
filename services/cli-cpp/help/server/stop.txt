@@ -1,0 +1,9 @@
+telar server stop: Ask the local runtime to stop
+
+Usage: telar server stop [--socket PATH]
+
+Effects: sends the stop request; the runtime writes its session checkpoint, closes
+its panes' children and exits. Never starts a runtime.
+
+Results: `telar runtime is stopping`, or `telar runtime is not running`; exit 0 in
+both cases, 1 when the runtime refused.

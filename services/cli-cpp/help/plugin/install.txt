@@ -1,0 +1,9 @@
+telar plugin install: Copy a package into the local content-addressed store
+
+Usage: telar plugin install PATH
+
+Effects: validates the package and copies it to `plugins/<id>/<digest>` under
+$XDG_DATA_HOME/telar (else ~/.local/share/telar), owner-only. The same digest
+already there is left as is; a different package there is refused.
+
+Results: `telar plugin installed: DIR`. Exit 0 or 1.

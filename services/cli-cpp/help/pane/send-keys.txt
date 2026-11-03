@@ -1,0 +1,19 @@
+telar pane send-keys: Send raw text, or --stdin, (and --enter) to a pane no person has focused
+
+Usage: telar pane send-keys ID|--current TEXT|--stdin [--enter] [--json] [--socket PATH]
+
+Arguments:
+  TEXT             1 to 65536 bytes, typed as is (no Enter unless --enter).
+  --stdin          Read the text from standard input instead (third word, in
+                   place of TEXT), so it never shows in a process list; trailing
+                   newlines are trimmed.
+  --enter          Press Enter 150 ms after the text, so an agent that reads fast
+                   typing as a paste still submits it.
+
+Effects: the runtime writes the bytes to the pane's terminal, whatever runs there.
+Not refused while an agent is blocked: this is how a blocked agent's question is
+answered, after reading it with `pane read` and only as the user authorized.
+Refused when a person has the pane focused. Starts the local runtime when none runs.
+For a prompt to an agent prefer `telar agent prompt`, which waits and is budgeted.
+
+Results: nothing; exit 0, 1 when refused, 2 when the pane is gone.

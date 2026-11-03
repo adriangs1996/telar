@@ -1,0 +1,19 @@
+telar pane focus: Focus a pane in a window; or, from Neovim, move focus out of this pane by direction
+
+Usage: telar pane focus ID --client ID [--json] [--socket PATH]
+       telar pane focus --current --direction left|right|up|down [--json] [--socket PATH]
+
+Two forms. `pane focus ID --client ID` focuses that pane in the window's active tab;
+an already focused pane is a no-op. Effects: the runtime forwards the request to the window `--client ID` names (see
+`telar client list`); the pane must be in that window's active tab. Needs a running
+runtime; never starts one. Results: text `ACTION: STATUS` or JSON `client_id`,
+`client_generation`, `action`, `status`, `target_id`, `value`, `text`. `applied`
+means done; `admitted` means the window queued it and the runtime confirms the
+change later (check with `pane list` or `tab get`). Exit 0; 1 when the window
+refused (its reason on stderr); 2 unknown client; 3 the window did not answer in time.
+
+`pane focus --current --direction D` is for an editor inside this pane that reached
+its own edge: the runtime asks the window that last typed into this pane to move
+focus one pane in that direction. Results: nothing, or JSON `changed`,
+`focused_pane_id`, `reason` (focused|no_neighbor|source_not_focused); exit 0 for
+every outcome, 1 when no window typed here, 2 when the pane is gone.

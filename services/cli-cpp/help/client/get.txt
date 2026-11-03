@@ -1,0 +1,8 @@
+telar client get: Show one attached window
+
+Usage: telar client get ID [--json] [--socket PATH]
+
+Effects: read-only; never starts a runtime.
+
+Results: one row or one JSON object as `client list` prints. Exit 0; 2 with no
+output when the client is not attached.

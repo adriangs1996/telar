@@ -1,0 +1,26 @@
+telar exec: Run a literal command under the runtime without a terminal, and observe, cancel or release its result
+
+Usage: telar exec [options] -- PROGRAM ARGS...
+       telar exec list|status|output|cancel|forget [ID] [options]
+
+Commands:
+  start           Start a command (the word `start` may be left out); the default when `--` follows
+  list            List retained executions with their state and exit code
+  status          Show one execution's state, exit code, stream counters and failure
+  output          Print retained stdout and stderr bytes from given offsets
+  cancel          Kill an execution's process group
+  forget          Release a finished execution's id and retained output
+
+An execution is a runtime-owned command with pipes, not a pane: literal argv, no
+shell, no PTY, stdout and stderr kept apart. Its id and bounded output outlive the
+connection that started it and the workspace it ran in, for one runtime lifetime,
+until `forget`. Timeouts and disconnects leave it running. For a command that needs
+a terminal use `telar workspace create -- COMMAND` or `telar worktree exec`.
+
+Ids are the destination runtime's: with `telar --machine LABEL exec`, that machine's.
+Bounds: 32 retained executions, 64 argv words, 32 KiB of argument bytes, the
+newest 1 MiB kept per output stream, a 64 KiB stdin queue. Exit codes: the
+child's; 124 when `--timeout` passed; 125 when the runtime or transport failed or
+refused (a child may exit with these too: `exec status` tells).
+
+`telar exec COMMAND --help` explains a command's arguments, effects and results.

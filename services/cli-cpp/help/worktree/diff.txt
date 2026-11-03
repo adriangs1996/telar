@@ -1,0 +1,14 @@
+telar worktree diff: Print the worktree's diff against its base, or its uncommitted changes
+
+Usage: telar worktree diff BRANCH|TITLE [--stat] [--uncommitted] [--socket PATH]
+
+Arguments:
+  --stat           Only the diffstat.
+  --uncommitted    Changes not yet committed (against HEAD) instead of the branch's work.
+
+Effects: runs `git diff` in the worktree, against the merge base of its base and HEAD
+by default. Read-only for Git; an untracked linked worktree of the current repository
+gets registered first. Starts the local runtime when none runs.
+
+Results: the diff on stdout, as Git prints it. Exit 0; 1 when Git fails. Answer
+questions about a task from this diff, not from its pane's screen.

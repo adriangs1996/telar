@@ -1,0 +1,93 @@
+telar @TELAR_VERSION@: a terminal multiplexer and runtime for agents.
+
+Usage: telar [options] [COMMAND [ARGS...]]      run a shell, or COMMAND, in a pane of a window
+       telar FAMILY COMMAND [ARGS...]          one operation on the runtime, an agent or a window
+       telar --machine LABEL FAMILY COMMAND... the same operation on a saved machine
+
+Discover from the binary you run: `telar FAMILY --help` lists a family's commands and
+`telar FAMILY COMMAND --help` explains one command's arguments, effects and results.
+Help never starts or contacts a runtime, and `--help` after `--` belongs to the child.
+Most commands take `--json` for structured output and `--socket PATH` to name a runtime.
+
+Families:
+
+Sessions (what the runtime keeps alive)
+  workspace       Create, list, rename and show workspaces: a directory and its ordered tabs
+  tab             List, open, rename, move and close the tabs of a workspace; select them in a window
+  pane            Read, type into and watch any pane; list panes; and, through a window, split, close, focus, resize and scroll them
+  worktree        Git worktrees as tasks: create one for an agent, run commands in it, inspect and remove it
+
+Agents (running in panes)
+  agent           Observe, wait on, prompt and interrupt the agents running in panes
+
+Execution (runtime-owned, no terminal)
+  exec            Run a literal command under the runtime without a terminal, and observe, cancel or release its result
+  repository      Prepare a clone of this repository on another machine from committed history alone
+  project         Run a repository's declared setup recipe in a checkout, explicitly authorized
+  file            Publish a file from standard input, or write one to standard output, byte-exact
+
+Machines (other computers)
+  machine         Save, check and set up other machines; `telar --machine LABEL COMMAND...` runs a command there
+
+Window (one attached client)
+  client          List and detach attached windows; open their pickers, copy mode, links and clipboard
+  sidebar         Show, hide, resize and read a window's sidebar
+  workspace-list  Set a client's legacy workspace-list preference; native windows ignore it
+  layout          Export a window's active tab layout as a token and apply it back
+  notification    Show a toast in every attached window, or dismiss one in a window
+  command         Ask the runtime's engine for a shell command from a description, in a pane's context
+
+Configuration and agent integration
+  config          Validate the Lua configuration, and reload or read the one a window adopted
+  plugin          Inspect, install and trust plugin packages; list, enable, disable and run them in a window
+  integration     Register telar's lifecycle hooks and skills with an agent CLI, or remove and inspect them
+  hook            The entry point an agent's installed hook runs: reads the event on stdin and reports it
+  cli             Link this executable as `telar` into a bin directory, for shells and agents
+  gui             Open the native window; --login-shell adopts the login shell's environment first
+
+Runtime and diagnostics
+  server          Run the local runtime in the foreground, stop it, or print its endpoint
+  runtime         Ask a running runtime whether it runs, how the host is doing, and watch its events
+  diagnostics     Read the runtime's logs beside its socket, and the limits it reached
+  history         Search, show, import, prune and summarize the command history the runtime records
+  proxy           Install or remove the proxy's short-lived system CA, and watch the proxy's status
+  api             Print the wire contract this binary speaks, for compatibility checks
+
+Options before COMMAND:
+  --config PATH     Load a specific Lua configuration (default: $XDG_CONFIG_HOME/telar/config.lua)
+  --no-config       Do not load Lua configuration
+  --profile NAME    Overlay a named Lua profile before CLI options
+  --theme NAME      UI theme: cybervenom (default), shade, vesper, catppuccin,
+                    tokyo-night, kanagawa, kanagawa-dragon, pierre-dark,
+                    pierre-dark-soft, terminal
+  --remote DEST     Attach to the runtime on an SSH host (needs telar on the remote PATH)
+  --machine LABEL   Show a saved machine first; the window still holds every enabled one
+  --fresh           Start a runtime that sets the previous session aside instead of
+                    restoring it; refused while a runtime is already running
+  --skill [telar|coordinator]  Print a bundled agent skill; `telar` is the discovery guide
+  -h, --help        Show this help
+  -V, --version     Show the version
+  --                Stop parsing telar options; what follows is the command
+
+Environment inside a pane: TELAR_SOCKET_PATH, TELAR_PANE_ID, TELAR_PANE_GENERATION,
+TELAR_WORKSPACE_ID, TELAR_TAB_ID and TELAR_BIN_PATH, which `--current` and `telar` resolve.
+
+Default keybindings (prefix Ctrl-b):
+  % / "            Split left/right or top/bottom
+  Arrow keys       Focus a pane by direction
+  Shift+arrows     Resize the focused pane
+  z                Toggle pane fullscreen
+  s                Toggle the sidebar
+  N                Create and select a workspace
+  W                Rename the active workspace
+  x                Close the focused pane
+  [                Enter copy mode
+  g                Open the goto picker
+  /                Search command history
+  c                Create and select a tab
+  n / p            Select the next or previous tab
+  1..9             Select a tab by position
+  T                Rename the active tab
+  X                Close the active tab
+  , / .            Move the active tab left or right
+  d                Detach the client

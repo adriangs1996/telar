@@ -1,0 +1,21 @@
+telar repository prepare: Send committed history to a machine and publish or update its clone
+
+Usage: telar repository prepare --machine LABEL [--from REF] [--workspace PATH|ID] [--json]
+
+Arguments:
+  --machine LABEL  Required: a saved machine other than this one.
+  --from REF       The commit to send (default HEAD).
+  --workspace X    Which clone to reuse there, when several match.
+
+Effects: checks the repository is whole (shallow or partial clones, submodules and
+LFS are refused), bundles the history up to REF (at most 256 MiB), and streams it
+to the machine through `telar exec`, where `repository receive` verifies it and
+fetches into an existing clone (found by the origin's identity, branches and
+checkout preserved) or publishes a new one under its $XDG_DATA_HOME/telar/
+repositories. Only commits travel: uncommitted files stay here and are counted on
+stderr. No credential, key or configuration leaves this machine. Remote
+`worktree create` runs this for you.
+
+Results: JSON `path`, `commit`, `repository`, `reused`, `repository_ready`,
+`environment` (`not_run`: setup is `project setup`'s). Exit 0; 1 with the reason on
+stderr. Never fall back to cloning through a provider yourself.

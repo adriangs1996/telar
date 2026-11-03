@@ -1,0 +1,5 @@
+telar cli uninstall: Remove the `telar` symlink
+
+Usage: telar cli uninstall [--dir DIR]
+
+Effects: removes the link when present. Results: `telar cli: removed LINK`. Exit 0.

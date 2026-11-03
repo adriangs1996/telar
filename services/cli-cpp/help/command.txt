@@ -1,0 +1,8 @@
+telar command: Ask the runtime's engine for a shell command from a description, in a pane's context
+
+Usage: telar command suggest PANE|--current TEXT [--json] [--socket PATH]
+
+Commands:
+  suggest         Suggest one command line for a pane from words; prints it, never runs it
+
+`telar command COMMAND --help` explains a command's arguments, effects and results.

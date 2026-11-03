@@ -1,0 +1,11 @@
+telar workspace list: List workspaces with id, name, directory, tab count, branch and dirty flag
+
+Usage: telar workspace list [--json] [--socket PATH]
+
+Effects: reads the runtime's workspace list once and disconnects; the Git columns are
+the runtime's retained probe, the CLI runs no Git. Needs a running runtime; never
+starts one.
+
+Results: text columns ID, NAME, DIRECTORY, TABS, BRANCH, GIT (dirty|clean); JSON an
+array (`[]` when empty) of `workspace_id`, `name`, `path`, `tab_count`, `branch`,
+`dirty`. Exit 0.

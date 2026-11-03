@@ -1,0 +1,9 @@
+telar exec list: List retained executions with their state and exit code
+
+Usage: telar exec list [--json] [--socket PATH]
+
+Effects: reads the runtime's execution table. Starts the local runtime when none runs.
+
+Results: always a JSON array of `execution_id`, `workspace_id`, `state`, `exit_code`,
+in ascending id order, including foreground executions whose streams carried no id.
+Exit 0.

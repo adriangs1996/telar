@@ -1,0 +1,22 @@
+telar plugin: Inspect, install and trust plugin packages; list, enable, disable and run them in a window
+
+Usage: telar plugin inspect|install|trust PATH [options] | telar plugin list|get|enable|disable|run ... --client ID
+
+Commands:
+  inspect         Validate a package and print its immutable identity
+  install         Copy a package into the local content-addressed store
+  trust           Grant declared capabilities to one exact package digest
+  list            List a window's configured plugins, loaded or disabled
+  get             Show one plugin's configuration, identity, capabilities and actions
+  enable          Enable a configured plugin for this window's lifetime and reload
+  disable         Disable a configured plugin for this window's lifetime and reload
+  run             Run one action of a loaded plugin in its isolated worker
+
+A plugin is a package (`plugin.json` beside its Lua) a window runs outside the
+runtime, in a worker with memory, time, output and process limits. Discovery,
+installation, trust and enablement are separate: `inspect` validates and names,
+`install` copies into the content-addressed store under $XDG_DATA_HOME/telar/plugins,
+`trust` grants capabilities to one exact digest, and the configuration enables it.
+Capabilities: workspace.read, workspace.write, process.spawn, network, clipboard.read, clipboard.write, notifications, history.read, history.write, proxy.tap, runtime.control. The first three run offline; the rest act through a window.
+
+`telar plugin COMMAND --help` explains a command's arguments, effects and results.

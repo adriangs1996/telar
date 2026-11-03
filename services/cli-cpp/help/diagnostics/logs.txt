@@ -1,0 +1,18 @@
+telar diagnostics logs: Print the tail of the runtime's log and the telemetry logs beside the socket
+
+Usage: telar diagnostics logs [--component all|runtime|client] [--pid N] [--lines N] [--json] [--socket PATH]
+
+Arguments:
+  --component KIND  `all` (default), `runtime` or `client` telemetry files.
+  --pid N          Only the files of that process.
+  --lines N        Last lines per file (default 100, up to 10000).
+
+Effects: reads `runtime.sock.runtime.log` (the runtime's stderr: reached limits
+and a fatal error), `runtime.sock.runtime.start.log` and the per-process
+`.runtime-PID.log` and `.client-PID.log` telemetry files, which exist only in
+Debug or diagnostics-enabled builds. Never contacts the runtime. Reads at most the
+last 1 MiB of each of at most 64 regular, owned files; no terminal content.
+
+Results: `PATH` (with `(tail)` when cut) followed by the text, per file sorted by
+name; JSON an array of `path`, `component`, `pid`, `truncated`, `text`. Exit 0; 2
+when no log exists (with the reason); 1 otherwise.

@@ -1,0 +1,14 @@
+telar integration uninstall: Remove telar's hooks (or extension/plugin) and skills for an agent
+
+Usage: telar integration uninstall claude|codex|pi|cursor|opencode [--settings PATH | --legacy]
+
+Arguments:
+  --settings PATH  The file to edit instead of the default.
+  --legacy         Edit the settings file under the home directory that the agent's
+                   directory variable now hides, where older installs left hooks.
+
+Effects: removes only telar's entries and telar's skill files; the user's hooks,
+even in the same group, and a skill telar did not write stay. A pi or opencode
+file telar did not write is left untouched with exit 1.
+
+Results: one line per thing removed or not present. Exit 0 or 1.

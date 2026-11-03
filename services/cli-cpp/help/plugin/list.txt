@@ -1,0 +1,10 @@
+telar plugin list: List a window's configured plugins, loaded or disabled
+
+Usage: telar plugin list --client ID [--json] [--socket PATH]
+
+Effects: forwarded to the window `--client ID` names. Needs a running runtime; never
+starts one. Exit 0; 1 when the window refused; 2 unknown client; 3 no answer in time.
+
+Results: always JSON, an array of `index`, `path`, `id`, `version`,
+`requested_enabled`, `enabled`, assembled under one configuration generation
+(a concurrent reload fails the listing instead of mixing generations).

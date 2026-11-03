@@ -1,0 +1,14 @@
+telar agent acknowledge: Mark an agent's finished turn as seen, so `done` returns to `ready`
+
+Usage: telar agent acknowledge TARGET [--json] [--socket PATH]
+
+TARGET is a pane id, `--current` (this pane, from TELAR_PANE_ID), `worktree:BRANCH`
+or `worktree:TITLE` (the agent working in that tracked worktree), or the agent's
+session title (case-insensitive; refused when two agents share it).
+
+Effects: sends the seen marker for the exact pane generation, as a window does when
+a person focuses the pane, then reads the agent back. Approves nothing and sends no
+input. Needs a running runtime; never starts one.
+
+Results: the agent's row or JSON after the marker, exit 0; 1 when it is still `done`;
+2 when the generation changed.
