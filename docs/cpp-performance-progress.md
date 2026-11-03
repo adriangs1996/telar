@@ -4512,6 +4512,107 @@ Inspection also confirms that `FixedText` already copies only its used prefix;
 its 4 KiB capacity is not evidence of a 4 KiB copy per operation. No observation
 worker, process-identity policy or Qt cursor behavior is changed on these profiles.
 
+## Signal-driven child-status polling experiment, 2026-11-03
+
+`out-perf/dlls-child-exit-poll-01` isolates the reap lead above. Its private
+`runtime.hpp` candidate requests a live-pane reap pass at startup, on SIGCHLD,
+or after a 100 ms fallback deadline. Unrelated event-loop iterations retain the
+deadline instead of calling `waitpid(WNOHANG)` for every live pane. The next wait
+is bounded by the remaining fallback interval. Pipe-execution handling, process
+identity checks, PTY draining, final-frame acknowledgements and exit delivery
+conditions are unchanged. The extracted policy has 16 bytes of state and allocates
+nothing. Production source remains unchanged pending native acceptance.
+
+The baseline is the accepted runtime `a0b8b9d5826c`. Clang VFS overlays restore
+the accepted client/attachment headers in both variants, excluding the pending
+cadence candidate. Only `runtime.hpp` varies. The first relink used output name
+`telar`, changing the automatic signature identifier from `telar-runtime` and its
+length by eight bytes; it was not accepted as an unexplained baseline difference.
+Relinking with the original name leaves just 48 differing bytes, all UUID or
+signature, with every other byte identical. Candidate runtime is `73a96b8d239a`;
+GUI `5a639c5f26f6`, helper and Qt are unchanged. Both builds emit existing header
+warnings; these are not claimed as clean lint results.
+
+An extracted-policy oracle checks 100,005 initial/deadline/signal transitions.
+Eight real owned-child exits cover observed SIGCHLD and recovery when queued
+notifications are deliberately not forwarded to the policy. ARM64 release,
+ASan/UBSan and executed x86-64 pass. A mutation ignoring the signal flag fails.
+ARM64, x86-64 and x86-64-v3 macOS policy kernels compile; Linux is not executed.
+Actual ARM64 `Runtime::publish` grows from 400 to 422 static instructions and
+contains a new branch bypassing its single `PtyProcess::reap` call site. This is
+syscall avoidance, not an instruction-count reduction or a cycle estimate.
+
+The reusable [child-exit checker](../services/runtime-cpp/tools/check_child_exits.py)
+and [probe](../services/runtime-cpp/tools/child_exit_probe.cpp) build from a configured
+runtime `--build` and compare `--before`/`--after` binaries in a fresh `--output`.
+Six cases cover immediate execution exit, release-triggered exit, a 1,024-line
+burst, signal termination, an inherited writer and eight simultaneously released
+panes in one tab. Each variant exercises 13 panes. The receiver applies actual
+wire frames using the current GUI Screen header without Qt, holds the final ACK
+while reading all emitted text, then verifies the terminal exit kind/value.
+All six canonical byte streams agree. Release and sanitizer runs at
+`/tmp/telar-perf-child-exit-canonical-01` and `-canonical-sanitizer-01` pass; a
+corrupted expected transcript is rejected cleanly in each. Dependency/source and
+binary identities and owned cleanup receipts are retained. Sanitizers cover the
+probe/inline headers, not the runtime or configured dependency libraries; leaks
+are disabled. Existing launch-cwd/default/environment and capture/capture-cwd
+probes also pass with identical canonical A/B output. Their incidental durations
+are not paired performance evidence.
+
+Fixture qualification corrected a ReadPane request above the 2,000-row wire limit
+and replaced cross-workspace creation, which intentionally detaches old panes,
+with same-tab pane creation. A proposed post-session-leader writer was invalid on
+this host: direct OS `forkpty`, independently of Telar, also revokes the terminal
+and returns EIO for a later descendant write despite ignoring SIGHUP. The final
+inherited-writer case keeps the leader alive until its writer completes. These
+fixture corrections and the direct control remain recorded privately.
+
+Seven alternating component pairs in `/tmp/telar-perf-child-exit-component-01`
+pass all 30 host boundaries, maximum load1 2.199. Across 200,000 opportunities
+with four live blocked children, A calls waitpid 800,000 times and B four times.
+Median CPU cost is 600.505 → 16.330 ns/opportunity, wall time 600.695 → 16.311;
+both win 7/7. The tiny B loop finishes before its next fallback deadline. This
+excludes all other publish work, creation/exit cost and the GUI; it does not imply
+the same speedup for a runtime session.
+
+Native qualification `/tmp/telar-perf-child-exit-native-qual-01` passes three
+byte-exact captures and 0.5 MiB/s variable offered load per background producer.
+All 18 host boundaries pass, maximum load1 1.991. The preregistered primary is
+runtime session CPU/s under that load, at least five of six alternating wins,
+followed by single/splits/tabs/lower-load controls and separate GUI latency/CPU.
+Primary series 01 is wholly discarded when the three producers fall to
+0.440–0.450 MiB/s in the same interval in round 1 B, outside the unchanged 5%
+tolerance. All seven host boundaries pass, maximum load1 2.845, and all three
+owned runtimes/children clean up. That does not establish the rate-loss cause or
+permit a partial aggregate. Series 02 is also wholly discarded: baseline A in
+round 2 has one producer interval at 0.473985 MiB/s (5.20% below the target),
+with maximum write duration 8.755 ms. All 11 host boundaries pass, maximum load1
+2.181, and all five owned runtimes/children clean up. The other two producers
+pass. This receipt does not identify the cause, establish a candidate regression
+or permit a partial aggregate.
+
+Series 03 completes all six alternating pairs and 26 host boundaries, maximum
+load1 3.748. Offered rate, positive presentation, geometry, focus and all twelve
+owned-runtime/child cleanup receipts pass. Medians across the six runs per variant:
+
+| Native metric | Accepted A | Candidate B | B wins / 6 |
+| --- | ---: | ---: | ---: |
+| Runtime session CPU, ms/s | 137.235 | 130.839 | 6 |
+| GUI CPU per measured input, ms | 19.656 | 18.785 | 5 |
+| Presented input p50, ms | 31.987 | 31.953 | 4 |
+| Presented input p95, ms | 37.272 | 37.372 | 3 |
+| Presented input p99, ms | 39.241 | 39.900 | 1 |
+
+The primary CPU target passes, but the consistent p99 loss **rejects the
+candidate**. Its cause is not established, and there is no demonstrated code
+placement exception. These p99 values are medians of six run-level p99s, not
+pooled percentiles. Runtime CPU includes startup/warmup/idle while GUI CPU covers
+the measured input interval, so their numbers must not be added. Remaining
+single/splits/tabs/lower-load controls are unnecessary after this rejection. A
+separate exit-latency control was prepared privately but not built or executed;
+it supplies no evidence. The reusable functional oracle is retained, production
+runtime source is unchanged, and every F01–F16 acceptance row remains open.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
