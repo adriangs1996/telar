@@ -441,12 +441,20 @@ class SceneTest final : public QObject {
   Q_OBJECT
 
 private:
+  Q_SLOT static void changingTextAndInlineDecorationsMatchesFreshRows_data() {
+    QTest::addColumn<bool>("optical");
+    QTest::newRow("standard") << false;
+    QTest::newRow("optical") << true;
+  }
+
   Q_SLOT static void changingTextAndInlineDecorationsMatchesFreshRows() {
+    QFETCH(bool, optical);
     constexpr std::array<std::string_view, 5> contents{"ffi!=->M", "ABCDEFGH", "        ", "01234567", "ffi!=->M"};
     constexpr std::size_t columns = 8;
     constexpr unsigned underline_shift = 8;
     SceneFixture fixture{CursorShape::block, false};
     fixture.useWhiteTextOnBlack();
+    fixture.setFontRendering(optical, FontConfiguration::maximum_thicken_strength);
     for (std::size_t variant = 0; variant < contents.size(); ++variant) {
       std::array<Byte, columns> text{};
       std::array<Cell, columns> cells;
@@ -466,6 +474,7 @@ private:
       const auto retained = fixture.capture();
       SceneFixture reference{CursorShape::block, false};
       reference.useWhiteTextOnBlack();
+      reference.setFontRendering(optical, FontConfiguration::maximum_thicken_strength);
       reference.setCells(cells, {.visible = false, .shape = CursorShape::block});
       QCOMPARE(retained, reference.capture());
     }

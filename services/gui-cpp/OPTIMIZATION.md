@@ -210,6 +210,16 @@ the terminal comparison requires exact baseline/candidate pixels. The supplied
 reference must match the workload/font/viewport; another font is a different case.
 The Zig reference above is a historical validation, not a new production dependency.
 
+For changes to retained Qt nodes, add `--render-each-frame` to the terminal
+comparison. The default probe applies every update before its first rendered
+frame; it cannot expose the renderer's removal/reinsertion work between frames.
+The new mode requests each update after the preceding frame swap. Its timer
+still covers scene synchronization, including immediate Qt dirty notifications,
+not subsequent rendering or presentation. `--floating-window` uses a Qt tool
+window to avoid tiling of the probe on window managers that support that policy.
+Reject image comparisons with different dimensions. The comparison now checks
+host load before/after every variant and invalidates the whole series on failure.
+
 Measured executable SHA256 values:
 
 | Executable | SHA256 |

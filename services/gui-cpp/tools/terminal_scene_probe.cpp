@@ -69,6 +69,8 @@ struct Options {
   QString output;
   QString snapshot_workload = QStringLiteral("full");
   bool thicken = true;
+  bool render_each_frame = false;
+  bool floating_window = false;
 };
 
 Options parseOptions(const QGuiApplication &application) {
@@ -80,6 +82,8 @@ Options parseOptions(const QGuiApplication &application) {
   parser.addOption({"font", "Installed font family", "family", "JetBrains Mono"});
   parser.addOption({"output", "Final rendered image", "path"});
   parser.addOption({"no-thicken", "Measure the standard glyph route"});
+  parser.addOption({"render-each-frame", "Render each update before changing the scene again"});
+  parser.addOption({"floating-window", "Use a tool window for window managers that tile normal windows"});
   parser.addOption({"snapshot-workload", "Snapshot changes: full, sparse, retained", "workload", "full"});
   parser.process(application);
   bool iterations_valid = false;
@@ -93,6 +97,8 @@ Options parseOptions(const QGuiApplication &application) {
       .output = parser.value("output"),
       .snapshot_workload = parser.value("snapshot-workload"),
       .thicken = !parser.isSet("no-thicken"),
+      .render_each_frame = parser.isSet("render-each-frame"),
+      .floating_window = parser.isSet("floating-window"),
   };
   constexpr unsigned maximum_iterations = 1000;
   if (!iterations_valid || !warmup_valid || !scale_valid || options.iterations == 0 || options.iterations > maximum_iterations || options.warmup > maximum_iterations || (options.scale != 1 && options.scale != 2)) {
@@ -139,30 +145,40 @@ public:
     return failure_;
   }
 
+  void requestFrame() {
+    frame_requested_ = true;
+    update();
+  }
+
 protected:
   QSGNode *updatePaintNode(QSGNode *previous, [[maybe_unused]] UpdatePaintNodeData *data) override {
     std::unique_ptr<QSGNode> root{previous != nullptr ? previous : new QSGNode};
-    if (completed_) {
+    if (completed_ || !frame_requested_) {
       return root.release();
     }
 
-    try {
-      for (unsigned frame = 0; frame < options_.warmup; ++frame) {
-        prepareFrame(frame);
-        paint(root);
-      }
+    frame_requested_ = false;
 
-      std::int64_t elapsed = 0;
-      std::int64_t apply_elapsed = 0;
-      for (unsigned frame = 0; frame < options_.iterations; ++frame) {
-        prepareFrame(frame);
-        apply_elapsed += apply_elapsed_;
+    try {
+      const auto total_frames = options_.warmup + options_.iterations;
+      const auto end = options_.render_each_frame ? next_frame_ + 1 : total_frames;
+      for (; next_frame_ < end; ++next_frame_) {
+        const auto measured = next_frame_ >= options_.warmup;
+        prepareFrame(measured ? next_frame_ - options_.warmup : next_frame_);
         const auto started = std::chrono::steady_clock::now();
         paint(root);
-        elapsed += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count();
+
+        if (measured) {
+          elapsed_ += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count();
+          total_apply_elapsed_ += apply_elapsed_;
+        }
       }
 
-      const QJsonObject result{{"iterations", static_cast<int>(options_.iterations)}, {"warmup", static_cast<int>(options_.warmup)}, {"elapsed_ns", elapsed}, {"apply_ns", apply_elapsed}, {"apply_and_paint_ns", elapsed + apply_elapsed}, {"snapshot_workload", options_.snapshot_workload}, {"columns", static_cast<int>(terminal_columns)}, {"rows", static_cast<int>(terminal_rows)}, {"scale", options_.scale}, {"font", options_.family}, {"thicken", options_.thicken}, {"fixed_pitch", resolved_.font.fixed_pitch}};
+      if (next_frame_ != total_frames) {
+        return root.release();
+      }
+
+      const QJsonObject result{{"iterations", static_cast<int>(options_.iterations)}, {"warmup", static_cast<int>(options_.warmup)}, {"elapsed_ns", elapsed_}, {"apply_ns", total_apply_elapsed_}, {"apply_and_paint_ns", elapsed_ + total_apply_elapsed_}, {"render_each_frame", options_.render_each_frame}, {"snapshot_workload", options_.snapshot_workload}, {"columns", static_cast<int>(terminal_columns)}, {"rows", static_cast<int>(terminal_rows)}, {"scale", options_.scale}, {"font", options_.family}, {"thicken", options_.thicken}, {"fixed_pitch", resolved_.font.fixed_pitch}};
       std::cout << QJsonDocument{result}.toJson(QJsonDocument::Compact).constData() << '\n';
     } catch (...) {
       failure_ = std::current_exception();
@@ -235,8 +251,12 @@ private:
   CellSelection selection_;
   std::uint64_t frame_id_ = 0;
   std::int64_t apply_elapsed_ = 0;
+  std::int64_t elapsed_ = 0;
+  std::int64_t total_apply_elapsed_ = 0;
+  unsigned next_frame_ = 0;
   std::exception_ptr failure_;
   bool completed_ = false;
+  bool frame_requested_ = true;
 };
 
 }
@@ -248,12 +268,18 @@ int main(int argc, char **argv) {
     const auto options = parseOptions(application);
     static_cast<void>(bundledFonts());
     QQuickWindow window;
+    window.setFlag(Qt::Tool, options.floating_window);
     window.setColor(Qt::black);
     TerminalProbe probe{window, options};
     window.resize(static_cast<int>(probe.width()), static_cast<int>(probe.height()));
     bool captured = false;
     QObject::connect(&window, &QQuickWindow::frameSwapped, &application, [&] {
-      if (captured || !probe.completed()) {
+      if (captured) {
+        return;
+      }
+
+      if (!probe.completed()) {
+        probe.requestFrame();
         return;
       }
 

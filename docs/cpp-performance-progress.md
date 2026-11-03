@@ -3388,7 +3388,8 @@ full-flow timing/cadence requirements remain open.
 
 Two fresh diagnostic repetitions in `/tmp/telar-perf-variable-work-profile-03`
 use the frozen accepted GUI `5a639c5f26f6`, runtime `a0b8b9d5826c`, and original
-QtGui `abd4bdf7f504`. Each qualifies 240 measured inputs, four 39×19 panes,
+QtGui `abd4bdf7f504`. Each qualifies 240 measured inputs, four panes with grids
+39×19 (primary), 18×19, 8×19 and 9×19,
 and three variable-ASCII producers at 0.125 MiB/s each. Both offered-rate checks
 pass, and both owned runtimes report complete cleanup. GUI and runtime are sampled
 for eight seconds each, with process-path/hash verification; these instrumented
@@ -3520,7 +3521,8 @@ single, splits, tabs and variable fixed-rate output, with byte-identical settled
 PNGs for the three static cases. All owned runtimes report complete cleanup.
 
 `/tmp/telar-perf-checkpoint-extent-native-01` completes six alternating pairs:
-100 measured inputs after 20 warmups, four 39×19 panes at 1600×1000, three variable
+100 measured inputs after 20 warmups, four panes at 1600×1000 with grids 39×19
+(primary), 18×19, 8×19 and 9×19, three variable
 ASCII producers at 0.125 MiB/s each. Every offered-rate check passes. Its 26 host
 observations qualify, with maximum one/five-minute load 4.537/2.964 and no active
 compiler observations. No builds, tests or profilers from this task overlapped
@@ -3556,6 +3558,78 @@ source adapter; an owned-child run also verifies actual capture and cleanup.
 The helper builds with `-Wall -Wextra -Werror`; it remains a
 Darwin-only measurement tool, with explicit window limitations documented in
 the flow matrix.
+
+## Attached row text experiment, 2026-11-03
+
+**Rejected for insufficient native CPU gain.** The accepted production scene
+sources are restored; the private candidate remains under
+`out-perf/dlls-attached-row-text-01`. No flow is closed by this experiment.
+
+`TerminalScene::paintRow` detached its retained text root before every changed-row
+update. Local Qt source confirms that removal recursively releases renderer shadow
+nodes, and reinsertion creates them again. The candidate borrowed a caller-owned,
+attached root in `TextScene`, deleting only its shapes/decorations siblings and
+preserving their draw order. It added no cache or persistent storage. A diagnostic
+full-scene run counted 364 reused roots and 53,746 descendants across seven updates:
+all roots were detached in A and attached in B. These are application node counts,
+not measured heap allocations or a count of all renderer work. Geometry/material
+updates and chunk replacement still occur.
+
+The existing scene probe performed all updates before its first rendered frame.
+It now has `--render-each-frame`, advancing from frame swaps, and
+`--floating-window` for tool-window treatment by tiling managers. Synchronization
+timing includes immediate renderer dirty notifications but excludes later rendering
+and presentation. The comparator passes these options, validates the schedule and
+uses the shared host-load gate around every variant. The changing-text/decoration
+oracle now explicitly covers standard and optical rendering.
+
+All 38 scene checks pass for A and B with both software and Metal rendering.
+Six native full/sparse/retained × standard/optical comparisons have identical RGBA
+pixels. Six additional comparisons confirm identical final pixels between the
+probe's batch and render-between-updates schedules. The first nonfloating image comparison was invalid: the window manager
+resized only A. Both partial ASan/UBSan builds initially reported libc++ container
+annotation failures in the unchanged, partly uninstrumented `Screen::reserve` path.
+Both pass all 38 checks with container annotations and leak checking disabled;
+ordinary address/UB checks remain enabled. Dependencies are not fully instrumented.
+This is qualified partial sanitizer coverage, not a clean full-dependency run.
+
+One qualified seven-pair component series measures full optical synchronization at
+7.971 → 7.429 ms/update, winning 7/7 with identical pixels. The sparse optical
+series is discarded after eight runs when the sampled one-minute load reaches
+7.859, above the fixed limit of 5. Remaining component cases are not timed. No
+partial aggregate or replacement low-load tail is used.
+
+Native qualification (`/tmp/telar-perf-attached-row-text-qual-01`) passes single,
+splits, tabs and variable split load; all three static captures are byte-identical.
+The unchanged accepted GUI `5a639c5f…` and runtime `a0b8b9d5…` are the reference;
+candidate GUI is `2770f96f…`, using the same runtime/helper/Qt. The rebuilt reference
+GUI is the previously characterized `0d5ec9b9…`; native timing uses the accepted
+binary directly. AArch64 disassembly is archived; this variant has no new SIMD,
+bit manipulation or target-specific kernel. No x86/Linux execution is claimed.
+
+Six alternating native pairs each contain 100 inputs after 20 warmups, four panes
+in a 1600×1000 window with grids 39×19 (primary), 18×19, 8×19 and 9×19, and three variable ASCII producers at
+0.125 MiB/s each (`/tmp/telar-perf-attached-row-text-native-01`). All rates and owned
+process cleanup pass. All 26 host observations qualify, with maximum one/five-minute
+loads 3.687/3.567 and no active compiler observations. Boundary checks cannot exclude
+every transient source of interference.
+
+| Native metric | Accepted A | Candidate B | Wins |
+| --- | ---: | ---: | ---: |
+| Input-to-present p50, ms | 31.523 | 31.062 | 5/6 |
+| p95, ms | 37.414 | 37.428 | 4/6 |
+| p99, ms | 41.113 | 41.090 | 4/6 |
+| GUI measured CPU, ms/input | 14.683 | 13.797 | 3/6 |
+| Runtime session CPU, ms | 894.937 | 875.075 | 2/6 |
+| Runtime session CPU, ms/second | 55.382 | 54.448 | 2/6 |
+
+The runtime observer brackets the whole GUI session, not its measured-input
+interval; the CPU windows are not summed. Median background production is
+5,395,456 → 5,388,416 bytes. The predeclared target requires GUI CPU wins in at least
+5/6 pairs; 3/6 fails even though its median is lower. No consistent native regression
+is established. The component gain does not override that failed target, and no
+additional native series is run to seek a favorable result. Only the reusable
+probe/comparator/oracle changes are retained.
 
 ## Coverage and next experiments
 
