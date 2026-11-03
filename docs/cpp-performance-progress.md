@@ -3384,6 +3384,99 @@ temporal coverage and are not proof of an otherwise idle machine. The ASCII
 coverage candidate was subsequently rejected by its component controls; all
 full-flow timing/cadence requirements remain open.
 
+## Variable-output sampled work, 2026-11-03
+
+Two fresh diagnostic repetitions in `/tmp/telar-perf-variable-work-profile-03`
+use the frozen accepted GUI `5a639c5f26f6`, runtime `a0b8b9d5826c`, and original
+QtGui `abd4bdf7f504`. Each qualifies 240 measured inputs, four 39×19 panes,
+and three variable-ASCII producers at 0.125 MiB/s each. Both offered-rate checks
+pass, and both owned runtimes report complete cleanup. GUI and runtime are sampled
+for eight seconds each, with process-path/hash verification; these instrumented
+runs do not qualify latency, CPU, throughput or cadence. The private controller
+and manifests retain the source and binary identities.
+
+Inclusive stack occurrences, counting nested matches only once within a group:
+
+| Group | Repetition 1 | Repetition 2 |
+| --- | ---: | ---: |
+| GUI `requestRowFonts` | 11 | 10 |
+| GUI `FontCoverage` | 9 | 9 |
+| GUI `updatePaintNode` | 50 | 64 |
+| Qt `renderMergedBatch` | 68 | 52 |
+| WindowServer `SLSObscureCursor` | 91 | 96 |
+| Runtime checkpoint `Snapshot::changed` | 10 | 6 |
+| Runtime `PaneObservationService::refresh` | 10 | 20 |
+| Runtime `CellProjection` | 6 | 7 |
+
+These groups overlap and must not be summed. Sleeping/waiting threads dominate
+the profiles, so counts are not CPU percentages. The cursor path waits in
+`mach_msg2_trap`: local Qt Cocoa `qnsview_keys.mm` calls
+`NSCursor.setHiddenUntilMouseMoves` before IME processing for non-command/control
+keypresses. No cursor/IME behavior is changed, and causality remains unproven.
+Exact per-input timestamps were not retained, limiting interval attribution.
+
+Source inspection identifies an independently testable work reduction:
+`persistence/snapshot.hpp::changed` visits all 256 pane slots and compares/writes
+their stamps on every configured session-store tick, even with four panes.
+An isolated experiment under ignored `out-perf/dlls-checkpoint-scan-01` explores
+ending after the live pane count and retaining the previous extent to detect
+removals. Font coverage remains a small sampled path; its rejected eager cache
+is not reinstated.
+
+## Count-limited checkpoint scan rejected, 2026-11-03
+
+The candidate adds one `size_t` of state and stops after finding the current
+live pane count. It clears stamps up to the previous extent after removals.
+The private component probe extracts the actual A/B `changed()` bodies and
+stamp definitions, substitutes lightweight pane/model fixtures, and applies
+`noinline` equally. Its timings do not measure the full runtime's object layout.
+A deterministic oracle compares 200,513 transitions and settled rechecks,
+including sparse/full occupancy, identity, dimensions, close flags and all
+three revision sources. Native Release, ASan/UBSan and x86-64 under Rosetta pass.
+
+The committed persistence test now checks the real `Snapshot` with owned PTYs:
+directory revision, independent dimension changes, text output without persistent
+changes, combined close flags, revisions, a hole before a live pane, removal of
+the last pane, re-addition and replacement without an intervening observation.
+The focused persistence suite passes against the original and candidate headers,
+including a sanitized candidate translation unit. Existing dependency libraries
+are not sanitized. Final builds have no compiler warnings; formatting and diff
+checks pass. An exploratory full-TU clang-tidy invocation exits zero but emits
+repository-style/header warnings; it is not a clean lint result. The normal
+runtime lint target excludes tests.
+
+Three combined series were discarded when other compilers appeared at their
+boundaries. No partial results were reused. Subsequently each case ran as its
+own complete seven-pair alternating series, with separate host qualification.
+All eight qualify: 240 boundary observations, maximum one/five-minute loads
+4.082/3.753, no active compiler observations. No builds, tests or profilers were
+run alongside these timings. Median process CPU nanoseconds per call:
+
+| Pane state | Original | Candidate | Wins |
+| --- | ---: | ---: | ---: |
+| Empty | 337.725 | 1.971 | 7/7 |
+| One low slot | 348.823 | 3.647 | 7/7 |
+| Four low slots | 394.560 | 12.416 | 7/7 |
+| All 256 occupied | 591.234 | 645.752 | 0/7 |
+| Four highest slots | 373.839 | 406.373 | 0/7 |
+| Four spaced slots | 411.517 | 333.703 | 7/7 |
+| Alternating fourth-pane removal/addition | 370.445 | 12.145 | 7/7 |
+| Directory revision on every call | 396.151 | 12.680 | 7/7 |
+
+Wall-time win counts agree. **Rejected** for the two consistent control losses;
+no production header was changed or native performance victory claimed. Actual
+integration disassembly has different bodies (304 → 472 bytes on AArch64),
+including the live-count work and tail cleanup, so no identical-code placement
+exception applies. The precise contribution of each added instruction is not
+established. x86-64 baseline and v3 lowerings were also generated; Linux runtime
+qualification remains open.
+
+The next candidate is maintaining the occupied extent when `SlotStore` changes,
+then scanning that prefix without a per-slot live counter. This would move work
+from every checkpoint tick to insert/remove operations, at a small bounded memory
+cost. It still needs store-lifecycle oracles, dense/mutation controls and whole
+runtime measurements before acceptance.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove

@@ -1,6 +1,7 @@
 #include "check.hpp"
 #include "persistence/file_store.hpp"
 #include "persistence/restore.hpp"
+#include "persistence/snapshot.hpp"
 #include "persistence/writer.hpp"
 #include "platform/observation_worker.hpp"
 #include <random>
@@ -200,6 +201,84 @@ static void testAtomicFile(SystemAllocator &memory) {
   check(::rmdir(directory.data()) == 0);
 }
 
+struct SnapshotAgents {
+  const Agent *find(std::uint64_t, std::uint64_t) const noexcept {
+    return nullptr;
+  }
+
+  std::uint64_t revision() const noexcept {
+    return version;
+  }
+
+  std::uint64_t version = 0;
+};
+
+static void testSnapshotChanges(SystemAllocator &memory) {
+  RuntimeModel model{memory};
+  NativeEventLoop<SystemAllocator> poller{memory};
+  PaneService panes{memory, model, poller, PaneLaunchOptions{.socket = "/tmp/unused-checkpoint-test.sock"}};
+  ClientLayouts layouts{memory, model};
+  SnapshotAgents agents;
+  checkpoint::Snapshot snapshot{model, layouts, agents};
+  const auto expect = [&](bool changed) {
+    check(snapshot.changed() == changed);
+    check(!snapshot.changed());
+  };
+  expect(true);
+
+  std::array<Byte, 4096> buffer;
+  checkpoint::Restore restore{memory, model, panes, layouts, false};
+  restore.apply(checkpointFixture(buffer));
+  expect(true);
+  auto *pane = model.panes.find(257);
+  check(pane != nullptr);
+  ++pane->cwd_revision;
+  expect(true);
+  pane->resize(TerminalSize{.cols = 91, .rows = 30, .cell_width_px = 0, .cell_height_px = 0});
+  expect(true);
+  pane->resize(TerminalSize{.cols = 91, .rows = 31, .cell_width_px = 0, .cell_height_px = 0});
+  expect(true);
+
+  constexpr std::array<Byte, 4> output{'t', 'e', 's', 't'};
+  pane->terminal.feed(output);
+  expect(false);
+  pane->output_closed = true;
+  expect(true);
+  pane->exit_status = 0;
+  expect(false);
+  pane->output_closed = false;
+  expect(false);
+  pane->exit_status.reset();
+  expect(true);
+  pane->close_requested = true;
+  expect(true);
+  pane->close_requested = false;
+  expect(true);
+  ++agents.version;
+  expect(true);
+  ++model.workspace_revision;
+  expect(true);
+
+  model.panes.erase(1);
+  expect(true);
+  ++pane->cwd_revision;
+  expect(true);
+  const auto location = pane->location;
+  model.panes.erase(257);
+  expect(true);
+
+  constexpr std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "read value"};
+  Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
+  const auto first = panes.launch(command, location, TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0}).id;
+  expect(true);
+  model.panes.erase(first);
+  const auto replacement = panes.launch(command, location, TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0}).id;
+  check(replacement != first);
+  expect(true);
+  model.panes.erase(replacement);
+  expect(true);
+}
+
 static void testLargePaneIdentity(SystemAllocator &memory) {
   constexpr std::uint64_t identity = UINT64_MAX - 2;
   std::array<Byte, 4096> buffer;
@@ -232,5 +311,6 @@ void testPersistence() {
   testCheckpointValidation();
   testRestore(memory);
   testLargePaneIdentity(memory);
+  testSnapshotChanges(memory);
   testAtomicFile(memory);
 }
