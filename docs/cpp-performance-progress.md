@@ -3800,8 +3800,10 @@ arithmetic. No x86/Linux execution or new sanitizer result is claimed.
 
 The local Qt 6.12 source exposes a further limit: QTimerInfoList::timerWait in
 `qtimerinfo_unix.cpp` rounds a positive remaining duration up to milliseconds, and
-QEventDispatcherCoreFoundation::updateTimers in `qeventdispatcher_cf.mm` uses that
-rounded duration for CFRunLoopTimer. QChronoTimer preserves its internal deadline,
+both the generic Core Foundation dispatcher and the actual Cocoa GUI dispatcher
+consume that rounded duration. For this GUI the relevant caller is
+QCocoaEventDispatcherPrivate::maybeStartCFRunLoopTimer in
+`qcocoaeventdispatcher.mm`, which passes it to CFRunLoopTimer. QChronoTimer preserves its internal deadline,
 but changing the application wrapper alone does not guarantee an unrounded native
 wake. This additional rounding must not be omitted from the hypothesis.
 
@@ -3817,6 +3819,154 @@ qualification. The candidate is not adopted; valid cadence acceptance and all
 input/idle regression series remain outstanding. The working production source
 is restored to A. The mutable GUI build contains the private candidate and must
 be rebuilt before being used as a baseline; frozen accepted stages are unchanged.
+
+## Fractional Cocoa timer wait experiment
+
+`out-perf/dlls-qt-timer-wait-01` isolates the second rounding site in Qt 6.12.
+A private QtCore relink returns the positive nanosecond remainder directly on
+Darwin; other platforms retain the existing millisecond ceiling. Timer eligibility,
+activation deadlines and storage are unchanged. Installed Qt and its source/object
+files are untouched. The Cocoa dispatcher already accepts fractional seconds.
+
+Original QtCore SHA-256 is `ab7cec95…`, candidate `5a49ee8a…`. An unchanged control
+relink has exactly the original 3,951,112-byte executable text section, SHA-256
+`98c46d0e23c0bce0cc9b98f0646271e44ebbaeacbde69c01acfa02d41a71726b`;
+all link inputs are fingerprinted. Six full-TU assembly compilations pass for
+A/B on ARM64, x86-64 and x86-64-v3. ARM64 timerWait removes the reciprocal multiply,
+shift and round-up sequence. This does not establish whole-application CPU savings
+or Linux/x86 execution.
+
+The first QCoreApplication probe is unsuitable: it selects QEventDispatcherUNIX.
+The corrected QGuiApplication probe creates no window and verifies the actual
+QCocoaEventDispatcher, loaded QtCore path/hash, cancellation and no early delivery.
+Both libraries pass those checks and all 18 existing window-adapter tests; the
+latter use QCoreApplication and therefore are not Cocoa-specific tests.
+
+Seven alternating pairs per case deliver 1,200 measured precise QChronoTimer
+callbacks after 60 warmups. Fractional waits are 0.25/0.5/0.75/1.25/1.5/2.25 ms;
+integer controls are 1/2/3 ms. Raw samples are retained without trimming.
+`paired-01` is entirely discarded when load1 reaches 5.250488. Fresh `paired-02`
+passes all 58 host observations, maximum load1/load5 3.620/2.907.
+
+| Timer delivery lateness | A median | B median | B wins |
+| --- | ---: | ---: | ---: |
+| Fractional p50 | 1,054.500 us | 258.146 us | 7/7 |
+| Fractional p95 | 1,568.229 us | 627.133 us | 7/7 |
+| Fractional p99 | 1,598.335 us | 648.665 us | 7/7 |
+| Integer p50 | 553.584 us | 549.875 us | 6/7 |
+| Integer p95 | 827.398 us | 821.052 us | 7/7 |
+| Integer p99 | 870.978 us | 854.965 us | 7/7 |
+
+Fractional CPU/event is mixed, 36.378 → 36.188 us, 3/7 wins; integer is
+35.963 → 34.932 us, 5/7. Integer maximum lateness worsens from median 1.021 to
+1.486 ms, 2/7 wins. This maximum was outside the declared component gate and is
+retained as an unresolved tail observation. No callback fires early. These are
+component delivery latencies, not input latency or presented content FPS.
+
+Native qualification combines this private library with the preceding QChronoTimer
+GUI candidate, against accepted GUI/Qt A, with the same runtime/helper. Actual
+loaded QtCore paths are checked from dyld logs. Single/splits/tabs static PNGs match
+exactly; variable split load also qualifies. Six-second cadence diagnostics in
+`/tmp/telar-perf-qt-timer-wait-cadence-qual-01` verify content and producer coverage:
+A records 678 distinct changes (113.227/s), B 684 (114.072/s), independent Zig 701
+(116.830/s). A/B display references change phase and cannot qualify missed-refresh
+counts; Zig qualifies at 120.0006 Hz with 19 missed opportunities. The diagnostic
+launcher enables dyld logging, so these observations are not paired acceptance.
+No six-pair native target or input/idle regression series is accepted. This remains
+a component gain with deferred adoption; working Qt/application source stays at A.
+
+## Retained runtime cell deadline candidate
+
+`out-perf/dlls-runtime-cadence-deadline-01` isolates a difference from the real Zig
+attachment path. Zig saves the deadline when deferring a frame and consumes it on
+the next preparation attempt. C++ recomputes `FramePacer::deadline(now)` when it
+wakes; once a credit has accrued this returns null, so record() anchors at the late
+wake instead of the scheduled cadence slot. With a 10 ms interval and a 3 ms late
+wake, accepted C++ waits another 10 ms rather than the remaining 7 ms.
+
+The candidate adds one optional time point to Attachment and exchanges it out at
+the start of cell preparation. A pacing deferral stores the deadline; a successful
+incremental preparation passes the previous deadline only if it has elapsed.
+Early input and output-close bypasses cannot anchor in the future. Snapshot,
+outstanding ACK, synchronized-output and burst-credit rules remain intact. This
+matches Zig's handling of retained deadlines, including clearing them on an early
+return. No timer, polling loop, GUI/Qt change or dynamic allocation is added.
+
+The new `attachment-pacing-tests` target exercises actual AttachmentDelivery with
+explicit time points and real decoded/ACKed frames. Ten scenarios cover on-time,
+1 ns/3 ms/9 ms late wakes, repeated deferrals, ACK backpressure, early input,
+snapshot bypass, interval reconfiguration, output closure, synchronized holds and
+bounded catch-up bursts. Accepted source fails the scheduled-wake/reconfiguration
+and early-output-close expectations; the candidate passes. An isolated copy of
+accepted headers compiled with the same expanded test emits exactly the same
+48,921 re-encoded frame-body bytes as the candidate, SHA-256
+`af2f511d8be5ba6c402278459e4caa5e289954e351924014888df459831fe500`.
+The capture decodes messages then serializes their complete bodies; it is not a raw
+socket capture. Existing client-delivery and text test groups pass separately. Fixtures own and
+reap their child processes. These deterministic checks prove the scheduling
+correction and matched output, not native performance.
+
+A/B assembly compilations cover ARM64, x86-64 and x86-64-v3 on macOS with
+both the test allocator and the actual synchronized/budgeted runtime allocator.
+Attachment grows from 32,592 to 32,608 bytes on all three, 16 bytes per attachment
+and at most 1,024 bytes per client's 64 attachments. The emitted cells function
+has 269 → 279 ARM64 instructions and retains its 128-byte stack frame; x86-64 and
+v3 have 292 → 302 instructions. The scheduled path now uses the existing cadence
+slot division. This is a scheduling correction, not a claim of fewer instructions.
+Both touched headers compile independently. Address/undefined sanitizers pass on
+the complete pacing test translation unit and preserve the wire digest; runtime-core
+and external dependencies are uninstrumented and leak detection is disabled.
+Linux or Rosetta execution is not yet established.
+
+Frozen B runtime SHA-256 is
+`66675b100049f967b5523ee4a26ff118fd83fc8aab42e1a303b23dbe34d837a6`;
+accepted A is `a0b8b9d5…`. Both use accepted GUI `5a639c5f…`, helper `87beebb0…`
+and original Qt. Native single/splits/tabs static captures are byte-identical;
+variable split load also qualifies. All 18 host observations pass. The initial
+cadence diagnostic has content-qualified A/B/Zig rates of 113.079/116.162/113.992
+changes/s. A's display reference changes phase; B and Zig qualify at 120.0006 Hz.
+B also has a 50 ms presented gap and a 52.561 ms producer delay. These observations
+cannot establish a paired win. Two fresh native cadence series remain ineligible: `cadence-pairs-01` reaches
+the last A run before its reference changes phase; `cadence-pairs-02` fails the
+first A reference. All 25/3 recorded host observations pass (maximum load1
+2.815/2.469), but neither controller completes host-series qualification. No
+partial performance aggregate is accepted. Input/idle regression controls and
+independent Zig/full-flow acceptance remain open.
+
+`single-pairs-01` completes five alternating input pairs, then stops on round 5 B:
+the first input after five seconds idle has no qualified presentation within two
+seconds. The owned producer received the key and exits cleanly; the runtime and
+children are reaped. All 23 recorded host boundaries pass. The entire incomplete
+series is ineligible, with no aggregate accepted. Four separate after-idle diagnostic
+startups (`idle-diagnostic-01`, A/B twice, 20 warmups and three measured markers)
+complete with readback logging. Accepted A also produces verified marker pixels
+whose drawable presentedTime remains zero at the 100 ms recheck; later drawables
+have positive timestamps. The diagnostic retains those drawable references and
+logs on the GUI thread, so its timings are not acceptance evidence. It does not
+reproduce the timeout or establish its cause. Zero timestamps remain rejected.
+
+The subsequent `load-pairs-01` series completes eight native runs with valid content
+and offered rates, but the host rejects the eighth run's final boundary: load1 is
+5.443848 against the limit of 5, with no active compiler observed. The entire series
+is discarded; earlier latency/CPU differences are not accepted evidence. The failed
+boundary's runtime/children exit and socket cleanup complete normally. The following A/B diagnostic profile also stops after the first A run: both
+owned eight-second samplers finish, all 240 inputs and offered-rate checks pass,
+but final load1 is 5.047852. Only A is captured, so no A/B profile comparison is
+available. Its raw stacks remain diagnostic observations, not a cost attribution.
+The third cadence series also fails the first A reference, with all three host
+boundaries valid and maximum load1 2.592285. No new native timing series is accepted.
+
+Post-processing the four failed A references finds host-clock phase adjustments
+inside the observation windows, at offsets ranging from 0.204 to 5.933 seconds.
+Some adjacent reference gaps are about 10.43/9.39/8.86 ms; others about
+6.24/7.28/7.81 ms, while the reported nominal period remains 8.33329 ms.
+`reference-failures.json` retains the exact timestamps. This is not exclusively
+startup behavior and does not justify dropping samples or enlarging tolerances.
+It establishes an unstable reference, not the physical display's causal mechanism.
+The next investigation is the actual Qt/Cocoa display scheduling policy. The
+runtime change remains an unaccepted working-tree candidate; accepted frozen
+stages are unchanged. The focused CTest and final source rebuild pass, and the
+rebuilt runtime is byte-identical to frozen B. All F01–F16 acceptance remains open.
 
 ## Coverage and next experiments
 
