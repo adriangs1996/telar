@@ -4220,6 +4220,83 @@ pair supplies no performance acceptance and no evidence of the hypothesized larg
 latency reduction. No production pool policy is changed. The remaining lead is
 Qt's drawable presentation scheduling/skipping path; its causal role is unproven.
 
+## Zero presentation timestamps isolated outside Qt, 2026-11-03
+
+Two accepted-A diagnostics retain the default three-drawable policy and all native
+input qualification gates. `out-perf/dlls-qt-presentation-skip-01` enables Qt's
+`qt.rhi.general` and `qt.gui.metal` logs and records drawable pointers/IDs alongside
+acquisition and callback times. Its private observer removes only the optional
+100 ms zero-timestamp recheck, avoiding that diagnostic's extra drawable retention.
+`/tmp/telar-perf-qt-presentation-skip-01` completes 20 measured inputs plus 20
+warmups. A setup drawable explicitly skipped by Qt's display lock has a zero
+callback. Three subsequent verified, visible-window zero callbacks have no Qt skip
+log; one is the first input after five seconds idle. Another drawable for the same
+input presents positively. All four host boundaries pass, maximum load1 4.709.
+
+`out-perf/dlls-qt-presentation-call-01` additionally delegates the concrete
+CAMetalDrawable `present` method while logging its actual invocation. The native
+run completes all 40 inputs with four valid host boundaries, maximum load1 2.791.
+Every acquired drawable has exactly one present request except the single setup
+drawable explicitly skipped by Qt. The verified first-input drawable receives an
+actual present call from the scheduled-handler thread, then a zero presentation
+timestamp; a later drawable serves that input positively. Thus Qt's display-lock
+omission does not explain this particular zero. Neither diagnostic reproduces a
+timeout or establishes the cause of previous timeout attempts. Both owned runtime
+cleanup receipts are complete. Logging/hooking overhead excludes timing acceptance.
+
+The reusable [Metal idle control](../tools/metal_idle_control.py), with its
+[native probe](../tools/metal_idle_control.m), removes Telar and Qt from the experiment.
+It clears an owned AppKit/CAMetalLayer window to alternating solid colors, submits
+20 warmup frames, waits five seconds with two unchanged redraws, then submits 20
+resumed frames. The first resumed frame is isolated for at least two seconds before
+another submission. It compares two diagnostic policies: present from a command
+buffer's scheduled handler, or `presentDrawable` on the command buffer. These are
+observations of API behavior, not paired performance comparisons. Default readback
+verifies a GPU pixel from each clear; `--no-readback` uses framebuffer-only drawables
+and explicitly reports content verification unavailable. Neither mode turns zero
+timestamps into eligible latency endpoints.
+
+Run `python3 tools/metal_idle_control.py /tmp/unique-metal-control` or add
+`--no-readback`; `--presentation scheduled|command` selects one policy. The driver
+builds into that new directory, records source/binary identities and host boundaries,
+checks owned process exit, and rejects missing/duplicate/mismatched callbacks,
+invalid clocks, foreground loss, wrong geometry, VSync/pool changes, unverified
+requested readback, coalesced submissions or overlapping first-resume callbacks.
+It neither launches a Telar runtime nor changes installed binaries/configuration.
+
+Private control `metal-idle-control-01` scheduled long-delay timers together and
+coalesced resumed submissions; it cannot isolate the first resumed frame. Version
+02 corrects this with recursive frame scheduling and the two-second isolation.
+Private no-readback version 03 loses foreground in its second policy, excluding that
+entire series. Both limitations are retained in disposition receipts. The canonical
+driver fails closed on foreground loss instead of accepting that observation.
+
+Fresh canonical runs qualify the standalone experiment:
+
+| Artifact under `/tmp/telar-perf-` | GPU readback | Host boundaries / max load1 | First resumed frame, scheduled / command |
+| --- | --- | --- | --- |
+| `metal-idle-canonical-01` | Every pixel verified | 6 / 1.654 | Zero / zero |
+| `metal-idle-canonical-02` | Disabled; framebuffer-only | 6 / 1.815 | Zero / zero |
+
+Each policy completes all 42 GPU operations and presentation callbacks, with a
+1600×1000 drawable on the display advertising 120 Hz. First-resume isolation is
+2.022–2.099 seconds; every first-resume zero callback precedes the next submission.
+Foreground/visibility observations pass at acquisition and callback processing.
+All four owned processes exit successfully. Nine mutations of a qualified native
+log reject focus loss, wrong pixels, non-finite time, wrong identity, disabled
+VSync, wrong dimensions, duplicate/missing callbacks and first-resume overlap. An
+untouched zero trace and a synthetic positive control are accepted only as
+diagnostics, always with `performance_eligible=false`.
+
+The zero-after-idle behavior therefore does not require Telar, Qt's presentation
+lock, its scheduled-handler policy, or this probe's GPU readback/framebuffer-only
+change in these controls. This is not a physical scanout observation, a general
+driver diagnosis, or proof that every earlier timeout has the same cause. It does
+not justify bypassing Qt's locking, repeating production frames, changing drawable
+capacity or weakening the positive-presentation gate. Native latency acceptance
+remains open. Production GUI/Qt policy is unchanged; the runtime deadline candidate
+remains unaccepted working-tree work.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
