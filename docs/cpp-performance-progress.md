@@ -3335,6 +3335,30 @@ unchanged. This is recorded in `reference-sections.json` and
 Load remained elevated (15.32 / 19.54 / 19.23 at 11:21); component and native
 acceptance timing have still not started.
 
+At 11:31 the host becomes eligible under the frozen limits, with no active
+compilers. Seven alternating component pairs complete in `pairs-01`: 56 runs,
+85 valid boundary observations, maximum one/five-minute load 4.80 / 6.85 and
+no observed active compiler. No builds, tests or profilers run alongside them.
+Median CPU nanoseconds per operation:
+
+| Operation | Original | ASCII cache | Cache wins |
+| --- | --- | --- | --- |
+| One ASCII query | 9.6580 | 1.4506 | 7/7 |
+| One non-ASCII/out-of-range query | 16.8971 | 17.2167 | 1/7 |
+| 62 one-byte cell coverage checks | 695.275 | 202.650 | 7/7 |
+| Construct face, query A and destroy | 8507.000 | 9483.330 | 0/7 |
+
+Wall-time win counts agree. The Unicode and cold controls reject the predeclared
+contract despite the warm ASCII/row gains. The actual coverage implementation
+changes, so there is no identical-code placement exemption. This candidate is
+rejected, not waiting for native timing; production `Face` still equals the
+original. Its source, qualified GUI artifacts and rejection are retained privately.
+No full-flow speedup or native CPU result is claimed. A possible follow-up is a
+cache scoped to main-thread row-font requests, populated only by actual queries;
+it must first establish correct font-generation invalidation and its own controls.
+The renderer's existing ligature data is not directly reusable by the main-thread
+face: `TerminalFrame` passes a font collection and `ResidentFonts` caches per thread.
+
 ## Shared-host measurement qualification, 2026-11-03
 
 The native latency CLI previously recorded only its initial process list. It now
@@ -3356,9 +3380,9 @@ comparison tests also pass. No GUI/runtime production behavior changes.
 A real CLI attempt in `/tmp/telar-perf-host-load-cli-01` exits 2 at `before-setup`
 under the observed shared load. Its report is `deferred`, with zero started runs;
 no probe library, runtime or GUI was launched. Boundary snapshots have limited
-temporal coverage and are not proof of an otherwise idle machine. The pending
-ASCII coverage candidate remains unaccepted, and all full-flow timing/cadence
-requirements remain open.
+temporal coverage and are not proof of an otherwise idle machine. The ASCII
+coverage candidate was subsequently rejected by its component controls; all
+full-flow timing/cadence requirements remain open.
 
 ## Coverage and next experiments
 
