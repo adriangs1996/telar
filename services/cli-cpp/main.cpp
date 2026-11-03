@@ -5,6 +5,9 @@
 #include "plugin.hpp"
 #include "proxy_trust.hpp"
 #include "server.hpp"
+#include "tab.hpp"
+#include "workspace.hpp"
+#include "worktree.hpp"
 #include <cstdio>
 #include <cstring>
 #include <span>
@@ -50,6 +53,35 @@ int runFamily(BudgetAllocator<SystemAllocator> &memory, Family family, std::span
   case Family::server:
     runServer(memory, words);
     return 0;
+  case Family::workspace:
+    if (!options.empty() && std::string_view{options.front()} == "select") {
+      return sessions::routed(memory, sessions::RoutedOptions::parse("workspace", options));
+    }
+    {
+      const auto parsed = sessions::WorkspaceOptions::parse(options);
+      if (parsed.worktree) {
+        sessions::WorktreeOptions worktree;
+        worktree.action = sessions::WorktreeOptions::Action::create;
+        worktree.branch = parsed.worktree;
+        worktree.title = parsed.name;
+        worktree.directory = parsed.directory;
+        worktree.socket = parsed.socket;
+        worktree.json = parsed.json;
+        return sessions::worktree(memory, worktree);
+      }
+      return sessions::workspace(memory, parsed);
+    }
+  case Family::tab:
+    if (!options.empty()) {
+      const std::string_view verb = options.front();
+      const bool background = std::ranges::any_of(options.subspan(1), [](const char *word) { return std::string_view{word} == "--background"; });
+      if (verb == "select" || verb == "next" || verb == "previous" || (verb == "create" && !background)) {
+        return sessions::routed(memory, sessions::RoutedOptions::parse("tab", options));
+      }
+    }
+    return sessions::tab(memory, sessions::TabOptions::parse(options));
+  case Family::worktree:
+    return sessions::worktree(memory, sessions::WorktreeOptions::parse(options));
   default:
     return unavailable(std::string{"telar "} + std::string{familyName(family)});
   }

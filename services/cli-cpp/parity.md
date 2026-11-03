@@ -45,20 +45,20 @@ differences; **unverified** runs without a comparison; **missing** prints
 
 | Command | Status | Notes |
 | --- | --- | --- |
-| `workspace create` | missing |  |
-| `workspace get` | missing |  |
-| `workspace list` | missing |  |
-| `workspace rename` | missing |  |
-| `workspace select` | missing |  |
-| `tab close` | missing |  |
-| `tab create` | missing |  |
-| `tab get` | missing |  |
-| `tab list` | missing |  |
-| `tab move` | missing |  |
-| `tab next` | missing |  |
-| `tab previous` | missing |  |
-| `tab rename` | missing |  |
-| `tab select` | missing |  |
+| `workspace create` | done | `tools/check_sessions_cli.py --cpp CPP --zig ZIG`: `workspace-create`, autostart, symlink resolution, wire validation and `--worktree` alias; `cli-sessions-tests`. Source: `src/cli/workspace.zig:51`, `arguments/WorkspaceOptions.zig:25`. Both wire encoders cap names at 128 bytes despite the 256-byte help/parser limit. |
+| `workspace get` | done | Same comparison: `workspace-get*`, `--current`, underscored ids and missing identities; `cli-sessions-tests`. Source: `src/cli/workspace.zig:130` and `workspace_output.zig:6`. |
+| `workspace list` | done | Same comparison: empty/nonempty text and JSON, missing runtime (never starts one), final workspace closure; waits for both retained Git probes to settle. Source: `src/cli/workspace.zig:130`; `cli-sessions-tests`. |
+| `workspace rename` | done | Same comparison: text/JSON, quotes, UTF-8, parser and wire limits. Source: `src/cli/workspace.zig:102`, `arguments/WorkspaceOptions.zig:40`; `cli-sessions-tests`. |
+| `workspace select` | partial | `check_sessions_cli.py --cpp CPP --zig ZIG --gui CPP_GUI`: real windows, missing client and repeated selection. CLI route/status validation matches `src/cli/routed.zig:27`; C++ GUI answers `admitted` for an already selected workspace where Zig answers `applied` (`services/gui-cpp/application/session.hpp:3618`). |
+| `tab close` | done | `check_sessions_cli.py`: close a tab and the last tab, JSON and filesystem/session effects; `cli-sessions-tests`. Source: `src/cli/TabControl.zig:66`. |
+| `tab create` | done | Same comparison: `--background` and real-GUI `--client`, labels, missing clients; GUI tab list confirms creation. `cli-sessions-tests` keeps the background path. Source: `src/cli/tab.zig:99`, `arguments/RoutedOptions.zig:40`, `routed.zig:27`. |
+| `tab get` | done | Same comparison: text/JSON pane generations/lifecycle, current and missing targets; `cli-sessions-tests`. Source: `src/cli/TabControl.zig:43`, `pane_output.zig:6`. |
+| `tab list` | done | Same comparison: text/JSON, inherited workspace and runtime order after moves; `cli-sessions-tests`. Source: `src/cli/tab.zig:31`. |
+| `tab move` | done | Same comparison: previous/next, relative target and readback ordering; `cli-sessions-tests`. Source: `src/cli/TabControl.zig:24`, `arguments/TabOptions.zig:51`. |
+| `tab next` | partial | Real-GUI stack comparison: C++ GUI changes `target_id` in completion (`services/gui-cpp/application/session.hpp:3613`), so the runtime cannot match the request and the CLI times out (exit 3); Zig completes the navigation. Missing-client and argument contracts match `src/cli/arguments/RoutedOptions.zig:112`, `routed.zig:27`. |
+| `tab previous` | partial | Same real-GUI completion mismatch as `tab next`: C++ GUI changes the original target 0 to the selected tab id. Source: `services/gui-cpp/application/session.hpp:3613`; `check_sessions_cli.py` records the timeout. |
+| `tab rename` | done | Same comparison: text/JSON, quotes, label limits and control-byte refusals; `cli-sessions-tests`. Source: `src/cli/TabControl.zig:52`, `arguments/TabOptions.zig:38`. |
+| `tab select` | partial | Real-GUI comparison includes already selected and changed tabs. C++ GUI leaves the status `applied` for a changed tab (`services/gui-cpp/application/session.hpp:3636`), where Zig admits an asynchronous handoff. CLI request/reply identity checks match `src/cli/routed.zig:27`. |
 | `pane close` | missing |  |
 | `pane copy` | missing |  |
 | `pane create` | missing |  |
@@ -73,14 +73,14 @@ differences; **unverified** runs without a comparison; **missing** prints
 | `pane send-keys` | missing |  |
 | `pane split` | missing |  |
 | `pane watch` | missing |  |
-| `worktree create` | missing |  |
-| `worktree diff` | missing |  |
-| `worktree exec` | missing |  |
-| `worktree fetch` | missing |  |
-| `worktree list` | missing |  |
-| `worktree open` | missing |  |
-| `worktree remove` | missing |  |
-| `worktree resolve` | missing |  |
+| `worktree create` | partial | Local stack comparison covers checkout, duplicate rejection, default source workspace, alias, setup authorization, recipes, symlink refusal and effects; `cli-sessions-tests`. Source: `src/cli/worktree.zig:129`, `project_setup.zig:33`. `--machine` dispatch remains pending the machine/repository ports; it fails explicitly without running Git or starting a local runtime. |
+| `worktree diff` | done | Same comparison: base/uncommitted diff, diffstat, empty diff and adopting an untracked linked checkout; `cli-sessions-tests`. Source: `src/cli/worktree.zig:479`, `worktree_git.zig:221`. |
+| `worktree exec` | done | Same comparison: branch/title lookup (case insensitive titles), background launch, literal argv, wait text/JSON, nonzero exit and timeout (pane remains running); `cli-sessions-tests`. Source: `src/cli/worktree.zig:200`, `lib/pty/login_shell.zig:69`. |
+| `worktree fetch` | partial | Argument grammar/validation ported and compared by `cli-session-arguments-tests`; remote transfer intentionally waits for the machine/repository packages. Valid invocations fail explicitly before local runtime/Git effects. Reference: `src/cli/worktree.zig:65`, `worktree_dispatch.zig`. |
+| `worktree list` | done | Same comparison: empty/tracked/untracked text and JSON, diff/command/agent projection, no adoption while listing; `cli-sessions-tests`. Source: `src/cli/worktree.zig:263`, `worktree.zig:676`. Agent JSON formatting follows `src/cli/control.zig:161`. |
+| `worktree open` | done | Real-GUI comparison: explicit client and most recently used client, plus no-client/missing-worktree failures. Source: `src/cli/worktree.zig:445`. `cli-sessions-tests` retains failures without requiring a GUI. |
+| `worktree remove` | partial | Local comparison: clean/dirty removal, force refusal without a terminal, merged branch deletion, unmerged branch refusal and keeping the branch; `cli-sessions-tests`. Source: `src/cli/worktree.zig:491`. Safe fallback: Git without `--no-lazy-fetch` cannot pass the hardened merge check, so deletion asks for terminal confirmation even if merged (older-Git path not compared). |
+| `worktree resolve` | done | `check_sessions_cli.py`: open/closed workspaces, explicit paths, origin matching and failure diagnostics; `cli-sessions-tests` retains the history lookup. Source: `src/cli/worktree.zig:535`, `repository_discovery.zig:19`. `session_history_paths.hpp` opens SQLite read-only through a lazy loader only for resolve: no SQLite startup dependency for hooks. Linux without available dynamic-loader symbols fails explicitly with `RepositoryHistoryUnavailable` (not compared on this Mac). |
 | `agent acknowledge` | missing |  |
 | `agent get` | missing |  |
 | `agent interrupt` | missing |  |
