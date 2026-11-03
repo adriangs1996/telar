@@ -3112,6 +3112,102 @@ equivalence oracle against the actual Qt container before any dependency change.
 The original Qt installation remains unchanged; any eventual native experiment
 requires separate immutable dependency prefixes.
 
+## Metal inline binding storage, 2026-11-03
+
+The isolated experiment in `out-perf/dlls-metal-bindings-inline-01` is not retained.
+Replacing temporary heap-backed binding batches removes many allocations but
+does not meet the predeclared native CPU target. This result concerns this
+storage change and workload; it does not disprove the broader allocation/copy
+or Qt conversion hypotheses.
+
+The container oracle compares the actual Qt private template with four inline
+resources and two inline batches. All 4,123 cases pass in Release and with
+ASan/UBSan: exhaustive subsets of twelve bindings, empty and large streams,
+gaps, repeated finish, copy/assignment, clear and reuse. Repeated finish preserves
+Qt's existing duplicate-final-batch behavior. The standalone source tool
+`services/gui-cpp/tools/check_qt_binding_storage.py` reproduces these checks with
+a supplied managed Qt prefix and matching header. It generates the experimental
+header only in ignored output and preserves Qt's copyright/license identifiers.
+The final oracle also passes the repository clang-tidy profile.
+
+Storage grows from 64 to 224 bytes per container, or 1,280 to 4,480 bytes in the
+five-stage/four-type model. Seven alternating uninstrumented pairs exercise
+construction, feed, finish, copying previous state and destruction. Median
+nanoseconds per model frame are:
+
+| Resources / binding stride | Original | Inline | Inline wins |
+| --- | --- | --- | --- |
+| Empty | 66.670 | 109.091 | 0/7 |
+| 1 / 1 | 596.697 | 229.320 | 7/7 |
+| 4 / 1 | 960.503 | 313.005 | 7/7 |
+| 8 / 1 | 1372.197 | 729.363 | 7/7 |
+| 4 / 2 | 1765.938 | 720.280 | 7/7 |
+| 16 / 2 | 5487.367 | 2360.550 | 7/7 |
+| 257 / 1 | 10799.400 | 5526.829 | 7/7 |
+
+This is not a universal container win: empty construction regresses. A separate
+instrumented census records zero allocations for the inline one/four-resource
+contiguous cases, versus 160,000/240,000 calls over 10,000 original model frames.
+Large fallback also has a tradeoff: the 257-resource case requests 979,216,448
+bytes versus 656,640,000 cumulatively. These are requested bytes across repeated
+allocations, not live or peak memory. No container timing includes Metal dispatch.
+
+The native candidate changes only shader-resource binding storage in a private
+copy of Qt's Metal backend. Vertex-input batches and the generic shared Qt
+container remain unchanged. Baseline QtGui SHA256 is
+`abd4bdf7f5042bc0cbae3f3dfdfbfa378deeea7a9fdc5a436dc83bf592d455a7`;
+candidate is `34fa13cf15f18d19b7796ad82d7a51e43793e9fe5466a30aea3d079465002b55`.
+The GUI, runtime and helper bytes are identical between A/B; other Qt framework
+binaries are also identical. Qualification verifies the actual loaded QtGui and
+byte-exact native single/splits/tabs captures. Seven graphics suites and ten
+native cases pass. An initial preparation run could not find the Cocoa plugin
+after framework relocation; explicit original plugin/QML paths fix this before
+qualification and timing. The original installation is untouched.
+
+ARM64 disassembly of `QRhiMetal::enqueueShaderResourceBindings` shows stack
+reservation growing from 4,048 to 7,264 bytes, plus the same 96 bytes of saved
+registers. The address span to the next symbol grows from 6,152 to 6,864 bytes;
+static call sites grow from 89 to 95, including dynamic fallback paths. These
+are not executed-instruction counts or evidence of a placement-only difference.
+
+Six alternating native pairs in
+`/tmp/telar-perf-metal-bindings-inline-regressions-01` use 100 measured inputs
+after 20 warmups, identical 1600×1000 viewports and strict native marker,
+geometry, focus, presentation and offered-rate checks. No builds, tests or
+profilers run during acceptance timing. Median results:
+
+| Case / metric | Original | Inline | Inline wins |
+| --- | --- | --- | --- |
+| Single GUI CPU ms/input | 4.048870 | 4.091645 | 4/6 |
+| Single presented p50 ms | 24.886990 | 24.911885 | 2/6 |
+| Single presented p95 ms | 32.793789 | 31.717501 | 6/6 |
+| Single presented p99 ms | 35.340820 | 35.576264 | 3/6 |
+| Single peak RSS MiB | 204.406250 | 205.109375 | 3/6 |
+| Four splits GUI CPU ms/input | 4.322370 | 4.336195 | 3/6 |
+| Four splits presented p50 ms | 25.615646 | 25.832708 | 3/6 |
+| Four splits presented p95 ms | 32.733261 | 32.896727 | 2/6 |
+| Four splits presented p99 ms | 35.717754 | 35.046910 | 3/6 |
+| Four splits peak RSS MiB | 211.578125 | 204.570313 | 4/6 |
+
+The primary four-split CPU target requires at least 5/6 wins and obtains 3/6.
+This is insufficient gain, not a demonstrated consistent CPU regression. The
+single-pane p95 result is exploratory; it does not replace the frozen CPU target
+after observing results. Tabs and fixed-rate load timing controls are not run
+after this rejection. Runtime resources, complete C++/Zig flow comparisons and
+120 Hz cadence remain unqualified.
+
+A separate three-pair native heap census in
+`/tmp/telar-perf-metal-bindings-inline-census-01` confirms the intended reduction.
+Median successful allocation calls per input fall from 839.38 to 508.76 (39.4%);
+requested bytes fall from 112,733.61 to 101,571.05 (9.9%). Instrumented timings are
+excluded. These six-API counters include framework/probe work and are neither
+precise allocation-site CPU attribution nor live/peak heap measurement. Fewer
+allocations therefore did not establish a native CPU gain in this experiment.
+
+Only the reusable oracle and this report are retained. The private dependency
+patch, binaries, raw measurements and decision remain ignored; no production
+renderer or Qt recipe change is applied. All F01–F16 acceptance rows remain open.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove

@@ -181,6 +181,26 @@ Those counters exclude fixture storage and framework allocations. Timing include
 frame descriptor selection and application, excludes encoding, and does not measure
 native presentation latency or runtime performance.
 
+The standalone Qt binding-storage oracle compares experimental inline storage
+with the actual private `QRhiBatchedBindings` container. It checks 4,123 binding
+sequences, copying, clearing, repeated finish and dynamic fallback. Supply the
+managed Release Qt prefix and its matching source header; the output directory
+must be new:
+
+```sh
+python3 services/gui-cpp/tools/check_qt_binding_storage.py \
+  --qt-prefix /path/to/managed-qt/install \
+  --qt-header /path/to/matching-qtbase/src/gui/rhi/qrhi_p.h \
+  --output out-qt-binding-oracle --compiler /path/to/clang++ --sanitize
+```
+
+Omit `--sanitize` for a Release run. The tool generates the experimental header
+in the output directory, preserving Qt's copyright and license identifiers, and
+records source/library hashes and build logs. It does not modify Qt or establish
+native rendering equivalence or a performance gain. The Metal inline-storage
+experiment was not retained because its native CPU target failed; details are in
+[the performance report](../../docs/cpp-performance-progress.md).
+
 ## macOS packaging
 
 `tools/package_macos.py` creates a separately named app, deploys Qt/QML and includes
