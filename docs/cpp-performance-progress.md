@@ -1556,12 +1556,12 @@ shows an identity-validation loop that bypasses sorting when unchanged and a
 halving binary-search loop for matches. ARM64, x86-64 and x86-64-v3 compilation
 passes; native x86/Linux execution remains unqualified. This is a component
 candidate only; none is accepted as a complete-client optimization. After these
-component checks and the cadence diagnostics, the ordered header is now staged
+component checks and the cadence diagnostics, the ordered header was staged
 in the worktree for a fresh integrated build under
 `out-perf/shared-image-optical-ordered`. The preceding header and measured final
 binary are preserved. Focused tests, pixel/row oracles, lint and native paired
-controls remain pending; the tabs regression must be tested first after build
-qualification. The original Qt image conversion remains unchanged.
+controls were then required, with the tabs regression tested first after build
+qualification. That variant preserved the original Qt image conversion.
 
 That first integrated build completes all 477 steps, thirteen focused tests in
 25.49 s, the four native Quick cases, 7,494 original-Zig rows and eleven native
@@ -1576,9 +1576,35 @@ corpus. All six ordinary/churn cases and the separate collision control win 7/7
 for wall and CPU. Representative wall totals are one entry 56.164 → 17.488 ms,
 full 224.245 → 127.469 ms, full churn 225.496 → 162.537 ms, and collision
 227.471 → 127.106 ms, with the same iteration counts as above. Three-target
-code generation compiles again. A fresh full application build is now running in
-`out-perf/shared-image-optical-ordered-final`; integrated qualification and paired
-tabs controls remain pending.
+code generation compiles again. The fresh full application build in
+`out-perf/shared-image-optical-ordered-final` passes thirteen focused tests in
+25.70 s, four native Quick cases in 1.615 s, 7,494 original-Zig row comparisons,
+eleven native image comparisons and all four touched-unit lint checks.
+
+The final GUI SHA-256 is
+`6d50486990077ce67dee60e9d05c1f64c771af2aee8f7b9af7cee5f7fe5f7153`.
+Its six alternating tabs pairs against coverage reject the integrated variant:
+GUI CPU/input rises 4.227190 → 4.253515 ms with only 1/6 wins. Presentation p50
+is 25.541437 → 26.065812 ms (2/6), p95 33.256270 → 33.108103 (4/6), p99
+35.387584 → 35.359052 (2/6), and maximum 37.721104 → 37.782250 (3/6).
+RSS is 203.90625 → 203.9375 MiB (3/6), not the rejection reason. Raw evidence is
+`/tmp/telar-perf-gordered-coverage-tabs-01` and the prefix's
+`measurement-state.json`. The sequence exits 2 before image or independent-Zig
+stages. No code-placement exception is established. The ordered header has been
+withdrawn byte-for-byte to the preceding graphics-final version; all frozen
+component and integrated evidence remains available.
+
+`out-perf/graphics-tabs-warm-profile` then samples both GUI and runtime in two
+separate diagnostic runs, using explicit native postwarmup and measurement-end
+markers. Both receipts confirm the five-second samples fall inside measurement,
+after warmup; all four samples and both controllers exit successfully. These use
+the coverage and rejected ordered GUI identities above, with the same runtime.
+Main and render threads mostly wait. Both show ColorSync/ICC work below Qt native
+update scheduling; the candidate also samples a QML Repeater/delegate creation
+cascade after warmup. Neither establishes a dominant pacer or allocation cause.
+The `sample` observations include sleeping/preempted threads and must not be read
+as CPU-time percentages or allocation counts. These profiles improve phase
+qualification over the earlier mixed-phase samples, not performance acceptance.
 
 ### Retained destination conversion component
 
@@ -1612,6 +1638,56 @@ inside Qt or proof of zero framework allocations. Native integration, RSS impact
 tail latency and all-flow controls remain unqualified. The two earlier conversion
 variants passed component timing but failed native tails, so this component win
 does not authorize retaining the change in production.
+
+The integrated candidate is frozen at
+`out-perf/shared-image-optical-retained-final`, GUI SHA-256
+`7fd7b6f5f3cb89a905fca07b9c747f018da19b94be52ede685d3faa4628db37b`.
+It copies and replaces only the image-resource object in the frozen graphics-final
+archive, then relinks dependent executables; all other source hashes and committed
+service files match that base. Exact archive/object/binary identities are recorded.
+The first prefix, `shared-image-optical-retained-premultiply`, stops on the lint
+requirement to use an anonymous namespace; its failed receipt is preserved.
+
+A private retained QImage now belongs to each native upload texture. Replacing a
+pending upload first drops the obsolete local reference; an image still held by a
+Qt update batch forces a new destination. Clear/eviction/recovery releases the
+cache with its texture. This can add one RGBA buffer per resident texture: about
+31.64 MiB for 3840×2160, 4 MiB for 1024×1024, bounded by the existing 512 MiB
+resident-image budget per window (excluding Qt's transient queued uploads).
+This is an allowed memory tradeoff to measure, not zero-copy or a new admission
+limit. RGB and big-endian conversion, GPU RGBA8 format and draw-node behavior stay
+as before.
+
+The actual production helper, extracted unchanged, passes the exhaustive
+65,536 alpha/channel and twelve odd-stride/source-overwrite/held-output cases.
+Thirteen focused tests pass in 25.43 s, four native Quick cases in 1.469 s,
+7,494 original-Zig row cases match, and all eleven native image captures match
+coverage exactly. Image-resource clang-tidy passes. Integrated ARM64, x86-64 and
+x86-64-v3 assembly compiles; ARM64 calls the row-copy loop and in-place native
+conversion, with the generic RGBA conversion confined to fallback. This does not
+qualify x86 Qt execution. Six native tabs pairs now reject this combined binary:
+p50 is 25.368990 → 25.631260 ms (2/6 wins), p95 32.795209 → 33.113134 (2/6),
+p99 34.457947 → 35.931213 (1/6), maximum 36.881208 → 37.356042 (1/6).
+CPU/input is 4.337445 → 4.322860 ms (2/6), RSS 210.742 → 206.359 MiB (4/6).
+The sequence exits 2 before image or independent-Zig timing; evidence is in
+`/tmp/telar-perf-retained-coverage-tabs-01` and `measurement-state.json`.
+
+This rejects the combined package, not a demonstrated conversion mechanism:
+the marker control has no image uploads, and the graphics-final base already
+failed tabs without the conversion. The next experiment isolates the same image
+source on coverage's archives. Compiler-generated dependencies must match every
+local services header to coverage's commit plus frozen overlay before linking;
+this avoids mixing the graphics-grace ABI into the old objects. A first isolated
+build stops because coverage lacks the unrelated session-effects test object;
+the failure is preserved. `out-perf/shared-image-optical-retained-isolated-final`
+selects coverage's twelve existing focused tests, which pass in 25.27 s. All
+26 local services dependencies match coverage. Four native Quick cases pass in
+1.517 s, all 7,494 original-Zig rows match and all eleven native graphics cases
+match coverage pixel-for-pixel. The isolated GUI SHA-256 is
+`dad2ce88f795889196930f6f3327f683047620f7f2f07c31a9251890f3090fc2`;
+runtime and helper remain unchanged. Its six-pair native sequence is running,
+tabs first, with no concurrent builds/tests/profiles. Performance acceptance
+remains pending.
 
 ### Display-reference phase audit
 
