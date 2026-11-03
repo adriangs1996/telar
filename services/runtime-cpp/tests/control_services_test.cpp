@@ -63,7 +63,8 @@ static void testWorktreeOwnership(SystemAllocator &memory) {
 static void testExecutions(SystemAllocator &memory) {
   RuntimeModel model{memory};
   NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
-  ExecutionService executions{memory, model, poller};
+  LimitService limits{model};
+  ExecutionService executions{memory, model, poller, limits};
   ClientPeer owner{memory, model, ClientRole::control};
   ClientPeer outsider{memory, model, ClientRole::control};
   const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "cat; printf error >&2; exit 17"};
@@ -74,7 +75,7 @@ static void testExecutions(SystemAllocator &memory) {
                            .cwd = "/tmp",
                            .arguments = arguments};
   executions.request(owner.session(), request);
-  check(owner.receive<ExecutionReply>().state == ExecutionState::running);
+  check(owner.receive<ExecutionReply>().state == ExecutionState::starting);
   request.request_id = 2;
   executions.request(owner.session(), request);
   check(owner.receive<ExecutionReply>().execution_id == 73);

@@ -73,20 +73,7 @@ def main():
                 def describe(item):
                     return repr(item) if len(item) <= 2048 else {"bytes": len(item), "sha256": hashlib.sha256(item).hexdigest()}
                 difference = {"zig": [left[0], *(describe(item) for item in left[1:])], "cpp": [right[0], *(describe(item) for item in right[1:])]}
-                if name in {"exec/detach", "exec/retained-start"}:
-                    assert left[0] == right[0] and left[2] == right[2]
-                    assert left[1].replace(b'"starting"', b'"running"') == right[1]
-                    report["runtime_gaps"][name] = difference
-                elif name.startswith("limits/"):
-                    # The C++ runtime does not report executions.retained_bytes.
-                    # All other rows must still agree, including client reports.
-                    if name != "limits/text":
-                        expected_limits = json.loads(left[1])
-                        actual_limits = json.loads(right[1])
-                        expected_limits["limits"] = [entry for entry in expected_limits["limits"] if entry["name"] != "executions.retained_bytes"]
-                        assert expected_limits == actual_limits, difference
-                    report["runtime_gaps"][name] = difference
-                elif name == "history/batch-stats":
+                if name == "history/batch-stats":
                     assert left[0] == right[0] and left[2] == right[2]
                     assert sorted(left[1].splitlines()) == sorted(right[1].splitlines())
                     report["runtime_gaps"][name] = difference

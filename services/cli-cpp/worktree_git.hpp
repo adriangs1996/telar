@@ -1,5 +1,6 @@
 #pragma once
 
+#include "repository_git.hpp"
 #include "session_channel.hpp"
 #include "telar_base/memory/retained_stream.hpp"
 #include "telar_platform/command_output.hpp"
@@ -141,18 +142,25 @@ public:
     return result;
   }
 
+  // Zig's merge check runs through its untrusted Git: hooks, filters and lazy
+  // fetches off. A clone that could still fetch lazily, on a Git too old to
+  // switch that off, counts as not merged and asks a person.
   bool merged(std::string_view root, std::string_view branch) {
-    const auto upstream = std::string{branch} + "@{upstream}";
-    const auto reference = "refs/heads/" + std::string{branch};
-    // Avoid invoking repository configured helpers while deciding whether a
-    // branch may be deleted without a person's confirmation.
-    std::string against = "HEAD";
     try {
-      against = line({"git", "--no-pager", "--no-lazy-fetch", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-C", root, "rev-parse", "--verify", "--quiet", "--end-of-options", upstream}, true);
+      repository::Git git{memory_, root};
+      std::string against = "HEAD";
+      try {
+        against = git.read({"rev-parse", "--verify", "--quiet", "--end-of-options", std::string{branch} + "@{upstream}"});
+      } catch (const std::exception &) {
+      }
+
+      git.read({"merge-base", "--is-ancestor", "refs/heads/" + std::string{branch}, against});
+      return true;
     } catch (const std::exception &) {
+      return false;
     }
-    return succeeds({"git", "--no-pager", "--no-lazy-fetch", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-C", root, "merge-base", "--is-ancestor", reference, against}, true);
   }
+
 
 private:
   Memory &memory_;

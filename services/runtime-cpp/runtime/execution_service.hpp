@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../execution/execution.hpp"
+#include "limit_service.hpp"
 #include "pane_service.hpp"
 #include <csignal>
 
@@ -9,10 +10,11 @@ namespace telar::runtime {
 template <Allocator Memory, EventLoop Poller>
 class ExecutionService {
 public:
-  explicit ExecutionService(Memory &memory, RuntimeModel<Memory> &model, Poller &poller)
+  explicit ExecutionService(Memory &memory, RuntimeModel<Memory> &model, Poller &poller, LimitService<Memory> &limits)
       : memory_(memory),
         model_(model),
         poller_(poller),
+        limits_(limits),
         executions_(memory) {}
 
   ~ExecutionService() {
@@ -31,7 +33,8 @@ public:
     }
 
     auto *execution = find(request.execution_id);
-    if (execution == nullptr) {
+    const bool started = execution == nullptr;
+    if (started) {
       if (request.action != ExecutionAction::start) {
         throw RequestError{FailureCode::invalid_request, "ExecutionNotFound"};
       }
@@ -65,7 +68,7 @@ public:
     }
 
     flushInput(*execution);
-    send(client, *execution, request);
+    send(client, *execution, request, started);
     if (request.action == ExecutionAction::forget) {
       unwatch(*execution);
       executions_.erase(execution->token);
@@ -164,6 +167,7 @@ private:
 
   Execution<Memory> &start(std::uint64_t client_id, const ExecutionRequest &request) {
     if (executions_.size() == capacity) {
+      limits_.report(LimitReach{.name = "executions.capacity", .noun = "retained executions", .value = capacity, .requested = capacity + 1});
       throw RequestError{FailureCode::resource_limit, "ExecutionLimitReached"};
     }
 
@@ -306,11 +310,20 @@ private:
     }
   }
 
-  void send(ClientSession<Memory> &client, const Execution<Memory> &execution, const ExecutionRequest &request) {
+  // The reply to the request that started an execution says `starting`, as
+  // Zig's does before its spawning thread confirms the child; later replies
+  // report it running.
+  void send(ClientSession<Memory> &client, const Execution<Memory> &execution, const ExecutionRequest &request, bool started = false) {
+    const auto state = started && execution.state == ExecutionState::running ? ExecutionState::starting : execution.state;
     std::array<Byte, 4096> output;
     std::array<Byte, 4096> error;
     const auto output_offset = std::max(request.stdout_offset, execution.output.retainedOffset());
     const auto error_offset = std::max(request.stderr_offset, execution.error.retainedOffset());
+    // Output older than the retained megabyte is gone; Zig reports that limit.
+    if (output_offset != request.stdout_offset || error_offset != request.stderr_offset) {
+      limits_.report(LimitReach{.name = "executions.retained_bytes", .noun = "bytes per stream", .value = Execution<Memory>::retained_capacity, .requested = std::max(execution.output.total(), execution.error.total())});
+    }
+
     client.connection.send(ExecutionReply{
         .request_id = request.request_id,
         .execution_id = execution.id,
@@ -321,7 +334,7 @@ private:
         .stderr_total = execution.error.total(),
         .input_offset = execution.input_written,
         .input_available = Execution<Memory>::input_capacity - execution.input.size(),
-        .state = execution.state,
+        .state = state,
         .exit_code = execution.exit_code,
         .stdin_open = !execution.eof,
         .failure = {reinterpret_cast<const Byte *>(execution.failure_name.data()), execution.failure_name.size()},
@@ -354,6 +367,7 @@ private:
   Memory &memory_;
   RuntimeModel<Memory> &model_;
   Poller &poller_;
+  LimitService<Memory> &limits_;
   SlotStore<Execution<Memory>, capacity, Memory> executions_;
   std::uint64_t administration_ = 0;
 };

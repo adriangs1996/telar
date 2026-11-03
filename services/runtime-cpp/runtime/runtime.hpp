@@ -57,7 +57,7 @@ public:
         panes_(memory, model_, poller, PaneLaunchOptions{listener_.path(), proxy, options.control_policy}, background),
         workspaces_(memory, model_, panes_),
         worktrees_(memory, model_, workspaces_, limits_),
-        executions_(memory, model_, poller_),
+        executions_(memory, model_, poller_, limits_),
         process_inspector_(model_.manifests),
         agents_(memory, model_, panes_, client_layouts_),
         process_probe_(process_inspector_),
