@@ -161,9 +161,11 @@ class TabFixture(Fixture):
 
     def run(self):
         original = termios.tcgetattr(0)
+        stopping = False
 
         def stop(*_):
-            raise SystemExit(0)
+            nonlocal stopping
+            stopping = True
 
         try:
             tty.setraw(0)
@@ -180,7 +182,11 @@ class TabFixture(Fixture):
             started = time.monotonic()
             deadline = started + 1 / UPDATES_PER_SECOND
             while time.monotonic() - started < LIFETIME_SECONDS:
+                if stopping:
+                    break
                 self.clock.sleep_until(deadline)
+                if stopping:
+                    break
                 readable, _, _ = select.select([0], [], [], 0)
                 if readable:
                     value = os.read(0, 1024)
