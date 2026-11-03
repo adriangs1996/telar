@@ -11,7 +11,7 @@ add_library(telar-platform STATIC src/file_descriptor.cpp src/open_directory.c s
 add_library(telar::platform ALIAS telar-platform)
 target_compile_features(telar-platform PUBLIC cxx_std_23)
 target_include_directories(telar-platform PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
-target_link_libraries(telar-platform PUBLIC telar::base Threads::Threads)
+target_link_libraries(telar-platform PUBLIC telar::base Threads::Threads ${CMAKE_DL_LIBS})
 target_compile_definitions(telar-platform PRIVATE TELAR_DEBUG=$<CONFIG:Debug>)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_compile_definitions(telar-platform PRIVATE _GNU_SOURCE)

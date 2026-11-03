@@ -29,6 +29,11 @@ public:
     return execute(command, deadline, ExecutionOptions{.input = input}, [&](std::span<const Byte> bytes) { return append(bytes, true); });
   }
 
+  template <typename ErrorConsumer>
+  int runWithInputDiagnostics(Command<Memory> &command, Clock::time_point deadline, std::span<const std::string_view> input, ErrorConsumer &&error) {
+    return execute(command, deadline, ExecutionOptions{.input = input}, [&](std::span<const Byte> bytes) { return append(bytes, true); }, error);
+  }
+
   template <typename Consumer>
   int stream(Command<Memory> &command, Clock::time_point deadline, Consumer &&consume) {
     return execute(command, deadline, ExecutionOptions{}, consume);

@@ -34,8 +34,8 @@ inline std::optional<char> jsonShorthand(unsigned char byte, JsonEscapes escapes
 }
 
 // Appends `text` as one JSON string literal, quotes included.
-template <Allocator Memory>
-void appendJsonText(String<Memory> &output, std::string_view text, JsonEscapes escapes) {
+template <typename CharacterAllocator>
+void appendJsonText(std::basic_string<char, std::char_traits<char>, CharacterAllocator> &output, std::string_view text, JsonEscapes escapes) {
   constexpr std::string_view hex = "0123456789abcdef";
   constexpr unsigned char first_printable = 0x20;
   constexpr unsigned char delete_byte = 0x7f;
