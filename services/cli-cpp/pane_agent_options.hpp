@@ -1,6 +1,7 @@
 #pragma once
 
 #include "arguments.hpp"
+#include "routed_options.hpp"
 #include "telar_base/text/decimal.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <algorithm>
@@ -16,7 +17,6 @@ inline constexpr std::uint32_t default_interval_ms = 250;
 inline constexpr std::uint32_t min_interval_ms = 10;
 inline constexpr std::uint32_t max_interval_ms = 60000;
 
-inline constexpr std::array<std::string_view, 4> directions{"left", "right", "up", "down"};
 inline constexpr std::array<std::string_view, 9> report_states{"working", "blocked", "ready", "exited", "settling", "continuing", "waiting", "idle", "released"};
 inline constexpr std::array<std::string_view, 5> blocked_reasons{"none", "permission", "question", "plan", "other"};
 inline constexpr std::array<std::string_view, 3> session_file_kinds{"claude_transcript", "codex_state", "cursor_meta"};
@@ -46,10 +46,6 @@ struct Options {
   std::optional<PaneDirection> direction{};
   std::optional<std::uint32_t> count{};
   std::uint32_t interval = default_interval_ms;
-  std::optional<ClientAction> routed{};
-  std::uint64_t client = 0;
-  std::uint64_t target_id = 0;
-  std::int64_t value = 0;
   ReportAgent report{};
   ReportAgentCommand command{};
 };
@@ -79,76 +75,10 @@ inline void readOption(Options &options, Cursor &cursor, std::string_view option
   }
 }
 
-inline void copyRange(std::string_view text) {
-  const auto colon = text.find(':');
-  if (colon == std::string_view::npos) {
-    usage("InvalidCopyRange");
-  }
-
-  for (const auto point : {text.substr(0, colon), text.substr(colon + 1)}) {
-    const auto comma = point.find(',');
-    if (comma == std::string_view::npos) {
-      usage("InvalidCopyRange");
-    }
-
-    number<std::uint16_t>(point.substr(0, comma), "InvalidCopyRange");
-    number<std::uint32_t>(point.substr(comma + 1), "InvalidCopyRange");
-  }
-}
-
-inline Options parseRouted(std::span<char *const> words, ClientAction action) {
-  Options options{.action = words.front(), .routed = action};
-  Cursor cursor{words.subspan(1)};
-  if (action != ClientAction::pane_create) {
-    options.target_id = positive(cursor.take("MissingTarget"), "InvalidTarget");
-  }
-
-  if (action == ClientAction::pane_split) {
-    options.text = cursor.take("MissingSplitAxis");
-    if (options.text != "horizontal" && options.text != "vertical") {
-      usage("InvalidSplitAxis");
-    }
-  } else if (action == ClientAction::pane_resize) {
-    options.text = cursor.take("MissingPaneDirection");
-    choice<PaneDirection>(options.text, "InvalidPaneDirection", directions);
-  } else if (action == ClientAction::pane_copy) {
-    options.text = cursor.take("MissingCopyRange");
-    copyRange(options.text);
-  } else if (action == ClientAction::pane_scroll) {
-    options.value = signedNumber<std::int32_t>(cursor.take("MissingScrollDelta"), "InvalidScrollDelta");
-  }
-
-  while (const auto word = cursor.next()) {
-    const std::string_view arg = *word;
-    if (arg == "--client" && options.client == 0) {
-      options.client = positive(cursor.take("MissingClientId"), "InvalidTarget");
-    } else if (arg == "--json" && !options.json) {
-      options.json = true;
-    } else if (arg == "--socket" && !options.socket) {
-      options.socket = cursor.take("MissingSocketPath").data();
-    } else {
-      usage("UnknownClientCommandOption");
-    }
-  }
-
-  if (options.client == 0) {
-    usage("MissingClientId");
-  }
-
-  return options;
-}
-
 inline Options parsePane(std::span<char *const> words) {
   Cursor cursor{words};
   Options options{.action = cursor.take("MissingPaneAction")};
   const auto action = options.action;
-  const std::array<std::pair<std::string_view, ClientAction>, 8> routed{{{"create", ClientAction::pane_create}, {"split", ClientAction::pane_split}, {"close", ClientAction::pane_close}, {"focus", ClientAction::pane_focus}, {"resize", ClientAction::pane_resize}, {"fullscreen", ClientAction::pane_fullscreen}, {"scroll", ClientAction::pane_scroll}, {"copy", ClientAction::pane_copy}}};
-  for (const auto &[name, route] : routed) {
-    if (action == name && !(action == "focus" && (std::find_if(words.begin(), words.end(), [](const char *word) { return std::string_view{word} == "--current" || std::string_view{word} == "--direction"; }) != words.end()))) {
-      return parseRouted(words, route);
-    }
-  }
-
   if (action != "read" && action != "send-keys" && action != "focus" && action != "list" && action != "get" && action != "watch" && action != "search") {
     usage("UnknownPaneAction");
   }
@@ -207,7 +137,7 @@ inline Options parsePane(std::span<char *const> words) {
         usage("InvalidInterval");
       }
     } else if (arg == "--direction" && action == "focus" && !cursor.empty() && !options.direction) {
-      options.direction = choice<PaneDirection>(cursor.take("UnknownPaneOption"), "InvalidPaneDirection", directions);
+      options.direction = choice<PaneDirection>(cursor.take("UnknownPaneOption"), "InvalidPaneDirection", pane_directions);
     } else {
       usage("UnknownPaneOption");
     }

@@ -5,7 +5,6 @@
 
 namespace telar::runtime::cli::pane_agents {
 
-inline constexpr std::array<std::string_view, 3> command_statuses{"request", "applied", "admitted"};
 inline constexpr std::array<std::string_view, 3> focus_outcomes{"focused", "no_neighbor", "source_not_focused"};
 inline constexpr std::array<std::string_view, 2> lifecycles{"running", "exited"};
 
@@ -18,53 +17,6 @@ void writePane(Output<Memory> &out, const PaneRecord &entry, bool json) {
   } else {
     out.number(entry.location.workspace.id).text("\t").number(entry.location.tab_id).text("\t").number(pane.pane_id).text("\t").number(pane.pane_generation).text("\t").text(lifecycle).text("\n");
   }
-}
-
-template <Allocator Memory>
-int routedPane(ControlSession<Memory> &session, const Options &options, Output<Memory> &out) {
-  const auto clients = session.template exchange<ClientList>(QueryClients{});
-  std::optional<ClientRoute> route;
-  for (const auto &client : clients.entries) {
-    if (client.id == options.client) {
-      route = ClientRoute{.id = client.id, .generation = client.generation};
-      break;
-    }
-  }
-
-  if (!route) {
-    throw Failure{"ClientNotFound", 2};
-  }
-
-  RequestClientCommand command;
-  command.route = *route;
-  command.action = *options.routed;
-  command.target_id = options.target_id;
-  command.value = options.value;
-  command.text = options.text;
-  const auto reply = session.template exchange<ClientCommandResult>(command);
-  if (reply.route.id != route->id || reply.route.generation != route->generation || reply.action != command.action || reply.target_id != command.target_id || reply.status == ClientCommandStatus::request) {
-    throw Failure{"unexpected reply from the runtime"};
-  }
-
-  if (reply.status == ClientCommandStatus::failed) {
-    std::fprintf(stderr, "telar: %.*s\n", static_cast<int>(reply.text.size()), reply.text.data());
-    return 1;
-  }
-
-  const auto status = command_statuses.at(static_cast<std::size_t>(reply.status));
-  const std::string action = "pane_" + std::string{options.action};
-  if (options.json) {
-    out.text("{\"client_id\":").number(route->id).text(",\"client_generation\":").number(route->generation).text(",\"action\":").json(action, JsonEscapes::standard).text(",\"status\":").json(status, JsonEscapes::standard).text(",\"target_id\":").number(reply.target_id).text(",\"value\":").number(reply.value).text(",\"text\":").json(reply.text, JsonEscapes::standard).text("}\n");
-  } else {
-    out.text(action).text(": ").text(status);
-    if (!reply.text.empty()) {
-      out.text(" ").text(reply.text);
-    }
-
-    out.text("\n");
-  }
-
-  return 0;
 }
 
 template <Allocator Memory>
@@ -134,10 +86,6 @@ template <Allocator Memory>
 int executePane(Memory &memory, const RuntimePaths<Memory> &paths, Options options, Output<Memory> &out) {
   ControlSession session{memory, paths.socket.c_str()};
   session.receiveTimeout(30);
-  if (options.routed) {
-    return routedPane(session, options, out);
-  }
-
   String<Memory> input{AllocatorRef<char, Memory>{memory}};
   if (options.stdin_text) {
     input.resize(max_input_bytes + 1);
@@ -246,7 +194,7 @@ template <Allocator Memory>
 int runPane(Memory &memory, const pane_agents::Options &options) {
   using namespace pane_agents;
   const RuntimePaths paths{memory, socketOptions(options.socket), ProcessEnvironment{}};
-  ensureRuntime(memory, paths, !options.routed && (options.action == "read" || options.action == "send-keys" || options.action == "focus"));
+  ensureRuntime(memory, paths, options.action == "read" || options.action == "send-keys" || options.action == "focus");
   Output out{memory};
   try {
     const auto result = executePane(memory, paths, options, out);
@@ -254,7 +202,7 @@ int runPane(Memory &memory, const pane_agents::Options &options) {
     return result;
   } catch (const std::exception &error) {
     out.flush();
-    return commandFailure("telar pane", error, options.routed.has_value());
+    return commandFailure("telar pane", error);
   }
 }
 

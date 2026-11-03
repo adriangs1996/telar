@@ -26,46 +26,6 @@ public:
   int status;
 };
 
-constexpr std::string_view actionName(ClientAction action) {
-  constexpr std::array names{
-      "workspace_select",
-      "tab_create",
-      "tab_select",
-      "tab_next",
-      "tab_previous",
-      "pane_create",
-      "pane_split",
-      "pane_close",
-      "pane_focus",
-      "pane_resize",
-      "pane_fullscreen",
-      "pane_scroll",
-      "sidebar_get",
-      "sidebar_show",
-      "sidebar_hide",
-      "sidebar_resize",
-      "workspace_list_expand",
-      "workspace_list_collapse",
-      "client_open_goto",
-      "client_open_history",
-      "client_copy_mode",
-      "notification_dismiss",
-      "client_open_link",
-      "client_clipboard_copy",
-      "pane_copy",
-      "layout_get",
-      "layout_apply",
-      "config_reload",
-      "config_show",
-      "plugin_list",
-      "plugin_get",
-      "plugin_enable",
-      "plugin_disable",
-      "plugin_run",
-  };
-  return names.at(static_cast<std::size_t>(action));
-}
-
 constexpr const char *statusName(ClientCommandStatus status) {
   switch (status) {
   case ClientCommandStatus::applied:
@@ -273,41 +233,38 @@ void plugins(Session &session, ClientCommand command, ClientCommandResult reply,
   }
 }
 
-int routed(Session &session, RoutedOptions options, Text &output) {
+int routed(Session &session, const RoutedOptions &options, Text &output) {
   const auto list = session.exchange<ClientList>(QueryClients{});
-  bool found = false;
-  for (const auto &entry : list.entries) {
-    if (entry.id == options.client) {
-      options.command.route = {
-          .id = entry.id,
-          .generation = entry.generation,
-      };
-      found = true;
-      break;
-    }
-  }
-
-  if (!found) {
+  const auto route = std::ranges::find(list.entries, options.client_id, &ClientDescriptor::id);
+  if (route == list.entries.end()) {
     throw Failure{"ClientNotFound", 2};
   }
-  if (options.command.text.size() > maximum_command_text) {
+
+  if (options.text.size() > maximum_command_text) {
     throw Failure{"InvalidClientCommandText"};
   }
 
   try {
-    validateUtf8(options.command.text);
+    validateUtf8(options.text);
   } catch (const EncodingError &) {
     throw Failure{"InvalidClientCommandText"};
   }
 
-  const auto reply = exchangeCommand(session, options.command);
+  const ClientCommand command{
+      .route = {.id = route->id, .generation = route->generation},
+      .action = options.action,
+      .target_id = options.target_id,
+      .value = options.value,
+      .text = options.text,
+  };
+  const auto reply = exchangeCommand(session, command);
   if (reply.status == ClientCommandStatus::failed) {
     std::fprintf(stderr, "telar: %.*s\n", static_cast<int>(reply.text.size()), reply.text.data());
     return 1;
   }
 
   if (reply.action == ClientAction::plugin_list || reply.action == ClientAction::plugin_get) {
-    plugins(session, options.command, reply, output);
+    plugins(session, command, reply, output);
   } else if (reply.action == ClientAction::config_show) {
     appendJson(output, JsonValue::parse(reply.text), !options.json);
     output += '\n';
@@ -338,7 +295,7 @@ int routed(Session &session, RoutedOptions options, Text &output) {
     output += ",\"client_generation\":";
     number(output, reply.route.generation);
     output += ",\"action\":";
-    appendJsonText(output, actionName(reply.action), JsonEscapes::standard);
+    appendJsonText(output, clientActionName(reply.action), JsonEscapes::standard);
     output += ",\"status\":";
     appendJsonText(output, statusName(reply.status), JsonEscapes::standard);
     output += ",\"target_id\":";
@@ -349,7 +306,7 @@ int routed(Session &session, RoutedOptions options, Text &output) {
     appendJsonText(output, reply.text, JsonEscapes::standard);
     output += "}\n";
   } else {
-    output += actionName(reply.action);
+    output += clientActionName(reply.action);
     output += ": ";
     output += statusName(reply.status);
     if (!reply.text.empty()) {
@@ -547,12 +504,13 @@ int connected(const Options &options, const char *prefix, Execute execute) {
 
 namespace telar::runtime::cli {
 
+int runRouted(const RoutedOptions &options) {
+  using namespace window;
+  return connected(options, "telar: ", [&](Session &session, Text &output) { return routed(session, options, output); });
+}
+
 int runWindow(Family family, std::span<char *const> words) {
   using namespace window;
-  if (const auto options = RoutedOptions::parse(family, words)) {
-    return connected(*options, "telar: ", [&](Session &session, Text &output) { return routed(session, *options, output); });
-  }
-
   if (family == Family::client) {
     const auto options = ClientOptions::parse(words);
     return connected(options, "telar client: ", [&](Session &session, Text &output) { clients(session, options, output); return 0; });

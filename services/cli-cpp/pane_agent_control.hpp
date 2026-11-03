@@ -393,14 +393,13 @@ inline std::optional<std::uint64_t> senderPane(const Options &options, std::uint
   return id;
 }
 
-inline int commandFailure(const char *family, const std::exception &error, bool routed = false) {
+inline int commandFailure(const char *family, const std::exception &error) {
   const auto *system = dynamic_cast<const SystemError *>(&error);
   const auto socket_timeout = dynamic_cast<const SocketError *>(&error) && (errno == EAGAIN || errno == EWOULDBLOCK);
   const auto timeout = socket_timeout || (system && (system->code() == EAGAIN || system->code() == EWOULDBLOCK));
-  const char *prefix = routed ? "telar" : family;
-  std::fprintf(stderr, "%s: %s\n", prefix, timeout ? "RuntimeTimeout" : error.what());
+  std::fprintf(stderr, "%s: %s\n", family, timeout ? "RuntimeTimeout" : error.what());
   if (timeout) {
-    return routed ? 3 : 1;
+    return 1;
   }
 
   if (const auto *failure = dynamic_cast<const Failure *>(&error)) {
@@ -408,7 +407,7 @@ inline int commandFailure(const char *family, const std::exception &error, bool 
   }
 
   if (const auto *failure = dynamic_cast<const ControlFailure *>(&error)) {
-    return !routed && (failure->code() == FailureCode::pane_not_found || failure->code() == FailureCode::pane_exited || (std::string_view{family} == "telar agent" && failure->code() == FailureCode::worktree_not_found)) ? 2 : 1;
+    return (failure->code() == FailureCode::pane_not_found || failure->code() == FailureCode::pane_exited || (std::string_view{family} == "telar agent" && failure->code() == FailureCode::worktree_not_found)) ? 2 : 1;
   }
 
   return 1;

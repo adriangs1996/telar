@@ -249,34 +249,6 @@ inline void checkLocation(TabLocation actual, TabLocation expected) {
   }
 }
 
-inline std::string_view actionName(ClientAction action) {
-  switch (action) {
-  case ClientAction::workspace_select:
-    return "workspace_select";
-  case ClientAction::tab_create:
-    return "tab_create";
-  case ClientAction::tab_select:
-    return "tab_select";
-  case ClientAction::tab_next:
-    return "tab_next";
-  case ClientAction::tab_previous:
-    return "tab_previous";
-  default:
-    throw Failure{"unexpected reply from the runtime"};
-  }
-}
-
-inline std::string_view statusName(ClientCommandStatus status) {
-  switch (status) {
-  case ClientCommandStatus::applied:
-    return "applied";
-  case ClientCommandStatus::admitted:
-    return "admitted";
-  default:
-    throw Failure{"unexpected reply from the runtime"};
-  }
-}
-
 inline ClientDescriptor chooseClient(std::span<const ClientDescriptor> clients, std::uint64_t wanted) {
   std::optional<ClientDescriptor> chosen;
   for (const auto &client : clients) {
@@ -296,44 +268,6 @@ inline ClientDescriptor chooseClient(std::span<const ClientDescriptor> clients, 
     throw Failure{"ClientNotFound", 2};
   }
   return *chosen;
-}
-
-template <Allocator Memory>
-int routed(Memory &memory, const RoutedOptions &options) {
-  try {
-    Channel session{memory, options.socket, false};
-    const auto clients = session.template exchange<ClientList>(QueryClients{}, false);
-    const auto client = chooseClient(clients.entries, options.client);
-    RequestClientCommand request;
-    request.route = {.id = client.id, .generation = client.generation};
-    request.action = options.action;
-    request.target_id = options.target;
-    request.text = options.label;
-    const auto reply = session.template exchange<ClientCommandResult>(request, false);
-    if (reply.route.id != client.id || reply.route.generation != client.generation || reply.action != request.action || reply.target_id != request.target_id || reply.status == ClientCommandStatus::request) {
-      throw Failure{"unexpected reply from the runtime"};
-    }
-
-    if (reply.status == ClientCommandStatus::failed) {
-      throw Failure{reply.text};
-    }
-    Output output{memory};
-    if (options.json) {
-      output.raw("{\"client_id\":").number(client.id).raw(",\"client_generation\":").number(client.generation).raw(",\"action\":").quoted(actionName(reply.action)).raw(",\"status\":").quoted(statusName(reply.status)).raw(",\"target_id\":").number(reply.target_id).raw(",\"value\":").signedNumber(reply.value).raw(",\"text\":").quoted(reply.text).raw("}\n");
-    } else {
-      output.raw(actionName(reply.action)).raw(": ").raw(statusName(reply.status));
-      if (!reply.text.empty()) {
-        output.raw(" ").raw(reply.text);
-      }
-      output.raw("\n");
-    }
-
-    output.flush();
-    return 0;
-  } catch (const Failure &error) {
-    std::fprintf(stderr, "telar: %s\n", error.what());
-    return error.status();
-  }
 }
 
 }

@@ -91,10 +91,6 @@ int runFamily(BudgetAllocator<SystemAllocator> &memory, Family family, std::span
   case Family::config:
     return runWindow(family, options);
   case Family::plugin:
-    if (!options.empty() && (std::string_view{options[0]} == "list" || std::string_view{options[0]} == "get" || std::string_view{options[0]} == "enable" || std::string_view{options[0]} == "disable" || std::string_view{options[0]} == "run")) {
-      return runWindow(family, options);
-    }
-
     runPlugin(memory, PluginOptions::parse(options), ProcessEnvironment{});
     return 0;
   case Family::proxy: {
@@ -111,9 +107,6 @@ int runFamily(BudgetAllocator<SystemAllocator> &memory, Family family, std::span
     runServer(memory, words);
     return 0;
   case Family::workspace:
-    if (!options.empty() && std::string_view{options.front()} == "select") {
-      return sessions::routed(memory, sessions::RoutedOptions::parse("workspace", options));
-    }
     {
       const auto parsed = sessions::WorkspaceOptions::parse(options);
       if (parsed.worktree) {
@@ -129,13 +122,6 @@ int runFamily(BudgetAllocator<SystemAllocator> &memory, Family family, std::span
       return sessions::workspace(memory, parsed);
     }
   case Family::tab:
-    if (!options.empty()) {
-      const std::string_view verb = options.front();
-      const bool background = std::ranges::any_of(options.subspan(1), [](const char *word) { return std::string_view{word} == "--background"; });
-      if (verb == "select" || verb == "next" || verb == "previous" || (verb == "create" && !background)) {
-        return sessions::routed(memory, sessions::RoutedOptions::parse("tab", options));
-      }
-    }
     return sessions::tab(memory, sessions::TabOptions::parse(options));
   case Family::worktree:
     return sessions::worktree(memory, sessions::WorktreeOptions::parse(options));
@@ -169,6 +155,10 @@ int run(std::span<char *const> words) {
 
   if (!words.empty() && std::string_view{words.front()} == "dispatch-argv") {
     return dispatchArguments(words.subspan(1), runResolved);
+  }
+
+  if (const auto routed = RoutedOptions::parse(words)) {
+    return runRouted(*routed);
   }
 
   if (words.empty()) {
