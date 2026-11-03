@@ -2591,6 +2591,97 @@ as are the other inspected text sections except `__const`. This is a restoration
 check, not a new performance result. Continue using the immutable original A
 executable for comparisons until qualifying any newly rebuilt binary.
 
+## Bounded pane-presentation retention: rejected, 2026-11-03
+
+The whole-pane cache experiment retains at most eight hidden client presentations
+beside the active layout, keyed by machine/client/runtime epoch and pane generation.
+It preserves active-pane API semantics through a separate presentation model,
+reuses QML delegates, skips hidden preparation/resizing, and retires held input,
+IME, wheel and link state on hiding. Closed, replaced and evicted views are removed;
+existing global image/glyph budgets and render-thread destruction remain intact.
+This is an archived experiment, **not an accepted production change**.
+
+The frozen baseline remains GUI `5a639c5f26f67892698088cd95e31555212e6508dae2e45a441dc58e641caef5`.
+The candidate is `77e003f3fb056189a9eff31147f0642efd64af390d499c962b8ea53b98a23bd3`,
+both using runtime `a0b8b9d5826cf80c135cc113a1587a552c054e4d733942ab34e98157a1717645`.
+Sources, binaries, acceptance criteria, generated ARM64 disassembly and the exact
+withdrawn patch are in `out-perf/dlls-pane-surface-cache-01`. The patch SHA-256 is
+`be446956adc49caf5f231c010426fb9f7ff1db151aca4fdd5d0367e531a7e95a`.
+
+The model passes persistent-index, generation/epoch, close/eviction, invalid-input
+and 2,000-operation reference checks. Fifteen selected Cocoa/Metal Quick cases
+pass, including actual delegate reuse, the retention bound, close, viewport,
+fullscreen/splits, held mouse, keyboard/copy, configuration reload and window
+replacement/reopening. Machine-window and graphics retention/recovery suites
+pass; the graphics retention suite also passes all 22 entries with Metal.
+Settled full-viewport PNGs are byte-identical for single, four-split and four-tab
+layouts (`/tmp/telar-perf-pane-surface-pixels-01`). These are not a complete animated
+content oracle or continuous-refresh qualification.
+
+Six valid alternating 100-input pairs with four 30 Hz producers meet the declared
+CPU and p95 targets. Complete pairs are rounds 0–1 of
+`/tmp/telar-perf-pane-surface-pairs-03`, round 0 of `...-pairs-04`, and rounds 0–2
+of `...-pairs-05`, in continuous A/B, B/A alternation. Median per-run results:
+
+| Metric | Original A | Retained B | B wins |
+| --- | ---: | ---: | ---: |
+| p50, ms | 43.074 | 38.341 | 6/6 |
+| p95, ms | 49.256 | 42.671 | 6/6 |
+| p99, ms | 49.308 | 44.579 | 6/6 |
+| Maximum, ms | 49.639 | 45.184 | 6/6 |
+| GUI CPU, ms/input | 29.578 | 28.213 | 6/6 |
+| GUI lifetime peak RSS, MiB | 204.664 | 217.766 | 1/6 |
+
+The roughly 13.1 MiB higher peak RSS is the measured memory tradeoff; it is not a
+measurement of exact live cache bytes. However, the independent six-pair typing
+regression series (`/tmp/telar-perf-pane-surface-regressions-01`) **rejects** the
+candidate. Four-split p99 rises from 33.973 to 37.258 ms and maximum from 37.124 to
+40.369 ms, both with **0/6 wins**. Its p95 is 32.023 → 33.184 ms (2/6), CPU
+4.168 → 4.296 ms/input (3/6). Single-pane p95 is 31.809 → 31.850 ms (3/6), CPU
+3.992 → 4.014 ms/input (3/6); other single-pane latency wins range from 2/6 to 4/6.
+The regression's cause is **not established**; no code-placement exemption is
+claimed. Target gains and functional parity do not override that rejection.
+
+Separate eight-second profiles overlap 97 original and 100 retained tab switches
+(`/tmp/telar-perf-pane-surface-profile-01`). Non-overlapping inclusive stack
+observations for QML construction fall 115 → 2, pane refresh 142 → 30, and native
+glyph rasterization 34 → 0; QML variable writes remain 191 → 191. These support
+reduced reconstruction work but are neither CPU-time attribution nor exact
+allocation/conversion counters. Separate four-split profiles do not identify the
+tail cause and must not replace the uninstrumented regression pairs. The working
+C++/QML and cache tests have been restored after byte-exact archive verification;
+all F01–F16 remain open. The restored GUI and Quick target build successfully.
+The GUI SHA-256 is `747d48fac2a08d45e3b79848a2e3226a70a3abce0a0ff5e95b2f6e2edf763de7`;
+its 6,850,340-byte `__TEXT/__text` section is byte-identical to frozen A. Of the
+inspected text sections, only `__const` differs. Continue measuring immutable A;
+this restoration check is not a code-placement explanation for B's regression.
+
+The remaining variable-write samples are primarily downstream of
+`TabStripLayout::rebuild` and `ListModel::reconcile`, where geometry updates notify
+whole QVariant records and nested QML consumers. The earlier field-role candidate
+also failed its regression gate and must not be silently reinstated. A next
+experiment should isolate layout motion from semantic record updates with a
+behavior/notification oracle, while independently investigating the four-split
+tail. Neither the source reading nor the samples establish a new accepted fix.
+
+### Producer shutdown receipt correction
+
+The first attempt fails the unchanged offered-rate gate: a 500 ms bucket contains
+16 publications even though overall rate is about 30 Hz. That run remains invalid.
+Another attempt exposes a distinct shutdown race: the signal handler raises
+`SystemExit` after incrementing the generation but before recording its publication.
+A deterministic PTY test sends SIGTERM immediately after the third payload: the
+old fixture records generation 3 with only two publications, while the corrected
+fixture finishes all three and then exits. Shutdown now requests loop termination
+rather than interrupting the publication transaction. All 13 fixture/packet/report
+tests pass, and a fresh 20-input native A/B qualification passes before timing.
+
+The failed runs and incomplete pairs remain archived and excluded; their valid
+halves are not paired with unrelated executions. The 5% rate, identity, generation,
+CRC, focus, geometry and positive-presentation checks were not relaxed. Integer
+bucket quantization remains a documented harness limitation for separate work.
+The receipt fix is retained independently of the rejected GUI experiment.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
