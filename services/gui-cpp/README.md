@@ -202,6 +202,24 @@ experiment is not retained: its native timing series was discarded for elevated
 shared-host load, so no qualified native CPU gain is established. Details are in
 [the performance report](../../docs/cpp-performance-progress.md).
 
+`gui-font-coverage-probe` records coverage for every codepoint value through
+U+10FFFF, including surrogates, and three out-of-range values. It repeats the
+coverage checks after metrics, shaping and rasterization at three sizes. Compare
+frozen reference and candidate probes with:
+
+```sh
+cmake --build services/gui-cpp/out --target gui-font-coverage-probe
+python3 services/gui-cpp/tools/check_font_coverage.py \
+  /path/to/reference/gui-font-coverage-probe \
+  /path/to/candidate/gui-font-coverage-probe out-font-coverage
+```
+
+The default corpus contains four bundled fonts and the variable-font fixture at
+default/wide coordinates. Repeat `--font PATH regular` or `--font PATH wide` to
+supply another corpus. The new output directory receives hashes, exact bitmaps
+and failures. This checks coverage and its stability across font operations;
+it does not compare rendered pixels or establish performance.
+
 ## macOS packaging
 
 `tools/package_macos.py` creates a separately named app, deploys Qt/QML and includes

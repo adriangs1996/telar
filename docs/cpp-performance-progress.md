@@ -3227,6 +3227,73 @@ runtime/children exited and cleanup completed. Artifacts are under
 `/tmp/telar-perf-variable-work-profile-02`. A post-run load receipt records
 7.51 / 11.88 / 10.04. Other agents' worktrees/processes were not modified.
 
+## Immutable ASCII font coverage candidate, 2026-11-03
+
+The next isolated candidate is prepared in `out-perf/dlls-ascii-coverage-01`;
+production `Face` remains unchanged. `TerminalItem::updatePolish` visits changed
+rows and `requestRowFonts` checks each nonempty, non-continuation cell through
+`FontCoverage::covers`. Every relevant scalar reaches `Face::covers`, which calls
+FreeType's charmap lookup. The existing tab-switch profiles contain this path,
+but only a few samples; they do not establish a dominant CPU cost. Row revision
+filtering and the existing shaped-glyph cache already avoid some other work.
+
+The candidate stores 128 immutable coverage bits after selecting the font and
+applying its variation. ASCII queries read those bits; all other inputs retain
+the original lookup. The selected charmap is not changed by later size/shaping
+operations. This adds 16 bytes per `Face` (336 → 352 on ARM64), no cache heap
+allocation, and 128 additional charmap queries per construction. Cold creation
+is an explicit control, not a free precomputation assumption.
+
+The source baseline is `65c69967d3bd679fe3a1fea475f973a7d3bb496c`, compiled with
+LLVM 23.1.4 and the current managed FreeType/HarfBuzz archives. The frozen original
+coverage probe SHA256 is
+`0f33592bbb8a79749ec7a0cac09fbf199c85d30e14319bf68b5b7d8808e780cd`;
+the Release candidate is
+`62afde0ba7e28d8d50571f9ea245662af88a97a823e087f9d21cba3423ca0a14`.
+Dependency/source hashes and commands are in the private build/oracle manifests.
+
+The reusable `gui-font-coverage-probe` and `check_font_coverage.py` compare exact
+coverage bitmaps for every value through U+10FFFF, including surrogates, plus
+U+110000, 0x1FFFFF and 0xFFFFFFFF. They check coverage again after metrics,
+shaping and rasterization at heights 9, 13 and 31. Four bundled fonts and the
+variable fixture at default/wide coordinates pass: 26,738,760 queries per probe
+in both Release and ASan/UBSan candidate runs. FreeType/HarfBuzz dependency
+archives are not sanitizer-instrumented. The corpus includes zero ASCII coverage
+in the symbol font, partial coverage in the variable fixture, and distinct text
+font coverage. Wrong-bit, truncated and trailing-output negative controls fail
+as required. The source probe passes clang-tidy and clang-format.
+
+A separate counted-call build confirms work removal without timing:
+
+| Model operation | Original charmap calls | Candidate charmap calls |
+| --- | --- | --- |
+| Construct one face | 0 | 128 |
+| 128,000 ASCII coverage queries | 128,000 | 0 |
+| 8,000 non-ASCII/out-of-range queries | 8,000 | 8,000 |
+| 62,000 one-byte cell coverage checks | 62,000 | 0 |
+
+Results/checksums match. These counters wrap calls made by `Face`, not all
+FreeType/HarfBuzz internal work or a native GUI workload. ARM64 disassembly
+shows the ASCII bounds check and bit load/shift; the non-ASCII branch still calls
+`FT_Get_Char_Index`. Actual `Face` source also compiles to x86-64 baseline and v3
+assembly; the cached branch uses a bit test. This is codegen inspection, not an
+x86 runtime or Linux qualification, and does not establish a speedup.
+
+Four private benchmark modes (ASCII, Unicode, row preparation and cold creation)
+have matching short-run checksums. No timing run has started. The load guard
+captured 29.82 / 28.73 / 20.05 at 11:07 on ten logical CPUs and deferred the entire
+series. It records `uptime` and active processes before each series/pair and after
+each member; elevated load discards the complete series. The current conservative
+limits are 5 at one minute and 7.5 at five minutes, with an additional check for
+active compilers. Other agents and their worktrees are untouched.
+
+The frozen contract requires 6/7 warm component wins without consistent cold or
+Unicode losses, followed by 5/6 native four-split variable-output GUI CPU wins,
+exact output/visual qualification and single/tabs/load regression controls. Native
+and component timing, cold-cost assessment, complete GUI qualification, x86/Linux
+execution and all F01–F16 acceptance remain open. Only reusable oracle sources,
+their build target and documentation are retained in the branch.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
