@@ -182,5 +182,8 @@ differences; **unverified** runs without a comparison; **missing** prints
 - `RuntimePaths` (`telar_platform/runtime_paths.hpp`) resolves `--socket`,
   `TELAR_SOCKET` and `TELAR_SOCKET_PATH` as Zig does; `server endpoint`
   (`server.hpp`) starts the runtime beside `telar` when none runs.
+- `appendJsonText` (`json_text.hpp`) writes JSON strings with the escaping the
+  Zig command used: `standard` where it used std.json.Stringify, `control`
+  where it used control.writeJsonString.
 - Code the runtime or the GUI also needs belongs in `dlls/`, never included
   from `services/runtime-cpp` or `services/gui-cpp`.
