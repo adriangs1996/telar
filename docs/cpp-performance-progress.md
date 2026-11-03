@@ -2682,6 +2682,52 @@ CRC, focus, geometry and positive-presentation checks were not relaxed. Integer
 bucket quantization remains a documented harness limitation for separate work.
 The receipt fix is retained independently of the rejected GUI experiment.
 
+## Scalar tab presentation roles — rejected
+
+On DLL base `d2ae9b30e`, this experiment replaced nested tab records in the
+TerminalTabs delegate with sixteen independent model roles. The full-record API
+remained available. An oracle compared 2,048 seeded insert/remove/reorder cases
+with ListModel; role-specific notification checks and an actual QML selection test
+verified that unchanged application marks and activity records were not rebound.
+The model, activity and chrome suites passed, as did nine native Cocoa/Metal tab,
+drag, focus and layout cases. Settled single/split/tab captures were byte-exact;
+this does not qualify animated content.
+
+Frozen evidence is under ignored `out-perf/dlls-tab-value-roles-01`: A GUI
+`5a639c5f26f67892698088cd95e31555212e6508dae2e45a441dc58e641caef5`, B GUI
+`e1379cf358c584ece3bc148e0c17a0f7f0dee1962294344cc802245b90b458f9`, source patch
+`21c2ddd85c88d292485a0473407abdc550b525c654e2d3ab0410ee2cb4eaadcf`.
+Six valid alternating target pairs are rounds 0–4 of
+`/tmp/telar-perf-tab-value-pairs-01` and round 0 of `...-pairs-02` (B first).
+Incomplete pair 5 of the first series failed the unchanged offered-rate gate and
+was excluded in full. Median per-run results:
+
+| Metric | Original A | Scalar-role B | B wins |
+| --- | ---: | ---: | ---: |
+| p50, ms | 43.069 | 44.533 | 3/6 |
+| p95, ms | 47.882 | 49.214 | 1/6 |
+| p99, ms | 49.295 | 49.333 | 0/6 |
+| Maximum, ms | 49.624 | 49.707 | 3/6 |
+| GUI CPU, ms/input | 29.900 | 28.757 | 5/6 |
+| GUI lifetime peak RSS, MiB | 205.805 | 206.531 | 3/6 |
+
+The declared target required CPU **and p95** wins in at least five pairs. CPU gains
+do not override the latency rejection; its cause is not established. Independent
+six-pair single-pane and four-split typing series (`...-tab-value-regressions-01`)
+had no latency/CPU metric with 0–1 wins. That does not override the target failure.
+Separate eight-second profiles overlap 94 A and 89 B switches. Non-overlapping
+inclusive QML variable-write stack observations fall 249 → 31, while construction
+remains 99 → 104 and pane refresh 124 → 130. These support reduced binding work,
+not precise CPU or allocation attribution, and instrumented timings are excluded.
+The candidate source and tests were withdrawn after exact archive verification.
+
+Before candidate timings, an identical-binary A/A four-split control ran six
+alternating pairs (`/tmp/telar-perf-split-identical-control-01`). Median p95 was
+31.953 → 30.713 ms (4/6), p99 34.594 → 33.119 ms (4/6), CPU 4.156 → 4.279 ms/input
+(2/6). No latency/CPU metric showed a consistent 0–1 directional loss. This records
+host variability; it neither excuses the earlier pane-retention regression nor
+establishes its cause. All F01–F16 remain open.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
