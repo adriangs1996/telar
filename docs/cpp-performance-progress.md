@@ -2961,6 +2961,91 @@ of application plus painting. Two native smoke invocations cover the legacy
 arguments and retained/combined mode with exact visible pixels. Their one-pair
 numbers are functional checks, not acceptance evidence.
 
+## Sampled allocation sites and draw batches, 2026-11-03
+
+A private bounded stack sampler extends the six-API census in
+`out-perf/dlls-allocation-sites-01`. It samples approximately one in 64 successful
+calls into a fixed 4,096-site table with 20-frame stacks and thread identities.
+Contention, capacity overflow and truncated stacks are reported. A known control,
+both standalone and linked into the native probe, records exactly five allocations
+and 344 requested bytes at sampling period one. Storage does not allocate, but
+backtrace and presentation-probe work remain part of the diagnostic environment.
+This is neither allocation CPU attribution nor a live/peak heap measurement.
+
+The native four-split qualification contains 20 inputs per variant in
+`/tmp/telar-perf-allocation-sites-qual-01`. Original A records 289 samples from
+18,326 observed successful API calls; rejected joint B records 280 from 17,678.
+Neither run drops samples through contention or capacity. Respectively 59 and 54
+stacks reach the depth limit. A/B render-thread samples are 228/222, main-thread
+samples 51/46, and explicit probe-containing stacks 25/17. Do not extrapolate this
+short qualification into a full-flow distribution or compare its instrumented
+latencies for acceptance.
+
+The dominant resolved stacks pass through `QArrayData::allocate`,
+`QRhiBatchedBindings::Batch` growth, `QRhiMetal::enqueueShaderResourceBindings`
+and `QSGBatchRenderer::Renderer::renderMergedBatch`. Source inspection confirms
+that Metal constructs temporary binding batches for each call before comparing
+them with the previous binding state. Project-containing stacks also include
+`AncestorGeometry::observe`: it reconnects every ancestor on parent changes,
+including during QML Repeater construction. Neither finding establishes the
+cause of the earlier native CPU regression. Large sampled probe allocations
+also prevent attributing all requested bytes to production code.
+
+A separate original-A run with `QSG_RENDERER_DEBUG=render`,
+`/tmp/telar-perf-baseline-render-batches-01`, consistently ends with 26 opaque nodes
+in 12 batches and 83 alpha nodes in 28 batches. Inactive terminal glyph rows
+already merge into one text batch per pane; a per-glyph draw-call explanation
+would be incorrect. Most batches are retained but still submitted. This motivates
+an isolated header-layer experiment: retain unchanged header pixels in small
+textures, require exact visible output first, and then test whether fewer batches
+outweigh offscreen rendering and texture storage. No optimization is accepted by
+these diagnostics, and all flows remain open.
+
+## Pane-header layers rejected by visual equivalence, 2026-11-03
+
+The isolated `PaneArea.qml` candidate enables a layer only for visible headers
+on known GPU backends. It trades header-sized texture storage for retained chrome
+pixels, with original accepted A as the baseline. Neither variant is retained in
+production source. No native acceptance timing was run after the visual rejection.
+
+The RGBA8 candidate in `out-perf/dlls-pane-header-layer-01`, GUI SHA
+`c788df0ca63bc4dfe14c1c76693453b3ccb0b83ce1e30b320525681acd0e0900`,
+passes the unframed single-pane capture but changes 1,131 four-split header pixels
+by one channel level. The full capture receipts and difference bounds are in
+`/tmp/telar-perf-pane-header-layer-pixels-01`. The oracle is not relaxed.
+
+An independently frozen RGBA32F refinement in
+`out-perf/dlls-pane-header-float-layer-01`, GUI SHA
+`114b4edaadcd9342eadcfbe378a00edf18abbebba2de6313e0055999f263fe69`,
+passes exact settled single/splits/tabs captures in
+`/tmp/telar-perf-pane-header-float-layer-pixels-02`. Nine selected native cases
+pass, covering split/close/tab changes, pane focus and child mouse ownership,
+fullscreen, attention, sidebar resize, configured bars and configuration reload.
+A separate debug-render run in `/tmp/telar-perf-header-float-render-batches-01`
+reduces the settled scene from 40 to 36 batches: opaque batches remain 12 and
+alpha batches fall from 28 to 24. This is work-count evidence, not a latency win.
+RGBA32F also requires 16 bytes per texture pixel before backend overhead;
+allocation dimensions and residency were not qualified for acceptance.
+
+The expanded Metal oracle compares a header containing blocked status, paused
+progress and the images-paused label with its layer disabled, enabled, then
+disabled again. At the first integer-aligned 460×30 logical header, 281 pixels
+change by one channel level. The 980×180 backing-window captures are saved as
+`/tmp/telar-perf-pane-header-float-oracle-fixed-{reference,layer}.png`.
+Disabling the layer restores the original image exactly, ruling out a persistent
+content change in that fixture. The first attempted restoration control was
+invalidated by the window manager resizing the window; the corrected fixed-size
+tool-window control removes that confound. Fractional-position and narrower-header
+iterations are not reached after the first exact comparison fails.
+
+Both QML variants and the experimental oracle are withdrawn. Their source patches,
+frozen binaries, build/test logs, difference receipts and withdrawal decision
+remain in the ignored experiment prefixes. The small pixel discrepancy is still
+a visual regression; the reduced batch count does not justify accepting it.
+Further draw-work experiments should avoid introducing this intermediate color
+composition, for example by investigating batch compatibility of existing glyph
+geometry. That is a source lead, not an accepted optimization.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
