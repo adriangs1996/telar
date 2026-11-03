@@ -169,7 +169,7 @@ def main():
         zig.write_text(zig_probe + constants + functions)
         grid_source = (root / "src/model/links/LinkGrid.zig").read_text()
         grid_module.write_text(grid_source.replace('@import("Position.zig")', '@FieldType(@import("model").LinkMatch, "start")'))
-        subprocess.run([arguments.compiler, "-std=c++23", "-O2", "-I", str(root / "services/gui-cpp"), "-I", str(root / "services/runtime-cpp"), "-I", str(root / "dlls/telar-client/include"), "-I", str(root / "dlls/telar-base/include"), "-I", str(root / "dlls/telar-lua/include"), "-I", str(root / "dlls/telar-platform/include"), "-I", str(root / "dlls/telar-plugins/include"), "-I", str(root / "dlls/telar-config/include"), str(cpp), "-o", str(temporary / "cpp")], check=True)
+        subprocess.run([arguments.compiler, "-std=c++23", "-O2", "-I", str(root / "services/gui-cpp"), "-I", str(root / "dlls/telar-client/include"), "-I", str(root / "dlls/telar-base/include"), "-I", str(root / "dlls/telar-lua/include"), "-I", str(root / "dlls/telar-platform/include"), "-I", str(root / "dlls/telar-plugins/include"), "-I", str(root / "dlls/telar-config/include"), str(cpp), "-o", str(temporary / "cpp")], check=True)
         modules = ["--dep", "model", "--dep", "cellgrid", "--dep", "telar-core", "--dep", "urlscan", "--dep", "link_grid", f"-Mroot={zig}"]
         modules += ["--dep", "telar-core", "--dep", "cellgrid", "--dep", "keyinput", "--dep", "urlscan", f"-Mmodel={root / 'src/model/model.zig'}"]
         modules += ["--dep", "cellgrid", "--dep", "keyinput", f"-Mtelar-core={root / 'src/core/core.zig'}"]

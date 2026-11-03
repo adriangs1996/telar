@@ -213,7 +213,6 @@ private:
   Commands &commands_;
 };
 
-using ActionValidator = BasicActionValidator<CommandTabRegistry>;
 using RetainedActionValidator = BasicActionValidator<RetainedCommandTabRegistry>;
 
 }

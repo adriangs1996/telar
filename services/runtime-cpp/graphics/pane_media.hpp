@@ -107,7 +107,6 @@ public:
     pending_responses_ = progress_.pending_responses;
     next_response_bytes_ = progress_.next_response_bytes;
     failed_ = progress_.failed;
-    failures_ += progress_.failed;
     busy_ = false;
     if (cancelled_ || progress_.cancelled) {
       cancel();
@@ -271,10 +270,6 @@ public:
     return std::exchange(dropped_bytes_, 0);
   }
 
-  std::uint64_t takeFailures() noexcept {
-    return std::exchange(failures_, 0);
-  }
-
   std::shared_ptr<PaneMedia> retired_next;
 
 private:
@@ -315,7 +310,6 @@ private:
   std::size_t active_ = 0;
   std::size_t sealed_ = 0;
   std::uint64_t dropped_bytes_ = 0;
-  std::uint64_t failures_ = 0;
 #if TELAR_DIAGNOSTICS
   diagnostics::MediaCounters batch_metrics_;
   diagnostics::MediaQueue queue_metrics_;

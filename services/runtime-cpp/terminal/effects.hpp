@@ -30,41 +30,6 @@ public:
     }
   }
 
-  GhosttyClipboardWriteResult receiveClipboard(const GhosttyClipboardWrite &write) noexcept {
-    constexpr std::size_t clipboard_limit = 1024 * 1024;
-    if (write.size < sizeof(GhosttyClipboardWrite)) {
-      return GHOSTTY_CLIPBOARD_WRITE_RESULT_INVALID_DATA;
-    }
-
-    if (write.contents_len == 0) {
-      clipboard.clear();
-      ++clipboard_revision;
-      return GHOSTTY_CLIPBOARD_WRITE_RESULT_SUCCESS;
-    }
-
-    for (std::size_t index = 0; index < write.contents_len; ++index) {
-      const auto &content = write.contents[index];
-      const std::string_view mime{reinterpret_cast<const char *>(content.mime.ptr), content.mime.len};
-      if (mime != "text/plain") {
-        continue;
-      }
-
-      if (content.data.len > clipboard_limit) {
-        return GHOSTTY_CLIPBOARD_WRITE_RESULT_DENIED;
-      }
-
-      try {
-        clipboard.assign(content.data.ptr, content.data.ptr + content.data.len);
-        ++clipboard_revision;
-        return GHOSTTY_CLIPBOARD_WRITE_RESULT_SUCCESS;
-      } catch (...) {
-        return GHOSTTY_CLIPBOARD_WRITE_RESULT_BUSY;
-      }
-    }
-
-    return GHOSTTY_CLIPBOARD_WRITE_RESULT_UNSUPPORTED;
-  }
-
   std::string_view title() const noexcept {
     return {title_.data(), title_length_};
   }

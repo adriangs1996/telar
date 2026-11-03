@@ -395,8 +395,6 @@ def main():
                 "-I",
                 str(root / "services/gui-cpp"),
                 "-I",
-                str(root / "services/runtime-cpp"),
-                "-I",
                 str(root / "dlls/telar-client/include"), "-I",
                 str(root / "dlls/telar-base/include"), "-I",
                 str(root / "dlls/telar-lua/include"), "-I",

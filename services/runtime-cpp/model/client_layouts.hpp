@@ -67,7 +67,6 @@ public:
         existing = &records_.back();
       } else {
         existing = &*std::ranges::min_element(records_, {}, &Record::last_used);
-        ++evictions_;
       }
     }
 
@@ -123,10 +122,6 @@ public:
     }
 
     return std::nullopt;
-  }
-
-  std::uint64_t evictions() const noexcept {
-    return evictions_;
   }
 
   std::uint64_t revision() const noexcept {
@@ -243,7 +238,6 @@ private:
   const RuntimeModel<Memory> &model_;
   Vector<Record, Memory> records_;
   std::uint64_t clock_ = 0;
-  std::uint64_t evictions_ = 0;
 };
 
 }

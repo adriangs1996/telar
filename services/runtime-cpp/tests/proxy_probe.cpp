@@ -72,7 +72,6 @@ private:
         if (!client) {
           client = FileDescriptor{::accept(listener_.get(), nullptr, nullptr)};
           require(static_cast<bool>(client));
-          const int enabled = 1;
           suppressSocketSignals(client.get());
           const timeval timeout{.tv_sec = 5, .tv_usec = 0};
           require(::setsockopt(client.get(), SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) == 0);
@@ -99,7 +98,6 @@ private:
 static FileDescriptor connectProxy(std::uint16_t port) {
   FileDescriptor socket{::socket(AF_INET, SOCK_STREAM, 0)};
   require(static_cast<bool>(socket));
-  const int enabled = 1;
   const timeval timeout{.tv_sec = 5, .tv_usec = 0};
   suppressSocketSignals(socket.get());
   require(::setsockopt(socket.get(), SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == 0);
