@@ -135,7 +135,8 @@ def main():
     cli = prefix / 'bin' / 'telar'
     runtime = prefix / 'bin' / 'telar-runtime'
     helper = prefix / 'bin' / 'telar-diagram-renderer'
-    for required in (binary, command_helper, cli, runtime, helper):
+    config_check = prefix / 'bin' / 'telar-config-check'
+    for required in (binary, command_helper, cli, runtime, helper, config_check):
         if not required.is_file():
             parser.error(f'missing executable: {required}')
     compiler = re.search(r'^CMAKE_CXX_COMPILER:FILEPATH=(.+)$', cache, re.M)
@@ -151,7 +152,7 @@ def main():
     (resources / 'bin').mkdir(parents=True)
     shutil.copy2(binary, macos / 'telar-gui')
     shutil.copy2(command_helper, macos / 'telar-gui-command')
-    for executable in (cli, runtime, helper):
+    for executable in (cli, runtime, helper, config_check):
         shutil.copy2(executable, resources / 'bin' / executable.name)
     shutil.copy2(root / 'packaging/macos/telar.icns', resources / 'telar.icns')
     for source, name in ((prefix / 'share/telar/licenses', 'runtime'),

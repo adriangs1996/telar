@@ -134,7 +134,7 @@ if(TELAR_RUNTIME_SANITIZERS)
 endif()
 
 if(TELAR_RUNTIME_DISTRIBUTABLE AND APPLE)
-  foreach(program telar-runtime telar)
+  foreach(program telar-runtime telar telar-config-check)
     add_custom_command(TARGET ${program} POST_BUILD
       COMMAND "${CMAKE_COMMAND}" -E env "TELAR_MACOS_MIN=${CMAKE_OSX_DEPLOYMENT_TARGET}"
               "${CMAKE_CURRENT_SOURCE_DIR}/../../packaging/release/check-linkage.sh" macos "$<TARGET_FILE:${program}>"
