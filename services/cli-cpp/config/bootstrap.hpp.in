@@ -1,0 +1,5 @@
+#pragma once
+#include <string_view>
+namespace telar::runtime::cli {
+inline constexpr std::string_view configuration_bootstrap = R"TELAR_LUA(@TELAR_WINDOW_CONFIG_BOOTSTRAP@)TELAR_LUA";
+}

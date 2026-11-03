@@ -31,6 +31,7 @@ endif()
 
 add_executable(telar main.cpp)
 target_link_libraries(telar PRIVATE cli-core)
+include(cmake/window.cmake)
 install(TARGETS telar RUNTIME DESTINATION bin)
 
 include(CTest)
@@ -62,4 +63,8 @@ if(BUILD_TESTING)
     add_test(NAME exec-runtime-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/exec_runtime_test.py" --telar "$<TARGET_FILE:telar>" --prepare-probe "$<TARGET_FILE:repository-prepare-probe>")
     set_tests_properties(exec-runtime-cli-tests PROPERTIES TIMEOUT 90)
   endif()
+endif()
+
+if(BUILD_TESTING)
+  add_test(NAME cli-window-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/window_test.py" --telar "$<TARGET_FILE:telar>")
 endif()

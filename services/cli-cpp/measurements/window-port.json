@@ -1,0 +1,434 @@
+{
+  "base_commit": "2c0ee1e9d956150e8993fc41ca7d7fc519ad1991",
+  "protocol": "cqp00001",
+  "comparison": {
+    "matched": 255,
+    "total": 262,
+    "normalization": "Only numeric client_id, client_generation, descriptor id, generation and identity; all other stdout/stderr bytes and exit codes retained.",
+    "groups": {
+      "validation": {
+        "matched": 93,
+        "total": 93
+      },
+      "wire": {
+        "matched": 106,
+        "total": 106
+      },
+      "config": {
+        "matched": 12,
+        "total": 13
+      },
+      "window": {
+        "matched": 39,
+        "total": 45
+      },
+      "no-window": {
+        "matched": 5,
+        "total": 5
+      }
+    },
+    "differences": [
+      {
+        "name": "config/nested",
+        "equal": false,
+        "zig": {
+          "status": 1,
+          "stdout": "",
+          "stderr": "telar config: config.client.sidebar.visible must be a boolean\nerror: InvalidConfig\n"
+        },
+        "cpp": {
+          "status": 1,
+          "stdout": "",
+          "stderr": "telar config: visible must be a boolean\nerror: InvalidConfig\n"
+        }
+      },
+      {
+        "name": "window/plugin-disable",
+        "equal": false,
+        "zig": {
+          "status": 0,
+          "stdout": "{\"client_id\":1,\"client_generation\":1,\"action\":\"plugin_disable\",\"status\":\"admitted\",\"target_id\":0,\"value\":0,\"text\":\"example\"}\n",
+          "stderr": ""
+        },
+        "cpp": {
+          "status": 0,
+          "stdout": "{\"client_id\":1,\"client_generation\":1,\"action\":\"plugin_disable\",\"status\":\"admitted\",\"target_id\":0,\"value\":0,\"text\":\"\"}\n",
+          "stderr": ""
+        }
+      },
+      {
+        "name": "window/plugin-enable",
+        "equal": false,
+        "zig": {
+          "status": 0,
+          "stdout": "{\"client_id\":1,\"client_generation\":1,\"action\":\"plugin_enable\",\"status\":\"admitted\",\"target_id\":0,\"value\":0,\"text\":\"example\"}\n",
+          "stderr": ""
+        },
+        "cpp": {
+          "status": 0,
+          "stdout": "{\"client_id\":1,\"client_generation\":1,\"action\":\"plugin_enable\",\"status\":\"admitted\",\"target_id\":0,\"value\":0,\"text\":\"\"}\n",
+          "stderr": ""
+        }
+      },
+      {
+        "name": "window/8/layout apply invalid",
+        "equal": false,
+        "zig": {
+          "status": 1,
+          "stdout": "",
+          "stderr": "telar: InvalidLength\n"
+        },
+        "cpp": {
+          "status": 1,
+          "stdout": "",
+          "stderr": "telar: Invalid hexadecimal layout token length\n"
+        }
+      },
+      {
+        "name": "window/18/plugin run sample run",
+        "equal": false,
+        "zig": {
+          "status": 0,
+          "stdout": "{\"client_id\":1,\"client_generation\":1,\"action\":\"plugin_run\",\"status\":\"admitted\",\"target_id\":9922177756001819210,\"value\":0,\"text\":\"sample\"}\n",
+          "stderr": ""
+        },
+        "cpp": {
+          "status": 0,
+          "stdout": "{\"client_id\":1,\"client_generation\":1,\"action\":\"plugin_run\",\"status\":\"admitted\",\"target_id\":9922177756001819210,\"value\":0,\"text\":\"\"}\n",
+          "stderr": ""
+        }
+      },
+      {
+        "name": "window/28/client open history",
+        "equal": false,
+        "zig": {
+          "status": 1,
+          "stdout": "",
+          "stderr": "telar: ClientPromptUnavailable\n"
+        },
+        "cpp": {
+          "status": 0,
+          "stdout": "{\"client_id\":1,\"client_generation\":1,\"action\":\"client_open_history\",\"status\":\"admitted\",\"target_id\":0,\"value\":0,\"text\":\"\"}\n",
+          "stderr": ""
+        }
+      },
+      {
+        "name": "window/copy-with-history",
+        "equal": false,
+        "zig": {
+          "status": 1,
+          "stdout": "",
+          "stderr": "telar: CopyModeUnavailable\n"
+        },
+        "cpp": {
+          "status": 0,
+          "stdout": "{\"client_id\":1,\"client_generation\":1,\"action\":\"client_copy_mode\",\"status\":\"applied\",\"target_id\":0,\"value\":0,\"text\":\"\"}\n",
+          "stderr": ""
+        }
+      }
+    ]
+  },
+  "binaries": {
+    "zig": {
+      "path": "/Users/adriangonzalez/sandbox/cli-port-scratch/cli-port-window/zig-telar/bin/telar",
+      "sha256": "291397ff7763ae0ee77c6d598c5a9b73cde4b9f034b0a44cb5157a5a7fa5ef5d"
+    },
+    "cpp": {
+      "path": "/Users/adriangonzalez/sandbox/cli-port-scratch/cli-port-window/build/telar",
+      "sha256": "a253d97c6053b6b40e2af8af10bc3b277423f10964054440c5ab493c8bf1f962"
+    },
+    "cpp_gui": {
+      "path": "/Users/adriangonzalez/sandbox/telar-worktrees/cpp-stack-perf-personal-20261102/out-perf/dlls-handoff-20261103/gui/telar-gui",
+      "sha256": "999d09c4c9fe6b00020bbb40a77ac9910814411c8ad1104734642c6333d4b197"
+    },
+    "config_check": {
+      "path": "/Users/adriangonzalez/sandbox/cli-port-scratch/cli-port-window/build/telar-config-check",
+      "sha256": "72fcdf78f0bb9c8b3c09f19528c0d8bf50d3209fb4b96655e75bd5ab33dc6c98"
+    }
+  },
+  "tests": {
+    "runtime_ctest": "39/39 with process-local descriptor limit 8192",
+    "standalone_cli_ctest": "5/5",
+    "window_fixtures": "116 cases, including validation, config compilation and UTF-8 body clipping"
+  },
+  "oracle_toolchain_adjustment": "Private Zig 0.16 copy: libcxx __random/clamp_to_integral.h replaces INFINITY with __builtin_huge_val() for the installed macOS SDK. Telar Zig sources unchanged.",
+  "gui_platforms": {
+    "zig": "native macOS",
+    "cpp": "Qt offscreen, private clipboard; shared column width stays below either host clamp"
+  },
+  "supplementary": {
+    "notification_body_utf8_limit": "1/1 additional byte-exact comparison: 600-byte UTF-8 body cut at 512 bytes, stderr, exit 1 and ReportLimit frame match"
+  },
+  "hook_startup": {
+    "scope": "one hook claude event, process startup, mapping and fixture IPC; no runtime or GUI; seven alternating pairs",
+    "platform": "macOS-26.6.2-arm64-arm-64bit",
+    "architecture": "arm64",
+    "load": [
+      5.759765625,
+      13.9384765625,
+      17.0478515625
+    ],
+    "binaries": {
+      "baseline": {
+        "path": "/Users/adriangonzalez/sandbox/cli-port-scratch/cli-port-window/telar-before",
+        "sha256": "b5b00e059f02049aa6680bb5e9cc47462788b4e659047888bfcb19865f0bd00d"
+      },
+      "candidate": {
+        "path": "/Users/adriangonzalez/sandbox/cli-port-scratch/cli-port-window/build/telar",
+        "sha256": "a253d97c6053b6b40e2af8af10bc3b277423f10964054440c5ab493c8bf1f962"
+      }
+    },
+    "pairs": [
+      {
+        "baseline": {
+          "samples_ns": [
+            5483167,
+            5967375,
+            5537500,
+            5373084,
+            5813917,
+            5776708,
+            5250583,
+            5353584,
+            5341333,
+            5154458,
+            5360375
+          ],
+          "p50_ns": 5373084
+        },
+        "candidate": {
+          "samples_ns": [
+            5412750,
+            5241208,
+            5099000,
+            4890042,
+            4812417,
+            5238709,
+            4937375,
+            4807458,
+            5351375,
+            4961083,
+            4781625
+          ],
+          "p50_ns": 4961083
+        },
+        "p50_ratio": 0.9233213178874553
+      },
+      {
+        "candidate": {
+          "samples_ns": [
+            5071208,
+            5059084,
+            4852417,
+            5041625,
+            4900334,
+            4785750,
+            4781417,
+            5203542,
+            4941291,
+            5149667,
+            5461417
+          ],
+          "p50_ns": 5041625
+        },
+        "baseline": {
+          "samples_ns": [
+            5696167,
+            5303917,
+            5460750,
+            4914417,
+            4823625,
+            5084917,
+            4817750,
+            4821166,
+            5121917,
+            5184083,
+            4772208
+          ],
+          "p50_ns": 5084917
+        },
+        "p50_ratio": 0.9914861933832941
+      },
+      {
+        "baseline": {
+          "samples_ns": [
+            5089208,
+            4937125,
+            5009958,
+            5232083,
+            5021750,
+            4893500,
+            4965625,
+            5298875,
+            5047792,
+            5152958,
+            5741084
+          ],
+          "p50_ns": 5047792
+        },
+        "candidate": {
+          "samples_ns": [
+            5011417,
+            4993125,
+            5380458,
+            4926083,
+            4821625,
+            5208959,
+            4910125,
+            4801834,
+            5278334,
+            4953333,
+            4789125
+          ],
+          "p50_ns": 4953333
+        },
+        "p50_ratio": 0.9812870657111069
+      },
+      {
+        "candidate": {
+          "samples_ns": [
+            5135167,
+            5041875,
+            4847375,
+            5144375,
+            5393500,
+            5033125,
+            5535000,
+            6122667,
+            5578875,
+            5826959,
+            5820542
+          ],
+          "p50_ns": 5393500
+        },
+        "baseline": {
+          "samples_ns": [
+            5677667,
+            5551958,
+            5536250,
+            5707291,
+            5396250,
+            7022291,
+            5381959,
+            5210292,
+            5267875,
+            5388916,
+            5404625
+          ],
+          "p50_ns": 5404625
+        },
+        "p50_ratio": 0.9979415778152971
+      },
+      {
+        "baseline": {
+          "samples_ns": [
+            5192417,
+            5326417,
+            5373833,
+            5096291,
+            5199792,
+            5532542,
+            5239625,
+            5503083,
+            5681250,
+            5464042,
+            5270834
+          ],
+          "p50_ns": 5326417
+        },
+        "candidate": {
+          "samples_ns": [
+            5621083,
+            5077250,
+            5322291,
+            5763542,
+            5265166,
+            5467708,
+            5419917,
+            5177709,
+            5203916,
+            5306833,
+            5050584
+          ],
+          "p50_ns": 5306833
+        },
+        "p50_ratio": 0.9963232319211958
+      },
+      {
+        "candidate": {
+          "samples_ns": [
+            5163708,
+            5375250,
+            5196708,
+            5114375,
+            5661917,
+            5257250,
+            5436250,
+            5791542,
+            5111875,
+            5024042,
+            5584959
+          ],
+          "p50_ns": 5257250
+        },
+        "baseline": {
+          "samples_ns": [
+            5126875,
+            5302792,
+            5683125,
+            5420750,
+            5252625,
+            5456292,
+            5198625,
+            5405917,
+            5265542,
+            5011041,
+            5301125
+          ],
+          "p50_ns": 5301125
+        },
+        "p50_ratio": 0.9917234549270202
+      },
+      {
+        "baseline": {
+          "samples_ns": [
+            5366625,
+            5153125,
+            5569542,
+            5559167,
+            5779708,
+            5942625,
+            6460834,
+            5681333,
+            5895041,
+            5982125,
+            5210542
+          ],
+          "p50_ns": 5681333
+        },
+        "candidate": {
+          "samples_ns": [
+            5424083,
+            6023958,
+            5560834,
+            5255542,
+            5335750,
+            5431750,
+            5413542,
+            5243166,
+            5664084,
+            5257917,
+            5422791
+          ],
+          "p50_ns": 5422791
+        },
+        "p50_ratio": 0.9544927220425207
+      }
+    ],
+    "p50_ns": {
+      "baseline": 5341333,
+      "candidate": 5203916
+    },
+    "median_paired_ratio": 0.9914861933832941
+  }
+}

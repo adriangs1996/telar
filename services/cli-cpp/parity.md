@@ -112,34 +112,34 @@ differences; **unverified** runs without a comparison; **missing** prints
 | `machine remove` | missing |  |
 | `machine rename` | missing |  |
 | `machine setup` | missing |  |
-| `client clipboard` | missing |  |
-| `client copy-mode` | missing |  |
-| `client detach` | missing |  |
-| `client get` | missing |  |
-| `client list` | missing |  |
-| `client open` | missing |  |
-| `client open-link` | missing |  |
-| `sidebar get` | missing |  |
-| `sidebar hide` | missing |  |
-| `sidebar resize` | missing |  |
-| `sidebar show` | missing |  |
-| `workspace-list collapse` | missing |  |
-| `workspace-list expand` | missing |  |
-| `layout apply` | missing |  |
-| `layout get` | missing |  |
-| `notification dismiss` | missing |  |
-| `notification show` | missing |  |
-| `command suggest` | missing |  |
-| `config check` | missing |  |
-| `config reload` | missing |  |
-| `config show` | missing |  |
-| `plugin disable` | missing |  |
-| `plugin enable` | missing |  |
-| `plugin get` | missing |  |
+| `client clipboard` | unverified | CLI wire/output matches; host clipboard effect not compared. [Window checks](window-port.md). |
+| `client copy-mode` | partial | Fresh entry matches; GUI admits over history where Zig returns `CopyModeUnavailable`. [Window checks](window-port.md). |
+| `client detach` | done | Real runtime/GUI and exact CLI fixtures; [window checks](window-port.md). |
+| `client get` | done | Real runtime/GUI and exact CLI fixtures; [window checks](window-port.md). |
+| `client list` | done | Empty and attached real runtimes, text/JSON fixtures; [window checks](window-port.md). |
+| `client open` | partial | Goto fixtures and fresh history match; GUI history admits over another prompt where Zig refuses. [Window checks](window-port.md). |
+| `client open-link` | unverified | Wire/output and real invalid-URI rejection match; host browser/editor effect not compared. [Window checks](window-port.md). |
+| `sidebar get` | done | Real GUI state and exact text/JSON fixtures; [window checks](window-port.md). |
+| `sidebar hide` | done | Real GUI mutation/readback and fixtures; [window checks](window-port.md). |
+| `sidebar resize` | done | Common host geometry clamp and exact fixtures; [window checks](window-port.md). |
+| `sidebar show` | done | Real GUI mutation/readback and fixtures; [window checks](window-port.md). |
+| `workspace-list collapse` | done | Real GUI mutation and exact fixtures; [window checks](window-port.md). |
+| `workspace-list expand` | done | Real GUI mutation and exact fixtures; [window checks](window-port.md). |
+| `layout apply` | partial | Valid token applies; invalid-token GUI diagnostic differs (`InvalidLength` in Zig). [Window checks](window-port.md). |
+| `layout get` | done | Real GUI token matches byte-for-byte; text/JSON fixtures. [Window checks](window-port.md). |
+| `notification dismiss` | done | Real owned first toast dismissed, repeated/stale id refused; exact fixtures. [Window checks](window-port.md). |
+| `notification show` | done | Real delivery/no clients, UTF-8 title/body clipping, limit reports and fixtures. [Window checks](window-port.md). |
+| `command suggest` | done | All four statuses and output fixtures; real runtime without an engine. [Window checks](window-port.md). |
+| `config check` | partial | C++ companion validates Lua/plugins/keymaps; 12/13 config cases match, nested diagnostic paths differ. [Window checks](window-port.md). |
+| `config reload` | done | Real GUI admission/adoption and exact fixtures; [window checks](window-port.md). |
+| `config show` | done | All six real GUI sections, pretty/minified JSON and decimal-number fixtures; [window checks](window-port.md). |
+| `plugin disable` | partial | Override adoption matches; GUI clears admitted `text` that Zig retains. [Window checks](window-port.md). |
+| `plugin enable` | partial | Override adoption matches; GUI clears admitted `text` that Zig retains. [Window checks](window-port.md). |
+| `plugin get` | done | Real configured package and generation-bound paginated fixtures; [window checks](window-port.md). |
 | `plugin inspect` | unverified | Implemented; no Zig comparison yet. |
 | `plugin install` | unverified | Implemented; no Zig comparison yet. |
-| `plugin list` | missing |  |
-| `plugin run` | missing |  |
+| `plugin list` | done | Real configured/disabled packages and paginated fixtures; [window checks](window-port.md). |
+| `plugin run` | partial | Real no-op worker admitted; GUI clears admitted `text` that Zig retains. [Window checks](window-port.md). |
 | `plugin trust` | unverified | Implemented; no Zig comparison yet. C++ also has `plugin untrust ID`, which Zig lacks. |
 | `integration install` | partial | `check_integration.py`: 32 of 68 cases differ from Zig in the files written (skills/extension set). |
 | `integration status` | partial | Same file-set differences as `install`. |
