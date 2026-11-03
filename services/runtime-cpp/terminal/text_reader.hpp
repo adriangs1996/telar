@@ -32,7 +32,7 @@ public:
     auto selection = ghosttySized<GhosttySelection>();
     selection.start = reference(tag, {0, rows - count});
     selection.end = reference(tag, {static_cast<std::uint16_t>(terminal_.screen.cols - 1), rows - 1});
-    format(selection, false);
+    format(selection, false, TrailingSpaces::kept);
   }
 
   void copy(const CopySelection &request) {
@@ -56,7 +56,7 @@ public:
     auto selection = ghosttySized<GhosttySelection>();
     selection.start = reference(GHOSTTY_POINT_TAG_SCREEN, start);
     selection.end = reference(GHOSTTY_POINT_TAG_SCREEN, end);
-    format(selection, true);
+    format(selection, true, TrailingSpaces::trimmed);
   }
 
   std::span<const Byte> bytes() const noexcept {
@@ -101,8 +101,8 @@ private:
     return true;
   }
 
-  void format(const GhosttySelection &selection, bool unwrap) {
-    formatTerminalSelection(terminal_, selection, unwrap, GhosttyWriter{.write = receive, .userdata = this});
+  void format(const GhosttySelection &selection, bool unwrap, TrailingSpaces spaces) {
+    formatTerminalSelection(terminal_, selection, unwrap, spaces, GhosttyWriter{.write = receive, .userdata = this});
 
     if (!wrapped_) {
       length_ = position_;

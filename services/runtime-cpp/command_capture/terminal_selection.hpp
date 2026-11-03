@@ -84,7 +84,7 @@ public:
     selection.end = reference(GHOSTTY_POINT_TAG_SCREEN, finish);
     destination.resize(maximum_bytes + utf8_maximum_width);
     PrefixWriter writer{destination};
-    formatTerminalSelection(terminal_, selection, true, GhosttyWriter{.write = PrefixWriter::receive, .userdata = &writer});
+    formatTerminalSelection(terminal_, selection, true, TrailingSpaces::trimmed, GhosttyWriter{.write = PrefixWriter::receive, .userdata = &writer});
     destination.resize(writer.length);
     if (destination.empty()) {
       return std::nullopt;

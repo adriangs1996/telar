@@ -4,12 +4,19 @@
 
 namespace telar::runtime {
 
+enum class TrailingSpaces : bool {
+  kept,
+  trimmed
+};
+
+// Plain text of `selection`. Pane reads keep the spaces a program wrote, as
+// Zig's `Screen.dumpString`; copies trim them, as `Screen.selectionString`.
 template <Allocator Memory>
-void formatTerminalSelection(Terminal<Memory> &terminal, const GhosttySelection &selection, bool unwrap, GhosttyWriter writer) {
+void formatTerminalSelection(Terminal<Memory> &terminal, const GhosttySelection &selection, bool unwrap, TrailingSpaces spaces, GhosttyWriter writer) {
   auto options = ghosttySized<GhosttyFormatterTerminalOptions>();
   options.emit = GHOSTTY_FORMATTER_FORMAT_PLAIN;
   options.unwrap = unwrap;
-  options.trim = true;
+  options.trim = spaces == TrailingSpaces::trimmed;
   options.selection = &selection;
   options.extra = ghosttySized<GhosttyFormatterTerminalExtra>();
   options.extra.screen = ghosttySized<GhosttyFormatterScreenExtra>();
