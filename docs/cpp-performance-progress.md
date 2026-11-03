@@ -6058,3 +6058,60 @@ new isolated candidate passes a stateless typed comparator instead, preserving
 the accepted containers and ordering algorithm. It does not inherit either
 flat-table variant, their memory tradeoff, or the rejected order detector. Any
 gain from removing those calls still requires fresh paired evidence.
+
+## Typed recency comparator: rejected, 2026-11-04
+
+`out-perf/dlls-history-typed-comparator-01` changes the accepted static comparator
+function into a stateless constexpr lambda. Its comparison expression is
+identical; containers, recency selection, sorting policy, scoring, deduplication
+and memory ownership remain accepted code. Neither flat-table candidate nor the
+order detector is included. Independent reference/exact A/B checks pass 900
+evaluations, with repeated empty/old-snapshot inputs counted as evaluations.
+The 192 scoped metadata cases, all 32 allocation failures, zero-live-storage
+checks, sanitized B and x86 baseline/v3 canonical validation pass. ARM64
+allocation calls/bytes/incremental peak remain 30 / 485,472 / 485,120.
+
+The recency comparator census is identical A/B: 30,021 calls on ordinary/tied,
+149,272 on shuffled, 20,006 on reverse, 1,551,857 on heap, and 30,022 on each
+single adjacent-disorder fixture. The change removes call overhead, not
+comparisons or an asymptotic sorting bound. ARM64 introsort has 47 static indirect
+call sites in A and none in B. x86-v3 also has none. The raw x86 baseline listing
+appears to contain one at `0x10000b39f`; Mach-O marks the surrounding 24 bytes at
+`0x10000b388` as data-in-code, kind 4. It is a disassembly false positive in a
+jump table, not an executable comparator call. Both raw and corrected evidence
+are retained in `cross-assembly-census.json` and `cross-disassembly-data.json`.
+
+All eighteen seven-pair component series complete, with 540 valid host boundaries,
+maximum load1 3.166 and no concurrent owned build/test. Counts remain 300 queries
+per execution, or 32 for the 100,000-entry heap/long fixtures. Every response is
+checked exactly; there is no native/full-runtime promotion.
+
+| Workload | A CPU ms | B CPU ms | B CPU / mean / p95 wins |
+| --- | ---: | ---: | --- |
+| Ordinary gb, distinct | 1.244313 | 1.235330 | 5 / 5 / 5 |
+| Ordinary GST, distinct | 1.276500 | 1.273537 | 6 / 6 / 6 |
+| Ordinary gb, non-distinct | 0.958043 | 0.958520 | 4 / 4 / 5 |
+| Duplicate-heavy, distinct | 0.936207 | 0.939337 | 3 / 3 / 2 |
+| No match, distinct | 1.188330 | 1.185393 | 5 / 5 / 3 |
+| Shuffled, non-distinct | 1.403960 | 1.310807 | 7 / 7 / 7 |
+| Reverse, non-distinct | 0.942903 | 0.946063 | 2 / 2 / 2 |
+| Tied, non-distinct | 0.964200 | 0.963473 | 3 / 3 / 1 |
+| Heap, non-distinct | 12.463656 | 12.471219 | 4 / 4 / 3 |
+| Beginning disorder, non-distinct | 0.960917 | 0.954757 | 6 / 6 / 6 |
+| Middle disorder, non-distinct | 0.956177 | 0.958530 | 1 / 1 / 3 |
+| End disorder, non-distinct | 0.954020 | 0.956850 | 5 / 5 / 5 |
+| Singleton, distinct | 0.008750 | 0.008803 | 3 / 3 / 4 |
+| Empty, distinct | 0.013377 | 0.013230 | 6 / 6 / 5 |
+| Shuffled, distinct | 1.715497 | 1.609300 | 7 / 7 / 7 |
+| Heap, distinct | 13.403438 | 13.052719 | 7 / 7 / 5 |
+| Long commands, distinct | 188.963469 | 189.512656 | 1 / 1 / 2 |
+| Old snapshot, distinct | 0.073337 | 0.073513 | 1 / 2 / 2 |
+
+Shuffled histories improve, but ordinary primary targets miss 6/7 and three CPU
+controls lose consistently. Even the small regressions remain disqualifying;
+their cause is not isolated and no placement exemption is established.
+`decision.json` records rejection. The next private experiment tests natural-run
+merging: fewer comparisons on partially ordered ranges in exchange for bounded
+temporary storage and extra copying on random ranges. Its primary shuffled
+target and all controls are declared before measurement. Production remains
+unchanged, and F01–F16/independent Zig/native120 acceptance remain open.
