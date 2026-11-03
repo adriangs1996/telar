@@ -5598,3 +5598,90 @@ resource modification timestamp and derived signatures; preserving the measured
 resource timestamp restored exact identity. `resource-mtime-control.json` and
 `final-build-equivalence.json` record this explicitly; no differing bytes are
 ignored in the final equality check.
+
+
+## Bounded retention of inactive history highlights, 2026-11-03
+
+Adopt a small retained suffix on top of `6778544a5`. This avoids repeatedly
+constructing the third highlight when queries alternate between two and three
+matches. The fresh diagnostic profile in
+`out-perf/dlls-history-after-matches-profile-01` had 4,437 main-thread observations,
+including 84 in QML object creation and insertion-driven stacks beneath
+HistoryMatchModel. These overlapping sample counts identify work to investigate;
+they are not paired timing or CPU milliseconds. Flattening CellText was deferred
+before edits because its wrapper and native item expose different baseline and
+intrinsic-size behavior.
+
+Each line now keeps `max(active_count, min(previous_model_count, 8))` model rows.
+Inactive delegates retain their previous records and glyph state, and are hidden
+through the active count. They cannot paint or appear as visible accessibility
+content. Queries requiring more than eight active highlights remain supported;
+shrinking to eight or fewer removes every excess delegate immediately. Destroying
+the parent line releases all retained delegates. This is a bound on live retained
+objects, not a claim that every Qt allocation has a fixed size or is immediately
+returned to the OS. Actual history highlight strings are bounded by the existing
+128-byte query limit. Generic ListModel behavior remains unchanged.
+
+The new component oracle first failed against the accepted implementation because
+the shortened suffix had been destroyed. It then passed with retention, including
+2 → 3 → 1 → 0 → 3 identity reuse, visible text/positions/colors, wide and combining
+Unicode, the eight-object shrink bound after a larger query, and parent teardown.
+All 36 component cases pass in software, all 36 native history cases pass, and
+five selected native component cases pass. The standalone model header passes
+clang-tidy. Full native gb/GST captures are byte-exact to the accepted images.
+
+Two cadences were declared before measuring. Evidence is in
+`out-perf/dlls-history-match-retention-01` and
+`out-perf/dlls-history-match-retention-cadence-01`. Each series has six alternating
+pairs, 720 queries and 62 valid load boundaries; maximum one-minute load is
+1.900 and 2.561. Input intervals average 309.396–310.212 ms and
+229.079–230.164 ms respectively. All callbacks drain, every result has a positive
+presentation timestamp, no result frames are dropped, and all owned children
+exit. No other build or functional test runs alongside either timing series.
+
+| Median statistic | 300 ms minimum: A → B (wins) | 220 ms minimum: A → B (wins) |
+| --- | --- | --- |
+| GUI CPU ms/query | 35.242 → 32.591 (6/6) | 32.763 → 29.982 (6/6) |
+| Runtime CPU ms/query | 2.730 → 2.818 (1/6) | 2.731 → 2.813 (3/6) |
+| Combined CPU ms/query | 37.928 → 35.494 (6/6) | 35.420 → 32.811 (6/6) |
+| Combined instructions, million/query | 142.703 → 117.114 (6/6) | 139.547 → 113.582 (6/6) |
+| Combined cycles, million/query | 80.562 → 71.601 (6/6) | 79.722 → 69.389 (6/6) |
+| Mean latency ms | 106.179 → 104.967 (5/6) | 106.356 → 105.050 (6/6) |
+| p95 latency ms | 116.853 → 115.731 (5/6) | 117.575 → 117.306 (4/6) |
+| p99 latency ms | 122.876 → 119.517 (5/6) | 121.696 → 119.937 (4/6) |
+| GUI final footprint, bytes | 253715836 → 253953428 (3/6) | 254166396 → 255427976 (2/6) |
+| GUI setup footprint, bytes | 313918916 → 314090888 (2/6) | 313771460 → 313787856 (5/6) |
+| GUI interrupt wakeups/query | 93.375 → 94.008 (0/6) | 70.517 → 71.058 (2/6) |
+
+Combined CPU decreases 6.4% and 7.4%, and instructions 17.9% and 18.6%, with
+12/12 paired wins for both. Whole-query mean latency improves in 11/12 pairs.
+The extra final GUI footprint in these medians, about 0.24 MB and 1.26 MB, is an
+accepted bounded-memory tradeoff. It is not attributed solely to retained object
+sizes: allocator and timing effects were not isolated. The unchanged runtime's
+CPU and active-query wakeups remain adverse or mixed; their causes are not
+established. Observer wakeups are not production idle measurements.
+
+The tails remain workload-dependent. At the shorter cadence gb p95 rises
+114.548 → 116.771 ms (2/6) and gb p99 rises 116.800 → 119.894 (3/6), while GST
+mean/p95/p99 improve in 6/6, 5/6 and 5/6. At the original cadence those GST win
+counts are 6/6, 3/6 and 3/6. No universal p95/p99 improvement is claimed. Neither
+cadence has a consistent latency loss under the zero-or-one-win rejection rule.
+The repeated-query CPU target and whole-query mean pass in both cadences.
+
+Startup plus scripted first-history setup is also retained. Combined setup CPU
+is 890.778 → 895.605 ms (2/6), and 883.516 → 867.511 ms (5/6). Setup instructions
+rise from 4.735 → 4.755 billion in the original cadence (0/6), and decrease from
+4.753 → 4.737 billion in the shorter cadence (4/6). This is mixed setup evidence,
+not a cold-open improvement. Every raw counter and individual query statistic
+is retained in both hardware-results.json files.
+
+ARM64 disassembly verifies the eight-entry bound and reuse of existing map
+records before positional replacement; conversions and reference counting still
+exist. There is no architecture-specific kernel change. The source hashes and
+configured final GUI match frozen B exactly, SHA-256
+`9bf92e972951d0b62aee68ea37199b7e9015353c4e4d1e42ad4abb1cad9904fa`, with no changes
+since the measured build. A is the accepted `9661f8aa…` GUI, with identical
+`1f1849d1…` runtime and helper on both sides. The final equality receipt is
+`final-build-equivalence.json`. Pending runtime pacing and optical changes are
+excluded. All F01–F16 remain open; these instrumented C++ comparisons do not
+establish independent Zig parity or native 120 Hz acceptance.

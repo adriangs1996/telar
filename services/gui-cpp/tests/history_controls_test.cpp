@@ -776,6 +776,7 @@ class HistoryControlsTest final : public QObject {
     QVERIFY(showComponentWindow(window, wait_ms));
     const auto matches = [&] {
       auto items = visualItems(*row, QStringLiteral("historyMatch"));
+      items.removeIf([](const auto *item) { return !item->isVisible(); });
       std::ranges::sort(items, [](const auto *left, const auto *right) { return left->x() < right->x(); });
 
       return items;
@@ -801,10 +802,17 @@ class HistoryControlsTest final : public QObject {
     row->setProperty("query", QStringLiteral("a"));
     QTRY_COMPARE_WITH_TIMEOUT(matches().size(), qsizetype{1}, wait_ms);
     QCOMPARE(matches()[0], first.data());
-    QTRY_VERIFY_WITH_TIMEOUT(second.isNull() && third.isNull(), wait_ms);
+    QVERIFY(second && third);
+    QVERIFY(!second->isVisible() && !third->isVisible());
     QCOMPARE(first->property("text").toString(), QStringLiteral("a"));
     row->setProperty("query", QStringLiteral("z"));
-    QTRY_VERIFY_WITH_TIMEOUT(matches().isEmpty() && first.isNull(), wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(matches().isEmpty(), wait_ms);
+    QVERIFY(first && !first->isVisible());
+    row->setProperty("query", QStringLiteral("abc"));
+    QTRY_COMPARE_WITH_TIMEOUT(matches().size(), qsizetype{3}, wait_ms);
+    QCOMPARE(matches()[0], first.data());
+    QCOMPARE(matches()[1], second.data());
+    QCOMPARE(matches()[2], third.data());
 
     record.insert(QStringLiteral("command"), QStringLiteral("a界e\u0301"));
     row->setProperty("record", record);
@@ -817,6 +825,38 @@ class HistoryControlsTest final : public QObject {
     QCOMPARE(wide->width(), qreal{2 * cell_width});
     QCOMPARE(combining->width(), qreal{cell_width});
     QCOMPARE(combining->x(), wide->x() + wide->width());
+
+    constexpr qsizetype retention_bound = 8;
+    constexpr qsizetype overflow = 2;
+    const QString many_matches(retention_bound + overflow, QChar{u'a'});
+    record.insert(QStringLiteral("command"), many_matches);
+    row->setProperty("record", record);
+    row->setProperty("query", many_matches);
+    QTRY_COMPARE_WITH_TIMEOUT(matches().size(), retention_bound + overflow, wait_ms);
+    QList<QPointer<QQuickItem>> retained;
+    for (auto *item : matches()) {
+      retained.append(item);
+    }
+
+    row->setProperty("query", QStringLiteral("a"));
+    QTRY_COMPARE_WITH_TIMEOUT(matches().size(), qsizetype{1}, wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(visualItems(*row, QStringLiteral("historyMatch")).size(), retention_bound, wait_ms);
+    for (qsizetype index = 0; index < retained.size(); ++index) {
+      if (index < retention_bound) {
+        QVERIFY(retained[index]);
+        QCOMPARE(retained[index]->isVisible(), index == 0);
+      } else {
+        QVERIFY(retained[index].isNull());
+      }
+    }
+
+    row->setProperty("query", QStringLiteral("z"));
+    QTRY_VERIFY_WITH_TIMEOUT(matches().isEmpty(), wait_ms);
+    QCOMPARE(visualItems(*row, QStringLiteral("historyMatch")).size(), retention_bound);
+    row.reset();
+    for (const auto &item : retained) {
+      QVERIFY(item.isNull());
+    }
   }
 
   Q_SLOT static void selectedCardsShowEveryExplicitCommandLine() {

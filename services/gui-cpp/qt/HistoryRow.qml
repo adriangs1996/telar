@@ -154,7 +154,9 @@ HistoryRowLayout {
                         model: matches.model
                         delegate: CellText {
                             objectName: "historyMatch"
+                            required property int index
                             required property var record
+                            visible: index < matches.activeCount
                             x: record.bounds.x
                             y: record.bounds.y
                             width: record.bounds.width
