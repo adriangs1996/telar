@@ -1,6 +1,7 @@
 #pragma once
 
 #include "repository_discovery.hpp"
+#include "worktree_dispatch.hpp"
 #include "worktree_git.hpp"
 #include "worktree_options.hpp"
 #include "worktree_output.hpp"
@@ -526,16 +527,26 @@ private:
 template <Allocator Memory>
 int worktree(Memory &memory, const WorktreeOptions &options) {
   try {
+    // The machine's own label runs here like any other create.
     if (options.machine) {
-      throw Failure{"cross-machine worktrees require the machine and repository CLI ports"};
+      if (const auto profile = machine::resolve(memory, *options.machine)) {
+        WorktreeDispatch dispatch{memory, options, *profile};
+        return options.action == WorktreeOptions::Action::fetch ? dispatch.fetch() : dispatch.create();
+      }
+
+      if (options.action == WorktreeOptions::Action::fetch) {
+        throw Failure{"FetchNeedsAnotherMachine"};
+      }
     }
+
     return WorktreeCommand{memory, options}.run();
   } catch (const Failure &error) {
-    const std::string_view message = error.what();
-    std::fprintf(stderr, "telar worktree: %s\n", message == "NotARepository" ? "not inside a git repository" : error.what());
+    const auto message = describeDispatchError(error.what());
+    std::fprintf(stderr, "telar worktree: %.*s\n", static_cast<int>(message.size()), message.data());
     return error.status() == 2 || error.code() == FailureCode::worktree_not_found || error.code() == FailureCode::workspace_not_found ? 2 : 1;
   } catch (const std::exception &error) {
-    std::fprintf(stderr, "telar worktree: %s\n", error.what());
+    const auto message = describeDispatchError(error.what());
+    std::fprintf(stderr, "telar worktree: %.*s\n", static_cast<int>(message.size()), message.data());
     return 1;
   }
 }

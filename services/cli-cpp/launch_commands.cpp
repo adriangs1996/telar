@@ -85,12 +85,7 @@ int dispatchMachine(std::span<char *const> words, Dispatch dispatch) {
 
   std::optional<machines::MachineProfile> target;
   try {
-    const auto profiles = machine::load(memory, machine::profilesPath());
-    if (const auto index = profiles.find(label)) {
-      target = profiles.rows()[*index];
-    } else if (label != machine::localLabel(profiles)) {
-      throw std::runtime_error{"UnknownMachine"};
-    }
+    target = machine::resolve(memory, label);
   } catch (const std::exception &error) {
     std::fprintf(stderr, "telar --machine: %s: %s\n", label.c_str(), std::string_view{error.what()} == "UnknownMachine" ? "no saved machine or local label has that name; see `telar machine list`" : error.what());
     return 1;

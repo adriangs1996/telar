@@ -1,4 +1,41 @@
 #include "../repository_prepare.hpp"
+#include <sys/mman.h>
+
+namespace {
+
+// The bundle as one read-only mapping, written to the receiving telar's stdin.
+class MappedBundle {
+public:
+  explicit MappedBundle(int descriptor) {
+    struct stat state{};
+    if (::fstat(descriptor, &state) != 0 || state.st_size <= 0) {
+      throw std::runtime_error{"InvalidRepositoryTransfer"};
+    }
+
+    size_ = static_cast<std::size_t>(state.st_size);
+    bytes_ = ::mmap(nullptr, size_, PROT_READ, MAP_PRIVATE, descriptor, 0);
+    if (bytes_ == MAP_FAILED) {
+      throw std::runtime_error{"RepositoryTransferFailed"};
+    }
+  }
+
+  ~MappedBundle() {
+    ::munmap(bytes_, size_);
+  }
+
+  MappedBundle(const MappedBundle &) = delete;
+  MappedBundle &operator=(const MappedBundle &) = delete;
+
+  std::string_view text() const {
+    return {static_cast<const char *>(bytes_), size_};
+  }
+
+private:
+  void *bytes_;
+  std::size_t size_;
+};
+
+}
 
 int main(int argc, char **argv) {
   using namespace telar;
@@ -23,7 +60,7 @@ int main(int argc, char **argv) {
       std::vector<std::string_view> arguments{binary};
       arguments.insert(arguments.end(), words.begin(), words.end());
       Command command{memory, Launch{.arguments = arguments}, CommandPurpose::configured_helper};
-      const repository::MappedBundle bundle{descriptor};
+      const MappedBundle bundle{descriptor};
       const std::array input{bundle.text()};
       constexpr std::size_t max_reply = 4 * 1024 * 1024;
       CommandOutput output{memory, max_reply};

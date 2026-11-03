@@ -76,8 +76,10 @@ inline std::string decode(std::string_view word) {
   return result;
 }
 
+// Zig's `SshOptions`: the options every connection to `destination` shares,
+// including the control master that keeps one SSH session per machine.
 template <Allocator Memory>
-std::vector<std::string> ssh(Memory &memory, std::string_view destination, std::string_view command) {
+std::vector<std::string> sshOptions(Memory &memory, std::string_view destination) {
   MachineFieldRules::destination(destination);
   const RuntimePaths paths{memory, ServerOptions{}, ProcessEnvironment{}};
   paths.prepareSocket();
@@ -93,11 +95,37 @@ std::vector<std::string> ssh(Memory &memory, std::string_view destination, std::
 
   std::array<char, 32> name;
   std::snprintf(name.data(), name.size(), "/ssh-%012llx", static_cast<unsigned long long>(hash >> control_hash_shift));
-  return {"ssh", "-T", "-o", "BatchMode=yes", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4", "-o", "ForwardAgent=no", "-o", "ControlMaster=auto", "-o", "ControlPersist=600", "-o", "ControlPath=" + std::string{directory} + name.data(), "--", std::string{destination}, std::string{command}};
+  return {"-o", "BatchMode=yes", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4", "-o", "ForwardAgent=no", "-o", "ControlMaster=auto", "-o", "ControlPersist=600", "-o", "ControlPath=" + std::string{directory} + name.data()};
 }
 
 template <Allocator Memory>
-int forward(Memory &memory, const MachineProfile &profile, std::span<char *const> words) {
+std::vector<std::string> ssh(Memory &memory, std::string_view destination, std::string_view command) {
+  auto argv = sshOptions(memory, destination);
+  argv.insert(argv.begin(), {"ssh", "-T"});
+  argv.insert(argv.end(), {"--", std::string{destination}, std::string{command}});
+  return argv;
+}
+
+// `GIT_SSH_COMMAND` for Git traffic to `destination` over the same options.
+template <Allocator Memory>
+std::string gitSshCommand(Memory &memory, std::string_view destination) {
+  std::string command{"ssh"};
+  for (const auto &word : sshOptions(memory, destination)) {
+    if (word.contains('\'')) {
+      throw CommandError{"UnquotableSshOption"};
+    }
+
+    command += " '";
+    command += word;
+    command += '\'';
+  }
+
+  return command;
+}
+
+// The shell command that runs `words` as one telar command there.
+template <typename Words>
+std::string remoteCommand(const MachineProfile &profile, const Words &words) {
   std::string command = std::string{profile.program().value_or("telar")} + " dispatch-argv";
   for (const std::string_view word : words) {
     const auto encoded = encode(word);
@@ -109,7 +137,45 @@ int forward(Memory &memory, const MachineProfile &profile, std::span<char *const
     command += encoded;
   }
 
-  return launch::inherit(ssh(memory, profile.destination(), command));
+  return command;
+}
+
+// Zig's `machine_dispatch.forward`: runs one telar command there with this
+// terminal's streams and returns its exit status.
+template <Allocator Memory, typename Words>
+int forward(Memory &memory, const MachineProfile &profile, const Words &words) {
+  return launch::inherit(ssh(memory, profile.destination(), remoteCommand(profile, words)));
+}
+
+// Zig's `machine_dispatch.capture` and `captureFile`: runs one telar command
+// there, reading `input` (or nothing), and returns its stdout. Its stderr
+// passes through; a failure throws `failure`.
+template <Allocator Memory, typename Words>
+std::string capture(Memory &memory, const MachineProfile &profile, const Words &words, const char *failure, int input = -1) {
+  constexpr auto capture_timeout = std::chrono::seconds{900};
+  const auto result = launch::capture(ssh(memory, profile.destination(), remoteCommand(profile, words)), input, capture_timeout);
+  std::fwrite(result.err.data(), 1, result.err.size(), stderr);
+  if (result.status != 0 || result.dropped != 0) {
+    throw CommandError{failure};
+  }
+
+  return result.out;
+}
+
+// Zig's `machine_dispatch.resolve`: the saved machine `label` names, or
+// nullopt for this machine's own label.
+template <Allocator Memory>
+std::optional<MachineProfile> resolve(Memory &memory, std::string_view label) {
+  const auto profiles = load(memory, profilesPath());
+  if (const auto index = profiles.find(label)) {
+    return profiles.rows()[*index];
+  }
+
+  if (label != localLabel(profiles)) {
+    throw CommandError{"UnknownMachine"};
+  }
+
+  return std::nullopt;
 }
 
 inline std::string_view trimmed(std::string_view text) {

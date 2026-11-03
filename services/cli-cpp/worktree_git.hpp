@@ -19,8 +19,12 @@ public:
 
   // Mutations retain only the tail of diagnostics; diff streams both byte
   // streams. Every invocation uses literal argv and a bounded deadline.
-  std::string run(std::span<const std::string_view> arguments, const char *failure = "NotARepository", bool stream = false, bool hardened = false) {
+  std::string run(std::span<const std::string_view> arguments, const char *failure = "NotARepository", bool stream = false, bool hardened = false, std::span<const std::pair<std::string_view, std::string_view>> environment = {}) {
     Command command{memory_, Launch{.arguments = arguments}, CommandPurpose::configured_helper};
+    for (const auto &[name, value] : environment) {
+      command.setEnvironment(name, value);
+    }
+
     if (hardened) {
       command.removeEnvironmentPrefix("GIT_");
       command.setEnvironment("GIT_OPTIONAL_LOCKS", "0");
@@ -154,72 +158,5 @@ private:
   Memory &memory_;
 };
 
-inline std::optional<std::string> repositoryIdentity(std::string_view url) {
-  const auto begin = url.find_first_not_of(" \t\r\n"), end = url.find_last_not_of(" \t\r\n");
-  if (begin == std::string_view::npos) {
-    return std::nullopt;
-  }
-  url = url.substr(begin, end - begin + 1);
-  std::string_view scheme = "ssh", authority, path;
-  const auto separator = url.find("://");
-  if (separator != std::string_view::npos) {
-    scheme = url.substr(0, separator);
-    if (scheme == "file" || scheme == "FILE") {
-      return std::nullopt;
-    }
-    url.remove_prefix(separator + std::string_view{"://"}.size());
-    const auto slash = url.find('/');
-    if (slash == std::string_view::npos) {
-      return std::nullopt;
-    }
-    authority = url.substr(0, slash);
-    path = url.substr(slash);
-  } else {
-    const auto colon = url.find(':');
-    if (colon == std::string_view::npos || url.substr(0, colon).contains('/')) {
-      return std::nullopt;
-    }
-    authority = url.substr(0, colon);
-    path = url.substr(colon + 1);
-  }
-
-  if (const auto at = authority.rfind('@'); at != std::string_view::npos) {
-    authority.remove_prefix(at + 1);
-  }
-  while (path.starts_with('/')) {
-    path.remove_prefix(1);
-  }
-  while (path.ends_with('/')) {
-    path.remove_suffix(1);
-  }
-  if (path.ends_with(".git")) {
-    path.remove_suffix(std::string_view{".git"}.size());
-  }
-  while (path.ends_with('/')) {
-    path.remove_suffix(1);
-  }
-  const auto port = authority.starts_with('[') ? authority.find(':', authority.find(']')) : authority.find(':');
-  if (port != std::string_view::npos) {
-    const auto number = authority.substr(port + 1);
-    if ((scheme == "ssh" && number == "22") || (scheme == "https" && number == "443") || (scheme == "http" && number == "80")) {
-      authority = authority.substr(0, port);
-    }
-  }
-  if (authority.starts_with('[') && authority.ends_with(']')) {
-    authority = authority.substr(1, authority.size() - 2);
-  }
-  if (authority.empty() || path.empty()) {
-    return std::nullopt;
-  }
-  std::string identity{authority};
-  for (auto &byte : identity) {
-    if (byte >= 'A' && byte <= 'Z') {
-      byte += 'a' - 'A';
-    }
-  }
-  identity += '/';
-  identity += path;
-  return identity;
-}
 
 }
