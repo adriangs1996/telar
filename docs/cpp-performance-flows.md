@@ -92,6 +92,24 @@ Start with six valid pairs per full-client case and seven for runtime/component
 cases that already use the seven-pair contract. Increase sampling only for a
 stated uncertainty, retaining every invalid run and the reason it failed.
 
+On a shared host, inspect `uptime` before each series and record load/processes
+before and after each variant. Discard or repeat the entire series when elevated
+load or concurrent compilation is observed; do not select its quiet-looking pairs
+afterward. Leave unrelated agents, worktrees and processes alone.
+
+The `tools/gui_tui_latency.py` CLI enforces these boundary checks through
+`tools/benchmark_host.py`. Its default one/five-minute load limits are
+`max(2, logical CPUs / 2)` and `max(3, logical CPUs * 3 / 4)`; `--max-load ONE FIVE`
+sets explicit finite positive limits before the series. Active compiler processes
+above 10% CPU also reject a checkpoint. `host-load.json` preserves the policy,
+`uptime`, process snapshots and rejection. A rejected series exits with status 2,
+retains raw observations and does not publish `comparison.json`. Missing host
+observations fail closed. The observer is included in the frozen source manifest.
+Custom drivers calling `measure()` directly must use `HostLoadGate.run()` around
+each invocation and `finish()` before computing an aggregate. Boundary snapshots
+cannot exclude every transient interference and do not replace workload, focus,
+geometry or presentation qualification.
+
 Visible endpoints require qualified initial readiness and verified content on the
 drawable with a positive native presentation timestamp. An acknowledgement, texture
 submission or GPU-completion timestamp is a separate endpoint. Qualify negative
@@ -103,6 +121,18 @@ settled/peak memory with observation windows, queue growth and allocation counts
 where available. Allocation instrumentation and profilers run separately from
 headline timing. Avoid summing shared RSS; obtain actual clock/timebase units and
 validate native resource counters.
+
+For Darwin runtime counters without adding queries inside the GUI input phase,
+build `tools/macos_process_resources.c` with `clang -O2` into an ignored scratch
+directory. Programmatic callers can wrap native `measure()` with
+`native_runtime_resources.capture(harness, receipt_path, helper_path)`.
+This serial adapter samples the socket-verified runtime before GUI launch and
+after GUI exit, then preserves the harness's owned-runtime cleanup. The window
+includes GUI startup, warmup and boundary-observer time, excludes runtime startup/shutdown and child CPU,
+and differs from the GUI measured-input interval. It must be reported separately.
+The helper records the Mach timebase, process start time, executable UUID and
+clock brackets. Memory values are boundary snapshots and a lifetime footprint
+maximum, not an interval peak. This optional adapter is not enabled by the CLI.
 
 ## Deliverables and later optimization
 

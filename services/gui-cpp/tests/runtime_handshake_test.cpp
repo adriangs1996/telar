@@ -17,6 +17,7 @@
 #include <iostream>
 #include <span>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <type_traits>
 
@@ -34,7 +35,8 @@ void exactSchemaAndRefusalPolicies() {
   require(wrong.error == MachineError::endpoint_unavailable && wrong.detail.view() == "InvalidServerSelection", "A server selecting another schema must fail the handshake with the original error");
   const auto incompatible = RuntimeHandshake::inspect(HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = other}));
   require(incompatible.error == MachineError::incompatible_schema && MachineConnectionPolicy::permanent(*incompatible.error), "An explicit incompatible-schema refusal must wait for the person");
-  require(incompatible.detail.view() == "the runtime speaks wire schema 00000000; this telar speaks 886b480d. Update telar on one side", "The refusal must explain both wire schemas exactly");
+  const auto expected_refusal = std::string{"the runtime speaks wire schema 00000000; this telar speaks "} + std::string{textView(std::span{handshake::schema_id})} + ". Update telar on one side";
+  require(incompatible.detail.view() == expected_refusal, "The refusal must explain both wire schemas exactly");
   const auto full = RuntimeHandshake::inspect(HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::client_limit_reached, .expected_schema = handshake::schema_id}));
   require(full.error && !MachineConnectionPolicy::permanent(*full.error), "Runtime client capacity must remain retryable");
   require(full.detail.view() == "clients.max_clients: the runtime holds its limit of 32 clients (windows, CLI calls and agent hooks); close a window or retry once running commands finish", "A client-capacity refusal must retain its original explanation");

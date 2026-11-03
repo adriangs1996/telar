@@ -210,6 +210,16 @@ the terminal comparison requires exact baseline/candidate pixels. The supplied
 reference must match the workload/font/viewport; another font is a different case.
 The Zig reference above is a historical validation, not a new production dependency.
 
+For changes to retained Qt nodes, add `--render-each-frame` to the terminal
+comparison. The default probe applies every update before its first rendered
+frame; it cannot expose the renderer's removal/reinsertion work between frames.
+The new mode requests each update after the preceding frame swap. Its timer
+still covers scene synchronization, including immediate Qt dirty notifications,
+not subsequent rendering or presentation. `--floating-window` uses a Qt tool
+window to avoid tiling of the probe on window managers that support that policy.
+Reject image comparisons with different dimensions. The comparison now checks
+host load before/after every variant and invalidates the whole series on failure.
+
 Measured executable SHA256 values:
 
 | Executable | SHA256 |
@@ -223,6 +233,34 @@ Measured executable SHA256 values:
 Raw captures, manifests, assembly and pair logs stayed in a private temporary
 directory, outside version control. The measurements describe the working-tree
 build with the hashes above, not the unchanged HEAD executable or Preview27.
+
+### Font request equivalence
+
+For changes to `TerminalItem::requestRowFonts`, freeze the reference and candidate
+`terminal_item.cpp/.hpp` files in separate directories, then run:
+
+```sh
+python3 services/gui-cpp/tools/check_terminal_font_requests.py \
+  --build-dir BUILD --reference REFERENCE_QT --candidate CANDIDATE_QT \
+  --output-dir FRESH_RESULTS
+```
+
+The configured GUI build must have its common libraries and the
+`gui-terminal-scene-probe` target built. The tool transplants the actual request
+method and collection-installation block into a small facade, using the build's
+real `CellValue`, `Face`, `FontCoverage` and QString normalization. The catalog
+records fallback request roles and bytes, including repeated missing requests.
+Its corpus contains 889,336 cells across five bundled faces, collection changes,
+all one/two-byte strings, Unicode boundaries, malformed UTF-8, continuation cells
+and seeded flags. Exact output equality is required; input, sources, commands,
+libraries, executable hashes and output streams are retained.
+
+Both variants share the configured common libraries, so this oracle only isolates
+the extracted TerminalItem code. It models catalog storage and excludes native
+font discovery, asynchronous completion and rendering. It does not measure
+performance. A deliberately omitted cache reset must fail before relying on the
+oracle for a coverage cache; native rendering and configuration reload checks
+remain separate requirements.
 
 ## Measurement contract and invalid runs
 

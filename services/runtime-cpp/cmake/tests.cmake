@@ -250,3 +250,6 @@ add_test(NAME ip-fragment-tests COMMAND ip-fragment-tests)
 add_executable(datagram-tests tests/datagram_test.cpp)
 target_link_libraries(datagram-tests PRIVATE runtime-core)
 add_test(NAME datagram-tests COMMAND datagram-tests)
+
+add_test(NAME plugin-action-worker COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_action_workers.py" --cpp "$<TARGET_FILE:telar-runtime>")
+set_tests_properties(plugin-action-worker PROPERTIES TIMEOUT 90)

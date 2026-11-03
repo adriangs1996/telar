@@ -1,3 +1,4 @@
+#include "cli/plugin_worker.hpp"
 #include "cli/server.hpp"
 #include "cli/traffic.hpp"
 #include "plugins/run_worker.hpp"
@@ -16,6 +17,11 @@ auto main(int argc, char **argv) -> int {
 
     if (argc >= 2 && std::string_view{args.subspan<1>().front()} == "traffic") {
       cli::runTraffic(budget, args.subspan<2>());
+      return 0;
+    }
+
+    if (argc >= 2 && std::string_view{argv[1]} == "plugin-worker") {
+      cli::runPluginWorker(budget, cli::PluginWorkerOptions::parse(args.subspan<2>()));
       return 0;
     }
 

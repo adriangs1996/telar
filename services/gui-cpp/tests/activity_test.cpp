@@ -191,14 +191,19 @@ void commandNavigationUsesTheCurrentWorkspace() {
   Transport transport;
   Session session{memory, transport};
   std::array rows{worktreeEntry()};
-  deliver(session, WorkspaceList{.revision = 1, .worktrees = rows});
+  const std::array entries{WorkspaceListEntry{.workspace = 2, .name = "task", .path = "/project/worktree"}};
+  deliver(session, WorkspaceList{.revision = 1, .entries = entries, .worktrees = rows});
   require(!session.openWorktree(task_worktree_id), "offline metadata must not navigate to a retired runtime");
   session.connected(1);
+  require(!session.openWorktree(task_worktree_id), "a new connection must wait for refreshed workspace metadata");
+  deliver(session, WorkspaceList{.revision = 1, .entries = entries, .worktrees = rows});
   require(session.openWorktree(task_worktree_id), "tracked command navigation must select its workspace");
-  const auto request = transport.last<RequestWorkspaceSnapshot>();
-  require(request.workspace.kind == WorkspaceLocation::Kind::workspace && request.workspace.id == 2, "command navigation must use the materialized workspace identity");
+  const auto request = transport.last<OpenPane>();
+  require(request.target.kind == PaneTarget::Kind::workspace && request.target.id == 2 && !request.launch, "command navigation must open the materialized workspace without launching another command");
+  deliver(session, RequestFailed{.request_id = request.request_id, .code = FailureCode::permission_denied, .message = "Workspace access was denied"});
+  require(!session.requestsPending(), "the detached-worktree check must not be masked by an in-flight navigation request");
   rows.front().workspace.reset();
-  deliver(session, WorkspaceList{.revision = 2, .worktrees = rows});
+  deliver(session, WorkspaceList{.revision = 2, .entries = entries, .worktrees = rows});
   const auto requests = transport.sent.size();
   require(!session.openWorktree(task_worktree_id) && transport.sent.size() == requests, "a detached worktree must not reuse its previous workspace");
 }

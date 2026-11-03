@@ -1,5 +1,6 @@
 #include "core/color.hpp"
 #include "fonts/font_role.hpp"
+#include "frame_fixture.hpp"
 #include "qml_fixture.hpp"
 #include "qt/alpha_mask_material.hpp"
 #include "qt/native_chrome_icon.hpp"
@@ -24,6 +25,7 @@
 #include <QString>
 #include <QTemporaryDir>
 #include <QVariantMap>
+#include <QtCore/qcontainerfwd.h>
 #include <QtCore/qlogging.h>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qscopeguard.h>
@@ -143,6 +145,53 @@ private:
     const AlphaMaskMaterial stable{nearest, Color::rgb(shade_subtext), AlphaMaskSampling::stable_nearest};
     QVERIFY(first.type() != stable.type());
     QVERIFY(first.compare(&stable) != 0);
+  }
+
+  Q_SLOT static void adjacentColorsMatchIsolatedRenderingAfterRecoloring() {
+    QQmlEngine engine;
+    QQuickWindow window;
+    window.resize(window_size);
+    window.setMinimumSize(window_size);
+    window.setMaximumSize(window_size);
+    window.setColor(QColor{shade_background});
+    const QVariantMap properties{{QStringLiteral("glyph"), QStringLiteral("\uf07b")}, {QStringLiteral("pixelSize"), title_pixels}, {QStringLiteral("color"), QColor{Qt::white}}};
+    auto first = createChrome(engine, QStringLiteral("ChromeIcon"), properties);
+    auto second = createChrome(engine, QStringLiteral("ChromeIcon"), properties);
+    first->setParentItem(window.contentItem());
+    second->setParentItem(window.contentItem());
+    first->setSize(status_size);
+    second->setSize(status_size);
+    constexpr qreal first_inset = 16.25;
+    constexpr qreal second_inset = 16.5;
+    constexpr qreal half = 0.5;
+    first->setPosition({first_inset, first_inset});
+    second->setPosition({(window_size.width() * half) + second_inset, first_inset});
+    QVERIFY(showComponentWindow(window, wait_ms));
+    const std::array first_colors{QColor{255, 0, 0, 191}, QColor{0, 255, 0, 127}};
+    const std::array second_colors{QColor{0, 0, 255, 127}, QColor{255, 255, 0, 191}};
+    for (std::size_t index = 0; index < first_colors.size(); ++index) {
+      QVERIFY(first->setProperty("color", first_colors[index]));
+      QVERIFY(second->setProperty("color", second_colors[index]));
+      first->setVisible(true);
+      second->setVisible(false);
+      QVERIFY(waitForSynchronizedFrame(window, wait_ms));
+      const auto first_only = window.grabWindow();
+      first->setVisible(false);
+      second->setVisible(true);
+      QVERIFY(waitForSynchronizedFrame(window, wait_ms));
+      const auto second_only = window.grabWindow();
+      QVERIFY(!first_only.isNull() && first_only != second_only);
+      first->setVisible(true);
+      QVERIFY(waitForSynchronizedFrame(window, wait_ms));
+      const auto together = window.grabWindow();
+      QCOMPARE(together.size(), first_only.size());
+      QCOMPARE(together.size(), second_only.size());
+      const auto half_width = together.width() / 2;
+      const QRect left{0, 0, half_width, together.height()};
+      const QRect right{half_width, 0, together.width() - half_width, together.height()};
+      QCOMPARE(together.copy(left), first_only.copy(left));
+      QCOMPARE(together.copy(right), second_only.copy(right));
+    }
   }
 
   Q_SLOT static void qmlIconNeedsNoApplicationController() {

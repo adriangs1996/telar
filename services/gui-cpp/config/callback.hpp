@@ -3,19 +3,14 @@
 #include "input/action.hpp"
 #include "input/binding.hpp"
 #include "telar_base/memory/fixed_text.hpp"
+#include "telar_config/callback_context.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
 
 namespace telar::gui {
 
-struct BindingContext {
-  bool sidebar_visible = true;
-  std::uint16_t tab_count = 0;
-  std::uint16_t active_tab_index = 0;
-  std::uint16_t pane_count = 0;
-  std::uint64_t focused_pane_id = 0;
-};
+using BindingContext = runtime::config::BindingContext;
 
 struct BindingEffects {
   static constexpr std::size_t maximum_effects = 16;

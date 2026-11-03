@@ -17,6 +17,40 @@ from gui_tui_latency import finish_image_fixture, validate_image_receipt
 
 
 class ImageFixtureTest(unittest.TestCase):
+    def test_alpha_patterns_publish_magnified_pixels_with_independent_markers(self):
+        for pattern in ('alpha-edge', 'alpha-gradient'):
+            with self.subTest(pattern=pattern), tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True):
+                fixture = benchmark.ImageFixture(Path(directory), (16, 16), pattern)
+                fixture.size = os.terminal_size((82, 21))
+                fixture.phase = 'ready'
+                output = io.BytesIO()
+                try:
+                    with patch.object(benchmark.sys, 'stdout', SimpleNamespace(buffer=output)):
+                        fixture.draw_marker()
+                        fixture.handle_marker_input(b'x')
+                    fixture.record()
+                    receipt = json.loads(fixture.receipt.read_text())
+                    result = dict(fixtures=[receipt], gpu_ms=[1], endpoint='gpu', image_pattern=pattern)
+                    validate_image_receipt(result, (16, 16))
+                    self.assertIn(b',c=8,r=4;', output.getvalue())
+                    for frame, marker in zip(fixture.frames, benchmark.COLORS):
+                        self.assertEqual(frame[:4], bytes(benchmark.image_patterns.BORDER_COLOR))
+                        offset = (8 * 16 + 8) * 4
+                        self.assertEqual(frame[offset:offset + 4], bytes(marker))
+                    for field, value in [('pattern', 'opaque'), ('placement_cells', [4, 8])]:
+                        corrupted = copy.deepcopy(result)
+                        corrupted['fixtures'][0]['image'][field] = value
+                        with self.assertRaises(ValueError):
+                            validate_image_receipt(corrupted, (16, 16))
+                finally:
+                    fixture.close()
+
+    def test_alpha_patterns_require_the_qualified_extent(self):
+        with self.assertRaises(ValueError):
+            benchmark.image_patterns.frames((1024, 1024), 'alpha-edge')
+        with self.assertRaises(ValueError):
+            benchmark.image_patterns.frames((16, 16), 'unknown')
+
     def test_publications_own_exact_pixels_and_cleanup_unadopted_memory(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True):
             fixture = benchmark.ImageFixture(Path(directory), (7, 3))

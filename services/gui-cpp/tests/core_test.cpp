@@ -150,6 +150,39 @@ void screenFrames() {
     }
 
     require(rejected && screen.frameId() == 2, "invalid cells must be rejected before mutation");
+
+    const std::array<Byte, 1> replacement{'y'};
+    const std::array<Cell, 1> changed{{{.text = replacement}}};
+    const auto changed_run = CellRunCodec::encode(changed, encoded);
+    const std::array<FrameSpan, 2> late_bad_spans{{{.start = 0, .count = 1, .cells = changed_run}, {.start = 3, .count = 1, .cells = malformed}}};
+    frame.spans = late_bad_spans;
+    rejected = false;
+    try {
+      screen.apply(frame);
+    } catch (const EncodingError &) {
+      rejected = true;
+    }
+
+    require(rejected && screen.frameId() == 2 && screen.cells()[0].utf8() == "x", "a malformed later span must not commit an earlier decoded span");
+    require(screen.rowRevision(1) == second_row_revision, "a rejected frame must retain row revisions");
+    const std::array<FrameSpan, 2> recovered_spans{{{.start = 0, .count = 1, .cells = changed_run}, {.start = 3, .count = 1, .cells = changed_run}}};
+    frame.spans = recovered_spans;
+    require(screen.apply(frame) == FrameApplication::applied, "valid delta must recover after a rejected frame");
+    require(screen.cells()[0].utf8() == "y" && screen.cells()[3].utf8() == "y", "delta spans must commit at their own positions");
+    require(screen.cells()[1].utf8() == "x" && screen.cells()[2].utf8() == "x", "delta spans must not overwrite gaps");
+
+    const std::array prior_rows{screen.rowRevision(0), screen.rowRevision(1)};
+    const std::array<Byte, 2> wrapped_flags{static_cast<Byte>(RowFlag::wrap), 0};
+    frame.base_frame_id = frame.frame_id++;
+    frame.spans = {};
+    frame.cursor = {.visible = true, .x = 1, .y = 1};
+    frame.input_modes.bracketed_paste = true;
+    frame.scroll = {.total_rows = 4, .offset = 1};
+    frame.text_metadata = TextMetadata{.row_flags = wrapped_flags};
+    require(screen.apply(frame) == FrameApplication::applied, "metadata-only delta must apply without decoding cells");
+    require(screen.rowRevision(0) == prior_rows[0] && screen.rowRevision(1) == prior_rows[1], "metadata-only delta must preserve cell revisions");
+    require(screen.cursor().x == 1 && screen.cursor().y == 1 && screen.modes().bracketed_paste, "metadata-only delta must update cursor and input modes");
+    require(screen.scroll().offset == 1 && screen.rowFlags(0) == wrapped_flags[0], "metadata-only delta must update scroll and text metadata");
   }
 
   require(memory.liveBytes() == 0, "screen must release injected allocations");

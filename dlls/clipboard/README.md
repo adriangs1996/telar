@@ -1,11 +1,23 @@
 # Clipboard
 
-Standalone C++23 project. Run these commands from `dlls/clipboard`.
-The current executable is a build scaffold; `readInto` is declared but not implemented.
+Standalone C++23 clipboard reader for macOS and Linux. Run these commands from `dlls/clipboard`.
+`telar::clipboard::read()` returns owned bytes and a MIME type. It reads text
+and encoded PNG, JPEG, or TIFF images, in that order, preferring images over alternate text.
+Storage grows to the content size instead of using a fixed 2048-byte buffer.
+Allocation failures and clipboard changes during capture are reported as errors.
+Images retain their original encoding; reading does not decode or convert pixels.
 
 ## Build and test
 
-Requires CMake 3.25+, Ninja, and a C++23 compiler. LLVM's `clangd`,
+Requires CMake 3.25+, Ninja, and a C++23 compiler. On Linux, also install
+pkg-config, the Wayland client and XCB development packages, and `wayland-scanner`.
+On Arch/Omarchy:
+
+```sh
+sudo pacman -S --needed base-devel clang cmake ninja pkgconf wayland libxcb
+```
+
+LLVM's `clangd`,
 `clang-format`, and `clang-tidy` should be on `PATH` for editor and tooling support.
 No machine-specific compiler or SDK paths are stored in the project.
 
@@ -28,8 +40,63 @@ cmake --build --preset sanitize
 ctest --preset sanitize
 ```
 
-The current test only checks that the executable exits successfully; it does not
-exercise clipboard functionality.
+Tests cover large UTF-8 text, empty text, PNG/TIFF/JPEG images larger than 2048
+bytes, MIME types, image priority, exact file output, and unsupported content.
+On macOS, they reuse the GUI tests' private pasteboard helper, so they neither
+read nor modify the system clipboard. The smoke test only prints CLI help.
+
+## Linux backends and integration tests
+
+The Linux API uses libwayland-client and XCB directly. It does not spawn clipboard
+utilities, create a visible window, or depend on Qt. Wayland requires a compositor
+that exposes `zwlr_data_control_manager_v1`. Compositors without that protocol
+return `unsupported_protocol`; there is no silent fallback to XWayland.
+The vendored wlr-data-control XML retains its upstream copyright and license.
+
+With `WAYLAND_DISPLAY` set, the reader uses Wayland and the first advertised seat.
+Otherwise it uses the X11 `CLIPBOARD` selection through `DISPLAY`, including INCR
+transfers. The graphical session's environment and access permissions must be
+available to the process; an SSH login alone does not provide them. Reads have a
+five-second transfer deadline. Buffers grow with received data, and X11 size hints
+are never used to allocate memory. UTF-8 MIME types and `UTF8_STRING` are preferred
+over generic `text/plain`; bytes are preserved rather than transcoded.
+
+The optional integration suites start private headless Sway and authenticated
+Xvfb sessions. They test multi-megabyte PNG/JPEG/TIFF images, empty and large text,
+UTF-8 aliases, embedded NUL bytes, terminal protection, stalled owners, and X11
+INCR, malformed transfers, owner changes, and untrusted size hints. They reuse the
+GUI tests' X11 provider and fixture helpers. No desktop clipboard is modified.
+
+```sh
+sudo pacman -S --needed sway wl-clipboard xorg-server-xvfb xorg-xauth xclip python-pillow
+cmake --preset debug -DCMAKE_CXX_COMPILER=clang++ -DCLIPBOARD_LINUX_INTEGRATION_TESTS=ON
+cmake --build --preset debug
+ctest --preset debug
+```
+
+The suites passed in the Omarchy ARM64 VM with Clang 23.1.4 in Debug and with
+AddressSanitizer/UndefinedBehaviorSanitizer enabled. A read-only probe also
+succeeded on the VM's existing Hyprland session, discarding captured bytes.
+macOS's private-pasteboard tests still pass.
+
+## Read the clipboard
+
+```sh
+# Print text, with no added newline.
+./out/debug/clipboard
+
+# Save text or an image to a local file.
+./out/debug/clipboard --output /tmp/clipboard-content
+
+# Pipe encoded image bytes to another program or file.
+./out/debug/clipboard > /tmp/clipboard-content
+```
+
+Images are not printed to an interactive terminal. Use `--output` or redirect
+stdout instead. With `--output`, stderr reports the MIME type and byte count;
+stdout remains untouched. The filename does not select or convert the encoding:
+a clipboard TIFF stays TIFF even if the output filename ends in `.png`.
+Empty or unsupported clipboards and read/write failures exit with status `1`.
 
 To treat compiler warnings as errors:
 

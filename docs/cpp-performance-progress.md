@@ -7,6 +7,145 @@ acceptance yet. Conditional cursor invalidation is accepted for the measured
 warm-typing layouts against the frozen C++ baseline; complete-flow and Zig-stack
 acceptance remain open.
 
+## Shared-library base, 2026-11-03
+
+Work has moved to `cpp-stack-perf-dlls-20261103`, initially at
+`b8be74a45cf85d01db4998b3cf94fe7f4c975bbe`, following Adrian's local handoff.
+The preceding branch is obsolete. Its commits and C++ working changes were
+already integrated, so only the subsequent report and capture-oracle files were
+carried over. A binary patch, exact snapshot-to-current tree delta and backup
+stash are retained; the delta was verified byte-for-byte after switching.
+The actual shared-library extraction commit in this history is `282d1a727`.
+The integrated key-repeat fix and shared-memory include moves are preserved.
+Neither removed measurement directory has tracked files.
+
+New build directories are under `out-perf/dlls-handoff-20261103`. The first
+runtime attempt exposed generic Homebrew include paths selecting OpenSSL 4
+headers despite linking OpenSSL 3. Explicit nghttp2/Brotli/Zstd prefixes avoid
+that include collision. The resulting Release runtime has SHA-256
+`fa894913f47514fc4246876e0f79d773fef1467876d395b89e87963af8eb7c36`.
+Thirty-five CTest entries pass initially. `runtime-tests` stops at the inherited
+descriptor test because its process limit is 2560 but it requests descriptor
+4096. With a limit of 8192 confined to the owned test controller and children,
+that same test binary passes, including the atomic-runtime checks. All 36 entries
+are therefore verified; the initial failure is retained, not relabeled successful.
+
+The GUI now builds successfully with the repository's managed Qt recipe and
+pinned patch in a new private cache. The complete suite passes 128/131 entries;
+the two known stale fixtures and the Quick suite's CTest timeout remain in the
+initial log. The handshake fixture now expects the actual schema identifier in
+the exact refusal text. The activity fixture supplies materialized workspace
+entries and refreshed connection metadata, checks canonical OpenPane navigation,
+and completes a denied request before checking detached-worktree rejection.
+The first fixture revision used a missing-pane failure, which correctly triggered
+the existing fallback and left a request pending; that failed trial is retained.
+Activity, handshake and workspace-navigation checks now all pass. Production
+behavior was not changed. The first direct Quick invocation omitted its runtime
+environment and failed initialization; that controller error is retained. With
+the environment supplied, the unrestricted offscreen run finishes in 130.481 s:
+125 passed, five failed and one skipped. Two failures expect hiding a window to
+remove its active state; two subsequent history checks fail synchronization.
+All four pass in a focused Cocoa/Metal rerun without production or test changes.
+The skipped native-minimization case also passes in a separate Cocoa run.
+
+The fifth failure exposes a separate complete-stack gap. The first test PATH
+contained `telar-runtime`, while helper discovery searches for `telar`; its
+identity assertion correctly rejected the installed executable before invoking
+the plugin. With the new C++ runtime staged as `telar` and used for both discovery
+and the test server, the native test reaches invocation but reports
+`PluginWorkerFailed`. The C++ CLI has `tap-worker` but no `plugin-worker` dispatch.
+A direct empty-environment control returns `Unknown server option`. F14 plugin
+action parity therefore remains open; substituting the Zig helper would not
+validate the complete C++ stack. All failures and focused results are preserved
+under the new build prefix.
+
+The new staged GUI has SHA-256
+`01c6ebc2c0bc28d210b458be09150b6f9b366fa0c5706eb022ce5017f051324e`.
+Its runtime, command helper, dynamic linkage and matching benchmark configuration
+are frozen alongside it. The first fresh native qualification completes in both
+stacks with twenty measured inputs after twenty warmups, a 1600×1000 viewport,
+82×21 grid, identical marker coordinates, VSync, positive drawable presentation
+and verified GUI/runtime identities (`/tmp/telar-perf-dlls-native-qual-01`).
+Single-run p50 is 26.965 ms for Zig and 25.781 ms for C++; this is qualification,
+not a six-pair performance acceptance or a sustained-refresh result.
+
+A fresh instrumented tab-layout census on this base reproduces the repeated
+work: reorder and Escape cancellation pass with 37/58 rebuilds and 100/162
+caption measurements. Caption work accounts for about 8.0%/9.6% of their
+instrumented rebuild time. The hidden-counter case first fails visibility under
+the window manager; floating only its owned window reaches the counter but fails
+the destination-in-viewport assertion. Both failed runs remain excluded. The
+viewport-change cancellation passes in a separate floating-window run. Artifacts
+are under `out-perf/dlls-tab-layout-census`. No production cache change has been
+made.
+
+Phase instrumentation in `out-perf/dlls-tab-layout-phases` then separates
+measurement, positioned-record construction and model reconciliation. Reorder,
+Escape cancellation and viewport cancellation all pass. Measurement accounts
+for 10.6–13.1% of instrumented rebuild time; reconciliation, including synchronous
+Qt/QML subscribers, accounts for 76.2–80.2%. These are diagnostic, unpaired
+durations. Rebuilding captions or measured records alone would leave most of
+that observed work intact.
+
+The provisional `dlls-tab-field-roles` experiment retains complete records for
+existing consumers but exposes separate tab content and geometry roles to QML.
+Moving a tab then notifies bounds without rebinding its content, icons and
+activity. A reference-model oracle passes 2,048 deterministic insert/remove/
+reorder sequences and verifies selective notifications; chrome and activity scene
+tests pass. All three instrumented native gestures pass as well. Their model
+update durations decrease, but instrumentation and nonpaired runs prevent a
+performance acceptance claim. The candidate's single-layout native qualification
+also passes, with a byte-identical full-viewport PNG against the new C++ baseline
+(SHA-256 `5ef2102300977afa1170013c15ce79664d5dacce5f0816862062f8ab0a6f3eed`).
+That static equality does not establish animated pixel parity. A separate v2
+build incorporates lint cleanup and passes the model oracle, chrome/activity
+tests and six uninstrumented native reorder/cancellation gestures. Its native
+single-layout capture also has the same PNG digest. Targeted model/test lint
+passes; linting the unchanged layout translation unit reports its existing
+101-line `rebuild` against the 100-line threshold.
+
+Six alternating pairs per settled typing layout finish successfully in
+`/tmp/telar-perf-tab-fields-v2-regression-01`. These are regressions against the
+new C++ baseline, not a Zig comparison or actual F08 switching acceptance.
+Values below are medians of run statistics; CPU is GUI CPU milliseconds per
+measured input. Runtime resources remain outside this series.
+
+| Layout / metric | New C++ baseline | Field-role v2 | Candidate wins |
+| --- | ---: | ---: | ---: |
+| Single p50 ms | 25.101 | 24.921 | 3/6 |
+| Single p95 ms | 32.112 | 30.616 | 4/6 |
+| Single p99 ms | 35.121 | 34.345 | 4/6 |
+| Single maximum ms | 37.640 | 35.769 | 5/6 |
+| Single GUI CPU ms/input | 4.081 | 4.066 | 3/6 |
+| Four tabs p50 ms | 25.020 | 24.978 | 2/6 |
+| Four tabs p95 ms | 32.668 | 31.556 | 5/6 |
+| Four tabs p99 ms | 34.443 | 35.306 | 3/6 |
+| Four tabs maximum ms | 37.671 | 35.979 | 4/6 |
+| Four tabs GUI CPU ms/input | 4.175 | 4.261 | 2/6 |
+| Four splits p50 ms | 25.264 | 25.758 | 2/6 |
+| Four splits p95 ms | 31.697 | 32.976 | 1/6 |
+| Four splits p99 ms | 34.660 | 35.531 | 3/6 |
+| Four splits maximum ms | 36.629 | 37.780 | 1/6 |
+| Four splits GUI CPU ms/input | 4.178 | 4.357 | 1/6 |
+
+The four-split p95, maximum and CPU regressions reject v2. Cause is not
+established; no code-placement exemption is demonstrated. Median lifetime GUI
+peak RSS is approximately 205–206 MiB in both variants and is not the rejection
+criterion. ARM64 inspection shows the bounded per-field comparisons and selective
+role-list construction; fewer downstream QML evaluations do not prove a complete
+application win. Source copies, executables, oracles, profiles and the decision
+remain in the isolated prefixes. All candidate production/test/CMake changes
+were verified against their preserved copies and withdrawn from the working
+tree. Actual tab/workspace switching and continuous presentation remain open.
+
+A fresh original-Zig ReleaseFast reference also builds from this branch with the
+new font/theme assets, SHA-256
+`6ccf79485c5ca8baaa2d69d2590abb49d23c808891c04fe6e70f5602713a1d5e`.
+Earlier installed-Qt measurements below are historical evidence, not performance
+qualification of this new dependency/base.
+The rejected image prototypes remain isolated artifacts and were not promoted
+into the production working tree during the migration.
+
 ## Fresh environment
 
 Personal reports Apple M1 Pro, MacBookPro18,3, 32 GiB, ten CPU cores, 128-byte
@@ -1860,8 +1999,15 @@ Raw data: `/tmp/telar-perf-fused-zig-{4k,1k}-01`. The 4K GUI CPU deficit remains
 real even though every latency percentile wins; more retained memory is allowed,
 not evidence that the CPU gap is solved. Both rows are uniform opaque image
 replacement, not arbitrary-alpha images or continuous 120 Hz. Independent Zig
-text controls are still running. Runtime CPU was not captured in these intervals;
+text controls have completed. Runtime CPU was not captured in these intervals;
 these GUI CPU figures must not be presented as whole-stack CPU.
+
+The independent single/split/tab text controls retain GUI CPU deficits: Zig → C++
+CPU/input is 3.640→4.242, 3.673→4.527 and 3.552→4.368 ms respectively, each
+0/6 C++ wins. Presentation p50/p95/p99/maximum win counts are 4/5/6/5,
+6/4/4/3 and 5/4/2/2 respectively. No complete text-flow acceptance follows.
+Raw data: `/tmp/telar-perf-fused-zig-text-01`. The full frozen fused-image
+sequence is now terminal; its initial placement failure and proof remain intact.
 
 `out-perf/native-runtime-resources` prepares an SDK-based `proc_pid_rusage`
 collector for explicit GUI/runtime intervals, with PID/start-time/UUID and
@@ -1890,7 +2036,7 @@ may eliminate CPU premultiplication work entirely; no shader or production
 conversion change is made on that unverified inference. Current image timings
 and the fused candidate remain preserved.
 
-The next F08 investigation is prepared under `out-perf/tab-layout-work-census`.
+The next F08 investigation was prepared under `out-perf/tab-layout-work-census`.
 It instruments actual native tab reorder/cancel/reveal/viewport gestures to count
 layout rebuilds, caption measurements, native shaping and fallback work. It also
 separates animation-requested rebuilds from other updates. The diagnostic will
@@ -1908,6 +2054,137 @@ joined by image key/generation to native input. These project events would not
 be a Qt/framework allocation census. The lead and required lifetime/recovery
 oracles are recorded in
 `out-perf/graphics-tabs-warm-profile/image-store-copy-lead.json`.
+
+### Straight-alpha parity and reducing upload work
+
+The prepared alpha-edge experiment has now run. Initial zero-idle captures failed
+because the asynchronous capture had not arrived when collection ended; these
+failures are retained under `image-alpha-edge-oracle` and its debug variant.
+The `image-alpha-edge-oracle-ready` controller allows the existing two-second
+capture interval. Original Zig and coverage both then qualify native readiness
+and the capture witness. The generic cross-stack marker-centroid gate fails at
+[188,163] versus [189,163]; it remains unchanged for headline comparisons.
+An independent opaque-border audit establishes identical image bounds
+[120,84,264,244], source payloads, grid, viewport and DPR. Within that 144×160
+image footprint, 3860 pixels differ, with maximum channel difference 40.
+This proves a varying-alpha filtering difference, rather than an image-size
+or position mismatch. Raw data: `/tmp/telar-perf-alpha-edge-ready-01`.
+
+The scratch `out-perf/image-straight-shader` prototype uploads straight RGBA and
+uses the original Zig blend factors after linear sampling. Its actual native
+edge capture matches original Zig exactly: zero pixel/channel differences,
+RGBA SHA-256 `bb3028162627b8c348c59f06f6d4bec44f4989d9cab17b8fed7ee8a0ab1dd3eb`.
+All eleven native graphics cases also pass and match the preceding C++ captures
+exactly, including replacement, clipping, shared views, generation recovery and
+texture reuse. The actual raw-copy helper passes Release and ASan/UBSan checks
+for all alpha/channel combinations, alternate formats, odd strides, source
+overwrite and retained queued outputs. Qt frameworks are not instrumented.
+This prototype removes CPU premultiplication but still makes an owned upload
+copy. The subsequent six alternating 4K pairs against coverage reject this
+variant: p50 47.807→47.508 ms (4/6 wins), p95 60.528→60.658 (2/6),
+p99 64.076→68.866 (2/6), maximum 67.207→77.280 (0/6). GUI CPU/input
+does improve 31.290→11.946 ms (6/6), with peak RSS 367.117→399.180 MiB.
+The explicit memory allowance does not excuse the consistent maximum-latency
+loss. No placement exemption is established for the changed image path.
+Raw data: `/tmp/telar-perf-straight-coverage-4k-01`; the pixel-parity finding
+remains valid independently of the rejected performance result.
+
+A separate `out-perf/image-straight-qimage` diagnostic uploads an owned straight
+RGBA QImage through QRhi. Its native image footprint also matches original Zig
+exactly (`/tmp/telar-perf-alpha-qimage-01`). This verifies the relevant Metal
+upload behavior without assuming Qt converts these bytes. It deliberately makes
+a fresh copy and is not a performance candidate. A future immutable pixel lease
+could avoid that copy, but must preserve allocator lifetime/thread ownership,
+generation cancellation, global bounds and teardown. GraphicsBudget currently
+belongs to the session, while queued upload objects can outlive a catalog; a
+raw borrowed pointer alone cannot establish safe ownership. The protected
+kernel-mediated shared-memory read remains required. Original Zig's mapping
+explicitly accepts same-user truncation SIGBUS, which is not a suitable C++
+optimization to copy.
+
+The next isolated variant, `out-perf/image-pixel-lease`, shares the immutable
+pixel allocation of a completed generation with the upload QImage. A cleanup
+owner retains the bytes until Qt releases its last image reference. This avoids
+the post-read RGBA copy and premultiplication; RGB still requires expansion.
+Catalog credits retain their previous semantics, and queued ownership replaces
+the former owned upload copy rather than adding an unbounded retention cache.
+Leases are available only for thread-safe allocators; other allocators use an
+owned copy. The allocator must outlive both the model and renderer, as in the
+application's existing destruction order. No delayed deleter accesses the
+session-owned GraphicsBudget. The component oracle passes native ARM64,
+ASan/UBSan and x86-64 via Rosetta, covering incomplete images, failed pixel/control
+allocations, immutable publication, retirement, catalog deletion/credits and last
+release on another thread. The complete isolated GUI build now succeeds, with
+GUI SHA-256 `512f4bc7285d01203f735211385a783d54d6099a42d8a21724c10911fa490a7a`.
+The actual Qt helper oracle passes Release and ASan/UBSan: RGBA pointer identity
+survives the model's destruction and last-reference release on another thread;
+copy-on-write mutation preserves the source; borrowed and non-thread-safe paths
+own their copies; RGB expands correctly. Seven focused session/graphics/shared
+memory/recovery tests and all eleven native pixel cases pass. The original alpha
+edge and a new varying-alpha gradient/checkerboard capture both match original
+Zig exactly. The latter image-footprint digest is
+`1a8c60569009571f946f4ff59cb9ce4786798f880719f8a8bd842c2e93f849c1`.
+Payloads, native geometry and actual PNG hashes are audited separately for both
+comparisons under `/tmp/telar-perf-alpha-{lease,gradient-lease}-01`.
+
+The ARM64 linked path takes a shared-owner atomic reference, constructs the
+external-buffer QImage and passes retained ownership. Relocations verify that
+the retained RGBA branch invokes QImage's sharing constructor; conversion and
+deep-copy calls remain on the other branches. No pixel loop remains in that
+branch. This removes post-read CPU work, not the protected shared-memory read or
+Qt/driver staging. The six alternating native 4K pairs are now complete and reject
+this variant too: p50 47.303→47.130 ms (3/6 wins), p95 59.007→63.425 (0/6),
+p99 63.320→73.516 (0/6), maximum 67.203→79.580 (0/6). GUI CPU/input
+falls 31.412→11.099 ms (6/6), and peak RSS falls 367.031→335.406 MiB (6/6).
+Those resource gains do not excuse the consistent tail losses. Their cause is
+not established; a native upload/presentation timeline is the next diagnostic,
+rather than assuming that fewer copied bytes guarantees lower visible latency.
+Raw data: `/tmp/telar-perf-lease-coverage-4k-01`. The root production candidate
+remains preserved separately from this rejected isolated source tree.
+
+Reusable source tooling now covers both alpha patterns. The native runner accepts
+`--image-size 16 16 --image-pattern alpha-edge` or `alpha-gradient`, with
+`--capture --idle-seconds 2` for the static oracle. The fixture reports the pattern
+and eight-column/four-row placement, and the runner verifies them. The ordinary
+opaque workload retains its original payload and wire placement. All six alpha
+payload digests match the original diagnostic fixtures exactly.
+`tools/image_capture_oracle.py REFERENCE_RESULT CANDIDATE_RESULT --output REPORT`
+checks native readiness/VSync/focus, source payloads, capture-file hashes and
+geometry before comparing the connected opaque-bordered footprint. It permits
+a color-derived marker-centroid difference only in this static comparison;
+the headline runner's geometry gate is unchanged. Fifteen image-tool tests and
+nineteen existing latency-runner tests pass. Replaying five actual native pairs
+retains the original 3860-pixel mismatch and all four exact prototype results.
+
+### Qualified process counters and remaining diagnostic limits
+
+The first `proc_pid_rusage` unit test failed because CPU values are Mach ticks,
+not nanoseconds on this host. The failure and raw counters are retained.
+`out-perf/native-runtime-resources-clock` applies the recorded 125/3 timebase.
+Its self/owned-child controls pass against getrusage: self 199.996 versus
+199.990 ms; child 199.848 versus 199.717 ms, while parent CPU is 0.0127 ms.
+PID/start-time/UUID, counter-regression and invalid-PID controls also pass.
+The native collector verifies the isolated runtime PID against the socket owner
+and brackets each process sample. Runtime and GUI CPU remain separate.
+
+One diagnostic sequence with twenty measured 4K inputs reports GUI/runtime CPU
+per input in ms: Zig 10.298/9.709, coverage 30.928/7.914, fused 14.508/7.890
+(`/tmp/telar-perf-proc-resource-01`). The straight-shader prototype later records
+11.866/7.908 (`/tmp/telar-perf-proc-straight-01`). GUI counters agree with native
+getrusage, and paired process-sample midpoint skew is 6–22 microseconds in the
+three-stack sequence. These are separate, unpaired diagnostics, not acceptance
+comparisons or retroactive runtime measurements for earlier headline pairs.
+Collector overhead still needs paired qualification. Memory snapshots and
+lifetime physical-footprint peaks are retained with their actual meaning;
+shared RSS is not summed and lifetime peaks are not interval peaks.
+
+The tab-work census also completed its first two gestures: reorder after release
+and Escape cancellation pass, with 23 and 35 rebuilds. Caption measurement is
+about 8.9% and 8.5% of instrumented rebuild time respectively, so caption caching
+alone cannot remove most observed rebuild work. The third gesture fails its
+hidden-counter visibility/width setup assertion; the viewport-change case did
+not run. Both outcomes are preserved in `qualified-summary.json`, and neither
+is counted as a passing flow. No caption or layout cache was implemented.
 
 ### Display-reference phase audit
 
@@ -2000,6 +2277,2241 @@ historically named presentation counters as frame-completion callbacks. Those
 counters cannot qualify visible 120 Hz; native positive presentation timestamps
 and a content oracle remain required.
 
+### Process-resource probe rebuilt on the DLL base
+
+The SDK `proc_pid_rusage(RUSAGE_INFO_V4)` prototype was rebuilt from current
+native-harness sources in `out-perf/dlls-runtime-resources`; the preserved
+`125/3` Mach timebase conversion remains necessary. Fresh self/child CPU controls
+and invalid identity/counter controls pass. The native qualification run
+`/tmp/telar-perf-dlls-resources-qual-01` verifies the GUI and socket-peer runtime
+identities for both complete stacks. Its 20-input CPU readings are diagnostic,
+not paired application results: Zig GUI getrusage/process counters are
+3.701300/3.700538 ms per input and runtime 0.841794; C++ GUI
+4.182150/4.186038 and runtime 0.570227. Memory counters remain separate snapshots
+and a process-lifetime footprint maximum, not interval peaks or additive RSS.
+
+The first probe-overhead comparison is **rejected**. Six alternating pairs per
+stack, 100 inputs after 20 warmups, native positive presentation timestamps,
+1600×1000 at DPR 2 and 82×21 cells are preserved in
+`/tmp/telar-perf-dlls-resources-overhead-01`. Application binaries are identical
+between variants; A uses the original probe and B the rebuilt resource probe.
+C++ p50 moves 25.019750 → 25.135417 ms and GUI CPU 3.948820 → 4.111330 ms/input,
+both winning only 1/6. C++ p95 wins 4/6, p99 and maximum 3/6; Zig has no metric
+at 0–1/6 but worse median tails. No cause or code-placement exemption is
+established. All outliers remain in the receipts. This does not qualify the
+collector for historical-probe comparisons.
+
+A follow-up uses **one identical probe binary** with collection disabled/enabled
+to separate collection cost from the rebuild. Its first attempt,
+`/tmp/telar-perf-dlls-resources-toggle-01`, is invalid: Python used `is False`
+against the probe's numeric JSON zero. Disabled start/end PIDs and counters were
+all zero. The corrected controller accepts numeric zero and still verifies the
+absent intervals and zero PIDs. The corrected complete series in
+`/tmp/telar-perf-dlls-resources-toggle-02` also **fails qualification**: C++ GUI
+CPU is 3.992750 → 4.106245 ms/input, winning only 1/6. C++ p50/p95/p99/maximum
+win 4/5/3/3 pairs; Zig 4/3/2/4 and CPU 4/6. This isolates an enabled/disabled
+collector comparison with identical machine code, but does not establish the
+cause of the CPU difference. The collector remains a separate diagnostic tool;
+there is no promotion into headline measurements or claim of negligible cost.
+
+### Client plugin-worker parity prerequisite
+
+The fresh-base F14 failure is a missing C++ CLI dispatch for `plugin-worker`, not
+a timing regression or permission failure. The isolated subprocess oracle
+`services/runtime-cpp/tools/compare_action_workers.py` checks exit status and
+exact protocol bytes with an empty environment and no server/GUI launch. The
+initial 66-case reference run in `out-perf/dlls-action-worker-oracle-02` passes
+66/66 against Zig. The frozen C++ runtime passes only the 23 negative cases;
+all 43 valid cases fail because the command is absent. The earlier reference
+run is retained: its sole fixture error put `config.helper` at the wrong path.
+
+The C++ implementation now dispatches the existing seven-argument command,
+reuses the shared bounded VM, configuration bootstrap, local-module sandbox and
+action/binding validators, and encodes the complete result before writing stdout.
+It loads only the worker binding rather than a full GUI/runtime configuration.
+The 16 MiB VM quota, load/callback instruction and deadline budgets, immutable
+context, first-16-effects truncation and unsupported-effect rejection remain.
+Callback context/invocation and protocol tags are shared with the GUI. Its parent
+still owns the immutable package snapshot, timeout, generation/cancellation and
+whole-batch capability checks; there is no fallback to a Zig executable.
+
+The first direct-entry prototype passed 118 functional cases and seven component
+pairs on four workloads, but review found a lexical-scope difference. Zig's wrapper
+captures a local `telar` and invokes the mutable `telar.bind_global` factory after
+loading the entry. Bypassing that wrapper changes valid programs that replace the
+global or factory. Four new controls reproduce those mismatches against the old
+C++ prototype while all 122 pass against Zig. The prototype and its favorable
+component timings in `out-perf/dlls-plugin-action-worker/pairs-01` are therefore
+**rejected for equivalence**, with the exact executable preserved there.
+
+The corrected worker preserves the lexical wrapper and binding-factory call,
+including its validation, while still avoiding the unrelated configuration
+snapshot. This intentionally retains a bounded source copy. Both binaries pass
+122/122 exact-result cases in `out-perf/dlls-action-worker-oracle-05`. A new
+`plugin-action-worker` CTest runs the same expected-byte/error oracle without a
+Zig dependency and passes. The existing `gui-config`, `gui-plugin-packages` and
+`gui-plugin-worker` tests pass; `QuickTest::routedPluginWorker` passes natively on
+Cocoa/Metal with the corrected C++ runtime, exercising command and keyboard
+execution, whole-batch permission refusal and stale-generation cancellation.
+No all-flow or 120 Hz acceptance follows from these checks. Linux and x86-64
+execution remain unqualified for this new worker.
+
+The corrected binary is measured separately in
+`out-perf/dlls-plugin-action-worker/pairs-02`: seven alternating pairs, 30 fresh
+worker launches per variant/case after three warmups. Every invocation checks
+exact stdout bytes and successful exit. Wall time includes spawning through
+reaping; `wait4` supplies that child's CPU and maximum RSS. These are one-shot
+component measurements, excluding package copying, GUI authorization/routing and
+presentation. Medians of paired summaries (A original Zig → B corrected C++):
+
+| Case | p50 ms (wins) | p95 ms (wins) | p99 / max wins | CPU ms (wins) | Child max RSS MiB (wins) |
+| --- | --- | --- | --- | --- | --- |
+| Sidebar | 11.099 → 9.374 (7/7) | 12.283 → 10.265 (7/7) | 5/7 / 5/7 | 8.7165 → 7.4425 (7/7) | 12.547 → 7.602 (7/7) |
+| Sixteen effects | 10.949 → 9.254 (7/7) | 12.301 → 10.071 (7/7) | 7/7 / 7/7 | 8.6600 → 7.3255 (7/7) | 12.547 → 7.602 (7/7) |
+| Local module | 10.929 → 9.414 (7/7) | 12.111 → 10.212 (7/7) | 6/7 / 6/7 | 8.6290 → 7.4085 (7/7) | 12.555 → 7.609 (7/7) |
+| Targeted notification | 10.885 → 9.367 (7/7) | 11.904 → 10.289 (7/7) | 7/7 / 7/7 | 8.6560 → 7.3920 (7/7) | 12.578 → 7.641 (7/7) |
+
+This meets the component criterion for p50/p95 and CPU; sidebar p99/max do not
+meet the 6/7 target. The functional implementation is retained, without closing
+F14 or attributing the entire C++/Zig difference to one optimization. The corrected
+C++ SHA is `a0b8b9d5826cf80c135cc113a1587a552c054e4d733942ab34e98157a1717645`;
+the Zig SHA remains `6ccf79485c5ca8baaa2d69d2590abb49d23c808891c04fe6e70f5602713a1d5e`.
+Sources, receipts, binary and selected ARM64 assembly are preserved privately.
+Assembly confirms the 16-effect bound and direct encoding without a full
+configuration-generation call. It also shows a roughly 164 KiB worker stack
+frame: retained command-validation storage is still initialized even though
+command-tab effects cannot be emitted by this protocol. Removing that work is a
+candidate, not an accepted change. Linked stub labels are not used as evidence
+of the underlying library function.
+
+Standalone new runtime headers compile. The focused clang-tidy translation unit
+finishes without compiler errors but emits style/advisory warnings, including
+repository-style pragma guards, checked span indexing, structure padding and
+intentional uninitialized output storage. This is not a clean lint claim.
+A focused worker build with ASan/UBSan also passes all 122 oracle cases without
+sanitizer diagnostics (`out-perf/dlls-action-worker-sanitizers-01`). The C++ VM
+adapter and encoder are instrumented; the existing Lua static library is not.
+Negative cases must exit normally with a nonzero status and empty stdout; crashes
+and timeouts do not count as successful rejection.
+
+
+## Native tab-switch endpoint and initial DLL baseline, 2026-11-03
+
+`tools/bench_tab_switch.py` now exercises actual native Ctrl+B,p actions against
+four independently updating PTYs, instead of typing in an already selected tab.
+Each producer publishes a tab identity, 16-bit generation and CRC8 packet in
+opaque terminal cells at 30 Hz. Receipts bind producer identities to the runtime's
+actual pane, tab and workspace IDs. Native readback requires the requested tab
+and a generation at least as new as the receipt at input time and newer than its
+last accepted presentation. The endpoint remains a positive
+`MTLDrawable.presentedTime`; focus, initial readiness, matching grids and VSync
+checks come from the ordinary harness, whose typing probe is unchanged.
+
+The isolated builder preserves generated sources, helper binaries, commands and
+hashes. Publication events bracket PTY writes with `CACurrentMediaTime`, allowing
+the report to reject unproduced generations and check all four producers during
+the observation window. It conservatively retains the 5% offered-rate gate in
+every complete 500 ms window: at this rate, integer counts require exactly 15.
+This is a method limitation near a window boundary, not permission to silently
+accept a failed run. Runtime resource separation, probe overhead, entire terminal
+content equivalence, workspace switching and continuous 120 Hz cadence remain
+open. A display reporting a 120 Hz maximum does not close those requirements.
+
+Twelve focused tests pass, covering packet corruption/truncation, generation and
+native-clock provenance, a producer stall, and four real PTYs surviving marker
+withdrawal/restoration, resize and termination. Native wrong-tab, stale-generation
+and bad-checksum controls pass in both complete stacks: all six qualify initial
+presentation and then reject the first incorrect target with input timeout and
+zero accepted responses. They are reproducible with `--negative-controls` and
+were re-run through the final CLI in `/tmp/telar-perf-tab-switch-negative-03`.
+The controls exercise the target oracle, not all possible presentation faults.
+
+Producer qualification initially failed with select, Python sleep and
+`mach_wait_until`; changing QoS and adding a Foundation activity did not solve it
+and were removed. An isolated 180-tick comparison found median/max wake lateness
+of 7.603/16.450 ms for Mach wait versus 0.053/2.794 ms for an absolute Mach-clock
+kqueue timer with `NOTE_CRITICAL`. The final small C helper uses that timer only
+in the owned benchmark producers, with no busy wait or system configuration
+change. The native qualification then passed both stacks, 40 switches each.
+These are generator diagnostics, not Telar improvements. Failed attempts remain
+under `/tmp/telar-perf-tab-switch-qual-01` through `-07`; successful final
+qualification is `-08` and generator evidence is in
+`out-perf/dlls-tab-switch-qual`.
+
+The initial baseline uses source HEAD `3da9ec736`, GUI SHA
+`5a639c5f26f67892698088cd95e31555212e6508dae2e45a441dc58e641caef5`,
+C++ runtime SHA `a0b8b9d5826cf80c135cc113a1587a552c054e4d733942ab34e98157a1717645`
+and the same frozen original Zig SHA `6ccf79485c5ca8baaa2d69d2590abb49d23c808891c04fe6e70f5602713a1d5e`.
+Both stacks use JetBrains Mono 15, optical thickening, opaque background, no
+sidebar, four tabs, 1600×1000 backing pixels and an 82×21 grid. Six valid
+alternating pairs contain 100 measured switches after 20 warmups per run.
+
+`/tmp/telar-perf-tab-switch-pairs-01` completed five valid pairs; its sixth C++
+attempt failed the predeclared rate gate and remains excluded. That producer's
+observed rate was 30.00085 Hz, with 31.625–34.879 ms gaps, but publications near
+500 ms boundaries produced counts of 14/16. A fresh complete sixth pair in
+`/tmp/telar-perf-tab-switch-pairs-02` passed without changing that gate or the
+workload, starting C++ first to retain the AB/BA order. All invalid artifacts are
+retained; the combined receipt is `out-perf/dlls-tab-switch-qual/paired-summary.json`.
+Medians of the six paired summaries, scoped to this instrumented discrete-switch
+workload. Visible run-directory labels differed between stacks; the later working-
+directory correction is required before matched-content acceptance:
+
+| Metric | Zig | C++ | C++ wins |
+| --- | --- | --- | --- |
+| p50 latency ms | 38.370 | 43.100 | 1/6 |
+| p95 latency ms | 43.425 | 49.151 | 0/6 |
+| p99 latency ms | 47.546 | 49.285 | 2/6 |
+| Maximum latency ms | 50.749 | 49.808 | 3/6 |
+| GUI CPU ms/action | 17.217 | 29.741 | 0/6 |
+
+This is a baseline regression, not an accepted optimization or F08 completion.
+Separate native stack sampling in `/tmp/telar-perf-tab-switch-profile-01` overlaps
+102 Zig and 91 C++ switches; its timings are excluded from the pairs. C++ samples
+show QML delegate construction/destruction, hidden pane-header layout and binding
+work, and new optical glyph rasterization after switching. Large sampled Metal
+`nextDrawable` waits are waits, not equivalent CPU-work percentages. Source
+inspection confirms keyed pane-model reconciliation replaces delegates when pane
+identity changes, and `PaneArea.qml` constructs its header even for an unframed
+single pane. Avoiding that unused header work is the next isolated candidate;
+retaining glyphs across delegate lifetimes is another unaccepted memory/work
+tradeoff. Neither follows merely from a general allocation hypothesis.
+
+## Unframed pane-header experiment rejected, 2026-11-03
+
+The first isolated candidate following that profile put `PaneHeader` behind a
+synchronous Loader whose `active` condition was the pane's existing `framed`
+flag. This avoids creating and updating unused header objects for a single
+unframed pane, while preserving the existing framed and fullscreen behavior.
+The source and candidate executable are preserved privately in
+`out-perf/dlls-pane-header-lazy-01`; they are **withdrawn from production source**.
+A is the frozen GUI SHA `5a639c5f26f67892698088cd95e31555212e6508dae2e45a441dc58e641caef5`;
+B is `94c7bcf912d8e828f105ef677c095a842b299ffca4d1dac51d08199f0fc007b4`.
+Both use the identical C++ runtime and command helper. Generated QML C++ and
+ARM64 assembly are retained; the active binding reads the framed boolean. The
+native structural test verifies that an unframed pane has no header instance.
+No architecture-specific application kernel was introduced.
+
+Functional checks passed: a new native test covers no unframed header, two
+visible headers after splitting, click-to-focus on the correct pane and removal
+after closing the split. Its first version incorrectly assumed traversal order
+identified the original pane; it was corrected to find the header through that
+pane's retained TerminalItem. Existing native split/tab, nested-grid recovery,
+fullscreen-strip and configured-group keyboard tests pass, as does `gui-chrome`.
+Full viewport PNGs are byte-identical between A/B for a single pane and four
+splits, including the visible headers, in `/tmp/telar-perf-pane-header-pixels-02`.
+
+The first capture attempt differed because the two run-directory names were
+visible workspace labels. The corrected comparison uses a shared private working
+directory, with no pixel masking or tolerance. `bench_tab_switch.py` now uses
+that same policy for both stacks, including negative controls. The final CLI
+qualification in `/tmp/telar-perf-tab-switch-cwd-qual-01` passes both complete
+stacks with 20 warmup and 20 measured switches each, without claiming timing
+acceptance from one pair. All 12 focused tests pass again; stricter input-source
+anchor checks in the builder preserve the measured native probe and producer
+sources byte for byte. Earlier six-pair
+Zig/C++ figures above used different run-directory labels and are therefore
+initial diagnostic data, not final matched-content acceptance; repeat that
+comparison with the corrected working directory before any full-flow claim.
+
+All subsequent candidate pairs use the same working directory, four 30 Hz
+producers, strict target/generation and offered-rate gates, 100 measured switches
+and 20 warmups. There were no invalid rows in either candidate switch series.
+The initial hypothesis specified at least 5/6 GUI-CPU wins, without a consistent
+latency regression. It failed that criterion despite a promising latency result.
+An independent six-pair confirmation was then declared for p50 and p95 latency,
+each requiring 5/6 wins, with the exact same candidate and reversed initial order.
+It failed p50. Do not merge the exploratory and confirmatory samples to bypass
+that result.
+
+| Switch metric | Exploratory A → B (wins) | Independent A → B (wins) |
+| --- | --- | --- |
+| p50 ms | 45.190 → 40.518 (6/6) | 42.929 → 40.626 (4/6) |
+| p95 ms | 49.255 → 45.599 (6/6) | 48.743 → 45.603 (6/6) |
+| p99 ms | 49.398 → 47.101 (5/6) | 49.469 → 47.278 (4/6) |
+| Maximum ms | 49.826 → 47.675 (5/6) | 49.727 → 48.903 (4/6) |
+| GUI CPU ms/action | 29.947 → 29.269 (4/6) | 29.136 → 29.367 (4/6) |
+| GUI lifetime peak RSS MiB | 207.352 → 205.523 (4/6) | 204.414 → 205.469 (3/6) |
+
+The already-started settled-input regression series was allowed to finish.
+Single-pane p95 loses consistently, giving an additional rejection under the
+existing rule; the cause is not established and code placement is not proven.
+These are six alternating pairs per layout, also with identical working labels:
+
+| Settled input metric | Single A → B (wins) | Four splits A → B (wins) |
+| --- | --- | --- |
+| p50 ms | 24.966 → 24.995 (4/6) | 25.160 → 25.233 (2/6) |
+| p95 ms | 31.999 → 32.219 (1/6) | 33.065 → 32.663 (4/6) |
+| p99 ms | 33.684 → 34.264 (4/6) | 37.047 → 34.345 (4/6) |
+| Maximum ms | 39.646 → 37.108 (6/6) | 37.262 → 38.150 (3/6) |
+| GUI CPU ms/input | 4.048 → 4.060 (2/6) | 4.338 → 4.368 (3/6) |
+
+Raw series are `/tmp/telar-perf-pane-header-pairs-01`,
+`/tmp/telar-perf-pane-header-confirm-01` and
+`/tmp/telar-perf-pane-header-regressions-01`. Their favorable p95 and maximum
+latencies are retained as observations, not selected for promotion. No Zig or
+120 Hz victory follows, and all F01–F16 remain open. The next diagnostic separates
+continuous producer/drawing cost from switching cost on the frozen original C++
+GUI, before choosing a larger work-reduction or bounded-retention change.
+
+## Switching versus continuous background work census, 2026-11-03
+
+A separate diagnostic on the frozen original C++ GUI compares three alternating
+pairs with identical working labels and four 30 Hz producers. The normal variant
+performs previous-tab actions. The control leaves tab zero selected and observes
+fresh, CRC-verified generations on positive native presentations without injecting
+an action. Its reported observation waits are explicitly **not input latency**.
+Both retain the publication provenance and all four offered-rate checks; all six
+runs pass. Sources, native probes and receipts are in
+`out-perf/dlls-tab-switch-work-census` and
+`/tmp/telar-perf-tab-switch-work-census-01`.
+
+GUI CPU divided by its measured wall interval is 9.16%, 10.11%, 9.81% of one
+core without switching, versus 33.28%, 31.87%, 31.64% with switching. Medians are
+9.81% and 31.87%. These observations prioritize switching-related work, but do not
+identify one cause or prove a 22-point optimization opportunity: runtime work is
+not included, the response-driven observation cadence differs, and probe overhead
+remains unqualified. In particular, this does not turn a wait into CPU work or
+make the rejected header candidate acceptable.
+
+The next candidate should investigate bounded retention of the complete pane
+presentation and its glyph resources across tab changes, rather than assume that
+one hidden header dominates. Preserve pane/generation identity, focus and held
+input release, IME/copy/scroll state, image budgets, close/invalidation behavior
+and renderer-thread resource destruction. Hidden panes must not acquire extra
+rendering work merely because their disposable client objects are retained.
+This is a hypothesis supported by the profile and control, not an implemented or
+accepted cache. The allocation/copy/Qt-conversion brief and Adrian's allowance for
+bounded memory in exchange for less work remain part of the investigation.
+
+The rejected QML and test changes are removed and the original source rebuilt.
+The rebuilt GUI hash is `24236ffa9b107578541847d52bf528704a47cec3b05d1e44fd48bdd16bb6226f`;
+its 6,850,340-byte `__TEXT/__text` section is byte-identical to the frozen original,
+as are the other inspected text sections except `__const`. This is a restoration
+check, not a new performance result. Continue using the immutable original A
+executable for comparisons until qualifying any newly rebuilt binary.
+
+## Bounded pane-presentation retention: rejected, 2026-11-03
+
+The whole-pane cache experiment retains at most eight hidden client presentations
+beside the active layout, keyed by machine/client/runtime epoch and pane generation.
+It preserves active-pane API semantics through a separate presentation model,
+reuses QML delegates, skips hidden preparation/resizing, and retires held input,
+IME, wheel and link state on hiding. Closed, replaced and evicted views are removed;
+existing global image/glyph budgets and render-thread destruction remain intact.
+This is an archived experiment, **not an accepted production change**.
+
+The frozen baseline remains GUI `5a639c5f26f67892698088cd95e31555212e6508dae2e45a441dc58e641caef5`.
+The candidate is `77e003f3fb056189a9eff31147f0642efd64af390d499c962b8ea53b98a23bd3`,
+both using runtime `a0b8b9d5826cf80c135cc113a1587a552c054e4d733942ab34e98157a1717645`.
+Sources, binaries, acceptance criteria, generated ARM64 disassembly and the exact
+withdrawn patch are in `out-perf/dlls-pane-surface-cache-01`. The patch SHA-256 is
+`be446956adc49caf5f231c010426fb9f7ff1db151aca4fdd5d0367e531a7e95a`.
+
+The model passes persistent-index, generation/epoch, close/eviction, invalid-input
+and 2,000-operation reference checks. Fifteen selected Cocoa/Metal Quick cases
+pass, including actual delegate reuse, the retention bound, close, viewport,
+fullscreen/splits, held mouse, keyboard/copy, configuration reload and window
+replacement/reopening. Machine-window and graphics retention/recovery suites
+pass; the graphics retention suite also passes all 22 entries with Metal.
+Settled full-viewport PNGs are byte-identical for single, four-split and four-tab
+layouts (`/tmp/telar-perf-pane-surface-pixels-01`). These are not a complete animated
+content oracle or continuous-refresh qualification.
+
+Six valid alternating 100-input pairs with four 30 Hz producers meet the declared
+CPU and p95 targets. Complete pairs are rounds 0–1 of
+`/tmp/telar-perf-pane-surface-pairs-03`, round 0 of `...-pairs-04`, and rounds 0–2
+of `...-pairs-05`, in continuous A/B, B/A alternation. Median per-run results:
+
+| Metric | Original A | Retained B | B wins |
+| --- | ---: | ---: | ---: |
+| p50, ms | 43.074 | 38.341 | 6/6 |
+| p95, ms | 49.256 | 42.671 | 6/6 |
+| p99, ms | 49.308 | 44.579 | 6/6 |
+| Maximum, ms | 49.639 | 45.184 | 6/6 |
+| GUI CPU, ms/input | 29.578 | 28.213 | 6/6 |
+| GUI lifetime peak RSS, MiB | 204.664 | 217.766 | 1/6 |
+
+The roughly 13.1 MiB higher peak RSS is the measured memory tradeoff; it is not a
+measurement of exact live cache bytes. However, the independent six-pair typing
+regression series (`/tmp/telar-perf-pane-surface-regressions-01`) **rejects** the
+candidate. Four-split p99 rises from 33.973 to 37.258 ms and maximum from 37.124 to
+40.369 ms, both with **0/6 wins**. Its p95 is 32.023 → 33.184 ms (2/6), CPU
+4.168 → 4.296 ms/input (3/6). Single-pane p95 is 31.809 → 31.850 ms (3/6), CPU
+3.992 → 4.014 ms/input (3/6); other single-pane latency wins range from 2/6 to 4/6.
+The regression's cause is **not established**; no code-placement exemption is
+claimed. Target gains and functional parity do not override that rejection.
+
+Separate eight-second profiles overlap 97 original and 100 retained tab switches
+(`/tmp/telar-perf-pane-surface-profile-01`). Non-overlapping inclusive stack
+observations for QML construction fall 115 → 2, pane refresh 142 → 30, and native
+glyph rasterization 34 → 0; QML variable writes remain 191 → 191. These support
+reduced reconstruction work but are neither CPU-time attribution nor exact
+allocation/conversion counters. Separate four-split profiles do not identify the
+tail cause and must not replace the uninstrumented regression pairs. The working
+C++/QML and cache tests have been restored after byte-exact archive verification;
+all F01–F16 remain open. The restored GUI and Quick target build successfully.
+The GUI SHA-256 is `747d48fac2a08d45e3b79848a2e3226a70a3abce0a0ff5e95b2f6e2edf763de7`;
+its 6,850,340-byte `__TEXT/__text` section is byte-identical to frozen A. Of the
+inspected text sections, only `__const` differs. Continue measuring immutable A;
+this restoration check is not a code-placement explanation for B's regression.
+
+The remaining variable-write samples are primarily downstream of
+`TabStripLayout::rebuild` and `ListModel::reconcile`, where geometry updates notify
+whole QVariant records and nested QML consumers. The earlier field-role candidate
+also failed its regression gate and must not be silently reinstated. A next
+experiment should isolate layout motion from semantic record updates with a
+behavior/notification oracle, while independently investigating the four-split
+tail. Neither the source reading nor the samples establish a new accepted fix.
+
+### Producer shutdown receipt correction
+
+The first attempt fails the unchanged offered-rate gate: a 500 ms bucket contains
+16 publications even though overall rate is about 30 Hz. That run remains invalid.
+Another attempt exposes a distinct shutdown race: the signal handler raises
+`SystemExit` after incrementing the generation but before recording its publication.
+A deterministic PTY test sends SIGTERM immediately after the third payload: the
+old fixture records generation 3 with only two publications, while the corrected
+fixture finishes all three and then exits. Shutdown now requests loop termination
+rather than interrupting the publication transaction. All 13 fixture/packet/report
+tests pass, and a fresh 20-input native A/B qualification passes before timing.
+
+The failed runs and incomplete pairs remain archived and excluded; their valid
+halves are not paired with unrelated executions. The 5% rate, identity, generation,
+CRC, focus, geometry and positive-presentation checks were not relaxed. Integer
+bucket quantization remains a documented harness limitation for separate work.
+The receipt fix is retained independently of the rejected GUI experiment.
+
+## Scalar tab presentation roles — rejected
+
+On DLL base `d2ae9b30e`, this experiment replaced nested tab records in the
+TerminalTabs delegate with sixteen independent model roles. The full-record API
+remained available. An oracle compared 2,048 seeded insert/remove/reorder cases
+with ListModel; role-specific notification checks and an actual QML selection test
+verified that unchanged application marks and activity records were not rebound.
+The model, activity and chrome suites passed, as did nine native Cocoa/Metal tab,
+drag, focus and layout cases. Settled single/split/tab captures were byte-exact;
+this does not qualify animated content.
+
+Frozen evidence is under ignored `out-perf/dlls-tab-value-roles-01`: A GUI
+`5a639c5f26f67892698088cd95e31555212e6508dae2e45a441dc58e641caef5`, B GUI
+`e1379cf358c584ece3bc148e0c17a0f7f0dee1962294344cc802245b90b458f9`, source patch
+`21c2ddd85c88d292485a0473407abdc550b525c654e2d3ab0410ee2cb4eaadcf`.
+Six valid alternating target pairs are rounds 0–4 of
+`/tmp/telar-perf-tab-value-pairs-01` and round 0 of `...-pairs-02` (B first).
+Incomplete pair 5 of the first series failed the unchanged offered-rate gate and
+was excluded in full. Median per-run results:
+
+| Metric | Original A | Scalar-role B | B wins |
+| --- | ---: | ---: | ---: |
+| p50, ms | 43.069 | 44.533 | 3/6 |
+| p95, ms | 47.882 | 49.214 | 1/6 |
+| p99, ms | 49.295 | 49.333 | 0/6 |
+| Maximum, ms | 49.624 | 49.707 | 3/6 |
+| GUI CPU, ms/input | 29.900 | 28.757 | 5/6 |
+| GUI lifetime peak RSS, MiB | 205.805 | 206.531 | 3/6 |
+
+The declared target required CPU **and p95** wins in at least five pairs. CPU gains
+do not override the latency rejection; its cause is not established. Independent
+six-pair single-pane and four-split typing series (`...-tab-value-regressions-01`)
+had no latency/CPU metric with 0–1 wins. That does not override the target failure.
+Separate eight-second profiles overlap 94 A and 89 B switches. Non-overlapping
+inclusive QML variable-write stack observations fall 249 → 31, while construction
+remains 99 → 104 and pane refresh 124 → 130. These support reduced binding work,
+not precise CPU or allocation attribution, and instrumented timings are excluded.
+The candidate source and tests were withdrawn after exact archive verification.
+
+Before candidate timings, an identical-binary A/A four-split control ran six
+alternating pairs (`/tmp/telar-perf-split-identical-control-01`). Median p95 was
+31.953 → 30.713 ms (4/6), p99 34.594 → 33.119 ms (4/6), CPU 4.156 → 4.279 ms/input
+(2/6). No latency/CPU metric showed a consistent 0–1 directional loss. This records
+host variability; it neither excuses the earlier pane-retention regression nor
+establishes its cause. All F01–F16 remain open.
+
+## Snapshot row retention and staged decoding — investigation open
+
+On `0fcfdc42a`, the first experiment preserves cell rows and their presentation
+revisions for same-pane, same-grid snapshots whose semantic cell contents match.
+Delta invalidation remains unchanged; cursor, links, modes and frame identity
+still advance. A 2,048-case seeded cell/row oracle exercises text, width, style,
+pane identity, grid changes, detach, metadata and malformed late input. It fails
+on the original implementation's unconditional row invalidation and passes the
+candidate, including under Rosetta and ASan/UBSan. All 38 native Metal scene tests
+pass, including retained-row cursor movement against forced reconstruction.
+
+The probe now separates Screen application from TerminalScene synchronization and
+supports full, one-row and unchanged snapshots. Seven alternating pairs for each
+text policy are in `/tmp/telar-perf-snapshot-rows-components-01`; source and frozen
+binaries are under ignored `out-perf/dlls-snapshot-row-retention-01`. Median combined
+apply-plus-paint CPU times in milliseconds:
+
+| Snapshot changes | Optical A → B | Wins | Standard A → B | Wins |
+| --- | ---: | ---: | ---: | ---: |
+| None | 6.653 → 0.274 | 7/7 | 7.073 → 0.276 | 7/7 |
+| One row | 6.602 → 0.393 | 7/7 | 7.097 → 0.412 | 7/7 |
+| All cells | 6.743 → 6.814 | 2/7 | 7.176 → 7.177 | 2/7 |
+
+All six final visible captures match exactly. These component numbers exclude
+encoding and do not measure input latency, native frame cadence or hidden-pane
+scene retention. Application alone is consistently slower: the optical unchanged
+case rises from 0.257 to 0.273 ms, the full case from 0.260 to 0.295 ms, both 0/7.
+The benefit comes from avoiding downstream work; this is **not an accepted
+full-flow optimization**. Arm64 assembly retains both decoder traversals and adds
+semantic-style comparison and memcmp on the retention path; unchanged cells skip
+stores and row-revision division. No vector or architecture-specific shortcut is
+used.
+
+The follow-up experiment stages decoded cells in a retained vector and commits
+only after all spans validate, eliminating the second decoder traversal while
+keeping malformed-frame atomicity. At the protocol maximum, its extra cell storage
+is 130,359 × 32 bytes (about 3.98 MiB per Screen on this host); typical grids need
+less. This is an explicit bounded-memory tradeoff, not a zero-memory claim. Added
+checks cover a malformed later delta span, recovery, gaps, and no further injected
+Screen allocations after capacity warmup. The source remains experimental under
+`out-perf/dlls-staged-screen-decode-01`; native latency, resource and regression
+acceptance are still required. No pane-retention cache has been reinstated, and
+all F01–F16 remain open.
+
+The staged variant passes the same 2,048-case oracle under native arm64, Rosetta
+x86-64 and ASan/UBSan, all 38 native Metal scene cases, core/session/runtime-link
+checks, four native tab/layout cases, and byte-exact settled single/split/tab
+captures. Seven alternating component pairs per case are recorded in
+`/tmp/telar-perf-staged-screen-components-01`:
+
+| Snapshot changes | Optical A → B, ms | Wins | Standard A → B, ms | Wins |
+| --- | ---: | ---: | ---: | ---: |
+| None | 6.619 → 0.199 | 7/7 | 7.089 → 0.201 | 7/7 |
+| One row | 6.636 → 0.333 | 7/7 | 7.108 → 0.331 | 7/7 |
+| All cells | 6.720 → 6.684 | 6/7 | 7.114 → 7.087 | 3/7 |
+
+Application-only CPU wins all seven pairs in every case; the optical full case
+falls 0.256 → 0.187 ms. Arm64 assembly has one CellReader traversal followed by a
+commit traversal over decoded cells; the two decoder call sites are the entry and
+backedge of that single traversal. No native-latency conclusion follows from these
+component results. GUI A is
+`5a639c5f26f67892698088cd95e31555212e6508dae2e45a441dc58e641caef5`, staged GUI B is
+`d63ca3a96192f551bfad6fe1dfdc7138d8e5c612ef6ef15b8857755d3d1064aa`; both use runtime
+`a0b8b9d5826cf80c135cc113a1587a552c054e4d733942ab34e98157a1717645`.
+Native qualification passes. Six alternating tab-switch pairs
+(`/tmp/telar-perf-staged-screen-pairs-01`) finish without rejected runs: median
+p50 44.326 → 44.075 ms (4/6), p95 49.239 → 49.066 ms (4/6), p99 49.304 → 49.301 ms
+(4/6), maximum 49.966 → 49.416 ms (3/6), GUI CPU 30.471 → 29.718 ms/input (5/6).
+The latency counts do not establish an F08 win. GUI peak RSS is 212.625 → 211.672
+MiB (4/6); this is not the staging buffer's exact allocation size.
+
+Six independent typing-control pairs per layout
+(`/tmp/telar-perf-staged-screen-regressions-01`) have no consistent latency/CPU
+loss. Single-pane p95 is 33.069 → 33.118 ms (3/6), CPU 4.260 → 4.089 ms/input
+(4/6); its latency wins range from 2/6 to 3/6. Four-split p50/p95/p99 win 5/6 each,
+p95 32.806 → 31.969 ms; CPU is 4.225 → 4.182 ms/input (4/6).
+
+A separate direct Screen audit checks empty, one-cell, one-row and full-grid deltas,
+plus full snapshots, using the same 82×21 grid. The first short batches expose a
+fixed empty-delta cost: 13.175 → 17.950 ns, 0/7, while deltas with cells win 7/7.
+These small durations motivate longer batches before final acceptance. Injected
+allocator accounting reports 55,293 live bytes for original A and 110,397 for B:
+exactly one additional 55,104-byte cell buffer, with no warm allocation churn.
+The staged binary remains **unaccepted** while this empty-message path is repaired.
+
+The follow-up in `out-perf/dlls-staged-screen-fast-empty-01` keeps validation and
+metadata application in the common path and moves nonempty cell decoding/commit
+into a separate helper. Empty deltas avoid staging-vector setup entirely. Added
+functional checks require cursor, input modes, scroll and row metadata to advance
+without invalidating cell rows. Final-source functional checks pass: core/session/runtime-link, the expanded
+2,048-case oracle under Rosetta and ASan/UBSan, 38 native Metal scene cases and four
+native tab/layout cases. The fresh GUI is
+`d6dc9a4930ba8260020ddf6a050e9386d646368d2dc9912a29760eb8c280d66a`;
+its source patch is `06ca097c76f666de8025c57911cce589b4c7de34a3905e1ab608488116d43009`.
+
+Longer direct-kernel batches use 10 million measured empty deltas, 3 million
+one-cell deltas, 200,000 row deltas and 10,000 full frames, after half as many
+warmups in each process. Seven alternating pairs report:
+
+| Frame case | Original A, ns | Separated-path B, ns | B wins |
+| --- | ---: | ---: | ---: |
+| Empty delta | 10.069 | 9.618 | 7/7 |
+| One-cell delta | 43.130 | 31.074 | 7/7 |
+| One-row delta | 783.203 | 471.355 | 7/7 |
+| Full-grid delta | 15,788.996 | 11,356.992 | 7/7 |
+| Full snapshot | 15,792.733 | 15,729.533 | 5/7 |
+
+The direct fixture uses plain ASCII at 82×21; it is not the richer 256×52 scene
+probe or a whole-client benchmark. Its allocator evidence remains 55,104 extra
+live bytes and one additional allocation on cold initialization, with no warm
+allocations. Arm64 production symbols confirm a separate nonempty helper.
+The final separated-path variant is **rejected**. Six independent native typing
+pairs (`/tmp/telar-perf-staged-fast-empty-regressions-01`) give single-pane GUI CPU
+3.902805 → 4.017025 ms/input, only 1/6 wins. Its p95 is 32.794 → 32.657 ms, 2/6;
+four-split CPU is 4.183 → 4.204 ms/input, 3/6. The cause is not established and no
+code-placement exemption is claimed. The target tab-switch attempt fails the
+unchanged offered-rate gate before completion; it supplies no acceptance evidence.
+Component wins cannot override this independent native regression.
+
+Final component pairs (`/tmp/telar-perf-staged-fast-empty-components-01`) still
+show retained/sparse combined application-plus-paint wins in all seven pairs:
+optical 6.594 → 0.197 ms and 6.539 → 0.328 ms; standard 7.105 → 0.200 ms and
+7.060 → 0.333 ms. Full optical is 6.675 → 6.647 ms (3/7); full standard is
+7.153 → 7.060 ms (6/7). All six final visible component captures are pixel-exact.
+
+The new joint experiment, `out-perf/dlls-pane-row-reuse-01`, combines bounded
+pane retention with staged decoding and unchanged snapshot row revisions. Its
+contract explicitly retains the original frozen C++ baseline: neither rejected
+parent is accepted. The intended saving is reuse of both QML delegates and
+unchanged terminal rows when revisiting tabs. Extra bounded storage is allowed;
+six fresh target pairs must win CPU and p95 at least 5/6, and a consistent
+latency/CPU loss in independent single/split controls rejects it.
+
+An initial native oracle catches two fullscreen-strip objects after changing
+panes: the hidden cached delegate keeps its old strip. Requiring the pane to be
+visible before loading fullscreen/attention chrome fixes the failure without
+weakening the oracle. The corrected candidate passes 17 native cases, 38 Metal
+scene cases and core/session/runtime-link/cache-model tests. The refactored
+2,048-case Screen oracle also passes Rosetta and ASan/UBSan; pinned Zig 0.16 checks,
+cross-compilation, style and module-boundary checks pass. A later final-binary repetition catches another correctness issue: opening a
+split reports generation zero before a later snapshot resolves it. Cache identity
+replacement destroys the terminal during mouse capture; a QPointer diagnostic
+records generation 0 → 3. A new model oracle fails deterministically before the
+fix. Only visible unresolved entries may retain their token when the generation
+resolves; hidden unresolved entries are never cached, while known-generation and
+runtime-context changes still replace tokens. The corrected candidate passes the
+model oracle, 20 native cases, 38 Metal cases and six additional repetitions of
+each previously failing mouse case. Modified-code static analysis passes; the
+unchanged redundant-alias diagnostic in `config/callback.hpp` remains recorded.
+
+The **joint candidate is rejected and withdrawn**. Final GUI B is
+`713aefd658db8ed23149b72da7f82fb97e92378ac7118a695c878df72965eee0`,
+source patch `6cb76158567333f90f0fc6aac008277fd71be5ac153af3512026443e7a45b346`.
+Settled full-window PNGs match exactly for single, split and tab layouts.
+Six alternating native typing pairs per layout
+(`/tmp/telar-perf-pane-row-reuse-regressions-01`) report:
+
+| Control | Metric | Original A | Joint B | B wins |
+| --- | --- | ---: | ---: | ---: |
+| Single | p95, ms | 32.609 | 31.595 | 2/6 |
+| Single | p99, ms | 36.095 | 34.222 | 5/6 |
+| Single | GUI CPU, ms/input | 4.004 | 4.027 | 3/6 |
+| Four splits | p95, ms | 32.721 | 32.665 | 3/6 |
+| Four splits | p99, ms | 34.247 | 35.212 | 1/6 |
+| Four splits | GUI CPU, ms/input | 4.221 | 4.493 | 0/6 |
+
+The split p99 and CPU losses reject the candidate. Peak GUI RSS is
+205.063 → 206.906 MiB for single-pane and 204.914 → 204.430 MiB for splits;
+extra bounded memory is allowed and is not the rejection reason. No target-switch
+or final component acceptance batch runs after this independent rejection.
+A separate eight-second sample of each frozen binary during four-split typing
+(`/tmp/telar-perf-pane-row-reuse-split-profile-01`) is too sparse in application
+code to establish the CPU cause. GPU-work medians and observed drawable-ID spans
+do not show an obvious directional change. No code-placement exemption is claimed.
+
+The reusable Screen probe completes seven pairs per case in
+`screen-pairs-final`: empty delta 10.308 → 9.381 ns (7/7), one cell
+42.704 → 31.194 ns (7/7), one row 784.999 → 473.190 ns (7/7), full delta
+15,721.825 → 11,278.800 ns (7/7), changing snapshot 15,746.308 → 15,737.475 ns
+(4/7), retained snapshot 15,806.979 → 15,630.496 ns (7/7). Each uses 55,104 extra
+Screen-owned bytes at 82×21 and no warm allocation churn. These component wins
+cannot override the native rejection. ARM64 inspection confirms the empty-span
+branch and single decoding traversal. It also finds 512 bytes of temporary cache
+identity initialization per validation; retaining that scratch is an unmeasured
+follow-up, not an explanation for the measured regression.
+
+The complete rejected source, generation and visibility oracles, binaries and
+receipts remain in the ignored experiment prefix. Production changes are removed;
+only generic Screen checks for atomic rejection, recovery, span gaps and
+metadata-only deltas remain in the active source. The accepted baseline and all
+F01–F16 acceptance requirements remain unchanged.
+
+A follow-up allocation census (`out-perf/dlls-allocation-census-01`) remains a
+private diagnostic prototype. Instruments' Allocations attachment invoked
+SecurityAgent and invalidated focus after 59 responses; its incomplete trace is
+not used. The alternative interposes six dynamic heap APIs in the owned GUI:
+`malloc`, `calloc`, `realloc`, `free`, `aligned_alloc` and `posix_memalign`.
+A known five-operation sequence verifies 344 requested bytes, four frees and one
+realloc, both standalone and linked into the presentation probe. Overflowing
+calloc, invalid alignment and absent-instrument negative controls also pass.
+QtCore and the measured GUI import the covered classic allocation symbols.
+
+Three alternating diagnostic four-split pairs, 100 inputs each
+(`/tmp/telar-perf-allocation-census-splits-01`), count successful calls as
+A/B 88,298/79,506; 83,346/83,317; 87,574/87,589. Requested bytes are respectively
+11,776,269/10,839,052; 11,221,016/11,212,180; 11,656,520/11,672,380. These counts do
+not show a consistent increase in B and do not explain the rejected CPU result.
+The broad per-input medians are 875.74/833.17 calls and 116,565/112,122 requested
+bytes, but the paired rows show why those medians must not be presented as a
+repeatable allocation reduction. Instrumented latency is excluded from acceptance.
+
+The census takes fieldwise atomic snapshots around the measured-input phase,
+before result construction and cleanup. It includes framework and probe-induced
+work outside the interposer image, excludes uncovered APIs/direct zone calls,
+and neither attributes sites nor measures live/peak heap bytes. Returned usable
+bytes are cumulative API results, including realloc, not net memory growth.
+The next allocation investigation needs site attribution and a control for
+probe-induced work; allocator lifetime or Qt conversion is not yet a demonstrated
+cause of the native regression.
+
+`gui-screen-probe` and `tools/compare_screen.py` now provide the direct Screen
+workloads as reusable source. They verify final cells, reject warm allocation
+churn, retain binary hashes and raw paired results, and report Screen-owned bytes.
+They exclude encoding, Qt allocations, process RSS and native presentation timing.
+
+The reusable `compare_terminal_scene.py` controller now supports
+`--snapshot-workload full|sparse|retained` and
+`--metric elapsed_ns|apply_and_paint_ns`. The default remains scene-only timing;
+the combined metric requires a positive application duration and exact accounting
+of application plus painting. Two native smoke invocations cover the legacy
+arguments and retained/combined mode with exact visible pixels. Their one-pair
+numbers are functional checks, not acceptance evidence.
+
+## Sampled allocation sites and draw batches, 2026-11-03
+
+A private bounded stack sampler extends the six-API census in
+`out-perf/dlls-allocation-sites-01`. It samples approximately one in 64 successful
+calls into a fixed 4,096-site table with 20-frame stacks and thread identities.
+Contention, capacity overflow and truncated stacks are reported. A known control,
+both standalone and linked into the native probe, records exactly five allocations
+and 344 requested bytes at sampling period one. Storage does not allocate, but
+backtrace and presentation-probe work remain part of the diagnostic environment.
+This is neither allocation CPU attribution nor a live/peak heap measurement.
+
+The native four-split qualification contains 20 inputs per variant in
+`/tmp/telar-perf-allocation-sites-qual-01`. Original A records 289 samples from
+18,326 observed successful API calls; rejected joint B records 280 from 17,678.
+Neither run drops samples through contention or capacity. Respectively 59 and 54
+stacks reach the depth limit. A/B render-thread samples are 228/222, main-thread
+samples 51/46, and explicit probe-containing stacks 25/17. Do not extrapolate this
+short qualification into a full-flow distribution or compare its instrumented
+latencies for acceptance.
+
+The dominant resolved stacks pass through `QArrayData::allocate`,
+`QRhiBatchedBindings::Batch` growth, `QRhiMetal::enqueueShaderResourceBindings`
+and `QSGBatchRenderer::Renderer::renderMergedBatch`. Source inspection confirms
+that Metal constructs temporary binding batches for each call before comparing
+them with the previous binding state. Project-containing stacks also include
+`AncestorGeometry::observe`: it reconnects every ancestor on parent changes,
+including during QML Repeater construction. Neither finding establishes the
+cause of the earlier native CPU regression. Large sampled probe allocations
+also prevent attributing all requested bytes to production code.
+
+A separate original-A run with `QSG_RENDERER_DEBUG=render`,
+`/tmp/telar-perf-baseline-render-batches-01`, consistently ends with 26 opaque nodes
+in 12 batches and 83 alpha nodes in 28 batches. Inactive terminal glyph rows
+already merge into one text batch per pane; a per-glyph draw-call explanation
+would be incorrect. Most batches are retained but still submitted. This motivates
+an isolated header-layer experiment: retain unchanged header pixels in small
+textures, require exact visible output first, and then test whether fewer batches
+outweigh offscreen rendering and texture storage. No optimization is accepted by
+these diagnostics, and all flows remain open.
+
+## Pane-header layers rejected by visual equivalence, 2026-11-03
+
+The isolated `PaneArea.qml` candidate enables a layer only for visible headers
+on known GPU backends. It trades header-sized texture storage for retained chrome
+pixels, with original accepted A as the baseline. Neither variant is retained in
+production source. No native acceptance timing was run after the visual rejection.
+
+The RGBA8 candidate in `out-perf/dlls-pane-header-layer-01`, GUI SHA
+`c788df0ca63bc4dfe14c1c76693453b3ccb0b83ce1e30b320525681acd0e0900`,
+passes the unframed single-pane capture but changes 1,131 four-split header pixels
+by one channel level. The full capture receipts and difference bounds are in
+`/tmp/telar-perf-pane-header-layer-pixels-01`. The oracle is not relaxed.
+
+An independently frozen RGBA32F refinement in
+`out-perf/dlls-pane-header-float-layer-01`, GUI SHA
+`114b4edaadcd9342eadcfbe378a00edf18abbebba2de6313e0055999f263fe69`,
+passes exact settled single/splits/tabs captures in
+`/tmp/telar-perf-pane-header-float-layer-pixels-02`. Nine selected native cases
+pass, covering split/close/tab changes, pane focus and child mouse ownership,
+fullscreen, attention, sidebar resize, configured bars and configuration reload.
+A separate debug-render run in `/tmp/telar-perf-header-float-render-batches-01`
+reduces the settled scene from 40 to 36 batches: opaque batches remain 12 and
+alpha batches fall from 28 to 24. This is work-count evidence, not a latency win.
+RGBA32F also requires 16 bytes per texture pixel before backend overhead;
+allocation dimensions and residency were not qualified for acceptance.
+
+The expanded Metal oracle compares a header containing blocked status, paused
+progress and the images-paused label with its layer disabled, enabled, then
+disabled again. At the first integer-aligned 460×30 logical header, 281 pixels
+change by one channel level. The 980×180 backing-window captures are saved as
+`/tmp/telar-perf-pane-header-float-oracle-fixed-{reference,layer}.png`.
+Disabling the layer restores the original image exactly, ruling out a persistent
+content change in that fixture. The first attempted restoration control was
+invalidated by the window manager resizing the window; the corrected fixed-size
+tool-window control removes that confound. Fractional-position and narrower-header
+iterations are not reached after the first exact comparison fails.
+
+Both QML variants and the experimental oracle are withdrawn. Their source patches,
+frozen binaries, build/test logs, difference receipts and withdrawal decision
+remain in the ignored experiment prefixes. The small pixel discrepancy is still
+a visual regression; the reduced batch count does not justify accepting it.
+Further draw-work experiments should avoid introducing this intermediate color
+composition, for example by investigating batch compatibility of existing glyph
+geometry. That is a source lead, not an accepted optimization.
+
+## Per-vertex mask colors rejected by component controls, 2026-11-03
+
+The isolated experiment in `out-perf/dlls-mask-vertex-color-01` moves mask color
+from material uniforms into float vertex attributes. Compatible text/icon masks
+can then batch across colors without offscreen composition. It preserves separate
+sampling and blend material types, premultiplication and shader coverage formulas.
+Vertex stride increases from 20 to 36 bytes, or 96 additional bytes per six-vertex
+glyph quad. The candidate is **withdrawn from production source**.
+
+Original accepted A remains GUI SHA
+`5a639c5f26f67892698088cd95e31555212e6508dae2e45a441dc58e641caef5`;
+B is `ffa1df64b2ce0dd3a310de26d83f5983093cbf036ad83a8c02e46b38f9369138`,
+with the identical runtime, command helper and Qt installation. The frozen patch
+SHA is `3c1ef558bd18c6d9d9f4545050dedf1fa5979e30c7296d610def267d22aafb73`.
+Native single/splits/tabs captures remain byte-exact in
+`/tmp/telar-perf-mask-vertex-color-pixels-01`. Existing Metal text, icon and scene
+suites pass. A separate four-split debug run reduces alpha batches from 28 to 24,
+with 12 opaque batches unchanged. No native latency/CPU acceptance follows from
+that count or from diagnostic presentation samples.
+
+The new generic icon oracle renders two semitransparent colored icons separately,
+then together, and compares both image regions exactly before and after recoloring
+at fractional positions. It passes with the candidate on Metal, actual OpenGL 2.1
+and software. It is preserved independently of the rejected representation.
+Generated shader inspection verifies a flat color input on Metal/HLSL/modern GLSL
+and the existing legacy-GLSL qualifier fallback. The CPU text-scene probe's
+experimental adaptation checks uniform opaque vertex ink before emitting its
+existing single-ink digest; that adaptation is withdrawn with the candidate.
+
+Seven alternating pairs for each optical/standard and retained/sparse/full mode
+complete in `/tmp/telar-perf-mask-vertex-color-components-01`, without simultaneous
+builds, tests or profiling. All six final 3600×2198 captures have zero channel
+difference. Median CPU milliseconds per snapshot application plus scene update:
+
+| Mode | A ms | B ms | B wins |
+| --- | --- | --- | --- |
+| retained-optical | 6.619460 | 6.729761 | 2/7 |
+| sparse-optical | 6.587403 | 6.679302 | 1/7 |
+| full-optical | 6.628179 | 6.814280 | 1/7 |
+| retained-standard | 7.027967 | 7.096267 | 2/7 |
+| sparse-standard | 7.105088 | 7.122310 | 3/7 |
+| full-standard | 7.091248 | 7.148828 | 2/7 |
+
+Sparse and full optical modes each win only 1/7, rejecting the predeclared component
+control contract. Native timing pairs are not run for this rejected variant.
+The retained color oracle and original icon suite pass on Metal, OpenGL and
+software after withdrawal, and the offscreen CTest target and modified-file
+clang-tidy pass. The test uses the repository component-window helper to prevent
+a Cocoa tool window from disappearing on deactivation; an earlier OpenGL run
+timed out while unexposed and is retained as a harness failure.
+Address-bounded ARM64 disassembly shows shorter material comparison and uniform
+update functions but additional color stores in `GlyphMesh::paint`. The paint
+function changes, so this is not an established code-placement exception. More
+vertex traffic is a plausible cost; the entire timing difference is not causally
+attributed to it. The shader/geometry changes, frozen binaries, generated shaders,
+assembly and withdrawal decision remain in ignored artifacts. All full-flow
+acceptance requirements remain open.
+
+The next isolated lead is Metal binding-batch storage. Qt already uses small
+inline arrays for the initial buffer/texture/sampler lists, but each stage then
+constructs four `QRhiBatchedBindings` containers backed by implicitly shared
+vectors. The private `dlls-metal-bindings-inline-01` contract first requires an
+equivalence oracle against the actual Qt container before any dependency change.
+The original Qt installation remains unchanged; any eventual native experiment
+requires separate immutable dependency prefixes.
+
+## Metal inline binding storage, 2026-11-03
+
+The isolated experiment in `out-perf/dlls-metal-bindings-inline-01` is not retained.
+Its native timing series is discarded for elevated shared-host load following
+Adrian's coordinator notice. The initial CPU rejection was based on that series
+and is superseded: native CPU impact is inconclusive pending a qualified rerun.
+The container oracle and diagnostic allocation census remain useful, but do not
+establish a native performance gain or disprove the broader allocation/copy or
+Qt conversion hypotheses.
+
+The container oracle compares the actual Qt private template with four inline
+resources and two inline batches. All 4,123 cases pass in Release and with
+ASan/UBSan: exhaustive subsets of twelve bindings, empty and large streams,
+gaps, repeated finish, copy/assignment, clear and reuse. Repeated finish preserves
+Qt's existing duplicate-final-batch behavior. The standalone source tool
+`services/gui-cpp/tools/check_qt_binding_storage.py` reproduces these checks with
+a supplied managed Qt prefix and matching header. It generates the experimental
+header only in ignored output and preserves Qt's copyright/license identifiers.
+The final oracle also passes the repository clang-tidy profile.
+
+Storage grows from 64 to 224 bytes per container, or 1,280 to 4,480 bytes in the
+five-stage/four-type model. Seven alternating uninstrumented pairs exercise
+construction, feed, finish, copying previous state and destruction. Median
+nanoseconds per model frame are:
+
+| Resources / binding stride | Original | Inline | Inline wins |
+| --- | --- | --- | --- |
+| Empty | 66.670 | 109.091 | 0/7 |
+| 1 / 1 | 596.697 | 229.320 | 7/7 |
+| 4 / 1 | 960.503 | 313.005 | 7/7 |
+| 8 / 1 | 1372.197 | 729.363 | 7/7 |
+| 4 / 2 | 1765.938 | 720.280 | 7/7 |
+| 16 / 2 | 5487.367 | 2360.550 | 7/7 |
+| 257 / 1 | 10799.400 | 5526.829 | 7/7 |
+
+This is not a universal container win: empty construction regresses. A separate
+instrumented census records zero allocations for the inline one/four-resource
+contiguous cases, versus 160,000/240,000 calls over 10,000 original model frames.
+Large fallback also has a tradeoff: the 257-resource case requests 979,216,448
+bytes versus 656,640,000 cumulatively. These are requested bytes across repeated
+allocations, not live or peak memory. No container timing includes Metal dispatch.
+
+The native candidate changes only shader-resource binding storage in a private
+copy of Qt's Metal backend. Vertex-input batches and the generic shared Qt
+container remain unchanged. Baseline QtGui SHA256 is
+`abd4bdf7f5042bc0cbae3f3dfdfbfa378deeea7a9fdc5a436dc83bf592d455a7`;
+candidate is `34fa13cf15f18d19b7796ad82d7a51e43793e9fe5466a30aea3d079465002b55`.
+The GUI, runtime and helper bytes are identical between A/B; other Qt framework
+binaries are also identical. Qualification verifies the actual loaded QtGui and
+byte-exact native single/splits/tabs captures. Seven graphics suites and ten
+native cases pass. An initial preparation run could not find the Cocoa plugin
+after framework relocation; explicit original plugin/QML paths fix this before
+qualification and timing. The original installation is untouched.
+
+ARM64 disassembly of `QRhiMetal::enqueueShaderResourceBindings` shows stack
+reservation growing from 4,048 to 7,264 bytes, plus the same 96 bytes of saved
+registers. The address span to the next symbol grows from 6,152 to 6,864 bytes;
+static call sites grow from 89 to 95, including dynamic fallback paths. These
+are not executed-instruction counts or evidence of a placement-only difference.
+
+Six alternating native pairs in
+`/tmp/telar-perf-metal-bindings-inline-regressions-01` use 100 measured inputs
+after 20 warmups, identical 1600×1000 viewports and strict native marker,
+geometry, focus, presentation and offered-rate checks. This agent ran no builds,
+tests or profilers during timing, but later learned of concurrent CLI-port work.
+The series ran 10:36:47–10:42:57 local time, overlapping the five agents active
+since 10:40. Its initial load averages were already 7.05 / 9.92 / 7.01 on ten
+logical CPUs. The following numbers are retained as discarded observations,
+not acceptance evidence:
+
+| Case / metric | Original | Inline | Inline wins |
+| --- | --- | --- | --- |
+| Single GUI CPU ms/input | 4.048870 | 4.091645 | 4/6 |
+| Single presented p50 ms | 24.886990 | 24.911885 | 2/6 |
+| Single presented p95 ms | 32.793789 | 31.717501 | 6/6 |
+| Single presented p99 ms | 35.340820 | 35.576264 | 3/6 |
+| Single peak RSS MiB | 204.406250 | 205.109375 | 3/6 |
+| Four splits GUI CPU ms/input | 4.322370 | 4.336195 | 3/6 |
+| Four splits presented p50 ms | 25.615646 | 25.832708 | 3/6 |
+| Four splits presented p95 ms | 32.733261 | 32.896727 | 2/6 |
+| Four splits presented p99 ms | 35.717754 | 35.046910 | 3/6 |
+| Four splits peak RSS MiB | 211.578125 | 204.570313 | 4/6 |
+
+The primary four-split CPU target requires at least 5/6 wins; the discarded
+series obtains 3/6. Neither that count nor the single-pane p95 count can support
+acceptance or rejection of CPU impact. The frozen CPU target is unchanged.
+Tabs and fixed-rate load timing controls were not run after the initial decision.
+Runtime resources, complete C++/Zig flow comparisons and 120 Hz cadence remain
+unqualified. Any rerun requires a fresh low-load window and recorded load/process
+checks before each A/B series; discard or repeat series affected by high load.
+
+A separate three-pair native heap census in
+`/tmp/telar-perf-metal-bindings-inline-census-01` confirms the intended reduction.
+Median successful allocation calls per input fall from 839.38 to 508.76 (39.4%);
+requested bytes fall from 112,733.61 to 101,571.05 (9.9%). Instrumented timings are
+excluded. These six-API counters include framework/probe work and are neither
+precise allocation-site CPU attribution nor live/peak heap measurement. They also
+do not normalize the amount of rendering work under shared-host load. Fewer
+observed allocations do not establish a native CPU gain in this experiment.
+
+Only the reusable oracle and this report are retained. The private dependency
+patch, binaries, raw measurements and decision remain ignored; no production
+renderer or Qt recipe change is applied. All F01–F16 acceptance rows remain open.
+
+A subsequent baseline variable-output profile attempted three background panes
+at 0.125 MiB/s each plus interactive input in the fourth. The first launch stopped
+at manifest preparation because the helper filename was wrong. After correcting
+it, the native run lost foreground/key-window ownership after 115 responses and
+was invalidated; both samplers were still waiting for a readiness file that this
+non-throughput fixture does not emit. No useful stacks were collected. The owned
+runtime/children exited and cleanup completed. Artifacts are under
+`out-perf/dlls-variable-work-profile-01` and
+`/tmp/telar-perf-variable-work-profile-02`. A post-run load receipt records
+7.51 / 11.88 / 10.04. Other agents' worktrees/processes were not modified.
+
+## Immutable ASCII font coverage candidate, 2026-11-03
+
+The next isolated candidate is prepared in `out-perf/dlls-ascii-coverage-01`;
+production `Face` remains unchanged. `TerminalItem::updatePolish` visits changed
+rows and `requestRowFonts` checks each nonempty, non-continuation cell through
+`FontCoverage::covers`. Every relevant scalar reaches `Face::covers`, which calls
+FreeType's charmap lookup. The existing tab-switch profiles contain this path,
+but only a few samples; they do not establish a dominant CPU cost. Row revision
+filtering and the existing shaped-glyph cache already avoid some other work.
+
+The candidate stores 128 immutable coverage bits after selecting the font and
+applying its variation. ASCII queries read those bits; all other inputs retain
+the original lookup. The selected charmap is not changed by later size/shaping
+operations. This adds 16 bytes per `Face` (336 → 352 on ARM64), no cache heap
+allocation, and 128 additional charmap queries per construction. Cold creation
+is an explicit control, not a free precomputation assumption.
+
+The source baseline is `65c69967d3bd679fe3a1fea475f973a7d3bb496c`, compiled with
+LLVM 23.1.4 and the current managed FreeType/HarfBuzz archives. The frozen original
+coverage probe SHA256 is
+`0f33592bbb8a79749ec7a0cac09fbf199c85d30e14319bf68b5b7d8808e780cd`;
+the Release candidate is
+`62afde0ba7e28d8d50571f9ea245662af88a97a823e087f9d21cba3423ca0a14`.
+Dependency/source hashes and commands are in the private build/oracle manifests.
+
+The reusable `gui-font-coverage-probe` and `check_font_coverage.py` compare exact
+coverage bitmaps for every value through U+10FFFF, including surrogates, plus
+U+110000, 0x1FFFFF and 0xFFFFFFFF. They check coverage again after metrics,
+shaping and rasterization at heights 9, 13 and 31. Four bundled fonts and the
+variable fixture at default/wide coordinates pass: 26,738,760 queries per probe
+in both Release and ASan/UBSan candidate runs. FreeType/HarfBuzz dependency
+archives are not sanitizer-instrumented. The corpus includes zero ASCII coverage
+in the symbol font, partial coverage in the variable fixture, and distinct text
+font coverage. Wrong-bit, truncated and trailing-output negative controls fail
+as required. The source probe passes clang-tidy and clang-format.
+
+A separate counted-call build confirms work removal without timing:
+
+| Model operation | Original charmap calls | Candidate charmap calls |
+| --- | --- | --- |
+| Construct one face | 0 | 128 |
+| 128,000 ASCII coverage queries | 128,000 | 0 |
+| 8,000 non-ASCII/out-of-range queries | 8,000 | 8,000 |
+| 62,000 one-byte cell coverage checks | 62,000 | 0 |
+
+Results/checksums match. These counters wrap calls made by `Face`, not all
+FreeType/HarfBuzz internal work or a native GUI workload. ARM64 disassembly
+shows the ASCII bounds check and bit load/shift; the non-ASCII branch still calls
+`FT_Get_Char_Index`. Actual `Face` source also compiles to x86-64 baseline and v3
+assembly; the cached branch uses a bit test. This is codegen inspection, not an
+x86 runtime or Linux qualification, and does not establish a speedup.
+
+Four private benchmark modes (ASCII, Unicode, row preparation and cold creation)
+have matching short-run checksums. No timing run has started. The load guard
+captured 29.82 / 28.73 / 20.05 at 11:07 on ten logical CPUs and deferred the entire
+series. It records `uptime` and active processes before each series/pair and after
+each member; elevated load discards the complete series. The current conservative
+limits are 5 at one minute and 7.5 at five minutes, with an additional check for
+active compilers. Other agents and their worktrees are untouched.
+
+The frozen contract requires 6/7 warm component wins without consistent cold or
+Unicode losses, followed by 5/6 native four-split variable-output GUI CPU wins,
+exact output/visual qualification and single/tabs/load regression controls. Native
+and component timing, cold-cost assessment, complete GUI qualification, x86/Linux
+execution and all F01–F16 acceptance remain open. Only reusable oracle sources,
+their build target and documentation are retained in the branch.
+
+The next qualification pass builds and freezes the complete reference/candidate
+GUI and focused test executables, then restores both production `Face` files to
+their committed contents. GUI SHA256 values are
+`0d5ec9b958573ae7ee7a606a08e9d5537cc88606cca45467e2da8c27bd247f79`
+(rebuilt reference) and
+`999d09c4c9fe6b00020bbb40a77ac9910814411c8ad1104734642c6333d4b197`
+(candidate). Runtime/helper binaries and managed Qt remain unchanged. The frozen
+directories are `gui-A` and `gui-B`; the mutable GUI build currently contains
+candidate artifacts despite restored source and must be rebuilt before reuse
+as a reference. The private `gui-build.json` records targets, source patch and
+all frozen hashes.
+
+Font cascade, row text, optical text, font resolver and scene suites pass on both
+versions with the offscreen/software test configuration. These include 432
+byte-exact CoreText raster cases, 15 font-resolver QtTest entries and 37 scene
+entries. The integrated coverage probes also pass all six font variants. Six
+native Metal component captures (retained/sparse/full, optical/standard) match
+at 3600×2198 with zero channel difference in
+`/tmp/telar-perf-ascii-coverage-pixels-01`. Their probe-generated timing fields
+are explicitly excluded under shared-host load. This establishes scoped visual
+equivalence, not complete GUI input or 120 Hz cadence acceptance.
+
+Full-window qualification against the previously accepted GUI stops during the
+rebuilt reference's setup: the key-window/foreground control fails before any
+responses, and the candidate is not reached. The recorded frontmost `telar`
+process is PID 51675, distinct from owned GUI PID 51410. Both owned runtimes and
+children are confirmed cleaned up. This attempt in
+`/tmp/telar-perf-ascii-coverage-native-qual-01` remains invalid; no focus check is
+relaxed and no native timing conclusion is drawn.
+
+The rebuilt reference's different hash is explained independently: comparison
+with accepted GUI `5a639c5f26f67892698088cd95e31555212e6508dae2e45a441dc58e641caef5`
+finds identical executable code and every other file-backed Mach-O section except
+32 bytes in `__TEXT,__const`. All differences are the low four bytes of eight Qt
+resource modification timestamps. Their positions match the local RCC writer's
+14-byte resource record prefix plus eight-byte timestamp; resource contents are
+unchanged. This is recorded in `reference-sections.json` and
+`reference-data-differences.json`, and does not substitute for native qualification.
+Load remained elevated (15.32 / 19.54 / 19.23 at 11:21); component and native
+acceptance timing have still not started.
+
+At 11:31 the host becomes eligible under the frozen limits, with no active
+compilers. Seven alternating component pairs complete in `pairs-01`: 56 runs,
+85 valid boundary observations, maximum one/five-minute load 4.80 / 6.85 and
+no observed active compiler. No builds, tests or profilers run alongside them.
+Median CPU nanoseconds per operation:
+
+| Operation | Original | ASCII cache | Cache wins |
+| --- | --- | --- | --- |
+| One ASCII query | 9.6580 | 1.4506 | 7/7 |
+| One non-ASCII/out-of-range query | 16.8971 | 17.2167 | 1/7 |
+| 62 one-byte cell coverage checks | 695.275 | 202.650 | 7/7 |
+| Construct face, query A and destroy | 8507.000 | 9483.330 | 0/7 |
+
+Wall-time win counts agree. The Unicode and cold controls reject the predeclared
+contract despite the warm ASCII/row gains. The actual coverage implementation
+changes, so there is no identical-code placement exemption. This candidate is
+rejected, not waiting for native timing; production `Face` still equals the
+original. Its source, qualified GUI artifacts and rejection are retained privately.
+No full-flow speedup or native CPU result is claimed. A possible follow-up is a
+cache scoped to main-thread row-font requests, populated only by actual queries;
+it must first establish correct font-generation invalidation and its own controls.
+The renderer's existing ligature data is not directly reusable by the main-thread
+face: `TerminalFrame` passes a font collection and `ResidentFonts` caches per thread.
+
+## Shared-host measurement qualification, 2026-11-03
+
+The native latency CLI previously recorded only its initial process list. It now
+uses the reusable `tools/benchmark_host.py` gate before preparation, before the
+series, around every attempted variant and after the series. Load limits and
+active-compiler checks are frozen in `host-load.json`; high load or a missing
+observation irreversibly excludes the entire series. Raw results remain, but no
+aggregate is published. The observer source is copied into the measurement's
+source manifest. Direct callers of `measure()` must opt into the gate themselves;
+functional image oracles are not timing acceptance runs.
+
+Twelve focused tests pass, including real runner control flow with mocked host
+observations: high initial load prevents the probe build/workload, and interference
+after a second run prevents aggregate generation even though the first run was
+clean. Other cases cover capture failure, compiler detection, sticky invalidation,
+cleanup ordering, invalid limits and the final checkpoint. The 19 existing native
+comparison tests also pass. No GUI/runtime production behavior changes.
+
+A real CLI attempt in `/tmp/telar-perf-host-load-cli-01` exits 2 at `before-setup`
+under the observed shared load. Its report is `deferred`, with zero started runs;
+no probe library, runtime or GUI was launched. Boundary snapshots have limited
+temporal coverage and are not proof of an otherwise idle machine. The ASCII
+coverage candidate was subsequently rejected by its component controls; all
+full-flow timing/cadence requirements remain open.
+
+## Variable-output sampled work, 2026-11-03
+
+Two fresh diagnostic repetitions in `/tmp/telar-perf-variable-work-profile-03`
+use the frozen accepted GUI `5a639c5f26f6`, runtime `a0b8b9d5826c`, and original
+QtGui `abd4bdf7f504`. Each qualifies 240 measured inputs, four panes with grids
+39×19 (primary), 18×19, 8×19 and 9×19,
+and three variable-ASCII producers at 0.125 MiB/s each. Both offered-rate checks
+pass, and both owned runtimes report complete cleanup. GUI and runtime are sampled
+for eight seconds each, with process-path/hash verification; these instrumented
+runs do not qualify latency, CPU, throughput or cadence. The private controller
+and manifests retain the source and binary identities.
+
+Inclusive stack occurrences, counting nested matches only once within a group:
+
+| Group | Repetition 1 | Repetition 2 |
+| --- | ---: | ---: |
+| GUI `requestRowFonts` | 11 | 10 |
+| GUI `FontCoverage` | 9 | 9 |
+| GUI `updatePaintNode` | 50 | 64 |
+| Qt `renderMergedBatch` | 68 | 52 |
+| WindowServer `SLSObscureCursor` | 91 | 96 |
+| Runtime checkpoint `Snapshot::changed` | 10 | 6 |
+| Runtime `PaneObservationService::refresh` | 10 | 20 |
+| Runtime `CellProjection` | 6 | 7 |
+
+These groups overlap and must not be summed. Sleeping/waiting threads dominate
+the profiles, so counts are not CPU percentages. The cursor path waits in
+`mach_msg2_trap`: local Qt Cocoa `qnsview_keys.mm` calls
+`NSCursor.setHiddenUntilMouseMoves` before IME processing for non-command/control
+keypresses. No cursor/IME behavior is changed, and causality remains unproven.
+Exact per-input timestamps were not retained, limiting interval attribution.
+
+Source inspection identifies an independently testable work reduction:
+`persistence/snapshot.hpp::changed` visits all 256 pane slots and compares/writes
+their stamps on every configured session-store tick, even with four panes.
+An isolated experiment under ignored `out-perf/dlls-checkpoint-scan-01` explores
+ending after the live pane count and retaining the previous extent to detect
+removals. Font coverage remains a small sampled path; its rejected eager cache
+is not reinstated.
+
+## Count-limited checkpoint scan rejected, 2026-11-03
+
+The candidate adds one `size_t` of state and stops after finding the current
+live pane count. It clears stamps up to the previous extent after removals.
+The private component probe extracts the actual A/B `changed()` bodies and
+stamp definitions, substitutes lightweight pane/model fixtures, and applies
+`noinline` equally. Its timings do not measure the full runtime's object layout.
+A deterministic oracle compares 200,513 transitions and settled rechecks,
+including sparse/full occupancy, identity, dimensions, close flags and all
+three revision sources. Native Release, ASan/UBSan and x86-64 under Rosetta pass.
+
+The committed persistence test now checks the real `Snapshot` with owned PTYs:
+directory revision, independent dimension changes, text output without persistent
+changes, combined close flags, revisions, a hole before a live pane, removal of
+the last pane, re-addition and replacement without an intervening observation.
+The focused persistence suite passes against the original and candidate headers,
+including a sanitized candidate translation unit. Existing dependency libraries
+are not sanitized. Final builds have no compiler warnings; formatting and diff
+checks pass. An exploratory full-TU clang-tidy invocation exits zero but emits
+repository-style/header warnings; it is not a clean lint result. The normal
+runtime lint target excludes tests.
+
+Three combined series were discarded when other compilers appeared at their
+boundaries. No partial results were reused. Subsequently each case ran as its
+own complete seven-pair alternating series, with separate host qualification.
+All eight qualify: 240 boundary observations, maximum one/five-minute loads
+4.082/3.753, no active compiler observations. No builds, tests or profilers were
+run alongside these timings. Median process CPU nanoseconds per call:
+
+| Pane state | Original | Candidate | Wins |
+| --- | ---: | ---: | ---: |
+| Empty | 337.725 | 1.971 | 7/7 |
+| One low slot | 348.823 | 3.647 | 7/7 |
+| Four low slots | 394.560 | 12.416 | 7/7 |
+| All 256 occupied | 591.234 | 645.752 | 0/7 |
+| Four highest slots | 373.839 | 406.373 | 0/7 |
+| Four spaced slots | 411.517 | 333.703 | 7/7 |
+| Alternating fourth-pane removal/addition | 370.445 | 12.145 | 7/7 |
+| Directory revision on every call | 396.151 | 12.680 | 7/7 |
+
+Wall-time win counts agree. **Rejected** for the two consistent control losses;
+no production header was changed or native performance victory claimed. Actual
+integration disassembly has different bodies (304 → 472 bytes on AArch64),
+including the live-count work and tail cleanup, so no identical-code placement
+exception applies. The precise contribution of each added instruction is not
+established. x86-64 baseline and v3 lowerings were also generated; Linux runtime
+qualification remains open.
+
+The next candidate is maintaining the occupied extent when `SlotStore` changes,
+then scanning that prefix without a per-slot live counter. This would move work
+from every checkpoint tick to insert/remove operations, at a small bounded memory
+cost. It still needs store-lifecycle oracles, dense/mutation controls and whole
+runtime measurements before acceptance.
+
+## Maintained checkpoint extent: no native CPU win, 2026-11-03
+
+The follow-up in ignored `out-perf/dlls-checkpoint-extent-01` maintains an occupied
+prefix in `SlotStore` on insert/erase and scans that prefix in `Snapshot::changed`.
+Previous stamps beyond a shortened prefix are cleared. It adds one `size_t` per
+store and one to `Snapshot`, without changing the existing full-span `items()`
+API. The runtime uses stores for panes, clients, workspaces, worktrees and
+executions; the mutation cost therefore needs controls beyond pane scanning.
+
+The oracle uses actual copied `SlotStore` implementations and extracted snapshot
+bodies with lightweight pane fixtures. It checks 201,028 transitions, settled
+rechecks, holes, full occupancy, rejected inserts, replacement and stale handles.
+Release, ASan/UBSan and Rosetta pass. Broken extent shrinking and lost removal
+detection are both rejected by negative controls. The real persistence suite
+also passes against A/B and sanitized B through a Clang VFS overlay; production
+headers remain unchanged. x86-64 baseline/v3 code was generated. Linux runtime
+qualification remains open.
+
+Seven alternating pairs per component case all pass their host gates. Median
+process CPU nanoseconds, A → B: empty 337.066 → 2.915, one pane 348.069 → 3.628,
+four low slots 395.146 → 12.472, four highest slots 373.687 → 365.275, spaced
+slots 398.062 → 315.880, mutation followed by scanning 386.719 → 26.210,
+revision changes 388.543 → 13.747, and cold snapshot construction plus scan
+551.648 → 178.760; all win 7/7. Dense occupancy is unresolved at component level:
+581.093 → 598.526 (2/7), then an independently qualified repetition
+594.341 → 584.271 (6/7). Both series are retained. Pure insert/remove, declared
+separately before timing, costs 20.099 → 22.211 ns (0/7); moving work to mutation
+does not make that work free.
+
+The full candidate runtime is `dfee66b94e26`; GUI `5a639c5f26f6`, helper
+`87beebb065f0` and QtGui `abd4bdf7f504` are unchanged. The rebuild of original
+runtime source has identical code, data, addresses and file bytes outside its
+UUID/signature to the accepted runtime; the native A still uses the original
+accepted `a0b8b9d5826c` binary. No production source was installed or replaced.
+
+Real-session A→B→A, B→A→B and B→B→B restore checks pass. The attempted existing
+cross-Zig driver fails at its first Zig seed because it uses the C++ `cqp00001`
+wire client against Zig's different schema; this is not cross-runtime checkpoint
+qualification. Native `/tmp/telar-perf-checkpoint-extent-qual-01` qualifies
+single, splits, tabs and variable fixed-rate output, with byte-identical settled
+PNGs for the three static cases. All owned runtimes report complete cleanup.
+
+`/tmp/telar-perf-checkpoint-extent-native-01` completes six alternating pairs:
+100 measured inputs after 20 warmups, four panes at 1600×1000 with grids 39×19
+(primary), 18×19, 8×19 and 9×19, three variable
+ASCII producers at 0.125 MiB/s each. Every offered-rate check passes. Its 26 host
+observations qualify, with maximum one/five-minute load 4.537/2.964 and no active
+compiler observations. No builds, tests or profilers from this task overlapped
+the series.
+
+| Native metric | Accepted A | Candidate B | Wins |
+| --- | ---: | ---: | ---: |
+| Input-to-present p50, ms | 31.103 | 31.365 | 2/6 |
+| p95, ms | 36.737 | 35.893 | 5/6 |
+| p99, ms | 40.952 | 38.237 | 4/6 |
+| GUI measured CPU, ms/input | 13.705 | 13.812 | 3/6 |
+| Runtime session CPU, ms | 859.904 | 855.974 | 3/6 |
+| Runtime session CPU, ms/second | 53.541 | 53.150 | 3/6 |
+
+The runtime window brackets GUI launch and exit, including setup, warmup and
+boundary-observer time. It is not the GUI measured-input window, and their CPU values are not
+summed. Produced bytes are retained alongside duration/rate: medians
+5,365,760 → 5,386,816 bytes. **Rejected for insufficient native target gain**:
+both runtime CPU metrics win 3/6, below the predeclared 5/6 requirement. This is
+not a claim of a proven runtime regression. Neither the large component gain
+nor p95 improvement overrides the failed target. No further checkpoint variant
+is promoted; larger-cost work remains the next profiling priority.
+
+The external observer is retained as `tools/macos_process_resources.h/.c` and
+`tools/native_runtime_resources.py`, independently of the rejected optimization.
+It queries the verified runtime outside the GUI phase and leaves the native probe
+binary unchanged. CPU conversion uses the recorded 125/3 Mach timebase on this
+host. Fresh self/child controls agree with `getrusage`; invalid-PID and seven
+identity/counter/clock controls reject. Nine Python tests cover representation,
+conversion, receipt preservation, PID reuse and cleanup after capture/native
+failure. All 20 qualification/timing receipts replay identically through the
+source adapter; an owned-child run also verifies actual capture and cleanup.
+The helper builds with `-Wall -Wextra -Werror`; it remains a
+Darwin-only measurement tool, with explicit window limitations documented in
+the flow matrix.
+
+## Attached row text experiment, 2026-11-03
+
+**Rejected for insufficient native CPU gain.** The accepted production scene
+sources are restored; the private candidate remains under
+`out-perf/dlls-attached-row-text-01`. No flow is closed by this experiment.
+
+`TerminalScene::paintRow` detached its retained text root before every changed-row
+update. Local Qt source confirms that removal recursively releases renderer shadow
+nodes, and reinsertion creates them again. The candidate borrowed a caller-owned,
+attached root in `TextScene`, deleting only its shapes/decorations siblings and
+preserving their draw order. It added no cache or persistent storage. A diagnostic
+full-scene run counted 364 reused roots and 53,746 descendants across seven updates:
+all roots were detached in A and attached in B. These are application node counts,
+not measured heap allocations or a count of all renderer work. Geometry/material
+updates and chunk replacement still occur.
+
+The existing scene probe performed all updates before its first rendered frame.
+It now has `--render-each-frame`, advancing from frame swaps, and
+`--floating-window` for tool-window treatment by tiling managers. Synchronization
+timing includes immediate renderer dirty notifications but excludes later rendering
+and presentation. The comparator passes these options, validates the schedule and
+uses the shared host-load gate around every variant. The changing-text/decoration
+oracle now explicitly covers standard and optical rendering.
+
+All 38 scene checks pass for A and B with both software and Metal rendering.
+Six native full/sparse/retained × standard/optical comparisons have identical RGBA
+pixels. Six additional comparisons confirm identical final pixels between the
+probe's batch and render-between-updates schedules. The first nonfloating image comparison was invalid: the window manager
+resized only A. Both partial ASan/UBSan builds initially reported libc++ container
+annotation failures in the unchanged, partly uninstrumented `Screen::reserve` path.
+Both pass all 38 checks with container annotations and leak checking disabled;
+ordinary address/UB checks remain enabled. Dependencies are not fully instrumented.
+This is qualified partial sanitizer coverage, not a clean full-dependency run.
+
+One qualified seven-pair component series measures full optical synchronization at
+7.971 → 7.429 ms/update, winning 7/7 with identical pixels. The sparse optical
+series is discarded after eight runs when the sampled one-minute load reaches
+7.859, above the fixed limit of 5. Remaining component cases are not timed. No
+partial aggregate or replacement low-load tail is used.
+
+Native qualification (`/tmp/telar-perf-attached-row-text-qual-01`) passes single,
+splits, tabs and variable split load; all three static captures are byte-identical.
+The unchanged accepted GUI `5a639c5f…` and runtime `a0b8b9d5…` are the reference;
+candidate GUI is `2770f96f…`, using the same runtime/helper/Qt. The rebuilt reference
+GUI is the previously characterized `0d5ec9b9…`; native timing uses the accepted
+binary directly. AArch64 disassembly is archived; this variant has no new SIMD,
+bit manipulation or target-specific kernel. No x86/Linux execution is claimed.
+
+Six alternating native pairs each contain 100 inputs after 20 warmups, four panes
+in a 1600×1000 window with grids 39×19 (primary), 18×19, 8×19 and 9×19, and three variable ASCII producers at
+0.125 MiB/s each (`/tmp/telar-perf-attached-row-text-native-01`). All rates and owned
+process cleanup pass. All 26 host observations qualify, with maximum one/five-minute
+loads 3.687/3.567 and no active compiler observations. Boundary checks cannot exclude
+every transient source of interference.
+
+| Native metric | Accepted A | Candidate B | Wins |
+| --- | ---: | ---: | ---: |
+| Input-to-present p50, ms | 31.523 | 31.062 | 5/6 |
+| p95, ms | 37.414 | 37.428 | 4/6 |
+| p99, ms | 41.113 | 41.090 | 4/6 |
+| GUI measured CPU, ms/input | 14.683 | 13.797 | 3/6 |
+| Runtime session CPU, ms | 894.937 | 875.075 | 2/6 |
+| Runtime session CPU, ms/second | 55.382 | 54.448 | 2/6 |
+
+The runtime observer brackets the whole GUI session, not its measured-input
+interval; the CPU windows are not summed. Median background production is
+5,395,456 → 5,388,416 bytes. The predeclared target requires GUI CPU wins in at least
+5/6 pairs; 3/6 fails even though its median is lower. No consistent native regression
+is established. The component gain does not override that failed target, and no
+additional native series is run to seek a favorable result. Only the reusable
+probe/comparator/oracle changes are retained.
+
+## Lazy TerminalItem ASCII coverage — adoption deferred
+
+Starting from `036d129d1`, `out-perf/dlls-terminal-font-requests-01` tests a
+GUI-thread cache of primary-face coverage. Each TerminalItem gains 128 bytes of
+unknown/missing/present state, cleared when its FontCollection changes. Repeated
+ASCII avoids UTF-8 decoding and FreeType charmap lookup. Missing coverage still
+requests fallback on every occurrence; Unicode and invalid-byte normalization
+keep their previous path. There is no additional heap allocation count, but the
+TerminalItem allocation grows. This differs from the rejected eager per-Face
+cache: no constructor precomputation or shared mutable Face state is introduced.
+
+The source-extracted oracle uses actual requestRowFonts and collection-install
+bodies with real CellValue, Face, FontCoverage and QString normalization. Five
+faces, font changes, repeated missing requests, every one/two-byte string,
+Unicode boundaries and seeded cell flags produce 889,336 cells in 8,246 records.
+Reference and candidate emit exactly 761,710 fallback requests. The promoted
+`check_terminal_font_requests.py` also compares roles; both 10,018,306-byte streams
+have SHA-256 `651a95191d7f3db30fca1864e55bc9abde0a90e6e2006e7d0460c12d70970b24`.
+A deliberately omitted reset is rejected. Five malformed-record controls reject
+truncated header/cell data, oversized text, invalid width and unknown font index.
+The private ASan/UBSan oracle also passes; Face/probe code is instrumented, whereas
+Qt/FreeType/HarfBuzz dependencies are not. Leak checking is disabled. Native font
+discovery, asynchronous completion and rendering are outside this facade.
+
+A separate census over 100,000 warm ASCII rows counts 25.6 million primary Face
+coverage calls in A and zero in B. The Unicode control keeps 32 million calls;
+128 unique cold ASCII scalars keep 12.8 million calls in both. The catalog facade
+does not execute real secondary coverage lookup, so these are primary-method
+counts rather than total application calls or allocation counts. No census
+instrumentation is used for timings. Seven alternating component pairs give:
+
+| CPU ns/row | Reference | Candidate | Wins |
+| --- | ---: | ---: | ---: |
+| Warm ASCII | 3356.55 | 401.32 | 7/7 |
+| Unicode | 4780.12 | 4827.99 | 3/7 |
+| Missing ASCII | 2246.54 | 879.55 | 7/7 |
+| Cold 256-cell rows | 3336.75 | 1494.43 | 7/7 |
+| Cold 128 unique ASCII cells | 1664.49 | 1323.84 | 7/7 |
+
+All 150 host observations qualify: maximum one/five-minute load 2.069/2.281,
+no active compiler observations. Cold unique ASCII benefits from bypassing the
+UTF-8 wrapper despite having no coverage-call savings. ARM64, x86-64 and x86-64-v3
+assembly compilation succeeds for both variants; only ARM64 runs natively.
+The full GUI method grows from 600 to 724 code bytes, using cached byte tests to
+skip calls. This is work elimination, not a claim of globally fewer instructions.
+
+Both GUIs pass native input/rendering, cursor blink, split/tab and configuration
+reload controls. Single/splits/tabs static PNGs are identical, and variable split
+load qualifies. Native timing uses the accepted GUI `5a639c5f…`, candidate
+`5c57b1b5…`, unchanged runtime `a0b8b9d5…`, helper `87beebb0…` and QtGui `abd4bdf7…`.
+The separately rebuilt reference is `0d5ec9b9…`. All subsequent timings use frozen
+stages, not the mutable build directory.
+
+Six alternating loaded pairs contain 100 measured inputs after 20 warmups. The
+1600×1000 window has grids 39×19, 18×19, 8×19 and 9×19, with three variable ASCII
+producers at 0.125 MiB/s each. All 26 host observations qualify (maximum
+one/five-minute load 2.987/2.387, no active compilers). Results:
+
+| Native metric | Accepted A | Candidate B | Wins |
+| --- | ---: | ---: | ---: |
+| Input-to-present p50, ms | 31.389 | 30.627 | 3/6 |
+| p95, ms | 37.325 | 37.380 | 3/6 |
+| p99, ms | 38.605 | 40.845 | 2/6 |
+| GUI CPU, ms/input | 14.594 | 14.389 | 5/6 |
+| Runtime session CPU, ms | 895.038 | 923.614 | 2/6 |
+| Runtime session CPU, ms/second | 55.650 | 57.407 | 2/6 |
+
+The CPU target meets the predeclared 5/6 gate; the worse p99 median and runtime
+trend are retained. Runtime counters cover the whole GUI session, not the GUI
+input interval, and the windows are not summed. Median background bytes are
+5,371,328 → 5,371,840. This result alone does not accept the candidate.
+
+The separate single-pane control passes its no-consistent-loss criterion over
+six pairs, each with five idle seconds and 100 inputs after 20 warmups. GUI CPU
+is 2.452 → 2.467 ms/input (3/6); idle CPU is 3.233 → 4.617 ms/second (3/6).
+Input p50/p95/p99 are 24.693 → 24.608, 32.640 → 29.958 and 33.695 → 33.260 ms
+(3/6, 5/6, 4/6). All 26 host observations qualify, maximum one/five-minute load
+3.268/2.929. The higher idle median is a mixed result, not an established saving.
+
+The first tab-control series is incomplete: the accepted baseline times out on
+its first input in round 1. A separate diagnostic reproduces that baseline failure.
+The expected cyan pixel reaches GPU readback, but drawable 191 and 192 report
+zero presentedTime, including a delayed recheck. Focus and geometry are valid;
+all owned processes clean up. The cause of the zero timestamp is not established.
+Neither incomplete series contributes timing evidence. The complete replacement
+series also stops on its first input, this time in B during round 2. All host
+observations pass in both attempts; neither series completes. The second failure
+has no diagnostic readback enabled, so its cause is not inferred from the first.
+Both incomplete series remain excluded. Positive native presentation remains
+mandatory; no further timing retry is used to seek a favorable outcome. Adoption
+and independent Zig/cadence comparison remain open. The production source is
+still the accepted baseline.
+
+A separate current-stack cadence diagnostic completes for A, B and independent
+Zig (`/tmp/telar-perf-terminal-font-requests-cadence-qual-01`). It uses the unchanged,
+previously fault-qualified phase probe and a current-driver adaptation with the
+owned-producer completion gate. The 240 Hz producer, native pixels, focus, geometry,
+positive presentations and cleanup qualify in all three runs. All eight host
+observations pass; maximum one/five-minute load is 1.760/2.120. Results are single
+observations, not paired acceptance:
+
+| Cadence diagnostic | Accepted A | Candidate B | Independent Zig |
+| --- | ---: | ---: | ---: |
+| Changed content frames in six seconds | 688 | 683 | 626 |
+| Changes/s, first-to-last timestamps | 114.660 | 113.825 | 104.312 |
+| Longest changed-content gap, ms | 16.667 | 29.166 | 16.670 |
+| Stable native refresh reference | 120.0006 Hz | Unqualified phase change | 120.0006 Hz |
+| Two-refresh intervals | 32 | Unqualified | 94 |
+
+B's reference changes phase, so its missed-refresh classification is unavailable;
+the 0.25 ms native residual and 5% reference tolerances remain unchanged. A and Zig
+both fail to sustain a content change at every qualified refresh. GUI CPU totals
+are 0.612/0.692/0.675 seconds over separately bracketed 6.292/6.283/6.018-second
+windows; these are unpaired diagnostics with probe overhead still open. The data
+does not establish a C++/Zig win or a cache regression. Adoption is deferred because
+valid tab controls and paired cadence evidence are missing, not because a
+consistent regression has been demonstrated. Only the reusable oracle and report
+are retained. The next diagnostic will inspect actual pacing decisions before
+changing timers or inferring a scheduling cause.
+
+## Pacing-decision census and fractional deadline prototype
+
+`out-perf/dlls-pacing-decisions-01` instruments only the accepted WindowFramePacer
+with a bounded 65,536-event ring, atomic publication and an exit-time dump. It logs
+configuration, admitted/deferred requests, timer delivery and prepared frames. The
+instrumented GUI is `68ad271c…`; its fixed buffer and logging overhead are diagnostic
+only. Production source is restored after building. The first two runs do not
+activate logging because the isolated launcher strips inherited TELAR variables.
+They retain valid native records but have no pacing trace and cannot support
+pacing attribution. The corrected launcher supplies the owned output path directly
+and requires its trace artifact.
+
+Two corrected six-second observations (`/tmp/telar-perf-pacing-decisions-02`) record
+369 and 287 deferred requests. Their millisecond ceiling adds median 0.650/0.735 ms
+and maximum 1.000/0.999 ms to the requested remaining deadline. Both configure an
+8,333,334 ns GUI interval. They record 682/676 preparations, and neither ring fills.
+Both display references change phase; the second producer also suffers an 86.993 ms
+write delay despite passing the existing half-second offered-rate buckets. Thus
+these traces establish the extra requested wait, not its share of missed refreshes
+or a performance improvement. All six host observations qualify, maximum
+one/five-minute load 2.596/2.438. Boundary load checks cannot exclude such transient
+stalls.
+
+A twenty-sample clock check compares CLOCK_UPTIME_RAW brackets with
+CACurrentMediaTime. Exact integer bracketing initially fails because conversion to
+integer nanoseconds truncates fractional Mach ticks; the largest excursion is
+0.688 ns. Every sample fits with one nanosecond of integer quantization. The
+separate native 0.25 ms residual and 5% display-reference criteria are unchanged.
+
+`out-perf/dlls-precise-frame-deadline-01` then freezes an application-only candidate:
+QChronoTimer replaces QTimer for deferred delivery, preserving single-shot/precise
+behavior, eligibility, input grace, phase anchoring and the existing INT_MAX
+millisecond cap. Stop precedes setInterval/start to avoid Qt restarting an already
+active timer twice. This is separate from the deferred font cache and includes no
+trace buffer. Candidate GUI SHA-256 is
+`adae0eb6af0f1bd87ecd3bdf3803d08f84ff61cff9f47f83ba2cf02cb7fa8686`;
+reference GUI remains `5a639c5f…`, runtime/helper/Qt remain unchanged.
+
+All 18 window-adapter tests pass for each build. The unchanged pure FramePacer
+corpus has 32,174 operations and byte-identical 434,071-byte outputs, SHA-256
+`f2883262f71149bc561dd605286317cbc6caa307a13afb68e457c9482f062b5b`.
+Its probe binary is also identical across A/B. Native single/splits/tabs static PNGs
+match exactly and variable split load qualifies. These are functional checks, not
+accepted latency measurements. ARM64 defer assembly shrinks 484 → 468 bytes;
+QChronoTimer stop/setInterval/start replace the old timer call and ceiling
+arithmetic. No x86/Linux execution or new sanitizer result is claimed.
+
+The local Qt 6.12 source exposes a further limit: QTimerInfoList::timerWait in
+`qtimerinfo_unix.cpp` rounds a positive remaining duration up to milliseconds, and
+both the generic Core Foundation dispatcher and the actual Cocoa GUI dispatcher
+consume that rounded duration. For this GUI the relevant caller is
+QCocoaEventDispatcherPrivate::maybeStartCFRunLoopTimer in
+`qcocoaeventdispatcher.mm`, which passes it to CFRunLoopTimer. QChronoTimer preserves its internal deadline,
+but changing the application wrapper alone does not guarantee an unrounded native
+wake. This additional rounding must not be omitted from the hypothesis.
+
+One fresh diagnostic per stack (`/tmp/telar-perf-precise-frame-deadline-cadence-qual-01`)
+qualifies native content and producers. Accepted A records 686 changes in six
+seconds (114.326 changes/s), B 684 (114.072), and independent Zig 661 (110.154).
+A and Zig have stable 120.0006 Hz references with 34/59 missed opportunities; B's
+phase changes, so its missed-refresh classification is unavailable. All eight
+host observations pass, maximum one/five-minute load 2.888/2.917. These unpaired
+observations establish neither a win nor a regression. The six-pair cadence
+acceptance controller is prepared but is not run after the failed reference
+qualification. The candidate is not adopted; valid cadence acceptance and all
+input/idle regression series remain outstanding. The working production source
+is restored to A. The mutable GUI build contains the private candidate and must
+be rebuilt before being used as a baseline; frozen accepted stages are unchanged.
+
+## Fractional Cocoa timer wait experiment
+
+`out-perf/dlls-qt-timer-wait-01` isolates the second rounding site in Qt 6.12.
+A private QtCore relink returns the positive nanosecond remainder directly on
+Darwin; other platforms retain the existing millisecond ceiling. Timer eligibility,
+activation deadlines and storage are unchanged. Installed Qt and its source/object
+files are untouched. The Cocoa dispatcher already accepts fractional seconds.
+
+Original QtCore SHA-256 is `ab7cec95…`, candidate `5a49ee8a…`. An unchanged control
+relink has exactly the original 3,951,112-byte executable text section, SHA-256
+`98c46d0e23c0bce0cc9b98f0646271e44ebbaeacbde69c01acfa02d41a71726b`;
+all link inputs are fingerprinted. Six full-TU assembly compilations pass for
+A/B on ARM64, x86-64 and x86-64-v3. ARM64 timerWait removes the reciprocal multiply,
+shift and round-up sequence. This does not establish whole-application CPU savings
+or Linux/x86 execution.
+
+The first QCoreApplication probe is unsuitable: it selects QEventDispatcherUNIX.
+The corrected QGuiApplication probe creates no window and verifies the actual
+QCocoaEventDispatcher, loaded QtCore path/hash, cancellation and no early delivery.
+Both libraries pass those checks and all 18 existing window-adapter tests; the
+latter use QCoreApplication and therefore are not Cocoa-specific tests.
+
+Seven alternating pairs per case deliver 1,200 measured precise QChronoTimer
+callbacks after 60 warmups. Fractional waits are 0.25/0.5/0.75/1.25/1.5/2.25 ms;
+integer controls are 1/2/3 ms. Raw samples are retained without trimming.
+`paired-01` is entirely discarded when load1 reaches 5.250488. Fresh `paired-02`
+passes all 58 host observations, maximum load1/load5 3.620/2.907.
+
+| Timer delivery lateness | A median | B median | B wins |
+| --- | ---: | ---: | ---: |
+| Fractional p50 | 1,054.500 us | 258.146 us | 7/7 |
+| Fractional p95 | 1,568.229 us | 627.133 us | 7/7 |
+| Fractional p99 | 1,598.335 us | 648.665 us | 7/7 |
+| Integer p50 | 553.584 us | 549.875 us | 6/7 |
+| Integer p95 | 827.398 us | 821.052 us | 7/7 |
+| Integer p99 | 870.978 us | 854.965 us | 7/7 |
+
+Fractional CPU/event is mixed, 36.378 → 36.188 us, 3/7 wins; integer is
+35.963 → 34.932 us, 5/7. Integer maximum lateness worsens from median 1.021 to
+1.486 ms, 2/7 wins. This maximum was outside the declared component gate and is
+retained as an unresolved tail observation. No callback fires early. These are
+component delivery latencies, not input latency or presented content FPS.
+
+Native qualification combines this private library with the preceding QChronoTimer
+GUI candidate, against accepted GUI/Qt A, with the same runtime/helper. Actual
+loaded QtCore paths are checked from dyld logs. Single/splits/tabs static PNGs match
+exactly; variable split load also qualifies. Six-second cadence diagnostics in
+`/tmp/telar-perf-qt-timer-wait-cadence-qual-01` verify content and producer coverage:
+A records 678 distinct changes (113.227/s), B 684 (114.072/s), independent Zig 701
+(116.830/s). A/B display references change phase and cannot qualify missed-refresh
+counts; Zig qualifies at 120.0006 Hz with 19 missed opportunities. The diagnostic
+launcher enables dyld logging, so these observations are not paired acceptance.
+No six-pair native target or input/idle regression series is accepted. This remains
+a component gain with deferred adoption; working Qt/application source stays at A.
+
+## Retained runtime cell deadline candidate
+
+`out-perf/dlls-runtime-cadence-deadline-01` isolates a difference from the real Zig
+attachment path. Zig saves the deadline when deferring a frame and consumes it on
+the next preparation attempt. C++ recomputes `FramePacer::deadline(now)` when it
+wakes; once a credit has accrued this returns null, so record() anchors at the late
+wake instead of the scheduled cadence slot. With a 10 ms interval and a 3 ms late
+wake, accepted C++ waits another 10 ms rather than the remaining 7 ms.
+
+The candidate adds one optional time point to Attachment and exchanges it out at
+the start of cell preparation. A pacing deferral stores the deadline; a successful
+incremental preparation passes the previous deadline only if it has elapsed.
+Early input and output-close bypasses cannot anchor in the future. Snapshot,
+outstanding ACK, synchronized-output and burst-credit rules remain intact. This
+matches Zig's handling of retained deadlines, including clearing them on an early
+return. No timer, polling loop, GUI/Qt change or dynamic allocation is added.
+
+The new `attachment-pacing-tests` target exercises actual AttachmentDelivery with
+explicit time points and real decoded/ACKed frames. Ten scenarios cover on-time,
+1 ns/3 ms/9 ms late wakes, repeated deferrals, ACK backpressure, early input,
+snapshot bypass, interval reconfiguration, output closure, synchronized holds and
+bounded catch-up bursts. Accepted source fails the scheduled-wake/reconfiguration
+and early-output-close expectations; the candidate passes. An isolated copy of
+accepted headers compiled with the same expanded test emits exactly the same
+48,921 re-encoded frame-body bytes as the candidate, SHA-256
+`af2f511d8be5ba6c402278459e4caa5e289954e351924014888df459831fe500`.
+The capture decodes messages then serializes their complete bodies; it is not a raw
+socket capture. Existing client-delivery and text test groups pass separately. Fixtures own and
+reap their child processes. These deterministic checks prove the scheduling
+correction and matched output, not native performance.
+
+A/B assembly compilations cover ARM64, x86-64 and x86-64-v3 on macOS with
+both the test allocator and the actual synchronized/budgeted runtime allocator.
+Attachment grows from 32,592 to 32,608 bytes on all three, 16 bytes per attachment
+and at most 1,024 bytes per client's 64 attachments. The emitted cells function
+has 269 → 279 ARM64 instructions and retains its 128-byte stack frame; x86-64 and
+v3 have 292 → 302 instructions. The scheduled path now uses the existing cadence
+slot division. This is a scheduling correction, not a claim of fewer instructions.
+Both touched headers compile independently. Address/undefined sanitizers pass on
+the complete pacing test translation unit and preserve the wire digest; runtime-core
+and external dependencies are uninstrumented and leak detection is disabled.
+Linux or Rosetta execution is not yet established.
+
+Frozen B runtime SHA-256 is
+`66675b100049f967b5523ee4a26ff118fd83fc8aab42e1a303b23dbe34d837a6`;
+accepted A is `a0b8b9d5…`. Both use accepted GUI `5a639c5f…`, helper `87beebb0…`
+and original Qt. Native single/splits/tabs static captures are byte-identical;
+variable split load also qualifies. All 18 host observations pass. The initial
+cadence diagnostic has content-qualified A/B/Zig rates of 113.079/116.162/113.992
+changes/s. A's display reference changes phase; B and Zig qualify at 120.0006 Hz.
+B also has a 50 ms presented gap and a 52.561 ms producer delay. These observations
+cannot establish a paired win. Two fresh native cadence series remain ineligible: `cadence-pairs-01` reaches
+the last A run before its reference changes phase; `cadence-pairs-02` fails the
+first A reference. All 25/3 recorded host observations pass (maximum load1
+2.815/2.469), but neither controller completes host-series qualification. No
+partial performance aggregate is accepted. Input/idle regression controls and
+independent Zig/full-flow acceptance remain open.
+
+`single-pairs-01` completes five alternating input pairs, then stops on round 5 B:
+the first input after five seconds idle has no qualified presentation within two
+seconds. The owned producer received the key and exits cleanly; the runtime and
+children are reaped. All 23 recorded host boundaries pass. The entire incomplete
+series is ineligible, with no aggregate accepted. Four separate after-idle diagnostic
+startups (`idle-diagnostic-01`, A/B twice, 20 warmups and three measured markers)
+complete with readback logging. Accepted A also produces verified marker pixels
+whose drawable presentedTime remains zero at the 100 ms recheck; later drawables
+have positive timestamps. The diagnostic retains those drawable references and
+logs on the GUI thread, so its timings are not acceptance evidence. It does not
+reproduce the timeout or establish its cause. Zero timestamps remain rejected.
+
+The subsequent `load-pairs-01` series completes eight native runs with valid content
+and offered rates, but the host rejects the eighth run's final boundary: load1 is
+5.443848 against the limit of 5, with no active compiler observed. The entire series
+is discarded; earlier latency/CPU differences are not accepted evidence. The failed
+boundary's runtime/children exit and socket cleanup complete normally. The following A/B diagnostic profile also stops after the first A run: both
+owned eight-second samplers finish, all 240 inputs and offered-rate checks pass,
+but final load1 is 5.047852. Only A is captured, so no A/B profile comparison is
+available. Its raw stacks remain diagnostic observations, not a cost attribution.
+The third cadence series also fails the first A reference, with all three host
+boundaries valid and maximum load1 2.592285. No new native timing series is accepted.
+
+Post-processing the four failed A references finds host-clock phase adjustments
+inside the observation windows, at offsets ranging from 0.204 to 5.933 seconds.
+Some adjacent reference gaps are about 10.43/9.39/8.86 ms; others about
+6.24/7.28/7.81 ms, while the reported nominal period remains 8.33329 ms.
+`reference-failures.json` retains the exact timestamps. This is not exclusively
+startup behavior and does not justify dropping samples or enlarging tolerances.
+It establishes an unstable reference, not the physical display's causal mechanism.
+The next investigation is the actual Qt/Cocoa display scheduling policy. The
+runtime change remains an unaccepted working-tree candidate; accepted frozen
+stages are unchanged. The focused CTest and final source rebuild pass, and the
+rebuilt runtime is byte-identical to frozen B. All F01–F16 acceptance remains open.
+
+## Application and independent display-link clock census
+
+`out-perf/dlls-display-link-census-01` adds a private, bounded callback recorder to
+the native cadence probe. It wraps Qt's CVDisplayLinkSetOutputCallback and delegates
+the original callback with unchanged link, timestamps, flags, output-flags pointer
+and context. A 32-link/32,768-sample buffer records callback and input/output host
+clock values; no logging or dynamic allocation occurs inside the callback. Image
+identity identifies `libqcocoa.dylib`, and the native window/display ID must match.
+This changes observer overhead and is diagnostic only. GUI, runtime and installed
+Qt binaries remain unchanged.
+
+The first hook uses dlsym(RTLD_NEXT), which resolves back to the interposed setter
+and recurses. Its private GUI reaches the harness's 105-second timeout; a one-second
+sample proves recursive `qt_set_display_callback` calls. The owned GUI/runtime are
+terminated and cleanup completes. That run is invalid and its hook/binary/logs are
+preserved. The corrected hook calls the original symbol directly from its own
+interposing image. A standalone Core Video test passes with and without the hook;
+with it, every recorded callback reaches the delegate with the original context.
+
+`/tmp/telar-perf-display-link-census-qual-02` validates A and B content and producer
+coverage with exactly one Qt link on display 1. Each six-second window contains
+720 application and 720 independent reference callbacks; both clocks and all native
+intervals pass the unchanged 5% reference/0.25 ms interval criteria. Median Qt minus
+reference output timestamps are -1.625 us (A) and -20.396 us (B). No phase anomaly
+is reproduced. Both stacks use the accepted GUI/Qt; B uses only the retained
+runtime deadline candidate. All six host observations pass, maximum load1 3.291.
+These instrumented observations are not paired timing acceptance.
+
+A twenty-second extension is invalid because the original producer stops at nine
+seconds. Producer completion correctly rejects the uncovered observation window;
+the nominal success returned by the native observer is not accepted. The next
+private prefix, `out-perf/dlls-display-link-census-12s-01`, uses twelve seconds of
+observation and fifteen seconds of the same 240 Hz producer. A preflight verifies
+all 3,600 unique reversible color codes fit the existing 12-bit encoding and cover
+the complete warmup/observation/drain interval. Pixel decoding and tolerances are
+unchanged.
+
+`/tmp/telar-perf-display-link-census-12s-qual-01` then passes content, producer and
+clock checks for A/B. Each window has 1,440 callbacks from each clock. Their median
+output-time difference is -1.583/-1.271 us, with no phase anomaly or off-grid native
+interval. All six host observations pass, maximum load1 2.438. AC power is attached,
+and pmset records no thermal/performance warning; these observations do not prove
+that every possible scheduling or power limit is absent. The failed references'
+cause remains unestablished. After these stable diagnostic windows, the original
+uninstrumented six-pair cadence controller, `cadence-pairs-04`, fails on round 4 A
+after nine runs: the reference changes phase and the longest native gap is
+20.833 ms. All 19 recorded host boundaries pass, maximum load1 4.790; the incomplete
+series remains ineligible. No partial timing aggregate is accepted.
+
+A bounded diagnostic reproduction then runs accepted A only, stopping at the first
+phase anomaly or six twelve-second windows. It stops on the third window in
+`/tmp/telar-perf-display-link-census-reproduce-01`. All eight host observations pass,
+maximum load1 3.507. Every window contains 1,440 Qt and 1,440 independent reference
+callbacks. The first two windows have no detected phase or native interval anomaly.
+In the third, both clocks report three out-of-tolerance gaps around 4.008–4.030 s:
+Qt has 6.240375/7.281750/7.806292 ms and the reference has
+6.239625/7.281375/7.806125 ms. The native presentation interval starting at 3.966398 s
+is 29.166417 ms, outside the unchanged 0.25 ms integer-period criterion.
+
+This reproduces the phase adjustment in the application's actual scheduling clock
+as well as the independent observer. It does not establish physical scanout behavior
+or the causal mechanism, and the bounded, stop-on-event experiment is not an event
+frequency estimate. Both timestamp streams and the native frames are retained in
+the raw results; `clock-comparison.json` records their comparison. No tolerance is
+relaxed and no measured interval is removed. The retained runtime deadline candidate
+still requires valid paired performance and regression evidence.
+
+The following four-static-pane input regression series, `splits-pairs-01`, also
+remains ineligible. Eight runs complete their native content checks, but the host
+gate rejects the final boundary of round 3 A: load1 is 6.341797, above 5, with no
+active compiler observed. The whole series is discarded without an aggregate.
+No other worktree or process is attributed as the cause of the host load.
+
+## Presented-frame copy work census
+
+`out-perf/dlls-presented-frame-census-01` compiles a private friend-based type census
+against the actual Application header and the GUI's existing Release compile
+command. On ARM64, PresentedFrame is 18,312 bytes; its 64 PresentedPane slots are
+9,728 bytes (152 each), HistoryHoverFrame is 6,744 bytes and TabDropSurface is
+1,616 bytes. Generated assignment, copy construction and move construction each
+visit all 64 pane slots. The queued
+frameSwapped callback captures the preparation by value regardless of the active
+pane count. This identifies capacity-dependent copy work, not a proven bottleneck
+or a byte count for every executed copy: optional members have conditional paths.
+
+The previous two qualified variable-output diagnostic profiles have 10 and 11
+inclusive samples under the frameSwapped callback. Most sampled descendants are
+Qt event posting and CFRunLoop wakeup; only the second profile contains a sampled
+memmove below that callback. Counts are not CPU percentages. No production frame
+storage, ownership, generation handling or scheduling is changed on this evidence.
+
+## Shared prepared-frame snapshots: component candidate
+
+`out-perf/dlls-frame-snapshot-01` tests retaining the prepared frame in the queued
+callback rather than copying and moving its full 18,312-byte value. The candidate
+keeps the current preparation in a shared holder. At beforeSynchronizing, it reuses
+that preparation only when it has no other owners; otherwise it allocates a fresh
+frame with the existing application allocator. Each queued callback retains its
+own immutable snapshot. No queued frame is discarded and existing window-generation,
+machine-view and pane-generation guards remain. Qt documents that the GUI thread
+is blocked during beforeSynchronizing. The production source is restored after
+freezing the candidate; this is not an accepted optimization.
+
+The reusable `services/gui-cpp/tools/check_presented_frames.py` extracts only the
+actual observeFrames implementation. Its QObject facade uses the current real
+PresentedFrame type, QQuickWindow signals and queued callbacks, but simulates
+preparation and presentation. It checks active pane identities/revisions, populated
+link snapshots, history/tab surfaces, duplicate swaps, queue backlogs, unswapped
+preparations, window-generation changes, null windows and receiver destruction.
+The expanded corpus delivers 1,172 expected snapshots with the same A/B digest
+`10422253783135734446`. A weak-reference check verifies that a replaced link snapshot
+survives while queued and expires after its last callback. Removing the reuse guard
+fails the oracle. The same positive and negative controls pass with address/undefined
+sanitizers on the probe translation unit; Qt dependencies are uninstrumented and
+leak detection is disabled. Native scene, weak QObject lifetime and runtime ACK
+behavior remain outside this facade.
+
+The earlier private timing probe omits the added weak-reference observation. Seven
+alternating pairs in `/tmp/telar-perf-frame-snapshot-component-pairs-01` pass all 170
+host boundaries (maximum load1 2.372). Each run measures 50,000 preparation/queue/
+delivery cycles after 1,000 warmups, with real Qt events on the offscreen platform.
+It includes simulated preparation and presentation, not native rendering:
+
+| Component case | A median us/frame | B median us/frame | B wins |
+| --- | ---: | ---: | ---: |
+| One pane, drain each frame | 18.511 | 17.244 | 7/7 |
+| Four panes, drain each frame | 18.479 | 17.307 | 7/7 |
+| 64 panes, drain each frame | 18.539 | 17.306 | 7/7 |
+| Four panes, drain every eight | 3.471 | 3.220 | 7/7 |
+| Four panes plus history | 18.785 | 17.521 | 7/7 |
+| 64 panes plus history, drain every eight | 3.774 | 3.530 | 7/7 |
+
+Rebuilding unmodified GUI source yields SHA-256 `0d5ec9b95857…`, different from
+accepted `5a639c5f26f6…`. A complete byte-difference audit accounts for all 207
+changed bytes: eight generated Qt RCC node modification timestamps, LC_UUID and
+code signature. Executable text is byte-identical (6,850,340 bytes, SHA-256
+`78d11211a1dde580a278f9b4aa1ccdb13530a21dc99e1c46f2b2bbd8d89c7659`),
+and no payload difference is unexplained. This does not claim identical whole files.
+The original accepted frozen GUI remains the native timing baseline.
+
+Frozen candidate GUI SHA-256 is
+`2aafe1147befc8de58b03ee65961293dfeb9a2fc14853bf3d9116d9e88d7fa8c`.
+It uses accepted runtime `a0b8b9d5826c…`, helper `87beebb065f0…` and original Qt;
+the unaccepted runtime deadline candidate is not combined with this experiment.
+Both rebuilt control and candidate pass six focused native QuickTest cases:
+history footer/row delivery, scene synchronization, queued frames across window
+rebinding, hidden terminal frames and resuming a deferred frame. Init/cleanup also
+pass (8/8 each). `/tmp/telar-perf-frame-snapshot-native-qual-01` then qualifies
+single/splits/tabs with byte-identical PNGs, plus the variable split-load workload.
+All 18 host observations pass, maximum load1 2.305.
+
+The source-extracted observer compiles to assembly for macOS ARM64, x86-64 and
+x86-64-v3; this is not Linux or Rosetta execution. Inspection of the actual frozen
+ARM64 binaries finds the frameSwapped callback shrinks from 198 to 73 emitted
+instructions, including its event-dispatch/destruction branches. Its stack frame
+shrinks from 18,432 to 112 bytes, and the queued callable's operator-new request
+from 18,344 to 48 bytes. These are static code/allocation-request observations,
+not sampled instruction counts or total process allocation/memory measurements.
+Before-synchronization work now includes the reference-count guard and allocating
+a fresh frame when an older snapshot is still held.
+
+`native-contract.json` requires at least five of six GUI CPU/input wins under
+variable split output, with no consistent latency or GUI/runtime CPU regression
+in single/splits/tabs controls. The original frozen GUI remains A; only the GUI
+changes in B. Native paired whole-client evidence is required for adoption; the
+component result alone does not establish a full-flow win or 120 Hz acceptance.
+
+`/tmp/telar-perf-frame-snapshot-load-pairs-01` completes six valid native pairs,
+100 measured inputs plus 20 warmups per run and a five-second input-free interval.
+The three background producers remain active during that interval. All 26 host
+observations pass (maximum load1 4.203), with content and offered rates qualified.
+GUI CPU/input has only 3/6 wins: median 20.641 → 20.144 ms. This misses the
+preregistered target, so the candidate is not adopted as a CPU optimization and
+the production source remains restored. The smaller static allocation request and
+component win do not override this native result.
+
+Median input-to-positive-presentation latency is 32.676 → 30.810 ms, 6/6 wins;
+p95 is 37.419 → 37.391 ms and p99 41.034 → 41.039 ms, both 3/6. Runtime session
+CPU/s also has 3/6 wins. The median-latency result is exploratory, not a retroactive
+replacement for the primary CPU criterion. Post-processing excluding each run's
+20 warmups finds GPU-completion latency and reported GPU-work medians each have
+4/6 wins. Absolute input/presentation timestamps were not retained, so these
+artifacts cannot establish a phase explanation. The input driver already varies
+its inter-sample delay between 25 and 74 ms. A fresh, independently specified latency
+experiment would need to distinguish a reproducible delivery gain from sample or
+display phase before reconsidering this candidate. No F01–F16 row is closed.
+
+## Independent latency confirmation and drawable timeline
+
+A new contract in `out-perf/dlls-frame-snapshot-01/latency-confirm-contract.json`
+separates independent median-latency confirmation from the already failed CPU
+target. It requires five of six median-latency wins and no consistent tail-latency
+or GUI/runtime CPU regression, followed by single/splits/tabs controls. It retains
+the same frozen executables, original probe, offered rate and host gates. Neither
+attempt qualifies: `latency-confirm-01` fails the first A producer-rate check;
+`latency-confirm-02` completes four valid runs, then fails the round 2 A rate check.
+No partial aggregate is accepted. All recorded host boundaries pass (3/11,
+maximum load1 1.973/2.757), and owned runtime/children/socket cleanup completes.
+
+The first failure has producer intervals as low as 0.114296 and 0.113107 MiB/s
+against 0.125 MiB/s. The second has 0.115548 and 0.117146 MiB/s. The second failure's
+intervals occur before the first injected input, during setup; the first failure's
+intervals occur after input injection starts. This distinction does not change the
+existing whole-run rate gate or make either series eligible. Maximum write duration
+alone does not establish why the offered rate fell.
+
+`out-perf/dlls-producer-pacing-diagnostic-01` wraps the original producer pacer
+without changing its missed-slot/drop policy. It records return-from-wait lateness,
+discarded deadline shifts and corresponding write duration, retaining at most 128
+events per producer. A deterministic 2,000-step fake-clock comparison preserves
+every original deadline and sleep request; it also exercises recorder saturation.
+Two accepted-A diagnostic runs keep all offered rates within tolerance. The first
+records maximum return lateness of 6.94–9.88 ms across producers; individual recorded
+late returns often accompany writes lasting tens of microseconds. This demonstrates
+that a discarded pacing slot need not mean a long blocking write. It does not
+reproduce or establish the cause of the earlier rate failures. The second run's
+final host boundary reaches load1 5.068848, so the entire diagnostic series is
+ineligible for performance conclusions. Additional clocks/logging can perturb pacing.
+
+A separate private observer, `out-perf/dlls-drawable-timeline-01`, retains absolute
+input, drawable-acquisition, GPU-completion-callback and positive presentation times.
+It also records the actual drawable-pool capacity and presentsWithTransaction flag.
+Pixel, focus, geometry, sequence and positive-presentation gates remain unchanged.
+`/tmp/telar-perf-drawable-timeline-single-01` qualifies 20 measured inputs plus 20
+warmups on accepted A, after five seconds idle; all four host observations pass,
+maximum load1 3.674. Every recorded absolute GPU/presentation difference agrees with
+the existing relative duration. The observed pool capacity is three and transaction
+presentation is false. Separate medians are 0.126 ms acquiring a drawable and
+22.307 ms from the completion callback to presentation. These diagnostic medians
+must not be added or treated as a measured queue depth or causal attribution.
+
+The first private two-drawable policy experiment is **not an applied policy test**.
+The harness removes TELAR_* variables, including the experimental activation flag.
+Consequently `drawable-pool-single-01` and its short-idle follow-up keep the default
+three-drawable capacity. The purported B run after five seconds idle times out on
+its first input; the short-idle run succeeds, but both are baseline behavior. Raw
+artifacts and policy-disposition receipts retain this mistake; neither supports a
+two-drawable conclusion.
+
+The corrected prefix, `out-perf/dlls-drawable-pool-02`, uses a forwarded private
+TGB_DRAWABLE_POOL flag and validates both the requested setting and an acquisition
+capacity bitmask, as well as every accepted frame's observed capacity. It changes
+only the owned test process's layer policy; GUI/runtime/helper/Qt binaries remain
+accepted A. `/tmp/telar-perf-drawable-pool-single-02` completes A/B with 20 measured
+inputs each after five seconds idle, six valid host observations, maximum load1
+1.712. All A samples observe three drawables and all B samples observe two.
+Acquisition medians are 0.0635/0.0637 ms, completion-to-presentation medians
+22.590/23.335 ms, and input-latency medians 26.477/26.523 ms. This single diagnostic
+pair supplies no performance acceptance and no evidence of the hypothesized large
+latency reduction. No production pool policy is changed. The remaining lead is
+Qt's drawable presentation scheduling/skipping path; its causal role is unproven.
+
+## Zero presentation timestamps isolated outside Qt, 2026-11-03
+
+Two accepted-A diagnostics retain the default three-drawable policy and all native
+input qualification gates. `out-perf/dlls-qt-presentation-skip-01` enables Qt's
+`qt.rhi.general` and `qt.gui.metal` logs and records drawable pointers/IDs alongside
+acquisition and callback times. Its private observer removes only the optional
+100 ms zero-timestamp recheck, avoiding that diagnostic's extra drawable retention.
+`/tmp/telar-perf-qt-presentation-skip-01` completes 20 measured inputs plus 20
+warmups. A setup drawable explicitly skipped by Qt's display lock has a zero
+callback. Three subsequent verified, visible-window zero callbacks have no Qt skip
+log; one is the first input after five seconds idle. Another drawable for the same
+input presents positively. All four host boundaries pass, maximum load1 4.709.
+
+`out-perf/dlls-qt-presentation-call-01` additionally delegates the concrete
+CAMetalDrawable `present` method while logging its actual invocation. The native
+run completes all 40 inputs with four valid host boundaries, maximum load1 2.791.
+Every acquired drawable has exactly one present request except the single setup
+drawable explicitly skipped by Qt. The verified first-input drawable receives an
+actual present call from the scheduled-handler thread, then a zero presentation
+timestamp; a later drawable serves that input positively. Thus Qt's display-lock
+omission does not explain this particular zero. Neither diagnostic reproduces a
+timeout or establishes the cause of previous timeout attempts. Both owned runtime
+cleanup receipts are complete. Logging/hooking overhead excludes timing acceptance.
+
+The reusable [Metal idle control](../tools/metal_idle_control.py), with its
+[native probe](../tools/metal_idle_control.m), removes Telar and Qt from the experiment.
+It clears an owned AppKit/CAMetalLayer window to alternating solid colors, submits
+20 warmup frames, waits five seconds with two unchanged redraws, then submits 20
+resumed frames. The first resumed frame is isolated for at least two seconds before
+another submission. It compares two diagnostic policies: present from a command
+buffer's scheduled handler, or `presentDrawable` on the command buffer. These are
+observations of API behavior, not paired performance comparisons. Default readback
+verifies a GPU pixel from each clear; `--no-readback` uses framebuffer-only drawables
+and explicitly reports content verification unavailable. Neither mode turns zero
+timestamps into eligible latency endpoints.
+
+Run `python3 tools/metal_idle_control.py /tmp/unique-metal-control` or add
+`--no-readback`; `--presentation scheduled|command` selects one policy. The driver
+builds into that new directory, records source/binary identities and host boundaries,
+checks owned process exit, and rejects missing/duplicate/mismatched callbacks,
+invalid clocks, foreground loss, wrong geometry, VSync/pool changes, unverified
+requested readback, coalesced submissions or overlapping first-resume callbacks.
+It neither launches a Telar runtime nor changes installed binaries/configuration.
+
+Private control `metal-idle-control-01` scheduled long-delay timers together and
+coalesced resumed submissions; it cannot isolate the first resumed frame. Version
+02 corrects this with recursive frame scheduling and the two-second isolation.
+Private no-readback version 03 loses foreground in its second policy, excluding that
+entire series. Both limitations are retained in disposition receipts. The canonical
+driver fails closed on foreground loss instead of accepting that observation.
+
+Fresh canonical runs qualify the standalone experiment:
+
+| Artifact under `/tmp/telar-perf-` | GPU readback | Host boundaries / max load1 | First resumed frame, scheduled / command |
+| --- | --- | --- | --- |
+| `metal-idle-canonical-01` | Every pixel verified | 6 / 1.654 | Zero / zero |
+| `metal-idle-canonical-02` | Disabled; framebuffer-only | 6 / 1.815 | Zero / zero |
+
+Each policy completes all 42 GPU operations and presentation callbacks, with a
+1600×1000 drawable on the display advertising 120 Hz. First-resume isolation is
+2.022–2.099 seconds; every first-resume zero callback precedes the next submission.
+Foreground/visibility observations pass at acquisition and callback processing.
+All four owned processes exit successfully. Nine mutations of a qualified native
+log reject focus loss, wrong pixels, non-finite time, wrong identity, disabled
+VSync, wrong dimensions, duplicate/missing callbacks and first-resume overlap. An
+untouched zero trace and a synthetic positive control are accepted only as
+diagnostics, always with `performance_eligible=false`.
+
+The zero-after-idle behavior therefore does not require Telar, Qt's presentation
+lock, its scheduled-handler policy, or this probe's GPU readback/framebuffer-only
+change in these controls. This is not a physical scanout observation, a general
+driver diagnosis, or proof that every earlier timeout has the same cause. It does
+not justify bypassing Qt's locking, repeating production frames, changing drawable
+capacity or weakening the positive-presentation gate. Native latency acceptance
+remains open. Production GUI/Qt policy is unchanged; the runtime deadline candidate
+remains unaccepted working-tree work.
+
+## Span row-revision marking rejected, 2026-11-03
+
+`out-perf/dlls-span-row-revisions-01` tests marking touched rows once per span in
+`Screen::apply`, instead of dividing the cell position and writing its row revision
+for every decoded cell. Snapshots already initialize all row revisions, so their
+per-cell revision work is redundant. Unlike the earlier row-retention/staged-decode
+experiments, this variant preserves exact invalidation semantics, both decoder
+traversals and all allocation/storage behavior. Production source is unchanged.
+
+A differential oracle compares public cell bytes/styles, row revisions, metadata,
+links, frame/header state and allocation counts after 3,342 operations, including
+360 rejected malformed frames whose state remains unchanged. Exhaustive small-grid
+span ranges, 2,048 seeded sequences, stale/gap/detach/resize behavior and maximum
+dimensions/cell count are covered. Native release, ASan/UBSan and x86-64 execution
+agree on digest `8144262334345902512`. A negative variant that omits later touched
+rows fails the oracle. Sanitizers instrument the probe/header code, not the system
+libraries; leak checking is disabled.
+
+ARM64, x86-64 baseline and x86-64-v3 macOS kernels compile. In the BudgetAllocator
+component instantiation, ARM64's inner cell-copy loop falls from 30 to 24 static
+instructions, removing its division and row-revision loads/store; both the decoder
+and memcpy calls remain. Delta spans do one division for a single cell or two for
+longer spans. Snapshots do none in the cell loop. Linux and the native GUI's
+SystemAllocator instantiation are not performance-qualified by these probes.
+
+Seven alternating pairs per mode/grid in
+`/tmp/telar-perf-span-row-revisions-pairs-01` pass all 394 host boundaries, maximum
+load1 1.895. Encoding/rendering/native delivery are excluded. Live/peak memory,
+allocation counts and final state digests match in every pair; warmed application
+adds no allocations. Median nanoseconds per Screen application:
+
+| Mode | 82×21 A → B | B wins | 240×80 A → B | B wins |
+| --- | --- | --- | --- | --- |
+| Snapshot | 15,748 → 15,707 | 5/7 | 183,392 → 180,674 | 7/7 |
+| Full delta | 15,901 → 15,794 | 5/7 | 180,345 → 178,704 | 7/7 |
+| One row | 781.85 → 780.13 | 5/7 | 2,245.34 → 2,237.73 | 6/7 |
+| 64 one-cell spans | 1,923.62 → 1,948.81 | 0/7 | 1,918.59 → 1,961.19 | 1/7 |
+| Two cells crossing a row | 54.00 → 54.57 | 0/7 | 54.13 → 54.86 | 2/7 |
+| One cell | 43.42 → 43.85 | 2/7 | 43.50 → 44.04 | 1/7 |
+| Empty delta | 10.93 → 10.96 | 2/7 | 11.02 → 11.01 | 3/7 |
+
+The normal-grid targets miss six wins and several controls lose consistently.
+Large-grid gains do not override that rejection; no native candidate build or
+full-flow acceptance is attempted. Constructing complete Cell values during the
+validation-only first pass motivates the separate experiment below, without
+reinstating row retention or its additional staging buffer.
+
+## Validation-only CellReader rejected, 2026-11-03
+
+`out-perf/dlls-validation-only-reader-01` separately tests a shared parser with
+materializing and validation-only return policies. `Screen::apply` uses the latter
+only for its first traversal; all checks, their order, the second traversal and
+original per-cell row marking remain. There is no staging buffer or additional
+allocation. The baseline parser is frozen as an independent class in the oracle;
+both Screen implementations share the unchanged wire types and support headers.
+
+The same 3,342 Screen operations and 360 malformed-frame atomicity checks pass,
+along with 6,276 reader comparisons over partial consumption and mutated/truncated/
+trailing input. ARM64 release, ASan/UBSan and executed x86-64 agree on the original
+Screen digest and allocation counts. A negative control omitting cell validation
+from the discard path is rejected. ARM64's validation helper has 152 static
+instructions versus 168 in the materializing helper, both with 80-byte stacks;
+these counts include error branches, not estimated cycles. The materializing
+instruction stream matches the original after local block-number normalization.
+ARM64, x86-64 and x86-64-v3 macOS kernels compile; Linux is not executed.
+
+Seven alternating component pairs per mode/grid in
+`/tmp/telar-perf-validation-only-reader-pairs-01` pass all 394 host observations,
+maximum load1 1.711. Every paired final digest and live/peak/allocation count agrees;
+no warmed application allocates. Median nanoseconds per application:
+
+| Mode | 82×21 A → B | B wins | 240×80 A → B | B wins |
+| --- | --- | --- | --- | --- |
+| Snapshot | 15,784 → 15,676 | 5/7 | 182,362 → 180,817 | 7/7 |
+| Full delta | 15,755 → 15,585 | 6/7 | 180,175 → 179,080 | 6/7 |
+| One row | 781.57 → 778.67 | 5/7 | 2,241.99 → 2,226.68 | 7/7 |
+| 64 one-cell spans | 1,930.77 → 1,860.32 | 7/7 | 1,927.57 → 1,860.53 | 7/7 |
+| Two cells crossing a row | 53.93 → 49.37 | 7/7 | 53.98 → 50.67 | 6/7 |
+| One cell | 43.44 → 40.87 | 7/7 | 43.57 → 40.83 | 7/7 |
+| Empty delta | 10.99 → 11.21 | 0/7 | 10.97 → 11.24 | 1/7 |
+
+The reusable [Screen application checker](../services/gui-cpp/tools/check_screen_application.py)
+and [probe](../services/gui-cpp/tools/screen_application_probe.cpp) accept frozen
+`--before-screen`/`--after-screen` headers and optional `--before-reader`/
+`--after-reader` headers, a configured GUI `--build`, and a new `--output` directory.
+They retain source identities and independently rename the baseline reader;
+supporting GUI/core/base headers come from the current build. `--sanitize`,
+`--arch x86_64` and `--negative-control` select additional checks. This tool compares
+Screen state, exception types/messages and requested reader consumption; it does
+not render or establish native presentation behavior. Final release, sanitizer,
+x86-64 and row-marking control results are retained in the experiment's `final-*`
+directories; the invalid-cell negative control fails as required.
+
+The empty controls consistently regress and the normal snapshot target misses six
+wins. This rejects the variant despite useful small-span reductions. The empty
+path does not decode cells, but that alone does not prove code-placement causality
+or override the gate. No production codec/GUI source is changed and no native
+performance acceptance is claimed. The separate experiment below examines the
+redundant grid-capacity checks without retaining this parser change.
+
+## Same-grid delta reservation experiment, 2026-11-03
+
+`out-perf/dlls-delta-grid-reserve-01` skips the cell and row-revision vector capacity
+checks for a valid delta. `Screen::apply` has already required its base frame and
+grid to match the current screen. Snapshot reservations and every metadata
+reservation remain unchanged, as do both decoder passes and per-cell revision
+marking. There is no additional storage. Production source remains the accepted
+baseline while the native candidate is evaluated separately.
+
+The reusable Screen oracle now injects allocation failures at each reservation
+boundary for initial snapshots, resized snapshots and metadata-growing deltas.
+Its 21 scenarios exercise 12 allocation failures and six allocation-free same-grid
+recoveries after a failed resize or metadata update. Public state, exception
+type/message, allocator attempts, live bytes and allocation/failure counts agree.
+The original 3,342 Screen operations, 360 malformed-frame checks and 6,276 reader
+comparisons also pass, retaining digest `8144262334345902512`. Release,
+ASan/UBSan and executed x86-64 agree; sanitizer scope excludes system libraries
+and leak detection. A negative control omitting only the links reservation fails
+with `Allocation-failure differential mismatch`. A broader negative that omitted
+all metadata reservations crashed with SIGSEGV; that attempt is retained but is
+not evidence of a clean oracle rejection or an established crash cause.
+
+ARM64, x86-64 and x86-64-v3 macOS kernels compile for both BudgetAllocator and
+the GUI's SystemAllocator. ARM64's `apply` instruction stream is identical in A/B;
+the reserve helper branches around two out-of-line capacity-check calls on deltas.
+Its static instruction count grows from 32 to 36, with the same 32-byte stack.
+These counts are not cycle estimates. Linux is not executed.
+
+Seven alternating pairs per mode/grid in
+`/tmp/telar-perf-delta-grid-reserve-pairs-01` pass all 394 host observations,
+maximum load1 2.518. Final digests and live/peak/allocation counts match in every
+pair; warmed application allocates nothing. Median nanoseconds per application:
+
+| Mode | 82×21 A → B | B wins | 240×80 A → B | B wins |
+| --- | --- | --- | --- | --- |
+| Snapshot | 15,849.50 → 15,747.98 | 6/7 | 182,137.54 → 182,371.12 | 5/7 |
+| Full delta | 15,750.40 → 15,736.90 | 3/7 | 179,949.17 → 179,953.75 | 4/7 |
+| One row | 781.31 → 779.53 | 6/7 | 2,244.72 → 2,241.55 | 6/7 |
+| 64 one-cell spans | 1,921.17 → 1,917.71 | 3/7 | 1,921.38 → 1,926.26 | 3/7 |
+| Two cells crossing a row | 54.09 → 50.74 | 7/7 | 54.02 → 50.70 | 7/7 |
+| One cell | 43.59 → 40.01 | 7/7 | 43.63 → 39.71 | 7/7 |
+| Empty delta | 11.00 → 9.38 | 7/7 | 10.93 → 9.39 | 7/7 |
+
+The preregistered empty/one-cell targets pass, with no consistently losing
+component control. The absolute saving is only a few nanoseconds per delta and
+does not establish an application improvement. Native candidate GUI
+`c2b1d0425e73` uses the frozen accepted runtime `a0b8b9d5826c`, helper and Qt;
+the pending runtime deadline change is excluded. Rebuilt A's executable code and
+payloads match the accepted GUI, with all 207 differing bytes accounted for by
+eight generated RCC timestamps, UUID and signature. Native timing uses the original
+frozen accepted GUI `5a639c5f26f6` as A.
+
+The core test and six focused native frame-delivery cases pass. Qualification in
+`/tmp/telar-perf-delta-grid-reserve-native-qual-01` passes three byte-exact captures
+(single, splits, tabs), variable offered load, and all 18 host boundaries, maximum
+load1 2.238. Native single-pane series 01 is wholly discarded when load1 reaches
+6.235 at `after:3-single-A`, above the limit of 5. All eight owned runtimes and
+their children exit with complete cleanup; no partial aggregate is used. A fresh
+six-pair series 02 starts after load falls to 3.74, with GUI CPU per input as the
+preregistered primary target (at least five wins). Its 19 host boundaries remain
+valid, maximum load1 3.601, but baseline A times out on the first warmup input
+after idle in round 4. Initial presentation qualifies; zero input responses
+complete, before the measured interval. All nine runtimes/children clean up.
+The ordinary probe has no readback diagnostics enabled, so this receipt does not
+establish whether the marker appeared with a zero timestamp or identify another
+cause. Series 02 is also wholly excluded. The candidate is **deferred**, not an
+accepted native improvement or a measured native regression. Existing
+positive-presentation, focus, geometry, rate and host gates remain unchanged.
+
+## Higher-volume accepted-stack profile, 2026-11-03
+
+`/tmp/telar-perf-variable-work-profile-04` profiles accepted GUI `5a639c5f26f6`
+and runtime `a0b8b9d5826c`, keeping their helper, Qt, configuration and original
+positive-presentation probe. Three variable-output background producers each
+request 0.5 MiB/s, four times the earlier profile's offered rate. Two repetitions
+complete 240 inputs each, with 20 warmups and no idle phase. Every producer passes
+the unchanged 5% rate gate. Owned identities, geometry and foreground qualify;
+both runtime/child cleanup receipts complete. All six host boundaries pass,
+maximum load1 1.882. Separate GUI/runtime samplers run for eight seconds at 1 ms.
+Source/binary identities, profiles and external runtime counters are retained.
+These instrumented runs do not qualify latency, CPU savings or continuous cadence.
+
+| Inclusive sampled stack group | Repetition 1 | Repetition 2 |
+| --- | ---: | ---: |
+| GUI font requests / coverage | 16 / 16 | 17 / 16 |
+| GUI `TerminalItem::updatePaintNode` | 72 | 88 |
+| Qt `renderMergedBatch` | 90 | 72 |
+| WindowServer `SLSObscureCursor` | 117 | 111 |
+| GUI `CellReader::next` | 7 | 11 |
+| Runtime checkpoint `Snapshot::changed` | 20 | 15 |
+| Runtime `PaneObservationService::refresh` | 30 | 31 |
+| Runtime `CellProjection::copyRow` | 4 | 7 |
+| Runtime `FrameSync::appendDamage` | 8 | 11 |
+| Runtime `wait4` | 34 | 28 |
+| Runtime process-info / ioctl calls | 53 / 71 | 48 / 70 |
+
+Groups overlap and must not be summed; waiting threads dominate the full samples.
+These are stack observations, not call counts or CPU percentages, and exact
+per-input timestamps remain unavailable. Higher offered volume does not make
+cell projection the dominant sampled path in these small split grids.
+
+Following the `wait4` stack identifies a distinct work-reduction lead:
+`Runtime::publish` calls `PtyProcess::reap` for every live pane on every event-loop
+iteration. The server already registers SIGCHLD on both platform loops, but the
+runtime merely continues on that event and performs the same unconditional
+polling on unrelated events. A signal-driven reap pass with a bounded periodic
+fallback could avoid repeated live-child syscalls. It needs exit/status and
+output-drain oracles, coalesced/early signal checks, platform qualification and
+paired whole-runtime evidence before adoption. The older SIGCHLD change removed
+a 100 ms exit delay; this lead must preserve that behavior.
+
+Inspection also confirms that `FixedText` already copies only its used prefix;
+its 4 KiB capacity is not evidence of a 4 KiB copy per operation. No observation
+worker, process-identity policy or Qt cursor behavior is changed on these profiles.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
@@ -2015,7 +4527,7 @@ and the existing seven-pair component contracts remain mandatory.
 | F05 | TUI/terminal fixtures | Deterministic full TUI trace and presentation cadence |
 | F06 | Native wheel injection, terminal scroll probes | Continuous scrollback/selection/live-return content and cadence |
 | F07 | Four splits and fixed-rate background load | All producers active, fairness and cadence |
-| F08 | Four tabs and background output | Repeated tab/workspace switching to verified target content |
+| F08 | Native previous-tab to verified target generation, four 30 Hz producers | Baseline latency/CPU regression; workspaces, complete content, cadence and separate resources |
 | F09 | Native resize and blur controls | Continuous window/divider motion, clipping, matched backgrounds |
 | F10 | Kitty producer and image marker tooling | Integrated 1K/4K receipts, alpha/generations, image latency plus UI cadence |
 | F11 | Private clipboard/shelf/modal captures | Independent runtimes, actual image endpoint, bounded multi-attachment cases |
@@ -2027,8 +4539,9 @@ and the existing seven-pair component contracts remain mandatory.
 
 First profiling candidates are the refresh value sent by each GUI, GUI pacing
 phase versus VSync, and whole-viewport repaint during subcell resizing. Further
-leads are repeated font coverage lookup, per-cell row-revision division, runtime
-scrollback projection and history-query scratch/statement reuse. Each needs a
+leads are repeated font coverage lookup, runtime scrollback projection and
+history-query scratch/statement reuse. Same-grid capacity checks pass the component
+gate but remain deferred on native qualification. Each new candidate needs a
 fresh profile, equivalence oracle, disassembly and paired acceptance before it
 can be retained as an optimization. Historical rejected batching, relay-buffer,
 prefault, render-loop and update-idle variants remain documented in the existing

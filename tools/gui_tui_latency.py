@@ -12,6 +12,7 @@ The optional GUI text endpoint starts at committed text instead of keyDown.
 import argparse
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import plistlib
@@ -27,6 +28,7 @@ from terminal_bench_report import latency_samples, validate_telar_display_sync
 from perf_e2e import descendants, stop_runtime
 from terminal_bench_fixture import background_rate
 from bench_stack import executable_identity, process_identity, runtime_identity, staged_runtime
+from benchmark_host import HostLoadGate, HostLoadRejected
 
 WARMUP = 20
 BACKGROUND_RATE_TOLERANCE = .05
@@ -75,6 +77,12 @@ def validate_image_receipt(result, size):
     if len(fixtures) != 1 or fixtures[0]['role'] != 'primary':
         raise ValueError('image measurement requires exactly one primary fixture')
     image = fixtures[0].get('image', {})
+    pattern = result.get('image_pattern', 'opaque')
+    from image_patterns import placement
+    expected_cells = placement(size, pattern)
+    if (image.get('pattern', 'opaque') != pattern
+            or image.get('placement_cells') != (list(expected_cells) if expected_cells else None)):
+        raise ValueError('image receipt does not match the requested pattern and placement')
     if ([image.get('width'), image.get('height')] != list(size)
             or image.get('bytes_per_image') != size[0] * size[1] * 4
             or image.get('format') != 'RGBA8888'
@@ -217,6 +225,7 @@ def measure(mode, directory, setup):
         if getattr(options, 'image_size', None):
             fixture[1] = str(Path(__file__).with_name('image_bench_fixture.py').resolve())
             fixture += ['--width', str(options.image_size[0]), '--height', str(options.image_size[1])]
+            fixture += ['--pattern', getattr(options, 'image_pattern', 'opaque')]
     else:
         fixture = [shutil.which('python3'),
                    str(Path(__file__).with_name('gui_tui_marker.py').resolve()), str(directory / 'size.json')]
@@ -346,6 +355,7 @@ def measure(mode, directory, setup):
             result['background_load'] = background_load(result['fixtures'], rate)
         if getattr(options, 'image_size', None):
             result['image_size'] = list(options.image_size)
+            result['image_pattern'] = getattr(options, 'image_pattern', 'opaque')
             validate_image_receipt(result, options.image_size)
     (directory / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
     if mode in TELAR_MODES:
@@ -379,17 +389,23 @@ def main():
     parser.add_argument('--throughput', action='store_true', help='run 8 MiB ASCII/ANSI DSR probes before latency')
     parser.add_argument('--image-size', type=int, nargs=2, metavar=('WIDTH', 'HEIGHT'),
                         help='replace a Kitty RGBA image on each input; requires single-pane Telar modes')
+    parser.add_argument('--image-pattern', choices=['opaque', 'alpha-edge', 'alpha-gradient'], default='opaque',
+                        help='alpha patterns require --image-size 16 16 and use an opaque border with a center marker')
     parser.add_argument('--text-pattern', choices=['repeat', 'variable'], default='repeat',
                         help='repeat the original 64-byte line or vary every line deterministically')
     parser.add_argument('--background-mib-per-second', type=background_rate,
                         help='limit each background fixture in load cases; omitted means unlimited')
     parser.add_argument('--float-windows', action='store_true', help='float only probe windows in AeroSpace before resizing')
     parser.add_argument('--source', type=Path, help='source checkout used for the measured binary')
+    parser.add_argument('--max-load', type=float, nargs=2, metavar=('ONE_MINUTE', 'FIVE_MINUTES'),
+                        help='positive host load limits; defaults to max(2, CPUs/2) and max(3, CPUs*3/4); high load discards the whole series')
     parser.add_argument('--input-method', choices=['key', 'text'], default='key',
                         help='keyDown event, or GUI committed text bypassing synthetic IME dispatch')
     parser.add_argument('--viewport', type=int, nargs=2, metavar=('WIDTH', 'HEIGHT'),
                         help='fix render-target pixels independently of the window manager')
     options = parser.parse_args()
+    if options.max_load is not None and any(not math.isfinite(value) or value <= 0 for value in options.max_load):
+        parser.error('--max-load requires two finite positive numbers')
     if not 0 <= options.idle_seconds <= 10:
         parser.error('--idle-seconds must be finite and between 0 and 10')
     if options.capture and options.idle_seconds == 0:
@@ -397,10 +413,14 @@ def main():
     if options.config is not None and not options.config.is_file():
         parser.error('--config must name an existing Lua file')
     modes = MODE_GROUPS.get(options.mode, [options.mode])
+    if options.image_pattern != 'opaque' and not options.image_size:
+        parser.error('--image-pattern requires --image-size')
     if options.image_size:
         from image_bench_fixture import image_extent
+        from image_patterns import placement
         try:
             image_extent(*options.image_size)
+            placement(options.image_size, options.image_pattern)
         except ValueError as error:
             parser.error(str(error))
         if options.cases != ['single'] or options.throughput or any(mode not in TELAR_MODES for mode in modes):
@@ -438,6 +458,8 @@ def main():
         parser.error('samples must be 1..400 and rounds 1..10')
     directory = options.directory.resolve()
     directory.mkdir(mode=0o700, parents=True, exist_ok=False)
+    host = HostLoadGate(directory / 'host-load.json', options.max_load)
+    host.checkpoint('before-setup')
     binary = options.binary.resolve()
     app = directory / 'GhosttyProbe.app'
     if 'ghostty' in modes:
@@ -466,6 +488,7 @@ def main():
                           "window = { padding = { x = 0, y = 0 }, background_opacity = 1 }, "
                           "cursor = { blink = false } } }\n")
     manifest = dict(binary=str(binary), sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
+                    host_load_policy=host.policy,
                     vsync=options.vsync, endpoint=options.endpoint, warmup=WARMUP, rounds=options.rounds,
                     idle_seconds=options.idle_seconds,
                     readback_diagnostics='TGB_READBACK_DIAGNOSTICS' in os.environ,
@@ -473,6 +496,7 @@ def main():
                     working_directory=str(options.cwd) if options.cwd else None,
                     input_method=options.input_method, cases=options.cases, panes=options.panes,
                     image_size=options.image_size,
+                    image_pattern=options.image_pattern,
                     text_pattern=options.text_pattern, background_mib_per_second=options.background_mib_per_second,
                     background_rate_tolerance=BACKGROUND_RATE_TOLERANCE,
                     viewport=options.viewport, command_line=os.sys.argv,
@@ -505,7 +529,7 @@ def main():
     manifest['config_path'] = str(config)
     shutil.copy2(config, directory / 'used-config.lua')
     manifest['probe_sha256'] = {name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
-                                for name in ('gui_tui_latency.py', 'gui_tui_latency.m', 'gui_view.h', 'terminal_bench_fixture.py', 'image_bench_fixture.py', 'kitty_stream.py', 'terminal_bench_report.py', 'bench_stack.py')}
+                                for name in ('gui_tui_latency.py', 'gui_tui_latency.m', 'gui_view.h', 'terminal_bench_fixture.py', 'image_bench_fixture.py', 'image_patterns.py', 'kitty_stream.py', 'terminal_bench_report.py', 'bench_stack.py', 'benchmark_host.py')}
     probe_source = directory / 'probe-source'
     probe_source.mkdir()
     for name in manifest['probe_sha256']:
@@ -515,6 +539,7 @@ def main():
     results = []
     rejected = []
     setup = binary, app, library, config, options
+    host.checkpoint('before-series')
     for round_index in range(options.rounds):
         # Reversed cyclic permutations balance three variants over six rounds.
         offset = (round_index // 2) % len(modes)
@@ -527,7 +552,8 @@ def main():
                 for attempt in range(3):
                     name = f'{round_index}-{case}-{mode}' + (f'-retry{attempt}' if attempt else '')
                     try:
-                        result = measure(mode, directory / name, setup)
+                        with host.run(name):
+                            result = measure(mode, directory / name, setup)
                         break
                     except ProbeFailure as failure:
                         row = failure.result
@@ -544,6 +570,7 @@ def main():
                     paired = {row['mode']: row for row in results if row['round'] == round_index and row['case'] == case}
                     if len(paired) == len(TELAR_MODES):
                         validate_telar_grids(paired['gui'], paired['gui-cpp'])
+    host.finish()
     report = dict(manifest=manifest, runs=results, rejected_startups=rejected,
                   aggregate=aggregate_runs(results, options.cases, modes))
     (directory / 'comparison.json').write_text(json.dumps(report, indent=2) + '\n')
@@ -551,4 +578,8 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except HostLoadRejected as error:
+        print(str(error), file=os.sys.stderr)
+        raise SystemExit(2) from error
