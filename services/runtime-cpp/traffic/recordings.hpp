@@ -1,14 +1,14 @@
 #pragma once
 
-#include "recording_protocol.hpp"
-#include "recording_owner.hpp"
+#include "../plugins/protocol.hpp"
+#include "event_frame.hpp"
 #include "filter.hpp"
 #include "flow.hpp"
 #include "pcapng.hpp"
-#include "event_frame.hpp"
-#include "../memory/sensitive_allocation.hpp"
-#include "../plugins/protocol.hpp"
-#include "../proxy/host_policy.hpp"
+#include "recording_owner.hpp"
+#include "recording_protocol.hpp"
+#include "telar_base/memory/sensitive_allocation.hpp"
+#include "telar_config/proxy/host_policy.hpp"
 #include <atomic>
 #include <chrono>
 #include <mutex>

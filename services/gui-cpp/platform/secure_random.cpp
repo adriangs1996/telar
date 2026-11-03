@@ -1,5 +1,5 @@
 #include "secure_random.hpp"
-#include "platform/error.hpp"
+#include "telar_platform/error.hpp"
 #include <algorithm>
 #include <cerrno>
 #include <cstddef>

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../agents/provider.hpp"
 #include "../platform/launch_program.hpp"
 #include "../worktrees/git_probe.hpp"
 #include "limit_service.hpp"
+#include "telar_config/agents/provider.hpp"
 #include "workspace_service.hpp"
 
 namespace telar::runtime {

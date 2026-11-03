@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../memory/sensitive_allocation.hpp"
-#include "../platform/error.hpp"
 #include "../platform/stream_read_buffer.hpp"
 #include "protocol.hpp"
+#include "telar_base/memory/sensitive_allocation.hpp"
+#include "telar_platform/error.hpp"
 
 namespace telar::runtime::plugins {
 

@@ -1,7 +1,7 @@
 #pragma once
 
 #if TELAR_DEBUG
-#include "../memory/allocator.hpp"
+#include "telar_base/memory/allocator.hpp"
 #include <chrono>
 #include <cstdint>
 #include <span>

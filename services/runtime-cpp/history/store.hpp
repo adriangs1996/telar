@@ -2,13 +2,13 @@
 
 #include "../transport/encoded_reply.hpp"
 #include "agent_command.hpp"
-#include "filters.hpp"
 #include "import_identity.hpp"
 #include "launch_writer.hpp"
 #include "pane_writer.hpp"
 #include "result_rows.hpp"
 #include "schema.hpp"
-#include "search_policy.hpp"
+#include "telar_base/history/search_policy.hpp"
+#include "telar_config/history/filters.hpp"
 #include <unordered_set>
 
 namespace telar::runtime {

@@ -1,14 +1,14 @@
 #pragma once
 
 #include "../diagnostics/trace.hpp"
-#include "../terminal/control/parser.hpp"
 #include "../terminal/control/classification.hpp"
+#include "../terminal/control/parser.hpp"
 #include "../terminal/pty_response_queue.hpp"
 #include "../terminal/response_outbox.hpp"
 #include "atomic_frame.hpp"
 #include "file_input.hpp"
-#include "limits.hpp"
 #include "storage.hpp"
+#include "telar_config/graphics/limits.hpp"
 #include "upload_limits.hpp"
 #include <charconv>
 

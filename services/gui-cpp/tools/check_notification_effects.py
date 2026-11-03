@@ -189,7 +189,7 @@ def main():
         "services/gui-cpp/tools/check_activity_order.py",
         "services/gui-cpp/text/bounded_text.hpp",
         "services/gui-cpp/core/configuration.hpp",
-        "services/runtime-cpp/memory/fixed_text.hpp",
+        "dlls/telar-base/include/telar_base/memory/fixed_text.hpp",
         "dlls/telar-client/include/telar_client/serializers/telar_protocol.hpp",
     ]
     result = {

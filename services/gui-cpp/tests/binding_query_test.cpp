@@ -4,9 +4,9 @@
 #include "core/memory.hpp"
 #include "input/action.hpp"
 #include "json_fixture.hpp"
-#include "plugins/identity.hpp"
+#include "telar_base/text/json.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "text/json.hpp"
+#include "telar_plugins/identity.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdio>

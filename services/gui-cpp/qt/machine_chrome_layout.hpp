@@ -5,10 +5,10 @@
 #include "machines/limits.hpp"
 #include "machines/machine_row.hpp"
 #include "machines/machine_token.hpp"
-#include "memory/fixed_text.hpp"
 #include "presentation/machine_chrome_geometry.hpp"
 #include "presentation/machine_facts.hpp"
 #include "resident_fonts.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include <QAbstractItemModel>
 #include <QColor>

@@ -60,7 +60,7 @@ void optionalArrowRead(std::string_view text) {
 
 // CASE: std.unique_get_escape
 // PAIR: std.unique_get
-// SOURCE: services/runtime-cpp/memory/allocator.hpp :: Owned
+// SOURCE: dlls/telar-base/include/telar_base/memory/allocator.hpp :: Owned
 // STATUS: implemented
 // CONTRACT: unique_ptr::get points into storage that the owner releases when it dies.
 // SCENARIO: The pointer from a local owner is returned.
@@ -73,7 +73,7 @@ const standard::record *uniqueGetEscape(std::string_view text) {
 
 // CASE: std.unique_get_read
 // PAIR: std.unique_get
-// SOURCE: services/runtime-cpp/memory/allocator.hpp :: Owned
+// SOURCE: dlls/telar-base/include/telar_base/memory/allocator.hpp :: Owned
 // STATUS: implemented
 // CONTRACT: Contents read through a smart pointer borrow what the owned object borrows.
 // SCENARIO: The owned record's text outlives the owner; accept.
@@ -117,7 +117,7 @@ void valueOrTemporary(std::string_view text) {
 
 // CASE: std.iterator_invalidated
 // PAIR: std.iterator
-// SOURCE: services/runtime-cpp/agents/manifest.hpp :: AgentManifests::tryAdd
+// SOURCE: dlls/telar-config/include/telar_config/agents/manifest.hpp :: AgentManifests::tryAdd
 // STATUS: implemented
 // CONTRACT: A vector iterator points into the vector's storage, which growth may reallocate.
 // SCENARIO: push_back can invalidate the iterator before it is dereferenced.
@@ -132,7 +132,7 @@ void iteratorInvalidated() {
 
 // CASE: std.iterator_range_for
 // PAIR: std.iterator
-// SOURCE: services/runtime-cpp/agents/manifest.hpp :: AgentManifests::tryAdd
+// SOURCE: dlls/telar-config/include/telar_config/agents/manifest.hpp :: AgentManifests::tryAdd
 // STATUS: implemented
 // CONTRACT: Dereferencing an iterator designates the element, not the iterator object.
 // SCENARIO: A range-for element and a pointer to it come from the caller's vector; accept.
@@ -148,7 +148,7 @@ const std::string_view *iteratorRangeFor(const std::vector<std::string_view> &va
 
 // CASE: std.element_escape
 // PAIR: std.element
-// SOURCE: services/runtime-cpp/text/json_node.hpp :: JsonNode::find
+// SOURCE: dlls/telar-base/include/telar_base/text/json_node.hpp :: JsonNode::find
 // STATUS: implemented
 // CONTRACT: An element reference from a range-for borrows the iterated container.
 // SCENARIO: A pointer to an element of a local vector is returned.
@@ -164,7 +164,7 @@ const std::string_view *elementEscape() {
 
 // CASE: std.initializer_list_copy
 // PAIR: std.element
-// SOURCE: services/runtime-cpp/text/json_node.hpp :: JsonNode::find
+// SOURCE: dlls/telar-base/include/telar_base/text/json_node.hpp :: JsonNode::find
 // STATUS: implemented
 // CONTRACT: A container copies an initializer list instead of borrowing its backing array.
 // SCENARIO: Elements built from an initializer list are read after the list's full expression; accept.
@@ -177,7 +177,7 @@ void initializerListCopy(std::string_view text) {
 
 // CASE: std.find_escape
 // PAIR: std.algorithm
-// SOURCE: services/runtime-cpp/diagnostics/limit_ledger.hpp :: LimitLedger
+// SOURCE: dlls/telar-base/include/telar_base/diagnostics/limit_ledger.hpp :: LimitLedger
 // STATUS: implemented
 // CONTRACT: An iterator returned by an algorithm comes from its iterator arguments.
 // SCENARIO: The found element of a local vector is returned as a view.
@@ -191,7 +191,7 @@ std::string_view findEscape() {
 
 // CASE: std.find_parameter
 // PAIR: std.algorithm
-// SOURCE: services/runtime-cpp/diagnostics/limit_ledger.hpp :: LimitLedger
+// SOURCE: dlls/telar-base/include/telar_base/diagnostics/limit_ledger.hpp :: LimitLedger
 // STATUS: implemented
 // CONTRACT: A needle argument does not become part of the found iterator's dependency.
 // SCENARIO: The found element comes from the caller's vector and a temporary needle; accept.
@@ -204,7 +204,7 @@ std::string_view findParameter(const std::vector<std::string> &owners) {
 
 // CASE: std.exchange_dangling
 // PAIR: std.exchange
-// SOURCE: services/runtime-cpp/memory/sensitive_allocation.hpp :: SensitiveAllocation
+// SOURCE: dlls/telar-base/include/telar_base/memory/sensitive_allocation.hpp :: SensitiveAllocation
 // STATUS: implemented
 // CONTRACT: std::exchange returns a copy of its object's previous value.
 // SCENARIO: The previous view's source dies before it is read.
@@ -222,7 +222,7 @@ void exchangeDangling() {
 
 // CASE: std.exchange_live
 // PAIR: std.exchange
-// SOURCE: services/runtime-cpp/memory/sensitive_allocation.hpp :: SensitiveAllocation
+// SOURCE: dlls/telar-base/include/telar_base/memory/sensitive_allocation.hpp :: SensitiveAllocation
 // STATUS: implemented
 // CONTRACT: An exchanged previous value may be read while its source is alive.
 // SCENARIO: The source outlives the read; accept.

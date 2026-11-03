@@ -1,9 +1,9 @@
 #pragma once
 
 #include "callback.hpp"
-#include "memory/fixed_text.hpp"
-#include "plugins/package.hpp"
-#include "plugins/package_limits.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_plugins/package.hpp"
+#include "telar_plugins/package_limits.hpp"
 #include <cstddef>
 #include <cstdint>
 

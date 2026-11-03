@@ -6,11 +6,11 @@
 #include "config/themes.hpp"
 #include "core/configuration.hpp"
 #include "core/memory.hpp"
-#include "memory/allocator.hpp"
 #include "platform/file_stamp.hpp"
 #include "platform/private_file_stamp.hpp"
 #include "presentation/theme.hpp"
 #include "projection.hpp"
+#include "telar_base/memory/allocator.hpp"
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../memory/allocator.hpp"
-#include "../platform/process_environment.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_platform/process_environment.hpp"
 #include <stdexcept>
 
 namespace telar::runtime {

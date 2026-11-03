@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../platform/error.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include "telar_client/telar_client.hpp"
+#include "telar_platform/error.hpp"
 
 namespace telar::runtime::cli {
 

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../memory/sensitive_allocation.hpp"
 #include "effects.hpp"
 #include "service_spec.hpp"
+#include "telar_base/memory/sensitive_allocation.hpp"
 
 namespace telar::runtime::plugins {
 

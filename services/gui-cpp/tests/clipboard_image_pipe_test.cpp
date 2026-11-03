@@ -1,10 +1,10 @@
 #include "assertions.hpp"
 #include "erasure_allocator.hpp"
 #include "platform/clipboard_image_file.h"
-#include "platform/clipboard_pipe_status.h"
 #include "platform/clipboard_image_pipe.hpp"
 #include "platform/clipboard_image_source.hpp"
-#include "platform/file_descriptor.hpp"
+#include "platform/clipboard_pipe_status.h"
+#include "telar_platform/file_descriptor.hpp"
 #include <algorithm>
 #include <array>
 #include <atomic>

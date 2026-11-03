@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../agents/provider.hpp"
+#include "telar_config/agents/provider.hpp"
 #include <span>
 #include <stdexcept>
 

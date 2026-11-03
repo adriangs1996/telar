@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../memory/c_allocation_blocks.hpp"
+#include "telar_base/memory/c_allocation_blocks.hpp"
 #include <cstring>
 #include <openssl/crypto.h>
 #include <openssl/ssl.h>

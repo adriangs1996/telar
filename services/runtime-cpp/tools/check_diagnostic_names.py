@@ -29,7 +29,7 @@ def main():
     (artifacts / "DiagnosticLogName.zig").write_bytes(reference)
     shutil.copy2(root / "tests/diagnostic_name_reference.zig", artifacts / "oracle.zig")
     subprocess.run([arguments.zig, "build-lib", "-dynamic", "-O", "ReleaseFast", str(artifacts / "oracle.zig"), "-femit-bin=" + str(artifacts / "zig.dylib")], check=True)
-    subprocess.run([arguments.compiler, "-std=c++23", "-O3", "-dynamiclib", "-I", str(root), str(root / "tests/diagnostic_name_oracle.cpp"), "-o", str(artifacts / "cpp.dylib")], check=True)
+    subprocess.run([arguments.compiler, "-std=c++23", "-O3", "-dynamiclib", "-I", str(root), "-I", str(root.parents[1] / "dlls/telar-client/include"), "-I", str(root.parents[1] / "dlls/telar-base/include"), "-I", str(root.parents[1] / "dlls/telar-lua/include"), "-I", str(root.parents[1] / "dlls/telar-platform/include"), "-I", str(root.parents[1] / "dlls/telar-plugins/include"), "-I", str(root.parents[1] / "dlls/telar-config/include"), str(root / "tests/diagnostic_name_oracle.cpp"), "-o", str(artifacts / "cpp.dylib")], check=True)
     libraries = [ctypes.CDLL(str(artifacts / name)) for name in ["zig.dylib", "cpp.dylib"]]
     for library in libraries:
         library.classify_name.argtypes = [ctypes.c_char_p, ctypes.c_size_t]

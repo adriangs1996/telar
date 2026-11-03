@@ -1,7 +1,7 @@
 #include "platform/socket_signals.hpp"
 #include "protocol_peer.hpp"
 #include "proxy/secret_file.hpp"
-#include "text/base64.hpp"
+#include "telar_base/text/base64.hpp"
 #include <arpa/inet.h>
 #include <atomic>
 #include <filesystem>

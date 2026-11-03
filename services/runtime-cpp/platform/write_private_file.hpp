@@ -1,8 +1,8 @@
 #pragma once
 
-#include "file_descriptor.hpp"
-#include "write_descriptor.hpp"
 #include "rename.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include "telar_platform/write_descriptor.hpp"
 #include <algorithm>
 #include <array>
 #include <cstdio>

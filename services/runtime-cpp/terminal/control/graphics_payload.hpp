@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../../text/base64.hpp"
 #include "graphics_base64_block.hpp"
 #include "graphics_base64_wide.hpp"
+#include "telar_base/text/base64.hpp"
 
 namespace telar::runtime::control {
 

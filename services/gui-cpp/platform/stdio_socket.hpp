@@ -1,6 +1,6 @@
 #pragma once
 
-#include "platform/file_descriptor.hpp"
+#include "telar_platform/file_descriptor.hpp"
 
 namespace telar::gui::platform {
 

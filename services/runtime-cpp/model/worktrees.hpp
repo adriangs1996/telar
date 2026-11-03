@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../memory/fixed_text.hpp"
-#include "../runtime/request_error.hpp"
 #include "slot_store.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/request_error.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <chrono>
 

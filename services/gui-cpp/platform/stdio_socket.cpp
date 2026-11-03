@@ -1,6 +1,6 @@
 #include "stdio_socket.hpp"
-#include "platform/error.hpp"
-#include "platform/file_descriptor.hpp"
+#include "telar_platform/error.hpp"
+#include "telar_platform/file_descriptor.hpp"
 #include <array>
 #include <cerrno>
 #include <sys/socket.h>

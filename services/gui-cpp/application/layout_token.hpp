@@ -2,9 +2,9 @@
 
 #include "core/memory.hpp"
 #include "pane_layout.hpp"
+#include "telar_base/text/hexadecimal.hpp"
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
-#include "text/hexadecimal.hpp"
 #include <array>
 #include <charconv>
 #include <cstddef>

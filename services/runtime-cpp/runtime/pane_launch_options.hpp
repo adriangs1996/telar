@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../proxy/client_configuration.hpp"
-#include "../terminal/control/policy.hpp"
+#include "telar_config/terminal/control/policy.hpp"
 
 namespace telar::runtime {
 

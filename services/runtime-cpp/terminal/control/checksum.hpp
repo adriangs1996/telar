@@ -1,9 +1,9 @@
 #pragma once
 
-#include "parameters.hpp"
-#include "vt_state.hpp"
-#include "../../memory/allocator.hpp"
 #include "cell_layout.hpp"
+#include "parameters.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "vt_state.hpp"
 #include <limits>
 #include <utility>
 

@@ -56,7 +56,7 @@ def build(root, arguments):
                     '--dep', 'capture', '-Mroot=' + str(directory / 'oracle.zig'),
                     '-Mcapture=' + str(directory / 'reference/root.zig'),
                     '-femit-bin=' + str(directory / 'zig.dylib')], check=True)
-    subprocess.run([arguments.compiler, '-std=c++23', '-O3', '-dynamiclib', '-I', str(root),
+    subprocess.run([arguments.compiler, '-std=c++23', '-O3', '-dynamiclib', '-I', str(root), '-I', str(root.parents[1] / 'dlls/telar-client/include'), '-I', str(root.parents[1] / 'dlls/telar-base/include'), '-I', str(root.parents[1] / 'dlls/telar-lua/include'), '-I', str(root.parents[1] / 'dlls/telar-platform/include'), '-I', str(root.parents[1] / 'dlls/telar-plugins/include'), '-I', str(root.parents[1] / 'dlls/telar-config/include'),
                     str(root / 'tests/capture_storage.cpp'), '-o', str(directory / 'cpp.dylib')], check=True)
     return [load_library(directory / name) for name in ['zig.dylib', 'cpp.dylib']]
 

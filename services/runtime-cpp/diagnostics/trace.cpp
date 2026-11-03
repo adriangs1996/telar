@@ -1,9 +1,9 @@
-#include "../platform/thread_name.hpp"
 #include "trace.hpp"
+#include "../platform/thread_name.hpp"
 
 #if TELAR_DEBUG
-#include "../platform/private_directory.hpp"
 #include "../platform/thread_identity.hpp"
+#include "telar_platform/private_directory.hpp"
 #include <atomic>
 #include <condition_variable>
 #include <cstdio>

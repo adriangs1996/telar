@@ -1,14 +1,14 @@
 #pragma once
 
-#include "config/limit_notices.hpp"
-#include "config/ui_value_constraints.hpp"
 #include "core/color_name.hpp"
-#include "lua/value.hpp"
-#include "memory/fixed_text.hpp"
 #include "node.hpp"
 #include "presentation/bar_metrics.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/ascii.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
-#include "text/ascii.hpp"
+#include "telar_config/limit_notices.hpp"
+#include "telar_config/ui_value_constraints.hpp"
+#include "telar_lua/value.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>

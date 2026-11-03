@@ -1,5 +1,5 @@
 #include "check.hpp"
-#include "platform/error.hpp"
+#include "telar_platform/error.hpp"
 #include "terminal/ghostty_handle.hpp"
 #include <cstring>
 #include <exception>

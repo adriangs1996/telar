@@ -1,6 +1,6 @@
 #pragma once
 
-#include "config/key_chord.hpp"
+#include "telar_config/key_chord.hpp"
 #include <algorithm>
 #include <array>
 #include <cstddef>

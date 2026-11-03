@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../text/ascii.hpp"
+#include "telar_base/text/ascii.hpp"
 #include <limits>
 #include <optional>
 #include <string_view>

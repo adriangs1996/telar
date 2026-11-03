@@ -1,7 +1,7 @@
 #include "core/memory.hpp"
-#include "plugins/inspection.hpp"
-#include "plugins/package_inspection.hpp"
 #include "qt/plugin_packages.hpp"
+#include "telar_plugins/inspection.hpp"
+#include "telar_plugins/package_inspection.hpp"
 #include <QCoreApplication>
 #include <cstddef>
 #include <exception>

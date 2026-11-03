@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../../text/json.hpp"
 #include "../integration_options.hpp"
 #include "provider.hpp"
 #include "skills.hpp"
+#include "telar_base/text/json.hpp"
 
 namespace telar::runtime::cli::integration {
 

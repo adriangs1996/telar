@@ -1,10 +1,10 @@
 #pragma once
 
 #include "../diagnostics/trace.hpp"
-#include "../memory/allocator.hpp"
 #include "../http1/message_relay.hpp"
 #include "http1_observer.hpp"
 #include "socket_interest.hpp"
+#include "telar_base/memory/allocator.hpp"
 
 namespace telar::runtime {
 

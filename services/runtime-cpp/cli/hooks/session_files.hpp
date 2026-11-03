@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../../platform/directory_stream.hpp"
 #include "../../platform/git_files.hpp"
-#include "../../platform/process_environment.hpp"
-#include "../../text/decimal.hpp"
 #include "payload.hpp"
+#include "telar_base/text/decimal.hpp"
+#include "telar_platform/directory_stream.hpp"
+#include "telar_platform/process_environment.hpp"
 #include <openssl/md5.h>
 
 namespace telar::runtime::cli::hooks {

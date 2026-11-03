@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../memory/sensitive_buffer.hpp"
 #include "../platform/delimited_read.hpp"
 #include "socket_stream.hpp"
+#include "telar_base/memory/sensitive_buffer.hpp"
 
 namespace telar::runtime {
 

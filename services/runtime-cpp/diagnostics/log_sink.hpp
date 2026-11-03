@@ -2,8 +2,8 @@
 
 #include <cstring>
 
-#include "../platform/directory_stream.hpp"
 #include "log_name.hpp"
+#include "telar_platform/directory_stream.hpp"
 #include <algorithm>
 #include <array>
 #include <csignal>

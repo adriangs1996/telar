@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../platform/error.hpp"
-#include "request_error.hpp"
+#include "telar_base/request_error.hpp"
+#include "telar_platform/error.hpp"
 #include <new>
 #include <string_view>
 

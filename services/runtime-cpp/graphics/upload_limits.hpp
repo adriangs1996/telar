@@ -2,7 +2,7 @@
 
 #include "../terminal/ghostty_handle.hpp"
 #include "kitty_framing.hpp"
-#include "limits.hpp"
+#include "telar_config/graphics/limits.hpp"
 #include <algorithm>
 #include <array>
 #include <limits>

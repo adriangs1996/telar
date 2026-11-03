@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../diagnostics/limit_ledger.hpp"
+#include "telar_base/diagnostics/limit_ledger.hpp"
 
 namespace telar::runtime {
 

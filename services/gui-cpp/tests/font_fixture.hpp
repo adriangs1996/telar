@@ -5,7 +5,7 @@
 #include "fonts/font_cascade.hpp"
 #include "fonts/font_role.hpp"
 #include "platform/font.h"
-#include "platform/read_file.hpp"
+#include "telar_platform/read_file.hpp"
 #include <cstdint>
 #include <filesystem>
 #include <optional>

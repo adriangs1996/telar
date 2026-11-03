@@ -3,10 +3,10 @@
 #include "machines/edit.hpp"
 #include "machines/limits.hpp"
 #include "machines/profile_store.hpp"
-#include "platform/error.hpp"
 #include "platform/profile_file.hpp"
-#include "platform/temporary_directory.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
+#include "telar_platform/error.hpp"
+#include "telar_platform/temporary_directory.hpp"
 #include <algorithm>
 #include <array>
 #include <cerrno>

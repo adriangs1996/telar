@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../text/json.hpp"
+#include "telar_base/text/json.hpp"
 
 namespace telar::runtime::cli::hooks {
 

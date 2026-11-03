@@ -307,7 +307,7 @@ void placeNestedGrandchildGrowth(places::tree &root) {
 
 // CASE: place.inline_element_growth
 // PAIR: place.inline_element
-// SOURCE: services/runtime-cpp/text/json_node.hpp :: JsonNode::ensure
+// SOURCE: dlls/telar-base/include/telar_base/text/json_node.hpp :: JsonNode::ensure
 // STATUS: implemented
 // CONTRACT: An element that keeps its contents inline, like a short string, moves them when the container grows.
 // SCENARIO: A view of a string element is read after the vector grows.
@@ -321,7 +321,7 @@ void placeInlineElementGrowth(std::vector<std::string> &names) {
 
 // CASE: place.detached_element_growth
 // PAIR: place.inline_element
-// SOURCE: services/runtime-cpp/text/json_node.hpp :: JsonNode::ensure
+// SOURCE: dlls/telar-base/include/telar_base/text/json_node.hpp :: JsonNode::ensure
 // STATUS: implemented
 // CONTRACT: An element that owns its contents through an allocation leaves them in place when the container grows.
 // SCENARIO: A view of a uniquely owned string is read after the vector grows; accept.

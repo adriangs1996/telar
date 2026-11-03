@@ -1,5 +1,5 @@
 #include "protocol_peer.hpp"
-#include "text/base64.hpp"
+#include "telar_base/text/base64.hpp"
 #include <chrono>
 #include <fcntl.h>
 #include <sys/mman.h>

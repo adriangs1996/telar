@@ -2,10 +2,10 @@
 
 #include "config/plugin_effects.hpp"
 #include "input/action.hpp"
-#include "plugins/capabilities.hpp"
-#include "plugins/package.hpp"
-#include "plugins/trust_store.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
+#include "telar_plugins/capabilities.hpp"
+#include "telar_plugins/package.hpp"
+#include "telar_plugins/trust_store.hpp"
 #include <algorithm>
 #include <array>
 #include <cstddef>

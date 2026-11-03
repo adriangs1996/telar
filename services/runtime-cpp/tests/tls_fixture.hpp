@@ -1,7 +1,7 @@
 #pragma once
 
 #include "check.hpp"
-#include "platform/private_directory.hpp"
+#include "telar_platform/private_directory.hpp"
 #include "tls/authority.hpp"
 #include <cstring>
 #include <filesystem>

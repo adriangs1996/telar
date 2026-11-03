@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../../agents/builtin_manifests.hpp"
 #include "payload.hpp"
+#include "telar_config/agents/builtin_manifests.hpp"
 #include "text.hpp"
 
 namespace telar::runtime::cli::hooks {

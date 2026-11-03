@@ -1,14 +1,14 @@
 #pragma once
 
-#include "../memory/allocator.hpp"
-#include "../memory/erasing_allocator.hpp"
-#include "../memory/fixed_text.hpp"
 #include "connection.hpp"
 #include "kernel_drops.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_base/memory/erasing_allocator.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include <chrono>
 #include <csignal>
-#include <optional>
 #include <net/if.h>
+#include <optional>
 #include <pcap/pcap.h>
 #include <pthread.h>
 

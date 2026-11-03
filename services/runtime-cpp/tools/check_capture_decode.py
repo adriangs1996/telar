@@ -53,7 +53,7 @@ def build(root, arguments):
                     '--dep', 'cblocks', '-I', str(brotli / 'include'), '-Mcapture=' + str(directory / 'reference/root.zig'),
                     '-Mcblocks=' + str(arguments.reference.resolve() / 'lib/cblocks/root.zig'),
                     '-femit-bin=' + str(directory / 'zig.dylib')], check=True)
-    subprocess.run([arguments.compiler, '-std=c++23', '-O3', '-dynamiclib', '-I', str(root),
+    subprocess.run([arguments.compiler, '-std=c++23', '-O3', '-dynamiclib', '-I', str(root), '-I', str(root.parents[1] / 'dlls/telar-client/include'), '-I', str(root.parents[1] / 'dlls/telar-base/include'), '-I', str(root.parents[1] / 'dlls/telar-lua/include'), '-I', str(root.parents[1] / 'dlls/telar-platform/include'), '-I', str(root.parents[1] / 'dlls/telar-plugins/include'), '-I', str(root.parents[1] / 'dlls/telar-config/include'),
                     '-I', str(brotli / 'include'), '-I', str(zstd / 'include'),
                     str(root / 'tests/capture_decode.cpp'), '-lz', *brotli_libraries,
                     str(zstd / 'lib/libzstd.a'), '-o', str(directory / 'cpp.dylib')], check=True)

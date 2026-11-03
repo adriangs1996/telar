@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../diagnostics/config.hpp"
 #include "../diagnostics/graphics_storage.hpp"
 #include "../terminal/ghostty_allocator.hpp"
 #include "../terminal/ghostty_handle.hpp"
 #include "storage_limits.hpp"
+#include "telar_base/diagnostics/config.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <array>
 #include <optional>

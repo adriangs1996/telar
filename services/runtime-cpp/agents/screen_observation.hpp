@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../terminal/terminal.hpp"
-#include "builtin_manifests.hpp"
+#include "telar_config/agents/builtin_manifests.hpp"
 #include <optional>
 
 namespace telar::runtime {

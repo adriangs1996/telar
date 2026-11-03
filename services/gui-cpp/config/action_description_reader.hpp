@@ -1,11 +1,11 @@
 #pragma once
 
 #include "action_descriptions.hpp"
-#include "config/client_definitions.hpp"
-#include "lua/value.hpp"
-#include "plugins/identity.hpp"
+#include "telar_base/text/utf8.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "text/utf8.hpp"
+#include "telar_config/client_definitions.hpp"
+#include "telar_lua/value.hpp"
+#include "telar_plugins/identity.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>

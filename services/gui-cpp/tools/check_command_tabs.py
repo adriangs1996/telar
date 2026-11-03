@@ -10,14 +10,14 @@ from check_binding_query import core_exports, model_exports
 
 cpp_probe = r"""
 
-#include "config/command_tab_reference.hpp"
-#include "config/command_tab_registry.hpp"
-#include "config/command_tab_view.hpp"
-#include "config/limit_notices.hpp"
+#include "telar_config/command_tab_reference.hpp"
+#include "telar_config/command_tab_registry.hpp"
+#include "telar_config/command_tab_view.hpp"
+#include "telar_config/limit_notices.hpp"
 #include "core/json_writer.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "tests/json_fixture.hpp"
-#include "text/json.hpp"
+#include "telar_base/text/json.hpp"
 #include <array>
 #include <charconv>
 #include <cstdint>
@@ -372,7 +372,12 @@ def main():
                 "-I",
                 str(root / "services/runtime-cpp"),
                 "-I",
-                str(root / "dlls/telar-client/include"),
+                str(root / "dlls/telar-client/include"), "-I",
+                str(root / "dlls/telar-base/include"), "-I",
+                str(root / "dlls/telar-lua/include"), "-I",
+                str(root / "dlls/telar-platform/include"), "-I",
+                str(root / "dlls/telar-plugins/include"), "-I",
+                str(root / "dlls/telar-config/include"),
                 str(work / "probe.cpp"),
                 "-o",
                 str(work / "cpp"),

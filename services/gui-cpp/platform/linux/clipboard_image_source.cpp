@@ -1,30 +1,30 @@
 #include "platform/clipboard_image_source.hpp"
-#include "platform/clipboard_image_pipe.hpp"
-#include "platform/clipboard_image_transfer.hpp"
-#include "platform/file_descriptor.hpp"
 #include "application/dependencies.hpp"
 #include "attachments/catalog.hpp"
 #include "attachments/secure_erase.hpp"
 #include "attachments/sensitive_bytes.hpp"
 #include "attachments/types.hpp"
 #include "core/memory.hpp"
-#include "memory/allocator.hpp"
+#include "platform/clipboard_image_pipe.hpp"
+#include "platform/clipboard_image_transfer.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include <QBuffer>
 #include <QByteArray>
 #include <QByteArrayView>
-#include <QBuffer>
 #include <QClipboard>
 #include <QGuiApplication>
-#include <QImageReader>
 #include <QIODevice>
+#include <QImageReader>
 #include <QMimeData>
 #include <QSize>
 #include <QString>
 #include <QtCore/qstringliteral.h>
 #include <cstddef>
 #include <cstdint>
-#include <span>
 #include <memory>
 #include <optional>
+#include <span>
 #include <utility>
 
 namespace telar::gui::platform {

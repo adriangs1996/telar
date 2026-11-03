@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../error.hpp"
+#include "telar_platform/error.hpp"
 #include <cstdint>
 #include <cstdlib>
 #include <memory>

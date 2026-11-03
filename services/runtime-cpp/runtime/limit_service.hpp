@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../diagnostics/limit_ledger.hpp"
 #include "../model/runtime_model.hpp"
+#include "telar_base/diagnostics/limit_ledger.hpp"
 #include <cstdio>
 
 namespace telar::runtime {

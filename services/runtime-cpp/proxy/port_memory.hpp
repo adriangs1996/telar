@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../platform/private_file.hpp"
 #include "../platform/write_private_file.hpp"
 #include "port_range.hpp"
-#include "../platform/sha256.hpp"
+#include "telar_platform/private_file.hpp"
+#include "telar_platform/sha256.hpp"
 #include <charconv>
 #include <dirent.h>
 #include <optional>

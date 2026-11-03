@@ -1,7 +1,7 @@
 #include "managed_directory.hpp"
-#include "platform/error.hpp"
 #include "platform/path_limits.hpp"
-#include "platform/private_directory.hpp"
+#include "telar_platform/error.hpp"
+#include "telar_platform/private_directory.hpp"
 #include <algorithm>
 #include <array>
 #include <cerrno>

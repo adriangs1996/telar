@@ -1,8 +1,8 @@
 #include "check.hpp"
-#include "cli/runtime_paths.hpp"
-#include "cli/server_options.hpp"
-#include <filesystem>
+#include "telar_platform/runtime_paths.hpp"
+#include "telar_platform/server_options.hpp"
 #include <cstring>
+#include <filesystem>
 
 using namespace telar::runtime;
 using namespace telar::runtime::cli;

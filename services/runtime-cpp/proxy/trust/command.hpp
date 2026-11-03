@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../../memory/allocator.hpp"
-#include "../../platform/error.hpp"
-#include "../../text/json.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_base/text/json.hpp"
+#include "telar_platform/error.hpp"
 #include <cstdio>
 #include <spawn.h>
 #include <sys/wait.h>

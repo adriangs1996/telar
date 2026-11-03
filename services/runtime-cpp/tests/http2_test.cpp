@@ -1,8 +1,8 @@
 #include "check.hpp"
 #include "http2/direction_observer.hpp"
 #include "http2_fixture.hpp"
-#include "memory/c_allocation_blocks.hpp"
 #include "proxy/http2_connection.hpp"
+#include "telar_base/memory/c_allocation_blocks.hpp"
 #include "test_byte_stream.hpp"
 #include <string>
 #include <vector>

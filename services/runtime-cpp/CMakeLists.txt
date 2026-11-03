@@ -7,10 +7,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(TELAR_GHOSTTY_STATE_VERSION 6)
-include(cmake/lua.cmake)
 
 include(cmake/dependencies.cmake)
-add_subdirectory(../../dlls/telar-client "${CMAKE_CURRENT_BINARY_DIR}/telar-client")
+add_subdirectory(../../dlls/telar-config "${CMAKE_CURRENT_BINARY_DIR}/telar-config")
 
 add_library(ghostty-vt UNKNOWN IMPORTED)
 set_target_properties(ghostty-vt PROPERTIES
@@ -90,8 +89,6 @@ add_library(runtime-core STATIC
   cli/daemon.cpp
   graphics/png_decoder.cpp
   diagnostics/trace.cpp
-  platform/file_descriptor.cpp
-  platform/open_directory.c
   platform/pty_process.cpp
   platform/pipe_process.cpp
   platform/process_inspector.cpp
@@ -100,14 +97,14 @@ add_library(runtime-core STATIC
   platform/local_listener.cpp
   history/database.cpp
   terminal/cell_projection.cpp)
-set_target_properties(runtime-core runtime-lua PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties(runtime-core telar-lua-vm telar-platform PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(runtime-core PUBLIC . "${CMAKE_CURRENT_BINARY_DIR}/generated" "${NGHTTP2_INCLUDE_DIR}")
-target_link_libraries(runtime-core PUBLIC telar::client)
+target_link_libraries(runtime-core PUBLIC telar::config)
 target_link_libraries(runtime-core PUBLIC "${NGHTTP2_LIBRARY}")
 target_link_libraries(runtime-core PUBLIC "${PCAP_LIBRARY}")
 target_include_directories(runtime-core PUBLIC "${BROTLI_INCLUDE_DIR}" "${ZSTD_INCLUDE_DIR}")
 target_link_libraries(runtime-core PUBLIC "${ZLIB_LIBRARY}" "${BROTLI_DECODER_LIBRARY}" "${BROTLI_ENCODER_LIBRARY}" "${BROTLI_COMMON_LIBRARY}" "${ZSTD_LIBRARY}")
-target_link_libraries(runtime-core PUBLIC ghostty-vt runtime-lua "${SQLITE3_LIBRARY}" Threads::Threads OpenSSL::SSL OpenSSL::Crypto)
+target_link_libraries(runtime-core PUBLIC ghostty-vt "${SQLITE3_LIBRARY}" Threads::Threads OpenSSL::SSL OpenSSL::Crypto)
 if(APPLE)
   target_sources(runtime-core PRIVATE platform/macos/event_loop.cpp)
   target_link_libraries(runtime-core PUBLIC "-framework IOKit" "-framework CoreFoundation" "-framework Security")
@@ -125,7 +122,8 @@ if(TELAR_RUNTIME_SANITIZERS)
   if(TELAR_RUNTIME_DISTRIBUTABLE)
     message(FATAL_ERROR "Sanitizer builds require their compiler runtime and cannot use the distributable linkage check")
   endif()
-  target_compile_options(runtime-lua PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+  target_compile_options(telar-lua-vm PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+  target_compile_options(telar-platform PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
   target_compile_options(runtime-core PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
   target_link_options(runtime-core PUBLIC -fsanitize=address,undefined)
 endif()

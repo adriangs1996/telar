@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../memory/byte_queue.hpp"
-#include "../runtime/request_error.hpp"
 #include "command.hpp"
 #include "pipe_process.hpp"
+#include "telar_base/memory/byte_queue.hpp"
+#include "telar_base/request_error.hpp"
 #include <atomic>
 #include <chrono>
 #include <poll.h>

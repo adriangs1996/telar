@@ -5,7 +5,7 @@
 #include "font_resolver.hpp"
 #include "font_source.hpp"
 #include "fonts/face.hpp"
-#include "memory/allocator.hpp"
+#include "telar_base/memory/allocator.hpp"
 #include "terminal/font_grid.hpp"
 #include <QtCore/qtypes.h>
 #include <array>

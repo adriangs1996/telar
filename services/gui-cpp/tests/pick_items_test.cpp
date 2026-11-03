@@ -1,10 +1,10 @@
 #include "components/pick_items.hpp"
 #include "components/pick_items_reader.hpp"
 #include "components/pick_matches.hpp"
-#include "config/limit_notices.hpp"
 #include "core/memory.hpp"
-#include "lua/value.hpp"
-#include "lua/vm.hpp"
+#include "telar_config/limit_notices.hpp"
+#include "telar_lua/value.hpp"
+#include "telar_lua/vm.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <exception>

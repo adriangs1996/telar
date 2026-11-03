@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../diagnostics/config.hpp"
 #include "../diagnostics/operation.hpp"
 #include "../diagnostics/request_queue.hpp"
+#include "telar_base/diagnostics/config.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 
 namespace telar::runtime {

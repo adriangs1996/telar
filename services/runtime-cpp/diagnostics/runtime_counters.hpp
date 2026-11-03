@@ -1,11 +1,11 @@
 #pragma once
 
-#include "config.hpp"
 #include "graphics_counters.hpp"
 #include "line.hpp"
 #include "media_counters.hpp"
 #include "observation_counters.hpp"
 #include "system_counters.hpp"
+#include "telar_base/diagnostics/config.hpp"
 
 namespace telar::runtime::diagnostics {
 

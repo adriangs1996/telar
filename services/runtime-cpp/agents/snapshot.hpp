@@ -1,8 +1,8 @@
 #pragma once
 
 #include "../model/runtime_model.hpp"
-#include "provider.hpp"
 #include "registry.hpp"
+#include "telar_config/agents/provider.hpp"
 #include <cstring>
 
 namespace telar::runtime {

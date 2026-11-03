@@ -1,5 +1,4 @@
 #include "application.hpp"
-#include "config/command_tab_view.hpp"
 #include "machine_client.hpp"
 #include "machine_profiles_source.hpp"
 #include "machines/edit.hpp"
@@ -9,10 +8,11 @@
 #include "machines/picker.hpp"
 #include "machines/picker_target.hpp"
 #include "palette/query.hpp"
+#include "platform/runtime_endpoint.hpp"
 #include "presentation/palette_row_window.hpp"
 #include "projection.hpp"
 #include "runtime_connection.hpp"
-#include "platform/runtime_endpoint.hpp"
+#include "telar_config/command_tab_view.hpp"
 #include "text/bounded_text.hpp"
 #include <QLatin1StringView>
 #include <QString>

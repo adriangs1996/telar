@@ -1,11 +1,11 @@
 #pragma once
 
-#include "../memory/allocator.hpp"
 #include "../terminal/control/identity.hpp"
-#include "../memory/erasing_allocator.hpp"
-#include "error.hpp"
 #include "pty_process.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_base/memory/erasing_allocator.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_platform/error.hpp"
 #include <array>
 #include <limits.h>
 #include <string_view>

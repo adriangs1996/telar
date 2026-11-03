@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../../memory/allocator.hpp"
-#include "sequence.hpp"
 #include "apc_borrow.hpp"
+#include "sequence.hpp"
+#include "telar_base/memory/allocator.hpp"
 #include <array>
 #include <cstring>
 #include <utility>

@@ -2,16 +2,16 @@
 
 #include "../exchange_capture/decoded_body.hpp"
 #include "../exchange_capture/decoder_memory.hpp"
-#include "../text/ascii.hpp"
-#include "../text/fields.hpp"
+#include "telar_base/text/ascii.hpp"
+#include "telar_base/text/fields.hpp"
 #include <brotli/decode.h>
 #include <brotli/encode.h>
 #include <zlib.h>
 #define ZSTD_STATIC_LINKING_ONLY
-#include <zstd.h>
 #include <array>
 #include <memory>
 #include <stdexcept>
+#include <zstd.h>
 
 namespace telar::runtime {
 

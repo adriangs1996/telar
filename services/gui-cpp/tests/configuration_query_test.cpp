@@ -10,8 +10,8 @@
 #include "core/memory.hpp"
 #include "input/action.hpp"
 #include "json_fixture.hpp"
+#include "telar_base/text/json.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "text/json.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>

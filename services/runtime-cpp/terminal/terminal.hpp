@@ -3,16 +3,16 @@
 #include "../diagnostics/terminal_storage.hpp"
 #include "../diagnostics/trace.hpp"
 
-#include "../graphics/storage.hpp"
 #include "../graphics/pane_media.hpp"
+#include "../graphics/storage.hpp"
 #include "cell_projection.hpp"
+#include "control/engine.hpp"
 #include "effects.hpp"
 #include "ghostty_allocator.hpp"
 #include "graphics_cursor.hpp"
-#include "control/engine.hpp"
-#include "../memory/byte_queue.hpp"
 #include "pty_response_queue.hpp"
 #include "response_outbox.hpp"
+#include "telar_base/memory/byte_queue.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 
 namespace telar::runtime {

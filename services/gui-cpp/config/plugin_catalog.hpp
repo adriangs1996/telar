@@ -2,9 +2,9 @@
 
 #include "action_descriptions.hpp"
 #include "plugin_overrides.hpp"
-#include "plugins/identity.hpp"
-#include "plugins/package.hpp"
-#include "plugins/specifications.hpp"
+#include "telar_plugins/identity.hpp"
+#include "telar_plugins/package.hpp"
+#include "telar_plugins/specifications.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <span>

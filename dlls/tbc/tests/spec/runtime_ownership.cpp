@@ -2,7 +2,7 @@
 
 // CASE: runtime.allocator_escape
 // PAIR: runtime.allocator_dependency
-// SOURCE: services/runtime-cpp/memory/allocator.hpp :: AllocationDeleter / makeOwned
+// SOURCE: dlls/telar-base/include/telar_base/memory/allocator.hpp :: AllocationDeleter / makeOwned
 // STATUS: pending
 // CONTRACT: An allocated owner's deleter borrows the allocator until owner destruction.
 // SCENARIO: Heap-allocated pointee lifetime does not rescue a dead stack allocator.
@@ -15,7 +15,7 @@ tbc::view<spec::allocated_int, tbc::lt::a> allocatorEscape() {
 
 // CASE: runtime.allocator_caller_owned
 // PAIR: runtime.allocator_dependency
-// SOURCE: services/runtime-cpp/memory/allocator.hpp :: AllocationDeleter / makeOwned
+// SOURCE: dlls/telar-base/include/telar_base/memory/allocator.hpp :: AllocationDeleter / makeOwned
 // STATUS: pending
 // CONTRACT: A returned owner's allocator dependency is propagated to its caller.
 // SCENARIO: The allocator is borrowed from a reference parameter, not created locally.
@@ -27,7 +27,7 @@ tbc::view<spec::allocated_int, tbc::lt::a> allocatorCallerOwned(tbc::view<spec::
 
 // CASE: runtime.moved_owner_releases_view
 // PAIR: runtime.owner_transfer
-// SOURCE: services/runtime-cpp/memory/allocator.hpp :: Owned
+// SOURCE: dlls/telar-base/include/telar_base/memory/allocator.hpp :: Owned
 // STATUS: implemented
 // CONTRACT: Moving unique_ptr transfers ownership; destroying the new owner invalidates views.
 // SCENARIO: Follow the allocation to destination and diagnose reset, not the prior move.
@@ -43,7 +43,7 @@ void movedOwnerReleasesView() {
 
 // CASE: runtime.moved_owner_preserves_view
 // PAIR: runtime.owner_transfer
-// SOURCE: services/runtime-cpp/memory/allocator.hpp :: Owned
+// SOURCE: dlls/telar-base/include/telar_base/memory/allocator.hpp :: Owned
 // STATUS: implemented
 // CONTRACT: Moving a unique_ptr does not move its pointee or immediately dangle its views.
 // SCENARIO: Accept a pointee read while the transferred allocation remains owned.

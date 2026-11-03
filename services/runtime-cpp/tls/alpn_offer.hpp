@@ -1,8 +1,8 @@
 #pragma once
 
 #include "../proxy/socket.hpp"
-#include "../proxy/hostname.hpp"
-#include "../memory/fixed_text.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_config/proxy/hostname.hpp"
 #include <array>
 #include <cstdint>
 #include <span>

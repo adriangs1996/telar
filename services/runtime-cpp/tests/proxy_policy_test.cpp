@@ -1,6 +1,6 @@
 #include "check.hpp"
-#include "config/proxy_reader.hpp"
-#include "lua/vm.hpp"
+#include "telar_config/proxy_reader.hpp"
+#include "telar_lua/vm.hpp"
 
 using namespace telar::runtime;
 

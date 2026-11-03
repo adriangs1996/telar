@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../memory/sensitive_text.hpp"
 #include "../platform/cancellation_signal.hpp"
 #include "../platform/pipe_process.hpp"
-#include "limits.hpp"
+#include "telar_base/memory/sensitive_text.hpp"
+#include "telar_plugins/limits.hpp"
 #include <algorithm>
 #include <array>
 #include <climits>

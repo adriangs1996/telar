@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../memory/allocation_statistics.hpp"
 #include "line.hpp"
+#include "telar_base/memory/allocation_statistics.hpp"
 #if defined(__APPLE__)
 #include <mach/mach.h>
 #else

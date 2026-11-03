@@ -1,7 +1,7 @@
 #pragma once
 
 #include "pty_response_queue.hpp"
-#include "../memory/allocator.hpp"
+#include "telar_base/memory/allocator.hpp"
 #include <stdexcept>
 
 namespace telar::runtime {

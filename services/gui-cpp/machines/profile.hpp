@@ -4,7 +4,7 @@
 #include "field_rules.hpp"
 #include "identity.hpp"
 #include "limits.hpp"
-#include "memory/fixed_text.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>

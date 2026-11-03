@@ -153,7 +153,7 @@ def main():
         (work / "probe.cpp").write_text(cpp_probe)
         (work / "probe.zig").write_text(reference_source(root))
         (work / "freetype.zig").write_text(freetype_probe)
-        subprocess.run([options.compiler, "-std=c++23", "-O2", "-ffp-contract=off", "-I", str(root / "services/gui-cpp"), "-I", str(root / "services/runtime-cpp"), "-I", str(root / "dlls/telar-client/include"), str(work / "probe.cpp"), "-o", str(work / "cpp")], check=True)
+        subprocess.run([options.compiler, "-std=c++23", "-O2", "-ffp-contract=off", "-I", str(root / "services/gui-cpp"), "-I", str(root / "services/runtime-cpp"), "-I", str(root / "dlls/telar-client/include"), "-I", str(root / "dlls/telar-base/include"), "-I", str(root / "dlls/telar-lua/include"), "-I", str(root / "dlls/telar-platform/include"), "-I", str(root / "dlls/telar-plugins/include"), "-I", str(root / "dlls/telar-config/include"), str(work / "probe.cpp"), "-o", str(work / "cpp")], check=True)
         subprocess.run(["zig", "build-exe", "-O", "ReleaseSafe", "-lc", "--dep", "font_size", "--dep", "gui_font", "--dep", "freetype", f"-Mroot={work / 'probe.zig'}", "--dep", "freetype", f"-Mfont_size={root / 'src/gui/text/FontSize.zig'}", f"-Mgui_font={root / 'src/client/config/GuiFont.zig'}", f"-Mfreetype={work / 'freetype.zig'}", f"-femit-bin={work / 'zig'}"], check=True)
         expected = subprocess.run([str(work / "zig")], input=payload, capture_output=True, check=True).stdout
         actual = subprocess.run([str(work / "cpp")], input=payload, capture_output=True, check=True).stdout

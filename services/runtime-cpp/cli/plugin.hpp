@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../plugins/inspection.hpp"
 #include "../plugins/package_installation.hpp"
 #include "../plugins/paths.hpp"
 #include "../plugins/trust_update.hpp"
 #include "plugin_options.hpp"
+#include "telar_plugins/inspection.hpp"
 
 namespace telar::runtime::cli {
 

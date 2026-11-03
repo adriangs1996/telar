@@ -1,6 +1,6 @@
-#include "../platform/peer_credentials.hpp"
 #include "runtime_connection.hpp"
-#include "../platform/file_descriptor.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include "telar_platform/peer_credentials.hpp"
 #include <csignal>
 #include <pthread.h>
 

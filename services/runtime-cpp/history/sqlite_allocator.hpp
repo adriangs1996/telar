@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../memory/allocator.hpp"
+#include "telar_base/memory/allocator.hpp"
 #include <cstring>
 #include <sqlite3.h>
 #include <stdexcept>

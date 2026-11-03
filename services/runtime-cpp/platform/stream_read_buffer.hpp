@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../memory/sensitive_buffer.hpp"
 #include "byte_stream.hpp"
+#include "telar_base/memory/sensitive_buffer.hpp"
 #include <algorithm>
 #include <cassert>
 #include <cstring>

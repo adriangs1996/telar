@@ -2,12 +2,12 @@
 
 #include "../platform/thread_name.hpp"
 
-#include "../memory/slot_indexes.hpp"
-#include "../memory/drop_channel.hpp"
 #include "connection.hpp"
 #include "listener.hpp"
 #include "refusal.hpp"
 #include "socket_watch.hpp"
+#include "telar_base/memory/drop_channel.hpp"
+#include "telar_base/memory/slot_indexes.hpp"
 #include <thread>
 
 namespace telar::runtime {

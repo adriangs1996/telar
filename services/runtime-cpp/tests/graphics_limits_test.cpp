@@ -1,6 +1,6 @@
 #include "check.hpp"
 #include "graphics/media_terminal.hpp"
-#include "memory/allocator.hpp"
+#include "telar_base/memory/allocator.hpp"
 #include <string>
 
 using namespace telar;

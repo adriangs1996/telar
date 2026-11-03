@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../proxy/hostname.hpp"
-#include <arpa/inet.h>
+#include "telar_config/proxy/hostname.hpp"
 #include <algorithm>
+#include <arpa/inet.h>
 #include <array>
 
 namespace telar::runtime {

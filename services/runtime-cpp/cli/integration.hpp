@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../memory/allocator.hpp"
 #include "integration_options.hpp"
+#include "telar_base/memory/allocator.hpp"
 
 namespace telar::runtime::cli {
 

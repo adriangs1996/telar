@@ -1,11 +1,11 @@
 #pragma once
 
-#include "config/limit_notices.hpp"
 #include "content.hpp"
 #include "input/action.hpp"
-#include "lua/value.hpp"
 #include "snapshot.hpp"
 #include "source.hpp"
+#include "telar_config/limit_notices.hpp"
+#include "telar_lua/value.hpp"
 #include <algorithm>
 #include <array>
 #include <cstddef>

@@ -2,9 +2,9 @@
 
 #include "link_target.hpp"
 #include "link_text.hpp"
-#include "memory/fixed_text.hpp"
 #include "path_recognizer.hpp"
-#include "text/ascii.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/ascii.hpp"
 #include "text/bounded_text.hpp"
 #include "uri_view.hpp"
 #include <charconv>

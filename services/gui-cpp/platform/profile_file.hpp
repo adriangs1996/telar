@@ -3,10 +3,10 @@
 #include "core/memory.hpp"
 #include "machines/limits.hpp"
 #include "path_limits.hpp"
-#include "platform/error.hpp"
-#include "platform/file_descriptor.hpp"
-#include "platform/private_file.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
+#include "telar_platform/error.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include "telar_platform/private_file.hpp"
 #include <array>
 #include <cerrno>
 #include <cstddef>

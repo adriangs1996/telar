@@ -7,13 +7,13 @@
 #include "attachments/types.hpp"
 #include "core/memory.hpp"
 #include "graphics/artwork_resize.hpp"
-#include "memory/allocator.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include <QBuffer>
 #include <QByteArray>
 #include <QByteArrayView>
-#include <QBuffer>
+#include <QIODevice>
 #include <QImage>
 #include <QImageReader>
-#include <QIODevice>
 #include <QSize>
 #include <QtCore/qtypes.h>
 #include <cstddef>

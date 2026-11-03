@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../../memory/allocator.hpp"
 #include "../pty_response_queue.hpp"
+#include "telar_base/memory/allocator.hpp"
 #include <array>
 #include <charconv>
 #include <stdexcept>

@@ -5,12 +5,12 @@
 #include "../platform/event_token.hpp"
 #include "../proxy/client_configuration.hpp"
 #include "../terminal/text_reader.hpp"
-#include "geometry_lease.hpp"
 #include "clipboard_service.hpp"
+#include "geometry_lease.hpp"
 #include "launch_failure_cause.hpp"
 #include "limit_service.hpp"
 #include "pane_launch_options.hpp"
-#include "request_error.hpp"
+#include "telar_base/request_error.hpp"
 #include "workspace_notifications.hpp"
 #include <charconv>
 #include <sys/wait.h>

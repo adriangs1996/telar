@@ -5,11 +5,11 @@
 #include "machines/failure.hpp"
 #include "machines/field_rules.hpp"
 #include "machines/remote_command.hpp"
-#include "platform/file_descriptor.hpp"
 #include "platform/managed_directory.hpp"
 #include "platform/path_limits.hpp"
 #include "platform/stdio_socket.hpp"
 #include "ssh_options.hpp"
+#include "telar_platform/file_descriptor.hpp"
 #include "transport/runtime_protocol.hpp"
 #include <QByteArray>
 #include <QFutureWatcher>

@@ -1,12 +1,12 @@
 #pragma once
 
-#include "log_interface.hpp"
 #include "direction.hpp"
-#include "../memory/fixed_text.hpp"
+#include "log_interface.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include <algorithm>
-#include <array>
 #include <arpa/inet.h>
+#include <array>
 #include <memory>
 #include <pcap/pcap.h>
 

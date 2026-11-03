@@ -3,8 +3,8 @@
 #include "failure.hpp"
 #include "field_rules.hpp"
 #include "limits.hpp"
-#include "memory/fixed_text.hpp"
 #include "profile.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include <algorithm>
 #include <array>
 #include <cstddef>

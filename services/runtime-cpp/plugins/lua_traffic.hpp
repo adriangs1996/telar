@@ -1,11 +1,11 @@
 #pragma once
 
-#include "lua_traffic_value.hpp"
-#include "lua_traffic_control.hpp"
 #include "lua_effects.hpp"
+#include "lua_traffic_control.hpp"
+#include "lua_traffic_value.hpp"
+#include "telar_base/memory/byte_queue.hpp"
+#include "telar_base/memory/sensitive_allocation.hpp"
 #include "traffic_api.hpp"
-#include "../memory/byte_queue.hpp"
-#include "../memory/sensitive_allocation.hpp"
 
 namespace telar::runtime::plugins {
 

@@ -4,8 +4,8 @@
 #include "diagnostics/proxy_sample.hpp"
 #include "diagnostics/runtime_counters.hpp"
 #include "diagnostics/runtime_telemetry.hpp"
-#include "memory/allocator.hpp"
-#include "platform/temporary_directory.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_platform/temporary_directory.hpp"
 #include "terminal/frame_sync.hpp"
 #include "terminal/terminal.hpp"
 #include <filesystem>

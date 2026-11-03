@@ -1,12 +1,12 @@
 #pragma once
 
 #include "limits.hpp"
-#include "memory/fixed_text.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
-#include "text/utf8.hpp"
 #include <algorithm>
 #include <array>
 #include <cstddef>

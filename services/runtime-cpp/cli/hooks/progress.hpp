@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../../text/decimal.hpp"
 #include "payload.hpp"
 #include "reports.hpp"
+#include "telar_base/text/decimal.hpp"
 #include "text.hpp"
 
 namespace telar::runtime::cli::hooks {

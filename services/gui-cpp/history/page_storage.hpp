@@ -2,9 +2,9 @@
 
 #include "core/memory.hpp"
 #include "entry.hpp"
+#include "telar_base/text/utf8.hpp"
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "text/utf8.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <span>

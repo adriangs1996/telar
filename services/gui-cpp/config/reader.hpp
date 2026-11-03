@@ -1,10 +1,10 @@
 #pragma once
 
-#include "config/gui_validator.hpp"
-#include "config/theme_validator.hpp"
-#include "config/value_constraints.hpp"
 #include "core/configuration.hpp"
 #include "presentation/theme.hpp"
+#include "telar_config/gui_validator.hpp"
+#include "telar_config/theme_validator.hpp"
+#include "telar_config/value_constraints.hpp"
 #include "theme_reader.hpp"
 #include "themes.hpp"
 

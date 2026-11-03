@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../memory/erase_sensitive.hpp"
+#include "telar_base/memory/erase_sensitive.hpp"
 #include <array>
 #include <cstdint>
 #include <optional>

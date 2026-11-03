@@ -1,10 +1,10 @@
-#include "../platform/peer_credentials.hpp"
 #include "../platform/socket_signals.hpp"
+#include "telar_platform/peer_credentials.hpp"
 #pragma once
 
-#include "../platform/error.hpp"
-#include "../platform/file_descriptor.hpp"
 #include "protocol.hpp"
+#include "telar_platform/error.hpp"
+#include "telar_platform/file_descriptor.hpp"
 #include <algorithm>
 #include <poll.h>
 #include <sys/socket.h>

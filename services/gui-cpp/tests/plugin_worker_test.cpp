@@ -2,14 +2,14 @@
 #include "config/action_descriptions.hpp"
 #include "config/plugin_effects.hpp"
 #include "config/plugin_invocation.hpp"
-#include "platform/file_descriptor.hpp"
-#include "platform/write_descriptor.hpp"
-#include "plugins/package_inspection.hpp"
 #include "qt/plugin_packages.hpp"
 #include "qt/plugin_worker.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include "telar_platform/write_descriptor.hpp"
+#include "telar_plugins/package_inspection.hpp"
 #include <QCoreApplication>
 #include <QFile>
 #include <QIODevice>

@@ -1,11 +1,11 @@
 #pragma once
 
-#include "../memory/erasing_allocator.hpp"
-#include "../memory/fixed_text.hpp"
-#include "../memory/sensitive_text.hpp"
 #include "../platform/completion_signal.hpp"
-#include "../proxy/host_policy.hpp"
 #include "flow.hpp"
+#include "telar_base/memory/erasing_allocator.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/memory/sensitive_text.hpp"
+#include "telar_config/proxy/host_policy.hpp"
 #include <atomic>
 #include <mutex>
 

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../memory/erase_sensitive.hpp"
-#include "../text/ascii.hpp"
+#include "telar_base/memory/erase_sensitive.hpp"
+#include "telar_base/text/ascii.hpp"
 #include <algorithm>
 #include <array>
 #include <charconv>

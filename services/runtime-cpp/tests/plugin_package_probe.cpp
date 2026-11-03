@@ -1,7 +1,7 @@
-#include "platform/write_descriptor.hpp"
-#include "plugins/inspection.hpp"
-#include "plugins/package_inspector.hpp"
 #include "plugins/package_snapshots.hpp"
+#include "telar_platform/write_descriptor.hpp"
+#include "telar_plugins/inspection.hpp"
+#include "telar_plugins/package_inspector.hpp"
 #include <cstdio>
 
 using namespace telar::runtime;

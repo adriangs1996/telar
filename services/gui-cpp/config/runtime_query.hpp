@@ -1,9 +1,9 @@
 #pragma once
 
-#include "config/runtime_values.hpp"
 #include "core/json_writer.hpp"
 #include "core/memory.hpp"
-#include "proxy/options.hpp"
+#include "telar_config/proxy/options.hpp"
+#include "telar_config/runtime_values.hpp"
 #include <optional>
 #include <span>
 #include <string_view>

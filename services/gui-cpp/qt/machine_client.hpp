@@ -6,10 +6,10 @@
 #include "machine_client_key.hpp"
 #include "machines/limits.hpp"
 #include "machines/machine_row.hpp"
-#include "memory/fixed_text.hpp"
 #include "platform/awake_clock.hpp"
 #include "platform/window_lease.hpp"
 #include "runtime_connection.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include <cstdint>
 #include <optional>
 

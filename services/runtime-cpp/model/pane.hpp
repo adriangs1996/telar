@@ -4,17 +4,17 @@
 #include "../agents/resume.hpp"
 #include "../diagnostics/runtime_counters.hpp"
 #include "../graphics/pane_media.hpp"
-#include "../memory/byte_queue.hpp"
 #include "../observation/pane_observer.hpp"
 #include "../persistence/launch_record.hpp"
 #include "../platform/command.hpp"
 #include "../platform/process_cache.hpp"
 #include "../terminal/terminal.hpp"
 #include "pane_launch.hpp"
+#include "telar_base/memory/byte_queue.hpp"
 #include <chrono>
 #include <csignal>
-#include <sys/wait.h>
 #include <sys/uio.h>
+#include <sys/wait.h>
 #include <system_error>
 
 namespace telar::runtime {

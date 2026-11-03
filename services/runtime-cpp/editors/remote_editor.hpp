@@ -5,7 +5,7 @@
 #include "../platform/command_output.hpp"
 #include "../runtime/request_context.hpp"
 #include "../transport/encoded_reply.hpp"
-#include "kind.hpp"
+#include "telar_base/editors/kind.hpp"
 #include <charconv>
 #include <dirent.h>
 #include <fcntl.h>

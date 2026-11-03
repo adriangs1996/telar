@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../platform/private_directory.hpp"
-#include "../platform/temporary_directory.hpp"
 #include "../platform/rename.hpp"
-#include "package_copy.hpp"
+#include "telar_platform/private_directory.hpp"
+#include "telar_platform/temporary_directory.hpp"
+#include "telar_plugins/package_copy.hpp"
 
 namespace telar::runtime::plugins {
 

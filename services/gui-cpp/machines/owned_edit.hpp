@@ -3,7 +3,7 @@
 #include "edit.hpp"
 #include "failure.hpp"
 #include "limits.hpp"
-#include "memory/fixed_text.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include <optional>
 #include <string_view>
 

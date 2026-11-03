@@ -1,8 +1,8 @@
 #pragma once
 
 #include "../http1/number.hpp"
-#include "../text/ascii.hpp"
-#include "../text/fields.hpp"
+#include "telar_base/text/ascii.hpp"
+#include "telar_base/text/fields.hpp"
 #include <algorithm>
 
 namespace telar::runtime {

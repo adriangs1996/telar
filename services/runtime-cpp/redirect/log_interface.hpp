@@ -1,13 +1,13 @@
 #pragma once
 
-#include "../platform/file_descriptor.hpp"
-#include "../platform/error.hpp"
+#include "telar_platform/error.hpp"
+#include "telar_platform/file_descriptor.hpp"
 #include <cstdio>
-#include <stdexcept>
 #include <net/if.h>
+#include <stdexcept>
 #include <sys/ioctl.h>
-#include <sys/sockio.h>
 #include <sys/socket.h>
+#include <sys/sockio.h>
 
 namespace telar::runtime::redirect {
 

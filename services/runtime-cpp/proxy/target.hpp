@@ -1,6 +1,6 @@
 #pragma once
 
-#include "hostname.hpp"
+#include "telar_config/proxy/hostname.hpp"
 #include <charconv>
 #include <cstdint>
 #include <optional>

@@ -1,16 +1,16 @@
 #pragma once
 
-#include "reply.hpp"
-#include "graphics_payload.hpp"
-#include "graphics_header.hpp"
 #include "../../graphics/child_file.hpp"
 #include "../../graphics/child_shared_memory.hpp"
-#include "../../graphics/temporary_path.hpp"
-#include "../../graphics/png_decoder.hpp"
-#include "../../graphics/limits.hpp"
-#include "../../graphics/query_resources.hpp"
 #include "../../graphics/media_budget.hpp"
+#include "../../graphics/png_decoder.hpp"
+#include "../../graphics/query_resources.hpp"
+#include "../../graphics/temporary_path.hpp"
 #include "../ghostty_allocator.hpp"
+#include "graphics_header.hpp"
+#include "graphics_payload.hpp"
+#include "reply.hpp"
+#include "telar_config/graphics/limits.hpp"
 #include <cassert>
 #include <charconv>
 #include <zlib.h>

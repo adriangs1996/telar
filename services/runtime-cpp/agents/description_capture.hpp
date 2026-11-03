@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../memory/sensitive_text.hpp"
 #include "../terminal/input_scanner.hpp"
+#include "telar_base/memory/sensitive_text.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 
 namespace telar::runtime {

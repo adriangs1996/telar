@@ -182,7 +182,7 @@ def main():
         zig = temporary / "probe.zig"
         cpp.write_text(cpp_probe)
         zig.write_text(zig_probe)
-        subprocess.run([arguments.compiler, "-std=c++23", "-O2", "-I", str(root / "services/gui-cpp"), "-I", str(root / "services/runtime-cpp"), "-I", str(root / "dlls/telar-client/include"), str(cpp), "-o", str(temporary / "cpp")], check=True)
+        subprocess.run([arguments.compiler, "-std=c++23", "-O2", "-I", str(root / "services/gui-cpp"), "-I", str(root / "services/runtime-cpp"), "-I", str(root / "dlls/telar-client/include"), "-I", str(root / "dlls/telar-base/include"), "-I", str(root / "dlls/telar-lua/include"), "-I", str(root / "dlls/telar-platform/include"), "-I", str(root / "dlls/telar-plugins/include"), "-I", str(root / "dlls/telar-config/include"), str(cpp), "-o", str(temporary / "cpp")], check=True)
         subprocess.run([arguments.zig, "build-exe", "-O", "ReleaseFast", "-lc", "--dep", "urlscan", f"-Mroot={zig}", f"-Murlscan={root / 'lib/urlscan/root.zig'}", f"-femit-bin={temporary / 'zig'}"], check=True)
         actual = subprocess.run([str(temporary / "cpp")], input=data, stdout=subprocess.PIPE, check=True).stdout
         expected = subprocess.run([str(temporary / "zig")], input=data, stdout=subprocess.PIPE, check=True).stdout

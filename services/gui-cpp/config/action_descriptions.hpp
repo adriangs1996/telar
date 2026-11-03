@@ -2,7 +2,7 @@
 
 #include "core/memory.hpp"
 #include "input/binding.hpp"
-#include "memory/fixed_text.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include <cstddef>
 #include <cstdint>

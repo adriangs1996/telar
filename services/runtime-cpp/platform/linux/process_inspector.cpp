@@ -1,6 +1,6 @@
 #include "../process_inspector.hpp"
-#include "../../text/utf8.hpp"
 #include "proc_file.hpp"
+#include "telar_base/text/utf8.hpp"
 #include <dirent.h>
 #include <sys/socket.h>
 

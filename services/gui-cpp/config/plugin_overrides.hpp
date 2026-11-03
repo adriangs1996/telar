@@ -1,6 +1,6 @@
 #pragma once
 
-#include "plugins/specifications.hpp"
+#include "telar_plugins/specifications.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>

@@ -1,7 +1,7 @@
 #include "window_lease.hpp"
-#include "platform/file_descriptor.hpp"
-#include "platform/open_beneath.hpp"
-#include "platform/private_directory.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include "telar_platform/open_beneath.hpp"
+#include "telar_platform/private_directory.hpp"
 #include <algorithm>
 #include <array>
 #include <cerrno>

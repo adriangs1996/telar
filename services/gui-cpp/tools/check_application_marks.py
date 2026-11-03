@@ -15,7 +15,7 @@ from check_presentation import source_function
 cpp_probe = r'''
 #include "presentation/application_mark.hpp"
 #include "graphics/artwork_resize.hpp"
-#include "agents/builtin_manifests.hpp"
+#include "telar_config/agents/builtin_manifests.hpp"
 #include <array>
 #include <cstdint>
 #include <fstream>
@@ -224,7 +224,7 @@ def main():
         (work / "probe.zig").write_text(zig_probe)
         (work / "core.zig").write_text(core)
         (work / "atlas.rgba").write_bytes(atlas.read_bytes())
-        includes = ["-I" + str(root / "services" / name) for name in ("gui-cpp", "runtime-cpp")] + ["-I" + str(root / "dlls/telar-client/include")]
+        includes = ["-I" + str(root / "services" / name) for name in ("gui-cpp", "runtime-cpp")] + ["-I" + str(root / "dlls/telar-client/include"), "-I" + str(root / "dlls/telar-base/include"), "-I" + str(root / "dlls/telar-lua/include"), "-I" + str(root / "dlls/telar-platform/include"), "-I" + str(root / "dlls/telar-plugins/include"), "-I" + str(root / "dlls/telar-config/include")]
         sanitizers = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"] if options.sanitizers else []
         subprocess.run([options.compiler, "-std=c++23", "-O2", "-ffp-contract=off", *sanitizers, *includes, str(work / "probe.cpp"), "-o", str(work / "cpp")], check=True)
         subprocess.run(["zig", "build-exe", "-O", "ReleaseSafe", "-lc", "--dep", "icons", "--dep", "telar-core", "--dep", "resize", "--dep", "premultiply", f"-Mroot={work / 'probe.zig'}", "--dep", "telar-core", f"-Micons={root / 'src/model/layout/icons.zig'}", f"-Mtelar-core={work / 'core.zig'}", f"-Mresize={root / 'lib/imaging/resize.zig'}", f"-Mpremultiply={root / 'lib/imaging/premultiply.zig'}", f"-femit-bin={work / 'zig'}"], check=True)

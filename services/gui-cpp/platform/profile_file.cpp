@@ -1,12 +1,12 @@
 #include "profile_file.hpp"
 #include "path_limits.hpp"
-#include "platform/error.hpp"
-#include "platform/file_descriptor.hpp"
-#include "platform/open_beneath.hpp"
-#include "platform/private_directory.hpp"
-#include "platform/write_descriptor.hpp"
 #include "secure_random.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
+#include "telar_platform/error.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include "telar_platform/open_beneath.hpp"
+#include "telar_platform/private_directory.hpp"
+#include "telar_platform/write_descriptor.hpp"
 #include "text/bounded_text.hpp"
 #include <algorithm>
 #include <array>

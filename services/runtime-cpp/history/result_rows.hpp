@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../memory/byte_queue.hpp"
 #include "database.hpp"
+#include "telar_base/memory/byte_queue.hpp"
 
 namespace telar::runtime {
 

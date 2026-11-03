@@ -1,7 +1,7 @@
 #pragma once
 
-#include "editors/kind.hpp"
 #include "link_text.hpp"
+#include "telar_base/editors/kind.hpp"
 #include "text/bounded_text.hpp"
 #include <array>
 #include <cstddef>

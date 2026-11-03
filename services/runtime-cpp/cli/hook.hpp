@@ -6,7 +6,7 @@
 #include "hooks/session.hpp"
 #include "hooks/target.hpp"
 #include "hooks/worktrees.hpp"
-#include "runtime_paths.hpp"
+#include "telar_platform/runtime_paths.hpp"
 
 namespace telar::runtime::cli {
 

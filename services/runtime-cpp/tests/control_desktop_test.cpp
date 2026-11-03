@@ -1,9 +1,9 @@
 #include "client_peer.hpp"
-#include "config/control_reader.hpp"
 #include "runtime/workspace_service.hpp"
-#include <string>
+#include "telar_config/control_reader.hpp"
 #include <chrono>
 #include <poll.h>
+#include <string>
 #include <termios.h>
 
 using namespace telar;

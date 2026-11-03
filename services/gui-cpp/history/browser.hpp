@@ -2,13 +2,13 @@
 
 #include "choice.hpp"
 #include "entry.hpp"
-#include "memory/fixed_text.hpp"
 #include "page_storage.hpp"
 #include "plain_text.hpp"
 #include "search.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
-#include "text/utf8.hpp"
 #include <algorithm>
 #include <array>
 #include <cstddef>

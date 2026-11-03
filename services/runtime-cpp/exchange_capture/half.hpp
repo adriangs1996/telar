@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../memory/sensitive_text.hpp"
-#include "../proxy/capture_limits.hpp"
-#include "../text/ascii.hpp"
-#include "../text/fields.hpp"
 #include "buffer.hpp"
+#include "telar_base/memory/sensitive_text.hpp"
+#include "telar_base/text/ascii.hpp"
+#include "telar_base/text/fields.hpp"
+#include "telar_config/proxy/capture_limits.hpp"
 #include "types.hpp"
 
 namespace telar::runtime {

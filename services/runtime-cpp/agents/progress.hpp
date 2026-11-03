@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-#include "../memory/fixed_text.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 
 namespace telar::runtime {

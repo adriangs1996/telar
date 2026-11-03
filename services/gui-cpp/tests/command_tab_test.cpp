@@ -4,11 +4,7 @@
 #include "assertions.hpp"
 #include "config/callback.hpp"
 #include "config/command_tab_action.hpp"
-#include "config/command_tab_reference.hpp"
-#include "config/command_tab_registry.hpp"
-#include "config/command_tab_view.hpp"
 #include "config/generation.hpp"
-#include "config/limit_notices.hpp"
 #include "core/memory.hpp"
 #include "input/action.hpp"
 #include "input/tab_drag.hpp"
@@ -16,6 +12,10 @@
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/command_tab_reference.hpp"
+#include "telar_config/command_tab_registry.hpp"
+#include "telar_config/command_tab_view.hpp"
+#include "telar_config/limit_notices.hpp"
 #include <algorithm>
 #include <array>
 #include <cstddef>

@@ -2,8 +2,8 @@
 #include "fonts/face.hpp"
 #include "fonts/shaped_run_view.hpp"
 #include "platform/font.h"
-#include "platform/read_file.hpp"
 #include "presentation/notification_text.hpp"
+#include "telar_platform/read_file.hpp"
 #include "text/grapheme_cursor.hpp"
 #include "text/text_fit.hpp"
 #include <bit>

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "clipboard_metadata.hpp"
-#include "../../memory/allocator.hpp"
+#include "telar_base/memory/allocator.hpp"
 #include <optional>
 
 namespace telar::runtime::control {

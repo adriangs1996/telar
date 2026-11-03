@@ -1,12 +1,12 @@
 #pragma once
 
-#include "tcp_packet.hpp"
 #include "flow.hpp"
-#include "../memory/allocator.hpp"
-#include "../memory/erasing_allocator.hpp"
-#include "../memory/sensitive_buffer.hpp"
-#include <unordered_map>
+#include "tcp_packet.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_base/memory/erasing_allocator.hpp"
+#include "telar_base/memory/sensitive_buffer.hpp"
 #include <bit>
+#include <unordered_map>
 
 namespace telar::runtime::traffic {
 

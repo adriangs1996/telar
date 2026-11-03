@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../../memory/fixed_text.hpp"
-#include "../../text/base64.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/base64.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 
 namespace telar::runtime::control {

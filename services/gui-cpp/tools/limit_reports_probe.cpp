@@ -1,7 +1,7 @@
 #include "application/limit_reports.hpp"
-#include "memory/allocator.hpp"
 #include "probe_io.hpp"
 #include "probe_text.hpp"
+#include "telar_base/memory/allocator.hpp"
 #include <cstdint>
 #include <cstdio>
 #include <exception>

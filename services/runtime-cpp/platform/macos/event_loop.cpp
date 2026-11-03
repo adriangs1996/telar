@@ -1,5 +1,5 @@
 #include "../event_loop.hpp"
-#include "../error.hpp"
+#include "telar_platform/error.hpp"
 #include <csignal>
 
 namespace telar::runtime {

@@ -187,7 +187,7 @@ def main():
     for name,_ in aliases:command+=['--dep',name]
     command+=['-Mroot='+str(root/'probe.zig'),'--dep','telar-core','-Mmodel='+str(root/'model.zig')]
     command+=['-M'+name+'='+str(root/file) for name,file in aliases if name!='model'];command+=['-femit-bin='+str(out/'reference')]
-    candidate=[a.compiler,'-std=c++23','-O2','-ffp-contract=off','-Wall','-Wextra','-Werror','-I'+str(service),'-I'+str(repo/'dlls/telar-client/include'),str(service/'tools/tab_drag_probe.cpp'),'-o',str(out/'candidate')]
+    candidate=[a.compiler,'-std=c++23','-O2','-ffp-contract=off','-Wall','-Wextra','-Werror','-I'+str(service),'-I'+str(repo/'dlls/telar-client/include'), '-I'+str(repo/'dlls/telar-base/include'), '-I'+str(repo/'dlls/telar-lua/include'), '-I'+str(repo/'dlls/telar-platform/include'), '-I'+str(repo/'dlls/telar-plugins/include'), '-I'+str(repo/'dlls/telar-config/include'),str(service/'tools/tab_drag_probe.cpp'),'-o',str(out/'candidate')]
     if a.sanitizers:candidate+=['-fsanitize=address,undefined','-fno-omit-frame-pointer']
     for name,command in [('reference',command),('candidate',candidate)]:
         r=subprocess.run(command,capture_output=True);(out/(name+'-build.log')).write_bytes(r.stdout+r.stderr);(out/(name+'-build.json')).write_text(json.dumps(dict(command=command,actual_exit=r.returncode),indent=2)+'\n');r.check_returncode()

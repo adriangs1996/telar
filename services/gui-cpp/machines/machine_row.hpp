@@ -2,7 +2,7 @@
 
 #include "identity.hpp"
 #include "limits.hpp"
-#include "memory/fixed_text.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include <cstdint>
 #include <optional>
 #include <string_view>

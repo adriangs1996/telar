@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../memory/allocator.hpp"
-#include "../platform/private_directory.hpp"
-#include "../platform/private_file.hpp"
 #include "../platform/write_private_file.hpp"
 #include "records.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_platform/private_directory.hpp"
+#include "telar_platform/private_file.hpp"
 #include <cstdio>
 #include <sys/file.h>
 

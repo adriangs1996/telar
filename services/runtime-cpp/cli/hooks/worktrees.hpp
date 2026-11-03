@@ -1,11 +1,11 @@
 #pragma once
 
-#include "../../memory/retained_stream.hpp"
 #include "../../platform/command_output.hpp"
 #include "../../platform/git_files.hpp"
-#include "../runtime_paths.hpp"
 #include "object.hpp"
 #include "target.hpp"
+#include "telar_base/memory/retained_stream.hpp"
+#include "telar_platform/runtime_paths.hpp"
 
 namespace telar::runtime::cli::hooks {
 

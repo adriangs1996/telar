@@ -1,11 +1,11 @@
 #pragma once
 
-#include "../../memory/fixed_text.hpp"
-#include "../../platform/private_file.hpp"
 #include "../../platform/write_private_file.hpp"
-#include "../../text/json_fields.hpp"
-#include "../../text/schema_version.hpp"
-#include "../../text/utf8.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/json_fields.hpp"
+#include "telar_base/text/schema_version.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_platform/private_file.hpp"
 
 namespace telar::runtime::proxy_trust {
 

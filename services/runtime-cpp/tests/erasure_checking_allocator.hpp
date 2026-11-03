@@ -1,7 +1,7 @@
 #pragma once
 
 #include "check.hpp"
-#include "memory/allocator.hpp"
+#include "telar_base/memory/allocator.hpp"
 #include <span>
 
 class ErasureCheckingAllocator {

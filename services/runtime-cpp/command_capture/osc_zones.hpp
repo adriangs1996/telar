@@ -1,10 +1,10 @@
 #pragma once
 
 #include "../diagnostics/command_capture.hpp"
-#include "../diagnostics/config.hpp"
-#include "../memory/fixed_text.hpp"
-#include "../platform/observation_time.hpp"
+#include "telar_base/diagnostics/config.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_platform/observation_time.hpp"
 #include <charconv>
 #include <cstring>
 #include <limits>

@@ -1,8 +1,8 @@
 #pragma once
 
 #include "machines/field_rules.hpp"
-#include "platform/private_directory.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
+#include "telar_platform/private_directory.hpp"
 #include <QByteArray>
 #include <QByteArrayView>
 #include <QCryptographicHash>

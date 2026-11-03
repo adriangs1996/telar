@@ -4,8 +4,8 @@
 #include "fonts/native_match.hpp"
 #include "fonts/shaped_run_view.hpp"
 #include "platform/font.h"
-#include "platform/read_file.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
+#include "telar_platform/read_file.hpp"
 #include <array>
 #include <bit>
 #include <cstddef>

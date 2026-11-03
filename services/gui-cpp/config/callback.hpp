@@ -2,7 +2,7 @@
 
 #include "input/action.hpp"
 #include "input/binding.hpp"
-#include "memory/fixed_text.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>

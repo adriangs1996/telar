@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <exception>
 #ifndef __APPLE__
-#include "platform/file_descriptor.hpp"
+#include "telar_platform/file_descriptor.hpp"
 #include <memory>
 #endif
 

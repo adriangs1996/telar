@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../memory/drop_channel.hpp"
 #include "../platform/completion_signal.hpp"
 #include "result.hpp"
+#include "telar_base/memory/drop_channel.hpp"
 #include <limits.h>
 
 namespace telar::runtime::plugins {

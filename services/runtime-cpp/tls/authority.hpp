@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../memory/erasing_allocator.hpp"
-#include "../platform/private_file.hpp"
 #include "../platform/write_private_file.hpp"
 #include "certificate_pair.hpp"
 #include "library.hpp"
+#include "telar_base/memory/erasing_allocator.hpp"
+#include "telar_platform/private_file.hpp"
 #include <optional>
 
 namespace telar::runtime {

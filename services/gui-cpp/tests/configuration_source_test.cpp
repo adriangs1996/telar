@@ -14,12 +14,12 @@
 #include "input/action.hpp"
 #include "input/configuration.hpp"
 #include "json_fixture.hpp"
-#include "plugins/identity.hpp"
+#include "qt/bundled_fonts.hpp"
 #include "qt/configuration_source.hpp"
+#include "telar_base/text/json.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "text/json.hpp"
-#include "qt/bundled_fonts.hpp"
+#include "telar_plugins/identity.hpp"
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>

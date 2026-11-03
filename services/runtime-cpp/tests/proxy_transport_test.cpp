@@ -5,8 +5,8 @@
 #include "proxy/relay_direction.hpp"
 #include "proxy/socket_watch.hpp"
 #include "socket_pair.hpp"
+#include "telar_base/text/base64.hpp"
 #include "test_byte_stream.hpp"
-#include "text/base64.hpp"
 #include <poll.h>
 #include <string>
 #include <thread>

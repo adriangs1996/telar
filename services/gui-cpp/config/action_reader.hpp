@@ -1,12 +1,12 @@
 #pragma once
 
 #include "command_tab_action.hpp"
-#include "config/action_validator.hpp"
-#include "config/command_tab_registry.hpp"
-#include "config/command_tab_view.hpp"
-#include "config/limit_notices.hpp"
 #include "input/action.hpp"
-#include "lua/value.hpp"
+#include "telar_config/action_validator.hpp"
+#include "telar_config/command_tab_registry.hpp"
+#include "telar_config/command_tab_view.hpp"
+#include "telar_config/limit_notices.hpp"
+#include "telar_lua/value.hpp"
 #include <algorithm>
 #include <array>
 #include <cstddef>

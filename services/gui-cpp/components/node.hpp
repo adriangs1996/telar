@@ -1,10 +1,10 @@
 #pragma once
 
-#include "config/component_shape.hpp"
 #include "core/color_name.hpp"
 #include "input/action.hpp"
-#include "memory/fixed_text.hpp"
 #include "presentation/bar_metrics.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_config/component_shape.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "link_text.hpp"
-#include "memory/fixed_text.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include "text/bounded_text.hpp"
 #include <algorithm>
 #include <array>

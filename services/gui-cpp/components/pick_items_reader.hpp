@@ -1,18 +1,18 @@
 #pragma once
 
-#include "config/limit_notices.hpp"
-#include "config/ui_value_constraints.hpp"
-#include "lua/value.hpp"
-#include "text/utf8.hpp"
 #include "pick_items.hpp"
-#include <charconv>
+#include "telar_base/text/utf8.hpp"
+#include "telar_config/limit_notices.hpp"
+#include "telar_config/ui_value_constraints.hpp"
+#include "telar_lua/value.hpp"
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cstddef>
 #include <lua.h>
 #include <optional>
-#include <system_error>
 #include <string_view>
+#include <system_error>
 
 namespace telar::gui::components {
 

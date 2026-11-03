@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../../platform/read_file.hpp"
-#include "../../platform/resolve_relative_path.hpp"
 #include "../../platform/write_private_file.hpp"
+#include "telar_platform/read_file.hpp"
+#include "telar_platform/resolve_relative_path.hpp"
 #include <optional>
 
 namespace telar::runtime::cli::integration {

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "limits.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include "telar_plugins/limits.hpp"
 
 namespace telar::runtime::plugins {
 

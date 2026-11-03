@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/theme_values.hpp"
-#include "lua/value.hpp"
+#include "telar_lua/value.hpp"
 #include "themes.hpp"
 #include <charconv>
 #include <cstddef>

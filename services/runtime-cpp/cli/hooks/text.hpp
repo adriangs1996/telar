@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../../memory/fixed_text.hpp"
-#include "../../text/utf8.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <charconv>
 

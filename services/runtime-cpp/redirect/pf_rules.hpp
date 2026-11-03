@@ -1,11 +1,11 @@
 #pragma once
 
-#include "../memory/allocator.hpp"
-#include "../plugins/identity.hpp"
-#include "target.hpp"
+#include "direction.hpp"
 #include "flow_key.hpp"
 #include "route_path.hpp"
-#include "direction.hpp"
+#include "target.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_plugins/identity.hpp"
 #include <net/if.h>
 
 namespace telar::runtime::redirect {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "memory/fixed_text.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "text/bounded_text.hpp"
 #include <cstddef>

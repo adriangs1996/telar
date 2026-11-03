@@ -1,14 +1,14 @@
 #pragma once
 
-#include "../diagnostics/config.hpp"
 #include "../diagnostics/request_queue.hpp"
 #include "../history/query_order.hpp"
 #include "../runtime/request_context.hpp"
-#include "../runtime/request_error.hpp"
 #include "../transport/encoded_reply.hpp"
 #include "completion_signal.hpp"
-#include "error.hpp"
 #include "request_queue.hpp"
+#include "telar_base/diagnostics/config.hpp"
+#include "telar_base/request_error.hpp"
+#include "telar_platform/error.hpp"
 #include <condition_variable>
 #include <pthread.h>
 #include <variant>

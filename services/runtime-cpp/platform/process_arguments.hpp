@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../agents/builtin_manifests.hpp"
 #include "../agents/session_host.hpp"
+#include "telar_config/agents/builtin_manifests.hpp"
 #include <cstring>
 #include <optional>
 

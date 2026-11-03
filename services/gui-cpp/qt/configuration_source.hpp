@@ -9,7 +9,6 @@
 #include "application/dependencies.hpp"
 #include "config/action_descriptions.hpp"
 #include "config/callback.hpp"
-#include "config/command_tab_view.hpp"
 #include "config/plugin_effects.hpp"
 #include "config/plugin_invocation.hpp"
 #include "config/plugin_query.hpp"
@@ -18,6 +17,7 @@
 #include "core/configuration.hpp"
 #include "input/action.hpp"
 #include "input/configuration.hpp"
+#include "telar_config/command_tab_view.hpp"
 #include <QByteArray>
 #include <QFutureWatcher>
 #include <QList>

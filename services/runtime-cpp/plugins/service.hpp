@@ -1,8 +1,8 @@
 #pragma once
 
 #include "event_source.hpp"
+#include "telar_plugins/trust_store.hpp"
 #include "worker.hpp"
-#include "trust_store.hpp"
 
 namespace telar::runtime::plugins {
 

@@ -6,7 +6,7 @@ cpp_probe = r"""#include "core/memory.hpp"
 #include "config/plugin_query.hpp"
 #include "config/plugin_overrides.hpp"
 #include "tests/json_fixture.hpp"
-#include "text/json.hpp"
+#include "telar_base/text/json.hpp"
 #include <array>
 #include <charconv>
 #include <iostream>
@@ -134,7 +134,7 @@ def main():
     def run(command,name,**kwargs):
         with (out/(name+'.log')).open('wb') as log:r=subprocess.run(command,stdout=log,stderr=subprocess.STDOUT,**kwargs)
         commands.append(dict(command=command,actual_exit=r.returncode));(out/'commands.json').write_text(json.dumps(commands,indent=2)+'\n');r.check_returncode()
-    cpp=[a.compiler,'-std=c++23','-O2','-DTELAR_DIAGNOSTICS=0','-I',str(repo/'services/gui-cpp'),'-I',str(repo/'services/runtime-cpp'),'-I',str(repo/'dlls/telar-client/include'),str(out/'probe.cpp'),'-o',str(out/'candidate')]
+    cpp=[a.compiler,'-std=c++23','-O2','-DTELAR_DIAGNOSTICS=0','-I',str(repo/'services/gui-cpp'),'-I',str(repo/'services/runtime-cpp'),'-I',str(repo/'dlls/telar-client/include'), '-I',str(repo/'dlls/telar-base/include'), '-I',str(repo/'dlls/telar-lua/include'), '-I',str(repo/'dlls/telar-platform/include'), '-I',str(repo/'dlls/telar-plugins/include'), '-I',str(repo/'dlls/telar-config/include'),str(out/'probe.cpp'),'-o',str(out/'candidate')]
     if a.sanitize:cpp.extend(['-g','-fsanitize=address,undefined','-fno-omit-frame-pointer'])
     run(cpp,'candidate-build');run([a.zig,'build-exe','-O','ReleaseSafe','-lc','--dep','plugin','-Mroot='+str(out/'reference.zig'),'-Mplugin='+str(repo/'src/core/plugin.zig'),'-femit-bin='+str(out/'reference')],'reference-build')
     cases=list(records())

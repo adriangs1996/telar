@@ -1,11 +1,11 @@
 #pragma once
 
-#include "../traffic/flow.hpp"
-#include "../memory/fixed_text.hpp"
-#include "../memory/sensitive_buffer.hpp"
 #include "../platform/byte_stream.hpp"
-#include <netdb.h>
+#include "../traffic/flow.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/memory/sensitive_buffer.hpp"
 #include <cstdio>
+#include <netdb.h>
 #include <sys/socket.h>
 
 namespace telar::runtime {

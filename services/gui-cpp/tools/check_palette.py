@@ -295,7 +295,7 @@ def main():
                'services/gui-cpp/palette/query.hpp', 'services/gui-cpp/palette/navigation_label.hpp',
                'services/gui-cpp/palette/ranked_matches.hpp', 'services/gui-cpp/presentation/palette_geometry.hpp',
                'services/gui-cpp/tools/palette_probe.cpp', 'services/gui-cpp/tools/generate_palette.py',
-               'services/gui-cpp/tools/generate_bindings.py', 'services/runtime-cpp/history/search_policy.hpp']
+               'services/gui-cpp/tools/generate_bindings.py', 'dlls/telar-base/include/telar_base/history/search_policy.hpp']
     sources.extend(['services/gui-cpp/input/key_label.hpp', 'src/gui/widgets/overlays/key_label.zig',
                     'lib/keyinput/root.zig', 'lib/keyinput/Key.zig', 'lib/keyinput/Char.zig', 'lib/keyinput/Mods.zig'])
     result = dict(cases=len(cases), cases_by_kind={kind: sum(name == kind for name, _ in cases) for kind in ['query', 'label', 'ranking', 'catalogue', 'key_label', 'geometry']},

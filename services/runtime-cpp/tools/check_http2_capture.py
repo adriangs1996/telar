@@ -32,7 +32,7 @@ def build(root, arguments):
     with (artifacts / 'zig-build.log').open('w') as log:
         subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, check=True)
     command = [arguments.compiler, '-std=c++23', '-O3', '-dynamiclib', '-DTELAR_DEBUG=0',
-               '-I', str(root), '-I', include, '-I', str(arguments.brotli / 'include'),
+               '-I', str(root), '-I', str(root.parents[1] / 'dlls/telar-client/include'), '-I', str(root.parents[1] / 'dlls/telar-base/include'), '-I', str(root.parents[1] / 'dlls/telar-lua/include'), '-I', str(root.parents[1] / 'dlls/telar-platform/include'), '-I', str(root.parents[1] / 'dlls/telar-plugins/include'), '-I', str(root.parents[1] / 'dlls/telar-config/include'), '-I', include, '-I', str(arguments.brotli / 'include'),
                '-I', str(arguments.zstd / 'include'), str(root / 'tests/http2_capture.cpp'),
                library, '-o', str(artifacts / 'cpp.dylib')]
     with (artifacts / 'cpp-build.log').open('w') as log:

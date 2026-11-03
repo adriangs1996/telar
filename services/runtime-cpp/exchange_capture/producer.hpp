@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../memory/drop_channel.hpp"
 #include "content_decoder.hpp"
 #include "exchange.hpp"
 #include "metrics.hpp"
+#include "telar_base/memory/drop_channel.hpp"
 
 namespace telar::runtime {
 

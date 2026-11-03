@@ -1,11 +1,11 @@
 #pragma once
 
 #include "core/memory.hpp"
-#include "graphics/limits.hpp"
 #include "lifetime.hpp"
 #include "limit.hpp"
 #include "resync_required.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
 #include <algorithm>
 #include <array>
 #include <concepts>

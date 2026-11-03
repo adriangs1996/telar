@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../platform/byte_stream.hpp"
-#include "../platform/error.hpp"
+#include "telar_platform/error.hpp"
 #include <array>
 #include <poll.h>
 #include <sys/uio.h>

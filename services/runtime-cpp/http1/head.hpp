@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../text/fields.hpp"
 #include "framing.hpp"
 #include "number.hpp"
+#include "telar_base/text/fields.hpp"
 #include <cstdint>
 
 namespace telar::runtime {

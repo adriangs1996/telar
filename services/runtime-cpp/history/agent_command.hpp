@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../diagnostics/limit_ledger.hpp"
 #include "../diagnostics/trace.hpp"
 #include "../runtime/request_context.hpp"
 #include "database.hpp"
+#include "telar_base/diagnostics/limit_ledger.hpp"
 
 namespace telar::runtime {
 

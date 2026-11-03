@@ -1,11 +1,11 @@
 #pragma once
 
-#include "../memory/byte_queue.hpp"
-#include "../platform/error.hpp"
-#include "../platform/file_descriptor.hpp"
 #include "outgoing_frames.hpp"
+#include "telar_base/memory/byte_queue.hpp"
 #include "telar_client/codecs/telar_handshake.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_platform/error.hpp"
+#include "telar_platform/file_descriptor.hpp"
 #include <array>
 #include <chrono>
 

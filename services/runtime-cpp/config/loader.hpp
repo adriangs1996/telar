@@ -1,15 +1,15 @@
 #pragma once
 
-#include "../cli/server_options.hpp"
-#include "../lua/json.hpp"
-#include "../platform/error.hpp"
-#include "../platform/file_descriptor.hpp"
-#include "../platform/process_environment.hpp"
-#include "../platform/read_file.hpp"
-#include "../platform/resolve_relative_path.hpp"
 #include "config_bootstrap.hpp"
-#include "local_modules.hpp"
-#include "snapshot_reader.hpp"
+#include "telar_config/local_modules.hpp"
+#include "telar_config/snapshot_reader.hpp"
+#include "telar_lua/json.hpp"
+#include "telar_platform/error.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include "telar_platform/process_environment.hpp"
+#include "telar_platform/read_file.hpp"
+#include "telar_platform/resolve_relative_path.hpp"
+#include "telar_platform/server_options.hpp"
 #include <fcntl.h>
 #include <sys/stat.h>
 

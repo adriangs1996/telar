@@ -1,8 +1,8 @@
 #pragma once
 
 #include "../flow_key.hpp"
-#include "../../platform/error.hpp"
-#include "../../platform/file_descriptor.hpp"
+#include "telar_platform/error.hpp"
+#include "telar_platform/file_descriptor.hpp"
 #include <charconv>
 #include <fcntl.h>
 

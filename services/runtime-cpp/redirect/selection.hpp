@@ -1,8 +1,8 @@
 #pragma once
 
-#include "target.hpp"
 #include "../proxy/name_resolutions.hpp"
-#include "../runtime/request_error.hpp"
+#include "target.hpp"
+#include "telar_base/request_error.hpp"
 #include <atomic>
 #include <chrono>
 #include <cstdio>

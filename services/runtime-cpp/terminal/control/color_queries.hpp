@@ -2,8 +2,8 @@
 
 #include "classification.hpp"
 #include "color_value.hpp"
-#include "policy.hpp"
 #include "reply.hpp"
+#include "telar_config/terminal/control/policy.hpp"
 #include "vt_state.hpp"
 #include <algorithm>
 #include <array>

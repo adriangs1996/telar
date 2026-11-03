@@ -45,7 +45,7 @@ def main():
         destination.write_bytes(subprocess.check_output(['git', 'show', reference_commit + ':src/backend/' + name], cwd=root))
     (artifacts / 'oracle.zig').write_bytes((root / 'tests/pty_response_reference.zig').read_bytes())
     subprocess.run([arguments.zig, 'build-lib', '-dynamic', '-O', 'ReleaseFast', '-lc', str(artifacts / 'oracle.zig'), '-femit-bin=' + str(artifacts / 'zig.dylib')], check=True)
-    subprocess.run([arguments.compiler, '-std=c++23', '-O3', '-dynamiclib', '-I', str(root), str(root / 'tests/pty_response_oracle.cpp'), '-o', str(artifacts / 'cpp.dylib')], check=True)
+    subprocess.run([arguments.compiler, '-std=c++23', '-O3', '-dynamiclib', '-I', str(root), '-I', str(root.parents[1] / 'dlls/telar-client/include'), '-I', str(root.parents[1] / 'dlls/telar-base/include'), '-I', str(root.parents[1] / 'dlls/telar-lua/include'), '-I', str(root.parents[1] / 'dlls/telar-platform/include'), '-I', str(root.parents[1] / 'dlls/telar-plugins/include'), '-I', str(root.parents[1] / 'dlls/telar-config/include'), str(root / 'tests/pty_response_oracle.cpp'), '-o', str(artifacts / 'cpp.dylib')], check=True)
     libraries = []
     for name in ['zig', 'cpp']:
         library = ctypes.CDLL(str(artifacts / (name + '.dylib')))

@@ -1,9 +1,9 @@
 #pragma once
 
 #include "../command_capture/command.hpp"
-#include "../memory/allocator.hpp"
-#include "../memory/fixed_text.hpp"
 #include "launch_failure.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include <array>
 
 namespace telar::runtime {

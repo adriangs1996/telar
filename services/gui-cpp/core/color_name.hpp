@@ -1,7 +1,7 @@
 #pragma once
 
+#include "telar_base/text/ascii.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
-#include "text/ascii.hpp"
 #include "theme_values.hpp"
 #include <cstddef>
 #include <cstdint>

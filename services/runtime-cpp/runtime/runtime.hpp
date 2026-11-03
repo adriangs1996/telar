@@ -3,7 +3,6 @@
 #include "../diagnostics/runtime_telemetry.hpp"
 #include "../diagnostics/trace.hpp"
 
-#include "../editors/kind.hpp"
 #include "../exchange_capture/joiner.hpp"
 #include "../exchange_capture/source.hpp"
 #include "../model/client_layouts.hpp"
@@ -30,6 +29,7 @@
 #include "plugin_delivery.hpp"
 #include "request_dispatch.hpp"
 #include "response_projection.hpp"
+#include "telar_base/editors/kind.hpp"
 #include "workspace_git_service.hpp"
 #include "workspace_service.hpp"
 #include "worktree_detection_service.hpp"

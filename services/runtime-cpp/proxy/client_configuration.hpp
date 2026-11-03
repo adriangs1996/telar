@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../memory/sensitive_buffer.hpp"
 #include "../platform/command.hpp"
 #include "secret.hpp"
+#include "telar_base/memory/sensitive_buffer.hpp"
 
 namespace telar::runtime {
 

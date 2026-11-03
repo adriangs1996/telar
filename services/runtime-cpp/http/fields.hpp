@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../memory/erasing_allocator.hpp"
-#include "../memory/sensitive_allocation.hpp"
-#include "../text/ascii.hpp"
+#include "telar_base/memory/erasing_allocator.hpp"
+#include "telar_base/memory/sensitive_allocation.hpp"
+#include "telar_base/text/ascii.hpp"
 #include <array>
 #include <optional>
 

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "agents/provider.hpp"
 #include "application/records.hpp"
 #include "application/workbench_geometry.hpp"
 #include "core/calendar_sample.hpp"
@@ -15,6 +14,7 @@
 #include "presentation/tab_caption.hpp"
 #include "presentation/workspace_mark.hpp"
 #include "progress_value.hpp"
+#include "telar_config/agents/provider.hpp"
 #include <QChar>
 #include <QColor>
 #include <QRectF>

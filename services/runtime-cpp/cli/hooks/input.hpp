@@ -1,8 +1,8 @@
 #pragma once
 
 #include "../../diagnostics/trace.hpp"
-#include "../../platform/error.hpp"
 #include "object.hpp"
+#include "telar_platform/error.hpp"
 #include "validation.hpp"
 #include <unistd.h>
 

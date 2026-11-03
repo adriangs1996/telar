@@ -58,7 +58,7 @@ def build(root, arguments):
                     '-Mh2frames=' + str(reference / 'lib/h2frames/root.zig'),
                     '-Mcblocks=' + str(reference / 'lib/cblocks/root.zig'),
                     '-femit-bin=' + str(artifacts / 'zig.dylib')], check=True)
-    subprocess.run([arguments.compiler, '-std=c++23', '-O3', '-dynamiclib', '-I', str(root), '-I', include,
+    subprocess.run([arguments.compiler, '-std=c++23', '-O3', '-dynamiclib', '-I', str(root), '-I', str(root.parents[1] / 'dlls/telar-client/include'), '-I', str(root.parents[1] / 'dlls/telar-base/include'), '-I', str(root.parents[1] / 'dlls/telar-lua/include'), '-I', str(root.parents[1] / 'dlls/telar-platform/include'), '-I', str(root.parents[1] / 'dlls/telar-plugins/include'), '-I', str(root.parents[1] / 'dlls/telar-config/include'), '-I', include,
                     str(root / 'tests/http2_framing.cpp'), library, '-o', str(artifacts / 'cpp.dylib')], check=True)
     return [load_library(artifacts / name) for name in ['zig.dylib', 'cpp.dylib']]
 
@@ -188,7 +188,7 @@ def measure(libraries, baseline_name='zig'):
 
 
 def source_paths(root, arguments):
-    return [*root.glob('http2/*.hpp'), root / 'proxy/relay_direction.hpp', root / 'memory/erase_sensitive.hpp', root / 'memory/c_allocation_blocks.hpp', root / 'tests/http2_oracle.hpp',
+    return [*root.glob('http2/*.hpp'), root / 'proxy/relay_direction.hpp', root.parents[1] / 'dlls/telar-base/include/telar_base/memory/erase_sensitive.hpp', root.parents[1] / 'dlls/telar-base/include/telar_base/memory/c_allocation_blocks.hpp', root / 'tests/http2_oracle.hpp',
                root / 'tests/http2_framing.cpp', root / 'tests/http2_oracle_stream.hpp', root / 'tests/http2_reference.zig', *arguments.reference.glob('lib/httprelay/**/*.zig')]
 
 

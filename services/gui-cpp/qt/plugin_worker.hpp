@@ -5,11 +5,11 @@
 #include "config/plugin_effects.hpp"
 #include "config/plugin_invocation.hpp"
 #include "core/memory.hpp"
-#include "memory/allocator.hpp"
-#include "platform/temporary_directory.hpp"
 #include "plugin_packages.hpp"
-#include "plugins/package_copy_storage.hpp"
-#include "plugins/package_inspection.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_platform/temporary_directory.hpp"
+#include "telar_plugins/package_copy_storage.hpp"
+#include "telar_plugins/package_inspection.hpp"
 #include <QDebug>
 #include <QFuture>
 #include <QFutureWatcher>

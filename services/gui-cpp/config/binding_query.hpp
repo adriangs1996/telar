@@ -2,11 +2,11 @@
 
 #include "action_descriptions.hpp"
 #include "action_query.hpp"
-#include "config/command_tab_registry.hpp"
 #include "core/json_writer.hpp"
 #include "core/memory.hpp"
 #include "input/configuration.hpp"
 #include "input_query.hpp"
+#include "telar_config/command_tab_registry.hpp"
 #include <cstddef>
 #include <span>
 #include <stdexcept>

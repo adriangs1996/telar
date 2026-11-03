@@ -1,6 +1,6 @@
 #include "http2_fixture.hpp"
 #include "proxy/service.hpp"
-#include "text/base64.hpp"
+#include "telar_base/text/base64.hpp"
 #include "tls_fixture.hpp"
 #include <thread>
 

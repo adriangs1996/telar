@@ -1,6 +1,6 @@
 #include "agent_oracle.hpp"
-#include "agents/provider.hpp"
 #include "history/database.hpp"
+#include "telar_config/agents/provider.hpp"
 #include <chrono>
 #include <filesystem>
 #include <iostream>

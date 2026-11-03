@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../memory/erasing_allocator.hpp"
-#include "../memory/sensitive_buffer.hpp"
-#include "../platform/private_file.hpp"
 #include "../platform/write_private_file.hpp"
 #include "secret.hpp"
+#include "telar_base/memory/erasing_allocator.hpp"
+#include "telar_base/memory/sensitive_buffer.hpp"
+#include "telar_platform/private_file.hpp"
 
 namespace telar::runtime {
 

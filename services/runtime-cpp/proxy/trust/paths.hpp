@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../../platform/private_directory.hpp"
-#include "../../platform/process_environment.hpp"
 #include "../../tls/authority.hpp"
-#include "record.hpp"
 #include "destination.hpp"
+#include "record.hpp"
+#include "telar_platform/private_directory.hpp"
+#include "telar_platform/process_environment.hpp"
 
 namespace telar::runtime::proxy_trust {
 

@@ -1,8 +1,8 @@
 #pragma once
 
 #include "application/dependencies.hpp"
-#include "plugins/package_inspection.hpp"
-#include "plugins/package_registry_storage.hpp"
+#include "telar_plugins/package_inspection.hpp"
+#include "telar_plugins/package_registry_storage.hpp"
 #include <QByteArrayView>
 #include <QCryptographicHash>
 #include <algorithm>

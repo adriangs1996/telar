@@ -1,16 +1,16 @@
 #pragma once
 
 #include "../diagnostics/trace.hpp"
-#include "../history/filters.hpp"
-#include "../lua/json.hpp"
-#include "../lua/local_modules.hpp"
-#include "../memory/recycling_allocator.hpp"
-#include "../platform/read_file.hpp"
 #include "lua_effects.hpp"
 #include "lua_exchange.hpp"
+#include "lua_traffic.hpp"
 #include "plugin_bootstrap.hpp"
 #include "protocol.hpp"
-#include "lua_traffic.hpp"
+#include "telar_base/memory/recycling_allocator.hpp"
+#include "telar_config/history/filters.hpp"
+#include "telar_lua/json.hpp"
+#include "telar_lua/local_modules.hpp"
+#include "telar_platform/read_file.hpp"
 
 namespace telar::runtime::plugins {
 

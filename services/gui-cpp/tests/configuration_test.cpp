@@ -7,7 +7,7 @@
 #include "gui_config_bootstrap.hpp"
 #include "input/action.hpp"
 #include "input/binding.hpp"
-#include "lua/vm.hpp"
+#include "telar_lua/vm.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>

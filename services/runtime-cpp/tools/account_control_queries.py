@@ -99,7 +99,7 @@ def main():
     sources = ['tests/control_accounting_probe.cpp', 'tests/control_component_probe.cpp',
                'tools/account_control_queries.py', 'tools/bench_control_queries.py',
                'terminal/control/engine.hpp', 'terminal/control/vt_state.hpp',
-               'terminal/ghostty_allocator.hpp', 'memory/allocator.hpp']
+               'terminal/ghostty_allocator.hpp', '../../dlls/telar-base/include/telar_base/memory/allocator.hpp']
     report = {'recorded_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
               'architecture': platform.machine(), 'iterations': args.iterations,
               'probe': str(probe), 'probe_sha256': hashlib.sha256(probe.read_bytes()).hexdigest(),

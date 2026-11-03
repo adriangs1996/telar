@@ -1,9 +1,9 @@
 #pragma once
 
-#include "lua/value.hpp"
-#include "memory/fixed_text.hpp"
 #include "node.hpp"
-#include "text/utf8.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_lua/value.hpp"
 #include "value_reader.hpp"
 #include <algorithm>
 #include <array>

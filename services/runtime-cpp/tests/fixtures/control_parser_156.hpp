@@ -1,9 +1,9 @@
 // Frozen parser from ab35af576; differential oracle for owned OSC accumulation.
 #pragma once
 
-#include "../../memory/allocator.hpp"
-#include "../../terminal/control/sequence.hpp"
 #include "../../terminal/control/apc_borrow.hpp"
+#include "../../terminal/control/sequence.hpp"
+#include "telar_base/memory/allocator.hpp"
 #include <array>
 #include <cstring>
 #include <utility>

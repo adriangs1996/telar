@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/geometry.hpp"
-#include "text/ascii.hpp"
+#include "telar_base/text/ascii.hpp"
 #include "text/grapheme_cursor.hpp"
 #include <concepts>
 #include <cstddef>

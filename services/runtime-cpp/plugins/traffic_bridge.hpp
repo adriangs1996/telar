@@ -1,12 +1,12 @@
 #pragma once
 
-#include "session.hpp"
-#include "traffic_protocol.hpp"
-#include "../traffic/package_port.hpp"
-#include "../traffic/control_access.hpp"
-#include "../memory/erasing_allocator.hpp"
-#include "../memory/byte_queue.hpp"
 #include "../proxy/socket.hpp"
+#include "../traffic/control_access.hpp"
+#include "../traffic/package_port.hpp"
+#include "session.hpp"
+#include "telar_base/memory/byte_queue.hpp"
+#include "telar_base/memory/erasing_allocator.hpp"
+#include "traffic_protocol.hpp"
 #include <poll.h>
 
 namespace telar::runtime::plugins {

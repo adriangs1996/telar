@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../platform/process_environment.hpp"
-#include "../text/hexadecimal.hpp"
-#include "package.hpp"
+#include "telar_base/text/hexadecimal.hpp"
+#include "telar_platform/process_environment.hpp"
+#include "telar_plugins/package.hpp"
 
 namespace telar::runtime::plugins {
 

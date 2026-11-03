@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../platform/temporary_directory.hpp"
-#include "package_copy.hpp"
+#include "telar_platform/temporary_directory.hpp"
+#include "telar_plugins/package_copy.hpp"
 #include <charconv>
 #include <optional>
 

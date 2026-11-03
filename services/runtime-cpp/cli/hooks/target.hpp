@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../../platform/process_environment.hpp"
-#include "../../text/decimal.hpp"
 #include "session.hpp"
+#include "telar_base/text/decimal.hpp"
+#include "telar_platform/process_environment.hpp"
 #include <charconv>
 
 namespace telar::runtime::cli::hooks {

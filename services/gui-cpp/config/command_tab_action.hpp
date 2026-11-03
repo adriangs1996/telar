@@ -1,7 +1,7 @@
 #pragma once
 
-#include "config/command_tab_reference.hpp"
 #include "input/action.hpp"
+#include "telar_config/command_tab_reference.hpp"
 #include <bit>
 #include <cstdint>
 #include <optional>

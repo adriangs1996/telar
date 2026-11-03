@@ -1,7 +1,7 @@
 #pragma once
 
 #include "link_text.hpp"
-#include "memory/fixed_text.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <cstdint>

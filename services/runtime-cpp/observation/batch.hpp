@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../agents/evidence.hpp"
+#include "telar_config/agents/evidence.hpp"
 
 namespace telar::runtime {
 

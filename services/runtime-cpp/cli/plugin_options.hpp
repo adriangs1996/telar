@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../plugins/capabilities.hpp"
+#include "telar_plugins/capabilities.hpp"
 
 namespace telar::runtime::cli {
 

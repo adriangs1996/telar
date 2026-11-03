@@ -1,6 +1,6 @@
 #pragma once
 
-#include "limits.hpp"
+#include "telar_config/graphics/limits.hpp"
 
 namespace telar::runtime {
 

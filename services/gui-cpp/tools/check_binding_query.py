@@ -13,14 +13,14 @@ cpp_probe = r"""
 #include "config/action_descriptions.hpp"
 #include "config/binding_query.hpp"
 #include "config/command_tab_action.hpp"
-#include "config/command_tab_registry.hpp"
-#include "config/limit_notices.hpp"
+#include "telar_config/command_tab_registry.hpp"
+#include "telar_config/limit_notices.hpp"
 #include "core/memory.hpp"
 #include "input/action.hpp"
 #include "input/configuration.hpp"
-#include "plugins/identity.hpp"
+#include "telar_plugins/identity.hpp"
 #include "tests/json_fixture.hpp"
-#include "text/json.hpp"
+#include "telar_base/text/json.hpp"
 #include <array>
 #include <charconv>
 #include <cstring>
@@ -529,7 +529,12 @@ def main():
                 "-I",
                 str(root / "services/runtime-cpp"),
                 "-I",
-                str(root / "dlls/telar-client/include"),
+                str(root / "dlls/telar-client/include"), "-I",
+                str(root / "dlls/telar-base/include"), "-I",
+                str(root / "dlls/telar-lua/include"), "-I",
+                str(root / "dlls/telar-platform/include"), "-I",
+                str(root / "dlls/telar-plugins/include"), "-I",
+                str(root / "dlls/telar-config/include"),
                 str(work / "probe.cpp"),
                 "-o",
                 str(work / "cpp"),

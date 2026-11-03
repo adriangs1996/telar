@@ -1,7 +1,7 @@
 #pragma once
 
-#include "agents/provider.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include "telar_config/agents/provider.hpp"
 #include <string_view>
 
 namespace telar::gui {

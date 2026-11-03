@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../memory/allocator.hpp"
+#include "telar_base/memory/allocator.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "text_metadata.hpp"
 #include <cstring>

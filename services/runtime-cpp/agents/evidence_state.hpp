@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../memory/fixed_text.hpp"
-#include "evidence.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_config/agents/evidence.hpp"
 
 namespace telar::runtime {
 

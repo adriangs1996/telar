@@ -1,14 +1,14 @@
 #pragma once
 
-#include "../memory/fixed_text.hpp"
+#include "../redirect/connection.hpp"
+#include "../tls/alpn_offer.hpp"
 #include "authenticate.hpp"
 #include "connect_head.hpp"
 #include "connection_policy.hpp"
 #include "counters.hpp"
-#include "options.hpp"
 #include "origin_connection.hpp"
-#include "../redirect/connection.hpp"
-#include "../tls/alpn_offer.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_config/proxy/options.hpp"
 
 namespace telar::runtime {
 

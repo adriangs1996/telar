@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../lua/vm.hpp"
 #include "effects.hpp"
+#include "telar_lua/vm.hpp"
 
 namespace telar::runtime::plugins {
 

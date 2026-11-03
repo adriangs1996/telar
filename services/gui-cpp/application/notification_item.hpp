@@ -1,10 +1,10 @@
 #pragma once
 
 #include "core/smoothstep.hpp"
-#include "memory/fixed_text.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "text/utf8.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>

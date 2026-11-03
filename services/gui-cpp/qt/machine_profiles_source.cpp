@@ -5,10 +5,10 @@
 #include "machines/messages.hpp"
 #include "machines/owned_edit.hpp"
 #include "machines/profile_store.hpp"
-#include "memory/allocator.hpp"
 #include "platform/file_stamp.hpp"
 #include "platform/profile_file.hpp"
 #include "platform/secure_random.hpp"
+#include "telar_base/memory/allocator.hpp"
 #include <QFuture>
 #include <QString>
 #include <QtConcurrentRun>

@@ -1,8 +1,8 @@
-#include "../platform/descriptor_path.hpp"
 #include "database.hpp"
-#include "../platform/error.hpp"
-#include "../platform/file_descriptor.hpp"
-#include "../platform/private_directory.hpp"
+#include "../platform/descriptor_path.hpp"
+#include "telar_platform/error.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include "telar_platform/private_directory.hpp"
 #include <cstring>
 #include <fcntl.h>
 #include <sys/stat.h>

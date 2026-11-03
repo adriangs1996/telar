@@ -1,7 +1,7 @@
 #pragma once
 
-#include "error.hpp"
-#include "file_descriptor.hpp"
+#include "telar_platform/error.hpp"
+#include "telar_platform/file_descriptor.hpp"
 #include <array>
 #include <cstdint>
 

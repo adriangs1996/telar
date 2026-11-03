@@ -1,7 +1,7 @@
 #include "surface_command.hpp"
 #include "platform/process_group.hpp"
+#include "telar_base/text/utf8.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
-#include "text/utf8.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QIODevice>

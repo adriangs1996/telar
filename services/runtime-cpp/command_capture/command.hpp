@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../platform/observation_time.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_platform/observation_time.hpp"
 #include <concepts>
 
 namespace telar::runtime {

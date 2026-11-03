@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../memory/erase_sensitive.hpp"
 #include "handle.hpp"
+#include "telar_base/memory/erase_sensitive.hpp"
 #include <cstdint>
 #include <span>
 

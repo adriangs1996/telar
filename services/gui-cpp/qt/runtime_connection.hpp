@@ -2,10 +2,10 @@
 
 #include "application/dependencies.hpp"
 #include "machines/failure.hpp"
-#include "platform/file_descriptor.hpp"
 #include "remote_bridge.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include "telar_client/serializers/telar_handshake.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_platform/file_descriptor.hpp"
 #include "transport/frame_stream.hpp"
 #include "transport/runtime_link.hpp"
 #include <QByteArrayView>

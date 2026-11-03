@@ -1,7 +1,7 @@
 #pragma once
 
-#include "graphics/limits.hpp"
 #include "lifetime.hpp"
+#include "telar_config/graphics/limits.hpp"
 #include <algorithm>
 #include <array>
 #include <concepts>

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../memory/erasing_allocator.hpp"
 #include "quota.hpp"
+#include "telar_base/memory/erasing_allocator.hpp"
 #include <cstdint>
 #include <cstring>
 #include <span>

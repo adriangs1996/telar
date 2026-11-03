@@ -1,13 +1,14 @@
 #include "wayland_clipboard_image_monitor.hpp"
 #include "application/dependencies.hpp"
 #include "core/memory.hpp"
-#include "memory/allocator.hpp"
 #include "platform/clipboard_image_file.h"
 #include "platform/clipboard_image_source.hpp"
-#include "platform/file_descriptor.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_platform/file_descriptor.hpp"
 #include <QString>
 #include <QtCore/qstringliteral.h>
 #include <QtWaylandClient/private/qwayland-wayland.h>
+#include <QtWaylandClient/private/wayland-wayland-client-protocol.h>
 #include <algorithm>
 #include <array>
 #include <cerrno>
@@ -15,7 +16,6 @@
 #include <cstdint>
 #include <optional>
 #include <wayland-client-core.h>
-#include <QtWaylandClient/private/wayland-wayland-client-protocol.h>
 #include <wayland-util.h>
 
 namespace telar::gui::platform {

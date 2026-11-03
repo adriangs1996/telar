@@ -2,7 +2,7 @@
 
 #include "../platform/executable_path.hpp"
 #include "../platform/spawn_options.hpp"
-#include "runtime_paths.hpp"
+#include "telar_platform/runtime_paths.hpp"
 #include <sys/wait.h>
 
 extern char **environ;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "package.hpp"
+#include "telar_plugins/package.hpp"
 #include <atomic>
 #include <memory>
 

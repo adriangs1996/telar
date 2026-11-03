@@ -1,6 +1,6 @@
 #include "check.hpp"
 #include "erasure_checking_allocator.hpp"
-#include "memory/recycling_allocator.hpp"
+#include "telar_base/memory/recycling_allocator.hpp"
 #include <cstdint>
 #include <span>
 

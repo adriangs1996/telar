@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../../agents/provider.hpp"
 #include "object.hpp"
+#include "telar_config/agents/provider.hpp"
 #include "validation.hpp"
 
 namespace telar::runtime::cli::hooks {

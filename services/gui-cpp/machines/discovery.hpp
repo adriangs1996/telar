@@ -1,7 +1,7 @@
 #pragma once
 
 #include "failure.hpp"
-#include "memory/fixed_text.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_handshake.hpp"
 #include <array>
 #include <cstddef>

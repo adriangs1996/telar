@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../memory/allocator.hpp"
 #include "cell_layout.hpp"
 #include "ghostty_handle.hpp"
+#include "telar_base/memory/allocator.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 
 namespace telar::runtime {

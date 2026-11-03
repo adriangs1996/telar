@@ -5,8 +5,8 @@
 #include "../history/failure_reply.hpp"
 #include "../history/metrics.hpp"
 #include "../history/store.hpp"
-#include "../platform/error.hpp"
 #include "request_context.hpp"
+#include "telar_platform/error.hpp"
 #include <variant>
 
 #if TELAR_DIAGNOSTICS

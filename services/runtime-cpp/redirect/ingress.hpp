@@ -1,4 +1,4 @@
-#include "../platform/peer_credentials.hpp"
+#include "telar_platform/peer_credentials.hpp"
 #pragma once
 
 #include "../platform/completion_signal.hpp"
@@ -6,9 +6,9 @@
 #include "protocol.hpp"
 #include <atomic>
 #include <chrono>
+#include <fcntl.h>
 #include <poll.h>
 #include <thread>
-#include <fcntl.h>
 
 namespace telar::runtime::redirect {
 

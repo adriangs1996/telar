@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../platform/private_directory.hpp"
-#include "../platform/resolve_relative_path.hpp"
 #include "../platform/write_private_file.hpp"
-#include "package.hpp"
-#include "trust_store.hpp"
+#include "telar_platform/private_directory.hpp"
+#include "telar_platform/resolve_relative_path.hpp"
+#include "telar_plugins/package.hpp"
+#include "telar_plugins/trust_store.hpp"
 
 namespace telar::runtime::plugins {
 

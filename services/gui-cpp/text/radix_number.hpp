@@ -2,7 +2,7 @@
 
 #include "core/memory.hpp"
 #include "number_radix.hpp"
-#include "text/ascii.hpp"
+#include "telar_base/text/ascii.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>

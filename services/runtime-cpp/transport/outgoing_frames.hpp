@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../memory/byte_queue.hpp"
 #include "deferred_responses.hpp"
 #include "delivery_lane.hpp"
+#include "telar_base/memory/byte_queue.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <array>
 #include <bit>

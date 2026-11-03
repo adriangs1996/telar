@@ -10,7 +10,7 @@ cpp_probe = r"""
 
 #include "config/client_query.hpp"
 #include "tests/json_fixture.hpp"
-#include "text/json.hpp"
+#include "telar_base/text/json.hpp"
 #include <array>
 #include <charconv>
 #include <cstdint>
@@ -346,7 +346,12 @@ def main():
                 "-I",
                 str(root / "services/runtime-cpp"),
                 "-I",
-                str(root / "dlls/telar-client/include"),
+                str(root / "dlls/telar-client/include"), "-I",
+                str(root / "dlls/telar-base/include"), "-I",
+                str(root / "dlls/telar-lua/include"), "-I",
+                str(root / "dlls/telar-platform/include"), "-I",
+                str(root / "dlls/telar-plugins/include"), "-I",
+                str(root / "dlls/telar-config/include"),
                 str(work / "probe.cpp"),
                 "-o",
                 str(work / "cpp"),

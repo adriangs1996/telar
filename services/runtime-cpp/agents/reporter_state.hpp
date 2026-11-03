@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../memory/allocator.hpp"
-#include "../platform/observation_time.hpp"
 #include "../platform/process_lineage.hpp"
+#include "telar_base/memory/allocator.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_platform/observation_time.hpp"
 #include <bit>
 
 namespace telar::runtime {

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../../memory/allocator.hpp"
-#include "../graphics_cursor.hpp"
 #include "../ghostty_handle.hpp"
+#include "../graphics_cursor.hpp"
+#include "telar_base/memory/allocator.hpp"
 #include <array>
 #include <optional>
 

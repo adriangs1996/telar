@@ -5,7 +5,7 @@
 #include "machines/limits.hpp"
 #include "machines/profile.hpp"
 #include "machines/profile_store.hpp"
-#include "memory/fixed_text.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include <algorithm>
 #include <array>

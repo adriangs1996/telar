@@ -1,6 +1,6 @@
 #pragma once
 
-#include "text/json.hpp"
+#include "telar_base/text/json.hpp"
 #include <stdexcept>
 #include <string>
 #include <string_view>

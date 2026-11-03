@@ -5,8 +5,8 @@
 #include "../http1/number.hpp"
 #include "../http2/event.hpp"
 #include "../http2/stream_tracker.hpp"
-#include "../memory/slot_indexes.hpp"
 #include "counters.hpp"
+#include "telar_base/memory/slot_indexes.hpp"
 #include <utility>
 
 namespace telar::runtime {

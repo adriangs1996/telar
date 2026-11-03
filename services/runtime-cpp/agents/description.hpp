@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../memory/fixed_text.hpp"
 #include "description_capture.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include <algorithm>
 #include <chrono>
 

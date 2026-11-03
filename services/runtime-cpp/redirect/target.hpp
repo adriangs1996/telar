@@ -1,11 +1,11 @@
 #pragma once
 
-#include "../memory/fixed_text.hpp"
 #include "../proxy/network_address.hpp"
 #include "../proxy/target.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include <algorithm>
 #include <arpa/inet.h>
 #include <charconv>
-#include <algorithm>
 
 namespace telar::runtime::redirect {
 

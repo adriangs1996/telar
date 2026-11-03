@@ -27,7 +27,7 @@ def main():
          '-Mtelar-core=' + str(artifacts / 'core/core.zig'), '-Msqlite=' + str(artifacts / 'sqlite/root.zig'),
          '-femit-bin=' + str(artifacts / 'zig.dylib')],
         ['/opt/homebrew/opt/llvm/bin/clang++', '-std=c++23', '-O3', '-dynamiclib', '-DTELAR_DEBUG=0',
-         '-I' + str(root), '-I' + str(root.parents[1] / 'dlls/telar-client/include'),
+         '-I' + str(root), '-I' + str(root.parents[1] / 'dlls/telar-client/include'), '-I' + str(root.parents[1] / 'dlls/telar-base/include'), '-I' + str(root.parents[1] / 'dlls/telar-lua/include'), '-I' + str(root.parents[1] / 'dlls/telar-platform/include'), '-I' + str(root.parents[1] / 'dlls/telar-plugins/include'), '-I' + str(root.parents[1] / 'dlls/telar-config/include'),
          str(root / 'tests/launch_history_oracle.cpp'), str(root / 'history/database.cpp'),
          '-lsqlite3', '-o', str(artifacts / 'cpp.dylib')],
     ]

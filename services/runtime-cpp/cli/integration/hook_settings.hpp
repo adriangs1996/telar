@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../../text/json_node.hpp"
 #include "provider.hpp"
+#include "telar_base/text/json_node.hpp"
 
 namespace telar::runtime::cli::integration {
 

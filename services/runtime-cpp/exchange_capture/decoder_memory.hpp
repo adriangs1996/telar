@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../memory/c_allocation_blocks.hpp"
-#include "../memory/erasing_allocator.hpp"
+#include "telar_base/memory/c_allocation_blocks.hpp"
+#include "telar_base/memory/erasing_allocator.hpp"
 
 namespace telar::runtime {
 

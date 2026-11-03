@@ -39,7 +39,7 @@ def build(root, arguments):
         if "=" in line and ":" in line and not line.startswith(("//", "#")):
             name, value = line.split("=", 1)
             cache[name.split(":", 1)[0]] = value
-    subprocess.run([cache["CMAKE_CXX_COMPILER"], "-std=c++23", "-O3", "-dynamiclib", "-DTELAR_DEBUG=0", "-DTELAR_DIAGNOSTICS=0", "-I", str(root), "-I", str(root.parents[1] / "dlls/telar-client/include"), "-I", str(build_directory / "generated"), "-I", cache["GHOSTTY_VT_INCLUDE_DIR"], str(root / "tests/screen_oracle.cpp"), str(build_directory / "libruntime-core.a"), cache["GHOSTTY_VT_LIBRARY"], "-o", str(artifacts / "cpp.dylib")], check=True)
+    subprocess.run([cache["CMAKE_CXX_COMPILER"], "-std=c++23", "-O3", "-dynamiclib", "-DTELAR_DEBUG=0", "-DTELAR_DIAGNOSTICS=0", "-I", str(root), "-I", str(root.parents[1] / "dlls/telar-client/include"), "-I", str(root.parents[1] / "dlls/telar-base/include"), "-I", str(root.parents[1] / "dlls/telar-lua/include"), "-I", str(root.parents[1] / "dlls/telar-platform/include"), "-I", str(root.parents[1] / "dlls/telar-plugins/include"), "-I", str(root.parents[1] / "dlls/telar-config/include"), "-I", str(build_directory / "generated"), "-I", cache["GHOSTTY_VT_INCLUDE_DIR"], str(root / "tests/screen_oracle.cpp"), str(build_directory / "libruntime-core.a"), cache["GHOSTTY_VT_LIBRARY"], "-o", str(artifacts / "cpp.dylib")], check=True)
     return artifacts
 
 

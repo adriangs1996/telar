@@ -1,13 +1,13 @@
 #pragma once
 
-#include "config/component_budget.hpp"
-#include "config/component_shape.hpp"
-#include "config/component_shape_reader.hpp"
-#include "config/limit_notices.hpp"
 #include "content.hpp"
-#include "lua/value.hpp"
 #include "node.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include "telar_config/component_budget.hpp"
+#include "telar_config/component_shape.hpp"
+#include "telar_config/component_shape_reader.hpp"
+#include "telar_config/limit_notices.hpp"
+#include "telar_lua/value.hpp"
 #include "value_reader.hpp"
 #include <algorithm>
 #include <array>

@@ -4,11 +4,11 @@
 #include "core/metrics.hpp"
 #include "form_input_context.hpp"
 #include "form_text_grid.hpp"
+#include "qt/utf16_encoding.hpp"
+#include "telar_base/text/utf8.hpp"
 #include "text/bounded_editor.hpp"
 #include "text/cell_text_measure.hpp"
 #include "text/utf16_prefix.hpp"
-#include "qt/utf16_encoding.hpp"
-#include "text/utf8.hpp"
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QInputMethod>

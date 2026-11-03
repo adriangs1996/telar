@@ -1,11 +1,11 @@
 #pragma once
 
-#include "../diagnostics/config.hpp"
 #include "../diagnostics/graphics_counters.hpp"
 #include "../diagnostics/trace.hpp"
 #include "../transport/connection.hpp"
 #include "credit.hpp"
 #include "pane_media.hpp"
+#include "telar_base/diagnostics/config.hpp"
 
 namespace telar::runtime {
 

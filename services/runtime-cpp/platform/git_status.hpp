@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../memory/fixed_text.hpp"
 #include "git_head.hpp"
 #include "git_repository.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 
 namespace telar::runtime {
 

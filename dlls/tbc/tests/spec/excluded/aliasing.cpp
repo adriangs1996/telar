@@ -37,7 +37,7 @@ void endedShared() {
 
 // CASE: core.overlapping_mutable
 // PAIR: core.reborrow
-// SOURCE: services/runtime-cpp/memory/byte_queue.hpp :: appendUninitialized
+// SOURCE: dlls/telar-base/include/telar_base/memory/byte_queue.hpp :: appendUninitialized
 // STATUS: pending
 // CONTRACT: A live exclusive loan forbids an independent overlapping mutable loan.
 // SCENARIO: Both references remain used; report creation of the second loan.
@@ -54,7 +54,7 @@ void overlappingMutable() {
 
 // CASE: core.derived_reborrow
 // PAIR: core.reborrow
-// SOURCE: services/runtime-cpp/memory/byte_queue.hpp :: appendUninitialized
+// SOURCE: dlls/telar-base/include/telar_base/memory/byte_queue.hpp :: appendUninitialized
 // STATUS: pending
 // CONTRACT: A derived exclusive reborrow temporarily suspends conflicting parent access.
 // SCENARIO: Use the child, end its scope, then resume the parent; accept.

@@ -1,11 +1,11 @@
 #pragma once
 
-#include "../agents/builtin_manifests.hpp"
 #include "../agents/session_host.hpp"
-#include "../memory/fixed_text.hpp"
-#include "process_lineage.hpp"
 #include "process_arguments.hpp"
+#include "process_lineage.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/agents/builtin_manifests.hpp"
 #include <optional>
 #include <sys/types.h>
 #include <unistd.h>

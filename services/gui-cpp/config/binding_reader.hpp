@@ -1,10 +1,10 @@
 #pragma once
 
-#include "config/key_chord_validator.hpp"
 #include "input/action.hpp"
 #include "input/binding.hpp"
 #include "input/configuration.hpp"
-#include "lua/value.hpp"
+#include "telar_config/key_chord_validator.hpp"
+#include "telar_lua/value.hpp"
 #include <algorithm>
 #include <concepts>
 #include <cstddef>

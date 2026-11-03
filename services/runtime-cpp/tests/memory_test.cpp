@@ -1,10 +1,10 @@
 #include "check.hpp"
-#include "memory/buffer_allocator.hpp"
-#include "memory/byte_queue.hpp"
-#include "memory/erase_sensitive.hpp"
-#include "memory/erasing_allocator.hpp"
-#include "memory/fixed_text.hpp"
-#include "memory/slot_indexes.hpp"
+#include "telar_base/memory/buffer_allocator.hpp"
+#include "telar_base/memory/byte_queue.hpp"
+#include "telar_base/memory/erase_sensitive.hpp"
+#include "telar_base/memory/erasing_allocator.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/memory/slot_indexes.hpp"
 #include "terminal/ghostty_allocator.hpp"
 #include <array>
 #include <optional>

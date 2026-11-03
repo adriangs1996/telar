@@ -1,6 +1,5 @@
 #pragma once
 
-#include "../memory/fixed_text.hpp"
 #include "../platform/byte_stream.hpp"
 #include "../platform/stream_read_buffer.hpp"
 #include "../platform/tunnel_sockets.hpp"
@@ -8,10 +7,11 @@
 #include "authority.hpp"
 #include "contexts.hpp"
 #include "side.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include <arpa/inet.h>
 #include <chrono>
-#include <optional>
 #include <memory>
+#include <optional>
 
 namespace telar::runtime {
 

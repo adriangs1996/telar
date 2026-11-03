@@ -5,9 +5,9 @@
 #include "identity.hpp"
 #include "profile.hpp"
 #include "profiles.hpp"
+#include "telar_base/text/json.hpp"
+#include "telar_base/text/json_fields.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
-#include "text/json.hpp"
-#include "text/json_fields.hpp"
 #include "text/json_unsigned_integer.hpp"
 #include <algorithm>
 #include <array>

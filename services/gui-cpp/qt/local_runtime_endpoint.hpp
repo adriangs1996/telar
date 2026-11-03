@@ -1,10 +1,10 @@
 #pragma once
 
-#include "cli/runtime_paths.hpp"
-#include "cli/server_options.hpp"
 #include "core/memory.hpp"
-#include "platform/process_environment.hpp"
 #include "platform/runtime_endpoint.hpp"
+#include "telar_platform/process_environment.hpp"
+#include "telar_platform/runtime_paths.hpp"
+#include "telar_platform/server_options.hpp"
 #include <QLocalSocket>
 #include <QString>
 #include <QtCore/qtypes.h>

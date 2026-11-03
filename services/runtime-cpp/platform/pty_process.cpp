@@ -1,6 +1,6 @@
 #include "pty_process.hpp"
 #include "child_descriptors.hpp"
-#include "error.hpp"
+#include "telar_platform/error.hpp"
 #include <algorithm>
 #include <cerrno>
 #include <csignal>

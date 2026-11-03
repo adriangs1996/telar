@@ -2,14 +2,14 @@
 
 #include "action_descriptions.hpp"
 #include "command_tab_action.hpp"
-#include "config/command_tab_reference.hpp"
-#include "config/command_tab_registry.hpp"
-#include "config/command_tab_view.hpp"
 #include "core/json_writer.hpp"
 #include "core/memory.hpp"
 #include "input/action.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include "telar_config/command_tab_reference.hpp"
+#include "telar_config/command_tab_registry.hpp"
+#include "telar_config/command_tab_view.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>

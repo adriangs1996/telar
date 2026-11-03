@@ -112,7 +112,7 @@ def main():
         'zig': [arguments.zig, 'build-lib', '-dynamic', '-O', 'ReleaseFast', '-lc', '--dep', 'telar-core',
                 '-Mroot=' + str(artifacts / 'oracle.zig'), '-Mtelar-core=' + str(artifacts / 'core/core.zig'),
                 '-femit-bin=' + str(artifacts / 'zig.dylib')],
-        'cpp': [arguments.compiler, '-std=c++23', '-O3', '-dynamiclib', '-I', str(root), '-I', str(root.parents[1] / 'dlls/telar-client/include'),
+        'cpp': [arguments.compiler, '-std=c++23', '-O3', '-dynamiclib', '-I', str(root), '-I', str(root.parents[1] / 'dlls/telar-client/include'), '-I', str(root.parents[1] / 'dlls/telar-base/include'), '-I', str(root.parents[1] / 'dlls/telar-lua/include'), '-I', str(root.parents[1] / 'dlls/telar-platform/include'), '-I', str(root.parents[1] / 'dlls/telar-plugins/include'), '-I', str(root.parents[1] / 'dlls/telar-config/include'),
                 str(root / 'tests/plugin_data.cpp'), '-o', str(artifacts / 'cpp.dylib')],
     }
     for language, command in commands.items():

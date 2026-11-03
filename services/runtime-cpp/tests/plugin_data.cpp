@@ -1,6 +1,6 @@
 #include "plugins/frame_writer.hpp"
-#include "plugins/manifest.hpp"
-#include "plugins/trust_store.hpp"
+#include "telar_plugins/manifest.hpp"
+#include "telar_plugins/trust_store.hpp"
 
 using namespace telar;
 using namespace telar::runtime;

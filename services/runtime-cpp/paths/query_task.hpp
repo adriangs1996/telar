@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../memory/fixed_text.hpp"
 #include "path_index.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 
 namespace telar::runtime {
 

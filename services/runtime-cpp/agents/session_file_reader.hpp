@@ -2,11 +2,11 @@
 
 #include "../diagnostics/trace.hpp"
 #include "../history/database.hpp"
-#include "../platform/error.hpp"
-#include "../platform/file_descriptor.hpp"
-#include "../text/json.hpp"
-#include "../text/utf8.hpp"
 #include "session_file.hpp"
+#include "telar_base/text/json.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_platform/error.hpp"
+#include "telar_platform/file_descriptor.hpp"
 #include <fcntl.h>
 #include <sys/stat.h>
 

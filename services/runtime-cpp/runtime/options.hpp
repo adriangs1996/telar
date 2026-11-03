@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../agents/builtin_manifests.hpp"
 #include "../agents/description.hpp"
-#include "../graphics/limits.hpp"
 #include "../persistence/options.hpp"
-#include "../terminal/control/policy.hpp"
+#include "telar_config/agents/builtin_manifests.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include "telar_config/terminal/control/policy.hpp"
 
 namespace telar::runtime {
 

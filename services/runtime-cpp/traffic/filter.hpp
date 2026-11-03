@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../memory/fixed_text.hpp"
 #include "protocol.hpp"
-#include <optional>
+#include "telar_base/memory/fixed_text.hpp"
 #include <memory>
+#include <optional>
 #include <pcap/pcap.h>
 
 namespace telar::runtime::traffic {

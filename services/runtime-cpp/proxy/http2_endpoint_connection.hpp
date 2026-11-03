@@ -2,11 +2,11 @@
 
 #include "../http/message.hpp"
 #include "../http2/memory.hpp"
-#include "../memory/byte_queue.hpp"
-#include "../memory/sensitive_buffer.hpp"
 #include "../traffic/flow.hpp"
 #include "http2_capture_policy.hpp"
 #include "socket_interest.hpp"
+#include "telar_base/memory/byte_queue.hpp"
+#include "telar_base/memory/sensitive_buffer.hpp"
 #include <charconv>
 
 namespace telar::runtime {

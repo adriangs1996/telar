@@ -1,8 +1,8 @@
 #pragma once
 
 #include "authorization.hpp"
-#include "host_policy.hpp"
 #include "target.hpp"
+#include "telar_config/proxy/host_policy.hpp"
 #include <variant>
 
 namespace telar::runtime {

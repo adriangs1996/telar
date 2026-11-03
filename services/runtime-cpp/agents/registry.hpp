@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../memory/allocator.hpp"
-#include "../runtime/request_error.hpp"
 #include "agent.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_base/request_error.hpp"
 
 namespace telar::runtime {
 

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../memory/sensitive_allocation.hpp"
 #include "decoder_memory.hpp"
+#include "telar_base/memory/sensitive_allocation.hpp"
 #include "zstd_block.hpp"
 #define ZSTD_STATIC_LINKING_ONLY
 #include <zstd.h>

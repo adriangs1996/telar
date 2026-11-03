@@ -7,11 +7,11 @@
 #include "core/metrics.hpp"
 #include "font_collection.hpp"
 #include "list_model.hpp"
-#include "memory/fixed_text.hpp"
 #include "presentation/notification_geometry.hpp"
 #include "presentation/notification_stack.hpp"
 #include "presentation/notification_text.hpp"
 #include "resident_fonts.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include <QAbstractItemModel>
 #include <QMetaObject>
 #include <QPointer>

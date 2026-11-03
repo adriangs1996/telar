@@ -1,7 +1,7 @@
 #pragma once
 
 #include "network_packet.hpp"
-#include "../memory/sensitive_allocation.hpp"
+#include "telar_base/memory/sensitive_allocation.hpp"
 #include <algorithm>
 #include <chrono>
 #include <optional>

@@ -1,11 +1,11 @@
 #pragma once
 
-#include "../memory/sensitive_buffer.hpp"
 #include "event.hpp"
 #include "header_metadata.hpp"
 #include "hpack_decoder.hpp"
 #include "payload_fragment.hpp"
 #include "stream_tracker.hpp"
+#include "telar_base/memory/sensitive_buffer.hpp"
 
 namespace telar::runtime {
 

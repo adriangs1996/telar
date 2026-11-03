@@ -1,6 +1,6 @@
 #include "check.hpp"
-#include "lua/json.hpp"
-#include "lua/vm.hpp"
+#include "telar_lua/json.hpp"
+#include "telar_lua/vm.hpp"
 
 using namespace telar::runtime;
 

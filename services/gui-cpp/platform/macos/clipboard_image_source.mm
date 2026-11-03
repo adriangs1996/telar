@@ -1,12 +1,12 @@
 #include "platform/clipboard_image_source.hpp"
-#include "platform/clipboard_image_monitor.hpp"
 #include "application/dependencies.hpp"
 #include "attachments/catalog.hpp"
-#include "attachments/sensitive_bytes.hpp"
 #include "attachments/secure_erase.hpp"
+#include "attachments/sensitive_bytes.hpp"
 #include "attachments/types.hpp"
-#include "platform/file_descriptor.hpp"
 #include "platform/clipboard_image_file.h"
+#include "platform/clipboard_image_monitor.hpp"
+#include "telar_platform/file_descriptor.hpp"
 #include <AppKit/AppKit.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreGraphics/CoreGraphics.h>
@@ -17,14 +17,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <new>
 #include <exception>
+#include <fcntl.h>
 #include <limits>
+#include <new>
 #include <optional>
 #include <span>
 #include <stdexcept>
 #include <sys/stat.h>
-#include <fcntl.h>
 #include <unistd.h>
 #include <utility>
 

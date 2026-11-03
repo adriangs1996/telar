@@ -1,7 +1,7 @@
 #pragma once
 
 #include "limits.hpp"
-#include "memory/fixed_text.hpp"
+#include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <cstdint>

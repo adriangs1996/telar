@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../text/base64.hpp"
+#include "telar_base/text/base64.hpp"
 #include <algorithm>
 
 namespace telar::runtime {

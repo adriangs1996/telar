@@ -1,8 +1,8 @@
 #pragma once
 
 #include "../terminal/selection_formatter.hpp"
-#include "../text/utf8.hpp"
 #include "cell_layout.hpp"
+#include "telar_base/text/utf8.hpp"
 #include <optional>
 
 namespace telar::runtime {

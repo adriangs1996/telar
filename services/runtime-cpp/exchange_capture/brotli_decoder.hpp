@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../memory/buffer_allocator.hpp"
 #include "decoder_memory.hpp"
+#include "telar_base/memory/buffer_allocator.hpp"
 #include <array>
 #include <brotli/decode.h>
 #include <cstdint>

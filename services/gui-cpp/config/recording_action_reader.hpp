@@ -3,10 +3,10 @@
 #include "action_description_reader.hpp"
 #include "action_descriptions.hpp"
 #include "action_reader.hpp"
-#include "config/client_definitions.hpp"
 #include "core/memory.hpp"
 #include "input/action.hpp"
-#include "lua/value.hpp"
+#include "telar_config/client_definitions.hpp"
+#include "telar_lua/value.hpp"
 #include <optional>
 
 namespace telar::gui {

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../memory/sensitive_buffer.hpp"
 #include "../platform/delimited_read.hpp"
 #include "head.hpp"
 #include "observer.hpp"
+#include "telar_base/memory/sensitive_buffer.hpp"
 #include <algorithm>
 
 namespace telar::runtime {

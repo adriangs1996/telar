@@ -52,7 +52,7 @@ def libraries(root, reference, compiler, zig, scratch):
     shutil.copyfile(root / 'tests/http1_reference.zig', package / 'oracle.zig')
     paths = [scratch / 'zig.dylib', scratch / 'cpp.dylib']
     subprocess.run([zig, 'build-lib', '-dynamic', '-O', 'ReleaseFast', '-lc', '--dep', 'localca', '-Mroot=' + str(package / 'oracle.zig'), '-Mlocalca=' + str(reference / 'lib/localca/root.zig'), '-femit-bin=' + str(paths[0])], check=True)
-    subprocess.run([compiler, '-std=c++23', '-O3', '-dynamiclib', '-I', str(root), str(root / 'tests/http1_framing.cpp'), '-o', str(paths[1])], check=True)
+    subprocess.run([compiler, '-std=c++23', '-O3', '-dynamiclib', '-I', str(root), '-I', str(root.parents[1] / 'dlls/telar-client/include'), '-I', str(root.parents[1] / 'dlls/telar-base/include'), '-I', str(root.parents[1] / 'dlls/telar-lua/include'), '-I', str(root.parents[1] / 'dlls/telar-platform/include'), '-I', str(root.parents[1] / 'dlls/telar-plugins/include'), '-I', str(root.parents[1] / 'dlls/telar-config/include'), str(root / 'tests/http1_framing.cpp'), '-o', str(paths[1])], check=True)
     loaded = [load_library(path) for path in paths]
     return loaded, {path.stem: fingerprint(path) for path in paths}
 
@@ -209,7 +209,7 @@ def main():
                 report['baseline_cpp'] = {'path': str(arguments.baseline_cpp), 'sha256': fingerprint(arguments.baseline_cpp)}
                 report['paired'] = measure([load_library(arguments.baseline_cpp), loaded[1]], 'baseline')
             report['performance'] = measure(loaded)
-    sources = [*root.glob('http1/*.hpp'), root / 'text/fields.hpp', root / 'platform/delimited_read.hpp', root / 'tests/http1_framing.cpp', root / 'tests/http1_reference.zig', *arguments.reference.glob('lib/httprelay/**/*.zig')]
+    sources = [*root.glob('http1/*.hpp'), root.parents[1] / 'dlls/telar-base/include/telar_base/text/fields.hpp', root / 'platform/delimited_read.hpp', root / 'tests/http1_framing.cpp', root / 'tests/http1_reference.zig', *arguments.reference.glob('lib/httprelay/**/*.zig')]
     report['sources'] = {str(path): fingerprint(path) for path in sources}
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     arguments.output.write_text(json.dumps(report, indent=2) + '\n')

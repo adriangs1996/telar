@@ -1,6 +1,5 @@
 #pragma once
 
-#include "../diagnostics/config.hpp"
 #include "../diagnostics/media_counters.hpp"
 #include "../diagnostics/media_queue.hpp"
 #include "kitty_framing.hpp"
@@ -9,6 +8,7 @@
 #include "media_input.hpp"
 #include "media_terminal.hpp"
 #include "prepared_images.hpp"
+#include "telar_base/diagnostics/config.hpp"
 #include "transfer_requests.hpp"
 #include <atomic>
 

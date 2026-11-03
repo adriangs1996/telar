@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../memory/slot_indexes.hpp"
 #include "exchange.hpp"
+#include "telar_base/memory/slot_indexes.hpp"
 #include <limits>
 
 namespace telar::runtime {

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../diagnostics/config.hpp"
 #include "../diagnostics/system_counters.hpp"
 #include "host_sample.hpp"
+#include "telar_base/diagnostics/config.hpp"
 #include <algorithm>
 #include <limits>
 

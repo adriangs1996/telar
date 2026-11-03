@@ -2,7 +2,7 @@
 
 #include "direction.hpp"
 #include "target.hpp"
-#include "../platform/error.hpp"
+#include "telar_platform/error.hpp"
 #include <ifaddrs.h>
 #include <memory>
 #include <net/if.h>

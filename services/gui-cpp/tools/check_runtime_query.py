@@ -35,10 +35,10 @@ path_fields = {
 cpp_probe = r'''
 #include "config/query.hpp"
 #include "config/runtime_query.hpp"
-#include "config/runtime_values.hpp"
+#include "telar_config/runtime_values.hpp"
 #include "core/memory.hpp"
 #include "tests/json_fixture.hpp"
-#include "text/json.hpp"
+#include "telar_base/text/json.hpp"
 #include <array>
 #include <bit>
 #include <charconv>
@@ -265,7 +265,7 @@ def main():
         work = Path(directory)
         (work / "probe.cpp").write_text(candidate())
         (work / "probe.zig").write_text(reference(root))
-        subprocess.run([options.compiler, "-std=c++23", "-O2", "-I", str(root / "services/gui-cpp"), "-I", str(root / "services/runtime-cpp"), "-I", str(root / "dlls/telar-client/include"), str(work / "probe.cpp"), "-o", str(work / "cpp")], check=True)
+        subprocess.run([options.compiler, "-std=c++23", "-O2", "-I", str(root / "services/gui-cpp"), "-I", str(root / "services/runtime-cpp"), "-I", str(root / "dlls/telar-client/include"), "-I", str(root / "dlls/telar-base/include"), "-I", str(root / "dlls/telar-lua/include"), "-I", str(root / "dlls/telar-platform/include"), "-I", str(root / "dlls/telar-plugins/include"), "-I", str(root / "dlls/telar-config/include"), str(work / "probe.cpp"), "-o", str(work / "cpp")], check=True)
         subprocess.run(["zig", "build-exe", "-O", "ReleaseSafe", "-lc", str(work / "probe.zig"), f"-femit-bin={work / 'zig'}"], check=True)
         expected = subprocess.run([str(work / "zig")], input=payload, capture_output=True, check=True).stdout.split(b"\n")[:-1]
         actual = subprocess.run([str(work / "cpp")], input=payload, capture_output=True, check=True).stdout.split(b"\n")[:-1]

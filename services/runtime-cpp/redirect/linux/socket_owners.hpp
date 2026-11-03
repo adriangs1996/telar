@@ -1,7 +1,7 @@
 #pragma once
 
 #include "tcp_table.hpp"
-#include "../../platform/directory_stream.hpp"
+#include "telar_platform/directory_stream.hpp"
 #include <cstdio>
 
 namespace telar::runtime::redirect {

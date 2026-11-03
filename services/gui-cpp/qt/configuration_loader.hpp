@@ -1,13 +1,13 @@
 #pragma once
 
 #include "application/dependencies.hpp"
+#include "config/plugin_overrides.hpp"
 #include "core/configuration.hpp"
 #include "core/memory.hpp"
-#include "config/plugin_overrides.hpp"
 #include "platform/file_stamp.hpp"
 #include "platform/private_file_stamp.hpp"
 #include "plugin_packages.hpp"
-#include "plugins/trust_store.hpp"
+#include "telar_plugins/trust_store.hpp"
 #include <QMap>
 #include <QString>
 #include <cstdint>

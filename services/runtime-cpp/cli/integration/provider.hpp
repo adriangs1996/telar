@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../../agents/provider.hpp"
-#include "../../memory/allocator.hpp"
-#include "../../platform/process_environment.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_config/agents/provider.hpp"
+#include "telar_platform/process_environment.hpp"
 
 namespace telar::runtime::cli::integration {
 

@@ -1,9 +1,9 @@
 #pragma once
 
 #include "target.hpp"
-#include "../platform/file_descriptor.hpp"
-#include "../platform/error.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
+#include "telar_platform/error.hpp"
+#include "telar_platform/file_descriptor.hpp"
 #include <chrono>
 #include <net/if.h>
 #include <net/if_dl.h>

@@ -3,9 +3,9 @@
 #include "machines/connection_policy.hpp"
 #include "machines/failure.hpp"
 #include "machines/machine_row.hpp"
+#include "telar_base/text/utf8.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "text/bounded_text.hpp"
-#include "text/utf8.hpp"
 #include <algorithm>
 #include <array>
 #include <chrono>

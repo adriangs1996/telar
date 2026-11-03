@@ -1,12 +1,12 @@
 #pragma once
 
-#include "../agents/builtin_manifests.hpp"
 #include "../diagnostics/runtime_counters.hpp"
 #include "client.hpp"
 #include "exited_panes.hpp"
 #include "pane.hpp"
 #include "runtime_limits.hpp"
 #include "slot_store.hpp"
+#include "telar_config/agents/builtin_manifests.hpp"
 #include "workspace.hpp"
 #include "worktrees.hpp"
 

@@ -2,8 +2,8 @@
 
 #include "clipboard_grants.hpp"
 #include "clipboard_response.hpp"
-#include "policy.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/terminal/control/policy.hpp"
 #include <chrono>
 
 namespace telar::runtime::control {

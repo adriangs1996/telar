@@ -4,8 +4,8 @@
 
 #include "../diagnostics/trace.hpp"
 #include "../platform/completion_signal.hpp"
-#include "hostname.hpp"
 #include "system_resolver.hpp"
+#include "telar_config/proxy/hostname.hpp"
 #include <algorithm>
 #include <concepts>
 #include <pthread.h>

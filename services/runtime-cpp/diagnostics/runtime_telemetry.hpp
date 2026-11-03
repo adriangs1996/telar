@@ -1,7 +1,7 @@
 #pragma once
 
-#include "config.hpp"
 #include "log_sink.hpp"
+#include "telar_base/diagnostics/config.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <string_view>
 

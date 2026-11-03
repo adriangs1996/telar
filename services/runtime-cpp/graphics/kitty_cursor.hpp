@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../text/base64.hpp"
 #include "display_cells.hpp"
 #include "kitty_command_scanner.hpp"
 #include "kitty_control.hpp"
+#include "telar_base/text/base64.hpp"
 
 namespace telar::runtime {
 

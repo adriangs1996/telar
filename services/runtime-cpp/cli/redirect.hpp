@@ -89,8 +89,8 @@ void runRedirect(Memory &memory, std::span<char *const> arguments, bool cleanup)
 }
 
 #else
-#include "../memory/allocator.hpp"
-#include "../platform/error.hpp"
+#include "telar_base/memory/allocator.hpp"
+#include "telar_platform/error.hpp"
 #include <span>
 
 namespace telar::runtime::cli {
