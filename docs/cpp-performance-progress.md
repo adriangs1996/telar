@@ -5809,3 +5809,136 @@ promotion is attempted after this failed component gate. Raw pairs are under
 `/tmp/telar-perf-history-inplace-rank-*-pairs-01`; `decision.json` retains the
 rejection and identities. The next selection experiment should isolate ordering
 work from record size and duplicate handling. All F01–F16 remain open.
+
+## Fuzzy recency order detection: superseded before adoption, 2026-11-04
+
+`out-perf/dlls-history-order-detection-01` isolates the recency sort from the
+rejected in-place ranking experiment. It retains the 32-byte candidate vector,
+16-byte ranked records, hash set, scoring, duplicate policy and detail fetch. It
+reverses an already reverse-sorted candidate range, leaves an already sorted
+range alone, and otherwise uses the previous sort. No production source changes.
+The independent model and exact encoded replies pass 576 evaluations across
+large, long, duplicate, shuffled, tied, reversed and nearly ordered fixtures.
+The 192 scoped/filter/metadata checks, allocation-failure recovery and zero-live-
+allocation checks pass on ARM64 A/B, ASan/UBSan B and x86 baseline/v3 under Rosetta.
+The existing History, HistoryQueue and HistoryCapacity tests also pass. System
+SQLite is not sanitizer-instrumented; three existing test compiler warnings are
+retained in the build log.
+
+Allocations remain 30 calls, 485,472 bytes and 485,120 incremental peak bytes on
+the ARM64 allocation fixture, with all 32 failure injections recovered. The x86
+fixture has eight additional bytes in allocated and incremental peak totals.
+Instrumented comparator counts explain what changes: ordinary and tied ranges
+fall from 30,021 to 9,999 comparisons; reverse ranges from 20,006 to 10,000.
+Shuffled input adds five comparisons and the heap control adds three. The
+baseline libc++ sort already adapts to ordered input: this is fewer comparisons,
+not evidence of an O(N log N) to O(N) change on these particular ranges.
+
+Ten seven-pair component series use 300 queries per execution, or 32 for the
+100,000-entry heap control. Component CPU wins are 6/7 for ordinary gb and GST,
+7/7 for ordinary non-distinct, 6/7 for duplicates, 7/7 for no-match, 4/7 for
+shuffled, 7/7 for reverse, 6/7 for tied, 3/7 for heap, and 2/7 for swapped first
+timestamps. The latter adds 10,001 comparator calls before falling back to sort;
+its median CPU increases from 0.957 to 0.967 ms. This avoidable failed reverse
+scan motivates the guarded successor rather than native promotion of this one.
+
+Full-runtime A is byte-exact to accepted `1f1849d1…`; private B is `d2843618…`.
+Both explicitly link the accepted corrected local-listener object before the
+runtime archive. An initial link omitted that object and was excluded before
+measurement. A corrected link under a different executable basename changed the
+ad-hoc signature identifier; rebuilding with the same `telar` basename restored
+byte-exact A identity. These excluded binaries and comparison receipts remain in
+the scratch prefix. GUI `9bf92e97…` and helper `87beebb0…` remain unchanged, and
+overlays exclude the unadopted attachment-pacing edits from both runtime builds.
+
+| Full-runtime workload | A CPU µs | B CPU µs | B CPU wins | Response mean / p95 / p99 wins |
+| --- | ---: | ---: | ---: | --- |
+| Warm monotonic query | 675.287 | 667.624 | 6/7 | 5 / 6 / 4 |
+| Warm shuffled query | 903.871 | 906.657 | 3/7 | 4 / 3 / 3 |
+| Warm small query | 51.139 | 50.764 | 6/7 | 6 / 6 / 5 |
+| Warm empty query | 30.623 | 30.741 | 2/7 | 3 / 3 / 3 |
+| First query in fresh runtime | 1,991.964 | 1,968.437 | 5/7 | 5 / — / — |
+| Unchanged FTS / substring / empty query | 1,102.924 | 1,098.538 | 6/7 | 6 / 7 / 4 |
+| Unchanged four-request import/delete cycle | 5,491.913 | 5,464.597 | 5/7 | 5 / 5 / 5 |
+
+Warm ordinary series use 2,400 queries per execution, small/empty 4,800; the
+first-query control uses eight fresh runtimes per variant per pair, and unchanged
+paths use 600 queries or completed cycles. The first-query criterion is a
+no-consistent-loss control, declared before running it, not a startup-improvement
+claim. Memory results are mixed: warm monotonic end footprint rises from 7,553,456
+to 7,668,120 bytes (3/7 wins), and first-query footprint rises from 6,121,880 to
+6,125,970 bytes (4/7). Full counters, tails, cleanup and identities are retained
+in `first-screen.json`, `runtime-screen.json`, `runtime-controls.json` and the
+referenced raw runs. Do not attribute unchanged-path differences to this sort.
+
+All 17 complete series and 706 host boundaries qualify, maximum load1 2.208.
+No owned builds/tests overlap timing. The guard successor checks whether the
+first adjacent pair already disproves reverse order, and adds middle/end-disorder
+controls before measuring. Native scripts for the unguarded candidate were
+prepared but never run. Neither version is adopted by this entry; F01–F16 and
+independent Zig/native120 acceptance remain open.
+
+## Guarded fuzzy recency detection: not adopted, 2026-11-04
+
+`out-perf/dlls-history-order-guard-01` adds a necessary first-pair condition before
+the reverse-order scan. If the first candidate is newer than the second, reverse
+order is impossible and that scan is skipped. Empty/singleton ranges are guarded
+before indexing. The original accepted source is still A; the unguarded candidate
+was never promoted. The new B remains a private VFS overlay.
+
+Independent model/exact A/B validation passes 324 large-fixture evaluations and
+504 evaluations on fourteen smaller/boundary/control fixtures. These are
+evaluations, not 828 unique requests: the empty fixture repeats snapshot zero.
+Added cases include empty, singleton, two entries in both orders, equal dates,
+and an adjacent timestamp swap at the beginning, middle and end of 10,000 rows.
+All 192 scoped/filter/metadata cases and 32 allocation-failure injections pass
+for A, B, sanitized B and both x86 targets; existing history/queue/capacity tests
+also pass. Allocations and peaks match the unguarded experiment exactly.
+
+Comparator census A→B: ordinary/tied 30,021→10,000, reverse 20,006→10,000,
+shuffled 149,272→149,277, heap 1,551,857→1,551,861, beginning/end disorder
+30,022→30,025, middle disorder 30,022→35,024. Thus the guard avoids the previously
+identified failed full scan without removing all partial-scan overhead. ARM64
+assembly has the size check at `0x100004f20`, first-pair test at `0x100004f60`,
+reverse validation at `0x100004f94`, forward validation at `0x100004fcc`, and
+fallback introsort at `0x100005010`. Reverse swaps use paired 128-bit loads/stores
+for the 32-byte candidates; ranked records remain 16 bytes. x86 baseline/v3
+also retain the guard, validation and fallback paths; their executable oracles
+pass under Rosetta. These are codegen checks, not x86 performance evidence.
+
+All twelve seven-pair component series complete and pass the initial CPU screen.
+Ordinary gb/GST win 7/7, non-distinct 6/7, duplicates/no-match 7/7, shuffled 4/7,
+reverse 7/7, tied/heap 6/7, beginning/middle disorder 4/7 and end disorder 6/7.
+Ordinary distinct gb CPU falls from 1.2380 to 1.2198 ms; GST from 1.2805 to
+1.2633 ms. Middle-disorder median CPU rises from 0.9594 to 0.9611 ms despite its
+4/7 paired wins. All tails and exact replies are retained in `first-screen.json`.
+
+Full-runtime rebuilt A is byte-exact `1f1849d1…`; private B is `15d66adc…`.
+The corrected listener, accepted GUI/helper and exclusion of pending attachment
+pacing are identical to the preceding experiment. The predeclared primary warm
+monotonic CPU criterion requires at least 6/7 wins. It achieves only 5/7, so this
+candidate is not adopted or promoted to native GUI measurement.
+
+| Full-runtime workload | A CPU µs | B CPU µs | B CPU wins | Response mean / p95 / p99 wins |
+| --- | ---: | ---: | ---: | --- |
+| Warm monotonic query | 675.522 | 670.978 | 5/7 | 4 / 5 / 4 |
+| Warm shuffled query | 903.895 | 903.167 | 3/7 | 2 / 4 / 4 |
+| Warm small query | 51.077 | 50.756 | 5/7 | 5 / 3 / 5 |
+| Warm empty query | 30.806 | 30.927 | 3/7 | 2 / 2 / 1 |
+| First query in fresh runtime | 1,986.031 | 1,967.062 | 5/7 | 5 / — / — |
+| Unchanged FTS / substring / empty query | 1,103.470 | 1,104.845 | 5/7 | 5 / 3 / 5 |
+| Unchanged four-request import/delete cycle | 5,501.467 | 5,480.963 | 5/7 | 4 / 2 / 5 |
+
+Sample counts match the preceding experiment. Empty-control p99 rises from
+49.001 to 51.795 µs with only 1/7 wins; its cause is not established. First-query
+end footprint rises from 6,130,075 to 6,136,213 bytes (3/7 wins), shuffled from
+7,700,888 to 7,733,680 bytes (4/7), while monotonic end footprint falls from
+7,569,840 to 7,455,152 bytes (5/7). Full counters remain in the receipts; mixed
+medians/win counts are not converted into broad improvement claims.
+
+All 19 complete series and 766 host boundaries qualify, maximum load1 2.594.
+No series is rerun to seek a different decision, and no owned build/test overlaps
+timing. `decision.json` records the failed promotion criterion and unchanged
+production source `5d2167b7…`. Native scripts were prepared but never run. The
+next isolated experiment targets per-key allocation/rehash work in fuzzy
+deduplication, retaining the accepted ordering algorithm. All F01–F16 remain open.
