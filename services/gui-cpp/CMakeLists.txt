@@ -1070,8 +1070,10 @@ if(TELAR_GUI_NATIVE)
     set_tests_properties(gui-qt-dependency PROPERTIES ENVIRONMENT "TELAR_GUI_QT_CACHE=${CMAKE_CURRENT_BINARY_DIR}/CMakeCache.txt" TIMEOUT 30)
     find_package(Qt6 ${TELAR_QT_VERSION} EXACT REQUIRED COMPONENTS Test
       PATHS "${TELAR_GUI_QT_PREFIX}/lib/cmake/Qt6" NO_DEFAULT_PATH)
+    # Package inspection hashes contents with OpenSSL; the GUI itself does not link it.
+    find_package(OpenSSL REQUIRED COMPONENTS Crypto)
     add_executable(gui-plugin-packages-test tests/plugin_packages_test.cpp)
-    target_link_libraries(gui-plugin-packages-test PRIVATE gui-posix Qt6::Core)
+    target_link_libraries(gui-plugin-packages-test PRIVATE gui-posix Qt6::Core OpenSSL::Crypto)
     add_test(NAME gui-plugin-packages COMMAND gui-plugin-packages-test)
     set_tests_properties(gui-plugin-packages PROPERTIES TIMEOUT 30)
     add_dependencies(gui-lint gui-plugin-packages-test)
