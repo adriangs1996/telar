@@ -37,6 +37,12 @@ target_link_libraries(cli-launch PUBLIC cli-core)
 
 add_executable(telar main.cpp)
 target_link_libraries(telar PRIVATE cli-core cli-launch)
+# Nothing loads symbols from telar. Exporting none spares dyld from coalescing
+# every weak template instantiation against libc++ on each start, which
+# `hook` pays per agent event.
+if(APPLE)
+  target_link_options(telar PRIVATE "LINKER:-exported_symbol,__mh_execute_header")
+endif()
 include(cmake/window.cmake)
 install(TARGETS telar RUNTIME DESTINATION bin)
 
