@@ -166,6 +166,21 @@ Native animation cadence can be checked with `gui-animation-probe` and
 `tools/check_animation_cadence.py`. See [ANIMATION_CADENCE.md](ANIMATION_CADENCE.md)
 for the measurement endpoint, paired results, reproduction and limitations.
 
+`gui-screen-probe` measures application of preencoded terminal frames without Qt.
+It covers empty, one-cell, one-row and full-grid deltas, plus changing and retained
+snapshots. Each run verifies the final cells and rejects allocation churn after
+warmup. Compare two frozen Release builds with seven alternating pairs:
+
+```sh
+python3 services/gui-cpp/tools/compare_screen.py out-A/gui-screen-probe out-B/gui-screen-probe out-screen-pairs
+```
+
+The default grid is 82×21; `--columns` and `--rows` select another grid. The driver
+records binary hashes, raw results, win counts and Screen-owned allocation bytes.
+Those counters exclude fixture storage and framework allocations. Timing includes
+frame descriptor selection and application, excludes encoding, and does not measure
+native presentation latency or runtime performance.
+
 ## macOS packaging
 
 `tools/package_macos.py` creates a separately named app, deploys Qt/QML and includes
