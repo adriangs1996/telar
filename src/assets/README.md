@@ -1,12 +1,12 @@
 # Sidebar raster assets
 
-`JetBrainsMono-Regular.ttf` is Telar's embedded UI rasterizer face. It is the
+`JetBrainsMono-Regular.ttf` is Telar's embedded monospace fallback face. It is the
 non-Nerd-Font regular face used by Ghostty's embedded-font build. Its SHA-256
 is `a0bf60ef0f83c5ed4d7a75d45838548b1f6873372dfac88f71804491898d138f`.
 The font is distributed under the SIL Open Font License 1.1; the complete
 license is in `JetBrainsMono-OFL.txt`.
 
-`TelarForma-Regular.ttf` is the C++ GUI's bundled Telar Forma Regular face,
+`TelarForma-Regular.ttf` is the GUI's default terminal face, Telar Forma Regular,
 version 0.104. Its SHA-256 is
 `e5b684760f500b2642dbe8216f68db9b4bcde4bb5ff3309dfc0608638459c2d0`.
 Selecting `client.gui.font.family = "Telar Forma"` loads the embedded file,
