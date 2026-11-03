@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../command_error.hpp"
 #include "telar_platform/read_file.hpp"
 #include "telar_platform/resolve_relative_path.hpp"
 #include "telar_platform/write_private_file.hpp"
@@ -28,6 +29,11 @@ std::optional<String<Memory>> read(Memory &memory, const String<Memory> &path, s
     }
 
     throw SystemError{"Read integration file"};
+  }
+
+  struct stat state{};
+  if (::fstat(file.get(), &state) == 0 && state.st_size >= 0 && static_cast<std::uint64_t>(state.st_size) >= maximum_bytes) {
+    throw CommandError{"StreamTooLong"};
   }
 
   return readFileContents(memory, file.get(), maximum_bytes - 1);

@@ -1,0 +1,6 @@
+#pragma once
+#include <string_view>
+namespace telar::runtime::cli::machine::assets {
+inline constexpr std::string_view probe = R"TelarProbe(@TELAR_MACHINE_PROBE@)TelarProbe";
+inline constexpr std::string_view installer = R"TelarInstaller(@TELAR_MACHINE_INSTALLER@)TelarInstaller";
+}
