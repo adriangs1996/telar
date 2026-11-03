@@ -75,7 +75,7 @@ jobs:
 
       - name: Install Zig and build libghostty-vt
         run: |
-          packaging/release/install-zig.sh "$RUNNER_TEMP/zig"
+          packaging/release/install-zig.sh "$RUNNER_TEMP/zig" 0.17.0
           python3 services/runtime-cpp/tools/build_ghostty.py --zig "$RUNNER_TEMP/zig/zig" --build-dir "$RUNNER_TEMP/ghostty-build" --prefix "$RUNNER_TEMP/ghostty"
 
       - name: Configure with managed Qt
