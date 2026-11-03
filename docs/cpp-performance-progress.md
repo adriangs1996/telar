@@ -1685,9 +1685,47 @@ selects coverage's twelve existing focused tests, which pass in 25.27 s. All
 1.517 s, all 7,494 original-Zig rows match and all eleven native graphics cases
 match coverage pixel-for-pixel. The isolated GUI SHA-256 is
 `dad2ce88f795889196930f6f3327f683047620f7f2f07c31a9251890f3090fc2`;
-runtime and helper remain unchanged. Its six-pair native sequence is running,
-tabs first, with no concurrent builds/tests/profiles. Performance acceptance
-remains pending.
+runtime and helper remain unchanged. Six tabs pairs initially stop this isolated
+sequence too: p50 25.617250 → 25.827531 ms (2/6), p95 32.683566 → 33.064984
+(1/6), p99 35.255964 → 35.565902 (2/6), maximum 36.788292 → 40.530729 (0/6).
+CPU/input is 4.262575 → 4.338330 ms (3/6), RSS 206.141 → 203.977 MiB (5/6).
+Raw results and the original failed state remain unchanged.
+
+A subsequent placement check establishes byte-identical input objects for
+Application, TerminalItem and TerminalScene. It compares linked ARM64 instructions
+for eleven text-path functions, masking only relocation immediate fields from
+those identical objects and preserving other opcodes/registers/constants plus
+relocation symbol identities. All eleven normalized streams match, including
+consume, presentChange, input-frame scheduling, prepared-frame recording and
+terminal scene synchronization. All move by 960 bytes. `placement/result.json`,
+the comparison script and normalized listings preserve the proof.
+
+Under perf-pass's explicit identical-normalized-disassembly rule, the unchanged
+text control is classified as placement, with its losses still reported. This
+exception does not cover the changed image path or establish a complete-stack
+win. `measure-after-placement.py` starts the remaining image/text/Zig stages,
+recording to a separate `placement-qualified-measurement-state.json`. The original
+sequence is not overwritten.
+
+The six-pair 4K target then rejects the isolated image variant on changed-path
+latency: p50 47.418917 → 47.178302 ms (3/6 wins), p95 58.766621 → 58.789570
+(3/6), p99 62.427293 → 63.308232 (2/6), maximum 63.713188 → 64.699500 (1/6).
+GUI CPU/input falls 31.225410 → 14.956875 ms, winning all six pairs. Peak RSS
+rises 367.226563 → 398.828125 MiB, approximately one retained 4K RGBA destination.
+This is a favorable memory-for-CPU tradeoff under Adrian's instruction; memory
+is not the rejection reason. The target lacks the required p50 win count and
+has a consistent maximum-latency loss. The unchanged-text placement exception
+does not cover the modified image path. No framework allocation census or causal
+explanation of the remaining presentation delay is established by these numbers.
+
+Evidence is `/tmp/telar-perf-retiso-coverage-4k-01` and the separate placement-
+qualified state file. The controller exits 2 before 1K, other text controls or
+independent-Zig stages. Root `image_resource.cpp` has been restored exactly to its
+preceding source; all candidate binaries, source, pixel proof, assembly and paired
+receipts are preserved. The >50% CPU reduction is a useful measured component
+for a future distinct scheduling experiment, not permission to retain this
+failed complete-client variant. All F01–F16 and representative native 120 Hz
+requirements remain open.
 
 ### Display-reference phase audit
 
