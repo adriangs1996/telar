@@ -1,5 +1,7 @@
 #pragma once
 
+#include "command_error.hpp"
+#include "command_io.hpp"
 #include "plugin_options.hpp"
 #include "telar_plugins/inspection.hpp"
 #include "telar_plugins/package_installation.hpp"
@@ -8,21 +10,27 @@
 
 namespace telar::runtime::cli {
 
+// Zig's `grantedCapabilities`: the manifest's, or the requested ones, each
+// declared there and named once.
 inline plugins::Capabilities grantedCapabilities(const plugins::Manifest &manifest, const PluginOptions &options) {
-  if (!options.explicit_capabilities) {
+  if (options.capability_count == 0) {
     return manifest.capabilities;
   }
-  for (unsigned value = 0; value < static_cast<unsigned>(plugins::Capability::count); ++value) {
-    const auto capability = static_cast<plugins::Capability>(value);
-    if (options.capabilities.contains(capability) && !manifest.capabilities.contains(capability)) {
-      throw std::invalid_argument{"Plugin capability is not declared"};
+
+  plugins::Capabilities granted;
+  for (const auto capability : std::span{options.capabilities}.first(options.capability_count)) {
+    if (!manifest.capabilities.contains(capability)) {
+      throw std::runtime_error{"CapabilityNotDeclared"};
     }
+
+    granted.insert(capability);
   }
-  return options.capabilities;
+
+  return granted;
 }
 
 template <Allocator Memory, EnvironmentLookup Environment>
-void runPlugin(Memory &memory, const PluginOptions &options, const Environment &environment) {
+void executePlugin(Memory &memory, const PluginOptions &options, const Environment &environment) {
   if (options.action == PluginAction::untrust) {
     plugins::revokeTrust(memory, options.path, plugins::Paths::trust(memory, environment));
     constexpr std::string_view message = "telar plugin trust revoked\n";
@@ -55,6 +63,19 @@ void runPlugin(Memory &memory, const PluginOptions &options, const Environment &
   const auto written = writeDescriptor(STDOUT_FILENO, {reinterpret_cast<const std::uint8_t *>(output.data()), output.size()});
   if (written != 0) {
     throw SystemError{"Write plugin command output", written};
+  }
+}
+
+// As Zig's `plugin.run`, a failure after the arguments parsed prints
+// `error: NAME` with Zig's error name.
+template <Allocator Memory, EnvironmentLookup Environment>
+void runPlugin(Memory &memory, const PluginOptions &options, const Environment &environment) {
+  try {
+    executePlugin(memory, options, environment);
+  } catch (const SystemError &error) {
+    throw CommandError{systemErrorName(error.code())};
+  } catch (const std::exception &error) {
+    throw CommandError{error.what()};
   }
 }
 

@@ -41,7 +41,7 @@ int unavailable(std::string_view what) {
 int printSkill(std::span<char *const> words) {
   const std::string_view which = words.size() > 1 ? words[1] : "telar";
   if (which != "telar" && which != "coordinator") {
-    throw std::invalid_argument{"--skill takes telar or coordinator"};
+    throw std::invalid_argument{"UnknownSkill"};
   }
 
   const auto text = which == "telar" ? integration::assets::telar_skill : integration::assets::coordinator_skill;

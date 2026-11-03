@@ -1,5 +1,6 @@
 #pragma once
 
+#include "arguments.hpp"
 #include "telar_plugins/capabilities.hpp"
 
 namespace telar::runtime::cli {
@@ -12,21 +13,33 @@ enum class PluginAction { inspect,
 struct PluginOptions {
   PluginAction action;
   std::string_view path;
-  plugins::Capabilities capabilities;
-  bool explicit_capabilities = false;
+  std::array<plugins::Capability, static_cast<std::size_t>(plugins::Capability::count)> capabilities{};
+  std::size_t capability_count = 0;
 
+  // Zig's `PluginOptions.parse`, with its error names; `untrust` is the C++
+  // runtime's addition.
   static PluginOptions parse(std::span<char *const> arguments) {
     if (arguments.size() < 2) {
-      throw std::invalid_argument{"Expected plugin inspect|install|trust PATH [--capability NAME], or plugin untrust ID"};
+      usage("MissingPluginArguments");
     }
-    PluginOptions options{.action = parseAction(arguments[0]), .path = arguments[1], .capabilities = {}};
+
+    PluginOptions options{.action = parseAction(arguments[0]), .path = arguments[1]};
     for (std::size_t index = 2; index < arguments.size(); index += 2) {
-      if (options.action != PluginAction::trust || std::string_view{arguments[index]} != "--capability" || index + 1 == arguments.size()) {
-        throw std::invalid_argument{"Invalid plugin arguments"};
+      if (std::string_view{arguments[index]} != "--capability" || index + 1 >= arguments.size()) {
+        usage("InvalidPluginArguments");
       }
-      options.capabilities.insert(plugins::Capabilities::parseName(arguments[index + 1]));
-      options.explicit_capabilities = true;
+
+      if (options.capability_count == options.capabilities.size()) {
+        usage("TooManyPluginCapabilities");
+      }
+
+      options.capabilities[options.capability_count++] = plugins::Capabilities::parseName(arguments[index + 1]);
     }
+
+    if (options.action != PluginAction::trust && options.capability_count != 0) {
+      usage("InvalidPluginArguments");
+    }
+
     return options;
   }
 
@@ -44,7 +57,7 @@ private:
     if (action == "untrust") {
       return PluginAction::untrust;
     }
-    throw std::invalid_argument{"Unknown plugin action"};
+    usage("UnknownPluginAction");
   }
 };
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "command_error.hpp"
 #include "proxy_options.hpp"
 #include "telar_tls/authority_directory.hpp"
 #include "telar_tls/trust/service.hpp"
@@ -19,10 +20,22 @@ int runProxyTrust(Memory &memory, const ProxyTrustOptions &options, const Enviro
   if (!options.linux_backend.empty()) {
     selected = options.linux_backend == "trust" ? proxy_trust::Backend::trust : proxy_trust::Backend::update_ca_certificates;
   }
-#if defined(__linux__)
-  if (options.action == ProxyTrustAction::install && !selected) {
-    throw std::invalid_argument{"Linux trust installation requires --linux trust or --linux update-ca-certificates"};
+  // As Zig's `selectBackend`, only installation chooses a backend; status
+  // and removal ignore --linux.
+  if (options.action == ProxyTrustAction::install) {
+#if defined(__APPLE__)
+    if (selected) {
+      throw CommandError{"LinuxTrustFlagOnMacOS"};
+    }
+#elif defined(__linux__)
+    if (!selected) {
+      throw CommandError{"LinuxTrustBackendRequired"};
+    }
+#endif
   }
+
+#if defined(__APPLE__)
+  selected.reset();
 #endif
   const auto destination = paths.nativeDestination(memory, environment, selected);
   const TlsLibrary library{memory};

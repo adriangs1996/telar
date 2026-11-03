@@ -39,7 +39,7 @@ differences; **unverified** runs without a comparison; **missing** prints
 | `--config`, `--no-config`, `--profile`, `--theme`, `--fresh`, `--remote` before COMMAND | done | `check_machines_launch.py` validates flags against Zig; real window/profile/fresh and localhost SSH machine selection in `check_window_parity.py`, `check_window_launch.py`, `check_machine_ssh.py`. |
 | `telar --machine LABEL ...`, `dispatch-argv` | done | `check_machines_launch.py`: literal argv, local/remote labels, help, decode errors and statuses; `check_machine_ssh.py`: real isolated localhost SSH, stdin/stderr, disabled explicit profile and GUI remote launch. |
 | `plugin-worker` | forwarded | `telar` exec's `telar-runtime plugin-worker`; the worker belongs to the runtime. |
-| Usage errors | partial | `main` prints Zig's format, `telar: MESSAGE; see \`telar FAMILY [COMMAND] --help\``, exit 1; each family still has to use Zig's messages. |
+| Usage errors | done | `usage_cases.py` on the Personal machine: 516 invalid command lines built from every help topic (unknown verbs, unknown options, misplaced and duplicate options); 499 match the Zig oracle byte for byte. The other 17 are not usage errors: 16 parse as valid commands and reach a runtime, and `telar --zz` opens a window, which the headless oracle lacks. Integration, plugin, proxy and `--skill` errors now carry Zig's names. |
 
 ## Commands
 
@@ -136,11 +136,11 @@ differences; **unverified** runs without a comparison; **missing** prints
 | `plugin disable` | done | Override adoption matches; the admitted result keeps the plugin text, as Zig. C++ GUI checked under `QT_QPA_PLATFORM=offscreen` with `check_window_cli.stack`; output equals the Zig output recorded in `measurements/window-port.json`. |
 | `plugin enable` | done | Override adoption matches; the admitted result keeps the plugin text, as Zig. C++ GUI checked under `QT_QPA_PLATFORM=offscreen` with `check_window_cli.stack`; output equals the Zig output recorded in `measurements/window-port.json`. |
 | `plugin get` | done | Real configured package and generation-bound paginated fixtures; [window checks](window-port.md). |
-| `plugin inspect` | unverified | Implemented; no Zig comparison yet. |
-| `plugin install` | unverified | Implemented; no Zig comparison yet. |
+| `plugin inspect` | done | `plugin_cases.py` on the Personal machine: 20/20 cases match the Zig oracle, including installed files: valid, truncated and malformed manifests, missing and unknown fields, API version, capabilities (unknown, undeclared, duplicate), duplicate actions, missing paths and files. Manifests now fail with Zig's error names, as `error: NAME`. |
+| `plugin install` | done | `plugin_cases.py` on the Personal machine: 20/20 cases match the Zig oracle, including installed files: valid, truncated and malformed manifests, missing and unknown fields, API version, capabilities (unknown, undeclared, duplicate), duplicate actions, missing paths and files. Manifests now fail with Zig's error names, as `error: NAME`. |
 | `plugin list` | done | Real configured/disabled packages and paginated fixtures; [window checks](window-port.md). |
 | `plugin run` | done | Real no-op worker admitted with the plugin text kept, as Zig. C++ GUI checked under `QT_QPA_PLATFORM=offscreen` with `check_window_cli.stack`; output equals the Zig output recorded in `measurements/window-port.json`. |
-| `plugin trust` | unverified | Implemented; no Zig comparison yet. C++ also has `plugin untrust ID`, which Zig lacks. |
+| `plugin trust` | done | `plugin_cases.py` on the Personal machine: 20/20 cases match the Zig oracle, including installed files: valid, truncated and malformed manifests, missing and unknown fields, API version, capabilities (unknown, undeclared, duplicate), duplicate actions, missing paths and files. Manifests now fail with Zig's error names, as `error: NAME`. C++ also has `plugin untrust ID`, which Zig lacks. |
 | `integration install` | done | `check_integration.py`: all 68 scenarios match including stderr, files, permissions and skills/extensions; hooks prefer TELAR_BIN_PATH. `integration-tests` retains the exact command contract. |
 | `integration status` | done | Same 68 lifecycle comparisons as install, including stderr. |
 | `integration uninstall` | done | Same 68 lifecycle comparisons as install, including stderr. |
@@ -165,7 +165,7 @@ differences; **unverified** runs without a comparison; **missing** prints
 | `history search` | done | Same check: imported commands and retained commands after a limit. |
 | `history show` | done | Same check: raw captured bytes, truncation notice and the no-output notice on stderr. |
 | `history stats` | partial | Same check: totals, unique count, periods and grouping match. Only the order of tied top groups differs: Zig's is its hash map's iteration order, C++ sorts ties by name. Matching it would mean reproducing Zig's hash order; left as a deliberate difference. |
-| `proxy trust` | unverified | Implemented; `check_proxy_trust.py` needs a `tls-probe` the runtime no longer builds. |
+| `proxy trust` | partial | `proxy_cases.py` on the Personal machine: status (default, empty, missing, file and relative `--ca-dir`, `--linux` on macOS) and removal without a record match the Zig oracle, 7/7. Install and removal of an installed authority change the system trust store and were not run; `check_proxy_trust.py` still needs a `tls-probe` the runtime no longer builds. |
 | `proxy watch` | done | Same check: subscription filtering, count, stopping; observer never starts a runtime. |
 | `api schema` | done | `exec-runtime-offline-tests` checks every native tag against the C++ declarations; comparison checks shared Zig tags/bounds. Native ID/fingerprint and clipboard extensions intentionally differ; see `exec-runtime.md`. |
 

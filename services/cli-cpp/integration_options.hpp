@@ -1,5 +1,6 @@
 #pragma once
 
+#include "arguments.hpp"
 #include "telar_config/agents/provider.hpp"
 
 namespace telar::runtime::cli {
@@ -14,9 +15,10 @@ struct IntegrationOptions {
   std::string_view settings;
   bool legacy = false;
 
+  // Zig's `IntegrationOptions.parse`, with its error names.
   static IntegrationOptions parse(std::span<char *const> arguments) {
     if (arguments.size() < 2) {
-      throw std::invalid_argument{"Expected integration install|uninstall|status AGENT"};
+      usage("MissingIntegrationArguments");
     }
 
     IntegrationOptions options;
@@ -26,29 +28,33 @@ struct IntegrationOptions {
     } else if (action == "uninstall") {
       options.action = IntegrationAction::uninstall;
     } else if (action != "status") {
-      throw std::invalid_argument{"Unknown integration action"};
+      usage("UnknownIntegrationAction");
     }
 
     options.provider = providerNamed(arguments[1]);
     if (options.provider == AgentProvider::unknown) {
-      throw std::invalid_argument{"Unknown integration agent"};
+      usage("UnknownHookAgent");
     }
 
     for (std::size_t index = 2; index < arguments.size(); ++index) {
       const std::string_view option = arguments[index];
       if (option == "--legacy" && options.action == IntegrationAction::uninstall) {
         options.legacy = true;
-      } else if (option == "--settings" && index + 1 < arguments.size()) {
-        options.settings = arguments[++index];
-        if (!options.settings.starts_with('/')) {
-          throw std::invalid_argument{"Integration settings path must be absolute"};
-        }
-      } else {
-        throw std::invalid_argument{"Unknown integration option"};
+        continue;
+      }
+
+      if (option != "--settings" || index + 1 >= arguments.size()) {
+        usage("UnknownIntegrationOption");
+      }
+
+      options.settings = arguments[++index];
+      if (!options.settings.starts_with('/')) {
+        usage("RelativeSettingsPath");
       }
     }
+
     if (options.legacy && !options.settings.empty()) {
-      throw std::invalid_argument{"Legacy integration cannot use an explicit settings path"};
+      usage("UnknownIntegrationOption");
     }
 
     return options;

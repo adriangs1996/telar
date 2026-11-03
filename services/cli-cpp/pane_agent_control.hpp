@@ -1,6 +1,8 @@
 #pragma once
 
 #include "control_session.hpp"
+#include "command_error.hpp"
+#include "command_io.hpp"
 #include "failure.hpp"
 #include "json_text.hpp"
 #include "output.hpp"
@@ -119,17 +121,21 @@ inline ServerOptions socketOptions(const char *socket) {
   return options;
 }
 
-// Reads a running runtime, or starts one only for the commands whose Zig
-// version opened a session rather than attaching to one.
+// Zig's `Session.attach` (start false) or `Session.open`: a connection
+// failure ends the command as Zig's escapes to main, `error: NAME`.
 template <Allocator Memory>
 void connectRuntime(Memory &memory, const RuntimePaths<Memory> &paths, bool start) {
-  std::optional<RuntimeConnection> probe;
-  if (connectExisting(probe, paths.socket.c_str())) {
+  try {
+    const RuntimeConnection probe{paths.socket.c_str()};
     return;
+  } catch (const SystemError &error) {
+    if (!start || (error.code() != ENOENT && error.code() != ECONNREFUSED)) {
+      throw CommandError{systemErrorName(error.code())};
+    }
   }
 
-  if (!start || startRuntime(memory, ServerOptions{}, paths) != RuntimeStart::listening) {
-    throw Failure{"the local runtime is not reachable"};
+  if (startRuntime(memory, ServerOptions{}, paths) != RuntimeStart::listening) {
+    throw CommandError{"RuntimeUnavailable"};
   }
 }
 

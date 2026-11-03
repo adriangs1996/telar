@@ -40,7 +40,7 @@ public:
 
   void insert(Capability capability) {
     if (contains(capability)) {
-      throw std::invalid_argument{"Duplicate plugin capability"};
+      throw std::invalid_argument{"DuplicateCapability"};
     }
     bits_ |= bit(capability);
   }
@@ -48,7 +48,7 @@ public:
   static Capability parseName(std::string_view name) {
     const auto found = std::ranges::find(names_, name);
     if (found == names_.end()) {
-      throw std::invalid_argument{"Unknown plugin capability"};
+      throw std::invalid_argument{"UnknownCapability"};
     }
     return static_cast<Capability>(found - names_.begin());
   }
