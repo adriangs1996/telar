@@ -4297,6 +4297,108 @@ capacity or weakening the positive-presentation gate. Native latency acceptance
 remains open. Production GUI/Qt policy is unchanged; the runtime deadline candidate
 remains unaccepted working-tree work.
 
+## Span row-revision marking rejected, 2026-11-03
+
+`out-perf/dlls-span-row-revisions-01` tests marking touched rows once per span in
+`Screen::apply`, instead of dividing the cell position and writing its row revision
+for every decoded cell. Snapshots already initialize all row revisions, so their
+per-cell revision work is redundant. Unlike the earlier row-retention/staged-decode
+experiments, this variant preserves exact invalidation semantics, both decoder
+traversals and all allocation/storage behavior. Production source is unchanged.
+
+A differential oracle compares public cell bytes/styles, row revisions, metadata,
+links, frame/header state and allocation counts after 3,342 operations, including
+360 rejected malformed frames whose state remains unchanged. Exhaustive small-grid
+span ranges, 2,048 seeded sequences, stale/gap/detach/resize behavior and maximum
+dimensions/cell count are covered. Native release, ASan/UBSan and x86-64 execution
+agree on digest `8144262334345902512`. A negative variant that omits later touched
+rows fails the oracle. Sanitizers instrument the probe/header code, not the system
+libraries; leak checking is disabled.
+
+ARM64, x86-64 baseline and x86-64-v3 macOS kernels compile. In the BudgetAllocator
+component instantiation, ARM64's inner cell-copy loop falls from 30 to 24 static
+instructions, removing its division and row-revision loads/store; both the decoder
+and memcpy calls remain. Delta spans do one division for a single cell or two for
+longer spans. Snapshots do none in the cell loop. Linux and the native GUI's
+SystemAllocator instantiation are not performance-qualified by these probes.
+
+Seven alternating pairs per mode/grid in
+`/tmp/telar-perf-span-row-revisions-pairs-01` pass all 394 host boundaries, maximum
+load1 1.895. Encoding/rendering/native delivery are excluded. Live/peak memory,
+allocation counts and final state digests match in every pair; warmed application
+adds no allocations. Median nanoseconds per Screen application:
+
+| Mode | 82×21 A → B | B wins | 240×80 A → B | B wins |
+| --- | --- | --- | --- | --- |
+| Snapshot | 15,748 → 15,707 | 5/7 | 183,392 → 180,674 | 7/7 |
+| Full delta | 15,901 → 15,794 | 5/7 | 180,345 → 178,704 | 7/7 |
+| One row | 781.85 → 780.13 | 5/7 | 2,245.34 → 2,237.73 | 6/7 |
+| 64 one-cell spans | 1,923.62 → 1,948.81 | 0/7 | 1,918.59 → 1,961.19 | 1/7 |
+| Two cells crossing a row | 54.00 → 54.57 | 0/7 | 54.13 → 54.86 | 2/7 |
+| One cell | 43.42 → 43.85 | 2/7 | 43.50 → 44.04 | 1/7 |
+| Empty delta | 10.93 → 10.96 | 2/7 | 11.02 → 11.01 | 3/7 |
+
+The normal-grid targets miss six wins and several controls lose consistently.
+Large-grid gains do not override that rejection; no native candidate build or
+full-flow acceptance is attempted. Constructing complete Cell values during the
+validation-only first pass motivates the separate experiment below, without
+reinstating row retention or its additional staging buffer.
+
+## Validation-only CellReader rejected, 2026-11-03
+
+`out-perf/dlls-validation-only-reader-01` separately tests a shared parser with
+materializing and validation-only return policies. `Screen::apply` uses the latter
+only for its first traversal; all checks, their order, the second traversal and
+original per-cell row marking remain. There is no staging buffer or additional
+allocation. The baseline parser is frozen as an independent class in the oracle;
+both Screen implementations share the unchanged wire types and support headers.
+
+The same 3,342 Screen operations and 360 malformed-frame atomicity checks pass,
+along with 6,276 reader comparisons over partial consumption and mutated/truncated/
+trailing input. ARM64 release, ASan/UBSan and executed x86-64 agree on the original
+Screen digest and allocation counts. A negative control omitting cell validation
+from the discard path is rejected. ARM64's validation helper has 152 static
+instructions versus 168 in the materializing helper, both with 80-byte stacks;
+these counts include error branches, not estimated cycles. The materializing
+instruction stream matches the original after local block-number normalization.
+ARM64, x86-64 and x86-64-v3 macOS kernels compile; Linux is not executed.
+
+Seven alternating component pairs per mode/grid in
+`/tmp/telar-perf-validation-only-reader-pairs-01` pass all 394 host observations,
+maximum load1 1.711. Every paired final digest and live/peak/allocation count agrees;
+no warmed application allocates. Median nanoseconds per application:
+
+| Mode | 82×21 A → B | B wins | 240×80 A → B | B wins |
+| --- | --- | --- | --- | --- |
+| Snapshot | 15,784 → 15,676 | 5/7 | 182,362 → 180,817 | 7/7 |
+| Full delta | 15,755 → 15,585 | 6/7 | 180,175 → 179,080 | 6/7 |
+| One row | 781.57 → 778.67 | 5/7 | 2,241.99 → 2,226.68 | 7/7 |
+| 64 one-cell spans | 1,930.77 → 1,860.32 | 7/7 | 1,927.57 → 1,860.53 | 7/7 |
+| Two cells crossing a row | 53.93 → 49.37 | 7/7 | 53.98 → 50.67 | 6/7 |
+| One cell | 43.44 → 40.87 | 7/7 | 43.57 → 40.83 | 7/7 |
+| Empty delta | 10.99 → 11.21 | 0/7 | 10.97 → 11.24 | 1/7 |
+
+The reusable [Screen application checker](../services/gui-cpp/tools/check_screen_application.py)
+and [probe](../services/gui-cpp/tools/screen_application_probe.cpp) accept frozen
+`--before-screen`/`--after-screen` headers and optional `--before-reader`/
+`--after-reader` headers, a configured GUI `--build`, and a new `--output` directory.
+They retain source identities and independently rename the baseline reader;
+supporting GUI/core/base headers come from the current build. `--sanitize`,
+`--arch x86_64` and `--negative-control` select additional checks. This tool compares
+Screen state, exception types/messages and requested reader consumption; it does
+not render or establish native presentation behavior. Final release, sanitizer,
+x86-64 and row-marking control results are retained in the experiment's `final-*`
+directories; the invalid-cell negative control fails as required.
+
+The empty controls consistently regress and the normal snapshot target misses six
+wins. This rejects the variant despite useful small-span reductions. The empty
+path does not decode cells, but that alone does not prove code-placement causality
+or override the gate. No production codec/GUI source is changed and no native
+performance acceptance is claimed. A distinct remaining invariant to examine is
+that valid deltas already require the current grid, yet `reserve` still rechecks
+cell and row-vector capacity on every application. That optimization has not been
+implemented or measured here.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
@@ -4324,7 +4426,7 @@ and the existing seven-pair component contracts remain mandatory.
 
 First profiling candidates are the refresh value sent by each GUI, GUI pacing
 phase versus VSync, and whole-viewport repaint during subcell resizing. Further
-leads are repeated font coverage lookup, per-cell row-revision division, runtime
+leads are repeated font coverage lookup, redundant grid-capacity checks on valid deltas, runtime
 scrollback projection and history-query scratch/statement reuse. Each needs a
 fresh profile, equivalence oracle, disassembly and paired acceptance before it
 can be retained as an optimization. Historical rejected batching, relay-buffer,
