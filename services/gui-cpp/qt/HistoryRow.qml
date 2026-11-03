@@ -243,6 +243,8 @@ HistoryRowLayout {
                     paneOpen: root.paneOpen
                     interactive: root.interactive
                     actionController: root.actionController
+                    historyIndex: root.historyIndex
+                    revision: root.revision
                     commandLoaded: root.commandLoaded
                     showDirectory: root.showCwd
                     macStyle: root.macStyle

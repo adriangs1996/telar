@@ -15,6 +15,8 @@ HistoryMetaLayout {
     property bool paneOpen: false
     property bool interactive: true
     property var actionController: null
+    property int historyIndex: -1
+    property string revision: ""
     enabled: root.interactive
     property bool commandLoaded: true
     property bool showDirectory: true
@@ -34,6 +36,8 @@ HistoryMetaLayout {
 
     input: ({
         record: root.record,
+        historyIndex: root.historyIndex,
+        revision: root.revision,
         ratio: root.ratio,
         smallPixels: root.pixelSize,
         selected: root.selected,

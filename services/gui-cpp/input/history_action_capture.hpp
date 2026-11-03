@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/geometry.hpp"
+#include "history/choice.hpp"
 #include "presentation/history_actions.hpp"
 #include <array>
 #include <cstddef>
@@ -29,6 +30,7 @@ struct HistoryActionSurface {
   std::array<HistoryActionTarget, HistoryActions::count> targets{};
   std::uint64_t generation = 0;
   double scale = 1;
+  std::optional<HistoryChoice> choice;
 
   [[nodiscard]] const HistoryActionTarget *find(HistoryCardAction action) const noexcept {
     for (const auto &target : targets) {
@@ -50,7 +52,8 @@ public:
       if (!target.bounds.empty() && target.contains(position)) {
         held_ = true;
         generation_ = surface.generation;
-        if (primary) {
+        choice_ = surface.choice;
+        if (primary && target.enabled) {
           action_ = target.action;
         }
 
@@ -66,7 +69,7 @@ public:
 
   void present(const HistoryActionSurface &surface) noexcept {
     const auto *target = action_ ? surface.find(*action_) : nullptr;
-    if (surface.generation != generation_ || target == nullptr || !target->enabled) {
+    if (surface.generation != generation_ || surface.choice != choice_ || target == nullptr || !target->enabled) {
       cancel();
     }
   }
@@ -82,6 +85,7 @@ public:
 
 private:
   std::optional<HistoryCardAction> action_;
+  std::optional<HistoryChoice> choice_;
   std::uint64_t generation_ = 0;
   bool held_ = false;
 };

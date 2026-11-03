@@ -153,6 +153,13 @@ QVariantMap HistoryMetaLayout::layout() const {
 
 HistoryActionSurface HistoryMetaLayout::actionSurface(std::uint64_t generation) const {
   HistoryActionSurface result{.generation = generation, .scale = density_};
+  bool valid_revision = false;
+  const auto revision = input_.value(QStringLiteral("revision")).toString().toULongLong(&valid_revision);
+  const auto index = input_.value(QStringLiteral("historyIndex"), -1).toInt();
+  if (valid_revision && index >= 0) {
+    result.choice = HistoryChoice{.index = static_cast<std::size_t>(index), .revision = revision};
+  }
+
   if (!isVisible() || window() == nullptr) {
     return result;
   }

@@ -2,6 +2,7 @@
 #include "input/action.hpp"
 #include "input/binding.hpp"
 #include "input/configuration.hpp"
+#include "input/history_action_capture.hpp"
 #include "input/key_event.hpp"
 #include "input/key_router.hpp"
 #include <algorithm>
@@ -150,6 +151,32 @@ void generatedDefaultsAndOverrides() {
   require(indexed && indexed->kind == BindingActionKind::select_tab && indexed->parameter == expected_index && !builtinBindingAction("select-tab-0"), "indexed action names must preserve the original one-based configuration syntax");
 }
 
+void historyActionsRetainTheirChoice() {
+  constexpr HistoryActionPosition position{.x = 5, .y = 5};
+  constexpr HistoryChoice original{.index = 0, .revision = std::numeric_limits<std::uint64_t>::max() - 1};
+  HistoryActionSurface surface{.generation = 1, .choice = original};
+  surface.targets[0] = {.action = HistoryCardAction::copy, .bounds = {.width = 10, .height = 10}, .enabled = true};
+  HistoryActionCapture capture;
+  require(capture.begin(surface, position, true), "a visible history action must consume its press");
+  ++surface.choice->revision;
+  require(!capture.release(surface, position), "replaced results must cancel a held action without an intermediate disabled frame");
+  require(capture.begin(surface, position, true), "a new result must accept a fresh press");
+  require(capture.release(surface, position) == HistoryCardAction::copy, "a fresh press must act on the new result");
+
+  require(capture.begin(surface, position, true), "selection test must capture the action");
+  ++surface.choice->index;
+  capture.present(surface);
+  --surface.choice->index;
+  require(!capture.release(surface, position), "returning to the original selection must not revive a cancelled press");
+
+  surface.targets[0].enabled = false;
+  require(capture.begin(surface, position, true), "disabled actions must still consume their press");
+  surface.targets[0].enabled = true;
+  require(!capture.release(surface, position), "enabling an action must not revive a press that began disabled");
+  require(capture.begin(surface, position, false), "secondary buttons must retain ownership");
+  require(!capture.release(surface, position), "secondary buttons must not activate history actions");
+}
+
 }
 
 int main() {
@@ -159,6 +186,7 @@ int main() {
     physicalRepeatsAndReload();
     capacityAndAmbiguity();
     generatedDefaultsAndOverrides();
+    historyActionsRetainTheirChoice();
     std::puts("gui-input: passed");
   } catch (const std::exception &error) {
     std::cerr << "gui-input: " << error.what() << '\n';

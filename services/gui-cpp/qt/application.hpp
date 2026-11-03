@@ -638,7 +638,7 @@ private:
   [[nodiscard]] HistoryActionSurface historyActionSurface() const;
   [[nodiscard]] TabDropSurface tabDropSurface() const;
   void synchronizeTabStrip();
-  void activateHistoryCardAction(HistoryCardAction action);
+  void activateHistoryCardAction(HistoryCardAction action, HistoryChoice choice);
   [[nodiscard]] QVariantList fullscreenEntries(const Tab<ApplicationAllocator> &tab);
   void showDialog(const QString &kind, const QString &text = {});
   void fail(const std::exception &error);

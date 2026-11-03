@@ -5456,3 +5456,36 @@ identical to measured B, including its UUID and signature: SHA-256
 `1f1849d1881fe60af13d46531c6f722fb5105f32fc8beaaadf7276ad50f55031`.
 The full comparison is `final-build-equivalence.json`; no ignored byte differences
 are needed. GUI debounce and optical rendering remain unchanged in this pass.
+
+
+## History card capture identity prerequisite, 2026-11-03
+
+The next, unadopted match-highlight delegate reuse candidate exposed a held-copy
+failure: pressing copy on query A and releasing after query B had replaced the
+same row copied B. Its first full native history run passed 35 of 36 cases;
+`out-perf/dlls-history-match-model-01/native-quick-result-01.json` and the adjacent
+log retain the failure. A four-case original-QML control passed with the same
+accepted fused runtime. That single control does not establish why the candidate
+exposed the failure; neither timing nor adoption of that candidate followed it.
+
+Card capture previously retained only the dialog generation and action enum.
+It could therefore depend on presentation of an intermediate disabled card to
+cancel an old press. The correction retains the rendered `HistoryChoice` (row
+index and exact 64-bit content revision), cancels when that choice changes, and
+checks the browser's current choice before activation. A press beginning on a
+disabled target remains consumed but cannot later activate it. The QML revision
+stays a string until C++ conversion, avoiding JavaScript number truncation.
+
+Evidence is in `out-perf/dlls-history-action-identity-01`. The permanent input
+test covers replacement without an intermediate disabled frame, a fresh click,
+selection changes, disabled-to-enabled targets and secondary buttons. It passes
+ARM64, ASan/UBSan, and Rosetta baseline/v3; removing identity comparison makes
+it fail. The native regression also changes selection and releases synchronously,
+before another frame can present. A separate negative control removing the
+activation-time check copies B_FIRST and fails that new assertion.
+Both the original QML and the unadopted match adapter now pass all 36 native
+history cases (38 including init/cleanup). The adapter also passes all 36
+component cases offscreen and five selected native component cases. Those
+checks establish interaction correctness, not a performance gain. The correction
+is separate from the adapter; subsequent A/B stages include it on both sides.
+All F01–F16 remain open, and pending runtime cadence changes remain separate.

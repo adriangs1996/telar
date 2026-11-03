@@ -385,8 +385,8 @@ bool PointerDispatcher::release(QMouseEvent &event) {
   if (previous.history.held()) {
     const auto &surface = application_.presented_history_actions_;
     const auto action = previous.history.release(surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale});
-    if (action && application_.dialog_ == QStringLiteral("history") && surface.generation == application_.dialog_generation_) {
-      application_.activateHistoryCardAction(*action);
+    if (action && surface.choice && application_.dialog_ == QStringLiteral("history") && surface.generation == application_.dialog_generation_) {
+      application_.activateHistoryCardAction(*action, *surface.choice);
     }
 
     return true;

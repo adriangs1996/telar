@@ -2765,6 +2765,14 @@ return {api_version=2, client={keybindings={
     QCOMPARE(clipboard->text(), sentinel);
     QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, position);
     QCOMPARE(clipboard->text(), QStringLiteral("echo GUI_REUSE_PRESS_B_SECOND"));
+
+    clipboard->setText(sentinel);
+    sendMouse(*window_, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, position);
+    client_->selectHistoryRow(1);
+    QCOMPARE(client_->historyState().value(QStringLiteral("selection")).toInt(), 1);
+    // Release before another frame can present the changed selection.
+    sendMouse(*window_, QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, position);
+    QCOMPARE(clipboard->text(), sentinel);
   }
 
   Q_SLOT void historySelectionProgressesInEventLoops() {
