@@ -3608,23 +3608,45 @@ private:
     }
   }
 
+  // As Zig's `cli_control.zig`: a command that changes nothing is `applied`,
+  // one that starts a change is `admitted`, and the target stays the one the
+  // CLI sent, which the runtime matches the completion by.
   void executeNavigationCommand(const ClientCommand &message, CompleteClientCommand &reply) {
     switch (message.action) {
     case ClientAction::tab_next:
-    case ClientAction::tab_previous:
+    case ClientAction::tab_previous: {
+      if (!active_tab_) {
+        throw EncodingError{"NoActiveTab"};
+      }
+
+      const auto before = *active_tab_;
       selectTabOffset(message.action == ClientAction::tab_next ? 1 : -1);
-      reply.target_id = active_tab_ ? active_tab_->tab_id : 0;
+      reply.status = sameTab(before, *active_tab_) ? ClientCommandStatus::applied : ClientCommandStatus::admitted;
       break;
-    case ClientAction::workspace_select:
+    }
+    case ClientAction::workspace_select: {
+      if (message.target_id == 0) {
+        throw EncodingError{"InvalidWorkspaceId"};
+      }
+
+      const WorkspaceLocation location{WorkspaceLocation::Kind::workspace, message.target_id};
       if (std::ranges::none_of(workspaces_, [&](const auto &workspace) {
             return workspace.location.kind == WorkspaceLocation::Kind::workspace && workspace.location.id == message.target_id;
           })) {
-        throw EncodingError{"Workspace does not belong to this client"};
+        throw EncodingError{"WorkspaceNotFound"};
       }
 
-      selectWorkspace({WorkspaceLocation::Kind::workspace, message.target_id});
+      if (active_tab_ && sameWorkspace(active_tab_->workspace, location)) {
+        break;
+      }
+
+      if (!selectWorkspace(location)) {
+        throw EncodingError{"ClientBusy"};
+      }
+
       reply.status = ClientCommandStatus::admitted;
       break;
+    }
     case ClientAction::tab_create:
       if (createTab(message.text) != TabCreationOutcome::requested) {
         throw EncodingError{"ClientBusy"};
@@ -3636,12 +3658,18 @@ private:
       const auto tab = std::ranges::find_if(tabs_, [&](const auto &entry) {
         return entry->location.tab_id == message.target_id;
       });
-      if (tab == tabs_.end()) {
-        throw EncodingError{"Tab does not belong to this client"};
+      if (message.target_id == 0 || tab == tabs_.end()) {
+        throw EncodingError{"TabNotFound"};
+      }
+
+      if (active_tab_ && sameTab(*active_tab_, (*tab)->location)) {
+        break;
       }
 
       selectTab((*tab)->location);
-    } break;
+      reply.status = ClientCommandStatus::admitted;
+      break;
+    }
     default:
       throw EncodingError{"Invalid navigation command"};
     }
