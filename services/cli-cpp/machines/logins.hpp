@@ -165,11 +165,8 @@ class Logins {
   }
 
   std::string capture(const std::vector<std::string> &words, std::optional<std::string_view> input = std::nullopt) {
-    std::string command = std::string{profile_.program().value_or("telar")} + " dispatch-argv";
-    for (const auto &word : words) {
-      command += " " + encode(word);
-    }
-
+    // The same encoded command, length limit included, as every dispatch.
+    const auto command = remoteCommand(profile_, words);
     const auto output = input ? launch::captureBytes(ssh(memory_, profile_.destination(), command), *input, status_timeout) : launch::capture(ssh(memory_, profile_.destination(), command), -1, status_timeout);
     std::fwrite(output.err.data(), 1, output.err.size(), stderr);
     if (output.status != 0) {
