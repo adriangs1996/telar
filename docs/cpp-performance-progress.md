@@ -40,8 +40,67 @@ and completes a denied request before checking detached-worktree rejection.
 The first fixture revision used a missing-pane failure, which correctly triggered
 the existing fallback and left a request pending; that failed trial is retained.
 Activity, handshake and workspace-navigation checks now all pass. Production
-behavior was not changed. The complete Quick executable is running directly;
-its result and new native measurements remain pending.
+behavior was not changed. The first direct Quick invocation omitted its runtime
+environment and failed initialization; that controller error is retained. With
+the environment supplied, the unrestricted offscreen run finishes in 130.481 s:
+125 passed, five failed and one skipped. Two failures expect hiding a window to
+remove its active state; two subsequent history checks fail synchronization.
+All four pass in a focused Cocoa/Metal rerun without production or test changes.
+The skipped native-minimization case also passes in a separate Cocoa run.
+
+The fifth failure exposes a separate complete-stack gap. The first test PATH
+contained `telar-runtime`, while helper discovery searches for `telar`; its
+identity assertion correctly rejected the installed executable before invoking
+the plugin. With the new C++ runtime staged as `telar` and used for both discovery
+and the test server, the native test reaches invocation but reports
+`PluginWorkerFailed`. The C++ CLI has `tap-worker` but no `plugin-worker` dispatch.
+A direct empty-environment control returns `Unknown server option`. F14 plugin
+action parity therefore remains open; substituting the Zig helper would not
+validate the complete C++ stack. All failures and focused results are preserved
+under the new build prefix.
+
+The new staged GUI has SHA-256
+`01c6ebc2c0bc28d210b458be09150b6f9b366fa0c5706eb022ce5017f051324e`.
+Its runtime, command helper, dynamic linkage and matching benchmark configuration
+are frozen alongside it. The first fresh native qualification completes in both
+stacks with twenty measured inputs after twenty warmups, a 1600×1000 viewport,
+82×21 grid, identical marker coordinates, VSync, positive drawable presentation
+and verified GUI/runtime identities (`/tmp/telar-perf-dlls-native-qual-01`).
+Single-run p50 is 26.965 ms for Zig and 25.781 ms for C++; this is qualification,
+not a six-pair performance acceptance or a sustained-refresh result.
+
+A fresh instrumented tab-layout census on this base reproduces the repeated
+work: reorder and Escape cancellation pass with 37/58 rebuilds and 100/162
+caption measurements. Caption work accounts for about 8.0%/9.6% of their
+instrumented rebuild time. The hidden-counter case first fails visibility under
+the window manager; floating only its owned window reaches the counter but fails
+the destination-in-viewport assertion. Both failed runs remain excluded. The
+viewport-change cancellation passes in a separate floating-window run. Artifacts
+are under `out-perf/dlls-tab-layout-census`. No production cache change has been
+made.
+
+Phase instrumentation in `out-perf/dlls-tab-layout-phases` then separates
+measurement, positioned-record construction and model reconciliation. Reorder,
+Escape cancellation and viewport cancellation all pass. Measurement accounts
+for 10.6–13.1% of instrumented rebuild time; reconciliation, including synchronous
+Qt/QML subscribers, accounts for 76.2–80.2%. These are diagnostic, unpaired
+durations. Rebuilding captions or measured records alone would leave most of
+that observed work intact.
+
+The provisional `dlls-tab-field-roles` experiment retains complete records for
+existing consumers but exposes separate tab content and geometry roles to QML.
+Moving a tab then notifies bounds without rebinding its content, icons and
+activity. A reference-model oracle passes 2,048 deterministic insert/remove/
+reorder sequences and verifies selective notifications; chrome and activity scene
+tests pass. All three instrumented native gestures pass as well. Their model
+update durations decrease, but instrumentation and nonpaired runs prevent a
+performance acceptance claim. The candidate's single-layout native qualification
+also passes, with a byte-identical full-viewport PNG against the new C++ baseline
+(SHA-256 `5ef2102300977afa1170013c15ce79664d5dacce5f0816862062f8ab0a6f3eed`).
+That static equality does not establish animated pixel parity. A separate v2
+build incorporates lint cleanup; its checks, paired regressions and actual
+interaction-to-presentation acceptance remain pending. The candidate is not yet
+accepted or committed as a production optimization.
 
 A fresh original-Zig ReleaseFast reference also builds from this branch with the
 new font/theme assets, SHA-256
