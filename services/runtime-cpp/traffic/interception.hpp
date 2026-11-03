@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_platform/random_bytes.hpp"
 #include "../platform/completion_signal.hpp"
 #include "flow.hpp"
 #include "telar_base/memory/erasing_allocator.hpp"
@@ -127,7 +128,7 @@ class Interception {
 public:
   explicit Interception(Memory &memory, CompletionSignal *completion = nullptr, CompletionSignal *requests = nullptr)
       : upstream_(memory), memory_(memory), completion_(completion ? *completion : wake_), request_signal_(requests ? *requests : requests_) {
-    ::arc4random_buf(&next_, sizeof(next_));
+    randomBytes(&next_, sizeof(next_));
     next_ >>= 1;
   }
 

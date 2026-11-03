@@ -1,3 +1,4 @@
+#include "telar_platform/random_bytes.hpp"
 #include "check.hpp"
 #include "platform/private_tunnel.hpp"
 #include "traffic/datagram.hpp"
@@ -42,7 +43,7 @@ static Packet packet() {
   word(ipv4_bytes, fixture_port);
   word(ipv4_bytes + 2, fixture_port);
   word(ipv4_bytes + 4, udp_bytes + payload_bytes);
-  ::arc4random_buf(ip.data() + ipv4_bytes + udp_bytes, payload_bytes);
+  randomBytes(ip.data() + ipv4_bytes + udp_bytes, payload_bytes);
   ip.back() = 0;
 
   return frame;

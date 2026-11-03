@@ -2,6 +2,7 @@
 
 #include "command_limit.hpp"
 #include "telar_platform/file_descriptor.hpp"
+#include "telar_platform/rename.hpp"
 #include <fcntl.h>
 #include <filesystem>
 #include <sys/stat.h>
@@ -182,11 +183,8 @@ inline std::uint64_t copy(int input, int output) {
 }
 
 inline void publish(int parent, const char *temporary, const char *name) {
-#ifdef __APPLE__
-  const auto result = ::renameatx_np(parent, temporary, parent, name, RENAME_EXCL);
-#elif defined(__linux__)
-  constexpr unsigned rename_no_replace = 1;
-  const auto result = ::syscall(SYS_renameat2, parent, temporary, parent, name, rename_no_replace);
+#if defined(__APPLE__) || defined(__linux__)
+  const auto result = renameAt(parent, temporary, parent, name, RenameMode::create_only);
 #else
   const auto result = ::linkat(parent, temporary, parent, name, 0);
   if (result == 0) {

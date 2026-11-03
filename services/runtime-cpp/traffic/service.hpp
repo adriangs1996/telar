@@ -1,3 +1,4 @@
+#include "telar_platform/random_bytes.hpp"
 #include "telar_platform/peer_credentials.hpp"
 #pragma once
 
@@ -76,7 +77,7 @@ class Service : public FlowControl, public HttpControl, public PackagePort {
 
 public:
   explicit Service(Memory &memory, std::string_view path, bool allow_interception = false) : upstream_(memory), memory_(memory), listener_(path), interception_(memory), http_interception_(memory, &interception_.completionSignal(), &interception_.requestSignal()), analysis_(memory), recordings_(memory), allow_interception_(allow_interception) {
-    ::arc4random_buf(&session_, sizeof(session_));
+    randomBytes(&session_, sizeof(session_));
     const auto error = ::pthread_create(&thread_, nullptr, &start, this);
     if (error != 0) {
       throw SystemError{"Start traffic service", error};

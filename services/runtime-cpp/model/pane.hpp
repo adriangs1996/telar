@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_platform/random_bytes.hpp"
 #include "../agents/reporter_state.hpp"
 #include "../agents/resume.hpp"
 #include "../diagnostics/runtime_counters.hpp"
@@ -43,7 +44,7 @@ public:
         terminal(memory, settings.size, TerminalPurpose::separate_media, pty_responses, GraphicsQueryResources{settings.graphics, settings.media_budget, &media->queryUsage()}),
         input(memory, input_limit),
         cwd(command.cwd(), AllocatorRef<char, Memory>{memory}) {
-    ::arc4random_buf(history_session.data(), history_session.size());
+    randomBytes(history_session.data(), history_session.size());
     input.reserve(input_limit);
     launch.capture(command.arguments(), command.restorable());
     const auto executable = std::string_view{command.arguments().front()};

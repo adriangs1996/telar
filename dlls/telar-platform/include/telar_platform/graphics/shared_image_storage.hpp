@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_platform/random_bytes.hpp"
 #include "telar_platform/file_descriptor.hpp"
 #include "telar_platform/mapped_region.hpp"
 #include <array>
@@ -22,7 +23,7 @@ public:
 
     SharedImageStorage storage;
     std::array<std::uint64_t, 2> nonce;
-    ::arc4random_buf(nonce.data(), sizeof(nonce));
+    randomBytes(nonce.data(), sizeof(nonce));
     std::snprintf(storage.name_.data(), storage.name_.size(), "/tlr%016llx%08x", static_cast<unsigned long long>(nonce[0]), static_cast<unsigned>(nonce[1]));
     FileDescriptor descriptor{::shm_open(storage.name_.data(), O_CREAT | O_EXCL | O_RDWR, 0600)};
     if (!descriptor) {

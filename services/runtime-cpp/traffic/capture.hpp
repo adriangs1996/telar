@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_platform/random_bytes.hpp"
 #include "connection.hpp"
 #include "kernel_drops.hpp"
 #include "telar_base/memory/allocator.hpp"
@@ -34,7 +35,7 @@ public:
   explicit Capture(Memory &memory, FileDescriptor socket)
       : memory_(memory), socket_(std::move(socket)), output_(AllocatorRef<Byte, ErasingAllocator<Memory>>{memory_}) {
     output_.resize(Limits::frame_bytes + Protocol::prefix_bytes);
-    ::arc4random_buf(&session_, sizeof(session_));
+    randomBytes(&session_, sizeof(session_));
   }
 
   void live() {

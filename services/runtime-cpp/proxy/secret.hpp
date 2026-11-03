@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_platform/random_bytes.hpp"
 #include "telar_base/memory/erase_sensitive.hpp"
 #include "telar_base/text/ascii.hpp"
 #include <algorithm>
@@ -20,7 +21,7 @@ public:
 
   static ProxySecret generate() noexcept {
     ProxySecret secret;
-    ::arc4random_buf(secret.bytes_.data(), secret.bytes_.size());
+    randomBytes(secret.bytes_.data(), secret.bytes_.size());
     return secret;
   }
 

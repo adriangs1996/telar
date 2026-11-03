@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_platform/random_bytes.hpp"
 #include "telar_platform/trace.hpp"
 #include "telar_tls/handle.hpp"
 #include "telar_tls/hostname.hpp"
@@ -108,7 +109,7 @@ private:
     requireTls(X509_set_version(pair.certificate.get(), version_three) == 1 && X509_set_pubkey(pair.certificate.get(), pair.key.get()) == 1, "Set TLS certificate public key");
 
     std::uint64_t serial;
-    ::arc4random_buf(&serial, sizeof(serial));
+    randomBytes(&serial, sizeof(serial));
     serial >>= 1;
     requireTls(ASN1_INTEGER_set_uint64(X509_get_serialNumber(pair.certificate.get()), serial == 0 ? 1 : serial) == 1, "Set TLS certificate serial");
     const auto backdate_seconds = std::chrono::duration_cast<std::chrono::seconds>(backdate).count();

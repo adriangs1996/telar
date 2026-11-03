@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_platform/random_bytes.hpp"
 #include "clipboard_grants.hpp"
 #include "clipboard_response.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
@@ -355,7 +356,7 @@ private:
   struct Pending {
     explicit Pending(Memory &memory)
         : text(AllocatorRef<std::uint8_t, Memory>{memory}), transaction(nullptr, AllocationDeleter<ClipboardWrite<Memory>, Memory>{memory}) {
-      ::arc4random_buf(&nonce, sizeof(nonce));
+      randomBytes(&nonce, sizeof(nonce));
       if (nonce == 0) {
         nonce = 1;
       }

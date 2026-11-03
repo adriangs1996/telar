@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_platform/random_bytes.hpp"
 #include "telar_platform/file_descriptor.hpp"
 #include "telar_platform/rename.hpp"
 #include "telar_platform/write_descriptor.hpp"
@@ -26,7 +27,7 @@ inline int writePrivateFile(int directory, std::string_view name, std::span<cons
   constexpr unsigned maximum_attempts = 8;
   for (unsigned attempt = 0; attempt < maximum_attempts; ++attempt) {
     std::uint64_t nonce;
-    ::arc4random_buf(&nonce, sizeof(nonce));
+    randomBytes(&nonce, sizeof(nonce));
     std::array<char, 64> temporary;
     std::snprintf(temporary.data(), temporary.size(), ".telar-write-%016llx.tmp", static_cast<unsigned long long>(nonce));
     FileDescriptor file{::openat(directory, temporary.data(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600)};

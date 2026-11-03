@@ -2,6 +2,9 @@
 
 #include "telar_platform/error.hpp"
 #include <csignal>
+#include <cstdlib>
+#include <dirent.h>
+#include <fcntl.h>
 #include <spawn.h>
 
 namespace telar::runtime {
@@ -57,9 +60,32 @@ public:
 #endif
   }
 
+  // The child keeps only the standard streams and what `redirect` placed.
+  // musl has no addclosefrom, so there every descriptor above stderr is
+  // marked close-on-exec in this process instead: the child loses it at
+  // exec, this process keeps it, and dup2 targets are fresh descriptors.
   void closeOthers() {
-#if defined(__linux__)
+#if defined(__GLIBC__)
     checkSpawn(::posix_spawn_file_actions_addclosefrom_np(&actions, STDERR_FILENO + 1));
+#elif defined(__linux__)
+    DIR *descriptors = ::opendir("/proc/self/fd");
+    if (descriptors == nullptr) {
+      throw SystemError{"List open descriptors"};
+    }
+
+    const int own = ::dirfd(descriptors);
+    while (const auto *entry = ::readdir(descriptors)) {
+      char *end = nullptr;
+      const auto descriptor = std::strtol(entry->d_name, &end, 10);
+      if (*end == '\0' && end != entry->d_name && descriptor > STDERR_FILENO && descriptor != own) {
+        const int flags = ::fcntl(static_cast<int>(descriptor), F_GETFD);
+        if (flags >= 0) {
+          ::fcntl(static_cast<int>(descriptor), F_SETFD, flags | FD_CLOEXEC);
+        }
+      }
+    }
+
+    ::closedir(descriptors);
 #endif
   }
 

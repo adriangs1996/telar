@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_platform/random_bytes.hpp"
 #include "object.hpp"
 #include "target.hpp"
 #include "telar_base/memory/retained_stream.hpp"
@@ -214,7 +215,7 @@ private:
     std::array<Byte, 64> outgoing;
     std::uint64_t identity = 0;
     while (identity == 0) {
-      ::arc4random_buf(&identity, sizeof(identity));
+      randomBytes(&identity, sizeof(identity));
     }
 
     connection.send(RequestRuntimeState{.client_identity = identity, .interactive = false}, outgoing);

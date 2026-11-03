@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_platform/random_bytes.hpp"
 #include "arguments.hpp"
 #include "cli_install.hpp"
 #include "telar_platform/file_descriptor.hpp"
@@ -179,7 +180,7 @@ inline bool place(int home, const std::string &path, std::string_view bytes, mod
   }
 
   std::uint64_t nonce;
-  ::arc4random_buf(&nonce, sizeof(nonce));
+  randomBytes(&nonce, sizeof(nonce));
   std::array<char, 64> temporary;
   std::snprintf(temporary.data(), temporary.size(), ".telar-%016llx", static_cast<unsigned long long>(nonce));
   FileDescriptor file{::openat(parent.get(), temporary.data(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, mode)};

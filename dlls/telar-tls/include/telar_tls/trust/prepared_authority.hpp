@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_platform/random_bytes.hpp"
 #include "telar_tls/trust/inspection.hpp"
 
 namespace telar::runtime::proxy_trust {
@@ -25,7 +26,7 @@ public:
     }
 
     std::uint64_t nonce;
-    ::arc4random_buf(&nonce, sizeof(nonce));
+    randomBytes(&nonce, sizeof(nonce));
     makeName(key_, canonical_.key, "rotate", nonce);
     makeName(certificate_, canonical_.certificate, "rotate", nonce);
     makeName(previous_key_, canonical_.key, "previous", nonce);

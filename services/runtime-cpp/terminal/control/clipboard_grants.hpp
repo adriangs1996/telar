@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_platform/random_bytes.hpp"
 #include "clipboard_metadata.hpp"
 #include <algorithm>
 #include <cstdlib>
@@ -96,7 +97,7 @@ public:
     constexpr std::string_view alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
     static_assert(alphabet.size() == 64);
     std::array<std::uint8_t, password_length> random;
-    ::arc4random_buf(random.data(), random.size());
+    randomBytes(random.data(), random.size());
     std::array<char, password_length> output;
     for (std::size_t index = 0; index < output.size(); ++index) {
       output[index] = alphabet[random[index] & (alphabet.size() - 1)];

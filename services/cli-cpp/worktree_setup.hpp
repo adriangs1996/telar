@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_platform/random_bytes.hpp"
 #include "session_channel.hpp"
 #include "telar_base/text/json.hpp"
 #include "telar_platform/file_descriptor.hpp"
@@ -194,7 +195,7 @@ std::optional<std::uint64_t> worktreeSetup(Memory &memory, Channel<Memory> &sess
   }
   std::uint64_t id{};
   while (id == 0) {
-    ::arc4random_buf(&id, sizeof(id));
+    randomBytes(&id, sizeof(id));
   }
   ExecutionRequest request{.action = ExecutionAction::start, .execution_id = id, .cwd = cwd, .arguments = std::span{argv}.first(arguments.size())};
   std::fprintf(stderr, "telar project: setup execution %llu; each explicit invocation repeats the recipe\n", static_cast<unsigned long long>(id));

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_platform/random_bytes.hpp"
 #include "arguments.hpp"
 #include "json_text.hpp"
 #include "telar_client/codecs/telar_codec.hpp"
@@ -46,7 +47,7 @@ inline std::string_view textBytes(std::span<const Byte> bytes) {
 inline std::uint64_t randomIdentity() {
   std::uint64_t value = 0;
   while (value == 0) {
-    ::arc4random_buf(&value, sizeof(value));
+    randomBytes(&value, sizeof(value));
   }
 
   return value;

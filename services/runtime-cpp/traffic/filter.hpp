@@ -8,6 +8,19 @@
 
 namespace telar::runtime::traffic {
 
+// Outside Filter, so its optional entries see a complete, default
+// constructible type: Clang rejects emplace on a nested class whose member
+// initializers it has not yet parsed.
+struct FilterProgram {
+  bpf_program value{};
+  ~FilterProgram() { pcap_freecode(&value); }
+};
+
+struct FilterEntry {
+  std::uint32_t link_type = 0;
+  FilterProgram program;
+};
+
 class Filter {
 public:
   Filter(const Filter &) = delete;
@@ -47,15 +60,8 @@ public:
   }
 
 private:
-  struct Program {
-    bpf_program value{};
-    ~Program() { pcap_freecode(&value); }
-  };
-
-  struct Entry {
-    std::uint32_t link_type = 0;
-    Program program;
-  };
+  using Program = FilterProgram;
+  using Entry = FilterEntry;
 
   void compile(int link_type, Program &program) {
     const std::unique_ptr<pcap_t, decltype(&pcap_close)> dead{pcap_open_dead(link_type, Limits::packet_bytes), &pcap_close};

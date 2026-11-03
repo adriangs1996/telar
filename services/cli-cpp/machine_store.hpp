@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_platform/random_bytes.hpp"
 #include "cli_install.hpp"
 #include "machine_options.hpp"
 #include "telar_client/machines/profile_codec.hpp"
@@ -68,7 +69,7 @@ inline void requireNotLocal(const MachineProfiles &profiles, std::string_view la
 
 struct Random {
   void fill(std::span<std::uint8_t> bytes) {
-    ::arc4random_buf(bytes.data(), bytes.size());
+    randomBytes(bytes.data(), bytes.size());
   }
 };
 

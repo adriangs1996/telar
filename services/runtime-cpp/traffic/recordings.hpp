@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_platform/random_bytes.hpp"
 #include "../plugins/protocol.hpp"
 #include "event_frame.hpp"
 #include "filter.hpp"
@@ -64,7 +65,7 @@ class Recordings {
   };
 
 public:
-  explicit Recordings(Memory &memory) noexcept : memory_(memory) { ::arc4random_buf(&next_id_, sizeof(next_id_)); }
+  explicit Recordings(Memory &memory) noexcept : memory_(memory) { randomBytes(&next_id_, sizeof(next_id_)); }
 
   bool selects(Selection selection) const noexcept { return (interest_.load(std::memory_order_acquire) & static_cast<Byte>(selection)) != 0; }
 
