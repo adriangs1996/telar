@@ -2867,10 +2867,58 @@ visible before loading fullscreen/attention chrome fixes the failure without
 weakening the oracle. The corrected candidate passes 17 native cases, 38 Metal
 scene cases and core/session/runtime-link/cache-model tests. The refactored
 2,048-case Screen oracle also passes Rosetta and ASan/UBSan; pinned Zig 0.16 checks,
-cross-compilation, style and module-boundary checks pass. Final rebuild, static
-analysis and fresh paired measurements remain required; no joint result is
-accepted yet. A pre-existing redundant-alias diagnostic in `config/callback.hpp`
-is recorded separately from the modified-code checks.
+cross-compilation, style and module-boundary checks pass. A later final-binary repetition catches another correctness issue: opening a
+split reports generation zero before a later snapshot resolves it. Cache identity
+replacement destroys the terminal during mouse capture; a QPointer diagnostic
+records generation 0 → 3. A new model oracle fails deterministically before the
+fix. Only visible unresolved entries may retain their token when the generation
+resolves; hidden unresolved entries are never cached, while known-generation and
+runtime-context changes still replace tokens. The corrected candidate passes the
+model oracle, 20 native cases, 38 Metal cases and six additional repetitions of
+each previously failing mouse case. Modified-code static analysis passes; the
+unchanged redundant-alias diagnostic in `config/callback.hpp` remains recorded.
+
+The **joint candidate is rejected and withdrawn**. Final GUI B is
+`713aefd658db8ed23149b72da7f82fb97e92378ac7118a695c878df72965eee0`,
+source patch `6cb76158567333f90f0fc6aac008277fd71be5ac153af3512026443e7a45b346`.
+Settled full-window PNGs match exactly for single, split and tab layouts.
+Six alternating native typing pairs per layout
+(`/tmp/telar-perf-pane-row-reuse-regressions-01`) report:
+
+| Control | Metric | Original A | Joint B | B wins |
+| --- | --- | ---: | ---: | ---: |
+| Single | p95, ms | 32.609 | 31.595 | 2/6 |
+| Single | p99, ms | 36.095 | 34.222 | 5/6 |
+| Single | GUI CPU, ms/input | 4.004 | 4.027 | 3/6 |
+| Four splits | p95, ms | 32.721 | 32.665 | 3/6 |
+| Four splits | p99, ms | 34.247 | 35.212 | 1/6 |
+| Four splits | GUI CPU, ms/input | 4.221 | 4.493 | 0/6 |
+
+The split p99 and CPU losses reject the candidate. Peak GUI RSS is
+205.063 → 206.906 MiB for single-pane and 204.914 → 204.430 MiB for splits;
+extra bounded memory is allowed and is not the rejection reason. No target-switch
+or final component acceptance batch runs after this independent rejection.
+A separate eight-second sample of each frozen binary during four-split typing
+(`/tmp/telar-perf-pane-row-reuse-split-profile-01`) is too sparse in application
+code to establish the CPU cause. GPU-work medians and observed drawable-ID spans
+do not show an obvious directional change. No code-placement exemption is claimed.
+
+The reusable Screen probe completes seven pairs per case in
+`screen-pairs-final`: empty delta 10.308 → 9.381 ns (7/7), one cell
+42.704 → 31.194 ns (7/7), one row 784.999 → 473.190 ns (7/7), full delta
+15,721.825 → 11,278.800 ns (7/7), changing snapshot 15,746.308 → 15,737.475 ns
+(4/7), retained snapshot 15,806.979 → 15,630.496 ns (7/7). Each uses 55,104 extra
+Screen-owned bytes at 82×21 and no warm allocation churn. These component wins
+cannot override the native rejection. ARM64 inspection confirms the empty-span
+branch and single decoding traversal. It also finds 512 bytes of temporary cache
+identity initialization per validation; retaining that scratch is an unmeasured
+follow-up, not an explanation for the measured regression.
+
+The complete rejected source, generation and visibility oracles, binaries and
+receipts remain in the ignored experiment prefix. Production changes are removed;
+only generic Screen checks for atomic rejection, recovery, span gaps and
+metadata-only deltas remain in the active source. The accepted baseline and all
+F01–F16 acceptance requirements remain unchanged.
 
 `gui-screen-probe` and `tools/compare_screen.py` now provide the direct Screen
 workloads as reusable source. They verify final cells, reject warm allocation
