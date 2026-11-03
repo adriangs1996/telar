@@ -3,6 +3,7 @@
 #include "control_failure.hpp"
 #include "runtime_connection.hpp"
 #include "telar_base/memory/allocator.hpp"
+#include <optional>
 #include <stdexcept>
 
 namespace telar::runtime::cli {
@@ -54,21 +55,33 @@ public:
   Reply exchange(Request request) {
     request.request_id = next_request_++;
     connection_.send(request, outgoing_);
+    return receive<Reply>(request.request_id);
+  }
+
+  // Subscription events may interleave with a reply; snapshots have no request id.
+  template <typename Reply>
+  Reply receive(std::optional<std::uint64_t> request_id = std::nullopt) {
     for (;;) {
       const auto frame = connection_.receive(incoming_);
       DecodeStorage storage{decoded_};
       if (frame.front() == static_cast<Byte>(MessageSchema<Reply>::tag)) {
         auto reply = Codec::decode<Reply>(frame, storage);
-        if (reply.request_id == request.request_id) {
-          return reply;
+        if constexpr (requires { reply.request_id; }) {
+          if (request_id && reply.request_id != *request_id) {
+            continue;
+          }
         }
-      } else if (frame.front() == static_cast<Byte>(ServerTag::request_failed)) {
+
+        return reply;
+      }
+
+      if (frame.front() == static_cast<Byte>(ServerTag::request_failed)) {
         const auto failure = Codec::decode<RequestFailed>(frame, storage);
-        if (failure.request_id == request.request_id) {
+        if (!request_id || failure.request_id == *request_id) {
           throw ControlFailure{failure.code};
         }
-      } else {
-        throw EncodingError{"Unexpected reply from the runtime"};
+      } else if (frame.front() == static_cast<Byte>(ServerTag::runtime_stopping)) {
+        throw std::runtime_error{"RuntimeStopping"};
       }
     }
   }
