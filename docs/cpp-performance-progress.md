@@ -4995,6 +4995,100 @@ query-response latency. Native input-to-results timing, separate GUI/runtime
 resources, independent Zig F12 comparison and native120 remain open. No flow is
 closed by these two content cases.
 
+### Native history result observer and instrumented A/B comparison
+
+The private history observer now verifies both screenshot-derived BGRA templates
+against raw Metal bytes. `/tmp/telar-perf-history-observer-same-submit-gb-01` and
+`/tmp/telar-perf-history-observer-same-submit-GST-01` pass with no readback drops.
+The 512×48 region at (320,1592) contains the selected command, outside the query
+field. The two commands differ, so changing query text or highlighting on an old
+result cannot satisfy the new-result oracle.
+
+Unlike the initial post-presentation snapshot experiment, the observer encodes
+its blit into the render command buffer before commit. A per-drawable record joins
+the GPU-completed pixel comparison with that drawable's positive native
+presentation timestamp. Three reusable shared buffers total 294,912 bytes.
+Pool exhaustion fails the run. A target-result frame with a zero timestamp also
+invalidates the measured endpoint; non-target zero frames are counted separately.
+This implementation currently observes the ordinary Metal command-buffer path
+used by the C++ GUI; independent Zig/Metal4 qualification remains separate work.
+
+Native query-replacement qualification passes in
+`/tmp/telar-perf-history-query-observer-qual-A-02`. The driver posts Command-A,
+verifies the native selected range, timestamps `NSTextInputClient.insertText`,
+checks the resulting query text, and alternates `gb`/`GST`. Selection preparation
+is outside the latency interval. The 60 ms application debounce remains inside it.
+The earliest verified positive result timestamp is retained while callbacks drain
+for 50 ms before the next query. No arbitrary settle delay is added to the reported
+latency. Forced stale-result, absent-result and zero-presentation controls in
+`/tmp/telar-perf-history-query-observer-negative-{stale,missing,zero}-01` all time
+out without accepting a trial. These are detector fault injections, not claims
+that the operating system generated every injected fault. The first A driver run
+failed while serializing its summary and is superseded by A-02.
+
+The two-query diagnostic
+`/tmp/telar-perf-history-query-observer-timeline-B-01` retains all observed ROI
+pixels and commit/GPU-completion/presentation times. Visual inspection shows old
+command text, a blank region, then the new command at the first exact match. It
+does not show an earlier new command merely fading into the settled template.
+This is a check of these two transitions, not proof for arbitrary history layouts.
+
+`/tmp/telar-perf-history-native-query-pairs-01` completes six alternating A/B pairs
+with 60 replacements per run, using the corrected-listener stages above and one
+frozen observer. All 720 queries, 12 owned-process cleanups and 62 nested/series
+host boundaries pass; maximum load1 is 3.761. There are no dropped readbacks or
+target-result zero timestamps. The observer rejects 610 old-result frames and
+counts seven non-target zero frames during the trials.
+
+The resource helper samples GUI and runtime separately after settled readiness,
+before releasing the input driver, and after its final report. This excludes GUI
+startup, fixture setup and shutdown, but includes native selection preparation,
+the inter-query callback interval, observer work and counter boundary overhead.
+The setup action timer stops after readiness; window-manager polling also stops
+before query measurement. Median paired results are:
+
+| Metric | A | B | B wins |
+| --- | ---: | ---: | ---: |
+| Mean input-to-presented-results, ms | 141.7414 | 137.9442 | 6/6 |
+| Presentation latency p95, ms | 151.9116 | 148.8086 | 5/6 |
+| Presentation latency p99, ms | 153.9799 | 151.4946 | 3/6 |
+| Runtime CPU, ms/query cycle | 6.00394 | 1.82102 | 6/6 |
+| GUI CPU, ms/query cycle | 68.74782 | 68.11187 | 6/6 |
+| Runtime end footprint, bytes | 11,313,584 | 10,944,968 | 4/6 |
+| GUI end footprint, bytes | 269,649,300 | 269,141,360 | 4/6 |
+
+The p99 result is mixed, not a consistent tail-latency improvement. End footprints
+and lifetime maxima are not interval peaks. Instrumented commit/encoder/drawable/
+completion/record hooks account for approximately 0.305/0.274 ms per query cycle;
+this excludes the native input driver and does not isolate GPU readback
+perturbation. GPU work counters cover the whole render submission, not just the
+copy. The manifests therefore retain `adoption_eligible: false`: this is a
+completed instrumented comparison, with observer overhead and independent Zig F12
+still requiring qualification. Native120 and every full flow remain open.
+
+Independent Zig captures now exist at
+`/tmp/telar-perf-history-native-capture-Z-gb-02` and
+`/tmp/telar-perf-history-native-capture-Z-GST-01`. Both actual processes identify as
+`6ccf79485c5ca8baaa2d69d2590abb49d23c808891c04fe6e70f5602713a1d5e`;
+the copied database still has 10,000 commands/max-id 10,000 after capture. Native
+query/focus/viewport/positive-presentation and owned cleanup checks pass. The
+selected commands are the same as in C++, but complete RGB captures differ at
+64,029/66,649 pixels out of 6.4 million, respectively. The selected-command ROI
+also differs: this is not just volatile outer chrome. For `gb`, its background
+color is identical while the glyph pixels differ. Separate Zig templates are
+saved, but neither their raw Metal4 readback nor the cross-stack visual difference
+has been qualified yet. These captures do not establish visual parity or a Zig
+latency comparison.
+
+The GUI's larger CPU cost suggests the next algorithmic investigation. A history
+page contains up to 100 records. `ListModel::reconcile` inserts new identities
+individually, scans existing keys repeatedly, then removes the old suffix; the
+history panel temporarily sets its model to null on removal and restores it with
+`Qt.callLater`. This code path is consistent with the observed blank frame, but
+its causal CPU/latency contribution has not yet been measured. A bounded page
+replacement strategy should be tested against overlap, identical refresh,
+deletion, paging and stale-action controls before changing production behavior.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
