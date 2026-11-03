@@ -3335,6 +3335,31 @@ unchanged. This is recorded in `reference-sections.json` and
 Load remained elevated (15.32 / 19.54 / 19.23 at 11:21); component and native
 acceptance timing have still not started.
 
+## Shared-host measurement qualification, 2026-11-03
+
+The native latency CLI previously recorded only its initial process list. It now
+uses the reusable `tools/benchmark_host.py` gate before preparation, before the
+series, around every attempted variant and after the series. Load limits and
+active-compiler checks are frozen in `host-load.json`; high load or a missing
+observation irreversibly excludes the entire series. Raw results remain, but no
+aggregate is published. The observer source is copied into the measurement's
+source manifest. Direct callers of `measure()` must opt into the gate themselves;
+functional image oracles are not timing acceptance runs.
+
+Twelve focused tests pass, including real runner control flow with mocked host
+observations: high initial load prevents the probe build/workload, and interference
+after a second run prevents aggregate generation even though the first run was
+clean. Other cases cover capture failure, compiler detection, sticky invalidation,
+cleanup ordering, invalid limits and the final checkpoint. The 19 existing native
+comparison tests also pass. No GUI/runtime production behavior changes.
+
+A real CLI attempt in `/tmp/telar-perf-host-load-cli-01` exits 2 at `before-setup`
+under the observed shared load. Its report is `deferred`, with zero started runs;
+no probe library, runtime or GUI was launched. Boundary snapshots have limited
+temporal coverage and are not proof of an otherwise idle machine. The pending
+ASCII coverage candidate remains unaccepted, and all full-flow timing/cadence
+requirements remain open.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
