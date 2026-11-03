@@ -71,7 +71,7 @@ struct HistoryOptions {
   static std::int64_t parseBefore(std::string_view text) {
     constexpr std::int64_t milliseconds_per_second = 1000;
     if (!text.contains('-')) {
-      const auto seconds = parseInteger<std::int64_t>(text);
+      const auto seconds = parseInt<std::int64_t>(text);
       if (seconds <= 0 || seconds > std::numeric_limits<std::int64_t>::max() / milliseconds_per_second) {
         throw std::invalid_argument{"InvalidHistoryBefore"};
       }
@@ -86,7 +86,7 @@ struct HistoryOptions {
         throw std::invalid_argument{"InvalidHistoryBefore"};
       }
 
-      fields[at] = parseInteger<std::int64_t>(text.substr(0, end));
+      fields[at] = parseInt<std::int64_t>(text.substr(0, end));
       if (end != text.npos) {
         text.remove_prefix(end + 1);
       }
@@ -119,7 +119,7 @@ struct HistoryOptions {
 
     const std::string_view action = words.front();
     HistoryOptions self{.action = Action::list};
-    std::size_t index = 1;
+    Cursor cursor{words.subspan(1)};
     if (action == "list") {
       self.action = Action::list;
     } else if (action == "stats") {
@@ -128,40 +128,32 @@ struct HistoryOptions {
       self.action = Action::prune;
     } else if (action == "search") {
       self.action = Action::search;
-      if (words.size() < 2) {
-        throw std::invalid_argument{"MissingHistoryQuery"};
-      }
-
-      self.query = words[index++];
+      self.query = cursor.take("MissingHistoryQuery");
     } else if (action == "show" || action == "delete") {
       self.action = action == "show" ? Action::show : Action::remove;
-      if (words.size() < 2) {
-        throw std::invalid_argument{"MissingHistoryId"};
-      }
-
-      self.id = parseInteger<std::uint64_t>(words[index++], true);
+      self.id = parseInt<std::uint64_t>(cursor.take("MissingHistoryId"));
       if (self.id == 0) {
         throw std::invalid_argument{"InvalidHistoryId"};
       }
     } else if (action == "import") {
       self.action = Action::import;
       if (words.size() > 1 && !std::string_view{words[1]}.starts_with('-')) {
-        self.import_kind = importKind(words[index++]);
+        self.import_kind = importKind(*cursor.next());
       }
     } else {
       throw std::invalid_argument{"UnknownHistoryAction"};
     }
 
-    for (; index < words.size(); ++index) {
-      const std::string_view arg = words[index];
+    while (const auto word = cursor.next()) {
+      const std::string_view arg = *word;
       if (arg == "--file" && self.action == Action::import) {
-        self.import_file = requireValue(words, index, "MissingHistoryFile");
+        self.import_file = cursor.take("MissingHistoryFile");
       } else if (arg == "--cwd") {
         self.setScope(HistoryScope::cwd);
       } else if (arg == "--workspace") {
-        self.setScope(HistoryScope::workspace, requireValue(words, index, "MissingWorkspacePath"));
+        self.setScope(HistoryScope::workspace, cursor.take("MissingWorkspacePath"));
       } else if (arg == "--pane") {
-        self.pane_id = parseInteger<std::uint64_t>(requireValue(words, index, "MissingPaneId"), true);
+        self.pane_id = parseInt<std::uint64_t>(cursor.take("MissingPaneId"));
         if (self.pane_id == 0) {
           throw std::invalid_argument{"InvalidPaneId"};
         }
@@ -170,7 +162,7 @@ struct HistoryOptions {
       } else if (arg == "--failed") {
         self.failed_only = true;
       } else if (arg == "--period" && self.action == Action::stats) {
-        const auto value = requireValue(words, index, "MissingHistoryPeriod");
+        const auto value = cursor.take("MissingHistoryPeriod");
         if (value == "today") {
           self.period_days = 1;
         } else if (value == "week") {
@@ -185,15 +177,15 @@ struct HistoryOptions {
           throw std::invalid_argument{"InvalidHistoryPeriod"};
         }
       } else if (arg == "--before" && self.action == Action::prune) {
-        self.before_ms = parseBefore(requireValue(words, index, "MissingHistoryBefore"));
+        self.before_ms = parseBefore(cursor.take("MissingHistoryBefore"));
       } else if (arg == "--dry-run" && self.action == Action::prune) {
         self.dry_run = true;
       } else if (arg == "--yes" && self.action == Action::prune) {
         self.assume_yes = true;
       } else if (arg == "--match" && self.action == Action::prune) {
-        self.query = requireValue(words, index, "MissingHistoryQuery");
+        self.query = cursor.take("MissingHistoryQuery");
       } else if (arg == "--author") {
-        const auto value = requireValue(words, index, "MissingHistoryAuthor");
+        const auto value = cursor.take("MissingHistoryAuthor");
         if (value != "all" && value != "human" && value != "agent") {
           throw std::invalid_argument{"InvalidHistoryAuthor"};
         }
@@ -201,12 +193,12 @@ struct HistoryOptions {
         self.author = value == "all" ? HistoryAuthorFilter::all : value == "human" ? HistoryAuthorFilter::human
                                                                                    : HistoryAuthorFilter::agent;
       } else if (arg == "--limit") {
-        self.limit = parseInteger<std::uint16_t>(requireValue(words, index, "MissingHistoryLimit"), true);
+        self.limit = parseInt<std::uint16_t>(cursor.take("MissingHistoryLimit"));
         if (self.limit == 0 || self.limit > max_results) {
           throw std::invalid_argument{"InvalidHistoryLimit"};
         }
       } else if (arg == "--socket") {
-        const auto value = requireValue(words, index, "MissingSocketPath");
+        const auto value = cursor.take("MissingSocketPath");
         if (self.socket) {
           throw std::invalid_argument{"DuplicateSocketOption"};
         }

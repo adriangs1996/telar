@@ -32,14 +32,15 @@ struct RepositoryOptions {
     }
 
     RepositoryOptions self{.action = action == "prepare" ? Action::prepare : Action::receive};
-    for (std::size_t index = 1; index < words.size(); ++index) {
-      const std::string_view arg = words[index];
+    Cursor cursor{words.subspan(1)};
+    while (const auto word = cursor.next()) {
+      const std::string_view arg = *word;
       if (arg == "--json") {
         self.json = true;
         continue;
       }
 
-      const auto value = requireValue(words, index, "MissingRepositoryOptionValue");
+      const auto value = cursor.take("MissingRepositoryOptionValue");
       if (arg == "--machine" && self.action == Action::prepare) {
         self.machine = value;
       } else if (arg == "--from" && self.action == Action::prepare) {
@@ -55,7 +56,7 @@ struct RepositoryOptions {
       } else if (arg == "--ref" && self.action == Action::receive) {
         self.ref = value;
       } else if (arg == "--bytes" && self.action == Action::receive) {
-        self.bytes = parseInteger<std::uint64_t>(value);
+        self.bytes = parseUnsigned<std::uint64_t>(value);
       } else {
         throw std::invalid_argument{"UnknownRepositoryOption"};
       }

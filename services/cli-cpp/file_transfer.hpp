@@ -65,7 +65,7 @@ struct Options {
         throw std::invalid_argument{"InvalidFileArguments"};
       }
 
-      self.bytes = parseInteger<std::uint64_t>(words[3]);
+      self.bytes = parseUnsigned<std::uint64_t>(words[3]);
     } else if (self.action == Action::put) {
       throw std::invalid_argument{"MissingTransferByteCount"};
     }

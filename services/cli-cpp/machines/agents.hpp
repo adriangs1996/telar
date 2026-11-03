@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../arguments.hpp"
 #include "platform.hpp"
 #include "remote_shell.hpp"
 #include "setup_report.hpp"
@@ -82,6 +83,15 @@ bash "$installer" </dev/null
   return {.tools = {"curl", "bash"}, .script = "fetch https://cursor.com/install\nbash \"$installer\" </dev/null\n", .musl = false};
 }
 
+// `std.fmt.parseInt(u32, part, 10) catch null`, as Zig reads a Node.js version.
+inline std::optional<std::uint32_t> maybeVersion(std::string_view part) noexcept {
+  try {
+    return parseInt<std::uint32_t>(part);
+  } catch (const std::invalid_argument &) {
+    return std::nullopt;
+  }
+}
+
 inline std::optional<std::string> missingPrerequisite(const Platform &platform, std::string_view agent, const AgentInstaller &installer) {
   if (platform.libc == "musl" && !installer.musl) {
     return "its binary needs glibc and this machine has musl";
@@ -100,16 +110,12 @@ inline std::optional<std::string> missingPrerequisite(const Platform &platform, 
     while (text.starts_with('v')) {
       text.remove_prefix(1);
     }
-    unsigned major = 0;
-    unsigned minor = 0;
-    const auto first = std::from_chars(text.data(), text.data() + text.size(), major);
-    if (first.ec != std::errc{} || first.ptr == text.data() + text.size() || *first.ptr != '.') {
-      return "Node.js there is older than 22.19";
-    }
-    const auto second = std::from_chars(first.ptr + 1, text.data() + text.size(), minor);
-    constexpr unsigned required_major = 22;
-    constexpr unsigned required_minor = 19;
-    if (second.ec != std::errc{} || major < required_major || (major == required_major && minor < required_minor)) {
+    const auto dot = text.find('.');
+    const auto major = maybeVersion(text.substr(0, dot));
+    const auto minor = dot == std::string_view::npos ? std::nullopt : maybeVersion(text.substr(dot + 1, text.find('.', dot + 1) - dot - 1));
+    constexpr std::uint32_t required_major = 22;
+    constexpr std::uint32_t required_minor = 19;
+    if (!major || !minor || *major < required_major || (*major == required_major && *minor < required_minor)) {
       return "Node.js there is older than 22.19";
     }
   }

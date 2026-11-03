@@ -63,7 +63,7 @@ private:
     try {
       constexpr auto max_seconds = std::numeric_limits<std::int64_t>::max() / 1000;
       constexpr auto min_seconds = std::numeric_limits<std::int64_t>::min() / 1000;
-      const auto seconds = parseInteger<std::int64_t>(text);
+      const auto seconds = parseInt<std::int64_t>(text);
       return seconds > max_seconds || seconds < min_seconds ? 0 : seconds * 1000;
     } catch (const std::invalid_argument &) {
       return 0;
@@ -139,7 +139,7 @@ private:
   std::optional<ImportedLine> bash(std::string_view line) {
     if (line.size() > 1 && line.front() == '#') {
       try {
-        const auto seconds = parseInteger<std::int64_t>(line.substr(1));
+        const auto seconds = parseInt<std::int64_t>(line.substr(1));
         auto finished = flush();
         time_ = timestamp(std::to_string(seconds));
         return finished;

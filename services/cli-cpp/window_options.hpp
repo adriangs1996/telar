@@ -1,5 +1,6 @@
 #pragma once
 
+#include "arguments.hpp"
 #include "family.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include "telar_plugins/identity.hpp"
@@ -10,72 +11,13 @@
 
 namespace telar::runtime::cli::window {
 
-class Arguments {
-public:
-  explicit Arguments(std::span<char *const> words)
-      : words_(words) {}
-
-  bool empty() const noexcept {
-    return words_.empty();
-  }
-
-  std::string_view take(const char *error) {
-    if (empty()) {
-      throw std::invalid_argument{error};
-    }
-
-    const std::string_view result = words_.front();
-    words_ = words_.subspan(1);
-    return result;
-  }
-
-private:
-  std::span<char *const> words_;
-};
-
-template <typename Integer = std::uint64_t>
-Integer unsignedNumber(std::string_view text, const char *error, const char *overflow = nullptr) {
-  if (text.empty() || text.front() == '_' || text.back() == '_') {
-    throw std::invalid_argument{error};
-  }
-
-  Integer value{};
-  constexpr Integer base = 10;
-  for (const char byte : text) {
-    if (byte == '_') {
-      continue;
-    }
-    if (byte < '0' || byte > '9') {
-      throw std::invalid_argument{error};
-    }
-
-    const auto digit = static_cast<Integer>(byte - '0');
-    if (value > (std::numeric_limits<Integer>::max() - digit) / base) {
-      throw std::invalid_argument{overflow == nullptr ? error : overflow};
-    }
-
-    value = value * base + digit;
-  }
-
-  return value;
-}
-
-inline std::uint64_t positive(std::string_view text, const char *error) {
-  const auto value = unsignedNumber(text, error);
-  if (value == 0) {
-    throw std::invalid_argument{error};
-  }
-
-  return value;
-}
-
 struct RoutedOptions {
   ClientCommand command{};
   std::uint64_t client = 0;
   bool json = false;
   const char *socket = nullptr;
 
-  static std::optional<ClientAction> action(Family family, std::string_view verb, Arguments &args) {
+  static std::optional<ClientAction> action(Family family, std::string_view verb, Cursor &args) {
     using enum ClientAction;
     switch (family) {
     case Family::sidebar:
@@ -170,7 +112,7 @@ struct RoutedOptions {
       return std::nullopt;
     }
 
-    Arguments args{words};
+    Cursor args{words};
     const auto verb = args.take("MissingClientAction");
     const auto selected = action(family, verb, args);
     if (!selected) {
@@ -219,7 +161,7 @@ struct RoutedOptions {
       } else if (option == "--section" && *selected == ClientAction::config_show && self.command.text.empty()) {
         self.command.text = args.take("MissingSection");
       } else if (option == "--index" && *selected == ClientAction::config_show) {
-        self.command.value = unsignedNumber<std::uint16_t>(args.take("MissingIndex"), "InvalidIndex");
+        self.command.value = number<std::uint16_t>(args.take("MissingIndex"), "InvalidIndex");
       } else if (option == "--json" && !self.json) {
         self.json = true;
       } else if (option == "--socket" && self.socket == nullptr) {
@@ -249,7 +191,7 @@ struct ClientOptions {
   const char *socket = nullptr;
 
   static ClientOptions parse(std::span<char *const> words) {
-    Arguments args{words};
+    Cursor args{words};
     const auto verb = args.take("MissingClientAction");
     ClientOptions self{};
     if (verb == "list") {
@@ -311,7 +253,7 @@ struct SuggestionOptions {
       throw std::invalid_argument{"InvalidSuggestionText"};
     }
 
-    Arguments args{words.subspan(3)};
+    Cursor args{words.subspan(3)};
     while (!args.empty()) {
       const auto option = args.take("UnknownSuggestionOption");
       if (option == "--json" && !self.json) {
@@ -346,7 +288,7 @@ struct NotificationOptions {
       throw std::invalid_argument{"EmptyNotificationTitle"};
     }
 
-    Arguments args{words.subspan(2)};
+    Cursor args{words.subspan(2)};
     bool body = false, link = false, level = false, duration = false, target = false;
     while (!args.empty()) {
       const auto option = args.take("UnknownNotificationOption");
@@ -388,7 +330,7 @@ struct NotificationOptions {
           throw std::invalid_argument{"DuplicateNotificationDuration"};
         }
 
-        self.notification.duration_ms = unsignedNumber<std::uint32_t>(args.take("MissingNotificationDuration"), "InvalidCharacter", "Overflow");
+        self.notification.duration_ms = parseUnsigned<std::uint32_t>(args.take("MissingNotificationDuration"));
         if (self.notification.duration_ms < min_notification_duration_ms || self.notification.duration_ms > max_notification_duration_ms) {
           throw std::invalid_argument{"InvalidNotificationDuration"};
         }
@@ -401,7 +343,7 @@ struct NotificationOptions {
 
         const auto missing = option == "--pane" ? "MissingPaneId" : option == "--tab" ? "MissingTabId"
                                                                                       : "MissingWorkspaceId";
-        self.notification.target.id = unsignedNumber(args.take(missing), "InvalidCharacter", "Overflow");
+        self.notification.target.id = parseUnsigned<std::uint64_t>(args.take(missing));
         if (self.notification.target.id == 0) {
           throw std::invalid_argument{option == "--pane" ? "InvalidPaneId" : option == "--tab" ? "InvalidTabId"
                                                                                                : "InvalidWorkspaceId"};
@@ -430,7 +372,7 @@ struct ConfigCheckOptions {
   std::string_view profile;
 
   static ConfigCheckOptions parse(std::span<char *const> words) {
-    Arguments args{words};
+    Cursor args{words};
     if (args.empty() || args.take("UnknownConfigAction") != "check") {
       throw std::invalid_argument{"UnknownConfigAction"};
     }

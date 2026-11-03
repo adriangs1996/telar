@@ -60,12 +60,12 @@ struct WorktreeOptions {
   Action action{};
   std::optional<std::string_view> branch{}, title{}, from{}, label{}, workspace{}, directory{}, machine{}, dispatched_from{}, repository{}, socket{};
   std::optional<CoordinatorReference> coordinator{};
-  Words command{};
+  Arguments command{};
   std::uint64_t client = 0;
   unsigned timeout = default_wait_seconds;
   bool json = false, setup = false, uncommitted = false, stat = false, force = false, delete_branch = false, wait = false;
 
-  static WorktreeOptions parse(Words words) {
+  static WorktreeOptions parse(Arguments words) {
     if (words.empty()) {
       usage("MissingWorktreeAction");
     }
@@ -91,9 +91,9 @@ struct WorktreeOptions {
       usage("UnknownWorktreeAction");
     }
 
-    std::size_t index = 1;
+    Cursor cursor{words.subspan(1)};
     if (self.action != Action::list && self.action != Action::resolve) {
-      const auto value = take(words, index, "MissingWorktreeBranch");
+      const auto value = cursor.take("MissingWorktreeBranch");
       if (value.starts_with('-')) {
         usage("MissingWorktreeBranch");
       }
@@ -105,13 +105,13 @@ struct WorktreeOptions {
       self.branch = value;
     }
 
-    while (index < words.size()) {
-      const std::string_view arg = words[index++];
+    while (const auto word = cursor.next()) {
+      const std::string_view arg = *word;
       if (arg == "--") {
         if (self.action != Action::create && self.action != Action::exec) {
           usage("UnexpectedWorktreeCommand");
         }
-        self.command = words.subspan(index);
+        self.command = cursor.rest();
         if (self.command.empty()) {
           usage("MissingWorktreeCommand");
         }
@@ -122,39 +122,39 @@ struct WorktreeOptions {
       } else if (arg == "--setup" && self.action == Action::create) {
         self.setup = true;
       } else if (arg == "--title" && self.action == Action::create) {
-        single(self.title, take(words, index, "MissingWorktreeTitle"), "DuplicateWorktreeOption");
+        single(self.title, cursor.take("MissingWorktreeTitle"), "DuplicateWorktreeOption");
         printable(*self.title, title_bytes);
       } else if (arg == "--from" && self.action == Action::create) {
-        single(self.from, take(words, index, "MissingWorktreeBase"), "DuplicateWorktreeOption");
+        single(self.from, cursor.take("MissingWorktreeBase"), "DuplicateWorktreeOption");
         sessions::branch(*self.from);
       } else if (arg == "--directory" && self.action == Action::create) {
-        single(self.directory, take(words, index, "MissingWorktreeDirectory"), "DuplicateWorktreeOption");
+        single(self.directory, cursor.take("MissingWorktreeDirectory"), "DuplicateWorktreeOption");
         if (!self.directory->starts_with('/')) {
           usage("RelativeWorktreeDirectory");
         }
       } else if (arg == "--label" && (self.action == Action::create || self.action == Action::exec)) {
-        single(self.label, take(words, index, "MissingTabLabel"), "DuplicateWorktreeOption");
+        single(self.label, cursor.take("MissingTabLabel"), "DuplicateWorktreeOption");
         printable(*self.label, tab_label_bytes);
       } else if (arg == "--machine" && (self.action == Action::create || self.action == Action::fetch)) {
-        single(self.machine, take(words, index, "MissingMachineLabel"), "DuplicateWorktreeOption");
+        single(self.machine, cursor.take("MissingMachineLabel"), "DuplicateWorktreeOption");
         machineLabel(*self.machine);
       } else if (arg == "--dispatched-from" && self.action == Action::create) {
-        single(self.dispatched_from, take(words, index, "MissingMachineLabel"), "DuplicateWorktreeOption");
+        single(self.dispatched_from, cursor.take("MissingMachineLabel"), "DuplicateWorktreeOption");
         printable(*self.dispatched_from, machine_label_bytes);
       } else if (arg == "--coordinator" && self.action == Action::create) {
-        const auto value = take(words, index, "MissingCoordinatorReference");
+        const auto value = cursor.take("MissingCoordinatorReference");
         if (self.coordinator) {
           usage("DuplicateWorktreeOption");
         }
         self.coordinator = coordinatorReference(value);
       } else if (arg == "--repository" && self.action == Action::resolve) {
-        single(self.repository, take(words, index, "MissingRepository"), "DuplicateWorktreeOption");
+        single(self.repository, cursor.take("MissingRepository"), "DuplicateWorktreeOption");
         constexpr std::size_t repository_bytes = 512;
         printable(*self.repository, repository_bytes);
       } else if (arg == "--workspace" && (self.action == Action::create || self.action == Action::list || self.action == Action::resolve)) {
-        single(self.workspace, take(words, index, "MissingWorkspaceTarget"), "DuplicateWorktreeOption");
+        single(self.workspace, cursor.take("MissingWorkspaceTarget"), "DuplicateWorktreeOption");
       } else if (arg == "--client" && self.action == Action::open) {
-        self.client = positive(take(words, index, "MissingClientId"), "InvalidClientId");
+        self.client = positive(cursor.take("MissingClientId"), "InvalidClientId");
       } else if (arg == "--uncommitted" && self.action == Action::diff) {
         self.uncommitted = true;
       } else if (arg == "--stat" && self.action == Action::diff) {
@@ -166,19 +166,19 @@ struct WorktreeOptions {
       } else if (arg == "--wait" && self.action == Action::exec) {
         self.wait = true;
       } else if (arg == "--timeout" && self.action == Action::exec) {
-        auto value = take(words, index, "MissingTimeout");
+        auto value = cursor.take("MissingTimeout");
         while (value.ends_with('s')) {
           value.remove_suffix(1);
         }
-        const auto number = unsignedNumber(value);
-        if (!number || *number == 0 || *number > max_wait_seconds) {
+        const auto seconds = maybeUnsigned(value);
+        if (!seconds || *seconds == 0 || *seconds > max_wait_seconds) {
           usage("InvalidTimeout");
         }
-        self.timeout = static_cast<unsigned>(*number);
+        self.timeout = static_cast<unsigned>(*seconds);
       } else if (arg == "--json") {
         self.json = true;
       } else if (arg == "--socket") {
-        single(self.socket, take(words, index, "MissingSocketPath"), "DuplicateWorktreeOption");
+        single(self.socket, cursor.take("MissingSocketPath"), "DuplicateWorktreeOption");
       } else {
         usage("UnknownWorktreeOption");
       }

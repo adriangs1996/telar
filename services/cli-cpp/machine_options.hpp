@@ -1,5 +1,6 @@
 #pragma once
 
+#include "arguments.hpp"
 #include <algorithm>
 #include <array>
 #include <optional>
@@ -65,16 +66,11 @@ struct MachineOptions {
       result.value = args[2];
     }
 
-    for (std::size_t index = positional + 1; index < args.size(); ++index) {
-      const std::string_view word = args[index];
+    Cursor cursor{args.subspan(positional + 1)};
+    while (const auto next = cursor.next()) {
+      const std::string_view word = *next;
       const bool takes_setup = action == Action::add || action == Action::setup;
-      const auto value = [&]() -> std::string_view {
-        if (++index == args.size()) {
-          throw std::invalid_argument{"MissingMachineArgument"};
-        }
-
-        return args[index];
-      };
+      const auto value = [&] { return cursor.take("MissingMachineArgument"); };
       if (word == "--json" && (action == Action::list || action == Action::check || takes_setup)) {
         result.json = true;
       } else if (word == "--setup" && action == Action::add) {
@@ -111,11 +107,7 @@ struct MachineOptions {
           throw std::invalid_argument{"DuplicateColorOption"};
         }
 
-        if (++index == args.size()) {
-          throw std::invalid_argument{"MissingMachineColor"};
-        }
-
-        result.color = args[index];
+        result.color = cursor.take("MissingMachineColor");
       } else if (word == "--disabled" && action == Action::add) {
         result.disabled = true;
       } else if (word == "--check" && action == Action::add) {

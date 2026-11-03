@@ -25,7 +25,7 @@ public:
 
 inline std::uint64_t current(const char *name, bool nonzero = false) {
   const auto text = ProcessEnvironment{}.lookup(name);
-  const auto id = targetNumber(text);
+  const auto id = maybeUnsigned(text);
   if (!id || (nonzero && *id == 0)) {
     throw Failure{missing_pane_context};
   }
@@ -38,7 +38,7 @@ inline std::uint64_t paneId(std::string_view target) {
     return current("TELAR_PANE_ID");
   }
 
-  if (const auto id = targetNumber(target)) {
+  if (const auto id = maybeUnsigned(target)) {
     return *id;
   }
 
@@ -353,7 +353,7 @@ std::uint64_t worktreeId(Memory &memory, const char *socket, std::string_view re
 }
 
 inline AgentSnapshotEntry resolve(const AgentSnapshot &snapshot, std::string_view target, std::optional<std::uint64_t> worktree = std::nullopt) {
-  const auto wanted = target == "--current" ? std::optional{current("TELAR_PANE_ID")} : targetNumber(target);
+  const auto wanted = target == "--current" ? std::optional{current("TELAR_PANE_ID")} : maybeUnsigned(target);
   std::optional<AgentSnapshotEntry> found;
   for (const auto &entry : snapshot.entries) {
     if (worktree ? entry.work_tree == *worktree : wanted ? entry.pane_id == *wanted
@@ -375,7 +375,7 @@ inline AgentSnapshotEntry resolve(const AgentSnapshot &snapshot, std::string_vie
 
 inline std::optional<std::uint64_t> senderPane(const Options &options, std::uint64_t target) {
   const ProcessEnvironment environment;
-  const auto id = targetNumber(environment.lookup("TELAR_PANE_ID"));
+  const auto id = maybeUnsigned(environment.lookup("TELAR_PANE_ID"));
   const auto own = environment.lookup("TELAR_SOCKET_PATH");
   if (!id || *id == target || own.empty()) {
     return std::nullopt;

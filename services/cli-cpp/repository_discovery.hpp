@@ -121,13 +121,7 @@ std::optional<std::string> find(Memory &memory, std::string_view identity, std::
   const auto available = catalog(memory, paths.socket.c_str());
   if (selected) {
     std::string path{*selected};
-    std::optional<std::uint64_t> id;
-    try {
-      id = parseInteger<std::uint64_t>(*selected);
-    } catch (const std::invalid_argument &) {
-    }
-
-    if (id) {
+    if (const auto id = maybeUnsigned(*selected)) {
       const auto found = std::ranges::find(available.workspaces, *id, &std::pair<std::uint64_t, std::string>::first);
       if (found == available.workspaces.end()) {
         throw std::runtime_error{"WorkspaceNotFound"};

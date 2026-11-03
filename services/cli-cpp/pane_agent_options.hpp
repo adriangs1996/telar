@@ -1,12 +1,11 @@
 #pragma once
 
+#include "arguments.hpp"
 #include "telar_base/text/decimal.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <algorithm>
-#include <charconv>
 #include <span>
 #include <string>
-#include <type_traits>
 
 namespace telar::runtime::cli::pane_agents {
 
@@ -16,88 +15,6 @@ inline constexpr std::uint32_t max_timeout_seconds = 86400;
 inline constexpr std::uint32_t default_interval_ms = 250;
 inline constexpr std::uint32_t min_interval_ms = 10;
 inline constexpr std::uint32_t max_interval_ms = 60000;
-
-[[noreturn]] inline void usage(const char *message) {
-  throw std::invalid_argument{message};
-}
-
-template <typename Integer>
-Integer number(std::string_view text, const char *error) {
-  // Zig's unsigned decimal parser rejects signs; signed values accept plus.
-  if constexpr (std::is_signed_v<Integer>) {
-    if (text.starts_with('+')) {
-      text.remove_prefix(1);
-    }
-  }
-
-  std::string digits;
-  if (text.find('_') != std::string_view::npos) {
-    if (text.empty() || (text.front() == '_' || (text.front() == '-' && text.size() > 1 && text[1] == '_')) || text.back() == '_' || text.find("__") != std::string_view::npos) {
-      usage(error);
-    }
-
-    digits.reserve(text.size());
-    for (char byte : text) {
-      if (byte != '_') {
-        digits.push_back(byte);
-      }
-    }
-
-    text = digits;
-  }
-
-  Integer value{};
-  const auto result = std::from_chars(text.data(), text.data() + text.size(), value);
-  if (text.empty() || result.ec != std::errc{} || result.ptr != text.data() + text.size()) {
-    usage(error);
-  }
-
-  return value;
-}
-
-inline std::optional<std::uint64_t> targetNumber(std::string_view text) {
-  try {
-    return number<std::uint64_t>(text, "InvalidPaneId");
-  } catch (const std::invalid_argument &) {
-    return std::nullopt;
-  }
-}
-
-inline std::uint64_t positive(std::string_view text, const char *error) {
-  const auto result = number<std::uint64_t>(text, error);
-  if (result == 0) {
-    usage(error);
-  }
-
-  return result;
-}
-
-struct Cursor {
-  std::span<char *const> words;
-  std::size_t index = 0;
-
-  bool empty() const {
-    return index == words.size();
-  }
-
-  std::string_view require(const char *error) {
-    if (empty()) {
-      usage(error);
-    }
-
-    return words[index++];
-  }
-};
-
-template <typename Enum, std::size_t Size>
-Enum choice(std::string_view text, const char *error, const std::array<std::string_view, Size> &names) {
-  const auto found = std::find(names.begin(), names.end(), text);
-  if (found == names.end()) {
-    usage(error);
-  }
-
-  return static_cast<Enum>(found - names.begin());
-}
 
 inline constexpr std::array<std::string_view, 4> directions{"left", "right", "up", "down"};
 inline constexpr std::array<std::string_view, 9> report_states{"working", "blocked", "ready", "exited", "settling", "continuing", "waiting", "idle", "released"};
@@ -138,7 +55,7 @@ struct Options {
 };
 
 inline void socketOption(Options &options, Cursor &cursor) {
-  const auto value = cursor.require("MissingSocketPath");
+  const auto value = cursor.take("MissingSocketPath");
   if (options.socket) {
     usage("DuplicateSocketOption");
   }
@@ -148,12 +65,12 @@ inline void socketOption(Options &options, Cursor &cursor) {
 
 inline void readOption(Options &options, Cursor &cursor, std::string_view option) {
   if (option == "--lines") {
-    options.lines = number<std::uint16_t>(cursor.require("MissingLineCount"), "InvalidLineCount");
+    options.lines = number<std::uint16_t>(cursor.take("MissingLineCount"), "InvalidLineCount");
     if (options.lines == 0 || options.lines > max_read_rows) {
       usage("InvalidLineCount");
     }
   } else {
-    const auto source = cursor.require("MissingTextSource");
+    const auto source = cursor.take("MissingTextSource");
     if (source != "screen" && source != "recent") {
       usage("InvalidTextSource");
     }
@@ -183,32 +100,32 @@ inline Options parseRouted(std::span<char *const> words, ClientAction action) {
   Options options{.action = words.front(), .routed = action};
   Cursor cursor{words.subspan(1)};
   if (action != ClientAction::pane_create) {
-    options.target_id = positive(cursor.require("MissingTarget"), "InvalidTarget");
+    options.target_id = positive(cursor.take("MissingTarget"), "InvalidTarget");
   }
 
   if (action == ClientAction::pane_split) {
-    options.text = cursor.require("MissingSplitAxis");
+    options.text = cursor.take("MissingSplitAxis");
     if (options.text != "horizontal" && options.text != "vertical") {
       usage("InvalidSplitAxis");
     }
   } else if (action == ClientAction::pane_resize) {
-    options.text = cursor.require("MissingPaneDirection");
+    options.text = cursor.take("MissingPaneDirection");
     choice<PaneDirection>(options.text, "InvalidPaneDirection", directions);
   } else if (action == ClientAction::pane_copy) {
-    options.text = cursor.require("MissingCopyRange");
+    options.text = cursor.take("MissingCopyRange");
     copyRange(options.text);
   } else if (action == ClientAction::pane_scroll) {
-    options.value = number<std::int32_t>(cursor.require("MissingScrollDelta"), "InvalidScrollDelta");
+    options.value = signedNumber<std::int32_t>(cursor.take("MissingScrollDelta"), "InvalidScrollDelta");
   }
 
-  while (!cursor.empty()) {
-    const auto arg = cursor.require("UnknownClientCommandOption");
+  while (const auto word = cursor.next()) {
+    const std::string_view arg = *word;
     if (arg == "--client" && options.client == 0) {
-      options.client = positive(cursor.require("MissingClientId"), "InvalidTarget");
+      options.client = positive(cursor.take("MissingClientId"), "InvalidTarget");
     } else if (arg == "--json" && !options.json) {
       options.json = true;
     } else if (arg == "--socket" && !options.socket) {
-      options.socket = cursor.require("MissingSocketPath").data();
+      options.socket = cursor.take("MissingSocketPath").data();
     } else {
       usage("UnknownClientCommandOption");
     }
@@ -223,7 +140,7 @@ inline Options parseRouted(std::span<char *const> words, ClientAction action) {
 
 inline Options parsePane(std::span<char *const> words) {
   Cursor cursor{words};
-  Options options{.action = cursor.require("MissingPaneAction")};
+  Options options{.action = cursor.take("MissingPaneAction")};
   const auto action = options.action;
   const std::array<std::pair<std::string_view, ClientAction>, 8> routed{{{"create", ClientAction::pane_create}, {"split", ClientAction::pane_split}, {"close", ClientAction::pane_close}, {"focus", ClientAction::pane_focus}, {"resize", ClientAction::pane_resize}, {"fullscreen", ClientAction::pane_fullscreen}, {"scroll", ClientAction::pane_scroll}, {"copy", ClientAction::pane_copy}}};
   for (const auto &[name, route] : routed) {
@@ -237,8 +154,8 @@ inline Options parsePane(std::span<char *const> words) {
   }
 
   if (action != "list") {
-    options.target = cursor.require("MissingPaneTarget");
-    if (options.target != "--current" && !targetNumber(options.target) && !(options.target.starts_with("worktree:") && options.target.size() > std::string_view{"worktree:"}.size())) {
+    options.target = cursor.take("MissingPaneTarget");
+    if (options.target != "--current" && !maybeUnsigned(options.target) && !(options.target.starts_with("worktree:") && options.target.size() > std::string_view{"worktree:"}.size())) {
       usage("InvalidPaneId");
     }
   }
@@ -248,7 +165,7 @@ inline Options parsePane(std::span<char *const> words) {
   }
 
   if (action == "search" || action == "send-keys") {
-    options.text = cursor.require(action == "search" ? "MissingSearchText" : "MissingSendText");
+    options.text = cursor.take(action == "search" ? "MissingSearchText" : "MissingSendText");
     options.stdin_text = action == "send-keys" && options.text == "--stdin";
     if (action == "search") {
       if (options.text.empty() || options.text.size() > 128 || inspectUtf8(options.text) != Utf8Validation::valid) {
@@ -259,8 +176,8 @@ inline Options parsePane(std::span<char *const> words) {
     }
   }
 
-  while (!cursor.empty()) {
-    const auto arg = cursor.require("UnknownPaneOption");
+  while (const auto word = cursor.next()) {
+    const std::string_view arg = *word;
     if (arg == "--json" || (arg == "--jsonl" && action == "watch")) {
       options.json = true;
     } else if (arg == "--socket") {
@@ -271,7 +188,7 @@ inline Options parsePane(std::span<char *const> words) {
         usage(arg == "--workspace" ? "DuplicateWorkspaceOption" : "DuplicateTabOption");
       }
 
-      target = cursor.require(arg == "--workspace" ? "MissingWorkspaceId" : "MissingTabId");
+      target = cursor.take(arg == "--workspace" ? "MissingWorkspaceId" : "MissingTabId");
       if (*target != "--current") {
         positive(*target, "InvalidIdentity");
       }
@@ -280,17 +197,17 @@ inline Options parsePane(std::span<char *const> words) {
     } else if ((arg == "--lines" || arg == "--source") && (action == "read" || action == "watch")) {
       readOption(options, cursor, arg);
     } else if (arg == "--count" && action == "watch" && !options.count) {
-      options.count = number<std::uint32_t>(cursor.require("MissingCount"), "InvalidCount");
+      options.count = number<std::uint32_t>(cursor.take("MissingCount"), "InvalidCount");
       if (*options.count == 0) {
         usage("InvalidCount");
       }
     } else if (arg == "--interval-ms" && action == "watch") {
-      options.interval = number<std::uint32_t>(cursor.require("MissingInterval"), "InvalidInterval");
+      options.interval = number<std::uint32_t>(cursor.take("MissingInterval"), "InvalidInterval");
       if (options.interval < min_interval_ms || options.interval > max_interval_ms) {
         usage("InvalidInterval");
       }
     } else if (arg == "--direction" && action == "focus" && !cursor.empty() && !options.direction) {
-      options.direction = choice<PaneDirection>(cursor.require("UnknownPaneOption"), "InvalidPaneDirection", directions);
+      options.direction = choice<PaneDirection>(cursor.take("UnknownPaneOption"), "InvalidPaneDirection", directions);
     } else {
       usage("UnknownPaneOption");
     }
@@ -309,7 +226,7 @@ inline Options parsePane(std::span<char *const> words) {
 
 inline Options parseAgent(std::span<char *const> words) {
   Cursor cursor{words};
-  Options options{.action = cursor.require("MissingAgentAction")};
+  Options options{.action = cursor.take("MissingAgentAction")};
   const auto action = options.action;
   constexpr std::array<std::string_view, 11> actions{"list", "get", "wait", "prompt", "read", "interrupt", "acknowledge", "report-session", "report-title", "report-state", "report-command"};
   if (std::find(actions.begin(), actions.end(), action) == actions.end()) {
@@ -317,65 +234,65 @@ inline Options parseAgent(std::span<char *const> words) {
   }
 
   if (action != "list") {
-    options.target = cursor.require("MissingAgentTarget");
+    options.target = cursor.take("MissingAgentTarget");
   }
 
   if (action == "report-command") {
     constexpr std::array<std::string_view, 2> phases{"started", "finished"};
-    const auto phase = cursor.require("MissingCommandReport");
-    options.command.command = cursor.require("MissingCommandReport");
+    const auto phase = cursor.take("MissingCommandReport");
+    options.command.command = cursor.take("MissingCommandReport");
     options.command.phase = choice<AgentCommandPhase>(phase, "InvalidCommandPhase", phases);
   } else if (action == "report-state") {
-    options.report.state = choice<AgentReportState>(cursor.require("MissingAgentState"), "InvalidAgentState", report_states);
+    options.report.state = choice<AgentReportState>(cursor.take("MissingAgentState"), "InvalidAgentState", report_states);
   } else if (action == "report-title") {
-    options.text = cursor.require("MissingAgentTitle");
+    options.text = cursor.take("MissingAgentTitle");
     if (!options.text.empty() && (options.text.size() > 96 || !displayText(options.text))) {
       usage("InvalidSessionTitle");
     }
   } else if (action == "report-session") {
-    options.text = cursor.require("MissingSessionReference");
+    options.text = cursor.take("MissingSessionReference");
     if (options.text.empty() || options.text.size() > 64) {
       usage("InvalidSessionReference");
     }
   } else if (action == "prompt") {
-    options.text = cursor.require("MissingPromptText");
+    options.text = cursor.take("MissingPromptText");
     if (options.text.size() > max_input_bytes) {
       usage("InvalidPromptText");
     }
   }
 
-  while (!cursor.empty()) {
-    const auto arg = cursor.require("UnknownAgentOption");
+  while (const auto word = cursor.next()) {
+    const std::string_view arg = *word;
     if (arg == "--json") {
       options.json = true;
     } else if (arg == "--socket") {
       socketOption(options, cursor);
     } else if (arg == "--provider" && action == "report-command") {
-      options.command.provider = cursor.require("MissingProvider");
+      options.command.provider = cursor.take("MissingProvider");
     } else if (arg == "--tool-call" && action == "report-command") {
-      options.command.tool_call_id = cursor.require("MissingToolCall");
+      options.command.tool_call_id = cursor.take("MissingToolCall");
     } else if (arg == "--cwd" && action == "report-command") {
-      options.command.cwd = cursor.require("MissingCwd");
+      options.command.cwd = cursor.take("MissingCwd");
     } else if (arg == "--session" && action == "report-command") {
-      options.command.session = cursor.require("MissingSessionReference");
+      options.command.session = cursor.take("MissingSessionReference");
     } else if (arg == "--exit-code" && action == "report-command") {
-      options.command.exit_code = number<std::int32_t>(cursor.require("MissingExitCode"), "InvalidExitCode");
+      options.command.exit_code = signedNumber<std::int32_t>(cursor.take("MissingExitCode"), "InvalidExitCode");
     } else if (arg == "--blocked-reason" && action == "report-state") {
-      options.report.blocked_reason = choice<AgentBlockedReason>(cursor.require("MissingBlockedReason"), "InvalidBlockedReason", blocked_reasons);
+      options.report.blocked_reason = choice<AgentBlockedReason>(cursor.take("MissingBlockedReason"), "InvalidBlockedReason", blocked_reasons);
     } else if (arg == "--event" && action == "report-state") {
-      options.report.event = cursor.require("MissingAgentEvent");
+      options.report.event = cursor.take("MissingAgentEvent");
     } else if (arg == "--session" && action == "report-state") {
-      options.report.session = cursor.require("MissingSessionReference");
+      options.report.session = cursor.take("MissingSessionReference");
     } else if (arg == "--session-file" && action == "report-state") {
-      options.report.session_file = cursor.require("MissingSessionFile");
+      options.report.session_file = cursor.take("MissingSessionFile");
     } else if (arg == "--session-file-kind" && action == "report-state") {
-      options.report.session_file_kind = choice<AgentSessionFileKind>(cursor.require("MissingSessionFileKind"), "InvalidSessionFileKind", session_file_kinds);
+      options.report.session_file_kind = choice<AgentSessionFileKind>(cursor.take("MissingSessionFileKind"), "InvalidSessionFileKind", session_file_kinds);
     } else if (arg == "--interrupt" && action == "prompt") {
       options.interrupt = true;
     } else if (arg == "--wait" && action == "prompt") {
       options.wait = true;
     } else if (arg == "--until" && action == "wait") {
-      auto status = cursor.require("MissingWaitStatus");
+      auto status = cursor.take("MissingWaitStatus");
       options.finished = status == "finished";
       if (status == "idle") {
         status = "ready";
@@ -388,7 +305,7 @@ inline Options parseAgent(std::span<char *const> words) {
         }
       }
     } else if (arg == "--timeout" && (action == "wait" || action == "prompt")) {
-      auto text = cursor.require("MissingTimeout");
+      auto text = cursor.take("MissingTimeout");
       while (text.ends_with('s')) {
         text.remove_suffix(1);
       }

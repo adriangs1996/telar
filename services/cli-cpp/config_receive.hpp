@@ -1,10 +1,10 @@
 #pragma once
 
+#include "arguments.hpp"
 #include "cli_install.hpp"
 #include "telar_platform/file_descriptor.hpp"
 #include "telar_platform/write_descriptor.hpp"
 #include <algorithm>
-#include <charconv>
 #include <fcntl.h>
 #include <filesystem>
 #include <iostream>
@@ -252,25 +252,9 @@ inline int run() {
     }
 
     std::size_t size = 0;
-    auto number = prefix[2];
-    const bool negative = number.starts_with('-');
-    if (number.starts_with('+') || negative) {
-      number.remove_prefix(1);
-    }
-
-    if (number.empty() || number.front() == '_' || number.back() == '_') {
-      throw CommandError{"InvalidConfigStream"};
-    }
-
-    std::string digits;
-    for (const auto byte : number) {
-      if (byte != '_') {
-        digits += byte;
-      }
-    }
-
-    const auto parsed = std::from_chars(digits.data(), digits.data() + digits.size(), size);
-    if (parsed.ec != std::errc{} || parsed.ptr != digits.data() + digits.size() || (negative && size != 0)) {
+    try {
+      size = parseInt<std::size_t>(prefix[2]);
+    } catch (const std::invalid_argument &) {
       throw CommandError{"InvalidConfigStream"};
     }
 

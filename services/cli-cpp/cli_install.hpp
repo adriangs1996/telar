@@ -1,5 +1,6 @@
 #pragma once
 
+#include "arguments.hpp"
 #include "command_error.hpp"
 
 #include "telar_platform/executable_path.hpp"
@@ -37,8 +38,9 @@ inline CliInstallOptions parseCliInstall(std::span<char *const> args) {
   }
 
   std::optional<std::string_view> directory;
-  for (std::size_t index = 1; index < args.size(); index += 2) {
-    if (std::string_view{args[index]} != "--dir") {
+  Cursor cursor{args.subspan(1)};
+  while (const auto word = cursor.next()) {
+    if (*word != "--dir") {
       throw std::invalid_argument{"UnknownCliOption"};
     }
 
@@ -46,11 +48,7 @@ inline CliInstallOptions parseCliInstall(std::span<char *const> args) {
       throw std::invalid_argument{"DuplicateDirOption"};
     }
 
-    if (index + 1 == args.size()) {
-      throw std::invalid_argument{"MissingDirPath"};
-    }
-
-    directory = args[index + 1];
+    directory = cursor.take("MissingDirPath");
   }
 
   return {.action = action, .directory = directory};

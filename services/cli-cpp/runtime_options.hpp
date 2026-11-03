@@ -29,8 +29,9 @@ struct RuntimeOptions {
 
     RuntimeOptions self{.action = action == "status" ? Action::status : action == "metrics" ? Action::metrics
                                                                                             : Action::watch};
-    for (std::size_t index = 1; index < words.size(); ++index) {
-      const std::string_view arg = words[index];
+    Cursor cursor{words.subspan(1)};
+    while (const auto word = cursor.next()) {
+      const std::string_view arg = *word;
       if (arg == "--json" || (self.action == Action::watch && arg == "--jsonl")) {
         if (self.json) {
           throw std::invalid_argument{"DuplicateJsonOption"};
@@ -42,13 +43,7 @@ struct RuntimeOptions {
           throw std::invalid_argument{"DuplicateCountOption"};
         }
 
-        const auto value = requireValue(words, index, "MissingCount");
-        try {
-          self.count = parseInteger<std::uint32_t>(value);
-        } catch (const std::invalid_argument &) {
-          throw std::invalid_argument{"InvalidCount"};
-        }
-
+        self.count = number<std::uint32_t>(cursor.take("MissingCount"), "InvalidCount");
         if (*self.count == 0) {
           throw std::invalid_argument{"InvalidCount"};
         }
@@ -57,7 +52,7 @@ struct RuntimeOptions {
           throw std::invalid_argument{"DuplicateSocketOption"};
         }
 
-        self.socket = requireValue(words, index, "MissingSocketPath");
+        self.socket = cursor.take("MissingSocketPath");
       } else {
         throw std::invalid_argument{"UnknownRuntimeOption"};
       }

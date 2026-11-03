@@ -1,5 +1,6 @@
 #pragma once
 
+#include "arguments.hpp"
 #include "json_text.hpp"
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_platform/error.hpp"
@@ -11,58 +12,6 @@
 #include <unistd.h>
 
 namespace telar::runtime::cli {
-
-using Arguments = std::span<char *const>;
-
-inline std::string_view requireValue(Arguments words, std::size_t &index, const char *error) {
-  if (++index == words.size()) {
-    throw std::invalid_argument{error};
-  }
-
-  return words[index];
-}
-
-template <typename Integer>
-Integer parseInteger(std::string_view text, bool allow_sign = std::is_signed_v<Integer>) {
-  const bool negative = allow_sign && text.starts_with('-');
-  if (allow_sign && (text.starts_with('+') || text.starts_with('-'))) {
-    text.remove_prefix(1);
-  }
-
-  if (text.empty() || text.front() == '_' || text.back() == '_') {
-    throw std::invalid_argument{"InvalidCharacter"};
-  }
-
-  using Unsigned = std::make_unsigned_t<Integer>;
-  const auto positive_limit = static_cast<Unsigned>(std::numeric_limits<Integer>::max());
-  const auto limit = negative ? (std::is_signed_v<Integer> ? static_cast<Unsigned>(positive_limit + 1) : Unsigned{0}) : positive_limit;
-  Unsigned value = 0;
-  constexpr Unsigned decimal_base = 10;
-  for (const char byte : text) {
-    if (byte == '_') {
-      continue;
-    }
-
-    if (byte < '0' || byte > '9') {
-      throw std::invalid_argument{"InvalidCharacter"};
-    }
-
-    const auto digit = static_cast<Unsigned>(byte - '0');
-    if (digit > limit || value > (limit - digit) / decimal_base) {
-      throw std::invalid_argument{"Overflow"};
-    }
-
-    value = static_cast<Unsigned>(value * decimal_base + digit);
-  }
-
-  if constexpr (std::is_signed_v<Integer>) {
-    if (negative) {
-      return value == static_cast<Unsigned>(positive_limit + 1) ? std::numeric_limits<Integer>::min() : static_cast<Integer>(-static_cast<Integer>(value));
-    }
-  }
-
-  return static_cast<Integer>(value);
-}
 
 inline std::string quoteJson(std::string_view text, JsonEscapes escapes = JsonEscapes::standard) {
   std::string result;

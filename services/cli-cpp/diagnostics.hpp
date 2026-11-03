@@ -38,12 +38,9 @@ inline std::optional<Log> parseLog(std::string_view name, std::string_view base)
     return std::nullopt;
   }
 
-  try {
-    const auto pid = parseInteger<std::uint32_t>(suffix);
-    if (pid != 0) {
-      return Log{.name = std::string{name}, .component = component, .pid = pid};
-    }
-  } catch (const std::invalid_argument &) {
+  const auto pid = maybeUnsigned<std::uint32_t>(suffix);
+  if (pid && *pid != 0) {
+    return Log{.name = std::string{name}, .component = component, .pid = *pid};
   }
 
   return std::nullopt;

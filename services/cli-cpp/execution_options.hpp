@@ -32,19 +32,15 @@ struct ExecutionOptions {
 
   static ExecutionOptions parse(Arguments words) {
     ExecutionOptions self;
-    std::size_t index = 0;
+    Cursor cursor{words};
     constexpr std::array names{"start", "status", "output", "cancel", "forget", "list"};
     if (!words.empty()) {
       for (std::size_t action = 0; action < names.size(); ++action) {
         if (words.front() == std::string_view{names[action]}) {
           self.action = static_cast<Action>(action);
-          ++index;
+          cursor.next();
           if (self.action != Action::start && self.action != Action::list) {
-            if (index == words.size()) {
-              throw std::invalid_argument{"MissingExecutionId"};
-            }
-
-            self.id = parseInteger<std::uint64_t>(words[index++]);
+            self.id = parseUnsigned<std::uint64_t>(cursor.take("MissingExecutionId"));
           }
 
           break;
@@ -52,18 +48,16 @@ struct ExecutionOptions {
       }
     }
 
-    for (; index < words.size(); ++index) {
-      const std::string_view arg = words[index];
+    while (const auto word = cursor.next()) {
+      const std::string_view arg = *word;
       if (arg == "--") {
-        self.argument_count = words.size() - index - 1;
+        const auto command = cursor.rest();
+        self.argument_count = command.size();
         if (self.argument_count > max_arguments) {
           throw std::invalid_argument{self.action == Action::start ? "InvalidExecutionArguments" : "InvalidExecutionOptions"};
         }
 
-        for (std::size_t at = 0; at < self.argument_count; ++at) {
-          self.arguments[at] = words[index + 1 + at];
-        }
-
+        std::ranges::copy(command, self.arguments.begin());
         break;
       }
 
@@ -74,24 +68,24 @@ struct ExecutionOptions {
       } else if (arg == "--no-stdin") {
         self.stdin_open = false;
       } else {
-        const auto value = requireValue(words, index, "MissingExecutionOptionValue");
+        const auto value = cursor.take("MissingExecutionOptionValue");
         if (arg == "--cwd") {
           self.cwd = value;
         } else if (arg == "--socket") {
           self.socket = value;
         } else if (arg == "--workspace") {
-          self.workspace = parseInteger<std::uint64_t>(value);
+          self.workspace = parseUnsigned<std::uint64_t>(value);
           if (self.workspace == 0) {
             throw std::invalid_argument{"InvalidWorkspaceId"};
           }
         } else if (arg == "--id") {
-          self.id = parseInteger<std::uint64_t>(value);
+          self.id = parseUnsigned<std::uint64_t>(value);
         } else if (arg == "--timeout") {
-          self.timeout_seconds = parseInteger<std::uint32_t>(value);
+          self.timeout_seconds = parseUnsigned<std::uint32_t>(value);
         } else if (arg == "--stdout-offset") {
-          self.stdout_offset = parseInteger<std::uint64_t>(value);
+          self.stdout_offset = parseUnsigned<std::uint64_t>(value);
         } else if (arg == "--stderr-offset") {
-          self.stderr_offset = parseInteger<std::uint64_t>(value);
+          self.stderr_offset = parseUnsigned<std::uint64_t>(value);
         } else {
           throw std::invalid_argument{"UnknownExecutionOption"};
         }

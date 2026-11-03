@@ -1,5 +1,6 @@
 #pragma once
 
+#include "arguments.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <algorithm>
 #include <charconv>
@@ -12,7 +13,6 @@
 
 namespace telar::runtime::cli::sessions {
 
-using Words = std::span<char *const>;
 inline constexpr std::size_t workspace_name_bytes = 256;
 inline constexpr std::size_t tab_label_bytes = 128;
 inline constexpr std::size_t branch_bytes = 200;
@@ -24,50 +24,6 @@ inline constexpr unsigned default_wait_seconds = 600;
 inline constexpr unsigned max_wait_seconds = 86400;
 inline constexpr TerminalSize launch_size{.cols = 160, .rows = 48};
 inline constexpr TerminalSize workspace_size{.cols = 80, .rows = 24};
-
-inline void usage(const char *message) {
-  throw std::invalid_argument{message};
-}
-
-inline std::string_view take(Words words, std::size_t &index, const char *missing) {
-  if (index == words.size()) {
-    usage(missing);
-  }
-
-  return words[index++];
-}
-
-inline std::optional<std::uint64_t> unsignedNumber(std::string_view value) {
-  if (value.empty() || value.front() == '_' || value.back() == '_') {
-    return std::nullopt;
-  }
-
-  constexpr std::uint64_t radix = 10;
-  std::uint64_t result{};
-  for (const auto byte : value) {
-    if (byte == '_') {
-      continue;
-    }
-    if (byte < '0' || byte > '9') {
-      return std::nullopt;
-    }
-    const auto digit = static_cast<std::uint64_t>(byte - '0');
-    if (result > (std::numeric_limits<std::uint64_t>::max() - digit) / radix) {
-      return std::nullopt;
-    }
-    result = result * radix + digit;
-  }
-  return result;
-}
-
-inline std::uint64_t positive(std::string_view value, const char *error) {
-  const auto number = unsignedNumber(value);
-  if (!number || *number == 0) {
-    usage(error);
-  }
-
-  return *number;
-}
 
 inline void text(std::string_view value, std::size_t maximum, const char *error, bool empty = false) {
   try {
@@ -128,7 +84,7 @@ struct Target {
       throw std::runtime_error{"MissingCurrentIdentity"};
     }
 
-    const auto number = unsignedNumber(value);
+    const auto number = maybeUnsigned(value);
     if (!number || *number == 0) {
       throw std::runtime_error{"InvalidIdentity"};
     }
@@ -148,11 +104,11 @@ struct WorkspaceOptions {
   Action action{};
   Target target{};
   std::optional<std::string_view> name{}, directory{}, worktree{}, socket{};
-  Words command{};
+  Arguments command{};
   std::optional<std::uint16_t> columns{};
   bool json = false;
 
-  static WorkspaceOptions parse(Words words) {
+  static WorkspaceOptions parse(Arguments words) {
     if (words.empty()) {
       usage("MissingWorkspaceAction");
     }
@@ -171,41 +127,41 @@ struct WorkspaceOptions {
       usage("UnknownWorkspaceAction");
     }
 
-    std::size_t index = 1;
+    Cursor cursor{words.subspan(1)};
     if (self.action == Action::get || self.action == Action::rename) {
-      self.target = Target::parse(take(words, index, "MissingWorkspaceTarget"));
+      self.target = Target::parse(cursor.take("MissingWorkspaceTarget"));
     }
 
     if (self.action == Action::rename) {
-      self.name = take(words, index, "MissingWorkspaceName");
+      self.name = cursor.take("MissingWorkspaceName");
       text(*self.name, workspace_name_bytes, "InvalidWorkspaceName");
     }
 
-    while (index < words.size()) {
-      const std::string_view arg = words[index++];
+    while (const auto word = cursor.next()) {
+      const std::string_view arg = *word;
       if (arg == "--" && self.action == Action::create) {
-        self.command = words.subspan(index);
+        self.command = cursor.rest();
         if (self.command.empty()) {
           usage("MissingWorkspaceCommand");
         }
         break;
       } else if (arg == "--columns" && self.action == Action::create) {
-        const auto value = unsignedNumber(take(words, index, "MissingWorkspaceColumns"));
+        const auto value = maybeUnsigned(cursor.take("MissingWorkspaceColumns"));
         constexpr unsigned minimum_columns = 20, maximum_columns = 1024;
         if (!value || *value < minimum_columns || *value > maximum_columns) {
           usage("InvalidWorkspaceColumns");
         }
         self.columns = static_cast<std::uint16_t>(*value);
       } else if (arg == "--worktree" && self.action == Action::create) {
-        const auto value = take(words, index, "MissingWorktreeBranch");
+        const auto value = cursor.take("MissingWorktreeBranch");
         single(self.worktree, value, "DuplicateWorktreeOption");
         branch(value);
       } else if (arg == "--name" && self.action == Action::create) {
-        single(self.name, take(words, index, "MissingWorkspaceName"), "DuplicateNameOption");
+        single(self.name, cursor.take("MissingWorkspaceName"), "DuplicateNameOption");
       } else if (arg == "--directory" && self.action == Action::create) {
-        single(self.directory, take(words, index, "MissingWorktreeDirectory"), "DuplicateDirectoryOption");
+        single(self.directory, cursor.take("MissingWorktreeDirectory"), "DuplicateDirectoryOption");
       } else if (arg == "--socket") {
-        single(self.socket, take(words, index, "MissingSocketPath"), "DuplicateSocketOption");
+        single(self.socket, cursor.take("MissingSocketPath"), "DuplicateSocketOption");
       } else if (arg == "--json") {
         self.json = true;
       } else {
@@ -242,7 +198,7 @@ struct TabOptions {
   std::optional<std::uint64_t> relative{};
   bool background = false, json = false;
 
-  static TabOptions parse(Words words) {
+  static TabOptions parse(Arguments words) {
     if (words.empty()) {
       usage("MissingTabAction");
     }
@@ -265,18 +221,18 @@ struct TabOptions {
       usage("UnknownTabAction");
     }
 
-    std::size_t index = 1;
+    Cursor cursor{words.subspan(1)};
     if (self.action != Action::list && self.action != Action::create) {
-      self.target = Target::parse(take(words, index, "MissingTabTarget"));
+      self.target = Target::parse(cursor.take("MissingTabTarget"));
     }
 
     if (self.action == Action::rename) {
-      self.label = take(words, index, "MissingTabLabel");
+      self.label = cursor.take("MissingTabLabel");
       text(*self.label, tab_label_bytes, "InvalidTabLabel");
     }
 
     if (self.action == Action::move) {
-      const auto direction = take(words, index, "MissingMoveDirection");
+      const auto direction = cursor.take("MissingMoveDirection");
       if (direction == "previous") {
         self.direction = TabMoveDirection::previous;
       } else if (direction == "next") {
@@ -287,13 +243,13 @@ struct TabOptions {
     }
 
     bool workspace_seen = false;
-    while (index < words.size()) {
-      const std::string_view arg = words[index++];
+    while (const auto word = cursor.next()) {
+      const std::string_view arg = *word;
       if (arg == "--relative-to" && self.action == Action::move) {
         if (self.relative) {
           usage("DuplicateRelativeTarget");
         }
-        const auto target = Target::parse(take(words, index, "MissingRelativeTarget"));
+        const auto target = Target::parse(cursor.take("MissingRelativeTarget"));
         if (!target.id) {
           usage("InvalidRelativeTarget");
         }
@@ -307,19 +263,19 @@ struct TabOptions {
         if (self.label) {
           usage("DuplicateLabelOption");
         }
-        self.label = take(words, index, "MissingTabLabel");
+        self.label = cursor.take("MissingTabLabel");
         text(*self.label, tab_label_bytes, "InvalidTabLabel", true);
       } else if (arg == "--workspace") {
         if (workspace_seen) {
           usage("DuplicateWorkspaceOption");
         }
-        self.workspace = Target::parse(take(words, index, "MissingWorkspaceTarget"));
+        self.workspace = Target::parse(cursor.take("MissingWorkspaceTarget"));
         workspace_seen = true;
       } else if (arg == "--socket") {
         if (self.socket) {
           usage("DuplicateSocketOption");
         }
-        self.socket = take(words, index, "MissingSocketPath");
+        self.socket = cursor.take("MissingSocketPath");
       } else if (arg == "--json") {
         if (self.json) {
           usage("DuplicateJsonOption");
@@ -344,10 +300,10 @@ struct RoutedOptions {
   std::optional<std::string_view> socket{};
   bool json = false;
 
-  static RoutedOptions parse(std::string_view family, Words words) {
+  static RoutedOptions parse(std::string_view family, Arguments words) {
     RoutedOptions self;
     const std::string_view verb = words.front();
-    std::size_t index = 1;
+    Cursor cursor{words.subspan(1)};
     if (family == "workspace") {
       self.action = ClientAction::workspace_select;
     } else if (verb == "select") {
@@ -361,18 +317,18 @@ struct RoutedOptions {
     }
 
     if (verb == "select") {
-      self.target = positive(take(words, index, "MissingTarget"), "InvalidTarget");
+      self.target = positive(cursor.take("MissingTarget"), "InvalidTarget");
     }
-    while (index < words.size()) {
-      const std::string_view arg = words[index++];
+    while (const auto word = cursor.next()) {
+      const std::string_view arg = *word;
       if (arg == "--client" && self.client == 0) {
-        self.client = positive(take(words, index, "MissingClientId"), "InvalidTarget");
+        self.client = positive(cursor.take("MissingClientId"), "InvalidTarget");
       } else if (arg == "--label" && self.action == ClientAction::tab_create && self.label.empty()) {
-        self.label = take(words, index, "MissingLabel");
+        self.label = cursor.take("MissingLabel");
       } else if (arg == "--json" && !self.json) {
         self.json = true;
       } else if (arg == "--socket" && !self.socket) {
-        self.socket = take(words, index, "MissingSocketPath");
+        self.socket = cursor.take("MissingSocketPath");
       } else {
         usage("UnknownClientCommandOption");
       }

@@ -11,7 +11,7 @@ namespace telar::runtime::cli::sessions {
 
 inline std::optional<std::uint64_t> currentWorkspace() {
   const auto value = ::getenv("TELAR_WORKSPACE_ID");
-  return value ? unsignedNumber(value) : std::nullopt;
+  return value ? maybeUnsigned(value) : std::nullopt;
 }
 
 inline bool confirmRemoval(const char *question) {
@@ -128,7 +128,7 @@ private:
 
   std::string originDirectory() {
     if (options_.workspace) {
-      if (const auto id = unsignedNumber(*options_.workspace)) {
+      if (const auto id = maybeUnsigned(*options_.workspace)) {
         const auto entry = workspace(*id);
         if (!entry) {
           throw Failure{"workspace not found", 2};
@@ -148,7 +148,7 @@ private:
 
   std::uint64_t sourceWorkspace(std::string_view root) {
     if (options_.workspace) {
-      if (const auto id = unsignedNumber(*options_.workspace)) {
+      if (const auto id = maybeUnsigned(*options_.workspace)) {
         return *id;
       }
     }
@@ -177,7 +177,7 @@ private:
     if (!id_text || !generation_text) {
       return std::nullopt;
     }
-    const auto id = unsignedNumber(id_text), generation = unsignedNumber(generation_text);
+    const auto id = maybeUnsigned(id_text), generation = maybeUnsigned(generation_text);
     if (!id || !generation || *id == 0 || *generation == 0) {
       return std::nullopt;
     }
@@ -366,7 +366,7 @@ private:
     const auto agents = agents_channel.template exchange<AgentSnapshot>(QueryAgents{});
     std::optional<std::uint64_t> source;
     if (options_.workspace) {
-      source = unsignedNumber(*options_.workspace);
+      source = maybeUnsigned(*options_.workspace);
       if (!source) {
         const auto entry = workspaceAt(*options_.workspace);
         if (!entry) {
@@ -498,7 +498,7 @@ private:
     std::optional<std::string> found;
     if (options_.workspace) {
       auto path = *options_.workspace;
-      if (const auto id = unsignedNumber(path)) {
+      if (const auto id = maybeUnsigned(path)) {
         const auto entry = workspace(*id);
         if (!entry) {
           throw Failure{"workspace not found", 2};
