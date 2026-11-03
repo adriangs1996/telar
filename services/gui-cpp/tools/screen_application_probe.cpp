@@ -196,8 +196,122 @@ void readerEquivalence() {
   }
 }
 
+struct FaultAllocator {
+  SystemAllocator upstream;
+  std::optional<unsigned> remaining;
+  unsigned attempts = 0;
+
+  void *allocate(std::size_t size, std::size_t alignment) noexcept {
+    ++attempts;
+    if (remaining) {
+      if (*remaining == 0) {
+        return nullptr;
+      }
+
+      --*remaining;
+    }
+
+    return upstream.allocate(size, alignment);
+  }
+
+  void deallocate(void *pointer, std::size_t size, std::size_t alignment) noexcept {
+    upstream.deallocate(pointer, size, alignment);
+  }
+
+  void failAfter(unsigned allocations) noexcept {
+    remaining = allocations;
+    attempts = 0;
+  }
+};
+
+enum class AllocationCase { initial, resize, metadata };
+static unsigned allocation_cases, allocation_failures, allocation_free_recoveries;
+
+void allocationEquivalence() {
+  constexpr std::size_t budget = 1024 * 1024;
+  constexpr unsigned reservation_boundaries = 6;
+  constexpr unsigned metadata_links = 8;
+  constexpr unsigned uri_bytes = 2;
+  for (const auto mode : {AllocationCase::initial, AllocationCase::resize, AllocationCase::metadata}) {
+    for (unsigned boundary = 0; boundary <= reservation_boundaries; ++boundary) {
+      FaultAllocator upstreamA, upstreamB;
+      BudgetAllocator memoryA{upstreamA, budget}, memoryB{upstreamB, budget};
+      Screen a{memoryA};
+      candidate::Screen b{memoryB};
+      auto compare = [&](Fixture &fixture) {
+        fixture.ready();
+        const auto beforeA = state(a), beforeB = state(b);
+        const auto resultA = apply(a, fixture.frame), resultB = apply(b, fixture.frame);
+        if (resultA != resultB || state(a) != state(b) || memoryA.liveBytes() != memoryB.liveBytes() || memoryA.allocations() != memoryB.allocations() || memoryA.failures() != memoryB.failures() || upstreamA.attempts != upstreamB.attempts) {
+          throw std::runtime_error{"Allocation-failure differential mismatch"};
+        }
+
+        const bool failed = resultA.starts_with("error:");
+        if (failed && (state(a) != beforeA || state(b) != beforeB)) {
+          throw std::runtime_error{"Allocation failure mutated screen"};
+        }
+
+        return failed;
+      };
+
+      Fixture initial{4, 3, 1, 1, 0};
+      initial.range(0, 12, boundary);
+      if (mode != AllocationCase::initial && compare(initial)) {
+        throw std::runtime_error{"Initial allocation setup failed"};
+      }
+
+      Fixture resized{9, 8, 1, 2, 0};
+      resized.range(0, 72, boundary);
+      Fixture metadata{4, 3, 1, 2, 1};
+      std::array<MetadataLink, metadata_links> links;
+      std::array<MetadataRun, metadata_links> runs;
+      std::array<Byte, metadata_links * uri_bytes> uris;
+      for (unsigned index = 0; index < metadata_links; ++index) {
+        links[index] = {.offset = index * uri_bytes, .len = uri_bytes};
+        runs[index] = {.start = index, .len = 1, .link_index = static_cast<std::uint16_t>(index)};
+        uris[index * uri_bytes] = static_cast<Byte>('a' + index);
+        uris[index * uri_bytes + 1] = static_cast<Byte>('A' + index);
+      }
+
+      metadata.frame.text_metadata = TextMetadata{.row_flags = metadata.flags, .links = links, .runs = runs, .uris = uris};
+      auto &target = mode == AllocationCase::initial ? initial : mode == AllocationCase::resize ? resized : metadata;
+      upstreamA.failAfter(boundary);
+      upstreamB.failAfter(boundary);
+      const bool failed = compare(target);
+      ++allocation_cases;
+      allocation_failures += failed;
+
+      if (mode != AllocationCase::initial && failed) {
+        Fixture delta{a.columns(), a.rows(), 1, a.frameId() + 1, a.frameId()};
+        delta.frame.text_metadata.reset();
+        delta.range(0, 1, boundary);
+        upstreamA.failAfter(0);
+        upstreamB.failAfter(0);
+        if (compare(delta) || upstreamA.attempts != 0 || upstreamB.attempts != 0) {
+          throw std::runtime_error{"Same-grid recovery unexpectedly allocated"};
+        }
+
+        ++allocation_free_recoveries;
+      }
+
+      upstreamA.remaining.reset();
+      upstreamB.remaining.reset();
+      target.frame.frame_id = a.frameId() + 1;
+      target.frame.base_frame_id = mode == AllocationCase::metadata ? a.frameId() : 0;
+      if (compare(target)) {
+        throw std::runtime_error{"Allocation recovery failed"};
+      }
+    }
+  }
+
+  if (allocation_failures == 0 || allocation_free_recoveries == 0) {
+    throw std::runtime_error{"Missing allocation failure coverage"};
+  }
+}
+
 int exercise() {
   readerEquivalence();
+  allocationEquivalence();
   SystemAllocator upstream;
   constexpr std::size_t budget = 32 * 1024 * 1024;
   BudgetAllocator memoryA{upstream, budget}, memoryB{upstream, budget};
@@ -283,7 +397,7 @@ int exercise() {
   snapshot(65535, 1, 2);
   snapshot(1, 65535, 3);
   snapshot(3, 43453, 4);
-  std::cout << "{\"reader_checks\":" << reader_checks << ",\"checks\":" << checks << ",\"errors\":" << errors << ",\"digest\":" << digest << ",\"live_bytes\":" << memoryA.liveBytes() << ",\"allocations\":" << memoryA.allocations() << "}\n";
+  std::cout << "{\"reader_checks\":" << reader_checks << ",\"checks\":" << checks << ",\"errors\":" << errors << ",\"allocation_cases\":" << allocation_cases << ",\"allocation_failures\":" << allocation_failures << ",\"allocation_free_recoveries\":" << allocation_free_recoveries << ",\"digest\":" << digest << ",\"live_bytes\":" << memoryA.liveBytes() << ",\"allocations\":" << memoryA.allocations() << "}\n";
   return 0;
 }
 

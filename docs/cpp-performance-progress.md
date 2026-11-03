@@ -4394,10 +4394,123 @@ The empty controls consistently regress and the normal snapshot target misses si
 wins. This rejects the variant despite useful small-span reductions. The empty
 path does not decode cells, but that alone does not prove code-placement causality
 or override the gate. No production codec/GUI source is changed and no native
-performance acceptance is claimed. A distinct remaining invariant to examine is
-that valid deltas already require the current grid, yet `reserve` still rechecks
-cell and row-vector capacity on every application. That optimization has not been
-implemented or measured here.
+performance acceptance is claimed. The separate experiment below examines the
+redundant grid-capacity checks without retaining this parser change.
+
+## Same-grid delta reservation experiment, 2026-11-03
+
+`out-perf/dlls-delta-grid-reserve-01` skips the cell and row-revision vector capacity
+checks for a valid delta. `Screen::apply` has already required its base frame and
+grid to match the current screen. Snapshot reservations and every metadata
+reservation remain unchanged, as do both decoder passes and per-cell revision
+marking. There is no additional storage. Production source remains the accepted
+baseline while the native candidate is evaluated separately.
+
+The reusable Screen oracle now injects allocation failures at each reservation
+boundary for initial snapshots, resized snapshots and metadata-growing deltas.
+Its 21 scenarios exercise 12 allocation failures and six allocation-free same-grid
+recoveries after a failed resize or metadata update. Public state, exception
+type/message, allocator attempts, live bytes and allocation/failure counts agree.
+The original 3,342 Screen operations, 360 malformed-frame checks and 6,276 reader
+comparisons also pass, retaining digest `8144262334345902512`. Release,
+ASan/UBSan and executed x86-64 agree; sanitizer scope excludes system libraries
+and leak detection. A negative control omitting only the links reservation fails
+with `Allocation-failure differential mismatch`. A broader negative that omitted
+all metadata reservations crashed with SIGSEGV; that attempt is retained but is
+not evidence of a clean oracle rejection or an established crash cause.
+
+ARM64, x86-64 and x86-64-v3 macOS kernels compile for both BudgetAllocator and
+the GUI's SystemAllocator. ARM64's `apply` instruction stream is identical in A/B;
+the reserve helper branches around two out-of-line capacity-check calls on deltas.
+Its static instruction count grows from 32 to 36, with the same 32-byte stack.
+These counts are not cycle estimates. Linux is not executed.
+
+Seven alternating pairs per mode/grid in
+`/tmp/telar-perf-delta-grid-reserve-pairs-01` pass all 394 host observations,
+maximum load1 2.518. Final digests and live/peak/allocation counts match in every
+pair; warmed application allocates nothing. Median nanoseconds per application:
+
+| Mode | 82×21 A → B | B wins | 240×80 A → B | B wins |
+| --- | --- | --- | --- | --- |
+| Snapshot | 15,849.50 → 15,747.98 | 6/7 | 182,137.54 → 182,371.12 | 5/7 |
+| Full delta | 15,750.40 → 15,736.90 | 3/7 | 179,949.17 → 179,953.75 | 4/7 |
+| One row | 781.31 → 779.53 | 6/7 | 2,244.72 → 2,241.55 | 6/7 |
+| 64 one-cell spans | 1,921.17 → 1,917.71 | 3/7 | 1,921.38 → 1,926.26 | 3/7 |
+| Two cells crossing a row | 54.09 → 50.74 | 7/7 | 54.02 → 50.70 | 7/7 |
+| One cell | 43.59 → 40.01 | 7/7 | 43.63 → 39.71 | 7/7 |
+| Empty delta | 11.00 → 9.38 | 7/7 | 10.93 → 9.39 | 7/7 |
+
+The preregistered empty/one-cell targets pass, with no consistently losing
+component control. The absolute saving is only a few nanoseconds per delta and
+does not establish an application improvement. Native candidate GUI
+`c2b1d0425e73` uses the frozen accepted runtime `a0b8b9d5826c`, helper and Qt;
+the pending runtime deadline change is excluded. Rebuilt A's executable code and
+payloads match the accepted GUI, with all 207 differing bytes accounted for by
+eight generated RCC timestamps, UUID and signature. Native timing uses the original
+frozen accepted GUI `5a639c5f26f6` as A.
+
+The core test and six focused native frame-delivery cases pass. Qualification in
+`/tmp/telar-perf-delta-grid-reserve-native-qual-01` passes three byte-exact captures
+(single, splits, tabs), variable offered load, and all 18 host boundaries, maximum
+load1 2.238. Native single-pane series 01 is wholly discarded when load1 reaches
+6.235 at `after:3-single-A`, above the limit of 5. All eight owned runtimes and
+their children exit with complete cleanup; no partial aggregate is used. A fresh
+six-pair series 02 starts after load falls to 3.74, with GUI CPU per input as the
+preregistered primary target (at least five wins). Its 19 host boundaries remain
+valid, maximum load1 3.601, but baseline A times out on the first warmup input
+after idle in round 4. Initial presentation qualifies; zero input responses
+complete, before the measured interval. All nine runtimes/children clean up.
+The ordinary probe has no readback diagnostics enabled, so this receipt does not
+establish whether the marker appeared with a zero timestamp or identify another
+cause. Series 02 is also wholly excluded. The candidate is **deferred**, not an
+accepted native improvement or a measured native regression. Existing
+positive-presentation, focus, geometry, rate and host gates remain unchanged.
+
+## Higher-volume accepted-stack profile, 2026-11-03
+
+`/tmp/telar-perf-variable-work-profile-04` profiles accepted GUI `5a639c5f26f6`
+and runtime `a0b8b9d5826c`, keeping their helper, Qt, configuration and original
+positive-presentation probe. Three variable-output background producers each
+request 0.5 MiB/s, four times the earlier profile's offered rate. Two repetitions
+complete 240 inputs each, with 20 warmups and no idle phase. Every producer passes
+the unchanged 5% rate gate. Owned identities, geometry and foreground qualify;
+both runtime/child cleanup receipts complete. All six host boundaries pass,
+maximum load1 1.882. Separate GUI/runtime samplers run for eight seconds at 1 ms.
+Source/binary identities, profiles and external runtime counters are retained.
+These instrumented runs do not qualify latency, CPU savings or continuous cadence.
+
+| Inclusive sampled stack group | Repetition 1 | Repetition 2 |
+| --- | ---: | ---: |
+| GUI font requests / coverage | 16 / 16 | 17 / 16 |
+| GUI `TerminalItem::updatePaintNode` | 72 | 88 |
+| Qt `renderMergedBatch` | 90 | 72 |
+| WindowServer `SLSObscureCursor` | 117 | 111 |
+| GUI `CellReader::next` | 7 | 11 |
+| Runtime checkpoint `Snapshot::changed` | 20 | 15 |
+| Runtime `PaneObservationService::refresh` | 30 | 31 |
+| Runtime `CellProjection::copyRow` | 4 | 7 |
+| Runtime `FrameSync::appendDamage` | 8 | 11 |
+| Runtime `wait4` | 34 | 28 |
+| Runtime process-info / ioctl calls | 53 / 71 | 48 / 70 |
+
+Groups overlap and must not be summed; waiting threads dominate the full samples.
+These are stack observations, not call counts or CPU percentages, and exact
+per-input timestamps remain unavailable. Higher offered volume does not make
+cell projection the dominant sampled path in these small split grids.
+
+Following the `wait4` stack identifies a distinct work-reduction lead:
+`Runtime::publish` calls `PtyProcess::reap` for every live pane on every event-loop
+iteration. The server already registers SIGCHLD on both platform loops, but the
+runtime merely continues on that event and performs the same unconditional
+polling on unrelated events. A signal-driven reap pass with a bounded periodic
+fallback could avoid repeated live-child syscalls. It needs exit/status and
+output-drain oracles, coalesced/early signal checks, platform qualification and
+paired whole-runtime evidence before adoption. The older SIGCHLD change removed
+a 100 ms exit delay; this lead must preserve that behavior.
+
+Inspection also confirms that `FixedText` already copies only its used prefix;
+its 4 KiB capacity is not evidence of a 4 KiB copy per operation. No observation
+worker, process-identity policy or Qt cursor behavior is changed on these profiles.
 
 ## Coverage and next experiments
 
@@ -4426,8 +4539,9 @@ and the existing seven-pair component contracts remain mandatory.
 
 First profiling candidates are the refresh value sent by each GUI, GUI pacing
 phase versus VSync, and whole-viewport repaint during subcell resizing. Further
-leads are repeated font coverage lookup, redundant grid-capacity checks on valid deltas, runtime
-scrollback projection and history-query scratch/statement reuse. Each needs a
+leads are repeated font coverage lookup, runtime scrollback projection and
+history-query scratch/statement reuse. Same-grid capacity checks pass the component
+gate but remain deferred on native qualification. Each new candidate needs a
 fresh profile, equivalence oracle, disassembly and paired acceptance before it
 can be retained as an optimization. Historical rejected batching, relay-buffer,
 prefault, render-loop and update-idle variants remain documented in the existing
