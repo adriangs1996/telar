@@ -4663,6 +4663,99 @@ In particular, an old snapshot may make an ordered scan visit many excluded
 rows, so old/selective snapshots, ties, scoped queries, imports and deletions
 must be controls. Production schema and queries remain unchanged.
 
+## History ordering experiments and fused-ranking candidate, 2026-11-03
+
+Three isolated alternatives to SQLite's repeated temporary-tree work are rejected
+before changing production. Native SQL probes include prepare, row consumption
+and finalize, use one binary for both paths and check identical row counts/content.
+Their diagnostic SQLite counters are collected outside timing. None qualifies a
+GUI or full F12 win.
+
+* **Covering index:** `/tmp/telar-perf-history-query-order-pairs-01` completes
+  seven alternating pairs in six cases and 170 valid host boundaries, maximum
+  load1 1.167. Current-snapshot CPU drops from 4.327 to 0.691 ms/query, 7/7 wins,
+  but old snapshots rise from 29.235 to 191.622 microseconds, 0/7. Old-page and
+  empty controls also lose 0/7. The old query's diagnostic VM steps rise from
+  1,414 to 30,410 and the candidate visits 9,999 index steps; the empty query rises
+  from 14 to 30,010 VM steps. The ordered scan defeats the selective id bound.
+  `ANALYZE` on another private copy does not change that choice. Write/migration
+  controls are not run after rejection; production indexes are unchanged.
+* **Forced existing chronological index:** the private proposal would affect only
+  new unfiltered fuzzy searches. It retains the exact ORDER BY/LIMIT while SQLite
+  sorts the timestamp ties. An independent timestamp/id model matches 120 complete
+  SQL result sets, including shuffled timestamps and more than 10,000 candidates.
+  `/tmp/telar-perf-history-existing-order-pairs-01` passes 142 host boundaries,
+  maximum load1 1.798. Current-snapshot CPU wins 6/7 (4.253 → 4.202 ms), but
+  shuffled timestamps win only 1/7 (4.929 → 4.959 ms), rejecting it. Grouped/all
+  ties and larger histories win 7/7. Scattered table lookups are a possible cause
+  of the shuffled loss, not a causally isolated finding.
+* **Native ordering with retained commands:** a bounded top-k heap replaces the
+  temporary SQL tree, retaining at most 10,000 rows and 2 MiB of string capacity,
+  plus fixed candidate storage and a transient incoming string. Over budget, it
+  repeats the original SQL query. Full-row release and ASan/UBSan oracles pass
+  144 cases; an inverted id tie-break mutation is rejected. Sanitizers cover the
+  probe/native ordering, not system SQLite; leaks are disabled. Seven alternating
+  pairs in `/tmp/telar-perf-history-native-order-pairs-01` pass 226 host boundaries,
+  maximum load1 2.008. Every ordinary, tied, shuffled, larger, old and empty case
+  wins 7/7; current-snapshot CPU drops from 4.309 to 1.315 ms. Long commands trigger
+  the budget fallback and lose 0/7 (12.499 → 13.353 ms). This rejects that variant:
+  copying commands and then repeating SQL adds work in the fallback.
+
+The next private candidate, `out-perf/dlls-history-fused-rank-01`, fuses score/hash
+calculation with the bounded recency selection. Each retained candidate contains
+only id, timestamp, command hash and optional score. Command strings are consumed
+directly from the current SQLite row and are not copied or retained. After keeping
+the newest 10,000 candidates, the same recency order, duplicate-hash rule, score
+ordering and pagination apply; the existing detail query loads only selected
+results. It uses the project's allocator and leaves the schema unchanged.
+The extra fixed-size vector still requires allocation/failure and size accounting.
+
+Both variants rebuild main.cpp against the accepted dependency archives, using
+VFS overlays to exclude pending attachment cadence work. The rebuilt A differs
+from accepted `a0b8b9d5826c` only in 48 UUID/signature bytes; the original accepted
+binary is measured. Candidate B is `474b46abbdbf328b635c53d895d5b7d54734566fb481d629d074adeeae28beba`.
+Production source remains unchanged. Existing header warnings remain present.
+
+`/tmp/telar-perf-history-fused-rank-qual-01` passes 480 independent reference/A/B
+cases across monotonic dates, grouped ties, all ties, shuffled dates, 15,000
+entries, long commands, 100 entries and an empty history. Each dataset covers
+five queries, distinct/non-distinct results, two offsets and three snapshot bounds.
+Selected command bytes/order, ids, timestamps, snapshot id and has-more match the
+model; canonical A/B output agrees. This oracle does not yet qualify every history
+metadata field, scoped/author/failed filters, cancellation or allocation failures.
+
+Warm protocol measurements use identical fixed counts and order after seeding
+and a 60-case model check, with seven alternating pairs per dataset. The primary
+series is `/tmp/telar-perf-history-fused-rank-monotonic-01`; the remaining seven
+are under `/tmp/telar-perf-history-fused-rank-controls-01`. All 112 executions and
+240 host boundaries qualify, maximum load1 2.675, and every owned runtime/child
+cleanup completes. Medians across seven runs per variant:
+
+| History dataset | Runtime CPU A → B, ms/query | Mean protocol response A → B, ms | CPU / response wins |
+| --- | ---: | ---: | ---: |
+| 10,000 monotonic dates | 2.3746 → 0.6783 | 2.3803 → 0.6834 | 7/7, 7/7 |
+| Grouped ties | 2.5528 → 0.6771 | 2.5593 → 0.6820 | 7/7, 7/7 |
+| All dates equal | 2.6216 → 0.6790 | 2.6275 → 0.6837 | 7/7, 7/7 |
+| Shuffled dates | 2.7600 → 0.9028 | 2.7677 → 0.9078 | 7/7, 7/7 |
+| 15,000 entries | 4.0424 → 1.3291 | 4.0481 → 1.3343 | 7/7, 7/7 |
+| Long commands | 5.6710 → 1.5500 | 5.6813 → 1.5571 | 7/7, 7/7 |
+| 100 entries | 0.0666 → 0.0514 | 0.0704 → 0.0552 | 7/7, 6/7 |
+| Empty | 0.0396 → 0.0307 | 0.0428 → 0.0340 | 7/7, 7/7 |
+
+Response p95/p99 win 7/7 except the small history, which wins 6/7 for each.
+External runtime CPU counters bracket probe release/completion and include boundary
+time; the protocol response clock surrounds each request/reply. Neither is GUI
+presentation latency. The primary end-footprint median rises by 327,680 bytes
+(6,996,400 → 7,324,080). Long-command lifetime maximum footprint falls from
+21,299,656 to 14,221,744 bytes. These are boundary and lifetime observations across
+seeding/warmup/query work, not incremental vector size or measured-interval peaks.
+
+The fused candidate is **pending**, not adopted. Remaining requirements include
+candidate-header sanitizer/fault recovery, targeted history regression and filter
+coverage, cross-architecture checks, cold queries, write controls, a qualified
+native query-to-presented-results comparison, and the independent Zig F12 stack.
+No flow or native120 requirement closes on these protocol results.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
