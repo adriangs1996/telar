@@ -74,6 +74,21 @@ gui-test *args: dev-bin (gui-configure "out" "Debug" "-DTELAR_GUI_TEST_RUNTIME="
     cmake --build out
     ctest --test-dir out --output-on-failure {{ args }}
 
+# Each project gets out/compile_commands.json and, for a dll, the header flags in
+# out/clangd/compile_flags.txt; its .clangd-build.json then refreshes them on save.
+# Configure the C++ projects under dlls/ and services/cli-cpp for clangd.
+editor: runtime-editor
+    #!/usr/bin/env bash
+    set -euo pipefail
+    options=(-G Ninja -DCMAKE_BUILD_TYPE=Debug "-DGHOSTTY_VT_ROOT={{ vt_prefix }}")
+    if command -v brew >/dev/null; then
+        options+=("-DCMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang" "-DCMAKE_CXX_COMPILER=$(brew --prefix llvm)/bin/clang++" "-DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3)")
+    fi
+    for project in dlls/telar-base dlls/telar-client dlls/telar-config dlls/telar-lua dlls/telar-platform dlls/telar-plugins dlls/telar-tls services/cli-cpp; do
+        cmake -S "$project" -B "$project/out" "${options[@]}" >/dev/null
+        echo "configured $project/out"
+    done
+
 # Refresh the runtime compilation database and generated headers for clangd.
 [working-directory: "services/runtime-cpp"]
 runtime-editor: (runtime-configure "out" "Debug")

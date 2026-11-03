@@ -17,3 +17,9 @@ target_link_libraries(your_target PRIVATE telar::base)
 #include "telar_base/text/utf8.hpp"
 #include "telar_base/memory/allocator.hpp"
 ```
+
+## Editor
+
+`just editor` configures `out/` for clangd: `out/clangd/compile_flags.txt` carries the
+include directories and definitions consumers compile these headers with
+(`cmake/telar_editor.cmake`). `.clangd-build.json` refreshes it on save.

@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
 project(telar_platform LANGUAGES C CXX)
 
 if(NOT TARGET telar-base)
@@ -18,3 +19,5 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_libraries(telar-platform PUBLIC util)
 endif()
 target_compile_options(telar-platform PRIVATE -Wall -Wextra -Wpedantic)
+
+telar_editor_flags(telar-platform)

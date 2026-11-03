@@ -16,3 +16,9 @@ target_link_libraries(your_target PRIVATE telar::client)
 
 `telar.hpp` includes every header; include `telar_client/codecs/...` or
 `telar_client/serializers/...` directly to pull in less.
+
+## Editor
+
+`just editor` configures `out/` for clangd: `out/clangd/compile_flags.txt` carries the
+include directories and definitions consumers compile these headers with
+(`cmake/telar_editor.cmake`). `.clangd-build.json` refreshes it on save.

@@ -1,0 +1,8 @@
+CompileFlags:
+  CompilationDatabase: out/clangd
+
+---
+If:
+  PathMatch: src/.*
+CompileFlags:
+  CompilationDatabase: out

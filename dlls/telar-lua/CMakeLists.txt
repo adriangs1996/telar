@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
 project(telar_lua LANGUAGES C CXX)
 
 if(NOT TARGET telar-base)
@@ -25,3 +26,5 @@ add_library(telar-lua INTERFACE)
 add_library(telar::lua ALIAS telar-lua)
 target_include_directories(telar-lua INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_link_libraries(telar-lua INTERFACE telar-lua-vm telar::base)
+
+telar_editor_flags(telar-lua)

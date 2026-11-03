@@ -84,3 +84,8 @@ monolithic Zig release. Agent assets and skills are embedded from
 
 See [the port report](machines-launch-report.md) for comparisons, retained tests
 and the remaining setup verification boundaries.
+
+## Editor
+
+`just editor` configures `out/` (with `out/compile_commands.json`) for clangd, as it
+does for every dll; `.clangd-build.json` re-runs that configuration on save.

@@ -14,3 +14,9 @@ target_link_libraries(your_target PRIVATE telar::config)
 ```cpp
 #include "telar_config/runtime_values.hpp"
 ```
+
+## Editor
+
+`just editor` configures `out/` for clangd: `out/clangd/compile_flags.txt` carries the
+include directories and definitions consumers compile these headers with
+(`cmake/telar_editor.cmake`). `.clangd-build.json` refreshes it on save.

@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
 project(telar_plugins LANGUAGES CXX)
 
 if(NOT TARGET telar-platform)
@@ -9,3 +10,5 @@ add_library(telar-plugins INTERFACE)
 add_library(telar::plugins ALIAS telar-plugins)
 target_include_directories(telar-plugins INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_link_libraries(telar-plugins INTERFACE telar::platform)
+
+telar_editor_flags(telar-plugins)
