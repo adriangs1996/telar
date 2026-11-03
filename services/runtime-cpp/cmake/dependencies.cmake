@@ -22,10 +22,23 @@ if(NOT TELAR_WUFFS_ACTUAL_SHA256 STREQUAL TELAR_WUFFS_HEADER_SHA256)
 endif()
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
-find_library(SQLITE3_LIBRARY NAMES sqlite3 REQUIRED)
 find_package(Threads REQUIRED)
 
 option(TELAR_RUNTIME_DISTRIBUTABLE "Require static non-system dependencies for installation" OFF)
+# Linux has no base system beyond glibc: a distributable build links the
+# libraries macOS ships (SQLite, zlib) and the C++ library statically. pcap
+# stays shared: the distributions' static libpcap needs D-Bus, which none
+# ships static.
+set(TELAR_LINUX_DISTRIBUTABLE OFF)
+if(TELAR_RUNTIME_DISTRIBUTABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(TELAR_LINUX_DISTRIBUTABLE ON)
+endif()
+
+if(TELAR_LINUX_DISTRIBUTABLE)
+  find_library(SQLITE3_LIBRARY NAMES libsqlite3.a REQUIRED)
+else()
+  find_library(SQLITE3_LIBRARY NAMES sqlite3 REQUIRED)
+endif()
 if(TELAR_RUNTIME_DISTRIBUTABLE)
   set(OPENSSL_USE_STATIC_LIBS TRUE)
 endif()
@@ -35,8 +48,14 @@ set(NGHTTP2_ROOT "" CACHE PATH "Installed nghttp2 prefix")
 find_path(NGHTTP2_INCLUDE_DIR nghttp2/nghttp2.h HINTS "${NGHTTP2_ROOT}/include" REQUIRED)
 find_library(NGHTTP2_LIBRARY NAMES libnghttp2.a nghttp2 HINTS "${NGHTTP2_ROOT}/lib" REQUIRED)
 
-find_library(ZLIB_LIBRARY NAMES z REQUIRED)
-find_library(PCAP_LIBRARY NAMES pcap PATHS "${CMAKE_OSX_SYSROOT}/usr/lib" REQUIRED)
+if(TELAR_LINUX_DISTRIBUTABLE)
+  find_library(ZLIB_LIBRARY NAMES libz.a REQUIRED)
+  find_library(PCAP_LIBRARY NAMES pcap REQUIRED)
+  add_link_options(-static-libstdc++ -static-libgcc)
+else()
+  find_library(ZLIB_LIBRARY NAMES z REQUIRED)
+  find_library(PCAP_LIBRARY NAMES pcap PATHS "${CMAKE_OSX_SYSROOT}/usr/lib" REQUIRED)
+endif()
 
 set(BROTLI_ROOT "" CACHE PATH "Installed Brotli prefix")
 find_path(BROTLI_INCLUDE_DIR brotli/decode.h HINTS "${BROTLI_ROOT}/include" REQUIRED)

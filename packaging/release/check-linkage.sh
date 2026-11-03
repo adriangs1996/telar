@@ -15,6 +15,8 @@ set -eu
 # glibc and the GCC runtime that the Rust helper unwinds with.
 linux_base='libc.so.6 libm.so.6 libpthread.so.0 libdl.so.2 librt.so.1 libutil.so.1 libgcc_s.so.1 ld-linux-x86-64.so.2 ld-linux-aarch64.so.1'
 # What the Wayland and Vulkan client needs, all present on a desktop session.
+# The C++ runtime's packet capture; Debian and Ubuntu name it 0.8.
+linux_server='libpcap.so.0.8'
 linux_desktop='libwayland-client.so.0 libwayland-cursor.so.0 libvulkan.so.1 libxkbcommon.so.0 libfontconfig.so.1 libatk-1.0.so.0 libatk-bridge-2.0.so.0 libgio-2.0.so.0 libgobject-2.0.so.0 libglib-2.0.so.0'
 
 fail() {
@@ -90,7 +92,7 @@ check_static() {
     printf '%s: static, no shared library\n' "$binary"
 }
 
-[ $# -ge 2 ] || fail "usage: check-linkage.sh macos|linux-gui|linux-headless BIN..."
+[ $# -ge 2 ] || fail "usage: check-linkage.sh macos|linux-gui|linux-server|linux-headless BIN..."
 kind=$1
 shift
 for binary in "$@"; do
@@ -98,6 +100,7 @@ for binary in "$@"; do
     case $kind in
         macos) check_macos "$binary" ;;
         linux-gui) check_linux "$binary" "$linux_base $linux_desktop" ;;
+        linux-server) check_linux "$binary" "$linux_base $linux_server" ;;
         linux-headless) check_static "$binary" ;;
         *) fail "unknown kind $kind" ;;
     esac

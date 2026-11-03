@@ -103,13 +103,10 @@ and notarizes for other Macs.
 tars `bin` and `share` into `zig-out/telar-<arch>-linux.tar.gz`; unpack it
 over a prefix such as `/usr/local` or `~/.local`.
 
-`zig build -Dgui=false` leaves the window out. The result has the runtime
-and every command line control, links no Wayland, Vulkan, ATK or GLib
-library, and builds without Cargo. `telar` and `telar gui` then exit with an
-error. This is the build for servers, which is where remote mode runs the
-runtime. The release adds `-Dtarget=<arch>-linux-musl`, which makes it a
-static executable that needs no library of the host
-([why](#why-the-headless-build-is-static-musl)).
+The build for servers, where remote mode runs the runtime, is the C++
+runtime and CLI without a window: `services/runtime-cpp` builds `telar`,
+`telar-runtime` and `telar-config-check` side by side. The release links
+every library but glibc into them ([details](#the-linux-headless-build)).
 
 The desktop entry runs `telar gui --login-shell`, so the menu launch is the
 same path as the macOS bundle.
@@ -203,10 +200,10 @@ points at the newest one.
 
 | Asset | Contents |
 | --- | --- |
-| `telar-macos-aarch64.tar.gz`, `telar-macos-x86_64.tar.gz` | `bin/telar`, `bin/telar-diagram-renderer`, notices |
-| `Telar-macos-aarch64.dmg`, `Telar-macos-x86_64.dmg` | `Telar.app` and a link to `/Applications` |
+| `telar-macos-aarch64.tar.gz`, `telar-macos-x86_64.tar.gz` | `bin/telar`, `bin/telar-runtime`, `bin/telar-config-check`, `bin/telar-diagram-renderer`, notices |
+| `Telar-macos-aarch64.dmg`, `Telar-macos-x86_64.dmg` | `Telar.app` (the C++ client with its Qt, runtime and CLI) and a link to `/Applications` |
 | `telar-linux-x86_64.tar.gz`, `telar-linux-aarch64.tar.gz` | the tree `zig build` installs, desktop entry included |
-| `telar-linux-x86_64-headless.tar.gz`, `telar-linux-aarch64-headless.tar.gz` | `bin/telar` built with `-Dgui=false`, notices |
+| `telar-linux-x86_64-headless.tar.gz`, `telar-linux-aarch64-headless.tar.gz` | the C++ `bin/telar`, `bin/telar-runtime`, `bin/telar-config-check`, `bin/telar-diagram-renderer`, notices |
 | `install.sh` | the installer from the tagged commit |
 | `SHA256SUMS` | SHA-256 of every asset above |
 
@@ -217,10 +214,10 @@ Sigstore. `gh attestation verify FILE --repo adriangs1996/telar` checks one.
 
 | Build | Runner | Target | Links |
 | --- | --- | --- | --- |
-| macOS arm64 | `macos-26` | `aarch64-macos.26.0`, Apple M1 | `/usr/lib` and `/System/Library` only |
-| macOS x86_64 | `macos-26-intel` | `x86_64-macos.26.0`, core2 | same |
+| macOS arm64 | `macos-26` | macOS 26.0 deployment target | `/usr/lib` and `/System/Library` only; Qt inside the bundle |
+| macOS x86_64 | `macos-26-intel` | same | same |
 | Linux desktop | `ubuntu-24.04`, `ubuntu-24.04-arm` | host glibc, baseline CPU | glibc, Wayland, Vulkan, xkbcommon, Fontconfig, ATK, GLib; glibc 2.38 or newer |
-| Linux headless | same | `<arch>-linux-musl`, baseline CPU | nothing: static musl, Linux 5.10 or newer |
+| Linux headless | same | host glibc, Clang 18 | glibc 2.38 or newer and `libpcap.so.0.8`; every other library static |
 
 The labels come from GitHub's
 [hosted runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
@@ -239,9 +236,12 @@ would use whatever AVX-512 or SVE the runner has and crash on older
 machines.
 
 `packaging/release/check-linkage.sh` fails the build when a binary links
-anything outside that table, when the desktop build asks for glibc newer
-than 2.38, or when the headless build has any `NEEDED` entry or program
-interpreter. It reads `otool -L` on macOS and `readelf` on Linux.
+anything outside that table or asks for glibc newer than 2.38. It reads
+`otool -L` on macOS and `readelf` on Linux. The C++ runtime and CLI build
+with `TELAR_RUNTIME_DISTRIBUTABLE`, which links OpenSSL, nghttp2, Brotli,
+Zstd and libghostty-vt statically everywhere, and on Linux also SQLite,
+zlib, pcap and the C++ library, then runs the same check on every
+executable.
 
 The desktop build's glibc floor is the runner's. On `ubuntu-24.04-arm`,
 glibc 2.38 headers turn `strtol` and `strtoul` into `__isoc23_strtol` and
@@ -251,124 +251,32 @@ measured outside CI, where the same check holds it to 2.38. Debian 12 ships
 glibc 2.36, so there `install.sh` finds that the desktop build does not
 start and installs the headless one.
 
-### Why the headless build is static musl
+### The Linux headless build
 
-A server gets whatever Linux it has: Alpine, an old enterprise release, a
-container without a desktop. A static binary needs no libc of the host at
-all, so the headless build targets `<arch>-linux-musl`, which Zig links
-statically. What differs from glibc, checked in this code:
-
-- Name resolution, TLS and the trust store never go through libc. The
-  proxy resolves upstream hosts with `std.Io.net.HostName.lookup`, Zig's
-  own resolver that reads `/etc/hosts` and `/etc/resolv.conf` on either
-  libc; `lib/localca` finds roots through `std.crypto.Certificate.Bundle`.
-  Neither reads `nsswitch.conf` under glibc either.
-- The passwd database appears once, in `src/cli/login_shell.zig`, as the
-  fallback after `SHELL` for `telar gui --login-shell`, which a headless
-  build refuses. musl reads only `/etc/passwd` there, without NSS, so an
-  LDAP or SSSD account would fall back to `/bin/sh` if it ever reached it.
-- A C `struct stat` cannot come through `@cImport` on musl: its `timespec`
-  pads with bit-fields, so translate-c makes the struct opaque. Ownership
-  checks read `privatefile.Inode` instead, which asks `statx` on Linux,
-  the call `std.Io` already makes for every stat, and `fstatat` elsewhere.
-  CI builds the headless binary for musl, so an import that brings the
-  struct back fails there.
-- The kernel floor is Zig's, not libc's. Without a version in the target,
-  Zig 0.16 builds Linux executables for 5.10 or newer
-  (`default_min` in `std/Target.zig`), and the standard library may use
-  what that version has without a fallback. The release does not lower
-  it, so it supports Linux 5.10 and later; `statx` alone would need only
-  4.11. Every run described here used OrbStack's 7.0 kernel; no older
-  kernel was tried.
-- `malloc` is not musl's. Zig 0.16 links its own `malloc` into musl
-  builds (`c/malloc.zig` in its lib directory), a wrapper over
-  `std.heap.SmpAllocator`; the binary's `malloc` is `c.malloc.malloc`.
-  That allocator keeps one free list per thread slot, never unmaps a slab
-  of 64 KiB or less, and searches only one other slot before mapping a
-  new slab. The runtime allocates a history batch on one thread and frees
-  it on the history worker, and threads move between slots under
-  contention, so freed memory piled up on slots the allocating threads
-  never searched: at 150,000 commands a counting build had 72 MiB of
-  slabs, most of it on free lists. Its own symbol cannot be replaced
-  either: a second `export fn malloc` collides inside the Zig compilation,
-  and a C definition is not used by Zig's calls.
-
-  Release builds for musl therefore start through `mainOnSlabHeap` in
-  `src/main.zig`, with `lib/slabheap` as the process's general allocator
-  and its `std.Io`'s. That allocator is the same one, except that a thread
-  whose slot is empty visits every other slot before it maps a slab,
-  spinning up to 128 times for a busy one, and maps outside every lock.
-  The C libraries allocate from the caller's allocator, not `malloc`:
-  SQLite through `sqlite.routeMemory`, and Lua, brotli and nghttp2 through
-  the hooks each takes, over `lib/cblocks`. Debug builds, glibc and macOS
-  keep the standard start, where the general allocator is libc's or Zig's
-  leak-checking one.
-
-  Measured in one Debian 12 container with 4 CPUs, feeding the runtime
-  commands through `telar history import`, 1000 at a time, with aarch64
-  ReleaseFast builds, two runs each, alternating builds. The "before" rows
-  come from an earlier batch of the same binary:
-
-  | Build | Commands | Resident at the end | Runtime CPU |
-  | --- | --- | --- | --- |
-  | glibc | 150,000 | 21.2 and 21.2 MiB | 23.0 and 23.4 s |
-  | musl, Zig's `malloc` (before) | 150,000 | 118 and 188 MiB | 24.0 and 24.0 s |
-  | musl, `slabheap` | 150,000 | 19.4 and 19.4 MiB | 23.2 and 23.0 s |
-  | glibc | 300,000 | 20.6 and 20.8 MiB | 66.2 and 66.2 s |
-  | musl, Zig's `malloc` (before) | 300,000 | 85 and 80 MiB | 65.7 and 65.4 s |
-  | musl, `slabheap` | 300,000 | 18.8 and 19.2 MiB | 66.7 and 67.3 s |
-
-  Searches took 0.01 to 0.03 s for 20 in every build. Before, resident
-  memory varied from run to run and still grew by 5 to 19 MiB per 50,000
-  commands between 200,000 and 300,000. With `slabheap`, anonymous memory
-  went from 10,132 to 10,164 KiB between 150,000 and 300,000 commands in
-  one run and from 10,368 to 10,560 KiB in the other. SQLite reported
-  2.1 MiB in use from the first 10,000 commands on and a high-water mark
-  of 4.2 MiB.
-
-  How long a thread may wait for a busy slot was measured with a scratch
-  program on the macOS host (8 cores, 1 µs clock), three runs each: one
-  thread allocating 400 batches of 2000 blocks of 16 to 3000 bytes, which
-  six or 24 threads free.
-
-  | Busy slot | Worst allocation | 99.99th percentile | Slabs mapped |
-  | --- | --- | --- | --- |
-  | waited for without bound | 277 to 477 µs | 2 to 85 µs | 92 to 373 |
-  | skipped after 128 spins | 16 to 30 µs | 7 µs | 103 to 147 |
-
-  With six freeing threads and ten times as many batches, 128 spins mapped
-  214 to 572 slabs and the unbounded wait 438 to 560. In the container,
-  where up to 25 threads share 4 CPUs, the worst allocation reached 43 ms
-  with 128 spins and 51 ms with the wait: the allocating thread itself was
-  descheduled.
-
-  The proxy's pattern was measured apart, since no end-to-end proxy load
-  ran: a scratch aarch64 musl program in the same container ran six
-  threads that each, 60,000 times, encoded and decoded an HPACK block of
-  twelve headers through nghttp2 with `header_memory` hooks, decoded a
-  brotli body through `exchangecapture.decode`, and allocated a capture
-  record of 64 to 8192 bytes, two runs per allocator:
-
-  | Capture records freed by | Zig's `malloc` | `slabheap` |
-  | --- | --- | --- |
-  | one consumer thread | 2,282 and 1,855 MiB, still growing | 2.7 and 3.0 MiB |
-  | the thread that made them | 198 and 205 MiB | 1.6 and 1.6 MiB |
-
-  Both allocators took 9.3 to 11.2 s. The second row has no handoff
-  between threads at all: threads moving between slots under contention
-  are enough to strand memory under Zig's `malloc`.
-
-The binary was also started on Alpine 3.22, where `telar server`,
-`telar runtime status`, `telar agent list` and `telar server stop` worked
-with no library installed. The glibc build it replaces does not start
-there: Alpine has no `ld-linux-aarch64.so.1`.
+The headless archive is the C++ runtime and CLI. Unlike the Zig build it
+replaces, which was static musl and started on Alpine and any Linux 5.10 or
+newer, it needs glibc: 2.38 or newer when built on Ubuntu 24.04, so Debian
+12 (glibc 2.36) and Alpine do not run it. It also needs libpcap under
+Debian's soname, `libpcap.so.0.8` (the `libpcap0.8` package), because the
+distributions' static libpcap requires D-Bus, which none ships static; other
+distributions name it `libpcap.so.1`. Everything else is linked in. One
+more exception remains:
+`telar worktree resolve`, which `worktree fetch --machine` runs there,
+reads the history database through the system's `libsqlite3.so.0`, loaded
+only for that command; without it, a host with recorded history reports
+`RepositoryHistoryUnavailable`.
 
 To reproduce a release build locally:
 
 ```sh
-packaging/release/macos.sh build /tmp/stage && packaging/release/macos.sh package /tmp/stage dist
+packaging/release/macos.sh build /tmp/stage   # Homebrew deps, Zig 0.17, Cargo
+packaging/release/sign-macos.sh /tmp/stage    # ad hoc without MACOS_SIGNING_IDENTITY
+packaging/release/macos.sh package /tmp/stage dist
 packaging/release/linux.sh dist   # Ubuntu 24.04, after install-linux-deps.sh
 ```
+
+`GHOSTTY_VT_ROOT` reuses an existing libghostty-vt build and
+`TELAR_QT_CACHE` the managed Qt; the first Qt build takes the longest.
 
 ### Signing and notarization
 

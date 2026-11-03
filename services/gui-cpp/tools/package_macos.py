@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage a separate local Release preview; never install or replace an app."""
+"""Stage a Release Telar.app (--release) or a separate local preview; never install or replace an app."""
 
 import argparse
 import hashlib
@@ -107,6 +107,7 @@ def main():
     parser.add_argument('--output', type=Path, default=base / 'out-adoption' / 'Telar C++ Preview.app')
     parser.add_argument('--macdeployqt', type=Path, help='Explicit deployment tool override')
     parser.add_argument('--qtpaths', type=Path, help='Explicit Qt paths tool override')
+    parser.add_argument('--release', action='store_true', help='Name and identify the bundle as the Telar release, not the side-by-side preview')
     args = parser.parse_args()
     if sys.platform != 'darwin':
         parser.error('macOS packaging must run on macOS')
@@ -139,9 +140,8 @@ def main():
     for required in (binary, command_helper, cli, runtime, helper, config_check):
         if not required.is_file():
             parser.error(f'missing executable: {required}')
-    compiler = re.search(r'^CMAKE_CXX_COMPILER:FILEPATH=(.+)$', cache, re.M)
-    if compiler is None:
-        compiler = re.search(r'^CMAKE_CXX_COMPILER:STRING=(.+)$', cache, re.M)
+    # A compiler given with -D and no type stays UNINITIALIZED in the cache.
+    compiler = re.search(r'^CMAKE_CXX_COMPILER:[A-Z]+=(.+)$', cache, re.M)
     if compiler is None:
         parser.error('cannot identify the build compiler')
     version = re.search(r'\.version\s*=\s*"([^"]+)"', (root / 'build.zig.zon').read_text()).group(1)
@@ -166,18 +166,20 @@ def main():
     shutil.copy2(root / 'src/assets/TelarForma-OFL.txt', resources / 'licenses/TelarForma-OFL.txt')
     template = (root / 'packaging/macos/Info.plist.in').read_bytes().replace(b'@VERSION@', version.encode())
     info = plistlib.loads(template)
-    info.update(CFBundleDisplayName='Telar C++ Preview', CFBundleName='Telar C++ Preview',
-                CFBundleIdentifier='dev.telar.cpp.preview', CFBundleExecutable='TelarPreview')
+    if not args.release:
+        info.update(CFBundleDisplayName='Telar C++ Preview', CFBundleName='Telar C++ Preview',
+                    CFBundleIdentifier='dev.telar.cpp.preview', CFBundleExecutable='TelarPreview')
+    launcher = macos / info['CFBundleExecutable']
     with (contents / 'Info.plist').open('wb') as stream:
         plistlib.dump(info, stream)
     command = [compiler.group(1), '-std=c++23', '-O2', '-Wall', '-Wextra', '-Werror',
                '-I', base, base / 'tools/macos_launcher.cpp',
-               base / 'platform/login_shell.cpp', '-o', macos / 'TelarPreview']
+               base / 'platform/login_shell.cpp', '-Wl,-headerpad_max_install_names', '-o', launcher]
     run(command)
     library = qt_prefix / 'lib'
     executables = deploy_qml(base, build, resources, contents / 'PlugIns', library, qtpaths)
     add_search_path(macos / 'telar-gui', library)
-    add_search_path(macos / 'TelarPreview', library)
+    add_search_path(launcher, library)
     (resources / 'qt.conf').write_text('[Paths]\nPlugins = PlugIns\nQmlImports = Resources/qml\n')
     deployment_log = output.parent / (output.stem + '.deployment.log')
     with deployment_log.open('w') as stream:

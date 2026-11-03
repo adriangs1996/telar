@@ -133,13 +133,16 @@ if(TELAR_RUNTIME_SANITIZERS)
   target_link_options(cli-core PUBLIC -fsanitize=address,undefined)
 endif()
 
-if(TELAR_RUNTIME_DISTRIBUTABLE AND APPLE)
-  foreach(program telar-runtime telar telar-config-check)
-    add_custom_command(TARGET ${program} POST_BUILD
-      COMMAND "${CMAKE_COMMAND}" -E env "TELAR_MACOS_MIN=${CMAKE_OSX_DEPLOYMENT_TARGET}"
-              "${CMAKE_CURRENT_SOURCE_DIR}/../../packaging/release/check-linkage.sh" macos "$<TARGET_FILE:${program}>"
-      VERBATIM)
-  endforeach()
+# The installed executables may link only the base system (glibc on Linux);
+# every distributable build checks it.
+if(TELAR_RUNTIME_DISTRIBUTABLE)
+  set(TELAR_LINKAGE_KIND "$<IF:$<PLATFORM_ID:Darwin>,macos,linux-server>")
+  add_custom_target(distributable-linkage ALL
+    COMMAND "${CMAKE_COMMAND}" -E env "TELAR_MACOS_MIN=${CMAKE_OSX_DEPLOYMENT_TARGET}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/../../packaging/release/check-linkage.sh" "${TELAR_LINKAGE_KIND}"
+            "$<TARGET_FILE:telar-runtime>" "$<TARGET_FILE:telar>" "$<TARGET_FILE:telar-config-check>"
+    DEPENDS telar-runtime telar telar-config-check
+    VERBATIM)
 endif()
 
 if(BUILD_TESTING)

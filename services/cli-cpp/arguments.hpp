@@ -23,7 +23,7 @@ using Arguments = std::span<char *const>;
 
 enum class Sign : std::uint8_t {
   rejected,
-  accepted
+  accepted,
 };
 
 // Zig's `std.fmt.parseInt` (`Sign::accepted`) or `std.fmt.parseUnsigned`

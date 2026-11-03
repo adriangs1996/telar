@@ -58,16 +58,20 @@ jobs:
         run: |
           packaging/release/install-zig.sh "$RUNNER_TEMP/zig"
           echo "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
+          packaging/release/install-zig.sh "$RUNNER_TEMP/zig-ghostty" 0.17.0
 
       - name: Install Rust
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
           rustup default "$RUST_TOOLCHAIN"
 
-      # Builds the desktop and headless archives and fails if the desktop
-      # one links a library it must not or needs glibc above 2.38, or the
-      # headless one is not static.
+      # Builds the desktop (Zig) and headless (C++) archives and fails if
+      # either links a library it must not or needs glibc above 2.38.
       - name: Build and check linkage
+        env:
+          CC: clang-18
+          CXX: clang++-18
+          ZIG_GHOSTTY: ${{ runner.temp }}/zig-ghostty/zig
         run: packaging/release/linux.sh dist
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -92,9 +96,9 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install Zig
+      - name: Install Zig for libghostty-vt
         run: |
-          packaging/release/install-zig.sh "$RUNNER_TEMP/zig"
+          packaging/release/install-zig.sh "$RUNNER_TEMP/zig" 0.17.0
           echo "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
 
       - name: Install Rust
@@ -102,12 +106,28 @@ jobs:
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
           rustup default "$RUST_TOOLCHAIN"
 
+      - name: Install build dependencies
+        run: brew install cmake ninja llvm openssl@3 libnghttp2 brotli zstd libpng
+
+      - name: Identify the Qt build toolchain
+        id: toolchain
+        run: |
+          { "$(brew --prefix llvm)/bin/clang++" --version; cmake --version; uname -m; xcrun --show-sdk-path; } > "$RUNNER_TEMP/qt-toolchain"
+          echo "key=$(shasum -a 256 "$RUNNER_TEMP/qt-toolchain" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: .qt-cache
+          key: qt-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.key }}-${{ hashFiles('services/gui-cpp/cmake/qt.cmake', 'services/gui-cpp/cmake/qt/**') }}
+
       - name: Build and check linkage
+        env:
+          TELAR_QT_CACHE: ${{ github.workspace }}/.qt-cache
         run: packaging/release/macos.sh build "$RUNNER_TEMP/stage"
 
-      # upload-artifact drops file modes, so the stage travels as a tarball.
+      # upload-artifact drops file modes, so the app travels as a tarball.
       - name: Archive the stage
-        run: tar -czf "$RUNNER_TEMP/stage-macos-${{ matrix.arch }}.tar.gz" -C "$RUNNER_TEMP" stage
+        run: tar -czf "$RUNNER_TEMP/stage-macos-${{ matrix.arch }}.tar.gz" -C "$RUNNER_TEMP" stage/Telar.app
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -235,7 +255,7 @@ jobs:
         run: |
           signed=no
           notarized=no
-          if packaging/release/signed-by-developer-id.sh "$RUNNER_TEMP/unpacked/stage/prefix/Telar.app"; then
+          if packaging/release/signed-by-developer-id.sh "$RUNNER_TEMP/unpacked/stage/Telar.app"; then
             signed=yes
           fi
 

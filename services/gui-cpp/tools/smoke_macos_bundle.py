@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import plistlib
 import shutil
 import signal
 import subprocess
@@ -52,7 +53,7 @@ def main():
         record['runtime_executable'] = str(runtime)
         record['runtime_sha256'] = hashlib.sha256(runtime.read_bytes()).hexdigest()
         record['bundled_cli_sha256'] = hashlib.sha256(bundled_cli.read_bytes()).hexdigest()
-        launcher = bundle / 'Contents/MacOS/TelarPreview'
+        launcher = bundle / 'Contents/MacOS' / plistlib.loads((bundle / 'Contents/Info.plist').read_bytes())['CFBundleExecutable']
         record['bundled_gui_sha256'] = hashlib.sha256((bundle / 'Contents/MacOS/telar-gui').read_bytes()).hexdigest()
         runtime_directory = state / 'run'
         runtime_directory.mkdir(mode=0o700)

@@ -1,9 +1,8 @@
 #!/bin/sh
-# Signs the staged Telar.app inside out. With a Developer ID Application
+# Signs the staged Telar.app inside out: every library, Qt framework and
+# executable it carries, then the bundle. With a Developer ID Application
 # identity it uses the hardened runtime and a secure timestamp, as
-# notarization requires. Telar needs no hardened runtime entitlement: it runs
-# no JIT, loads no library at runtime and sends no Apple Events itself
-# (notifications go through /usr/bin/osascript, a separate process).
+# notarization requires.
 #
 # Without an identity it signs ad hoc, so the bundle carries a complete
 # signature, sealed resources included, instead of the linker's signatures
@@ -19,7 +18,8 @@
 set -eu
 
 identity=${MACOS_SIGNING_IDENTITY:-}
-app=$1/prefix/Telar.app
+app=$1/Telar.app
+contents=$app/Contents
 
 sign() {
     if [ -n "$identity" ]; then
@@ -29,8 +29,18 @@ sign() {
     fi
 }
 
-sign "$app/Contents/Resources/bin/telar-diagram-renderer"
-sign "$app/Contents/Resources/bin/telar"
-sign "$app/Contents/MacOS/Telar"
+# Libraries outside the frameworks: Qt plugins and QML modules.
+find "$contents" -type f -name '*.dylib' ! -path '*.framework/*' | while read -r library; do
+    sign "$library"
+done
+
+for framework in "$contents"/Frameworks/*.framework; do
+    [ -d "$framework" ] && sign "$framework"
+done
+
+for executable in "$contents"/Resources/bin/* "$contents"/MacOS/*; do
+    sign "$executable"
+done
+
 sign "$app"
 codesign --verify --strict --deep --verbose=2 "$app"

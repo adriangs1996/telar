@@ -4,7 +4,7 @@
 # reports it: leaf, intermediate and root, in that order. An ad hoc
 # signature, or one whose certificate only borrows the name, fails.
 #
-#   packaging/release/signed-by-developer-id.sh stage/prefix/Telar.app
+#   packaging/release/signed-by-developer-id.sh stage/Telar.app
 set -eu
 
 codesign --verify --strict "$1" 2>/dev/null || exit 1
