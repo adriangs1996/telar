@@ -4756,6 +4756,76 @@ coverage, cross-architecture checks, cold queries, write controls, a qualified
 native query-to-presented-results comparison, and the independent Zig F12 stack.
 No flow or native120 requirement closes on these protocol results.
 
+### Fused history ranking: filter, allocation and architecture qualification
+
+The candidate remains private and pending. The reusable
+`services/runtime-cpp/tools/check_history_store.py` and `history_store_probe.cpp`
+now compare complete encoded `HistoryResults` payloads, including metadata. The
+runner accepts baseline/candidate store headers and compiles them through private
+VFS overlays; it never replaces production source. Its successful run is
+`/tmp/telar-perf-history-store-check-01`. These are functional diagnostics, not
+additional timing evidence, and no host-load performance gate is claimed for them.
+
+Two fixtures contain 1,024 and 15,872 entries, including duplicate commands,
+nonmonotonic/tied timestamps, Unicode text, imported human history and reported
+agent commands. Each exercises 192 combinations of global/cwd/workspace/pane
+scope, human/agent/all author, failed-only, distinct, current/old snapshot and
+pagination. Every reply is checked against independent filter assertions and
+compared byte-for-byte across implementations. Post-failure delete/import queries
+also match. The canonical SHA-256 values are
+`d891693b9f7db23005e9a9023025814cef16c3e2573fb65f2c83b86af5d720fa` and
+`234d3107fbe8861fb685bb8f7a1f7deae8b7892138451943342536c3db2e671b`.
+
+The private `out-perf/dlls-history-fused-rank-01/history-check-results.json` records
+ARM64 baseline/candidate, candidate ASan/UBSan, and x86-64 baseline/v3 candidate
+runs under Rosetta. All ten executions agree. The ARM64 diagnostic additionally
+runs the existing history, queue and capacity tests, including their worker
+cancellation cases. The Rosetta check covers the store oracle, not those worker
+tests. ASan/UBSan instrument the candidate header and the four test translation
+units; dependency archives and system SQLite remain uninstrumented. LeakSanitizer
+is disabled; the injected allocator separately verifies zero live bytes after
+store/reply/SQLite teardown. Linux execution is still unverified.
+
+The allocation audit includes SQLite's configured allocation callbacks as well as
+project vectors/hash storage. For one warmed fuzzy `gs`, distinct=true query:
+
+| Fixture | Allocation calls A → B | Total allocated bytes A → B | Incremental peak live bytes A → B |
+| --- | ---: | ---: | ---: |
+| 1,024 entries | 132 → 30 | 685,719 → 485,472 | 185,215 → 485,120 |
+| 15,872 entries | 2,834 → 30 | 16,591,815 → 485,472 | 191,879 → 485,120 |
+
+These are instrumented query-local allocator figures, not process footprint or
+Qt/framework allocations. The candidate's extra 320,000-byte vector holds at most
+10,000 fixed 32-byte records; the existing 160,000-byte ranked vector remains.
+The x86 candidate requests eight more bytes in total/peak in these fixtures.
+This is a measured memory-for-work tradeoff, consistent with Adrian's preference,
+not evidence that allocation alone explains all elapsed-time gains.
+
+Each observed allocation ordinal is failed once, followed by an exact successful
+query. Additional failures target the observed large reservation sizes. The
+baseline passes 133/2,835 injections in the small/large fixtures, and every
+candidate configuration passes 32 in each. Some SQLite baseline injections are
+recovered internally; others throw `bad_alloc`. Every candidate injection throws,
+recovers and leaves no audited live allocation at teardown.
+
+Disassembly of the actual ARM64 runtime object confirms the 32-byte candidate
+stride, scalar timestamp/id comparisons, paired 128-bit heap-record transfers,
+and rejection before fetching/scoring text for rows older than the retained
+boundary. The scoped x86 build uses two SSE transfers at baseline and 256-bit
+transfers under v3 for corresponding record moves. The final recency sort still
+passes a comparator function pointer; no new optimization is attributed to it.
+These listings establish generated behavior, not a separate speed claim.
+
+A negative control reverses the equal-timestamp id tie break. Its standalone
+filter/failure audit still succeeds, but the complete-wire comparison rejects it;
+`/tmp/telar-perf-history-store-check-01/negative/result.json` records the distinct
+canonical digest. This checks that the differential oracle detects ordering errors
+which simple filter assertions miss.
+
+The candidate still needs cold first-query and non-fuzzy/write controls, native
+query-to-presented-results measurement and independent Zig F12 comparison. None
+of F01–F16 or native120 is closed by this validation.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
