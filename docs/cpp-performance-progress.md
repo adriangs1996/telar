@@ -5942,3 +5942,119 @@ timing. `decision.json` records the failed promotion criterion and unchanged
 production source `5d2167b7…`. Native scripts were prepared but never run. The
 next isolated experiment targets per-key allocation/rehash work in fuzzy
 deduplication, retaining the accepted ordering algorithm. All F01–F16 remain open.
+
+## Flat fuzzy deduplication table: first version rejected, 2026-11-04
+
+`out-perf/dlls-history-flat-dedup-01` replaces only the fuzzy query's node-based
+hash set with a private contiguous table of the same 64-bit command hashes.
+Original recency sorting and compact ranked records remain unchanged. The table
+starts with sixteen zeroed slots on its first nonzero insertion, grows at half
+occupancy, and uses masked linear probing. Hash zero has a separate presence bit.
+It performs the same newest-hash-winner check before score eligibility. The
+10,000-candidate bound limits the table to 32,768 slots; growth temporarily holds
+old and new storage. No persistent cache, database/index change or GUI edit.
+
+The independent model and byte-exact A/B oracle pass 324 large and 504 smaller
+evaluations, including empty/singleton/two-entry boundaries. Duplicate-heavy
+scoped metadata validation covers 192 requests on 13,312 entries for A/B,
+sanitized B and both x86 targets. All original 32 allocation-failure injections
+and eleven candidate injections recover, with zero observed live storage after
+teardown. A separate exact-output allocation fixture uses 12,800 unique imported
+commands plus 512 agent records. Its baseline samples the first 64 allocation
+ordinals plus four large sizes; candidate validation covers all eighteen
+allocation ordinals plus seven large sizes. All recover; A/B/sanitized B output
+agrees. System SQLite remains outside sanitizer instrumentation.
+
+| Allocation fixture | Calls A → B | Allocated bytes A → B | Incremental peak bytes A → B |
+| --- | ---: | ---: | ---: |
+| Duplicate-heavy | 30 → 9 | 485,472 → 485,560 | 485,120 → 484,968 |
+| Mostly unique | 9,639 → 18 | 920,744 → 1,008,824 | 818,160 → 873,280 |
+
+Fewer allocations do not imply fewer allocated bytes. On the mostly unique
+fixture, the candidate trades 55,120 additional peak bytes for fewer allocator
+operations. The separate table oracle compares 100,014 insertions/reinsertions
+with `std::set`, including zero, maximum hash, sequential/random values, long
+collision chains, wraparound and duplicates. Every one of its twelve growth
+allocation failures leaves earlier entries intact and permits retry. Release and
+ASan/UBSan both pass with zero allocator-observed live bytes at teardown.
+
+Eighteen seven-pair component series use 300 queries per execution on ordinary
+and small cases, or 32 on the 100,000-entry heap/long cases. The old-snapshot
+control queries the first 100 ids in the 10,000-entry database. Every measured
+reply is exact, all 540 host boundaries qualify, maximum load1 1.966, and no
+owned build/test overlaps timing. Results are component process CPU, not native
+presentation latency. Source, binary and fixture identities accompany raw runs.
+
+| Workload | A CPU ms | B CPU ms | B CPU wins |
+| --- | ---: | ---: | ---: |
+| Ordinary gb, distinct | 1.237773 | 1.076853 | 7/7 |
+| Ordinary GST, distinct | 1.275467 | 1.115313 | 7/7 |
+| Ordinary gb, non-distinct | 0.955337 | 0.978817 | 0/7 |
+| Duplicate-heavy, distinct | 0.939147 | 0.942593 | 2/7 |
+| No match, distinct | 1.187520 | 1.037243 | 7/7 |
+| Shuffled, non-distinct | 1.403520 | 1.420757 | 1/7 |
+| Reverse, non-distinct | 0.944567 | 0.969763 | 0/7 |
+| Tied, non-distinct | 0.967133 | 0.990507 | 0/7 |
+| Heap, non-distinct | 12.533844 | 12.557375 | 3/7 |
+| Beginning disorder, non-distinct | 0.958033 | 0.986210 | 0/7 |
+| Middle disorder, non-distinct | 0.956320 | 0.978397 | 0/7 |
+| End disorder, non-distinct | 0.961850 | 0.982767 | 1/7 |
+| Singleton, distinct | 0.008810 | 0.008767 | 5/7 |
+| Empty, distinct | 0.013593 | 0.013317 | 4/7 |
+| Shuffled, distinct | 1.708873 | 1.539947 | 7/7 |
+| Heap, distinct | 13.187219 | 13.055563 | 5/7 |
+| Long commands, distinct | 189.410531 | 188.943625 | 7/7 |
+| Old snapshot, distinct | 0.072993 | 0.069070 | 7/7 |
+
+Ordinary gb/GST/no-match/shuffled distinct mean and p95 also win 7/7, but the
+ordinary non-distinct mean/p95 lose 0/7. Heap-distinct p95 is adverse, with 2/7
+wins and median 13.638→13.920 ms. Full mean/p95 counts remain in
+`first-screen.json` and `/tmp/telar-perf-history-flat-dedup-*-pairs-01`.
+
+The consistent non-distinct CPU regressions reject the candidate despite its
+approximately 13% distinct-query gain. ARM64 and x86 assembly show insertion as
+a separate function, so an inlined insertion body is not the explanation. ARM64
+table probing at `0x1000061f0` uses a mask, indexed load and collision loop;
+the original per-row distinct checks remain in the shared query path. No
+identical-code placement exemption is established, and the regression's cause
+is not isolated. `decision.json` records rejection; no full-runtime/native
+promotion or production edit occurs. A separate successor specializes the two
+query paths to remove those invariant per-row checks and unused table state;
+it must pass fresh oracles and paired controls. All F01–F16 remain open.
+
+The separate `out-perf/dlls-history-flat-dedup-02` successor dispatches distinct
+and non-distinct fuzzy queries once, using two template instantiations and
+`if constexpr` inside the loops. It passes 324 large plus 576 smaller/control
+oracle evaluations (including repeated snapshot inputs), both allocation
+fixtures, release/sanitized table collision and recovery checks, and x86
+baseline/v3 canonical validation. Allocation counts/bytes/peaks are identical
+to flat-dedup-01. The old-snapshot and long-command timing controls are now also
+included explicitly in the smaller-oracle runner.
+
+ARM64 disassembly confirms that the two per-row loads of `request.distinct`
+disappear. The accepted query body contains 796 instructions; the new true/false
+bodies contain 799 and 780 respectively, including exception paths. The false
+body still has a cleanup reference to the table destructor, so this is not a
+claim that every trace of unused table state disappears. The resulting total
+code is larger. No timing conclusion follows from those static counts alone.
+
+All eighteen fresh seven-pair series complete, with 540 valid host boundaries
+and maximum load1 3.153. The repeated non-distinct losses reject this version
+too: ordinary CPU 0.969907→0.992770 ms (1/7), shuffled 1.392900→1.422697 (0/7),
+reverse 0.949847→0.965890 (1/7), tied 0.967037→0.987213 (0/7), beginning disorder
+0.956837→0.982943 (1/7), middle 0.956907→0.982350 (0/7), end
+0.958547→0.984637 (0/7). Heap non-distinct is mixed at 3/7. Duplicate-heavy
+distinct is adverse at 2/7, singleton 2/7 and empty 3/7. Ordinary gb/GST,
+no-match, shuffled-distinct, long and old-snapshot distinct CPU win 7/7; heap
+distinct wins 6/7. Full mean/p95 values, sources and raw pairs are retained in
+`first-screen.json` and `/tmp/telar-perf-history-flat-dedup-specialized-*-pairs-01`.
+No series is rerun for a different outcome. No production/runtime/native
+promotion occurs; the non-distinct regression's cause remains unisolated.
+
+Inspecting the accepted recency sort reveals an independent lead: libc++'s
+introsort instantiation receives a function pointer and invokes it indirectly
+(for example ARM64 `blr` at `0x10000652c`, `0x100006540` and `0x100006568`). A
+new isolated candidate passes a stateless typed comparator instead, preserving
+the accepted containers and ordering algorithm. It does not inherit either
+flat-table variant, their memory tradeoff, or the rejected order detector. Any
+gain from removing those calls still requires fresh paired evidence.
