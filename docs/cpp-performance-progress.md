@@ -5685,3 +5685,74 @@ since the measured build. A is the accepted `9661f8aa…` GUI, with identical
 `final-build-equivalence.json`. Pending runtime pacing and optical changes are
 excluded. All F01–F16 remain open; these instrumented C++ comparisons do not
 establish independent Zig parity or native 120 Hz acceptance.
+
+## History burst and delayed-response controls, 2026-11-03
+
+The accepted production stack remains GUI `9bf92e97…` and runtime `1f1849d1…`
+from source HEAD `50f72f1a6`. The 60 ms history debounce is unchanged. Source
+inspection confirms that each expired timer sends a new query; HistoryBrowser
+tracks at most 128 outstanding requests and retires obsolete replies without
+presenting them. Removing the timer without testing typing bursts could therefore
+trade lower isolated-query latency for more obsolete runtime work.
+
+`tools/gui_history_latency.py` now accepts `--burst-ms`, `--trace-history`,
+`--delay-history QUERY=MS`, `--callback-drain-ms`, and
+`--burst-main-stall-ms`. Bursts replace the selected query with individual composed
+characters through the native text input client. A separate serial producer offers
+characters at fixed deadlines, independently of the GUI thread. Each event records
+its intended deadline, actual enqueue time, delivery time and resulting text.
+Producer and delivery spans are checked separately against the existing 5%
+tolerance. A failed rate check remains visible and excludes timing claims; it
+does not erase a useful functional or queueing diagnostic. Last-character latency
+is distinguished from the recorded whole-burst input timeline.
+
+`HistoryQueryTrace` is an owned Unix-socket relay, with at most 4,096 recorded
+queries/replies and 128 pending history requests per connection. Without delays it
+preserves mixed-frame order and bytes. Selected replies can be delayed, allowing
+newer results to arrive first. The census records request identities, query text,
+frame hashes and receive/forward timestamps. It never enters a primary direct-
+runtime performance series. Six socket tests verify byte/order preservation,
+deliberate reordering, failure retirement, duplicate identities, truncated queries
+and bounded capacity. Run them with
+`python3 services/gui-cpp/tools/test_history_query_trace.py`.
+
+The presentation observer also checks the latest positively presented ROI after
+the drain interval, including unmatched images, instead of remembering only the
+last matching template. Callback order cannot substitute for presentation order.
+The new `--negative late-stale` control poisons the final-match metadata after a
+real first match; it must fail even though a valid initial result was seen. This
+is an observer negative control, not an actual production stale-result defect.
+
+Final qualification is recorded in
+`out-perf/dlls-history-query-scheduling-01/burst-qualification-final.json` and
+`final-qualification-receipt.json`, with raw owned runs under
+`/tmp/telar-perf-history-query-scheduling-*-02`. All ten runs use identical final
+tool source hashes and unchanged production binaries. Thirty load boundaries
+pass, maximum load1 1.951, and every owned GUI/runtime exits completely. The
+Objective-C observer passes a warnings-enabled syntax check without diagnostics.
+
+* Whole-query replacement passes two native trials.
+* Four alternating gb/GST bursts at 15 ms per character send only the four final
+  queries, after the two setup queries. The rate check fails on short-span jitter;
+  these observations are functional evidence only.
+* Four bursts at 45 ms also send only the four final queries and meet the rate
+  tolerance.
+* Four bursts at 90 ms send ten queries, including G, GS and g prefixes. Delaying
+  those prefixes by 300–500 ms produces a peak of three pending requests. All six
+  obsolete replies are forwarded 213–409 ms after the corresponding final reply;
+  the correct final ROI survives the 750 ms observation interval. The input rate
+  qualifies and every recorded reply is forwarded.
+* A 200 ms main-thread stall is observed as up to 202.652 ms of main-queue delay.
+  The producer continues offering events; compressed delivery correctly fails the
+  rate check. Both native final results still match.
+* Stale, missing, zero-timestamp, missing-callback and late-stale controls all
+  fail with their expected errors. Their driver exit status is zero because the
+  intended negative result is verified, not because the trial passed.
+
+These are diagnostic controls, not an A/B speedup or a claim that the observer
+has negligible overhead. Sustained outstanding-request pressure, large-history
+bursts, changed scheduling policy and full cross-stack comparisons remain open.
+No production scheduling candidate is adopted. The next algorithmic investigation
+must account for obsolete query work and bounded reuse of repeated history work,
+including invalidation after writes and external database changes. All F01–F16
+and native120 acceptance remain open.
