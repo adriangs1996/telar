@@ -2,6 +2,7 @@
 
 #include "application/dependencies.hpp"
 #include "machines/failure.hpp"
+#include "platform/shared_image_source.hpp"
 #include "remote_bridge.hpp"
 #include "telar_client/serializers/telar_handshake.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
@@ -43,6 +44,16 @@ public:
   void finishSession() noexcept;
   void resumeSession();
   [[nodiscard]] bool ready() const noexcept;
+  [[nodiscard]] bool supportsSharedMemory() const noexcept {
+    return accepted_ && !remote_target_;
+  }
+  [[nodiscard]] platform::SharedImageSource sharedImage(std::string_view name) const {
+    if (!supportsSharedMemory()) {
+      throw EncodingError{"Shared graphics requires a local runtime"};
+    }
+
+    return platform::SharedImageSource{name};
+  }
   [[nodiscard]] const SchemaId &schema() const noexcept {
     return schema_;
   }

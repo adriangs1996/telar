@@ -61,6 +61,20 @@ public:
       ++chunks_;
     }
 
+    template <typename Source>
+    bool readShared(Source &source) {
+      if (received_ != 0 || chunks_ != 0) {
+        throw EncodingError{"Shared image already received pixels"};
+      }
+
+      if (!source.read(std::span<Byte>{pixels_, static_cast<std::size_t>(description_.byte_len)})) {
+        return false;
+      }
+
+      received_ = description_.byte_len;
+      return true;
+    }
+
     [[nodiscard]] bool ready() const noexcept {
       return received_ == description_.byte_len;
     }
@@ -214,6 +228,25 @@ public:
     }
 
     return false;
+  }
+
+  template <typename Source>
+  bool sharedImage(const GraphicsSharedImage &message, Source &source) {
+    if (!accept(message.header.revision)) {
+      return false;
+    }
+
+    image(GraphicsImage{.header = message.header, .image = message.image});
+    auto *received = findImage(message.image.key);
+    if (received == nullptr || !received->readShared(source)) {
+      requireSnapshot();
+
+      throw GraphicsResyncRequired{};
+    }
+
+    retireOtherGenerations(message.image.key);
+    ++revision_;
+    return true;
   }
 
   bool placement(const GraphicsPlacementMessage &message) {

@@ -16,6 +16,12 @@
 
 namespace telar::gui::platform {
 
+bool supportsImmediateWindowUpdates() {
+  return false;
+}
+
+void deliverPendingWindowUpdate(QWindow &) {}
+
 namespace {
 
 class WaylandSurfaceLifetime final : public QObject {

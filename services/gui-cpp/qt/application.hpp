@@ -652,6 +652,7 @@ private:
   [[nodiscard]] TerminalItem *visibleTerminal(std::uint64_t pane_id) const;
   [[nodiscard]] std::size_t collectPacingPanes(std::span<FramePacer::Pane, PaneLayout::maximum_panes> panes) const;
   void reconsiderFrame();
+  void requestTerminalFrame();
   void configureFramePacer();
   void prepareImagePlacements();
   void configureWindow();

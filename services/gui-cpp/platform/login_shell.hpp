@@ -19,10 +19,13 @@ const char *script(std::string_view shell);
 class Command final {
 public:
   Command();
+  ~Command() = default;
   Command(const Command &) = delete;
   Command &operator=(const Command &) = delete;
+  Command(Command &&) = delete;
+  Command &operator=(Command &&) = delete;
 
-  std::span<const std::string_view> arguments() const;
+  [[nodiscard]] std::span<const std::string_view> arguments() const;
 
 private:
   std::string shell_;

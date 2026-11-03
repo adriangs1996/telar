@@ -183,7 +183,7 @@ public:
     metrics_ = {};
     proxy_ = {};
     transport_.send(RequestRuntimeState{.client_identity = identity, .interactive = true});
-    transport_.send(ConfigureGraphics{false});
+    transport_.send(ConfigureGraphics{supportsSharedGraphics()});
     configureCadence();
   }
 
@@ -303,6 +303,8 @@ public:
       return dispatch.template operator()<GraphicsSnapshot>();
     case ServerTag::graphics_image:
       return dispatch.template operator()<GraphicsImage>();
+    case ServerTag::graphics_shared_image:
+      return dispatch.template operator()<GraphicsSharedImage>();
     case ServerTag::graphics_image_chunk:
       return dispatch.template operator()<GraphicsImageChunk>();
     case ServerTag::graphics_placement:
@@ -747,7 +749,7 @@ public:
       transport_.send(PaneInput{.pane_id = pane_id, .bytes = pending_bytes.first(count)});
       if constexpr (PaneInputObserver<Effects>) {
         if (source != PaneInputSource::terminal_report && pending_bytes.size() == bytes.size()) {
-          effects_.notePaneInput({.pane_id = pane->id, .frame_id = pane->screen.frameId(), .attached = pane->attached, .attachment_generation = pane->attachment_generation}, Clock::nowNanoseconds());
+          effects_.notePaneInput({.pane_id = pane->id, .frame_id = pane->screen.frameId(), .attached = pane->attached, .attachment_generation = pane->attachment_generation, .graphics_revision = pane->graphics.revision()}, Clock::nowNanoseconds());
         }
       }
 
@@ -2512,7 +2514,7 @@ private:
 
   template <typename Message, ClientCommandHandler Handler>
   Change dispatchMessage(std::span<const Byte> payload, DecodeStorage &storage, Handler &handler) {
-    if constexpr (std::same_as<Message, GraphicsSnapshot> || std::same_as<Message, GraphicsImage> || std::same_as<Message, GraphicsImageChunk> || std::same_as<Message, GraphicsPlacementMessage> || std::same_as<Message, GraphicsDeleteImage> || std::same_as<Message, GraphicsDeletePlacement>) {
+    if constexpr (std::same_as<Message, GraphicsSnapshot> || std::same_as<Message, GraphicsImage> || std::same_as<Message, GraphicsSharedImage> || std::same_as<Message, GraphicsImageChunk> || std::same_as<Message, GraphicsPlacementMessage> || std::same_as<Message, GraphicsDeleteImage> || std::same_as<Message, GraphicsDeletePlacement>) {
       try {
         const auto change = apply(Codec::decode<Message>(payload, storage));
         resumeGraphics();
@@ -2530,8 +2532,8 @@ private:
     }
   }
 
-  template <typename Message>
-  Change applyGraphics(const Message &message) {
+  template <typename Message, typename Source = std::nullptr_t>
+  Change applyGraphics(const Message &message, Source source = nullptr) {
     auto *pane = findPane(message.header.pane_id);
     if (pane == nullptr || !pane->attached) {
       return Change::none;
@@ -2546,6 +2548,8 @@ private:
         }
       } else if constexpr (std::same_as<Message, GraphicsImage>) {
         changed = pane->graphics.image(message);
+      } else if constexpr (std::same_as<Message, GraphicsSharedImage>) {
+        changed = pane->graphics.sharedImage(message, source);
       } else if constexpr (std::same_as<Message, GraphicsImageChunk>) {
         changed = pane->graphics.chunk(message);
       } else if constexpr (std::same_as<Message, GraphicsPlacementMessage>) {
@@ -2668,6 +2672,24 @@ private:
 
   Change apply(const GraphicsImage &message) {
     return applyGraphics(message);
+  }
+
+  [[nodiscard]] bool supportsSharedGraphics() const noexcept {
+    if constexpr (requires { transport_.supportsSharedMemory(); }) {
+      return transport_.supportsSharedMemory();
+    }
+
+    return false;
+  }
+
+  Change apply(const GraphicsSharedImage &message) {
+    if constexpr (requires { transport_.sharedImage(message.name); }) {
+      if (supportsSharedGraphics()) {
+        return applyGraphics(message, transport_.sharedImage(message.name));
+      }
+    }
+
+    throw EncodingError{"Shared graphics was not negotiated"};
   }
 
   Change apply(const GraphicsImageChunk &message) {

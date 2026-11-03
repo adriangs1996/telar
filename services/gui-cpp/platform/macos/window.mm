@@ -9,6 +9,7 @@
 #include <QSGRendererInterface>
 #include <QWindow>
 #include <QtCore/qtenvironmentvariables.h>
+#include <qpa/qplatformwindow.h>
 #include <bit>
 #include <cmath>
 #include <cstdint>
@@ -16,6 +17,16 @@
 #include <tuple>
 
 namespace telar::gui::platform {
+
+bool supportsImmediateWindowUpdates() {
+  return QGuiApplication::platformName() == QLatin1StringView{"cocoa"};
+}
+
+void deliverPendingWindowUpdate(QWindow &window) {
+  if (auto *handle = window.handle(); handle != nullptr && handle->hasPendingUpdateRequest()) {
+    handle->deliverUpdateRequest();
+  }
+}
 
 namespace {
 

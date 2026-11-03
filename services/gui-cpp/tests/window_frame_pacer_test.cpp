@@ -24,6 +24,7 @@ using telar::gui::test::waitForGuiCondition;
 constexpr int wait_ms = 2000;
 constexpr std::uint64_t started_ns = FramePacer::nanoseconds_per_second;
 constexpr std::uint64_t next_input_ns = started_ns + 1;
+constexpr std::uint64_t idle_input_ns = started_ns + (2 * FramePacer::maximum_interval_ns);
 
 struct ControlledClock {
   static inline std::uint64_t now_ns = started_ns;
@@ -175,6 +176,184 @@ private:
     },
                                 wait_ms));
     QCOMPARE(ControlledClock::now_ns, next_input_ns);
+    QVERIFY(!window.framePacer().pending());
+  }
+
+  Q_SLOT static void outputRequestsAFrameBeforeThePlatformUpdate() {
+    FrameFixture window;
+    ControlledClock::now_ns = idle_input_ns;
+    window.framePacer().noteInput(window.pane(), ControlledClock::now_ns);
+    ++window.pane().frame_id;
+    window.framePacer().requestInputFrame(window.pane());
+    window.framePacer().requestInputFrame(window.pane());
+    QCOMPARE(window.admitted(), 0);
+
+    QVERIFY(waitForGuiCondition([&] {
+      return window.admitted() == 1;
+    },
+                                wait_ms));
+    QVERIFY(!window.framePacer().pending());
+
+    constexpr int observation_ms = 50;
+    QVERIFY(!waitForGuiCondition([&] {
+      return window.admitted() != 1;
+    },
+                                 observation_ms));
+  }
+
+  Q_SLOT static void inputDuringContinuousRenderingKeepsPlatformDelivery() {
+    FrameFixture window;
+    ControlledClock::now_ns = next_input_ns;
+    window.framePacer().noteInput(window.pane(), ControlledClock::now_ns);
+    ++window.pane().frame_id;
+    window.framePacer().requestInputFrame(window.pane());
+    QVERIFY(!window.framePacer().pending());
+    QCOMPARE(window.admitted(), 0);
+
+    window.request();
+    QCOMPARE(window.admitted(), 1);
+  }
+
+  Q_SLOT static void graphicsOnlyInputRequestsOneFrameAfterIdle() {
+    FrameFixture window;
+    ControlledClock::now_ns = idle_input_ns;
+    window.framePacer().noteInput(window.pane(), ControlledClock::now_ns);
+    ++window.pane().graphics_revision;
+    window.framePacer().requestInputFrame(window.pane());
+    QVERIFY(window.framePacer().pending());
+    QVERIFY(waitForGuiCondition([&] {
+      return window.admitted() == 1;
+    },
+                                wait_ms));
+
+    ControlledClock::now_ns += 2 * FramePacer::maximum_interval_ns;
+    window.framePacer().noteInput(window.pane(), ControlledClock::now_ns);
+    window.framePacer().requestInputFrame(window.pane());
+    QVERIFY(!window.framePacer().pending());
+    QCOMPARE(window.admitted(), 1);
+  }
+
+  Q_SLOT static void graphicsGraceRequiresFreshAttachedOutputAndDoesNotRefreshItsDeadline() {
+    FramePacer pacing;
+    FramePacer::Pane pane{.pane_id = 1, .frame_id = 4, .attached = true, .attachment_generation = 2, .graphics_revision = 3};
+    pacing.noteInput(pane, started_ns);
+    QVERIFY(!pacing.canAdvanceInput(pane, next_input_ns));
+    ++pane.graphics_revision;
+    QVERIFY(pacing.canAdvanceInput(pane, next_input_ns));
+
+    auto stale = pane;
+    --stale.frame_id;
+    QVERIFY(!pacing.canAdvanceInput(stale, next_input_ns));
+    stale = pane;
+    stale.graphics_revision -= 2;
+    ++stale.frame_id;
+    QVERIFY(!pacing.canAdvanceInput(stale, next_input_ns));
+    pacing.noteInput(stale, next_input_ns);
+    QVERIFY(!pacing.canAdvanceInput(pane, started_ns + FramePacer::input_grace_ns));
+
+    auto detached = pane;
+    detached.attached = false;
+    QVERIFY(!pacing.canAdvanceInput(detached, next_input_ns));
+    ++pane.attachment_generation;
+    QVERIFY(!pacing.canAdvanceInput(pane, next_input_ns));
+  }
+
+  Q_SLOT static void graphicsGraceConsumesTheExistingFrameBudget() {
+    FramePacer pacing;
+    pacing.configure(FramePacer::maximum_interval_ns, std::nullopt);
+    std::array panes{FramePacer::Pane{.pane_id = 1, .frame_id = 1, .attached = true, .attachment_generation = 1}};
+    pacing.record(panes, started_ns);
+    pacing.noteInput(panes.front(), next_input_ns);
+    for (std::uint32_t index = 0; index < FramePacer::input_frame_budget; ++index) {
+      ++panes.front().graphics_revision;
+      QVERIFY(!pacing.waitUntil(panes, next_input_ns));
+      pacing.record(panes, next_input_ns);
+      QVERIFY(pacing.waitUntil(panes, next_input_ns));
+    }
+
+    ++panes.front().graphics_revision;
+    QVERIFY(pacing.waitUntil(panes, next_input_ns));
+  }
+
+  Q_SLOT static void earlyInputDeliveryRequiresTwoIdleIntervals() {
+    FrameFixture window;
+    ControlledClock::now_ns = idle_input_ns - 1;
+    window.framePacer().noteInput(window.pane(), ControlledClock::now_ns);
+    ++window.pane().frame_id;
+    window.framePacer().requestInputFrame(window.pane());
+    QVERIFY(!window.framePacer().pending());
+
+    ++ControlledClock::now_ns;
+    window.framePacer().requestInputFrame(window.pane());
+    QVERIFY(waitForGuiCondition([&] {
+      return window.admitted() == 1;
+    },
+                                wait_ms));
+    QVERIFY(!window.framePacer().pending());
+  }
+
+  Q_SLOT static void backgroundOutputDoesNotAdvancePlatformDelivery() {
+    FrameFixture window;
+    ++window.pane().frame_id;
+    window.framePacer().requestInputFrame(window.pane());
+    QVERIFY(!window.framePacer().pending());
+
+    ControlledClock::now_ns += FramePacer::maximum_interval_ns;
+    window.framePacer().requestInputFrame(window.pane());
+    QVERIFY(!window.framePacer().pending());
+    QCOMPARE(window.admitted(), 0);
+
+    window.request();
+    QCOMPARE(window.admitted(), 1);
+  }
+
+  Q_SLOT static void onlyANewFrameFromTheInputAttachmentCanAdvanceDelivery() {
+    FrameFixture window;
+    ControlledClock::now_ns = idle_input_ns;
+    window.framePacer().noteInput(window.pane(), ControlledClock::now_ns);
+    window.framePacer().requestInputFrame(window.pane());
+    QVERIFY(!window.framePacer().pending());
+
+    auto other = window.pane();
+    ++other.pane_id;
+    ++other.frame_id;
+    window.framePacer().requestInputFrame(other);
+    QVERIFY(!window.framePacer().pending());
+
+    other = window.pane();
+    ++other.attachment_generation;
+    ++other.frame_id;
+    window.framePacer().requestInputFrame(other);
+    QVERIFY(!window.framePacer().pending());
+
+    other = window.pane();
+    ++other.frame_id;
+    other.attached = false;
+    window.framePacer().requestInputFrame(other);
+    QVERIFY(!window.framePacer().pending());
+
+    ++window.pane().frame_id;
+    ControlledClock::now_ns += FramePacer::input_grace_ns;
+    window.framePacer().requestInputFrame(window.pane());
+    QVERIFY(!window.framePacer().pending());
+    QCOMPARE(window.admitted(), 0);
+  }
+
+  Q_SLOT static void hidingBeforeOutputDeliveryCancelsTheRequest() {
+    FrameFixture window;
+    ControlledClock::now_ns = idle_input_ns;
+    window.framePacer().noteInput(window.pane(), ControlledClock::now_ns);
+    ++window.pane().frame_id;
+    window.framePacer().requestInputFrame(window.pane());
+    QVERIFY(window.framePacer().pending());
+    window.hide();
+
+    QVERIFY(waitForGuiCondition([&] {
+      return !window.framePacer().pending();
+    },
+                                wait_ms));
+    QCOMPARE(window.admitted(), 0);
+    window.framePacer().requestInputFrame(window.pane());
     QVERIFY(!window.framePacer().pending());
   }
 

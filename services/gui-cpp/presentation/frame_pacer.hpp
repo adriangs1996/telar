@@ -19,6 +19,7 @@ public:
     std::uint64_t frame_id = 0;
     bool attached = false;
     std::uint64_t attachment_generation = 0;
+    std::uint64_t graphics_revision = 0;
   };
 
   static constexpr std::uint64_t nanoseconds_per_second = 1'000'000'000;
@@ -80,6 +81,17 @@ public:
     inputs_[vacant.value_or(oldest)] = InputGrace{.pane = pane, .started_ns = now_ns};
   }
 
+  [[nodiscard]] bool canAdvanceInput(Pane pane, std::uint64_t now_ns) const noexcept {
+    constexpr std::uint64_t idle_intervals = 2;
+    if (last_preparation_ns_ && (now_ns < *last_preparation_ns_ || now_ns - *last_preparation_ns_ < interval_ns_ * idle_intervals)) {
+      return false;
+    }
+
+    return std::ranges::any_of(inputs_, [&](const auto &grace) {
+      return grace && grace->active(now_ns) && grace->includes(pane);
+    });
+  }
+
   [[nodiscard]] std::optional<std::uint64_t> waitUntil(std::span<const Pane> panes, std::uint64_t now_ns) const noexcept {
     if (ordinaryAvailable(now_ns)) {
       return std::nullopt;
@@ -121,6 +133,7 @@ public:
     }
 
     anchor_ns_ = scheduled ? *due_ns : now_ns;
+    last_preparation_ns_ = now_ns;
   }
 
 private:
@@ -130,11 +143,11 @@ private:
     std::uint32_t frames_left = input_frame_budget;
 
     [[nodiscard]] bool includes(Pane candidate) const noexcept {
-      return candidate.attached && candidate.pane_id == pane.pane_id && candidate.attachment_generation == pane.attachment_generation && candidate.frame_id > pane.frame_id;
+      return candidate.attached && candidate.pane_id == pane.pane_id && candidate.attachment_generation == pane.attachment_generation && candidate.frame_id >= pane.frame_id && candidate.graphics_revision >= pane.graphics_revision && (candidate.frame_id > pane.frame_id || candidate.graphics_revision > pane.graphics_revision);
     }
 
     [[nodiscard]] bool rejects(Pane candidate, std::uint64_t now_ns) const noexcept {
-      return pane.attachment_generation > candidate.attachment_generation || now_ns < started_ns || (pane.attachment_generation == candidate.attachment_generation && pane.frame_id > candidate.frame_id);
+      return pane.attachment_generation > candidate.attachment_generation || now_ns < started_ns || (pane.attachment_generation == candidate.attachment_generation && (pane.frame_id > candidate.frame_id || pane.graphics_revision > candidate.graphics_revision));
     }
 
     [[nodiscard]] bool active(std::uint64_t now_ns) const noexcept {
@@ -153,6 +166,7 @@ private:
   std::array<std::optional<InputGrace>, capacity> inputs_{};
   std::uint64_t interval_ns_ = default_interval_ns;
   std::optional<std::uint64_t> anchor_ns_;
+  std::optional<std::uint64_t> last_preparation_ns_;
 };
 
 }

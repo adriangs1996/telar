@@ -407,7 +407,7 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *previous, [[maybe_unused]] Updat
   };
   auto *node = TerminalScene::synchronizeNode(previous, *window(), frame);
   prepared_frame_ = {
-      .pane = {.pane_id = current->id, .frame_id = current->screen.frameId(), .attached = current->attached, .attachment_generation = current->attachment_generation},
+      .pane = {.pane_id = current->id, .frame_id = current->screen.frameId(), .attached = current->attached, .attachment_generation = current->attachment_generation, .graphics_revision = current->graphics.revision()},
       .links = prepareLinkPresentation(),
       .revision = prepared_frame_.revision + 1,
   };

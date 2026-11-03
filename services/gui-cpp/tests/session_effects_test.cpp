@@ -114,6 +114,8 @@ void acceptedInputObservesTheQueuedPaneIdentity() {
   openFirstPane(client, transport);
   const auto *pane = client.focusedPane();
   require(pane != nullptr, "input observation requires the opened pane");
+  client.findPane(pane->id)->graphics.detach();
+  require(pane->graphics.revision() != 0, "input observation must exercise a nonzero graphics revision");
   client.input(pane->id, "a");
   client.input(pane->id, "b", PaneInputSource::mouse);
   client.input(pane->id, "c", PaneInputSource::key_release);
@@ -124,6 +126,7 @@ void acceptedInputObservesTheQueuedPaneIdentity() {
   for (std::size_t index = 0; index < observations.count; ++index) {
     const auto &entry = observations.entries[index];
     require(entry.pane.pane_id == pane->id && entry.pane.attached && entry.pane.attachment_generation == pane->attachment_generation && entry.pane.frame_id == pane->screen.frameId(), "input grace must retain the actual frame and attachment identity");
+    require(entry.pane.graphics_revision == pane->graphics.revision(), "input grace must retain the current graphics revision");
     require(entry.at_ns == InputClock::now_ns && entry.queued_inputs == index + 1, "the clock and observation must follow successful transport admission");
   }
 }

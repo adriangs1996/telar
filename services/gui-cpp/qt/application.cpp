@@ -568,7 +568,7 @@ std::size_t Application::collectPacingPanes(std::span<FramePacer::Pane, PaneLayo
     }
 
     if (const auto *pane = session().findPane(leaf->pane_id); pane != nullptr && pane->attached) {
-      panes[count++] = {.pane_id = pane->id, .frame_id = pane->screen.frameId(), .attached = true, .attachment_generation = pane->attachment_generation};
+      panes[count++] = {.pane_id = pane->id, .frame_id = pane->screen.frameId(), .attached = true, .attachment_generation = pane->attachment_generation, .graphics_revision = pane->graphics.revision()};
     }
   }
 
@@ -596,6 +596,34 @@ void Application::reconsiderFrame() {
   std::array<FramePacer::Pane, PaneLayout::maximum_panes> panes;
   const auto count = collectPacingPanes(panes);
   frame_pacer_->reconsider(std::span{panes}.first(count));
+}
+
+void Application::requestTerminalFrame() {
+  if (!platform::supportsImmediateWindowUpdates()) {
+    reconsiderFrame();
+
+    return;
+  }
+
+  if (!frame_pacer_) {
+    return;
+  }
+
+  if (frame_pacer_->pending()) {
+    reconsiderFrame();
+
+    return;
+  }
+
+  const auto pane_id = session().changedPane();
+  const auto *tab = session().activeTab();
+  if (tab == nullptr || !tab->layout.contains(pane_id) || (tab->fullscreen && tab->focused_pane != pane_id) || visibleTerminal(pane_id) == nullptr) {
+    return;
+  }
+
+  if (const auto *pane = session().findPane(pane_id); pane != nullptr && pane->attached && frame_pacer_) {
+    frame_pacer_->requestInputFrame({.pane_id = pane->id, .frame_id = pane->screen.frameId(), .attached = true, .attachment_generation = pane->attachment_generation, .graphics_revision = pane->graphics.revision()});
+  }
 }
 
 void Application::configureFramePacer() {
@@ -746,7 +774,7 @@ void Application::presentChange(Change change) {
       emit pathPickerGeometryChanged();
     }
 
-    reconsiderFrame();
+    requestTerminalFrame();
     break;
   case Change::paths:
     refreshPathPicker();
