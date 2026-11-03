@@ -30,10 +30,24 @@ descriptor test because its process limit is 2560 but it requests descriptor
 that same test binary passes, including the atomic-runtime checks. All 36 entries
 are therefore verified; the initial failure is retained, not relabeled successful.
 
-The GUI now uses the repository's managed Qt recipe, including its pinned patch.
-It is building in a new private cache. Complete GUI compilation/tests and new
-native measurements remain pending. Earlier installed-Qt measurements below are
-historical evidence, not performance qualification of this new dependency/base.
+The GUI now builds successfully with the repository's managed Qt recipe and
+pinned patch in a new private cache. The complete suite passes 128/131 entries;
+the two known stale fixtures and the Quick suite's CTest timeout remain in the
+initial log. The handshake fixture now expects the actual schema identifier in
+the exact refusal text. The activity fixture supplies materialized workspace
+entries and refreshed connection metadata, checks canonical OpenPane navigation,
+and completes a denied request before checking detached-worktree rejection.
+The first fixture revision used a missing-pane failure, which correctly triggered
+the existing fallback and left a request pending; that failed trial is retained.
+Activity, handshake and workspace-navigation checks now all pass. Production
+behavior was not changed. The complete Quick executable is running directly;
+its result and new native measurements remain pending.
+
+A fresh original-Zig ReleaseFast reference also builds from this branch with the
+new font/theme assets, SHA-256
+`6ccf79485c5ca8baaa2d69d2590abb49d23c808891c04fe6e70f5602713a1d5e`.
+Earlier installed-Qt measurements below are historical evidence, not performance
+qualification of this new dependency/base.
 The rejected image prototypes remain isolated artifacts and were not promoted
 into the production working tree during the migration.
 
