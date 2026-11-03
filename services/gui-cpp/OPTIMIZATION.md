@@ -366,3 +366,57 @@ tests and VM results do not establish native frame latency.
 
 Keep concise findings and decisions here or in PARITY. Generated results, profiles,
 screenshots and frozen binaries belong in ignored `out*/` or private storage.
+
+## Native history query observer
+
+`tools/gui_history_latency.py` launches an isolated, explicitly selected runtime
+and GUI, then alternates two history queries through native text input. It requires
+macOS with the Metal4 SDK, clang and Pillow. The companion Objective-C probe uses
+the ordinary Metal or Metal4 render submission to copy a bounded result region;
+it accepts only matching pixels on that drawable with a positive presentation
+timestamp. It checks focus, geometry, VSync, executable identities and host load,
+and cleans up its owned processes. `--help` lists the inputs.
+
+Supply a SQLite history fixture, a configuration shared by both stacks, and a case
+JSON such as this. Coordinates are physical drawable pixels; viewport dimensions
+are native points. Template paths are relative to the case file unless absolute.
+
+```json
+{
+  "viewport": [1600, 1000],
+  "drawable": [3200, 2000],
+  "region": [320, 1592, 512, 48],
+  "queries": [
+    {"text": "gb", "template": "selected-build.bgra"},
+    {"text": "GST", "template": "selected-status.bgra"}
+  ]
+}
+```
+
+Each template is tightly packed BGRA8 from an independently verified native result
+capture. The region must identify different returned content and exclude the query
+field. Templates are not an independent ranking oracle and separate renderer
+templates do not prove visual parity. Validate raw pixels with `--observe-only`
+before timing; use the stale/missing/zero `--negative` controls to qualify rejection.
+The `callback` control withholds one drawable completion while allowing a later
+verified result, and checks that the driver still refuses to advance. Positive
+trials require all submitted drawables to finish both pixel and presentation
+callbacks. ROI rows are aligned for Metal transfer and compared without padding.
+
+```sh
+python3 tools/gui_history_latency.py out-history-query \
+  --kind cpp --runtime /path/to/stage/telar --gui /path/to/stage/telar-gui \
+  --qt-prefix /path/to/qt/install --config /path/to/shared.lua \
+  --fixture /path/to/history.db --case /path/to/case.json --samples 60
+```
+
+For Zig, pass `--kind zig` and the independent Zig executable as both `--runtime`
+and `--gui`. The native endpoint begins immediately before replacing selected
+query text, so application debounce is included. Selection preparation and the
+50 ms inter-query callback drain are excluded from individual latency samples but
+included in GUI/runtime resource intervals. These are warm query replacements,
+not cold-query, sustained typing or native120 acceptance. Resource snapshots are
+separate for GUI and runtime; lifetime footprint maxima are not interval peaks.
+Hook `elapsed_ns` fields measure wall time, not process CPU, and submission GPU
+time includes rendering as well as readback. Observer perturbation still needs
+qualification before using small timing differences to accept an optimization.

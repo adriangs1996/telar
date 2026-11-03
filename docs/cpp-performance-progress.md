@@ -5060,7 +5060,9 @@ before query measurement. Median paired results are:
 The p99 result is mixed, not a consistent tail-latency improvement. End footprints
 and lifetime maxima are not interval peaks. Instrumented commit/encoder/drawable/
 completion/record hooks account for approximately 0.305/0.274 ms per query cycle;
-this excludes the native input driver and does not isolate GPU readback
+these are elapsed wall durations, despite the old scratch schema's `cpu_ns`
+suffix. The reusable observer uses `elapsed_ns`. This excludes the native input
+driver and does not isolate GPU readback
 perturbation. GPU work counters cover the whole render submission, not just the
 copy. The manifests therefore retain `adoption_eligible: false`: this is a
 completed instrumented comparison, with observer overhead and independent Zig F12
@@ -5088,6 +5090,90 @@ history panel temporarily sets its model to null on removal and restores it with
 its causal CPU/latency contribution has not yet been measured. A bounded page
 replacement strategy should be tested against overlap, identical refresh,
 deletion, paging and stale-action controls before changing production behavior.
+
+### Independent Metal4 observer and history text rasterization diagnosis
+
+`tools/gui_history_latency.py` and `.m` provide the native history observer as
+reusable source. The caller supplies explicit GUI/runtime binaries, a shared
+configuration, a SQLite fixture and a JSON case with two queries, BGRA templates,
+viewport, drawable dimensions and ROI. The driver copies a consistent database
+snapshot, validates actual process identities, stages no installed applications,
+checks host load and owns cleanup. It supports ordinary Metal and Metal4 with the
+same pixel/presentation predicate. Metal4 uses three reusable readback slots and
+residency sets; each set contains its buffer and current source texture. It does
+not allocate a new residency set for every frame.
+
+`/tmp/telar-perf-history-metal4-raw-{gb,GST}-01` verifies both Zig templates against
+same-submission raw Metal4 bytes. `/tmp/telar-perf-history-metal4-query-01` passes
+12 alternating native replacements and records a diagnostic pixel timeline. The
+three stale/missing/zero detector injections under
+`/tmp/telar-perf-history-metal4-negative-{stale,missing,zero}-01` all reject the
+trial by timeout. The reusable driver also passes C++, Zig, raw-template and all
+three negative cases under `/tmp/telar-perf-history-public-*`. Final ordinary-Metal
+and Metal4 positive reruns use `public-final-cpp-01` and `public-final-zig-01`.
+The instructions and result/resource limitations are in
+`services/gui-cpp/OPTIMIZATION.md`. Neither these qualifications nor the earlier
+C++ A/B pairs establish the independent six-pair Zig comparison or native120.
+
+The final source builds the observer with `-O2`, reports aligned buffer bytes,
+and compares packed template rows without Metal transfer padding. It also refuses
+to advance while any submitted drawable lacks either its pixel or presentation
+callback. The final six-case cohort is
+`/tmp/telar-perf-history-public-joined-{cpp,zig,stale,missing,zero,callback}-01`:
+both positive runs complete 12 replacements with zero pending submissions; the
+Zig case uses a 511-pixel-wide ROI to exercise padded row transfer. All four
+negative controls reject, including a withheld callback despite a later verified
+positive result. Every cleanup and host boundary passes; maximum load1 is 1.740.
+`public-joined-padded-raw-01` additionally checks exact packed raw bytes. The probe
+also compiles for macOS x86-64; native execution here remains ARM64.
+
+An earlier `public-optimized-missing-01` run reached its expected detector timeout
+but its final load1 was 5.608, so that execution is excluded for performance and
+the interrupted qualification batch is superseded. No partial batch is reused as
+an accepted timing series. The earlier six-pair C++ comparison remains historical
+instrumented evidence; final acceptance requires remeasurement with the frozen
+reusable observer and its stronger callback-completion gate.
+
+The first 12-query Zig diagnostic produces 39.3–58.2 ms input-to-presented-result
+samples. This is not a paired performance result: it retains diagnostic pixel
+data and visual parity is still open. Source inspection identifies a timing
+difference to investigate: C++ starts its 60 ms history timer, whereas Zig's
+`name_prompt` history callback calls `history_palette.queryHistory`, which pushes
+the bounded request through `requestHistoryPage` without that debounce timer.
+Changing scheduling needs rapid-typing, cancellation and request-load controls;
+the timer has not been changed.
+
+The history glyph mismatch now has a concrete isolated experiment.
+`NativeCellText::updatePaintNode` calls `paintChromeText`, whose rasterization is
+always non-optical. Zig propagates the configured `thicken`/strength into its
+primary and fallback font faces. The private
+`out-perf/dlls-history-cell-optical-01` changes only the NativeCellText translation
+unit to call the existing optical terminal-text route for the already-thickened
+fixture. This deliberately forced route is diagnostic, not a configuration-aware
+fix or an accepted performance variant.
+
+Before that build, the configured GUI output still contained the unaccepted
+same-grid reservation experiment (`c2b1d042…`), although source had been restored.
+Rebuilding the accepted source restores `0d5ec9b958573ae7ee7a606a08e9d5537cc88606cca45467e2da8c27bd247f79`,
+the previously verified baseline that differs from `5a639c5f…` only in resource
+timestamps/signature metadata. Its complete `gb` PNG is byte-exact to the frozen
+history baseline. The private optical GUI is
+`6517982704afdb02ae3e1802b47a22f318eb72944778e0539a7600dd74cbb69b`;
+both sides retain corrected runtime `ffea7fb2…` and the same helper. The link map
+confirms the old NativeCellText archive member is not also linked.
+
+Captures `/tmp/telar-perf-history-cell-optical-{A-gb,B-gb,B-GST}-01` preserve native
+identity/focus/geometry/positive presentation and clean up all owned processes.
+The `gb` selected-command ROI changes from 2,287 mismatching pixels against Zig to
+two; `GST` also leaves two. Remaining channels differ by one level, including
+the same pixel at (347,1623) in both queries. Complete-image differences fall to
+22,261/22,282 pixels, so full visual parity is not achieved. The optical path
+explains most of the selected-command mismatch, but the remaining blend/raster
+rounding and other chrome text require investigation. No tolerance was substituted
+for exact equality. A production change must propagate configuration and handle
+reload/invalidation, non-optical mode, strengths, styles and fallback fonts before
+adoption. The separate history page-replacement algorithm remains a source-based
+lead rather than an implementation change.
 
 ## Coverage and next experiments
 
