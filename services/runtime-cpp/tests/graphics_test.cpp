@@ -3,7 +3,7 @@
 #include "graphics/media_budget.hpp"
 #include "graphics/png_decoder.hpp"
 #include "graphics/synchronizer.hpp"
-#include "platform/mapped_region.hpp"
+#include "telar_platform/mapped_region.hpp"
 #include "terminal/terminal.hpp"
 #include <sys/mman.h>
 #include <sys/stat.h>

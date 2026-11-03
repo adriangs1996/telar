@@ -2,7 +2,7 @@
 
 #include "atomic_frame.hpp"
 #include "child_file.hpp"
-#include "child_shared_memory.hpp"
+#include "telar_platform/graphics/child_shared_memory.hpp"
 
 namespace telar::runtime {
 

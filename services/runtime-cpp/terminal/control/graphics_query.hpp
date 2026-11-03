@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../../graphics/child_file.hpp"
-#include "../../graphics/child_shared_memory.hpp"
 #include "../../graphics/media_budget.hpp"
 #include "../../graphics/png_decoder.hpp"
 #include "../../graphics/query_resources.hpp"
@@ -11,6 +10,7 @@
 #include "graphics_payload.hpp"
 #include "reply.hpp"
 #include "telar_config/graphics/limits.hpp"
+#include "telar_platform/graphics/child_shared_memory.hpp"
 #include <cassert>
 #include <charconv>
 #include <zlib.h>

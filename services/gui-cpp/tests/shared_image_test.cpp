@@ -1,9 +1,9 @@
 #include "application/session.hpp"
 #include "assertions.hpp"
-#include "graphics/shared_image_storage.hpp"
 #include "graphics/store.hpp"
 #include "platform/shared_image_source.hpp"
 #include "session_fixture.hpp"
+#include "telar_platform/graphics/shared_image_storage.hpp"
 #include <algorithm>
 #include <array>
 #include <cerrno>

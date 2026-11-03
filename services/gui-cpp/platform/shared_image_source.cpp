@@ -1,6 +1,6 @@
 #include "shared_image_source.hpp"
-#include "graphics/child_shared_memory.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_platform/graphics/child_shared_memory.hpp"
 #include <algorithm>
 #include <array>
 #include <fcntl.h>

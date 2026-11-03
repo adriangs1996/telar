@@ -1,7 +1,7 @@
 #pragma once
 
-#include "child_name.hpp"
 #include "telar_platform/file_descriptor.hpp"
+#include "telar_platform/graphics/child_name.hpp"
 #include <algorithm>
 #include <array>
 #include <cerrno>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../platform/mapped_region.hpp"
+#include "telar_platform/mapped_region.hpp"
 #include <array>
 #include <atomic>
 #include <mutex>
