@@ -105,8 +105,8 @@ over a prefix such as `/usr/local` or `~/.local`.
 
 The build for servers, where remote mode runs the runtime, is the C++
 runtime and CLI without a window: `services/runtime-cpp` builds `telar`,
-`telar-runtime` and `telar-config-check` side by side. The release links
-every library but glibc into them ([details](#the-linux-headless-build)).
+`telar-runtime` and `telar-config-check` side by side. The release makes
+them static musl executables ([details](#the-linux-headless-build)).
 
 The desktop entry runs `telar gui --login-shell`, so the menu launch is the
 same path as the macOS bundle.
@@ -217,7 +217,7 @@ Sigstore. `gh attestation verify FILE --repo adriangs1996/telar` checks one.
 | macOS arm64 | `macos-26` | macOS 26.0 deployment target | `/usr/lib` and `/System/Library` only; Qt inside the bundle |
 | macOS x86_64 | `macos-26-intel` | same | same |
 | Linux desktop | `ubuntu-24.04`, `ubuntu-24.04-arm` | host glibc, baseline CPU | glibc, Wayland, Vulkan, xkbcommon, Fontconfig, ATK, GLib; glibc 2.38 or newer |
-| Linux headless | same | host glibc, Clang 18 | glibc 2.38 or newer and `libpcap.so.0.8`; every other library static |
+| Linux headless | same, in `alpine:3.22` | musl, Alpine's GCC | nothing: static musl, any Linux |
 
 The labels come from GitHub's
 [hosted runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
@@ -253,18 +253,26 @@ start and installs the headless one.
 
 ### The Linux headless build
 
-The headless archive is the C++ runtime and CLI. Unlike the Zig build it
-replaces, which was static musl and started on Alpine and any Linux 5.10 or
-newer, it needs glibc: 2.38 or newer when built on Ubuntu 24.04, so Debian
-12 (glibc 2.36) and Alpine do not run it. It also needs libpcap under
-Debian's soname, `libpcap.so.0.8` (the `libpcap0.8` package), because the
-distributions' static libpcap requires D-Bus, which none ships static; other
-distributions name it `libpcap.so.1`. Everything else is linked in. One
-more exception remains:
-`telar worktree resolve`, which `worktree fetch --machine` runs there,
-reads the history database through the system's `libsqlite3.so.0`, loaded
-only for that command; without it, a host with recorded history reports
-`RepositoryHistoryUnavailable`.
+The headless archive is the C++ runtime, CLI, configuration checker and
+diagram renderer, linked statically against musl, so it starts on any Linux
+and needs no library of the host. `linux-headless.sh` builds it in an
+Alpine container with Alpine's GCC: Alpine's static libraries carry GCC
+link-time-optimization objects, which Clang cannot link. The archive was
+started on Alpine 3.22, Debian 12 and Fedora, where `exec`, a pane and its
+text, `worktree resolve` over the history and `server stop` worked.
+
+What differs from a glibc build, in this code:
+
+- musl gives threads 128 KiB stacks unless the executable names a size; the
+  terminal engine overflows that, so the static build sets 8 MiB with
+  `-z stack-size`.
+- A static executable cannot `dlopen`, so the CLI links SQLite there
+  (`TELAR_LINKED_SQLITE`) for `worktree resolve`'s history lookup instead of
+  loading it on demand.
+- musl has no `arc4random_buf`, `renameat2`, `epoll_pwait2` or
+  `posix_spawn_file_actions_addclosefrom_np`. Random bytes come from
+  `getrandom`, the two calls go through `syscall`, and a child's extra
+  descriptors are marked close-on-exec in the parent instead.
 
 To reproduce a release build locally:
 
@@ -273,6 +281,7 @@ packaging/release/macos.sh build /tmp/stage   # Homebrew deps, Zig 0.17, Cargo
 packaging/release/sign-macos.sh /tmp/stage    # ad hoc without MACOS_SIGNING_IDENTITY
 packaging/release/macos.sh package /tmp/stage dist
 packaging/release/linux.sh dist   # Ubuntu 24.04, after install-linux-deps.sh
+packaging/release/linux-headless.sh dist   # Alpine, after install-alpine-deps.sh
 ```
 
 `GHOSTTY_VT_ROOT` reuses an existing libghostty-vt build and

@@ -136,7 +136,7 @@ endif()
 # The installed executables may link only the base system (glibc on Linux);
 # every distributable build checks it.
 if(TELAR_RUNTIME_DISTRIBUTABLE)
-  set(TELAR_LINKAGE_KIND "$<IF:$<PLATFORM_ID:Darwin>,macos,linux-server>")
+  set(TELAR_LINKAGE_KIND "$<IF:$<PLATFORM_ID:Darwin>,macos,linux-headless>")
   add_custom_target(distributable-linkage ALL
     COMMAND "${CMAKE_COMMAND}" -E env "TELAR_MACOS_MIN=${CMAKE_OSX_DEPLOYMENT_TARGET}"
             "${CMAKE_CURRENT_SOURCE_DIR}/../../packaging/release/check-linkage.sh" "${TELAR_LINKAGE_KIND}"

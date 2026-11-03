@@ -58,25 +58,50 @@ jobs:
         run: |
           packaging/release/install-zig.sh "$RUNNER_TEMP/zig"
           echo "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
-          packaging/release/install-zig.sh "$RUNNER_TEMP/zig-ghostty" 0.17.0
 
       - name: Install Rust
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
           rustup default "$RUST_TOOLCHAIN"
 
-      # Builds the desktop (Zig) and headless (C++) archives and fails if
-      # either links a library it must not or needs glibc above 2.38.
+      # Builds the desktop (Zig) archive and fails if it links a library it
+      # must not or needs glibc above 2.38.
       - name: Build and check linkage
-        env:
-          CC: clang-18
-          CXX: clang++-18
-          ZIG_GHOSTTY: ${{ runner.temp }}/zig-ghostty/zig
         run: packaging/release/linux.sh dist
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-${{ matrix.runner }}
+          path: dist/*
+          if-no-files-found: error
+
+  # The C++ runtime and CLI, static against musl, so the archive runs on any
+  # Linux. It builds in an Alpine container, whose static libraries need its
+  # own GCC; the runner only checks out and uploads.
+  linux-headless:
+    needs: version
+    name: linux headless (${{ matrix.runner }})
+    strategy:
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build and check linkage on Alpine
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src -e RUST_TOOLCHAIN alpine:3.22 sh -euc '
+            packaging/release/install-alpine-deps.sh
+            . "$HOME/.cargo/env"
+            packaging/release/install-zig.sh /tmp/zig 0.17.0
+            ZIG_GHOSTTY=/tmp/zig/zig packaging/release/linux-headless.sh dist
+            chown -R "$(stat -c %u:%g /src)" dist'
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-headless-${{ matrix.runner }}
           path: dist/*
           if-no-files-found: error
 
@@ -283,7 +308,7 @@ jobs:
           path: ${{ runner.temp }}/status-macos-${{ matrix.arch }}.txt
 
   publish:
-    needs: [version, linux, macos-sign]
+    needs: [version, linux, linux-headless, macos-sign]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

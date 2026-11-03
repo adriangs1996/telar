@@ -9,11 +9,30 @@
 #include <utility>
 
 // Older glibc keeps these in libdl. Keep the CLI linkable there; history
-// discovery reports unavailability when no loader is present.
-#if defined(__linux__)
+// discovery reports unavailability when no loader is present. A static
+// release build links SQLite instead (TELAR_LINKED_SQLITE).
+#if defined(__linux__) && !TELAR_LINKED_SQLITE
 #pragma weak dlopen
 #pragma weak dlsym
 #pragma weak dlclose
+#endif
+
+// SQLite's handles stay opaque here; a linked build calls its functions
+// through the same signatures the loader resolves.
+struct HistoryDatabase;
+struct HistoryStatement;
+
+#if TELAR_LINKED_SQLITE
+extern "C" {
+int sqlite3_open_v2(const char *, HistoryDatabase **, int, const char *);
+int sqlite3_close(HistoryDatabase *);
+int sqlite3_prepare_v2(HistoryDatabase *, const char *, int, HistoryStatement **, const char **);
+int sqlite3_finalize(HistoryStatement *);
+int sqlite3_step(HistoryStatement *);
+const unsigned char *sqlite3_column_text(HistoryStatement *, int);
+int sqlite3_column_bytes(HistoryStatement *, int);
+int sqlite3_busy_timeout(HistoryDatabase *, int);
+}
 #endif
 
 namespace telar::runtime::cli {
@@ -27,6 +46,16 @@ public:
 
   // Opens `path` read-only; false when SQLite cannot open it.
   bool open(const char *path) {
+#if TELAR_LINKED_SQLITE
+    open_ = &sqlite3_open_v2;
+    close_ = &sqlite3_close;
+    prepare_ = &sqlite3_prepare_v2;
+    finalize_ = &sqlite3_finalize;
+    step_ = &sqlite3_step;
+    text_ = &sqlite3_column_text;
+    length_ = &sqlite3_column_bytes;
+    const Timeout timeout = &sqlite3_busy_timeout;
+#else
 #if defined(__linux__)
     if (!::dlopen || !::dlsym || !::dlclose) {
       return false;
@@ -51,6 +80,7 @@ public:
     text_ = symbol<Text>("sqlite3_column_text");
     length_ = symbol<Length>("sqlite3_column_bytes");
     const auto timeout = symbol<Timeout>("sqlite3_busy_timeout");
+#endif
     if (open_(path, &database_, read_only, nullptr) != Result::ok) {
       return false;
     }
@@ -116,8 +146,8 @@ public:
   }
 
 private:
-  struct Database;
-  struct Statement;
+  using Database = HistoryDatabase;
+  using Statement = HistoryStatement;
 
   enum Result : int {
     ok = 0,
@@ -170,7 +200,9 @@ private:
     }
 
     if (library_) {
+#if !TELAR_LINKED_SQLITE
       ::dlclose(std::exchange(library_, nullptr));
+#endif
     }
   }
 

@@ -33,6 +33,11 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 
 # Machines, CLI installation and window startup.
+if(TELAR_LINKED_SQLITE)
+  target_link_libraries(cli-core PUBLIC "${SQLITE3_LIBRARY}")
+  target_compile_definitions(cli-core PUBLIC TELAR_LINKED_SQLITE=1)
+endif()
+
 add_library(cli-launch STATIC launch_commands.cpp)
 target_link_libraries(cli-launch PUBLIC cli-core)
 
@@ -69,10 +74,14 @@ if(BUILD_TESTING)
   add_executable(pane-agent-probe tests/pane_agent_probe.cpp)
   target_link_libraries(pane-agent-probe PRIVATE cli-core)
   add_test(NAME pane-agent-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/pane_agent_test.py" --telar "$<TARGET_FILE:telar>")
-  add_test(NAME machines-launch-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/machines_launch_test.py" --telar "$<TARGET_FILE:telar>")
-  set_tests_properties(machines-launch-cli-tests PROPERTIES TIMEOUT 90)
-  add_test(NAME machine-setup-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/machine_setup_test.py" --telar "$<TARGET_FILE:telar>")
-  set_tests_properties(machine-setup-cli-tests PROPERTIES TIMEOUT 120)
+  # Expected outputs come from the Zig CLI on macOS: the window launch
+  # checks the display first on Linux, and setup reports the local platform.
+  if(APPLE)
+    add_test(NAME machines-launch-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/machines_launch_test.py" --telar "$<TARGET_FILE:telar>")
+    set_tests_properties(machines-launch-cli-tests PROPERTIES TIMEOUT 90)
+    add_test(NAME machine-setup-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/machine_setup_test.py" --telar "$<TARGET_FILE:telar>")
+    set_tests_properties(machine-setup-cli-tests PROPERTIES TIMEOUT 120)
+  endif()
   add_executable(hook-mapping-probe tests/hook_mapping_probe.cpp)
   target_link_libraries(hook-mapping-probe PRIVATE cli-core)
   add_test(NAME exec-runtime-offline-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/exec_runtime_test.py" --telar "$<TARGET_FILE:telar>" --offline)

@@ -25,13 +25,22 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 find_package(Threads REQUIRED)
 
 option(TELAR_RUNTIME_DISTRIBUTABLE "Require static non-system dependencies for installation" OFF)
-# Linux has no base system beyond glibc: a distributable build links the
-# libraries macOS ships (SQLite, zlib) and the C++ library statically. pcap
-# stays shared: the distributions' static libpcap needs D-Bus, which none
-# ships static.
+# Linux has no base system: a distributable build is a static musl
+# executable, so it starts on any distribution, Alpine included, with every
+# library linked in. glibc cannot link statically everything it needs, so
+# the build must run on musl (Alpine).
 set(TELAR_LINUX_DISTRIBUTABLE OFF)
 if(TELAR_RUNTIME_DISTRIBUTABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(TELAR_LINUX_DISTRIBUTABLE ON)
+  include(CheckCXXSourceCompiles)
+  check_cxx_source_compiles("#include <cstdio>
+#if defined(__GLIBC__)
+#error glibc
+#endif
+int main() {}" TELAR_MUSL)
+  if(NOT TELAR_MUSL)
+    message(FATAL_ERROR "The Linux distributable build links statically against musl; build it on Alpine")
+  endif()
 endif()
 
 if(TELAR_LINUX_DISTRIBUTABLE)
@@ -50,8 +59,12 @@ find_library(NGHTTP2_LIBRARY NAMES libnghttp2.a nghttp2 HINTS "${NGHTTP2_ROOT}/l
 
 if(TELAR_LINUX_DISTRIBUTABLE)
   find_library(ZLIB_LIBRARY NAMES libz.a REQUIRED)
-  find_library(PCAP_LIBRARY NAMES pcap REQUIRED)
-  add_link_options(-static-libstdc++ -static-libgcc)
+  find_library(PCAP_LIBRARY NAMES libpcap.a REQUIRED)
+  # musl gives threads 128 KiB stacks unless the executable names a size;
+  # the terminal engine needs glibc's 8 MiB.
+  add_link_options(-static "LINKER:-z,stack-size=8388608")
+  # A static executable cannot dlopen, so the CLI links SQLite for history.
+  set(TELAR_LINKED_SQLITE ON)
 else()
   find_library(ZLIB_LIBRARY NAMES z REQUIRED)
   find_library(PCAP_LIBRARY NAMES pcap PATHS "${CMAKE_OSX_SYSROOT}/usr/lib" REQUIRED)
