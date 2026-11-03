@@ -2277,6 +2277,124 @@ historically named presentation counters as frame-completion callbacks. Those
 counters cannot qualify visible 120 Hz; native positive presentation timestamps
 and a content oracle remain required.
 
+### Process-resource probe rebuilt on the DLL base
+
+The SDK `proc_pid_rusage(RUSAGE_INFO_V4)` prototype was rebuilt from current
+native-harness sources in `out-perf/dlls-runtime-resources`; the preserved
+`125/3` Mach timebase conversion remains necessary. Fresh self/child CPU controls
+and invalid identity/counter controls pass. The native qualification run
+`/tmp/telar-perf-dlls-resources-qual-01` verifies the GUI and socket-peer runtime
+identities for both complete stacks. Its 20-input CPU readings are diagnostic,
+not paired application results: Zig GUI getrusage/process counters are
+3.701300/3.700538 ms per input and runtime 0.841794; C++ GUI
+4.182150/4.186038 and runtime 0.570227. Memory counters remain separate snapshots
+and a process-lifetime footprint maximum, not interval peaks or additive RSS.
+
+The first probe-overhead comparison is **rejected**. Six alternating pairs per
+stack, 100 inputs after 20 warmups, native positive presentation timestamps,
+1600×1000 at DPR 2 and 82×21 cells are preserved in
+`/tmp/telar-perf-dlls-resources-overhead-01`. Application binaries are identical
+between variants; A uses the original probe and B the rebuilt resource probe.
+C++ p50 moves 25.019750 → 25.135417 ms and GUI CPU 3.948820 → 4.111330 ms/input,
+both winning only 1/6. C++ p95 wins 4/6, p99 and maximum 3/6; Zig has no metric
+at 0–1/6 but worse median tails. No cause or code-placement exemption is
+established. All outliers remain in the receipts. This does not qualify the
+collector for historical-probe comparisons.
+
+A follow-up uses **one identical probe binary** with collection disabled/enabled
+to separate collection cost from the rebuild. Its first attempt,
+`/tmp/telar-perf-dlls-resources-toggle-01`, is invalid: Python used `is False`
+against the probe's numeric JSON zero. Disabled start/end PIDs and counters were
+all zero. The corrected controller accepts numeric zero and still verifies the
+absent intervals and zero PIDs. The corrected complete series in
+`/tmp/telar-perf-dlls-resources-toggle-02` also **fails qualification**: C++ GUI
+CPU is 3.992750 → 4.106245 ms/input, winning only 1/6. C++ p50/p95/p99/maximum
+win 4/5/3/3 pairs; Zig 4/3/2/4 and CPU 4/6. This isolates an enabled/disabled
+collector comparison with identical machine code, but does not establish the
+cause of the CPU difference. The collector remains a separate diagnostic tool;
+there is no promotion into headline measurements or claim of negligible cost.
+
+### Client plugin-worker parity prerequisite
+
+The fresh-base F14 failure is a missing C++ CLI dispatch for `plugin-worker`, not
+a timing regression or permission failure. The isolated subprocess oracle
+`services/runtime-cpp/tools/compare_action_workers.py` checks exit status and
+exact protocol bytes with an empty environment and no server/GUI launch. The
+initial 66-case reference run in `out-perf/dlls-action-worker-oracle-02` passes
+66/66 against Zig. The frozen C++ runtime passes only the 23 negative cases;
+all 43 valid cases fail because the command is absent. The earlier reference
+run is retained: its sole fixture error put `config.helper` at the wrong path.
+
+The C++ implementation now dispatches the existing seven-argument command,
+reuses the shared bounded VM, configuration bootstrap, local-module sandbox and
+action/binding validators, and encodes the complete result before writing stdout.
+It loads only the worker binding rather than a full GUI/runtime configuration.
+The 16 MiB VM quota, load/callback instruction and deadline budgets, immutable
+context, first-16-effects truncation and unsupported-effect rejection remain.
+Callback context/invocation and protocol tags are shared with the GUI. Its parent
+still owns the immutable package snapshot, timeout, generation/cancellation and
+whole-batch capability checks; there is no fallback to a Zig executable.
+
+The first direct-entry prototype passed 118 functional cases and seven component
+pairs on four workloads, but review found a lexical-scope difference. Zig's wrapper
+captures a local `telar` and invokes the mutable `telar.bind_global` factory after
+loading the entry. Bypassing that wrapper changes valid programs that replace the
+global or factory. Four new controls reproduce those mismatches against the old
+C++ prototype while all 122 pass against Zig. The prototype and its favorable
+component timings in `out-perf/dlls-plugin-action-worker/pairs-01` are therefore
+**rejected for equivalence**, with the exact executable preserved there.
+
+The corrected worker preserves the lexical wrapper and binding-factory call,
+including its validation, while still avoiding the unrelated configuration
+snapshot. This intentionally retains a bounded source copy. Both binaries pass
+122/122 exact-result cases in `out-perf/dlls-action-worker-oracle-05`. A new
+`plugin-action-worker` CTest runs the same expected-byte/error oracle without a
+Zig dependency and passes. The existing `gui-config`, `gui-plugin-packages` and
+`gui-plugin-worker` tests pass; `QuickTest::routedPluginWorker` passes natively on
+Cocoa/Metal with the corrected C++ runtime, exercising command and keyboard
+execution, whole-batch permission refusal and stale-generation cancellation.
+No all-flow or 120 Hz acceptance follows from these checks. Linux and x86-64
+execution remain unqualified for this new worker.
+
+The corrected binary is measured separately in
+`out-perf/dlls-plugin-action-worker/pairs-02`: seven alternating pairs, 30 fresh
+worker launches per variant/case after three warmups. Every invocation checks
+exact stdout bytes and successful exit. Wall time includes spawning through
+reaping; `wait4` supplies that child's CPU and maximum RSS. These are one-shot
+component measurements, excluding package copying, GUI authorization/routing and
+presentation. Medians of paired summaries (A original Zig → B corrected C++):
+
+| Case | p50 ms (wins) | p95 ms (wins) | p99 / max wins | CPU ms (wins) | Child max RSS MiB (wins) |
+| --- | --- | --- | --- | --- | --- |
+| Sidebar | 11.099 → 9.374 (7/7) | 12.283 → 10.265 (7/7) | 5/7 / 5/7 | 8.7165 → 7.4425 (7/7) | 12.547 → 7.602 (7/7) |
+| Sixteen effects | 10.949 → 9.254 (7/7) | 12.301 → 10.071 (7/7) | 7/7 / 7/7 | 8.6600 → 7.3255 (7/7) | 12.547 → 7.602 (7/7) |
+| Local module | 10.929 → 9.414 (7/7) | 12.111 → 10.212 (7/7) | 6/7 / 6/7 | 8.6290 → 7.4085 (7/7) | 12.555 → 7.609 (7/7) |
+| Targeted notification | 10.885 → 9.367 (7/7) | 11.904 → 10.289 (7/7) | 7/7 / 7/7 | 8.6560 → 7.3920 (7/7) | 12.578 → 7.641 (7/7) |
+
+This meets the component criterion for p50/p95 and CPU; sidebar p99/max do not
+meet the 6/7 target. The functional implementation is retained, without closing
+F14 or attributing the entire C++/Zig difference to one optimization. The corrected
+C++ SHA is `a0b8b9d5826cf80c135cc113a1587a552c054e4d733942ab34e98157a1717645`;
+the Zig SHA remains `6ccf79485c5ca8baaa2d69d2590abb49d23c808891c04fe6e70f5602713a1d5e`.
+Sources, receipts, binary and selected ARM64 assembly are preserved privately.
+Assembly confirms the 16-effect bound and direct encoding without a full
+configuration-generation call. It also shows a roughly 164 KiB worker stack
+frame: retained command-validation storage is still initialized even though
+command-tab effects cannot be emitted by this protocol. Removing that work is a
+candidate, not an accepted change. Linked stub labels are not used as evidence
+of the underlying library function.
+
+Standalone new runtime headers compile. The focused clang-tidy translation unit
+finishes without compiler errors but emits style/advisory warnings, including
+repository-style pragma guards, checked span indexing, structure padding and
+intentional uninitialized output storage. This is not a clean lint claim.
+A focused worker build with ASan/UBSan also passes all 122 oracle cases without
+sanitizer diagnostics (`out-perf/dlls-action-worker-sanitizers-01`). The C++ VM
+adapter and encoder are instrumented; the existing Lua static library is not.
+Negative cases must exit normally with a nonzero status and empty stdout; crashes
+and timeouts do not count as successful rejection.
+
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove

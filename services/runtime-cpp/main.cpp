@@ -1,6 +1,7 @@
 #include "cli/hook.hpp"
 #include "cli/integration.hpp"
 #include "cli/plugin.hpp"
+#include "cli/plugin_worker.hpp"
 #include "cli/proxy_trust.hpp"
 #include "cli/server.hpp"
 #include "cli/traffic.hpp"
@@ -36,6 +37,11 @@ auto main(int argc, char **argv) -> int {
     if (argc >= 2 && std::string_view{argv[1]} == "plugin") {
       const auto options = cli::PluginOptions::parse({argv + 2, static_cast<std::size_t>(argc - 2)});
       cli::runPlugin(budget, options, ProcessEnvironment{});
+      return 0;
+    }
+
+    if (argc >= 2 && std::string_view{argv[1]} == "plugin-worker") {
+      cli::runPluginWorker(budget, cli::PluginWorkerOptions::parse(args.subspan<2>()));
       return 0;
     }
 

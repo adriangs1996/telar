@@ -6,6 +6,7 @@
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include "telar_plugins/action_protocol.hpp"
 #include "telar_plugins/capabilities.hpp"
 #include "telar_plugins/package.hpp"
 #include "telar_plugins/trust_store.hpp"
@@ -24,8 +25,9 @@ namespace telar::gui {
 
 class PluginEffects {
 public:
+  static_assert(BindingEffects::maximum_effects == runtime::plugins::ActionProtocol::maximum_effects);
   using Effect = std::variant<BindingAction, NotificationActionDescription>;
-  static constexpr std::size_t maximum_bytes = sizeof(Byte) + (BindingEffects::maximum_effects * (sizeof(Byte) + sizeof(NotificationLevel) + sizeof(std::uint32_t) + sizeof(NotificationTarget::Kind) + sizeof(std::uint64_t) + (sizeof(std::uint16_t) * 2) + max_notification_title_bytes + max_notification_message_bytes));
+  static constexpr std::size_t maximum_bytes = runtime::plugins::ActionProtocol::maximum_bytes;
 
   [[nodiscard]] static PluginEffects decode(std::span<const Byte> input) {
     if (input.size() > maximum_bytes) {
@@ -76,28 +78,7 @@ public:
   }
 
 private:
-  enum class Tag : Byte {
-    split = 1,
-    focus = 2,
-    sidebar = 3,
-    close_pane = 4,
-    new_tab = 5,
-    tab_offset = 6,
-    select_tab = 7,
-    rename_tab = 8,
-    close_tab = 9,
-    move_tab = 10,
-    detach = 11,
-    resize = 12,
-    fullscreen = 13,
-    workspace_list = 14,
-    new_workspace = 15,
-    rename_workspace = 16,
-    select_workspace = 17,
-    notification = 18,
-    resize_sidebar = 19,
-    leave_worktree = 20,
-  };
+  using Tag = runtime::plugins::ActionTag;
 
   static BindingAction indexed(std::span<const BindingActionKind> kinds, std::span<const Byte> &input) {
     const auto index = u8::decode(input);
