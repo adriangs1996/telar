@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../command_error.hpp"
 #include "provider.hpp"
 #include "telar_base/text/json_node.hpp"
 
@@ -9,15 +10,19 @@ template <Allocator Memory>
 class HookSettings {
 public:
   explicit HookSettings(Memory &memory, Provider provider, std::string_view executable)
-      : memory_(memory), provider_(provider), marker_{" hook ", AllocatorRef<char, Memory>{memory}}, command_{AllocatorRef<char, Memory>{memory}}, worktree_command_{AllocatorRef<char, Memory>{memory}} {
+      : memory_(memory),
+        provider_(provider),
+        marker_{" hook ", AllocatorRef<char, Memory>{memory}},
+        command_{AllocatorRef<char, Memory>{memory}},
+        worktree_command_{AllocatorRef<char, Memory>{memory}} {
     if (executable.contains('\'')) {
       throw std::invalid_argument{"Unsupported integration executable path"};
     }
 
     marker_ += provider.name;
-    worktree_command_ = "exec '";
+    worktree_command_ = "telar_hook_bin=${TELAR_BIN_PATH:-'";
     worktree_command_ += executable;
-    worktree_command_ += '\'';
+    worktree_command_ += "'}; exec \"$telar_hook_bin\"";
     worktree_command_ += marker_;
     command_ = "[ -n \"$TELAR_PANE_ID\" ] && [ -n \"$TELAR_PANE_GENERATION\" ] || exit 0; ";
     command_ += worktree_command_;
@@ -38,6 +43,10 @@ public:
     if (provider_.flat_hooks && settings.find("version") == nullptr) {
       settings.setLiteral("version", "1");
       changed = true;
+    }
+
+    if (const auto *hooks = settings.find("hooks"); hooks && hooks->kind() != JsonKind::object) {
+      throw CommandError{"SettingsFieldNotAnObject"};
     }
 
     auto &hooks = settings.ensure("hooks", JsonKind::object);
@@ -85,6 +94,10 @@ private:
   bool installEvents(JsonNode<Memory> &hooks, std::span<const std::string_view> events, std::string_view command, std::string_view timeout) const {
     bool changed = false;
     for (const auto event : events) {
+      if (const auto *entries = hooks.find(event); entries && entries->kind() != JsonKind::array) {
+        throw CommandError{"SettingsFieldNotAnArray"};
+      }
+
       auto &entries = hooks.ensure(event, JsonKind::array);
       bool present = false;
       for (auto &entry : entries.children()) {

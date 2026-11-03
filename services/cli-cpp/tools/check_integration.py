@@ -58,6 +58,13 @@ def run_case(binary, provider, variant, seed, actions):
         environment = {key: value for key, value in os.environ.items()
                        if not key.startswith(("TELAR_", "XDG_")) and key not in {entry[2] for entry in PROVIDERS.values()}}
         environment.update(HOME=str(home), TMPDIR=str(root))
+        for key in ("XDG_RUNTIME_DIR", "XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_STATE_HOME"):
+            directory = root / key.lower()
+            directory.mkdir(mode=0o700)
+            environment[key] = str(directory)
+        # OpenCode's default root follows XDG_CONFIG_HOME.
+        if provider == "opencode":
+            settings = Path(environment["XDG_CONFIG_HOME"]) / "opencode" / filename
         settings = home / directory / filename
         extra = []
         if variant in ("override", "legacy", "same-legacy", "relative-override", "missing-home"):
@@ -158,7 +165,7 @@ def main():
                         for label, binary in (("zig", arguments.zig), ("cpp", arguments.cpp))}
             differences = []
             for action_index, (zig, cpp) in enumerate(zip(outcomes["zig"], outcomes["cpp"])):
-                for key in ("exit", "stdout", "files"):
+                for key in ("exit", "stdout", "stderr", "files"):
                     if zig[key] != cpp[key]:
                         differences.append({"action": action_index, "field": key})
             report["cases"].append({"name": f"{index}-{provider}-{variant}", "equal": not differences, "differences": differences, **outcomes})

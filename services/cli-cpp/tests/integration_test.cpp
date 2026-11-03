@@ -19,6 +19,10 @@ void testSettings(Memory &memory) {
     check(!hooks.install(settings));
     for (const auto event : specification.events) {
       check(hooks.installed(settings, event));
+      const auto &entry = settings.find("hooks")->find(event)->children().front();
+      const auto &hook = specification.flat_hooks ? entry : entry.find("hooks")->children().front();
+      const auto expected = std::string{"[ -n \"$TELAR_PANE_ID\" ] && [ -n \"$TELAR_PANE_GENERATION\" ] || exit 0; telar_hook_bin=${TELAR_BIN_PATH:-'/fixture/telar'}; exec \"$telar_hook_bin\" hook "} + std::string{specification.name};
+      check(hook.find("command")->text() == expected);
     }
 
     const integration::HookSettings upgraded{memory, specification, "/new path/telar"};
