@@ -20,13 +20,17 @@ import time
 
 import _posixshmem
 
+MAX_PLACEMENT_CELLS = 65535
 
 def frame_bytes(width, height, shade):
     row = bytes((x * 255 // max(1, width - 1), shade, 255 - shade, 255)[c] for x in range(width) for c in range(4))
     return row * height
 
 
-def publish(out, name, pixels, size):
+def publish(out, name, pixels, size, cells=None):
+    if cells is not None and (len(cells) != 2 or any(type(value) is not int or not 0 < value <= MAX_PLACEMENT_CELLS for value in cells)):
+        raise ValueError('image placement requires positive protocol-sized column and row counts')
+    placement = '' if cells is None else ',c=%d,r=%d' % tuple(cells)
     fd = _posixshmem.shm_open(name, os.O_CREAT | os.O_EXCL | os.O_RDWR, 0o600)
     try:
         os.ftruncate(fd, len(pixels))
@@ -36,8 +40,8 @@ def publish(out, name, pixels, size):
         os.close(fd)
     encoded = base64.standard_b64encode(name.encode()).decode()
     width, height = size
-    out.write(("\0337\033[?2026h\033[H\033_Ga=T,f=32,s=%d,v=%d,t=s,i=77,p=1,C=1,q=2;%s\033\\\033[?2026l\0338"
-               % (width, height, encoded)).encode())
+    out.write(("\0337\033[?2026h\033[H\033_Ga=T,f=32,s=%d,v=%d,t=s,i=77,p=1,C=1,q=2%s;%s\033\\\033[?2026l\0338"
+               % (width, height, placement, encoded)).encode())
     out.flush()
 
 

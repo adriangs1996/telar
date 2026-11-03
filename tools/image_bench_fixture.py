@@ -15,6 +15,8 @@ import time
 
 import _posixshmem
 
+import image_patterns
+from image_patterns import COLORS
 from kitty_stream import publish
 from terminal_bench_fixture import Fixture, atomic_json, defer_resize
 
@@ -22,7 +24,6 @@ from terminal_bench_fixture import Fixture, atomic_json, defer_resize
 CHANNELS = 4
 MAX_IMAGE_BYTES = 64 * 1024 * 1024
 MAX_PUBLICATIONS = 1024
-COLORS = ((230, 20, 60, 255), (20, 220, 200, 255), (180, 180, 180, 255))
 
 
 def image_extent(width, height):
@@ -32,9 +33,11 @@ def image_extent(width, height):
 
 
 class ImageFixture(Fixture):
-    def __init__(self, directory, size):
+    def __init__(self, directory, size, pattern='opaque'):
         self.image_size = image_extent(*size)
-        self.frames = tuple(bytes(color) * (size[0] * size[1]) for color in COLORS)
+        self.pattern = pattern
+        self.cells = image_patterns.placement(size, pattern)
+        self.frames = image_patterns.frames(size, pattern)
         self.digests = [hashlib.sha256(frame).hexdigest() for frame in self.frames]
         self.shared_names = []
         self.shared_prefix = '/tbi-' + secrets.token_hex(6)
@@ -51,7 +54,7 @@ class ImageFixture(Fixture):
             name = f'{self.shared_prefix}-{len(self.publications):x}'
             self.shared_names.append(name)
             started = time.monotonic_ns()
-            publish(sys.stdout.buffer, name, self.frames[color], self.image_size)
+            publish(sys.stdout.buffer, name, self.frames[color], self.image_size, self.cells)
             self.publications.append(dict(generation=len(self.publications) + 1, color=color,
                                           input_sequence=self.marker_inputs,
                                           started_ns=started, written_ns=time.monotonic_ns()))
@@ -64,6 +67,7 @@ class ImageFixture(Fixture):
                                     format='RGBA8888', transport='kitty-shared-memory',
                                     bytes_per_image=len(self.frames[0]), payload_sha256=self.digests,
                                     workload='closed-loop replacement on input',
+                                    pattern=self.pattern, placement_cells=self.cells,
                                     publications=self.publications)
             atomic_json(self.receipt, receipt)
 
@@ -92,12 +96,14 @@ def main():
     parser.add_argument('directory', type=Path)
     parser.add_argument('--width', type=int, required=True)
     parser.add_argument('--height', type=int, required=True)
+    parser.add_argument('--pattern', choices=image_patterns.PATTERNS, default='opaque')
     args = parser.parse_args()
     try:
         size = image_extent(args.width, args.height)
+        image_patterns.placement(size, args.pattern)
     except ValueError as error:
         parser.error(str(error))
-    ImageFixture(args.directory.resolve(), size).run()
+    ImageFixture(args.directory.resolve(), size, args.pattern).run()
 
 
 if __name__ == '__main__':

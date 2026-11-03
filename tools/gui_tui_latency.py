@@ -75,6 +75,12 @@ def validate_image_receipt(result, size):
     if len(fixtures) != 1 or fixtures[0]['role'] != 'primary':
         raise ValueError('image measurement requires exactly one primary fixture')
     image = fixtures[0].get('image', {})
+    pattern = result.get('image_pattern', 'opaque')
+    from image_patterns import placement
+    expected_cells = placement(size, pattern)
+    if (image.get('pattern', 'opaque') != pattern
+            or image.get('placement_cells') != (list(expected_cells) if expected_cells else None)):
+        raise ValueError('image receipt does not match the requested pattern and placement')
     if ([image.get('width'), image.get('height')] != list(size)
             or image.get('bytes_per_image') != size[0] * size[1] * 4
             or image.get('format') != 'RGBA8888'
@@ -217,6 +223,7 @@ def measure(mode, directory, setup):
         if getattr(options, 'image_size', None):
             fixture[1] = str(Path(__file__).with_name('image_bench_fixture.py').resolve())
             fixture += ['--width', str(options.image_size[0]), '--height', str(options.image_size[1])]
+            fixture += ['--pattern', getattr(options, 'image_pattern', 'opaque')]
     else:
         fixture = [shutil.which('python3'),
                    str(Path(__file__).with_name('gui_tui_marker.py').resolve()), str(directory / 'size.json')]
@@ -346,6 +353,7 @@ def measure(mode, directory, setup):
             result['background_load'] = background_load(result['fixtures'], rate)
         if getattr(options, 'image_size', None):
             result['image_size'] = list(options.image_size)
+            result['image_pattern'] = getattr(options, 'image_pattern', 'opaque')
             validate_image_receipt(result, options.image_size)
     (directory / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
     if mode in TELAR_MODES:
@@ -379,6 +387,8 @@ def main():
     parser.add_argument('--throughput', action='store_true', help='run 8 MiB ASCII/ANSI DSR probes before latency')
     parser.add_argument('--image-size', type=int, nargs=2, metavar=('WIDTH', 'HEIGHT'),
                         help='replace a Kitty RGBA image on each input; requires single-pane Telar modes')
+    parser.add_argument('--image-pattern', choices=['opaque', 'alpha-edge', 'alpha-gradient'], default='opaque',
+                        help='alpha patterns require --image-size 16 16 and use an opaque border with a center marker')
     parser.add_argument('--text-pattern', choices=['repeat', 'variable'], default='repeat',
                         help='repeat the original 64-byte line or vary every line deterministically')
     parser.add_argument('--background-mib-per-second', type=background_rate,
@@ -397,10 +407,14 @@ def main():
     if options.config is not None and not options.config.is_file():
         parser.error('--config must name an existing Lua file')
     modes = MODE_GROUPS.get(options.mode, [options.mode])
+    if options.image_pattern != 'opaque' and not options.image_size:
+        parser.error('--image-pattern requires --image-size')
     if options.image_size:
         from image_bench_fixture import image_extent
+        from image_patterns import placement
         try:
             image_extent(*options.image_size)
+            placement(options.image_size, options.image_pattern)
         except ValueError as error:
             parser.error(str(error))
         if options.cases != ['single'] or options.throughput or any(mode not in TELAR_MODES for mode in modes):
@@ -473,6 +487,7 @@ def main():
                     working_directory=str(options.cwd) if options.cwd else None,
                     input_method=options.input_method, cases=options.cases, panes=options.panes,
                     image_size=options.image_size,
+                    image_pattern=options.image_pattern,
                     text_pattern=options.text_pattern, background_mib_per_second=options.background_mib_per_second,
                     background_rate_tolerance=BACKGROUND_RATE_TOLERANCE,
                     viewport=options.viewport, command_line=os.sys.argv,
@@ -505,7 +520,7 @@ def main():
     manifest['config_path'] = str(config)
     shutil.copy2(config, directory / 'used-config.lua')
     manifest['probe_sha256'] = {name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
-                                for name in ('gui_tui_latency.py', 'gui_tui_latency.m', 'gui_view.h', 'terminal_bench_fixture.py', 'image_bench_fixture.py', 'kitty_stream.py', 'terminal_bench_report.py', 'bench_stack.py')}
+                                for name in ('gui_tui_latency.py', 'gui_tui_latency.m', 'gui_view.h', 'terminal_bench_fixture.py', 'image_bench_fixture.py', 'image_patterns.py', 'kitty_stream.py', 'terminal_bench_report.py', 'bench_stack.py')}
     probe_source = directory / 'probe-source'
     probe_source.mkdir()
     for name in manifest['probe_sha256']:

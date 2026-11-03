@@ -7,6 +7,36 @@ acceptance yet. Conditional cursor invalidation is accepted for the measured
 warm-typing layouts against the frozen C++ baseline; complete-flow and Zig-stack
 acceptance remain open.
 
+## Shared-library base, 2026-11-03
+
+Work has moved to `cpp-stack-perf-dlls-20261103`, initially at
+`b8be74a45cf85d01db4998b3cf94fe7f4c975bbe`, following Adrian's local handoff.
+The preceding branch is obsolete. Its commits and C++ working changes were
+already integrated, so only the subsequent report and capture-oracle files were
+carried over. A binary patch, exact snapshot-to-current tree delta and backup
+stash are retained; the delta was verified byte-for-byte after switching.
+The actual shared-library extraction commit in this history is `282d1a727`.
+The integrated key-repeat fix and shared-memory include moves are preserved.
+Neither removed measurement directory has tracked files.
+
+New build directories are under `out-perf/dlls-handoff-20261103`. The first
+runtime attempt exposed generic Homebrew include paths selecting OpenSSL 4
+headers despite linking OpenSSL 3. Explicit nghttp2/Brotli/Zstd prefixes avoid
+that include collision. The resulting Release runtime has SHA-256
+`fa894913f47514fc4246876e0f79d773fef1467876d395b89e87963af8eb7c36`.
+Thirty-five CTest entries pass initially. `runtime-tests` stops at the inherited
+descriptor test because its process limit is 2560 but it requests descriptor
+4096. With a limit of 8192 confined to the owned test controller and children,
+that same test binary passes, including the atomic-runtime checks. All 36 entries
+are therefore verified; the initial failure is retained, not relabeled successful.
+
+The GUI now uses the repository's managed Qt recipe, including its pinned patch.
+It is building in a new private cache. Complete GUI compilation/tests and new
+native measurements remain pending. Earlier installed-Qt measurements below are
+historical evidence, not performance qualification of this new dependency/base.
+The rejected image prototypes remain isolated artifacts and were not promoted
+into the production working tree during the migration.
+
 ## Fresh environment
 
 Personal reports Apple M1 Pro, MacBookPro18,3, 32 GiB, ten CPU cores, 128-byte
@@ -1860,8 +1890,15 @@ Raw data: `/tmp/telar-perf-fused-zig-{4k,1k}-01`. The 4K GUI CPU deficit remains
 real even though every latency percentile wins; more retained memory is allowed,
 not evidence that the CPU gap is solved. Both rows are uniform opaque image
 replacement, not arbitrary-alpha images or continuous 120 Hz. Independent Zig
-text controls are still running. Runtime CPU was not captured in these intervals;
+text controls have completed. Runtime CPU was not captured in these intervals;
 these GUI CPU figures must not be presented as whole-stack CPU.
+
+The independent single/split/tab text controls retain GUI CPU deficits: Zig → C++
+CPU/input is 3.640→4.242, 3.673→4.527 and 3.552→4.368 ms respectively, each
+0/6 C++ wins. Presentation p50/p95/p99/maximum win counts are 4/5/6/5,
+6/4/4/3 and 5/4/2/2 respectively. No complete text-flow acceptance follows.
+Raw data: `/tmp/telar-perf-fused-zig-text-01`. The full frozen fused-image
+sequence is now terminal; its initial placement failure and proof remain intact.
 
 `out-perf/native-runtime-resources` prepares an SDK-based `proc_pid_rusage`
 collector for explicit GUI/runtime intervals, with PID/start-time/UUID and
@@ -1890,7 +1927,7 @@ may eliminate CPU premultiplication work entirely; no shader or production
 conversion change is made on that unverified inference. Current image timings
 and the fused candidate remain preserved.
 
-The next F08 investigation is prepared under `out-perf/tab-layout-work-census`.
+The next F08 investigation was prepared under `out-perf/tab-layout-work-census`.
 It instruments actual native tab reorder/cancel/reveal/viewport gestures to count
 layout rebuilds, caption measurements, native shaping and fallback work. It also
 separates animation-requested rebuilds from other updates. The diagnostic will
@@ -1908,6 +1945,137 @@ joined by image key/generation to native input. These project events would not
 be a Qt/framework allocation census. The lead and required lifetime/recovery
 oracles are recorded in
 `out-perf/graphics-tabs-warm-profile/image-store-copy-lead.json`.
+
+### Straight-alpha parity and reducing upload work
+
+The prepared alpha-edge experiment has now run. Initial zero-idle captures failed
+because the asynchronous capture had not arrived when collection ended; these
+failures are retained under `image-alpha-edge-oracle` and its debug variant.
+The `image-alpha-edge-oracle-ready` controller allows the existing two-second
+capture interval. Original Zig and coverage both then qualify native readiness
+and the capture witness. The generic cross-stack marker-centroid gate fails at
+[188,163] versus [189,163]; it remains unchanged for headline comparisons.
+An independent opaque-border audit establishes identical image bounds
+[120,84,264,244], source payloads, grid, viewport and DPR. Within that 144×160
+image footprint, 3860 pixels differ, with maximum channel difference 40.
+This proves a varying-alpha filtering difference, rather than an image-size
+or position mismatch. Raw data: `/tmp/telar-perf-alpha-edge-ready-01`.
+
+The scratch `out-perf/image-straight-shader` prototype uploads straight RGBA and
+uses the original Zig blend factors after linear sampling. Its actual native
+edge capture matches original Zig exactly: zero pixel/channel differences,
+RGBA SHA-256 `bb3028162627b8c348c59f06f6d4bec44f4989d9cab17b8fed7ee8a0ab1dd3eb`.
+All eleven native graphics cases also pass and match the preceding C++ captures
+exactly, including replacement, clipping, shared views, generation recovery and
+texture reuse. The actual raw-copy helper passes Release and ASan/UBSan checks
+for all alpha/channel combinations, alternate formats, odd strides, source
+overwrite and retained queued outputs. Qt frameworks are not instrumented.
+This prototype removes CPU premultiplication but still makes an owned upload
+copy. The subsequent six alternating 4K pairs against coverage reject this
+variant: p50 47.807→47.508 ms (4/6 wins), p95 60.528→60.658 (2/6),
+p99 64.076→68.866 (2/6), maximum 67.207→77.280 (0/6). GUI CPU/input
+does improve 31.290→11.946 ms (6/6), with peak RSS 367.117→399.180 MiB.
+The explicit memory allowance does not excuse the consistent maximum-latency
+loss. No placement exemption is established for the changed image path.
+Raw data: `/tmp/telar-perf-straight-coverage-4k-01`; the pixel-parity finding
+remains valid independently of the rejected performance result.
+
+A separate `out-perf/image-straight-qimage` diagnostic uploads an owned straight
+RGBA QImage through QRhi. Its native image footprint also matches original Zig
+exactly (`/tmp/telar-perf-alpha-qimage-01`). This verifies the relevant Metal
+upload behavior without assuming Qt converts these bytes. It deliberately makes
+a fresh copy and is not a performance candidate. A future immutable pixel lease
+could avoid that copy, but must preserve allocator lifetime/thread ownership,
+generation cancellation, global bounds and teardown. GraphicsBudget currently
+belongs to the session, while queued upload objects can outlive a catalog; a
+raw borrowed pointer alone cannot establish safe ownership. The protected
+kernel-mediated shared-memory read remains required. Original Zig's mapping
+explicitly accepts same-user truncation SIGBUS, which is not a suitable C++
+optimization to copy.
+
+The next isolated variant, `out-perf/image-pixel-lease`, shares the immutable
+pixel allocation of a completed generation with the upload QImage. A cleanup
+owner retains the bytes until Qt releases its last image reference. This avoids
+the post-read RGBA copy and premultiplication; RGB still requires expansion.
+Catalog credits retain their previous semantics, and queued ownership replaces
+the former owned upload copy rather than adding an unbounded retention cache.
+Leases are available only for thread-safe allocators; other allocators use an
+owned copy. The allocator must outlive both the model and renderer, as in the
+application's existing destruction order. No delayed deleter accesses the
+session-owned GraphicsBudget. The component oracle passes native ARM64,
+ASan/UBSan and x86-64 via Rosetta, covering incomplete images, failed pixel/control
+allocations, immutable publication, retirement, catalog deletion/credits and last
+release on another thread. The complete isolated GUI build now succeeds, with
+GUI SHA-256 `512f4bc7285d01203f735211385a783d54d6099a42d8a21724c10911fa490a7a`.
+The actual Qt helper oracle passes Release and ASan/UBSan: RGBA pointer identity
+survives the model's destruction and last-reference release on another thread;
+copy-on-write mutation preserves the source; borrowed and non-thread-safe paths
+own their copies; RGB expands correctly. Seven focused session/graphics/shared
+memory/recovery tests and all eleven native pixel cases pass. The original alpha
+edge and a new varying-alpha gradient/checkerboard capture both match original
+Zig exactly. The latter image-footprint digest is
+`1a8c60569009571f946f4ff59cb9ce4786798f880719f8a8bd842c2e93f849c1`.
+Payloads, native geometry and actual PNG hashes are audited separately for both
+comparisons under `/tmp/telar-perf-alpha-{lease,gradient-lease}-01`.
+
+The ARM64 linked path takes a shared-owner atomic reference, constructs the
+external-buffer QImage and passes retained ownership. Relocations verify that
+the retained RGBA branch invokes QImage's sharing constructor; conversion and
+deep-copy calls remain on the other branches. No pixel loop remains in that
+branch. This removes post-read CPU work, not the protected shared-memory read or
+Qt/driver staging. The six alternating native 4K pairs are now complete and reject
+this variant too: p50 47.303→47.130 ms (3/6 wins), p95 59.007→63.425 (0/6),
+p99 63.320→73.516 (0/6), maximum 67.203→79.580 (0/6). GUI CPU/input
+falls 31.412→11.099 ms (6/6), and peak RSS falls 367.031→335.406 MiB (6/6).
+Those resource gains do not excuse the consistent tail losses. Their cause is
+not established; a native upload/presentation timeline is the next diagnostic,
+rather than assuming that fewer copied bytes guarantees lower visible latency.
+Raw data: `/tmp/telar-perf-lease-coverage-4k-01`. The root production candidate
+remains preserved separately from this rejected isolated source tree.
+
+Reusable source tooling now covers both alpha patterns. The native runner accepts
+`--image-size 16 16 --image-pattern alpha-edge` or `alpha-gradient`, with
+`--capture --idle-seconds 2` for the static oracle. The fixture reports the pattern
+and eight-column/four-row placement, and the runner verifies them. The ordinary
+opaque workload retains its original payload and wire placement. All six alpha
+payload digests match the original diagnostic fixtures exactly.
+`tools/image_capture_oracle.py REFERENCE_RESULT CANDIDATE_RESULT --output REPORT`
+checks native readiness/VSync/focus, source payloads, capture-file hashes and
+geometry before comparing the connected opaque-bordered footprint. It permits
+a color-derived marker-centroid difference only in this static comparison;
+the headline runner's geometry gate is unchanged. Fifteen image-tool tests and
+nineteen existing latency-runner tests pass. Replaying five actual native pairs
+retains the original 3860-pixel mismatch and all four exact prototype results.
+
+### Qualified process counters and remaining diagnostic limits
+
+The first `proc_pid_rusage` unit test failed because CPU values are Mach ticks,
+not nanoseconds on this host. The failure and raw counters are retained.
+`out-perf/native-runtime-resources-clock` applies the recorded 125/3 timebase.
+Its self/owned-child controls pass against getrusage: self 199.996 versus
+199.990 ms; child 199.848 versus 199.717 ms, while parent CPU is 0.0127 ms.
+PID/start-time/UUID, counter-regression and invalid-PID controls also pass.
+The native collector verifies the isolated runtime PID against the socket owner
+and brackets each process sample. Runtime and GUI CPU remain separate.
+
+One diagnostic sequence with twenty measured 4K inputs reports GUI/runtime CPU
+per input in ms: Zig 10.298/9.709, coverage 30.928/7.914, fused 14.508/7.890
+(`/tmp/telar-perf-proc-resource-01`). The straight-shader prototype later records
+11.866/7.908 (`/tmp/telar-perf-proc-straight-01`). GUI counters agree with native
+getrusage, and paired process-sample midpoint skew is 6–22 microseconds in the
+three-stack sequence. These are separate, unpaired diagnostics, not acceptance
+comparisons or retroactive runtime measurements for earlier headline pairs.
+Collector overhead still needs paired qualification. Memory snapshots and
+lifetime physical-footprint peaks are retained with their actual meaning;
+shared RSS is not summed and lifetime peaks are not interval peaks.
+
+The tab-work census also completed its first two gestures: reorder after release
+and Escape cancellation pass, with 23 and 35 rebuilds. Caption measurement is
+about 8.9% and 8.5% of instrumented rebuild time respectively, so caption caching
+alone cannot remove most observed rebuild work. The third gesture fails its
+hidden-counter visibility/width setup assertion; the viewport-change case did
+not run. Both outcomes are preserved in `qualified-summary.json`, and neither
+is counted as a passing flow. No caption or layout cache was implemented.
 
 ### Display-reference phase audit
 
