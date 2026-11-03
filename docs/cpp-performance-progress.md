@@ -1727,6 +1727,141 @@ for a future distinct scheduling experiment, not permission to retain this
 failed complete-client variant. All F01–F16 and representative native 120 Hz
 requirements remain open.
 
+### Retained-image timeline and fused conversion experiments
+
+`out-perf/image-retained-timeline` joins bounded C++ pacing/upload events with
+per-input native Metal submission, GPU timestamps and verified drawable
+presentation. Both C++ variants reuse the same frozen coverage tracing objects;
+only the image resource differs. The native probe retains the existing readiness,
+focus, geometry and pixel gates. Each of the base, retained and independent Zig
+runs has 120 sequential, unique, pixel-verified native presentations, with 20
+warmups excluded. Native `CACurrentMediaTime` and `CLOCK_UPTIME_RAW` are bracketed
+in each run; local Python monotonic-clock calibration also passes. Phase sums
+reproduce each original presentation sample. These are diagnostic runs, not
+alternating acceptance pairs or sustained-cadence qualification.
+
+| Median phase, ms | Coverage C++ | Retained C++ |
+| --- | ---: | ---: |
+| Input to first graphics-change request | 14.278 | 13.994 |
+| First graphics-change request to upload | 4.042 | 4.329 |
+| Conversion | 4.588 | 3.955 |
+| Conversion to Metal commit | 3.507 | 3.556 |
+| Commit to GPU start | 0.757 | 0.706 |
+| GPU work | 0.728 | 0.731 |
+| GPU end to native presentation | 18.998 | 19.605 |
+| Drawable acquisition | 0.047 | 0.048 |
+
+The retained path records zero explicit destination creations and zero conversion
+pointer relocations across its 100 measured uploads. The baseline does not
+instrument these counters; neither path has a framework allocation census.
+Separate phase medians do not add to the median total. The independent Zig run
+also has a large GPU-end-to-presentation median, 24.944 ms, so that wait is not
+established as a Qt-specific cause. Producer publication takes median 3.397,
+3.303 and 4.043 ms for base C++, retained C++ and Zig; publication-to-commit is
+22.996, 22.690 and 17.510 ms respectively. The fixture is unchanged.
+
+The original six-pair 4K results were also decomposed after excluding warmup and
+asserting that all presentation quantiles reproduce the recorded summaries.
+GPU-completion callback p50 is 28.639 → 28.135 ms (5/6 wins), p99
+38.558 → 39.655 (2/6), and maximum 39.626 → 45.683 (0/6). GPU work p50 is
+0.724 → 0.711 ms (5/6). The first analysis accidentally included warmup; it is
+preserved with an invalid-warmup name and is not used for these numbers.
+
+The next component family fuses source copying and premultiplication into one
+pass over a retained destination. Opaque blocks copy directly; other blocks use
+exact Qt rounding. All versions preserve the original RGB and big-endian path.
+The ARM SIMD versions also preserve the original conversion on non-AArch64.
+`out-perf/image-fused-premultiply` passes the exhaustive/ownership oracle but
+loses 4K opaque wall time 1/7 and alpha wall time 0/7: rejected. Its 32-bit packed
+arithmetic saves CPU but is slower in wall time than Qt's parallel conversion.
+`out-perf/image-fused-neon` uses byte-wide multiplication/narrowing and 32-pixel
+blocks. Opaque, near-opaque and queued-opaque cases win 7/7 at both sizes, but
+alpha 4K loses 0/7: also rejected.
+
+`out-perf/image-fused-parallel` divides rows between the caller and one private
+worker. Additional large odd-stride RGB/RGBA and held-output oracles pass. Its
+4K RGB control loses 1/7 for wall and CPU, and queued-alpha timing is unstable;
+it is unaccepted. `out-perf/image-fused-worker` instead bounds workers per calling
+thread, avoiding a pool per texture, and requests high worker service quality on
+supported Qt versions. Every RGBA CPU case wins 7/7, with all RGBA wall cases
+winning 6–7/7 except alpha 4K (5/7). RGB controls have no consistent loss. This
+remains a component candidate. `out-perf/image-fused-three` partitions rows across
+the caller and at most two extra workers: all ten RGBA cases win 7/7 for wall
+and CPU time, while both RGB controls win 4/7. Per-conversion opaque 4K time is
+1.695→1.091 ms and alpha 4K is 1.829→1.142 ms. These are component results.
+
+The production candidate in `out-perf/shared-image-optical-fused-final` replaces
+only the image-resource TU in frozen coverage archives. Every local compiler
+header dependency is audited against that baseline. It retains destinations only
+for little-endian ARM64 RGBA, keeps queued outputs immutable, and joins workers
+with scope guards even if a subsequent task launch throws. RGB and other targets
+retain Qt's conversion. The final source extracts a row helper to pass complexity
+limits; its exact helper is independently rechecked in
+`out-perf/image-fused-source-final`, without fictional allocation counters.
+
+The integrated build and clang-tidy pass. Twelve focused tests (25.28 s), four
+native Quick cases (1.651 s), 7494 independent original-Zig row cases, and eleven
+native Metal image cases pass; every distinct captured RGBA image matches
+coverage exactly. The exhaustive conversion/ownership oracle also passes under
+ASan/UBSan. The actual production TU compiles for ARM64, x86 baseline and x86-v3;
+x86 uses the original Qt fallback. Installed Qt frameworks are ARM64-only, so
+x86 Qt execution remains unqualified. ARM assembly uses an AND/UMIN reduction
+and exact integer multiply/narrowing without per-pixel calls, but materializes
+a 128-byte temporary on the stack and reloads the source for the reduction.
+That remaining work is a separate possible experiment, not an assumed win.
+
+Candidate GUI SHA-256:
+`10e3533e9ec6de37e59c934de4e153870281adb75a94e383c3f081b86891c62e`.
+The working image resource contains this unaccepted candidate. Exact final-helper
+component timing passes: all ten RGBA cases win 7/7 for wall and CPU; RGB 1K wins
+3/7 for both and RGB 4K wins 5/7 wall, 4/7 CPU. Opaque 4K conversion is
+1.696→1.087 ms, alpha 4K 1.833→1.109 ms; corresponding total CPU per conversion
+is 8.185→3.139 ms and 8.872→3.221 ms. Component runs contain 128 conversions for
+1K and 32 for 4K after eight warmups. The six-pair tab control completes with p50 25.597→25.785 ms (2/6),
+p95 32.989→32.989 ms (4/6), p99 36.152→36.646 ms (2/6) and maximum
+37.215→40.861 ms (1/6). GUI CPU/input is 4.336→4.457 ms (3/6), peak RSS
+204.141→204.930 MiB (3/6). The consistent maximum loss stops the controller.
+
+The independent placement audit proves all eleven affected linked text/pacing
+functions identical after masking only instruction relocation immediate fields;
+input objects are byte-identical and relocation targets remain part of the
+comparison. Their addresses shift 7168 bytes. Under the perf-pass exception the
+text maximum loss is classified as placement, with the raw result preserved in
+`measurement-state.json`. The separate
+`placement-qualified-measurement-state.json` continues with 4K images; the
+changed image path receives no placement exception.
+
+The six native 4K pairs pass this stage: p50 48.035→47.327 ms (6/6),
+p95 58.325→58.025 ms (4/6), p99 63.607→63.465 ms (3/6), maximum
+66.703→65.783 ms (3/6). GUI CPU/input falls 31.473→15.615 ms (6/6).
+Peak GUI RSS increases 367.008→398.898 MiB (+31.891 MiB); that bounded
+memory tradeoff is explicitly allowed and is not the rejection criterion.
+The six native 1K pairs also pass: p50 37.225→35.531 ms (6/6),
+p95 43.821→43.485 ms (4/6), p99 47.624→47.507 ms (3/6), maximum
+56.289→50.798 ms (4/6). GUI CPU/input falls 9.689→6.510 ms (6/6),
+with peak RSS 218.383→226.125 MiB (+7.742 MiB). The sequence now checks
+single/split text controls before independent Zig. Native cadence remains open.
+Raw data: `/tmp/telar-perf-fused-coverage-{4k,1k}-01`.
+
+The next F08 investigation is prepared under `out-perf/tab-layout-work-census`.
+It instruments actual native tab reorder/cancel/reveal/viewport gestures to count
+layout rebuilds, caption measurements, native shaping and fallback work. It also
+separates animation-requested rebuilds from other updates. The diagnostic will
+run after headline timing; instrumented durations are not acceptance evidence.
+The hypotheses are bounded caption reuse and reusing measured model records/target
+geometry across animation-only frames. No cache change has been implemented.
+
+A read-only follow-up distinguishes GUI generation allocation from rendering:
+`GraphicsStore::Image` owns a byte buffer per admitted image generation, and
+`SharedImageSource` fills it through a protected kernel-mediated read. The runtime
+atomic path already adopts a protected mapping and exports its prepared shared
+name, so a second `freezeShared` memcpy must not be assumed there. A separate
+diagnostic should time GUI construction/allocation, shared read and retirement,
+joined by image key/generation to native input. These project events would not
+be a Qt/framework allocation census. The lead and required lifetime/recovery
+oracles are recorded in
+`out-perf/graphics-tabs-warm-profile/image-store-copy-lead.json`.
+
 ### Display-reference phase audit
 
 Read-only reanalysis of the original cadence runs finds a phase discontinuity in
