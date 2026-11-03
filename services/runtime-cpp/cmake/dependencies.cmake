@@ -67,6 +67,19 @@ set(ZSTD_ROOT "" CACHE PATH "Installed Zstd prefix")
 find_path(ZSTD_INCLUDE_DIR zstd.h HINTS "${ZSTD_ROOT}/include" REQUIRED)
 find_library(ZSTD_LIBRARY NAMES libzstd.a zstd HINTS "${ZSTD_ROOT}/lib" REQUIRED)
 
+# A static libcrypto may ask for zstd and zlib by name, which the linker would
+# take from their shared libraries; hand it the static ones found above.
+if(TELAR_LINUX_DISTRIBUTABLE)
+  foreach(target IN ITEMS OpenSSL::Crypto OpenSSL::SSL)
+    get_target_property(dependencies ${target} INTERFACE_LINK_LIBRARIES)
+    if(dependencies)
+      list(TRANSFORM dependencies REPLACE "^zstd$" "${ZSTD_LIBRARY}")
+      list(TRANSFORM dependencies REPLACE "^z$" "${ZLIB_LIBRARY}")
+      set_target_properties(${target} PROPERTIES INTERFACE_LINK_LIBRARIES "${dependencies}")
+    endif()
+  endforeach()
+endif()
+
 if(TELAR_RUNTIME_DISTRIBUTABLE)
   foreach(dependency IN ITEMS GHOSTTY_VT_LIBRARY NGHTTP2_LIBRARY BROTLI_DECODER_LIBRARY BROTLI_ENCODER_LIBRARY BROTLI_COMMON_LIBRARY ZSTD_LIBRARY OPENSSL_SSL_LIBRARY OPENSSL_CRYPTO_LIBRARY)
     if(NOT "${${dependency}}" MATCHES "\\.a$")
