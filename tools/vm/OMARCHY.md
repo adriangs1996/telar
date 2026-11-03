@@ -26,6 +26,11 @@ Release mode. The runtime executes inside Linux. `run` uses a private runtime
 socket and history database in the guest source tree, and starts the GUI on
 the guest's Wayland session using OpenGL.
 
+The GUI loads the guest user's `~/.config/telar/config.lua`, or the matching
+path under `XDG_CONFIG_HOME`, and reloads changes to that file and its Lua
+modules. Arguments after `run` are forwarded to the GUI; use
+`run --no-config` explicitly to test the built-in defaults.
+
 The first GUI build compiles the project's pinned Qt sources and keeps that
 installation in the guest's `.qt-cache` for later builds. If package updates
 replace Hyprland or its libraries, stop and start the VM after building so

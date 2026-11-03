@@ -89,7 +89,7 @@ elif [[ $command == run ]]; then
     --setenv=TELAR_HISTORY="$TELAR_HISTORY" --setenv=XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
     --setenv=WAYLAND_DISPLAY="$WAYLAND_DISPLAY" --setenv=QSG_RHI_BACKEND=opengl \
     --setenv=QT_QPA_PLATFORM=wayland \
-    "$PWD/services/gui-cpp/out-vm/telar-gui" --no-config --cwd "$PWD" "$@"
+    "$PWD/services/gui-cpp/out-vm/telar-gui" --cwd "$PWD" "$@"
 else
   printf 'Unknown operation: %s\n' "$command" >&2
   exit 2
