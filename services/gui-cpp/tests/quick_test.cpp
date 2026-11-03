@@ -2743,7 +2743,7 @@ return {api_version=2, client={keybindings={
     const auto restore_clipboard = qScopeGuard([clipboard, saved = std::move(saved)] mutable { clipboard->setMimeData(saved.release()); });
     const auto sentinel = QStringLiteral("GUI_REUSE_PRESS_UNCHANGED");
     clipboard->setText(sentinel);
-    auto *copy = selected_copy();
+    const auto *copy = selected_copy();
     auto position = copy->mapToScene(QPointF{copy->width() / 2, copy->height() / 2}).toPoint();
     bool held = true;
     const auto release = qScopeGuard([&] {

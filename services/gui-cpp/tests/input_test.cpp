@@ -1,10 +1,12 @@
 #include "default_bindings.hpp"
+#include "history/choice.hpp"
 #include "input/action.hpp"
 #include "input/binding.hpp"
 #include "input/configuration.hpp"
 #include "input/history_action_capture.hpp"
 #include "input/key_event.hpp"
 #include "input/key_router.hpp"
+#include "presentation/history_actions.hpp"
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -152,10 +154,11 @@ void generatedDefaultsAndOverrides() {
 }
 
 void historyActionsRetainTheirChoice() {
+  constexpr float extent = 10;
   constexpr HistoryActionPosition position{.x = 5, .y = 5};
   constexpr HistoryChoice original{.index = 0, .revision = std::numeric_limits<std::uint64_t>::max() - 1};
   HistoryActionSurface surface{.generation = 1, .choice = original};
-  surface.targets[0] = {.action = HistoryCardAction::copy, .bounds = {.width = 10, .height = 10}, .enabled = true};
+  surface.targets[0] = {.action = HistoryCardAction::copy, .bounds = {.width = extent, .height = extent}, .enabled = true};
   HistoryActionCapture capture;
   require(capture.begin(surface, position, true), "a visible history action must consume its press");
   ++surface.choice->revision;

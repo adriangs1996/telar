@@ -30,7 +30,7 @@ struct HistoryActionSurface {
   std::array<HistoryActionTarget, HistoryActions::count> targets{};
   std::uint64_t generation = 0;
   double scale = 1;
-  std::optional<HistoryChoice> choice;
+  std::optional<HistoryChoice> choice = std::nullopt;
 
   [[nodiscard]] const HistoryActionTarget *find(HistoryCardAction action) const noexcept {
     for (const auto &target : targets) {

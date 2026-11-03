@@ -1,4 +1,5 @@
 #include "input/history_action_capture.hpp"
+#include "history/choice.hpp"
 #include "history_meta_layout.hpp"
 #include "core/geometry.hpp"
 #include "core/metrics.hpp"

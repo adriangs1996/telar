@@ -5489,3 +5489,12 @@ component cases offscreen and five selected native component cases. Those
 checks establish interaction correctness, not a performance gain. The correction
 is separate from the adapter; subsequent A/B stages include it on both sides.
 All F01–F16 remain open, and pending runtime cadence changes remain separate.
+
+The follow-up static check adds direct includes, an explicit empty optional
+initializer and a named test extent, and keeps the optional checks adjacent to
+activation. The final input suite and four native interaction cases pass again.
+Targeted clang-tidy passes `history_meta_layout.cpp` and `input_test.cpp`;
+`history_pointer.cpp` and the final `pointer_dispatcher.cpp` report only the
+pre-existing redundant alias in `config/callback.hpp:13`. The larger QuickTest
+check reported that same alias and a const-correctness suggestion in the touched
+regression, which was corrected. Full lint is not claimed green.
