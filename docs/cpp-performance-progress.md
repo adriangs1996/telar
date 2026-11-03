@@ -2454,7 +2454,8 @@ observed rate was 30.00085 Hz, with 31.625–34.879 ms gaps, but publications ne
 workload, starting C++ first to retain the AB/BA order. All invalid artifacts are
 retained; the combined receipt is `out-perf/dlls-tab-switch-qual/paired-summary.json`.
 Medians of the six paired summaries, scoped to this instrumented discrete-switch
-workload:
+workload. Visible run-directory labels differed between stacks; the later working-
+directory correction is required before matched-content acceptance:
 
 | Metric | Zig | C++ | C++ wins |
 | --- | --- | --- | --- |
@@ -2475,6 +2476,120 @@ identity changes, and `PaneArea.qml` constructs its header even for an unframed
 single pane. Avoiding that unused header work is the next isolated candidate;
 retaining glyphs across delegate lifetimes is another unaccepted memory/work
 tradeoff. Neither follows merely from a general allocation hypothesis.
+
+## Unframed pane-header experiment rejected, 2026-11-03
+
+The first isolated candidate following that profile put `PaneHeader` behind a
+synchronous Loader whose `active` condition was the pane's existing `framed`
+flag. This avoids creating and updating unused header objects for a single
+unframed pane, while preserving the existing framed and fullscreen behavior.
+The source and candidate executable are preserved privately in
+`out-perf/dlls-pane-header-lazy-01`; they are **withdrawn from production source**.
+A is the frozen GUI SHA `5a639c5f26f67892698088cd95e31555212e6508dae2e45a441dc58e641caef5`;
+B is `94c7bcf912d8e828f105ef677c095a842b299ffca4d1dac51d08199f0fc007b4`.
+Both use the identical C++ runtime and command helper. Generated QML C++ and
+ARM64 assembly are retained; the active binding reads the framed boolean. The
+native structural test verifies that an unframed pane has no header instance.
+No architecture-specific application kernel was introduced.
+
+Functional checks passed: a new native test covers no unframed header, two
+visible headers after splitting, click-to-focus on the correct pane and removal
+after closing the split. Its first version incorrectly assumed traversal order
+identified the original pane; it was corrected to find the header through that
+pane's retained TerminalItem. Existing native split/tab, nested-grid recovery,
+fullscreen-strip and configured-group keyboard tests pass, as does `gui-chrome`.
+Full viewport PNGs are byte-identical between A/B for a single pane and four
+splits, including the visible headers, in `/tmp/telar-perf-pane-header-pixels-02`.
+
+The first capture attempt differed because the two run-directory names were
+visible workspace labels. The corrected comparison uses a shared private working
+directory, with no pixel masking or tolerance. `bench_tab_switch.py` now uses
+that same policy for both stacks, including negative controls. The final CLI
+qualification in `/tmp/telar-perf-tab-switch-cwd-qual-01` passes both complete
+stacks with 20 warmup and 20 measured switches each, without claiming timing
+acceptance from one pair. All 12 focused tests pass again; stricter input-source
+anchor checks in the builder preserve the measured native probe and producer
+sources byte for byte. Earlier six-pair
+Zig/C++ figures above used different run-directory labels and are therefore
+initial diagnostic data, not final matched-content acceptance; repeat that
+comparison with the corrected working directory before any full-flow claim.
+
+All subsequent candidate pairs use the same working directory, four 30 Hz
+producers, strict target/generation and offered-rate gates, 100 measured switches
+and 20 warmups. There were no invalid rows in either candidate switch series.
+The initial hypothesis specified at least 5/6 GUI-CPU wins, without a consistent
+latency regression. It failed that criterion despite a promising latency result.
+An independent six-pair confirmation was then declared for p50 and p95 latency,
+each requiring 5/6 wins, with the exact same candidate and reversed initial order.
+It failed p50. Do not merge the exploratory and confirmatory samples to bypass
+that result.
+
+| Switch metric | Exploratory A → B (wins) | Independent A → B (wins) |
+| --- | --- | --- |
+| p50 ms | 45.190 → 40.518 (6/6) | 42.929 → 40.626 (4/6) |
+| p95 ms | 49.255 → 45.599 (6/6) | 48.743 → 45.603 (6/6) |
+| p99 ms | 49.398 → 47.101 (5/6) | 49.469 → 47.278 (4/6) |
+| Maximum ms | 49.826 → 47.675 (5/6) | 49.727 → 48.903 (4/6) |
+| GUI CPU ms/action | 29.947 → 29.269 (4/6) | 29.136 → 29.367 (4/6) |
+| GUI lifetime peak RSS MiB | 207.352 → 205.523 (4/6) | 204.414 → 205.469 (3/6) |
+
+The already-started settled-input regression series was allowed to finish.
+Single-pane p95 loses consistently, giving an additional rejection under the
+existing rule; the cause is not established and code placement is not proven.
+These are six alternating pairs per layout, also with identical working labels:
+
+| Settled input metric | Single A → B (wins) | Four splits A → B (wins) |
+| --- | --- | --- |
+| p50 ms | 24.966 → 24.995 (4/6) | 25.160 → 25.233 (2/6) |
+| p95 ms | 31.999 → 32.219 (1/6) | 33.065 → 32.663 (4/6) |
+| p99 ms | 33.684 → 34.264 (4/6) | 37.047 → 34.345 (4/6) |
+| Maximum ms | 39.646 → 37.108 (6/6) | 37.262 → 38.150 (3/6) |
+| GUI CPU ms/input | 4.048 → 4.060 (2/6) | 4.338 → 4.368 (3/6) |
+
+Raw series are `/tmp/telar-perf-pane-header-pairs-01`,
+`/tmp/telar-perf-pane-header-confirm-01` and
+`/tmp/telar-perf-pane-header-regressions-01`. Their favorable p95 and maximum
+latencies are retained as observations, not selected for promotion. No Zig or
+120 Hz victory follows, and all F01–F16 remain open. The next diagnostic separates
+continuous producer/drawing cost from switching cost on the frozen original C++
+GUI, before choosing a larger work-reduction or bounded-retention change.
+
+## Switching versus continuous background work census, 2026-11-03
+
+A separate diagnostic on the frozen original C++ GUI compares three alternating
+pairs with identical working labels and four 30 Hz producers. The normal variant
+performs previous-tab actions. The control leaves tab zero selected and observes
+fresh, CRC-verified generations on positive native presentations without injecting
+an action. Its reported observation waits are explicitly **not input latency**.
+Both retain the publication provenance and all four offered-rate checks; all six
+runs pass. Sources, native probes and receipts are in
+`out-perf/dlls-tab-switch-work-census` and
+`/tmp/telar-perf-tab-switch-work-census-01`.
+
+GUI CPU divided by its measured wall interval is 9.16%, 10.11%, 9.81% of one
+core without switching, versus 33.28%, 31.87%, 31.64% with switching. Medians are
+9.81% and 31.87%. These observations prioritize switching-related work, but do not
+identify one cause or prove a 22-point optimization opportunity: runtime work is
+not included, the response-driven observation cadence differs, and probe overhead
+remains unqualified. In particular, this does not turn a wait into CPU work or
+make the rejected header candidate acceptable.
+
+The next candidate should investigate bounded retention of the complete pane
+presentation and its glyph resources across tab changes, rather than assume that
+one hidden header dominates. Preserve pane/generation identity, focus and held
+input release, IME/copy/scroll state, image budgets, close/invalidation behavior
+and renderer-thread resource destruction. Hidden panes must not acquire extra
+rendering work merely because their disposable client objects are retained.
+This is a hypothesis supported by the profile and control, not an implemented or
+accepted cache. The allocation/copy/Qt-conversion brief and Adrian's allowance for
+bounded memory in exchange for less work remain part of the investigation.
+
+The rejected QML and test changes are removed and the original source rebuilt.
+The rebuilt GUI hash is `24236ffa9b107578541847d52bf528704a47cec3b05d1e44fd48bdd16bb6226f`;
+its 6,850,340-byte `__TEXT/__text` section is byte-identical to the frozen original,
+as are the other inspected text sections except `__const`. This is a restoration
+check, not a new performance result. Continue using the immutable original A
+executable for comparisons until qualifying any newly rebuilt binary.
 
 ## Coverage and next experiments
 

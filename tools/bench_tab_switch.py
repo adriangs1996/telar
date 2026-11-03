@@ -81,6 +81,8 @@ def main():
         setattr(args, name, getattr(args, name).resolve(strict=True))
     output = args.output.resolve()
     output.mkdir(parents=True, mode=0o700, exist_ok=False)
+    working = output / 'working-directory'
+    working.mkdir()
     library = build(output / 'probe')
     sys.path.insert(0, str(library.parent))
     harness = load_harness(library.parent / 'gui_tui_latency.py', 'switch_latency')
@@ -99,7 +101,7 @@ def main():
         shutil.copy2(path, output / path.name)
     manifest = dict(scope=__doc__, negative_controls=args.negative_controls,
                     rounds=args.rounds, first=args.first, samples=args.samples, warmup=harness.WARMUP,
-                    viewport=args.viewport, endpoint='MTLDrawable.presentedTime',
+                    viewport=args.viewport, working_directory=str(working), endpoint='MTLDrawable.presentedTime',
                     head=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=Path(__file__).parent, text=True).strip(),
                     binaries={name: executable_identity(path) for name, path in
                               [('zig', zig / 'telar'), ('cpp_gui', cpp / 'telar-gui'),
@@ -113,7 +115,7 @@ def main():
                                      image_size=None, input_method='key', endpoint='presented', idle_seconds=0,
                                      case='tabs', panes=4, throughput=False, text_pattern='repeat',
                                      background_mib_per_second=None, viewport=args.viewport,
-                                     float_windows=args.float_windows, capture=False, cwd=None)
+                                     float_windows=args.float_windows, capture=False, cwd=working)
         negative_controls(output, library, options, zig / 'telar')
         return
     rows = []
@@ -127,7 +129,7 @@ def main():
                                          samples=args.samples, image_size=None, input_method='key',
                                          endpoint='presented', idle_seconds=0, case='tabs', panes=4,
                                          throughput=False, text_pattern='repeat', background_mib_per_second=None,
-                                         viewport=args.viewport, float_windows=args.float_windows, capture=False, cwd=None)
+                                         viewport=args.viewport, float_windows=args.float_windows, capture=False, cwd=working)
             row = harness.measure(mode, directory, (zig / 'telar', None, library, output / 'config.lua', options))
             receipts = [json.loads(path.read_text()) for path in sorted((directory / 'switching').glob('*.json'))]
             publications = {tab: (directory / 'switching' / f'{tab}.events').read_bytes() for tab in range(4)}

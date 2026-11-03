@@ -37,8 +37,12 @@ def build(output):
     replace('static BOOL pending, finished, text_input;', 'static BOOL pending, finished, text_input;\n    static atomic_ulong packet_cell_width;\n    static unsigned expected_tabs[ProbeSampleCapacity], minimum_generations[ProbeSampleCapacity];\n    static unsigned observed_tabs[ProbeSampleCapacity], observed_generations[ProbeSampleCapacity];\n    static unsigned last_seen_generations[16];\n    static double switch_input_at[ProbeSampleCapacity], switch_presented_at[ProbeSampleCapacity];\n    static BOOL layout_key(BOOL create);')
     replace('@public unsigned sequence, geometry; NSUInteger drawable_id;', '@public unsigned sequence, geometry, tab_index, content_generation; NSUInteger drawable_id;')
     replace('    pending=YES;\n    atomic_store(&epoch,(unsigned)count+1);', '    unsigned wanted = panes - 1 - (unsigned)count % panes;\n        NSString *receipt_path = [display_directory stringByAppendingPathComponent:[NSString stringWithFormat:@"switching/%u.json", wanted]];\n        NSData *receipt_data = [NSData dataWithContentsOfFile:receipt_path];\n        NSDictionary *receipt = receipt_data ? [NSJSONSerialization JSONObjectWithData:receipt_data options:0 error:nil] : nil;\n        unsigned generation = [receipt[@"generation"] unsignedIntValue];\n        if (![receipt[@"phase"] isEqualToString:@"ready"] || !generation || [receipt[@"tab_index"] unsignedIntValue] != wanted) { finish(12); return; }\n        expected_tabs[count] = wanted;\n        minimum_generations[count] = MAX(generation, last_seen_generations[wanted] + 1);\n        pending=YES;\n        atomic_store(&epoch,(unsigned)count+1);')
-    a = contents.index('    if(text_input){\n        [(id<NSTextInputClient>)target insertText:')
-    b = contents.index('    unsigned sequence = (unsigned)count + 1;', a)
+    input_begin = '    if(text_input){\n        [(id<NSTextInputClient>)target insertText:'
+    input_end = '    unsigned sequence = (unsigned)count + 1;'
+    if contents.count(input_begin) != 1 or contents.count(input_end) != 1:
+        raise ValueError('Native probe input injection anchors changed')
+    a = contents.index(input_begin)
+    b = contents.index(input_end, a)
     contents = contents[:a] + '    if (!layout_key(NO)) { finish(ProbeFailureInputTarget); return; }\n' + contents[b:]
     replace('    began=CACurrentMediaTime();', '    began=CACurrentMediaTime();\n    switch_input_at[count] = began;')
     replace('    pending=NO;count++;', '    switch_presented_at[count] = frame->presented;\n        observed_tabs[count] = frame->tab_index;\n        observed_generations[count] = frame->content_generation;\n        last_seen_generations[frame->tab_index] = frame->content_generation;\n        pending=NO;count++;')
