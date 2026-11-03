@@ -2839,9 +2839,43 @@ The direct fixture uses plain ASCII at 82×21; it is not the richer 256×52 scen
 probe or a whole-client benchmark. Its allocator evidence remains 55,104 extra
 live bytes and one additional allocation on cold initialization, with no warm
 allocations. Arm64 production symbols confirm a separate nonempty helper.
-Final-binary visible captures, scene component pairs, native qualification, typing
-controls and tab-switch pairs are running sequentially; earlier favorable results
-cannot accept this new binary. The production change remains experimental.
+The final separated-path variant is **rejected**. Six independent native typing
+pairs (`/tmp/telar-perf-staged-fast-empty-regressions-01`) give single-pane GUI CPU
+3.902805 → 4.017025 ms/input, only 1/6 wins. Its p95 is 32.794 → 32.657 ms, 2/6;
+four-split CPU is 4.183 → 4.204 ms/input, 3/6. The cause is not established and no
+code-placement exemption is claimed. The target tab-switch attempt fails the
+unchanged offered-rate gate before completion; it supplies no acceptance evidence.
+Component wins cannot override this independent native regression.
+
+Final component pairs (`/tmp/telar-perf-staged-fast-empty-components-01`) still
+show retained/sparse combined application-plus-paint wins in all seven pairs:
+optical 6.594 → 0.197 ms and 6.539 → 0.328 ms; standard 7.105 → 0.200 ms and
+7.060 → 0.333 ms. Full optical is 6.675 → 6.647 ms (3/7); full standard is
+7.153 → 7.060 ms (6/7). All six final visible component captures are pixel-exact.
+
+The new joint experiment, `out-perf/dlls-pane-row-reuse-01`, combines bounded
+pane retention with staged decoding and unchanged snapshot row revisions. Its
+contract explicitly retains the original frozen C++ baseline: neither rejected
+parent is accepted. The intended saving is reuse of both QML delegates and
+unchanged terminal rows when revisiting tabs. Extra bounded storage is allowed;
+six fresh target pairs must win CPU and p95 at least 5/6, and a consistent
+latency/CPU loss in independent single/split controls rejects it.
+
+An initial native oracle catches two fullscreen-strip objects after changing
+panes: the hidden cached delegate keeps its old strip. Requiring the pane to be
+visible before loading fullscreen/attention chrome fixes the failure without
+weakening the oracle. The corrected candidate passes 17 native cases, 38 Metal
+scene cases and core/session/runtime-link/cache-model tests. The refactored
+2,048-case Screen oracle also passes Rosetta and ASan/UBSan; pinned Zig 0.16 checks,
+cross-compilation, style and module-boundary checks pass. Final rebuild, static
+analysis and fresh paired measurements remain required; no joint result is
+accepted yet. A pre-existing redundant-alias diagnostic in `config/callback.hpp`
+is recorded separately from the modified-code checks.
+
+`gui-screen-probe` and `tools/compare_screen.py` now provide the direct Screen
+workloads as reusable source. They verify final cells, reject warm allocation
+churn, retain binary hashes and raw paired results, and report Screen-owned bytes.
+They exclude encoding, Qt allocations, process RSS and native presentation timing.
 
 The reusable `compare_terminal_scene.py` controller now supports
 `--snapshot-workload full|sparse|retained` and
