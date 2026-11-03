@@ -2395,6 +2395,87 @@ Negative cases must exit normally with a nonzero status and empty stdout; crashe
 and timeouts do not count as successful rejection.
 
 
+## Native tab-switch endpoint and initial DLL baseline, 2026-11-03
+
+`tools/bench_tab_switch.py` now exercises actual native Ctrl+B,p actions against
+four independently updating PTYs, instead of typing in an already selected tab.
+Each producer publishes a tab identity, 16-bit generation and CRC8 packet in
+opaque terminal cells at 30 Hz. Receipts bind producer identities to the runtime's
+actual pane, tab and workspace IDs. Native readback requires the requested tab
+and a generation at least as new as the receipt at input time and newer than its
+last accepted presentation. The endpoint remains a positive
+`MTLDrawable.presentedTime`; focus, initial readiness, matching grids and VSync
+checks come from the ordinary harness, whose typing probe is unchanged.
+
+The isolated builder preserves generated sources, helper binaries, commands and
+hashes. Publication events bracket PTY writes with `CACurrentMediaTime`, allowing
+the report to reject unproduced generations and check all four producers during
+the observation window. It conservatively retains the 5% offered-rate gate in
+every complete 500 ms window: at this rate, integer counts require exactly 15.
+This is a method limitation near a window boundary, not permission to silently
+accept a failed run. Runtime resource separation, probe overhead, entire terminal
+content equivalence, workspace switching and continuous 120 Hz cadence remain
+open. A display reporting a 120 Hz maximum does not close those requirements.
+
+Twelve focused tests pass, covering packet corruption/truncation, generation and
+native-clock provenance, a producer stall, and four real PTYs surviving marker
+withdrawal/restoration, resize and termination. Native wrong-tab, stale-generation
+and bad-checksum controls pass in both complete stacks: all six qualify initial
+presentation and then reject the first incorrect target with input timeout and
+zero accepted responses. They are reproducible with `--negative-controls` and
+were re-run through the final CLI in `/tmp/telar-perf-tab-switch-negative-03`.
+The controls exercise the target oracle, not all possible presentation faults.
+
+Producer qualification initially failed with select, Python sleep and
+`mach_wait_until`; changing QoS and adding a Foundation activity did not solve it
+and were removed. An isolated 180-tick comparison found median/max wake lateness
+of 7.603/16.450 ms for Mach wait versus 0.053/2.794 ms for an absolute Mach-clock
+kqueue timer with `NOTE_CRITICAL`. The final small C helper uses that timer only
+in the owned benchmark producers, with no busy wait or system configuration
+change. The native qualification then passed both stacks, 40 switches each.
+These are generator diagnostics, not Telar improvements. Failed attempts remain
+under `/tmp/telar-perf-tab-switch-qual-01` through `-07`; successful final
+qualification is `-08` and generator evidence is in
+`out-perf/dlls-tab-switch-qual`.
+
+The initial baseline uses source HEAD `3da9ec736`, GUI SHA
+`5a639c5f26f67892698088cd95e31555212e6508dae2e45a441dc58e641caef5`,
+C++ runtime SHA `a0b8b9d5826cf80c135cc113a1587a552c054e4d733942ab34e98157a1717645`
+and the same frozen original Zig SHA `6ccf79485c5ca8baaa2d69d2590abb49d23c808891c04fe6e70f5602713a1d5e`.
+Both stacks use JetBrains Mono 15, optical thickening, opaque background, no
+sidebar, four tabs, 1600×1000 backing pixels and an 82×21 grid. Six valid
+alternating pairs contain 100 measured switches after 20 warmups per run.
+
+`/tmp/telar-perf-tab-switch-pairs-01` completed five valid pairs; its sixth C++
+attempt failed the predeclared rate gate and remains excluded. That producer's
+observed rate was 30.00085 Hz, with 31.625–34.879 ms gaps, but publications near
+500 ms boundaries produced counts of 14/16. A fresh complete sixth pair in
+`/tmp/telar-perf-tab-switch-pairs-02` passed without changing that gate or the
+workload, starting C++ first to retain the AB/BA order. All invalid artifacts are
+retained; the combined receipt is `out-perf/dlls-tab-switch-qual/paired-summary.json`.
+Medians of the six paired summaries, scoped to this instrumented discrete-switch
+workload:
+
+| Metric | Zig | C++ | C++ wins |
+| --- | --- | --- | --- |
+| p50 latency ms | 38.370 | 43.100 | 1/6 |
+| p95 latency ms | 43.425 | 49.151 | 0/6 |
+| p99 latency ms | 47.546 | 49.285 | 2/6 |
+| Maximum latency ms | 50.749 | 49.808 | 3/6 |
+| GUI CPU ms/action | 17.217 | 29.741 | 0/6 |
+
+This is a baseline regression, not an accepted optimization or F08 completion.
+Separate native stack sampling in `/tmp/telar-perf-tab-switch-profile-01` overlaps
+102 Zig and 91 C++ switches; its timings are excluded from the pairs. C++ samples
+show QML delegate construction/destruction, hidden pane-header layout and binding
+work, and new optical glyph rasterization after switching. Large sampled Metal
+`nextDrawable` waits are waits, not equivalent CPU-work percentages. Source
+inspection confirms keyed pane-model reconciliation replaces delegates when pane
+identity changes, and `PaneArea.qml` constructs its header even for an unframed
+single pane. Avoiding that unused header work is the next isolated candidate;
+retaining glyphs across delegate lifetimes is another unaccepted memory/work
+tradeoff. Neither follows merely from a general allocation hypothesis.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
@@ -2410,7 +2491,7 @@ and the existing seven-pair component contracts remain mandatory.
 | F05 | TUI/terminal fixtures | Deterministic full TUI trace and presentation cadence |
 | F06 | Native wheel injection, terminal scroll probes | Continuous scrollback/selection/live-return content and cadence |
 | F07 | Four splits and fixed-rate background load | All producers active, fairness and cadence |
-| F08 | Four tabs and background output | Repeated tab/workspace switching to verified target content |
+| F08 | Native previous-tab to verified target generation, four 30 Hz producers | Baseline latency/CPU regression; workspaces, complete content, cadence and separate resources |
 | F09 | Native resize and blur controls | Continuous window/divider motion, clipping, matched backgrounds |
 | F10 | Kitty producer and image marker tooling | Integrated 1K/4K receipts, alpha/generations, image latency plus UI cadence |
 | F11 | Private clipboard/shelf/modal captures | Independent runtimes, actual image endpoint, bounded multi-attachment cases |
