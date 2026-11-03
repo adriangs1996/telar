@@ -3477,6 +3477,86 @@ from every checkpoint tick to insert/remove operations, at a small bounded memor
 cost. It still needs store-lifecycle oracles, dense/mutation controls and whole
 runtime measurements before acceptance.
 
+## Maintained checkpoint extent: no native CPU win, 2026-11-03
+
+The follow-up in ignored `out-perf/dlls-checkpoint-extent-01` maintains an occupied
+prefix in `SlotStore` on insert/erase and scans that prefix in `Snapshot::changed`.
+Previous stamps beyond a shortened prefix are cleared. It adds one `size_t` per
+store and one to `Snapshot`, without changing the existing full-span `items()`
+API. The runtime uses stores for panes, clients, workspaces, worktrees and
+executions; the mutation cost therefore needs controls beyond pane scanning.
+
+The oracle uses actual copied `SlotStore` implementations and extracted snapshot
+bodies with lightweight pane fixtures. It checks 201,028 transitions, settled
+rechecks, holes, full occupancy, rejected inserts, replacement and stale handles.
+Release, ASan/UBSan and Rosetta pass. Broken extent shrinking and lost removal
+detection are both rejected by negative controls. The real persistence suite
+also passes against A/B and sanitized B through a Clang VFS overlay; production
+headers remain unchanged. x86-64 baseline/v3 code was generated. Linux runtime
+qualification remains open.
+
+Seven alternating pairs per component case all pass their host gates. Median
+process CPU nanoseconds, A → B: empty 337.066 → 2.915, one pane 348.069 → 3.628,
+four low slots 395.146 → 12.472, four highest slots 373.687 → 365.275, spaced
+slots 398.062 → 315.880, mutation followed by scanning 386.719 → 26.210,
+revision changes 388.543 → 13.747, and cold snapshot construction plus scan
+551.648 → 178.760; all win 7/7. Dense occupancy is unresolved at component level:
+581.093 → 598.526 (2/7), then an independently qualified repetition
+594.341 → 584.271 (6/7). Both series are retained. Pure insert/remove, declared
+separately before timing, costs 20.099 → 22.211 ns (0/7); moving work to mutation
+does not make that work free.
+
+The full candidate runtime is `dfee66b94e26`; GUI `5a639c5f26f6`, helper
+`87beebb065f0` and QtGui `abd4bdf7f504` are unchanged. The rebuild of original
+runtime source has identical code, data, addresses and file bytes outside its
+UUID/signature to the accepted runtime; the native A still uses the original
+accepted `a0b8b9d5826c` binary. No production source was installed or replaced.
+
+Real-session A→B→A, B→A→B and B→B→B restore checks pass. The attempted existing
+cross-Zig driver fails at its first Zig seed because it uses the C++ `cqp00001`
+wire client against Zig's different schema; this is not cross-runtime checkpoint
+qualification. Native `/tmp/telar-perf-checkpoint-extent-qual-01` qualifies
+single, splits, tabs and variable fixed-rate output, with byte-identical settled
+PNGs for the three static cases. All owned runtimes report complete cleanup.
+
+`/tmp/telar-perf-checkpoint-extent-native-01` completes six alternating pairs:
+100 measured inputs after 20 warmups, four 39×19 panes at 1600×1000, three variable
+ASCII producers at 0.125 MiB/s each. Every offered-rate check passes. Its 26 host
+observations qualify, with maximum one/five-minute load 4.537/2.964 and no active
+compiler observations. No builds, tests or profilers from this task overlapped
+the series.
+
+| Native metric | Accepted A | Candidate B | Wins |
+| --- | ---: | ---: | ---: |
+| Input-to-present p50, ms | 31.103 | 31.365 | 2/6 |
+| p95, ms | 36.737 | 35.893 | 5/6 |
+| p99, ms | 40.952 | 38.237 | 4/6 |
+| GUI measured CPU, ms/input | 13.705 | 13.812 | 3/6 |
+| Runtime session CPU, ms | 859.904 | 855.974 | 3/6 |
+| Runtime session CPU, ms/second | 53.541 | 53.150 | 3/6 |
+
+The runtime window brackets GUI launch and exit, including setup, warmup and
+boundary-observer time. It is not the GUI measured-input window, and their CPU values are not
+summed. Produced bytes are retained alongside duration/rate: medians
+5,365,760 → 5,386,816 bytes. **Rejected for insufficient native target gain**:
+both runtime CPU metrics win 3/6, below the predeclared 5/6 requirement. This is
+not a claim of a proven runtime regression. Neither the large component gain
+nor p95 improvement overrides the failed target. No further checkpoint variant
+is promoted; larger-cost work remains the next profiling priority.
+
+The external observer is retained as `tools/macos_process_resources.h/.c` and
+`tools/native_runtime_resources.py`, independently of the rejected optimization.
+It queries the verified runtime outside the GUI phase and leaves the native probe
+binary unchanged. CPU conversion uses the recorded 125/3 Mach timebase on this
+host. Fresh self/child controls agree with `getrusage`; invalid-PID and seven
+identity/counter/clock controls reject. Nine Python tests cover representation,
+conversion, receipt preservation, PID reuse and cleanup after capture/native
+failure. All 20 qualification/timing receipts replay identically through the
+source adapter; an owned-child run also verifies actual capture and cleanup.
+The helper builds with `-Wall -Wextra -Werror`; it remains a
+Darwin-only measurement tool, with explicit window limitations documented in
+the flow matrix.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove

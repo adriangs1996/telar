@@ -122,6 +122,18 @@ where available. Allocation instrumentation and profilers run separately from
 headline timing. Avoid summing shared RSS; obtain actual clock/timebase units and
 validate native resource counters.
 
+For Darwin runtime counters without adding queries inside the GUI input phase,
+build `tools/macos_process_resources.c` with `clang -O2` into an ignored scratch
+directory. Programmatic callers can wrap native `measure()` with
+`native_runtime_resources.capture(harness, receipt_path, helper_path)`.
+This serial adapter samples the socket-verified runtime before GUI launch and
+after GUI exit, then preserves the harness's owned-runtime cleanup. The window
+includes GUI startup, warmup and boundary-observer time, excludes runtime startup/shutdown and child CPU,
+and differs from the GUI measured-input interval. It must be reported separately.
+The helper records the Mach timebase, process start time, executable UUID and
+clock brackets. Memory values are boundary snapshots and a lifetime footprint
+maximum, not an interval peak. This optional adapter is not enabled by the CLI.
+
 ## Deliverables and later optimization
 
 Fresh setup, coverage gaps and current experiments are tracked in
