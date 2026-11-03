@@ -5756,3 +5756,56 @@ No production scheduling candidate is adopted. The next algorithmic investigatio
 must account for obsolete query work and bounded reuse of repeated history work,
 including invalidation after writes and external database changes. All F01–F16
 and native120 acceptance remain open.
+
+## In-place fuzzy ranking: rejected, 2026-11-03
+
+`out-perf/dlls-history-inplace-rank-01` tests a private VFS-overlay candidate
+against the accepted fused runtime source (`5d2167b7…`). It removes RankedEntry
+storage and the fuzzy hash set. For distinct queries it sorts candidates by hash
+and newest timestamp/id, keeps the newest hash winner before testing score
+eligibility, then compacts valid scores in place. It partially sorts that vector
+by score/timestamp/id to select the page. Non-distinct queries skip the full sort.
+No retained command cache, database migration, production edit or timer change is
+involved. A and B use freshly built direct HistoryStore probes with identical
+flags/dependencies; production GUI/runtime binaries remain unchanged.
+
+All 396 independent recency/score/page cases match A and B byte-exactly: 324 on
+nine large/long/duplicate/shuffled/tied/reverse fixtures, plus 72 on the ordinary
+and duplicate-heavy 10,000-entry timing fixtures. Scoped metadata and allocation
+failure checks cover another 192 requests per variant on 13,312 entries, including
+old snapshots, author/failed filters, pagination, deletion and subsequent import.
+A, B and ASan/UBSan B produce the same canonical bytes and release all allocator-
+observed live storage. System SQLite itself is not sanitizer-instrumented.
+
+On that duplicate-heavy allocation oracle, calls fall from 30 to 5, allocated
+bytes from 485,472 to 324,664, and incremental peak bytes from 485,120 to 324,456.
+All 32 baseline and six candidate allocation-failure injection points recover
+correctly. These counts describe that fixture and allocator, not all SQL or GUI
+allocations. The first audit runner mixed JSON stdout with diagnostic stderr and
+failed to parse a successful run; the final runner separates both streams and
+repeats A/B/sanitized validation.
+
+The predeclared initial timing screen uses five independent seven-pair series,
+300 queries per execution and one warmup query, with no concurrent owned build,
+test or profiler. Every measured response is checked exactly. All 150 load
+boundaries pass, maximum load1 3.080. Results are component process CPU, including
+the small equality/clock overhead, not GUI latency or cold-start measurements.
+
+| Workload | A CPU ms/query | B CPU ms/query | B wins |
+| --- | ---: | ---: | ---: |
+| Ordinary gb, distinct | 1.241 | 1.375 | 0/7 |
+| Ordinary GST, distinct | 1.278 | 1.402 | 0/7 |
+| Ordinary gb, non-distinct | 0.960 | 0.979 | 0/7 |
+| Duplicate-heavy gb, distinct | 0.938 | 1.331 | 0/7 |
+| No match, distinct | 1.191 | 1.314 | 0/7 |
+
+All five mean-response and p95 comparisons also lose 0/7. The candidate is
+rejected despite lower allocation count and peak memory. ARM64 disassembly
+confirms the conditional full sort, hash-group compaction, and selection over
+32-byte candidates in place of the previous 16-byte ranked records. The separate
+costs of those changes, including the non-distinct regression, are not causally
+isolated; this is not attributed to code placement. No x86 or full-client
+promotion is attempted after this failed component gate. Raw pairs are under
+`/tmp/telar-perf-history-inplace-rank-*-pairs-01`; `decision.json` retains the
+rejection and identities. The next selection experiment should isolate ordering
+work from record size and duplicate handling. All F01–F16 remain open.
