@@ -2728,6 +2728,73 @@ alternating pairs (`/tmp/telar-perf-split-identical-control-01`). Median p95 was
 host variability; it neither excuses the earlier pane-retention regression nor
 establishes its cause. All F01–F16 remain open.
 
+## Snapshot row retention and staged decoding — investigation open
+
+On `0fcfdc42a`, the first experiment preserves cell rows and their presentation
+revisions for same-pane, same-grid snapshots whose semantic cell contents match.
+Delta invalidation remains unchanged; cursor, links, modes and frame identity
+still advance. A 2,048-case seeded cell/row oracle exercises text, width, style,
+pane identity, grid changes, detach, metadata and malformed late input. It fails
+on the original implementation's unconditional row invalidation and passes the
+candidate, including under Rosetta and ASan/UBSan. All 38 native Metal scene tests
+pass, including retained-row cursor movement against forced reconstruction.
+
+The probe now separates Screen application from TerminalScene synchronization and
+supports full, one-row and unchanged snapshots. Seven alternating pairs for each
+text policy are in `/tmp/telar-perf-snapshot-rows-components-01`; source and frozen
+binaries are under ignored `out-perf/dlls-snapshot-row-retention-01`. Median combined
+apply-plus-paint CPU times in milliseconds:
+
+| Snapshot changes | Optical A → B | Wins | Standard A → B | Wins |
+| --- | ---: | ---: | ---: | ---: |
+| None | 6.653 → 0.274 | 7/7 | 7.073 → 0.276 | 7/7 |
+| One row | 6.602 → 0.393 | 7/7 | 7.097 → 0.412 | 7/7 |
+| All cells | 6.743 → 6.814 | 2/7 | 7.176 → 7.177 | 2/7 |
+
+All six final visible captures match exactly. These component numbers exclude
+encoding and do not measure input latency, native frame cadence or hidden-pane
+scene retention. Application alone is consistently slower: the optical unchanged
+case rises from 0.257 to 0.273 ms, the full case from 0.260 to 0.295 ms, both 0/7.
+The benefit comes from avoiding downstream work; this is **not an accepted
+full-flow optimization**. Arm64 assembly retains both decoder traversals and adds
+semantic-style comparison and memcmp on the retention path; unchanged cells skip
+stores and row-revision division. No vector or architecture-specific shortcut is
+used.
+
+The follow-up experiment stages decoded cells in a retained vector and commits
+only after all spans validate, eliminating the second decoder traversal while
+keeping malformed-frame atomicity. At the protocol maximum, its extra cell storage
+is 130,359 × 32 bytes (about 3.98 MiB per Screen on this host); typical grids need
+less. This is an explicit bounded-memory tradeoff, not a zero-memory claim. Added
+checks cover a malformed later delta span, recovery, gaps, and no further injected
+Screen allocations after capacity warmup. The source remains experimental under
+`out-perf/dlls-staged-screen-decode-01`; native latency, resource and regression
+acceptance are still required. No pane-retention cache has been reinstated, and
+all F01–F16 remain open.
+
+The staged variant passes the same 2,048-case oracle under native arm64, Rosetta
+x86-64 and ASan/UBSan, all 38 native Metal scene cases, core/session/runtime-link
+checks, four native tab/layout cases, and byte-exact settled single/split/tab
+captures. Seven alternating component pairs per case are recorded in
+`/tmp/telar-perf-staged-screen-components-01`:
+
+| Snapshot changes | Optical A → B, ms | Wins | Standard A → B, ms | Wins |
+| --- | ---: | ---: | ---: | ---: |
+| None | 6.619 → 0.199 | 7/7 | 7.089 → 0.201 | 7/7 |
+| One row | 6.636 → 0.333 | 7/7 | 7.108 → 0.331 | 7/7 |
+| All cells | 6.720 → 6.684 | 6/7 | 7.114 → 7.087 | 3/7 |
+
+Application-only CPU wins all seven pairs in every case; the optical full case
+falls 0.256 → 0.187 ms. Arm64 assembly has one CellReader traversal followed by a
+commit traversal over decoded cells; the two decoder call sites are the entry and
+backedge of that single traversal. No native-latency conclusion follows from these
+component results. GUI A is
+`5a639c5f26f67892698088cd95e31555212e6508dae2e45a441dc58e641caef5`, staged GUI B is
+`d63ca3a96192f551bfad6fe1dfdc7138d8e5c612ef6ef15b8857755d3d1064aa`; both use runtime
+`a0b8b9d5826cf80c135cc113a1587a552c054e4d733942ab34e98157a1717645`.
+Independent native qualification, typing regressions and tab-switch pairs are the
+next acceptance step. Production code remains uncommitted experimental work.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
