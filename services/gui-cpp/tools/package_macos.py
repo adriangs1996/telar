@@ -161,6 +161,7 @@ def main():
     shutil.copytree(qt_licenses, resources / 'licenses/qt')
     shutil.copy2(base / 'terminal/glyphs/LICENSE', resources / 'licenses/cell-glyphs.txt')
     shutil.copy2(root / 'src/assets/JetBrainsMono-OFL.txt', resources / 'licenses/JetBrainsMono-OFL.txt')
+    shutil.copy2(root / 'src/assets/TelarForma-OFL.txt', resources / 'licenses/TelarForma-OFL.txt')
     template = (root / 'packaging/macos/Info.plist.in').read_bytes().replace(b'@VERSION@', version.encode())
     info = plistlib.loads(template)
     info.update(CFBundleDisplayName='Telar C++ Preview', CFBundleName='Telar C++ Preview',

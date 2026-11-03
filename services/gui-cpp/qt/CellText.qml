@@ -31,7 +31,7 @@ Item {
         sourceComponent: Text {
             text: root.text
             color: root.color
-            font.family: root.grid.family || "JetBrains Mono"
+            font.family: root.grid.family || "Telar Forma"
             font.styleName: root.grid.style ?? ""
             font.pixelSize: root.grid.pixelHeight
             font.bold: root.bold

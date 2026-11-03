@@ -14,6 +14,7 @@ pub const Builtin = enum {
     kanagawa,
     kanagawa_dragon,
     terminal,
+    cybervenom,
 
     pub fn canonicalName(self: Builtin) []const u8 {
         return switch (self) {
@@ -26,6 +27,7 @@ pub const Builtin = enum {
             .kanagawa => "kanagawa",
             .kanagawa_dragon => "kanagawa-dragon",
             .terminal => "terminal",
+            .cybervenom => "cybervenom",
         };
     }
 };
@@ -33,9 +35,13 @@ pub const Builtin = enum {
 pub const Theme = @import("Theme.zig");
 const TerminalTheme = @import("TerminalTheme.zig");
 
-pub const default_theme = builtin(.shade);
+pub const default_theme = builtin(.cybervenom);
 
 pub fn fromName(name: []const u8) ?Theme {
+    if (eql(name, "cybervenom")) {
+        return builtin(.cybervenom);
+    }
+
     if (eql(name, "shade") or eql(name, "osaka-jade") or eql(name, "osaka_jade") or eql(name, "osakajade")) {
         return builtin(.shade);
     }
@@ -72,6 +78,24 @@ pub fn builtin(name: Builtin) Theme {
         .terminal = terminal(name),
         .syntax_styles = syntax(name),
         .palette = switch (name) {
+            .cybervenom => .{
+                .accent = rgb24c(0xaa87f5),
+                .panel_bg = rgb24c(0x211b2f),
+                .surface0 = rgb24c(0x312b3e),
+                .surface1 = rgb24c(0x373245),
+                .surface_dim = rgb24c(0x1a1627),
+                .overlay0 = rgb24c(0x383546),
+                .overlay1 = rgb24c(0x5e5d74),
+                .text = rgb24c(0xaba8b6),
+                .subtext0 = rgb24c(0x8e899d),
+                .mauve = rgb24c(0xaf99e9),
+                .green = rgb24c(0x5fb095),
+                .yellow = rgb24c(0xd9cc7e),
+                .red = rgb24c(0xf37986),
+                .blue = rgb24c(0xaa87f5),
+                .teal = rgb24c(0x82c3d3),
+                .peach = rgb24c(0xec9c63),
+            },
             .shade => builtin(.vesper).withOverrides(.{
                 .accent = rgb24c(0xa8c98c),
                 .panel_bg = .default,
@@ -237,7 +261,8 @@ pub fn builtin(name: Builtin) Theme {
 fn syntax(name: Builtin) Theme.SyntaxStyles {
     var result: Theme.SyntaxStyles = .initFill(null);
     const roles = .{ .plain, .keyword, .string, .number, .comment, .constant, .builtin_constant, .builtin, .func, .type, .parameter, .property, .namespace, .operator, .punctuation };
-    const colors: [roles.len]u24 = switch (name) {
+    const colors: [roles.len]?u24 = switch (name) {
+        .cybervenom => .{ 0xaba8b6, 0xaf99e9, 0x5fb095, 0xec9c63, 0x7c7690, 0xec9c63, null, null, 0x99baf8, 0xe5ca93, 0xe492c9, 0xb3d7e1, 0xe5ca93, 0xa588e9, 0xa1a2a9 },
         .shade => .{ 0xd1d1cf, 0xa0a0a0, 0x91b99a, 0xe6b99d, 0x304a39, 0xc3cea0, 0xe6b99d, 0xa8c98c, 0xa8c98c, 0xc3cea0, 0xadd0c5, 0xbbc8b5, 0xc4b3c5, 0xa0a0a0, 0xa0a0a0 },
         .pierre_dark => .{ 0xe5e5e5, 0xff678d, 0x5ecc71, 0x68cdf2, 0x737373, 0xffd452, 0x68cdf2, 0xffab16, 0x9d6afb, 0xd568ea, 0xffa359, 0xffd452, 0xffab16, 0x08c0ef, 0x636363 },
         .pierre_dark_soft => .{ 0xd4d4d4, 0xff91a8, 0x8cda94, 0x96d9f6, 0x636363, 0xffde80, 0x96d9f6, 0xffde80, 0xba8ffd, 0xe290f0, 0xffba82, 0xffde80, 0xffde80, 0x68cdf2, 0x737373 },
@@ -246,14 +271,16 @@ fn syntax(name: Builtin) Theme.SyntaxStyles {
         else => return result,
     };
     inline for (roles, colors) |role, color| {
-        result.set(role, .{
-            .color = rgb24c(color),
-            .italic = switch (name) {
-                .shade => role == .parameter,
-                .kanagawa, .kanagawa_dragon => role == .keyword or role == .comment,
-                else => false,
-            },
-        });
+        if (color) |explicit_color| {
+            result.set(role, .{
+                .color = rgb24c(explicit_color),
+                .italic = switch (name) {
+                    .shade => role == .parameter,
+                    .kanagawa, .kanagawa_dragon => role == .keyword or role == .comment,
+                    else => false,
+                },
+            });
+        }
     }
 
     return result;
@@ -263,6 +290,16 @@ fn terminal(name: Builtin) TerminalTheme {
     // Palette sources are recorded in docs/configuration.md. These are ANSI
     // colors, not a positional conversion of the chrome's semantic roles.
     return switch (name) {
+        .cybervenom => .{
+            .foreground = rgb24(0xaba8b6),
+            .background = rgb24(0x211b2f),
+            .cursor_color = rgb24(0xaa87f5),
+            .cursor_text_color = rgb24(0x211b2f),
+            .palette = ansi(.{
+                0x383546, 0xf37986, 0x5fb095, 0xd9cc7e, 0x99baf8, 0xaa87f5, 0x82c3d3, 0xaba8b6,
+                0x7c7690, 0xfea9af, 0x99c2ac, 0xe5ca93, 0xb8d2ff, 0xc7b2ff, 0xb3d7e1, 0xe5e3ee,
+            }),
+        },
         .shade, .vesper => .{
             .foreground = rgb24(0xffffff),
             .background = rgb24(0x101010),

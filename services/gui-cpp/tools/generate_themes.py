@@ -65,6 +65,7 @@ def main():
         "kanagawa",
         "kanagawa_dragon",
         "terminal",
+        "cybervenom",
     ]
     defaults = source_path.with_name("TerminalTheme.zig").read_text()
     default_palette_body, _ = balanced(
@@ -179,11 +180,11 @@ def main():
         for color in palette:
             output.append("          " + rgb_bytes(color) + ",")
         output.extend(["        }},", "      },", "      .syntax_styles = {{"])
-        colors = re.findall(r"0x[0-9a-f]+", syntax_cases.get(name, ""))
+        colors = re.findall(r"0x[0-9a-f]+|\bnull\b", syntax_cases.get(name, ""))
         if colors and len(colors) != len(syntax_roles):
             raise ValueError(f"Invalid syntax palette: {name}")
         for index, role in enumerate(syntax_roles):
-            if not colors:
+            if not colors or colors[index] == "null":
                 output.append("        std::nullopt,")
                 continue
             italic = (name == "shade" and role == "parameter") or (
@@ -200,7 +201,16 @@ def main():
             )
         output.extend(["      }},", "    },", "  },"])
 
-    output.extend(["}};", "", "}", ""])
+    default_name = re.search(r"pub const default_theme = builtin\(\.(\w+)\);", source)[1]
+    default_index = names.index(default_name)
+    output.extend([
+        "}};",
+        "",
+        f"inline constexpr ThemeValues default_theme_values = theme_presets[{default_index}].values;",
+        "",
+        "}",
+        "",
+    ])
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text("\n".join(output))
 

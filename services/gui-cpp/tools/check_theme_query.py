@@ -2,6 +2,7 @@ import argparse
 import json
 from pathlib import Path
 import random
+import re
 import subprocess
 import sys
 import tempfile
@@ -146,6 +147,7 @@ int main() {
 
 zig_probe = r"""const std = @import("std");
 const support = @import("theme_support");
+const preset_count = std.meta.fields(support.Builtin).len;
 const Color = @import("color").Color;
 const data = struct {
     const HostAppearance = @import("appearance").HostAppearance;
@@ -244,13 +246,13 @@ fn run(source: []const u8) !void {
     const light = try number(request, "light");
     const dark = try number(request, "dark");
     const lock = try number(request, "lock");
-    if (light < 9) {
+    if (light < preset_count) {
         snapshot.theme_light = preset(light);
     }
-    if (dark < 9) {
+    if (dark < preset_count) {
         snapshot.theme_dark = preset(dark);
     }
-    const locked = if (lock < 9) preset(lock) else null;
+    const locked = if (lock < preset_count) preset(lock) else null;
     for (request.object.get("operations").?.array.items) |operation| {
         try mutate(&snapshot, operation);
     }
@@ -282,37 +284,37 @@ pub fn main() !void {
 """
 
 
-def records():
+def records(preset_count):
     generator = random.Random(0x5448454D45)
     default = dict(
         utf8=False,
         base=0,
-        light=9,
-        dark=9,
-        lock=9,
+        light=preset_count,
+        dark=preset_count,
+        lock=preset_count,
         appearance=0,
         capacity=4096,
         operations=[],
     )
-    for base in range(9):
+    for base in range(preset_count):
         for appearance in range(3):
-            for lock in (base, 9):
+            for lock in (base, preset_count):
                 yield {**default, "base": base, "appearance": appearance, "lock": lock}
     for index in range(2048):
         value = {
             **default,
-            "base": index % 9,
-            "light": generator.randrange(10),
-            "dark": generator.randrange(10),
+            "base": index % preset_count,
+            "light": generator.randrange(preset_count + 1),
+            "dark": generator.randrange(preset_count + 1),
             "appearance": index % 3,
-            "lock": generator.choice((9, 9, generator.randrange(9))),
+            "lock": generator.choice((preset_count, preset_count, generator.randrange(preset_count))),
             "capacity": generator.choice((4096, 65536)),
             "operations": [],
         }
         targets = (
             [0]
-            + ([1] if value["light"] < 9 else [])
-            + ([2] if value["dark"] < 9 else [])
+            + ([1] if value["light"] < preset_count else [])
+            + ([2] if value["dark"] < preset_count else [])
         )
         for _ in range(generator.randrange(24)):
             kind = generator.randrange(7)
@@ -364,7 +366,10 @@ def main():
         source.split("pub fn resolveTheme(", 1)[1].split("{", 1)[1].split("\n}", 1)[0]
     )
     zig = zig_probe.replace("__QUERY__", query).replace("__RESOLVE__", resolve)
-    cases = list(records())
+    themes = (root / "src/model/appearance/theme_support.zig").read_text()
+    builtin = themes.split("pub const Builtin = enum {", 1)[1].split("pub fn canonicalName", 1)[0]
+    preset_count = len(re.findall(r"^\s+\w+,", builtin, re.MULTILINE))
+    cases = list(records(preset_count))
     with tempfile.TemporaryDirectory(prefix="telar-theme-query-") as directory:
         work = Path(directory)
         (work / "probe.cpp").write_text(cpp_probe)

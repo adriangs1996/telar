@@ -8,8 +8,9 @@ are implemented separately from capture activation. Repeater workflows belong
 to client applications. The broader target is in
 [traffic-platform.md](traffic-platform.md).
 
-The runtime currently targets macOS ARM64. Go is a reference only; none of these
-commands starts the Go service. The capture helper links the SDK's libpcap.
+The runtime runs natively on macOS and Linux. Go is a reference only; none of
+these commands starts the Go service. The capture helper links the platform's
+libpcap. The PF transparent-redirection helper remains specific to macOS.
 
 ## Enable the data service
 

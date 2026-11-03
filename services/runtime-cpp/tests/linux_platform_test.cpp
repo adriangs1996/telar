@@ -2,8 +2,11 @@
 #include "platform/linux/proc_file.hpp"
 #include "platform/process_inspector.hpp"
 #include "platform/system_certificates.hpp"
+#include "platform/temporary_directory.hpp"
 #include "redirect/socket_owners.hpp"
+#include "tls/certificate_pair.hpp"
 #include <algorithm>
+#include <string>
 #include <sys/prctl.h>
 
 using namespace telar::runtime;
@@ -99,6 +102,41 @@ void systemCertificates() {
   check(count > 0);
 }
 
+void restrictedSystemCertificates() {
+  TemporaryDirectory directory{"/tmp/telar-system-trust-XXXXXX"};
+  const auto path = std::string{directory.path()} + "/roots.pem";
+  auto allowed = CertificatePair::authority("Allowed TLS root", CertificatePair::private_lifetime);
+  auto rejected = CertificatePair::authority("Rejected TLS root", CertificatePair::private_lifetime);
+  auto other_purpose = CertificatePair::authority("Client-only root", CertificatePair::private_lifetime);
+  check(X509_add1_reject_object(rejected.certificate.get(), OBJ_nid2obj(NID_server_auth)) == 1);
+  check(X509_add1_trust_object(other_purpose.certificate.get(), OBJ_nid2obj(NID_client_auth)) == 1);
+  {
+    const TlsBuffer file{BIO_new_file(path.c_str(), "w")};
+    check(file != nullptr);
+    for (auto *certificate : {allowed.certificate.get(), rejected.certificate.get(), other_purpose.certificate.get()}) {
+      check(PEM_write_bio_X509_AUX(file.get(), certificate) == 1);
+    }
+  }
+
+  const auto *variable = X509_get_default_cert_file_env();
+  const auto *previous = std::getenv(variable);
+  const auto saved = previous ? std::optional{std::string{previous}} : std::nullopt;
+  check(::setenv(variable, path.c_str(), 1) == 0);
+  std::size_t count = 0;
+  SystemCertificates::read([&](std::span<const std::uint8_t> certificate) {
+    const auto *bytes = certificate.data();
+    const TlsCertificate decoded{d2i_X509(nullptr, &bytes, certificate.size())};
+    check(decoded != nullptr && X509_cmp(decoded.get(), allowed.certificate.get()) == 0);
+    ++count;
+  });
+  check(count == 1);
+  if (saved) {
+    check(::setenv(variable, saved->c_str(), 1) == 0);
+  } else {
+    check(::unsetenv(variable) == 0);
+  }
+}
+
 }
 
 int main() {
@@ -106,4 +144,5 @@ int main() {
   socketOwnership(AF_INET);
   socketOwnership(AF_INET6);
   systemCertificates();
+  restrictedSystemCertificates();
 }

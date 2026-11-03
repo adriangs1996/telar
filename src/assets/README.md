@@ -7,14 +7,19 @@ The font is distributed under the SIL Open Font License 1.1; the complete
 license is in `JetBrainsMono-OFL.txt`.
 
 `TelarForma-Regular.ttf` is the GUI's default terminal face, Telar Forma Regular,
-version 0.104. Its SHA-256 is
-`e5b684760f500b2642dbe8216f68db9b4bcde4bb5ff3309dfc0608638459c2d0`.
+version 0.106. Its SHA-256 is
+`9324d4cd24202cd135b2a5c11b2fed4884fa36f7476389b95c80b695ef711bbe`.
+It uses the approved 50/50 design with a slashed zero and the `1`, `f`, `w`,
+`t`, `o` and `y` drawings retained from version 0.103.
 Selecting `client.gui.font.family = "Telar Forma"` loads the embedded file,
 without requiring a system installation. Only `Regular` is available;
 bold and italic terminal attributes use the existing synthesized styles.
-It retains the SIL Open Font License 1.1 and copyright notice; the license
-text is in `JetBrainsMono-OFL.txt`. Rebuild it from the pinned bundled face
-and the authored drawings with `uv run tools/build_forma.py`.
+It retains the SIL Open Font License 1.1 and copyright notices; the license
+text is in `TelarForma-OFL.txt`. Rebuild it with `uv run tools/build_forma.py`
+from the pinned bundled base and `TelarForma-glyphs.json`. The JSON stores
+the 402 approved glyph overrides as coordinates, contour ends, point flags
+and horizontal metrics, so rebuilding preserves the approved outlines
+without depending on installed fonts or rasterizer versions.
 
 Text rasterization links FreeType 2.13.2 from the source archive pinned in
 `build.zig.zon`. Portions of this software are copyright © 2023 The FreeType

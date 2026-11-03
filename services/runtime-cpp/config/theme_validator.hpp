@@ -45,7 +45,7 @@ private:
     }
 
     const auto text = value.string();
-    constexpr std::string_view names[]{"shade", "osaka-jade", "osaka_jade", "osakajade", "vesper", "catppuccin", "catppuccin-mocha", "mocha", "tokyo-night", "tokyonight", "tokyo_night", "pierre-dark", "pierre-dark-soft", "kanagawa", "kanagawa-wave", "kanagawa_wave", "kanagawa-dragon", "kanagawa_dragon", "terminal", "default"};
+    constexpr std::string_view names[]{"cybervenom", "shade", "osaka-jade", "osaka_jade", "osakajade", "vesper", "catppuccin", "catppuccin-mocha", "mocha", "tokyo-night", "tokyonight", "tokyo_night", "pierre-dark", "pierre-dark-soft", "kanagawa", "kanagawa-wave", "kanagawa_wave", "kanagawa-dragon", "kanagawa_dragon", "terminal", "default"};
     const bool found = std::ranges::any_of(names, [&](std::string_view name) {
       return text.size() == name.size() && std::equal(text.begin(), text.end(), name.begin(), [](char left, char right) { return asciiLower(left) == right; });
     });

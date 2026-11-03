@@ -3,24 +3,27 @@
 # requires-python = ">=3.11"
 # dependencies = ["fonttools==4.63.0"]
 # ///
-"""Rebuild Telar Forma Regular from the pinned JetBrains Mono font."""
+"""Rebuild Telar Forma Regular from its pinned base and approved glyph drawings."""
 
 import argparse
 import hashlib
 import json
 import unicodedata
+from array import array
 from pathlib import Path
 
 from fontTools.misc.roundTools import otRound
 from fontTools.pens.recordingPen import DecomposingRecordingPen
 from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.ttLib import TTFont
+from fontTools.ttLib.tables._g_l_y_f import Glyph, GlyphCoordinates
+from fontTools.ttLib.tables.ttProgram import Program
 
 CELL = 575
 CAP_HEIGHT = 684
 X_HEIGHT = 520
 FAMILY = "Telar Forma"
-VERSION = "0.104"
+VERSION = "0.106"
 SOURCE_SHA256 = "a0bf60ef0f83c5ed4d7a75d45838548b1f6873372dfac88f71804491898d138f"
 
 
@@ -155,7 +158,36 @@ def rename(font, family):
     font["head"].fontRevision = float(VERSION)
 
 
-def build(source_path, output):
+def apply_drawings(font, drawings_path):
+    drawings = json.loads(drawings_path.read_text())
+    if drawings["version"] != VERSION or drawings["base_sha256"] != SOURCE_SHA256:
+        raise ValueError("Glyph drawings must match the pinned base and font version")
+
+    glyph_names = set(font.getGlyphOrder())
+    for name, drawing in drawings["glyphs"].items():
+        if name not in glyph_names:
+            raise ValueError(f"Unknown glyph drawing: {name}")
+
+        glyph = Glyph()
+        glyph.numberOfContours = len(drawing["end_points"])
+        glyph.endPtsOfContours = drawing["end_points"]
+        glyph.coordinates = GlyphCoordinates(drawing["coordinates"])
+        glyph.flags = array("B", drawing["flags"])
+        glyph.program = Program()
+        glyph.program.fromBytecode([])
+        glyph.recalcBounds(font["glyf"])
+        font["glyf"][name] = glyph
+        font["hmtx"][name] = tuple(drawing["metrics"])
+
+    for identifier, value in drawings["names"].items():
+        font["name"].removeNames(nameID=int(identifier))
+        for platform, encoding, language in ((3, 1, 0x409), (1, 0, 0)):
+            font["name"].setName(value, int(identifier), platform, encoding, language)
+
+    return len(drawings["glyphs"])
+
+
+def build(source_path, output, drawings_path):
     original_bytes = source_path.read_bytes()
     if hashlib.sha256(original_bytes).hexdigest() != SOURCE_SHA256:
         raise ValueError("Expected the pinned JetBrains Mono Regular source")
@@ -218,6 +250,7 @@ def build(source_path, output):
     for tag in ("fpgm", "prep", "cvt ", "DSIG"):
         if tag in result:
             del result[tag]
+    approved_drawings = apply_drawings(result, drawings_path)
     rename(result, FAMILY)
     result.save(output)
 
@@ -233,12 +266,14 @@ def build(source_path, output):
         "version": VERSION,
         "input": str(source_path.resolve()),
         "input_sha256": hashlib.sha256(original_bytes).hexdigest(),
+        "drawings_sha256": hashlib.sha256(drawings_path.read_bytes()).hexdigest(),
         "output_sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
         "cell": CELL,
         "cap_height": CAP_HEIGHT,
         "x_height": X_HEIGHT,
         "glyph_count": len(checked.getGlyphOrder()),
         "authored_drawings": list(authored),
+        "approved_glyph_drawings": approved_drawings,
         "checks": ["source unchanged", "cmap retained", "glyph order retained", "GSUB retained", "uniform ASCII advances", "source embedding flags retained"],
     }
     print(json.dumps(report, indent=2))
@@ -248,6 +283,7 @@ if __name__ == "__main__":
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, default=root / "src/assets/JetBrainsMono-Regular.ttf")
+    parser.add_argument("--drawings", type=Path, default=root / "src/assets/TelarForma-glyphs.json")
     parser.add_argument("--output", type=Path, default=root / "src/assets/TelarForma-Regular.ttf")
     arguments = parser.parse_args()
-    build(arguments.source, arguments.output)
+    build(arguments.source, arguments.output, arguments.drawings)

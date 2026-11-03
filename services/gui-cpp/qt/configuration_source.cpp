@@ -87,7 +87,7 @@ ConfigurationSource::ConfigurationSource(ApplicationAllocator &memory, QObject *
   connect(&poll_, &QTimer::timeout, this, &ConfigurationSource::poll);
   connect(&debounce_, &QTimer::timeout, this, &ConfigurationSource::reload);
   connect(&task_, &QFutureWatcher<PreparedConfiguration>::finished, this, &ConfigurationSource::complete);
-  configuration_.themes.base = themeValuesByName("shade");
+  configuration_.themes.base = default_theme_values;
   configuration_.theme = projectTheme(configuration_.themes.base);
   const auto *style_hints = QGuiApplication::styleHints();
   appearance_ = hostAppearance(style_hints->colorScheme());

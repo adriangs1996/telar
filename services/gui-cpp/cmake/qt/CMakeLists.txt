@@ -54,6 +54,7 @@ set(base_arguments
   -DFEATURE_system_harfbuzz:BOOL=OFF
   -DFEATURE_system_jpeg:BOOL=OFF
   -DFEATURE_system_png:BOOL=OFF
+  -DFEATURE_system_textmarkdownreader:BOOL=OFF
   -DFEATURE_icu:BOOL=OFF
   -DFEATURE_brotli:BOOL=OFF
   -DFEATURE_zstd:BOOL=OFF)

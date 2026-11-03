@@ -126,17 +126,13 @@ std::optional<fonts::FontRole> ResidentFonts::source(std::string_view text, font
 }
 
 std::shared_ptr<const FontAsset> ResidentFonts::resolveSource(const QString &family, const QString &style) {
-  if (family.isEmpty() && style.isEmpty()) {
-    return textSource();
-  }
-
   thread_local QHash<std::pair<QString, QString>, std::weak_ptr<const FontAsset>> sources;
   forgetExpired(sources);
-  const std::pair key{family, style};
+  const std::pair key{family.isEmpty() ? QStringLiteral("Telar Forma") : family, style};
   auto source = sources.value(key).lock();
   if (!source) {
     FontConfiguration configuration;
-    configuration.family.assign(family.toStdString());
+    configuration.family.assign(key.first.toStdString());
     configuration.style.assign(style.toStdString());
     source = std::make_shared<const FontAsset>(loadFontData(configuration));
     sources.insert(key, source);

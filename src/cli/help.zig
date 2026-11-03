@@ -238,8 +238,9 @@ pub const root_text = "telar " ++ build_options.version ++ ": a terminal multipl
     \\  --config PATH     Load a specific Lua configuration (default: $XDG_CONFIG_HOME/telar/config.lua)
     \\  --no-config       Do not load Lua configuration
     \\  --profile NAME    Overlay a named Lua profile before CLI options
-    \\  --theme NAME      UI theme: shade, vesper, catppuccin, tokyo-night, kanagawa,
-    \\                    kanagawa-dragon, pierre-dark, pierre-dark-soft, terminal
+    \\  --theme NAME      UI theme: cybervenom (default), shade, vesper, catppuccin,
+    \\                    tokyo-night, kanagawa, kanagawa-dragon, pierre-dark,
+    \\                    pierre-dark-soft, terminal
     \\  --remote DEST     Attach to the runtime on an SSH host (needs telar on the remote PATH)
     \\  --machine LABEL   Show a saved machine first; the window still holds every enabled one
     \\  --fresh           Start a runtime that sets the previous session aside instead of

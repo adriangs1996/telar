@@ -325,6 +325,7 @@ rsync -a --delete --exclude=/.zig-cache/ --exclude=/zig-out/ --exclude=/.zig-out
     --exclude=/.qt-cache/ --exclude=/.dev/ \\
     --exclude=/services/runtime-cpp/dependencies/ \\
     --exclude=/services/runtime-cpp/out-vm/ --exclude=/services/runtime-cpp/out/ \\
+    --exclude=/services/runtime-cpp/out-vm-debug/ \\
     --exclude=/services/gui-cpp/out-vm/ --exclude=/services/gui-cpp/out/ \\
     "$stage/" "$HOME/{destination}/"
 '''

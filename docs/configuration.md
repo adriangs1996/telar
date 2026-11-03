@@ -82,7 +82,7 @@ uses a larger font and hides the sidebar for presentations:
 ```lua
 return {
   api_version = 2,
-  theme = "shade",
+  theme = "cybervenom",
   gui = { font = { size = 15 } },
   profiles = {
     presentation = {
@@ -258,15 +258,17 @@ failures, and transitions from any other state remain silent. Set
 Select a theme once at the root of the configuration:
 
 ```lua
-theme = "shade"
+theme = "cybervenom"
 ```
 
 Each preset defines Telar's chrome roles and the native terminal's foreground,
-background, ANSI palette and cursor colors. Built-ins are `shade` (the default),
-`vesper`, `catppuccin` (Mocha), `tokyo-night`, `kanagawa` (Wave),
+background, ANSI palette and cursor colors. Built-ins are `cybervenom` (the default),
+`shade`, `vesper`, `catppuccin` (Mocha), `tokyo-night`, `kanagawa` (Wave),
 `kanagawa-dragon`, `pierre-dark`,
 `pierre-dark-soft`, and `terminal`. The Pierre presets use the dark and dark-soft
-palettes from Adrian's Neovim theme, including syntax and ANSI colors. Shade
+palettes from Adrian's Neovim theme, including syntax and ANSI colors.
+Cybervenom uses a `#211b2f` background, `#aa87f5` accents, and its own terminal
+and syntax palettes. Shade
 combines Vesper's neutral grays and terminal palette with green chrome accents.
 The old names `osaka-jade`, `osaka_jade`, and `osakajade` remain aliases for Shade.
 Shade's `panel_bg` is `default`: the chrome takes the terminal background,
@@ -333,7 +335,7 @@ to `theme.terminal.cursor_color` and `theme.terminal.cursor_text_color`.
 Shade inherits Vesper's terminal colors unchanged. The ANSI data comes from the [Vesper terminal port](https://github.com/mbadolato/iTerm2-Color-Schemes/blob/master/ghostty/Vesper),
 [Catppuccin Mocha](https://github.com/catppuccin/ghostty/blob/main/themes/catppuccin-mocha.conf)
 and [Tokyo Night](https://github.com/folke/tokyonight.nvim/blob/main/extras/ghostty/tokyonight_night).
-Telar retains its orange Vesper cursor with background-colored text.
+The Vesper preset retains its orange cursor with background-colored text.
 
 Kanagawa and Kanagawa Dragon use the [Kanagawa Neovim palette](https://github.com/rebelot/kanagawa.nvim/tree/bb85e4bfc8d89b0e62c8fa53ccdd13d12e2f77b3),
 including its ANSI colors and cursor. They include these Neovim customizations:
@@ -358,7 +360,7 @@ telar gui --config examples/gui.lua --profile presentation
 ```
 
 ```lua
-theme = "shade"
+theme = "cybervenom"
 gui = {
   window = {
     titlebar = false, -- the macOS default; Linux defaults to true
@@ -367,7 +369,7 @@ gui = {
     padding = { x = 8, y = 8 },
   },
   font = {
-    family = "JetBrains Mono",
+    family = "Telar Forma",
     style = "Regular",
     size = 15,
     line_height = 1.15,
@@ -389,8 +391,8 @@ gui = {
 | `window.background_blur` | `0` | Integer `0..255`: macOS blur radius, with `0` disabling blur. On Wayland any positive value requests compositor blur; its intensity remains compositor-controlled. Has no visible effect at opacity `1`. Legacy `true` means `20`, and `false` means `0`. |
 | `window.padding.x` | `0` | Logical pixels on each horizontal edge, `0..256`, decimals allowed. |
 | `window.padding.y` | `0` | Logical pixels on each vertical edge, `0..256`, decimals allowed. |
-| `font.family` | bundled JetBrains Mono | Installed or bundled family name, at most 256 UTF-8 bytes, without NUL. An empty name or `JetBrains Mono` uses the bundled face. The C++ GUI also bundles `Telar Forma`, available without installing it on the system. |
-| `font.style` | empty (regular) | The style name the font advertises for the face to use, such as `Light`, `SemiLight`, `Medium` or `Retina`; matching ignores case. It selects the face's weight, including a variable font's named instances. Bundled faces only provide `Regular`; any other style with `JetBrains Mono` or an empty family uses the installed JetBrains Mono. `Telar Forma` rejects other styles. A style the family does not provide fails at startup or rejects the reload instead of falling back to another face. Bold and italic text are still synthesized from this face. |
+| `font.family` | bundled Telar Forma | Installed or bundled family name, at most 256 UTF-8 bytes, without NUL. An empty name or `Telar Forma` uses the bundled default face without requiring a system installation. `JetBrains Mono` is also bundled and can be selected explicitly. |
+| `font.style` | empty (regular) | The style name the font advertises for the face to use, such as `Light`, `SemiLight`, `Medium` or `Retina`; matching ignores case. It selects the face's weight, including a variable font's named instances. Bundled faces only provide `Regular`. Telar Forma, including an empty family, rejects other styles; another style with `JetBrains Mono` uses the installed JetBrains Mono. A style the family does not provide fails at startup or rejects the reload instead of falling back to another face. Bold and italic text are still synthesized from this face. |
 | `font.size` | `15` | Logical pixel size, equivalent to points on macOS; `6..96`, decimals allowed. The display scale is applied once during rasterization. |
 | `font.line_height` | `1.0` | Multiplier of the font's natural line height; `0.75..3`. Extra space is distributed above and below the baseline. |
 | `font.letter_spacing` | `0` | Extra logical pixels per cell; `-5..20`. A combination producing a nonpositive cell width fails at startup or rejects the reload. |

@@ -140,6 +140,9 @@ nghttp2, Brotli, Zstd and Ghostty archives. Each link runs the project's macOS
 dependency check and rejects non-system dynamic libraries. A cached dynamic
 dependency causes a configuration error instead of silently being retained.
 The minimum deployment target defaults to macOS 26.0.
+Linux installations normally use the distribution's shared libraries and
+`cmake --install out --prefix /path/to/staging`. The Homebrew linkage audit
+only runs on macOS.
 
 `cmake --install out-distribution --prefix /path/to/staging` installs
 `bin/telar-runtime`. Add `-DTELAR_RUNTIME_INSTALL_AS_TELAR=ON` when
@@ -149,13 +152,33 @@ the login shell's PATH. Choose a private staging directory when testing a
 replacement. Signed archives and bundled dependency notices remain pending.
 
 The manually dispatched [C++ runtime workflow](../../.github/workflows/runtime-cpp.yml) builds
-Release and Debug with ASan/UBSan on macOS ARM64, plus Release on Linux ARM64
-and x86-64. It exercises runtime/TLS/hooks, native event handling and server
+Release and Debug with ASan/UBSan on macOS ARM64, Linux ARM64 and Linux
+x86-64. It exercises runtime/TLS/hooks, native event handling and server
 startup, bridging, persistence and shutdown. Linux additionally checks process
 identity, IPv4/IPv6 socket ownership and system certificates. It does not run
 on pushes or pull requests. Hosted CI acceptance remains pending;
 shared CI runners are not used for performance acceptance. Sanitizer builds
 need the compiler's runtime library and cannot enable the distribution check.
+
+Native Linux acceptance was run in the Omarchy ARM64 VM with Clang 23.1.4
+and Zig 0.17.0. The complete Release build and all 34 CTest groups passed.
+Debug with ASan/UBSan passed all seven selected groups: runtime, TLS, hooks,
+native platform, event-loop, server CLI and diagnostics. Ten independent
+runtime-probe flows passed, including
+Unicode/graphemes, full-screen and bulk output, scrolling, modes, links,
+mixed updates, reconnection and concurrent input. The generated Linux TUN
+interface was created, used to inject a packet and removed successfully.
+The server CLI check also completed 50 consecutive isolated startup,
+bridge, checkpoint and shutdown runs, followed by 100 Release and 100
+ASan/UBSan lifecycle runs. One earlier full-suite run had an unsuccessful
+checkpoint probe whose stderr was not retained. The harness now reports that
+stderr; the original failure has not reproduced in those repeated runs.
+
+macOS Release regression checks passed runtime, TLS, event-loop, server CLI,
+diagnostics, traffic control, socket ownership, PF adapter and interface
+fixture tests. The Debug event-loop and diagnostics groups also passed on
+macOS. These checks establish functional behavior; they do not
+establish Linux GUI frame pacing or native-hardware performance.
 
 The socket directory must belong to the current user and prohibit writes by
 other users. The socket has mode `0600`; accepted peers must have the same UID.

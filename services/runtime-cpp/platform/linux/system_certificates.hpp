@@ -39,6 +39,10 @@ public:
         ERR_clear_error();
         return;
       }
+      ++count;
+      if (X509_check_trust(certificate.get(), X509_TRUST_SSL_SERVER, 0) == X509_TRUST_REJECTED) {
+        continue;
+      }
 
       unsigned char *encoded = nullptr;
       const auto length = i2d_X509(certificate.get(), &encoded);
@@ -47,7 +51,6 @@ public:
         throw SystemError{"Encode system certificate", EINVAL};
       }
       consume(std::span<const std::uint8_t>{bytes.get(), static_cast<std::size_t>(length)});
-      ++count;
     }
   }
 };

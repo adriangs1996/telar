@@ -1,4 +1,10 @@
 include_guard(GLOBAL)
+
+if(POLICY CMP0218)
+  cmake_policy(SET CMP0218 NEW)
+endif()
+set(QT_NO_PRIVATE_MODULE_WARNING ON)
+
 include("${CMAKE_CURRENT_LIST_DIR}/qt/manifest.cmake")
 
 # Keep Qt's QML examples and fuzz fixtures outside this QML project's source tree.

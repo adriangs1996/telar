@@ -3,6 +3,7 @@
 #include "fonts/face.hpp"
 #include "fonts/font_coverage.hpp"
 #include "fonts/font_query.hpp"
+#include "fonts/font_role.hpp"
 #include "fonts/glyph_bitmap_view.hpp"
 #include "fonts/native_match.hpp"
 #include "fonts/shaped_run_view.hpp"
@@ -11,6 +12,7 @@
 #include "qt/font_cache.hpp"
 #include "qt/font_resolver.hpp"
 #include "qt/font_source.hpp"
+#include "qt/resident_fonts.hpp"
 #include "qt/terminal_font.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "terminal/font_grid.hpp"
@@ -229,7 +231,7 @@ private:
     SystemAllocator memory;
     FontConfiguration configuration;
     const auto original = FontResolver::resolve(memory, configuration, 1);
-    configuration.family.assign("jEtBrAiNs MoNo");
+    configuration.family.assign("tElAr FoRmA");
     configuration.style.assign("rEgUlAr");
     const auto resolved = FontResolver::resolve(memory, configuration, 1);
     QCOMPARE(resolved.font.cell, original.font.cell);
@@ -237,6 +239,34 @@ private:
     QCOMPARE(resolved.font.faces, original.font.faces);
     configuration.style.assign("Not An Installed Style");
     QVERIFY_THROWS_EXCEPTION(std::runtime_error, static_cast<void>(FontResolver::resolve(memory, configuration, 1)));
+
+    configuration.family.assign("JetBrains Mono");
+    configuration.style.assign("");
+    const auto jetbrains = FontResolver::resolve(memory, configuration, 1);
+    configuration.family.assign("jEtBrAiNs MoNo");
+    configuration.style.assign("rEgUlAr");
+    QCOMPARE(FontResolver::resolve(memory, configuration, 1).font.faces, jetbrains.font.faces);
+  }
+
+  Q_SLOT static void defaultsToBundledFormaAcrossRenderers() {
+    const auto expected = loadFontBytes(QStringLiteral(":/telar/fonts/TelarForma-Regular.ttf"));
+    const FontConfiguration configuration;
+    QCOMPARE(loadFontData(configuration).bytes, expected);
+    QCOMPARE(bundledFonts().front(), QStringLiteral("Telar Forma"));
+
+    const auto source = ResidentFonts::resolveSource({}, {});
+    QCOMPARE(source, ResidentFonts::resolveSource(QStringLiteral("Telar Forma"), {}));
+    QVERIFY(std::ranges::equal(source->bytes(), telar::byteView({expected.constData(), static_cast<std::size_t>(expected.size())})));
+    const auto resident = ResidentFonts::shared(source);
+    QCOMPARE(resident->face(fonts::FontRole::primary).family(), std::string_view{"Telar Forma"});
+    QCOMPARE(resident->face(fonts::FontRole::text).family(), std::string_view{"JetBrains Mono"});
+
+    const auto terminal = TerminalFont::resolve({}, 1);
+    QCOMPARE(QRawFont::fromFont(terminal.faces.front()).familyName(), QStringLiteral("Telar Forma"));
+
+    SystemAllocator memory;
+    const auto resolved = FontResolver::resolve(memory, configuration, 1);
+    QCOMPARE(QRawFont::fromFont(resolved.font.faces.front()).familyName(), QStringLiteral("Telar Forma"));
   }
 
   Q_SLOT static void loadsBundledFormaFromResources() {

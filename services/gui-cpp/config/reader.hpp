@@ -19,7 +19,7 @@ public:
     }
 
     Configuration result;
-    result.themes.base = themeValuesByName("shade");
+    result.themes.base = default_theme_values;
     apply(root, result);
 
     if (!profile.empty()) {

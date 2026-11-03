@@ -51,7 +51,7 @@ using Clock = ComponentSlotState::Clock;
 
 void registerComponentFonts() {
   static const bool ready = [] {
-    constexpr std::array paths{":/telar/fonts/IBMPlexSans-Regular.ttf", ":/telar/fonts/IBMPlexSans-SemiBold.ttf", ":/telar/fonts/SymbolsNerdFontMono-Regular.ttf", ":/telar/fonts/JetBrainsMono-Regular.ttf"};
+    constexpr std::array paths{":/telar/fonts/IBMPlexSans-Regular.ttf", ":/telar/fonts/IBMPlexSans-SemiBold.ttf", ":/telar/fonts/SymbolsNerdFontMono-Regular.ttf", ":/telar/fonts/JetBrainsMono-Regular.ttf", ":/telar/fonts/TelarForma-Regular.ttf"};
     for (const auto *const path : paths) {
       if (QFontDatabase::addApplicationFont(QString::fromLatin1(path)) < 0) {
         throw std::runtime_error{"Could not register a bundled UI font"};

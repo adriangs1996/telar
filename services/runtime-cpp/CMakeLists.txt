@@ -140,7 +140,7 @@ else()
   install(TARGETS telar-runtime RUNTIME DESTINATION bin)
 endif()
 
-if(TELAR_RUNTIME_DISTRIBUTABLE)
+if(TELAR_RUNTIME_DISTRIBUTABLE AND APPLE)
   add_custom_command(TARGET telar-runtime POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E env "TELAR_MACOS_MIN=${CMAKE_OSX_DEPLOYMENT_TARGET}"
             "${CMAKE_CURRENT_SOURCE_DIR}/../../packaging/release/check-linkage.sh" macos "$<TARGET_FILE:telar-runtime>"

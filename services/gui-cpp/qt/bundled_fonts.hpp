@@ -4,6 +4,6 @@
 
 namespace telar::gui::qt {
 // Registers the fonts the GUI embeds the first time it runs.
-// Returns their families in fallback order: the terminal face, then Nerd Font symbols.
+// Returns Telar Forma, JetBrains Mono and Nerd Font symbols in fallback order.
 const QStringList &bundledFonts();
 }

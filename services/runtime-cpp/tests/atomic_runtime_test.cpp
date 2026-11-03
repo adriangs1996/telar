@@ -92,8 +92,11 @@ static void testAtomicPipeline(SystemAllocator &memory, GraphicsInputMedium medi
     newest.checkConsumed();
 #if TELAR_DIAGNOSTICS
     const auto &metrics = media.batchMetrics();
-    check(metrics.discarded_frames == 1 && metrics.forwarded_frames == 1 && metrics.unavailable_frames == 0);
-    check(metrics.direct_frames == 1 && metrics.file_frames == (medium == GraphicsInputMedium::file));
+    constexpr std::uint64_t input_frame_count = 2;
+    const std::uint64_t discarded_frames = query.empty() ? 1 : 0;
+    const auto forwarded_frames = input_frame_count - discarded_frames;
+    check(metrics.discarded_frames == discarded_frames && metrics.forwarded_frames == forwarded_frames && metrics.unavailable_frames == 0);
+    check(metrics.direct_frames == forwarded_frames && metrics.file_frames == (medium == GraphicsInputMedium::file ? forwarded_frames : 0));
     check(metrics.ingest.count == 1 && metrics.failures == 0);
     const auto storage = media.storageMetrics();
     check(storage.images == 1 && storage.placements == 2 && storage.resident_bytes == newest.pixels.size());

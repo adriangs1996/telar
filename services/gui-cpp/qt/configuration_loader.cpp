@@ -76,7 +76,7 @@ PreparedConfiguration ConfigurationLoader::prepare(ApplicationAllocator &memory,
 }
 
 void ConfigurationLoader::load(ApplicationAllocator &memory, const ConfigurationReloadRequest &request, ConfigurationPreparation &result) {
-  result.configuration.themes.base = themeValuesByName("shade");
+  result.configuration.themes.base = default_theme_values;
   result.configuration.theme = projectTheme(result.configuration.themes.base);
   if (!request.selection.trust_path.isEmpty()) {
     const auto path = QFile::encodeName(request.selection.trust_path);

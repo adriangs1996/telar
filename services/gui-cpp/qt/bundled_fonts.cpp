@@ -10,6 +10,7 @@
 namespace telar::gui::qt {
 namespace {
 constexpr std::array resources{
+    ":/telar/fonts/TelarForma-Regular.ttf",
     ":/telar/fonts/JetBrainsMono-Regular.ttf",
     ":/telar/fonts/SymbolsNerdFontMono-Regular.ttf",
 };
@@ -18,7 +19,7 @@ QStringList registerFonts() {
   QStringList families;
 
   for (const auto *resource :
-       {":/telar/fonts/IBMPlexSans-Regular.ttf", ":/telar/fonts/IBMPlexSans-SemiBold.ttf", ":/telar/fonts/TelarForma-Regular.ttf"}) {
+       {":/telar/fonts/IBMPlexSans-Regular.ttf", ":/telar/fonts/IBMPlexSans-SemiBold.ttf"}) {
     if (QFontDatabase::addApplicationFont(QString::fromLatin1(resource)) < 0) {
       qWarning() << "Could not register the bundled font" << resource;
     }

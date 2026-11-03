@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "clipboard: main",
+      "type": "codelldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/out/debug/clipboard",
+      "cwd": "${workspaceFolder}",
+      "preRunCommands": ["breakpoint set --name main --one-shot true"],
+      "windows": {
+        "program": "${workspaceFolder}/out/debug/clipboard.exe"
+      }
+    }
+  ]
+}

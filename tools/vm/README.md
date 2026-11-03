@@ -1,5 +1,9 @@
 # Linux test machine
 
+For the C++ runtime and Qt Quick client on Omarchy, use the
+[Omarchy development VM](OMARCHY.md). Its Apple Silicon launcher uses the
+official Try Omarchy image and accelerated OpenGL.
+
 `tools/vm/vm.py` runs a Fedora virtual machine under QEMU with a Wayland
 desktop, so Telar's Linux runtime, CLI and native client can be exercised
 from any host: macOS on Apple Silicon (HVF, aarch64 guest), Linux

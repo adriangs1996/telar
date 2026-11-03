@@ -52,7 +52,7 @@ int acceptFallbackFont(const fonts::FontMatch *match, void *context) noexcept {
 }
 
 FontData loadFontData(const FontConfiguration &font) {
-  const auto family = font.family.view().empty() ? QStringLiteral("JetBrains Mono") : QString::fromUtf8(font.family.view());
+  const auto family = font.family.view().empty() ? QStringLiteral("Telar Forma") : QString::fromUtf8(font.family.view());
   const auto style = QString::fromUtf8(font.style.view());
   const auto regular_style = style.isEmpty() || style.compare(QStringLiteral("Regular"), Qt::CaseInsensitive) == 0;
   FontData data;

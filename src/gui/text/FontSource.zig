@@ -15,25 +15,37 @@ const Lookup = enum(c_int) {
 };
 
 /// The family and only style the embedded face provides.
-const bundled_family = "JetBrains Mono";
+const bundled_family = "Telar Forma";
 const bundled_style = "Regular";
 
 /// The largest font file the GUI reads, matching `TELAR_FONT_MAX_BYTES` in
 /// the native port so a file the port reports is never refused here.
 pub const max_bytes = 64 * 1024 * 1024;
 
-bytes: []const u8 = assets.jetbrains_mono,
+bytes: []const u8 = assets.telar_forma,
 owned: bool = false,
 match: FontMatch = .{},
 
-/// Resolves and owns font bytes once, outside cell rendering. The bundled
-/// family with another style resolves to the installed family instead.
+/// Resolves and owns font bytes once, outside cell rendering.
+/// Telar Forma only provides Regular; other families may use installed styles.
 /// Example: `var source = try FontSource.load(gpa, io, &config.font);`
 pub fn load(allocator: std.mem.Allocator, io: std.Io, font: *const client.GuiFont) !FontSource {
     const family = if (font.family.len == 0) bundled_family else font.family.name();
     const style = font.style.name();
-    if (std.ascii.eqlIgnoreCase(family, bundled_family) and (style.len == 0 or std.ascii.eqlIgnoreCase(style, bundled_style))) {
+    const regular_style = style.len == 0 or std.ascii.eqlIgnoreCase(style, bundled_style);
+
+    if (std.ascii.eqlIgnoreCase(family, bundled_family)) {
+        if (!regular_style) {
+            return error.FontStyleNotFound;
+        }
+
         return .{};
+    }
+
+    if (std.ascii.eqlIgnoreCase(family, "JetBrains Mono") and regular_style) {
+        return .{
+            .bytes = assets.jetbrains_mono,
+        };
     }
 
     var match: FontMatch = .{};

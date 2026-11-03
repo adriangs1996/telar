@@ -2,7 +2,7 @@ local telar = require("telar")
 
 return telar.config({
   api_version = 2,
-  theme = "shade",
+  theme = "cybervenom",
   gui = {
     window = {
       titlebar = true, -- Defaults to false on macOS and true on Linux.
@@ -11,7 +11,7 @@ return telar.config({
       padding = { x = 8, y = 8 },
     },
     font = {
-      family = "JetBrains Mono", -- Bundled; an installed family name also works.
+      family = "Telar Forma", -- Bundled default; an installed family name also works.
       style = "Regular", -- The face's own style name: "Light", "SemiLight", "Medium"...
       size = 15,
       line_height = 1.15,

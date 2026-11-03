@@ -26,36 +26,36 @@ struct Color {
 };
 
 struct DefaultTheme {
-  static constexpr Color background = Color::rgb(0x101010);
-  static constexpr Color foreground = Color::rgb(0xffffff);
-  static constexpr Color surface = Color::rgb(0x232323);
-  static constexpr Color elevated = Color::rgb(0x343434);
-  static constexpr Color border = Color::rgb(0x5c5c5c);
-  static constexpr Color muted = Color::rgb(0xa0a0a0);
-  static constexpr Color accent = Color::rgb(0xa8c98c);
-  static constexpr Color selection = Color::rgb(0x343434);
-  static constexpr Color cursor = Color::rgb(0xffc799);
-  static constexpr Color success = Color::rgb(0x91b99a);
-  static constexpr Color warning = Color::rgb(0xd4b477);
-  static constexpr Color failure = Color::rgb(0xe58c85);
+  static constexpr Color background = Color::rgb(0x211b2f);
+  static constexpr Color foreground = Color::rgb(0xaba8b6);
+  static constexpr Color surface = Color::rgb(0x312b3e);
+  static constexpr Color elevated = Color::rgb(0x373245);
+  static constexpr Color border = Color::rgb(0x383546);
+  static constexpr Color muted = Color::rgb(0x8e899d);
+  static constexpr Color accent = Color::rgb(0xaa87f5);
+  static constexpr Color selection = elevated;
+  static constexpr Color cursor = accent;
+  static constexpr Color success = Color::rgb(0x5fb095);
+  static constexpr Color warning = Color::rgb(0xd9cc7e);
+  static constexpr Color failure = Color::rgb(0xf37986);
   static constexpr std::size_t palette_size = 16;
   static constexpr std::array<Color, palette_size> palette{
-      Color::rgb(0x101010),
-      Color::rgb(0xf5a191),
-      Color::rgb(0x90b99f),
-      Color::rgb(0xe6b99d),
-      Color::rgb(0xaca1cf),
-      Color::rgb(0xe29eca),
-      Color::rgb(0xea83a5),
-      Color::rgb(0xa0a0a0),
-      Color::rgb(0x7e7e7e),
-      Color::rgb(0xff8080),
-      Color::rgb(0x99ffe4),
-      Color::rgb(0xffc799),
-      Color::rgb(0xb9aeda),
-      Color::rgb(0xecaad6),
-      Color::rgb(0xf591b2),
-      Color::rgb(0xffffff),
+      Color::rgb(0x383546),
+      Color::rgb(0xf37986),
+      Color::rgb(0x5fb095),
+      Color::rgb(0xd9cc7e),
+      Color::rgb(0x99baf8),
+      Color::rgb(0xaa87f5),
+      Color::rgb(0x82c3d3),
+      Color::rgb(0xaba8b6),
+      Color::rgb(0x7c7690),
+      Color::rgb(0xfea9af),
+      Color::rgb(0x99c2ac),
+      Color::rgb(0xe5ca93),
+      Color::rgb(0xb8d2ff),
+      Color::rgb(0xc7b2ff),
+      Color::rgb(0xb3d7e1),
+      Color::rgb(0xe5e3ee),
   };
 };
 
@@ -69,7 +69,7 @@ struct Theme {
   Color accent = DefaultTheme::accent;
   Color selection = DefaultTheme::selection;
   Color cursor = DefaultTheme::cursor;
-  std::optional<Color> cursor_text;
+  std::optional<Color> cursor_text = DefaultTheme::background;
   Color success = DefaultTheme::success;
   Color warning = DefaultTheme::warning;
   Color failure = DefaultTheme::failure;

@@ -93,8 +93,10 @@ def check_runtime(binary, checkpoint_probe):
             assert history.exists() and stat.S_IMODE(history.stat().st_mode) == 0o600
             bridge_handshake(binary, socket, environment, schema)
 
-            subprocess.run([str(checkpoint_probe), str(socket), "seed", str(root / "expected")],
-                           env=environment, check=True, capture_output=True, timeout=30)
+            seeded = subprocess.run([str(checkpoint_probe), str(socket), "seed", str(root / "expected")],
+                                    env=environment, capture_output=True, text=True, timeout=30)
+            if seeded.returncode:
+                raise RuntimeError(f"Checkpoint probe failed: {seeded.stderr.strip()}")
             wait_socket(socket, False)
             checkpoint = history.with_name("session.ckpt")
             previous = checkpoint.read_bytes()

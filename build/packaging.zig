@@ -76,8 +76,7 @@ fn addLinuxArchive(b: *std.Build, app: Application, variant: []const u8) void {
     b.step("package-linux", "Build zig-out/telar-[headless-]<arch>-linux.tar.gz with the binary, desktop entry and icon").dependOn(&archive.step);
 }
 
-/// Notices of the C libraries compiled into `telar`, which their licenses
-/// require copies of the binary to carry.
+/// Notices shipped with the binary's native libraries and embedded font.
 fn installNativeLicenses(b: *std.Build, step: *std.Build.Step, root: []const u8) void {
     const notices = [_]struct { dependency: []const u8, file: []const u8 }{
         .{
@@ -106,4 +105,7 @@ fn installNativeLicenses(b: *std.Build, step: *std.Build.Step, root: []const u8)
         const destination = b.fmt("{s}/{s}/{s}", .{ root, notice.dependency, notice.file });
         step.dependOn(&b.addInstallFile(source, destination).step);
     }
+
+    const font_notice = b.addInstallFile(b.path("src/assets/TelarForma-OFL.txt"), b.fmt("{s}/TelarForma-OFL.txt", .{root}));
+    step.dependOn(&font_notice.step);
 }

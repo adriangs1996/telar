@@ -306,7 +306,12 @@ static void authorityControl(TlsTestMemory &memory) {
   proxy.manageAuthority(proxy_trust::Action::rotate, commands);
   const auto replaced = proxy.authorityStatus();
   check(replaced.accepting && replaced.trust == proxy_trust::Status::installed && replaced.fingerprint_sha256 != installed.fingerprint_sha256);
-  check(commands.calls.size() == 3 && commands.calls[2][1] == "delete-certificate");
+  check(commands.calls.size() == 3);
+#if defined(__APPLE__)
+  check(commands.calls[2][1] == "delete-certificate");
+#else
+  check(commands.calls[2][2] == "/usr/bin/trust" && commands.calls[2][3] == "anchor" && commands.calls[2][4] == "--remove");
+#endif
   proxy.manageAuthority(proxy_trust::Action::uninstall, commands);
   const auto uninstalled = proxy.authorityStatus();
   check(uninstalled.accepting && uninstalled.trust == proxy_trust::Status::absent && uninstalled.fingerprint_sha256 == rotated.fingerprint_sha256);
