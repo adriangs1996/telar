@@ -4826,6 +4826,81 @@ The candidate still needs cold first-query and non-fuzzy/write controls, native
 query-to-presented-results measurement and independent Zig F12 comparison. None
 of F01–F16 or native120 is closed by this validation.
 
+### Fused history ranking: first requests and unchanged-path controls
+
+The first-query experiment starts a fresh owned runtime for each request against
+a copy of an existing fixture database. No history query precedes the timed fuzzy
+`gb`, distinct=true request. An independent rank model is constructed before
+readiness; runtime CPU counters surround probe release/completion, and a separate
+clock surrounds the protocol exchange. Startup, database copying and model
+construction are outside those intervals. Filesystem caching is uncontrolled and
+may be warm: this is **first-query-after-restart**, not cold-disk latency or native
+GUI latency. Each of seven alternating pairs averages eight fresh processes per
+variant; table entries are medians of those seven pair means.
+
+All four final series under `/tmp/telar-perf-history-first-query-pairs-02` qualify:
+448 executions, 904 valid host boundaries, maximum load1 3.225, exact model/A/B
+results and complete owned-process cleanup. `uptime` is recorded before every
+series. The accepted A/B runtime binaries are unchanged.
+
+| Fixture | Runtime CPU A → B, ms/request | Protocol response A → B, ms | CPU / response wins |
+| --- | ---: | ---: | ---: |
+| 10,000 monotonic dates | 5.4905 → 1.9769 | 5.4943 → 1.9749 | 7/7, 7/7 |
+| 100 entries | 0.2776 → 0.2586 | 0.2635 → 0.2460 | 7/7, 7/7 |
+| Long commands | 12.5358 → 4.1415 | 12.5547 → 4.1645 | 7/7, 7/7 |
+| 15,000 shuffled dates | 9.0446 → 3.5035 | 9.0440 → 3.5056 | 7/7, 7/7 |
+
+The main end-footprint statistic rises from 5,890,471 to 6,130,072 bytes. As before,
+this process observation is distinct from the query-local allocator peak.
+
+An earlier long-command series is excluded in full. Its runtime exited before a
+query with `Disable socket SIGPIPE: Invalid argument`. The identity helper used a
+raw connect/get-peer-pid/close connection. A separate local UNIX-socket diagnostic
+reproduces `SO_NOSIGPIPE` failure in 1,000/1,000 accepted connections whose client
+has already closed, versus zero failures in 1,000 retained connections. In
+`LocalListener::accept`, signal configuration can throw outside the runtime's
+admission exception handler. This is an open runtime robustness defect, not a
+proven consequence of the history candidate.
+
+The revised private harness obtains `LOCAL_PEERPID` from the measured probe's
+already-handshaken connection and verifies its executable identity before release.
+It uses bounded connect-only retries while the background runtime starts. An
+intermediate qualification exposed the missing startup wait and is also excluded.
+All four series were then repeated with the same final harness; no partial pairs
+were reused. Receipts are in `socket-close-diagnostic.json`,
+`socket-close-followup.json` and the excluded runs' `disposition.json` files under
+the private prefix/output directories. The runtime defect still needs its own
+regression and fix; the history timing binaries were not altered to mask it.
+
+The unchanged FTS/substring/empty-query control is
+`/tmp/telar-perf-history-fused-rank-fts-01`: seven pairs, 600 queries per execution,
+with 30 independently checked query/offset/snapshot cases before timing and exact
+checks on every measured reply. CPU medians are 1.103683 → 1.104202 ms/query;
+response medians are 1.109017 → 1.109318 ms, with 2/7 wins for both. Response p95
+wins 2/7 and p99 wins 3/7. This is **not a performance improvement**; it does not
+hit the original 0–1/7 control-rejection threshold. No gate was changed afterward.
+
+The persisted import/delete control is
+`/tmp/telar-perf-history-fused-rank-write-01`: seven pairs of 600 cycles after 20
+warm cycles. Each cycle waits for import admission, queries the persisted newest
+entry, waits for deletion and queries the restored prior newest entry. It checks
+command bytes, timestamp, id/snapshot and removed count; matching restored entries
+form the canonical A/B output. Its clock includes all four exchanges and the
+small verification steps, rather than treating import acknowledgment as durable
+completion. The generic raw result keys say `per_query`, but the denominator is
+**completed four-request cycles**. CPU medians are 5.495882 → 5.461910 ms/cycle;
+wall medians are 5.652373 → 5.585677 ms/cycle, both 6/7 wins. Wall p95 wins 6/7 and
+p99 4/7. This path does not enter the changed fuzzy algorithm, so these differences
+are control observations, not an established additional algorithmic gain.
+
+Both unchanged-path controls have 14 valid executions, 30 valid host boundaries,
+exact results and complete cleanup. Maximum load1 is 2.014 for FTS and 2.161 for
+writes. The fused candidate remains **pending** native query-to-presented-results
+qualification and independent Zig F12 comparison; Linux execution is also open.
+The C++ GUI currently has a 60 ms history debounce (`qt/application.cpp`), which
+must remain inside input-to-presentation measurements. None of F01–F16 or native120
+is closed by the protocol measurements.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
