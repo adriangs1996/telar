@@ -3631,6 +3631,126 @@ is established. The component gain does not override that failed target, and no
 additional native series is run to seek a favorable result. Only the reusable
 probe/comparator/oracle changes are retained.
 
+## Lazy TerminalItem ASCII coverage — adoption deferred
+
+Starting from `036d129d1`, `out-perf/dlls-terminal-font-requests-01` tests a
+GUI-thread cache of primary-face coverage. Each TerminalItem gains 128 bytes of
+unknown/missing/present state, cleared when its FontCollection changes. Repeated
+ASCII avoids UTF-8 decoding and FreeType charmap lookup. Missing coverage still
+requests fallback on every occurrence; Unicode and invalid-byte normalization
+keep their previous path. There is no additional heap allocation count, but the
+TerminalItem allocation grows. This differs from the rejected eager per-Face
+cache: no constructor precomputation or shared mutable Face state is introduced.
+
+The source-extracted oracle uses actual requestRowFonts and collection-install
+bodies with real CellValue, Face, FontCoverage and QString normalization. Five
+faces, font changes, repeated missing requests, every one/two-byte string,
+Unicode boundaries and seeded cell flags produce 889,336 cells in 8,246 records.
+Reference and candidate emit exactly 761,710 fallback requests. The promoted
+`check_terminal_font_requests.py` also compares roles; both 10,018,306-byte streams
+have SHA-256 `651a95191d7f3db30fca1864e55bc9abde0a90e6e2006e7d0460c12d70970b24`.
+A deliberately omitted reset is rejected. Five malformed-record controls reject
+truncated header/cell data, oversized text, invalid width and unknown font index.
+The private ASan/UBSan oracle also passes; Face/probe code is instrumented, whereas
+Qt/FreeType/HarfBuzz dependencies are not. Leak checking is disabled. Native font
+discovery, asynchronous completion and rendering are outside this facade.
+
+A separate census over 100,000 warm ASCII rows counts 25.6 million primary Face
+coverage calls in A and zero in B. The Unicode control keeps 32 million calls;
+128 unique cold ASCII scalars keep 12.8 million calls in both. The catalog facade
+does not execute real secondary coverage lookup, so these are primary-method
+counts rather than total application calls or allocation counts. No census
+instrumentation is used for timings. Seven alternating component pairs give:
+
+| CPU ns/row | Reference | Candidate | Wins |
+| --- | ---: | ---: | ---: |
+| Warm ASCII | 3356.55 | 401.32 | 7/7 |
+| Unicode | 4780.12 | 4827.99 | 3/7 |
+| Missing ASCII | 2246.54 | 879.55 | 7/7 |
+| Cold 256-cell rows | 3336.75 | 1494.43 | 7/7 |
+| Cold 128 unique ASCII cells | 1664.49 | 1323.84 | 7/7 |
+
+All 150 host observations qualify: maximum one/five-minute load 2.069/2.281,
+no active compiler observations. Cold unique ASCII benefits from bypassing the
+UTF-8 wrapper despite having no coverage-call savings. ARM64, x86-64 and x86-64-v3
+assembly compilation succeeds for both variants; only ARM64 runs natively.
+The full GUI method grows from 600 to 724 code bytes, using cached byte tests to
+skip calls. This is work elimination, not a claim of globally fewer instructions.
+
+Both GUIs pass native input/rendering, cursor blink, split/tab and configuration
+reload controls. Single/splits/tabs static PNGs are identical, and variable split
+load qualifies. Native timing uses the accepted GUI `5a639c5f…`, candidate
+`5c57b1b5…`, unchanged runtime `a0b8b9d5…`, helper `87beebb0…` and QtGui `abd4bdf7…`.
+The separately rebuilt reference is `0d5ec9b9…`. All subsequent timings use frozen
+stages, not the mutable build directory.
+
+Six alternating loaded pairs contain 100 measured inputs after 20 warmups. The
+1600×1000 window has grids 39×19, 18×19, 8×19 and 9×19, with three variable ASCII
+producers at 0.125 MiB/s each. All 26 host observations qualify (maximum
+one/five-minute load 2.987/2.387, no active compilers). Results:
+
+| Native metric | Accepted A | Candidate B | Wins |
+| --- | ---: | ---: | ---: |
+| Input-to-present p50, ms | 31.389 | 30.627 | 3/6 |
+| p95, ms | 37.325 | 37.380 | 3/6 |
+| p99, ms | 38.605 | 40.845 | 2/6 |
+| GUI CPU, ms/input | 14.594 | 14.389 | 5/6 |
+| Runtime session CPU, ms | 895.038 | 923.614 | 2/6 |
+| Runtime session CPU, ms/second | 55.650 | 57.407 | 2/6 |
+
+The CPU target meets the predeclared 5/6 gate; the worse p99 median and runtime
+trend are retained. Runtime counters cover the whole GUI session, not the GUI
+input interval, and the windows are not summed. Median background bytes are
+5,371,328 → 5,371,840. This result alone does not accept the candidate.
+
+The separate single-pane control passes its no-consistent-loss criterion over
+six pairs, each with five idle seconds and 100 inputs after 20 warmups. GUI CPU
+is 2.452 → 2.467 ms/input (3/6); idle CPU is 3.233 → 4.617 ms/second (3/6).
+Input p50/p95/p99 are 24.693 → 24.608, 32.640 → 29.958 and 33.695 → 33.260 ms
+(3/6, 5/6, 4/6). All 26 host observations qualify, maximum one/five-minute load
+3.268/2.929. The higher idle median is a mixed result, not an established saving.
+
+The first tab-control series is incomplete: the accepted baseline times out on
+its first input in round 1. A separate diagnostic reproduces that baseline failure.
+The expected cyan pixel reaches GPU readback, but drawable 191 and 192 report
+zero presentedTime, including a delayed recheck. Focus and geometry are valid;
+all owned processes clean up. The cause of the zero timestamp is not established.
+Neither incomplete series contributes timing evidence. The complete replacement
+series also stops on its first input, this time in B during round 2. All host
+observations pass in both attempts; neither series completes. The second failure
+has no diagnostic readback enabled, so its cause is not inferred from the first.
+Both incomplete series remain excluded. Positive native presentation remains
+mandatory; no further timing retry is used to seek a favorable outcome. Adoption
+and independent Zig/cadence comparison remain open. The production source is
+still the accepted baseline.
+
+A separate current-stack cadence diagnostic completes for A, B and independent
+Zig (`/tmp/telar-perf-terminal-font-requests-cadence-qual-01`). It uses the unchanged,
+previously fault-qualified phase probe and a current-driver adaptation with the
+owned-producer completion gate. The 240 Hz producer, native pixels, focus, geometry,
+positive presentations and cleanup qualify in all three runs. All eight host
+observations pass; maximum one/five-minute load is 1.760/2.120. Results are single
+observations, not paired acceptance:
+
+| Cadence diagnostic | Accepted A | Candidate B | Independent Zig |
+| --- | ---: | ---: | ---: |
+| Changed content frames in six seconds | 688 | 683 | 626 |
+| Changes/s, first-to-last timestamps | 114.660 | 113.825 | 104.312 |
+| Longest changed-content gap, ms | 16.667 | 29.166 | 16.670 |
+| Stable native refresh reference | 120.0006 Hz | Unqualified phase change | 120.0006 Hz |
+| Two-refresh intervals | 32 | Unqualified | 94 |
+
+B's reference changes phase, so its missed-refresh classification is unavailable;
+the 0.25 ms native residual and 5% reference tolerances remain unchanged. A and Zig
+both fail to sustain a content change at every qualified refresh. GUI CPU totals
+are 0.612/0.692/0.675 seconds over separately bracketed 6.292/6.283/6.018-second
+windows; these are unpaired diagnostics with probe overhead still open. The data
+does not establish a C++/Zig win or a cache regression. Adoption is deferred because
+valid tab controls and paired cadence evidence are missing, not because a
+consistent regression has been demonstrated. Only the reusable oracle and report
+are retained. The next diagnostic will inspect actual pacing decisions before
+changing timers or inferring a scheduling cause.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
