@@ -5175,6 +5175,98 @@ reload/invalidation, non-optical mode, strengths, styles and fallback fonts befo
 adoption. The separate history page-replacement algorithm remains a source-based
 lead rather than an implementation change.
 
+## F12 history snapshot candidate and process work counters (2026-11-03)
+
+The native history replacement profile identifies repeated Qt delegate work,
+not record conversion, as the next substantial GUI cost. Two separate six-second
+`sample` runs used the qualified observer and completed 120 queries each. In the
+C++ main-thread profile, 549 of 4,521 stack observations include
+`QQuickItemView::setModel`, 662 include `QQmlObjectCreator`, and only three include
+`historyRecord`. These groups overlap and are neither additive CPU times nor
+paired performance measurements. Receipts are in
+`out-perf/dlls-history-row-profile-01/summary.json`.
+The C++ profile used the private fused-query runtime; it is separate from the
+accepted-runtime A/B stages below.
+
+The working-tree candidate adds positional `ListModel::replaceRows` for history
+snapshots only. Equal-sized replacements update records with one bounded
+`dataChanged` range, avoiding keyed insertion/movement and whole-view retirement.
+Unchanged snapshots emit nothing. Real suffix removal retains the existing QML
+pending-delegate retirement safeguard; other models still use keyed `reconcile`.
+The AArch64 body has one bounded shared-prefix loop, QMap pointer moves and a
+single changed-range notification, rather than repeated searches and insertions.
+This candidate remains **pending**, not an accepted F12 or independent-Zig win.
+
+Validation: 4,096 randomized final-record comparisons against keyed reconciliation,
+Qt model integrity and positional persistent-index/signal checks passed. All 34
+existing native history cases passed with owned-window floating and Cocoa-owner
+acknowledgement; the initial unqualified geometry/setup attempts are retained in
+the scratch logs. Two additional native cases passed: equal-sized replacement
+while delegates are incubating, and press-before/release-after replacement without
+acting on the new record. The existing retirement and stale-action cases were
+rerun alongside them. Both complete native `gb` and `GST` images are byte-exact to
+the accepted GUI, not merely equal inside the latency ROI.
+
+Frozen GUI A is `0d5ec9b9…`; B is `aef2c9b0…`. Both use the same accepted runtime
+`ffea7fb2…` and helper `87beebb0…`; no fused-history runtime candidate is included.
+`stage-manifest.json`, `validation.json`, captures and assembly are in the same
+scratch directory. Two independent series each contain six alternating pairs of
+60 native queries per run, with positive verified result pixels and all submitted
+callbacks completed. Each series has 720 queries and 62 valid host boundaries,
+complete owned cleanup, no target-zero timestamps and no dropped readbacks.
+Maximum load1 is 2.9102 for the original closed-loop driver and 3.5391 for the
+fixed-cadence diagnostic. Series receipts are
+`/tmp/telar-perf-history-row-snapshot-pairs-01` and
+`/tmp/telar-perf-history-row-fixed-pairs-01`; `paired-results.json` aggregates them.
+
+| Instrumented metric | Closed-loop A → B | B wins | Fixed-cadence A → B | B wins |
+| --- | ---: | ---: | ---: | ---: |
+| Mean input → verified presentation, ms | 141.068 → 110.725 | 6/6 | 141.668 → 110.586 | 6/6 |
+| p95, ms | 151.563 → 122.495 | 6/6 | 152.416 → 119.993 | 6/6 |
+| p99, ms | 156.293 → 124.353 | 6/6 | 156.942 → 122.297 | 6/6 |
+| GUI CPU ms/query cycle | 69.644 → 32.466 | 6/6 | 76.072 → 39.199 | 6/6 |
+| Runtime CPU ms/query cycle | 6.084 → 7.242 | **0/6** | 6.736 → 6.933 | **1/6** |
+| GUI end footprint, bytes | 267,756,936 → 254,076,296 | 5/6 | 263,210,400 → 253,961,632 | 6/6 |
+
+CPU intervals include the native input driver and callback drain/wait, not startup.
+The fixed diagnostic adds a minimum 300ms wait before the next Select All, with
+observed mean input intervals 309.452–310.381ms and the required 5% offered-rate
+tolerance. It changes only a conjunction in the observer's advance gate. Combined
+GUI+runtime CPU medians are 75.777 → 39.545ms in the closed-loop series and
+82.805 → 46.006ms at fixed cadence. Runtime footprint is mixed, 3/6 wins in each.
+Observer CPU/GPU perturbation remains a limitation; these are instrumented
+comparisons, not native120 or independent-Zig acceptance.
+
+The runtime CPU increase is smaller at fixed cadence but still consistent; its
+cause is **not established**. A separate pass-through IPC census found exactly
+24 queries and 24 responses in each variant, with no intercepted or duplicate
+queries. Do not attribute the remaining difference to clock frequency, caches,
+Qt conversions or additional runtime work without further evidence.
+
+`macos_process_resources.c` now exposes the existing `proc_pid_rusage` instruction
+and cycle fields. The parser keeps them as raw deltas, checks optional-field
+pairing, representation and monotonicity, and distinguishes unavailable zero
+lifetime counters from a supported idle interval. Older snapshots remain valid.
+Eleven resource tests pass. An owned-child native helper/parser qualification
+observed positive counters and verified exact deltas, process identity and cleanup
+(`counter-helper-qualification-native-guarded.json`).
+
+Cross-architecture qualification also exposed an existing CPU conversion error:
+the translated x86 helper reports a 1:1 Mach timebase, while the native reader
+uses 125:3 for the same kernel CPU counters. The translated reader reported only
+3.800ms CPU over a 170.277ms busy interval. That receipt is invalid for CPU
+interpretation. The helper now rejects translated execution or an unqualified
+translation check instead of returning misleading JSON. A native ARM reader can
+measure translated targets: an owned x86 child reports 274.613ms CPU over
+278.285ms wall, with positive raw work counters and verified cleanup. See
+`translated-helper-rejection.json` and `native-helper-translated-child.json`.
+The two history series above used ARM readers and are unaffected.
+
+The next experiment can compare runtime instructions/cycles at the same offered
+rate before accepting or rejecting the GUI candidate. Its source/tests remain
+separate from the pre-existing runtime cadence edits. All F01–F16 requirements
+remain open.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove

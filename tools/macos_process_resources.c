@@ -27,6 +27,10 @@ int main(int argc, char **argv) {
   ProcessResources snapshot = process_resources((pid_t)pid);
   if (snapshot.result || snapshot.timebase_result != KERN_SUCCESS ||
       snapshot.timebase.numer == 0 || snapshot.timebase.denom == 0) {
+    if (snapshot.error == ENOTSUP) {
+      fprintf(stderr, "Resource snapshots require a native-architecture helper; translated execution has an incompatible Mach timebase\n");
+    }
+
     return resource_error;
   }
 
@@ -41,12 +45,13 @@ int main(int argc, char **argv) {
          "\"uuid\":\"%s\",\"user_ticks\":%llu,\"system_ticks\":%llu,\"idle_"
          "wakeups\":%llu,\"interrupt_wakeups\":%llu,\"pageins\":%llu,"
          "\"resident_bytes\":%llu,\"footprint_bytes\":%llu,\"lifetime_max_"
-         "footprint_bytes\":%llu}\n",
+         "footprint_bytes\":%llu,\"instructions\":%llu,\"cycles\":%llu}\n",
          snapshot.pid, snapshot.before_ns, snapshot.after_ns,
          snapshot.timebase.numer, snapshot.timebase.denom,
          u->ri_proc_start_abstime, u->ri_proc_exit_abstime, uuid,
          u->ri_user_time, u->ri_system_time, u->ri_pkg_idle_wkups,
          u->ri_interrupt_wkups, u->ri_pageins, u->ri_resident_size,
-         u->ri_phys_footprint, u->ri_lifetime_max_phys_footprint);
+         u->ri_phys_footprint, u->ri_lifetime_max_phys_footprint,
+         u->ri_instructions, u->ri_cycles);
   return 0;
 }

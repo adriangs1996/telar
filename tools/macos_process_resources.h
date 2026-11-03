@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <sys/resource.h>
+#include <sys/sysctl.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -23,6 +24,17 @@ typedef struct {
 
 static inline ProcessResources process_resources(pid_t pid) {
   ProcessResources result = {.pid = pid};
+  // Rosetta's virtualized Mach timebase can disagree with the kernel CPU ticks.
+  int translated = 0;
+  size_t translated_size = sizeof(translated);
+  const int translation_result = sysctlbyname("sysctl.proc_translated", &translated, &translated_size, NULL, 0);
+  if ((translation_result == 0 && translated != 0) || (translation_result != 0 && errno != ENOENT)) {
+    result.result = -1;
+    result.error = translation_result == 0 ? ENOTSUP : errno;
+    result.timebase_result = KERN_NOT_SUPPORTED;
+    return result;
+  }
+
   result.timebase_result = mach_timebase_info(&result.timebase);
   result.before_ns = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
   errno = 0;

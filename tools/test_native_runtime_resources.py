@@ -40,6 +40,38 @@ class ResourceTests(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 resources.interval(self.start, dict(self.end, **{key: value}))
 
+    def test_hardware_counters_are_raw_and_optional(self):
+        result = resources.interval(dict(self.start, instructions=100, cycles=200),
+                                    dict(self.end, instructions=350, cycles=900))
+        self.assertEqual(result['instructions'], 250)
+        self.assertEqual(result['cycles'], 700)
+        self.assertTrue(result['hardware_counters_available'])
+        self.assertAlmostEqual(result['user_cpu_seconds'], .000010)
+        self.assertNotIn('instructions', resources.interval(self.start, self.end))
+        unavailable = resources.interval(dict(self.start, instructions=0, cycles=0),
+                                         dict(self.end, instructions=0, cycles=0))
+        self.assertFalse(unavailable['hardware_counters_available'])
+        idle = resources.interval(dict(self.start, instructions=100, cycles=200),
+                                  dict(self.end, instructions=100, cycles=200))
+        self.assertTrue(idle['hardware_counters_available'])
+        self.assertEqual(idle['instructions'], 0)
+
+    def test_hardware_counter_integrity(self):
+        start = dict(self.start, instructions=100, cycles=200)
+        end = dict(self.end, instructions=350, cycles=900)
+        for key in ('instructions', 'cycles'):
+            for value in (-1, 2**64, 1.5, True, None, start[key] - 1):
+                with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                    resources.interval(start, dict(end, **{key: value}))
+            missing = dict(end)
+            del missing[key]
+            with self.subTest(missing=key), self.assertRaises(ValueError):
+                resources.interval(start, missing)
+        with self.assertRaises(ValueError):
+            resources.interval(self.start, end)
+        with self.assertRaises(ValueError):
+            resources.interval(start, self.end)
+
     def test_invalid_representations_and_missing_fields(self):
         for value in (True, -1, 2**64, 1.5, float('nan'), float('inf'), '100', None):
             with self.subTest(value=value), self.assertRaises(ValueError):
