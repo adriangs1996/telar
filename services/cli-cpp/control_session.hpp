@@ -11,16 +11,22 @@ namespace telar::runtime::cli {
 // The runtime refused a request; `what()` is the text scripts read on stderr.
 class ControlFailure final : public std::runtime_error {
 public:
-  explicit ControlFailure(FailureCode code)
+  explicit ControlFailure(FailureCode code, std::string_view message = {})
       : std::runtime_error{controlFailureDescription(code)},
-        code_(code) {}
+        code_(code),
+        message_(message) {}
 
   [[nodiscard]] FailureCode code() const noexcept {
     return code_;
   }
 
+  std::string_view message() const noexcept {
+    return message_;
+  }
+
 private:
   FailureCode code_;
+  std::string message_;
 };
 
 // One conversation with the runtime, as every command that addresses panes, tabs,
@@ -32,9 +38,9 @@ class ControlSession {
 public:
   // `reply_bytes` bounds one reply and what decoding it may borrow; small fixed
   // replies, as hooks get, need far less than the protocol's 4 MiB frames.
-  ControlSession(Memory &memory, const char *socket, std::size_t reply_bytes = max_payload_size)
+  ControlSession(Memory &memory, const char *socket, std::size_t reply_bytes = max_payload_size, std::size_t request_bytes = maximum_request_bytes)
       : connection_(socket),
-        outgoing_(maximum_request_bytes, Byte{}, AllocatorRef<Byte, Memory>{memory}),
+        outgoing_(request_bytes, Byte{}, AllocatorRef<Byte, Memory>{memory}),
         incoming_(reply_bytes, Byte{}, AllocatorRef<Byte, Memory>{memory}),
         decoded_(reply_bytes, Byte{}, AllocatorRef<Byte, Memory>{memory}) {}
 
@@ -78,7 +84,7 @@ public:
       if (frame.front() == static_cast<Byte>(ServerTag::request_failed)) {
         const auto failure = Codec::decode<RequestFailed>(frame, storage);
         if (!request_id || failure.request_id == *request_id) {
-          throw ControlFailure{failure.code};
+          throw ControlFailure{failure.code, failure.message};
         }
       } else if (frame.front() == static_cast<Byte>(ServerTag::runtime_stopping)) {
         throw std::runtime_error{"RuntimeStopping"};

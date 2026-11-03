@@ -92,17 +92,17 @@ differences; **unverified** runs without a comparison; **missing** prints
 | `agent report-state` | done | Stack comparison and CTest: lifecycle, reason/event/session validation and accepted JSON match Zig; hook protocol types reused. Worktree report keeps Zig's `WorktreeCatalogMissing`. Reference: `src/cli/AgentReports.zig:18`. |
 | `agent report-title` | done | Stack comparison and CTest: empty/UTF-8 title, validation, current generation and accepted JSON match Zig; hook report type reused. Worktree report keeps Zig's `WorktreeCatalogMissing`. Reference: `src/cli/AgentReports.zig:18`. |
 | `agent wait` | done | Stack comparison: ready/idle and timeout diagnostics/status 3 match Zig; CTest checks polling and missing targets. Reference: `src/cli/agent.zig:131`, `src/cli/arguments/values.zig:103`. |
-| `exec cancel` | missing |  |
-| `exec forget` | missing |  |
-| `exec list` | missing |  |
-| `exec output` | missing |  |
-| `exec start` | missing |  |
-| `exec status` | missing |  |
-| `repository prepare` | missing |  |
-| `repository receive` | missing |  |
-| `project setup` | missing |  |
-| `file get` | missing |  |
-| `file put` | missing |  |
+| `exec cancel` | done | `check_exec_runtime_cli.py`: cancellation and retained status; `exec-runtime-cli-tests`. |
+| `exec forget` | done | Same check: refuses a running execution, forgets an exited one, subsequent status fails with 125. |
+| `exec list` | done | Same check: retained executions, JSON without requiring `--json`. |
+| `exec output` | done | Same check: binary stdout/stderr, offsets, retention loss and recovery. |
+| `exec start` | partial | Same check: raw binary stdin/stdout/stderr, child status, spawn failure, timeout, retry identity. Native runtime initially replies `running`; Zig replies `starting` for detached starts. |
+| `exec status` | done | Same check: JSON fields, failed/missing/cancelled executions and status after timeout. |
+| `repository prepare` | partial | Source preparation and the `exec`/receive pipeline pass `repository-prepare-probe` in `exec-runtime-cli-tests`. The public CLI delegates profile resolution/dispatch to package 5 (`machine list --json`, `--machine`), still missing on this branch; real SSH comparison pending. See `exec-runtime.md`. |
+| `repository receive` | done | `check_exec_runtime_cli.py`: verified bundle, publication, dirty clone reuse, explicit selection, closed-workspace history discovery, ambiguity, interrupted/long/mismatched transfer, unowned stage. |
+| `project setup` | done | Same check: absent/invalid recipe, successful recipe, stderr streams, detach and failed exit. `project_setup::prepare` is reusable by worktree create. |
+| `file get` | done | Same check: 131,334 binary bytes including every byte value; ownership/link/type refusals. `exec-runtime-offline-tests`. |
+| `file put` | done | Same check: byte-exact publication, private permissions, empty input, short/long input, occupied destination and ancestor symlink refusal. |
 | `machine add` | missing |  |
 | `machine check` | missing |  |
 | `machine disable` | missing |  |
@@ -153,21 +153,21 @@ differences; **unverified** runs without a comparison; **missing** prints
 | `server bridge` | done | Hidden; `server-cli-tests`. |
 | `server endpoint` | done | Starts `telar-runtime server --daemonized` when none runs; `server-cli-tests`. |
 | `server stop` | done | `server-cli-tests`. |
-| `runtime metrics` | missing |  |
-| `runtime status` | missing |  |
-| `runtime watch` | missing |  |
-| `diagnostics limits` | missing |  |
-| `diagnostics logs` | missing |  |
-| `history delete` | missing |  |
-| `history import` | missing |  |
-| `history list` | missing |  |
-| `history prune` | missing |  |
-| `history search` | missing |  |
-| `history show` | missing |  |
-| `history stats` | missing |  |
+| `runtime metrics` | done | Same check: deterministic metric frames, text/JSON, battery present/absent; live samples separately validate ranges. |
+| `runtime status` | done | Same check: text/JSON, unavailable runtime and deterministic port warning. Reports native `cqp00001`, deliberately unlike Zig. |
+| `runtime watch` | done | Same check: fixed proxy/metrics/workspace/agent snapshots, count, stopping and resync; live subscription also exercised. |
+| `diagnostics limits` | partial | Same check: empty/reached registries, JSON/text and client import limit. Native runtime does not report `executions.retained_bytes`, unlike Zig; CLI prints the registry it receives. |
+| `diagnostics logs` | done | Same check: sorted telemetry/runtime/start logs, text/JSON tails, component/pid filters, missing logs, safe file checks and standard JSON escaping. |
+| `history delete` | done | Same check: exact retained entry removed. |
+| `history import` | done | Same check: zsh continuations, bash/fish timestamps, idempotency, oversized-command skip, 64-entry and payload batch boundaries. CTest needs no Zig. |
+| `history list` | done | Same check: default/explicit limit, escaped fields, cwd/pane/failed filters and empty result. |
+| `history prune` | done | Same check: preview, date notice, dry run, abort, confirmed/--yes deletion and text filter. |
+| `history search` | done | Same check: imported commands and retained commands after a limit. |
+| `history show` | done | Same check: raw captured bytes, truncation notice and the no-output notice on stderr. |
+| `history stats` | partial | Same check: totals, unique count, periods and grouping. Native runtime sorts tied top groups alphabetically; Zig preserves hash iteration order. |
 | `proxy trust` | unverified | Implemented; `check_proxy_trust.py` needs a `tls-probe` the runtime no longer builds. |
-| `proxy watch` | missing |  |
-| `api schema` | missing |  |
+| `proxy watch` | done | Same check: subscription filtering, count, stopping; observer never starts a runtime. |
+| `api schema` | done | `exec-runtime-offline-tests` checks every native tag against the C++ declarations; comparison checks shared Zig tags/bounds. Native ID/fingerprint and clipboard extensions intentionally differ; see `exec-runtime.md`. |
 
 ## Building blocks
 

@@ -1,8 +1,10 @@
 # telar CLI
 
 `telar`, the command line people and agents type. It implements help, agent
-hooks, agent CLI integration, plugin packages, proxy CA trust, and `server` to
-start, find, bridge and stop the runtime; the rest of the Zig CLI is being ported. It talks to the runtime over its socket with `telar-client`
+hooks, agent CLI integration, plugin packages, proxy CA trust, execution,
+file/repository transfer, project setup, runtime inspection, diagnostics,
+history and the native API schema. `server` starts, finds, bridges and stops
+the runtime; the remaining families are being ported. It talks to the runtime over its socket with `telar-client`
 and shares code with the runtime and the GUI through `dlls/`; it never includes
 `services/runtime-cpp`.
 
@@ -24,6 +26,11 @@ The C++ `telar` is replacing the Zig CLI command by command;
 [parity.md](parity.md) records what each command does today and how it is
 compared with Zig. `help/` holds every help text `telar` prints, and `tools/`
 the parity and latency checks.
+
+[Execution and runtime contracts](exec-runtime.md) documents the interfaces for
+remote machine/worktree commands, the deliberate native wire differences and
+the remaining runtime gaps. Repository preparation still needs the machine
+family's profile listing and dispatch entry point to be integrated.
 
 ## Agent hooks
 
