@@ -4945,6 +4945,56 @@ listener correction in both variants; old frozen measurements remain evidence of
 the earlier binaries, not measurements of the newly corrected stack. All F01–F16
 and native120 acceptance remain open.
 
+### History candidate on the corrected listener: native content qualification
+
+`out-perf/dlls-history-fused-rank-02` stages the same verified baseline/candidate
+main objects with the identical corrected listener object in both links. Link maps
+confirm the old archive listener object is not pulled in. Runtime A is
+`ffea7fb28307e3e990cc0bd51ddbfe268859293da562bf16488ebbd8dd642d09`;
+B is `1f1849d1881fe60af13d46531c6f722fb5105f32fc8beaaadf7276ad50f55031`.
+Both retain GUI `5a639c5f26f67892698088cd95e31555212e6508dae2e45a441dc58e641caef5`
+and helper `87beebb065f0ea4274492eaadecea2ccef7cdedc28f36049bf61ecc21214924f`.
+The frozen prior stages and their measurements remain intact.
+
+A fresh seven-pair warm query run,
+`/tmp/telar-perf-history-fused-rank-02-monotonic-01`, preserves the independent
+60-case reference checks and exact measured replies. All 14 executions and 30 host
+boundaries qualify, maximum load1 2.077, with complete cleanup. CPU medians are
+2.385050 → 0.679151 ms/query and mean protocol response medians are
+2.391025 → 0.683903 ms; both win 7/7. Response p95/p99 also win 7/7. End-footprint
+medians are 7,045,552 → 7,602,608 bytes. These are measurements of the new common
+listener stages, still not GUI latency acceptance.
+
+The private `capture-native.py` reuses the repository's native history action and
+Metal capture helpers, starts the selected C++ runtime explicitly, and imports the
+existing 10,000-entry fixture by copying its standalone database before startup.
+It checks the actual GUI/runtime executable identities and stages the expected
+runtime helper beside the GUI. The final four captures are:
+
+| Query | Baseline | Candidate | Complete PNG / pixels |
+| --- | --- | --- | --- |
+| `gb` | `/tmp/telar-perf-history-native-capture-A-02` | `/tmp/telar-perf-history-native-capture-B-01` | Byte-exact / exact |
+| `GST` | `/tmp/telar-perf-history-native-capture-A-GST-01` | `/tmp/telar-perf-history-native-capture-B-GST-01` | Byte-exact / exact |
+
+Each has a focused key window, 1600×1000 point viewport, 3200×2000 drawable, expected
+native text-input query and a positive `MTLDrawable.presentedTime` after the final
+scripted input. Both processes are identified and cleaned up. Database inspection
+after capture confirms 10,000 rows/max-id 10,000 in all four cases. Visual inspection
+of the baseline images shows selected commands `git build --target 4996` and
+`git status --short 4995`, consistent with the independent ranking fixture. The
+complete image equality includes the visible rows and metadata, not just that
+selected command.
+
+`native-capture-comparison.json` records the image digests. Two distinct BGRA
+selected-command templates were extracted for a future per-frame observer. This
+observer is **not qualified yet**: raw Metal readback must first match those
+screenshot-derived bytes, and stale/wrong/missing/zero-presentation controls must
+fail. The existing capture driver waits for a settled image and performs a final
+resize; its elapsed time and last-input timestamp must not be repurposed as
+query-response latency. Native input-to-results timing, separate GUI/runtime
+resources, independent Zig F12 comparison and native120 remain open. No flow is
+closed by these two content cases.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
