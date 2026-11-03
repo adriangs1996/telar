@@ -145,16 +145,21 @@ HistoryRowLayout {
                         Accessible.ignored: true
                     }
 
+                    HistoryMatchModel {
+                        id: matches
+                        records: line.value.matches
+                    }
+
                     Repeater {
-                        model: line.value.matches
+                        model: matches.model
                         delegate: CellText {
                             objectName: "historyMatch"
-                            required property var modelData
-                            x: modelData.bounds.x
-                            y: modelData.bounds.y
-                            width: modelData.bounds.width
-                            height: modelData.bounds.height
-                            text: modelData.text
+                            required property var record
+                            x: record.bounds.x
+                            y: record.bounds.y
+                            width: record.bounds.width
+                            height: record.bounds.height
+                            text: record.text
                             color: root.colors.accent
                             grid: root.typography.grid
                             bold: true

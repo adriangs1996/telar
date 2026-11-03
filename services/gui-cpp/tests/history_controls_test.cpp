@@ -24,6 +24,7 @@
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QPointF>
+#include <QPointer>
 #include <QPointingDevice>
 #include <QInputDevice>
 #include <QWheelEvent>
@@ -751,6 +752,71 @@ class HistoryControlsTest final : public QObject {
     row->setProperty("interactive", false);
     QTest::mouseRelease(&window, Qt::LeftButton, Qt::NoModifier, center);
     QCOMPARE(activated.size(), 1);
+  }
+
+  Q_SLOT static void matchDelegatesRetainPositionsAcrossQueryChanges() {
+    SystemAllocator memory;
+    HistoryRow<SystemAllocator> entry{memory};
+    entry.command = "abc";
+    auto record = historyRecord(entry, {});
+    const auto colors = themeColors({});
+    QQuickWindow window;
+    QQmlEngine engine;
+    auto row = createChrome(engine, QStringLiteral("HistoryRow"), {
+        {QStringLiteral("record"), record},
+        {QStringLiteral("colors"), colors},
+        {QStringLiteral("typography"), historyTypography()},
+        {QStringLiteral("rowHeight"), row_height},
+        {QStringLiteral("width"), wide_width},
+        {QStringLiteral("height"), row_height},
+        {QStringLiteral("query"), QStringLiteral("ab")},
+    });
+    row->setParentItem(window.contentItem());
+    window.resize(wide_width, row_height);
+    QVERIFY(showComponentWindow(window, wait_ms));
+    const auto matches = [&] {
+      auto items = visualItems(*row, QStringLiteral("historyMatch"));
+      std::ranges::sort(items, [](const auto *left, const auto *right) { return left->x() < right->x(); });
+
+      return items;
+    };
+    QTRY_COMPARE_WITH_TIMEOUT(matches().size(), qsizetype{2}, wait_ms);
+    QPointer<QQuickItem> first = matches()[0];
+    QPointer<QQuickItem> second = matches()[1];
+    QCOMPARE(first->property("text").toString(), QStringLiteral("a"));
+    QCOMPARE(second->property("text").toString(), QStringLiteral("b"));
+    row->setProperty("query", QStringLiteral("bc"));
+    QTRY_VERIFY_WITH_TIMEOUT(first && first->property("text").toString() == QStringLiteral("b"), wait_ms);
+    QCOMPARE(matches()[0], first.data());
+    QCOMPARE(matches()[1], second.data());
+    QCOMPARE(second->property("text").toString(), QStringLiteral("c"));
+    QCOMPARE(first->property("color").value<QColor>(), colors.value(QStringLiteral("accent")).value<QColor>());
+    QVERIFY(first->property("bold").toBool());
+
+    row->setProperty("query", QStringLiteral("abc"));
+    QTRY_COMPARE_WITH_TIMEOUT(matches().size(), qsizetype{3}, wait_ms);
+    QCOMPARE(matches()[0], first.data());
+    QCOMPARE(matches()[1], second.data());
+    QPointer<QQuickItem> third = matches()[2];
+    row->setProperty("query", QStringLiteral("a"));
+    QTRY_COMPARE_WITH_TIMEOUT(matches().size(), qsizetype{1}, wait_ms);
+    QCOMPARE(matches()[0], first.data());
+    QTRY_VERIFY_WITH_TIMEOUT(second.isNull() && third.isNull(), wait_ms);
+    QCOMPARE(first->property("text").toString(), QStringLiteral("a"));
+    row->setProperty("query", QStringLiteral("z"));
+    QTRY_VERIFY_WITH_TIMEOUT(matches().isEmpty() && first.isNull(), wait_ms);
+
+    record.insert(QStringLiteral("command"), QStringLiteral("a界e\u0301"));
+    row->setProperty("record", record);
+    row->setProperty("query", QStringLiteral("界e\u0301"));
+    QTRY_COMPARE_WITH_TIMEOUT(matches().size(), qsizetype{2}, wait_ms);
+    const auto wide = matches()[0];
+    const auto combining = matches()[1];
+    QCOMPARE(wide->property("text").toString(), QStringLiteral("界"));
+    QCOMPARE(combining->property("text").toString(), QStringLiteral("e\u0301"));
+    QCOMPARE(wide->width(), qreal{2 * cell_width});
+    QCOMPARE(combining->width(), qreal{cell_width});
+    QCOMPARE(combining->x(), wide->x() + wide->width());
   }
 
   Q_SLOT static void selectedCardsShowEveryExplicitCommandLine() {

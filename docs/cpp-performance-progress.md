@@ -5498,3 +5498,103 @@ Targeted clang-tidy passes `history_meta_layout.cpp` and `input_test.cpp`;
 pre-existing redundant alias in `config/callback.hpp:13`. The larger QuickTest
 check reported that same alias and a const-correctness suggestion in the touched
 regression, which was corrected. Full lint is not claimed green.
+
+
+## Retained history match delegates: local CPU adoption, 2026-11-03
+
+Adopt positional reuse of the inner history match delegates for reduced CPU
+work. This is not a consistent latency improvement or global F12 acceptance.
+The accepted comparison base is `f2b203cda`, including the separate card-choice
+correction above. Both A and B include that correction and use the same accepted
+fused runtime. Neither the runtime cadence edits nor the optical text candidate
+are part of this change.
+
+`HistoryMatchModel` keeps a stable ListModel for each existing command line.
+Changed records update the shared prefix; only appended highlights create new
+QML objects, and removed suffixes retire immediately. Unchanged input returns
+without updating the model. This removes repeated delegate construction while
+retaining one adapter and one ListModel per live command line, plus shared Qt
+records. It does not retain a high-water pool of removed highlights. Existing
+keyed ListModel consumers, command matching, shaping, line geometry and the
+60 ms search debounce are unchanged.
+
+Evidence lives in `out-perf/dlls-history-match-model-03` and
+`out-perf/dlls-history-match-cadence-01`; the earlier stage 01 failure and stage 02
+correctness controls remain intact. Each final series has six alternating pairs,
+60 queries per run, 720 total queries, and 62 qualified load boundaries. Maximum
+one-minute load was 2.647 and 2.316 respectively. All owned children exited; all
+presentation callbacks drained, with no dropped or zero-timestamp result frames.
+The second series was added to investigate the adverse first-series p95, without
+replacing or excluding the first series. Offered mean intervals were
+309.068–310.543 ms and 229.090–231.212 ms. These are two controlled query rates,
+not a typing-burst or cold-open latency experiment.
+
+Values below are medians of six per-run statistics. Wins are paired B < A.
+
+| Metric | 300 ms minimum: A → B (wins) | 220 ms minimum: A → B (wins) |
+| --- | --- | --- |
+| GUI CPU ms/query | 39.778 → 35.229 (6/6) | 37.220 → 32.493 (6/6) |
+| Runtime CPU ms/query | 2.442 → 2.632 (1/6) | 2.359 → 2.679 (0/6) |
+| Combined CPU ms/query | 42.132 → 37.925 (6/6) | 39.571 → 35.206 (6/6) |
+| Combined instructions, million/query | 187.754 → 142.423 (6/6) | 185.015 → 139.926 (6/6) |
+| Combined cycles, million/query | 93.065 → 80.483 (6/6) | 92.595 → 78.007 (6/6) |
+| Mean latency ms | 106.063 → 105.436 (4/6) | 106.142 → 105.893 (5/6) |
+| p95 latency ms | 116.412 → 117.938 (2/6) | 116.689 → 116.147 (5/6) |
+| p99 latency ms | 120.075 → 119.888 (4/6) | 121.400 → 119.564 (3/6) |
+| GUI interrupt wakeups/query | 92.033 → 93.242 (0/6) | 69.600 → 70.700 (0/6) |
+| GUI final footprint, bytes | 253756784 → 253928828 (2/6) | 254510472 → 253912444 (4/6) |
+| GUI setup footprint, bytes | 313517484 → 314050012 (1/6) | 312862148 → 313664952 (1/6) |
+
+Combined CPU falls about 10.0% and 11.0%, and combined instructions about 24.1%
+and 24.4%, with 12/12 paired wins for both. Runtime CPU and GUI interrupt wakeups
+are adverse despite identical runtime code. Their causes are not established;
+no clock, cache, core-placement or QoS explanation is claimed. Runtime cycles
+also rise: 5.743 → 6.111 million/query (0/6), and 5.621 → 6.115 (1/6), while
+runtime instruction medians remain around 21.45–21.48 million. The whole-query
+CPU and hardware totals include these costs. Wakeups belong to the instrumented
+active-query workload with a 5 ms observer tick, not production idle behavior.
+
+The separately retained setup counters include startup and scripted first
+history preparation. Combined setup CPU is mixed: 880.537 → 884.545 ms (2/6)
+and 892.247 → 878.007 ms (4/6). The higher GUI setup footprint, about 0.53/0.80 MB
+in these medians, is an explicit bounded-memory tradeoff. Final footprints are
+mixed, so no memory-saving claim is made. Individual query tails also remain
+mixed: at the original cadence `gb` p99 rises 115.761 → 117.593 ms (2/6); at the
+second it changes 119.157 → 118.925 (3/6). All counters and per-query statistics
+are retained in both `hardware-results.json` files. The second cadence does not
+prove the cause of the first cadence's adverse p95.
+
+The target CPU-work reduction passes the five-of-six acceptance rule in both
+cadences. Neither cadence has a consistent loss (zero or one wins) in whole-query
+mean/p95/p99 or the individual query latency cases. Adoption is scoped to that
+CPU reduction; it does not promote the mixed tails to a latency win. All F01–F16
+remain open, and independent Zig comparison/native 120 Hz acceptance remains
+outstanding. The observer's perturbation is not independently qualified.
+
+Correctness checks include all 36 native history cases with both old QML and the
+adapter after the choice fix, four final native interaction cases after guard
+cleanup, all 36 component cases in software and five selected native component
+cases. The retained-match test checks identity, text and positions across
+same-size updates, grow/shrink/empty transitions, and wide/combining Unicode.
+The final targeted component case and standalone header clang-tidy also pass.
+Full native `gb` and `GST` images are byte-exact between A/B and retain accepted
+PNG hashes `d488533203d1f1ec802f84ea2d3fc392f390ac241fd5c0456853ada0a0ed8f3f`
+and `210477c351733af4fd5fa199c8184793bf6543a504a077d7f786b3848838d2ff`.
+
+ARM64 disassembly in the action-identity evidence directory shows the initial
+list size/shared-data checks, QVariant equality for unshared input, one list
+reserve, per-record QVariant::toMap, and positional ListModel replacement.
+Conversions and reference counting remain; this is not an allocation census or
+proof that allocations explain the entire C++/Zig gap. The measured reduction
+is work avoided by preserving QML delegates. No target-specific SIMD or integer
+lowering was introduced.
+
+Frozen GUI A is `7422966257e439674434c0b202bc576ba3885744c0ead38e1b448c179a26b511`;
+B is `9661f8aa544f0d93aa41ce4ec6cf4f2a73b41b7661d2385a652ae704a58fda79`.
+Both runtimes are `1f1849d1881fe60af13d46531c6f722fb5105f32fc8beaaadf7276ad50f55031`.
+The final include-only cleanup rebuild is byte-for-byte identical to measured B,
+including UUID and signature. Rebuilding first changed the embedded HistoryRow
+resource modification timestamp and derived signatures; preserving the measured
+resource timestamp restored exact identity. `resource-mtime-control.json` and
+`final-build-equivalence.json` record this explicitly; no differing bytes are
+ignored in the final equality check.
