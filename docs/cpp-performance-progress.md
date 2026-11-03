@@ -3751,6 +3751,73 @@ consistent regression has been demonstrated. Only the reusable oracle and report
 are retained. The next diagnostic will inspect actual pacing decisions before
 changing timers or inferring a scheduling cause.
 
+## Pacing-decision census and fractional deadline prototype
+
+`out-perf/dlls-pacing-decisions-01` instruments only the accepted WindowFramePacer
+with a bounded 65,536-event ring, atomic publication and an exit-time dump. It logs
+configuration, admitted/deferred requests, timer delivery and prepared frames. The
+instrumented GUI is `68ad271c…`; its fixed buffer and logging overhead are diagnostic
+only. Production source is restored after building. The first two runs do not
+activate logging because the isolated launcher strips inherited TELAR variables.
+They retain valid native records but have no pacing trace and cannot support
+pacing attribution. The corrected launcher supplies the owned output path directly
+and requires its trace artifact.
+
+Two corrected six-second observations (`/tmp/telar-perf-pacing-decisions-02`) record
+369 and 287 deferred requests. Their millisecond ceiling adds median 0.650/0.735 ms
+and maximum 1.000/0.999 ms to the requested remaining deadline. Both configure an
+8,333,334 ns GUI interval. They record 682/676 preparations, and neither ring fills.
+Both display references change phase; the second producer also suffers an 86.993 ms
+write delay despite passing the existing half-second offered-rate buckets. Thus
+these traces establish the extra requested wait, not its share of missed refreshes
+or a performance improvement. All six host observations qualify, maximum
+one/five-minute load 2.596/2.438. Boundary load checks cannot exclude such transient
+stalls.
+
+A twenty-sample clock check compares CLOCK_UPTIME_RAW brackets with
+CACurrentMediaTime. Exact integer bracketing initially fails because conversion to
+integer nanoseconds truncates fractional Mach ticks; the largest excursion is
+0.688 ns. Every sample fits with one nanosecond of integer quantization. The
+separate native 0.25 ms residual and 5% display-reference criteria are unchanged.
+
+`out-perf/dlls-precise-frame-deadline-01` then freezes an application-only candidate:
+QChronoTimer replaces QTimer for deferred delivery, preserving single-shot/precise
+behavior, eligibility, input grace, phase anchoring and the existing INT_MAX
+millisecond cap. Stop precedes setInterval/start to avoid Qt restarting an already
+active timer twice. This is separate from the deferred font cache and includes no
+trace buffer. Candidate GUI SHA-256 is
+`adae0eb6af0f1bd87ecd3bdf3803d08f84ff61cff9f47f83ba2cf02cb7fa8686`;
+reference GUI remains `5a639c5f…`, runtime/helper/Qt remain unchanged.
+
+All 18 window-adapter tests pass for each build. The unchanged pure FramePacer
+corpus has 32,174 operations and byte-identical 434,071-byte outputs, SHA-256
+`f2883262f71149bc561dd605286317cbc6caa307a13afb68e457c9482f062b5b`.
+Its probe binary is also identical across A/B. Native single/splits/tabs static PNGs
+match exactly and variable split load qualifies. These are functional checks, not
+accepted latency measurements. ARM64 defer assembly shrinks 484 → 468 bytes;
+QChronoTimer stop/setInterval/start replace the old timer call and ceiling
+arithmetic. No x86/Linux execution or new sanitizer result is claimed.
+
+The local Qt 6.12 source exposes a further limit: QTimerInfoList::timerWait in
+`qtimerinfo_unix.cpp` rounds a positive remaining duration up to milliseconds, and
+QEventDispatcherCoreFoundation::updateTimers in `qeventdispatcher_cf.mm` uses that
+rounded duration for CFRunLoopTimer. QChronoTimer preserves its internal deadline,
+but changing the application wrapper alone does not guarantee an unrounded native
+wake. This additional rounding must not be omitted from the hypothesis.
+
+One fresh diagnostic per stack (`/tmp/telar-perf-precise-frame-deadline-cadence-qual-01`)
+qualifies native content and producers. Accepted A records 686 changes in six
+seconds (114.326 changes/s), B 684 (114.072), and independent Zig 661 (110.154).
+A and Zig have stable 120.0006 Hz references with 34/59 missed opportunities; B's
+phase changes, so its missed-refresh classification is unavailable. All eight
+host observations pass, maximum one/five-minute load 2.888/2.917. These unpaired
+observations establish neither a win nor a regression. The six-pair cadence
+acceptance controller is prepared but is not run after the failed reference
+qualification. The candidate is not adopted; valid cadence acceptance and all
+input/idle regression series remain outstanding. The working production source
+is restored to A. The mutable GUI build contains the private candidate and must
+be rebuilt before being used as a baseline; frozen accepted stages are unchanged.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
