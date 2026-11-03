@@ -1,4 +1,11 @@
 #include "background_effect.hpp"
+// Qt generates its core protocol header from a wayland.xml newer than many
+// systems' libwayland, under the same WAYLAND_CLIENT_PROTOCOL_H guard. It must
+// come first: the scanner header below pulls in the system one otherwise, and
+// Qt's private headers then miss the interfaces only the newer one declares.
+#include <QtWaylandClient/private/qwaylanddisplay_p.h>
+#include <QtWaylandClient/private/qwaylandwindow_p.h>
+
 #include "platform/window.hpp"
 extern "C" {
 #include "../native/telar_gui.h"
@@ -18,8 +25,6 @@ extern "C" {
 #include <QtCore/qlogging.h>
 #include <QtCore/qstringliteral.h>
 #include <QtGui/qguiapplication_platform.h>
-#include <QtWaylandClient/private/qwaylanddisplay_p.h>
-#include <QtWaylandClient/private/qwaylandwindow_p.h>
 #include <algorithm>
 #include <cstdint>
 #include <memory>
