@@ -1,7 +1,9 @@
 #pragma once
 
 #include "control_session.hpp"
+#include "failure.hpp"
 #include "json_text.hpp"
+#include "output.hpp"
 #include "pane_agent_options.hpp"
 #include "server.hpp"
 #include <chrono>
@@ -14,14 +16,6 @@ inline constexpr auto submit_delay = std::chrono::milliseconds{150};
 inline constexpr auto start_grace = std::chrono::seconds{5};
 inline constexpr auto interrupt_settle = std::chrono::seconds{15};
 
-class Failure : public std::runtime_error {
-public:
-  explicit Failure(const char *message, int status = 1)
-      : std::runtime_error{message},
-        status(status) {}
-
-  int status;
-};
 
 inline std::uint64_t current(const char *name, bool nonzero = false) {
   const auto text = ProcessEnvironment{}.lookup(name);
@@ -125,75 +119,29 @@ inline ServerOptions socketOptions(const char *socket) {
   return options;
 }
 
+// Reads a running runtime, or starts one only for the commands whose Zig
+// version opened a session rather than attaching to one.
 template <Allocator Memory>
-void ensureRuntime(Memory &memory, const RuntimePaths<Memory> &paths, bool start) {
+void connectRuntime(Memory &memory, const RuntimePaths<Memory> &paths, bool start) {
   std::optional<RuntimeConnection> probe;
   if (connectExisting(probe, paths.socket.c_str())) {
     return;
   }
 
-  if (!start) {
+  if (!start || startRuntime(memory, ServerOptions{}, paths) != RuntimeStart::listening) {
     throw Failure{"the local runtime is not reachable"};
-  }
-
-  paths.prepareSocket();
-  const auto pid = launchDaemon(memory, ServerOptions{}, paths, ExecutablePath{runtime_program});
-  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
-  while (!connectExisting(probe, paths.socket.c_str())) {
-    int status = 0;
-    if (::waitpid(pid, &status, WNOHANG) == pid || std::chrono::steady_clock::now() >= deadline) {
-      throw Failure{"the local runtime is not reachable"};
-    }
-
-    std::this_thread::sleep_for(std::chrono::milliseconds{10});
   }
 }
 
-template <Allocator Memory>
-class Output {
-public:
-  explicit Output(Memory &memory)
-      : data(AllocatorRef<char, Memory>{memory}) {}
-
-  Output &text(std::string_view value) {
-    data.append(value);
-    return *this;
-  }
-
-  template <typename Integer>
-  Output &number(Integer value) {
-    std::array<char, 32> buffer;
-    const auto end = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value).ptr;
-    data.append(buffer.data(), end);
-    return *this;
-  }
-
-  Output &boolean(bool value) {
-    return text(value ? "true" : "false");
-  }
-
-  Output &json(std::string_view value, JsonEscapes escapes = JsonEscapes::control) {
-    appendJsonText(data, value, escapes);
-    return *this;
-  }
-
-  void flush() {
-    std::fwrite(data.data(), 1, data.size(), stdout);
-    std::fflush(stdout);
-    data.clear();
-  }
-
-  String<Memory> data;
-};
 
 template <Allocator Memory>
 void writeAgent(Output<Memory> &out, const AgentSnapshotEntry &agent, bool json) {
   const auto provider = agent.provider_name.empty() ? std::string_view{"unknown"} : agent.provider_name;
   const auto status = status_names[static_cast<std::size_t>(agent.status)];
   if (json) {
-    out.text("{\"pane_id\":").number(agent.pane_id).text(",\"pane_generation\":").number(agent.pane_generation).text(",\"workspace_id\":").number(agent.location.workspace.id).text(",\"tab_id\":").number(agent.location.tab_id).text(",\"pane_index\":").number(agent.pane_index).text(",\"provider\":").json(provider).text(",\"provider_index\":").number(static_cast<unsigned>(agent.provider)).text(",\"status\":").json(status);
-    out.text(",\"workspace\":").json(agent.workspace_label).text(",\"tab\":").json(agent.tab_label).text(",\"title\":").json(agent.session_title).text(",\"cwd\":").json(agent.cwd_label).text(",\"blocked_reason\":").json(blocked_reasons[static_cast<std::size_t>(agent.blocked_reason)]).text(",\"status_age_s\":").number(agent.status_age_s).text(",\"worktree_id\":").number(agent.work_tree).text(",\"last_event\":").json(agent.last_event);
-    out.text(",\"plan\":{\"done\":").number(agent.plan_done).text(",\"total\":").number(agent.plan_total).text(",\"step\":").json(agent.plan_step).text("},\"final_message\":").json(agent.final_message).text(",\"session_id\":\"");
+    out.text("{\"pane_id\":").number(agent.pane_id).text(",\"pane_generation\":").number(agent.pane_generation).text(",\"workspace_id\":").number(agent.location.workspace.id).text(",\"tab_id\":").number(agent.location.tab_id).text(",\"pane_index\":").number(agent.pane_index).text(",\"provider\":").json(provider, JsonEscapes::control).text(",\"provider_index\":").number(static_cast<unsigned>(agent.provider)).text(",\"status\":").json(status, JsonEscapes::control);
+    out.text(",\"workspace\":").json(agent.workspace_label, JsonEscapes::control).text(",\"tab\":").json(agent.tab_label, JsonEscapes::control).text(",\"title\":").json(agent.session_title, JsonEscapes::control).text(",\"cwd\":").json(agent.cwd_label, JsonEscapes::control).text(",\"blocked_reason\":").json(blocked_reasons[static_cast<std::size_t>(agent.blocked_reason)], JsonEscapes::control).text(",\"status_age_s\":").number(agent.status_age_s).text(",\"worktree_id\":").number(agent.work_tree).text(",\"last_event\":").json(agent.last_event, JsonEscapes::control);
+    out.text(",\"plan\":{\"done\":").number(agent.plan_done).text(",\"total\":").number(agent.plan_total).text(",\"step\":").json(agent.plan_step, JsonEscapes::control).text("},\"final_message\":").json(agent.final_message, JsonEscapes::control).text(",\"session_id\":\"");
     constexpr std::string_view hex = "0123456789abcdef";
     for (const auto byte : agent.session_id) {
       out.text(hex.substr(byte >> 4, 1)).text(hex.substr(byte & 15, 1));
@@ -250,7 +198,7 @@ void writeText(Output<Memory> &out, const PaneText &reply, bool json, bool agent
       out.text("null");
     }
 
-    out.text(",\"text\":").json(reply.text).text("}\n");
+    out.text(",\"text\":").json(reply.text, JsonEscapes::control).text("}\n");
     return;
   }
 
@@ -403,7 +351,7 @@ inline int commandFailure(const char *family, const std::exception &error) {
   }
 
   if (const auto *failure = dynamic_cast<const Failure *>(&error)) {
-    return failure->status;
+    return failure->status();
   }
 
   if (const auto *failure = dynamic_cast<const ControlFailure *>(&error)) {

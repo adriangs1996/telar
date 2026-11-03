@@ -4,29 +4,18 @@
 
 namespace telar::runtime::cli {
 
-// Starts the sibling runtime only for commands whose Zig Session.open did so.
-// Runtime status/reporting uses Session.attach and must never resurrect it.
+// Zig's `Session.open`: connects to the runtime, starting it when none
+// listens. Commands that only report (Zig's `Session.attach`) must never
+// resurrect a stopped runtime and do not call this.
 template <Allocator Memory>
-void ensureRuntime(Memory &memory, const RuntimePaths<Memory> &paths) {
+void ensureRuntime(Memory &memory, const RuntimePaths<Memory> &paths, const ServerOptions &options = {}) {
   std::optional<RuntimeConnection> connection;
   if (connectExisting(connection, paths.socket.c_str())) {
     return;
   }
 
-  paths.prepareSocket();
-  const auto child = launchDaemon(memory, ServerOptions{}, paths, ExecutablePath{runtime_program});
-  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
-  while (!connectExisting(connection, paths.socket.c_str())) {
-    int status = 0;
-    if (::waitpid(child, &status, WNOHANG) == child) {
-      throw std::runtime_error{"RuntimeStartFailed"};
-    }
-
-    if (std::chrono::steady_clock::now() >= deadline) {
-      throw std::runtime_error{"RuntimeTimeout"};
-    }
-
-    std::this_thread::sleep_for(std::chrono::milliseconds{10});
+  if (startRuntime(memory, options, paths) != RuntimeStart::listening) {
+    throw std::runtime_error{"RuntimeUnavailable"};
   }
 }
 

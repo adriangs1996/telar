@@ -1,5 +1,6 @@
 #include "window.hpp"
 #include "control_session.hpp"
+#include "failure.hpp"
 #include "telar_platform/executable_path.hpp"
 #include "telar_platform/runtime_paths.hpp"
 #include "window_json.hpp"
@@ -17,14 +18,6 @@ constexpr std::size_t memory_budget = 32 * 1024 * 1024;
 constexpr unsigned receive_timeout = 30;
 constexpr std::size_t maximum_command_text = 4096;
 
-class Failure final : public std::runtime_error {
-public:
-  explicit Failure(const char *message, int status = 1)
-      : std::runtime_error{message},
-        status(status) {}
-
-  int status;
-};
 
 constexpr const char *statusName(ClientCommandStatus status) {
   switch (status) {
@@ -464,7 +457,7 @@ int connected(const Options &options, const char *prefix, Execute execute) {
       std::fprintf(stderr, "%s%s\n", prefix, error.what());
     }
 
-    return error.status;
+    return error.status();
   } catch (const ControlFailure &error) {
     std::fprintf(stderr, "%s%s\n", prefix, error.what());
   } catch (const SystemError &error) {

@@ -3,7 +3,7 @@
 #include "ensure_runtime.hpp"
 #include "file_transfer.hpp"
 #include "repository_git.hpp"
-#include "repository_history_paths.hpp"
+#include "history_paths.hpp"
 #include <openssl/sha.h>
 
 namespace telar::runtime::cli::repository {
@@ -113,10 +113,18 @@ std::optional<std::string> matching(Memory &memory, std::string_view path, std::
   return root;
 }
 
+// Zig's `repository_discovery.find`: the main checkout whose origin is
+// `identity` among the runtime's workspaces and worktrees, the workspaces
+// history recorded and the managed clone. It starts the runtime if needed.
 template <Allocator Memory>
-std::optional<std::string> find(Memory &memory, std::string_view identity, std::optional<std::string_view> selected) {
+std::optional<std::string> find(Memory &memory, std::string_view identity, std::optional<std::string_view> selected, std::optional<std::string_view> socket = std::nullopt) {
   const ProcessEnvironment environment;
-  const RuntimePaths paths{memory, ServerOptions{}, environment};
+  ServerOptions server;
+  if (socket) {
+    server.socket = *socket;
+  }
+
+  const RuntimePaths paths{memory, server, environment};
   ensureRuntime(memory, paths);
   const auto available = catalog(memory, paths.socket.c_str());
   if (selected) {
@@ -161,10 +169,7 @@ std::optional<std::string> find(Memory &memory, std::string_view identity, std::
 
   RuntimePaths storage_paths{memory, ServerOptions{}, environment};
   storage_paths.resolveStorage(ServerOptions{}, environment);
-  HistoryPaths history{std::string{storage_paths.history}};
-  for (const auto &path : history.read()) {
-    consider(path);
-  }
+  historyPaths(storage_paths.history.c_str(), consider);
 
   consider(managedPath(identity));
   return result;

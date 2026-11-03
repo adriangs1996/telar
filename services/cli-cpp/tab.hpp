@@ -7,9 +7,9 @@ namespace telar::runtime::cli::sessions {
 template <Allocator Memory>
 void tabSnapshot(Output<Memory> &output, const TabSnapshot &reply, bool json) {
   if (json) {
-    output.raw("{\"workspace_id\":").number(reply.location.workspace.id).raw(",\"tab_id\":").number(reply.location.tab_id).raw(",\"panes\":[");
+    output.text("{\"workspace_id\":").number(reply.location.workspace.id).text(",\"tab_id\":").number(reply.location.tab_id).text(",\"panes\":[");
   } else {
-    output.raw("PANE\tGENERATION\tLIFECYCLE\n");
+    output.text("PANE\tGENERATION\tLIFECYCLE\n");
   }
 
   bool first = true;
@@ -17,38 +17,38 @@ void tabSnapshot(Output<Memory> &output, const TabSnapshot &reply, bool json) {
     const auto lifecycle = pane.lifecycle == PaneLifecycle::running ? "running" : "exited";
     if (json) {
       if (!first) {
-        output.raw(",");
+        output.text(",");
       }
-      output.raw("{\"pane_id\":").number(pane.pane_id).raw(",\"pane_generation\":").number(pane.pane_generation).raw(",\"lifecycle\":").quoted(lifecycle).raw("}");
+      output.text("{\"pane_id\":").number(pane.pane_id).text(",\"pane_generation\":").number(pane.pane_generation).text(",\"lifecycle\":").json(lifecycle).text("}");
     } else {
-      output.number(pane.pane_id).raw("\t").number(pane.pane_generation).raw("\t").raw(lifecycle).raw("\n");
+      output.number(pane.pane_id).text("\t").number(pane.pane_generation).text("\t").text(lifecycle).text("\n");
     }
     first = false;
   }
 
   if (json) {
-    output.raw("]}\n");
+    output.text("]}\n");
   }
 }
 
 template <Allocator Memory>
 void tabList(Output<Memory> &output, const WorkspaceSnapshot &reply, bool json) {
-  output.raw(json ? "[" : "ID\tPOSITION\tPANES\tLABEL\n");
+  output.text(json ? "[" : "ID\tPOSITION\tPANES\tLABEL\n");
   bool first = true;
   for (const auto &entry : reply.tabs) {
     if (json) {
       if (!first) {
-        output.raw(",");
+        output.text(",");
       }
-      output.raw("{\"workspace_id\":").number(reply.workspace.id).raw(",\"tab_id\":").number(entry.tab_id).raw(",\"position\":").number(entry.position).raw(",\"pane_count\":").number(entry.pane_count).raw(",\"label\":").quoted(entry.label).raw("}");
+      output.text("{\"workspace_id\":").number(reply.workspace.id).text(",\"tab_id\":").number(entry.tab_id).text(",\"position\":").number(entry.position).text(",\"pane_count\":").number(entry.pane_count).text(",\"label\":").json(entry.label).text("}");
     } else {
-      output.number(entry.tab_id).raw("\t").number(entry.position).raw("\t").number(entry.pane_count).raw("\t").raw(entry.label).raw("\n");
+      output.number(entry.tab_id).text("\t").number(entry.position).text("\t").number(entry.pane_count).text("\t").text(entry.label).text("\n");
     }
     first = false;
   }
 
   if (json) {
-    output.raw("]\n");
+    output.text("]\n");
   }
 }
 
@@ -63,9 +63,9 @@ void tabOperation(Channel<Memory> &session, Output<Memory> &output, const TabOpt
   }
 
   if (options.json) {
-    output.raw("{\"workspace_id\":").number(location.workspace.id).raw(",\"tab_id\":").number(location.tab_id);
+    output.text("{\"workspace_id\":").number(location.workspace.id).text(",\"tab_id\":").number(location.tab_id);
   } else {
-    output.raw("tab ").number(location.tab_id);
+    output.text("tab ").number(location.tab_id);
   }
 
   switch (options.action) {
@@ -74,9 +74,9 @@ void tabOperation(Channel<Memory> &session, Output<Memory> &output, const TabOpt
     const auto reply = session.template exchange<TabRenamed>(RenameTab{.location = location, .label = *options.label});
     checkLocation(reply.location, location);
     if (options.json) {
-      output.raw(",\"label\":").quoted(reply.label);
+      output.text(",\"label\":").json(reply.label);
     } else {
-      output.raw(" renamed to ").raw(reply.label);
+      output.text(" renamed to ").text(reply.label);
     }
     break;
   }
@@ -84,23 +84,23 @@ void tabOperation(Channel<Memory> &session, Output<Memory> &output, const TabOpt
     const auto reply = session.template exchange<TabClosed>(CloseTab{.location = location});
     checkLocation(reply.location, location);
     if (options.json) {
-      output.raw(",\"closed\":true,\"workspace_closed\":").boolean(reply.workspace_closed);
+      output.text(",\"closed\":true,\"workspace_closed\":").boolean(reply.workspace_closed);
     } else {
-      output.raw(" closed");
+      output.text(" closed");
     }
     break;
   }
   case Action::move: {
     const auto reply = session.template exchange<TabMoved>(MoveTab{.location = location, .direction = options.direction, .relative_to = options.relative});
     checkLocation(reply.location, location);
-    output.raw(options.json ? ",\"position\":" : " moved to position ").number(reply.position);
+    output.text(options.json ? ",\"position\":" : " moved to position ").number(reply.position);
     break;
   }
   default:
     throw Failure{"InvalidTabAction"};
   }
 
-  output.raw(options.json ? "}\n" : "\n");
+  output.text(options.json ? "}\n" : "\n");
 }
 
 template <Allocator Memory>
@@ -120,9 +120,9 @@ int tab(Memory &memory, const TabOptions &options) {
       wireTabLabel(options.label.value_or(""), true);
       const auto opened = session.template exchange<PaneOpened>(LaunchTab{.workspace = workspace, .label = options.label.value_or(""), .size = launch_size, .launch = {.cwd = entry->path, .arguments = shell}});
       if (options.json) {
-        output.raw("{\"workspace_id\":").number(workspace).raw(",\"tab_id\":").number(opened.location.tab_id).raw(",\"pane_id\":").number(opened.pane_id).raw(",\"pane_generation\":").number(opened.pane_generation).raw("}\n");
+        output.text("{\"workspace_id\":").number(workspace).text(",\"tab_id\":").number(opened.location.tab_id).text(",\"pane_id\":").number(opened.pane_id).text(",\"pane_generation\":").number(opened.pane_generation).text("}\n");
       } else {
-        output.raw("tab ").number(opened.location.tab_id).raw(" opened in workspace ").number(workspace).raw(": pane ").number(opened.pane_id).raw("\n");
+        output.text("tab ").number(opened.location.tab_id).text(" opened in workspace ").number(workspace).text(": pane ").number(opened.pane_id).text("\n");
       }
     } else if (options.action == TabOptions::Action::list) {
       const auto reply = session.template exchange<WorkspaceSnapshot>(RequestWorkspaceSnapshot{.workspace = {.id = workspace}});

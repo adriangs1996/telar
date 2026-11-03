@@ -223,7 +223,7 @@ template <Allocator Memory>
 int runAgent(Memory &memory, const pane_agents::Options &options) {
   using namespace pane_agents;
   const RuntimePaths paths{memory, socketOptions(options.socket), ProcessEnvironment{}};
-  ensureRuntime(memory, paths, options.action != "acknowledge" && options.action != "report-title" && options.action != "report-state" && options.action != "report-command");
+  connectRuntime(memory, paths, options.action != "acknowledge" && options.action != "report-title" && options.action != "report-state" && options.action != "report-command");
   Output out{memory};
   try {
     const auto result = executeAgent(memory, paths, options, out);

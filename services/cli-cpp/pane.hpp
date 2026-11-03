@@ -179,7 +179,7 @@ int executePane(Memory &memory, const RuntimePaths<Memory> &paths, Options optio
   } else if (options.action == "focus") {
     const auto reply = session.template exchange<PaneFocusResult>(RequestPaneFocus{.pane_id = wanted, .pane_generation = generation, .direction = *options.direction});
     if (options.json) {
-      out.text("{\"changed\":").boolean(reply.outcome == PaneFocusOutcome::focused).text(",\"focused_pane_id\":").number(reply.focused_pane_id).text(",\"reason\":").json(focus_outcomes.at(static_cast<std::size_t>(reply.outcome))).text("}\n");
+      out.text("{\"changed\":").boolean(reply.outcome == PaneFocusOutcome::focused).text(",\"focused_pane_id\":").number(reply.focused_pane_id).text(",\"reason\":").json(focus_outcomes.at(static_cast<std::size_t>(reply.outcome)), JsonEscapes::control).text("}\n");
     }
   }
 
@@ -194,7 +194,7 @@ template <Allocator Memory>
 int runPane(Memory &memory, const pane_agents::Options &options) {
   using namespace pane_agents;
   const RuntimePaths paths{memory, socketOptions(options.socket), ProcessEnvironment{}};
-  ensureRuntime(memory, paths, options.action == "read" || options.action == "send-keys" || options.action == "focus");
+  connectRuntime(memory, paths, options.action == "read" || options.action == "send-keys" || options.action == "focus");
   Output out{memory};
   try {
     const auto result = executePane(memory, paths, options, out);

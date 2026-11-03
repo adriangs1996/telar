@@ -1,6 +1,8 @@
 #pragma once
 
 #include "control_session.hpp"
+#include "failure.hpp"
+#include "output.hpp"
 #include "json_text.hpp"
 #include "server.hpp"
 #include "session_arguments.hpp"
@@ -9,25 +11,6 @@
 
 namespace telar::runtime::cli::sessions {
 
-class Failure : public std::runtime_error {
-public:
-  explicit Failure(std::string_view message, int status = 1, std::optional<FailureCode> code = std::nullopt)
-      : std::runtime_error{std::string{message}},
-        status_(status),
-        code_(code) {}
-
-  int status() const noexcept {
-    return status_;
-  }
-
-  std::optional<FailureCode> code() const noexcept {
-    return code_;
-  }
-
-private:
-  int status_;
-  std::optional<FailureCode> code_;
-};
 
 inline std::string realDirectory(std::string_view path) {
   std::error_code error;
@@ -72,25 +55,6 @@ inline void wireTabLabel(std::string_view value, bool empty = false) {
   }
 }
 
-inline void ensureRuntime(auto &memory, const auto &paths, const ServerOptions &options) {
-  std::optional<RuntimeConnection> connection;
-  if (connectExisting(connection, paths.socket.c_str())) {
-    return;
-  }
-
-  paths.prepareSocket();
-  const auto child = launchDaemon(memory, options, paths, ExecutablePath{runtime_program});
-  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
-  while (!connectExisting(connection, paths.socket.c_str())) {
-    int status{};
-    if (::waitpid(child, &status, WNOHANG) == child || std::chrono::steady_clock::now() >= deadline) {
-      throw Failure{"the local runtime is not reachable"};
-    }
-
-    std::this_thread::sleep_for(std::chrono::milliseconds{10});
-  }
-}
-
 // Catalog subscriptions also carry unrelated broadcasts. Keep them on a separate
 // connection from exchanges, and own their borrowed strings for the command's life.
 template <Allocator Memory>
@@ -101,8 +65,9 @@ public:
         incoming_(max_payload_size, Byte{}, AllocatorRef<Byte, Memory>{memory}),
         decoded_(max_payload_size, Byte{}, AllocatorRef<Byte, Memory>{memory}) {
     const auto options = socketOptions(socket);
-    if (start) {
-      ensureRuntime(memory, paths_, options);
+    std::optional<RuntimeConnection> probe;
+    if (start && !connectExisting(probe, paths_.socket.c_str()) && startRuntime(memory, options, paths_) != RuntimeStart::listening) {
+      throw Failure{"the local runtime is not reachable"};
     }
 
     try {
@@ -206,42 +171,6 @@ private:
   std::uint64_t next_request_ = 1;
 };
 
-template <Allocator Memory>
-class Output {
-public:
-  explicit Output(Memory &memory)
-      : bytes_(AllocatorRef<char, Memory>{memory}) {}
-
-  Output &raw(std::string_view value) {
-    bytes_.append(value);
-    return *this;
-  }
-
-  Output &number(std::uint64_t value) {
-    return raw(std::to_string(value));
-  }
-
-  Output &signedNumber(std::int64_t value) {
-    return raw(std::to_string(value));
-  }
-
-  Output &boolean(bool value) {
-    return raw(value ? "true" : "false");
-  }
-
-  Output &quoted(std::string_view value, JsonEscapes escapes = JsonEscapes::standard) {
-    appendJsonText(bytes_, value, escapes);
-    return *this;
-  }
-
-  void flush() {
-    std::fwrite(bytes_.data(), 1, bytes_.size(), stdout);
-    bytes_.clear();
-  }
-
-private:
-  String<Memory> bytes_;
-};
 
 inline void checkLocation(TabLocation actual, TabLocation expected) {
   if (actual.workspace.kind != expected.workspace.kind || actual.workspace.id != expected.workspace.id || actual.tab_id != expected.tab_id) {

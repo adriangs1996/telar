@@ -21,23 +21,49 @@ inline bool connectExisting(std::optional<RuntimeConnection> &connection, const 
   }
 }
 
+enum class RuntimeStart : std::uint8_t {
+  listening,
+  exited,
+  timed_out
+};
+
+// Launches the sibling runtime where none listens and waits up to ten seconds
+// for its socket.
+template <Allocator Memory>
+RuntimeStart startRuntime(Memory &memory, const ServerOptions &options, const RuntimePaths<Memory> &paths) {
+  constexpr auto start_window = std::chrono::seconds{10};
+  constexpr auto poll_interval = std::chrono::milliseconds{10};
+  paths.prepareSocket();
+  const auto child = launchDaemon(memory, options, paths, ExecutablePath{runtime_program});
+  const auto deadline = std::chrono::steady_clock::now() + start_window;
+  std::optional<RuntimeConnection> connection;
+  while (!connectExisting(connection, paths.socket.c_str())) {
+    int status = 0;
+    if (::waitpid(child, &status, WNOHANG) == child) {
+      return RuntimeStart::exited;
+    }
+
+    if (std::chrono::steady_clock::now() >= deadline) {
+      return RuntimeStart::timed_out;
+    }
+
+    std::this_thread::sleep_for(poll_interval);
+  }
+
+  return RuntimeStart::listening;
+}
+
 template <Allocator Memory>
 void printEndpoint(Memory &memory, const ServerOptions &options, const RuntimePaths<Memory> &paths) {
   std::optional<RuntimeConnection> connection;
   if (!connectExisting(connection, paths.socket.c_str())) {
-    paths.prepareSocket();
-    const auto child = launchDaemon(memory, options, paths, ExecutablePath{runtime_program});
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
-    while (!connectExisting(connection, paths.socket.c_str())) {
-      int status = 0;
-      if (::waitpid(child, &status, WNOHANG) == child) {
-        throw SystemError{"Runtime failed to start; inspect its .runtime.start.log", ECHILD};
-      }
-      if (std::chrono::steady_clock::now() >= deadline) {
-        throw SystemError{"Runtime did not start within ten seconds", ETIMEDOUT};
-      }
+    const auto started = startRuntime(memory, options, paths);
+    if (started == RuntimeStart::exited) {
+      throw SystemError{"Runtime failed to start; inspect its .runtime.start.log", ECHILD};
+    }
 
-      std::this_thread::sleep_for(std::chrono::milliseconds{10});
+    if (started == RuntimeStart::timed_out) {
+      throw SystemError{"Runtime did not start within ten seconds", ETIMEDOUT};
     }
   }
 

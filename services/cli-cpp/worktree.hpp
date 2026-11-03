@@ -1,11 +1,10 @@
 #pragma once
 
-#include "session_history_paths.hpp"
+#include "repository_discovery.hpp"
 #include "worktree_git.hpp"
 #include "worktree_options.hpp"
 #include "worktree_output.hpp"
 #include "worktree_setup.hpp"
-#include <openssl/sha.h>
 
 namespace telar::runtime::cli::sessions {
 
@@ -344,9 +343,9 @@ private:
           text.remove_suffix(1);
         }
         if (options_.json) {
-          output_.raw("{\"pane_id\":").number(opened.pane_id).raw(",\"exit_code\":").signedNumber(*reply.exit_code).raw(",\"truncated\":").boolean(reply.truncated).raw(",\"output\":").quoted(text).raw("}\n");
+          output_.text("{\"pane_id\":").number(opened.pane_id).text(",\"exit_code\":").number(*reply.exit_code).text(",\"truncated\":").boolean(reply.truncated).text(",\"output\":").json(text).text("}\n");
         } else {
-          output_.raw(text).raw("\n");
+          output_.text(text).text("\n");
           if (reply.truncated) {
             std::fprintf(stderr, "telar worktree: older rows were omitted\n");
           }
@@ -375,14 +374,14 @@ private:
         source = entry->workspace;
       }
     }
-    output_.raw(options_.json ? "[" : "BRANCH\tTITLE\tSTATE\tAGENT\tDIFF\tCOMMAND\tPATH\n");
+    output_.text(options_.json ? "[" : "BRANCH\tTITLE\tSTATE\tAGENT\tDIFF\tCOMMAND\tPATH\n");
     bool first = true;
     for (const auto &entry : catalog_.worktrees) {
       if (source && entry.source != *source) {
         continue;
       }
       if (options_.json && !first) {
-        output_.raw(",");
+        output_.text(",");
       }
       worktreeEntry(output_, entry, agents.entries, options_.json);
       first = false;
@@ -390,16 +389,16 @@ private:
     for (const auto &entry : untracked()) {
       if (options_.json) {
         if (!first) {
-          output_.raw(",");
+          output_.text(",");
         }
-        output_.raw("{\"worktree_id\":null,\"branch\":").quoted(entry.branch, JsonEscapes::control).raw(",\"path\":").quoted(entry.path, JsonEscapes::control).raw(",\"origin\":\"untracked\",\"agents\":[]}");
+        output_.text("{\"worktree_id\":null,\"branch\":").json(entry.branch, JsonEscapes::control).text(",\"path\":").json(entry.path, JsonEscapes::control).text(",\"origin\":\"untracked\",\"agents\":[]}");
       } else {
-        output_.raw(entry.branch).raw("\t-\tuntracked\t-\t-\t-\t").raw(entry.path).raw("\n");
+        output_.text(entry.branch).text("\t-\tuntracked\t-\t-\t-\t").text(entry.path).text("\n");
       }
       first = false;
     }
     if (options_.json) {
-      output_.raw("]\n");
+      output_.text("]\n");
     }
   }
 
@@ -427,9 +426,9 @@ private:
       throw Failure{"the UI client could not open the worktree"};
     }
     if (options_.json) {
-      output_.raw("{\"worktree_id\":").number(entry->worktree).raw(",\"workspace_id\":").number(*entry->workspace).raw(",\"client_id\":").number(client.id).raw("}\n");
+      output_.text("{\"worktree_id\":").number(entry->worktree).text(",\"workspace_id\":").number(*entry->workspace).text(",\"client_id\":").number(client.id).text("}\n");
     } else {
-      output_.raw("opened ").raw(entry->branch).raw(" in client ").number(client.id).raw("\n");
+      output_.text("opened ").text(entry->branch).text(" in client ").number(client.id).text("\n");
     }
   }
 
@@ -476,82 +475,40 @@ private:
       }
     }
     if (options_.json) {
-      output_.raw("{\"worktree_id\":").number(entry->worktree).raw(",\"path\":").quoted(entry->path).raw(",\"branch_deleted\":").boolean(options_.delete_branch).raw("}\n");
+      output_.text("{\"worktree_id\":").number(entry->worktree).text(",\"path\":").json(entry->path).text(",\"branch_deleted\":").boolean(options_.delete_branch).text("}\n");
     } else {
-      output_.raw("removed ").raw(entry->branch).raw(" at ").raw(entry->path).raw("\n");
+      output_.text("removed ").text(entry->branch).text(" at ").text(entry->path).text("\n");
     }
   }
 
-  std::optional<std::string> matchingRepository(std::string_view path) {
-    try {
-      auto root = git_.root(path);
-      const auto identity = repositoryIdentity(git_.line({"git", "-C", root, "config", "--get", "remote.origin.url"}));
-      if (identity && *identity == *options_.repository) {
-        return root;
-      }
-    } catch (const std::exception &) {
-    }
-    return std::nullopt;
-  }
-
+  // `repository_discovery.find`, with this command's descriptions of its errors.
   void resolve() {
+    static constexpr std::array<std::pair<std::string_view, const char *>, 4> descriptions{{
+        {"RepositoryNotInWorkspace", "that workspace holds another repository"},
+        {"AmbiguousRepository", "several clones of this repository are open on the machine; pass --workspace PATH"},
+        {"WorkspaceNotFound", "workspace not found"},
+        {"NotARepository", "not inside a git repository"},
+    }};
     std::optional<std::string> found;
-    if (options_.workspace) {
-      auto path = *options_.workspace;
-      if (const auto id = maybeUnsigned(path)) {
-        const auto entry = workspace(*id);
-        if (!entry) {
-          throw Failure{"workspace not found", 2};
-        }
-        path = entry->path;
+    try {
+      found = repository::find(memory_, *options_.repository, options_.workspace, options_.socket);
+    } catch (const std::runtime_error &error) {
+      const auto description = std::ranges::find(descriptions, std::string_view{error.what()}, &std::pair<std::string_view, const char *>::first);
+      if (description == descriptions.end()) {
+        throw;
       }
-      found = matchingRepository(path);
-      if (!found) {
-        throw Failure{"that workspace holds another repository"};
-      }
-    } else {
-      const auto consider = [&](std::string_view path) {
-        const auto candidate = matchingRepository(path);
-        if (!candidate) {
-          return;
-        }
-        if (found && *found != *candidate) {
-          throw Failure{"several clones of this repository are open on the machine; pass --workspace PATH"};
-        }
-        found = candidate;
-      };
-      for (const auto &entry : catalog_.entries) {
-        consider(entry.path);
-      }
-      for (const auto &entry : catalog_.worktrees) {
-        consider(entry.path);
-      }
-      historyPaths(memory_, session_.socket(), consider);
-      const auto data_home = ::getenv("XDG_DATA_HOME"), home = ::getenv("HOME");
-      if (!data_home && !home) {
-        throw Failure{"HomeDirectoryUnavailable"};
-      }
-      const auto base = data_home ? std::string{data_home} : std::string{home} + "/.local/share";
-      if (!base.starts_with('/')) {
-        throw Failure{"InvalidDataDirectory"};
-      }
-      std::array<unsigned char, SHA256_DIGEST_LENGTH> digest;
-      SHA256(reinterpret_cast<const unsigned char *>(options_.repository->data()), options_.repository->size(), digest.data());
-      constexpr std::string_view hex = "0123456789abcdef";
-      std::string suffix;
-      for (const auto byte : digest) {
-        suffix += hex[byte >> 4];
-        suffix += hex[byte & 15];
-      }
-      consider(base + "/telar/repositories/" + suffix);
+
+      throw Failure{description->second, description->first == "WorkspaceNotFound" ? 2 : 1};
     }
+
     if (!found) {
       throw Failure{"no workspace on the machine holds this repository; open one there or pass --workspace PATH"};
     }
+
     if (options_.json) {
-      output_.raw("{\"repository\":").quoted(*options_.repository).raw(",\"path\":").quoted(*found).raw("}\n");
+      output_.text("{\"repository\":").json(*options_.repository).text(",\"path\":").json(*found).text("}\n");
     } else {
-      output_.raw(*found).raw("\n");
+      output_.text(*found).text("\n");
     }
   }
 

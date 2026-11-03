@@ -7,9 +7,9 @@ namespace telar::runtime::cli::sessions {
 template <Allocator Memory>
 void workspaceEntry(Output<Memory> &output, const WorkspaceListEntry &entry, bool json) {
   if (json) {
-    output.raw("{\"workspace_id\":").number(entry.workspace).raw(",\"name\":").quoted(entry.name).raw(",\"path\":").quoted(entry.path).raw(",\"tab_count\":").number(entry.tab_count).raw(",\"branch\":").quoted(entry.branch).raw(",\"dirty\":").boolean(entry.dirty).raw("}");
+    output.text("{\"workspace_id\":").number(entry.workspace).text(",\"name\":").json(entry.name).text(",\"path\":").json(entry.path).text(",\"tab_count\":").number(entry.tab_count).text(",\"branch\":").json(entry.branch).text(",\"dirty\":").boolean(entry.dirty).text("}");
   } else {
-    output.number(entry.workspace).raw("\t").raw(entry.name).raw("\t").raw(entry.path).raw("\t").number(entry.tab_count).raw("\t").raw(entry.branch).raw("\t").raw(entry.dirty ? "dirty" : "clean").raw("\n");
+    output.number(entry.workspace).text("\t").text(entry.name).text("\t").text(entry.path).text("\t").number(entry.tab_count).text("\t").text(entry.branch).text("\t").text(entry.dirty ? "dirty" : "clean").text("\n");
   }
 }
 
@@ -45,9 +45,9 @@ int workspace(Memory &memory, const WorkspaceOptions &options) {
       wireTabLabel(name);
       const auto opened = session.template exchange<PaneOpened>(CreateWorkspace{.size = size, .name = name, .launch = {.cwd = directory, .arguments = std::span{command}.first(count)}}, false);
       if (options.json) {
-        output.raw("{\"workspace_id\":").number(opened.location.workspace.id).raw(",\"tab_id\":").number(opened.location.tab_id).raw(",\"pane_id\":").number(opened.pane_id).raw(",\"directory\":").quoted(directory, JsonEscapes::control).raw("}\n");
+        output.text("{\"workspace_id\":").number(opened.location.workspace.id).text(",\"tab_id\":").number(opened.location.tab_id).text(",\"pane_id\":").number(opened.pane_id).text(",\"directory\":").json(directory, JsonEscapes::control).text("}\n");
       } else {
-        output.raw("workspace ").number(opened.location.workspace.id).raw(" created at ").raw(directory).raw("\n");
+        output.text("workspace ").number(opened.location.workspace.id).text(" created at ").text(directory).text("\n");
       }
     } else if (options.action == Action::rename) {
       const auto id = options.target.resolve("TELAR_WORKSPACE_ID");
@@ -58,16 +58,16 @@ int workspace(Memory &memory, const WorkspaceOptions &options) {
         throw Failure{"unexpected reply from the runtime"};
       }
       if (options.json) {
-        output.raw("{\"workspace_id\":").number(id).raw(",\"name\":").quoted(reply.name).raw("}\n");
+        output.text("{\"workspace_id\":").number(id).text(",\"name\":").json(reply.name).text("}\n");
       } else {
-        output.raw("workspace ").number(id).raw(" renamed to ").raw(reply.name).raw("\n");
+        output.text("workspace ").number(id).text(" renamed to ").text(reply.name).text("\n");
       }
     } else {
       const auto wanted = options.action == Action::get ? std::optional{options.target.resolve("TELAR_WORKSPACE_ID")} : std::nullopt;
       Channel session{memory, options.socket, false};
       const auto catalog = session.catalog();
       if (!wanted) {
-        output.raw(options.json ? "[" : "ID\tNAME\tDIRECTORY\tTABS\tBRANCH\tGIT\n");
+        output.text(options.json ? "[" : "ID\tNAME\tDIRECTORY\tTABS\tBRANCH\tGIT\n");
       }
       bool first = true;
       for (const auto &entry : catalog.entries) {
@@ -75,7 +75,7 @@ int workspace(Memory &memory, const WorkspaceOptions &options) {
           continue;
         }
         if (options.json && !first) {
-          output.raw(",");
+          output.text(",");
         }
         workspaceEntry(output, entry, options.json);
         first = false;
@@ -85,7 +85,7 @@ int workspace(Memory &memory, const WorkspaceOptions &options) {
         throw Failure{"workspace not found"};
       }
       if (options.json) {
-        output.raw(wanted ? "\n" : "]\n");
+        output.text(wanted ? "\n" : "]\n");
       }
     }
 
