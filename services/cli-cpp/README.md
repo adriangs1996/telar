@@ -2,9 +2,11 @@
 
 `telar`, the command line people and agents type. It implements help, agent
 hooks, agent CLI integration, plugin packages, proxy CA trust, and `server` to
-start, find, bridge and stop the runtime; the rest of the Zig CLI is being ported. It talks to the runtime over its socket with `telar-client`
-and shares code with the runtime and the GUI through `dlls/`; it never includes
-`services/runtime-cpp`.
+start, find, bridge and stop the runtime. Window commands cover `client`,
+`sidebar`, `workspace-list`, `layout`, `notification`, `command suggest`,
+`config` and configured plugins; the rest of the Zig CLI is being ported. It
+talks to the runtime over its socket with `telar-client` and shares code with the
+runtime and GUI through `dlls/`; it never includes `services/runtime-cpp`.
 
 `hook` runs on every agent event, so `telar` stays small: it links libssl and
 libcrypto beside the system libraries, without the runtime's terminal engine,
@@ -15,10 +17,15 @@ The runtime's build includes this directory and writes `telar` next to
 `telar-runtime`. To build only the CLI:
 
 ```sh
-cmake -S . -B out -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B out -G Ninja -DCMAKE_BUILD_TYPE=Release -DGHOSTTY_VT_ROOT=/path/to/libghostty-vt
 cmake --build out
 ctest --test-dir out --output-on-failure
 ```
+
+`config check` execs the sibling `telar-config-check`, installed beside `telar`.
+The helper links `telar-config`, Lua and libghostty for agent icon width validation;
+these dependencies are kept out of the hook process. Its Lua bootstrap lives in
+`config/bootstrap.lua` and has no build dependency on the retired Zig tree.
 
 The C++ `telar` is replacing the Zig CLI command by command;
 [parity.md](parity.md) records what each command does today and how it is

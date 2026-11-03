@@ -31,6 +31,7 @@ endif()
 
 add_executable(telar main.cpp)
 target_link_libraries(telar PRIVATE cli-core)
+include(cmake/window.cmake)
 install(TARGETS telar RUNTIME DESTINATION bin)
 
 include(CTest)
@@ -47,4 +48,8 @@ if(BUILD_TESTING)
   add_test(NAME cli-help-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/help_test.py" --telar "$<TARGET_FILE:telar>" --help-directory "${CMAKE_CURRENT_SOURCE_DIR}/help" --version "${TELAR_VERSION}")
   add_executable(hook-mapping-probe tests/hook_mapping_probe.cpp)
   target_link_libraries(hook-mapping-probe PRIVATE cli-core)
+endif()
+
+if(BUILD_TESTING)
+  add_test(NAME cli-window-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/window_test.py" --telar "$<TARGET_FILE:telar>")
 endif()

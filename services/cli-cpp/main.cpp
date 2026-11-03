@@ -5,6 +5,7 @@
 #include "plugin.hpp"
 #include "proxy_trust.hpp"
 #include "server.hpp"
+#include "window.hpp"
 #include <cstdio>
 #include <cstring>
 #include <span>
@@ -40,7 +41,19 @@ int runFamily(BudgetAllocator<SystemAllocator> &memory, Family family, std::span
     return runHook(memory, HookOptions::parse(options), ProcessEnvironment{});
   case Family::integration:
     return runIntegration(memory, IntegrationOptions::parse(options));
+  case Family::client:
+  case Family::sidebar:
+  case Family::workspace_list:
+  case Family::layout:
+  case Family::notification:
+  case Family::command:
+  case Family::config:
+    return runWindow(family, options);
   case Family::plugin:
+    if (!options.empty() && (std::string_view{options[0]} == "list" || std::string_view{options[0]} == "get" || std::string_view{options[0]} == "enable" || std::string_view{options[0]} == "disable" || std::string_view{options[0]} == "run")) {
+      return runWindow(family, options);
+    }
+
     runPlugin(memory, PluginOptions::parse(options), ProcessEnvironment{});
     return 0;
   case Family::proxy: {
