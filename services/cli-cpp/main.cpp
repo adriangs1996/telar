@@ -1,9 +1,17 @@
+#include "api_schema.hpp"
+#include "diagnostics.hpp"
+#include "execution.hpp"
+#include "file_transfer.hpp"
 #include "help.hpp"
+#include "history.hpp"
 #include "hook.hpp"
 #include "integration.hpp"
 #include "integration_assets.hpp"
 #include "plugin.hpp"
+#include "project_setup.hpp"
 #include "proxy_trust.hpp"
+#include "repository_prepare.hpp"
+#include "runtime_observer.hpp"
 #include "server.hpp"
 #include <cstdio>
 #include <cstring>
@@ -36,6 +44,22 @@ int printSkill(std::span<char *const> words) {
 int runFamily(BudgetAllocator<SystemAllocator> &memory, Family family, std::span<char *const> words) {
   const auto options = words.subspan(1);
   switch (family) {
+  case Family::exec:
+    return execution::run(memory, ExecutionOptions::parse(options));
+  case Family::file:
+    return file_transfer::run(file_transfer::Options::parse(options));
+  case Family::runtime:
+    return runRuntime(memory, RuntimeOptions::parse(options));
+  case Family::diagnostics:
+    return diagnostics::run(memory, DiagnosticsOptions::parse(options));
+  case Family::api:
+    return api::run(options);
+  case Family::history:
+    return history::run(memory, HistoryOptions::parse(options));
+  case Family::project:
+    return project_setup::run(memory, project_setup::Options::parse(options));
+  case Family::repository:
+    return repository::run(memory, RepositoryOptions::parse(options));
   case Family::hook:
     return runHook(memory, HookOptions::parse(options), ProcessEnvironment{});
   case Family::integration:
@@ -44,6 +68,12 @@ int runFamily(BudgetAllocator<SystemAllocator> &memory, Family family, std::span
     runPlugin(memory, PluginOptions::parse(options), ProcessEnvironment{});
     return 0;
   case Family::proxy: {
+    if (!options.empty() && std::string_view{options.front()} == "watch") {
+      auto parsed = RuntimeOptions::parse(options);
+      parsed.proxy_only = true;
+      return runRuntime(memory, parsed);
+    }
+
     SynchronizedAllocator synchronized{memory};
     return runProxyTrust(synchronized, ProxyTrustOptions::parse(options), ProcessEnvironment{});
   }
