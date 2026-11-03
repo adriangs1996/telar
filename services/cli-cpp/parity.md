@@ -59,20 +59,20 @@ differences; **unverified** runs without a comparison; **missing** prints
 | `tab previous` | missing |  |
 | `tab rename` | missing |  |
 | `tab select` | missing |  |
-| `pane close` | missing |  |
-| `pane copy` | missing |  |
-| `pane create` | missing |  |
-| `pane focus` | missing |  |
-| `pane fullscreen` | missing |  |
-| `pane get` | missing |  |
-| `pane list` | missing |  |
-| `pane read` | missing |  |
-| `pane resize` | missing |  |
-| `pane scroll` | missing |  |
-| `pane search` | missing |  |
-| `pane send-keys` | missing |  |
-| `pane split` | missing |  |
-| `pane watch` | missing |  |
+| `pane close` | done | `check_pane_agent_cli.py`: native window routing, text/JSON, applied/admitted/refused replies match Zig; `check_pane_gui.py`: closure confirmed by topology. Reference: `src/cli/arguments/RoutedOptions.zig:103`, `src/cli/routed.zig:31`. |
+| `pane copy` | done | Same routing comparison; C++ GUI copy admitted. Inclusive range validation matches `src/cli/arguments/RoutedOptions.zig:73`, `src/core/schema/messages/CopySelection.zig:15`; `pane-agent-cli-tests`. |
+| `pane create` | done | Same routing comparison; C++ GUI creation confirmed by topology (`check_pane_gui.py`). Reference: `src/cli/arguments/RoutedOptions.zig:111`, `src/cli/routed.zig:31`. |
+| `pane focus` | done | Native window routing matches Zig; C++ GUI focus applied. Directional no-owner failure matches both runtimes; success/reason/generation covered by `pane-agent-cli-tests`. Reference: `src/cli/pane.zig:172`, `src/cli/arguments/PaneOptions.zig:64`. |
+| `pane fullscreen` | done | Native window routing matches Zig; C++ GUI toggles return 1 then 0 (`check_pane_gui.py`). Reference: `src/cli/arguments/RoutedOptions.zig:94`, `src/cli/routed.zig:31`. |
+| `pane get` | done | `check_pane_agent_cli.py`: current, missing, zero and filtered topology match Zig; `pane-agent-cli-tests`. Reference: `src/cli/pane.zig:202`. |
+| `pane list` | done | Same stack comparison and CTest: JSON/text topology and workspace/tab/current filters. Reference: `src/cli/PaneCatalog.zig:16`, `src/cli/PaneRecord.zig:10`. |
+| `pane read` | partial | CLI arguments, errors and formatting match; stack comparison exposes C++ runtime trimming an explicit final space (`"❯ "` becomes `"❯"`). `check_pane_agent_cli.py`; `pane-agent-cli-tests` protects exact wire text/escapes. Reference: `src/cli/pane.zig:121`; runtime path: `services/runtime-cpp/terminal/text_reader.hpp:18`. |
+| `pane resize` | done | Native window routing matches Zig; C++ GUI resize applied (`check_pane_gui.py`). Reference: `src/cli/arguments/RoutedOptions.zig:95`, `src/cli/routed.zig:31`. |
+| `pane scroll` | done | Native window routing matches Zig; C++ GUI scroll applied. Signed delta validation matches `src/cli/arguments/RoutedOptions.zig:90`; `pane-agent-cli-tests`. |
+| `pane search` | done | `check_pane_agent_cli.py`: empty and populated searches; text/JSON match Zig. `pane-agent-cli-tests` checks coordinates. Reference: `src/cli/pane.zig:94`. |
+| `pane send-keys` | done | Stack comparison: input/Enter and stdin errors match Zig. CTest: 150 ms submit delay, stdin trimming, focused/gone panes and limits. Reference: `src/cli/pane.zig:63`, `src/cli/pane.zig:153`. |
+| `pane split` | done | Native window routing matches Zig; C++ GUI vertical split confirmed by topology. Reference: `src/cli/arguments/RoutedOptions.zig:104`; `check_pane_gui.py`. |
+| `pane watch` | partial | Same runtime final-space difference as `pane read`. Stack comparison and CTest cover JSONL, generation pinning, text deduplication, count and polling. Reference: `src/cli/PaneWatcher.zig:20`. |
 | `worktree create` | missing |  |
 | `worktree diff` | missing |  |
 | `worktree exec` | missing |  |
@@ -81,17 +81,17 @@ differences; **unverified** runs without a comparison; **missing** prints
 | `worktree open` | missing |  |
 | `worktree remove` | missing |  |
 | `worktree resolve` | missing |  |
-| `agent acknowledge` | missing |  |
-| `agent get` | missing |  |
-| `agent interrupt` | missing |  |
-| `agent list` | missing |  |
-| `agent prompt` | missing |  |
-| `agent read` | missing |  |
-| `agent report-command` | missing |  |
-| `agent report-session` | missing |  |
-| `agent report-state` | missing |  |
-| `agent report-title` | missing |  |
-| `agent wait` | missing |  |
+| `agent acknowledge` | done | Stack comparison matches Zig; CTest covers ordering barrier, updated status and unapplied acknowledgements. Reference: `src/cli/agent.zig:86`. |
+| `agent get` | done | Stack comparison: ids, case-insensitive/UTF-8 titles, missing agent/worktree, exact rows/JSON match Zig; CTest also checks ambiguity and worktree branch/title resolution. Reference: `src/cli/Snapshot.zig:26`, `src/cli/control.zig:161`. |
+| `agent interrupt` | done | Stack comparison matches Zig; CTest verifies request and returned pre-interrupt snapshot. Reference: `src/cli/agent.zig:105`. |
+| `agent list` | done | Stack comparison matches Zig; CTest preserves all JSON fields, session id, plan and final message. Reference: `src/cli/agent.zig:229`, `src/cli/control.zig:161`. |
+| `agent prompt` | done | Stack comparison: blocked/ready prompts and wait timeout match Zig. CTest: start/completion/failure, interrupt settling, generation changes, sender attribution, focus/rate refusals and text limits. Reference: `src/cli/agent.zig:156`, `src/cli/control.zig:41`. |
+| `agent read` | partial | Same C++ runtime final-space difference as `pane read`; CLI output and errors covered by stack comparison and CTest. Reference: `src/cli/agent.zig:119`, `src/cli/agent.zig:260`. |
+| `agent report-command` | done | Stack comparison and CTest match Zig using the protocol reports shared with hooks. Includes Zig's `WorktreeCatalogMissing` for a worktree target. Reference: `src/cli/AgentReports.zig:18`, `src/cli/arguments/AgentOptions.zig:66`. |
+| `agent report-session` | done | Stack comparison and CTest: session validation, silent success and failures match Zig. Reference: `src/cli/agent.zig:111`, `src/core/schema/messages/agent.zig:37`. |
+| `agent report-state` | done | Stack comparison and CTest: lifecycle, reason/event/session validation and accepted JSON match Zig; hook protocol types reused. Worktree report keeps Zig's `WorktreeCatalogMissing`. Reference: `src/cli/AgentReports.zig:18`. |
+| `agent report-title` | done | Stack comparison and CTest: empty/UTF-8 title, validation, current generation and accepted JSON match Zig; hook report type reused. Worktree report keeps Zig's `WorktreeCatalogMissing`. Reference: `src/cli/AgentReports.zig:18`. |
+| `agent wait` | done | Stack comparison: ready/idle and timeout diagnostics/status 3 match Zig; CTest checks polling and missing targets. Reference: `src/cli/agent.zig:131`, `src/cli/arguments/values.zig:103`. |
 | `exec cancel` | missing |  |
 | `exec forget` | missing |  |
 | `exec list` | missing |  |
