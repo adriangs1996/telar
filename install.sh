@@ -6,13 +6,19 @@
 #   sh install.sh --version 0.3.0 --bin-dir /usr/local/bin --sudo
 #   sh install.sh --binary ./telar --sha256 HEX --bin-dir DIR
 #
+# The Linux desktop build is a tree, the tools beside the native client and
+# its Qt libraries: it goes to PREFIX/lib/telar, with telar linked from the
+# bin directory and the desktop entry and icon under PREFIX/share, where
+# PREFIX is the bin directory's parent.
+#
 # It downloads the archive for this system, or the disk image with --app,
 # checks it against the release's SHA256SUMS, copies it beside what it
 # replaces, proves from there that it starts, and only then renames it into
 # place. The only downloaded code it runs is what it installs, after the
 # checksum matched: `telar --version`, the diagram helper on an empty
-# request, and with --app `telar cli install`, which links the app's
-# executable into the bin directory.
+# request, the Linux native client's `--help` without a display, and with
+# --app `telar cli install`, which links the app's executable into the bin
+# directory.
 set -eu
 
 repository=adriangs1996/telar
@@ -39,10 +45,11 @@ Usage: install.sh [options]
   --app-dir DIR     macOS: install Telar.app into DIR instead.
   --headless        Linux: the runtime without the native client or any
                     desktop library. For servers.
-  --gui             Linux: include the native client (Wayland and Vulkan).
-                    Without either flag, the native client is chosen when
-                    Wayland and Vulkan are installed, and the headless build
-                    replaces it when it does not start.
+  --gui             Linux: include the native client (Qt, on Wayland or X11)
+                    in DIR/../lib/telar. Without either flag, the native
+                    client is chosen when a desktop's libraries are
+                    installed, and the headless build replaces it when it
+                    does not start.
   --sudo            Write with sudo, for directories such as /usr/local/bin
                     or /Applications.
   --sha256 HEX      The archive, disk image or --binary must have this
@@ -61,8 +68,9 @@ fail() {
     exit 1
 }
 
-# True when the linker cache knows Wayland and Vulkan. Debian keeps ldconfig
-# in /sbin, outside a regular user's PATH.
+# True when the linker cache knows what the native client loads: EGL,
+# Fontconfig and xkbcommon, with Wayland or X11. Debian keeps ldconfig in
+# /sbin, outside a regular user's PATH.
 has_desktop_libraries() {
     ldconfig=$(command -v ldconfig 2>/dev/null || true)
     for candidate in /sbin/ldconfig /usr/sbin/ldconfig; do
@@ -73,8 +81,15 @@ has_desktop_libraries() {
 
     [ -n "$ldconfig" ] || return 1
     libraries=$("$ldconfig" -p 2>/dev/null || true)
+    for library in libEGL.so.1 libfontconfig.so.1 libxkbcommon.so.0; do
+        case $libraries in
+            *"$library"*) ;;
+            *) return 1 ;;
+        esac
+    done
+
     case $libraries in
-        *libwayland-client.so.0*libvulkan.so.1* | *libvulkan.so.1*libwayland-client.so.0*) return 0 ;;
+        *libwayland-client.so.0* | *libX11-xcb.so.1*) return 0 ;;
     esac
 
     return 1
@@ -270,6 +285,10 @@ discard() {
     done
 
     staged=
+    if [ -n "$staged_tree" ]; then
+        run rm -rf "$staged_tree"
+        staged_tree=
+    fi
 }
 
 # Stops without touching the install because FILE's build does not start.
@@ -297,6 +316,53 @@ stage() {
     fi
 }
 
+# Succeeds when a staged native client loads its libraries, Qt's included:
+# --help starts Qt without a display and exits before any window opens.
+opens() {
+    QT_QPA_PLATFORM=offscreen LD_BIND_NOW=1 "$1" --help >/dev/null 2>"$work/start.log"
+}
+
+# Copies the unpacked desktop tree beside its target as .telar.new and runs it
+# from there; sets staged_tree and installed.
+stage_tree() {
+    staged_tree=$lib_dir/.telar.new
+    run rm -rf "$staged_tree"
+    run cp -R "$(dirname "$source_dir")" "$staged_tree"
+    installed=$(starts "$staged_tree/bin/telar") || return 1
+    renders "$staged_tree/bin/telar-diagram-renderer" || return 1
+    opens "$staged_tree/bin/telar-gui" || return 1
+}
+
+# Swaps the staged tree in, links telar to it and installs the desktop entry,
+# whose Exec names the tree, since a menu launch may not search the bin
+# directory. Tools an earlier headless install put in the bin directory go:
+# telar now finds its own beside it in the tree.
+install_tree() {
+    tree=$lib_dir/telar
+    run rm -rf "$lib_dir/.telar.old"
+    if [ -e "$tree" ]; then
+        run mv "$tree" "$lib_dir/.telar.old"
+    fi
+
+    run mv "$staged_tree" "$tree"
+    staged_tree=
+    run rm -rf "$lib_dir/.telar.old"
+    run ln -sfn "$tree/bin/telar" "$bin_dir/.telar.new"
+    run mv -f "$bin_dir/.telar.new" "$bin_dir/telar"
+    for tool in telar-runtime telar-config-check telar-diagram-renderer; do
+        if [ -f "$bin_dir/$tool" ] && [ ! -L "$bin_dir/$tool" ]; then
+            run rm -f "$bin_dir/$tool"
+        fi
+    done
+
+    entry=$share_dir/applications/telar.desktop
+    icon=$share_dir/icons/hicolor/512x512/apps/telar.png
+    run mkdir -p "$(dirname "$entry")" "$(dirname "$icon")"
+    sed "s|^Exec=telar |Exec=\"$tree/bin/telar\" |" "$tree/share/applications/telar.desktop" >"$work/telar.desktop"
+    run cp "$work/telar.desktop" "$entry"
+    run cp "$tree/share/icons/hicolor/512x512/apps/telar.png" "$icon"
+}
+
 # Downloads and unpacks the archive of VARIANT; sets file and source_dir.
 unpack() {
     asset=telar-$os-$arch
@@ -315,6 +381,21 @@ unpack() {
 }
 
 prepare "$bin_dir"
+# The desktop tree's PREFIX, whose bin directory is DIR. The desktop entry
+# names the tree, so the path must be absolute.
+desktop_tree=false
+lib_dir=
+share_dir=
+if [ "$os" = linux ] && [ "$variant" = gui ] && [ -z "$binary" ]; then
+    desktop_tree=true
+    bin_dir=$(cd "$bin_dir" && pwd)
+    prefix=$(dirname "$bin_dir")
+    lib_dir=$prefix/lib
+    share_dir=$prefix/share
+    prepare "$lib_dir"
+    prepare "$share_dir"
+fi
+
 if [ "$install_app" = true ]; then
     prepare "$app_dir"
     # `telar cli install` replaces only a symlink, never a file.
@@ -326,6 +407,7 @@ fi
 work=$(mktemp -d)
 mount=
 staged=
+staged_tree=
 new_app=
 cleanup() {
     if [ -n "$mount" ]; then
@@ -390,23 +472,28 @@ if [ "$install_app" = true ]; then
     printf 'Installed %s as %s/Telar.app, linked from %s/telar\n' "$installed" "$app_dir" "$bin_dir"
 else
     unpack "$variant"
-    if ! stage; then
+    if [ "$desktop_tree" = true ] && ! stage_tree; then
         [ -n "$fallback" ] || refuse "$file"
         discard
         printf 'install.sh: the native client does not start on this system:\n' >&2
         sed 's/^/  /' "$work/start.log" >&2
         printf 'install.sh: installing the headless build instead; --gui insists on the native client\n' >&2
+        desktop_tree=false
         unpack "$fallback"
-        stage || refuse "$file"
     fi
 
-    for tool in $staged; do
-        run mv -f "$bin_dir/.$tool.new" "$bin_dir/$tool"
-    done
+    if [ "$desktop_tree" = true ]; then
+        install_tree
+        printf 'Installed %s into %s/telar, linked from %s/telar\n' "$installed" "$lib_dir" "$bin_dir"
+    else
+        stage || refuse "$file"
+        for tool in $staged; do
+            run mv -f "$bin_dir/.$tool.new" "$bin_dir/$tool"
+        done
 
-    staged=
-
-    printf 'Installed %s into %s\n' "$installed" "$bin_dir"
+        staged=
+        printf 'Installed %s into %s\n' "$installed" "$bin_dir"
+    fi
 fi
 
 case :$PATH: in

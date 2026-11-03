@@ -61,7 +61,7 @@ set(base_arguments
 if(APPLE)
   list(APPEND base_arguments -DFEATURE_openssl:BOOL=OFF -DFEATURE_vulkan:BOOL=OFF)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  list(APPEND base_arguments -DFEATURE_fontconfig:BOOL=ON -DFEATURE_xcb:BOOL=ON)
+  list(APPEND base_arguments -DFEATURE_fontconfig:BOOL=ON -DFEATURE_xcb:BOOL=ON -DFEATURE_vulkan:BOOL=ON)
 else()
   message(FATAL_ERROR "The managed Qt build supports native macOS and Linux builds")
 endif()

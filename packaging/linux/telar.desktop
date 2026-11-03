@@ -6,4 +6,4 @@ Exec=telar gui --login-shell
 Icon=telar
 Terminal=false
 Categories=Development;TerminalEmulator;
-StartupWMClass=telar
+StartupWMClass=telar-gui

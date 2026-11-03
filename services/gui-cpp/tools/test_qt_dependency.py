@@ -9,7 +9,7 @@ import sys
 import tempfile
 import unittest
 
-from package_macos import qt_installation
+from qt_deploy import qt_installation
 
 
 BASE = Path(__file__).resolve().parents[1]

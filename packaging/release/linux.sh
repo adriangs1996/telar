@@ -1,30 +1,30 @@
 #!/bin/sh
 # Builds the Linux desktop release for the host architecture and archives it:
 #
-#   telar-linux-ARCH.tar.gz   native client, needs a desktop
+#   telar-linux-ARCH.tar.gz   the headless tools plus the native client and its Qt
 #
-#   packaging/release/linux.sh OUT_DIR
+#   packaging/release/linux.sh OUT_DIR HEADLESS_ARCHIVE    # after install-linux-deps.sh
 #
-# The headless release builds on Alpine with linux-headless.sh. Asset names
-# carry no version, so releases/latest/download/NAME always resolves;
-# install.sh relies on it.
-#
-# The desktop release is still the Zig build until the C++ GUI ships its Qt
-# libraries in a Linux archive. It keeps the host OS so pkg-config and the
-# distribution's Wayland, Vulkan and ATK libraries resolve, and pins the CPU
-# to the architecture's baseline so any machine runs it. It needs the glibc
-# of the runner that built it: Ubuntu 24.04's headers turn strtol into
-# __isoc23_strtol, a glibc 2.38 symbol. The check below fails the build if a
-# runner update raises that floor unnoticed.
+# HEADLESS_ARCHIVE is linux-headless.sh's telar-linux-ARCH-headless.tar.gz, so
+# both archives ship the same static runtime, CLI and helpers. The client
+# builds against the managed Qt (TELAR_QT_CACHE, default .qt-cache), and
+# package_linux.py copies the Qt libraries, plugins and QML modules it loads
+# beside it. The rest comes from the desktop session: check-linkage fails the
+# build when a library outside that set, or a glibc or libstdc++ newer than
+# the floors below, sneaks in. Ubuntu 24.04's headers turn strtol into
+# __isoc23_strtol, a glibc 2.38 symbol, and Qt needs GLIBCXX_3.4.32 (GCC 13).
+# libghostty-vt needs Zig 0.17 (ZIG_GHOSTTY, default zig), or GHOSTTY_VT_ROOT
+# naming an existing build.
 set -eu
 
 out=$1
+headless=$2
 glibc_max=2.38
+glibcxx_max=3.4.32
 root=$(cd "$(dirname "$0")/../.." && pwd)
 arch=$(uname -m)
 case $arch in
     x86_64 | aarch64) ;;
-    arm64) arch=aarch64 ;;
     *)
         printf 'linux.sh: unsupported architecture %s\n' "$arch" >&2
         exit 1
@@ -35,10 +35,29 @@ mkdir -p "$out"
 out=$(cd "$out" && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
-
 name=telar-linux-$arch
-cd "$root"
-zig build -Doptimize=ReleaseFast -Dstrip=true -Dcpu=baseline --prefix "$work/$name"
-TELAR_GLIBC_MAX=$glibc_max "$root/packaging/release/check-linkage.sh" linux-gui "$work/$name/bin/telar" "$work/$name/bin/telar-diagram-renderer"
+
+tar -xzf "$headless" -C "$work"
+if [ ! -d "$work/$name-headless/bin" ]; then
+    printf 'linux.sh: %s has no %s-headless/bin\n' "$headless" "$name" >&2
+    exit 1
+fi
+
+ghostty=${GHOSTTY_VT_ROOT:-$work/ghostty}
+if [ -z "${GHOSTTY_VT_ROOT:-}" ]; then
+    python3 "$root/services/runtime-cpp/tools/build_ghostty.py" --zig "${ZIG_GHOSTTY:-zig}" --build-dir "$work/ghostty-build" --prefix "$ghostty"
+fi
+
+CC=${CC:-gcc-14} CXX=${CXX:-g++-14} cmake -S "$root/services/gui-cpp" -B "$work/gui" -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DGHOSTTY_VT_ROOT="$ghostty" \
+    -DTELAR_GUI_QT_BUILD_DIR="${TELAR_QT_CACHE:-$root/.qt-cache}" -DTELAR_GUI_QT_JOBS="$(nproc)"
+cmake --build "$work/gui" --target telar-gui telar-gui-command
+python3 "$root/services/gui-cpp/tools/package_linux.py" --build "$work/gui" --headless "$work/$name-headless" --output "$work/$name"
+
+find "$work/$name/bin" "$work/$name/lib" "$work/$name/plugins" "$work/$name/qml" -type f -name 'telar-gui*' -o -type f -name '*.so*' >"$work/elf"
+TELAR_GLIBC_MAX=$glibc_max TELAR_GLIBCXX_MAX=$glibcxx_max TELAR_BUNDLED_LIBRARIES="$work/$name/lib" \
+    xargs "$root/packaging/release/check-linkage.sh" linux-gui <"$work/elf"
 "$work/$name/bin/telar" --version
+QT_QPA_PLATFORM=offscreen LD_BIND_NOW=1 "$work/$name/bin/telar-gui" --help >/dev/null
+
 tar -czf "$out/$name.tar.gz" -C "$work" "$name"

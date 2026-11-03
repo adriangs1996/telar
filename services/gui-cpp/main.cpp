@@ -181,7 +181,8 @@ int main(int argc, char **argv) {
   const QGuiApplication application{argc, argv};
   telar::gui::platform::configureGraphics();
   QQuickStyle::setStyle(QStringLiteral("Basic"));
-  QGuiApplication::setDesktopFileName(QStringLiteral("telar-gui"));
+  // Wayland compositors find the icon and name through share/applications/telar.desktop.
+  QGuiApplication::setDesktopFileName(QStringLiteral("telar"));
 
   QCommandLineParser parser;
   configureParser(parser);

@@ -31,16 +31,19 @@ open "$HOME/Applications/Telar.app"
 "$HOME/Applications/Telar.app/Contents/Resources/bin/telar" cli install --dir "$HOME/.local/bin"
 ```
 
-On Linux, install into a user-owned prefix:
+On Linux, build the release archives ([how](#to-reproduce-a-release-build))
+and unpack the desktop one into a user-owned prefix:
 
 ```sh
-zig build -Doptimize=ReleaseFast --prefix "$HOME/.local"
+mkdir -p "$HOME/.local/lib/telar" "$HOME/.local/bin"
+tar -xzf "dist/telar-linux-$(uname -m).tar.gz" -C "$HOME/.local/lib/telar" --strip-components=1
+ln -sfn "$HOME/.local/lib/telar/bin/telar" "$HOME/.local/bin/telar"
 "$HOME/.local/bin/telar" --version
 ```
 
-This installs the binary, diagram helper, desktop entry and icon. It can
-replace a previous build at that prefix. Ensure `~/.local/bin` is on PATH.
-The app menu entry opens the GUI through the login shell.
+Ensure `~/.local/bin` is on PATH. `install.sh` does the same from a
+release and also installs the desktop entry and icon, whose menu launch
+opens the GUI through the login shell.
 
 A running runtime keeps its existing build. After updating, save/finish the
 work in its panes before stopping that runtime and starting the new build.
@@ -97,19 +100,38 @@ and notarizes for other Macs.
 
 ## Linux
 
-`zig build` installs, next to `bin/telar`, a desktop entry at
-`share/applications/telar.desktop` and the icon at
-`share/icons/hicolor/512x512/apps/telar.png`. `zig build package-linux`
-tars `bin` and `share` into `zig-out/telar-<arch>-linux.tar.gz`; unpack it
-over a prefix such as `/usr/local` or `~/.local`.
+The desktop archive is a relocatable tree:
+
+```text
+telar-linux-ARCH/
+  bin/telar, telar-runtime,        the static headless tools
+      telar-config-check,
+      telar-diagram-renderer
+  bin/telar-gui, telar-gui-command the C++ client and its surface helper
+  bin/qt.conf                      points Qt at the plugins and QML below
+  lib/                             the managed Qt libraries the client loads
+  plugins/                         Qt platform (xcb, Wayland), input, image and TLS plugins
+  qml/                             the Qt QML modules the client imports
+  share/applications/telar.desktop
+  share/icons/hicolor/512x512/apps/telar.png
+  share/telar/licenses/
+```
+
+`services/gui-cpp/tools/package_linux.py` stages it. It copies the Qt
+libraries the client and its plugins name, directly or through each other,
+and gives every ELF file an `$ORIGIN` RUNPATH into `lib`, so the tree runs
+from wherever it is unpacked. `telar` finds `telar-gui` and `telar-runtime`
+beside the file a symlink resolves to.
 
 The build for servers, where remote mode runs the runtime, is the C++
 runtime and CLI without a window: `services/runtime-cpp` builds `telar`,
 `telar-runtime` and `telar-config-check` side by side. The release makes
-them static musl executables ([details](#the-linux-headless-build)).
+them static musl executables ([details](#the-linux-headless-build)), and
+the desktop archive carries the same files.
 
 The desktop entry runs `telar gui --login-shell`, so the menu launch is the
-same path as the macOS bundle.
+same path as the macOS bundle. The client reports `telar` as its desktop
+file name, so Wayland compositors match its windows to `telar.desktop`.
 
 ## The login shell
 
@@ -202,7 +224,7 @@ points at the newest one.
 | --- | --- |
 | `telar-macos-aarch64.tar.gz`, `telar-macos-x86_64.tar.gz` | `bin/telar`, `bin/telar-runtime`, `bin/telar-config-check`, `bin/telar-diagram-renderer`, notices |
 | `Telar-macos-aarch64.dmg`, `Telar-macos-x86_64.dmg` | `Telar.app` (the C++ client with its Qt, runtime and CLI) and a link to `/Applications` |
-| `telar-linux-x86_64.tar.gz`, `telar-linux-aarch64.tar.gz` | the tree `zig build` installs, desktop entry included |
+| `telar-linux-x86_64.tar.gz`, `telar-linux-aarch64.tar.gz` | the headless tools plus the C++ client, its Qt, the desktop entry and icon, notices ([layout](#linux)) |
 | `telar-linux-x86_64-headless.tar.gz`, `telar-linux-aarch64-headless.tar.gz` | the C++ `bin/telar`, `bin/telar-runtime`, `bin/telar-config-check`, `bin/telar-diagram-renderer`, notices |
 | `install.sh` | the installer from the tagged commit |
 | `SHA256SUMS` | SHA-256 of every asset above |
@@ -216,7 +238,7 @@ Sigstore. `gh attestation verify FILE --repo adriangs1996/telar` checks one.
 | --- | --- | --- | --- |
 | macOS arm64 | `macos-26` | macOS 26.0 deployment target | `/usr/lib` and `/System/Library` only; Qt inside the bundle |
 | macOS x86_64 | `macos-26-intel` | same | same |
-| Linux desktop | `ubuntu-24.04`, `ubuntu-24.04-arm` | host glibc, baseline CPU | glibc, Wayland, Vulkan, xkbcommon, Fontconfig, ATK, GLib; glibc 2.38 or newer |
+| Linux desktop | `ubuntu-24.04`, `ubuntu-24.04-arm` | host glibc, GCC 14 | glibc 2.38 and libstdc++ `GLIBCXX_3.4.32` or newer, GLVND (EGL, GLX, OpenGL), Wayland, X11 and its xcb extensions, xkbcommon, Fontconfig, D-Bus; Qt inside the tree |
 | Linux headless | same, in `alpine:3.22` | musl, Alpine's GCC | nothing: static musl, any Linux |
 
 The labels come from GitHub's
@@ -231,25 +253,29 @@ foreign and stops finding the SDK, so `packaging/macos/sdk-libc.sh` writes a
 libc file for `--libc` and `build/macos_sdk.zig` adds the SDK's frameworks
 and `usr/lib`.
 
-Linux builds pin the baseline CPU of their architecture. A native build
-would use whatever AVX-512 or SVE the runner has and crash on older
-machines.
-
 `packaging/release/check-linkage.sh` fails the build when a binary links
-anything outside that table or asks for glibc newer than 2.38. It reads
+anything outside that table or asks for glibc newer than 2.38 or a
+libstdc++ newer than `GLIBCXX_3.4.32`. It reads
 `otool -L` on macOS and `readelf` on Linux. The C++ runtime and CLI build
 with `TELAR_RUNTIME_DISTRIBUTABLE`, which links OpenSSL, nghttp2, Brotli,
 Zstd and libghostty-vt statically everywhere, and on Linux also SQLite,
 zlib, pcap and the C++ library, then runs the same check on every
 executable.
 
-The desktop build's glibc floor is the runner's. On `ubuntu-24.04-arm`,
-glibc 2.38 headers turn `strtol` and `strtoul` into `__isoc23_strtol` and
-`__isoc23_strtoul`, the only `GLIBC_2.38` symbols of the aarch64 `telar`;
-its `telar-diagram-renderer` stops at 2.35. The x86_64 build was not
-measured outside CI, where the same check holds it to 2.38. Debian 12 ships
-glibc 2.36, so there `install.sh` finds that the desktop build does not
-start and installs the headless one.
+The desktop build's floors are the runner's. Ubuntu 24.04's glibc 2.38
+headers turn `strtol` and `strtoul` into `__isoc23_strtol` and
+`__isoc23_strtoul`, and its GCC 14 makes the client and Qt need up to
+`GLIBCXX_3.4.32`, the libstdc++ of GCC 13. Measured on the aarch64 tree,
+`telar-gui` and Qt Qml reach both floors and Qt Gui and Quick the glibc
+one. Ubuntu 24.04, Debian 13 and Fedora 39 or later meet both; Debian 12
+ships glibc 2.36, so there `install.sh` finds that the client does not
+start and installs the headless build. The x86_64
+tree was not measured outside CI, where the same check holds it.
+
+The client renders with Vulkan when a Vulkan instance finds a device, and
+with OpenGL otherwise, so a desktop or virtual machine without a Vulkan
+driver still opens a window. `QSG_RHI_BACKEND` overrides the choice. Qt
+loads `libvulkan.so.1` on demand, so it is not a link dependency.
 
 ### The Linux headless build
 
@@ -274,14 +300,14 @@ What differs from a glibc build, in this code:
   `getrandom`, the two calls go through `syscall`, and a child's extra
   descriptors are marked close-on-exec in the parent instead.
 
-To reproduce a release build locally:
+### To reproduce a release build
 
 ```sh
 packaging/release/macos.sh build /tmp/stage   # Homebrew deps, Zig 0.17, Cargo
 packaging/release/sign-macos.sh /tmp/stage    # ad hoc without MACOS_SIGNING_IDENTITY
 packaging/release/macos.sh package /tmp/stage dist
-packaging/release/linux.sh dist   # Ubuntu 24.04, after install-linux-deps.sh
 packaging/release/linux-headless.sh dist   # Alpine, after install-alpine-deps.sh
+packaging/release/linux.sh dist "dist/telar-linux-$(uname -m)-headless.tar.gz"   # Ubuntu 24.04, after install-linux-deps.sh
 ```
 
 `GHOSTTY_VT_ROOT` reuses an existing libghostty-vt build and
@@ -393,13 +419,27 @@ rename them into place; otherwise it removes the copies. `--app` checks
 the copied `Telar.app` the same way before swapping it in. It runs `sudo`
 only with `--sudo`.
 
+The Linux desktop archive is a tree, so it goes to `PREFIX/lib/telar`,
+where `PREFIX` is the bin directory's parent: `~/.local` by default,
+`/usr/local` for `--bin-dir /usr/local/bin`. The installer copies it to
+`PREFIX/lib/.telar.new`, runs the same two checks there plus
+`telar-gui --help` with `QT_QPA_PLATFORM=offscreen` and `LD_BIND_NOW=1`,
+which loads Qt and every library it needs without a display, and only then
+swaps the tree in and points `bin/telar` at `lib/telar/bin/telar`. It
+removes the `telar-runtime`, `telar-config-check` and
+`telar-diagram-renderer` files a headless install left in the bin
+directory, since `telar` now uses the ones in the tree, and writes
+`PREFIX/share/applications/telar.desktop`, with `Exec` naming the tree
+because a menu launch may not search the bin directory, and the icon.
+
 On Linux it tries the desktop build when `ldconfig -p` lists
-`libwayland-client.so.0` and `libvulkan.so.1`, looking in `/sbin` and
+`libEGL.so.1`, `libfontconfig.so.1` and `libxkbcommon.so.0`, with
+`libwayland-client.so.0` or `libX11-xcb.so.1`, looking in `/sbin` and
 `/usr/sbin` too, since a regular Debian user's PATH has neither. The
-desktop build also needs xkbcommon, Fontconfig, ATK, GLib and glibc 2.38
-(see [What each build pins](#what-each-build-pins)); when it does not
-start, the installer prints the loader's error and installs the headless
-build instead. `--gui` insists on the desktop build and aborts, keeping the
+client also needs the rest of the libraries in
+[What each build pins](#what-each-build-pins); when it does not start, the
+installer prints the loader's error and installs the headless build
+instead. `--gui` insists on the desktop build and aborts, keeping the
 install, when it does not start; `--headless` skips it. Remote mode needs
 the same version on both machines, so pin `--version` on the server.
 `TELAR_RELEASES_URL` points it at a mirror or a local `file://` copy.

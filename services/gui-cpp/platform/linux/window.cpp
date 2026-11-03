@@ -9,9 +9,13 @@
 #include <QSGRendererInterface>
 #include <QString>
 #include <QSurface>
+#include <QVersionNumber>
+#include <QVulkanFunctions>
+#include <QVulkanInstance>
 #include <QWindow>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qtenvironmentvariables.h>
+#include <cstdint>
 #include <memory>
 
 namespace telar::gui::platform {
@@ -56,14 +60,33 @@ WaylandSurfaceLifetime &surfaceLifetime(QWindow &window) {
   return *std::make_unique<WaylandSurfaceLifetime>(window).release();
 }
 
+// Qt Quick aborts when the API it was told to use cannot start, and many
+// desktops, virtual machines among them, have a Vulkan loader but no device.
+bool vulkanDeviceAvailable() {
+  // The loader rejects an instance that names no API version.
+  const QVersionNumber vulkan_baseline{1, 0};
+  QVulkanInstance probe;
+  probe.setApiVersion(vulkan_baseline);
+  if (!probe.create()) {
+    return false;
+  }
+
+  std::uint32_t devices = 0;
+  probe.functions()->vkEnumeratePhysicalDevices(probe.vkInstance(), &devices, nullptr);
+
+  return devices > 0;
+}
+
 }
 
 void configureKeyRepeat() {}
 
 void configureGraphics() {
-  if (!qEnvironmentVariableIsSet("QSG_RHI_BACKEND") && !qEnvironmentVariableIsSet("QT_QUICK_BACKEND")) {
-    QQuickWindow::setGraphicsApi(QSGRendererInterface::Vulkan);
+  if (qEnvironmentVariableIsSet("QSG_RHI_BACKEND") || qEnvironmentVariableIsSet("QT_QUICK_BACKEND")) {
+    return;
   }
+
+  QQuickWindow::setGraphicsApi(vulkanDeviceAvailable() ? QSGRendererInterface::Vulkan : QSGRendererInterface::OpenGL);
 }
 
 bool defaultTitlebar() noexcept {

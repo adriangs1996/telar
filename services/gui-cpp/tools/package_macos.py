@@ -11,6 +11,8 @@ import shutil
 import subprocess
 import sys
 
+from qt_deploy import copy_plugins, copy_qml_modules, qt_installation
+
 
 def run(command, **kwargs):
     subprocess.run([str(part) for part in command], check=True, **kwargs)
@@ -18,17 +20,6 @@ def run(command, **kwargs):
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def qt_installation(cache):
-    match = re.search(r'^TELAR_GUI_QT_PREFIX:INTERNAL=(.+)$', cache, re.M)
-    core = re.search(r'^Qt6Core_DIR:PATH=(.+)$', cache, re.M)
-    if match is None or core is None:
-        raise ValueError('configure the GUI with its managed Qt dependency before packaging')
-    prefix = Path(match.group(1)).resolve()
-    if not Path(core.group(1)).resolve().is_relative_to(prefix):
-        raise ValueError('the GUI Qt libraries do not belong to the managed Qt installation')
-    return prefix
 
 
 def add_search_path(binary, library):
@@ -65,29 +56,8 @@ def write_manifest(output, binary, cli, runtime):
 
 
 def deploy_qml(base, build, resources, plugins, library, qtpaths):
-    def query(name):
-        return Path(subprocess.check_output([qtpaths, '--query', name], text=True).strip())
-
-    imports = query('QT_INSTALL_QML')
-    scanner = query('QT_INSTALL_LIBEXECS') / 'qmlimportscanner'
-    modules = json.loads(subprocess.check_output(
-        [str(scanner), '-rootPath', str(base / 'qt'), '-importPath', str(build), '-importPath', str(imports)],
-        text=True))
-    for module in modules:
-        source = Path(module.get('path', ''))
-        if not source.is_absolute() or not source.is_relative_to(imports):
-            continue
-        destination = resources / 'qml' / source.relative_to(imports)
-
-        def nested_modules(directory, names):
-            return [name for name in names if (Path(directory) / name / 'qmldir').is_file()]
-
-        shutil.copytree(source, destination, dirs_exist_ok=True, ignore=nested_modules)
-    plugin_root = query('QT_INSTALL_PLUGINS')
-    for group in ('platforms', 'imageformats', 'iconengines', 'tls', 'networkinformation'):
-        source = plugin_root / group
-        if source.is_dir():
-            shutil.copytree(source, plugins / group)
+    copy_qml_modules(base, build, resources / 'qml', qtpaths)
+    copy_plugins(qtpaths, plugins, ('platforms', 'imageformats', 'iconengines', 'tls', 'networkinformation'))
     executables = []
     for directory in (resources / 'qml', plugins):
         for binary in directory.rglob('*.dylib'):
