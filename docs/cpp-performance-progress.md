@@ -3968,6 +3968,97 @@ runtime change remains an unaccepted working-tree candidate; accepted frozen
 stages are unchanged. The focused CTest and final source rebuild pass, and the
 rebuilt runtime is byte-identical to frozen B. All F01–F16 acceptance remains open.
 
+## Application and independent display-link clock census
+
+`out-perf/dlls-display-link-census-01` adds a private, bounded callback recorder to
+the native cadence probe. It wraps Qt's CVDisplayLinkSetOutputCallback and delegates
+the original callback with unchanged link, timestamps, flags, output-flags pointer
+and context. A 32-link/32,768-sample buffer records callback and input/output host
+clock values; no logging or dynamic allocation occurs inside the callback. Image
+identity identifies `libqcocoa.dylib`, and the native window/display ID must match.
+This changes observer overhead and is diagnostic only. GUI, runtime and installed
+Qt binaries remain unchanged.
+
+The first hook uses dlsym(RTLD_NEXT), which resolves back to the interposed setter
+and recurses. Its private GUI reaches the harness's 105-second timeout; a one-second
+sample proves recursive `qt_set_display_callback` calls. The owned GUI/runtime are
+terminated and cleanup completes. That run is invalid and its hook/binary/logs are
+preserved. The corrected hook calls the original symbol directly from its own
+interposing image. A standalone Core Video test passes with and without the hook;
+with it, every recorded callback reaches the delegate with the original context.
+
+`/tmp/telar-perf-display-link-census-qual-02` validates A and B content and producer
+coverage with exactly one Qt link on display 1. Each six-second window contains
+720 application and 720 independent reference callbacks; both clocks and all native
+intervals pass the unchanged 5% reference/0.25 ms interval criteria. Median Qt minus
+reference output timestamps are -1.625 us (A) and -20.396 us (B). No phase anomaly
+is reproduced. Both stacks use the accepted GUI/Qt; B uses only the retained
+runtime deadline candidate. All six host observations pass, maximum load1 3.291.
+These instrumented observations are not paired timing acceptance.
+
+A twenty-second extension is invalid because the original producer stops at nine
+seconds. Producer completion correctly rejects the uncovered observation window;
+the nominal success returned by the native observer is not accepted. The next
+private prefix, `out-perf/dlls-display-link-census-12s-01`, uses twelve seconds of
+observation and fifteen seconds of the same 240 Hz producer. A preflight verifies
+all 3,600 unique reversible color codes fit the existing 12-bit encoding and cover
+the complete warmup/observation/drain interval. Pixel decoding and tolerances are
+unchanged.
+
+`/tmp/telar-perf-display-link-census-12s-qual-01` then passes content, producer and
+clock checks for A/B. Each window has 1,440 callbacks from each clock. Their median
+output-time difference is -1.583/-1.271 us, with no phase anomaly or off-grid native
+interval. All six host observations pass, maximum load1 2.438. AC power is attached,
+and pmset records no thermal/performance warning; these observations do not prove
+that every possible scheduling or power limit is absent. The failed references'
+cause remains unestablished. After these stable diagnostic windows, the original
+uninstrumented six-pair cadence controller, `cadence-pairs-04`, fails on round 4 A
+after nine runs: the reference changes phase and the longest native gap is
+20.833 ms. All 19 recorded host boundaries pass, maximum load1 4.790; the incomplete
+series remains ineligible. No partial timing aggregate is accepted.
+
+A bounded diagnostic reproduction then runs accepted A only, stopping at the first
+phase anomaly or six twelve-second windows. It stops on the third window in
+`/tmp/telar-perf-display-link-census-reproduce-01`. All eight host observations pass,
+maximum load1 3.507. Every window contains 1,440 Qt and 1,440 independent reference
+callbacks. The first two windows have no detected phase or native interval anomaly.
+In the third, both clocks report three out-of-tolerance gaps around 4.008–4.030 s:
+Qt has 6.240375/7.281750/7.806292 ms and the reference has
+6.239625/7.281375/7.806125 ms. The native presentation interval starting at 3.966398 s
+is 29.166417 ms, outside the unchanged 0.25 ms integer-period criterion.
+
+This reproduces the phase adjustment in the application's actual scheduling clock
+as well as the independent observer. It does not establish physical scanout behavior
+or the causal mechanism, and the bounded, stop-on-event experiment is not an event
+frequency estimate. Both timestamp streams and the native frames are retained in
+the raw results; `clock-comparison.json` records their comparison. No tolerance is
+relaxed and no measured interval is removed. The retained runtime deadline candidate
+still requires valid paired performance and regression evidence.
+
+The following four-static-pane input regression series, `splits-pairs-01`, also
+remains ineligible. Eight runs complete their native content checks, but the host
+gate rejects the final boundary of round 3 A: load1 is 6.341797, above 5, with no
+active compiler observed. The whole series is discarded without an aggregate.
+No other worktree or process is attributed as the cause of the host load.
+
+## Presented-frame copy work census
+
+`out-perf/dlls-presented-frame-census-01` compiles a private friend-based type census
+against the actual Application header and the GUI's existing Release compile
+command. On ARM64, PresentedFrame is 18,312 bytes; its 64 PresentedPane slots are
+9,728 bytes (152 each), HistoryHoverFrame is 6,744 bytes and TabDropSurface is
+1,616 bytes. Generated assignment, copy construction and move construction each
+visit all 64 pane slots. The queued
+frameSwapped callback captures the preparation by value regardless of the active
+pane count. This identifies capacity-dependent copy work, not a proven bottleneck
+or a byte count for every executed copy: optional members have conditional paths.
+
+The previous two qualified variable-output diagnostic profiles have 10 and 11
+inclusive samples under the frameSwapped callback. Most sampled descendants are
+Qt event posting and CFRunLoop wakeup; only the second profile contains a sampled
+memmove below that callback. Counts are not CPU percentages. No production frame
+storage, ownership, generation handling or scheduling is changed on this evidence.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
