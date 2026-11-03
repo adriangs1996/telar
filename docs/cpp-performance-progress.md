@@ -3115,10 +3115,12 @@ requires separate immutable dependency prefixes.
 ## Metal inline binding storage, 2026-11-03
 
 The isolated experiment in `out-perf/dlls-metal-bindings-inline-01` is not retained.
-Replacing temporary heap-backed binding batches removes many allocations but
-does not meet the predeclared native CPU target. This result concerns this
-storage change and workload; it does not disprove the broader allocation/copy
-or Qt conversion hypotheses.
+Its native timing series is discarded for elevated shared-host load following
+Adrian's coordinator notice. The initial CPU rejection was based on that series
+and is superseded: native CPU impact is inconclusive pending a qualified rerun.
+The container oracle and diagnostic allocation census remain useful, but do not
+establish a native performance gain or disprove the broader allocation/copy or
+Qt conversion hypotheses.
 
 The container oracle compares the actual Qt private template with four inline
 resources and two inline batches. All 4,123 cases pass in Release and with
@@ -3173,8 +3175,12 @@ are not executed-instruction counts or evidence of a placement-only difference.
 Six alternating native pairs in
 `/tmp/telar-perf-metal-bindings-inline-regressions-01` use 100 measured inputs
 after 20 warmups, identical 1600×1000 viewports and strict native marker,
-geometry, focus, presentation and offered-rate checks. No builds, tests or
-profilers run during acceptance timing. Median results:
+geometry, focus, presentation and offered-rate checks. This agent ran no builds,
+tests or profilers during timing, but later learned of concurrent CLI-port work.
+The series ran 10:36:47–10:42:57 local time, overlapping the five agents active
+since 10:40. Its initial load averages were already 7.05 / 9.92 / 7.01 on ten
+logical CPUs. The following numbers are retained as discarded observations,
+not acceptance evidence:
 
 | Case / metric | Original | Inline | Inline wins |
 | --- | --- | --- | --- |
@@ -3189,24 +3195,37 @@ profilers run during acceptance timing. Median results:
 | Four splits presented p99 ms | 35.717754 | 35.046910 | 3/6 |
 | Four splits peak RSS MiB | 211.578125 | 204.570313 | 4/6 |
 
-The primary four-split CPU target requires at least 5/6 wins and obtains 3/6.
-This is insufficient gain, not a demonstrated consistent CPU regression. The
-single-pane p95 result is exploratory; it does not replace the frozen CPU target
-after observing results. Tabs and fixed-rate load timing controls are not run
-after this rejection. Runtime resources, complete C++/Zig flow comparisons and
-120 Hz cadence remain unqualified.
+The primary four-split CPU target requires at least 5/6 wins; the discarded
+series obtains 3/6. Neither that count nor the single-pane p95 count can support
+acceptance or rejection of CPU impact. The frozen CPU target is unchanged.
+Tabs and fixed-rate load timing controls were not run after the initial decision.
+Runtime resources, complete C++/Zig flow comparisons and 120 Hz cadence remain
+unqualified. Any rerun requires a fresh low-load window and recorded load/process
+checks before each A/B series; discard or repeat series affected by high load.
 
 A separate three-pair native heap census in
 `/tmp/telar-perf-metal-bindings-inline-census-01` confirms the intended reduction.
 Median successful allocation calls per input fall from 839.38 to 508.76 (39.4%);
 requested bytes fall from 112,733.61 to 101,571.05 (9.9%). Instrumented timings are
 excluded. These six-API counters include framework/probe work and are neither
-precise allocation-site CPU attribution nor live/peak heap measurement. Fewer
-allocations therefore did not establish a native CPU gain in this experiment.
+precise allocation-site CPU attribution nor live/peak heap measurement. They also
+do not normalize the amount of rendering work under shared-host load. Fewer
+observed allocations do not establish a native CPU gain in this experiment.
 
 Only the reusable oracle and this report are retained. The private dependency
 patch, binaries, raw measurements and decision remain ignored; no production
 renderer or Qt recipe change is applied. All F01–F16 acceptance rows remain open.
+
+A subsequent baseline variable-output profile attempted three background panes
+at 0.125 MiB/s each plus interactive input in the fourth. The first launch stopped
+at manifest preparation because the helper filename was wrong. After correcting
+it, the native run lost foreground/key-window ownership after 115 responses and
+was invalidated; both samplers were still waiting for a readiness file that this
+non-throughput fixture does not emit. No useful stacks were collected. The owned
+runtime/children exited and cleanup completed. Artifacts are under
+`out-perf/dlls-variable-work-profile-01` and
+`/tmp/telar-perf-variable-work-profile-02`. A post-run load receipt records
+7.51 / 11.88 / 10.04. Other agents' worktrees/processes were not modified.
 
 ## Coverage and next experiments
 

@@ -198,7 +198,8 @@ Omit `--sanitize` for a Release run. The tool generates the experimental header
 in the output directory, preserving Qt's copyright and license identifiers, and
 records source/library hashes and build logs. It does not modify Qt or establish
 native rendering equivalence or a performance gain. The Metal inline-storage
-experiment was not retained because its native CPU target failed; details are in
+experiment is not retained: its native timing series was discarded for elevated
+shared-host load, so no qualified native CPU gain is established. Details are in
 [the performance report](../../docs/cpp-performance-progress.md).
 
 ## macOS packaging
