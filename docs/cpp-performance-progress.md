@@ -2920,6 +2920,34 @@ only generic Screen checks for atomic rejection, recovery, span gaps and
 metadata-only deltas remain in the active source. The accepted baseline and all
 F01–F16 acceptance requirements remain unchanged.
 
+A follow-up allocation census (`out-perf/dlls-allocation-census-01`) remains a
+private diagnostic prototype. Instruments' Allocations attachment invoked
+SecurityAgent and invalidated focus after 59 responses; its incomplete trace is
+not used. The alternative interposes six dynamic heap APIs in the owned GUI:
+`malloc`, `calloc`, `realloc`, `free`, `aligned_alloc` and `posix_memalign`.
+A known five-operation sequence verifies 344 requested bytes, four frees and one
+realloc, both standalone and linked into the presentation probe. Overflowing
+calloc, invalid alignment and absent-instrument negative controls also pass.
+QtCore and the measured GUI import the covered classic allocation symbols.
+
+Three alternating diagnostic four-split pairs, 100 inputs each
+(`/tmp/telar-perf-allocation-census-splits-01`), count successful calls as
+A/B 88,298/79,506; 83,346/83,317; 87,574/87,589. Requested bytes are respectively
+11,776,269/10,839,052; 11,221,016/11,212,180; 11,656,520/11,672,380. These counts do
+not show a consistent increase in B and do not explain the rejected CPU result.
+The broad per-input medians are 875.74/833.17 calls and 116,565/112,122 requested
+bytes, but the paired rows show why those medians must not be presented as a
+repeatable allocation reduction. Instrumented latency is excluded from acceptance.
+
+The census takes fieldwise atomic snapshots around the measured-input phase,
+before result construction and cleanup. It includes framework and probe-induced
+work outside the interposer image, excludes uncovered APIs/direct zone calls,
+and neither attributes sites nor measures live/peak heap bytes. Returned usable
+bytes are cumulative API results, including realloc, not net memory growth.
+The next allocation investigation needs site attribution and a control for
+probe-induced work; allocator lifetime or Qt conversion is not yet a demonstrated
+cause of the native regression.
+
 `gui-screen-probe` and `tools/compare_screen.py` now provide the direct Screen
 workloads as reusable source. They verify final cells, reject warm allocation
 churn, retain binary hashes and raw paired results, and report Screen-owned bytes.
