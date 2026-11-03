@@ -98,9 +98,45 @@ performance acceptance claim. The candidate's single-layout native qualification
 also passes, with a byte-identical full-viewport PNG against the new C++ baseline
 (SHA-256 `5ef2102300977afa1170013c15ce79664d5dacce5f0816862062f8ab0a6f3eed`).
 That static equality does not establish animated pixel parity. A separate v2
-build incorporates lint cleanup; its checks, paired regressions and actual
-interaction-to-presentation acceptance remain pending. The candidate is not yet
-accepted or committed as a production optimization.
+build incorporates lint cleanup and passes the model oracle, chrome/activity
+tests and six uninstrumented native reorder/cancellation gestures. Its native
+single-layout capture also has the same PNG digest. Targeted model/test lint
+passes; linting the unchanged layout translation unit reports its existing
+101-line `rebuild` against the 100-line threshold.
+
+Six alternating pairs per settled typing layout finish successfully in
+`/tmp/telar-perf-tab-fields-v2-regression-01`. These are regressions against the
+new C++ baseline, not a Zig comparison or actual F08 switching acceptance.
+Values below are medians of run statistics; CPU is GUI CPU milliseconds per
+measured input. Runtime resources remain outside this series.
+
+| Layout / metric | New C++ baseline | Field-role v2 | Candidate wins |
+| --- | ---: | ---: | ---: |
+| Single p50 ms | 25.101 | 24.921 | 3/6 |
+| Single p95 ms | 32.112 | 30.616 | 4/6 |
+| Single p99 ms | 35.121 | 34.345 | 4/6 |
+| Single maximum ms | 37.640 | 35.769 | 5/6 |
+| Single GUI CPU ms/input | 4.081 | 4.066 | 3/6 |
+| Four tabs p50 ms | 25.020 | 24.978 | 2/6 |
+| Four tabs p95 ms | 32.668 | 31.556 | 5/6 |
+| Four tabs p99 ms | 34.443 | 35.306 | 3/6 |
+| Four tabs maximum ms | 37.671 | 35.979 | 4/6 |
+| Four tabs GUI CPU ms/input | 4.175 | 4.261 | 2/6 |
+| Four splits p50 ms | 25.264 | 25.758 | 2/6 |
+| Four splits p95 ms | 31.697 | 32.976 | 1/6 |
+| Four splits p99 ms | 34.660 | 35.531 | 3/6 |
+| Four splits maximum ms | 36.629 | 37.780 | 1/6 |
+| Four splits GUI CPU ms/input | 4.178 | 4.357 | 1/6 |
+
+The four-split p95, maximum and CPU regressions reject v2. Cause is not
+established; no code-placement exemption is demonstrated. Median lifetime GUI
+peak RSS is approximately 205–206 MiB in both variants and is not the rejection
+criterion. ARM64 inspection shows the bounded per-field comparisons and selective
+role-list construction; fewer downstream QML evaluations do not prove a complete
+application win. Source copies, executables, oracles, profiles and the decision
+remain in the isolated prefixes. All candidate production/test/CMake changes
+were verified against their preserved copies and withdrawn from the working
+tree. Actual tab/workspace switching and continuous presentation remain open.
 
 A fresh original-Zig ReleaseFast reference also builds from this branch with the
 new font/theme assets, SHA-256
