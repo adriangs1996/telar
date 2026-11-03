@@ -64,8 +64,13 @@ public:
 
 private:
   static std::span<const Byte> decodeHexadecimal(std::string_view text, std::span<Byte> output) {
-    if (text.empty() || text.size() > text_capacity || text.size() % digits_per_byte != 0) {
-      throw EncodingError{"Invalid hexadecimal layout token length"};
+    // Zig's `std.fmt.hexToBytes` error names, in its order.
+    if (text.empty() || text.size() % digits_per_byte != 0) {
+      throw EncodingError{"InvalidLength"};
+    }
+
+    if (text.size() > text_capacity) {
+      throw EncodingError{"NoSpaceLeft"};
     }
 
     constexpr int hexadecimal_base = 16;
@@ -75,7 +80,7 @@ private:
       unsigned value = 0;
       const auto parsed = std::from_chars(digits.data(), digits.data() + digits.size(), value, hexadecimal_base);
       if (parsed.ec != std::errc{} || parsed.ptr != digits.data() + digits.size()) {
-        throw EncodingError{"Invalid hexadecimal layout token digit"};
+        throw EncodingError{"InvalidCharacter"};
       }
 
       output[index] = static_cast<Byte>(value);

@@ -372,7 +372,8 @@ private:
 
     const auto profiles = root.field("profiles");
     const auto selected = profiles.entry(profile_.view());
-    const auto overlay = selected.field("client");
+    const auto profile_config = selected.as("config");
+    const auto overlay = profile_config.field("client");
     const runtime::config::ClientDefinitions definitions{overlay, &client};
 
     return std::forward<Consumer>(consume)(definitions);
@@ -392,7 +393,8 @@ private:
     if (!profile_.view().empty()) {
       const auto profiles = root.field("profiles");
       const auto selected = profiles.entry(profile_.view());
-      const auto overlay = selected.field("client");
+      const auto profile_config = selected.as("config");
+    const auto overlay = profile_config.field("client");
       readClient(overlay, &client);
     }
 
@@ -471,7 +473,8 @@ private:
 
     const auto profiles = root.field("profiles");
     const auto selected = profiles.entry(profile_.view());
-    const auto overlay = selected.field("client");
+    const auto profile_config = selected.as("config");
+    const auto overlay = profile_config.field("client");
     const runtime::config::ClientDefinitions definitions{overlay, &client};
     const runtime::config::RetainedActionValidator validator{definitions, notices_, client_state_.commands};
     const BindingActionReader reader{*machine_.state(), validator, client_state_.commands, number_};

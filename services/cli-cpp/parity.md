@@ -113,11 +113,11 @@ differences; **unverified** runs without a comparison; **missing** prints
 | `machine rename` | done | `check_machines_launch.py`: same-name no-op, reserved local label and collision refusal. |
 | `machine setup` | partial | `check_machine_setup.py`: configuration filtering and login lifecycle match Zig; real localhost upload/idempotence/repair and GUI attachment. Interactive provider OAuth and released C++ archives remain unverified. Login commands require the other ports of workspace/tab/pane; C++ deployment carries CLI/module/runtime and hashes all three (see port report). |
 | `client clipboard` | unverified | CLI wire/output matches; host clipboard effect not compared. [Window checks](window-port.md). |
-| `client copy-mode` | partial | Fresh entry matches; GUI admits over history where Zig returns `CopyModeUnavailable`. [Window checks](window-port.md). |
+| `client copy-mode` | done | Fresh entry and entry over an open history prompt (`CopyModeUnavailable`) match. C++ GUI checked under `QT_QPA_PLATFORM=offscreen` with `check_window_cli.stack`; output equals the Zig output recorded in `measurements/window-port.json`. |
 | `client detach` | done | Real runtime/GUI and exact CLI fixtures; [window checks](window-port.md). |
 | `client get` | done | Real runtime/GUI and exact CLI fixtures; [window checks](window-port.md). |
 | `client list` | done | Empty and attached real runtimes, text/JSON fixtures; [window checks](window-port.md). |
-| `client open` | partial | Goto fixtures and fresh history match; GUI history admits over another prompt where Zig refuses. [Window checks](window-port.md). |
+| `client open` | done | Goto fixtures, fresh history and history over another prompt (`ClientPromptUnavailable`) match. C++ GUI checked under `QT_QPA_PLATFORM=offscreen` with `check_window_cli.stack`; output equals the Zig output recorded in `measurements/window-port.json`. |
 | `client open-link` | unverified | Wire/output and real invalid-URI rejection match; host browser/editor effect not compared. [Window checks](window-port.md). |
 | `sidebar get` | done | Real GUI state and exact text/JSON fixtures; [window checks](window-port.md). |
 | `sidebar hide` | done | Real GUI mutation/readback and fixtures; [window checks](window-port.md). |
@@ -125,21 +125,21 @@ differences; **unverified** runs without a comparison; **missing** prints
 | `sidebar show` | done | Real GUI mutation/readback and fixtures; [window checks](window-port.md). |
 | `workspace-list collapse` | done | Real GUI mutation and exact fixtures; [window checks](window-port.md). |
 | `workspace-list expand` | done | Real GUI mutation and exact fixtures; [window checks](window-port.md). |
-| `layout apply` | partial | Valid token applies; invalid-token GUI diagnostic differs (`InvalidLength` in Zig). [Window checks](window-port.md). |
+| `layout apply` | done | Valid token applies with empty text; `invalid` reports `InvalidLength`, as Zig's `hexToBytes`. C++ GUI checked under `QT_QPA_PLATFORM=offscreen` with `check_window_cli.stack`; output equals the Zig output recorded in `measurements/window-port.json`. |
 | `layout get` | done | Real GUI token matches byte-for-byte; text/JSON fixtures. [Window checks](window-port.md). |
 | `notification dismiss` | done | Real owned first toast dismissed, repeated/stale id refused; exact fixtures. [Window checks](window-port.md). |
 | `notification show` | done | Real delivery/no clients, UTF-8 title/body clipping, limit reports and fixtures. [Window checks](window-port.md). |
 | `command suggest` | done | All four statuses and output fixtures; real runtime without an engine. [Window checks](window-port.md). |
-| `config check` | partial | C++ companion validates Lua/plugins/keymaps; 12/13 config cases match, nested diagnostic paths differ. [Window checks](window-port.md). |
+| `config check` | done | `config_cases.py` on the Personal machine: 20/20 cases match the Zig oracle byte for byte, including nested fields (`config.client.sidebar.visible`), unknown nested fields, profiles and sidebar footer limits. `lua::Value` names each field by its whole path and profiles report as `config`, as Zig's diagnostics do. |
 | `config reload` | done | Real GUI admission/adoption and exact fixtures; [window checks](window-port.md). |
 | `config show` | done | All six real GUI sections, pretty/minified JSON and decimal-number fixtures; [window checks](window-port.md). |
-| `plugin disable` | partial | Override adoption matches; GUI clears admitted `text` that Zig retains. [Window checks](window-port.md). |
-| `plugin enable` | partial | Override adoption matches; GUI clears admitted `text` that Zig retains. [Window checks](window-port.md). |
+| `plugin disable` | done | Override adoption matches; the admitted result keeps the plugin text, as Zig. C++ GUI checked under `QT_QPA_PLATFORM=offscreen` with `check_window_cli.stack`; output equals the Zig output recorded in `measurements/window-port.json`. |
+| `plugin enable` | done | Override adoption matches; the admitted result keeps the plugin text, as Zig. C++ GUI checked under `QT_QPA_PLATFORM=offscreen` with `check_window_cli.stack`; output equals the Zig output recorded in `measurements/window-port.json`. |
 | `plugin get` | done | Real configured package and generation-bound paginated fixtures; [window checks](window-port.md). |
 | `plugin inspect` | unverified | Implemented; no Zig comparison yet. |
 | `plugin install` | unverified | Implemented; no Zig comparison yet. |
 | `plugin list` | done | Real configured/disabled packages and paginated fixtures; [window checks](window-port.md). |
-| `plugin run` | partial | Real no-op worker admitted; GUI clears admitted `text` that Zig retains. [Window checks](window-port.md). |
+| `plugin run` | done | Real no-op worker admitted with the plugin text kept, as Zig. C++ GUI checked under `QT_QPA_PLATFORM=offscreen` with `check_window_cli.stack`; output equals the Zig output recorded in `measurements/window-port.json`. |
 | `plugin trust` | unverified | Implemented; no Zig comparison yet. C++ also has `plugin untrust ID`, which Zig lacks. |
 | `integration install` | done | `check_integration.py`: all 68 scenarios match including stderr, files, permissions and skills/extensions; hooks prefer TELAR_BIN_PATH. `integration-tests` retains the exact command contract. |
 | `integration status` | done | Same 68 lifecycle comparisons as install, including stderr. |

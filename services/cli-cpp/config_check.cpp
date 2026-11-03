@@ -173,7 +173,10 @@ void validateSelectedBindings(const lua::Value &root, std::string_view profile, 
   }
 
   if (!profile.empty()) {
-    const auto overlay = root.field("profiles").entry(profile).field("client");
+    const auto profiles = root.field("profiles");
+    const auto selected = profiles.entry(profile);
+    const auto profile_config = selected.as("config");
+    const auto overlay = profile_config.field("client");
     if (overlay.present()) {
       if (overlay.field("prefix").present()) {
         prefix = config::KeyChordValidator::parse(overlay.field("prefix"));

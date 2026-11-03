@@ -5,12 +5,14 @@
 #include <cstdio>
 #include <initializer_list>
 #include <optional>
+#include <string>
+#include <string_view>
 
 namespace telar::runtime::lua {
 
 class Value {
 public:
-  explicit Value(lua_State *state, int index, const char *label)
+  explicit Value(lua_State *state, int index, std::string_view label)
       : state_(state),
         index_(lua_absindex(state, index)),
         restored_top_(lua_gettop(state)),
@@ -22,6 +24,12 @@ public:
 
   Value(const Value &) = delete;
   Value &operator=(const Value &) = delete;
+
+  // The same value under another name: a profile's tables are reported as
+  // the configuration's, as Zig's diagnostics name them.
+  Value as(std::string_view label) const {
+    return Value{state_, index_, label};
+  }
 
   Value field(const char *name) const {
     require(LUA_TTABLE, "must be a table");
@@ -127,7 +135,7 @@ public:
         const Value key{state_, -2, label_};
         const auto name = key.string();
         if (std::find(allowed.begin(), allowed.end(), name) == allowed.end()) {
-          key.fail("contains an unknown field");
+          throw Error{"unknown field " + label_ + "." + std::string{name}};
         }
       }
 
@@ -173,7 +181,7 @@ public:
 
   [[noreturn]] void fail(const char *message) const {
     std::array<char, 512> description;
-    std::snprintf(description.data(), description.size(), "%s %s", label_, message);
+    std::snprintf(description.data(), description.size(), "%s %s", label_.c_str(), message);
     throw Error{description.data()};
   }
 
@@ -187,11 +195,12 @@ private:
     lua_rawget(state_, parent.index_);
   }
 
+  // A field names its whole path, as Zig's diagnostics do: config.client.sidebar.visible.
   Value(const Value &parent, const char *name)
       : state_(parent.state_),
         index_(lua_gettop(state_) + 1),
         restored_top_(lua_gettop(state_)),
-        label_(name) {
+        label_(parent.label_ + "." + name) {
     lua_getfield(state_, parent.index_, name);
   }
 
@@ -212,7 +221,7 @@ private:
   lua_State *state_;
   int index_;
   int restored_top_;
-  const char *label_;
+  std::string label_;
 };
 
 }

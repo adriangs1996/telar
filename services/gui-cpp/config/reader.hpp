@@ -33,7 +33,7 @@ public:
         selected.fail("is not defined");
       }
 
-      apply(selected, result);
+      apply(selected.as("config"), result);
     }
 
     result.theme = projectTheme(result.themes.base);

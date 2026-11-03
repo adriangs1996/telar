@@ -2,6 +2,7 @@
 
 #include "telar_config/component_validator.hpp"
 #include "telar_config/dynamic_source_validator.hpp"
+#include <format>
 
 namespace telar::runtime::config {
 
@@ -31,7 +32,7 @@ public:
     if (footer.present()) {
       const auto count = footer.arraySize();
       if (count > maximum_footer_slots) {
-        footer.fail("accepts at most three slots");
+        footer.fail(std::format("accepts at most {} slots", maximum_footer_slots).c_str());
       }
       for (std::size_t index = 1; index <= count; ++index) {
         if (source(footer.element(index)) == Source::tabs) {

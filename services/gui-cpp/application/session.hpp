@@ -3521,8 +3521,9 @@ private:
   Change apply(const ClientCommand &message, Handler &handler) {
     CompleteClientCommand reply;
     static_cast<ClientCommand &>(reply) = message;
+    // The reply starts as the command, text included, as Zig's: the actions
+    // whose text is only a request argument clear it.
     reply.status = ClientCommandStatus::applied;
-    reply.text = {};
     auto change = Change::model;
 
     try {
@@ -3553,6 +3554,7 @@ private:
       return Change::none;
     case ClientAction::layout_apply:
       importLayout(message.text);
+      reply.text = {};
 
       return Change::model;
     case ClientAction::tab_next:
@@ -3586,6 +3588,7 @@ private:
       return Change::configuration;
     case ClientAction::client_clipboard_copy:
       clipboard_ = message.text;
+      reply.text = {};
       reply.status = ClientCommandStatus::admitted;
 
       return Change::clipboard;
@@ -3595,12 +3598,6 @@ private:
       }
 
       return Change::notification;
-    case ClientAction::client_copy_mode:
-      if (!copy_mode_.active() && !enterCopyMode()) {
-        throw EncodingError{"Copy mode is unavailable"};
-      }
-
-      return Change::copy_mode;
     default:
       handler(message, reply);
 
@@ -3652,6 +3649,7 @@ private:
         throw EncodingError{"ClientBusy"};
       }
 
+      reply.text = {};
       reply.status = ClientCommandStatus::admitted;
       break;
     case ClientAction::tab_select: {
@@ -3690,11 +3688,12 @@ private:
       break;
     case ClientAction::pane_split:
       if (message.text != "horizontal" && message.text != "vertical") {
-        throw EncodingError{"Invalid split axis"};
+        throw EncodingError{"InvalidSplitAxis"};
       }
 
       focusCommandPane(message.target_id);
       admitPaneSplit(message.text == "horizontal" ? ClientLayoutAxis::horizontal : ClientLayoutAxis::vertical, reply);
+      reply.text = {};
       break;
     case ClientAction::pane_close:
       focusCommandPane(message.target_id);
@@ -3711,8 +3710,10 @@ private:
       const auto direction = parseDirection(message.text);
       focusCommandPane(message.target_id);
       if (!resizeDirection(direction)) {
-        throw EncodingError{"Pane resize is unavailable"};
+        throw EncodingError{"PaneResizeUnavailable"};
       }
+
+      reply.text = {};
     } break;
     case ClientAction::pane_fullscreen:
       focusCommandPane(message.target_id);
@@ -3721,21 +3722,22 @@ private:
       break;
     case ClientAction::pane_scroll:
       if (message.value < std::numeric_limits<std::int32_t>::min() || message.value > std::numeric_limits<std::int32_t>::max()) {
-        throw EncodingError{"Invalid scroll delta"};
+        throw EncodingError{"InvalidScrollDelta"};
       }
 
-      if (!commandPane(message.target_id).attached) {
-        throw EncodingError{"Pane viewport is unavailable"};
+      if (!commandPane(message.target_id).attached || copy_mode_.active()) {
+        throw EncodingError{"PaneViewportUnavailable"};
       }
 
       scroll({.pane_id = message.target_id, .rows = -message.value});
       break;
     case ClientAction::pane_copy:
       if (!commandPane(message.target_id).attached) {
-        throw EncodingError{"Copy pane is not attached"};
+        throw EncodingError{"TerminalPaneNotAttached"};
       }
 
       transport_.send(CopyRangeParser::parse(message.target_id, message.text));
+      reply.text = {};
       reply.status = ClientCommandStatus::admitted;
       break;
     default:

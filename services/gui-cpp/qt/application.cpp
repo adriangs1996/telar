@@ -845,16 +845,34 @@ void Application::executeHostCommand(const ClientCommand &message, CompleteClien
     configuration_source_.requestReload();
     reply.status = ClientCommandStatus::admitted;
     break;
+  // As Zig's name prompts: none opens over copy mode or another prompt, and
+  // copy mode does not start over a prompt.
   case ClientAction::client_open_goto:
-    if (copyModeActive()) {
+    if (copyModeActive() || !dialog_.isEmpty()) {
       throw EncodingError{"ClientPromptUnavailable"};
     }
 
     executeWindowAction(Action::goto_picker);
     break;
   case ClientAction::client_open_history:
+    if (copyModeActive() || !dialog_.isEmpty()) {
+      throw EncodingError{"ClientPromptUnavailable"};
+    }
+
     executeWindowAction(Action::history);
     reply.status = ClientCommandStatus::admitted;
+    break;
+  case ClientAction::client_copy_mode:
+    if (!copyModeActive()) {
+      if (!dialog_.isEmpty()) {
+        throw EncodingError{"CopyModeUnavailable"};
+      }
+
+      executeWindowAction(Action::copy_mode);
+      if (!copyModeActive()) {
+        throw EncodingError{"CopyModeUnavailable"};
+      }
+    }
     break;
   case ClientAction::client_open_link: {
     const auto target = LinkTarget::fromUri(message.text);
@@ -867,6 +885,7 @@ void Application::executeHostCommand(const ClientCommand &message, CompleteClien
       throw EncodingError{"LinkOpeningUnavailable"};
     }
 
+    reply.text = {};
     reply.status = ClientCommandStatus::admitted;
     break;
   }

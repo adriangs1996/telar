@@ -163,10 +163,10 @@ void footerValidation(Memory &memory) {
   };
 
   constexpr std::array invalid{
-      InvalidFooter{R"(local t=require('telar'); return {api_version=2,client={bars={sidebar_footer={t.bar.metrics(),t.bar.machines(),t.bar.static('third'),t.bar.static('fourth')}}}})", "sidebar_footer accepts at most three slots", {}},
-      InvalidFooter{R"(local t=require('telar'); return {api_version=2,client={bars={sidebar_footer={t.bar.tabs()}}}})", "sidebar_footer cannot contain tabs", {}},
-      InvalidFooter{R"(local t=require('telar'); return {api_version=2,client={bars={sidebar_footer={t.bar.static('first'),t.bar.metrics(),t.bar.tabs()}}}})", "sidebar_footer cannot contain tabs", {}},
-      InvalidFooter{R"(local t=require('telar'); return {api_version=2,profiles={bad={client={bars={sidebar_footer={t.bar.tabs()}}}}}})", "sidebar_footer cannot contain tabs", "bad"},
+      InvalidFooter{R"(local t=require('telar'); return {api_version=2,client={bars={sidebar_footer={t.bar.metrics(),t.bar.machines(),t.bar.static('third'),t.bar.static('fourth')}}}})", "config.client.bars.sidebar_footer accepts at most 3 slots", {}},
+      InvalidFooter{R"(local t=require('telar'); return {api_version=2,client={bars={sidebar_footer={t.bar.tabs()}}}})", "config.client.bars.sidebar_footer cannot contain tabs", {}},
+      InvalidFooter{R"(local t=require('telar'); return {api_version=2,client={bars={sidebar_footer={t.bar.static('first'),t.bar.metrics(),t.bar.tabs()}}}})", "config.client.bars.sidebar_footer cannot contain tabs", {}},
+      InvalidFooter{R"(local t=require('telar'); return {api_version=2,profiles={bad={client={bars={sidebar_footer={t.bar.tabs()}}}}}})", "config.client.bars.sidebar_footer cannot contain tabs", "bad"},
   };
   for (const auto &example : invalid) {
     bool rejected = false;

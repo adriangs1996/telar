@@ -54,7 +54,7 @@ public:
         auto checked = makeOwned<RuntimeValues<Memory>>(memory_, values_);
         const auto saved_commands = client_state.commands.checkpoint();
         const auto saved_keymap = client_state.keymap;
-        readProfile(profile, *checked, base_client, client_state);
+        readProfile(profile.as("config"), *checked, base_client, client_state);
         client_state.commands.restore(saved_commands);
         client_state.keymap = saved_keymap;
       }
@@ -73,7 +73,7 @@ public:
     if (!selected.present()) {
       selected.fail("is not defined");
     }
-    readProfile(selected, values_, base_client, client_state);
+    readProfile(selected.as("config"), values_, base_client, client_state);
     client_state.keymap.report(values_.limits);
   }
 
