@@ -1195,7 +1195,7 @@ if(TELAR_GUI_NATIVE)
     add_test(NAME gui-status-bar COMMAND gui-status-bar-test)
     set_tests_properties(gui-status-bar PROPERTIES ENVIRONMENT "QT_QUICK_BACKEND=software;QT_QPA_PLATFORM=offscreen" TIMEOUT 30)
     add_dependencies(gui-lint gui-status-bar-test)
-    target_link_libraries(gui-chrome-icon-test PRIVATE gui-quick gui-quickplugin Qt6::Test)
+    target_link_libraries(gui-chrome-icon-test PRIVATE gui-quick gui-quickplugin Qt6::Test gui-test-window-activation)
     qt_add_resources(gui-chrome-icon-test gui-icon-fixtures
       PREFIX "/telar/test-icons"
       BASE "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/icons"

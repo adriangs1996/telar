@@ -3046,6 +3046,72 @@ Further draw-work experiments should avoid introducing this intermediate color
 composition, for example by investigating batch compatibility of existing glyph
 geometry. That is a source lead, not an accepted optimization.
 
+## Per-vertex mask colors rejected by component controls, 2026-11-03
+
+The isolated experiment in `out-perf/dlls-mask-vertex-color-01` moves mask color
+from material uniforms into float vertex attributes. Compatible text/icon masks
+can then batch across colors without offscreen composition. It preserves separate
+sampling and blend material types, premultiplication and shader coverage formulas.
+Vertex stride increases from 20 to 36 bytes, or 96 additional bytes per six-vertex
+glyph quad. The candidate is **withdrawn from production source**.
+
+Original accepted A remains GUI SHA
+`5a639c5f26f67892698088cd95e31555212e6508dae2e45a441dc58e641caef5`;
+B is `ffa1df64b2ce0dd3a310de26d83f5983093cbf036ad83a8c02e46b38f9369138`,
+with the identical runtime, command helper and Qt installation. The frozen patch
+SHA is `3c1ef558bd18c6d9d9f4545050dedf1fa5979e30c7296d610def267d22aafb73`.
+Native single/splits/tabs captures remain byte-exact in
+`/tmp/telar-perf-mask-vertex-color-pixels-01`. Existing Metal text, icon and scene
+suites pass. A separate four-split debug run reduces alpha batches from 28 to 24,
+with 12 opaque batches unchanged. No native latency/CPU acceptance follows from
+that count or from diagnostic presentation samples.
+
+The new generic icon oracle renders two semitransparent colored icons separately,
+then together, and compares both image regions exactly before and after recoloring
+at fractional positions. It passes with the candidate on Metal, actual OpenGL 2.1
+and software. It is preserved independently of the rejected representation.
+Generated shader inspection verifies a flat color input on Metal/HLSL/modern GLSL
+and the existing legacy-GLSL qualifier fallback. The CPU text-scene probe's
+experimental adaptation checks uniform opaque vertex ink before emitting its
+existing single-ink digest; that adaptation is withdrawn with the candidate.
+
+Seven alternating pairs for each optical/standard and retained/sparse/full mode
+complete in `/tmp/telar-perf-mask-vertex-color-components-01`, without simultaneous
+builds, tests or profiling. All six final 3600×2198 captures have zero channel
+difference. Median CPU milliseconds per snapshot application plus scene update:
+
+| Mode | A ms | B ms | B wins |
+| --- | --- | --- | --- |
+| retained-optical | 6.619460 | 6.729761 | 2/7 |
+| sparse-optical | 6.587403 | 6.679302 | 1/7 |
+| full-optical | 6.628179 | 6.814280 | 1/7 |
+| retained-standard | 7.027967 | 7.096267 | 2/7 |
+| sparse-standard | 7.105088 | 7.122310 | 3/7 |
+| full-standard | 7.091248 | 7.148828 | 2/7 |
+
+Sparse and full optical modes each win only 1/7, rejecting the predeclared component
+control contract. Native timing pairs are not run for this rejected variant.
+The retained color oracle and original icon suite pass on Metal, OpenGL and
+software after withdrawal, and the offscreen CTest target and modified-file
+clang-tidy pass. The test uses the repository component-window helper to prevent
+a Cocoa tool window from disappearing on deactivation; an earlier OpenGL run
+timed out while unexposed and is retained as a harness failure.
+Address-bounded ARM64 disassembly shows shorter material comparison and uniform
+update functions but additional color stores in `GlyphMesh::paint`. The paint
+function changes, so this is not an established code-placement exception. More
+vertex traffic is a plausible cost; the entire timing difference is not causally
+attributed to it. The shader/geometry changes, frozen binaries, generated shaders,
+assembly and withdrawal decision remain in ignored artifacts. All full-flow
+acceptance requirements remain open.
+
+The next isolated lead is Metal binding-batch storage. Qt already uses small
+inline arrays for the initial buffer/texture/sampler lists, but each stage then
+constructs four `QRhiBatchedBindings` containers backed by implicitly shared
+vectors. The private `dlls-metal-bindings-inline-01` contract first requires an
+equivalence oracle against the actual Qt container before any dependency change.
+The original Qt installation remains unchanged; any eventual native experiment
+requires separate immutable dependency prefixes.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
