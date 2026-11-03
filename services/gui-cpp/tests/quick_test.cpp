@@ -2719,6 +2719,54 @@ return {api_version=2, client={keybindings={
     QCOMPARE(clipboard->text(), sentinel);
   }
 
+  Q_SLOT void historyCardPressCannotFollowAReplacedRecord() {
+    const std::array entries{
+        telar::ImportHistoryEntry{.started_at_ms = 100, .command = "echo GUI_REUSE_PRESS_A_FIRST"},
+        telar::ImportHistoryEntry{.started_at_ms = 101, .command = "echo GUI_REUSE_PRESS_A_SECOND"},
+        telar::ImportHistoryEntry{.started_at_ms = 102, .command = "echo GUI_REUSE_PRESS_B_FIRST"},
+        telar::ImportHistoryEntry{.started_at_ms = 103, .command = "echo GUI_REUSE_PRESS_B_SECOND"},
+    };
+    importHistory(entries, "gui-reuse-press");
+    const auto restore = qScopeGuard([this] { client_->execute(Application::Action::cancel); });
+    client_->execute(Application::Action::history);
+    client_->searchHistory(QStringLiteral("GUI_REUSE_PRESS_A_"));
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 2, runtime_wait_ms);
+    const auto selected_copy = [this] { return historyCardHint(*window_, 0, QStringLiteral("copy")); };
+    test::activateWindow(*window_);
+    QTRY_VERIFY_WITH_TIMEOUT(selected_copy() != nullptr, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    const auto rows = test::visualItems(*window_->contentItem(), QStringLiteral("historyResult"));
+    QVERIFY(!rows.isEmpty());
+    const QPointer<QQuickItem> retained{rows.front()};
+    auto *clipboard = QGuiApplication::clipboard();
+    auto saved = test::copyClipboard();
+    const auto restore_clipboard = qScopeGuard([clipboard, saved = std::move(saved)] mutable { clipboard->setMimeData(saved.release()); });
+    const auto sentinel = QStringLiteral("GUI_REUSE_PRESS_UNCHANGED");
+    clipboard->setText(sentinel);
+    auto *copy = selected_copy();
+    auto position = copy->mapToScene(QPointF{copy->width() / 2, copy->height() / 2}).toPoint();
+    bool held = true;
+    const auto release = qScopeGuard([&] {
+      if (held) {
+        QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, position);
+      }
+    });
+    QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, position);
+    client_->searchHistory(QStringLiteral("GUI_REUSE_PRESS_B_"));
+    QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == 2, runtime_wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT(selected_copy() != nullptr, runtime_wait_ms);
+    QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+    QVERIFY(!retained.isNull());
+    copy = selected_copy();
+    position = copy->mapToScene(QPointF{copy->width() / 2, copy->height() / 2}).toPoint();
+    QTest::mouseMove(window_, position);
+    QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, position);
+    held = false;
+    QCOMPARE(clipboard->text(), sentinel);
+    QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, position);
+    QCOMPARE(clipboard->text(), QStringLiteral("echo GUI_REUSE_PRESS_B_SECOND"));
+  }
+
   Q_SLOT void historySelectionProgressesInEventLoops() {
     const bool native_loop = !qEnvironmentVariableIsSet("TELAR_GUI_TEST_MANUAL_EVENT_LOOP_CONTROL");
     importRetainedHistory();
@@ -3736,6 +3784,19 @@ return {api_version=2, client={keybindings={
 
   Q_SLOT void historyFilteredReplyRetiresPendingDelegatesBeforeTheirRows() {
     verifyHistoryDelegateRetirement(QStringLiteral("GUI_BROWSER_PAGE_DELEGATE_SINGLE_TARGET"), 1);
+  }
+
+  Q_SLOT void historyEqualSizedReplyUpdatesPendingDelegates() {
+    constexpr auto entry_count = HistoryBrowser<ApplicationAllocator>::page_entries;
+    std::array<std::string, entry_count> commands;
+    std::array<telar::ImportHistoryEntry, entry_count> entries{};
+    for (std::size_t index = 0; index < entries.size(); ++index) {
+      commands[index] = "echo GUI_REPLACEMENT_TARGET_" + std::to_string(index);
+      entries[index] = {.started_at_ms = static_cast<std::int64_t>(index) + 1, .command = commands[index]};
+    }
+
+    importHistory(entries, "gui-replacement-target");
+    verifyHistoryDelegateRetirement(QStringLiteral("GUI_REPLACEMENT_TARGET"), static_cast<int>(entry_count));
   }
 
   Q_SLOT void historyGeometryAndFocusSurviveInspection() {
@@ -6359,11 +6420,35 @@ return {api_version=2, client={keybindings={
     // Cache delegates incubate asynchronously, independently of flick distance.
     QVERIFY(results->setProperty("cacheBuffer", results->property("contentHeight")));
     QTRY_VERIFY_WITH_TIMEOUT(deferred.incubatingObjectCount() > 0, runtime_wait_ms);
+    const auto retained_snapshot = expected_rows == client_->history()->rowCount();
+    const auto existing = test::visualItems(*results, QStringLiteral("historyResult"));
+    QVERIFY(!existing.isEmpty());
+    const QPointer<QQuickItem> retained{existing.front()};
+    const QSignalSpy removed{client_->history(), &QAbstractItemModel::rowsRemoved};
     QTest::failOnWarning(QRegularExpression{QStringLiteral("DelegateModel::cancel:.*")});
     client_->searchHistory(query);
     QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == expected_rows, runtime_wait_ms);
     QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
     QCOMPARE(results->property("count").toInt(), expected_rows);
+    if (retained_snapshot) {
+      QVERIFY(removed.isEmpty());
+      QVERIFY(!retained.isNull());
+      QTRY_VERIFY_WITH_TIMEOUT(([&] {
+        deferred.incubateFor(50);
+
+        return deferred.incubatingObjectCount() == 0;
+      })(), runtime_wait_ms);
+      const auto delivered = test::visualItems(*results, QStringLiteral("historyResult"));
+      QVERIFY(!delivered.isEmpty());
+      for (const auto *item : delivered) {
+        const auto index = item->property("index").toInt();
+        QVERIFY(index >= 0 && index < expected_rows);
+        const auto record = client_->history()->data(client_->history()->index(index, 0), ListModel::record_role).toMap();
+        QVERIFY(record.value(QStringLiteral("command")).toString().contains(query));
+        QCOMPARE(item->property("record").toMap(), record);
+      }
+    }
+
     QCOMPARE(deferred.incubatingObjectCount(), 0);
   }
 

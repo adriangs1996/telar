@@ -5195,7 +5195,9 @@ Unchanged snapshots emit nothing. Real suffix removal retains the existing QML
 pending-delegate retirement safeguard; other models still use keyed `reconcile`.
 The AArch64 body has one bounded shared-prefix loop, QMap pointer moves and a
 single changed-range notification, rather than repeated searches and insertions.
-This candidate remains **pending**, not an accepted F12 or independent-Zig win.
+The initial pass held the candidate for the runtime-cost investigation below;
+the follow-up records its local adoption decision. This is not an accepted F12
+or independent-Zig win.
 
 Validation: 4,096 randomized final-record comparisons against keyed reconciliation,
 Qt model integrity and positional persistent-index/signal checks passed. All 34
@@ -5262,10 +5264,55 @@ measure translated targets: an owned x86 child reports 274.613ms CPU over
 `translated-helper-rejection.json` and `native-helper-translated-child.json`.
 The two history series above used ARM readers and are unaffected.
 
-The next experiment can compare runtime instructions/cycles at the same offered
-rate before accepting or rejecting the GUI candidate. Its source/tests remain
-separate from the pre-existing runtime cadence edits. All F01–F16 requirements
-remain open.
+### Follow-up: retained history rows adopted for the measured C++ workload
+
+The source hashes and both frozen stages were rechecked before a third complete
+six-pair series, now with native raw instruction/cycle counters. No application
+code or fixture changed between these series. The fixed-rate observer, resource
+helper/header, parser and host gate hashes are frozen in the new contract.
+`/tmp/telar-perf-history-row-hardware-pairs-01` contains 720 queries, 62 qualified
+host boundaries (maximum load1 3.75), complete cleanup and zero dropped readbacks,
+pending callbacks or target-zero presentations. Mean input intervals range from
+309.252 to 310.638ms, inside the required offered-rate tolerance. The compact
+receipt is `out-perf/dlls-history-row-profile-01/hardware-results.json`.
+
+| Instrumented query-cycle metric | Accepted GUI A | Retained rows B | B wins |
+| --- | ---: | ---: | ---: |
+| Input → verified result mean, ms | 141.695 | 109.558 | 6/6 |
+| p95, ms | 153.419 | 119.002 | 6/6 |
+| p99, ms | 155.946 | 125.008 | 6/6 |
+| GUI CPU, ms | 76.284 | 39.975 | 6/6 |
+| GUI instructions, millions | 558.654 | 168.654 | 6/6 |
+| GUI cycles, millions | 213.775 | 89.674 | 6/6 |
+| Runtime CPU, ms | 6.671 | 6.847 | 3/6 |
+| Runtime instructions, millions | 71.632 | 71.640 | 2/6 |
+| Runtime cycles, millions | 16.923 | 17.315 | 1/6 |
+| Combined process CPU, ms | 82.966 | 46.974 | 6/6 |
+| Combined process instructions, millions | 630.286 | 240.292 | 6/6 |
+| Combined process cycles, millions | 230.638 | 106.769 | 6/6 |
+
+Both query modes, `gb` and `GST`, independently win mean/p95/p99 in all six pairs.
+GUI end footprint falls from 265,790,856 to 253,937,032 bytes, 6/6 wins. Runtime
+memory is mixed, 3/6. Runtime instructions differ by only -0.016% to +0.059% per
+pair; its CPU-time wins are now mixed. This does not establish a clock/cache/QoS
+cause for the small runtime cycle increase. GUI interrupt wakeups also rise from
+89.575 to 92.950 per cycle (0/6 lower), with the observer's 5ms main-thread polling
+present. Do not turn this instrumented count into an idle or production wakeup
+claim. These adverse counters remain recorded rather than discarded.
+
+Adopt `replaceRows` for the history projection: the complete measured client
+workload has substantially lower latency, CPU, instructions and cycles, with
+unchanged results and the native interaction checks above. The adoption criterion
+is the whole query workload, not a claim that every process counter improves.
+Keyed reconciliation remains unchanged for other projections. No change is made
+to debounce, runtime SQL, fonts or the removal safeguard. Frozen B (`aef2c9b0…`)
+becomes the GUI baseline for the next experiments; runtime remains `ffea7fb2…`.
+
+This local adoption does not close F12, certify uninstrumented latency/idle
+behavior, complete x86/Linux GUI validation or establish native120. The next
+experiment combines the retained GUI with the separately qualified fused-query
+runtime candidate, preserving single-variable comparisons. The pre-existing
+runtime cadence edits remain untouched. All F01–F16 requirements remain open.
 
 ## Coverage and next experiments
 
