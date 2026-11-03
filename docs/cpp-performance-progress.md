@@ -3294,6 +3294,47 @@ and component timing, cold-cost assessment, complete GUI qualification, x86/Linu
 execution and all F01–F16 acceptance remain open. Only reusable oracle sources,
 their build target and documentation are retained in the branch.
 
+The next qualification pass builds and freezes the complete reference/candidate
+GUI and focused test executables, then restores both production `Face` files to
+their committed contents. GUI SHA256 values are
+`0d5ec9b958573ae7ee7a606a08e9d5537cc88606cca45467e2da8c27bd247f79`
+(rebuilt reference) and
+`999d09c4c9fe6b00020bbb40a77ac9910814411c8ad1104734642c6333d4b197`
+(candidate). Runtime/helper binaries and managed Qt remain unchanged. The frozen
+directories are `gui-A` and `gui-B`; the mutable GUI build currently contains
+candidate artifacts despite restored source and must be rebuilt before reuse
+as a reference. The private `gui-build.json` records targets, source patch and
+all frozen hashes.
+
+Font cascade, row text, optical text, font resolver and scene suites pass on both
+versions with the offscreen/software test configuration. These include 432
+byte-exact CoreText raster cases, 15 font-resolver QtTest entries and 37 scene
+entries. The integrated coverage probes also pass all six font variants. Six
+native Metal component captures (retained/sparse/full, optical/standard) match
+at 3600×2198 with zero channel difference in
+`/tmp/telar-perf-ascii-coverage-pixels-01`. Their probe-generated timing fields
+are explicitly excluded under shared-host load. This establishes scoped visual
+equivalence, not complete GUI input or 120 Hz cadence acceptance.
+
+Full-window qualification against the previously accepted GUI stops during the
+rebuilt reference's setup: the key-window/foreground control fails before any
+responses, and the candidate is not reached. The recorded frontmost `telar`
+process is PID 51675, distinct from owned GUI PID 51410. Both owned runtimes and
+children are confirmed cleaned up. This attempt in
+`/tmp/telar-perf-ascii-coverage-native-qual-01` remains invalid; no focus check is
+relaxed and no native timing conclusion is drawn.
+
+The rebuilt reference's different hash is explained independently: comparison
+with accepted GUI `5a639c5f26f67892698088cd95e31555212e6508dae2e45a441dc58e641caef5`
+finds identical executable code and every other file-backed Mach-O section except
+32 bytes in `__TEXT,__const`. All differences are the low four bytes of eight Qt
+resource modification timestamps. Their positions match the local RCC writer's
+14-byte resource record prefix plus eight-byte timestamp; resource contents are
+unchanged. This is recorded in `reference-sections.json` and
+`reference-data-differences.json`, and does not substitute for native qualification.
+Load remained elevated (15.32 / 19.54 / 19.23 at 11:21); component and native
+acceptance timing have still not started.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
