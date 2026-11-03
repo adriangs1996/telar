@@ -4059,6 +4059,102 @@ Qt event posting and CFRunLoop wakeup; only the second profile contains a sample
 memmove below that callback. Counts are not CPU percentages. No production frame
 storage, ownership, generation handling or scheduling is changed on this evidence.
 
+## Shared prepared-frame snapshots: component candidate
+
+`out-perf/dlls-frame-snapshot-01` tests retaining the prepared frame in the queued
+callback rather than copying and moving its full 18,312-byte value. The candidate
+keeps the current preparation in a shared holder. At beforeSynchronizing, it reuses
+that preparation only when it has no other owners; otherwise it allocates a fresh
+frame with the existing application allocator. Each queued callback retains its
+own immutable snapshot. No queued frame is discarded and existing window-generation,
+machine-view and pane-generation guards remain. Qt documents that the GUI thread
+is blocked during beforeSynchronizing. The production source is restored after
+freezing the candidate; this is not an accepted optimization.
+
+The reusable `services/gui-cpp/tools/check_presented_frames.py` extracts only the
+actual observeFrames implementation. Its QObject facade uses the current real
+PresentedFrame type, QQuickWindow signals and queued callbacks, but simulates
+preparation and presentation. It checks active pane identities/revisions, populated
+link snapshots, history/tab surfaces, duplicate swaps, queue backlogs, unswapped
+preparations, window-generation changes, null windows and receiver destruction.
+The expanded corpus delivers 1,172 expected snapshots with the same A/B digest
+`10422253783135734446`. A weak-reference check verifies that a replaced link snapshot
+survives while queued and expires after its last callback. Removing the reuse guard
+fails the oracle. The same positive and negative controls pass with address/undefined
+sanitizers on the probe translation unit; Qt dependencies are uninstrumented and
+leak detection is disabled. Native scene, weak QObject lifetime and runtime ACK
+behavior remain outside this facade.
+
+The earlier private timing probe omits the added weak-reference observation. Seven
+alternating pairs in `/tmp/telar-perf-frame-snapshot-component-pairs-01` pass all 170
+host boundaries (maximum load1 2.372). Each run measures 50,000 preparation/queue/
+delivery cycles after 1,000 warmups, with real Qt events on the offscreen platform.
+It includes simulated preparation and presentation, not native rendering:
+
+| Component case | A median us/frame | B median us/frame | B wins |
+| --- | ---: | ---: | ---: |
+| One pane, drain each frame | 18.511 | 17.244 | 7/7 |
+| Four panes, drain each frame | 18.479 | 17.307 | 7/7 |
+| 64 panes, drain each frame | 18.539 | 17.306 | 7/7 |
+| Four panes, drain every eight | 3.471 | 3.220 | 7/7 |
+| Four panes plus history | 18.785 | 17.521 | 7/7 |
+| 64 panes plus history, drain every eight | 3.774 | 3.530 | 7/7 |
+
+Rebuilding unmodified GUI source yields SHA-256 `0d5ec9b95857…`, different from
+accepted `5a639c5f26f6…`. A complete byte-difference audit accounts for all 207
+changed bytes: eight generated Qt RCC node modification timestamps, LC_UUID and
+code signature. Executable text is byte-identical (6,850,340 bytes, SHA-256
+`78d11211a1dde580a278f9b4aa1ccdb13530a21dc99e1c46f2b2bbd8d89c7659`),
+and no payload difference is unexplained. This does not claim identical whole files.
+The original accepted frozen GUI remains the native timing baseline.
+
+Frozen candidate GUI SHA-256 is
+`2aafe1147befc8de58b03ee65961293dfeb9a2fc14853bf3d9116d9e88d7fa8c`.
+It uses accepted runtime `a0b8b9d5826c…`, helper `87beebb065f0…` and original Qt;
+the unaccepted runtime deadline candidate is not combined with this experiment.
+Both rebuilt control and candidate pass six focused native QuickTest cases:
+history footer/row delivery, scene synchronization, queued frames across window
+rebinding, hidden terminal frames and resuming a deferred frame. Init/cleanup also
+pass (8/8 each). `/tmp/telar-perf-frame-snapshot-native-qual-01` then qualifies
+single/splits/tabs with byte-identical PNGs, plus the variable split-load workload.
+All 18 host observations pass, maximum load1 2.305.
+
+The source-extracted observer compiles to assembly for macOS ARM64, x86-64 and
+x86-64-v3; this is not Linux or Rosetta execution. Inspection of the actual frozen
+ARM64 binaries finds the frameSwapped callback shrinks from 198 to 73 emitted
+instructions, including its event-dispatch/destruction branches. Its stack frame
+shrinks from 18,432 to 112 bytes, and the queued callable's operator-new request
+from 18,344 to 48 bytes. These are static code/allocation-request observations,
+not sampled instruction counts or total process allocation/memory measurements.
+Before-synchronization work now includes the reference-count guard and allocating
+a fresh frame when an older snapshot is still held.
+
+`native-contract.json` requires at least five of six GUI CPU/input wins under
+variable split output, with no consistent latency or GUI/runtime CPU regression
+in single/splits/tabs controls. The original frozen GUI remains A; only the GUI
+changes in B. Native paired whole-client evidence is required for adoption; the
+component result alone does not establish a full-flow win or 120 Hz acceptance.
+
+`/tmp/telar-perf-frame-snapshot-load-pairs-01` completes six valid native pairs,
+100 measured inputs plus 20 warmups per run and a five-second input-free interval.
+The three background producers remain active during that interval. All 26 host
+observations pass (maximum load1 4.203), with content and offered rates qualified.
+GUI CPU/input has only 3/6 wins: median 20.641 → 20.144 ms. This misses the
+preregistered target, so the candidate is not adopted as a CPU optimization and
+the production source remains restored. The smaller static allocation request and
+component win do not override this native result.
+
+Median input-to-positive-presentation latency is 32.676 → 30.810 ms, 6/6 wins;
+p95 is 37.419 → 37.391 ms and p99 41.034 → 41.039 ms, both 3/6. Runtime session
+CPU/s also has 3/6 wins. The median-latency result is exploratory, not a retroactive
+replacement for the primary CPU criterion. Post-processing excluding each run's
+20 warmups finds GPU-completion latency and reported GPU-work medians each have
+4/6 wins. Absolute input/presentation timestamps were not retained, so these
+artifacts cannot establish a phase explanation. The input driver already varies
+its inter-sample delay between 25 and 74 ms. A fresh, independently specified latency
+experiment would need to distinguish a reproducible delivery gain from sample or
+display phase before reconsidering this candidate. No F01–F16 row is closed.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
