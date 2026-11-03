@@ -4155,6 +4155,71 @@ its inter-sample delay between 25 and 74 ms. A fresh, independently specified la
 experiment would need to distinguish a reproducible delivery gain from sample or
 display phase before reconsidering this candidate. No F01–F16 row is closed.
 
+## Independent latency confirmation and drawable timeline
+
+A new contract in `out-perf/dlls-frame-snapshot-01/latency-confirm-contract.json`
+separates independent median-latency confirmation from the already failed CPU
+target. It requires five of six median-latency wins and no consistent tail-latency
+or GUI/runtime CPU regression, followed by single/splits/tabs controls. It retains
+the same frozen executables, original probe, offered rate and host gates. Neither
+attempt qualifies: `latency-confirm-01` fails the first A producer-rate check;
+`latency-confirm-02` completes four valid runs, then fails the round 2 A rate check.
+No partial aggregate is accepted. All recorded host boundaries pass (3/11,
+maximum load1 1.973/2.757), and owned runtime/children/socket cleanup completes.
+
+The first failure has producer intervals as low as 0.114296 and 0.113107 MiB/s
+against 0.125 MiB/s. The second has 0.115548 and 0.117146 MiB/s. The second failure's
+intervals occur before the first injected input, during setup; the first failure's
+intervals occur after input injection starts. This distinction does not change the
+existing whole-run rate gate or make either series eligible. Maximum write duration
+alone does not establish why the offered rate fell.
+
+`out-perf/dlls-producer-pacing-diagnostic-01` wraps the original producer pacer
+without changing its missed-slot/drop policy. It records return-from-wait lateness,
+discarded deadline shifts and corresponding write duration, retaining at most 128
+events per producer. A deterministic 2,000-step fake-clock comparison preserves
+every original deadline and sleep request; it also exercises recorder saturation.
+Two accepted-A diagnostic runs keep all offered rates within tolerance. The first
+records maximum return lateness of 6.94–9.88 ms across producers; individual recorded
+late returns often accompany writes lasting tens of microseconds. This demonstrates
+that a discarded pacing slot need not mean a long blocking write. It does not
+reproduce or establish the cause of the earlier rate failures. The second run's
+final host boundary reaches load1 5.068848, so the entire diagnostic series is
+ineligible for performance conclusions. Additional clocks/logging can perturb pacing.
+
+A separate private observer, `out-perf/dlls-drawable-timeline-01`, retains absolute
+input, drawable-acquisition, GPU-completion-callback and positive presentation times.
+It also records the actual drawable-pool capacity and presentsWithTransaction flag.
+Pixel, focus, geometry, sequence and positive-presentation gates remain unchanged.
+`/tmp/telar-perf-drawable-timeline-single-01` qualifies 20 measured inputs plus 20
+warmups on accepted A, after five seconds idle; all four host observations pass,
+maximum load1 3.674. Every recorded absolute GPU/presentation difference agrees with
+the existing relative duration. The observed pool capacity is three and transaction
+presentation is false. Separate medians are 0.126 ms acquiring a drawable and
+22.307 ms from the completion callback to presentation. These diagnostic medians
+must not be added or treated as a measured queue depth or causal attribution.
+
+The first private two-drawable policy experiment is **not an applied policy test**.
+The harness removes TELAR_* variables, including the experimental activation flag.
+Consequently `drawable-pool-single-01` and its short-idle follow-up keep the default
+three-drawable capacity. The purported B run after five seconds idle times out on
+its first input; the short-idle run succeeds, but both are baseline behavior. Raw
+artifacts and policy-disposition receipts retain this mistake; neither supports a
+two-drawable conclusion.
+
+The corrected prefix, `out-perf/dlls-drawable-pool-02`, uses a forwarded private
+TGB_DRAWABLE_POOL flag and validates both the requested setting and an acquisition
+capacity bitmask, as well as every accepted frame's observed capacity. It changes
+only the owned test process's layer policy; GUI/runtime/helper/Qt binaries remain
+accepted A. `/tmp/telar-perf-drawable-pool-single-02` completes A/B with 20 measured
+inputs each after five seconds idle, six valid host observations, maximum load1
+1.712. All A samples observe three drawables and all B samples observe two.
+Acquisition medians are 0.0635/0.0637 ms, completion-to-presentation medians
+22.590/23.335 ms, and input-latency medians 26.477/26.523 ms. This single diagnostic
+pair supplies no performance acceptance and no evidence of the hypothesized large
+latency reduction. No production pool policy is changed. The remaining lead is
+Qt's drawable presentation scheduling/skipping path; its causal role is unproven.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
