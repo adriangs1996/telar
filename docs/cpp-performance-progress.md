@@ -2792,8 +2792,41 @@ component results. GUI A is
 `5a639c5f26f67892698088cd95e31555212e6508dae2e45a441dc58e641caef5`, staged GUI B is
 `d63ca3a96192f551bfad6fe1dfdc7138d8e5c612ef6ef15b8857755d3d1064aa`; both use runtime
 `a0b8b9d5826cf80c135cc113a1587a552c054e4d733942ab34e98157a1717645`.
-Independent native qualification, typing regressions and tab-switch pairs are the
-next acceptance step. Production code remains uncommitted experimental work.
+Native qualification passes. Six alternating tab-switch pairs
+(`/tmp/telar-perf-staged-screen-pairs-01`) finish without rejected runs: median
+p50 44.326 → 44.075 ms (4/6), p95 49.239 → 49.066 ms (4/6), p99 49.304 → 49.301 ms
+(4/6), maximum 49.966 → 49.416 ms (3/6), GUI CPU 30.471 → 29.718 ms/input (5/6).
+The latency counts do not establish an F08 win. GUI peak RSS is 212.625 → 211.672
+MiB (4/6); this is not the staging buffer's exact allocation size.
+
+Six independent typing-control pairs per layout
+(`/tmp/telar-perf-staged-screen-regressions-01`) have no consistent latency/CPU
+loss. Single-pane p95 is 33.069 → 33.118 ms (3/6), CPU 4.260 → 4.089 ms/input
+(4/6); its latency wins range from 2/6 to 3/6. Four-split p50/p95/p99 win 5/6 each,
+p95 32.806 → 31.969 ms; CPU is 4.225 → 4.182 ms/input (4/6).
+
+A separate direct Screen audit checks empty, one-cell, one-row and full-grid deltas,
+plus full snapshots, using the same 82×21 grid. The first short batches expose a
+fixed empty-delta cost: 13.175 → 17.950 ns, 0/7, while deltas with cells win 7/7.
+These small durations motivate longer batches before final acceptance. Injected
+allocator accounting reports 55,293 live bytes for original A and 110,397 for B:
+exactly one additional 55,104-byte cell buffer, with no warm allocation churn.
+The staged binary remains **unaccepted** while this empty-message path is repaired.
+
+The follow-up in `out-perf/dlls-staged-screen-fast-empty-01` keeps validation and
+metadata application in the common path and moves nonempty cell decoding/commit
+into a separate helper. Empty deltas avoid staging-vector setup entirely. Added
+functional checks require cursor, input modes, scroll and row metadata to advance
+without invalidating cell rows. Final-source functional, component and native
+checks are pending; earlier favorable results cannot accept the new binary.
+
+The reusable `compare_terminal_scene.py` controller now supports
+`--snapshot-workload full|sparse|retained` and
+`--metric elapsed_ns|apply_and_paint_ns`. The default remains scene-only timing;
+the combined metric requires a positive application duration and exact accounting
+of application plus painting. Two native smoke invocations cover the legacy
+arguments and retained/combined mode with exact visible pixels. Their one-pair
+numbers are functional checks, not acceptance evidence.
 
 ## Coverage and next experiments
 
