@@ -2817,8 +2817,31 @@ The follow-up in `out-perf/dlls-staged-screen-fast-empty-01` keeps validation an
 metadata application in the common path and moves nonempty cell decoding/commit
 into a separate helper. Empty deltas avoid staging-vector setup entirely. Added
 functional checks require cursor, input modes, scroll and row metadata to advance
-without invalidating cell rows. Final-source functional, component and native
-checks are pending; earlier favorable results cannot accept the new binary.
+without invalidating cell rows. Final-source functional checks pass: core/session/runtime-link, the expanded
+2,048-case oracle under Rosetta and ASan/UBSan, 38 native Metal scene cases and four
+native tab/layout cases. The fresh GUI is
+`d6dc9a4930ba8260020ddf6a050e9386d646368d2dc9912a29760eb8c280d66a`;
+its source patch is `06ca097c76f666de8025c57911cce589b4c7de34a3905e1ab608488116d43009`.
+
+Longer direct-kernel batches use 10 million measured empty deltas, 3 million
+one-cell deltas, 200,000 row deltas and 10,000 full frames, after half as many
+warmups in each process. Seven alternating pairs report:
+
+| Frame case | Original A, ns | Separated-path B, ns | B wins |
+| --- | ---: | ---: | ---: |
+| Empty delta | 10.069 | 9.618 | 7/7 |
+| One-cell delta | 43.130 | 31.074 | 7/7 |
+| One-row delta | 783.203 | 471.355 | 7/7 |
+| Full-grid delta | 15,788.996 | 11,356.992 | 7/7 |
+| Full snapshot | 15,792.733 | 15,729.533 | 5/7 |
+
+The direct fixture uses plain ASCII at 82×21; it is not the richer 256×52 scene
+probe or a whole-client benchmark. Its allocator evidence remains 55,104 extra
+live bytes and one additional allocation on cold initialization, with no warm
+allocations. Arm64 production symbols confirm a separate nonempty helper.
+Final-binary visible captures, scene component pairs, native qualification, typing
+controls and tab-switch pairs are running sequentially; earlier favorable results
+cannot accept this new binary. The production change remains experimental.
 
 The reusable `compare_terminal_scene.py` controller now supports
 `--snapshot-workload full|sparse|retained` and
