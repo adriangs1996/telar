@@ -4613,6 +4613,56 @@ separate exit-latency control was prepared privately but not built or executed;
 it supplies no evidence. The reusable functional oracle is retained, production
 runtime source is unchanged, and every F01–F16 acceptance row remains open.
 
+## History query work profile and ordered-index lead, 2026-11-03
+
+The foreground-query lead was checked against the earlier runtime report before
+editing: unrestricted worker-side discovery already lost concurrent tail-latency
+controls. It is not repeated without new causal evidence.
+
+`out-perf/dlls-history-work-profile-01` instead exercises F12's runtime path with
+the accepted runtime `a0b8b9d5826c`. A private protocol fixture imports 10,000
+entries containing 5,000 distinct commands, then checks twenty combinations of
+five fuzzy searches, duplicate removal and two page offsets. ASCII case, UTF-8
+bytes, no matches, score-derived ordering and ties, snapshot bounds, ids and full command
+text are checked against an independent model using repeated string search and
+a full sort. The model is built before profiling; every queried page is checked.
+This does not cover every history filter, cancellation or GUI presentation.
+
+Fixture attempts 01–03 fail before profiling: admission acknowledgements alone
+allow the import queue to fill, and a control connection closes after a history
+reply. The final fixture verifies persistence after every 64-entry batch and
+registers the same interactive client role used for repeated GUI queries. All
+failed-attempt owned-runtime cleanups complete; those attempts supply no timing.
+
+`/tmp/telar-perf-history-work-profile-04` completes two repetitions with identical
+canonical output `e8b0e9aa70de9`. Each has ten seconds of queries and a separate
+eight-second, 1 ms runtime sample. All six host boundaries pass, maximum load1
+1.847, and both owned runtimes clean up. The instrumented query counts, 2,055 and
+2,060, are not throughput acceptance. The first profile places 5,297 inclusive
+samples in the candidate-row `queryFuzzy` branch, of 5,951 under `query`; 5,293
+descend through `Statement::next`. SQLite temporary-tree insertion, balancing
+and memory movement dominate this path. These overlapping counts are not CPU
+percentages and must not be summed.
+
+The runtime's system SQLite 3.51.0 confirms the plan on its owned database:
+`SEARCH command USING INTEGER PRIMARY KEY (rowid<?)` followed by
+`USE TEMP B-TREE FOR ORDER BY`. The existing index contains only
+`started_at_ms DESC`, while the query additionally orders by `id DESC`.
+This identifies repeated sorting as a stronger lead than merely retaining the
+ranked-entry reservation or prepared statements.
+
+Private database copies in `out-perf/dlls-history-query-order-01` replace that
+index with `(started_at_ms DESC, id DESC)`, or with those columns plus `command`.
+Both plans eliminate the temporary sort; the latter is a covering-index scan.
+Complete result hashes match for snapshot boundaries 10,000, 5,000 and 100,
+and each database passes `integrity_check`. The covering copy occupies 3,948,544
+bytes versus the original 3,780,608; these whole-file sizes include differing
+free-page counts and do not measure incremental live memory or steady-state
+index size. No paired speed, write-cost or migration result is claimed yet.
+In particular, an old snapshot may make an ordered scan visit many excluded
+rows, so old/selective snapshots, ties, scoped queries, imports and deletions
+must be controls. Production schema and queries remain unchanged.
+
 ## Coverage and next experiments
 
 Every row below remains open. Existing component/functional probes do not prove
