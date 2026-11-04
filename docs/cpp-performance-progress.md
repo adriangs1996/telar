@@ -6925,3 +6925,48 @@ late-stale and missing-callback negative controls still fail as required. All
 four runs qualify host load and cleanup; Objective-C syntax checking reports
 no warnings. This enables the next six-pair equal-load comparison without
 dropping the current observer's stronger final-result controls.
+
+
+## Independent warm history comparison at equal cadence, 2026-11-04
+
+`/tmp/telar-perf-history-cross-stack-pairs-01` completes six alternating pairs
+of 60 replacements per run with the current observer and a 300 ms minimum
+query interval. C++ GUI `a88e53a8` uses C++ runtime `1f1849d1`; Zig GUI and
+runtime both use `6ccf7948`. The fixture, configuration, cases, templates,
+executables/helpers and observer sources are frozen by hash. All 26 outer host
+boundaries qualify (maximum load1 2.038574); every native result, final-match,
+callback, offered-rate and owned-cleanup check passes.
+
+The table reports medians of the six per-run summaries, with paired win counts.
+
+| Metric | C++ | Zig | C++ lower |
+| --- | ---: | ---: | ---: |
+| Mean latency (ms) | 103.698201 | 51.746027 | 0/6 |
+| p50 latency (ms) | 105.112323 | 50.475177 | 0/6 |
+| p95 latency (ms) | 115.149120 | 66.145023 | 0/6 |
+| p99 latency (ms) | 119.537262 | 69.611662 | 0/6 |
+| GUI CPU/query (ms) | 29.877808 | 13.999987 | 0/6 |
+| Runtime CPU/query (ms) | 2.769275 | 12.137768 | 6/6 |
+| Combined CPU/query (ms) | 32.647083 | 26.273176 | 0/6 |
+| GUI end footprint (bytes) | 253969776.000000 | 193913912.000000 | 0/6 |
+| Runtime end footprint (bytes) | 11297224.000000 | 16491168.000000 | 6/6 |
+
+C++ loses the warm visible endpoint in every pair. Its runtime is substantially
+cheaper, but the GUI's CPU cost exceeds that saving: GUI instructions are
+80.578594M versus 29.196562M per query (0/6), while runtime instructions are
+21.491953M versus 110.234095M (6/6). GUI interrupt wakeups are lower
+(94.383333 versus 124.633333, 6/6); runtime interrupt wakeups are higher
+(4.516667 versus 0.466667, 0/6). No energy conclusion follows. All process
+counters, including setup costs, remain in the raw result. Footprints are
+separate process snapshots, not a sum of shared RSS or proven fixed storage.
+
+The fixed 60 ms C++ timer is a concrete latency hypothesis, not proof that it
+explains the whole measured gap. A private zero-delay single-shot candidate
+now isolates that wait; it must also qualify rapid-input/request-load behavior
+before adoption. The single-shot event-loop coalescence, request revisions,
+stale rejection and 128-request bound remain in place.
+
+This comparison uses independently checked result templates for each renderer;
+it does not close optical/ranking parity, instrumentation perturbation, cold
+queries, inspection, scrolling or native120. The complete F01–F16 goal remains
+active. The observed warm F12 loss is now an explicit optimization target.
