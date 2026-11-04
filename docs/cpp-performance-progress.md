@@ -10058,3 +10058,94 @@ TUI benefit while avoiding another ready batch of competing background panes;
 that is a hypothesis requiring new ordinary pairs and regression checks. No
 production optimization is accepted here, and all F01–F16/native120 complete-flow
 requirements and the unlimited goal remain open.
+
+## 2026-11-04 — Single-pane ready-event batching rejected
+
+The follow-up in `out-perf/dlls-ready-event-single-pane-01` restricts the extra
+zero-timeout event batch to a runtime with exactly one pane. This is the global
+pane count, read in O(1), not a client's visible-pane count. The original event
+dispatch remains in the extracted helper; the second call requires a readable
+pane event, no stop request, and one pane. It adds no heap state or deliberate
+delay and retains the existing per-pane read limits and at most two128-event
+batches. The hypothesis is to collect already-available output before publishing
+an intermediate state, while avoiding the competing-pane regression of the
+previous experiment. No allocation/copy explanation is assumed.
+
+Source is a fresh archive of `f64f0283e`, built separately with the same pinned
+LLVM23.1.4, Release/O3, OpenSSL3 and Ghostty dependencies. Candidate runtime
+`16e14b17443f0b2b8100f4064f94256114904fd583b07812e55310f61856adc8` is compared
+directly against accepted runtime `1f1849d1`, with unchanged GUI `bc55d0e8` and
+helper `87beebb0`. The main working tree's four pending runtime files are never
+built into either measured executable. Frozen sources, patch, commands and
+identities remain under the artifact prefix.
+
+All22 functional runs pass: accepted/B across sparse, full, scrolling, Unicode,
+modes, links, colors, mixed state, bulk, graphemes and concurrent foreground/bulk
+work. Exact screen/text dumps agree, including resize, reconnect and exit checks
+where applicable. Event-loop and control-queue CTest entries pass. The actual
+main translation unit compiles for x86-64 baseline and v3. ARM disassembly shows
+the stopping/readable checks, cached pane-count comparison against1, and guarded
+zero-timeout call. This is compile/lowering evidence; full x86/Linux runtime
+execution is not established. The build retains59 pre-existing main warnings.
+
+`/tmp/telar-perf-ready-event-single-pixels-01` qualifies all six full-window PNGs
+for TUI, single typing and four splits, matching both A/B and the accepted
+references exactly. Configuration remains optical JBM15,1600×1000 at scale2,
+with82×21 cells for single/TUI and39×19 for the primary split pane. Ordinary
+timings use100 measured inputs plus20 warmups and six alternating pairs, without
+read/allocation/render-census instrumentation or overlapping own builds/tests.
+
+The first TUI series, `...ready-event-single-tui-pairs-01`, is excluded entirely
+after load1 reaches5.40234 on round4 B. The unchanged repeat
+`...ready-event-single-tui-pairs-02` qualifies26 host boundaries, maximum load1
+2.57715. The later single-typing series `...ready-event-single-typing-pairs-01`
+also qualifies26 boundaries, maximum2.74463. Results are:
+
+| Case | p95 A→B ms | B lower pairs | GUI CPU A→B ms/input | B lower pairs | Runtime CPU A→B ms/run | B lower pairs |
+|---|---:|---:|---:|---:|---:|---:|
+| TUI | 41.440→36.357 | 5/6 | 5.442→5.314 | 4/6 | 103.612→102.123 | 4/6 |
+| Single typing | 32.936→32.773 | 3/6 | 3.897→3.995 | **1/6** | 83.111→83.134 | 3/6 |
+
+TUI p50 is28.854→28.842 ms (4/6), p99 46.051→46.256 (3/6), maximum49.307→49.264
+(4/6). Runtime instructions fall180,498,636.5→178,600,254 (5/6), but the CPU
+reduction is not consistent. Single typing p50 is25.010→24.937 (3/6), p99
+37.021→35.521 (4/6), maximum41.701→36.908 (5/6); runtime instructions rise
+90,186,069→91,214,711.5 (2/6 lower). GUI peak RSS is218.469→218.422MiB for TUI
+and197.539→204.102MiB for typing. Memory is not the rejection reason. Runtime
+resource intervals include GUI setup, warmup, measurement and the final TUI
+query, exclude runtime startup/shutdown and child CPU, and are not added to the
+differently scoped GUI CPU interval.
+
+Three attempts to qualify four splits with variable background output at
+0.125MiB/s per producer fail the unchanged5% rate check. Each entire series is
+excluded; partial pairs are not pooled or used to decide the candidate:
+
+| Series suffix | Failed run | Lowest producer interval MiB/s | Maximum load1 |
+|---|---|---:|---:|
+| `single-load-pairs-01` | round5 B | 0.114839 | 3.18457 |
+| `single-load-pairs-02` | round3 A | 0.107962 | 4.77637 |
+| `single-load-pairs-03` | round4 B | 0.113117 | 3.63135 |
+
+In each failed run, all three producers have deficient checkpoint intervals
+that overlap in time (shared intersections324,357 and86ms). Their maximum
+individual write durations range0.299–5.098ms. The pacer deliberately drops missed
+slots rather than catching up with a burst. These observations motivate a
+separate producer-scheduling diagnostic, but establish neither its cause nor a
+runtime-induced stall. Raw observations and `rate-failures.json` are retained.
+Host reports remain ineligible/pending because those series never finish;
+eligible boundary loads alone do not qualify a workload.
+
+The completed typing series is sufficient to reject this variant: GUI CPU is
+worse in five of six pairs. No normalized-code-placement proof excuses it, and
+its cause is not established. The TUI p95 win does not override that consistent
+regression. Further idle-split timing and another background retry are unnecessary
+for this rejected candidate; loaded-interaction qualification remains open.
+
+All91 owned runtime/child shutdowns and resource cleanups pass, including22
+functional runs and every interrupted series. The accepted binaries, production
+`runtime.hpp`, and all four pending runtime hashes remain intact. `validation.json`,
+`tables.json` and `decision.json` record the audit. Only this report is committed;
+the candidate is not promoted. The next investigation should measure publication
+and GUI work directly rather than adding another unconditional event-loop batch.
+Allocation/copy/conversion hypotheses and memory-for-work tradeoffs remain in
+scope, as do all F01–F16/native120 requirements and the unlimited active goal.
