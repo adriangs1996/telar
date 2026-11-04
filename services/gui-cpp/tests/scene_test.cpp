@@ -1218,6 +1218,50 @@ private:
     }
   }
 
+  Q_SLOT static void sparseBackgroundTransitionsMatchIndependentRectangles() {
+    struct Step {
+      std::size_t count = 0;
+      Color color;
+    };
+    constexpr qreal cell_height = 21;
+    constexpr std::array steps{
+        Step{.count = 0, .color = Color::rgb(0xdc3020)},
+        Step{.count = 1, .color = Color::rgb(0xdc3020)},
+        Step{.count = 1, .color = Color{.r = 0.12345F, .g = 0.65789F, .b = 0.30001F}},
+        Step{.count = 2, .color = Color::rgb(0xdc3020)},
+        Step{.count = 1, .color = Color::rgb(0x2040dc, 0.5F)},
+        Step{.count = 0, .color = Color::rgb(0xdc3020)},
+        Step{.count = 2, .color = Color::rgb(0x20dc40)},
+    };
+    constexpr std::array configurations{
+        std::pair{9.0, 1.0}, std::pair{9.0, 0.5},
+        std::pair{9.2, 1.0}, std::pair{9.2, 0.5},
+        std::pair{9.1, 1.0}, std::pair{9.1, 0.5},
+    };
+    SceneFixture actual{CursorShape::block, false};
+    SceneFixture reference{CursorShape::block, false};
+    for (const auto &[width, opacity] : configurations) {
+      for (const auto &step : steps) {
+        auto row = backgroundRow(BackgroundPattern::uniform, step.color);
+        row.rectangles.resize(step.count);
+        for (std::size_t column = step.count; column < row.cells.size(); ++column) {
+          row.cells[column].style.background = {};
+        }
+
+        for (auto *fixture : {&actual, &reference}) {
+          fixture->resizeCell({width, cell_height});
+          fixture->setOpacity(opacity);
+          fixture->setPaletteColor(0, step.color);
+          fixture->setCells(row.cells, {.visible = false});
+          fixture->setVisibleColumns(background_columns);
+        }
+
+        reference.referenceBackgrounds(row.rectangles);
+        QVERIFY2(actual.capture() == reference.capture(), "Sparse background transitions must preserve empty, singleton and multiple rectangles");
+      }
+    }
+  }
+
   Q_SLOT static void changedBackgroundsMatchFreshRectangles() {
     constexpr qreal cell_height = 21;
     constexpr float translucent_alpha = 0.5F;

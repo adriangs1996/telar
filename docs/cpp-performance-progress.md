@@ -10748,3 +10748,82 @@ owned runtime/child shutdowns, framework receipts and resource observers pass.
 Validation verifies frozen binaries, restored accepted production source/build
 and all four untouched pending runtime files. Only the expanded overlap oracle
 and this report are retained. All F01–F16 and native120 acceptance remains open.
+
+
+## 2026-11-04: lazy background mesh preparation rejected at the TUI p95 gate
+
+`out-perf/dlls-lazy-background-mesh-01`, source `b53871d77`, tests avoiding mesh
+setup for empty and singleton background rows. The prior opaque mesh queried
+Qt's renderer interface for every dirty row and reserved vertex storage even for
+one rectangle. The fixed-load fixture writes plain ASCII in background panes
+and one colored marker rectangle in its primary pane; these source facts motivate
+removing unnecessary work, not a claim that it caused the preceding regression.
+
+The candidate stores the first rectangle/color in a local optional. An empty row
+never queries the backend. A singleton emits the original QSGSimpleRectNode when
+the row finishes, without constructing mesh vertices. A second rectangle triggers
+the existing opaque-byte-color eligibility and overlap-safe mesh logic in original
+order; precision, alpha and software fallbacks remain unchanged. This trades more
+local stack state for less preparation/allocation work in sparse rows. It does not
+retain cached geometry across rows or frames.
+
+Accepted GUI `bc55d0e8`, runtime `1f1849d1`, helper `87beebb0` and original Qt are A;
+B GUI is `e3c4c895712a534b7a734e052f0822f2258fb8b894f6fab8c4f8926761225001`.
+The independent sparse oracle reuses actual/reference scenes through background
+counts0→1→1→2→1→0→2, including byte-opaque, higher-precision and translucent
+colors, widths9/9.2/9.1 and parent opacity1/0.5:42 independent captures per backend.
+A negative variant drops the pending singleton and fails this oracle. A and B
+pass it on software/Metal, and B passes all49 scene cases on each backend.
+
+Initial lint finds excessive test nesting, missing designated/default member
+initialization and a redundant production private specifier. Flattening the
+configuration table and fixing those declarations preserves all cases. Production
+and final oracle lint pass. The last default-initializer edit reproduces both
+already-tested scene executables byte-for-byte, verified in final-test-identity.json;
+it also reproduces the same A/B production GUI hashes. No native measurements
+precede these checks. ARM disassembly resolves the singleton destructor's312-byte
+allocation, original rectangle constructor and append through indirect symbols;
+mesh append/flush remain separate. Actual-TU x86 baseline/v3 compile passes. These
+checks establish generated paths, not executed allocation totals or whole-GUI
+x86/Linux behavior.
+
+`/tmp/telar-perf-lazy-background-pixels-01` qualifies six TUI/single/split PNGs,
+byte-exact against A and accepted references. `...-tui-01` qualifies six alternating
+ordinary100-input pairs after20 warmups, unchanged optical JBM15 and1600×1000/scale2,
+82×21 cells. No own builds, tests or diagnostic instrumentation overlap timing.
+The frozen co-primary gate still requires at least5/6 improvements for both TUI
+p95 and GUI CPU; the previous rejected mesh is never substituted for A.
+
+| TUI metric | Accepted A | Lazy mesh B | B lower pairs |
+|---|---:|---:|---:|
+| p50 ms | 28.836 | 26.727 | 6/6 |
+| p95 ms | 37.490 | 37.377 | 3/6 |
+| p99 ms | 44.393 | 45.562 | 4/6 |
+| Maximum ms | 47.198 | 46.495 | 4/6 |
+| GUI CPU ms/input | 5.149 | 4.150 | 6/6 |
+| GUI peak RSS MiB | 218.414 | 212.930 | 4/6 |
+| Runtime CPU ms/run | 99.667 | 98.499 | 4/6 |
+
+Both p50 and CPU improve in every pair, but p95 improves in only three. The
+co-primary target therefore fails and B is rejected. Tail behavior's cause is not
+established; neither lower CPU nor the favorable p95 median overrides pair counts.
+No further ordinary regression controls are run after this failure, so this pass
+also does not establish whether lazy preparation fixes the prior load regression.
+Memory is not the rejection reason. Runtime windows include GUI setup/warmup/final
+readback and exclude runtime startup/shutdown and child CPU; they are not added
+to GUI CPU. Full runtime instructions/cycles remain in table.json.
+
+Pixels pass14 host boundaries, maximum load1=3.03369; TUI passes26, maximum2.53271.
+All18 owned runtime/child shutdowns, framework receipts and resource observers
+pass. Frozen binaries, restored accepted production source/build and all four
+pending runtime files are verified unchanged. Only the sparse transition oracle
+and this report are retained. All-flow complete-stack and native120 acceptance
+remain open; the persistent objective stays active.
+
+A source-backed next lead is repeated cell color resolution within a row.
+`cellRun` resolves foreground/background and applies inverse/selection/faint for
+each cell, while the TUI fixture emits one RGB style for most cells in each row.
+A row-local cache keyed by complete style and selection could skip repeated
+conversion without changing scene-graph organization. Theme lifetime, semantic
+CellColor equality, selection boundaries and faint application need independent
+oracles; executed work and native timing remain unmeasured for this hypothesis.
