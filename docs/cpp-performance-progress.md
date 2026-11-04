@@ -9609,3 +9609,86 @@ the wider runtime interval; no such runtime timing acceptance is claimed here.
 Accepted GUI `bc55d0e8` and all four pre-existing runtime source hashes remain
 intact. No performance optimization is accepted by this tooling/profile pass;
 all F01–F16/native120 requirements and the unlimited goal remain open.
+
+## Opaque row background runs rejected on tail consistency, 2026-11-04
+
+The representative TUI profile leads to one algorithmic experiment, retained in
+`out-perf/dlls-row-background-runs-01`: accumulate adjacent, equal, opaque cell
+backgrounds and append one rectangle per run. `paintRow` still visits every cell;
+background node allocation, color conversion and scene-graph insertion become
+proportional to runs. Exact adjacency is required. Overlapping wide/continuation
+rectangles retain their ordering; translucent rectangles are never merged. No
+persistent cache or additional heap buffer is introduced. The previous rejected
+attached-text-root change remains absent.
+
+The new `SceneTest::rowBackgroundsMatchIndependentRectangles` oracle renders
+independently specified rectangles and compares every pixel against the terminal
+scene. Seven cases cover uniform/alternating backgrounds, default-color gaps,
+selection plus inverse, wide/continuation overlap, translucent overlap and clipped
+wide cells. Each uses three integer/fractional cell widths and a repeated
+appearance invalidation. The accepted baseline passes software and native Metal.
+The first candidate fails five software cases at fractional width9.2/scale1;
+Metal passes. That candidate is retained as a negative control. The revised
+candidate keeps individual rectangles on Qt's software backend and passes all45
+scene checks on both software/offscreen and native Cocoa/Metal. No tolerance is
+relaxed. Native Metal runs at backing scale2; these tests do not certify every
+scale, Linux or x86 Qt execution.
+
+Frozen revised GUI B2 is
+`30d12a5a2667d8aa5d53fb8baa1bbbd287c1a1b43bda6acba2c3830bedf10bfc`,
+against accepted A `bc55d0e8`. Both use unchanged runtime `1f1849d1`, helper
+`87beebb0`, LLVM23.1.4, Qt6.12 and the same optical JBM15 configuration. Native
+qualification in `/tmp/telar-perf-row-background-pixels-01` produces byte-exact
+full-window PNG pairs for TUI, single typing and four splits. All six runs and14
+host boundaries qualify (maximum load1 2.69580078125). The final TUI text oracle
+also passes; settled PNGs do not prove every intermediate TUI body frame.
+
+ARM64 `paintRow` disassembly shows the matching-run path bypassing
+`QColor::fromRgbF`, `operator new(312)`, `QSGSimpleRectNode` construction and
+`appendChildNode`. Its stack frame grows from576 to656 bytes. The same actual
+translation unit compiles for x86-64 baseline and v3: baseline uses
+`cmpeqps`/`movmskps` for the color comparison, v3 uses `vcmpeqps`/`vtestps`, followed
+by ordered scalar geometry comparisons and the same allocation-bypassing branch.
+This is static lowering evidence, not executed x86 GUI validation. Clang-tidy
+reports no diagnostics. For one complete 82×21 ASCII frame, source-derived
+background rectangle counts fall from1,722 to23 (one per ordinary row, three in
+the marker row); actual frame/invocation/allocation counts were not instrumented.
+
+The first timing attempt, `/tmp/telar-perf-row-background-tui-pairs-01`, fails
+initial native presentation qualification on A before any inputs. Its cause is
+not established; it is retained and excluded. The unchanged retry in
+`/tmp/telar-perf-row-background-tui-pairs-02` completes six alternating pairs,
+100 measured inputs plus20 warmups each, using the ordinary native probe without
+profilers or counters inside its measured interval. All12 final text and native
+presentation checks pass. All26 host boundaries qualify; maximum load1 is
+2.138671875. No own compilation, tests or profiling overlaps this series.
+
+| TUI metric | A median | B2 median | B2 lower pairs |
+|---|---:|---:|---:|
+| p50 ms | 28.851 | 26.983 | 6/6 |
+| p95 ms | 39.803 | 38.645 | **4/6** |
+| p99 ms | 46.545 | 44.592 | 6/6 |
+| Maximum ms | 49.779 | 48.498 | 4/6 |
+| GUI CPU ms/input | 5.377 | 4.498 | 6/6 |
+| GUI peak RSS MiB | 223.203 | 209.625 | 5/6 |
+
+Separate runtime CPU is105.180/99.733 ms (5/6 lower pairs), instructions
+179,585,682/179,169,847 (4/6), cycles185,938,169/178,614,902 (5/6), and end-boundary
+footprint14.235/14.196 MiB (3/6). This interval includes GUI setup, warmup, measured
+inputs and the final TUI screen query; it excludes runtime startup/shutdown and
+child CPU. It differs from GUI measured-input CPU and is not summed with it.
+The runtime binary is unchanged; the cause of its CPU difference is not established.
+
+Reject promotion despite the16.3% GUI CPU and6.5% median-latency reductions:
+target p95 improves only4/6 pairs. Memory is not the rejection reason. The saved
+work and candidate remain available for a later distinct experiment, without
+repeating this valid series to seek a favorable result. Further typing-regression
+or independent Zig acceptance timings are not warranted for this rejected variant.
+All19 owned runtime/child shutdowns and resource capture cleanups pass. Production
+source is restored and the configured GUI is verified byte-exact against accepted
+`bc55d0e8`; all four pre-existing runtime source hashes remain intact. The reusable
+background oracle is retained, with named test patterns. Its final seven cases
+pass again on software and Metal, and changed-line clang-tidy is clean. Whole-file
+clang-tidy retains two pre-existing diagnostics in the older text test: Qt
+`_data` naming and a non-const `QFETCH(bool)`. All F01–F16/native120 complete-flow
+requirements and the unlimited goal remain open.

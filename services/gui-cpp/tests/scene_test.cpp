@@ -10,11 +10,14 @@
 #include "links/link_match.hpp"
 #include "links/link_target.hpp"
 #include "qt/box_font.hpp"
+#include "qt/bundled_fonts.hpp"
 #include "qt/font_collection.hpp"
 #include "qt/font_resolver.hpp"
 #include "qt/link_preview.hpp"
 #include "qt/projection.hpp"
 #include "qt/resident_fonts.hpp"
+#include "qt/scene_nodes.hpp"
+#include "qt/terminal_font.hpp"
 #include "qt/terminal_scene.hpp"
 #include "qt/window_images.hpp"
 #include "telar_client/codecs/telar_cells.hpp"
@@ -26,8 +29,6 @@
 #include "terminal/font_grid.hpp"
 #include "terminal/screen.hpp"
 #include "terminal/selection.hpp"
-#include "qt/bundled_fonts.hpp"
-#include "qt/terminal_font.hpp"
 #include <QColor>
 #include <QGuiApplication>
 #include <QImage>
@@ -36,6 +37,7 @@
 #include <QQuickWindow>
 #include <QRect>
 #include <QSGNode>
+#include <QSGSimpleRectNode>
 #include <QSize>
 #include <QSizeF>
 #include <QString>
@@ -54,10 +56,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -73,6 +78,72 @@ constexpr TabLocation no_location;
 constexpr auto background_color = Color::rgb(0x101010);
 constexpr auto cursor_color = Color::rgb(0x22cc55);
 constexpr auto cursor_text_color = Color::rgb(0x3366ff);
+
+enum class BackgroundPattern : std::uint8_t {
+  uniform,
+  alternating,
+  default_gaps,
+  selection_inverse,
+  wide_overlap,
+  translucent_wide_overlap,
+  clipped_wide,
+};
+
+struct BackgroundRectangle {
+  qreal column;
+  qreal columns;
+  Color color;
+};
+
+constexpr std::size_t background_columns = 8;
+constexpr std::size_t background_selection_start = 2;
+constexpr std::size_t background_selection_end = 5;
+constexpr auto background_blue = Color::rgb(0x2040dc);
+
+struct BackgroundRow {
+  std::array<Cell, background_columns> cells;
+  std::vector<BackgroundRectangle> rectangles;
+};
+
+BackgroundRow backgroundRow(BackgroundPattern pattern, Color first_color) {
+  static constexpr std::array<Byte, 1> space{' '};
+  constexpr std::size_t inverse_columns = 4;
+  constexpr qreal wide_columns = 2;
+  const auto wide = pattern == BackgroundPattern::wide_overlap || pattern == BackgroundPattern::translucent_wide_overlap || pattern == BackgroundPattern::clipped_wide;
+  BackgroundRow row;
+  for (std::size_t column = 0; column < background_columns; ++column) {
+    const auto alternate = pattern == BackgroundPattern::alternating && column % 2 != 0;
+    auto &cell = row.cells[column];
+    cell.text = space;
+    cell.style.background = {.kind = CellColor::Kind::indexed, .channels = {static_cast<Byte>(alternate)}};
+    Color expected = alternate ? background_blue : first_color;
+    if (pattern == BackgroundPattern::default_gaps && column % 3 == 1) {
+      cell.style.background = {};
+      continue;
+    }
+
+    if (pattern == BackgroundPattern::selection_inverse) {
+      if (column < inverse_columns) {
+        cell.style.flags = static_cast<std::uint16_t>(CellAttribute::inverse);
+      }
+
+      if (column < background_selection_start || (column >= inverse_columns && column <= background_selection_end)) {
+        expected = cursor_color;
+      }
+    }
+
+    if (wide && column % 2 == 0) {
+      cell.width = CellWidth::wide;
+    } else if (wide) {
+      cell.width = CellWidth::continuation;
+      cell.text = {};
+    }
+
+    row.rectangles.push_back({.column = static_cast<qreal>(column), .columns = cell.width == CellWidth::wide ? wide_columns : 1, .color = expected});
+  }
+
+  return row;
+}
 
 LinkTarget requireLinkTarget(std::string_view text) {
   const auto target = LinkTarget::fromUri(text);
@@ -150,16 +221,35 @@ public:
     invalidateAppearance();
   }
 
+  void referenceBackgrounds(std::optional<std::vector<BackgroundRectangle>> rectangles) {
+    reference_backgrounds_ = std::move(rectangles);
+    update();
+  }
+
 protected:
   QSGNode *updatePaintNode(QSGNode *previous, [[maybe_unused]] UpdatePaintNodeData *update_data) override {
     frame_.scale = window()->devicePixelRatio();
     frame_.owner = this;
+
+    if (reference_backgrounds_) {
+      std::unique_ptr<QSGNode> old{previous};
+      old.reset();
+      auto root = std::make_unique<QSGNode>();
+      appendSceneNode<QSGSimpleRectNode>(*root, frame_.bounds, toQColor(frame_.configuration.theme.background));
+      for (const auto &rectangle : *reference_backgrounds_) {
+        const QRectF bounds{rectangle.column * frame_.font.cell.width(), 0, rectangle.columns * frame_.font.cell.width(), frame_.font.cell.height()};
+        appendSceneNode<QSGSimpleRectNode>(*root, bounds, toQColor(rectangle.color));
+      }
+
+      return root.release();
+    }
 
     return TerminalScene::synchronizeNode(previous, *window(), frame_);
   }
 
 private:
   TerminalPresentation frame_;
+  std::optional<std::vector<BackgroundRectangle>> reference_backgrounds_;
 };
 
 class SceneFixture {
@@ -318,6 +408,15 @@ public:
     configuration_.font.thicken = thicken;
     configuration_.font.thicken_strength = strength;
     item_.invalidateAppearance();
+  }
+
+  void setPaletteColor(std::size_t index, Color color) {
+    configuration_.theme.palette.at(index) = color;
+    item_.invalidateAppearance();
+  }
+
+  void referenceBackgrounds(std::optional<std::vector<BackgroundRectangle>> rectangles) {
+    item_.referenceBackgrounds(std::move(rectangles));
   }
 
   void setPreedit(const QString &text) {
@@ -1017,6 +1116,48 @@ private:
     QCOMPARE(fixture.pixel(fixture.capture(), cell.width() / 2, cell.height() / 2), toQColor(cursor_color));
     fixture.select(no_selection);
     QCOMPARE(fixture.pixel(fixture.capture(), cell.width() / 2, cell.height() / 2), toQColor(background_color));
+  }
+
+  // NOLINTNEXTLINE(readability-identifier-naming): Qt requires the _data suffix.
+  Q_SLOT static void rowBackgroundsMatchIndependentRectangles_data() {
+    QTest::addColumn<BackgroundPattern>("pattern");
+    QTest::newRow("uniform") << BackgroundPattern::uniform;
+    QTest::newRow("alternating") << BackgroundPattern::alternating;
+    QTest::newRow("default-gaps") << BackgroundPattern::default_gaps;
+    QTest::newRow("selection-inverse") << BackgroundPattern::selection_inverse;
+    QTest::newRow("wide-overlap") << BackgroundPattern::wide_overlap;
+    QTest::newRow("translucent-wide-overlap") << BackgroundPattern::translucent_wide_overlap;
+    QTest::newRow("clipped-wide") << BackgroundPattern::clipped_wide;
+  }
+
+  Q_SLOT static void rowBackgroundsMatchIndependentRectangles() {
+    QFETCH(const BackgroundPattern, pattern);
+    constexpr qreal cell_height = 21;
+    constexpr float translucent_alpha = 0.5F;
+    const auto first_color = Color::rgb(0xdc3020, pattern == BackgroundPattern::translucent_wide_overlap ? translucent_alpha : 1);
+    for (const auto width : {9.0, 9.2, 9.1}) {
+      SceneFixture fixture{CursorShape::block, false};
+      fixture.resizeCell({width, cell_height});
+      fixture.setPaletteColor(0, first_color);
+      fixture.setPaletteColor(1, background_blue);
+      auto row = backgroundRow(pattern, first_color);
+      fixture.setCells(row.cells, {.visible = false});
+      if (pattern == BackgroundPattern::selection_inverse) {
+        fixture.select({.anchor = background_selection_start, .head = background_selection_end});
+      }
+
+      if (pattern == BackgroundPattern::clipped_wide) {
+        fixture.setVisibleColumns(background_columns - 1);
+        row.rectangles.pop_back();
+      }
+
+      fixture.referenceBackgrounds(row.rectangles);
+      const auto expected = fixture.capture();
+      fixture.referenceBackgrounds(std::nullopt);
+      QVERIFY2(fixture.capture() == expected, qPrintable(QStringLiteral("Background pixels differ at cell width %1 and scale %2").arg(width).arg(fixture.scale())));
+      fixture.invalidateAppearance();
+      QVERIFY2(fixture.capture() == expected, qPrintable(QStringLiteral("Background pixels differ at cell width %1 and scale %2").arg(width).arg(fixture.scale())));
+    }
   }
 };
 
