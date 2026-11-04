@@ -3123,6 +3123,8 @@ The isolated experiment in `out-perf/dlls-metal-bindings-inline-01` is not retai
 Its native timing series is discarded for elevated shared-host load following
 Adrian's coordinator notice. The initial CPU rejection was based on that series
 and is superseded: native CPU impact is inconclusive pending a qualified rerun.
+The November4 follow-up, documented below, supplies that qualified rerun and
+rejects the candidate for loaded latency despite passing its primary CPU target.
 The container oracle and diagnostic allocation census remain useful, but do not
 establish a native performance gain or disprove the broader allocation/copy or
 Qt conversion hypotheses.
@@ -10376,3 +10378,112 @@ Both native series qualify all10 host boundaries, maximum load1 2.70850 and
 All eight owned runtime/child shutdowns pass; PID identities, accepted binaries,
 and the four pending runtime hashes are verified in `validation.json`. All
 F01–F16/native120 complete-flow requirements and the unlimited goal remain open.
+
+## 2026-11-04 — Metal inline bindings pass the CPU target but regress loaded latency
+
+The fresh qualification in `out-perf/dlls-metal-inline-current-01`, from source
+`a316740ac`, rejects the previously inconclusive Metal inline-binding candidate.
+This decision uses new host-qualified measurements on the current accepted stack;
+the earlier high-load series remains discarded. The candidate passes its original
+four-split GUI CPU target but loses loaded p50 in all six pairs and loaded p95 and
+maximum latency in five. Memory concessions remain allowed and are not the reason
+for rejection. The latency regression's cause is not established.
+
+Both stages use identical accepted GUI `bc55d0e8`, runtime `1f1849d1` and helper
+`87beebb0`. Only QtGui differs: accepted `abd4bdf7` versus candidate `34fa13cf`,
+with full hashes retained in `frameworks.json`. All60 framework binaries, the
+original and patched Metal source, patch and prior LLVM23.1.4 Release/O3 build
+receipt are checked. No application or dependency is rebuilt for these ordinary
+comparisons. The private patch still changes only Metal shader-resource batch
+storage; vertex-input batches remain unchanged. The prior assembly findings apply
+to these same verified dependency bytes, including the larger inline stack frame.
+No production Qt recipe or renderer change is applied.
+
+Fresh normal and ASan/UBSan container oracles each pass4,123 cases. Their generated
+container matches the patched Metal class after removing comments/whitespace and
+normalizing its name. The scalar container grows64→224 bytes. Both stages pass46
+scene cases on software and Metal, including independent background-transition
+comparisons. The first candidate scene launch lacks the relocated plugin path and
+aborts before tests; explicit original plugin/QML paths fix the setup, after which
+both complete suites pass. The failed launch log remains preserved.
+
+The ordinary native probe now records dyld loaded-image paths after measured
+CPU/timing snapshots. `tools/qt_framework_receipt.py` verifies resolved paths and
+SHA-256 against frozen framework identities, rejects unknown/duplicate frameworks,
+and requires QtCore,QtGui and QtQuick. Every run has a verified receipt; no loader
+logging is enabled during inputs. A focused test covers missing/malformed receipts,
+missing required libraries, duplicates, unexpected paths/modules and changed
+bytes. An actual candidate receipt also fails against baseline expectations.
+Hashing occurs after GUI exit. The final source only expands the new loop's
+single-line conditional into braces; archived ordinary probes retain their exact
+source, and the final combined heap probe compiles and exercises that same loop.
+
+`/tmp/telar-perf-metal-inline-current-pixels-01` matches all six full-window PNGs
+for TUI, single typing and four splits byte-for-byte against A/B and accepted
+references. Ordinary series `...-splits-01`, `...-tui-01`, `...-typing-tabs-01` and
+`...-load-01` each run six alternating pairs per case,100 measured inputs after20
+warmups, at1600×1000/scale2 with optical JetBrains Mono15. Single/TUI/tabs use82×21
+cells; the primary split has39×19. The fixed-rate case has three variable-output
+background producers at0.125MiB/s each; all measured producer windows satisfy the
+unchanged5% rate tolerance. No own compilation, tests, profiler or heap census
+overlaps ordinary timing. The CPU target remains at least5/6 lower pairs; any
+latency/CPU control with0–1 lower pairs rejects the candidate.
+
+Values below are medians of run metrics; parenthesized counts are candidate-lower
+pairs out of six. Runtime CPU covers GUI setup, warmup, inputs and final TUI query
+where applicable, excludes runtime startup/shutdown and child CPU, and must not be
+added to GUI interval CPU.
+
+| Case | GUI CPU ms/input A→B (lower pairs) | GUI peak RSS MiB A→B (lower pairs) | Runtime CPU ms/run A→B (lower pairs) |
+|---|---:|---:|---:|
+| splits | 4.085→3.998 (5/6) | 204.664→191.578 (4/6) | 100.422→96.520 (3/6) |
+| tui | 5.248→5.003 (4/6) | 218.523→215.961 (5/6) | 101.649→99.785 (4/6) |
+| single | 4.060→3.861 (6/6) | 206.094→204.859 (5/6) | 87.105→81.196 (6/6) |
+| tabs | 4.123→4.045 (3/6) | 205.273→204.688 (3/6) | 100.501→96.370 (6/6) |
+| splits-load | 19.366→18.292 (4/6) | 197.344→204.711 (2/6) | 1141.056→1130.732 (3/6) |
+
+| Case | p50 ms A→B (lower pairs) | p95 ms A→B (lower pairs) | p99 ms A→B (lower pairs) | Maximum ms A→B (lower pairs) |
+|---|---:|---:|---:|---:|
+| splits | 25.899→24.898 (5/6) | 33.101→32.866 (4/6) | 37.730→34.257 (4/6) | 39.573→37.250 (5/6) |
+| tui | 28.837→28.806 (4/6) | 42.013→40.176 (3/6) | 47.159→47.187 (2/6) | 50.045→49.502 (3/6) |
+| single | 25.829→24.942 (5/6) | 33.188→33.059 (3/6) | 35.919→36.187 (4/6) | 37.915→39.298 (2/6) |
+| tabs | 25.552→24.926 (3/6) | 32.924→32.685 (4/6) | 36.453→35.095 (3/6) | 37.018→36.673 (3/6) |
+| splits-load | 31.061→32.680 (0/6) | 36.646→37.400 (1/6) | 39.719→39.235 (3/6) | 41.053→41.062 (1/6) |
+
+The primary CPU target passes5/6 and single typing improves6/6, but the loaded
+p50/p95/maximum losses reject promotion. Loaded runtime instructions also rise
+3,501,285,088→3,532,337,856.5 with0/6 lower pairs, without a proven causal link to
+the GUI regression. Full runtime CPU/instruction/cycle tables remain in
+`tables.json`; the runtime executable itself is unchanged.
+
+A separate sampled-heap pair per TUI and four-split case, in `...-census-01`, uses
+a fresh combined probe with the same loaded-image receipt. Its exact API/errno,
+site, sampling-disabled, child-exclusion, threaded and overflow control passes.
+These timings are diagnostic only. Observed successful covered calls and requested
+bytes over100 inputs are:
+
+| Case | Calls A→B | Requested bytes A→B | Recorded stacks A→B |
+|---|---:|---:|---:|
+| TUI | 180,714→127,741 | 40,626,201→38,238,069 | 722→533 |
+| Four splits | 87,466→50,881 | 11,601,603→10,163,007 | 367→212 |
+
+TUI binding-inclusive samples fall314→111 and split samples241→102.
+Samples through `enqueueShaderResourceBindings` fall189→0 and159→0 respectively.
+All remaining candidate `QRhiBatchedBindings` samples carry `setVertexInput`,
+which the patch intentionally leaves unchanged. TUI scene samples remain301→327.
+These inclusive, depth-limited samples and aggregate counts include framework and
+probe work. They establish observed allocation sites, not CPU shares, live memory,
+a repeatable allocation percentage or the cause of the loaded latency loss.
+`attribute.py`, `attribution.json` and `remaining-binding-sites.json` preserve the
+symbol attribution. Fewer allocations cannot override the ordinary decision.
+
+All six series qualify their host gates: pixel14 boundaries/max load1=3.16553,
+splits26/4.42773, TUI26/1.95313, typing+tabs50/2.12842, load26/2.70117 and
+census10/3.06641. All70 owned runtime/child shutdowns and resource cleanups pass.
+Every run's Qt receipt is rechecked, along with all60 frozen frameworks, accepted
+executables and the four untouched pending runtime files. `validation.json` and
+`decision.json` contain the final audit. Only reusable receipt tooling and this
+report are retained. The next investigation should identify work that can be
+skipped before pursuing another storage substitution; no unverified caching
+proposal is accepted here. All F01–F16/native120 requirements and the goal remain
+open.

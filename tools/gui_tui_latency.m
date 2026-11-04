@@ -350,6 +350,16 @@ static void finish(int failed) {
         result[@"draw_diagnostics"] = draw_diagnostic_result();
     }
     NSError *error = nil;
+    NSMutableArray *loaded_images = [NSMutableArray array];
+    const uint32_t image_count = _dyld_image_count();
+    for (uint32_t index = 0; index < image_count; ++index) {
+        const char *name = _dyld_get_image_name(index);
+        NSString *path = name ? [NSString stringWithUTF8String:name] : nil;
+        if (path) {
+            [loaded_images addObject:path];
+        }
+    }
+    result[@"loaded_images"] = loaded_images;
     NSData *json = [NSJSONSerialization dataWithJSONObject:result options:NSJSONWritingPrettyPrinted error:&error];
     if (!json || ![json writeToFile:@(getenv("TELAR_DISPLAY_RESULT")) options:NSDataWritingAtomic error:&error]) {
         fprintf(stderr, "probe could not write result: %s\n", error.description.UTF8String);
