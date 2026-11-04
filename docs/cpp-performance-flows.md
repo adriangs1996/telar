@@ -153,6 +153,28 @@ control with a new capture path, retain its stdout JSON, then pass that JSON as
 and the residual from short-lived threads. Missing or failed thread reads reject
 the capture. Synthetic negative controls are in `test_thread_cpu_report.py`.
 
+## ASCII TUI interaction diagnostic
+
+Build an isolated copy of the native harness with
+`python3 tools/build_tui_bench_probe.py out-perf/tui/probe`. Its
+`gui_tui_latency.py` accepts the ordinary explicit Zig binary, `--cpp-gui`,
+`--cpp-runtime`, `--config`, `--source`, viewport and host-load arguments; use
+`--mode telar --cases tui --endpoint presented`. The default remains three
+rounds, so explicitly request at least `--rounds 6` for paired timing. For a
+separate PNG qualification use `--capture --idle-seconds 0.2`; a zero idle interval
+cannot wait for capture completion.
+
+The fixture changes full and partial ASCII rows, colors, bold styles, cursor and
+alternate-screen state before each native marker. Final runtime screen text is
+verified before owned cleanup; corrupt/stale results fail and cannot enter the
+shared report. This check does not verify every intermediate drawable's body,
+cell styles or continuous native120 cadence. The fixture's producer generation
+and receipt I/O are included in the end-to-end workload. The final-screen query
+is outside GUI measured-input CPU, but occurs before the ordinary runtime
+resource adapter's stop-boundary snapshot; report that wider runtime scope.
+Current visual differences and diagnostic qualification are in the progress
+report. They must not be hidden by treating the marker alone as full F05 parity.
+
 ## Deliverables and later optimization
 
 Fresh setup, coverage gaps and current experiments are tracked in

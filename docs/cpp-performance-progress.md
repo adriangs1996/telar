@@ -9513,3 +9513,99 @@ runtime resource cleanup checks pass. The one production source file is restored
 the configured GUI matches accepted `bc55d0e8` byte-for-byte. The four
 pre-existing runtime source hashes remain intact. All F01–F16/native120 complete
 flow requirements and the unlimited goal remain open.
+
+## Representative ASCII TUI qualification and work profile, 2026-11-04
+
+The preceding typing fixture changes a space's background. A new, explicitly
+separate `tui` case exercises ASCII text throughout an alternate screen: full
+repaints every eight inputs, one-quarter of rows otherwise, grayscale foreground
+and background changes, bold styles, a moving visible cursor and alternate-screen
+resets every 32 inputs. Each update writes its body before the existing native
+marker. Geometry changes rebuild the fixture, with SIGWINCH deferred through
+output and the receipt. Producer generation and receipt I/O are part of this
+workload; their overhead has not been separately calibrated. This is an
+interaction trace, not a continuous 120 Hz producer or complete F05 acceptance.
+
+Reusable sources are `tools/tui_bench_trace.py`, `tui_bench_fixture.py`,
+`tui_bench_report.py`, `read_cpp_pane.cpp` and `build_tui_bench_probe.py`.
+The builder copies the ordinary native presentation probe unchanged, selects a
+separate fixture, labels results `tui` rather than `single`, and verifies all final
+runtime text rows after GUI exit and before cleanup. C++ uses the existing typed
+protocol client; Zig uses its frozen `pane read --source screen --json` command.
+The check rejects wrong identities, truncated/exited replies, missing/stale row
+updates and text mismatches. It does not verify cell styles or all intermediate
+presented body pixels. The shared report loader rejects TUI results without the
+matching final-screen qualification.
+
+Nine fixture/report tests pass, including an independent interpreter of the
+fixture's CSI subset, full/partial/reset/resize/capture transitions, damaged
+payloads and 17 malformed-content/receipt controls. All 20 ordinary native-harness
+report tests pass, including the new TUI admission guard. The C++ reader builds
+with `-Wall -Wextra -Werror`; seven argument/connection-failure controls pass.
+Production GUI/runtime source and binaries remain unchanged. Tool builds use
+Apple Clang 21.0.0; a prototype reader also built with LLVM 23.1.4. No x86/Linux
+GUI validation is claimed.
+
+`out-perf/dlls-tui-trace-01`, `-02` and `-04` retain development, profiles and final
+reproducible qualification; `-03` is an unrun intermediate builder. The native
+stacks remain C++ GUI `bc55d0e8` plus runtime `1f1849d1`, versus independent Zig
+`6ccf7948`, using the same JBM15 optical configuration and 1600×1000 viewport.
+Both have an 82×21 PTY and 2× backing scale. The initial 20-measured/20-warmup
+qualification ends after a full repaint at sequence40. A second, 23/20 run ends
+at sequence43 after partial updates. Both stacks return exactly the modeled text
+in both successful series. A capture attempt with zero idle time fails before
+inputs because the controller checks capture completion immediately; it remains
+invalid. The corrected capture controller uses the existing 0.2-second capture
+settle, without changing the native witness or pixel tolerances.
+
+The final builder is exercised through its actual CLI in
+`/tmp/telar-perf-tui-builder-qual-01`, one diagnostic pair, 23/20 inputs. Both final
+screen checks pass with normalized text SHA256
+`e9c6dab3ea45cb541615ab766bdce660942832671ceb9d0a7d0ccfbf7b91a712`.
+The shared source report loader admits those qualified results. A separate
+live negative control corrupts only the expected-text receipt: all 23 native
+presentations complete and native `failed` remains zero, but the final-screen
+oracle rejects it, no comparison is published, and cleanup completes. This is a
+content-oracle failure after successful native activity, not a setup-failure
+substitute.
+
+Full-window C++/Zig PNGs in `/tmp/telar-perf-tui-trace-qual-03` are **not**
+byte-exact: 5,167 of 1,600,000 pixels differ, maximum channel delta141. Manual
+inspection of the terminal interior rectangle `(120,84)..(1596,924)` finds 435
+differing pixels, all in the seven bold rows, with maximum channel delta1; other
+differences are outside that rectangle. This region is an inspected diagnostic,
+not a general pane detector or a relaxed oracle. The cause remains unestablished;
+visual parity is not certified and tolerances are not widened.
+
+A separate two-stack profile uses 240 measured inputs after 20 warmups in
+`/tmp/telar-perf-tui-trace-profile-01`. Four eight-second samplers at 1 ms start
+after sequence25, with verified GUI/runtime process identities. C++ GUI/runtime
+finish at sequences133/129; Zig at131/129, all before the final sequence260.
+Both final text checks pass. Inclusive C++ GUI stack observations include:
+terminal synchronization40, row painting36, text preparation8, node insertion/
+removal14, merged-batch rendering22, opaque-batch preparation17 and render-list
+construction15. Groups overlap, waits dominate the traces, and these are neither
+call counts nor CPU percentages. C++ runtime feed/refresh observations are5/3;
+these sparse samples do not establish a runtime bottleneck. Instrumented timings
+are not acceptance evidence.
+
+Source inspection of `qt/terminal_scene.cpp::paintRun` identifies a new algorithmic
+lead: every nondefault-background cell appends its own `QSGSimpleRectNode`. A
+uniform 82-cell row therefore creates 82 background rectangles even when one
+opaque run would cover the same area. This is a source-derived work count, not a
+measured allocation census. Coalescing adjacent opaque backgrounds could remove
+node and renderer bookkeeping; it still needs pixel oracles for alternating
+colors, transparent and wide/continuation cells, selection, scale and clipping,
+plus paired application evidence. The previously rejected attached-text-root
+experiment is not being reinstated.
+
+All completed diagnostic series pass their host gates: maximum load1 is 4.013672
+in the profile, lower in qualification. The failed capture and deliberate negative
+control remain ineligible. All ten owned runtime/child shutdowns and resource
+capture cleanups pass. Prototype profile resource snapshots precede the final
+screen query. The reusable builder's query precedes `stop_runtime`, so callers
+wrapping that with the ordinary resource adapter must account for its query in
+the wider runtime interval; no such runtime timing acceptance is claimed here.
+Accepted GUI `bc55d0e8` and all four pre-existing runtime source hashes remain
+intact. No performance optimization is accepted by this tooling/profile pass;
+all F01–F16/native120 requirements and the unlimited goal remain open.

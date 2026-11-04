@@ -22,6 +22,23 @@ def presented_run(mode, values):
 
 
 class GuiComparisonTest(unittest.TestCase):
+    def test_tui_report_requires_its_final_screen_oracle(self):
+        run = presented_run('gui-cpp', [1000, 4])
+        run.update(case='tui', foreground_workload='ascii-tui-v1',
+                   tui_validation=dict(passed=True, workload='ascii-tui-v1', sequence=2))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'comparison.json'
+            path.write_text(json.dumps(dict(runs=[run])))
+            self.assertEqual(len(load_runs([path])[0]), 1)
+            for field, value in [('tui_validation', None), ('foreground_workload', 'marker'),
+                                 ('tui_validation', dict(passed=False, workload='ascii-tui-v1', sequence=2)),
+                                 ('tui_validation', dict(passed=True, workload='ascii-tui-v1', sequence=1))]:
+                wrong = copy.deepcopy(run)
+                wrong[field] = value
+                path.write_text(json.dumps(dict(runs=[wrong])))
+                with self.subTest(field=field, value=value), self.assertRaisesRegex(ValueError, 'qualified final screen'):
+                    load_runs([path])
+
     def test_cpp_gui_cannot_silently_measure_the_reference_runtime(self):
         reference, candidate = Path('/reference/telar'), Path('/candidate/telar')
         self.assertEqual(runtime_program('gui', reference, candidate), reference)
