@@ -7425,3 +7425,127 @@ frames, disabled synchronization, pending callbacks, host failure, relay errors
 and incomplete cleanup. CLI help and diff checks pass. Production GUI/runtime
 remain accepted A; unrelated runtime cadence edits are preserved. All F01–F16,
 observer perturbation, optical parity and native120 requirements remain open.
+
+
+## Final-command burst baseline and ordered admission, 2026-11-04
+
+The previous turn qualified the endpoint against delayed final replies. This
+continuation starts from `f97d2f6e3`, with the unlimited goal active and the four
+unrelated runtime cadence files preserved. Allocation/copy/Qt conversion remains
+an additional hypothesis; the coordinator's memory-versus-work tradeoff is
+permitted, subject to actual bounded ownership and measured regressions.
+
+A fresh six-pair independent comparison uses the final-command-dependent `gb1`
+and `gs0` templates, the same10k fixture,60 bursts per run,45 ms characters and
+at least300 ms between query starts. The strict current observer, source inputs,
+endpoint qualification receipts and accepted binary identities are frozen in
+`/tmp/telar-perf-history-final-command-cross-stack-pairs-01/contract.json`.
+Zig build inputs remain unchanged from its recorded build, and its binary remains
+`6ccf7948`; no stale-source rebuild exemption is inferred from C++ changes.
+All native result, presentation, callback, offered-rate and cleanup gates pass.
+All26 host boundaries qualify, maximum load1 2.141602; no owned build, test or
+profile overlaps timing.
+
+Medians of six runs per variant, with C++ pair wins:
+
+| Metric | C++ | Zig | C++ wins |
+| --- | ---: | ---: | ---: |
+| Mean final-character latency, ms | 103.527201 | 44.383258 | 0/6 |
+| p95, ms | 114.308677 | 49.499701 | 0/6 |
+| p99, ms | 117.877121 | 50.636353 | 0/6 |
+| GUI CPU, ms/burst | 40.454628 | 19.682776 | 0/6 |
+| Runtime CPU, ms/burst | 2.789955 | 36.584392 | 6/6 |
+| Combined CPU, ms/burst | 43.319090 | 56.575646 | 6/6 |
+| GUI instructions, million/burst | 109.220053 | 59.983676 | 0/6 |
+| Runtime instructions, million/burst | 22.304999 | 330.143234 | 6/6 |
+
+This independently qualifies the narrower final-command endpoint instead of
+reusing prefix-match latency. It does not establish cross-renderer ranking or
+optical parity, sustained typing, full F12, native120, or observer perturbation.
+The accepted C++ stack remains slower in latency despite winning combined CPU
+for this offered burst workload. The current candidate must preserve both costs;
+no component-only gain closes the all-flow objective.
+
+
+### Ordered observation admission rejected
+
+`out-perf/dlls-history-ordered-admission-01` freezes a different algorithm from
+the earlier rejected256-slot fence scan. Each nonempty observation buffer owns
+one intrusive node in a shared order; a query inserts a marker after preceding
+buffers. Completing a buffer unlinks its node, and readiness checks the head.
+Later buffers do not extend an existing marker. Queries keep the bounded64-entry
+FIFO, owned payloads, mutation ordering and client/event-identity cancellation.
+Two nodes plus one shared owner use48 bytes of additional fields per observer on this64-bit target,
+with one shared order and one marker per pending query. Empty process-only batches
+are not enrolled; discarded active events retire their node so an oversized
+input cannot strand admission on an empty buffer. No worker accesses the list.
+The GUI uses the already-qualified zero-delay search form.
+
+An independent list oracle is written before the implementation. It passes720
+completion permutations and200,000 random track/remove/move transitions with
+ARM64 ASan/UBSan, uninstrumented ARM64 and x86-64 under Rosetta. A separate20,000-transition
+admission oracle matches the old per-observer sequence reference through
+cancellation, empty sealed batches, two-buffer rollover and future batches.
+Focused capture, ownership, FIFO bounds, exception recovery, retired-observer
+and dropped-batch tests pass, including instrumented header instantiations;
+dependency archives are not sanitizer-instrumented. Two initial test-development
+failures, a missing order variable and a retired test using a different order,
+are retained and corrected before native validation.
+
+All36 native history cases pass on the final GUI/runtime pair. A diagnostic SQL
+trace records the live command INSERT before the query snapshot and its `id<=2`
+scan. Full native `gb1`/`gs0` RGBA images are byte-exact A/B. The rebuilt zero-delay
+GUI matches `abffa8d6`; using the integer rather than chrono QTimer overload first
+produces a different executable, so it is corrected and the final native suite
+rerun. A final rebuild reproduces all three staged B binary hashes exactly.
+ARM64 and x86 baseline/v3 compile/assembly show bounded pointer loads/stores and
+no iteration or allocation in readiness/track/retire; only native ARM64 and the
+standalone x86 list oracle are executed. Linux and full x86 GUI are not qualified.
+Focused clang-tidy completes with existing broad test/style diagnostics and an
+intra-TU lifetime-annotation suggestion; no warning-free full-runtime audit is
+claimed. Diff whitespace checks pass.
+
+The first primary series deliberately tests short bursts, because removing the
+GUI wait can submit more prefixes. Six alternating pairs,60 bursts each, use
+45 ms characters, at least300 ms query starts and the qualified final-command
+case. Raw evidence is
+`/tmp/telar-perf-history-ordered-admission-burst-pairs-01`. All26 host boundaries
+qualify, maximum load1 4.712891; all offered-rate, result, callback, drawable and
+cleanup checks pass. No owned build, test or profile overlaps timing.
+
+| Metric | Accepted A | Ordered admission + immediate GUI B | B wins |
+| --- | ---: | ---: | ---: |
+| Mean final-character latency, ms | 104.470433 | 38.841953 | 6/6 |
+| p95, ms | 115.686153 | 49.260603 | 6/6 |
+| p99, ms | 118.156704 | 54.806749 | 6/6 |
+| GUI CPU, ms/burst | 42.697102 | 42.716370 | 4/6 |
+| Runtime CPU, ms/burst | 2.843076 | 6.895604 | 0/6 |
+| Combined CPU, ms/burst | 45.540897 | 49.732807 | 0/6 |
+| GUI instructions, million/burst | 109.934982 | 175.447407 | 0/6 |
+| Runtime instructions, million/burst | 22.304329 | 63.657944 | 0/6 |
+
+**Reject:** combined CPU loses all six pairs, failing the predeclared5/6 rule.
+The memory increase is permitted and is not the reason for rejection. The
+whole-query, unchanged-GUI runtime-only and input/output timing controls are not
+started after this primary failure. Therefore these results do not isolate the
+cost of the admission list itself, and must not be reported as a runtime-only
+regression. The large latency improvement does not override the frozen rule.
+
+Separate twelve-burst trace/frame diagnostics pass the final-reply endpoint
+verifier for both A and B. Clock-aligned request census finds exactly12 queries
+for A and36 for B: B submits `g`, the two-character prefix and the final query.
+This demonstrates additional query work, not its isolated share of CPU or a
+global allocation cause. Neither these traces nor their timings are acceptance
+measurements. The next verified source lead is eager `refreshHistory` projection
+of every returned row: up to100 records, each with more than20 QVariantMap
+fields, are constructed before the virtualized view requests visible records.
+A lazy owned projection needs its own equivalence and lifecycle oracle; it is
+not yet implemented or accepted. The rejected line-role experiment remains
+rejected and must not be silently reintroduced.
+
+The private candidate source, commands, failed and successful oracles, native
+captures, assembly, complete paired results and decision are archived. Every
+changed production source is restored to its frozen accepted hash; new private
+headers are removed. The four unrelated runtime cadence edits remain intact.
+The unlimited objective remains active. F01–F16, independent all-flow acceptance,
+optical parity, observer perturbation and native120 remain open.
