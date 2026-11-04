@@ -10860,8 +10860,8 @@ oracle lint pass, followed by repeated complete scene checks and negative contro
 Initial source/build/log variants remain separate and contribute no native timings.
 
 ARM disassembly confirms a hit tests validity/selection and calls semantic style
-equality, then skips the resolution block. It also outlines cellRun and adds a
-style-equality call on the hit path: avoided conversion does not imply free lookup.
+equality, then skips the resolution block. Both A and B already call cellRun out of line; B additionally calls semantic
+style equality on the hit path. Avoided conversion does not imply free lookup.
 Actual-TU x86 baseline/v3 compilation succeeds. These are generated-code findings,
 not executed hit counts, CPU attribution or whole-GUI x86/Linux validation.
 
@@ -10896,9 +10896,106 @@ runtime files are unchanged. Only the independent color oracle and this report
 are retained; all F01–F16/native120 acceptance remains open and the goal is active.
 
 A separate next lead avoids dynamic cache lookup entirely: the accepted ARM
-paintRow listing contains runtime scalar color-channel divisions. Color::rgb
+cellRun listing contains runtime vector RGB normalization divisions. The scalar
+color divisions in paintRow belong to its underline path. Color::rgb
 normalizes each byte by255. A compile-time256-entry float table would use1KiB of
 read-only storage to precompute that finite domain while retaining exact division
 results. Exhaustive channel-bit equivalence, alpha preservation, cross-architecture
 lowering and fresh native timing are required before treating it as an optimization.
 No such table is implemented or accepted in this pass.
+
+## 2026-11-04: exact RGB normalization table rejected
+
+On source `fc1dfb0e2`, `out-perf/dlls-rgb-channel-table-01` replaces Color::rgb's
+three byte-to-float divisions with a constexpr256-entry table generated using the
+original division. Alpha and indexed-theme arithmetic remain unchanged. The table
+occupies1KiB of read-only storage, with no dynamic initialization or allocation.
+Accepted GUI `bc55d0e8`, runtime `1f1849d1`, helper `87beebb0` and original Qt remain
+A. Final B GUI is `0a1e81c052882b99a5e284151bfbc417d3b04fd78adce3f9e86189ee009b0c8c`.
+All scene nodes, ordering and drawing formulas are otherwise unchanged.
+
+The new reusable gui-color oracle compares every channel value in all three
+positions, plus4096 deterministic packed inputs, against uncached volatile runtime
+division. Each input uses eight alpha bit patterns: positive/negative zero,
+minimum subnormal,0.5,1,positive/negative infinity and a quiet NaN payload.
+All38,912 comparisons require identical bits, including the ignored high RGB byte
+and unmodified alpha. Compile-time evaluation and aggregate/size/trivial-copy
+properties are also checked. Coverage assumes round-to-nearest; it does not claim
+all alpha patterns or other rounding modes. A deliberate reciprocal-multiplication
+table fails the compile-time assertion at channel52; an independently compiled
+negative control with only that assertion removed also fails the runtime oracle.
+
+Final A/B standalone oracles pass on ARM and Rosetta x86 baseline/v3; B also passes
+ASan/UBSan. Actual TerminalScene translation units compile for both x86 targets.
+Final production/oracle lint, gui-color/gui-theme and all51 B scene cases on both
+software and Metal pass. The initial qualification stopped on test lint, was
+corrected, and was rerun before native measurements; its files remain separate.
+The accepted GUI is restored byte-identically before ordinary timing.
+
+Kernel assembly replaces ARM's vector division and x86's two division instructions
+with three indexed float loads; all B kernel listings contain exactly256 floats.
+The linked B GUI has one channel-table symbol. Actual cellRun uses the table on
+RGB paths; indexed conversions remain unchanged. These facts establish codegen,
+not executed savings or a full-GUI x86/Linux performance result. This report also
+corrects the preceding row-cache listing interpretation: A already called cellRun
+out of line; paintRow's scalar color divisions are its underline path.
+
+`/tmp/telar-perf-rgb-channel-table-pixels-01` passes all six native TUI/single/split
+PNGs byte-exactly against both A/B and accepted references. `...-tui-01` qualifies
+six alternating100-input pairs after20 warmups, optical JBM15,1600×1000/scale2 and
+82×21 cells. No own builds/tests/profiles overlap ordinary timing. The frozen
+co-primary p95/GUI CPU gate still requires at least5/6 lower pairs for each metric.
+
+| TUI metric | Accepted A | Table B | B lower pairs |
+|---|---:|---:|---:|
+| p50 ms | 28.856 | 28.846 | 5/6 |
+| p95 ms | 37.458 | 38.297 | 0/6 |
+| p99 ms | 43.904 | 45.142 | 2/6 |
+| Maximum ms | 47.999 | 50.626 | 2/6 |
+| GUI CPU ms/input | 5.093 | 5.107 | 3/6 |
+| GUI peak RSS MiB | 220.891 | 218.188 | 4/6 |
+| Runtime CPU ms/run | 99.614 | 99.871 | 4/6 |
+
+B is rejected: p95 loses every pair and the CPU target also fails. Cause is not
+established. Neither fewer divisions nor lower median RSS overrides native timing;
+memory is not the rejection reason. Further regression controls are not run after
+this primary failure. Runtime windows include setup/warmup/final readback, exclude
+runtime startup/shutdown and child CPU, and are not added to GUI CPU. Instructions
+and cycles remain in table.json.
+
+Pixels pass14 host boundaries, maximum load1=3.81836; TUI passes26, maximum4.60986.
+All18 owned runtime/child shutdowns, framework receipts and resource observers pass.
+Frozen stages, accepted production source/build and the four pending runtime files
+are verified unchanged. Only the independent color oracle/CMake registration and
+this report are retained. All F01–F16/native120 acceptance remains open.
+
+## 2026-11-04: accepted TUI CPU profile refreshed
+
+`out-perf/dlls-current-tui-cpu-profile-01` runs the accepted stack through400 measured
+TUI inputs after20 warmups. The private driver samples only its identity-verified
+GUI for8 seconds at1ms nominal intervals, beginning after trace sequence25 and
+ending at135. This excludes startup and warmup and stays within active input work.
+`/tmp/telar-perf-current-tui-cpu-profile-01` contains the source, stack sample and
+receipts. Final sequence420 text validation, Qt identities, resource observer and
+owned runtime/child cleanup pass. All four host boundaries qualify, maximum
+load1=1.74951. Timings from this perturbed run are diagnostic only.
+
+The short sample contains80 inclusive observations below QSGRenderer::renderScene
+and45 below TerminalScene::synchronizeNode. Within the latter,18 observations sit
+at paintRow's background-child removal call site; the accepted ARM listing maps
+that return PC to the loop over row.background children. Qt's nodeChanged,
+nodeWasRemoved and shadow-node hash operations appear below it. Counts include
+nested work and waits, are not additive CPU percentages, and cannot establish a
+causal bottleneck from one sample. Sampling also captures text shaping and probe
+readback work; allocation/copy/conversion remains a hypothesis, not a proved cause.
+
+A distinct source-backed lead is to detach a row's background container once,
+rebuild its children while disconnected, and reinsert it at the same sibling
+position. Current clearSceneChildren removes each rectangle separately while
+attached; pinned Qt6.12 handles each through nodeChanged. Qt recursively removes
+and adds a detached subtree, so the proposal would retain per-descendant shadow
+work but avoid repeated attached-tree notifications. It would preserve individual
+rectangles and their order, without merging or retaining them. The previously
+rejected attached-text and retained-background variants are different operations.
+This lead is unimplemented and unmeasured here; visual equivalence and paired
+native controls are still required. The persistent objective remains active.
