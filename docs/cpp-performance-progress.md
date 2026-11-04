@@ -11278,3 +11278,89 @@ unchanged. This establishes repeated reconnection allocation, not its CPU share.
 The next isolated hypothesis retains connections for the unchanged near-ancestor
 prefix and rebuilds only the changed suffix. It needs lifecycle/reparenting and
 pixel oracles before ordinary timing; the full goal remains active.
+
+## 2026-11-04: retained ancestor connection prefix rejected
+
+`out-perf/dlls-retained-ancestor-prefix-01`, based on `1fa2f5cf4`, tests retaining
+the unchanged near-ancestor prefix in AncestorGeometry::observe. Candidate
+`9d81668fa4c854027eb943d4f5267aa9aa58db2956134ca81f2ae976697fd457`
+stores guarded QPointer identities beside the same eight connection handles,
+disconnects only the obsolete suffix and connects only newly reached ancestors.
+It preserves all geometry/parent signals and item updates. Accepted GUI remains
+`bc55d0e8`, runtime `1f1849d1`, helper/Qt unchanged.
+
+Two reusable chrome-text oracles are added first. One checks all eight signal
+receiver counts after direct/indirect reparenting, ancestor deletion, item detach
+and item destruction. The other compares rendered text against independent face
+rasterization through several ancestor changes and fractional positions. A passes;
+negative controls omitting ancestor refresh or disconnection both fail the count
+oracle. B passes the full18-case chrome-text Metal suite, both51-case software/Metal
+scene suites, and icon, rounded-rectangle, tab-activity, pane-attention and chrome
+component tests. ASan/UBSan instruments AncestorGeometry and the chrome-text test
+with candidate headers, and passes the full suite; other GUI/MOC/Qt code remains
+unsanitized and leak detection is disabled. Three initial lint attempts find
+missing direct includes and initializer spelling issues; archived failures are
+not validation. Final production/oracle clang-tidy and actual-TU x86 baseline/v3
+compilation pass.
+
+ARM64 linked assembly retains a guarded ancestor walk before suffix disconnection;
+matching ancestors bypass reconnection. Its observe stack subtraction increases
+160→224 bytes. Clang layout reports the outer object unchanged at32 bytes; each
+ancestor's64 bytes of connection handles becomes an80-byte observation including
+a16-byte QPointer. This excludes list capacity/header and possible shared Qt weak
+reference control storage. Extra memory is permitted; it is not a rejection reason.
+
+Eight application PNGs in `/tmp/telar-perf-retained-ancestor-pixels-01` match A/B
+and accepted single/splits/tabs/TUI references exactly. Source and configured GUI
+restore byte-exactly before native timing. `/tmp/telar-perf-retained-ancestor-tabs-01`
+completes six alternating100-input/20-warmup pairs with four30Hz producers,
+1600×1000/scale2,82×21 and the same optical JBM15 configuration.
+
+| Ordinary native tab switching | A median | B median | B lower |
+|---|---:|---:|---:|
+| p50 ms | 38.855 | 38.534 | 4/6 |
+| p95 ms | 42.604 | 41.464 | 4/6 |
+| p99 ms | 43.183 | 42.068 | 4/6 |
+| Maximum ms | 44.995 | 43.636 | 4/6 |
+| GUI CPU ms/input | 28.010 | 28.622 | 4/6 |
+| GUI peak RSS MiB | 204.953 | 204.906 | 3/6 |
+| Runtime CPU ms/run | 392.227 | 396.877 | 3/6 |
+
+Both co-primary targets fail the frozen5/6 gate. B is rejected; cause is not
+established and no placement exemption is claimed. CPU median and paired win
+count summarize different aspects of the rows. No further regression controls
+are run after primary failure. Runtime counters span setup/warmup/measurement,
+not the GUI's measured interval, and are not summed with GUI CPU.
+
+Pixels/timing pass18/26 host boundaries, maximum load1=3.35986/3.16895. All20 owned
+shutdowns, content/producer rate/phase, Qt and resource checks pass. No own
+build/test/profile overlaps timing. Frozen stages, production source/build and all
+four pending runtime files verify unchanged. A separate subsequent heap diagnostic
+checks whether the intended allocation reduction occurred; it cannot reverse the
+ordinary rejection. Only the new oracles and findings are retained.
+
+`/tmp/telar-perf-retained-ancestor-heap-01` then runs A/B counts-only and B/A sampled
+observers for100 measured switches each. The unchanged1/512 observer and counters
+remain diagnostic, including native-probe work. All four native/rate/phase/Qt/
+resource checks and shutdowns pass; ten host boundaries qualify, maximum2.73438.
+Neither sampled run overflows. Production, stages and pending runtime source are
+rechecked unchanged afterward.
+
+| Allocation diagnostic | A | B |
+|---|---:|---:|
+| Counts-only successful calls | 2,619,924 | 2,431,455 |
+| Counts-only cumulative requested bytes | 885,371,625 | 874,977,981 |
+| Sampled successful calls | 2,618,629 | 2,404,414 |
+| Sampled cumulative requested bytes | 885,194,862 | 871,573,323 |
+| Recorded stacks | 5,053 | 4,625 |
+| Depth-limited stacks | 3,067 | 2,690 |
+| Inclusive AncestorGeometry stacks | 543 | 147 |
+
+Counts-only calls fall about7.2%; samples support less ancestor reconnection work.
+These are separate diagnostic runs, not exact per-site population counts, live
+memory, CPU attribution or timing acceptance. Other inclusive categories still
+include QV4 (2089/1968), QVariant-map operations (1850/1714) and Metal binding batches
+(1033/1067); rows overlap. The allocation reduction does not override rejection.
+The next investigation targets repeated QML value/map conversion work and must
+remain distinct from previously rejected scalar roles and stable QObject tab
+presentations. All F01–F16/native120 requirements remain open; the goal is active.
