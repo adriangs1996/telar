@@ -9296,3 +9296,81 @@ The next diagnostic must preserve the 100-action workload and bound observer
 perturbation before assigning the loss to main/render work, Qt conversions,
 cache structure or code placement. All six diagnostic runtimes and the failed
 setup runtime exit with complete cleanup. Production remains accepted `bc55d0e8`.
+
+## Boundary-only thread counters and crossed calibration, 2026-11-04
+
+The preceding periodic observer consumed about 7% of typing CPU and used a longer
+workload than the failed control. `tools/macos_thread_cpu.c/.h` now offers an
+explicit boundary-only mode: it creates no observer thread and takes exactly two
+snapshots. The existing API still selects periodic sampling. The analyzer records
+the sampling period, rejects extra samples in boundary mode and preserves signed
+process residuals rather than assigning unseen-thread CPU to live threads.
+`tools/build_thread_cpu_probe.py` now accepts `--workload typing --sampling
+boundaries`; its defaults remain tab switching with periodic sampling. These are
+diagnostic-tool changes; neither GUI nor runtime production code changes.
+
+`out-perf/dlls-splits-boundary-cpu-01` freezes the observer patch, source hashes,
+build commands and controls. Four report tests, including 16 corrupted-trace
+controls, pass. ARM64 busy/sleep/churn controls pass in both modes, ordinarily and
+with ASan/UBSan; all eight short-lived threads remain unseen in boundary mode and
+their known approximately 80 ms appears in the residual. The first sanitizer
+attempt aborts because leak detection is unsupported on this platform; the
+successful runs explicitly disable it. Diagnostic tools use Apple Clang 21.0.0;
+the frozen production binaries/toolchain remain those of the preceding report.
+
+The x86 executable builds and runs under Rosetta but fails the independent
+thread-clock control. A separate one-thread, 150 ms wall experiment observes
+149.905 ms process CPU and 149.906 ms thread-clock CPU on ARM64, versus 149.919 ms
+process CPU and 3.598 ms from both POSIX and `_np` thread clocks under translation.
+This implicates the reference clock used by that control, without establishing
+the platform cause. Mach counters are not rescaled to manufacture a pass; no
+translated-x86 validation is claimed. All GUI measurements below are native ARM64.
+
+The calibration crosses accepted A `bc55d0e8` and rejected B `ab2efd4a` with plain
+and boundary-only probes, six alternating pairs for each comparison. Every run
+uses exactly the failed control's four-split, 100-action/20-warmup workload, fonts,
+grid, viewport, presentation endpoint and separate runtime-resource collection.
+The ordinary native probe sources match; current Python measurement functions
+match the archived probe's AST, while later CLI host-load guards are retained.
+
+The first two series, `/tmp/telar-perf-splits-boundary-cpu-01` and `-02`, are
+discarded in full at load1 6.75390625 and 5.501953125. Their timings are not pooled
+or reused. `/tmp/telar-perf-splits-boundary-cpu-03` completes all 24 runs and 50
+host checks, maximum load1 2.7177734375, without overlapping own builds/tests.
+Native/content/grid/accounting/cleanup checks pass. All 30 owned shutdown receipts
+across the valid and discarded series pass, as do resource-capture cleanup checks.
+
+| Calibration within the same GUI | Plain median | Boundary median | Boundary lower pairs |
+|---|---:|---:|---:|
+| A GUI CPU ms/input | 4.412 | 4.174 | 4/6 |
+| A p95 ms | 32.906 | 32.546 | 3/6 |
+| A maximum ms | 37.715 | 41.486 | **1/6** |
+| B GUI CPU ms/input | 4.438 | 4.410 | 4/6 |
+| B p95 ms | 32.994 | 33.192 | 3/6 |
+| B p99 ms | 36.989 | 37.635 | **1/6** |
+
+Removing the periodic observer does not establish a neutral probe: tail
+calibration still has consistent differences. Instrumented CPU is not corrected
+by subtracting estimated snapshot cost, and its timings cannot rescue B.
+
+| Candidate comparison | A median | B median | B lower pairs |
+|---|---:|---:|---:|
+| Plain p95 ms | 32.906 | 32.994 | **1/6** |
+| Plain GUI CPU ms/input | 4.412 | 4.438 | 2/6 |
+| Boundary GUI CPU ms/input | 4.174 | 4.410 | **1/6** |
+| Boundary process CPU ms | 416.853 | 441.179 | 1/6 |
+| Boundary main-thread CPU ms | 164.782 | 172.406 | 2/6 |
+| Boundary render-thread CPU ms | 127.577 | 141.456 | 1/6 |
+| Boundary render CPU / wall second | 0.016466 | 0.018310 | 1/6 |
+
+The plain probe reproduces a consistent p95 loss. The instrumented render-thread
+increase is a lead for an operation/frame census, not a demonstrated cause of the
+original regression. Main and render threads exist at both boundaries; completely
+unseen threads remain unassigned. Snapshot maxima span 0.115–0.480 ms, CPU boundary
+differences -1.146–0.284 ms and wall differences -1.647–0.199 ms. Signed residual
+bounds span -0.242–31.236 ms; they are not exact dead-thread CPU. Medians from
+different accounting categories must not be added as a per-run decomposition.
+The next investigation will count actual render work in the same 100-action
+scenario before changing another cache/call structure. Accepted GUI `bc55d0e8`
+and the four preserved runtime source hashes remain unchanged. B stays rejected;
+all F01–F16/native120 requirements and the unlimited goal remain open.

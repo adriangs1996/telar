@@ -17,7 +17,7 @@ def snapshot(index, kind, process, rows):
 
 
 def capture():
-    return [dict(type="header", version=1, pid=12, controlling_id=1,
+    return [dict(type="header", version=1, pid=12, controlling_id=1, period_ns=100000000,
                  cpu_unit="microseconds", clock="CLOCK_UPTIME_RAW"),
             snapshot(0, "begin", 100, [thread(1, 40), thread(2, 60)]),
             snapshot(1, "periodic", 125, [thread(1, 50), thread(2, 70), thread(3, 5)]),
@@ -26,6 +26,18 @@ def capture():
 
 
 class ThreadCpuReportTest(unittest.TestCase):
+    def test_boundary_capture_leaves_short_thread_work_unassigned(self):
+        data = capture()
+        data[0]["period_ns"] = 0
+        data.pop(2)
+        data[2]["sequence"] = 1
+        result = analyze(data)
+        self.assertEqual(result["snapshots"], 2)
+        self.assertEqual(result["sampling_period_ns"], 0)
+        self.assertAlmostEqual(result["observed_thread_cpu_ms"], 0.035)
+        self.assertAlmostEqual(result["signed_residual_minimum_ms"], 0.004)
+        self.assertEqual({row["id"] for row in result["threads"]}, {1, 2})
+
     def test_retired_and_new_threads_leave_visible_residual(self):
         result = analyze(capture())
         self.assertAlmostEqual(result["observed_thread_cpu_ms"], 0.040)
@@ -47,6 +59,8 @@ class ThreadCpuReportTest(unittest.TestCase):
         controls = [
             ("footer", lambda rows: rows.pop()),
             ("units", lambda rows: rows[0].update(cpu_unit="ticks")),
+            ("sampling period", lambda rows: rows[0].update(period_ns=-1)),
+            ("boundary capture", lambda rows: rows[0].update(period_ns=0)),
             ("reordered snapshot", lambda rows: rows[2].update(sequence=3)),
             ("clock", lambda rows: rows[2].update(before_ns=0)),
             ("enumeration", lambda rows: rows[2].update(enumerated=99)),

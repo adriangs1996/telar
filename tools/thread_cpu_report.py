@@ -21,9 +21,11 @@ def analyze(records):
     require(header.get("cpu_unit") == "microseconds" and header.get("clock") == "CLOCK_UPTIME_RAW", "incompatible units")
     require(unsigned(header.get("pid")) and header["pid"] > 0, "invalid process identity")
     require(unsigned(header.get("controlling_id")) and header["controlling_id"] > 0, "invalid controlling thread")
+    require(unsigned(header.get("period_ns")), "invalid sampling period")
     require(footer.get("type") == "footer", "missing completion footer")
     require(all(footer.get(key) == 0 for key in ("observer_error", "join_error", "end_error")), "observer failed")
     snapshots = records[1:-1]
+    require(header["period_ns"] != 0 or len(snapshots) == 2, "boundary capture contains periodic snapshots")
     require(snapshots[0].get("kind") == "begin" and snapshots[-1].get("kind") == "end", "missing begin/end")
     threads = {}
     previous = None
@@ -80,7 +82,7 @@ def analyze(records):
     observed = sum(row["cpu_ms"] for row in rows)
     require(process_minimum > 0 and process_minimum <= process_maximum, "empty process CPU interval")
     return dict(scope="Diagnostic observed thread CPU deltas, not acceptance timing. New threads contribute observed lifetime CPU; threads ending between snapshots have an unobserved tail. Completely unseen threads remain in signed process residual. Process/thread accounting is asynchronous; residuals are not exact dead-thread CPU.",
-                pid=header["pid"], controlling_id=header["controlling_id"], snapshots=len(snapshots),
+                pid=header["pid"], controlling_id=header["controlling_id"], sampling_period_ns=header["period_ns"], snapshots=len(snapshots),
                 wall_minimum_ms=(end["before_ns"] - begin["after_ns"]) / 1e6,
                 wall_maximum_ms=(end["after_ns"] - begin["before_ns"]) / 1e6,
                 maximum_snapshot_ms=max(row["after_ns"] - row["before_ns"] for row in snapshots) / 1e6,

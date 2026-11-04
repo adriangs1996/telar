@@ -33,6 +33,7 @@ static pthread_t observer;
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t condition = PTHREAD_COND_INITIALIZER;
 static bool stopping;
+static bool periodic;
 static int observer_error;
 static unsigned sequence;
 
@@ -138,7 +139,11 @@ static void *observe(void *unused) {
 }
 
 int telar_thread_cpu_begin(const char *path) {
-  if (path == NULL || output != NULL) {
+  return telar_thread_cpu_begin_sampling(path, telar_thread_cpu_periodic);
+}
+
+int telar_thread_cpu_begin_sampling(const char *path, enum TelarThreadCpuSampling sampling) {
+  if (path == NULL || output != NULL || (sampling != telar_thread_cpu_periodic && sampling != telar_thread_cpu_boundaries)) {
     return EINVAL;
   }
   output = fopen(path, "wx");
@@ -147,15 +152,16 @@ int telar_thread_cpu_begin(const char *path) {
   }
 
   stopping = false;
+  periodic = sampling == telar_thread_cpu_periodic;
   observer_error = 0;
   sequence = 0;
   uint64_t controlling_id = 0;
   pthread_threadid_np(NULL, &controlling_id);
   fprintf(output, "{\"type\":\"header\",\"version\":1,\"pid\":%d,\"controlling_id\":%" PRIu64
           ",\"period_ns\":%d,\"cpu_unit\":\"microseconds\",\"clock\":\"CLOCK_UPTIME_RAW\"}\n",
-          getpid(), controlling_id, sample_period_ns);
+          getpid(), controlling_id, periodic ? sample_period_ns : 0);
   int result = snapshot("begin");
-  if (result == 0) {
+  if (result == 0 && periodic) {
     result = pthread_create(&observer, NULL, observe, NULL);
   }
   if (result != 0) {
@@ -176,7 +182,7 @@ int telar_thread_cpu_end(void) {
   const int captured = snapshot("end");
   pthread_cond_signal(&condition);
   pthread_mutex_unlock(&mutex);
-  const int joined = pthread_join(observer, NULL);
+  const int joined = periodic ? pthread_join(observer, NULL) : 0;
   if (joined != 0) {
     return joined;
   }

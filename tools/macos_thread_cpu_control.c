@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 
 enum Work {
@@ -74,7 +75,7 @@ static void *short_worker(void *context) {
 }
 
 int main(int argc, char **argv) {
-  if (argc != 2) {
+  if (argc != 2 && (argc != 3 || strcmp(argv[2], "--boundaries") != 0)) {
     return usage_error;
   }
   pthread_setname_np("control-main");
@@ -86,7 +87,8 @@ int main(int argc, char **argv) {
   while (atomic_load(&ready) != 2) {
     sleep_milliseconds(1);
   }
-  if (telar_thread_cpu_begin(argv[1]) != 0) {
+  const int captured = argc == 3 ? telar_thread_cpu_begin_sampling(argv[1], telar_thread_cpu_boundaries) : telar_thread_cpu_begin(argv[1]);
+  if (captured != 0) {
     return capture_error;
   }
   atomic_store(&start, true);
