@@ -8,14 +8,21 @@ import shutil
 import subprocess
 
 from build_thread_cpu_probe import copy_typing_probe
+from build_tab_switch_probe import build as build_switch_probe
 
 
-def build(output, sampling=True, sample_shift=8):
+def build(output, sampling=True, sample_shift=8, workload='typing'):
     if type(sample_shift) is not int or not 0 <= sample_shift <= 12:
         raise ValueError('Invalid heap sampling shift')
+    if workload not in ('typing', 'tabs'):
+        raise ValueError('Unsupported heap diagnostic workload')
     directory = Path(output).resolve()
     source = Path(__file__).resolve().parent
-    copy_typing_probe(directory, source)
+    if workload == 'tabs':
+        build_switch_probe(directory)
+        (directory / 'build.json').rename(directory / 'base-build.json')
+    else:
+        copy_typing_probe(directory, source)
     for name in ('heap_stack_census.h', 'heap_stack_census.c'):
         shutil.copy2(source / name, directory / name)
     path = directory / 'gui_tui_latency.m'
@@ -100,7 +107,7 @@ static NSDictionary *heap_stack_json(void) {
             subprocess.run(command, check=True, stdout=log, stderr=subprocess.STDOUT)
     shutil.copy2(__file__, directory / Path(__file__).name)
     (directory / 'build.json').write_text(json.dumps(dict(
-        sampling=sampling, sample_shift=sample_shift, commands=commands,
+        workload=workload, sampling=sampling, sample_shift=sample_shift, commands=commands,
         scope='Diagnostic only. Pair sampling with counts-only to assess observer interference; both include native probe work.',
         sha256={file.name: hashlib.sha256(file.read_bytes()).hexdigest() for file in directory.iterdir() if file.is_file()},
     ), indent=2) + '\n')
@@ -112,5 +119,6 @@ if __name__ == '__main__':
     parser.add_argument('output', type=Path)
     parser.add_argument('--counts-only', action='store_true')
     parser.add_argument('--sample-shift', type=int, default=8)
+    parser.add_argument('--workload', choices=('typing', 'tabs'), default='typing')
     options = parser.parse_args()
-    print(build(options.output, not options.counts_only, options.sample_shift))
+    print(build(options.output, not options.counts_only, options.sample_shift, options.workload))

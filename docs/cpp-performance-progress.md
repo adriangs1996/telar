@@ -11221,3 +11221,60 @@ the experiment prefix. Only this report is retained. No complete flow or native1
 requirement is closed, and the goal remains active. Next investigation: measured
 allocation sites during tab switching, distinguishing framework/model conversion
 and text rebuild work before selecting another reuse algorithm.
+
+## 2026-11-04: tab-switch heap samples identify ancestor reconnection work
+
+On `ef3281c42`, `out-perf/dlls-tab-heap-sites-01` extends the existing private
+heap probe builder with `--workload tabs`, retaining typing as the default. It
+reuses the current tab packet/phase/producer harness and the unchanged six-API
+heap observer. Both counts-only and sampled libraries pass exact API totals,
+errno, stack-site, disabled-sampling, fork exclusion, threading and capacity
+controls. The typing build remains supported and the three report tests pass.
+The accepted GUI `bc55d0e8`, runtime `1f1849d1`, helper and Qt are not rebuilt.
+
+The first capture attempt fails during warmup, before observation begins. The
+live-switch capture sentinel remains on tab0, making its packet undecodable on
+return. This is an unsupported harness combination, not a product regression or
+heap measurement. Deterministic ordinary four-tab captures with the same observer
+instead pass exactly against the accepted reference. The first100-switch sampled
+run at1/256 records8192 stacks and overflows by2077; its partial attribution is
+excluded. Both initial attempts and successful owned shutdowns are retained.
+
+The final configuration uses1/512 sampling with the unchanged8192-record/24-frame
+bounds. All four final libraries (typing/tabs, counts/sampled) pass the control
+program. `/tmp/telar-perf-tab-heap-pixels-03` passes both deterministic captures;
+`/tmp/telar-perf-tab-heap-sites-02` completes two diagnostic100-input runs after20
+warmups, four30Hz producers,1600×1000/scale2,82×21, optical JBM15. Native content,
+producer rate/phase, loaded Qt images, resource observations and all nine owned
+shutdowns across the attempts pass. Final pixels/sites each pass six host
+boundaries, maximum load1=2.58057/2.36035. No own build/test overlaps collection.
+
+| Measured interval diagnostic | Counts-only | Sampled |
+|---|---:|---:|
+| Successful observed allocation calls | 2,628,813 | 2,618,220 |
+| Requested bytes, cumulative | 886,699,766 | 885,420,133 |
+| Recorded allocation stacks | 0 | 5,052 |
+| Stacks reaching depth24 | 0 | 3,141 |
+
+These are API-request totals, not live memory, CPU attribution or timing wins.
+Instrumentation serializes observation and includes native-probe/framework work;
+no difference between the two runs estimates an optimization benefit. Source,
+stages, configured GUI and the four pending runtime files verify unchanged.
+
+Inclusive sample categories overlap:2157 contain QV4,1884 QVariant-map operations,
+1046 Metal binding batches,427 ListModel,220 Application::refresh,186 ChromeScene,
+180 TerminalScene and178 TextScene. Limited stack depth prevents exhaustive
+ancestor attribution. First non-wrapper allocation sites include1133 QArrayData
+allocations and1121 map-node insertion samples. No rejected typed-tab, retained
+pane or Qt binding variant is revived by these counts.
+
+A distinct application lead has564 samples through AncestorGeometry::observe:
+515 arrive via its ancestor parentChanged callback,33 from NativeChromeText's own
+parent change,9 from NativeTabActivity and7 from NativeRoundedRectangle. Recorded
+stacks show QQmlObjectCreator/Repeater hierarchy construction. Source currently
+disconnects all eight signals for every ancestor and reconstructs the entire
+chain on each such callback, even when the nearest part of the chain remains
+unchanged. This establishes repeated reconnection allocation, not its CPU share.
+The next isolated hypothesis retains connections for the unchanged near-ancestor
+prefix and rebuilds only the changed suffix. It needs lifecycle/reparenting and
+pixel oracles before ordinary timing; the full goal remains active.
