@@ -10827,3 +10827,78 @@ A row-local cache keyed by complete style and selection could skip repeated
 conversion without changing scene-graph organization. Theme lifetime, semantic
 CellColor equality, selection boundaries and faint application need independent
 oracles; executed work and native timing remain unmeasured for this hypothesis.
+
+
+## 2026-11-04: row-local resolved-color cache rejected
+
+On source `68914a599`, `out-perf/dlls-row-color-cache-01` tests a row-local cache
+of resolved foreground/background colors. Accepted GUI `bc55d0e8`, runtime
+`1f1849d1`, helper `87beebb0` and original Qt remain A. Final B GUI is
+`0c53bf227d4e513385cc398f6c8b5475449fb650458984eed0903bc1de650383`.
+No background-mesh changes are included. The candidate keeps the original scene
+nodes and drawing order and keys the cache by complete semantic CellStyle plus
+selection. Misses retain the original resolve→inverse/selection→faint arithmetic.
+The cache is constructed anew for each paintRow, so theme changes cannot reuse
+an entry from a previous frame. The text fallback uses the same row-local cache.
+
+The new independent scene oracle resolves each cell without caching, then builds
+a reference row using explicit palette colors and no inverse/faint/selection.
+Reference palette indices differ per cell, preventing the same cache hit from
+masking an error. It covers default, RGB, palette, indexed cube and indexed gray
+colors; repeated styles; precise translucent palette values; faint and inverse;
+three selection states crossing equal-style neighbors; and palette changes across
+five row variants. Standard and optical text modes each compare15 captures per
+backend,30 total. The negative variant omits selection from the cache key and
+fails both text modes on Metal. A and final B pass the oracle on software/Metal;
+B passes all51 scene cases on both backends.
+
+Initial lint leads to a simpler uncached reference helper and explicit expression
+parentheses. Before any native timing, the candidate interface is also revised to
+return resolved colors directly, avoiding initialization followed by overwrite
+and the empty designated-initializer lint diagnostics. All final production and
+oracle lint pass, followed by repeated complete scene checks and negative control.
+Initial source/build/log variants remain separate and contribute no native timings.
+
+ARM disassembly confirms a hit tests validity/selection and calls semantic style
+equality, then skips the resolution block. It also outlines cellRun and adds a
+style-equality call on the hit path: avoided conversion does not imply free lookup.
+Actual-TU x86 baseline/v3 compilation succeeds. These are generated-code findings,
+not executed hit counts, CPU attribution or whole-GUI x86/Linux validation.
+
+`/tmp/telar-perf-row-color-cache-pixels-01` qualifies six native TUI/single/split
+PNGs, byte-exact against accepted references. `...-tui-01` qualifies six alternating
+100-input pairs after20 warmups, unchanged optical JBM15,1600×1000/scale2 and82×21
+cells. No own builds/tests/profiles overlap ordinary timing. The frozen co-primary
+TUI p95 and GUI CPU gate still requires at least5/6 improvements in each.
+
+| TUI metric | Accepted A | Cached B | B lower pairs |
+|---|---:|---:|---:|
+| p50 ms | 28.825 | 28.829 | 3/6 |
+| p95 ms | 36.932 | 37.808 | 1/6 |
+| p99 ms | 41.579 | 41.732 | 1/6 |
+| Maximum ms | 44.101 | 48.210 | 1/6 |
+| GUI CPU ms/input | 5.061 | 4.960 | 4/6 |
+| GUI peak RSS MiB | 222.742 | 217.617 | 5/6 |
+| Runtime CPU ms/run | 99.472 | 99.287 | 4/6 |
+
+Both primary targets fail; p95, p99 and maximum latency also regress consistently.
+B is rejected and further ordinary regression controls are not run. The cause is
+not established. Added helper calls are an observed codegen difference, not a
+proven explanation or a placement exemption. Lower RSS is not the rejection reason.
+Runtime CPU covers setup/warmup/final readback as before, excludes runtime startup,
+shutdown and child CPU, and is not summed with GUI CPU. Full instructions/cycles
+remain in table.json.
+
+Pixels pass14 host boundaries, maximum load1=2.44434; TUI passes26, maximum4.07813.
+All18 owned runtime/child shutdowns, loaded-Qt receipts and resource observers
+pass. Frozen binaries, accepted production source/build and the four pending
+runtime files are unchanged. Only the independent color oracle and this report
+are retained; all F01–F16/native120 acceptance remains open and the goal is active.
+
+A separate next lead avoids dynamic cache lookup entirely: the accepted ARM
+paintRow listing contains runtime scalar color-channel divisions. Color::rgb
+normalizes each byte by255. A compile-time256-entry float table would use1KiB of
+read-only storage to precompute that finite domain while retaining exact division
+results. Exhaustive channel-bit equivalence, alpha preservation, cross-architecture
+lowering and fresh native timing are required before treating it as an optimization.
+No such table is implemented or accepted in this pass.

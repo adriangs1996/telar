@@ -145,6 +145,21 @@ BackgroundRow backgroundRow(BackgroundPattern pattern, Color first_color) {
   return row;
 }
 
+std::pair<Color, Color> resolvedCellColors(const Theme &theme, const CellStyle &style, bool selected) {
+  auto foreground = theme.resolve(style.foreground, theme.foreground);
+  auto background = theme.resolve(style.background, theme.background);
+  if (hasAttribute(style, CellAttribute::inverse) != selected) {
+    std::swap(foreground, background);
+  }
+
+  if (hasAttribute(style, CellAttribute::faint)) {
+    constexpr float faint_opacity = 0.5F;
+    foreground.a *= faint_opacity;
+  }
+
+  return {foreground, background};
+}
+
 LinkTarget requireLinkTarget(std::string_view text) {
   const auto target = LinkTarget::fromUri(text);
   if (!target) {
@@ -1214,6 +1229,59 @@ private:
 
         reference.referenceBackgrounds(row.rectangles);
         QVERIFY2(actual.capture() == reference.capture(), "Mixed background colors must preserve independent rectangle geometry, precision, opacity and order");
+      }
+    }
+  }
+
+  // NOLINTNEXTLINE(readability-identifier-naming): Qt requires the _data suffix.
+  Q_SLOT static void cellColorsMatchExplicitPaletteColors_data() {
+    QTest::addColumn<bool>("optical");
+    QTest::newRow("standard") << false;
+    QTest::newRow("optical") << true;
+  }
+
+  Q_SLOT static void cellColorsMatchExplicitPaletteColors() {
+    QFETCH(const bool, optical);
+    constexpr auto faint = static_cast<std::uint16_t>(CellAttribute::faint);
+    constexpr auto inverse = static_cast<std::uint16_t>(CellAttribute::inverse);
+    constexpr Color precise_color{.r = 0.12345F, .g = 0.65789F, .b = 0.30001F, .a = 0.7F};
+    constexpr std::array<Byte, 1> text{'M'};
+    constexpr std::array<CellColor, 5> colors{
+        CellColor{.kind = CellColor::Kind::default_color},
+        CellColor{.kind = CellColor::Kind::indexed, .channels = {1}},
+        CellColor{.kind = CellColor::Kind::indexed, .channels = {196}},
+        CellColor{.kind = CellColor::Kind::indexed, .channels = {244}},
+        CellColor{.kind = CellColor::Kind::rgb, .channels = {20, 220, 200}},
+    };
+    constexpr std::array<std::uint16_t, 4> flags{0, faint, inverse, faint | inverse};
+    constexpr std::array selections{no_selection, CellSelection{.anchor = 1, .head = 4}, CellSelection{.anchor = 0, .head = 7}};
+    SceneFixture actual{CursorShape::block, false};
+    SceneFixture reference{CursorShape::block, false};
+    actual.setFontRendering(optical, FontConfiguration::maximum_thicken_strength);
+    reference.setFontRendering(optical, FontConfiguration::maximum_thicken_strength);
+    Theme theme;
+    theme.foreground = cursor_color;
+    theme.background = background_color;
+    for (std::size_t variant = 0; variant < colors.size(); ++variant) {
+      theme.palette[1] = variant % 2 == 0 ? precise_color : background_blue;
+      actual.setPaletteColor(1, theme.palette[1]);
+      for (const auto selection : selections) {
+        std::array<Cell, background_columns> cells;
+        std::array<Cell, background_columns> expected;
+        for (std::size_t column = 0; column < cells.size(); ++column) {
+          const auto index = ((column / 2) + variant) % colors.size();
+          const CellStyle style{.flags = flags[column / 2], .foreground = colors[index], .background = colors[(index + 1) % colors.size()]};
+          cells[column] = {.style = style, .text = text};
+          const auto [foreground, background] = resolvedCellColors(theme, style, selection.contains(column));
+          reference.setPaletteColor(2 * column, foreground);
+          reference.setPaletteColor((2 * column) + 1, background);
+          expected[column] = {.style = {.foreground = {.kind = CellColor::Kind::indexed, .channels = {static_cast<Byte>(2 * column)}}, .background = {.kind = CellColor::Kind::indexed, .channels = {static_cast<Byte>((2 * column) + 1)}}}, .text = text};
+        }
+
+        actual.setCells(cells, {.visible = false});
+        actual.select(selection);
+        reference.setCells(expected, {.visible = false});
+        QVERIFY2(actual.capture() == reference.capture(), "Resolved cell colors must match explicit colors across style, selection, faint and palette changes");
       }
     }
   }
