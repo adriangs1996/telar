@@ -8086,3 +8086,83 @@ All five production/test source files are restored to their original hashes.
 Regenerating the raw QML resource and PaneArea AOT cache reproduces accepted GUI
 `a88e53a8` byte exactly. The restored three component tests and two native
 viewport/tab-palette checks pass; `restoration.json` records the final state.
+
+## Bounded caption measurement cache: work avoided, target rejected, 2026-11-04
+
+A separate experiment on `15c6e9b5a` starts from accepted GUI `a88e53a8` and
+runtime `1f1849d1`, without any withdrawn pane/model variant. It keeps one caption
+measurement per existing tab slot (maximum 64), keyed by exact text and display
+scale, and clears entries on font/pixel-size/model/context changes. Only successful
+bundled-font measurements are cached; fallback font measurements remain fresh.
+Labels longer than 4096 UTF-16 code units are measured fully and left uncached.
+Retained strings are compact copies, so a short QString with a large reserved
+backing allocation cannot defeat the bound. This uses up to 512 KiB of label data
+plus 64 entries/allocator overhead, rather than retaining arbitrary label storage.
+Full source/binaries/contracts are in `out-perf/dlls-tab-caption-cache-01`.
+B GUI is `e3a08dead9648a7d4dd63b333be704ea6aece6f547a36704a4fc964baffb03fb`.
+
+A fresh-instance oracle is prepared before caching, then passes with caching
+across all 64 slots, repeated/renamed/empty/long labels, combining sequences,
+Arabic/CJK/emoji, regular/bold fonts, two pixel sizes and five scale transitions.
+A separate capacity test checks oversized QString reserves, uncached long labels,
+font-size invalidation and uncached CJK fallback. Fifteen native Cocoa/Metal cases
+pass on final production code; rebuilt chrome/tab-activity scene tests and full
+settled PNG equality for single/splits/tabs also pass. Focused clang-tidy passes
+after new nesting, parameter-order and test-constant corrections. An unchanged
+101-line rebuild warning is recorded and excluded from the changed-line scope.
+No x86/Linux GUI execution or placement exemption is claimed.
+
+A private instrumented B run with 100 actions passes target content, generation,
+checksum, offered-rate and initial-phase checks. Across GUI lifetime including
+startup and warmup, it counts 6098 caption requests: 6089 hits, 9 conversions and 9
+shaping calls, with no fallback. These are operation counts, not allocation
+counts or timing evidence. ARM64 disassembly confirms that a hit checks occupancy,
+scale and exact QString equality before loading the saved float and returning
+without conversion/coverage/shaping. After this diagnosis, the configured GUI is
+rebuilt without counters and matches frozen B byte exactly before timed runs.
+
+`/tmp/telar-perf-tab-caption-cache-pairs-01` contains six alternating native pairs,
+100 measured plus 20 warmup actions, four independent 30 Hz producers and matched
+82x21 grids. All 26 host boundaries qualify, maximum load 4.05126953125; every
+content/rate/phase and runtime-cleanup check passes. Source and binaries remain
+frozen, with no owned build/test/profile overlap. Median per-run results:
+
+| Target metric | A | B | B wins |
+|---|---:|---:|---:|
+| p50, ms | 42.278 | 44.829 | 2/6 |
+| p95, ms | 48.484 | 48.293 | 2/6 |
+| p99, ms | 49.178 | 49.192 | 3/6 |
+| maximum, ms | 49.587 | 49.290 | 3/6 |
+| GUI CPU, ms/action | 29.066 | 30.171 | 2/6 |
+| GUI lifetime peak RSS, MiB | 200.664 | 193.555 | 3/6 lower |
+
+Separate runtime counters bracket GUI startup/warmup/measurement and exclude child
+CPU. Runtime CPU is 379.437 → 402.966 ms/run (1/6), and final footprint is 18.454 →
+18.766 MiB (1/6 lower). Neither this broader interval nor memory snapshots are
+summed with GUI measurement CPU or lifetime RSS. Their raw identities, timebase,
+source hashes and qualified existing resource observer are retained.
+
+**Rejected:** target GUI CPU and p95 each win 2/6 instead of the required 5/6.
+Avoided shaping is proven but whole-flow improvement is not; the cause of the
+CPU/latency outcome remains unestablished. No additional typing or independent
+Zig adoption series is run for this rejected source. The next diagnostic counts
+baseline rebuilds without intervening input invalidation, to assess whether
+reusing an entire layout plan during animation could avoid more work. This is a
+new hypothesis, not acceptance of this caption-only cache. Full F01–F16 and
+continuous native120 remain open; the unlimited goal stays active.
+
+The independent baseline diagnostic subsequently qualifies 100 actions and counts
+1565 rebuilds, of which 1428 follow no intervening source-input polish request;
+278 input-invalidating requests and 5990 caption calls occur across its full GUI
+lifetime. Animation sampling/afterAnimating polish requests intentionally do not
+mark the input dirty. This is notification-based classification, not proof that
+external font-catalog changes are covered. The record is `baseline-census.json`
+and `/tmp/telar-perf-tab-layout-invalidation-census-01`; all diagnostic timing is
+excluded and the owned runtime cleanup completes. About 91% of rebuilds therefore
+offer a concrete next investigation into reusing layout inputs during animation,
+with explicit model/font/scale/drag/context invalidation and visual oracles.
+
+Restoration verifies all three original source hashes and reproduces accepted
+GUI `a88e53a8` byte exactly. Restored chrome/tab-activity scene tests and native
+viewport/tab-drag cases pass. The final receipt is `restoration.json`; unrelated
+runtime pacing work remains untouched.
