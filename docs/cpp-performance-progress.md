@@ -6291,3 +6291,47 @@ establish how much of the preceding timing loss it caused. New measurements
 put singleton and empty controls first and retain every other control and the
 prospective larger-runtime per-case/tail criteria. Accepted production code
 remains unchanged; F01–F16 and independent Zig/native120 gates remain open.
+
+## Trivial-range guard: shuffled heap control rejects, 2026-11-04
+
+`out-perf/dlls-history-natural-merge-03` adds a caller-side candidate-count guard
+before natural merging. ARM64 emits a range-length comparison before the call
+at `0x100004f68`; zero/one candidates skip the helper and its stack frame.
+The helper source is byte-identical to variant02, whose 46,490-case Release
+and sanitized helper oracle is explicitly reused in `helper-validation-reuse.json`.
+Fresh independent query-level reference/exact checks pass 936 evaluations.
+Fresh 13,312- and 6,912-entry allocation/scoped/sanitized checks pass, with
+the same calls/bytes/peaks and recovered failures as variant02. Fresh x86
+baseline/v3 checks and History/HistoryQueue/HistoryCapacity tests also pass.
+Runtime B builds as
+`11fcd220b6effdb73a19659d4296f2ace5a2b74f8053e485a794a58d454d0578`,
+but is not timed after rejection. Accepted A remains byte-exact.
+
+Seven complete alternating-pair component series have 210 qualified host
+boundaries, maximum load1 2.717773, with 300 queries/execution and
+exact responses. No owned build/test overlaps timing.
+
+| Component | A CPU ms | B CPU ms | CPU / mean / p95 wins |
+| --- | ---: | ---: | --- |
+| small-distinct | 0.008863 | 0.008850 | 5 / 5 / 4 |
+| empty-distinct | 0.013413 | 0.013307 | 4 / 4 / 3 |
+| shuffled | 1.389083 | 1.070950 | 7 / 7 / 7 |
+| shuffled-distinct | 1.702927 | 1.352600 | 7 / 7 / 7 |
+| shuffled-heap-all | 2.179997 | 2.172530 | 5 / 5 / 4 |
+| shuffled-heap-distinct | 2.525577 | 2.534550 | 4 / 4 / 4 |
+| shuffled-heap-GST | 2.565447 | 2.567157 | 1 / 1 / 1 |
+
+Singleton no longer loses consistently and both nonheap shuffled targets win
+7/7, but shuffled-heap GST CPU, mean and p95 each win only 1/7. Median CPU
+increases by just 1,710 ns (about 0.067%); the small magnitude is retained
+alongside the adverse win count. The declared rule rejects the variant. The
+remaining fourteen component series, full runtime and native checks are
+unmeasured. No repeat is used to fish for a passing result, and identical
+whole-query normalized code has not been established for a placement exemption.
+
+The next algorithmic candidate consumes the already valid top-k heap with
+`std::sort_heap` and a local typed comparator, instead of introsorting the
+heap array. It retains natural runs for nonheap inputs and the trivial guard.
+This seeks less repeated ordering work on the failing path; comparison counts,
+record movement, exact results and paired performance must be checked afresh.
+Production acceptance and all F01–F16/independent Zig/native120 gates remain open.
