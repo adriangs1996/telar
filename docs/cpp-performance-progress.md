@@ -10149,3 +10149,65 @@ the candidate is not promoted. The next investigation should measure publication
 and GUI work directly rather than adding another unconditional event-loop batch.
 Allocation/copy/conversion hypotheses and memory-for-work tradeoffs remain in
 scope, as do all F01–F16/native120 requirements and the unlimited active goal.
+
+## 2026-11-04 — Measured transport-copy volume, not per-message allocation
+
+The next diagnostic examines the allocation/copy hypothesis at GUI `FrameStream`.
+Its retained vector copies every received payload before synchronous consumption,
+including bodies already contiguous in the input buffer. Capacity reuse is visible
+in source; it does not establish whether actual workloads grow that capacity.
+`out-perf/dlls-frame-stream-copy-01` adds six private counters to the existing
+legacy-Metal measured-interval census: payloads, payload bytes, bodies complete
+when their prefix finishes, their bytes, inserted bytes, and capacity increases.
+No borrowing optimization or production semantic change is implemented.
+
+The private GUI is built from `ccae2b908` with the unchanged accepted runtime
+`1f1849d1`, LLVM23.1.4 and the existing Qt6.12 Release configuration. A weak
+counter import requires an explicit Darwin dynamic-lookup link option; the first
+link failure is retained. The production header is restored in a `finally` block,
+and the subsequent ordinary GUI rebuild is byte-identical to accepted `bc55d0e8`.
+The exact diagnostic executable/probe hashes, source hooks and link command are
+in `census-build.json`, `frame-stream-census.hpp` and `link-census.txt`.
+
+The counter oracle exercises all1,275 three-chunk partitions of three differently
+sized messages. It independently checks received bytes and message count, summed
+copy bytes, and the intervals whose bodies are complete in the same chunk that
+finishes their prefix. A prefix ending exactly at a chunk boundary is deliberately
+not counted as that opportunity. Final controls pass on ARM, x86-64 under Rosetta,
+and ARM ASan/UBSan. Explicit non-elidable checks are used; corrupting a copy count
+fails each executable with status1. Earlier runs inherited `NDEBUG` and are not
+used as oracle evidence. Commands and final positive/negative results are retained
+in `control-commands.json` and `control-final.log`.
+
+`/tmp/telar-perf-frame-stream-pixels-01` compares accepted and instrumented GUI
+captures for TUI, single typing and four splits. All six settled full-window PNGs
+match the accepted references byte-for-byte. The subsequent diagnostic in
+`/tmp/telar-perf-frame-stream-counts-01` runs100 measured inputs plus20 warmups for
+each GUI/case, with optical JBM15 and1600×1000 at scale2. The source counters are
+all zero in the unmodified GUI, the absent-hook control; the instrumented GUI
+reports:
+
+| Case | Transport payloads | Payload/copied bytes | Complete bodies at prefix completion | Capacity increases | Metal commits |
+|---|---:|---:|---:|---:|---:|
+| TUI | 111 | 143,506 | 111 | 0 | 111 |
+| Single typing | 103 | 8,554 | 103 | 0 | 103 |
+| Four splits | 104 | 8,572 | 104 | 0 | 105 |
+
+Every copied body is contiguous at the recorded decision point, so a borrowing
+fast path could avoid that volume. However, the observed totals are only1,435
+bytes/input for this TUI and about86 for typing, and no vector-capacity increase
+occurs inside these intervals. This directly rules out repeated payload-vector
+growth in these runs, not allocations elsewhere in Qt or the whole application.
+The counters count all transport messages, not only terminal frames. Equal message
+and commit totals do not prove a one-to-one relationship or establish publication
+causality. The counters add calls and locks; these runs establish no timing gain,
+CPU attribution, Zig-stack advantage or continuous-refresh acceptance.
+
+Both series qualify all14 host boundaries, with maximum load1 2.92773 and2.28711.
+All12 owned runtime/child shutdowns pass. Accepted executables, production source
+and the four pending runtime hashes are verified intact in `validation.json`.
+The borrowing lead is lower priority on this measured volume; no candidate is
+promoted or declared performance-rejected without ordinary timing. The next heap
+diagnostic should reuse the existing six-API observer and add allocation-site
+attribution plus a probe-overhead control, rather than repeating aggregate counts.
+All complete-flow and native120 requirements remain open and the goal stays active.
