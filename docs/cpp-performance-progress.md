@@ -6970,3 +6970,40 @@ This comparison uses independently checked result templates for each renderer;
 it does not close optical/ranking parity, instrumentation perturbation, cold
 queries, inspection, scrolling or native120. The complete F01–F16 goal remains
 active. The observed warm F12 loss is now an explicit optimization target.
+
+
+## Zero-delay history dispatch rejected on live capture, 2026-11-04
+
+`out-perf/dlls-history-immediate-query-01` changes only the GUI history timer
+from 60 ms to a zero-delay single shot. Private GUI `abffa8d6` builds, and the
+existing bounded-request/stale-failure history oracle passes. The original
+36-case native cohort passes 35 cases but fails
+`historyInspectionTracksTabRenamingAndPaneClosure`: after a command prints its
+marker and the test sends Ctrl-U, the first history query never returns its
+expected single row. No performance series or capture adoption follows this
+functional failure.
+
+The unchanged case fails again in isolation. A separate diagnostic run records
+a ready, error-free empty first result, observes the matching command in the
+owned temporary SQLite database, and obtains the expected row with a second
+query. That diagnostic adds logging and a post-failure requery only in a backed-up
+test copy; it is not a passing oracle or a production fix. Both diagnostic edits
+and the timer change are removed. The rebuilt GUI is byte-exact to accepted
+`a88e53a8`, and the original isolated case then passes all three checks in
+1.512 seconds. Original failure logs and all database observations remain saved.
+
+Source inspection identifies a relevant asynchronous boundary: pane input/output
+observation runs through `ObservationWorker`; `PaneObserver` later submits
+`command_finished` persistence to the history worker. `Runtime::handle(QueryHistory)`
+submits directly to that worker. FIFO ordering covers already-submitted history
+jobs, but does not itself wait for an observation that has not submitted its
+capture event yet. This is consistent with the observed failure; exact inter-worker
+ordering has not yet been traced. The fixed wait cannot simply be removed while
+claiming preserved live-history behavior.
+
+The next investigation needs a deterministic observation/query ordering oracle
+and bounded, nonblocking coordination of relevant pending capture work. Existing
+deferred-report ownership patterns are a source lead, but pausing reads on the
+interactive GUI connection would also delay terminal input and must not be copied
+blindly. The existing native test remains unchanged. No speedup or scheduling
+candidate is adopted; the all-flow objective remains active.
