@@ -1164,14 +1164,30 @@ private:
     }
   }
 
+  // NOLINTNEXTLINE(readability-identifier-naming): Qt requires the _data suffix.
+  Q_SLOT static void mixedBackgroundColorsMatchIndependentRectangles_data() {
+    QTest::addColumn<bool>("mixed");
+    QTest::newRow("opaque-overlap") << false;
+    QTest::newRow("mixed-precision-and-alpha") << true;
+  }
+
   Q_SLOT static void mixedBackgroundColorsMatchIndependentRectangles() {
+    QFETCH(const bool, mixed);
     constexpr qreal cell_height = 21;
-    constexpr std::array colors{
+    constexpr Color precise_color{.r = 0.12345F, .g = 0.65789F, .b = 0.30001F};
+    constexpr float translucent_alpha = 0.5F;
+    constexpr std::array opaque_colors{
         Color::rgb(0xdc3020),
-        Color{.r = 0.12345F, .g = 0.65789F, .b = 0.30001F},
-        Color::rgb(0x2040dc, 0.5F),
+        Color::rgb(0xdc8020),
+        Color::rgb(0x2040dc),
         Color::rgb(0x20dc40),
     };
+    auto colors = opaque_colors;
+    if (mixed) {
+      colors[1] = precise_color;
+      colors[2].a = translucent_alpha;
+    }
+
     SceneFixture actual{CursorShape::block, false};
     SceneFixture reference{CursorShape::block, false};
     auto row = backgroundRow(BackgroundPattern::wide_overlap, colors.front());

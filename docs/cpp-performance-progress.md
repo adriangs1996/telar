@@ -10660,3 +10660,91 @@ report no errors. `validation.json` checks accepted production source/executable
 frozen stages, framework receipts and all four untouched pending runtime hashes.
 Only the independent mixed-color oracle and report are retained. All F01–F16 and
 native120 acceptance requirements remain open and the goal stays active.
+
+
+## 2026-11-04: overlap-safe opaque background meshes rejected under load
+
+On source `4ced947dd`, `out-perf/dlls-opaque-background-mesh-01` tests explicit
+opaque classification for the earlier per-vertex background mesh. Accepted GUI
+`bc55d0e8`, runtime `1f1849d1`, helper `87beebb0` and original Qt remain A;
+B GUI is `382c3e5e694cf352a08303b2a88c6af1349c5b43d2ca7a455eaaac605467a4d0`.
+The production source and main GUI build are restored to A before native timing.
+
+Qt's opaque pass writes depth with a strict Less comparison. Putting overlapping,
+differently colored rectangles at one mesh depth can therefore change their order.
+The independent mixed-color oracle now also exercises an entirely opaque palette,
+with wide/continuation overlap, widths9/9.2/9.1 and parent opacity1/0.5. Each backend
+compares twelve captures against independent original rectangles. A deliberately
+unconditional opaque mesh fails the opaque-overlap row while passing the mixed
+precision/alpha row. B detects overlap using the actual emitted float left/right
+coordinates and retains blending for overlapping groups. Exactly opaque byte-color,
+software, precision and alpha eligibility rules otherwise match the preceding mesh.
+
+The expanded oracle passes A and B on software/Metal, and B passes all48 scene
+cases on both backends. Initial oracle lint rejects Qt's required data suffix,
+mutable QFETCH and unnamed literals; a scoped Qt naming annotation, const fetch
+and named constexpr palette values resolve those diagnostics. Final oracle lint,
+production lint and repeated negative control pass. No oracle is weakened.
+ARM disassembly shows scalar float comparisons for overlap/right-edge tracking
+and the overlap Boolean passed to QSGMaterial::setFlag; indirect symbols resolve
+the setFlag and memmove stubs. Actual-TU x86 baseline/v3 compilation passes and
+shows scalar ucomiss comparisons. These are codegen checks, not whole-GUI x86 or
+Linux execution or a claim of measured savings on those targets.
+
+`/tmp/telar-perf-opaque-background-pixels-01` qualifies all six native TUI,
+single-pane and four-split captures, byte-exact against A and accepted references.
+`...-tui-01` qualifies six alternating100-input pairs after20 warmups, using the
+unchanged optical JBM15,1600×1000/scale2,82×21 setup. No own build, test, profiler
+or census overlaps ordinary timing. The frozen co-primary gate requires at least
+5/6 improvements in both TUI p95 and GUI CPU, then regression controls.
+
+| TUI metric | Accepted A | Mesh B | B lower pairs |
+|---|---:|---:|---:|
+| p50 ms | 28.826 | 26.785 | 5/6 |
+| p95 ms | 37.545 | 34.810 | 5/6 |
+| p99 ms | 44.380 | 41.448 | 3/6 |
+| Maximum ms | 48.271 | 45.498 | 3/6 |
+| GUI CPU ms/input | 4.850 | 4.150 | 6/6 |
+| GUI peak RSS MiB | 221.656 | 215.195 | 4/6 |
+| Runtime CPU ms/run | 99.027 | 100.898 | 4/6 |
+
+The primary gate passes. Fixed-rate four-split load is checked next because it
+rejected an earlier Qt candidate. `...-load-01` is excluded in full: its final A
+run has producer intervals around0.109–0.112MiB/s instead of0.125MiB/s, outside
+the unchanged5% tolerance. Host observations themselves remain below limits;
+the rate failure's cause is not established. No eleven-run aggregate is used.
+`...-load-02` repeats all six pairs and qualifies every producer interval.
+
+| Four-split load metric | Accepted A | Mesh B | B lower pairs |
+|---|---:|---:|---:|
+| p50 ms | 30.859 | 31.930 | 1/6 |
+| p95 ms | 37.349 | 37.317 | 5/6 |
+| p99 ms | 38.354 | 39.653 | 1/6 |
+| Maximum ms | 38.785 | 41.092 | 1/6 |
+| GUI CPU ms/input | 20.553 | 20.408 | 2/6 |
+| GUI peak RSS MiB | 205.313 | 191.500 | 4/6 |
+| Runtime CPU ms/run | 1195.192 | 1202.975 | 3/6 |
+
+The consistent p50/p99/maximum regressions reject B despite the TUI improvement.
+Their cause is not established; there is no placement exemption. RSS is not the
+rejection reason. Remaining ordinary single/split/tab controls are not run after
+this rejection. Runtime CPU windows include GUI setup, warmup and final readback,
+exclude runtime startup/shutdown and child CPU, and are not summed with GUI CPU.
+Full instructions/cycles and pair data remain in table.json and load-table.json.
+
+A separate identical-instrumented-Qt census, `...-census-01`, uses QtGui `def5afd2`
+for both apps,100 inputs after20 warmups and200ms initial capture wait. All four
+A/B PNGs match. TUI A has111 commits/4867 vertex-input calls/9734 bindings; B has
+117/4187/8374. Four splits have105/4200/8400 versus103/4120/8240: exactly40 calls
+per commit for both, so the preceding candidate's extra split call is absent.
+Unchanged and offset-only cache hits remain zero. The TUI commit counts differ;
+call totals include inter-input work and do not prove per-frame equivalence,
+GPU draw counts, CPU attribution, continuous cadence or the cause of load latency.
+
+Qualified host boundaries/max load1 are14/3.92188 for pixels,26/3.60742 for TUI,
+26/4.46143 for repeated load and10/3.04199 for census. The excluded load series
+has25 boundaries, maximum3.07373 and no completed eligibility receipt. All46
+owned runtime/child shutdowns, framework receipts and resource observers pass.
+Validation verifies frozen binaries, restored accepted production source/build
+and all four untouched pending runtime files. Only the expanded overlap oracle
+and this report are retained. All F01–F16 and native120 acceptance remains open.
