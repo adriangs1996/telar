@@ -9046,3 +9046,134 @@ runtime sources remain untouched. The next experiment will test separating cold
 glyph admission from the hot lookup while retaining bounded mask reuse; it must
 pass fresh oracles and all paired controls. F01–F16/native120 remain open and the
 unlimited goal remains active.
+
+## Cold glyph admission rejected; reuse verified in the application, 2026-11-04
+
+`out-perf/dlls-optical-glyph-cold-admission-01` rechecks HEAD `b5397f318`, accepted
+GUI `bc55d0e8` and the preserved runtime work before applying another candidate.
+It retains the separate bounded optical-mask store but moves cache-miss admission
+into a non-inlined `loadGlyph` method taking the existing glyph request type.
+The common key/lookup path can then inline into its caller. This tests a different
+call structure; it does not assume that the prior typing losses were caused by
+register saves or code placement.
+
+The first build command sees an unknown new test target because the restored
+CMake cache has not regenerated; a concurrent initial lint matches zero files and
+is not validation. Explicit reconfiguration and current candidate timestamps then
+force all affected translation units, including application and terminal item, to
+rebuild. Final staged B is
+`7f3e3323d72a54522c2efb7a04715d6463855a2c738588e91370776e7aa6c10a`.
+Four focused tests (including 432 optical reference rasters), the 72-request reuse
+matrix, ownership/bounds/invalidation checks, native texture close/reopen,
+ASan/UBSan on both new test translation units, all 17 native application cases and
+three byte-exact full-window PNGs pass. Final new-test/header lint examines two
+translation units and passes; no global lint or new platform acceptance is claimed.
+
+ARM64 disassembly shows both standalone `glyph` specializations disappear from
+B. `ChromeScene::appendSpan` directly calls `QHash::findImpl`, and only its miss
+branch calls `loadGlyph`. Its optical caller frame remains 368 bytes; a hit no
+longer enters A's separate 288-byte glyph frame. Window-store lookup, rasterization
+and admission remain in the cold function. This proves the intended call-structure
+change, not a whole-application performance gain.
+
+`/tmp/telar-perf-optical-glyph-cold-admission-pairs-01` completes six alternating
+pairs with the unchanged native 100-action/20-warmup, four-producer 30 Hz contract.
+All content, phase, rate, presentation and cleanup checks pass. All 26 host bounds
+qualify, maximum load1 4.14404296875; no own builds/tests/profiles overlap timing.
+
+| Discrete switch | A median | B median | B wins/6 |
+|---|---:|---:|---:|
+| p50 ms | 38.556 | 32.276 | 6 |
+| p95 ms | 42.718 | 40.209 | **4** |
+| p99 ms | 43.808 | 40.868 | 3 |
+| maximum ms | 45.217 | 43.842 | 3 |
+| GUI CPU ms/input | 28.041 | 26.247 | 5 |
+| GUI lifetime peak RSS MiB | 205.930 | 203.406 | 2 |
+| Runtime CPU ms | 376.572 | 376.655 | 3 |
+| Runtime lifetime maximum footprint MiB | 20.266 | 20.344 | 4 |
+
+Runtime instructions/cycles win 5/6 and 4/6. Resource scopes remain the same as in
+the preceding report. **Reject:** p95 wins only 4/6 against the predefined 5/6
+threshold. No typing or independent Zig acceptance series follows this failure.
+The earlier variant is not reinstated. Both source and the configured GUI are
+restored byte-exactly to accepted A, preserving original source timestamps and
+all four recorded dirty-runtime source hashes.
+
+A separate diagnostic, `out-perf/dlls-glyph-reuse-census-01`, then tests whether the
+actual application uses the retained masks. Its private instrumented copy of B
+(`2f4ac88d`) records active-cache hits, raster misses, resident reuse, window-store
+selection/insertion/eviction/clear/destruction and mask identity/checksum/geometry.
+The logger's first build warns about passing a typed pointer to `%p`; an explicit
+void-pointer cast fixes the final diagnostic. Production is restored to `bc55d0e8`
+before the staged copy runs. Its single/splits/tabs full-window PNGs match A
+byte-for-byte in `/tmp/telar-perf-glyph-reuse-census-pixels-01`.
+
+`/tmp/telar-perf-glyph-reuse-census-01` qualifies 240 measured plus 20 warmup
+switches, producer rate/content/phase, native presentation and cleanup. All four
+host observations pass, maximum load1 3.91015625. The 8,139 events are contiguous,
+all cache/store lifetimes close, requests equal hits plus raster misses plus reuse,
+and cache/store byte counts reconcile. Every reuse names a matching live retained
+mask with unchanged checksum and geometry. Eight corrupted-trace controls reject
+missing events, wrong mask/hash/font, wrong request/byte counts, oversized geometry
+and an unclosed cache.
+
+| Whole-GUI-lifetime census | Standard | Optical |
+|---|---:|---:|
+| Caches created and destroyed | 1 | 267 |
+| Requests | 286502 | 661731 |
+| Own-cache hits | 286408 | 654255 |
+| Raster misses | 94 | 28 |
+| Resident reuses | 0 | 7448 |
+| Unique request identities | 94 | 28 |
+| Groups with different checksum/geometry | 0 | 0 |
+| Native optical rasterizers created | 0 | 1 |
+| Caches with a raster scratch buffer | 0 | 1 |
+
+One window store reaches 28 entries and 10,600 alpha bytes. The peak union of
+cache/store-owned masks is 122 masks and 38,496 alpha bytes, avoiding duplicate
+counting of references. One optical cache retires with a 4,194,304-byte raster
+scratch buffer; the others allocate no such buffer. These are diagnostic lifetime
+counts, not paired timing or total process allocation volume. Alpha excludes GPU
+textures, fonts, hash/Qt storage, node-only references and RSS. The earlier accepted
+census had 7,422 optical misses across 267 cache lifetimes, but its request totals
+are different; it is not a paired performance comparison. Reuse is effective in
+the application, so an absent/nonfunctioning store does not explain the rejection.
+
+Post hoc decomposition of the already-qualified, uninstrumented six pairs retains
+the original endpoint and warmup exclusion:
+
+| Median of per-run stage p50, ms | A | B | B lower pairs |
+|---|---:|---:|---:|
+| Input to completion callback | 10.512 | 7.615 | 6/6 |
+| Presentation minus callback | 29.025 | 25.121 | 3/6 |
+| GPU execution, overlapping interval | 0.883 | 0.277 | 6/6 |
+
+The callback includes CPU/submission/scheduling; it is not GPU execution end.
+Stage quantiles must not be added or interpreted as drawable queue depth. Measured
+wall time/input is 89.248/83.842 ms (B lower 5/6), and process CPU/wall second is
+0.314877/0.313352 (4/6). Faster completion shortens the interval containing
+fixed-rate background work; CPU/input savings must not all be assigned to avoided
+rasterization. The variable presentation interval remains unresolved. Earlier
+drawable-pool/render-loop controls are not silently repeated or reinstated.
+
+`out-perf/dlls-glyph-reuse-thread-cpu-01` subsequently reuses the source/hash-verified
+100 ms thread observer for one separate A/B diagnostic, not acceptance timing.
+`/tmp/telar-perf-glyph-reuse-thread-cpu-01` passes both 240-action workloads and all
+six host bounds (maximum load1 3.94921875). Process CPU midpoints are
+7103.5945/6604.1415 ms; main-thread CPU is 3296.111/3275.077 ms and render-thread CPU
+2415.426/2042.235 ms. Measured wall intervals are 21712.063/20604.349 ms, so the
+corresponding render CPU/wall fractions are 0.111248/0.099117, while main fractions
+are 0.151810/0.158951. Observer CPU is 33.660/33.525 ms and remains included.
+Signed process residuals are [-0.095,0.090]/[1.482,1.645] ms; sampler-to-probe CPU
+boundary differences are -0.3675/-0.4075 ms. This is evidence of a render-side
+reduction with substantial main-thread work remaining, not causal attribution of
+presentation scheduling or subtraction of observer perturbation.
+
+All 27 owned shutdown receipts in these target/pixel/census/thread runs pass,
+along with separate runtime-resource cleanup checks. The configured GUI remains
+accepted `bc55d0e8`; both failed candidates and all diagnostic sources remain in
+ignored prefixes. The next experiment will evaluate complementary main-thread
+publication and render-mask work reduction together, reusing the typed-tab and
+glyph oracles but requiring fresh full paired controls. Component gains are not
+assumed additive, and neither rejected component is accepted independently.
+All F01–F16/native120 requirements and the unlimited goal remain open.
