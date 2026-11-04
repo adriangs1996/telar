@@ -6771,3 +6771,35 @@ GUI remains byte-exact to B. Removing temporary test logging and naming its
 settle duration leaves all 39 final software checks passing. The separate
 runtime cadence work is preserved unchanged. This acceptance closes only the
 local candidate; F01–F16, independent Zig comparison and native120 remain open.
+
+
+## Profile of the accepted query bypass, 2026-11-04
+
+`out-perf/dlls-history-after-query-measurements-profile-01` samples accepted
+GUI `a88e53a8` with runtime `1f1849d1`, completing 120 verified queries and
+owned cleanup. Host qualification passes, maximum load1 2.183105. The six-second
+sample requested 1 ms intervals. Its 4,431 main-thread observations include
+124 history refresh, 65 row snapshot, 68 row layout, 228 QML binding,
+123 polish and 140 scene synchronization observations. Counts overlap and are
+diagnostic, not a controlled before/after performance comparison.
+
+Inspection of actual stacks expands the narrow conversion classifier: free
+`toVariant`/`objectToVariant` functions account for 26 inclusive observations,
+`VariantAssociationObject` for 106, and V4 garbage collection for 46. The old
+conversion regex matches zero because it misses these names; that zero is not
+evidence that conversions are absent. Footer layout appears in 27 observations,
+metadata layout in 13, accessibility in 19 and QMap comparisons in five.
+This gives a concrete local allocation/conversion lead without proving a global
+root cause or attributing the entire cost to one component.
+
+Source review confirms that footer and metadata inputs rebuild labels and
+unconditionally notify layout even for some changes that leave the displayed
+labels and geometry unchanged. Footer label preparation also updates the
+hover/action choice revision, so any caching must separate that mandatory
+identity update from label regeneration. The next oracle must prove that
+revision changes retire gestures and refresh hover choices while unchanged
+labels avoid notification, and that genuine label/geometry changes still
+propagate. Filters already narrow their input, and the empty state already
+uses a conditional Loader; those are not missing optimizations. No new
+candidate is implemented or accepted from this profile yet. The persistent
+objective remains active.
