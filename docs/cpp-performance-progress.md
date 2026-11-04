@@ -7007,3 +7007,49 @@ deferred-report ownership patterns are a source lead, but pausing reads on the
 interactive GUI connection would also delay terminal input and must not be copied
 blindly. The existing native test remains unchanged. No speedup or scheduling
 candidate is adopted; the all-flow objective remains active.
+
+
+## Live capture ordering traced; admission prototype, 2026-11-04
+
+The private SQLite interposer in `out-perf/dlls-history-capture-order-01`
+confirms the missing ordering directly. With zero-delay GUI dispatch and the
+accepted runtime, the first query reads snapshot ID 1 and finishes scanning
+before the live command is inserted as ID 2. With the accepted 60 ms GUI timer,
+the insertion precedes the snapshot. These are diagnostic runs with additional
+allocation and logging, excluded from performance comparisons.
+
+`out-perf/dlls-history-observation-admission-01` contains an unadopted composite
+prototype: zero-delay GUI dispatch plus runtime admission of history queries
+after already-received observation batches have submitted their capture writes.
+A batch sequence cutoff avoids waiting for a busy pane to become idle. A lazy,
+bounded queue retains history request order without pausing connection reads.
+Disconnected clients' requests are cancelled, and replay checks client event
+identity. Warm queries with no preceding observation work require no queue or
+payload allocation. No result cache is introduced.
+
+The focused component oracle passes capture-before-delivery, owned payload,
+FIFO, cancellation, capacity, exception recovery and future-batch cases. ASan
+and UBSan pass for the touched tests/header instantiations; dependency archives
+remain uninstrumented. All 36 original native history cases pass, including the
+previous live-capture failure, without changing their assertions. The candidate
+SQL trace now records insertion before snapshot selection. Full native `gb` and
+`GST` images match accepted A byte-for-byte. Runtime B is `537764da`; GUI B is
+`abffa8d6`; A remains runtime `1f1849d1` and GUI `a88e53a8`.
+
+The actual sequence methods compile for arm64, x86-64 baseline and x86-64-v3.
+The completion check lowers to scalar load/subtract/sign extraction on arm64
+and compare/sign test on x86; neither uses allocation or synchronization. This
+is assembly qualification, not cross-target execution. Full runtime assembly
+also exposes the added 256-slot pane scan per query; its cost still needs the
+runtime-only control. The observer limit matches existing active-plus-retired
+pane capacity.
+
+No speedup or adoption follows these functional results. The frozen contract
+requires six alternating latency/CPU pairs, burst typing/request-load controls,
+runtime-only overhead checks and current host-load qualification. Removing a
+debounce can increase intermediate query work; lower replacement latency alone
+is insufficient. The queue has 64 slots and at most 256 observer references
+per request. The wire payload ceiling implies a conservative 256 MiB payload
+bound across a full queue, not measured ordinary consumption; cancelled vector
+capacity can remain until that queue entry drains. Memory and unrelated-flow
+effects remain open, as do the complete F01–F16 and native120 requirements.
