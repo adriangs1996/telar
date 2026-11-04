@@ -6439,3 +6439,78 @@ one root replacement/heap repair, without inheriting natural merging or heap
 extraction. This targets earlier repeated selection work, and requires new
 heap-property, top-k, failure and paired checks. Accepted production code and
 F01–F16/independent Zig/native120 status remain unchanged.
+
+## Single heap-root replacement: rejected, 2026-11-04
+
+`out-perf/dlls-history-heap-replace-01` starts from accepted A, without natural
+merging or heap extraction. Each eligible replacement moves older children up
+to a leaf, then inserts the new record with one upward repair. It avoids
+preserving the discarded root at the tail and repairing an intermediate heap
+before reinsertion. Final recency sorting, hashes, scoring, compact ranking
+and detail fetch remain accepted code. No storage or allocation is added.
+
+Fresh direct Release and ASan/UBSan oracles each pass 139,083 single replacement
+cases: permutations through length eight, tied/random large heaps, extreme
+signed timestamps and complete score/hash/id preservation. A 100,000-candidate
+stream verifies the heap property after every eligible replacement and the
+final independent top-10,000 reference. Replacement allocates zero times and
+all storage returns to zero. Fresh query reference/exact checks pass 936
+evaluations, 192 scoped metadata cases pass on each of 13,312 and 6,912 entries,
+and every one of 32 allocation failures recovers. A/B calls/bytes/peak remain
+30 / 485,472 / 485,120. Sanitized B, x86 baseline/v3 and scoped History/
+HistoryQueue/HistoryCapacity pass. System SQLite/dependency archives are not
+fully sanitizer-instrumented; no Linux timing or global acceptance is claimed.
+
+Comparator census falls from 1,551,857 to 1,457,806 on the monotonic 100,000-
+entry heap and from 245,570 to 231,854 on shuffled 15,000 entries; nonheap
+counts are unchanged. ARM64 inlines replacement and reduces query size from
+796 to 728 instructions, but size/count reductions do not establish speed.
+
+The first primary series completes seven alternating pairs of 32 queries,
+with 30 valid host boundaries and maximum load1 2.443359. Its distinct heap
+CPU rises from 13.110906 to 13.648344 ms (4.099%), with 0/7 wins.
+Mean is 13.113842→13.652470 ms and p95
+13.557206→14.164503 ms, both 0/7. Exact responses pass.
+The predeclared early stop rejects the candidate; twenty remaining component
+cases, full runtime and native are unmeasured. No owned builds/tests overlap.
+
+Three separate instrumented phase diagnostics use 64 queries/execution, seven
+alternating pairs, 90 valid boundaries and maximum load1 3.248047. These retain
+exact responses but are diagnostic, not replacement acceptance timings.
+
+| Diagnostic case / phase | A CPU µs | B CPU µs | Wins |
+| --- | ---: | ---: | ---: |
+| heap-distinct / setup | 5.2969 | 5.4219 | 2 |
+| heap-distinct / scan_select_score_hash | 12187.3906 | 12712.9531 | 0 |
+| heap-distinct / recency_order | 417.5938 | 417.1875 | 4 |
+| heap-distinct / dedup_collect | 374.5469 | 375.5156 | 3 |
+| heap-distinct / rank_page | 4.1875 | 4.3281 | 1 |
+| heap-distinct / detail_encode | 108.3906 | 110.8906 | 2 |
+| heap-distinct / destroy | 167.9062 | 168.2812 | 2 |
+| heap-all / setup | 5.1562 | 5.6094 | 3 |
+| heap-all / scan_select_score_hash | 12199.7969 | 12717.5781 | 0 |
+| heap-all / recency_order | 423.9375 | 423.4062 | 5 |
+| heap-all / dedup_collect | 10.7031 | 10.5469 | 5 |
+| heap-all / rank_page | 4.0156 | 4.0938 | 3 |
+| heap-all / detail_encode | 111.8750 | 114.5156 | 2 |
+| heap-all / destroy | 2.4688 | 2.7031 | 3 |
+| shuffled-heap-distinct / setup | 3.6406 | 3.9062 | 2 |
+| shuffled-heap-distinct / scan_select_score_hash | 1650.3594 | 1700.7656 | 0 |
+| shuffled-heap-distinct / recency_order | 485.7500 | 479.2500 | 7 |
+| shuffled-heap-distinct / dedup_collect | 253.4219 | 252.8125 | 5 |
+| shuffled-heap-distinct / rank_page | 2.7500 | 2.6562 | 5 |
+| shuffled-heap-distinct / detail_encode | 76.4688 | 78.1250 | 2 |
+| shuffled-heap-distinct / destroy | 96.2344 | 96.6719 | 4 |
+
+Unlike the earlier extraction diagnostic, this reproduces the major loss:
+large scan/selection/score/hash adds about 0.52 ms and wins 0/7 in both distinct
+and non-distinct runs; final sorting stays mixed. ARM64 reloads the vector
+data pointer from `[sp, #0x30]` on every descent at `0x100004d50`, and again
+during ascent. The accepted library path retains a pointer while descending.
+This is a concrete code-generation difference, not an isolated causal proof.
+
+A successor explicitly captures `candidates.data()` once before repair.
+Its initial assembly removes those repeated base loads and has 725 query
+instructions. It must pass fresh equivalence and paired checks; the rejected
+variant is not reclassified. Production remains accepted A and F01–F16/
+independent Zig/native120 remain open.
