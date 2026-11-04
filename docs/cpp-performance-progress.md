@@ -6514,3 +6514,32 @@ Its initial assembly removes those repeated base loads and has 725 query
 instructions. It must pass fresh equivalence and paired checks; the rejected
 variant is not reclassified. Production remains accepted A and F01–F16/
 independent Zig/native120 remain open.
+
+## Fixed-base heap replacement: rejected, 2026-11-04
+
+`out-perf/dlls-history-heap-replace-02` captures the vector data pointer before
+repair and indexes that fixed base. ARM64 removes the predecessor's repeated
+base-field loads; the query has 725 instructions. The replacement algorithm,
+heap shapes, comparison counts and storage are unchanged. Direct Release and
+ASan/UBSan checks each pass 139,083 cases and the 100,000-candidate stream.
+Fresh expanded reference/exact checks pass 612 evaluations; the previous 324
+large-fixture evaluations are not rerun or counted as fresh. The 192 scoped
+metadata cases, all 32 allocation failures, zero-live-storage checks, sanitized
+B, x86 baseline/v3 and History/HistoryQueue/HistoryCapacity pass. A/B calls,
+allocated bytes and incremental peak remain 30 / 485,472 / 485,120.
+
+The first primary seven-pair series has 30 qualified host boundaries,
+maximum load1 2.148926, and 32 queries per execution. Every response is exact.
+Distinct heap CPU rises 13.185531→13.676344 ms (3.722%), 0/7 wins;
+mean is 13.191074→13.680818 ms, 0/7, and p95
+13.570675→14.141933 ms, 1/7. The declared rule rejects the candidate;
+the other twenty controls, full runtime and native remain unmeasured.
+
+Removing those loads is therefore insufficient to explain or fix the preceding
+loss. The new descent still chooses a child index before computing its address,
+while the accepted library descent can select a child pointer already computed.
+The successor retains hole/child pointers through the repair and bounds pointer
+formation before reaching a leaf. This is another code-generation hypothesis,
+not a proven causal attribution. It needs fresh pointer-safety/equivalence and
+paired evidence. Production remains unchanged; F01–F16 and independent Zig/
+native120 acceptance remain open.
