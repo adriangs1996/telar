@@ -10999,3 +10999,71 @@ rectangles and their order, without merging or retaining them. The previously
 rejected attached-text and retained-background variants are different operations.
 This lead is unimplemented and unmeasured here; visual equivalence and paired
 native controls are still required. The persistent objective remains active.
+
+## 2026-11-04: detached background reconstruction rejected
+
+`out-perf/dlls-detached-background-update-01`, source `b1364f66f`, tests the preceding
+profile lead. A private scope guard disconnects a nonempty row background container,
+lets the existing rectangle-removal/recreation loops run while disconnected, then
+reinserts the container before its saved next sibling, or at the end. Empty
+containers stay attached. Rectangles, color arithmetic and drawing order remain
+unchanged; this neither merges rectangles nor retains them. Three stack pointers/
+references replace repeated notifications through the full attached ancestor chain.
+Pinned Qt still recursively removes/adds every shadow descendant, so this does not
+eliminate descendant work or prove an allocation reduction.
+
+Accepted A remains GUI `bc55d0e8`, runtime `1f1849d1`, helper `87beebb0`, original Qt.
+B GUI is `f33e7506bb6daf857a2760db436e020a9265c90ea2b564a83193b9e67866be36`.
+B passes production lint and all51 existing scene cases on software and Metal,
+including the independent background/color/overlap/transition oracles. Deliberately
+omitting reattachment fails the background-transition oracle. The actual translation
+unit compiles for x86 baseline/v3. ARM code adds a conditional container-removal call,
+retains the child loop and restores the saved sibling position. These are codegen
+facts, not executed callback counts or whole-GUI x86/Linux validation.
+
+The existing multirow scene probe had only default backgrounds, so it could not
+exercise this candidate. The reusable `--colored-backgrounds` option now emits
+changing RGB row backgrounds with default-color gaps. Full/sparse/retained schedules
+continue to control which rows change, and the JSON receipt identifies the option.
+The comparator forwards and validates it. Four offline controls verify propagation
+and reject missing/mismatched receipts. A separate native capture proves that the
+flag actually changes pixels (maximum channel difference38 versus default), rather
+than merely changing its receipt. Initial full-tool lint exposes a QStringLiteral
+include diagnostic; explicit QString construction resolves it. Final full-tool lint
+passes; failed attempts remain archived and contribute no measurements.
+
+`/tmp/telar-perf-detached-background-scene-pixels-01` passes all six A/B comparisons:
+full/sparse/retained × standard/optical text, colored backgrounds,5 updates after
+3 warmups, scale2, with rendering between updates. All3600×2214 final captures are
+pixel-exact. This checks final visible pixels after the schedule, not every
+intermediate drawable. All26 host boundaries qualify, maximum load1=1.93994.
+
+`...detached-background-pixels-01` additionally passes six full-application
+TUI/single/split PNGs byte-exact against accepted references. `...-tui-01` qualifies
+six alternating100-input pairs after20 warmups, optical JBM15,1600×1000/scale2,
+82×21 cells. No own builds/tests/profiles overlap ordinary timing. Co-primary
+TUI p95 and GUI CPU still each require at least5/6 lower pairs.
+
+| TUI metric | Accepted A | Detached B | B lower pairs |
+|---|---:|---:|---:|
+| p50 ms | 28.777 | 28.851 | 2/6 |
+| p95 ms | 37.248 | 37.425 | 2/6 |
+| p99 ms | 43.140 | 43.347 | 2/6 |
+| Maximum ms | 47.244 | 45.722 | 3/6 |
+| GUI CPU ms/input | 5.039 | 5.051 | 3/6 |
+| GUI peak RSS MiB | 232.062 | 227.812 | 4/6 |
+| Runtime CPU ms/run | 99.430 | 100.738 | 3/6 |
+
+Both primary targets fail. B is rejected; cause is not established. The short
+pixel-qualification timings are not acceptance evidence. Neither fewer attached
+notifications nor favorable peak-memory medians overrides the ordinary pairs.
+Further regression controls are not run after primary failure. Runtime windows
+include setup/warmup/final readback, exclude runtime startup/shutdown and child CPU,
+and are not summed with GUI CPU. Full counters remain in tables.json.
+
+Application pixels pass14 host boundaries, maximum load1=1.86475; TUI passes26,
+maximum2.62549. All18 owned runtime/child shutdowns, Qt receipts and resource
+observers pass. Frozen binaries, accepted production source/build and all four
+pending runtime files are unchanged. Only the colored-background probe/comparator
+and this report are retained. No complete flow or native120 requirement is closed;
+the persistent objective remains active.

@@ -29,6 +29,7 @@
 #include <QQuickWindow>
 #include <QRectF>
 #include <QSGNode>
+#include <QString>
 #include <QTextCharFormat>
 #include <QTimer>
 #include <QtCore/qnamespace.h>
@@ -67,10 +68,11 @@ struct Options {
   qreal scale = 1;
   QString family;
   QString output;
-  QString snapshot_workload = QStringLiteral("full");
+  QString snapshot_workload = QString::fromLatin1("full");
   bool thicken = true;
   bool render_each_frame = false;
   bool floating_window = false;
+  bool colored_backgrounds = false;
 };
 
 Options parseOptions(const QGuiApplication &application) {
@@ -85,6 +87,7 @@ Options parseOptions(const QGuiApplication &application) {
   parser.addOption({"render-each-frame", "Render each update before changing the scene again"});
   parser.addOption({"floating-window", "Use a tool window for window managers that tile normal windows"});
   parser.addOption({"snapshot-workload", "Snapshot changes: full, sparse, retained", "workload", "full"});
+  parser.addOption({"colored-backgrounds", "Draw changing row backgrounds with default-color gaps"});
   parser.process(application);
   bool iterations_valid = false;
   bool warmup_valid = false;
@@ -99,6 +102,7 @@ Options parseOptions(const QGuiApplication &application) {
       .thicken = !parser.isSet("no-thicken"),
       .render_each_frame = parser.isSet("render-each-frame"),
       .floating_window = parser.isSet("floating-window"),
+      .colored_backgrounds = parser.isSet("colored-backgrounds"),
   };
   constexpr unsigned maximum_iterations = 1000;
   if (!iterations_valid || !warmup_valid || !scale_valid || options.iterations == 0 || options.iterations > maximum_iterations || options.warmup > maximum_iterations || (options.scale != 1 && options.scale != 2)) {
@@ -178,7 +182,7 @@ protected:
         return root.release();
       }
 
-      const QJsonObject result{{"iterations", static_cast<int>(options_.iterations)}, {"warmup", static_cast<int>(options_.warmup)}, {"elapsed_ns", elapsed_}, {"apply_ns", total_apply_elapsed_}, {"apply_and_paint_ns", elapsed_ + total_apply_elapsed_}, {"render_each_frame", options_.render_each_frame}, {"snapshot_workload", options_.snapshot_workload}, {"columns", static_cast<int>(terminal_columns)}, {"rows", static_cast<int>(terminal_rows)}, {"scale", options_.scale}, {"font", options_.family}, {"thicken", options_.thicken}, {"fixed_pitch", resolved_.font.fixed_pitch}};
+      const QJsonObject result{{"iterations", static_cast<int>(options_.iterations)}, {"warmup", static_cast<int>(options_.warmup)}, {"elapsed_ns", elapsed_}, {"apply_ns", total_apply_elapsed_}, {"apply_and_paint_ns", elapsed_ + total_apply_elapsed_}, {"render_each_frame", options_.render_each_frame}, {"snapshot_workload", options_.snapshot_workload}, {"colored_backgrounds", options_.colored_backgrounds}, {"columns", static_cast<int>(terminal_columns)}, {"rows", static_cast<int>(terminal_rows)}, {"scale", options_.scale}, {"font", options_.family}, {"thicken", options_.thicken}, {"fixed_pitch", resolved_.font.fixed_pitch}};
       std::cout << QJsonDocument{result}.toJson(QJsonDocument::Compact).constData() << '\n';
     } catch (...) {
       failure_ = std::current_exception();
@@ -198,6 +202,8 @@ private:
     constexpr unsigned bright_period = 7;
     constexpr Byte dim_green = 128;
     constexpr Byte bright_green = 255;
+    constexpr Byte background_red = 32;
+    constexpr unsigned background_blue_period = 128;
     for (unsigned row = 0; row < terminal_rows; ++row) {
       const auto phase = options_.snapshot_workload == "retained" || (options_.snapshot_workload == "sparse" && row != 0) ? 0U : frame;
       for (unsigned column = 0; column < terminal_columns; ++column) {
@@ -206,6 +212,10 @@ private:
         characters_[offset] = static_cast<Byte>(printable_first + (value % printable_count));
         const auto green = (column + row + phase) % bright_period == 0 ? bright_green : dim_green;
         cells_[offset] = {.width = CellWidth::single, .style = {.foreground = {.kind = CellColor::Kind::rgb, .channels = {0, green, 0}}}, .text = std::span{characters_}.subspan(offset, 1)};
+
+        if (options_.colored_backgrounds && column % bright_period != 0) {
+          cells_[offset].style.background = {.kind = CellColor::Kind::rgb, .channels = {background_red, 0, static_cast<Byte>((row + phase) % background_blue_period)}};
+        }
       }
     }
 

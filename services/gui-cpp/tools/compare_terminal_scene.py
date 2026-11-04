@@ -27,6 +27,8 @@ def read_run(binary, directory, label, options):
         command.append('--render-each-frame')
     if options.floating_window:
         command.append('--floating-window')
+    if options.colored_backgrounds:
+        command.append('--colored-backgrounds')
     if options.snapshot_workload != 'full':
         command += ['--snapshot-workload', options.snapshot_workload]
     if label.startswith('0-'):
@@ -44,6 +46,8 @@ def read_run(binary, directory, label, options):
         raise ValueError('Inconsistent snapshot workload')
     if row.get('render_each_frame', False) != options.render_each_frame:
         raise ValueError('Inconsistent rendering schedule')
+    if row.get('colored_backgrounds', False) != options.colored_backgrounds:
+        raise ValueError('Inconsistent background workload')
     duration = row.get(options.metric)
     if not isinstance(duration, (int, float)) or not math.isfinite(duration) or duration <= 0:
         raise ValueError('Expected a finite positive terminal scene duration')
@@ -85,6 +89,7 @@ def main():
     parser.add_argument('--no-thicken', action='store_true')
     parser.add_argument('--render-each-frame', action='store_true')
     parser.add_argument('--floating-window', action='store_true')
+    parser.add_argument('--colored-backgrounds', action='store_true')
     parser.add_argument('--snapshot-workload', choices=['full', 'sparse', 'retained'], default='full')
     parser.add_argument('--metric', choices=['elapsed_ns', 'apply_and_paint_ns'], default='elapsed_ns',
                         help='Scene synchronization alone, or decoded-frame application plus scene synchronization')
@@ -124,6 +129,7 @@ def main():
                   reference_image=str(options.reference_image.resolve()) if options.reference_image else None,
                   metric=options.metric, snapshot_workload=options.snapshot_workload,
                   render_each_frame=options.render_each_frame,
+                  colored_backgrounds=options.colored_backgrounds,
                   scope=('CPU decoded-frame application plus production TerminalScene synchronization; fixture encoding is excluded. '
                          if options.metric == 'apply_and_paint_ns' else
                          'CPU production TerminalScene synchronization; frame preparation and decoding are excluded. ')
