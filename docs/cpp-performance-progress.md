@@ -7177,3 +7177,62 @@ This qualifies workload delivery and existing endpoint guards, not observer
 perturbation, cross-renderer optical parity, an optimization speedup or full F12.
 The corrected producer enables the next independent equal-rate burst comparison;
 all wider flow and native120 gates remain open.
+
+
+## Independent short-burst comparison and GUI profile, 2026-11-04
+
+`/tmp/telar-perf-history-burst-cross-stack-pairs-01` completes six alternating
+independent-stack pairs using the qualified strict-timer observer. Each run
+offers 60 alternating `GST`/`gb` bursts, 45 ms between characters and at least
+300 ms between query starts. Actual mean start intervals span 309.178693–310.666038
+ms. Every character-span, query-rate, final-result, callback, focus, geometry and
+cleanup gate passes. All 26 outer host boundaries qualify, maximum load1 2.163086.
+No owned compilation, tests or profiling overlap the timed series.
+
+Accepted C++ GUI `a88e53a8` uses runtime `1f1849d1`; Zig uses `6ccf7948` for
+both. The frozen contract includes binaries/helpers, fixture, configuration,
+cases, templates and observer sources. A fresh source check confirms that the
+Zig build inputs remain unchanged from build commit `5c619b85`; the new observer
+is independently frozen. The two templates qualify separate endpoints, not
+cross-renderer optical or ranking parity.
+
+Medians of the six per-run summaries; CPU is per completed user burst, not per
+internal backend query. Latency starts at the final delivered character.
+
+| Metric | C++ stack | Zig stack | C++ lower |
+| --- | ---: | ---: | ---: |
+| Mean latency (ms) | 104.577655 | 27.852494 | 0/6 |
+| p95 latency (ms) | 114.009920 | 36.386415 | 0/6 |
+| p99 latency (ms) | 117.334420 | 40.669695 | 0/6 |
+| GUI CPU/burst (ms) | 40.187140 | 18.982875 | 0/6 |
+| Runtime CPU/burst (ms) | 2.797963 | 30.654747 | 6/6 |
+| Combined CPU/burst (ms) | 43.038844 | 49.633458 | 6/6 |
+| GUI instructions/burst (M) | 100.415930 | 51.915545 | 0/6 |
+| Runtime instructions/burst (M) | 21.488063 | 274.290136 | 6/6 |
+| GUI end footprint (bytes) | 255337864 | 194462764 | 0/6 |
+| Runtime end footprint (bytes) | 11444680 | 16310944 | 6/6 |
+
+The accepted C++ runtime saves enough CPU to win the combined resource metric,
+but presentation and GUI cost lose every pair. Neither that CPU win nor these
+short bursts close sustained typing, complete F12, observer perturbation or
+native120. Separate process footprints are not summed shared RSS, and no energy
+claim follows from the wakeup counters retained in the raw report.
+
+After the paired series finished, `out-perf/dlls-history-burst-profile-01`
+sampled the accepted C++ GUI for six seconds at requested 1 ms intervals during
+120 verified bursts. Both cadence checks, host qualification and cleanup pass;
+maximum load1 is 3.314941. Of 4,431 main-thread observations, the classifier
+finds 189 QML-binding, 69 variant-association, 24 JS-to-variant, 32 GC, 55 row-layout,
+40 row-snapshot and 78 history-refresh observations. Categories overlap and are
+not CPU milliseconds. Direct line projection appears in four observations;
+the sample does not establish it as the dominant cost.
+
+Source review identifies a narrower work-avoidance hypothesis: `commandLines()`
+recreates maps containing text, bounds, continuation markers and matches when
+the query changes, and QML delegates bind to the aggregate line value. Separating
+stable line data from changing match roles could avoid conversions and binding
+updates, with bounded retained storage. Actual propagation needs a census and
+an oracle preserving text, geometry, highlights, delivered identities and full
+native output before implementation or acceptance. This remains a candidate
+lead, not a demonstrated global allocation cause. All F01–F16 remain open and
+the persistent objective stays active.
