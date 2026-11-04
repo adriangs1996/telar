@@ -6575,3 +6575,35 @@ avoiding pointer-distance scaling and signed-division correction. This is a
 concrete redundant-work reduction, not a claimed performance result. Its
 oracles and measurements are fresh. Production and F01–F16/independent Zig/
 native120 acceptance remain unchanged.
+
+## Retained-index heap replacement: second primary missed, 2026-11-04
+
+`out-perf/dlls-history-heap-replace-04` reuses the unsigned descent index during
+ascent, removing pointer-distance reconstruction and signed-division correction.
+ARM64 emits 728 query instructions; its ascent starts with subtract/shift and
+direct address formation. The same repair algorithm, comparison census,
+accepted final sort and memory use remain. Fresh Release/ASan/UBSan direct
+oracles pass 139,083 cases and the 100,000-candidate stream; expanded reference/
+exact checks pass 612 evaluations. Scoped metadata, 32 allocation failures,
+zero-live-storage, sanitized B, x86 baseline/v3 and History/HistoryQueue/
+HistoryCapacity pass. No allocations or retained storage are introduced.
+
+Two complete seven-pair primary series have 60 qualified host boundaries,
+maximum load1 2.012695. Each execution has 32 queries; every response matches.
+
+| Primary | A CPU ms | B CPU ms | CPU / mean / p95 wins |
+| --- | ---: | ---: | --- |
+| heap-distinct | 13.238563 | 13.015531 | 7 / 7 / 5 |
+| heap | 12.438844 | 12.346063 | 3 / 3 / 3 |
+
+Distinct passes 7/7, but non-distinct only wins 3/7 and misses its separately
+predeclared 6/7 target. The candidate is not adopted or repeated. The remaining
+nineteen controls, full runtime and native remain unmeasured. The isolated
+family has produced useful work/code-generation evidence, but no version has
+passed its complete declared gate. No production heap change is committed.
+
+Further prioritization returns to the accepted GUI profile, where the latest
+qualified history interaction still costs roughly 30–33 ms GUI CPU per query.
+A fresh profile after bounded highlight retention is required before choosing
+its next work-reduction candidate. All F01–F16/independent Zig/native120 gates
+remain open; the persistent objective remains active.
