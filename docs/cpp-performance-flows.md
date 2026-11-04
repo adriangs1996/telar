@@ -134,6 +134,25 @@ The helper records the Mach timebase, process start time, executable UUID and
 clock brackets. Memory values are boundary snapshots and a lifetime footprint
 maximum, not an interval peak. This optional adapter is not enabled by the CLI.
 
+For diagnostic GUI CPU attribution on native macOS, use
+`python3 tools/build_thread_cpu_probe.py OUT` to build an isolated tab-switch
+probe. It adds measured-interval hooks and a 100 ms in-process observer from
+`tools/macos_thread_cpu.c`; the ordinary probe and production GUI are unchanged.
+`python3 tools/thread_cpu_report.py CAPTURE --output REPORT` validates the resulting
+`thread-cpu.jsonl`. The report retains signed process/thread accounting residuals:
+new threads contribute their observed lifetime CPU, retired threads can have an
+unobserved tail, and completely unseen threads remain unattributed. Names do not
+prove a thread's current dispatch queue. Counter units are seconds/microseconds
+from Mach `THREAD_BASIC_INFO` and `getrusage`, not raw Mach ticks. These observed
+CPU totals include probe work; their timings never count toward acceptance.
+
+Before using that observer on a new host, compile `tools/macos_thread_cpu.c` and
+`tools/macos_thread_cpu_control.c` together with `clang -O2 -pthread`. Run the
+control with a new capture path, retain its stdout JSON, then pass that JSON as
+`--control RECEIPT` to `thread_cpu_report.py`. This checks known busy/sleep CPU
+and the residual from short-lived threads. Missing or failed thread reads reject
+the capture. Synthetic negative controls are in `test_thread_cpu_report.py`.
+
 ## Deliverables and later optimization
 
 Fresh setup, coverage gaps and current experiments are tracked in

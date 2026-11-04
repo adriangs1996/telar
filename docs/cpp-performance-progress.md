@@ -8816,3 +8816,128 @@ sample counts as CPU cost would mis-rank the remaining work. Thread observations
 must account explicitly for threads that appear/disappear, clock units and
 unattributed residuals against process CPU, and remain separate from headline
 latency. No new production candidate is applied.
+
+## GUI thread CPU attribution and optical-cache lifetime census, 2026-11-04
+
+On `1b7db2874`, production remains accepted GUI `bc55d0e8` with runtime
+`1f1849d1`. `out-perf/dlls-gui-thread-cpu-census-01` implements a separate native
+CPU observer before choosing another presentation optimization. The reusable
+`macos_thread_cpu.c/.h`, `macos_thread_cpu_control.c`, `thread_cpu_report.py`,
+`test_thread_cpu_report.py` and `build_thread_cpu_probe.py` live in `tools`.
+They do not modify the ordinary acceptance probe or production rendering.
+
+The observer enumerates its own process's threads every 100 ms during measured
+inputs. It records stable thread IDs, names, user/system CPU from Mach
+`THREAD_BASIC_INFO`, process `getrusage` brackets and uptime-clock boundaries.
+Both CPU APIs expose seconds/microseconds here; raw Mach tick scaling does not
+apply. New threads contribute observed lifetime CPU; retired threads retain their
+last observation, and unseen work remains in a signed process residual. Different
+accounting update times can yield small negative residuals, which are not clamped.
+The analyzer rejects failed reads, missing completion, incomplete enumeration,
+duplicate IDs, counter/clock reversal and inconsistent boundary/sampler identity.
+
+The first two busy/sleep/churn controls pass. A third is rejected because the
+sampler exits before final enumeration, leaving an invalid thread port. The
+observer now takes the final snapshot under its mutex while the sampler is alive,
+then joins it. Three corrected controls record 250.528–250.683 ms for 250 ms of
+known worker CPU, 80.221–80.297 ms for 80 ms of main-thread work, and only
+1.329–1.455 ms for the waiting thread. Seven of eight short-lived workers are
+unseen in each run; the reported residual differs from their known unobserved
+work by less than 0.2 ms. A final source control also passes. The private
+ASan/UBSan control passes, with leak detection disabled. Two positive synthetic
+cases and fourteen negative mutations pass; two initial expected-error-string
+mismatches are fixed and retained in the logs. Native arm64/macOS is validated;
+there is no Linux, Rosetta or x86 execution claim.
+
+`/tmp/telar-perf-gui-thread-cpu-01` observes accepted C++ and independent Zig
+`6ccf7948`, each with 240 measured switches after 20 warmups, four 30 Hz producers,
+1600x1000 viewport and an 82x21 grid. Native content/rate/phase and cleanup checks
+pass. All six host boundaries qualify, maximum load1 2.89013671875. CPU below is
+for the diagnostic interval, in milliseconds; the process column is the midpoint
+of its boundary readings. Other threads include unnamed dispatch workers.
+
+| Diagnostic GUI | Process CPU | Main thread | Qt render thread | Observer | Other observed threads |
+|---|---:|---:|---:|---:|---:|
+| C++ | 7258.678 | 3338.428 | 2481.994 | 35.950 | 1402.303 |
+| Zig | 4268.447 | 1625.882 | — | 47.844 | 2594.705 |
+
+There are 203/194 snapshots. Signed residual ranges are -0.099..0.104 ms and
+-0.141..0.173 ms. CPU differs from the ordinary probe's slightly different
+measurement boundaries by -0.5705/-1.908 ms; wall duration differs by less than
+2.23 ms. Maximum individual snapshot duration is 1.794/1.527 ms. Observed sampler
+CPU does not capture every scheduling/cache effect of instrumentation and must
+not be subtracted to claim uninstrumented performance.
+
+A separate diagnosis, `/tmp/telar-perf-gui-thread-cpu-profile-01`, adds eight-second,
+1 ms `sample` captures overlapping 96 switches in each stack. Both workloads and
+all six host boundaries pass, maximum load1 2.0654296875. C++/Zig process CPU is
+5977.854/4022.368 ms, main-thread CPU 2767.010/1525.237 ms, and C++ render CPU
+1991.090 ms. These differ from the preceding instrumented run; neither run is a
+paired acceptance series. All four thread reports revalidate against the final
+identity checks, with absolute residual endpoints below 0.2 ms and boundary CPU
+differences below 3.14 ms.
+
+Same-run stacks identify C++'s main and QSG render threads by ID. `sample` groups
+some dispatch queues under `Thread_<multiple>`; Zig's `telar.surface.metal` queue
+cannot therefore be assigned an exact per-worker CPU total from that listing.
+Large drawable/semaphore waits remain waits. The C++ render stack nevertheless
+locates repeated optical rasterization under TerminalScene -> paintRow ->
+paintTerminalText -> ChromeGlyphImages::glyph: 37 inclusive glyph-cache samples,
+25 in rasterization and 22 in CTFontDrawGlyphs. These overlap and are not CPU
+percentages. Source `ChromeGlyphImages::shared` holds weak pointers, so its cached
+masks can disappear when the last pane scene retires. This is a specific remaining
+work hypothesis, separate from the rejected typed-tab publication experiment.
+
+`out-perf/dlls-glyph-lifetime-census-01` then instruments only
+`chrome_glyph_images.hpp` in a private GUI copy. It counts cache creation/destruction,
+requests/hits and successful misses, logging native font-asset identity, glyph key,
+geometry and a 64-bit checksum of zero-padded alpha bytes. The first run passes the
+native flow but produces no trace because the launcher sanitizes the parent
+environment variable. It is invalid for the census. The second passes the native
+flow but fails accounting: diagnostic asset lookup on standard regular/emphasized
+roles throws `MissingNativeFontAsset`, leaving 59 stored glyphs but only 24 miss
+records in the standard cache. This instrumentation changed behavior; the entire
+second capture is excluded, including its otherwise consistent optical rows.
+
+The corrected instrumentation queries native assets only on the optical path,
+where the original rasterizer already uses them. Three settled full-window PNGs
+(single, splits, tabs) match accepted A byte-for-byte in
+`/tmp/telar-perf-glyph-lifetime-pixels-01`. After each temporary build the header is
+restored with its original timestamp and dependent objects are rebuilt. The
+configured GUI is again byte-exactly `bc55d0e8` before running the staged copy.
+
+`/tmp/telar-perf-glyph-lifetime-census-03` passes 240 measured plus 20 warmup
+switches, native content/rate/phase, complete owned cleanup and all four host
+boundaries; maximum load1 is 3.97412109375. All 8,047 events have contiguous
+sequence IDs and closed lifetimes. Requests equal hits plus misses, stored glyph
+counts equal miss records, and reconstructed alpha-byte totals equal destruction
+receipts. Four corrupted-trace controls reject an unclosed lifetime, missing event,
+incorrect request count and incorrect alpha-byte count.
+
+| Whole-GUI-lifetime observation | Standard cache | Optical caches |
+|---|---:|---:|
+| Caches created and destroyed | 1 | 267 |
+| Requests | 297865 | 671975 |
+| Hits | 297776 | 664553 |
+| Successful misses | 89 | 7422 |
+| Unique request identities | 89 | 28 |
+| Repeated matching-checksum/geometry misses | 0 | 7394 |
+| Largest cache-owned alpha bytes | 26812 | 10600 |
+
+Optical requests use one font-object address and one native font-asset address in
+this fixed-configuration run; no matching request changes checksum or geometry.
+Of 7,422 optical misses, 7,155 have nonempty masks and 267 have empty masks.
+Peak live caches are two overall, one optical; peak cache-owned alpha sum is
+37,412 bytes. These observations span startup, warmup, measurement and teardown,
+not just measured inputs. Checksums are diagnostic evidence, not an independent
+byte-exact oracle. Alpha sums exclude GPU textures, font objects, nodes retaining
+retired mask references and process RSS; they are not global memory bounds.
+
+The next frozen experiment is `out-perf/dlls-optical-glyph-residency-01`: retain
+one most-recent optical glyph cache per window across pane-consumer lifetimes.
+This targets repeat rasterization/texture construction without retaining hidden
+pane delegates. Window/font/strength separation, render-thread invalidation,
+eviction with active readers, close/reopen and exact-image oracles must precede
+fresh target pairs and typing controls. The accepted flush remains unchanged;
+no production residency candidate is applied yet. Unrelated runtime work is
+preserved, F01–F16/native120 remain open, and the unlimited goal stays active.
