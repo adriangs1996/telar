@@ -7,6 +7,11 @@ acceptance yet. Conditional cursor invalidation is accepted for the measured
 warm-typing layouts against the frozen C++ baseline; complete-flow and Zig-stack
 acceptance remain open.
 
+The latest accepted local GUI is `bc55d0e8`, with runtime `1f1849d1`: the
+compile-time OpenPane flush below improves discrete tab switching against the
+preceding C++ build and passes typing controls. It does not close F08 against
+Zig or any complete-flow/native120 requirement.
+
 ## Shared-library base, 2026-11-03
 
 Work has moved to `cpp-stack-perf-dlls-20261103`, initially at
@@ -8507,3 +8512,116 @@ send specialization, leaving other request specializations and the shared writer
 unchanged. That is a new hypothesis to test, not an explanation established by
 these results. The unlimited goal remains active; complete F01–F16 and native120
 acceptance remain open.
+
+## Compile-time OpenPane flush accepted locally, 2026-11-04
+
+`out-perf/dlls-open-pane-typed-flush-01` freezes accepted GUI `a88e53a8` and
+runtime `1f1849d1` on source HEAD `06e3246a6`. This distinct experiment places
+the nonblocking flush in `RuntimeConnection::send<OpenPane>` using
+`if constexpr`. The common writer and every other request specialization avoid
+the previous variant's extra runtime tag check. A successful complete write and
+an accepted connection precede the flush; output ordering, queue capacity and
+asynchronous recovery under backpressure retain their existing behavior.
+
+The previous failed variant is not reinstated. Its typing regressions remain
+unexplained; removing the common-path check is a testable change, not proof of
+their cause. The new baseline oracles again fail at immediate OpenPane delivery,
+including recovery after a saturated queue. An additional check confirms that
+a preceding DetachPane remains buffered until OpenPane is sent. All 15 connection
+cases then pass with the change, including ordering, backpressure, audited
+schemas, retries and simulated SSH transport. All 15 selected native window
+cases and three byte-exact settled full-viewport PNG comparisons pass. Focused
+clang-tidy and whitespace checks pass. These connection oracles are now retained
+in `remote_connection_test.cpp`.
+
+ARM64 inspection compares the normal entry-to-return path of `write` and the
+entry-to-tail-call path of `send<PaneInput>`. All 58 and 28 instructions,
+respectively, match after normalizing addresses while preserving registers,
+constants, relative branch destinations and actual external symbols. A changed
+register is rejected by each comparison. Cold exception paths are not claimed
+identical, nor is this a whole-application placement exemption. OpenPane now calls
+the shared writer, checks acceptance and tail-calls QLocalSocket::flush. There is
+no target-specific construct; Linux/x86 execution remains unverified.
+
+Candidate and now locally accepted GUI SHA-256 is
+`bc55d0e84d76c5eb6d7518a7c83acf8de2aca8ff6894ea71645a626f41a9ccb3`.
+The runtime remains `1f1849d1` and command helper `87beebb0`. Sources, staged
+binaries and the configured GUI are rehashed after all measurements and still
+match the frozen inputs. No production edit follows the measured build.
+
+`/tmp/telar-perf-open-pane-typed-flush-pairs-01` completes six alternating pairs,
+100 measured plus 20 warmup switches, four independent 30 Hz producers,
+1600x1000 views and 82x21 grids. Native presentation/content/generation/checksum,
+producer-rate/phase and cleanup gates pass. All 26 host boundaries qualify,
+maximum load1 3.9375. Builds, tests, lint and capture oracles finish before timing;
+an earlier validation-time load1 of 5.02 is observed before the series starts.
+
+| Discrete F08 median of run summaries | Previous A | Candidate B | B lower pairs |
+|---|---:|---:|---:|
+| p50, ms | 42.643 | 37.984 | 6/6 |
+| p95, ms | 49.204 | 41.846 | 6/6 |
+| p99, ms | 49.495 | 42.767 | 6/6 |
+| Maximum, ms | 49.837 | 43.101 | 6/6 |
+| GUI CPU, ms/input | 28.668 | 28.029 | 5/6 |
+| GUI lifetime peak RSS, MiB | 205.133 | 197.852 | 5/6 |
+
+The separate runtime GUI-startup/warmup/measurement interval reports
+399.474 -> 382.274 ms CPU (3/6 lower), 838,965,421 -> 816,382,743 retired
+instructions (6/6), and 783,741,198 -> 786,889,055 cycles (3/6). Final runtime
+footprint is 18.907 -> 20.032 MiB (0/6 lower). Instruction counts support less
+runtime work in this observation window, but do not identify which work or
+establish a consistent runtime CPU gain against A.
+
+`/tmp/telar-perf-open-pane-typed-flush-regressions-01` completes six pairs each
+for single and four-split typing. All 50 host boundaries pass, maximum load1
+3.673828125; all cleanup receipts pass.
+
+| Typing metric | Single A -> B | B lower pairs | Four splits A -> B | B lower pairs |
+|---|---:|---:|---:|---:|
+| p50, ms | 25.234 -> 25.185 | 3/6 | 25.875 -> 25.304 | 5/6 |
+| p95, ms | 32.985 -> 32.774 | 4/6 | 33.391 -> 32.924 | 4/6 |
+| p99, ms | 34.186 -> 35.458 | 3/6 | 37.391 -> 36.045 | 6/6 |
+| Maximum, ms | 39.526 -> 37.824 | 4/6 | 39.286 -> 39.196 | 3/6 |
+| GUI CPU, ms/input | 4.029 -> 3.999 | 3/6 | 4.324 -> 4.239 | 5/6 |
+| GUI lifetime peak RSS, MiB | 191.469 -> 206.219 | 1/6 | 197.984 -> 198.859 | 1/6 |
+
+Runtime CPU in those broader windows is 86.775 -> 84.272 ms for single (4/6)
+and 105.390 -> 102.346 ms for splits (5/6). No measured typing latency or
+GUI/runtime CPU metric has the consistent 0–1/6 loss that rejects a candidate.
+The single-pane GUI peak RSS increase of 14.750 MiB, smaller split increase and
+1.125 MiB runtime footprint increase in the target are accepted under Adrian's
+explicit memory/performance tradeoff authorization. They are observed process
+memory values, not a new cache allocation or a summed stack footprint. All
+runtime observations exclude child CPU and runtime startup/shutdown; memory is
+boundary snapshots/lifetime maximum, not an interval peak.
+
+The private `independent.py` reuses the qualified ordinary tab observer and
+resource adapter for two genuinely independent stacks. Zig `6ccf7948` is frozen
+again; source inputs are verified unchanged against build HEAD `5c619b85c`.
+`/tmp/telar-perf-open-pane-typed-flush-zig-pairs-01` completes six alternating
+pairs with the same content/rate/phase, geometry and cleanup qualification.
+All 26 host boundaries pass, maximum load1 3.82470703125.
+
+| Independent stacks, median of run summaries | Zig | Accepted C++ | C++ lower pairs |
+|---|---:|---:|---:|
+| p50, ms | 37.184 | 37.534 | 1/6 |
+| p95, ms | 40.080 | 42.737 | 2/6 |
+| p99, ms | 43.825 | 44.331 | 3/6 |
+| Maximum, ms | 45.826 | 45.436 | 3/6 |
+| GUI CPU, ms/input | 17.020 | 27.783 | 0/6 |
+| GUI lifetime peak RSS, MiB | 133.703 | 191.961 | 0/6 |
+| Runtime CPU, separate broader interval, ms | 519.245 | 370.484 | 6/6 |
+| Runtime final footprint, MiB | 21.595 | 20.250 | 6/6 |
+
+Runtime retired instructions are 1,031,980,082 -> 818,528,488 and cycles
+974,877,430 -> 761,100,638, each 6/6 lower for C++. The GUI remains the major
+CPU deficit in this workload. These separate observation windows cannot be
+added into a claimed total-stack CPU result.
+
+Accept the source change as an incremental improvement against the previous
+C++ baseline, with the measured memory tradeoff. F08 does not pass against Zig:
+GUI CPU loses every pair and p50 improves only one. Workspace switching,
+continuous native120 and complete F01–F16 coverage remain open. The next pass
+will profile the newly accepted GUI and correlate attachment/frame preparation
+to quantify avoided work and locate the remaining CPU cost. Unrelated runtime
+changes remain untouched, and the persistent unlimited goal remains active.

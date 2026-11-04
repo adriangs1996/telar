@@ -49,6 +49,132 @@ class RemoteConnectionTest : public QObject {
   Q_OBJECT
 
 private:
+  template <typename Message>
+  static QByteArray framedMessage(const Message &message) {
+    std::vector<Byte> storage(Codec::encodedSize(message));
+    const auto payload = textView(Codec::encode(message, storage));
+    std::array<Byte, frame_prefix_size> prefix{};
+    std::span<Byte> output{prefix};
+    u32::encode(static_cast<std::uint32_t>(payload.size()), output);
+    const auto prefix_text = textView(std::span<const Byte>{prefix});
+    QByteArray result{prefix_text.data(), static_cast<qsizetype>(prefix_text.size())};
+    result.append(payload.data(), static_cast<qsizetype>(payload.size()));
+
+    return result;
+  }
+
+  static QByteArray readWithoutSenderEvents(QLocalSocket &peer, qsizetype expected) {
+    constexpr int read_timeout_ms = 100;
+    QElapsedTimer elapsed;
+    elapsed.start();
+    QByteArray received;
+    while (received.size() < expected) {
+      received.append(peer.readAll());
+      const auto remaining = read_timeout_ms - elapsed.elapsed();
+      if (received.size() >= expected || remaining <= 0 || !peer.waitForReadyRead(static_cast<int>(remaining))) {
+        break;
+      }
+    }
+
+    return received;
+  }
+
+  static qsizetype receiveAvailable(QLocalSocket &peer, QByteArray &received) {
+    received.append(peer.readAll());
+
+    return received.size();
+  }
+
+  Q_SLOT static void openingPaneFlushesTheCompleteOrderedRequest() {
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QLocalServer listener;
+    QVERIFY(listener.listen(directory.filePath(QStringLiteral("open-flush.sock"))));
+    ApplicationAllocator memory;
+    RuntimeConnection connection{memory};
+    connection.open(listener.fullServerName());
+    QTRY_VERIFY(listener.hasPendingConnections());
+    const std::unique_ptr<QLocalSocket> peer{listener.nextPendingConnection()};
+    QVERIFY(peer != nullptr);
+    const auto hello = framedHello(handshake::schema_id);
+    QTRY_COMPARE(peer->bytesAvailable(), hello.size());
+    QCOMPARE(peer->readAll(), hello);
+    QVERIFY(sendHandshake(*peer, ServerAccept{handshake::schema_id}));
+    QTRY_VERIFY(connection.ready());
+
+    const DetachPane detach{.pane_id = 6};
+    const OpenPane open{.request_id = 1, .target = {.kind = PaneTarget::Kind::pane, .id = 7}, .size = {.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0}};
+    const auto expected = framedMessage(detach) + framedMessage(open);
+    connection.send(detach);
+    QVERIFY(readWithoutSenderEvents(*peer, framedMessage(detach).size()).isEmpty());
+    connection.send(open);
+    QCOMPARE(readWithoutSenderEvents(*peer, expected.size()), expected);
+
+    constexpr std::array<Byte, 3> bytes{'o', 'k', '\n'};
+    const PaneInput input{.pane_id = 7, .bytes = bytes};
+    connection.send(input);
+    QTRY_COMPARE(peer->bytesAvailable(), framedMessage(input).size());
+    QCOMPARE(peer->readAll(), framedMessage(input));
+    QVERIFY(connection.ready());
+    QVERIFY(connection.error().isEmpty());
+  }
+
+  Q_SLOT static void openingPanePreservesBackpressureAndByteOrder() {
+    const QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QLocalServer listener;
+    QVERIFY(listener.listen(directory.filePath(QStringLiteral("pressure.sock"))));
+    ApplicationAllocator memory;
+    RuntimeConnection connection{memory};
+    connection.open(listener.fullServerName());
+    QTRY_VERIFY(listener.hasPendingConnections());
+    const std::unique_ptr<QLocalSocket> peer{listener.nextPendingConnection()};
+    QVERIFY(peer != nullptr);
+    const auto hello = framedHello(handshake::schema_id);
+    QTRY_COMPARE(peer->bytesAvailable(), hello.size());
+    QCOMPARE(peer->readAll(), hello);
+    QVERIFY(sendHandshake(*peer, ServerAccept{handshake::schema_id}));
+    QTRY_VERIFY(connection.ready());
+
+    constexpr std::size_t chunk_size = 65'536;
+    constexpr std::size_t maximum_chunks = 4 * static_cast<std::size_t>(RuntimeConnection::output_limit) / chunk_size;
+    const std::vector<Byte> bytes(chunk_size, 'x');
+    const PaneInput input{.pane_id = 7, .bytes = bytes};
+    constexpr OpenPane initial_open{.request_id = 1, .target = {.kind = PaneTarget::Kind::pane, .id = 7}, .size = {.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0}};
+    auto open = initial_open;
+    const auto chunk = framedMessage(input);
+    QByteArray expected;
+    bool limited = false;
+    QElapsedTimer elapsed;
+    elapsed.start();
+    for (std::size_t index = 0; index < maximum_chunks; ++index) {
+      try {
+        connection.send(input);
+        expected.append(chunk);
+        open.request_id = index + 1;
+        connection.send(open);
+        expected.append(framedMessage(open));
+      } catch (const std::length_error &) {
+        limited = true;
+        break;
+      }
+    }
+    constexpr int nonblocking_timeout_ms = 2000;
+    QVERIFY(elapsed.elapsed() < nonblocking_timeout_ms);
+    QVERIFY(limited);
+    QVERIFY(!expected.isEmpty());
+    QVERIFY(connection.ready());
+
+    QByteArray received;
+    constexpr int drain_timeout_ms = 5000;
+    QTRY_COMPARE_WITH_TIMEOUT(receiveAvailable(*peer, received), expected.size(), drain_timeout_ms);
+    QCOMPARE(received, expected);
+    connection.send(open);
+    const auto recovery = framedMessage(open);
+    QCOMPARE(readWithoutSenderEvents(*peer, recovery.size()), recovery);
+    QVERIFY(connection.error().isEmpty());
+  }
+
   Q_SLOT static void resumedSessionDiscardsThePreviousReadTail() {
     const QTemporaryDir directory;
     QVERIFY(directory.isValid());
